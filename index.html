@@ -32,13 +32,14 @@
       display:flex; align-items:center; justify-content:center;
       min-height:48px;
     }
+    .brand-row a{display:inline-block;}
     .brand-row img{
-      height:48px; width:auto; display:block; filter:none; /* ¡importante! */
+      height:48px; width:auto; display:block; filter:none; transition:transform .2s ease;
     }
+    .brand-row img:hover{transform:scale(1.05);}
     .wordmark{
       font-weight:800; letter-spacing:6px; font-size:20px; color:#fff; display:none;
     }
-    /* si falla la imagen, mostraremos el wordmark (JS lo activa) */
     .show-wordmark .wordmark{ display:inline-block; }
     .show-wordmark img{ display:none; }
 
@@ -66,22 +67,21 @@
     footer{ padding:36px 0 64px; color:#b3b3b3; text-align:center; border-top:1px solid rgba(255,255,255,.08); margin-top:48px; }
   </style>
 
-  <!-- (Opcional) estilos extra de tienda -->
-  <link rel="stylesheet" href="assets/store.css?v=5">
+  <link rel="stylesheet" href="assets/store.css?v=6">
 </head>
 <body>
 
   <!-- BANNER ÚNICO: LOGO + MENÚ -->
   <div class="banner" id="banner">
     <div class="brand-row">
-      <!-- Usa la ruta relativa a Pages con espacios codificados -->
-      <img id="brandLogo"
-           src="assets/logo%20largo%20bueno.JPG"
-           alt="CRONOX logo">
-      <span class="wordmark">CRONOX</span>
+      <a href="#inicio">
+        <img id="brandLogo"
+             src="assets/logo%20largo%20bueno.JPG"
+             alt="CRONOX logo">
+        <span class="wordmark">CRONOX</span>
+      </a>
     </div>
     <nav class="nav">
-      <a href="#inicio">Inicio</a>
       <a href="#tienda">Tienda</a>
       <a href="cart.html">Carrito (<span id="cart-count">0</span>)</a>
     </nav>
@@ -120,17 +120,16 @@
   </footer>
 
   <script>
-    // Año footer
+    // Año del footer
     document.getElementById('anio').textContent = new Date().getFullYear();
 
-    // Fallback: si el logo no carga, mostramos la palabra CRONOX
+    // Si el logo falla, mostramos el texto "CRONOX"
     const img = document.getElementById('brandLogo');
     img.addEventListener('error', () => {
       document.getElementById('banner').classList.add('show-wordmark');
     });
   </script>
 
-  <!-- Tienda -->
   <script src="assets/products.js"></script>
   <script src="assets/app.js"></script>
 
