@@ -1,5 +1,5 @@
 // ===== Utilidades =====
-const € = n => n.toLocaleString("es-ES", { style: "currency", currency: "EUR" });
+const formatEUR = n => n.toLocaleString("es-ES", { style: "currency", currency: "EUR" });
 
 function getCart() {
   try { return JSON.parse(localStorage.getItem("CRONOX_CART") || "[]"); }
@@ -39,7 +39,7 @@ function renderGrid() {
         ${p.badges?.length ? `<span class="badge">${p.badges[0]}</span>` : ""}
       </div>
       <h3>${p.name}</h3>
-      <p class="price">${€(p.price)}</p>
+      <p class="price">${formatEUR(p.price)}</p>
       <div class="p-actions">
         <a class="cta secondary" href="product.html?id=${encodeURIComponent(p.id)}">Ver</a>
         <button class="cta" onclick="location.href='product.html?id=${encodeURIComponent(p.id)}'">Comprar</button>
@@ -62,7 +62,7 @@ function renderProductPage() {
       </div>
       <div class="p-info">
         <h1>${p.name}</h1>
-        <p class="price big">${€(p.price)}</p>
+        <p class="price big">${formatEUR(p.price)}</p>
         <p class="desc">${p.description}</p>
         <label>Talla</label>
         <div class="sizes">
@@ -99,8 +99,8 @@ function renderCartPage() {
       <tr>
         <td>${p ? p.name : i.productId}<br><small>Talla: ${i.size}</small></td>
         <td>${i.qty}</td>
-        <td>${€(i.price)}</td>
-        <td>${€(i.price * i.qty)}</td>
+        <td>${formatEUR(i.price)}</td>
+        <td>${formatEUR(i.price * i.qty)}</td>
         <td><button class="link danger" onclick="removeItem('${i.key}')">Eliminar</button></td>
       </tr>
     `;
@@ -115,7 +115,7 @@ function renderCartPage() {
     </table>
     <div class="cart-total">
       <div>Total</div>
-      <div class="price big">${€(total)}</div>
+      <div class="price big">${formatEUR(total)}</div>
     </div>
     <div class="checkout">
       <button class="cta" id="checkout-btn">Checkout (demo)</button>
