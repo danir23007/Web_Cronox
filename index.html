@@ -64,12 +64,12 @@
   <header>
     <div class="container nav">
       <div class="brand"><span class="logo"></span> Mi Primera Web</div>
-      <nav>
-        <a href="#inicio">Inicio</a>
-        <a href="#servicios">Servicios</a>
-        <a href="#acerca">Acerca</a>
-        <a href="#contacto">Contacto</a>
-      </nav>
+<nav>
+  <a href="#inicio">Inicio</a>
+  <a href="#tienda">Tienda</a>
+  <a href="cart.html">Carrito (<span id="cart-count">0</span>)</a>
+</nav>
+      
     </div>
   </header>
 
@@ -112,6 +112,12 @@
       <img alt="Mockup de una web en móvil y ordenador" src="https://images.unsplash.com/photo-1559027615-5a1f4f36ef32?q=80&w=1600&auto=format&fit=crop" />
     </section>
 
+    <!-- TIENDA -->
+<section id="tienda">
+  <h2>Productos</h2>
+  <div class="grid" id="product-grid"><!-- Aquí se cargarán los productos --></div>
+</section>
+
     <section id="contacto" style="margin-top: 36px;">
       <h2>Contacto</h2>
       <p class="notice">Este formulario está de ejemplo. Para recibir mensajes reales, usa un servicio como Formspree y cambia el atributo <code>action</code>.</p>
@@ -147,5 +153,10 @@
       });
     });
   </script>
+
+  <link rel="stylesheet" href="assets/store.css" />
+<script src="assets/products.js"></script>
+<script src="assets/app.js"></script>
+
 </body>
 </html>
