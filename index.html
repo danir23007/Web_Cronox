@@ -11,133 +11,81 @@
     html,body{
       margin:0;padding:0;
       font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Cantarell,Noto Sans,Arial;
-      color:#eaeaea;
-      background:#0c0c0d;
+      color:#eaeaea;background:#0c0c0d;
     }
-    a{color:#7c5cff;text-decoration:none;}
-    a:hover{text-decoration:underline;}
+    a{color:#eaeaea;text-decoration:none;opacity:.9}
+    a:hover{opacity:1}
     .container{width:min(1100px,92%);margin:0 auto;}
 
-    /* --- Banner Cronox (logo) --- */
-    .banner {
-      width: 100%;
-      background: #000;
-      text-align: center;
-      padding: 12px 0 6px 0;
-      position: sticky;
-      top: 0;
-      z-index: 10000;
-      border-bottom: 1px solid rgba(255,255,255,0.08);
-      box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+    /* === BANNER ÚNICO (logo + menú) === */
+    .banner{
+      position:sticky; top:0; z-index:9999;
+      width:100%;
+      background:#000;
+      border-bottom:1px solid rgba(255,255,255,.08);
+      box-shadow:0 4px 20px rgba(0,0,0,.3);
+      display:flex; flex-direction:column; align-items:center; justify-content:center;
+      padding:10px 12px 8px;
+      gap:8px;
     }
-    .banner-logo img {
-      height: 48px;
-      width: auto;
-      display: inline-block;
-      filter: none;
-      transition: transform 0.2s ease;
+    .brand-row{
+      display:flex; align-items:center; justify-content:center;
+      min-height:48px;
     }
-    .banner-logo img:hover {
-      transform: scale(1.05);
+    .brand-row img{
+      height:48px; width:auto; display:block; filter:none; /* ¡importante! */
     }
+    .wordmark{
+      font-weight:800; letter-spacing:6px; font-size:20px; color:#fff; display:none;
+    }
+    /* si falla la imagen, mostraremos el wordmark (JS lo activa) */
+    .show-wordmark .wordmark{ display:inline-block; }
+    .show-wordmark img{ display:none; }
 
-    /* --- Menú debajo del logo --- */
-    header {
-      background: transparent;
-      border-bottom: 1px solid rgba(255,255,255,0.05);
-      padding: 10px 0;
-      text-align: center;
+    /* Menú dentro del mismo banner */
+    .nav{
+      display:flex; align-items:center; justify-content:center; gap:1.6rem;
+      padding-bottom:6px;
+      border-top:1px solid rgba(255,255,255,.06);
+      padding-top:8px;
+      width:100%;
     }
-    .nav {
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      gap: 1.8rem;
-    }
-    .nav a {
-      color: #eaeaea;
-      font-weight: 500;
-      opacity: 0.9;
-      transition: opacity 0.2s ease;
-    }
-    .nav a:hover {
-      opacity: 1;
-    }
+    .nav a{ color:#eaeaea; font-weight:500; }
 
-    .hero {
-      padding: 72px 0 36px;
-      text-align: center;
+    /* Contenido principal */
+    .hero{ padding:72px 0 36px; text-align:center; }
+    .hero h1{ font-size:clamp(2rem,5vw,3.2rem); line-height:1.1; margin:0 0 16px; }
+    .hero p{ color:#b3b3b3; margin:0 auto 24px; max-width:720px; }
+    .cta{
+      display:inline-flex; align-items:center; gap:.6rem; padding:12px 18px;
+      background:#7c5cff; color:#fff; border-radius:999px; border:none; cursor:pointer; font-weight:700;
     }
-    .hero h1 {
-      font-size: clamp(2rem, 5vw, 3.2rem);
-      line-height: 1.1;
-      margin: 0 0 16px;
-    }
-    .hero p {
-      color: #b3b3b3;
-      margin: 0 auto 24px;
-      max-width: 720px;
-    }
-    .cta {
-      display:inline-flex;
-      align-items:center;
-      gap:.6rem;
-      padding:12px 18px;
-      background:#7c5cff;
-      color:#fff;
-      border-radius:999px;
-      border:none;
-      cursor:pointer;
-      font-weight:700;
-    }
-    .cta.secondary{
-      background:transparent;
-      border:1px solid rgba(255,255,255,.14);
-      color:#eaeaea;
-    }
-    .grid{
-      display:grid;
-      grid-template-columns:repeat(auto-fit,minmax(240px,1fr));
-      gap:16px;
-      margin:36px 0;
-    }
-    .card{
-      background:#151517;
-      border:1px solid rgba(255,255,255,.06);
-      border-radius:16px;
-      padding:20px;
-    }
-    footer{
-      padding:36px 0 64px;
-      color:#b3b3b3;
-      text-align:center;
-      border-top:1px solid rgba(255,255,255,.08);
-      margin-top:48px;
-    }
+    .cta.secondary{ background:transparent; border:1px solid rgba(255,255,255,.14); color:#eaeaea; }
+    .grid{ display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:16px; margin:36px 0; }
+    .card{ background:#151517; border:1px solid rgba(255,255,255,.06); border-radius:16px; padding:20px; }
+    footer{ padding:36px 0 64px; color:#b3b3b3; text-align:center; border-top:1px solid rgba(255,255,255,.08); margin-top:48px; }
   </style>
 
-  <link rel="stylesheet" href="assets/store.css?v=4" />
+  <!-- (Opcional) estilos extra de tienda -->
+  <link rel="stylesheet" href="assets/store.css?v=5">
 </head>
 <body>
 
-  <!-- BANNER CRONOX -->
-  <div class="banner">
-    <a href="#inicio" class="banner-logo">
-      <img 
-        src="https://raw.githubusercontent.com/danir23007/Web_Cronox/refs/heads/main/assets/logo%20largo%20bueno.JPG" 
-        alt="CRONOX logo"
-      />
-    </a>
-  </div>
-
-  <!-- MENÚ PRINCIPAL -->
-  <header>
-    <div class="nav">
+  <!-- BANNER ÚNICO: LOGO + MENÚ -->
+  <div class="banner" id="banner">
+    <div class="brand-row">
+      <!-- Usa la ruta relativa a Pages con espacios codificados -->
+      <img id="brandLogo"
+           src="assets/logo%20largo%20bueno.JPG"
+           alt="CRONOX logo">
+      <span class="wordmark">CRONOX</span>
+    </div>
+    <nav class="nav">
       <a href="#inicio">Inicio</a>
       <a href="#tienda">Tienda</a>
       <a href="cart.html">Carrito (<span id="cart-count">0</span>)</a>
-    </div>
-  </header>
+    </nav>
+  </div>
 
   <main class="container">
     <section id="inicio" class="hero">
@@ -172,8 +120,17 @@
   </footer>
 
   <script>
+    // Año footer
     document.getElementById('anio').textContent = new Date().getFullYear();
+
+    // Fallback: si el logo no carga, mostramos la palabra CRONOX
+    const img = document.getElementById('brandLogo');
+    img.addEventListener('error', () => {
+      document.getElementById('banner').classList.add('show-wordmark');
+    });
   </script>
+
+  <!-- Tienda -->
   <script src="assets/products.js"></script>
   <script src="assets/app.js"></script>
 
