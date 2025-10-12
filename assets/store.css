@@ -17,3 +17,25 @@
 .cart-total { display:flex; align-items:center; justify-content:space-between; padding:12px 0; border-top:1px solid rgba(255,255,255,.1); }
 .checkout { display:flex; gap:10px; }
 .link.danger { background:transparent; border:none; color:#ff7b7b; cursor:pointer; }
+
+/* ===== BANNER CRONOX ===== */
+.banner {
+  width: 100%;
+  background: #0a0a0b;
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+  text-align: center;
+  padding: 10px 0;
+  position: sticky;
+  top: 0;
+  z-index: 1000;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+}
+.banner-logo img {
+  height: 38px;
+  width: auto;
+  filter: brightness(0) invert(1); /* blanco sobre fondo oscuro */
+  transition: transform 0.2s ease;
+}
+.banner-logo img:hover {
+  transform: scale(1.05);
+}
