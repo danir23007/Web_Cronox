@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Producto — CRONOX</title>
+  <link rel="stylesheet" href="assets/store.css" />
+  <style>
+    :root { --text:#eaeaea; --accent:#7c5cff; }
+    body{margin:0;background:#0c0c0d;color:var(--text);font-family:system-ui,Segoe UI,Roboto,Arial}
+    .container{width:min(1100px,92%);margin:0 auto}
+    header{position:sticky;top:0;background:rgba(16,16,18,.7);backdrop-filter:blur(8px);border-bottom:1px solid rgba(255,255,255,.06)}
+    .nav{display:flex;align-items:center;justify-content:space-between;height:64px}
+    a{color:var(--text);text-decoration:none;opacity:.9}
+    .cta{display:inline-flex;gap:.6rem;padding:12px 18px;background:var(--accent);color:#fff;border-radius:999px;border:none;cursor:pointer;font-weight:700}
+    .cta.secondary{background:transparent;border:1px solid rgba(255,255,255,.14)}
+    .brand{font-weight:700}
+    footer{padding:36px 0 64px;color:#bbb;text-align:center;border-top:1px solid rgba(255,255,255,.08);margin-top:48px}
+  </style>
+</head>
+<body>
+  <header>
+    <div class="container nav">
+      <div class="brand">CRONOX</div>
+      <nav>
+        <a href="index.html">Tienda</a>
+        <a href="cart.html">Carrito (<span id="cart-count">0</span>)</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="container" style="padding:28px 0">
+    <div id="product-detail"></div>
+  </main>
+
+  <footer><div class="container">© <span id="anio"></span> CRONOX</div></footer>
+
+  <script src="assets/products.js"></script>
+  <script src="assets/app.js"></script>
+  <script>document.getElementById('anio').textContent=new Date().getFullYear()</script>
+</body>
+</html>
