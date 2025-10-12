@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Mi Primera Web</title>
+  <meta name="description" content="Página web sencilla creada desde cero con HTML, CSS y JavaScript." />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Arial; color: #111; }
+    :root {
+      --bg: #0c0c0d;
+      --card: #151517;
+      --text: #eaeaea;
+      --muted: #b3b3b3;
+      --accent: #7c5cff;
+      --accent-2: #00d1b2;
+      --radius: 16px;
+      --shadow: 0 10px 30px rgba(0,0,0,.35);
+    }
+    body { background: linear-gradient(180deg, #0c0c0d 0%, #101012 100%); color: var(--text); }
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    .container { width: min(1100px, 92%); margin: 0 auto; }
+
+    header {
+      position: sticky; top: 0; z-index: 10; background: rgba(16,16,18,.7); backdrop-filter: blur(8px); border-bottom: 1px solid rgba(255,255,255,.06);
+    }
+    .nav { display: flex; align-items: center; justify-content: space-between; height: 64px; }
+    .brand { display: flex; align-items: center; gap: .6rem; font-weight: 700; letter-spacing: .3px; }
+    .logo { width: 28px; height: 28px; border-radius: 8px; background: linear-gradient(135deg, var(--accent), var(--accent-2)); box-shadow: var(--shadow); }
+    .nav a { color: var(--text); opacity: .9; margin-left: 1rem; }
+
+    .hero { padding: 72px 0 36px; text-align: center; }
+    .hero h1 { font-size: clamp(2rem, 5vw, 3.2rem); line-height: 1.1; margin: 0 0 16px; }
+    .hero p { color: var(--muted); margin: 0 auto 24px; max-width: 720px; }
+    .cta { display: inline-flex; align-items: center; gap: .6rem; padding: 12px 18px; background: var(--accent); color: white; border-radius: 999px; border: none; cursor: pointer; font-weight: 700; box-shadow: var(--shadow); }
+    .cta.secondary { background: transparent; border: 1px solid rgba(255,255,255,.14); color: var(--text); }
+    .cta:hover { transform: translateY(-1px); }
+    .cta:active { transform: translateY(0); }
+    .cta-wrap { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; margin: 36px 0; }
+    .card { background: var(--card); border: 1px solid rgba(255,255,255,.06); border-radius: var(--radius); padding: 20px; box-shadow: var(--shadow); }
+    .card h3 { margin: 0 0 8px; }
+    .pill { display: inline-block; font-size: .75rem; padding: 6px 10px; border-radius: 999px; background: rgba(124,92,255,.18); color: #d9d1ff; border: 1px solid rgba(124,92,255,.35); }
+
+    .about { display: grid; grid-template-columns: 1.2fr .8fr; gap: 22px; align-items: center; }
+    .about img { width: 100%; border-radius: var(--radius); border: 1px solid rgba(255,255,255,.08); box-shadow: var(--shadow); }
+
+    form { display: grid; gap: 12px; }
+    input, textarea { width: 100%; padding: 12px 14px; border-radius: 10px; border: 1px solid rgba(255,255,255,.12); background: #0f0f11; color: var(--text); }
+    textarea { min-height: 120px; resize: vertical; }
+    .notice { font-size: .9rem; color: var(--muted); }
+
+    footer { padding: 36px 0 64px; color: var(--muted); text-align: center; border-top: 1px solid rgba(255,255,255,.08); margin-top: 48px; }
+
+    @media (max-width: 800px) {
+      .about { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="container nav">
+      <div class="brand"><span class="logo"></span> Mi Primera Web</div>
+      <nav>
+        <a href="#inicio">Inicio</a>
+        <a href="#servicios">Servicios</a>
+        <a href="#acerca">Acerca</a>
+        <a href="#contacto">Contacto</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="container">
+    <section id="inicio" class="hero">
+      <span class="pill">Hecho con HTML + CSS + JS</span>
+      <h1>Hola, mundo. ✨<br/>Esta es tu primera página web.</h1>
+      <p>
+        Todo lo que ves aquí está en un único archivo <strong>index.html</strong>. Puedes cambiar textos, colores, secciones y publicar gratis con GitHub Pages.
+      </p>
+      <div class="cta-wrap">
+        <button class="cta" id="btn-saludo">Probar botón</button>
+        <a class="cta secondary" href="#servicios">Ver secciones</a>
+      </div>
+    </section>
+
+    <section id="servicios">
+      <h2>Servicios rápidos</h2>
+      <div class="grid">
+        <article class="card"><h3>Landing</h3><p>Una página simple para presentar tu marca o proyecto con llamada a la acción.</p></article>
+        <article class="card"><h3>Portfolio</h3><p>Muestra tus trabajos con una galería bonita y ligera.</p></article>
+        <article class="card"><h3>Formulario</h3><p>Recibe mensajes por email usando servicios como Formspree o Getform.</p></article>
+        <article class="card"><h3>Blog estático</h3><p>Publica artículos simples sin base de datos usando archivos Markdown.</p></article>
+      </div>
+    </section>
+
+    <section id="acerca" class="about">
+      <div>
+        <h2>¿Cómo está construido?</h2>
+        <p>
+          Este archivo tiene <em>HTML</em> (estructura), <em>CSS</em> (estilos) y <em>JavaScript</em> (interacción) en una sola pieza. Perfecto para empezar sin instalaciones complicadas.
+        </p>
+        <ul>
+          <li>✅ Diseño responsive (se adapta a móvil).</li>
+          <li>✅ Navegación simple entre secciones.</li>
+          <li>✅ Botón con interacción para aprender JS.</li>
+          <li>✅ Código limpio y comentarios básicos.</li>
+        </ul>
+      </div>
+      <img alt="Mockup de una web en móvil y ordenador" src="https://images.unsplash.com/photo-1559027615-5a1f4f36ef32?q=80&w=1600&auto=format&fit=crop" />
+    </section>
+
+    <section id="contacto" style="margin-top: 36px;">
+      <h2>Contacto</h2>
+      <p class="notice">Este formulario está de ejemplo. Para recibir mensajes reales, usa un servicio como Formspree y cambia el atributo <code>action</code>.</p>
+      <form method="POST" action="mailto:tucorreo@example.com" enctype="text/plain">
+        <input name="nombre" placeholder="Tu nombre" required />
+        <input name="email" type="email" placeholder="Tu email" required />
+        <textarea name="mensaje" placeholder="Cuéntame sobre tu proyecto..." required></textarea>
+        <button class="cta" type="submit">Enviar</button>
+      </form>
+    </section>
+  </main>
+
+  <footer>
+    <div class="container">© <span id="anio"></span> · Hecho por mí con ayuda de ChatGPT ⚡</div>
+  </footer>
+
+  <script>
+    const btn = document.getElementById('btn-saludo');
+    btn.addEventListener('click', () => {
+      const horas = new Date().getHours();
+      const saludo = horas < 12 ? '¡Buenos días!' : horas < 20 ? '¡Buenas tardes!' : '¡Buenas noches!';
+      alert(`${saludo} 👋 Gracias por probar tu primer botón.`);
+    });
+    document.getElementById('anio').textContent = new Date().getFullYear();
+    document.querySelectorAll('a[href^=\"#\"]').forEach(a => {
+      a.addEventListener('click', (e) => {
+        const id = a.getAttribute('href');
+        const el = document.querySelector(id);
+        if (el) {
+          e.preventDefault();
+          el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+      });
+    });
+  </script>
+</body>
+</html>
