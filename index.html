@@ -23,36 +23,48 @@
     .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:16px;margin:36px 0;}
     .card{background:#151517;border:1px solid rgba(255,255,255,.06);border-radius:16px;padding:20px;}
     footer{padding:36px 0 64px;color:#b3b3b3;text-align:center;border-top:1px solid rgba(255,255,255,.08);margin-top:48px;}
-    /* --- Banner Cronox --- */
-    .banner{
-      width:100%;
-      background:#000;
-      text-align:center;
-      padding:12px 0;
-      position:sticky;
-      top:0;
-      z-index:10000;
-      border-bottom:1px solid rgba(255,255,255,.08);
-      box-shadow:0 4px 20px rgba(0,0,0,.3);
-    }
-    .banner-logo img{
-      height:42px;width:auto;
-      filter:brightness(0) invert(1);
-      transition:transform .2s ease;
-    }
-    .banner-logo img:hover{transform:scale(1.05);}
+  
+  /* --- Banner Cronox --- */
+.banner {
+  width: 100%;
+  background: #000;
+  text-align: center;
+  padding: 12px 0;
+  position: sticky;
+  top: 0;
+  z-index: 10000;
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+  box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+}
+
+.banner-logo img {
+  height: 48px;
+  width: auto;
+  display: inline-block;
+  filter: none; /* <-- quitamos el filtro que lo volvía blanco */
+  transition: transform 0.2s ease;
+}
+
+.banner-logo img:hover {
+  transform: scale(1.05);
+}
+
   </style>
   <link rel="stylesheet" href="assets/store.css?v=3" />
 </head>
 <body>
 
-  <!-- BANNER CRONOX -->
-  <div class="banner">
-    <a href="#inicio" class="banner-logo">
-      <<img src= https://raw.githubusercontent.com/danir23007/Web_Cronox/refs/heads/main/assets/logo%20largo%20bueno.JPG alt="CRONOX logo" />
+ <!-- BANNER CRONOX -->
+<div class="banner">
+  <a href="#inicio" class="banner-logo">
+    <img 
+      src="https://raw.githubusercontent.com/danir23007/Web_Cronox/refs/heads/main/assets/logo%20largo%20bueno.JPG" 
+      alt="CRONOX logo"
+      style="height: 48px; width: auto; display: inline-block; filter: none; border: none; box-shadow: none;"
+    />
+  </a>
+</div>
 
-    </a>
-  </div>
 
   <header>
     <div class="container nav">
