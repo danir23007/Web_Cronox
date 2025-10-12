@@ -5,75 +5,137 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>CRONOX — Tienda Oficial</title>
   <meta name="description" content="Tienda oficial CRONOX — Dark streetwear premium." />
+
   <style>
     *,*::before,*::after{box-sizing:border-box;}
-    html,body{margin:0;padding:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Cantarell,Noto Sans,Arial;color:#eaeaea;background:#0c0c0d;}
+    html,body{
+      margin:0;padding:0;
+      font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Cantarell,Noto Sans,Arial;
+      color:#eaeaea;
+      background:#0c0c0d;
+    }
     a{color:#7c5cff;text-decoration:none;}
     a:hover{text-decoration:underline;}
     .container{width:min(1100px,92%);margin:0 auto;}
-    header{position:sticky;top:80px;z-index:9;background:rgba(16,16,18,.7);backdrop-filter:blur(8px);border-bottom:1px solid rgba(255,255,255,.06);}
-    .nav{display:flex;align-items:center;justify-content:space-between;height:64px;}
-    .brand{display:flex;align-items:center;gap:.6rem;font-weight:700;letter-spacing:.3px;}
-    .nav a{color:#eaeaea;opacity:.9;margin-left:1rem;}
-    .hero{padding:72px 0 36px;text-align:center;}
-    .hero h1{font-size:clamp(2rem,5vw,3.2rem);line-height:1.1;margin:0 0 16px;}
-    .hero p{color:#b3b3b3;margin:0 auto 24px;max-width:720px;}
-    .cta{display:inline-flex;align-items:center;gap:.6rem;padding:12px 18px;background:#7c5cff;color:#fff;border-radius:999px;border:none;cursor:pointer;font-weight:700;}
-    .cta.secondary{background:transparent;border:1px solid rgba(255,255,255,.14);color:#eaeaea;}
-    .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:16px;margin:36px 0;}
-    .card{background:#151517;border:1px solid rgba(255,255,255,.06);border-radius:16px;padding:20px;}
-    footer{padding:36px 0 64px;color:#b3b3b3;text-align:center;border-top:1px solid rgba(255,255,255,.08);margin-top:48px;}
-  
-  /* --- Banner Cronox --- */
-.banner {
-  width: 100%;
-  background: #000;
-  text-align: center;
-  padding: 12px 0;
-  position: sticky;
-  top: 0;
-  z-index: 10000;
-  border-bottom: 1px solid rgba(255,255,255,0.08);
-  box-shadow: 0 4px 20px rgba(0,0,0,0.3);
-}
 
-.banner-logo img {
-  height: 48px;
-  width: auto;
-  display: inline-block;
-  filter: none; /* <-- quitamos el filtro que lo volvía blanco */
-  transition: transform 0.2s ease;
-}
+    /* --- Banner Cronox (logo) --- */
+    .banner {
+      width: 100%;
+      background: #000;
+      text-align: center;
+      padding: 12px 0 6px 0;
+      position: sticky;
+      top: 0;
+      z-index: 10000;
+      border-bottom: 1px solid rgba(255,255,255,0.08);
+      box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+    }
+    .banner-logo img {
+      height: 48px;
+      width: auto;
+      display: inline-block;
+      filter: none;
+      transition: transform 0.2s ease;
+    }
+    .banner-logo img:hover {
+      transform: scale(1.05);
+    }
 
-.banner-logo img:hover {
-  transform: scale(1.05);
-}
+    /* --- Menú debajo del logo --- */
+    header {
+      background: transparent;
+      border-bottom: 1px solid rgba(255,255,255,0.05);
+      padding: 10px 0;
+      text-align: center;
+    }
+    .nav {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 1.8rem;
+    }
+    .nav a {
+      color: #eaeaea;
+      font-weight: 500;
+      opacity: 0.9;
+      transition: opacity 0.2s ease;
+    }
+    .nav a:hover {
+      opacity: 1;
+    }
 
+    .hero {
+      padding: 72px 0 36px;
+      text-align: center;
+    }
+    .hero h1 {
+      font-size: clamp(2rem, 5vw, 3.2rem);
+      line-height: 1.1;
+      margin: 0 0 16px;
+    }
+    .hero p {
+      color: #b3b3b3;
+      margin: 0 auto 24px;
+      max-width: 720px;
+    }
+    .cta {
+      display:inline-flex;
+      align-items:center;
+      gap:.6rem;
+      padding:12px 18px;
+      background:#7c5cff;
+      color:#fff;
+      border-radius:999px;
+      border:none;
+      cursor:pointer;
+      font-weight:700;
+    }
+    .cta.secondary{
+      background:transparent;
+      border:1px solid rgba(255,255,255,.14);
+      color:#eaeaea;
+    }
+    .grid{
+      display:grid;
+      grid-template-columns:repeat(auto-fit,minmax(240px,1fr));
+      gap:16px;
+      margin:36px 0;
+    }
+    .card{
+      background:#151517;
+      border:1px solid rgba(255,255,255,.06);
+      border-radius:16px;
+      padding:20px;
+    }
+    footer{
+      padding:36px 0 64px;
+      color:#b3b3b3;
+      text-align:center;
+      border-top:1px solid rgba(255,255,255,.08);
+      margin-top:48px;
+    }
   </style>
-  <link rel="stylesheet" href="assets/store.css?v=3" />
+
+  <link rel="stylesheet" href="assets/store.css?v=4" />
 </head>
 <body>
 
- <!-- BANNER CRONOX -->
-<div class="banner">
-  <a href="#inicio" class="banner-logo">
-    <img 
-      src="https://raw.githubusercontent.com/danir23007/Web_Cronox/refs/heads/main/assets/logo%20largo%20bueno.JPG" 
-      alt="CRONOX logo"
-      style="height: 48px; width: auto; display: inline-block; filter: none; border: none; box-shadow: none;"
-    />
-  </a>
-</div>
+  <!-- BANNER CRONOX -->
+  <div class="banner">
+    <a href="#inicio" class="banner-logo">
+      <img 
+        src="https://raw.githubusercontent.com/danir23007/Web_Cronox/refs/heads/main/assets/logo%20largo%20bueno.JPG" 
+        alt="CRONOX logo"
+      />
+    </a>
+  </div>
 
-
+  <!-- MENÚ PRINCIPAL -->
   <header>
-    <div class="container nav">
-      <div class="brand">CRONOX</div>
-      <nav>
-        <a href="#inicio">Inicio</a>
-        <a href="#tienda">Tienda</a>
-        <a href="cart.html">Carrito (<span id="cart-count">0</span>)</a>
-      </nav>
+    <div class="nav">
+      <a href="#inicio">Inicio</a>
+      <a href="#tienda">Tienda</a>
+      <a href="cart.html">Carrito (<span id="cart-count">0</span>)</a>
     </div>
   </header>
 
@@ -110,7 +172,7 @@
   </footer>
 
   <script>
-    document.getElementById('anio').textContent=new Date().getFullYear();
+    document.getElementById('anio').textContent = new Date().getFullYear();
   </script>
   <script src="assets/products.js"></script>
   <script src="assets/app.js"></script>
