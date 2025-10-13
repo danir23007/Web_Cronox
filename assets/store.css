@@ -31,10 +31,10 @@
   position: absolute;
   top: 0; left: 0;
   width: 100%; height: 100%;
-  object-fit: cover;
+  object-fit: contain; /* para que no recorte */
   object-position: center center;
   z-index: 0;
-  background-color: #000;
+  background-color: #000; /* rellena los márgenes laterales */
 }
 
 .hero-overlay {
@@ -54,23 +54,10 @@
   letter-spacing: 4px;
 }
 
-/* ===== AJUSTE EN PANTALLAS ANCHAS (PC) ===== */
-/* Más zoom y recorte centrado para que el logo se vea más grande */
-@media (min-aspect-ratio: 16/9){
-  .hero-video{
-    object-fit: cover !important;
-    object-position: 50% 45% !important; /* sube encuadre un poco */
-    transform: scale(1.18);              /* zoom para eliminar márgenes verticales */
-    transform-origin: center;            /* centrado del zoom */
-    background-color: #000;
-  }
-}
-
-/* ===== EN PANTALLAS MÁS VERTICALES (móvil/tablet) ===== */
+/* ===== AJUSTES RESPONSIVE ===== */
 @media (max-aspect-ratio: 16/9){
   .hero-video{
     object-fit: cover !important;
     object-position: center top !important;
-    transform: none;
   }
 }
