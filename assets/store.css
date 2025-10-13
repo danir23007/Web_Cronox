@@ -34,7 +34,9 @@
   width: 100%;
   height: 100%;
   object-fit: cover;
+  object-position: center center;
   z-index: 0;
+  background-color: #000;
 }
 
 .hero-overlay {
@@ -58,4 +60,20 @@
   font-family: "Montserrat", sans-serif;
   text-transform: uppercase;
   letter-spacing: 4px;
+}
+
+/* ===== VIDEO RESPONSIVE (FORZADO) ===== */
+@media (min-aspect-ratio: 16/9){
+  .hero-video{
+    object-fit: contain !important;
+    object-position: center center !important;
+    background-color: #000;
+  }
+}
+
+@media (max-aspect-ratio: 16/9){
+  .hero-video{
+    object-fit: cover !important;
+    object-position: center top !important;
+  }
 }
