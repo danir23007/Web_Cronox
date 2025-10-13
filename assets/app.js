@@ -1,7 +1,18 @@
-// ===== Preloader =====
-window.addEventListener('load', () => {
-  const preloader = document.getElementById('preloader');
-  if (preloader) preloader.style.display = 'none';
+// ===== Utils =====
+function hidePreloaderSafely() {
+  const p = document.getElementById('preloader');
+  if (p) p.style.display = 'none';
+}
+
+// ===== Preloader: tres vías para ocultarlo =====
+window.addEventListener('load', hidePreloaderSafely, { once: true });
+document.addEventListener('DOMContentLoaded', () => {
+  // Si por lo que sea 'load' no dispara (vídeo muy pesado, error en otro script), lo ocultamos igual
+  setTimeout(hidePreloaderSafely, 2000);
+}, { once: true });
+window.addEventListener('error', () => {
+  // Si hay un error en algún recurso/script, no nos quedamos bloqueados en la pantalla de carga
+  setTimeout(hidePreloaderSafely, 0);
 });
 
 // ===== Elements =====
@@ -25,22 +36,28 @@ const productsGrid = document.getElementById('productsGrid');
 const productsFallback = document.getElementById('productsFallback');
 
 // ===== State =====
-let isOverHero = true;     // topbar sobre vídeo
+let isOverHero = true;
 let menuOpen = false;
 let searchOpen = false;
 
-// ===== Topbar mode =====
-const io = new IntersectionObserver((entries) => {
-  entries.forEach(entry => {
-    isOverHero = entry.isIntersecting && entry.intersectionRatio > 0;
-    updateTopbarMode();
-    if (menuOpen) updateOverlayMode();
-  });
-}, { root: null, threshold: [0, 0.01] });
+// ===== Topbar modes =====
+try {
+  const io = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      isOverHero = entry.isIntersecting && entry.intersectionRatio > 0;
+      updateTopbarMode();
+      if (menuOpen) updateOverlayMode();
+    });
+  }, { root: null, threshold: [0, 0.01] });
 
-if (hero) io.observe(hero);
+  if (hero) io.observe(hero);
+} catch (e) {
+  // Si IntersectionObserver no está, degradamos a opaco fuera del top
+  console.error('IntersectionObserver error:', e);
+}
 
 function updateTopbarMode() {
+  if (!topbar) return;
   const atTop = window.scrollY < 4;
   topbar.classList.remove('topbar--transparent','topbar--hero','topbar--page');
 
@@ -57,33 +74,34 @@ updateTopbarMode();
 
 // ===== Overlay =====
 function openOverlay() {
+  if (!overlay) return;
   overlay.hidden = false;
   updateOverlayMode();
 }
 function closeOverlay() {
+  if (!overlay) return;
   overlay.hidden = true;
   overlay.classList.remove('overlay--hero','overlay--page');
 }
 function updateOverlayMode() {
+  if (!overlay) return;
   overlay.classList.toggle('overlay--hero', isOverHero);
   overlay.classList.toggle('overlay--page', !isOverHero);
 }
-overlay?.addEventListener('click', () => {
-  if (menuOpen) toggleMenu(false);
-});
+overlay?.addEventListener('click', () => { if (menuOpen) toggleMenu(false); });
 
-// ===== Menú de filtros =====
+// ===== Filtros =====
 function toggleMenu(force) {
   const next = typeof force === 'boolean' ? force : !menuOpen;
   menuOpen = next;
-  btnMenu.setAttribute('aria-expanded', String(next));
+  btnMenu?.setAttribute('aria-expanded', String(next));
   if (next) {
-    filtersPanel.hidden = false;
+    if (filtersPanel) filtersPanel.hidden = false;
     openOverlay();
-    const firstInput = filtersPanel.querySelector('input,button,select,textarea');
+    const firstInput = filtersPanel?.querySelector('input,button,select,textarea');
     firstInput && firstInput.focus({preventScroll:true});
   } else {
-    filtersPanel.hidden = true;
+    if (filtersPanel) filtersPanel.hidden = true;
     closeOverlay();
     btnMenu?.focus({preventScroll:true});
   }
@@ -91,6 +109,7 @@ function toggleMenu(force) {
 btnMenu?.addEventListener('click', () => toggleMenu());
 btnCloseFilters?.addEventListener('click', () => toggleMenu(false));
 
+// Accesibilidad: ESC cierra
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') {
     if (menuOpen) toggleMenu(false);
@@ -103,20 +122,18 @@ filtersForm?.addEventListener('submit', (e) => {
   e.preventDefault();
   toggleMenu(false);
 });
-btnClearFilters?.addEventListener('click', () => {
-  filtersForm.reset();
-});
+btnClearFilters?.addEventListener('click', () => { filtersForm?.reset(); });
 
-// ===== Barra de búsqueda =====
+// ===== Búsqueda =====
 function toggleSearch(force) {
   const next = typeof force === 'boolean' ? force : !searchOpen;
   searchOpen = next;
-  btnSearch.setAttribute('aria-expanded', String(next));
+  btnSearch?.setAttribute('aria-expanded', String(next));
   if (next) {
-    searchBar.hidden = false;
+    if (searchBar) searchBar.hidden = false;
     requestAnimationFrame(() => { searchInput?.focus(); });
   } else {
-    searchBar.hidden = true;
+    if (searchBar) searchBar.hidden = true;
     btnSearch?.focus({preventScroll:true});
   }
 }
@@ -130,14 +147,14 @@ searchForm?.addEventListener('submit', (e) => {
   url.searchParams.set('q', q);
   history.replaceState({}, '', url);
   toggleSearch(false);
-  // TODO: llamar a tu función de filtrado en products.js con 'q'
+  // TODO: conectar con filtrado real en products.js
 });
 
-// ===== Fallback de productos =====
-window.addEventListener('DOMContentLoaded', () => {
+// ===== Fallback productos si nadie pintó tarjetas =====
+document.addEventListener('DOMContentLoaded', () => {
   setTimeout(() => {
     if (productsGrid && productsGrid.children.length === 0 && productsFallback) {
       productsFallback.hidden = false;
     }
-  }, 1000);
+  }, 1200);
 });
