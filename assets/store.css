@@ -62,11 +62,12 @@
   letter-spacing: 4px;
 }
 
-/* ===== VIDEO RESPONSIVE (FORZADO) ===== */
+/* ===== VIDEO RESPONSIVE AJUSTADO ===== */
 @media (min-aspect-ratio: 16/9){
   .hero-video{
-    object-fit: contain !important;
-    object-position: center center !important;
+    object-fit: cover !important;
+    object-position: center 45% !important; /* sube ligeramente el encuadre para que se vea más el logo */
+    transform: scale(1.12); /* zoom leve para eliminar márgenes arriba/abajo */
     background-color: #000;
   }
 }
@@ -75,5 +76,6 @@
   .hero-video{
     object-fit: cover !important;
     object-position: center top !important;
+    transform: none;
   }
 }
