@@ -25,11 +25,11 @@ const productsGrid = document.getElementById('productsGrid');
 const productsFallback = document.getElementById('productsFallback');
 
 // ===== State =====
-let isOverHero = true;     // si la topbar está sobre la sección del vídeo
+let isOverHero = true;     // topbar sobre vídeo
 let menuOpen = false;
 let searchOpen = false;
 
-// ===== Topbar: transparente / translúcida / opaca =====
+// ===== Topbar mode =====
 const io = new IntersectionObserver((entries) => {
   entries.forEach(entry => {
     isOverHero = entry.isIntersecting && entry.intersectionRatio > 0;
@@ -55,7 +55,7 @@ function updateTopbarMode() {
 window.addEventListener('scroll', updateTopbarMode);
 updateTopbarMode();
 
-// ===== Overlay (para filtros) =====
+// ===== Overlay =====
 function openOverlay() {
   overlay.hidden = false;
   updateOverlayMode();
@@ -98,7 +98,7 @@ document.addEventListener('keydown', (e) => {
   }
 });
 
-// Placeholder: conectar con products.js si quieres aplicar filtros reales
+// Placeholder de filtros (conectar con products.js si quieres)
 filtersForm?.addEventListener('submit', (e) => {
   e.preventDefault();
   toggleMenu(false);
@@ -107,7 +107,7 @@ btnClearFilters?.addEventListener('click', () => {
   filtersForm.reset();
 });
 
-// ===== Barra de búsqueda fina =====
+// ===== Barra de búsqueda =====
 function toggleSearch(force) {
   const next = typeof force === 'boolean' ? force : !searchOpen;
   searchOpen = next;
@@ -130,12 +130,11 @@ searchForm?.addEventListener('submit', (e) => {
   url.searchParams.set('q', q);
   history.replaceState({}, '', url);
   toggleSearch(false);
-  // Aquí puedes disparar una función global de products.js para filtrar el grid por 'q'
+  // TODO: llamar a tu función de filtrado en products.js con 'q'
 });
 
-// ===== Fallback para productos (por si products.js no inyecta nada) =====
+// ===== Fallback de productos =====
 window.addEventListener('DOMContentLoaded', () => {
-  // Si después de 1s no hay contenido en el grid, mostramos fallback
   setTimeout(() => {
     if (productsGrid && productsGrid.children.length === 0 && productsFallback) {
       productsFallback.hidden = false;
