@@ -11,11 +11,38 @@
     html,body{
       margin:0;padding:0;
       font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Cantarell,Noto Sans,Arial;
-      color:#eaeaea;background:#000000;
+      color:#eaeaea;background:#000;
+      overflow-x:hidden;
     }
     a{color:#eaeaea;text-decoration:none;opacity:.9}
     a:hover{opacity:1}
     .container{width:min(1100px,92%);margin:0 auto;}
+
+    /* === PANTALLA DE CARGA === */
+    #preloader {
+      position: fixed;
+      inset: 0;
+      background: #000;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      z-index: 10000;
+      transition: opacity 0.8s ease, visibility 0.8s ease;
+    }
+    #preloader.fade-out {
+      opacity: 0;
+      visibility: hidden;
+    }
+    #preloader img {
+      width: 180px;
+      height: auto;
+      animation: pulse 1.8s ease-in-out infinite;
+      user-select: none;
+    }
+    @keyframes pulse {
+      0%,100% { opacity: 0.6; transform: scale(0.98); }
+      50% { opacity: 1; transform: scale(1); }
+    }
 
     /* === TOPBAR === */
     .topbar{
@@ -63,17 +90,21 @@
     .card{ background:#151517; border:1px solid rgba(255,255,255,.06); border-radius:16px; padding:20px; }
     footer{ padding:36px 0 64px; color:#b3b3b3; text-align:center; border-top:1px solid rgba(255,255,255,.08); margin-top:48px; }
 
-    /* Responsive */
     @media (max-width: 520px){
       .logo-img{ height:40px; }
       .topbar-inner{ gap:8px; }
+      #preloader img { width: 130px; }
     }
   </style>
 
-  <!-- estilos extra de la tienda -->
-  <link rel="stylesheet" href="assets/store.css?v=7">
+  <link rel="stylesheet" href="assets/store.css?v=10">
 </head>
 <body>
+
+  <!-- PANTALLA DE CARGA -->
+  <div id="preloader">
+    <img src="assets/logo%20largo%20bueno.JPG" alt="CRONOX logo">
+  </div>
 
   <!-- TOPBAR -->
   <div class="topbar" id="topbar">
@@ -100,8 +131,8 @@
 
   <!-- HERO VIDEO FULLSCREEN -->
   <section class="hero-video-section">
-    <video autoplay muted loop playsinline preload="metadata" class="hero-video" poster="assets/poster.jpg">
-      <source src="assets/VIDEO_LOGO_CRONOX.mp4" type="video/mp4">
+    <video autoplay muted loop playsinline webkit-playsinline preload="metadata" class="hero-video" poster="assets/poster.jpg">
+      <source src="assets/VIDEO_LOGO_CRONOX.mp4?v=4" type="video/mp4">
       Tu navegador no soporta video HTML5.
     </video>
     <div class="hero-overlay">
@@ -145,7 +176,7 @@
     // Año footer
     document.getElementById('anio').textContent = new Date().getFullYear();
 
-    // Fallback: si el logo no carga, mostramos texto "CRONOX"
+    // Fallback: si el logo no carga
     const img = document.getElementById('brandLogo');
     img.addEventListener('error', () => {
       document.querySelector('.logo-text').style.display = 'inline-block';
@@ -161,9 +192,15 @@
         topbar.classList.remove('scrolled');
       }
     });
+
+    // Preloader: desaparece cuando carga la página
+    window.addEventListener('load', () => {
+      const preloader = document.getElementById('preloader');
+      preloader.classList.add('fade-out');
+      setTimeout(() => preloader.remove(), 900);
+    });
   </script>
 
-  <!-- Tienda -->
   <script src="assets/products.js"></script>
   <script src="assets/app.js"></script>
 
