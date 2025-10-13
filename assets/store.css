@@ -27,7 +27,7 @@
   top: 0; left: 0;
   width: 100%; height: 100%;
   object-fit: contain;
-  transform: scale(2.30) translateY(7%);
+  transform: scale(2.20) translateY(7%);
   transform-origin: center center;
   background-color: #000;
   z-index: 0;
