@@ -5,22 +5,23 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>CRONOX — Tienda Oficial</title>
   <meta name="description" content="Tienda oficial CRONOX — Dark streetwear premium.">
-  <link rel="stylesheet" href="assets/store.css?v=23">
+  <!-- CSS principal (cache bust) -->
+  <link rel="stylesheet" href="assets/store.css?v=24">
 </head>
 <body>
 
-  <!-- Preloader -->
-  <div id="preloader" class="preloader">
+  <!-- Preloader (pantalla negra con logo) -->
+  <div id="preloader" class="preloader" aria-hidden="true">
     <img src="assets/logo-cronox.svg" alt="CRONOX" class="preloader__logo">
   </div>
 
-  <!-- Overlay (solo visible cuando el menú de filtros está abierto) -->
+  <!-- Capa de overlay para panel de filtros (se activa por JS) -->
   <div id="overlay" class="overlay" hidden></div>
 
-  <!-- Topbar -->
-  <header class="topbar topbar--transparent" id="topbar">
+  <!-- Topbar fija -->
+  <header class="topbar topbar--transparent" id="topbar" role="banner">
     <div class="topbar__left">
-      <!-- Botón menú (tres líneas) -->
+      <!-- Menú hamburguesa: abre filtros -->
       <button id="btnMenu" class="icon-btn" aria-label="Abrir filtros" aria-expanded="false" aria-controls="filtersPanel">
         <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
              stroke-linecap="round" stroke-linejoin="round" class="icon">
@@ -30,7 +31,7 @@
         </svg>
       </button>
 
-      <!-- Lupa (buscador) -->
+      <!-- Lupa: abre barra de búsqueda fina bajo el banner -->
       <button id="btnSearch" class="icon-btn" aria-label="Buscar productos" aria-expanded="false" aria-controls="searchBar">
         <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
              stroke-linecap="round" stroke-linejoin="round" class="icon">
@@ -40,18 +41,19 @@
       </button>
     </div>
 
-    <!-- LOGO centrado -->
+    <!-- Logo centrado (blanco mediante filter CSS) -->
     <a href="/" class="topbar__logo" aria-label="CRONOX — Inicio">
       <img src="assets/logo-cronox.svg" alt="CRONOX">
     </a>
 
-    <nav class="topbar__right">
+    <!-- Enlaces derecha (puedes quitar “Tienda” si lo prefieres) -->
+    <nav class="topbar__right" aria-label="Navegación principal">
       <a href="#store" class="topbar__link">Tienda</a>
       <a href="#cart" class="topbar__link">Carrito</a>
     </nav>
   </header>
 
-  <!-- Barra de búsqueda fina pegada bajo la topbar -->
+  <!-- Barra de búsqueda fina pegada debajo del banner -->
   <div id="searchBar" class="searchbar" hidden>
     <form id="searchForm" class="searchbar__form" role="search">
       <input id="searchInput" class="searchbar__input" type="text" placeholder="Buscar productos…" autocomplete="off" />
@@ -61,7 +63,7 @@
     </form>
   </div>
 
-  <!-- Panel de filtros (aparece con overlay) -->
+  <!-- Panel de filtros (sobre overlay) -->
   <aside id="filtersPanel" class="filters" hidden aria-label="Filtros de producto">
     <div class="filters__card">
       <div class="filters__head">
@@ -102,18 +104,22 @@
     </div>
   </aside>
 
-  <!-- HERO VIDEO en pantalla completa -->
-  <section class="hero-video-section" id="hero">
+  <!-- HERO video pantalla completa (base estable) -->
+  <section class="hero-video-section" id="hero" aria-label="Portada">
     <video class="hero-video" src="assets/hero.mp4" autoplay muted loop playsinline></video>
     <div class="hero-overlay-text">
       <h1>NOS REGIT NOX</h1>
     </div>
   </section>
 
-  <!-- TIENDA -->
-  <main id="store" class="store">
+  <!-- TIENDA / GRID -->
+  <main id="store" class="store" aria-live="polite">
     <h2 class="sr-only">Tienda</h2>
     <div id="productsGrid" class="products-grid"></div>
+    <!-- Fallback si products.js no rellena -->
+    <div id="productsFallback" class="products-fallback" hidden>
+      <p>No se han podido cargar los productos. Revisa <code>assets/products.js</code>.</p>
+    </div>
   </main>
 
   <!-- CONTACTO -->
@@ -126,7 +132,8 @@
     <p>© CRONOX</p>
   </footer>
 
+  <!-- Scripts (products primero, luego app) -->
   <script src="assets/products.js"></script>
-  <script src="assets/app.js?v=23"></script>
+  <script src="assets/app.js?v=24"></script>
 </body>
 </html>
