@@ -35,14 +35,18 @@
       50%{opacity:1;transform:scale(1)}
     }
 
-    /* === TOPBAR === */
+    /* === TOPBAR (3 estados) === */
     .topbar{
       position:fixed;top:0;left:0;right:0;z-index:9999;
-      background:rgba(0,0,0,0);
-      transition:background .4s ease,box-shadow .4s ease;
+      background:rgba(0,0,0,0); /* transparente en el tope */
+      transition:background .25s ease, box-shadow .25s ease;
     }
-    .topbar.scrolled{
-      background:rgba(0,0,0,.85);
+    .topbar.translucent{
+      background:rgba(0,0,0,.35); /* sobre el vídeo */
+      box-shadow:none;
+    }
+    .topbar.opaque{
+      background:#000; /* después del vídeo, negro 100% */
       box-shadow:0 4px 20px rgba(0,0,0,.3);
     }
     .topbar-inner{
@@ -82,6 +86,7 @@
     }
   </style>
 
+  <!-- Tu CSS externo (no hace falta tocarlo) -->
   <link rel="stylesheet" href="assets/store.css?v=21">
 </head>
 <body>
@@ -98,7 +103,7 @@
         <a href="#tienda" class="top-link">Tienda</a>
       </div>
       <div class="top-center">
-        <a href="#inicio" class="logo-link">
+        <a href="#" class="logo-link" id="homeLink">
           <img id="brandLogo" class="logo-img" src="assets/logo largo bueno.JPG" alt="CRONOX logo">
           <span class="logo-text">CRONOX</span>
         </a>
@@ -153,24 +158,67 @@
   </footer>
 
   <script>
+    // Siempre cargar arriba del todo
+    try { history.scrollRestoration = 'manual'; } catch(e) {}
+    if (location.hash) {
+      // Elimina el hash para no saltar a secciones en la primera carga
+      history.replaceState(null, document.title, location.pathname + location.search);
+    }
+    // Evita restauración de scroll del navegador en algunas condiciones
+    window.scrollTo(0, 0);
+
+    // Año footer
     document.getElementById('anio').textContent = new Date().getFullYear();
 
+    // Fallback logo
     const img = document.getElementById('brandLogo');
     img.addEventListener('error', () => {
       document.querySelector('.logo-text').style.display = 'inline-block';
       img.style.display = 'none';
     });
 
+    // Topbar 3 estados según posición respecto al vídeo
     const topbar = document.getElementById('topbar');
-    window.addEventListener('scroll', () => {
-      if (window.scrollY > 80) topbar.classList.add('scrolled');
-      else topbar.classList.remove('scrolled');
-    });
+    const hero = document.querySelector('.hero-video-section');
 
+    function updateTopbarState(){
+      const top = window.scrollY || document.documentElement.scrollTop;
+      const heroRect = hero.getBoundingClientRect();
+      const topbarH = topbar.offsetHeight || 0;
+
+      // Arriba del todo (transparente)
+      if (top <= 0) {
+        topbar.classList.remove('translucent','opaque');
+        return;
+      }
+
+      // ¿Sigue solapando al vídeo?
+      // heroRect.bottom > topbarH => aún hay vídeo debajo de la barra
+      if (heroRect.bottom - topbarH > 0) {
+        topbar.classList.add('translucent');
+        topbar.classList.remove('opaque');
+      } else {
+        topbar.classList.add('opaque');
+        topbar.classList.remove('translucent');
+      }
+    }
+
+    window.addEventListener('scroll', updateTopbarState, { passive: true });
+    window.addEventListener('resize', updateTopbarState);
     window.addEventListener('load', () => {
       const preloader = document.getElementById('preloader');
       preloader.classList.add('fade-out');
       setTimeout(() => preloader.remove(), 900);
+      // Asegura que empezamos en el tope tras cargar recursos
+      window.scrollTo(0, 0);
+      updateTopbarState();
+    });
+
+    // Al hacer clic en el logo, vuelve arriba (no al #inicio)
+    document.getElementById('homeLink').addEventListener('click', (e) => {
+      e.preventDefault();
+      history.replaceState(null, document.title, location.pathname + location.search);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
     });
   </script>
 
