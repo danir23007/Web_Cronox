@@ -29,13 +29,9 @@
       z-index: 10000;
       transition: opacity 0.8s ease, visibility 0.8s ease;
     }
-    #preloader.fade-out {
-      opacity: 0;
-      visibility: hidden;
-    }
+    #preloader.fade-out { opacity: 0; visibility: hidden; }
     #preloader img {
-      width: 180px;
-      height: auto;
+      width: 180px; height: auto;
       animation: pulse 1.8s ease-in-out infinite;
       user-select: none;
     }
@@ -97,7 +93,8 @@
     }
   </style>
 
-  <link rel="stylesheet" href="assets/store.css?v=12">
+  <!-- Incrementamos versión para forzar recarga del CSS -->
+  <link rel="stylesheet" href="assets/store.css?v=14">
 </head>
 <body>
 
@@ -115,10 +112,7 @@
 
       <div class="top-center">
         <a href="#inicio" class="logo-link">
-          <img id="brandLogo"
-               class="logo-img"
-               src="assets/logo%20largo%20bueno.JPG"
-               alt="CRONOX logo">
+          <img id="brandLogo" class="logo-img" src="assets/logo%20largo%20bueno.JPG" alt="CRONOX logo">
           <span class="logo-text">CRONOX</span>
         </a>
       </div>
