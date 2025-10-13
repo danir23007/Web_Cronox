@@ -27,7 +27,7 @@
   object-fit:contain;
   transform:scale(2.40); /* zoom leve para laterales más finos */
   transform-origin:center center;
-  object-position:50% 55%; /* recorte muy leve arriba/abajo */
+  object-position:50% 65%; /* recorte muy leve arriba/abajo */
   background-color:#000;
   z-index:0;
 }
