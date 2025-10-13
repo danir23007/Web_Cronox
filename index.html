@@ -93,7 +93,7 @@
     }
   </style>
 
-  <link rel="stylesheet" href="assets/store.css?v=15">
+  <link rel="stylesheet" href="assets/store.css?v=16">
 </head>
 <body>
 
@@ -167,16 +167,19 @@
 
   <script>
     document.getElementById('anio').textContent = new Date().getFullYear();
+
     const img = document.getElementById('brandLogo');
     img.addEventListener('error', () => {
       document.querySelector('.logo-text').style.display = 'inline-block';
       img.style.display = 'none';
     });
+
     const topbar = document.getElementById('topbar');
     window.addEventListener('scroll', () => {
       if (window.scrollY > 80) topbar.classList.add('scrolled');
       else topbar.classList.remove('scrolled');
     });
+
     window.addEventListener('load', () => {
       const preloader = document.getElementById('preloader');
       preloader.classList.add('fade-out');
