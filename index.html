@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>CRONOX — Tienda Oficial</title>
   <meta name="description" content="Tienda oficial CRONOX — Dark streetwear premium.">
-  <link rel="stylesheet" href="assets/store.css?v=30">
+  <link rel="stylesheet" href="assets/store.css?v=31">
 </head>
 <body>
 
@@ -34,7 +34,7 @@
         </svg>
       </button>
 
-      <!-- Lupa (buscador) -->
+      <!-- Lupa -->
       <button id="btnSearch" class="icon-btn" aria-label="Buscar productos" aria-expanded="false" aria-controls="searchBar">
         <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
              stroke-linecap="round" stroke-linejoin="round" class="icon">
@@ -44,7 +44,7 @@
       </button>
     </div>
 
-    <!-- Logo centrado (usa tu JPG) -->
+    <!-- Logo centrado -->
     <a href="/" class="topbar__logo" aria-label="CRONOX — Inicio">
       <img
         src="https://raw.githubusercontent.com/danir23007/Web_Cronox/refs/heads/main/assets/logo%20largo%20bueno.JPG"
@@ -59,7 +59,7 @@
     </nav>
   </header>
 
-  <!-- Barra de búsqueda fina -->
+  <!-- Barra de búsqueda -->
   <div id="searchBar" class="searchbar" hidden>
     <form id="searchForm" class="searchbar__form" role="search">
       <input id="searchInput" class="searchbar__input" type="text" placeholder="Buscar productos…" autocomplete="off" />
@@ -108,7 +108,7 @@
     </div>
   </aside>
 
-  <!-- HERO video (usa tu nombre real del archivo) -->
+  <!-- HERO video -->
   <section class="hero-video-section" id="hero" aria-label="Portada">
     <video class="hero-video" src="assets/VIDEO_LOGO_CRONOX.mp4" autoplay muted loop playsinline></video>
     <div class="hero-overlay-text">
@@ -135,8 +135,19 @@
     <p>© CRONOX</p>
   </footer>
 
-  <!-- Scripts -->
-  <script src="assets/products.js"></script>
-  <script src="assets/app.js?v=30"></script>
+  <!-- Failsafe: si algo rompe JS, oculta el preloader a los 5s -->
+  <script>
+    (function(){
+      var tried = false;
+      function hide(){ if(tried) return; tried = true; var p = document.getElementById('preloader'); if(p) p.style.display='none'; }
+      window.addEventListener('load', hide, {once:true});
+      window.addEventListener('DOMContentLoaded', function(){ setTimeout(hide, 3500); }, {once:true});
+      window.addEventListener('error', function(){ setTimeout(hide, 0); });
+    })();
+  </script>
+
+  <!-- Scripts principales -->
+  <script src="assets/products.js?v=31"></script>
+  <script src="assets/app.js?v=31"></script>
 </body>
 </html>
