@@ -25,7 +25,7 @@
 .hero-video {
   position:absolute;top:0;left:0;width:100%;height:100%;
   object-fit:contain;
-  transform:scale(2.00); /* zoom leve para laterales más finos */
+  transform:scale(2.20); /* zoom leve para laterales más finos */
   transform-origin:center center;
   object-position:50% 50%; /* recorte muy leve arriba/abajo */
   background-color:#000;
