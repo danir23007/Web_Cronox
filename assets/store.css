@@ -1,32 +1,29 @@
-/* ===== Base y variables ===== */
+/* ===== Base ===== */
 *,*::before,*::after{box-sizing:border-box}
 html,body{margin:0;padding:0;background:#000;color:#fff}
 
+/* ===== Vars ===== */
 :root{
   --topbar-h:64px;
-
-  /* Estados de topbar */
-  --topbar-bg: rgba(0,0,0,0.0);      /* transparente (arriba del todo) */
-  --topbar-bg-hero: rgba(0,0,0,0.35);/* translúcida sobre el vídeo */
+  --topbar-bg: rgba(0,0,0,0.0);      /* transparente arriba */
+  --topbar-bg-hero: rgba(0,0,0,0.35);/* translúcida sobre vídeo */
   --topbar-bg-page: rgba(0,0,0,1);   /* opaca fuera del vídeo */
 
-  /* Colores UI */
   --text:#f4f4f4;
   --muted:#d0d0d0;
   --border:rgba(255,255,255,.12);
   --card:rgba(20,20,20,.88);
   --focus:0 0 0 2px rgba(255,255,255,.3),0 0 0 4px rgba(0,0,0,.6);
 
-  /* Overlays */
   --overlay-hero: rgba(0,0,0,.35);
   --overlay-page: rgba(0,0,0,.9);
 }
 
 /* ===== Preloader ===== */
 .preloader{position:fixed;inset:0;display:grid;place-items:center;background:#000;z-index:9999}
-.preloader__logo{width:120px;opacity:.9;filter:invert(1)}
+.preloader__logo{width:160px;opacity:.95;/* no filter para respetar tu JPG */}
 
-/* ===== Overlay (para filtros) ===== */
+/* ===== Overlay (filtros) ===== */
 .overlay{position:fixed;inset:0;background:var(--overlay-hero);backdrop-filter:saturate(120%) blur(2px);z-index:900;transition:background .25s ease,opacity .2s ease}
 .overlay[hidden]{display:none}
 .overlay.overlay--hero{background:var(--overlay-hero)}
@@ -44,14 +41,14 @@ html,body{margin:0;padding:0;background:#000;color:#fff}
 .topbar__link:hover{color:#fff}
 
 .topbar__logo{justify-self:center;display:inline-flex;align-items:center}
-.topbar__logo img{height:28px;display:block;filter:invert(1) saturate(0) brightness(1.2)} /* logo blanco aunque el SVG sea oscuro */
+.topbar__logo-img{height:28px;display:block;/* sin invert: tu JPG ya viene diseñado */}
 
 /* Iconos */
 .icon-btn{background:transparent;border:none;color:#fff;display:inline-flex;align-items:center;justify-content:center;width:36px;height:36px;border-radius:999px;cursor:pointer}
 .icon-btn:focus-visible{outline:none;box-shadow:var(--focus)}
 .icon{display:block}
 
-/* ===== Searchbar fina (debajo del banner) ===== */
+/* ===== Searchbar fina ===== */
 .searchbar{position:sticky;top:var(--topbar-h);z-index:950;background:rgba(0,0,0,.85);backdrop-filter:saturate(120%) blur(2px);border-bottom:1px solid var(--border)}
 .searchbar[hidden]{display:none}
 .searchbar__form{max-width:1100px;margin:0 auto;padding:6px 14px;display:flex;gap:10px}
@@ -73,14 +70,14 @@ html,body{margin:0;padding:0;background:#000;color:#fff}
 .btn{background:#fff;color:#000;border:none;border-radius:10px;padding:10px 14px;font:700 13px/1 system-ui;cursor:pointer}
 .btn--ghost{background:transparent;color:#fff;border:1px solid var(--border)}
 
-/* ===== HERO video (TU BASE ESTABLE) ===== */
+/* ===== HERO video (BASE ESTABLE) ===== */
 .hero-video-section{position:relative;min-height:100svh;display:grid;place-items:center;background:#000;overflow:hidden;z-index:1}
 .hero-video{
   position:absolute;inset:0;width:100%;height:100%;
-  object-fit:contain;                    /* BASE ESTABLE */
+  object-fit:contain;               /* TU BASE ESTABLE */
   transform-origin:center center;
-  transform:scale(2.20) translateY(7%);  /* BASE ESTABLE */
-  background:#000;                       /* BASE ESTABLE */
+  transform:scale(2.20) translateY(7%); /* TU BASE ESTABLE */
+  background:#000;                  /* TU BASE ESTABLE */
   z-index:0;
 }
 .hero-overlay-text{position:relative;z-index:1;color:#fff;text-align:center}
