@@ -97,7 +97,7 @@
     }
   </style>
 
-  <link rel="stylesheet" href="assets/store.css?v=10">
+  <link rel="stylesheet" href="assets/store.css?v=12">
 </head>
 <body>
 
@@ -136,7 +136,7 @@
       Tu navegador no soporta video HTML5.
     </video>
     <div class="hero-overlay">
-      <h1>"NOS REGIT NOX"</h1>
+      <h1>Nos regit nox</h1>
     </div>
   </section>
 
@@ -173,27 +173,20 @@
   </footer>
 
   <script>
-    // Año footer
     document.getElementById('anio').textContent = new Date().getFullYear();
 
-    // Fallback: si el logo no carga
     const img = document.getElementById('brandLogo');
     img.addEventListener('error', () => {
       document.querySelector('.logo-text').style.display = 'inline-block';
       img.style.display = 'none';
     });
 
-    // Efecto topbar transparente → oscuro al hacer scroll
     const topbar = document.getElementById('topbar');
     window.addEventListener('scroll', () => {
-      if (window.scrollY > 80) {
-        topbar.classList.add('scrolled');
-      } else {
-        topbar.classList.remove('scrolled');
-      }
+      if (window.scrollY > 80) topbar.classList.add('scrolled');
+      else topbar.classList.remove('scrolled');
     });
 
-    // Preloader: desaparece cuando carga la página
     window.addEventListener('load', () => {
       const preloader = document.getElementById('preloader');
       preloader.classList.add('fade-out');
