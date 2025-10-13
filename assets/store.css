@@ -59,16 +59,3 @@
   text-transform: uppercase;
   letter-spacing: 4px;
 }
-@media (min-aspect-ratio: 16/9) {
-  .hero-video { 
-    object-fit: contain;
-    background-color: #000;
-  }
-}
-
-@media (max-aspect-ratio: 16/9) {
-  .hero-video {
-    object-fit: cover;
-    object-position: center;
-  }
-}
