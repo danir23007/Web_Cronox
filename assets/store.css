@@ -31,10 +31,12 @@
   position: absolute;
   top: 0; left: 0;
   width: 100%; height: 100%;
-  object-fit: contain; /* para que no recorte */
-  object-position: center center;
+  object-fit: cover;
+  object-position: 50% 45%;
   z-index: 0;
-  background-color: #000; /* rellena los márgenes laterales */
+  background-color: #000;
+  transform: scale(1.08); /* zoom intermedio */
+  transform-origin: center center;
 }
 
 .hero-overlay {
@@ -54,10 +56,11 @@
   letter-spacing: 4px;
 }
 
-/* ===== AJUSTES RESPONSIVE ===== */
+/* ===== EN MÓVIL ===== */
 @media (max-aspect-ratio: 16/9){
   .hero-video{
     object-fit: cover !important;
     object-position: center top !important;
+    transform: none;
   }
 }
