@@ -1,105 +1,94 @@
 <!doctype html>
 <html lang="es">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>CRONOX — Tienda Oficial</title>
-  <meta name="description" content="Tienda oficial CRONOX — Dark streetwear premium." />
+  <meta name="description" content="Tienda oficial CRONOX — Dark streetwear premium.">
 
   <style>
     *,*::before,*::after{box-sizing:border-box;}
     html,body{
       margin:0;padding:0;
-      font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Cantarell,Noto Sans,Arial;
-      color:#eaeaea;background:#000;
-      overflow-x:hidden;
+      font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Cantarell,Noto Sans,Arial,sans-serif;
+      color:#eaeaea;background:#000;overflow-x:hidden;
     }
     a{color:#eaeaea;text-decoration:none;opacity:.9}
     a:hover{opacity:1}
-    .container{width:min(1100px,92%);margin:0 auto;}
+    .container{width:min(1100px,92%);margin:0 auto}
 
     /* === PANTALLA DE CARGA === */
-    #preloader {
-      position: fixed;
-      inset: 0;
-      background: #000;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      z-index: 10000;
-      transition: opacity 0.8s ease, visibility 0.8s ease;
+    #preloader{
+      position:fixed;inset:0;background:#000;
+      display:flex;justify-content:center;align-items:center;
+      z-index:10000;
+      transition:opacity .8s ease,visibility .8s ease;
     }
-    #preloader.fade-out { opacity: 0; visibility: hidden; }
-    #preloader img {
-      width: 180px; height: auto;
-      animation: pulse 1.8s ease-in-out infinite;
-      user-select: none;
+    #preloader.fade-out{opacity:0;visibility:hidden}
+    #preloader img{
+      width:180px;height:auto;
+      animation:pulse 1.8s ease-in-out infinite;
+      user-select:none;
     }
-    @keyframes pulse {
-      0%,100% { opacity: 0.6; transform: scale(0.98); }
-      50% { opacity: 1; transform: scale(1); }
+    @keyframes pulse{
+      0%,100%{opacity:.6;transform:scale(.98)}
+      50%{opacity:1;transform:scale(1)}
     }
 
     /* === TOPBAR === */
     .topbar{
-      position:fixed; top:0; z-index:9999;
-      width:100%;
+      position:fixed;top:0;left:0;right:0;z-index:9999;
       background:rgba(0,0,0,0);
-      transition:background 0.4s ease, box-shadow 0.4s ease;
+      transition:background .4s ease,box-shadow .4s ease;
     }
     .topbar.scrolled{
-      background:rgba(0,0,0,0.85);
+      background:rgba(0,0,0,.85);
       box-shadow:0 4px 20px rgba(0,0,0,.3);
     }
     .topbar-inner{
-      width:min(1100px,92%); margin:0 auto;
-      display:grid; grid-template-columns: 1fr auto 1fr;
-      align-items:center; gap:12px;
-      padding:14px 0;
+      width:min(1100px,92%);margin:0 auto;
+      display:grid;grid-template-columns:1fr auto 1fr;
+      align-items:center;gap:12px;padding:14px 0;
     }
-    .top-left, .top-right{ display:flex; align-items:center; }
-    .top-left{ justify-content:flex-start; }
-    .top-right{ justify-content:flex-end; }
-    .top-center{ display:flex; justify-content:center; align-items:center; }
+    .top-left,.top-right{display:flex;align-items:center}
+    .top-left{justify-content:flex-start}
+    .top-right{justify-content:flex-end}
+    .top-center{display:flex;justify-content:center;align-items:center}
+    .top-link{font-weight:500}
+    .cart-link{white-space:nowrap}
+    .logo-link{display:inline-flex;align-items:center}
+    .logo-img{height:44px;width:auto;display:block;transition:transform .2s ease}
+    .logo-img:hover{transform:scale(1.05)}
+    .logo-text{display:none;font-weight:800;letter-spacing:6px;font-size:20px}
 
-    .top-link{ font-weight:500; }
-    .cart-link{ white-space:nowrap; }
-
-    .logo-link{ display:inline-flex; align-items:center; }
-    .logo-img{
-      height:44px; width:auto; display:block; filter:none;
-      transition:transform .2s ease;
-    }
-    .logo-img:hover{ transform:scale(1.05); }
-    .logo-text{ display:none; font-weight:800; letter-spacing:6px; font-size:20px; }
-
-    /* Contenido principal */
-    .hero{ padding:72px 0 36px; text-align:center; }
-    .hero h1{ font-size:clamp(2rem,5vw,3.2rem); line-height:1.1; margin:0 0 16px; }
-    .hero p{ color:#b3b3b3; margin:0 auto 24px; max-width:720px; }
+    /* === CONTENIDO PRINCIPAL === */
+    .hero{padding:72px 0 36px;text-align:center}
+    .hero h1{font-size:clamp(2rem,5vw,3.2rem);line-height:1.1;margin:0 0 16px}
+    .hero p{color:#b3b3b3;margin:0 auto 24px;max-width:720px}
     .cta{
-      display:inline-flex; align-items:center; gap:.6rem; padding:12px 18px;
-      background:#7c5cff; color:#fff; border-radius:999px; border:none; cursor:pointer; font-weight:700;
+      display:inline-flex;align-items:center;gap:.6rem;
+      padding:12px 18px;background:#7c5cff;color:#fff;
+      border-radius:999px;border:none;cursor:pointer;font-weight:700;
     }
-    .cta.secondary{ background:transparent; border:1px solid rgba(255,255,255,.14); color:#eaeaea; }
-    .grid{ display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:16px; margin:36px 0; }
-    .card{ background:#151517; border:1px solid rgba(255,255,255,.06); border-radius:16px; padding:20px; }
-    footer{ padding:36px 0 64px; color:#b3b3b3; text-align:center; border-top:1px solid rgba(255,255,255,.08); margin-top:48px; }
+    .cta.secondary{background:transparent;border:1px solid rgba(255,255,255,.14);color:#eaeaea}
+    .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:16px;margin:36px 0}
+    .card{background:#151517;border:1px solid rgba(255,255,255,.06);border-radius:16px;padding:20px}
+    footer{padding:36px 0 64px;color:#b3b3b3;text-align:center;border-top:1px solid rgba(255,255,255,.08);margin-top:48px}
 
-    @media (max-width: 520px){
-      .logo-img{ height:40px; }
-      .topbar-inner{ gap:8px; }
-      #preloader img { width: 130px; }
+    @media (max-width:520px){
+      .logo-img{height:40px}
+      .topbar-inner{gap:8px}
+      #preloader img{width:130px}
     }
   </style>
 
-  <link rel="stylesheet" href="assets/store.css?v=19">
+  <link rel="stylesheet" href="assets/store.css?v=21">
 </head>
 <body>
 
   <!-- PANTALLA DE CARGA -->
   <div id="preloader">
-    <img src="assets/logo%20largo%20bueno.JPG" alt="CRONOX logo">
+    <img src="assets/logo largo bueno.JPG" alt="CRONOX logo">
   </div>
 
   <!-- TOPBAR -->
@@ -108,23 +97,21 @@
       <div class="top-left">
         <a href="#tienda" class="top-link">Tienda</a>
       </div>
-
       <div class="top-center">
         <a href="#inicio" class="logo-link">
-          <img id="brandLogo" class="logo-img" src="assets/logo%20largo%20bueno.JPG" alt="CRONOX logo">
+          <img id="brandLogo" class="logo-img" src="assets/logo largo bueno.JPG" alt="CRONOX logo">
           <span class="logo-text">CRONOX</span>
         </a>
       </div>
-
       <div class="top-right">
         <a href="cart.html" class="top-link cart-link">Carrito (<span id="cart-count">0</span>)</a>
       </div>
     </div>
   </div>
 
-  <!-- HERO VIDEO FULLSCREEN -->
+  <!-- HERO VIDEO -->
   <section class="hero-video-section">
-    <video autoplay muted loop playsinline webkit-playsinline preload="metadata" class="hero-video" poster="assets/poster.jpg">
+    <video class="hero-video" autoplay muted loop playsinline webkit-playsinline preload="metadata" poster="assets/poster.jpg">
       <source src="assets/VIDEO_LOGO_CRONOX.mp4?v=4" type="video/mp4">
       Tu navegador no soporta video HTML5.
     </video>
@@ -143,6 +130,7 @@
       </div>
     </section>
 
+    <!-- TIENDA -->
     <section id="tienda">
       <h2>Productos</h2>
       <div class="grid" id="product-grid"></div>
@@ -188,6 +176,5 @@
 
   <script src="assets/products.js"></script>
   <script src="assets/app.js"></script>
-
 </body>
 </html>
