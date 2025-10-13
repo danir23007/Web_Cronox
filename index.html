@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>CRONOX — Tienda Oficial</title>
   <meta name="description" content="Tienda oficial CRONOX — Dark streetwear premium.">
-  <link rel="stylesheet" href="assets/store.css?v=22">
+  <link rel="stylesheet" href="assets/store.css?v=23">
 </head>
 <body>
 
@@ -14,15 +14,14 @@
     <img src="assets/logo-cronox.svg" alt="CRONOX" class="preloader__logo">
   </div>
 
-  <!-- Overlay (controlado por JS para opacidad) -->
+  <!-- Overlay (solo visible cuando el menú de filtros está abierto) -->
   <div id="overlay" class="overlay" hidden></div>
 
   <!-- Topbar -->
   <header class="topbar topbar--transparent" id="topbar">
     <div class="topbar__left">
-      <!-- Botón menú (reemplaza “Tienda”) -->
+      <!-- Botón menú (tres líneas) -->
       <button id="btnMenu" class="icon-btn" aria-label="Abrir filtros" aria-expanded="false" aria-controls="filtersPanel">
-        <!-- Hamburguesa (blanca) -->
         <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
              stroke-linecap="round" stroke-linejoin="round" class="icon">
           <line x1="3" y1="6" x2="21" y2="6"></line>
@@ -31,7 +30,7 @@
         </svg>
       </button>
 
-      <!-- Botón búsqueda (lupa blanca) -->
+      <!-- Lupa (buscador) -->
       <button id="btnSearch" class="icon-btn" aria-label="Buscar productos" aria-expanded="false" aria-controls="searchBar">
         <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
              stroke-linecap="round" stroke-linejoin="round" class="icon">
@@ -41,6 +40,7 @@
       </button>
     </div>
 
+    <!-- LOGO centrado -->
     <a href="/" class="topbar__logo" aria-label="CRONOX — Inicio">
       <img src="assets/logo-cronox.svg" alt="CRONOX">
     </a>
@@ -51,7 +51,7 @@
     </nav>
   </header>
 
-  <!-- Barra de búsqueda fina (aparece debajo del banner) -->
+  <!-- Barra de búsqueda fina pegada bajo la topbar -->
   <div id="searchBar" class="searchbar" hidden>
     <form id="searchForm" class="searchbar__form" role="search">
       <input id="searchInput" class="searchbar__input" type="text" placeholder="Buscar productos…" autocomplete="off" />
@@ -61,7 +61,7 @@
     </form>
   </div>
 
-  <!-- Panel filtros (overlay encima del vídeo o página) -->
+  <!-- Panel de filtros (aparece con overlay) -->
   <aside id="filtersPanel" class="filters" hidden aria-label="Filtros de producto">
     <div class="filters__card">
       <div class="filters__head">
@@ -102,7 +102,7 @@
     </div>
   </aside>
 
-  <!-- Hero video full screen -->
+  <!-- HERO VIDEO en pantalla completa -->
   <section class="hero-video-section" id="hero">
     <video class="hero-video" src="assets/hero.mp4" autoplay muted loop playsinline></video>
     <div class="hero-overlay-text">
@@ -110,13 +110,13 @@
     </div>
   </section>
 
-  <!-- Contenido tienda -->
+  <!-- TIENDA -->
   <main id="store" class="store">
     <h2 class="sr-only">Tienda</h2>
     <div id="productsGrid" class="products-grid"></div>
   </main>
 
-  <!-- Contacto -->
+  <!-- CONTACTO -->
   <section id="contact" class="contact">
     <h2>Contacto</h2>
     <p>Escríbenos para colaboraciones y soporte.</p>
@@ -127,6 +127,6 @@
   </footer>
 
   <script src="assets/products.js"></script>
-  <script src="assets/app.js?v=22"></script>
+  <script src="assets/app.js?v=23"></script>
 </body>
 </html>
