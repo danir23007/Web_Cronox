@@ -231,3 +231,33 @@ html,body{margin:0;padding:0;background:#000;color:#fff}
   .filters__form{grid-template-columns:1fr}
   .topbar__right{display:none}
 }
+
+/* ===== Tarjetas de producto ===== */
+.product-card{
+  background:#111;
+  border:1px solid rgba(255,255,255,0.08);
+  border-radius:14px;
+  padding:18px 12px;
+  text-align:center;
+  transition:transform .2s ease, box-shadow .2s ease;
+}
+.product-card:hover{
+  transform:translateY(-4px);
+  box-shadow:0 10px 20px rgba(0,0,0,.4);
+}
+.product-img{
+  width:100%;
+  height:260px;
+  object-fit:cover;
+  border-radius:12px;
+  background:#000;
+}
+.product-name{
+  font:600 14px/1.3 system-ui;
+  margin:12px 0 4px;
+  color:#fff;
+}
+.product-price{
+  font:500 13px/1 system-ui;
+  color:#aaa;
+}
