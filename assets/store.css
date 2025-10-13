@@ -1,27 +1,32 @@
-/* ===== Base ===== */
+/* ===== Base y variables ===== */
 *,*::before,*::after{box-sizing:border-box}
 html,body{margin:0;padding:0;background:#000;color:#fff}
 
-/* ===== Variables ===== */
 :root{
   --topbar-h:64px;
-  --topbar-bg: rgba(0,0,0,0.0);      /* transparente arriba del todo */
+
+  /* Estados de topbar */
+  --topbar-bg: rgba(0,0,0,0.0);      /* transparente (arriba del todo) */
   --topbar-bg-hero: rgba(0,0,0,0.35);/* translúcida sobre el vídeo */
   --topbar-bg-page: rgba(0,0,0,1);   /* opaca fuera del vídeo */
-  --text: #f4f4f4;
-  --muted: #d0d0d0;
-  --border: rgba(255,255,255,0.12);
-  --card: rgba(20,20,20,0.88);
-  --overlay-hero: rgba(0,0,0,0.35);
-  --overlay-page: rgba(0,0,0,0.9);
-  --focus: 0 0 0 2px rgba(255,255,255,.3), 0 0 0 4px rgba(0,0,0,.6);
+
+  /* Colores UI */
+  --text:#f4f4f4;
+  --muted:#d0d0d0;
+  --border:rgba(255,255,255,.12);
+  --card:rgba(20,20,20,.88);
+  --focus:0 0 0 2px rgba(255,255,255,.3),0 0 0 4px rgba(0,0,0,.6);
+
+  /* Overlays */
+  --overlay-hero: rgba(0,0,0,.35);
+  --overlay-page: rgba(0,0,0,.9);
 }
 
 /* ===== Preloader ===== */
 .preloader{position:fixed;inset:0;display:grid;place-items:center;background:#000;z-index:9999}
 .preloader__logo{width:120px;opacity:.9;filter:invert(1)}
 
-/* ===== Overlay ===== */
+/* ===== Overlay (para filtros) ===== */
 .overlay{position:fixed;inset:0;background:var(--overlay-hero);backdrop-filter:saturate(120%) blur(2px);z-index:900;transition:background .25s ease,opacity .2s ease}
 .overlay[hidden]{display:none}
 .overlay.overlay--hero{background:var(--overlay-hero)}
@@ -39,14 +44,14 @@ html,body{margin:0;padding:0;background:#000;color:#fff}
 .topbar__link:hover{color:#fff}
 
 .topbar__logo{justify-self:center;display:inline-flex;align-items:center}
-.topbar__logo img{height:28px;display:block;filter:invert(1) saturate(0) brightness(1.2)} /* asegura logo blanco */
+.topbar__logo img{height:28px;display:block;filter:invert(1) saturate(0) brightness(1.2)} /* logo blanco aunque el SVG sea oscuro */
 
 /* Iconos */
-.icon-btn{background:transparent;border:none;color:white;display:inline-flex;align-items:center;justify-content:center;width:36px;height:36px;border-radius:999px;cursor:pointer}
+.icon-btn{background:transparent;border:none;color:#fff;display:inline-flex;align-items:center;justify-content:center;width:36px;height:36px;border-radius:999px;cursor:pointer}
 .icon-btn:focus-visible{outline:none;box-shadow:var(--focus)}
 .icon{display:block}
 
-/* ===== Search bar (fina bajo topbar) ===== */
+/* ===== Searchbar fina (debajo del banner) ===== */
 .searchbar{position:sticky;top:var(--topbar-h);z-index:950;background:rgba(0,0,0,.85);backdrop-filter:saturate(120%) blur(2px);border-bottom:1px solid var(--border)}
 .searchbar[hidden]{display:none}
 .searchbar__form{max-width:1100px;margin:0 auto;padding:6px 14px;display:flex;gap:10px}
@@ -68,20 +73,23 @@ html,body{margin:0;padding:0;background:#000;color:#fff}
 .btn{background:#fff;color:#000;border:none;border-radius:10px;padding:10px 14px;font:700 13px/1 system-ui;cursor:pointer}
 .btn--ghost{background:transparent;color:#fff;border:1px solid var(--border)}
 
-/* ===== HERO VIDEO — mantiene tu ajuste estable ===== */
+/* ===== HERO video (TU BASE ESTABLE) ===== */
 .hero-video-section{position:relative;min-height:100svh;display:grid;place-items:center;background:#000;overflow:hidden;z-index:1}
-.hero-video{position:absolute;inset:0;width:100%;height:100%;
-  object-fit:contain;               /* TU BASE ESTABLE */
+.hero-video{
+  position:absolute;inset:0;width:100%;height:100%;
+  object-fit:contain;                    /* BASE ESTABLE */
   transform-origin:center center;
-  transform:scale(2.20) translateY(7%); /* TU BASE ESTABLE */
-  background:#000;                  /* TU BASE ESTABLE */
-  z-index:0}
+  transform:scale(2.20) translateY(7%);  /* BASE ESTABLE */
+  background:#000;                       /* BASE ESTABLE */
+  z-index:0;
+}
 .hero-overlay-text{position:relative;z-index:1;color:#fff;text-align:center}
 .hero-overlay-text h1{font:800 42px/1.1 system-ui;letter-spacing:.1em}
 
 /* ===== Contenido ===== */
 .store{padding:40px 16px;background:#0b0b0b;color:#fff;z-index:1;position:relative}
 .products-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:16px;max-width:1200px;margin:0 auto}
+.products-fallback{max-width:1200px;margin:24px auto 0;color:#bbb}
 .contact{padding:60px 16px;background:#0b0b0b;color:#fff}
 .footer{padding:40px 16px;background:#000;color:#888;text-align:center}
 
