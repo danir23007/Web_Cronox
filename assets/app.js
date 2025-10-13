@@ -21,15 +21,17 @@ const searchInput = document.getElementById('searchInput');
 const filtersForm = document.getElementById('filtersForm');
 const btnClearFilters = document.getElementById('btnClearFilters');
 
+const productsGrid = document.getElementById('productsGrid');
+const productsFallback = document.getElementById('productsFallback');
+
 // ===== State =====
-let isOverHero = true;     // si la topbar está sobre el vídeo
+let isOverHero = true;     // si la topbar está sobre la sección del vídeo
 let menuOpen = false;
 let searchOpen = false;
 
-// ===== Topbar mode según scroll/hero =====
+// ===== Topbar: transparente / translúcida / opaca =====
 const io = new IntersectionObserver((entries) => {
   entries.forEach(entry => {
-    // "Sobre el vídeo" si la sección hero está visible en el viewport
     isOverHero = entry.isIntersecting && entry.intersectionRatio > 0;
     updateTopbarMode();
     if (menuOpen) updateOverlayMode();
@@ -50,11 +52,10 @@ function updateTopbarMode() {
     topbar.classList.add('topbar--page');
   }
 }
-
 window.addEventListener('scroll', updateTopbarMode);
 updateTopbarMode();
 
-// ===== Overlay =====
+// ===== Overlay (para filtros) =====
 function openOverlay() {
   overlay.hidden = false;
   updateOverlayMode();
@@ -67,7 +68,6 @@ function updateOverlayMode() {
   overlay.classList.toggle('overlay--hero', isOverHero);
   overlay.classList.toggle('overlay--page', !isOverHero);
 }
-
 overlay?.addEventListener('click', () => {
   if (menuOpen) toggleMenu(false);
 });
@@ -85,7 +85,7 @@ function toggleMenu(force) {
   } else {
     filtersPanel.hidden = true;
     closeOverlay();
-    btnMenu.focus?.({preventScroll:true});
+    btnMenu?.focus({preventScroll:true});
   }
 }
 btnMenu?.addEventListener('click', () => toggleMenu());
@@ -98,7 +98,7 @@ document.addEventListener('keydown', (e) => {
   }
 });
 
-// Acciones de filtros (placeholder; conecta con products.js si quieres)
+// Placeholder: conectar con products.js si quieres aplicar filtros reales
 filtersForm?.addEventListener('submit', (e) => {
   e.preventDefault();
   toggleMenu(false);
@@ -107,7 +107,7 @@ btnClearFilters?.addEventListener('click', () => {
   filtersForm.reset();
 });
 
-// ===== Barra de búsqueda =====
+// ===== Barra de búsqueda fina =====
 function toggleSearch(force) {
   const next = typeof force === 'boolean' ? force : !searchOpen;
   searchOpen = next;
@@ -117,7 +117,7 @@ function toggleSearch(force) {
     requestAnimationFrame(() => { searchInput?.focus(); });
   } else {
     searchBar.hidden = true;
-    btnSearch.focus?.({preventScroll:true});
+    btnSearch?.focus({preventScroll:true});
   }
 }
 btnSearch?.addEventListener('click', () => toggleSearch());
@@ -130,7 +130,15 @@ searchForm?.addEventListener('submit', (e) => {
   url.searchParams.set('q', q);
   history.replaceState({}, '', url);
   toggleSearch(false);
+  // Aquí puedes disparar una función global de products.js para filtrar el grid por 'q'
 });
 
-// ===== Initial pass =====
-updateTopbarMode();
+// ===== Fallback para productos (por si products.js no inyecta nada) =====
+window.addEventListener('DOMContentLoaded', () => {
+  // Si después de 1s no hay contenido en el grid, mostramos fallback
+  setTimeout(() => {
+    if (productsGrid && productsGrid.children.length === 0 && productsFallback) {
+      productsFallback.hidden = false;
+    }
+  }, 1000);
+});
