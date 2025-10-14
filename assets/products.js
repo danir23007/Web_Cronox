@@ -1,59 +1,79 @@
-// ===== products.js =====
-// Genera dinámicamente el grid con tus productos reales
-
+// products.js — robusto: intenta varias extensiones y fallback a RAW GitHub
 (function(){
   const productsGrid = document.getElementById("productsGrid");
   const productsFallback = document.getElementById("productsFallback");
 
-  function showFallback(msg){
-    if (productsFallback) {
-      productsFallback.hidden = false;
-      if (msg) productsFallback.innerHTML = `<p>${msg}</p>`;
+  if (!productsGrid) {
+    if (productsFallback) { productsFallback.hidden = false; }
+    return;
+  }
+
+  // Define tus productos por "baseName" (sin extensión)
+  const GH_USER = "danir23007";
+  const GH_REPO = "Web_Cronox";
+  const BASE_LOCAL = "assets/products/";
+  const EXTS = ["jpg","jpeg","JPG","JPEG","png","PNG","webp","WEBP"];
+
+  const products = [
+    { name: "Camiseta Washed Negra", price: "49 €", baseName: "camiseta_washed_negra" },
+    { name: "Camiseta Washed Gris",  price: "49 €", baseName: "camiseta_washed_gris"  }
+  ];
+
+  function buildCandidates(base){
+    // prueba primero local, luego RAW GitHub, para cada extensión
+    const cands = [];
+    for (const ext of EXTS) {
+      const local = `${BASE_LOCAL}${base}.${ext}`;
+      const raw   = `https://raw.githubusercontent.com/${GH_USER}/${GH_REPO}/main/${BASE_LOCAL}${base}.${ext}`;
+      cands.push(local, raw);
     }
+    // último recurso: placeholder si lo pones algún día
+    cands.push(`${BASE_LOCAL}placeholder.jpg`);
+    return cands;
+  }
+
+  function createCard(p){
+    const card = document.createElement("div");
+    card.className = "product-card";
+
+    const img = document.createElement("img");
+    img.className = "product-img";
+    img.alt = p.name;
+
+    const candidates = buildCandidates(p.baseName);
+    let idx = 0;
+
+    function tryNext(){
+      if (idx >= candidates.length) return;
+      img.src = candidates[idx] + `?v=31`; // cache-busting
+      idx++;
+    }
+    img.onerror = tryNext;
+    tryNext(); // primer intento
+
+    const h3 = document.createElement("h3");
+    h3.className = "product-name";
+    h3.textContent = p.name;
+
+    const price = document.createElement("p");
+    price.className = "product-price";
+    price.textContent = p.price;
+
+    card.appendChild(img);
+    card.appendChild(h3);
+    card.appendChild(price);
+    return card;
   }
 
   try {
-    if (!productsGrid) {
-      showFallback("No se ha encontrado el contenedor de productos (#productsGrid).");
-      return;
-    }
-
-    // === TUS PRODUCTOS REALES ===
-    const products = [
-      {
-        name: "Camiseta Washed Negra",
-        price: "34,95€",
-        image: "assets/products/camiseta_washed_negra.jpg",
-        color: "negro",
-        category: "camisetas"
-      },
-      {
-        name: "Camiseta Washed Gris",
-        price: "34,95€",
-        image: "assets/products/camiseta_washed_gris.jpg",
-        color: "gris",
-        category: "camisetas"
-      }
-    ];
-
-    // Renderizado
     productsGrid.innerHTML = "";
-    products.forEach(p => {
-      const card = document.createElement("div");
-      card.className = "product-card";
-      card.innerHTML = `
-        <img src="${p.image}" alt="${p.name}" class="product-img" onerror="this.src='assets/products/placeholder.jpg'">
-        <h3 class="product-name">${p.name}</h3>
-        <p class="product-price">${p.price}</p>
-      `;
-      productsGrid.appendChild(card);
-    });
-
-    if (products.length === 0) showFallback("No hay productos disponibles.");
-    else if (productsFallback) productsFallback.hidden = true;
-
-  } catch (err) {
-    console.error("Error al cargar productos:", err);
-    showFallback("No se han podido cargar los productos. (Error en products.js)");
+    products.forEach(p => productsGrid.appendChild(createCard(p)));
+    if (productsFallback) productsFallback.hidden = true;
+  } catch (e) {
+    console.error(e);
+    if (productsFallback) {
+      productsFallback.hidden = false;
+      productsFallback.innerHTML = "<p>No se han podido cargar los productos (error en products.js).</p>";
+    }
   }
 })();
