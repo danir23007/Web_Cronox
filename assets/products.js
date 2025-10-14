@@ -15,8 +15,8 @@
   const EXTS = ["jpg","jpeg","JPG","JPEG","png","PNG","webp","WEBP"];
 
   const products = [
-    { name: "Camiseta Washed Negra", price: "49 €", baseName: "camiseta_washed_negra" },
-    { name: "Camiseta Washed Gris",  price: "49 €", baseName: "camiseta_washed_gris"  }
+    { name: "Camiseta Washed Negra", price: "34,95 €", baseName: "camiseta_washed_negra" },
+    { name: "Camiseta Washed Gris",  price: "34,95 €", baseName: "camiseta_washed_gris"  }
   ];
 
   function buildCandidates(base){
