@@ -68,10 +68,14 @@
       >
     </a>
 
-    <nav class="topbar__right" aria-label="Navegación principal">
-      <a href="#store" class="topbar__link">Tienda</a>
-      <a href="cart.html" class="topbar__link">Carrito</a>
-    </nav>
+  <nav class="topbar__right" aria-label="Navegación principal">
+  <a href="#store" class="topbar__link">Tienda</a>
+  <a href="cart.html" class="topbar__link topbar__cart">
+    Carrito
+    <span class="cart-count" aria-label="Artículos en el carrito" hidden>0</span>
+  </a>
+</nav>
+    
   </header>
 
   <!-- Barra de búsqueda -->
@@ -188,5 +192,6 @@
   <!-- Scripts principales (defer para no bloquear pintado) -->
   <script src="assets/products.js?v=31" defer></script>
   <script src="assets/app.js?v=31" defer></script>
+  <script src="assets/cart-badge.js?v=31" defer></script>
 </body>
 </html>
