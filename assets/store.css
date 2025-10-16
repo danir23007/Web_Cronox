@@ -12,6 +12,7 @@ html,body{margin:0;padding:0;background:#000;color:#fff}
   --focus:0 0 0 2px rgba(255,255,255,.3),0 0 0 4px rgba(0,0,0,.6);
   --overlay-hero: rgba(0,0,0,.35);
   --overlay-page: rgba(0,0,0,.9);
+  --divider: rgba(255,255,255,.14);
 }
 
 /* ===== Preloader ===== */
@@ -236,11 +237,45 @@ html,body{margin:0;padding:0;background:#000;color:#fff}
   background:#0b0b0b;color:#fff;
   z-index:1;position:relative;
 }
+
+/* ===== Grid de productos con divisores verticales ===== */
 .products-grid{
+  position:relative;
   display:grid;
-  grid-template-columns:repeat(auto-fill,minmax(220px,1fr));
-  gap:16px;max-width:1200px;margin:0 auto;
+  grid-template-columns:repeat(3, minmax(0,1fr)); /* 3 columnas desktop */
+  gap:22px;
+  max-width:1200px;margin:0 auto;
+  padding:0 12px;
 }
+/* Divisores para 3 columnas */
+.products-grid::before,
+.products-grid::after{
+  content:"";
+  position:absolute; top:0; bottom:0;
+  width:1px; background:var(--divider);
+  pointer-events:none;
+}
+.products-grid::before{ left: calc(100%/3); }
+.products-grid::after{  left: calc(100%*2/3); }
+
+/* 2 columnas (tablet) */
+@media (max-width: 1024px){
+  .products-grid{
+    grid-template-columns:repeat(2, minmax(0,1fr));
+  }
+  .products-grid::before{ left: 50%; }
+  .products-grid::after{ display:none; }
+}
+
+/* 1 columna (móvil) */
+@media (max-width: 640px){
+  .products-grid{
+    grid-template-columns:1fr;
+  }
+  .products-grid::before,
+  .products-grid::after{ display:none; }
+}
+
 .products-fallback{
   max-width:1200px;margin:24px auto 0;color:#bbb;
   text-align:center;
@@ -256,7 +291,7 @@ html,body{margin:0;padding:0;background:#000;color:#fff}
   overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0;
 }
 
-/* ===== Responsive ===== */
+/* ===== Responsive varios ===== */
 @media (max-width:720px){
   .filters__form{grid-template-columns:1fr}
   .topbar__right{display:none}
@@ -276,8 +311,7 @@ html,body{margin:0;padding:0;background:#000;color:#fff}
 }
 .cart-count[hidden]{ display:none; }
 
-/* ===== Tarjetas de producto — versión TRANSPARENTE ===== */
-/* Enlaces clicables y accesibles */
+/* ===== Tarjetas de producto — estilo BLANCO ===== */
 a.product-card{
   display:block;
   text-decoration:none;
@@ -285,46 +319,52 @@ a.product-card{
   cursor:pointer;
 }
 
-/* Tarjeta sin fondo, sin borde ni sombra */
+/* Tarjeta blanca con borde sutil y sombra suave */
 .product-card{
-  background:transparent !important;
-  border:none !important;
-  border-radius:0 !important;
-  padding:0 !important;
-  box-shadow:none !important;
-  transition:none !important;
+  background:#fff;
+  color:#111;
+  border:1px solid rgba(0,0,0,.06);
+  border-radius:16px;
+  padding:16px;
+  box-shadow:0 6px 18px rgba(0,0,0,.08);
+  transition:transform .18s ease, box-shadow .18s ease;
 }
-.product-card:hover{ transform:none !important; box-shadow:none !important; }
+.product-card:hover{
+  transform:translateY(-3px);
+  box-shadow:0 10px 26px rgba(0,0,0,.12);
+}
 
-/* La imagen respeta el PNG (sin recortar ni fondo) */
+/* Imagen centrada, sin recorte */
 .product-img{
   width:100%;
-  height:260px;
-  object-fit:contain !important;
-  background:transparent !important;
-  border-radius:0 !important;
+  height:280px;                 /* ajusta si quieres */
+  object-fit:contain;
+  background:#fff;
+  border-radius:12px;
   display:block;
 }
 
 /* Textos bajo la imagen */
 .product-name{
-  font:600 14px/1.3 system-ui;
-  margin:8px 0 2px !important;
-  color:#fff;
+  font:700 13px/1.35 system-ui;
+  margin:12px 0 6px;
+  color:#111;
+  letter-spacing:.04em;
+  text-transform:uppercase;     /* mayúsculas como pediste */
 }
 .product-price{
-  font:500 13px/1 system-ui;
-  color:#aaa;
+  font:600 12px/1 system-ui;
+  color:#333;
 }
 
-/* Accesibilidad: foco visible al navegar con teclado */
+/* Foco accesible (se nota sobre blanco) */
 a.product-card:focus-visible{
-  outline:2px solid rgba(255,255,255,.5);
-  outline-offset:4px;
-  border-radius:8px;
+  outline:2px solid #111;
+  outline-offset:3px;
+  border-radius:14px;
 }
 
 /* ===== Ajuste móvil para imágenes de producto ===== */
 @media (max-width: 480px){
-  .product-img{ height:220px; } /* reduce altura para móviles */
+  .product-img{ height:220px; }
 }
