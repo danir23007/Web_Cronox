@@ -23,16 +23,22 @@
     <div class="topbar__left">
       <a href="index.html#store" class="topbar__link">← Seguir comprando</a>
     </div>
+
     <a href="index.html" class="topbar__logo" aria-label="CRONOX — Inicio">
       <img
         src="https://raw.githubusercontent.com/danir23007/Web_Cronox/refs/heads/main/assets/logo%20largo%20bueno.JPG"
         alt="CRONOX" class="topbar__logo-img" decoding="async">
     </a>
+
     <nav class="topbar__right" aria-label="Navegación principal">
-      <span class="topbar__link">Carrito</span>
+      <a href="cart.html" class="topbar__link topbar__cart">
+        Carrito
+        <span class="cart-count" aria-label="Artículos en el carrito" hidden>0</span>
+      </a>
     </nav>
   </header>
 
+  <!-- Contenido principal -->
   <main class="store" style="padding-top:calc(24px + var(--topbar-h));">
     <h1 style="font:800 22px/1.2 system-ui;margin:0 0 16px;">Tu carrito</h1>
 
@@ -57,7 +63,7 @@
   </main>
 
   <footer class="footer">
-    <p>© CRONOX</p>
+    <p>© <span id="anio"></span> CRONOX</p>
   </footer>
 
   <!-- Failsafe preloader -->
@@ -70,7 +76,13 @@
     })();
   </script>
 
+  <!-- Scripts principales -->
   <script src="assets/app.js?v=31" defer></script>
   <script src="assets/cart.js?v=31" defer></script>
+  <script src="assets/cart-badge.js?v=31" defer></script>
+  <script>
+    document.getElementById('anio').textContent = new Date().getFullYear();
+  </script>
+
 </body>
 </html>
