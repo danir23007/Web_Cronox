@@ -1,43 +1,76 @@
 <!doctype html>
 <html lang="es">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Carrito — CRONOX</title>
-  <link rel="stylesheet" href="assets/store.css" />
-  <style>
-    :root { --text:#eaeaea; --accent:#7c5cff; }
-    body{margin:0;background:#0c0c0d;color:var(--text);font-family:system-ui,Segoe UI,Roboto,Arial}
-    .container{width:min(1100px,92%);margin:0 auto}
-    header{position:sticky;top:0;background:rgba(16,16,18,.7);backdrop-filter:blur(8px);border-bottom:1px solid rgba(255,255,255,.06)}
-    .nav{display:flex;align-items:center;justify-content:space-between;height:64px}
-    a{color:var(--text);text-decoration:none;opacity:.9}
-    .cta{display:inline-flex;gap:.6rem;padding:12px 18px;background:var(--accent);color:#fff;border-radius:999px;border:none;cursor:pointer;font-weight:700}
-    .cta.secondary{background:transparent;border:1px solid rgba(255,255,255,.14)}
-    .brand{font-weight:700}
-    footer{padding:36px 0 64px;color:#bbb;text-align:center;border-top:1px solid rgba(255,255,255,.08);margin-top:48px}
-  </style>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>CRONOX — Carrito</title>
+  <meta name="description" content="Carrito de CRONOX">
+  <meta name="theme-color" content="#000000">
+  <link rel="stylesheet" href="assets/store.css?v=31">
+  <noscript><style>#preloader{display:none!important;}</style></noscript>
 </head>
 <body>
-  <header>
-    <div class="container nav">
-      <div class="brand">CRONOX</div>
-      <nav>
-        <a href="index.html">Tienda</a>
-        <a href="cart.html">Carrito (<span id="cart-count">0</span>)</a>
-      </nav>
+
+  <!-- Preloader -->
+  <div id="preloader" class="preloader" aria-hidden="true">
+    <img
+      src="https://raw.githubusercontent.com/danir23007/Web_Cronox/refs/heads/main/assets/logo%20largo%20bueno.JPG"
+      alt="CRONOX" class="preloader__logo" decoding="async">
+  </div>
+
+  <!-- Topbar fija opaca -->
+  <header class="topbar topbar--page" id="topbar" role="banner">
+    <div class="topbar__left">
+      <a href="index.html#store" class="topbar__link">← Seguir comprando</a>
     </div>
+    <a href="index.html" class="topbar__logo" aria-label="CRONOX — Inicio">
+      <img
+        src="https://raw.githubusercontent.com/danir23007/Web_Cronox/refs/heads/main/assets/logo%20largo%20bueno.JPG"
+        alt="CRONOX" class="topbar__logo-img" decoding="async">
+    </a>
+    <nav class="topbar__right" aria-label="Navegación principal">
+      <span class="topbar__link">Carrito</span>
+    </nav>
   </header>
 
-  <main class="container" style="padding:28px 0">
-    <h1>Tu carrito</h1>
-    <div id="cart-page"></div>
+  <main class="store" style="padding-top:calc(24px + var(--topbar-h));">
+    <h1 style="font:800 22px/1.2 system-ui;margin:0 0 16px;">Tu carrito</h1>
+
+    <div id="cartContainer" style="max-width:1100px;margin:0 auto;display:grid;grid-template-columns:1fr 340px;gap:18px;">
+      <div>
+        <div id="cartList"></div>
+        <div id="cartEmpty" class="products-fallback" hidden>
+          <p>Tu carrito está vacío.</p>
+        </div>
+      </div>
+
+      <aside style="border:1px solid rgba(255,255,255,.12);border-radius:16px;padding:16px;background:#0b0b0b;">
+        <h2 style="font:700 16px/1 system-ui;margin:0 0 12px;">Resumen</h2>
+        <div style="display:flex;justify-content:space-between;margin:6px 0;color:#cfcfcf;">
+          <span>Subtotal</span><strong id="subtotal">—</strong>
+        </div>
+        <p style="color:#9a9a9a;font:12px/1.4 system-ui;margin:8px 0 14px;">El envío y los impuestos se calculan en el siguiente paso.</p>
+        <button id="btnCheckout" class="product-modal__btn" style="width:100%;margin-bottom:8px;">Finalizar compra</button>
+        <button id="btnClear" class="product-modal__btn product-modal__btn--ghost" style="width:100%;">Vaciar carrito</button>
+      </aside>
+    </div>
   </main>
 
-  <footer><div class="container">© <span id="anio"></span> CRONOX</div></footer>
+  <footer class="footer">
+    <p>© CRONOX</p>
+  </footer>
 
-  <script src="assets/products.js"></script>
-  <script src="assets/app.js"></script>
-  <script>document.getElementById('anio').textContent=new Date().getFullYear()</script>
+  <!-- Failsafe preloader -->
+  <script>
+    (function(){
+      function hide(){ var p=document.getElementById('preloader'); if(p) p.style.display='none'; }
+      window.addEventListener('load', hide, {once:true});
+      window.addEventListener('DOMContentLoaded', function(){ setTimeout(hide, 2000); }, {once:true});
+      window.addEventListener('error', function(){ setTimeout(hide, 0); });
+    })();
+  </script>
+
+  <script src="assets/app.js?v=31" defer></script>
+  <script src="assets/cart.js?v=31" defer></script>
 </body>
 </html>
