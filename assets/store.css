@@ -195,3 +195,62 @@ a.product-card:focus-visible{
 
 /* ===== Footer ===== */
 .footer{padding:40px 16px;background:#000;color:#888;text-align:center}
+
+/* ======= PRODUCT CARD — imagen grande + footer negro ======= */
+.product-card{
+  padding:0 !important;          /* sin relleno: la imagen manda */
+  border-radius:0 !important;     /* esquinas en pico */
+  background:#fff !important;
+  border:1px solid rgba(0,0,0,.1) !important;
+  box-shadow:0 6px 18px rgba(0,0,0,.08) !important;
+  transition:transform .18s ease, box-shadow .18s ease !important;
+}
+.product-card:hover{
+  transform:translateY(-3px) !important;
+  box-shadow:0 10px 26px rgba(0,0,0,.12) !important;
+}
+
+/* Imagen MUY protagonista */
+.product-img{
+  width:100% !important;
+  height:420px !important;        /* ↑ más alta en desktop */
+  object-fit:contain !important;
+  background:#fff !important;
+  border-radius:0 !important;
+  display:block !important;
+}
+
+/* Footer negro que contiene nombre + precio */
+.product-name,
+.product-price{
+  display:block !important;
+  background:#000 !important;
+  color:#fff !important;
+  text-align:center !important;
+  margin:0 !important;
+  line-height:1.35 !important;
+}
+.product-name{
+  font-weight:800 !important;
+  font-size:12px !important;
+  text-transform:uppercase !important;
+  letter-spacing:.06em !important;
+  padding:12px 12px 4px !important;   /* parte superior del footer */
+}
+.product-price{
+  font-weight:700 !important;
+  font-size:12px !important;
+  padding:0 12px 12px !important;     /* parte inferior del footer */
+  opacity:.95;
+}
+
+/* ——— Responsivo: ajusta altura de imagen para que todo respire ——— */
+@media (max-width: 1024px){   /* tablet (2 columnas) */
+  .product-img{ height:360px !important; }
+}
+@media (max-width: 640px){    /* móvil (1 columna) */
+  .product-img{ height:280px !important; }
+}
+@media (max-width: 480px){    /* móvil pequeño */
+  .product-img{ height:240px !important; }
+}
