@@ -201,7 +201,7 @@ a.product-card:focus-visible{
   padding:0 !important;          /* sin relleno: la imagen manda */
   border-radius:0 !important;     /* esquinas en pico */
   background:#fff !important;
-  border:1px solid rgba(0,0,0,.1) !important;
+  border:0px solid rgba(0,0,0,.1) !important;
   box-shadow:0 6px 18px rgba(0,0,0,.08) !important;
   transition:transform .18s ease, box-shadow .18s ease !important;
 }
