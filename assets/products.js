@@ -1,79 +1,178 @@
-// products.js — robusto: intenta varias extensiones y fallback a RAW GitHub
-(function(){
+// ======================================================
+// assets/products.js — Grid transparente + enlaces a página de producto
+// ======================================================
+(function () {
   const productsGrid = document.getElementById("productsGrid");
   const productsFallback = document.getElementById("productsFallback");
+  const filtersForm = document.getElementById("filtersForm");
+  const btnClearFilters = document.getElementById("btnClearFilters");
+  const searchForm = document.getElementById("searchForm");
+  const searchInput = document.getElementById("searchInput");
 
   if (!productsGrid) {
-    if (productsFallback) { productsFallback.hidden = false; }
-    return;
+    console.warn("[CRONOX] No se encontró #productsGrid.");
   }
 
-  // Define tus productos por "baseName" (sin extensión)
-  const GH_USER = "danir23007";
-  const GH_REPO = "Web_Cronox";
-  const BASE_LOCAL = "assets/products/";
-  const EXTS = ["jpg","jpeg","JPG","JPEG","png","PNG","webp","WEBP"];
+  const norm = (s) =>
+    (s || "")
+      .toString()
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .trim();
 
+  const url = new URL(window.location);
+  const initialQuery = norm(url.searchParams.get("q") || "");
+  if (searchInput && initialQuery) searchInput.value = url.searchParams.get("q") || "";
+
+  // === Datos de ejemplo (ajusta rutas/nombres a tus PNG) ===
   const products = [
-    { name: "Camiseta Washed Negra", price: "34,95 €", baseName: "camiseta_washed_negra" },
-    { name: "Camiseta Washed Gris",  price: "34,95 €", baseName: "camiseta_washed_gris"  }
+    {
+      id: "hoodie-acid-black",
+      name: "Sudadera CRONOX Acid Black",
+      price: 89,
+      priceLabel: "89 €",
+      image: "assets/products/sudadera1.png",
+      categories: ["sudaderas"],
+      sizes: ["s", "m", "l", "xl"],
+      color: "negro",
+      desc: "Sudadera premium con lavado acid y logo metalizado CRONOX."
+    },
+    {
+      id: "tee-oversized",
+      name: "Camiseta CRONOX Oversized",
+      price: 49,
+      priceLabel: "49 €",
+      image: "assets/products/camiseta1.png",
+      categories: ["camisetas"],
+      sizes: ["xs", "s", "m", "l"],
+      color: "negro",
+      desc: "Camiseta oversize con gramaje alto y print tono sobre tono."
+    },
+    {
+      id: "pants-dark",
+      name: "Pantalón Dark Street",
+      price: 79,
+      priceLabel: "79 €",
+      image: "assets/products/pantalon1.png",
+      categories: ["pantalones"],
+      sizes: ["s", "m", "l"],
+      color: "gris",
+      desc: "Pantalón corte straight, alta resistencia y acabado soft-touch."
+    },
+    {
+      id: "cap-black",
+      name: "Gorra Logo Metalizado",
+      price: 39,
+      priceLabel: "39 €",
+      image: "assets/products/gorra1.png",
+      categories: ["accesorios"],
+      sizes: [],
+      color: "negro",
+      desc: "Gorra ajustable con emblema CRONOX efecto cromo oscuro."
+    }
   ];
 
-  function buildCandidates(base){
-    // prueba primero local, luego RAW GitHub, para cada extensión
-    const cands = [];
-    for (const ext of EXTS) {
-      const local = `${BASE_LOCAL}${base}.${ext}`;
-      const raw   = `https://raw.githubusercontent.com/${GH_USER}/${GH_REPO}/main/${BASE_LOCAL}${base}.${ext}`;
-      cands.push(local, raw);
-    }
-    // último recurso: placeholder si lo pones algún día
-    cands.push(`${BASE_LOCAL}placeholder.jpg`);
-    return cands;
-  }
-
-  function createCard(p){
-    const card = document.createElement("div");
-    card.className = "product-card";
+  // Tarjeta transparente con <a> hacia producto.html?id=...
+  function createCard(p) {
+    const a = document.createElement("a");
+    a.href = `producto.html?id=${encodeURIComponent(p.id)}`;
+    a.className = "product-card";
+    a.setAttribute("data-id", p.id);
 
     const img = document.createElement("img");
     img.className = "product-img";
-    img.alt = p.name;
+    img.loading = "lazy";
+    img.decoding = "async";
+    img.alt = p.name || "Producto";
+    img.src = p.image;
 
-    const candidates = buildCandidates(p.baseName);
-    let idx = 0;
-
-    function tryNext(){
-      if (idx >= candidates.length) return;
-      img.src = candidates[idx] + `?v=31`; // cache-busting
-      idx++;
-    }
-    img.onerror = tryNext;
-    tryNext(); // primer intento
-
-    const h3 = document.createElement("h3");
-    h3.className = "product-name";
-    h3.textContent = p.name;
+    const name = document.createElement("h3");
+    name.className = "product-name";
+    name.textContent = p.name;
 
     const price = document.createElement("p");
     price.className = "product-price";
-    price.textContent = p.price;
+    price.textContent = p.priceLabel || `${p.price} €`;
 
-    card.appendChild(img);
-    card.appendChild(h3);
-    card.appendChild(price);
-    return card;
+    a.appendChild(img);
+    a.appendChild(name);
+    a.appendChild(price);
+    return a;
   }
 
-  try {
+  function getActiveFilters() {
+    const f = { categories: [], sizes: [], colors: [], q: "" };
+
+    if (filtersForm) {
+      f.categories = Array.from(filtersForm.querySelectorAll('input[name="cat"]:checked')).map(el => el.value);
+      f.sizes = Array.from(filtersForm.querySelectorAll('input[name="size"]:checked')).map(el => el.value);
+      f.colors = Array.from(filtersForm.querySelectorAll('input[name="color"]:checked')).map(el => el.value);
+    }
+
+    const qParam = url.searchParams.get("q");
+    if (qParam && qParam.trim()) f.q = norm(qParam);
+    else if (searchInput && searchInput.value) f.q = norm(searchInput.value);
+
+    return f;
+  }
+
+  function matchProduct(p, f) {
+    if (f.q) {
+      const haystack = norm(p.name);
+      if (!haystack.includes(f.q)) return false;
+    }
+    if (f.categories.length && !p.categories?.some(c => f.categories.includes(c))) return false;
+    if (f.sizes.length && Array.isArray(p.sizes) && p.sizes.length) {
+      if (!p.sizes.some(s => f.sizes.includes(s))) return false;
+    }
+    if (f.colors.length && !f.colors.includes(p.color)) return false;
+    return true;
+  }
+
+  function renderProducts(list) {
+    if (!productsGrid) return;
     productsGrid.innerHTML = "";
-    products.forEach(p => productsGrid.appendChild(createCard(p)));
+
+    if (!Array.isArray(list) || list.length === 0) {
+      if (productsFallback) {
+        productsFallback.hidden = false;
+        productsFallback.innerHTML = '<p>No hay productos que coincidan con los filtros o la búsqueda.</p>';
+      }
+      return;
+    }
+
     if (productsFallback) productsFallback.hidden = true;
-  } catch (e) {
-    console.error(e);
-    if (productsFallback) {
-      productsFallback.hidden = false;
-      productsFallback.innerHTML = "<p>No se han podido cargar los productos (error en products.js).</p>";
+    const frag = document.createDocumentFragment();
+    list.forEach(p => frag.appendChild(createCard(p)));
+    productsGrid.appendChild(frag);
+  }
+
+  function apply() {
+    try {
+      const f = getActiveFilters();
+      const filtered = products.filter(p => matchProduct(p, f));
+      renderProducts(filtered);
+    } catch (err) {
+      console.error("[CRONOX] Error aplicando filtros:", err);
+      if (productsFallback) {
+        productsFallback.hidden = false;
+        productsFallback.innerHTML = "<p>Ha ocurrido un error cargando los productos. Vuelve a intentarlo.</p>";
+      }
     }
   }
+
+  window.addEventListener("popstate", apply);
+  window.addEventListener("hashchange", apply);
+  if (searchForm) searchForm.addEventListener("submit", () => setTimeout(apply, 0));
+  if (filtersForm) {
+    filtersForm.addEventListener("submit", () => setTimeout(apply, 0));
+    filtersForm.addEventListener("change", apply);
+  }
+  if (btnClearFilters) btnClearFilters.addEventListener("click", () => { filtersForm?.reset(); setTimeout(apply, 0); });
+
+  // INIT
+  renderProducts(products);
+  if (initialQuery) apply();
 })();
+
