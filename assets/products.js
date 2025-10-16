@@ -30,8 +30,8 @@
     {
       id: "camiseta-washed-gris",
       name: "Camiseta Washed Gris",
-      price: 49,
-      priceLabel: "49 €",
+      price: 34.95,
+      priceLabel: "34,95 €",
       image: "assets/products/camiseta_washed_gris.png",
       categories: ["camisetas"],
       sizes: ["s", "m", "l", "xl"],
@@ -41,8 +41,8 @@
     {
       id: "camiseta-washed-negra",
       name: "Camiseta Washed Negra",
-      price: 49,
-      priceLabel: "49 €",
+      price: 34.95,
+      priceLabel: "34,95 €",
       image: "assets/products/camiseta_washed_negra.png",
       categories: ["camisetas"],
       sizes: ["s", "m", "l", "xl"],
