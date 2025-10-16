@@ -181,30 +181,25 @@ html,body{margin:0;padding:0;background:#000;color:#fff}
 /* ===== HERO VIDEO (BASE ESTABLE + mejoras responsive) ===== */
 .hero-video-section{
   position:relative;
-  min-height:100vh;           /* fallback */
-  height:100svh;              /* soporta barras dinámicas */
+  min-height:100vh;
+  height:100svh;
   display:grid;place-items:center;
   background:#000;overflow:hidden;z-index:1;
-  /* SIN margen superior: debe empezar en 0, para quedar detrás de la topbar fija */
 }
-/* Usar dvh si está disponible (iOS Safari moderno y navegadores actualizados) */
 @supports (height: 100dvh){
   .hero-video-section{
     min-height:100dvh;
     height:100dvh;
   }
 }
-
 .hero-video{
   position:absolute;inset:0;width:100%;height:100%;
-  object-fit:contain;                 /* BASE ESTABLE */
+  object-fit:contain;
   transform-origin:center center;
-  transform:scale(2.20) translateY(7%); /* BASE ESTABLE (desktop/anchos) */
-  background:#000;                    /* BASE ESTABLE */
+  transform:scale(2.20) translateY(7%);
+  background:#000;
   z-index:0;
 }
-
-/* Texto sobre el vídeo */
 .hero-overlay-text{
   position:relative;z-index:1;
   color:#fff;text-align:center;
@@ -214,33 +209,29 @@ html,body{margin:0;padding:0;background:#000;color:#fff}
   letter-spacing:.1em;
 }
 
-/* === OVERRIDES RESPONSIVOS PARA NO CORTAR EL VÍDEO ===
-   En vistas estrechas o con relación de aspecto alta (portrait/móvil, ventana partida),
-   anulamos la transformación y mantenemos el vídeo COMPLETO con bandas negras si hace falta. */
-@media (max-aspect-ratio: 16/9){
-  .hero-video{
-    object-fit: contain !important;
-    transform: none !important;
-    background:#000;
-  }
-}
-@media (max-width: 768px){
+/* === OVERRIDES RESPONSIVOS — versión SIN MÁRGENES (ocupa todo) === */
+@media (max-aspect-ratio: 16/9),
+       (max-width: 768px){
   .hero-video-section{
     height:100svh;
+    width:100vw;
+    background:#000;
   }
   @supports (height: 100dvh){
     .hero-video-section{ height:100dvh; }
   }
+
   .hero-video{
-    object-fit: contain !important;
+    object-fit: cover !important;   /* rellena sin márgenes */
     transform: none !important;
+    width:100%;
+    height:100%;
+    background:#000;
   }
 }
 
 /* ===== Contenido ===== */
-/* scroll-margin-top para que los anclajes no queden ocultos tras la topbar fija */
 #store,#contact{scroll-margin-top:calc(var(--topbar-h) + 12px)}
-
 .store{
   padding:calc(40px + var(--topbar-h)) 16px 40px;
   background:#0b0b0b;color:#fff;
