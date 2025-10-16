@@ -34,7 +34,7 @@ html,body{margin:0;padding:0;background:#000;color:#fff}
 .overlay.overlay--hero{background:var(--overlay-hero)}
 .overlay.overlay--page{background:var(--overlay-page)}
 
-/* ===== Topbar (fija para que el vídeo comience arriba del todo) ===== */
+/* ===== Topbar (fija) ===== */
 .topbar{
   position:fixed;top:0;left:0;right:0;
   height:var(--topbar-h);
@@ -54,7 +54,7 @@ html,body{margin:0;padding:0;background:#000;color:#fff}
 
 /* Translúcida mientras sigues sobre el vídeo */
 .topbar--hero,
-.topbar--translucent{ /* alias de compatibilidad */
+.topbar--translucent{
   background:rgba(0,0,0,0.35);
   border-bottom:1px solid rgba(255,255,255,.08);
   backdrop-filter:saturate(120%) blur(6px);
@@ -63,7 +63,7 @@ html,body{margin:0;padding:0;background:#000;color:#fff}
 
 /* Negra opaca cuando sales del vídeo */
 .topbar--page,
-.topbar--opaque{ /* alias de compatibilidad */
+.topbar--opaque{
   background:rgba(0,0,0,1);
   border-bottom:1px solid rgba(255,255,255,.1);
   backdrop-filter:none;
@@ -94,7 +94,7 @@ html,body{margin:0;padding:0;background:#000;color:#fff}
 .icon-btn:focus-visible{outline:none;box-shadow:var(--focus)}
 .icon{display:block}
 
-/* ===== Searchbar fina (debajo de la topbar fija) ===== */
+/* ===== Searchbar (debajo de topbar) ===== */
 .searchbar{
   position:sticky;
   top:var(--topbar-h);
@@ -178,7 +178,7 @@ html,body{margin:0;padding:0;background:#000;color:#fff}
   border:1px solid var(--border);
 }
 
-/* ===== HERO VIDEO (BASE ESTABLE + mejoras responsive) ===== */
+/* ===== HERO VIDEO ===== */
 .hero-video-section{
   position:relative;
   min-height:100vh;
@@ -209,7 +209,7 @@ html,body{margin:0;padding:0;background:#000;color:#fff}
   letter-spacing:.1em;
 }
 
-/* === OVERRIDES RESPONSIVOS — versión SIN MÁRGENES (ocupa todo) === */
+/* === OVERRIDES RESPONSIVOS — SIN MÁRGENES (ocupa todo) === */
 @media (max-aspect-ratio: 16/9),
        (max-width: 768px){
   .hero-video-section{
@@ -220,9 +220,8 @@ html,body{margin:0;padding:0;background:#000;color:#fff}
   @supports (height: 100dvh){
     .hero-video-section{ height:100dvh; }
   }
-
   .hero-video{
-    object-fit: cover !important;   /* rellena sin márgenes */
+    object-fit: cover !important;
     transform: none !important;
     width:100%;
     height:100%;
@@ -263,35 +262,6 @@ html,body{margin:0;padding:0;background:#000;color:#fff}
   .topbar__right{display:none}
 }
 
-/* ===== Tarjetas de producto ===== */
-.product-card{
-  background:#111;
-  border:1px solid rgba(255,255,255,0.08);
-  border-radius:14px;
-  padding:18px 12px;
-  text-align:center;
-  transition:transform .2s ease, box-shadow .2s ease;
-}
-.product-card:hover{
-  transform:translateY(-4px);
-  box-shadow:0 10px 20px rgba(0,0,0,.4);
-}
-.product-img{
-  width:100%;
-  height:260px;
-  object-fit:cover;
-  border-radius:12px;
-  background:#000;
-}
-.product-name{
-  font:600 14px/1.3 system-ui;
-  margin:12px 0 4px;
-  color:#fff;
-}
-.product-price{
-  font:500 13px/1 system-ui;
-  color:#aaa;
-}
 /* ===== Cart badge (contador) ===== */
 .topbar__cart { position: relative; }
 .cart-count{
@@ -305,7 +275,9 @@ html,body{margin:0;padding:0;background:#000;color:#fff}
   text-align:center; vertical-align:middle;
 }
 .cart-count[hidden]{ display:none; }
-/* === OVERRIDES: tarjetas transparentes y enlaces cliqueables === */
+
+/* ===== Tarjetas de producto — versión TRANSPARENTE ===== */
+/* Enlaces clicables y accesibles */
 a.product-card{
   display:block;
   text-decoration:none;
@@ -313,6 +285,7 @@ a.product-card{
   cursor:pointer;
 }
 
+/* Tarjeta sin fondo, sin borde ni sombra */
 .product-card{
   background:transparent !important;
   border:none !important;
@@ -323,10 +296,10 @@ a.product-card{
 }
 .product-card:hover{ transform:none !important; box-shadow:none !important; }
 
-/* La imagen respeta el PNG, sin recorte ni fondo */
+/* La imagen respeta el PNG (sin recortar ni fondo) */
 .product-img{
   width:100%;
-  height:260px;            /* ajusta si quieres otra altura */
+  height:260px;
   object-fit:contain !important;
   background:transparent !important;
   border-radius:0 !important;
@@ -349,4 +322,9 @@ a.product-card:focus-visible{
   outline:2px solid rgba(255,255,255,.5);
   outline-offset:4px;
   border-radius:8px;
+}
+
+/* ===== Ajuste móvil para imágenes de producto ===== */
+@media (max-width: 480px){
+  .product-img{ height:220px; } /* reduce altura para móviles */
 }
