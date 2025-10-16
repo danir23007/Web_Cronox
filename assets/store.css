@@ -93,7 +93,7 @@ html,body{margin:0;padding:0;background:#000;color:#fff}
 
 /* ===== Contenido general ===== */
 #store,#contact{scroll-margin-top:calc(var(--topbar-h) + 12px)}
-.store{padding:calc(40px + var(--topbar-h)) 16px 40px;background:#0b0b0b;color:#fff;z-index:1;position:relative;}
+.store{padding:calc(40px + var(--topbar-h)) 16px 40px;background:#000000;color:#fff;z-index:1;position:relative;}
 
 /* ===== GRID DE PRODUCTOS ===== */
 .products-grid{
