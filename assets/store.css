@@ -292,3 +292,16 @@ html,body{margin:0;padding:0;background:#000;color:#fff}
   font:500 13px/1 system-ui;
   color:#aaa;
 }
+/* ===== Cart badge (contador) ===== */
+.topbar__cart { position: relative; }
+.cart-count{
+  display:inline-block;
+  min-width:18px;
+  padding:0 6px;
+  margin-left:6px;
+  border-radius:10px;
+  font:700 11px/18px system-ui;
+  background:#fff; color:#000;
+  text-align:center; vertical-align:middle;
+}
+.cart-count[hidden]{ display:none; }
