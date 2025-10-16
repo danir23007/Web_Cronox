@@ -305,3 +305,48 @@ html,body{margin:0;padding:0;background:#000;color:#fff}
   text-align:center; vertical-align:middle;
 }
 .cart-count[hidden]{ display:none; }
+/* === OVERRIDES: tarjetas transparentes y enlaces cliqueables === */
+a.product-card{
+  display:block;
+  text-decoration:none;
+  color:inherit;
+  cursor:pointer;
+}
+
+.product-card{
+  background:transparent !important;
+  border:none !important;
+  border-radius:0 !important;
+  padding:0 !important;
+  box-shadow:none !important;
+  transition:none !important;
+}
+.product-card:hover{ transform:none !important; box-shadow:none !important; }
+
+/* La imagen respeta el PNG, sin recorte ni fondo */
+.product-img{
+  width:100%;
+  height:260px;            /* ajusta si quieres otra altura */
+  object-fit:contain !important;
+  background:transparent !important;
+  border-radius:0 !important;
+  display:block;
+}
+
+/* Textos bajo la imagen */
+.product-name{
+  font:600 14px/1.3 system-ui;
+  margin:8px 0 2px !important;
+  color:#fff;
+}
+.product-price{
+  font:500 13px/1 system-ui;
+  color:#aaa;
+}
+
+/* Accesibilidad: foco visible al navegar con teclado */
+a.product-card:focus-visible{
+  outline:2px solid rgba(255,255,255,.5);
+  outline-offset:4px;
+  border-radius:8px;
+}
