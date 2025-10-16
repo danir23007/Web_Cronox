@@ -5,16 +5,30 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>CRONOX — Tienda Oficial</title>
   <meta name="description" content="Tienda oficial CRONOX — Dark streetwear premium.">
+  <meta name="theme-color" content="#000000">
+
+  <!-- Preload del vídeo para mejorar el arranque del héroe -->
+  <link rel="preload" as="video" href="assets/VIDEO_LOGO_CRONOX.mp4" type="video/mp4">
+
+  <!-- CSS principal (mantengo tu versión) -->
   <link rel="stylesheet" href="assets/store.css?v=31">
+
+  <!-- Noscript: si no hay JS, oculta el preloader para no bloquear la vista -->
+  <noscript>
+    <style>
+      #preloader { display: none !important; }
+    </style>
+  </noscript>
 </head>
 <body>
 
   <!-- Preloader -->
-  <div id="preloader" class="preloader" aria-hidden="true">
+  <div id="preloader" class="preloader" aria-hidden="true" aria-live="polite">
     <img
       src="https://raw.githubusercontent.com/danir23007/Web_Cronox/refs/heads/main/assets/logo%20largo%20bueno.JPG"
       alt="CRONOX"
       class="preloader__logo"
+      decoding="async"
     >
   </div>
 
@@ -27,7 +41,7 @@
       <!-- Menú (tres líneas) -->
       <button id="btnMenu" class="icon-btn" aria-label="Abrir filtros" aria-expanded="false" aria-controls="filtersPanel">
         <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-             stroke-linecap="round" stroke-linejoin="round" class="icon">
+             stroke-linecap="round" stroke-linejoin="round" class="icon" aria-hidden="true" focusable="false">
           <line x1="3" y1="6" x2="21" y2="6"></line>
           <line x1="3" y1="12" x2="21" y2="12"></line>
           <line x1="3" y1="18" x2="21" y2="18"></line>
@@ -37,7 +51,7 @@
       <!-- Lupa -->
       <button id="btnSearch" class="icon-btn" aria-label="Buscar productos" aria-expanded="false" aria-controls="searchBar">
         <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-             stroke-linecap="round" stroke-linejoin="round" class="icon">
+             stroke-linecap="round" stroke-linejoin="round" class="icon" aria-hidden="true" focusable="false">
           <circle cx="11" cy="11" r="8"></circle>
           <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
         </svg>
@@ -50,6 +64,7 @@
         src="https://raw.githubusercontent.com/danir23007/Web_Cronox/refs/heads/main/assets/logo%20largo%20bueno.JPG"
         alt="CRONOX"
         class="topbar__logo-img"
+        decoding="async"
       >
     </a>
 
@@ -110,8 +125,19 @@
 
   <!-- HERO video -->
   <section class="hero-video-section" id="hero" aria-label="Portada">
-    <video class="hero-video" src="assets/VIDEO_LOGO_CRONOX.mp4" autoplay muted loop playsinline></video>
-    <div class="hero-overlay-text">
+    <!-- Nota: playsinline + muted + autoplay garantizan reproducción inline en iOS/Android -->
+    <video
+      class="hero-video"
+      src="assets/VIDEO_LOGO_CRONOX.mp4"
+      autoplay
+      muted
+      loop
+      playsinline
+      preload="auto"
+      aria-label="Animación de introducción de CRONOX"
+    ></video>
+
+    <div class="hero-overlay-text" aria-hidden="true">
       <h1>NOS REGIT NOX</h1>
     </div>
   </section>
@@ -135,19 +161,32 @@
     <p>© CRONOX</p>
   </footer>
 
-  <!-- Failsafe: si algo rompe JS, oculta el preloader a los 5s -->
+  <!-- Failsafe: si algo rompe JS, oculta el preloader a los 3.5s -->
   <script>
     (function(){
       var tried = false;
-      function hide(){ if(tried) return; tried = true; var p = document.getElementById('preloader'); if(p) p.style.display='none'; }
+      function hide(){
+        if(tried) return;
+        tried = true;
+        var p = document.getElementById('preloader');
+        if(p) p.style.display='none';
+      }
+      // Evita restaurar scroll en algunas navegadores
+      try { window.history.scrollRestoration = 'manual'; } catch(e) {}
+
       window.addEventListener('load', hide, {once:true});
       window.addEventListener('DOMContentLoaded', function(){ setTimeout(hide, 3500); }, {once:true});
       window.addEventListener('error', function(){ setTimeout(hide, 0); });
+
+      // Forzar arranque arriba del todo para el héroe
+      window.addEventListener('load', function(){
+        window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+      }, {once:true});
     })();
   </script>
 
-  <!-- Scripts principales -->
-  <script src="assets/products.js?v=31"></script>
-  <script src="assets/app.js?v=31"></script>
+  <!-- Scripts principales (defer para no bloquear pintado) -->
+  <script src="assets/products.js?v=31" defer></script>
+  <script src="assets/app.js?v=31" defer></script>
 </body>
 </html>
