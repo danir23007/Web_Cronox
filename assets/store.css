@@ -241,7 +241,6 @@ a.product-card:focus-visible{
   font-weight:700 !important;
   font-size:12px !important;
   padding:0 12px 12px !important;     /* parte inferior del footer */
-  opacity:.95;
 }
 
 /* ——— Responsivo: ajusta altura de imagen para que todo respire ——— */
