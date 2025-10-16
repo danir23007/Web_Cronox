@@ -24,7 +24,11 @@
       <div class="brand">CRONOX</div>
       <nav>
         <a href="index.html">Tienda</a>
-        <a href="cart.html">Carrito (<span id="cart-count">0</span>)</a>
+      <a href="cart.html" class="topbar__link topbar__cart">
+  Carrito
+  <span class="cart-count" aria-label="Artículos en el carrito" hidden>0</span>
+</a>
+
       </nav>
     </div>
   </header>
@@ -33,10 +37,15 @@
     <div id="product-detail"></div>
   </main>
 
-  <footer><div class="container">© <span id="anio"></span> CRONOX</div></footer>
+ <footer>
+  <div class="container">© <span id="anio"></span> CRONOX</div>
+</footer>
 
-  <script src="assets/products.js"></script>
-  <script src="assets/app.js"></script>
-  <script>document.getElementById('anio').textContent=new Date().getFullYear()</script>
+<script src="assets/app.js?v=31" defer></script>
+<script src="assets/product-page.js?v=31" defer></script>
+<script src="assets/cart-badge.js?v=31" defer></script>
+<script>
+  document.getElementById('anio').textContent = new Date().getFullYear();
+</script>
 </body>
 </html>
