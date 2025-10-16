@@ -34,14 +34,14 @@ html,body{margin:0;padding:0;background:#000;color:#fff}
 .overlay.overlay--hero{background:var(--overlay-hero)}
 .overlay.overlay--page{background:var(--overlay-page)}
 
-/* ===== Topbar (ahora fija para que el vídeo comience arriba del todo) ===== */
+/* ===== Topbar (fija para que el vídeo comience arriba del todo) ===== */
 .topbar{
-  position:fixed;top:0;left:0;right:0; /* <— FIXED */
+  position:fixed;top:0;left:0;right:0;
   height:var(--topbar-h);
   display:grid;grid-template-columns:1fr auto 1fr;
   align-items:center;padding:0 14px;
   z-index:1001;
-  transition:background-color .35s ease,border-color .35s ease,backdrop-filter .35s ease;
+  transition:background-color .35s ease,border-color .35s ease,backdrop-filter .35s ease,box-shadow .35s ease;
 }
 
 /* Transparente al inicio (se ve el vídeo detrás) */
@@ -49,20 +49,25 @@ html,body{margin:0;padding:0;background:#000;color:#fff}
   background:transparent;
   border-bottom:1px solid transparent;
   backdrop-filter:none;
+  box-shadow:none;
 }
 
 /* Translúcida mientras sigues sobre el vídeo */
-.topbar--hero{
+.topbar--hero,
+.topbar--translucent{ /* alias de compatibilidad */
   background:rgba(0,0,0,0.35);
   border-bottom:1px solid rgba(255,255,255,.08);
-  backdrop-filter:saturate(120%) blur(2px);
+  backdrop-filter:saturate(120%) blur(6px);
+  box-shadow:0 2px 12px rgba(0,0,0,0.25);
 }
 
 /* Negra opaca cuando sales del vídeo */
-.topbar--page{
+.topbar--page,
+.topbar--opaque{ /* alias de compatibilidad */
   background:rgba(0,0,0,1);
   border-bottom:1px solid rgba(255,255,255,.1);
   backdrop-filter:none;
+  box-shadow:0 2px 16px rgba(0,0,0,0.45);
 }
 
 /* ===== Topbar contenido ===== */
@@ -92,7 +97,7 @@ html,body{margin:0;padding:0;background:#000;color:#fff}
 /* ===== Searchbar fina (debajo de la topbar fija) ===== */
 .searchbar{
   position:sticky;
-  top:var(--topbar-h);               /* respeta la topbar fija */
+  top:var(--topbar-h);
   z-index:950;
   background:rgba(0,0,0,.85);
   backdrop-filter:saturate(120%) blur(2px);
@@ -124,7 +129,7 @@ html,body{margin:0;padding:0;background:#000;color:#fff}
 .filters{
   position:fixed;inset:0;
   display:grid;place-items:start center;
-  padding-top:calc(var(--topbar-h) + 14px); /* despega del borde superior */
+  padding-top:calc(var(--topbar-h) + 14px);
   z-index:950;
 }
 .filters[hidden]{display:none}
@@ -173,21 +178,33 @@ html,body{margin:0;padding:0;background:#000;color:#fff}
   border:1px solid var(--border);
 }
 
-/* ===== HERO VIDEO (TU BASE ESTABLE) ===== */
+/* ===== HERO VIDEO (BASE ESTABLE + mejoras responsive) ===== */
 .hero-video-section{
-  position:relative;min-height:100svh;
+  position:relative;
+  min-height:100vh;           /* fallback */
+  height:100svh;              /* soporta barras dinámicas */
   display:grid;place-items:center;
   background:#000;overflow:hidden;z-index:1;
-  /* SIN margen superior: debe empezar justo en el 0, para quedar detrás de la topbar fija */
+  /* SIN margen superior: debe empezar en 0, para quedar detrás de la topbar fija */
 }
+/* Usar dvh si está disponible (iOS Safari moderno y navegadores actualizados) */
+@supports (height: 100dvh){
+  .hero-video-section{
+    min-height:100dvh;
+    height:100dvh;
+  }
+}
+
 .hero-video{
   position:absolute;inset:0;width:100%;height:100%;
   object-fit:contain;                 /* BASE ESTABLE */
   transform-origin:center center;
-  transform:scale(2.20) translateY(7%); /* BASE ESTABLE */
+  transform:scale(2.20) translateY(7%); /* BASE ESTABLE (desktop/anchos) */
   background:#000;                    /* BASE ESTABLE */
   z-index:0;
 }
+
+/* Texto sobre el vídeo */
 .hero-overlay-text{
   position:relative;z-index:1;
   color:#fff;text-align:center;
@@ -197,12 +214,35 @@ html,body{margin:0;padding:0;background:#000;color:#fff}
   letter-spacing:.1em;
 }
 
+/* === OVERRIDES RESPONSIVOS PARA NO CORTAR EL VÍDEO ===
+   En vistas estrechas o con relación de aspecto alta (portrait/móvil, ventana partida),
+   anulamos la transformación y mantenemos el vídeo COMPLETO con bandas negras si hace falta. */
+@media (max-aspect-ratio: 16/9){
+  .hero-video{
+    object-fit: contain !important;
+    transform: none !important;
+    background:#000;
+  }
+}
+@media (max-width: 768px){
+  .hero-video-section{
+    height:100svh;
+  }
+  @supports (height: 100dvh){
+    .hero-video-section{ height:100dvh; }
+  }
+  .hero-video{
+    object-fit: contain !important;
+    transform: none !important;
+  }
+}
+
 /* ===== Contenido ===== */
-/* Añadimos scroll-margin-top para que los anclajes no queden ocultos tras la topbar fija */
+/* scroll-margin-top para que los anclajes no queden ocultos tras la topbar fija */
 #store,#contact{scroll-margin-top:calc(var(--topbar-h) + 12px)}
 
 .store{
-  padding:calc(40px + var(--topbar-h)) 16px 40px; /* añade espacio superior para no quedar tapado al salir del vídeo */
+  padding:calc(40px + var(--topbar-h)) 16px 40px;
   background:#0b0b0b;color:#fff;
   z-index:1;position:relative;
 }
