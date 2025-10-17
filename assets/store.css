@@ -287,3 +287,38 @@ a.product-card:focus-visible{
 .icon-btn .icon path{
   transform: none !important;
 }
+/* ===== ICONO SHOPPING BAG ===== */
+.icon-bag {
+  width: 22px;
+  height: 22px;
+  stroke: currentColor !important;
+  fill: none !important;
+  vertical-align: middle;
+  transition: opacity 0.2s ease;
+}
+
+.topbar__cart:hover .icon-bag {
+  opacity: 0.8;
+}
+
+/* Alineación visual del contador */
+.topbar__cart {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: #fff;
+}
+
+.topbar__cart .cart-count {
+  position: absolute;
+  top: -4px;
+  right: -10px;
+  background: #fff;
+  color: #000;
+  border-radius: 10px;
+  font: 700 10px/1 system-ui;
+  padding: 1px 5px;
+  min-width: 16px;
+  text-align: center;
+}
