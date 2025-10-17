@@ -356,3 +356,29 @@ a.product-card:focus-visible{
   min-width: 16px;
   text-align: center;
 }
+/* ===== Heading Tienda ===== */
+.store-heading {
+  text-align: center;
+  font: 800 22px/1.2 "system-ui", sans-serif;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: #fff;
+  margin: 60px 0 40px;
+  text-shadow: 0 0 18px rgba(255, 255, 255, 0.08);
+  opacity: 0;
+  transform: translateY(10px);
+  animation: fadeInHeading 1.6s ease forwards;
+}
+
+@keyframes fadeInHeading {
+  0% {
+    opacity: 0;
+    transform: translateY(10px);
+    filter: blur(4px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+    filter: blur(0);
+  }
+}
