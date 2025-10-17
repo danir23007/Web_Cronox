@@ -252,3 +252,39 @@ a.product-card:focus-visible{
 @media (max-width: 480px){    /* móvil pequeño */
   .product-img{ height:240px !important; }
 }
+/* ===== FIX: quitar fondo blanco de los iconos de menú y lupa ===== */
+.icon-btn,
+.icon-btn svg,
+.icon-btn img {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
+.icon-btn {
+  color: #fff !important;
+  width: 36px;
+  height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  border-radius: 0 !important;
+  transition: opacity 0.2s ease;
+}
+
+.icon-btn:hover {
+  opacity: 0.8;
+}
+
+.icon-btn:focus-visible {
+  outline: none;
+  box-shadow: var(--focus);
+}
+
+/* Aseguramos que no haya fondo en la lupa ni en el menú */
+.icon-btn * {
+  background: transparent !important;
+  fill: #fff !important;
+  color: #fff !important;
+}
