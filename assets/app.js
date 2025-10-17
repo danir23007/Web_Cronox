@@ -1,187 +1,164 @@
-// ==========================
-// assets/app.js — CRONOX
-// ==========================
+/* ========== CRONOX — Interacciones principales (drawer lateral filtros) ========== */
+(() => {
+  "use strict";
 
-// ===== Utils =====
-function hidePreloaderSafely() {
-  const p = document.getElementById('preloader');
-  if (p) p.style.display = 'none';
-}
+  // Helpers
+  const $  = (s, r = document) => r.querySelector(s);
+  const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
 
-// Evita que el navegador restaure el scroll (queremos empezar arriba del héroe)
-try { window.history.scrollRestoration = 'manual'; } catch (e) {}
+  // Elements
+  const topbar        = $("#topbar");
+  const hero          = $("#hero");
+  const overlay       = $("#overlay");
 
-// ===== Preloader: tres vías para ocultarlo =====
-window.addEventListener('load', hidePreloaderSafely, { once: true });
-document.addEventListener('DOMContentLoaded', () => {
-  // Failsafe por si 'load' tarda o no dispara (vídeo pesado, etc.)
-  setTimeout(hidePreloaderSafely, 2000);
-}, { once: true });
-window.addEventListener('error', () => {
-  // Si hay error en recursos, no bloquear en la pantalla de carga
-  setTimeout(hidePreloaderSafely, 0);
-});
+  const btnMenu       = $("#btnMenu");          // botón 3 líneas
+  const filtersPanel  = $("#filtersPanel");     // <aside id="filtersPanel">
+  const btnClose      = $("#btnCloseFilters");  // ✕ dentro del drawer
 
-// ===== Elements =====
-const topbar = document.getElementById('topbar');
-const hero = document.getElementById('hero');
-const overlay = document.getElementById('overlay');
+  const btnSearch     = $("#btnSearch");
+  const searchBar     = $("#searchBar");
+  const searchForm    = $("#searchForm");
+  const searchInput   = $("#searchInput");
 
-const btnMenu = document.getElementById('btnMenu');
-const filtersPanel = document.getElementById('filtersPanel');
-const btnCloseFilters = document.getElementById('btnCloseFilters');
-
-const btnSearch = document.getElementById('btnSearch');
-const searchBar = document.getElementById('searchBar');
-const searchForm = document.getElementById('searchForm');
-const searchInput = document.getElementById('searchInput');
-
-const filtersForm = document.getElementById('filtersForm');
-const btnClearFilters = document.getElementById('btnClearFilters');
-
-const productsGrid = document.getElementById('productsGrid');
-const productsFallback = document.getElementById('productsFallback');
-
-// ===== State =====
-let isOverHero = true;
-let menuOpen = false;
-let searchOpen = false;
-
-// ===== Forzar arranque arriba del todo cuando cargue la página =====
-window.addEventListener('load', () => {
-  // scrollTo(0,0) es el más compatible y suficiente aquí
-  try { window.scrollTo(0, 0); } catch(e) {}
-}, { once: true });
-
-// ===== Topbar modes (transparente → hero/translúcida → page/opaca) =====
-function updateTopbarMode() {
-  if (!topbar) return;
-  const atTop = (window.scrollY || 0) < 4;
-
-  topbar.classList.remove('topbar--transparent','topbar--hero','topbar--page');
-
-  if (atTop && isOverHero) {
-    topbar.classList.add('topbar--transparent');
-  } else if (isOverHero) {
-    topbar.classList.add('topbar--hero'); // (alias en CSS: --translucent)
-  } else {
-    topbar.classList.add('topbar--page'); // (alias en CSS: --opaque)
+  // ===== Overlay control =======================================================
+  function showOverlay(mode = "page") {
+    if (!overlay) return;
+    overlay.hidden = false;
+    overlay.classList.remove("overlay--hero", "overlay--page");
+    overlay.classList.add(mode === "hero" ? "overlay--hero" : "overlay--page");
   }
-}
-
-window.addEventListener('scroll', updateTopbarMode, { passive: true });
-
-// Usamos IntersectionObserver para saber si el héroe (vídeo) está en viewport
-try {
-  const io = new IntersectionObserver(
-    (entries) => {
-      entries.forEach((entry) => {
-        isOverHero = entry.isIntersecting && entry.intersectionRatio > 0.05;
-        updateTopbarMode();
-        if (menuOpen) updateOverlayMode();
-      });
-    },
-    // 5% visible para considerarlo "sobre el héroe" y evitar parpadeos
-    { root: null, threshold: [0, 0.05, 0.15, 0.5, 0.9] }
-  );
-  if (hero) io.observe(hero);
-} catch (e) {
-  // Si IO no existe, degradamos: opaca salvo en el top absoluto
-  console.warn('IntersectionObserver not available, degrading behavior.');
-  isOverHero = false;
-  updateTopbarMode();
-}
-
-// ===== Overlay (filtros y otras capas) =====
-function openOverlay() {
-  if (!overlay) return;
-  overlay.hidden = false;
-  updateOverlayMode();
-}
-function closeOverlay() {
-  if (!overlay) return;
-  overlay.hidden = true;
-  overlay.classList.remove('overlay--hero','overlay--page');
-}
-function updateOverlayMode() {
-  if (!overlay) return;
-  overlay.classList.toggle('overlay--hero', isOverHero);
-  overlay.classList.toggle('overlay--page', !isOverHero);
-}
-overlay?.addEventListener('click', () => { if (menuOpen) toggleMenu(false); });
-
-// ===== Filtros =====
-function toggleMenu(force) {
-  const next = (typeof force === 'boolean') ? force : !menuOpen;
-  menuOpen = next;
-  btnMenu?.setAttribute('aria-expanded', String(next));
-
-  if (next) {
-    if (filtersPanel) filtersPanel.hidden = false;
-    openOverlay();
-    const firstInput = filtersPanel?.querySelector('input,button,select,textarea');
-    firstInput && firstInput.focus?.({ preventScroll: true });
-  } else {
-    if (filtersPanel) filtersPanel.hidden = true;
-    closeOverlay();
-    btnMenu?.focus?.({ preventScroll: true });
+  function hideOverlay() {
+    if (!overlay) return;
+    overlay.hidden = true;
+    overlay.classList.remove("overlay--hero", "overlay--page");
   }
-}
-btnMenu?.addEventListener('click', () => toggleMenu());
-btnCloseFilters?.addEventListener('click', () => toggleMenu(false));
 
-// Accesibilidad: ESC cierra menú y barra de búsqueda
-document.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape') {
-    if (menuOpen) toggleMenu(false);
-    if (searchOpen) toggleSearch(false);
+  // ===== Body scroll lock ======================================================
+  function lockScroll()   { document.body.classList.add("no-scroll"); }
+  function unlockScroll() { document.body.classList.remove("no-scroll"); }
+
+  // ===== Drawer Filtros (lateral izquierdo) ===================================
+  function openFilters() {
+    if (!filtersPanel) return;
+    filtersPanel.hidden = false;              // asegúrate de que entra en flujo
+    filtersPanel.classList.add("is-open");    // CSS hace translateX(0)
+    btnMenu?.setAttribute("aria-expanded", "true");
+    showOverlay("page");
+    lockScroll();
+
+    // Enfocar primer control útil
+    const firstFocusable = $("button, [href], input, select, textarea, [tabindex]:not([tabindex='-1'])", filtersPanel) || btnClose;
+    firstFocusable?.focus();
   }
-});
 
-// Placeholder de filtros (conecta con products.js si quieres)
-filtersForm?.addEventListener('submit', (e) => {
-  e.preventDefault();
-  toggleMenu(false);
-});
-btnClearFilters?.addEventListener('click', () => { filtersForm?.reset?.(); });
+  function closeFilters() {
+    if (!filtersPanel) return;
+    filtersPanel.classList.remove("is-open");
+    btnMenu?.setAttribute("aria-expanded", "false");
+    hideOverlay();
+    unlockScroll();
 
-// ===== Búsqueda =====
-function toggleSearch(force) {
-  const next = (typeof force === 'boolean') ? force : !searchOpen;
-  searchOpen = next;
-  btnSearch?.setAttribute('aria-expanded', String(next));
+    // Devolver foco al trigger por accesibilidad
+    btnMenu?.focus();
 
-  if (next) {
-    if (searchBar) searchBar.hidden = false;
-    requestAnimationFrame(() => { searchInput?.focus?.(); });
-  } else {
-    if (searchBar) searchBar.hidden = true;
-    btnSearch?.focus?.({ preventScroll: true });
+    // Si quieres ocultar del árbol tras la transición, descomenta:
+    // setTimeout(() => { filtersPanel.hidden = true; }, 250);
   }
-}
-btnSearch?.addEventListener('click', () => toggleSearch());
 
-searchForm?.addEventListener('submit', (e) => {
-  e.preventDefault();
-  const q = (searchInput?.value || '').trim();
-  if (!q) return;
+  btnMenu?.addEventListener("click", () => {
+    const open = filtersPanel?.classList.contains("is-open");
+    open ? closeFilters() : openFilters();
+  });
 
-  const url = new URL(window.location);
-  url.searchParams.set('q', q);
-  history.replaceState({}, '', url);
+  btnClose?.addEventListener("click", closeFilters);
 
-  toggleSearch(false);
-  // TODO: conectar con filtrado real en products.js
-});
+  // Cierre al clicar overlay
+  overlay?.addEventListener("click", () => {
+    if (filtersPanel?.classList.contains("is-open")) closeFilters();
+    if (searchBar && !searchBar.hidden) toggleSearch(false);
+  });
 
-// ===== Fallback productos si nadie pintó tarjetas =====
-document.addEventListener('DOMContentLoaded', () => {
-  setTimeout(() => {
-    if (productsGrid && productsGrid.children.length === 0 && productsFallback) {
-      productsFallback.hidden = false;
+  // Cierre con Esc
+  window.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") {
+      if (filtersPanel?.classList.contains("is-open")) closeFilters();
+      if (searchBar && !searchBar.hidden) toggleSearch(false);
     }
-  }, 1200);
-});
+  });
 
-// ===== Inicialización =====
-updateTopbarMode();
+  // ===== Buscador (barra superior) ============================================
+  function toggleSearch(forceOpen = null) {
+    if (!searchBar) return;
+    const willOpen = forceOpen ?? searchBar.hidden;
+    if (willOpen) {
+      searchBar.hidden = false;
+      showOverlay("page");
+      lockScroll();
+      btnSearch?.setAttribute("aria-expanded", "true");
+      // focus diferido para móviles
+      setTimeout(() => searchInput?.focus(), 0);
+    } else {
+      searchBar.hidden = true;
+      hideOverlay();
+      unlockScroll();
+      btnSearch?.setAttribute("aria-expanded", "false");
+      btnSearch?.focus();
+    }
+  }
+
+  btnSearch?.addEventListener("click", () => toggleSearch());
+
+  searchForm?.addEventListener("submit", (e) => {
+    e.preventDefault();
+    const q = (searchInput?.value || "").trim();
+    // Aquí podrías filtrar productos por q si lo necesitas.
+    toggleSearch(false);
+  });
+
+  // ===== Topbar: transparente sobre héroe, opaca fuera ========================
+  function setupTopbarObserver() {
+    if (!topbar || !hero || !("IntersectionObserver" in window)) return;
+
+    const io = new IntersectionObserver(
+      (entries) => {
+        const entry = entries[0];
+        if (entry.isIntersecting && entry.intersectionRatio > 0.15) {
+          // En el área del héroe (parte alta): transparente
+          topbar.classList.add("topbar--transparent");
+          topbar.classList.remove("topbar--page");
+        } else {
+          // Fuera del héroe: opaca 100%
+          topbar.classList.remove("topbar--transparent");
+          topbar.classList.add("topbar--page");
+        }
+      },
+      { threshold: [0, 0.15, 0.5, 1] }
+    );
+    io.observe(hero);
+  }
+  setupTopbarObserver();
+
+  // ===== Preloader failsafe + scroll al inicio =================================
+  (function preloaderAndScroll(){
+    const preloader = $("#preloader");
+    let tried = false;
+    function hidePreloader(){
+      if (tried) return;
+      tried = true;
+      if (preloader) preloader.style.display = "none";
+    }
+
+    // Evitar restauración del scroll
+    try { window.history.scrollRestoration = "manual"; } catch(e){}
+
+    window.addEventListener("load", () => {
+      hidePreloader();
+      // Arrancar arriba del todo para que se vea el vídeo héroe
+      window.scrollTo({ top: 0, left: 0, behavior: "instant" });
+    }, { once: true });
+
+    window.addEventListener("DOMContentLoaded", () => setTimeout(hidePreloader, 3500), { once: true });
+    window.addEventListener("error", () => setTimeout(hidePreloader, 0));
+  })();
+
+})();
