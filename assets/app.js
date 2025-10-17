@@ -120,7 +120,6 @@
   // - Translúcida (.topbar--hero): mientras el topbar solape el hero (vídeo)
   // - Opaca (.topbar--page): al salir del hero
   function getTopbarHeight() {
-    // Lee la custom prop --topbar-h
     const cs = getComputedStyle(document.documentElement);
     const v = cs.getPropertyValue("--topbar-h").trim() || "64px";
     const n = parseFloat(v);
@@ -129,9 +128,7 @@
 
   function setTopbarState(state) {
     if (!topbar) return;
-    // Limpia estados primero
     topbar.classList.remove("topbar--transparent", "topbar--hero", "topbar--page");
-    // Aplica el nuevo
     topbar.classList.add(state);
   }
 
@@ -152,7 +149,7 @@
     const heroBottomFromTopbar = heroRect.bottom - topbarH;
 
     // Si la parte inferior del hero aún está por debajo del borde inferior del topbar,
-    // significa que seguimos sobre el video -> estado translúcido.
+    // seguimos sobre el video -> estado translúcido.
     if (heroBottomFromTopbar > 0) {
       setTopbarState("topbar--hero");
     } else {
@@ -161,12 +158,11 @@
     }
   }
 
-  // Listeners de scroll/resize/orientation para recalcular
   window.addEventListener("scroll", updateTopbarState, { passive: true });
   window.addEventListener("resize", updateTopbarState);
   window.addEventListener("orientationchange", updateTopbarState);
 
-  // ===== Preloader failsafe + scroll al inicio =================================
+  // ===== Preloader + FORZAR HERO AL ENTRAR =====================================
   (function preloaderAndScroll(){
     const preloader = $("#preloader");
     let tried = false;
@@ -181,11 +177,19 @@
 
     window.addEventListener("load", () => {
       hidePreloader();
+
+      // >>> IMP: siempre que se entra, limpiar #store para no saltar a la tienda
+      if (location.hash) {
+        const clean = location.pathname + location.search; // sin hash
+        history.replaceState(null, "", clean);
+      }
+
       // Arrancar arriba del todo para que se vea el vídeo héroe
       window.scrollTo({ top: 0, left: 0, behavior: "instant" });
+
       // Recalcula estado del topbar una vez que todo pintó
       updateTopbarState();
-      // Pequeño ajuste asíncrono por si el video tarda en calcular tamaño
+      // Ajuste por si el video tarda en calcular tamaño
       setTimeout(updateTopbarState, 100);
     }, { once: true });
 
