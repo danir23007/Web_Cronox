@@ -112,7 +112,7 @@ html,body{margin:0;padding:0;background:#000;color:#fff}
   content:"";
   position:absolute;
   top:0;bottom:0;
-  width:1px;
+  width:0px;
   background:var(--divider);
   pointer-events:none;
 }
