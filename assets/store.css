@@ -51,7 +51,14 @@ html,body{margin:0;padding:0;background:#000;color:#fff}
 .topbar__right{justify-self:end;display:flex;gap:16px}
 .topbar__link{color:var(--muted);text-decoration:none;font:500 14px/1 system-ui;}
 .topbar__link:hover{color:#fff}
-.topbar__logo{justify-self:center;display:inline-flex;align-items:center}
+
+/* Logo centrado clicable */
+.topbar__logo{
+  justify-self:center;display:inline-flex;align-items:center;
+  height:var(--topbar-h);
+  cursor:pointer;               /* ← hace evidente que es clicable */
+}
+.topbar__logo:hover{opacity:.88}
 .topbar__logo-img{height:28px;display:block}
 
 /* ===== Searchbar ===== */
@@ -117,8 +124,7 @@ html,body{margin:0;padding:0;background:#000;color:#fff}
   pointer-events:none;
 }
 .products-grid::before{left: calc(100%/3);}
-products-grid::after{left: calc(100%*2/3);} /* fallback typo-safe */
-.products-grid::after{left: calc(100%*2/3);}
+.products-grid::after{left: calc(100%*2/3);} /* ← corregido (se elimina el selector sin punto) */
 
 /* 2 columnas (tablet) */
 @media (max-width:1024px){
@@ -287,6 +293,7 @@ a.product-card:focus-visible{
 .icon-btn .icon path{
   transform: none !important;
 }
+
 /* ===== ICONO SHOPPING BAG ===== */
 .icon-bag {
   width: 22px;
@@ -296,10 +303,7 @@ a.product-card:focus-visible{
   vertical-align: middle;
   transition: opacity 0.2s ease;
 }
-
-.topbar__cart:hover .icon-bag {
-  opacity: 0.8;
-}
+.topbar__cart:hover .icon-bag { opacity: 0.8; }
 
 /* Alineación visual del contador */
 .topbar__cart {
@@ -309,7 +313,6 @@ a.product-card:focus-visible{
   gap: 4px;
   color: #fff;
 }
-
 .topbar__cart .cart-count {
   position: absolute;
   top: -4px;
