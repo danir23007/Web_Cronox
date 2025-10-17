@@ -288,3 +288,31 @@ a.product-card:focus-visible{
   fill: #fff !important;
   color: #fff !important;
 }
+/* ===== Ajuste visual del icono de la lupa ===== */
+
+/* Asegura que no tenga fondo ni borde */
+.icon-btn svg {
+  background: transparent !important;
+  fill: none !important;            /* sin relleno blanco */
+  stroke: #fff !important;          /* líneas blancas */
+  stroke-width: 2 !important;       /* grosor equilibrado */
+  width: 20px !important;           /* tamaño general */
+  height: 20px !important;
+}
+
+/* Círculo más pequeño y mango más largo */
+.icon-btn svg path {
+  transform-origin: center center;
+  transform: scale(0.85); /* reduce ligeramente el círculo */
+}
+
+/* Si la lupa está compuesta de dos formas (círculo + mango separados) */
+.icon-btn svg circle {
+  r: 7 !important; /* reduce el radio del círculo */
+}
+
+.icon-btn svg line {
+  stroke: #fff !important;
+  stroke-width: 2 !important;
+  transform: scaleY(1.3); /* alarga el mango verticalmente */
+}
