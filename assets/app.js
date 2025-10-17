@@ -1,10 +1,9 @@
-/* ========== CRONOX — Interacciones principales (drawer lateral filtros) ========== */
+/* ========== CRONOX — Interacciones principales (drawer + topbar states) ========== */
 (() => {
   "use strict";
 
   // Helpers
   const $  = (s, r = document) => r.querySelector(s);
-  const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
 
   // Elements
   const topbar        = $("#topbar");
@@ -40,14 +39,16 @@
   // ===== Drawer Filtros (lateral izquierdo) ===================================
   function openFilters() {
     if (!filtersPanel) return;
-    filtersPanel.hidden = false;              // asegúrate de que entra en flujo
+    filtersPanel.hidden = false;              // visible para permitir animación
     filtersPanel.classList.add("is-open");    // CSS hace translateX(0)
     btnMenu?.setAttribute("aria-expanded", "true");
     showOverlay("page");
     lockScroll();
 
     // Enfocar primer control útil
-    const firstFocusable = $("button, [href], input, select, textarea, [tabindex]:not([tabindex='-1'])", filtersPanel) || btnClose;
+    const firstFocusable =
+      $("button, [href], input, select, textarea, [tabindex]:not([tabindex='-1'])", filtersPanel) ||
+      btnClose;
     firstFocusable?.focus();
   }
 
@@ -60,8 +61,7 @@
 
     // Devolver foco al trigger por accesibilidad
     btnMenu?.focus();
-
-    // Si quieres ocultar del árbol tras la transición, descomenta:
+    // Si quisieras ocultarlo del árbol tras la transición:
     // setTimeout(() => { filtersPanel.hidden = true; }, 250);
   }
 
@@ -95,7 +95,6 @@
       showOverlay("page");
       lockScroll();
       btnSearch?.setAttribute("aria-expanded", "true");
-      // focus diferido para móviles
       setTimeout(() => searchInput?.focus(), 0);
     } else {
       searchBar.hidden = true;
@@ -111,32 +110,61 @@
   searchForm?.addEventListener("submit", (e) => {
     e.preventDefault();
     const q = (searchInput?.value || "").trim();
-    // Aquí podrías filtrar productos por q si lo necesitas.
+    // TODO: filtrar productos por q si lo necesitas.
     toggleSearch(false);
   });
 
-  // ===== Topbar: transparente sobre héroe, opaca fuera ========================
-  function setupTopbarObserver() {
-    if (!topbar || !hero || !("IntersectionObserver" in window)) return;
-
-    const io = new IntersectionObserver(
-      (entries) => {
-        const entry = entries[0];
-        if (entry.isIntersecting && entry.intersectionRatio > 0.15) {
-          // En el área del héroe (parte alta): transparente
-          topbar.classList.add("topbar--transparent");
-          topbar.classList.remove("topbar--page");
-        } else {
-          // Fuera del héroe: opaca 100%
-          topbar.classList.remove("topbar--transparent");
-          topbar.classList.add("topbar--page");
-        }
-      },
-      { threshold: [0, 0.15, 0.5, 1] }
-    );
-    io.observe(hero);
+  // ===== Topbar states (transparente / translúcida / opaca) ====================
+  // Reglas:
+  // - Transparente: en la parte más alta del documento (scroll <= 2px)
+  // - Translúcida (.topbar--hero): mientras el topbar solape el hero (vídeo)
+  // - Opaca (.topbar--page): al salir del hero
+  function getTopbarHeight() {
+    // Lee la custom prop --topbar-h
+    const cs = getComputedStyle(document.documentElement);
+    const v = cs.getPropertyValue("--topbar-h").trim() || "64px";
+    const n = parseFloat(v);
+    return isNaN(n) ? 64 : n;
   }
-  setupTopbarObserver();
+
+  function setTopbarState(state) {
+    if (!topbar) return;
+    // Limpia estados primero
+    topbar.classList.remove("topbar--transparent", "topbar--hero", "topbar--page");
+    // Aplica el nuevo
+    topbar.classList.add(state);
+  }
+
+  function updateTopbarState() {
+    if (!topbar || !hero) return;
+
+    const y = window.scrollY || window.pageYOffset || 0;
+    const topbarH = getTopbarHeight();
+
+    // Transparente si estás literalmente arriba del todo (sensibilidad 2px)
+    if (y <= 2) {
+      setTopbarState("topbar--transparent");
+      return;
+    }
+
+    // ¿Sigue el hero por debajo del topbar?
+    const heroRect = hero.getBoundingClientRect();
+    const heroBottomFromTopbar = heroRect.bottom - topbarH;
+
+    // Si la parte inferior del hero aún está por debajo del borde inferior del topbar,
+    // significa que seguimos sobre el video -> estado translúcido.
+    if (heroBottomFromTopbar > 0) {
+      setTopbarState("topbar--hero");
+    } else {
+      // Ya hemos pasado el hero -> opaca
+      setTopbarState("topbar--page");
+    }
+  }
+
+  // Listeners de scroll/resize/orientation para recalcular
+  window.addEventListener("scroll", updateTopbarState, { passive: true });
+  window.addEventListener("resize", updateTopbarState);
+  window.addEventListener("orientationchange", updateTopbarState);
 
   // ===== Preloader failsafe + scroll al inicio =================================
   (function preloaderAndScroll(){
@@ -148,16 +176,25 @@
       if (preloader) preloader.style.display = "none";
     }
 
-    // Evitar restauración del scroll
+    // Evitar restauración del scroll por el navegador
     try { window.history.scrollRestoration = "manual"; } catch(e){}
 
     window.addEventListener("load", () => {
       hidePreloader();
       // Arrancar arriba del todo para que se vea el vídeo héroe
       window.scrollTo({ top: 0, left: 0, behavior: "instant" });
+      // Recalcula estado del topbar una vez que todo pintó
+      updateTopbarState();
+      // Pequeño ajuste asíncrono por si el video tarda en calcular tamaño
+      setTimeout(updateTopbarState, 100);
     }, { once: true });
 
-    window.addEventListener("DOMContentLoaded", () => setTimeout(hidePreloader, 3500), { once: true });
+    window.addEventListener("DOMContentLoaded", () => {
+      // Estado inicial por si hay reflow antes del load
+      updateTopbarState();
+      setTimeout(updateTopbarState, 50);
+    }, { once: true });
+
     window.addEventListener("error", () => setTimeout(hidePreloader, 0));
   })();
 
