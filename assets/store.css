@@ -382,3 +382,60 @@ a.product-card:focus-visible{
     filter: blur(0);
   }
 }
+/* ===== Product image responsiva: grande, proporcional y sin recortes ===== */
+/* La imagen ocupa un “marco” proporcional que escala con la tarjeta.        */
+/* En desktop usamos 4:5 (alto fashion). En móvil acercamos a 1:1 para más llenado. */
+
+.product-card{
+  position: relative;               /* por si en el futuro añades efectos */
+  overflow: hidden;                 /* seguridad: nada se sale de la tarjeta */
+}
+
+/* Reglas base para todas las vistas */
+.product-img{
+  display: block !important;
+  width: 100% !important;
+  height: auto !important;          /* elimina alturas fijas previas */
+  aspect-ratio: 4 / 5 !important;   /* marco proporcional en desktop/tablet */
+  object-fit: contain !important;   /* nunca recorta, nunca deforma */
+  object-position: center center !important;
+  background: #fff !important;      /* mantiene tu base blanca */
+  transform: none !important;       /* por si había zooms previos */
+}
+
+/* Footer compacto para dar más protagonismo a la imagen */
+.product-name{
+  padding: 10px 12px 4px !important;
+  font-size: 12px !important;
+}
+.product-price{
+  padding: 0 12px 12px !important;
+  font-size: 12px !important;
+}
+
+/* —— Ajustes por breakpoint —— */
+/* Tablet: mantenemos 4:5 */
+@media (max-width: 1024px){
+  .product-img{
+    aspect-ratio: 4 / 5 !important;
+  }
+}
+
+/* Móvil: acercamos a cuadrado para llenar más sin recortar */
+@media (max-width: 640px){
+  .product-img{
+    aspect-ratio: 1 / 1.05 !important; /* casi cuadrado -> se ve más grande */
+    /* height sigue siendo auto, todo escala con el ancho de la tarjeta */
+  }
+  .product-name{ font-size: 11.5px !important; }
+  .product-price{ font-size: 11.5px !important; }
+}
+
+/* Móvil pequeño */
+@media (max-width: 480px){
+  .product-img{
+    aspect-ratio: 1 / 1 !important; /* cuadrado puro: ocupa máximo sin recorte */
+  }
+  .product-name{ font-size: 11px !important; }
+  .product-price{ font-size: 11px !important; }
+}
