@@ -1,6 +1,6 @@
 // ======================================================
-// assets/products.js — Grid + filtros + enlaces a PDP
-// + scroll exacto al volver (back) + foco en última vista
+// assets/products.js — Grid + filtros + enlaces a PDP + Quick-Add (+)
+// + scroll exacto al volver (back) y foco en última vista
 // ======================================================
 (function () {
   const productsGrid = document.getElementById("productsGrid");
@@ -11,10 +11,9 @@
   const searchInput = document.getElementById("searchInput");
 
   // Claves de sesión para restaurar
-  const RETURN_KEY = "cronox_scroll_to";      // id de producto (para centrar y resaltar)
-  const SCROLL_POS_KEY = "cronox_scroll_pos"; // posición Y exacta (para botón Atrás)
+  const RETURN_KEY = "cronox_scroll_to";
+  const SCROLL_POS_KEY = "cronox_scroll_pos";
 
-  // Asegura control manual del scroll si el navegador lo soporta
   try { history.scrollRestoration = "manual"; } catch {}
 
   const norm = (s) =>
@@ -24,7 +23,7 @@
     return new Intl.NumberFormat("es-ES",{style:"currency",currency:"EUR"}).format(n);
   }
 
-  // === Catálogo (igual que en la PDP) ===
+  // === Catálogo (añado 'images' y 'colors' para el Quick-Add) ===
   const PRODUCTS = [
     {
       id: "camiseta-washed-gris",
@@ -32,9 +31,14 @@
       price: 34.95,
       priceLabel: "34,95 €",
       image: "assets/products/camiseta_washed_gris.png",
+      images: [
+        "assets/products/camiseta_washed_gris.png",
+        "assets/products/camiseta_washed_gris_2.png" // si no existe, se repetirá la 1ª
+      ],
       categories: ["camisetas"],
       sizes: ["s", "m", "l", "xl"],
       color: "gris",
+      colors: ["gris"], // si solo hay un color, igualmente se muestra
       desc: "Camiseta premium lavado gris, corte oversized y tacto suave."
     },
     {
@@ -43,20 +47,185 @@
       price: 34.95,
       priceLabel: "34,95 €",
       image: "assets/products/camiseta_washed_negra.png",
+      images: [
+        "assets/products/camiseta_washed_negra.png",
+        "assets/products/camiseta_washed_negra_2.png"
+      ],
       categories: ["camisetas"],
       sizes: ["s", "m", "l", "xl"],
       color: "negro",
+      colors: ["negro"],
       desc: "Camiseta premium lavado negro, corte oversized y tacto suave."
     }
   ];
-  window.CRONOX_PRODUCTS = PRODUCTS; // para la PDP
+  window.CRONOX_PRODUCTS = PRODUCTS; // para PDP
 
   // ---- Búsqueda inicial (?q=) ----
   const url = new URL(window.location);
   const initialQueryRaw  = url.searchParams.get("q") || "";
   if (searchInput && initialQueryRaw) searchInput.value = initialQueryRaw;
 
-  // ---- Tarjeta como LINK a producto.html ----
+  // ======================================================
+  // Quick-Add: crear overlay/panel una sola vez y reutilizar
+  // ======================================================
+  let qaOverlay, qaPanel, qaClose, qaImg1, qaImg2, qaName, qaPrice, qaColor, qaSize, qaQty, qaAdd, qaLink;
+  let qaCurrentProduct = null;
+
+  function ensureQuickAddDOM() {
+    if (qaOverlay) return;
+
+    qaOverlay = document.createElement("div");
+    qaOverlay.className = "qa-overlay";
+    qaOverlay.id = "quickAdd";
+    qaOverlay.setAttribute("aria-hidden", "true");
+    qaOverlay.innerHTML = `
+      <div class="qa-panel" role="dialog" aria-modal="true">
+        <button class="qa-close" aria-label="Cerrar">×</button>
+
+        <div class="qa-media">
+          <img id="qaImg1" alt="" loading="lazy" decoding="async">
+          <img id="qaImg2" alt="" loading="lazy" decoding="async">
+        </div>
+
+        <div class="qa-info">
+          <h3 class="qa-name" id="qaName"></h3>
+          <p class="qa-price" id="qaPrice"></p>
+
+          <div class="qa-row">
+            <span class="qa-label">Color</span>
+            <select id="qaColor" class="qa-select"></select>
+          </div>
+
+          <div class="qa-row">
+            <span class="qa-label">Talla</span>
+            <select id="qaSize" class="qa-select"></select>
+          </div>
+
+          <div class="qa-row">
+            <span class="qa-label">Cantidad</span>
+            <input id="qaQty" class="qa-qty" type="number" min="1" value="1" inputmode="numeric">
+          </div>
+
+          <div class="qa-row" style="margin-top:6px">
+            <button id="qaAdd" class="qa-btn">Añadir al carrito</button>
+          </div>
+
+          <a id="qaLink" class="qa-muted-link" href="#" rel="nofollow">Ver detalles del producto</a>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(qaOverlay);
+
+    qaPanel = qaOverlay.querySelector(".qa-panel");
+    qaClose = qaOverlay.querySelector(".qa-close");
+    qaImg1  = qaOverlay.querySelector("#qaImg1");
+    qaImg2  = qaOverlay.querySelector("#qaImg2");
+    qaName  = qaOverlay.querySelector("#qaName");
+    qaPrice = qaOverlay.querySelector("#qaPrice");
+    qaColor = qaOverlay.querySelector("#qaColor");
+    qaSize  = qaOverlay.querySelector("#qaSize");
+    qaQty   = qaOverlay.querySelector("#qaQty");
+    qaAdd   = qaOverlay.querySelector("#qaAdd");
+    qaLink  = qaOverlay.querySelector("#qaLink");
+
+    // Cerrar
+    qaClose.addEventListener("click", closeQuickAdd);
+    qaOverlay.addEventListener("click", (e) => {
+      if (!e.target.closest(".qa-panel")) closeQuickAdd();
+    });
+    window.addEventListener("keydown", (e) => {
+      if (qaOverlay.getAttribute("aria-hidden") === "false" && e.key === "Escape") closeQuickAdd();
+    });
+
+    // Añadir al carrito
+    qaAdd.addEventListener("click", () => {
+      if (!qaCurrentProduct) return;
+      const size = qaSize?.value || "M";
+      const color = qaColor?.value || qaCurrentProduct.color || null;
+      const qty  = Math.max(1, parseInt(qaQty?.value || "1", 10));
+      addToCart({
+        id: qaCurrentProduct.id,
+        name: qaCurrentProduct.name,
+        price: Number(qaCurrentProduct.price) || 0,
+        priceLabel: qaCurrentProduct.priceLabel || euros(qaCurrentProduct.price),
+        image: qaCurrentProduct.image,
+        color,
+        size,
+        qty
+      });
+      // pequeño feedback
+      qaAdd.disabled = true;
+      const prev = qaAdd.textContent;
+      qaAdd.textContent = "Añadido ✓";
+      setTimeout(() => { qaAdd.textContent = prev; qaAdd.disabled = false; }, 1200);
+    });
+
+    // Ver detalles
+    qaLink.addEventListener("click", (e) => {
+      e.preventDefault();
+      if (!qaCurrentProduct) return;
+      window.location.href = `producto.html?id=${encodeURIComponent(qaCurrentProduct.id)}`;
+    });
+  }
+
+  function openQuickAdd(product) {
+    ensureQuickAddDOM();
+    qaCurrentProduct = product;
+
+    // Imágenes (solo 2 primeras; si falta, repetimos la primera)
+    const imgs = Array.isArray(product.images) && product.images.length ? product.images : [product.image];
+    qaImg1.src = imgs[0];
+    qaImg1.alt = product.name;
+    qaImg2.src = imgs[1] || imgs[0];
+    qaImg2.alt = product.name;
+
+    // Textos y selects
+    qaName.textContent  = product.name || "";
+    qaPrice.textContent = product.priceLabel || euros(product.price);
+
+    const colors = product.colors && product.colors.length ? product.colors : (product.color ? [product.color] : ["Único"]);
+    qaColor.innerHTML = colors.map(c => `<option value="${c}">${c.toString().toUpperCase()}</option>`).join("");
+
+    const sizes = product.sizes && product.sizes.length ? product.sizes : ["m"];
+    qaSize.innerHTML = sizes.map(s => `<option value="${s.toUpperCase()}">${s.toUpperCase()}</option>`).join("");
+
+    qaQty.value = "1";
+    qaLink.href = `producto.html?id=${encodeURIComponent(product.id)}`;
+
+    qaOverlay.setAttribute("aria-hidden", "false");
+    document.body.style.overflow = "hidden";
+    qaClose.focus();
+  }
+
+  function closeQuickAdd() {
+    if (!qaOverlay) return;
+    qaOverlay.setAttribute("aria-hidden", "true");
+    document.body.style.overflow = "";
+    qaCurrentProduct = null;
+  }
+
+  // Carrito
+  function addToCart(item) {
+    try {
+      const raw = localStorage.getItem("cronox_cart");
+      const cart = raw ? JSON.parse(raw) : [];
+      // agrupar por id+size+color
+      const idx = cart.findIndex(x => x.id === item.id && x.size === item.size && x.color === item.color);
+      if (idx >= 0) {
+        cart[idx].qty = (Number(cart[idx].qty) || 0) + (Number(item.qty) || 1);
+      } else {
+        cart.push({ ...item, qty: Number(item.qty) || 1, addedAt: Date.now() });
+      }
+      localStorage.setItem("cronox_cart", JSON.stringify(cart));
+      if (typeof window.updateCartBadge === "function") window.updateCartBadge(cart.length);
+      window.dispatchEvent(new Event("cart:updated"));
+    } catch (e) {
+      console.error("[CRONOX] Error guardando en carrito:", e);
+      alert("No se pudo guardar el carrito en este navegador.");
+    }
+  }
+
+  // ---- Tarjeta como LINK a producto.html y botón "+" ----
   function createCard(p) {
     const a = document.createElement("a");
     a.href = `producto.html?id=${encodeURIComponent(p.id)}`;
@@ -78,9 +247,22 @@
     price.className = "product-price";
     price.textContent = p.priceLabel || euros(p.price);
 
+    // Botón "+"
+    const plus = document.createElement("button");
+    plus.className = "card-plus";
+    plus.type = "button";
+    plus.setAttribute("aria-label", `Añadir rápido ${p.name}`);
+    plus.textContent = "+";
+    plus.addEventListener("click", (ev) => {
+      ev.preventDefault(); // no navegamos a producto.html
+      ev.stopPropagation();
+      openQuickAdd(p);
+    });
+
     a.appendChild(img);
     a.appendChild(name);
     a.appendChild(price);
+    a.appendChild(plus);
     return a;
   }
 
@@ -101,7 +283,6 @@
     list.forEach((p) => frag.appendChild(createCard(p)));
     productsGrid.appendChild(frag);
 
-    // Tras render inicial: restaurar scroll si procede
     restoreScrollOrFocus();
   }
 
@@ -112,22 +293,14 @@
 
     f.cat = Array.from(filtersForm.querySelectorAll('input[name="cat"]:checked')).map(el => norm(el.value));
     f.size = Array.from(filtersForm.querySelectorAll('input[name="size"]:checked')).map(el => norm(el.value));
-    f.color = Array.from(filtersForm.querySelectorAll('input[name="color"]:checked')).map(el => norm(el.value));
+    f.color= Array.from(filtersForm.querySelectorAll('input[name="color"]:checked')).map(el => norm(el.value));
     return f;
   }
 
   function matchesFilters(p, f) {
-    if (f.cat.length) {
-      const hasCat = (p.categories || []).some(c => f.cat.includes(norm(c)));
-      if (!hasCat) return false;
-    }
-    if (f.size.length) {
-      const hasSize = (p.sizes || []).some(s => f.size.includes(norm(s)));
-      if (!hasSize) return false;
-    }
-    if (f.color.length) {
-      if (!f.color.includes(norm(p.color))) return false;
-    }
+    if (f.cat.length)  { if (!(p.categories||[]).some(c=>f.cat.includes(norm(c)))) return false; }
+    if (f.size.length) { if (!(p.sizes||[]).some(s=>f.size.includes(norm(s)))) return false; }
+    if (f.color.length){ if (!f.color.includes(norm(p.color))) return false; }
     return true;
   }
 
@@ -145,56 +318,40 @@
     renderProducts(out);
   }
 
-  // ---- Guardar scroll antes de salir a la PDP (para botón Atrás) ----
+  // ---- Guardar scroll antes de salir a PDP ----
   if (productsGrid) {
     productsGrid.addEventListener("click", (e) => {
       const link = e.target.closest("a.product-card[href]");
       if (!link) return;
-      // Guarda la posición actual de scroll
-      try {
-        sessionStorage.setItem(SCROLL_POS_KEY, String(window.scrollY || window.pageYOffset || 0));
-      } catch {}
-      // (Opcional) también guardamos el id para fallback de foco
+      try { sessionStorage.setItem(SCROLL_POS_KEY, String(window.scrollY || 0)); } catch {}
       const pid = link.getAttribute("data-id") || link.dataset.id;
-      if (pid) {
-        try { sessionStorage.setItem(RETURN_KEY, pid); } catch {}
-      }
-    }, { capture: true }); // capture para asegurar que se ejecute antes de navegar
+      if (pid) { try { sessionStorage.setItem(RETURN_KEY, pid); } catch {} }
+    }, { capture: true });
   }
 
-  // ---- Restaurar scroll exacto (si venimos con botón Atrás) o centrar tarjeta (si venimos desde la PDP con fade) ----
+  // ---- Restaurar scroll o centrar tarjeta ----
   function ensureHighlightStyles() {
     if (document.getElementById("cronox-card-flash")) return;
-    const css = `
-      .cronox-flash {
-        outline: 2px solid rgba(255,255,255,.85);
-        box-shadow: 0 0 0 6px rgba(255,255,255,.18);
-        transition: outline-color .6s ease, box-shadow .6s ease, transform .2s ease;
-      }
-    `;
     const style = document.createElement("style");
     style.id = "cronox-card-flash";
-    style.textContent = css;
+    style.textContent = `.cronox-flash{outline:2px solid rgba(255,255,255,.85);box-shadow:0 0 0 6px rgba(255,255,255,.18);transition:outline-color .6s ease, box-shadow .6s ease}`;
     document.head.appendChild(style);
   }
 
   function restoreScrollOrFocus() {
     const prefersReduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
-    // 1) Intento de restaurar scroll exacto (si se guardó al salir)
     let y = null;
     try { y = sessionStorage.getItem(SCROLL_POS_KEY); } catch {}
     if (y !== null && y !== undefined) {
       const yNum = Math.max(0, parseInt(y, 10) || 0);
       try { sessionStorage.removeItem(SCROLL_POS_KEY); } catch {}
-      // Esperar al frame de pintado para posicionar
       requestAnimationFrame(() => {
         window.scrollTo({ top: yNum, behavior: prefersReduced ? "auto" : "instant" });
       });
-      return; // ya restaurado, no necesitamos centrar
+      return;
     }
 
-    // 2) Fallback: centrar y resaltar última tarjeta vista (RETURN_KEY lo pone la PDP)
     let pid = null;
     try { pid = sessionStorage.getItem(RETURN_KEY); } catch {}
     if (!pid) return;
@@ -211,29 +368,19 @@
     });
   }
 
-  // ---- También cubrir bfcache (pageshow con persisted=true) ----
-  window.addEventListener("pageshow", (e) => {
-    // Si la página vino del bfcache, volvemos a intentar restaurar
-    if (e.persisted) restoreScrollOrFocus();
-  });
+  window.addEventListener("pageshow", (e) => { if (e.persisted) restoreScrollOrFocus(); });
 
-  // ---- Eventos
+  // ---- Eventos búsqueda/filtros ----
   if (searchForm) {
     searchForm.addEventListener("submit", (e) => {
       e.preventDefault();
-      const q = searchInput ? searchInput.value : "";
-      const newURL = new URL(window.location);
-      if (q && q.trim().length) newURL.searchParams.set("q", q);
-      else newURL.searchParams.delete("q");
-      window.history.replaceState({}, "", newURL.toString());
-      applyAll();
+      applyAll(); // si quieres mantener ?q= en URL, sustituye por el bloque anterior que lo hacía
     });
   }
 
   if (filtersForm) {
     filtersForm.addEventListener("submit", (e) => {
-      e.preventDefault();
-      applyAll();
+      e.preventDefault(); applyAll();
     });
   }
 
