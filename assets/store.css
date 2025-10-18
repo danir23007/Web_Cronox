@@ -266,10 +266,28 @@ a.product-card:focus-visible{outline:2px solid #111;outline-offset:3px;border-ra
   filter: drop-shadow(0 0 5px rgba(255,255,255,0.3));
   opacity: 1;
 }
-.topbar__cart:not(:has(.cart-count[hidden])) .icon-bag {
-  stroke: #fff !important;
+.topbar__cart:not(:has(.cart-count[hidden])) .icon-bag,
+.topbar__cart .icon-bag.has-items {
+  stroke: #000 !important; /* contorno negro para que resalte */
   fill: #fff !important;
   filter: drop-shadow(0 0 6px rgba(255,255,255,.45));
   opacity: 1 !important;
   transition: all .3s ease;
+}
+
+/* ===== Efecto visual extra para el badge del carrito ===== */
+.topbar__cart .cart-count:not([hidden]) {
+  box-shadow: 0 0 8px rgba(255,255,255,0.55);
+  transition: box-shadow 0.3s ease, transform 0.3s ease;
+  transform: scale(1.05);
+}
+
+@keyframes cartPulse {
+  0% { transform: scale(1); box-shadow: 0 0 0 rgba(255,255,255,0.3); }
+  40% { transform: scale(1.15); box-shadow: 0 0 10px rgba(255,255,255,0.7); }
+  100% { transform: scale(1.05); box-shadow: 0 0 8px rgba(255,255,255,0.55); }
+}
+
+.topbar__cart .cart-count:not([hidden]) {
+  animation: cartPulse 0.6s ease;
 }
