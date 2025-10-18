@@ -1,5 +1,6 @@
 // ======================================================
-// assets/products.js — Grid + filtros + enlaces a PDP + scroll a última vista
+// assets/products.js — Grid + filtros + enlaces a PDP
+// + scroll exacto al volver (back) + foco en última vista
 // ======================================================
 (function () {
   const productsGrid = document.getElementById("productsGrid");
@@ -9,7 +10,12 @@
   const searchForm = document.getElementById("searchForm");
   const searchInput = document.getElementById("searchInput");
 
-  const RETURN_KEY = "cronox_scroll_to"; // <- lee el id guardado en la PDP
+  // Claves de sesión para restaurar
+  const RETURN_KEY = "cronox_scroll_to";      // id de producto (para centrar y resaltar)
+  const SCROLL_POS_KEY = "cronox_scroll_pos"; // posición Y exacta (para botón Atrás)
+
+  // Asegura control manual del scroll si el navegador lo soporta
+  try { history.scrollRestoration = "manual"; } catch {}
 
   const norm = (s) =>
     (s || "").toString().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
@@ -18,7 +24,7 @@
     return new Intl.NumberFormat("es-ES",{style:"currency",currency:"EUR"}).format(n);
   }
 
-  // === Catálogo actual (igual que en la PDP) ===
+  // === Catálogo (igual que en la PDP) ===
   const PRODUCTS = [
     {
       id: "camiseta-washed-gris",
@@ -43,7 +49,7 @@
       desc: "Camiseta premium lavado negro, corte oversized y tacto suave."
     }
   ];
-  window.CRONOX_PRODUCTS = PRODUCTS; // para PDP
+  window.CRONOX_PRODUCTS = PRODUCTS; // para la PDP
 
   // ---- Búsqueda inicial (?q=) ----
   const url = new URL(window.location);
@@ -95,8 +101,8 @@
     list.forEach((p) => frag.appendChild(createCard(p)));
     productsGrid.appendChild(frag);
 
-    // Tras render: si hay marca de retorno, desplazarse a esa tarjeta
-    scrollToLastViewed();
+    // Tras render inicial: restaurar scroll si procede
+    restoreScrollOrFocus();
   }
 
   // ---- Filtros + Búsqueda ----
@@ -135,12 +141,28 @@
     const f = getActiveFilters();
     const qRaw = searchInput ? searchInput.value : initialQueryRaw;
     const qNorm = norm(qRaw);
-
     const out = PRODUCTS.filter(p => matchesFilters(p, f) && matchesQuery(p, qNorm));
     renderProducts(out);
   }
 
-  // ---- Scroll a última vista (con resaltado) ----
+  // ---- Guardar scroll antes de salir a la PDP (para botón Atrás) ----
+  if (productsGrid) {
+    productsGrid.addEventListener("click", (e) => {
+      const link = e.target.closest("a.product-card[href]");
+      if (!link) return;
+      // Guarda la posición actual de scroll
+      try {
+        sessionStorage.setItem(SCROLL_POS_KEY, String(window.scrollY || window.pageYOffset || 0));
+      } catch {}
+      // (Opcional) también guardamos el id para fallback de foco
+      const pid = link.getAttribute("data-id") || link.dataset.id;
+      if (pid) {
+        try { sessionStorage.setItem(RETURN_KEY, pid); } catch {}
+      }
+    }, { capture: true }); // capture para asegurar que se ejecute antes de navegar
+  }
+
+  // ---- Restaurar scroll exacto (si venimos con botón Atrás) o centrar tarjeta (si venimos desde la PDP con fade) ----
   function ensureHighlightStyles() {
     if (document.getElementById("cronox-card-flash")) return;
     const css = `
@@ -156,31 +178,44 @@
     document.head.appendChild(style);
   }
 
-  function scrollToLastViewed() {
+  function restoreScrollOrFocus() {
+    const prefersReduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+    // 1) Intento de restaurar scroll exacto (si se guardó al salir)
+    let y = null;
+    try { y = sessionStorage.getItem(SCROLL_POS_KEY); } catch {}
+    if (y !== null && y !== undefined) {
+      const yNum = Math.max(0, parseInt(y, 10) || 0);
+      try { sessionStorage.removeItem(SCROLL_POS_KEY); } catch {}
+      // Esperar al frame de pintado para posicionar
+      requestAnimationFrame(() => {
+        window.scrollTo({ top: yNum, behavior: prefersReduced ? "auto" : "instant" });
+      });
+      return; // ya restaurado, no necesitamos centrar
+    }
+
+    // 2) Fallback: centrar y resaltar última tarjeta vista (RETURN_KEY lo pone la PDP)
     let pid = null;
     try { pid = sessionStorage.getItem(RETURN_KEY); } catch {}
     if (!pid) return;
-
-    // Limpia inmediatamente para no repetir en futuras visitas
     try { sessionStorage.removeItem(RETURN_KEY); } catch {}
 
-    // Espera a que el navegador pinte
     requestAnimationFrame(() => {
       const card = productsGrid?.querySelector(`.product-card[data-id="${CSS.escape(pid)}"]`);
       if (!card) return;
-
-      // Ajuste por topbar: usa scrollMarginTop para evitar quedar oculto
       card.style.scrollMarginTop = "84px";
-
-      const prefersReduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
       card.scrollIntoView({ behavior: prefersReduced ? "auto" : "smooth", block: "center" });
-
-      // Resalta levemente la tarjeta
       ensureHighlightStyles();
       card.classList.add("cronox-flash");
       setTimeout(() => { card.classList.remove("cronox-flash"); }, 1400);
     });
   }
+
+  // ---- También cubrir bfcache (pageshow con persisted=true) ----
+  window.addEventListener("pageshow", (e) => {
+    // Si la página vino del bfcache, volvemos a intentar restaurar
+    if (e.persisted) restoreScrollOrFocus();
+  });
 
   // ---- Eventos
   if (searchForm) {
