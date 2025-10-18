@@ -1,11 +1,7 @@
 /* Página de detalle de producto (PDP) */
-
 .pdp {
-  max-width: 1200px;
-  margin: 0 auto;
   padding: 32px 16px 64px;
 }
-
 .pdp__grid {
   display: grid;
   grid-template-columns: 1fr;
@@ -51,11 +47,10 @@
 .btn-primary:hover{ opacity:.92 }
 
 .pdp__meta ul{ margin:.6em 0 0; padding-left:18px; color:#bcbcbc; line-height:1.6; }
-.pdp__breadcrumb{ margin-top:28px; }
 .pdp__breadcrumb a{ color:#eaeaea; text-decoration:none; opacity:.9; }
 .pdp__breadcrumb a:hover{ text-decoration:underline; }
 
-/* Toast (reutiliza el estilo del overlay, por si no lo tienes aquí también) */
+/* Toast */
 .toast{
   position:fixed; left:50%; bottom:24px;
   transform:translateX(-50%) translateY(20px);
@@ -66,9 +61,23 @@
 }
 .toast.show{ opacity:1; transform:translateX(-50%) translateY(0); }
 
-/* Topbar opaca en PDP */
-.topbar--opaque{
-  backdrop-filter:saturate(120%) blur(8px);
-  background:rgba(0,0,0,.9);
-  border-bottom:1px solid rgba(255,255,255,.12);
+/* ===== Relacionados ===== */
+.pdp-related { margin-top:42px; }
+.pdp-related__title { font-size: clamp(18px, 2.6vw, 22px); margin: 0 0 14px; letter-spacing:.06em; }
+
+/* Mini grid reutilizando estilos base si existen, con seguros locales */
+.products-grid{
+  display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:16px;
 }
+@media (min-width:768px){ .products-grid{ grid-template-columns:repeat(4,minmax(0,1fr)); gap:20px; } }
+
+.product-card{
+  background:rgba(20,20,20,.88); border:1px solid rgba(255,255,255,.12);
+  border-radius:16px; overflow:hidden; display:flex; flex-direction:column;
+  text-decoration:none; color:#fff;
+  transition:transform .2s ease, box-shadow .2s ease;
+}
+.product-card:hover{ transform:translateY(-2px); }
+.product-img{ width:100%; aspect-ratio:1/1; object-fit:contain; background:#0d0d0d; }
+.product-name{ margin:10px 12px 4px; font-weight:600; font-size:14px; }
+.product-price{ margin:0 12px 12px; color:#cfcfcf; font-size:13px; }
