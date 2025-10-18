@@ -1,4 +1,4 @@
-/* ===== Quick-Add Modal (v2.2 con "+" más grande, sin recuadro y con brillo) ===== */
+/* ===== Quick-Add Modal (v2.3 con "+" más fino y hastas más largas) ===== */
 .qa-overlay{
   position:fixed; inset:0; background:rgba(0,0,0,.6);
   display:none; align-items:center; justify-content:center; z-index:1200;
@@ -61,15 +61,36 @@
 .product-media{ position:relative; }
 .product-img{ display:block; width:100%; height:auto; background:#fff; }
 
-/* "+" grande, perpendicular, sin recuadro ni fondo, con leve glow blanco */
+/* "+" más largo y fino, sin recuadro ni fondo, con leve brillo blanco */
 .card-plus{
   position:absolute; right:10px; bottom:10px;
-  width:auto; height:auto; padding:0;
-  font-size:32px; font-weight:900; line-height:1;
-  color:#000; background:none; border:none;
-  text-shadow:0 0 4px rgba(255,255,255,0.9);
-  cursor:pointer; user-select:none;
+  width:28px; height:28px;
+  background:none; border:none; cursor:pointer;
+  display:block;
+}
+.card-plus::before,
+.card-plus::after{
+  content:"";
+  position:absolute;
+  background-color:#000;
+  left:50%; top:50%;
+  transform:translate(-50%,-50%);
+  box-shadow:0 0 3px rgba(255,255,255,0.9);
   transition:transform .15s ease, opacity .15s ease;
 }
-.card-plus:hover{ transform:scale(1.15); opacity:0.9; }
-.card-plus:active{ transform:scale(.95); }
+.card-plus::before{
+  width:2px; height:22px;  /* línea vertical más larga y delgada */
+}
+.card-plus::after{
+  width:22px; height:2px;  /* línea horizontal más larga y delgada */
+}
+
+.card-plus:hover::before,
+.card-plus:hover::after{
+  transform:translate(-50%,-50%) scale(1.15);
+  opacity:0.9;
+}
+.card-plus:active::before,
+.card-plus:active::after{
+  transform:translate(-50%,-50%) scale(0.9);
+}
