@@ -88,26 +88,27 @@ a.product-card{display:block;text-decoration:none;color:inherit;cursor:pointer;}
   position:relative;overflow:hidden;
   background:#fff;color:#111;
   border:1px solid rgba(0,0,0,.1);
-  border-bottom-color:#000;          /* ✅ borde inferior negro para fundirse con el pie */
+  border-bottom-color:#000;
   border-radius:0;
   box-shadow:0 6px 18px rgba(0,0,0,.08);
   transition:transform .18s ease, box-shadow .18s ease;
-  padding:0;                         /* ✅ sin padding: el pie negro toca los bordes */
+  padding:0;
 }
 .product-card:hover{transform:translateY(-3px);box-shadow:0 10px 26px rgba(0,0,0,.12);}
 
-/* Zona blanca (imagen) */
+/* Imagen blanca */
 .product-img{width:100%;height:420px;object-fit:contain;background:#fff;display:block;border:none;}
 @media (max-width:1024px){.product-img{height:360px;}}
 @media (max-width:640px){.product-img{height:280px;}}
 @media (max-width:480px){.product-img{height:240px;}}
 
-/* Footer negro uniforme (sin márgenes) */
+/* Footer negro — ajustado 2px hacia arriba */
 .product-name,.product-price{display:block;width:100%;background:#000;color:#fff;text-align:center;margin:0;border:none;}
 .product-name{
   font-weight:800;font-size:12px;text-transform:uppercase;letter-spacing:.06em;
   padding:12px 12px 4px;
-  margin-top:-1px;                   /* ✅ tapa micro-gaps entre imagen y pie */
+  margin-top:-2px;              /* baja el pie para tapar huecos */
+  border-top:2px solid #000;    /* asegura unión perfecta con la imagen */
 }
 .product-price{font-weight:700;font-size:12px;padding:0 12px 12px;}
 
@@ -134,20 +135,20 @@ a.product-card{display:block;text-decoration:none;color:inherit;cursor:pointer;}
 .topbar__cart:hover .icon-bag{stroke:#fff!important;fill:rgba(255,255,255,0.15)!important;filter:drop-shadow(0 0 5px rgba(255,255,255,0.3));opacity:1;}
 .topbar__cart[aria-current="page"] .icon-bag{stroke:#000!important;fill:#fff!important;filter:drop-shadow(0 0 6px rgba(255,255,255,.45));opacity:1!important;transition:all .3s ease;}
 
-/* ===== Estrella de favoritos en tarjetas (sin fondo) ===== */
+/* ===== Estrella de favoritos ===== */
 .fav-toggle{position:absolute;top:10px;right:10px;width:24px;height:24px;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:transform .25s ease,opacity .25s ease;z-index:2;}
 .fav-toggle svg{width:20px;height:20px;stroke:#000;fill:none;stroke-width:2;transition:all .25s ease;opacity:.85;}
 .fav-toggle:hover{transform:scale(1.1);opacity:1;}
 .fav-toggle.active svg{fill:#000;stroke:#000;opacity:1;filter:drop-shadow(0 0 3px rgba(0,0,0,0.3));}
 
-/* ===== Favoritos — botones en tarjetas ===== */
+/* ===== Favoritos — botones ===== */
 .fav-remove{position:absolute;top:10px;right:10px;background:none;border:none;color:#000;font-size:20px;line-height:1;cursor:pointer;transition:transform .25s ease,opacity .25s ease;z-index:3;}
 .fav-remove:hover{transform:scale(1.15);opacity:.8;}
 
-/* Botón + (añadir al carrito) — en el área blanca, no sobre el footer */
+/* Botón + (añadir al carrito) — sobre la zona blanca */
 .fav-add{
   position:absolute;
-  bottom:64px;   /* ~altura del footer (nombre + precio) */
+  bottom:64px;
   right:12px;
   background:none;border:none;color:#000;font-size:26px;font-weight:400;line-height:1;cursor:pointer;
   transition:transform .25s ease, opacity .25s ease;z-index:3;
