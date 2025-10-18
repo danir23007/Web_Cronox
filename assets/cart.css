@@ -1,0 +1,135 @@
+/* ===== CARRITO CRONOX — Responsive sin scroll horizontal ===== */
+
+:root{ --topbar-h:64px; }
+
+html, body { background:#000; color:#eaeaea; margin:0; }
+body { padding-top: var(--topbar-h); }
+
+.topbar{
+  position:fixed; top:0; left:0; right:0; height:var(--topbar-h);
+  background:#000 !important; border-bottom:1px solid rgba(255,255,255,.08);
+  z-index:1000;
+}
+.topbar__logo-img{ max-height:32px; }
+
+/* Contenedor principal */
+.container{ width:min(1200px,92%); margin:0 auto; }
+
+/* Título */
+.cart__title{
+  margin:22px 0 14px;
+  font-size: clamp(20px, 3.5vw, 28px);
+  letter-spacing:.02em;
+}
+
+/* Grid del carrito: 2 columnas en desktop; 1 columna en móvil */
+.cart-grid{
+  display:grid;
+  grid-template-columns: 1fr 420px;
+  gap:22px;
+}
+@media (max-width: 900px){
+  .cart-grid{
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Lista de productos */
+.cart-items{
+  display:flex; flex-direction:column; gap:12px;
+}
+
+/* Ítem de carrito */
+.cart-item{
+  display:grid;
+  grid-template-columns: 96px 1fr auto;
+  gap:12px;
+  background: rgba(12,12,12,.88);
+  border:1px solid rgba(255,255,255,.12);
+  border-radius:0;
+  padding:10px;
+  align-items:center;
+  overflow:hidden;
+}
+@media (max-width:600px){
+  .cart-item{
+    grid-template-columns: 76px 1fr;
+    grid-template-areas:
+      "media info"
+      "price info";
+    align-items:flex-start;
+  }
+}
+
+.cart-item.empty{
+  display:block; text-align:center; padding:24px;
+}
+
+/* Media en bloque blanco para resaltar producto */
+.ci-media{
+  width:100%; height:100%; display:grid; place-items:center;
+  background:#fff; border:1px solid rgba(255,255,255,.12); border-radius:0;
+}
+.ci-media img{
+  width:100%; height:100%; object-fit:contain; display:block; background:#fff;
+}
+
+/* Información */
+.ci-info{ display:flex; flex-direction:column; gap:6px; }
+.ci-name{ margin:0; font-weight:700; font-size:14px; color:#fff; }
+.ci-meta{ margin:0; color:#cfcfcf; font-size:12px; display:flex; gap:10px; flex-wrap:wrap; }
+
+.ci-controls{ display:flex; gap:10px; align-items:center; margin-top:6px; }
+.ci-qty{
+  width:70px; background:#0f0f0f; border:1px solid rgba(255,255,255,.15); color:#fff;
+  border-radius:0; padding:6px 8px;
+}
+.ci-remove{
+  background:transparent; color:#eaeaea; border:1px solid rgba(255,255,255,.15);
+  padding:6px 10px; border-radius:0; cursor:pointer;
+}
+.ci-remove:hover{ background:#151515; }
+
+.ci-price{ font-weight:700; color:#eaeaea; }
+@media (max-width:600px){
+  .ci-price{ grid-area: price; }
+}
+
+/* Resumen / Pago — fondo negro, marco sutil; en móvil aparece DEBAJO */
+.cart-summary{
+  background:#0b0b0b;
+  border:1px solid rgba(255,255,255,.12);
+  border-radius:0;
+  padding:14px;
+  height:max-content;
+}
+.cart-summary h2{
+  margin:0 0 10px; font-size:16px; letter-spacing:.06em;
+}
+.summary-row{
+  display:flex; justify-content:space-between; align-items:center;
+  padding:8px 0; border-bottom:1px dashed rgba(255,255,255,.12);
+}
+.summary-row:last-child{ border-bottom:none; }
+.summary-total strong{ font-size:18px; }
+
+.btn-primary{
+  background:#fff; color:#000; font-weight:800; border:0; border-radius:0;
+  padding:12px 16px; cursor:pointer; width:100%;
+  margin-top:10px;
+}
+.btn-primary:hover{ opacity:.92; }
+
+.btn-link{
+  color:#fff; text-decoration:none; border-bottom:1px solid rgba(255,255,255,.3);
+}
+.btn-link:hover{ opacity:.9; }
+
+.pay-trust{
+  margin-top:10px; color:#cfcfcf; font-size:12px;
+}
+.pay-trust ul{ margin:6px 0 0; padding-left:16px; }
+.pay-trust li{ line-height:1.6; }
+
+/* Evitar scroll horizontal */
+html, body { overflow-x:hidden; }
