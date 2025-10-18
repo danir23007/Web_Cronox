@@ -320,3 +320,41 @@ a.product-card:focus-visible{outline:2px solid #111;outline-offset:3px;border-ra
   opacity: 1;
   filter: drop-shadow(0 0 3px rgba(0,0,0,0.3));
 }
+/* ===== Favoritos — tarjetas ===== */
+.fav-remove {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  background: none;
+  border: none;
+  color: #000;
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+  transition: transform 0.25s ease, opacity 0.25s ease;
+  z-index: 3;
+}
+.fav-remove:hover {
+  transform: scale(1.15);
+  opacity: 0.8;
+}
+
+/* Botón + para añadir al carrito */
+.fav-add {
+  position: absolute;
+  bottom: 10px;
+  right: 10px;
+  background: none;
+  border: none;
+  color: #000;
+  font-size: 26px;
+  font-weight: 400;
+  line-height: 1;
+  cursor: pointer;
+  transition: transform 0.25s ease, opacity 0.25s ease;
+  z-index: 3;
+}
+.fav-add:hover {
+  transform: scale(1.2);
+  opacity: 0.8;
+}
