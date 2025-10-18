@@ -1,88 +1,210 @@
 <!doctype html>
 <html lang="es">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>CRONOX — Carrito</title>
-  <meta name="description" content="Carrito de CRONOX">
-  <meta name="theme-color" content="#000000">
-  <link rel="stylesheet" href="assets/store.css?v=31">
-  <noscript><style>#preloader{display:none!important;}</style></noscript>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Carrito — CRONOX</title>
+  <meta name="theme-color" content="#000000" />
+  <meta name="description" content="Carrito de compra CRONOX — Dark streetwear premium.">
+
+  <!-- CSS global -->
+  <link rel="stylesheet" href="assets/store.css?v=31" />
+  <!-- CSS del carrito (nuevo) -->
+  <link rel="stylesheet" href="assets/cart.css?v=2" />
 </head>
 <body>
 
-  <!-- Preloader -->
-  <div id="preloader" class="preloader" aria-hidden="true">
-    <img
-      src="https://raw.githubusercontent.com/danir23007/Web_Cronox/refs/heads/main/assets/logo%20largo%20bueno.JPG"
-      alt="CRONOX" class="preloader__logo" decoding="async">
-  </div>
-
-  <!-- Topbar fija opaca -->
-  <header class="topbar topbar--page" id="topbar" role="banner">
+  <!-- Topbar opaca (igual que en producto/index) -->
+  <header class="topbar" id="topbar" role="banner">
     <div class="topbar__left">
-      <a href="index.html#store" class="topbar__link">← Seguir comprando</a>
+      <button id="btnMenu" class="icon-btn" aria-label="Abrir filtros" aria-expanded="false" aria-controls="filtersPanel">
+        <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+             stroke-linecap="round" stroke-linejoin="round" class="icon" aria-hidden="true" focusable="false">
+          <line x1="3" y1="6" x2="21" y2="6"></line>
+          <line x1="3" y1="12" x2="21" y2="12"></line>
+          <line x1="3" y1="18" x2="21" y2="18"></line>
+        </svg>
+      </button>
+
+      <button id="btnSearch" class="icon-btn" aria-label="Buscar productos" aria-expanded="false" aria-controls="searchBar">
+        <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+             stroke-linecap="round" stroke-linejoin="round" class="icon" aria-hidden="true" focusable="false">
+          <circle cx="11" cy="11" r="8"></circle>
+          <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+        </svg>
+      </button>
     </div>
 
-    <a href="index.html" class="topbar__logo" aria-label="CRONOX — Inicio">
+    <a href="index.html#store" class="topbar__logo" aria-label="CRONOX — Tienda">
       <img
         src="https://raw.githubusercontent.com/danir23007/Web_Cronox/refs/heads/main/assets/logo%20largo%20bueno.JPG"
-        alt="CRONOX" class="topbar__logo-img" decoding="async">
+        alt="CRONOX"
+        class="topbar__logo-img"
+        decoding="async"
+      >
     </a>
 
     <nav class="topbar__right" aria-label="Navegación principal">
-      <a href="cart.html" class="topbar__link topbar__cart">
-        Carrito
+      <a href="cart.html" class="topbar__link topbar__cart" aria-label="Ver carrito">
+        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-bag" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/>
+          <line x1="3" y1="6" x2="21" y2="6"/>
+          <path d="M16 10a4 4 0 0 1-8 0"/>
+        </svg>
         <span class="cart-count" aria-label="Artículos en el carrito" hidden>0</span>
       </a>
     </nav>
   </header>
 
-  <!-- Contenido principal -->
-  <main class="store" style="padding-top:calc(24px + var(--topbar-h));">
-    <h1 style="font:800 22px/1.2 system-ui;margin:0 0 16px;">Tu carrito</h1>
+  <!-- Barra de búsqueda (igual que en el resto) -->
+  <div id="searchBar" class="searchbar" hidden>
+    <form id="searchForm" class="searchbar__form" role="search" action="index.html#store">
+      <input id="searchInput" class="searchbar__input" type="text" placeholder="Buscar productos…" autocomplete="off" />
+      <button class="searchbar__submit" type="submit" aria-label="Buscar"><span>Buscar</span></button>
+    </form>
+  </div>
 
-    <div id="cartContainer" style="max-width:1100px;margin:0 auto;display:grid;grid-template-columns:1fr 340px;gap:18px;">
-      <div>
-        <div id="cartList"></div>
-        <div id="cartEmpty" class="products-fallback" hidden>
+  <!-- CONTENIDO DEL CARRITO -->
+  <main id="cartMain" class="cart container" aria-live="polite">
+    <h1 class="cart__title">Tu carrito</h1>
+
+    <div class="cart-grid">
+      <!-- Lista de productos -->
+      <section id="cartItems" class="cart-items" aria-label="Productos en el carrito">
+        <!-- Cada ítem -->
+        <!-- Tu script existente puede rellenar aquí; dejo estructura base por si acaso -->
+        <div class="cart-item empty" data-empty hidden>
           <p>Tu carrito está vacío.</p>
+          <p><a href="index.html#store" class="btn-link">Seguir comprando →</a></p>
         </div>
-      </div>
+      </section>
 
-      <aside style="border:1px solid rgba(255,255,255,.12);border-radius:16px;padding:16px;background:#0b0b0b;">
-        <h2 style="font:700 16px/1 system-ui;margin:0 0 12px;">Resumen</h2>
-        <div style="display:flex;justify-content:space-between;margin:6px 0;color:#cfcfcf;">
-          <span>Subtotal</span><strong id="subtotal">—</strong>
+      <!-- Resumen / Pago (APILADO DEBAJO EN MÓVIL) -->
+      <aside id="cartSummary" class="cart-summary" aria-label="Resumen y pago">
+        <h2>Resumen</h2>
+
+        <div class="summary-row">
+          <span>Subtotal</span>
+          <strong id="sumSubtotal">—</strong>
         </div>
-        <p style="color:#9a9a9a;font:12px/1.4 system-ui;margin:8px 0 14px;">El envío y los impuestos se calculan en el siguiente paso.</p>
-        <button id="btnCheckout" class="product-modal__btn" style="width:100%;margin-bottom:8px;">Finalizar compra</button>
-        <button id="btnClear" class="product-modal__btn product-modal__btn--ghost" style="width:100%;">Vaciar carrito</button>
+        <div class="summary-row">
+          <span>Envío</span>
+          <span id="sumShipping">Calculado en checkout</span>
+        </div>
+        <div class="summary-row summary-total">
+          <span>Total</span>
+          <strong id="sumTotal">—</strong>
+        </div>
+
+        <!-- Botón de pago -->
+        <button id="btnCheckout" class="btn-primary btn-block">Ir a pagar</button>
+
+        <!-- Opcional: métodos/seguridad -->
+        <div class="pay-trust">
+          <span>Pago seguro</span>
+          <ul>
+            <li>Tarjeta</li>
+            <li>PayPal</li>
+            <li>Apple/Google Pay</li>
+          </ul>
+        </div>
       </aside>
     </div>
   </main>
 
   <footer class="footer">
-    <p>© <span id="anio"></span> CRONOX</p>
+    <div class="container">© <span id="anio"></span> CRONOX</div>
   </footer>
 
-  <!-- Failsafe preloader -->
+  <!-- JS (reutiliza tus scripts) -->
   <script>
+    document.getElementById('anio').textContent = new Date().getFullYear();
+
+    // === Render mínimo por si no tienes un cart.js dedicado ===
+    // Lee 'cronox_cart' y pinta items. Si ya tienes tu propio render, puedes borrar esto.
     (function(){
-      function hide(){ var p=document.getElementById('preloader'); if(p) p.style.display='none'; }
-      window.addEventListener('load', hide, {once:true});
-      window.addEventListener('DOMContentLoaded', function(){ setTimeout(hide, 2000); }, {once:true});
-      window.addEventListener('error', function(){ setTimeout(hide, 0); });
+      const key = "cronox_cart";
+      const itemsEl = document.getElementById("cartItems");
+      if (!itemsEl) return;
+      let cart = [];
+      try { cart = JSON.parse(localStorage.getItem(key) || "[]"); } catch {}
+      itemsEl.innerHTML = "";
+
+      if (!cart.length) {
+        const empty = document.querySelector(".cart-item.empty");
+        if (empty) empty.hidden = false;
+        updateSummary(0);
+        return;
+      }
+
+      let subtotal = 0;
+      const frag = document.createDocumentFragment();
+
+      cart.forEach((it, i) => {
+        const li = document.createElement("article");
+        li.className = "cart-item";
+        li.innerHTML = `
+          <div class="ci-media">
+            <img src="${it.image}" alt="${it.name || "Producto"}" loading="lazy">
+          </div>
+          <div class="ci-info">
+            <h3 class="ci-name">${it.name || ""}</h3>
+            <p class="ci-meta">
+              ${it.color ? `<span>Color: ${String(it.color).toUpperCase()}</span>` : ""}
+              ${it.size ? `<span>Talla: ${String(it.size).toUpperCase()}</span>` : ""}
+            </p>
+            <div class="ci-controls">
+              <label>Cant.
+                <input type="number" class="ci-qty" min="1" value="${it.qty || 1}" data-idx="${i}">
+              </label>
+              <button class="ci-remove" data-idx="${i}">Eliminar</button>
+            </div>
+          </div>
+          <div class="ci-price">
+            <span>${it.priceLabel || (Number(it.price)||0).toLocaleString("es-ES",{style:"currency",currency:"EUR"})}</span>
+          </div>
+        `;
+        subtotal += (Number(it.price)||0) * (Number(it.qty)||1);
+        frag.appendChild(li);
+      });
+
+      itemsEl.appendChild(frag);
+      updateSummary(subtotal);
+
+      // qty change
+      itemsEl.addEventListener("change", (e) => {
+        const inp = e.target.closest(".ci-qty");
+        if (!inp) return;
+        const idx = Number(inp.dataset.idx);
+        const val = Math.max(1, parseInt(inp.value||"1", 10));
+        cart[idx].qty = val;
+        localStorage.setItem(key, JSON.stringify(cart));
+        // recalcular
+        let st = 0;
+        cart.forEach(it => st += (Number(it.price)||0) * (Number(it.qty)||1));
+        updateSummary(st);
+        window.dispatchEvent(new Event("cart:updated"));
+      });
+
+      // remove
+      itemsEl.addEventListener("click", (e) => {
+        const btn = e.target.closest(".ci-remove");
+        if (!btn) return;
+        const idx = Number(btn.dataset.idx);
+        cart.splice(idx,1);
+        localStorage.setItem(key, JSON.stringify(cart));
+        location.reload();
+      });
+
+      function updateSummary(subtotal){
+        const f = (n)=> new Intl.NumberFormat("es-ES",{style:"currency",currency:"EUR"}).format(n||0);
+        document.getElementById("sumSubtotal").textContent = f(subtotal);
+        document.getElementById("sumTotal").textContent = f(subtotal); // sin tasas/envío en este paso
+      }
     })();
   </script>
 
-  <!-- Scripts principales -->
   <script src="assets/app.js?v=31" defer></script>
-  <script src="assets/cart.js?v=31" defer></script>
   <script src="assets/cart-badge.js?v=31" defer></script>
-  <script>
-    document.getElementById('anio').textContent = new Date().getFullYear();
-  </script>
-
 </body>
 </html>
