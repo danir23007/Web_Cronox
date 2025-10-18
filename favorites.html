@@ -6,25 +6,14 @@
   <title>Favoritos — CRONOX</title>
   <meta name="description" content="Lista de productos favoritos — CRONOX">
   <meta name="theme-color" content="#000000">
-
-  <!-- CSS principal de la web -->
   <link rel="stylesheet" href="assets/store.css?v=32">
-
-  <noscript>
-    <style>
-      #preloader{display:none!important}
-    </style>
-  </noscript>
+  <noscript><style>#preloader{display:none!important}</style></noscript>
 </head>
 <body>
-
-  <!-- Overlay (compat) -->
   <div id="overlay" class="overlay" hidden></div>
 
-  <!-- Topbar (misma estructura que en index) -->
   <header class="topbar topbar--page" id="topbar" role="banner">
     <div class="topbar__left">
-      <!-- Menú (placeholder sin acción en esta página) -->
       <button id="btnMenu" class="icon-btn" aria-label="Abrir filtros" aria-expanded="false" aria-controls="filtersPanel">
         <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
              stroke-linecap="round" stroke-linejoin="round" class="icon" aria-hidden="true" focusable="false">
@@ -33,8 +22,6 @@
           <line x1="3" y1="18" x2="21" y2="18"></line>
         </svg>
       </button>
-
-      <!-- Lupa (placeholder) -->
       <button id="btnSearch" class="icon-btn" aria-label="Buscar productos" aria-expanded="false" aria-controls="searchBar">
         <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
              stroke-linecap="round" stroke-linejoin="round" class="icon" aria-hidden="true" focusable="false">
@@ -44,19 +31,14 @@
       </button>
     </div>
 
-    <!-- Logo centrado: lleva a la tienda -->
     <a href="index.html#store" class="topbar__logo" aria-label="Volver a la tienda CRONOX">
-      <img
-        src="https://raw.githubusercontent.com/danir23007/Web_Cronox/refs/heads/main/assets/logo%20largo%20bueno.JPG"
-        alt="CRONOX"
-        class="topbar__logo-img"
-        decoding="async"
-      >
+      <img src="https://raw.githubusercontent.com/danir23007/Web_Cronox/refs/heads/main/assets/logo%20largo%20bueno.JPG"
+           alt="CRONOX" class="topbar__logo-img" decoding="async">
     </a>
 
     <nav class="topbar__right" aria-label="Navegación principal">
-      <!-- Favoritos (estrella) -->
-      <a href="favorites.html" class="topbar__link topbar__fav" aria-label="Ver favoritos">
+      <!-- Estrella marcada como página actual -->
+      <a href="favorites.html" class="topbar__link topbar__fav" aria-label="Ver favoritos" aria-current="page" id="favLink">
         <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-star" viewBox="0 0 24 24" fill="none" stroke="currentColor"
              stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
           <polygon points="12 2 15.09 8.26 22 9.27 17.3 13.97 18.18 21 12 17.77 5.82 21 6.7 13.97 2 9.27 8.91 8.26 12 2"></polygon>
@@ -64,7 +46,6 @@
         <span class="fav-count" aria-label="Artículos en favoritos" hidden>0</span>
       </a>
 
-      <!-- Carrito -->
       <a href="cart.html" class="topbar__link topbar__cart" aria-label="Ver carrito">
         <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-bag" viewBox="0 0 24 24" fill="none" stroke="currentColor"
              stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
@@ -77,37 +58,33 @@
     </nav>
   </header>
 
-  <!-- Contenido -->
   <main id="favorites" class="store" aria-live="polite">
     <h1 class="store-heading">Favoritos</h1>
-
     <div id="favGrid" class="products-grid" aria-label="Lista de productos favoritos"></div>
-
     <div id="favEmpty" class="products-fallback" style="text-align:center;margin-top:40px;">
       <p>No tienes productos en favoritos todavía.</p>
       <p><a href="index.html#store" class="topbar__link" style="color:#fff;text-decoration:underline;">Ir a la tienda</a></p>
     </div>
   </main>
 
-  <footer class="footer">
-    <p>© CRONOX</p>
-  </footer>
+  <footer class="footer"><p>© CRONOX</p></footer>
 
-  <!-- ===== Scripts ===== -->
-
-  <!-- Actualiza el badge de Favoritos leyendo localStorage 'cronox:favs' -->
   <script>
     (function(){
+      // Evita recargar si ya estás en favoritos y vuelves a pulsar la estrella
+      var favLink = document.getElementById('favLink');
+      if (favLink) {
+        favLink.addEventListener('click', function(e){
+          if (location.pathname.endsWith('/favorites.html')) { e.preventDefault(); }
+        });
+      }
+
       function getFavs(){
-        try{
-          var raw = localStorage.getItem('cronox:favs');
-          var arr = raw ? JSON.parse(raw) : [];
-          return Array.isArray(arr) ? arr : [];
-        }catch(e){ return []; }
+        try{ var raw = localStorage.getItem('cronox:favs'); var arr = raw ? JSON.parse(raw) : []; return Array.isArray(arr)?arr:[]; }
+        catch(e){ return []; }
       }
       function setFavs(arr){
-        try{ localStorage.setItem('cronox:favs', JSON.stringify(arr)); }
-        catch(e){}
+        try{ localStorage.setItem('cronox:favs', JSON.stringify(arr)); }catch(e){}
       }
       function updateFavBadge(){
         var el = document.querySelector('.fav-count');
@@ -116,9 +93,7 @@
         if(count > 0){ el.textContent = String(count); el.hidden = false; }
         else{ el.hidden = true; }
       }
-
       function makeCard(item){
-        // item puede ser un ID (string/number) o un objeto {id,name,price,image,url}
         var isPrimitive = (typeof item === 'string' || typeof item === 'number');
         var id    = isPrimitive ? String(item) : (item.id != null ? String(item.id) : '');
         var name  = isPrimitive ? ('Producto ' + id) : (item.name || 'Producto');
@@ -126,88 +101,36 @@
         var img   = isPrimitive ? '' : (item.image || '');
         var url   = isPrimitive ? 'index.html#store' : (item.url || 'index.html#store');
 
-        var a = document.createElement('a');
-        a.className = 'product-card';
-        a.href = url;
-        a.setAttribute('aria-label', name);
+        var a = document.createElement('a'); a.className = 'product-card'; a.href = url; a.setAttribute('aria-label', name);
+        var imgEl = document.createElement('img'); imgEl.className = 'product-img'; imgEl.alt = name;
+        if(img) imgEl.src = img; else { imgEl.style.background = '#0a0a0a'; imgEl.style.display='grid'; imgEl.style.placeItems='center'; imgEl.style.color='#fff'; imgEl.style.font='700 12px/1 system-ui'; imgEl.style.letterSpacing='.08em'; imgEl.style.textTransform='uppercase'; imgEl.style.padding='12px'; imgEl.setAttribute('data-fallback','1'); }
+        var nameEl = document.createElement('span'); nameEl.className = 'product-name'; nameEl.textContent = name;
+        var priceEl = document.createElement('span'); priceEl.className = 'product-price'; priceEl.textContent = price;
 
-        var imgEl = document.createElement('img');
-        imgEl.className = 'product-img';
-        imgEl.alt = name;
-        if(img) imgEl.src = img;
-        else{
-          // Fallback visual si no hay imagen
-          imgEl.style.background = '#0a0a0a';
-          imgEl.style.color = '#fff';
-          imgEl.style.display = 'grid';
-          imgEl.style.placeItems = 'center';
-          imgEl.style.font = '700 12px/1 system-ui';
-          imgEl.style.letterSpacing = '.08em';
-          imgEl.style.textTransform = 'uppercase';
-          imgEl.style.padding = '12px';
-          imgEl.setAttribute('data-fallback', '1');
-        }
+        a.appendChild(imgEl); a.appendChild(nameEl); a.appendChild(priceEl);
 
-        var nameEl = document.createElement('span');
-        nameEl.className = 'product-name';
-        nameEl.textContent = name;
-
-        var priceEl = document.createElement('span');
-        priceEl.className = 'product-price';
-        priceEl.textContent = price;
-
-        a.appendChild(imgEl);
-        a.appendChild(nameEl);
-        a.appendChild(priceEl);
-
-        // Botón eliminar (overlay simple arriba a la derecha)
         var removeBtn = document.createElement('button');
-        removeBtn.type = 'button';
-        removeBtn.setAttribute('aria-label', 'Eliminar de favoritos');
-        removeBtn.textContent = '✕';
-        removeBtn.style.position = 'absolute';
-        removeBtn.style.top = '8px';
-        removeBtn.style.right = '8px';
-        removeBtn.style.width = '28px';
-        removeBtn.style.height = '28px';
-        removeBtn.style.border = '1px solid rgba(255,255,255,.28)';
-        removeBtn.style.borderRadius = '6px';
-        removeBtn.style.background = 'rgba(0,0,0,.75)';
-        removeBtn.style.color = '#fff';
-        removeBtn.style.cursor = 'pointer';
+        removeBtn.type='button'; removeBtn.setAttribute('aria-label','Eliminar de favoritos'); removeBtn.textContent='✕';
+        removeBtn.style.position='absolute'; removeBtn.style.top='8px'; removeBtn.style.right='8px';
+        removeBtn.style.width='28px'; removeBtn.style.height='28px'; removeBtn.style.border='1px solid rgba(255,255,255,.28)';
+        removeBtn.style.borderRadius='6px'; removeBtn.style.background='rgba(0,0,0,.75)'; removeBtn.style.color='#fff'; removeBtn.style.cursor='pointer';
 
-        var wrapper = document.createElement('div');
-        wrapper.style.position = 'relative';
-        wrapper.appendChild(a);
-        wrapper.appendChild(removeBtn);
+        var wrapper=document.createElement('div'); wrapper.style.position='relative'; wrapper.appendChild(a); wrapper.appendChild(removeBtn);
 
         removeBtn.addEventListener('click', function(ev){
-          ev.preventDefault();
-          ev.stopPropagation();
-          var current = getFavs();
-          var next;
-          if(isPrimitive){
+          ev.preventDefault(); ev.stopPropagation();
+          var current = getFavs(); var next;
+          if(isPrimitive){ next = current.filter(function(x){ return String(x) !== id; }); }
+          else{
             next = current.filter(function(x){
-              return String(x) !== id;
-            });
-          }else{
-            next = current.filter(function(x){
-              // Compara por id si existe, si no por JSON.stringify
               try{
-                if(x && (typeof x === 'object') && 'id' in x && item && 'id' in item){
-                  return String(x.id) !== String(item.id);
-                }
+                if(x && (typeof x === 'object') && 'id' in x && item && 'id' in item){ return String(x.id) !== String(item.id); }
                 return JSON.stringify(x) !== JSON.stringify(item);
-              }catch(e){
-                return true;
-              }
+              }catch(e){ return true; }
             });
           }
-          setFavs(next);
-          updateFavBadge();
-          render(); // repinta grid
+          setFavs(next); updateFavBadge(); render();
         });
-
         return wrapper;
       }
 
@@ -218,41 +141,17 @@
 
         var favs = getFavs();
         grid.innerHTML = '';
-        if(!favs.length){
-          empty.hidden = false;
-          return;
-        }
+        if(!favs.length){ empty.hidden = false; return; }
         empty.hidden = true;
-
-        // Pinta cada favorito
-        favs.forEach(function(item){
-          grid.appendChild(makeCard(item));
-        });
+        favs.forEach(function(item){ grid.appendChild(makeCard(item)); });
       }
 
-      // Eventos para mantener badge y lista sincronizados
-      document.addEventListener('visibilitychange', function(){
-        if(document.visibilityState === 'visible'){
-          updateFavBadge();
-          render();
-        }
-      });
-      window.addEventListener('storage', function(e){
-        if(e.key === 'cronox:favs'){
-          updateFavBadge();
-          render();
-        }
-      });
-
-      // Kickoff
-      window.addEventListener('DOMContentLoaded', function(){
-        updateFavBadge();
-        render();
-      }, {once:true});
+      document.addEventListener('visibilitychange', function(){ if(document.visibilityState === 'visible'){ updateFavBadge(); render(); }});
+      window.addEventListener('storage', function(e){ if(e.key === 'cronox:favs'){ updateFavBadge(); render(); }});
+      window.addEventListener('DOMContentLoaded', function(){ updateFavBadge(); render(); }, {once:true});
     })();
   </script>
 
-  <!-- Tu badge de carrito (ya existente) -->
   <script src="assets/cart-badge.js?v=31" defer></script>
 </body>
 </html>
