@@ -254,80 +254,69 @@ a.product-card:focus-visible{outline:2px solid #111;outline-offset:3px;border-ra
 }
 
 /* ===== Bolsa del carrito — efectos visuales (solo activa en cart.html) ===== */
-
-/* Estado base: contorno blanco */
 .topbar__cart .icon-bag {
   stroke: currentColor !important;
   fill: none !important;
   transition: all .3s ease;
   opacity: 0.9;
 }
-
-/* Hover: se ilumina con brillo tenue */
 .topbar__cart:hover .icon-bag {
   stroke: #fff !important;
   fill: rgba(255,255,255,0.15) !important;
   filter: drop-shadow(0 0 5px rgba(255,255,255,0.3));
   opacity: 1;
 }
-
-/* Estado activo (cuando estás dentro de cart.html) */
 .topbar__cart[aria-current="page"] .icon-bag {
-  stroke: #000 !important; /* contorno negro para que resalte */
-  fill: #fff !important;   /* relleno blanco completo */
+  stroke: #000 !important;
+  fill: #fff !important;
   filter: drop-shadow(0 0 6px rgba(255,255,255,.45));
   opacity: 1 !important;
   transition: all .3s ease;
 }
-
-/* ===== Efecto visual extra para el badge del carrito ===== */
 .topbar__cart .cart-count:not([hidden]) {
   box-shadow: 0 0 8px rgba(255,255,255,0.55);
   transition: box-shadow 0.3s ease, transform 0.3s ease;
   transform: scale(1.05);
 }
-
 @keyframes cartPulse {
   0% { transform: scale(1); box-shadow: 0 0 0 rgba(255,255,255,0.3); }
   40% { transform: scale(1.15); box-shadow: 0 0 10px rgba(255,255,255,0.7); }
   100% { transform: scale(1.05); box-shadow: 0 0 8px rgba(255,255,255,0.55); }
 }
-
 .topbar__cart .cart-count:not([hidden]) {
   animation: cartPulse 0.6s ease;
 }
-/* ===== Estrella de favoritos en tarjetas ===== */
+
+/* ===== Estrella de favoritos en tarjetas (sin fondo) ===== */
 .fav-toggle {
   position: absolute;
   top: 10px;
   right: 10px;
-  width: 26px;
-  height: 26px;
-  background: rgba(255,255,255,0.85);
-  border-radius: 50%;
+  width: 24px;
+  height: 24px;
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  transition: all 0.25s ease;
+  transition: transform 0.25s ease, opacity 0.25s ease;
   z-index: 2;
 }
-
 .fav-toggle svg {
-  width: 16px;
-  height: 16px;
+  width: 20px;
+  height: 20px;
   stroke: #000;
   fill: none;
   stroke-width: 2;
   transition: all 0.25s ease;
+  opacity: 0.85;
 }
-
-/* Hover y estado activo */
 .fav-toggle:hover {
-  background: #fff;
   transform: scale(1.1);
+  opacity: 1;
 }
 .fav-toggle.active svg {
   fill: #000;
   stroke: #000;
+  opacity: 1;
+  filter: drop-shadow(0 0 3px rgba(0,0,0,0.3));
 }
