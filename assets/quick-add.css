@@ -1,4 +1,4 @@
-/* ===== Quick-Add Modal (v2) ===== */
+/* ===== Quick-Add Modal (v2.2 con "+" más grande, sin recuadro y con brillo) ===== */
 .qa-overlay{
   position:fixed; inset:0; background:rgba(0,0,0,.6);
   display:none; align-items:center; justify-content:center; z-index:1200;
@@ -15,7 +15,7 @@
 
 .qa-close{
   position:absolute; top:10px; right:10px; width:36px; height:36px;
-  border:1px solid #dcdcdc; background:#fff; color:#111; font-size:20px; cursor:pointer;
+  border:0; background:transparent; color:#000; font-size:28px; cursor:pointer;
 }
 
 /* Fotos arriba */
@@ -55,20 +55,21 @@
 }
 .qa-muted-link:hover{ text-decoration:underline; }
 
-/* ===== Botón "+" DENTRO de la imagen ===== */
+/* ===== Botón "+" dentro de la imagen ===== */
 .product-card{ position:relative; text-decoration:none; color:inherit; }
 
-/* Envoltorio solo para la imagen de la tarjeta */
 .product-media{ position:relative; }
 .product-img{ display:block; width:100%; height:auto; background:#fff; }
 
-/* El "+" se ancla a la esquina inferior derecha dentro del área de imagen */
+/* "+" grande, perpendicular, sin recuadro ni fondo, con leve glow blanco */
 .card-plus{
-  position:absolute; right:8px; bottom:8px; width:34px; height:34px;
-  display:grid; place-items:center;
-  background:#ffffff; color:#000; font-weight:900;
-  border:1px solid #dcdcdc; border-radius:0; cursor:pointer;
-  line-height:1; transition:transform .15s ease, opacity .15s ease;
+  position:absolute; right:10px; bottom:10px;
+  width:auto; height:auto; padding:0;
+  font-size:32px; font-weight:900; line-height:1;
+  color:#000; background:none; border:none;
+  text-shadow:0 0 4px rgba(255,255,255,0.9);
+  cursor:pointer; user-select:none;
+  transition:transform .15s ease, opacity .15s ease;
 }
-.card-plus:hover{ transform:scale(1.05); }
-.card-plus:active{ transform:scale(.96); }
+.card-plus:hover{ transform:scale(1.15); opacity:0.9; }
+.card-plus:active{ transform:scale(.95); }
