@@ -12,12 +12,12 @@
 
   <!-- CSS principal (mantengo tu versión) -->
   <link rel="stylesheet" href="assets/store.css?v=31">
+  <!-- CSS del overlay de producto (nuevo, aislado para no tocar tu CSS estable) -->
+  <link rel="stylesheet" href="assets/product-detail.css?v=1">
 
   <!-- Noscript: si no hay JS, oculta el preloader para no bloquear la vista -->
   <noscript>
-    <style>
-      #preloader { display: none !important; }
-    </style>
+    <style>#preloader{display:none!important}</style>
   </noscript>
 </head>
 <body>
@@ -32,7 +32,7 @@
     >
   </div>
 
-  <!-- Overlay -->
+  <!-- Overlay global existente -->
   <div id="overlay" class="overlay" hidden></div>
 
   <!-- Topbar -->
@@ -69,7 +69,6 @@
     </a>
 
     <nav class="topbar__right" aria-label="Navegación principal">
-      <!-- Eliminado el enlace de texto "Tienda" -->
       <a href="cart.html" class="topbar__link topbar__cart" aria-label="Ver carrito">
         <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-bag" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/>
@@ -79,7 +78,6 @@
         <span class="cart-count" aria-label="Artículos en el carrito" hidden>0</span>
       </a>
     </nav>
-    
   </header>
 
   <!-- Barra de búsqueda -->
@@ -133,7 +131,6 @@
 
   <!-- HERO video -->
   <section class="hero-video-section" id="hero" aria-label="Portada">
-    <!-- Nota: playsinline + muted + autoplay garantizan reproducción inline en iOS/Android -->
     <video
       class="hero-video"
       src="assets/VIDEO_LOGO_CRONOX.mp4"
@@ -159,6 +156,45 @@
     </div>
   </main>
 
+  <!-- ===== Overlay Detalle de Producto (NUEVO) ===== -->
+  <div id="productDetail" class="product-detail" aria-hidden="true" role="dialog" aria-modal="true">
+    <div class="product-detail__panel" role="document">
+      <button class="product-detail__close" id="pdClose" aria-label="Cerrar detalle">×</button>
+
+      <div class="product-detail__media">
+        <img id="pdImage" alt="" loading="lazy">
+      </div>
+
+      <div class="product-detail__info">
+        <h3 id="pdName" class="pd-name"></h3>
+        <p id="pdPrice" class="pd-price"></p>
+        <p id="pdDesc" class="pd-desc"></p>
+
+        <div class="pd-actions">
+          <label class="pd-size-label">
+            Talla
+            <select id="pdSize" class="pd-size">
+              <option value="S">S</option>
+              <option value="M" selected>M</option>
+              <option value="L">L</option>
+              <option value="XL">XL</option>
+            </select>
+          </label>
+
+          <label class="pd-qty-label">
+            Cant.
+            <input id="pdQty" class="pd-qty" type="number" value="1" min="1" inputmode="numeric">
+          </label>
+
+          <button id="pdAddToCart" class="btn-primary">Añadir al carrito</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast -->
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
   <!-- CONTACTO -->
   <section id="contact" class="contact">
     <h2>Contacto</h2>
@@ -172,29 +208,18 @@
   <!-- Failsafe: si algo rompe JS, oculta el preloader a los 3.5s -->
   <script>
     (function(){
-      var tried = false;
-      function hide(){
-        if(tried) return;
-        tried = true;
-        var p = document.getElementById('preloader');
-        if(p) p.style.display='none';
-      }
-      // Evita restaurar scroll en algunas navegadores
-      try { window.history.scrollRestoration = 'manual'; } catch(e) {}
-
+      var tried=false;
+      function hide(){ if(tried) return; tried=true; var p=document.getElementById('preloader'); if(p) p.style.display='none'; }
+      try{ window.history.scrollRestoration='manual'; }catch(e){}
       window.addEventListener('load', hide, {once:true});
       window.addEventListener('DOMContentLoaded', function(){ setTimeout(hide, 3500); }, {once:true});
       window.addEventListener('error', function(){ setTimeout(hide, 0); });
-
-      // Forzar arranque arriba del todo para el héroe
-      window.addEventListener('load', function(){
-        window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
-      }, {once:true});
+      window.addEventListener('load', function(){ window.scrollTo({top:0,left:0,behavior:'instant'}); }, {once:true});
     })();
   </script>
 
-  <!-- Scripts principales (defer para no bloquear pintado) -->
-  <script src="assets/products.js?v=31" defer></script>
+  <!-- Scripts principales -->
+  <script src="assets/products.js?v=32" defer></script>
   <script src="assets/app.js?v=31" defer></script>
   <script src="assets/cart-badge.js?v=31" defer></script>
 </body>
