@@ -253,23 +253,28 @@ a.product-card:focus-visible{outline:2px solid #111;outline-offset:3px;border-ra
   transition: all .3s ease;
 }
 
-/* ===== Bolsa del carrito — efectos visuales ===== */
+/* ===== Bolsa del carrito — efectos visuales (solo activa en cart.html) ===== */
+
+/* Estado base: contorno blanco */
 .topbar__cart .icon-bag {
   stroke: currentColor !important;
   fill: none !important;
   transition: all .3s ease;
   opacity: 0.9;
 }
+
+/* Hover: se ilumina con brillo tenue */
 .topbar__cart:hover .icon-bag {
   stroke: #fff !important;
   fill: rgba(255,255,255,0.15) !important;
   filter: drop-shadow(0 0 5px rgba(255,255,255,0.3));
   opacity: 1;
 }
-.topbar__cart:not(:has(.cart-count[hidden])) .icon-bag,
-.topbar__cart .icon-bag.has-items {
+
+/* Estado activo (cuando estás dentro de cart.html) */
+.topbar__cart[aria-current="page"] .icon-bag {
   stroke: #000 !important; /* contorno negro para que resalte */
-  fill: #fff !important;
+  fill: #fff !important;   /* relleno blanco completo */
   filter: drop-shadow(0 0 6px rgba(255,255,255,.45));
   opacity: 1 !important;
   transition: all .3s ease;
