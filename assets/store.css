@@ -88,7 +88,7 @@ a.product-card{display:block;text-decoration:none;color:inherit;cursor:pointer;}
   position:relative;overflow:hidden;
   background:#fff;color:#111;
   border:1px solid rgba(0,0,0,.1);
-  border-bottom-color:#000;
+  border-bottom-color:#000;      /* unión limpia con el pie negro */
   border-radius:0;
   box-shadow:0 6px 18px rgba(0,0,0,.08);
   transition:transform .18s ease, box-shadow .18s ease;
@@ -96,19 +96,28 @@ a.product-card{display:block;text-decoration:none;color:inherit;cursor:pointer;}
 }
 .product-card:hover{transform:translateY(-3px);box-shadow:0 10px 26px rgba(0,0,0,.12);}
 
-/* Imagen blanca */
+/* ==== Envoltorio de imagen (index) — sella la unión con el pie ==== */
+.product-media{
+  position:relative;
+  background:#fff;
+  line-height:0;                 /* evita cualquier interlineado residual */
+  border-bottom:2px solid #000;  /* ✅ tapa subpíxeles entre imagen y footer */
+}
+
+/* Imagen blanca (index y favoritos/relacionados) */
 .product-img{width:100%;height:420px;object-fit:contain;background:#fff;display:block;border:none;}
+/* Para cartas que NO usan .product-media (favoritos / relacionados): */
+.product-card > .product-img{ border-bottom:2px solid #000; }  /* ✅ misma solución */
 @media (max-width:1024px){.product-img{height:360px;}}
 @media (max-width:640px){.product-img{height:280px;}}
 @media (max-width:480px){.product-img{height:240px;}}
 
-/* Footer negro — ajustado 2px hacia arriba */
+/* Footer negro continuo */
 .product-name,.product-price{display:block;width:100%;background:#000;color:#fff;text-align:center;margin:0;border:none;}
 .product-name{
   font-weight:800;font-size:12px;text-transform:uppercase;letter-spacing:.06em;
   padding:12px 12px 4px;
-  margin-top:-2px;              /* baja el pie para tapar huecos */
-  border-top:2px solid #000;    /* asegura unión perfecta con la imagen */
+  /* (quitamos el margin-top negativo anterior) */
 }
 .product-price{font-weight:700;font-size:12px;padding:0 12px 12px;}
 
@@ -148,7 +157,7 @@ a.product-card{display:block;text-decoration:none;color:inherit;cursor:pointer;}
 /* Botón + (añadir al carrito) — sobre la zona blanca */
 .fav-add{
   position:absolute;
-  bottom:64px;
+  bottom:64px;     /* altura aprox. del footer (nombre+precio) */
   right:12px;
   background:none;border:none;color:#000;font-size:26px;font-weight:400;line-height:1;cursor:pointer;
   transition:transform .25s ease, opacity .25s ease;z-index:3;
