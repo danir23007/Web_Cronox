@@ -1,54 +1,74 @@
-/* ===== Quick-Add Modal ===== */
+/* ===== Quick-Add Modal (v2) ===== */
 .qa-overlay{
   position:fixed; inset:0; background:rgba(0,0,0,.6);
   display:none; align-items:center; justify-content:center; z-index:1200;
 }
 .qa-overlay[aria-hidden="false"]{ display:flex; }
 
+/* Panel blanco, esquinas en pico, orientación vertical */
 .qa-panel{
-  width:min(100%, 980px); max-height:90vh; overflow:auto;
-  background:#0e0e0e; border:1px solid rgba(255,255,255,.12); border-radius:18px;
-  padding:16px; display:grid; grid-template-columns:1fr; gap:16px;
-}
-@media (min-width:900px){
-  .qa-panel{ grid-template-columns:1.2fr .8fr; gap:20px; padding:18px; }
+  width:min(100%, 720px); max-height:92vh; overflow:auto;
+  background:#ffffff; border:1px solid #e6e6e6; border-radius:0;
+  padding:18px; display:flex; flex-direction:column; gap:16px; position:relative;
+  color:#0a0a0a;
 }
 
 .qa-close{
-  position:absolute; top:10px; right:10px; width:36px; height:36px; border-radius:8px;
-  border:1px solid rgba(255,255,255,.12); background:transparent; color:#fff; font-size:20px; cursor:pointer;
+  position:absolute; top:10px; right:10px; width:36px; height:36px;
+  border:1px solid #dcdcdc; background:#fff; color:#111; font-size:20px; cursor:pointer;
 }
 
-.qa-media{ display:grid; grid-template-columns:1fr; gap:10px; }
-.qa-media img{ width:100%; height:100%; object-fit:contain; background:#0a0a0a; border-radius:12px; }
-@media (min-width:700px){ .qa-media{ grid-template-columns:1fr 1fr; } }
+/* Fotos arriba */
+.qa-media{
+  display:grid; grid-template-columns:1fr; gap:10px;
+}
+@media (min-width:640px){
+  .qa-media{ grid-template-columns:1fr 1fr; }
+}
+.qa-media img{
+  width:100%; aspect-ratio:1/1; object-fit:contain; background:#fff; border:1px solid #efefef;
+}
 
-.qa-info{ display:flex; flex-direction:column; gap:12px; }
-.qa-name{ margin:.2em 0 0; font-size: clamp(18px, 2.8vw, 24px); font-weight:800; }
-.qa-price{ margin:0; color:#ddd; font-weight:700; }
+/* Texto e inputs en columna */
+.qa-info{ display:flex; flex-direction:column; gap:10px; }
+.qa-name{ margin:0; font-size: clamp(18px, 2.6vw, 22px); font-weight:800; color:#0a0a0a; }
+.qa-price{ margin:0; font-weight:700; color:#111; }
 
+/* Filas */
 .qa-row{ display:flex; flex-wrap:wrap; gap:10px; align-items:center; }
-.qa-label{ font-size:13px; color:#cfcfcf; width:100%; margin:6px 0 -2px; }
+.qa-label{ font-size:13px; color:#444; width:100%; margin:2px 0; }
 
 .qa-select, .qa-qty{
-  background:#111; border:1px solid rgba(255,255,255,.14); color:#fff;
-  border-radius:10px; padding:8px 10px; min-width:120px;
+  background:#fff; border:1px solid #cfcfcf; color:#111;
+  border-radius:0; padding:8px 10px; min-width:140px;
 }
+
+/* CTA negro para contraste en panel blanco */
 .qa-btn{
-  background:#fff; color:#000; font-weight:800; border:0; border-radius:14px; padding:10px 16px; cursor:pointer;
+  background:#000; color:#fff; font-weight:800; border:0; border-radius:0;
+  padding:12px 16px; cursor:pointer; width:100%;
 }
-.qa-btn:active{ transform:scale(.98); }
+.qa-btn:active{ transform:scale(.996); }
+
 .qa-muted-link{
-  margin-top:6px; font-size:12px; opacity:.8; text-decoration:none; color:#eaeaea;
+  margin-top:6px; font-size:12px; opacity:.85; text-decoration:none; color:#111;
 }
 .qa-muted-link:hover{ text-decoration:underline; }
 
-/* ===== Botón "+" en tarjeta ===== */
-.product-card{ position:relative; }
+/* ===== Botón "+" DENTRO de la imagen ===== */
+.product-card{ position:relative; text-decoration:none; color:inherit; }
+
+/* Envoltorio solo para la imagen de la tarjeta */
+.product-media{ position:relative; }
+.product-img{ display:block; width:100%; height:auto; background:#fff; }
+
+/* El "+" se ancla a la esquina inferior derecha dentro del área de imagen */
 .card-plus{
-  position:absolute; right:10px; bottom:10px; width:34px; height:34px; border-radius:10px;
-  display:grid; place-items:center; background:rgba(255,255,255,.95); color:#000; font-weight:900;
-  border:0; cursor:pointer; line-height:1; transition:transform .15s ease, opacity .15s ease;
+  position:absolute; right:8px; bottom:8px; width:34px; height:34px;
+  display:grid; place-items:center;
+  background:#ffffff; color:#000; font-weight:900;
+  border:1px solid #dcdcdc; border-radius:0; cursor:pointer;
+  line-height:1; transition:transform .15s ease, opacity .15s ease;
 }
 .card-plus:hover{ transform:scale(1.05); }
 .card-plus:active{ transform:scale(.96); }
