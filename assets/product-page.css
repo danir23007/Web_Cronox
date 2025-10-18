@@ -1,0 +1,74 @@
+/* Página de detalle de producto (PDP) */
+
+.pdp {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 32px 16px 64px;
+}
+
+.pdp__grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 20px;
+}
+@media (min-width: 900px) {
+  .pdp__grid { grid-template-columns: 1.2fr .8fr; gap: 28px; }
+}
+
+/* Media grande, que nunca se corte ni deforme */
+.pdp__media {
+  background:#0a0a0a;
+  border:1px solid rgba(255,255,255,.12);
+  border-radius:16px;
+  min-height: 320px;
+  display:grid;
+  place-items:center;
+}
+.pdp__media img {
+  width:100%;
+  height:100%;
+  max-height:75vh;
+  object-fit:contain;
+}
+
+/* Info derecha */
+.pdp__info { display:flex; flex-direction:column; gap:12px; }
+.pdp__name  { margin:.2em 0 0; font-size: clamp(22px, 3.5vw, 32px); letter-spacing:.02em; }
+.pdp__price { margin:0; color:#ddd; font-weight:700; font-size: clamp(18px, 2.5vw, 22px); }
+.pdp__desc  { margin:.2em 0 .6em; color:#cfcfcf; line-height:1.6; }
+
+.pdp__actions { display:flex; flex-wrap:wrap; gap:12px; align-items:center; }
+.pdp__label  { display:flex; flex-direction:column; gap:6px; font-size:14px; color:#cfcfcf; }
+.pdp__select, .pdp__qty {
+  background:#111; border:1px solid rgba(255,255,255,.12); color:#fff;
+  border-radius:10px; padding:8px 10px; min-width:110px;
+}
+.btn-primary {
+  background:#fff; color:#000; font-weight:700; border:0; border-radius:14px;
+  padding:10px 16px; cursor:pointer; transition:transform .2s ease, opacity .2s ease;
+}
+.btn-primary:active{ transform:scale(.98) }
+.btn-primary:hover{ opacity:.92 }
+
+.pdp__meta ul{ margin:.6em 0 0; padding-left:18px; color:#bcbcbc; line-height:1.6; }
+.pdp__breadcrumb{ margin-top:28px; }
+.pdp__breadcrumb a{ color:#eaeaea; text-decoration:none; opacity:.9; }
+.pdp__breadcrumb a:hover{ text-decoration:underline; }
+
+/* Toast (reutiliza el estilo del overlay, por si no lo tienes aquí también) */
+.toast{
+  position:fixed; left:50%; bottom:24px;
+  transform:translateX(-50%) translateY(20px);
+  background:#111; border:1px solid rgba(255,255,255,.12);
+  padding:10px 14px; border-radius:12px;
+  opacity:0; pointer-events:none;
+  transition:opacity .25s ease, transform .25s ease; z-index:1200;
+}
+.toast.show{ opacity:1; transform:translateX(-50%) translateY(0); }
+
+/* Topbar opaca en PDP */
+.topbar--opaque{
+  backdrop-filter:saturate(120%) blur(8px);
+  background:rgba(0,0,0,.9);
+  border-bottom:1px solid rgba(255,255,255,.12);
+}
