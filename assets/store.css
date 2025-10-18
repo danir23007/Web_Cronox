@@ -1,4 +1,4 @@
-/* ===== Base ===== */
+/* ===== Base ===== */ 
 *,*::before,*::after{box-sizing:border-box}
 html,body{margin:0;padding:0;background:#000;color:#fff}
 
@@ -162,3 +162,69 @@ a.product-card{display:block;text-decoration:none;color:inherit;cursor:pointer;}
   transition:transform .25s ease, opacity .25s ease;z-index:3;
 }
 .fav-add:hover{transform:scale(1.2);opacity:.8;}
+
+
+/* ============================================================
+   PDP — “También puede interesarte”
+   (Forzamos estilo de tarjetas y fondo negro puro)
+============================================================ */
+.pdp-related{
+  background:#000;               /* negro puro en todo el bloque */
+  padding:50px 0 70px;
+  border-top:2px solid #000;     /* continuidad con las tarjetas */
+}
+.pdp-related__title{
+  margin:0 0 28px;
+  color:#fff;
+  font:800 18px/1.3 system-ui, sans-serif;
+  text-transform:uppercase;
+  letter-spacing:.12em;
+  text-align:center;
+}
+
+/* Centrado y ancho controlado del grid */
+.pdp-related .products-grid{
+  max-width:1200px;
+  margin:0 auto;
+  padding:0 12px;
+}
+
+/* Tarjeta en relacionados igual que en la tienda (pisamos product-page.css) */
+.pdp-related .product-card{
+  background:#fff !important;
+  border:1px solid #000 !important;
+  border-radius:0 !important;
+  box-shadow:0 6px 18px rgba(0,0,0,.08);
+  overflow:hidden;
+}
+
+/* Imagen blanca y unión perfecta con el footer negro */
+.pdp-related .product-img{
+  width:100%;
+  background:#fff !important;
+  display:block;
+  border:0;
+  border-bottom:2px solid #000;  /* evita líneas grises */
+  /* dejamos el alto que marque product-page, aquí no forzamos */
+}
+
+/* Footer negro puro y texto centrado respecto a la tarjeta */
+.pdp-related .product-name,
+.pdp-related .product-price{
+  background:#000 !important;
+  color:#fff !important;
+  text-align:center !important;
+  margin:0 !important;
+  border:none !important;
+}
+.pdp-related .product-name{
+  font-weight:800;
+  font-size:12px;
+  letter-spacing:.06em;
+  padding:12px 12px 4px !important;
+}
+.pdp-related .product-price{
+  font-weight:700;
+  font-size:12px;
+  padding:0 12px 12px !important;
+}
