@@ -296,3 +296,38 @@ a.product-card:focus-visible{outline:2px solid #111;outline-offset:3px;border-ra
 .topbar__cart .cart-count:not([hidden]) {
   animation: cartPulse 0.6s ease;
 }
+/* ===== Estrella de favoritos en tarjetas ===== */
+.fav-toggle {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  width: 26px;
+  height: 26px;
+  background: rgba(255,255,255,0.85);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.25s ease;
+  z-index: 2;
+}
+
+.fav-toggle svg {
+  width: 16px;
+  height: 16px;
+  stroke: #000;
+  fill: none;
+  stroke-width: 2;
+  transition: all 0.25s ease;
+}
+
+/* Hover y estado activo */
+.fav-toggle:hover {
+  background: #fff;
+  transform: scale(1.1);
+}
+.fav-toggle.active svg {
+  fill: #000;
+  stroke: #000;
+}
