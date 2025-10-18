@@ -11,13 +11,39 @@
   <link rel="stylesheet" href="assets/store.css?v=31" />
   <!-- PDP oscuro total -->
   <link rel="stylesheet" href="assets/product-page.css?v=3" />
+
+  <style>
+    /* Forzar topbar opaca en PDP */
+    body {
+      margin: 0;
+      background: #000;
+      color: #eaeaea;
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Arial;
+      padding-top: 64px; /* deja espacio para el banner */
+    }
+
+    .topbar {
+      background: #000 !important;
+      backdrop-filter: none !important;
+      border-bottom: 1px solid rgba(255,255,255,.08);
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      z-index: 999;
+    }
+
+    .topbar__logo-img {
+      max-height: 32px;
+    }
+  </style>
 </head>
 <body>
 
-  <!-- Topbar (idéntico al index) -->
-  <header class="topbar topbar--transparent" id="topbar" role="banner">
+  <!-- Topbar (idéntica a la del index pero opaca) -->
+  <header class="topbar" id="topbar" role="banner">
     <div class="topbar__left">
-      <!-- Menú (tres líneas) -->
+      <!-- Menú -->
       <button id="btnMenu" class="icon-btn" aria-label="Abrir filtros" aria-expanded="false" aria-controls="filtersPanel">
         <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
              stroke-linecap="round" stroke-linejoin="round" class="icon" aria-hidden="true" focusable="false">
@@ -37,7 +63,7 @@
       </button>
     </div>
 
-    <!-- Logo centrado (igual que en index) -->
+    <!-- Logo centrado -->
     <a href="index.html#store" class="topbar__logo" aria-label="CRONOX — Tienda">
       <img
         src="https://raw.githubusercontent.com/danir23007/Web_Cronox/refs/heads/main/assets/logo%20largo%20bueno.JPG"
@@ -59,7 +85,7 @@
     </nav>
   </header>
 
-  <!-- Barra de búsqueda (misma que index para que funcione con app.js) -->
+  <!-- Barra de búsqueda -->
   <div id="searchBar" class="searchbar" hidden>
     <form id="searchForm" class="searchbar__form" role="search" action="index.html#store">
       <input id="searchInput" class="searchbar__input" type="text" placeholder="Buscar productos…" autocomplete="off" />
@@ -67,7 +93,7 @@
     </form>
   </div>
 
-  <!-- PDP negro completo -->
+  <!-- PDP (contenido principal) -->
   <main id="productMain" class="pdp container" aria-live="polite">
     <div class="pdp__grid">
       <div class="pdp__media">
@@ -101,58 +127,4 @@
         </div>
 
         <nav class="pdp__breadcrumb" style="margin-top:18px">
-          <a href="index.html#store" class="js-back">← Volver a la colección</a>
-        </nav>
-      </div>
-    </div>
-
-    <!-- Relacionados -->
-    <section class="pdp-related">
-      <h2 class="pdp-related__title">También puede interesarte</h2>
-      <div id="relatedGrid" class="products-grid"></div>
-    </section>
-  </main>
-
-  <!-- Toast -->
-  <div id="toast" class="toast" role="status" aria-live="polite"></div>
-
-  <footer class="footer">
-    <div class="container">© <span id="anio"></span> CRONOX</div>
-  </footer>
-
-  <!-- Catálogo mínimo por si entras directo -->
-  <script>
-    window.CRONOX_PRODUCTS = window.CRONOX_PRODUCTS || [
-      {
-        id: "camiseta-washed-gris",
-        name: "Camiseta Washed Gris",
-        price: 34.95,
-        priceLabel: "34,95 €",
-        image: "assets/products/camiseta_washed_gris.png",
-        categories: ["camisetas"],
-        sizes: ["s","m","l","xl"],
-        color: "gris",
-        desc: "Camiseta premium lavado gris, corte oversized y tacto suave."
-      },
-      {
-        id: "camiseta-washed-negra",
-        name: "Camiseta Washed Negra",
-        price: 34.95,
-        priceLabel: "34,95 €",
-        image: "assets/products/camiseta_washed_negra.png",
-        categories: ["camisetas"],
-        sizes: ["s","m","l","xl"],
-        color: "negro",
-        desc: "Camiseta premium lavado negro, corte oversized y tacto suave."
-      }
-    ];
-    document.getElementById('anio').textContent = new Date().getFullYear();
-  </script>
-
-  <!-- JS -->
-  <script src="assets/product-page.js?v=34" defer></script>
-  <!-- Incluye app.js para que el topbar/búsqueda funcionen igual que en el index -->
-  <script src="assets/app.js?v=31" defer></script>
-  <script src="assets/cart-badge.js?v=31" defer></script>
-</body>
-</html>
+          <a href="index.html#store" class="js-back">← Volv
