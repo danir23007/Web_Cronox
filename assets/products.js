@@ -1,6 +1,7 @@
 // ======================================================
 // assets/products.js — Grid + filtros + enlaces a PDP + Quick-Add (+)
 // + scroll exacto al volver (back) y foco en última vista
+// (v2: "+" dentro de la imagen; Quick-Add panel blanco y orden vertical)
 // ======================================================
 (function () {
   const productsGrid = document.getElementById("productsGrid");
@@ -10,7 +11,6 @@
   const searchForm = document.getElementById("searchForm");
   const searchInput = document.getElementById("searchInput");
 
-  // Claves de sesión para restaurar
   const RETURN_KEY = "cronox_scroll_to";
   const SCROLL_POS_KEY = "cronox_scroll_pos";
 
@@ -23,7 +23,7 @@
     return new Intl.NumberFormat("es-ES",{style:"currency",currency:"EUR"}).format(n);
   }
 
-  // === Catálogo (añado 'images' y 'colors' para el Quick-Add) ===
+  // === Catálogo (ahora con 'images' y 'colors') ===
   const PRODUCTS = [
     {
       id: "camiseta-washed-gris",
@@ -33,12 +33,12 @@
       image: "assets/products/camiseta_washed_gris.png",
       images: [
         "assets/products/camiseta_washed_gris.png",
-        "assets/products/camiseta_washed_gris_2.png" // si no existe, se repetirá la 1ª
+        "assets/products/camiseta_washed_gris_2.png"
       ],
       categories: ["camisetas"],
       sizes: ["s", "m", "l", "xl"],
       color: "gris",
-      colors: ["gris"], // si solo hay un color, igualmente se muestra
+      colors: ["gris"],
       desc: "Camiseta premium lavado gris, corte oversized y tacto suave."
     },
     {
@@ -66,7 +66,7 @@
   if (searchInput && initialQueryRaw) searchInput.value = initialQueryRaw;
 
   // ======================================================
-  // Quick-Add: crear overlay/panel una sola vez y reutilizar
+  // Quick-Add DOM (panel blanco, orden vertical)
   // ======================================================
   let qaOverlay, qaPanel, qaClose, qaImg1, qaImg2, qaName, qaPrice, qaColor, qaSize, qaQty, qaAdd, qaLink;
   let qaCurrentProduct = null;
@@ -82,34 +82,35 @@
       <div class="qa-panel" role="dialog" aria-modal="true">
         <button class="qa-close" aria-label="Cerrar">×</button>
 
+        <!-- 1) Fotos arriba -->
         <div class="qa-media">
           <img id="qaImg1" alt="" loading="lazy" decoding="async">
           <img id="qaImg2" alt="" loading="lazy" decoding="async">
         </div>
 
+        <!-- 2) Nombre + precio -->
         <div class="qa-info">
           <h3 class="qa-name" id="qaName"></h3>
           <p class="qa-price" id="qaPrice"></p>
 
+          <!-- 3) Color -->
           <div class="qa-row">
             <span class="qa-label">Color</span>
             <select id="qaColor" class="qa-select"></select>
           </div>
 
+          <!-- 4) Talla -->
           <div class="qa-row">
             <span class="qa-label">Talla</span>
             <select id="qaSize" class="qa-select"></select>
           </div>
 
-          <div class="qa-row">
-            <span class="qa-label">Cantidad</span>
-            <input id="qaQty" class="qa-qty" type="number" min="1" value="1" inputmode="numeric">
-          </div>
-
+          <!-- 5) Añadir -->
           <div class="qa-row" style="margin-top:6px">
             <button id="qaAdd" class="qa-btn">Añadir al carrito</button>
           </div>
 
+          <!-- 6) Ver detalles -->
           <a id="qaLink" class="qa-muted-link" href="#" rel="nofollow">Ver detalles del producto</a>
         </div>
       </div>
@@ -124,7 +125,7 @@
     qaPrice = qaOverlay.querySelector("#qaPrice");
     qaColor = qaOverlay.querySelector("#qaColor");
     qaSize  = qaOverlay.querySelector("#qaSize");
-    qaQty   = qaOverlay.querySelector("#qaQty");
+    qaQty   = document.createElement("input"); // no se muestra por pedido, pero mantenemos cantidad 1
     qaAdd   = qaOverlay.querySelector("#qaAdd");
     qaLink  = qaOverlay.querySelector("#qaLink");
 
@@ -142,7 +143,7 @@
       if (!qaCurrentProduct) return;
       const size = qaSize?.value || "M";
       const color = qaColor?.value || qaCurrentProduct.color || null;
-      const qty  = Math.max(1, parseInt(qaQty?.value || "1", 10));
+      const qty  = 1; // Quick-Add por defecto 1
       addToCart({
         id: qaCurrentProduct.id,
         name: qaCurrentProduct.name,
@@ -153,7 +154,6 @@
         size,
         qty
       });
-      // pequeño feedback
       qaAdd.disabled = true;
       const prev = qaAdd.textContent;
       qaAdd.textContent = "Añadido ✓";
@@ -172,26 +172,29 @@
     ensureQuickAddDOM();
     qaCurrentProduct = product;
 
-    // Imágenes (solo 2 primeras; si falta, repetimos la primera)
+    // Imágenes (2 primeras; si falta la 2ª, repetimos la 1ª)
     const imgs = Array.isArray(product.images) && product.images.length ? product.images : [product.image];
     qaImg1.src = imgs[0];
     qaImg1.alt = product.name;
     qaImg2.src = imgs[1] || imgs[0];
     qaImg2.alt = product.name;
 
-    // Textos y selects
+    // Nombre y precio
     qaName.textContent  = product.name || "";
     qaPrice.textContent = product.priceLabel || euros(product.price);
 
+    // Color
     const colors = product.colors && product.colors.length ? product.colors : (product.color ? [product.color] : ["Único"]);
     qaColor.innerHTML = colors.map(c => `<option value="${c}">${c.toString().toUpperCase()}</option>`).join("");
 
+    // Talla
     const sizes = product.sizes && product.sizes.length ? product.sizes : ["m"];
     qaSize.innerHTML = sizes.map(s => `<option value="${s.toUpperCase()}">${s.toUpperCase()}</option>`).join("");
 
-    qaQty.value = "1";
+    // Link a detalle
     qaLink.href = `producto.html?id=${encodeURIComponent(product.id)}`;
 
+    // Mostrar
     qaOverlay.setAttribute("aria-hidden", "false");
     document.body.style.overflow = "hidden";
     qaClose.focus();
@@ -209,7 +212,6 @@
     try {
       const raw = localStorage.getItem("cronox_cart");
       const cart = raw ? JSON.parse(raw) : [];
-      // agrupar por id+size+color
       const idx = cart.findIndex(x => x.id === item.id && x.size === item.size && x.color === item.color);
       if (idx >= 0) {
         cart[idx].qty = (Number(cart[idx].qty) || 0) + (Number(item.qty) || 1);
@@ -225,12 +227,16 @@
     }
   }
 
-  // ---- Tarjeta como LINK a producto.html y botón "+" ----
+  // ---- Tarjeta con wrapper de imagen y "+" DENTRO de la imagen ----
   function createCard(p) {
     const a = document.createElement("a");
     a.href = `producto.html?id=${encodeURIComponent(p.id)}`;
     a.className = "product-card";
     a.setAttribute("data-id", p.id);
+
+    // Envoltorio de imagen para posicionar el "+"
+    const media = document.createElement("div");
+    media.className = "product-media";
 
     const img = document.createElement("img");
     img.className = "product-img";
@@ -238,6 +244,21 @@
     img.decoding = "async";
     img.alt = p.name || "Producto";
     img.src = p.image;
+
+    // Botón "+"
+    const plus = document.createElement("button");
+    plus.className = "card-plus";
+    plus.type = "button";
+    plus.setAttribute("aria-label", `Añadir rápido ${p.name}`);
+    plus.textContent = "+";
+    plus.addEventListener("click", (ev) => {
+      ev.preventDefault();
+      ev.stopPropagation();
+      openQuickAdd(p);
+    });
+
+    media.appendChild(img);
+    media.appendChild(plus);
 
     const name = document.createElement("h3");
     name.className = "product-name";
@@ -247,22 +268,9 @@
     price.className = "product-price";
     price.textContent = p.priceLabel || euros(p.price);
 
-    // Botón "+"
-    const plus = document.createElement("button");
-    plus.className = "card-plus";
-    plus.type = "button";
-    plus.setAttribute("aria-label", `Añadir rápido ${p.name}`);
-    plus.textContent = "+";
-    plus.addEventListener("click", (ev) => {
-      ev.preventDefault(); // no navegamos a producto.html
-      ev.stopPropagation();
-      openQuickAdd(p);
-    });
-
-    a.appendChild(img);
+    a.appendChild(media);
     a.appendChild(name);
     a.appendChild(price);
-    a.appendChild(plus);
     return a;
   }
 
@@ -372,18 +380,11 @@
 
   // ---- Eventos búsqueda/filtros ----
   if (searchForm) {
-    searchForm.addEventListener("submit", (e) => {
-      e.preventDefault();
-      applyAll(); // si quieres mantener ?q= en URL, sustituye por el bloque anterior que lo hacía
-    });
+    searchForm.addEventListener("submit", (e) => { e.preventDefault(); applyAll(); });
   }
-
   if (filtersForm) {
-    filtersForm.addEventListener("submit", (e) => {
-      e.preventDefault(); applyAll();
-    });
+    filtersForm.addEventListener("submit", (e) => { e.preventDefault(); applyAll(); });
   }
-
   if (btnClearFilters && filtersForm) {
     btnClearFilters.addEventListener("click", () => {
       filtersForm.querySelectorAll('input[type="checkbox"]').forEach(chk => (chk.checked = false));
