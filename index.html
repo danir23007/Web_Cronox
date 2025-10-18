@@ -14,6 +14,8 @@
   <link rel="stylesheet" href="assets/store.css?v=31">
   <!-- CSS del overlay de producto (nuevo, aislado para no tocar tu CSS estable) -->
   <link rel="stylesheet" href="assets/product-detail.css?v=1">
+  <!-- CSS del Quick-Add (icono "+" y modal rápido) -->
+  <link rel="stylesheet" href="assets/quick-add.css?v=1">
 
   <!-- Noscript: si no hay JS, oculta el preloader para no bloquear la vista -->
   <noscript>
@@ -32,7 +34,7 @@
     >
   </div>
 
-  <!-- Overlay global existente -->
+  <!-- Overlay -->
   <div id="overlay" class="overlay" hidden></div>
 
   <!-- Topbar -->
@@ -156,7 +158,7 @@
     </div>
   </main>
 
-  <!-- ===== Overlay Detalle de Producto (NUEVO) ===== -->
+  <!-- ===== Overlay Detalle de Producto (legacy, puede quedar oculto) ===== -->
   <div id="productDetail" class="product-detail" aria-hidden="true" role="dialog" aria-modal="true">
     <div class="product-detail__panel" role="document">
       <button class="product-detail__close" id="pdClose" aria-label="Cerrar detalle">×</button>
@@ -219,7 +221,7 @@
   </script>
 
   <!-- Scripts principales -->
-  <script src="assets/products.js?v=32" defer></script>
+  <script src="assets/products.js?v=36" defer></script>
   <script src="assets/app.js?v=31" defer></script>
   <script src="assets/cart-badge.js?v=31" defer></script>
 </body>
