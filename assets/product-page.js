@@ -1,9 +1,10 @@
 // ====================================================== 
-// assets/product-page.js — PDP + carrito + relacionados + back suave
+// assets/product-page.js — PDP + carrito + relacionados + back suave + marca de retorno
 // CRONOX
 // ======================================================
 (function () {
   const CART_KEY = "cronox_cart";
+  const RETURN_KEY = "cronox_scroll_to"; // <- aquí guardamos el id para volver
 
   // --- Referencias principales ---
   const pImage = document.getElementById("pImage");
@@ -66,9 +67,7 @@
   // --- Relacionados ---
   function similarityScore(a, b) {
     let score = 0;
-    // Mismo color
     if (a.color && b.color && a.color === b.color) score += 1;
-    // Coincidencia de categoría
     const ac = Array.isArray(a.categories) ? a.categories : [];
     const bc = Array.isArray(b.categories) ? b.categories : [];
     if (ac.length && bc.length && ac.some(c => bc.includes(c))) score += 2;
@@ -117,14 +116,15 @@
     window.scrollTo({ top: 0, left: 0, behavior: "instant" });
   }
 
-  // --- Back suave (fade-out) ---
-  function setupBackLinks() {
+  // --- Back suave (fade-out) + guardar id para volver ---
+  function setupBackLinks(currentId) {
     const links = document.querySelectorAll('a.js-back[href^="index.html#store"]');
     links.forEach(a => {
       a.addEventListener("click", (e) => {
-        // Respetar reduced motion
         const prefersReduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-        if (prefersReduced) return; // navegación normal
+        // Guarda el id para reposicionar en la tienda
+        try { sessionStorage.setItem(RETURN_KEY, currentId); } catch {}
+        if (prefersReduced) return; // navegación normal sin fade
 
         e.preventDefault();
         document.documentElement.classList.add("page-exit");
@@ -161,7 +161,7 @@
       showToast("Añadido al carrito ✓");
     });
 
-    setupBackLinks();
+    setupBackLinks(p.id);
   }
 
   init();
