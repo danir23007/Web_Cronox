@@ -1,4 +1,4 @@
-/* ===== Quick-Add Modal (v2.3 con "+" más fino y hastas más largas) ===== */
+/* ===== Quick-Add Modal (v2.4 con cruz más proporcionada) ===== */
 .qa-overlay{
   position:fixed; inset:0; background:rgba(0,0,0,.6);
   display:none; align-items:center; justify-content:center; z-index:1200;
@@ -61,7 +61,7 @@
 .product-media{ position:relative; }
 .product-img{ display:block; width:100%; height:auto; background:#fff; }
 
-/* "+" más largo y fino, sin recuadro ni fondo, con leve brillo blanco */
+/* "+" fino, sin fondo, con brillo blanco */
 .card-plus{
   position:absolute; right:10px; bottom:10px;
   width:28px; height:28px;
@@ -79,10 +79,10 @@
   transition:transform .15s ease, opacity .15s ease;
 }
 .card-plus::before{
-  width:2px; height:22px;  /* línea vertical más larga y delgada */
+  width:2px; height:20px;  /* vertical más corta (antes 22px) */
 }
 .card-plus::after{
-  width:22px; height:2px;  /* línea horizontal más larga y delgada */
+  width:20px; height:2px;  /* horizontal más corta (antes 22px) */
 }
 
 .card-plus:hover::before,
