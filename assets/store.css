@@ -452,3 +452,21 @@ a.product-card:focus-visible{
   .product-name{ font-size: 11px !important; }
   .product-price{ font-size: 11px !important; }
 }
+/* ===== Estrella activa (página de Favoritos) ===== */
+.topbar__fav[aria-current="page"] .icon-star {
+  fill: #fff !important;               /* la estrella se rellena completamente */
+  stroke: #fff !important;             /* el contorno también blanco */
+  opacity: 1 !important;
+  filter: drop-shadow(0 0 6px rgba(255,255,255,.45)); /* leve brillo */
+  transition: all .3s ease;
+}
+
+/* Suaviza el hover en el resto de la web */
+.topbar__fav .icon-star {
+  fill: none !important;
+  stroke: currentColor !important;
+  transition: all .3s ease;
+}
+.topbar__fav:hover .icon-star {
+  opacity: .8;
+}
