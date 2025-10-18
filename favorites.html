@@ -6,7 +6,7 @@
   <title>Favoritos — CRONOX</title>
   <meta name="description" content="Lista de productos favoritos — CRONOX">
   <meta name="theme-color" content="#000000">
-  <link rel="stylesheet" href="assets/store.css?v=33">
+  <link rel="stylesheet" href="assets/store.css?v=34">
   <noscript><style>#preloader{display:none!important}</style></noscript>
 </head>
 <body>
@@ -62,13 +62,9 @@
     const FAV_KEY = 'cronox:favs';
     const CART_KEY = 'cronox_cart';
 
-    const getFavs = () => {
-      try { return JSON.parse(localStorage.getItem(FAV_KEY)) || []; } catch { return []; }
-    };
+    const getFavs = () => { try { return JSON.parse(localStorage.getItem(FAV_KEY)) || []; } catch { return []; } };
     const setFavs = arr => localStorage.setItem(FAV_KEY, JSON.stringify(arr));
-    const getCart = () => {
-      try { return JSON.parse(localStorage.getItem(CART_KEY)) || []; } catch { return []; }
-    };
+    const getCart = () => { try { return JSON.parse(localStorage.getItem(CART_KEY)) || []; } catch { return []; } };
     const setCart = arr => localStorage.setItem(CART_KEY, JSON.stringify(arr));
 
     const updateFavBadge = () => {
@@ -102,6 +98,7 @@
       favs.forEach(item => {
         const card = document.createElement('div');
         card.className = 'product-card';
+        card.style.position = 'relative';
 
         const img = document.createElement('img');
         img.className = 'product-img';
@@ -119,7 +116,7 @@
         // X para eliminar
         const removeBtn = document.createElement('button');
         removeBtn.className = 'fav-remove';
-        removeBtn.innerHTML = '✕';
+        removeBtn.textContent = '✕';
         removeBtn.addEventListener('click', e => {
           e.stopPropagation();
           const newFavs = getFavs().filter(f => f.name !== item.name);
@@ -156,6 +153,6 @@
   })();
   </script>
 
-  <script src="assets/cart-badge.js?v=33" defer></script>
+  <script src="assets/cart-badge.js?v=34" defer></script>
 </body>
 </html>
