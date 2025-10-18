@@ -6,54 +6,41 @@
   <title>Favoritos — CRONOX</title>
   <meta name="description" content="Lista de productos favoritos — CRONOX">
   <meta name="theme-color" content="#000000">
-  <link rel="stylesheet" href="assets/store.css?v=32">
+  <link rel="stylesheet" href="assets/store.css?v=33">
   <noscript><style>#preloader{display:none!important}</style></noscript>
 </head>
 <body>
+
   <div id="overlay" class="overlay" hidden></div>
 
   <header class="topbar topbar--page" id="topbar" role="banner">
     <div class="topbar__left">
-      <button id="btnMenu" class="icon-btn" aria-label="Abrir filtros" aria-expanded="false" aria-controls="filtersPanel">
+      <button id="btnMenu" class="icon-btn" aria-label="Abrir filtros">
         <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-             stroke-linecap="round" stroke-linejoin="round" class="icon" aria-hidden="true" focusable="false">
-          <line x1="3" y1="6" x2="21" y2="6"></line>
-          <line x1="3" y1="12" x2="21" y2="12"></line>
-          <line x1="3" y1="18" x2="21" y2="18"></line>
-        </svg>
+             stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
       </button>
-      <button id="btnSearch" class="icon-btn" aria-label="Buscar productos" aria-expanded="false" aria-controls="searchBar">
+      <button id="btnSearch" class="icon-btn" aria-label="Buscar productos">
         <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-             stroke-linecap="round" stroke-linejoin="round" class="icon" aria-hidden="true" focusable="false">
-          <circle cx="11" cy="11" r="8"></circle>
-          <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
-        </svg>
+             stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
       </button>
     </div>
 
     <a href="index.html#store" class="topbar__logo" aria-label="Volver a la tienda CRONOX">
       <img src="https://raw.githubusercontent.com/danir23007/Web_Cronox/refs/heads/main/assets/logo%20largo%20bueno.JPG"
-           alt="CRONOX" class="topbar__logo-img" decoding="async">
+        alt="CRONOX" class="topbar__logo-img" decoding="async">
     </a>
 
     <nav class="topbar__right" aria-label="Navegación principal">
-      <!-- Estrella marcada como página actual -->
-      <a href="favorites.html" class="topbar__link topbar__fav" aria-label="Ver favoritos" aria-current="page" id="favLink">
+      <a href="favorites.html" class="topbar__link topbar__fav" aria-label="Ver favoritos" aria-current="page">
         <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-star" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-             stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
-          <polygon points="12 2 15.09 8.26 22 9.27 17.3 13.97 18.18 21 12 17.77 5.82 21 6.7 13.97 2 9.27 8.91 8.26 12 2"></polygon>
-        </svg>
-        <span class="fav-count" aria-label="Artículos en favoritos" hidden>0</span>
+             stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17.3 13.97 18.18 21 12 17.77 5.82 21 6.7 13.97 2 9.27 8.91 8.26 12 2"></polygon></svg>
+        <span class="fav-count" hidden>0</span>
       </a>
 
       <a href="cart.html" class="topbar__link topbar__cart" aria-label="Ver carrito">
         <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-bag" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-             stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
-          <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"></path>
-          <line x1="3" y1="6" x2="21" y2="6"></line>
-          <path d="M16 10a4 4 0 0 1-8 0"></path>
-        </svg>
-        <span class="cart-count" aria-label="Artículos en el carrito" hidden>0</span>
+             stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"></path><line x1="3" y1="6" x2="21" y2="6"></line><path d="M16 10a4 4 0 0 1-8 0"></path></svg>
+        <span class="cart-count" hidden>0</span>
       </a>
     </nav>
   </header>
@@ -61,6 +48,7 @@
   <main id="favorites" class="store" aria-live="polite">
     <h1 class="store-heading">Favoritos</h1>
     <div id="favGrid" class="products-grid" aria-label="Lista de productos favoritos"></div>
+
     <div id="favEmpty" class="products-fallback" style="text-align:center;margin-top:40px;">
       <p>No tienes productos en favoritos todavía.</p>
       <p><a href="index.html#store" class="topbar__link" style="color:#fff;text-decoration:underline;">Ir a la tienda</a></p>
@@ -70,88 +58,104 @@
   <footer class="footer"><p>© CRONOX</p></footer>
 
   <script>
-    (function(){
-      // Evita recargar si ya estás en favoritos y vuelves a pulsar la estrella
-      var favLink = document.getElementById('favLink');
-      if (favLink) {
-        favLink.addEventListener('click', function(e){
-          if (location.pathname.endsWith('/favorites.html')) { e.preventDefault(); }
+  (function(){
+    const FAV_KEY = 'cronox:favs';
+    const CART_KEY = 'cronox_cart';
+
+    const getFavs = () => {
+      try { return JSON.parse(localStorage.getItem(FAV_KEY)) || []; } catch { return []; }
+    };
+    const setFavs = arr => localStorage.setItem(FAV_KEY, JSON.stringify(arr));
+    const getCart = () => {
+      try { return JSON.parse(localStorage.getItem(CART_KEY)) || []; } catch { return []; }
+    };
+    const setCart = arr => localStorage.setItem(CART_KEY, JSON.stringify(arr));
+
+    const updateFavBadge = () => {
+      const el = document.querySelector('.fav-count');
+      const n = getFavs().length;
+      if (!el) return;
+      el.hidden = n === 0;
+      if (n > 0) el.textContent = n;
+    };
+
+    const addToCart = (item) => {
+      const cart = getCart();
+      const existing = cart.find(it => it.name === item.name);
+      if (existing) existing.qty = (existing.qty || 1) + 1;
+      else cart.push({...item, qty: 1});
+      setCart(cart);
+      window.dispatchEvent(new CustomEvent('cart:updated'));
+    };
+
+    const render = () => {
+      const grid = document.getElementById('favGrid');
+      const empty = document.getElementById('favEmpty');
+      grid.innerHTML = '';
+      const favs = getFavs();
+      if (!favs.length) {
+        empty.hidden = false;
+        return;
+      }
+      empty.hidden = true;
+
+      favs.forEach(item => {
+        const card = document.createElement('div');
+        card.className = 'product-card';
+
+        const img = document.createElement('img');
+        img.className = 'product-img';
+        img.src = item.image || '';
+        img.alt = item.name || 'Producto';
+
+        const name = document.createElement('span');
+        name.className = 'product-name';
+        name.textContent = item.name;
+
+        const price = document.createElement('span');
+        price.className = 'product-price';
+        price.textContent = item.price || '';
+
+        // X para eliminar
+        const removeBtn = document.createElement('button');
+        removeBtn.className = 'fav-remove';
+        removeBtn.innerHTML = '✕';
+        removeBtn.addEventListener('click', e => {
+          e.stopPropagation();
+          const newFavs = getFavs().filter(f => f.name !== item.name);
+          setFavs(newFavs);
+          updateFavBadge();
+          render();
         });
-      }
 
-      function getFavs(){
-        try{ var raw = localStorage.getItem('cronox:favs'); var arr = raw ? JSON.parse(raw) : []; return Array.isArray(arr)?arr:[]; }
-        catch(e){ return []; }
-      }
-      function setFavs(arr){
-        try{ localStorage.setItem('cronox:favs', JSON.stringify(arr)); }catch(e){}
-      }
-      function updateFavBadge(){
-        var el = document.querySelector('.fav-count');
-        if(!el) return;
-        var count = getFavs().length;
-        if(count > 0){ el.textContent = String(count); el.hidden = false; }
-        else{ el.hidden = true; }
-      }
-      function makeCard(item){
-        var isPrimitive = (typeof item === 'string' || typeof item === 'number');
-        var id    = isPrimitive ? String(item) : (item.id != null ? String(item.id) : '');
-        var name  = isPrimitive ? ('Producto ' + id) : (item.name || 'Producto');
-        var price = isPrimitive ? '' : (item.price || '');
-        var img   = isPrimitive ? '' : (item.image || '');
-        var url   = isPrimitive ? 'index.html#store' : (item.url || 'index.html#store');
-
-        var a = document.createElement('a'); a.className = 'product-card'; a.href = url; a.setAttribute('aria-label', name);
-        var imgEl = document.createElement('img'); imgEl.className = 'product-img'; imgEl.alt = name;
-        if(img) imgEl.src = img; else { imgEl.style.background = '#0a0a0a'; imgEl.style.display='grid'; imgEl.style.placeItems='center'; imgEl.style.color='#fff'; imgEl.style.font='700 12px/1 system-ui'; imgEl.style.letterSpacing='.08em'; imgEl.style.textTransform='uppercase'; imgEl.style.padding='12px'; imgEl.setAttribute('data-fallback','1'); }
-        var nameEl = document.createElement('span'); nameEl.className = 'product-name'; nameEl.textContent = name;
-        var priceEl = document.createElement('span'); priceEl.className = 'product-price'; priceEl.textContent = price;
-
-        a.appendChild(imgEl); a.appendChild(nameEl); a.appendChild(priceEl);
-
-        var removeBtn = document.createElement('button');
-        removeBtn.type='button'; removeBtn.setAttribute('aria-label','Eliminar de favoritos'); removeBtn.textContent='✕';
-        removeBtn.style.position='absolute'; removeBtn.style.top='8px'; removeBtn.style.right='8px';
-        removeBtn.style.width='28px'; removeBtn.style.height='28px'; removeBtn.style.border='1px solid rgba(255,255,255,.28)';
-        removeBtn.style.borderRadius='6px'; removeBtn.style.background='rgba(0,0,0,.75)'; removeBtn.style.color='#fff'; removeBtn.style.cursor='pointer';
-
-        var wrapper=document.createElement('div'); wrapper.style.position='relative'; wrapper.appendChild(a); wrapper.appendChild(removeBtn);
-
-        removeBtn.addEventListener('click', function(ev){
-          ev.preventDefault(); ev.stopPropagation();
-          var current = getFavs(); var next;
-          if(isPrimitive){ next = current.filter(function(x){ return String(x) !== id; }); }
-          else{
-            next = current.filter(function(x){
-              try{
-                if(x && (typeof x === 'object') && 'id' in x && item && 'id' in item){ return String(x.id) !== String(item.id); }
-                return JSON.stringify(x) !== JSON.stringify(item);
-              }catch(e){ return true; }
-            });
-          }
-          setFavs(next); updateFavBadge(); render();
+        // + para añadir al carrito
+        const addBtn = document.createElement('button');
+        addBtn.className = 'fav-add';
+        addBtn.textContent = '+';
+        addBtn.addEventListener('click', e => {
+          e.stopPropagation();
+          addToCart(item);
         });
-        return wrapper;
-      }
 
-      function render(){
-        var grid = document.getElementById('favGrid');
-        var empty = document.getElementById('favEmpty');
-        if(!grid || !empty) return;
+        card.appendChild(img);
+        card.appendChild(removeBtn);
+        card.appendChild(name);
+        card.appendChild(price);
+        card.appendChild(addBtn);
+        grid.appendChild(card);
+      });
+    };
 
-        var favs = getFavs();
-        grid.innerHTML = '';
-        if(!favs.length){ empty.hidden = false; return; }
-        empty.hidden = true;
-        favs.forEach(function(item){ grid.appendChild(makeCard(item)); });
-      }
-
-      document.addEventListener('visibilitychange', function(){ if(document.visibilityState === 'visible'){ updateFavBadge(); render(); }});
-      window.addEventListener('storage', function(e){ if(e.key === 'cronox:favs'){ updateFavBadge(); render(); }});
-      window.addEventListener('DOMContentLoaded', function(){ updateFavBadge(); render(); }, {once:true});
-    })();
+    document.addEventListener('DOMContentLoaded', () => {
+      updateFavBadge();
+      render();
+    });
+    window.addEventListener('storage', e => {
+      if (e.key === FAV_KEY) { updateFavBadge(); render(); }
+    });
+  })();
   </script>
 
-  <script src="assets/cart-badge.js?v=31" defer></script>
+  <script src="assets/cart-badge.js?v=33" defer></script>
 </body>
 </html>
