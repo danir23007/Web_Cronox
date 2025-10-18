@@ -59,7 +59,13 @@
 .product-card{ position:relative; text-decoration:none; color:inherit; }
 
 .product-media{ position:relative; }
-.product-img{ display:block; width:100%; height:auto; background:#fff; }
+/* Solo dentro del modal Quick-Add */
+.qa-media img{
+  display:block;
+  width:100%;
+  height:auto;
+  background:#fff;
+}
 
 /* Cruz fina y proporcionada (15x15), sin fondo ni recuadro */
 .card-plus{
