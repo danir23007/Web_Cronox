@@ -10,8 +10,8 @@
   <!-- Preload del vídeo para mejorar el arranque del héroe -->
   <link rel="preload" as="video" href="assets/VIDEO_LOGO_CRONOX.mp4" type="video/mp4">
 
-  <!-- CSS principal (mantengo tu versión) -->
-  <link rel="stylesheet" href="assets/store.css?v=31">
+  <!-- CSS principal -->
+  <link rel="stylesheet" href="assets/store.css?v=32">
   <!-- CSS del overlay de producto (nuevo, aislado para no tocar tu CSS estable) -->
   <link rel="stylesheet" href="assets/product-detail.css?v=1">
   <!-- CSS del Quick-Add (icono "+" y modal rápido) -->
@@ -71,11 +71,21 @@
     </a>
 
     <nav class="topbar__right" aria-label="Navegación principal">
+      <!-- Favoritos (estrella) -->
+      <a href="favorites.html" class="topbar__link topbar__fav" aria-label="Ver favoritos">
+        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-star" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+             stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+          <polygon points="12 2 15.09 8.26 22 9.27 17.3 13.97 18.18 21 12 17.77 5.82 21 6.7 13.97 2 9.27 8.91 8.26 12 2"></polygon>
+        </svg>
+        <span class="fav-count" aria-label="Artículos en favoritos" hidden>0</span>
+      </a>
+
+      <!-- Carrito (shopping bag) -->
       <a href="cart.html" class="topbar__link topbar__cart" aria-label="Ver carrito">
-        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-bag" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/>
-          <line x1="3" y1="6" x2="21" y2="6"/>
-          <path d="M16 10a4 4 0 0 1-8 0"/>
+        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-bag" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+          <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"></path>
+          <line x1="3" y1="6" x2="21" y2="6"></line>
+          <path d="M16 10a4 4 0 0 1-8 0"></path>
         </svg>
         <span class="cart-count" aria-label="Artículos en el carrito" hidden>0</span>
       </a>
@@ -217,6 +227,36 @@
       window.addEventListener('DOMContentLoaded', function(){ setTimeout(hide, 3500); }, {once:true});
       window.addEventListener('error', function(){ setTimeout(hide, 0); });
       window.addEventListener('load', function(){ window.scrollTo({top:0,left:0,behavior:'instant'}); }, {once:true});
+    })();
+  </script>
+
+  <!-- Script ligero para actualizar el badge de Favoritos desde localStorage -->
+  <script>
+    (function(){
+      function updateFavBadge(){
+        var el = document.querySelector('.fav-count');
+        if(!el) return;
+        try{
+          var raw = localStorage.getItem('cronox:favs');
+          var arr = raw ? JSON.parse(raw) : [];
+          var count = Array.isArray(arr) ? arr.length : 0;
+          if(count > 0){
+            el.textContent = String(count);
+            el.hidden = false;
+          }else{
+            el.hidden = true;
+          }
+        }catch(e){
+          el.hidden = true;
+        }
+      }
+      document.addEventListener('visibilitychange', function(){
+        if(document.visibilityState === 'visible') updateFavBadge();
+      });
+      window.addEventListener('storage', function(e){
+        if(e.key === 'cronox:favs') updateFavBadge();
+      });
+      window.addEventListener('DOMContentLoaded', updateFavBadge, {once:true});
     })();
   </script>
 
