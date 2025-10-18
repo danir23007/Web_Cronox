@@ -48,7 +48,7 @@ html,body{margin:0;padding:0;background:#000;color:#fff}
 .topbar--hero{background:rgba(0,0,0,0.35);border-bottom:1px solid rgba(255,255,255,.08);backdrop-filter:saturate(120%) blur(6px);box-shadow:0 2px 12px rgba(0,0,0,0.25);}
 .topbar--page{background:#000;border-bottom:1px solid rgba(255,255,255,.1);backdrop-filter:none;box-shadow:0 2px 16px rgba(0,0,0,0.45);}
 .topbar__left{display:flex;gap:12px;align-items:center}
-.topbar__right{justify-self:end;display:flex;gap:16px}
+.topbar__right{justify-self:end;display:flex;gap:16px;align-items:center}
 .topbar__link{color:var(--muted);text-decoration:none;font:500 14px/1 system-ui;}
 .topbar__link:hover{color:#fff}
 
@@ -327,7 +327,7 @@ a.product-card:focus-visible{
 .icon-btn .icon line,
 .icon-btn .icon path{ transform:none !important; }
 
-/* Icono shopping bag */
+/* ===== Icono shopping bag ===== */
 .icon-bag {
   width: 22px;
   height: 22px;
@@ -356,6 +356,37 @@ a.product-card:focus-visible{
   min-width: 16px;
   text-align: center;
 }
+
+/* ===== Icono favoritos (estrella) ===== */
+.icon-star{
+  width:22px;
+  height:22px;
+  stroke: currentColor !important;
+  fill: none !important;
+  vertical-align: middle;
+  transition: opacity .2s ease, transform .2s ease;
+}
+.topbar__fav{
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: #fff;
+}
+.topbar__fav:hover .icon-star{ opacity:.8; transform: scale(1.04); }
+.topbar__fav .fav-count{
+  position:absolute;
+  top:-4px;
+  right:-10px;
+  background:#fff;
+  color:#000;
+  border-radius:10px;
+  font:700 10px/1 system-ui;
+  padding:1px 5px;
+  min-width:16px;
+  text-align:center;
+}
+
 /* ===== Heading Tienda ===== */
 .store-heading {
   text-align: center;
@@ -371,36 +402,26 @@ a.product-card:focus-visible{
 }
 
 @keyframes fadeInHeading {
-  0% {
-    opacity: 0;
-    transform: translateY(10px);
-    filter: blur(4px);
-  }
-  100% {
-    opacity: 1;
-    transform: translateY(0);
-    filter: blur(0);
-  }
+  0% { opacity: 0; transform: translateY(10px); filter: blur(4px); }
+  100% { opacity: 1; transform: translateY(0); filter: blur(0); }
 }
-/* ===== Product image responsiva: grande, proporcional y sin recortes ===== */
-/* La imagen ocupa un “marco” proporcional que escala con la tarjeta.        */
-/* En desktop usamos 4:5 (alto fashion). En móvil acercamos a 1:1 para más llenado. */
 
+/* ===== Product image responsiva: grande, proporcional y sin recortes ===== */
 .product-card{
-  position: relative;               /* por si en el futuro añades efectos */
-  overflow: hidden;                 /* seguridad: nada se sale de la tarjeta */
+  position: relative;
+  overflow: hidden;
 }
 
 /* Reglas base para todas las vistas */
 .product-img{
   display: block !important;
   width: 100% !important;
-  height: auto !important;          /* elimina alturas fijas previas */
-  aspect-ratio: 4 / 5 !important;   /* marco proporcional en desktop/tablet */
-  object-fit: contain !important;   /* nunca recorta, nunca deforma */
+  height: auto !important;
+  aspect-ratio: 4 / 5 !important;
+  object-fit: contain !important;
   object-position: center center !important;
-  background: #fff !important;      /* mantiene tu base blanca */
-  transform: none !important;       /* por si había zooms previos */
+  background: #fff !important;
+  transform: none !important;
 }
 
 /* Footer compacto para dar más protagonismo a la imagen */
@@ -413,29 +434,21 @@ a.product-card:focus-visible{
   font-size: 12px !important;
 }
 
-/* —— Ajustes por breakpoint —— */
 /* Tablet: mantenemos 4:5 */
 @media (max-width: 1024px){
-  .product-img{
-    aspect-ratio: 4 / 5 !important;
-  }
+  .product-img{ aspect-ratio: 4 / 5 !important; }
 }
 
-/* Móvil: acercamos a cuadrado para llenar más sin recortar */
+/* Móvil: acercamos a cuadrado para llenar más sin recorte */
 @media (max-width: 640px){
-  .product-img{
-    aspect-ratio: 1 / 1.05 !important; /* casi cuadrado -> se ve más grande */
-    /* height sigue siendo auto, todo escala con el ancho de la tarjeta */
-  }
+  .product-img{ aspect-ratio: 1 / 1.05 !important; }
   .product-name{ font-size: 11.5px !important; }
   .product-price{ font-size: 11.5px !important; }
 }
 
 /* Móvil pequeño */
 @media (max-width: 480px){
-  .product-img{
-    aspect-ratio: 1 / 1 !important; /* cuadrado puro: ocupa máximo sin recorte */
-  }
+  .product-img{ aspect-ratio: 1 / 1 !important; }
   .product-name{ font-size: 11px !important; }
   .product-price{ font-size: 11px !important; }
 }
