@@ -1,5 +1,5 @@
 // ======================================================
-// assets/products.js — CRONOX STORE (grid + filtros + enlaces a producto.html)
+// assets/products.js — Grid + filtros + enlaces a PDP + scroll a última vista
 // ======================================================
 (function () {
   const productsGrid = document.getElementById("productsGrid");
@@ -9,6 +9,8 @@
   const searchForm = document.getElementById("searchForm");
   const searchInput = document.getElementById("searchInput");
 
+  const RETURN_KEY = "cronox_scroll_to"; // <- lee el id guardado en la PDP
+
   const norm = (s) =>
     (s || "").toString().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
 
@@ -16,7 +18,7 @@
     return new Intl.NumberFormat("es-ES",{style:"currency",currency:"EUR"}).format(n);
   }
 
-  // === Catálogo actual (igual que en tu PDP) ===
+  // === Catálogo actual (igual que en la PDP) ===
   const PRODUCTS = [
     {
       id: "camiseta-washed-gris",
@@ -41,15 +43,14 @@
       desc: "Camiseta premium lavado negro, corte oversized y tacto suave."
     }
   ];
-  // Exponer para producto.html
-  window.CRONOX_PRODUCTS = PRODUCTS;
+  window.CRONOX_PRODUCTS = PRODUCTS; // para PDP
 
-  // ---- Estado búsqueda inicial (?q=) ----
+  // ---- Búsqueda inicial (?q=) ----
   const url = new URL(window.location);
   const initialQueryRaw  = url.searchParams.get("q") || "";
   if (searchInput && initialQueryRaw) searchInput.value = initialQueryRaw;
 
-  // ---- Crear tarjeta como LINK a producto.html ----
+  // ---- Tarjeta como LINK a producto.html ----
   function createCard(p) {
     const a = document.createElement("a");
     a.href = `producto.html?id=${encodeURIComponent(p.id)}`;
@@ -93,6 +94,9 @@
     const frag = document.createDocumentFragment();
     list.forEach((p) => frag.appendChild(createCard(p)));
     productsGrid.appendChild(frag);
+
+    // Tras render: si hay marca de retorno, desplazarse a esa tarjeta
+    scrollToLastViewed();
   }
 
   // ---- Filtros + Búsqueda ----
@@ -136,7 +140,49 @@
     renderProducts(out);
   }
 
-  // Eventos
+  // ---- Scroll a última vista (con resaltado) ----
+  function ensureHighlightStyles() {
+    if (document.getElementById("cronox-card-flash")) return;
+    const css = `
+      .cronox-flash {
+        outline: 2px solid rgba(255,255,255,.85);
+        box-shadow: 0 0 0 6px rgba(255,255,255,.18);
+        transition: outline-color .6s ease, box-shadow .6s ease, transform .2s ease;
+      }
+    `;
+    const style = document.createElement("style");
+    style.id = "cronox-card-flash";
+    style.textContent = css;
+    document.head.appendChild(style);
+  }
+
+  function scrollToLastViewed() {
+    let pid = null;
+    try { pid = sessionStorage.getItem(RETURN_KEY); } catch {}
+    if (!pid) return;
+
+    // Limpia inmediatamente para no repetir en futuras visitas
+    try { sessionStorage.removeItem(RETURN_KEY); } catch {}
+
+    // Espera a que el navegador pinte
+    requestAnimationFrame(() => {
+      const card = productsGrid?.querySelector(`.product-card[data-id="${CSS.escape(pid)}"]`);
+      if (!card) return;
+
+      // Ajuste por topbar: usa scrollMarginTop para evitar quedar oculto
+      card.style.scrollMarginTop = "84px";
+
+      const prefersReduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      card.scrollIntoView({ behavior: prefersReduced ? "auto" : "smooth", block: "center" });
+
+      // Resalta levemente la tarjeta
+      ensureHighlightStyles();
+      card.classList.add("cronox-flash");
+      setTimeout(() => { card.classList.remove("cronox-flash"); }, 1400);
+    });
+  }
+
+  // ---- Eventos
   if (searchForm) {
     searchForm.addEventListener("submit", (e) => {
       e.preventDefault();
