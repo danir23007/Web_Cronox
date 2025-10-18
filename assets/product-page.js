@@ -1,11 +1,11 @@
 // ====================================================== 
-// assets/product-page.js — Página de producto + carrito (versión final compatible con nuevo producto.html)
+// assets/product-page.js — PDP + carrito + relacionados + back suave
 // CRONOX
 // ======================================================
 (function () {
   const CART_KEY = "cronox_cart";
 
-  // --- Referencias de la PDP ---
+  // --- Referencias principales ---
   const pImage = document.getElementById("pImage");
   const pName  = document.getElementById("pName");
   const pPrice = document.getElementById("pPrice");
@@ -14,58 +14,27 @@
   const pQty   = document.getElementById("pQty");
   const pAdd   = document.getElementById("pAdd");
   const toast  = document.getElementById("toast");
+  const relatedGrid = document.getElementById("relatedGrid");
 
-  // --- Catálogo base (igual que en products.js) ---
-  const PRODUCTS = window.CRONOX_PRODUCTS || [
-    {
-      id: "camiseta-washed-gris",
-      name: "Camiseta Washed Gris",
-      price: 34.95,
-      priceLabel: "34,95 €",
-      image: "assets/products/camiseta_washed_gris.png",
-      sizes: ["s", "m", "l", "xl"],
-      color: "gris",
-      desc: "Camiseta premium lavado gris, corte oversized y tacto suave."
-    },
-    {
-      id: "camiseta-washed-negra",
-      name: "Camiseta Washed Negra",
-      price: 34.95,
-      priceLabel: "34,95 €",
-      image: "assets/products/camiseta_washed_negra.png",
-      sizes: ["s", "m", "l", "xl"],
-      color: "negro",
-      desc: "Camiseta premium lavado negro, corte oversized y tacto suave."
-    }
-  ];
+  // --- Catálogo (inyectado desde index o fallback local del HTML) ---
+  const PRODUCTS = Array.isArray(window.CRONOX_PRODUCTS) ? window.CRONOX_PRODUCTS : [];
 
   // --- Utils ---
   function getId() {
-    try {
-      const url = new URL(window.location.href);
-      return url.searchParams.get("id") || "";
-    } catch {
-      return "";
-    }
+    try { return new URL(window.location.href).searchParams.get("id") || ""; }
+    catch { return ""; }
   }
-
   function money(n) {
     const v = Number(n) || 0;
-    try {
-      return v.toLocaleString("es-ES", { style: "currency", currency: "EUR" });
-    } catch {
-      return `${v} €`;
-    }
+    try { return v.toLocaleString("es-ES", { style: "currency", currency: "EUR" }); }
+    catch { return `${v} €`; }
   }
-
   function setPageTitle(p) {
     try {
       if (!p) return;
       document.title = `${p.name} — CRONOX`;
       const metaDesc = document.querySelector('meta[name="description"]');
-      if (metaDesc) {
-        metaDesc.setAttribute("content", `${p.name} · ${p.desc || "Producto CRONOX"}`);
-      }
+      if (metaDesc) metaDesc.setAttribute("content", `${p.name} · ${p.desc || "Producto CRONOX"}`);
     } catch {}
   }
 
@@ -74,14 +43,12 @@
     try {
       const raw = localStorage.getItem(CART_KEY);
       const cart = raw ? JSON.parse(raw) : [];
-
       const idx = cart.findIndex(x => x.id === item.id && x.size === item.size);
       if (idx >= 0) {
         cart[idx].qty = (Number(cart[idx].qty) || 0) + (Number(item.qty) || 1);
       } else {
         cart.push({ ...item, qty: Number(item.qty) || 1 });
       }
-
       localStorage.setItem(CART_KEY, JSON.stringify(cart));
       window.dispatchEvent(new Event("cart:updated"));
     } catch (e) {
@@ -89,7 +56,6 @@
       alert("No se pudo guardar el carrito en este navegador.");
     }
   }
-
   function showToast(msg) {
     if (!toast) return;
     toast.textContent = msg;
@@ -97,30 +63,76 @@
     setTimeout(() => toast.classList.remove("show"), 1800);
   }
 
-  // --- Render del producto ---
+  // --- Relacionados ---
+  function similarityScore(a, b) {
+    let score = 0;
+    // Mismo color
+    if (a.color && b.color && a.color === b.color) score += 1;
+    // Coincidencia de categoría
+    const ac = Array.isArray(a.categories) ? a.categories : [];
+    const bc = Array.isArray(b.categories) ? b.categories : [];
+    if (ac.length && bc.length && ac.some(c => bc.includes(c))) score += 2;
+    return score;
+  }
+  function getRelated(current, max = 4) {
+    const pool = PRODUCTS.filter(x => x.id !== current.id);
+    return pool
+      .map(x => ({ p: x, s: similarityScore(current, x) }))
+      .sort((u, v) => v.s - u.s)
+      .slice(0, max)
+      .map(o => o.p);
+  }
+  function cardHTML(p) {
+    return `
+      <a class="product-card" href="producto.html?id=${encodeURIComponent(p.id)}" aria-label="${p.name}">
+        <img class="product-img" src="${p.image}" alt="${p.name}" loading="lazy" decoding="async">
+        <h3 class="product-name">${p.name}</h3>
+        <p class="product-price">${p.priceLabel || money(p.price)}</p>
+      </a>
+    `;
+  }
+  function renderRelated(current) {
+    if (!relatedGrid) return;
+    const rel = getRelated(current, 4);
+    relatedGrid.innerHTML = rel.map(cardHTML).join("");
+  }
+
+  // --- Render PDP ---
   function render(p) {
     if (!p) return;
-
-    // Pintar imagen, texto, precio, descripción
     if (pImage) { pImage.src = p.image; pImage.alt = p.name || ""; }
     if (pName)  pName.textContent  = p.name || "";
     if (pPrice) pPrice.textContent = p.priceLabel || money(p.price);
     if (pDesc)  pDesc.textContent  = p.desc || "";
 
-    // Tallas dinámicas
     if (pSize) {
       const sizes = Array.isArray(p.sizes) && p.sizes.length ? p.sizes : ["m"];
       pSize.innerHTML = sizes.map(s => `<option value="${s.toUpperCase()}">${s.toUpperCase()}</option>`).join("");
     }
-
-    // Cantidad por defecto
     if (pQty) pQty.value = "1";
 
-    // Título y meta
     setPageTitle(p);
+    renderRelated(p);
 
-    // Scroll arriba
     window.scrollTo({ top: 0, left: 0, behavior: "instant" });
+  }
+
+  // --- Back suave (fade-out) ---
+  function setupBackLinks() {
+    const links = document.querySelectorAll('a.js-back[href^="index.html#store"]');
+    links.forEach(a => {
+      a.addEventListener("click", (e) => {
+        // Respetar reduced motion
+        const prefersReduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+        if (prefersReduced) return; // navegación normal
+
+        e.preventDefault();
+        document.documentElement.classList.add("page-exit");
+        document.body.classList.add("page-exit");
+        const href = a.getAttribute("href");
+        setTimeout(() => { window.location.href = href; }, 220);
+      });
+    });
   }
 
   // --- Init ---
@@ -137,8 +149,7 @@
     pAdd?.addEventListener("click", () => {
       const size = pSize?.value || "M";
       const qty  = Math.max(1, parseInt(pQty?.value || "1", 10));
-
-      const item = {
+      addToCart({
         id: p.id,
         name: p.name,
         price: Number(p.price) || 0,
@@ -146,11 +157,11 @@
         image: p.image,
         size,
         qty
-      };
-
-      addToCart(item);
+      });
       showToast("Añadido al carrito ✓");
     });
+
+    setupBackLinks();
   }
 
   init();
