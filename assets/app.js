@@ -26,9 +26,7 @@
     filtersPanel.classList.add("black-menu");
     filtersPanel.classList.remove("filters");
 
-    // Si ya hemos inyectado estilos, no repetir
     if (document.getElementById("cronox-blackmenu-style")) return;
-
     const css = `
 #filtersPanel.black-menu{
   position: fixed !important;
@@ -76,7 +74,6 @@
 }
 body.no-scroll{ overflow: hidden !important; }
     `.trim();
-
     const style = document.createElement("style");
     style.id = "cronox-blackmenu-style";
     style.textContent = css;
@@ -116,27 +113,22 @@ body.no-scroll{ overflow: hidden !important; }
   }
 
   // ===== Menú negro de categorías (pantalla completa) =========================
+  let _openingGuard = false; // evita cerrar por el mismo click que lo abre
   function isFiltersOpen(){ return !!filtersPanel && filtersPanel.classList.contains("is-open"); }
 
   function openFilters() {
     if (!filtersPanel) return;
 
-    // 1) quitar hidden y asegurar display/visibility saneados
-    filtersPanel.hidden = false;
-    filtersPanel.style.display = "grid";
-    filtersPanel.style.visibility = "visible";
-    // limpiar posibles restos de CSS legacy inline
-    filtersPanel.style.opacity = "";
-    filtersPanel.style.pointerEvents = "";
-    filtersPanel.style.transform = "";
+    filtersPanel.hidden = false;              // 1) visible
+    void filtersPanel.offsetWidth;            // 2) reflow para transiciones
 
-    // 2) forzar reflow para que la transición arranque desde base
-    void filtersPanel.offsetWidth;
-
-    // 3) abrir
-    filtersPanel.classList.add("is-open");
+    filtersPanel.classList.add("is-open");    // 3) abrir
     btnMenu?.setAttribute("aria-expanded", "true");
     lockScroll();
+
+    // Guard: ignorar cualquier click de fondo durante ~1 frame humano
+    _openingGuard = true;
+    setTimeout(() => { _openingGuard = false; }, 300);
 
     // Enfocar el primer enlace
     const firstLink = $(".black-menu__link", filtersPanel);
@@ -145,28 +137,20 @@ body.no-scroll{ overflow: hidden !important; }
 
   function closeFilters() {
     if (!filtersPanel) return;
-
     filtersPanel.classList.remove("is-open");
     btnMenu?.setAttribute("aria-expanded", "false");
 
-    // 4) Espera transición y oculta/limpia
     setTimeout(() => {
       filtersPanel.hidden = true;
-      // Limpieza por si quedara algo de inline
-      filtersPanel.style.display = "";
-      filtersPanel.style.visibility = "";
       unlockScroll();
       btnMenu?.focus();
-    }, 260); // > .22s por seguridad
+    }, 260); // > .22s de CSS
   }
-
-  // Exponer helpers de test en consola
-  window.__testOpen = openFilters;
-  window.__testClose = closeFilters;
 
   // Toggle desde el botón hamburguesa
   btnMenu?.addEventListener("click", (e) => {
     e.preventDefault();
+    e.stopPropagation(); // que este click no burbujee al fondo del menú
     isFiltersOpen() ? closeFilters() : openFilters();
   });
 
@@ -180,12 +164,14 @@ body.no-scroll{ overflow: hidden !important; }
 
   // Cerrar al hacer clic en cualquier enlace del menú (dejar navegar)
   filtersPanel?.addEventListener("click", (e) => {
+    if (_openingGuard) return; // ignora el click que disparó la apertura
     const a = e.target.closest("a.black-menu__link");
     if (a) closeFilters();
   });
 
   // Cerrar si se hace clic en el fondo negro (fuera de la lista)
   filtersPanel?.addEventListener("click", (e) => {
+    if (_openingGuard) return;
     const list = $(".black-menu__list", filtersPanel);
     if (list && !list.contains(e.target)) closeFilters();
   });
@@ -224,10 +210,6 @@ body.no-scroll{ overflow: hidden !important; }
   });
 
   // ===== Topbar states (transparente / translúcida / opaca) ====================
-  // Reglas:
-  // - Transparente: en la parte más alta del documento (scroll <= 2px)
-  // - Translúcida (.topbar--hero): mientras el topbar solape el hero (vídeo)
-  // - Opaca (.topbar--page): al salir del hero
   function getTopbarHeight() {
     const cs = getComputedStyle(document.documentElement);
     const v = cs.getPropertyValue("--topbar-h").trim() || "64px";
@@ -247,22 +229,14 @@ body.no-scroll{ overflow: hidden !important; }
     const y = window.scrollY || window.pageYOffset || 0;
     const topbarH = getTopbarHeight();
 
-    // Transparente si estás literalmente arriba del todo (sensibilidad 2px)
-    if (y <= 2) {
-      setTopbarState("topbar--transparent");
-      return;
-    }
+    if (y <= 2) { setTopbarState("topbar--transparent"); return; }
 
-    // ¿Sigue el hero por debajo del topbar?
     const heroRect = hero.getBoundingClientRect();
     const heroBottomFromTopbar = heroRect.bottom - topbarH;
 
-    // Si la parte inferior del hero aún está por debajo del borde inferior del topbar,
-    // seguimos sobre el video -> estado translúcido.
     if (heroBottomFromTopbar > 0) {
       setTopbarState("topbar--hero");
     } else {
-      // Ya hemos pasado el hero -> opaca
       setTopbarState("topbar--page");
     }
   }
@@ -281,29 +255,23 @@ body.no-scroll{ overflow: hidden !important; }
       if (preloader) preloader.style.display = "none";
     }
 
-    // Evitar restauración del scroll por el navegador
     try { window.history.scrollRestoration = "manual"; } catch(e){}
 
     window.addEventListener("load", () => {
       hidePreloader();
 
-      // >>> IMP: siempre que se entra, limpiar #store para no saltar a la tienda
       if (location.hash) {
         const clean = location.pathname + location.search; // sin hash
         history.replaceState(null, "", clean);
       }
 
-      // Arrancar arriba del todo para que se vea el vídeo héroe
       window.scrollTo({ top: 0, left: 0, behavior: "instant" });
 
-      // Recalcula estado del topbar una vez que todo pintó
       updateTopbarState();
-      // Ajuste por si el video tarda en calcular tamaño
       setTimeout(updateTopbarState, 100);
     }, { once: true });
 
     window.addEventListener("DOMContentLoaded", () => {
-      // Estado inicial por si hay reflow antes del load
       updateTopbarState();
       setTimeout(updateTopbarState, 50);
     }, { once: true });
