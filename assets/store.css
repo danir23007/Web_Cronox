@@ -26,7 +26,7 @@ html,body{margin:0;padding:0;background:#000;color:#fff}
 .overlay.overlay--page{background:var(--overlay-page)}
 
 /* ===== Topbar ===== */
-.topbar{position:fixed;top:0;left:0;right:0;height:var(--topbar-h);display:grid;grid-template-columns:1fr auto 1fr;align-items:center;padding:0 14px;z-index:1001;transition:background-color .35s ease,border-color .35s ease,backdrop-filter .35s ease,box-shadow .35s ease;}
+.topbar{position:fixed;top:0;left:0;right:0;height:var(--topbar-h);display:grid;grid-template-columns:1fr auto 1fr;align-items:center;padding:0 14px;z-index:1001;transition:background-color .35s ease,border-color .35s ease,backdrop-filter .35s ease,box-shadow .35s ease;color:#fff;}
 .topbar--transparent{background:transparent;border-bottom:1px solid transparent;backdrop-filter:none;box-shadow:none;}
 .topbar--hero{background:rgba(0,0,0,0.35);border-bottom:1px solid rgba(255,255,255,.08);backdrop-filter:saturate(120%) blur(6px);box-shadow:0 2px 12px rgba(0,0,0,0.25);}
 .topbar--page{background:#000;border-bottom:1px solid rgba(255,255,255,.1);backdrop-filter:none;box-shadow:0 2px 16px rgba(0,0,0,0.45);}
@@ -87,7 +87,6 @@ a.product-card{display:block;text-decoration:none;color:inherit;cursor:pointer;}
 .product-card{
   position:relative;overflow:hidden;
   background:#fff;color:#111;
-  /* borde negro sólido para que coincida con el footer */
   border:1px solid #000;
   border-radius:0;
   box-shadow:0 6px 18px rgba(0,0,0,.08);
@@ -96,28 +95,24 @@ a.product-card{display:block;text-decoration:none;color:inherit;cursor:pointer;}
 }
 .product-card:hover{transform:translateY(-3px);box-shadow:0 10px 26px rgba(0,0,0,.12);}
 
-/* ==== Envoltorio de imagen (index) — sella la unión con el pie ==== */
+/* ==== Envoltorio de imagen (index) ==== */
 .product-media{
   position:relative;
   background:#fff;
-  line-height:0;                 /* evita cualquier interlineado residual */
-  border-bottom:2px solid #000;  /* ✅ tapa subpíxeles entre imagen y footer */
+  line-height:0;
+  border-bottom:2px solid #000;
 }
 
-/* Imagen blanca (index y favoritos/relacionados) */
+/* Imagen blanca */
 .product-img{width:100%;height:420px;object-fit:contain;background:#fff;display:block;border:none;}
-/* Para cartas que NO usan .product-media (favoritos / relacionados): */
-.product-card > .product-img{ border-bottom:2px solid #000; }  /* ✅ misma solución */
+.product-card > .product-img{ border-bottom:2px solid #000; }
 @media (max-width:1024px){.product-img{height:360px;}}
 @media (max-width:640px){.product-img{height:280px;}}
 @media (max-width:480px){.product-img{height:240px;}}
 
 /* Footer negro continuo */
 .product-name,.product-price{display:block;width:100%;background:#000;color:#fff;text-align:center;margin:0;border:none;}
-.product-name{
-  font-weight:800;font-size:12px;text-transform:uppercase;letter-spacing:.06em;
-  padding:12px 12px 4px;
-}
+.product-name{font-weight:800;font-size:12px;text-transform:uppercase;letter-spacing:.06em;padding:12px 12px 4px;}
 .product-price{font-weight:700;font-size:12px;padding:0 12px 12px;}
 
 /* ===== Icon buttons ===== */
@@ -156,75 +151,42 @@ a.product-card{display:block;text-decoration:none;color:inherit;cursor:pointer;}
 /* Botón + (añadir al carrito) — sobre la zona blanca */
 .fav-add{
   position:absolute;
-  bottom:64px;     /* altura aprox. del footer (nombre+precio) */
+  bottom:64px;
   right:12px;
   background:none;border:none;color:#000;font-size:26px;font-weight:400;line-height:1;cursor:pointer;
   transition:transform .25s ease, opacity .25s ease;z-index:3;
 }
 .fav-add:hover{transform:scale(1.2);opacity:.8;}
 
-
-/* ============================================================
-   PDP — “También puede interesarte”
-   (Forzamos estilo de tarjetas y fondo negro puro)
-============================================================ */
-.pdp-related{
-  background:#000;               /* negro puro en todo el bloque */
-  padding:50px 0 70px;
-  border-top:2px solid #000;     /* continuidad con las tarjetas */
-}
-.pdp-related__title{
-  margin:0 0 28px;
-  color:#fff;
-  font:800 18px/1.3 system-ui, sans-serif;
-  text-transform:uppercase;
-  letter-spacing:.12em;
-  text-align:center;
-}
-
-/* Centrado y ancho controlado del grid */
-.pdp-related .products-grid{
-  max-width:1200px;
-  margin:0 auto;
-  padding:0 12px;
-}
-
-/* Tarjeta en relacionados igual que en la tienda (pisamos product-page.css) */
-.pdp-related .product-card{
-  background:#fff !important;
-  border:1px solid #000 !important;
-  border-radius:0 !important;
-  box-shadow:0 6px 18px rgba(0,0,0,.08);
-  overflow:hidden;
-}
-
-/* Imagen blanca y unión perfecta con el footer negro */
-.pdp-related .product-img{
-  width:100%;
-  background:#fff !important;
-  display:block;
-  border:0;
-  border-bottom:2px solid #000;  /* evita líneas grises */
-  /* dejamos el alto que marque product-page, aquí no forzamos */
-}
-
-/* Footer negro puro y texto centrado respecto a la tarjeta */
+/* ===== PDP — “También puede interesarte” ===== */
+.pdp-related{background:#000;padding:50px 0 70px;border-top:2px solid #000;}
+.pdp-related__title{margin:0 0 28px;color:#fff;font:800 18px/1.3 system-ui, sans-serif;text-transform:uppercase;letter-spacing:.12em;text-align:center;}
+.pdp-related .products-grid{max-width:1200px;margin:0 auto;padding:0 12px;}
+.pdp-related .product-card{background:#fff!important;border:1px solid #000!important;border-radius:0!important;box-shadow:0 6px 18px rgba(0,0,0,.08);overflow:hidden;}
+.pdp-related .product-img{width:100%;background:#fff!important;display:block;border:0;border-bottom:2px solid #000;}
 .pdp-related .product-name,
-.pdp-related .product-price{
-  background:#000 !important;
-  color:#fff !important;
-  text-align:center !important;
-  margin:0 !important;
-  border:none !important;
+.pdp-related .product-price{background:#000!important;color:#fff!important;text-align:center!important;margin:0!important;border:none!important;}
+.pdp-related .product-name{font-weight:800;font-size:12px;letter-spacing:.06em;padding:12px 12px 4px!important;}
+.pdp-related .product-price{font-weight:700;font-size:12px;padding:0 12px 12px!important;}
+
+/* ===== Perfil (icono de usuario) ===== */
+.topbar__profile{
+  position:relative;
+  display:inline-flex;
+  align-items:center;
+  gap:4px;
+  color:#fff;
+  text-decoration:none;
 }
-.pdp-related .product-name{
-  font-weight:800;
-  font-size:12px;
-  letter-spacing:.06em;
-  padding:12px 12px 4px !important;
+.icon-user{
+  width:22px;
+  height:22px;
+  stroke:currentColor !important;
+  fill:none !important;
+  vertical-align:middle;
+  transition:opacity .2s ease, transform .2s ease;
 }
-.pdp-related .product-price{
-  font-weight:700;
-  font-size:12px;
-  padding:0 12px 12px !important;
+.topbar__profile:hover .icon-user{
+  opacity:.8;
+  transform:scale(1.04);
 }
