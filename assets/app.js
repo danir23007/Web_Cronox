@@ -2,31 +2,32 @@
 (() => {
   "use strict";
 
-  // Helpers
-  const $  = (s, r = document) => r.querySelector(s);
+  const $ = (s, r = document) => r.querySelector(s);
 
-  // Elements
-  const topbar        = $("#topbar");
-  const hero          = $("#hero");
-  const overlay       = $("#overlay");
+  const topbar       = $("#topbar");
+  const hero         = $("#hero");
+  const overlay      = $("#overlay");
 
-  const btnMenu       = $("#btnMenu");          // botón 3 líneas
-  const filtersPanel  = $("#filtersPanel");     // <aside id="filtersPanel"> (black-menu)
+  const btnMenu      = $("#btnMenu");
+  const filtersPanel = $("#filtersPanel");
 
-  const btnSearch     = $("#btnSearch");
-  const searchBar     = $("#searchBar");
-  const searchForm    = $("#searchForm");
-  const searchInput   = $("#searchInput");
+  const btnSearch    = $("#btnSearch");
+  const searchBar    = $("#searchBar");
+  const searchForm   = $("#searchForm");
+  const searchInput  = $("#searchInput");
 
   console.log("[CRONOX] app.js cargado — init");
 
-  // ===== 0) Asegurar estilos del black-menu (override con !important) =========
+  // ===== Asegurar estilos/estado del black-menu ==================================
   (function ensureBlackMenuStyles(){
     if (!filtersPanel) { console.warn("[CRONOX] No existe #filtersPanel"); return; }
-
-    // Garantiza clase .black-menu y elimina restos antiguos de .filters
+    // forzar clases correctas
     filtersPanel.classList.add("black-menu");
     filtersPanel.classList.remove("filters");
+
+    // limpiar estados heredados
+    filtersPanel.classList.remove("is-open");
+    document.body.classList.remove("filters-open");
 
     if (document.getElementById("cronox-blackmenu-style")) return;
     const css = `
@@ -82,7 +83,7 @@ body.no-scroll{ overflow: hidden !important; }
     document.head.appendChild(style);
   })();
 
-  // ===== Overlay control (para la búsqueda; el black-menu NO usa overlay) =====
+  // ===== Overlay (solo búsqueda) =================================================
   function showOverlay(mode = "page") {
     if (!overlay) return;
     overlay.hidden = false;
@@ -95,11 +96,9 @@ body.no-scroll{ overflow: hidden !important; }
     overlay.classList.remove("overlay--hero", "overlay--page");
   }
 
-  // ===== Body scroll lock + compensador de scroll =============================
+  // ===== Scroll lock con compensación ===========================================
   let _bodyPadRightPrev = "";
-  function getScrollbarW(){
-    return window.innerWidth - document.documentElement.clientWidth;
-  }
+  function getScrollbarW(){ return window.innerWidth - document.documentElement.clientWidth; }
   function lockScroll(){
     document.body.classList.add("no-scroll");
     const sw = getScrollbarW();
@@ -114,32 +113,29 @@ body.no-scroll{ overflow: hidden !important; }
     _bodyPadRightPrev = "";
   }
 
-  // ===== Menú negro de categorías (pantalla completa) =========================
-  let _openingGuard = false; // evita cerrar por el mismo click que lo abre
-  function isFiltersOpen(){ return !!filtersPanel && filtersPanel.classList.contains("is-open"); }
-
+  // ===== Black menu ==============================================================
+  let _openingGuard = false;
   function openFilters() {
     if (!filtersPanel) return;
 
-    // Estado visible y transición fiable
+    // visible + transición fiable
     filtersPanel.hidden = false;
     void filtersPanel.offsetWidth;
 
     filtersPanel.classList.add("is-open");
-    document.body.classList.add("filters-open"); // <- también en body (por si tu CSS usa esta clase)
+    document.body.classList.add("filters-open");
     btnMenu?.setAttribute("aria-expanded", "true");
     lockScroll();
 
     _openingGuard = true;
     setTimeout(() => { _openingGuard = false; }, 300);
 
-    // Enfocar primer enlace
-    const firstLink = $(".black-menu__link", filtersPanel);
+    // foco
+    const firstLink = filtersPanel.querySelector(".black-menu__link");
     firstLink?.focus();
 
     console.log("[CRONOX] Black menu -> OPEN");
   }
-
   function closeFilters() {
     if (!filtersPanel) return;
 
@@ -155,36 +151,34 @@ body.no-scroll{ overflow: hidden !important; }
     }, 260);
   }
 
-  // Toggle desde el botón hamburguesa
+  // 👇 Cambiamos el comportamiento: la hamburguesa **siempre abre**.
+  // (para descartar cualquier estado fantasma que haga creer que ya está abierto)
   btnMenu?.addEventListener("click", (e) => {
     e.preventDefault();
     e.stopPropagation();
-    isFiltersOpen() ? closeFilters() : openFilters();
+    openFilters();
   });
 
   // Cerrar con ESC
   window.addEventListener("keydown", (e) => {
-    if (e.key === "Escape") {
-      if (isFiltersOpen()) closeFilters();
-      if (searchBar && !searchBar.hidden) toggleSearch(false);
-    }
+    if (e.key === "Escape") closeFilters();
   });
 
-  // Cerrar al hacer clic en cualquier enlace del menú (dejar navegar)
+  // Cerrar al hacer clic en enlaces
   filtersPanel?.addEventListener("click", (e) => {
     if (_openingGuard) return;
     const a = e.target.closest("a.black-menu__link");
     if (a) closeFilters();
   });
 
-  // Cerrar si se hace clic en el fondo negro (fuera de la lista)
+  // Cerrar si clicas en el fondo negro (fuera de la lista)
   filtersPanel?.addEventListener("click", (e) => {
     if (_openingGuard) return;
-    const list = $(".black-menu__list", filtersPanel);
+    const list = filtersPanel.querySelector(".black-menu__list");
     if (list && !list.contains(e.target)) closeFilters();
   });
 
-  // ===== Buscador (barra superior, este SÍ usa overlay) ========================
+  // ===== Búsqueda ================================================================
   function toggleSearch(forceOpen = null) {
     if (!searchBar) return;
     const willOpen = forceOpen ?? searchBar.hidden;
@@ -202,88 +196,67 @@ body.no-scroll{ overflow: hidden !important; }
       btnSearch?.focus();
     }
   }
-
   btnSearch?.addEventListener("click", () => toggleSearch());
-
   searchForm?.addEventListener("submit", (e) => {
     e.preventDefault();
     const q = (searchInput?.value || "").trim();
-    // TODO: filtrar productos por q si lo necesitas.
+    // TODO: usar 'q' para filtrar si quieres
     toggleSearch(false);
   });
-
-  // Cierre al clicar overlay (solo afecta a búsqueda)
   overlay?.addEventListener("click", () => {
     if (searchBar && !searchBar.hidden) toggleSearch(false);
   });
 
-  // ===== Topbar states (transparente / translúcida / opaca) ====================
+  // ===== Topbar states ===========================================================
   function getTopbarHeight() {
     const cs = getComputedStyle(document.documentElement);
     const v = cs.getPropertyValue("--topbar-h").trim() || "64px";
     const n = parseFloat(v);
     return isNaN(n) ? 64 : n;
   }
-
   function setTopbarState(state) {
     if (!topbar) return;
     topbar.classList.remove("topbar--transparent", "topbar--hero", "topbar--page");
     topbar.classList.add(state);
   }
-
   function updateTopbarState() {
     if (!topbar || !hero) return;
-
     const y = window.scrollY || window.pageYOffset || 0;
     const topbarH = getTopbarHeight();
-
     if (y <= 2) { setTopbarState("topbar--transparent"); return; }
-
     const heroRect = hero.getBoundingClientRect();
     const heroBottomFromTopbar = heroRect.bottom - topbarH;
-
-    if (heroBottomFromTopbar > 0) {
-      setTopbarState("topbar--hero");
-    } else {
-      setTopbarState("topbar--page");
-    }
+    if (heroBottomFromTopbar > 0) setTopbarState("topbar--hero");
+    else setTopbarState("topbar--page");
   }
-
   window.addEventListener("scroll", updateTopbarState, { passive: true });
   window.addEventListener("resize", updateTopbarState);
   window.addEventListener("orientationchange", updateTopbarState);
 
-  // ===== Preloader + FORZAR HERO AL ENTRAR =====================================
+  // ===== Preloader + estado inicial =============================================
   (function preloaderAndScroll(){
     const preloader = $("#preloader");
     let tried = false;
-    function hidePreloader(){
-      if (tried) return;
-      tried = true;
-      if (preloader) preloader.style.display = "none";
-    }
-
+    function hidePreloader(){ if (tried) return; tried = true; if (preloader) preloader.style.display = "none"; }
     try { window.history.scrollRestoration = "manual"; } catch(e){}
-
     window.addEventListener("load", () => {
       hidePreloader();
-
       if (location.hash) {
-        const clean = location.pathname + location.search; // sin hash
+        const clean = location.pathname + location.search;
         history.replaceState(null, "", clean);
       }
-
       window.scrollTo({ top: 0, left: 0, behavior: "instant" });
-
+      // asegurar estado limpio
+      filtersPanel?.classList.remove("is-open");
+      document.body.classList.remove("filters-open");
+      filtersPanel && (filtersPanel.hidden = true);
       updateTopbarState();
       setTimeout(updateTopbarState, 100);
     }, { once: true });
-
     window.addEventListener("DOMContentLoaded", () => {
       updateTopbarState();
       setTimeout(updateTopbarState, 50);
     }, { once: true });
-
     window.addEventListener("error", () => setTimeout(hidePreloader, 0));
   })();
 
