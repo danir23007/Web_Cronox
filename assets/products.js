@@ -1,8 +1,8 @@
 // ======================================================
-// assets/products.js — Grid + filtros + enlaces a PDP + Quick-Add (+)
-// + scroll exacto al volver (back) y foco en última vista
+// assets/products.js — Grid + filtros + enlaces a PDP
 // + mini-galería en cards con flechas < y >
-// (v3)
+// + scroll exacto al volver (back) y foco en última vista
+// (v4) — SIN .card-plus ni overlay de Quick-Add
 // ======================================================
 (function () {
   const productsGrid = document.getElementById("productsGrid");
@@ -59,176 +59,14 @@
       desc: "Camiseta premium lavado negro, corte oversized y tacto suave."
     }
   ];
-  window.CRONOX_PRODUCTS = PRODUCTS; // para PDP
+  window.CRONOX_PRODUCTS = PRODUCTS; // para PDP si lo necesitas
 
   // ---- Búsqueda inicial (?q=) ----
   const url = new URL(window.location);
   const initialQueryRaw  = url.searchParams.get("q") || "";
   if (searchInput && initialQueryRaw) searchInput.value = initialQueryRaw;
 
-  // ======================================================
-  // Quick-Add DOM (panel blanco, orden vertical)
-  // ======================================================
-  let qaOverlay, qaPanel, qaClose, qaImg1, qaImg2, qaName, qaPrice, qaColor, qaSize, qaQty, qaAdd, qaLink;
-  let qaCurrentProduct = null;
-
-  function ensureQuickAddDOM() {
-    if (qaOverlay) return;
-
-    qaOverlay = document.createElement("div");
-    qaOverlay.className = "qa-overlay";
-    qaOverlay.id = "quickAdd";
-    qaOverlay.setAttribute("aria-hidden", "true");
-    qaOverlay.innerHTML = `
-      <div class="qa-panel" role="dialog" aria-modal="true">
-        <button class="qa-close" aria-label="Cerrar">×</button>
-
-        <!-- 1) Fotos arriba -->
-        <div class="qa-media">
-          <img id="qaImg1" alt="" loading="lazy" decoding="async">
-          <img id="qaImg2" alt="" loading="lazy" decoding="async">
-        </div>
-
-        <!-- 2) Nombre + precio -->
-        <div class="qa-info">
-          <h3 class="qa-name" id="qaName"></h3>
-          <p class="qa-price" id="qaPrice"></p>
-
-          <!-- 3) Color -->
-          <div class="qa-row">
-            <span class="qa-label">Color</span>
-            <select id="qaColor" class="qa-select"></select>
-          </div>
-
-          <!-- 4) Talla -->
-          <div class="qa-row">
-            <span class="qa-label">Talla</span>
-            <select id="qaSize" class="qa-select"></select>
-          </div>
-
-          <!-- 5) Añadir -->
-          <div class="qa-row" style="margin-top:6px">
-            <button id="qaAdd" class="qa-btn">Añadir al carrito</button>
-          </div>
-
-          <!-- 6) Ver detalles -->
-          <a id="qaLink" class="qa-muted-link" href="#" rel="nofollow">Ver detalles del producto</a>
-        </div>
-      </div>
-    `;
-    document.body.appendChild(qaOverlay);
-
-    qaPanel = qaOverlay.querySelector(".qa-panel");
-    qaClose = qaOverlay.querySelector(".qa-close");
-    qaImg1  = qaOverlay.querySelector("#qaImg1");
-    qaImg2  = qaOverlay.querySelector("#qaImg2");
-    qaName  = qaOverlay.querySelector("#qaName");
-    qaPrice = qaOverlay.querySelector("#qaPrice");
-    qaColor = qaOverlay.querySelector("#qaColor");
-    qaSize  = qaOverlay.querySelector("#qaSize");
-    qaQty   = document.createElement("input"); // cantidad 1
-    qaAdd   = qaOverlay.querySelector("#qaAdd");
-    qaLink  = qaOverlay.querySelector("#qaLink");
-
-    // Cerrar
-    qaClose.addEventListener("click", closeQuickAdd);
-    qaOverlay.addEventListener("click", (e) => {
-      if (!e.target.closest(".qa-panel")) closeQuickAdd();
-    });
-    window.addEventListener("keydown", (e) => {
-      if (qaOverlay.getAttribute("aria-hidden") === "false" && e.key === "Escape") closeQuickAdd();
-    });
-
-    // Añadir al carrito
-    qaAdd.addEventListener("click", () => {
-      if (!qaCurrentProduct) return;
-      const size = qaSize?.value || "M";
-      const color = qaColor?.value || qaCurrentProduct.color || null;
-      const qty  = 1;
-      addToCart({
-        id: qaCurrentProduct.id,
-        name: qaCurrentProduct.name,
-        price: Number(qaCurrentProduct.price) || 0,
-        priceLabel: qaCurrentProduct.priceLabel || euros(qaCurrentProduct.price),
-        image: qaCurrentProduct.image,
-        color,
-        size,
-        qty
-      });
-      qaAdd.disabled = true;
-      const prev = qaAdd.textContent;
-      qaAdd.textContent = "Añadido ✓";
-      setTimeout(() => { qaAdd.textContent = prev; qaAdd.disabled = false; }, 1200);
-    });
-
-    // Ver detalles
-    qaLink.addEventListener("click", (e) => {
-      e.preventDefault();
-      if (!qaCurrentProduct) return;
-      window.location.href = `producto.html?id=${encodeURIComponent(qaCurrentProduct.id)}`;
-    });
-  }
-
-  function openQuickAdd(product) {
-    ensureQuickAddDOM();
-    qaCurrentProduct = product;
-
-    // Imágenes (2 primeras; si falta la 2ª, repetimos la 1ª)
-    const imgs = Array.isArray(product.images) && product.images.length ? product.images : [product.image];
-    qaImg1.src = imgs[0];
-    qaImg1.alt = product.name;
-    qaImg2.src = imgs[1] || imgs[0];
-    qaImg2.alt = product.name;
-
-    // Nombre y precio
-    qaName.textContent  = product.name || "";
-    qaPrice.textContent = product.priceLabel || euros(product.price);
-
-    // Color
-    const colors = product.colors && product.colors.length ? product.colors : (product.color ? [product.color] : ["Único"]);
-    qaColor.innerHTML = colors.map(c => `<option value="${c}">${c.toString().toUpperCase()}</option>`).join("");
-
-    // Talla
-    const sizes = product.sizes && product.sizes.length ? product.sizes : ["m"];
-    qaSize.innerHTML = sizes.map(s => `<option value="${s.toUpperCase()}">${s.toUpperCase()}</option>`).join("");
-
-    // Link a detalle
-    qaLink.href = `producto.html?id=${encodeURIComponent(product.id)}`;
-
-    // Mostrar
-    qaOverlay.setAttribute("aria-hidden", "false");
-    document.body.style.overflow = "hidden";
-    qaClose.focus();
-  }
-
-  function closeQuickAdd() {
-    if (!qaOverlay) return;
-    qaOverlay.setAttribute("aria-hidden", "true");
-    document.body.style.overflow = "";
-    qaCurrentProduct = null;
-  }
-
-  // Carrito
-  function addToCart(item) {
-    try {
-      const raw = localStorage.getItem("cronox_cart");
-      const cart = raw ? JSON.parse(raw) : [];
-      const idx = cart.findIndex(x => x.id === item.id && x.size === item.size && x.color === item.color);
-      if (idx >= 0) {
-        cart[idx].qty = (Number(cart[idx].qty) || 0) + (Number(item.qty) || 1);
-      } else {
-        cart.push({ ...item, qty: Number(item.qty) || 1, addedAt: Date.now() });
-      }
-      localStorage.setItem("cronox_cart", JSON.stringify(cart));
-      if (typeof window.updateCartBadge === "function") window.updateCartBadge(cart.length);
-      window.dispatchEvent(new Event("cart:updated"));
-    } catch (e) {
-      console.error("[CRONOX] Error guardando en carrito:", e);
-      alert("No se pudo guardar el carrito en este navegador.");
-    }
-  }
-
-  // ======= Tarjeta con mini-galería + botón "+" =======
+  // ======= Tarjeta con mini-galería + botón "+" clásico (.fav-add) =======
   function createCard(p) {
     const a = document.createElement("a");
     a.href = `producto.html?id=${encodeURIComponent(p.id)}`;
@@ -289,17 +127,13 @@
       gallery.appendChild(next);
     }
 
-    // Botón "+" (Quick-Add)
+    // Botón "+" CLÁSICO (no navega; app.js gestiona el click)
     const plus = document.createElement("button");
-    plus.className = "card-plus";
+    plus.className = "fav-add";
     plus.type = "button";
     plus.setAttribute("aria-label", `Añadir rápido ${p.name}`);
     plus.textContent = "+";
-    plus.addEventListener("click", (ev) => {
-      ev.preventDefault();
-      ev.stopPropagation();
-      openQuickAdd(p);
-    });
+    // No añadimos listener aquí: app.js (delegación) maneja .fav-add para carrito
 
     media.appendChild(gallery);
     media.appendChild(plus);
