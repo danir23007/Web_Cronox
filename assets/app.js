@@ -1,4 +1,4 @@
-/* ========== CRONOX — Interacciones principales (drawer + topbar states) ========== */
+/* ========== CRONOX — Interacciones principales (black menu + search + topbar) ========== */
 (() => {
   "use strict";
 
@@ -11,15 +11,14 @@
   const overlay       = $("#overlay");
 
   const btnMenu       = $("#btnMenu");          // botón 3 líneas
-  const filtersPanel  = $("#filtersPanel");     // <aside id="filtersPanel">
-  const btnClose      = $("#btnCloseFilters");  // ✕ dentro del drawer
+  const filtersPanel  = $("#filtersPanel");     // <aside id="filtersPanel"> (black-menu)
 
   const btnSearch     = $("#btnSearch");
   const searchBar     = $("#searchBar");
   const searchForm    = $("#searchForm");
   const searchInput   = $("#searchInput");
 
-  // ===== Overlay control =======================================================
+  // ===== Overlay control (para la búsqueda; el black-menu NO usa overlay) =====
   function showOverlay(mode = "page") {
     if (!overlay) return;
     overlay.hidden = false;
@@ -36,57 +35,67 @@
   function lockScroll()   { document.body.classList.add("no-scroll"); }
   function unlockScroll() { document.body.classList.remove("no-scroll"); }
 
-  // ===== Drawer Filtros (lateral izquierdo) ===================================
+  // ===== Menú negro de categorías (pantalla completa) =========================
+  function isFiltersOpen(){ return !!filtersPanel && filtersPanel.classList.contains("is-open"); }
+
   function openFilters() {
     if (!filtersPanel) return;
-    filtersPanel.hidden = false;              // visible para permitir animación
-    filtersPanel.classList.add("is-open");    // CSS hace translateX(0)
+    // No usamos overlay para el black-menu
+    filtersPanel.hidden = false;             // visible para permitir animación
+    // forzar reflow para transición
+    void filtersPanel.offsetWidth;
+    filtersPanel.classList.add("is-open");
     btnMenu?.setAttribute("aria-expanded", "true");
-    showOverlay("page");
     lockScroll();
 
-    // Enfocar primer control útil
-    const firstFocusable =
-      $("button, [href], input, select, textarea, [tabindex]:not([tabindex='-1'])", filtersPanel) ||
-      btnClose;
-    firstFocusable?.focus();
+    // Enfocar el primer enlace de la lista para accesibilidad
+    const firstLink = $(".black-menu__link", filtersPanel);
+    firstLink?.focus();
   }
 
   function closeFilters() {
     if (!filtersPanel) return;
     filtersPanel.classList.remove("is-open");
     btnMenu?.setAttribute("aria-expanded", "false");
-    hideOverlay();
-    unlockScroll();
-
-    // Devolver foco al trigger por accesibilidad
-    btnMenu?.focus();
-    // Si quisieras ocultarlo del árbol tras la transición:
-    // setTimeout(() => { filtersPanel.hidden = true; }, 250);
+    // Ocultar tras la transición y liberar scroll
+    setTimeout(() => {
+      filtersPanel.hidden = true;
+      unlockScroll();
+      // devolver foco al trigger
+      btnMenu?.focus();
+    }, 220);
   }
 
-  btnMenu?.addEventListener("click", () => {
-    const open = filtersPanel?.classList.contains("is-open");
-    open ? closeFilters() : openFilters();
+  // Toggle desde el botón hamburguesa
+  btnMenu?.addEventListener("click", (e) => {
+    e.preventDefault();
+    isFiltersOpen() ? closeFilters() : openFilters();
   });
 
-  btnClose?.addEventListener("click", closeFilters);
-
-  // Cierre al clicar overlay
-  overlay?.addEventListener("click", () => {
-    if (filtersPanel?.classList.contains("is-open")) closeFilters();
-    if (searchBar && !searchBar.hidden) toggleSearch(false);
-  });
-
-  // Cierre con Esc
+  // Cerrar con ESC
   window.addEventListener("keydown", (e) => {
     if (e.key === "Escape") {
-      if (filtersPanel?.classList.contains("is-open")) closeFilters();
+      if (isFiltersOpen()) closeFilters();
       if (searchBar && !searchBar.hidden) toggleSearch(false);
     }
   });
 
-  // ===== Buscador (barra superior) ============================================
+  // Cerrar al hacer clic en cualquier enlace del menú (dejar navegar)
+  filtersPanel?.addEventListener("click", (e) => {
+    const a = e.target.closest("a.black-menu__link");
+    if (a) {
+      // cerramos visualmente; la navegación continúa
+      closeFilters();
+    }
+  });
+
+  // Cerrar si se hace clic en el fondo negro (fuera de la lista)
+  filtersPanel?.addEventListener("click", (e) => {
+    const list = $(".black-menu__list", filtersPanel);
+    if (list && !list.contains(e.target)) closeFilters();
+  });
+
+  // ===== Buscador (barra superior, este SÍ usa overlay) ========================
   function toggleSearch(forceOpen = null) {
     if (!searchBar) return;
     const willOpen = forceOpen ?? searchBar.hidden;
@@ -112,6 +121,12 @@
     const q = (searchInput?.value || "").trim();
     // TODO: filtrar productos por q si lo necesitas.
     toggleSearch(false);
+  });
+
+  // Cierre al clicar overlay (solo afecta a búsqueda)
+  overlay?.addEventListener("click", () => {
+    if (searchBar && !searchBar.hidden) toggleSearch(false);
+    // El black-menu no usa overlay, no lo tocamos aquí
   });
 
   // ===== Topbar states (transparente / translúcida / opaca) ====================
