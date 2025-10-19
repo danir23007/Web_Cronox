@@ -1,7 +1,8 @@
 // ======================================================
 // assets/products.js — Grid + filtros + enlaces a PDP + Quick-Add (+)
 // + scroll exacto al volver (back) y foco en última vista
-// (v2: "+" dentro de la imagen; Quick-Add panel blanco y orden vertical)
+// + mini-galería en cards con flechas < y >
+// (v3)
 // ======================================================
 (function () {
   const productsGrid = document.getElementById("productsGrid");
@@ -23,7 +24,7 @@
     return new Intl.NumberFormat("es-ES",{style:"currency",currency:"EUR"}).format(n);
   }
 
-  // === Catálogo (ahora con 'images' y 'colors') ===
+  // === Catálogo (usa 'image' + 'images' (frente/espalda) ) ===
   const PRODUCTS = [
     {
       id: "camiseta-washed-gris",
@@ -125,7 +126,7 @@
     qaPrice = qaOverlay.querySelector("#qaPrice");
     qaColor = qaOverlay.querySelector("#qaColor");
     qaSize  = qaOverlay.querySelector("#qaSize");
-    qaQty   = document.createElement("input"); // no se muestra por pedido, pero mantenemos cantidad 1
+    qaQty   = document.createElement("input"); // cantidad 1
     qaAdd   = qaOverlay.querySelector("#qaAdd");
     qaLink  = qaOverlay.querySelector("#qaLink");
 
@@ -143,7 +144,7 @@
       if (!qaCurrentProduct) return;
       const size = qaSize?.value || "M";
       const color = qaColor?.value || qaCurrentProduct.color || null;
-      const qty  = 1; // Quick-Add por defecto 1
+      const qty  = 1;
       addToCart({
         id: qaCurrentProduct.id,
         name: qaCurrentProduct.name,
@@ -227,25 +228,68 @@
     }
   }
 
-  // ---- Tarjeta con wrapper de imagen y "+" DENTRO de la imagen ----
+  // ======= Tarjeta con mini-galería + botón "+" =======
   function createCard(p) {
     const a = document.createElement("a");
     a.href = `producto.html?id=${encodeURIComponent(p.id)}`;
     a.className = "product-card";
     a.setAttribute("data-id", p.id);
 
-    // Envoltorio de imagen para posicionar el "+"
+    // Envoltorio de imagen para posicionar galería y "+" dentro
     const media = document.createElement("div");
     media.className = "product-media";
 
-    const img = document.createElement("img");
-    img.className = "product-img";
-    img.loading = "lazy";
-    img.decoding = "async";
-    img.alt = p.name || "Producto";
-    img.src = p.image;
+    // Contenedor de imágenes (galería)
+    const gallery = document.createElement("div");
+    gallery.className = "product-images";
 
-    // Botón "+"
+    const imgs = Array.isArray(p.images) && p.images.length ? p.images : [p.image];
+    const imgEls = imgs.map((src, i) => {
+      const im = document.createElement("img");
+      im.className = "product-img" + (i === 0 ? " active" : "");
+      im.loading = "lazy";
+      im.decoding = "async";
+      im.alt = p.name || "Producto";
+      im.src = src;
+      return im;
+    });
+    imgEls.forEach(im => gallery.appendChild(im));
+
+    // Flechas (solo si hay >1 imagen)
+    if (imgEls.length > 1) {
+      const prev = document.createElement("button");
+      prev.className = "product-arrow prev";
+      prev.type = "button";
+      prev.setAttribute("aria-label", "Imagen anterior");
+      prev.textContent = "‹";
+
+      const next = document.createElement("button");
+      next.className = "product-arrow next";
+      next.type = "button";
+      next.setAttribute("aria-label", "Imagen siguiente");
+      next.textContent = "›";
+
+      // Estado interno por tarjeta
+      let index = 0;
+      const show = (i) => {
+        imgEls.forEach((el, j) => el.classList.toggle("active", j === i));
+      };
+      prev.addEventListener("click", (ev) => {
+        ev.preventDefault(); ev.stopPropagation();
+        index = (index - 1 + imgEls.length) % imgEls.length;
+        show(index);
+      });
+      next.addEventListener("click", (ev) => {
+        ev.preventDefault(); ev.stopPropagation();
+        index = (index + 1) % imgEls.length;
+        show(index);
+      });
+
+      gallery.appendChild(prev);
+      gallery.appendChild(next);
+    }
+
+    // Botón "+" (Quick-Add)
     const plus = document.createElement("button");
     plus.className = "card-plus";
     plus.type = "button";
@@ -257,7 +301,7 @@
       openQuickAdd(p);
     });
 
-    media.appendChild(img);
+    media.appendChild(gallery);
     media.appendChild(plus);
 
     const name = document.createElement("h3");
@@ -308,7 +352,7 @@
   function matchesFilters(p, f) {
     if (f.cat.length)  { if (!(p.categories||[]).some(c=>f.cat.includes(norm(c)))) return false; }
     if (f.size.length) { if (!(p.sizes||[]).some(s=>f.size.includes(norm(s)))) return false; }
-    if (f.color.length){ if (!f.color.includes(norm(p.color))) return false; }
+    if (f.color.length){ if (!f.color || !f.color.includes(norm(p.color))) return false; }
     return true;
   }
 
