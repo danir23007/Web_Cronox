@@ -374,3 +374,40 @@ a.product-card{display:block;text-decoration:none;color:inherit;cursor:pointer;}
   background: rgba(255,255,255,0.85);
   color: #000;
 }
+/* === Flechas puras (sin fondos/sombras/fades) y siempre visibles === */
+.product-arrow{
+  background: transparent !important;
+  color: #fff !important;
+  border: none !important;
+  box-shadow: none !important;
+
+  width: 28px !important;
+  height: 38px !important;
+  line-height: 38px !important;
+  font-size: 20px !important;      /* ‹ › como glifo “icono” */
+  font-weight: 700 !important;
+  text-align: center !important;
+
+  position: absolute !important;
+  top: 50% !important;
+  transform: translateY(-50%) !important;
+  z-index: 5 !important;
+
+  opacity: 1 !important;           /* SIEMPRE visibles */
+  transition: none !important;      /* sin animaciones */
+  cursor: pointer !important;
+}
+
+/* posiciones */
+.product-arrow.prev{ left: 6px !important; border-radius: 0 !important; }
+.product-arrow.next{ right: 6px !important; border-radius: 0 !important; }
+
+/* sin efectos en hover/active */
+.product-arrow:hover,
+.product-arrow:active,
+.product-card:hover .product-arrow{
+  background: transparent !important;
+  color: #fff !important;
+  opacity: 1 !important;
+  transform: translateY(-50%) !important; /* sin saltos */
+}
