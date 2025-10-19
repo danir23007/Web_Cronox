@@ -1,5 +1,5 @@
 /* =========================
-   CRONOX — store.css (v45)
+   CRONOX — store.css (v46)
    ========================= */
 
 /* ===== Base ===== */
@@ -303,4 +303,23 @@ a.product-card{display:block;text-decoration:none;color:inherit;cursor:pointer;}
 /* En móviles, el cajón un poco más ancho pero contenido sigue al 100% */
 @media (max-width: 480px){
   #filtersPanel.black-menu{ width: 94vw !important; }
+}
+/* ===== Botón "X" de cierre en el panel lateral ===== */
+#filtersPanel.black-menu .filters-close{
+  position:absolute;
+  top:14px;
+  right:14px;
+  background:transparent;
+  border:none;
+  color:#fff;
+  font-size:26px;
+  line-height:1;
+  cursor:pointer;
+  opacity:.8;
+  transition:opacity .2s ease, transform .2s ease;
+  z-index:10;
+}
+#filtersPanel.black-menu .filters-close:hover{
+  opacity:1;
+  transform:scale(1.1);
 }
