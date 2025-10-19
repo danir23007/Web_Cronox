@@ -249,3 +249,54 @@ body.filters-open .black-menu{
 @media (max-width: 480px){
   .black-menu__link{ padding: 16px 16px; }
 }
+/* === OVERRIDE DURO para el menú negro (neutraliza estilos legacy) === */
+#filtersPanel.black-menu{
+  position: fixed !important;
+  inset: 0 !important;
+  background: #000 !important;
+  color: #fff !important;
+  z-index: 9999 !important;
+  display: grid !important;
+  place-items: center !important;
+
+  /* estado base cerrado (visible para animar si JS quita [hidden]) */
+  opacity: 0 !important;
+  transform: translateY(-2%) !important;
+  pointer-events: none !important;
+  transition: opacity .18s ease, transform .22s ease !important;
+}
+
+#filtersPanel.black-menu.is-open{
+  opacity: 1 !important;
+  transform: translateY(0) !important;
+  pointer-events: auto !important;
+}
+
+/* Estructura interna con alta especificidad */
+#filtersPanel.black-menu .black-menu__list{
+  display: grid;
+  gap: 18px;
+  width: min(92vw, 520px);
+  padding: 24px 0;
+}
+
+#filtersPanel.black-menu .black-menu__link{
+  display: block;
+  width: 100%;
+  text-decoration: none;
+  color: #fff;
+  background: #0b0b0b;
+  border: 1px solid rgba(255,255,255,.14);
+  border-radius: 14px;
+  padding: 18px 20px;
+  font-size: clamp(18px, 2.6vw, 22px);
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  text-align: center;
+  transition: transform .12s ease, background .18s ease, border-color .18s ease;
+}
+#filtersPanel.black-menu .black-menu__link:hover{
+  background: #111;
+  border-color: rgba(255,255,255,.24);
+  transform: translateY(-1px);
+}
