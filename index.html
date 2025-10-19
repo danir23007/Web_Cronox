@@ -17,6 +17,61 @@
   <!-- CSS del Quick-Add (icono "+" y modal rápido) -->
   <link rel="stylesheet" href="assets/quick-add.css?v=1">
 
+  <!-- Estilos del menú negro (aislados, sin tocar tu CSS estable) -->
+  <style>
+    /* === Menú negro de categorías (pantalla completa) === */
+    .black-menu{
+      position: fixed;
+      inset: 0;
+      background: #000;
+      color: #fff;
+      z-index: 9999;
+      display: grid;
+      place-items: center;
+      opacity: 0;
+      transform: translateY(-2%);
+      pointer-events: none;
+      transition: opacity .18s ease, transform .22s ease;
+    }
+    .black-menu.is-open{
+      opacity: 1;
+      transform: translateY(0);
+      pointer-events: auto;
+    }
+    .black-menu__list{
+      display: grid;
+      gap: 18px;
+      width: min(92vw, 520px);
+      padding: 24px 0;
+    }
+    .black-menu__link{
+      display: block;
+      width: 100%;
+      text-decoration: none;
+      color: #fff;
+      background: #0b0b0b;
+      border: 1px solid rgba(255,255,255,.14);
+      border-radius: 14px;
+      padding: 18px 20px;
+      font-size: clamp(18px, 2.6vw, 22px);
+      letter-spacing: .04em;
+      text-transform: uppercase;
+      text-align: center;
+      transition: transform .12s ease, background .18s ease, border-color .18s ease;
+    }
+    .black-menu__link:hover{
+      background: #111;
+      border-color: rgba(255,255,255,.24);
+      transform: translateY(-1px);
+    }
+    .black-menu__link:active{ transform: translateY(0); }
+    @media (max-width: 480px){
+      .black-menu__link{ padding: 16px 16px; }
+    }
+    /* Bloqueo de scroll de fondo cuando el menú está abierto */
+    body.no-scroll{ overflow: hidden; }
+  </style>
+
   <!-- Noscript: si no hay JS, oculta el preloader para no bloquear la vista -->
   <noscript>
     <style>#preloader{display:none!important}</style>
@@ -34,7 +89,7 @@
     >
   </div>
 
-  <!-- Overlay -->
+  <!-- Overlay (lo dejamos por si lo usas en otros módulos) -->
   <div id="overlay" class="overlay" hidden></div>
 
   <!-- Topbar -->
@@ -110,45 +165,12 @@
     </form>
   </div>
 
-  <!-- Panel de filtros -->
-  <aside id="filtersPanel" class="filters" hidden aria-label="Filtros de producto">
-    <div class="filters__card">
-      <div class="filters__head">
-        <h3>Filtrar productos</h3>
-        <button id="btnCloseFilters" class="filters__close" aria-label="Cerrar filtros">✕</button>
-      </div>
-
-      <form id="filtersForm" class="filters__form">
-        <fieldset class="filters__group">
-          <legend>Categoría</legend>
-          <label><input type="checkbox" name="cat" value="sudaderas"> Sudaderas</label>
-          <label><input type="checkbox" name="cat" value="camisetas"> Camisetas</label>
-          <label><input type="checkbox" name="cat" value="pantalones"> Pantalones</label>
-          <label><input type="checkbox" name="cat" value="accesorios"> Accesorios</label>
-        </fieldset>
-
-        <fieldset class="filters__group">
-          <legend>Talla</legend>
-          <label><input type="checkbox" name="size" value="xs"> XS</label>
-          <label><input type="checkbox" name="size" value="s"> S</label>
-          <label><input type="checkbox" name="size" value="m"> M</label>
-          <label><input type="checkbox" name="size" value="l"> L</label>
-          <label><input type="checkbox" name="size" value="xl"> XL</label>
-        </fieldset>
-
-        <fieldset class="filters__group">
-          <legend>Color</legend>
-          <label><input type="checkbox" name="color" value="negro"> Negro</label>
-          <label><input type="checkbox" name="color" value="gris"> Gris</label>
-          <label><input type="checkbox" name="color" value="blanco"> Blanco</label>
-        </fieldset>
-
-        <div class="filters__actions">
-          <button type="button" id="btnClearFilters" class="btn btn--ghost">Limpiar</button>
-          <button type="submit" class="btn">Aplicar</button>
-        </div>
-      </form>
-    </div>
+  <!-- Menú negro de categorías (sustituye al panel de filtros anterior) -->
+  <aside id="filtersPanel" class="black-menu" hidden aria-label="Navegación de categorías">
+    <nav class="black-menu__list" role="menu">
+      <a class="black-menu__link" role="menuitem" href="tienda.html">Toda la oscuridad</a>
+      <a class="black-menu__link" role="menuitem" href="tienda-camisetas.html">Camisetas</a>
+    </nav>
   </aside>
 
   <!-- HERO video -->
@@ -267,6 +289,60 @@
         if(e.key === 'cronox:favs') updateFavBadge();
       });
       window.addEventListener('DOMContentLoaded', updateFavBadge, {once:true});
+    })();
+  </script>
+
+  <!-- Menú negro: abrir/cerrar y accesibilidad -->
+  <script>
+    (function(){
+      var btn = document.getElementById('btnMenu');
+      var panel = document.getElementById('filtersPanel');
+      if(!btn || !panel) return;
+
+      function openMenu(){
+        document.body.classList.add('no-scroll');
+        panel.hidden = false;
+        // forzar reflow para activar transición
+        void panel.offsetWidth;
+        panel.classList.add('is-open');
+        btn.setAttribute('aria-expanded','true');
+      }
+      function closeMenu(){
+        panel.classList.remove('is-open');
+        btn.setAttribute('aria-expanded','false');
+        // Espera fin de transición para ocultar
+        setTimeout(function(){
+          panel.hidden = true;
+          document.body.classList.remove('no-scroll');
+        }, 220);
+      }
+      function isOpen(){ return panel.classList.contains('is-open'); }
+
+      btn.addEventListener('click', function(e){
+        e.preventDefault();
+        isOpen() ? closeMenu() : openMenu();
+      });
+
+      // Cerrar con ESC
+      document.addEventListener('keydown', function(e){
+        if(e.key === 'Escape' && isOpen()) closeMenu();
+      });
+
+      // Cerrar al hacer clic fuera de la lista
+      panel.addEventListener('click', function(e){
+        var list = panel.querySelector('.black-menu__list');
+        if(!list) return;
+        if(!list.contains(e.target)) closeMenu();
+      });
+
+      // Cerrar al navegar (enlaces)
+      panel.addEventListener('click', function(e){
+        var a = e.target.closest('a.black-menu__link');
+        if(a){
+          // dejamos que navegue y cerramos visualmente
+          closeMenu();
+        }
+      });
     })();
   </script>
 
