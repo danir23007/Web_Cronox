@@ -1,5 +1,5 @@
 /* =========================
-   CRONOX — store.css (v51)
+   CRONOX — store.css (v52)
    ========================= */
 
 /* ===== Base ===== */
@@ -142,17 +142,17 @@ a.product-card{display:block;text-decoration:none;color:inherit;cursor:pointer;}
 /* ÚNICO “+” CLÁSICO — esquina inferior derecha de la IMAGEN */
 .fav-add{
   position:absolute;
-  right:12px;
-  bottom:12px;              /* dentro de .product-media, por encima del footer */
+  right:10px;
+  bottom:10px;
   background:none;
   border:none;
-  color:#000;               /* negro sobre imagen/fondo blanco */
-  font-size:26px;
-  font-weight:700;
+  color:#000;
+  font-size:30px;
+  font-weight:500;   /* 'px' no es válido; 500 es el equivalente correcto */
   line-height:1;
   cursor:pointer;
   transition:transform .25s ease,opacity .25s ease;
-  z-index:7;                /* por encima de flechas (5) e imagen */
+  z-index:7;         /* por encima de flechas (5) e imagen */
   opacity:.95;
 }
 .fav-add:hover{transform:scale(1.15);opacity:1;}
