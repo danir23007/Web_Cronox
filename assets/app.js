@@ -18,6 +18,71 @@
   const searchForm    = $("#searchForm");
   const searchInput   = $("#searchInput");
 
+  // ===== 0) Asegurar estilos del black-menu (override con !important) =========
+  (function ensureBlackMenuStyles(){
+    if (!filtersPanel) return;
+
+    // Garantiza clase .black-menu y elimina restos antiguos de .filters
+    filtersPanel.classList.add("black-menu");
+    filtersPanel.classList.remove("filters");
+
+    // Si ya hemos inyectado estilos, no repetir
+    if (document.getElementById("cronox-blackmenu-style")) return;
+
+    const css = `
+#filtersPanel.black-menu{
+  position: fixed !important;
+  inset: 0 !important;
+  background: #000 !important;
+  color: #fff !important;
+  z-index: 9999 !important;
+  display: grid !important;
+  place-items: center !important;
+  opacity: 0 !important;
+  transform: translateY(-2%) !important;
+  pointer-events: none !important;
+  transition: opacity .18s ease, transform .22s ease !important;
+}
+#filtersPanel.black-menu.is-open{
+  opacity: 1 !important;
+  transform: translateY(0) !important;
+  pointer-events: auto !important;
+}
+#filtersPanel.black-menu .black-menu__list{
+  display: grid;
+  gap: 18px;
+  width: min(92vw, 520px);
+  padding: 24px 0;
+}
+#filtersPanel.black-menu .black-menu__link{
+  display: block;
+  width: 100%;
+  text-decoration: none;
+  color: #fff;
+  background: #0b0b0b;
+  border: 1px solid rgba(255,255,255,.14);
+  border-radius: 14px;
+  padding: 18px 20px;
+  font-size: clamp(18px, 2.6vw, 22px);
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  text-align: center;
+  transition: transform .12s ease, background .18s ease, border-color .18s ease;
+}
+#filtersPanel.black-menu .black-menu__link:hover{
+  background: #111;
+  border-color: rgba(255,255,255,.24);
+  transform: translateY(-1px);
+}
+body.no-scroll{ overflow: hidden !important; }
+    `.trim();
+
+    const style = document.createElement("style");
+    style.id = "cronox-blackmenu-style";
+    style.textContent = css;
+    document.head.appendChild(style);
+  })();
+
   // ===== Overlay control (para la búsqueda; el black-menu NO usa overlay) =====
   function showOverlay(mode = "page") {
     if (!overlay) return;
@@ -34,21 +99,18 @@
   // ===== Body scroll lock + compensador de scroll =============================
   let _bodyPadRightPrev = "";
   function getScrollbarW(){
-    // calcula el ancho de la barra de scroll para evitar “temblor”
     return window.innerWidth - document.documentElement.clientWidth;
   }
   function lockScroll(){
     document.body.classList.add("no-scroll");
     const sw = getScrollbarW();
     if (sw > 0){
-      // guarda padding-right previo y compensa
       _bodyPadRightPrev = document.body.style.paddingRight || "";
       document.body.style.paddingRight = sw + "px";
     }
   }
   function unlockScroll(){
     document.body.classList.remove("no-scroll");
-    // restaura padding-right
     document.body.style.paddingRight = _bodyPadRightPrev;
     _bodyPadRightPrev = "";
   }
@@ -58,35 +120,49 @@
 
   function openFilters() {
     if (!filtersPanel) return;
-    // Quitar hidden primero para que exista en el flujo y pueda animar
-    filtersPanel.hidden = false;
 
-    // Forzar reflow para arrancar la transición desde el estado base
+    // 1) quitar hidden y asegurar display/visibility saneados
+    filtersPanel.hidden = false;
+    filtersPanel.style.display = "grid";
+    filtersPanel.style.visibility = "visible";
+    // limpiar posibles restos de CSS legacy inline
+    filtersPanel.style.opacity = "";
+    filtersPanel.style.pointerEvents = "";
+    filtersPanel.style.transform = "";
+
+    // 2) forzar reflow para que la transición arranque desde base
     void filtersPanel.offsetWidth;
 
-    // Abrir
+    // 3) abrir
     filtersPanel.classList.add("is-open");
     btnMenu?.setAttribute("aria-expanded", "true");
     lockScroll();
 
-    // Enfocar el primer enlace de la lista para accesibilidad
+    // Enfocar el primer enlace
     const firstLink = $(".black-menu__link", filtersPanel);
     firstLink?.focus();
   }
 
   function closeFilters() {
     if (!filtersPanel) return;
+
     filtersPanel.classList.remove("is-open");
     btnMenu?.setAttribute("aria-expanded", "false");
 
-    // Espera el fin de la transición antes de ocultar (evita parpadeos/temblor)
+    // 4) Espera transición y oculta/limpia
     setTimeout(() => {
       filtersPanel.hidden = true;
+      // Limpieza por si quedara algo de inline
+      filtersPanel.style.display = "";
+      filtersPanel.style.visibility = "";
       unlockScroll();
-      // devolver foco al trigger
       btnMenu?.focus();
-    }, 240); // un poco más que .22s de CSS para ir seguros
+    }, 260); // > .22s por seguridad
   }
+
+  // Exponer helpers de test en consola
+  window.__testOpen = openFilters;
+  window.__testClose = closeFilters;
 
   // Toggle desde el botón hamburguesa
   btnMenu?.addEventListener("click", (e) => {
@@ -105,10 +181,7 @@
   // Cerrar al hacer clic en cualquier enlace del menú (dejar navegar)
   filtersPanel?.addEventListener("click", (e) => {
     const a = e.target.closest("a.black-menu__link");
-    if (a) {
-      // cerramos visualmente; la navegación continúa
-      closeFilters();
-    }
+    if (a) closeFilters();
   });
 
   // Cerrar si se hace clic en el fondo negro (fuera de la lista)
@@ -148,7 +221,6 @@
   // Cierre al clicar overlay (solo afecta a búsqueda)
   overlay?.addEventListener("click", () => {
     if (searchBar && !searchBar.hidden) toggleSearch(false);
-    // El black-menu no usa overlay
   });
 
   // ===== Topbar states (transparente / translúcida / opaca) ====================
