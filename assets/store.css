@@ -265,3 +265,26 @@ a.product-card{display:block;text-decoration:none;color:inherit;cursor:pointer;}
   opacity:1 !important;
   transform:translateY(0) !important;
 }
+/* === Quick-Add "+" — visible sobre la imagen y por encima de las flechas === */
+.card-plus,
+.fav-add{                           /* compat: por si algún producto aún usa .fav-add */
+  position: absolute !important;
+  right: 12px !important;
+  bottom: 12px !important;
+  background: transparent !important;
+  border: none !important;
+  color: #000 !important;           /* negro sobre el fondo blanco de la imagen */
+  font-size: 26px !important;
+  font-weight: 700 !important;
+  line-height: 1 !important;
+  cursor: pointer !important;
+  z-index: 7 !important;            /* > flechas (5) y > imagen (2) */
+  transition: transform .2s ease, opacity .2s ease !important;
+  opacity: 0.95 !important;
+}
+
+.card-plus:hover,
+.fav-add:hover{
+  transform: scale(1.12) !important;
+  opacity: 1 !important;
+}
