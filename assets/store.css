@@ -190,3 +190,62 @@ a.product-card{display:block;text-decoration:none;color:inherit;cursor:pointer;}
   opacity:.8;
   transform:scale(1.04);
 }
+/* === Menú de filtros 100% negro (CRONOX) === */
+body.no-scroll { overflow: hidden; }
+
+.black-menu{
+  position: fixed;
+  inset: 0;
+  background: #000;              /* negro sólido */
+  color: #fff;
+  z-index: 9999;
+  display: grid;
+  place-items: center;
+  transform: translateY(-2%);    /* pequeño lift para animación */
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity .18s ease, transform .22s ease;
+}
+
+/* estado abierto (lo pone el JS en <body>) */
+body.filters-open .black-menu{
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+
+/* Lista vertical centrada */
+.black-menu__list{
+  display: grid;
+  gap: 18px;
+  width: min(92vw, 520px);
+  padding: 24px 0;
+}
+
+.black-menu__link{
+  display: block;
+  width: 100%;
+  text-decoration: none;
+  color: #fff;
+  background: #0b0b0b;
+  border: 1px solid rgba(255,255,255,.14);
+  border-radius: 14px;
+  padding: 18px 20px;
+  font-size: clamp(18px, 2.6vw, 22px);
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  text-align: center;
+  transition: transform .12s ease, background .18s ease, border-color .18s ease;
+}
+.black-menu__link:hover{
+  background: #111;
+  border-color: rgba(255,255,255,.24);
+  transform: translateY(-1px);
+}
+.black-menu__link:active{
+  transform: translateY(0);
+}
+
+@media (max-width: 480px){
+  .black-menu__link{ padding: 16px 16px; }
+}
