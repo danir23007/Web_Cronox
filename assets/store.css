@@ -239,3 +239,68 @@ a.product-card{display:block;text-decoration:none;color:inherit;cursor:pointer;}
 @media (max-width:480px){
   #filtersPanel.black-menu{ width:94vw; }
 }
+/* === FIX DURO — Drawer a altura completa + enlaces solo texto, sin recuadro === */
+
+/* Cajón: que ocupe todo el alto y sin esquinas redondeadas “fantasma” */
+#filtersPanel.black-menu{
+  top: 0 !important;
+  height: 100vh !important;
+  padding-top: var(--topbar-h) !important;
+  border-radius: 0 !important;
+  overflow: auto !important;  /* si la lista crece, que haga scroll dentro */
+}
+
+/* La lista NO debe tener ancho fijo ni centrado */
+#filtersPanel.black-menu .black-menu__list{
+  width: 100% !important;
+  max-width: none !important;
+  padding: 16px !important;
+  margin: 0 !important;
+  gap: 10px !important;
+  align-content: start !important;
+}
+
+/* Reset total de los enlaces (adiós fondo, bordes y pill) */
+#filtersPanel.black-menu .black-menu__link{
+  all: unset;                     /* resetea casi todo */
+  display: block !important;
+  width: 100% !important;
+  box-sizing: border-box !important;
+
+  /* Estilo deseado: solo texto */
+  padding: 10px 14px !important;
+  font: 800 16px/1.2 system-ui, sans-serif !important;
+  text-transform: uppercase !important;
+  letter-spacing: .08em !important;
+  color: #fff !important;
+  text-align: left !important;
+  cursor: pointer !important;
+
+  /* Garantiza ausencia de pill */
+  background: transparent !important;
+  border: none !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  outline: none !important;
+  transform: none !important;
+}
+
+/* Hover limpio: solo color y un leve desplazamiento */
+#filtersPanel.black-menu .black-menu__link:hover{
+  color: rgba(255,255,255,.7) !important;
+  transform: translateX(6px) !important;
+  background: transparent !important;
+  border: none !important;
+}
+
+/* Activo: sin “rebote” ni cambios de fondo */
+#filtersPanel.black-menu .black-menu__link:active{
+  transform: translateX(4px) !important;
+  background: transparent !important;
+  border: none !important;
+}
+
+/* En móviles, el cajón un poco más ancho pero contenido sigue al 100% */
+@media (max-width: 480px){
+  #filtersPanel.black-menu{ width: 94vw !important; }
+}
