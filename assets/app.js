@@ -261,3 +261,11 @@ body.no-scroll{ overflow: hidden !important; }
   })();
 
 })();
+document.addEventListener("click", (e) => {
+  if (e.target.matches(".filters-close")) {
+    e.preventDefault();
+    const panel = document.querySelector("#filtersPanel");
+    if (panel) panel.classList.remove("is-open");
+    document.body.classList.remove("no-scroll");
+  }
+});
