@@ -1,271 +1,211 @@
-/* ========== CRONOX — Interacciones principales (black menu + search + topbar) ========== */
-(() => {
-  "use strict";
+/* ==========================================================
+   CRONOX — app.js (clean quick-add; keep legacy .fav-add)
+   ========================================================== */
 
-  const $ = (s, r = document) => r.querySelector(s);
+(function () {
+  const $ = (s, el = document) => el.querySelector(s);
+  const $$ = (s, el = document) => Array.from(el.querySelectorAll(s));
 
-  const topbar       = $("#topbar");
-  const hero         = $("#hero");
-  const overlay      = $("#overlay");
+  // ===== Utilidades mínimas =====
+  function clamp(n, min, max) { return Math.max(min, Math.min(max, n)); }
 
-  const btnMenu      = $("#btnMenu");
-  const filtersPanel = $("#filtersPanel");
+  // ===== Topbar: transparente (en el tope del héroe) → hero (sobre el vídeo) → page (resto) =====
+  const topbar = $('.topbar');
+  const hero = $('.hero-video-section');
 
-  const btnSearch    = $("#btnSearch");
-  const searchBar    = $("#searchBar");
-  const searchForm   = $("#searchForm");
-  const searchInput  = $("#searchInput");
+  function applyTopbarState(state) {
+    if (!topbar) return;
+    topbar.classList.remove('topbar--transparent', 'topbar--hero', 'topbar--page');
+    topbar.classList.add(state);
+  }
 
-  console.log("[CRONOX] app.js cargado — init");
+  function updateTopbarOnScroll() {
+    if (!topbar || !hero) return;
+    const rect = hero.getBoundingClientRect();
+    const atTop = window.scrollY <= 0;
+    const heroInView = rect.bottom > 0 && rect.top < (topbar.offsetHeight + 1) + window.innerHeight;
 
-  // ===== Asegurar estilos/estado del black-menu ==================================
-  (function ensureBlackMenuStyles(){
-    if (!filtersPanel) { console.warn("[CRONOX] No existe #filtersPanel"); return; }
-    // forzar clases correctas
-    filtersPanel.classList.add("black-menu");
-    filtersPanel.classList.remove("filters");
+    if (atTop && rect.top >= 0) {
+      applyTopbarState('topbar--transparent');
+    } else if (heroInView && rect.bottom > topbar.offsetHeight) {
+      applyTopbarState('topbar--hero');
+    } else {
+      applyTopbarState('topbar--page');
+    }
+  }
 
-    // limpiar estados heredados
-    filtersPanel.classList.remove("is-open");
-    document.body.classList.remove("filters-open");
+  if (hero && topbar) {
+    // Primera pintura
+    updateTopbarOnScroll();
+    // Observa al héroe para cambios finos
+    try {
+      const io = new IntersectionObserver(
+        ([entry]) => {
+          // entry.isIntersecting = topbar “hero”, si además estamos en y=0 y borde superior del héroe está visible, “transparent”
+          if (entry.isIntersecting) {
+            if (window.scrollY <= 0) applyTopbarState('topbar--transparent');
+            else applyTopbarState('topbar--hero');
+          } else {
+            applyTopbarState('topbar--page');
+          }
+        },
+        { root: null, threshold: [0, 0.01, 0.1, 0.5, 1] }
+      );
+      io.observe(hero);
+    } catch {
+      // Fallback sin IO
+      window.addEventListener('scroll', updateTopbarOnScroll, { passive: true });
+      window.addEventListener('resize', updateTopbarOnScroll);
+    }
+    window.addEventListener('scroll', updateTopbarOnScroll, { passive: true });
+    window.addEventListener('resize', updateTopbarOnScroll);
+  }
 
-    if (document.getElementById("cronox-blackmenu-style")) return;
-    const css = `
-#filtersPanel.black-menu{
-  position: fixed !important;
-  inset: 0 !important;
-  background: #000 !important;
-  color: #fff !important;
-  z-index: 9999 !important;
-  display: grid !important;
-  place-items: center !important;
-  opacity: 0 !important;
-  transform: translateY(-2%) !important;
-  pointer-events: none !important;
-  transition: opacity .18s ease, transform .22s ease !important;
-}
-#filtersPanel.black-menu.is-open{
-  opacity: 1 !important;
-  transform: translateY(0) !important;
-  pointer-events: auto !important;
-}
-#filtersPanel.black-menu .black-menu__list{
-  display: grid;
-  gap: 18px;
-  width: min(92vw, 520px);
-  padding: 24px 0;
-}
-#filtersPanel.black-menu .black-menu__link{
-  display: block;
-  width: 100%;
-  text-decoration: none;
-  color: #fff;
-  background: #0b0b0b;
-  border: 1px solid rgba(255,255,255,.14);
-  border-radius: 14px;
-  padding: 18px 20px;
-  font-size: clamp(18px, 2.6vw, 22px);
-  letter-spacing: .04em;
-  text-transform: uppercase;
-  text-align: center;
-  transition: transform .12s ease, background .18s ease, border-color .18s ease;
-}
-#filtersPanel.black-menu .black-menu__link:hover{
-  background: #111;
-  border-color: rgba(255,255,255,.24);
-  transform: translateY(-1px);
-}
-body.no-scroll{ overflow: hidden !important; }
-    `.trim();
-    const style = document.createElement("style");
-    style.id = "cronox-blackmenu-style";
-    style.textContent = css;
-    document.head.appendChild(style);
-  })();
-
-  // ===== Overlay (solo búsqueda) =================================================
-  function showOverlay(mode = "page") {
+  // ===== Overlay genérico (si lo usas para búsqueda u otros) =====
+  const overlay = $('.overlay');
+  function showOverlay(kind = 'overlay--page') {
     if (!overlay) return;
     overlay.hidden = false;
-    overlay.classList.remove("overlay--hero", "overlay--page");
-    overlay.classList.add(mode === "hero" ? "overlay--hero" : "overlay--page");
+    overlay.classList.remove('overlay--hero', 'overlay--page');
+    overlay.classList.add(kind);
   }
   function hideOverlay() {
     if (!overlay) return;
     overlay.hidden = true;
-    overlay.classList.remove("overlay--hero", "overlay--page");
   }
 
-  // ===== Scroll lock con compensación ===========================================
-  let _bodyPadRightPrev = "";
-  function getScrollbarW(){ return window.innerWidth - document.documentElement.clientWidth; }
-  function lockScroll(){
-    document.body.classList.add("no-scroll");
-    const sw = getScrollbarW();
-    if (sw > 0){
-      _bodyPadRightPrev = document.body.style.paddingRight || "";
-      document.body.style.paddingRight = sw + "px";
-    }
-  }
-  function unlockScroll(){
-    document.body.classList.remove("no-scroll");
-    document.body.style.paddingRight = _bodyPadRightPrev;
-    _bodyPadRightPrev = "";
-  }
-
-  // ===== Black menu ==============================================================
-  let _openingGuard = false;
+  // ===== Drawer lateral (filtros/categorías) =====
+  const filtersPanel = $('#filtersPanel');
   function openFilters() {
     if (!filtersPanel) return;
-
-    // visible + transición fiable
-    filtersPanel.hidden = false;
-    void filtersPanel.offsetWidth;
-
-    filtersPanel.classList.add("is-open");
-    document.body.classList.add("filters-open");
-    btnMenu?.setAttribute("aria-expanded", "true");
-    lockScroll();
-
-    _openingGuard = true;
-    setTimeout(() => { _openingGuard = false; }, 300);
-
-    // foco
-    const firstLink = filtersPanel.querySelector(".black-menu__link");
-    firstLink?.focus();
-
-    console.log("[CRONOX] Black menu -> OPEN");
+    filtersPanel.classList.add('is-open');
+    showOverlay('overlay--page');
+    document.body.classList.add('no-scroll');
   }
   function closeFilters() {
     if (!filtersPanel) return;
-
-    filtersPanel.classList.remove("is-open");
-    document.body.classList.remove("filters-open");
-    btnMenu?.setAttribute("aria-expanded", "false");
-
-    setTimeout(() => {
-      filtersPanel.hidden = true;
-      unlockScroll();
-      btnMenu?.focus();
-      console.log("[CRONOX] Black menu -> CLOSE");
-    }, 260);
+    filtersPanel.classList.remove('is-open');
+    hideOverlay();
+    document.body.classList.remove('no-scroll');
   }
 
-  // 👇 Cambiamos el comportamiento: la hamburguesa **siempre abre**.
-  // (para descartar cualquier estado fantasma que haga creer que ya está abierto)
-  btnMenu?.addEventListener("click", (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    openFilters();
-  });
+  document.addEventListener('click', (e) => {
+    const t = e.target;
 
-  // Cerrar con ESC
-  window.addEventListener("keydown", (e) => {
-    if (e.key === "Escape") closeFilters();
-  });
-
-  // Cerrar al hacer clic en enlaces
-  filtersPanel?.addEventListener("click", (e) => {
-    if (_openingGuard) return;
-    const a = e.target.closest("a.black-menu__link");
-    if (a) closeFilters();
-  });
-
-  // Cerrar si clicas en el fondo negro (fuera de la lista)
-  filtersPanel?.addEventListener("click", (e) => {
-    if (_openingGuard) return;
-    const list = filtersPanel.querySelector(".black-menu__list");
-    if (list && !list.contains(e.target)) closeFilters();
-  });
-
-  // ===== Búsqueda ================================================================
-  function toggleSearch(forceOpen = null) {
-    if (!searchBar) return;
-    const willOpen = forceOpen ?? searchBar.hidden;
-    if (willOpen) {
-      searchBar.hidden = false;
-      showOverlay("page");
-      lockScroll();
-      btnSearch?.setAttribute("aria-expanded", "true");
-      setTimeout(() => searchInput?.focus(), 0);
-    } else {
-      searchBar.hidden = true;
-      hideOverlay();
-      unlockScroll();
-      btnSearch?.setAttribute("aria-expanded", "false");
-      btnSearch?.focus();
+    // Botones de abrir/cerrar filtros (usa data-attrs para no depender de IDs concretos)
+    if (t.closest('[data-open-filters]')) {
+      e.preventDefault();
+      openFilters();
+      return;
     }
+    if (t.closest('[data-close-filters]') || (overlay && t === overlay)) {
+      e.preventDefault();
+      closeFilters();
+      return;
+    }
+  });
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') closeFilters();
+  });
+
+  // ===== Galería de imágenes en tarjeta (flechas ‹ ›) =====
+  function moveGallery(cardEl, dir = 1) {
+    const imagesWrap = $('.product-images', cardEl);
+    if (!imagesWrap) return;
+
+    const imgs = $$('.product-img', imagesWrap);
+    if (!imgs.length) return;
+
+    let activeIndex = imgs.findIndex((im) => im.classList.contains('active'));
+    if (activeIndex < 0) activeIndex = 0;
+
+    const nextIndex = (activeIndex + dir + imgs.length) % imgs.length;
+    imgs.forEach((im, idx) => im.classList.toggle('active', idx === nextIndex));
   }
-  btnSearch?.addEventListener("click", () => toggleSearch());
-  searchForm?.addEventListener("submit", (e) => {
+
+  document.addEventListener('click', (e) => {
+    const prevBtn = e.target.closest('.product-arrow.prev');
+    const nextBtn = e.target.closest('.product-arrow.next');
+    if (prevBtn || nextBtn) {
+      e.preventDefault();
+      const card = e.target.closest('.product-card');
+      moveGallery(card, prevBtn ? -1 : 1);
+    }
+  });
+
+  // ===== Favoritos (icono estrella en card) =====
+  const favCountEl = $('.topbar__fav .fav-count');
+  let favCount = Number(favCountEl?.textContent || 0);
+
+  function bumpFavCount(delta) {
+    favCount = clamp(favCount + delta, 0, 999);
+    if (favCountEl) favCountEl.textContent = String(favCount);
+  }
+
+  document.addEventListener('click', (e) => {
+    const toggle = e.target.closest('.fav-toggle');
+    if (!toggle) return;
     e.preventDefault();
-    const q = (searchInput?.value || "").trim();
-    // TODO: usar 'q' para filtrar si quieres
-    toggleSearch(false);
-  });
-  overlay?.addEventListener("click", () => {
-    if (searchBar && !searchBar.hidden) toggleSearch(false);
+
+    const active = toggle.classList.toggle('active');
+    bumpFavCount(active ? 1 : -1);
   });
 
-  // ===== Topbar states ===========================================================
-  function getTopbarHeight() {
-    const cs = getComputedStyle(document.documentElement);
-    const v = cs.getPropertyValue("--topbar-h").trim() || "64px";
-    const n = parseFloat(v);
-    return isNaN(n) ? 64 : n;
-  }
-  function setTopbarState(state) {
-    if (!topbar) return;
-    topbar.classList.remove("topbar--transparent", "topbar--hero", "topbar--page");
-    topbar.classList.add(state);
-  }
-  function updateTopbarState() {
-    if (!topbar || !hero) return;
-    const y = window.scrollY || window.pageYOffset || 0;
-    const topbarH = getTopbarHeight();
-    if (y <= 2) { setTopbarState("topbar--transparent"); return; }
-    const heroRect = hero.getBoundingClientRect();
-    const heroBottomFromTopbar = heroRect.bottom - topbarH;
-    if (heroBottomFromTopbar > 0) setTopbarState("topbar--hero");
-    else setTopbarState("topbar--page");
-  }
-  window.addEventListener("scroll", updateTopbarState, { passive: true });
-  window.addEventListener("resize", updateTopbarState);
-  window.addEventListener("orientationchange", updateTopbarState);
+  // ===== Carrito: solo con el “+” clásico (.fav-add) =====
+  // Importante: eliminamos cualquier creación/uso de ".card-plus".
+  // Este bloque NO genera ningún botón; únicamente maneja clicks del "+" ya existente en el HTML.
+  const cartCountEl = $('.topbar__cart .cart-count');
+  let cartCount = Number(cartCountEl?.textContent || 0);
 
-  // ===== Preloader + estado inicial =============================================
-  (function preloaderAndScroll(){
-    const preloader = $("#preloader");
-    let tried = false;
-    function hidePreloader(){ if (tried) return; tried = true; if (preloader) preloader.style.display = "none"; }
-    try { window.history.scrollRestoration = "manual"; } catch(e){}
-    window.addEventListener("load", () => {
-      hidePreloader();
-      if (location.hash) {
-        const clean = location.pathname + location.search;
-        history.replaceState(null, "", clean);
-      }
-      window.scrollTo({ top: 0, left: 0, behavior: "instant" });
-      // asegurar estado limpio
-      filtersPanel?.classList.remove("is-open");
-      document.body.classList.remove("filters-open");
-      filtersPanel && (filtersPanel.hidden = true);
-      updateTopbarState();
-      setTimeout(updateTopbarState, 100);
-    }, { once: true });
-    window.addEventListener("DOMContentLoaded", () => {
-      updateTopbarState();
-      setTimeout(updateTopbarState, 50);
-    }, { once: true });
-    window.addEventListener("error", () => setTimeout(hidePreloader, 0));
-  })();
+  function bumpCartCount(delta) {
+    cartCount = clamp(cartCount + delta, 0, 999);
+    if (cartCountEl) cartCountEl.textContent = String(cartCount);
+  }
 
+  document.addEventListener('click', (e) => {
+    const addBtn = e.target.closest('.fav-add'); // el “+” clásico
+    if (!addBtn) return;
+
+    e.preventDefault();
+    const card = addBtn.closest('.product-card');
+    const productId = card?.getAttribute('data-product-id') || null;
+
+    // Aquí puedes integrar tu lógica real de carrito (localStorage / fetch / Shopify / etc.)
+    // Por ahora, solo incrementamos el contador visualmente.
+    bumpCartCount(1);
+
+    // Feedback mínimo
+    addBtn.style.transform = 'scale(1.12)';
+    addBtn.style.opacity = '1';
+    setTimeout(() => {
+      addBtn.style.transform = '';
+      addBtn.style.opacity = '';
+    }, 150);
+  });
+
+  // ===== Limpieza defensiva: elimina cualquier “.card-plus” ya pintado por HTML heredado =====
+  $$('.card-plus').forEach((el) => el.remove());
+
+  // ===== Prevención: si algún script externo intenta inyectar .card-plus en el futuro =====
+  try {
+    const mo = new MutationObserver((mutations) => {
+      mutations.forEach((m) => {
+        m.addedNodes && m.addedNodes.forEach((node) => {
+          if (!(node instanceof HTMLElement)) return;
+          if (node.matches && node.matches('.card-plus')) node.remove();
+          // Si entra dentro de un card:
+          $$('.card-plus', node).forEach((n) => n.remove());
+        });
+      });
+    });
+    mo.observe(document.documentElement, { childList: true, subtree: true });
+  } catch { /* noop */ }
+
+  // ===== Ajuste inicial de estados =====
+  document.addEventListener('DOMContentLoaded', updateTopbarOnScroll);
+  window.addEventListener('load', () => {
+    // Asegura estado correcto tras carga completa
+    updateTopbarOnScroll();
+  });
 })();
-document.addEventListener("click", (e) => {
-  if (e.target.matches(".filters-close")) {
-    e.preventDefault();
-    const panel = document.querySelector("#filtersPanel");
-    if (panel) panel.classList.remove("is-open");
-    document.body.classList.remove("no-scroll");
-  }
-});
