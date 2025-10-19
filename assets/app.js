@@ -18,9 +18,11 @@
   const searchForm    = $("#searchForm");
   const searchInput   = $("#searchInput");
 
+  console.log("[CRONOX] app.js cargado — init");
+
   // ===== 0) Asegurar estilos del black-menu (override con !important) =========
   (function ensureBlackMenuStyles(){
-    if (!filtersPanel) return;
+    if (!filtersPanel) { console.warn("[CRONOX] No existe #filtersPanel"); return; }
 
     // Garantiza clase .black-menu y elimina restos antiguos de .filters
     filtersPanel.classList.add("black-menu");
@@ -119,38 +121,44 @@ body.no-scroll{ overflow: hidden !important; }
   function openFilters() {
     if (!filtersPanel) return;
 
-    filtersPanel.hidden = false;              // 1) visible
-    void filtersPanel.offsetWidth;            // 2) reflow para transiciones
+    // Estado visible y transición fiable
+    filtersPanel.hidden = false;
+    void filtersPanel.offsetWidth;
 
-    filtersPanel.classList.add("is-open");    // 3) abrir
+    filtersPanel.classList.add("is-open");
+    document.body.classList.add("filters-open"); // <- también en body (por si tu CSS usa esta clase)
     btnMenu?.setAttribute("aria-expanded", "true");
     lockScroll();
 
-    // Guard: ignorar cualquier click de fondo durante ~1 frame humano
     _openingGuard = true;
     setTimeout(() => { _openingGuard = false; }, 300);
 
-    // Enfocar el primer enlace
+    // Enfocar primer enlace
     const firstLink = $(".black-menu__link", filtersPanel);
     firstLink?.focus();
+
+    console.log("[CRONOX] Black menu -> OPEN");
   }
 
   function closeFilters() {
     if (!filtersPanel) return;
+
     filtersPanel.classList.remove("is-open");
+    document.body.classList.remove("filters-open");
     btnMenu?.setAttribute("aria-expanded", "false");
 
     setTimeout(() => {
       filtersPanel.hidden = true;
       unlockScroll();
       btnMenu?.focus();
-    }, 260); // > .22s de CSS
+      console.log("[CRONOX] Black menu -> CLOSE");
+    }, 260);
   }
 
   // Toggle desde el botón hamburguesa
   btnMenu?.addEventListener("click", (e) => {
     e.preventDefault();
-    e.stopPropagation(); // que este click no burbujee al fondo del menú
+    e.stopPropagation();
     isFiltersOpen() ? closeFilters() : openFilters();
   });
 
@@ -164,7 +172,7 @@ body.no-scroll{ overflow: hidden !important; }
 
   // Cerrar al hacer clic en cualquier enlace del menú (dejar navegar)
   filtersPanel?.addEventListener("click", (e) => {
-    if (_openingGuard) return; // ignora el click que disparó la apertura
+    if (_openingGuard) return;
     const a = e.target.closest("a.black-menu__link");
     if (a) closeFilters();
   });
