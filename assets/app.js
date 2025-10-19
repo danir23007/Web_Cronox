@@ -31,19 +31,40 @@
     overlay.classList.remove("overlay--hero", "overlay--page");
   }
 
-  // ===== Body scroll lock ======================================================
-  function lockScroll()   { document.body.classList.add("no-scroll"); }
-  function unlockScroll() { document.body.classList.remove("no-scroll"); }
+  // ===== Body scroll lock + compensador de scroll =============================
+  let _bodyPadRightPrev = "";
+  function getScrollbarW(){
+    // calcula el ancho de la barra de scroll para evitar “temblor”
+    return window.innerWidth - document.documentElement.clientWidth;
+  }
+  function lockScroll(){
+    document.body.classList.add("no-scroll");
+    const sw = getScrollbarW();
+    if (sw > 0){
+      // guarda padding-right previo y compensa
+      _bodyPadRightPrev = document.body.style.paddingRight || "";
+      document.body.style.paddingRight = sw + "px";
+    }
+  }
+  function unlockScroll(){
+    document.body.classList.remove("no-scroll");
+    // restaura padding-right
+    document.body.style.paddingRight = _bodyPadRightPrev;
+    _bodyPadRightPrev = "";
+  }
 
   // ===== Menú negro de categorías (pantalla completa) =========================
   function isFiltersOpen(){ return !!filtersPanel && filtersPanel.classList.contains("is-open"); }
 
   function openFilters() {
     if (!filtersPanel) return;
-    // No usamos overlay para el black-menu
-    filtersPanel.hidden = false;             // visible para permitir animación
-    // forzar reflow para transición
+    // Quitar hidden primero para que exista en el flujo y pueda animar
+    filtersPanel.hidden = false;
+
+    // Forzar reflow para arrancar la transición desde el estado base
     void filtersPanel.offsetWidth;
+
+    // Abrir
     filtersPanel.classList.add("is-open");
     btnMenu?.setAttribute("aria-expanded", "true");
     lockScroll();
@@ -57,13 +78,14 @@
     if (!filtersPanel) return;
     filtersPanel.classList.remove("is-open");
     btnMenu?.setAttribute("aria-expanded", "false");
-    // Ocultar tras la transición y liberar scroll
+
+    // Espera el fin de la transición antes de ocultar (evita parpadeos/temblor)
     setTimeout(() => {
       filtersPanel.hidden = true;
       unlockScroll();
       // devolver foco al trigger
       btnMenu?.focus();
-    }, 220);
+    }, 240); // un poco más que .22s de CSS para ir seguros
   }
 
   // Toggle desde el botón hamburguesa
@@ -126,7 +148,7 @@
   // Cierre al clicar overlay (solo afecta a búsqueda)
   overlay?.addEventListener("click", () => {
     if (searchBar && !searchBar.hidden) toggleSearch(false);
-    // El black-menu no usa overlay, no lo tocamos aquí
+    // El black-menu no usa overlay
   });
 
   // ===== Topbar states (transparente / translúcida / opaca) ====================
