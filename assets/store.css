@@ -81,12 +81,45 @@ html,body{margin:0;padding:0;background:#000;color:#fff}
 .topbar__profile:hover .icon-user{opacity:.8;transform:scale(1.04);}
 
 /* ===== Searchbar ===== */
-.searchbar{position:sticky;top:var(--topbar-h);z-index:950;background:rgba(0,0,0,.85);backdrop-filter:saturate(120%) blur(2px);border-bottom:1px solid var(--border);transition:opacity .25s ease;}
+.searchbar{
+  position:sticky;
+  top:var(--topbar-h);
+  z-index:950;
+  background:#000; /* negro sólido, sin transparencia */
+  border-bottom:1px solid var(--border);
+  transition:opacity .25s ease;
+}
 .searchbar[hidden]{display:none}
-.searchbar__form{max-width:1100px;margin:0 auto;padding:6px 14px;display:flex;gap:10px;}
-.searchbar__input{flex:1;background:transparent;border:1px solid var(--border);color:var(--text);height:34px;border-radius:8px;padding:0 10px;font:400 14px/1 system-ui;}
+
+.searchbar__form{
+  max-width:1100px;
+  margin:0 auto;
+  padding:6px 14px;
+  display:flex;
+  gap:10px;
+}
+.searchbar__input{
+  flex:1;
+  background:transparent;
+  border:1px solid var(--border);
+  color:var(--text);
+  height:34px;
+  border-radius:8px;
+  padding:0 10px;
+  font:400 14px/1 system-ui;
+}
 .searchbar__input::placeholder{color:#aaa}
-.searchbar__submit{height:34px;padding:0 12px;border-radius:8px;background:#fff;color:#000;border:none;font:700 13px/1 system-ui;cursor:pointer;}
+
+.searchbar__submit{
+  height:34px;
+  padding:0 12px;
+  border-radius:8px;
+  background:#fff;
+  color:#000;
+  border:none;
+  font:700 13px/1 system-ui;
+  cursor:pointer;
+}
 
 /* ===== HERO VIDEO ===== */
 .hero-video-section{position:relative;min-height:100vh;height:100svh;display:grid;place-items:center;background:#000;overflow:hidden;z-index:1;}
