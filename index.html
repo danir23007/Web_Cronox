@@ -7,41 +7,29 @@
   <meta name="description" content="Tienda oficial CRONOX — Dark streetwear premium.">
   <meta name="theme-color" content="#000000">
 
-  <!-- Preload del vídeo para mejorar el arranque del héroe -->
   <link rel="preload" as="video" href="assets/VIDEO_LOGO_CRONOX.mp4" type="video/mp4">
-
-  <!-- CSS principal (sube versión si hiciste cambios) -->
   <link rel="stylesheet" href="assets/store.css?v=54">
-  <!-- CSS del overlay de producto (nuevo, aislado para no tocar tu CSS estable) -->
   <link rel="stylesheet" href="assets/product-detail.css?v=1">
-  <!-- CSS del Quick-Add (icono "+" y modal rápido) -->
   <link rel="stylesheet" href="assets/quick-add.css?v=1">
 
-  <!-- Noscript: si no hay JS, oculta el preloader para no bloquear la vista -->
-  <noscript>
-    <style>#preloader{display:none!important}</style>
-  </noscript>
+  <noscript><style>#preloader{display:none!important}</style></noscript>
 </head>
 <body>
 
-  <!-- Preloader -->
+  <!-- ===== Preloader ===== -->
   <div id="preloader" class="preloader" aria-hidden="true" aria-live="polite">
-    <img
-      src="https://raw.githubusercontent.com/danir23007/Web_Cronox/refs/heads/main/assets/logo%20largo%20bueno.JPG"
-      alt="CRONOX"
-      class="preloader__logo"
-      decoding="async"
-    >
+    <img src="https://raw.githubusercontent.com/danir23007/Web_Cronox/refs/heads/main/assets/logo%20largo%20bueno.JPG"
+         alt="CRONOX" class="preloader__logo" decoding="async">
   </div>
 
-  <!-- Overlay (se usa para buscador) -->
+  <!-- ===== Overlay general ===== -->
   <div id="overlay" class="overlay" hidden></div>
 
-  <!-- Topbar -->
+  <!-- ===== TOPBAR ===== -->
   <header class="topbar topbar--transparent" id="topbar" role="banner">
     <div class="topbar__left">
-      <!-- Menú (tres líneas) -->
-      <button id="btnMenu" class="icon-btn" aria-label="Abrir filtros" aria-expanded="false" aria-controls="filtersPanel">
+      <!-- Botón hamburguesa -->
+      <button id="btnMenu" class="icon-btn" aria-label="Abrir menú" aria-expanded="false" aria-controls="filtersPanel">
         <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
              stroke-linecap="round" stroke-linejoin="round" class="icon" aria-hidden="true" focusable="false">
           <line x1="3" y1="6" x2="21" y2="6"></line>
@@ -60,21 +48,17 @@
       </button>
     </div>
 
-    <!-- Logo centrado (clicable a la tienda) -->
+    <!-- Logo centrado -->
     <a href="#store" class="topbar__logo" aria-label="CRONOX — Tienda">
-      <img
-        src="https://raw.githubusercontent.com/danir23007/Web_Cronox/refs/heads/main/assets/logo%20largo%20bueno.JPG"
-        alt="CRONOX"
-        class="topbar__logo-img"
-        decoding="async"
-      >
+      <img src="https://raw.githubusercontent.com/danir23007/Web_Cronox/refs/heads/main/assets/logo%20largo%20bueno.JPG"
+           alt="CRONOX" class="topbar__logo-img" decoding="async">
     </a>
 
     <nav class="topbar__right" aria-label="Navegación principal">
       <!-- Perfil -->
       <a href="#" class="topbar__link topbar__profile" id="profileBtn" aria-label="Iniciar sesión" title="Iniciar sesión">
-        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-user" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-             stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-user" viewBox="0 0 24 24" fill="none"
+             stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M20 21v-2a4 4 0 0 0-3-3.87"></path>
           <path d="M4 21v-2a4 4 0 0 1 3-3.87"></path>
           <circle cx="12" cy="7.5" r="4"></circle>
@@ -83,227 +67,157 @@
 
       <!-- Favoritos -->
       <a href="favorites.html" class="topbar__link topbar__fav" aria-label="Ver favoritos">
-        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-star" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-             stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-star" viewBox="0 0 24 24" fill="none"
+             stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <polygon points="12 2 15.09 8.26 22 9.27 17.3 13.97 18.18 21 12 17.77 5.82 21 6.7 13.97 2 9.27 8.91 8.26 12 2"></polygon>
         </svg>
-        <span class="fav-count" aria-label="Artículos en favoritos" hidden>0</span>
+        <span class="fav-count" hidden>0</span>
       </a>
 
       <!-- Carrito -->
       <a href="cart.html" class="topbar__link topbar__cart" aria-label="Ver carrito">
-        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-bag" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-bag" viewBox="0 0 24 24" fill="none"
+             stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"></path>
           <line x1="3" y1="6" x2="21" y2="6"></line>
           <path d="M16 10a4 4 0 0 1-8 0"></path>
         </svg>
-        <span class="cart-count" aria-label="Artículos en el carrito" hidden>0</span>
+        <span class="cart-count" hidden>0</span>
       </a>
     </nav>
   </header>
 
-  <!-- Barra de búsqueda -->
+  <!-- ===== SEARCHBAR ===== -->
   <div id="searchBar" class="searchbar" hidden>
     <form id="searchForm" class="searchbar__form" role="search">
-      <input id="searchInput" class="searchbar__input" type="text" placeholder="Buscar productos…" autocomplete="off" />
-      <button class="searchbar__submit" type="submit" aria-label="Buscar"><span>Buscar</span></button>
+      <input id="searchInput" class="searchbar__input" type="text" placeholder="Buscar productos…" autocomplete="off">
+      <button class="searchbar__submit" type="submit">Buscar</button>
     </form>
   </div>
 
-  <!-- Menú de categorías (drawer lateral) -->
+  <!-- ===== MENÚ NEGRO lateral (restaurado) ===== -->
   <aside id="filtersPanel" class="black-menu" hidden aria-label="Navegación de categorías" role="dialog" aria-modal="true">
-    <!-- ✕ Cerrar -->
     <button class="filters-close" aria-label="Cerrar menú">✕</button>
-
     <nav class="black-menu__list" role="menu">
       <a class="black-menu__link" role="menuitem" href="tienda.html">Toda la oscuridad</a>
       <a class="black-menu__link" role="menuitem" href="tienda-camisetas.html">Camisetas</a>
+      <a class="black-menu__link" role="menuitem" href="tienda-sudaderas.html">Sudaderas</a>
+      <a class="black-menu__link" role="menuitem" href="tienda-accesorios.html">Accesorios</a>
     </nav>
   </aside>
 
-  <!-- HERO video -->
+  <!-- ===== HERO ===== -->
   <section class="hero-video-section" id="hero" aria-label="Portada">
-    <video
-      class="hero-video"
-      src="assets/VIDEO_LOGO_CRONOX.mp4"
-      autoplay
-      muted
-      loop
-      playsinline
-      preload="auto"
-      aria-label="Animación de introducción de CRONOX"
-    ></video>
-
-    <div class="hero-overlay-text" aria-hidden="true">
-      <h1>"NOS REGIT NOX"</h1>
-    </div>
+    <video class="hero-video" src="assets/VIDEO_LOGO_CRONOX.mp4" autoplay muted loop playsinline preload="auto"></video>
+    <div class="hero-overlay-text"><h1>"NOS REGIT NOX"</h1></div>
   </section>
 
-  <!-- TIENDA -->
+  <!-- ===== STORE ===== -->
   <main id="store" class="store" aria-live="polite">
     <h2 class="store-heading">DÉJATE CORROMPER</h2>
     <div id="productsGrid" class="products-grid"></div>
     <div id="productsFallback" class="products-fallback" hidden>
-      <p>No se han podido cargar los productos. Revisa <code>assets/products.js</code>.</p>
+      <p>No se han podido cargar los productos.</p>
     </div>
   </main>
 
-  <!-- ===== Overlay Detalle de Producto (legacy) ===== -->
+  <!-- ===== PRODUCT DETAIL ===== -->
   <div id="productDetail" class="product-detail" aria-hidden="true" role="dialog" aria-modal="true">
     <div class="product-detail__panel" role="document">
       <button class="product-detail__close" id="pdClose" aria-label="Cerrar detalle">×</button>
-
-      <div class="product-detail__media">
-        <img id="pdImage" alt="" loading="lazy">
-      </div>
-
+      <div class="product-detail__media"><img id="pdImage" alt=""></div>
       <div class="product-detail__info">
         <h3 id="pdName" class="pd-name"></h3>
         <p id="pdPrice" class="pd-price"></p>
         <p id="pdDesc" class="pd-desc"></p>
-
         <div class="pd-actions">
-          <label class="pd-size-label">
-            Talla
+          <label class="pd-size-label">Talla
             <select id="pdSize" class="pd-size">
-              <option value="S">S</option>
-              <option value="M" selected>M</option>
-              <option value="L">L</option>
-              <option value="XL">XL</option>
+              <option>S</option><option selected>M</option><option>L</option><option>XL</option>
             </select>
           </label>
-
-          <label class="pd-qty-label">
-            Cant.
-            <input id="pdQty" class="pd-qty" type="number" value="1" min="1" inputmode="numeric">
+          <label class="pd-qty-label">Cant.
+            <input id="pdQty" class="pd-qty" type="number" value="1" min="1">
           </label>
-
           <button id="pdAddToCart" class="btn-primary">Añadir al carrito</button>
         </div>
       </div>
     </div>
   </div>
 
-  <!-- Toast -->
-  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <!-- ===== TOAST & CONTACT ===== -->
+  <div id="toast" class="toast" role="status"></div>
+  <section id="contact" class="contact"><h2>Contacto</h2><p>Escríbenos para colaboraciones y soporte.</p></section>
+  <footer class="footer"><p>© CRONOX</p></footer>
 
-  <!-- CONTACTO -->
-  <section id="contact" class="contact">
-    <h2>Contacto</h2>
-    <p>Escríbenos para colaboraciones y soporte.</p>
-  </section>
-
-  <footer class="footer">
-    <p>© CRONOX</p>
-  </footer>
-
-  <!-- Failsafe: si algo rompe JS, oculta el preloader a los 3.5s -->
+  <!-- ===== FAILSAFE PRELOADER ===== -->
   <script>
-    (function(){
-      var tried=false;
-      function hide(){ if(tried) return; tried=true; var p=document.getElementById('preloader'); if(p) p.style.display='none'; }
-      try{ window.history.scrollRestoration='manual'; }catch(e){}
-      window.addEventListener('load', hide, {once:true});
-      window.addEventListener('DOMContentLoaded', function(){ setTimeout(hide, 3500); }, {once:true});
-      window.addEventListener('error', function(){ setTimeout(hide, 0); });
-      window.addEventListener('load', function(){ window.scrollTo({top:0,left:0,behavior:'instant'}); }, {once:true});
-    })();
+  (function(){
+    var tried=false;
+    function hide(){if(tried)return;tried=true;var p=document.getElementById('preloader');if(p)p.style.display='none';}
+    try{window.history.scrollRestoration='manual';}catch(e){}
+    window.addEventListener('load',hide,{once:true});
+    window.addEventListener('DOMContentLoaded',function(){setTimeout(hide,3500);},{once:true});
+    window.addEventListener('error',function(){setTimeout(hide,0);});
+    window.addEventListener('load',function(){window.scrollTo({top:0,left:0,behavior:'instant'});},{once:true});
+  })();
   </script>
 
-  <!-- Script ligero para actualizar el badge de Favoritos desde localStorage -->
+  <!-- ===== BADGE FAVORITOS ===== -->
   <script>
-    (function(){
-      function updateFavBadge(){
-        var el = document.querySelector('.fav-count');
-        if(!el) return;
-        try{
-          var raw = localStorage.getItem('cronox:favs');
-          var arr = raw ? JSON.parse(raw) : [];
-          var count = Array.isArray(arr) ? arr.length : 0;
-          if(count > 0){
-            el.textContent = String(count);
-            el.hidden = false;
-          }else{
-            el.hidden = true;
-          }
-        }catch(e){
-          el.hidden = true;
-        }
-      }
-      document.addEventListener('visibilitychange', function(){
-        if(document.visibilityState === 'visible') updateFavBadge();
-      });
-      window.addEventListener('storage', function(e){
-        if(e.key === 'cronox:favs') updateFavBadge();
-      });
-      window.addEventListener('DOMContentLoaded', updateFavBadge, {once:true});
-    })();
+  (function(){
+    function updateFavBadge(){
+      var el=document.querySelector('.fav-count');
+      if(!el)return;
+      try{
+        var raw=localStorage.getItem('cronox:favs');
+        var arr=raw?JSON.parse(raw):[];
+        var count=Array.isArray(arr)?arr.length:0;
+        el.hidden=count===0;
+        if(count>0)el.textContent=String(count);
+      }catch(e){el.hidden=true;}
+    }
+    document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')updateFavBadge();});
+    window.addEventListener('storage',(e)=>{if(e.key==='cronox:favs')updateFavBadge();});
+    window.addEventListener('DOMContentLoaded',updateFavBadge,{once:true});
+  })();
   </script>
 
-  <!-- Menú negro: abrir/cerrar y accesibilidad -->
+  <!-- ===== MENÚ NEGRO (restaurado) ===== -->
   <script>
-    (function(){
-      var btn = document.getElementById('btnMenu');
-      var panel = document.getElementById('filtersPanel');
-      var closeBtn = null;
+  (function(){
+    const btn=document.getElementById('btnMenu');
+    const panel=document.getElementById('filtersPanel');
+    const closeBtn=panel?.querySelector('.filters-close');
+    if(!btn||!panel)return;
 
-      if(!btn || !panel) return;
+    const open=()=>{
+      document.body.classList.add('no-scroll');
+      panel.hidden=false;
+      void panel.offsetWidth;
+      panel.classList.add('is-open');
+      btn.setAttribute('aria-expanded','true');
+    };
+    const close=()=>{
+      panel.classList.remove('is-open');
+      btn.setAttribute('aria-expanded','false');
+      setTimeout(()=>{panel.hidden=true;document.body.classList.remove('no-scroll');},220);
+    };
+    const isOpen=()=>panel.classList.contains('is-open');
 
-      function openMenu(){
-        document.body.classList.add('no-scroll');
-        panel.hidden = false;
-        void panel.offsetWidth; // reflow
-        panel.classList.add('is-open');
-        btn.setAttribute('aria-expanded','true');
-        // cachear botón close una vez que existe en DOM
-        if (!closeBtn) closeBtn = panel.querySelector('.filters-close');
-      }
-
-      function closeMenu(){
-        panel.classList.remove('is-open');
-        btn.setAttribute('aria-expanded','false');
-        setTimeout(function(){
-          panel.hidden = true;
-          document.body.classList.remove('no-scroll');
-        }, 220);
-      }
-
-      function isOpen(){ return panel.classList.contains('is-open'); }
-
-      btn.addEventListener('click', function(e){
-        e.preventDefault();
-        isOpen() ? closeMenu() : openMenu();
-      });
-
-      // ✕ cerrar
-      panel.addEventListener('click', function(e){
-        if (e.target.closest('.filters-close')) {
-          e.preventDefault();
-          closeMenu();
-        }
-      });
-
-      // Cerrar con ESC
-      document.addEventListener('keydown', function(e){
-        if(e.key === 'Escape' && isOpen()) closeMenu();
-      });
-
-      // Cerrar al hacer clic fuera de la lista
-      panel.addEventListener('click', function(e){
-        var list = panel.querySelector('.black-menu__list');
-        if(!list) return;
-        if(!list.contains(e.target) && !e.target.closest('.filters-close')) closeMenu();
-      });
-
-      // Cerrar al navegar (enlaces)
-      panel.addEventListener('click', function(e){
-        var a = e.target.closest('a.black-menu__link');
-        if(a){ closeMenu(); }
-      });
-    })();
+    btn.addEventListener('click',e=>{e.preventDefault();isOpen()?close():open();});
+    closeBtn?.addEventListener('click',e=>{e.preventDefault();close();});
+    document.addEventListener('keydown',e=>{if(e.key==='Escape'&&isOpen())close();});
+    panel.addEventListener('click',e=>{
+      const list=panel.querySelector('.black-menu__list');
+      if(!list)return;
+      if(!list.contains(e.target)&&!e.target.closest('.filters-close'))close();
+      const a=e.target.closest('a.black-menu__link');if(a)close();
+    });
+  })();
   </script>
 
-  <!-- Scripts principales -->
+  <!-- ===== MAIN SCRIPTS ===== -->
   <script src="assets/products.js?v=45" defer></script>
   <script src="assets/app.js?v=46" defer></script>
   <script src="assets/cart-badge.js?v=42" defer></script>
