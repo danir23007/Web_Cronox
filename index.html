@@ -216,6 +216,38 @@
     });
   })();
   </script>
+<!-- ===== BARRA DE BÚSQUEDA ===== -->
+<script>
+(function(){
+  const btnSearch = document.getElementById('btnSearch');
+  const searchBar = document.getElementById('searchBar');
+  const searchInput = document.getElementById('searchInput');
+  if(!btnSearch || !searchBar) return;
+
+  const open = () => {
+    searchBar.hidden = false;
+    searchInput?.focus();
+    btnSearch.setAttribute('aria-expanded','true');
+  };
+  const close = () => {
+    searchBar.hidden = true;
+    btnSearch.setAttribute('aria-expanded','false');
+  };
+  const toggle = () => {
+    const isHidden = searchBar.hasAttribute('hidden');
+    isHidden ? open() : close();
+  };
+
+  btnSearch.addEventListener('click', e => {
+    e.preventDefault();
+    toggle();
+  });
+
+  document.addEventListener('keydown', e => {
+    if(e.key === 'Escape' && !searchBar.hasAttribute('hidden')) close();
+  });
+})();
+</script>
 
   <!-- ===== MAIN SCRIPTS ===== -->
   <script src="assets/products.js?v=45" defer></script>
