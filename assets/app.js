@@ -1,15 +1,16 @@
 /* ==========================================================
-   CRONOX — app.js (clean quick-add; keep legacy .fav-add)
+   CRONOX — app.js (v44)  —  “+” clásico añade al carrito
    ========================================================== */
 
 (function () {
   const $ = (s, el = document) => el.querySelector(s);
   const $$ = (s, el = document) => Array.from(el.querySelectorAll(s));
 
-  // ===== Utilidades mínimas =====
-  function clamp(n, min, max) { return Math.max(min, Math.min(max, n)); }
+  // ===== Util =====
+  const clamp = (n, min, max) => Math.max(min, Math.min(max, n));
+  const getProducts = () => Array.isArray(window.CRONOX_PRODUCTS) ? window.CRONOX_PRODUCTS : [];
 
-  // ===== Topbar: transparente (en el tope del héroe) → hero (sobre el vídeo) → page (resto) =====
+  // ===== Topbar states (transparente → hero → page) =====
   const topbar = $('.topbar');
   const hero = $('.hero-video-section');
 
@@ -23,11 +24,10 @@
     if (!topbar || !hero) return;
     const rect = hero.getBoundingClientRect();
     const atTop = window.scrollY <= 0;
-    const heroInView = rect.bottom > 0 && rect.top < (topbar.offsetHeight + 1) + window.innerHeight;
 
     if (atTop && rect.top >= 0) {
       applyTopbarState('topbar--transparent');
-    } else if (heroInView && rect.bottom > topbar.offsetHeight) {
+    } else if (rect.bottom > 0) {
       applyTopbarState('topbar--hero');
     } else {
       applyTopbarState('topbar--page');
@@ -35,13 +35,9 @@
   }
 
   if (hero && topbar) {
-    // Primera pintura
-    updateTopbarOnScroll();
-    // Observa al héroe para cambios finos
     try {
       const io = new IntersectionObserver(
         ([entry]) => {
-          // entry.isIntersecting = topbar “hero”, si además estamos en y=0 y borde superior del héroe está visible, “transparent”
           if (entry.isIntersecting) {
             if (window.scrollY <= 0) applyTopbarState('topbar--transparent');
             else applyTopbarState('topbar--hero');
@@ -49,163 +45,174 @@
             applyTopbarState('topbar--page');
           }
         },
-        { root: null, threshold: [0, 0.01, 0.1, 0.5, 1] }
+        { threshold: [0, 0.01, 0.1] }
       );
       io.observe(hero);
-    } catch {
-      // Fallback sin IO
-      window.addEventListener('scroll', updateTopbarOnScroll, { passive: true });
-      window.addEventListener('resize', updateTopbarOnScroll);
-    }
+    } catch {}
     window.addEventListener('scroll', updateTopbarOnScroll, { passive: true });
     window.addEventListener('resize', updateTopbarOnScroll);
+    document.addEventListener('DOMContentLoaded', updateTopbarOnScroll);
+    window.addEventListener('load', updateTopbarOnScroll);
   }
 
-  // ===== Overlay genérico (si lo usas para búsqueda u otros) =====
+  // ===== Drawer Lateral (si lo usas) =====
   const overlay = $('.overlay');
-  function showOverlay(kind = 'overlay--page') {
+  const filtersPanel = $('#filtersPanel');
+  const showOverlay = (kind = 'overlay--page') => {
     if (!overlay) return;
     overlay.hidden = false;
     overlay.classList.remove('overlay--hero', 'overlay--page');
     overlay.classList.add(kind);
-  }
-  function hideOverlay() {
-    if (!overlay) return;
-    overlay.hidden = true;
-  }
+  };
+  const hideOverlay = () => { if (overlay) overlay.hidden = true; };
 
-  // ===== Drawer lateral (filtros/categorías) =====
-  const filtersPanel = $('#filtersPanel');
-  function openFilters() {
-    if (!filtersPanel) return;
-    filtersPanel.classList.add('is-open');
-    showOverlay('overlay--page');
-    document.body.classList.add('no-scroll');
-  }
-  function closeFilters() {
-    if (!filtersPanel) return;
-    filtersPanel.classList.remove('is-open');
-    hideOverlay();
-    document.body.classList.remove('no-scroll');
-  }
+  function openFilters(){ if (filtersPanel){ filtersPanel.classList.add('is-open'); showOverlay('overlay--page'); document.body.classList.add('no-scroll'); } }
+  function closeFilters(){ if (filtersPanel){ filtersPanel.classList.remove('is-open'); hideOverlay(); document.body.classList.remove('no-scroll'); } }
 
   document.addEventListener('click', (e) => {
-    const t = e.target;
-
-    // Botones de abrir/cerrar filtros (usa data-attrs para no depender de IDs concretos)
-    if (t.closest('[data-open-filters]')) {
-      e.preventDefault();
-      openFilters();
-      return;
-    }
-    if (t.closest('[data-close-filters]') || (overlay && t === overlay)) {
-      e.preventDefault();
-      closeFilters();
-      return;
-    }
+    if (e.target.closest('[data-open-filters]')) { e.preventDefault(); openFilters(); }
+    if (e.target.closest('[data-close-filters]') || (overlay && e.target === overlay)) { e.preventDefault(); closeFilters(); }
   });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeFilters(); });
 
-  document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') closeFilters();
-  });
-
-  // ===== Galería de imágenes en tarjeta (flechas ‹ ›) =====
+  // ===== Mini-galería en cards (flechas ‹ ›) =====
   function moveGallery(cardEl, dir = 1) {
-    const imagesWrap = $('.product-images', cardEl);
-    if (!imagesWrap) return;
-
-    const imgs = $$('.product-img', imagesWrap);
+    const wrap = $('.product-images', cardEl);
+    if (!wrap) return;
+    const imgs = $$('.product-img', wrap);
     if (!imgs.length) return;
 
-    let activeIndex = imgs.findIndex((im) => im.classList.contains('active'));
-    if (activeIndex < 0) activeIndex = 0;
-
-    const nextIndex = (activeIndex + dir + imgs.length) % imgs.length;
-    imgs.forEach((im, idx) => im.classList.toggle('active', idx === nextIndex));
+    let idx = imgs.findIndex((im) => im.classList.contains('active'));
+    if (idx < 0) idx = 0;
+    const next = (idx + dir + imgs.length) % imgs.length;
+    imgs.forEach((im, i) => im.classList.toggle('active', i === next));
   }
 
   document.addEventListener('click', (e) => {
     const prevBtn = e.target.closest('.product-arrow.prev');
     const nextBtn = e.target.closest('.product-arrow.next');
     if (prevBtn || nextBtn) {
-      e.preventDefault();
+      e.preventDefault(); e.stopPropagation();
       const card = e.target.closest('.product-card');
       moveGallery(card, prevBtn ? -1 : 1);
     }
   });
 
-  // ===== Favoritos (icono estrella en card) =====
+  // ===== Favoritos (estrella) — opcional =====
   const favCountEl = $('.topbar__fav .fav-count');
   let favCount = Number(favCountEl?.textContent || 0);
-
-  function bumpFavCount(delta) {
-    favCount = clamp(favCount + delta, 0, 999);
+  const bumpFavCount = (d) => {
+    favCount = clamp(favCount + d, 0, 999);
     if (favCountEl) favCountEl.textContent = String(favCount);
-  }
-
+  };
   document.addEventListener('click', (e) => {
     const toggle = e.target.closest('.fav-toggle');
     if (!toggle) return;
-    e.preventDefault();
-
+    e.preventDefault(); e.stopPropagation();
     const active = toggle.classList.toggle('active');
     bumpFavCount(active ? 1 : -1);
   });
 
-  // ===== Carrito: solo con el “+” clásico (.fav-add) =====
-  // Importante: eliminamos cualquier creación/uso de ".card-plus".
-  // Este bloque NO genera ningún botón; únicamente maneja clicks del "+" ya existente en el HTML.
+  // ===== Carrito =====
   const cartCountEl = $('.topbar__cart .cart-count');
-  let cartCount = Number(cartCountEl?.textContent || 0);
 
-  function bumpCartCount(delta) {
-    cartCount = clamp(cartCount + delta, 0, 999);
-    if (cartCountEl) cartCountEl.textContent = String(cartCount);
+  function readCart() {
+    try {
+      const raw = localStorage.getItem('cronox_cart');
+      return raw ? JSON.parse(raw) : [];
+    } catch { return []; }
   }
 
+  function writeCart(cart) {
+    try { localStorage.setItem('cronox_cart', JSON.stringify(cart)); } catch {}
+    window.dispatchEvent(new Event('cart:updated'));
+  }
+
+  function cartTotalQty(cart) {
+    return cart.reduce((acc, it) => acc + (Number(it.qty) || 0), 0);
+  }
+
+  function updateCartBadgeExplicit(qty) {
+    if (cartCountEl) cartCountEl.textContent = String(clamp(qty, 0, 999));
+  }
+
+  function updateCartBadgeFromStorage() {
+    const cart = readCart();
+    updateCartBadgeExplicit(cartTotalQty(cart));
+  }
+
+  // expone por si otros scripts lo usan
+  window.updateCartBadge = updateCartBadgeExplicit;
+
+  function addToCartLine(item) {
+    const cart = readCart();
+    // misma línea = mismo id + talla + color
+    const idx = cart.findIndex(x => x.id === item.id && x.size === item.size && x.color === item.color);
+    if (idx >= 0) {
+      cart[idx].qty = (Number(cart[idx].qty) || 0) + (Number(item.qty) || 1);
+    } else {
+      cart.push({ ...item, qty: Number(item.qty) || 1, addedAt: Date.now() });
+    }
+    writeCart(cart);
+    updateCartBadgeExplicit(cartTotalQty(cart));
+  }
+
+  // Click en el “+” clásico dentro de la card
   document.addEventListener('click', (e) => {
-    const addBtn = e.target.closest('.fav-add'); // el “+” clásico
+    const addBtn = e.target.closest('.fav-add');
     if (!addBtn) return;
 
+    // Evita navegar (el botón está dentro del <a.product-card>)
     e.preventDefault();
+    e.stopPropagation();
+
     const card = addBtn.closest('.product-card');
-    const productId = card?.getAttribute('data-product-id') || null;
+    const pid = card?.getAttribute('data-id') || card?.dataset?.id;
+    if (!pid) return;
 
-    // Aquí puedes integrar tu lógica real de carrito (localStorage / fetch / Shopify / etc.)
-    // Por ahora, solo incrementamos el contador visualmente.
-    bumpCartCount(1);
+    const product = getProducts().find(p => p.id === pid);
+    if (!product) return;
 
-    // Feedback mínimo
+    // Defaults rápidos (si no hay opciones)
+    const size  = (product.sizes && product.sizes[0]) ? String(product.sizes[0]).toUpperCase() : 'M';
+    const color = (product.colors && product.colors[0]) ? String(product.colors[0]) : (product.color || 'Único');
+
+    addToCartLine({
+      id: product.id,
+      name: product.name,
+      price: Number(product.price) || 0,
+      priceLabel: product.priceLabel || new Intl.NumberFormat('es-ES',{style:'currency',currency:'EUR'}).format(product.price),
+      image: (Array.isArray(product.images) && product.images[0]) ? product.images[0] : product.image,
+      size,
+      color,
+      qty: 1
+    });
+
+    // Feedback visual rápido
     addBtn.style.transform = 'scale(1.12)';
     addBtn.style.opacity = '1';
     setTimeout(() => {
       addBtn.style.transform = '';
       addBtn.style.opacity = '';
-    }, 150);
+    }, 160);
   });
 
-  // ===== Limpieza defensiva: elimina cualquier “.card-plus” ya pintado por HTML heredado =====
-  $$('.card-plus').forEach((el) => el.remove());
+  // Inicializa badge al cargar
+  document.addEventListener('DOMContentLoaded', updateCartBadgeFromStorage);
+  window.addEventListener('storage', (e) => { if (e.key === 'cronox_cart') updateCartBadgeFromStorage(); });
 
-  // ===== Prevención: si algún script externo intenta inyectar .card-plus en el futuro =====
+  // ===== Saneado: si algún HTML viejo mete .card-plus, lo quitamos =====
+  $$('.card-plus').forEach((el) => el.remove());
   try {
-    const mo = new MutationObserver((mutations) => {
-      mutations.forEach((m) => {
-        m.addedNodes && m.addedNodes.forEach((node) => {
-          if (!(node instanceof HTMLElement)) return;
-          if (node.matches && node.matches('.card-plus')) node.remove();
-          // Si entra dentro de un card:
-          $$('.card-plus', node).forEach((n) => n.remove());
+    const mo = new MutationObserver((muts) => {
+      muts.forEach((m) => {
+        m.addedNodes && m.addedNodes.forEach((n) => {
+          if (!(n instanceof HTMLElement)) return;
+          if (n.matches?.('.card-plus')) n.remove();
+          $$('.card-plus', n).forEach((x) => x.remove());
         });
       });
     });
     mo.observe(document.documentElement, { childList: true, subtree: true });
-  } catch { /* noop */ }
-
-  // ===== Ajuste inicial de estados =====
-  document.addEventListener('DOMContentLoaded', updateTopbarOnScroll);
-  window.addEventListener('load', () => {
-    // Asegura estado correcto tras carga completa
-    updateTopbarOnScroll();
-  });
+  } catch {}
 })();
