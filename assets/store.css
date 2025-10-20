@@ -212,3 +212,64 @@ a.product-card{display:block;text-decoration:none;color:inherit;cursor:pointer;}
 }
 .qa-btn:hover{filter:brightness(1.02)}
 .qa-muted-link{font:600 12px/1.3 system-ui;color:#cfcfcf;text-decoration:underline}
+/* =========================
+   MENÚ DESPLEGABLE NEGRO (BLACK MENU)
+   ========================= */
+.black-menu {
+  position: fixed;
+  top: 0;
+  left: 0;
+  height: 100vh;
+  width: min(82vw, 340px);
+  background: #000;
+  color: #fff;
+  z-index: 1600;
+  transform: translateX(-102%);
+  transition: transform 0.3s cubic-bezier(.2,.8,.2,1);
+  display: flex;
+  flex-direction: column;
+  padding: 24px 20px;
+  box-shadow: 6px 0 24px rgba(0,0,0,.6);
+  border-right: 1px solid rgba(255,255,255,.1);
+}
+.black-menu.is-open {
+  transform: translateX(0);
+}
+
+/* Botón de cerrar (✕) */
+.filters-close {
+  align-self: flex-end;
+  background: none;
+  border: none;
+  color: #fff;
+  font-size: 28px;
+  line-height: 1;
+  cursor: pointer;
+  margin-bottom: 16px;
+  transition: opacity .2s ease, transform .2s ease;
+}
+.filters-close:hover {
+  opacity: .85;
+  transform: scale(1.1);
+}
+
+/* Enlaces del menú */
+.black-menu__list {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding: 0;
+  margin: 0;
+}
+.black-menu__link {
+  color: #fff;
+  text-decoration: none;
+  font: 700 18px/1.2 system-ui;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  transition: color .2s ease, transform .2s ease;
+}
+.black-menu__link:hover {
+  color: #cfcfcf;
+  transform: translateX(4px);
+}
