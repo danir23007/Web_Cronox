@@ -1,8 +1,8 @@
 // ======================================================
-// assets/products.js — Grid + filtros + mini-galería
-// + Quick-Add (panel vertical) al pulsar “+” clásico
-// + scroll exacto al volver (back) y foco en última vista
-// (v5)
+// assets/products.js (v6)
+// - Grid + filtros + mini-galería
+// - “+” abre Quick-Add vertical
+// - Quick-Add SIN selector de color (usa color del producto)
 // ======================================================
 (function () {
   const productsGrid = document.getElementById("productsGrid");
@@ -20,11 +20,9 @@
   const norm = (s) =>
     (s || "").toString().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
 
-  function euros(n){
-    return new Intl.NumberFormat("es-ES",{style:"currency",currency:"EUR"}).format(n);
-  }
+  function euros(n){ return new Intl.NumberFormat("es-ES",{style:"currency",currency:"EUR"}).format(n); }
 
-  // === Catálogo (usa 'image' + 'images' (frente/espalda) ) ===
+  // === Demo catálogo ===
   const PRODUCTS = [
     {
       id: "camiseta-washed-gris",
@@ -59,7 +57,7 @@
       desc: "Camiseta premium lavado negro, corte oversized y tacto suave."
     }
   ];
-  window.CRONOX_PRODUCTS = PRODUCTS; // para otros scripts
+  window.CRONOX_PRODUCTS = PRODUCTS;
 
   // ---- Búsqueda inicial (?q=) ----
   const url = new URL(window.location);
@@ -67,9 +65,9 @@
   if (searchInput && initialQueryRaw) searchInput.value = initialQueryRaw;
 
   // ======================================================
-  // Quick-Add DOM (PANEL VERTICAL)
+  // Quick-Add DOM (panel negro, sin color)
   // ======================================================
-  let qaOverlay, qaPanel, qaClose, qaImg1, qaImg2, qaName, qaPrice, qaColor, qaSize, qaAdd, qaLink;
+  let qaOverlay, qaPanel, qaClose, qaImg1, qaImg2, qaName, qaPrice, /* qaColor, */ qaSize, qaAdd, qaLink;
   let qaCurrentProduct = null;
 
   function ensureQuickAddDOM() {
@@ -92,10 +90,7 @@
           <h3 class="qa-name" id="qaName"></h3>
           <p class="qa-price" id="qaPrice"></p>
 
-          <div class="qa-row">
-            <span class="qa-label">Color</span>
-            <select id="qaColor" class="qa-select"></select>
-          </div>
+          <!-- Sin selector de color por ahora -->
 
           <div class="qa-row">
             <span class="qa-label">Talla</span>
@@ -118,7 +113,7 @@
     qaImg2  = qaOverlay.querySelector("#qaImg2");
     qaName  = qaOverlay.querySelector("#qaName");
     qaPrice = qaOverlay.querySelector("#qaPrice");
-    qaColor = qaOverlay.querySelector("#qaColor");
+    // qaColor = (eliminado)
     qaSize  = qaOverlay.querySelector("#qaSize");
     qaAdd   = qaOverlay.querySelector("#qaAdd");
     qaLink  = qaOverlay.querySelector("#qaLink");
@@ -132,13 +127,13 @@
       if (qaOverlay.getAttribute("aria-hidden") === "false" && e.key === "Escape") closeQuickAdd();
     });
 
-    // Añadir al carrito (usa el evento global que expone app.js o localStorage directo)
+    // Añadir al carrito
     qaAdd.addEventListener("click", () => {
       if (!qaCurrentProduct) return;
       const size  = (qaSize?.value || (qaCurrentProduct.sizes?.[0] || "M")).toUpperCase();
-      const color = qaColor?.value || qaCurrentProduct.color || "Único";
+      // color por defecto (no expuesto en UI)
+      const color = qaCurrentProduct.color || (qaCurrentProduct.colors?.[0]) || "Único";
 
-      // Dispara un evento global para que app.js lo gestione si existe:
       const ev = new CustomEvent("cronox:addToCart", {
         detail: {
           id: qaCurrentProduct.id,
@@ -176,9 +171,7 @@
     qaName.textContent  = product.name || "";
     qaPrice.textContent = product.priceLabel || euros(product.price);
 
-    const colors = product.colors?.length ? product.colors : (product.color ? [product.color] : ["Único"]);
-    qaColor.innerHTML = colors.map(c => `<option value="${c}">${String(c).toUpperCase()}</option>`).join("");
-
+    // Solo tallas
     const sizes  = product.sizes?.length ? product.sizes : ["m"];
     qaSize.innerHTML = sizes.map(s => `<option value="${String(s).toUpperCase()}">${String(s).toUpperCase()}</option>`).join("");
 
@@ -196,7 +189,6 @@
     qaCurrentProduct = null;
   }
 
-  // Exponer helper global para abrir por id (lo usará app.js)
   window.CRONOX_openQuickAddById = function(id){
     const p = PRODUCTS.find(x => x.id === id);
     if (p) openQuickAdd(p);
