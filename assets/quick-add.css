@@ -1,109 +1,78 @@
-/* =========================
-   QUICK ADD — CRONOX (v2)
-   ========================= */
+/* ===== QUICK-ADD — Ajustes de layout (fotos arriba grandes + modal más corto) ===== */
 
-.qa-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, .6);
-  display: none;
-  align-items: center;
-  justify-content: center;
-  z-index: 1200;
+/* Modal un poco más bajo */
+.qa-panel{
+  max-height: 82vh;              /* ↓ antes 92vh */
+  padding: 16px 22px 16px;       /* menos padding inferior */
+  background:#000;
+  color:#fff;
+  border:1px solid rgba(255,255,255,.15);
+  box-shadow:0 0 40px rgba(0,0,0,.8);
 }
-.qa-overlay[aria-hidden="false"] { display: flex; }
 
-/* Panel negro con textos blancos */
-.qa-panel {
-  width: min(100%, 720px);
-  max-height: 92vh;
-  overflow: auto;
-  background: #000;
-  color: #fff;
-  border: 1px solid rgba(255, 255, 255, .15);
-  padding: 18px 24px 24px;
-  display: flex;
-  flex-direction: column;
+/* Franja de imágenes: ocupa “toda” la parte superior visible del modal */
+.qa-media{
+  display:grid;
+  grid-template-columns: 1fr 1fr;           /* dos imágenes lado a lado en desktop */
   gap: 16px;
-  position: relative;
-  box-shadow: 0 0 40px rgba(0,0,0,.8);
+  height: clamp(320px, 38vh, 440px);        /* << controla la altura de esa franja */
+  /* sin márgenes extras para que pegue a los bordes del panel */
+  margin: 4px 0 10px;
+}
+@media (max-width: 640px){
+  .qa-media{
+    grid-template-columns: 1fr;             /* una columna en móvil */
+    height: clamp(260px, 42vh, 420px);
+  }
 }
 
-/* Botón de cierre */
-.qa-close {
-  position: absolute;
-  top: 10px;
-  right: 10px;
-  width: 36px;
-  height: 36px;
-  border: 1px solid rgba(255, 255, 255, .25);
-  background: transparent;
-  color: #fff;
-  font-size: 22px;
-  line-height: 1;
-  cursor: pointer;
-  border-radius: 6px;
-}
-.qa-close:hover { background: rgba(255, 255, 255, .08); }
-
-/* Galería de imágenes */
-.qa-media {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 10px;
-}
-@media (min-width: 640px) {
-  .qa-media { grid-template-columns: 1fr 1fr; }
-}
-.qa-media img {
-  width: 100%;
-  aspect-ratio: 1 / 1;
-  object-fit: contain;
-  background: #fff;              /* ✅ fondo blanco */
-  border: 1px solid rgba(255, 255, 255, .15);
-  border-radius: 2px;
+/* Cada imagen rellena su celda sin dejar “bandas” */
+.qa-media img{
+  width:100%;
+  height:100%;
+  object-fit: contain;                       /* mantiene proporción */
+  background:#fff;                           /* ✅ fondo blanco detrás de la prenda */
+  border:1px solid rgba(255,255,255,.15);
+  border-radius:2px;
+  display:block;
 }
 
-/* Información */
-.qa-info { display: flex; flex-direction: column; gap: 10px; }
-.qa-name { font-size: clamp(18px, 2.6vw, 22px); font-weight: 800; color: #fff; margin: 0; }
-.qa-price { font-weight: 700; color: #fff; margin: 0; }
+/* Bloque de info más compacto (para acortar el modal por abajo) */
+.qa-info{ display:flex; flex-direction:column; gap: 8px; }
+.qa-name{ margin: 8px 0 0; font-weight:800; color:#fff; }
+.qa-price{ margin:0; font-weight:700; color:#fff; }
+.qa-label{ font-size:13px; color:#d0d0d0; margin: 4px 0 0; }
 
-.qa-label { font-size: 13px; color: #d0d0d0; margin-bottom: 2px; }
-.qa-select, .qa-qty {
-  background: #0f0f0f;
-  border: 1px solid rgba(255,255,255,.25);
-  color: #fff;
-  border-radius: 0;
-  padding: 8px 10px;
-  min-width: 140px;
-}
-
-/* BOTÓN AÑADIR AL CARRITO */
-.qa-btn {
-  background: #fff;          /* ✅ fondo blanco */
-  color: #000;               /* ✅ texto negro */
-  font-weight: 800;
-  border: none;
-  border-radius: 0;
-  padding: 12px 16px;
-  cursor: pointer;
-  width: 100%;
-  transition: all .2s ease;
-}
-.qa-btn:hover {
-  background: #e6e6e6;
+.qa-select, .qa-qty{
+  background:#0f0f0f;
+  border:1px solid rgba(255,255,255,.25);
+  color:#fff;
+  border-radius:0;
+  padding:8px 10px;
+  min-width:140px;
 }
 
-/* Enlace inferior */
-.qa-muted-link {
-  margin-top: 8px;
-  font-size: 12px;
-  color: #ccc;
-  text-decoration: underline;
+/* Botón blanco con texto negro (se mantiene) */
+.qa-btn{
+  background:#fff;
+  color:#000;
+  font-weight:800;
+  border:none;
+  border-radius:0;
+  padding:12px 16px;
+  width:100%;
+  cursor:pointer;
+  transition:filter .2s ease;
+  margin-top: 4px;                            /* compacta un poco */
 }
+.qa-btn:hover{ filter:brightness(0.94); }
 
-/* Fondo del botón "+" en tarjetas */
-.card-plus::before, .card-plus::after {
-  background-color: #fff;
+/* Cierre y enlace, sin cambios visuales relevantes */
+.qa-close{
+  position:absolute; top:10px; right:10px; width:36px; height:36px;
+  border:1px solid rgba(255,255,255,.25); background:transparent; color:#fff;
+  font-size:22px; line-height:1; cursor:pointer; border-radius:6px;
 }
+.qa-close:hover{ background:rgba(255,255,255,.08); }
+
+.qa-muted-link{ margin-top:6px; font-size:12px; color:#ccc; text-decoration:underline; }
