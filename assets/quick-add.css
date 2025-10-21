@@ -168,3 +168,23 @@
 .qa-name{
   margin-top: 6px !important;
 }
+
+/* ====== X minimalista (sin recuadro, solo icono negro) ====== */
+.qa-close{
+  background:none !important;
+  border:none !important;
+  color:#000 !important;          /* ✅ X negra */
+  font-size:22px !important;
+  font-weight:600;
+  line-height:1;
+  cursor:pointer;
+  padding:0;
+  width:auto;
+  height:auto;
+  top:14px !important;
+  right:14px !important;
+}
+.qa-close:hover{
+  transform:scale(1.15);
+  transition:transform .15s ease;
+}
