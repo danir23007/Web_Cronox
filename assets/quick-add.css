@@ -125,3 +125,26 @@
 
 /* Por si hay "+" en las tarjetas */
 .card-plus::before,.card-plus::after{ background-color:#fff; }
+
+/* === FIX 1: Colocar la X arriba a la derecha sí o sí === */
+.qa-panel .qa-close{
+  left: auto !important;
+  right: 10px !important;
+  top: 10px !important;
+  background: #fff;
+  color: #000;
+  border: 1px solid #000;
+  z-index: 30;
+}
+
+/* === FIX 2: Separación real entre imágenes y texto (que no tape el título) === */
+.qa-media{
+  gap: 4px !important;          /* separación entre las dos fotos */
+  margin-bottom: 12px !important;/* espacio bajo el bloque blanco de fotos */
+}
+
+/* Seguridad extra: evita que una imagen sobresalga de su celda */
+.qa-media img{
+  max-height: 100%;
+  display: block;
+}
