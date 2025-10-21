@@ -7,65 +7,9 @@
   <meta name="description" content="Lista de productos favoritos — CRONOX">
   <meta name="theme-color" content="#000000">
 
-  <!-- Usa tu CSS actual (v56) -->
+  <!-- Usa tu CSS actual -->
   <link rel="stylesheet" href="assets/store.css?v=56">
   <noscript><style>#preloader{display:none!important}</style></noscript>
-
-  <!-- Estilos SOLO para la página de Favoritos (no tocan el resto) -->
-  <style>
-    /* Grid igual que tienda */
-    #favGrid.products-grid{ margin-top:10px; }
-
-    /* Asegura que las imágenes de favoritos NO hereden la mini-galería */
-    #favGrid .product-card .product-img{
-      position: static !important;
-      opacity: 1 !important;
-      width: 100% !important;
-      height: auto !important;
-      aspect-ratio: 1 / 1;
-      object-fit: contain;
-      background: #fff;
-      display: block;
-    }
-
-    /* Tarjeta: mantenemos tu look */
-    #favGrid .product-card{
-      position: relative;
-      overflow: hidden;
-    }
-
-    /* Botón quitar (✕) — esquina superior derecha */
-    .fav-remove{
-      position:absolute;
-      top:8px; right:8px;
-      width:32px; height:32px;
-      border:1px solid var(--border);
-      border-radius: 999px;
-      background:#000; color:#fff;
-      font:700 16px/1 system-ui;
-      display:grid; place-items:center;
-      cursor:pointer; opacity:.95;
-    }
-    .fav-remove:hover{ opacity:1; }
-
-    /* Botón añadir (+) — esquina inferior derecha */
-    .fav-add{
-      position:absolute;
-      right:10px; bottom:10px;
-      width:34px; height:34px;
-      border:1px solid var(--border);
-      border-radius: 999px;
-      background:#fff; color:#000;
-      font:700 20px/1 system-ui;
-      display:grid; place-items:center;
-      cursor:pointer; opacity:.95;
-    }
-    .fav-add:hover{ opacity:1; }
-
-    /* Textos de la tarjeta */
-    #favGrid .product-name{ font-weight:800; font-size:12px; text-transform:uppercase; letter-spacing:.06em; }
-    #favGrid .product-price{ font-weight:700; font-size:12px; }
-  </style>
 </head>
 <body>
 
@@ -106,6 +50,7 @@
   <main id="favorites" class="store" aria-live="polite">
     <h1 class="store-heading">Favoritos</h1>
 
+    <!-- MISMA GRID QUE TIENDA -->
     <div id="favGrid" class="products-grid" aria-label="Lista de productos favoritos"></div>
 
     <div id="favEmpty" class="products-fallback" style="text-align:center;margin-top:40px;">
@@ -118,114 +63,137 @@
 
   <script>
   (function(){
-    const FAV_KEY = 'cronox:favs';
-    const CART_KEY = 'cronox_cart';
+    const FAV_KEY   = 'cronox:favs';
 
     const getFavs = () => { try { return JSON.parse(localStorage.getItem(FAV_KEY)) || []; } catch { return []; } };
-    const setFavs = arr => localStorage.setItem(FAV_KEY, JSON.stringify(arr));
-    const getCart = () => { try { return JSON.parse(localStorage.getItem(CART_KEY)) || []; } catch { return []; } };
-    const setCart = arr => localStorage.setItem(CART_KEY, JSON.stringify(arr));
 
-    const updateFavBadge = () => {
-      const el = document.querySelector('.fav-count');
-      const n = getFavs().length;
-      if (!el) return;
-      el.hidden = n === 0;
-      if (n > 0) el.textContent = n;
-    };
+    // Crea una tarjeta con la MISMA estructura que en tienda
+    function createStoreLikeCard(p){
+      const a = document.createElement('a');
+      a.href = `producto.html?id=${encodeURIComponent(p.id)}`;
+      a.className = 'product-card';
+      a.setAttribute('data-id', p.id);
 
-    const addToCart = (item) => {
-      const cart = getCart();
-      const existing = cart.find(it => it.id === item.id && it.size === item.size);
-      if (existing) existing.qty = (existing.qty || 1) + 1;
-      else cart.push({...item, qty: 1});
-      setCart(cart);
-      window.dispatchEvent(new Event('cart:updated'));
-    };
+      // Media con mini-galería (si hay varias imágenes)
+      const media   = document.createElement('div');
+      media.className = 'product-media';
 
-    function card(item){
-      const card = document.createElement('div');
-      card.className = 'product-card';
-      card.style.position = 'relative';
+      const gallery = document.createElement('div');
+      gallery.className = 'product-images';
 
-      const img = document.createElement('img');
-      img.className = 'product-img';
-      img.src = item.image || '';
-      img.alt = item.name || 'Producto';
-      img.loading = 'lazy';
-      img.decoding = 'async';
-      img.onerror = () => { img.src = 'assets/products/placeholder.png'; };
+      const imgs = (Array.isArray(p.images) && p.images.length ? p.images : [p.image]).filter(Boolean);
+      const imgEls = imgs.map((src, i) => {
+        const im = document.createElement('img');
+        im.className = 'product-img' + (i === 0 ? ' active' : '');
+        im.loading = 'lazy';
+        im.decoding = 'async';
+        im.alt = p.name || 'Producto';
+        im.src = src;
+        return im;
+      });
+      imgEls.forEach(im => gallery.appendChild(im));
 
-      const name = document.createElement('span');
+      // Flechas solo si hay más de una imagen (misma clase que tienda)
+      if (imgEls.length > 1) {
+        const prev = document.createElement('button');
+        prev.className = 'product-arrow prev';
+        prev.type = 'button';
+        prev.setAttribute('aria-label', 'Imagen anterior');
+        prev.textContent = '‹';
+
+        const next = document.createElement('button');
+        next.className = 'product-arrow next';
+        next.type = 'button';
+        next.setAttribute('aria-label', 'Imagen siguiente');
+        next.textContent = '›';
+
+        // Navegación básica local
+        let index = 0;
+        const show = (i) => imgEls.forEach((el, j) => el.classList.toggle('active', j === i));
+        prev.addEventListener('click', (ev) => { ev.preventDefault(); ev.stopPropagation(); index=(index-1+imgEls.length)%imgEls.length; show(index); });
+        next.addEventListener('click', (ev) => { ev.preventDefault(); ev.stopPropagation(); index=(index+1)%imgEls.length; show(index); });
+
+        gallery.appendChild(prev);
+        gallery.appendChild(next);
+      }
+
+      // “+” clásico (misma clase). Abrimos Quick-Add usando el helper global.
+      const plus = document.createElement('button');
+      plus.className = 'fav-add';
+      plus.type = 'button';
+      plus.setAttribute('aria-label', `Añadir rápido ${p.name}`);
+      plus.textContent = '+';
+      plus.addEventListener('click', (ev) => {
+        ev.preventDefault(); ev.stopPropagation();
+        if (typeof window.CRONOX_openQuickAddById === 'function') {
+          window.CRONOX_openQuickAddById(p.id);
+        }
+      });
+
+      media.appendChild(gallery);
+      media.appendChild(plus);
+
+      const name = document.createElement('h3');
       name.className = 'product-name';
-      name.textContent = item.name || 'Producto';
+      name.textContent = p.name || '';
 
-      const price = document.createElement('span');
+      const price = document.createElement('p');
       price.className = 'product-price';
-      price.textContent = item.price || item.priceLabel || '';
+      price.textContent = p.priceLabel || p.price || '';
 
-      const removeBtn = document.createElement('button');
-      removeBtn.className = 'fav-remove';
-      removeBtn.type = 'button';
-      removeBtn.textContent = '✕';
-      removeBtn.addEventListener('click', e => {
-        e.stopPropagation();
-        const newFavs = getFavs().filter(f => f.id ? f.id !== item.id : f.name !== item.name);
-        setFavs(newFavs);
-        updateFavBadge();
-        render();
-      });
+      a.appendChild(media);
+      a.appendChild(name);
+      a.appendChild(price);
+      return a;
+    }
 
-      const addBtn = document.createElement('button');
-      addBtn.className = 'fav-add';
-      addBtn.type = 'button';
-      addBtn.textContent = '+';
-      addBtn.title = 'Añadir al carrito';
-      addBtn.addEventListener('click', e => {
-        e.stopPropagation();
-        addToCart({
-          id: item.id || item.name,
-          name: item.name,
-          price: Number(item.price) || Number(String(item.price).replace(/[^\d.,]/g,'').replace(',','.')) || 0,
-          priceLabel: item.price || item.priceLabel,
-          image: item.image,
-          size: (item.size || 'M').toString().toUpperCase()
-        });
-      });
-
-      card.appendChild(img);
-      card.appendChild(removeBtn);
-      card.appendChild(name);
-      card.appendChild(price);
-      card.appendChild(addBtn);
-      return card;
+    // Enriquecemos cada favorito con datos del catálogo para tener mismas imágenes/labels
+    function enrichFavs(rawFavs){
+      const CATALOG = Array.isArray(window.CRONOX_PRODUCTS) ? window.CRONOX_PRODUCTS : [];
+      return rawFavs.map(f => {
+        const fromId   = CATALOG.find(x => x.id === f.id);
+        const fromName = CATALOG.find(x => !f.id && x.name === f.name);
+        const base = fromId || fromName || {};
+        return {
+          id:   f.id   || base.id,
+          name: f.name || base.name,
+          price: f.price || base.priceLabel || base.price,
+          priceLabel: f.priceLabel || base.priceLabel,
+          image: f.image || base.image,
+          images: base.images || (f.image ? [f.image] : []),
+        };
+      }).filter(x => x.id && (x.image || (x.images && x.images.length)));
     }
 
     function render(){
-      const grid = document.getElementById('favGrid');
+      const grid  = document.getElementById('favGrid');
       const empty = document.getElementById('favEmpty');
       grid.innerHTML = '';
-      const favs = getFavs();
-      if(!favs.length){
+
+      const favs = enrichFavs(getFavs());
+      if (!favs.length){
         empty.hidden = false;
         return;
       }
       empty.hidden = true;
+
       const frag = document.createDocumentFragment();
-      favs.forEach(it => frag.appendChild(card(it)));
+      favs.forEach(p => frag.appendChild(createStoreLikeCard(p)));
       grid.appendChild(frag);
+
+      // La estrella (fav-toggle.js) se añade sola a .product-card; al cambiar favoritos recargamos vista.
     }
 
-    document.addEventListener('DOMContentLoaded', () => {
-      updateFavBadge();
-      render();
-    });
-    window.addEventListener('storage', (e) => {
-      if (e.key === FAV_KEY) { updateFavBadge(); render(); }
-    });
+    document.addEventListener('DOMContentLoaded', render);
+    window.addEventListener('storage', (e) => { if (e.key === FAV_KEY) render(); });
   })();
   </script>
 
+  <!-- Reutilizamos tus scripts para Quick-Add, badge, estrella y galería -->
+  <script src="assets/products.js?v=45" defer></script>
+  <script src="assets/app.js?v=46" defer></script>
   <script src="assets/cart-badge.js?v=42" defer></script>
+  <script src="assets/fav-toggle.js?v=42" defer></script>
+  <script src="assets/product-gallery.js?v=1" defer></script>
 </body>
 </html>
