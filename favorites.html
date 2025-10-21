@@ -7,7 +7,7 @@
   <meta name="description" content="Lista de productos favoritos — CRONOX">
   <meta name="theme-color" content="#000000">
 
-  <!-- Usa tu CSS actual -->
+  <!-- Tu CSS actual -->
   <link rel="stylesheet" href="assets/store.css?v=56">
   <noscript><style>#preloader{display:none!important}</style></noscript>
 </head>
@@ -33,15 +33,31 @@
     </a>
 
     <nav class="topbar__right" aria-label="Navegación principal">
+      <!-- PERFIL (igual que en index.html) -->
+      <a href="#" class="topbar__link topbar__profile" id="profileBtn" aria-label="Iniciar sesión" title="Iniciar sesión">
+        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-user" viewBox="0 0 24 24" fill="none"
+             stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M20 21v-2a4 4 0 0 0-3-3.87"></path>
+          <path d="M4 21v-2a4 4 0 0 1 3-3.87"></path>
+          <circle cx="12" cy="7.5" r="4"></circle>
+        </svg>
+      </a>
+
+      <!-- Favoritos -->
       <a href="favorites.html" class="topbar__link topbar__fav" aria-label="Ver favoritos" aria-current="page">
         <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-star" viewBox="0 0 24 24" fill="none" stroke="currentColor"
              stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17.3 13.97 18.18 21 12 17.77 5.82 21 6.7 13.97 2 9.27 8.91 8.26 12 2"></polygon></svg>
         <span class="fav-count" hidden>0</span>
       </a>
 
+      <!-- Carrito -->
       <a href="cart.html" class="topbar__link topbar__cart" aria-label="Ver carrito">
-        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-bag" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-             stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"></path><line x1="3" y1="6" x2="21" y2="6"></line><path d="M16 10a4 4 0 0 1-8 0"></path></svg>
+        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-bag" viewBox="0 0 24 24" fill="none"
+             stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"></path>
+          <line x1="3" y1="6" x2="21" y2="6"></line>
+          <path d="M16 10a4 4 0 0 1-8 0"></path>
+        </svg>
         <span class="cart-count" hidden>0</span>
       </a>
     </nav>
@@ -50,7 +66,6 @@
   <main id="favorites" class="store" aria-live="polite">
     <h1 class="store-heading">Favoritos</h1>
 
-    <!-- MISMA GRID QUE TIENDA -->
     <div id="favGrid" class="products-grid" aria-label="Lista de productos favoritos"></div>
 
     <div id="favEmpty" class="products-fallback" style="text-align:center;margin-top:40px;">
@@ -67,14 +82,13 @@
 
     const getFavs = () => { try { return JSON.parse(localStorage.getItem(FAV_KEY)) || []; } catch { return []; } };
 
-    // Crea una tarjeta con la MISMA estructura que en tienda
+    // MISMA tarjeta que tienda (estructura y clases)
     function createStoreLikeCard(p){
       const a = document.createElement('a');
       a.href = `producto.html?id=${encodeURIComponent(p.id)}`;
       a.className = 'product-card';
       a.setAttribute('data-id', p.id);
 
-      // Media con mini-galería (si hay varias imágenes)
       const media   = document.createElement('div');
       media.className = 'product-media';
 
@@ -93,7 +107,6 @@
       });
       imgEls.forEach(im => gallery.appendChild(im));
 
-      // Flechas solo si hay más de una imagen (misma clase que tienda)
       if (imgEls.length > 1) {
         const prev = document.createElement('button');
         prev.className = 'product-arrow prev';
@@ -107,7 +120,6 @@
         next.setAttribute('aria-label', 'Imagen siguiente');
         next.textContent = '›';
 
-        // Navegación básica local
         let index = 0;
         const show = (i) => imgEls.forEach((el, j) => el.classList.toggle('active', j === i));
         prev.addEventListener('click', (ev) => { ev.preventDefault(); ev.stopPropagation(); index=(index-1+imgEls.length)%imgEls.length; show(index); });
@@ -117,7 +129,6 @@
         gallery.appendChild(next);
       }
 
-      // “+” clásico (misma clase). Abrimos Quick-Add usando el helper global.
       const plus = document.createElement('button');
       plus.className = 'fav-add';
       plus.type = 'button';
@@ -147,7 +158,6 @@
       return a;
     }
 
-    // Enriquecemos cada favorito con datos del catálogo para tener mismas imágenes/labels
     function enrichFavs(rawFavs){
       const CATALOG = Array.isArray(window.CRONOX_PRODUCTS) ? window.CRONOX_PRODUCTS : [];
       return rawFavs.map(f => {
@@ -180,8 +190,6 @@
       const frag = document.createDocumentFragment();
       favs.forEach(p => frag.appendChild(createStoreLikeCard(p)));
       grid.appendChild(frag);
-
-      // La estrella (fav-toggle.js) se añade sola a .product-card; al cambiar favoritos recargamos vista.
     }
 
     document.addEventListener('DOMContentLoaded', render);
@@ -189,7 +197,7 @@
   })();
   </script>
 
-  <!-- Reutilizamos tus scripts para Quick-Add, badge, estrella y galería -->
+  <!-- Reutilizamos tus scripts tal cual -->
   <script src="assets/products.js?v=45" defer></script>
   <script src="assets/app.js?v=46" defer></script>
   <script src="assets/cart-badge.js?v=42" defer></script>
