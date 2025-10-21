@@ -148,3 +148,10 @@
   max-height: 100%;
   display: block;
 }
+
+/* === FIX 3: recorte visual del fondo blanco en imágenes del Quick-Add === */
+.qa-media img {
+  object-fit: cover !important;         /* antes era contain → ahora recorta */
+  object-position: center 52%;          /* centra y sube un poco el encuadre */
+  clip-path: inset(20px 0 20px 0);      /* ✅ recorta 20px por arriba y 20px por abajo */
+}
