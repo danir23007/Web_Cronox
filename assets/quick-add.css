@@ -149,21 +149,22 @@
   display: block;
 }
 
-/* ======= BAJAR EL BLOQUE DE TEXTOS ======= */
+/* ======= MARGENES EQUILIBRADOS ARRIBA / ABAJO ======= */
 
-/* más hueco debajo del bloque de fotos */
+/* separa más el bloque de texto respecto a las imágenes */
 .qa-media{
-  margin-bottom: 28px !important;   /* antes 12px */
+  margin-bottom: 48px !important;   /* ↑ aumenta la separación entre fotos y texto */
 }
 
-/* el bloque de info empieza un poco más abajo todavía */
+/* bloque de información con más aire visual */
 .qa-info{
-  margin-top: 8px !important;       /* empuja todo el bloque hacia abajo */
-  padding-top: 28px !important;     /* más aire superior dentro del bloque */
+  margin-top: 0 !important;
+  padding-top: 36px !important;     /* ↑ mantiene equilibrio visual */
+  padding-bottom: 36px !important;  /* ↓ deja mismo aire abajo del todo */
   border-top: 1px solid rgba(255,255,255,.10) !important;
 }
 
-/* por si el título tuviera margen colapsando */
+/* título con pequeño margen para evitar colapsos */
 .qa-name{
-  margin-top: 4px !important;
+  margin-top: 6px !important;
 }
