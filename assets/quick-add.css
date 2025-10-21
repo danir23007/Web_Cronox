@@ -148,3 +148,22 @@
   max-height: 100%;
   display: block;
 }
+
+/* 3) “Recorte visual” del fondo blanco SIN tocar la imagen:
+      restamos 20px arriba y 20px abajo con un margen interno,
+      así deja una franja negra y el título ya no pisa la zona blanca. */
+.qa-media img{
+  height:calc(100% - 40px) !important;  /* 100% menos 20+20 */
+  margin:20px 0 !important;             /* 20px arriba y abajo */
+  object-fit:contain !important;         /* mantenemos proporción */
+  background:#fff;                       /* fondo blanco dentro del marco */
+  display:block;
+  border:0;
+  border-radius:0;
+}
+
+/* 4) Por si el título llegara muy alto, forzamos separación con el bloque de info */
+.qa-info{
+  padding-top:22px !important;
+  border-top:1px solid rgba(255,255,255,.08) !important;
+}
