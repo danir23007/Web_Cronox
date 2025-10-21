@@ -1,8 +1,7 @@
 /* =========================
-   QUICK ADD — CRONOX (v3)
+   QUICK ADD — CRONOX (v4)
    ========================= */
 
-/* Fondo del overlay */
 .qa-overlay {
   position: fixed;
   inset: 0;
@@ -14,27 +13,26 @@
 }
 .qa-overlay[aria-hidden="false"] { display: flex; }
 
-/* Ventana centrada */
+/* Modal centrado */
 .qa-panel {
   width: min(100%, 720px);
-  max-height: 84vh;              /* un poco más corta por abajo */
+  max-height: 84vh;            /* un poco más corto que el original */
   overflow: auto;
   background: #000;
   color: #fff;
   border: 1px solid rgba(255,255,255,.15);
-  padding: 18px 24px 22px;
   display: flex;
   flex-direction: column;
-  gap: 16px;
   position: relative;
   box-shadow: 0 0 40px rgba(0,0,0,.8);
+  padding: 0 24px 22px;        /* ✅ sin padding superior */
 }
 
 /* Botón cerrar */
 .qa-close {
   position: absolute;
-  top: 10px;
-  right: 10px;
+  top: 12px;
+  right: 12px;
   width: 36px;
   height: 36px;
   border: 1px solid rgba(255,255,255,.25);
@@ -44,40 +42,68 @@
   line-height: 1;
   cursor: pointer;
   border-radius: 6px;
+  z-index: 10;
 }
 .qa-close:hover { background: rgba(255,255,255,.08); }
 
-/* Galería de imágenes: ocupa toda la parte superior */
+/* =========================
+   GALERÍA DE IMÁGENES ARRIBA
+   ========================= */
 .qa-media {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 16px;
-  height: clamp(340px, 40vh, 460px);  /* altura controlada, sin márgenes negros */
-  margin-bottom: 10px;
+  height: clamp(360px, 45vh, 480px);  /* más grandes */
+  margin: 0;                         /* ✅ sin márgenes arriba ni abajo */
+  padding-top: 0;
 }
 @media (max-width: 640px) {
   .qa-media {
     grid-template-columns: 1fr;
-    height: clamp(260px, 46vh, 420px);
+    height: clamp(280px, 46vh, 440px);
   }
 }
 .qa-media img {
   width: 100%;
   height: 100%;
   object-fit: contain;
-  background: #fff;                           /* fondo blanco */
+  background: #fff;
   border: 1px solid rgba(255,255,255,.15);
-  border-radius: 2px;
+  border-radius: 0;
   display: block;
 }
 
-/* Información del producto */
-.qa-info { display: flex; flex-direction: column; gap: 8px; }
-.qa-name { font-size: clamp(18px, 2.6vw, 22px); font-weight: 800; color: #fff; margin: 8px 0 0; }
-.qa-price { font-weight: 700; color: #fff; margin: 0; }
+/* =========================
+   INFORMACIÓN DEL PRODUCTO
+   ========================= */
+.qa-info {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 14px; /* pequeño espacio tras las imágenes */
+}
 
-.qa-label { font-size: 13px; color: #d0d0d0; margin: 6px 0 0; }
-.qa-select, .qa-qty {
+.qa-name {
+  font-size: clamp(18px, 2.6vw, 22px);
+  font-weight: 800;
+  color: #fff;
+  margin: 8px 0 0;
+}
+
+.qa-price {
+  font-weight: 700;
+  color: #fff;
+  margin: 0;
+}
+
+.qa-label {
+  font-size: 13px;
+  color: #d0d0d0;
+  margin: 6px 0 0;
+}
+
+.qa-select,
+.qa-qty {
   background: #0f0f0f;
   border: 1px solid rgba(255,255,255,.25);
   color: #fff;
@@ -86,9 +112,11 @@
   min-width: 140px;
 }
 
-/* Botón de Añadir al carrito */
+/* =========================
+   BOTÓN AÑADIR AL CARRITO
+   ========================= */
 .qa-btn {
-  background: #fff;      /* fondo blanco */
+  background: #fff;      /* blanco */
   color: #000;           /* texto negro */
   font-weight: 800;
   border: none;
@@ -97,7 +125,7 @@
   width: 100%;
   cursor: pointer;
   transition: filter .2s ease;
-  margin-top: 6px;
+  margin-top: 8px;
 }
 .qa-btn:hover { filter: brightness(0.92); }
 
@@ -110,7 +138,8 @@
   text-align: left;
 }
 
-/* Botón "+" (por si aún se usa dentro de las tarjetas) */
-.card-plus::before, .card-plus::after {
+/* Botón "+" en tarjetas (sin cambios) */
+.card-plus::before,
+.card-plus::after {
   background-color: #fff;
 }
