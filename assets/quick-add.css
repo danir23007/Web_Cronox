@@ -1,93 +1,127 @@
 /* =========================
-   QUICK ADD — CRONOX (v5)
+   QUICK ADD — CRONOX (v6)
    ========================= */
 
-/* Overlay */
 .qa-overlay{
-  position:fixed; inset:0; background:rgba(0,0,0,.6);
-  display:none; align-items:center; justify-content:center; z-index:1200;
+  position:fixed; inset:0;
+  background:rgba(0,0,0,.6);
+  display:none; align-items:center; justify-content:center;
+  z-index:1200;
 }
 .qa-overlay[aria-hidden="false"]{ display:flex; }
 
-/* Panel centrado — SIN padding lateral ni superior */
+/* Ventana centrada */
 .qa-panel{
   width:min(100%, 720px);
-  max-height:84vh;                 /* un poco más corto por abajo */
+  max-height:84vh;
   overflow:auto;
-  background:#000; color:#fff;
+  background:#000;
+  color:#fff;
   border:1px solid rgba(255,255,255,.15);
-  padding:0;                        /* ✅ elimina padding que creaba márgenes a los lados y arriba */
-  display:flex; flex-direction:column;
+  display:flex;
+  flex-direction:column;
   position:relative;
   box-shadow:0 0 40px rgba(0,0,0,.8);
+  padding:0;
 }
 
-/* Botón cerrar: arriba-derecha, encima de la foto, en NEGRO */
+/* ===== Botón Cerrar (arriba a la derecha, negro) ===== */
 .qa-close{
-  position:absolute; top:8px; right:8px;
+  position:absolute;
+  top:10px; right:10px;              /* ✅ esquina superior derecha */
   width:34px; height:34px;
-  background:#fff;                 /* fondo blanco para que la X negra destaque */
-  color:#000;                      /* ✅ X negra */
+  background:#fff;
+  color:#000;
   border:1px solid #000;
   border-radius:6px;
-  font-size:20px; line-height:1; cursor:pointer;
-  z-index:20;                      /* por encima de las imágenes */
+  font-size:20px; line-height:1;
+  cursor:pointer;
+  z-index:30;                        /* ✅ por encima de las imágenes */
 }
-.qa-close:hover{ filter:brightness(.95); }
+.qa-close:hover{ filter:brightness(.9); }
 
-/* ===== Zona de imágenes: pega a los bordes del panel ===== */
+/* ===== Galería de imágenes ===== */
 .qa-media{
   display:grid;
   grid-template-columns:1fr 1fr;
-  gap:16px;                        /* separación ENTRE imágenes */
-  height:clamp(360px, 45vh, 500px);
-  margin:0;                        /* ✅ sin margen arriba/abajo */
-  padding:0 0 0 0;                 /* ✅ sin padding lateral */
+  gap:4px;                            /* ✅ separación mínima entre fotos */
+  height:clamp(360px,45vh,500px);
+  margin:0;
+  padding:0;
 }
 @media (max-width:640px){
   .qa-media{
     grid-template-columns:1fr;
-    height:clamp(280px, 46vh, 440px);
-    gap:10px;
+    height:clamp(280px,46vh,440px);
+    gap:4px;
   }
 }
-
-/* Cada imagen ocupa su celda completa y llega hasta los bordes del panel */
 .qa-media img{
   width:100%; height:100%;
   object-fit:contain;
-  background:#fff;                 /* fondo blanco bajo la prenda */
-  display:block;
-  border:0;                        /* ✅ sin borde que deje “aire” */
+  background:#fff;
+  border:none;
   border-radius:0;
+  display:block;
 }
 
-/* ===== Info: añadimos el padding aquí (no en el panel) ===== */
+/* ===== Info del producto ===== */
 .qa-info{
-  display:flex; flex-direction:column; gap:8px;
-  padding:16px 24px 22px;          /* ✅ el texto sí lleva aire lateral/abajo */
+  display:flex;
+  flex-direction:column;
+  gap:8px;
+  padding:22px 24px 24px;           /* ✅ añadido más espacio arriba para que el título no quede tapado */
   border-top:1px solid rgba(255,255,255,.08);
 }
-.qa-name{ margin:6px 0 0; font-size:clamp(18px,2.6vw,22px); font-weight:800; color:#fff; }
-.qa-price{ margin:0; font-weight:700; color:#fff; }
-.qa-label{ font-size:13px; color:#d0d0d0; margin:6px 0 0; }
-
-.qa-select,.qa-qty{
-  background:#0f0f0f; border:1px solid rgba(255,255,255,.25); color:#fff;
-  border-radius:0; padding:8px 10px; min-width:140px;
+.qa-name{
+  margin:0;
+  font-size:clamp(18px,2.6vw,22px);
+  font-weight:800;
+  color:#fff;
+}
+.qa-price{
+  font-weight:700;
+  color:#fff;
+  margin:0 0 2px;
 }
 
-/* Botón Añadir al carrito: blanco con texto negro */
+.qa-label{
+  font-size:13px;
+  color:#d0d0d0;
+  margin:6px 0 0;
+}
+
+.qa-select,.qa-qty{
+  background:#0f0f0f;
+  border:1px solid rgba(255,255,255,.25);
+  color:#fff;
+  border-radius:0;
+  padding:8px 10px;
+  min-width:140px;
+}
+
+/* ===== Botón Añadir al carrito ===== */
 .qa-btn{
-  background:#fff; color:#000; font-weight:800;
-  border:none; border-radius:0; padding:12px 16px; width:100%;
-  cursor:pointer; transition:filter .2s ease; margin-top:8px;
+  background:#fff;
+  color:#000;
+  font-weight:800;
+  border:none;
+  border-radius:0;
+  padding:12px 16px;
+  width:100%;
+  cursor:pointer;
+  transition:filter .2s ease;
+  margin-top:8px;
 }
 .qa-btn:hover{ filter:brightness(.92); }
 
 .qa-muted-link{
-  margin-top:8px; font-size:12px; color:#ccc; text-decoration:underline; text-align:left;
+  margin-top:8px;
+  font-size:12px;
+  color:#ccc;
+  text-decoration:underline;
+  text-align:left;
 }
 
-/* (por si aún hubiera algún .card-plus antiguo) */
+/* Por si hay "+" en las tarjetas */
 .card-plus::before,.card-plus::after{ background-color:#fff; }
