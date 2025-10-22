@@ -222,15 +222,36 @@
   const btnSearch = document.getElementById('btnSearch');
   const searchBar = document.getElementById('searchBar');
   const searchInput = document.getElementById('searchInput');
+  const topbar = document.getElementById('topbar');
+  const topbarStates = ['topbar--transparent','topbar--hero','topbar--page'];
+  let prevTopbarState = '';
   if(!btnSearch || !searchBar) return;
+
+  const lockTopbar = () => {
+    if (!topbar) return;
+    prevTopbarState = topbarStates.find(cls => topbar.classList.contains(cls)) || '';
+    document.body.dataset.topbarLock = 'topbar--page';
+    topbar.classList.remove(...topbarStates);
+    topbar.classList.add('topbar--page');
+  };
+  const unlockTopbar = () => {
+    if (!topbar) return;
+    delete document.body.dataset.topbarLock;
+    topbar.classList.remove(...topbarStates);
+    if (prevTopbarState) topbar.classList.add(prevTopbarState);
+    prevTopbarState = '';
+    window.dispatchEvent(new Event('scroll'));
+  };
 
   const open = () => {
     searchBar.hidden = false;
+    lockTopbar();
     searchInput?.focus();
     btnSearch.setAttribute('aria-expanded','true');
   };
   const close = () => {
     searchBar.hidden = true;
+    unlockTopbar();
     btnSearch.setAttribute('aria-expanded','false');
   };
   const toggle = () => {
