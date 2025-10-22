@@ -10,12 +10,13 @@
   const pImage = document.getElementById("pImage");
   const pName  = document.getElementById("pName");
   const pPrice = document.getElementById("pPrice");
-  const pDesc  = document.getElementById("pDesc");
-  const pSize  = document.getElementById("pSize");
-  const pQty   = document.getElementById("pQty");
-  const pAdd   = document.getElementById("pAdd");
+  const pDesc      = document.getElementById("pDesc");
+  const pSizeGroup = document.getElementById("pSizeGroup");
+  const pAdd       = document.getElementById("pAdd");
   const toast  = document.getElementById("toast");
   const relatedGrid = document.getElementById("relatedGrid");
+
+  let selectedSize = "";
 
   // --- Catálogo (inyectado desde index o fallback local del HTML) ---
   const PRODUCTS = Array.isArray(window.CRONOX_PRODUCTS) ? window.CRONOX_PRODUCTS : [];
@@ -97,6 +98,47 @@
   }
 
   // --- Render PDP ---
+  function normalizeSizes(list) {
+    const arr = Array.isArray(list) && list.length ? list : ["M"];
+    const seen = new Set();
+    return arr
+      .map(s => String(s || "").trim().toUpperCase())
+      .filter(s => {
+        if (!s) return false;
+        if (seen.has(s)) return false;
+        seen.add(s);
+        return true;
+      });
+  }
+
+  function setupSizeButtons(sizes) {
+    if (!pSizeGroup) return;
+    const normalized = normalizeSizes(sizes);
+    pSizeGroup.innerHTML = normalized
+      .map(size => `<button type="button" class="size-btn" data-size="${size}" role="radio" aria-checked="false">${size}</button>`)
+      .join("");
+
+    const buttons = Array.from(pSizeGroup.querySelectorAll(".size-btn"));
+    if (!buttons.length) {
+      selectedSize = "";
+      return;
+    }
+
+    const activate = (btn) => {
+      buttons.forEach(b => {
+        const isActive = b === btn;
+        b.classList.toggle("is-active", isActive);
+        b.setAttribute("aria-checked", isActive ? "true" : "false");
+        if (isActive) selectedSize = b.dataset.size || "";
+      });
+    };
+
+    activate(buttons[0]);
+    buttons.forEach(btn => {
+      btn.addEventListener("click", () => activate(btn));
+    });
+  }
+
   function render(p) {
     if (!p) return;
     if (pImage) { pImage.src = p.image; pImage.alt = p.name || ""; }
@@ -104,11 +146,7 @@
     if (pPrice) pPrice.textContent = p.priceLabel || money(p.price);
     if (pDesc)  pDesc.textContent  = p.desc || "";
 
-    if (pSize) {
-      const sizes = Array.isArray(p.sizes) && p.sizes.length ? p.sizes : ["m"];
-      pSize.innerHTML = sizes.map(s => `<option value="${s.toUpperCase()}">${s.toUpperCase()}</option>`).join("");
-    }
-    if (pQty) pQty.value = "1";
+    setupSizeButtons(p.sizes);
 
     setPageTitle(p);
     renderRelated(p);
@@ -147,8 +185,8 @@
     render(p);
 
     pAdd?.addEventListener("click", () => {
-      const size = pSize?.value || "M";
-      const qty  = Math.max(1, parseInt(pQty?.value || "1", 10));
+      const fallbackSize = normalizeSizes(p.sizes)[0] || "M";
+      const size = selectedSize || fallbackSize;
       addToCart({
         id: p.id,
         name: p.name,
@@ -156,7 +194,7 @@
         priceLabel: p.priceLabel || money(p.price),
         image: p.image,
         size,
-        qty
+        qty: 1
       });
       showToast("Añadido al carrito ✓");
     });
