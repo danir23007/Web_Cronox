@@ -77,16 +77,73 @@
     .pdp__price{ color:#ddd; font-weight:700; font-size: clamp(18px, 2.5vw, 22px); margin:0; }
     .pdp__desc{ color:#cfcfcf; line-height:1.6; margin:0 0 .8em; }
 
-    .pdp__actions{ display:flex; flex-wrap:wrap; gap:12px; align-items:center; }
-    .pdp__label{ display:flex; flex-direction:column; gap:6px; font-size:14px; color:#bbb; }
-    .pdp__select, .pdp__qty{
+    .pdp__actions{ display:flex; flex-direction:column; gap:16px; align-items:flex-start; }
+    .pdp__size-block{ display:flex; flex-direction:column; gap:10px; width:100%; }
+    .pdp__label-text{ font-size:13px; letter-spacing:.08em; text-transform:uppercase; color:#bbb; }
+    .pdp__size-buttons{ display:flex; flex-wrap:wrap; gap:10px; }
+    .size-btn{
       background:#0f0f0f;
-      border:1px solid rgba(255,255,255,.15);
+      border:1px solid rgba(255,255,255,.18);
       color:#fff;
       border-radius:0;
-      padding:8px 10px;
-      min-width:110px;
+      padding:12px 18px;
+      min-width:58px;
+      text-transform:uppercase;
+      letter-spacing:.06em;
+      font-weight:600;
+      font-size:13px;
+      cursor:pointer;
+      transition:background .2s ease, color .2s ease, border-color .2s ease;
     }
+    .size-btn:hover{ border-color:#fff; }
+    .size-btn.is-active,
+    .size-btn[aria-checked="true"]{
+      background:#fff;
+      color:#000;
+      border-color:#fff;
+    }
+    .size-btn:focus-visible{
+      outline:2px solid #fff;
+      outline-offset:2px;
+    }
+    #pAdd{
+      align-self:stretch;
+      max-width:320px;
+    }
+    @media (min-width:600px){
+      #pAdd{ max-width:360px; }
+    }
+
+    .pdp__details{ margin-top:24px; display:flex; flex-direction:column; gap:12px; }
+    .pdp__accordion{
+      background:#0f0f0f;
+      border:1px solid rgba(255,255,255,.12);
+    }
+    .pdp__accordion summary{
+      list-style:none;
+      cursor:pointer;
+      padding:14px 16px;
+      font-weight:600;
+      letter-spacing:.06em;
+      text-transform:uppercase;
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      color:#eaeaea;
+    }
+    .pdp__accordion summary::-webkit-details-marker{ display:none; }
+    .pdp__accordion summary::after{
+      content:"+";
+      font-weight:400;
+      margin-left:16px;
+    }
+    .pdp__accordion[open] summary{ border-bottom:1px solid rgba(255,255,255,.08); }
+    .pdp__accordion[open] summary::after{ content:"−"; }
+    .pdp__accordion-content{ padding:14px 16px 18px; color:#cfcfcf; line-height:1.6; font-size:14px; }
+    .pdp__details-list{ margin:0; padding-left:18px; }
+    .pdp__details-list li{ margin-bottom:6px; }
+    .pdp__details-list li:last-child{ margin-bottom:0; }
+    .pdp__size-guide-placeholder{ margin:0; color:#bcbcbc; }
 
     .btn-primary{
       background:#fff;
@@ -247,15 +304,10 @@
         <p id="pDesc" class="pdp__desc"></p>
 
         <div class="pdp__actions">
-          <label class="pdp__label">
-            Talla
-            <select id="pSize" class="pdp__select"></select>
-          </label>
-
-          <label class="pdp__label">
-            Cant.
-            <input id="pQty" class="pdp__qty" type="number" min="1" value="1" inputmode="numeric">
-          </label>
+          <div class="pdp__size-block">
+            <span class="pdp__label-text">Talla</span>
+            <div id="pSizeGroup" class="pdp__size-buttons" role="radiogroup" aria-label="Selecciona una talla"></div>
+          </div>
 
           <button id="pAdd" class="btn-primary">Añadir al carrito</button>
         </div>
@@ -267,6 +319,25 @@
             <li>Calidad premium CRONOX</li>
           </ul>
         </div>
+
+        <section class="pdp__details" aria-label="Especificaciones del producto">
+          <details class="pdp__accordion">
+            <summary>Detalles del producto</summary>
+            <div class="pdp__accordion-content">
+              <ul class="pdp__details-list">
+                <li>COMPOSICIÓN: 100% Algodón, 240gsm</li>
+                <li>Corte: Mid-Cropped, Boxy fit</li>
+                <li>Diseño: Camiseta con lavado ácido, doble bordado frontal y trasero</li>
+              </ul>
+            </div>
+          </details>
+          <details class="pdp__accordion">
+            <summary>Guía de tallas</summary>
+            <div class="pdp__accordion-content">
+              <p class="pdp__size-guide-placeholder">Añadiremos la guía de tallas muy pronto.</p>
+            </div>
+          </details>
+        </section>
 
         <nav class="pdp__breadcrumb" style="margin-top:18px">
           <a href="index.html#store" class="js-back">← Volver a la colección</a>
@@ -295,9 +366,9 @@
         priceLabel: "34,95 €",
         image: "assets/products/camiseta_washed_gris.png",
         categories: ["camisetas"],
-        sizes: ["s","m","l","xl"],
+        sizes: ["s","m","l","xl","xxl"],
         color: "gris",
-        desc: "Camiseta premium lavado gris, corte oversized y tacto suave."
+        desc: "Me he peleado con el proveedor que me las hacía porque decían que les exigía demasiado para una camiseta básica, asique si se acaban no hay restock <3"
       },
       {
         id: "camiseta-washed-negra",
@@ -306,9 +377,9 @@
         priceLabel: "34,95 €",
         image: "assets/products/camiseta_washed_negra.png",
         categories: ["camisetas"],
-        sizes: ["s","m","l","xl"],
+        sizes: ["s","m","l","xl","xxl"],
         color: "negro",
-        desc: "Camiseta premium lavado negro, corte oversized y tacto suave."
+        desc: "Me he peleado con el proveedor que me las hacía porque decían que les exigía demasiado para una camiseta básica, asique si se acaban no hay restock <3"
       }
     ];
     document.getElementById('anio').textContent = new Date().getFullYear();
