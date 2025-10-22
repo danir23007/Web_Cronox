@@ -26,7 +26,7 @@
   const PRODUCTS = [
     {
       id: "camiseta-washed-gris",
-      name: "Camiseta Washed Gris",
+      name: "Grey Core Tee",
       price: 34.95,
       priceLabel: "34,95 €",
       image: "assets/products/camiseta_washed_gris.png",
@@ -42,7 +42,7 @@
     },
     {
       id: "camiseta-washed-negra",
-      name: "Camiseta Washed Negra",
+      name: "Black Core Tee",
       price: 34.95,
       priceLabel: "34,95 €",
       image: "assets/products/camiseta_washed_negra.png",

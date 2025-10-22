@@ -114,36 +114,39 @@
       #pAdd{ max-width:360px; }
     }
 
-    .pdp__details{ margin-top:24px; display:flex; flex-direction:column; gap:12px; }
+    .pdp__details{ margin-top:24px; display:flex; flex-direction:column; }
     .pdp__accordion{
-      background:#0f0f0f;
-      border:1px solid rgba(255,255,255,.12);
+      background:transparent;
+      border:0;
+      padding:0;
     }
+    .pdp__accordion + .pdp__accordion{ border-top:1px solid rgba(255,255,255,.12); }
     .pdp__accordion summary{
       list-style:none;
       cursor:pointer;
-      padding:14px 16px;
+      padding:12px 0;
       font-weight:600;
-      letter-spacing:.06em;
+      letter-spacing:.05em;
       text-transform:uppercase;
       display:flex;
       justify-content:space-between;
       align-items:center;
       color:#eaeaea;
+      font-size:13px;
     }
     .pdp__accordion summary::-webkit-details-marker{ display:none; }
     .pdp__accordion summary::after{
       content:"+";
       font-weight:400;
-      margin-left:16px;
+      margin-left:12px;
     }
-    .pdp__accordion[open] summary{ border-bottom:1px solid rgba(255,255,255,.08); }
+    .pdp__accordion[open] summary{ border-bottom:1px solid rgba(255,255,255,.12); }
     .pdp__accordion[open] summary::after{ content:"−"; }
-    .pdp__accordion-content{ padding:14px 16px 18px; color:#cfcfcf; line-height:1.6; font-size:14px; }
+    .pdp__accordion-content{ padding:12px 0 16px; color:#cfcfcf; line-height:1.6; font-size:13px; }
     .pdp__details-list{ margin:0; padding-left:18px; }
     .pdp__details-list li{ margin-bottom:6px; }
     .pdp__details-list li:last-child{ margin-bottom:0; }
-    .pdp__size-guide-placeholder{ margin:0; color:#bcbcbc; }
+    .pdp__size-guide-placeholder{ margin:0; color:#bcbcbc; font-size:13px; }
 
     .btn-primary{
       background:#fff;
@@ -157,13 +160,6 @@
     }
     .btn-primary:active{ transform:scale(.98); }
     .btn-primary:hover{ opacity:.9; }
-
-    .pdp__meta ul{
-      margin:.6em 0 0;
-      padding-left:18px;
-      color:#bcbcbc;
-      line-height:1.6;
-    }
 
     .pdp__breadcrumb a{
       color:#eaeaea;
@@ -242,7 +238,7 @@
 <body>
 
   <!-- Topbar (idéntica al index pero negra opaca) -->
-  <header class="topbar" id="topbar" role="banner">
+  <header class="topbar topbar--page" id="topbar" role="banner">
     <div class="topbar__left">
       <button id="btnMenu" class="icon-btn" aria-label="Abrir filtros" aria-expanded="false" aria-controls="filtersPanel">
         <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
@@ -272,6 +268,23 @@
     </a>
 
     <nav class="topbar__right" aria-label="Navegación principal">
+      <a href="#" class="topbar__link topbar__profile" id="profileBtn" aria-label="Iniciar sesión" title="Iniciar sesión">
+        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-user" viewBox="0 0 24 24" fill="none"
+             stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M20 21v-2a4 4 0 0 0-3-3.87"></path>
+          <path d="M4 21v-2a4 4 0 0 1 3-3.87"></path>
+          <circle cx="12" cy="7.5" r="4"></circle>
+        </svg>
+      </a>
+
+      <a href="favorites.html" class="topbar__link topbar__fav" aria-label="Ver favoritos">
+        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-star" viewBox="0 0 24 24" fill="none"
+             stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polygon points="12 2 15.09 8.26 22 9.27 17.3 13.97 18.18 21 12 17.77 5.82 21 6.7 13.97 2 9.27 8.91 8.26 12 2"></polygon>
+        </svg>
+        <span class="fav-count" hidden>0</span>
+      </a>
+
       <a href="cart.html" class="topbar__link topbar__cart" aria-label="Ver carrito">
         <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-bag" viewBox="0 0 24 24" fill="none"
              stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -310,14 +323,6 @@
           </div>
 
           <button id="pAdd" class="btn-primary">Añadir al carrito</button>
-        </div>
-
-        <div class="pdp__meta">
-          <ul>
-            <li>Envío 24/48h</li>
-            <li>Devoluciones 14 días</li>
-            <li>Calidad premium CRONOX</li>
-          </ul>
         </div>
 
         <section class="pdp__details" aria-label="Especificaciones del producto">
@@ -361,7 +366,7 @@
     window.CRONOX_PRODUCTS = window.CRONOX_PRODUCTS || [
       {
         id: "camiseta-washed-gris",
-        name: "Camiseta Washed Gris",
+        name: "Grey Core Tee",
         price: 34.95,
         priceLabel: "34,95 €",
         image: "assets/products/camiseta_washed_gris.png",
@@ -372,7 +377,7 @@
       },
       {
         id: "camiseta-washed-negra",
-        name: "Camiseta Washed Negra",
+        name: "Black Core Tee",
         price: 34.95,
         priceLabel: "34,95 €",
         image: "assets/products/camiseta_washed_negra.png",
