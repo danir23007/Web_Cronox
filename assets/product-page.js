@@ -18,6 +18,18 @@
 
   let selectedSize = "";
 
+  function syncAddButtonWidth() {
+    if (!pAdd || !pSizeGroup) return;
+    requestAnimationFrame(() => {
+      if (!pAdd || !pSizeGroup) return;
+      pAdd.style.width = "auto";
+      const width = Math.round(pSizeGroup.getBoundingClientRect().width);
+      if (width > 0) {
+        pAdd.style.width = `${width}px`;
+      }
+    });
+  }
+
   // --- Catálogo (inyectado desde index o fallback local del HTML) ---
   const PRODUCTS = Array.isArray(window.CRONOX_PRODUCTS) ? window.CRONOX_PRODUCTS : [];
 
@@ -86,8 +98,10 @@
     return `
       <a class="product-card" href="producto.html?id=${encodeURIComponent(p.id)}" aria-label="${p.name}">
         <img class="product-img" src="${p.image}" alt="${p.name}" loading="lazy" decoding="async">
-        <h3 class="product-name">${p.name}</h3>
-        <p class="product-price">${p.priceLabel || money(p.price)}</p>
+        <div class="product-card__info">
+          <h3 class="product-name">${p.name}</h3>
+          <p class="product-price">${p.priceLabel || money(p.price)}</p>
+        </div>
       </a>
     `;
   }
@@ -121,6 +135,7 @@
     const buttons = Array.from(pSizeGroup.querySelectorAll(".size-btn"));
     if (!buttons.length) {
       selectedSize = "";
+      syncAddButtonWidth();
       return;
     }
 
@@ -137,6 +152,8 @@
     buttons.forEach(btn => {
       btn.addEventListener("click", () => activate(btn));
     });
+
+    syncAddButtonWidth();
   }
 
   function render(p) {
@@ -150,6 +167,8 @@
 
     setPageTitle(p);
     renderRelated(p);
+
+    syncAddButtonWidth();
 
     window.scrollTo({ top: 0, left: 0, behavior: "instant" });
   }
@@ -201,6 +220,8 @@
 
     setupBackLinks(p.id);
   }
+
+  window.addEventListener("resize", syncAddButtonWidth);
 
   init();
 })();
