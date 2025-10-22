@@ -78,6 +78,15 @@
   transition:transform .2s ease, box-shadow .2s ease;
 }
 .product-card:hover{ transform:translateY(-2px); }
-.product-img{ width:100%; aspect-ratio:1/1; object-fit:contain; background:#0d0d0d; }
+.product-img{
+  width:100%;
+  aspect-ratio:1/1;
+  object-fit:contain;
+  background:#0d0d0d;
+  position:static;
+  opacity:1;
+  height:auto;
+  display:block;
+}
 .product-name{ margin:10px 12px 4px; font-weight:600; font-size:14px; }
 .product-price{ margin:0 12px 12px; color:#cfcfcf; font-size:13px; }
