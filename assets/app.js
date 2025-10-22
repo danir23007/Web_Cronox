@@ -13,10 +13,19 @@
   const topbar = $('.topbar');
   const hero = $('.hero-video-section');
 
+  const getLockedTopbarState = () => {
+    if (!document.body) return '';
+    const ds = document.body.dataset || {};
+    const lock = typeof ds.topbarLock === 'string' ? ds.topbarLock.trim() : '';
+    return lock || '';
+  };
+
   function applyTopbarState(state) {
     if (!topbar) return;
+    const locked = getLockedTopbarState();
+    const targetState = locked || state;
     topbar.classList.remove('topbar--transparent', 'topbar--hero', 'topbar--page');
-    topbar.classList.add(state);
+    if (targetState) topbar.classList.add(targetState);
   }
   function updateTopbarOnScroll() {
     if (!topbar || !hero) return;
