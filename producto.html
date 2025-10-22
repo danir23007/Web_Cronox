@@ -77,10 +77,23 @@
     .pdp__price{ color:#ddd; font-weight:700; font-size: clamp(18px, 2.5vw, 22px); margin:0; }
     .pdp__desc{ color:#cfcfcf; line-height:1.6; margin:0 0 .8em; }
 
-    .pdp__actions{ display:flex; flex-direction:column; gap:16px; align-items:flex-start; }
-    .pdp__size-block{ display:flex; flex-direction:column; gap:10px; width:100%; }
+    .pdp__actions{
+      display:flex;
+      flex-direction:column;
+      gap:16px;
+      align-items:flex-start;
+      width:fit-content;
+      max-width:100%;
+    }
+    .pdp__size-block{
+      display:flex;
+      flex-direction:column;
+      gap:10px;
+      align-items:flex-start;
+      width:100%;
+    }
     .pdp__label-text{ font-size:13px; letter-spacing:.08em; text-transform:uppercase; color:#bbb; }
-    .pdp__size-buttons{ display:flex; flex-wrap:wrap; gap:10px; }
+    .pdp__size-buttons{ display:inline-flex; flex-wrap:wrap; gap:10px; justify-content:flex-start; }
     .size-btn{
       background:#0f0f0f;
       border:1px solid rgba(255,255,255,.18);
@@ -108,10 +121,8 @@
     }
     #pAdd{
       align-self:stretch;
-      max-width:320px;
-    }
-    @media (min-width:600px){
-      #pAdd{ max-width:360px; }
+      width:100%;
+      max-width:none;
     }
 
     .pdp__details{ margin-top:24px; display:flex; flex-direction:column; }
@@ -172,25 +183,23 @@
     .pdp-related{ margin-top:42px; }
     .pdp-related__title{
       font-size: clamp(18px, 2.6vw, 22px);
-      margin: 0 0 14px;
+      margin: 0 0 24px;
       letter-spacing:.06em;
     }
 
     .products-grid{
       display:grid;
-      grid-template-columns:repeat(2,minmax(0,1fr));
+      grid-template-columns:repeat(auto-fit,minmax(220px,1fr));
       gap:16px;
+      justify-content:start;
     }
     @media (min-width:768px){
-      .products-grid{
-        grid-template-columns:repeat(4,minmax(0,1fr));
-        gap:20px;
-      }
+      .products-grid{ gap:20px; }
     }
 
     .product-card{
-      background:rgba(12,12,12,.88);
-      border:1px solid rgba(255,255,255,.12);
+      background:#000;
+      border:1px solid rgba(255,255,255,.14);
       border-radius:0;
       overflow:hidden;
       display:flex;
@@ -212,9 +221,28 @@
       height:auto;
       display:block;
     }
-
-    .product-name{ margin:10px 12px 4px; font-weight:600; font-size:14px; }
-    .product-price{ margin:0 12px 12px; color:#cfcfcf; font-size:13px; }
+    .product-card__info{
+      margin-top:auto;
+      background:#000;
+      padding:12px 14px 14px;
+      display:flex;
+      flex-direction:column;
+      align-items:center;
+      gap:6px;
+      text-align:center;
+    }
+    .product-name{
+      margin:0;
+      font-weight:700;
+      font-size:14px;
+      letter-spacing:.08em;
+      text-transform:uppercase;
+    }
+    .product-price{
+      margin:0;
+      color:#e6e6e6;
+      font-size:13px;
+    }
 
     /* Toast */
     .toast{
@@ -351,7 +379,7 @@
     </div>
 
     <section class="pdp-related">
-      <h2 class="pdp-related__title">También puede interesarte</h2>
+      <h2 class="pdp-related__title">Combina, complementa, oscurécete</h2>
       <div id="relatedGrid" class="products-grid"></div>
     </section>
   </main>
