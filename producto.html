@@ -54,21 +54,124 @@
       .pdp__grid{ grid-template-columns:1.1fr .9fr; gap:28px; }
     }
 
-    /* Imagen del producto — fondo blanco, esquinas en pico */
+    /* Galería principal */
+    .pdp__visual{
+      display:flex;
+      flex-direction:column;
+      gap:12px;
+    }
     .pdp__media{
+      position:relative;
       background:#fff;
       border:1px solid rgba(255,255,255,.12);
       border-radius:0;
       min-height:320px;
-      display:grid; place-items:center;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      overflow:hidden;
     }
-    .pdp__media img{
+    .pdp__media-viewport{
+      width:100%;
+      height:100%;
+      display:grid;
+      place-items:center;
+    }
+    .pdp__media-img{
       width:100%;
       height:100%;
       max-height:75vh;
       object-fit:contain;
+      display:none;
+      background:#fff;
+      transition:transform .25s ease;
+    }
+    .pdp__media-img.is-active{ display:block; }
+    .pdp__media-arrow{
+      position:absolute;
+      top:50%;
+      transform:translateY(-50%);
+      width:42px;
+      height:42px;
+      border:0;
+      background:rgba(0,0,0,.08);
+      color:#000;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      font-size:26px;
+      font-weight:600;
+      cursor:pointer;
+      border-radius:0;
+      opacity:.9;
+      transition:background .2s ease, color .2s ease, opacity .2s ease;
+      z-index:6;
+    }
+    .pdp__media-arrow span{ pointer-events:none; }
+    .pdp__media-arrow.prev{ left:12px; }
+    .pdp__media-arrow.next{ right:12px; }
+    .pdp__media-arrow:hover,
+    .pdp__media-arrow:focus-visible{
+      background:#fff;
+      color:#000;
+      opacity:1;
+    }
+    .pdp__media-arrow:focus-visible{
+      outline:2px solid #fff;
+      outline-offset:2px;
+    }
+    .pdp__media-arrow[hidden]{ display:none; }
+
+    .pdp__thumbs{
+      display:grid;
+      grid-template-columns:repeat(2,minmax(0,1fr));
+      gap:10px;
+    }
+    .pdp__thumbs[hidden]{ display:none; }
+    .pdp__thumb{
+      border:1px solid rgba(255,255,255,.14);
+      background:#fff;
+      padding:0;
+      cursor:pointer;
+      display:block;
+      aspect-ratio:1/1;
+      overflow:hidden;
+      position:relative;
+      transition:border-color .2s ease, transform .2s ease;
+    }
+    .pdp__thumb img{
+      width:100%;
+      height:100%;
+      object-fit:contain;
       display:block;
       background:#fff;
+    }
+    .pdp__thumb:hover{ transform:translateY(-2px); }
+    .pdp__thumb:focus-visible{
+      outline:2px solid #fff;
+      outline-offset:2px;
+    }
+    .pdp__thumb.is-active{
+      outline:2px solid #fff;
+      outline-offset:2px;
+    }
+    @media (min-width:768px){
+      .pdp__thumbs{
+        display:flex;
+        flex-wrap:wrap;
+        gap:12px;
+      }
+      .pdp__thumb{
+        flex:0 0 110px;
+        max-width:120px;
+      }
+    }
+    @media (min-width:900px){
+      .pdp__visual{ gap:16px; }
+    }
+    @media (hover:hover) and (pointer:fine){
+      .pdp__media.has-zoom{ cursor:zoom-in; }
+      .pdp__media.has-zoom.is-zoomed{ cursor:zoom-out; }
     }
 
     /* Info derecha */
@@ -353,8 +456,19 @@
   <!-- PDP -->
   <main id="productMain" class="pdp container" aria-live="polite">
     <div class="pdp__grid">
-      <div class="pdp__media">
-        <img id="pImage" alt="" loading="lazy">
+      <div class="pdp__visual">
+        <div class="pdp__media" id="pMedia">
+          <button id="pMediaPrev" class="pdp__media-arrow prev" type="button" aria-label="Imagen anterior" hidden>
+            <span aria-hidden="true">‹</span>
+          </button>
+          <div class="pdp__media-viewport" id="pMediaViewport">
+            <img id="pImage" class="pdp__media-img is-active" alt="" loading="lazy" decoding="async">
+          </div>
+          <button id="pMediaNext" class="pdp__media-arrow next" type="button" aria-label="Imagen siguiente" hidden>
+            <span aria-hidden="true">›</span>
+          </button>
+        </div>
+        <div id="pThumbs" class="pdp__thumbs" aria-label="Más imágenes del producto" hidden></div>
       </div>
       <div class="pdp__info">
         <h1 id="pName" class="pdp__name"></h1>
@@ -415,6 +529,10 @@
         price: 34.95,
         priceLabel: "34,95 €",
         image: "assets/products/camiseta_washed_gris.png",
+        images: [
+          "assets/products/camiseta_washed_gris.png",
+          "assets/products/camiseta_washed_gris_2.png"
+        ],
         categories: ["camisetas"],
         sizes: ["s","m","l","xl","xxl"],
         color: "gris",
@@ -426,6 +544,10 @@
         price: 34.95,
         priceLabel: "34,95 €",
         image: "assets/products/camiseta_washed_negra.png",
+        images: [
+          "assets/products/camiseta_washed_negra.png",
+          "assets/products/camiseta_washed_negra_2.png"
+        ],
         categories: ["camisetas"],
         sizes: ["s","m","l","xl","xxl"],
         color: "negro",
@@ -435,7 +557,7 @@
     document.getElementById('anio').textContent = new Date().getFullYear();
   </script>
 
-  <script src="assets/product-page.js?v=34" defer></script>
+  <script src="assets/product-page.js?v=35" defer></script>
   <script src="assets/app.js?v=31" defer></script>
   <script src="assets/cart-badge.js?v=31" defer></script>
 </body>

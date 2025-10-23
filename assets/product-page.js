@@ -7,7 +7,11 @@
   const RETURN_KEY = "cronox_scroll_to"; // <- aquí guardamos el id para volver
 
   // --- Referencias principales ---
-  const pImage = document.getElementById("pImage");
+  const pMedia = document.getElementById("pMedia");
+  const pMediaViewport = document.getElementById("pMediaViewport");
+  const pMediaPrev = document.getElementById("pMediaPrev");
+  const pMediaNext = document.getElementById("pMediaNext");
+  const pThumbs = document.getElementById("pThumbs");
   const pName  = document.getElementById("pName");
   const pPrice = document.getElementById("pPrice");
   const pDesc      = document.getElementById("pDesc");
@@ -17,6 +21,12 @@
   const relatedGrid = document.getElementById("relatedGrid");
 
   let selectedSize = "";
+  let galleryImages = [];
+  let currentImageIndex = 0;
+  let isZoomActive = false;
+  const pointerFineQuery = typeof window.matchMedia === "function"
+    ? window.matchMedia("(pointer: fine)")
+    : { matches: false };
 
   function syncAddButtonWidth() {
     if (!pAdd || !pSizeGroup) return;
@@ -125,6 +135,186 @@
       });
   }
 
+  function sanitizeImages(list, fallback) {
+    const result = [];
+    const push = (src) => {
+      const value = typeof src === "string" ? src.trim() : "";
+      if (value && !result.includes(value)) {
+        result.push(value);
+      }
+    };
+    if (Array.isArray(list)) list.forEach(push);
+    push(fallback);
+    return result;
+  }
+
+  function getActiveImage() {
+    if (!pMediaViewport) return null;
+    return pMediaViewport.querySelector(".pdp__media-img.is-active");
+  }
+
+  function resetZoom() {
+    isZoomActive = false;
+    if (pMedia) pMedia.classList.remove("is-zoomed");
+    const active = getActiveImage();
+    if (active) {
+      active.style.transform = "";
+      active.style.transformOrigin = "";
+    }
+  }
+
+  function updateZoomClass() {
+    if (!pMedia) return;
+    const canZoom = Boolean(pointerFineQuery?.matches) && galleryImages.length > 0;
+    pMedia.classList.toggle("has-zoom", canZoom);
+    if (!canZoom) resetZoom();
+  }
+
+  function updateThumbState(activeIndex) {
+    if (!pThumbs) return;
+    const buttons = pThumbs.querySelectorAll(".pdp__thumb");
+    buttons.forEach(btn => {
+      const idx = Number(btn.dataset.index);
+      const isActive = idx === activeIndex;
+      btn.classList.toggle("is-active", isActive);
+      btn.setAttribute("aria-current", isActive ? "true" : "false");
+    });
+  }
+
+  function showImage(index) {
+    if (!pMediaViewport) return;
+    const imgs = Array.from(pMediaViewport.querySelectorAll(".pdp__media-img"));
+    if (!imgs.length) return;
+
+    const total = imgs.length;
+    const normalized = ((index % total) + total) % total;
+
+    imgs.forEach((img, idx) => {
+      const isActive = idx === normalized;
+      img.classList.toggle("is-active", isActive);
+      if (isActive) {
+        img.removeAttribute("hidden");
+        img.setAttribute("aria-hidden", "false");
+      } else {
+        img.setAttribute("hidden", "true");
+        img.setAttribute("aria-hidden", "true");
+      }
+    });
+
+    currentImageIndex = normalized;
+    updateThumbState(normalized);
+    resetZoom();
+
+    const single = total <= 1;
+    if (pMediaPrev) pMediaPrev.hidden = single;
+    if (pMediaNext) pMediaNext.hidden = single;
+  }
+
+  function setupGallery(p) {
+    const images = sanitizeImages(p?.images, p?.image);
+    galleryImages = images;
+
+    if (!images.length) {
+      if (pMediaViewport) pMediaViewport.innerHTML = "";
+      if (pThumbs) {
+        pThumbs.innerHTML = "";
+        pThumbs.hidden = true;
+        pThumbs.setAttribute("aria-hidden", "true");
+      }
+      updateZoomClass();
+      return;
+    }
+
+    const altBase = p?.name ? String(p.name) : "Producto CRONOX";
+
+    if (pMediaViewport) {
+      pMediaViewport.innerHTML = images.map((src, idx) => {
+        const activeClass = idx === 0 ? " is-active" : "";
+        const hiddenAttr = idx === 0 ? "" : " hidden";
+        const idAttr = idx === 0 ? ' id="pImage"' : "";
+        const altSuffix = images.length > 1 ? ` — imagen ${idx + 1}` : "";
+        const loading = idx === 0 ? "eager" : "lazy";
+        return `<img${idAttr} class="pdp__media-img${activeClass}" src="${src}" alt="${altBase}${altSuffix}" loading="${loading}" decoding="async"${hiddenAttr} aria-hidden="${idx === 0 ? "false" : "true"}">`;
+      }).join("");
+    }
+
+    if (pThumbs) {
+      pThumbs.innerHTML = images.map((src, idx) => {
+        const activeClass = idx === 0 ? " is-active" : "";
+        return `<button type="button" class="pdp__thumb${activeClass}" data-index="${idx}" aria-label="Ver imagen ${idx + 1} de ${images.length}"><img src="${src}" alt="${altBase} miniatura ${idx + 1}" loading="lazy" decoding="async"></button>`;
+      }).join("");
+      const hideThumbs = images.length <= 1;
+      pThumbs.hidden = hideThumbs;
+      pThumbs.setAttribute("aria-hidden", hideThumbs ? "true" : "false");
+      pThumbs.querySelectorAll(".pdp__thumb").forEach(btn => {
+        btn.addEventListener("click", () => {
+          const idx = Number(btn.dataset.index);
+          if (!Number.isNaN(idx)) {
+            showImage(idx);
+          }
+        });
+      });
+    }
+
+    updateZoomClass();
+    showImage(0);
+  }
+
+  if (typeof pointerFineQuery?.addEventListener === "function") {
+    pointerFineQuery.addEventListener("change", updateZoomClass);
+  } else if (typeof pointerFineQuery?.addListener === "function") {
+    pointerFineQuery.addListener(updateZoomClass);
+  }
+
+  pMediaPrev?.addEventListener("click", (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    showImage(currentImageIndex - 1);
+  });
+
+  pMediaNext?.addEventListener("click", (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    showImage(currentImageIndex + 1);
+  });
+
+  if (pMedia) {
+    const updateOrigin = (event) => {
+      const img = getActiveImage();
+      if (!img) return;
+      const rect = img.getBoundingClientRect();
+      const x = rect.width ? ((event.clientX - rect.left) / rect.width) * 100 : 50;
+      const y = rect.height ? ((event.clientY - rect.top) / rect.height) * 100 : 50;
+      img.style.transformOrigin = `${x}% ${y}%`;
+    };
+
+    pMedia.addEventListener("click", (event) => {
+      if (!pointerFineQuery?.matches) return;
+      if (event.target.closest(".pdp__media-arrow")) return;
+      const img = getActiveImage();
+      if (!img) return;
+      isZoomActive = !isZoomActive;
+      if (isZoomActive) {
+        updateOrigin(event);
+        img.style.transform = "scale(2)";
+        pMedia.classList.add("is-zoomed");
+      } else {
+        resetZoom();
+      }
+    });
+
+    pMedia.addEventListener("mousemove", (event) => {
+      if (!isZoomActive) return;
+      updateOrigin(event);
+    });
+
+    pMedia.addEventListener("mouseleave", () => {
+      if (isZoomActive) {
+        resetZoom();
+      }
+    });
+  }
+
   function setupSizeButtons(sizes) {
     if (!pSizeGroup) return;
     const normalized = normalizeSizes(sizes);
@@ -158,7 +348,8 @@
 
   function render(p) {
     if (!p) return;
-    if (pImage) { pImage.src = p.image; pImage.alt = p.name || ""; }
+
+    setupGallery(p);
     if (pName)  pName.textContent  = p.name || "";
     if (pPrice) pPrice.textContent = p.priceLabel || money(p.price);
     if (pDesc)  pDesc.textContent  = p.desc || "";
