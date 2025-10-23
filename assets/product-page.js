@@ -23,7 +23,7 @@
   let selectedSize = "";
   let galleryImages = [];
   let currentImageIndex = 0;
-  let isZoomActive = false;
+  let zoomLevel = 0;
   const pointerFineQuery = typeof window.matchMedia === "function"
     ? window.matchMedia("(pointer: fine)")
     : { matches: false };
@@ -154,7 +154,7 @@
   }
 
   function resetZoom() {
-    isZoomActive = false;
+    zoomLevel = 0;
     if (pMedia) pMedia.classList.remove("is-zoomed");
     const active = getActiveImage();
     if (active) {
@@ -293,23 +293,25 @@
       if (event.target.closest(".pdp__media-arrow")) return;
       const img = getActiveImage();
       if (!img) return;
-      isZoomActive = !isZoomActive;
-      if (isZoomActive) {
-        updateOrigin(event);
-        img.style.transform = "scale(2)";
-        pMedia.classList.add("is-zoomed");
-      } else {
+      zoomLevel = (zoomLevel + 1) % 3;
+      if (zoomLevel === 0) {
         resetZoom();
+        return;
       }
+
+      const scale = zoomLevel === 1 ? 2 : 3;
+      updateOrigin(event);
+      img.style.transform = `scale(${scale})`;
+      pMedia.classList.add("is-zoomed");
     });
 
     pMedia.addEventListener("mousemove", (event) => {
-      if (!isZoomActive) return;
+      if (zoomLevel === 0) return;
       updateOrigin(event);
     });
 
     pMedia.addEventListener("mouseleave", () => {
-      if (isZoomActive) {
+      if (zoomLevel !== 0) {
         resetZoom();
       }
     });

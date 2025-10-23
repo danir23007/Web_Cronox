@@ -51,8 +51,8 @@
 }
 @media (max-width:640px){
   .qa-media{
-    grid-template-columns:1fr;
-    height:clamp(280px,46vh,440px);
+    grid-template-columns:repeat(2,minmax(0,1fr));
+    height:clamp(220px,58vw,320px);
     gap:4px;
   }
 }
