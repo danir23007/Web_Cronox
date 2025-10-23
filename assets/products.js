@@ -35,7 +35,7 @@
         "assets/products/camiseta_washed_gris_2.png"
       ],
       categories: ["camisetas"],
-      sizes: ["s", "m", "l", "xl"],
+      sizes: ["s", "m", "l", "xl", "xxl"],
       color: "gris",
       colors: ["gris"],
       desc: "Camiseta premium lavado gris, corte oversized y tacto suave."
@@ -51,7 +51,7 @@
         "assets/products/camiseta_washed_negra_2.png"
       ],
       categories: ["camisetas"],
-      sizes: ["s", "m", "l", "xl"],
+      sizes: ["s", "m", "l", "xl", "xxl"],
       color: "negro",
       colors: ["negro"],
       desc: "Camiseta premium lavado negro, corte oversized y tacto suave."
