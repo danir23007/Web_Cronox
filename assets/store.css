@@ -56,7 +56,11 @@ html,body{margin:0;padding:0;background:#000;color:#fff}
 .topbar__link:hover{color:#fff}
 .topbar__logo{justify-self:center;display:inline-flex;align-items:center;height:var(--topbar-h);cursor:pointer;}
 .topbar__logo:hover{opacity:.88}
-.topbar__logo-img{height:28px;display:block}
+.topbar__logo-img{
+  display:block;
+  height:auto;
+  max-height:calc(var(--topbar-h) - 8px);
+}
 
 /* ===== Icon Buttons ===== */
 .icon-btn,.icon-btn svg,.icon-btn img{background:transparent!important;border:none!important;box-shadow:none!important;}
