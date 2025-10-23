@@ -310,7 +310,7 @@
 
     .product-card{
       background:#000;
-      border:1px solid rgba(255,255,255,.14);
+      border:0;
       border-radius:0;
       overflow:hidden;
       display:flex;
@@ -457,6 +457,17 @@
     </div>
   </div>
 
+  <!-- Menú lateral reutilizable -->
+  <aside id="filtersPanel" class="black-menu" hidden aria-label="Navegación de categorías" role="dialog" aria-modal="true">
+    <button class="filters-close" aria-label="Cerrar menú">✕</button>
+    <nav class="black-menu__list" role="menu">
+      <a class="black-menu__link" role="menuitem" href="tienda.html">Toda la oscuridad</a>
+      <a class="black-menu__link" role="menuitem" href="tienda-camisetas.html">Camisetas</a>
+      <a class="black-menu__link" role="menuitem" href="tienda-sudaderas.html">Sudaderas</a>
+      <a class="black-menu__link" role="menuitem" href="tienda-accesorios.html">Accesorios</a>
+    </nav>
+  </aside>
+
   <!-- PDP -->
   <main id="productMain" class="pdp container" aria-live="polite">
     <div class="pdp__grid">
@@ -562,7 +573,7 @@
   </script>
 
   <script src="assets/product-page.js?v=35" defer></script>
-  <script src="assets/app.js?v=47" defer></script>
+  <script src="assets/app.js?v=48" defer></script>
   <script src="assets/cart-badge.js?v=31" defer></script>
 </body>
 </html>
