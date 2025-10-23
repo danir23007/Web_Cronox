@@ -73,7 +73,12 @@
 
     /* Info derecha */
     .pdp__info{ display:flex; flex-direction:column; gap:12px; }
-    .pdp__name{ font-size: clamp(22px, 3.5vw, 32px); letter-spacing:.02em; margin:.2em 0 0; }
+    .pdp__name{
+      font-size: clamp(22px, 3.5vw, 32px);
+      letter-spacing:.02em;
+      margin:.2em 0 0;
+      text-transform:uppercase;
+    }
     .pdp__price{ color:#ddd; font-weight:700; font-size: clamp(18px, 2.5vw, 22px); margin:0; }
     .pdp__desc{ color:#cfcfcf; line-height:1.6; margin:0 0 .8em; }
 
@@ -185,13 +190,15 @@
       font-size: clamp(18px, 2.6vw, 22px);
       margin: 0 0 24px;
       letter-spacing:.06em;
+      text-transform:uppercase;
     }
 
     .products-grid{
-      display:grid;
-      grid-template-columns:repeat(auto-fit,minmax(220px,1fr));
+      display:flex;
+      flex-wrap:wrap;
       gap:16px;
-      justify-content:start;
+      justify-content:flex-start;
+      align-items:stretch;
     }
     @media (min-width:768px){
       .products-grid{ gap:20px; }
@@ -207,8 +214,16 @@
       text-decoration:none;
       color:#fff;
       transition:transform .2s ease, box-shadow .2s ease;
+      flex:0 0 220px;
+      max-width:220px;
     }
     .product-card:hover{ transform:translateY(-2px); }
+    @media (max-width:520px){
+      .product-card{
+        flex:1 1 100%;
+        max-width:100%;
+      }
+    }
 
     .product-img{
       width:100%;
