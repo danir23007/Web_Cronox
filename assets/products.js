@@ -239,14 +239,16 @@
     qaLink.href = `producto.html?id=${encodeURIComponent(product.id)}`;
 
     qaOverlay.setAttribute("aria-hidden","false");
-    document.body.classList.add("no-scroll");
+    if (typeof window.CRONOX_lockScroll === "function") window.CRONOX_lockScroll("quick-add");
+    else document.body.classList.add("no-scroll");
     qaClose.focus();
   }
 
   function closeQuickAdd() {
     if (!qaOverlay) return;
     qaOverlay.setAttribute("aria-hidden","true");
-    document.body.classList.remove("no-scroll");
+    if (typeof window.CRONOX_unlockScroll === "function") window.CRONOX_unlockScroll("quick-add");
+    else document.body.classList.remove("no-scroll");
     qaCurrentProduct = null;
     qaSelectedSize = "";
   }
