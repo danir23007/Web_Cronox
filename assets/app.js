@@ -100,23 +100,77 @@
   window.CRONOX_unlockScroll = unlockScroll;
 
   const filtersPanel = $('#filtersPanel');
+  const menuBtn = $('#btnMenu');
+  const filtersCloseBtn = filtersPanel ? $('.filters-close', filtersPanel) : null;
+  const FILTERS_KEY = 'filters';
+  const FILTERS_TRANSITION_MS = 220;
+
+  const isFiltersOpen = () => Boolean(filtersPanel?.classList.contains('is-open'));
+
   function openFilters(){
     if (!filtersPanel) return;
-    filtersPanel.classList.add('is-open');
-    showOverlay('overlay--page', 'filters');
-    lockScroll('filters');
+    filtersPanel.hidden = false;
+    requestAnimationFrame(() => {
+      filtersPanel?.classList.add('is-open');
+    });
+    showOverlay('overlay--page', FILTERS_KEY);
+    lockScroll(FILTERS_KEY);
+    menuBtn?.setAttribute('aria-expanded', 'true');
   }
+
   function closeFilters(){
     if (!filtersPanel) return;
     filtersPanel.classList.remove('is-open');
-    hideOverlay('filters');
-    unlockScroll('filters');
+    menuBtn?.setAttribute('aria-expanded', 'false');
+    window.setTimeout(() => {
+      if (!filtersPanel) return;
+      if (!isFiltersOpen()) {
+        filtersPanel.hidden = true;
+        hideOverlay(FILTERS_KEY);
+        unlockScroll(FILTERS_KEY);
+      }
+    }, FILTERS_TRANSITION_MS);
   }
-  document.addEventListener('click', (e) => {
-    if (e.target.closest('[data-open-filters]')) { e.preventDefault(); openFilters(); }
-    if (e.target.closest('[data-close-filters]') || (overlay && e.target === overlay)) { e.preventDefault(); closeFilters(); }
-  });
-  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeFilters(); });
+
+  if (filtersPanel) {
+    document.addEventListener('click', (e) => {
+      if (e.target.closest('[data-open-filters]')) {
+        e.preventDefault();
+        openFilters();
+      }
+      if (e.target.closest('[data-close-filters]')) {
+        e.preventDefault();
+        closeFilters();
+      }
+    });
+
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && isFiltersOpen()) closeFilters();
+    });
+
+    menuBtn?.addEventListener('click', (e) => {
+      e.preventDefault();
+      isFiltersOpen() ? closeFilters() : openFilters();
+    });
+
+    filtersCloseBtn?.addEventListener('click', (e) => {
+      e.preventDefault();
+      closeFilters();
+    });
+
+    filtersPanel.addEventListener('click', (e) => {
+      const list = $('.black-menu__list', filtersPanel);
+      if (!list) return;
+      const link = e.target.closest('a.black-menu__link');
+      if (link) {
+        closeFilters();
+        return;
+      }
+      if (!list.contains(e.target) && !e.target.closest('.filters-close')) {
+        closeFilters();
+      }
+    });
+  }
 
   // ===== Searchbar =====
   const searchBar = $('#searchBar');
@@ -216,9 +270,9 @@
   });
 
   overlay?.addEventListener('click', (e) => {
-    if (searchActive && e.target === overlay) {
-      closeSearch();
-    }
+    if (e.target !== overlay) return;
+    if (searchActive) closeSearch();
+    if (isFiltersOpen()) closeFilters();
   });
 
   // ===== Mini-galería (flechas) =====

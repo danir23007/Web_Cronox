@@ -157,7 +157,26 @@
   <script>
   (function(){
     var tried=false;
-    function hide(){if(tried)return;tried=true;var p=document.getElementById('preloader');if(p)p.style.display='none';}
+    var minTime=1500;
+    var start=Date.now();
+    var hideTimer=0;
+    function finish(){
+      if(tried)return;
+      tried=true;
+      var p=document.getElementById('preloader');
+      if(p)p.style.display='none';
+      hideTimer=0;
+    }
+    function hide(){
+      if(tried)return;
+      var elapsed=Date.now()-start;
+      if(elapsed<minTime){
+        if(hideTimer)clearTimeout(hideTimer);
+        hideTimer=setTimeout(finish,minTime-elapsed);
+        return;
+      }
+      finish();
+    }
     try{window.history.scrollRestoration='manual';}catch(e){}
     window.addEventListener('load',hide,{once:true});
     window.addEventListener('DOMContentLoaded',function(){setTimeout(hide,3500);},{once:true});
@@ -186,47 +205,9 @@
   })();
   </script>
 
-  <!-- ===== MENÚ NEGRO (restaurado) ===== -->
-  <script>
-  (function(){
-    const btn=document.getElementById('btnMenu');
-    const panel=document.getElementById('filtersPanel');
-    const closeBtn=panel?.querySelector('.filters-close');
-    if(!btn||!panel)return;
-
-    const open=()=>{
-      if(typeof window.CRONOX_lockScroll==='function') window.CRONOX_lockScroll('menu');
-      else document.body.classList.add('no-scroll');
-      panel.hidden=false;
-      void panel.offsetWidth;
-      panel.classList.add('is-open');
-      btn.setAttribute('aria-expanded','true');
-    };
-    const close=()=>{
-      panel.classList.remove('is-open');
-      btn.setAttribute('aria-expanded','false');
-      setTimeout(()=>{
-        panel.hidden=true;
-        if(typeof window.CRONOX_unlockScroll==='function') window.CRONOX_unlockScroll('menu');
-        else document.body.classList.remove('no-scroll');
-      },220);
-    };
-    const isOpen=()=>panel.classList.contains('is-open');
-
-    btn.addEventListener('click',e=>{e.preventDefault();isOpen()?close():open();});
-    closeBtn?.addEventListener('click',e=>{e.preventDefault();close();});
-    document.addEventListener('keydown',e=>{if(e.key==='Escape'&&isOpen())close();});
-    panel.addEventListener('click',e=>{
-      const list=panel.querySelector('.black-menu__list');
-      if(!list)return;
-      if(!list.contains(e.target)&&!e.target.closest('.filters-close'))close();
-      const a=e.target.closest('a.black-menu__link');if(a)close();
-    });
-  })();
-  </script>
   <!-- ===== MAIN SCRIPTS ===== -->
   <script src="assets/products.js?v=46" defer></script>
-  <script src="assets/app.js?v=47" defer></script>
+  <script src="assets/app.js?v=48" defer></script>
   <script src="assets/cart-badge.js?v=42" defer></script>
   <script src="assets/fav-toggle.js?v=42" defer></script>
   <script src="assets/product-gallery.js?v=1" defer></script>
