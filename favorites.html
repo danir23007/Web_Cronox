@@ -8,7 +8,7 @@
   <meta name="theme-color" content="#000000">
 
   <!-- Tu CSS actual -->
-  <link rel="stylesheet" href="assets/store.css?v=57">
+  <link rel="stylesheet" href="assets/store.css?v=58">
   <noscript><style>#preloader{display:none!important}</style></noscript>
 </head>
 <body>
@@ -62,6 +62,16 @@
       </a>
     </nav>
   </header>
+
+  <div id="searchBar" class="searchbar" hidden aria-hidden="true">
+    <div class="searchbar__inner">
+      <form id="searchForm" class="searchbar__form" role="search" action="index.html#store">
+        <input id="searchInput" class="searchbar__input" type="text" placeholder="Buscar productos…" autocomplete="off">
+        <button class="searchbar__submit" type="submit">Buscar</button>
+      </form>
+      <button type="button" class="searchbar__close" aria-label="Cerrar búsqueda">×</button>
+    </div>
+  </div>
 
   <main id="favorites" class="store" aria-live="polite">
     <h1 class="store-heading">Favoritos</h1>
@@ -198,8 +208,8 @@
   </script>
 
   <!-- Reutilizamos tus scripts tal cual -->
-  <script src="assets/products.js?v=45" defer></script>
-  <script src="assets/app.js?v=46" defer></script>
+  <script src="assets/products.js?v=46" defer></script>
+  <script src="assets/app.js?v=47" defer></script>
   <script src="assets/cart-badge.js?v=42" defer></script>
   <script src="assets/fav-toggle.js?v=42" defer></script>
   <script src="assets/product-gallery.js?v=1" defer></script>

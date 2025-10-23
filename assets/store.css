@@ -35,6 +35,10 @@ html,body{margin:0;padding:0;background:#000;color:#fff}
 .overlay[hidden]{display:none}
 .overlay.overlay--hero{background:var(--overlay-hero)}
 .overlay.overlay--page{background:var(--overlay-page)}
+.overlay.overlay--search{
+  background:rgba(0,0,0,.68);
+  backdrop-filter:saturate(130%) blur(4px);
+}
 
 /* ===== Topbar ===== */
 .topbar{
@@ -86,19 +90,35 @@ html,body{margin:0;padding:0;background:#000;color:#fff}
   top:var(--topbar-h);
   left:0;
   right:0;
-  z-index:1200;
+  z-index:1400;
   background:rgba(0,0,0,.92);
   border-bottom:1px solid var(--border);
   backdrop-filter:saturate(120%) blur(2px);
   transition:opacity .25s ease, transform .25s ease;
+  opacity:0;
+  transform:translateY(-12px);
+  pointer-events:none;
 }
 .searchbar[hidden]{display:none}
+.searchbar.is-open{
+  opacity:1;
+  transform:translateY(0);
+  pointer-events:auto;
+}
+
+.searchbar__inner{
+  width:min(100%, 1100px);
+  margin:0 auto;
+  padding:10px 16px;
+  display:flex;
+  align-items:center;
+  gap:12px;
+}
 
 .searchbar__form{
-  max-width:1100px;
-  margin:0 auto;
-  padding:6px 14px;
+  flex:1;
   display:flex;
+  align-items:center;
   gap:10px;
 }
 .searchbar__input{
@@ -122,6 +142,29 @@ html,body{margin:0;padding:0;background:#000;color:#fff}
   border:none;
   font:700 13px/1 system-ui;
   cursor:pointer;
+}
+
+.searchbar__close{
+  background:none;
+  border:none;
+  color:#fff;
+  font-size:22px;
+  line-height:1;
+  padding:4px;
+  cursor:pointer;
+  transition:color .2s ease, transform .2s ease;
+}
+.searchbar__close:hover{ color:#f5f5f5; transform:scale(1.12); }
+.searchbar__close:focus-visible{
+  outline:none;
+  box-shadow:0 0 0 2px rgba(255,255,255,.35);
+  border-radius:50%;
+}
+
+@media (max-width:640px){
+  .searchbar__inner{ padding:8px 12px; gap:10px; }
+  .searchbar__submit{ padding:0 10px; }
+  .searchbar__close{ font-size:20px; padding:2px; }
 }
 
 /* ===== HERO VIDEO ===== */

@@ -1,5 +1,5 @@
 /* ==========================================================
-   CRONOX — app.js (v45)
+   CRONOX — app.js (v47)
    - Click en .fav-add abre Quick-Add (panel vertical)
    - El panel emite "cronox:addToCart" para añadir al carrito
    ========================================================== */
@@ -8,6 +8,8 @@
   const $ = (s, el = document) => el.querySelector(s);
   const $$ = (s, el = document) => Array.from(el.querySelectorAll(s));
   const clamp = (n, min, max) => Math.max(min, Math.min(max, n));
+
+  const TOPBAR_STATES = ['topbar--transparent', 'topbar--hero', 'topbar--page'];
 
   // ===== Topbar =====
   const topbar = $('.topbar');
@@ -24,7 +26,7 @@
     if (!topbar) return;
     const locked = getLockedTopbarState();
     const targetState = locked || state;
-    topbar.classList.remove('topbar--transparent', 'topbar--hero', 'topbar--page');
+    topbar.classList.remove(...TOPBAR_STATES);
     if (targetState) topbar.classList.add(targetState);
   }
   function updateTopbarOnScroll() {
@@ -53,21 +55,171 @@
 
   // ===== Drawer Lateral (si lo usas) =====
   const overlay = $('.overlay');
-  const filtersPanel = $('#filtersPanel');
-  const showOverlay = (kind = 'overlay--page') => {
+  const overlayUsers = new Map();
+  const OVERLAY_CLASSES = ['overlay--hero', 'overlay--page', 'overlay--search'];
+  const refreshOverlay = () => {
     if (!overlay) return;
+    if (!overlayUsers.size) {
+      overlay.hidden = true;
+      overlay.classList.remove(...OVERLAY_CLASSES);
+      return;
+    }
+    const activeKinds = Array.from(overlayUsers.values());
+    const currentKind = activeKinds[activeKinds.length - 1] || 'overlay--page';
     overlay.hidden = false;
-    overlay.classList.remove('overlay--hero', 'overlay--page');
-    overlay.classList.add(kind);
+    overlay.classList.remove(...OVERLAY_CLASSES);
+    overlay.classList.add(currentKind);
   };
-  const hideOverlay = () => { if (overlay) overlay.hidden = true; };
-  function openFilters(){ if (filtersPanel){ filtersPanel.classList.add('is-open'); showOverlay('overlay--page'); document.body.classList.add('no-scroll'); } }
-  function closeFilters(){ if (filtersPanel){ filtersPanel.classList.remove('is-open'); hideOverlay(); document.body.classList.remove('no-scroll'); } }
+  const showOverlay = (kind = 'overlay--page', key = 'default') => {
+    if (!overlay) return key;
+    overlayUsers.delete(key);
+    overlayUsers.set(key, kind);
+    refreshOverlay();
+    return key;
+  };
+  const hideOverlay = (key = 'default') => {
+    if (!overlay) return;
+    overlayUsers.delete(key);
+    refreshOverlay();
+  };
+
+  const scrollLocks = new Set();
+  function lockScroll(key = 'default') {
+    const body = document.body;
+    if (!body) return;
+    scrollLocks.add(key);
+    body.classList.add('no-scroll');
+  }
+  function unlockScroll(key = 'default') {
+    const body = document.body;
+    if (!body) return;
+    scrollLocks.delete(key);
+    if (!scrollLocks.size) body.classList.remove('no-scroll');
+  }
+  window.CRONOX_lockScroll = lockScroll;
+  window.CRONOX_unlockScroll = unlockScroll;
+
+  const filtersPanel = $('#filtersPanel');
+  function openFilters(){
+    if (!filtersPanel) return;
+    filtersPanel.classList.add('is-open');
+    showOverlay('overlay--page', 'filters');
+    lockScroll('filters');
+  }
+  function closeFilters(){
+    if (!filtersPanel) return;
+    filtersPanel.classList.remove('is-open');
+    hideOverlay('filters');
+    unlockScroll('filters');
+  }
   document.addEventListener('click', (e) => {
     if (e.target.closest('[data-open-filters]')) { e.preventDefault(); openFilters(); }
     if (e.target.closest('[data-close-filters]') || (overlay && e.target === overlay)) { e.preventDefault(); closeFilters(); }
   });
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeFilters(); });
+
+  // ===== Searchbar =====
+  const searchBar = $('#searchBar');
+  const btnSearch = $('#btnSearch');
+  const searchInput = $('#searchInput');
+  const searchCloseBtn = searchBar ? $('.searchbar__close', searchBar) : null;
+  let searchActive = false;
+  let searchPrevTopbarState = '';
+  let searchLockedTopbar = false;
+  let searchHideTimer = 0;
+
+  const lockTopbarForSearch = () => {
+    if (!topbar) return;
+    searchPrevTopbarState = TOPBAR_STATES.find((cls) => topbar.classList.contains(cls)) || '';
+    const body = document.body;
+    if (body) {
+      body.dataset.topbarLock = 'topbar--page';
+      searchLockedTopbar = true;
+    }
+    topbar.classList.remove(...TOPBAR_STATES);
+    topbar.classList.add('topbar--page');
+  };
+
+  const unlockTopbarForSearch = () => {
+    if (!topbar || !searchLockedTopbar) return;
+    const body = document.body;
+    if (body && body.dataset.topbarLock === 'topbar--page') {
+      delete body.dataset.topbarLock;
+    }
+    searchLockedTopbar = false;
+    topbar.classList.remove(...TOPBAR_STATES);
+    if (searchPrevTopbarState) {
+      topbar.classList.add(searchPrevTopbarState);
+    } else {
+      updateTopbarOnScroll();
+    }
+    searchPrevTopbarState = '';
+    window.requestAnimationFrame(updateTopbarOnScroll);
+  };
+
+  const openSearch = () => {
+    if (!searchBar || searchActive) return;
+    if (searchHideTimer) {
+      clearTimeout(searchHideTimer);
+      searchHideTimer = 0;
+    }
+    searchActive = true;
+    searchBar.hidden = false;
+    searchBar.setAttribute('aria-hidden', 'false');
+    requestAnimationFrame(() => searchBar.classList.add('is-open'));
+    showOverlay('overlay--search', 'search');
+    lockScroll('search');
+    lockTopbarForSearch();
+    btnSearch?.setAttribute('aria-expanded', 'true');
+    window.setTimeout(() => {
+      if (searchInput) {
+        try { searchInput.focus({ preventScroll: true }); }
+        catch { searchInput.focus(); }
+      }
+    }, 60);
+  };
+
+  const closeSearch = () => {
+    if (!searchBar || !searchActive) return;
+    searchActive = false;
+    searchBar.classList.remove('is-open');
+    searchBar.setAttribute('aria-hidden', 'true');
+    btnSearch?.setAttribute('aria-expanded', 'false');
+    hideOverlay('search');
+    unlockScroll('search');
+    unlockTopbarForSearch();
+    if (searchHideTimer) clearTimeout(searchHideTimer);
+    searchHideTimer = window.setTimeout(() => {
+      if (!searchActive && searchBar) {
+        searchBar.hidden = true;
+      }
+    }, 220);
+  };
+
+  const toggleSearch = () => {
+    if (!searchBar) return;
+    searchActive ? closeSearch() : openSearch();
+  };
+
+  btnSearch?.addEventListener('click', (e) => {
+    e.preventDefault();
+    toggleSearch();
+  });
+
+  searchCloseBtn?.addEventListener('click', (e) => {
+    e.preventDefault();
+    closeSearch();
+  });
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && searchActive) closeSearch();
+  });
+
+  overlay?.addEventListener('click', (e) => {
+    if (searchActive && e.target === overlay) {
+      closeSearch();
+    }
+  });
 
   // ===== Mini-galería (flechas) =====
   function moveGallery(cardEl, dir = 1) {

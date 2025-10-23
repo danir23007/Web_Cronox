@@ -153,20 +153,25 @@
 
 /* separa más el bloque de texto respecto a las imágenes */
 .qa-media{
-  margin-bottom: 48px !important;   /* ↑ aumenta la separación entre fotos y texto */
+  margin-bottom: 64px !important;   /* ↑ amplía la separación entre fotos y texto */
 }
 
 /* bloque de información con más aire visual */
 .qa-info{
   margin-top: 0 !important;
-  padding-top: 36px !important;     /* ↑ mantiene equilibrio visual */
-  padding-bottom: 36px !important;  /* ↓ deja mismo aire abajo del todo */
+  padding-top: 48px !important;     /* ↑ baja el bloque de textos respecto a las imágenes */
+  padding-bottom: 40px !important;  /* ↓ mantiene aire uniforme al final */
+  gap: 14px !important;
   border-top: 1px solid rgba(255,255,255,.10) !important;
 }
 
-/* título con pequeño margen para evitar colapsos */
+/* título alineado desde el inicio del bloque */
 .qa-name{
-  margin-top: 6px !important;
+  margin-top: 0 !important;
+}
+
+.qa-price{
+  margin-top: 0 !important;
 }
 
 /* ====== X minimalista (sin recuadro, solo icono negro) ====== */

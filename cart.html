@@ -8,11 +8,13 @@
   <meta name="description" content="Carrito de compra CRONOX — Dark streetwear premium.">
 
   <!-- CSS global -->
-  <link rel="stylesheet" href="assets/store.css?v=57" />
+  <link rel="stylesheet" href="assets/store.css?v=58" />
   <!-- CSS del carrito (nuevo) -->
   <link rel="stylesheet" href="assets/cart.css?v=2" />
 </head>
 <body>
+
+  <div id="overlay" class="overlay" hidden></div>
 
   <!-- Topbar opaca (igual que en producto/index) -->
   <header class="topbar topbar--page" id="topbar" role="banner">
@@ -72,11 +74,14 @@
   </header>
 
   <!-- Barra de búsqueda (igual que en el resto) -->
-  <div id="searchBar" class="searchbar" hidden>
-    <form id="searchForm" class="searchbar__form" role="search" action="index.html#store">
-      <input id="searchInput" class="searchbar__input" type="text" placeholder="Buscar productos…" autocomplete="off" />
-      <button class="searchbar__submit" type="submit" aria-label="Buscar"><span>Buscar</span></button>
-    </form>
+  <div id="searchBar" class="searchbar" hidden aria-hidden="true">
+    <div class="searchbar__inner">
+      <form id="searchForm" class="searchbar__form" role="search" action="index.html#store">
+        <input id="searchInput" class="searchbar__input" type="text" placeholder="Buscar productos…" autocomplete="off" />
+        <button class="searchbar__submit" type="submit" aria-label="Buscar"><span>Buscar</span></button>
+      </form>
+      <button type="button" class="searchbar__close" aria-label="Cerrar búsqueda">×</button>
+    </div>
   </div>
 
   <!-- CONTENIDO DEL CARRITO -->
@@ -219,7 +224,7 @@
     })();
   </script>
 
-  <script src="assets/app.js?v=31" defer></script>
+  <script src="assets/app.js?v=47" defer></script>
   <script src="assets/cart-badge.js?v=31" defer></script>
 </body>
 </html>

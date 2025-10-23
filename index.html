@@ -8,9 +8,9 @@
   <meta name="theme-color" content="#000000">
 
   <link rel="preload" as="video" href="assets/VIDEO_LOGO_CRONOX.mp4" type="video/mp4">
-  <link rel="stylesheet" href="assets/store.css?v=57">
+  <link rel="stylesheet" href="assets/store.css?v=58">
   <link rel="stylesheet" href="assets/product-detail.css?v=1">
-  <link rel="stylesheet" href="assets/quick-add.css?v=1">
+  <link rel="stylesheet" href="assets/quick-add.css?v=2">
 
   <noscript><style>#preloader{display:none!important}</style></noscript>
 </head>
@@ -88,11 +88,14 @@
   </header>
 
   <!-- ===== SEARCHBAR ===== -->
-  <div id="searchBar" class="searchbar" hidden>
-    <form id="searchForm" class="searchbar__form" role="search">
-      <input id="searchInput" class="searchbar__input" type="text" placeholder="Buscar productos…" autocomplete="off">
-      <button class="searchbar__submit" type="submit">Buscar</button>
-    </form>
+  <div id="searchBar" class="searchbar" hidden aria-hidden="true">
+    <div class="searchbar__inner">
+      <form id="searchForm" class="searchbar__form" role="search">
+        <input id="searchInput" class="searchbar__input" type="text" placeholder="Buscar productos…" autocomplete="off">
+        <button class="searchbar__submit" type="submit">Buscar</button>
+      </form>
+      <button type="button" class="searchbar__close" aria-label="Cerrar búsqueda">×</button>
+    </div>
   </div>
 
   <!-- ===== MENÚ NEGRO lateral (restaurado) ===== -->
@@ -192,7 +195,8 @@
     if(!btn||!panel)return;
 
     const open=()=>{
-      document.body.classList.add('no-scroll');
+      if(typeof window.CRONOX_lockScroll==='function') window.CRONOX_lockScroll('menu');
+      else document.body.classList.add('no-scroll');
       panel.hidden=false;
       void panel.offsetWidth;
       panel.classList.add('is-open');
@@ -201,7 +205,11 @@
     const close=()=>{
       panel.classList.remove('is-open');
       btn.setAttribute('aria-expanded','false');
-      setTimeout(()=>{panel.hidden=true;document.body.classList.remove('no-scroll');},220);
+      setTimeout(()=>{
+        panel.hidden=true;
+        if(typeof window.CRONOX_unlockScroll==='function') window.CRONOX_unlockScroll('menu');
+        else document.body.classList.remove('no-scroll');
+      },220);
     };
     const isOpen=()=>panel.classList.contains('is-open');
 
@@ -216,63 +224,9 @@
     });
   })();
   </script>
-<!-- ===== BARRA DE BÚSQUEDA ===== -->
-<script>
-(function(){
-  const btnSearch = document.getElementById('btnSearch');
-  const searchBar = document.getElementById('searchBar');
-  const searchInput = document.getElementById('searchInput');
-  const topbar = document.getElementById('topbar');
-  const topbarStates = ['topbar--transparent','topbar--hero','topbar--page'];
-  let prevTopbarState = '';
-  if(!btnSearch || !searchBar) return;
-
-  const lockTopbar = () => {
-    if (!topbar) return;
-    prevTopbarState = topbarStates.find(cls => topbar.classList.contains(cls)) || '';
-    document.body.dataset.topbarLock = 'topbar--page';
-    topbar.classList.remove(...topbarStates);
-    topbar.classList.add('topbar--page');
-  };
-  const unlockTopbar = () => {
-    if (!topbar) return;
-    delete document.body.dataset.topbarLock;
-    topbar.classList.remove(...topbarStates);
-    if (prevTopbarState) topbar.classList.add(prevTopbarState);
-    prevTopbarState = '';
-    window.dispatchEvent(new Event('scroll'));
-  };
-
-  const open = () => {
-    searchBar.hidden = false;
-    lockTopbar();
-    searchInput?.focus();
-    btnSearch.setAttribute('aria-expanded','true');
-  };
-  const close = () => {
-    searchBar.hidden = true;
-    unlockTopbar();
-    btnSearch.setAttribute('aria-expanded','false');
-  };
-  const toggle = () => {
-    const isHidden = searchBar.hasAttribute('hidden');
-    isHidden ? open() : close();
-  };
-
-  btnSearch.addEventListener('click', e => {
-    e.preventDefault();
-    toggle();
-  });
-
-  document.addEventListener('keydown', e => {
-    if(e.key === 'Escape' && !searchBar.hasAttribute('hidden')) close();
-  });
-})();
-</script>
-
   <!-- ===== MAIN SCRIPTS ===== -->
-  <script src="assets/products.js?v=45" defer></script>
-  <script src="assets/app.js?v=46" defer></script>
+  <script src="assets/products.js?v=46" defer></script>
+  <script src="assets/app.js?v=47" defer></script>
   <script src="assets/cart-badge.js?v=42" defer></script>
   <script src="assets/fav-toggle.js?v=42" defer></script>
   <script src="assets/product-gallery.js?v=1" defer></script>

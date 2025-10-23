@@ -8,7 +8,7 @@
   <meta name="description" content="Detalle de producto CRONOX — Dark streetwear premium.">
 
   <!-- CSS global -->
-  <link rel="stylesheet" href="assets/store.css?v=57" />
+  <link rel="stylesheet" href="assets/store.css?v=58" />
   <!-- PDP oscuro total -->
   <link rel="stylesheet" href="assets/product-page.css?v=3" />
 
@@ -384,6 +384,8 @@
 </head>
 <body>
 
+  <div id="overlay" class="overlay" hidden></div>
+
   <!-- Topbar (idéntica al index pero negra opaca) -->
   <header class="topbar topbar--page" id="topbar" role="banner">
     <div class="topbar__left">
@@ -445,11 +447,14 @@
   </header>
 
   <!-- Barra de búsqueda -->
-  <div id="searchBar" class="searchbar" hidden>
-    <form id="searchForm" class="searchbar__form" role="search" action="index.html#store">
-      <input id="searchInput" class="searchbar__input" type="text" placeholder="Buscar productos…" autocomplete="off" />
-      <button class="searchbar__submit" type="submit" aria-label="Buscar"><span>Buscar</span></button>
-    </form>
+  <div id="searchBar" class="searchbar" hidden aria-hidden="true">
+    <div class="searchbar__inner">
+      <form id="searchForm" class="searchbar__form" role="search" action="index.html#store">
+        <input id="searchInput" class="searchbar__input" type="text" placeholder="Buscar productos…" autocomplete="off" />
+        <button class="searchbar__submit" type="submit" aria-label="Buscar"><span>Buscar</span></button>
+      </form>
+      <button type="button" class="searchbar__close" aria-label="Cerrar búsqueda">×</button>
+    </div>
   </div>
 
   <!-- PDP -->
@@ -557,7 +562,7 @@
   </script>
 
   <script src="assets/product-page.js?v=35" defer></script>
-  <script src="assets/app.js?v=31" defer></script>
+  <script src="assets/app.js?v=47" defer></script>
   <script src="assets/cart-badge.js?v=31" defer></script>
 </body>
 </html>
