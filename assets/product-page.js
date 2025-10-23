@@ -155,7 +155,7 @@
 
   function resetZoom() {
     zoomLevel = 0;
-    if (pMedia) pMedia.classList.remove("is-zoomed");
+    if (pMedia) pMedia.classList.remove("is-zoomed", "is-zoomed-max");
     const active = getActiveImage();
     if (active) {
       active.style.transform = "";
@@ -299,10 +299,11 @@
         return;
       }
 
-      const scale = zoomLevel === 1 ? 2 : 3;
+      const scale = zoomLevel === 1 ? 2 : 4;
       updateOrigin(event);
       img.style.transform = `scale(${scale})`;
       pMedia.classList.add("is-zoomed");
+      pMedia.classList.toggle("is-zoomed-max", zoomLevel === 2);
     });
 
     pMedia.addEventListener("mousemove", (event) => {
