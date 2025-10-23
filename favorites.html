@@ -17,7 +17,7 @@
 
   <header class="topbar topbar--page" id="topbar" role="banner">
     <div class="topbar__left">
-      <button id="btnMenu" class="icon-btn" aria-label="Abrir filtros">
+      <button id="btnMenu" class="icon-btn" aria-label="Abrir filtros" aria-expanded="false" aria-controls="filtersPanel">
         <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
              stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
       </button>
@@ -72,6 +72,16 @@
       <button type="button" class="searchbar__close" aria-label="Cerrar búsqueda">×</button>
     </div>
   </div>
+
+  <aside id="filtersPanel" class="black-menu" hidden aria-label="Navegación de categorías" role="dialog" aria-modal="true">
+    <button class="filters-close" aria-label="Cerrar menú">✕</button>
+    <nav class="black-menu__list" role="menu">
+      <a class="black-menu__link" role="menuitem" href="tienda.html">Toda la oscuridad</a>
+      <a class="black-menu__link" role="menuitem" href="tienda-camisetas.html">Camisetas</a>
+      <a class="black-menu__link" role="menuitem" href="tienda-sudaderas.html">Sudaderas</a>
+      <a class="black-menu__link" role="menuitem" href="tienda-accesorios.html">Accesorios</a>
+    </nav>
+  </aside>
 
   <main id="favorites" class="store" aria-live="polite">
     <h1 class="store-heading">Favoritos</h1>
