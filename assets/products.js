@@ -67,8 +67,9 @@
   // ======================================================
   // Quick-Add DOM (panel negro, sin color)
   // ======================================================
-  let qaOverlay, qaPanel, qaClose, qaImg1, qaImg2, qaName, qaPrice, /* qaColor, */ qaSize, qaAdd, qaLink;
+  let qaOverlay, qaPanel, qaClose, qaImg1, qaImg2, qaName, qaPrice, /* qaColor, */ qaSizeGroup, qaAdd, qaLink;
   let qaCurrentProduct = null;
+  let qaSelectedSize = "";
 
   function ensureQuickAddDOM() {
     if (qaOverlay) return;
@@ -94,7 +95,7 @@
 
           <div class="qa-row">
             <span class="qa-label">Talla</span>
-            <select id="qaSize" class="qa-select"></select>
+            <div id="qaSizes" class="qa-sizes" role="radiogroup" aria-label="Selecciona una talla"></div>
           </div>
 
           <div class="qa-row" style="margin-top:6px">
@@ -114,7 +115,7 @@
     qaName  = qaOverlay.querySelector("#qaName");
     qaPrice = qaOverlay.querySelector("#qaPrice");
     // qaColor = (eliminado)
-    qaSize  = qaOverlay.querySelector("#qaSize");
+    qaSizeGroup = qaOverlay.querySelector("#qaSizes");
     qaAdd   = qaOverlay.querySelector("#qaAdd");
     qaLink  = qaOverlay.querySelector("#qaLink");
 
@@ -130,7 +131,8 @@
     // Añadir al carrito
     qaAdd.addEventListener("click", () => {
       if (!qaCurrentProduct) return;
-      const size  = (qaSize?.value || (qaCurrentProduct.sizes?.[0] || "M")).toUpperCase();
+      const fallbackSize = qaCurrentProduct.sizes?.[0] || "M";
+      const size = (qaSelectedSize || String(fallbackSize)).toUpperCase();
       // color por defecto (no expuesto en UI)
       const color = qaCurrentProduct.color || (qaCurrentProduct.colors?.[0]) || "Único";
 
@@ -160,6 +162,67 @@
     });
   }
 
+  function setupQuickAddSizes(product) {
+    if (!qaSizeGroup) return;
+
+    const rawSizes = Array.isArray(product?.sizes) && product.sizes.length ? product.sizes : ["m"];
+    const normalized = rawSizes.map((size) => String(size).toUpperCase());
+    qaSelectedSize = normalized[0] || "";
+
+    qaSizeGroup.innerHTML = normalized
+      .map((size) => `<button type="button" class="qa-size-btn" data-size="${size}" role="radio" aria-checked="false">${size}</button>`)
+      .join("");
+
+    const buttons = Array.from(qaSizeGroup.querySelectorAll(".qa-size-btn"));
+    if (!buttons.length) {
+      return;
+    }
+
+    const updateTabIndexes = () => {
+      buttons.forEach((btn) => {
+        btn.tabIndex = btn.classList.contains("is-active") ? 0 : -1;
+      });
+    };
+
+    const activate = (btn) => {
+      buttons.forEach((button) => {
+        const isActive = button === btn;
+        button.classList.toggle("is-active", isActive);
+        button.setAttribute("aria-checked", isActive ? "true" : "false");
+      });
+      qaSelectedSize = btn?.dataset.size || (normalized[0] || "");
+      updateTabIndexes();
+    };
+
+    activate(buttons[0]);
+
+    buttons.forEach((btn, index) => {
+      btn.addEventListener("click", () => activate(btn));
+      btn.addEventListener("keydown", (event) => {
+        if (event.key === " " || event.key === "Enter") {
+          event.preventDefault();
+          activate(btn);
+          return;
+        }
+
+        if (event.key === "ArrowRight" || event.key === "ArrowDown") {
+          event.preventDefault();
+          const nextIndex = (index + 1) % buttons.length;
+          buttons[nextIndex].focus();
+          activate(buttons[nextIndex]);
+          return;
+        }
+
+        if (event.key === "ArrowLeft" || event.key === "ArrowUp") {
+          event.preventDefault();
+          const prevIndex = (index - 1 + buttons.length) % buttons.length;
+          buttons[prevIndex].focus();
+          activate(buttons[prevIndex]);
+        }
+      });
+    });
+  }
+
   function openQuickAdd(product) {
     ensureQuickAddDOM();
     qaCurrentProduct = product;
@@ -171,9 +234,7 @@
     qaName.textContent  = product.name || "";
     qaPrice.textContent = product.priceLabel || euros(product.price);
 
-    // Solo tallas
-    const sizes  = product.sizes?.length ? product.sizes : ["m"];
-    qaSize.innerHTML = sizes.map(s => `<option value="${String(s).toUpperCase()}">${String(s).toUpperCase()}</option>`).join("");
+    setupQuickAddSizes(product);
 
     qaLink.href = `producto.html?id=${encodeURIComponent(product.id)}`;
 
@@ -187,6 +248,7 @@
     qaOverlay.setAttribute("aria-hidden","true");
     document.body.classList.remove("no-scroll");
     qaCurrentProduct = null;
+    qaSelectedSize = "";
   }
 
   window.CRONOX_openQuickAddById = function(id){
