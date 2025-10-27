@@ -1,6 +1,11 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+<svg xmlns="http://www.w3.org/2000/svg"
+     xmlns:xlink="http://www.w3.org/1999/xlink"
+     width="512"
+     height="512"
+     viewBox="0 0 512 512">
   <rect width="512" height="512" fill="#000" />
-  <image href="logo_browser.png"
+  <image xlink:href="logo_browser.png"
+         href="logo_browser.png"
          width="384"
          height="166"
          x="64"
