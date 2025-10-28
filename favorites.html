@@ -216,9 +216,11 @@
 
     document.addEventListener('DOMContentLoaded', render);
     window.addEventListener('storage', (e) => { if (e.key === FAV_KEY) render(); });
+    window.addEventListener('cronox:productsLoaded', render);
   })();
   </script>
 
+  <script src="assets/api.js"></script>
   <!-- Reutilizamos tus scripts tal cual -->
   <script src="assets/products.js?v=46" defer></script>
   <script src="assets/app.js?v=48" defer></script>
