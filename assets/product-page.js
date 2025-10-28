@@ -40,8 +40,160 @@
     });
   }
 
-  // --- Catálogo (inyectado desde index o fallback local del HTML) ---
-  const PRODUCTS = Array.isArray(window.CRONOX_PRODUCTS) ? window.CRONOX_PRODUCTS : [];
+  // --- Catálogo (API + fallback) ---
+  const API = window.CRONOX_API || {};
+
+  const localFallbackFactory = () => [
+    {
+      id: "camiseta-washed-gris",
+      name: "Grey Core Tee",
+      price: 34.95,
+      priceLabel: "34,95 €",
+      image: "assets/products/camiseta_washed_gris.png",
+      images: [
+        "assets/products/camiseta_washed_gris.png",
+        "assets/products/camiseta_washed_gris_2.png",
+      ],
+      categories: ["camisetas"],
+      sizes: ["s", "m", "l", "xl", "xxl"],
+      color: "gris",
+      colors: ["gris"],
+      desc: "Camiseta premium lavado gris, corte oversized y tacto suave.",
+    },
+    {
+      id: "camiseta-washed-negra",
+      name: "Black Core Tee",
+      price: 34.95,
+      priceLabel: "34,95 €",
+      image: "assets/products/camiseta_washed_negra.png",
+      images: [
+        "assets/products/camiseta_washed_negra.png",
+        "assets/products/camiseta_washed_negra_2.png",
+      ],
+      categories: ["camisetas"],
+      sizes: ["s", "m", "l", "xl", "xxl"],
+      color: "negro",
+      colors: ["negro"],
+      desc: "Camiseta premium lavado negro, corte oversized y tacto suave.",
+    },
+  ];
+
+  const fallbackFactory = typeof API.getFallbackProducts === "function"
+    ? API.getFallbackProducts.bind(API)
+    : localFallbackFactory;
+
+  const cloneProduct = (product = {}) => {
+    const copy = { ...product };
+    if (Array.isArray(product.images)) copy.images = [...product.images];
+    if (Array.isArray(product.sizes)) copy.sizes = [...product.sizes];
+    if (Array.isArray(product.colors)) copy.colors = [...product.colors];
+    if (Array.isArray(product.categories)) copy.categories = [...product.categories];
+    return copy;
+  };
+
+  const cloneProducts = (list) => (Array.isArray(list) ? list.map(cloneProduct) : []);
+
+  const getFallbackList = () => {
+    try {
+      const list = fallbackFactory();
+      if (Array.isArray(list) && list.length) return cloneProducts(list);
+    } catch {}
+    return cloneProducts(localFallbackFactory());
+  };
+
+  const adaptCatalogLocally = (rawList, fallbackList) => {
+    const source = Array.isArray(rawList) ? rawList : [];
+    const fallback = Array.isArray(fallbackList) && fallbackList.length
+      ? fallbackList
+      : getFallbackList();
+
+    return source.map((item, index) => {
+      const data = typeof item === "object" && item ? item : {};
+      const template = cloneProduct(fallback[index % fallback.length] || {});
+      const priceValue = data.price != null ? Number(data.price) : Number(template.price) || 0;
+      const templateImages = Array.isArray(template.images) ? [...template.images] : [];
+      const sourceImages = Array.isArray(data.images) ? [...data.images] : [];
+      const candidateImage = data.image || sourceImages[0] || template.image || templateImages[0] || "";
+      const uniqueImages = [];
+      const pushImage = (value) => {
+        const clean = typeof value === "string" ? value.trim() : "";
+        if (clean && !uniqueImages.includes(clean)) uniqueImages.push(clean);
+      };
+      pushImage(candidateImage);
+      sourceImages.forEach(pushImage);
+      templateImages.forEach(pushImage);
+
+      return {
+        ...template,
+        ...data,
+        id: data.id != null ? String(data.id) : template.id || `product-${index + 1}`,
+        name: data.name || template.name || "Producto CRONOX",
+        price: priceValue,
+        priceLabel: data.priceLabel || template.priceLabel || money(priceValue),
+        image: candidateImage || uniqueImages[0] || template.image || "",
+        images: uniqueImages,
+        categories: Array.isArray(data.categories) && data.categories.length
+          ? data.categories
+          : template.categories || [],
+        sizes: Array.isArray(data.sizes) && data.sizes.length
+          ? data.sizes
+          : template.sizes || [],
+        colors: Array.isArray(data.colors) && data.colors.length
+          ? data.colors
+          : template.colors || [],
+        color: data.color || template.color || "",
+        desc: data.desc || template.desc || "",
+      };
+    });
+  };
+
+  const adaptCatalog = (rawList) => {
+    const fallback = getFallbackList();
+    if (typeof API.adaptProducts === "function") {
+      try {
+        const adapted = API.adaptProducts(rawList, fallback);
+        if (Array.isArray(adapted) && adapted.length) {
+          return adapted;
+        }
+      } catch {}
+    }
+    return adaptCatalogLocally(rawList, fallback);
+  };
+
+  let PRODUCTS = cloneProducts(window.CRONOX_PRODUCTS);
+
+  const setProducts = (list) => {
+    PRODUCTS = cloneProducts(list);
+    window.CRONOX_PRODUCTS = PRODUCTS;
+  };
+
+  const loadProductsFromApi = async () => {
+    if (!API || typeof API.getProducts !== "function") {
+      throw new Error("Cliente API no disponible");
+    }
+    const raw = await API.getProducts();
+    return adaptCatalog(raw);
+  };
+
+  async function ensureCatalog() {
+    if (Array.isArray(PRODUCTS) && PRODUCTS.length) {
+      return PRODUCTS;
+    }
+
+    try {
+      const fromApi = await loadProductsFromApi();
+      if (!Array.isArray(fromApi) || !fromApi.length) {
+        throw new Error("Catálogo vacío");
+      }
+      setProducts(fromApi);
+      return PRODUCTS;
+    } catch (error) {
+      console.warn("[CRONOX] No se pudo cargar el catálogo en PDP, usando fallback local.", error);
+      const fallback = getFallbackList();
+      setProducts(fallback);
+      return PRODUCTS;
+    }
+  }
 
   // --- Utils ---
   function getId() {
@@ -97,7 +249,8 @@
     return score;
   }
   function getRelated(current, max = 4) {
-    const pool = PRODUCTS.filter(x => x.id !== current.id);
+    const currentId = current?.id != null ? String(current.id) : "";
+    const pool = PRODUCTS.filter(x => (x?.id != null ? String(x.id) : "") !== currentId);
     return pool
       .map(x => ({ p: x, s: similarityScore(current, x) }))
       .sort((u, v) => v.s - u.s)
@@ -387,9 +540,10 @@
   }
 
   // --- Init ---
-  function init() {
+  async function init() {
     const id = getId();
-    const p = PRODUCTS.find(x => x.id === id);
+    const catalog = await ensureCatalog();
+    const p = catalog.find(x => (x?.id != null ? String(x.id) : "") === id);
     if (!p) {
       window.location.replace("index.html#store");
       return;
@@ -412,10 +566,13 @@
       showToast("Añadido al carrito ✓");
     });
 
-    setupBackLinks(p.id);
+    setupBackLinks(String(p.id || ""));
   }
 
   window.addEventListener("resize", syncAddButtonWidth);
 
-  init();
+  init().catch((error) => {
+    console.error("[CRONOX] Error inicializando la PDP:", error);
+    window.location.replace("index.html#store");
+  });
 })();
