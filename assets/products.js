@@ -526,13 +526,25 @@
 
   window.addEventListener("pageshow", (e) => { if (e.persisted) restoreScrollOrFocus(); });
 
-  const loadProductsFromApi = async () => {
+  async function loadCatalog() {
+    const fallback = cloneProducts(localFallbackFactory());
     if (!API || typeof API.getProducts !== "function") {
-      throw new Error("Cliente API no disponible");
+      return { products: fallback, source: "fallback" };
     }
-    const raw = await API.getProducts();
-    return adaptCatalog(raw);
-  };
+
+    try {
+      const raw = await API.getProducts();
+      const adapted = adaptCatalog(raw);
+      if (!Array.isArray(adapted) || !adapted.length) {
+        throw new Error("Catálogo vacío");
+      }
+      console.log("[CRONOX] productos desde API", adapted);
+      return { products: adapted, source: "api" };
+    } catch (error) {
+      console.warn("[CRONOX] No se pudo cargar el catálogo desde la API, usando fallback local.", error);
+      return { products: fallback, source: "fallback" };
+    }
+  }
 
   const notifyCatalogReady = (source) => {
     try {
@@ -542,21 +554,8 @@
   };
 
   async function initCatalog() {
-    let source = "api";
-    let loaded = [];
-    try {
-      const fromApi = await loadProductsFromApi();
-      if (!Array.isArray(fromApi) || !fromApi.length) {
-        throw new Error("Catálogo vacío");
-      }
-      loaded = fromApi;
-    } catch (error) {
-      console.warn("[CRONOX] No se pudo cargar el catálogo desde la API, usando fallback local.", error);
-      loaded = getFallbackList();
-      source = "fallback";
-    }
-
-    setProducts(loaded);
+    const { products, source } = await loadCatalog();
+    setProducts(products);
     applyAll();
     notifyCatalogReady(source);
   }

@@ -59,12 +59,60 @@
 
   const getFallbackProducts = () => FALLBACK_SOURCE.map(cloneProduct);
 
+  const readManualBase = () => {
+    if (typeof window === 'undefined' || typeof document === 'undefined') return '';
+
+    const globalBase = typeof window.__CRONOX_API_BASE__ === 'string'
+      ? window.__CRONOX_API_BASE__.trim()
+      : '';
+    if (globalBase) return globalBase;
+
+    const doc = document.documentElement;
+    if (doc && typeof doc.dataset?.cronoxApiBase === 'string' && doc.dataset.cronoxApiBase.trim()) {
+      return doc.dataset.cronoxApiBase.trim();
+    }
+
+    const meta = document.querySelector('meta[name="cronox:api-base"]');
+    if (meta && typeof meta.content === 'string' && meta.content.trim()) {
+      return meta.content.trim();
+    }
+
+    const script = document.querySelector('script[data-cronox-api-base]');
+    if (script && typeof script.dataset.cronoxApiBase === 'string' && script.dataset.cronoxApiBase.trim()) {
+      return script.dataset.cronoxApiBase.trim();
+    }
+
+    return '';
+  };
+
+  const detectLocalhostPort = (fallbackPort = '3000') => {
+    if (typeof window === 'undefined') return fallbackPort;
+    const raw = window.__CRONOX_BACKEND_PORT__ != null
+      ? String(window.__CRONOX_BACKEND_PORT__).trim()
+      : '';
+    if (raw) return raw;
+
+    if (typeof document !== 'undefined') {
+      const doc = document.documentElement;
+      if (doc && typeof doc.dataset?.cronoxBackendPort === 'string') {
+        const value = doc.dataset.cronoxBackendPort.trim();
+        if (value) return value;
+      }
+    }
+
+    return String(fallbackPort || '').trim() || '3000';
+  };
+
   const detectApiBase = () => {
     if (typeof window === 'undefined') {
       return 'http://localhost:3000';
     }
 
-    const { protocol, hostname } = window.location;
+    const manualBase = readManualBase();
+    if (manualBase) return manualBase;
+
+    const { protocol, hostname, port } = window.location;
+
     if (/\.app\.github\.dev$/i.test(hostname)) {
       const match = hostname.match(/^(.*)-(\d+)\.app\.github\.dev$/i);
       if (match && match[1]) {
@@ -72,7 +120,39 @@
       }
     }
 
-    return 'http://localhost:3000';
+    const normalizePort = (value) => {
+      if (!value) return '';
+      const raw = String(value).trim();
+      if (!raw) return '';
+      const num = Number(raw);
+      if (!Number.isFinite(num) || num <= 0) return '';
+      const defaultPort = protocol === 'https:' ? 443 : 80;
+      if (num === defaultPort) return '';
+      return String(num);
+    };
+
+    const safeJoin = (baseProtocol, host, basePort = '') => {
+      const p = normalizePort(basePort);
+      return `${baseProtocol}//${host}${p ? `:${p}` : ''}`;
+    };
+
+    if (hostname === 'localhost' || hostname === '127.0.0.1') {
+      const backendPort = normalizePort(detectLocalhostPort('3000')) || '3000';
+      return safeJoin(protocol, hostname, backendPort);
+    }
+
+    if (/^192\.168\./.test(hostname) || /^10\./.test(hostname) || /^172\.(1[6-9]|2[0-9]|3[0-1])\./.test(hostname)) {
+      if (port) {
+        return safeJoin(protocol, hostname, port);
+      }
+      return safeJoin(protocol, hostname, '3000');
+    }
+
+    if (port) {
+      return safeJoin(protocol, hostname, port);
+    }
+
+    return `${protocol}//${hostname}`;
   };
 
   const normalizeBase = (base) => base.replace(/\/$/, '');
