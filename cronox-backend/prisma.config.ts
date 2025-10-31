@@ -1,12 +1,7 @@
-import { defineConfig, env } from "prisma/config";
+import 'dotenv/config';
+import { join } from 'path';
 
-export default defineConfig({
-  schema: "prisma/schema.prisma",
-  migrations: {
-    path: "prisma/migrations",
-  },
-  engine: "classic",
-  datasource: {
-    url: env("DATABASE_URL"),
-  },
-});
+// fuerza carga del .env desde la raíz del backend
+process.env.DOTENV_PATH = join(__dirname, '.env');
+
+// no hace falta exportar nada, solo cargar dotenv
