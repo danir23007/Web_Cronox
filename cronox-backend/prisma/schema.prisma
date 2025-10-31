@@ -1,7 +1,4 @@
-<<<<<<< HEAD
-=======
 // prisma/schema.prisma
->>>>>>> 9c88e9b (prisma changes)
 generator client {
   provider = "prisma-client-js"
 }
@@ -15,11 +12,7 @@ model Product {
   id        Int      @id @default(autoincrement())
   slug      String   @unique
   name      String
-<<<<<<< HEAD
-  price     Int
-=======
   price     Int      // en céntimos (79€ => 7900) para precisión
->>>>>>> 9c88e9b (prisma changes)
   currency  String   @default("EUR")
   imageUrl  String?
   createdAt DateTime @default(now())
@@ -29,13 +22,8 @@ model Product {
 model User {
   id        Int      @id @default(autoincrement())
   email     String   @unique
-<<<<<<< HEAD
-  password  String
-  role      String   @default("customer")
-=======
   password  String   // si luego usas Supabase Auth puro, este puede no usarse
   role      String   @default("customer") // admin | customer
->>>>>>> 9c88e9b (prisma changes)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }

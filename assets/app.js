@@ -297,11 +297,34 @@
   });
 
   // ===== Favoritos (estrella) — opcional =====
+  const favKey = 'cronox:favs';
   const favCountEl = $('.topbar__fav .fav-count');
   let favCount = Number(favCountEl?.textContent || 0);
+  const renderFavCount = (value) => {
+    if (!favCountEl) return;
+    if (value > 0) {
+      favCountEl.hidden = false;
+      favCountEl.textContent = String(value);
+    } else {
+      favCountEl.hidden = true;
+    }
+  };
+  const readFavCount = () => {
+    try {
+      const raw = localStorage.getItem(favKey);
+      const list = raw ? JSON.parse(raw) : [];
+      return Array.isArray(list) ? list.length : 0;
+    } catch {
+      return 0;
+    }
+  };
+  const syncFavCount = () => {
+    favCount = clamp(readFavCount(), 0, 999);
+    renderFavCount(favCount);
+  };
   const bumpFavCount = (d) => {
     favCount = clamp(favCount + d, 0, 999);
-    if (favCountEl) favCountEl.textContent = String(favCount);
+    renderFavCount(favCount);
   };
   document.addEventListener('click', (e) => {
     const toggle = e.target.closest('.fav-toggle');
@@ -310,6 +333,9 @@
     const active = toggle.classList.toggle('active');
     bumpFavCount(active ? 1 : -1);
   });
+  document.addEventListener('DOMContentLoaded', syncFavCount, { once: true });
+  window.addEventListener('storage', (e) => { if (e.key === favKey) syncFavCount(); });
+  window.addEventListener('cronox:favsChanged', syncFavCount);
 
   // ===== Carrito (localStorage) =====
   const cartCountEl = $('.topbar__cart .cart-count');

@@ -12,10 +12,17 @@
     } catch { return []; }
   }
 
+  function dispatchChange(arr){
+    try {
+      const detail = Array.isArray(arr) ? arr.map((item) => ({ ...item })) : [];
+      window.dispatchEvent(new CustomEvent('cronox:favsChanged', { detail }));
+    } catch {}
+  }
+
   function setFavs(arr){
     try { localStorage.setItem(KEY, JSON.stringify(arr)); }
     catch(e){}
-    window.dispatchEvent(new Event('storage')); // para sincronizar
+    dispatchChange(arr);
   }
 
   function isFav(id){

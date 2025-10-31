@@ -216,6 +216,7 @@
 
     document.addEventListener('DOMContentLoaded', render);
     window.addEventListener('storage', (e) => { if (e.key === FAV_KEY) render(); });
+    window.addEventListener('cronox:favsChanged', render);
     window.addEventListener('cronox:productsLoaded', render);
   })();
   </script>
