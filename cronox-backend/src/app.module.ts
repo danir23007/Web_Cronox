@@ -16,10 +16,6 @@ import { ProductsModule } from './products/products.module';
       exclude: ['/api(.*)', '/products(.*)', '/products', '/api'],
       serveStaticOptions: { index: 'index.html' },
     }),
-<<<<<<< HEAD
-    ProductsModule,
-=======
->>>>>>> 3e231a8 (CORRECCIONES DIA 31)
     PrismaModule,
     ProductsModule,
   ],
@@ -27,4 +23,3 @@ import { ProductsModule } from './products/products.module';
   providers: [AppService],
 })
 export class AppModule {}
-
