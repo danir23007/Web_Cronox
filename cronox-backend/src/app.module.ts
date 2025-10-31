@@ -10,9 +10,10 @@ import { ProductsModule } from './products/products.module';
 
 @Module({
   imports: [
-    // Sirve estáticos desde la raíz del proyecto, evitando colisión con /api y /products
+    // Sirve estáticos desde la carpeta del front
     ServeStaticModule.forRoot({
-      rootPath: join(__dirname, '..', '..'),
+      rootPath: join(__dirname, '..', '..', 'cronox-front'),
+      // Evitar colisiones con API y /products
       exclude: ['/api(.*)', '/products(.*)', '/products', '/api'],
       serveStaticOptions: { index: 'index.html' },
     }),
