@@ -203,6 +203,7 @@
     }
     document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')updateFavBadge();});
     window.addEventListener('storage',(e)=>{if(e.key==='cronox:favs')updateFavBadge();});
+    window.addEventListener('cronox:favsChanged',updateFavBadge);
     window.addEventListener('DOMContentLoaded',updateFavBadge,{once:true});
   })();
   </script>
