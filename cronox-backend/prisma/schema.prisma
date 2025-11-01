@@ -9,14 +9,29 @@ datasource db {
 }
 
 model Product {
-  id        Int      @id @default(autoincrement())
-  slug      String   @unique
+  id        Int             @id @default(autoincrement())
+  slug      String          @unique
   name      String
-  price     Int      // en céntimos (79€ => 7900) para precisión
-  currency  String   @default("EUR")
+  price     Int             // en céntimos (79€ => 7900) para precisión
+  currency  String          @default("EUR")
   imageUrl  String?
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+  images    ProductImage[]
+}
+
+model ProductImage {
+  id        Int      @id @default(autoincrement())
+  productId Int
+  url       String
+  alt       String? @default("")
+  sortOrder Int     @default(0)
+  isPrimary Boolean @default(false)
   createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+
+  product Product @relation(fields: [productId], references: [id])
+
+  @@index([productId, sortOrder])
 }
 
 model User {
