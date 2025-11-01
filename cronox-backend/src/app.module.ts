@@ -7,7 +7,7 @@ import { AppController } from './app.controller';
 import { AppService } from './app.service';
 
 import { PrismaModule } from './prisma/prisma.module';
-import { ProductsModule } from './products/products.module';
+import { ProductModule } from './products/product.module';
 
 @Module({
   imports: [
@@ -20,7 +20,7 @@ import { ProductsModule } from './products/products.module';
       serveStaticOptions: { index: 'index.html' },
     }),
     PrismaModule,
-    ProductsModule,
+    ProductModule,
   ],
   controllers: [AppController],
   providers: [AppService],
