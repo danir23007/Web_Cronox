@@ -11,14 +11,18 @@ import { ProductModule } from './products/product.module';
 
 @Module({
   imports: [
-    // Sirve estáticos desde la carpeta del front
+    // Sirve el frontend estático desde /cronox-front,
+    // pero NO tapes las rutas de API ni Swagger.
     ServeStaticModule.forRoot({
       rootPath: join(__dirname, '..', '..', 'cronox-front'),
-      // IMPORTANT: usar comodines con nombre para path-to-regexp v6
-      // Excluye /api y /products (y sus subrutas) del fallback estático
-      exclude: ['/api', '/api/:rest(.*)', '/products', '/products/:rest(.*)'],
+      exclude: [
+        '/api(.*)',        // todo lo que empiece por /api
+        '/api/docs(.*)',   // swagger ui + assets
+        '/products(.*)',   // endpoints REST de productos
+      ],
       serveStaticOptions: { index: 'index.html' },
     }),
+
     PrismaModule,
     ProductModule,
   ],
