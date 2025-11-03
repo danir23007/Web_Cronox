@@ -7,10 +7,11 @@ import {
   Patch,
   Post,
   Req,
+  UnauthorizedException,
   UseGuards,
 } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
-import { Request } from 'express';
+import type { Request } from 'express';
 import { AuthService } from './auth.service';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { ForgotDto } from './dto/forgot.dto';
@@ -20,7 +21,6 @@ import { RegisterDto } from './dto/register.dto';
 import { ResetDto } from './dto/reset.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { RefreshJwtGuard } from './guards/refresh-jwt.guard';
-import { SafeUser } from '../users/users.service';
 
 @Controller('auth')
 export class AuthController {
@@ -32,7 +32,7 @@ export class AuthController {
   }
 
   @Post('login')
-  @Throttle(5, 60)
+  @Throttle({ limit: 5, ttl: 60_000 })
   async login(@Body() dto: LoginDto) {
     return this.authService.login(dto);
   }
@@ -40,7 +40,10 @@ export class AuthController {
   @Post('refresh')
   @UseGuards(RefreshJwtGuard)
   async refresh(@Req() req: Request) {
-    const user = req.user as SafeUser;
+    const user = req.user;
+    if (!user) {
+      throw new UnauthorizedException('Usuario no autenticado');
+    }
     const refreshToken = (req as Request & { refreshToken?: string }).refreshToken;
     return this.authService.refreshTokens(user.id, refreshToken);
   }
@@ -55,12 +58,15 @@ export class AuthController {
   @Get('me')
   @UseGuards(JwtAuthGuard)
   async me(@Req() req: Request) {
-    const user = req.user as SafeUser;
+    const user = req.user;
+    if (!user) {
+      throw new UnauthorizedException('Usuario no autenticado');
+    }
     return this.authService.getProfile(user.id);
   }
 
   @Post('forgot')
-  @Throttle(5, 60)
+  @Throttle({ limit: 5, ttl: 60_000 })
   @HttpCode(HttpStatus.OK)
   async forgot(@Body() dto: ForgotDto) {
     await this.authService.forgotPassword(dto);
@@ -80,7 +86,10 @@ export class AuthController {
   @UseGuards(JwtAuthGuard)
   @HttpCode(HttpStatus.NO_CONTENT)
   async changePassword(@Req() req: Request, @Body() dto: ChangePasswordDto) {
-    const user = req.user as SafeUser;
+    const user = req.user;
+    if (!user) {
+      throw new UnauthorizedException('Usuario no autenticado');
+    }
     await this.authService.changePassword(user.id, dto);
   }
 }

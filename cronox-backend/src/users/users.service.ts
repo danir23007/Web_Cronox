@@ -15,7 +15,7 @@ export class UsersService {
     return this.prisma.user.findUnique({ where: { email } });
   }
 
-  async findById(id: string) {
+  async findById(id: number) {
     return this.prisma.user.findUnique({ where: { id } });
   }
 
@@ -30,25 +30,28 @@ export class UsersService {
     });
   }
 
-  async updatePassword(id: string, passwordHash: string) {
+  async updatePassword(id: number, passwordHash: string) {
     return this.prisma.user.update({
       where: { id },
       data: { passwordHash },
     });
   }
 
-  async setRefreshTokenHash(id: string, hash: string | null) {
+  async setRefreshTokenHash(id: number, hash: string) {
     return this.prisma.user.update({
       where: { id },
       data: { refreshTokenHash: hash },
     });
   }
 
-  async clearRefreshTokenHash(id: string) {
-    return this.setRefreshTokenHash(id, null);
+  async clearRefreshTokenHash(id: number) {
+    return this.prisma.user.update({
+      where: { id },
+      data: { refreshTokenHash: null },
+    });
   }
 
-  async setResetToken(id: string, hash: string, expiresAt: Date) {
+  async setResetToken(id: number, hash: string, expiresAt: Date) {
     return this.prisma.user.update({
       where: { id },
       data: {
@@ -58,7 +61,7 @@ export class UsersService {
     });
   }
 
-  async clearResetToken(id: string) {
+  async clearResetToken(id: number) {
     return this.prisma.user.update({
       where: { id },
       data: {

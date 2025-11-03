@@ -1,7 +1,7 @@
 import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
-import { Request } from 'express';
+import type { Request } from 'express';
 import * as bcrypt from 'bcrypt';
 import { UsersService } from '../../users/users.service';
 
@@ -48,7 +48,12 @@ export class JwtRefreshStrategy extends PassportStrategy(
       throw new UnauthorizedException('Refresh token inválido');
     }
 
-    const user = await this.usersService.findById(payload.sub);
+    const userId = Number(payload.sub);
+    if (Number.isNaN(userId)) {
+      throw new UnauthorizedException('Refresh token inválido');
+    }
+
+    const user = await this.usersService.findById(userId);
     if (!user || !user.refreshTokenHash) {
       throw new UnauthorizedException('Refresh token inválido');
     }
