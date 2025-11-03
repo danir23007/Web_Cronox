@@ -25,6 +25,6 @@ export class JwtAccessStrategy extends PassportStrategy(Strategy, 'jwt') {
       throw new UnauthorizedException();
     }
 
-    return this.usersService.toPublic(user);
+    return this.usersService.toSafeUser(user);
   }
 }

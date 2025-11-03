@@ -6,7 +6,7 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
-import { Role, User } from '@prisma/client';
+import { Role } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 import type { Request } from 'express';
 import { EmailService } from '../common/email/email.service';
@@ -16,7 +16,7 @@ import { LoginDto } from './dto/login.dto';
 import { RefreshDto } from './dto/refresh.dto';
 import { RegisterDto } from './dto/register.dto';
 import { ResetDto } from './dto/reset.dto';
-import { UsersService } from '../users/users.service';
+import { UsersService, AuthUser } from '../users/users.service';
 
 interface JwtPayload {
   sub: string;
@@ -80,14 +80,14 @@ export class AuthService {
     const tokens = await this.generateAndPersistTokens(user);
 
     return {
-      user: this.usersService.toPublic(user),
+      user: this.usersService.toSafeUser(user),
       tokens,
     };
   }
 
   async login(dto: LoginDto) {
     const email = dto.email.toLowerCase();
-    const user = await this.usersService.findByEmail(email);
+    const user = await this.usersService.findByEmailForAuth(email);
 
     if (!user) {
       throw new UnauthorizedException('Credenciales inválidas');
@@ -105,7 +105,7 @@ export class AuthService {
     const tokens = await this.generateAndPersistTokens(user);
 
     return {
-      user: this.usersService.toPublic(user),
+      user: this.usersService.toSafeUser(user),
       tokens,
     };
   }
@@ -118,7 +118,7 @@ export class AuthService {
     const user = await this.validateRefreshToken(userId, refreshToken);
 
     const tokens = await this.generateTokens(user);
-    await this.usersService.setRefreshTokenHash(
+    await this.usersService.setRefreshHash(
       user.id,
       await this.hashData(tokens.refreshToken),
     );
@@ -134,7 +134,7 @@ export class AuthService {
         if (Number.isNaN(userId)) {
           throw new UnauthorizedException('Token inválido');
         }
-        await this.usersService.clearRefreshTokenHash(userId);
+        await this.usersService.clearRefreshHash(userId);
         return;
       } catch (error) {
         // Ignoramos errores para permitir intentar con el refresh token
@@ -148,7 +148,7 @@ export class AuthService {
         throw new UnauthorizedException('Token inválido');
       }
       await this.validateRefreshToken(userId, refreshToken);
-      await this.usersService.clearRefreshTokenHash(userId);
+      await this.usersService.clearRefreshHash(userId);
       return;
     }
 
@@ -160,12 +160,12 @@ export class AuthService {
     if (!user) {
       throw new NotFoundException('Usuario no encontrado');
     }
-    return this.usersService.toPublic(user);
+    return this.usersService.toSafeUser(user);
   }
 
   async forgotPassword(dto: ForgotDto) {
     const email = dto.email.toLowerCase();
-    const user = await this.usersService.findByEmail(email);
+    const user = await this.usersService.findByEmailForAuth(email);
 
     if (!user) {
       // Respondemos 200 aunque el usuario no exista para evitar enumeraciones
@@ -209,7 +209,7 @@ export class AuthService {
       throw new BadRequestException('Token inválido o expirado');
     }
 
-    const user = await this.usersService.findById(userId);
+    const user = await this.usersService.findByIdForAuth(userId);
     if (!user || !user.resetTokenHash || !user.resetTokenExp) {
       throw new BadRequestException('Token inválido o expirado');
     }
@@ -226,11 +226,11 @@ export class AuthService {
     const newPasswordHash = await this.hashData(dto.newPassword);
     await this.usersService.updatePassword(user.id, newPasswordHash);
     await this.usersService.clearResetToken(user.id);
-    await this.usersService.clearRefreshTokenHash(user.id);
+    await this.usersService.clearRefreshHash(user.id);
   }
 
   async changePassword(userId: number, dto: ChangePasswordDto) {
-    const user = await this.usersService.findById(userId);
+    const user = await this.usersService.findByIdForAuth(userId);
     if (!user) {
       throw new NotFoundException('Usuario no encontrado');
     }
@@ -246,7 +246,7 @@ export class AuthService {
 
     const newPasswordHash = await this.hashData(dto.newPassword);
     await this.usersService.updatePassword(user.id, newPasswordHash);
-    await this.usersService.clearRefreshTokenHash(user.id);
+    await this.usersService.clearRefreshHash(user.id);
   }
 
   async extractTokensFromRequest(req: Request, dto?: RefreshDto) {
@@ -266,9 +266,9 @@ export class AuthService {
     };
   }
 
-  private async generateAndPersistTokens(user: User) {
+  private async generateAndPersistTokens(user: AuthUser) {
     const tokens = await this.generateTokens(user);
-    await this.usersService.setRefreshTokenHash(
+    await this.usersService.setRefreshHash(
       user.id,
       await this.hashData(tokens.refreshToken),
     );
@@ -279,8 +279,11 @@ export class AuthService {
     return bcrypt.hash(data, this.bcryptSaltRounds);
   }
 
-  private async validateRefreshToken(userId: number, refreshToken: string) {
-    const user = await this.usersService.findById(userId);
+  private async validateRefreshToken(
+    userId: number,
+    refreshToken: string,
+  ): Promise<AuthUser> {
+    const user = await this.usersService.findByIdForAuth(userId);
     if (!user || !user.refreshTokenHash) {
       throw new UnauthorizedException('Refresh token inválido');
     }
@@ -293,7 +296,7 @@ export class AuthService {
     return user;
   }
 
-  private async generateTokens(user: User) {
+  private async generateTokens(user: AuthUser) {
     const payload: JwtPayload = {
       sub: String(user.id),
       email: user.email,
