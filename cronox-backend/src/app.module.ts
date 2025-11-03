@@ -13,6 +13,7 @@ import { AppThrottlerGuard } from './common/guards/app-throttler.guard';
 import { PrismaModule } from './prisma/prisma.module';
 import { ProductModule } from './products/product.module';
 import { UsersModule } from './users/users.module';
+import { AddressesModule } from './addresses/addresses.module';
 
 @Module({
   imports: [
@@ -37,6 +38,7 @@ import { UsersModule } from './users/users.module';
     AuthModule,
     ProductModule,
     UsersModule,
+    AddressesModule,
   ],
   controllers: [AppController],
   providers: [
