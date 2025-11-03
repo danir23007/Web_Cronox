@@ -1,7 +1,17 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { IsArray, IsInt, IsOptional, IsPositive, IsString, Matches, MaxLength, ValidateNested } from 'class-validator';
+import {
+  IsArray,
+  IsInt,
+  IsOptional,
+  IsPositive,
+  IsString,
+  Matches,
+  MaxLength,
+  ValidateNested,
+} from 'class-validator';
 import { CreateProductImageDto } from './create-product-image.dto';
+import { CreateVariantDto } from './create-variant.dto';
 
 export class CreateProductDto {
   @ApiProperty({ example: 'Camiseta Cronox Negra' })
@@ -33,4 +43,10 @@ export class CreateProductDto {
   @ValidateNested({ each: true })
   @Type(() => CreateProductImageDto)
   images?: CreateProductImageDto[];
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => CreateVariantDto)
+  variants?: CreateVariantDto[];
 }
