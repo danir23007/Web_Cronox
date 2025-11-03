@@ -1,66 +1,70 @@
-import { BadRequestException, Inject, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma, PrismaClient } from '@prisma/client';
-import { PrismaService } from '../prisma/prisma.service';
+import { v4 as uuidv4 } from 'uuid';
 import { AddItemDto } from './dto/add-item.dto';
 import { UpdateItemDto } from './dto/update-item.dto';
 
-export type CartWithItems = Prisma.CartGetPayload<{
-  include: {
-    items: {
-      include: {
-        variant: { include: { product: true } };
-      };
-    };
-  };
-}>;
+type ModelClient = Pick<
+  PrismaClient,
+  'cart' | 'cartItem' | 'productVariant' | '$transaction'
+>;
+
+export type CartWithItems = Awaited<ReturnType<PrismaClient['cart']['findUnique']>>;
 
 export type CartContext = {
   userId?: number;
   anonymousId?: string;
 };
 
-const INSUFFICIENT_STOCK_ERROR = 'INSUFFICIENT_STOCK';
+const NO_CONTEXT_ERROR = 'NO_CONTEXT';
+const CART_NOT_FOUND_ERROR = 'CART_NOT_FOUND';
 const ITEM_NOT_FOUND_ERROR = 'ITEM_NOT_FOUND';
-
-export type Client = Prisma.TransactionClient | PrismaClient;
-
-type VariantWithProduct = Prisma.ProductVariantGetPayload<{
-  include: { product: true };
-}>;
+const INSUFFICIENT_STOCK_ERROR = 'INSUFFICIENT_STOCK';
+const VARIANT_PRICE_NOT_SET_ERROR = 'VARIANT_PRICE_NOT_SET';
 
 @Injectable()
 export class CartService {
+  constructor(private readonly prisma: PrismaClient) {}
+
   private readonly cartInclude = {
     items: {
       include: {
-        variant: {
-          include: {
-            product: true,
-          },
-        },
+        variant: { include: { product: true } },
       },
-      orderBy: { id: 'asc' as const },
     },
   } as const;
 
-  constructor(@Inject(PrismaService) private readonly prisma: PrismaClient) {}
-
-  async getOrCreateCart(opts: CartContext): Promise<CartWithItems> {
-    const record = await this.ensureCart(this.prisma, opts);
-    const cart = await this.getCartWithItems(record.id, this.prisma);
-
-    if (!cart) {
-      throw new NotFoundException('Cart not found');
-    }
-
-    return cart;
+  private getClient(tx?: Prisma.TransactionClient): ModelClient {
+    return (tx ?? this.prisma) as unknown as ModelClient;
   }
 
-  async addItem(opts: CartContext, dto: AddItemDto): Promise<CartWithItems> {
-    return this.prisma.$transaction(async (tx) => {
-      const cart = await this.ensureCart(tx, opts);
+  async getOrCreateCart(context: CartContext): Promise<CartWithItems> {
+    const where = this.buildUniqueWhere(context);
+    if (!where) {
+      throw new BadRequestException(NO_CONTEXT_ERROR);
+    }
 
-      const existingItem = await tx.cartItem.findUnique({
+    return this.findOrCreate(where);
+  }
+
+  async addItem(context: CartContext, dto: AddItemDto): Promise<CartWithItems> {
+    return this.prisma.$transaction(async (tx) => {
+      const client = this.getClient(tx);
+      const where = this.buildUniqueWhere(context);
+
+      if (!where) {
+        throw new BadRequestException(NO_CONTEXT_ERROR);
+      }
+
+      const cart = await this.findOrCreate(where, tx);
+      const variant = await this.getVariantOrThrow(client, dto.variantId);
+      const price = variant.price;
+
+      if (price == null) {
+        throw new BadRequestException(VARIANT_PRICE_NOT_SET_ERROR);
+      }
+
+      const existingItem = await client.cartItem.findUnique({
         where: {
           cartId_variantId: {
             cartId: cart.id,
@@ -72,115 +76,88 @@ export class CartService {
       const currentQty = existingItem?.qty ?? 0;
       const newQty = currentQty + dto.qty;
 
-      const variant = await this.ensureVariantStock(tx, dto.variantId, newQty);
+      this.assertStock(newQty, variant.stock);
 
       if (existingItem) {
-        await tx.cartItem.update({
+        await client.cartItem.update({
           where: { id: existingItem.id },
           data: { qty: newQty },
         });
       } else {
-        const priceAtAdd = variant.price ?? variant.product.price;
-
-        await tx.cartItem.create({
+        await client.cartItem.create({
           data: {
             cartId: cart.id,
             variantId: dto.variantId,
             qty: dto.qty,
-            priceAtAdd,
+            priceAtAdd: price,
           },
         });
       }
 
-      await this.recalculateCartTotals(tx, cart.id);
-
-      const updated = await this.getCartWithItems(cart.id, tx);
-
-      if (!updated) {
-        throw new NotFoundException('Cart not found');
-      }
-
-      return updated;
+      await this.recalcTotals(client, cart.id);
+      return this.getCartByIdOrThrow(client, cart.id);
     });
   }
 
   async updateItem(
-    opts: CartContext,
+    context: CartContext,
     itemId: number,
     dto: UpdateItemDto,
   ): Promise<CartWithItems> {
     return this.prisma.$transaction(async (tx) => {
-      const cart = await this.findCart(tx, opts);
+      const client = this.getClient(tx);
+      const cart = await this.getCartForContext(context, client);
 
-      if (!cart) {
-        throw new NotFoundException(ITEM_NOT_FOUND_ERROR);
-      }
-
-      const item = await tx.cartItem.findUnique({ where: { id: itemId } });
+      const item = await client.cartItem.findUnique({ where: { id: itemId } });
 
       if (!item || item.cartId !== cart.id) {
         throw new NotFoundException(ITEM_NOT_FOUND_ERROR);
       }
 
-      await this.ensureVariantStock(tx, item.variantId, dto.qty);
+      const variant = await this.getVariantOrThrow(client, item.variantId);
 
-      await tx.cartItem.update({ where: { id: itemId }, data: { qty: dto.qty } });
+      this.assertStock(dto.qty, variant.stock);
 
-      await this.recalculateCartTotals(tx, cart.id);
+      await client.cartItem.update({ where: { id: itemId }, data: { qty: dto.qty } });
 
-      const updated = await this.getCartWithItems(cart.id, tx);
-
-      if (!updated) {
-        throw new NotFoundException('Cart not found');
-      }
-
-      return updated;
+      await this.recalcTotals(client, cart.id);
+      return this.getCartByIdOrThrow(client, cart.id);
     });
   }
 
-  async removeItem(opts: CartContext, itemId: number): Promise<CartWithItems> {
+  async removeItem(context: CartContext, itemId: number): Promise<CartWithItems> {
     return this.prisma.$transaction(async (tx) => {
-      const cart = await this.findCart(tx, opts);
+      const client = this.getClient(tx);
+      const cart = await this.getCartForContext(context, client);
 
-      if (!cart) {
-        throw new NotFoundException(ITEM_NOT_FOUND_ERROR);
-      }
-
-      const item = await tx.cartItem.findUnique({ where: { id: itemId } });
+      const item = await client.cartItem.findUnique({ where: { id: itemId } });
 
       if (!item || item.cartId !== cart.id) {
         throw new NotFoundException(ITEM_NOT_FOUND_ERROR);
       }
 
-      await tx.cartItem.delete({ where: { id: itemId } });
+      await client.cartItem.delete({ where: { id: itemId } });
 
-      await this.recalculateCartTotals(tx, cart.id);
-
-      const updated = await this.getCartWithItems(cart.id, tx);
-
-      if (!updated) {
-        throw new NotFoundException('Cart not found');
-      }
-
-      return updated;
+      await this.recalcTotals(client, cart.id);
+      return this.getCartByIdOrThrow(client, cart.id);
     });
   }
 
-  async clearCart(opts: CartContext): Promise<CartWithItems> {
+  async clearCart(context: CartContext): Promise<CartWithItems> {
     return this.prisma.$transaction(async (tx) => {
-      const cart = await this.ensureCart(tx, opts);
+      const client = this.getClient(tx);
+      const where = this.buildUniqueWhere(context);
 
-      await tx.cartItem.deleteMany({ where: { cartId: cart.id } });
-
-      await this.recalculateCartTotals(tx, cart.id);
-
-      const updated = await this.getCartWithItems(cart.id, tx);
-
-      if (!updated) {
-        throw new NotFoundException('Cart not found');
+      if (!where) {
+        throw new BadRequestException(NO_CONTEXT_ERROR);
       }
 
-      return updated;
+      const cart = await this.findOrCreate(where, tx);
+
+      await client.cartItem.deleteMany({ where: { cartId: cart.id } });
+
+      await this.recalcTotals(client, cart.id);
+      return this.getCartByIdOrThrow(client, cart.id);
     });
   }
 
@@ -190,12 +167,13 @@ export class CartService {
     }
 
     await this.prisma.$transaction(async (tx) => {
+      const client = this.getClient(tx);
       const [anonCart, userCart] = await Promise.all([
-        tx.cart.findUnique({
+        client.cart.findUnique({
           where: { anonymousId },
           include: { items: true },
         }),
-        tx.cart.findUnique({
+        client.cart.findUnique({
           where: { userId },
           include: { items: true },
         }),
@@ -206,11 +184,11 @@ export class CartService {
       }
 
       if (!userCart) {
-        await tx.cart.update({
+        await client.cart.update({
           where: { id: anonCart.id },
           data: { userId, anonymousId: null },
         });
-        await this.recalculateCartTotals(tx, anonCart.id);
+        await this.recalcTotals(client, anonCart.id);
         return;
       }
 
@@ -222,19 +200,19 @@ export class CartService {
         const currentQty = existingItemsMap.get(item.variantId) ?? 0;
         const newQty = currentQty + item.qty;
 
-        await this.ensureVariantStock(tx, item.variantId, newQty);
+        const variant = await this.getVariantOrThrow(client, item.variantId);
+        this.assertStock(newQty, variant.stock);
 
         const existingItem = userCart.items.find((i) => i.variantId === item.variantId);
 
         if (existingItem) {
-          await tx.cartItem.update({
+          await client.cartItem.update({
             where: { id: existingItem.id },
             data: { qty: newQty },
           });
           existingItem.qty = newQty;
-          existingItemsMap.set(item.variantId, newQty);
         } else {
-          const created = await tx.cartItem.create({
+          const created = await client.cartItem.create({
             data: {
               cartId: userCart.id,
               variantId: item.variantId,
@@ -243,105 +221,112 @@ export class CartService {
             },
             select: { id: true, variantId: true, qty: true },
           });
+
           userCart.items.push({
             ...item,
             id: created.id,
             cartId: userCart.id,
           });
-          existingItemsMap.set(item.variantId, newQty);
         }
+
+        existingItemsMap.set(item.variantId, newQty);
       }
 
-      await tx.cart.delete({ where: { id: anonCart.id } });
+      await client.cart.delete({ where: { id: anonCart.id } });
 
-      await this.recalculateCartTotals(tx, userCart.id);
+      await this.recalcTotals(client, userCart.id);
     });
   }
 
-  private buildUniqueWhere(opts: CartContext): Prisma.CartWhereUniqueInput | null {
-    if (opts.userId) {
-      return { userId: opts.userId };
+  private buildUniqueWhere(context: CartContext): Prisma.CartWhereUniqueInput | null {
+    if (typeof context.userId === 'number') {
+      return { userId: context.userId };
     }
 
-    if (opts.anonymousId) {
-      return { anonymousId: opts.anonymousId };
+    if (context.anonymousId) {
+      return { anonymousId: context.anonymousId };
     }
 
     return null;
   }
 
-  private async ensureCart(client: Client, opts: CartContext) {
-    const where = this.buildUniqueWhere(opts);
-
-    if (!where) {
-      throw new BadRequestException('CART_CONTEXT_REQUIRED');
-    }
-
-    const existing = await client.cart.findUnique({ where });
+  private async findOrCreate(
+    where: Prisma.CartWhereUniqueInput,
+    tx?: Prisma.TransactionClient,
+  ): Promise<CartWithItems> {
+    const client = this.getClient(tx);
+    const existing = await client.cart.findUnique({ where, include: this.cartInclude });
 
     if (existing) {
       return existing;
     }
 
-    return client.cart.create({ data: where });
-  }
-
-  private async findCart(client: Client, opts: CartContext) {
-    const where = this.buildUniqueWhere(opts);
-
-    if (!where) {
-      return null;
+    if ('anonymousId' in where && !where.anonymousId) {
+      where.anonymousId = uuidv4();
     }
 
-    return client.cart.findUnique({ where });
+    return client.cart.create({ data: where, include: this.cartInclude });
   }
 
-  private async getCartWithItems(cartId: number, client: Client) {
-    return client.cart.findUnique({
+  private async getCartForContext(
+    context: CartContext,
+    client: ModelClient,
+  ): Promise<CartWithItems> {
+    const where = this.buildUniqueWhere(context);
+
+    if (!where) {
+      throw new BadRequestException(NO_CONTEXT_ERROR);
+    }
+
+    const cart = await client.cart.findUnique({ where, include: this.cartInclude });
+
+    if (!cart) {
+      throw new NotFoundException(CART_NOT_FOUND_ERROR);
+    }
+
+    return cart;
+  }
+
+  private async getCartByIdOrThrow(
+    client: ModelClient,
+    cartId: number,
+  ): Promise<CartWithItems> {
+    const cart = await client.cart.findUnique({
       where: { id: cartId },
       include: this.cartInclude,
     });
+
+    if (!cart) {
+      throw new NotFoundException(CART_NOT_FOUND_ERROR);
+    }
+
+    return cart;
   }
 
-  private async ensureVariantStock(
-    client: Client,
-    variantId: number,
-    requiredQty: number,
-  ): Promise<VariantWithProduct> {
-    const variant = await client.productVariant.findUnique({
-      where: { id: variantId },
-      include: { product: true },
-    });
+  private async getVariantOrThrow(client: ModelClient, variantId: number) {
+    const variant = await client.productVariant.findUnique({ where: { id: variantId } });
 
     if (!variant) {
       throw new NotFoundException('VARIANT_NOT_FOUND');
     }
 
-    if (requiredQty > variant.stock) {
-      throw new BadRequestException(INSUFFICIENT_STOCK_ERROR);
-    }
-
     return variant;
   }
 
-  private async recalculateCartTotals(client: Client, cartId: number): Promise<void> {
-    const items = await client.cartItem.findMany({
-      where: { cartId },
-      select: { qty: true, priceAtAdd: true },
-    });
+  private assertStock(required: number, stock: number) {
+    if (required > stock) {
+      throw new BadRequestException(INSUFFICIENT_STOCK_ERROR);
+    }
+  }
 
-    const itemsCount = items.reduce((total, item) => total + item.qty, 0);
-    const subtotal = items.reduce(
-      (total, item) => total + item.qty * item.priceAtAdd,
-      0,
-    );
+  private async recalcTotals(client: ModelClient, cartId: number) {
+    const items = await client.cartItem.findMany({ where: { cartId } });
+    const itemsCount = items.reduce((sum, item) => sum + item.qty, 0);
+    const subtotal = items.reduce((sum, item) => sum + item.qty * item.priceAtAdd, 0);
 
     await client.cart.update({
       where: { id: cartId },
-      data: {
-        itemsCount,
-        subtotal,
-      },
+      data: { itemsCount, subtotal },
     });
   }
 }
