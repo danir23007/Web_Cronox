@@ -1,5 +1,9 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Put, Query } from '@nestjs/common';
-import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Put, Query, UseGuards } from '@nestjs/common';
+import { AuthGuard } from '@nestjs/passport';
+import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { Role } from '@prisma/client';
+import { Roles } from '../auth/roles.decorator';
+import { RolesGuard } from '../auth/roles.guard';
 import { ProductService } from './product.service';
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
@@ -26,36 +30,56 @@ export class ProductController {
   }
 
   @Post()
+  @ApiBearerAuth()
+  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @Roles(Role.admin)
   @ApiOperation({ summary: 'Crear un nuevo producto con imágenes' })
   @ApiResponse({ status: 201, description: 'Producto creado correctamente.' })
+  @ApiResponse({ status: 403, description: 'No autorizado.' })
   create(@Body() body: CreateProductDto) {
     return this.productService.createProduct(body);
   }
 
   @Put(':id')
+  @ApiBearerAuth()
+  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @Roles(Role.admin)
   @ApiOperation({ summary: 'Actualizar (PUT) un producto con sus imágenes' })
   @ApiResponse({ status: 200, description: 'Producto actualizado.' })
+  @ApiResponse({ status: 403, description: 'No autorizado.' })
   putUpdate(@Param('id') id: string, @Body() dto: UpdateProductDto) {
     return this.productService.updateProduct(Number(id), dto);
   }
 
   @Patch(':id')
+  @ApiBearerAuth()
+  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @Roles(Role.admin)
   @ApiOperation({ summary: 'Actualizar (PATCH) un producto con sus imágenes' })
   @ApiResponse({ status: 200, description: 'Producto actualizado.' })
+  @ApiResponse({ status: 403, description: 'No autorizado.' })
   patchUpdate(@Param('id') id: string, @Body() dto: UpdateProductDto) {
     return this.productService.updateProduct(Number(id), dto);
   }
 
   @Delete(':id')
+  @ApiBearerAuth()
+  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @Roles(Role.admin)
   @ApiOperation({ summary: 'Eliminar un producto (y sus imágenes)' })
   @ApiResponse({ status: 200, description: 'Producto eliminado.' })
+  @ApiResponse({ status: 403, description: 'No autorizado.' })
   remove(@Param('id') id: string) {
     return this.productService.deleteProduct(Number(id));
   }
 
   @Delete(':id/images/:imageId')
+  @ApiBearerAuth()
+  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @Roles(Role.admin)
   @ApiOperation({ summary: 'Eliminar una imagen de un producto' })
   @ApiResponse({ status: 200, description: 'Imagen eliminada.' })
+  @ApiResponse({ status: 403, description: 'No autorizado.' })
   removeImage(@Param('id') _id: string, @Param('imageId') imageId: string) {
     return this.productService.deleteImage(Number(imageId));
   }

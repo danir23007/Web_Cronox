@@ -14,7 +14,9 @@ async function bootstrap() {
     .setTitle('CRONOX API')
     .setDescription('API de la tienda CRONOX — productos, imágenes y más.')
     .setVersion('1.0')
+    .addTag('Auth')
     .addTag('Products')
+    .addBearerAuth()
     .build();
 
   const document = SwaggerModule.createDocument(app, config);

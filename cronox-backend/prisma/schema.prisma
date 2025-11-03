@@ -9,6 +9,11 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+enum Role {
+  admin
+  customer
+}
+
 model Product {
   id        Int             @id @default(autoincrement())
   slug      String          @unique
@@ -36,10 +41,10 @@ model ProductImage {
 }
 
 model User {
-  id        Int      @id @default(autoincrement())
-  email     String   @unique
-  password  String   // si luego usas Supabase Auth puro, este puede no usarse
-  role      String   @default("customer") // admin | customer
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id           Int      @id @default(autoincrement())
+  email        String   @unique
+  passwordHash String
+  role         Role     @default(customer)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 }
