@@ -1,10 +1,18 @@
+-- Ensure Role enum exists for shadow DB replay
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'Role') THEN
+    CREATE TYPE "Role" AS ENUM ('ADMIN', 'CUSTOMER');
+  END IF;
+END$$;
+
 -- Drop the old integer-based primary key and recreate the User table with the new schema
 CREATE TABLE "_User_new" (
     "id" TEXT NOT NULL,
     "email" TEXT NOT NULL,
     "passwordHash" TEXT NOT NULL,
     "name" TEXT,
-    "role" "Role" NOT NULL DEFAULT 'customer',
+    "role" "Role" NOT NULL DEFAULT 'CUSTOMER',
     "isEmailVerified" BOOLEAN NOT NULL DEFAULT false,
     "refreshTokenHash" VARCHAR(255),
     "resetTokenHash" VARCHAR(255),
@@ -28,7 +36,7 @@ SELECT
     "id"::TEXT,
     "email",
     "passwordHash",
-    COALESCE("role", 'customer'),
+    COALESCE("role", 'CUSTOMER'),
     "createdAt",
     "updatedAt"
 FROM "User";
