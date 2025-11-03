@@ -12,6 +12,7 @@ import {
 } from '@nestjs/common';
 import type { Request } from 'express';
 import { AuthService } from './auth.service';
+import { CartService } from '../cart/cart.service';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { ForgotDto } from './dto/forgot.dto';
 import { LoginDto } from './dto/login.dto';
@@ -23,7 +24,10 @@ import { RefreshJwtGuard } from './guards/refresh-jwt.guard';
 
 @Controller('auth')
 export class AuthController {
-  constructor(private readonly authService: AuthService) {}
+  constructor(
+    private readonly authService: AuthService,
+    private readonly cartService: CartService,
+  ) {}
 
   @Post('register')
   async register(@Body() dto: RegisterDto) {
@@ -31,8 +35,16 @@ export class AuthController {
   }
 
   @Post('login')
-  async login(@Body() dto: LoginDto) {
-    return this.authService.login(dto);
+  async login(@Req() req: Request, @Body() dto: LoginDto) {
+    const result = await this.authService.login(dto);
+
+    const cookies = (req as Request & {
+      cookies?: Record<string, string | undefined>;
+    }).cookies;
+
+    await this.cartService.mergeOnLogin(result.user.id, cookies?.cartId);
+
+    return result;
   }
 
   @Post('refresh')

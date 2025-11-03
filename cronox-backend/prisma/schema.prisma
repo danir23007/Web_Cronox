@@ -115,3 +115,36 @@ model Address {
 
   @@index([userId, isDefault])
 }
+
+model Cart {
+  id          Int        @id @default(autoincrement())
+  userId      Int?       @unique
+  user        User?      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  anonymousId String?    @unique
+
+  items      CartItem[]
+
+  itemsCount Int        @default(0)
+  subtotal   Int        @default(0)
+
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+}
+
+model CartItem {
+  id        Int            @id @default(autoincrement())
+  cartId    Int
+  cart      Cart           @relation(fields: [cartId], references: [id], onDelete: Cascade)
+
+  variantId Int
+  variant   ProductVariant @relation(fields: [variantId], references: [id], onDelete: Restrict)
+
+  qty        Int
+  priceAtAdd Int
+
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+
+  @@unique([cartId, variantId])
+  @@index([variantId])
+}
