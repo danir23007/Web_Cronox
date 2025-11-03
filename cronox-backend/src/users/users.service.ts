@@ -1,5 +1,5 @@
-import { Injectable } from '@nestjs/common';
-import { Role, User } from '@prisma/client';
+import { Injectable, NotFoundException } from '@nestjs/common';
+import { Prisma, Role, User } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 
 export type AuthUser = User;
@@ -84,6 +84,31 @@ export class UsersService {
         resetTokenExp: null,
       },
     });
+  }
+
+  async updateProfile(id: number, update: { name?: string }): Promise<SafeUser> {
+    const data: Prisma.UserUpdateInput = {};
+
+    if (update.name !== undefined) {
+      data.name = update.name;
+    }
+
+    if (Object.keys(data).length === 0) {
+      const user = await this.findById(id);
+
+      if (!user) {
+        throw new NotFoundException('User not found');
+      }
+
+      return this.toSafeUser(user);
+    }
+
+    const updated = await this.prisma.user.update({
+      where: { id },
+      data,
+    });
+
+    return this.toSafeUser(updated);
   }
 
   toSafeUser(user: AuthUser): SafeUser {
