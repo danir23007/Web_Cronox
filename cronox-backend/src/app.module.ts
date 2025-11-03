@@ -30,8 +30,8 @@ import { UsersModule } from './users/users.module';
 
     ThrottlerModule.forRoot([
       {
-        ttl: 60,
-        limit: 60,
+        ttl: 60_000,
+        limit: 20,
       },
     ]),
     PrismaModule,

@@ -8,7 +8,7 @@ import {
 import { JwtService } from '@nestjs/jwt';
 import { Role, User } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
-import { Request } from 'express';
+import type { Request } from 'express';
 import { EmailService } from '../common/email/email.service';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { ForgotDto } from './dto/forgot.dto';
@@ -31,16 +31,25 @@ interface RefreshPayload {
   [key: string]: unknown;
 }
 
+const toPositiveNumber = (value: string | undefined, fallback: number) => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+};
+
 @Injectable()
 export class AuthService {
   private readonly accessSecret =
     process.env.JWT_ACCESS_SECRET ?? 'change_me_access';
   private readonly refreshSecret =
     process.env.JWT_REFRESH_SECRET ?? 'change_me_refresh';
-  private readonly accessExpiresIn =
-    process.env.JWT_ACCESS_EXPIRES ?? '15m';
-  private readonly refreshExpiresIn =
-    process.env.JWT_REFRESH_EXPIRES ?? '7d';
+  private readonly accessTtlSec = toPositiveNumber(
+    process.env.JWT_ACCESS_EXPIRES,
+    15 * 60,
+  );
+  private readonly refreshTtlSec = toPositiveNumber(
+    process.env.JWT_REFRESH_EXPIRES,
+    7 * 24 * 60 * 60,
+  );
   private readonly bcryptSaltRounds = Number(
     process.env.BCRYPT_SALT_ROUNDS ?? '10',
   );
@@ -101,7 +110,7 @@ export class AuthService {
     };
   }
 
-  async refreshTokens(userId: string, refreshToken: string | undefined) {
+  async refreshTokens(userId: number, refreshToken: string | undefined) {
     if (!refreshToken) {
       throw new UnauthorizedException('Refresh token requerido');
     }
@@ -121,7 +130,11 @@ export class AuthService {
     if (accessToken) {
       try {
         const payload = await this.verifyAccessToken(accessToken);
-        await this.usersService.clearRefreshTokenHash(payload.sub);
+        const userId = Number(payload.sub);
+        if (Number.isNaN(userId)) {
+          throw new UnauthorizedException('Token inválido');
+        }
+        await this.usersService.clearRefreshTokenHash(userId);
         return;
       } catch (error) {
         // Ignoramos errores para permitir intentar con el refresh token
@@ -130,15 +143,19 @@ export class AuthService {
 
     if (refreshToken) {
       const payload = await this.verifyRefreshToken(refreshToken);
-      await this.validateRefreshToken(payload.sub, refreshToken);
-      await this.usersService.clearRefreshTokenHash(payload.sub);
+      const userId = Number(payload.sub);
+      if (Number.isNaN(userId)) {
+        throw new UnauthorizedException('Token inválido');
+      }
+      await this.validateRefreshToken(userId, refreshToken);
+      await this.usersService.clearRefreshTokenHash(userId);
       return;
     }
 
     throw new UnauthorizedException('No se proporcionó un token válido');
   }
 
-  async getProfile(userId: string) {
+  async getProfile(userId: number) {
     const user = await this.usersService.findById(userId);
     if (!user) {
       throw new NotFoundException('Usuario no encontrado');
@@ -156,10 +173,10 @@ export class AuthService {
     }
 
     const token = await this.jwtService.signAsync(
-      { sub: user.id, email: user.email, type: 'reset' },
+      { sub: String(user.id), email: user.email, type: 'reset' },
       {
         secret: this.accessSecret,
-        expiresIn: '30m',
+        expiresIn: this.resetTokenTtlMs / 1000,
       },
     );
 
@@ -187,7 +204,12 @@ export class AuthService {
       throw new BadRequestException('Token inválido o expirado');
     }
 
-    const user = await this.usersService.findById(payload.sub);
+    const userId = Number(payload.sub);
+    if (Number.isNaN(userId)) {
+      throw new BadRequestException('Token inválido o expirado');
+    }
+
+    const user = await this.usersService.findById(userId);
     if (!user || !user.resetTokenHash || !user.resetTokenExp) {
       throw new BadRequestException('Token inválido o expirado');
     }
@@ -207,7 +229,7 @@ export class AuthService {
     await this.usersService.clearRefreshTokenHash(user.id);
   }
 
-  async changePassword(userId: string, dto: ChangePasswordDto) {
+  async changePassword(userId: number, dto: ChangePasswordDto) {
     const user = await this.usersService.findById(userId);
     if (!user) {
       throw new NotFoundException('Usuario no encontrado');
@@ -257,7 +279,7 @@ export class AuthService {
     return bcrypt.hash(data, this.bcryptSaltRounds);
   }
 
-  private async validateRefreshToken(userId: string, refreshToken: string) {
+  private async validateRefreshToken(userId: number, refreshToken: string) {
     const user = await this.usersService.findById(userId);
     if (!user || !user.refreshTokenHash) {
       throw new UnauthorizedException('Refresh token inválido');
@@ -273,24 +295,24 @@ export class AuthService {
 
   private async generateTokens(user: User) {
     const payload: JwtPayload = {
-      sub: user.id,
+      sub: String(user.id),
       email: user.email,
       role: user.role,
     };
 
     const refreshPayload: RefreshPayload = {
-      sub: user.id,
+      sub: String(user.id),
       type: 'refresh',
     };
 
     const [accessToken, refreshToken] = await Promise.all([
       this.jwtService.signAsync(payload, {
         secret: this.accessSecret,
-        expiresIn: this.accessExpiresIn,
+        expiresIn: this.accessTtlSec,
       }),
       this.jwtService.signAsync(refreshPayload, {
         secret: this.refreshSecret,
-        expiresIn: this.refreshExpiresIn,
+        expiresIn: this.refreshTtlSec,
       }),
     ]);
 
