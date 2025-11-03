@@ -5,6 +5,7 @@ import { join } from 'path';
 
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
+import { AuthModule } from './auth/auth.module';
 
 import { PrismaModule } from './prisma/prisma.module';
 import { ProductModule } from './products/product.module';
@@ -19,12 +20,14 @@ import { ProductModule } from './products/product.module';
         '/api(.*)',        // todo lo que empiece por /api
         '/api/docs(.*)',   // swagger ui + assets
         '/products(.*)',   // endpoints REST de productos
+        '/auth(.*)',       // endpoints de autenticación
       ],
       serveStaticOptions: { index: 'index.html' },
     }),
 
     PrismaModule,
     ProductModule,
+    AuthModule,
   ],
   controllers: [AppController],
   providers: [AppService],
