@@ -28,18 +28,19 @@ model Product {
 }
 
 model ProductVariant {
-  id         Int      @id @default(autoincrement())
+  id         Int         @id @default(autoincrement())
   productId  Int
   size       VariantSize
-  sku        String   @unique
+  sku        String      @unique
   price      Int?
-  stock      Int      @default(0)
-  isActive   Boolean  @default(true)
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  stock      Int         @default(0)
+  isActive   Boolean     @default(true)
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
 
-  product    Product  @relation(fields: [productId], references: [id])
+  product    Product     @relation(fields: [productId], references: [id])
   movements  StockMovement[]
+  cartItems  CartItem[]
 
   @@index([productId])
   @@unique([productId, size])
@@ -93,6 +94,7 @@ model User {
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
   addresses        Address[]
+  carts            Cart[]
 }
 
 model Address {
