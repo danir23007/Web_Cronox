@@ -1,21 +1,22 @@
 // src/app.module.ts
 import { Module } from '@nestjs/common';
-import { APP_GUARD, Reflector } from '@nestjs/core';
+import { APP_GUARD } from '@nestjs/core';
 import { ServeStaticModule } from '@nestjs/serve-static';
 import { join } from 'path';
-import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
+import { ThrottlerModule } from '@nestjs/throttler';
 
-// importa aquí el resto de tus módulos reales
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { AuthModule } from './auth/auth.module';
+import { EmailModule } from './common/email/email.module';
+import { AppThrottlerGuard } from './common/guards/app-throttler.guard';
 import { PrismaModule } from './prisma/prisma.module';
 import { ProductModule } from './products/product.module';
-import { EmailModule } from './common/email/email.module';
 import { UsersModule } from './users/users.module';
 
 @Module({
   imports: [
+    // API v5: array de configuraciones
     ThrottlerModule.forRoot([
       {
         ttl: 60_000, // 60s
@@ -41,8 +42,8 @@ import { UsersModule } from './users/users.module';
   controllers: [AppController],
   providers: [
     AppService,
-    Reflector,
-    { provide: APP_GUARD, useClass: ThrottlerGuard },
+    // Registramos nuestro guard extendido como guard global ÚNICO
+    { provide: APP_GUARD, useClass: AppThrottlerGuard },
   ],
 })
 export class AppModule {}
