@@ -1,5 +1,5 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import { Cart, Prisma } from '@prisma/client';
+import { BadRequestException, Inject, Injectable, NotFoundException } from '@nestjs/common';
+import { Prisma, PrismaClient } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { AddItemDto } from './dto/add-item.dto';
 import { UpdateItemDto } from './dto/update-item.dto';
@@ -8,21 +8,7 @@ export type CartWithItems = Prisma.CartGetPayload<{
   include: {
     items: {
       include: {
-        variant: {
-          select: {
-            id: true;
-            sku: true;
-            price: true;
-            stock: true;
-            product: {
-              select: {
-                id: true;
-                name: true;
-                slug: true;
-              };
-            };
-          };
-        };
+        variant: { include: { product: true } };
       };
     };
   };
@@ -36,56 +22,32 @@ export type CartContext = {
 const INSUFFICIENT_STOCK_ERROR = 'INSUFFICIENT_STOCK';
 const ITEM_NOT_FOUND_ERROR = 'ITEM_NOT_FOUND';
 
-type PrismaClientOrTransaction = PrismaService | Prisma.TransactionClient;
+export type Client = Prisma.TransactionClient | PrismaClient;
 
-type CartUniqueWhere = Prisma.CartWhereUniqueInput;
-
-type VariantForStock = Prisma.ProductVariantGetPayload<{
-  select: {
-    id: true;
-    stock: true;
-    price: true;
-    product: {
-      select: {
-        id: true;
-        price: true;
-        name: true;
-        slug: true;
-      };
-    };
-  };
+type VariantWithProduct = Prisma.ProductVariantGetPayload<{
+  include: { product: true };
 }>;
 
 @Injectable()
 export class CartService {
-  private readonly cartInclude: Prisma.CartInclude = {
+  private readonly cartInclude = {
     items: {
       include: {
         variant: {
-          select: {
-            id: true,
-            sku: true,
-            price: true,
-            stock: true,
-            product: {
-              select: {
-                id: true,
-                name: true,
-                slug: true,
-              },
-            },
+          include: {
+            product: true,
           },
         },
       },
-      orderBy: { id: 'asc' },
+      orderBy: { id: 'asc' as const },
     },
-  };
+  } as const;
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(@Inject(PrismaService) private readonly prisma: PrismaClient) {}
 
   async getOrCreateCart(opts: CartContext): Promise<CartWithItems> {
     const record = await this.ensureCart(this.prisma, opts);
-    const cart = await this.getCartWithItems(this.prisma, record.id);
+    const cart = await this.getCartWithItems(record.id, this.prisma);
 
     if (!cart) {
       throw new NotFoundException('Cart not found');
@@ -132,7 +94,7 @@ export class CartService {
 
       await this.recalculateCartTotals(tx, cart.id);
 
-      const updated = await this.getCartWithItems(tx, cart.id);
+      const updated = await this.getCartWithItems(cart.id, tx);
 
       if (!updated) {
         throw new NotFoundException('Cart not found');
@@ -166,7 +128,7 @@ export class CartService {
 
       await this.recalculateCartTotals(tx, cart.id);
 
-      const updated = await this.getCartWithItems(tx, cart.id);
+      const updated = await this.getCartWithItems(cart.id, tx);
 
       if (!updated) {
         throw new NotFoundException('Cart not found');
@@ -194,7 +156,7 @@ export class CartService {
 
       await this.recalculateCartTotals(tx, cart.id);
 
-      const updated = await this.getCartWithItems(tx, cart.id);
+      const updated = await this.getCartWithItems(cart.id, tx);
 
       if (!updated) {
         throw new NotFoundException('Cart not found');
@@ -212,7 +174,7 @@ export class CartService {
 
       await this.recalculateCartTotals(tx, cart.id);
 
-      const updated = await this.getCartWithItems(tx, cart.id);
+      const updated = await this.getCartWithItems(cart.id, tx);
 
       if (!updated) {
         throw new NotFoundException('Cart not found');
@@ -262,9 +224,7 @@ export class CartService {
 
         await this.ensureVariantStock(tx, item.variantId, newQty);
 
-        const existingItem = userCart.items.find(
-          (i) => i.variantId === item.variantId,
-        );
+        const existingItem = userCart.items.find((i) => i.variantId === item.variantId);
 
         if (existingItem) {
           await tx.cartItem.update({
@@ -298,7 +258,7 @@ export class CartService {
     });
   }
 
-  private buildUniqueWhere(opts: CartContext): CartUniqueWhere | null {
+  private buildUniqueWhere(opts: CartContext): Prisma.CartWhereUniqueInput | null {
     if (opts.userId) {
       return { userId: opts.userId };
     }
@@ -310,10 +270,7 @@ export class CartService {
     return null;
   }
 
-  private async ensureCart(
-    client: PrismaClientOrTransaction,
-    opts: CartContext,
-  ): Promise<Cart> {
+  private async ensureCart(client: Client, opts: CartContext) {
     const where = this.buildUniqueWhere(opts);
 
     if (!where) {
@@ -329,10 +286,7 @@ export class CartService {
     return client.cart.create({ data: where });
   }
 
-  private async findCart(
-    client: PrismaClientOrTransaction,
-    opts: CartContext,
-  ): Promise<Cart | null> {
+  private async findCart(client: Client, opts: CartContext) {
     const where = this.buildUniqueWhere(opts);
 
     if (!where) {
@@ -342,10 +296,7 @@ export class CartService {
     return client.cart.findUnique({ where });
   }
 
-  private async getCartWithItems(
-    client: PrismaClientOrTransaction,
-    cartId: number,
-  ): Promise<CartWithItems | null> {
+  private async getCartWithItems(cartId: number, client: Client) {
     return client.cart.findUnique({
       where: { id: cartId },
       include: this.cartInclude,
@@ -353,29 +304,17 @@ export class CartService {
   }
 
   private async ensureVariantStock(
-    client: PrismaClientOrTransaction,
+    client: Client,
     variantId: number,
     requiredQty: number,
-  ): Promise<VariantForStock> {
+  ): Promise<VariantWithProduct> {
     const variant = await client.productVariant.findUnique({
       where: { id: variantId },
-      select: {
-        id: true,
-        stock: true,
-        price: true,
-        product: {
-          select: {
-            id: true,
-            price: true,
-            name: true,
-            slug: true,
-          },
-        },
-      },
+      include: { product: true },
     });
 
     if (!variant) {
-      throw new NotFoundException('Variant not found');
+      throw new NotFoundException('VARIANT_NOT_FOUND');
     }
 
     if (requiredQty > variant.stock) {
@@ -385,10 +324,7 @@ export class CartService {
     return variant;
   }
 
-  private async recalculateCartTotals(
-    client: PrismaClientOrTransaction,
-    cartId: number,
-  ): Promise<void> {
+  private async recalculateCartTotals(client: Client, cartId: number): Promise<void> {
     const items = await client.cartItem.findMany({
       where: { cartId },
       select: { qty: true, priceAtAdd: true },
