@@ -17,10 +17,10 @@ import { ProductModule } from './products/product.module';
     ServeStaticModule.forRoot({
       rootPath: join(__dirname, '..', '..', 'cronox-front'),
       exclude: [
-        '/api(.*)',        // todo lo que empiece por /api
-        '/api/docs(.*)',   // swagger ui + assets
-        '/products(.*)',   // endpoints REST de productos
-        '/auth(.*)',       // endpoints de autenticación
+        '/api(.*)', // todo lo que empiece por /api
+        '/api/docs(.*)', // swagger ui + assets
+        '/products(.*)', // endpoints REST de productos
+        '/auth(.*)', // endpoints de autenticación
       ],
       serveStaticOptions: { index: 'index.html' },
     }),

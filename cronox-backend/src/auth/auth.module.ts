@@ -7,8 +7,8 @@ import { AuthService } from './auth.service';
 import { JwtStrategy } from './jwt.strategy';
 
 // ✅ Define un tipo correcto para expiresIn con formato tipo "7d", "12h", etc.
-const EXPIRES_IN =
-  (process.env.JWT_EXPIRES_IN ?? '7d') as `${number}${'ms' | 's' | 'm' | 'h' | 'd' | 'w' | 'y'}`;
+const EXPIRES_IN = (process.env.JWT_EXPIRES_IN ??
+  '7d') as `${number}${'ms' | 's' | 'm' | 'h' | 'd' | 'w' | 'y'}`;
 
 @Module({
   imports: [
