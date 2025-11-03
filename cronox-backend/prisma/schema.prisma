@@ -24,6 +24,46 @@ model Product {
   createdAt DateTime        @default(now())
   updatedAt DateTime        @updatedAt
   images    ProductImage[]
+  variants  ProductVariant[]
+}
+
+model ProductVariant {
+  id         Int      @id @default(autoincrement())
+  productId  Int
+  size       VariantSize
+  sku        String   @unique
+  price      Int?
+  stock      Int      @default(0)
+  isActive   Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  product    Product  @relation(fields: [productId], references: [id])
+  movements  StockMovement[]
+
+  @@index([productId])
+  @@unique([productId, size])
+}
+
+enum VariantSize {
+  XS
+  S
+  M
+  L
+  XL
+  XXL
+}
+
+model StockMovement {
+  id        Int      @id @default(autoincrement())
+  variantId Int
+  delta     Int
+  reason    String?
+  createdAt DateTime @default(now())
+
+  variant ProductVariant @relation(fields: [variantId], references: [id])
+
+  @@index([variantId])
 }
 
 model ProductImage {

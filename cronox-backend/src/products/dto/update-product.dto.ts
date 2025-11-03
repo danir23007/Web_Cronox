@@ -1,8 +1,16 @@
 import { PartialType } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { IsArray, IsInt, IsOptional, IsPositive, ValidateNested } from 'class-validator';
+import {
+  IsArray,
+  IsInt,
+  IsOptional,
+  IsPositive,
+  ValidateNested,
+} from 'class-validator';
 import { CreateProductDto } from './create-product.dto';
 import { CreateProductImageDto } from './create-product-image.dto';
+import { CreateVariantDto } from './create-variant.dto';
+import { UpdateVariantDto } from './update-variant.dto';
 
 export class UpdateProductDto extends PartialType(CreateProductDto) {
   @IsOptional()
@@ -23,6 +31,24 @@ export class UpdateProductDto extends PartialType(CreateProductDto) {
   @IsInt({ each: true })
   @IsPositive({ each: true })
   imagesToDeleteIds?: number[];
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => CreateVariantDto)
+  variantsToCreate?: CreateVariantDto[];
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => UpdateVariantDto)
+  variantsToUpdate?: (UpdateVariantDto & { id: number })[];
+
+  @IsOptional()
+  @IsArray()
+  @Type(() => Number)
+  @IsInt({ each: true })
+  variantIdsToDelete?: number[];
 }
 
 export class UpdateImageItem {
