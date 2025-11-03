@@ -1,6 +1,6 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma, PrismaClient } from '@prisma/client';
-import { v4 as uuidv4 } from 'uuid';
+import { randomUUID } from 'node:crypto';
 import { AddItemDto } from './dto/add-item.dto';
 import { UpdateItemDto } from './dto/update-item.dto';
 
@@ -244,7 +244,7 @@ export class CartService {
     return {
       userId: 'userId' in where ? where.userId : undefined,
       anonymousId:
-        'anonymousId' in where ? where.anonymousId ?? uuidv4() : undefined,
+        'anonymousId' in where ? where.anonymousId ?? randomUUID() : undefined,
     };
   }
 
