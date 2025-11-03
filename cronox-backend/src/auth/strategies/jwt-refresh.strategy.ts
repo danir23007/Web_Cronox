@@ -53,7 +53,7 @@ export class JwtRefreshStrategy extends PassportStrategy(
       throw new UnauthorizedException('Refresh token inválido');
     }
 
-    const user = await this.usersService.findById(userId);
+    const user = await this.usersService.findByIdForAuth(userId);
     if (!user || !user.refreshTokenHash) {
       throw new UnauthorizedException('Refresh token inválido');
     }
@@ -63,6 +63,6 @@ export class JwtRefreshStrategy extends PassportStrategy(
       throw new UnauthorizedException('Refresh token inválido');
     }
 
-    return this.usersService.toPublic(user);
+    return this.usersService.toSafeUser(user);
   }
 }
