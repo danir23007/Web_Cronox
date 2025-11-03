@@ -10,8 +10,8 @@ datasource db {
 }
 
 enum Role {
-  admin
-  customer
+  ADMIN
+  CUSTOMER
 }
 
 model Product {
@@ -85,7 +85,7 @@ model User {
   email            String   @unique
   passwordHash     String
   name             String?
-  role             Role     @default(customer)
+  role             Role     @default(CUSTOMER)
   isEmailVerified  Boolean  @default(false)
   refreshTokenHash String?  @db.VarChar(255)
   resetTokenHash   String?  @db.VarChar(255)
