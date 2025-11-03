@@ -10,7 +10,6 @@ import {
   UnauthorizedException,
   UseGuards,
 } from '@nestjs/common';
-import { Throttle } from '@nestjs/throttler';
 import type { Request } from 'express';
 import { AuthService } from './auth.service';
 import { ChangePasswordDto } from './dto/change-password.dto';
@@ -32,7 +31,6 @@ export class AuthController {
   }
 
   @Post('login')
-  @Throttle({ limit: 5, ttl: 60_000 })
   async login(@Body() dto: LoginDto) {
     return this.authService.login(dto);
   }
@@ -66,7 +64,6 @@ export class AuthController {
   }
 
   @Post('forgot')
-  @Throttle({ limit: 5, ttl: 60_000 })
   @HttpCode(HttpStatus.OK)
   async forgot(@Body() dto: ForgotDto) {
     await this.authService.forgotPassword(dto);
