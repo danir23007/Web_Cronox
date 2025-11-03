@@ -9,7 +9,9 @@ type ModelClient = Pick<
   'cart' | 'cartItem' | 'productVariant' | '$transaction'
 >;
 
-export type CartWithItems = Awaited<ReturnType<PrismaClient['cart']['findUnique']>>;
+export type CartWithItems = NonNullable<
+  Awaited<ReturnType<PrismaClient['cart']['findUnique']>>
+>;
 
 export type CartContext = {
   userId?: number;
@@ -40,10 +42,6 @@ export class CartService {
 
   async getOrCreateCart(context: CartContext): Promise<CartWithItems> {
     const where = this.buildUniqueWhere(context);
-    if (!where) {
-      throw new BadRequestException(NO_CONTEXT_ERROR);
-    }
-
     return this.findOrCreate(where);
   }
 
@@ -51,11 +49,6 @@ export class CartService {
     return this.prisma.$transaction(async (tx) => {
       const client = this.getClient(tx);
       const where = this.buildUniqueWhere(context);
-
-      if (!where) {
-        throw new BadRequestException(NO_CONTEXT_ERROR);
-      }
-
       const cart = await this.findOrCreate(where, tx);
       const variant = await this.getVariantOrThrow(client, dto.variantId);
       const price = variant.price;
@@ -147,11 +140,6 @@ export class CartService {
     return this.prisma.$transaction(async (tx) => {
       const client = this.getClient(tx);
       const where = this.buildUniqueWhere(context);
-
-      if (!where) {
-        throw new BadRequestException(NO_CONTEXT_ERROR);
-      }
-
       const cart = await this.findOrCreate(where, tx);
 
       await client.cartItem.deleteMany({ where: { cartId: cart.id } });
@@ -238,7 +226,7 @@ export class CartService {
     });
   }
 
-  private buildUniqueWhere(context: CartContext): Prisma.CartWhereUniqueInput | null {
+  private buildUniqueWhere(context: CartContext): Prisma.CartWhereUniqueInput {
     if (typeof context.userId === 'number') {
       return { userId: context.userId };
     }
@@ -247,7 +235,17 @@ export class CartService {
       return { anonymousId: context.anonymousId };
     }
 
-    return null;
+    throw new BadRequestException(NO_CONTEXT_ERROR);
+  }
+
+  private buildCreateData(
+    where: Prisma.CartWhereUniqueInput,
+  ): Prisma.CartUncheckedCreateInput {
+    return {
+      userId: 'userId' in where ? where.userId : undefined,
+      anonymousId:
+        'anonymousId' in where ? where.anonymousId ?? uuidv4() : undefined,
+    };
   }
 
   private async findOrCreate(
@@ -261,11 +259,8 @@ export class CartService {
       return existing;
     }
 
-    if ('anonymousId' in where && !where.anonymousId) {
-      where.anonymousId = uuidv4();
-    }
-
-    return client.cart.create({ data: where, include: this.cartInclude });
+    const data = this.buildCreateData(where);
+    return client.cart.create({ data, include: this.cartInclude });
   }
 
   private async getCartForContext(
@@ -273,11 +268,6 @@ export class CartService {
     client: ModelClient,
   ): Promise<CartWithItems> {
     const where = this.buildUniqueWhere(context);
-
-    if (!where) {
-      throw new BadRequestException(NO_CONTEXT_ERROR);
-    }
-
     const cart = await client.cart.findUnique({ where, include: this.cartInclude });
 
     if (!cart) {
@@ -321,8 +311,8 @@ export class CartService {
 
   private async recalcTotals(client: ModelClient, cartId: number) {
     const items = await client.cartItem.findMany({ where: { cartId } });
-    const itemsCount = items.reduce((sum, item) => sum + item.qty, 0);
-    const subtotal = items.reduce((sum, item) => sum + item.qty * item.priceAtAdd, 0);
+    const itemsCount = items.reduce((s, it) => s + it.qty, 0);
+    const subtotal = items.reduce((s, it) => s + it.qty * it.priceAtAdd, 0);
 
     await client.cart.update({
       where: { id: cartId },
