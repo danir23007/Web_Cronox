@@ -25,10 +25,10 @@ import { UsersModule } from './users/users.module';
     ServeStaticModule.forRoot({
       rootPath: join(__dirname, '..', '..', 'cronox-front'),
       exclude: [
-        '/api(.*)',
-        '/api/docs(.*)',
-        '/products(.*)',
-        '/auth(.*)',
+        '/api*',
+        '/api/docs*',
+        '/products*',
+        '/auth*',
       ],
       serveStaticOptions: { index: 'index.html' },
     }),
