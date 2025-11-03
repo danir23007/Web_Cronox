@@ -24,7 +24,7 @@ export class VariantController {
 
   @Post()
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(Role.admin)
+  @Roles(Role.ADMIN)
   @ApiOperation({ summary: 'Crear variantes para un producto' })
   create(
     @Param('productId') productId: string,
@@ -35,7 +35,7 @@ export class VariantController {
 
   @Patch(':variantId')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(Role.admin)
+  @Roles(Role.ADMIN)
   @ApiOperation({ summary: 'Actualizar una variante' })
   update(
     @Param('productId') productId: string,
@@ -51,7 +51,7 @@ export class VariantController {
 
   @Patch(':variantId/adjust-stock')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(Role.admin)
+  @Roles(Role.ADMIN)
   @ApiOperation({ summary: 'Ajustar stock de una variante (delta +/-)' })
   adjustStock(
     @Param('productId') productId: string,
@@ -67,7 +67,7 @@ export class VariantController {
 
   @Delete(':variantId')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(Role.admin)
+  @Roles(Role.ADMIN)
   @ApiOperation({ summary: 'Eliminar una variante' })
   remove(
     @Param('productId') productId: string,

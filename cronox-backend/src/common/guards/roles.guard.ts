@@ -5,6 +5,7 @@ import {
   Injectable,
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
+import type { Request } from 'express';
 import { Role } from '@prisma/client';
 import { ROLES_KEY } from '../roles.decorator';
 
@@ -22,10 +23,10 @@ export class RolesGuard implements CanActivate {
       return true;
     }
 
-    const request = context.switchToHttp().getRequest();
-    const user = request.user as { role?: Role } | undefined;
+    const req = context.switchToHttp().getRequest<Request>();
+    const userRole = req.user?.role as Role | undefined;
 
-    if (!user?.role || !requiredRoles.includes(user.role)) {
+    if (!userRole || !requiredRoles.includes(userRole)) {
       throw new ForbiddenException('No tienes permisos para esta acción');
     }
 
