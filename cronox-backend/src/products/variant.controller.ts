@@ -7,11 +7,11 @@ import {
   Post,
   UseGuards,
 } from '@nestjs/common';
-import { AuthGuard } from '@nestjs/passport';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Role } from '@prisma/client';
-import { Roles } from '../auth/roles.decorator';
-import { RolesGuard } from '../auth/roles.guard';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../common/guards/roles.guard';
+import { Roles } from '../common/roles.decorator';
 import { ProductService } from './product.service';
 import { CreateVariantDto } from './dto/create-variant.dto';
 import { AdjustStockDto, UpdateVariantDto } from './dto/update-variant.dto';
@@ -23,7 +23,7 @@ export class VariantController {
   constructor(private readonly productService: ProductService) {}
 
   @Post()
-  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.admin)
   @ApiOperation({ summary: 'Crear variantes para un producto' })
   create(
@@ -34,7 +34,7 @@ export class VariantController {
   }
 
   @Patch(':variantId')
-  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.admin)
   @ApiOperation({ summary: 'Actualizar una variante' })
   update(
@@ -50,7 +50,7 @@ export class VariantController {
   }
 
   @Patch(':variantId/adjust-stock')
-  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.admin)
   @ApiOperation({ summary: 'Ajustar stock de una variante (delta +/-)' })
   adjustStock(
@@ -66,7 +66,7 @@ export class VariantController {
   }
 
   @Delete(':variantId')
-  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.admin)
   @ApiOperation({ summary: 'Eliminar una variante' })
   remove(

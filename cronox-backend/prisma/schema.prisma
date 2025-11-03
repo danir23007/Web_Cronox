@@ -81,10 +81,15 @@ model ProductImage {
 }
 
 model User {
-  id           Int      @id @default(autoincrement())
-  email        String   @unique
-  passwordHash String
-  role         Role     @default(customer)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id               String   @id @default(cuid())
+  email            String   @unique
+  passwordHash     String
+  name             String?
+  role             Role     @default(customer)
+  isEmailVerified  Boolean  @default(false)
+  refreshTokenHash String?  @db.VarChar(255)
+  resetTokenHash   String?  @db.VarChar(255)
+  resetTokenExp    DateTime?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
 }

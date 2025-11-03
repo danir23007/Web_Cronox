@@ -10,7 +10,6 @@ import {
   Query,
   UseGuards,
 } from '@nestjs/common';
-import { AuthGuard } from '@nestjs/passport';
 import {
   ApiBearerAuth,
   ApiOperation,
@@ -18,8 +17,9 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import { Role } from '@prisma/client';
-import { Roles } from '../auth/roles.decorator';
-import { RolesGuard } from '../auth/roles.guard';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../common/guards/roles.guard';
+import { Roles } from '../common/roles.decorator';
 import { ProductService } from './product.service';
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
@@ -47,7 +47,7 @@ export class ProductController {
 
   @Post()
   @ApiBearerAuth()
-  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.admin)
   @ApiOperation({ summary: 'Crear un nuevo producto con imágenes' })
   @ApiResponse({ status: 201, description: 'Producto creado correctamente.' })
@@ -58,7 +58,7 @@ export class ProductController {
 
   @Put(':id')
   @ApiBearerAuth()
-  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.admin)
   @ApiOperation({ summary: 'Actualizar (PUT) un producto con sus imágenes' })
   @ApiResponse({ status: 200, description: 'Producto actualizado.' })
@@ -69,7 +69,7 @@ export class ProductController {
 
   @Patch(':id')
   @ApiBearerAuth()
-  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.admin)
   @ApiOperation({ summary: 'Actualizar (PATCH) un producto con sus imágenes' })
   @ApiResponse({ status: 200, description: 'Producto actualizado.' })
@@ -80,7 +80,7 @@ export class ProductController {
 
   @Delete(':id')
   @ApiBearerAuth()
-  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.admin)
   @ApiOperation({ summary: 'Eliminar un producto (y sus imágenes)' })
   @ApiResponse({ status: 200, description: 'Producto eliminado.' })
@@ -91,7 +91,7 @@ export class ProductController {
 
   @Delete(':id/images/:imageId')
   @ApiBearerAuth()
-  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.admin)
   @ApiOperation({ summary: 'Eliminar una imagen de un producto' })
   @ApiResponse({ status: 200, description: 'Imagen eliminada.' })

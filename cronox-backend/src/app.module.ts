@@ -1,7 +1,9 @@
 // cronox-backend/src/app.module.ts
 import { Module } from '@nestjs/common';
+import { APP_GUARD } from '@nestjs/core';
 import { ServeStaticModule } from '@nestjs/serve-static';
 import { join } from 'path';
+import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
@@ -9,6 +11,7 @@ import { AuthModule } from './auth/auth.module';
 
 import { PrismaModule } from './prisma/prisma.module';
 import { ProductModule } from './products/product.module';
+import { UsersModule } from './users/users.module';
 
 @Module({
   imports: [
@@ -25,11 +28,24 @@ import { ProductModule } from './products/product.module';
       serveStaticOptions: { index: 'index.html' },
     }),
 
+    ThrottlerModule.forRoot([
+      {
+        ttl: 60,
+        limit: 60,
+      },
+    ]),
     PrismaModule,
     ProductModule,
+    UsersModule,
     AuthModule,
   ],
   controllers: [AppController],
-  providers: [AppService],
+  providers: [
+    AppService,
+    {
+      provide: APP_GUARD,
+      useClass: ThrottlerGuard,
+    },
+  ],
 })
 export class AppModule {}
