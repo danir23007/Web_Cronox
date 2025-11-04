@@ -15,6 +15,7 @@ import { PrismaModule } from './prisma/prisma.module';
 import { ProductModule } from './products/product.module';
 import { UsersModule } from './users/users.module';
 import { AddressesModule } from './addresses/addresses.module';
+import { OrdersModule } from './orders/orders.module'; // [ORDERS]
 
 @Module({
   imports: [
@@ -41,6 +42,7 @@ import { AddressesModule } from './addresses/addresses.module';
     ProductModule,
     UsersModule,
     AddressesModule,
+    OrdersModule, // [ORDERS] Registro del módulo de pedidos
   ],
   controllers: [AppController],
   providers: [
