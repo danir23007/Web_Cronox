@@ -105,7 +105,7 @@ model User {
   updatedAt        DateTime @updatedAt
   addresses        Address[]
   carts            Cart[]
-  orders           Order[]  // [ORDERS]
+  // [FIX] Orders relation temporarily disabled until user table exists
 }
 
 model Address {
@@ -165,8 +165,8 @@ model CartItem {
 // [ORDERS] Pedido confirmado por el proveedor de pago
 model Order {
   id           Int          @id @default(autoincrement())
-  userId       Int
-  user         User         @relation(fields: [userId], references: [id])
+  userId       String // [FIX]
+  // [FIX] User relation temporarily removed while foreign key is disabled
   status       OrderStatus  @default(PENDING)
   subtotal     Decimal      @db.Decimal(12, 2)
   taxRate      Decimal      @db.Decimal(5, 4)
@@ -181,6 +181,8 @@ model Order {
   items        OrderItem[]
   shippingAddr Json?
   billingAddr  Json?
+
+  @@index([userId]) // [FIX]
 }
 
 // [ORDERS] Línea de pedido que copia el carrito en el momento de la compra
