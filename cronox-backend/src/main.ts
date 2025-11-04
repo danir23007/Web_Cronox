@@ -18,6 +18,7 @@ async function bootstrap() {
     .setVersion('1.0')
     .addTag('Auth')
     .addTag('Products')
+    .addTag('Orders') // [ORDERS] Documentar endpoints de pedidos
     .addBearerAuth()
     .build();
 
