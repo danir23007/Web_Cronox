@@ -69,7 +69,7 @@ export class CartService {
       const currentQty = existingItem?.qty ?? 0;
       const newQty = currentQty + dto.qty;
 
-      this.assertStock(newQty, variant.stockQty ?? variant.stock ?? 0); // [STOCK]
+      this.assertStock(newQty, variant.stockQty ?? 0); // [STOCK]
 
       if (existingItem) {
         await client.cartItem.update({
@@ -109,7 +109,7 @@ export class CartService {
 
       const variant = await this.getVariantOrThrow(client, item.variantId);
 
-      this.assertStock(dto.qty, variant.stockQty ?? variant.stock ?? 0); // [STOCK]
+     this.assertStock(dto.qty, variant.stockQty ?? 0); // [STOCK] 
 
       await client.cartItem.update({ where: { id: itemId }, data: { qty: dto.qty } });
 
@@ -189,7 +189,7 @@ export class CartService {
         const newQty = currentQty + item.qty;
 
         const variant = await this.getVariantOrThrow(client, item.variantId);
-        this.assertStock(newQty, variant.stockQty ?? variant.stock ?? 0); // [STOCK]
+        this.assertStock(newQty, variant.stockQty ?? 0); // [STOCK]
 
         const existingItem = userCart.items.find((i) => i.variantId === item.variantId);
 
