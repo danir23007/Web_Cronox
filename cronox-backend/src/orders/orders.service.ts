@@ -52,6 +52,31 @@ type CheckoutComputation = {
   lineItems: CheckoutLineItem[];
 };
 
+type CheckoutSummaryResponse = { // [STRIPE]
+  currency: string;
+  subtotal: string;
+  taxRate: string;
+  taxAmount: string;
+  shippingCost: string;
+  total: string;
+};
+
+type CheckoutLineItemResponse = { // [STRIPE]
+  productId: number;
+  title: string;
+  quantity: number;
+  unitPrice: string;
+  lineTotal: string;
+};
+
+type CheckoutPreview = { // [STRIPE]
+  cart: CartSnapshot;
+  computation: CheckoutComputation;
+  summary: CheckoutSummaryResponse;
+  lineItems: CheckoutLineItemResponse[];
+  metadata: { cartId: number; userId: number };
+};
+
 type AuthenticatedUser = {
   id: number;
   role: Role;
@@ -60,6 +85,7 @@ type AuthenticatedUser = {
 @Injectable()
 export class OrdersService {
   private readonly logger = new Logger(OrdersService.name);
+  private readonly allowNegativeStock = process.env.ALLOW_NEGATIVE_STOCK === 'true'; // [STOCK]
 
   constructor(
     private readonly prisma: PrismaService,
@@ -67,10 +93,7 @@ export class OrdersService {
     private readonly taxConfig: TaxConfigService,
   ) {}
 
-  async createCheckoutSession(
-    userId: number,
-    dto: CreateCheckoutSessionDto,
-  ): Promise<Record<string, unknown>> {
+  async getCheckoutPreview(userId: number): Promise<CheckoutPreview> { // [STRIPE]
     const cart = (await this.cartService.getOrCreateCart({ userId })) as CartSnapshot;
 
     if (!cart.items.length) {
@@ -78,29 +101,21 @@ export class OrdersService {
     }
 
     const computation = this.buildCheckoutComputation(cart);
+    const summary = this.buildCheckoutSummary(computation);
+    const lineItems = this.buildPublicLineItems(computation.lineItems);
+    const metadata = { cartId: cart.id, userId };
+
+    return { cart, computation, summary, lineItems, metadata };
+  }
+
+  async createCheckoutSession(
+    userId: number,
+    dto: CreateCheckoutSessionDto,
+  ): Promise<Record<string, unknown>> {
+    const preview = await this.getCheckoutPreview(userId); // [STRIPE]
     const provider = this.taxConfig.getPaymentProvider();
 
-    const lineItems = computation.lineItems.map((item) => ({
-      productId: item.productId,
-      title: item.title,
-      quantity: item.quantity,
-      unitPrice: this.formatMoney(item.unitPrice),
-      lineTotal: this.formatMoney(item.lineTotal),
-    }));
-
-    const summary = {
-      currency: computation.currency,
-      subtotal: this.formatMoney(computation.subtotal),
-      taxRate: this.formatRate(computation.taxRate),
-      taxAmount: this.formatMoney(computation.taxAmount),
-      shippingCost: this.formatMoney(computation.shippingCost),
-      total: this.formatMoney(computation.total),
-    };
-
-    const metadata: Record<string, unknown> = {
-      cartId: cart.id,
-      userId,
-    };
+    const metadata: Record<string, unknown> = { ...preview.metadata };
 
     if (dto.shippingMethod) {
       metadata.shippingMethod = dto.shippingMethod;
@@ -111,8 +126,8 @@ export class OrdersService {
 
     const response: Record<string, unknown> = {
       provider,
-      summary,
-      lineItems,
+      summary: preview.summary,
+      lineItems: preview.lineItems,
       metadata,
     };
 
@@ -130,7 +145,10 @@ export class OrdersService {
     return response;
   }
 
-  async createOrderFromWebhook(dto: CreateOrderWebhookDto): Promise<Record<string, unknown>> {
+  async createOrderFromWebhook(
+    dto: CreateOrderWebhookDto,
+    options: { updateStock?: boolean; allowNegativeStock?: boolean } = {},
+  ): Promise<Record<string, unknown>> {
     const providerRef = dto.providerRef;
 
     return this.prisma.$transaction(async (tx) => {
@@ -208,6 +226,15 @@ export class OrdersService {
             lineTotal: item.lineTotal,
           })),
         });
+      }
+
+      if (status === OrderStatus.PAID && cart && options.updateStock) {
+        await this.adjustStockForPaidOrder(
+          tx,
+          order.id,
+          cart,
+          options.allowNegativeStock,
+        ); // [STOCK]
       }
 
       if (status === OrderStatus.PAID && cart) {
@@ -331,6 +358,31 @@ export class OrdersService {
     return fallback ?? null;
   }
 
+  private buildCheckoutSummary(
+    computation: CheckoutComputation,
+  ): CheckoutSummaryResponse { // [STRIPE]
+    return {
+      currency: computation.currency,
+      subtotal: this.formatMoney(computation.subtotal),
+      taxRate: this.formatRate(computation.taxRate),
+      taxAmount: this.formatMoney(computation.taxAmount),
+      shippingCost: this.formatMoney(computation.shippingCost),
+      total: this.formatMoney(computation.total),
+    };
+  }
+
+  private buildPublicLineItems(
+    lineItems: CheckoutLineItem[],
+  ): CheckoutLineItemResponse[] { // [STRIPE]
+    return lineItems.map((item) => ({
+      productId: item.productId,
+      title: item.title,
+      quantity: item.quantity,
+      unitPrice: this.formatMoney(item.unitPrice),
+      lineTotal: this.formatMoney(item.lineTotal),
+    }));
+  }
+
   private buildCheckoutComputation(cart: CartSnapshot | null): CheckoutComputation {
     const taxRate = this.rateFromNumber(this.taxConfig.getDefaultVat());
     const shippingCost = this.moneyFromNumber(this.taxConfig.getFlatShipping());
@@ -431,6 +483,101 @@ export class OrdersService {
 
   private formatRate(value: Prisma.Decimal): string {
     return value.toFixed(4);
+  }
+
+  private async adjustStockForPaidOrder(
+    tx: Prisma.TransactionClient,
+    orderId: number,
+    cart: CartSnapshot,
+    allowNegativeStockOverride?: boolean,
+  ): Promise<void> { // [STOCK]
+    const allowNegative =
+      allowNegativeStockOverride !== undefined
+        ? allowNegativeStockOverride
+        : this.allowNegativeStock;
+
+    for (const item of cart.items) {
+      if (item.qty <= 0) {
+        continue;
+      }
+
+      const variantId = item.variantId;
+      const variantSku = item.variant?.sku ?? 'UNKNOWN';
+
+      let currentStock: number | null = null;
+      if (item.variant && typeof (item.variant as any).stockQty === 'number') {
+        currentStock = (item.variant as any).stockQty as number;
+      } else if (item.variant && typeof (item.variant as any).stock === 'number') {
+        currentStock = (item.variant as any).stock as number;
+      }
+
+      if (currentStock === null) {
+        const dbVariant = await tx.productVariant.findUnique({
+          where: { id: variantId },
+          select: { stockQty: true },
+        });
+        currentStock = dbVariant?.stockQty ?? 0;
+      }
+
+      if (!allowNegative && currentStock < item.qty) {
+        this.logger.warn(
+          `No hay stock suficiente para la variante ${variantSku} (${variantId}) en el pedido ${orderId}`,
+        );
+        throw new BadRequestException('INSUFFICIENT_STOCK_AT_CHECKOUT');
+      }
+
+      if (allowNegative && currentStock < item.qty) {
+        this.logger.warn(
+          `El pedido ${orderId} provocará stock negativo en la variante ${variantSku} (${variantId})`,
+        );
+      }
+
+      if (allowNegative) {
+        await tx.productVariant.update({
+          where: { id: variantId },
+          data: { stockQty: { decrement: item.qty } },
+        });
+      } else {
+        const result = await tx.productVariant.updateMany({
+          where: { id: variantId, stockQty: { gte: item.qty } },
+          data: { stockQty: { decrement: item.qty } },
+        });
+
+        if (result.count === 0) {
+          this.logger.error(
+            `No se pudo descontar stock para la variante ${variantSku} (${variantId}) en el pedido ${orderId}`,
+          );
+          throw new BadRequestException('INSUFFICIENT_STOCK_AT_CHECKOUT');
+        }
+      }
+
+      await tx.stockMovement.create({
+        data: {
+          variantId,
+          quantity: -item.qty,
+          reason: 'ORDER_PAID',
+          orderId,
+        },
+      });
+    }
+  }
+
+  async markOrderAsRefunded(providerRef: string): Promise<void> { // [STRIPE]
+    try {
+      await this.prisma.order.update({
+        where: { providerRef },
+        data: { status: OrderStatus.REFUNDED },
+      });
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
+        this.logger.warn(
+          `No se encontró ningún pedido para marcar como REFUNDED con providerRef ${providerRef}`,
+        );
+        return;
+      }
+
+      throw error;
+    }
   }
 
   private serializeOrder(order: OrderWithItems): Record<string, unknown> {
