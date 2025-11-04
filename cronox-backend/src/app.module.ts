@@ -1,5 +1,6 @@
 // src/app.module.ts
 import { Module } from '@nestjs/common';
+import { ConfigModule } from '@nestjs/config'; // [STRIPE]
 import { APP_GUARD } from '@nestjs/core';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { ServeStaticModule } from '@nestjs/serve-static';
@@ -16,9 +17,11 @@ import { ProductModule } from './products/product.module';
 import { UsersModule } from './users/users.module';
 import { AddressesModule } from './addresses/addresses.module';
 import { OrdersModule } from './orders/orders.module'; // [ORDERS]
+import { PaymentsModule } from './payments/payments.module'; // [STRIPE]
 
 @Module({
   imports: [
+    ConfigModule.forRoot({ isGlobal: true }), // [STRIPE]
     ThrottlerModule.forRoot([
       {
         ttl: 60_000, // ventana de 60s
@@ -43,6 +46,7 @@ import { OrdersModule } from './orders/orders.module'; // [ORDERS]
     UsersModule,
     AddressesModule,
     OrdersModule, // [ORDERS] Registro del módulo de pedidos
+    PaymentsModule, // [STRIPE]
   ],
   controllers: [AppController],
   providers: [

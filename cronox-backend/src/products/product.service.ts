@@ -85,6 +85,7 @@ export class ProductService {
 
     return {
       ...variantData,
+      stock: variantData.stockQty, // [STOCK]
       effectivePrice: variantData.price ?? product.price,
     };
   }
@@ -165,7 +166,7 @@ export class ProductService {
               size: variant.size,
               sku: variant.sku,
               price: variant.price ?? null,
-              stock: variant.stock ?? 0,
+              stockQty: variant.stockQty ?? variant.stock ?? 0, // [STOCK]
               isActive: variant.isActive ?? true,
             })),
             skipDuplicates: false,
@@ -255,7 +256,7 @@ export class ProductService {
               size: variant.size,
               sku: variant.sku,
               price: variant.price ?? null,
-              stock: variant.stock ?? 0,
+              stockQty: variant.stockQty ?? variant.stock ?? 0, // [STOCK]
               isActive: variant.isActive ?? true,
             })),
             skipDuplicates: false,
@@ -287,8 +288,11 @@ export class ProductService {
                 ...(variantData.price !== undefined
                   ? { price: variantData.price }
                   : {}),
-                ...(variantData.stock !== undefined
-                  ? { stock: variantData.stock }
+                ...(variantData.stockQty !== undefined || variantData.stock !== undefined
+                  ? {
+                      stockQty:
+                        variantData.stockQty ?? variantData.stock ?? 0,
+                    }
                   : {}),
                 ...(variantData.isActive !== undefined
                   ? { isActive: variantData.isActive }
@@ -426,7 +430,7 @@ export class ProductService {
               size: variant.size,
               sku: variant.sku,
               price: variant.price ?? null,
-              stock: variant.stock ?? 0,
+              stockQty: variant.stockQty ?? variant.stock ?? 0, // [STOCK]
               isActive: variant.isActive ?? true,
             })),
             skipDuplicates: false,
@@ -475,7 +479,9 @@ export class ProductService {
           ...(dto.size !== undefined ? { size: dto.size } : {}),
           ...(dto.sku !== undefined ? { sku: dto.sku } : {}),
           ...(dto.price !== undefined ? { price: dto.price } : {}),
-          ...(dto.stock !== undefined ? { stock: dto.stock } : {}),
+          ...(dto.stockQty !== undefined || dto.stock !== undefined
+            ? { stockQty: dto.stockQty ?? dto.stock ?? 0 }
+            : {}), // [STOCK]
           ...(dto.isActive !== undefined ? { isActive: dto.isActive } : {}),
         },
         include: { product: { select: { price: true } } },
@@ -527,15 +533,15 @@ export class ProductService {
 
       const updated = await tx.productVariant.update({
         where: { id: variantId },
-        data: { stock: { increment: dto.delta } },
+        data: { stockQty: { increment: dto.delta } }, // [STOCK]
         include: { product: { select: { price: true } } },
       });
 
       await tx.stockMovement.create({
         data: {
           variantId,
-          delta: dto.delta,
-          reason: dto.reason ?? 'manual_adjust',
+          quantity: dto.delta,
+          reason: dto.reason ?? 'MANUAL_ADJUST', // [STOCK]
         },
       });
 

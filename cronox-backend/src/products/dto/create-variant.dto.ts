@@ -24,6 +24,10 @@ export class CreateVariantDto {
   stock?: number;
 
   @IsOptional()
+  @IsInt()
+  stockQty?: number; // [STOCK]
+
+  @IsOptional()
   @IsBoolean()
   isActive?: boolean;
 }
