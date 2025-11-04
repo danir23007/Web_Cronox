@@ -164,14 +164,16 @@ export class OrdersService {
 
       const status = totalsMatch ? OrderStatus.PAID : OrderStatus.PENDING;
 
-      const shippingAddr: Prisma.InputJsonValue | Prisma.JsonNull = // [FIX]
+      // [FIX] JsonNull es un valor, no un tipo → usamos typeof Prisma.JsonNull
+      const shippingAddr: Prisma.InputJsonValue | typeof Prisma.JsonNull =
         dto.shippingAddress
           ? (dto.shippingAddress as Prisma.InputJsonValue)
           : dto.metadata?.shippingAddress
             ? (dto.metadata.shippingAddress as Prisma.InputJsonValue)
             : Prisma.JsonNull;
 
-      const billingAddr: Prisma.InputJsonValue | Prisma.JsonNull = // [FIX]
+      // [FIX] Igual para billing
+      const billingAddr: Prisma.InputJsonValue | typeof Prisma.JsonNull =
         dto.billingAddress
           ? (dto.billingAddress as Prisma.InputJsonValue)
           : dto.metadata?.billingAddress
@@ -180,7 +182,7 @@ export class OrdersService {
 
       const order = await tx.order.create({
         data: {
-          userId: String(userId), // [FIX]
+          userId: String(userId), // [FIX] userId es String en Order
           status,
           subtotal: computation.subtotal,
           taxRate: computation.taxRate,
@@ -191,7 +193,7 @@ export class OrdersService {
           provider: dto.provider,
           providerRef,
           shippingAddr: shippingAddr, // [FIX]
-          billingAddr: billingAddr, // [FIX]
+          billingAddr: billingAddr,   // [FIX]
         },
       });
 
