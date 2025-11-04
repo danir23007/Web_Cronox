@@ -164,9 +164,23 @@ export class OrdersService {
 
       const status = totalsMatch ? OrderStatus.PAID : OrderStatus.PENDING;
 
+      const shippingAddr: Prisma.InputJsonValue | Prisma.JsonNull = // [FIX]
+        dto.shippingAddress
+          ? (dto.shippingAddress as Prisma.InputJsonValue)
+          : dto.metadata?.shippingAddress
+            ? (dto.metadata.shippingAddress as Prisma.InputJsonValue)
+            : Prisma.JsonNull;
+
+      const billingAddr: Prisma.InputJsonValue | Prisma.JsonNull = // [FIX]
+        dto.billingAddress
+          ? (dto.billingAddress as Prisma.InputJsonValue)
+          : dto.metadata?.billingAddress
+            ? (dto.metadata.billingAddress as Prisma.InputJsonValue)
+            : Prisma.JsonNull;
+
       const order = await tx.order.create({
         data: {
-          userId,
+          userId: String(userId), // [FIX]
           status,
           subtotal: computation.subtotal,
           taxRate: computation.taxRate,
@@ -176,8 +190,8 @@ export class OrdersService {
           currency: dto.currency ?? computation.currency,
           provider: dto.provider,
           providerRef,
-          shippingAddr: dto.shippingAddress ?? dto.metadata.shippingAddress,
-          billingAddr: dto.billingAddress ?? dto.metadata.billingAddress,
+          shippingAddr: shippingAddr, // [FIX]
+          billingAddr: billingAddr, // [FIX]
         },
       });
 
@@ -226,7 +240,7 @@ export class OrdersService {
 
     const orderBy = this.resolveOrderBy(pagination.sort, pagination.order);
 
-    const where = user.role === Role.ADMIN ? {} : { userId: user.id };
+    const where = user.role === Role.ADMIN ? {} : { userId: String(user.id) }; // [FIX]
 
     const [orders, total] = await Promise.all([
       this.prisma.order.findMany({
@@ -262,7 +276,8 @@ export class OrdersService {
       throw new NotFoundException('ORDER_NOT_FOUND');
     }
 
-    if (user.role !== Role.ADMIN && order.userId !== user.id) {
+    const isOwner = String(order.userId) === String(user.id); // [FIX]
+    if (user.role !== Role.ADMIN && !isOwner) {
       throw new ForbiddenException('ACCESS_DENIED');
     }
 
