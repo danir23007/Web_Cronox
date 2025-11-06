@@ -554,8 +554,8 @@ export class OrdersService {
       await tx.stockMovement.create({
         data: {
           variantId,
-          quantity: -item.qty,
-          reason: 'ORDER_PAID',
+          delta: -item.qty,
+          reason: 'order',
           orderId,
         },
       });

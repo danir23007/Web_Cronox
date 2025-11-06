@@ -263,9 +263,9 @@ describe('OrdersService', () => {
     expect(prisma.stockMovement.create).toHaveBeenCalledWith({
       data: expect.objectContaining({
         variantId: 8,
-        quantity: -2,
+        delta: -2,
         orderId: createdOrder.id,
-        reason: 'ORDER_PAID',
+        reason: 'order',
       }),
     });
     expect(result).toMatchObject({ status: OrderStatus.PAID });
@@ -304,7 +304,7 @@ describe('OrdersService', () => {
     prisma.order.findMany.mockResolvedValue([orderEntity]);
     prisma.order.count.mockResolvedValue(1);
 
-    const result = await service.listOrders({ id: 4, role: Role.CUSTOMER }, {} as any);
+    const result = await service.listOrders({ id: 4, role: Role.USER }, {} as any);
 
     expect(prisma.order.findMany).toHaveBeenCalledWith(
       expect.objectContaining({ where: { userId: 4 } }),

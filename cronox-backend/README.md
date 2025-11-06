@@ -1,98 +1,77 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
-</p>
+# Cronox Backend
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
+Backend de la tienda Cronox construido con [NestJS](https://nestjs.com/), Prisma y PostgreSQL.
+Incluye autenticación JWT, gestión de productos/carrito/pedidos y un panel administrativo por API.
 
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
+## Stack principal
+- NestJS 11 + TypeScript
+- Prisma ORM con PostgreSQL (compatible con Supabase)
+- Stripe (payment intent + webhook)
+- Class Validator/Transformer para DTOs
 
-## Description
+## Puesta en marcha
+1. Crea un `.env` a partir de `.env.example` con la cadena `DATABASE_URL` de tu instancia.
+2. Instala dependencias:
+   ```bash
+   npm install
+   ```
+3. Ejecuta las migraciones y genera el cliente de Prisma:
+   ```bash
+   npm run prisma:migrate
+   npm run prisma:gen
+   ```
+4. Arranca el servidor en modo desarrollo:
+   ```bash
+   npm run dev
+   ```
 
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
+El servidor escucha en `http://localhost:3000` y expone documentación Swagger en `http://localhost:3000/api/docs`.
 
-## Project setup
+## Scripts útiles
+- `npm run dev`: alias de `npm run start:dev`.
+- `npm run prisma:migrate`: aplica migraciones en local.
+- `npm run prisma:deploy`: aplica migraciones en producción.
+- `npm run prisma:gen`: regenera el cliente Prisma.
+- `npm run lint:fix`: ejecuta ESLint con autofix sobre el código.
+- `npm run start:prod`: arranca en modo producción tras compilar (`npm run build`).
 
-```bash
-$ npm install
+## Roles y acceso
+Cada usuario tiene un campo `role` (`USER` o `ADMIN`). Por defecto los registros nuevos son `USER`.
+Para elevar un usuario a `ADMIN` en un entorno de desarrollo puedes ejecutar directamente en la base de datos:
+```sql
+UPDATE "User" SET role = 'ADMIN' WHERE email = 'admin@cronox.dev';
 ```
+También puedes promocionar usuarios desde la API administrativa una vez tengas un token de un admin.
 
-## Compile and run the project
+## Panel administrativo (API)
+El panel se sirve únicamente como API bajo `/admin/**` y está protegido con JWT + guard de roles.
+Consulta ejemplos completos de `curl` en [`src/admin/README.md`](src/admin/README.md).
 
-```bash
-# development
-$ npm run start
+### Pedidos
+- `GET /admin/orders`: listado paginado con filtros por estado, fechas, usuario y total.
+- `GET /admin/orders/:id`: detalle con líneas de pedido.
+- `PATCH /admin/orders/:id/status`: cambia el estado entre `PENDING`, `PAID`, `CANCELLED`, `REFUNDED` o `SHIPPED`.
+- `POST /admin/orders/:id/refund`: marca un pedido como reembolsado (stub para integrar con Stripe).
+- `GET /admin/orders/export.csv`: exporta el listado filtrado actual a CSV listo para Excel/Sheets.
 
-# watch mode
-$ npm run start:dev
+### Usuarios
+- `GET /admin/users`: búsqueda por email/nombre con paginación y ordenación.
+- `GET /admin/users/:id`: devuelve perfil y direcciones asociadas.
+- `PATCH /admin/users/:id/role`: cambia entre `USER` y `ADMIN` con protecciones (no deja sin admins ni permite que un admin se degrade a sí mismo).
 
-# production mode
-$ npm run start:prod
-```
+### Productos y variantes
+- CRUD completo de productos y variantes mediante `/admin/products`.
+- Ajuste de stock con `PATCH /admin/products/:productId/variants/:variantId/adjust-stock` usando deltas positivos/negativos y motivo opcional.
 
-## Run tests
+### Movimientos de stock
+- `GET /admin/stock/movements`: historial de ajustes con filtros por producto/variante/fecha/motivo.
+Cada ajuste registra `delta`, `reason` y el administrador responsable (`userId`).
 
-```bash
-# unit tests
-$ npm run test
+## Flujo de trabajo recomendado
+1. Crea o promociona un usuario admin.
+2. Autentícate y usa los endpoints `/admin/users` para gestionar roles y cuentas.
+3. Gestiona catálogo (`/admin/products`) y mantén el stock actualizado con el endpoint de ajustes.
+4. Controla pedidos (`/admin/orders`) y descarga CSV para contabilidad (`/admin/orders/export.csv`).
+5. Audita cualquier cambio de inventario en `/admin/stock/movements`.
 
-# e2e tests
-$ npm run test:e2e
-
-# test coverage
-$ npm run test:cov
-```
-
-## Deployment
-
-When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
-
-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
-
-```bash
-$ npm install -g @nestjs/mau
-$ mau deploy
-```
-
-With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
-
-## Resources
-
-Check out a few resources that may come in handy when working with NestJS:
-
-- Visit the [NestJS Documentation](https://docs.nestjs.com) to learn more about the framework.
-- For questions and support, please visit our [Discord channel](https://discord.gg/G7Qnnhy).
-- To dive deeper and get more hands-on experience, check out our official video [courses](https://courses.nestjs.com/).
-- Deploy your application to AWS with the help of [NestJS Mau](https://mau.nestjs.com) in just a few clicks.
-- Visualize your application graph and interact with the NestJS application in real-time using [NestJS Devtools](https://devtools.nestjs.com).
-- Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
-- To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
-- Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
-
-## Support
-
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
-
-## Stay in touch
-
-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
-
-## License
-
-Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
+Recuerda mantener sincronizado Prisma tras cambios en el esquema con `npm run prisma:gen` y revisar migraciones en el directorio `prisma/migrations`.

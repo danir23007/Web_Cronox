@@ -521,6 +521,7 @@ export class ProductService {
     productId: number,
     variantId: number,
     dto: AdjustStockDto,
+    performedById?: number,
   ) {
     return this.prisma.$transaction(async (tx) => {
       const variant = await tx.productVariant.findFirst({
@@ -540,8 +541,9 @@ export class ProductService {
       await tx.stockMovement.create({
         data: {
           variantId,
-          quantity: dto.delta,
-          reason: dto.reason ?? 'MANUAL_ADJUST', // [STOCK]
+          delta: dto.delta,
+          reason: dto.reason ?? 'manual', // [STOCK]
+          userId: performedById,
         },
       });
 
