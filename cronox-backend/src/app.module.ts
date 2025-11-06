@@ -18,6 +18,7 @@ import { UsersModule } from './users/users.module';
 import { AddressesModule } from './addresses/addresses.module';
 import { OrdersModule } from './orders/orders.module'; // [ORDERS]
 import { PaymentsModule } from './payments/payments.module'; // [STRIPE]
+import { AdminModule } from './admin/admin.module';
 
 @Module({
   imports: [
@@ -47,6 +48,7 @@ import { PaymentsModule } from './payments/payments.module'; // [STRIPE]
     AddressesModule,
     OrdersModule, // [ORDERS] Registro del módulo de pedidos
     PaymentsModule, // [STRIPE]
+    AdminModule,
   ],
   controllers: [AppController],
   providers: [

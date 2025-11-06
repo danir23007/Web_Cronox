@@ -11,7 +11,7 @@ datasource db {
 
 enum Role {
   ADMIN
-  CUSTOMER
+  USER
 }
 
 // [ORDERS] Estados disponibles para pedidos
@@ -68,16 +68,20 @@ enum VariantSize {
 model StockMovement {
   id        String   @id @default(cuid())
   variantId Int
-  quantity  Int      // negativo en ventas, positivo en ajustes // [STOCK]
-  reason    String
+  delta     Int      // negativo en ventas, positivo en ajustes // [STOCK]
+  reason    String?
   orderId   Int?
+  userId    Int?
   createdAt DateTime @default(now())
 
   variant ProductVariant @relation(fields: [variantId], references: [id])
   order   Order?         @relation(fields: [orderId], references: [id])
+  user    User?          @relation(fields: [userId], references: [id], onDelete: SetNull)
 
   @@index([variantId])
   @@index([orderId])
+  @@index([variantId, createdAt])
+  @@index([userId])
 }
 
 model ProductImage {
@@ -99,7 +103,7 @@ model User {
   email            String   @unique
   passwordHash     String
   name             String?
-  role             Role     @default(CUSTOMER)
+  role             Role     @default(USER)
   isEmailVerified  Boolean  @default(false)
   refreshTokenHash String?  @db.VarChar(255)
   resetTokenHash   String?  @db.VarChar(255)
@@ -108,6 +112,7 @@ model User {
   updatedAt        DateTime @updatedAt
   addresses        Address[]
   carts            Cart[]
+  stockMovements   StockMovement[]
   // [FIX] Orders relation temporarily disabled until user table exists
 }
 
@@ -187,6 +192,8 @@ model Order {
   stockMovements StockMovement[]
 
   @@index([userId]) // [FIX]
+  @@index([createdAt])
+  @@index([status])
 }
 
 // [ORDERS] Línea de pedido que copia el carrito en el momento de la compra

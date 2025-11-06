@@ -12,6 +12,7 @@ import { Role } from '@prisma/client';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/roles.decorator';
+import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { ProductService } from './product.service';
 import { CreateVariantDto } from './dto/create-variant.dto';
 import { AdjustStockDto, UpdateVariantDto } from './dto/update-variant.dto';
@@ -57,11 +58,13 @@ export class VariantController {
     @Param('productId') productId: string,
     @Param('variantId') variantId: string,
     @Body() dto: AdjustStockDto,
+    @CurrentUser('id') userId: number,
   ) {
     return this.productService.adjustVariantStock(
       Number(productId),
       Number(variantId),
       dto,
+      userId,
     );
   }
 
