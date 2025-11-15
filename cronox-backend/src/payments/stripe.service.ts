@@ -7,6 +7,7 @@ export type CreateOrReusePaymentIntentArgs = {
   cartId: number;
   amount: number;
   currency: string;
+  metadata?: Record<string, string>;
 };
 
 export type CreateOrReusePaymentIntentResult = {
@@ -40,10 +41,11 @@ export class StripeService {
   async createOrReusePaymentIntent(
     args: CreateOrReusePaymentIntentArgs,
   ): Promise<CreateOrReusePaymentIntentResult> {
-    const { userId, cartId, amount, currency } = args;
+    const { userId, cartId, amount, currency, metadata: extraMetadata } = args;
     const metadata = {
       userId: String(userId),
       cartId: String(cartId),
+      ...(extraMetadata ?? {}),
     };
 
     const idempotencyKey = `payment:${userId}:${cartId}:${amount}`; // [STRIPE]

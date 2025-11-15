@@ -50,9 +50,21 @@ export class OrdersController {
             lineTotal: '100.00',
           },
         ],
+        shippingMethod: {
+          id: 2,
+          name: 'Express',
+          priceCents: 250,
+          price: '2.50',
+          countries: ['ES'],
+          isActive: true,
+          createdAt: '2025-02-04T00:00:00.000Z',
+          updatedAt: '2025-02-04T00:00:00.000Z',
+        },
         metadata: {
           cartId: 10,
           userId: 3,
+          shippingMethodId: 2,
+          shippingCostCents: 250,
         },
       },
     },
@@ -85,6 +97,7 @@ export class OrdersController {
         currency: 'EUR',
         provider: 'stripe',
         providerRef: 'pi_12345',
+        shippingMethodId: 2,
         items: [
           {
             id: 1,
