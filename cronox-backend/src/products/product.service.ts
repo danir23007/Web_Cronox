@@ -101,14 +101,51 @@ export class ProductService {
       [sortBy]: order,
     } as Prisma.ProductOrderByWithRelationInput;
 
+    const where: Prisma.ProductWhereInput = {};
+
+    if (query.categorySlug) {
+      where.categories = {
+        some: {
+          category: {
+            slug: query.categorySlug,
+            isActive: true,
+          },
+        },
+      };
+    }
+
+    if (query.minPrice !== undefined || query.maxPrice !== undefined) {
+      const priceFilter: Prisma.IntFilter = {};
+      if (query.minPrice !== undefined) {
+        priceFilter.gte = query.minPrice;
+      }
+      if (query.maxPrice !== undefined) {
+        priceFilter.lte = query.maxPrice;
+      }
+      if (Object.keys(priceFilter).length > 0) {
+        where.price = priceFilter;
+      }
+    }
+
+    if (query.size) {
+      where.variants = {
+        some: {
+          size: query.size,
+          isActive: true,
+          stockQty: { gt: 0 },
+        },
+      };
+    }
+
     const [items, total] = await this.prisma.$transaction([
       this.prisma.product.findMany({
+        where,
         skip,
         take: limit,
         orderBy,
         include: this.getProductInclude(),
       }),
-      this.prisma.product.count(),
+      this.prisma.product.count({ where }),
     ]);
 
     return {

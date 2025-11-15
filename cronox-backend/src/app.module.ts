@@ -20,6 +20,7 @@ import { OrdersModule } from './orders/orders.module'; // [ORDERS]
 import { PaymentsModule } from './payments/payments.module'; // [STRIPE]
 import { AdminModule } from './admin/admin.module';
 import { ShippingMethodsModule } from './shipping-methods/shipping-methods.module';
+import { CategoriesModule } from './categories/categories.module';
 
 @Module({
   imports: [
@@ -48,6 +49,7 @@ import { ShippingMethodsModule } from './shipping-methods/shipping-methods.modul
     UsersModule,
     AddressesModule,
     ShippingMethodsModule,
+    CategoriesModule,
     OrdersModule, // [ORDERS] Registro del módulo de pedidos
     PaymentsModule, // [STRIPE]
     AdminModule,
