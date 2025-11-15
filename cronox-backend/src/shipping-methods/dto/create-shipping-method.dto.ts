@@ -35,7 +35,7 @@ export class CreateShippingMethodDto {
   @IsArray()
   @ArrayUnique()
   @ValidateIf((_, value) => Array.isArray(value))
-  @IsISO31661Alpha2({}, { each: true })
+  @IsISO31661Alpha2({ each: true })
   @Transform(({ value }) => (Array.isArray(value) ? value.map((code: string) => code?.toUpperCase?.() ?? code) : value))
   countries?: string[];
 
