@@ -34,8 +34,8 @@ import { CategoriesModule } from './categories/categories.module';
     ServeStaticModule.forRoot({
       rootPath: join(__dirname, '..', '..', 'cronox-front'),
       exclude: [
-        '/api*',
-        '/api/docs*',
+        '/api(.*)',
+        '/api/docs(.*)',
         '/products*',
         '/auth*',
       ],
