@@ -33,12 +33,8 @@ import { CategoriesModule } from './categories/categories.module';
     ]),
     ServeStaticModule.forRoot({
       rootPath: join(__dirname, '..', '..', 'cronox-front'),
-      exclude: [
-        '/api(.*)',
-        '/api/docs(.*)',
-        '/products*',
-        '/auth*',
-      ],
+      // Sin "exclude": las rutas /api/... las manejan los controladores
+      // y sólo si no existe ninguna coincidencia se sirve el front.
       serveStaticOptions: { index: 'index.html' },
     }),
     PrismaModule,
