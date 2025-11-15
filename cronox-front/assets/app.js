@@ -8,6 +8,7 @@
   const $ = (s, el = document) => el.querySelector(s);
   const $$ = (s, el = document) => Array.from(el.querySelectorAll(s));
   const clamp = (n, min, max) => Math.max(min, Math.min(max, n));
+  const API = window.CRONOX_API || {};
 
   const TOPBAR_STATES = ['topbar--transparent', 'topbar--hero', 'topbar--page'];
 
@@ -337,22 +338,93 @@
   window.addEventListener('storage', (e) => { if (e.key === favKey) syncFavCount(); });
   window.addEventListener('cronox:favsChanged', syncFavCount);
 
-  // ===== Carrito (localStorage) =====
+  // ===== Carrito (API + fallback local) =====
   const cartCountEl = $('.topbar__cart .cart-count');
-  const readCart = () => { try { return JSON.parse(localStorage.getItem('cronox_cart')||'[]'); } catch { return []; } };
-  const writeCart = (cart) => { try { localStorage.setItem('cronox_cart', JSON.stringify(cart)); } catch {} };
-  const totalQty = (cart) => cart.reduce((a,it)=>a+(Number(it.qty)||0),0);
-  function updateBadge(){ const t = totalQty(readCart()); if (cartCountEl) cartCountEl.textContent = String(clamp(t,0,999)); }
-  window.updateCartBadge = (q)=>{ if (cartCountEl) cartCountEl.textContent = String(clamp(q,0,999)); };
+  const cartFallbackKey = 'cronox_cart';
+  const toast = document.getElementById('toast');
+  const showToast = (msg) => {
+    if (!toast) return;
+    toast.textContent = msg;
+    toast.classList.add('show');
+    setTimeout(() => toast.classList.remove('show'), 1600);
+  };
 
-  function addToCartLine(item){
-    const cart = readCart();
-    const i = cart.findIndex(x => x.id===item.id && x.size===item.size && x.color===item.color);
-    if (i>=0) cart[i].qty = (Number(cart[i].qty)||0) + (Number(item.qty)||1);
-    else cart.push({ ...item, qty: Number(item.qty)||1, addedAt: Date.now() });
-    writeCart(cart);
+  const readFallbackCart = () => {
+    try {
+      const raw = localStorage.getItem(cartFallbackKey);
+      return raw ? JSON.parse(raw) : [];
+    } catch {
+      return [];
+    }
+  };
+  const writeFallbackCart = (cart) => {
+    try { localStorage.setItem(cartFallbackKey, JSON.stringify(cart)); }
+    catch {}
+  };
+  const totalQtyFallback = (cart) => cart.reduce((a, it) => a + (Number(it.qty) || 0), 0);
+
+  const cartState = { data: null };
+
+  function updateBadge(cart) {
+    const source = cart || cartState.data;
+    const count = source?.itemsCount ?? totalQtyFallback(readFallbackCart());
+    if (cartCountEl) {
+      cartCountEl.textContent = String(clamp(count, 0, 999));
+      cartCountEl.hidden = count <= 0;
+    }
+  }
+  window.updateCartBadge = (q) => {
+    if (cartCountEl) {
+      cartCountEl.textContent = String(clamp(q, 0, 999));
+      cartCountEl.hidden = q <= 0;
+    }
+  };
+
+  const refreshCartFromApi = async () => {
+    if (!API || typeof API.getCart !== 'function') {
+      updateBadge();
+      return null;
+    }
+    try {
+      const cart = await API.getCart();
+      cartState.data = cart;
+      updateBadge(cart);
+      window.dispatchEvent(new CustomEvent('cart:updated', { detail: cart }));
+      return cart;
+    } catch (error) {
+      console.warn('[CRONOX] No se pudo sincronizar el carrito con la API', error);
+      updateBadge();
+      return null;
+    }
+  };
+
+  async function addToCartLine(item) {
+    const qty = Math.max(1, Number(item.qty) || 1);
+    if (API && typeof API.addCartItem === 'function' && item.variantId) {
+      try {
+        const cart = await API.addCartItem({ variantId: item.variantId, qty });
+        cartState.data = cart;
+        updateBadge(cart);
+        window.dispatchEvent(new CustomEvent('cart:updated', { detail: cart }));
+        showToast('Añadido al carrito ✓');
+        return;
+      } catch (error) {
+        console.error('[CRONOX] Error añadiendo al carrito remoto', error);
+      }
+    }
+
+    const cart = readFallbackCart();
+    const idx = cart.findIndex((x) => x.id === item.id && x.size === item.size && x.color === item.color);
+    if (idx >= 0) {
+      cart[idx].qty = (Number(cart[idx].qty) || 0) + qty;
+    } else {
+      cart.push({ ...item, qty, addedAt: Date.now() });
+    }
+    writeFallbackCart(cart);
+    const fallbackCart = { itemsCount: totalQtyFallback(cart) };
     updateBadge();
-    window.dispatchEvent(new Event('cart:updated'));
+    window.dispatchEvent(new CustomEvent('cart:updated', { detail: fallbackCart }));
+    showToast('Añadido al carrito ✓');
   }
 
   // 1) Click en “+” abre Quick-Add (no añade directamente)
@@ -375,8 +447,11 @@
   });
 
   // Inicializar badge
-  document.addEventListener('DOMContentLoaded', updateBadge);
-  window.addEventListener('storage', (e)=>{ if (e.key==='cronox_cart') updateBadge(); });
+  document.addEventListener('DOMContentLoaded', () => {
+    refreshCartFromApi();
+    updateBadge();
+  });
+  window.addEventListener('storage', (e)=>{ if (e.key===cartFallbackKey) updateBadge(); });
 
   // Saneado: eliminar cualquier .card-plus heredado
   $$('.card-plus').forEach((el)=>el.remove());

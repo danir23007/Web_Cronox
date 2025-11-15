@@ -69,6 +69,16 @@
     if (Array.isArray(product.sizes)) copy.sizes = [...product.sizes];
     if (Array.isArray(product.colors)) copy.colors = [...product.colors];
     if (Array.isArray(product.categories)) copy.categories = [...product.categories];
+    if (Array.isArray(product.variants)) copy.variants = product.variants.map((variant) => ({ ...variant }));
+    if (product.variantMap && typeof product.variantMap === "object") {
+      copy.variantMap = Object.entries(product.variantMap).reduce((acc, [key, value]) => {
+        acc[key] = { ...value };
+        return acc;
+      }, {});
+    }
+    if (product.priceCents != null) copy.priceCents = product.priceCents;
+    if (product.backendId != null) copy.backendId = product.backendId;
+    if (product.slug) copy.slug = product.slug;
     return copy;
   };
 
@@ -160,6 +170,13 @@
   let qaCurrentProduct = null;
   let qaSelectedSize = "";
 
+  const findVariantForSize = (product, size) => {
+    if (!product || !size) return null;
+    const map = product.variantMap || {};
+    const key = String(size).toUpperCase();
+    return map[key] || map[key.toLowerCase()] || null;
+  };
+
   function ensureQuickAddDOM() {
     if (qaOverlay) return;
 
@@ -222,17 +239,28 @@
       if (!qaCurrentProduct) return;
       const fallbackSize = qaCurrentProduct.sizes?.[0] || "M";
       const size = (qaSelectedSize || String(fallbackSize)).toUpperCase();
-      // color por defecto (no expuesto en UI)
       const color = qaCurrentProduct.color || (qaCurrentProduct.colors?.[0]) || "Único";
+      const variant = findVariantForSize(qaCurrentProduct, size);
+
+      if (!variant || !variant.id) {
+        alert("No hay stock disponible para esa talla ahora mismo.");
+        return;
+      }
 
       const ev = new CustomEvent("cronox:addToCart", {
         detail: {
           id: qaCurrentProduct.id,
+          productId: qaCurrentProduct.backendId || qaCurrentProduct.id,
+          slug: qaCurrentProduct.slug,
           name: qaCurrentProduct.name,
-          price: Number(qaCurrentProduct.price) || 0,
-          priceLabel: qaCurrentProduct.priceLabel || euros(qaCurrentProduct.price),
+          price: Number(variant.price ?? qaCurrentProduct.price) || 0,
+          priceLabel: variant.priceLabel || qaCurrentProduct.priceLabel || euros(qaCurrentProduct.price),
+          priceCents: variant.priceCents ?? qaCurrentProduct.priceCents,
           image: (qaCurrentProduct.images?.[0]) || qaCurrentProduct.image,
-          size, color, qty: 1
+          size,
+          color,
+          qty: 1,
+          variantId: variant.id,
         }
       });
       window.dispatchEvent(ev);
@@ -247,7 +275,11 @@
     qaLink.addEventListener("click", (e) => {
       e.preventDefault();
       if (!qaCurrentProduct) return;
-      window.location.href = `producto.html?id=${encodeURIComponent(qaCurrentProduct.id)}`;
+      if (qaCurrentProduct.slug) {
+        window.location.href = `producto.html?slug=${encodeURIComponent(qaCurrentProduct.slug)}`;
+      } else {
+        window.location.href = `producto.html?id=${encodeURIComponent(qaCurrentProduct.id)}`;
+      }
     });
   }
 
@@ -255,11 +287,23 @@
     if (!qaSizeGroup) return;
 
     const rawSizes = Array.isArray(product?.sizes) && product.sizes.length ? product.sizes : ["m"];
-    const normalized = rawSizes.map((size) => String(size).toUpperCase());
-    qaSelectedSize = normalized[0] || "";
+    const variantMap = product?.variantMap || {};
+    const variantKeys = Object.keys(variantMap);
+    const normalized = (variantKeys.length ? variantKeys : rawSizes)
+      .map((size) => String(size || "").toUpperCase());
+
+    const firstAvailable = normalized.find((size) => {
+      const variant = variantMap[size] || variantMap[size.toUpperCase()];
+      return variant ? variant.isAvailable !== false : true;
+    }) || normalized[0] || "";
+    qaSelectedSize = firstAvailable;
 
     qaSizeGroup.innerHTML = normalized
-      .map((size) => `<button type="button" class="qa-size-btn" data-size="${size}" role="radio" aria-checked="false">${size}</button>`)
+      .map((size) => {
+        const variant = variantMap[size] || variantMap[size.toUpperCase()];
+        const disabled = Boolean(variant) && variant.isAvailable === false;
+        return `<button type="button" class="qa-size-btn${disabled ? ' is-disabled' : ''}" data-size="${size}" role="radio" aria-checked="false" ${disabled ? 'disabled' : ''}>${size}</button>`;
+      })
       .join("");
 
     const buttons = Array.from(qaSizeGroup.querySelectorAll(".qa-size-btn"));
@@ -283,7 +327,12 @@
       updateTabIndexes();
     };
 
-    activate(buttons[0]);
+    const firstButton = buttons.find((btn) => !btn.disabled) || buttons[0];
+    if (firstButton) {
+      activate(firstButton);
+    } else {
+      qaSelectedSize = "";
+    }
 
     buttons.forEach((btn, index) => {
       btn.addEventListener("click", () => activate(btn));
@@ -325,7 +374,11 @@
 
     setupQuickAddSizes(product);
 
-    qaLink.href = `producto.html?id=${encodeURIComponent(product.id)}`;
+    if (product.slug) {
+      qaLink.href = `producto.html?slug=${encodeURIComponent(product.slug)}`;
+    } else {
+      qaLink.href = `producto.html?id=${encodeURIComponent(product.id)}`;
+    }
 
     qaOverlay.setAttribute("aria-hidden","false");
     if (typeof window.CRONOX_lockScroll === "function") window.CRONOX_lockScroll("quick-add");
@@ -343,16 +396,20 @@
   }
 
   window.CRONOX_openQuickAddById = function(id){
-    const p = PRODUCTS.find(x => x.id === id);
+    const p = PRODUCTS.find(x => x.id === id || x.slug === id);
     if (p) openQuickAdd(p);
   };
 
   // ======= Tarjeta con mini-galería + botón "+" clásico =======
   function createCard(p) {
     const a = document.createElement("a");
-    a.href = `producto.html?id=${encodeURIComponent(p.id)}`;
+    if (p.slug) {
+      a.href = `producto.html?slug=${encodeURIComponent(p.slug)}`;
+    } else {
+      a.href = `producto.html?id=${encodeURIComponent(p.id)}`;
+    }
     a.className = "product-card";
-    a.setAttribute("data-id", p.id);
+    a.setAttribute("data-id", p.slug || p.id);
 
     const media = document.createElement("div");
     media.className = "product-media";
@@ -527,19 +584,17 @@
   window.addEventListener("pageshow", (e) => { if (e.persisted) restoreScrollOrFocus(); });
 
   async function loadCatalog() {
-    const fallback = cloneProducts(localFallbackFactory());
+    const fallback = cloneProducts(fallbackFactory());
     if (!API || typeof API.getProducts !== "function") {
       return { products: fallback, source: "fallback" };
     }
 
     try {
-      const raw = await API.getProducts();
-      const adapted = adaptCatalog(raw);
-      if (!Array.isArray(adapted) || !adapted.length) {
+      const raw = await API.getProducts({ limit: 48, sortBy: "createdAt", order: "desc" });
+      if (!Array.isArray(raw) || !raw.length) {
         throw new Error("Catálogo vacío");
       }
-      console.log("[CRONOX] productos desde API", adapted);
-      return { products: adapted, source: "api" };
+      return { products: cloneProducts(raw), source: "api" };
     } catch (error) {
       console.warn("[CRONOX] No se pudo cargar el catálogo desde la API, usando fallback local.", error);
       return { products: fallback, source: "fallback" };

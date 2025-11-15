@@ -35,6 +35,10 @@ export class ProductService {
     return {
       images: { orderBy: this.imageOrderBy },
       variants: variantArgs,
+      categories: {
+        orderBy: { id: 'asc' },
+        include: { category: true },
+      },
     };
   }
 
