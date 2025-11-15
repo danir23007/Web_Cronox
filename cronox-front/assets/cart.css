@@ -112,6 +112,32 @@ body { padding-top: var(--topbar-h); }
 }
 .summary-row:last-child{ border-bottom:none; }
 .summary-total strong{ font-size:18px; }
+.summary-shipping{
+  flex-direction:column;
+  align-items:flex-start;
+  gap:6px;
+}
+.summary-shipping label{
+  font-weight:600;
+}
+.shipping-control{
+  display:flex;
+  gap:8px;
+  width:100%;
+}
+#shippingMethod{
+  flex:1;
+  background:#0f0f0f;
+  border:1px solid rgba(255,255,255,.2);
+  color:#fff;
+  border-radius:0;
+  padding:6px 8px;
+}
+#shippingPrice{
+  min-width:80px;
+  text-align:right;
+  font-weight:600;
+}
 
 .btn-primary{
   background:#fff; color:#000; font-weight:800; border:0; border-radius:0;

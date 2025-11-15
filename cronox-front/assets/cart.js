@@ -1,168 +1,299 @@
 // ======================================================
-// assets/cart.js — Listado y control del carrito (localStorage)
-// CRONOX
+// assets/cart.js — Carrito conectado a la API de CRONOX
 // ======================================================
 (function () {
-  const KEY = 'cronox_cart';
+  const API = window.CRONOX_API || {};
+  const listEl = document.getElementById('cartItems');
+  const emptyEl = listEl ? listEl.querySelector('[data-empty]') : null;
+  const subtotalEl = document.getElementById('sumSubtotal');
+  const shippingLabelEl = document.getElementById('sumShipping');
+  const totalEl = document.getElementById('sumTotal');
+  const btnClear = document.getElementById('btnClear');
+  const btnCheckout = document.getElementById('btnCheckout');
+  const shippingSelect = document.getElementById('shippingMethod');
+  const shippingPriceEl = document.getElementById('shippingPrice');
 
-  // ---- Nodos
-  const listEl     = document.getElementById('cartList');
-  const emptyEl    = document.getElementById('cartEmpty');
-  const subtotalEl = document.getElementById('subtotal');
-  const btnClear   = document.getElementById('btnClear');
-  const btnCheckout= document.getElementById('btnCheckout');
+  const EUR = new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR' });
+  const money = (cents) => EUR.format((Number(cents) || 0) / 100);
 
-  // ---- Formateo €
-  const EUR_FMT = new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR' });
-  const money = (n) => EUR_FMT.format(Number(n) || 0);
-
-  // ---- Storage helpers
-  function load() {
+  const fallbackKey = 'cronox_cart';
+  const readFallback = () => {
     try {
-      const raw = localStorage.getItem(KEY);
-      const data = raw ? JSON.parse(raw) : [];
-      // saneado mínimo
-      return Array.isArray(data) ? data.map(it => ({
-        id: it.id,
-        name: String(it.name || ''),
-        price: Number(it.price) || 0,
-        priceLabel: it.priceLabel || money(it.price),
-        image: String(it.image || ''),
-        size: it.size || null,
-        qty: Math.max(1, Number(it.qty) || 1),
-      })) : [];
+      const raw = localStorage.getItem(fallbackKey);
+      return raw ? JSON.parse(raw) : [];
     } catch {
       return [];
     }
-  }
-  function save(cart) {
-    localStorage.setItem(KEY, JSON.stringify(cart));
-    // notificar a la burbuja
-    window.dispatchEvent(new Event('cart:updated'));
-  }
+  };
 
-  // ---- Cálculo
-  function calcSubtotal(cart) {
-    const sum = cart.reduce((acc, it) => acc + (Number(it.price) || 0) * (Number(it.qty) || 0), 0);
-    return Math.round(sum * 100) / 100; // 2 decimales
-  }
+  const state = {
+    cart: null,
+    shippingMethods: [],
+    shippingMethodId: null,
+  };
 
-  // ---- Render
-  function render() {
-    const cart = load();
+  const mapFallbackCart = () => {
+    const items = readFallback();
+    const mapped = items.map((item, idx) => ({
+      id: idx + 1,
+      variantId: item.variantId,
+      qty: Number(item.qty) || 1,
+      priceCents: Math.round((Number(item.price) || 0) * 100),
+      priceLabel: item.priceLabel || money(Math.round((Number(item.price) || 0) * 100)),
+      size: item.size,
+      product: {
+        name: item.name,
+        image: item.image,
+      },
+    }));
+    const subtotal = mapped.reduce((acc, it) => acc + (it.priceCents || 0) * it.qty, 0);
+    return {
+      items: mapped,
+      subtotalCents: subtotal,
+      itemsCount: mapped.reduce((acc, it) => acc + (Number(it.qty) || 0), 0),
+      currency: 'EUR',
+    };
+  };
 
-    if (!cart.length) {
-      if (listEl) listEl.innerHTML = '';
-      if (emptyEl) emptyEl.hidden = false;
-      if (subtotalEl) subtotalEl.textContent = money(0);
+  const selectShipping = (methods) => {
+    if (!Array.isArray(methods) || !methods.length) {
+      state.shippingMethodId = null;
+      return;
+    }
+    if (state.shippingMethodId && methods.some((m) => m.id === state.shippingMethodId)) {
+      return;
+    }
+    state.shippingMethodId = methods[0].id;
+  };
+
+  const renderShippingOptions = () => {
+    if (!shippingSelect) return;
+    shippingSelect.innerHTML = '';
+    state.shippingMethods.forEach((method) => {
+      const option = document.createElement('option');
+      option.value = String(method.id);
+      option.textContent = `${method.name} · ${method.priceLabel || money(method.priceCents || 0)}`;
+      option.selected = method.id === state.shippingMethodId;
+      shippingSelect.appendChild(option);
+    });
+    if (shippingPriceEl) {
+      const selected = state.shippingMethods.find((m) => m.id === state.shippingMethodId);
+      shippingPriceEl.textContent = selected?.priceLabel || '—';
+    }
+  };
+
+  const renderSummary = () => {
+    if (!state.cart) {
+      subtotalEl && (subtotalEl.textContent = money(0));
+      totalEl && (totalEl.textContent = money(0));
+      shippingLabelEl && (shippingLabelEl.textContent = 'Calculado en checkout');
+      return;
+    }
+    subtotalEl && (subtotalEl.textContent = money(state.cart.subtotalCents || 0));
+    const shipping = state.shippingMethods.find((m) => m.id === state.shippingMethodId);
+    const shippingCents = shipping ? shipping.priceCents : 0;
+    if (shippingLabelEl) {
+      shippingLabelEl.textContent = shipping
+        ? `${shipping.name} · ${shipping.priceLabel || money(shippingCents)}`
+        : 'Selecciona método';
+    }
+    totalEl && (totalEl.textContent = money((state.cart.subtotalCents || 0) + shippingCents));
+  };
+
+  const renderEmpty = () => {
+    if (!listEl) return;
+    listEl.innerHTML = '';
+    if (emptyEl) emptyEl.hidden = false;
+    renderSummary();
+  };
+
+  const renderCart = () => {
+    if (!listEl) return;
+    if (!state.cart) {
+      renderEmpty();
+      return;
+    }
+    const items = Array.isArray(state.cart.items) ? state.cart.items : [];
+    if (!items.length) {
+      renderEmpty();
+      return;
+    }
+    if (emptyEl) emptyEl.hidden = true;
+    const frag = document.createDocumentFragment();
+    items.forEach((item) => {
+      const article = document.createElement('article');
+      article.className = 'cart-item';
+      article.dataset.id = String(item.id);
+      article.innerHTML = `
+        <div class="ci-media">
+          <img src="${item.product?.image || 'assets/logo_banner.png'}" alt="${item.product?.name || ''}" loading="lazy">
+        </div>
+        <div class="ci-info">
+          <h3 class="ci-name">${item.product?.name || 'Producto CRONOX'}</h3>
+          <p class="ci-meta">
+            ${item.size ? `<span>Talla: ${String(item.size).toUpperCase()}</span>` : ''}
+          </p>
+          <div class="ci-controls">
+            <label>Cant.
+              <input type="number" class="ci-qty" min="1" value="${item.qty}" data-id="${item.id}" aria-label="Cantidad">
+            </label>
+            <button class="ci-remove" data-id="${item.id}" type="button">Eliminar</button>
+          </div>
+        </div>
+        <div class="ci-price">
+          <span>${item.priceLabel || money(item.priceCents || 0)}</span>
+        </div>
+      `;
+      frag.appendChild(article);
+    });
+    listEl.innerHTML = '';
+    listEl.appendChild(frag);
+    renderSummary();
+  };
+
+  const syncCart = async () => {
+    if (!API || typeof API.getCart !== 'function') {
+      state.cart = mapFallbackCart();
+      renderCart();
+      return;
+    }
+    try {
+      state.cart = await API.getCart();
+    } catch (error) {
+      console.warn('[CRONOX] Error cargando el carrito', error);
+      state.cart = mapFallbackCart();
+    }
+    renderCart();
+  };
+
+  const syncShippingMethods = async () => {
+    if (!API || typeof API.getShippingMethods !== 'function') {
+      state.shippingMethods = [];
+      state.shippingMethodId = null;
+      renderSummary();
+      return;
+    }
+    try {
+      state.shippingMethods = await API.getShippingMethods();
+      selectShipping(state.shippingMethods);
+      renderShippingOptions();
+      renderSummary();
+    } catch (error) {
+      console.warn('[CRONOX] Error cargando métodos de envío', error);
+      state.shippingMethods = [];
+      state.shippingMethodId = null;
+      renderSummary();
+    }
+  };
+
+  const handleQtyChange = async (input) => {
+    const itemId = Number(input.dataset.id);
+    const qty = Math.max(1, Number(input.value) || 1);
+    input.value = String(qty);
+
+    if (!API || typeof API.updateCartItem !== 'function') {
+      const fallback = readFallback();
+      if (fallback[itemId - 1]) {
+        fallback[itemId - 1].qty = qty;
+        try { localStorage.setItem(fallbackKey, JSON.stringify(fallback)); } catch {}
+      }
+      state.cart = mapFallbackCart();
+      renderCart();
+      window.dispatchEvent(new CustomEvent('cart:updated', { detail: state.cart }));
       return;
     }
 
-    if (emptyEl) emptyEl.hidden = true;
-
-    const frag = document.createDocumentFragment();
-
-    cart.forEach((it, idx) => {
-      const row = document.createElement('div');
-      row.className = 'cart-row';
-      row.style.cssText = `
-        display:grid;grid-template-columns:96px 1fr auto;gap:12px;align-items:center;
-        border:1px solid rgba(255,255,255,.12);border-radius:12px;padding:10px 12px;margin-bottom:10px;background:#0b0b0b;
-      `;
-
-      row.innerHTML = `
-        <div style="background:#000;width:96px;height:96px;display:grid;place-items:center;border-radius:8px;overflow:hidden;">
-          <img src="${it.image}" alt="${escapeHtml(it.name)}" style="max-width:100%;max-height:100%;object-fit:contain;">
-        </div>
-        <div>
-          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-            <strong style="font:700 14px/1.2 system-ui;">${escapeHtml(it.name)}</strong>
-            ${it.size ? `<span style="font:700 11px/1 system-ui;border:1px solid rgba(255,255,255,.18);border-radius:8px;padding:4px 8px;color:#fff;">Talla ${escapeHtml(String(it.size).toUpperCase())}</span>` : ''}
-          </div>
-          <div style="margin-top:8px;display:flex;gap:8px;align-items:center;">
-            <button class="qty" data-action="dec" data-idx="${idx}" aria-label="Reducir cantidad" style="width:28px;height:28px;border-radius:8px;border:1px solid rgba(255,255,255,.2);background:transparent;color:#fff;cursor:pointer;">−</button>
-            <span style="min-width:28px;text-align:center;">${it.qty}</span>
-            <button class="qty" data-action="inc" data-idx="${idx}" aria-label="Aumentar cantidad" style="width:28px;height:28px;border-radius:8px;border:1px solid rgba(255,255,255,.2);background:transparent;color:#fff;cursor:pointer;">+</button>
-            <button class="remove" data-idx="${idx}" style="margin-left:12px;border:none;background:transparent;color:#f19999;cursor:pointer;">Eliminar</button>
-          </div>
-        </div>
-        <div style="text-align:right;">
-          <div style="font:700 14px/1 system-ui;">${money(it.price * it.qty)}</div>
-          <div style="color:#9a9a9a;font:12px/1.2 system-ui;margin-top:4px;">${money(it.price)} c/u</div>
-        </div>
-      `;
-      frag.appendChild(row);
-    });
-
-    if (listEl) {
-      listEl.innerHTML = '';
-      listEl.appendChild(frag);
+    try {
+      state.cart = await API.updateCartItem(itemId, qty);
+      renderCart();
+    } catch (error) {
+      console.error('[CRONOX] No se pudo actualizar la cantidad', error);
+      await syncCart();
     }
-    if (subtotalEl) subtotalEl.textContent = money(calcSubtotal(cart));
-  }
+  };
 
-  // ---- Escapador mínimo para nombres
-  function escapeHtml(s) {
-    return String(s)
-      .replaceAll('&','&amp;')
-      .replaceAll('<','&lt;')
-      .replaceAll('>','&gt;')
-      .replaceAll('"','&quot;')
-      .replaceAll("'",'&#39;');
-  }
-
-  // ---- Interacciones (+, −, eliminar)
-  document.addEventListener('click', (e) => {
-    const qbtn = e.target.closest('.qty');
-    const rbtn = e.target.closest('.remove');
-    if (!qbtn && !rbtn) return;
-
-    const cart = load();
-
-    if (qbtn) {
-      const idx = Number(qbtn.dataset.idx);
-      const action = qbtn.dataset.action;
-      if (!isNaN(idx) && cart[idx]) {
-        if (action === 'inc') cart[idx].qty = (Number(cart[idx].qty) || 0) + 1;
-        if (action === 'dec') cart[idx].qty = Math.max(1, (Number(cart[idx].qty) || 1) - 1);
-        save(cart);
-        render();
-      }
+  const handleRemove = async (button) => {
+    const itemId = Number(button.dataset.id);
+    if (!API || typeof API.removeCartItem !== 'function') {
+      const fallback = readFallback();
+      fallback.splice(itemId - 1, 1);
+      try { localStorage.setItem(fallbackKey, JSON.stringify(fallback)); } catch {}
+      state.cart = mapFallbackCart();
+      renderCart();
+      window.dispatchEvent(new CustomEvent('cart:updated', { detail: state.cart }));
+      return;
     }
 
-    if (rbtn) {
-      const idx = Number(rbtn.dataset.idx);
-      if (!isNaN(idx)) {
-        cart.splice(idx, 1);
-        save(cart);
-        render();
-      }
+    try {
+      state.cart = await API.removeCartItem(itemId);
+      renderCart();
+    } catch (error) {
+      console.error('[CRONOX] No se pudo eliminar el artículo', error);
+      await syncCart();
+    }
+  };
+
+  const clearCart = async () => {
+    if (!API || typeof API.clearCart !== 'function') {
+      try { localStorage.removeItem(fallbackKey); } catch {}
+      state.cart = mapFallbackCart();
+      renderCart();
+      window.dispatchEvent(new CustomEvent('cart:updated', { detail: state.cart }));
+      return;
+    }
+    try {
+      state.cart = await API.clearCart();
+      renderCart();
+    } catch (error) {
+      console.error('[CRONOX] No se pudo vaciar el carrito', error);
+    }
+  };
+
+  listEl?.addEventListener('input', (event) => {
+    const input = event.target.closest('.ci-qty');
+    if (!input) return;
+    handleQtyChange(input);
+  });
+
+  listEl?.addEventListener('click', (event) => {
+    const removeBtn = event.target.closest('.ci-remove');
+    if (removeBtn) {
+      event.preventDefault();
+      handleRemove(removeBtn);
     }
   });
 
-  // ---- Vaciar & Checkout
   btnClear?.addEventListener('click', () => {
     if (confirm('¿Vaciar tu carrito?')) {
-      save([]);
-      render();
+      clearCart();
     }
+  });
+
+  shippingSelect?.addEventListener('change', (event) => {
+    const value = Number(event.target.value);
+    state.shippingMethodId = Number.isFinite(value) ? value : null;
+    renderShippingOptions();
+    renderSummary();
   });
 
   btnCheckout?.addEventListener('click', () => {
-    const cart = load();
-    if (!cart.length) {
-      alert('Tu carrito está vacío.');
-      return;
+    alert('Para completar la compra inicia sesión y finaliza el pago desde el backend de CRONOX.');
+  });
+
+  document.addEventListener('DOMContentLoaded', () => {
+    const yearEl = document.getElementById('anio');
+    if (yearEl) {
+      yearEl.textContent = new Date().getFullYear();
     }
-    // Aquí integrarías tu checkout real (TPV/Shopify/etc.)
-    alert('Checkout de ejemplo: integraremos tu pago aquí.');
+    syncCart();
+    syncShippingMethods();
   });
 
-  // ---- Re-render cuando cambie en otra pestaña
-  window.addEventListener('storage', (e) => {
-    if (e.key === KEY) render();
+  window.addEventListener('cart:updated', (event) => {
+    const cart = event?.detail;
+    if (cart && cart.items) {
+      state.cart = cart;
+      renderCart();
+    }
   });
-
-  // ---- Init
-  render();
 })();

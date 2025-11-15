@@ -3,7 +3,6 @@
 // CRONOX
 // ======================================================
 (function () {
-  const CART_KEY = "cronox_cart";
   const RETURN_KEY = "cronox_scroll_to"; // <- aquí guardamos el id para volver
 
   // --- Referencias principales ---
@@ -27,6 +26,13 @@
   const pointerFineQuery = typeof window.matchMedia === "function"
     ? window.matchMedia("(pointer: fine)")
     : { matches: false };
+
+  const findVariantForSize = (product, size) => {
+    if (!product || !size) return null;
+    const map = product.variantMap || {};
+    const key = String(size).toUpperCase();
+    return map[key] || map[key.toLowerCase()] || null;
+  };
 
   function syncAddButtonWidth() {
     if (!pAdd || !pSizeGroup) return;
@@ -88,6 +94,16 @@
     if (Array.isArray(product.sizes)) copy.sizes = [...product.sizes];
     if (Array.isArray(product.colors)) copy.colors = [...product.colors];
     if (Array.isArray(product.categories)) copy.categories = [...product.categories];
+    if (Array.isArray(product.variants)) copy.variants = product.variants.map((variant) => ({ ...variant }));
+    if (product.variantMap && typeof product.variantMap === "object") {
+      copy.variantMap = Object.entries(product.variantMap).reduce((acc, [key, value]) => {
+        acc[key] = { ...value };
+        return acc;
+      }, {});
+    }
+    if (product.slug) copy.slug = product.slug;
+    if (product.priceCents != null) copy.priceCents = product.priceCents;
+    if (product.backendId != null) copy.backendId = product.backendId;
     return copy;
   };
 
@@ -196,9 +212,13 @@
   }
 
   // --- Utils ---
-  function getId() {
-    try { return new URL(window.location.href).searchParams.get("id") || ""; }
-    catch { return ""; }
+  function getProductKey() {
+    try {
+      const url = new URL(window.location.href);
+      return url.searchParams.get("slug") || url.searchParams.get("id") || "";
+    } catch {
+      return "";
+    }
   }
   function money(n) {
     const v = Number(n) || 0;
@@ -216,21 +236,7 @@
 
   // --- Carrito ---
   function addToCart(item) {
-    try {
-      const raw = localStorage.getItem(CART_KEY);
-      const cart = raw ? JSON.parse(raw) : [];
-      const idx = cart.findIndex(x => x.id === item.id && x.size === item.size);
-      if (idx >= 0) {
-        cart[idx].qty = (Number(cart[idx].qty) || 0) + (Number(item.qty) || 1);
-      } else {
-        cart.push({ ...item, qty: Number(item.qty) || 1 });
-      }
-      localStorage.setItem(CART_KEY, JSON.stringify(cart));
-      window.dispatchEvent(new Event("cart:updated"));
-    } catch (e) {
-      console.error("[CRONOX] Error guardando en carrito:", e);
-      alert("No se pudo guardar el carrito en este navegador.");
-    }
+    window.dispatchEvent(new CustomEvent("cronox:addToCart", { detail: item }));
   }
   function showToast(msg) {
     if (!toast) return;
@@ -250,7 +256,12 @@
   }
   function getRelated(current, max = 4) {
     const currentId = current?.id != null ? String(current.id) : "";
-    const pool = PRODUCTS.filter(x => (x?.id != null ? String(x.id) : "") !== currentId);
+    const currentSlug = current?.slug ? String(current.slug) : "";
+    const pool = PRODUCTS.filter(x => {
+      const pid = x?.id != null ? String(x.id) : "";
+      const slug = x?.slug ? String(x.slug) : "";
+      return pid !== currentId && (!currentSlug || slug !== currentSlug);
+    });
     return pool
       .map(x => ({ p: x, s: similarityScore(current, x) }))
       .sort((u, v) => v.s - u.s)
@@ -258,8 +269,11 @@
       .map(o => o.p);
   }
   function cardHTML(p) {
+    const href = p.slug
+      ? `producto.html?slug=${encodeURIComponent(p.slug)}`
+      : `producto.html?id=${encodeURIComponent(p.id)}`;
     return `
-      <a class="product-card" href="producto.html?id=${encodeURIComponent(p.id)}" aria-label="${p.name}">
+      <a class="product-card" href="${href}" aria-label="${p.name}">
         <img class="product-img" src="${p.image}" alt="${p.name}" loading="lazy" decoding="async">
         <div class="product-card__info">
           <h3 class="product-name">${p.name}</h3>
@@ -471,11 +485,15 @@
     });
   }
 
-  function setupSizeButtons(sizes) {
+  function setupSizeButtons(product) {
     if (!pSizeGroup) return;
-    const normalized = normalizeSizes(sizes);
+    const normalized = normalizeSizes(product?.sizes);
     pSizeGroup.innerHTML = normalized
-      .map(size => `<button type="button" class="size-btn" data-size="${size}" role="radio" aria-checked="false">${size}</button>`)
+      .map((size) => {
+        const variant = findVariantForSize(product, size);
+        const disabled = Boolean(variant) && variant.isAvailable === false;
+        return `<button type="button" class="size-btn${disabled ? ' is-disabled' : ''}" data-size="${size}" role="radio" aria-checked="false" ${disabled ? 'disabled' : ''}>${size}</button>`;
+      })
       .join("");
 
     const buttons = Array.from(pSizeGroup.querySelectorAll(".size-btn"));
@@ -494,7 +512,13 @@
       });
     };
 
-    activate(buttons[0]);
+    const firstButton = buttons.find((btn) => !btn.disabled) || buttons[0];
+    if (firstButton) {
+      activate(firstButton);
+    } else {
+      selectedSize = "";
+    }
+
     buttons.forEach(btn => {
       btn.addEventListener("click", () => activate(btn));
     });
@@ -510,7 +534,7 @@
     if (pPrice) pPrice.textContent = p.priceLabel || money(p.price);
     if (pDesc)  pDesc.textContent  = p.desc || "";
 
-    setupSizeButtons(p.sizes);
+    setupSizeButtons(p);
 
     setPageTitle(p);
     renderRelated(p);
@@ -541,9 +565,13 @@
 
   // --- Init ---
   async function init() {
-    const id = getId();
+    const id = getProductKey();
     const catalog = await ensureCatalog();
-    const p = catalog.find(x => (x?.id != null ? String(x.id) : "") === id);
+    const p = catalog.find(x => {
+      const pid = x?.id != null ? String(x.id) : "";
+      const slug = x?.slug ? String(x.slug) : "";
+      return pid === id || (slug && slug === id);
+    });
     if (!p) {
       window.location.replace("index.html#store");
       return;
@@ -552,21 +580,34 @@
     render(p);
 
     pAdd?.addEventListener("click", () => {
-      const fallbackSize = normalizeSizes(p.sizes)[0] || "M";
-      const size = selectedSize || fallbackSize;
+      const normalizedSizes = normalizeSizes(p.sizes);
+      const fallbackSize = normalizedSizes[0] || "M";
+      const size = (selectedSize || fallbackSize || "M").toUpperCase();
+      const variant = findVariantForSize(p, size);
+
+      if (!variant || !variant.id) {
+        alert("No hay stock disponible para esa talla ahora mismo.");
+        return;
+      }
+
       addToCart({
         id: p.id,
+        productId: p.backendId || p.id,
+        slug: p.slug,
         name: p.name,
-        price: Number(p.price) || 0,
-        priceLabel: p.priceLabel || money(p.price),
+        price: Number(variant.price ?? p.price) || 0,
+        priceLabel: variant.priceLabel || p.priceLabel || money(p.price),
+        priceCents: variant.priceCents ?? p.priceCents,
         image: p.image,
         size,
-        qty: 1
+        color: p.color || (p.colors?.[0]) || 'Único',
+        qty: 1,
+        variantId: variant.id,
       });
       showToast("Añadido al carrito ✓");
     });
 
-    setupBackLinks(String(p.id || ""));
+    setupBackLinks(String(p.slug || p.id || ""));
   }
 
   window.addEventListener("resize", syncAddButtonWidth);
