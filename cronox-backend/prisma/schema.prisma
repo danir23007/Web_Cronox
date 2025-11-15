@@ -12,6 +12,7 @@ datasource db {
 enum Role {
   ADMIN
   USER
+  CUSTOMER
 }
 
 // [ORDERS] Estados disponibles para pedidos
