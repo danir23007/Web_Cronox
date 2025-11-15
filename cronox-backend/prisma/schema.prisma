@@ -170,6 +170,18 @@ model CartItem {
   @@index([variantId])
 }
 
+model ShippingMethod {
+  id         Int      @id @default(autoincrement())
+  name       String
+  price      Int
+  countries  String[] @default([])
+  isActive   Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  orders Order[]
+}
+
 // [ORDERS] Pedido confirmado por el proveedor de pago
 model Order {
   id           Int          @id @default(autoincrement())
@@ -184,16 +196,19 @@ model Order {
   currency     String       @default("EUR")
   provider     String?
   providerRef  String?      @unique
+  shippingMethodId Int?
   createdAt    DateTime     @default(now())
   updatedAt    DateTime     @updatedAt
   items        OrderItem[]
   shippingAddr Json?
   billingAddr  Json?
+  shippingMethod ShippingMethod? @relation(fields: [shippingMethodId], references: [id])
   stockMovements StockMovement[]
 
   @@index([userId]) // [FIX]
   @@index([createdAt])
   @@index([status])
+  @@index([shippingMethodId])
 }
 
 // [ORDERS] Línea de pedido que copia el carrito en el momento de la compra

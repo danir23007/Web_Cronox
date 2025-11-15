@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { OrderStatus, Prisma } from '@prisma/client';
+import { Decimal } from '@prisma/client/runtime/library';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AdminOrdersQueryDto } from './dto/admin-order-query.dto';
 
@@ -212,11 +213,11 @@ export class AdminOrdersService {
     const totalFilter: Prisma.DecimalFilter = {};
 
     if (query.minTotal !== undefined) {
-      totalFilter.gte = new Prisma.Decimal(query.minTotal);
+      totalFilter.gte = new Decimal(query.minTotal);
     }
 
     if (query.maxTotal !== undefined) {
-      totalFilter.lte = new Prisma.Decimal(query.maxTotal);
+      totalFilter.lte = new Decimal(query.maxTotal);
     }
 
     if (Object.keys(totalFilter).length) {

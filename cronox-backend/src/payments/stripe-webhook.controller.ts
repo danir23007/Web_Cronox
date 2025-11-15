@@ -49,6 +49,17 @@ export class StripeWebhookController {
     }
 
     const cartId = metadata.cartId ? Number(metadata.cartId) : undefined;
+    const shippingMethodId = metadata.shippingMethodId
+      ? Number(metadata.shippingMethodId)
+      : undefined;
+    if (!shippingMethodId) {
+      throw new BadRequestException('STRIPE_METADATA_SHIPPING_METHOD_REQUIRED');
+    }
+
+    const shippingCostCents = metadata.shippingCostCents;
+    if (typeof shippingCostCents !== 'string') {
+      throw new BadRequestException('STRIPE_METADATA_SHIPPING_COST_REQUIRED');
+    }
     const amountCents = paymentIntent.amount_received ?? paymentIntent.amount ?? 0;
     const amount = (amountCents / 100).toFixed(2);
     const currency = (paymentIntent.currency ?? 'eur').toUpperCase();
@@ -70,6 +81,8 @@ export class StripeWebhookController {
         metadata: {
           userId,
           cartId,
+          shippingMethodId,
+          shippingCostCents,
         } as any,
         shippingAddress: shippingAddress as any,
         rawPayload: paymentIntent as unknown as Record<string, unknown>,

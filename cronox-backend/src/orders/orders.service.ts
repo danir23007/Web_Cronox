@@ -7,12 +7,17 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { OrderStatus, Prisma, Role } from '@prisma/client';
+import { Decimal } from '@prisma/client/runtime/library';
 import { CartService } from '../cart/cart.service';
 import { TaxConfigService } from '../common/tax/tax-config.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateCheckoutSessionDto } from './dto/create-checkout-session.dto';
 import { CreateOrderWebhookDto } from './dto/create-order-webhook.dto';
 import { PaginationDto } from './dto/pagination.dto';
+import {
+  ShippingMethodResponse,
+  ShippingMethodsService,
+} from '../shipping-methods/shipping-methods.service';
 
 const DEFAULT_CURRENCY = 'EUR';
 
@@ -69,12 +74,20 @@ type CheckoutLineItemResponse = { // [STRIPE]
   lineTotal: string;
 };
 
+type CheckoutMetadata = {
+  cartId: number;
+  userId: number;
+  shippingMethodId: number;
+  shippingCostCents: number;
+};
+
 type CheckoutPreview = { // [STRIPE]
   cart: CartSnapshot;
   computation: CheckoutComputation;
   summary: CheckoutSummaryResponse;
   lineItems: CheckoutLineItemResponse[];
-  metadata: { cartId: number; userId: number };
+  metadata: CheckoutMetadata;
+  shippingMethod: ShippingMethodResponse;
 };
 
 type AuthenticatedUser = {
@@ -91,35 +104,56 @@ export class OrdersService {
     private readonly prisma: PrismaService,
     private readonly cartService: CartService,
     private readonly taxConfig: TaxConfigService,
+    private readonly shippingMethods: ShippingMethodsService,
   ) {}
 
-  async getCheckoutPreview(userId: number): Promise<CheckoutPreview> { // [STRIPE]
+  async getCheckoutPreview(
+    userId: number,
+    params: { shippingMethodId: number; shippingCountry?: string },
+  ): Promise<CheckoutPreview> { // [STRIPE]
     const cart = (await this.cartService.getOrCreateCart({ userId })) as CartSnapshot;
 
     if (!cart.items.length) {
       throw new BadRequestException('CART_EMPTY');
     }
 
-    const computation = this.buildCheckoutComputation(cart);
+    const shippingMethod = await this.shippingMethods.getActiveMethodById(
+      params.shippingMethodId,
+      params.shippingCountry,
+    );
+    const shippingCost = this.centsToDecimal(shippingMethod.price);
+    const computation = this.buildCheckoutComputation(cart, { shippingCost });
     const summary = this.buildCheckoutSummary(computation);
     const lineItems = this.buildPublicLineItems(computation.lineItems);
-    const metadata = { cartId: cart.id, userId };
+    const metadata: CheckoutMetadata = {
+      cartId: cart.id,
+      userId,
+      shippingMethodId: shippingMethod.id,
+      shippingCostCents: this.decimalToCents(computation.shippingCost),
+    };
 
-    return { cart, computation, summary, lineItems, metadata };
+    return {
+      cart,
+      computation,
+      summary,
+      lineItems,
+      metadata,
+      shippingMethod: this.shippingMethods.toResponse(shippingMethod),
+    };
   }
 
   async createCheckoutSession(
     userId: number,
     dto: CreateCheckoutSessionDto,
   ): Promise<Record<string, unknown>> {
-    const preview = await this.getCheckoutPreview(userId); // [STRIPE]
+    const shippingCountry = this.extractCountry(dto.shippingAddress);
+    const preview = await this.getCheckoutPreview(userId, {
+      shippingMethodId: dto.shippingMethodId,
+      shippingCountry,
+    }); // [STRIPE]
     const provider = this.taxConfig.getPaymentProvider();
 
     const metadata: Record<string, unknown> = { ...preview.metadata };
-
-    if (dto.shippingMethod) {
-      metadata.shippingMethod = dto.shippingMethod;
-    }
     if (dto.couponCode) {
       metadata.couponCode = dto.couponCode;
     }
@@ -129,6 +163,7 @@ export class OrdersService {
       summary: preview.summary,
       lineItems: preview.lineItems,
       metadata,
+      shippingMethod: preview.shippingMethod,
     };
 
     if (dto.shippingAddress) {
@@ -168,7 +203,19 @@ export class OrdersService {
       }
 
       const cart = await this.loadCartSnapshot(tx, dto.metadata.cartId, userId);
-      const computation = this.buildCheckoutComputation(cart);
+      const shippingMethodId = dto.metadata.shippingMethodId;
+      if (!shippingMethodId) {
+        throw new BadRequestException('SHIPPING_METHOD_REQUIRED');
+      }
+
+      const shippingMethod = await this.shippingMethods.getMethodByIdOrThrow(shippingMethodId);
+      const shippingCostCents = Number(dto.metadata.shippingCostCents);
+      if (!Number.isFinite(shippingCostCents)) {
+        throw new BadRequestException('SHIPPING_COST_METADATA_REQUIRED');
+      }
+      const shippingCost = this.centsToDecimal(shippingCostCents);
+
+      const computation = this.buildCheckoutComputation(cart, { shippingCost });
       const providerAmount = this.moneyFromString(dto.amount);
       const totalsMatch = providerAmount.equals(computation.total);
 
@@ -210,6 +257,7 @@ export class OrdersService {
           currency: dto.currency ?? computation.currency,
           provider: dto.provider,
           providerRef,
+          shippingMethodId: shippingMethod.id,
           shippingAddr: shippingAddr, // [FIX]
           billingAddr: billingAddr,   // [FIX]
         },
@@ -383,12 +431,30 @@ export class OrdersService {
     }));
   }
 
-  private buildCheckoutComputation(cart: CartSnapshot | null): CheckoutComputation {
+  private extractCountry(address?: Record<string, unknown>): string | undefined {
+    if (!address) {
+      return undefined;
+    }
+
+    const typed = address as { country?: unknown; countryCode?: unknown };
+    const raw = typed.country ?? typed.countryCode;
+    if (typeof raw !== 'string') {
+      return undefined;
+    }
+
+    const normalized = raw.trim().toUpperCase();
+    return normalized || undefined;
+  }
+
+  private buildCheckoutComputation(
+    cart: CartSnapshot | null,
+    options: { shippingCost: Prisma.Decimal },
+  ): CheckoutComputation {
     const taxRate = this.rateFromNumber(this.taxConfig.getDefaultVat());
-    const shippingCost = this.moneyFromNumber(this.taxConfig.getFlatShipping());
+    const shippingCost = options.shippingCost;
     const currency = cart?.items[0]?.variant?.product?.currency ?? DEFAULT_CURRENCY;
 
-    if (!cart) {
+    if (!cart || !cart.items.length) {
       return {
         currency,
         taxRate,
@@ -458,23 +524,27 @@ export class OrdersService {
   }
 
   private centsToDecimal(cents: number): Prisma.Decimal {
-    return this.roundMoney(new Prisma.Decimal(cents).dividedBy(100));
+    return this.roundMoney(new Decimal(cents).dividedBy(100));
+  }
+
+  private decimalToCents(value: Prisma.Decimal): number {
+    return Number(value.mul(100).toFixed(0));
   }
 
   private moneyFromNumber(amount: number): Prisma.Decimal {
-    return new Prisma.Decimal(amount.toFixed(2));
+    return new Decimal(amount.toFixed(2));
   }
 
   private moneyFromString(amount: string): Prisma.Decimal {
-    return new Prisma.Decimal(amount);
+    return new Decimal(amount);
   }
 
   private rateFromNumber(rate: number): Prisma.Decimal {
-    return new Prisma.Decimal(rate.toFixed(4));
+    return new Decimal(rate.toFixed(4));
   }
 
   private roundMoney(value: Prisma.Decimal): Prisma.Decimal {
-    return new Prisma.Decimal(value.toFixed(2));
+    return new Decimal(value.toFixed(2));
   }
 
   private formatMoney(value: Prisma.Decimal, digits = 2): string {
@@ -593,6 +663,7 @@ export class OrdersService {
       currency: order.currency,
       provider: order.provider,
       providerRef: order.providerRef,
+      shippingMethodId: order.shippingMethodId,
       createdAt: order.createdAt,
       updatedAt: order.updatedAt,
       shippingAddr: order.shippingAddr,

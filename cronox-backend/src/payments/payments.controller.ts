@@ -41,9 +41,21 @@ export class PaymentsController {
             lineTotal: '100.00',
           },
         ],
+        shippingMethod: {
+          id: 2,
+          name: 'Express',
+          priceCents: 250,
+          price: '2.50',
+          countries: ['ES'],
+          isActive: true,
+          createdAt: '2025-02-04T00:00:00.000Z',
+          updatedAt: '2025-02-04T00:00:00.000Z',
+        },
         metadata: {
           userId: '1',
           cartId: '10',
+          shippingMethodId: '2',
+          shippingCostCents: '250',
         },
       },
     },
@@ -58,7 +70,9 @@ export class PaymentsController {
       throw new UnauthorizedException('USER_NOT_AUTHENTICATED');
     }
 
-    const preview = await this.ordersService.getCheckoutPreview(userId); // [STRIPE]
+    const preview = await this.ordersService.getCheckoutPreview(userId, {
+      shippingMethodId: dto.shippingMethodId,
+    }); // [STRIPE]
     const amountInCents = Number(preview.computation.total.mul(100).toFixed(0));
 
     const paymentIntent = await this.stripeService.createOrReusePaymentIntent({
@@ -66,11 +80,17 @@ export class PaymentsController {
       cartId: preview.metadata.cartId,
       amount: amountInCents,
       currency: preview.computation.currency,
+      metadata: {
+        shippingMethodId: String(preview.metadata.shippingMethodId),
+        shippingCostCents: String(preview.metadata.shippingCostCents),
+      },
     });
 
     const metadata = {
       userId: String(preview.metadata.userId),
       cartId: String(preview.metadata.cartId),
+      shippingMethodId: String(preview.metadata.shippingMethodId),
+      shippingCostCents: String(preview.metadata.shippingCostCents),
     } as Record<string, string>;
 
     if (dto.addressId) {
@@ -82,6 +102,7 @@ export class PaymentsController {
       paymentIntentId: paymentIntent.id,
       summary: preview.summary,
       lineItems: preview.lineItems,
+      shippingMethod: preview.shippingMethod,
       metadata,
     };
   }

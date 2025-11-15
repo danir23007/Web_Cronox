@@ -1,12 +1,14 @@
 // [ORDERS] Datos necesarios para preparar un checkout sin confirmar pago
-import { ApiPropertyOptional } from '@nestjs/swagger';
-import { IsObject, IsOptional, IsString } from 'class-validator';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { Type } from 'class-transformer';
+import { IsInt, IsObject, IsOptional, IsString, Min } from 'class-validator';
 
 export class CreateCheckoutSessionDto {
-  @ApiPropertyOptional({ description: 'Identificador del método de envío elegido' })
-  @IsOptional()
-  @IsString()
-  shippingMethod?: string;
+  @ApiProperty({ description: 'Identificador del método de envío elegido' })
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  shippingMethodId!: number;
 
   @ApiPropertyOptional({ description: 'Dirección de envío a usar durante el checkout', type: Object })
   @IsOptional()

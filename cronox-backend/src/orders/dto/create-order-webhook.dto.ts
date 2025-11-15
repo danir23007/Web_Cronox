@@ -24,6 +24,15 @@ class WebhookMetadataDto {
   @IsInt()
   cartId?: number;
 
+  @ApiProperty({ description: 'Método de envío aplicado durante el checkout' })
+  @Type(() => Number)
+  @IsInt()
+  shippingMethodId!: number;
+
+  @ApiProperty({ description: 'Coste del envío en céntimos copiado del checkout' })
+  @IsNumberString()
+  shippingCostCents!: string;
+
   @ApiPropertyOptional({ description: 'Dirección de envío usada en el checkout', type: Object })
   @IsOptional()
   @IsObject()

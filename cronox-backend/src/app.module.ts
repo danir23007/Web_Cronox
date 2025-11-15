@@ -19,6 +19,7 @@ import { AddressesModule } from './addresses/addresses.module';
 import { OrdersModule } from './orders/orders.module'; // [ORDERS]
 import { PaymentsModule } from './payments/payments.module'; // [STRIPE]
 import { AdminModule } from './admin/admin.module';
+import { ShippingMethodsModule } from './shipping-methods/shipping-methods.module';
 
 @Module({
   imports: [
@@ -46,6 +47,7 @@ import { AdminModule } from './admin/admin.module';
     ProductModule,
     UsersModule,
     AddressesModule,
+    ShippingMethodsModule,
     OrdersModule, // [ORDERS] Registro del módulo de pedidos
     PaymentsModule, // [STRIPE]
     AdminModule,

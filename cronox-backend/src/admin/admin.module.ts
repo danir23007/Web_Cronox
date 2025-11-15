@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ProductModule } from '../products/product.module';
 import { RolesGuard } from '../common/guards/roles.guard';
+import { ShippingMethodsModule } from '../shipping-methods/shipping-methods.module';
 import { AdminOrdersController } from './orders/admin-orders.controller';
 import { AdminOrdersService } from './orders/admin-orders.service';
 import { AdminUsersController } from './users/admin-users.controller';
@@ -8,14 +9,16 @@ import { AdminUsersService } from './users/admin-users.service';
 import { AdminProductsController } from './products/admin-products.controller';
 import { AdminStockController } from './stock/admin-stock.controller';
 import { AdminStockService } from './stock/admin-stock.service';
+import { AdminShippingMethodsController } from './shipping-methods/admin-shipping-methods.controller';
 
 @Module({
-  imports: [ProductModule],
+  imports: [ProductModule, ShippingMethodsModule],
   controllers: [
     AdminOrdersController,
     AdminUsersController,
     AdminProductsController,
     AdminStockController,
+    AdminShippingMethodsController,
   ],
   providers: [AdminOrdersService, AdminUsersService, AdminStockService, RolesGuard],
 })
