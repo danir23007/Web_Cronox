@@ -579,23 +579,45 @@
   async function init() {
     const id = getProductKey();
     const catalog = await ensureCatalog();
-    const p = catalog.find(x => {
+
+    // Limpia productos incompletos (p.ej. creados manualmente desde el front)
+    // para evitar catálogos corruptos que provocan redirecciones inesperadas.
+    const cleanedCatalog = catalog.filter((item) => Boolean(item && (item.id || item.slug)));
+    if (cleanedCatalog.length !== catalog.length) {
+      setProducts(cleanedCatalog);
+    }
+
+    let target = cleanedCatalog.find((x) => {
       const pid = x?.id != null ? String(x.id) : "";
       const slug = x?.slug ? String(x.slug) : "";
       return pid === id || (slug && slug === id);
     });
-    if (!p) {
+
+    // Si no se encuentra el producto en el catálogo cargado, vuelve al fallback
+    // local (elimina posibles productos fantasma del front o con fotos corruptas)
+    // antes de redirigir al usuario.
+    if (!target) {
+      const fallback = getFallbackList();
+      setProducts(fallback);
+      target = fallback.find((x) => {
+        const pid = x?.id != null ? String(x.id) : "";
+        const slug = x?.slug ? String(x.slug) : "";
+        return pid === id || (slug && slug === id);
+      });
+    }
+
+    if (!target) {
       window.location.replace("index.html#store");
       return;
     }
 
-    render(p);
+    render(target);
 
     pAdd?.addEventListener("click", () => {
-      const normalizedSizes = normalizeSizes(p.sizes);
+      const normalizedSizes = normalizeSizes(target.sizes);
       const fallbackSize = normalizedSizes[0] || "M";
       const size = (selectedSize || fallbackSize || "M").toUpperCase();
-      const variant = findVariantForSize(p, size);
+      const variant = findVariantForSize(target, size);
 
       if (!variant || !variant.id) {
         alert("No hay stock disponible para esa talla ahora mismo.");
@@ -603,23 +625,23 @@
       }
 
       addToCart({
-        id: p.id,
-        productId: p.backendId || p.id,
-        slug: p.slug,
-        name: p.name,
-        price: Number(variant.price ?? p.price) || 0,
-        priceLabel: variant.priceLabel || p.priceLabel || money(p.price),
-        priceCents: variant.priceCents ?? p.priceCents,
-        image: p.image,
+        id: target.id,
+        productId: target.backendId || target.id,
+        slug: target.slug,
+        name: target.name,
+        price: Number(variant.price ?? target.price) || 0,
+        priceLabel: variant.priceLabel || target.priceLabel || money(target.price),
+        priceCents: variant.priceCents ?? target.priceCents,
+        image: target.image,
         size,
-        color: p.color || (p.colors?.[0]) || 'Único',
+        color: target.color || (target.colors?.[0]) || 'Único',
         qty: 1,
         variantId: variant.id,
       });
       showToast("Añadido al carrito ✓");
     });
 
-    setupBackLinks(String(p.slug || p.id || ""));
+    setupBackLinks(String(target.slug || target.id || ""));
   }
 
   window.addEventListener("resize", syncAddButtonWidth);
