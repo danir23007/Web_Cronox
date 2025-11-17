@@ -1,5 +1,5 @@
 // ======================================================
-// assets/products.js (v6)
+// assets/products.js (v7)
 // - Grid + filtros + mini-galería
 // - “+” abre Quick-Add vertical
 // - Quick-Add SIN selector de color (usa color del producto)
@@ -197,8 +197,6 @@
           <h3 class="qa-name" id="qaName"></h3>
           <p class="qa-price" id="qaPrice"></p>
 
-          <!-- Sin selector de color por ahora -->
-
           <div class="qa-row">
             <span class="qa-label">Talla</span>
             <div id="qaSizes" class="qa-sizes" role="radiogroup" aria-label="Selecciona una talla"></div>
@@ -220,7 +218,6 @@
     qaImg2  = qaOverlay.querySelector("#qaImg2");
     qaName  = qaOverlay.querySelector("#qaName");
     qaPrice = qaOverlay.querySelector("#qaPrice");
-    // qaColor = (eliminado)
     qaSizeGroup = qaOverlay.querySelector("#qaSizes");
     qaAdd   = qaOverlay.querySelector("#qaAdd");
     qaLink  = qaOverlay.querySelector("#qaLink");
@@ -276,9 +273,9 @@
       e.preventDefault();
       if (!qaCurrentProduct) return;
       if (qaCurrentProduct.slug) {
-        window.location.href = `producto.html?slug=${encodeURIComponent(qaCurrentProduct.slug)}`;
+        window.location.href = `/producto.html?slug=${encodeURIComponent(qaCurrentProduct.slug)}`;
       } else {
-        window.location.href = `producto.html?id=${encodeURIComponent(qaCurrentProduct.id)}`;
+        window.location.href = `/producto.html?id=${encodeURIComponent(qaCurrentProduct.id)}`;
       }
     });
   }
@@ -375,9 +372,9 @@
     setupQuickAddSizes(product);
 
     if (product.slug) {
-      qaLink.href = `producto.html?slug=${encodeURIComponent(product.slug)}`;
+      qaLink.href = `/producto.html?slug=${encodeURIComponent(product.slug)}`;
     } else {
-      qaLink.href = `producto.html?id=${encodeURIComponent(product.id)}`;
+      qaLink.href = `/producto.html?id=${encodeURIComponent(product.id)}`;
     }
 
     qaOverlay.setAttribute("aria-hidden","false");
@@ -404,9 +401,9 @@
   function createCard(p) {
     const slug = p.slug || p.id;
     const detailHref = p.slug
-      ? `producto.html?slug=${encodeURIComponent(p.slug)}`
+      ? `/producto.html?slug=${encodeURIComponent(p.slug)}`
       : p.id
-        ? `producto.html?id=${encodeURIComponent(p.id)}`
+        ? `/producto.html?id=${encodeURIComponent(p.id)}`
         : "#";
 
     const a = document.createElement("a");
@@ -414,9 +411,6 @@
     a.className = "product-card";
     a.setAttribute("data-id", slug);
     if (slug) a.setAttribute("data-slug", slug);
-
-    // Navegación nativa al PDP; basta con el href.
-    // (Evitar interceptar el click previene fallos al abrir la página de detalle.)
 
     const media = document.createElement("div");
     media.className = "product-media";
@@ -458,7 +452,6 @@
       gallery.appendChild(next);
     }
 
-    // “+” clásico: abre Quick-Add
     const plus = document.createElement("button");
     plus.className = "fav-add";
     plus.type = "button";

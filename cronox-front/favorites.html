@@ -9,7 +9,6 @@
 
   <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
   <link rel="alternate icon" href="assets/logo_browser.png" type="image/png">
-  <!-- Tu CSS actual -->
   <link rel="stylesheet" href="assets/store.css?v=58">
   <noscript><style>#preloader{display:none!important}</style></noscript>
 </head>
@@ -21,11 +20,18 @@
     <div class="topbar__left">
       <button id="btnMenu" class="icon-btn" aria-label="Abrir filtros" aria-expanded="false" aria-controls="filtersPanel">
         <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-             stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
+             stroke-linecap="round" stroke-linejoin="round">
+          <line x1="3" y1="6" x2="21" y2="6"></line>
+          <line x1="3" y1="12" x2="21" y2="12"></line>
+          <line x1="3" y1="18" x2="21" y2="18"></line>
+        </svg>
       </button>
       <button id="btnSearch" class="icon-btn" aria-label="Buscar productos">
         <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-             stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+             stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="11" cy="11" r="8"></circle>
+          <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+        </svg>
       </button>
     </div>
 
@@ -35,7 +41,7 @@
     </a>
 
     <nav class="topbar__right" aria-label="Navegación principal">
-      <!-- PERFIL (igual que en index.html) -->
+      <!-- PERFIL -->
       <a href="#" class="topbar__link topbar__profile" id="profileBtn" aria-label="Iniciar sesión" title="Iniciar sesión">
         <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-user" viewBox="0 0 24 24" fill="none"
              stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -48,7 +54,9 @@
       <!-- Favoritos -->
       <a href="favorites.html" class="topbar__link topbar__fav" aria-label="Ver favoritos" aria-current="page">
         <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-star" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-             stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17.3 13.97 18.18 21 12 17.77 5.82 21 6.7 13.97 2 9.27 8.91 8.26 12 2"></polygon></svg>
+             stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polygon points="12 2 15.09 8.26 22 9.27 17.3 13.97 18.18 21 12 17.77 5.82 21 6.7 13.97 2 9.27 8.91 8.26 12 2"></polygon>
+        </svg>
         <span class="fav-count" hidden>0</span>
       </a>
 
@@ -102,12 +110,18 @@
   (function(){
     const FAV_KEY   = 'cronox:favs';
 
-    const getFavs = () => { try { return JSON.parse(localStorage.getItem(FAV_KEY)) || []; } catch { return []; } };
+    const getFavs = () => {
+      try { return JSON.parse(localStorage.getItem(FAV_KEY)) || []; }
+      catch { return []; }
+    };
 
-    // MISMA tarjeta que tienda (estructura y clases)
+    // MISMA tarjeta que tienda (estructura y clases),
+    // usando rutas ABSOLUTAS a /producto.html
     function createStoreLikeCard(p){
       const a = document.createElement('a');
-      a.href = `producto.html?id=${encodeURIComponent(p.id)}`;
+      a.href = p.slug
+        ? `/producto.html?slug=${encodeURIComponent(p.slug)}`
+        : `/producto.html?id=${encodeURIComponent(p.id)}`;
       a.className = 'product-card';
       a.setAttribute('data-id', p.id);
 
@@ -188,6 +202,7 @@
         const base = fromId || fromName || {};
         return {
           id:   f.id   || base.id,
+          slug: f.slug || base.slug,
           name: f.name || base.name,
           price: f.price || base.priceLabel || base.price,
           priceLabel: f.priceLabel || base.priceLabel,
@@ -222,8 +237,7 @@
   </script>
 
   <script src="assets/api.js"></script>
-  <!-- Reutilizamos tus scripts tal cual -->
-  <script src="assets/products.js?v=46" defer></script>
+  <script src="assets/products.js?v=47" defer></script>
   <script src="assets/app.js?v=48" defer></script>
   <script src="assets/cart-badge.js?v=42" defer></script>
   <script src="assets/fav-toggle.js?v=42" defer></script>

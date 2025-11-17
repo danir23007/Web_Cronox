@@ -282,8 +282,8 @@
   }
   function cardHTML(p) {
     const href = p.slug
-      ? `producto.html?slug=${encodeURIComponent(p.slug)}`
-      : `producto.html?id=${encodeURIComponent(p.id)}`;
+      ? `/producto.html?slug=${encodeURIComponent(p.slug)}`
+      : `/producto.html?id=${encodeURIComponent(p.id)}`;
     return `
       <a class="product-card" href="${href}" aria-label="${p.name}">
         <img class="product-img" src="${p.image}" alt="${p.name}" loading="lazy" decoding="async">
@@ -562,9 +562,8 @@
     links.forEach(a => {
       a.addEventListener("click", (e) => {
         const prefersReduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-        // Guarda el id para reposicionar en la tienda
         try { sessionStorage.setItem(RETURN_KEY, currentId); } catch {}
-        if (prefersReduced) return; // navegación normal sin fade
+        if (prefersReduced) return;
 
         e.preventDefault();
         document.documentElement.classList.add("page-exit");
@@ -580,8 +579,6 @@
     const id = getProductKey();
     const catalog = await ensureCatalog();
 
-    // Limpia productos incompletos (p.ej. creados manualmente desde el front)
-    // para evitar catálogos corruptos que provocan redirecciones inesperadas.
     const cleanedCatalog = catalog.filter((item) => Boolean(item && (item.id || item.slug)));
     if (cleanedCatalog.length !== catalog.length) {
       setProducts(cleanedCatalog);
@@ -593,9 +590,6 @@
       return pid === id || (slug && slug === id);
     });
 
-    // Si no se encuentra el producto en el catálogo cargado, vuelve al fallback
-    // local (elimina posibles productos fantasma del front o con fotos corruptas)
-    // antes de redirigir al usuario.
     if (!target) {
       const fallback = getFallbackList();
       setProducts(fallback);
