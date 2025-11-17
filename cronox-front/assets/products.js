@@ -415,12 +415,8 @@
     a.setAttribute("data-id", slug);
     if (slug) a.setAttribute("data-slug", slug);
 
-    if (detailHref !== "#") {
-      a.addEventListener("click", (ev) => {
-        ev.preventDefault();
-        window.location.href = detailHref;
-      });
-    }
+    // Navegación nativa al PDP; basta con el href.
+    // (Evitar interceptar el click previene fallos al abrir la página de detalle.)
 
     const media = document.createElement("div");
     media.className = "product-media";
