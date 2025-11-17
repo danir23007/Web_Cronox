@@ -402,14 +402,19 @@
 
   // ======= Tarjeta con mini-galería + botón "+" clásico =======
   function createCard(p) {
+    const slug = p.slug || p.id;
+
     const a = document.createElement("a");
-    if (p.slug) {
-      a.href = `producto.html?slug=${encodeURIComponent(p.slug)}`;
-    } else {
-      a.href = `producto.html?id=${encodeURIComponent(p.id)}`;
-    }
+    a.href = slug ? `/product/${encodeURIComponent(slug)}` : "#";
     a.className = "product-card";
-    a.setAttribute("data-id", p.slug || p.id);
+    a.setAttribute("data-id", slug);
+    if (slug) a.setAttribute("data-slug", slug);
+
+    a.addEventListener("click", (ev) => {
+      if (!slug) return;
+      ev.preventDefault();
+      window.location.href = `/product/${encodeURIComponent(slug)}`;
+    });
 
     const media = document.createElement("div");
     media.className = "product-media";
