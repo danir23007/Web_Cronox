@@ -211,6 +211,22 @@
     }
   }
 
+  async function loadProductByKey(key) {
+    if (!key) return null;
+    if (!API || typeof API.getProductBySlug !== "function") return null;
+
+    try {
+      const product = await API.getProductBySlug(key);
+      if (product) {
+        return cloneProduct(product);
+      }
+    } catch (error) {
+      console.warn("[CRONOX] No se pudo cargar el producto por slug", error);
+    }
+
+    return null;
+  }
+
   // --- Utils ---
   function getProductKey() {
     try {
@@ -567,11 +583,30 @@
   async function init() {
     const id = getProductKey();
     const catalog = await ensureCatalog();
-    const p = catalog.find(x => {
-      const pid = x?.id != null ? String(x.id) : "";
-      const slug = x?.slug ? String(x.slug) : "";
-      return pid === id || (slug && slug === id);
-    });
+
+    let p = null;
+    if (id) {
+      p = await loadProductByKey(id);
+      if (p) {
+        const alreadyInCatalog = PRODUCTS.some((item) => {
+          const pid = item?.id != null ? String(item.id) : "";
+          const slug = item?.slug ? String(item.slug) : "";
+          return pid === id || (slug && slug === id);
+        });
+        if (!alreadyInCatalog) {
+          setProducts([p, ...PRODUCTS]);
+        }
+      }
+    }
+
+    if (!p) {
+      p = PRODUCTS.find(x => {
+        const pid = x?.id != null ? String(x.id) : "";
+        const slug = x?.slug ? String(x.slug) : "";
+        return pid === id || (slug && slug === id);
+      });
+    }
+
     if (!p) {
       window.location.replace("index.html#store");
       return;
