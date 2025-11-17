@@ -32,9 +32,10 @@ import { CategoriesModule } from './categories/categories.module';
       },
     ]),
     ServeStaticModule.forRoot({
-      rootPath: join(__dirname, '..', '..', 'cronox-front'),
-      // Sin "exclude": las rutas /api/... las manejan los controladores
-      // y sólo si no existe ninguna coincidencia se sirve el front.
+      rootPath: join(process.cwd(), '..', 'cronox-front'),
+      serveRoot: '/',
+      renderPath: '/',
+      exclude: ['/api*', '/docs*', '/webhooks*'],
       serveStaticOptions: { index: 'index.html' },
     }),
     PrismaModule,
