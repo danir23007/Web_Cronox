@@ -215,7 +215,19 @@
   function getProductKey() {
     try {
       const url = new URL(window.location.href);
-      return url.searchParams.get("slug") || url.searchParams.get("id") || "";
+      const direct = url.searchParams.get("slug") || url.searchParams.get("id");
+      if (direct) return direct;
+
+      const path = (url.pathname || "").split("/").filter(Boolean);
+      const last = path[path.length - 1] || "";
+      if (last && last.toLowerCase() !== "producto.html") {
+        return last.replace(/\.html?$/i, "");
+      }
+
+      const hash = (url.hash || "").replace(/^#/, "").trim();
+      if (hash) return hash.replace(/\.html?$/i, "");
+
+      return "";
     } catch {
       return "";
     }
