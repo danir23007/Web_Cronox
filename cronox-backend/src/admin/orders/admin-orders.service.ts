@@ -207,7 +207,7 @@ export class AdminOrdersService {
     }
 
     if (query.userId) {
-      where.userId = String(query.userId);
+      where.userId = Number(query.userId);
     }
 
     const totalFilter: Prisma.DecimalFilter = {};
