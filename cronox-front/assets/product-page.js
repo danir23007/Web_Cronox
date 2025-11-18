@@ -3,9 +3,9 @@
 // CRONOX
 // ======================================================
 (function () {
-  const RETURN_KEY = "cronox_scroll_to"; // <- aquí guardamos el id para volver
+  const RETURN_KEY = "cronox_scroll_to"; // para volver a la card de la tienda
 
-  // --- Referencias principales ---
+  // --- Referencias principales DOM ---
   const pMedia = document.getElementById("pMedia");
   const pMediaViewport = document.getElementById("pMediaViewport");
   const pMediaPrev = document.getElementById("pMediaPrev");
@@ -23,9 +23,16 @@
   let galleryImages = [];
   let currentImageIndex = 0;
   let zoomLevel = 0;
+
   const pointerFineQuery = typeof window.matchMedia === "function"
     ? window.matchMedia("(pointer: fine)")
     : { matches: false };
+
+  const API = window.CRONOX_API || {};
+
+  // ==========================
+  // Utils generales
+  // ==========================
 
   const findVariantForSize = (product, size) => {
     if (!product || !size) return null;
@@ -46,12 +53,40 @@
     });
   }
 
-  // --- Catálogo (API + fallback) ---
-  const API = window.CRONOX_API || {};
+  function money(n) {
+    const v = Number(n) || 0;
+    try { return v.toLocaleString("es-ES", { style: "currency", currency: "EUR" }); }
+    catch { return `${v} €`; }
+  }
+
+  function setPageTitle(p) {
+    try {
+      if (!p) return;
+      document.title = `${p.name} — CRONOX`;
+      const metaDesc = document.querySelector('meta[name="description"]');
+      if (metaDesc) metaDesc.setAttribute("content", `${p.name} · ${p.desc || "Producto CRONOX"}`);
+    } catch {}
+  }
+
+  function showToast(msg) {
+    if (!toast) return;
+    toast.textContent = msg;
+    toast.classList.add("show");
+    setTimeout(() => toast.classList.remove("show"), 1800);
+  }
+
+  function addToCart(item) {
+    window.dispatchEvent(new CustomEvent("cronox:addToCart", { detail: item }));
+  }
+
+  // ==========================
+  // Catálogo (API + fallback)
+  // ==========================
 
   const localFallbackFactory = () => [
     {
       id: "camiseta-washed-gris",
+      slug: "camiseta-washed-gris",
       name: "Grey Core Tee",
       price: 34.95,
       priceLabel: "34,95 €",
@@ -68,6 +103,7 @@
     },
     {
       id: "camiseta-washed-negra",
+      slug: "camiseta-washed-negra",
       name: "Black Core Tee",
       price: 34.95,
       priceLabel: "34,95 €",
@@ -94,10 +130,10 @@
     if (Array.isArray(product.sizes)) copy.sizes = [...product.sizes];
     if (Array.isArray(product.colors)) copy.colors = [...product.colors];
     if (Array.isArray(product.categories)) copy.categories = [...product.categories];
-    if (Array.isArray(product.variants)) copy.variants = product.variants.map((variant) => ({ ...variant }));
+    if (Array.isArray(product.variants)) copy.variants = product.variants.map(v => ({ ...v }));
     if (product.variantMap && typeof product.variantMap === "object") {
-      copy.variantMap = Object.entries(product.variantMap).reduce((acc, [key, value]) => {
-        acc[key] = { ...value };
+      copy.variantMap = Object.entries(product.variantMap).reduce((acc, [k, v]) => {
+        acc[k] = { ...v };
         return acc;
       }, {});
     }
@@ -127,6 +163,7 @@
       const data = typeof item === "object" && item ? item : {};
       const template = cloneProduct(fallback[index % fallback.length] || {});
       const priceValue = data.price != null ? Number(data.price) : Number(template.price) || 0;
+
       const templateImages = Array.isArray(template.images) ? [...template.images] : [];
       const sourceImages = Array.isArray(data.images) ? [...data.images] : [];
       const candidateImage = data.image || sourceImages[0] || template.image || templateImages[0] || "";
@@ -159,6 +196,7 @@
           : template.colors || [],
         color: data.color || template.color || "",
         desc: data.desc || template.desc || "",
+        slug: data.slug || template.slug || data.id || template.id,
       };
     });
   };
@@ -168,15 +206,15 @@
     if (typeof API.adaptProducts === "function") {
       try {
         const adapted = API.adaptProducts(rawList, fallback);
-        if (Array.isArray(adapted) && adapted.length) {
-          return adapted;
-        }
+        if (Array.isArray(adapted) && adapted.length) return adapted;
       } catch {}
     }
     return adaptCatalogLocally(rawList, fallback);
   };
 
-  let PRODUCTS = cloneProducts(window.CRONOX_PRODUCTS);
+  // empezamos con lo que haya en window.CRONOX_PRODUCTS (por si viene precargado),
+  // pero si no tiene backendId/slug tiraremos de API igualmente
+  let PRODUCTS = cloneProducts(window.CRONOX_PRODUCTS || []);
 
   const setProducts = (list) => {
     PRODUCTS = cloneProducts(list);
@@ -192,9 +230,12 @@
   };
 
   async function ensureCatalog() {
-    if (Array.isArray(PRODUCTS) && PRODUCTS.length) {
-      return PRODUCTS;
-    }
+    const hasUsefulData =
+      Array.isArray(PRODUCTS) &&
+      PRODUCTS.length &&
+      (PRODUCTS[0].backendId || PRODUCTS[0].slug || typeof PRODUCTS[0].id === "string");
+
+    if (hasUsefulData) return PRODUCTS;
 
     try {
       const fromApi = await loadProductsFromApi();
@@ -211,7 +252,9 @@
     }
   }
 
-  // --- Utils ---
+  // ==========================
+  // Localizar producto por la URL
+  // ==========================
   function getProductKey() {
     try {
       const url = new URL(window.location.href);
@@ -232,95 +275,15 @@
       return "";
     }
   }
-  function money(n) {
-    const v = Number(n) || 0;
-    try { return v.toLocaleString("es-ES", { style: "currency", currency: "EUR" }); }
-    catch { return `${v} €`; }
-  }
-  function setPageTitle(p) {
-    try {
-      if (!p) return;
-      document.title = `${p.name} — CRONOX`;
-      const metaDesc = document.querySelector('meta[name="description"]');
-      if (metaDesc) metaDesc.setAttribute("content", `${p.name} · ${p.desc || "Producto CRONOX"}`);
-    } catch {}
-  }
 
-  // --- Carrito ---
-  function addToCart(item) {
-    window.dispatchEvent(new CustomEvent("cronox:addToCart", { detail: item }));
-  }
-  function showToast(msg) {
-    if (!toast) return;
-    toast.textContent = msg;
-    toast.classList.add("show");
-    setTimeout(() => toast.classList.remove("show"), 1800);
-  }
-
-  // --- Relacionados ---
-  function similarityScore(a, b) {
-    let score = 0;
-    if (a.color && b.color && a.color === b.color) score += 1;
-    const ac = Array.isArray(a.categories) ? a.categories : [];
-    const bc = Array.isArray(b.categories) ? b.categories : [];
-    if (ac.length && bc.length && ac.some(c => bc.includes(c))) score += 2;
-    return score;
-  }
-  function getRelated(current, max = 4) {
-    const currentId = current?.id != null ? String(current.id) : "";
-    const currentSlug = current?.slug ? String(current.slug) : "";
-    const pool = PRODUCTS.filter(x => {
-      const pid = x?.id != null ? String(x.id) : "";
-      const slug = x?.slug ? String(x.slug) : "";
-      return pid !== currentId && (!currentSlug || slug !== currentSlug);
-    });
-    return pool
-      .map(x => ({ p: x, s: similarityScore(current, x) }))
-      .sort((u, v) => v.s - u.s)
-      .slice(0, max)
-      .map(o => o.p);
-  }
-  function cardHTML(p) {
-    const href = p.slug
-      ? `/producto.html?slug=${encodeURIComponent(p.slug)}`
-      : `/producto.html?id=${encodeURIComponent(p.id)}`;
-    return `
-      <a class="product-card" href="${href}" aria-label="${p.name}">
-        <img class="product-img" src="${p.image}" alt="${p.name}" loading="lazy" decoding="async">
-        <div class="product-card__info">
-          <h3 class="product-name">${p.name}</h3>
-          <p class="product-price">${p.priceLabel || money(p.price)}</p>
-        </div>
-      </a>
-    `;
-  }
-  function renderRelated(current) {
-    if (!relatedGrid) return;
-    const rel = getRelated(current, 4);
-    relatedGrid.innerHTML = rel.map(cardHTML).join("");
-  }
-
-  // --- Render PDP ---
-  function normalizeSizes(list) {
-    const arr = Array.isArray(list) && list.length ? list : ["M"];
-    const seen = new Set();
-    return arr
-      .map(s => String(s || "").trim().toUpperCase())
-      .filter(s => {
-        if (!s) return false;
-        if (seen.has(s)) return false;
-        seen.add(s);
-        return true;
-      });
-  }
-
+  // ==========================
+  // Galería de imágenes
+  // ==========================
   function sanitizeImages(list, fallback) {
     const result = [];
     const push = (src) => {
       const value = typeof src === "string" ? src.trim() : "";
-      if (value && !result.includes(value)) {
-        result.push(value);
-      }
+      if (value && !result.includes(value)) result.push(value);
     };
     if (Array.isArray(list)) list.forEach(push);
     push(fallback);
@@ -428,9 +391,7 @@
       pThumbs.querySelectorAll(".pdp__thumb").forEach(btn => {
         btn.addEventListener("click", () => {
           const idx = Number(btn.dataset.index);
-          if (!Number.isNaN(idx)) {
-            showImage(idx);
-          }
+          if (!Number.isNaN(idx)) showImage(idx);
         });
       });
     }
@@ -491,10 +452,24 @@
     });
 
     pMedia.addEventListener("mouseleave", () => {
-      if (zoomLevel !== 0) {
-        resetZoom();
-      }
+      if (zoomLevel !== 0) resetZoom();
     });
+  }
+
+  // ==========================
+  // Tallas
+  // ==========================
+  function normalizeSizes(list) {
+    const arr = Array.isArray(list) && list.length ? list : ["M"];
+    const seen = new Set();
+    return arr
+      .map(s => String(s || "").trim().toUpperCase())
+      .filter(s => {
+        if (!s) return false;
+        if (seen.has(s)) return false;
+        seen.add(s);
+        return true;
+      });
   }
 
   function setupSizeButtons(product) {
@@ -525,11 +500,8 @@
     };
 
     const firstButton = buttons.find((btn) => !btn.disabled) || buttons[0];
-    if (firstButton) {
-      activate(firstButton);
-    } else {
-      selectedSize = "";
-    }
+    if (firstButton) activate(firstButton);
+    else selectedSize = "";
 
     buttons.forEach(btn => {
       btn.addEventListener("click", () => activate(btn));
@@ -538,32 +510,85 @@
     syncAddButtonWidth();
   }
 
-  function render(p) {
-    if (!p) return;
+  // ==========================
+  // Relacionados
+  // ==========================
+  function similarityScore(a, b) {
+    let score = 0;
+    if (a.color && b.color && a.color === b.color) score += 1;
+    const ac = Array.isArray(a.categories) ? a.categories : [];
+    const bc = Array.isArray(b.categories) ? b.categories : [];
+    if (ac.length && bc.length && ac.some(c => bc.includes(c))) score += 2;
+    return score;
+  }
 
-    setupGallery(p);
-    if (pName)  pName.textContent  = p.name || "";
-    if (pPrice) pPrice.textContent = p.priceLabel || money(p.price);
-    if (pDesc)  pDesc.textContent  = p.desc || "";
+  function getRelated(current, max = 4) {
+    const currentId = current?.id != null ? String(current.id) : "";
+    const currentSlug = current?.slug ? String(current.slug) : "";
+    const pool = PRODUCTS.filter(x => {
+      const pid = x?.id != null ? String(x.id) : "";
+      const slug = x?.slug ? String(x.slug) : "";
+      return pid !== currentId && (!currentSlug || slug !== currentSlug);
+    });
+    return pool
+      .map(x => ({ p: x, s: similarityScore(current, x) }))
+      .sort((u, v) => v.s - u.s)
+      .slice(0, max)
+      .map(o => o.p);
+  }
 
-    setupSizeButtons(p);
+  function cardHTML(p) {
+    const href = p.slug
+      ? `/producto.html?slug=${encodeURIComponent(p.slug)}`
+      : `/producto.html?id=${encodeURIComponent(p.id)}`;
+    return `
+      <a class="product-card" href="${href}" aria-label="${p.name}">
+        <img class="product-img" src="${p.image}" alt="${p.name}" loading="lazy" decoding="async">
+        <div class="product-card__info">
+          <h3 class="product-name">${p.name}</h3>
+          <p class="product-price">${p.priceLabel || money(p.price)}</p>
+        </div>
+      </a>
+    `;
+  }
 
-    setPageTitle(p);
-    renderRelated(p);
+  function renderRelated(current) {
+    if (!relatedGrid) return;
+    const rel = getRelated(current, 4);
+    relatedGrid.innerHTML = rel.map(cardHTML).join("");
+  }
 
+  // ==========================
+  // Render PDP + back suave
+  // ==========================
+  function render(product) {
+    if (!product) {
+      if (pName) pName.textContent = "Producto no disponible";
+      if (pDesc) pDesc.textContent = "Este producto ya no está activo en la colección.";
+      return;
+    }
+
+    setupGallery(product);
+
+    if (pName)  pName.textContent  = product.name || "";
+    if (pPrice) pPrice.textContent = product.priceLabel || money(product.price);
+    if (pDesc)  pDesc.textContent  = product.desc || "";
+
+    setupSizeButtons(product);
+    setPageTitle(product);
+    renderRelated(product);
     syncAddButtonWidth();
 
     window.scrollTo({ top: 0, left: 0, behavior: "instant" });
   }
 
-  // --- Back suave (fade-out) + guardar id para volver ---
   function setupBackLinks(currentId) {
     const links = document.querySelectorAll('a.js-back[href^="index.html#store"]');
     links.forEach(a => {
       a.addEventListener("click", (e) => {
         const prefersReduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
         try { sessionStorage.setItem(RETURN_KEY, currentId); } catch {}
-        if (prefersReduced) return;
+        if (prefersReduced) return; // navegación normal
 
         e.preventDefault();
         document.documentElement.classList.add("page-exit");
@@ -574,74 +599,84 @@
     });
   }
 
-  // --- Init ---
+  // ==========================
+  // INIT
+  // ==========================
   async function init() {
-    const id = getProductKey();
+    const key = getProductKey();
     const catalog = await ensureCatalog();
 
+    // limpiamos posibles productos corruptos
     const cleanedCatalog = catalog.filter((item) => Boolean(item && (item.id || item.slug)));
     if (cleanedCatalog.length !== catalog.length) {
       setProducts(cleanedCatalog);
     }
 
+    const keyNorm = String(key || "").trim();
     let target = cleanedCatalog.find((x) => {
       const pid = x?.id != null ? String(x.id) : "";
       const slug = x?.slug ? String(x.slug) : "";
-      return pid === id || (slug && slug === id);
+      return pid === keyNorm || slug === keyNorm;
     });
 
-    if (!target) {
-      const fallback = getFallbackList();
-      setProducts(fallback);
-      target = fallback.find((x) => {
-        const pid = x?.id != null ? String(x.id) : "";
-        const slug = x?.slug ? String(x.slug) : "";
-        return pid === id || (slug && slug === id);
+    // búsqueda más laxa (por si cambia algo en el slug)
+    if (!target && keyNorm) {
+      const lower = keyNorm.toLowerCase();
+      target = cleanedCatalog.find((x) => {
+        const pid = (x?.id != null ? String(x.id) : "").toLowerCase();
+        const slug = (x?.slug ? String(x.slug) : "").toLowerCase();
+        return pid === lower || slug === lower;
       });
     }
 
+    // si sigue sin encontrarlo, muestra el primer producto en vez de redirigir
     if (!target) {
-      window.location.replace("index.html#store");
-      return;
+      console.warn("[CRONOX] Producto no encontrado para clave:", keyNorm);
+      target = cleanedCatalog[0] || getFallbackList()[0] || null;
     }
 
     render(target);
 
-    pAdd?.addEventListener("click", () => {
-      const normalizedSizes = normalizeSizes(target.sizes);
-      const fallbackSize = normalizedSizes[0] || "M";
-      const size = (selectedSize || fallbackSize || "M").toUpperCase();
-      const variant = findVariantForSize(target, size);
+    // botón añadir al carrito
+    if (target && pAdd) {
+      pAdd.addEventListener("click", () => {
+        const normalizedSizes = normalizeSizes(target.sizes);
+        const fallbackSize = normalizedSizes[0] || "M";
+        const size = (selectedSize || fallbackSize || "M").toUpperCase();
+        const variant = findVariantForSize(target, size);
 
-      if (!variant || !variant.id) {
-        alert("No hay stock disponible para esa talla ahora mismo.");
-        return;
-      }
+        if (!variant || !variant.id) {
+          alert("No hay stock disponible para esa talla ahora mismo.");
+          return;
+        }
 
-      addToCart({
-        id: target.id,
-        productId: target.backendId || target.id,
-        slug: target.slug,
-        name: target.name,
-        price: Number(variant.price ?? target.price) || 0,
-        priceLabel: variant.priceLabel || target.priceLabel || money(target.price),
-        priceCents: variant.priceCents ?? target.priceCents,
-        image: target.image,
-        size,
-        color: target.color || (target.colors?.[0]) || 'Único',
-        qty: 1,
-        variantId: variant.id,
+        addToCart({
+          id: target.id,
+          productId: target.backendId || target.id,
+          slug: target.slug,
+          name: target.name,
+          price: Number(variant.price ?? target.price) || 0,
+          priceLabel: variant.priceLabel || target.priceLabel || money(target.price),
+          priceCents: variant.priceCents ?? target.priceCents,
+          image: target.image,
+          size,
+          color: target.color || (target.colors?.[0]) || "Único",
+          qty: 1,
+          variantId: variant.id,
+        });
+        showToast("Añadido al carrito ✓");
       });
-      showToast("Añadido al carrito ✓");
-    });
+    }
 
-    setupBackLinks(String(target.slug || target.id || ""));
+    setupBackLinks(String(target ? (target.slug || target.id || "") : ""));
   }
 
   window.addEventListener("resize", syncAddButtonWidth);
 
+  // OJO: aquí ya no redirigimos nunca a index.html#store.
   init().catch((error) => {
     console.error("[CRONOX] Error inicializando la PDP:", error);
-    window.location.replace("index.html#store");
+    // si hay error gordo, al menos mostramos mensaje
+    render(null);
   });
 })();
