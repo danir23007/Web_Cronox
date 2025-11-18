@@ -114,10 +114,16 @@
       sourceImages.forEach(pushImage);
       templateImages.forEach(pushImage);
 
+      const backendId = data.backendId != null
+        ? data.backendId
+        : (data.id != null ? data.id : template.backendId);
+
       return {
         ...template,
         ...data,
         id: data.id != null ? String(data.id) : template.id || `product-${index + 1}`,
+        backendId: backendId != null ? backendId : undefined,
+        slug: data.slug || template.slug || undefined,
         name: data.name || template.name || "Producto CRONOX",
         price: priceValue,
         priceLabel: data.priceLabel || template.priceLabel || euros(priceValue),
@@ -153,8 +159,25 @@
 
   let PRODUCTS = [];
 
+  const normalizeProduct = (product) => {
+    const copy = cloneProduct(product || {});
+    const backendId = copy.backendId != null
+      ? copy.backendId
+      : (copy.id != null ? copy.id : undefined);
+    const id = copy.id != null
+      ? String(copy.id)
+      : (backendId != null ? String(backendId) : "");
+    return {
+      ...copy,
+      id,
+      backendId: backendId != null ? backendId : undefined,
+      slug: copy.slug || undefined,
+    };
+  };
+
   const setProducts = (list) => {
-    PRODUCTS = cloneProducts(list);
+    const normalized = Array.isArray(list) ? list.map(normalizeProduct) : [];
+    PRODUCTS = normalized;
     window.CRONOX_PRODUCTS = PRODUCTS;
   };
 
@@ -272,10 +295,11 @@
     qaLink.addEventListener("click", (e) => {
       e.preventDefault();
       if (!qaCurrentProduct) return;
+      const key = qaCurrentProduct.slug || qaCurrentProduct.id;
       if (qaCurrentProduct.slug) {
-        window.location.href = `/producto.html?slug=${encodeURIComponent(qaCurrentProduct.slug)}`;
+        window.location.href = `/producto.html?slug=${encodeURIComponent(key)}`;
       } else {
-        window.location.href = `/producto.html?id=${encodeURIComponent(qaCurrentProduct.id)}`;
+        window.location.href = `/producto.html?id=${encodeURIComponent(key)}`;
       }
     });
   }
@@ -371,10 +395,11 @@
 
     setupQuickAddSizes(product);
 
+    const key = product.slug || product.id;
     if (product.slug) {
-      qaLink.href = `/producto.html?slug=${encodeURIComponent(product.slug)}`;
+      qaLink.href = `/producto.html?slug=${encodeURIComponent(key)}`;
     } else {
-      qaLink.href = `/producto.html?id=${encodeURIComponent(product.id)}`;
+      qaLink.href = `/producto.html?id=${encodeURIComponent(key)}`;
     }
 
     qaOverlay.setAttribute("aria-hidden","false");
@@ -399,18 +424,18 @@
 
   // ======= Tarjeta con mini-galería + botón "+" clásico =======
   function createCard(p) {
-    const slug = p.slug || p.id;
+    const key = p.slug || String(p.id) || String(p.backendId);
     const detailHref = p.slug
-      ? `/producto.html?slug=${encodeURIComponent(p.slug)}`
-      : p.id
-        ? `/producto.html?id=${encodeURIComponent(p.id)}`
+      ? `/producto.html?slug=${encodeURIComponent(key)}`
+      : key
+        ? `/producto.html?id=${encodeURIComponent(key)}`
         : "#";
 
     const a = document.createElement("a");
     a.href = detailHref;
     a.className = "product-card";
-    a.setAttribute("data-id", slug);
-    if (slug) a.setAttribute("data-slug", slug);
+    if (key) a.setAttribute("data-id", key);
+    if (p.slug) a.setAttribute("data-slug", p.slug);
 
     const media = document.createElement("div");
     media.className = "product-media";
@@ -584,7 +609,7 @@
   window.addEventListener("pageshow", (e) => { if (e.persisted) restoreScrollOrFocus(); });
 
   async function loadCatalog() {
-    const fallback = cloneProducts(fallbackFactory());
+    const fallback = adaptCatalog(cloneProducts(fallbackFactory()));
     if (!API || typeof API.getProducts !== "function") {
       return { products: fallback, source: "fallback" };
     }
@@ -594,7 +619,7 @@
       if (!Array.isArray(raw) || !raw.length) {
         throw new Error("Catálogo vacío");
       }
-      return { products: cloneProducts(raw), source: "api" };
+      return { products: adaptCatalog(raw), source: "api" };
     } catch (error) {
       console.warn("[CRONOX] No se pudo cargar el catálogo desde la API, usando fallback local.", error);
       return { products: fallback, source: "fallback" };
