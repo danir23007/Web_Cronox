@@ -4,6 +4,8 @@
 (function(){
   const KEY = 'cronox:favs';
 
+  const SELECTOR = '.fav-toggle';
+
   function getFavs(){
     try {
       const raw = localStorage.getItem(KEY);
@@ -36,40 +38,66 @@
     setFavs(next);
   }
 
-  // Inicializa en las tarjetas visibles
-  window.addEventListener('DOMContentLoaded', () => {
-    document.querySelectorAll('.product-card').forEach(card => {
-      const id = card.dataset.id || card.querySelector('.product-name')?.textContent.trim();
+  const getProductData = (btn) => {
+    const card = btn.closest('.product-card');
+    const product = {
+      id: btn.dataset.id || card?.dataset.id || card?.dataset.slug || '',
+      name: btn.dataset.name || card?.querySelector('.product-name')?.textContent?.trim() || 'Producto',
+      price: btn.dataset.price || card?.querySelector('.product-price')?.textContent?.trim() || '',
+      image: btn.dataset.image || card?.querySelector('img')?.src || ''
+    };
+    product.id = String(product.id || '').trim();
+    return product;
+  };
+
+  const syncActiveState = () => {
+    const favs = getFavs();
+    const ids = new Set(favs.map((f) => f && f.id).filter(Boolean));
+    document.querySelectorAll(SELECTOR).forEach((btn) => {
+      const { id } = getProductData(btn);
       if (!id) return;
-
-      // Crear botón estrella
-      const btn = document.createElement('div');
-      btn.className = 'fav-toggle';
-      btn.innerHTML = `
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
-          <polygon points="12 2 15.09 8.26 22 9.27 17.3 13.97 18.18 21
-            12 17.77 5.82 21 6.7 13.97 2 9.27 8.91 8.26 12 2"></polygon>
-        </svg>
-      `;
-      card.style.position = 'relative';
-      card.appendChild(btn);
-
-      // Estado inicial
-      const productData = {
-        id,
-        name: card.querySelector('.product-name')?.textContent.trim() || 'Producto',
-        price: card.querySelector('.product-price')?.textContent.trim() || '',
-        image: card.querySelector('img')?.src || ''
-      };
-      if (isFav(id)) btn.classList.add('active');
-
-      // Evento de clic
-      btn.addEventListener('click', (ev) => {
-        ev.preventDefault();
-        ev.stopPropagation();
-        btn.classList.toggle('active');
-        toggleFav(productData);
-      });
+      btn.classList.toggle('active', ids.has(id));
     });
+  };
+
+  const handleClick = (btn) => {
+    const product = getProductData(btn);
+    if (!product.id) return;
+    btn.classList.toggle('active');
+    toggleFav(product);
+  };
+
+  const initBtn = (btn) => {
+    if (!btn || btn.dataset.favReady === '1') return;
+    btn.dataset.favReady = '1';
+    const product = getProductData(btn);
+    if (product.id && isFav(product.id)) btn.classList.add('active');
+    btn.addEventListener('click', (ev) => {
+      ev.preventDefault();
+      ev.stopPropagation();
+      handleClick(btn);
+    });
+  };
+
+  const initAll = () => {
+    document.querySelectorAll(SELECTOR).forEach(initBtn);
+  };
+
+  const observer = new MutationObserver((mutations) => {
+    for (const mutation of mutations) {
+      mutation.addedNodes.forEach((node) => {
+        if (!(node instanceof Element)) return;
+        if (node.matches?.(SELECTOR)) initBtn(node);
+        node.querySelectorAll?.(SELECTOR).forEach(initBtn);
+      });
+    }
   });
+
+  window.addEventListener('DOMContentLoaded', () => {
+    initAll();
+    try { observer.observe(document.body, { childList: true, subtree: true }); } catch {}
+  });
+
+  window.addEventListener('cronox:favsChanged', syncActiveState);
+  window.addEventListener('storage', (e) => { if (e.key === KEY) syncActiveState(); });
 })();
