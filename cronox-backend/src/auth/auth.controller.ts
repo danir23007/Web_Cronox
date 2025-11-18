@@ -4,101 +4,73 @@ import {
   Get,
   HttpCode,
   HttpStatus,
-  Patch,
   Post,
   Req,
+  Res,
   UnauthorizedException,
   UseGuards,
 } from '@nestjs/common';
-import type { Request } from 'express';
+import type { Request, Response } from 'express';
+import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { AuthService } from './auth.service';
-import { CartService } from '../cart/cart.service';
-import { ChangePasswordDto } from './dto/change-password.dto';
-import { ForgotDto } from './dto/forgot.dto';
-import { LoginDto } from './dto/login.dto';
-import { RefreshDto } from './dto/refresh.dto';
-import { RegisterDto } from './dto/register.dto';
-import { ResetDto } from './dto/reset.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { RefreshJwtGuard } from './guards/refresh-jwt.guard';
+import { LoginDto } from './dto/login.dto';
+import { RegisterDto } from './dto/register.dto';
 
 @Controller('auth')
 export class AuthController {
-  constructor(
-    private readonly authService: AuthService,
-    private readonly cartService: CartService,
-  ) {}
+  constructor(private readonly authService: AuthService) {}
 
   @Post('register')
-  async register(@Body() dto: RegisterDto) {
-    return this.authService.register(dto);
+  async register(
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+    @Body() dto: RegisterDto,
+  ) {
+    const result = await this.authService.register(dto);
+    const cookies = (req as Request & { cookies?: Record<string, string | undefined> }).cookies;
+    await this.authService.mergeCartOnLogin(result.user.id, cookies?.cartId);
+    this.authService.setAuthCookies(res, result.tokens);
+    return { user: result.user };
   }
 
   @Post('login')
-  async login(@Req() req: Request, @Body() dto: LoginDto) {
+  async login(
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+    @Body() dto: LoginDto,
+  ) {
     const result = await this.authService.login(dto);
-
-    const cookies = (req as Request & {
-      cookies?: Record<string, string | undefined>;
-    }).cookies;
-
-    await this.cartService.mergeOnLogin(result.user.id, cookies?.cartId);
-
-    return result;
-  }
-
-  @Post('refresh')
-  @UseGuards(RefreshJwtGuard)
-  async refresh(@Req() req: Request) {
-    const user = req.user;
-    if (!user) {
-      throw new UnauthorizedException('Usuario no autenticado');
-    }
-    const refreshToken = (req as Request & { refreshToken?: string }).refreshToken;
-    return this.authService.refreshTokens(user.id, refreshToken);
+    const cookies = (req as Request & { cookies?: Record<string, string | undefined> }).cookies;
+    await this.authService.mergeCartOnLogin(result.user.id, cookies?.cartId);
+    this.authService.setAuthCookies(res, result.tokens);
+    return { user: result.user };
   }
 
   @Post('logout')
   @HttpCode(HttpStatus.NO_CONTENT)
-  async logout(@Req() req: Request, @Body() dto: RefreshDto) {
-    const tokens = await this.authService.extractTokensFromRequest(req, dto);
-    await this.authService.logout(tokens.accessToken, tokens.refreshToken ?? tokens.accessToken);
+  async logout(@Res({ passthrough: true }) res: Response) {
+    this.authService.clearAuthCookies(res);
   }
 
   @Get('me')
   @UseGuards(JwtAuthGuard)
-  async me(@Req() req: Request) {
-    const user = req.user;
-    if (!user) {
+  async me(@CurrentUser('id') userId: number) {
+    return this.authService.getProfile(userId);
+  }
+
+  @Post('refresh')
+  @UseGuards(RefreshJwtGuard)
+  async refresh(@Req() req: Request, @Res({ passthrough: true }) res: Response) {
+    const userId = req.user?.id;
+
+    if (!userId) {
       throw new UnauthorizedException('Usuario no autenticado');
     }
-    return this.authService.getProfile(user.id);
-  }
 
-  @Post('forgot')
-  @HttpCode(HttpStatus.OK)
-  async forgot(@Body() dto: ForgotDto) {
-    await this.authService.forgotPassword(dto);
-    return {
-      message:
-        'Si el email existe recibirás un enlace para restablecer la contraseña',
-    };
-  }
-
-  @Post('reset')
-  @HttpCode(HttpStatus.NO_CONTENT)
-  async reset(@Body() dto: ResetDto) {
-    await this.authService.resetPassword(dto);
-  }
-
-  @Patch('password')
-  @UseGuards(JwtAuthGuard)
-  @HttpCode(HttpStatus.NO_CONTENT)
-  async changePassword(@Req() req: Request, @Body() dto: ChangePasswordDto) {
-    const user = req.user;
-    if (!user) {
-      throw new UnauthorizedException('Usuario no autenticado');
-    }
-    await this.authService.changePassword(user.id, dto);
+    const result = await this.authService.refresh(userId);
+    this.authService.setAuthCookies(res, result.tokens);
+    return { user: result.user };
   }
 }
