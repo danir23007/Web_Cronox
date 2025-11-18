@@ -416,6 +416,52 @@
     getFallbackProducts,
   };
 
+  // ===== AUTH =====
+  api.register = async (payload) => {
+    const data = await request('/auth/register', {
+      method: 'POST',
+      body: payload,
+    });
+    return data?.user || null;
+  };
+
+  api.login = async (credentials) => {
+    const data = await request('/auth/login', {
+      method: 'POST',
+      body: credentials,
+    });
+    return data?.user || null;
+  };
+
+  api.logout = async () => {
+    await request('/auth/logout', { method: 'POST' });
+  };
+
+  api.getMe = async () => {
+    const data = await request('/auth/me');
+    return data || null;
+  };
+
+  // ===== FAVORITES =====
+  api.getFavorites = async () => {
+    const data = await request('/favorites');
+    return Array.isArray(data)
+      ? data.map((item) => ({ productId: item.productId, id: item.id, createdAt: item.createdAt }))
+      : [];
+  };
+
+  api.addFavorite = async (productId) => {
+    const data = await request('/favorites', {
+      method: 'POST',
+      body: { productId },
+    });
+    return data;
+  };
+
+  api.removeFavorite = async (productId) => {
+    await request(`/favorites/${productId}`, { method: 'DELETE' });
+  };
+
   api.getProducts = async (query = {}) => {
     try {
       const data = await request('/products', { query });
@@ -481,21 +527,6 @@
           priceLabel: formatCents(method.priceCents ?? method.price ?? 0),
         }))
       : [];
-  };
-
-  api.login = async (credentials) => {
-    const data = await request('/auth/login', {
-      method: 'POST',
-      body: credentials,
-    });
-    if (data?.tokens) {
-      writeAuthState(data.tokens);
-    }
-    return data;
-  };
-
-  api.logout = () => {
-    writeAuthState(null);
   };
 
   const ensureFallbackList = (list) => {
