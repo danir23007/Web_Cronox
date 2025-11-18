@@ -176,10 +176,15 @@
       sourceImages.forEach(pushImage);
       templateImages.forEach(pushImage);
 
+      const backendId = data.backendId != null
+        ? data.backendId
+        : (data.id != null ? data.id : template.backendId);
+
       return {
         ...template,
         ...data,
         id: data.id != null ? String(data.id) : template.id || `product-${index + 1}`,
+        backendId: backendId != null ? backendId : undefined,
         name: data.name || template.name || "Producto CRONOX",
         price: priceValue,
         priceLabel: data.priceLabel || template.priceLabel || money(priceValue),
@@ -196,7 +201,7 @@
           : template.colors || [],
         color: data.color || template.color || "",
         desc: data.desc || template.desc || "",
-        slug: data.slug || template.slug || data.id || template.id,
+        slug: data.slug || template.slug || undefined,
       };
     });
   };
@@ -212,12 +217,28 @@
     return adaptCatalogLocally(rawList, fallback);
   };
 
+  const normalizeProduct = (product) => {
+    const copy = cloneProduct(product || {});
+    const backendId = copy.backendId != null
+      ? copy.backendId
+      : (copy.id != null ? copy.id : undefined);
+    const id = copy.id != null
+      ? String(copy.id)
+      : (backendId != null ? String(backendId) : "");
+    return {
+      ...copy,
+      id,
+      backendId: backendId != null ? backendId : undefined,
+      slug: copy.slug || undefined,
+    };
+  };
+
   // empezamos con lo que haya en window.CRONOX_PRODUCTS (por si viene precargado),
   // pero si no tiene backendId/slug tiraremos de API igualmente
-  let PRODUCTS = cloneProducts(window.CRONOX_PRODUCTS || []);
+  let PRODUCTS = cloneProducts(window.CRONOX_PRODUCTS || []).map(normalizeProduct);
 
   const setProducts = (list) => {
-    PRODUCTS = cloneProducts(list);
+    PRODUCTS = Array.isArray(list) ? list.map(normalizeProduct) : [];
     window.CRONOX_PRODUCTS = PRODUCTS;
   };
 
@@ -230,12 +251,10 @@
   };
 
   async function ensureCatalog() {
-    const hasUsefulData =
-      Array.isArray(PRODUCTS) &&
-      PRODUCTS.length &&
-      (PRODUCTS[0].backendId || PRODUCTS[0].slug || typeof PRODUCTS[0].id === "string");
+    const hasCatalog = Array.isArray(PRODUCTS) && PRODUCTS.length;
+    const hasIdentifiers = hasCatalog && PRODUCTS.some((p) => p.backendId != null || p.slug);
 
-    if (hasUsefulData) return PRODUCTS;
+    if (hasCatalog && hasIdentifiers) return PRODUCTS;
 
     try {
       const fromApi = await loadProductsFromApi();
@@ -612,27 +631,28 @@
       setProducts(cleanedCatalog);
     }
 
-    const keyNorm = String(key || "").trim();
-    let target = cleanedCatalog.find((x) => {
-      const pid = x?.id != null ? String(x.id) : "";
-      const slug = x?.slug ? String(x.slug) : "";
-      return pid === keyNorm || slug === keyNorm;
-    });
+    const keyStr = String(key || "").trim();
+    let target = cleanedCatalog.find((p) =>
+      (p.slug && p.slug === keyStr) ||
+      String(p.id) === keyStr ||
+      String(p.backendId || "") === keyStr
+    );
 
-    // búsqueda más laxa (por si cambia algo en el slug)
-    if (!target && keyNorm) {
-      const lower = keyNorm.toLowerCase();
-      target = cleanedCatalog.find((x) => {
-        const pid = (x?.id != null ? String(x.id) : "").toLowerCase();
-        const slug = (x?.slug ? String(x.slug) : "").toLowerCase();
-        return pid === lower || slug === lower;
+    if (!target && keyStr) {
+      const lower = keyStr.toLowerCase();
+      target = cleanedCatalog.find((p) => {
+        const pid = String(p.id || "").toLowerCase();
+        const slug = String(p.slug || "").toLowerCase();
+        const backend = String(p.backendId || "").toLowerCase();
+        return pid === lower || slug === lower || backend === lower;
       });
     }
 
-    // si sigue sin encontrarlo, muestra el primer producto en vez de redirigir
     if (!target) {
-      console.warn("[CRONOX] Producto no encontrado para clave:", keyNorm);
-      target = cleanedCatalog[0] || getFallbackList()[0] || null;
+      console.warn("[CRONOX] Producto no encontrado para clave:", keyStr);
+      render(null);
+      setupBackLinks("");
+      return;
     }
 
     render(target);
@@ -650,6 +670,8 @@
           return;
         }
 
+        const image = (Array.isArray(target.images) && target.images[0]) || target.image;
+
         addToCart({
           id: target.id,
           productId: target.backendId || target.id,
@@ -658,7 +680,7 @@
           price: Number(variant.price ?? target.price) || 0,
           priceLabel: variant.priceLabel || target.priceLabel || money(target.price),
           priceCents: variant.priceCents ?? target.priceCents,
-          image: target.image,
+          image,
           size,
           color: target.color || (target.colors?.[0]) || "Único",
           qty: 1,

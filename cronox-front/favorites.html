@@ -118,12 +118,14 @@
     // MISMA tarjeta que tienda (estructura y clases),
     // usando rutas ABSOLUTAS a /producto.html
     function createStoreLikeCard(p){
+      const key = p.slug || String(p.id) || String(p.backendId || "");
       const a = document.createElement('a');
       a.href = p.slug
         ? `/producto.html?slug=${encodeURIComponent(p.slug)}`
-        : `/producto.html?id=${encodeURIComponent(p.id)}`;
+        : `/producto.html?id=${encodeURIComponent(key)}`;
       a.className = 'product-card';
-      a.setAttribute('data-id', p.id);
+      if (key) a.setAttribute('data-id', key);
+      if (p.slug) a.setAttribute('data-slug', p.slug);
 
       const media   = document.createElement('div');
       media.className = 'product-media';
