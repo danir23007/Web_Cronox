@@ -609,7 +609,8 @@ window.CRONOX_USER = window.CRONOX_USER || null;
     const tabs = document.querySelectorAll('.auth-tab');
 
     if (profileBtn) {
-      profileBtn.addEventListener('click', () => {
+      profileBtn.addEventListener('click', (ev) => {
+        ev.preventDefault();
         if (window.CRONOX_USER) {
           // De momento, si estás logueado, mostramos opción de logout directa
           const confirmed = confirm('¿Cerrar sesión?');
@@ -644,6 +645,11 @@ window.CRONOX_USER = window.CRONOX_USER || null;
 
     if (registerForm) {
       registerForm.addEventListener('submit', handleRegisterSubmit);
+    }
+
+    // [AUTH] Asegurar modal oculto al cargar y estado de sesión inicial
+    if (overlay) {
+      overlay.classList.add('auth-hidden');
     }
 
     // Inicializar estado de sesión

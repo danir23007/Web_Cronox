@@ -419,3 +419,8 @@ a.product-card{display:block;text-decoration:none;color:inherit;cursor:pointer;}
   color: #f5f5f5;
   min-height: 16px;
 }
+
+/* [AUTH] Asegurar que el modal permanezca oculto cuando corresponde */
+.auth-overlay.auth-hidden {
+  display: none !important;
+}
