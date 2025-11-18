@@ -384,6 +384,57 @@
     .toast.show{ opacity:1; transform:translateX(-50%) translateY(0); }
   </style>
 </head>
+<!-- [AUTH] Modal de login/registro -->
+<div id="authOverlay" class="auth-overlay auth-hidden">
+  <div class="auth-modal">
+    <button class="auth-close" id="authCloseBtn" aria-label="Cerrar">✕</button>
+
+    <div class="auth-tabs">
+      <button class="auth-tab auth-tab--active" data-auth-tab="login">Iniciar sesión</button>
+      <button class="auth-tab" data-auth-tab="register">Crear cuenta</button>
+    </div>
+
+    <div class="auth-views">
+      <!-- Vista login -->
+      <form id="authLoginForm" class="auth-view auth-view--active" data-auth-view="login">
+        <h2 class="auth-title">Inicia sesión</h2>
+        <label class="auth-label">
+          Email
+          <input type="email" id="authLoginEmail" class="auth-input" required autocomplete="email">
+        </label>
+        <label class="auth-label">
+          Contraseña
+          <input type="password" id="authLoginPassword" class="auth-input" required autocomplete="current-password">
+        </label>
+        <button type="submit" class="auth-button">Entrar</button>
+        <button type="button" class="auth-link" id="authForgotBtn">
+          ¿Has olvidado la contraseña?
+        </button>
+      </form>
+
+      <!-- Vista registro -->
+      <form id="authRegisterForm" class="auth-view" data-auth-view="register">
+        <h2 class="auth-title">Crear cuenta</h2>
+        <label class="auth-label">
+          Nombre (opcional)
+          <input type="text" id="authRegisterName" class="auth-input" autocomplete="name">
+        </label>
+        <label class="auth-label">
+          Email
+          <input type="email" id="authRegisterEmail" class="auth-input" required autocomplete="email">
+        </label>
+        <label class="auth-label">
+          Contraseña
+          <input type="password" id="authRegisterPassword" class="auth-input" required autocomplete="new-password">
+        </label>
+        <button type="submit" class="auth-button">Registrarse</button>
+      </form>
+    </div>
+
+    <p class="auth-message" id="authMessage"></p>
+  </div>
+</div>
+
 <body>
 
   <div id="overlay" class="overlay" hidden></div>

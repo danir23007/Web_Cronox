@@ -466,3 +466,187 @@
     mo.observe(document.documentElement,{childList:true,subtree:true});
   }catch{}
 })();
+
+// [AUTH] Lógica de sesión y modal
+window.CRONOX_USER = window.CRONOX_USER || null;
+
+(function () {
+  function selectAuthTab(tab) {
+    const tabs = document.querySelectorAll('.auth-tab');
+    const views = document.querySelectorAll('.auth-view');
+
+    tabs.forEach((t) => {
+      t.classList.toggle('auth-tab--active', t.dataset.authTab === tab);
+    });
+
+    views.forEach((v) => {
+      v.classList.toggle('auth-view--active', v.dataset.authView === tab);
+    });
+  }
+
+  function setAuthMessage(msg) {
+    const el = document.getElementById('authMessage');
+    if (el) el.textContent = msg || '';
+  }
+
+  function openAuthModal(initialTab) {
+    const overlay = document.getElementById('authOverlay');
+    if (!overlay) return;
+    overlay.classList.remove('auth-hidden');
+    document.body.classList.add('CRONOX_lockScroll'); // si ya usas esto para otros overlays
+    selectAuthTab(initialTab || 'login');
+    setAuthMessage('');
+  }
+
+  function closeAuthModal() {
+    const overlay = document.getElementById('authOverlay');
+    if (!overlay) return;
+    overlay.classList.add('auth-hidden');
+    document.body.classList.remove('CRONOX_lockScroll');
+    setAuthMessage('');
+  }
+
+  async function initAuthState() {
+    if (!window.CRONOX_API || !window.CRONOX_API.getMe) return;
+
+    const user = await window.CRONOX_API.getMe();
+    window.CRONOX_USER = user;
+
+    updateProfileIconUI();
+  }
+
+  function updateProfileIconUI() {
+    const profileBtn = document.getElementById('profileBtn');
+    if (!profileBtn) return;
+
+    if (window.CRONOX_USER) {
+      profileBtn.setAttribute('data-auth-state', 'logged');
+      profileBtn.title = window.CRONOX_USER.email || 'Mi cuenta';
+    } else {
+      profileBtn.setAttribute('data-auth-state', 'guest');
+      profileBtn.title = 'Iniciar sesión';
+    }
+  }
+
+  async function handleLoginSubmit(event) {
+    event.preventDefault();
+    if (!window.CRONOX_API || !window.CRONOX_API.login) return;
+
+    const emailInput = document.getElementById('authLoginEmail');
+    const passInput = document.getElementById('authLoginPassword');
+
+    const email = emailInput?.value.trim();
+    const password = passInput?.value;
+
+    if (!email || !password) {
+      setAuthMessage('Rellena email y contraseña.');
+      return;
+    }
+
+    try {
+      setAuthMessage('Iniciando sesión...');
+      const user = await window.CRONOX_API.login({ email, password });
+      window.CRONOX_USER = user;
+      updateProfileIconUI();
+      closeAuthModal();
+    } catch (err) {
+      console.error('[AUTH] login error', err);
+      setAuthMessage('No se ha podido iniciar sesión. Revisa tus datos.');
+    }
+  }
+
+  async function handleRegisterSubmit(event) {
+    event.preventDefault();
+    if (!window.CRONOX_API || !window.CRONOX_API.register) return;
+
+    const nameInput = document.getElementById('authRegisterName');
+    const emailInput = document.getElementById('authRegisterEmail');
+    const passInput = document.getElementById('authRegisterPassword');
+
+    const name = nameInput?.value.trim() || undefined;
+    const email = emailInput?.value.trim();
+    const password = passInput?.value;
+
+    if (!email || !password) {
+      setAuthMessage('Rellena email y contraseña.');
+      return;
+    }
+
+    try {
+      setAuthMessage('Creando cuenta...');
+      const user = await window.CRONOX_API.register({ email, password, name });
+      window.CRONOX_USER = user;
+      updateProfileIconUI();
+      closeAuthModal();
+    } catch (err) {
+      console.error('[AUTH] register error', err);
+      setAuthMessage('No se ha podido crear la cuenta.');
+    }
+  }
+
+  async function handleLogout() {
+    if (!window.CRONOX_API || !window.CRONOX_API.logout) return;
+    try {
+      await window.CRONOX_API.logout();
+    } catch (err) {
+      console.warn('[AUTH] logout error', err);
+    }
+    window.CRONOX_USER = null;
+    updateProfileIconUI();
+  }
+
+  // Exponer funciones globales por si las necesitas
+  window.CRONOX_openAuthModal = openAuthModal;
+  window.CRONOX_closeAuthModal = closeAuthModal;
+  window.CRONOX_logout = handleLogout;
+
+  document.addEventListener('DOMContentLoaded', () => {
+    const profileBtn = document.getElementById('profileBtn');
+    const overlay = document.getElementById('authOverlay');
+    const closeBtn = document.getElementById('authCloseBtn');
+    const loginForm = document.getElementById('authLoginForm');
+    const registerForm = document.getElementById('authRegisterForm');
+    const tabs = document.querySelectorAll('.auth-tab');
+
+    if (profileBtn) {
+      profileBtn.addEventListener('click', () => {
+        if (window.CRONOX_USER) {
+          // De momento, si estás logueado, mostramos opción de logout directa
+          const confirmed = confirm('¿Cerrar sesión?');
+          if (confirmed) {
+            handleLogout();
+          }
+        } else {
+          openAuthModal('login');
+        }
+      });
+    }
+
+    if (overlay && closeBtn) {
+      closeBtn.addEventListener('click', closeAuthModal);
+      overlay.addEventListener('click', (ev) => {
+        if (ev.target === overlay) {
+          closeAuthModal();
+        }
+      });
+    }
+
+    tabs.forEach((tab) => {
+      tab.addEventListener('click', () => {
+        selectAuthTab(tab.dataset.authTab);
+        setAuthMessage('');
+      });
+    });
+
+    if (loginForm) {
+      loginForm.addEventListener('submit', handleLoginSubmit);
+    }
+
+    if (registerForm) {
+      registerForm.addEventListener('submit', handleRegisterSubmit);
+    }
+
+    // Inicializar estado de sesión
+    initAuthState();
+  });
+})();

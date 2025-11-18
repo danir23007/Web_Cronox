@@ -599,3 +599,78 @@
   g.CRONOX_API = api;
   g.CRONOX_API_BASE = API_BASE;
 })(typeof window !== 'undefined' ? window : this);
+
+// [AUTH] API de usuarios (login / registro / sesión)
+// Aseguramos que el objeto existe
+window.CRONOX_API = window.CRONOX_API || {};
+
+// getMe: devuelve usuario o null si 401
+window.CRONOX_API.getMe = async function getMe() {
+  try {
+    const res = await fetch('/auth/me', {
+      method: 'GET',
+      credentials: 'include',
+    });
+
+    if (res.status === 401 || res.status === 403) {
+      return null;
+    }
+
+    if (!res.ok) {
+      console.error('[AUTH] getMe error status', res.status);
+      return null;
+    }
+
+    return await res.json();
+  } catch (err) {
+    console.error('[AUTH] getMe error', err);
+    return null;
+  }
+};
+
+window.CRONOX_API.login = async function login({ email, password }) {
+  const res = await fetch('/auth/login', {
+    method: 'POST',
+    credentials: 'include',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ email, password }),
+  });
+
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    throw new Error(text || 'Error al iniciar sesión');
+  }
+
+  return res.json();
+};
+
+window.CRONOX_API.register = async function register({ email, password, name }) {
+  const res = await fetch('/auth/register', {
+    method: 'POST',
+    credentials: 'include',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ email, password, name }),
+  });
+
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    throw new Error(text || 'Error al crear la cuenta');
+  }
+
+  return res.json();
+};
+
+window.CRONOX_API.logout = async function logout() {
+  try {
+    await fetch('/auth/logout', {
+      method: 'POST',
+      credentials: 'include',
+    });
+  } catch (err) {
+    console.warn('[AUTH] logout error (ignorado)', err);
+  }
+};
