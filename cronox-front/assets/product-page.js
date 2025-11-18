@@ -124,24 +124,26 @@
     ? API.getFallbackProducts.bind(API)
     : localFallbackFactory;
 
-  const cloneProduct = (product = {}) => {
-    const copy = { ...product };
-    if (Array.isArray(product.images)) copy.images = [...product.images];
-    if (Array.isArray(product.sizes)) copy.sizes = [...product.sizes];
-    if (Array.isArray(product.colors)) copy.colors = [...product.colors];
-    if (Array.isArray(product.categories)) copy.categories = [...product.categories];
-    if (Array.isArray(product.variants)) copy.variants = product.variants.map(v => ({ ...v }));
-    if (product.variantMap && typeof product.variantMap === "object") {
-      copy.variantMap = Object.entries(product.variantMap).reduce((acc, [k, v]) => {
-        acc[k] = { ...v };
-        return acc;
-      }, {});
-    }
-    if (product.slug) copy.slug = product.slug;
-    if (product.priceCents != null) copy.priceCents = product.priceCents;
-    if (product.backendId != null) copy.backendId = product.backendId;
-    return copy;
-  };
+  const cloneProduct = typeof API.cloneProduct === "function"
+    ? API.cloneProduct.bind(API)
+    : (product = {}) => {
+        const copy = { ...product };
+        if (Array.isArray(product.images)) copy.images = [...product.images];
+        if (Array.isArray(product.sizes)) copy.sizes = [...product.sizes];
+        if (Array.isArray(product.colors)) copy.colors = [...product.colors];
+        if (Array.isArray(product.categories)) copy.categories = [...product.categories];
+        if (Array.isArray(product.variants)) copy.variants = product.variants.map(v => ({ ...v }));
+        if (product.variantMap && typeof product.variantMap === "object") {
+          copy.variantMap = Object.entries(product.variantMap).reduce((acc, [k, v]) => {
+            acc[k] = { ...v };
+            return acc;
+          }, {});
+        }
+        if (product.slug) copy.slug = product.slug;
+        if (product.priceCents != null) copy.priceCents = product.priceCents;
+        if (product.backendId != null) copy.backendId = product.backendId;
+        return copy;
+      };
 
   const cloneProducts = (list) => (Array.isArray(list) ? list.map(cloneProduct) : []);
 
@@ -153,68 +155,23 @@
     return cloneProducts(localFallbackFactory());
   };
 
-  const adaptCatalogLocally = (rawList, fallbackList) => {
-    const source = Array.isArray(rawList) ? rawList : [];
-    const fallback = Array.isArray(fallbackList) && fallbackList.length
-      ? fallbackList
-      : getFallbackList();
+  const adaptWithApi = typeof API.adaptProducts === "function"
+    ? API.adaptProducts.bind(API)
+    : null;
 
-    return source.map((item, index) => {
-      const data = typeof item === "object" && item ? item : {};
-      const template = cloneProduct(fallback[index % fallback.length] || {});
-      const priceValue = data.price != null ? Number(data.price) : Number(template.price) || 0;
-
-      const templateImages = Array.isArray(template.images) ? [...template.images] : [];
-      const sourceImages = Array.isArray(data.images) ? [...data.images] : [];
-      const candidateImage = data.image || sourceImages[0] || template.image || templateImages[0] || "";
-      const uniqueImages = [];
-      const pushImage = (value) => {
-        const clean = typeof value === "string" ? value.trim() : "";
-        if (clean && !uniqueImages.includes(clean)) uniqueImages.push(clean);
-      };
-      pushImage(candidateImage);
-      sourceImages.forEach(pushImage);
-      templateImages.forEach(pushImage);
-
-      const backendId = data.backendId != null
-        ? data.backendId
-        : (data.id != null ? data.id : template.backendId);
-
-      return {
-        ...template,
-        ...data,
-        id: data.id != null ? String(data.id) : template.id || `product-${index + 1}`,
-        backendId: backendId != null ? backendId : undefined,
-        name: data.name || template.name || "Producto CRONOX",
-        price: priceValue,
-        priceLabel: data.priceLabel || template.priceLabel || money(priceValue),
-        image: candidateImage || uniqueImages[0] || template.image || "",
-        images: uniqueImages,
-        categories: Array.isArray(data.categories) && data.categories.length
-          ? data.categories
-          : template.categories || [],
-        sizes: Array.isArray(data.sizes) && data.sizes.length
-          ? data.sizes
-          : template.sizes || [],
-        colors: Array.isArray(data.colors) && data.colors.length
-          ? data.colors
-          : template.colors || [],
-        color: data.color || template.color || "",
-        desc: data.desc || template.desc || "",
-        slug: data.slug || template.slug || undefined,
-      };
-    });
-  };
+  const ensureFallbackList = typeof API.ensureFallbackList === "function"
+    ? API.ensureFallbackList.bind(API)
+    : null;
 
   const adaptCatalog = (rawList) => {
-    const fallback = getFallbackList();
-    if (typeof API.adaptProducts === "function") {
+    const fallback = ensureFallbackList ? ensureFallbackList(rawList) : getFallbackList();
+    if (adaptWithApi) {
       try {
-        const adapted = API.adaptProducts(rawList, fallback);
+        const adapted = adaptWithApi(rawList, fallback);
         if (Array.isArray(adapted) && adapted.length) return adapted;
       } catch {}
     }
-    return adaptCatalogLocally(rawList, fallback);
+    return cloneProducts(Array.isArray(rawList) && rawList.length ? rawList : fallback);
   };
 
   const normalizeProduct = (product) => {
@@ -233,39 +190,35 @@
     };
   };
 
-  // empezamos con lo que haya en window.CRONOX_PRODUCTS (por si viene precargado),
-  // pero si no tiene backendId/slug tiraremos de API igualmente
-  let PRODUCTS = cloneProducts(window.CRONOX_PRODUCTS || []).map(normalizeProduct);
+  let PRODUCTS = [];
 
   const setProducts = (list) => {
     PRODUCTS = Array.isArray(list) ? list.map(normalizeProduct) : [];
     window.CRONOX_PRODUCTS = PRODUCTS;
   };
 
-  const loadProductsFromApi = async () => {
-    if (!API || typeof API.getProducts !== "function") {
-      throw new Error("Cliente API no disponible");
-    }
-    const raw = await API.getProducts();
-    return adaptCatalog(raw);
-  };
-
   async function ensureCatalog() {
-    const hasCatalog = Array.isArray(PRODUCTS) && PRODUCTS.length;
-    const hasIdentifiers = hasCatalog && PRODUCTS.some((p) => p.backendId != null || p.slug);
+    const globalCatalog = Array.isArray(window.CRONOX_PRODUCTS)
+      ? window.CRONOX_PRODUCTS
+      : [];
+    const hasIdentifiers = globalCatalog.some((p) => p && (p.slug || p.backendId != null));
 
-    if (hasCatalog && hasIdentifiers) return PRODUCTS;
+    if (globalCatalog.length && hasIdentifiers) {
+      setProducts(globalCatalog);
+      return PRODUCTS;
+    }
 
     try {
-      const fromApi = await loadProductsFromApi();
-      if (!Array.isArray(fromApi) || !fromApi.length) {
-        throw new Error("Catálogo vacío");
+      if (!API || typeof API.getProducts !== "function") {
+        throw new Error("Cliente API no disponible");
       }
-      setProducts(fromApi);
+      const raw = await API.getProducts();
+      const adapted = adaptCatalog(raw);
+      setProducts(adapted);
       return PRODUCTS;
     } catch (error) {
       console.warn("[CRONOX] No se pudo cargar el catálogo en PDP, usando fallback local.", error);
-      const fallback = getFallbackList();
+      const fallback = adaptCatalog(getFallbackList());
       setProducts(fallback);
       return PRODUCTS;
     }
@@ -275,24 +228,10 @@
   // Localizar producto por la URL
   // ==========================
   function getProductKey() {
-    try {
-      const url = new URL(window.location.href);
-      const direct = url.searchParams.get("slug") || url.searchParams.get("id");
-      if (direct) return direct;
-
-      const path = (url.pathname || "").split("/").filter(Boolean);
-      const last = path[path.length - 1] || "";
-      if (last && last.toLowerCase() !== "producto.html") {
-        return last.replace(/\.html?$/i, "");
-      }
-
-      const hash = (url.hash || "").replace(/^#/, "").trim();
-      if (hash) return hash.replace(/\.html?$/i, "");
-
-      return "";
-    } catch {
-      return "";
-    }
+    const url = new URL(window.location.href);
+    const slug = url.searchParams.get("slug");
+    const id   = url.searchParams.get("id");
+    return (slug || id || "").trim();
   }
 
   // ==========================
@@ -625,31 +564,20 @@
     const key = getProductKey();
     const catalog = await ensureCatalog();
 
-    // limpiamos posibles productos corruptos
     const cleanedCatalog = catalog.filter((item) => Boolean(item && (item.id || item.slug)));
     if (cleanedCatalog.length !== catalog.length) {
       setProducts(cleanedCatalog);
     }
 
-    const keyStr = String(key || "").trim();
+    const keyLower = String(key || "").trim().toLowerCase();
     let target = cleanedCatalog.find((p) =>
-      (p.slug && p.slug === keyStr) ||
-      String(p.id) === keyStr ||
-      String(p.backendId || "") === keyStr
+      (p.slug && p.slug.toLowerCase() === keyLower) ||
+      String(p.id).toLowerCase() === keyLower ||
+      String(p.backendId || "").toLowerCase() === keyLower
     );
 
-    if (!target && keyStr) {
-      const lower = keyStr.toLowerCase();
-      target = cleanedCatalog.find((p) => {
-        const pid = String(p.id || "").toLowerCase();
-        const slug = String(p.slug || "").toLowerCase();
-        const backend = String(p.backendId || "").toLowerCase();
-        return pid === lower || slug === lower || backend === lower;
-      });
-    }
-
     if (!target) {
-      console.warn("[CRONOX] Producto no encontrado para clave:", keyStr);
+      console.warn("[CRONOX] Producto no encontrado para clave:", keyLower);
       render(null);
       setupBackLinks("");
       return;
