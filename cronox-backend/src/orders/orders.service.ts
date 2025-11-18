@@ -247,7 +247,7 @@ export class OrdersService {
 
       const order = await tx.order.create({
         data: {
-          userId: String(userId), // [FIX] userId es String en Order
+          userId,
           status,
           subtotal: computation.subtotal,
           taxRate: computation.taxRate,
@@ -317,7 +317,7 @@ export class OrdersService {
 
     const orderBy = this.resolveOrderBy(pagination.sort, pagination.order);
 
-    const where = user.role === Role.ADMIN ? {} : { userId: String(user.id) }; // [FIX]
+    const where = user.role === Role.ADMIN ? {} : { userId: user.id };
 
     const [orders, total] = await Promise.all([
       this.prisma.order.findMany({
@@ -353,7 +353,7 @@ export class OrdersService {
       throw new NotFoundException('ORDER_NOT_FOUND');
     }
 
-    const isOwner = String(order.userId) === String(user.id); // [FIX]
+    const isOwner = order.userId === user.id;
     if (user.role !== Role.ADMIN && !isOwner) {
       throw new ForbiddenException('ACCESS_DENIED');
     }

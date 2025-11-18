@@ -9,7 +9,6 @@ export type SafeUser = {
   email: string;
   name?: string | null;
   role: Role;
-  isEmailVerified: boolean;
   createdAt: Date;
   updatedAt: Date;
 };
@@ -18,23 +17,7 @@ export type SafeUser = {
 export class UsersService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async findByEmail(email: string) {
-    return this.prisma.user.findUnique({ where: { email } });
-  }
-
-  async findById(id: number) {
-    return this.prisma.user.findUnique({ where: { id } });
-  }
-
-  async findByEmailForAuth(email: string): Promise<AuthUser | null> {
-    return this.prisma.user.findUnique({ where: { email } });
-  }
-
-  async findByIdForAuth(id: number): Promise<AuthUser | null> {
-    return this.prisma.user.findUnique({ where: { id } });
-  }
-
-  async create(data: {
+  async createUser(data: {
     email: string;
     passwordHash: string;
     name?: string;
@@ -45,45 +28,12 @@ export class UsersService {
     });
   }
 
-  async updatePassword(id: number, passwordHash: string): Promise<void> {
-    await this.prisma.user.update({
-      where: { id },
-      data: { passwordHash },
-    });
+  async findByEmail(email: string) {
+    return this.prisma.user.findUnique({ where: { email } });
   }
 
-  async setRefreshHash(id: number, hash: string): Promise<void> {
-    await this.prisma.user.update({
-      where: { id },
-      data: { refreshTokenHash: hash },
-    });
-  }
-
-  async clearRefreshHash(id: number): Promise<void> {
-    await this.prisma.user.update({
-      where: { id },
-      data: { refreshTokenHash: null },
-    });
-  }
-
-  async setResetToken(id: number, hash: string, exp: Date): Promise<void> {
-    await this.prisma.user.update({
-      where: { id },
-      data: {
-        resetTokenHash: hash,
-        resetTokenExp: exp,
-      },
-    });
-  }
-
-  async clearResetToken(id: number): Promise<void> {
-    await this.prisma.user.update({
-      where: { id },
-      data: {
-        resetTokenHash: null,
-        resetTokenExp: null,
-      },
-    });
+  async findById(id: number) {
+    return this.prisma.user.findUnique({ where: { id } });
   }
 
   async updateProfile(id: number, update: { name?: string }): Promise<SafeUser> {
@@ -117,7 +67,6 @@ export class UsersService {
       email: user.email,
       name: user.name,
       role: user.role,
-      isEmailVerified: user.isEmailVerified,
       createdAt: user.createdAt,
       updatedAt: user.updatedAt,
     };
