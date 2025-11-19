@@ -443,23 +443,43 @@
   };
 
   // ===== FAVORITES =====
-  api.getFavorites = async () => { // [FAVORITES_BACKEND_ONLY]
-    const data = await request('/api/favorites');
+  const normalizeProductId = (value) => { // [FAVORITES_FIX]
+    const num = Number(value);
+    return Number.isFinite(num) ? num : null;
+  };
+
+  api.getFavorites = async () => { // [FAVORITES_BACKEND_ONLY] [FAVORITES_FIX]
+    const data = await request('/api/favorites', {
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+    });
     return Array.isArray(data)
       ? data.map((item) => ({ productId: item.productId, id: item.id, createdAt: item.createdAt }))
       : [];
   };
 
-  api.addFavorite = async (productId) => { // [FAVORITES_BACKEND_ONLY]
+  api.addFavorite = async (productId) => { // [FAVORITES_BACKEND_ONLY] [FAVORITES_FIX]
+    const normalizedId = normalizeProductId(productId);
+    if (normalizedId == null) throw new Error('productId inválido para favoritos');
+
     const data = await request('/api/favorites', {
       method: 'POST',
-      body: { productId },
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ productId: normalizedId }),
     });
     return data;
   };
 
-  api.removeFavorite = async (productId) => { // [FAVORITES_BACKEND_ONLY]
-    await request(`/api/favorites/${productId}`, { method: 'DELETE' });
+  api.removeFavorite = async (productId) => { // [FAVORITES_BACKEND_ONLY] [FAVORITES_FIX]
+    const normalizedId = normalizeProductId(productId);
+    if (normalizedId == null) throw new Error('productId inválido para favoritos');
+
+    await request(`/api/favorites/${normalizedId}`, {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+    });
   };
 
   api.getProducts = async (query = {}) => {
