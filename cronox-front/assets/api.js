@@ -443,23 +443,23 @@
   };
 
   // ===== FAVORITES =====
-  api.getFavorites = async () => {
-    const data = await request('/favorites');
+  api.getFavorites = async () => { // [FAVORITES_BACKEND_ONLY]
+    const data = await request('/api/favorites');
     return Array.isArray(data)
       ? data.map((item) => ({ productId: item.productId, id: item.id, createdAt: item.createdAt }))
       : [];
   };
 
-  api.addFavorite = async (productId) => {
-    const data = await request('/favorites', {
+  api.addFavorite = async (productId) => { // [FAVORITES_BACKEND_ONLY]
+    const data = await request('/api/favorites', {
       method: 'POST',
       body: { productId },
     });
     return data;
   };
 
-  api.removeFavorite = async (productId) => {
-    await request(`/favorites/${productId}`, { method: 'DELETE' });
+  api.removeFavorite = async (productId) => { // [FAVORITES_BACKEND_ONLY]
+    await request(`/api/favorites/${productId}`, { method: 'DELETE' });
   };
 
   api.getProducts = async (query = {}) => {
