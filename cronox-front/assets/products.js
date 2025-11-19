@@ -159,18 +159,15 @@
 
   let PRODUCTS = [];
 
-  const FAV_KEY = "cronox:favs";
-
-  const isFav = (id) => {
-    if (!id) return false;
-    try {
-      const raw = localStorage.getItem(FAV_KEY);
-      const list = raw ? JSON.parse(raw) : [];
-      return Array.isArray(list) && list.some((item) => item && item.id === id);
-    } catch {
-      return false;
-    }
+  const getFavSet = () => { // [FAVORITES_BACKEND_ONLY]
+    const favs = window.CRONOX_FAVORITES;
+    if (favs?.ids instanceof Set) return favs.ids;
+    if (Array.isArray(favs?.list)) return new Set(favs.list.map((x) => String(x)));
+    if (Array.isArray(favs)) return new Set(favs.map((x) => String(x)));
+    return new Set();
   };
+
+  const isFav = (id) => getFavSet().has(String(id || "")); // [FAVORITES_BACKEND_ONLY]
 
   const normalizeProduct = (product) => {
     const copy = cloneProduct(product || {});

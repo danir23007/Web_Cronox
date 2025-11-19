@@ -241,21 +241,25 @@
   <!-- ===== BADGE FAVORITOS ===== -->
   <script>
   (function(){
-    function updateFavBadge(){
+    function favCount(detail){ // [FAVORITES_BACKEND_ONLY]
+      if(Array.isArray(detail))return detail.length;
+      var favs=window.CRONOX_FAVORITES;
+      if(favs&&favs.ids instanceof Set)return favs.ids.size;
+      if(favs&&Array.isArray(favs.list))return favs.list.length;
+      if(Array.isArray(favs))return favs.length;
+      if(favs&&typeof favs.count==='number')return favs.count;
+      return 0;
+    }
+    function updateFavBadge(detail){ // [FAVORITES_BACKEND_ONLY]
       var el=document.querySelector('.fav-count');
       if(!el)return;
-      try{
-        var raw=localStorage.getItem('cronox:favs');
-        var arr=raw?JSON.parse(raw):[];
-        var count=Array.isArray(arr)?arr.length:0;
-        el.hidden=count===0;
-        if(count>0)el.textContent=String(count);
-      }catch(e){el.hidden=true;}
+      var count=favCount(detail);
+      el.hidden=count===0;
+      if(count>0)el.textContent=String(count);
     }
     document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')updateFavBadge();});
-    window.addEventListener('storage',(e)=>{if(e.key==='cronox:favs')updateFavBadge();});
-    window.addEventListener('cronox:favsChanged',updateFavBadge);
-    window.addEventListener('DOMContentLoaded',updateFavBadge,{once:true});
+    window.addEventListener('cronox:favsChanged',(e)=>updateFavBadge(e&&e.detail));
+    window.addEventListener('DOMContentLoaded',()=>updateFavBadge(),{once:true});
   })();
   </script>
 

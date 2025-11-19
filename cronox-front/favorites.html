@@ -98,6 +98,11 @@
 
     <div id="favGrid" class="products-grid" aria-label="Lista de productos favoritos"></div>
 
+    <div id="favGuest" class="products-fallback" style="text-align:center;margin-top:40px;" hidden>
+      <p>Inicia sesión para ver tus favoritos</p>
+      <p><a href="#" class="topbar__link" style="color:#fff;text-decoration:underline;" id="favLoginLink">Iniciar sesión</a></p>
+    </div>
+
     <div id="favEmpty" class="products-fallback" style="text-align:center;margin-top:40px;">
       <p>No tienes productos en favoritos todavía.</p>
       <p><a href="index.html#store" class="topbar__link" style="color:#fff;text-decoration:underline;">Ir a la tienda</a></p>
@@ -108,16 +113,27 @@
 
   <script>
   (function(){
-    const FAV_KEY   = 'cronox:favs';
+    const state = { items: [] }; // [FAVORITES_BACKEND_ONLY]
 
-    const getFavs = () => {
-      try { return JSON.parse(localStorage.getItem(FAV_KEY)) || []; }
-      catch { return []; }
+    const hasUser = () => Boolean(window.CRONOX_USER); // [FAVORITES_BACKEND_ONLY]
+    const api = () => window.CRONOX_API || {}; // [FAVORITES_BACKEND_ONLY]
+
+    const grid  = document.getElementById('favGrid');
+    const empty = document.getElementById('favEmpty');
+    const guest = document.getElementById('favGuest');
+    const loginLink = document.getElementById('favLoginLink');
+
+    const ensureLoginLink = () => { // [FAVORITES_BACKEND_ONLY]
+      if (!loginLink) return;
+      loginLink.addEventListener('click', (ev) => {
+        ev.preventDefault();
+        if (typeof window.CRONOX_openAuthModal === 'function') {
+          window.CRONOX_openAuthModal();
+        }
+      });
     };
 
-    // MISMA tarjeta que tienda (estructura y clases),
-    // usando rutas ABSOLUTAS a /producto.html
-    function createStoreLikeCard(p){
+    const createStoreLikeCard = (p) => { // [FAVORITES_BACKEND_ONLY]
       const key = p.slug || String(p.id) || String(p.backendId || "");
       const a = document.createElement('a');
       a.href = p.slug
@@ -194,47 +210,73 @@
       a.appendChild(name);
       a.appendChild(price);
       return a;
-    }
+    };
 
-    function enrichFavs(rawFavs){
-      const CATALOG = Array.isArray(window.CRONOX_PRODUCTS) ? window.CRONOX_PRODUCTS : [];
-      return rawFavs.map(f => {
-        const fromId   = CATALOG.find(x => x.id === f.id);
-        const fromName = CATALOG.find(x => !f.id && x.name === f.name);
-        const base = fromId || fromName || {};
-        return {
-          id:   f.id   || base.id,
-          slug: f.slug || base.slug,
-          name: f.name || base.name,
-          price: f.price || base.priceLabel || base.price,
-          priceLabel: f.priceLabel || base.priceLabel,
-          image: f.image || base.image,
-          images: base.images || (f.image ? [f.image] : []),
-        };
-      }).filter(x => x.id && (x.image || (x.images && x.images.length)));
-    }
+    const mapItem = (fav) => { // [FAVORITES_BACKEND_ONLY]
+      const productId = String(fav?.productId ?? fav?.id ?? fav?.product?.id ?? '').trim();
+      const catalog = Array.isArray(window.CRONOX_PRODUCTS) ? window.CRONOX_PRODUCTS : [];
+      const fromCatalog = catalog.find((x) => String(x.id) === productId || String(x.backendId || '') === productId) || {};
+      const source = fav?.product || fromCatalog || {};
+      const images = Array.isArray(source.images) ? source.images : (source.image ? [source.image] : []);
+      return {
+        id: productId,
+        slug: source.slug,
+        name: source.name || 'Producto',
+        price: source.priceLabel || source.price,
+        priceLabel: source.priceLabel || source.price,
+        image: source.image || images[0] || '',
+        images,
+        backendId: source.backendId,
+      };
+    };
 
-    function render(){
-      const grid  = document.getElementById('favGrid');
-      const empty = document.getElementById('favEmpty');
+    const render = () => { // [FAVORITES_BACKEND_ONLY]
+      if (!grid || !empty || !guest) return;
       grid.innerHTML = '';
 
-      const favs = enrichFavs(getFavs());
-      if (!favs.length){
+      if (!hasUser()) {
+        empty.hidden = true;
+        guest.hidden = false;
+        return;
+      }
+
+      guest.hidden = true;
+      const favs = state.items.map(mapItem).filter((x) => x.id && (x.image || (x.images && x.images.length)));
+      if (!favs.length) {
         empty.hidden = false;
         return;
       }
       empty.hidden = true;
 
       const frag = document.createDocumentFragment();
-      favs.forEach(p => frag.appendChild(createStoreLikeCard(p)));
+      favs.forEach((p) => frag.appendChild(createStoreLikeCard(p)));
       grid.appendChild(frag);
-    }
+    };
 
-    document.addEventListener('DOMContentLoaded', render);
-    window.addEventListener('storage', (e) => { if (e.key === FAV_KEY) render(); });
-    window.addEventListener('cronox:favsChanged', render);
-    window.addEventListener('cronox:productsLoaded', render);
+    const loadFavorites = async () => { // [FAVORITES_BACKEND_ONLY]
+      if (!hasUser()) {
+        state.items = [];
+        render();
+        return;
+      }
+      try {
+        const data = await api().getFavorites();
+        state.items = Array.isArray(data) ? data : [];
+        render();
+      } catch (error) {
+        console.warn('[CRONOX] No se pudieron cargar los favoritos', error);
+        state.items = [];
+        render();
+      }
+    };
+
+    document.addEventListener('DOMContentLoaded', () => {
+      ensureLoginLink();
+      loadFavorites();
+    });
+
+    window.addEventListener('cronox:productsLoaded', render); // [FAVORITES_BACKEND_ONLY]
+    window.addEventListener('cronox:favsChanged', loadFavorites); // [FAVORITES_BACKEND_ONLY]
   })();
   </script>
 
