@@ -500,6 +500,7 @@ window.CRONOX_USER = window.CRONOX_USER || null;
     window.CRONOX_USER = user;
 
     updateProfileIconUI();
+    try { window.dispatchEvent(new CustomEvent('cronox:userChanged', { detail: user })); } catch {}
   }
 
   function updateProfileIconUI() {
@@ -535,6 +536,7 @@ window.CRONOX_USER = window.CRONOX_USER || null;
       const user = await window.CRONOX_API.login({ email, password });
       window.CRONOX_USER = user;
       updateProfileIconUI();
+      try { window.dispatchEvent(new CustomEvent('cronox:userChanged', { detail: user })); } catch {}
       closeAuthModal();
     } catch (err) {
       console.error('[AUTH] login error', err);
@@ -564,6 +566,7 @@ window.CRONOX_USER = window.CRONOX_USER || null;
       const user = await window.CRONOX_API.register({ email, password, name });
       window.CRONOX_USER = user;
       updateProfileIconUI();
+      try { window.dispatchEvent(new CustomEvent('cronox:userChanged', { detail: user })); } catch {}
       closeAuthModal();
     } catch (err) {
       console.error('[AUTH] register error', err);
@@ -580,6 +583,7 @@ window.CRONOX_USER = window.CRONOX_USER || null;
     }
     window.CRONOX_USER = null;
     updateProfileIconUI();
+    try { window.dispatchEvent(new CustomEvent('cronox:userChanged', { detail: null })); } catch {}
   }
 
   // Exponer funciones globales por si las necesitas

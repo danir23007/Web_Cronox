@@ -123,11 +123,13 @@
     setFavorites(nextIds);
 
     try {
-      if (nextActive) {
-        await api.addFavorite(product.productId);
-      } else {
-        await api.removeFavorite(product.productId);
-      }
+      const result = await api.toggleFavorite(product.productId);
+      const confirmed = Boolean(result?.isFavorite);
+      const syncedIds = new Set(favoriteIds);
+      if (confirmed) syncedIds.add(product.productId);
+      else syncedIds.delete(product.productId);
+      setFavorites(syncedIds);
+      syncActiveState();
     } catch (error) {
       console.warn('[CRONOX] Error al actualizar favorito', error);
       if (nextActive) {
@@ -174,4 +176,5 @@
   });
 
   window.addEventListener('cronox:favsChanged', syncActiveState);
+  window.addEventListener('cronox:userChanged', refreshFromBackend);
 })();

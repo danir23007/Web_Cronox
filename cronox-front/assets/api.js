@@ -164,7 +164,6 @@
 
   const normalizeBase = (base) => (base || '').replace(/\/$/, '');
   const API_BASE = normalizeBase(detectApiBase());
-  const AUTH_STORAGE_KEY = 'cronox:auth';
 
   const safeJsonParse = (text) => {
     try {
@@ -317,35 +316,6 @@
     };
   };
 
-  let authState = null;
-  const readStoredAuth = () => {
-    if (authState) return authState;
-    if (typeof localStorage === 'undefined') return null;
-    try {
-      const raw = localStorage.getItem(AUTH_STORAGE_KEY);
-      authState = raw ? JSON.parse(raw) : null;
-      return authState;
-    } catch (error) {
-      return null;
-    }
-  };
-
-  const writeAuthState = (state) => {
-    authState = state || null;
-    if (typeof localStorage === 'undefined') return;
-    try {
-      if (state) {
-        localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(state));
-      } else {
-        localStorage.removeItem(AUTH_STORAGE_KEY);
-      }
-    } catch (error) {
-      // ignore
-    }
-  };
-
-  const getAccessToken = () => readStoredAuth()?.accessToken || '';
-
   const buildUrl = (path, query) => {
     const normalized = path.startsWith('http')
       ? path
@@ -369,15 +339,10 @@
   };
 
   const buildRequestHeaders = (customHeaders) => {
-    const headers = {
+    return {
       Accept: 'application/json',
       ...(customHeaders || {}),
     };
-    const token = getAccessToken();
-    if (token && !headers.Authorization) {
-      headers.Authorization = `Bearer ${token}`;
-    }
-    return headers;
   };
 
   const request = async (path, options = {}) => {
@@ -418,7 +383,7 @@
 
   // ===== AUTH =====
   api.register = async (payload) => {
-    const data = await request('/auth/register', {
+    const data = await request('/api/auth/register', {
       method: 'POST',
       body: payload,
     });
@@ -426,7 +391,7 @@
   };
 
   api.login = async (credentials) => {
-    const data = await request('/auth/login', {
+    const data = await request('/api/auth/login', {
       method: 'POST',
       body: credentials,
     });
@@ -434,11 +399,11 @@
   };
 
   api.logout = async () => {
-    await request('/auth/logout', { method: 'POST' });
+    await request('/api/auth/logout', { method: 'POST' });
   };
 
   api.getMe = async () => {
-    const data = await request('/auth/me');
+    const data = await request('/api/auth/me');
     return data || null;
   };
 
@@ -448,13 +413,34 @@
     return Number.isFinite(num) ? num : null;
   };
 
+  const mapFavoriteProduct = (product) => {
+    if (!product) return null;
+    const images = Array.isArray(product.images)
+      ? product.images.map((img) => img?.url || img?.imageUrl || img).filter(Boolean)
+      : [];
+    const priceValue = Number(product.price ?? product.priceCents ?? 0);
+
+    return {
+      id: product.id ?? product.productId,
+      backendId: product.id ?? product.productId,
+      slug: product.slug,
+      name: product.name,
+      price: priceValue,
+      priceLabel: product.priceLabel || formatPrice(priceValue),
+      image: product.imageUrl || product.image || images[0] || '',
+      images,
+    };
+  };
+
   api.getFavorites = async () => { // [FAVORITES_BACKEND_ONLY] [FAVORITES_FIX]
-    const data = await request('/api/favorites', {
-      headers: { 'Content-Type': 'application/json' },
-      credentials: 'include',
-    });
+    const data = await request('/api/favorites');
     return Array.isArray(data)
-      ? data.map((item) => ({ productId: item.productId, id: item.id, createdAt: item.createdAt }))
+      ? data.map((item) => ({
+          id: item.id ?? item.productId,
+          productId: item.productId ?? item.product?.id,
+          createdAt: item.createdAt,
+          product: mapFavoriteProduct(item.product),
+        }))
       : [];
   };
 
@@ -462,24 +448,27 @@
     const normalizedId = normalizeProductId(productId);
     if (normalizedId == null) throw new Error('productId inválido para favoritos');
 
-    const data = await request('/api/favorites', {
+    return request('/api/favorites', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      credentials: 'include',
-      body: JSON.stringify({ productId: normalizedId }),
+      body: { productId: normalizedId },
     });
-    return data;
+  };
+
+  api.toggleFavorite = async (productId) => {
+    const normalizedId = normalizeProductId(productId);
+    if (normalizedId == null) throw new Error('productId inválido para favoritos');
+
+    return request('/api/favorites/toggle', {
+      method: 'POST',
+      body: { productId: normalizedId },
+    });
   };
 
   api.removeFavorite = async (productId) => { // [FAVORITES_BACKEND_ONLY] [FAVORITES_FIX]
     const normalizedId = normalizeProductId(productId);
     if (normalizedId == null) throw new Error('productId inválido para favoritos');
 
-    await request(`/api/favorites/${normalizedId}`, {
-      method: 'DELETE',
-      headers: { 'Content-Type': 'application/json' },
-      credentials: 'include',
-    });
+    await request(`/api/favorites/${normalizedId}`, { method: 'DELETE' });
   };
 
   api.getProducts = async (query = {}) => {
@@ -620,77 +609,3 @@
   g.CRONOX_API_BASE = API_BASE;
 })(typeof window !== 'undefined' ? window : this);
 
-// [AUTH] API de usuarios (login / registro / sesión)
-// Aseguramos que el objeto existe
-window.CRONOX_API = window.CRONOX_API || {};
-
-// getMe: devuelve usuario o null si 401
-window.CRONOX_API.getMe = async function getMe() {
-  try {
-    const res = await fetch('/auth/me', {
-      method: 'GET',
-      credentials: 'include',
-    });
-
-    if (res.status === 401 || res.status === 403) {
-      return null;
-    }
-
-    if (!res.ok) {
-      console.error('[AUTH] getMe error status', res.status);
-      return null;
-    }
-
-    return await res.json();
-  } catch (err) {
-    console.error('[AUTH] getMe error', err);
-    return null;
-  }
-};
-
-window.CRONOX_API.login = async function login({ email, password }) {
-  const res = await fetch('/auth/login', {
-    method: 'POST',
-    credentials: 'include',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ email, password }),
-  });
-
-  if (!res.ok) {
-    const text = await res.text().catch(() => '');
-    throw new Error(text || 'Error al iniciar sesión');
-  }
-
-  return res.json();
-};
-
-window.CRONOX_API.register = async function register({ email, password, name }) {
-  const res = await fetch('/auth/register', {
-    method: 'POST',
-    credentials: 'include',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ email, password, name }),
-  });
-
-  if (!res.ok) {
-    const text = await res.text().catch(() => '');
-    throw new Error(text || 'Error al crear la cuenta');
-  }
-
-  return res.json();
-};
-
-window.CRONOX_API.logout = async function logout() {
-  try {
-    await fetch('/auth/logout', {
-      method: 'POST',
-      credentials: 'include',
-    });
-  } catch (err) {
-    console.warn('[AUTH] logout error (ignorado)', err);
-  }
-};

@@ -118,6 +118,15 @@
     const hasUser = () => Boolean(window.CRONOX_USER); // [FAVORITES_BACKEND_ONLY]
     const api = () => window.CRONOX_API || {}; // [FAVORITES_BACKEND_ONLY]
 
+    const ensureUser = async () => {
+      const client = api();
+      if (!client?.getMe) return null;
+      const user = await client.getMe();
+      window.CRONOX_USER = user;
+      try { window.dispatchEvent(new CustomEvent('cronox:userChanged', { detail: user })); } catch {}
+      return user;
+    };
+
     const grid  = document.getElementById('favGrid');
     const empty = document.getElementById('favEmpty');
     const guest = document.getElementById('favGuest');
@@ -254,7 +263,8 @@
     };
 
     const loadFavorites = async () => { // [FAVORITES_BACKEND_ONLY]
-      if (!hasUser()) {
+      const user = await ensureUser();
+      if (!user) {
         state.items = [];
         render();
         return;
@@ -277,6 +287,7 @@
 
     window.addEventListener('cronox:productsLoaded', render); // [FAVORITES_BACKEND_ONLY]
     window.addEventListener('cronox:favsChanged', loadFavorites); // [FAVORITES_BACKEND_ONLY]
+    window.addEventListener('cronox:userChanged', loadFavorites);
   })();
   </script>
 

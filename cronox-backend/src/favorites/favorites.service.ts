@@ -27,7 +27,12 @@ export class FavoritesService {
       orderBy: { createdAt: 'desc' },
     });
 
-    return favorites.map((favorite) => this.toProductResponse(favorite.product));
+    return favorites.map((favorite) => ({
+      id: favorite.id,
+      productId: favorite.productId,
+      createdAt: favorite.createdAt,
+      product: this.toProductResponse(favorite.product),
+    }));
   }
 
   async add(userId: number, dto: AddFavoriteDto) {
@@ -39,7 +44,26 @@ export class FavoritesService {
       create: { userId, productId: product.id },
     });
 
-    return this.toProductResponse(product);
+    return {
+      productId: product.id,
+      product: this.toProductResponse(product),
+      isFavorite: true,
+    };
+  }
+
+  async toggle(userId: number, dto: AddFavoriteDto) {
+    const product = await this.findProduct(dto);
+    const existing = await this.prisma.favorite.findUnique({
+      where: { userId_productId: { userId, productId: product.id } },
+    });
+
+    if (existing) {
+      await this.prisma.favorite.delete({ where: { userId_productId: { userId, productId: product.id } } });
+      return { productId: product.id, product: this.toProductResponse(product), isFavorite: false };
+    }
+
+    await this.prisma.favorite.create({ data: { userId, productId: product.id } });
+    return { productId: product.id, product: this.toProductResponse(product), isFavorite: true };
   }
 
   async remove(userId: number, productIdOrSlug: string) {
