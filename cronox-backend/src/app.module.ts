@@ -25,7 +25,10 @@ import { FavoritesModule } from './favorites/favorites.module';
 
 @Module({
   imports: [
-    ConfigModule.forRoot({ isGlobal: true }), // [STRIPE]
+    ConfigModule.forRoot({
+      isGlobal: true,
+      envFilePath: '.env',
+    }), // [STRIPE]
     ThrottlerModule.forRoot([
       {
         ttl: 60_000, // ventana de 60s
