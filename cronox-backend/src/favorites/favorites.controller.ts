@@ -19,12 +19,17 @@ export class FavoritesController {
     return this.favoritesService.add(userId, dto);
   }
 
+  @Post('toggle')
+  async toggle(@CurrentUser('id') userId: number, @Body() dto: AddFavoriteDto) {
+    return this.favoritesService.toggle(userId, dto);
+  }
+
   @Delete(':productId')
   async remove(
     @CurrentUser('id') userId: number,
     @Param('productId') productIdOrSlug: string,
   ) {
     await this.favoritesService.remove(userId, productIdOrSlug);
-    return { ok: true };
+    return { ok: true, productId: productIdOrSlug };
   }
 }
