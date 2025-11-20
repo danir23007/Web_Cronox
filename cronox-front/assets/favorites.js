@@ -141,21 +141,15 @@
     imgEls.forEach((im) => gallery.appendChild(im));
 
     const favBtn = document.createElement('button');
-    favBtn.className = 'fav-toggle';
+    favBtn.className = 'favorite-toggle is-favorite';
     favBtn.type = 'button';
-    favBtn.setAttribute('aria-label', 'Añadir a favoritos');
-    favBtn.dataset.id = String(product.id || '');
+    favBtn.setAttribute('aria-label', 'Marcar como favorito');
+    favBtn.dataset.productId = String(product.backendId ?? product.id ?? '');
     favBtn.dataset.slug = product.slug || '';
-    if (product.backendId != null) favBtn.dataset.backendId = String(product.backendId);
     favBtn.dataset.name = product.name || 'Producto';
     favBtn.dataset.price = formatPriceFromCents(product.priceInCents);
     favBtn.dataset.image = imgs[0] || product.image || '';
-    favBtn.innerHTML = `
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
-        <polygon points="12 2 15.09 8.26 22 9.27 17.3 13.97 18.18 21 12 17.77 5.82 21 6.7 13.97 2 9.27 8.91 8.26 12 2"></polygon>
-      </svg>
-    `;
-    favBtn.classList.add('active');
+    favBtn.textContent = '★';
     favBtn.addEventListener('click', (ev) => {
       ev.preventDefault();
       ev.stopPropagation();

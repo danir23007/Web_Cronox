@@ -159,7 +159,8 @@
 
   let PRODUCTS = [];
 
-  const getFavSet = () => { // [FAVORITES_BACKEND_ONLY]
+  const getFavSet = () => {
+    if (window.CRONOX_FAVORITE_IDS instanceof Set) return window.CRONOX_FAVORITE_IDS;
     const favs = window.CRONOX_FAVORITES;
     if (favs?.ids instanceof Set) return favs.ids;
     if (Array.isArray(favs?.list)) return new Set(favs.list.map((x) => String(x)));
@@ -167,7 +168,7 @@
     return new Set();
   };
 
-  const isFav = (id) => getFavSet().has(String(id || "")); // [FAVORITES_BACKEND_ONLY]
+  const isFav = (id) => getFavSet().has(String(id || ""));
 
   const normalizeProduct = (product) => {
     const copy = cloneProduct(product || {});
@@ -488,19 +489,15 @@
     }
 
     const favBtn = document.createElement("button");
-    favBtn.className = "fav-toggle";
+    favBtn.className = "favorite-toggle";
     favBtn.type = "button";
-    favBtn.setAttribute("aria-label", "Añadir a favoritos");
-    favBtn.dataset.id = String(p.id || "");
+    favBtn.setAttribute("aria-label", "Marcar como favorito");
+    favBtn.dataset.productId = String(p.backendId ?? p.id ?? "");
     favBtn.dataset.name = p.name || "Producto";
     favBtn.dataset.price = p.priceLabel || euros(p.price);
     favBtn.dataset.image = imgs[0] || p.image || "";
-    favBtn.innerHTML = `
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
-        <polygon points="12 2 15.09 8.26 22 9.27 17.3 13.97 18.18 21 12 17.77 5.82 21 6.7 13.97 2 9.27 8.91 8.26 12 2"></polygon>
-      </svg>
-    `;
-    if (isFav(p.id)) favBtn.classList.add("active");
+    favBtn.textContent = "★";
+    if (isFav(p.backendId ?? p.id)) favBtn.classList.add("is-favorite");
     favBtn.addEventListener("click", (ev) => { ev.preventDefault(); ev.stopPropagation(); });
 
     const plus = document.createElement("button");

@@ -309,6 +309,7 @@
       transition:transform .2s ease, box-shadow .2s ease;
       flex:0 0 220px;
       max-width:220px;
+      position:relative;
     }
     .product-card:hover{ transform:translateY(-2px); }
     @media (max-width:520px){
@@ -474,7 +475,7 @@
              stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <polygon points="12 2 15.09 8.26 22 9.27 17.3 13.97 18.18 21 12 17.77 5.82 21 6.7 13.97 2 9.27 8.91 8.26 12 2"></polygon>
         </svg>
-        <span class="fav-count" hidden>0</span>
+        <span class="topbar-icon-badge favorites-count fav-count" hidden></span>
       </a>
 
       <a href="cart.html" class="topbar__link topbar__cart topbar-icon topbar-icon-cart" aria-label="Ver carrito">
@@ -513,12 +514,13 @@
 
   <!-- PDP -->
   <main id="productMain" class="pdp container" aria-live="polite">
-    <div class="pdp__grid">
+      <div class="pdp__grid">
       <div class="pdp__visual">
         <div class="pdp__media" id="pMedia">
           <button id="pMediaPrev" class="pdp__media-arrow prev" type="button" aria-label="Imagen anterior" hidden>
             <span aria-hidden="true">‹</span>
           </button>
+          <button id="pFavoriteToggle" class="favorite-toggle" type="button" aria-label="Marcar como favorito">★</button>
           <div class="pdp__media-viewport" id="pMediaViewport">
             <img id="pImage" class="pdp__media-img is-active" alt="" loading="lazy" decoding="async">
           </div>

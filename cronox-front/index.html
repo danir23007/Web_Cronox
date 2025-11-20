@@ -124,7 +124,7 @@
              stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <polygon points="12 2 15.09 8.26 22 9.27 17.3 13.97 18.18 21 12 17.77 5.82 21 6.7 13.97 2 9.27 8.91 8.26 12 2"></polygon>
         </svg>
-        <span class="fav-count" hidden>0</span>
+        <span class="topbar-icon-badge favorites-count fav-count" hidden></span>
       </a>
 
       <!-- Carrito -->
@@ -239,36 +239,11 @@
   </script>
 
   <!-- ===== BADGE FAVORITOS ===== -->
-  <script>
-  (function(){
-    function favCount(detail){ // [FAVORITES_BACKEND_ONLY]
-      if(Array.isArray(detail))return detail.length;
-      var favs=window.CRONOX_FAVORITES;
-      if(favs&&favs.ids instanceof Set)return favs.ids.size;
-      if(favs&&Array.isArray(favs.list))return favs.list.length;
-      if(Array.isArray(favs))return favs.length;
-      if(favs&&typeof favs.count==='number')return favs.count;
-      return 0;
-    }
-    function updateFavBadge(detail){ // [FAVORITES_BACKEND_ONLY]
-      var el=document.querySelector('.fav-count');
-      if(!el)return;
-      var count=favCount(detail);
-      el.hidden=count===0;
-      if(count>0)el.textContent=String(count);
-    }
-    document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')updateFavBadge();});
-    window.addEventListener('cronox:favsChanged',(e)=>updateFavBadge(e&&e.detail));
-    window.addEventListener('DOMContentLoaded',()=>updateFavBadge(),{once:true});
-  })();
-  </script>
-
   <script src="assets/api.js"></script>
   <!-- ===== MAIN SCRIPTS ===== -->
-  <script src="assets/products.js?v=47" defer></script>
   <script src="assets/app.js?v=48" defer></script>
+  <script src="assets/products.js?v=47" defer></script>
   <script src="assets/cart-badge.js?v=42" defer></script>
-  <script src="assets/fav-toggle.js?v=42" defer></script>
   <script src="assets/product-gallery.js?v=1" defer></script>
 </body>
 </html>
