@@ -120,6 +120,7 @@
       : `/producto.html?id=${encodeURIComponent(key)}`;
     if (key) a.setAttribute('data-id', key);
     if (product.slug) a.setAttribute('data-slug', product.slug);
+    if (product.backendId != null) a.setAttribute('data-backend-id', String(product.backendId));
 
     const media = document.createElement('div');
     media.className = 'product-media';
@@ -138,6 +139,27 @@
       return im;
     });
     imgEls.forEach((im) => gallery.appendChild(im));
+
+    const favBtn = document.createElement('button');
+    favBtn.className = 'fav-toggle';
+    favBtn.type = 'button';
+    favBtn.setAttribute('aria-label', 'Añadir a favoritos');
+    favBtn.dataset.id = String(product.id || '');
+    favBtn.dataset.slug = product.slug || '';
+    if (product.backendId != null) favBtn.dataset.backendId = String(product.backendId);
+    favBtn.dataset.name = product.name || 'Producto';
+    favBtn.dataset.price = formatPriceFromCents(product.priceInCents);
+    favBtn.dataset.image = imgs[0] || product.image || '';
+    favBtn.innerHTML = `
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+        <polygon points="12 2 15.09 8.26 22 9.27 17.3 13.97 18.18 21 12 17.77 5.82 21 6.7 13.97 2 9.27 8.91 8.26 12 2"></polygon>
+      </svg>
+    `;
+    favBtn.classList.add('active');
+    favBtn.addEventListener('click', (ev) => {
+      ev.preventDefault();
+      ev.stopPropagation();
+    });
 
     if (imgEls.length > 1) {
       const prev = document.createElement('button');
@@ -185,6 +207,7 @@
     });
 
     media.appendChild(gallery);
+    media.appendChild(favBtn);
     media.appendChild(plus);
 
     const name = document.createElement('h3');
