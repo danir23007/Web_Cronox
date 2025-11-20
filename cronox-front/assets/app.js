@@ -319,10 +319,11 @@
   });
 
   // ===== Favoritos (estrella) — backend =====
-  const favCountEl = $('.topbar__fav .fav-count');
+  const favoritesIcon = document.querySelector('.topbar-icon-favorites');
+  const favCountEl = document.querySelector('.fav-count') || document.querySelector('.favorites-count');
   let favCount = Number(favCountEl?.textContent || 0);
   const renderFavCount = (value) => { // [FAVORITES_BACKEND_ONLY]
-    if (!favCountEl) return;
+    if (!favCountEl || !favoritesIcon) return;
     if (value > 0) {
       favCountEl.hidden = false;
       favCountEl.textContent = String(value);
@@ -343,6 +344,9 @@
     favCount = clamp(readFavCount(detail), 0, 999);
     renderFavCount(favCount);
   };
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') syncFavCount();
+  });
   document.addEventListener('DOMContentLoaded', () => syncFavCount(), { once: true });
   window.addEventListener('cronox:favsChanged', (e) => syncFavCount(e?.detail));
 

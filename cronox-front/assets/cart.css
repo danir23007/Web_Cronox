@@ -10,7 +10,6 @@ body { padding-top: var(--topbar-h); }
   background:#000 !important; border-bottom:1px solid rgba(255,255,255,.08);
   z-index:1000;
 }
-.topbar__logo-img{ max-height:32px; }
 
 /* Contenedor principal */
 .container{ width:min(1200px,92%); margin:0 auto; }
