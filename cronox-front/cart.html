@@ -18,7 +18,6 @@
 
   <div id="overlay" class="overlay" hidden></div>
 
-  <!-- Topbar unificada -->
   <header class="topbar topbar--page" id="topbar" role="banner">
     <div class="topbar__left">
       <!-- Botón hamburguesa -->
@@ -43,15 +42,12 @@
 
     <!-- Logo centrado -->
     <a href="index.html" class="topbar__logo" aria-label="CRONOX — Tienda">
-      <img
-        src="assets/logo_banner.png"
-        alt="CRONOX"
-        class="topbar__logo-img"
-        decoding="async"
-      >
+      <img src="assets/logo_banner.png"
+           alt="CRONOX" class="topbar__logo-img" decoding="async">
     </a>
 
     <nav class="topbar__right" aria-label="Navegación principal">
+      <!-- Perfil -->
       <a href="#" class="topbar__link topbar__profile topbar-icon topbar-icon-user" id="profileBtn" aria-label="Iniciar sesión" title="Iniciar sesión">
         <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-user" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M20 21v-2a4 4 0 0 0-3-3.87"></path>
@@ -60,6 +56,7 @@
         </svg>
       </a>
 
+      <!-- Favoritos -->
       <a href="favorites.html" class="topbar__link topbar__fav topbar-icon topbar-icon-favorites" aria-label="Ver favoritos">
         <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-star" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <polygon points="12 2 15.09 8.26 22 9.27 17.3 13.97 18.18 21 12 17.77 5.82 21 6.7 13.97 2 9.27 8.91 8.26 12 2"></polygon>
@@ -67,13 +64,14 @@
         <span class="fav-count" hidden>0</span>
       </a>
 
+      <!-- Carrito -->
       <a href="cart.html" class="topbar__link topbar__cart topbar-icon topbar-icon-cart" aria-label="Ver carrito">
         <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-bag" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/>
-          <line x1="3" y1="6" x2="21" y2="6"/>
-          <path d="M16 10a4 4 0 0 1-8 0"/>
+          <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"></path>
+          <line x1="3" y1="6" x2="21" y2="6"></line>
+          <path d="M16 10a4 4 0 0 1-8 0"></path>
         </svg>
-        <span class="cart-count" aria-label="Artículos en el carrito" hidden>0</span>
+        <span class="cart-count" hidden>0</span>
       </a>
     </nav>
   </header>
