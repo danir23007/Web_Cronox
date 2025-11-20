@@ -16,6 +16,7 @@
   const pDesc      = document.getElementById("pDesc");
   const pSizeGroup = document.getElementById("pSizeGroup");
   const pAdd       = document.getElementById("pAdd");
+  const pFavoriteToggle = document.getElementById("pFavoriteToggle");
   const toast  = document.getElementById("toast");
   const relatedGrid = document.getElementById("relatedGrid");
 
@@ -191,6 +192,13 @@
   };
 
   let PRODUCTS = [];
+
+  const getFavSet = () => (window.CRONOX_FAVORITE_IDS instanceof Set ? window.CRONOX_FAVORITE_IDS : new Set());
+  const isFav = (product) => {
+    if (!product) return false;
+    const id = product.backendId ?? product.id ?? product.slug;
+    return getFavSet().has(String(id || ""));
+  };
 
   const setProducts = (list) => {
     PRODUCTS = Array.isArray(list) ? list.map(normalizeProduct) : [];
@@ -499,8 +507,11 @@
     const href = p.slug
       ? `/producto.html?slug=${encodeURIComponent(p.slug)}`
       : `/producto.html?id=${encodeURIComponent(p.id)}`;
+    const favoriteClass = isFav(p) ? " is-favorite" : "";
+    const productId = String(p.backendId ?? p.id ?? "");
     return `
       <a class="product-card" href="${href}" aria-label="${p.name}">
+        <button class="favorite-toggle${favoriteClass}" type="button" aria-label="Marcar como favorito" data-product-id="${productId}">★</button>
         <img class="product-img" src="${p.image}" alt="${p.name}" loading="lazy" decoding="async">
         <div class="product-card__info">
           <h3 class="product-name">${p.name}</h3>
@@ -523,6 +534,7 @@
     if (!product) {
       if (pName) pName.textContent = "Producto no disponible";
       if (pDesc) pDesc.textContent = "Este producto ya no está activo en la colección.";
+      if (pFavoriteToggle) pFavoriteToggle.hidden = true;
       return;
     }
 
@@ -531,6 +543,13 @@
     if (pName)  pName.textContent  = product.name || "";
     if (pPrice) pPrice.textContent = product.priceLabel || money(product.price);
     if (pDesc)  pDesc.textContent  = product.desc || "";
+
+    if (pFavoriteToggle) {
+      const pid = product.backendId ?? product.id ?? "";
+      pFavoriteToggle.dataset.productId = String(pid);
+      pFavoriteToggle.classList.toggle("is-favorite", isFav(product));
+      pFavoriteToggle.hidden = !pid;
+    }
 
     setupSizeButtons(product);
     setPageTitle(product);

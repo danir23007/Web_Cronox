@@ -82,7 +82,7 @@ html,body{margin:0;padding:0;background:#000;color:#fff}
 .icon-star{width:22px;height:22px;stroke:currentColor!important;fill:none!important;vertical-align:middle;transition:opacity .2s ease,transform .2s ease;}
 .topbar__fav{position:relative;display:inline-flex;align-items:center;gap:4px;color:#fff;}
 .topbar__fav:hover .icon-star{opacity:.8;transform:scale(1.04);}
-.topbar__fav .fav-count{position:absolute;top:-4px;right:-10px;background:#fff;color:#000;border-radius:10px;font:700 10px/1 system-ui;padding:1px 5px;min-width:16px;text-align:center;}
+.topbar__fav .favorites-count,.topbar__fav .fav-count{position:absolute;top:-4px;right:-10px;background:#fff;color:#000;border-radius:10px;font:700 10px/1 system-ui;padding:1px 5px;min-width:16px;text-align:center;}
 .topbar__fav[aria-current="page"] .icon-star{fill:#fff!important;stroke:#fff!important;filter:drop-shadow(0 0 6px rgba(255,255,255,.45));}
 .topbar-icon.active .icon-star{fill:#fff!important;stroke:#fff!important;filter:drop-shadow(0 0 6px rgba(255,255,255,.45));}
 
@@ -220,10 +220,25 @@ a.product-card{display:block;text-decoration:none;color:inherit;cursor:pointer;}
 .product-price{font-weight:700;font-size:12px;padding:0 12px 12px;}
 
 /* ===== Favoritos / Quick Add ===== */
-.fav-toggle{position:absolute;top:10px;right:10px;width:24px;height:24px;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:transform .25s ease,opacity .25s ease;z-index:2;}
-.fav-toggle svg{width:20px;height:20px;stroke:#000;fill:none;stroke-width:2;transition:all .25s ease;opacity:.85;}
-.fav-toggle:hover{transform:scale(1.1);opacity:1;}
-.fav-toggle.active svg{fill:#000;stroke:#000;opacity:1;filter:drop-shadow(0 0 3px rgba(0,0,0,.3));}
+.favorite-toggle,.fav-toggle{
+  position:absolute;
+  top:10px;
+  right:10px;
+  background:transparent;
+  border:none;
+  padding:0;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  cursor:pointer;
+  transition:transform .25s ease,opacity .25s ease;
+  z-index:2;
+  font-size:20px;
+  line-height:1;
+  color:#000;
+}
+.favorite-toggle:hover,.fav-toggle:hover{transform:scale(1.05);opacity:1;}
+.favorite-toggle.is-favorite,.fav-toggle.is-favorite{color:#000;text-shadow:0 0 4px rgba(0,0,0,.25);}
 
 /* “+” CLÁSICO en la imagen */
 .fav-add{

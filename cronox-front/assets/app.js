@@ -319,36 +319,120 @@
   });
 
   // ===== Favoritos (estrella) — backend =====
-  const favoritesIcon = document.querySelector('.topbar-icon-favorites');
-  const favCountEl = document.querySelector('.fav-count') || document.querySelector('.favorites-count');
-  let favCount = Number(favCountEl?.textContent || 0);
-  const renderFavCount = (value) => { // [FAVORITES_BACKEND_ONLY]
-    if (!favCountEl || !favoritesIcon) return;
-    if (value > 0) {
-      favCountEl.hidden = false;
-      favCountEl.textContent = String(value);
-    } else {
-      favCountEl.hidden = true;
+  const favoritesState = { ids: new Set() };
+
+  const normalizeFavId = (value) => {
+    if (value == null) return null;
+    const str = String(value).trim();
+    return str ? str : null;
+  };
+
+  const syncFavoriteButtons = () => {
+    const ids = favoritesState.ids;
+    document.querySelectorAll('.favorite-toggle, .fav-toggle').forEach((btn) => {
+      const pid = normalizeFavId(btn.dataset.productId || btn.dataset.id || btn.dataset.backendId || '');
+      if (!pid) return;
+      btn.classList.toggle('is-favorite', ids.has(pid));
+    });
+  };
+
+  async function updateFavoritesBadge() {
+    const badge = document.querySelector('.favorites-count') || document.querySelector('.fav-count');
+    const favoritesIcon = document.querySelector('.topbar-icon-favorites');
+    if (!badge || !favoritesIcon) return;
+
+    try {
+      const res = await fetch('/api/favorites', {
+        method: 'GET',
+        credentials: 'include',
+      });
+
+      if (!res.ok) {
+        badge.textContent = '';
+        badge.style.display = 'none';
+        favoritesState.ids = new Set();
+        syncFavoriteButtons();
+        return;
+      }
+
+      const favorites = await res.json();
+      const favIds = new Set();
+      (Array.isArray(favorites) ? favorites : []).forEach((fav) => {
+        const id = normalizeFavId(fav?.productId ?? fav?.id ?? fav?.product?.id);
+        if (id) favIds.add(id);
+      });
+
+      favoritesState.ids = favIds;
+      window.CRONOX_FAVORITE_IDS = favoritesState.ids;
+      const count = favIds.size;
+
+      if (count > 0) {
+        badge.textContent = String(count);
+        badge.style.display = 'inline-block';
+        badge.hidden = false;
+      } else {
+        badge.textContent = '';
+        badge.style.display = 'none';
+        badge.hidden = true;
+      }
+
+      syncFavoriteButtons();
+      window.dispatchEvent(new CustomEvent('cronox:favsChanged', { detail: Array.from(favIds) }));
+    } catch (err) {
+      console.error('Error fetching favorites for badge:', err);
+      badge.textContent = '';
+      badge.style.display = 'none';
+      favoritesState.ids = new Set();
+      syncFavoriteButtons();
     }
-  };
-  const readFavCount = (detail) => { // [FAVORITES_BACKEND_ONLY]
-    if (Array.isArray(detail)) return detail.length;
-    const favs = window.CRONOX_FAVORITES;
-    if (favs?.ids instanceof Set) return favs.ids.size;
-    if (Array.isArray(favs?.list)) return favs.list.length;
-    if (Array.isArray(favs)) return favs.length;
-    if (typeof favs?.count === 'number') return favs.count;
-    return 0;
-  };
-  const syncFavCount = (detail) => { // [FAVORITES_BACKEND_ONLY]
-    favCount = clamp(readFavCount(detail), 0, 999);
-    renderFavCount(favCount);
-  };
-  document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'visible') syncFavCount();
+  }
+
+  async function toggleFavorite(productId) {
+    try {
+      const res = await fetch(`/api/favorites/toggle/${productId}`, {
+        method: 'POST',
+        credentials: 'include',
+      });
+
+      if (!res.ok) {
+        console.error('Error toggling favorite', res.status);
+        return null;
+      }
+
+      return res.json();
+    } catch (error) {
+      console.error('Error toggling favorite', error);
+      return null;
+    }
+  }
+
+  document.addEventListener('click', async (event) => {
+    const btn = event.target.closest('.favorite-toggle, .fav-toggle');
+    if (!btn) return;
+
+    event.preventDefault();
+    event.stopPropagation();
+
+    const productId = normalizeFavId(btn.dataset.productId || btn.dataset.id || btn.dataset.backendId || '');
+    if (!productId) return;
+
+    const result = await toggleFavorite(productId);
+    if (!result) return;
+
+    const status = result.status || (result.isFavorite ? 'added' : 'removed');
+    const isFavorite = status === 'added';
+
+    btn.classList.toggle('is-favorite', isFavorite);
+    if (isFavorite) favoritesState.ids.add(productId);
+    else favoritesState.ids.delete(productId);
+
+    updateFavoritesBadge();
   });
-  document.addEventListener('DOMContentLoaded', () => syncFavCount(), { once: true });
-  window.addEventListener('cronox:favsChanged', (e) => syncFavCount(e?.detail));
+
+  document.addEventListener('DOMContentLoaded', () => {
+    updateFavoritesBadge();
+    syncFavoriteButtons();
+  });
 
   // ===== Carrito (API + fallback local) =====
   const cartCountEl = $('.topbar__cart .cart-count');
