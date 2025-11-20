@@ -26,20 +26,7 @@
       font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Cantarell,Noto Sans,Arial;
     }
 
-    /* Topbar negra y fija */
-    .topbar{
-      position:fixed;
-      top:0; left:0; right:0;
-      height:var(--topbar-h);
-      background:#000 !important;
-      backdrop-filter:none !important;
-      border-bottom:1px solid rgba(255,255,255,.08);
-      z-index:1000;
-    }
-
     body { padding-top: var(--topbar-h); }
-
-    .topbar__logo-img{ max-height:32px; }
 
     /* PDP layout */
     main.pdp {
@@ -435,14 +422,15 @@
   </div>
 </div>
 
-<body>
+<body class="page-product">
 
   <div id="overlay" class="overlay" hidden></div>
 
-  <!-- Topbar (idéntica al index pero negra opaca) -->
+  <!-- Topbar unificada -->
   <header class="topbar topbar--page" id="topbar" role="banner">
     <div class="topbar__left">
-      <button id="btnMenu" class="icon-btn" aria-label="Abrir filtros" aria-expanded="false" aria-controls="filtersPanel">
+      <!-- Botón hamburguesa -->
+      <button id="btnMenu" class="icon-btn" aria-label="Abrir menú" aria-expanded="false" aria-controls="filtersPanel">
         <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
              stroke-linecap="round" stroke-linejoin="round" class="icon" aria-hidden="true" focusable="false">
           <line x1="3" y1="6" x2="21" y2="6"></line>
@@ -451,6 +439,7 @@
         </svg>
       </button>
 
+      <!-- Lupa -->
       <button id="btnSearch" class="icon-btn" aria-label="Buscar productos" aria-expanded="false" aria-controls="searchBar">
         <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
              stroke-linecap="round" stroke-linejoin="round" class="icon" aria-hidden="true" focusable="false">
@@ -460,7 +449,8 @@
       </button>
     </div>
 
-    <a href="index.html#store" class="topbar__logo" aria-label="CRONOX — Tienda">
+    <!-- Logo centrado -->
+    <a href="index.html" class="topbar__logo" aria-label="CRONOX — Tienda">
       <img
         src="assets/logo_banner.png"
         alt="CRONOX"
@@ -470,7 +460,7 @@
     </a>
 
     <nav class="topbar__right" aria-label="Navegación principal">
-      <a href="#" class="topbar__link topbar__profile" id="profileBtn" aria-label="Iniciar sesión" title="Iniciar sesión">
+      <a href="#" class="topbar__link topbar__profile topbar-icon topbar-icon-user" id="profileBtn" aria-label="Iniciar sesión" title="Iniciar sesión">
         <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-user" viewBox="0 0 24 24" fill="none"
              stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M20 21v-2a4 4 0 0 0-3-3.87"></path>
@@ -479,7 +469,7 @@
         </svg>
       </a>
 
-      <a href="favorites.html" class="topbar__link topbar__fav" aria-label="Ver favoritos">
+      <a href="favorites.html" class="topbar__link topbar__fav topbar-icon topbar-icon-favorites" aria-label="Ver favoritos">
         <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-star" viewBox="0 0 24 24" fill="none"
              stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <polygon points="12 2 15.09 8.26 22 9.27 17.3 13.97 18.18 21 12 17.77 5.82 21 6.7 13.97 2 9.27 8.91 8.26 12 2"></polygon>
@@ -487,7 +477,7 @@
         <span class="fav-count" hidden>0</span>
       </a>
 
-      <a href="cart.html" class="topbar__link topbar__cart" aria-label="Ver carrito">
+      <a href="cart.html" class="topbar__link topbar__cart topbar-icon topbar-icon-cart" aria-label="Ver carrito">
         <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-bag" viewBox="0 0 24 24" fill="none"
              stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/>
@@ -640,8 +630,8 @@
     })();
   </script>
 
-  <script src="assets/product-page.js?v=35" defer></script>
   <script src="assets/app.js?v=48" defer></script>
   <script src="assets/cart-badge.js?v=31" defer></script>
+  <script src="assets/product-page.js?v=35" defer></script>
 </body>
 </html>
