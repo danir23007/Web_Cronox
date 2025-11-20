@@ -96,200 +96,26 @@
   <main id="favorites" class="store" aria-live="polite">
     <h1 class="store-heading">Favoritos</h1>
 
-    <div id="favGrid" class="products-grid" aria-label="Lista de productos favoritos"></div>
+    <section id="favorites-loading" class="products-fallback" aria-live="polite">
+      <p>Cargando tus favoritos...</p>
+    </section>
 
-    <div id="favGuest" class="products-fallback" style="text-align:center;margin-top:40px;" hidden>
+    <section id="favorites-login" class="products-fallback" style="text-align:center;margin-top:40px;" hidden>
       <p>Inicia sesión para ver tus favoritos</p>
-      <p><a href="#" class="topbar__link" style="color:#fff;text-decoration:underline;" id="favLoginLink">Iniciar sesión</a></p>
-    </div>
+      <p><a href="#" class="topbar__link" style="color:#fff;text-decoration:underline;" id="favorites-login-link">Iniciar sesión</a></p>
+    </section>
 
-    <div id="favEmpty" class="products-fallback" style="text-align:center;margin-top:40px;">
+    <section id="favorites-empty" class="products-fallback" style="text-align:center;margin-top:40px;" hidden>
       <p>No tienes productos en favoritos todavía.</p>
       <p><a href="index.html#store" class="topbar__link" style="color:#fff;text-decoration:underline;">Ir a la tienda</a></p>
-    </div>
+    </section>
+
+    <section id="favorites-list" hidden>
+      <div id="favorites-grid" class="products-grid" aria-label="Lista de productos favoritos"></div>
+    </section>
   </main>
 
   <footer class="footer"><p>© CRONOX</p></footer>
-
-  <script>
-  (function(){
-    const state = { items: [] }; // [FAVORITES_BACKEND_ONLY]
-
-    const hasUser = () => Boolean(window.CRONOX_USER); // [FAVORITES_BACKEND_ONLY]
-    const api = () => window.CRONOX_API || {}; // [FAVORITES_BACKEND_ONLY]
-
-    const ensureUser = async () => {
-      const client = api();
-      if (!client?.getMe) return null;
-      const user = await client.getMe();
-      window.CRONOX_USER = user;
-      try { window.dispatchEvent(new CustomEvent('cronox:userChanged', { detail: user })); } catch {}
-      return user;
-    };
-
-    const grid  = document.getElementById('favGrid');
-    const empty = document.getElementById('favEmpty');
-    const guest = document.getElementById('favGuest');
-    const loginLink = document.getElementById('favLoginLink');
-
-    const ensureLoginLink = () => { // [FAVORITES_BACKEND_ONLY]
-      if (!loginLink) return;
-      loginLink.addEventListener('click', (ev) => {
-        ev.preventDefault();
-        if (typeof window.CRONOX_openAuthModal === 'function') {
-          window.CRONOX_openAuthModal();
-        }
-      });
-    };
-
-    const createStoreLikeCard = (p) => { // [FAVORITES_BACKEND_ONLY]
-      const key = p.slug || String(p.id) || String(p.backendId || "");
-      const a = document.createElement('a');
-      a.href = p.slug
-        ? `/producto.html?slug=${encodeURIComponent(p.slug)}`
-        : `/producto.html?id=${encodeURIComponent(key)}`;
-      a.className = 'product-card';
-      if (key) a.setAttribute('data-id', key);
-      if (p.slug) a.setAttribute('data-slug', p.slug);
-
-      const media   = document.createElement('div');
-      media.className = 'product-media';
-
-      const gallery = document.createElement('div');
-      gallery.className = 'product-images';
-
-      const imgs = (Array.isArray(p.images) && p.images.length ? p.images : [p.image]).filter(Boolean);
-      const imgEls = imgs.map((src, i) => {
-        const im = document.createElement('img');
-        im.className = 'product-img' + (i === 0 ? ' active' : '');
-        im.loading = 'lazy';
-        im.decoding = 'async';
-        im.alt = p.name || 'Producto';
-        im.src = src;
-        return im;
-      });
-      imgEls.forEach(im => gallery.appendChild(im));
-
-      if (imgEls.length > 1) {
-        const prev = document.createElement('button');
-        prev.className = 'product-arrow prev';
-        prev.type = 'button';
-        prev.setAttribute('aria-label', 'Imagen anterior');
-        prev.textContent = '‹';
-
-        const next = document.createElement('button');
-        next.className = 'product-arrow next';
-        next.type = 'button';
-        next.setAttribute('aria-label', 'Imagen siguiente');
-        next.textContent = '›';
-
-        let index = 0;
-        const show = (i) => imgEls.forEach((el, j) => el.classList.toggle('active', j === i));
-        prev.addEventListener('click', (ev) => { ev.preventDefault(); ev.stopPropagation(); index=(index-1+imgEls.length)%imgEls.length; show(index); });
-        next.addEventListener('click', (ev) => { ev.preventDefault(); ev.stopPropagation(); index=(index+1)%imgEls.length; show(index); });
-
-        gallery.appendChild(prev);
-        gallery.appendChild(next);
-      }
-
-      const plus = document.createElement('button');
-      plus.className = 'fav-add';
-      plus.type = 'button';
-      plus.setAttribute('aria-label', `Añadir rápido ${p.name}`);
-      plus.textContent = '+';
-      plus.addEventListener('click', (ev) => {
-        ev.preventDefault(); ev.stopPropagation();
-        if (typeof window.CRONOX_openQuickAddById === 'function') {
-          window.CRONOX_openQuickAddById(p.id);
-        }
-      });
-
-      media.appendChild(gallery);
-      media.appendChild(plus);
-
-      const name = document.createElement('h3');
-      name.className = 'product-name';
-      name.textContent = p.name || '';
-
-      const price = document.createElement('p');
-      price.className = 'product-price';
-      price.textContent = p.priceLabel || p.price || '';
-
-      a.appendChild(media);
-      a.appendChild(name);
-      a.appendChild(price);
-      return a;
-    };
-
-    const mapItem = (fav) => { // [FAVORITES_BACKEND_ONLY]
-      const productId = String(fav?.productId ?? fav?.id ?? fav?.product?.id ?? '').trim();
-      const catalog = Array.isArray(window.CRONOX_PRODUCTS) ? window.CRONOX_PRODUCTS : [];
-      const fromCatalog = catalog.find((x) => String(x.id) === productId || String(x.backendId || '') === productId) || {};
-      const source = fav?.product || fromCatalog || {};
-      const images = Array.isArray(source.images) ? source.images : (source.image ? [source.image] : []);
-      return {
-        id: productId,
-        slug: source.slug,
-        name: source.name || 'Producto',
-        price: source.priceLabel || source.price,
-        priceLabel: source.priceLabel || source.price,
-        image: source.image || images[0] || '',
-        images,
-        backendId: source.backendId,
-      };
-    };
-
-    const render = () => { // [FAVORITES_BACKEND_ONLY]
-      if (!grid || !empty || !guest) return;
-      grid.innerHTML = '';
-
-      if (!hasUser()) {
-        empty.hidden = true;
-        guest.hidden = false;
-        return;
-      }
-
-      guest.hidden = true;
-      const favs = state.items.map(mapItem).filter((x) => x.id && (x.image || (x.images && x.images.length)));
-      if (!favs.length) {
-        empty.hidden = false;
-        return;
-      }
-      empty.hidden = true;
-
-      const frag = document.createDocumentFragment();
-      favs.forEach((p) => frag.appendChild(createStoreLikeCard(p)));
-      grid.appendChild(frag);
-    };
-
-    const loadFavorites = async () => { // [FAVORITES_BACKEND_ONLY]
-      const user = await ensureUser();
-      if (!user) {
-        state.items = [];
-        render();
-        return;
-      }
-      try {
-        const data = await api().getFavorites();
-        state.items = Array.isArray(data) ? data : [];
-        render();
-      } catch (error) {
-        console.warn('[CRONOX] No se pudieron cargar los favoritos', error);
-        state.items = [];
-        render();
-      }
-    };
-
-    document.addEventListener('DOMContentLoaded', () => {
-      ensureLoginLink();
-      loadFavorites();
-    });
-
-    window.addEventListener('cronox:productsLoaded', render); // [FAVORITES_BACKEND_ONLY]
-    window.addEventListener('cronox:favsChanged', loadFavorites); // [FAVORITES_BACKEND_ONLY]
-    window.addEventListener('cronox:userChanged', loadFavorites);
-  })();
-  </script>
 
   <script src="assets/api.js"></script>
   <script src="assets/products.js?v=47" defer></script>
@@ -297,5 +123,6 @@
   <script src="assets/cart-badge.js?v=42" defer></script>
   <script src="assets/fav-toggle.js?v=42" defer></script>
   <script src="assets/product-gallery.js?v=1" defer></script>
+  <script src="assets/favorites.js?v=1" defer></script>
 </body>
 </html>
