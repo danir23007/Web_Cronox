@@ -58,8 +58,8 @@ html,body{margin:0;padding:0;background:#000;color:#fff}
 .topbar__logo:hover{opacity:.88}
 .topbar__logo-img{
   display:block;
-  height:auto;
-  max-height:calc(var(--topbar-h) - 8px);
+  height:32px;
+  width:auto;
 }
 
 /* ===== Icon Buttons ===== */
@@ -77,16 +77,19 @@ html,body{margin:0;padding:0;background:#000;color:#fff}
 .topbar__cart .icon-bag{opacity:.9;transition:all .3s ease;}
 .topbar__cart:hover .icon-bag{stroke:#fff!important;fill:rgba(255,255,255,.15)!important;filter:drop-shadow(0 0 5px rgba(255,255,255,.3));opacity:1;}
 .topbar__cart[aria-current="page"] .icon-bag{stroke:#000!important;fill:#fff!important;filter:drop-shadow(0 0 6px rgba(255,255,255,.45));opacity:1!important;}
+.topbar-icon.active .icon-bag{stroke:#000!important;fill:#fff!important;filter:drop-shadow(0 0 6px rgba(255,255,255,.45));opacity:1!important;}
 
 .icon-star{width:22px;height:22px;stroke:currentColor!important;fill:none!important;vertical-align:middle;transition:opacity .2s ease,transform .2s ease;}
 .topbar__fav{position:relative;display:inline-flex;align-items:center;gap:4px;color:#fff;}
 .topbar__fav:hover .icon-star{opacity:.8;transform:scale(1.04);}
 .topbar__fav .fav-count{position:absolute;top:-4px;right:-10px;background:#fff;color:#000;border-radius:10px;font:700 10px/1 system-ui;padding:1px 5px;min-width:16px;text-align:center;}
 .topbar__fav[aria-current="page"] .icon-star{fill:#fff!important;stroke:#fff!important;filter:drop-shadow(0 0 6px rgba(255,255,255,.45));}
+.topbar-icon.active .icon-star{fill:#fff!important;stroke:#fff!important;filter:drop-shadow(0 0 6px rgba(255,255,255,.45));}
 
 .topbar__profile{position:relative;display:inline-flex;align-items:center;gap:4px;color:#fff;text-decoration:none;}
 .icon-user{width:22px;height:22px;stroke:currentColor!important;fill:none!important;vertical-align:middle;transition:opacity .2s ease, transform .2s ease;}
 .topbar__profile:hover .icon-user{opacity:.8;transform:scale(1.04);}
+.topbar-icon.active .icon-user{stroke:#fff!important;opacity:1;filter:drop-shadow(0 0 6px rgba(255,255,255,.45));}
 
 /* ===== Searchbar (flotante) ===== */
 .searchbar{

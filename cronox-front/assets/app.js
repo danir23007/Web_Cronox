@@ -54,6 +54,27 @@
     window.addEventListener('load', updateTopbarOnScroll);
   }
 
+  function activateTopbarIcon() {
+    const body = document.body;
+    if (!body) return;
+
+    const favoritesIcon = document.querySelector('.topbar-icon-favorites');
+    const cartIcon = document.querySelector('.topbar-icon-cart');
+    const userIcon = document.querySelector('.topbar-icon-user');
+
+    const markActive = (el) => {
+      if (!el) return;
+      el.classList.add('active');
+      el.setAttribute('aria-current', 'page');
+    };
+
+    if (body.classList.contains('page-favorites')) markActive(favoritesIcon);
+    if (body.classList.contains('page-cart')) markActive(cartIcon);
+    if (body.classList.contains('page-login')) markActive(userIcon);
+  }
+
+  document.addEventListener('DOMContentLoaded', activateTopbarIcon);
+
   // ===== Drawer Lateral (si lo usas) =====
   const overlay = $('.overlay');
   const overlayUsers = new Map();
