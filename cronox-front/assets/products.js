@@ -504,7 +504,6 @@
     favBtn.dataset.price = p.priceLabel || euros(p.price);
     favBtn.dataset.image = imgs[0] || p.image || "";
     favBtn.innerHTML = STAR_ICON;
-    if (isFav(p.backendId ?? p.id)) favBtn.classList.add("is-favorite");
     favBtn.addEventListener("click", (ev) => { ev.preventDefault(); ev.stopPropagation(); });
 
     const plus = document.createElement("button");

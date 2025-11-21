@@ -473,3 +473,22 @@ a.product-card{display:block;text-decoration:none;color:inherit;cursor:pointer;}
 .auth-overlay.auth-hidden {
   display: none !important;
 }
+
+/* Estrella en TARJETAS de producto (no topbar) */
+.product-card .favorite-toggle .icon-star,
+.products-grid .favorite-toggle .icon-star,
+.favorites-grid .favorite-toggle .icon-star,
+.pdp__media .favorite-toggle .icon-star {
+  font-size: 24px;
+  line-height: 1;
+  color: rgba(0, 0, 0, 0.45);
+}
+
+/* Cuando el producto SÍ está en favoritos en la tarjeta */
+.product-card .favorite-toggle.is-favorite .icon-star,
+.products-grid .favorite-toggle.is-favorite .icon-star,
+.favorites-grid .favorite-toggle.is-favorite .icon-star,
+.pdp__media .favorite-toggle.is-favorite .icon-star {
+  color: #000000;
+  text-shadow: 0 0 4px rgba(0, 0, 0, 0.4);
+}

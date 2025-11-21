@@ -159,10 +159,8 @@
     });
     imgEls.forEach((im) => gallery.appendChild(im));
 
-    const isFavorite = favoriteIdsSet.has(String(product.backendId ?? product.id ?? product.slug ?? ''));
-
     const favBtn = document.createElement('button');
-    favBtn.className = 'favorite-toggle' + (isFavorite ? ' is-favorite' : '');
+    favBtn.className = 'favorite-toggle';
     favBtn.type = 'button';
     favBtn.setAttribute('aria-label', 'Marcar como favorito');
     favBtn.dataset.productId = String(product.backendId ?? product.id ?? '');
