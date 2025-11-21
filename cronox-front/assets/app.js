@@ -473,6 +473,10 @@
       if (typeof updateFavoritesBadge === 'function') {
         updateFavoritesBadge();
       }
+
+      window.dispatchEvent(new CustomEvent('cronox:favsChanged', {
+        detail: Array.from(favoritesState.ids),
+      }));
     } catch (error) {
       console.error('Error toggling favorite', error);
     }
