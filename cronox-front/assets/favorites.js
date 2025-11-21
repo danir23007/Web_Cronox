@@ -160,19 +160,15 @@
     imgEls.forEach((im) => gallery.appendChild(im));
 
     const favBtn = document.createElement('button');
-    favBtn.className = 'favorite-toggle';
+    favBtn.className = 'favorite-toggle is-favorite';
     favBtn.type = 'button';
-    favBtn.setAttribute('aria-label', 'Marcar como favorito');
+    favBtn.setAttribute('aria-label', 'Quitar de favoritos');
     favBtn.dataset.productId = String(product.backendId ?? product.id ?? '');
     favBtn.dataset.slug = product.slug || '';
     favBtn.dataset.name = product.name || 'Producto';
     favBtn.dataset.price = formatPriceFromCents(product.priceInCents);
     favBtn.dataset.image = imgs[0] || product.image || '';
     favBtn.innerHTML = STAR_ICON;
-    favBtn.addEventListener('click', (ev) => {
-      ev.preventDefault();
-      ev.stopPropagation();
-    });
 
     if (imgEls.length > 1) {
       const prev = document.createElement('button');
