@@ -511,7 +511,9 @@
     const productId = String(p.backendId ?? p.id ?? "");
     return `
       <a class="product-card" href="${href}" aria-label="${p.name}">
-        <button class="favorite-toggle${favoriteClass}" type="button" aria-label="Marcar como favorito" data-product-id="${productId}">★</button>
+        <button class="favorite-toggle${favoriteClass}" type="button" aria-label="Marcar como favorito" data-product-id="${productId}">
+          <span class="icon-star"></span>
+        </button>
         <img class="product-img" src="${p.image}" alt="${p.name}" loading="lazy" decoding="async">
         <div class="product-card__info">
           <h3 class="product-name">${p.name}</h3>

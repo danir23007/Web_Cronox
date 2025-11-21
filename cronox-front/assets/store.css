@@ -58,7 +58,7 @@ html,body{margin:0;padding:0;background:#000;color:#fff}
 .topbar__logo:hover{opacity:.88}
 .topbar__logo-img{
   display:block;
-  height:32px;
+  height:52px;
   width:auto;
   object-fit:contain;
 }
@@ -228,23 +228,27 @@ a.product-card{display:block;text-decoration:none;color:inherit;cursor:pointer;}
   background:transparent;
   border:none;
   padding:0;
-  display:flex;
+  cursor:pointer;
+  line-height:1;
+  z-index:2;
+  transition:transform .25s ease,opacity .25s ease,color .2s ease,text-shadow .2s ease;
+}
+.favorite-toggle .icon-star,.fav-toggle .icon-star{
+  display:inline-flex;
   align-items:center;
   justify-content:center;
-  cursor:pointer;
-  transition:transform .25s ease,opacity .25s ease,color .2s ease,text-shadow .2s ease;
-  z-index:2;
+  font-size:24px;
   line-height:1;
   color:rgba(255,255,255,.45);
 }
-.favorite-toggle .icon-star,.fav-toggle .icon-star{
-  width:24px;
-  height:24px;
-  stroke:currentColor!important;
-  fill:none!important;
+.favorite-toggle .icon-star::before,.fav-toggle .icon-star::before{
+  content:'\2605';
 }
 .favorite-toggle:hover,.fav-toggle:hover{transform:scale(1.05);opacity:1;}
-.favorite-toggle.is-favorite,.fav-toggle.is-favorite{color:#fff;text-shadow:0 0 6px rgba(255,255,255,.35);}
+.favorite-toggle.is-favorite .icon-star,.fav-toggle.is-favorite .icon-star{
+  color:#fff;
+  text-shadow:0 0 4px rgba(255,255,255,.75);
+}
 
 /* “+” CLÁSICO en la imagen */
 .fav-add{
