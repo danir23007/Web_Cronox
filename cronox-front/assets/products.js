@@ -160,6 +160,12 @@
 
   let PRODUCTS = [];
 
+  const fetchFavoriteIds = typeof window.fetchFavoritesIds === "function"
+    ? window.fetchFavoritesIds
+    : async () => new Set();
+
+  const favoritesReady = fetchFavoriteIds().catch(() => new Set());
+
   const getFavSet = () => {
     if (window.CRONOX_FAVORITE_IDS instanceof Set) return window.CRONOX_FAVORITE_IDS;
     const favs = window.CRONOX_FAVORITES;
@@ -660,6 +666,7 @@
 
   async function initCatalog() {
     const { products, source } = await loadCatalog();
+    await favoritesReady.catch(() => {});
     setProducts(products);
     applyAll();
     notifyCatalogReady(source);
