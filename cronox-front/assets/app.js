@@ -412,13 +412,21 @@
     const productId = normalizeFavId(btn.dataset.productId || btn.dataset.id || btn.dataset.backendId || '');
     if (!productId) return;
 
+    const numericId = Number(productId);
+    const payload = {};
+    if (Number.isFinite(numericId)) payload.productId = numericId;
+    const slug = btn.dataset.slug || '';
+    if (slug) payload.slug = slug;
+    if (!payload.productId && !payload.slug) return;
+
     try {
-      const res = await fetch(`/api/favorites/toggle/${productId}`, {
+      const res = await fetch('/api/favorites/toggle', {
         method: 'POST',
         credentials: 'include',
         headers: {
           'Content-Type': 'application/json',
         },
+        body: JSON.stringify(payload),
       });
 
       if (res.status === 401 || res.status === 403) {

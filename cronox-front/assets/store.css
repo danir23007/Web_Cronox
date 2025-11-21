@@ -242,12 +242,15 @@ a.product-card{display:block;text-decoration:none;color:inherit;cursor:pointer;}
   color:rgba(255,255,255,.45);
 }
 .favorite-toggle .icon-star::before,.fav-toggle .icon-star::before{
-  content:'\2605';
+  content:'\2606';
 }
 .favorite-toggle:hover,.fav-toggle:hover{transform:scale(1.05);opacity:1;}
 .favorite-toggle.is-favorite .icon-star,.fav-toggle.is-favorite .icon-star{
   color:#fff;
   text-shadow:0 0 4px rgba(255,255,255,.75);
+}
+.favorite-toggle.is-favorite .icon-star::before,.fav-toggle.is-favorite .icon-star::before{
+  content:'\2605';
 }
 
 .product-card .favorite-toggle .icon-star,
