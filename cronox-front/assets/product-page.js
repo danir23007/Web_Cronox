@@ -193,6 +193,12 @@
 
   let PRODUCTS = [];
 
+  const fetchFavoriteIds = typeof window.fetchFavoritesIds === "function"
+    ? window.fetchFavoritesIds
+    : async () => new Set();
+
+  const favoritesReady = fetchFavoriteIds().catch(() => new Set());
+
   const getFavSet = () => (window.CRONOX_FAVORITE_IDS instanceof Set ? window.CRONOX_FAVORITE_IDS : new Set());
   const isFav = (product) => {
     if (!product) return false;
@@ -583,6 +589,7 @@
   // ==========================
   async function init() {
     const key = getProductKey();
+    await favoritesReady.catch(() => {});
     const catalog = await ensureCatalog();
 
     const cleanedCatalog = catalog.filter((item) => Boolean(item && (item.id || item.slug)));

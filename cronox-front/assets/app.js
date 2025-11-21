@@ -338,23 +338,30 @@
     });
   };
 
-  async function updateFavoritesBadge() {
-    const badge = document.querySelector('.favorites-count') || document.querySelector('.fav-count');
-    const favoritesIcon = document.querySelector('.topbar-icon-favorites');
-    if (!badge || !favoritesIcon) return;
+  const setFavoriteIds = (ids) => {
+    favoritesState.ids = ids instanceof Set ? ids : new Set();
+    window.CRONOX_FAVORITE_IDS = favoritesState.ids;
+    syncFavoriteButtons();
+    return favoritesState.ids;
+  };
 
+  window.CRONOX_setFavoriteIds = setFavoriteIds;
+
+  async function fetchFavoritesIds() {
     try {
       const res = await fetch('/api/favorites', {
         method: 'GET',
         credentials: 'include',
       });
 
+      if (res.status === 401 || res.status === 403) {
+        setFavoriteIds(new Set());
+        return favoritesState.ids;
+      }
+
       if (!res.ok) {
-        badge.textContent = '';
-        badge.style.display = 'none';
-        favoritesState.ids = new Set();
-        syncFavoriteButtons();
-        return;
+        setFavoriteIds(new Set());
+        return favoritesState.ids;
       }
 
       const favorites = await res.json();
@@ -364,50 +371,36 @@
         if (id) favIds.add(id);
       });
 
-      favoritesState.ids = favIds;
-      window.CRONOX_FAVORITE_IDS = favoritesState.ids;
-      const count = favIds.size;
-
-      if (count > 0) {
-        badge.textContent = String(count);
-        badge.style.display = 'inline-block';
-        badge.hidden = false;
-      } else {
-        badge.textContent = '';
-        badge.style.display = 'none';
-        badge.hidden = true;
-      }
-
-      syncFavoriteButtons();
+      setFavoriteIds(favIds);
       window.dispatchEvent(new CustomEvent('cronox:favsChanged', { detail: Array.from(favIds) }));
+      return favoritesState.ids;
     } catch (err) {
-      console.error('Error fetching favorites for badge:', err);
+      console.warn('Error fetching favorites for badge:', err);
+      setFavoriteIds(new Set());
+      return favoritesState.ids;
+    }
+  }
+  window.fetchFavoritesIds = fetchFavoritesIds;
+
+  async function updateFavoritesBadge() {
+    const badge = document.querySelector('.favorites-count') || document.querySelector('.fav-count');
+    const favoritesIcon = document.querySelector('.topbar-icon-favorites');
+    if (!badge || !favoritesIcon) return;
+
+    const favIds = await fetchFavoritesIds();
+    const count = favIds.size;
+
+    if (count > 0) {
+      badge.textContent = String(count);
+      badge.style.display = 'inline-block';
+      badge.hidden = false;
+    } else {
       badge.textContent = '';
       badge.style.display = 'none';
-      favoritesState.ids = new Set();
-      syncFavoriteButtons();
+      badge.hidden = true;
     }
   }
   window.updateFavoritesBadge = updateFavoritesBadge;
-
-  async function toggleFavorite(productId) {
-    try {
-      const res = await fetch(`/api/favorites/toggle/${productId}`, {
-        method: 'POST',
-        credentials: 'include',
-      });
-
-      if (!res.ok) {
-        console.error('Error toggling favorite', res.status);
-        return null;
-      }
-
-      return res.json();
-    } catch (error) {
-      console.error('Error toggling favorite', error);
-      return null;
-    }
-  }
 
   document.addEventListener('click', async (event) => {
     const btn = event.target.closest('.favorite-toggle, .fav-toggle');
@@ -419,17 +412,43 @@
     const productId = normalizeFavId(btn.dataset.productId || btn.dataset.id || btn.dataset.backendId || '');
     if (!productId) return;
 
-    const result = await toggleFavorite(productId);
-    if (!result) return;
+    try {
+      const res = await fetch(`/api/favorites/toggle/${productId}`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
 
-    const status = result.status || (result.isFavorite ? 'added' : 'removed');
-    const isFavorite = status === 'added';
+      if (res.status === 401 || res.status === 403) {
+        if (typeof window.openAuthModal === 'function') {
+          window.openAuthModal('login');
+        }
+        return;
+      }
 
-    btn.classList.toggle('is-favorite', isFavorite);
-    if (isFavorite) favoritesState.ids.add(productId);
-    else favoritesState.ids.delete(productId);
+      if (!res.ok) {
+        console.error('Error toggling favorite', res.status);
+        return;
+      }
 
-    updateFavoritesBadge();
+      const data = await res.json();
+      const status = data.status || (data.isFavorite ? 'added' : 'removed');
+      const isFavorite = status === 'added';
+
+      btn.classList.toggle('is-favorite', isFavorite);
+      if (isFavorite) favoritesState.ids.add(productId);
+      else favoritesState.ids.delete(productId);
+
+      window.CRONOX_FAVORITE_IDS = favoritesState.ids;
+
+      if (typeof updateFavoritesBadge === 'function') {
+        updateFavoritesBadge();
+      }
+    } catch (error) {
+      console.error('Error toggling favorite', error);
+    }
   });
 
   document.addEventListener('DOMContentLoaded', () => {

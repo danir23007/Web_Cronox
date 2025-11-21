@@ -7,6 +7,7 @@
   }
 
   const STAR_ICON = window.CRONOX_STAR_ICON || '<span class="icon-star"></span>';
+  let favoriteIdsSet = new Set();
 
   window.formatPriceFromCents = window.formatPriceFromCents || formatPriceFromCents;
 
@@ -42,6 +43,7 @@
     setVisible(refs.empty, false);
     setVisible(refs.list, false);
     setVisible(refs.login, true);
+    updateFavoriteIdsSet([]);
   }
 
   function showEmpty() {
@@ -49,6 +51,7 @@
     setVisible(refs.login, false);
     setVisible(refs.list, false);
     setVisible(refs.empty, true);
+    updateFavoriteIdsSet([]);
   }
 
   function showList() {
@@ -113,6 +116,20 @@
     };
   }
 
+  const updateFavoriteIdsSet = (list) => {
+    const ids = new Set();
+    (Array.isArray(list) ? list : []).forEach((fav) => {
+      const id = String(fav.backendId ?? fav.id ?? fav.productId ?? '').trim();
+      if (id) ids.add(id);
+    });
+    favoriteIdsSet = ids;
+    if (typeof window.CRONOX_setFavoriteIds === 'function') {
+      window.CRONOX_setFavoriteIds(ids);
+    } else {
+      window.CRONOX_FAVORITE_IDS = ids;
+    }
+  };
+
   function createProductCard(product) {
     const key = product.slug || String(product.id || product.backendId || '');
     const a = document.createElement('a');
@@ -142,8 +159,10 @@
     });
     imgEls.forEach((im) => gallery.appendChild(im));
 
+    const isFavorite = favoriteIdsSet.has(String(product.backendId ?? product.id ?? product.slug ?? ''));
+
     const favBtn = document.createElement('button');
-    favBtn.className = 'favorite-toggle is-favorite';
+    favBtn.className = 'favorite-toggle' + (isFavorite ? ' is-favorite' : '');
     favBtn.type = 'button';
     favBtn.setAttribute('aria-label', 'Marcar como favorito');
     favBtn.dataset.productId = String(product.backendId ?? product.id ?? '');
@@ -225,6 +244,8 @@
     refs.grid.innerHTML = '';
 
     const favorites = (Array.isArray(list) ? list : []).map(normalizeFavorite).filter((fav) => fav.id && (fav.image || fav.images.length));
+
+    updateFavoriteIdsSet(favorites);
 
     if (!favorites.length) {
       showEmpty();

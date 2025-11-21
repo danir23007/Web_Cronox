@@ -252,17 +252,23 @@ a.product-card{display:block;text-decoration:none;color:inherit;cursor:pointer;}
 
 .product-card .favorite-toggle .icon-star,
 .product-card .fav-toggle .icon-star,
-.favorites-card .favorite-toggle .icon-star,
-.favorites-card .fav-toggle .icon-star{
+.favorites-grid .favorite-toggle .icon-star,
+.favorites-grid .fav-toggle .icon-star,
+.favorites-list-item .favorite-toggle .icon-star,
+.product-detail .favorite-toggle .icon-star{
+  font-size:24px;
+  line-height:1;
   color:rgba(0,0,0,.45);
 }
 
 .product-card .favorite-toggle.is-favorite .icon-star,
 .product-card .fav-toggle.is-favorite .icon-star,
-.favorites-card .favorite-toggle.is-favorite .icon-star,
-.favorites-card .fav-toggle.is-favorite .icon-star{
+.favorites-grid .favorite-toggle.is-favorite .icon-star,
+.favorites-grid .fav-toggle.is-favorite .icon-star,
+.favorites-list-item .favorite-toggle.is-favorite .icon-star,
+.product-detail .favorite-toggle.is-favorite .icon-star{
   color:#000;
-  text-shadow:0 0 4px rgba(0,0,0,.35);
+  text-shadow:0 0 4px rgba(0,0,0,.4);
 }
 
 /* “+” CLÁSICO en la imagen */
