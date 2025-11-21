@@ -23,6 +23,7 @@
   function euros(n){ return new Intl.NumberFormat("es-ES",{style:"currency",currency:"EUR"}).format(n); }
 
   const API = window.CRONOX_API || {};
+  const STAR_ICON = window.CRONOX_STAR_ICON || '<svg xmlns="http://www.w3.org/2000/svg" class="icon icon-star" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17.3 13.97 18.18 21 12 17.77 5.82 21 6.7 13.97 2 9.27 8.91 8.26 12 2"></polygon></svg>';
 
   const localFallbackFactory = () => [
     {
@@ -496,7 +497,7 @@
     favBtn.dataset.name = p.name || "Producto";
     favBtn.dataset.price = p.priceLabel || euros(p.price);
     favBtn.dataset.image = imgs[0] || p.image || "";
-    favBtn.textContent = "★";
+    favBtn.innerHTML = STAR_ICON;
     if (isFav(p.backendId ?? p.id)) favBtn.classList.add("is-favorite");
     favBtn.addEventListener("click", (ev) => { ev.preventDefault(); ev.stopPropagation(); });
 

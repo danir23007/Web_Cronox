@@ -520,7 +520,11 @@
           <button id="pMediaPrev" class="pdp__media-arrow prev" type="button" aria-label="Imagen anterior" hidden>
             <span aria-hidden="true">‹</span>
           </button>
-          <button id="pFavoriteToggle" class="favorite-toggle" type="button" aria-label="Marcar como favorito">★</button>
+          <button id="pFavoriteToggle" class="favorite-toggle" type="button" aria-label="Marcar como favorito">
+            <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-star" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polygon points="12 2 15.09 8.26 22 9.27 17.3 13.97 18.18 21 12 17.77 5.82 21 6.7 13.97 2 9.27 8.91 8.26 12 2"></polygon>
+            </svg>
+          </button>
           <div class="pdp__media-viewport" id="pMediaViewport">
             <img id="pImage" class="pdp__media-img is-active" alt="" loading="lazy" decoding="async">
           </div>

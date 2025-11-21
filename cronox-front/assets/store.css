@@ -58,8 +58,9 @@ html,body{margin:0;padding:0;background:#000;color:#fff}
 .topbar__logo:hover{opacity:.88}
 .topbar__logo-img{
   display:block;
-  height:56px;
+  height:32px;
   width:auto;
+  object-fit:contain;
 }
 
 /* ===== Icon Buttons ===== */
@@ -231,14 +232,19 @@ a.product-card{display:block;text-decoration:none;color:inherit;cursor:pointer;}
   align-items:center;
   justify-content:center;
   cursor:pointer;
-  transition:transform .25s ease,opacity .25s ease;
+  transition:transform .25s ease,opacity .25s ease,color .2s ease,text-shadow .2s ease;
   z-index:2;
-  font-size:20px;
   line-height:1;
-  color:#000;
+  color:rgba(255,255,255,.45);
+}
+.favorite-toggle .icon-star,.fav-toggle .icon-star{
+  width:24px;
+  height:24px;
+  stroke:currentColor!important;
+  fill:none!important;
 }
 .favorite-toggle:hover,.fav-toggle:hover{transform:scale(1.05);opacity:1;}
-.favorite-toggle.is-favorite,.fav-toggle.is-favorite{color:#000;text-shadow:0 0 4px rgba(0,0,0,.25);}
+.favorite-toggle.is-favorite,.fav-toggle.is-favorite{color:#fff;text-shadow:0 0 6px rgba(255,255,255,.35);}
 
 /* “+” CLÁSICO en la imagen */
 .fav-add{
