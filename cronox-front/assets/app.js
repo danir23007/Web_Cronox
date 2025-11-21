@@ -422,8 +422,8 @@
       });
 
       if (res.status === 401 || res.status === 403) {
-        if (typeof window.openAuthModal === 'function') {
-          window.openAuthModal('login');
+        if (typeof window.CRONOX_openAuthModal === 'function') {
+          window.CRONOX_openAuthModal('login');
         }
         return;
       }

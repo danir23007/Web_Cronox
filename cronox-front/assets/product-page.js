@@ -513,11 +513,10 @@
     const href = p.slug
       ? `/producto.html?slug=${encodeURIComponent(p.slug)}`
       : `/producto.html?id=${encodeURIComponent(p.id)}`;
-    const favoriteClass = isFav(p) ? " is-favorite" : "";
     const productId = String(p.backendId ?? p.id ?? "");
     return `
       <a class="product-card" href="${href}" aria-label="${p.name}">
-        <button class="favorite-toggle${favoriteClass}" type="button" aria-label="Marcar como favorito" data-product-id="${productId}">
+        <button class="favorite-toggle" type="button" aria-label="Marcar como favorito" data-product-id="${productId}">
           <span class="icon-star"></span>
         </button>
         <img class="product-img" src="${p.image}" alt="${p.name}" loading="lazy" decoding="async">
@@ -555,7 +554,6 @@
     if (pFavoriteToggle) {
       const pid = product.backendId ?? product.id ?? "";
       pFavoriteToggle.dataset.productId = String(pid);
-      pFavoriteToggle.classList.toggle("is-favorite", isFav(product));
       pFavoriteToggle.hidden = !pid;
     }
 
