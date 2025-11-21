@@ -500,6 +500,7 @@
     favBtn.type = "button";
     favBtn.setAttribute("aria-label", "Marcar como favorito");
     favBtn.dataset.productId = String(p.backendId ?? p.id ?? "");
+    favBtn.dataset.slug = p.slug || "";
     favBtn.dataset.name = p.name || "Producto";
     favBtn.dataset.price = p.priceLabel || euros(p.price);
     favBtn.dataset.image = imgs[0] || p.image || "";

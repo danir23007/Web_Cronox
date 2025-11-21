@@ -332,7 +332,15 @@
   const syncFavoriteButtons = () => {
     const ids = favoritesState.ids;
     document.querySelectorAll('.favorite-toggle, .fav-toggle').forEach((btn) => {
-      const pid = normalizeFavId(btn.dataset.productId || btn.dataset.id || btn.dataset.backendId || '');
+      const card = btn.closest('.product-card');
+      const pid = normalizeFavId(
+        btn.dataset.productId
+        || btn.dataset.id
+        || btn.dataset.backendId
+        || card?.dataset.backendId
+        || card?.dataset.id
+        || '',
+      );
       if (!pid) return;
       btn.classList.toggle('is-favorite', ids.has(pid));
     });
@@ -409,13 +417,24 @@
     event.preventDefault();
     event.stopPropagation();
 
-    const productId = normalizeFavId(btn.dataset.productId || btn.dataset.id || btn.dataset.backendId || '');
-    if (!productId) return;
+    const card = btn.closest('.product-card');
+    const productId = normalizeFavId(
+      btn.dataset.productId
+      || btn.dataset.id
+      || btn.dataset.backendId
+      || card?.dataset.backendId
+      || card?.dataset.id
+      || '',
+    );
+    const slug = (btn.dataset.slug || card?.dataset.slug || '').trim();
+    if (!productId && !slug) return;
 
     const numericId = Number(productId);
     const payload = {};
     if (Number.isFinite(numericId)) payload.productId = numericId;
-    const slug = btn.dataset.slug || '';
+    if (!Number.isFinite(numericId) && productId) {
+      payload.slug = productId; // fallback cuando el ID no es numérico
+    }
     if (slug) payload.slug = slug;
     if (!payload.productId && !payload.slug) return;
 
