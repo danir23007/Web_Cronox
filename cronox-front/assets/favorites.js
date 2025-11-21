@@ -6,7 +6,7 @@
     return euros.toFixed(2).replace('.', ',') + ' €';
   }
 
-  const STAR_ICON = window.CRONOX_STAR_ICON || '<svg xmlns="http://www.w3.org/2000/svg" class="icon icon-star" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17.3 13.97 18.18 21 12 17.77 5.82 21 6.7 13.97 2 9.27 8.91 8.26 12 2"></polygon></svg>';
+  const STAR_ICON = window.CRONOX_STAR_ICON || '<span class="icon-star"></span>';
 
   window.formatPriceFromCents = window.formatPriceFromCents || formatPriceFromCents;
 
