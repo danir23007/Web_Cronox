@@ -131,7 +131,10 @@
       if (id) ids.add(id);
     });
     favoriteIdsSet = ids;
-    if (typeof window.CRONOX_setFavoriteIds === 'function') {
+    if (window.CRONOX_FAVORITES && typeof window.CRONOX_FAVORITES.setIdsFromServer === 'function') {
+      window.CRONOX_FAVORITES.setIdsFromServer(list);
+      favoriteIdsSet = window.CRONOX_FAVORITES.ids;
+    } else if (typeof window.CRONOX_setFavoriteIds === 'function') {
       favoriteIdsSet = window.CRONOX_setFavoriteIds(ids);
     } else {
       window.CRONOX_FAVORITE_IDS = ids;
@@ -178,6 +181,14 @@
     favBtn.dataset.price = formatPriceFromCents(product.priceInCents);
     favBtn.dataset.image = imgs[0] || product.image || '';
     favBtn.innerHTML = STAR_ICON;
+    favBtn.dataset.favBound = '1';
+    favBtn.addEventListener('click', (ev) => {
+      ev.preventDefault();
+      ev.stopPropagation();
+      if (window.CRONOX_FAVORITES && typeof window.CRONOX_FAVORITES.toggleFromButton === 'function') {
+        window.CRONOX_FAVORITES.toggleFromButton(favBtn);
+      }
+    });
 
     if (imgEls.length > 1) {
       const prev = document.createElement('button');

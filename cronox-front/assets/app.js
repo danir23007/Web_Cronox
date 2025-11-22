@@ -320,85 +320,221 @@
     }
   });
 
-  // ===== Favoritos (estrella) — backend =====
-  const favoritesState = { ids: new Set() };
+  // ===== Favoritos globales =====
+  const FavoritesManager = {
+    ready: false,
+    ids: new Set(),
+    isLoading: false,
+    initDone: false,
+    normalizeId(value) {
+      const str = value == null ? '' : String(value).trim();
+      return str || null;
+    },
+    init() {
+      if (this.initDone) return;
+      this.initDone = true;
+      const run = async () => {
+        await this.loadFromServer();
+        this.updateDomState();
+        this.ready = true;
+      };
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', run, { once: true });
+      } else {
+        run();
+      }
+    },
+    async loadFromServer() {
+      if (this.isLoading) return this.ids;
+      this.isLoading = true;
+      try {
+        const meRes = await fetch('/api/auth/me', { credentials: 'include' });
+        if (meRes.status === 401) {
+          this.setIdsFromServer([]);
+          return this.ids;
+        }
+        if (!meRes.ok) {
+          throw new Error('Error comprobando sesión');
+        }
 
-  const normalizeFavId = (value) => {
-    if (value == null) return null;
-    const str = String(value).trim();
-    return str ? str : null;
-  };
+        const res = await fetch('/api/favorites', {
+          method: 'GET',
+          credentials: 'include',
+        });
 
-  const applyFavoriteIds = (ids) => {
-    const nextSet = ids instanceof Set ? ids : new Set(Array.from(ids || []));
-    favoritesState.ids = nextSet;
-    if (typeof window.CRONOX_setFavoriteIds === 'function') {
-      favoritesState.ids = window.CRONOX_setFavoriteIds(nextSet);
-    } else {
-      window.CRONOX_FAVORITE_IDS = favoritesState.ids;
-    }
-    return favoritesState.ids;
-  };
+        if (!res.ok) {
+          throw new Error('Error al cargar favoritos');
+        }
 
-  async function fetchFavoritesIds() {
-    try {
-      const res = await fetch('/api/favorites', {
-        method: 'GET',
-        credentials: 'include',
+        const favorites = await res.json();
+        this.setIdsFromServer(Array.isArray(favorites) ? favorites : []);
+        return this.ids;
+      } catch (err) {
+        console.error('[CRONOX] No se pudieron cargar favoritos', err);
+        this.setIdsFromServer([]);
+        return this.ids;
+      } finally {
+        this.isLoading = false;
+      }
+    },
+    setIdsFromServer(list) {
+      const next = new Set();
+      (Array.isArray(list) ? list : []).forEach((fav) => {
+        const id = this.normalizeId(fav?.backendId ?? fav?.productId ?? fav?.id ?? fav?.product?.id ?? fav);
+        if (id) next.add(id);
       });
+      this.ids = next;
+      window.CRONOX_FAVORITE_IDS = this.ids;
+      if (typeof window.CRONOX_setFavoriteIds === 'function') {
+        try { window.CRONOX_setFavoriteIds(new Set(next)); } catch {}
+      }
+      this.updateDomState();
+      this.updateTopbarCount();
+      this.emitChange();
+      return this.ids;
+    },
+    isFavorite(productId) {
+      const id = this.normalizeId(productId);
+      return id ? this.ids.has(id) : false;
+    },
+    async toggleFromButton(btn) {
+      if (!btn) return;
+      const productId = btn.dataset.productId || btn.getAttribute('data-product-id') || '';
+      const normId = this.normalizeId(productId);
+      if (!normId) return;
+      if (!this.initDone) this.init();
 
-      if (res.status === 401 || res.status === 403) {
-        applyFavoriteIds(new Set());
-        return favoritesState.ids;
+      try {
+        const sessionRes = await fetch('/api/auth/me', { credentials: 'include' });
+        if (sessionRes.status === 401) {
+          window.dispatchEvent(new CustomEvent('cronox:authRequired', { detail: { reason: 'favorites' } }));
+          return;
+        }
+        if (!sessionRes.ok) {
+          throw new Error('No se pudo verificar la sesión');
+        }
+      } catch (err) {
+        console.error('[CRONOX] No se pudo verificar la sesión', err);
+        return;
       }
 
-      if (!res.ok) {
-        applyFavoriteIds(new Set());
-        return favoritesState.ids;
+      const currentlyFav = this.isFavorite(normId);
+      const willBeFav = !currentlyFav;
+
+      if (willBeFav) {
+        this.ids.add(normId);
+        btn.classList.add('is-favorite');
+      } else {
+        this.ids.delete(normId);
+        btn.classList.remove('is-favorite');
+      }
+      this.updateTopbarCount();
+      this.emitChange();
+
+      try {
+        let res;
+        if (willBeFav) {
+          res = await fetch('/api/favorites', {
+            method: 'POST',
+            credentials: 'include',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ productId: normId }),
+          });
+        } else {
+          res = await fetch(`/api/favorites/${encodeURIComponent(normId)}`, {
+            method: 'DELETE',
+            credentials: 'include',
+          });
+        }
+
+        if (!res.ok) {
+          throw new Error('Error al sincronizar favorito');
+        }
+      } catch (err) {
+        console.error('[CRONOX] Error actualizando favorito', err);
+        if (willBeFav) {
+          this.ids.delete(normId);
+          btn.classList.remove('is-favorite');
+        } else {
+          this.ids.add(normId);
+          btn.classList.add('is-favorite');
+        }
+        this.updateTopbarCount();
+        this.emitChange();
+        if (typeof showToast === 'function') {
+          showToast('No se pudo actualizar tu favorito. Inténtalo de nuevo.');
+        } else if (typeof window.showToast === 'function') {
+          window.showToast('No se pudo actualizar tu favorito. Inténtalo de nuevo.');
+        }
+      }
+    },
+    updateDomState() {
+      const buttons = document.querySelectorAll('.favorite-toggle[data-product-id]');
+      buttons.forEach((btn) => {
+        const productId = btn.dataset.productId || btn.getAttribute('data-product-id');
+        const normId = this.normalizeId(productId);
+        if (!btn.dataset.favBound) {
+          btn.dataset.favBound = '1';
+          btn.addEventListener('click', (ev) => {
+            ev.preventDefault();
+            ev.stopPropagation();
+            if (window.CRONOX_FAVORITES && typeof window.CRONOX_FAVORITES.toggleFromButton === 'function') {
+              window.CRONOX_FAVORITES.toggleFromButton(btn);
+            }
+          });
+        }
+        if (normId && this.isFavorite(normId)) btn.classList.add('is-favorite');
+        else btn.classList.remove('is-favorite');
+      });
+    },
+    updateTopbarCount() {
+      const topbarFav = document.querySelector('.topbar__fav');
+      const badge = topbarFav?.querySelector('.favorites-count, .fav-count');
+      const count = this.ids.size;
+      let target = badge || null;
+      if (!target && topbarFav && count > 0) {
+        target = document.createElement('span');
+        target.className = 'fav-count';
+        topbarFav.appendChild(target);
       }
 
-      const favorites = await res.json();
-      const favIds = new Set();
-      (Array.isArray(favorites) ? favorites : []).forEach((fav) => {
-        const id = normalizeFavId(fav?.productId ?? fav?.id ?? fav?.product?.id);
-        if (id) favIds.add(id);
-      });
+      if (!target) return;
 
-      applyFavoriteIds(favIds);
-      return favoritesState.ids;
-    } catch (err) {
-      console.warn('Error fetching favorites for badge:', err);
-      applyFavoriteIds(new Set());
-      return favoritesState.ids;
-    }
-  }
-  window.fetchFavoritesIds = fetchFavoritesIds;
+      if (count > 0) {
+        target.textContent = String(count);
+        target.style.display = 'inline-block';
+        target.hidden = false;
+      } else {
+        target.textContent = '';
+        target.style.display = 'none';
+        target.hidden = true;
+      }
+    },
+    emitChange() {
+      window.dispatchEvent(new CustomEvent('cronox:favsChanged', {
+        detail: { ids: new Set(this.ids) },
+      }));
+    },
+  };
 
-  async function updateFavoritesBadge() {
-    const badge = document.querySelector('.favorites-count') || document.querySelector('.fav-count');
-    const favoritesIcon = document.querySelector('.topbar-icon-favorites');
-    if (!badge || !favoritesIcon) return;
+  window.CRONOX_FAVORITES = FavoritesManager;
 
-    const favIds = await fetchFavoritesIds();
-    const count = favIds.size;
-    if (typeof window.CRONOX_syncFavoritesDom === 'function') {
-      window.CRONOX_syncFavoritesDom();
-    }
+  window.fetchFavoritesIds = async () => {
+    if (!window.CRONOX_FAVORITES) return new Set();
+    if (!window.CRONOX_FAVORITES.initDone) window.CRONOX_FAVORITES.init();
+    await window.CRONOX_FAVORITES.loadFromServer();
+    return window.CRONOX_FAVORITES.ids;
+  };
 
-    if (count > 0) {
-      badge.textContent = String(count);
-      badge.style.display = 'inline-block';
-      badge.hidden = false;
-    } else {
-      badge.textContent = '';
-      badge.style.display = 'none';
-      badge.hidden = true;
-    }
-  }
-  window.updateFavoritesBadge = updateFavoritesBadge;
+  window.updateFavoritesBadge = () => {
+    if (!window.CRONOX_FAVORITES) return;
+    window.CRONOX_FAVORITES.updateTopbarCount();
+  };
 
   document.addEventListener('DOMContentLoaded', () => {
-    updateFavoritesBadge();
+    if (window.CRONOX_FAVORITES && !window.CRONOX_FAVORITES.initDone) {
+      window.CRONOX_FAVORITES.init();
+    }
   });
 
   // ===== Carrito (API + fallback local) =====

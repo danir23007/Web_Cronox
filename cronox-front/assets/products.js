@@ -160,18 +160,6 @@
 
   let PRODUCTS = [];
 
-  const fetchFavoriteIds = typeof window.fetchFavoritesIds === "function"
-    ? window.fetchFavoritesIds
-    : async () => new Set();
-
-  const favoritesReady = fetchFavoriteIds().catch(() => new Set());
-
-  const syncFavoritesDom = () => {
-    if (typeof window.CRONOX_syncFavoritesDom === "function") {
-      window.CRONOX_syncFavoritesDom();
-    }
-  };
-
   const normalizeProduct = (product) => {
     const copy = cloneProduct(product || {});
     const backendId = copy.backendId != null
@@ -500,6 +488,14 @@
     favBtn.dataset.price = p.priceLabel || euros(p.price);
     favBtn.dataset.image = imgs[0] || p.image || "";
     favBtn.innerHTML = STAR_ICON;
+    favBtn.dataset.favBound = "1";
+    favBtn.addEventListener("click", (ev) => {
+      ev.preventDefault();
+      ev.stopPropagation();
+      if (window.CRONOX_FAVORITES && typeof window.CRONOX_FAVORITES.toggleFromButton === "function") {
+        window.CRONOX_FAVORITES.toggleFromButton(favBtn);
+      }
+    });
 
     const plus = document.createElement("button");
     plus.className = "fav-add";
@@ -546,7 +542,9 @@
     list.forEach((p) => frag.appendChild(createCard(p)));
     productsGrid.appendChild(frag);
 
-    syncFavoritesDom();
+    if (window.CRONOX_FAVORITES && typeof window.CRONOX_FAVORITES.updateDomState === "function") {
+      window.CRONOX_FAVORITES.updateDomState();
+    }
 
     restoreScrollOrFocus();
   }
@@ -662,7 +660,6 @@
 
   async function initCatalog() {
     const { products, source } = await loadCatalog();
-    await favoritesReady.catch(() => {});
     setProducts(products);
     applyAll();
     notifyCatalogReady(source);
