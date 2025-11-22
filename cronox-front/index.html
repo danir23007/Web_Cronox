@@ -19,14 +19,13 @@
 <!-- [AUTH] Modal de login/registro -->
 <div id="authOverlay" class="cronox-auth auth-hidden" aria-hidden="true">
   <div class="cronox-auth__dialog" role="dialog" aria-modal="true" aria-labelledby="authTitle">
-    <button type="button" class="cronox-auth__close" id="authCloseBtn" aria-label="Cerrar">✕</button>
+    <button type="button" class="cronox-auth__close auth-close" id="authCloseBtn" aria-label="Cerrar">✕</button>
     <div class="cronox-auth__content">
       <h2 class="cronox-auth__title" id="authTitle">Iniciar sesión</h2>
 
       <div class="cronox-auth__views">
         <!-- Login -->
         <form id="authLoginForm" class="cronox-auth__view is-active" data-auth-view="login" novalidate>
-          <label class="cronox-auth__label" for="authLoginEmail">Correo electrónico</label>
           <input
             type="email"
             id="authLoginEmail"
@@ -37,7 +36,6 @@
             required
           >
 
-          <label class="cronox-auth__label" for="authLoginPassword">Contraseña</label>
           <input
             type="password"
             id="authLoginPassword"
@@ -58,7 +56,6 @@
 
         <!-- Registro -->
         <form id="authRegisterForm" class="cronox-auth__view" data-auth-view="register" novalidate>
-          <label class="cronox-auth__label" for="authRegisterFirstName">Nombre</label>
           <input
             type="text"
             id="authRegisterFirstName"
@@ -69,7 +66,6 @@
             required
           >
 
-          <label class="cronox-auth__label" for="authRegisterLastName">Apellido</label>
           <input
             type="text"
             id="authRegisterLastName"
@@ -80,7 +76,6 @@
             required
           >
 
-          <label class="cronox-auth__label" for="authRegisterEmail">Correo electrónico</label>
           <input
             type="email"
             id="authRegisterEmail"
@@ -91,7 +86,6 @@
             required
           >
 
-          <label class="cronox-auth__label" for="authRegisterPassword">Contraseña</label>
           <input
             type="password"
             id="authRegisterPassword"
