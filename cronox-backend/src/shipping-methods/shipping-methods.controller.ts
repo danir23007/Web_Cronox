@@ -15,9 +15,9 @@ export class ShippingMethodsController {
     required: false,
     description: 'Subtotal de productos en céntimos para calcular el coste de envío',
   })
-  list(@Query('itemsTotal') itemsTotal?: string) {
+  async list(@Query('itemsTotal') itemsTotal?: string) {
     const itemsTotalCents = Number(itemsTotal);
-    const parsed = Number.isFinite(itemsTotalCents) ? itemsTotalCents : undefined;
-    return this.shippingMethods.listAvailable(parsed);
+    const parsed = Number.isFinite(itemsTotalCents) ? itemsTotalCents : 0;
+    return this.shippingMethods.listAvailableMethods(parsed);
   }
 }

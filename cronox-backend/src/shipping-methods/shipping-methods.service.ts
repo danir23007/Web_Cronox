@@ -1,49 +1,111 @@
-import { Injectable } from '@nestjs/common';
-import {
-  ShippingMethodCode,
-  SHIPPING_METHOD_LABELS,
-} from '../common/enums/shipping-method-code.enum';
+import { Injectable, NotFoundException } from '@nestjs/common';
+import { PrismaService } from '../prisma/prisma.service';
+import { ShippingMethodCode } from '../common/enums/shipping-method-code.enum';
 
-const FREE_SHIPPING_THRESHOLD = 6500; // 65,00 €
-const STANDARD_SHIPPING = 295; // 2,95 €
-const EXPRESS_SHIPPING = 495; // 4,95 €
-
-export interface ShippingMethodOption {
+export type ShippingMethodOption = {
+  id: number;
   code: ShippingMethodCode;
   label: string;
-  amountCents: number;
-  isFree: boolean;
-}
+  amountCents: number; // precio final en céntimos después de aplicar la regla de envío gratis
+};
+
+const FREE_SHIPPING_THRESHOLD_CENTS = 6500; // 65 €
 
 @Injectable()
 export class ShippingMethodsService {
-  getMethod(
-    code: ShippingMethodCode,
-    itemsTotalCents: number,
-  ): ShippingMethodOption {
-    if (code === ShippingMethodCode.EXPRESS) {
-      return {
-        code,
-        label: SHIPPING_METHOD_LABELS[code],
-        amountCents: EXPRESS_SHIPPING,
-        isFree: false,
-      };
+  constructor(private readonly prisma: PrismaService) {}
+
+  // Opcional: pequeño caché en memoria (mejora rendimiento pero no es obligatorio)
+  private cache:
+    | Map<string, { id: number; price: number; name: string; isActive: boolean }>
+    | null = null;
+
+  private async loadMethodsFromDb() {
+    if (this.cache) return this.cache;
+
+    const rows = await this.prisma.shippingMethod.findMany({
+      where: { isActive: true },
+    });
+
+    const map = new Map<
+      string,
+      { id: number; price: number; name: string; isActive: boolean }
+    >();
+
+    for (const row of rows) {
+      map.set(row.code, {
+        id: row.id,
+        price: row.price,
+        name: row.name,
+        isActive: row.isActive,
+      });
     }
 
-    const isFree = itemsTotalCents >= FREE_SHIPPING_THRESHOLD;
+    this.cache = map;
+    return map;
+  }
+
+  async getMethod(
+    code: ShippingMethodCode,
+    itemsTotalCents: number,
+  ): Promise<ShippingMethodOption> {
+    const methods = await this.loadMethodsFromDb();
+    const row = methods.get(code);
+
+    if (!row) {
+      throw new NotFoundException(`Shipping method not found: ${code}`);
+    }
+
+    let amountCents = row.price;
+
+    // **ÚNICA LÓGICA QUE QUIERO EN CÓDIGO**:
+    // Si el pedido >= 65 € y el método es STANDARD -> envío gratis
+    if (
+      code === ShippingMethodCode.STANDARD &&
+      itemsTotalCents >= FREE_SHIPPING_THRESHOLD_CENTS
+    ) {
+      amountCents = 0;
+    }
+
     return {
+      id: row.id,
       code,
-      label: SHIPPING_METHOD_LABELS[code],
-      amountCents: isFree ? 0 : STANDARD_SHIPPING,
-      isFree,
+      label: row.name,
+      amountCents,
     };
   }
 
-  listAvailable(itemsTotalCents?: number): ShippingMethodOption[] {
-    const total = itemsTotalCents ?? 0;
-    return [
-      this.getMethod(ShippingMethodCode.STANDARD, total),
-      this.getMethod(ShippingMethodCode.EXPRESS, total),
-    ];
+  async listAvailableMethods(
+    itemsTotalCents: number,
+  ): Promise<ShippingMethodOption[]> {
+    const methods = await this.loadMethodsFromDb();
+
+    const result: ShippingMethodOption[] = [];
+
+    for (const [codeStr, row] of methods.entries()) {
+      const code = codeStr as ShippingMethodCode;
+      if (!row.isActive) continue;
+
+      let amountCents = row.price;
+      if (
+        code === ShippingMethodCode.STANDARD &&
+        itemsTotalCents >= FREE_SHIPPING_THRESHOLD_CENTS
+      ) {
+        amountCents = 0;
+      }
+
+      result.push({
+        id: row.id,
+        code,
+        label: row.name,
+        amountCents,
+      });
+    }
+
+    return result;
+  }
+
+  clearCache() {
+    this.cache = null;
   }
 }

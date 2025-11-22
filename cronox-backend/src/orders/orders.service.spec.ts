@@ -31,7 +31,7 @@ import { TaxConfigService } from '../common/tax/tax-config.service';
 import { CartService } from '../cart/cart.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateOrderWebhookDto } from './dto/create-order-webhook.dto';
-import { ShippingMethodsService } from '../shipping-methods/shipping-methods.service';
+import type { ShippingMethodCode } from '../common/enums/shipping-method-code.enum';
 
 describe('OrdersService', () => {
   let service: OrdersService;
@@ -51,7 +51,18 @@ describe('OrdersService', () => {
   };
   let cartService: { getOrCreateCart: jest.Mock };
   let taxConfig: { getDefaultVat: jest.Mock; getPaymentProvider: jest.Mock };
-  let shippingMethods: ShippingMethodsService;
+  let shippingMethods: {
+    getMethod: jest.Mock<
+      Promise<{
+        id: number;
+        code: ShippingMethodCode;
+        label: string;
+        amountCents: number;
+      }>,
+      [ShippingMethodCode, number]
+    >;
+    listAvailableMethods: jest.Mock;
+  };
 
   beforeEach(() => {
     prisma = {
@@ -82,7 +93,21 @@ describe('OrdersService', () => {
       getPaymentProvider: jest.fn().mockReturnValue('none'),
     };
 
-    shippingMethods = new ShippingMethodsService();
+    shippingMethods = {
+      getMethod: jest.fn(async (code: ShippingMethodCode, itemsTotal: number) => {
+        const basePrice = code === 'EXPRESS' ? 495 : 295;
+        const amountCents =
+          code === 'STANDARD' && itemsTotal >= 6500 ? 0 : basePrice;
+
+        return {
+          id: code === 'EXPRESS' ? 2 : 1,
+          code,
+          label: code === 'EXPRESS' ? 'Envío express' : 'Envío estándar',
+          amountCents,
+        };
+      }),
+      listAvailableMethods: jest.fn(),
+    };
 
     prisma.$transaction.mockImplementation(async (cb: (tx: any) => Promise<unknown>) =>
       cb({
@@ -143,7 +168,6 @@ describe('OrdersService', () => {
       code: 'EXPRESS',
       amount: '4.95',
       amountCents: 495,
-      isFree: false,
     });
   });
 
