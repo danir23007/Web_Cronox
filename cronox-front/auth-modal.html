@@ -1,0 +1,57 @@
+<!-- [AUTH] Modal centralizado para login/registro Cronox -->
+<div id="authOverlay" class="cronox-auth auth-hidden" aria-hidden="true">
+  <div class="cronox-auth__dialog" role="dialog" aria-modal="true" aria-labelledby="authTitle">
+    <button type="button" class="cronox-auth__close" id="authCloseBtn" aria-label="Cerrar">✕</button>
+    <div class="cronox-auth__content">
+      <h2 class="cronox-auth__title" id="authTitle">Iniciar sesión</h2>
+
+      <div class="cronox-auth__views">
+        <!-- Login -->
+        <form id="authLoginForm" class="cronox-auth__view is-active" data-auth-view="login" novalidate>
+          <label class="cronox-auth__label" for="authLoginEmail">Email</label>
+          <input type="email" id="authLoginEmail" class="cronox-auth__input" name="email" autocomplete="email" required>
+
+          <label class="cronox-auth__label" for="authLoginPassword">Contraseña</label>
+          <input type="password" id="authLoginPassword" class="cronox-auth__input" name="password" autocomplete="current-password" required>
+
+          <button type="submit" class="cronox-auth__cta">Acceder</button>
+
+          <div class="cronox-auth__meta">
+            <button type="button" class="cronox-auth__link" data-auth-switch="register">¿No tienes cuenta? Crear cuenta</button>
+            <button type="button" class="cronox-auth__link cronox-auth__link--muted" data-auth-forgot>He olvidado mi contraseña</button>
+          </div>
+        </form>
+
+        <!-- Registro -->
+        <form id="authRegisterForm" class="cronox-auth__view" data-auth-view="register" novalidate>
+          <label class="cronox-auth__label" for="authRegisterName">Nombre (opcional)</label>
+          <input type="text" id="authRegisterName" class="cronox-auth__input" name="name" autocomplete="name">
+
+          <label class="cronox-auth__label" for="authRegisterEmail">Email</label>
+          <input type="email" id="authRegisterEmail" class="cronox-auth__input" name="email" autocomplete="email" required>
+
+          <label class="cronox-auth__label" for="authRegisterPassword">Contraseña</label>
+          <input type="password" id="authRegisterPassword" class="cronox-auth__input" name="password" autocomplete="new-password" required>
+
+          <button type="submit" class="cronox-auth__cta">Crear cuenta</button>
+
+          <div class="cronox-auth__meta">
+            <button type="button" class="cronox-auth__link" data-auth-switch="login">¿Ya tienes cuenta? Inicia sesión</button>
+            <button type="button" class="cronox-auth__link cronox-auth__link--muted" data-auth-forgot>He olvidado mi contraseña</button>
+          </div>
+        </form>
+      </div>
+
+      <p class="cronox-auth__message" id="authMessage" role="status" aria-live="polite"></p>
+    </div>
+  </div>
+</div>
+
+<!-- [AUTH] Menú rápido para usuario logueado -->
+<div id="authUserMenu" class="auth-user-menu" hidden>
+  <div class="auth-user-menu__inner">
+    <p class="auth-user-menu__label" data-auth-user-label>Mi cuenta</p>
+    <button type="button" class="auth-user-menu__btn" data-user-action="account">Mi cuenta</button>
+    <button type="button" class="auth-user-menu__btn auth-user-menu__btn--logout" data-user-action="logout">Cerrar sesión</button>
+  </div>
+</div>

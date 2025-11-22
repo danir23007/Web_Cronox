@@ -670,76 +670,143 @@
 window.CRONOX_USER = window.CRONOX_USER || null;
 
 (function () {
-  function selectAuthTab(tab) {
-    const tabs = document.querySelectorAll('.auth-tab');
-    const views = document.querySelectorAll('.auth-view');
+  const AUTH_HTML_PATH = 'auth-modal.html';
+  const AUTH_LOCK_KEY = 'auth-modal';
+  let authOverlay;
+  let authDialog;
+  let loginForm;
+  let registerForm;
+  let messageEl;
+  let profileBtn;
+  let userMenu;
+  let authTitle;
+  let loginEmail;
+  let loginPassword;
+  let registerName;
+  let registerEmail;
+  let registerPassword;
+  let listenersBound = false;
+  let authLoaded = false;
+  let currentView = 'login';
 
-    tabs.forEach((t) => {
-      t.classList.toggle('auth-tab--active', t.dataset.authTab === tab);
+  const lockBody = () => {
+    if (typeof window.CRONOX_lockScroll === 'function') window.CRONOX_lockScroll(AUTH_LOCK_KEY);
+    else document.body.classList.add('CRONOX_lockScroll');
+  };
+
+  const unlockBody = () => {
+    if (typeof window.CRONOX_unlockScroll === 'function') window.CRONOX_unlockScroll(AUTH_LOCK_KEY);
+    else document.body.classList.remove('CRONOX_lockScroll');
+  };
+
+  const setAuthMessage = (msg, type = 'info') => {
+    if (!messageEl) return;
+    messageEl.textContent = msg || '';
+    if (msg) messageEl.dataset.state = type;
+    else delete messageEl.dataset.state;
+  };
+
+  const selectAuthView = (view) => {
+    currentView = view === 'register' ? 'register' : 'login';
+    document.querySelectorAll('.cronox-auth__view').forEach((v) => {
+      v.classList.toggle('is-active', v.dataset.authView === currentView);
     });
-
-    views.forEach((v) => {
-      v.classList.toggle('auth-view--active', v.dataset.authView === tab);
-    });
-  }
-
-  function setAuthMessage(msg) {
-    const el = document.getElementById('authMessage');
-    if (el) el.textContent = msg || '';
-  }
-
-  function openAuthModal(initialTab) {
-    const overlay = document.getElementById('authOverlay');
-    if (!overlay) return;
-    overlay.classList.remove('auth-hidden');
-    document.body.classList.add('CRONOX_lockScroll'); // si ya usas esto para otros overlays
-    selectAuthTab(initialTab || 'login');
+    if (authTitle) authTitle.textContent = currentView === 'login' ? 'Iniciar sesión' : 'Crear cuenta';
     setAuthMessage('');
-  }
+  };
 
-  function closeAuthModal() {
-    const overlay = document.getElementById('authOverlay');
-    if (!overlay) return;
-    overlay.classList.add('auth-hidden');
-    document.body.classList.remove('CRONOX_lockScroll');
+  const positionUserMenu = () => {
+    if (!userMenu || !profileBtn) return;
+    const rect = profileBtn.getBoundingClientRect();
+    userMenu.style.top = `${rect.bottom + window.scrollY + 12}px`;
+    userMenu.style.left = `${rect.left + window.scrollX - 30}px`;
+  };
+
+  const hideUserMenu = () => {
+    if (!userMenu) return;
+    userMenu.classList.remove('is-open');
+    userMenu.hidden = true;
+    document.removeEventListener('click', handleOutsideMenu, true);
+  };
+
+  const showUserMenu = () => {
+    if (!userMenu || !profileBtn) return;
+    positionUserMenu();
+    const label = userMenu.querySelector('[data-auth-user-label]');
+    if (label) label.textContent = window.CRONOX_USER?.email || 'Mi cuenta';
+    userMenu.hidden = false;
+    requestAnimationFrame(() => userMenu.classList.add('is-open'));
+    document.addEventListener('click', handleOutsideMenu, true);
+  };
+
+  const toggleUserMenu = () => {
+    if (!userMenu) return;
+    if (userMenu.hidden || !userMenu.classList.contains('is-open')) showUserMenu();
+    else hideUserMenu();
+  };
+
+  const handleOutsideMenu = (ev) => {
+    if (!userMenu || userMenu.hidden) return;
+    if (userMenu.contains(ev.target) || profileBtn?.contains(ev.target)) return;
+    hideUserMenu();
+  };
+
+  const openAuthModal = (initialView = 'login') => {
+    if (!authOverlay) return;
+    hideUserMenu();
+    selectAuthView(initialView);
+    authOverlay.classList.add('is-open');
+    authOverlay.classList.remove('auth-hidden');
+    authOverlay.setAttribute('aria-hidden', 'false');
+    lockBody();
+    const focusInput = initialView === 'register' ? registerEmail : loginEmail;
+    if (focusInput) setTimeout(() => focusInput.focus({ preventScroll: true }), 60);
+  };
+
+  const closeAuthModal = () => {
+    if (!authOverlay) return;
+    authOverlay.classList.remove('is-open');
+    authOverlay.classList.add('auth-hidden');
+    authOverlay.setAttribute('aria-hidden', 'true');
+    unlockBody();
     setAuthMessage('');
-  }
+  };
 
-  async function initAuthState() {
-    if (!window.CRONOX_API || !window.CRONOX_API.getMe) return;
-
-    const user = await window.CRONOX_API.getMe();
-    window.CRONOX_USER = user;
-
-    updateProfileIconUI();
-    try { window.dispatchEvent(new CustomEvent('cronox:userChanged', { detail: user })); } catch {}
-  }
-
-  function updateProfileIconUI() {
-    const profileBtn = document.getElementById('profileBtn');
+  const updateProfileIconUI = () => {
     if (!profileBtn) return;
-
     if (window.CRONOX_USER) {
       profileBtn.setAttribute('data-auth-state', 'logged');
       profileBtn.title = window.CRONOX_USER.email || 'Mi cuenta';
     } else {
+      hideUserMenu();
       profileBtn.setAttribute('data-auth-state', 'guest');
       profileBtn.title = 'Iniciar sesión';
     }
-  }
+  };
 
-  async function handleLoginSubmit(event) {
+  const parseAuthError = (err) => {
+    if (!err) return 'Ha ocurrido un error. Inténtalo de nuevo.';
+    if (typeof err === 'string') return err;
+    if (err?.message) return err.message;
+    return 'No se ha podido completar la acción.';
+  };
+
+  const handleForgot = () => {
+    setAuthMessage('Revisa tu correo o contacta con soporte para recuperar tu acceso.', 'info');
+  };
+
+  const handleLoginSubmit = async (event) => {
     event.preventDefault();
-    if (!window.CRONOX_API || !window.CRONOX_API.login) return;
+    if (!window.CRONOX_API?.login) {
+      setAuthMessage('Servicio de login no disponible.', 'error');
+      return;
+    }
 
-    const emailInput = document.getElementById('authLoginEmail');
-    const passInput = document.getElementById('authLoginPassword');
-
-    const email = emailInput?.value.trim();
-    const password = passInput?.value;
+    const email = loginEmail?.value.trim();
+    const password = loginPassword?.value;
 
     if (!email || !password) {
-      setAuthMessage('Rellena email y contraseña.');
+      setAuthMessage('Rellena email y contraseña.', 'error');
       return;
     }
 
@@ -752,24 +819,23 @@ window.CRONOX_USER = window.CRONOX_USER || null;
       closeAuthModal();
     } catch (err) {
       console.error('[AUTH] login error', err);
-      setAuthMessage('No se ha podido iniciar sesión. Revisa tus datos.');
+      setAuthMessage(parseAuthError(err) || 'No se ha podido iniciar sesión.', 'error');
     }
-  }
+  };
 
-  async function handleRegisterSubmit(event) {
+  const handleRegisterSubmit = async (event) => {
     event.preventDefault();
-    if (!window.CRONOX_API || !window.CRONOX_API.register) return;
+    if (!window.CRONOX_API?.register) {
+      setAuthMessage('Servicio de registro no disponible.', 'error');
+      return;
+    }
 
-    const nameInput = document.getElementById('authRegisterName');
-    const emailInput = document.getElementById('authRegisterEmail');
-    const passInput = document.getElementById('authRegisterPassword');
-
-    const name = nameInput?.value.trim() || undefined;
-    const email = emailInput?.value.trim();
-    const password = passInput?.value;
+    const name = registerName?.value.trim() || undefined;
+    const email = registerEmail?.value.trim();
+    const password = registerPassword?.value;
 
     if (!email || !password) {
-      setAuthMessage('Rellena email y contraseña.');
+      setAuthMessage('Rellena email y contraseña.', 'error');
       return;
     }
 
@@ -782,80 +848,128 @@ window.CRONOX_USER = window.CRONOX_USER || null;
       closeAuthModal();
     } catch (err) {
       console.error('[AUTH] register error', err);
-      setAuthMessage('No se ha podido crear la cuenta.');
+      setAuthMessage(parseAuthError(err) || 'No se ha podido crear la cuenta.', 'error');
     }
-  }
+  };
 
-  async function handleLogout() {
-    if (!window.CRONOX_API || !window.CRONOX_API.logout) return;
-    try {
-      await window.CRONOX_API.logout();
-    } catch (err) {
-      console.warn('[AUTH] logout error', err);
+  const handleLogout = async () => {
+    hideUserMenu();
+    if (window.CRONOX_API?.logout) {
+      try { await window.CRONOX_API.logout(); }
+      catch (err) { console.warn('[AUTH] logout error', err); }
     }
     window.CRONOX_USER = null;
     updateProfileIconUI();
     try { window.dispatchEvent(new CustomEvent('cronox:userChanged', { detail: null })); } catch {}
-  }
+  };
 
-  // Exponer funciones globales por si las necesitas
+  const handleOverlayClick = (ev) => {
+    if (ev.target === authOverlay) closeAuthModal();
+  };
+
+  const handleEsc = (ev) => {
+    if (ev.key === 'Escape' && authOverlay?.classList.contains('is-open')) closeAuthModal();
+  };
+
+  const bindAuthEvents = () => {
+    if (listenersBound) return;
+    listenersBound = true;
+
+    profileBtn = document.getElementById('profileBtn');
+    if (profileBtn) {
+      profileBtn.addEventListener('click', (ev) => {
+        ev.preventDefault();
+        if (window.CRONOX_USER) toggleUserMenu();
+        else openAuthModal('login');
+      });
+    }
+
+    authOverlay?.addEventListener('click', handleOverlayClick);
+    authDialog?.addEventListener('click', (ev) => ev.stopPropagation());
+    document.addEventListener('keydown', handleEsc);
+    document.querySelectorAll('[data-auth-switch]').forEach((btn) => {
+      btn.addEventListener('click', () => selectAuthView(btn.dataset.authSwitch));
+    });
+    document.querySelectorAll('[data-auth-forgot]').forEach((btn) => {
+      btn.addEventListener('click', handleForgot);
+    });
+    loginForm?.addEventListener('submit', handleLoginSubmit);
+    registerForm?.addEventListener('submit', handleRegisterSubmit);
+    document.getElementById('authCloseBtn')?.addEventListener('click', closeAuthModal);
+
+    if (userMenu) {
+      userMenu.addEventListener('click', (ev) => {
+        const action = ev.target.closest('[data-user-action]')?.dataset.userAction;
+        if (action === 'logout') handleLogout();
+        if (action === 'account') hideUserMenu();
+      });
+      window.addEventListener('resize', () => { if (!userMenu.hidden) positionUserMenu(); });
+      window.addEventListener('scroll', () => { if (!userMenu.hidden) positionUserMenu(); }, { passive: true });
+    }
+  };
+
+  const cacheElements = () => {
+    authOverlay = document.getElementById('authOverlay');
+    authDialog = authOverlay?.querySelector('.cronox-auth__dialog') || null;
+    loginForm = document.getElementById('authLoginForm');
+    registerForm = document.getElementById('authRegisterForm');
+    messageEl = document.getElementById('authMessage');
+    authTitle = document.getElementById('authTitle');
+    loginEmail = document.getElementById('authLoginEmail');
+    loginPassword = document.getElementById('authLoginPassword');
+    registerName = document.getElementById('authRegisterName');
+    registerEmail = document.getElementById('authRegisterEmail');
+    registerPassword = document.getElementById('authRegisterPassword');
+    userMenu = document.getElementById('authUserMenu');
+  };
+
+  const ensureAuthModal = async () => {
+    if (authLoaded) return true;
+    try {
+      const res = await fetch(AUTH_HTML_PATH, { cache: 'no-cache' });
+      const html = await res.text();
+      const temp = document.createElement('div');
+      temp.innerHTML = html;
+
+      document.querySelectorAll('#authOverlay').forEach((el) => el.remove());
+      document.querySelectorAll('#authUserMenu').forEach((el) => el.remove());
+
+      const overlay = temp.querySelector('#authOverlay');
+      const menu = temp.querySelector('#authUserMenu');
+      if (overlay) document.body.appendChild(overlay);
+      if (menu) document.body.appendChild(menu);
+      authLoaded = true;
+      return true;
+    } catch (err) {
+      console.error('[AUTH] No se pudo cargar auth-modal.html', err);
+      return false;
+    }
+  };
+
+  const initAuthState = async () => {
+    if (!window.CRONOX_API?.getMe) return;
+    try {
+      const user = await window.CRONOX_API.getMe();
+      window.CRONOX_USER = user;
+      updateProfileIconUI();
+      try { window.dispatchEvent(new CustomEvent('cronox:userChanged', { detail: user })); } catch {}
+    } catch (err) {
+      console.warn('[AUTH] No se pudo obtener el usuario actual', err);
+    }
+  };
+
+  // Exponer funciones globales por compatibilidad
   window.CRONOX_openAuthModal = openAuthModal;
   window.CRONOX_closeAuthModal = closeAuthModal;
   window.CRONOX_logout = handleLogout;
 
-  document.addEventListener('DOMContentLoaded', () => {
-    const profileBtn = document.getElementById('profileBtn');
-    const overlay = document.getElementById('authOverlay');
-    const closeBtn = document.getElementById('authCloseBtn');
-    const loginForm = document.getElementById('authLoginForm');
-    const registerForm = document.getElementById('authRegisterForm');
-    const tabs = document.querySelectorAll('.auth-tab');
-
-    if (profileBtn) {
-      profileBtn.addEventListener('click', (ev) => {
-        ev.preventDefault();
-        if (window.CRONOX_USER) {
-          // De momento, si estás logueado, mostramos opción de logout directa
-          const confirmed = confirm('¿Cerrar sesión?');
-          if (confirmed) {
-            handleLogout();
-          }
-        } else {
-          openAuthModal('login');
-        }
-      });
-    }
-
-    if (overlay && closeBtn) {
-      closeBtn.addEventListener('click', closeAuthModal);
-      overlay.addEventListener('click', (ev) => {
-        if (ev.target === overlay) {
-          closeAuthModal();
-        }
-      });
-    }
-
-    tabs.forEach((tab) => {
-      tab.addEventListener('click', () => {
-        selectAuthTab(tab.dataset.authTab);
-        setAuthMessage('');
-      });
-    });
-
-    if (loginForm) {
-      loginForm.addEventListener('submit', handleLoginSubmit);
-    }
-
-    if (registerForm) {
-      registerForm.addEventListener('submit', handleRegisterSubmit);
-    }
-
-    // [AUTH] Asegurar modal oculto al cargar y estado de sesión inicial
-    if (overlay) {
-      overlay.classList.add('auth-hidden');
-    }
-
-    // Inicializar estado de sesión
+  document.addEventListener('DOMContentLoaded', async () => {
+    const ready = await ensureAuthModal();
+    if (!ready) return;
+    cacheElements();
+    bindAuthEvents();
+    if (authOverlay) authOverlay.classList.add('auth-hidden');
+    updateProfileIconUI();
     initAuthState();
   });
 })();
