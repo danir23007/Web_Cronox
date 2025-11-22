@@ -59,18 +59,18 @@ export class AuthService {
     }
 
     const passwordHash = await this.hashPassword(dto.password);
-    const fullName = [dto.name, dto.surname].filter(Boolean).join(' ').trim();
+    const fullName = [dto.firstName, dto.lastName].filter(Boolean).join(' ').trim();
     const user = await this.usersService.createUser({
       email,
       passwordHash,
       name: fullName || undefined,
-      firstName: dto.name,
-      lastName: dto.surname,
+      firstName: dto.firstName,
+      lastName: dto.lastName,
     });
 
     const tokens = await this.generateTokens(user);
 
-    return { user: this.usersService.toSafeUser(user), tokens };
+    return { user: this.formatAuthUser(user), tokens };
   }
 
   async login(dto: LoginDto) {
@@ -89,7 +89,7 @@ export class AuthService {
 
     const tokens = await this.generateTokens(user);
 
-    return { user: this.usersService.toSafeUser(user), tokens };
+    return { user: this.formatAuthUser(user), tokens };
   }
 
   async refresh(userId: number) {
@@ -101,7 +101,7 @@ export class AuthService {
 
     const tokens = await this.generateTokens(user);
 
-    return { user: this.usersService.toSafeUser(user), tokens };
+    return { user: this.formatAuthUser(user), tokens };
   }
 
   async getProfile(userId: number) {
@@ -111,7 +111,7 @@ export class AuthService {
       throw new UnauthorizedException('Usuario no autenticado');
     }
 
-    return this.usersService.toSafeUser(user);
+    return this.formatAuthUser(user);
   }
 
   async mergeCartOnLogin(userId: number, cartId?: string) {
@@ -150,5 +150,15 @@ export class AuthService {
 
   private hashPassword(data: string) {
     return bcrypt.hash(data, this.bcryptSaltRounds);
+  }
+
+  private formatAuthUser(user: AuthUser) {
+    const safe = this.usersService.toSafeUser(user);
+    return {
+      id: safe.id,
+      email: safe.email,
+      firstName: safe.firstName ?? null,
+      lastName: safe.lastName ?? null,
+    };
   }
 }

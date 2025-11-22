@@ -14,13 +14,13 @@ export class RegisterDto {
   @IsString()
   @IsNotEmpty()
   @MaxLength(120)
-  name!: string;
+  firstName!: string;
 
   @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
   @IsString()
   @IsNotEmpty()
   @MaxLength(120)
-  surname!: string;
+  lastName!: string;
 
   @Transform(({ value }) => value?.trim())
   @IsEmail()
