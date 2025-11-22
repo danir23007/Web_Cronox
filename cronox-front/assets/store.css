@@ -1,5 +1,5 @@
 /* =========================
-   CRONOX — store.css (v56)
+   CRONOX — store.css (v57)
    ========================= */
 
 /* ===== Base ===== */
@@ -233,45 +233,56 @@ a.product-card{display:block;text-decoration:none;color:inherit;cursor:pointer;}
   z-index:2;
   transition:transform .25s ease,opacity .25s ease,color .2s ease,text-shadow .2s ease;
 }
-.favorite-toggle .icon-star,.fav-toggle .icon-star{
+
+/* Estrella en TARJETAS / GRID / FAVORITOS / PDP (no topbar) */
+.favorite-toggle .icon-star,
+.fav-toggle .icon-star,
+.product-card .favorite-toggle .icon-star,
+.products-grid .favorite-toggle .icon-star,
+.favorites-grid .favorite-toggle .icon-star,
+.favorites-grid .fav-toggle .icon-star,
+.favorites-list-item .favorite-toggle .icon-star,
+.product-detail .favorite-toggle .icon-star,
+.pdp__media .favorite-toggle .icon-star{
   display:inline-flex;
   align-items:center;
   justify-content:center;
   font-size:24px;
   line-height:1;
-  color:rgba(255,255,255,.45);
-}
-.favorite-toggle .icon-star::before,.fav-toggle .icon-star::before{
-  content:'\2606';
-}
-.favorite-toggle:hover,.fav-toggle:hover{transform:scale(1.05);opacity:1;}
-.favorite-toggle.is-favorite .icon-star,.fav-toggle.is-favorite .icon-star{
-  color:#fff;
-  text-shadow:0 0 4px rgba(255,255,255,.75);
-}
-.favorite-toggle.is-favorite .icon-star::before,.fav-toggle.is-favorite .icon-star::before{
-  content:'\2605';
+  color:rgba(0,0,0,.45); /* contorno negro suave */
 }
 
-.product-card .favorite-toggle .icon-star,
-.product-card .fav-toggle .icon-star,
-.favorites-grid .favorite-toggle .icon-star,
-.favorites-grid .fav-toggle .icon-star,
-.favorites-list-item .favorite-toggle .icon-star,
-.product-detail .favorite-toggle .icon-star{
-  font-size:24px;
-  line-height:1;
-  color:rgba(0,0,0,.45);
+/* Icono vacío (no favorito) */
+.favorite-toggle .icon-star::before,
+.fav-toggle .icon-star::before{
+  content:'\2606'; /* estrella vacía */
 }
 
+/* Hover */
+.favorite-toggle:hover,
+.fav-toggle:hover{
+  transform:scale(1.05);
+  opacity:1;
+}
+
+/* Estado favorito (relleno negro) */
+.favorite-toggle.is-favorite .icon-star,
+.fav-toggle.is-favorite .icon-star,
 .product-card .favorite-toggle.is-favorite .icon-star,
-.product-card .fav-toggle.is-favorite .icon-star,
+.products-grid .favorite-toggle.is-favorite .icon-star,
 .favorites-grid .favorite-toggle.is-favorite .icon-star,
 .favorites-grid .fav-toggle.is-favorite .icon-star,
 .favorites-list-item .favorite-toggle.is-favorite .icon-star,
-.product-detail .favorite-toggle.is-favorite .icon-star{
-  color:#000;
+.product-detail .favorite-toggle.is-favorite .icon-star,
+.pdp__media .favorite-toggle.is-favorite .icon-star{
+  color:#000000;
   text-shadow:0 0 4px rgba(0,0,0,.4);
+}
+
+/* Icono relleno cuando es favorito */
+.favorite-toggle.is-favorite .icon-star::before,
+.fav-toggle.is-favorite .icon-star::before{
+  content:'\2605'; /* estrella rellena */
 }
 
 /* “+” CLÁSICO en la imagen */
@@ -475,23 +486,4 @@ a.product-card{display:block;text-decoration:none;color:inherit;cursor:pointer;}
 /* [AUTH] Asegurar que el modal permanezca oculto cuando corresponde */
 .auth-overlay.auth-hidden {
   display: none !important;
-}
-
-/* Estrella en TARJETAS de producto (no topbar) */
-.product-card .favorite-toggle .icon-star,
-.products-grid .favorite-toggle .icon-star,
-.favorites-grid .favorite-toggle .icon-star,
-.pdp__media .favorite-toggle .icon-star {
-  font-size: 24px;
-  line-height: 1;
-  color: rgba(0, 0, 0, 0.45);
-}
-
-/* Cuando el producto SÍ está en favoritos en la tarjeta */
-.product-card .favorite-toggle.is-favorite .icon-star,
-.products-grid .favorite-toggle.is-favorite .icon-star,
-.favorites-grid .favorite-toggle.is-favorite .icon-star,
-.pdp__media .favorite-toggle.is-favorite .icon-star {
-  color: #000000;
-  text-shadow: 0 0 4px rgba(0, 0, 0, 0.4);
 }

@@ -1,5 +1,5 @@
 // ======================================================
-// assets/products.js (v7)
+// assets/products.js (v8)
 // - Grid + filtros + mini-galería
 // - “+” abre Quick-Add vertical
 // - Quick-Add SIN selector de color (usa color del producto)
@@ -505,7 +505,13 @@
     favBtn.dataset.price = p.priceLabel || euros(p.price);
     favBtn.dataset.image = imgs[0] || p.image || "";
     favBtn.innerHTML = STAR_ICON;
-    favBtn.addEventListener("click", (ev) => { ev.preventDefault(); ev.stopPropagation(); });
+
+    // ✅ marcar como favorito si ya viene en el set
+    const favKey = p.backendId ?? p.id;
+    if (favKey != null && isFav(favKey)) {
+      favBtn.classList.add("is-favorite");
+      favBtn.setAttribute("aria-label", "Quitar de favoritos");
+    }
 
     const plus = document.createElement("button");
     plus.className = "fav-add";
