@@ -24,6 +24,18 @@ class UpdateMeDto {
   @Length(2, 80)
   @Transform(trim)
   name?: string;
+
+  @IsOptional()
+  @IsString()
+  @Length(2, 80)
+  @Transform(trim)
+  firstName?: string;
+
+  @IsOptional()
+  @IsString()
+  @Length(2, 80)
+  @Transform(trim)
+  lastName?: string;
 }
 
 @Controller()
@@ -55,7 +67,7 @@ export class UsersController {
     @CurrentUser('id') userId: number,
     @Body() dto: UpdateMeDto,
   ) {
-    if (dto.name === undefined) {
+    if (dto.name === undefined && dto.firstName === undefined && dto.lastName === undefined) {
       const user = await this.usersService.findById(userId);
 
       if (!user) {
@@ -65,6 +77,10 @@ export class UsersController {
       return this.usersService.toSafeUser(user);
     }
 
-    return this.usersService.updateProfile(userId, { name: dto.name });
+    return this.usersService.updateProfile(userId, {
+      name: dto.name,
+      firstName: dto.firstName,
+      lastName: dto.lastName,
+    });
   }
 }

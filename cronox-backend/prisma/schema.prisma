@@ -82,10 +82,10 @@ model User {
   id             Int             @id @default(autoincrement())
   email          String          @unique
   passwordHash   String
+  role           Role            @default(USER)
   name           String?
   firstName      String?
   lastName       String?
-  role           Role            @default(USER)
   createdAt      DateTime        @default(now())
   updatedAt      DateTime        @updatedAt
   addresses      Address[]
@@ -246,5 +246,5 @@ enum VariantSize {
 }
 
 // Después de este cambio, ejecutar:
-// npx prisma migrate dev -n "add_user_names_and_shipping_method_code"
+// npx prisma migrate dev -n "add_names_and_shipping_code"
 // npx prisma generate
