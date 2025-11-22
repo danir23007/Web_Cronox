@@ -193,18 +193,6 @@
 
   let PRODUCTS = [];
 
-  const fetchFavoriteIds = typeof window.fetchFavoritesIds === "function"
-    ? window.fetchFavoritesIds
-    : async () => new Set();
-
-  const favoritesReady = fetchFavoriteIds().catch(() => new Set());
-
-  const syncFavoritesDom = () => {
-    if (typeof window.CRONOX_syncFavoritesDom === "function") {
-      window.CRONOX_syncFavoritesDom();
-    }
-  };
-
   const setProducts = (list) => {
     PRODUCTS = Array.isArray(list) ? list.map(normalizeProduct) : [];
     window.CRONOX_PRODUCTS = PRODUCTS;
@@ -531,7 +519,9 @@
     if (!relatedGrid) return;
     const rel = getRelated(current, 4);
     relatedGrid.innerHTML = rel.map(cardHTML).join("");
-    syncFavoritesDom();
+    if (window.CRONOX_FAVORITES && typeof window.CRONOX_FAVORITES.updateDomState === "function") {
+      window.CRONOX_FAVORITES.updateDomState();
+    }
   }
 
   // ==========================
@@ -556,12 +546,24 @@
       pFavoriteToggle.dataset.productId = String(pid);
       pFavoriteToggle.dataset.slug = product.slug || "";
       pFavoriteToggle.hidden = !pid;
+      if (!pFavoriteToggle.dataset.favBound) {
+        pFavoriteToggle.dataset.favBound = "1";
+        pFavoriteToggle.addEventListener("click", (ev) => {
+          ev.preventDefault();
+          ev.stopPropagation();
+          if (window.CRONOX_FAVORITES && typeof window.CRONOX_FAVORITES.toggleFromButton === "function") {
+            window.CRONOX_FAVORITES.toggleFromButton(pFavoriteToggle);
+          }
+        });
+      }
     }
 
     setupSizeButtons(product);
     setPageTitle(product);
     renderRelated(product);
-    syncFavoritesDom();
+    if (window.CRONOX_FAVORITES && typeof window.CRONOX_FAVORITES.updateDomState === "function") {
+      window.CRONOX_FAVORITES.updateDomState();
+    }
     syncAddButtonWidth();
 
     window.scrollTo({ top: 0, left: 0, behavior: "instant" });
@@ -589,7 +591,6 @@
   // ==========================
   async function init() {
     const key = getProductKey();
-    await favoritesReady.catch(() => {});
     const catalog = await ensureCatalog();
 
     const cleanedCatalog = catalog.filter((item) => Boolean(item && (item.id || item.slug)));
