@@ -246,4 +246,5 @@ enum VariantSize {
 }
 
 // Después de este cambio, ejecutar:
-// npx prisma migrate dev --name add_first_last_name_to_user
+// npx prisma migrate dev -n "add_user_names_and_shipping_method_code"
+// npx prisma generate
