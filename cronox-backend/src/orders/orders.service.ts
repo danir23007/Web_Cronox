@@ -124,7 +124,7 @@ export class OrdersService {
     }
 
     const itemsTotalCents = this.computeItemsTotalCents(cart);
-    const shippingMethod = this.shippingMethods.getMethod(
+    const shippingMethod = await this.shippingMethods.getMethod(
       params.shippingMethod,
       itemsTotalCents,
     );
@@ -229,7 +229,7 @@ export class OrdersService {
         throw new BadRequestException('ITEMS_TOTAL_METADATA_REQUIRED');
       }
       const itemsTotalCents = this.computeItemsTotalCents(cart);
-      const validatedMethod = this.shippingMethods.getMethod(
+      const validatedMethod = await this.shippingMethods.getMethod(
         shippingMethod,
         itemsTotalCents,
       );
@@ -284,7 +284,7 @@ export class OrdersService {
           taxRate: computation.taxRate,
           taxAmount: computation.taxAmount,
           shippingCost: expectedShippingCents,
-          shippingMethodId: null,
+          shippingMethodId: validatedMethod.id ?? null,
           shippingMethodCode: validatedMethod.code,
           total: computation.total,
           currency: dto.currency ?? computation.currency,

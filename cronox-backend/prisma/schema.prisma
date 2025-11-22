@@ -227,7 +227,11 @@ enum OrderStatus {
 
 model ShippingMethod {
   id        Int      @id @default(autoincrement())
+  /// Código interno para el método de envío, por ejemplo: "STANDARD" o "EXPRESS"
+  code      String   @unique
+  /// Nombre legible tipo "Envío estándar" / "Envío express"
   name      String
+  /// Precio base del envío EN CÉNTIMOS
   price     Int
   isActive  Boolean  @default(true)
   countries String[]
