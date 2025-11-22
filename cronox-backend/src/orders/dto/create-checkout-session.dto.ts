@@ -1,14 +1,17 @@
 // [ORDERS] Datos necesarios para preparar un checkout sin confirmar pago
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { Type } from 'class-transformer';
-import { IsEnum, IsObject, IsOptional, IsString } from 'class-validator';
-import { ShippingMethod } from '@prisma/client';
+import { IsEnum, IsNotEmpty, IsObject, IsOptional, IsString } from 'class-validator';
+import { ShippingMethodCode } from '../../common/enums/shipping-method-code.enum';
 
 export class CreateCheckoutSessionDto {
-  @ApiProperty({ description: 'Método de envío elegido', enum: ShippingMethod })
-  @Type(() => String)
-  @IsEnum(ShippingMethod)
-  shippingMethod!: ShippingMethod;
+  @ApiProperty({
+    description: 'Método de envío elegido',
+    enum: ShippingMethodCode,
+    enumName: 'ShippingMethodCode',
+  })
+  @IsEnum(ShippingMethodCode)
+  @IsNotEmpty()
+  shippingMethod!: ShippingMethodCode;
 
   @ApiPropertyOptional({ description: 'Dirección de envío a usar durante el checkout', type: Object })
   @IsOptional()
