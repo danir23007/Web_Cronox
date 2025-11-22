@@ -42,20 +42,18 @@ export class PaymentsController {
           },
         ],
         shippingMethod: {
-          id: 2,
-          name: 'Express',
-          priceCents: 250,
-          price: '2.50',
-          countries: ['ES'],
-          isActive: true,
-          createdAt: '2025-02-04T00:00:00.000Z',
-          updatedAt: '2025-02-04T00:00:00.000Z',
+          code: 'EXPRESS',
+          label: 'Envío express',
+          description: 'Entrega rápida',
+          priceCents: 495,
+          price: '4.95',
         },
         metadata: {
           userId: '1',
           cartId: '10',
-          shippingMethodId: '2',
-          shippingCostCents: '250',
+          itemsTotalCents: '10000',
+          shippingMethod: 'EXPRESS',
+          shippingCostCents: '495',
         },
       },
     },
@@ -71,7 +69,7 @@ export class PaymentsController {
     }
 
     const preview = await this.ordersService.getCheckoutPreview(userId, {
-      shippingMethodId: dto.shippingMethodId,
+      shippingMethod: dto.shippingMethod,
     }); // [STRIPE]
     const amountInCents = Number(preview.computation.total.mul(100).toFixed(0));
 
@@ -81,16 +79,18 @@ export class PaymentsController {
       amount: amountInCents,
       currency: preview.computation.currency,
       metadata: {
-        shippingMethodId: String(preview.metadata.shippingMethodId),
+        shippingMethod: String(preview.metadata.shippingMethod),
         shippingCostCents: String(preview.metadata.shippingCostCents),
+        itemsTotalCents: String(preview.metadata.itemsTotalCents),
       },
     });
 
     const metadata = {
       userId: String(preview.metadata.userId),
       cartId: String(preview.metadata.cartId),
-      shippingMethodId: String(preview.metadata.shippingMethodId),
+      shippingMethod: String(preview.metadata.shippingMethod),
       shippingCostCents: String(preview.metadata.shippingCostCents),
+      itemsTotalCents: String(preview.metadata.itemsTotalCents),
     } as Record<string, string>;
 
     if (dto.addressId) {

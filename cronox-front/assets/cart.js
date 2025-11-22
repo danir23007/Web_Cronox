@@ -8,13 +8,21 @@
   const subtotalEl = document.getElementById('sumSubtotal');
   const shippingLabelEl = document.getElementById('sumShipping');
   const totalEl = document.getElementById('sumTotal');
+  const shippingOptionsEl = document.getElementById('shippingOptions');
   const btnClear = document.getElementById('btnClear');
   const btnCheckout = document.getElementById('btnCheckout');
-  const shippingSelect = document.getElementById('shippingMethod');
-  const shippingPriceEl = document.getElementById('shippingPrice');
 
   const EUR = new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR' });
   const money = (cents) => EUR.format((Number(cents) || 0) / 100);
+
+  const FREE_SHIPPING_THRESHOLD = 6500;
+  const STANDARD_SHIPPING = 295;
+  const EXPRESS_SHIPPING = 495;
+
+  const SHIPPING_OPTIONS = [
+    { code: 'STANDARD', label: 'Envío estándar (2,95€)', helper: 'Gratis a partir de 65€' },
+    { code: 'EXPRESS', label: 'Envío express (4,95€)' },
+  ];
 
   const fallbackKey = 'cronox_cart';
   const readFallback = () => {
@@ -28,8 +36,13 @@
 
   const state = {
     cart: null,
-    shippingMethods: [],
-    shippingMethodId: null,
+    shippingMethod: 'STANDARD',
+  };
+
+  const calculateShipping = (itemsTotal, method) => {
+    if (method === 'EXPRESS') return EXPRESS_SHIPPING;
+    if (itemsTotal >= FREE_SHIPPING_THRESHOLD) return 0;
+    return STANDARD_SHIPPING;
   };
 
   const mapFallbackCart = () => {
@@ -55,49 +68,56 @@
     };
   };
 
-  const selectShipping = (methods) => {
-    if (!Array.isArray(methods) || !methods.length) {
-      state.shippingMethodId = null;
-      return;
-    }
-    if (state.shippingMethodId && methods.some((m) => m.id === state.shippingMethodId)) {
-      return;
-    }
-    state.shippingMethodId = methods[0].id;
-  };
-
   const renderShippingOptions = () => {
-    if (!shippingSelect) return;
-    shippingSelect.innerHTML = '';
-    state.shippingMethods.forEach((method) => {
-      const option = document.createElement('option');
-      option.value = String(method.id);
-      option.textContent = `${method.name} · ${method.priceLabel || money(method.priceCents || 0)}`;
-      option.selected = method.id === state.shippingMethodId;
-      shippingSelect.appendChild(option);
+    if (!shippingOptionsEl) return;
+    shippingOptionsEl.innerHTML = '';
+
+    SHIPPING_OPTIONS.forEach((option) => {
+      const wrapper = document.createElement('label');
+      wrapper.className = 'shipping-option';
+      wrapper.innerHTML = `
+        <input type="radio" name="shippingMethod" value="${option.code}" ${
+          option.code === state.shippingMethod ? 'checked' : ''
+        }>
+        <div class="shipping-option__info">
+          <span class="shipping-option__label">${option.label}</span>
+          ${option.helper ? `<small class="shipping-option__helper">${option.helper}</small>` : ''}
+        </div>
+        <span class="shipping-option__price" data-code="${option.code}"></span>
+      `;
+      shippingOptionsEl.appendChild(wrapper);
     });
-    if (shippingPriceEl) {
-      const selected = state.shippingMethods.find((m) => m.id === state.shippingMethodId);
-      shippingPriceEl.textContent = selected?.priceLabel || '—';
-    }
   };
 
   const renderSummary = () => {
-    if (!state.cart) {
-      subtotalEl && (subtotalEl.textContent = money(0));
-      totalEl && (totalEl.textContent = money(0));
-      shippingLabelEl && (shippingLabelEl.textContent = 'Calculado en checkout');
-      return;
+    const subtotalCents = state.cart?.subtotalCents || 0;
+    const shippingCents = state.cart
+      ? calculateShipping(subtotalCents, state.shippingMethod)
+      : 0;
+    const isFree = shippingCents === 0 && state.shippingMethod === 'STANDARD';
+    const shippingLabel = isFree
+      ? 'Gratis (envío estándar)'
+      : `${state.shippingMethod === 'EXPRESS' ? 'Envío express' : 'Envío estándar'} · ${money(
+          shippingCents,
+        )}`;
+
+    subtotalEl && (subtotalEl.textContent = money(subtotalCents));
+    shippingLabelEl && (shippingLabelEl.textContent = state.cart ? shippingLabel : '—');
+    totalEl && (totalEl.textContent = money((state.cart ? subtotalCents : 0) + shippingCents));
+
+    if (shippingOptionsEl) {
+      shippingOptionsEl.querySelectorAll('.shipping-option__price').forEach((priceEl) => {
+        const code = priceEl.getAttribute('data-code');
+        if (code === 'STANDARD') {
+          const cost = calculateShipping(subtotalCents, 'STANDARD');
+          priceEl.textContent = money(cost);
+          priceEl.classList.toggle('is-free', cost === 0);
+        } else if (code === 'EXPRESS') {
+          priceEl.textContent = money(EXPRESS_SHIPPING);
+          priceEl.classList.remove('is-free');
+        }
+      });
     }
-    subtotalEl && (subtotalEl.textContent = money(state.cart.subtotalCents || 0));
-    const shipping = state.shippingMethods.find((m) => m.id === state.shippingMethodId);
-    const shippingCents = shipping ? shipping.priceCents : 0;
-    if (shippingLabelEl) {
-      shippingLabelEl.textContent = shipping
-        ? `${shipping.name} · ${shipping.priceLabel || money(shippingCents)}`
-        : 'Selecciona método';
-    }
-    totalEl && (totalEl.textContent = money((state.cart.subtotalCents || 0) + shippingCents));
   };
 
   const renderEmpty = () => {
@@ -164,26 +184,6 @@
       state.cart = mapFallbackCart();
     }
     renderCart();
-  };
-
-  const syncShippingMethods = async () => {
-    if (!API || typeof API.getShippingMethods !== 'function') {
-      state.shippingMethods = [];
-      state.shippingMethodId = null;
-      renderSummary();
-      return;
-    }
-    try {
-      state.shippingMethods = await API.getShippingMethods();
-      selectShipping(state.shippingMethods);
-      renderShippingOptions();
-      renderSummary();
-    } catch (error) {
-      console.warn('[CRONOX] Error cargando métodos de envío', error);
-      state.shippingMethods = [];
-      state.shippingMethodId = null;
-      renderSummary();
-    }
   };
 
   const handleQtyChange = async (input) => {
@@ -269,10 +269,10 @@
     }
   });
 
-  shippingSelect?.addEventListener('change', (event) => {
-    const value = Number(event.target.value);
-    state.shippingMethodId = Number.isFinite(value) ? value : null;
-    renderShippingOptions();
+  shippingOptionsEl?.addEventListener('change', (event) => {
+    const input = event.target.closest('input[name="shippingMethod"]');
+    if (!input) return;
+    state.shippingMethod = input.value === 'EXPRESS' ? 'EXPRESS' : 'STANDARD';
     renderSummary();
   });
 
@@ -285,8 +285,8 @@
     if (yearEl) {
       yearEl.textContent = new Date().getFullYear();
     }
+    renderShippingOptions();
     syncCart();
-    syncShippingMethods();
   });
 
   window.addEventListener('cart:updated', (event) => {

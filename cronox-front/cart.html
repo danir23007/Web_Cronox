@@ -118,20 +118,14 @@
         <h2>Resumen</h2>
 
         <div class="summary-row">
-          <span>Subtotal</span>
+          <span>Subtotal productos</span>
           <strong id="sumSubtotal">—</strong>
         </div>
-        <div class="summary-row summary-shipping">
-          <label for="shippingMethod">Envío</label>
-          <div class="shipping-control">
-            <select id="shippingMethod" aria-label="Selecciona método de envío"></select>
-            <span id="shippingPrice">—</span>
-          </div>
-        </div>
         <div class="summary-row">
-          <span>Método</span>
-          <span id="sumShipping">Calculado en checkout</span>
+          <span>Envío</span>
+          <strong id="sumShipping">—</strong>
         </div>
+        <div id="shippingOptions" class="shipping-options" aria-label="Método de envío"></div>
         <button id="btnClear" class="btn-link" type="button" style="margin-top:8px">Vaciar carrito</button>
         <div class="summary-row summary-total">
           <span>Total</span>

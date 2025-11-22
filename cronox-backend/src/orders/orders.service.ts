@@ -18,6 +18,7 @@ import {
   ShippingMethodResponse,
   ShippingMethodsService,
 } from '../shipping-methods/shipping-methods.service';
+import { ShippingMethod } from '@prisma/client';
 
 const DEFAULT_CURRENCY = 'EUR';
 
@@ -53,8 +54,10 @@ type CheckoutComputation = {
   subtotal: Prisma.Decimal;
   taxAmount: Prisma.Decimal;
   shippingCost: Prisma.Decimal;
+  shippingCostCents: number;
   total: Prisma.Decimal;
   lineItems: CheckoutLineItem[];
+  itemsTotalCents: number;
 };
 
 type CheckoutSummaryResponse = { // [STRIPE]
@@ -77,8 +80,9 @@ type CheckoutLineItemResponse = { // [STRIPE]
 type CheckoutMetadata = {
   cartId: number;
   userId: number;
-  shippingMethodId: number;
+  shippingMethod: ShippingMethod;
   shippingCostCents: number;
+  itemsTotalCents: number;
 };
 
 type CheckoutPreview = { // [STRIPE]
@@ -109,7 +113,7 @@ export class OrdersService {
 
   async getCheckoutPreview(
     userId: number,
-    params: { shippingMethodId: number; shippingCountry?: string },
+    params: { shippingMethod: ShippingMethod },
   ): Promise<CheckoutPreview> { // [STRIPE]
     const cart = (await this.cartService.getOrCreateCart({ userId })) as CartSnapshot;
 
@@ -117,19 +121,24 @@ export class OrdersService {
       throw new BadRequestException('CART_EMPTY');
     }
 
-    const shippingMethod = await this.shippingMethods.getActiveMethodById(
-      params.shippingMethodId,
-      params.shippingCountry,
+    const itemsTotalCents = this.computeItemsTotalCents(cart);
+    const shippingMethod = this.shippingMethods.getMethodOrThrow(params.shippingMethod);
+    const shippingCostCents = this.shippingMethods.calculateShipping(
+      itemsTotalCents,
+      shippingMethod.code,
     );
-    const shippingCost = this.centsToDecimal(shippingMethod.price);
-    const computation = this.buildCheckoutComputation(cart, { shippingCost });
+    const computation = this.buildCheckoutComputation(cart, {
+      shippingCostCents,
+      itemsTotalCents,
+    });
     const summary = this.buildCheckoutSummary(computation);
     const lineItems = this.buildPublicLineItems(computation.lineItems);
     const metadata: CheckoutMetadata = {
       cartId: cart.id,
       userId,
-      shippingMethodId: shippingMethod.id,
-      shippingCostCents: this.decimalToCents(computation.shippingCost),
+      shippingMethod: shippingMethod.code,
+      shippingCostCents,
+      itemsTotalCents,
     };
 
     return {
@@ -138,7 +147,7 @@ export class OrdersService {
       summary,
       lineItems,
       metadata,
-      shippingMethod: this.shippingMethods.toResponse(shippingMethod),
+      shippingMethod: this.shippingMethods.toResponse(shippingMethod, itemsTotalCents),
     };
   }
 
@@ -146,10 +155,8 @@ export class OrdersService {
     userId: number,
     dto: CreateCheckoutSessionDto,
   ): Promise<Record<string, unknown>> {
-    const shippingCountry = this.extractCountry(dto.shippingAddress);
     const preview = await this.getCheckoutPreview(userId, {
-      shippingMethodId: dto.shippingMethodId,
-      shippingCountry,
+      shippingMethod: dto.shippingMethod,
     }); // [STRIPE]
     const provider = this.taxConfig.getPaymentProvider();
 
@@ -203,19 +210,40 @@ export class OrdersService {
       }
 
       const cart = await this.loadCartSnapshot(tx, dto.metadata.cartId, userId);
-      const shippingMethodId = dto.metadata.shippingMethodId;
-      if (!shippingMethodId) {
+      const shippingMethod = dto.metadata.shippingMethod;
+      if (!shippingMethod) {
         throw new BadRequestException('SHIPPING_METHOD_REQUIRED');
       }
 
-      const shippingMethod = await this.shippingMethods.getMethodByIdOrThrow(shippingMethodId);
       const shippingCostCents = Number(dto.metadata.shippingCostCents);
       if (!Number.isFinite(shippingCostCents)) {
         throw new BadRequestException('SHIPPING_COST_METADATA_REQUIRED');
       }
-      const shippingCost = this.centsToDecimal(shippingCostCents);
+      const metadataItemsTotal = Number(dto.metadata.itemsTotalCents);
+      if (!Number.isFinite(metadataItemsTotal)) {
+        throw new BadRequestException('ITEMS_TOTAL_METADATA_REQUIRED');
+      }
+      const itemsTotalCents = this.computeItemsTotalCents(cart);
+      const validatedMethod = this.shippingMethods.getMethodOrThrow(
+        shippingMethod as ShippingMethod,
+      );
+      const expectedShippingCents = this.shippingMethods.calculateShipping(
+        itemsTotalCents,
+        validatedMethod.code,
+      );
 
-      const computation = this.buildCheckoutComputation(cart, { shippingCost });
+      if (expectedShippingCents !== shippingCostCents) {
+        this.logger.warn(
+          `Shipping cost mismatch for ${providerRef}: metadata=${shippingCostCents} expected=${expectedShippingCents}`,
+        );
+      }
+
+      const shippingCost = this.centsToDecimal(expectedShippingCents);
+
+      const computation = this.buildCheckoutComputation(cart, {
+        shippingCostCents: expectedShippingCents,
+        itemsTotalCents,
+      });
       const providerAmount = this.moneyFromString(dto.amount);
       const totalsMatch = providerAmount.equals(computation.total);
 
@@ -252,12 +280,12 @@ export class OrdersService {
           subtotal: computation.subtotal,
           taxRate: computation.taxRate,
           taxAmount: computation.taxAmount,
-          shippingCost: computation.shippingCost,
+          shippingCost: expectedShippingCents,
+          shippingMethod,
           total: computation.total,
           currency: dto.currency ?? computation.currency,
           provider: dto.provider,
           providerRef,
-          shippingMethodId: shippingMethod.id,
           shippingAddr: shippingAddr, // [FIX]
           billingAddr: billingAddr,   // [FIX]
         },
@@ -431,27 +459,20 @@ export class OrdersService {
     }));
   }
 
-  private extractCountry(address?: Record<string, unknown>): string | undefined {
-    if (!address) {
-      return undefined;
+  private computeItemsTotalCents(cart: CartSnapshot | null): number {
+    if (!cart || !Array.isArray(cart.items) || !cart.items.length) {
+      return 0;
     }
 
-    const typed = address as { country?: unknown; countryCode?: unknown };
-    const raw = typed.country ?? typed.countryCode;
-    if (typeof raw !== 'string') {
-      return undefined;
-    }
-
-    const normalized = raw.trim().toUpperCase();
-    return normalized || undefined;
+    return cart.items.reduce((acc, item) => acc + item.priceAtAdd * item.qty, 0);
   }
 
   private buildCheckoutComputation(
     cart: CartSnapshot | null,
-    options: { shippingCost: Prisma.Decimal },
+    options: { shippingCostCents: number; itemsTotalCents: number },
   ): CheckoutComputation {
     const taxRate = this.rateFromNumber(this.taxConfig.getDefaultVat());
-    const shippingCost = options.shippingCost;
+    const shippingCost = this.centsToDecimal(options.shippingCostCents);
     const currency = cart?.items[0]?.variant?.product?.currency ?? DEFAULT_CURRENCY;
 
     if (!cart || !cart.items.length) {
@@ -461,8 +482,10 @@ export class OrdersService {
         subtotal: this.moneyFromNumber(0),
         taxAmount: this.moneyFromNumber(0),
         shippingCost,
+        shippingCostCents: options.shippingCostCents,
         total: shippingCost,
         lineItems: [],
+        itemsTotalCents: 0,
       };
     }
 
@@ -482,8 +505,10 @@ export class OrdersService {
       subtotal,
       taxAmount,
       shippingCost,
+      shippingCostCents: options.shippingCostCents,
       total,
       lineItems,
+      itemsTotalCents: options.itemsTotalCents,
     };
   }
 
@@ -658,12 +683,12 @@ export class OrdersService {
       subtotal: this.formatMoney(order.subtotal),
       taxRate: this.formatRate(order.taxRate),
       taxAmount: this.formatMoney(order.taxAmount),
-      shippingCost: this.formatMoney(order.shippingCost),
+      shippingCost: this.formatMoney(this.centsToDecimal(order.shippingCost)),
       total: this.formatMoney(order.total),
       currency: order.currency,
       provider: order.provider,
       providerRef: order.providerRef,
-      shippingMethodId: order.shippingMethodId,
+      shippingMethod: order.shippingMethod,
       createdAt: order.createdAt,
       updatedAt: order.updatedAt,
       shippingAddr: order.shippingAddr,

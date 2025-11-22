@@ -31,6 +31,7 @@ import { TaxConfigService } from '../common/tax/tax-config.service';
 import { CartService } from '../cart/cart.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateOrderWebhookDto } from './dto/create-order-webhook.dto';
+import { ShippingMethodsService } from '../shipping-methods/shipping-methods.service';
 
 describe('OrdersService', () => {
   let service: OrdersService;
@@ -50,11 +51,7 @@ describe('OrdersService', () => {
   };
   let cartService: { getOrCreateCart: jest.Mock };
   let taxConfig: { getDefaultVat: jest.Mock; getPaymentProvider: jest.Mock };
-  let shippingMethods: {
-    getActiveMethodById: jest.Mock;
-    getMethodByIdOrThrow: jest.Mock;
-    toResponse: jest.Mock;
-  };
+  let shippingMethods: ShippingMethodsService;
 
   beforeEach(() => {
     prisma = {
@@ -85,34 +82,7 @@ describe('OrdersService', () => {
       getPaymentProvider: jest.fn().mockReturnValue('none'),
     };
 
-    shippingMethods = {
-      getActiveMethodById: jest.fn(),
-      getMethodByIdOrThrow: jest.fn(),
-      toResponse: jest.fn(),
-    };
-
-    const shippingMethodEntity = {
-      id: 2,
-      name: 'Express',
-      price: 250,
-      countries: [],
-      isActive: true,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    } as any;
-
-    shippingMethods.getActiveMethodById.mockResolvedValue(shippingMethodEntity);
-    shippingMethods.getMethodByIdOrThrow.mockResolvedValue(shippingMethodEntity);
-    shippingMethods.toResponse.mockReturnValue({
-      id: shippingMethodEntity.id,
-      name: shippingMethodEntity.name,
-      priceCents: shippingMethodEntity.price,
-      price: '2.50',
-      countries: shippingMethodEntity.countries,
-      isActive: shippingMethodEntity.isActive,
-      createdAt: shippingMethodEntity.createdAt,
-      updatedAt: shippingMethodEntity.updatedAt,
-    });
+    shippingMethods = new ShippingMethodsService();
 
     prisma.$transaction.mockImplementation(async (cb: (tx: any) => Promise<unknown>) =>
       cb({
@@ -153,19 +123,23 @@ describe('OrdersService', () => {
 
     cartService.getOrCreateCart.mockResolvedValue(cartSnapshot);
 
-    const result = await service.createCheckoutSession(1, { shippingMethodId: 2 });
+    const result = await service.createCheckoutSession(1, { shippingMethod: 'EXPRESS' } as any);
 
     expect(result.summary).toMatchObject({
       subtotal: '200.00',
       taxRate: '0.2100',
       taxAmount: '42.00',
-      shippingCost: '2.50',
-      total: '244.50',
+      shippingCost: '4.95',
+      total: '246.95',
     });
     expect(result.lineItems).toHaveLength(1);
     expect(result.lineItems[0]).toMatchObject({ lineTotal: '200.00', quantity: 2 });
-    expect(result.metadata).toMatchObject({ shippingMethodId: 2, shippingCostCents: 250 });
-    expect(result.shippingMethod).toMatchObject({ id: 2, price: '2.50' });
+    expect(result.metadata).toMatchObject({
+      shippingMethod: 'EXPRESS',
+      shippingCostCents: 495,
+      itemsTotalCents: 20000,
+    });
+    expect(result.shippingMethod).toMatchObject({ code: 'EXPRESS', price: '4.95' });
   });
 
   it('mantiene idempotencia por providerRef al crear pedidos desde webhook', async () => {
@@ -194,12 +168,12 @@ describe('OrdersService', () => {
       subtotal: new Decimal('100.00'),
       taxRate: new Decimal('0.2100'),
       taxAmount: new Decimal('21.00'),
-      shippingCost: new Decimal('0.00'),
+      shippingCost: 0,
+      shippingMethod: 'STANDARD',
       total: new Decimal('121.00'),
       currency: 'EUR',
       provider: 'stripe',
       providerRef: 'pi_123',
-      shippingMethodId: 2,
       createdAt: new Date(),
       updatedAt: new Date(),
       shippingAddr: null,
@@ -232,8 +206,9 @@ describe('OrdersService', () => {
       metadata: {
         userId: 3,
         cartId: 10,
-        shippingMethodId: 2,
+        shippingMethod: 'STANDARD',
         shippingCostCents: '0',
+        itemsTotalCents: '10000',
       } as any,
     } as CreateOrderWebhookDto;
 
@@ -275,12 +250,12 @@ describe('OrdersService', () => {
       subtotal: new Decimal('200.00'),
       taxRate: new Decimal('0.2100'),
       taxAmount: new Decimal('42.00'),
-      shippingCost: new Decimal('0.00'),
+      shippingCost: 0,
+      shippingMethod: 'STANDARD',
       total: new Decimal('242.00'),
       currency: 'EUR',
       provider: 'stripe',
       providerRef: 'pi_stock',
-      shippingMethodId: 2,
       createdAt: new Date(),
       updatedAt: new Date(),
       shippingAddr: null,
@@ -315,8 +290,9 @@ describe('OrdersService', () => {
       metadata: {
         userId: 4,
         cartId: 20,
-        shippingMethodId: 2,
+        shippingMethod: 'STANDARD',
         shippingCostCents: '0',
+        itemsTotalCents: '20000',
       } as any,
     } as CreateOrderWebhookDto;
 
@@ -345,12 +321,12 @@ describe('OrdersService', () => {
       subtotal: new Decimal('100.00'),
       taxRate: new Decimal('0.2100'),
       taxAmount: new Decimal('21.00'),
-      shippingCost: new Decimal('0.00'),
+      shippingCost: 0,
+      shippingMethod: 'STANDARD',
       total: new Decimal('121.00'),
       currency: 'EUR',
       provider: 'stripe',
       providerRef: 'pi_789',
-      shippingMethodId: 2,
       createdAt: new Date(),
       updatedAt: new Date(),
       shippingAddr: null,
@@ -374,7 +350,7 @@ describe('OrdersService', () => {
     const result = await service.listOrders({ id: 4, role: 'USER' as Role }, {} as any);
 
     expect(prisma.order.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { userId: '4' } }),
+      expect.objectContaining({ where: { userId: 4 } }),
     );
     expect(result.data).toHaveLength(1);
     expect(result.data[0]).toMatchObject({ id: 1, subtotal: '100.00' });
