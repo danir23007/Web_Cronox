@@ -166,16 +166,11 @@
 
   const favoritesReady = fetchFavoriteIds().catch(() => new Set());
 
-  const getFavSet = () => {
-    if (window.CRONOX_FAVORITE_IDS instanceof Set) return window.CRONOX_FAVORITE_IDS;
-    const favs = window.CRONOX_FAVORITES;
-    if (favs?.ids instanceof Set) return favs.ids;
-    if (Array.isArray(favs?.list)) return new Set(favs.list.map((x) => String(x)));
-    if (Array.isArray(favs)) return new Set(favs.map((x) => String(x)));
-    return new Set();
+  const syncFavoritesDom = () => {
+    if (typeof window.CRONOX_syncFavoritesDom === "function") {
+      window.CRONOX_syncFavoritesDom();
+    }
   };
-
-  const isFav = (id) => getFavSet().has(String(id || ""));
 
   const normalizeProduct = (product) => {
     const copy = cloneProduct(product || {});
@@ -506,13 +501,6 @@
     favBtn.dataset.image = imgs[0] || p.image || "";
     favBtn.innerHTML = STAR_ICON;
 
-    // ✅ marcar como favorito si ya viene en el set
-    const favKey = p.backendId ?? p.id;
-    if (favKey != null && isFav(favKey)) {
-      favBtn.classList.add("is-favorite");
-      favBtn.setAttribute("aria-label", "Quitar de favoritos");
-    }
-
     const plus = document.createElement("button");
     plus.className = "fav-add";
     plus.type = "button";
@@ -557,6 +545,8 @@
     const frag = document.createDocumentFragment();
     list.forEach((p) => frag.appendChild(createCard(p)));
     productsGrid.appendChild(frag);
+
+    syncFavoritesDom();
 
     restoreScrollOrFocus();
   }

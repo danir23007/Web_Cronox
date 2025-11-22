@@ -329,31 +329,16 @@
     return str ? str : null;
   };
 
-  const syncFavoriteButtons = () => {
-    const ids = favoritesState.ids;
-    document.querySelectorAll('.favorite-toggle, .fav-toggle').forEach((btn) => {
-      const card = btn.closest('.product-card');
-      const pid = normalizeFavId(
-        btn.dataset.productId
-        || btn.dataset.id
-        || btn.dataset.backendId
-        || card?.dataset.backendId
-        || card?.dataset.id
-        || '',
-      );
-      if (!pid) return;
-      btn.classList.toggle('is-favorite', ids.has(pid));
-    });
-  };
-
-  const setFavoriteIds = (ids) => {
-    favoritesState.ids = ids instanceof Set ? ids : new Set();
-    window.CRONOX_FAVORITE_IDS = favoritesState.ids;
-    syncFavoriteButtons();
+  const applyFavoriteIds = (ids) => {
+    const nextSet = ids instanceof Set ? ids : new Set(Array.from(ids || []));
+    favoritesState.ids = nextSet;
+    if (typeof window.CRONOX_setFavoriteIds === 'function') {
+      favoritesState.ids = window.CRONOX_setFavoriteIds(nextSet);
+    } else {
+      window.CRONOX_FAVORITE_IDS = favoritesState.ids;
+    }
     return favoritesState.ids;
   };
-
-  window.CRONOX_setFavoriteIds = setFavoriteIds;
 
   async function fetchFavoritesIds() {
     try {
@@ -363,12 +348,12 @@
       });
 
       if (res.status === 401 || res.status === 403) {
-        setFavoriteIds(new Set());
+        applyFavoriteIds(new Set());
         return favoritesState.ids;
       }
 
       if (!res.ok) {
-        setFavoriteIds(new Set());
+        applyFavoriteIds(new Set());
         return favoritesState.ids;
       }
 
@@ -379,12 +364,11 @@
         if (id) favIds.add(id);
       });
 
-      setFavoriteIds(favIds);
-      window.dispatchEvent(new CustomEvent('cronox:favsChanged', { detail: Array.from(favIds) }));
+      applyFavoriteIds(favIds);
       return favoritesState.ids;
     } catch (err) {
       console.warn('Error fetching favorites for badge:', err);
-      setFavoriteIds(new Set());
+      applyFavoriteIds(new Set());
       return favoritesState.ids;
     }
   }
@@ -397,6 +381,9 @@
 
     const favIds = await fetchFavoritesIds();
     const count = favIds.size;
+    if (typeof window.CRONOX_syncFavoritesDom === 'function') {
+      window.CRONOX_syncFavoritesDom();
+    }
 
     if (count > 0) {
       badge.textContent = String(count);
@@ -410,81 +397,8 @@
   }
   window.updateFavoritesBadge = updateFavoritesBadge;
 
-  document.addEventListener('click', async (event) => {
-    const btn = event.target.closest('.favorite-toggle, .fav-toggle');
-    if (!btn) return;
-
-    event.preventDefault();
-    event.stopPropagation();
-
-    const card = btn.closest('.product-card');
-    const productId = normalizeFavId(
-      btn.dataset.productId
-      || btn.dataset.id
-      || btn.dataset.backendId
-      || card?.dataset.backendId
-      || card?.dataset.id
-      || '',
-    );
-    const slug = (btn.dataset.slug || card?.dataset.slug || '').trim();
-    if (!productId && !slug) return;
-
-    const numericId = Number(productId);
-    const payload = {};
-    if (Number.isFinite(numericId)) payload.productId = numericId;
-    if (!Number.isFinite(numericId) && productId) {
-      payload.slug = productId; // fallback cuando el ID no es numérico
-    }
-    if (slug) payload.slug = slug;
-    if (!payload.productId && !payload.slug) return;
-
-    try {
-      const res = await fetch('/api/favorites/toggle', {
-        method: 'POST',
-        credentials: 'include',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(payload),
-      });
-
-      if (res.status === 401 || res.status === 403) {
-        if (typeof window.CRONOX_openAuthModal === 'function') {
-          window.CRONOX_openAuthModal('login');
-        }
-        return;
-      }
-
-      if (!res.ok) {
-        console.error('Error toggling favorite', res.status);
-        return;
-      }
-
-      const data = await res.json();
-      const status = data.status || (data.isFavorite ? 'added' : 'removed');
-      const isFavorite = status === 'added';
-
-      btn.classList.toggle('is-favorite', isFavorite);
-      if (isFavorite) favoritesState.ids.add(productId);
-      else favoritesState.ids.delete(productId);
-
-      window.CRONOX_FAVORITE_IDS = favoritesState.ids;
-
-      if (typeof updateFavoritesBadge === 'function') {
-        updateFavoritesBadge();
-      }
-
-      window.dispatchEvent(new CustomEvent('cronox:favsChanged', {
-        detail: Array.from(favoritesState.ids),
-      }));
-    } catch (error) {
-      console.error('Error toggling favorite', error);
-    }
-  });
-
   document.addEventListener('DOMContentLoaded', () => {
     updateFavoritesBadge();
-    syncFavoriteButtons();
   });
 
   // ===== Carrito (API + fallback local) =====

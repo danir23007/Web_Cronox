@@ -9,6 +9,12 @@
   const STAR_ICON = window.CRONOX_STAR_ICON || '<span class="icon-star"></span>';
   let favoriteIdsSet = new Set();
 
+  const syncFavoritesDom = () => {
+    if (typeof window.CRONOX_syncFavoritesDom === 'function') {
+      window.CRONOX_syncFavoritesDom();
+    }
+  };
+
   window.formatPriceFromCents = window.formatPriceFromCents || formatPriceFromCents;
 
   const refs = {
@@ -19,6 +25,8 @@
     grid: document.getElementById('favorites-grid'),
     loginLink: document.getElementById('favorites-login-link'),
   };
+
+  let isLoadingFavorites = false;
 
   const setVisible = (el, visible) => {
     if (!el) return;
@@ -124,10 +132,11 @@
     });
     favoriteIdsSet = ids;
     if (typeof window.CRONOX_setFavoriteIds === 'function') {
-      window.CRONOX_setFavoriteIds(ids);
+      favoriteIdsSet = window.CRONOX_setFavoriteIds(ids);
     } else {
       window.CRONOX_FAVORITE_IDS = ids;
     }
+    syncFavoritesDom();
   };
 
   function createProductCard(product) {
@@ -160,9 +169,9 @@
     imgEls.forEach((im) => gallery.appendChild(im));
 
     const favBtn = document.createElement('button');
-    favBtn.className = 'favorite-toggle is-favorite';
+    favBtn.className = 'favorite-toggle';
     favBtn.type = 'button';
-    favBtn.setAttribute('aria-label', 'Quitar de favoritos');
+    favBtn.setAttribute('aria-label', 'Marcar como favorito');
     favBtn.dataset.productId = String(product.backendId ?? product.id ?? '');
     favBtn.dataset.slug = product.slug || '';
     favBtn.dataset.name = product.name || 'Producto';
@@ -249,6 +258,7 @@
     const frag = document.createDocumentFragment();
     favorites.forEach((fav) => frag.appendChild(createProductCard(fav)));
     refs.grid.appendChild(frag);
+    syncFavoritesDom();
     showList();
   }
 
@@ -263,16 +273,19 @@
   }
 
   async function loadFavoritesFlow() {
-    showLoading();
-    setupLoginLink();
-
-    const user = await fetchCurrentUser();
-    if (!user) {
-      showLogin();
-      return;
-    }
+    if (isLoadingFavorites) return;
+    isLoadingFavorites = true;
 
     try {
+      showLoading();
+      setupLoginLink();
+
+      const user = await fetchCurrentUser();
+      if (!user) {
+        showLogin();
+        return;
+      }
+
       const favorites = await fetchFavorites();
       if (!Array.isArray(favorites) || !favorites.length) {
         showEmpty();
@@ -286,9 +299,16 @@
         return;
       }
       showLoading('No se pudieron cargar tus favoritos. Inténtalo de nuevo más tarde.');
+    } finally {
+      isLoadingFavorites = false;
     }
   }
 
+  const handleFavsChanged = () => {
+    if (isLoadingFavorites) return;
+    loadFavoritesFlow();
+  };
+
   document.addEventListener('DOMContentLoaded', loadFavoritesFlow);
-  window.addEventListener('cronox:favsChanged', loadFavoritesFlow);
+  window.addEventListener('cronox:favsChanged', handleFavsChanged);
 })();
