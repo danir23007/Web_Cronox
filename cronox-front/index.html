@@ -48,18 +48,34 @@
       <form id="authRegisterForm" class="auth-view" data-auth-view="register">
         <h2 class="auth-title">Crear cuenta</h2>
         <label class="auth-label">
-          Nombre (opcional)
-          <input type="text" id="authRegisterName" class="auth-input" autocomplete="name">
+          Nombre
+          <input
+            type="text"
+            id="authRegisterName"
+            class="auth-input"
+            autocomplete="given-name"
+            required
+          >
         </label>
         <label class="auth-label">
-          Email
+          Apellido
+          <input
+            type="text"
+            id="authRegisterSurname"
+            class="auth-input"
+            autocomplete="family-name"
+            required
+          >
+        </label>
+        <label class="auth-label">
+          Correo electrónico
           <input type="email" id="authRegisterEmail" class="auth-input" required autocomplete="email">
         </label>
         <label class="auth-label">
           Contraseña
           <input type="password" id="authRegisterPassword" class="auth-input" required autocomplete="new-password">
         </label>
-        <button type="submit" class="auth-button">Registrarse</button>
+        <button type="submit" class="auth-button">Crear cuenta</button>
       </form>
     </div>
 

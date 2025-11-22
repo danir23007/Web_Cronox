@@ -59,10 +59,13 @@ export class AuthService {
     }
 
     const passwordHash = await this.hashPassword(dto.password);
+    const fullName = [dto.name, dto.surname].filter(Boolean).join(' ').trim();
     const user = await this.usersService.createUser({
       email,
       passwordHash,
-      name: dto.name,
+      name: fullName || undefined,
+      firstName: dto.name,
+      lastName: dto.surname,
     });
 
     const tokens = await this.generateTokens(user);

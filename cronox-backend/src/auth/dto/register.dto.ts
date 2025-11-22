@@ -1,7 +1,7 @@
 import { Transform } from 'class-transformer';
 import {
   IsEmail,
-  IsOptional,
+  IsNotEmpty,
   IsString,
   Matches,
   MaxLength,
@@ -10,6 +10,18 @@ import {
 const PASSWORD_REGEX = /^(?=.*[A-Z])(?=.*\d).{8,}$/;
 
 export class RegisterDto {
+  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(120)
+  name!: string;
+
+  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(120)
+  surname!: string;
+
   @Transform(({ value }) => value?.trim())
   @IsEmail()
   email!: string;
@@ -20,10 +32,4 @@ export class RegisterDto {
       'La contraseña debe tener al menos 8 caracteres, una mayúscula y un número',
   })
   password!: string;
-
-  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
-  @IsOptional()
-  @IsString()
-  @MaxLength(120)
-  name?: string;
 }
