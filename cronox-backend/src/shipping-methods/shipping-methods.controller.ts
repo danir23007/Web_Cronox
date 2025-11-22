@@ -8,14 +8,16 @@ export class ShippingMethodsController {
   constructor(private readonly shippingMethods: ShippingMethodsService) {}
 
   @Get()
-  @ApiOperation({ summary: 'Lista los métodos de envío activos disponibles para el checkout' })
+  @ApiOperation({ summary: 'Lista los métodos de envío disponibles para el checkout' })
   @ApiOkResponse({ description: 'Listado de métodos de envío disponibles' })
   @ApiQuery({
-    name: 'country',
+    name: 'itemsTotal',
     required: false,
-    description: 'Filtra los métodos válidos para un país (ISO 3166-1 alpha-2)',
+    description: 'Subtotal de productos en céntimos para calcular el coste de envío',
   })
-  list(@Query('country') country?: string) {
-    return this.shippingMethods.listAvailable(country);
+  list(@Query('itemsTotal') itemsTotal?: string) {
+    const itemsTotalCents = Number(itemsTotal);
+    const parsed = Number.isFinite(itemsTotalCents) ? itemsTotalCents : undefined;
+    return this.shippingMethods.listAvailable(parsed);
   }
 }

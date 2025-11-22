@@ -141,43 +141,30 @@ model CartItem {
   @@index([variantId])
 }
 
-model ShippingMethod {
-  id        Int      @id @default(autoincrement())
-  name      String
-  price     Int
-  countries String[] @default([])
-  isActive  Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  orders    Order[]
-}
-
 model Order {
-  id               Int             @id @default(autoincrement())
-  status           OrderStatus     @default(PENDING)
-  subtotal         Decimal         @db.Decimal(12, 2)
-  taxRate          Decimal         @db.Decimal(5, 4)
-  taxAmount        Decimal         @db.Decimal(12, 2)
-  shippingCost     Decimal         @db.Decimal(12, 2)
-  total            Decimal         @db.Decimal(12, 2)
-  currency         String          @default("EUR")
-  provider         String?
-  providerRef      String?         @unique
-  shippingMethodId Int?
-  createdAt        DateTime        @default(now())
-  updatedAt        DateTime        @updatedAt
-  shippingAddr     Json?
-  billingAddr      Json?
-  userId           Int
-  shippingMethod   ShippingMethod? @relation(fields: [shippingMethodId], references: [id])
-  user             User            @relation(fields: [userId], references: [id])
-  items            OrderItem[]
-  stockMovements   StockMovement[]
+  id             Int             @id @default(autoincrement())
+  status         OrderStatus     @default(PENDING)
+  subtotal       Decimal         @db.Decimal(12, 2)
+  taxRate        Decimal         @db.Decimal(5, 4)
+  taxAmount      Decimal         @db.Decimal(12, 2)
+  shippingCost   Int
+  shippingMethod ShippingMethod @default(STANDARD)
+  total          Decimal         @db.Decimal(12, 2)
+  currency       String          @default("EUR")
+  provider       String?
+  providerRef    String?         @unique
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  shippingAddr   Json?
+  billingAddr    Json?
+  userId         Int
+  user           User            @relation(fields: [userId], references: [id])
+  items          OrderItem[]
+  stockMovements StockMovement[]
 
   @@index([userId])
   @@index([createdAt])
   @@index([status])
-  @@index([shippingMethodId])
 }
 
 model OrderItem {
@@ -234,6 +221,11 @@ enum OrderStatus {
   CANCELLED
   REFUNDED
   SHIPPED
+}
+
+enum ShippingMethod {
+  STANDARD
+  EXPRESS
 }
 
 enum VariantSize {
