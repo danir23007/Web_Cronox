@@ -683,6 +683,7 @@ window.CRONOX_USER = window.CRONOX_USER || null;
   let loginEmail;
   let loginPassword;
   let registerName;
+  let registerSurname;
   let registerEmail;
   let registerPassword;
   let listenersBound = false;
@@ -830,18 +831,19 @@ window.CRONOX_USER = window.CRONOX_USER || null;
       return;
     }
 
-    const name = registerName?.value.trim() || undefined;
+    const name = registerName?.value.trim();
+    const surname = registerSurname?.value.trim();
     const email = registerEmail?.value.trim();
     const password = registerPassword?.value;
 
-    if (!email || !password) {
-      setAuthMessage('Rellena email y contraseña.', 'error');
+    if (!name || !surname || !email || !password) {
+      setAuthMessage('Rellena todos los campos.', 'error');
       return;
     }
 
     try {
       setAuthMessage('Creando cuenta...');
-      const user = await window.CRONOX_API.register({ email, password, name });
+      const user = await window.CRONOX_API.register({ name, surname, email, password });
       window.CRONOX_USER = user;
       updateProfileIconUI();
       try { window.dispatchEvent(new CustomEvent('cronox:userChanged', { detail: user })); } catch {}
@@ -918,6 +920,7 @@ window.CRONOX_USER = window.CRONOX_USER || null;
     loginEmail = document.getElementById('authLoginEmail');
     loginPassword = document.getElementById('authLoginPassword');
     registerName = document.getElementById('authRegisterName');
+    registerSurname = document.getElementById('authRegisterSurname');
     registerEmail = document.getElementById('authRegisterEmail');
     registerPassword = document.getElementById('authRegisterPassword');
     userMenu = document.getElementById('authUserMenu');

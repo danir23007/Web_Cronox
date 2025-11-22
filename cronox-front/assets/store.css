@@ -351,8 +351,9 @@ a.product-card{display:block;text-decoration:none;color:inherit;cursor:pointer;}
 
 /* [AUTH] Modal login/registro */
 .auth-hidden{display:none!important}
+.auth-overlay{position:fixed;inset:0;background:#000!important;backdrop-filter:none!important;display:flex;align-items:center;justify-content:center;z-index:9999}
 
-.cronox-auth{position:fixed;inset:0;padding:24px;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.72);backdrop-filter:blur(12px);z-index:2400;opacity:0;pointer-events:none;transition:opacity .22s ease}
+.cronox-auth{position:fixed;inset:0;padding:24px;display:flex;align-items:center;justify-content:center;background:#000!important;backdrop-filter:none!important;z-index:9999;opacity:0;pointer-events:none;transition:opacity .22s ease}
 .cronox-auth.is-open{opacity:1;pointer-events:auto}
 
 .cronox-auth__dialog{position:relative;width:min(420px,calc(100vw - 32px));background:#050505;border:1px solid rgba(255,255,255,.12);border-radius:18px;box-shadow:0 25px 80px rgba(0,0,0,.8),0 0 0 1px rgba(255,255,255,.02) inset;padding:28px 24px 24px;color:#f8f8f8;overflow:hidden}

@@ -8,6 +8,8 @@ export type SafeUser = {
   id: number;
   email: string;
   name?: string | null;
+  firstName?: string | null;
+  lastName?: string | null;
   role: Role;
   createdAt: Date;
   updatedAt: Date;
@@ -21,6 +23,8 @@ export class UsersService {
     email: string;
     passwordHash: string;
     name?: string;
+    firstName?: string;
+    lastName?: string;
     role?: Role;
   }) {
     return this.prisma.user.create({
@@ -36,11 +40,19 @@ export class UsersService {
     return this.prisma.user.findUnique({ where: { id } });
   }
 
-  async updateProfile(id: number, update: { name?: string }): Promise<SafeUser> {
+  async updateProfile(id: number, update: { name?: string; firstName?: string; lastName?: string }): Promise<SafeUser> {
     const data: Prisma.UserUpdateInput = {};
 
     if (update.name !== undefined) {
       data.name = update.name;
+    }
+
+    if (update.firstName !== undefined) {
+      data.firstName = update.firstName;
+    }
+
+    if (update.lastName !== undefined) {
+      data.lastName = update.lastName;
     }
 
     if (Object.keys(data).length === 0) {
@@ -66,6 +78,8 @@ export class UsersService {
       id: user.id,
       email: user.email,
       name: user.name,
+      firstName: user.firstName,
+      lastName: user.lastName,
       role: user.role,
       createdAt: user.createdAt,
       updatedAt: user.updatedAt,
