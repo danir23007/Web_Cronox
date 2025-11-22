@@ -358,8 +358,10 @@ a.product-card{display:block;text-decoration:none;color:inherit;cursor:pointer;}
 
 .cronox-auth__dialog{position:relative;width:min(420px,calc(100vw - 32px));background:#000;border:1px solid #fff;border-radius:0;box-shadow:none;padding:32px 28px 26px;color:#fff;overflow:hidden}
 .cronox-auth__content{display:flex;flex-direction:column;gap:18px}
-.cronox-auth__close{position:absolute;top:12px;right:12px;width:36px;height:36px;border-radius:0;border:1px solid #fff;background:#000;color:#fff;font-size:16px;cursor:pointer;transition:opacity .15s ease}
+.cronox-auth__close{position:absolute;top:12px;right:12px;color:#fff;font-size:16px;cursor:pointer;transition:opacity .15s ease;padding:0;width:auto;height:auto;border:none;background:transparent;box-shadow:none;line-height:1}
 .cronox-auth__close:hover{opacity:.85}
+.auth-close{background:transparent!important;border:none!important;padding:0;width:auto;height:auto;box-shadow:none!important}
+.auth-close span,.auth-close svg,.auth-close::before,.auth-close::after{color:#ffffff!important;stroke:#ffffff!important}
 .cronox-auth__title{margin:0;font:800 22px/1.2 "Inter",system-ui,Arial,sans-serif;letter-spacing:.08em;color:#fff;text-transform:uppercase}
 
 .cronox-auth__views{display:flex;flex-direction:column;gap:0}
