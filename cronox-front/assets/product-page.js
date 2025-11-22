@@ -199,11 +199,10 @@
 
   const favoritesReady = fetchFavoriteIds().catch(() => new Set());
 
-  const getFavSet = () => (window.CRONOX_FAVORITE_IDS instanceof Set ? window.CRONOX_FAVORITE_IDS : new Set());
-  const isFav = (product) => {
-    if (!product) return false;
-    const id = product.backendId ?? product.id ?? product.slug;
-    return getFavSet().has(String(id || ""));
+  const syncFavoritesDom = () => {
+    if (typeof window.CRONOX_syncFavoritesDom === "function") {
+      window.CRONOX_syncFavoritesDom();
+    }
   };
 
   const setProducts = (list) => {
@@ -532,6 +531,7 @@
     if (!relatedGrid) return;
     const rel = getRelated(current, 4);
     relatedGrid.innerHTML = rel.map(cardHTML).join("");
+    syncFavoritesDom();
   }
 
   // ==========================
@@ -561,6 +561,7 @@
     setupSizeButtons(product);
     setPageTitle(product);
     renderRelated(product);
+    syncFavoritesDom();
     syncAddButtonWidth();
 
     window.scrollTo({ top: 0, left: 0, behavior: "instant" });
