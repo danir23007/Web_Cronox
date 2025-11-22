@@ -1,7 +1,6 @@
 // [ORDERS] Payload recibido desde el proveedor de pago
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { ShippingMethod } from '@prisma/client';
 import {
   IsBoolean,
   IsEnum,
@@ -13,6 +12,7 @@ import {
   IsString,
   ValidateNested,
 } from 'class-validator';
+import { ShippingMethodCode } from '../../common/enums/shipping-method-code.enum';
 
 class WebhookMetadataDto {
   @ApiProperty({ description: 'Identificador del usuario asociado al pago' })
@@ -26,10 +26,13 @@ class WebhookMetadataDto {
   @IsInt()
   cartId?: number;
 
-  @ApiProperty({ description: 'Método de envío aplicado durante el checkout', enum: ShippingMethod })
-  @Type(() => String)
-  @IsEnum(ShippingMethod)
-  shippingMethod!: ShippingMethod;
+  @ApiProperty({
+    description: 'Método de envío aplicado durante el checkout',
+    enum: ShippingMethodCode,
+    enumName: 'ShippingMethodCode',
+  })
+  @IsEnum(ShippingMethodCode)
+  shippingMethod!: ShippingMethodCode;
 
   @ApiProperty({ description: 'Coste del envío en céntimos copiado del checkout' })
   @IsNumberString()

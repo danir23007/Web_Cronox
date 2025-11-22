@@ -15,10 +15,10 @@ import { CreateCheckoutSessionDto } from './dto/create-checkout-session.dto';
 import { CreateOrderWebhookDto } from './dto/create-order-webhook.dto';
 import { PaginationDto } from './dto/pagination.dto';
 import {
-  ShippingMethodResponse,
+  ShippingMethodOption,
   ShippingMethodsService,
 } from '../shipping-methods/shipping-methods.service';
-import { ShippingMethod } from '@prisma/client';
+import { ShippingMethodCode } from '../common/enums/shipping-method-code.enum';
 
 const DEFAULT_CURRENCY = 'EUR';
 
@@ -60,6 +60,8 @@ type CheckoutComputation = {
   itemsTotalCents: number;
 };
 
+type ShippingMethodPublic = ShippingMethodOption & { amount: string };
+
 type CheckoutSummaryResponse = { // [STRIPE]
   currency: string;
   subtotal: string;
@@ -80,7 +82,7 @@ type CheckoutLineItemResponse = { // [STRIPE]
 type CheckoutMetadata = {
   cartId: number;
   userId: number;
-  shippingMethod: ShippingMethod;
+  shippingMethod: ShippingMethodCode;
   shippingCostCents: number;
   itemsTotalCents: number;
 };
@@ -91,7 +93,7 @@ type CheckoutPreview = { // [STRIPE]
   summary: CheckoutSummaryResponse;
   lineItems: CheckoutLineItemResponse[];
   metadata: CheckoutMetadata;
-  shippingMethod: ShippingMethodResponse;
+  shippingMethod: ShippingMethodPublic;
 };
 
 type AuthenticatedUser = {
@@ -113,7 +115,7 @@ export class OrdersService {
 
   async getCheckoutPreview(
     userId: number,
-    params: { shippingMethod: ShippingMethod },
+    params: { shippingMethod: ShippingMethodCode },
   ): Promise<CheckoutPreview> { // [STRIPE]
     const cart = (await this.cartService.getOrCreateCart({ userId })) as CartSnapshot;
 
@@ -122,11 +124,11 @@ export class OrdersService {
     }
 
     const itemsTotalCents = this.computeItemsTotalCents(cart);
-    const shippingMethod = this.shippingMethods.getMethodOrThrow(params.shippingMethod);
-    const shippingCostCents = this.shippingMethods.calculateShipping(
+    const shippingMethod = this.shippingMethods.getMethod(
+      params.shippingMethod,
       itemsTotalCents,
-      shippingMethod.code,
     );
+    const shippingCostCents = shippingMethod.amountCents;
     const computation = this.buildCheckoutComputation(cart, {
       shippingCostCents,
       itemsTotalCents,
@@ -147,7 +149,10 @@ export class OrdersService {
       summary,
       lineItems,
       metadata,
-      shippingMethod: this.shippingMethods.toResponse(shippingMethod, itemsTotalCents),
+      shippingMethod: {
+        ...shippingMethod,
+        amount: this.formatMoney(shippingMethod.amountCents),
+      },
     };
   }
 
@@ -224,13 +229,11 @@ export class OrdersService {
         throw new BadRequestException('ITEMS_TOTAL_METADATA_REQUIRED');
       }
       const itemsTotalCents = this.computeItemsTotalCents(cart);
-      const validatedMethod = this.shippingMethods.getMethodOrThrow(
-        shippingMethod as ShippingMethod,
-      );
-      const expectedShippingCents = this.shippingMethods.calculateShipping(
+      const validatedMethod = this.shippingMethods.getMethod(
+        shippingMethod,
         itemsTotalCents,
-        validatedMethod.code,
       );
+      const expectedShippingCents = validatedMethod.amountCents;
 
       if (expectedShippingCents !== shippingCostCents) {
         this.logger.warn(
@@ -281,7 +284,8 @@ export class OrdersService {
           taxRate: computation.taxRate,
           taxAmount: computation.taxAmount,
           shippingCost: expectedShippingCents,
-          shippingMethod,
+          shippingMethodId: null,
+          shippingMethodCode: validatedMethod.code,
           total: computation.total,
           currency: dto.currency ?? computation.currency,
           provider: dto.provider,
@@ -572,7 +576,11 @@ export class OrdersService {
     return new Decimal(value.toFixed(2));
   }
 
-  private formatMoney(value: Prisma.Decimal, digits = 2): string {
+  private formatMoney(value: Prisma.Decimal | number, digits = 2): string {
+    if (typeof value === 'number') {
+      return (value / 100).toFixed(digits);
+    }
+
     return value.toFixed(digits);
   }
 
@@ -683,12 +691,13 @@ export class OrdersService {
       subtotal: this.formatMoney(order.subtotal),
       taxRate: this.formatRate(order.taxRate),
       taxAmount: this.formatMoney(order.taxAmount),
-      shippingCost: this.formatMoney(this.centsToDecimal(order.shippingCost)),
+      shippingCost: this.formatMoney(order.shippingCost),
       total: this.formatMoney(order.total),
       currency: order.currency,
       provider: order.provider,
       providerRef: order.providerRef,
-      shippingMethod: order.shippingMethod,
+      shippingMethodId: order.shippingMethodId,
+      shippingMethodCode: order.shippingMethodCode,
       createdAt: order.createdAt,
       updatedAt: order.updatedAt,
       shippingAddr: order.shippingAddr,

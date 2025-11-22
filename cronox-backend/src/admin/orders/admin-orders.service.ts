@@ -295,7 +295,11 @@ export class AdminOrdersService {
     };
   }
 
-  private formatMoney(value: Prisma.Decimal): string {
+  private formatMoney(value: Prisma.Decimal | number): string {
+    if (typeof value === 'number') {
+      return (value / 100).toFixed(2);
+    }
+
     return value.toFixed(2);
   }
 

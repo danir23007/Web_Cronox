@@ -44,9 +44,9 @@ export class PaymentsController {
         shippingMethod: {
           code: 'EXPRESS',
           label: 'Envío express',
-          description: 'Entrega rápida',
-          priceCents: 495,
-          price: '4.95',
+          amountCents: 495,
+          amount: '4.95',
+          isFree: false,
         },
         metadata: {
           userId: '1',

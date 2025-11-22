@@ -139,7 +139,12 @@ describe('OrdersService', () => {
       shippingCostCents: 495,
       itemsTotalCents: 20000,
     });
-    expect(result.shippingMethod).toMatchObject({ code: 'EXPRESS', price: '4.95' });
+    expect(result.shippingMethod).toMatchObject({
+      code: 'EXPRESS',
+      amount: '4.95',
+      amountCents: 495,
+      isFree: false,
+    });
   });
 
   it('mantiene idempotencia por providerRef al crear pedidos desde webhook', async () => {
@@ -169,7 +174,8 @@ describe('OrdersService', () => {
       taxRate: new Decimal('0.2100'),
       taxAmount: new Decimal('21.00'),
       shippingCost: 0,
-      shippingMethod: 'STANDARD',
+      shippingMethodId: null,
+      shippingMethodCode: 'STANDARD',
       total: new Decimal('121.00'),
       currency: 'EUR',
       provider: 'stripe',
@@ -251,7 +257,8 @@ describe('OrdersService', () => {
       taxRate: new Decimal('0.2100'),
       taxAmount: new Decimal('42.00'),
       shippingCost: 0,
-      shippingMethod: 'STANDARD',
+      shippingMethodId: null,
+      shippingMethodCode: 'STANDARD',
       total: new Decimal('242.00'),
       currency: 'EUR',
       provider: 'stripe',
@@ -322,7 +329,8 @@ describe('OrdersService', () => {
       taxRate: new Decimal('0.2100'),
       taxAmount: new Decimal('21.00'),
       shippingCost: 0,
-      shippingMethod: 'STANDARD',
+      shippingMethodId: null,
+      shippingMethodCode: 'STANDARD',
       total: new Decimal('121.00'),
       currency: 'EUR',
       provider: 'stripe',
