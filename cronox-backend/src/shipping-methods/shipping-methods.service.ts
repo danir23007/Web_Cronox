@@ -11,32 +11,58 @@ export type ShippingMethodOption = {
 
 const FREE_SHIPPING_THRESHOLD_CENTS = 6500; // 65 €
 
+// Internamente sólo guardamos lo que viene de la BD
+type ShippingRow = {
+  id: number;
+  name: string;
+  price: number;
+  isActive: boolean;
+};
+
 @Injectable()
 export class ShippingMethodsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  // Opcional: pequeño caché en memoria (mejora rendimiento pero no es obligatorio)
-  private cache:
-    | Map<string, { id: number; price: number; name: string; isActive: boolean }>
-    | null = null;
+  // Caché opcional en memoria (puedes borrarlo si no lo quieres)
+  private cache: Map<ShippingMethodCode, ShippingRow> | null = null;
 
-  private async loadMethodsFromDb() {
+  /**
+   * Cargamos los métodos de envío desde la BD y los mapeamos
+   * a STANDARD / EXPRESS usando el ID de la fila:
+   *   id = 1  -> STANDARD
+   *   id = 2  -> EXPRESS
+   *
+   * IMPORTANTE: no borres estas filas y las recrees cambiando el orden,
+   * crea siempre primero el estándar (id 1) y luego el express (id 2).
+   */
+  private async loadMethodsFromDb(): Promise<
+    Map<ShippingMethodCode, ShippingRow>
+  > {
     if (this.cache) return this.cache;
 
     const rows = await this.prisma.shippingMethod.findMany({
       where: { isActive: true },
+      orderBy: { id: 'asc' },
     });
 
-    const map = new Map<
-      string,
-      { id: number; price: number; name: string; isActive: boolean }
-    >();
+    const map = new Map<ShippingMethodCode, ShippingRow>();
 
     for (const row of rows) {
-      map.set(row.code, {
+      let code: ShippingMethodCode | null = null;
+
+      if (row.id === 1) {
+        code = ShippingMethodCode.STANDARD;
+      } else if (row.id === 2) {
+        code = ShippingMethodCode.EXPRESS;
+      } else {
+        // De momento ignoramos otros métodos desconocidos
+        continue;
+      }
+
+      map.set(code, {
         id: row.id,
-        price: row.price,
         name: row.name,
+        price: row.price,
         isActive: row.isActive,
       });
     }
@@ -58,7 +84,7 @@ export class ShippingMethodsService {
 
     let amountCents = row.price;
 
-    // **ÚNICA LÓGICA QUE QUIERO EN CÓDIGO**:
+    // *** ÚNICA LÓGICA EN CÓDIGO ***
     // Si el pedido >= 65 € y el método es STANDARD -> envío gratis
     if (
       code === ShippingMethodCode.STANDARD &&
@@ -70,7 +96,7 @@ export class ShippingMethodsService {
     return {
       id: row.id,
       code,
-      label: row.name,
+      label: row.name, // el texto visible sale de la BD
       amountCents,
     };
   }
@@ -82,11 +108,11 @@ export class ShippingMethodsService {
 
     const result: ShippingMethodOption[] = [];
 
-    for (const [codeStr, row] of methods.entries()) {
-      const code = codeStr as ShippingMethodCode;
+    for (const [code, row] of methods.entries()) {
       if (!row.isActive) continue;
 
       let amountCents = row.price;
+
       if (
         code === ShippingMethodCode.STANDARD &&
         itemsTotalCents >= FREE_SHIPPING_THRESHOLD_CENTS
