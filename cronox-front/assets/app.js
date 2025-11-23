@@ -976,3 +976,9 @@ window.CRONOX_USER = window.CRONOX_USER || null;
     initAuthState();
   });
 })();
+// [AUTH] Abrir página de recuperar contraseña
+document.querySelectorAll("[data-auth-forgot]").forEach(btn => {
+  btn.addEventListener("click", () => {
+    window.location.href = "forgot-password.html";
+  });
+});
