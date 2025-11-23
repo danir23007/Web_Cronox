@@ -892,9 +892,15 @@ window.CRONOX_USER = window.CRONOX_USER || null;
     document.querySelectorAll('[data-auth-switch]').forEach((btn) => {
       btn.addEventListener('click', () => selectAuthView(btn.dataset.authSwitch));
     });
+
+    // [AUTH] Abrir página de recuperar contraseña -> redirigir a forgot-password.html
     document.querySelectorAll('[data-auth-forgot]').forEach((btn) => {
-      btn.addEventListener('click', handleForgot);
+      btn.addEventListener('click', (ev) => {
+        ev.preventDefault();
+        window.location.href = 'forgot-password.html';
+      });
     });
+
     loginForm?.addEventListener('submit', handleLoginSubmit);
     registerForm?.addEventListener('submit', handleRegisterSubmit);
     document.getElementById('authCloseBtn')?.addEventListener('click', closeAuthModal);
@@ -976,9 +982,3 @@ window.CRONOX_USER = window.CRONOX_USER || null;
     initAuthState();
   });
 })();
-// [AUTH] Abrir página de recuperar contraseña
-document.querySelectorAll("[data-auth-forgot]").forEach(btn => {
-  btn.addEventListener("click", () => {
-    window.location.href = "forgot-password.html";
-  });
-});
