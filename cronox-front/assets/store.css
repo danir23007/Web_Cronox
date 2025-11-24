@@ -88,8 +88,9 @@ html,body{margin:0;padding:0;background:#000;color:#fff}
 .topbar-icon.active .icon-bag,
 .topbar-icon--glow .icon-bag,
 .cart-icon-active .icon-bag{
-  stroke:#fff!important;
-  fill:currentColor!important;
+  stroke:#000!important;
+  fill:#fff!important;
+  color:#000;
   filter:drop-shadow(0 0 4px rgba(255,255,255,.35));
   opacity:1!important;
 }
