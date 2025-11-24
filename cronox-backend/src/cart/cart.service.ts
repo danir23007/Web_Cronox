@@ -31,7 +31,21 @@ export class CartService {
   private readonly cartInclude = {
     items: {
       include: {
-        variant: { include: { product: true } },
+        variant: {
+          include: {
+            product: {
+              include: {
+                images: {
+                  orderBy: [
+                    { isPrimary: 'desc' },
+                    { sortOrder: 'asc' },
+                    { id: 'asc' },
+                  ],
+                },
+              },
+            },
+          },
+        },
       },
     },
   } as const;

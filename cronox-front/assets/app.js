@@ -779,17 +779,32 @@
   };
 
   const getCartItemImage = (item) => {
+    const fallbackLogo = 'assets/logo_banner.png';
+    const normalizeImage = (img) => {
+      if (!img) return '';
+      if (typeof img === 'string') return img;
+      if (typeof img?.url === 'string') return img.url;
+      return '';
+    };
+
     const product = item?.product || {};
-    const productImages = Array.isArray(product.images) ? product.images : [];
-    const itemImages = Array.isArray(item?.images) ? item.images : [];
-    return (
-      product.image ||
-      productImages[0] ||
-      item.imageUrl ||
-      item.image ||
-      itemImages[0] ||
-      'assets/logo_banner.png'
-    );
+    const productImages = Array.isArray(product.images)
+      ? product.images.map(normalizeImage).filter(Boolean)
+      : [];
+    const itemImages = Array.isArray(item?.images)
+      ? item.images.map(normalizeImage).filter(Boolean)
+      : [];
+
+    const candidates = [
+      normalizeImage(item?.imageUrl),
+      normalizeImage(product.image || product.imageUrl),
+      productImages[0],
+      normalizeImage(item?.image),
+      itemImages[0],
+    ];
+
+    const imageUrl = candidates.find(Boolean);
+    return imageUrl || fallbackLogo;
   };
 
   const renderCartItems = (cart) => {
