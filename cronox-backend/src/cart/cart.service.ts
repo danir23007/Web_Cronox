@@ -5,14 +5,37 @@ import { randomUUID } from 'node:crypto';
 import { AddItemDto } from './dto/add-item.dto';
 import { UpdateItemDto } from './dto/update-item.dto';
 
+export const cartInclude = {
+  items: {
+    orderBy: {
+      id: 'asc',
+    },
+    include: {
+      variant: {
+        include: {
+          product: {
+            include: {
+              images: {
+                orderBy: [
+                  { isPrimary: 'desc' },
+                  { sortOrder: 'asc' },
+                  { id: 'asc' },
+                ],
+              },
+            },
+          },
+        },
+      },
+    },
+  },
+} satisfies Prisma.CartInclude;
+
 type ModelClient = Pick<
   PrismaClient,
   'cart' | 'cartItem' | 'productVariant' | '$transaction'
 >;
 
-export type CartWithItems = NonNullable<
-  Awaited<ReturnType<PrismaClient['cart']['findUnique']>>
->;
+export type CartWithItems = Prisma.CartGetPayload<{ include: typeof cartInclude }>;
 
 export type CartContext = {
   userId?: number;
@@ -29,30 +52,7 @@ const VARIANT_PRICE_NOT_SET_ERROR = 'VARIANT_PRICE_NOT_SET';
 export class CartService {
   constructor(private readonly prisma: PrismaClient) {}
 
-  private readonly cartInclude: Prisma.CartInclude = {
-    items: {
-      orderBy: {
-        id: 'asc',
-      },
-      include: {
-        variant: {
-          include: {
-            product: {
-              include: {
-                images: {
-                  orderBy: [
-                    { isPrimary: 'desc' },
-                    { sortOrder: 'asc' },
-                    { id: 'asc' },
-                  ],
-                },
-              },
-            },
-          },
-        },
-      },
-    },
-  };
+  private readonly cartInclude = cartInclude;
 
   private getClient(tx?: Prisma.TransactionClient): ModelClient {
     return (tx ?? this.prisma) as unknown as ModelClient;

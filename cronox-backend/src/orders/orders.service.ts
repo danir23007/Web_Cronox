@@ -8,7 +8,7 @@ import {
 } from '@nestjs/common';
 import { OrderStatus, Prisma, Role } from '@prisma/client';
 import { Decimal } from '@prisma/client/runtime/library';
-import { CartService } from '../cart/cart.service';
+import { CartService, cartInclude, type CartWithItems } from '../cart/cart.service';
 import { TaxConfigService } from '../common/tax/tax-config.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateCheckoutSessionDto } from './dto/create-checkout-session.dto';
@@ -22,19 +22,7 @@ import { ShippingMethodCode } from '../common/enums/shipping-method-code.enum';
 
 const DEFAULT_CURRENCY = 'EUR';
 
-type CartSnapshot = Prisma.CartGetPayload<{
-  include: {
-    items: {
-      include: {
-        variant: {
-          include: {
-            product: true;
-          };
-        };
-      };
-    };
-  };
-}>;
+type CartSnapshot = CartWithItems;
 
 type OrderWithItems = Prisma.OrderGetPayload<{
   include: { items: true };
@@ -159,7 +147,7 @@ export class OrdersService {
     userId: number,
     params: { shippingMethod: ShippingMethodCode },
   ): Promise<CheckoutPreview> { // [STRIPE]
-    const cart = (await this.cartService.getOrCreateCart({ userId })) as CartSnapshot;
+    const cart = await this.cartService.getOrCreateCart({ userId });
 
     if (!cart.items.length) {
       throw new BadRequestException('CART_EMPTY');
@@ -444,15 +432,7 @@ export class OrdersService {
     if (cartId) {
       const cart = await tx.cart.findUnique({
         where: { id: cartId },
-        include: {
-          items: {
-            include: {
-              variant: {
-                include: { product: true },
-              },
-            },
-          },
-        },
+        include: cartInclude,
       });
 
       if (cart && cart.userId && cart.userId !== userId) {
@@ -467,15 +447,7 @@ export class OrdersService {
 
     const fallback = await tx.cart.findUnique({
       where: { userId },
-      include: {
-        items: {
-          include: {
-            variant: {
-              include: { product: true },
-            },
-          },
-        },
-      },
+      include: cartInclude,
     });
 
     return fallback ?? null;
