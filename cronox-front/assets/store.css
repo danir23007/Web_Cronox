@@ -57,10 +57,10 @@ html,body{margin:0;padding:0;background:#000;color:#fff}
 .topbar__logo{justify-self:center;display:inline-flex;align-items:center;height:var(--topbar-h);cursor:pointer;}
 .topbar__logo:hover{opacity:.88}
 .topbar__logo-img{
-  display:block;
-  height:52px;
-  width:auto;
-  object-fit:contain;
+  display: block;
+  height: 65px;
+  width: auto;
+  object-fit: contain;
 }
 
 /* ===== Icon Buttons ===== */
