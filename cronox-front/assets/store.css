@@ -479,3 +479,37 @@ a.product-card{display:block;text-decoration:none;color:inherit;cursor:pointer;}
 .profile-section[data-profile-section="favorites"] h2 {
   margin-bottom: 24px;
 }
+
+.profile-section[data-profile-section="account"] .profile-save-btn {
+  background-color: #ffffff;
+  color: #000000;
+  border: 1px solid #ffffff;
+  border-radius: 0;
+}
+
+.profile-section[data-profile-section="account"] .profile-save-btn:hover {
+  background-color: #f5f5f5;
+  color: #000000;
+}
+
+.profile-section[data-profile-section="account"] input,
+.profile-section[data-profile-section="account"] select,
+.profile-section[data-profile-section="account"] textarea {
+  border-radius: 0;
+}
+
+.profile-message {
+  opacity: 0;
+  transform: translateY(-4px);
+  transition: opacity 0.4s ease, transform 0.4s ease;
+}
+
+.profile-message.is-visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.profile-message.is-hiding {
+  opacity: 0;
+  transform: translateY(-4px);
+}

@@ -42,7 +42,7 @@
     .profile-table td { color: #e6e7eb; }
     .profile-table tr:last-child td { border-bottom: none; }
     .profile-fallback { color: #a9abb1; margin: 8px 0 0; }
-    #profileMessage { margin-bottom: 16px; padding: 12px 14px; border-radius: 10px; background: #111118; border: 1px solid #1f1f24; color: #e5e7eb; display: none; }
+    #profileMessage { margin-bottom: 16px; padding: 12px 14px; border-radius: 10px; background: #111118; border: 1px solid #1f1f24; color: #e5e7eb; }
     #profileMessage.is-error { border-color: #ff5f5f; color: #ffd9d9; }
     #profileMessage.is-success { border-color: #4ade80; color: #e6ffed; }
   </style>
@@ -128,7 +128,7 @@
   <main class="store container profile-wrapper" aria-live="polite">
     <div class="profile-page">
       <h1 class="store-heading">Mi cuenta</h1>
-      <div id="profileMessage"></div>
+      <div id="profileMessage" class="profile-message" hidden></div>
       <nav class="profile-tabs" aria-label="Secciones de la cuenta">
         <button type="button" class="profile-tab is-active" data-profile-tab="orders">Pedidos</button>
         <button type="button" class="profile-tab" data-profile-tab="favorites">Favoritos</button>
@@ -195,7 +195,7 @@
                 <input id="email" name="email" type="email" autocomplete="email" placeholder="tu@email.com">
               </label>
               <div class="profile-actions">
-                <button type="submit" class="btn-primary">Guardar cambios</button>
+                <button type="submit" class="btn-primary profile-save-btn">Guardar cambios</button>
               </div>
             </form>
           </div>
@@ -233,7 +233,7 @@
                 </label>
               </div>
               <div class="profile-actions">
-                <button type="submit" class="btn-primary">Guardar dirección</button>
+                <button type="submit" class="btn-primary profile-save-btn">Guardar dirección</button>
               </div>
             </form>
           </div>
