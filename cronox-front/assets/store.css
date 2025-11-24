@@ -50,6 +50,13 @@ html,body{margin:0;padding:0;background:#000;color:#fff}
 .topbar--transparent{background:transparent;border-bottom:1px solid transparent;backdrop-filter:none;box-shadow:none;}
 .topbar--hero{background:rgba(0,0,0,.35);border-bottom:1px solid rgba(255,255,255,.08);backdrop-filter:saturate(120%) blur(6px);box-shadow:0 2px 12px rgba(0,0,0,.25);}
 .topbar--page{background:#000;border-bottom:1px solid rgba(255,255,255,.1);box-shadow:0 2px 16px rgba(0,0,0,.45);}
+.cart-open .topbar,
+.topbar--cart-open{
+  background:#000 !important;
+  border-bottom:1px solid #000 !important;
+  box-shadow:none !important;
+  backdrop-filter:none !important;
+}
 .topbar__left{display:flex;gap:12px;align-items:center}
 .topbar__right{justify-self:end;display:flex;gap:16px;align-items:center}
 .topbar__link{color:var(--muted);text-decoration:none;font:500 14px/1 system-ui;}
@@ -571,33 +578,27 @@ a.product-card{display:block;text-decoration:none;color:inherit;cursor:pointer;}
   gap: 12px;
 }
 
-.cart-drawer__eyebrow {
-  margin: 0;
-  font: 700 11px/1.4 "Inter", system-ui, sans-serif;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: rgba(255, 255, 255, 0.7);
-}
-
 .cart-drawer__title {
-  margin: 2px 0 0;
+  margin: 0;
   font: 700 20px/1.2 "Inter", system-ui, sans-serif;
   letter-spacing: 0.08em;
 }
 
 .cart-drawer__close {
-  border: 1px solid rgba(255, 255, 255, 0.16);
+  border: none;
   background: transparent;
   color: #fff;
   width: 34px;
   height: 34px;
-  border-radius: 50%;
-  font-size: 20px;
+  border-radius: 0;
+  font-size: 22px;
+  line-height: 1;
   cursor: pointer;
-  transition: border-color 0.2s ease, background 0.2s ease, transform 0.2s ease;
+  box-shadow: none;
+  transition: color 0.2s ease, transform 0.2s ease;
 }
 
-.cart-drawer__close:hover { border-color: rgba(255, 255, 255, 0.35); background: rgba(255, 255, 255, 0.06); transform: translateY(-1px); }
+.cart-drawer__close:hover { color: #e6e6e6; transform: translateY(-1px); }
 
 .cart-free-shipping {
   background: transparent;
@@ -635,14 +636,24 @@ a.product-card{display:block;text-decoration:none;color:inherit;cursor:pointer;}
   gap: 0;
 }
 
+.cart-drawer__items.is-empty {
+  align-items: center;
+  justify-content: center;
+}
+
 .cart-empty {
-  padding: 18px 0;
-  background: transparent;
+  padding: 0 12px;
+  width: 100%;
+  min-height: 240px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #000;
   border: none;
   border-radius: 0;
   text-align: center;
-  font-size: 14px;
-  color: rgba(255, 255, 255, 0.75);
+  font-size: 15px;
+  color: #fff;
 }
 
 .cart-line {
