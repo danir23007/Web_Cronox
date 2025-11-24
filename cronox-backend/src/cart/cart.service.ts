@@ -57,6 +57,28 @@ export class CartService {
     return (tx ?? this.prisma) as unknown as ModelClient;
   }
 
+  async getCartForCurrentUser(
+    userId: number,
+    options: { createIfMissing?: boolean; tx?: Prisma.TransactionClient } = {},
+  ): Promise<CartWithItems | null> {
+    const client = this.getClient(options.tx);
+
+    const cart = await client.cart.findFirst({
+      where: { userId },
+      include: this.cartInclude,
+    });
+
+    if (cart) {
+      return cart;
+    }
+
+    if (options.createIfMissing) {
+      return client.cart.create({ data: { userId }, include: this.cartInclude });
+    }
+
+    return null;
+  }
+
   async getOrCreateCart(context: CartContext): Promise<CartWithItems> {
     const where = this.buildUniqueWhere(context);
     return this.findOrCreate(where);

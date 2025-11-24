@@ -49,11 +49,28 @@
     payButton.textContent = loading ? 'Procesando…' : 'Pagar ahora';
   };
 
+  const setLoadingState = (loading) => {
+    if (!payButton) return;
+    payButton.classList.toggle('is-loading', loading);
+    setPayButtonState(loading);
+  };
+
+  const resetPaymentElement = () => {
+    paymentClientSecret = null;
+    if (paymentElement) {
+      paymentElement.unmount();
+      paymentElement = null;
+    }
+    elements = null;
+    setPayButtonState(false);
+  };
+
   const renderEmptyCart = () => {
     if (!cartItemsEl || !emptyCartEl) return;
+    resetPaymentElement();
     cartItemsEl.innerHTML = '';
     emptyCartEl.hidden = false;
-    setPayButtonState(true);
+    setPayButtonState(false);
     if (helpText) {
       helpText.textContent = 'Añade productos al carrito para continuar.';
     }
@@ -127,6 +144,8 @@
     state.shippingMethods.find((method) => method.code === code) || null;
 
   const refreshCheckoutSummary = async (shippingMethodCode = state.shippingMethod) => {
+    setLoadingState(true);
+    errorDiv.textContent = '';
     try {
       const data = await API.getCheckoutSummary({ shippingMethod: shippingMethodCode });
 
@@ -134,7 +153,8 @@
       state.shippingMethods = Array.isArray(data.shippingMethods) ? data.shippingMethods : [];
       if (!state.shippingMethods.length) {
         state.shippingMethod = '';
-        setPayButtonState(true);
+        resetPaymentElement();
+        setLoadingState(false);
         return false;
       }
       state.shippingMethod =
@@ -146,16 +166,20 @@
 
       if (!state.cart?.items?.length) {
         renderEmptyCart();
+        setLoadingState(false);
         return false;
       }
 
       renderCart();
       renderShippingOptions();
       renderSummary(state.totals, findShippingMethod(state.shippingMethod));
+      setLoadingState(false);
       return true;
     } catch (error) {
       console.error('[CRONOX] No se pudo cargar el resumen de checkout', error);
+      resetPaymentElement();
       renderEmptyCart();
+      setLoadingState(false);
       return false;
     }
   };
@@ -175,19 +199,20 @@
   const preparePaymentIntent = async () => {
     if (isInitializing) return;
     isInitializing = true;
-    setPayButtonState(true);
+    setLoadingState(true);
     errorDiv.textContent = '';
 
     const hasItems = Array.isArray(state.cart?.items) && state.cart.items.length > 0;
     if (!hasItems) {
-      setPayButtonState(true);
+      renderEmptyCart();
+      setLoadingState(false);
       isInitializing = false;
       return;
     }
 
     if (!state.shippingMethod) {
       errorDiv.textContent = 'Selecciona un método de envío.';
-      setPayButtonState(true);
+      setLoadingState(false);
       isInitializing = false;
       return;
     }
@@ -211,10 +236,10 @@
       state.shippingMethod = data.shippingMethod?.code || state.shippingMethod;
       state.totals = data.totals || state.totals;
       renderSummary(state.totals, findShippingMethod(state.shippingMethod) || data.shippingMethod);
-      setPayButtonState(false);
+      setLoadingState(false);
     } catch (error) {
       errorDiv.textContent = error.message || 'Error preparando el pago.';
-      setPayButtonState(true);
+      setLoadingState(false);
     } finally {
       isInitializing = false;
     }
@@ -264,7 +289,7 @@
     if (loaded) {
       await preparePaymentIntent();
     } else {
-      setPayButtonState(true);
+      setLoadingState(false);
     }
   });
 })();
