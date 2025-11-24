@@ -570,7 +570,7 @@
   const toast = document.getElementById('toast');
   const CART_LOCK_KEY = 'cart-drawer';
   const FREE_SHIPPING_THRESHOLD = 65 * 100; // 65€ en céntimos
-  const CHECKOUT_URL = 'cart.html';
+  const CHECKOUT_URL = '/checkout.html';
 
   const formatMoney = (() => {
     const EUR = new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR' });

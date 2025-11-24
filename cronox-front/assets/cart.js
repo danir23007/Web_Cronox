@@ -221,7 +221,7 @@
   });
 
   btnCheckout?.addEventListener('click', () => {
-    alert('Para completar la compra inicia sesión y finaliza el pago desde el backend de CRONOX.');
+    window.location.href = '/checkout.html';
   });
 
   document.addEventListener('DOMContentLoaded', () => {
