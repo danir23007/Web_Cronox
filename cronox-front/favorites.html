@@ -9,7 +9,18 @@
 
   <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
   <link rel="alternate icon" href="assets/logo_browser.png" type="image/png">
-  <link rel="stylesheet" href="assets/store.css?v=80">
+  <link id="cronox-main-style" rel="stylesheet" href="">
+  <script src="assets/version.js"></script>
+  <script>
+    (function () {
+      if (window.CRONOX_ASSET) {
+        const link = document.getElementById('cronox-main-style');
+        if (link) {
+          link.href = window.CRONOX_ASSET('assets/store.css');
+        }
+      }
+    })();
+  </script>
   <noscript><style>#preloader{display:none!important}</style></noscript>
 </head>
 <body class="page-favorites">
