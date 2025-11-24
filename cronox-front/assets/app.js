@@ -585,6 +585,11 @@
   };
 
   const cartState = { data: null, drawerOpen: false };
+  const pendingItemUpdates = new Map();
+  const queuedItemQty = new Map();
+  const qtyInputTimers = new Map();
+  const cartItemErrors = new Map();
+  const ITEM_DEBOUNCE_MS = 320;
 
   const setCartUiState = (isOpen) => {
     const body = document.body;
@@ -812,6 +817,11 @@
     const items = Array.isArray(cart?.items) ? cart.items : [];
     const hasItems = items.length > 0;
 
+    const validIds = new Set(items.map((item) => item.id));
+    Array.from(cartItemErrors.keys()).forEach((id) => {
+      if (!validIds.has(id)) cartItemErrors.delete(id);
+    });
+
     cartItemsContainer.classList.toggle('is-empty', !hasItems);
 
     if (!hasItems) {
@@ -831,6 +841,12 @@
       const imageUrl = getCartItemImage(item);
       const article = document.createElement('article');
       article.className = 'cart-line';
+      article.dataset.cartLine = item.id;
+
+      const isPending = pendingItemUpdates.has(item.id);
+      if (isPending) article.classList.add('is-updating');
+      const itemError = cartItemErrors.get(item.id);
+
       article.innerHTML = `
         <div class="cart-line__media">
           <div class="cart-line__image-frame">
@@ -844,23 +860,32 @@
           </div>
           <div class="cart-line__actions">
             <div class="cart-qty" data-id="${item.id}">
-              <button class="cart-qty__btn" data-action="dec" aria-label="Reducir cantidad" data-id="${item.id}">−</button>
+              <button class="cart-qty__btn" data-action="dec" aria-label="Reducir cantidad" data-id="${item.id}" ${isPending ? 'disabled' : ''}>−</button>
               <input
                 type="number"
                 class="cart-qty__input"
                 min="1"
+                max="999"
+                step="1"
                 value="${item.qty}"
                 data-id="${item.id}"
                 data-last-commit="${item.qty}"
                 aria-label="Cantidad"
+                ${isPending ? 'disabled' : ''}
               />
-              <button class="cart-qty__btn" data-action="inc" aria-label="Aumentar cantidad" data-id="${item.id}">+</button>
+              <button class="cart-qty__btn" data-action="inc" aria-label="Aumentar cantidad" data-id="${item.id}" ${isPending ? 'disabled' : ''}>+</button>
             </div>
             <div class="cart-line__price">${formatMoney(lineTotal)}</div>
             <button class="cart-line__remove" data-remove="${item.id}" aria-label="Eliminar artículo">🗑</button>
           </div>
         </div>
       `;
+      if (itemError) {
+        const errorEl = document.createElement('p');
+        errorEl.className = 'cart-line__error';
+        errorEl.textContent = itemError;
+        article.appendChild(errorEl);
+      }
       frag.appendChild(article);
     });
     cartItemsContainer.innerHTML = '';
@@ -914,25 +939,95 @@
     return nextCart;
   };
 
-  const handleQty = async (itemId, dir) => {
+  const syncCartLineUiState = (itemId) => {
+    if (!cartItemsContainer || !itemId) return;
+    const line = cartItemsContainer.querySelector(`[data-cart-line="${itemId}"]`);
+    if (!line) return;
+    const isPending = pendingItemUpdates.has(itemId);
+    line.classList.toggle('is-updating', isPending);
+    line.querySelectorAll('.cart-qty__btn, .cart-qty__input').forEach((el) => {
+      el.disabled = isPending;
+    });
+  };
+
+  const setCartItemError = (itemId, message) => {
+    if (!itemId) return;
+    if (message) cartItemErrors.set(itemId, message);
+    else cartItemErrors.delete(itemId);
+  };
+
+  const parseCartErrorMessage = (error) => {
+    const rawMessage = error?.payload?.message || error?.message || '';
+    if (typeof rawMessage === 'string' && rawMessage.toUpperCase().includes('INSUFFICIENT_STOCK')) {
+      return 'No hay stock suficiente para esta cantidad.';
+    }
+    return 'No se pudo actualizar el carrito en este momento.';
+  };
+
+  const handleCartUpdateError = async (itemId, error) => {
+    console.error('[CRONOX] No se pudo actualizar la cantidad', error);
+    setCartItemError(itemId, parseCartErrorMessage(error));
+    const refreshed = await fetchCart();
+    if (refreshed) renderCartDrawer(refreshed);
+    else renderCartDrawer(cartState.data);
+  };
+
+  const processQueuedUpdate = async (itemId) => {
+    if (!queuedItemQty.has(itemId)) return;
+    const targetQty = queuedItemQty.get(itemId);
+    queuedItemQty.delete(itemId);
+
+    pendingItemUpdates.set(itemId, true);
+    setCartItemError(itemId, '');
+    syncCartLineUiState(itemId);
+    applyOptimisticQty(itemId, targetQty);
+
+    try {
+      const cart = await updateCartItem(itemId, targetQty);
+      setCartItemError(itemId, '');
+      renderCartDrawer(cart);
+    } catch (error) {
+      await handleCartUpdateError(itemId, error);
+    } finally {
+      pendingItemUpdates.delete(itemId);
+      syncCartLineUiState(itemId);
+      if (queuedItemQty.has(itemId)) {
+        await processQueuedUpdate(itemId);
+      }
+    }
+  };
+
+  const queueCartUpdate = (itemId, qty) => {
+    if (!itemId) return;
+    const normalizedQty = Math.max(1, Number(qty) || 1);
+    queuedItemQty.set(itemId, normalizedQty);
+    applyOptimisticQty(itemId, normalizedQty);
+    if (!pendingItemUpdates.has(itemId)) {
+      processQueuedUpdate(itemId);
+    }
+  };
+
+  const handleQty = (itemId, dir) => {
     if (!itemId) return;
     const current = cartState.data?.items?.find((it) => it.id === itemId);
     const currentQty = Math.max(1, Number(current?.qty) || 1);
     const nextQty = dir === 'inc' ? currentQty + 1 : currentQty - 1;
-    try {
-      if (nextQty <= 0) {
-        const cart = await removeCartItem(itemId);
-        renderCartDrawer(cart);
-        return;
-      }
-      applyOptimisticQty(itemId, nextQty);
-      const cart = await updateCartItem(itemId, nextQty);
-      renderCartDrawer(cart);
-    } catch (error) {
-      console.error('[CRONOX] No se pudo actualizar la cantidad', error);
-      showToast('No se pudo actualizar la cantidad');
-      fetchCart().then(renderCartDrawer);
+    if (nextQty <= 0) {
+      pendingItemUpdates.set(itemId, true);
+      syncCartLineUiState(itemId);
+      removeCartItem(itemId)
+        .then((cart) => {
+          setCartItemError(itemId, '');
+          renderCartDrawer(cart);
+        })
+        .catch((error) => handleCartUpdateError(itemId, error))
+        .finally(() => {
+          pendingItemUpdates.delete(itemId);
+          syncCartLineUiState(itemId);
+        });
+      return;
     }
+    queueCartUpdate(itemId, nextQty);
   };
 
   const bindCartDrawerEvents = () => {
@@ -964,33 +1059,54 @@
       if (removeBtn) {
         ev.preventDefault();
         const id = Number(removeBtn.dataset.remove);
-        removeCartItem(id).then(renderCartDrawer).catch((error) => {
-          console.error('[CRONOX] No se pudo eliminar el artículo', error);
-          showToast('No se pudo eliminar el artículo');
-          fetchCart().then(renderCartDrawer);
-        });
+        pendingItemUpdates.set(id, true);
+        syncCartLineUiState(id);
+        removeCartItem(id)
+          .then((cart) => {
+            setCartItemError(id, '');
+            renderCartDrawer(cart);
+          })
+          .catch((error) => {
+            console.error('[CRONOX] No se pudo eliminar el artículo', error);
+            setCartItemError(id, parseCartErrorMessage(error));
+            fetchCart().then(renderCartDrawer);
+          })
+          .finally(() => {
+            pendingItemUpdates.delete(id);
+            syncCartLineUiState(id);
+          });
       }
     });
 
-    const commitQtyInput = (input) => {
+    const scheduleQtyCommit = (itemId, value, immediate = false) => {
+      const normalized = Math.max(1, Number(value) || 1);
+      const existing = qtyInputTimers.get(itemId);
+      if (existing) clearTimeout(existing);
+      if (immediate) {
+        qtyInputTimers.delete(itemId);
+        queueCartUpdate(itemId, normalized);
+        return;
+      }
+      const timer = window.setTimeout(() => {
+        qtyInputTimers.delete(itemId);
+        queueCartUpdate(itemId, normalized);
+      }, ITEM_DEBOUNCE_MS);
+      qtyInputTimers.set(itemId, timer);
+    };
+
+    const commitQtyInput = (input, immediate = false) => {
       const itemId = Number(input.dataset.id);
       let value = parseInt(input.value, 10);
       if (!Number.isFinite(value) || value < 1) value = 1;
       const lastCommit = Number(input.dataset.lastCommit);
-      if (Number.isFinite(lastCommit) && lastCommit === value) {
+      if (Number.isFinite(lastCommit) && lastCommit === value && !immediate) {
         input.value = String(value);
         return;
       }
       input.value = String(value);
       input.dataset.lastCommit = String(value);
       applyOptimisticQty(itemId, value);
-      updateCartItem(itemId, value)
-        .then(renderCartDrawer)
-        .catch((error) => {
-          console.error('[CRONOX] No se pudo actualizar la cantidad', error);
-          showToast('No se pudo actualizar la cantidad');
-          fetchCart().then(renderCartDrawer);
-        });
+      scheduleQtyCommit(itemId, value, immediate);
     };
 
     cartItemsContainer?.addEventListener('change', (ev) => {
@@ -1013,7 +1129,7 @@
       let value = parseInt(qtyInput.value, 10);
       if (!Number.isFinite(value) || value < 1) value = 1;
       qtyInput.value = String(value);
-      qtyInput.dispatchEvent(new Event('change', { bubbles: true }));
+      commitQtyInput(qtyInput, true);
     }, true);
 
     cartUpsellList?.addEventListener('click', (ev) => {
@@ -1127,6 +1243,8 @@ window.CRONOX_USER = window.CRONOX_USER || null;
   let listenersBound = false;
   let authLoaded = false;
   let currentView = 'login';
+  let loginErrorMessage = '';
+  let registerErrorMessage = '';
 
   const lockBody = () => {
     if (typeof window.CRONOX_lockScroll === 'function') window.CRONOX_lockScroll(AUTH_LOCK_KEY);
@@ -1151,7 +1269,8 @@ window.CRONOX_USER = window.CRONOX_USER || null;
       v.classList.toggle('is-active', v.dataset.authView === currentView);
     });
     if (authTitle) authTitle.textContent = currentView === 'login' ? 'Iniciar sesión' : 'Crear cuenta';
-    setAuthMessage('');
+    const storedMessage = currentView === 'login' ? loginErrorMessage : registerErrorMessage;
+    setAuthMessage(storedMessage, storedMessage ? 'error' : 'info');
   };
 
   const positionUserMenu = () => {
@@ -1224,6 +1343,8 @@ window.CRONOX_USER = window.CRONOX_USER || null;
     authOverlay.classList.add('auth-hidden');
     authOverlay.setAttribute('aria-hidden', 'true');
     unlockBody();
+    loginErrorMessage = '';
+    registerErrorMessage = '';
     setAuthMessage('');
   };
 
@@ -1243,7 +1364,12 @@ window.CRONOX_USER = window.CRONOX_USER || null;
   const parseAuthError = (err) => {
     if (!err) return 'Ha ocurrido un error. Inténtalo de nuevo.';
     if (typeof err === 'string') return err;
-    if (err?.message) return err.message;
+    if (err?.message) {
+      if (String(err.message).toUpperCase().includes('INSUFFICIENT_STOCK')) {
+        return 'No se ha podido iniciar sesión. Revisa tus credenciales.';
+      }
+      return err.message;
+    }
     return 'No se ha podido completar la acción.';
   };
 
@@ -1262,11 +1388,13 @@ window.CRONOX_USER = window.CRONOX_USER || null;
     const password = loginPassword?.value;
 
     if (!email || !password) {
-      setAuthMessage('Rellena email y contraseña.', 'error');
+      loginErrorMessage = 'Rellena email y contraseña.';
+      setAuthMessage(loginErrorMessage, 'error');
       return;
     }
 
     try {
+      loginErrorMessage = '';
       setAuthMessage('Iniciando sesión...');
       const user = await window.CRONOX_API.login({ email, password });
       window.CRONOX_USER = user;
@@ -1275,7 +1403,8 @@ window.CRONOX_USER = window.CRONOX_USER || null;
       closeAuthModal();
     } catch (err) {
       console.error('[AUTH] login error', err);
-      setAuthMessage(parseAuthError(err) || 'No se ha podido iniciar sesión.', 'error');
+      loginErrorMessage = parseAuthError(err) || 'No se ha podido iniciar sesión.';
+      setAuthMessage(loginErrorMessage, 'error');
     }
   };
 
@@ -1292,11 +1421,13 @@ window.CRONOX_USER = window.CRONOX_USER || null;
     const password = registerPassword?.value;
 
     if (!firstName || !lastName || !email || !password) {
-      setAuthMessage('Rellena todos los campos.', 'error');
+      registerErrorMessage = 'Rellena todos los campos.';
+      setAuthMessage(registerErrorMessage, 'error');
       return;
     }
 
     try {
+      registerErrorMessage = '';
       setAuthMessage('Creando cuenta...');
       const user = await window.CRONOX_API.register({ firstName, lastName, email, password });
       window.CRONOX_USER = user;
@@ -1305,7 +1436,8 @@ window.CRONOX_USER = window.CRONOX_USER || null;
       closeAuthModal();
     } catch (err) {
       console.error('[AUTH] register error', err);
-      setAuthMessage(parseAuthError(err) || 'No se ha podido crear la cuenta.', 'error');
+      registerErrorMessage = parseAuthError(err) || 'No se ha podido crear la cuenta.';
+      setAuthMessage(registerErrorMessage, 'error');
     }
   };
 
