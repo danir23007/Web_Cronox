@@ -702,12 +702,26 @@ a.product-card{display:block;text-decoration:none;color:inherit;cursor:pointer;}
   background: transparent;
 }
 
-.cart-line__media img {
+.cart-line__media { width: 74px; }
+
+.cart-line__image-frame {
   width: 74px;
   height: 74px;
-  object-fit: cover;
-  border-radius: 8px;
-  background: #111;
+  background: #fff;
+  padding: 6px;
+  border-radius: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.cart-line__media img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  border-radius: 0;
+  background: transparent;
 }
 
 .cart-line__info { display: flex; flex-direction: column; gap: 10px; }
@@ -725,15 +739,16 @@ a.product-card{display:block;text-decoration:none;color:inherit;cursor:pointer;}
 .cart-qty {
   display: inline-flex;
   align-items: center;
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  border-radius: 0;
   overflow: hidden;
+  background: #000;
 }
 
 .cart-qty__btn {
   width: 32px;
-  height: 32px;
-  background: rgba(255, 255, 255, 0.06);
+  height: 36px;
+  background: transparent;
   color: #fff;
   border: none;
   cursor: pointer;
@@ -741,8 +756,25 @@ a.product-card{display:block;text-decoration:none;color:inherit;cursor:pointer;}
   transition: background 0.2s ease, color 0.2s ease;
 }
 
-.cart-qty__btn:hover { background: rgba(255, 255, 255, 0.14); }
-.cart-qty__value { padding: 0 12px; min-width: 22px; text-align: center; font-weight: 700; }
+.cart-qty__btn:hover { background: rgba(255, 255, 255, 0.12); }
+
+.cart-qty__input {
+  width: 48px;
+  height: 36px;
+  padding: 0;
+  text-align: center;
+  border: none;
+  background: transparent;
+  color: #fff;
+  font-weight: 700;
+  font-size: 14px;
+}
+
+.cart-qty__input:focus { outline: 1px solid rgba(255, 255, 255, 0.35); outline-offset: -1px; }
+
+.cart-qty__input::-webkit-outer-spin-button,
+.cart-qty__input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.cart-qty__input[type=number] { -moz-appearance: textfield; }
 
 .cart-line__price { justify-self: end; font-weight: 700; letter-spacing: 0.02em; }
 

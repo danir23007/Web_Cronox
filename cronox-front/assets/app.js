@@ -833,7 +833,9 @@
       article.className = 'cart-line';
       article.innerHTML = `
         <div class="cart-line__media">
-          <img src="${imageUrl}" alt="${item.product?.name || ''}" loading="lazy">
+          <div class="cart-line__image-frame">
+            <img src="${imageUrl}" alt="${item.product?.name || ''}" loading="lazy">
+          </div>
         </div>
         <div class="cart-line__info">
           <div class="cart-line__title">
@@ -843,7 +845,15 @@
           <div class="cart-line__actions">
             <div class="cart-qty" data-id="${item.id}">
               <button class="cart-qty__btn" data-action="dec" aria-label="Reducir cantidad" data-id="${item.id}">−</button>
-              <span class="cart-qty__value" aria-live="polite">${item.qty}</span>
+              <input
+                type="number"
+                class="cart-qty__input"
+                min="1"
+                value="${item.qty}"
+                data-id="${item.id}"
+                data-last-commit="${item.qty}"
+                aria-label="Cantidad"
+              />
               <button class="cart-qty__btn" data-action="inc" aria-label="Aumentar cantidad" data-id="${item.id}">+</button>
             </div>
             <div class="cart-line__price">${formatMoney(lineTotal)}</div>
@@ -935,6 +945,49 @@
         });
       }
     });
+
+    const commitQtyInput = (input) => {
+      const itemId = Number(input.dataset.id);
+      let value = parseInt(input.value, 10);
+      if (!Number.isFinite(value) || value < 1) value = 1;
+      const lastCommit = Number(input.dataset.lastCommit);
+      if (Number.isFinite(lastCommit) && lastCommit === value) {
+        input.value = String(value);
+        return;
+      }
+      input.value = String(value);
+      input.dataset.lastCommit = String(value);
+      updateCartItem(itemId, value)
+        .then(renderCartDrawer)
+        .catch((error) => {
+          console.error('[CRONOX] No se pudo actualizar la cantidad', error);
+          showToast('No se pudo actualizar la cantidad');
+          fetchCart().then(renderCartDrawer);
+        });
+    };
+
+    cartItemsContainer?.addEventListener('change', (ev) => {
+      const qtyInput = ev.target.closest('.cart-qty__input');
+      if (!qtyInput) return;
+      commitQtyInput(qtyInput);
+    });
+
+    cartItemsContainer?.addEventListener('keydown', (ev) => {
+      if (ev.key !== 'Enter') return;
+      const qtyInput = ev.target.closest('.cart-qty__input');
+      if (!qtyInput) return;
+      ev.preventDefault();
+      qtyInput.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+
+    cartItemsContainer?.addEventListener('blur', (ev) => {
+      const qtyInput = ev.target.closest('.cart-qty__input');
+      if (!qtyInput) return;
+      let value = parseInt(qtyInput.value, 10);
+      if (!Number.isFinite(value) || value < 1) value = 1;
+      qtyInput.value = String(value);
+      qtyInput.dispatchEvent(new Event('change', { bubbles: true }));
+    }, true);
 
     cartUpsellList?.addEventListener('click', (ev) => {
       const btn = ev.target.closest('.cart-upsell__add');
