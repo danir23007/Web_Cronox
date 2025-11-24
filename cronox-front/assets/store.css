@@ -394,9 +394,11 @@ a.product-card{display:block;text-decoration:none;color:inherit;cursor:pointer;}
 .auth-user-menu.is-open{opacity:1;transform:translateY(0);pointer-events:auto}
 .auth-user-menu__inner{display:flex;flex-direction:column;gap:6px}
 .auth-user-menu__label{margin:2px 4px 6px;font:700 12px/1.4 "Inter",system-ui,sans-serif;color:#bdbdbd;letter-spacing:.08em;text-transform:uppercase}
-.auth-user-menu__btn{width:100%;text-align:left;padding:10px 12px;border-radius:10px;border:1px solid rgba(255,255,255,.08);background:#0b0b0b;color:#fff;font:700 13px/1.2 "Inter",system-ui,sans-serif;cursor:pointer;transition:border-color .15s ease,background .15s ease,transform .15s ease}
+.auth-user-menu__btn{width:100%;text-align:left;padding:10px 12px;border-radius:0 !important;border:1px solid rgba(255,255,255,.08);background:#0b0b0b;color:#fff;font:700 13px/1.2 "Inter",system-ui,sans-serif;cursor:pointer;transition:border-color .15s ease,background .15s ease,transform .15s ease}
 .auth-user-menu__btn:hover{border-color:rgba(255,255,255,.2);background:#111;transform:translateX(2px)}
 .auth-user-menu__btn--logout{color:#ffb9b9;border-color:rgba(255,255,255,.12)}
+.auth-user-menu__btn,.auth-user-menu__btn--logout{border-radius:0 !important}
+.auth-user-menu__btn:hover,.auth-user-menu__btn:focus,.auth-user-menu__btn:active,.auth-user-menu__btn--logout:hover,.auth-user-menu__btn--logout:focus,.auth-user-menu__btn--logout:active{border-radius:0 !important}
 
 /* === USER MENU (perfil) === */
 #authUserMenu {
