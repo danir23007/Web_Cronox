@@ -24,9 +24,9 @@
   <style>
     .profile-wrapper { padding: 24px 0 60px; }
     .profile-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 20px; }
-    .profile-section { background: #0d0d0f; border: 1px solid #1f1f24; border-radius: 12px; padding: 20px; box-shadow: 0 8px 30px rgba(0,0,0,0.35); }
-    .profile-section h2 { font-size: 1.25rem; margin: 0 0 12px; }
-    .profile-section p.section-desc { margin: 0 0 16px; color: #9ea0a6; }
+    .profile-card { background: #0d0d0f; border: 1px solid #1f1f24; border-radius: 12px; padding: 20px; box-shadow: 0 8px 30px rgba(0,0,0,0.35); }
+    .profile-card h2 { font-size: 1.25rem; margin: 0 0 12px; }
+    .profile-card p.section-desc { margin: 0 0 16px; color: #9ea0a6; }
     .profile-form { display: grid; gap: 12px; }
     .profile-form .form-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; }
     .profile-form label { display: flex; flex-direction: column; gap: 6px; font-size: 0.95rem; color: #dfe1e6; }
@@ -45,9 +45,6 @@
     #profileMessage { margin-bottom: 16px; padding: 12px 14px; border-radius: 10px; background: #111118; border: 1px solid #1f1f24; color: #e5e7eb; display: none; }
     #profileMessage.is-error { border-color: #ff5f5f; color: #ffd9d9; }
     #profileMessage.is-success { border-color: #4ade80; color: #e6ffed; }
-    .profile-actions-row { display: flex; flex-wrap: wrap; gap: 12px; justify-content: space-between; align-items: center; margin-top: 18px; }
-    .profile-actions-row .btn-primary { flex: 1 1 180px; text-align: center; }
-    .profile-actions-row .btn-ghost { flex: 1 1 180px; text-align: center; }
   </style>
 </head>
 <body class="page-profile">
@@ -131,99 +128,118 @@
   <main class="store container profile-wrapper" aria-live="polite">
     <h1 class="store-heading">Mi cuenta</h1>
     <div id="profileMessage"></div>
+    <nav class="profile-tabs" aria-label="Secciones de la cuenta">
+      <button type="button" class="profile-tab is-active" data-profile-tab="orders">Pedidos</button>
+      <button type="button" class="profile-tab" data-profile-tab="favorites">Favoritos</button>
+      <button type="button" class="profile-tab" data-profile-tab="account">Configuración de la cuenta</button>
+      <button type="button" class="profile-tab profile-tab--logout" data-profile-tab="logout">Cerrar sesión</button>
+    </nav>
 
-    <div class="profile-grid">
-      <section class="profile-section" aria-labelledby="account-title">
-        <h2 id="account-title">Datos de la cuenta</h2>
-        <p class="section-desc">Gestiona tu nombre y email.</p>
-        <form id="accountForm" class="profile-form">
-          <div class="form-row">
-            <label>Nombre
-              <input id="firstName" name="firstName" type="text" autocomplete="given-name" placeholder="Tu nombre">
-            </label>
-            <label>Apellido
-              <input id="lastName" name="lastName" type="text" autocomplete="family-name" placeholder="Tu apellido">
-            </label>
-          </div>
-          <label>Email
-            <input id="email" name="email" type="email" autocomplete="email" placeholder="tu@email.com">
-          </label>
-          <div class="profile-actions">
-            <button type="submit" class="btn-primary">Guardar cambios</button>
-          </div>
-        </form>
-      </section>
-
-      <section class="profile-section" aria-labelledby="address-title">
-        <h2 id="address-title">Dirección principal</h2>
-        <p class="section-desc">Se usará como dirección por defecto para tus pedidos.</p>
-        <form id="addressForm" class="profile-form">
-          <label>Nombre de envío
-            <input id="addrName" name="name" type="text" autocomplete="name" placeholder="Nombre y apellidos">
-          </label>
-          <label>Teléfono
-            <input id="addrPhone" name="phone" type="tel" autocomplete="tel" placeholder="Teléfono de contacto">
-          </label>
-          <label>Calle y número
-            <input id="addrLine1" name="line1" type="text" autocomplete="address-line1" placeholder="Calle, número">
-          </label>
-          <label>Piso / puerta (opcional)
-            <input id="addrLine2" name="line2" type="text" autocomplete="address-line2" placeholder="Piso, puerta">
-          </label>
-          <div class="form-row">
-            <label>Ciudad
-              <input id="addrCity" name="city" type="text" autocomplete="address-level2" placeholder="Ciudad">
-            </label>
-            <label>Provincia
-              <input id="addrState" name="state" type="text" autocomplete="address-level1" placeholder="Provincia">
-            </label>
-          </div>
-          <div class="form-row">
-            <label>Código postal
-              <input id="addrZip" name="zip" type="text" autocomplete="postal-code" placeholder="Código postal">
-            </label>
-            <label>País
-              <input id="addrCountry" name="country" type="text" autocomplete="country" placeholder="Ej: ES">
-            </label>
-          </div>
-          <div class="profile-actions">
-            <button type="submit" class="btn-primary">Guardar dirección</button>
-          </div>
-        </form>
-      </section>
-    </div>
-
-    <section class="profile-section" aria-labelledby="orders-title" style="margin-top:20px;">
-      <h2 id="orders-title">Historial de pedidos</h2>
-      <div class="table-wrapper">
-        <table class="profile-table" aria-describedby="orders-title">
-          <thead>
-            <tr>
-              <th scope="col">Pedido</th>
-              <th scope="col">Fecha</th>
-              <th scope="col">Estado</th>
-              <th scope="col">Total</th>
-            </tr>
-          </thead>
-          <tbody id="ordersBody"></tbody>
-        </table>
-        <p id="ordersEmpty" class="profile-fallback" hidden>No tienes pedidos todavía.</p>
+    <section class="profile-section is-active" data-profile-section="orders" aria-labelledby="orders-title">
+      <div class="profile-card">
+        <h2 id="orders-title">Historial de pedidos</h2>
+        <div class="table-wrapper">
+          <table class="profile-table" aria-describedby="orders-title">
+            <thead>
+              <tr>
+                <th scope="col">Pedido</th>
+                <th scope="col">Fecha</th>
+                <th scope="col">Estado</th>
+                <th scope="col">Total</th>
+              </tr>
+            </thead>
+            <tbody id="ordersBody"></tbody>
+          </table>
+          <p id="ordersEmpty" class="profile-fallback" hidden>No tienes pedidos todavía.</p>
+        </div>
+      </div>
+      <div class="profile-back-wrapper">
+        <button type="button" class="profile-back-link" data-profile-back="store">Volver a la tienda</button>
       </div>
     </section>
 
-    <section class="profile-section" aria-labelledby="favorites-title" style="margin-top:20px;">
-      <h2 id="favorites-title">Favoritos</h2>
-      <p class="section-desc">Ver todos tus favoritos guardados.</p>
-      <div class="profile-actions">
-        <button id="btnFavorites" type="button" class="btn-ghost">Ir a favoritos</button>
+    <section class="profile-section" data-profile-section="favorites" aria-labelledby="favorites-title">
+      <div class="profile-card">
+        <h2 id="favorites-title">Favoritos</h2>
+        <p class="section-desc">Ver todos tus favoritos guardados.</p>
+        <section id="profileFavoritesLoading" class="products-fallback" aria-live="polite">
+          <p>Cargando tus favoritos...</p>
+        </section>
+        <section id="profileFavoritesEmpty" class="products-fallback" style="text-align:center;margin-top:12px;" hidden>
+          <p>No tienes productos favoritos todavía.</p>
+        </section>
+        <section id="profileFavoritesList" hidden>
+          <div id="profileFavoritesGrid" class="products-grid" aria-label="Lista de productos favoritos"></div>
+        </section>
+      </div>
+      <div class="profile-back-wrapper">
+        <button type="button" class="profile-back-link" data-profile-back="store">Volver a la tienda</button>
       </div>
     </section>
 
-    <section class="profile-section" aria-labelledby="actions-title" style="margin-top:20px;">
-      <h2 id="actions-title">Acciones</h2>
-      <div class="profile-actions-row">
-        <button id="btnBackToStore" type="button" class="btn-ghost">Volver a la tienda</button>
-        <button id="btnLogoutProfile" type="button" class="btn-primary">Cerrar sesión</button>
+    <section class="profile-section" data-profile-section="account" aria-labelledby="account-title">
+      <div class="profile-grid">
+        <div class="profile-card">
+          <h2 id="account-title">Datos de la cuenta</h2>
+          <p class="section-desc">Gestiona tu nombre y email.</p>
+          <form id="accountForm" class="profile-form">
+            <div class="form-row">
+              <label>Nombre
+                <input id="firstName" name="firstName" type="text" autocomplete="given-name" placeholder="Tu nombre">
+              </label>
+              <label>Apellido
+                <input id="lastName" name="lastName" type="text" autocomplete="family-name" placeholder="Tu apellido">
+              </label>
+            </div>
+            <label>Email
+              <input id="email" name="email" type="email" autocomplete="email" placeholder="tu@email.com">
+            </label>
+            <div class="profile-actions">
+              <button type="submit" class="btn-primary">Guardar cambios</button>
+            </div>
+          </form>
+        </div>
+
+        <div class="profile-card" aria-labelledby="address-title">
+          <h2 id="address-title">Dirección principal</h2>
+          <p class="section-desc">Se usará como dirección por defecto para tus pedidos.</p>
+          <form id="addressForm" class="profile-form">
+            <label>Nombre de envío
+              <input id="addrName" name="name" type="text" autocomplete="name" placeholder="Nombre y apellidos">
+            </label>
+            <label>Teléfono
+              <input id="addrPhone" name="phone" type="tel" autocomplete="tel" placeholder="Teléfono de contacto">
+            </label>
+            <label>Calle y número
+              <input id="addrLine1" name="line1" type="text" autocomplete="address-line1" placeholder="Calle, número">
+            </label>
+            <label>Piso / puerta (opcional)
+              <input id="addrLine2" name="line2" type="text" autocomplete="address-line2" placeholder="Piso, puerta">
+            </label>
+            <div class="form-row">
+              <label>Ciudad
+                <input id="addrCity" name="city" type="text" autocomplete="address-level2" placeholder="Ciudad">
+              </label>
+              <label>Provincia
+                <input id="addrState" name="state" type="text" autocomplete="address-level1" placeholder="Provincia">
+              </label>
+            </div>
+            <div class="form-row">
+              <label>Código postal
+                <input id="addrZip" name="zip" type="text" autocomplete="postal-code" placeholder="Código postal">
+              </label>
+              <label>País
+                <input id="addrCountry" name="country" type="text" autocomplete="country" placeholder="Ej: ES">
+              </label>
+            </div>
+            <div class="profile-actions">
+              <button type="submit" class="btn-primary">Guardar dirección</button>
+            </div>
+          </form>
+        </div>
+      </div>
+      <div class="profile-back-wrapper">
+        <button type="button" class="profile-back-link" data-profile-back="store">Volver a la tienda</button>
       </div>
     </section>
   </main>
@@ -232,6 +248,7 @@
 
   <script src="assets/api.js"></script>
   <script src="assets/app.js?v=49" defer></script>
+  <script src="assets/favorites-toggle.js?v=1" defer></script>
   <script src="assets/profile.js?v=1" defer></script>
 </body>
 </html>
