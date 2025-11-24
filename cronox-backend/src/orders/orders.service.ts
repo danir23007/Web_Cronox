@@ -126,11 +126,25 @@ export class OrdersService {
     const itemsTotalCents = hasItems ? this.computeItemsTotalCents(cart) : 0;
     const methods = await this.shippingMethods.listAvailableMethods(itemsTotalCents);
 
-    const shippingMethods = methods.map((method) => ({
-      ...method,
-      priceCents: method.priceCents ?? method.amountCents,
-      amountCents: method.amountCents ?? method.priceCents ?? 0,
-    }));
+    const shippingMethods = methods.map((method: any) => {
+      const priceFromModel = typeof method.price === 'number' ? method.price : 0;
+
+      const priceCents =
+        (typeof method.priceCents === 'number' && method.priceCents) ??
+        (typeof method.amountCents === 'number' && method.amountCents) ??
+        priceFromModel;
+
+      const amountCents =
+        (typeof method.amountCents === 'number' && method.amountCents) ??
+        (typeof method.priceCents === 'number' && method.priceCents) ??
+        priceFromModel;
+
+      return {
+        ...method,
+        priceCents,
+        amountCents,
+      } as CheckoutShippingMethod;
+    });
 
     const selectedShippingMethod = hasItems
       ? this.pickShippingMethod(shippingMethods, params.shippingMethod)
@@ -483,8 +497,17 @@ export class OrdersService {
     shippingMethod: ShippingMethodOption | null,
   ): CheckoutTotals {
     const subtotalCents = this.computeItemsTotalCents(cart);
-    const shippingCents =
-      (shippingMethod?.amountCents ?? shippingMethod?.priceCents ?? 0) || 0;
+    let shippingCents = 0;
+    if (shippingMethod) {
+      const anyMethod = shippingMethod as any;
+      const rawPrice = typeof anyMethod.price === 'number' ? anyMethod.price : 0;
+
+      shippingCents =
+        (typeof anyMethod.amountCents === 'number' && anyMethod.amountCents) ||
+        (typeof anyMethod.priceCents === 'number' && anyMethod.priceCents) ||
+        rawPrice ||
+        0;
+    }
     const totalCents = subtotalCents + shippingCents;
 
     return { subtotalCents, shippingCents, totalCents };
