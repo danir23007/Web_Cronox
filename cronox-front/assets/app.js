@@ -909,7 +909,10 @@ window.CRONOX_USER = window.CRONOX_USER || null;
       userMenu.addEventListener('click', (ev) => {
         const action = ev.target.closest('[data-user-action]')?.dataset.userAction;
         if (action === 'logout') handleLogout();
-        if (action === 'account') hideUserMenu();
+        if (action === 'account') {
+          hideUserMenu();
+          window.location.href = 'profile.html';
+        }
       });
       window.addEventListener('resize', () => { if (!userMenu.hidden) positionUserMenu(); });
       window.addEventListener('scroll', () => { if (!userMenu.hidden) positionUserMenu(); }, { passive: true });
