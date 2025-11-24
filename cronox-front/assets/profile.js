@@ -12,13 +12,33 @@
 
   let favoritesLoaded = false;
 
-  const showMessage = (text, type = 'info') => {
+  const showProfileMessage = (text, type = 'success') => {
     if (!messageEl) return;
+
     messageEl.textContent = text || '';
-    messageEl.classList.remove('is-error', 'is-success');
+    messageEl.classList.remove('is-error', 'is-success', 'is-hiding');
     if (type === 'error') messageEl.classList.add('is-error');
     if (type === 'success') messageEl.classList.add('is-success');
-    messageEl.style.display = text ? 'block' : 'none';
+
+    if (messageEl._hideTimeout) {
+      clearTimeout(messageEl._hideTimeout);
+    }
+
+    messageEl.hidden = false;
+    messageEl.classList.add('is-visible');
+
+    if (type === 'success') {
+      messageEl._hideTimeout = setTimeout(() => {
+        messageEl.classList.add('is-hiding');
+        messageEl.classList.remove('is-visible');
+
+        setTimeout(() => {
+          messageEl.hidden = true;
+        }, 400);
+      }, 2000);
+    } else {
+      messageEl._hideTimeout = null;
+    }
   };
 
   const safeTrim = (value) => (typeof value === 'string' ? value.trim() : '');
@@ -137,7 +157,7 @@
       : [];
 
     const priceInCents = normalizeCentsValue(product.price ?? product.priceCents ?? product.price_in_cents ?? product.priceInCents ?? 0);
-    const priceLabel = product.priceLabel || formatPriceFromCents(priceInCents);
+    const priceLabel = formatPriceFromCents(priceInCents);
 
     return {
       id: product.id ?? favorite?.id ?? favorite?.productId,
@@ -194,7 +214,7 @@
 
     const priceEl = document.createElement('span');
     priceEl.className = 'product-price';
-    priceEl.textContent = product.priceLabel || '';
+    priceEl.textContent = formatPriceFromCents(product.priceInCents ?? product.price ?? 0) || product.priceLabel || '';
 
     link.appendChild(media);
     link.appendChild(nameEl);
@@ -265,7 +285,7 @@
     } catch (err) {
       if (handleAuthRedirect(err)) return;
       console.warn('[PROFILE] No se pudo cargar el perfil', err);
-      showMessage('No se pudo cargar tu perfil. Inténtalo de nuevo más tarde.', 'error');
+      showProfileMessage('No se pudo cargar tu perfil. Inténtalo de nuevo más tarde.', 'error');
     }
   };
 
@@ -284,12 +304,12 @@
         const updated = await api.updateMe(payload);
         window.CRONOX_USER = updated;
         fillAccount(updated);
-        showMessage('Datos actualizados correctamente.', 'success');
+        showProfileMessage('Datos actualizados correctamente.', 'success');
       } catch (err) {
         if (handleAuthRedirect(err)) return;
         console.error('[PROFILE] Error al guardar cuenta', err);
         const msg = err?.payload?.message || err?.message || 'No se pudieron guardar los cambios.';
-        showMessage(msg, 'error');
+        showProfileMessage(msg, 'error');
       }
     });
   };
@@ -312,19 +332,19 @@
       };
 
       if (!payload.name || !payload.line1 || !payload.city || !payload.zip || !payload.country) {
-        showMessage('Completa los campos obligatorios de la dirección.', 'error');
+        showProfileMessage('Completa los campos obligatorios de la dirección.', 'error');
         return;
       }
 
       try {
         const address = await api.upsertAddress(payload);
         fillAddress(address);
-        showMessage('Dirección guardada correctamente.', 'success');
+        showProfileMessage('Dirección guardada correctamente.', 'success');
       } catch (err) {
         if (handleAuthRedirect(err)) return;
         console.error('[PROFILE] Error al guardar dirección', err);
         const msg = err?.payload?.message || err?.message || 'No se pudo guardar la dirección.';
-        showMessage(msg, 'error');
+        showProfileMessage(msg, 'error');
       }
     });
   };
