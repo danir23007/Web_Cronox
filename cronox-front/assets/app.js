@@ -537,10 +537,18 @@
     }
   });
 
-  // ===== Carrito (API + fallback local) =====
+  // ===== Carrito (API + Drawer) =====
   const cartCountEl = $('.topbar__cart .cart-count');
-  const cartFallbackKey = 'cronox_cart';
   const toast = document.getElementById('toast');
+  const CART_LOCK_KEY = 'cart-drawer';
+  const FREE_SHIPPING_THRESHOLD = 85 * 100; // 85€ en céntimos
+  const CHECKOUT_URL = 'cart.html';
+
+  const formatMoney = (() => {
+    const EUR = new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR' });
+    return (cents) => EUR.format((Number(cents) || 0) / 100);
+  })();
+
   const showToast = (msg) => {
     if (!toast) return;
     toast.textContent = msg;
@@ -548,25 +556,11 @@
     setTimeout(() => toast.classList.remove('show'), 1600);
   };
 
-  const readFallbackCart = () => {
-    try {
-      const raw = localStorage.getItem(cartFallbackKey);
-      return raw ? JSON.parse(raw) : [];
-    } catch {
-      return [];
-    }
-  };
-  const writeFallbackCart = (cart) => {
-    try { localStorage.setItem(cartFallbackKey, JSON.stringify(cart)); }
-    catch {}
-  };
-  const totalQtyFallback = (cart) => cart.reduce((a, it) => a + (Number(it.qty) || 0), 0);
-
-  const cartState = { data: null };
+  const cartState = { data: null, drawerOpen: false };
 
   function updateBadge(cart) {
     const source = cart || cartState.data;
-    const count = source?.itemsCount ?? totalQtyFallback(readFallbackCart());
+    const count = source?.itemsCount ?? 0;
     if (cartCountEl) {
       cartCountEl.textContent = String(clamp(count, 0, 999));
       cartCountEl.hidden = count <= 0;
@@ -579,8 +573,9 @@
     }
   };
 
-  const refreshCartFromApi = async () => {
+  const fetchCart = async () => {
     if (!API || typeof API.getCart !== 'function') {
+      console.warn('[CRONOX] La API de carrito no está disponible');
       updateBadge();
       return null;
     }
@@ -597,34 +592,305 @@
     }
   };
 
+  const addCartItem = async ({ variantId, qty }) => {
+    if (!API?.addCartItem) throw new Error('API de carrito no disponible');
+    const cart = await API.addCartItem({ variantId, qty });
+    cartState.data = cart;
+    updateBadge(cart);
+    window.dispatchEvent(new CustomEvent('cart:updated', { detail: cart }));
+    return cart;
+  };
+
+  const updateCartItem = async (itemId, qty) => {
+    if (!API?.updateCartItem) throw new Error('API de carrito no disponible');
+    const cart = await API.updateCartItem(itemId, qty);
+    cartState.data = cart;
+    updateBadge(cart);
+    window.dispatchEvent(new CustomEvent('cart:updated', { detail: cart }));
+    return cart;
+  };
+
+  const removeCartItem = async (itemId) => {
+    if (!API?.removeCartItem) throw new Error('API de carrito no disponible');
+    const cart = await API.removeCartItem(itemId);
+    cartState.data = cart;
+    updateBadge(cart);
+    window.dispatchEvent(new CustomEvent('cart:updated', { detail: cart }));
+    return cart;
+  };
+
+  const clearCartItems = async () => {
+    if (!API?.clearCart) throw new Error('API de carrito no disponible');
+    const cart = await API.clearCart();
+    cartState.data = cart;
+    updateBadge(cart);
+    window.dispatchEvent(new CustomEvent('cart:updated', { detail: cart }));
+    return cart;
+  };
+
   async function addToCartLine(item) {
     const qty = Math.max(1, Number(item.qty) || 1);
-    if (API && typeof API.addCartItem === 'function' && item.variantId) {
-      try {
-        const cart = await API.addCartItem({ variantId: item.variantId, qty });
-        cartState.data = cart;
-        updateBadge(cart);
-        window.dispatchEvent(new CustomEvent('cart:updated', { detail: cart }));
-        showToast('Añadido al carrito ✓');
+    if (!item.variantId) {
+      console.error('[CRONOX] Falta variantId para añadir al carrito');
+      return;
+    }
+    try {
+      const cart = await addCartItem({ variantId: item.variantId, qty });
+      showToast('Añadido al carrito ✓');
+      if (cartState.drawerOpen) renderCartDrawer(cart);
+    } catch (error) {
+      console.error('[CRONOX] Error añadiendo al carrito', error);
+      showToast('No se pudo añadir al carrito');
+    }
+  }
+
+  const cartOverlayEl = $('#cart-overlay');
+  const cartDrawerEl = $('#cart-drawer');
+  const cartItemsContainer = $('#cart-items-container');
+  const cartEmptyState = $('#cart-empty-state');
+  const cartSubtotalEl = $('#cart-subtotal');
+  const freeShippingTextEl = $('#free-shipping-text');
+  const freeShippingBarFill = $('#free-shipping-bar-fill');
+  const cartUpsellList = $('#cart-upsell-list');
+  const cartUpsellSection = $('#cart-upsell-section');
+  const checkoutBtn = $('#cart-checkout-btn');
+  const cartCloseBtn = $('#cart-close-btn');
+
+  const toggleDrawer = (open) => {
+    if (!cartOverlayEl || !cartDrawerEl) return;
+    cartState.drawerOpen = Boolean(open);
+    if (open) {
+      cartOverlayEl.hidden = false;
+      cartDrawerEl.hidden = false;
+      requestAnimationFrame(() => {
+        cartOverlayEl.classList.add('is-visible');
+        cartDrawerEl.classList.add('is-visible');
+      });
+      lockScroll(CART_LOCK_KEY);
+    } else {
+      cartOverlayEl.classList.remove('is-visible');
+      cartDrawerEl.classList.remove('is-visible');
+      setTimeout(() => {
+        cartOverlayEl.hidden = true;
+        cartDrawerEl.hidden = true;
+      }, 260);
+      unlockScroll(CART_LOCK_KEY);
+    }
+  };
+
+  const closeCartDrawer = () => toggleDrawer(false);
+
+  const openCartDrawer = async () => {
+    toggleDrawer(true);
+    const cart = await fetchCart();
+    renderCartDrawer(cart);
+  };
+
+  const renderFreeShipping = (subtotalCents = 0) => {
+    if (!freeShippingBarFill || !freeShippingTextEl) return;
+    const progress = clamp(subtotalCents / FREE_SHIPPING_THRESHOLD, 0, 1);
+    freeShippingBarFill.style.width = `${progress * 100}%`;
+
+    if (subtotalCents >= FREE_SHIPPING_THRESHOLD) {
+      freeShippingTextEl.textContent = '¡Envío gratuito conseguido!';
+      freeShippingBarFill.dataset.state = 'complete';
+    } else {
+      const remaining = FREE_SHIPPING_THRESHOLD - subtotalCents;
+      freeShippingTextEl.textContent = `Te faltan ${formatMoney(remaining)} para conseguir envío gratuito`;
+      delete freeShippingBarFill.dataset.state;
+    }
+  };
+
+  const getUpsellCandidates = (cart) => {
+    const catalog = Array.isArray(window.CRONOX_PRODUCTS) ? window.CRONOX_PRODUCTS : [];
+    if (!catalog.length) return [];
+    const cartIds = new Set((cart?.items || []).map((it) => it.product?.id));
+    return catalog.filter((p) => !cartIds.has(p.backendId || p.id)).slice(0, 6);
+  };
+
+  const renderUpsell = (cart) => {
+    if (!cartUpsellList || !cartUpsellSection) return;
+    const candidates = getUpsellCandidates(cart);
+    cartUpsellList.innerHTML = '';
+    if (!candidates.length) {
+      cartUpsellSection.hidden = true;
+      return;
+    }
+    cartUpsellSection.hidden = false;
+    const frag = document.createDocumentFragment();
+    candidates.forEach((product) => {
+      const variant = Array.isArray(product.variants) ? product.variants[0] : null;
+      if (!variant) return;
+      const card = document.createElement('article');
+      card.className = 'cart-upsell__item';
+      card.innerHTML = `
+        <div class="cart-upsell__media">
+          <img src="${product.image || product.images?.[0] || 'assets/logo_banner.png'}" alt="${product.name}" loading="lazy">
+        </div>
+        <div class="cart-upsell__info">
+          <p class="cart-upsell__name">${product.name}</p>
+          <p class="cart-upsell__price">${product.priceLabel || formatMoney(product.priceCents)}</p>
+          <button class="cart-upsell__add" data-variant="${variant.id}" type="button">Añadir</button>
+        </div>
+      `;
+      frag.appendChild(card);
+    });
+    cartUpsellList.appendChild(frag);
+  };
+
+  const renderCartItems = (cart) => {
+    if (!cartItemsContainer) return;
+    const items = Array.isArray(cart?.items) ? cart.items : [];
+    if (!items.length) {
+      cartItemsContainer.innerHTML = '';
+      if (cartEmptyState) cartEmptyState.hidden = false;
+      return;
+    }
+    if (cartEmptyState) cartEmptyState.hidden = true;
+
+    const frag = document.createDocumentFragment();
+    items.forEach((item) => {
+      const lineTotal = (Number(item.priceCents) || 0) * (Number(item.qty) || 0);
+      const article = document.createElement('article');
+      article.className = 'cart-line';
+      article.innerHTML = `
+        <div class="cart-line__media">
+          <img src="${item.product?.image || 'assets/logo_banner.png'}" alt="${item.product?.name || ''}" loading="lazy">
+        </div>
+        <div class="cart-line__info">
+          <div class="cart-line__title">
+            <p class="cart-line__name">${item.product?.name || 'Producto CRONOX'}</p>
+            ${item.size ? `<span class="cart-line__meta">Talla: ${String(item.size).toUpperCase()}</span>` : ''}
+          </div>
+          <div class="cart-line__actions">
+            <div class="cart-qty" data-id="${item.id}">
+              <button class="cart-qty__btn" data-action="dec" aria-label="Reducir cantidad" data-id="${item.id}">−</button>
+              <span class="cart-qty__value" aria-live="polite">${item.qty}</span>
+              <button class="cart-qty__btn" data-action="inc" aria-label="Aumentar cantidad" data-id="${item.id}">+</button>
+            </div>
+            <div class="cart-line__price">${formatMoney(lineTotal)}</div>
+            <button class="cart-line__remove" data-remove="${item.id}" aria-label="Eliminar artículo">🗑</button>
+          </div>
+        </div>
+      `;
+      frag.appendChild(article);
+    });
+    cartItemsContainer.innerHTML = '';
+    cartItemsContainer.appendChild(frag);
+  };
+
+  const renderCartDrawer = (cart) => {
+    const subtotalCents = cart?.subtotalCents || 0;
+    renderFreeShipping(subtotalCents);
+    renderCartItems(cart);
+    renderUpsell(cart);
+    if (cartSubtotalEl) cartSubtotalEl.textContent = formatMoney(subtotalCents);
+  };
+
+  const handleQty = async (itemId, dir) => {
+    if (!itemId) return;
+    const current = cartState.data?.items?.find((it) => it.id === itemId);
+    const currentQty = Math.max(1, Number(current?.qty) || 1);
+    const nextQty = dir === 'inc' ? currentQty + 1 : currentQty - 1;
+    try {
+      if (nextQty <= 0) {
+        const cart = await removeCartItem(itemId);
+        renderCartDrawer(cart);
         return;
-      } catch (error) {
-        console.error('[CRONOX] Error añadiendo al carrito remoto', error);
       }
+      const cart = await updateCartItem(itemId, nextQty);
+      renderCartDrawer(cart);
+    } catch (error) {
+      console.error('[CRONOX] No se pudo actualizar la cantidad', error);
+      showToast('No se pudo actualizar la cantidad');
+      fetchCart().then(renderCartDrawer);
+    }
+  };
+
+  const bindCartDrawerEvents = () => {
+    if (cartOverlayEl) {
+      cartOverlayEl.addEventListener('click', (ev) => {
+        if (ev.target === cartOverlayEl) closeCartDrawer();
+      });
+    }
+    cartCloseBtn?.addEventListener('click', (ev) => {
+      ev.preventDefault();
+      closeCartDrawer();
+    });
+
+    checkoutBtn?.addEventListener('click', (ev) => {
+      ev.preventDefault();
+      window.location.href = CHECKOUT_URL;
+    });
+
+    cartItemsContainer?.addEventListener('click', (ev) => {
+      const btn = ev.target.closest('.cart-qty__btn');
+      if (btn) {
+        ev.preventDefault();
+        const dir = btn.dataset.action === 'dec' ? 'dec' : 'inc';
+        const id = Number(btn.dataset.id);
+        handleQty(id, dir);
+        return;
+      }
+      const removeBtn = ev.target.closest('[data-remove]');
+      if (removeBtn) {
+        ev.preventDefault();
+        const id = Number(removeBtn.dataset.remove);
+        removeCartItem(id).then(renderCartDrawer).catch((error) => {
+          console.error('[CRONOX] No se pudo eliminar el artículo', error);
+          showToast('No se pudo eliminar el artículo');
+          fetchCart().then(renderCartDrawer);
+        });
+      }
+    });
+
+    cartUpsellList?.addEventListener('click', (ev) => {
+      const btn = ev.target.closest('.cart-upsell__add');
+      if (!btn) return;
+      ev.preventDefault();
+      const variantId = Number(btn.dataset.variant) || btn.dataset.variant;
+      addCartItem({ variantId, qty: 1 })
+        .then((cart) => {
+          showToast('Añadido al carrito ✓');
+          renderCartDrawer(cart);
+        })
+        .catch((error) => {
+          console.error('[CRONOX] No se pudo añadir sugerido', error);
+          showToast('No se pudo añadir el producto');
+        });
+    });
+
+    const cartIcon = document.querySelector('.topbar__cart, #cart-icon-btn');
+    if (cartIcon) {
+      cartIcon.addEventListener('click', (ev) => {
+        ev.preventDefault();
+        openCartDrawer();
+      });
     }
 
-    const cart = readFallbackCart();
-    const idx = cart.findIndex((x) => x.id === item.id && x.size === item.size && x.color === item.color);
-    if (idx >= 0) {
-      cart[idx].qty = (Number(cart[idx].qty) || 0) + qty;
-    } else {
-      cart.push({ ...item, qty, addedAt: Date.now() });
-    }
-    writeFallbackCart(cart);
-    const fallbackCart = { itemsCount: totalQtyFallback(cart) };
-    updateBadge();
-    window.dispatchEvent(new CustomEvent('cart:updated', { detail: fallbackCart }));
-    showToast('Añadido al carrito ✓');
-  }
+    document.addEventListener('keydown', (ev) => {
+      if (ev.key === 'Escape' && cartState.drawerOpen) {
+        closeCartDrawer();
+      }
+    });
+  };
+
+  const initCartDrawer = () => {
+    if (!cartOverlayEl || !cartDrawerEl) return;
+    bindCartDrawerEvents();
+  };
+
+  window.CRONOX_CART = {
+    fetchCart,
+    addCartItem,
+    updateCartItem,
+    removeCartItem,
+    clearCartItems,
+    openCartDrawer,
+    closeCartDrawer,
+    renderCartDrawer,
+    get state() { return cartState; },
+  };
 
   // 1) Click en “+” abre Quick-Add (no añade directamente)
   document.addEventListener('click', (e) => {
@@ -645,12 +911,12 @@
     addToCartLine(item);
   });
 
-  // Inicializar badge
+  // Inicializar badge + drawer
   document.addEventListener('DOMContentLoaded', () => {
-    refreshCartFromApi();
+    fetchCart();
     updateBadge();
+    initCartDrawer();
   });
-  window.addEventListener('storage', (e)=>{ if (e.key===cartFallbackKey) updateBadge(); });
 
   // Saneado: eliminar cualquier .card-plus heredado
   $$('.card-plus').forEach((el)=>el.remove());

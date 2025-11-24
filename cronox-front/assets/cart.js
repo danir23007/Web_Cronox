@@ -24,15 +24,7 @@
     { code: 'EXPRESS', label: 'Envío express (4,95€)' },
   ];
 
-  const fallbackKey = 'cronox_cart';
-  const readFallback = () => {
-    try {
-      const raw = localStorage.getItem(fallbackKey);
-      return raw ? JSON.parse(raw) : [];
-    } catch {
-      return [];
-    }
-  };
+  const Cart = window.CRONOX_CART || null;
 
   const state = {
     cart: null,
@@ -45,28 +37,6 @@
     return STANDARD_SHIPPING;
   };
 
-  const mapFallbackCart = () => {
-    const items = readFallback();
-    const mapped = items.map((item, idx) => ({
-      id: idx + 1,
-      variantId: item.variantId,
-      qty: Number(item.qty) || 1,
-      priceCents: Math.round((Number(item.price) || 0) * 100),
-      priceLabel: item.priceLabel || money(Math.round((Number(item.price) || 0) * 100)),
-      size: item.size,
-      product: {
-        name: item.name,
-        image: item.image,
-      },
-    }));
-    const subtotal = mapped.reduce((acc, it) => acc + (it.priceCents || 0) * it.qty, 0);
-    return {
-      items: mapped,
-      subtotalCents: subtotal,
-      itemsCount: mapped.reduce((acc, it) => acc + (Number(it.qty) || 0), 0),
-      currency: 'EUR',
-    };
-  };
 
   const renderShippingOptions = () => {
     if (!shippingOptionsEl) return;
@@ -172,16 +142,17 @@
   };
 
   const syncCart = async () => {
-    if (!API || typeof API.getCart !== 'function') {
-      state.cart = mapFallbackCart();
-      renderCart();
-      return;
-    }
     try {
-      state.cart = await API.getCart();
+      if (Cart?.fetchCart) {
+        state.cart = await Cart.fetchCart();
+      } else if (API?.getCart) {
+        state.cart = await API.getCart();
+      } else {
+        state.cart = { items: [], subtotalCents: 0, itemsCount: 0 };
+      }
     } catch (error) {
       console.warn('[CRONOX] Error cargando el carrito', error);
-      state.cart = mapFallbackCart();
+      state.cart = { items: [], subtotalCents: 0, itemsCount: 0 };
     }
     renderCart();
   };
@@ -190,21 +161,9 @@
     const itemId = Number(input.dataset.id);
     const qty = Math.max(1, Number(input.value) || 1);
     input.value = String(qty);
-
-    if (!API || typeof API.updateCartItem !== 'function') {
-      const fallback = readFallback();
-      if (fallback[itemId - 1]) {
-        fallback[itemId - 1].qty = qty;
-        try { localStorage.setItem(fallbackKey, JSON.stringify(fallback)); } catch {}
-      }
-      state.cart = mapFallbackCart();
-      renderCart();
-      window.dispatchEvent(new CustomEvent('cart:updated', { detail: state.cart }));
-      return;
-    }
-
     try {
-      state.cart = await API.updateCartItem(itemId, qty);
+      if (Cart?.updateCartItem) state.cart = await Cart.updateCartItem(itemId, qty);
+      else state.cart = await API.updateCartItem(itemId, qty);
       renderCart();
     } catch (error) {
       console.error('[CRONOX] No se pudo actualizar la cantidad', error);
@@ -214,18 +173,9 @@
 
   const handleRemove = async (button) => {
     const itemId = Number(button.dataset.id);
-    if (!API || typeof API.removeCartItem !== 'function') {
-      const fallback = readFallback();
-      fallback.splice(itemId - 1, 1);
-      try { localStorage.setItem(fallbackKey, JSON.stringify(fallback)); } catch {}
-      state.cart = mapFallbackCart();
-      renderCart();
-      window.dispatchEvent(new CustomEvent('cart:updated', { detail: state.cart }));
-      return;
-    }
-
     try {
-      state.cart = await API.removeCartItem(itemId);
+      if (Cart?.removeCartItem) state.cart = await Cart.removeCartItem(itemId);
+      else state.cart = await API.removeCartItem(itemId);
       renderCart();
     } catch (error) {
       console.error('[CRONOX] No se pudo eliminar el artículo', error);
@@ -234,15 +184,9 @@
   };
 
   const clearCart = async () => {
-    if (!API || typeof API.clearCart !== 'function') {
-      try { localStorage.removeItem(fallbackKey); } catch {}
-      state.cart = mapFallbackCart();
-      renderCart();
-      window.dispatchEvent(new CustomEvent('cart:updated', { detail: state.cart }));
-      return;
-    }
     try {
-      state.cart = await API.clearCart();
+      if (Cart?.clearCartItems) state.cart = await Cart.clearCartItems();
+      else state.cart = await API.clearCart();
       renderCart();
     } catch (error) {
       console.error('[CRONOX] No se pudo vaciar el carrito', error);
