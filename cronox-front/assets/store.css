@@ -84,35 +84,67 @@ html,body{margin:0;padding:0;background:#000;color:#fff}
 .topbar__cart .cart-count{position:absolute;top:-4px;right:-10px;background:#fff;color:#000;border-radius:10px;font:700 10px/1 system-ui;padding:1px 5px;min-width:16px;text-align:center;}
 .topbar__cart .icon-bag{opacity:.9;transition:all .3s ease;}
 .topbar__cart:hover .icon-bag{stroke:#fff!important;fill:rgba(255,255,255,.15)!important;filter:drop-shadow(0 0 5px rgba(255,255,255,.3));opacity:1;}
-.topbar__cart[aria-current="page"] .icon-bag{stroke:#fff!important;fill:#fff!important;filter:drop-shadow(0 0 6px rgba(255,255,255,.45));opacity:1!important;}
-.topbar-icon.active .icon-bag{stroke:#fff!important;fill:#fff!important;filter:drop-shadow(0 0 6px rgba(255,255,255,.45));opacity:1!important;}
+.topbar__cart[aria-current="page"] .icon-bag,
+.topbar-icon.active .icon-bag{
+  stroke:#000!important;
+  fill:none!important;
+  filter:drop-shadow(0 0 8px rgba(255,255,255,.6));
+  opacity:1!important;
+}
 
 .icon-star{width:22px;height:22px;stroke:currentColor!important;fill:none!important;vertical-align:middle;transition:opacity .2s ease,transform .2s ease;}
 .topbar__fav{position:relative;display:inline-flex;align-items:center;gap:4px;color:#fff;}
 .topbar__fav:hover .icon-star{opacity:.8;transform:scale(1.04);}
 .topbar__fav .favorites-count,.topbar__fav .fav-count{position:absolute;top:-4px;right:-10px;background:#fff;color:#000;border-radius:10px;font:700 10px/1 system-ui;padding:1px 5px;min-width:16px;text-align:center;}
-.topbar__fav[aria-current="page"] .icon-star{fill:#fff!important;stroke:#fff!important;filter:drop-shadow(0 0 6px rgba(255,255,255,.45));}
-.topbar-icon.active .icon-star{fill:#fff!important;stroke:#fff!important;filter:drop-shadow(0 0 6px rgba(255,255,255,.45));}
+.topbar__fav[aria-current="page"] .icon-star,
+.topbar-icon.active .icon-star{
+  stroke:#000!important;
+  fill:#000!important;
+  filter:drop-shadow(0 0 8px rgba(255,255,255,.6));
+}
 
 .topbar__profile{position:relative;display:inline-flex;align-items:center;gap:4px;color:#fff;text-decoration:none;}
 .icon-user{width:22px;height:22px;stroke:currentColor!important;fill:none!important;vertical-align:middle;transition:opacity .2s ease, transform .2s ease;}
 .topbar__profile:hover .icon-user{opacity:.8;transform:scale(1.04);}
-.topbar-icon.active .icon-user{stroke:#fff!important;fill:#fff!important;opacity:1;filter:drop-shadow(0 0 6px rgba(255,255,255,.45));}
+.topbar-icon.active .icon-user{
+  stroke:#000!important;
+  fill:none!important;
+  opacity:1;
+  filter:drop-shadow(0 0 8px rgba(255,255,255,.6));
+}
 
 .topbar-icon--glow .icon-star,
 .topbar-icon--glow .icon-bag,
 .topbar-icon--glow .icon-user,
 .cart-icon-active .icon-bag,
 .account-icon-active .icon-user{
-  stroke:#fff!important;
-  fill:#fff!important;
-  filter:drop-shadow(0 0 6px rgba(255,255,255,.45));
+  stroke:#000!important;
+  fill:currentColor!important;
+  filter:drop-shadow(0 0 10px rgba(255,255,255,.65));
   opacity:1!important;
+}
+
+.topbar-icon--glow .icon-bag,
+.topbar-icon.active .icon-bag,
+.topbar__cart[aria-current="page"] .icon-bag,
+.topbar-icon--glow .icon-user,
+.topbar-icon.active .icon-user,
+.topbar__profile[aria-current="page"] .icon-user{
+  fill:none!important;
 }
 
 .cart-icon-active,
 .account-icon-active,
-.topbar-icon--glow{color:#fff;}
+.topbar-icon--glow,
+.topbar-icon.active,
+.topbar__cart[aria-current="page"],
+.topbar__fav[aria-current="page"],
+.topbar__profile[aria-current="page"]{
+  color:#000;
+  background:linear-gradient(145deg, #fff, rgba(255,255,255,.9));
+  box-shadow:0 0 12px rgba(255,255,255,.65);
+  border-radius:10px;
+}
 
 /* ===== Searchbar (flotante) ===== */
 .searchbar{
@@ -776,7 +808,7 @@ a.product-card{display:block;text-decoration:none;color:inherit;cursor:pointer;}
   width: 100%;
   height: 100%;
   background: #fff;
-  border-radius: 10px;
+  border-radius: 0;
   padding: 8px;
   display: flex;
   align-items: center;
@@ -789,7 +821,7 @@ a.product-card{display:block;text-decoration:none;color:inherit;cursor:pointer;}
   width: 100%;
   height: 100%;
   object-fit: contain;
-  border-radius: 6px;
+  border-radius: 0;
   display: block;
 }
 .cart-upsell__name { margin: 0 0 4px; font-size: 13px; }

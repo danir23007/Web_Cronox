@@ -27,6 +27,9 @@
     iconEl.classList.toggle('topbar-icon--glow', isActive || iconEl.classList.contains('active'));
   };
 
+  // Expose helper globally to avoid undefined references from inline handlers
+  window.setIconGlowState = setIconGlowState;
+
   const getLockedTopbarState = () => {
     if (!document.body) return '';
     const ds = document.body.dataset || {};
