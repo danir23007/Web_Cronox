@@ -93,6 +93,7 @@ model User {
   favorites      Favorite[]
   orders         Order[]
   stockMovements StockMovement[]
+  passwordResetTokens PasswordResetToken[]
 }
 
 model Address {
@@ -223,6 +224,16 @@ enum OrderStatus {
   CANCELLED
   REFUNDED
   SHIPPED
+}
+
+model PasswordResetToken {
+  id        Int      @id @default(autoincrement())
+  token     String   @unique
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    Int
+  createdAt DateTime @default(now())
+  expiresAt DateTime
+  usedAt    DateTime?
 }
 
 model ShippingMethod {

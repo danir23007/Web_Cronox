@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Get,
@@ -17,6 +18,8 @@ import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { RefreshJwtGuard } from './guards/refresh-jwt.guard';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
+import { ForgotPasswordDto } from './dto/forgot-password.dto';
+import { ResetPasswordDto } from './dto/reset-password.dto';
 
 @Controller('api/auth')
 export class AuthController {
@@ -72,5 +75,23 @@ export class AuthController {
     const result = await this.authService.refresh(userId);
     this.authService.setAuthCookies(res, result.tokens);
     return { user: result.user };
+  }
+
+  @Post('forgot-password')
+  async forgotPassword(@Body() dto: ForgotPasswordDto) {
+    await this.authService.requestPasswordReset(dto.email);
+    return { ok: true };
+  }
+
+  @Post('reset-password')
+  async resetPassword(@Body() body: ResetPasswordDto) {
+    const { token, password } = body;
+
+    if (!token || !password) {
+      throw new BadRequestException('Token y nueva contraseña son obligatorios');
+    }
+
+    await this.authService.resetPassword(token, password);
+    return { ok: true };
   }
 }
