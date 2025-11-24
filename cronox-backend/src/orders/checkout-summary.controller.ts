@@ -3,6 +3,7 @@ import { ApiBearerAuth, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swa
 import type { Request } from 'express';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { ShippingMethodCode } from '../common/enums/shipping-method-code.enum';
+import { CartService } from '../cart/cart.service';
 import { OrdersService } from './orders.service';
 
 @ApiTags('Checkout')
@@ -10,7 +11,10 @@ import { OrdersService } from './orders.service';
 @UseGuards(JwtAuthGuard)
 @ApiBearerAuth()
 export class CheckoutSummaryController {
-  constructor(private readonly ordersService: OrdersService) {}
+  constructor(
+    private readonly ordersService: OrdersService,
+    private readonly cartService: CartService,
+  ) {}
 
   @Get('summary')
   @ApiOperation({
@@ -29,7 +33,9 @@ export class CheckoutSummaryController {
         ? (shippingMethod.toUpperCase() as ShippingMethodCode)
         : undefined;
 
-    return this.ordersService.getCheckoutSummary(userId, {
+    const cart = await this.cartService.getActiveCartForRequest(req, { userId });
+
+    return this.ordersService.getCheckoutSummary(cart, {
       shippingMethod: normalized,
     });
   }

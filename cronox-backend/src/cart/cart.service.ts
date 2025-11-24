@@ -1,5 +1,6 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma, PrismaClient } from '@prisma/client';
+import type { Request } from 'express';
 import { randomUUID } from 'node:crypto';
 import { AddItemDto } from './dto/add-item.dto';
 import { UpdateItemDto } from './dto/update-item.dto';
@@ -61,22 +62,25 @@ export class CartService {
     userId: number,
     options: { createIfMissing?: boolean; tx?: Prisma.TransactionClient } = {},
   ): Promise<CartWithItems | null> {
-    const client = this.getClient(options.tx);
+    const cart = await this.getActiveCartForContext({ userId }, options.tx);
 
-    const cart = await client.cart.findFirst({
-      where: { userId },
-      include: this.cartInclude,
-    });
-
-    if (cart) {
-      return cart;
-    }
+    if (cart) return cart;
 
     if (options.createIfMissing) {
+      const client = this.getClient(options.tx);
       return client.cart.create({ data: { userId }, include: this.cartInclude });
     }
 
     return null;
+  }
+
+  async getActiveCartForRequest(
+    req: Request,
+    contextOverride?: CartContext,
+    tx?: Prisma.TransactionClient,
+  ): Promise<CartWithItems | null> {
+    const context = contextOverride ?? this.buildContextFromRequest(req);
+    return this.getActiveCartForContext(context, tx);
   }
 
   async getOrCreateCart(context: CartContext): Promise<CartWithItems> {
@@ -275,6 +279,48 @@ export class CartService {
     }
 
     throw new BadRequestException(NO_CONTEXT_ERROR);
+  }
+
+  private buildContextFromRequest(req: Request): CartContext {
+    const user = req.user as { id?: number } | undefined;
+    const userId = typeof user?.id === 'number' ? user.id : undefined;
+    const cookies = (req as Request & { cookies?: Record<string, string | undefined> }).cookies;
+    const anonymousId = cookies?.cartId;
+
+    const context: CartContext = {};
+
+    if (userId) {
+      context.userId = userId;
+    } else if (anonymousId) {
+      context.anonymousId = anonymousId;
+    }
+
+    return context;
+  }
+
+  private async getActiveCartForContext(
+    context: CartContext,
+    tx?: Prisma.TransactionClient,
+  ): Promise<CartWithItems | null> {
+    const client = this.getClient(tx);
+
+    if (typeof context.userId === 'number') {
+      return client.cart.findFirst({
+        where: { userId: context.userId },
+        include: this.cartInclude,
+        orderBy: { createdAt: 'desc' },
+      });
+    }
+
+    if (context.anonymousId) {
+      return client.cart.findFirst({
+        where: { anonymousId: context.anonymousId },
+        include: this.cartInclude,
+        orderBy: { createdAt: 'desc' },
+      });
+    }
+
+    return null;
   }
 
   private buildCreateData(
