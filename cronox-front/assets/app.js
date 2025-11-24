@@ -63,6 +63,7 @@
   // Expose helper globally to avoid undefined references from inline handlers
   window.setIconGlowState = setIconGlowState;
   window.setActiveTopbarIcon = setActiveTopbarIcon;
+  window.syncTopbarActiveIcon = syncTopbarActiveIcon;
 
   const getLockedTopbarState = () => {
     if (!document.body) return '';
