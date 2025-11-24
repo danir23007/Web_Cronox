@@ -63,17 +63,23 @@ export class CartService {
     options: { createIfMissing?: boolean; tx?: Prisma.TransactionClient } = {},
   ): Promise<CartWithItems | null> {
     const cart = await this.getActiveCartForContext({ userId }, options.tx);
-
     if (cart) return cart;
 
     if (options.createIfMissing) {
       const client = this.getClient(options.tx);
-      return client.cart.create({ data: { userId }, include: this.cartInclude });
+      return client.cart.create({
+        data: { userId },
+        include: this.cartInclude,
+      });
     }
 
     return null;
   }
 
+  /**
+   * Carrito "normal" según un contexto concreto (usuario O anónimo).
+   * NO mira los dos a la vez.
+   */
   async getActiveCartForRequest(
     req: Request,
     contextOverride?: CartContext,
@@ -81,6 +87,60 @@ export class CartService {
   ): Promise<CartWithItems | null> {
     const context = contextOverride ?? this.buildContextFromRequest(req);
     return this.getActiveCartForContext(context, tx);
+  }
+
+  /**
+   * 🔥 NUEVO:
+   * Carrito "para checkout".
+   *
+   * - Mira el carrito de USUARIO y el ANÓNIMO (cookie `cartId`).
+   * - Si el anónimo tiene items, devuelve ese (es normalmente el "carrito de verdad"
+   *   cuando el usuario ha estado comprando sin iniciar sesión).
+   * - Si no, devuelve el de usuario.
+   */
+  async getCheckoutCartForRequest(
+    req: Request,
+    tx?: Prisma.TransactionClient,
+  ): Promise<CartWithItems | null> {
+    const client = this.getClient(tx);
+
+    const user = req.user as { id?: number } | undefined;
+    const userId = typeof user?.id === 'number' ? user.id : undefined;
+
+    const cookies = (req as Request & {
+      cookies?: Record<string, string | undefined>;
+    }).cookies;
+    const anonymousId = cookies?.cartId;
+
+    const [userCart, anonCart] = await Promise.all([
+      userId
+        ? client.cart.findFirst({
+            where: { userId },
+            include: this.cartInclude,
+            orderBy: { createdAt: 'desc' },
+          })
+        : Promise.resolve<CartWithItems | null>(null),
+      anonymousId
+        ? client.cart.findFirst({
+            where: { anonymousId },
+            include: this.cartInclude,
+            orderBy: { createdAt: 'desc' },
+          })
+        : Promise.resolve<CartWithItems | null>(null),
+    ]);
+
+    // 1) Si el carrito anónimo tiene items, es el que estás usando ahora mismo.
+    if (anonCart && Array.isArray(anonCart.items) && anonCart.items.length > 0) {
+      return anonCart;
+    }
+
+    // 2) Si no, usamos el de usuario si tiene items.
+    if (userCart && Array.isArray(userCart.items) && userCart.items.length > 0) {
+      return userCart;
+    }
+
+    // 3) Si ninguno tiene items, devuelve lo que haya (userCart o anonCart o null).
+    return userCart ?? anonCart ?? null;
   }
 
   async getOrCreateCart(context: CartContext): Promise<CartWithItems> {
@@ -93,6 +153,7 @@ export class CartService {
       const client = this.getClient(tx);
       const where = this.buildUniqueWhere(context);
       const cart = await this.findOrCreate(where, tx);
+
       const variant = await this.getVariantOrThrow(client, dto.variantId);
       const price = variant.price;
 
@@ -145,16 +206,17 @@ export class CartService {
       const cart = await this.getCartForContext(context, client);
 
       const item = await client.cartItem.findUnique({ where: { id: itemId } });
-
       if (!item || item.cartId !== cart.id) {
         throw new NotFoundException(ITEM_NOT_FOUND_ERROR);
       }
 
       const variant = await this.getVariantOrThrow(client, item.variantId);
+      this.assertStock(dto.qty, variant.stockQty ?? 0); // [STOCK]
 
-     this.assertStock(dto.qty, variant.stockQty ?? 0); // [STOCK] 
-
-      await client.cartItem.update({ where: { id: itemId }, data: { qty: dto.qty } });
+      await client.cartItem.update({
+        where: { id: itemId },
+        data: { qty: dto.qty },
+      });
 
       await this.recalcTotals(client, cart.id);
       return this.getCartByIdOrThrow(client, cart.id);
@@ -167,13 +229,11 @@ export class CartService {
       const cart = await this.getCartForContext(context, client);
 
       const item = await client.cartItem.findUnique({ where: { id: itemId } });
-
       if (!item || item.cartId !== cart.id) {
         throw new NotFoundException(ITEM_NOT_FOUND_ERROR);
       }
 
       await client.cartItem.delete({ where: { id: itemId } });
-
       await this.recalcTotals(client, cart.id);
       return this.getCartByIdOrThrow(client, cart.id);
     });
@@ -186,7 +246,6 @@ export class CartService {
       const cart = await this.findOrCreate(where, tx);
 
       await client.cartItem.deleteMany({ where: { cartId: cart.id } });
-
       await this.recalcTotals(client, cart.id);
       return this.getCartByIdOrThrow(client, cart.id);
     });
@@ -199,6 +258,7 @@ export class CartService {
 
     await this.prisma.$transaction(async (tx) => {
       const client = this.getClient(tx);
+
       const [anonCart, userCart] = await Promise.all([
         client.cart.findUnique({
           where: { anonymousId },
@@ -234,7 +294,9 @@ export class CartService {
         const variant = await this.getVariantOrThrow(client, item.variantId);
         this.assertStock(newQty, variant.stockQty ?? 0); // [STOCK]
 
-        const existingItem = userCart.items.find((i) => i.variantId === item.variantId);
+        const existingItem = userCart.items.find(
+          (i) => i.variantId === item.variantId,
+        );
 
         if (existingItem) {
           await client.cartItem.update({
@@ -264,7 +326,6 @@ export class CartService {
       }
 
       await client.cart.delete({ where: { id: anonCart.id } });
-
       await this.recalcTotals(client, userCart.id);
     });
   }
@@ -284,7 +345,10 @@ export class CartService {
   private buildContextFromRequest(req: Request): CartContext {
     const user = req.user as { id?: number } | undefined;
     const userId = typeof user?.id === 'number' ? user.id : undefined;
-    const cookies = (req as Request & { cookies?: Record<string, string | undefined> }).cookies;
+
+    const cookies = (req as Request & {
+      cookies?: Record<string, string | undefined>;
+    }).cookies;
     const anonymousId = cookies?.cartId;
 
     const context: CartContext = {};
@@ -338,14 +402,22 @@ export class CartService {
     tx?: Prisma.TransactionClient,
   ): Promise<CartWithItems> {
     const client = this.getClient(tx);
-    const existing = await client.cart.findUnique({ where, include: this.cartInclude });
+
+    const existing = await client.cart.findUnique({
+      where,
+      include: this.cartInclude,
+    });
 
     if (existing) {
       return existing;
     }
 
     const data = this.buildCreateData(where);
-    return client.cart.create({ data, include: this.cartInclude });
+
+    return client.cart.create({
+      data,
+      include: this.cartInclude,
+    });
   }
 
   private async getCartForContext(
@@ -353,7 +425,10 @@ export class CartService {
     client: ModelClient,
   ): Promise<CartWithItems> {
     const where = this.buildUniqueWhere(context);
-    const cart = await client.cart.findUnique({ where, include: this.cartInclude });
+    const cart = await client.cart.findUnique({
+      where,
+      include: this.cartInclude,
+    });
 
     if (!cart) {
       throw new NotFoundException(CART_NOT_FOUND_ERROR);
@@ -379,7 +454,9 @@ export class CartService {
   }
 
   private async getVariantOrThrow(client: ModelClient, variantId: number) {
-    const variant = await client.productVariant.findUnique({ where: { id: variantId } });
+    const variant = await client.productVariant.findUnique({
+      where: { id: variantId },
+    });
 
     if (!variant) {
       throw new NotFoundException('VARIANT_NOT_FOUND');
@@ -395,7 +472,10 @@ export class CartService {
   }
 
   private async recalcTotals(client: ModelClient, cartId: number) {
-    const items = await client.cartItem.findMany({ where: { cartId } });
+    const items = await client.cartItem.findMany({
+      where: { cartId },
+    });
+
     const itemsCount = items.reduce((s, it) => s + it.qty, 0);
     const subtotal = items.reduce((s, it) => s + it.qty * it.priceAtAdd, 0);
 
