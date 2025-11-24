@@ -975,10 +975,28 @@ window.CRONOX_USER = window.CRONOX_USER || null;
   document.addEventListener('DOMContentLoaded', async () => {
     const ready = await ensureAuthModal();
     if (!ready) return;
+
     cacheElements();
     bindAuthEvents();
-    if (authOverlay) authOverlay.classList.add('auth-hidden');
+
+    if (authOverlay) {
+      authOverlay.classList.add('auth-hidden');
+    }
+
     updateProfileIconUI();
-    initAuthState();
+    await initAuthState();
+
+    // [AUTH] Abrir automáticamente el modal de login
+    // si venimos de la página de "Recuperar contraseña"
+    try {
+      const flag = localStorage.getItem('cronox_open_auth_on_load');
+      if (flag === 'login') {
+        localStorage.removeItem('cronox_open_auth_on_load');
+        openAuthModal('login');
+      }
+    } catch (err) {
+      console.warn('[AUTH] No se pudo leer cronox_open_auth_on_load', err);
+    }
   });
 })();
+
