@@ -718,9 +718,25 @@ window.CRONOX_USER = window.CRONOX_USER || null;
 
   const positionUserMenu = () => {
     if (!userMenu || !profileBtn) return;
+
     const rect = profileBtn.getBoundingClientRect();
+    const menuWidth = userMenu.offsetWidth;
+    const padding = 20; // margen lateral mínimo
+
+    let left = rect.left + window.scrollX - 30;
+
+    // Si se sale por la derecha → reajusta
+    if (left + menuWidth + padding > window.innerWidth) {
+      left = window.innerWidth - menuWidth - padding;
+    }
+
+    // Si se va demasiado a la izquierda → empuja hacia dentro
+    if (left < padding) {
+      left = padding;
+    }
+
+    userMenu.style.left = `${left}px`;
     userMenu.style.top = `${rect.bottom + window.scrollY + 12}px`;
-    userMenu.style.left = `${rect.left + window.scrollX - 30}px`;
   };
 
   const hideUserMenu = () => {
@@ -914,8 +930,15 @@ window.CRONOX_USER = window.CRONOX_USER || null;
           window.location.href = 'profile.html';
         }
       });
-      window.addEventListener('resize', () => { if (!userMenu.hidden) positionUserMenu(); });
-      window.addEventListener('scroll', () => { if (!userMenu.hidden) positionUserMenu(); }, { passive: true });
+      window.addEventListener('resize', () => {
+        if (!userMenu || userMenu.hidden) return;
+        positionUserMenu();
+      });
+
+      window.addEventListener('scroll', () => {
+        if (!userMenu || userMenu.hidden) return;
+        positionUserMenu();
+      }, { passive: true });
     }
   };
 
