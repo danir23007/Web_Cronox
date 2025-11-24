@@ -17,6 +17,15 @@
   // ===== Topbar =====
   const topbar = $('.topbar');
   const hero = $('.hero-video-section');
+  const favoritesIcon = document.querySelector('.topbar-icon-favorites');
+  const cartTopbarIcon = document.querySelector('.topbar-icon-cart');
+  const userTopbarIcon = document.querySelector('.topbar-icon-user');
+
+  const setIconGlowState = (iconEl, isActive, stateClass) => {
+    if (!iconEl) return;
+    if (stateClass) iconEl.classList.toggle(stateClass, isActive);
+    iconEl.classList.toggle('topbar-icon--glow', isActive || iconEl.classList.contains('active'));
+  };
 
   const getLockedTopbarState = () => {
     if (!document.body) return '';
@@ -60,19 +69,16 @@
     const body = document.body;
     if (!body) return;
 
-    const favoritesIcon = document.querySelector('.topbar-icon-favorites');
-    const cartIcon = document.querySelector('.topbar-icon-cart');
-    const userIcon = document.querySelector('.topbar-icon-user');
-
     const markActive = (el) => {
       if (!el) return;
       el.classList.add('active');
       el.setAttribute('aria-current', 'page');
+      setIconGlowState(el, true);
     };
 
     if (body.classList.contains('page-favorites')) markActive(favoritesIcon);
-    if (body.classList.contains('page-cart')) markActive(cartIcon);
-    if (body.classList.contains('page-login')) markActive(userIcon);
+    if (body.classList.contains('page-cart')) markActive(cartTopbarIcon);
+    if (body.classList.contains('page-login')) markActive(userTopbarIcon);
   }
 
   document.addEventListener('DOMContentLoaded', activateTopbarIcon);
@@ -562,6 +568,7 @@
     const body = document.body;
     if (body) body.classList.toggle('cart-open', isOpen);
     if (topbar) topbar.classList.toggle('topbar--cart-open', isOpen);
+    setIconGlowState(cartTopbarIcon, isOpen, 'cart-icon-active');
   };
 
   function updateBadge(cart) {
@@ -734,7 +741,9 @@
       card.className = 'cart-upsell__item';
       card.innerHTML = `
         <div class="cart-upsell__media">
-          <img src="${product.image || product.images?.[0] || 'assets/logo_banner.png'}" alt="${product.name}" loading="lazy">
+          <div class="cart-upsell__image-frame">
+            <img src="${product.image || product.images?.[0] || 'assets/logo_banner.png'}" alt="${product.name}" loading="lazy">
+          </div>
         </div>
         <div class="cart-upsell__info">
           <p class="cart-upsell__name">${product.name}</p>
@@ -906,7 +915,7 @@
         });
     });
 
-    const cartIcon = document.querySelector('.topbar__cart, #cart-icon-btn');
+    const cartIcon = cartTopbarIcon || document.getElementById('cart-icon-btn');
     if (cartIcon) {
       cartIcon.addEventListener('click', (ev) => {
         ev.preventDefault();
@@ -1111,6 +1120,7 @@ window.CRONOX_USER = window.CRONOX_USER || null;
       profileBtn.setAttribute('data-auth-state', 'guest');
       profileBtn.title = 'Iniciar sesión';
     }
+    setIconGlowState(profileBtn, Boolean(window.CRONOX_USER), 'account-icon-active');
   };
 
   const parseAuthError = (err) => {
