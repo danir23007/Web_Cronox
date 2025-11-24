@@ -541,7 +541,7 @@
   const cartCountEl = $('.topbar__cart .cart-count');
   const toast = document.getElementById('toast');
   const CART_LOCK_KEY = 'cart-drawer';
-  const FREE_SHIPPING_THRESHOLD = 85 * 100; // 85€ en céntimos
+  const FREE_SHIPPING_THRESHOLD = 65 * 100; // 65€ en céntimos
   const CHECKOUT_URL = 'cart.html';
 
   const formatMoney = (() => {
