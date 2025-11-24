@@ -28,7 +28,7 @@ const VARIANT_PRICE_NOT_SET_ERROR = 'VARIANT_PRICE_NOT_SET';
 export class CartService {
   constructor(private readonly prisma: PrismaClient) {}
 
-  private readonly cartInclude = {
+  private readonly cartInclude: Prisma.CartInclude = {
     items: {
       include: {
         variant: {
@@ -48,7 +48,7 @@ export class CartService {
         },
       },
     },
-  } as const;
+  };
 
   private getClient(tx?: Prisma.TransactionClient): ModelClient {
     return (tx ?? this.prisma) as unknown as ModelClient;
