@@ -286,11 +286,13 @@
       priceLabel: formatCents(priceCents),
       size: variant.size,
       sku: variant.sku,
+      imageUrl: productImage || null,
       product: {
         id: product.id,
         slug: product.slug,
         name: product.name,
         image: productImage,
+        imageUrl: productImage || product.imageUrl,
       },
     };
   };
