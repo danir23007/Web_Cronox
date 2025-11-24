@@ -87,11 +87,17 @@
     emptyCartEl.hidden = true;
     const frag = document.createDocumentFragment();
     items.forEach((item) => {
+      const imageUrl =
+        item.imageUrl ||
+        item.product?.imageUrl ||
+        (Array.isArray(item.product?.images) ? item.product.images[0]?.url : '') ||
+        item.product?.image ||
+        'assets/logo_banner.png';
       const article = document.createElement('article');
       article.className = 'checkout-item';
       article.innerHTML = `
         <div class="checkout-item__media">
-          <img src="${item.product?.image || 'assets/logo_banner.png'}" alt="${item.product?.name || ''}" loading="lazy">
+          <img src="${imageUrl}" alt="${item.product?.name || ''}" loading="lazy">
         </div>
         <div class="checkout-item__body">
           <h3 class="checkout-item__title">${item.product?.name || 'Producto CRONOX'}</h3>

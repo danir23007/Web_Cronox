@@ -275,7 +275,19 @@
     const variant = item.variant || {};
     const product = variant.product || {};
     const priceCents = Number(item.priceAtAdd ?? variant.price ?? product.price ?? 0);
-    const productImage = product.imageUrl || pickPrimaryImage(product.images || []);
+    const productImages = Array.isArray(product.images)
+      ? product.images
+          .map((img) => (typeof img?.url === 'string' ? { url: img.url } : null))
+          .filter(Boolean)
+      : [];
+    const productImage =
+      product.imageUrl || pickPrimaryImage(product.images || []) || productImages[0]?.url || '';
+
+    const itemImages = Array.isArray(item.images)
+      ? item.images
+          .map((img) => (typeof img?.url === 'string' ? { url: img.url } : null))
+          .filter(Boolean)
+      : [];
 
     return {
       id: item.id,
@@ -287,12 +299,15 @@
       size: variant.size,
       sku: variant.sku,
       imageUrl: productImage || null,
+      images: itemImages,
       product: {
         id: product.id,
         slug: product.slug,
         name: product.name,
+        currency: product.currency || 'EUR',
         image: productImage,
         imageUrl: productImage || product.imageUrl,
+        images: productImages,
       },
     };
   };
@@ -306,7 +321,11 @@
     const itemsCount = typeof cart.itemsCount === 'number'
       ? cart.itemsCount
       : items.reduce((acc, item) => acc + (Number(item.qty) || 0), 0);
-    const subtotalCents = Number(cart.subtotal ?? 0);
+    const subtotalCents = Number(cart.subtotal ?? cart.subtotalCents ?? 0);
+    const currency =
+      cart.currency ||
+      items.find((item) => item?.product?.currency)?.product?.currency ||
+      'EUR';
 
     return {
       id: cart.id,
@@ -314,7 +333,7 @@
       itemsCount,
       subtotalCents,
       subtotalLabel: formatCents(subtotalCents),
-      currency: 'EUR',
+      currency,
     };
   };
 
@@ -587,8 +606,11 @@
     const cart = mapCart(data?.cart);
     const methods = Array.isArray(data?.shippingMethods)
       ? data.shippingMethods.map((method) => {
-          const priceCents = Number(method.priceCents ?? method.amountCents ?? method.price ?? 0);
-          const amountCents = Number(method.amountCents ?? priceCents);
+          const rawPrice = Number(method.price ?? 0);
+          const priceCents = Number(
+            method.priceCents ?? method.amountCents ?? rawPrice ?? 0,
+          );
+          const amountCents = Number(method.amountCents ?? method.priceCents ?? rawPrice ?? priceCents);
           return {
             ...method,
             priceCents,
@@ -599,23 +621,21 @@
       : [];
 
     const selectedRaw = data?.selectedShippingMethod;
-    const selectedShippingMethod = methods.find((method) => {
-      if (selectedRaw?.id != null) {
-        return method.id === selectedRaw.id;
-      }
-      if (selectedRaw?.code) {
-        return method.code === selectedRaw.code;
-      }
-      return false;
-    }) || methods[0] || null;
+    const selectedShippingMethod =
+      methods.find((method) => {
+        if (selectedRaw?.id != null) {
+          return method.id === selectedRaw.id;
+        }
+        if (selectedRaw?.code) {
+          return method.code === selectedRaw.code;
+        }
+        return false;
+      }) || selectedRaw || methods[0] || null;
 
     const totals = {
-      subtotalCents: Number(data?.totals?.subtotalCents ?? cart.subtotalCents ?? 0),
-      shippingCents: Number(data?.totals?.shippingCents ?? selectedShippingMethod?.amountCents ?? 0),
-      totalCents: Number(
-        data?.totals?.totalCents ??
-          (cart.subtotalCents || 0) + (selectedShippingMethod?.amountCents || 0),
-      ),
+      subtotalCents: Number(data?.totals?.subtotalCents ?? 0),
+      shippingCents: Number(data?.totals?.shippingCents ?? 0),
+      totalCents: Number(data?.totals?.totalCents ?? 0),
     };
 
     return {
