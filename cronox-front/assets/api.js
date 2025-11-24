@@ -403,8 +403,34 @@
   };
 
   api.getMe = async () => {
-    const data = await request('/api/auth/me');
+    const data = await request('/api/me');
     return data || null;
+  };
+
+  api.updateMe = async (payload) => {
+    const data = await request('/api/me', {
+      method: 'PUT',
+      body: payload,
+    });
+    return data || null;
+  };
+
+  api.getDefaultAddress = async () => {
+    const data = await request('/api/me/address');
+    return data || null;
+  };
+
+  api.upsertAddress = async (payload) => {
+    const data = await request('/api/me/address', {
+      method: 'PUT',
+      body: payload,
+    });
+    return data || null;
+  };
+
+  api.getMyOrders = async () => {
+    const data = await request('/api/me/orders');
+    return Array.isArray(data) ? data : [];
   };
 
   // ===== FAVORITES =====
