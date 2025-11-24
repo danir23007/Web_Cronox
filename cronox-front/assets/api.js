@@ -554,10 +554,18 @@
     return mapCart(data);
   };
 
-  api.getShippingMethods = async (country) => {
-    const data = await request('/shipping-methods', {
-      query: country ? { country } : undefined,
-    });
+  api.getShippingMethods = async (params = {}) => {
+    const query = {};
+
+    if (params.country) {
+      query.country = params.country;
+    }
+
+    if (typeof params.itemsTotalCents === 'number') {
+      query.itemsTotal = params.itemsTotalCents;
+    }
+
+    const data = await request('/shipping-methods', { query });
     return Array.isArray(data)
       ? data.map((method) => ({
           ...method,

@@ -2,17 +2,13 @@ import { Body, Controller, Post, Req, UnauthorizedException, UseGuards } from '@
 import { ApiBearerAuth, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { Request } from 'express';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
-import { OrdersService } from '../orders/orders.service';
-import { StripeService } from './stripe.service';
 import { CreatePaymentIntentDto } from './dto/create-payment-intent.dto';
+import { PaymentIntentFactory } from './payment-intent.factory';
 
 @ApiTags('Payments / Stripe')
 @Controller('checkout')
 export class PaymentsController {
-  constructor(
-    private readonly ordersService: OrdersService,
-    private readonly stripeService: StripeService,
-  ) {}
+  constructor(private readonly paymentIntentFactory: PaymentIntentFactory) {}
 
   @Post('payment-intent')
   @UseGuards(JwtAuthGuard)
@@ -68,42 +64,6 @@ export class PaymentsController {
       throw new UnauthorizedException('USER_NOT_AUTHENTICATED');
     }
 
-    const preview = await this.ordersService.getCheckoutPreview(userId, {
-      shippingMethod: dto.shippingMethod,
-    }); // [STRIPE]
-    const amountInCents = Number(preview.computation.total.mul(100).toFixed(0));
-
-    const paymentIntent = await this.stripeService.createOrReusePaymentIntent({
-      userId,
-      cartId: preview.metadata.cartId,
-      amount: amountInCents,
-      currency: preview.computation.currency,
-      metadata: {
-        shippingMethod: String(preview.metadata.shippingMethod),
-        shippingCostCents: String(preview.metadata.shippingCostCents),
-        itemsTotalCents: String(preview.metadata.itemsTotalCents),
-      },
-    });
-
-    const metadata = {
-      userId: String(preview.metadata.userId),
-      cartId: String(preview.metadata.cartId),
-      shippingMethod: String(preview.metadata.shippingMethod),
-      shippingCostCents: String(preview.metadata.shippingCostCents),
-      itemsTotalCents: String(preview.metadata.itemsTotalCents),
-    } as Record<string, string>;
-
-    if (dto.addressId) {
-      metadata.addressId = String(dto.addressId); // [STRIPE]
-    }
-
-    return {
-      clientSecret: paymentIntent.clientSecret,
-      paymentIntentId: paymentIntent.id,
-      summary: preview.summary,
-      lineItems: preview.lineItems,
-      shippingMethod: preview.shippingMethod,
-      metadata,
-    };
+    return this.paymentIntentFactory.createPaymentIntentForUser(userId, dto);
   }
 }

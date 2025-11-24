@@ -1,0 +1,205 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Checkout — CRONOX</title>
+  <meta name="theme-color" content="#000000" />
+  <meta name="description" content="Checkout CRONOX — Pago seguro en una sola página.">
+
+  <link rel="icon" href="assets/favicon.svg" type="image/svg+xml" />
+  <link rel="alternate icon" href="assets/logo_browser.png" type="image/png" />
+  <!-- CSS global -->
+  <link id="cronox-main-style" rel="stylesheet" href="">
+  <script src="assets/version.js"></script>
+  <script>
+    (function () {
+      if (window.CRONOX_ASSET) {
+        const link = document.getElementById('cronox-main-style');
+        if (link) {
+          link.href = window.CRONOX_ASSET('assets/store.css');
+        }
+      }
+    })();
+  </script>
+  <link rel="stylesheet" href="assets/cart.css?v=2" />
+  <link rel="stylesheet" href="assets/checkout.css" />
+</head>
+<body class="page-checkout">
+
+  <div id="overlay" class="overlay" hidden></div>
+
+  <header class="topbar topbar--page" id="topbar" role="banner">
+    <div class="topbar__left">
+      <button id="btnMenu" class="icon-btn" aria-label="Abrir menú" aria-expanded="false" aria-controls="filtersPanel">
+        <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+             stroke-linecap="round" stroke-linejoin="round" class="icon" aria-hidden="true" focusable="false">
+          <line x1="3" y1="6" x2="21" y2="6"></line>
+          <line x1="3" y1="12" x2="21" y2="12"></line>
+          <line x1="3" y1="18" x2="21" y2="18"></line>
+        </svg>
+      </button>
+
+      <button id="btnSearch" class="icon-btn" aria-label="Buscar productos" aria-expanded="false" aria-controls="searchBar">
+        <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+             stroke-linecap="round" stroke-linejoin="round" class="icon" aria-hidden="true" focusable="false">
+          <circle cx="11" cy="11" r="8"></circle>
+          <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+        </svg>
+      </button>
+    </div>
+
+    <a href="index.html" class="topbar__logo" aria-label="CRONOX — Tienda">
+      <img src="assets/logo_banner.png" alt="CRONOX" class="topbar__logo-img" decoding="async">
+    </a>
+
+    <nav class="topbar__right" aria-label="Navegación principal">
+      <a href="#" class="topbar__link topbar__profile topbar-icon topbar-icon-user" id="profileBtn" aria-label="Iniciar sesión"
+         title="Iniciar sesión">
+        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-user" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M20 21v-2a4 4 0 0 0-3-3.87"></path>
+          <path d="M4 21v-2a4 4 0 0 1 3-3.87"></path>
+          <circle cx="12" cy="7.5" r="4"></circle>
+        </svg>
+      </a>
+
+      <a href="favorites.html" class="topbar__link topbar__fav topbar-icon topbar-icon-favorites" aria-label="Ver favoritos">
+        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-star" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polygon points="12 2 15.09 8.26 22 9.27 17.3 13.97 18.18 21 12 17.77 5.82 21 6.7 13.97 2 9.27 8.91 8.26 12 2"></polygon>
+        </svg>
+        <span class="topbar-icon-badge favorites-count fav-count" hidden></span>
+      </a>
+
+      <a href="cart.html" id="cart-icon-btn" class="topbar__link topbar__cart topbar-icon topbar-icon-cart" aria-label="Ver carrito">
+        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-bag" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"></path>
+          <line x1="3" y1="6" x2="21" y2="6"></line>
+          <path d="M16 10a4 4 0 0 1-8 0"></path>
+        </svg>
+        <span class="cart-count" hidden>0</span>
+      </a>
+    </nav>
+  </header>
+
+  <div id="searchBar" class="searchbar" hidden aria-hidden="true">
+    <div class="searchbar__inner">
+      <form id="searchForm" class="searchbar__form" role="search" action="index.html#store">
+        <input id="searchInput" class="searchbar__input" type="text" placeholder="Buscar productos…" autocomplete="off" />
+        <button class="searchbar__submit" type="submit" aria-label="Buscar"><span>Buscar</span></button>
+      </form>
+      <button type="button" class="searchbar__close" aria-label="Cerrar búsqueda">×</button>
+    </div>
+  </div>
+
+  <aside id="filtersPanel" class="black-menu" hidden aria-label="Navegación de categorías" role="dialog" aria-modal="true">
+    <button class="filters-close" aria-label="Cerrar menú">✕</button>
+    <nav class="black-menu__list" role="menu">
+      <a class="black-menu__link" role="menuitem" href="tienda.html">Toda la oscuridad</a>
+      <a class="black-menu__link" role="menuitem" href="tienda-camisetas.html">Camisetas</a>
+      <a class="black-menu__link" role="menuitem" href="tienda-sudaderas.html">Sudaderas</a>
+      <a class="black-menu__link" role="menuitem" href="tienda-accesorios.html">Accesorios</a>
+    </nav>
+  </aside>
+
+  <main id="checkoutMain" class="checkout container" aria-live="polite">
+    <header class="checkout__head">
+      <div>
+        <p class="eyebrow">Pago seguro</p>
+        <h1 class="checkout__title">Completa tu pedido</h1>
+        <p class="checkout__subtitle">Dirección, envío y pago en un solo paso.</p>
+      </div>
+      <div class="checkout__trust">
+        <span class="badge">SSL</span>
+        <span>Pago cifrado con Stripe</span>
+      </div>
+    </header>
+
+    <div class="checkout-grid">
+      <section class="checkout-panel" aria-label="Datos de envío">
+        <h2>Datos de envío</h2>
+        <form id="shipping-form" class="checkout-form">
+          <div class="form-grid">
+            <label class="form-field">
+              <span>Nombre</span>
+              <input type="text" name="firstName" autocomplete="given-name" placeholder="Nombre" />
+            </label>
+            <label class="form-field">
+              <span>Apellidos</span>
+              <input type="text" name="lastName" autocomplete="family-name" placeholder="Apellidos" />
+            </label>
+          </div>
+          <label class="form-field">
+            <span>Dirección</span>
+            <input type="text" name="address" autocomplete="street-address" placeholder="Calle y número" />
+          </label>
+          <div class="form-grid">
+            <label class="form-field">
+              <span>Ciudad</span>
+              <input type="text" name="city" autocomplete="address-level2" placeholder="Ciudad" />
+            </label>
+            <label class="form-field">
+              <span>Provincia</span>
+              <input type="text" name="state" autocomplete="address-level1" placeholder="Provincia" />
+            </label>
+          </div>
+          <div class="form-grid">
+            <label class="form-field">
+              <span>Código postal</span>
+              <input type="text" name="zip" autocomplete="postal-code" placeholder="00000" />
+            </label>
+            <label class="form-field">
+              <span>Teléfono</span>
+              <input type="tel" name="phone" autocomplete="tel" placeholder="+34" />
+            </label>
+          </div>
+        </form>
+      </section>
+
+      <aside class="checkout-panel checkout-panel--summary" aria-label="Resumen y pago">
+        <h2>Tu pedido</h2>
+        <div id="checkout-cart" class="checkout-cart" aria-live="polite">
+          <div class="checkout-cart__empty" data-empty hidden>Tu carrito está vacío.</div>
+          <div id="checkout-cart-items" class="checkout-cart__items"></div>
+        </div>
+
+        <div class="checkout-shipping" aria-label="Opciones de envío">
+          <h3>Método de envío</h3>
+          <div id="shipping-options" class="shipping-options"></div>
+        </div>
+
+        <div class="checkout-summary">
+          <div class="summary-row">
+            <span>Subtotal</span>
+            <strong id="summary-subtotal">—</strong>
+          </div>
+          <div class="summary-row">
+            <span>Envío</span>
+            <strong id="summary-shipping">—</strong>
+          </div>
+          <div class="summary-row summary-total">
+            <span>Total</span>
+            <strong id="summary-total">—</strong>
+          </div>
+        </div>
+
+        <section id="payment-section" class="checkout-payment" aria-label="Pago con tarjeta">
+          <h3>Pago seguro</h3>
+          <div id="payment-element" class="payment-element"></div>
+          <button id="pay-button" class="btn-primary btn-block" type="button">Pagar ahora</button>
+          <div id="payment-error" class="checkout-error" role="alert"></div>
+          <p id="checkout-help" class="checkout-help">Confirmarás el pago con Stripe sin salir de esta página.</p>
+        </section>
+      </aside>
+    </div>
+  </main>
+
+  <footer class="footer">
+    <div class="container">© <span id="anio"></span> CRONOX</div>
+  </footer>
+
+  <script src="https://js.stripe.com/v3/"></script>
+  <script src="assets/api.js"></script>
+  <script src="assets/app.js"></script>
+  <script src="assets/checkout.js"></script>
+</body>
+</html>
