@@ -558,6 +558,12 @@
 
   const cartState = { data: null, drawerOpen: false };
 
+  const setCartUiState = (isOpen) => {
+    const body = document.body;
+    if (body) body.classList.toggle('cart-open', isOpen);
+    if (topbar) topbar.classList.toggle('topbar--cart-open', isOpen);
+  };
+
   function updateBadge(cart) {
     const source = cart || cartState.data;
     const count = source?.itemsCount ?? 0;
@@ -649,16 +655,19 @@
   const cartItemsContainer = $('#cart-items-container');
   const cartEmptyState = $('#cart-empty-state');
   const cartSubtotalEl = $('#cart-subtotal');
+  const cartFreeShippingSection = cartDrawerEl ? $('.cart-free-shipping', cartDrawerEl) : null;
   const freeShippingTextEl = $('#free-shipping-text');
   const freeShippingBarFill = $('#free-shipping-bar-fill');
   const cartUpsellList = $('#cart-upsell-list');
   const cartUpsellSection = $('#cart-upsell-section');
   const checkoutBtn = $('#cart-checkout-btn');
   const cartCloseBtn = $('#cart-close-btn');
+  const cartFooter = cartDrawerEl ? $('.cart-drawer__footer', cartDrawerEl) : null;
 
   const toggleDrawer = (open) => {
     if (!cartOverlayEl || !cartDrawerEl) return;
     cartState.drawerOpen = Boolean(open);
+    setCartUiState(cartState.drawerOpen);
     if (open) {
       cartOverlayEl.hidden = false;
       cartDrawerEl.hidden = false;
@@ -738,24 +747,47 @@
     cartUpsellList.appendChild(frag);
   };
 
+  const getCartItemImage = (item) => {
+    const product = item?.product || {};
+    const productImages = Array.isArray(product.images) ? product.images : [];
+    const itemImages = Array.isArray(item?.images) ? item.images : [];
+    return (
+      product.image ||
+      productImages[0] ||
+      item.imageUrl ||
+      item.image ||
+      itemImages[0] ||
+      'assets/logo_banner.png'
+    );
+  };
+
   const renderCartItems = (cart) => {
     if (!cartItemsContainer) return;
     const items = Array.isArray(cart?.items) ? cart.items : [];
-    if (!items.length) {
+    const hasItems = items.length > 0;
+
+    cartItemsContainer.classList.toggle('is-empty', !hasItems);
+
+    if (!hasItems) {
       cartItemsContainer.innerHTML = '';
-      if (cartEmptyState) cartEmptyState.hidden = false;
+      if (cartEmptyState) {
+        cartEmptyState.textContent = 'Tu cesta está vacía.';
+        cartEmptyState.hidden = false;
+      }
       return;
     }
+
     if (cartEmptyState) cartEmptyState.hidden = true;
 
     const frag = document.createDocumentFragment();
     items.forEach((item) => {
       const lineTotal = (Number(item.priceCents) || 0) * (Number(item.qty) || 0);
+      const imageUrl = getCartItemImage(item);
       const article = document.createElement('article');
       article.className = 'cart-line';
       article.innerHTML = `
         <div class="cart-line__media">
-          <img src="${item.product?.image || 'assets/logo_banner.png'}" alt="${item.product?.name || ''}" loading="lazy">
+          <img src="${imageUrl}" alt="${item.product?.name || ''}" loading="lazy">
         </div>
         <div class="cart-line__info">
           <div class="cart-line__title">
@@ -780,9 +812,23 @@
   };
 
   const renderCartDrawer = (cart) => {
+    const items = Array.isArray(cart?.items) ? cart.items : [];
+    const hasItems = items.length > 0;
+
+    if (cartFreeShippingSection) cartFreeShippingSection.hidden = !hasItems;
+    if (cartUpsellSection) cartUpsellSection.hidden = !hasItems;
+    if (cartFooter) cartFooter.hidden = !hasItems;
+
+    renderCartItems(cart);
+
+    if (!hasItems) {
+      if (cartSubtotalEl) cartSubtotalEl.textContent = '—';
+      if (freeShippingBarFill) freeShippingBarFill.style.width = '0%';
+      return;
+    }
+
     const subtotalCents = cart?.subtotalCents || 0;
     renderFreeShipping(subtotalCents);
-    renderCartItems(cart);
     renderUpsell(cart);
     if (cartSubtotalEl) cartSubtotalEl.textContent = formatMoney(subtotalCents);
   };
