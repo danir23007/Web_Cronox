@@ -106,7 +106,7 @@ type CheckoutTotals = {
 type CheckoutShippingMethod = ShippingMethodOption & { priceCents: number };
 
 type CheckoutSummary = {
-  cart: CartSnapshot;
+  cart: CartSnapshot | null;
   currency: string;
   shippingMethods: CheckoutShippingMethod[];
   selectedShippingMethod: CheckoutShippingMethod | null;
@@ -134,13 +134,10 @@ export class OrdersService {
     userId: number,
     params: { shippingMethod?: ShippingMethodCode } = {},
   ): Promise<CheckoutSummary> {
-    const cart = (await this.cartService.getOrCreateCart({ userId })) as CartSnapshot;
+    const cart = (await this.cartService.getCartForCurrentUser(userId)) as CartSnapshot | null;
 
-    if (!cart.items.length) {
-      throw new BadRequestException('CART_EMPTY');
-    }
-
-    const itemsTotalCents = this.computeItemsTotalCents(cart);
+    const hasItems = Array.isArray(cart?.items) && cart.items.length > 0;
+    const itemsTotalCents = hasItems ? this.computeItemsTotalCents(cart) : 0;
     const methods = await this.shippingMethods.listAvailableMethods(itemsTotalCents);
 
     const shippingMethods = methods.map((method) => ({
@@ -149,11 +146,12 @@ export class OrdersService {
       amountCents: method.amountCents ?? method.priceCents ?? 0,
     }));
 
-    const selectedShippingMethod = this.pickShippingMethod(
-      shippingMethods,
-      params.shippingMethod,
-    );
-    const totals = this.calculateCartTotals(cart, selectedShippingMethod);
+    const selectedShippingMethod = hasItems
+      ? this.pickShippingMethod(shippingMethods, params.shippingMethod)
+      : null;
+    const totals = hasItems
+      ? this.calculateCartTotals(cart, selectedShippingMethod)
+      : { subtotalCents: 0, shippingCents: 0, totalCents: 0 };
     const currency = cart?.items[0]?.variant?.product?.currency ?? DEFAULT_CURRENCY;
 
     return { cart, currency, shippingMethods, selectedShippingMethod, totals };

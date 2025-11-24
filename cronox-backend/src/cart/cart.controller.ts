@@ -30,6 +30,17 @@ export class CartController {
     @Res({ passthrough: true }) res: Response,
   ): Promise<CartWithItems> {
     const context = this.resolveContext(req, res, { ensureAnonymousId: true });
+
+    if (context.userId) {
+      const cart = await this.cartService.getCartForCurrentUser(context.userId, {
+        createIfMissing: true,
+      });
+
+      if (cart) {
+        return cart;
+      }
+    }
+
     return this.cartService.getOrCreateCart(context);
   }
 
