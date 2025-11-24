@@ -25,6 +25,11 @@
     return formatter.format(num);
   };
 
+  const formatEuro = (cents) => {
+    const amount = Number(cents) || 0;
+    return (amount / 100).toFixed(2).replace('.', ',') + ' €';
+  };
+
   let stripe;
   let elements;
   let paymentElement;
@@ -35,6 +40,7 @@
     cart: null,
     shippingMethods: [],
     shippingMethod: 'STANDARD',
+    totals: { subtotalCents: 0, shippingCents: 0, totalCents: 0 },
   };
 
   const setPayButtonState = (loading) => {
@@ -87,6 +93,7 @@
     shippingOptionsEl.innerHTML = '';
 
     state.shippingMethods.forEach((method) => {
+      const priceCents = method.priceCents ?? method.amountCents ?? 0;
       const wrapper = document.createElement('label');
       wrapper.className = 'shipping-option';
       wrapper.innerHTML = `
@@ -97,24 +104,60 @@
           <span class="shipping-option__label">${method.label}</span>
           ${method.description ? `<small class="shipping-option__helper">${method.description}</small>` : ''}
         </div>
-        <span class="shipping-option__price ${method.amountCents === 0 ? 'is-free' : ''}">${
-          method.priceLabel || formatMoney((method.amountCents || 0) / 100)
-        }</span>
+        <span class="shipping-option__price ${priceCents === 0 ? 'is-free' : ''}">${formatEuro(
+          priceCents,
+        )}</span>
       `;
       shippingOptionsEl.appendChild(wrapper);
     });
   };
 
-  const renderSummary = (summary, shippingMethod) => {
-    if (!summary) return;
-    subtotalEl && (subtotalEl.textContent = formatMoney(summary.subtotal));
+  const renderSummary = (totals, shippingMethod) => {
+    if (!totals) return;
+    subtotalEl && (subtotalEl.textContent = formatEuro(totals.subtotalCents));
     if (shippingEl) {
-      const amount = shippingMethod?.amount ?? summary.shippingCost;
       shippingEl.textContent = shippingMethod
-        ? `${shippingMethod.label} · ${formatMoney(amount)}`
-        : formatMoney(amount);
+        ? `${shippingMethod.label} · ${formatEuro(totals.shippingCents)}`
+        : formatEuro(totals.shippingCents);
     }
-    totalEl && (totalEl.textContent = formatMoney(summary.total));
+    totalEl && (totalEl.textContent = formatEuro(totals.totalCents));
+  };
+
+  const findShippingMethod = (code) =>
+    state.shippingMethods.find((method) => method.code === code) || null;
+
+  const refreshCheckoutSummary = async (shippingMethodCode = state.shippingMethod) => {
+    try {
+      const data = await API.getCheckoutSummary({ shippingMethod: shippingMethodCode });
+
+      state.cart = data.cart;
+      state.shippingMethods = Array.isArray(data.shippingMethods) ? data.shippingMethods : [];
+      if (!state.shippingMethods.length) {
+        state.shippingMethod = '';
+        setPayButtonState(true);
+        return false;
+      }
+      state.shippingMethod =
+        data.selectedShippingMethod?.code ||
+        shippingMethodCode ||
+        state.shippingMethods[0]?.code ||
+        '';
+      state.totals = data.totals || state.totals;
+
+      if (!state.cart?.items?.length) {
+        renderEmptyCart();
+        return false;
+      }
+
+      renderCart();
+      renderShippingOptions();
+      renderSummary(state.totals, findShippingMethod(state.shippingMethod));
+      return true;
+    } catch (error) {
+      console.error('[CRONOX] No se pudo cargar el resumen de checkout', error);
+      renderEmptyCart();
+      return false;
+    }
   };
 
   const mountPaymentElement = (clientSecret) => {
@@ -165,7 +208,9 @@
       const data = await response.json();
       paymentClientSecret = data.clientSecret;
       mountPaymentElement(paymentClientSecret);
-      renderSummary(data.summary, data.shippingMethod);
+      state.shippingMethod = data.shippingMethod?.code || state.shippingMethod;
+      state.totals = data.totals || state.totals;
+      renderSummary(state.totals, findShippingMethod(state.shippingMethod) || data.shippingMethod);
       setPayButtonState(false);
     } catch (error) {
       errorDiv.textContent = error.message || 'Error preparando el pago.';
@@ -175,48 +220,19 @@
     }
   };
 
-  const loadShippingMethods = async () => {
-    try {
-      const subtotalCents = Number(state.cart?.subtotalCents || 0);
-      const methods = await API.getShippingMethods({ itemsTotalCents: subtotalCents });
-      state.shippingMethods = Array.isArray(methods) ? methods : [];
-      if (!state.shippingMethods.length) {
-        state.shippingMethod = '';
-        setPayButtonState(true);
-        return;
-      }
-      const preferred = state.shippingMethods.find((m) => m.code === 'STANDARD') || state.shippingMethods[0];
-      if (preferred) {
-        state.shippingMethod = preferred.code;
-      }
-      renderShippingOptions();
-    } catch (error) {
-      console.warn('[CRONOX] No se pudieron cargar los métodos de envío', error);
-    }
-  };
-
   const initStripe = () => {
     if (!stripe && typeof Stripe === 'function') {
       stripe = Stripe(STRIPE_PUBLISHABLE_KEY);
     }
   };
 
-  const syncCart = async () => {
-    try {
-      state.cart = await API.getCart();
-      renderCart();
-    } catch (error) {
-      console.error('[CRONOX] No se pudo cargar el carrito', error);
-      renderEmptyCart();
-    }
-  };
-
   const bindEvents = () => {
-    shippingOptionsEl?.addEventListener('change', (event) => {
+    shippingOptionsEl?.addEventListener('change', async (event) => {
       const input = event.target.closest('input[name="shippingMethod"]');
       if (!input) return;
       state.shippingMethod = input.value;
-      preparePaymentIntent();
+      await refreshCheckoutSummary(state.shippingMethod);
+      await preparePaymentIntent();
     });
 
     payButton?.addEventListener('click', async () => {
@@ -243,10 +259,12 @@
     if (yearEl) yearEl.textContent = new Date().getFullYear();
 
     initStripe();
-    await syncCart();
-    await loadShippingMethods();
-    renderSummary({ subtotal: 0, shippingCost: 0, total: 0 });
     bindEvents();
-    await preparePaymentIntent();
+    const loaded = await refreshCheckoutSummary();
+    if (loaded) {
+      await preparePaymentIntent();
+    } else {
+      setPayButtonState(true);
+    }
   });
 })();

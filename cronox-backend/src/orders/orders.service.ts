@@ -94,6 +94,23 @@ type CheckoutPreview = { // [STRIPE]
   lineItems: CheckoutLineItemResponse[];
   metadata: CheckoutMetadata;
   shippingMethod: ShippingMethodPublic;
+  totals: CheckoutTotals;
+};
+
+type CheckoutTotals = {
+  subtotalCents: number;
+  shippingCents: number;
+  totalCents: number;
+};
+
+type CheckoutShippingMethod = ShippingMethodOption & { priceCents: number };
+
+type CheckoutSummary = {
+  cart: CartSnapshot;
+  currency: string;
+  shippingMethods: CheckoutShippingMethod[];
+  selectedShippingMethod: CheckoutShippingMethod | null;
+  totals: CheckoutTotals;
 };
 
 type AuthenticatedUser = {
@@ -113,6 +130,35 @@ export class OrdersService {
     private readonly shippingMethods: ShippingMethodsService,
   ) {}
 
+  async getCheckoutSummary(
+    userId: number,
+    params: { shippingMethod?: ShippingMethodCode } = {},
+  ): Promise<CheckoutSummary> {
+    const cart = (await this.cartService.getOrCreateCart({ userId })) as CartSnapshot;
+
+    if (!cart.items.length) {
+      throw new BadRequestException('CART_EMPTY');
+    }
+
+    const itemsTotalCents = this.computeItemsTotalCents(cart);
+    const methods = await this.shippingMethods.listAvailableMethods(itemsTotalCents);
+
+    const shippingMethods = methods.map((method) => ({
+      ...method,
+      priceCents: method.priceCents ?? method.amountCents,
+      amountCents: method.amountCents ?? method.priceCents ?? 0,
+    }));
+
+    const selectedShippingMethod = this.pickShippingMethod(
+      shippingMethods,
+      params.shippingMethod,
+    );
+    const totals = this.calculateCartTotals(cart, selectedShippingMethod);
+    const currency = cart?.items[0]?.variant?.product?.currency ?? DEFAULT_CURRENCY;
+
+    return { cart, currency, shippingMethods, selectedShippingMethod, totals };
+  }
+
   async getCheckoutPreview(
     userId: number,
     params: { shippingMethod: ShippingMethodCode },
@@ -128,10 +174,10 @@ export class OrdersService {
       params.shippingMethod,
       itemsTotalCents,
     );
-    const shippingCostCents = shippingMethod.amountCents;
+    const totals = this.calculateCartTotals(cart, shippingMethod);
     const computation = this.buildCheckoutComputation(cart, {
-      shippingCostCents,
-      itemsTotalCents,
+      shippingCostCents: totals.shippingCents,
+      itemsTotalCents: totals.subtotalCents,
     });
     const summary = this.buildCheckoutSummary(computation);
     const lineItems = this.buildPublicLineItems(computation.lineItems);
@@ -139,8 +185,8 @@ export class OrdersService {
       cartId: cart.id,
       userId,
       shippingMethod: shippingMethod.code,
-      shippingCostCents,
-      itemsTotalCents,
+      shippingCostCents: totals.shippingCents,
+      itemsTotalCents: totals.subtotalCents,
     };
 
     return {
@@ -151,8 +197,9 @@ export class OrdersService {
       metadata,
       shippingMethod: {
         ...shippingMethod,
-        amount: this.formatMoney(shippingMethod.amountCents),
+        amount: this.formatMoney(totals.shippingCents),
       },
+      totals,
     };
   }
 
@@ -463,6 +510,38 @@ export class OrdersService {
     }));
   }
 
+  calculateCartTotals(
+    cart: CartSnapshot | null,
+    shippingMethod: ShippingMethodOption | null,
+  ): CheckoutTotals {
+    const subtotalCents = this.computeItemsTotalCents(cart);
+    const shippingCents =
+      (shippingMethod?.amountCents ?? shippingMethod?.priceCents ?? 0) || 0;
+    const totalCents = subtotalCents + shippingCents;
+
+    return { subtotalCents, shippingCents, totalCents };
+  }
+
+  private pickShippingMethod(
+    methods: CheckoutShippingMethod[],
+    requested?: ShippingMethodCode,
+  ): CheckoutShippingMethod | null {
+    if (!methods.length) {
+      return null;
+    }
+
+    if (requested) {
+      const desired = methods.find((method) => method.code === requested);
+      if (desired) {
+        return desired;
+      }
+    }
+
+    return methods.reduce((cheapest, current) =>
+      current.amountCents < cheapest.amountCents ? current : cheapest,
+    );
+  }
+
   private computeItemsTotalCents(cart: CartSnapshot | null): number {
     if (!cart || !Array.isArray(cart.items) || !cart.items.length) {
       return 0;
@@ -494,14 +573,17 @@ export class OrdersService {
     }
 
     const lineItems: CheckoutLineItem[] = cart.items.map((item) => this.buildLineItem(item));
+    const subtotal = this.centsToDecimal(options.itemsTotalCents);
 
-    const subtotal = lineItems.reduce(
-      (acc, item) => acc.add(item.lineTotal),
-      this.moneyFromNumber(0),
-    );
+    const taxAmount = (() => {
+      if (options.itemsTotalCents <= 0) {
+        return this.moneyFromNumber(0);
+      }
 
-    const taxAmount = this.roundMoney(subtotal.mul(taxRate));
-    const total = subtotal.add(taxAmount).add(shippingCost);
+      const taxBase = this.roundMoney(subtotal.dividedBy(taxRate.add(1)));
+      return this.roundMoney(subtotal.minus(taxBase));
+    })();
+    const total = subtotal.add(shippingCost);
 
     return {
       currency,

@@ -14,7 +14,7 @@ export class PaymentIntentFactory {
     const preview = await this.ordersService.getCheckoutPreview(userId, {
       shippingMethod: dto.shippingMethod,
     }); // [STRIPE]
-    const amountInCents = Number(preview.computation.total.mul(100).toFixed(0));
+    const amountInCents = preview.totals.totalCents;
 
     const paymentIntent = await this.stripeService.createOrReusePaymentIntent({
       userId,
@@ -46,6 +46,7 @@ export class PaymentIntentFactory {
       summary: preview.summary,
       lineItems: preview.lineItems,
       shippingMethod: preview.shippingMethod,
+      totals: preview.totals,
       metadata,
     };
   }
