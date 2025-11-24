@@ -38,6 +38,35 @@
     }
   };
 
+  const normalizeCentsValue = (value) => {
+    let cents = Number(value ?? 0);
+    if (cents > 0 && cents < 100) cents = Math.round(cents * 100);
+    return cents;
+  };
+
+  const formatPriceFromCents = (valueInCents) => {
+    const cents = normalizeCentsValue(valueInCents);
+    if (typeof window.formatPriceFromCents === 'function') {
+      return window.formatPriceFromCents(cents);
+    }
+
+    const amount = (Number(cents) || 0) / 100;
+    if (typeof api.formatPrice === 'function') {
+      return api.formatPrice(amount);
+    }
+
+    try {
+      return amount.toLocaleString('es-ES', {
+        style: 'currency',
+        currency: 'EUR',
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      });
+    } catch (error) {
+      return `${amount.toFixed(2)} €`;
+    }
+  };
+
   const renderOrders = (orders) => {
     if (!ordersBody || !ordersEmpty) return;
     ordersBody.innerHTML = '';
@@ -107,15 +136,15 @@
       ? product.images.map((img) => (typeof img === 'string' ? img : img?.url || img?.imageUrl || img?.image)).filter(Boolean)
       : [];
 
-    const priceValue = Number(product.price ?? product.priceCents ?? product.price_in_cents ?? product.priceInCents ?? 0);
-    const priceLabel = product.priceLabel
-      || (typeof api.formatPrice === 'function' ? api.formatPrice(priceValue) : `${priceValue} €`);
+    const priceInCents = normalizeCentsValue(product.price ?? product.priceCents ?? product.price_in_cents ?? product.priceInCents ?? 0);
+    const priceLabel = product.priceLabel || formatPriceFromCents(priceInCents);
 
     return {
       id: product.id ?? favorite?.id ?? favorite?.productId,
       backendId: product.backendId ?? product.id ?? favorite?.productId,
       slug: product.slug,
       name: product.name || 'Producto',
+      priceInCents,
       priceLabel,
       image: product.imageUrl || product.image || images[0] || '',
     };
