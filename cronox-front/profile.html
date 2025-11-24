@@ -93,7 +93,7 @@
         <span class="topbar-icon-badge favorites-count fav-count" hidden></span>
       </a>
 
-      <a href="cart.html" class="topbar__link topbar__cart topbar-icon topbar-icon-cart" aria-label="Ver carrito">
+      <a href="cart.html" id="cart-icon-btn" class="topbar__link topbar__cart topbar-icon topbar-icon-cart" aria-label="Ver carrito">
         <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-bag" viewBox="0 0 24 24" fill="none"
              stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"></path>
@@ -247,8 +247,46 @@
 
   <footer class="footer"><p>© CRONOX</p></footer>
 
+  <!-- ===== CART DRAWER ===== -->
+  <div id="cart-overlay" class="cart-overlay" hidden></div>
+  <aside id="cart-drawer" class="cart-drawer" aria-hidden="true" aria-label="Carrito">
+    <div class="cart-drawer__panel">
+      <header class="cart-drawer__header">
+        <div>
+          <p class="cart-drawer__eyebrow">Carrito</p>
+          <h2 class="cart-drawer__title">Tu carrito</h2>
+        </div>
+        <button id="cart-close-btn" class="cart-drawer__close" aria-label="Cerrar carrito">×</button>
+      </header>
+
+      <div class="cart-free-shipping">
+        <p id="free-shipping-text" class="cart-free-shipping__text">Te faltan 0€ para conseguir envío gratuito</p>
+        <div class="cart-free-shipping__bar"><span id="free-shipping-bar-fill"></span></div>
+      </div>
+
+      <section id="cart-items-container" class="cart-drawer__items" aria-label="Productos en el carrito">
+        <div id="cart-empty-state" class="cart-empty">Tu carrito está vacío.</div>
+      </section>
+
+      <section id="cart-upsell-section" class="cart-upsell" hidden aria-label="Completa tu outfit">
+        <div class="cart-upsell__head">
+          <h3>Completa tu outfit</h3>
+        </div>
+        <div id="cart-upsell-list" class="cart-upsell__list"></div>
+      </section>
+
+      <footer class="cart-drawer__footer">
+        <div class="cart-drawer__row">
+          <span>Subtotal</span>
+          <strong id="cart-subtotal">—</strong>
+        </div>
+        <button id="cart-checkout-btn" class="btn-primary btn-block">Checkout</button>
+      </footer>
+    </div>
+  </aside>
+
   <script src="assets/api.js"></script>
-  <script src="assets/app.js?v=49" defer></script>
+  <script src="assets/app.js?v=50" defer></script>
   <script src="assets/favorites-toggle.js?v=1" defer></script>
   <script src="assets/profile.js?v=1" defer></script>
 

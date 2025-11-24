@@ -3,19 +3,7 @@
 // ======================================================
 (function () {
   const API = window.CRONOX_API || {};
-  const KEY = 'cronox_cart';
-
-  const readFallbackCount = () => {
-    try {
-      const raw = localStorage.getItem(KEY);
-      const items = raw ? JSON.parse(raw) : [];
-      return Array.isArray(items)
-        ? items.reduce((n, it) => n + (Number(it.qty) || 0), 0)
-        : 0;
-    } catch {
-      return 0;
-    }
-  };
+  const Cart = window.CRONOX_CART || null;
 
   function updateBagVisual(hasItems) {
     document.querySelectorAll('.topbar__cart .icon-bag').forEach(icon => {
@@ -28,7 +16,7 @@
   }
 
   const render = (count) => {
-    const value = Number.isFinite(count) ? count : readFallbackCount();
+    const value = Number.isFinite(count) ? count : 0;
     document.querySelectorAll('.cart-count').forEach(el => {
       if (value > 0) {
         el.textContent = String(value);
@@ -41,17 +29,21 @@
   };
 
   const refreshFromApi = async () => {
-    if (!API || typeof API.getCart !== 'function') {
-      render(readFallbackCount());
-      return;
-    }
     try {
-      const cart = await API.getCart();
-      render(cart?.itemsCount ?? 0);
+      if (Cart?.fetchCart) {
+        const cart = await Cart.fetchCart();
+        render(cart?.itemsCount ?? 0);
+        return;
+      }
+      if (API?.getCart) {
+        const cart = await API.getCart();
+        render(cart?.itemsCount ?? 0);
+        return;
+      }
     } catch (error) {
       console.warn('[CRONOX] No se pudo refrescar el badge del carrito', error);
-      render(readFallbackCount());
     }
+    render(0);
   };
 
   window.addEventListener('cart:updated', (event) => {
@@ -65,11 +57,5 @@
 
   document.addEventListener('DOMContentLoaded', () => {
     refreshFromApi();
-  });
-
-  window.addEventListener('storage', (e) => {
-    if (e.key === KEY) {
-      render(readFallbackCount());
-    }
   });
 })();
