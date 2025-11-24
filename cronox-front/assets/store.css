@@ -397,3 +397,13 @@ a.product-card{display:block;text-decoration:none;color:inherit;cursor:pointer;}
 .auth-user-menu__btn{width:100%;text-align:left;padding:10px 12px;border-radius:10px;border:1px solid rgba(255,255,255,.08);background:#0b0b0b;color:#fff;font:700 13px/1.2 "Inter",system-ui,sans-serif;cursor:pointer;transition:border-color .15s ease,background .15s ease,transform .15s ease}
 .auth-user-menu__btn:hover{border-color:rgba(255,255,255,.2);background:#111;transform:translateX(2px)}
 .auth-user-menu__btn--logout{color:#ffb9b9;border-color:rgba(255,255,255,.12)}
+
+/* === USER MENU (perfil) === */
+#authUserMenu {
+  border-radius: 0 !important;
+  right: 20px !important;
+  left: auto !important;
+  transform: none !important;
+  max-width: calc(100vw - 40px);
+  overflow-x: hidden;
+}
