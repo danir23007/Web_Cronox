@@ -569,9 +569,62 @@
     return Array.isArray(data)
       ? data.map((method) => ({
           ...method,
-          priceLabel: formatCents(method.priceCents ?? method.price ?? 0),
+          priceLabel: formatCents(
+            method.priceCents ?? method.amountCents ?? method.price ?? 0,
+          ),
         }))
       : [];
+  };
+
+  api.getCheckoutSummary = async (params = {}) => {
+    const query = {};
+
+    if (params.shippingMethod) {
+      query.shippingMethod = params.shippingMethod;
+    }
+
+    const data = await request('/api/checkout/summary', { query });
+    const cart = mapCart(data?.cart);
+    const methods = Array.isArray(data?.shippingMethods)
+      ? data.shippingMethods.map((method) => {
+          const priceCents = Number(method.priceCents ?? method.amountCents ?? method.price ?? 0);
+          const amountCents = Number(method.amountCents ?? priceCents);
+          return {
+            ...method,
+            priceCents,
+            amountCents,
+            priceLabel: formatCents(priceCents),
+          };
+        })
+      : [];
+
+    const selectedRaw = data?.selectedShippingMethod;
+    const selectedShippingMethod = methods.find((method) => {
+      if (selectedRaw?.id != null) {
+        return method.id === selectedRaw.id;
+      }
+      if (selectedRaw?.code) {
+        return method.code === selectedRaw.code;
+      }
+      return false;
+    }) || methods[0] || null;
+
+    const totals = {
+      subtotalCents: Number(data?.totals?.subtotalCents ?? cart.subtotalCents ?? 0),
+      shippingCents: Number(data?.totals?.shippingCents ?? selectedShippingMethod?.amountCents ?? 0),
+      totalCents: Number(
+        data?.totals?.totalCents ??
+          (cart.subtotalCents || 0) + (selectedShippingMethod?.amountCents || 0),
+      ),
+    };
+
+    return {
+      cart,
+      currency: data?.currency || 'EUR',
+      shippingMethods: methods,
+      selectedShippingMethod,
+      totals,
+    };
   };
 
   const ensureFallbackList = (list) => {

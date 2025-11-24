@@ -6,7 +6,9 @@ export type ShippingMethodOption = {
   id: number;
   code: ShippingMethodCode;
   label: string;
+  priceCents: number; // precio base en céntimos
   amountCents: number; // precio final en céntimos después de aplicar la regla de envío gratis
+  description?: string | null;
 };
 
 const FREE_SHIPPING_THRESHOLD_CENTS = 6500; // 65 €
@@ -17,6 +19,7 @@ type ShippingRow = {
   name: string;
   price: number;
   isActive: boolean;
+  description?: string | null;
 };
 
 @Injectable()
@@ -64,6 +67,7 @@ export class ShippingMethodsService {
         name: row.name,
         price: row.price,
         isActive: row.isActive,
+        description: (row as any).description ?? null,
       });
     }
 
@@ -97,7 +101,9 @@ export class ShippingMethodsService {
       id: row.id,
       code,
       label: row.name, // el texto visible sale de la BD
+      priceCents: row.price,
       amountCents,
+      description: row.description ?? null,
     };
   }
 
@@ -124,7 +130,9 @@ export class ShippingMethodsService {
         id: row.id,
         code,
         label: row.name,
+        priceCents: row.price,
         amountCents,
+        description: row.description ?? null,
       });
     }
 
