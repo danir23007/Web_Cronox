@@ -5,6 +5,12 @@
   const messageEl = $('profileMessage');
   const ordersBody = $('ordersBody');
   const ordersEmpty = $('ordersEmpty');
+  const favoritesGrid = $('profileFavoritesGrid');
+  const favoritesLoading = $('profileFavoritesLoading');
+  const favoritesEmpty = $('profileFavoritesEmpty');
+  const favoritesList = $('profileFavoritesList');
+
+  let favoritesLoaded = false;
 
   const showMessage = (text, type = 'info') => {
     if (!messageEl) return;
@@ -95,6 +101,119 @@
     }
   };
 
+  const normalizeFavoriteProduct = (favorite) => {
+    const product = favorite?.product || favorite || {};
+    const images = Array.isArray(product.images)
+      ? product.images.map((img) => (typeof img === 'string' ? img : img?.url || img?.imageUrl || img?.image)).filter(Boolean)
+      : [];
+
+    const priceValue = Number(product.price ?? product.priceCents ?? product.price_in_cents ?? product.priceInCents ?? 0);
+    const priceLabel = product.priceLabel
+      || (typeof api.formatPrice === 'function' ? api.formatPrice(priceValue) : `${priceValue} €`);
+
+    return {
+      id: product.id ?? favorite?.id ?? favorite?.productId,
+      backendId: product.backendId ?? product.id ?? favorite?.productId,
+      slug: product.slug,
+      name: product.name || 'Producto',
+      priceLabel,
+      image: product.imageUrl || product.image || images[0] || '',
+    };
+  };
+
+  const updateFavoritesState = ({ loading = false, empty = false } = {}) => {
+    if (favoritesLoading) favoritesLoading.hidden = !loading;
+    if (favoritesEmpty) favoritesEmpty.hidden = !empty;
+    if (favoritesList) favoritesList.hidden = loading || empty;
+  };
+
+  const createFavoriteCard = (product) => {
+    const key = product.slug || product.backendId || product.id || '';
+    const link = document.createElement('a');
+    link.className = 'product-card';
+    if (key) link.dataset.id = key;
+    if (product.slug) link.dataset.slug = product.slug;
+    if (product.backendId != null) link.dataset.backendId = String(product.backendId);
+    link.href = product.slug
+      ? `/producto.html?slug=${encodeURIComponent(product.slug)}`
+      : `/producto.html?id=${encodeURIComponent(key)}`;
+
+    const media = document.createElement('div');
+    media.className = 'product-media';
+
+    const img = document.createElement('img');
+    img.className = 'product-img active';
+    img.loading = 'lazy';
+    img.decoding = 'async';
+    img.alt = product.name || 'Producto';
+    img.src = product.image || 'assets/logo_banner.png';
+
+    const favBtn = document.createElement('button');
+    favBtn.className = 'favorite-toggle';
+    favBtn.type = 'button';
+    favBtn.setAttribute('aria-label', 'Marcar como favorito');
+    favBtn.dataset.productId = String(product.backendId ?? product.id ?? '');
+    favBtn.dataset.slug = product.slug || '';
+    favBtn.innerHTML = window.CRONOX_STAR_ICON || '<span class="icon-star"></span>';
+
+    media.appendChild(img);
+    media.appendChild(favBtn);
+
+    const nameEl = document.createElement('span');
+    nameEl.className = 'product-name';
+    nameEl.textContent = product.name || 'Producto';
+
+    const priceEl = document.createElement('span');
+    priceEl.className = 'product-price';
+    priceEl.textContent = product.priceLabel || '';
+
+    link.appendChild(media);
+    link.appendChild(nameEl);
+    link.appendChild(priceEl);
+
+    return link;
+  };
+
+  const renderFavorites = (favorites) => {
+    if (!favoritesGrid) return;
+    favoritesGrid.innerHTML = '';
+
+    if (!Array.isArray(favorites) || !favorites.length) {
+      updateFavoritesState({ loading: false, empty: true });
+      return;
+    }
+
+    favorites.forEach((fav) => favoritesGrid.appendChild(createFavoriteCard(fav)));
+    updateFavoritesState({ loading: false, empty: false });
+
+    if (typeof window.CRONOX_syncFavoritesDom === 'function') {
+      window.CRONOX_syncFavoritesDom();
+    }
+  };
+
+  const loadFavorites = async () => {
+    if (!api.getFavorites || favoritesLoaded) return;
+    favoritesLoaded = true;
+    updateFavoritesState({ loading: true, empty: false });
+
+    try {
+      const data = await api.getFavorites();
+      const mapped = Array.isArray(data) ? data.map((fav) => normalizeFavoriteProduct(fav)) : [];
+
+      const favoriteIds = mapped.map((item) => item.backendId ?? item.id).filter(Boolean);
+      if (typeof window.CRONOX_setFavoriteIds === 'function') {
+        window.CRONOX_setFavoriteIds(favoriteIds);
+      }
+
+      renderFavorites(mapped);
+    } catch (err) {
+      if (handleAuthRedirect(err)) return;
+      console.warn('[PROFILE] No se pudieron cargar los favoritos', err);
+      favoritesLoaded = false;
+      updateFavoritesState({ loading: false, empty: true });
+    }
+  };
+
   const loadAddress = async () => {
     if (!api.getDefaultAddress) return;
     try {
@@ -181,24 +300,55 @@
     });
   };
 
-  const bindActions = () => {
-    $('btnFavorites')?.addEventListener('click', () => { window.location.href = 'favorites.html'; });
-    $('btnBackToStore')?.addEventListener('click', () => { window.location.href = 'index.html'; });
-    $('btnLogoutProfile')?.addEventListener('click', async () => {
-      try {
-        if (api.logout) await api.logout();
-      } catch (err) {
-        console.warn('[PROFILE] logout error', err);
-      }
-      window.CRONOX_USER = null;
-      window.location.href = 'index.html';
+  const handleLogout = async () => {
+    try {
+      if (api.logout) await api.logout();
+    } catch (err) {
+      console.warn('[PROFILE] logout error', err);
+    }
+    window.CRONOX_USER = null;
+    window.location.href = 'index.html';
+  };
+
+  const bindTabs = () => {
+    const tabs = Array.from(document.querySelectorAll('.profile-tab'));
+    const sections = Array.from(document.querySelectorAll('.profile-section'));
+
+    const activate = (target) => {
+      tabs.forEach((tab) => tab.classList.toggle('is-active', tab.dataset.profileTab === target));
+      sections.forEach((section) => section.classList.toggle('is-active', section.dataset.profileSection === target));
+
+      if (target === 'favorites') loadFavorites();
+    };
+
+    tabs.forEach((tab) => {
+      tab.addEventListener('click', async () => {
+        const target = tab.dataset.profileTab;
+        if (!target) return;
+        if (target === 'logout') {
+          await handleLogout();
+          return;
+        }
+        activate(target);
+      });
+    });
+
+    activate('orders');
+  };
+
+  const bindBackLinks = () => {
+    document.querySelectorAll('[data-profile-back="store"]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        window.location.href = 'index.html';
+      });
     });
   };
 
   document.addEventListener('DOMContentLoaded', () => {
     bindAccountForm();
     bindAddressForm();
-    bindActions();
+    bindTabs();
+    bindBackLinks();
     loadProfile();
   });
 })();
