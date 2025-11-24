@@ -1,5 +1,5 @@
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
-import { Prisma, PrismaClientKnownRequestError } from '@prisma/client';
+import { Prisma, OrderStatus } from '@prisma/client';
 import { Decimal } from '@prisma/client/runtime/library';
 import { PrismaService } from '../prisma/prisma.service';
 import { UpdateMeDto } from './dto/update-me.dto';
@@ -31,7 +31,7 @@ export type MeAddress = {
 export type MeOrder = {
   id: number;
   createdAt: Date;
-  status: Prisma.OrderStatus;
+  status: OrderStatus;
   total: number;
   currency: string;
 };
@@ -100,7 +100,7 @@ export class MeService {
 
       return this.toProfile(updated);
     } catch (error) {
-      if (error instanceof PrismaClientKnownRequestError && error.code === 'P2002') {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
         throw new ConflictException('El email ya está en uso');
       }
       throw error;
