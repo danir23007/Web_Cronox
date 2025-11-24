@@ -889,6 +889,31 @@
     if (cartSubtotalEl) cartSubtotalEl.textContent = formatMoney(subtotalCents);
   };
 
+  const applyOptimisticQty = (itemId, nextQty) => {
+    if (!cartState.data || !Array.isArray(cartState.data.items)) return null;
+    const desiredQty = Math.max(1, Number(nextQty) || 1);
+    let touched = false;
+
+    const nextItems = cartState.data.items.map((item) => {
+      if (item.id !== itemId) return item;
+      touched = true;
+      return { ...item, qty: desiredQty };
+    });
+
+    if (!touched) return null;
+
+    const subtotalCents = nextItems.reduce(
+      (sum, item) => sum + (Number(item.priceCents) || 0) * (Number(item.qty) || 0),
+      0,
+    );
+    const itemsCount = nextItems.reduce((sum, item) => sum + (Number(item.qty) || 0), 0);
+
+    const nextCart = { ...cartState.data, items: nextItems, subtotalCents, itemsCount };
+    cartState.data = nextCart;
+    renderCartDrawer(nextCart);
+    return nextCart;
+  };
+
   const handleQty = async (itemId, dir) => {
     if (!itemId) return;
     const current = cartState.data?.items?.find((it) => it.id === itemId);
@@ -900,6 +925,7 @@
         renderCartDrawer(cart);
         return;
       }
+      applyOptimisticQty(itemId, nextQty);
       const cart = await updateCartItem(itemId, nextQty);
       renderCartDrawer(cart);
     } catch (error) {
@@ -957,6 +983,7 @@
       }
       input.value = String(value);
       input.dataset.lastCommit = String(value);
+      applyOptimisticQty(itemId, value);
       updateCartItem(itemId, value)
         .then(renderCartDrawer)
         .catch((error) => {

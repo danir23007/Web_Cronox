@@ -30,6 +30,9 @@ export class CartService {
 
   private readonly cartInclude: Prisma.CartInclude = {
     items: {
+      orderBy: {
+        id: 'asc',
+      },
       include: {
         variant: {
           include: {

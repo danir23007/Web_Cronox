@@ -691,10 +691,11 @@ a.product-card{display:block;text-decoration:none;color:inherit;cursor:pointer;}
   color: #fff;
 }
 
+
 .cart-line {
   display: grid;
-  grid-template-columns: 74px 1fr;
-  gap: 12px;
+  grid-template-columns: 108px 1fr;
+  gap: 14px;
   padding: 12px 0;
   border: none;
   border-bottom: 1px solid rgba(255, 255, 255, 0.15);
@@ -702,13 +703,14 @@ a.product-card{display:block;text-decoration:none;color:inherit;cursor:pointer;}
   background: transparent;
 }
 
-.cart-line__media { width: 74px; }
+.cart-line__media { width: 108px; }
 
 .cart-line__image-frame {
-  width: 74px;
-  height: 74px;
+  width: 108px;
+  height: 108px;
   background: #fff;
-  padding: 6px;
+  padding: 8px;
+  border: 1px solid rgba(0, 0, 0, 0.04);
   border-radius: 0;
   display: flex;
   align-items: center;
@@ -736,6 +738,7 @@ a.product-card{display:block;text-decoration:none;color:inherit;cursor:pointer;}
   align-items: center;
 }
 
+
 .cart-qty {
   display: inline-flex;
   align-items: center;
@@ -743,31 +746,32 @@ a.product-card{display:block;text-decoration:none;color:inherit;cursor:pointer;}
   border-radius: 0;
   overflow: hidden;
   background: #000;
+  height: 32px;
 }
 
 .cart-qty__btn {
-  width: 32px;
-  height: 36px;
+  width: 28px;
+  height: 100%;
   background: transparent;
   color: #fff;
   border: none;
   cursor: pointer;
-  font-size: 16px;
+  font-size: 15px;
   transition: background 0.2s ease, color 0.2s ease;
 }
 
 .cart-qty__btn:hover { background: rgba(255, 255, 255, 0.12); }
 
 .cart-qty__input {
-  width: 48px;
-  height: 36px;
+  width: 44px;
+  height: 100%;
   padding: 0;
   text-align: center;
   border: none;
   background: transparent;
   color: #fff;
   font-weight: 700;
-  font-size: 14px;
+  font-size: 13px;
 }
 
 .cart-qty__input:focus { outline: 1px solid rgba(255, 255, 255, 0.35); outline-offset: -1px; }
@@ -894,7 +898,9 @@ a.product-card{display:block;text-decoration:none;color:inherit;cursor:pointer;}
 
 @media (max-width: 640px) {
   .cart-drawer { max-width: none; }
-  .cart-line { grid-template-columns: 68px 1fr; }
+  .cart-line { grid-template-columns: 94px 1fr; gap: 12px; }
+  .cart-line__media { width: 94px; }
+  .cart-line__image-frame { width: 94px; height: 94px; padding: 7px; }
   .cart-line__actions { grid-template-columns: 1fr auto; grid-template-rows: auto auto; }
   .cart-line__price { grid-column: 2; grid-row: 1; }
   .cart-line__remove { grid-column: 2; grid-row: 2; justify-self: end; }
