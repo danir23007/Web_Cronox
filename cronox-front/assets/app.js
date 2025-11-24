@@ -20,15 +20,49 @@
   const favoritesIcon = document.querySelector('.topbar-icon-favorites');
   const cartTopbarIcon = document.querySelector('.topbar-icon-cart');
   const userTopbarIcon = document.querySelector('.topbar-icon-user');
+  const TOPBAR_ICON_MAP = {
+    account: userTopbarIcon,
+    favorites: favoritesIcon,
+    cart: cartTopbarIcon,
+  };
+
+  const getPageActiveIconType = () => {
+    const body = document.body;
+    if (!body) return null;
+    if (body.classList.contains('page-profile')) return 'account';
+    if (body.classList.contains('page-favorites')) return 'favorites';
+    if (body.classList.contains('page-cart')) return 'cart';
+    return null;
+  };
+
+  const setActiveTopbarIcon = (type) => {
+    const activeType = type && TOPBAR_ICON_MAP[type] ? type : null;
+    Object.entries(TOPBAR_ICON_MAP).forEach(([key, el]) => {
+      if (!el) return;
+      const isActive = key === activeType;
+      el.classList.toggle('active', isActive);
+      el.classList.toggle('topbar-icon--glow', isActive);
+      if (isActive) el.setAttribute('aria-current', 'page');
+      else el.removeAttribute('aria-current');
+    });
+  };
+
+  const syncTopbarActiveIcon = () => setActiveTopbarIcon(getPageActiveIconType());
 
   const setIconGlowState = (iconEl, isActive, stateClass) => {
     if (!iconEl) return;
     if (stateClass) iconEl.classList.toggle(stateClass, isActive);
-    iconEl.classList.toggle('topbar-icon--glow', isActive || iconEl.classList.contains('active'));
+    const mapped = Object.entries(TOPBAR_ICON_MAP).find(([, node]) => node === iconEl);
+    if (mapped) {
+      setActiveTopbarIcon(isActive ? mapped[0] : getPageActiveIconType());
+    } else {
+      iconEl.classList.toggle('topbar-icon--glow', Boolean(isActive));
+    }
   };
 
   // Expose helper globally to avoid undefined references from inline handlers
   window.setIconGlowState = setIconGlowState;
+  window.setActiveTopbarIcon = setActiveTopbarIcon;
 
   const getLockedTopbarState = () => {
     if (!document.body) return '';
@@ -68,23 +102,7 @@
     window.addEventListener('load', updateTopbarOnScroll);
   }
 
-  function activateTopbarIcon() {
-    const body = document.body;
-    if (!body) return;
-
-    const markActive = (el) => {
-      if (!el) return;
-      el.classList.add('active');
-      el.setAttribute('aria-current', 'page');
-      setIconGlowState(el, true);
-    };
-
-    if (body.classList.contains('page-favorites')) markActive(favoritesIcon);
-    if (body.classList.contains('page-cart')) markActive(cartTopbarIcon);
-    if (body.classList.contains('page-login')) markActive(userTopbarIcon);
-  }
-
-  document.addEventListener('DOMContentLoaded', activateTopbarIcon);
+  document.addEventListener('DOMContentLoaded', syncTopbarActiveIcon);
 
   // ===== Drawer Lateral (si lo usas) =====
   const overlay = $('.overlay');
@@ -571,7 +589,7 @@
     const body = document.body;
     if (body) body.classList.toggle('cart-open', isOpen);
     if (topbar) topbar.classList.toggle('topbar--cart-open', isOpen);
-    setIconGlowState(cartTopbarIcon, isOpen, 'cart-icon-active');
+    setActiveTopbarIcon(isOpen ? 'cart' : getPageActiveIconType());
   };
 
   function updateBadge(cart) {
@@ -1123,7 +1141,7 @@ window.CRONOX_USER = window.CRONOX_USER || null;
       profileBtn.setAttribute('data-auth-state', 'guest');
       profileBtn.title = 'Iniciar sesión';
     }
-    setIconGlowState(profileBtn, Boolean(window.CRONOX_USER), 'account-icon-active');
+    syncTopbarActiveIcon();
   };
 
   const parseAuthError = (err) => {
