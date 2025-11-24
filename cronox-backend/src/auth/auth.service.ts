@@ -1,12 +1,20 @@
-import { ConflictException, Inject, Injectable, UnauthorizedException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  Inject,
+  Injectable,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { Role } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
+import { randomBytes } from 'crypto';
 import type { CookieOptions, Response } from 'express';
 import { CartService } from '../cart/cart.service';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
 import { UsersService, AuthUser } from '../users/users.service';
+import { PrismaService } from '../prisma/prisma.service';
 
 interface JwtPayload {
   sub: number;
@@ -48,6 +56,7 @@ export class AuthService {
     private readonly jwtService: JwtService,
     @Inject('JWT_REFRESH_SERVICE') private readonly refreshJwt: JwtService,
     private readonly cartService: CartService,
+    private readonly prisma: PrismaService,
   ) {}
 
   async register(dto: RegisterDto) {
@@ -116,6 +125,67 @@ export class AuthService {
 
   async mergeCartOnLogin(userId: number, cartId?: string) {
     await this.cartService.mergeOnLogin(userId, cartId);
+  }
+
+  async requestPasswordReset(email: string) {
+    const normalizedEmail = email?.toLowerCase();
+    const user = normalizedEmail
+      ? await this.usersService.findByEmail(normalizedEmail)
+      : null;
+
+    if (!user) {
+      return { ok: true };
+    }
+
+    const token = randomBytes(32).toString('hex');
+    const expiresAt = new Date(Date.now() + 60 * 60 * 1000);
+
+    await this.prisma.passwordResetToken.create({
+      data: {
+        token,
+        userId: user.id,
+        expiresAt,
+      },
+    });
+
+    // TODO: Enviar email al usuario con el enlace de reseteo de contraseña
+    // Ejemplo: https://midominio.com/reset-password?token=${token}
+    console.log('Password reset token generated for user:', user.email, token);
+
+    return { ok: true };
+  }
+
+  async resetPassword(token: string, newPassword: string) {
+    const passwordResetToken = await this.prisma.passwordResetToken.findUnique({
+      where: { token },
+    });
+
+    if (!passwordResetToken) {
+      throw new BadRequestException('Token inválido');
+    }
+
+    if (passwordResetToken.expiresAt < new Date()) {
+      throw new BadRequestException('Token caducado');
+    }
+
+    if (passwordResetToken.usedAt) {
+      throw new BadRequestException('Token ya usado');
+    }
+
+    const passwordHash = await this.hashPassword(newPassword);
+
+    await this.prisma.$transaction([
+      this.prisma.user.update({
+        where: { id: passwordResetToken.userId },
+        data: { passwordHash },
+      }),
+      this.prisma.passwordResetToken.update({
+        where: { id: passwordResetToken.id },
+        data: { usedAt: new Date() },
+      }),
+    ]);
+
+    return { ok: true };
   }
 
   setAuthCookies(res: Response, tokens: Tokens) {
