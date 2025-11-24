@@ -31,14 +31,10 @@ export class CartController {
   ): Promise<CartWithItems> {
     const context = this.resolveContext(req, res, { ensureAnonymousId: true });
 
-    if (context.userId) {
-      const cart = await this.cartService.getCartForCurrentUser(context.userId, {
-        createIfMissing: true,
-      });
+    const cart = await this.cartService.getActiveCartForRequest(req, context);
 
-      if (cart) {
-        return cart;
-      }
+    if (cart) {
+      return cart;
     }
 
     return this.cartService.getOrCreateCart(context);

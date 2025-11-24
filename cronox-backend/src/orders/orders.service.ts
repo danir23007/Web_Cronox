@@ -131,11 +131,9 @@ export class OrdersService {
   ) {}
 
   async getCheckoutSummary(
-    userId: number,
+    cart: CartSnapshot | null,
     params: { shippingMethod?: ShippingMethodCode } = {},
   ): Promise<CheckoutSummary> {
-    const cart = (await this.cartService.getCartForCurrentUser(userId)) as CartSnapshot | null;
-
     const hasItems = Array.isArray(cart?.items) && cart.items.length > 0;
     const itemsTotalCents = hasItems ? this.computeItemsTotalCents(cart) : 0;
     const methods = await this.shippingMethods.listAvailableMethods(itemsTotalCents);
