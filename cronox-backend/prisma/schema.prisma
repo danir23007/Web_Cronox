@@ -79,21 +79,21 @@ model ProductImage {
 }
 
 model User {
-  id             Int             @id @default(autoincrement())
-  email          String          @unique
-  passwordHash   String
-  role           Role            @default(USER)
-  name           String?
-  firstName      String?
-  lastName       String?
-  createdAt      DateTime        @default(now())
-  updatedAt      DateTime        @updatedAt
-  addresses      Address[]
-  carts          Cart?
-  favorites      Favorite[]
-  orders         Order[]
-  stockMovements StockMovement[]
-  passwordResetTokens PasswordResetToken[]
+  id                   Int                  @id @default(autoincrement())
+  email                String               @unique
+  passwordHash         String
+  role                 Role                 @default(USER)
+  name                 String?
+  firstName            String?
+  lastName             String?
+  createdAt            DateTime             @default(now())
+  updatedAt            DateTime             @updatedAt
+  addresses            Address[]
+  carts                Cart?
+  favorites            Favorite[]
+  orders               Order[]
+  stockMovements       StockMovement[]
+  passwordResetTokens  PasswordResetToken[]
 }
 
 model Address {
@@ -213,19 +213,6 @@ model Favorite {
   @@unique([userId, productId])
 }
 
-enum Role {
-  ADMIN
-  USER
-}
-
-enum OrderStatus {
-  PENDING
-  PAID
-  CANCELLED
-  REFUNDED
-  SHIPPED
-}
-
 model PasswordResetToken {
   id        Int      @id @default(autoincrement())
   token     String   @unique
@@ -249,6 +236,19 @@ model ShippingMethod {
   orders    Order[]
 }
 
+enum Role {
+  ADMIN
+  USER
+}
+
+enum OrderStatus {
+  PENDING
+  PAID
+  CANCELLED
+  REFUNDED
+  SHIPPED
+}
+
 enum VariantSize {
   XS
   S
@@ -258,6 +258,10 @@ enum VariantSize {
   XXL
 }
 
-// Después de este cambio, ejecutar:
+// Comentarios antiguos de otra migración:
 // npx prisma migrate dev -n "add_names_and_shipping_code"
+// npx prisma generate
+//
+// Para sincronizar AHORA este esquema con la base de datos usa:
+// npx prisma db push
 // npx prisma generate
