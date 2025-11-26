@@ -36,13 +36,27 @@ import { MeModule } from './me/me.module';
         limit: 100, // máximo 100 peticiones por IP/minuto
       },
     ]),
-    ServeStaticModule.forRoot({
-      rootPath: join(process.cwd(), '..', 'cronox-front'),
-      serveRoot: '/',
-      renderPath: '/',
-      exclude: ['/api*', '/docs*', '/webhooks*'],
-      serveStaticOptions: { index: 'index.html' },
-    }),
+    ServeStaticModule.forRoot([
+      {
+        rootPath: join(process.cwd(), '..', 'cronox-front'),
+        serveRoot: '/',
+        renderPath: '/',
+        exclude: ['/api*', '/docs*', '/webhooks*'],
+        serveStaticOptions: { index: 'index.html' },
+      },
+      {
+        rootPath: join(process.cwd(), '..', 'cronox-front'),
+        serveRoot: '/reset-password',
+        renderPath: '/reset-password',
+        serveStaticOptions: { index: 'reset-password.html' },
+      },
+      {
+        rootPath: join(process.cwd(), '..', 'cronox-front'),
+        serveRoot: '/forgot-password',
+        renderPath: '/forgot-password',
+        serveStaticOptions: { index: 'forgot-password.html' },
+      },
+    ]),
     PrismaModule,
     EmailModule,
     AuthModule,
