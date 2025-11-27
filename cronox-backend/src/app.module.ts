@@ -36,7 +36,7 @@ import { MeModule } from './me/me.module';
         limit: 100, // máximo 100 peticiones por IP/minuto
       },
     ]),
-    ServeStaticModule.forRoot([
+    ServeStaticModule.forRoot(
       {
         rootPath: join(process.cwd(), '..', 'cronox-front'),
         serveRoot: '/',
@@ -56,7 +56,7 @@ import { MeModule } from './me/me.module';
         renderPath: '/forgot-password',
         serveStaticOptions: { index: 'forgot-password.html' },
       },
-    ]),
+    ),
     PrismaModule,
     EmailModule,
     AuthModule,
