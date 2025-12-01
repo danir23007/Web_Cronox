@@ -14,6 +14,22 @@
 
   const TOPBAR_STATES = ['topbar--transparent', 'topbar--hero', 'topbar--page'];
 
+  // ===== Preloader =====
+  window.addEventListener('load', () => {
+    const body = document.body;
+    const preloader = document.getElementById('preloader');
+
+    if (body) {
+      body.classList.remove('is-loading');
+      body.classList.add('is-loaded');
+    }
+
+    if (preloader) {
+      // Espera ligeramente más que la transición CSS y elimina el nodo para evitar parpadeos
+      setTimeout(() => preloader.remove(), 600);
+    }
+  });
+
   // ===== Topbar =====
   const topbar = $('.topbar');
   const hero = $('.hero-video-section');
