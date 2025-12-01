@@ -559,10 +559,20 @@
     window.CRONOX_FAVORITES.updateTopbarCount();
   };
 
+  // Sincroniza favoritos desde el backend y refresca la UI
+  const initFavoritesFromBackend = async () => {
+    if (!window.CRONOX_FAVORITES) return new Set();
+    if (!window.CRONOX_FAVORITES.initDone) window.CRONOX_FAVORITES.init();
+    const ids = await window.CRONOX_FAVORITES.loadFromServer();
+    window.CRONOX_FAVORITES.updateDomState();
+    window.CRONOX_FAVORITES.updateTopbarCount();
+    return ids;
+  };
+
+  window.initFavoritesFromBackend = initFavoritesFromBackend;
+
   document.addEventListener('DOMContentLoaded', () => {
-    if (window.CRONOX_FAVORITES && !window.CRONOX_FAVORITES.initDone) {
-      window.CRONOX_FAVORITES.init();
-    }
+    if (typeof window.initFavoritesFromBackend === 'function') window.initFavoritesFromBackend();
   });
 
   // ===== Carrito (API + Drawer) =====
@@ -630,6 +640,13 @@
       updateBadge();
       return null;
     }
+  };
+
+  // Sincroniza el carrito desde el backend y refresca el badge
+  const initCartFromBackend = async () => {
+    const cart = await fetchCart();
+    updateBadge(cart);
+    return cart;
   };
 
   const addCartItem = async ({ variantId, qty }) => {
@@ -1180,6 +1197,8 @@
     get state() { return cartState; },
   };
 
+  window.initCartFromBackend = initCartFromBackend;
+
   // 1) Click en “+” abre Quick-Add (no añade directamente)
   document.addEventListener('click', (e) => {
     const addBtn = e.target.closest('.fav-add');
@@ -1201,8 +1220,7 @@
 
   // Inicializar badge + drawer
   document.addEventListener('DOMContentLoaded', () => {
-    fetchCart();
-    updateBadge();
+    if (typeof window.initCartFromBackend === 'function') window.initCartFromBackend();
     initCartDrawer();
   });
 
@@ -1261,6 +1279,22 @@ window.CRONOX_USER = window.CRONOX_USER || null;
     messageEl.textContent = msg || '';
     if (msg) messageEl.dataset.state = type;
     else delete messageEl.dataset.state;
+  };
+
+  // Re-sincroniza datos dependientes de usuario tras login/registro
+  const refreshUserDependentUI = async () => {
+    const safeCalls = [];
+    if (typeof window.initFavoritesFromBackend === 'function') {
+      safeCalls.push(Promise.resolve()
+        .then(() => window.initFavoritesFromBackend())
+        .catch((err) => console.warn('[AUTH] No se pudieron sincronizar favoritos tras login', err)));
+    }
+    if (typeof window.initCartFromBackend === 'function') {
+      safeCalls.push(Promise.resolve()
+        .then(() => window.initCartFromBackend())
+        .catch((err) => console.warn('[AUTH] No se pudo sincronizar carrito tras login', err)));
+    }
+    await Promise.all(safeCalls);
   };
 
   const selectAuthView = (view) => {
@@ -1400,6 +1434,7 @@ window.CRONOX_USER = window.CRONOX_USER || null;
       window.CRONOX_USER = user;
       updateProfileIconUI();
       try { window.dispatchEvent(new CustomEvent('cronox:userChanged', { detail: user })); } catch {}
+      await refreshUserDependentUI();
       closeAuthModal();
     } catch (err) {
       console.error('[AUTH] login error', err);
@@ -1433,6 +1468,7 @@ window.CRONOX_USER = window.CRONOX_USER || null;
       window.CRONOX_USER = user;
       updateProfileIconUI();
       try { window.dispatchEvent(new CustomEvent('cronox:userChanged', { detail: user })); } catch {}
+      await refreshUserDependentUI();
       closeAuthModal();
     } catch (err) {
       console.error('[AUTH] register error', err);
@@ -1449,6 +1485,7 @@ window.CRONOX_USER = window.CRONOX_USER || null;
     }
     window.CRONOX_USER = null;
     updateProfileIconUI();
+    await refreshUserDependentUI();
     try { window.dispatchEvent(new CustomEvent('cronox:userChanged', { detail: null })); } catch {}
   };
 
@@ -1559,6 +1596,7 @@ window.CRONOX_USER = window.CRONOX_USER || null;
       window.CRONOX_USER = user;
       updateProfileIconUI();
       try { window.dispatchEvent(new CustomEvent('cronox:userChanged', { detail: user })); } catch {}
+      await refreshUserDependentUI();
     } catch (err) {
       console.warn('[AUTH] No se pudo obtener el usuario actual', err);
     }
