@@ -21,7 +21,10 @@ html,body{margin:0;padding:0;background:#000;color:#fff}
 }
 
 /* ===== Preloader ===== */
-.preloader{position:fixed;inset:0;display:grid;place-items:center;background:#000;z-index:9999;}
+body.is-loading{overflow:hidden}
+#preloader{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:#000;z-index:9999;width:100vw;height:100vh;opacity:1;transform:scale(1);transition:opacity .4s ease,transform .4s ease}
+#preloader .preloader-inner{display:flex;align-items:center;justify-content:center}
+body.is-loaded #preloader{opacity:0;transform:scale(1.02);pointer-events:none}
 .preloader__logo{width:160px;opacity:.95}
 
 /* ===== Overlay ===== */
