@@ -18,16 +18,20 @@
   window.addEventListener('load', () => {
     const body = document.body;
     const preloader = document.getElementById('preloader');
+    // Retraso aleatorio del preloader entre 1s y 2s para mostrar la animación
+    const randomDelay = Math.floor(Math.random() * (2000 - 1000 + 1)) + 1000;
 
-    if (body) {
-      body.classList.remove('is-loading');
-      body.classList.add('is-loaded');
-    }
+    setTimeout(() => {
+      if (body) {
+        body.classList.remove('is-loading');
+        body.classList.add('is-loaded');
+      }
 
-    if (preloader) {
-      // Espera ligeramente más que la transición CSS y elimina el nodo para evitar parpadeos
-      setTimeout(() => preloader.remove(), 600);
-    }
+      if (preloader) {
+        // Espera ligeramente más que la transición CSS y elimina el nodo para evitar parpadeos
+        setTimeout(() => preloader.remove(), 600);
+      }
+    }, randomDelay);
   });
 
   // ===== Topbar =====
