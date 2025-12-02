@@ -87,6 +87,7 @@ model User {
   firstName            String?
   lastName             String?
   memberCode           String?              @unique
+  circleLevel          Int                  @default(1)
   createdAt            DateTime             @default(now())
   updatedAt            DateTime             @updatedAt
   addresses            Address[]

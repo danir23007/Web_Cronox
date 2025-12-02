@@ -935,9 +935,41 @@ a.product-card{display:block;text-decoration:none;color:inherit;cursor:pointer;}
   font-weight: 600;
 }
 
+.cronox-card__circle {
+  font-size: 14px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  margin: 4px 0;
+}
+
 .cronox-card__code {
   font-size: 14px;
   color: #ccc;
+}
+
+.cronox-card--circle-1 {
+  background: #000000;
+  color: #ffffff;
+}
+
+.cronox-card--circle-2 {
+  background: #000000;
+  color: #ffffff;
+}
+
+.cronox-card--circle-3 {
+  background: #2b2b2b;
+  color: #ffffff;
+}
+
+.cronox-card--circle-4 {
+  background: #ffffff;
+  color: #000000;
+}
+
+.cronox-card--circle-5 {
+  background: #b00000;
+  color: #ffffff;
 }
 
 .cronox-card__qr img,

@@ -11,6 +11,7 @@ export type SafeUser = {
   firstName?: string | null;
   lastName?: string | null;
   memberCode?: string | null;
+  circleLevel: number;
   role: Role;
   createdAt: Date;
   updatedAt: Date;
@@ -92,6 +93,7 @@ export class UsersService {
       firstName: user.firstName,
       lastName: user.lastName,
       memberCode: (user as any).memberCode, // Prisma ya tiene este campo
+      circleLevel: Number((user as any).circleLevel ?? 1),
       role: user.role,
       createdAt: user.createdAt,
       updatedAt: user.updatedAt,
