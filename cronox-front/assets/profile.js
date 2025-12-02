@@ -9,8 +9,12 @@
   const favoritesLoading = $('profileFavoritesLoading');
   const favoritesEmpty = $('profileFavoritesEmpty');
   const favoritesList = $('profileFavoritesList');
+  const accreditationName = document.querySelector('.cronox-card__name');
+  const accreditationCode = document.querySelector('.cronox-card__code');
+  const accreditationQr = $('cronox-member-qr');
 
   let favoritesLoaded = false;
+  let accreditationQrLoaded = false;
 
   const showProfileMessage = (text, type = 'success') => {
     if (!messageEl) return;
@@ -64,6 +68,15 @@
     return cents;
   };
 
+  const buildDisplayName = (user) => {
+    if (!user) return '';
+    const name = [user.firstName, user.lastName].filter(Boolean).join(' ').trim();
+    if (name) return name;
+    if (user.name) return user.name;
+    if (user.email) return user.email;
+    return '';
+  };
+
   const formatPriceFromCents = (valueInCents) => {
     const cents = normalizeCentsValue(valueInCents);
     if (typeof window.formatPriceFromCents === 'function') {
@@ -115,6 +128,13 @@
     if ($('firstName')) $('firstName').value = firstName || '';
     if ($('lastName')) $('lastName').value = lastName || '';
     if ($('email')) $('email').value = email || '';
+  };
+
+  const fillAccreditation = (user) => {
+    if (!user) return;
+    const fullName = buildDisplayName(user) || 'Miembro CRONOX';
+    if (accreditationName) accreditationName.textContent = fullName;
+    if (accreditationCode) accreditationCode.textContent = user.memberCode ? `ID: ${user.memberCode}` : 'ID: —';
   };
 
   const fillAddress = (address) => {
@@ -281,6 +301,7 @@
       if (!user) throw new Error('Usuario no autenticado');
       window.CRONOX_USER = user;
       fillAccount(user);
+      fillAccreditation(user);
       await Promise.all([loadAddress(), loadOrders()]);
     } catch (err) {
       if (handleAuthRedirect(err)) return;
@@ -304,6 +325,7 @@
         const updated = await api.updateMe(payload);
         window.CRONOX_USER = updated;
         fillAccount(updated);
+        fillAccreditation(updated);
         showProfileMessage('Datos actualizados correctamente.', 'success');
       } catch (err) {
         if (handleAuthRedirect(err)) return;
@@ -368,6 +390,13 @@
       sections.forEach((section) => section.classList.toggle('is-active', section.dataset.profileSection === target));
 
       if (target === 'favorites') loadFavorites();
+      if (target === 'accreditation') {
+        fillAccreditation(window.CRONOX_USER);
+        if (accreditationQr && !accreditationQrLoaded) {
+          accreditationQr.src = '/membership/me/qr';
+          accreditationQrLoaded = true;
+        }
+      }
     };
 
     tabs.forEach((tab) => {

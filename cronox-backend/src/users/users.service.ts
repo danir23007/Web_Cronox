@@ -10,6 +10,7 @@ export type SafeUser = {
   name?: string | null;
   firstName?: string | null;
   lastName?: string | null;
+  memberCode?: string | null;
   role: Role;
   createdAt: Date;
   updatedAt: Date;
@@ -26,9 +27,13 @@ export class UsersService {
     firstName?: string;
     lastName?: string;
     role?: Role;
+    memberCode?: string;
   }) {
+    const { memberCode, ...userData } = data;
+    const ensuredCode = memberCode ?? (await this.generateUniqueMemberCode());
+
     return this.prisma.user.create({
-      data,
+      data: { ...userData, memberCode: ensuredCode },
     });
   }
 
@@ -42,6 +47,8 @@ export class UsersService {
 
   async updateProfile(id: number, update: { name?: string; firstName?: string; lastName?: string }): Promise<SafeUser> {
     const data: Prisma.UserUpdateInput = {};
+
+    const memberCode = await this.ensureMemberCode(id);
 
     if (update.name !== undefined) {
       data.name = update.name;
@@ -70,7 +77,7 @@ export class UsersService {
       data,
     });
 
-    return this.toSafeUser(updated);
+    return this.toSafeUser({ ...updated, memberCode });
   }
 
   toSafeUser(user: AuthUser): SafeUser {
@@ -80,9 +87,48 @@ export class UsersService {
       name: user.name,
       firstName: user.firstName,
       lastName: user.lastName,
+      memberCode: user.memberCode,
       role: user.role,
       createdAt: user.createdAt,
       updatedAt: user.updatedAt,
     };
+  }
+
+  private async generateUniqueMemberCode(): Promise<string> {
+    const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    let code: string;
+    let exists = true;
+
+    while (exists) {
+      const random = Array.from({ length: 6 })
+        .map(() => alphabet[Math.floor(Math.random() * alphabet.length)])
+        .join('');
+      code = `CRX-${random}`;
+
+      const found = await this.prisma.user.findUnique({
+        where: { memberCode: code },
+        select: { id: true },
+      });
+
+      exists = !!found;
+    }
+
+    return code;
+  }
+
+  async ensureMemberCode(userId: number): Promise<string> {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user) throw new NotFoundException('User not found');
+
+    if (user.memberCode) return user.memberCode;
+
+    const newCode = await this.generateUniqueMemberCode();
+
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { memberCode: newCode },
+    });
+
+    return newCode;
   }
 }

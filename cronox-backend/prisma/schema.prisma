@@ -86,6 +86,7 @@ model User {
   name                 String?
   firstName            String?
   lastName             String?
+  memberCode           String?              @unique
   createdAt            DateTime             @default(now())
   updatedAt            DateTime             @updatedAt
   addresses            Address[]
