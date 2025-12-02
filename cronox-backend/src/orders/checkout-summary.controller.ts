@@ -52,11 +52,8 @@ export class CheckoutSummaryController {
         : undefined;
 
     // 🔥 IMPORTANTE:
-    // El checkout usa SIEMPRE el carrito del usuario logueado,
-    // igual que el endpoint /cart cuando hay sesión.
-    const cart = await this.cartService.getCartForCurrentUser(userId, {
-      createIfMissing: false,
-    });
+    // El checkout usa el carrito ACTUAL (incluido el anónimo con cookie) para evitar productos antiguos.
+    const cart = await this.cartService.getCheckoutCartForRequest(req);
 
     return this.ordersService.getCheckoutSummary(cart, {
       shippingMethod: normalized,

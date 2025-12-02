@@ -160,8 +160,10 @@ export class OrdersService {
   async getCheckoutPreview(
     userId: number,
     params: { shippingMethod: ShippingMethodCode },
+    options: { cart?: CartSnapshot | null } = {},
   ): Promise<CheckoutPreview> { // [STRIPE]
-    const cart = await this.cartService.getOrCreateCart({ userId });
+    const cart =
+      options.cart ?? (await this.cartService.getOrCreateCart({ userId }));
 
     if (!cart.items.length) {
       throw new BadRequestException('CART_EMPTY');
@@ -204,10 +206,15 @@ export class OrdersService {
   async createCheckoutSession(
     userId: number,
     dto: CreateCheckoutSessionDto,
+    options: { cart?: CartSnapshot | null } = {},
   ): Promise<Record<string, unknown>> {
-    const preview = await this.getCheckoutPreview(userId, {
-      shippingMethod: dto.shippingMethod,
-    }); // [STRIPE]
+    const preview = await this.getCheckoutPreview(
+      userId,
+      {
+        shippingMethod: dto.shippingMethod,
+      },
+      { cart: options.cart },
+    ); // [STRIPE]
     const provider = this.taxConfig.getPaymentProvider();
 
     const metadata: Record<string, unknown> = { ...preview.metadata };

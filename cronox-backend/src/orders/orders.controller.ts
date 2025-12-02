@@ -14,6 +14,7 @@ import {
 import { ApiBearerAuth, ApiCreatedResponse, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { Request } from 'express';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { CartService } from '../cart/cart.service';
 import { OrdersService } from './orders.service';
 import { CreateCheckoutSessionDto } from './dto/create-checkout-session.dto';
 import { CreateOrderWebhookDto } from './dto/create-order-webhook.dto';
@@ -22,7 +23,10 @@ import { PaginationDto } from './dto/pagination.dto';
 @ApiTags('Orders')
 @Controller()
 export class OrdersController {
-  constructor(private readonly ordersService: OrdersService) {}
+  constructor(
+    private readonly ordersService: OrdersService,
+    private readonly cartService: CartService,
+  ) {}
 
   @Post('checkout/session')
   @UseGuards(JwtAuthGuard)
@@ -76,7 +80,9 @@ export class OrdersController {
       throw new UnauthorizedException('USER_NOT_AUTHENTICATED');
     }
 
-    return this.ordersService.createCheckoutSession(userId, dto);
+    const cart = await this.cartService.getCheckoutCartForRequest(req);
+
+    return this.ordersService.createCheckoutSession(userId, dto, { cart }); // Usa solo los ítems del carrito activo
   }
 
   @Post('orders')

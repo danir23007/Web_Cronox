@@ -2,13 +2,17 @@ import { Body, Controller, Post, Req, UnauthorizedException, UseGuards } from '@
 import { ApiBearerAuth, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { Request } from 'express';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { CartService } from '../cart/cart.service';
 import { CreatePaymentIntentDto } from './dto/create-payment-intent.dto';
 import { PaymentIntentFactory } from './payment-intent.factory';
 
 @ApiTags('Payments / Stripe')
 @Controller('api/payments')
 export class PaymentsApiController {
-  constructor(private readonly paymentIntentFactory: PaymentIntentFactory) {}
+  constructor(
+    private readonly paymentIntentFactory: PaymentIntentFactory,
+    private readonly cartService: CartService,
+  ) {}
 
   @Post('create-payment-intent')
   @UseGuards(JwtAuthGuard)
@@ -22,6 +26,8 @@ export class PaymentsApiController {
       throw new UnauthorizedException('USER_NOT_AUTHENTICATED');
     }
 
-    return this.paymentIntentFactory.createPaymentIntentForUser(userId, dto);
+    const cart = await this.cartService.getCheckoutCartForRequest(req);
+
+    return this.paymentIntentFactory.createPaymentIntentForUser(userId, dto, cart); // Usa solo el carrito activo
   }
 }
