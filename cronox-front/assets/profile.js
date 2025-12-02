@@ -11,6 +11,8 @@
   const favoritesList = $('profileFavoritesList');
   const accreditationName = document.querySelector('.cronox-card__name');
   const accreditationCode = document.querySelector('.cronox-card__code');
+  const accreditationCircle = document.querySelector('.cronox-card__circle');
+  const accreditationCard = document.querySelector('.cronox-card');
   const accreditationQr = $('cronox-member-qr');
 
   let favoritesLoaded = false;
@@ -77,6 +79,24 @@
     return '';
   };
 
+  const applyCircleLevel = (circleLevel) => {
+    const level = Number(circleLevel);
+    const normalized = level >= 1 && level <= 5 ? level : 1;
+
+    if (accreditationCard) {
+      for (let i = 1; i <= 5; i += 1) {
+        accreditationCard.classList.remove(`cronox-card--circle-${i}`);
+      }
+      accreditationCard.classList.add(`cronox-card--circle-${normalized}`);
+    }
+
+    if (accreditationCircle) {
+      accreditationCircle.textContent = `Círculo ${normalized}`;
+    }
+
+    return normalized;
+  };
+
   const formatPriceFromCents = (valueInCents) => {
     const cents = normalizeCentsValue(valueInCents);
     if (typeof window.formatPriceFromCents === 'function') {
@@ -133,6 +153,7 @@
   const fillAccreditation = (user) => {
     if (!user) return;
     const fullName = buildDisplayName(user) || 'Miembro CRONOX';
+    applyCircleLevel(user.circleLevel);
     if (accreditationName) accreditationName.textContent = fullName;
     if (accreditationCode) accreditationCode.textContent = user.memberCode ? `ID: ${user.memberCode}` : 'ID: —';
   };
