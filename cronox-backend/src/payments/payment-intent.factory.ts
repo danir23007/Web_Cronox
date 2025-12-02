@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { CartWithItems } from '../cart/cart.service';
 import { OrdersService } from '../orders/orders.service';
 import { CreatePaymentIntentDto } from './dto/create-payment-intent.dto';
 import { StripeService } from './stripe.service';
@@ -10,10 +11,18 @@ export class PaymentIntentFactory {
     private readonly stripeService: StripeService,
   ) {}
 
-  async createPaymentIntentForUser(userId: number, dto: CreatePaymentIntentDto) {
-    const preview = await this.ordersService.getCheckoutPreview(userId, {
-      shippingMethod: dto.shippingMethod,
-    }); // [STRIPE]
+  async createPaymentIntentForUser(
+    userId: number,
+    dto: CreatePaymentIntentDto,
+    cart?: CartWithItems | null,
+  ) {
+    const preview = await this.ordersService.getCheckoutPreview(
+      userId,
+      {
+        shippingMethod: dto.shippingMethod,
+      },
+      { cart },
+    ); // [STRIPE]
     const amountInCents = preview.totals.totalCents;
 
     const paymentIntent = await this.stripeService.createOrReusePaymentIntent({
