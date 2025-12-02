@@ -11,6 +11,9 @@ export type SafeUser = {
   firstName?: string | null;
   lastName?: string | null;
   memberCode?: string | null;
+  newsletterSubscribed?: boolean;
+  firstOrderDiscountCode?: string | null;
+  firstOrderDiscountUsed?: boolean;
   circleLevel: number;
   role: Role;
   createdAt: Date;
@@ -29,6 +32,9 @@ export class UsersService {
     lastName?: string;
     role?: Role;
     memberCode?: string;
+    newsletterSubscribed?: boolean;
+    firstOrderDiscountCode?: string;
+    firstOrderDiscountUsed?: boolean;
   }) {
     const { memberCode, ...userData } = data;
     const ensuredCode = memberCode ?? (await this.generateUniqueMemberCode());
@@ -93,6 +99,9 @@ export class UsersService {
       firstName: user.firstName,
       lastName: user.lastName,
       memberCode: (user as any).memberCode, // Prisma ya tiene este campo
+      newsletterSubscribed: (user as any).newsletterSubscribed,
+      firstOrderDiscountCode: (user as any).firstOrderDiscountCode,
+      firstOrderDiscountUsed: (user as any).firstOrderDiscountUsed,
       circleLevel: Number((user as any).circleLevel ?? 1),
       role: user.role,
       createdAt: user.createdAt,

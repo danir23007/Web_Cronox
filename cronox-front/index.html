@@ -329,6 +329,34 @@
     </div>
   </aside>
 
+  <!-- ===== NEWSLETTER MODAL ===== -->
+  <div class="newsletter-modal-overlay" aria-hidden="true">
+    <div class="newsletter-modal" role="dialog" aria-modal="true" aria-labelledby="newsletterTitle">
+      <button type="button" class="newsletter-modal-close" aria-label="Cerrar">×</button>
+      <div class="newsletter-modal-grid">
+        <div class="newsletter-modal-image" role="presentation"></div>
+        <div class="newsletter-modal-content">
+          <p class="newsletter-modal-kicker">CRONOX CLUB</p>
+          <h3 id="newsletterTitle" class="newsletter-modal-title">EXCLUSIVE SH*T THIS WAY</h3>
+          <p class="newsletter-modal-subtitle">Suscríbete para drops, descuentos y acceso anticipado.</p>
+          <form id="newsletterForm" class="newsletter-modal-form" novalidate>
+            <input
+              id="newsletterEmail"
+              class="newsletter-modal-input"
+              type="email"
+              name="email"
+              placeholder="Email"
+              autocomplete="email"
+              required
+            >
+            <button type="submit" class="newsletter-modal-button">SIGN UP</button>
+            <p id="newsletterFeedback" class="newsletter-modal-feedback" role="status" aria-live="polite"></p>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- ===== FAILSAFE PRELOADER ===== -->
   <script>
   (function(){

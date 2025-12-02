@@ -328,6 +328,11 @@ export class OrdersService {
             ? (dto.metadata.billingAddress as Prisma.InputJsonValue)
             : Prisma.JsonNull;
 
+      const shippingName = this.extractNames(
+        dto.shippingAddress ?? dto.metadata?.shippingAddress,
+      );
+      const billingName = this.extractNames(dto.billingAddress ?? dto.metadata?.billingAddress);
+
       const order = await tx.order.create({
         data: {
           userId,
@@ -376,6 +381,8 @@ export class OrdersService {
           data: { itemsCount: 0, subtotal: 0 },
         });
       }
+
+      await this.fillMissingUserNames(tx, userId, shippingName, billingName);
 
       const created = await tx.order.findUnique({
         where: { id: order.id },
@@ -638,6 +645,80 @@ export class OrdersService {
 
   private decimalToCents(value: Prisma.Decimal): number {
     return Number(value.mul(100).toFixed(0));
+  }
+
+  private normalizeName(value: unknown): string | undefined {
+    if (typeof value !== 'string') return undefined;
+    const trimmed = value.trim();
+    return trimmed || undefined;
+  }
+
+  private extractNames(input: unknown): { firstName?: string; lastName?: string } | null {
+    if (!input || typeof input !== 'object') return null;
+    const record = input as Record<string, unknown>;
+    const primaryFirst =
+      this.normalizeName(record.firstName) ||
+      this.normalizeName(record.firstname) ||
+      this.normalizeName(record.first_name);
+    const primaryLast =
+      this.normalizeName(record.lastName) ||
+      this.normalizeName(record.lastname) ||
+      this.normalizeName(record.last_name);
+
+    let firstName = primaryFirst;
+    let lastName = primaryLast;
+
+    if (!firstName && !lastName && typeof record.name === 'string') {
+      const parts = record.name.trim().split(/\s+/);
+      if (parts.length > 0) {
+        firstName = parts.shift();
+        lastName = parts.join(' ') || undefined;
+      }
+    }
+
+    if (!firstName && !lastName) {
+      return null;
+    }
+
+    return { firstName: firstName || undefined, lastName: lastName || undefined };
+  }
+
+  private async fillMissingUserNames(
+    tx: Prisma.TransactionClient,
+    userId: number,
+    primary?: { firstName?: string; lastName?: string } | null,
+    fallback?: { firstName?: string; lastName?: string } | null,
+  ) {
+    const user = await tx.user.findUnique({
+      where: { id: userId },
+      select: { firstName: true, lastName: true },
+    });
+
+    if (!user) return;
+
+    const needsFirst = !user.firstName || !user.firstName.trim();
+    const needsLast = !user.lastName || !user.lastName.trim();
+
+    if (!needsFirst && !needsLast) {
+      return;
+    }
+
+    const firstName = primary?.firstName ?? fallback?.firstName;
+    const lastName = primary?.lastName ?? fallback?.lastName;
+
+    const data: Prisma.UserUpdateInput = {};
+
+    if (needsFirst && firstName) data.firstName = firstName;
+    if (needsLast && lastName) data.lastName = lastName;
+
+    if (Object.keys(data).length === 0) {
+      return;
+    }
+
+    await tx.user.update({
+      where: { id: userId },
+      data,
+    });
   }
 
   private moneyFromNumber(amount: number): Prisma.Decimal {
