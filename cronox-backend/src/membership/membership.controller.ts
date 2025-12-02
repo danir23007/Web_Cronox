@@ -1,0 +1,29 @@
+import { Controller, Get, Param, Res, UseGuards } from '@nestjs/common';
+import type { Response } from 'express';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { CurrentUser } from '../common/decorators/current-user.decorator';
+import { MembershipService } from './membership.service';
+
+@Controller('membership')
+export class MembershipController {
+  constructor(private readonly membershipService: MembershipService) {}
+
+  @Get('me/qr')
+  @UseGuards(JwtAuthGuard)
+  async getMyQr(@CurrentUser('id') userId: number, @Res() res: Response) {
+    const png = await this.membershipService.getQrForUser(userId);
+
+    res.setHeader('Content-Type', 'image/png');
+    res.send(png);
+  }
+}
+
+@Controller('m')
+export class MembershipPublicController {
+  constructor(private readonly membershipService: MembershipService) {}
+
+  @Get(':memberCode')
+  async getMemberInfo(@Param('memberCode') memberCode: string) {
+    return this.membershipService.getMemberInfo(memberCode);
+  }
+}

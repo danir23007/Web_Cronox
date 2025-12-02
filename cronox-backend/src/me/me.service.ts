@@ -2,6 +2,7 @@ import { ConflictException, Injectable, NotFoundException } from '@nestjs/common
 import { Prisma, OrderStatus } from '@prisma/client';
 import { Decimal } from '@prisma/client/runtime/library';
 import { PrismaService } from '../prisma/prisma.service';
+import { UsersService } from '../users/users.service';
 import { UpdateMeDto } from './dto/update-me.dto';
 import { UpsertAddressDto } from './dto/upsert-address.dto';
 
@@ -10,6 +11,7 @@ export type MeProfile = {
   email: string;
   firstName: string | null;
   lastName: string | null;
+  memberCode: string;
   createdAt: Date;
 };
 
@@ -38,7 +40,7 @@ export type MeOrder = {
 
 @Injectable()
 export class MeService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService, private readonly usersService: UsersService) {}
 
   async getProfile(userId: number): Promise<MeProfile> {
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
@@ -47,7 +49,9 @@ export class MeService {
       throw new NotFoundException('User not found');
     }
 
-    return this.toProfile(user);
+    const memberCode = await this.usersService.ensureMemberCode(userId);
+
+    return this.toProfile({ ...user, memberCode });
   }
 
   async updateProfile(userId: number, dto: UpdateMeDto): Promise<MeProfile> {
@@ -58,6 +62,7 @@ export class MeService {
     }
 
     const data: Prisma.UserUpdateInput = {};
+    const memberCode = await this.usersService.ensureMemberCode(userId);
 
     if (dto.firstName !== undefined) {
       data.firstName = dto.firstName;
@@ -89,7 +94,7 @@ export class MeService {
     }
 
     if (Object.keys(data).length === 0) {
-      return this.toProfile(user);
+      return this.toProfile({ ...user, memberCode });
     }
 
     try {
@@ -98,7 +103,7 @@ export class MeService {
         data,
       });
 
-      return this.toProfile(updated);
+      return this.toProfile({ ...updated, memberCode });
     } catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
         throw new ConflictException('El email ya está en uso');
@@ -190,12 +195,20 @@ export class MeService {
     }));
   }
 
-  private toProfile(user: { id: number; email: string; firstName: string | null; lastName: string | null; createdAt: Date }) {
+  private toProfile(user: {
+    id: number;
+    email: string;
+    firstName: string | null;
+    lastName: string | null;
+    memberCode: string | null;
+    createdAt: Date;
+  }) {
     return {
       id: user.id,
       email: user.email,
       firstName: user.firstName ?? null,
       lastName: user.lastName ?? null,
+      memberCode: user.memberCode ?? '',
       createdAt: user.createdAt,
     } as MeProfile;
   }

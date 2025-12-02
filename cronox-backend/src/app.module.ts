@@ -23,6 +23,7 @@ import { ShippingMethodsModule } from './shipping-methods/shipping-methods.modul
 import { CategoriesModule } from './categories/categories.module';
 import { FavoritesModule } from './favorites/favorites.module';
 import { MeModule } from './me/me.module';
+import { MembershipModule } from './membership/membership.module';
 
 @Module({
   imports: [
@@ -68,6 +69,7 @@ import { MeModule } from './me/me.module';
     CategoriesModule,
     FavoritesModule,
     MeModule,
+    MembershipModule,
     OrdersModule, // [ORDERS] Registro del módulo de pedidos
     PaymentsModule, // [STRIPE]
     AdminModule,

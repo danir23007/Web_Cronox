@@ -908,3 +908,41 @@ a.product-card{display:block;text-decoration:none;color:inherit;cursor:pointer;}
   .cart-line__price { grid-column: 2; grid-row: 1; }
   .cart-line__remove { grid-column: 2; grid-row: 2; justify-self: end; }
 }
+
+.account-section--accreditation {
+  max-width: 480px;
+  margin-top: 40px;
+}
+
+.cronox-card {
+  border: 1px solid #fff;
+  padding: 24px;
+  background: #000;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.cronox-card__label {
+  font-size: 12px;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: #aaa;
+}
+
+.cronox-card__name {
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.cronox-card__code {
+  font-size: 14px;
+  color: #ccc;
+}
+
+.cronox-card__qr img,
+#cronox-member-qr {
+  display: block;
+  width: 160px;
+  height: auto;
+}

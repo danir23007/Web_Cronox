@@ -132,6 +132,7 @@
       <nav class="profile-tabs" aria-label="Secciones de la cuenta">
         <button type="button" class="profile-tab is-active" data-profile-tab="orders">Pedidos</button>
         <button type="button" class="profile-tab" data-profile-tab="favorites">Favoritos</button>
+        <button type="button" class="profile-tab" data-profile-tab="accreditation">ACREDITACIÓN</button>
         <button type="button" class="profile-tab" data-profile-tab="account">Configuración de la cuenta</button>
         <button type="button" class="profile-tab profile-tab--logout" data-profile-tab="logout">Cerrar sesión</button>
       </nav>
@@ -171,6 +172,30 @@
           <section id="profileFavoritesList" hidden>
             <div id="profileFavoritesGrid" class="products-grid" aria-label="Lista de productos favoritos"></div>
           </section>
+        </div>
+        <div class="profile-back-wrapper">
+          <button type="button" class="profile-back-link" data-profile-back="store">Volver a la tienda</button>
+        </div>
+      </section>
+
+      <section class="profile-section" data-profile-section="accreditation" aria-labelledby="accreditation-title">
+        <div class="profile-card account-section--accreditation">
+          <h2 id="accreditation-title">Acreditación CRONOX</h2>
+
+          <div class="cronox-card">
+            <div class="cronox-card__header">
+              <span class="cronox-card__label">CRONOX INNER CIRCLE</span>
+            </div>
+
+            <div class="cronox-card__body">
+              <p class="cronox-card__name">—</p>
+              <p class="cronox-card__code">ID: —</p>
+            </div>
+
+            <div class="cronox-card__qr">
+              <img src="" alt="QR de acreditación CRONOX" id="cronox-member-qr">
+            </div>
+          </div>
         </div>
         <div class="profile-back-wrapper">
           <button type="button" class="profile-back-link" data-profile-back="store">Volver a la tienda</button>
@@ -287,7 +312,7 @@
   <script src="assets/api.js"></script>
   <script src="assets/app.js?v=50" defer></script>
   <script src="assets/favorites-toggle.js?v=1" defer></script>
-  <script src="assets/profile.js?v=1" defer></script>
+  <script src="assets/profile.js?v=2" defer></script>
 
   <style>
     /* Profile overrides */
