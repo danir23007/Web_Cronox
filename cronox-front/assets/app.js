@@ -1627,6 +1627,192 @@ window.CRONOX_USER = window.CRONOX_USER || null;
   window.CRONOX_closeAuthModal = closeAuthModal;
   window.CRONOX_logout = handleLogout;
 
+  // ===== Newsletter Popup =====
+  const NEWSLETTER_STORAGE_KEY = 'cronox_newsletter_dismissed';
+  const newsletterState = {
+    overlay: null,
+    modal: null,
+    closeBtn: null,
+    form: null,
+    emailInput: null,
+    submitBtn: null,
+    feedback: null,
+  };
+
+  const persistNewsletterDismiss = () => {
+    try {
+      localStorage.setItem(NEWSLETTER_STORAGE_KEY, '1');
+    } catch (error) {
+      console.warn('[CRONOX] No se pudo persistir la preferencia de newsletter', error);
+    }
+  };
+
+  const setNewsletterFeedback = (message, kind = '') => {
+    if (!newsletterState.feedback) return;
+    newsletterState.feedback.textContent = message || '';
+    newsletterState.feedback.classList.remove(
+      'newsletter-modal-feedback--error',
+      'newsletter-modal-feedback--success',
+    );
+    if (kind === 'error') {
+      newsletterState.feedback.classList.add('newsletter-modal-feedback--error');
+    }
+    if (kind === 'success') {
+      newsletterState.feedback.classList.add('newsletter-modal-feedback--success');
+    }
+  };
+
+  const setNewsletterLoading = (isLoading) => {
+    if (newsletterState.submitBtn) {
+      newsletterState.submitBtn.disabled = Boolean(isLoading);
+      newsletterState.submitBtn.textContent = isLoading ? 'ENVIANDO…' : 'SIGN UP';
+    }
+    if (newsletterState.emailInput) {
+      newsletterState.emailInput.disabled = Boolean(isLoading);
+    }
+  };
+
+  const closeNewsletterModal = () => {
+    if (newsletterState.overlay) {
+      newsletterState.overlay.classList.remove('newsletter-modal-overlay--visible');
+    }
+    unlockScroll('newsletter');
+    persistNewsletterDismiss();
+  };
+
+  const openNewsletterModal = () => {
+    if (!newsletterState.overlay) return;
+    newsletterState.overlay.classList.add('newsletter-modal-overlay--visible');
+    lockScroll('newsletter');
+  };
+
+  const shouldShowNewsletter = () => {
+    if (typeof window === 'undefined') return false;
+    if (window.CRONOX_USER) return false;
+    try {
+      const dismissed = localStorage.getItem(NEWSLETTER_STORAGE_KEY);
+      if (dismissed === '1') return false;
+    } catch (error) {
+      console.warn('[CRONOX] No se pudo leer el estado de newsletter', error);
+    }
+
+    return true;
+  };
+
+  const parseNewsletterResponse = async (response) => {
+    try {
+      return await response.json();
+    } catch (error) {
+      console.warn('[CRONOX] Respuesta inesperada de newsletter', error);
+      return {};
+    }
+  };
+
+  const handleNewsletterSubmit = async (event) => {
+    event.preventDefault();
+    if (!newsletterState.emailInput) return;
+
+    const email = newsletterState.emailInput.value.trim();
+    const emailRegex = /[^@\s]+@[^@\s]+\.[^@\s]+/;
+
+    if (!emailRegex.test(email)) {
+      setNewsletterFeedback('Introduce un email válido.', 'error');
+      return;
+    }
+
+    if (typeof fetch !== 'function') {
+      setNewsletterFeedback('Servicio no disponible en este navegador.', 'error');
+      return;
+    }
+
+    setNewsletterLoading(true);
+    setNewsletterFeedback('Enviando...');
+
+    try {
+      const res = await fetch('/api/newsletter/subscribe', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
+      });
+
+      const data = await parseNewsletterResponse(res);
+
+      if (res.status === 201 || data.status === 'ok') {
+        setNewsletterFeedback(
+          'Te hemos enviado un correo con tu código de -10% en tu primera compra.',
+          'success',
+        );
+        persistNewsletterDismiss();
+        setTimeout(closeNewsletterModal, 1200);
+        return;
+      }
+
+      if (res.status === 200 && data.status === 'already_subscribed') {
+        setNewsletterFeedback('Ya estabas dentro. Revisa tu bandeja para el código.', 'success');
+        persistNewsletterDismiss();
+        return;
+      }
+
+      if (res.status === 409 || data.status === 'already_registered') {
+        setNewsletterFeedback(
+          'Este correo ya tiene cuenta en CRONOX. Inicia sesión para usar tus beneficios.',
+          'error',
+        );
+        persistNewsletterDismiss();
+        return;
+      }
+
+      setNewsletterFeedback('Ha habido un problema, inténtalo de nuevo.', 'error');
+    } catch (error) {
+      console.error('[CRONOX] Error al enviar newsletter', error);
+      setNewsletterFeedback('Ha habido un problema, inténtalo de nuevo.', 'error');
+    } finally {
+      setNewsletterLoading(false);
+    }
+  };
+
+  const bindNewsletterEvents = () => {
+    if (newsletterState.overlay) {
+      newsletterState.overlay.addEventListener('click', (ev) => {
+        if (ev.target === newsletterState.overlay) closeNewsletterModal();
+      });
+    }
+
+    newsletterState.closeBtn?.addEventListener('click', (ev) => {
+      ev.preventDefault();
+      closeNewsletterModal();
+    });
+
+    newsletterState.form?.addEventListener('submit', handleNewsletterSubmit);
+  };
+
+  const cacheNewsletterElements = () => {
+    newsletterState.overlay = document.querySelector('.newsletter-modal-overlay');
+    newsletterState.modal = newsletterState.overlay?.querySelector('.newsletter-modal') || null;
+    newsletterState.closeBtn = newsletterState.overlay?.querySelector('.newsletter-modal-close') || null;
+    newsletterState.form = document.getElementById('newsletterForm');
+    newsletterState.emailInput = document.getElementById('newsletterEmail');
+    newsletterState.submitBtn = newsletterState.overlay?.querySelector('.newsletter-modal-button') || null;
+    newsletterState.feedback = document.getElementById('newsletterFeedback');
+  };
+
+  const initNewsletterModal = () => {
+    cacheNewsletterElements();
+    if (!newsletterState.overlay || !newsletterState.modal) return;
+
+    bindNewsletterEvents();
+
+    setTimeout(() => {
+      if (shouldShowNewsletter()) {
+        openNewsletterModal();
+      }
+    }, 3000);
+  };
+
+  document.addEventListener('DOMContentLoaded', () => {
+    initNewsletterModal();
+  });
+
   document.addEventListener('DOMContentLoaded', async () => {
     const ready = await ensureAuthModal();
     if (!ready) return;

@@ -24,6 +24,7 @@ import { CategoriesModule } from './categories/categories.module';
 import { FavoritesModule } from './favorites/favorites.module';
 import { MeModule } from './me/me.module';
 import { MembershipModule } from './membership/membership.module';
+import { NewsletterModule } from './newsletter/newsletter.module';
 
 @Module({
   imports: [
@@ -70,6 +71,7 @@ import { MembershipModule } from './membership/membership.module';
     FavoritesModule,
     MeModule,
     MembershipModule,
+    NewsletterModule,
     OrdersModule, // [ORDERS] Registro del módulo de pedidos
     PaymentsModule, // [STRIPE]
     AdminModule,
