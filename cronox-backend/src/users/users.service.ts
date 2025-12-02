@@ -45,9 +45,13 @@ export class UsersService {
     return this.prisma.user.findUnique({ where: { id } });
   }
 
-  async updateProfile(id: number, update: { name?: string; firstName?: string; lastName?: string }): Promise<SafeUser> {
+  async updateProfile(
+    id: number,
+    update: { name?: string; firstName?: string; lastName?: string },
+  ): Promise<SafeUser> {
     const data: Prisma.UserUpdateInput = {};
 
+    // Nos aseguramos de que el usuario tenga memberCode
     const memberCode = await this.ensureMemberCode(id);
 
     if (update.name !== undefined) {
@@ -87,7 +91,7 @@ export class UsersService {
       name: user.name,
       firstName: user.firstName,
       lastName: user.lastName,
-      memberCode: user.memberCode,
+      memberCode: (user as any).memberCode, // Prisma ya tiene este campo
       role: user.role,
       createdAt: user.createdAt,
       updatedAt: user.updatedAt,
@@ -96,13 +100,14 @@ export class UsersService {
 
   private async generateUniqueMemberCode(): Promise<string> {
     const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-    let code: string;
+    let code = ''; // ← inicializado para que TS no se queje
     let exists = true;
 
     while (exists) {
       const random = Array.from({ length: 6 })
         .map(() => alphabet[Math.floor(Math.random() * alphabet.length)])
         .join('');
+
       code = `CRX-${random}`;
 
       const found = await this.prisma.user.findUnique({
