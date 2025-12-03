@@ -285,3 +285,6 @@ enum VariantSize {
 // Para sincronizar AHORA este esquema con la base de datos usa:
 // npx prisma db push
 // npx prisma generate
+// [CRONOX] Ejecutar:
+// npx prisma migrate dev --name add_newsletter_fields
+// npx prisma generate

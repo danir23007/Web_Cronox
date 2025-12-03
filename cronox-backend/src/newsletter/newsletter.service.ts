@@ -7,11 +7,9 @@ import { PrismaService } from '../prisma/prisma.service';
 
 const FIRST_ORDER_DISCOUNT_PERCENT = 10;
 
-interface SubscriptionResult {
-  status: 'ok' | 'already_subscribed' | 'already_registered';
-  httpStatus: number;
-  code?: string;
-}
+export type SubscriptionResult =
+  | { status: 'ok'; code: string; httpStatus: number }
+  | { status: 'already_subscribed' | 'already_registered'; httpStatus: number; code?: string };
 
 @Injectable()
 export class NewsletterService {
@@ -26,38 +24,43 @@ export class NewsletterService {
   async subscribe(email: string): Promise<SubscriptionResult> {
     const normalizedEmail = email.trim().toLowerCase();
 
-    const result = await this.prisma.$transaction(async (tx) => {
+    const result = await this.prisma.$transaction<SubscriptionResult>(async (tx) => {
       const existingUser = await tx.user.findUnique({ where: { email: normalizedEmail } });
       const existingDiscount = existingUser
         ? await this.findFirstOrderDiscount(tx, existingUser.id)
         : null;
 
-      if (existingUser) {
-        const alreadySubscribed = existingUser.newsletterSubscribed;
-        const alreadyHasCode = Boolean(
-          existingDiscount || existingUser.firstOrderDiscountCode || existingUser.firstOrderDiscountUsed,
-        );
+      const existingCode = existingDiscount?.code ?? existingUser?.firstOrderDiscountCode ?? undefined;
+      const discountAlreadyUsed = existingUser?.firstOrderDiscountUsed ?? false;
 
-        if (alreadySubscribed && alreadyHasCode) {
-          return { status: 'already_registered', httpStatus: 409, code: existingDiscount?.code };
+      if (existingUser) {
+        if (existingUser.newsletterSubscribed) {
+          let codeToReturn = existingCode;
+
+          if (!codeToReturn && !discountAlreadyUsed) {
+            codeToReturn = await this.createFirstOrderDiscount(tx, existingUser.id);
+
+            await tx.user.update({
+              where: { id: existingUser.id },
+              data: { firstOrderDiscountCode: codeToReturn },
+            });
+          }
+
+          return { status: 'already_subscribed', httpStatus: 200, code: codeToReturn };
         }
 
-        const code = existingDiscount?.code ?? (await this.createFirstOrderDiscount(tx, existingUser.id));
+        const code = existingCode ?? (await this.createFirstOrderDiscount(tx, existingUser.id));
 
         await tx.user.update({
           where: { id: existingUser.id },
           data: {
             newsletterSubscribed: true,
             firstOrderDiscountCode: code,
-            firstOrderDiscountUsed: existingUser.firstOrderDiscountUsed ?? false,
+            firstOrderDiscountUsed: discountAlreadyUsed,
           },
         });
 
-        return {
-          status: alreadySubscribed && alreadyHasCode ? 'already_subscribed' : 'ok',
-          httpStatus: alreadySubscribed && alreadyHasCode ? 200 : 201,
-          code,
-        } as SubscriptionResult;
+        return { status: 'ok', httpStatus: 200, code };
       }
 
       const passwordHash = await this.hashRandomPassword();
@@ -82,7 +85,7 @@ export class NewsletterService {
         data: { firstOrderDiscountCode: code },
       });
 
-      return { status: 'ok', httpStatus: 201, code } as SubscriptionResult;
+      return { status: 'ok', httpStatus: 201, code };
     });
 
     if (result.code && result.status === 'ok') {
