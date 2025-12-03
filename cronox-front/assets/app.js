@@ -601,6 +601,7 @@
   const CART_LOCK_KEY = 'cart-drawer';
   const FREE_SHIPPING_THRESHOLD = 65 * 100; // 65€ en céntimos
   const CHECKOUT_URL = '/checkout.html';
+  const CONTINUE_SHOPPING_URL = '/index.html#store';
 
   const formatMoney = (() => {
     const EUR = new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR' });
@@ -849,6 +850,29 @@
     return imageUrl || fallbackLogo;
   };
 
+  const renderCartEmptyState = (message = 'Tu cesta está vacía.', { showCta = false } = {}) => {
+    if (!cartEmptyState) return;
+
+    cartEmptyState.innerHTML = '';
+    const text = document.createElement('p');
+    text.textContent = message;
+    cartEmptyState.appendChild(text);
+
+    if (showCta) {
+      const cta = document.createElement('button');
+      cta.type = 'button';
+      cta.className = 'btn-primary cart-empty__cta';
+      cta.textContent = 'Seguir comprando';
+      cta.addEventListener('click', () => {
+        closeCartDrawer();
+        window.location.href = CONTINUE_SHOPPING_URL;
+      });
+      cartEmptyState.appendChild(cta);
+    }
+
+    cartEmptyState.hidden = false;
+  };
+
   const renderCartItems = (cart) => {
     if (!cartItemsContainer) return;
     const items = Array.isArray(cart?.items) ? cart.items : [];
@@ -863,10 +887,7 @@
 
     if (!hasItems) {
       cartItemsContainer.innerHTML = '';
-      if (cartEmptyState) {
-        cartEmptyState.textContent = 'Tu cesta está vacía.';
-        cartEmptyState.hidden = false;
-      }
+      renderCartEmptyState('No tienes productos en tu carrito todavía.', { showCta: true });
       return;
     }
 
@@ -1080,6 +1101,13 @@
 
     checkoutBtn?.addEventListener('click', (ev) => {
       ev.preventDefault();
+
+      const itemsCount = cartState.data?.itemsCount ?? 0;
+      if (!itemsCount) {
+        renderCartEmptyState('No tienes productos en tu carrito todavía.', { showCta: true });
+        return;
+      }
+
       window.location.href = CHECKOUT_URL;
     });
 
