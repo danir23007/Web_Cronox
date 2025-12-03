@@ -3,6 +3,7 @@
   const API_BASE = API.API_BASE || '';
   const STRIPE_PUBLISHABLE_KEY =
     window.CRONOX_STRIPE_PUBLISHABLE_KEY || 'pk_test_xxx_replace_with_real_key';
+  const CONTINUE_SHOPPING_URL = '/index.html#store';
 
   const cartItemsEl = document.getElementById('checkout-cart-items');
   const emptyCartEl = document.querySelector('[data-empty]');
@@ -65,14 +66,39 @@
     setPayButtonState(false);
   };
 
-  const renderEmptyCart = () => {
+  const renderEmptyCart = (
+    options = {
+      title: 'Tu carrito está vacío',
+      description: 'Añade productos a tu carrito antes de finalizar la compra.',
+    },
+  ) => {
     if (!cartItemsEl || !emptyCartEl) return;
     resetPaymentElement();
     cartItemsEl.innerHTML = '';
+    if (shippingOptionsEl) shippingOptionsEl.innerHTML = '';
+
+    const title = options.title || 'Tu carrito está vacío';
+    const description =
+      options.description || 'Añade productos a tu carrito antes de finalizar la compra.';
+
+    emptyCartEl.innerHTML = `
+      <h3>${title}</h3>
+      <p>${description}</p>
+      <button type="button" class="btn-primary" data-continue-shopping>Seguir comprando</button>
+    `;
     emptyCartEl.hidden = false;
+
+    const cta = emptyCartEl.querySelector('[data-continue-shopping]');
+    if (cta) {
+      cta.addEventListener('click', () => {
+        window.location.href = CONTINUE_SHOPPING_URL;
+      });
+    }
+
     setPayButtonState(false);
+    renderSummary({ subtotalCents: 0, shippingCents: 0, totalCents: 0 });
     if (helpText) {
-      helpText.textContent = 'Añade productos al carrito para continuar.';
+      helpText.textContent = description;
     }
   };
 
@@ -172,6 +198,8 @@
 
       if (!state.cart?.items?.length) {
         renderEmptyCart();
+        state.cart = { items: [] };
+        state.totals = { subtotalCents: 0, shippingCents: 0, totalCents: 0 };
         setLoadingState(false);
         return false;
       }
@@ -184,7 +212,19 @@
     } catch (error) {
       console.error('[CRONOX] No se pudo cargar el resumen de checkout', error);
       resetPaymentElement();
-      renderEmptyCart();
+      state.cart = { items: [] };
+      state.totals = { subtotalCents: 0, shippingCents: 0, totalCents: 0 };
+
+      const errorCode = error?.payload?.code || error?.code;
+      if (errorCode === 'EMPTY_CART') {
+        renderEmptyCart();
+      } else {
+        renderEmptyCart({
+          title: 'No se pudo cargar el carrito',
+          description: 'Vuelve a la tienda y añade productos para continuar con el pago.',
+        });
+      }
+
       setLoadingState(false);
       return false;
     }

@@ -123,6 +123,14 @@ export class OrdersService {
     params: { shippingMethod?: ShippingMethodCode } = {},
   ): Promise<CheckoutSummary> {
     const hasItems = Array.isArray(cart?.items) && cart.items.length > 0;
+
+    if (!hasItems) {
+      throw new BadRequestException({
+        code: 'EMPTY_CART',
+        message: 'No puedes iniciar el checkout sin productos en el carrito.',
+      });
+    }
+
     const itemsTotalCents = hasItems ? this.computeItemsTotalCents(cart) : 0;
     const methods = await this.shippingMethods.listAvailableMethods(itemsTotalCents);
 
@@ -166,7 +174,10 @@ export class OrdersService {
       options.cart ?? (await this.cartService.getOrCreateCart({ userId }));
 
     if (!cart.items.length) {
-      throw new BadRequestException('CART_EMPTY');
+      throw new BadRequestException({
+        code: 'EMPTY_CART',
+        message: 'No puedes iniciar el checkout sin productos en el carrito.',
+      });
     }
 
     const itemsTotalCents = this.computeItemsTotalCents(cart);
