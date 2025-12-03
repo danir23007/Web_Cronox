@@ -1129,7 +1129,7 @@ a.product-card{display:block;text-decoration:none;color:inherit;cursor:pointer;}
 }
 
 .newsletter-modal-feedback--error { color: #ffb2b2; }
-.newsletter-modal-feedback--success { color: #b8ffce; }
+.newsletter-modal-feedback--success { color: #ff0000; }
 
 @media (max-width: 860px) {
   .newsletter-modal-grid {

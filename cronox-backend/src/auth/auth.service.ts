@@ -3,6 +3,7 @@ import {
   ConflictException,
   Inject,
   Injectable,
+  Logger,
   UnauthorizedException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
@@ -15,6 +16,7 @@ import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
 import { UsersService, AuthUser } from '../users/users.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { NewsletterService } from '../newsletter/newsletter.service';
 
 interface JwtPayload {
   sub: number;
@@ -36,6 +38,7 @@ type Tokens = {
 export class AuthService {
   private readonly isProd = process.env.NODE_ENV === 'production';
   private readonly bcryptSaltRounds = Number(process.env.BCRYPT_SALT_ROUNDS ?? '10');
+  private readonly logger = new Logger(AuthService.name);
   private readonly accessCookieOptions: CookieOptions = {
     httpOnly: true,
     sameSite: 'lax',
@@ -57,6 +60,7 @@ export class AuthService {
     @Inject('JWT_REFRESH_SERVICE') private readonly refreshJwt: JwtService,
     private readonly cartService: CartService,
     private readonly prisma: PrismaService,
+    private readonly newsletterService: NewsletterService,
   ) {}
 
   async register(dto: RegisterDto) {
@@ -76,6 +80,12 @@ export class AuthService {
       firstName: dto.firstName,
       lastName: dto.lastName,
     });
+
+    const subscriptionResult = await this.newsletterService.subscribeIfNeeded(user.email);
+
+    if (!subscriptionResult) {
+      this.logger.warn(`No se pudo suscribir automáticamente al newsletter: ${user.email}`);
+    }
 
     const tokens = await this.generateTokens(user);
 
