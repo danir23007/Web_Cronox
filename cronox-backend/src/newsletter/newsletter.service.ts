@@ -21,6 +21,15 @@ export class NewsletterService {
     private readonly emailService: EmailService,
   ) {}
 
+  async subscribeIfNeeded(email: string): Promise<SubscriptionResult | null> {
+    try {
+      return await this.subscribe(email);
+    } catch (error) {
+      this.logger.error('No se pudo completar la suscripción a la newsletter', error as Error);
+      return null;
+    }
+  }
+
   async subscribe(email: string): Promise<SubscriptionResult> {
     const normalizedEmail = email.trim().toLowerCase();
 

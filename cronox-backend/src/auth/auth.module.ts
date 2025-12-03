@@ -3,6 +3,7 @@ import { JwtModule, JwtService } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
 import { UsersModule } from '../users/users.module';
 import { CartModule } from '../cart/cart.module';
+import { NewsletterModule } from '../newsletter/newsletter.module';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { JwtAccessStrategy } from './strategies/jwt-access.strategy';
@@ -26,6 +27,7 @@ const refreshJwtProvider = {
     PassportModule,
     UsersModule,
     CartModule,
+    NewsletterModule,
   ],
   controllers: [AuthController],
   providers: [
