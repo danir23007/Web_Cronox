@@ -1,5 +1,5 @@
 /* ==========================================================
-   CRONOX — app.js (v47)
+   CRONOX — app.js (v47 -> v48 newsletter sessionStorage)
    - Click en .fav-add abre Quick-Add (panel vertical)
    - El panel emite "cronox:addToCart" para añadir al carrito
    ========================================================== */
@@ -1639,9 +1639,10 @@ window.CRONOX_USER = window.CRONOX_USER || null;
     feedback: null,
   };
 
+  // AHORA usa sessionStorage (opción A)
   const persistNewsletterDismiss = () => {
     try {
-      localStorage.setItem(NEWSLETTER_STORAGE_KEY, '1');
+      sessionStorage.setItem(NEWSLETTER_STORAGE_KEY, '1');
     } catch (error) {
       console.warn('[CRONOX] No se pudo persistir la preferencia de newsletter', error);
     }
@@ -1690,7 +1691,7 @@ window.CRONOX_USER = window.CRONOX_USER || null;
     if (typeof window === 'undefined') return false;
     if (window.CRONOX_USER) return false;
     try {
-      const dismissed = localStorage.getItem(NEWSLETTER_STORAGE_KEY);
+      const dismissed = sessionStorage.getItem(NEWSLETTER_STORAGE_KEY);
       if (dismissed === '1') return false;
     } catch (error) {
       console.warn('[CRONOX] No se pudo leer el estado de newsletter', error);
@@ -1840,4 +1841,3 @@ window.CRONOX_USER = window.CRONOX_USER || null;
     }
   });
 })();
-
