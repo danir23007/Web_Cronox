@@ -35,6 +35,20 @@ export class FavoritesService {
     }));
   }
 
+  async listProducts(userId: number) {
+    const favorites = await this.prisma.favorite.findMany({
+      where: { userId },
+      include: {
+        product: {
+          include: { images: { orderBy: this.imageOrderBy } },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    return favorites.map((favorite) => this.toProductResponse(favorite.product));
+  }
+
   async add(userId: number, dto: AddFavoriteDto) {
     const product = await this.findProduct(dto);
 
@@ -121,11 +135,14 @@ export class FavoritesService {
 
     return {
       id: product.id,
+      backendId: product.id,
       slug: product.slug,
       name: product.name,
       price: product.price,
+      priceInCents: product.price,
       currency: product.currency,
       imageUrl: product.imageUrl ?? primaryImage?.url ?? null,
+      images: product.images.map((image) => image.url),
     };
   }
 }
