@@ -124,6 +124,24 @@
     };
   }
 
+  function findCatalogProduct(fav) {
+    const catalog = Array.isArray(window.CRONOX_PRODUCTS) ? window.CRONOX_PRODUCTS : [];
+    if (!catalog.length) return null;
+
+    const id = (fav?.backendId ?? fav?.id ?? fav?.productId ?? '').toString();
+    const slug = fav?.slug;
+
+    const bySlug = slug ? catalog.find((p) => p.slug === slug) : null;
+    if (bySlug) return bySlug;
+
+    if (id) {
+      const byId = catalog.find((p) => p.id === id || (p.backendId != null && String(p.backendId) === id));
+      if (byId) return byId;
+    }
+
+    return null;
+  }
+
   const updateFavoriteIdsSet = (list) => {
     const ids = new Set();
     (Array.isArray(list) ? list : []).forEach((fav) => {
@@ -231,7 +249,8 @@
       ev.preventDefault();
       ev.stopPropagation();
       if (typeof window.CRONOX_openQuickAddById === 'function') {
-        window.CRONOX_openQuickAddById(product.id || product.backendId);
+        const key = product.slug || product.id || product.backendId;
+        window.CRONOX_openQuickAddById(key != null ? String(key) : '');
       }
     });
 
@@ -266,8 +285,24 @@
       return;
     }
 
+    const cardBuilder = typeof window.CRONOX_createProductCard === 'function'
+      ? window.CRONOX_createProductCard
+      : createProductCard;
+
     const frag = document.createDocumentFragment();
-    favorites.forEach((fav) => frag.appendChild(createProductCard(fav)));
+    favorites.forEach((fav) => {
+      const catalogProduct = findCatalogProduct(fav);
+      const cardData = catalogProduct || {
+        ...fav,
+        id: String(fav.id || fav.backendId || ''),
+        backendId: fav.backendId,
+        price: Number(fav.priceInCents || 0) / 100,
+        priceLabel: formatPriceFromCents(fav.priceInCents),
+        images: Array.isArray(fav.images) && fav.images.length ? fav.images : (fav.image ? [fav.image] : []),
+      };
+      const card = cardBuilder(cardData);
+      frag.appendChild(card);
+    });
     refs.grid.appendChild(frag);
     syncFavoritesDom();
     showList();
@@ -290,6 +325,12 @@
     try {
       showLoading();
       setupLoginLink();
+
+      if (window.CRONOX_catalogReady instanceof Promise) {
+        try {
+          await window.CRONOX_catalogReady;
+        } catch {}
+      }
 
       const user = await fetchCurrentUser();
       if (!user) {
