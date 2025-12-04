@@ -13,7 +13,8 @@
 /* Ventana centrada */
 .qa-panel{
   width:min(100%, 720px);
-  max-height:84vh;
+  height:auto;
+  max-height:90vh;
   overflow:auto;
   background:#000;
   color:#fff;
@@ -45,14 +46,14 @@
   display:grid;
   grid-template-columns:1fr 1fr;
   gap:4px;                            /* ✅ separación mínima entre fotos */
-  height:clamp(360px,45vh,500px);
+  height:clamp(320px,40vh,440px);
   margin:0;
   padding:0;
 }
 @media (max-width:640px){
   .qa-media{
     grid-template-columns:repeat(2,minmax(0,1fr));
-    height:clamp(220px,58vw,320px);
+    height:clamp(200px,54vw,280px);
     gap:4px;
   }
 }
@@ -72,6 +73,7 @@
   gap:8px;
   padding:0 24px;
   border-top:1px solid rgba(255,255,255,.08);
+  margin-top:18px;
 }
 .qa-name{
   margin:0;
@@ -246,7 +248,7 @@
 /* ===== Compact layout: sin espacios extra ===== */
 .qa-panel{
   margin:0 !important;
-  padding:0 !important;
+  padding:0 0 20px !important;
 }
 
 .qa-media{
@@ -256,7 +258,7 @@
 }
 
 .qa-info{
-  margin:0 !important;
+  margin:18px 0 0 !important;
   padding:0 18px !important;   /* sin aire arriba/abajo, solo lateral para legibilidad */
   gap:10px !important;
   border-top:none !important;
