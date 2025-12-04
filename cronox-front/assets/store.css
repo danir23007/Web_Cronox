@@ -1168,7 +1168,7 @@ a.product-card{display:block;text-decoration:none;color:inherit;cursor:pointer;}
 .cronox-footer {
   background: #000000;
   color: #ffffff;
-  padding: 60px 6vw 40px;
+  padding: 80px 6vw 60px;
   font-size: 12px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -1188,7 +1188,7 @@ a.product-card{display:block;text-decoration:none;color:inherit;cursor:pointer;}
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 60px;
+  gap: 100px;
   max-width: 1400px;
   margin: 0 auto;
 }
@@ -1196,10 +1196,10 @@ a.product-card{display:block;text-decoration:none;color:inherit;cursor:pointer;}
 /* Columna izquierda */
 
 .footer-left {
-  flex: 0 0 180px;
+  flex: 0 0 220px;
   display: flex;
   flex-direction: column;
-  gap: 24px;
+  gap: 30px;
 }
 
 .footer-logo {
@@ -1231,7 +1231,7 @@ a.product-card{display:block;text-decoration:none;color:inherit;cursor:pointer;}
 .footer-columns {
   flex: 1 1 auto;
   display: flex;
-  gap: 60px;
+  gap: 80px;
   justify-content: center;
 }
 
@@ -1241,7 +1241,7 @@ a.product-card{display:block;text-decoration:none;color:inherit;cursor:pointer;}
 
 .footer-title {
   font-size: 11px;
-  margin-bottom: 12px;
+  margin-bottom: 14px;
 }
 
 .footer-column ul {
@@ -1251,18 +1251,18 @@ a.product-card{display:block;text-decoration:none;color:inherit;cursor:pointer;}
 }
 
 .footer-column li {
-  margin-bottom: 8px;
+  margin-bottom: 10px;
   font-size: 11px;
 }
 
 /* Newsletter derecha */
 
 .footer-newsletter {
-  flex: 0 0 320px;
+  flex: 0 0 360px;
 }
 
 .footer-newsletter-text {
-  margin: 8px 0 18px;
+  margin: 10px 0 20px;
   font-size: 11px;
   line-height: 1.5;
   text-transform: none;
@@ -1272,7 +1272,7 @@ a.product-card{display:block;text-decoration:none;color:inherit;cursor:pointer;}
 .footer-newsletter-form {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 12px;
 }
 
 .footer-input {
@@ -1305,7 +1305,7 @@ a.product-card{display:block;text-decoration:none;color:inherit;cursor:pointer;}
 }
 
 .footer-legal-note {
-  margin-top: 10px;
+  margin-top: 14px;
   font-size: 9px;
   line-height: 1.4;
   opacity: 0.6;
@@ -1319,7 +1319,7 @@ a.product-card{display:block;text-decoration:none;color:inherit;cursor:pointer;}
   .cronox-footer-inner {
     flex-direction: column;
     align-items: flex-start;
-    gap: 40px;
+    gap: 50px;
   }
 
   .footer-columns {
@@ -1335,10 +1335,10 @@ a.product-card{display:block;text-decoration:none;color:inherit;cursor:pointer;}
 @media (max-width: 640px) {
   .footer-columns {
     flex-direction: column;
-    gap: 24px;
+    gap: 28px;
   }
 
   .cronox-footer {
-    padding: 40px 6vw 30px;
+    padding: 60px 6vw 40px;
   }
 }
