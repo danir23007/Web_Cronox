@@ -265,7 +265,7 @@ a.product-card{display:block;text-decoration:none;color:inherit;cursor:pointer;}
 .product-name{font-weight:800;font-size:12px;text-transform:uppercase;letter-spacing:.06em;padding:12px 12px 4px;}
 .product-price{font-weight:700;font-size:12px;padding:0 12px 12px;}
 
-.favorites-loading-text{font-size:14px;letter-spacing:.08em;text-transform:uppercase;color:#fff;opacity:.7;margin-top:40px;text-align:center;}
+.favorites-loading-text{font-size:14px;letter-spacing:.08em;text-transform:uppercase;color:#ffffff !important;opacity:.7;margin-top:40px;text-align:center;}
 
 /* ===== Favoritos / Quick Add ===== */
 .favorite-toggle,.fav-toggle{
