@@ -14,6 +14,11 @@ export class FavoritesController {
     return this.favoritesService.list(userId);
   }
 
+  @Get('products')
+  async listProducts(@CurrentUser('id') userId: number) {
+    return this.favoritesService.listProducts(userId);
+  }
+
   @Post()
   async add(@CurrentUser('id') userId: number, @Body() dto: AddFavoriteDto) {
     return this.favoritesService.add(userId, dto);

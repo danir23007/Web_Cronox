@@ -28,17 +28,49 @@
 
   let isLoadingFavorites = false;
 
+  const createSkeletonCard = () => {
+    const card = document.createElement('div');
+    card.className = 'product-card product-card--skeleton';
+
+    const media = document.createElement('div');
+    media.className = 'product-media skeleton-box';
+    card.appendChild(media);
+
+    const name = document.createElement('div');
+    name.className = 'product-name skeleton-box';
+    card.appendChild(name);
+
+    const price = document.createElement('div');
+    price.className = 'product-price skeleton-box';
+    card.appendChild(price);
+
+    return card;
+  };
+
+  const renderSkeletons = (count = 4) => {
+    const grid = document.createElement('div');
+    grid.className = 'products-grid favorites-skeleton-grid';
+    for (let i = 0; i < count; i += 1) {
+      grid.appendChild(createSkeletonCard());
+    }
+    return grid;
+  };
+
   const setVisible = (el, visible) => {
     if (!el) return;
     el.hidden = !visible;
   };
 
   function showLoading(message) {
-    if (refs.loading && message) {
+    if (refs.loading) {
       refs.loading.textContent = '';
-      const p = document.createElement('p');
-      p.textContent = message;
-      refs.loading.appendChild(p);
+      if (message) {
+        const p = document.createElement('p');
+        p.textContent = message;
+        refs.loading.appendChild(p);
+      } else {
+        refs.loading.appendChild(renderSkeletons());
+      }
     }
     setVisible(refs.loading, true);
     setVisible(refs.login, false);
@@ -69,25 +101,8 @@
     setVisible(refs.list, true);
   }
 
-  async function fetchCurrentUser() {
-    try {
-      const res = await fetch('/api/auth/me', {
-        method: 'GET',
-        credentials: 'include',
-      });
-
-      if (res.status === 401) return null;
-      if (!res.ok) throw new Error('Error al comprobar la sesión');
-
-      return await res.json();
-    } catch (error) {
-      console.error('[CRONOX] No se pudo comprobar la sesión', error);
-      return null;
-    }
-  }
-
-  async function fetchFavorites() {
-    const res = await fetch('/api/favorites', {
+  async function fetchFavoriteProducts() {
+    const res = await fetch('/api/favorites/products', {
       method: 'GET',
       credentials: 'include',
     });
@@ -332,13 +347,7 @@
         } catch {}
       }
 
-      const user = await fetchCurrentUser();
-      if (!user) {
-        showLogin();
-        return;
-      }
-
-      const favorites = await fetchFavorites();
+      const favorites = await fetchFavoriteProducts();
       if (!Array.isArray(favorites) || !favorites.length) {
         showEmpty();
         return;
