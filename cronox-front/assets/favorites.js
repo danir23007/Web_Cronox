@@ -27,6 +27,9 @@
   };
 
   let isLoadingFavorites = false;
+  let isRefreshingFavorites = false;
+  let favoritesLoaded = false;
+  let lastFavoriteIdsSignature = '';
 
   const setVisible = (el, visible) => {
     if (!el) return;
@@ -258,11 +261,34 @@
     return a;
   }
 
-  function renderFavorites(list) {
+  const normalizeFavoritesList = (list) =>
+    (Array.isArray(list) ? list : [])
+      .map(normalizeFavorite)
+      .filter((fav) => fav.id && (fav.image || fav.images.length));
+
+  const signatureFromIds = (idsLike) => {
+    const ids = idsLike instanceof Set ? Array.from(idsLike) : Array.from(idsLike || []);
+    return ids
+      .map((id) => (id == null ? '' : String(id).trim()))
+      .filter(Boolean)
+      .sort()
+      .join('|');
+  };
+
+  const signatureFromFavorites = (list) => {
+    const ids = [];
+    (Array.isArray(list) ? list : []).forEach((fav) => {
+      const id = fav?.backendId ?? fav?.id ?? fav?.productId;
+      if (id != null) ids.push(id);
+    });
+    return signatureFromIds(ids);
+  };
+
+  function renderFavorites(list, { preNormalized = false } = {}) {
     if (!refs.grid) return;
     refs.grid.innerHTML = '';
 
-    const favorites = (Array.isArray(list) ? list : []).map(normalizeFavorite).filter((fav) => fav.id && (fav.image || fav.images.length));
+    const favorites = preNormalized ? (Array.isArray(list) ? list : []) : normalizeFavoritesList(list);
 
     updateFavoriteIdsSet(favorites);
 
@@ -304,12 +330,19 @@
     loginLinkBound = true;
   }
 
-  async function loadFavoritesFlow() {
-    if (isLoadingFavorites) return;
-    isLoadingFavorites = true;
+  async function loadFavoritesFlow({ force = false } = {}) {
+    if (isLoadingFavorites || isRefreshingFavorites) return;
+    if (favoritesLoaded && !force) return;
+
+    const useLoadingState = !favoritesLoaded;
+    if (useLoadingState) {
+      isLoadingFavorites = true;
+      showLoading();
+    } else {
+      isRefreshingFavorites = true;
+    }
 
     try {
-      showLoading();
       setupLoginLink();
 
       if (window.CRONOX_catalogReady instanceof Promise) {
@@ -319,26 +352,43 @@
       }
 
       const favorites = await fetchFavoriteProducts();
-      if (!Array.isArray(favorites) || !favorites.length) {
+      const normalized = normalizeFavoritesList(favorites);
+      lastFavoriteIdsSignature = signatureFromFavorites(normalized);
+      favoritesLoaded = true;
+
+      if (!normalized.length) {
         showEmpty();
         return;
       }
-      renderFavorites(favorites);
+      renderFavorites(normalized, { preNormalized: true });
     } catch (error) {
       console.error('[CRONOX] Error al cargar favoritos', error);
       if (error?.status === 401) {
+        favoritesLoaded = true;
+        lastFavoriteIdsSignature = '';
         showLogin();
         return;
       }
       showLoading('No se pudieron cargar tus favoritos. Inténtalo de nuevo más tarde.');
     } finally {
-      isLoadingFavorites = false;
+      if (useLoadingState) {
+        isLoadingFavorites = false;
+      } else {
+        isRefreshingFavorites = false;
+      }
     }
   }
 
   const handleFavsChanged = () => {
-    if (isLoadingFavorites) return;
-    loadFavoritesFlow();
+    if (isLoadingFavorites || isRefreshingFavorites) return;
+    const managerIds = window.CRONOX_FAVORITES?.ids;
+    const incomingSignature = signatureFromIds(managerIds);
+
+    if (favoritesLoaded && incomingSignature && incomingSignature === lastFavoriteIdsSignature) {
+      return;
+    }
+
+    loadFavoritesFlow({ force: true });
   };
 
   document.addEventListener('DOMContentLoaded', loadFavoritesFlow);
