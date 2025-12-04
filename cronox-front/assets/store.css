@@ -1186,9 +1186,9 @@ a.product-card{display:block;text-decoration:none;color:inherit;cursor:pointer;}
 
 .cronox-footer-inner {
   display: flex;
+  flex-direction: column;
   align-items: flex-start;
-  justify-content: space-between;
-  gap: 100px;
+  gap: 50px;
   max-width: 1400px;
   margin: 0 auto;
 }
@@ -1229,10 +1229,9 @@ a.product-card{display:block;text-decoration:none;color:inherit;cursor:pointer;}
 /* Columnas centrales */
 
 .footer-columns {
-  flex: 1 1 auto;
   display: flex;
-  gap: 80px;
-  justify-content: center;
+  gap: 40px;
+  justify-content: flex-start;
 }
 
 .footer-column {
@@ -1272,7 +1271,8 @@ a.product-card{display:block;text-decoration:none;color:inherit;cursor:pointer;}
 .footer-newsletter-form {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 14px;
+  width: 100%;
 }
 
 .footer-input {
@@ -1283,6 +1283,9 @@ a.product-card{display:block;text-decoration:none;color:inherit;cursor:pointer;}
   font-size: 11px;
   text-transform: none;
   outline: none;
+  width: 100%;
+  box-sizing: border-box;
+  display: block;
 }
 
 .footer-input::placeholder {
@@ -1298,6 +1301,9 @@ a.product-card{display:block;text-decoration:none;color:inherit;cursor:pointer;}
   font-weight: 600;
   cursor: pointer;
   letter-spacing: 0.12em;
+  width: 100%;
+  box-sizing: border-box;
+  display: block;
 }
 
 .footer-button:hover {
@@ -1314,6 +1320,48 @@ a.product-card{display:block;text-decoration:none;color:inherit;cursor:pointer;}
 }
 
 /* Responsive */
+
+@media (min-width: 1024px) {
+  .cronox-footer-inner {
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    gap: 80px;
+    max-width: 1400px;
+    margin: 0 auto;
+    flex-direction: row;
+  }
+
+  .footer-left {
+    flex: 0 0 220px;
+  }
+
+  .footer-columns {
+    flex: 0 0 420px;
+    display: flex;
+    justify-content: space-between;
+    gap: 40px;
+  }
+
+  .footer-column {
+    flex: 0 0 120px;
+  }
+
+  .footer-newsletter {
+    flex: 0 0 360px;
+  }
+
+  .footer-newsletter-form {
+    width: 100%;
+  }
+
+  .footer-input,
+  .footer-button {
+    width: 100%;
+    box-sizing: border-box;
+    display: block;
+  }
+}
 
 @media (max-width: 1024px) {
   .cronox-footer-inner {
