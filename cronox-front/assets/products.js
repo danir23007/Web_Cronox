@@ -226,7 +226,7 @@
             <div id="qaSizes" class="qa-sizes" role="radiogroup" aria-label="Selecciona una talla"></div>
           </div>
 
-          <div class="qa-row" style="margin-top:6px">
+          <div class="qa-row">
             <button id="qaAdd" class="qa-btn">Añadir al carrito</button>
           </div>
 

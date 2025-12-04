@@ -369,9 +369,9 @@ a.product-card{display:block;text-decoration:none;color:inherit;cursor:pointer;}
 .qa-overlay[aria-hidden="false"] .qa-panel{transform:translateX(0);}
 .qa-close{position:absolute;top:10px;left:10px;background:transparent;border:none;color:#fff;font-size:28px;line-height:1;cursor:pointer;opacity:.85;}
 .qa-close:hover{opacity:1;transform:scale(1.05);}
-.qa-media{padding:20px 20px 0;border-bottom:0;display:grid;gap:10px;margin-bottom:12px}
+.qa-media{padding:0;border-bottom:0;display:grid;gap:10px;margin-bottom:0}
 .qa-media img{width:100%;height:auto;display:block;object-fit:contain;background:#111;border:1px solid rgba(255,255,255,.15)}
-.qa-info{padding:16px 18px 16px;display:grid;gap:10px;align-content:start}
+.qa-info{padding:0 18px;display:grid;gap:10px;align-content:start}
 .qa-name{margin:0;font:800 16px/1.2 system-ui;text-transform:uppercase;letter-spacing:.06em;color:#fff}
 .qa-price{margin:0;font:700 14px/1.2 system-ui;color:#fff}
 .qa-row{display:grid;gap:6px}
