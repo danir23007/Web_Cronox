@@ -28,34 +28,6 @@
 
   let isLoadingFavorites = false;
 
-  const createSkeletonCard = () => {
-    const card = document.createElement('div');
-    card.className = 'product-card product-card--skeleton';
-
-    const media = document.createElement('div');
-    media.className = 'product-media skeleton-box';
-    card.appendChild(media);
-
-    const name = document.createElement('div');
-    name.className = 'product-name skeleton-box';
-    card.appendChild(name);
-
-    const price = document.createElement('div');
-    price.className = 'product-price skeleton-box';
-    card.appendChild(price);
-
-    return card;
-  };
-
-  const renderSkeletons = (count = 4) => {
-    const grid = document.createElement('div');
-    grid.className = 'products-grid favorites-skeleton-grid';
-    for (let i = 0; i < count; i += 1) {
-      grid.appendChild(createSkeletonCard());
-    }
-    return grid;
-  };
-
   const setVisible = (el, visible) => {
     if (!el) return;
     el.hidden = !visible;
@@ -64,13 +36,12 @@
   function showLoading(message) {
     if (refs.loading) {
       refs.loading.textContent = '';
-      if (message) {
-        const p = document.createElement('p');
-        p.textContent = message;
-        refs.loading.appendChild(p);
-      } else {
-        refs.loading.appendChild(renderSkeletons());
+      const p = document.createElement('p');
+      p.textContent = message || 'Cargando productos favoritos...';
+      if (!message) {
+        p.className = 'favorites-loading-text';
       }
+      refs.loading.appendChild(p);
     }
     setVisible(refs.loading, true);
     setVisible(refs.login, false);
