@@ -423,6 +423,8 @@
     if (p) openQuickAdd(p);
   };
 
+  window.CRONOX_createProductCard = createCard;
+
   // ======= Tarjeta con mini-galería + botón "+" clásico =======
   function createCard(p) {
     const key = p.slug || String(p.id) || String(p.backendId);
