@@ -1326,6 +1326,12 @@ a.product-card{display:block;text-decoration:none;color:inherit;cursor:pointer;}
   letter-spacing: 0.02em;
 }
 
+.footer-logo {
+  display: block;
+  height: 18px;
+  width: auto;
+}
+
 /* ===== Responsive ===== */
 
 @media (max-width: 960px) {
