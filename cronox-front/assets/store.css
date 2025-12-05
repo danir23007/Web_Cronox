@@ -1034,6 +1034,41 @@ a.product-card{display:block;text-decoration:none;color:inherit;cursor:pointer;}
   filter: saturate(0.7);
 }
 
+.popup-image-wrapper {
+  position: relative;
+  display: inline-block;
+  width: 100%;
+}
+
+.popup-image {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+.ascii-overlay {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: rgba(43, 43, 43, 0.8);
+  padding: 20px;
+  border-radius: 6px;
+  color: #ffffff;
+  max-width: 90%;
+  overflow-x: auto;
+  white-space: pre;
+}
+
+.ascii-overlay pre {
+  margin: 0;
+  color: #fff;
+  font-family: monospace;
+  font-size: 10px;
+  line-height: 1;
+  white-space: pre;
+}
+
 .newsletter-modal-content {
   padding: 32px 30px;
   display: flex;
