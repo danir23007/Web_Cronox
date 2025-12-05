@@ -1190,7 +1190,7 @@ a.product-card{display:block;text-decoration:none;color:inherit;cursor:pointer;}
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 60px;
+  width: 100%;
 }
 
 /* ===== Columna 1: Marca ===== */
@@ -1200,6 +1200,7 @@ a.product-card{display:block;text-decoration:none;color:inherit;cursor:pointer;}
   flex-direction: column;
   gap: 16px;
   min-width: 160px;
+  flex-shrink: 0;
 }
 
 .footer-brand-name {
@@ -1231,8 +1232,8 @@ a.product-card{display:block;text-decoration:none;color:inherit;cursor:pointer;}
 
 .footer-links-block {
   display: flex;
-  gap: 80px;
-  flex-shrink: 0;
+  gap: 120px;
+  margin: 0 auto;
 }
 
 .footer-column {
