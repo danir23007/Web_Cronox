@@ -1246,7 +1246,7 @@ a.product-card{display:block;text-decoration:none;color:inherit;cursor:pointer;}
 }
 
 .footer-title {
-  font-size: 11px;
+  font-size: 12px;
   margin: 0 0 4px 0;
 }
 
@@ -1270,12 +1270,12 @@ a.product-card{display:block;text-decoration:none;color:inherit;cursor:pointer;}
 }
 
 .footer-newsletter-title {
-  font-size: 11px;
+  font-size: 15px;
   margin: 0 0 8px 0;
 }
 
 .footer-newsletter-text {
-  font-size: 9px;
+  font-size: 11px;
   line-height: 1.6;
   margin: 0 0 16px 0;
   text-transform: none;
@@ -1319,7 +1319,7 @@ a.product-card{display:block;text-decoration:none;color:inherit;cursor:pointer;}
 
 .footer-newsletter-legal {
   margin: 0;
-  font-size: 8px;
+  font-size: 9px;
   line-height: 1.5;
   opacity: 0.7;
   text-transform: none;
