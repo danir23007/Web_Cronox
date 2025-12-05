@@ -1048,25 +1048,28 @@ a.product-card{display:block;text-decoration:none;color:inherit;cursor:pointer;}
 
 .ascii-overlay {
   position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  background: rgba(43, 43, 43, 0.8);
-  padding: 20px;
-  border-radius: 6px;
-  color: #ffffff;
-  max-width: 90%;
-  overflow-x: auto;
-  white-space: pre;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;              /* ocupa toda la columna izquierda */
+  display: flex;
+  align-items: center;     /* centra verticalmente */
+  justify-content: center; /* centra horizontalmente */
+  background: rgba(43, 43, 43, 0.85); /* gris medio encima de la imagen */
+  padding: 16px;
+  overflow: hidden;        /* evita scrollbars internas */
 }
 
 .ascii-overlay pre {
   margin: 0;
-  color: #fff;
+  color: #ffffff;          /* caracteres blancos */
   font-family: monospace;
-  font-size: 10px;
+  font-size: 8px;          /* si sigue muy grande, bájalo a 7 o 6 */
   line-height: 1;
   white-space: pre;
+  text-align: left;
+  max-width: 100%;
+  max-height: 100%;
 }
 
 .newsletter-modal-content {
@@ -1401,23 +1404,3 @@ a.product-card{display:block;text-decoration:none;color:inherit;cursor:pointer;}
   display: block;
 }
 
-/* Overlay centrado con ASCII */
-.ascii-overlay {
-  position: absolute;
-  inset: 0; /* top:0; right:0; bottom:0; left:0 */
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: rgba(43, 43, 43, 0.85); /* gris medio semiopaco */
-  padding: 16px;
-}
-
-.ascii-overlay pre {
-  margin: 0;
-  color: #ffffff;          /* caracteres blancos */
-  font-family: monospace;
-  font-size: 8px;          /* puedes bajar o subir este valor si se ve muy grande/pequeño */
-  line-height: 1;
-  white-space: pre;
-  text-align: left;
-}
