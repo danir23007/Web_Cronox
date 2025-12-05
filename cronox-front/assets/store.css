@@ -1169,10 +1169,12 @@ a.product-card{display:block;text-decoration:none;color:inherit;cursor:pointer;}
 .site-footer {
   background-color: #000;
   color: #ffffff;
-  padding: 60px 6vw 40px;
+  padding: 40px 60px 30px;
   font-size: 11px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
+  border-top: 1px solid #111;
+  margin-top: 40px;
 }
 
 .site-footer a {
@@ -1185,8 +1187,6 @@ a.product-card{display:block;text-decoration:none;color:inherit;cursor:pointer;}
 }
 
 .footer-inner {
-  max-width: 1200px;
-  margin: 0 auto;
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
@@ -1231,7 +1231,7 @@ a.product-card{display:block;text-decoration:none;color:inherit;cursor:pointer;}
 
 .footer-links-block {
   display: flex;
-  gap: 60px;
+  gap: 80px;
   flex-shrink: 0;
 }
 
