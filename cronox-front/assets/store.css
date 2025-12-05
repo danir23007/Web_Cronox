@@ -1051,20 +1051,20 @@ a.product-card{display:block;text-decoration:none;color:inherit;cursor:pointer;}
   top: 0;
   left: 0;
   right: 0;
-  bottom: 0;              /* ocupa toda la columna izquierda */
+  bottom: 0;
   display: flex;
-  align-items: center;     /* centra verticalmente */
-  justify-content: center; /* centra horizontalmente */
-  background: rgba(43, 43, 43, 0.85); /* gris medio encima de la imagen */
-  padding: 16px;
-  overflow: hidden;        /* evita scrollbars internas */
+  align-items: center;
+  justify-content: center;
+  background: rgba(43, 43, 43, 0.85);
+  padding: 8px;
+  overflow: hidden;
 }
 
 .ascii-overlay pre {
   margin: 0;
-  color: #ffffff;          /* caracteres blancos */
+  color: #ffffff;
   font-family: monospace;
-  font-size: 8px;          /* si sigue muy grande, bájalo a 7 o 6 */
+  font-size: 6px;
   line-height: 1;
   white-space: pre;
   text-align: left;
