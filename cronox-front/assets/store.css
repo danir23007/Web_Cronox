@@ -1055,7 +1055,7 @@ a.product-card{display:block;text-decoration:none;color:inherit;cursor:pointer;}
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(43, 43, 43, 0.85);
+  background: rgba(43, 43, 43, 0.65);
   padding: 8px;
   overflow: hidden;
 }
