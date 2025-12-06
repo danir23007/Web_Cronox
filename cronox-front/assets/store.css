@@ -1064,7 +1064,7 @@ a.product-card{display:block;text-decoration:none;color:inherit;cursor:pointer;}
   margin: 0;
   color: #ffffff;
   font-family: monospace;
-  font-size: 14px;      /* Aumenta el tamaño (antes 6px) */
+  font-size: 12px;      /* Aumenta el tamaño (antes 6px) */
   line-height: 1.05;    /* Ajuste para mantener proporciones */
   white-space: pre;
   text-align: left;
