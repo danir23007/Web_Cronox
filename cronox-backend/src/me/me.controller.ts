@@ -6,7 +6,7 @@ import { UpsertAddressDto } from './dto/upsert-address.dto';
 import { MeService } from './me.service';
 
 // Opción A: controlador dedicado para los endpoints del usuario autenticado (/api/me)
-@Controller('api/me')
+@Controller('me')
 @UseGuards(JwtAuthGuard)
 export class MeController {
   constructor(private readonly meService: MeService) {}
