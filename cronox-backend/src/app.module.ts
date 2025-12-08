@@ -43,7 +43,12 @@ import { NewsletterModule } from './newsletter/newsletter.module';
         rootPath: join(__dirname, '..', 'cronox-front'),
         serveRoot: '/',
         renderPath: '/',
-        exclude: ['/api(.*)', '/docs(.*)', '/webhooks(.*)'],
+        // usamos expresiones regulares reales en lugar de strings tipo '/api(.*)'
+        exclude: [
+          /^\/api(\/.*)?/,
+          /^\/docs(\/.*)?/,
+          /^\/webhooks(\/.*)?/,
+        ],
         serveStaticOptions: { index: 'index.html' },
       },
       {
