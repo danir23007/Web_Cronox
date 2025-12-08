@@ -40,25 +40,22 @@ import { NewsletterModule } from './newsletter/newsletter.module';
     ]),
     ServeStaticModule.forRoot(
       {
-        rootPath: join(__dirname, '..', 'cronox-front'),
+        // cronox-backend/../.. = carpeta padre donde está cronox-front
+        rootPath: join(__dirname, '..', '..', 'cronox-front'),
         serveRoot: '/',
         renderPath: '/',
-        // usamos expresiones regulares reales en lugar de strings tipo '/api(.*)'
-        exclude: [
-          /^\/api(\/.*)?/,
-          /^\/docs(\/.*)?/,
-          /^\/webhooks(\/.*)?/,
-        ],
+        // solo cadenas simples; /api y compañía se reservan para la API
+        exclude: ['/api', '/docs', '/webhooks'],
         serveStaticOptions: { index: 'index.html' },
       },
       {
-        rootPath: join(__dirname, '..', 'cronox-front'),
+        rootPath: join(__dirname, '..', '..', 'cronox-front'),
         serveRoot: '/reset-password',
         renderPath: '/reset-password',
         serveStaticOptions: { index: 'reset-password.html' },
       },
       {
-        rootPath: join(__dirname, '..', 'cronox-front'),
+        rootPath: join(__dirname, '..', '..', 'cronox-front'),
         serveRoot: '/forgot-password',
         renderPath: '/forgot-password',
         serveStaticOptions: { index: 'forgot-password.html' },
