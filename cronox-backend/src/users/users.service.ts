@@ -2,7 +2,8 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma, Role, User } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 
-export type AuthUser = User;
+export type AuthUser = Omit<User, 'password'>;
+export type AuthUserWithPassword = User;
 
 export type SafeUser = {
   id: number;
@@ -91,7 +92,7 @@ export class UsersService {
     return this.toSafeUser({ ...updated, memberCode });
   }
 
-  toSafeUser(user: AuthUser): SafeUser {
+  toSafeUser(user: AuthUser | AuthUserWithPassword): SafeUser {
     return {
       id: user.id,
       email: user.email,
