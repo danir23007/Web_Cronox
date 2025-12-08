@@ -24,14 +24,9 @@ interface JwtPayload {
   role: Role;
 }
 
-interface RefreshPayload {
-  sub: number;
-  type: 'refresh';
-}
-
 type Tokens = {
   accessToken: string;
-  refreshToken: string;
+  refreshToken?: string;
 };
 
 @Injectable()
@@ -39,16 +34,9 @@ export class AuthService {
   private readonly isProd = process.env.NODE_ENV === 'production';
   private readonly bcryptSaltRounds = Number(process.env.BCRYPT_SALT_ROUNDS ?? '10');
   private readonly logger = new Logger(AuthService.name);
-  private readonly accessCookieOptions: CookieOptions = {
+  private readonly jwtCookieOptions: CookieOptions = {
     httpOnly: true,
-    sameSite: 'lax',
-    secure: this.isProd,
-    path: '/',
-    maxAge: 15 * 60 * 1000,
-  };
-  private readonly refreshCookieOptions: CookieOptions = {
-    httpOnly: true,
-    sameSite: 'lax',
+    sameSite: 'strict',
     secure: this.isProd,
     path: '/',
     maxAge: 7 * 24 * 60 * 60 * 1000,
@@ -71,11 +59,11 @@ export class AuthService {
       throw new ConflictException('El email ya está registrado');
     }
 
-    const passwordHash = await this.hashPassword(dto.password);
+    const hashedPassword = await this.hashPassword(dto.password);
     const fullName = [dto.firstName, dto.lastName].filter(Boolean).join(' ').trim();
     const user = await this.usersService.createUser({
       email,
-      passwordHash,
+      password: hashedPassword,
       name: fullName || undefined,
       firstName: dto.firstName,
       lastName: dto.lastName,
@@ -89,26 +77,27 @@ export class AuthService {
 
     const tokens = await this.generateTokens(user);
 
-    return { user: this.formatAuthUser(user), tokens };
+    return {
+      user: this.formatAuthUser(user),
+      token: tokens.accessToken,
+      tokens,
+    };
   }
 
   async login(dto: LoginDto) {
-    const email = dto.email.toLowerCase();
-    const user = await this.usersService.findByEmail(email);
+    const user = await this.validateUser(dto.email, dto.password);
 
     if (!user) {
       throw new UnauthorizedException('Credenciales inválidas');
     }
 
-    const isPasswordValid = await bcrypt.compare(dto.password, user.passwordHash);
-
-    if (!isPasswordValid) {
-      throw new UnauthorizedException('Credenciales inválidas');
-    }
-
     const tokens = await this.generateTokens(user);
 
-    return { user: this.formatAuthUser(user), tokens };
+    return {
+      user: this.formatAuthUser(user),
+      token: tokens.accessToken,
+      tokens,
+    };
   }
 
   async refresh(userId: number) {
@@ -120,7 +109,11 @@ export class AuthService {
 
     const tokens = await this.generateTokens(user);
 
-    return { user: this.formatAuthUser(user), tokens };
+    return {
+      user: this.formatAuthUser(user),
+      token: tokens.accessToken,
+      tokens,
+    };
   }
 
   async getProfile(userId: number) {
@@ -182,12 +175,12 @@ export class AuthService {
       throw new BadRequestException('Token ya usado');
     }
 
-    const passwordHash = await this.hashPassword(newPassword);
+    const hashedPassword = await this.hashPassword(newPassword);
 
     await this.prisma.$transaction([
       this.prisma.user.update({
         where: { id: passwordResetToken.userId },
-        data: { passwordHash },
+        data: { password: hashedPassword },
       }),
       this.prisma.passwordResetToken.update({
         where: { id: passwordResetToken.id },
@@ -199,33 +192,48 @@ export class AuthService {
   }
 
   setAuthCookies(res: Response, tokens: Tokens) {
-    res.cookie('access_token', tokens.accessToken, this.accessCookieOptions);
-    res.cookie('refresh_token', tokens.refreshToken, this.refreshCookieOptions);
+    res.cookie('jwt', tokens.accessToken, this.jwtCookieOptions);
+    if (tokens.refreshToken) {
+      res.cookie('refresh_token', tokens.refreshToken, this.jwtCookieOptions);
+    }
   }
 
   clearAuthCookies(res: Response) {
-    res.clearCookie('access_token', { ...this.accessCookieOptions, maxAge: undefined });
-    res.clearCookie('refresh_token', { ...this.refreshCookieOptions, maxAge: undefined });
+    res.clearCookie('jwt', { ...this.jwtCookieOptions, maxAge: undefined });
+    res.clearCookie('refresh_token', { ...this.jwtCookieOptions, maxAge: undefined });
+  }
+
+  async validateUser(email: string, password: string) {
+    const normalizedEmail = email.toLowerCase();
+    const user = await this.prisma.user.findUnique({ where: { email: normalizedEmail } });
+
+    if (!user) return null;
+
+    const isValid = await bcrypt.compare(password, user.password);
+    if (!isValid) return null;
+
+    const { password: _password, ...rest } = user;
+    return rest;
   }
 
   private async generateTokens(user: AuthUser): Promise<Tokens> {
+    const accessToken = await this.generateAccessToken(user);
+    const refreshToken = await this.refreshJwt.signAsync({
+      sub: user.id,
+      type: 'refresh',
+    });
+
+    return { accessToken, refreshToken };
+  }
+
+  private async generateAccessToken(user: AuthUser) {
     const payload: JwtPayload = {
       sub: user.id,
       email: user.email,
       role: user.role,
     };
 
-    const refreshPayload: RefreshPayload = {
-      sub: user.id,
-      type: 'refresh',
-    };
-
-    const [accessToken, refreshToken] = await Promise.all([
-      this.jwtService.signAsync(payload),
-      this.refreshJwt.signAsync(refreshPayload),
-    ]);
-
-    return { accessToken, refreshToken };
+    return this.jwtService.signAsync(payload);
   }
 
   private hashPassword(data: string) {
