@@ -424,8 +424,17 @@
   };
 
   api.getMe = async () => {
-    const data = await request('/api/me');
-    return data || null;
+    try {
+      const data = await request('/api/auth/me');
+      return data || null;
+    } catch (error) {
+      if (error?.status === 401) {
+        return null;
+      }
+      const message = error?.message || 'Error obteniendo el usuario autenticado';
+      console.error(message, error);
+      throw new Error(message);
+    }
   };
 
   api.updateMe = async (payload) => {
