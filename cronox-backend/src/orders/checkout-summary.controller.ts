@@ -19,7 +19,7 @@ import { CartService } from '../cart/cart.service';
 import { OrdersService } from './orders.service';
 
 @ApiTags('Checkout')
-@Controller('api/checkout')
+@Controller('checkout')
 @UseGuards(JwtAuthGuard)
 @ApiBearerAuth()
 export class CheckoutSummaryController {
