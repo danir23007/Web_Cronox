@@ -11,6 +11,8 @@ async function bootstrap() {
   // Desactivamos el parser global para poder manejar raw en 1 ruta
   const app = await NestFactory.create(AppModule, { bodyParser: false });
 
+  app.setGlobalPrefix('api');
+
   /**
    * STRIPE WEBHOOK
    * Necesita el body en RAW, sin parsear a JSON, para verificar la firma.
