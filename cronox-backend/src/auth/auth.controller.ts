@@ -36,7 +36,7 @@ export class AuthController {
     const cookies = (req as Request & { cookies?: Record<string, string | undefined> }).cookies;
     await this.authService.mergeCartOnLogin(result.user.id, cookies?.cartId);
     this.authService.setAuthCookies(res, result.tokens);
-    return result.user;
+    return { user: result.user };
   }
 
   @Post('login')
@@ -50,7 +50,7 @@ export class AuthController {
     const cookies = (req as Request & { cookies?: Record<string, string | undefined> }).cookies;
     await this.authService.mergeCartOnLogin(result.user.id, cookies?.cartId);
     this.authService.setAuthCookies(res, result.tokens);
-    return result.user;
+    return { user: result.user };
   }
 
   @Post('logout')

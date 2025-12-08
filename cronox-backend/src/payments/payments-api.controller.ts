@@ -7,7 +7,7 @@ import { CreatePaymentIntentDto } from './dto/create-payment-intent.dto';
 import { PaymentIntentFactory } from './payment-intent.factory';
 
 @ApiTags('Payments / Stripe')
-@Controller('api/payments')
+@Controller('payments')
 export class PaymentsApiController {
   constructor(
     private readonly paymentIntentFactory: PaymentIntentFactory,

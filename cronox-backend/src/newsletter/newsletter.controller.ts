@@ -3,7 +3,7 @@ import type { Response } from 'express';
 import { NewsletterSubscribeDto } from './dto/newsletter-subscribe.dto';
 import { NewsletterService } from './newsletter.service';
 
-@Controller('api/newsletter')
+@Controller('newsletter')
 export class NewsletterController {
   constructor(private readonly newsletterService: NewsletterService) {}
 

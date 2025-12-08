@@ -4,7 +4,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { AddFavoriteDto } from './dto/add-favorite.dto';
 import { FavoritesService } from './favorites.service';
 
-@Controller('api/favorites')
+@Controller('favorites')
 @UseGuards(JwtAuthGuard)
 export class FavoritesController {
   constructor(private readonly favoritesService: FavoritesService) {}
