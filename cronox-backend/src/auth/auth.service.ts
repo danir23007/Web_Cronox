@@ -7,7 +7,7 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
-import { Role } from '@prisma/client';
+import { Role, User } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 import { randomBytes } from 'crypto';
 import type { CookieOptions, Response } from 'express';
@@ -68,6 +68,7 @@ export class AuthService {
       firstName: dto.firstName,
       lastName: dto.lastName,
     });
+    const authUser = this.omitPassword(user);
 
     const subscriptionResult = await this.newsletterService.subscribeIfNeeded(user.email);
 
@@ -75,10 +76,10 @@ export class AuthService {
       this.logger.warn(`No se pudo suscribir automáticamente al newsletter: ${user.email}`);
     }
 
-    const tokens = await this.generateTokens(user);
+    const tokens = await this.generateTokens(authUser);
 
     return {
-      user: this.formatAuthUser(user),
+      user: this.formatAuthUser(authUser),
       token: tokens.accessToken,
       tokens,
     };
@@ -107,10 +108,11 @@ export class AuthService {
       throw new UnauthorizedException('Usuario no autenticado');
     }
 
-    const tokens = await this.generateTokens(user);
+    const authUser = this.omitPassword(user);
+    const tokens = await this.generateTokens(authUser);
 
     return {
-      user: this.formatAuthUser(user),
+      user: this.formatAuthUser(authUser),
       token: tokens.accessToken,
       tokens,
     };
@@ -123,7 +125,9 @@ export class AuthService {
       throw new UnauthorizedException('Usuario no autenticado');
     }
 
-    return this.formatAuthUser(user);
+    const authUser = this.omitPassword(user);
+
+    return this.formatAuthUser(authUser);
   }
 
   async mergeCartOnLogin(userId: number, cartId?: string) {
@@ -203,7 +207,7 @@ export class AuthService {
     res.clearCookie('refresh_token', { ...this.jwtCookieOptions, maxAge: undefined });
   }
 
-  async validateUser(email: string, password: string) {
+  async validateUser(email: string, password: string): Promise<AuthUser | null> {
     const normalizedEmail = email.toLowerCase();
     const user = await this.prisma.user.findUnique({ where: { email: normalizedEmail } });
 
@@ -212,6 +216,10 @@ export class AuthService {
     const isValid = await bcrypt.compare(password, user.password);
     if (!isValid) return null;
 
+    return this.omitPassword(user);
+  }
+
+  private omitPassword(user: User): AuthUser {
     const { password: _password, ...rest } = user;
     return rest;
   }
