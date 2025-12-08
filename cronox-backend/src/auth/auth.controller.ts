@@ -21,7 +21,7 @@ import { RegisterDto } from './dto/register.dto';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
 
-@Controller('api/auth')
+@Controller('auth')
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
@@ -35,10 +35,11 @@ export class AuthController {
     const cookies = (req as Request & { cookies?: Record<string, string | undefined> }).cookies;
     await this.authService.mergeCartOnLogin(result.user.id, cookies?.cartId);
     this.authService.setAuthCookies(res, result.tokens);
-    return { user: result.user };
+    return result.user;
   }
 
   @Post('login')
+  @HttpCode(HttpStatus.OK)
   async login(
     @Req() req: Request,
     @Res({ passthrough: true }) res: Response,
@@ -48,7 +49,7 @@ export class AuthController {
     const cookies = (req as Request & { cookies?: Record<string, string | undefined> }).cookies;
     await this.authService.mergeCartOnLogin(result.user.id, cookies?.cartId);
     this.authService.setAuthCookies(res, result.tokens);
-    return { user: result.user };
+    return result.user;
   }
 
   @Post('logout')

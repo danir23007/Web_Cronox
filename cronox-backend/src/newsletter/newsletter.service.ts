@@ -72,12 +72,12 @@ export class NewsletterService {
         return { status: 'ok', httpStatus: 200, code };
       }
 
-      const passwordHash = await this.hashRandomPassword();
+      const password = await this.hashRandomPassword();
       const memberCode = await this.generateMemberCode(tx);
       const newUser = await tx.user.create({
         data: {
           email: normalizedEmail,
-          passwordHash,
+          password,
           firstName: null,
           lastName: null,
           newsletterSubscribed: true,

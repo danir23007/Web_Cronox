@@ -26,7 +26,7 @@ export class UsersService {
 
   async createUser(data: {
     email: string;
-    passwordHash: string;
+    password: string;
     name?: string;
     firstName?: string;
     lastName?: string;
