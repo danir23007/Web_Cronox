@@ -1,3 +1,4 @@
+// src/auth/auth.service.ts
 import {
   BadRequestException,
   ConflictException,
@@ -61,6 +62,7 @@ export class AuthService {
 
     const hashedPassword = await this.hashPassword(dto.password);
     const fullName = [dto.firstName, dto.lastName].filter(Boolean).join(' ').trim();
+
     const user = await this.usersService.createUser({
       email,
       password: hashedPassword,
@@ -68,10 +70,10 @@ export class AuthService {
       firstName: dto.firstName,
       lastName: dto.lastName,
     });
+
     const authUser = this.omitPassword(user);
 
     const subscriptionResult = await this.newsletterService.subscribeIfNeeded(user.email);
-
     if (!subscriptionResult) {
       this.logger.warn(`No se pudo suscribir automáticamente al newsletter: ${user.email}`);
     }
@@ -126,12 +128,27 @@ export class AuthService {
     }
 
     const authUser = this.omitPassword(user);
-
     return this.formatAuthUser(authUser);
   }
 
+  /**
+   * Fusiona el carrito anónimo con el del usuario.
+   * IMPORTANTE: si falla (por ejemplo, por INSUFFICIENT_STOCK),
+   * NO bloqueamos el login. Solo lo registramos en logs.
+   */
   async mergeCartOnLogin(userId: number, cartId?: string) {
-    await this.cartService.mergeOnLogin(userId, cartId);
+    if (!cartId) return;
+
+    try {
+      await this.cartService.mergeOnLogin(userId, cartId);
+    } catch (error: any) {
+      this.logger.warn(
+        `No se pudo fusionar el carrito anónimo "${cartId}" con el usuario ${userId}: ${
+          error?.message ?? error
+        }`,
+      );
+      // No re-lanzamos el error: el usuario debe seguir pudiendo iniciar sesión.
+    }
   }
 
   async requestPasswordReset(email: string) {
@@ -220,6 +237,7 @@ export class AuthService {
   }
 
   private omitPassword(user: User): AuthUser {
+    // User tiene la propiedad `password` (mapeada a la columna passwordHash)
     const { password: _password, ...rest } = user;
     return rest;
   }
