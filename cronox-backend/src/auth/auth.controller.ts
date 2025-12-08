@@ -26,6 +26,7 @@ export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
   @Post('register')
+  @HttpCode(HttpStatus.CREATED)
   async register(
     @Req() req: Request,
     @Res({ passthrough: true }) res: Response,
@@ -58,14 +59,15 @@ export class AuthController {
     this.authService.clearAuthCookies(res);
   }
 
-  @Get('me')
+  @Get('profile')
   @UseGuards(JwtAuthGuard)
-  async me(@CurrentUser('id') userId: number) {
+  async profile(@CurrentUser('id') userId: number) {
     return this.authService.getProfile(userId);
   }
 
   @Post('refresh')
   @UseGuards(RefreshJwtGuard)
+  @HttpCode(HttpStatus.OK)
   async refresh(@Req() req: Request, @Res({ passthrough: true }) res: Response) {
     const userId = req.user?.id;
 
