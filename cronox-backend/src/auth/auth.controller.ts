@@ -1,3 +1,4 @@
+// src/auth/auth.controller.ts
 import {
   BadRequestException,
   Body,
@@ -33,9 +34,12 @@ export class AuthController {
     @Body() dto: RegisterDto,
   ) {
     const result = await this.authService.register(dto);
+
     const cookies = (req as Request & { cookies?: Record<string, string | undefined> }).cookies;
     await this.authService.mergeCartOnLogin(result.user.id, cookies?.cartId);
+
     this.authService.setAuthCookies(res, result.tokens);
+
     return { user: result.user };
   }
 
@@ -47,9 +51,12 @@ export class AuthController {
     @Body() dto: LoginDto,
   ) {
     const result = await this.authService.login(dto);
+
     const cookies = (req as Request & { cookies?: Record<string, string | undefined> }).cookies;
     await this.authService.mergeCartOnLogin(result.user.id, cookies?.cartId);
+
     this.authService.setAuthCookies(res, result.tokens);
+
     return { user: result.user };
   }
 
@@ -59,6 +66,19 @@ export class AuthController {
     this.authService.clearAuthCookies(res);
   }
 
+  /**
+   * ENDPOINT USADO POR EL FRONT PARA SABER QUIÉN ESTÁ LOGUEADO
+   * /api/auth/me
+   */
+  @Get('me')
+  @UseGuards(JwtAuthGuard)
+  async me(@CurrentUser('id') userId: number) {
+    return this.authService.getProfile(userId);
+  }
+
+  /**
+   * Alias antiguo /api/auth/profile (por si algo del front aún lo usa)
+   */
   @Get('profile')
   @UseGuards(JwtAuthGuard)
   async profile(@CurrentUser('id') userId: number) {
@@ -69,7 +89,7 @@ export class AuthController {
   @UseGuards(RefreshJwtGuard)
   @HttpCode(HttpStatus.OK)
   async refresh(@Req() req: Request, @Res({ passthrough: true }) res: Response) {
-    const userId = req.user?.id;
+    const userId = (req as any).user?.id;
 
     if (!userId) {
       throw new UnauthorizedException('Usuario no autenticado');
@@ -77,6 +97,7 @@ export class AuthController {
 
     const result = await this.authService.refresh(userId);
     this.authService.setAuthCookies(res, result.tokens);
+
     return { user: result.user };
   }
 
