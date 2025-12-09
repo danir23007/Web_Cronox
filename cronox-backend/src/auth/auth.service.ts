@@ -33,12 +33,16 @@ type Tokens = {
 @Injectable()
 export class AuthService {
   private readonly isProd = process.env.NODE_ENV === 'production';
+  private readonly isLocalhost =
+    process.env.APP_ENV === 'local' || (!this.isProd && (process.env.HOST ?? '').includes('localhost'));
   private readonly bcryptSaltRounds = Number(process.env.BCRYPT_SALT_ROUNDS ?? '10');
   private readonly logger = new Logger(AuthService.name);
+  // En local (NODE_ENV !== 'production' o APP_ENV=local) las cookies no usan `secure`
+  // para que funcionen en http://localhost. En producción se espera HTTPS real.
   private readonly jwtCookieOptions: CookieOptions = {
     httpOnly: true,
-    sameSite: 'strict',
-    secure: this.isProd,
+    sameSite: 'lax',
+    secure: this.isProd && !this.isLocalhost,
     path: '/',
     maxAge: 7 * 24 * 60 * 60 * 1000,
   };
@@ -267,12 +271,6 @@ export class AuthService {
   }
 
   private formatAuthUser(user: AuthUser) {
-    const safe = this.usersService.toSafeUser(user);
-    return {
-      id: safe.id,
-      email: safe.email,
-      firstName: safe.firstName ?? null,
-      lastName: safe.lastName ?? null,
-    };
+    return this.usersService.toSafeUser(user);
   }
 }

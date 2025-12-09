@@ -425,7 +425,7 @@
 
   api.getMe = async () => {
     try {
-      const data = await request('/api/auth/me');
+      const data = await request('/api/me');
       return data || null;
     } catch (error) {
       if (error?.status === 401) {
