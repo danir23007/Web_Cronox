@@ -1656,7 +1656,7 @@ window.CRONOX_USER = window.CRONOX_USER || null;
   window.CRONOX_logout = handleLogout;
 
   // ===== Newsletter Popup =====
-  const NEWSLETTER_STORAGE_KEY = 'cronox_newsletter_dismissed';
+  const NEWSLETTER_STORAGE_KEY = 'cronoxNewsletterShown';
   const newsletterState = {
     overlay: null,
     modal: null,
@@ -1667,10 +1667,9 @@ window.CRONOX_USER = window.CRONOX_USER || null;
     feedback: null,
   };
 
-  // AHORA usa sessionStorage (opción A)
   const persistNewsletterDismiss = () => {
     try {
-      sessionStorage.setItem(NEWSLETTER_STORAGE_KEY, '1');
+      sessionStorage.setItem(NEWSLETTER_STORAGE_KEY, 'true');
     } catch (error) {
       console.warn('[CRONOX] No se pudo persistir la preferencia de newsletter', error);
     }
@@ -1720,7 +1719,7 @@ window.CRONOX_USER = window.CRONOX_USER || null;
     if (window.CRONOX_USER) return false;
     try {
       const dismissed = sessionStorage.getItem(NEWSLETTER_STORAGE_KEY);
-      if (dismissed === '1') return false;
+      if (dismissed === 'true') return false;
     } catch (error) {
       console.warn('[CRONOX] No se pudo leer el estado de newsletter', error);
     }
@@ -1831,7 +1830,19 @@ window.CRONOX_USER = window.CRONOX_USER || null;
 
     bindNewsletterEvents();
 
+    try {
+      if (sessionStorage.getItem(NEWSLETTER_STORAGE_KEY) === 'true') return;
+    } catch (error) {
+      console.warn('[CRONOX] No se pudo leer el estado de newsletter', error);
+    }
+
     setTimeout(() => {
+      try {
+        if (sessionStorage.getItem(NEWSLETTER_STORAGE_KEY) === 'true') return;
+      } catch (error) {
+        console.warn('[CRONOX] No se pudo leer el estado de newsletter', error);
+      }
+
       if (shouldShowNewsletter()) {
         openNewsletterModal();
       }

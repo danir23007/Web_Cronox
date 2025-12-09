@@ -414,7 +414,8 @@
       if (target === 'accreditation') {
         fillAccreditation(window.CRONOX_USER);
         if (accreditationQr && !accreditationQrLoaded) {
-          accreditationQr.src = '/membership/me/qr';
+          const base = typeof window.CRONOX_API_BASE === 'string' ? window.CRONOX_API_BASE : '';
+          accreditationQr.src = `${base}/api/membership/me/qr`;
           accreditationQrLoaded = true;
         }
       }

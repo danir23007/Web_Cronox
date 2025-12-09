@@ -1028,7 +1028,7 @@ a.product-card{display:block;text-decoration:none;color:inherit;cursor:pointer;}
 .newsletter-modal-image {
   background: linear-gradient(135deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.02)),
     radial-gradient(circle at 20% 20%, rgba(255, 255, 255, 0.04), transparent 40%),
-    url('assets/newsletter-placeholder.jpg');
+    url('https://frqlgocxnyppzdgxxjuq.supabase.co/storage/v1/object/public/newsletter/chains-newsletter.jpg');
   background-size: cover;
   background-position: center;
   filter: saturate(0.7);
