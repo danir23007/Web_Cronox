@@ -9,7 +9,7 @@ const extractAccessToken = (req: Request): string | null => {
     return null;
   }
 
-  const tokenFromCookie = req.cookies?.access_token;
+  const tokenFromCookie = req.cookies?.jwt;
   if (tokenFromCookie) {
     return tokenFromCookie;
   }

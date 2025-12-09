@@ -425,10 +425,7 @@
 
   api.getMe = async () => {
     try {
-      const data = await request('/api/me', {
-        method: 'GET',
-      });
-
+      const data = await request('/api/me');
       // El backend devuelve directamente el usuario "seguro"
       // (id, email, firstName, lastName, etc.)
       return data || null;

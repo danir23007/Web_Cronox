@@ -35,6 +35,11 @@ export class AuthService {
   // IMPORTANTE: en local vamos a ignorar NODE_ENV y desactivar Secure
   private readonly isProd = process.env.NODE_ENV === 'production';
 
+  // Marca explícitamente cuando estamos en entorno local
+  private readonly isLocalhost =
+    process.env.APP_ENV === 'local' ||
+    (!this.isProd && (process.env.HOST ?? '').includes('localhost'));
+
   // si quieres, puedes bajar esto a 8 en dev para que vaya más rápido
   private readonly bcryptSaltRounds = Number(
     process.env.BCRYPT_SALT_ROUNDS ?? '10',
@@ -42,17 +47,18 @@ export class AuthService {
 
   private readonly logger = new Logger(AuthService.name);
 
-  // ⬇⬇⬇ AQUI ESTABA EL PROBLEMA ⬇⬇⬇
+  // Config común de las cookies JWT
+  // En local es MUY importante no usar `secure: true` con http://localhost
   private readonly jwtCookieOptions: CookieOptions = {
     httpOnly: true,
-    // En local es MUY importante no usar 'strict' + navegaciones entre páginas
+    // navegaciones normales funcionan bien con 'lax'
     sameSite: 'lax',
     /**
-     * Secure = false en localhost (http://localhost:3000)
-     * porque si no, el navegador NO envía la cookie.
-     * En producción, cuando tengas HTTPS real, podrás ponerlo en true.
+     * Secure:
+     *  - false en localhost / entornos no productivos
+     *  - true solo cuando NODE_ENV === 'production' y no es localhost
      */
-    secure: false,
+    secure: this.isProd && !this.isLocalhost,
     path: '/',
     maxAge: 7 * 24 * 60 * 60 * 1000,
   };
@@ -272,12 +278,6 @@ export class AuthService {
   }
 
   private formatAuthUser(user: AuthUser) {
-    const safe = this.usersService.toSafeUser(user);
-    return {
-      id: safe.id,
-      email: safe.email,
-      firstName: safe.firstName ?? null,
-      lastName: safe.lastName ?? null,
-    };
+    return this.usersService.toSafeUser(user);
   }
 }
