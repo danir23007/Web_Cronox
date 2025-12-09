@@ -67,8 +67,8 @@ export class AuthController {
   }
 
   /**
-   * ENDPOINT USADO POR EL FRONT PARA SABER QUIÉN ESTÁ LOGUEADO
-   * /api/auth/me
+   * Nuevo alias: /api/auth/me
+   * Lo usa el front para saber si hay sesión activa.
    */
   @Get('me')
   @UseGuards(JwtAuthGuard)
@@ -77,7 +77,8 @@ export class AuthController {
   }
 
   /**
-   * Alias antiguo /api/auth/profile (por si algo del front aún lo usa)
+   * Ruta antigua /api/auth/profile (la dejo por compatibilidad,
+   * pero internamente hace lo mismo que /auth/me)
    */
   @Get('profile')
   @UseGuards(JwtAuthGuard)

@@ -425,14 +425,23 @@
 
   api.getMe = async () => {
     try {
-      const data = await request('/api/auth/me');
+      const data = await request('/api/me', {
+        method: 'GET',
+      });
+
+      // El backend devuelve directamente el usuario "seguro"
+      // (id, email, firstName, lastName, etc.)
       return data || null;
     } catch (error) {
-      if (error?.status === 401) {
+      // Si no hay sesión, devolvemos null sin montar error gordo
+      if (error && (error.status === 401 || error.statusCode === 401 || error.status === 404)) {
         return null;
       }
-      const message = error?.message || 'Error obteniendo el usuario autenticado';
-      console.error(message, error);
+
+      const message =
+        (error && error.message) ||
+        'Error obteniendo el usuario autenticado';
+      console.error('[CRONOX_API.getMe]', message, error);
       throw new Error(message);
     }
   };
@@ -527,9 +536,10 @@
     await request(`/api/favorites/${normalizedId}`, { method: 'DELETE' });
   };
 
+  // ===== CATÁLOGO / PRODUCTOS =====
   api.getProducts = async (query = {}) => {
     try {
-      const data = await request('/products', { query });
+      const data = await request('/api/products', { query });
       if (!data || !Array.isArray(data.items)) {
         throw new Error('Formato inesperado de productos');
       }
@@ -542,22 +552,23 @@
 
   api.getProductBySlug = async (slug) => {
     if (!slug) return null;
-    const data = await request(`/products/${slug}`);
+    const data = await request(`/api/products/${slug}`);
     return mapProduct(data);
   };
 
   api.getCategories = async (query = {}) => {
-    const data = await request('/categories', { query });
+    const data = await request('/api/categories', { query });
     return Array.isArray(data?.items) ? data.items : [];
   };
 
+  // ===== CARRITO =====
   api.getCart = async () => {
-    const data = await request('/cart');
+    const data = await request('/api/cart');
     return mapCart(data);
   };
 
   api.addCartItem = async ({ variantId, qty }) => {
-    const data = await request('/cart/items', {
+    const data = await request('/api/cart/items', {
       method: 'POST',
       body: { variantId, qty },
     });
@@ -565,7 +576,7 @@
   };
 
   api.updateCartItem = async (itemId, qty) => {
-    const data = await request(`/cart/items/${itemId}`, {
+    const data = await request(`/api/cart/items/${itemId}`, {
       method: 'PATCH',
       body: { qty },
     });
@@ -573,15 +584,16 @@
   };
 
   api.removeCartItem = async (itemId) => {
-    const data = await request(`/cart/items/${itemId}`, { method: 'DELETE' });
+    const data = await request(`/api/cart/items/${itemId}`, { method: 'DELETE' });
     return mapCart(data);
   };
 
   api.clearCart = async () => {
-    const data = await request('/cart', { method: 'DELETE' });
+    const data = await request('/api/cart', { method: 'DELETE' });
     return mapCart(data);
   };
 
+  // ===== ENVÍOS / CHECKOUT =====
   api.getShippingMethods = async (params = {}) => {
     const query = {};
 
@@ -593,7 +605,7 @@
       query.itemsTotal = params.itemsTotalCents;
     }
 
-    const data = await request('/shipping-methods', { query });
+    const data = await request('/api/shipping-methods', { query });
     return Array.isArray(data)
       ? data.map((method) => ({
           ...method,
@@ -656,6 +668,7 @@
     };
   };
 
+  // ===== ADAPTADORES DE PRODUCTO (fallback) =====
   const ensureFallbackList = (list) => {
     if (Array.isArray(list) && list.length) {
       return list.map(cloneProduct);
@@ -726,4 +739,3 @@
   g.CRONOX_API = api;
   g.CRONOX_API_BASE = API_BASE;
 })(typeof window !== 'undefined' ? window : this);
-

@@ -32,16 +32,31 @@ type Tokens = {
 
 @Injectable()
 export class AuthService {
+  // IMPORTANTE: en local vamos a ignorar NODE_ENV y desactivar Secure
   private readonly isProd = process.env.NODE_ENV === 'production';
-  private readonly bcryptSaltRounds = Number(process.env.BCRYPT_SALT_ROUNDS ?? '10');
+
+  // si quieres, puedes bajar esto a 8 en dev para que vaya más rápido
+  private readonly bcryptSaltRounds = Number(
+    process.env.BCRYPT_SALT_ROUNDS ?? '10',
+  );
+
   private readonly logger = new Logger(AuthService.name);
+
+  // ⬇⬇⬇ AQUI ESTABA EL PROBLEMA ⬇⬇⬇
   private readonly jwtCookieOptions: CookieOptions = {
     httpOnly: true,
-    sameSite: 'strict',
-    secure: this.isProd,
+    // En local es MUY importante no usar 'strict' + navegaciones entre páginas
+    sameSite: 'lax',
+    /**
+     * Secure = false en localhost (http://localhost:3000)
+     * porque si no, el navegador NO envía la cookie.
+     * En producción, cuando tengas HTTPS real, podrás ponerlo en true.
+     */
+    secure: false,
     path: '/',
     maxAge: 7 * 24 * 60 * 60 * 1000,
   };
+  // ⬆⬆⬆ FIN CAMBIO COOKIES ⬆⬆⬆
 
   constructor(
     private readonly usersService: UsersService,
@@ -62,7 +77,6 @@ export class AuthService {
 
     const hashedPassword = await this.hashPassword(dto.password);
     const fullName = [dto.firstName, dto.lastName].filter(Boolean).join(' ').trim();
-
     const user = await this.usersService.createUser({
       email,
       password: hashedPassword,
@@ -70,12 +84,16 @@ export class AuthService {
       firstName: dto.firstName,
       lastName: dto.lastName,
     });
-
     const authUser = this.omitPassword(user);
 
-    const subscriptionResult = await this.newsletterService.subscribeIfNeeded(user.email);
+    const subscriptionResult = await this.newsletterService.subscribeIfNeeded(
+      user.email,
+    );
+
     if (!subscriptionResult) {
-      this.logger.warn(`No se pudo suscribir automáticamente al newsletter: ${user.email}`);
+      this.logger.warn(
+        `No se pudo suscribir automáticamente al newsletter: ${user.email}`,
+      );
     }
 
     const tokens = await this.generateTokens(authUser);
@@ -128,27 +146,12 @@ export class AuthService {
     }
 
     const authUser = this.omitPassword(user);
+
     return this.formatAuthUser(authUser);
   }
 
-  /**
-   * Fusiona el carrito anónimo con el del usuario.
-   * IMPORTANTE: si falla (por ejemplo, por INSUFFICIENT_STOCK),
-   * NO bloqueamos el login. Solo lo registramos en logs.
-   */
   async mergeCartOnLogin(userId: number, cartId?: string) {
-    if (!cartId) return;
-
-    try {
-      await this.cartService.mergeOnLogin(userId, cartId);
-    } catch (error: any) {
-      this.logger.warn(
-        `No se pudo fusionar el carrito anónimo "${cartId}" con el usuario ${userId}: ${
-          error?.message ?? error
-        }`,
-      );
-      // No re-lanzamos el error: el usuario debe seguir pudiendo iniciar sesión.
-    }
+    await this.cartService.mergeOnLogin(userId, cartId);
   }
 
   async requestPasswordReset(email: string) {
@@ -172,8 +175,6 @@ export class AuthService {
       },
     });
 
-    // TODO: Enviar email al usuario con el enlace de reseteo de contraseña
-    // Ejemplo: https://midominio.com/reset-password?token=${token}
     console.log('Password reset token generated for user:', user.email, token);
 
     return { ok: true };
@@ -221,12 +222,17 @@ export class AuthService {
 
   clearAuthCookies(res: Response) {
     res.clearCookie('jwt', { ...this.jwtCookieOptions, maxAge: undefined });
-    res.clearCookie('refresh_token', { ...this.jwtCookieOptions, maxAge: undefined });
+    res.clearCookie('refresh_token', {
+      ...this.jwtCookieOptions,
+      maxAge: undefined,
+    });
   }
 
   async validateUser(email: string, password: string): Promise<AuthUser | null> {
     const normalizedEmail = email.toLowerCase();
-    const user = await this.prisma.user.findUnique({ where: { email: normalizedEmail } });
+    const user = await this.prisma.user.findUnique({
+      where: { email: normalizedEmail },
+    });
 
     if (!user) return null;
 
@@ -237,7 +243,6 @@ export class AuthService {
   }
 
   private omitPassword(user: User): AuthUser {
-    // User tiene la propiedad `password` (mapeada a la columna passwordHash)
     const { password: _password, ...rest } = user;
     return rest;
   }
