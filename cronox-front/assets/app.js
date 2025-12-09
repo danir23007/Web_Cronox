@@ -396,7 +396,7 @@
       if (this.isLoading) return this.ids;
       this.isLoading = true;
       try {
-        const meRes = await fetch('/api/auth/me', { credentials: 'include' });
+        const meRes = await fetch('/api/me', { credentials: 'include' });
         if (meRes.status === 401) {
           this.setIdsFromServer([]);
           return this.ids;
@@ -453,7 +453,7 @@
       if (!this.initDone) this.init();
 
       try {
-        const sessionRes = await fetch('/api/auth/me', { credentials: 'include' });
+        const sessionRes = await fetch('/api/me', { credentials: 'include' });
         if (sessionRes.status === 401) {
           window.dispatchEvent(new CustomEvent('cronox:authRequired', { detail: { reason: 'favorites' } }));
           return;
