@@ -1251,15 +1251,16 @@ a.product-card{display:block;text-decoration:none;color:inherit;cursor:pointer;}
   gap: 8px;
 }
 
-.footer-social-pill {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  border-radius: 999px;
-  border: 1px solid #ffffff;
-  font-size: 10px;
+.social-icon {
+  width: 22px;
+  height: auto;
+  filter: brightness(0) invert(1);
+  transition: opacity 0.2s ease;
+}
+
+.footer-social a:hover .social-icon,
+.footer-socials a:hover .social-icon {
+  opacity: 0.75;
 }
 
 .footer-copy {
