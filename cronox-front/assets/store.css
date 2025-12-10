@@ -1370,6 +1370,7 @@ a.product-card{display:block;text-decoration:none;color:inherit;cursor:pointer;}
   display: block;
   height: 90px;
   width: auto;
+  margin-bottom: 8px;
 }
 
 /* ===== Responsive ===== */
