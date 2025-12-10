@@ -1249,6 +1249,7 @@ a.product-card{display:block;text-decoration:none;color:inherit;cursor:pointer;}
 .footer-social {
   display: flex;
   gap: 8px;
+  margin-left: 24px;
 }
 
 .social-icon {
