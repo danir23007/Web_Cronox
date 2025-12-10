@@ -1240,6 +1240,13 @@ a.product-card{display:block;text-decoration:none;color:inherit;cursor:pointer;}
   gap: 16px;
   min-width: 160px;
   flex-shrink: 0;
+  padding-bottom: 0 !important;
+}
+
+.footer-brand-block img {
+  margin-bottom: 0 !important;
+  padding-bottom: 0 !important;
+  display: block;
 }
 
 .footer-brand-name {
@@ -1370,7 +1377,6 @@ a.product-card{display:block;text-decoration:none;color:inherit;cursor:pointer;}
   display: block;
   height: 90px;
   width: auto;
-  margin-bottom: 8px;
 }
 
 /* ===== Responsive ===== */
