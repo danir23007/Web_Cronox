@@ -234,7 +234,7 @@ body.is-loaded #preloader{opacity:0;transform:scale(1.02);pointer-events:none}
 .store{padding:calc(40px + var(--topbar-h)) 16px 40px;background:#000;color:#fff;z-index:1;position:relative;}
 
 /* ===== GRID ===== */
-.products-grid{position:relative;display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:22px;max-width:1200px;margin:0;padding:0 12px;}
+.products-grid{position:relative;display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:22px;width:100%;max-width:none;margin:0;padding:0 12px;}
 .products-grid::before,.products-grid::after{content:"";position:absolute;top:0;bottom:0;width:0;background:var(--divider);pointer-events:none;}
 .products-grid::before{left:calc(100%/3);}
 .products-grid::after{left:calc(100%*2/3);}
