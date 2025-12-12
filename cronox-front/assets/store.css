@@ -1288,6 +1288,7 @@ a.product-card{display:block;text-decoration:none;color:inherit;cursor:pointer;}
   display: flex;
   gap: 220px;
   margin: 0 auto;
+  margin-left: 40px;
 }
 
 .footer-column {
