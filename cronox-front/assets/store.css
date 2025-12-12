@@ -1203,7 +1203,7 @@ a.product-card{display:block;text-decoration:none;color:inherit;cursor:pointer;}
 .site-footer {
   background-color: #000;
   color: #ffffff;
-  padding: 40px 60px 12px;
+  padding: 20px 90px 12px;
   font-size: 11px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -1282,7 +1282,7 @@ a.product-card{display:block;text-decoration:none;color:inherit;cursor:pointer;}
   left: 50%;
   transform: translateX(-50%);
   display: flex;
-  gap: 120px;
+  gap: 220px;
 }
 
 .footer-column {
