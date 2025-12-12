@@ -1285,7 +1285,7 @@ a.product-card{display:block;text-decoration:none;color:inherit;cursor:pointer;}
 .footer-links-block {
   display: flex;
   gap: 220px;
-  margin: 0 auto 0 40px; /* empuja las tres columnas un poco hacia la derecha */
+  margin: 0 auto 0 500px; /* empuja las tres columnas un poco hacia la derecha */
 }
 
 .footer-column {
