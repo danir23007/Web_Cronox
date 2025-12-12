@@ -1229,7 +1229,6 @@ a.product-card{display:block;text-decoration:none;color:inherit;cursor:pointer;}
 .footer-middle-sections {
   display: flex;
   align-items: center;
-  justify-content: center;   /* centra las columnas entre logo y newsletter */
   flex: 1;
   align-self: stretch;
 }
@@ -1286,7 +1285,7 @@ a.product-card{display:block;text-decoration:none;color:inherit;cursor:pointer;}
 .footer-links-block {
   display: flex;
   gap: 220px;
-  margin: 0;
+  margin: 0 auto 0 40px; /* empuja las tres columnas un poco hacia la derecha */
 }
 
 .footer-column {
@@ -1395,11 +1394,11 @@ a.product-card{display:block;text-decoration:none;color:inherit;cursor:pointer;}
     margin-top: 20px;
     flex-direction: column;
     align-items: flex-start;
-    justify-content: flex-start;
   }
 
   .footer-links-block {
     gap: 40px;
+    margin: 0;
   }
 
   .footer-newsletter-block {
