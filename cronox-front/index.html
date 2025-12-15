@@ -433,60 +433,79 @@
 
   <footer class="site-footer">
     <div class="footer-inner">
-      <!-- Columna 1: Marca + redes -->
-      <div class="footer-brand-block">
-        <div class="footer-brand-name">
-          <a href="index.html" aria-label="CRONOX — Tienda">
-            <img src="assets/logo_banner.png"
-                 alt="CRONOX" class="footer-logo" decoding="async">
-          </a>
-        </div>
+      <div class="footer-bottom">
+        <div class="footer-brand-block">
+          <div class="footer-brand-name">
+            <a href="index.html" aria-label="CRONOX — Tienda">
+              <img src="assets/logo_banner.png"
+                   alt="CRONOX" class="footer-logo" decoding="async">
+            </a>
+          </div>
 
-        <div class="footer-social">
-          <a href="https://instagram.com/tu_cuenta" target="_blank" rel="noopener">
-            <img src="assets/icons/instagram.svg" class="social-icon" alt="Instagram">
-          </a>
-          <a href="https://tiktok.com/@tu_cuenta" target="_blank" rel="noopener">
-            <img src="assets/icons/tiktok.svg" class="social-icon" alt="TikTok">
-          </a>
-          <a href="https://youtube.com/@tu_cuenta" target="_blank" rel="noopener">
-            <img src="assets/icons/youtube.svg" class="social-icon" alt="YouTube">
-          </a>
-        </div>
+          <div class="footer-social">
+            <a href="https://instagram.com/tu_cuenta" target="_blank" rel="noopener">
+              <img src="assets/icons/instagram.svg" class="social-icon" alt="Instagram">
+            </a>
+            <a href="https://tiktok.com/@tu_cuenta" target="_blank" rel="noopener">
+              <img src="assets/icons/tiktok.svg" class="social-icon" alt="TikTok">
+            </a>
+            <a href="https://youtube.com/@tu_cuenta" target="_blank" rel="noopener">
+              <img src="assets/icons/youtube.svg" class="social-icon" alt="YouTube">
+            </a>
+          </div>
 
-        <div class="footer-copy">
-          © CRONOX
+          <div class="footer-copy">
+            © CRONOX
+          </div>
         </div>
       </div>
 
       <div class="footer-middle-sections">
         <!-- Columnas 2, 3 y 4: enlaces -->
-        <div class="footer-links-block">
-          <div class="footer-column">
-            <h4 class="footer-title">SOPORTE</h4>
-            <ul class="footer-list">
-              <li><a href="#" class="footer-link">FAQS</a></li>
-              <li><a href="shipping-policy.html" class="footer-link">POLÍTICA DE ENVÍOS</a></li>
-              <li><a href="returns-exchanges.html" class="footer-link">DEVOLUCIONES Y CAMBIOS</a></li>
-            </ul>
+        <div class="footer-links-block footer-accordion" id="footerAccordion">
+          <div class="footer-acc-item">
+            <button class="footer-acc-trigger" type="button" aria-expanded="false" aria-controls="footer-panel-soporte">
+              <span class="footer-acc-title">SOPORTE</span>
+              <span class="footer-acc-icon" aria-hidden="true">+</span>
+            </button>
+            <div class="footer-acc-panel footer-column" id="footer-panel-soporte">
+              <h4 class="footer-title">SOPORTE</h4>
+              <ul class="footer-list">
+                <li><a href="#" class="footer-link">FAQS</a></li>
+                <li><a href="shipping-policy.html" class="footer-link">POLÍTICA DE ENVÍOS</a></li>
+                <li><a href="returns-exchanges.html" class="footer-link">DEVOLUCIONES Y CAMBIOS</a></li>
+              </ul>
+            </div>
           </div>
 
-          <div class="footer-column">
-            <h4 class="footer-title">COLABORA</h4>
-            <ul class="footer-list">
-              <li><a href="#" class="footer-link">DESARROLLA</a></li>
-              <li><a href="events.html" class="footer-link">EVENTOS</a></li>
-            </ul>
+          <div class="footer-acc-item">
+            <button class="footer-acc-trigger" type="button" aria-expanded="false" aria-controls="footer-panel-colabora">
+              <span class="footer-acc-title">COLABORA</span>
+              <span class="footer-acc-icon" aria-hidden="true">+</span>
+            </button>
+            <div class="footer-acc-panel footer-column" id="footer-panel-colabora">
+              <h4 class="footer-title">COLABORA</h4>
+              <ul class="footer-list">
+                <li><a href="#" class="footer-link">DESARROLLA</a></li>
+                <li><a href="events.html" class="footer-link">EVENTOS</a></li>
+              </ul>
+            </div>
           </div>
 
-          <div class="footer-column">
-            <h4 class="footer-title">LEGAL</h4>
-            <ul class="footer-list">
-              <li><a href="privacy-policy.html" class="footer-link">POLÍTICA DE PRIVACIDAD</a></li>
-              <li><a href="#" class="footer-link">POLÍTICA DE COOKIES</a></li>
-              <li><a href="terms-of-service.html" class="footer-link">TÉRMINOS DE SERVICIO</a></li>
-              <li><a href="aviso-legal.html" class="footer-link">AVISO LEGAL</a></li>
-            </ul>
+          <div class="footer-acc-item">
+            <button class="footer-acc-trigger" type="button" aria-expanded="false" aria-controls="footer-panel-legal">
+              <span class="footer-acc-title">LEGAL</span>
+              <span class="footer-acc-icon" aria-hidden="true">+</span>
+            </button>
+            <div class="footer-acc-panel footer-column" id="footer-panel-legal">
+              <h4 class="footer-title">LEGAL</h4>
+              <ul class="footer-list">
+                <li><a href="privacy-policy.html" class="footer-link">POLÍTICA DE PRIVACIDAD</a></li>
+                <li><a href="#" class="footer-link">POLÍTICA DE COOKIES</a></li>
+                <li><a href="terms-of-service.html" class="footer-link">TÉRMINOS DE SERVICIO</a></li>
+                <li><a href="aviso-legal.html" class="footer-link">AVISO LEGAL</a></li>
+              </ul>
+            </div>
           </div>
         </div>
 
