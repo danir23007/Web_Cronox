@@ -520,42 +520,53 @@
       .map(o => o.p);
   }
 
-  function cardHTML(p) {
-    const images = sanitizeImages(p?.images, p?.image);
-    const imageSrc = images[0] || PRODUCT_PLACEHOLDER;
-    const href = p.slug
-      ? `/producto.html?slug=${encodeURIComponent(p.slug)}`
-      : `/producto.html?id=${encodeURIComponent(p.id)}`;
-    const productId = String(p.backendId ?? p.id ?? "");
-    return `
-      <a class="product-card" href="${href}" aria-label="${p.name}">
-        <button class="favorite-toggle" type="button" aria-label="Marcar como favorito" data-product-id="${productId}" data-slug="${p.slug || ''}">
-          <span class="icon-star"></span>
-        </button>
-        <img class="product-img" src="${imageSrc}" alt="${p.name}" loading="lazy" decoding="async">
-        <div class="product-card__info">
-          <h3 class="product-name">${p.name}</h3>
-          <p class="product-price">${p.priceLabel || money(p.price)}</p>
-        </div>
-      </a>
-    `;
-  }
-
   function buildRelatedCard(product) {
     if (typeof window.CRONOX_createProductCard === "function") {
-      return window.CRONOX_createProductCard(product, {
-        variant: "mini",
-        hideFav: true,
-        hideQuickAdd: true,
-        hideArrows: true,
-        useFirstImageOnly: true,
-      });
+      return window.CRONOX_createProductCard(product);
     }
 
-    const container = document.createElement("div");
-    container.innerHTML = cardHTML(product);
-    const card = container.firstElementChild;
-    if (card) card.classList.add("product-card--mini");
+    const key = product?.slug || String(product?.id) || "";
+    const href = product?.slug
+      ? `/producto.html?slug=${encodeURIComponent(product.slug)}`
+      : key
+        ? `/producto.html?id=${encodeURIComponent(key)}`
+        : "#";
+
+    const card = document.createElement("a");
+    card.className = "product-card";
+    card.href = href;
+    if (key) card.setAttribute("data-id", key);
+    if (product?.slug) card.setAttribute("data-slug", product.slug);
+
+    const media = document.createElement("div");
+    media.className = "product-media";
+
+    const gallery = document.createElement("div");
+    gallery.className = "product-images";
+
+    const images = sanitizeImages(product?.images, product?.image);
+    const img = document.createElement("img");
+    img.className = "product-img active";
+    img.loading = "lazy";
+    img.decoding = "async";
+    img.alt = product?.name || "Producto";
+    img.src = images[0] || PRODUCT_PLACEHOLDER;
+    gallery.appendChild(img);
+
+    media.appendChild(gallery);
+
+    const name = document.createElement("h3");
+    name.className = "product-name";
+    name.textContent = product?.name || "";
+
+    const price = document.createElement("p");
+    price.className = "product-price";
+    price.textContent = product?.priceLabel || money(product?.price);
+
+    card.appendChild(media);
+    card.appendChild(name);
+    card.appendChild(price);
+
     return card;
   }
 
