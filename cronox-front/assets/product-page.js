@@ -29,11 +29,17 @@
     ? window.matchMedia("(pointer: fine)")
     : { matches: false };
 
+  const mobileViewportQuery = typeof window.matchMedia === "function"
+    ? window.matchMedia("(max-width: 480px)")
+    : null;
+
   const API = window.CRONOX_API || {};
 
   // ==========================
   // Utils generales
   // ==========================
+
+  const isMobileViewport = () => Boolean(mobileViewportQuery?.matches);
 
   const findVariantForSize = (product, size) => {
     if (!product || !size) return null;
@@ -266,7 +272,7 @@
 
   function updateZoomClass() {
     if (!pMedia) return;
-    const canZoom = Boolean(pointerFineQuery?.matches) && galleryImages.length > 0;
+    const canZoom = Boolean(pointerFineQuery?.matches) && galleryImages.length > 0 && !isMobileViewport();
     pMedia.classList.toggle("has-zoom", canZoom);
     if (!canZoom) resetZoom();
   }
@@ -365,6 +371,12 @@
     pointerFineQuery.addListener(updateZoomClass);
   }
 
+  if (typeof mobileViewportQuery?.addEventListener === "function") {
+    mobileViewportQuery.addEventListener("change", updateZoomClass);
+  } else if (typeof mobileViewportQuery?.addListener === "function") {
+    mobileViewportQuery.addListener(updateZoomClass);
+  }
+
   pMediaPrev?.addEventListener("click", (event) => {
     event.preventDefault();
     event.stopPropagation();
@@ -388,6 +400,11 @@
     };
 
     pMedia.addEventListener("click", (event) => {
+      if (isMobileViewport()) {
+        event.preventDefault();
+        event.stopPropagation();
+        return;
+      }
       if (!pointerFineQuery?.matches) return;
       if (event.target.closest(".pdp__media-arrow")) return;
       const img = getActiveImage();
