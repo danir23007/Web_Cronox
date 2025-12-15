@@ -1657,6 +1657,8 @@ window.CRONOX_USER = window.CRONOX_USER || null;
 
   // ===== Newsletter Popup =====
   const NEWSLETTER_STORAGE_KEY = 'cronoxNewsletterShown';
+  const BTN_LABEL_IDLE = 'UNIRSE';
+  const BTN_LABEL_LOADING = 'ENVIANDO…';
   const newsletterState = {
     overlay: null,
     modal: null,
@@ -1693,7 +1695,9 @@ window.CRONOX_USER = window.CRONOX_USER || null;
   const setNewsletterLoading = (isLoading) => {
     if (newsletterState.submitBtn) {
       newsletterState.submitBtn.disabled = Boolean(isLoading);
-      newsletterState.submitBtn.textContent = isLoading ? 'ENVIANDO…' : 'SIGN UP';
+      newsletterState.submitBtn.textContent = isLoading
+        ? BTN_LABEL_LOADING
+        : BTN_LABEL_IDLE;
     }
     if (newsletterState.emailInput) {
       newsletterState.emailInput.disabled = Boolean(isLoading);
@@ -1821,6 +1825,9 @@ window.CRONOX_USER = window.CRONOX_USER || null;
     newsletterState.form = document.getElementById('newsletterForm');
     newsletterState.emailInput = document.getElementById('newsletterEmail');
     newsletterState.submitBtn = newsletterState.overlay?.querySelector('.newsletter-modal-button') || null;
+    if (newsletterState.submitBtn) {
+      newsletterState.submitBtn.textContent = BTN_LABEL_IDLE;
+    }
     newsletterState.feedback = document.getElementById('newsletterFeedback');
   };
 
