@@ -258,6 +258,9 @@ body.is-loaded #preloader{opacity:0;transform:scale(1.02);pointer-events:none}
     padding:calc(22px + var(--topbar-h)*0.25) 14px 30px;
     margin-top:0;
   }
+  .page-favorites .store{
+    padding-top:calc(var(--topbar-h) + 18px);
+  }
   .store > .store-heading{ margin:0 0 20px; }
 }
 
