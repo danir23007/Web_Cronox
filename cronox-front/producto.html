@@ -295,73 +295,23 @@
       text-transform:uppercase;
     }
 
-    .products-grid{
-      display:flex;
-      flex-wrap:wrap;
-      gap:16px;
-      justify-content:flex-start;
-      align-items:stretch;
+    .pdp-related .products-grid{
+      position:relative;
+      display:grid;
+      grid-template-columns:repeat(5,minmax(0,1fr));
+      gap:22px;
+      width:100%;
+      max-width:none;
       margin:0;
       padding:0 12px;
     }
-    @media (min-width:768px){
-      .products-grid{ gap:20px; }
-    }
-
-    .product-card{
-      background:#000;
-      border:0;
-      border-radius:0;
-      overflow:hidden;
-      display:flex;
-      flex-direction:column;
-      text-decoration:none;
-      color:#fff;
-      transition:transform .2s ease, box-shadow .2s ease;
-      flex:0 0 220px;
-      max-width:220px;
-      position:relative;
-    }
-    .product-card:hover{ transform:translateY(-2px); }
-    @media (max-width:520px){
-      .product-card{
-        flex:1 1 100%;
-        max-width:100%;
+    @media (max-width:768px){
+      .pdp-related .products-grid{
+        grid-template-columns:repeat(2,minmax(0,1fr));
       }
     }
-
-    .product-img{
-      width:100%;
-      aspect-ratio:1/1;
-      object-fit:contain;
-      background:#fff;
-      border-radius:0;
-      position:static;
-      opacity:1;
-      height:auto;
-      display:block;
-    }
-    .product-card__info{
-      margin-top:auto;
-      background:#000;
-      padding:12px 14px 14px;
-      display:flex;
-      flex-direction:column;
-      align-items:center;
-      gap:6px;
-      text-align:center;
-    }
-    .product-name{
-      margin:0;
-      font-weight:700;
-      font-size:14px;
-      letter-spacing:.08em;
-      text-transform:uppercase;
-    }
-    .product-price{
-      margin:0;
-      color:#e6e6e6;
-      font-size:13px;
+    @media (max-width:480px){
+      .pdp-related .products-grid{ gap:12px; }
     }
 
     /* Toast */
