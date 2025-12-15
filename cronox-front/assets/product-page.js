@@ -34,6 +34,7 @@
     : null;
 
   const API = window.CRONOX_API || {};
+  const PRODUCT_PLACEHOLDER = window.CRONOX_PRODUCT_PLACEHOLDER || "assets/logo_browser.png";
 
   // ==========================
   // Utils generales
@@ -521,7 +522,7 @@
 
   function cardHTML(p) {
     const images = sanitizeImages(p?.images, p?.image);
-    const imageSrc = images[0] || "";
+    const imageSrc = images[0] || PRODUCT_PLACEHOLDER;
     const href = p.slug
       ? `/producto.html?slug=${encodeURIComponent(p.slug)}`
       : `/producto.html?id=${encodeURIComponent(p.id)}`;
@@ -540,10 +541,32 @@
     `;
   }
 
+  function buildRelatedCard(product) {
+    if (typeof window.CRONOX_createProductCard === "function") {
+      return window.CRONOX_createProductCard(product, {
+        variant: "mini",
+        hideFav: true,
+        hideQuickAdd: true,
+        hideArrows: true,
+        useFirstImageOnly: true,
+      });
+    }
+
+    const container = document.createElement("div");
+    container.innerHTML = cardHTML(product);
+    const card = container.firstElementChild;
+    if (card) card.classList.add("product-card--mini");
+    return card;
+  }
+
   function renderRelated(current) {
     if (!relatedGrid) return;
     const rel = getRelated(current, 4);
-    relatedGrid.innerHTML = rel.map(cardHTML).join("");
+    relatedGrid.innerHTML = "";
+    rel.forEach((p) => {
+      const card = buildRelatedCard(p);
+      if (card) relatedGrid.appendChild(card);
+    });
     if (window.CRONOX_FAVORITES && typeof window.CRONOX_FAVORITES.updateDomState === "function") {
       window.CRONOX_FAVORITES.updateDomState();
     }

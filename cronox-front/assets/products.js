@@ -24,6 +24,7 @@
 
   const API = window.CRONOX_API || {};
   const STAR_ICON = window.CRONOX_STAR_ICON || '<span class="icon-star"></span>';
+  const PRODUCT_PLACEHOLDER = window.CRONOX_PRODUCT_PLACEHOLDER || "assets/logo_browser.png";
 
   const localFallbackFactory = () => [
     {
@@ -426,7 +427,16 @@
   window.CRONOX_createProductCard = createCard;
 
   // ======= Tarjeta con mini-galería + botón "+" clásico =======
-  function createCard(p) {
+  function createCard(p, opts = {}) {
+    const options = {
+      hideFav: false,
+      hideQuickAdd: false,
+      hideArrows: false,
+      variant: null,
+      useFirstImageOnly: false,
+      ...opts,
+    };
+
     const key = p.slug || String(p.id) || String(p.backendId);
     const detailHref = p.slug
       ? `/producto.html?slug=${encodeURIComponent(key)}`
@@ -437,6 +447,9 @@
     const a = document.createElement("a");
     a.href = detailHref;
     a.className = "product-card";
+    if (options.variant) {
+      a.classList.add(`product-card--${options.variant}`);
+    }
     if (key) a.setAttribute("data-id", key);
     if (p.slug) a.setAttribute("data-slug", p.slug);
 
@@ -446,19 +459,31 @@
     const gallery = document.createElement("div");
     gallery.className = "product-images";
 
-    const imgs = Array.isArray(p.images) && p.images.length ? p.images : [p.image];
+    const sourceImages = Array.isArray(p.images) && p.images.length
+      ? p.images
+      : [p.image || PRODUCT_PLACEHOLDER];
+
+    const uniqueImages = [];
+    sourceImages.forEach((src) => {
+      const clean = typeof src === "string" ? src.trim() : "";
+      uniqueImages.push(clean || PRODUCT_PLACEHOLDER);
+    });
+
+    const imgs = options.useFirstImageOnly ? [uniqueImages[0]] : uniqueImages;
+    if (!imgs.length) imgs.push(PRODUCT_PLACEHOLDER);
+
     const imgEls = imgs.map((src, i) => {
       const im = document.createElement("img");
       im.className = "product-img" + (i === 0 ? " active" : "");
       im.loading = "lazy";
       im.decoding = "async";
       im.alt = p.name || "Producto";
-      im.src = src;
+      im.src = src || PRODUCT_PLACEHOLDER;
       return im;
     });
     imgEls.forEach(im => gallery.appendChild(im));
 
-    if (imgEls.length > 1) {
+    if (imgEls.length > 1 && !options.hideArrows) {
       const prev = document.createElement("button");
       prev.className = "product-arrow prev";
       prev.type = "button";
@@ -480,38 +505,44 @@
       gallery.appendChild(next);
     }
 
-    const favBtn = document.createElement("button");
-    favBtn.className = "favorite-toggle";
-    favBtn.type = "button";
-    favBtn.setAttribute("aria-label", "Marcar como favorito");
-    favBtn.dataset.productId = String(p.backendId ?? p.id ?? "");
-    favBtn.dataset.slug = p.slug || "";
-    favBtn.dataset.name = p.name || "Producto";
-    favBtn.dataset.price = p.priceLabel || euros(p.price);
-    favBtn.dataset.image = imgs[0] || p.image || "";
-    favBtn.innerHTML = STAR_ICON;
-    favBtn.dataset.favBound = "1";
-    favBtn.addEventListener("click", (ev) => {
-      ev.preventDefault();
-      ev.stopPropagation();
-      if (window.CRONOX_FAVORITES && typeof window.CRONOX_FAVORITES.toggleFromButton === "function") {
-        window.CRONOX_FAVORITES.toggleFromButton(favBtn);
-      }
-    });
-
-    const plus = document.createElement("button");
-    plus.className = "fav-add";
-    plus.type = "button";
-    plus.setAttribute("aria-label", `Añadir rápido ${p.name}`);
-    plus.textContent = "+";
-    plus.addEventListener("click", (ev) => {
-      ev.preventDefault(); ev.stopPropagation();
-      openQuickAdd(p);
-    });
-
     media.appendChild(gallery);
-    media.appendChild(favBtn);
-    media.appendChild(plus);
+
+    if (!options.hideFav) {
+      const favBtn = document.createElement("button");
+      favBtn.className = "favorite-toggle";
+      favBtn.type = "button";
+      favBtn.setAttribute("aria-label", "Marcar como favorito");
+      favBtn.dataset.productId = String(p.backendId ?? p.id ?? "");
+      favBtn.dataset.slug = p.slug || "";
+      favBtn.dataset.name = p.name || "Producto";
+      favBtn.dataset.price = p.priceLabel || euros(p.price);
+      favBtn.dataset.image = imgs[0] || p.image || PRODUCT_PLACEHOLDER;
+      favBtn.innerHTML = STAR_ICON;
+      favBtn.dataset.favBound = "1";
+      favBtn.addEventListener("click", (ev) => {
+        ev.preventDefault();
+        ev.stopPropagation();
+        if (window.CRONOX_FAVORITES && typeof window.CRONOX_FAVORITES.toggleFromButton === "function") {
+          window.CRONOX_FAVORITES.toggleFromButton(favBtn);
+        }
+      });
+
+      media.appendChild(favBtn);
+    }
+
+    if (!options.hideQuickAdd) {
+      const plus = document.createElement("button");
+      plus.className = "fav-add";
+      plus.type = "button";
+      plus.setAttribute("aria-label", `Añadir rápido ${p.name}`);
+      plus.textContent = "+";
+      plus.addEventListener("click", (ev) => {
+        ev.preventDefault(); ev.stopPropagation();
+        openQuickAdd(p);
+      });
+
+      media.appendChild(plus);
+    }
 
     const name = document.createElement("h3");
     name.className = "product-name";
