@@ -289,25 +289,9 @@ a.product-card{display:block;text-decoration:none;color:inherit;cursor:pointer;}
 .product-name{font-weight:800;font-size:12px;text-transform:uppercase;letter-spacing:.06em;padding:12px 12px 4px;}
 .product-price{font-weight:700;font-size:12px;padding:0 12px 12px;}
 
-/* PDP: relacionados compactos con imagen visible */
-.pdp-related .products-grid{grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:18px;padding:0;}
-.pdp-related .product-card{background:#fff;border:1px solid #000;box-shadow:0 8px 18px rgba(0,0,0,.14);color:#111;display:block;}
-.pdp-related .product-card--mini{max-width:260px;margin:0 auto;box-shadow:0 10px 24px rgba(0,0,0,.16);}
-.pdp-related .product-card .product-media{background:#fff;border-bottom:1px solid #000;padding:8px;}
-.pdp-related .product-card .product-img{width:100%;height:auto;max-height:240px;margin:0 auto;object-fit:contain;display:block;aspect-ratio:1/1;background:#fff;padding:4px;}
-.pdp-related .product-card .product-name,.pdp-related .product-card .product-price{background:#000;color:#fff;}
-.pdp-related .product-card .product-name{font-size:11px;padding:10px 10px 4px;letter-spacing:.06em;}
-.pdp-related .product-card .product-price{font-size:11px;padding:0 10px 10px;}
-.pdp-related .product-card .favorite-toggle,.pdp-related .product-card .fav-add,.pdp-related .product-card .product-arrow{display:none!important;}
-
-@media (max-width:480px){
-  .pdp-related .products-grid{grid-template-columns:1fr;gap:14px;}
-  .pdp-related .product-card--mini{max-width:260px;margin-left:auto;margin-right:auto;}
-  .pdp-related .product-card .product-media{padding:6px;}
-  .pdp-related .product-card .product-img{max-height:220px;padding:2px;}
-  .pdp-related .product-card .product-name{font-size:10.5px;padding:9px 9px 3px;}
-  .pdp-related .product-card .product-price{font-size:10.5px;padding:0 9px 9px;}
-}
+.pdp-related .favorite-toggle,
+.pdp-related .fav-add,
+.pdp-related .product-arrow{display:none!important;}
 
 .favorites-loading-text{font-size:14px;letter-spacing:.08em;text-transform:uppercase;color:#ffffff !important;opacity:.7;margin-top:40px;text-align:center;}
 
