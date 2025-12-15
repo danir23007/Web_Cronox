@@ -1679,16 +1679,16 @@ a.product-card{display:block;text-decoration:none;color:inherit;cursor:pointer;}
     border-top: none;
   }
 
-  .footer-acc-item:first-child {
-    border-top: none;
+  .footer-acc-item {
+    border: none;
+    position: relative;
   }
 
-  .footer-acc-item + .footer-acc-item {
-    border-top: 1px solid rgba(255, 255, 255, 0.15);
-  }
-
-  .footer-acc-item:last-child {
+  .footer-acc-item::after {
+    content: "";
+    display: block;
     border-bottom: 1px solid rgba(255, 255, 255, 0.15);
+    margin-top: 12px;
   }
 
   .footer-acc-trigger {
