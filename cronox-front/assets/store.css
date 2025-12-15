@@ -289,6 +289,10 @@ a.product-card{display:block;text-decoration:none;color:inherit;cursor:pointer;}
 .product-name{font-weight:800;font-size:12px;text-transform:uppercase;letter-spacing:.06em;padding:12px 12px 4px;}
 .product-price{font-weight:700;font-size:12px;padding:0 12px 12px;}
 
+/* PDP: relacionados compactos con imagen visible */
+.pdp-related .product-card{background:#000;border:1px solid rgba(255,255,255,.16);box-shadow:0 8px 18px rgba(0,0,0,.14);color:#fff;}
+.pdp-related .product-img{width:100%;height:auto;max-width:240px;margin:0 auto;object-fit:contain;display:block;aspect-ratio:1/1;background:#fff;}
+
 .favorites-loading-text{font-size:14px;letter-spacing:.08em;text-transform:uppercase;color:#ffffff !important;opacity:.7;margin-top:40px;text-align:center;}
 
 /* ===== Favoritos / Quick Add ===== */
