@@ -189,11 +189,17 @@
     const id = copy.id != null
       ? String(copy.id)
       : (backendId != null ? String(backendId) : "");
+
+    const normalizedImages = sanitizeImages(copy.images, copy.image);
+    const primaryImage = normalizedImages[0] || (typeof copy.image === "string" ? copy.image : "");
+
     return {
       ...copy,
       id,
       backendId: backendId != null ? backendId : undefined,
       slug: copy.slug || undefined,
+      images: normalizedImages,
+      image: primaryImage,
     };
   };
 
@@ -514,6 +520,8 @@
   }
 
   function cardHTML(p) {
+    const images = sanitizeImages(p?.images, p?.image);
+    const imageSrc = images[0] || "";
     const href = p.slug
       ? `/producto.html?slug=${encodeURIComponent(p.slug)}`
       : `/producto.html?id=${encodeURIComponent(p.id)}`;
@@ -523,7 +531,7 @@
         <button class="favorite-toggle" type="button" aria-label="Marcar como favorito" data-product-id="${productId}" data-slug="${p.slug || ''}">
           <span class="icon-star"></span>
         </button>
-        <img class="product-img" src="${p.image}" alt="${p.name}" loading="lazy" decoding="async">
+        <img class="product-img" src="${imageSrc}" alt="${p.name}" loading="lazy" decoding="async">
         <div class="product-card__info">
           <h3 class="product-name">${p.name}</h3>
           <p class="product-price">${p.priceLabel || money(p.price)}</p>
