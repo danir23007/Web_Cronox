@@ -1587,13 +1587,15 @@ a.product-card{display:block;text-decoration:none;color:inherit;cursor:pointer;}
     order: 2;
     width: 100%;
     justify-content: center;
-    margin-top: 18px;
+    align-items: center;
+    text-align: center;
+    margin-top: 12px;
   }
 
   .footer-brand-block {
     align-items: center;
     text-align: center;
-    gap: 10px;
+    gap: 6px;
     width: 100%;
   }
 
@@ -1605,6 +1607,7 @@ a.product-card{display:block;text-decoration:none;color:inherit;cursor:pointer;}
     margin-left: 0;
     justify-content: center;
     gap: 10px;
+    margin-top: 6px;
   }
 
   .social-icon {
@@ -1632,7 +1635,11 @@ a.product-card{display:block;text-decoration:none;color:inherit;cursor:pointer;}
     width: 100%;
     display: block;
     margin: 0;
-    border-top: 1px solid rgba(255, 255, 255, 0.15);
+    border-top: none;
+  }
+
+  .footer-acc-item:first-child {
+    border-top: none;
   }
 
   .footer-acc-item + .footer-acc-item {
