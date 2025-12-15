@@ -1601,6 +1601,17 @@ a.product-card{display:block;text-decoration:none;color:inherit;cursor:pointer;}
 }
 
 @media (max-width: 480px) {
+  .site-footer,
+  .footer-inner,
+  .footer-middle-sections,
+  .footer-links-block,
+  .footer-accordion,
+  .footer-acc-item {
+    height: auto;
+    max-height: none;
+    overflow: visible;
+  }
+
   .site-footer {
     padding: 16px 18px 18px;
     margin-top: 26px;
@@ -1707,15 +1718,18 @@ a.product-card{display:block;text-decoration:none;color:inherit;cursor:pointer;}
   }
 
   .footer-acc-panel {
+    position: static;
     overflow: hidden;
     max-height: 0;
     transition: max-height 0.3s ease;
     padding: 0;
+    width: 100%;
   }
 
   .footer-acc-item.is-open .footer-acc-panel {
-    max-height: 420px;
-    padding: 6px 0 10px;
+    max-height: none;
+    padding: 8px 0 14px;
+    overflow: visible;
   }
 
   .footer-acc-panel .footer-title {

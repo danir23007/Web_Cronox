@@ -1900,6 +1900,17 @@ window.CRONOX_USER = window.CRONOX_USER || null;
       items.forEach((item) => closeItem(item));
     };
 
+    const recalcOpenPanels = () => {
+      if (!mobileQuery.matches) return;
+      items.forEach((item) => {
+        if (!item.classList.contains('is-open')) return;
+        const panel = item.querySelector('.footer-acc-panel');
+        if (panel) {
+          panel.style.maxHeight = `${panel.scrollHeight}px`;
+        }
+      });
+    };
+
     const applyDesktopState = () => {
       items.forEach((item) => {
         const trigger = item.querySelector('.footer-acc-trigger');
@@ -1944,6 +1955,7 @@ window.CRONOX_USER = window.CRONOX_USER || null;
     }
 
     mobileQuery.addEventListener('change', handleMatchChange);
+    window.addEventListener('resize', recalcOpenPanels);
   };
 
   document.addEventListener('DOMContentLoaded', () => {
