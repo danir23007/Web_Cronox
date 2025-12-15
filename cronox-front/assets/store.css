@@ -290,6 +290,7 @@ a.product-card{display:block;text-decoration:none;color:inherit;cursor:pointer;}
 .product-price{font-weight:700;font-size:12px;padding:0 12px 12px;}
 
 .pdp-related .favorite-toggle,
+.pdp-related .fav-toggle,
 .pdp-related .fav-add,
 .pdp-related .product-arrow{display:none!important;}
 
@@ -459,6 +460,15 @@ a.product-card{display:block;text-decoration:none;color:inherit;cursor:pointer;}
   .product-arrow{
     display:none!important;
   }
+
+  .pdp-related .products-grid {
+    display:grid!important;
+    grid-template-columns:repeat(2,minmax(0,1fr))!important;
+    gap:12px!important;
+    align-items:start;
+  }
+
+  .pdp-related .product-card { width:auto!important; }
 }
 
 /* ===== QUICK-ADD ===== */

@@ -496,83 +496,27 @@
   // ==========================
   // Relacionados
   // ==========================
-  function similarityScore(a, b) {
-    let score = 0;
-    if (a.color && b.color && a.color === b.color) score += 1;
-    const ac = Array.isArray(a.categories) ? a.categories : [];
-    const bc = Array.isArray(b.categories) ? b.categories : [];
-    if (ac.length && bc.length && ac.some(c => bc.includes(c))) score += 2;
-    return score;
-  }
-
-  function getRelated(current, max = 4) {
+  function getRelated(current, max = 2) {
     const currentId = current?.id != null ? String(current.id) : "";
     const currentSlug = current?.slug ? String(current.slug) : "";
-    const pool = PRODUCTS.filter(x => {
-      const pid = x?.id != null ? String(x.id) : "";
-      const slug = x?.slug ? String(x.slug) : "";
-      return pid !== currentId && (!currentSlug || slug !== currentSlug);
+    const pool = PRODUCTS.filter((item) => {
+      const pid = item?.id != null ? String(item.id) : "";
+      const slug = item?.slug ? String(item.slug) : "";
+      const isSameId = currentId && pid === currentId;
+      const isSameSlug = currentSlug && slug === currentSlug;
+      return !isSameId && !isSameSlug;
     });
-    return pool
-      .map(x => ({ p: x, s: similarityScore(current, x) }))
-      .sort((u, v) => v.s - u.s)
-      .slice(0, max)
-      .map(o => o.p);
+    return pool.slice(0, max);
   }
 
   function buildRelatedCard(product) {
-    if (typeof window.CRONOX_createProductCard === "function") {
-      return window.CRONOX_createProductCard(product);
-    }
-
-    const key = product?.slug || String(product?.id) || "";
-    const href = product?.slug
-      ? `/producto.html?slug=${encodeURIComponent(product.slug)}`
-      : key
-        ? `/producto.html?id=${encodeURIComponent(key)}`
-        : "#";
-
-    const card = document.createElement("a");
-    card.className = "product-card";
-    card.href = href;
-    if (key) card.setAttribute("data-id", key);
-    if (product?.slug) card.setAttribute("data-slug", product.slug);
-
-    const media = document.createElement("div");
-    media.className = "product-media";
-
-    const gallery = document.createElement("div");
-    gallery.className = "product-images";
-
-    const images = sanitizeImages(product?.images, product?.image);
-    const img = document.createElement("img");
-    img.className = "product-img active";
-    img.loading = "lazy";
-    img.decoding = "async";
-    img.alt = product?.name || "Producto";
-    img.src = images[0] || PRODUCT_PLACEHOLDER;
-    gallery.appendChild(img);
-
-    media.appendChild(gallery);
-
-    const name = document.createElement("h3");
-    name.className = "product-name";
-    name.textContent = product?.name || "";
-
-    const price = document.createElement("p");
-    price.className = "product-price";
-    price.textContent = product?.priceLabel || money(product?.price);
-
-    card.appendChild(media);
-    card.appendChild(name);
-    card.appendChild(price);
-
-    return card;
+    if (typeof window.CRONOX_createProductCard !== "function") return null;
+    return window.CRONOX_createProductCard(product);
   }
 
   function renderRelated(current) {
     if (!relatedGrid) return;
-    const rel = getRelated(current, 4);
+    const rel = getRelated(current, 2);
     relatedGrid.innerHTML = "";
     rel.forEach((p) => {
       const card = buildRelatedCard(p);
