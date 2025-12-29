@@ -636,6 +636,17 @@ a.product-card{display:block;text-decoration:none;color:inherit;cursor:pointer;}
   margin-bottom: 24px;
 }
 
+.page-profile .profile-section[data-profile-section="favorites"] .products-grid {
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 22px;
+  padding: 0 4px;
+}
+
+.page-profile .profile-section[data-profile-section="favorites"] .products-grid::before,
+.page-profile .profile-section[data-profile-section="favorites"] .products-grid::after {
+  display: none;
+}
+
 .profile-section[data-profile-section="account"] .profile-save-btn {
   background-color: #ffffff;
   color: #000000;

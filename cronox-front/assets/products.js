@@ -425,6 +425,9 @@
   };
 
   window.CRONOX_createProductCard = createCard;
+  window.CRONOX_buildFavoriteCard = function(product, options = {}) {
+    return createCard(product, options);
+  };
 
   // ======= Tarjeta con mini-galería + botón "+" clásico =======
   function createCard(p, opts = {}) {
