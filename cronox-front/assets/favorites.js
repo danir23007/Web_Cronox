@@ -297,9 +297,11 @@
       return;
     }
 
-    const cardBuilder = typeof window.CRONOX_createProductCard === 'function'
-      ? window.CRONOX_createProductCard
-      : createProductCard;
+    const cardBuilder = typeof window.CRONOX_buildFavoriteCard === 'function'
+      ? window.CRONOX_buildFavoriteCard
+      : (typeof window.CRONOX_createProductCard === 'function'
+        ? window.CRONOX_createProductCard
+        : createProductCard);
 
     const frag = document.createDocumentFragment();
     favorites.forEach((fav) => {
