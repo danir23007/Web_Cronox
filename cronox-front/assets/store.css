@@ -1254,31 +1254,34 @@ a.product-card{display:block;text-decoration:none;color:inherit;cursor:pointer;}
 .crx-accreditation-stage,
 .accreditation-stage {
   position: relative;
-  width: 92vw;
-  max-width: 1400px;
   height: 72vh;
   min-height: 560px;
-  margin: 28px auto 18px;
-  display: grid;
-  place-items: center;
+  margin: 28px 0 18px;
 }
 
 .crx-accreditation-book,
 .accreditation-book {
   position: absolute;
-  inset: 0;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(1400px, 96vw);
+  height: 100%;
   background-image: url("https://frqlgocxnyppzdgxxjuq.supabase.co/storage/v1/object/public/Acreditation/Libro_antiguo.png");
   background-repeat: no-repeat;
-  background-position: center center;
-  background-size: 100% auto;
+  background-position: center;
+  background-size: contain;
   pointer-events: none;
   z-index: 1;
 }
 
 .crx-accreditation-card,
 .accreditation-card {
-  position: relative;
+  position: absolute;
   z-index: 2;
+  left: 50%;
+  top: 42%;
+  transform: translate(-50%, -50%);
   width: min(520px, 92vw);
   padding: 18px;
   border: 1px solid rgba(255, 255, 255, 0.35);
@@ -1326,7 +1329,6 @@ a.product-card{display:block;text-decoration:none;color:inherit;cursor:pointer;}
 @media (max-width: 700px) {
   .crx-accreditation-stage,
   .accreditation-stage {
-    width: 94vw;
     height: 66vh;
     min-height: 520px;
   }
