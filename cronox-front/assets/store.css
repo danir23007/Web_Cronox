@@ -1251,31 +1251,36 @@ a.product-card{display:block;text-decoration:none;color:inherit;cursor:pointer;}
   margin-top: 40px;
 }
 
+.crx-accreditation-stage,
 .accreditation-stage {
   position: relative;
-  width: min(1100px, 92vw);
-  margin: 28px auto 18px;
+  width: 92vw;
+  max-width: 1400px;
+  height: 72vh;
   min-height: 560px;
+  margin: 28px auto 18px;
+  display: grid;
+  place-items: center;
 }
 
+.crx-accreditation-book,
 .accreditation-book {
   position: absolute;
   inset: 0;
-  background-image: url("https://frqlgocxnyppzdgxxjuq.supabase.co/storage/v1/object/public/Acreditation/Libro%20antiguo%20Web%20Cronox.png");
+  background-image: url("https://frqlgocxnyppzdgxxjuq.supabase.co/storage/v1/object/public/Acreditation/Libro_antiguo.png");
   background-repeat: no-repeat;
-  background-position: center;
-  background-size: contain;
+  background-position: center center;
+  background-size: 100% auto;
   pointer-events: none;
-  opacity: 1;
+  z-index: 1;
 }
 
+.crx-accreditation-card,
 .accreditation-card {
   position: relative;
   z-index: 2;
   width: min(520px, 92vw);
-  margin-left: 70px;
-  margin-top: 110px;
-  padding: 18px 18px 14px;
+  padding: 18px;
   border: 1px solid rgba(255, 255, 255, 0.35);
   background: rgba(0, 0, 0, 0.35);
   backdrop-filter: blur(2px);
@@ -1319,14 +1324,16 @@ a.product-card{display:block;text-decoration:none;color:inherit;cursor:pointer;}
 }
 
 @media (max-width: 700px) {
+  .crx-accreditation-stage,
   .accreditation-stage {
     width: 94vw;
+    height: 66vh;
     min-height: 520px;
   }
 
+  .crx-accreditation-card,
   .accreditation-card {
-    margin: 0 auto;
-    margin-top: 80px;
+    width: 92vw;
   }
 }
 
