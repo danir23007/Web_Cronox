@@ -9,14 +9,22 @@
   const favoritesLoading = $('profileFavoritesLoading');
   const favoritesEmpty = $('profileFavoritesEmpty');
   const favoritesList = $('profileFavoritesList');
-  const accreditationName = document.querySelector('.cronox-card__name');
-  const accreditationCode = document.querySelector('.cronox-card__code');
-  const accreditationCircle = document.querySelector('.cronox-card__circle');
-  const accreditationCard = document.querySelector('.cronox-card');
+  const accreditationName = document.querySelector('.accreditation-name');
+  const accreditationCode = document.querySelector('.accreditation-id');
+  const accreditationCircle = document.querySelector('.accreditation-circle');
+  const accreditationSymbol = document.querySelector('[data-accreditation-rings]');
   const accreditationQr = $('cronox-member-qr');
 
   let favoritesLoaded = false;
   let accreditationQrLoaded = false;
+
+  const RING_COLORS = {
+    1: ['#000000'],
+    2: ['#000000', '#000000'],
+    3: ['#000000', '#000000', '#7C7C7C'],
+    4: ['#000000', '#000000', '#7C7C7C', '#EDE7DB'],
+    5: ['#000000', '#000000', '#7C7C7C', '#EDE7DB', '#B1001A'],
+  };
 
   const showProfileMessage = (text, type = 'success') => {
     if (!messageEl) return;
@@ -79,20 +87,53 @@
     return '';
   };
 
+  const renderCircleSymbol = (circleLevel) => {
+    if (!accreditationSymbol) return;
+
+    const level = Number(circleLevel);
+    const palette = RING_COLORS[level] || RING_COLORS[1];
+    const svgNS = 'http://www.w3.org/2000/svg';
+    const size = 220;
+    const center = size / 2;
+    let currentRadius = 84;
+
+    const svg = document.createElementNS(svgNS, 'svg');
+    svg.setAttribute('viewBox', `0 0 ${size} ${size}`);
+    svg.setAttribute('role', 'img');
+    svg.setAttribute('aria-label', `Círculo ${level || 1}`);
+
+    palette.forEach((color, index) => {
+      const stroke = Math.max(7, 12 - index);
+      const radius = Math.max(10, currentRadius - stroke / 2);
+      const circle = document.createElementNS(svgNS, 'circle');
+      circle.setAttribute('cx', center);
+      circle.setAttribute('cy', center);
+      circle.setAttribute('r', radius);
+      circle.setAttribute('fill', 'none');
+      circle.setAttribute('stroke', color);
+      circle.setAttribute('stroke-width', stroke);
+      circle.setAttribute('stroke-linecap', 'round');
+      svg.appendChild(circle);
+      currentRadius -= stroke + 6;
+    });
+
+    accreditationSymbol.innerHTML = '';
+    accreditationSymbol.appendChild(svg);
+  };
+
   const applyCircleLevel = (circleLevel) => {
     const level = Number(circleLevel);
     const normalized = level >= 1 && level <= 5 ? level : 1;
 
-    if (accreditationCard) {
-      for (let i = 1; i <= 5; i += 1) {
-        accreditationCard.classList.remove(`cronox-card--circle-${i}`);
-      }
-      accreditationCard.classList.add(`cronox-card--circle-${normalized}`);
+    if (accreditationSymbol) {
+      accreditationSymbol.dataset.circleLevel = String(normalized);
     }
 
     if (accreditationCircle) {
       accreditationCircle.textContent = `Círculo ${normalized}`;
     }
+
+    renderCircleSymbol(normalized);
 
     return normalized;
   };
@@ -151,11 +192,11 @@
   };
 
   const fillAccreditation = (user) => {
-    if (!user) return;
     const fullName = buildDisplayName(user) || 'Miembro CRONOX';
-    applyCircleLevel(user.circleLevel);
+    const normalizedCircle = applyCircleLevel(user?.circleLevel);
     if (accreditationName) accreditationName.textContent = fullName;
-    if (accreditationCode) accreditationCode.textContent = user.memberCode ? `ID: ${user.memberCode}` : 'ID: —';
+    if (accreditationCircle) accreditationCircle.textContent = `Círculo ${normalizedCircle}`;
+    if (accreditationCode) accreditationCode.textContent = user?.memberCode ? `ID: ${user.memberCode}` : 'ID: —';
   };
 
   const fillAddress = (address) => {
