@@ -1248,7 +1248,7 @@ a.product-card{display:block;text-decoration:none;color:inherit;cursor:pointer;}
 }
 
 .account-section--accreditation {
-  margin-top: 40px;
+  margin-top: 0;
 }
 
 .crx-accreditation-stage,
@@ -1256,7 +1256,7 @@ a.product-card{display:block;text-decoration:none;color:inherit;cursor:pointer;}
   position: relative;
   height: 72vh;
   min-height: 560px;
-  margin: 28px 0 18px;
+  margin: 0 0 18px;
 }
 
 .crx-accreditation-book,
