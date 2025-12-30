@@ -1254,22 +1254,28 @@ a.product-card{display:block;text-decoration:none;color:inherit;cursor:pointer;}
 .crx-accreditation-stage,
 .accreditation-stage {
   position: relative;
-  height: 72vh;
-  min-height: 560px;
   margin: 0 0 18px;
   display: flex;
   align-items: center;
   justify-content: center;
+  padding: clamp(12px, 3vw, 28px) 0;
 }
 
 .crx-accreditation-book,
 .accreditation-book {
+  position: relative;
+  width: min(1100px, 88vw);
+  aspect-ratio: 1.36;
+  margin-inline: auto;
+  display: block;
+  z-index: 1;
+}
+
+.crx-accreditation-book::before,
+.accreditation-book::before {
+  content: "";
   position: absolute;
-  top: 0;
-  left: 50%;
-  transform: translateX(-50%);
-  width: min(1400px, 96vw);
-  height: 100%;
+  inset: 0;
   background-image: url("https://frqlgocxnyppzdgxxjuq.supabase.co/storage/v1/object/public/Acreditation/Libro-antiguo.png");
   background-repeat: no-repeat;
   background-position: center;
@@ -1281,9 +1287,10 @@ a.product-card{display:block;text-decoration:none;color:inherit;cursor:pointer;}
 .accreditation-pages {
   position: absolute;
   top: 0;
-  left: 50%;
+  left: 43%;
   transform: translateX(-50%);
   width: min(1400px, 96vw);
+  max-width: 100%;
   height: 100%;
   z-index: 2;
   pointer-events: none;
@@ -1291,11 +1298,11 @@ a.product-card{display:block;text-decoration:none;color:inherit;cursor:pointer;}
 
 .accreditation-pages .accreditation-page {
   position: absolute;
-  top: 11%;
-  width: 42%;
-  height: 77%;
+  top: 5%;
+  width: 37%;
+  height: 83%;
   padding: clamp(16px, 3vw, 28px);
-  color: #1b1813;
+  color: #1b1b1b;
   text-shadow: 0 1px 0 rgba(0, 0, 0, 0.08);
   overflow: hidden;
   display: flex;
@@ -1392,37 +1399,74 @@ a.product-card{display:block;text-decoration:none;color:inherit;cursor:pointer;}
   filter: drop-shadow(0 3px 6px rgba(0, 0, 0, 0.18));
 }
 
-@media (max-width: 820px) {
-  .crx-accreditation-stage,
-  .accreditation-stage {
-    height: auto;
-    min-height: 520px;
-    padding-bottom: 40px;
+@media (max-width: 1200px) {
+  .crx-accreditation-book,
+  .accreditation-book {
+    width: min(960px, 92vw);
   }
 
   .accreditation-pages {
-    position: relative;
-    left: auto;
-    transform: none;
+    width: min(960px, 94vw);
+    left: 50%;
+    transform: translateX(-50%);
+  }
+}
+
+@media (max-width: 820px) {
+  .crx-accreditation-stage,
+  .accreditation-stage {
+    padding: clamp(10px, 4vw, 18px) 0;
+  }
+
+  .crx-accreditation-book,
+  .accreditation-book {
+    width: min(720px, 94vw);
+  }
+
+  .accreditation-pages {
     width: 100%;
-    height: auto;
-    display: grid;
-    grid-template-columns: 1fr;
-    gap: 18px;
-    padding: 24px 0 0;
+    left: 50%;
+    transform: translateX(-50%);
   }
 
   .accreditation-pages .accreditation-page {
-    position: relative;
-    width: 100%;
-    height: auto;
-    min-height: 420px;
+    top: 6%;
+    width: 40%;
+    height: 80%;
+    padding: clamp(14px, 4vw, 22px);
   }
 
-  .accreditation-pages .page-left,
+  .accreditation-pages .page-left {
+    left: 7%;
+  }
+
   .accreditation-pages .page-right {
-    left: auto;
-    right: auto;
+    right: 7%;
+  }
+
+  .accreditation-top {
+    gap: clamp(14px, 5vw, 22px);
+  }
+
+  .accreditation-symbol {
+    width: clamp(110px, 34vw, 150px);
+  }
+
+  #cronox-member-qr {
+    width: clamp(160px, 62vw, 210px);
+  }
+}
+
+@media (max-width: 560px) {
+  .crx-accreditation-book,
+  .accreditation-book {
+    width: min(520px, 94vw);
+  }
+
+  .accreditation-pages .accreditation-page {
+    top: 8%;
+    width: 42%;
+    height: 78%;
   }
 
   .accreditation-top {
