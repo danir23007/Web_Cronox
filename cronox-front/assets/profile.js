@@ -91,9 +91,9 @@
     const safeName = safeTrim(name);
     if (!safeName) return '—';
     const parts = safeName.split(/\s+/);
-    const first = parts.shift();
+    const first = parts.shift() || '';
     const rest = parts.join(' ');
-    return rest ? `${first}\n${rest}` : first;
+    return `${first}\n${rest}`;
   };
 
   const renderCircleSymbol = (circleLevel) => {
