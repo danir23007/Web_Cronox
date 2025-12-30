@@ -1336,8 +1336,15 @@ a.product-card{display:block;text-decoration:none;color:inherit;cursor:pointer;}
 
 .accreditation-top {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: clamp(18px, 4vw, 32px);
+}
+
+.accreditation-top__left {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: clamp(8px, 2vw, 12px);
 }
 
 .accreditation-symbol {
@@ -1362,6 +1369,7 @@ a.product-card{display:block;text-decoration:none;color:inherit;cursor:pointer;}
   gap: 6px;
   color: #1e1a16;
   font-family: "Cinzel", "Cormorant Garamond", Georgia, serif;
+  align-items: flex-start;
 }
 
 .accreditation-name {
@@ -1369,14 +1377,16 @@ a.product-card{display:block;text-decoration:none;color:inherit;cursor:pointer;}
   letter-spacing: 0.04em;
   margin: 0;
   line-height: 1.2;
+  white-space: pre-line;
 }
 
 .accreditation-circle {
   margin: 0;
-  font-size: clamp(13px, 2.8vw, 15px);
-  letter-spacing: 0.1em;
+  font-size: clamp(12px, 2.5vw, 14px);
+  letter-spacing: 0.12em;
   text-transform: uppercase;
   color: #2a2320;
+  text-align: center;
 }
 
 .accreditation-id {
@@ -1389,12 +1399,13 @@ a.product-card{display:block;text-decoration:none;color:inherit;cursor:pointer;}
 .accreditation-qr {
   display: flex;
   justify-content: center;
-  padding-top: clamp(12px, 2.6vw, 20px);
+  padding-top: clamp(6px, 2vw, 14px);
+  transform: translateY(clamp(-32px, -4vw, -18px));
 }
 
 #cronox-member-qr {
   display: block;
-  width: clamp(180px, 38vw, 240px);
+  width: clamp(160px, 34vw, 215px);
   height: auto;
   filter: drop-shadow(0 3px 6px rgba(0, 0, 0, 0.18));
 }
@@ -1425,8 +1436,12 @@ a.product-card{display:block;text-decoration:none;color:inherit;cursor:pointer;}
     width: clamp(110px, 34vw, 150px);
   }
 
+  .accreditation-top__left {
+    gap: clamp(6px, 3vw, 10px);
+  }
+
   #cronox-member-qr {
-    width: clamp(160px, 62vw, 210px);
+    width: clamp(150px, 58vw, 195px);
   }
 }
 
@@ -1444,6 +1459,10 @@ a.product-card{display:block;text-decoration:none;color:inherit;cursor:pointer;}
 
   .accreditation-meta {
     align-items: center;
+  }
+
+  .accreditation-qr {
+    transform: translateY(clamp(-20px, -3vw, -12px));
   }
 }
 

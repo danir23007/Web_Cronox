@@ -87,6 +87,15 @@
     return '';
   };
 
+  const formatAccreditationName = (name) => {
+    const safeName = safeTrim(name);
+    if (!safeName) return '—';
+    const parts = safeName.split(/\s+/);
+    const first = parts.shift();
+    const rest = parts.join(' ');
+    return rest ? `${first}\n${rest}` : first;
+  };
+
   const renderCircleSymbol = (circleLevel) => {
     if (!accreditationSymbol) return;
 
@@ -194,7 +203,7 @@
   const fillAccreditation = (user) => {
     const fullName = buildDisplayName(user) || 'Miembro CRONOX';
     const normalizedCircle = applyCircleLevel(user?.circleLevel);
-    if (accreditationName) accreditationName.textContent = fullName;
+    if (accreditationName) accreditationName.textContent = formatAccreditationName(fullName);
     if (accreditationCircle) accreditationCircle.textContent = `Círculo ${normalizedCircle}`;
     if (accreditationCode) accreditationCode.textContent = user?.memberCode ? `ID: ${user.memberCode}` : 'ID: —';
   };
