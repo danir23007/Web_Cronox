@@ -1376,7 +1376,7 @@ a.product-card{display:block;text-decoration:none;color:inherit;cursor:pointer;}
   font-size: clamp(20px, 4vw, 28px);
   letter-spacing: 0.04em;
   margin: 0;
-  line-height: 1.2;
+  line-height: 1;
   white-space: pre-line;
 }
 
@@ -1399,13 +1399,13 @@ a.product-card{display:block;text-decoration:none;color:inherit;cursor:pointer;}
 .accreditation-qr {
   display: flex;
   justify-content: center;
-  padding-top: clamp(6px, 2vw, 14px);
-  transform: translateY(clamp(-32px, -4vw, -18px));
+  align-self: center;
+  margin-bottom: clamp(18px, 2.2vw, 30px);
 }
 
 #cronox-member-qr {
   display: block;
-  width: clamp(160px, 34vw, 215px);
+  width: clamp(170px, 34vw, 195px);
   height: auto;
   filter: drop-shadow(0 3px 6px rgba(0, 0, 0, 0.18));
 }
@@ -1462,7 +1462,7 @@ a.product-card{display:block;text-decoration:none;color:inherit;cursor:pointer;}
   }
 
   .accreditation-qr {
-    transform: translateY(clamp(-20px, -3vw, -12px));
+    margin-bottom: clamp(14px, 3vw, 20px);
   }
 }
 
