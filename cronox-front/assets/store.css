@@ -1267,7 +1267,7 @@ a.product-card{display:block;text-decoration:none;color:inherit;cursor:pointer;}
   transform: translateX(-50%);
   width: min(1400px, 96vw);
   height: 100%;
-  background-image: url("https://frqlgocxnyppzdgxxjuq.supabase.co/storage/v1/object/public/Acreditation/Libro_antiguo.png");
+  background-image: url("https://frqlgocxnyppzdgxxjuq.supabase.co/storage/v1/object/public/Acreditation/Libro-antiguo.png");
   background-repeat: no-repeat;
   background-position: center;
   background-size: contain;
