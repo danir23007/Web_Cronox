@@ -1278,27 +1278,53 @@ a.product-card{display:block;text-decoration:none;color:inherit;cursor:pointer;}
   z-index: 1;
 }
 
-.accreditation-sheet {
+.accreditation-pages {
   position: absolute;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: clamp(14px, 4vw, 36px);
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(1400px, 96vw);
+  height: 100%;
   z-index: 2;
+  pointer-events: none;
 }
 
-.accreditation-page {
-  position: relative;
-  width: min(760px, 92vw);
-  padding: clamp(12px, 3vw, 28px);
+.accreditation-pages .accreditation-page {
+  position: absolute;
+  top: 11%;
+  width: 42%;
+  height: 77%;
+  padding: clamp(16px, 3vw, 28px);
+  color: #1b1813;
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.08);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  pointer-events: auto;
+}
+
+.accreditation-pages .page-left {
+  left: 6.5%;
+}
+
+.accreditation-pages .page-right {
+  right: 6.5%;
+}
+
+.accreditation-page .accreditation-page-content {
+  pointer-events: auto;
+  height: 100%;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
   gap: clamp(18px, 3vw, 26px);
-  min-height: clamp(420px, 70vh, 640px);
-  color: #1b1813;
-  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.08);
+}
+
+.debug-pages .accreditation-page {
+  border: 2px solid #c21807;
+  border-radius: 6px;
+  box-sizing: border-box;
 }
 
 .accreditation-top {
@@ -1374,8 +1400,29 @@ a.product-card{display:block;text-decoration:none;color:inherit;cursor:pointer;}
     padding-bottom: 40px;
   }
 
-  .accreditation-sheet {
+  .accreditation-pages {
     position: relative;
+    left: auto;
+    transform: none;
+    width: 100%;
+    height: auto;
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 18px;
+    padding: 24px 0 0;
+  }
+
+  .accreditation-pages .accreditation-page {
+    position: relative;
+    width: 100%;
+    height: auto;
+    min-height: 420px;
+  }
+
+  .accreditation-pages .page-left,
+  .accreditation-pages .page-right {
+    left: auto;
+    right: auto;
   }
 
   .accreditation-top {
