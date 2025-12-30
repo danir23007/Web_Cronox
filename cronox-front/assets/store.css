@@ -1320,12 +1320,14 @@ a.product-card{display:block;text-decoration:none;color:inherit;cursor:pointer;}
 }
 
 .accreditation-page .accreditation-page-content {
+  content: "";
   pointer-events: auto;
   height: 100%;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  gap: clamp(18px, 3vw, 26px);
+  gap: 0;
+  padding: 0;
 }
 
 .debug-pages .accreditation-page {
@@ -1337,14 +1339,14 @@ a.product-card{display:block;text-decoration:none;color:inherit;cursor:pointer;}
 .accreditation-top {
   display: flex;
   align-items: flex-start;
-  gap: clamp(18px, 4vw, 32px);
+  gap: 18px;
 }
 
 .accreditation-top__left {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: clamp(8px, 2vw, 12px);
+  gap: 10px;
 }
 
 .accreditation-symbol {
@@ -1382,11 +1384,10 @@ a.product-card{display:block;text-decoration:none;color:inherit;cursor:pointer;}
 
 .accreditation-circle {
   margin: 0;
-  font-size: clamp(12px, 2.5vw, 14px);
-  letter-spacing: 0.12em;
+  color: #1e1a16;
+  letter-spacing: 0.08em;
+  font-size: 12px;
   text-transform: uppercase;
-  color: #2a2320;
-  text-align: center;
 }
 
 .accreditation-id {
@@ -1400,7 +1401,7 @@ a.product-card{display:block;text-decoration:none;color:inherit;cursor:pointer;}
   display: flex;
   justify-content: center;
   align-self: center;
-  margin-bottom: clamp(18px, 2.2vw, 30px);
+  margin-bottom: 22px;
 }
 
 #cronox-member-qr {
@@ -1428,20 +1429,8 @@ a.product-card{display:block;text-decoration:none;color:inherit;cursor:pointer;}
     width: min(720px, 94vw);
   }
 
-  .accreditation-top {
-    gap: clamp(14px, 5vw, 22px);
-  }
-
   .accreditation-symbol {
     width: clamp(110px, 34vw, 150px);
-  }
-
-  .accreditation-top__left {
-    gap: clamp(6px, 3vw, 10px);
-  }
-
-  #cronox-member-qr {
-    width: clamp(150px, 58vw, 195px);
   }
 }
 
@@ -1449,20 +1438,6 @@ a.product-card{display:block;text-decoration:none;color:inherit;cursor:pointer;}
   .crx-accreditation-book,
   .accreditation-book {
     width: min(520px, 94vw);
-  }
-
-  .accreditation-top {
-    flex-direction: column;
-    align-items: center;
-    text-align: center;
-  }
-
-  .accreditation-meta {
-    align-items: center;
-  }
-
-  .accreditation-qr {
-    margin-bottom: clamp(14px, 3vw, 20px);
   }
 }
 
