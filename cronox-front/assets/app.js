@@ -1531,6 +1531,15 @@ window.CRONOX_USER = window.CRONOX_USER || null;
     return '/';
   };
 
+  const getHomeUrl = () => {
+    const homePath = getHomePath() || '/';
+    try {
+      return new URL(homePath, window.location.origin).toString();
+    } catch {
+      return homePath;
+    }
+  };
+
   const clearWebStorage = () => {
     try { sessionStorage.clear(); } catch (err) { console.warn('[AUTH] No se pudo limpiar sessionStorage', err); }
     try { localStorage.clear(); } catch (err) { console.warn('[AUTH] No se pudo limpiar localStorage', err); }
@@ -1568,12 +1577,30 @@ window.CRONOX_USER = window.CRONOX_USER || null;
   };
 
   const redirectToHomeAndReload = () => {
-    const homePath = getHomePath();
-    try { window.location.replace(homePath); }
-    catch { window.location.href = homePath; }
+    const homeUrl = getHomeUrl();
+    const goHome = () => {
+      try { window.location.replace(homeUrl); }
+      catch { window.location.href = homeUrl; }
+    };
+
+    const isAlreadyHome = (() => {
+      try {
+        const current = new URL(window.location.href);
+        const target = new URL(homeUrl, window.location.origin);
+        return current.pathname === target.pathname && current.search === target.search && current.hash === target.hash;
+      } catch {
+        return window.location.href === homeUrl || window.location.pathname === homeUrl;
+      }
+    })();
+
+    if (!isAlreadyHome) {
+      goHome();
+    }
+
     setTimeout(() => {
-      try { window.location.reload(); } catch {}
-    }, 60);
+      try { window.location.reload(); }
+      catch { goHome(); }
+    }, 120);
   };
 
   const logoutAndReload = async () => {
@@ -1694,6 +1721,7 @@ window.CRONOX_USER = window.CRONOX_USER || null;
   // Exponer funciones globales por compatibilidad
   window.CRONOX_openAuthModal = openAuthModal;
   window.CRONOX_closeAuthModal = closeAuthModal;
+  window.CRONOX_redirectHome = redirectToHomeAndReload;
   window.CRONOX_logout = logoutAndReload;
 
   // ===== Newsletter Popup =====

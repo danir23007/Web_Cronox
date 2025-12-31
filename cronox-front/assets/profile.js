@@ -614,9 +614,28 @@
   };
 
   const handleLogout = async () => {
+    const forceHome = () => {
+      if (typeof window.CRONOX_redirectHome === 'function') {
+        window.CRONOX_redirectHome();
+        return;
+      }
+      const logoHref = document.querySelector('.topbar__logo')?.getAttribute('href') || '/';
+      try { window.location.replace(logoHref); }
+      catch { window.location.href = logoHref; }
+      setTimeout(() => {
+        try { window.location.reload(); } catch {}
+      }, 120);
+    };
+
     if (typeof window.CRONOX_logout === 'function') {
-      await window.CRONOX_logout();
-      return;
+      try {
+        await window.CRONOX_logout();
+        return;
+      } catch (err) {
+        console.warn('[PROFILE] logout error', err);
+        forceHome();
+        return;
+      }
     }
     try {
       if (api.logout) await api.logout();
@@ -627,11 +646,7 @@
     try { localStorage.clear(); } catch {}
     window.CRONOX_USER = null;
     try { window.dispatchEvent(new CustomEvent('cronox:userChanged', { detail: null })); } catch {}
-    try { window.location.replace('index.html'); }
-    catch { window.location.href = 'index.html'; }
-    setTimeout(() => {
-      try { window.location.reload(); } catch {}
-    }, 60);
+    forceHome();
   };
 
   const bindTabs = () => {
