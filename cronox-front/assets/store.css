@@ -1411,6 +1411,7 @@ a.product-card{display:block;text-decoration:none;color:inherit;cursor:pointer;}
   color: #1e1a16;
   font-family: "Cinzel", "Cormorant Garamond", Georgia, serif;
   text-shadow: none;
+  padding-left: 5px;
 }
 
 .accreditation-right-section {
@@ -1419,7 +1420,7 @@ a.product-card{display:block;text-decoration:none;color:inherit;cursor:pointer;}
   gap: clamp(8px, 2vw, 12px);
 }
 .accreditation-page-right-content .accreditation-right-section:last-of-type {
-  transform: translateY(-6px);
+  transform: translateY(-10px);
 }
 
 .accreditation-right-title {
