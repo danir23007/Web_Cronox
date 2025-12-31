@@ -3,6 +3,7 @@ import { OrderStatus, Prisma } from '@prisma/client';
 import { Decimal } from '@prisma/client/runtime/library';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AdminOrdersQueryDto } from './dto/admin-order-query.dto';
+import { HistorialService } from '../../historial/historial.service';
 
 const DEFAULT_PAGE_SIZE = 20;
 const MAX_EXPORT_ROWS = 5000;
@@ -28,7 +29,10 @@ type OrderWithItems = Prisma.OrderGetPayload<{
 
 @Injectable()
 export class AdminOrdersService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly historialService: HistorialService,
+  ) {}
 
   async listOrders(query: AdminOrdersQueryDto) {
     const page = query.page ?? 1;
@@ -82,16 +86,33 @@ export class AdminOrdersService {
   }
 
   async updateOrderStatus(id: number, status: OrderStatus) {
-    const updated = await this.prisma.order.update({
-      where: { id },
-      data: { status },
-      include: {
-        items: {
-          include: {
-            product: { select: { id: true, name: true } },
-          },
+    const include = {
+      items: {
+        include: {
+          product: { select: { id: true, name: true } },
         },
       },
+    } as const;
+
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const existing = await tx.order.findUnique({
+        where: { id },
+        include,
+      });
+
+      if (!existing) {
+        throw new NotFoundException('Order not found');
+      }
+
+      const order = await tx.order.update({
+        where: { id },
+        data: { status },
+        include,
+      });
+
+      await this.syncHistorialForStatusChange(existing, order, tx);
+
+      return order;
     }).catch((error) => {
       if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
         throw new NotFoundException('Order not found');
@@ -104,16 +125,30 @@ export class AdminOrdersService {
   }
 
   async refundOrder(id: number) {
-    const order = await this.prisma.order.update({
-      where: { id },
-      data: { status: OrderStatus.REFUNDED },
-      include: {
-        items: {
-          include: {
-            product: { select: { id: true, name: true } },
-          },
+    const include = {
+      items: {
+        include: {
+          product: { select: { id: true, name: true } },
         },
       },
+    } as const;
+
+    const order = await this.prisma.$transaction(async (tx) => {
+      const existing = await tx.order.findUnique({ where: { id }, include });
+
+      if (!existing) {
+        throw new NotFoundException('Order not found');
+      }
+
+      const updated = await tx.order.update({
+        where: { id },
+        data: { status: OrderStatus.REFUNDED },
+        include,
+      });
+
+      await this.syncHistorialForStatusChange(existing, updated, tx);
+
+      return updated;
     }).catch((error) => {
       if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
         throw new NotFoundException('Order not found');
@@ -323,5 +358,34 @@ export class AdminOrdersService {
           .join(','),
       )
       .join('\n');
+  }
+
+  private async syncHistorialForStatusChange(
+    previous: OrderWithItems,
+    updated: OrderWithItems,
+    tx: Prisma.TransactionClient,
+  ) {
+    if (!updated.userId) return;
+
+    const itemsCount = this.computeItemsQuantity(updated.items);
+    const movedToCompletion =
+      this.isCompletionStatus(updated.status) && !this.isCompletionStatus(previous.status);
+
+    if (movedToCompletion) {
+      await this.historialService.incrementOrderProgress(updated.userId, itemsCount, tx);
+    }
+
+    if (updated.status === OrderStatus.REFUNDED && previous.status !== OrderStatus.REFUNDED) {
+      await this.historialService.registerReturn(updated.userId, itemsCount, tx);
+    }
+  }
+
+  private computeItemsQuantity(items: OrderWithItems['items']): number {
+    if (!Array.isArray(items) || !items.length) return 0;
+    return items.reduce((total, item) => total + Math.max(0, item.quantity), 0);
+  }
+
+  private isCompletionStatus(status: OrderStatus): boolean {
+    return status === OrderStatus.PAID || status === OrderStatus.SHIPPED;
   }
 }

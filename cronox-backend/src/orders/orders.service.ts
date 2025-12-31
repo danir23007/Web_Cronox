@@ -11,6 +11,7 @@ import { Decimal } from '@prisma/client/runtime/library';
 import { CartService, cartInclude, type CartWithItems } from '../cart/cart.service';
 import { TaxConfigService } from '../common/tax/tax-config.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { HistorialService } from '../historial/historial.service';
 import { CreateCheckoutSessionDto } from './dto/create-checkout-session.dto';
 import { CreateOrderWebhookDto } from './dto/create-order-webhook.dto';
 import { PaginationDto } from './dto/pagination.dto';
@@ -116,6 +117,7 @@ export class OrdersService {
     private readonly cartService: CartService,
     private readonly taxConfig: TaxConfigService,
     private readonly shippingMethods: ShippingMethodsService,
+    private readonly historialService: HistorialService,
   ) {}
 
   async getCheckoutSummary(
@@ -404,6 +406,11 @@ export class OrdersService {
         throw new NotFoundException('ORDER_NOT_FOUND_AFTER_CREATE');
       }
 
+      if (status === OrderStatus.PAID) {
+        const quantity = this.computeOrderItemsQuantity(created.items);
+        await this.historialService.incrementOrderProgress(userId, quantity, tx);
+      }
+
       return this.serializeOrder(created);
     });
   }
@@ -564,6 +571,11 @@ export class OrdersService {
     }
 
     return cart.items.reduce((acc, item) => acc + item.priceAtAdd * item.qty, 0);
+  }
+
+  private computeOrderItemsQuantity(items: OrderWithItems['items']): number {
+    if (!Array.isArray(items) || !items.length) return 0;
+    return items.reduce((total, item) => total + Math.max(0, item.quantity), 0);
   }
 
   private buildCheckoutComputation(
@@ -838,21 +850,29 @@ export class OrdersService {
   }
 
   async markOrderAsRefunded(providerRef: string): Promise<void> { // [STRIPE]
-    try {
-      await this.prisma.order.update({
+    await this.prisma.$transaction(async (tx) => {
+      const order = await tx.order.findUnique({
         where: { providerRef },
-        data: { status: OrderStatus.REFUNDED },
+        include: { items: true },
       });
-    } catch (error) {
-      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
+
+      if (!order) {
         this.logger.warn(
           `No se encontró ningún pedido para marcar como REFUNDED con providerRef ${providerRef}`,
         );
         return;
       }
 
-      throw error;
-    }
+      if (order.status !== OrderStatus.REFUNDED) {
+        await tx.order.update({
+          where: { providerRef },
+          data: { status: OrderStatus.REFUNDED },
+        });
+
+        const itemsCount = this.computeOrderItemsQuantity(order.items);
+        await this.historialService.registerReturn(order.userId, itemsCount, tx);
+      }
+    });
   }
 
   private serializeOrder(order: OrderWithItems): Record<string, unknown> {

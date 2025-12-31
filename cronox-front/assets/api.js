@@ -443,6 +443,11 @@
     }
   };
 
+  api.getAccreditationStats = async () => {
+    const data = await request('/api/membership/me/stats');
+    return data || null;
+  };
+
   api.updateMe = async (payload) => {
     const data = await request('/api/me', {
       method: 'PUT',
