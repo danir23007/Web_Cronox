@@ -1406,7 +1406,7 @@ a.product-card{display:block;text-decoration:none;color:inherit;cursor:pointer;}
 
 #cronox-member-qr {
   display: block;
-  width: clamp(170px, 34vw, 195px);
+  width: clamp(170px, 34vw, 105px);
   height: auto;
   filter: drop-shadow(0 3px 6px rgba(0, 0, 0, 0.18));
 }
