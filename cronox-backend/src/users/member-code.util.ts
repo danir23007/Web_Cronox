@@ -20,9 +20,10 @@ const formatMemberCodeFromIndex = (index: bigint): string => {
 export const getNextSequentialMemberCode = async (
   tx: Prisma.TransactionClient,
 ): Promise<string> => {
-  const result = await tx.$queryRaw<{ n: bigint | number }[]>(
-    `SELECT nextval('${MEMBER_CODE_SEQUENCE}') as n;`,
+  const result = await tx.$queryRaw<{ n: bigint }[]>(
+    Prisma.sql`SELECT nextval('public.user_member_code_seq') AS n;`
   );
+
   const nextValue = result?.[0]?.n;
 
   if (nextValue === undefined || nextValue === null) {
