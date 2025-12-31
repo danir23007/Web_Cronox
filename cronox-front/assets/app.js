@@ -1525,24 +1525,67 @@ window.CRONOX_USER = window.CRONOX_USER || null;
     }
   };
 
+  const getHomePath = () => {
+    const logoHref = document.querySelector('.topbar__logo')?.getAttribute('href');
+    if (logoHref && logoHref !== '#') return logoHref;
+    return 'index.html';
+  };
+
+  const clearWebStorage = () => {
+    try { sessionStorage.clear(); } catch (err) { console.warn('[AUTH] No se pudo limpiar sessionStorage', err); }
+    try { localStorage.clear(); } catch (err) { console.warn('[AUTH] No se pudo limpiar localStorage', err); }
+  };
+
+  const clearCookies = () => {
+    try {
+      if (typeof document === 'undefined' || !document.cookie) return;
+      document.cookie.split(';').forEach((cookie) => {
+        const eqPos = cookie.indexOf('=');
+        const name = (eqPos > -1 ? cookie.substr(0, eqPos) : cookie).trim();
+        if (!name) return;
+        const paths = ['/', window.location.pathname || '/'];
+        paths.forEach((path) => {
+          document.cookie = `${name}=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=${path}`;
+        });
+      });
+    } catch (err) {
+      console.warn('[AUTH] No se pudieron limpiar las cookies', err);
+    }
+  };
+
+  const resetClientSessionState = () => {
+    window.CRONOX_USER = null;
+    if (window.CRONOX_FAVORITES && typeof window.CRONOX_FAVORITES.setIdsFromServer === 'function') {
+      window.CRONOX_FAVORITES.setIdsFromServer([]);
+    } else {
+      window.CRONOX_FAVORITE_IDS = new Set();
+    }
+    cartState.data = null;
+    updateBadge();
+    try { window.dispatchEvent(new CustomEvent('cart:updated', { detail: null })); } catch {}
+    updateProfileIconUI();
+    try { window.dispatchEvent(new CustomEvent('cronox:userChanged', { detail: null })); } catch {}
+  };
+
+  const redirectToHomeAndReload = () => {
+    const homePath = getHomePath();
+    try { window.location.replace(homePath); }
+    catch { window.location.href = homePath; }
+    setTimeout(() => {
+      try { window.location.reload(); } catch {}
+    }, 60);
+  };
+
   const handleLogout = async () => {
     hideUserMenu();
     if (window.CRONOX_API?.logout) {
       try { await window.CRONOX_API.logout(); }
       catch (err) { console.warn('[AUTH] logout error', err); }
     }
-    window.CRONOX_USER = null;
-    updateProfileIconUI();
-    await refreshUserDependentUI();
-    try { window.dispatchEvent(new CustomEvent('cronox:userChanged', { detail: null })); } catch {}
-  };
-
-  const handleOverlayClick = (ev) => {
-    if (ev.target === authOverlay) closeAuthModal();
-  };
-
-  const handleEsc = (ev) => {
-    if (ev.key === 'Escape' && authOverlay?.classList.contains('is-open')) closeAuthModal();
+    resetClientSessionState();
+    clearWebStorage();
+    clearCookies();
+    redirectToHomeAndReload();
   };
 
   const bindAuthEvents = () => {
@@ -1558,9 +1601,7 @@ window.CRONOX_USER = window.CRONOX_USER || null;
       });
     }
 
-    authOverlay?.addEventListener('click', handleOverlayClick);
     authDialog?.addEventListener('click', (ev) => ev.stopPropagation());
-    document.addEventListener('keydown', handleEsc);
     document.querySelectorAll('[data-auth-switch]').forEach((btn) => {
       btn.addEventListener('click', () => selectAuthView(btn.dataset.authSwitch));
     });
