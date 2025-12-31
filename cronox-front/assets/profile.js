@@ -86,6 +86,27 @@
     return `${day}/${month}/${year}`;
   };
 
+  const toRomanNumeral = (value) => {
+    const num = Number(value);
+    if (!Number.isFinite(num) || num <= 0) return '—';
+    const entries = [
+      { value: 10, symbol: 'X' },
+      { value: 9, symbol: 'IX' },
+      { value: 5, symbol: 'V' },
+      { value: 4, symbol: 'IV' },
+      { value: 1, symbol: 'I' },
+    ];
+    let n = Math.round(num);
+    let result = '';
+    entries.forEach(({ value: v, symbol }) => {
+      while (n >= v) {
+        result += symbol;
+        n -= v;
+      }
+    });
+    return result || '—';
+  };
+
   const normalizeCentsValue = (value) => {
     let cents = Number(value ?? 0);
     if (cents > 0 && cents < 100) cents = Math.round(cents * 100);
@@ -123,7 +144,7 @@
     const svg = document.createElementNS(svgNS, 'svg');
     svg.setAttribute('viewBox', `0 0 ${size} ${size}`);
     svg.setAttribute('role', 'img');
-    svg.setAttribute('aria-label', `Círculo ${level || 1}`);
+    svg.setAttribute('aria-label', `Círculo ${toRomanNumeral(level || 1)}`);
 
     palette.forEach((color, index) => {
       const stroke = Math.max(7, 12 - index);
@@ -153,7 +174,7 @@
     }
 
     if (accreditationCircle) {
-      accreditationCircle.textContent = `Círculo ${normalized}`;
+      accreditationCircle.textContent = `Círculo ${toRomanNumeral(normalized)}`;
     }
 
     renderCircleSymbol(normalized);
@@ -218,7 +239,7 @@
     const fullName = buildDisplayName(user) || 'Miembro CRONOX';
     const normalizedCircle = applyCircleLevel(user?.circleLevel);
     if (accreditationName) accreditationName.textContent = formatAccreditationName(fullName);
-    if (accreditationCircle) accreditationCircle.textContent = `Círculo ${normalizedCircle}`;
+    if (accreditationCircle) accreditationCircle.textContent = `Círculo ${toRomanNumeral(normalizedCircle)}`;
     if (accreditationCode) accreditationCode.textContent = user?.memberCode ? `ID: ${user.memberCode}` : 'ID: —';
   };
 
@@ -233,7 +254,7 @@
 
     if (accreditationStatCircle) {
       const normalized = applyCircleLevel(circleLevel);
-      accreditationStatCircle.textContent = Number.isFinite(normalized) ? normalized : '—';
+      accreditationStatCircle.textContent = Number.isFinite(normalized) ? toRomanNumeral(normalized) : '—';
     }
 
     if (accreditationStatCreatedAt) {
