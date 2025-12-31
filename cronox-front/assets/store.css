@@ -1469,6 +1469,8 @@ a.product-card{display:block;text-decoration:none;color:inherit;cursor:pointer;}
   margin: 0 0 8px;
   text-align: center;
   letter-spacing: 0.04em;
+  transform: translateY(-5px);
+  font-weight: 700;
 }
 
 #cronox-member-qr {

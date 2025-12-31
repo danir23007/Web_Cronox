@@ -1528,7 +1528,7 @@ window.CRONOX_USER = window.CRONOX_USER || null;
   const getHomePath = () => {
     const logoHref = document.querySelector('.topbar__logo')?.getAttribute('href');
     if (logoHref && logoHref !== '#') return logoHref;
-    return 'index.html';
+    return '/';
   };
 
   const clearWebStorage = () => {
@@ -1576,7 +1576,7 @@ window.CRONOX_USER = window.CRONOX_USER || null;
     }, 60);
   };
 
-  const handleLogout = async () => {
+  const logoutAndReload = async () => {
     hideUserMenu();
     if (window.CRONOX_API?.logout) {
       try { await window.CRONOX_API.logout(); }
@@ -1621,7 +1621,7 @@ window.CRONOX_USER = window.CRONOX_USER || null;
     if (userMenu) {
       userMenu.addEventListener('click', (ev) => {
         const action = ev.target.closest('[data-user-action]')?.dataset.userAction;
-        if (action === 'logout') handleLogout();
+        if (action === 'logout') logoutAndReload();
         if (action === 'account') {
           hideUserMenu();
           window.location.href = 'profile.html';
@@ -1694,7 +1694,7 @@ window.CRONOX_USER = window.CRONOX_USER || null;
   // Exponer funciones globales por compatibilidad
   window.CRONOX_openAuthModal = openAuthModal;
   window.CRONOX_closeAuthModal = closeAuthModal;
-  window.CRONOX_logout = handleLogout;
+  window.CRONOX_logout = logoutAndReload;
 
   // ===== Newsletter Popup =====
   const NEWSLETTER_STORAGE_KEY = 'cronoxNewsletterShown';
