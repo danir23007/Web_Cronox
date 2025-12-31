@@ -1406,10 +1406,11 @@ a.product-card{display:block;text-decoration:none;color:inherit;cursor:pointer;}
 
 .accreditation-id--code {
   font-family: "Libre Baskerville", "Cormorant Garamond", Georgia, serif;
-  font-size: clamp(16px, 3vw, 19px);
-  font-weight: 700;
+  font-size: clamp(15px, 3vw, 10px);
+  font-weight: 600;
   letter-spacing: 0.06em;
   line-height: 1.15;
+  font-variant-numeric: lining-nums proportional-nums;
 }
 
 .accreditation-page-right-content {
