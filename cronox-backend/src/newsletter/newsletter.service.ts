@@ -4,6 +4,7 @@ import * as bcrypt from 'bcrypt';
 import { randomBytes } from 'crypto';
 import { EmailService } from '../common/email/email.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { getNextSequentialMemberCode } from '../users/member-code.util';
 
 const FIRST_ORDER_DISCOUNT_PERCENT = 10;
 
@@ -73,7 +74,7 @@ export class NewsletterService {
       }
 
       const password = await this.hashRandomPassword();
-      const memberCode = await this.generateMemberCode(tx);
+      const memberCode = await getNextSequentialMemberCode(tx);
       const newUser = await tx.user.create({
         data: {
           email: normalizedEmail,
@@ -107,29 +108,6 @@ export class NewsletterService {
   private async hashRandomPassword(): Promise<string> {
     const randomPassword = randomBytes(16).toString('hex');
     return bcrypt.hash(randomPassword, this.bcryptSaltRounds);
-  }
-
-  private async generateMemberCode(tx: Prisma.TransactionClient): Promise<string> {
-    const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-    let code = '';
-    let exists = true;
-
-    while (exists) {
-      const random = Array.from({ length: 6 })
-        .map(() => alphabet[Math.floor(Math.random() * alphabet.length)])
-        .join('');
-
-      code = `CRX-${random}`;
-
-      const found = await tx.user.findUnique({
-        where: { memberCode: code },
-        select: { id: true },
-      });
-
-      exists = Boolean(found);
-    }
-
-    return code;
   }
 
   private async generateDiscountCode(tx: Prisma.TransactionClient): Promise<string> {

@@ -1451,8 +1451,16 @@ a.product-card{display:block;text-decoration:none;color:inherit;cursor:pointer;}
 .accreditation-qr {
   display: flex;
   justify-content: center;
+  align-items: center;
+  flex-direction: column;
   align-self: center;
   margin-bottom: 22px;
+}
+
+.accreditation-qr__label {
+  margin: 0 0 8px;
+  text-align: center;
+  letter-spacing: 0.04em;
 }
 
 #cronox-member-qr {
