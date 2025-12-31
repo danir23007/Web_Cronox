@@ -1331,7 +1331,7 @@ a.product-card{display:block;text-decoration:none;color:inherit;cursor:pointer;}
 }
 
 .debug-pages .accreditation-page {
-  border: 2px solid #c21807;
+  border: 2px solid transparent;
   border-radius: 6px;
   box-sizing: border-box;
 }
@@ -1374,7 +1374,7 @@ a.product-card{display:block;text-decoration:none;color:inherit;cursor:pointer;}
 .accreditation-meta {
   display: flex;
   flex-direction: column;
-  gap: 11px;
+  gap: 13px;
   color: #1e1a16;
   font-family: "Cinzel", "Cormorant Garamond", Georgia, serif;
   align-items: flex-start;
@@ -1417,6 +1417,9 @@ a.product-card{display:block;text-decoration:none;color:inherit;cursor:pointer;}
   display: flex;
   flex-direction: column;
   gap: clamp(8px, 2vw, 12px);
+}
+.accreditation-page-right-content .accreditation-right-section:last-of-type {
+  transform: translateY(-6px);
 }
 
 .accreditation-right-title {
