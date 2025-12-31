@@ -614,13 +614,24 @@
   };
 
   const handleLogout = async () => {
+    if (typeof window.CRONOX_logout === 'function') {
+      await window.CRONOX_logout();
+      return;
+    }
     try {
       if (api.logout) await api.logout();
     } catch (err) {
       console.warn('[PROFILE] logout error', err);
     }
+    try { sessionStorage.clear(); } catch {}
+    try { localStorage.clear(); } catch {}
     window.CRONOX_USER = null;
-    window.location.href = 'index.html';
+    try { window.dispatchEvent(new CustomEvent('cronox:userChanged', { detail: null })); } catch {}
+    try { window.location.replace('index.html'); }
+    catch { window.location.href = 'index.html'; }
+    setTimeout(() => {
+      try { window.location.reload(); } catch {}
+    }, 60);
   };
 
   const bindTabs = () => {
