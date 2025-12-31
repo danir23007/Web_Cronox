@@ -10,9 +10,10 @@ import { AdminProductsController } from './products/admin-products.controller';
 import { AdminStockController } from './stock/admin-stock.controller';
 import { AdminStockService } from './stock/admin-stock.service';
 import { AdminCategoriesController } from './categories/admin-categories.controller';
+import { HistorialModule } from '../historial/historial.module';
 
 @Module({
-  imports: [ProductModule, CategoriesModule],
+  imports: [ProductModule, CategoriesModule, HistorialModule],
   controllers: [
     AdminOrdersController,
     AdminUsersController,

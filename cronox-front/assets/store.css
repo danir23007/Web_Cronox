@@ -1374,7 +1374,7 @@ a.product-card{display:block;text-decoration:none;color:inherit;cursor:pointer;}
 .accreditation-meta {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 11px;
   color: #1e1a16;
   font-family: "Cinzel", "Cormorant Garamond", Georgia, serif;
   align-items: flex-start;
@@ -1402,6 +1402,46 @@ a.product-card{display:block;text-decoration:none;color:inherit;cursor:pointer;}
   font-size: clamp(13px, 2.6vw, 15px);
   letter-spacing: 0.08em;
   color: #352c26;
+}
+
+.accreditation-page-right-content {
+  align-items: flex-start;
+  justify-content: flex-start;
+  gap: clamp(16px, 3vw, 22px);
+  color: #1e1a16;
+  font-family: "Cinzel", "Cormorant Garamond", Georgia, serif;
+  text-shadow: none;
+}
+
+.accreditation-right-section {
+  display: flex;
+  flex-direction: column;
+  gap: clamp(8px, 2vw, 12px);
+}
+
+.accreditation-right-title {
+  margin: 0;
+  font-size: clamp(16px, 3vw, 18px);
+  letter-spacing: 0.08em;
+  font-weight: 600;
+  color: #1e1a16;
+}
+
+.accreditation-right-row {
+  margin: 0;
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  font-size: clamp(14px, 2.8vw, 16px);
+  line-height: 1.6;
+}
+
+.accreditation-right-label {
+  font-weight: 600;
+}
+
+.accreditation-right-value {
+  font-weight: 400;
 }
 
 .accreditation-qr {

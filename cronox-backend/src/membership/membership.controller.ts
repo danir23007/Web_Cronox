@@ -16,6 +16,12 @@ export class MembershipController {
     res.setHeader('Content-Type', 'image/png');
     res.send(png);
   }
+
+  @Get('me/stats')
+  @UseGuards(JwtAuthGuard)
+  getMyStats(@CurrentUser('id') userId: number) {
+    return this.membershipService.getMyStats(userId);
+  }
 }
 
 @Controller('m')

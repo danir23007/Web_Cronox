@@ -14,9 +14,14 @@
   const accreditationCircle = document.querySelector('.accreditation-circle');
   const accreditationSymbol = document.querySelector('[data-accreditation-rings]');
   const accreditationQr = $('cronox-member-qr');
+  const accreditationStatCircle = document.querySelector('[data-acc-stat="circle"]');
+  const accreditationStatCreatedAt = document.querySelector('[data-acc-stat="createdAt"]');
+  const accreditationStatOrders = document.querySelector('[data-acc-stat="orders"]');
+  const accreditationStatItems = document.querySelector('[data-acc-stat="items"]');
 
   let favoritesLoaded = false;
   let accreditationQrLoaded = false;
+  let accreditationStatsLoaded = false;
 
   const RING_COLORS = {
     1: ['#000000'],
@@ -70,6 +75,15 @@
     } catch (_) {
       return date.toISOString().slice(0, 10);
     }
+  };
+
+  const formatAccreditationDate = (value) => {
+    const date = value ? new Date(value) : null;
+    if (!date || Number.isNaN(date.getTime())) return '—';
+    const day = String(date.getDate()).padStart(2, '0');
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const year = date.getFullYear();
+    return `${day}/${month}/${year}`;
   };
 
   const normalizeCentsValue = (value) => {
@@ -208,6 +222,35 @@
     if (accreditationCode) accreditationCode.textContent = user?.memberCode ? `ID: ${user.memberCode}` : 'ID: —';
   };
 
+  const fillAccreditationStats = (stats) => {
+    const circleLevel = stats?.circleLevel ?? window.CRONOX_USER?.circleLevel;
+    const createdAt = stats?.createdAt ?? window.CRONOX_USER?.createdAt;
+    const ordersCount = typeof stats?.pedidosRealizados === 'number' ? stats.pedidosRealizados : stats?.ordersCount;
+    const itemsNetCount =
+      typeof stats?.articulosAdquiridos === 'number'
+        ? stats.articulosAdquiridos
+        : stats?.itemsNetCount;
+
+    if (accreditationStatCircle) {
+      const normalized = applyCircleLevel(circleLevel);
+      accreditationStatCircle.textContent = Number.isFinite(normalized) ? normalized : '—';
+    }
+
+    if (accreditationStatCreatedAt) {
+      accreditationStatCreatedAt.textContent = formatAccreditationDate(createdAt);
+    }
+
+    if (accreditationStatOrders) {
+      accreditationStatOrders.textContent =
+        typeof ordersCount === 'number' && Number.isFinite(ordersCount) ? ordersCount : '—';
+    }
+
+    if (accreditationStatItems) {
+      accreditationStatItems.textContent =
+        typeof itemsNetCount === 'number' && Number.isFinite(itemsNetCount) ? itemsNetCount : '—';
+    }
+  };
+
   const fillAddress = (address) => {
     if (!address) return;
     if ($('addrName')) $('addrName').value = address.name || '';
@@ -238,6 +281,29 @@
       if (handleAuthRedirect(err)) return;
       console.warn('[PROFILE] No se pudieron cargar los pedidos', err);
       renderOrders([]);
+    }
+  };
+
+  const loadAccreditationStats = async () => {
+    if (!api.getAccreditationStats) {
+      fillAccreditationStats();
+      return;
+    }
+
+    if (accreditationStatsLoaded) {
+      return;
+    }
+
+    accreditationStatsLoaded = true;
+
+    try {
+      const stats = await api.getAccreditationStats();
+      fillAccreditationStats(stats);
+    } catch (err) {
+      if (handleAuthRedirect(err)) return;
+      console.warn('[PROFILE] No se pudieron cargar las estadísticas de acreditación', err);
+      accreditationStatsLoaded = false;
+      fillAccreditationStats();
     }
   };
 
@@ -453,6 +519,10 @@
       window.CRONOX_USER = user;
       fillAccount(user);
       fillAccreditation(user);
+      fillAccreditationStats({
+        circleLevel: user.circleLevel,
+        createdAt: user.createdAt,
+      });
       await Promise.all([loadAddress(), loadOrders()]);
     } catch (err) {
       if (handleAuthRedirect(err)) return;
@@ -543,6 +613,7 @@
       if (target === 'favorites') loadFavorites();
       if (target === 'accreditation') {
         fillAccreditation(window.CRONOX_USER);
+        loadAccreditationStats();
         if (accreditationQr && !accreditationQrLoaded) {
           const base = typeof window.CRONOX_API_BASE === 'string' ? window.CRONOX_API_BASE : '';
           accreditationQr.src = `${base}/api/membership/me/qr`;
