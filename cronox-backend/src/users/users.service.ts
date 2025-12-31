@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma, Role, User } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { getNextSequentialMemberCode } from './member-code.util';
 
 export type AuthUser = Omit<User, 'password'>;
 export type AuthUserWithPassword = User;
@@ -37,11 +38,13 @@ export class UsersService {
     firstOrderDiscountCode?: string;
     firstOrderDiscountUsed?: boolean;
   }) {
-    const { memberCode, ...userData } = data;
-    const ensuredCode = memberCode ?? (await this.generateUniqueMemberCode());
+    return this.prisma.$transaction(async (tx) => {
+      const { memberCode, ...userData } = data;
+      const ensuredCode = memberCode ?? (await getNextSequentialMemberCode(tx));
 
-    return this.prisma.user.create({
-      data: { ...userData, memberCode: ensuredCode },
+      return tx.user.create({
+        data: { ...userData, memberCode: ensuredCode },
+      });
     });
   }
 
@@ -110,42 +113,22 @@ export class UsersService {
     };
   }
 
-  private async generateUniqueMemberCode(): Promise<string> {
-    const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-    let code = ''; // ← inicializado para que TS no se queje
-    let exists = true;
+  async ensureMemberCode(userId: number): Promise<string> {
+    return this.prisma.$transaction(async (tx) => {
+      const user = await tx.user.findUnique({ where: { id: userId } });
+      if (!user) throw new NotFoundException('User not found');
 
-    while (exists) {
-      const random = Array.from({ length: 6 })
-        .map(() => alphabet[Math.floor(Math.random() * alphabet.length)])
-        .join('');
+      if (user.memberCode) return user.memberCode;
 
-      code = `CRX-${random}`;
+      const newCode = await getNextSequentialMemberCode(tx);
 
-      const found = await this.prisma.user.findUnique({
-        where: { memberCode: code },
-        select: { id: true },
+      const updated = await tx.user.update({
+        where: { id: userId },
+        data: { memberCode: newCode },
+        select: { memberCode: true },
       });
 
-      exists = !!found;
-    }
-
-    return code;
-  }
-
-  async ensureMemberCode(userId: number): Promise<string> {
-    const user = await this.prisma.user.findUnique({ where: { id: userId } });
-    if (!user) throw new NotFoundException('User not found');
-
-    if (user.memberCode) return user.memberCode;
-
-    const newCode = await this.generateUniqueMemberCode();
-
-    await this.prisma.user.update({
-      where: { id: userId },
-      data: { memberCode: newCode },
+      return updated.memberCode ?? newCode;
     });
-
-    return newCode;
   }
 }
