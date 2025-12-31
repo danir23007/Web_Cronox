@@ -1648,7 +1648,10 @@ window.CRONOX_USER = window.CRONOX_USER || null;
     if (userMenu) {
       userMenu.addEventListener('click', (ev) => {
         const action = ev.target.closest('[data-user-action]')?.dataset.userAction;
-        if (action === 'logout') logoutAndReload();
+        if (action === 'logout') {
+          if (typeof window.CRONOX_logout === 'function') window.CRONOX_logout();
+          else logoutAndReload();
+        }
         if (action === 'account') {
           hideUserMenu();
           window.location.href = 'profile.html';
