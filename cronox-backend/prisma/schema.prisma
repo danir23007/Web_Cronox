@@ -79,39 +79,45 @@ model ProductImage {
 }
 
 model User {
-  id                   Int                  @id @default(autoincrement())
-  email                String               @unique
-  password             String               @map("passwordHash")
-  role                 Role                 @default(USER)
-  name                 String?
-  firstName            String?
-  lastName             String?
-  memberCode           String?              @unique
-  newsletterSubscribed Boolean              @default(false)
+  id                     Int                  @id @default(autoincrement())
+  email                  String               @unique
+  password               String               @map("passwordHash")
+  role                   Role                 @default(USER)
+  name                   String?
+  firstName              String?
+  lastName               String?
+  memberCode             String?              @unique
+  newsletterSubscribed   Boolean              @default(false)
   firstOrderDiscountCode String?
-  firstOrderDiscountUsed Boolean            @default(false)
-  circleLevel          Int                  @default(1)
-  createdAt            DateTime             @default(now())
-  updatedAt            DateTime             @updatedAt
-  addresses            Address[]
-  carts                Cart?
-  favorites            Favorite[]
-  orders               Order[]
-  stockMovements       StockMovement[]
-  passwordResetTokens  PasswordResetToken[]
-  discountCodes        DiscountCode[]
-  historial            historial?
+  firstOrderDiscountUsed Boolean              @default(false)
+  circleLevel            Int                  @default(1)
+  createdAt              DateTime             @default(now())
+  updatedAt              DateTime             @updatedAt
+  addresses              Address[]
+  carts                  Cart?
+  favorites              Favorite[]
+  orders                 Order[]
+  stockMovements         StockMovement[]
+  passwordResetTokens    PasswordResetToken[]
+  discountCodes          DiscountCode[]
+
+  // ✅ FIX: relación correcta y naming consistente
+  historial              Historial?
 }
 
-model historial {
-  id                  String   @id @default(cuid())
+model Historial {
+  // ✅ FIX: en DB debe ser Int autoincrement (antes tenías String cuid())
+  id                  Int      @id @default(autoincrement())
   userId              Int      @unique
   pedidosRealizados   Int      @default(0)
   articulosAdquiridos Int      @default(0)
   devoluciones        Int      @default(0)
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
-  user                User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("historial")
 }
 
 model DiscountCode {
@@ -289,14 +295,3 @@ enum VariantSize {
   XL
   XXL
 }
-
-// Comentarios antiguos de otra migración:
-// npx prisma migrate dev -n "add_names_and_shipping_code"
-// npx prisma generate
-//
-// Para sincronizar AHORA este esquema con la base de datos usa:
-// npx prisma db push
-// npx prisma generate
-// [CRONOX] Ejecutar:
-// npx prisma migrate dev --name add_newsletter_fields
-// npx prisma generate
