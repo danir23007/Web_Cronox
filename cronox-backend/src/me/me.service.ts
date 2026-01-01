@@ -12,6 +12,7 @@ export type MeProfile = {
   firstName: string | null;
   lastName: string | null;
   memberCode: string;
+  circleLevel: number;
   createdAt: Date;
 };
 
@@ -201,6 +202,7 @@ export class MeService {
     firstName: string | null;
     lastName: string | null;
     memberCode: string | null;
+    circleLevel: number | null;
     createdAt: Date;
   }) {
     return {
@@ -209,6 +211,7 @@ export class MeService {
       firstName: user.firstName ?? null,
       lastName: user.lastName ?? null,
       memberCode: user.memberCode ?? '',
+      circleLevel: Number(user.circleLevel ?? 1),
       createdAt: user.createdAt,
     } as MeProfile;
   }

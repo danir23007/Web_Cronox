@@ -1,8 +1,9 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
+import * as QRCode from 'qrcode';
+import { CircleService } from './circle.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { UsersService } from '../users/users.service';
 import { HistorialService } from '../historial/historial.service';
-import * as QRCode from 'qrcode';
 
 @Injectable()
 export class MembershipService {
@@ -10,6 +11,7 @@ export class MembershipService {
     private readonly prisma: PrismaService,
     private readonly usersService: UsersService,
     private readonly historialService: HistorialService,
+    private readonly circleService: CircleService,
   ) {}
 
   async getQrForUser(userId: number): Promise<Buffer> {
@@ -45,6 +47,9 @@ export class MembershipService {
   }
 
   async getMyStats(userId: number) {
+    await this.circleService.ensureCircleByNetSpent(userId);
+    await this.circleService.maybePromoteRequestedCircle(userId);
+
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
       select: {
@@ -58,13 +63,19 @@ export class MembershipService {
       throw new NotFoundException('User not found');
     }
 
-    const record = await this.historialService.ensureForUser(userId);
+    const [record, netSpent, promotionRequestStatus] = await Promise.all([
+      this.historialService.ensureForUser(userId),
+      this.circleService.getNetSpent(userId),
+      this.circleService.getPromotionStatus(userId),
+    ]);
 
     return {
       circleLevel: user.circleLevel,
       createdAt: user.createdAt,
       pedidosRealizados: record.pedidosRealizados,
       articulosAdquiridos: record.articulosAdquiridos,
+      netSpent: Number(netSpent.toString()),
+      promotionRequestStatus,
     };
   }
 }

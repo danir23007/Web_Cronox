@@ -18,6 +18,10 @@
   const accreditationStatCreatedAt = document.querySelector('[data-acc-stat="createdAt"]');
   const accreditationStatOrders = document.querySelector('[data-acc-stat="orders"]');
   const accreditationStatItems = document.querySelector('[data-acc-stat="items"]');
+  const circleRequestBtn = document.querySelector('[data-circle-request-btn]');
+  const circleRequestStatus = document.querySelector('[data-circle-request-status]');
+  const circleRequestModal = document.getElementById('circleRequestModal');
+  const circleRequestModalClose = document.querySelector('[data-circle-modal-close]');
 
   let favoritesLoaded = false;
   let accreditationQrLoaded = false;
@@ -308,6 +312,7 @@
   const loadAccreditationStats = async () => {
     if (!api.getAccreditationStats) {
       fillAccreditationStats();
+      updatePromotionUi();
       return;
     }
 
@@ -319,7 +324,15 @@
 
     try {
       const stats = await api.getAccreditationStats();
+      if (stats?.circleLevel != null) {
+        window.CRONOX_USER = { ...(window.CRONOX_USER || {}), circleLevel: stats.circleLevel };
+      }
+      fillAccreditation({ ...(window.CRONOX_USER || {}), circleLevel: stats?.circleLevel });
       fillAccreditationStats(stats);
+      updatePromotionUi({
+        circleLevel: stats?.circleLevel,
+        promotionRequestStatus: stats?.promotionRequestStatus,
+      });
     } catch (err) {
       if (handleAuthRedirect(err)) return;
       console.warn('[PROFILE] No se pudieron cargar las estadísticas de acreditación', err);
@@ -544,6 +557,7 @@
         circleLevel: user.circleLevel,
         createdAt: user.createdAt,
       });
+      updatePromotionUi({ circleLevel: user.circleLevel });
       await Promise.all([loadAddress(), loadOrders()]);
     } catch (err) {
       if (handleAuthRedirect(err)) return;
@@ -660,6 +674,7 @@
       if (target === 'favorites') loadFavorites();
       if (target === 'accreditation') {
         fillAccreditation(window.CRONOX_USER);
+        updatePromotionUi({ circleLevel: window.CRONOX_USER?.circleLevel });
         loadAccreditationStats();
         if (accreditationQr && !accreditationQrLoaded) {
           const base = typeof window.CRONOX_API_BASE === 'string' ? window.CRONOX_API_BASE : '';
@@ -692,9 +707,72 @@
     });
   };
 
+  const updatePromotionUi = ({ circleLevel, promotionRequestStatus } = {}) => {
+    const normalizedLevel = Number(circleLevel ?? window.CRONOX_USER?.circleLevel ?? 1);
+    const status = promotionRequestStatus || window.CRONOX_PROMOTION_STATUS || 'none';
+    window.CRONOX_PROMOTION_STATUS = status;
+
+    if (circleRequestBtn) {
+      const showBtn = normalizedLevel === 2 && status !== 'pending' && normalizedLevel < 3;
+      circleRequestBtn.hidden = !showBtn;
+      circleRequestBtn.disabled = !showBtn;
+    }
+
+    if (circleRequestStatus) {
+      const showStatus = status === 'pending' && normalizedLevel === 2;
+      circleRequestStatus.hidden = !showStatus;
+    }
+  };
+
+  const hideCircleRequestModal = () => {
+    if (!circleRequestModal) return;
+    circleRequestModal.hidden = true;
+  };
+
+  const showCircleRequestModal = () => {
+    if (!circleRequestModal) return;
+    circleRequestModal.hidden = false;
+  };
+
+  const bindCirclePromotion = () => {
+    if (circleRequestBtn) {
+      circleRequestBtn.addEventListener('click', async () => {
+        if (!api.requestCirclePromotion) return;
+        try {
+          circleRequestBtn.disabled = true;
+          const response = await api.requestCirclePromotion();
+          updatePromotionUi({
+            circleLevel: 2,
+            promotionRequestStatus: response?.status || 'pending',
+          });
+          showCircleRequestModal();
+        } catch (err) {
+          if (handleAuthRedirect(err)) return;
+          console.error('[PROFILE] Error al solicitar ascenso de círculo', err);
+          const msg = err?.payload?.message || err?.message || 'No se pudo solicitar el ascenso.';
+          showProfileMessage(msg, 'error');
+          circleRequestBtn.disabled = false;
+        }
+      });
+    }
+
+    if (circleRequestModalClose) {
+      circleRequestModalClose.addEventListener('click', () => hideCircleRequestModal());
+    }
+
+    if (circleRequestModal) {
+      circleRequestModal.addEventListener('click', (ev) => {
+        if (ev.target === circleRequestModal) {
+          hideCircleRequestModal();
+        }
+      });
+    }
+  };
+
   document.addEventListener('DOMContentLoaded', () => {
     bindAccountForm();
     bindAddressForm();
+    bindCirclePromotion();
     bindTabs();
     bindBackLinks();
     loadProfile();

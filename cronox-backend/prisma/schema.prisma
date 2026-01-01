@@ -91,6 +91,7 @@ model User {
   firstOrderDiscountCode String?
   firstOrderDiscountUsed Boolean              @default(false)
   circleLevel            Int                  @default(1)
+  circlePromotionRequest CirclePromotionRequest?
   createdAt              DateTime             @default(now())
   updatedAt              DateTime             @updatedAt
   addresses              Address[]
@@ -103,6 +104,20 @@ model User {
 
   // ✅ FIX: relación correcta y naming consistente
   historial              Historial?
+}
+
+model CirclePromotionRequest {
+  id          Int      @id @default(autoincrement())
+  userId      Int      @unique
+  status      String   @default("pending")
+  requestedAt DateTime @default(now())
+  promoteAt   DateTime
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([status, promoteAt])
 }
 
 model Historial {

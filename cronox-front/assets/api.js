@@ -448,6 +448,13 @@
     return data || null;
   };
 
+  api.requestCirclePromotion = async () => {
+    const data = await request('/api/account/circle/request', {
+      method: 'POST',
+    });
+    return data || null;
+  };
+
   api.updateMe = async (payload) => {
     const data = await request('/api/me', {
       method: 'PUT',
