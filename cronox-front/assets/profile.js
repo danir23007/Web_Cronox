@@ -18,14 +18,12 @@
   const accreditationStatCreatedAt = document.querySelector('[data-acc-stat="createdAt"]');
   const accreditationStatOrders = document.querySelector('[data-acc-stat="orders"]');
   const accreditationStatItems = document.querySelector('[data-acc-stat="items"]');
-  const circleRequestBtn = document.querySelector('[data-circle-request-btn]');
-  const circleRequestStatus = document.querySelector('[data-circle-request-status]');
-  const circleRequestModal = document.getElementById('circleRequestModal');
-  const circleRequestModalClose = document.querySelector('[data-circle-modal-close]');
 
   let favoritesLoaded = false;
   let accreditationQrLoaded = false;
   let accreditationStatsLoaded = false;
+
+  // Modal state (only open after successful request)
   let isCircleRequestModalOpen = false;
 
   const RING_COLORS = {
@@ -34,6 +32,35 @@
     3: ['#000000', '#000000', '#7C7C7C'],
     4: ['#000000', '#000000', '#7C7C7C', '#EDE7DB'],
     5: ['#000000', '#000000', '#7C7C7C', '#EDE7DB', '#B1001A'],
+  };
+
+  // -----------------------------
+  // Robust DOM getters (IMPORTANT)
+  // -----------------------------
+  const getCircleRequestBtn = () => document.querySelector('[data-circle-request-btn]');
+  const getCircleRequestStatusEl = () => document.querySelector('[data-circle-request-status]');
+
+  // Modal can be identified by:
+  // 1) id="circleRequestModal" (expected)
+  // 2) [data-circle-request-modal] (fallback)
+  // 3) .circle-request-modal (fallback)
+  const getCircleRequestModal = () =>
+    document.getElementById('circleRequestModal') ||
+    document.querySelector('[data-circle-request-modal]') ||
+    document.querySelector('.circle-request-modal');
+
+  // Close button can be:
+  // 1) [data-circle-modal-close] (expected)
+  // 2) inside modal: button with aria-label "Close" or class "modal-close" etc.
+  const getCircleRequestModalCloseBtn = (modalEl) => {
+    if (!modalEl) return null;
+    return (
+      modalEl.querySelector('[data-circle-modal-close]') ||
+      modalEl.querySelector('.modal-close') ||
+      modalEl.querySelector('button[aria-label="Cerrar"]') ||
+      modalEl.querySelector('button[aria-label="Close"]') ||
+      modalEl.querySelector('button[data-close]')
+    );
   };
 
   const getCircleRequestModalStorageKey = () => {
@@ -332,6 +359,52 @@
     }
   };
 
+  const updatePromotionUi = ({ circleLevel, promotionRequestStatus } = {}) => {
+    const normalizedLevel = Number(circleLevel ?? window.CRONOX_USER?.circleLevel ?? 1);
+    const status = promotionRequestStatus || window.CRONOX_PROMOTION_STATUS || 'none';
+    window.CRONOX_PROMOTION_STATUS = status;
+
+    const circleRequestBtn = getCircleRequestBtn();
+    const circleRequestStatus = getCircleRequestStatusEl();
+
+    if (circleRequestBtn) {
+      const showBtn = normalizedLevel === 2 && status !== 'pending' && normalizedLevel < 3;
+      circleRequestBtn.hidden = !showBtn;
+      circleRequestBtn.disabled = !showBtn;
+    }
+
+    if (circleRequestStatus) {
+      const showStatus = status === 'pending' && normalizedLevel === 2;
+      circleRequestStatus.hidden = !showStatus;
+    }
+  };
+
+  // -----------------------------
+  // Modal show/hide (bulletproof)
+  // -----------------------------
+  const hideCircleRequestModal = () => {
+    const modal = getCircleRequestModal();
+    if (!modal) return;
+    modal.hidden = true;
+    modal.style.display = 'none';
+    modal.setAttribute('aria-hidden', 'true');
+    isCircleRequestModalOpen = false;
+  };
+
+  const showCircleRequestModal = () => {
+    const modal = getCircleRequestModal();
+    if (!modal || isCircleRequestModalOpen) return;
+
+    // IMPORTANT: modal ONLY opens after successful click (we never open it on load)
+    modal.hidden = false;
+    modal.style.display = '';
+    modal.setAttribute('aria-hidden', 'false');
+    isCircleRequestModalOpen = true;
+
+    // Keep as “seen” just in case some other code tries to auto-open
+    persistCircleRequestModalSeen();
+  };
+
   const loadAccreditationStats = async () => {
     if (!api.getAccreditationStats) {
       fillAccreditationStats();
@@ -367,12 +440,16 @@
   const normalizeFavoriteProduct = (favorite) => {
     const product = favorite?.product || favorite || {};
     const images = Array.isArray(product.images)
-      ? product.images.map((img) => (typeof img === 'string' ? img : img?.url || img?.imageUrl || img?.image)).filter(Boolean)
+      ? product.images
+          .map((img) => (typeof img === 'string' ? img : img?.url || img?.imageUrl || img?.image))
+          .filter(Boolean)
       : [];
 
-    const priceInCents = normalizeCentsValue(product.price ?? product.priceCents ?? product.price_in_cents ?? product.priceInCents ?? 0);
+    const priceInCents = normalizeCentsValue(
+      product.price ?? product.priceCents ?? product.price_in_cents ?? product.priceInCents ?? 0
+    );
     const priceLabel = formatPriceFromCents(priceInCents);
-    const imageList = images.length ? images : (product.image ? [product.image] : []);
+    const imageList = images.length ? images : product.image ? [product.image] : [];
 
     return {
       id: product.id ?? favorite?.id ?? favorite?.productId,
@@ -410,7 +487,9 @@
     const gallery = document.createElement('div');
     gallery.className = 'product-images';
 
-    const imgs = (Array.isArray(product.images) && product.images.length ? product.images : [product.image]).filter(Boolean);
+    const imgs = (Array.isArray(product.images) && product.images.length ? product.images : [product.image]).filter(
+      Boolean
+    );
     const imgEls = imgs.map((src, i) => {
       const img = document.createElement('img');
       img.className = `product-img${i === 0 ? ' active' : ''}`;
@@ -482,8 +561,8 @@
       ev.preventDefault();
       ev.stopPropagation();
       if (typeof window.CRONOX_openQuickAddById === 'function') {
-        const key = product.slug || product.id || product.backendId;
-        window.CRONOX_openQuickAddById(key != null ? String(key) : '');
+        const key2 = product.slug || product.id || product.backendId;
+        window.CRONOX_openQuickAddById(key2 != null ? String(key2) : '');
       }
     });
 
@@ -515,11 +594,12 @@
       return;
     }
 
-    const cardBuilder = typeof window.CRONOX_buildFavoriteCard === 'function'
-      ? window.CRONOX_buildFavoriteCard
-      : (typeof window.CRONOX_createProductCard === 'function'
-        ? window.CRONOX_createProductCard
-        : createFallbackProductCard);
+    const cardBuilder =
+      typeof window.CRONOX_buildFavoriteCard === 'function'
+        ? window.CRONOX_buildFavoriteCard
+        : typeof window.CRONOX_createProductCard === 'function'
+          ? window.CRONOX_createProductCard
+          : createFallbackProductCard;
 
     const frag = document.createDocumentFragment();
     favorites.forEach((fav) => {
@@ -657,10 +737,15 @@
         return;
       }
       const logoHref = document.querySelector('.topbar__logo')?.getAttribute('href') || '/';
-      try { window.location.replace(logoHref); }
-      catch { window.location.href = logoHref; }
+      try {
+        window.location.replace(logoHref);
+      } catch {
+        window.location.href = logoHref;
+      }
       setTimeout(() => {
-        try { window.location.reload(); } catch {}
+        try {
+          window.location.reload();
+        } catch {}
       }, 120);
     };
 
@@ -679,10 +764,16 @@
     } catch (err) {
       console.warn('[PROFILE] logout error', err);
     }
-    try { sessionStorage.clear(); } catch {}
-    try { localStorage.clear(); } catch {}
+    try {
+      sessionStorage.clear();
+    } catch {}
+    try {
+      localStorage.clear();
+    } catch {}
     window.CRONOX_USER = null;
-    try { window.dispatchEvent(new CustomEvent('cronox:userChanged', { detail: null })); } catch {}
+    try {
+      window.dispatchEvent(new CustomEvent('cronox:userChanged', { detail: null }));
+    } catch {}
     forceHome();
   };
 
@@ -692,7 +783,9 @@
 
     const activate = (target) => {
       tabs.forEach((tab) => tab.classList.toggle('is-active', tab.dataset.profileTab === target));
-      sections.forEach((section) => section.classList.toggle('is-active', section.dataset.profileSection === target));
+      sections.forEach((section) =>
+        section.classList.toggle('is-active', section.dataset.profileSection === target)
+      );
 
       if (target === 'favorites') loadFavorites();
       if (target === 'accreditation') {
@@ -730,67 +823,51 @@
     });
   };
 
-  const updatePromotionUi = ({ circleLevel, promotionRequestStatus } = {}) => {
-    const normalizedLevel = Number(circleLevel ?? window.CRONOX_USER?.circleLevel ?? 1);
-    const status = promotionRequestStatus || window.CRONOX_PROMOTION_STATUS || 'none';
-    window.CRONOX_PROMOTION_STATUS = status;
-
-    if (circleRequestBtn) {
-      const showBtn = normalizedLevel === 2 && status !== 'pending' && normalizedLevel < 3;
-      circleRequestBtn.hidden = !showBtn;
-      circleRequestBtn.disabled = !showBtn;
-    }
-
-    if (circleRequestStatus) {
-      const showStatus = status === 'pending' && normalizedLevel === 2;
-      circleRequestStatus.hidden = !showStatus;
-    }
-  };
-
-  const hideCircleRequestModal = () => {
-    if (!circleRequestModal) return;
-    circleRequestModal.hidden = true;
-    isCircleRequestModalOpen = false;
-  };
-
-  const showCircleRequestModal = () => {
-    if (!circleRequestModal || isCircleRequestModalOpen) return;
-    circleRequestModal.hidden = false;
-    isCircleRequestModalOpen = true;
-    persistCircleRequestModalSeen();
-  };
-
+  // -----------------------------
+  // Promotion binding (fixed)
+  // -----------------------------
   const bindCirclePromotion = () => {
+    // HARD RULE: modal must NEVER appear on load
     hideCircleRequestModal();
 
-    if (circleRequestBtn) {
-      circleRequestBtn.addEventListener('click', async () => {
+    const btn = getCircleRequestBtn();
+    if (btn) {
+      btn.addEventListener('click', async () => {
         if (!api.requestCirclePromotion) return;
         try {
-          circleRequestBtn.disabled = true;
+          btn.disabled = true;
           const response = await api.requestCirclePromotion();
           updatePromotionUi({
             circleLevel: 2,
             promotionRequestStatus: response?.status || 'pending',
           });
+          // Only show after successful request
           showCircleRequestModal();
         } catch (err) {
           if (handleAuthRedirect(err)) return;
           console.error('[PROFILE] Error al solicitar ascenso de círculo', err);
           const msg = err?.payload?.message || err?.message || 'No se pudo solicitar el ascenso.';
           showProfileMessage(msg, 'error');
-          circleRequestBtn.disabled = false;
+          btn.disabled = false;
         }
       });
     }
 
-    if (circleRequestModalClose) {
-      circleRequestModalClose.addEventListener('click', () => hideCircleRequestModal());
-    }
+    const modal = getCircleRequestModal();
+    if (modal) {
+      // Bind close button inside modal
+      const closeBtn = getCircleRequestModalCloseBtn(modal);
+      if (closeBtn) {
+        closeBtn.addEventListener('click', (ev) => {
+          ev.preventDefault();
+          ev.stopPropagation();
+          hideCircleRequestModal();
+        });
+      }
 
-    if (circleRequestModal) {
-      circleRequestModal.addEventListener('click', (ev) => {
-        if (ev.target === circleRequestModal) {
+      // Click outside to close (only if clicking the overlay itself)
+      modal.addEventListener('click', (ev) => {
+        if (ev.target === modal) {
           hideCircleRequestModal();
         }
       });
