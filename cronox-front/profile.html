@@ -200,6 +200,12 @@
                       <p class="accreditation-id accreditation-id--code">ID: —</p>
                     </div>
                   </div>
+                  <div class="accreditation-promo">
+                    <button type="button" class="accreditation-circle-btn" data-circle-request-btn hidden>
+                      SOLICITAR ASCENSO DE CÍRCULO
+                    </button>
+                    <p class="accreditation-circle-status" data-circle-request-status hidden>Solicitud enviada</p>
+                  </div>
                     <div class="accreditation-qr">
                       <p class="accreditation-qr__label">SELLO DE ACREDITACIÓN</p>
                       <img src="" alt="QR de acreditación CRONOX" id="cronox-member-qr">
@@ -311,6 +317,16 @@
 
   <footer class="footer"><p>© CRONOX</p></footer>
 
+  <div id="circleRequestModal" class="circle-modal-overlay" hidden>
+    <div class="circle-modal" role="dialog" aria-modal="true">
+      <button type="button" class="circle-modal-close" data-circle-modal-close aria-label="Cerrar">×</button>
+      <div class="circle-modal-body">
+        <p class="circle-modal-title">Se ha solicitado un ascenso de circulo en cronox</p>
+        <p class="circle-modal-subtitle">puede demorarse entre 1-3 días en revisar tu solicitud</p>
+      </div>
+    </div>
+  </div>
+
   <!-- ===== CART DRAWER ===== -->
   <div id="cart-overlay" class="cart-overlay" hidden></div>
   <aside id="cart-drawer" class="cart-drawer" aria-hidden="true" aria-label="Carrito">
@@ -352,7 +368,7 @@
   <script src="assets/app.js?v=50" defer></script>
   <script src="assets/products.js?v=47" defer></script>
   <script src="assets/favorites-toggle.js?v=1" defer></script>
-  <script src="assets/profile.js?v=3" defer></script>
+  <script src="assets/profile.js?v=4" defer></script>
 
   <style>
     /* Profile overrides */
@@ -374,6 +390,98 @@
     .page-profile .profile-form input,
     .page-profile .profile-form select {
       border-radius: 0;
+    }
+
+    .accreditation-promo {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+      margin: 12px 0 6px;
+    }
+
+    .accreditation-circle-btn {
+      background: #000;
+      color: #f5f0e9;
+      border: 1px solid #1b1b1b;
+      padding: 10px 14px;
+      letter-spacing: 0.08em;
+      font-size: 12px;
+      text-transform: uppercase;
+      cursor: pointer;
+      transition: transform 0.12s ease, box-shadow 0.12s ease;
+      min-width: 240px;
+    }
+
+    .accreditation-circle-btn:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 6px 14px rgba(0, 0, 0, 0.2);
+    }
+
+    .accreditation-circle-btn:active {
+      transform: translateY(0);
+      box-shadow: none;
+    }
+
+    .accreditation-circle-status {
+      margin: 0;
+      font-size: 12px;
+      letter-spacing: 0.05em;
+      color: #3b342e;
+    }
+
+    .circle-modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.7);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+      z-index: 2400;
+    }
+
+    .circle-modal {
+      position: relative;
+      background: #050505;
+      color: #f7f7f7;
+      padding: 28px 26px 24px;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      box-shadow: 0 18px 60px rgba(0, 0, 0, 0.55);
+      width: min(360px, 96vw);
+    }
+
+    .circle-modal-close {
+      position: absolute;
+      top: 10px;
+      right: 12px;
+      background: transparent;
+      border: none;
+      color: #f7f7f7;
+      font-size: 18px;
+      cursor: pointer;
+      padding: 4px 6px;
+      line-height: 1;
+    }
+
+    .circle-modal-title {
+      margin: 0 0 6px;
+      font-size: 16px;
+      letter-spacing: 0.04em;
+      text-transform: none;
+    }
+
+    .circle-modal-subtitle {
+      margin: 0;
+      color: #c8c8c8;
+      font-size: 14px;
+      letter-spacing: 0.03em;
+    }
+
+    @media (max-width: 640px) {
+      .accreditation-circle-btn {
+        width: 100%;
+      }
     }
   </style>
 </body>
