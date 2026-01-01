@@ -26,6 +26,7 @@
   let favoritesLoaded = false;
   let accreditationQrLoaded = false;
   let accreditationStatsLoaded = false;
+  let isCircleRequestModalOpen = false;
 
   const RING_COLORS = {
     1: ['#000000'],
@@ -33,6 +34,28 @@
     3: ['#000000', '#000000', '#7C7C7C'],
     4: ['#000000', '#000000', '#7C7C7C', '#EDE7DB'],
     5: ['#000000', '#000000', '#7C7C7C', '#EDE7DB', '#B1001A'],
+  };
+
+  const getCircleRequestModalStorageKey = () => {
+    const userId =
+      window.CRONOX_USER?.id ||
+      window.CRONOX_USER?._id ||
+      window.CRONOX_USER?.userId ||
+      window.CRONOX_USER?.uid ||
+      window.CRONOX_USER?.memberCode ||
+      window.CRONOX_USER?.email;
+    if (!userId) return null;
+    return `cronox_circle_request_modal_seen_${userId}`;
+  };
+
+  const persistCircleRequestModalSeen = () => {
+    const storageKey = getCircleRequestModalStorageKey();
+    if (!storageKey) return;
+    try {
+      localStorage.setItem(storageKey, '1');
+    } catch (_) {
+      /* ignore storage errors */
+    }
   };
 
   const showProfileMessage = (text, type = 'success') => {
@@ -727,14 +750,19 @@
   const hideCircleRequestModal = () => {
     if (!circleRequestModal) return;
     circleRequestModal.hidden = true;
+    isCircleRequestModalOpen = false;
   };
 
   const showCircleRequestModal = () => {
-    if (!circleRequestModal) return;
+    if (!circleRequestModal || isCircleRequestModalOpen) return;
     circleRequestModal.hidden = false;
+    isCircleRequestModalOpen = true;
+    persistCircleRequestModalSeen();
   };
 
   const bindCirclePromotion = () => {
+    hideCircleRequestModal();
+
     if (circleRequestBtn) {
       circleRequestBtn.addEventListener('click', async () => {
         if (!api.requestCirclePromotion) return;
