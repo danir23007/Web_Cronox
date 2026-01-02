@@ -101,6 +101,7 @@ model User {
   stockMovements         StockMovement[]
   passwordResetTokens    PasswordResetToken[]
   discountCodes          DiscountCode[]
+  circleUpgradeRequests  CircleUpgradeRequest[]
 
   // ✅ FIX: relación correcta y naming consistente
   historial              Historial?
@@ -118,6 +119,29 @@ model CirclePromotionRequest {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([status, promoteAt])
+}
+
+model CircleUpgradeRequest {
+  id                 String                        @id @default(uuid())
+  userId             Int
+  fromCircle         Int                           @default(3)
+  toCircle           Int                           @default(4)
+  socialNetwork      CircleUpgradeSocialNetwork
+  username           String
+  usernameNormalized String
+  status             CircleUpgradeRequestStatus    @default(PENDING)
+  requestNumber      Int
+  createdAt          DateTime                      @default(now())
+  updatedAt          DateTime                      @updatedAt
+  reviewedAt         DateTime?
+  reviewedBy         String?
+  notes              String?
+  approvedAt         DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, requestNumber])
+  @@index([status, socialNetwork, usernameNormalized])
 }
 
 model Historial {
@@ -292,6 +316,20 @@ model ShippingMethod {
 enum Role {
   ADMIN
   USER
+}
+
+enum CircleUpgradeRequestStatus {
+  PENDING
+  APPROVED
+  DENIED
+}
+
+enum CircleUpgradeSocialNetwork {
+  INSTAGRAM
+  TIKTOK
+  X
+  FACEBOOK
+  YOUTUBE
 }
 
 enum OrderStatus {

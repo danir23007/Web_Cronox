@@ -448,9 +448,22 @@
     return data || null;
   };
 
+  api.getCircleUpgradeStatus = async () => {
+    const data = await request('/api/upgrade/3-4/status');
+    return data || null;
+  };
+
   api.requestCirclePromotion = async () => {
     const data = await request('/api/account/circle/request', {
       method: 'POST',
+    });
+    return data || null;
+  };
+
+  api.requestCircleUpgrade = async (payload) => {
+    const data = await request('/api/upgrade/3-4', {
+      method: 'POST',
+      body: payload,
     });
     return data || null;
   };
