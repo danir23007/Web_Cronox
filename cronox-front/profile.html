@@ -205,6 +205,13 @@
                       SOLICITAR ASCENSO DE CÍRCULO
                     </button>
                     <p class="accreditation-circle-status" data-circle-request-status hidden>Solicitud de ascenso enviada</p>
+                    <div class="accreditation-upgrade" data-circle4-cta hidden>
+                      <button type="button" class="accreditation-circle-btn" data-circle4-request-btn hidden>
+                        Solicitar ascenso al Círculo 4
+                      </button>
+                      <p class="accreditation-circle-status" data-circle4-status hidden>La solicitud de ascenso ha sido enviada.</p>
+                      <p class="accreditation-circle-status accreditation-circle-status--muted" data-circle4-cooldown hidden></p>
+                    </div>
                   </div>
                     <div class="accreditation-qr">
                       <p class="accreditation-qr__label">SELLO DE ACREDITACIÓN</p>
@@ -327,6 +334,57 @@
     </div>
   </div>
 
+  <div id="circleUpgradeModal" class="circle-modal-overlay" hidden>
+    <div class="circle-modal circle-modal--large" role="dialog" aria-modal="true">
+      <button type="button" class="circle-modal-close" data-circle-upgrade-close aria-label="Cerrar">×</button>
+      <div class="circle-modal-body circle-upgrade-body">
+        <div class="circle-upgrade-copy">
+          <p>Enhorabuena por haber llegado hasta el Círculo 3.</p>
+          <p>Si has llegado hasta aquí, valoramos el compromiso que estás teniendo con la marca.</p>
+          <p>El objetivo de CRONOX es crear una comunidad en la que se pueda ir escalando. Pero no todo el mundo puede estar en los círculos superiores y optar a ventajas exclusivas. En los círculos más cercanos al núcleo buscamos a los mejores. ¿Eres uno de ellos?</p>
+          <p>Para pasar al siguiente nivel, seleccionamos perfiles con alguna red social pública (o pública, al menos, en el momento de la validación): gente con estilo, con seguidores, con perfiles cuidados, o que haya subido algún post con alguna de nuestras prendas.</p>
+          <p>No necesitas cumplirlo todo, pero sí debes cumplir al menos uno de esos requisitos.</p>
+          <p>Además, si la red que nos facilitas es Instagram y lo tienes público, debes saber que contamos con un expositor de fotos de gente que viste CRONOX. Vamos actualizándolo cada cierto tiempo, eligiendo las mejores y renovándolo según la estética que busquemos en los perfiles o en la propia web.</p>
+          <p>Nosotros ganamos contenido; tú ganas visibilidad: si tu foto aparece, al pulsarla se redirigirá directamente a esa publicación dentro de tu perfil de Instagram. También es una forma de que os conectéis entre vosotros y de conectar nuestra comunidad.</p>
+          <p>A continuación, selecciona la red social que quieres adjuntar e indica tu nombre de usuario para que podamos validar si tu perfil es apto para formar parte del Círculo 4.</p>
+          <p>Suerte.</p>
+        </div>
+        <form id="circleUpgradeForm" class="circle-upgrade-form">
+          <div class="circle-upgrade-row">
+            <label class="circle-upgrade-label">Red social
+              <select data-circle-upgrade-social required>
+                <option value="">Selecciona una opción</option>
+                <option value="INSTAGRAM">Instagram</option>
+                <option value="TIKTOK">TikTok</option>
+                <option value="X">X</option>
+                <option value="FACEBOOK">Facebook</option>
+                <option value="YOUTUBE">YouTube</option>
+              </select>
+            </label>
+            <label class="circle-upgrade-label">Nombre de usuario
+              <input type="text" data-circle-upgrade-username required placeholder="@tunombre">
+            </label>
+          </div>
+          <p class="circle-upgrade-helper">Ambos campos son obligatorios.</p>
+          <div class="circle-upgrade-actions">
+            <button type="submit" class="accreditation-circle-btn circle-upgrade-submit">Enviar solicitud</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <div id="circleUpgradeSuccessModal" class="circle-modal-overlay" hidden>
+    <div class="circle-modal" role="dialog" aria-modal="true">
+      <button type="button" class="circle-modal-close" data-circle-upgrade-success-close aria-label="Cerrar">×</button>
+      <div class="circle-modal-body">
+        <p class="circle-modal-title">La solicitud de ascenso al Círculo 4 se ha enviado con éxito.</p>
+        <p class="circle-modal-subtitle">El proceso de validación puede demorarse entre 1 y 7 días laborables.</p>
+        <p class="circle-modal-subtitle">¡Gracias!</p>
+      </div>
+    </div>
+  </div>
+
   <!-- ===== CART DRAWER ===== -->
   <div id="cart-overlay" class="cart-overlay" hidden></div>
   <aside id="cart-drawer" class="cart-drawer" aria-hidden="true" aria-label="Carrito">
@@ -430,6 +488,16 @@
       color: #3b342e;
     }
 
+    .accreditation-circle-status--muted {
+      color: #5f5f5f;
+    }
+
+    .accreditation-upgrade {
+      display: grid;
+      gap: 8px;
+      margin-top: 12px;
+    }
+
     .circle-modal-overlay {
       position: fixed;
       inset: 0;
@@ -449,6 +517,10 @@
       border: 1px solid rgba(255, 255, 255, 0.12);
       box-shadow: 0 18px 60px rgba(0, 0, 0, 0.55);
       width: min(360px, 96vw);
+    }
+
+    .circle-modal--large {
+      width: min(760px, 96vw);
     }
 
     .circle-modal-close {
@@ -478,8 +550,92 @@
       letter-spacing: 0.03em;
     }
 
+    .circle-upgrade-body {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      max-height: 80vh;
+      overflow: auto;
+    }
+
+    .circle-upgrade-copy {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      line-height: 1.5;
+      color: #f0f0f0;
+      font-size: 14px;
+    }
+
+    .circle-upgrade-form {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .circle-upgrade-row {
+      display: flex;
+      gap: 12px;
+      align-items: flex-start;
+    }
+
+    .circle-upgrade-label {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      flex: 1;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: #dcdcdc;
+    }
+
+    .circle-upgrade-label select,
+    .circle-upgrade-label input {
+      width: 100%;
+      background: #0c0c0c;
+      border: 1px solid rgba(255, 255, 255, 0.18);
+      color: #f7f7f7;
+      padding: 10px 12px;
+      font-size: 14px;
+      border-radius: 0;
+    }
+
+    .circle-upgrade-label select:focus,
+    .circle-upgrade-label input:focus {
+      outline: 1px solid #e8e1d8;
+    }
+
+    .circle-upgrade-helper {
+      margin: 0;
+      font-size: 12px;
+      color: #b5b5b5;
+      letter-spacing: 0.03em;
+    }
+
+    .circle-upgrade-actions {
+      display: flex;
+      justify-content: flex-end;
+    }
+
+    .circle-upgrade-submit {
+      min-width: 220px;
+    }
+
     @media (max-width: 640px) {
       .accreditation-circle-btn {
+        width: 100%;
+      }
+
+      .circle-upgrade-row {
+        flex-direction: column;
+      }
+
+      .circle-upgrade-actions {
+        justify-content: stretch;
+      }
+
+      .circle-upgrade-submit {
         width: 100%;
       }
     }

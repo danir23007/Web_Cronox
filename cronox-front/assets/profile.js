@@ -20,6 +20,10 @@
   const accreditationStatCreatedAt = document.querySelector('[data-acc-stat="createdAt"]');
   const accreditationStatOrders = document.querySelector('[data-acc-stat="orders"]');
   const accreditationStatItems = document.querySelector('[data-acc-stat="items"]');
+  const getCircleUpgradeCta = () => document.querySelector('[data-circle4-cta]');
+  const getCircleUpgradeBtn = () => document.querySelector('[data-circle4-request-btn]');
+  const getCircleUpgradeStatusEl = () => document.querySelector('[data-circle4-status]');
+  const getCircleUpgradeCooldownEl = () => document.querySelector('[data-circle4-cooldown]');
 
   let favoritesLoaded = false;
   let accreditationQrLoaded = false;
@@ -28,6 +32,10 @@
 
   // Modal state (only open after successful request)
   let isCircleRequestModalOpen = false;
+  let isCircleUpgradeModalOpen = false;
+  let isCircleUpgradeSuccessModalOpen = false;
+  let circleUpgradeStatusLoaded = false;
+  let circleUpgradeStatus = null;
 
   const RING_COLORS = {
     1: ['#000000'],
@@ -42,6 +50,8 @@
   // -----------------------------
   const getCircleRequestBtn = () => document.querySelector('[data-circle-request-btn]');
   const getCircleRequestStatusEl = () => document.querySelector('[data-circle-request-status]');
+  const getCircleUpgradeModal = () => document.getElementById('circleUpgradeModal');
+  const getCircleUpgradeSuccessModal = () => document.getElementById('circleUpgradeSuccessModal');
 
   // Modal can be identified by:
   // 1) id="circleRequestModal" (expected)
@@ -88,6 +98,38 @@
     }
   };
 
+  const getCircleUpgradeSuccessStorageKey = () => {
+    const userId =
+      window.CRONOX_USER?.id ||
+      window.CRONOX_USER?._id ||
+      window.CRONOX_USER?.userId ||
+      window.CRONOX_USER?.uid ||
+      window.CRONOX_USER?.memberCode ||
+      window.CRONOX_USER?.email;
+    if (!userId) return null;
+    return `cronox_circle4_request_success_${userId}`;
+  };
+
+  const markCircleUpgradeModalSeen = (requestId) => {
+    const storageKey = getCircleUpgradeSuccessStorageKey();
+    if (!storageKey || !requestId) return;
+    try {
+      localStorage.setItem(storageKey, String(requestId));
+    } catch (_) {
+      /* ignore */
+    }
+  };
+
+  const hasSeenCircleUpgradeSuccess = (requestId) => {
+    const storageKey = getCircleUpgradeSuccessStorageKey();
+    if (!storageKey || !requestId) return false;
+    try {
+      return localStorage.getItem(storageKey) === String(requestId);
+    } catch (_) {
+      return false;
+    }
+  };
+
   const showProfileMessage = (text, type = 'success') => {
     if (!messageEl) return;
 
@@ -118,6 +160,11 @@
   };
 
   const safeTrim = (value) => (typeof value === 'string' ? value.trim() : '');
+  const formatCooldownMessage = (days) => {
+    const remaining = Number(days) || 0;
+    if (remaining <= 0) return '';
+    return `Ya has enviado una solicitud recientemente. Podrás volver a solicitar el ascenso en ${remaining} día${remaining === 1 ? '' : 's'}.`;
+  };
   const NAME_REGEX = /^[A-Za-zÁÉÍÓÚÜÑáéíóúüñ\s'-]+$/;
   const LETTERS_REGEX = /[A-Za-zÁÉÍÓÚÜÑáéíóúüñ]/;
   const optionalValue = (id) => {
@@ -418,14 +465,22 @@
   const loadAccreditationData = async () => {
     setAccreditationLoading(true);
     window.CRONOX_PROMOTION_STATUS = 'loading';
+    circleUpgradeStatusLoaded = false;
     fillAccreditation(window.CRONOX_USER);
     updatePromotionUi({
       circleLevel: window.CRONOX_USER?.circleLevel,
       promotionRequestStatus: 'loading',
     });
+    renderCircleUpgradeUi({
+      circleLevel: window.CRONOX_USER?.circleLevel,
+    });
 
     try {
-      await Promise.all([loadAccreditationStats(), ensureAccreditationQr()]);
+      await Promise.all([
+        loadAccreditationStats(),
+        ensureAccreditationQr(),
+        loadCircleUpgradeStatus({ skipLoader: true }),
+      ]);
     } finally {
       setAccreditationLoading(false);
     }
@@ -488,6 +543,73 @@
     }
   };
 
+  const renderCircleUpgradeUi = (status = circleUpgradeStatus) => {
+    const circleLevel = Number(
+      status?.circleLevel ?? window.CRONOX_ACCREDITATION_STATS?.circleLevel ?? window.CRONOX_USER?.circleLevel ?? 1,
+    );
+    const circleUpgradeCta = getCircleUpgradeCta();
+    const circleUpgradeBtn = getCircleUpgradeBtn();
+    const circleUpgradeStatusEl = getCircleUpgradeStatusEl();
+    const circleUpgradeCooldown = getCircleUpgradeCooldownEl();
+
+    const latestStatus = (status?.latestRequest?.status || '').toString().toUpperCase();
+    const hasPending = status?.hasPending || latestStatus === 'PENDING';
+    const hasApproved = status?.hasApproved || latestStatus === 'APPROVED' || circleLevel >= 4;
+    const cooldownDays = Number(status?.cooldownDaysRemaining || 0);
+    const canRequest = !!(status?.canRequest && !hasApproved);
+    const shouldShowCta = circleLevel === 3 && !hasApproved;
+
+    if (circleUpgradeCta) {
+      circleUpgradeCta.hidden = !shouldShowCta;
+    }
+
+    if (circleUpgradeBtn) {
+      circleUpgradeBtn.hidden = !shouldShowCta || !canRequest;
+      circleUpgradeBtn.disabled = !shouldShowCta || !canRequest;
+    }
+
+    if (circleUpgradeStatusEl) {
+      const showStatus = shouldShowCta && hasPending;
+      circleUpgradeStatusEl.hidden = !showStatus;
+      if (showStatus) {
+        circleUpgradeStatusEl.textContent = 'La solicitud de ascenso ha sido enviada.';
+      }
+    }
+
+    if (circleUpgradeCooldown) {
+      const showCooldown = shouldShowCta && !hasPending && !canRequest && cooldownDays > 0;
+      circleUpgradeCooldown.hidden = !showCooldown;
+      if (showCooldown) {
+        circleUpgradeCooldown.textContent = formatCooldownMessage(cooldownDays);
+      }
+    }
+  };
+
+  const setCircleUpgradeState = (status) => {
+    circleUpgradeStatus = status || null;
+    renderCircleUpgradeUi(circleUpgradeStatus);
+  };
+
+  const loadCircleUpgradeStatus = async ({ skipLoader = false } = {}) => {
+    if (!api.getCircleUpgradeStatus) return null;
+    try {
+      if (!skipLoader) setAccreditationLoading(true);
+      const status = await api.getCircleUpgradeStatus();
+      circleUpgradeStatusLoaded = true;
+      setCircleUpgradeState(status);
+      return status;
+    } catch (err) {
+      if (handleAuthRedirect(err)) return null;
+      console.warn('[PROFILE] No se pudo cargar el estado de ascenso 3→4', err);
+      circleUpgradeStatusLoaded = false;
+      renderCircleUpgradeUi();
+      showProfileMessage('No se pudo cargar el estado de tu solicitud de Círculo 4.', 'error');
+      return null;
+    } finally {
+      if (!skipLoader) setAccreditationLoading(false);
+    }
+  };
+
   // -----------------------------
   // Modal show/hide (bulletproof)
   // -----------------------------
@@ -514,10 +636,57 @@
     persistCircleRequestModalSeen();
   };
 
+  const hideCircleUpgradeModal = () => {
+    const modal = getCircleUpgradeModal();
+    if (!modal) return;
+    modal.hidden = true;
+    modal.style.display = 'none';
+    modal.setAttribute('aria-hidden', 'true');
+    isCircleUpgradeModalOpen = false;
+  };
+
+  const showCircleUpgradeModal = () => {
+    const modal = getCircleUpgradeModal();
+    if (!modal || isCircleUpgradeModalOpen) return;
+    modal.hidden = false;
+    modal.style.display = '';
+    modal.setAttribute('aria-hidden', 'false');
+    isCircleUpgradeModalOpen = true;
+  };
+
+  const hideCircleUpgradeSuccessModal = () => {
+    const modal = getCircleUpgradeSuccessModal();
+    if (!modal) return;
+    modal.hidden = true;
+    modal.style.display = 'none';
+    modal.setAttribute('aria-hidden', 'true');
+    isCircleUpgradeSuccessModalOpen = false;
+  };
+
+  const showCircleUpgradeSuccessModal = (requestId) => {
+    const modal = getCircleUpgradeSuccessModal();
+    if (!modal) {
+      markCircleUpgradeModalSeen(requestId);
+      return;
+    }
+
+    if (isCircleUpgradeSuccessModalOpen || hasSeenCircleUpgradeSuccess(requestId)) {
+      markCircleUpgradeModalSeen(requestId);
+      return;
+    }
+
+    modal.hidden = false;
+    modal.style.display = '';
+    modal.setAttribute('aria-hidden', 'false');
+    isCircleUpgradeSuccessModalOpen = true;
+    markCircleUpgradeModalSeen(requestId);
+  };
+
   const loadAccreditationStats = async () => {
     if (!api.getAccreditationStats) {
       fillAccreditationStats();
       updatePromotionUi();
+      renderCircleUpgradeUi(circleUpgradeStatus);
       return;
     }
 
@@ -528,6 +697,7 @@
         circleLevel: window.CRONOX_ACCREDITATION_STATS?.circleLevel,
         promotionRequestStatus: window.CRONOX_ACCREDITATION_STATS?.promotionRequestStatus,
       });
+      renderCircleUpgradeUi(circleUpgradeStatus);
       return;
     }
 
@@ -544,6 +714,7 @@
         circleLevel: stats?.circleLevel,
         promotionRequestStatus: stats?.promotionRequestStatus,
       });
+      renderCircleUpgradeUi(circleUpgradeStatus || { circleLevel: stats?.circleLevel });
     } catch (err) {
       if (handleAuthRedirect(err)) return;
       console.warn('[PROFILE] No se pudieron cargar las estadísticas de acreditación', err);
@@ -948,6 +1119,93 @@
   };
 
   // -----------------------------
+  // Circle 3 → 4 upgrade binding
+  // -----------------------------
+  const bindCircleUpgrade = () => {
+    const btn = getCircleUpgradeBtn();
+    const modal = getCircleUpgradeModal();
+    const successModal = getCircleUpgradeSuccessModal();
+    const form = document.getElementById('circleUpgradeForm');
+    const socialField = modal?.querySelector('[data-circle-upgrade-social]');
+    const usernameField = modal?.querySelector('[data-circle-upgrade-username]');
+    const submitBtn = form?.querySelector('[type="submit"]');
+
+    if (btn) {
+      btn.addEventListener('click', () => {
+        showCircleUpgradeModal();
+      });
+    }
+
+    if (modal) {
+      const closeBtn = modal.querySelector('[data-circle-upgrade-close]');
+      if (closeBtn) {
+        closeBtn.addEventListener('click', (ev) => {
+          ev.preventDefault();
+          ev.stopPropagation();
+          hideCircleUpgradeModal();
+        });
+      }
+      modal.addEventListener('click', (ev) => {
+        if (ev.target === modal) {
+          hideCircleUpgradeModal();
+        }
+      });
+    }
+
+    if (successModal) {
+      const closeBtn = successModal.querySelector('[data-circle-upgrade-success-close]');
+      if (closeBtn) {
+        closeBtn.addEventListener('click', (ev) => {
+          ev.preventDefault();
+          ev.stopPropagation();
+          hideCircleUpgradeSuccessModal();
+        });
+      }
+      successModal.addEventListener('click', (ev) => {
+        if (ev.target === successModal) {
+          hideCircleUpgradeSuccessModal();
+        }
+      });
+    }
+
+    if (form) {
+      form.addEventListener('submit', async (ev) => {
+        ev.preventDefault();
+        if (!api.requestCircleUpgrade) return;
+        const socialNetwork = (socialField?.value || '').trim();
+        const username = safeTrim(usernameField?.value || '');
+
+        if (!socialNetwork || !username) {
+          showProfileMessage('Selecciona una red social e introduce tu usuario.', 'error');
+          return;
+        }
+
+        if (submitBtn) submitBtn.disabled = true;
+        setAccreditationLoading(true);
+        try {
+          const request = await api.requestCircleUpgrade({ socialNetwork, username });
+          form.reset();
+          hideCircleUpgradeModal();
+          await loadCircleUpgradeStatus({ skipLoader: true });
+          renderCircleUpgradeUi(circleUpgradeStatus);
+          showCircleUpgradeSuccessModal(request?.id);
+        } catch (err) {
+          if (handleAuthRedirect(err)) return;
+          console.error('[PROFILE] Error al solicitar ascenso 3→4', err);
+          const msg =
+            err?.payload?.message ||
+            err?.message ||
+            'No se pudo enviar la solicitud de ascenso al Círculo 4.';
+          showProfileMessage(msg, 'error');
+        } finally {
+          if (submitBtn) submitBtn.disabled = false;
+          setAccreditationLoading(false);
+        }
+      });
+    }
+  };
+
+  // -----------------------------
   // Promotion binding (fixed)
   // -----------------------------
   const bindCirclePromotion = () => {
@@ -1025,6 +1283,7 @@
   document.addEventListener('DOMContentLoaded', () => {
     bindAccountForm();
     bindAddressForm();
+    bindCircleUpgrade();
     bindCirclePromotion();
     bindTabs();
     bindBackLinks();
