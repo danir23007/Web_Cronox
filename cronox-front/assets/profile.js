@@ -34,8 +34,10 @@
   let isCircleRequestModalOpen = false;
   let isCircleUpgradeModalOpen = false;
   let isCircleUpgradeSuccessModalOpen = false;
+  let circleUpgradeJustSubmitted = false;
   let circleUpgradeStatusLoaded = false;
   let circleUpgradeStatus = null;
+  let lastCircleUpgradeRequestId = null;
 
   const RING_COLORS = {
     1: ['#000000'],
@@ -553,40 +555,49 @@
     const circleUpgradeCooldown = getCircleUpgradeCooldownEl();
 
     const latestStatus = (status?.latestRequest?.status || '').toString().toUpperCase();
-    const hasPending = status?.hasPending || latestStatus === 'PENDING';
-    const hasApproved = status?.hasApproved || latestStatus === 'APPROVED' || circleLevel >= 4;
+    const hasPending = Boolean(status?.hasPending || latestStatus === 'PENDING');
+    const hasApprovedRequest = Boolean(status?.hasApproved || latestStatus === 'APPROVED');
     const cooldownDays = Number(status?.cooldownDaysRemaining || 0);
-    const canRequest = !!(status?.canRequest && !hasApproved);
-    const shouldShowCta = circleLevel === 3 && !hasApproved;
+    const isCircleThree = circleLevel === 3;
+    const canRequest =
+      status?.canRequest ?? (isCircleThree && !hasPending && !hasApprovedRequest && cooldownDays <= 0);
+    const shouldShowFlow = isCircleThree;
+    const shouldShowBtn = shouldShowFlow && !!canRequest && !hasApprovedRequest;
+    const shouldShowStatus = shouldShowFlow && (hasPending || hasApprovedRequest);
+    const shouldShowCooldown = shouldShowFlow && !shouldShowBtn && !shouldShowStatus && cooldownDays > 0;
 
     if (circleUpgradeCta) {
-      circleUpgradeCta.hidden = !shouldShowCta;
+      circleUpgradeCta.hidden = !shouldShowFlow;
     }
 
     if (circleUpgradeBtn) {
-      circleUpgradeBtn.hidden = !shouldShowCta || !canRequest;
-      circleUpgradeBtn.disabled = !shouldShowCta || !canRequest;
+      circleUpgradeBtn.hidden = !shouldShowBtn;
+      circleUpgradeBtn.disabled = !shouldShowBtn;
     }
 
     if (circleUpgradeStatusEl) {
-      const showStatus = shouldShowCta && hasPending;
-      circleUpgradeStatusEl.hidden = !showStatus;
-      if (showStatus) {
+      circleUpgradeStatusEl.hidden = !shouldShowStatus;
+      if (shouldShowStatus) {
         circleUpgradeStatusEl.textContent = 'La solicitud de ascenso ha sido enviada.';
       }
     }
 
     if (circleUpgradeCooldown) {
-      const showCooldown = shouldShowCta && !hasPending && !canRequest && cooldownDays > 0;
-      circleUpgradeCooldown.hidden = !showCooldown;
-      if (showCooldown) {
+      circleUpgradeCooldown.hidden = !shouldShowCooldown;
+      if (shouldShowCooldown) {
         circleUpgradeCooldown.textContent = formatCooldownMessage(cooldownDays);
       }
+    }
+
+    if (!shouldShowFlow || circleLevel >= 4) {
+      hideCircleUpgradeModal();
+      hideCircleUpgradeSuccessModal();
     }
   };
 
   const setCircleUpgradeState = (status) => {
     circleUpgradeStatus = status || null;
+    lastCircleUpgradeRequestId = status?.latestRequest?.id || null;
     renderCircleUpgradeUi(circleUpgradeStatus);
   };
 
@@ -647,7 +658,20 @@
 
   const showCircleUpgradeModal = () => {
     const modal = getCircleUpgradeModal();
-    if (!modal || isCircleUpgradeModalOpen) return;
+    const btn = getCircleUpgradeBtn();
+    const circleLevel = Number(
+      circleUpgradeStatus?.circleLevel ?? window.CRONOX_ACCREDITATION_STATS?.circleLevel ?? window.CRONOX_USER?.circleLevel,
+    );
+    const latestStatus = (circleUpgradeStatus?.latestRequest?.status || '').toString().toUpperCase();
+    const hasPending = Boolean(circleUpgradeStatus?.hasPending || latestStatus === 'PENDING');
+    const hasApprovedRequest = Boolean(circleUpgradeStatus?.hasApproved || latestStatus === 'APPROVED');
+    const cooldownDays = Number(circleUpgradeStatus?.cooldownDaysRemaining || 0);
+    const canRequest =
+      circleUpgradeStatus?.canRequest ??
+      (circleLevel === 3 && !hasPending && !hasApprovedRequest && cooldownDays <= 0);
+    const eligible = circleLevel === 3 && canRequest && !hasApprovedRequest;
+
+    if (!modal || isCircleUpgradeModalOpen || !eligible || (btn && (btn.hidden || btn.disabled))) return;
     modal.hidden = false;
     modal.style.display = '';
     modal.setAttribute('aria-hidden', 'false');
@@ -661,17 +685,24 @@
     modal.style.display = 'none';
     modal.setAttribute('aria-hidden', 'true');
     isCircleUpgradeSuccessModalOpen = false;
+    circleUpgradeJustSubmitted = false;
   };
 
   const showCircleUpgradeSuccessModal = (requestId) => {
     const modal = getCircleUpgradeSuccessModal();
+    if (!circleUpgradeJustSubmitted) {
+      return;
+    }
+
     if (!modal) {
       markCircleUpgradeModalSeen(requestId);
+      circleUpgradeJustSubmitted = false;
       return;
     }
 
     if (isCircleUpgradeSuccessModalOpen || hasSeenCircleUpgradeSuccess(requestId)) {
       markCircleUpgradeModalSeen(requestId);
+      circleUpgradeJustSubmitted = false;
       return;
     }
 
@@ -679,6 +710,7 @@
     modal.style.display = '';
     modal.setAttribute('aria-hidden', 'false');
     isCircleUpgradeSuccessModalOpen = true;
+    circleUpgradeJustSubmitted = false;
     markCircleUpgradeModalSeen(requestId);
   };
 
@@ -1122,6 +1154,9 @@
   // Circle 3 → 4 upgrade binding
   // -----------------------------
   const bindCircleUpgrade = () => {
+    hideCircleUpgradeModal();
+    hideCircleUpgradeSuccessModal();
+
     const btn = getCircleUpgradeBtn();
     const modal = getCircleUpgradeModal();
     const successModal = getCircleUpgradeSuccessModal();
@@ -1188,6 +1223,8 @@
           hideCircleUpgradeModal();
           await loadCircleUpgradeStatus({ skipLoader: true });
           renderCircleUpgradeUi(circleUpgradeStatus);
+          circleUpgradeJustSubmitted = true;
+          lastCircleUpgradeRequestId = request?.id || lastCircleUpgradeRequestId;
           showCircleUpgradeSuccessModal(request?.id);
         } catch (err) {
           if (handleAuthRedirect(err)) return;
