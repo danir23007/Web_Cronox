@@ -1,4 +1,9 @@
-import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { Prisma, OrderStatus } from '@prisma/client';
 import { Decimal } from '@prisma/client/runtime/library';
 import { PrismaService } from '../prisma/prisma.service';
@@ -39,6 +44,9 @@ export type MeOrder = {
   currency: string;
 };
 
+const NAME_REGEX = /^[A-Za-zÁÉÍÓÚÜÑáéíóúüñ\s'-]+$/u;
+const LETTERS_REGEX = /[A-Za-zÁÉÍÓÚÜÑáéíóúüñ]/u;
+
 @Injectable()
 export class MeService {
   constructor(private readonly prisma: PrismaService, private readonly usersService: UsersService) {}
@@ -62,14 +70,23 @@ export class MeService {
       throw new NotFoundException('User not found');
     }
 
+    const ensureValidName = (value?: string | null) => {
+      if (value == null || value === '') return;
+      if (!NAME_REGEX.test(value)) {
+        throw new BadRequestException('El nombre y el apellido no pueden contener números.');
+      }
+    };
+
     const data: Prisma.UserUpdateInput = {};
     const memberCode = await this.usersService.ensureMemberCode(userId);
 
     if (dto.firstName !== undefined) {
+      ensureValidName(dto.firstName);
       data.firstName = dto.firstName;
     }
 
     if (dto.lastName !== undefined) {
+      ensureValidName(dto.lastName);
       data.lastName = dto.lastName;
     }
 
@@ -127,10 +144,24 @@ export class MeService {
       where: { userId, isDefault: true },
     });
 
+    let phone = dto.phone;
+
+    if (phone) {
+      if (LETTERS_REGEX.test(phone)) {
+        throw new BadRequestException('El teléfono solo puede contener números.');
+      }
+
+      phone = phone.replace(/[^\d+]/g, '');
+
+      if (!phone) {
+        phone = undefined;
+      }
+    }
+
     const data: Prisma.AddressUncheckedCreateInput = {
       userId,
       name: dto.name,
-      phone: dto.phone ?? null,
+      phone: phone ?? null,
       line1: dto.line1,
       line2: dto.line2 ?? null,
       city: dto.city,
@@ -159,7 +190,7 @@ export class MeService {
         where: { id: existingDefault.id },
         data: {
           name: dto.name,
-          phone: dto.phone ?? null,
+          phone: phone ?? null,
           line1: dto.line1,
           line2: dto.line2 ?? null,
           city: dto.city,

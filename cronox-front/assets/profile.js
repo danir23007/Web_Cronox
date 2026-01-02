@@ -115,6 +115,8 @@
   };
 
   const safeTrim = (value) => (typeof value === 'string' ? value.trim() : '');
+  const NAME_REGEX = /^[A-Za-zÁÉÍÓÚÜÑáéíóúüñ\s'-]+$/;
+  const LETTERS_REGEX = /[A-Za-zÁÉÍÓÚÜÑáéíóúüñ]/;
   const optionalValue = (id) => {
     const v = safeTrim($(id)?.value || '');
     return v || undefined;
@@ -375,6 +377,9 @@
 
     if (circleRequestStatus) {
       const showStatus = status === 'pending' && normalizedLevel === 2;
+      if (showStatus) {
+        circleRequestStatus.textContent = 'Solicitud de ascenso enviada';
+      }
       circleRequestStatus.hidden = !showStatus;
     }
   };
@@ -675,9 +680,21 @@
     form.addEventListener('submit', async (ev) => {
       ev.preventDefault();
       if (!api.updateMe) return;
+      const firstName = optionalValue('firstName');
+      const lastName = optionalValue('lastName');
+
+      const invalidName =
+        (firstName && (!NAME_REGEX.test(firstName) || /\d/.test(firstName))) ||
+        (lastName && (!NAME_REGEX.test(lastName) || /\d/.test(lastName)));
+
+      if (invalidName) {
+        showProfileMessage('El nombre y el apellido no pueden contener números.', 'error');
+        return;
+      }
+
       const payload = {
-        firstName: optionalValue('firstName'),
-        lastName: optionalValue('lastName'),
+        firstName,
+        lastName,
         email: optionalValue('email'),
       };
       try {
@@ -701,9 +718,20 @@
     form.addEventListener('submit', async (ev) => {
       ev.preventDefault();
       if (!api.upsertAddress) return;
+      let phone = optionalValue('addrPhone');
+      if (phone && LETTERS_REGEX.test(phone)) {
+        showProfileMessage('El teléfono solo puede contener números.', 'error');
+        return;
+      }
+      if (phone) {
+        phone = phone.replace(/[^\d+]/g, '');
+        if (!phone) {
+          phone = undefined;
+        }
+      }
       const payload = {
         name: requiredValue('addrName'),
-        phone: optionalValue('addrPhone'),
+        phone,
         line1: requiredValue('addrLine1'),
         line2: optionalValue('addrLine2'),
         city: requiredValue('addrCity'),
@@ -831,15 +859,30 @@
     hideCircleRequestModal();
 
     const btn = getCircleRequestBtn();
+    const circleRequestStatus = getCircleRequestStatusEl();
     if (btn) {
       btn.addEventListener('click', async () => {
         if (!api.requestCirclePromotion) return;
+
+        window.CRONOX_PROMOTION_STATUS = 'pending';
+        btn.hidden = true;
+        btn.disabled = true;
+
+        if (circleRequestStatus) {
+          circleRequestStatus.hidden = false;
+          circleRequestStatus.textContent = 'Solicitud de ascenso enviada';
+        }
+
+        updatePromotionUi({ promotionRequestStatus: 'pending' });
+
         try {
-          btn.disabled = true;
           const response = await api.requestCirclePromotion();
+          const promotionStatus = response?.status || 'pending';
+
+          window.CRONOX_PROMOTION_STATUS = promotionStatus;
           updatePromotionUi({
             circleLevel: 2,
-            promotionRequestStatus: response?.status || 'pending',
+            promotionRequestStatus: promotionStatus,
           });
           // Only show after successful request
           showCircleRequestModal();
@@ -848,6 +891,15 @@
           console.error('[PROFILE] Error al solicitar ascenso de círculo', err);
           const msg = err?.payload?.message || err?.message || 'No se pudo solicitar el ascenso.';
           showProfileMessage(msg, 'error');
+          window.CRONOX_PROMOTION_STATUS = 'none';
+          if (circleRequestStatus) {
+            circleRequestStatus.hidden = true;
+          }
+          updatePromotionUi({
+            circleLevel: window.CRONOX_USER?.circleLevel,
+            promotionRequestStatus: 'none',
+          });
+          btn.hidden = false;
           btn.disabled = false;
         }
       });
