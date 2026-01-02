@@ -15,6 +15,7 @@
   const accreditationCircle = document.querySelector('.accreditation-circle');
   const accreditationSymbol = document.querySelector('[data-accreditation-rings]');
   const accreditationQr = $('cronox-member-qr');
+  const accreditationBook = accreditationSection?.querySelector('.crx-accreditation-book');
   const accreditationStatCircle = document.querySelector('[data-acc-stat="circle"]');
   const accreditationStatCreatedAt = document.querySelector('[data-acc-stat="createdAt"]');
   const accreditationStatOrders = document.querySelector('[data-acc-stat="orders"]');
@@ -23,7 +24,7 @@
   let favoritesLoaded = false;
   let accreditationQrLoaded = false;
   let accreditationStatsLoaded = false;
-  let accreditationLoadingOverlay = null;
+  let globalLoader = null;
 
   // Modal state (only open after successful request)
   let isCircleRequestModalOpen = false;
@@ -330,49 +331,103 @@
     }
   };
 
-  const ensureAccreditationOverlay = () => {
-    if (accreditationLoadingOverlay && accreditationLoadingOverlay.isConnected) {
-      return accreditationLoadingOverlay;
+  const ensureGlobalLoader = () => {
+    if (globalLoader && globalLoader.isConnected) return globalLoader;
+
+    const existing = document.getElementById('preloader');
+    if (existing) {
+      existing.dataset.persistent = 'true';
+      existing.hidden = true;
+      existing.style.display = 'none';
+      globalLoader = existing;
+      return globalLoader;
     }
 
-    const container =
-      accreditationSection?.querySelector('.crx-accreditation-book') || accreditationSection;
-    if (!container) return null;
+    const loader = document.createElement('div');
+    loader.id = 'preloader';
+    loader.className = 'preloader';
+    loader.dataset.persistent = 'true';
+    loader.setAttribute('aria-hidden', 'true');
+    loader.setAttribute('aria-live', 'polite');
+    loader.hidden = true;
+    loader.style.display = 'none';
 
-    if (!container.style.position || container.style.position === 'static') {
-      container.style.position = 'relative';
+    const inner = document.createElement('div');
+    inner.className = 'preloader-inner';
+
+    const img = document.createElement('img');
+    img.src = 'assets/CRONOX-GIF.gif';
+    img.alt = 'CRONOX';
+    img.className = 'preloader__logo';
+    img.decoding = 'async';
+
+    inner.appendChild(img);
+    loader.appendChild(inner);
+    document.body.appendChild(loader);
+    globalLoader = loader;
+    return loader;
+  };
+
+  const setGlobalLoaderVisible = (isVisible) => {
+    const loader = ensureGlobalLoader();
+    if (!loader) return;
+
+    loader.hidden = !isVisible;
+    loader.style.display = isVisible ? 'flex' : 'none';
+    if (isVisible) {
+      document.body.classList.add('is-loading');
+      document.body.classList.remove('is-loaded');
+    } else {
+      document.body.classList.remove('is-loading');
+      document.body.classList.add('is-loaded');
     }
-
-    const overlay = document.createElement('div');
-    overlay.id = 'accreditationLoadingOverlay';
-    overlay.setAttribute('role', 'status');
-    overlay.setAttribute('aria-live', 'polite');
-    overlay.textContent = 'CARGANDO…';
-    overlay.style.position = 'absolute';
-    overlay.style.inset = '0';
-    overlay.style.display = 'none';
-    overlay.style.alignItems = 'center';
-    overlay.style.justifyContent = 'center';
-    overlay.style.background = 'rgba(0, 0, 0, 0.6)';
-    overlay.style.color = '#f5f0e9';
-    overlay.style.letterSpacing = '0.12em';
-    overlay.style.fontSize = '14px';
-    overlay.style.textTransform = 'uppercase';
-    overlay.style.zIndex = '5';
-    overlay.style.pointerEvents = 'auto';
-
-    container.appendChild(overlay);
-    accreditationLoadingOverlay = overlay;
-    return overlay;
   };
 
   const setAccreditationLoading = (isLoading) => {
-    const overlay = ensureAccreditationOverlay();
     if (accreditationSection) {
       accreditationSection.classList.toggle('is-loading', !!isLoading);
     }
-    if (overlay) {
-      overlay.style.display = isLoading ? 'flex' : 'none';
+    if (accreditationBook) {
+      accreditationBook.hidden = !!isLoading;
+    }
+    setGlobalLoaderVisible(!!isLoading);
+  };
+
+  const waitForImageLoad = (img) =>
+    new Promise((resolve) => {
+      if (!img) return resolve();
+      if (img.complete && img.naturalWidth > 0) {
+        resolve();
+        return;
+      }
+      const onDone = () => resolve();
+      img.addEventListener('load', onDone, { once: true });
+      img.addEventListener('error', onDone, { once: true });
+    });
+
+  const ensureAccreditationQr = () => {
+    if (!accreditationQr) return Promise.resolve();
+    if (!accreditationQrLoaded) {
+      const base = typeof window.CRONOX_API_BASE === 'string' ? window.CRONOX_API_BASE : '';
+      accreditationQr.src = `${base}/api/membership/me/qr`;
+      accreditationQrLoaded = true;
+    }
+    return waitForImageLoad(accreditationQr);
+  };
+
+  const loadAccreditationData = async () => {
+    setAccreditationLoading(true);
+    window.CRONOX_PROMOTION_STATUS = 'loading';
+    fillAccreditation(window.CRONOX_USER);
+    updatePromotionUi({
+      circleLevel: window.CRONOX_USER?.circleLevel,
+      promotionRequestStatus: 'loading',
+    });
+
+    try {
+      await Promise.all([loadAccreditationStats(), ensureAccreditationQr()]);
+    } finally {
+      setAccreditationLoading(false);
     }
   };
 
@@ -460,12 +515,9 @@
   };
 
   const loadAccreditationStats = async () => {
-    setAccreditationLoading(true);
-
     if (!api.getAccreditationStats) {
       fillAccreditationStats();
       updatePromotionUi();
-      setAccreditationLoading(false);
       return;
     }
 
@@ -476,7 +528,6 @@
         circleLevel: window.CRONOX_ACCREDITATION_STATS?.circleLevel,
         promotionRequestStatus: window.CRONOX_ACCREDITATION_STATS?.promotionRequestStatus,
       });
-      setAccreditationLoading(false);
       return;
     }
 
@@ -498,8 +549,6 @@
       console.warn('[PROFILE] No se pudieron cargar las estadísticas de acreditación', err);
       accreditationStatsLoaded = false;
       showProfileMessage('No se pudieron cargar tus datos de acreditación.', 'error');
-    } finally {
-      setAccreditationLoading(false);
     }
   };
 
@@ -865,28 +914,14 @@
     const tabs = Array.from(document.querySelectorAll('.profile-tab'));
     const sections = Array.from(document.querySelectorAll('.profile-section'));
 
-    const activate = (target) => {
+    const activate = async (target) => {
       tabs.forEach((tab) => tab.classList.toggle('is-active', tab.dataset.profileTab === target));
       sections.forEach((section) =>
         section.classList.toggle('is-active', section.dataset.profileSection === target)
       );
 
       if (target === 'favorites') loadFavorites();
-      if (target === 'accreditation') {
-        setAccreditationLoading(true);
-        window.CRONOX_PROMOTION_STATUS = 'loading';
-        fillAccreditation(window.CRONOX_USER);
-        updatePromotionUi({
-          circleLevel: window.CRONOX_USER?.circleLevel,
-          promotionRequestStatus: 'loading',
-        });
-        loadAccreditationStats();
-        if (accreditationQr && !accreditationQrLoaded) {
-          const base = typeof window.CRONOX_API_BASE === 'string' ? window.CRONOX_API_BASE : '';
-          accreditationQr.src = `${base}/api/membership/me/qr`;
-          accreditationQrLoaded = true;
-        }
-      }
+      if (target === 'accreditation') await loadAccreditationData();
     };
 
     tabs.forEach((tab) => {
@@ -897,7 +932,7 @@
           await handleLogout();
           return;
         }
-        activate(target);
+        await activate(target);
       });
     });
 

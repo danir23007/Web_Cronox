@@ -18,6 +18,7 @@
   window.addEventListener('load', () => {
     const body = document.body;
     const preloader = document.getElementById('preloader');
+    const shouldRemovePreloader = preloader && preloader.dataset.persistent !== 'true';
     // Retraso aleatorio del preloader entre 1s y 2s para mostrar la animación
     const randomDelay = Math.floor(Math.random() * (2000 - 1000 + 1)) + 1000;
 
@@ -28,8 +29,13 @@
       }
 
       if (preloader) {
-        // Espera ligeramente más que la transición CSS y elimina el nodo para evitar parpadeos
-        setTimeout(() => preloader.remove(), 600);
+        if (shouldRemovePreloader) {
+          // Espera ligeramente más que la transición CSS y elimina el nodo para evitar parpadeos
+          setTimeout(() => preloader.remove(), 600);
+        } else {
+          preloader.hidden = true;
+          preloader.style.display = 'none';
+        }
       }
     }, randomDelay);
   });
