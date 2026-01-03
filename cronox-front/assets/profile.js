@@ -598,9 +598,9 @@
     const isCircleThree = circleLevel === 3;
     const canRequest =
       status?.canRequest ?? (isCircleThree && !hasPending && !hasApprovedRequest && cooldownDays <= 0);
-    const shouldShowFlow = isCircleThree;
-    const shouldShowBtn = shouldShowFlow && !!canRequest && !hasApprovedRequest;
-    const shouldShowStatus = shouldShowFlow && (hasPending || hasApprovedRequest);
+    const shouldShowFlow = isCircleThree && !hasApprovedRequest;
+    const shouldShowBtn = shouldShowFlow && !!canRequest;
+    const shouldShowStatus = shouldShowFlow && hasPending;
     const shouldShowCooldown = shouldShowFlow && !shouldShowBtn && !shouldShowStatus && cooldownDays > 0;
     debugAccreditationLog('Circle 4 UI state', {
       circleRaw: circleLevelRaw,
