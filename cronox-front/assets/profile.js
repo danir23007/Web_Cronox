@@ -36,6 +36,7 @@
   let isCircleUpgradeSuccessModalOpen = false;
   let circleUpgradeJustSubmitted = false;
   let circleUpgradeStatusLoaded = false;
+  let circleUpgradeStatusLoading = false;
   let circleUpgradeStatus = null;
   let lastCircleUpgradeRequestId = null;
 
@@ -504,6 +505,7 @@
     setAccreditationLoading(true);
     window.CRONOX_PROMOTION_STATUS = 'loading';
     circleUpgradeStatusLoaded = false;
+    circleUpgradeStatusLoading = true;
     const normalizedUserCircle = getNormalizedCircleLevel(window.CRONOX_USER?.circleLevel, window.CRONOX_USER?.circleLevel);
     fillAccreditation({ ...(window.CRONOX_USER || {}), circleLevel: normalizedUserCircle });
     updatePromotionUi({
@@ -591,37 +593,65 @@
     const circleUpgradeStatusEl = getCircleUpgradeStatusEl();
     const circleUpgradeCooldown = getCircleUpgradeCooldownEl();
 
-    const latestStatus = (status?.latestRequest?.status || '').toString().toUpperCase();
-    const hasPending = Boolean(status?.hasPending || latestStatus === 'PENDING');
+    const latestStatus = (status?.latestRequest?.status || status?.status || '').toString().toUpperCase();
+    const hasPending =
+      Boolean(status?.hasPending) || latestStatus === 'PENDING' || latestStatus === 'REQUESTED' || latestStatus === 'SENT';
     const hasApprovedRequest = Boolean(status?.hasApproved || latestStatus === 'APPROVED');
     const cooldownDays = Number(status?.cooldownDaysRemaining ?? status?.cooldownDays ?? 0);
     const isCircleThree = circleLevel === 3;
+    const isLoadingStatus = circleUpgradeStatusLoading || status === 'loading';
+
+    let computedStatus = 'NONE';
+    if (hasApprovedRequest || circleLevel >= 4) {
+      computedStatus = 'APPROVED';
+    } else if (hasPending) {
+      computedStatus = 'PENDING';
+    } else if (latestStatus === 'DENIED' || latestStatus === 'REJECTED') {
+      computedStatus = 'DENIED';
+    } else if (status?.error) {
+      computedStatus = 'ERROR';
+    }
+
     const canRequest =
-      status?.canRequest ?? (isCircleThree && !hasPending && !hasApprovedRequest && cooldownDays <= 0);
-    const shouldShowFlow = isCircleThree && !hasApprovedRequest;
-    const shouldShowBtn = shouldShowFlow && !!canRequest;
-    const shouldShowStatus = shouldShowFlow && hasPending;
-    const shouldShowCooldown = shouldShowFlow && !shouldShowBtn && !shouldShowStatus && cooldownDays > 0;
+      status?.canRequest ??
+      (isCircleThree &&
+        computedStatus !== 'PENDING' &&
+        computedStatus !== 'APPROVED' &&
+        cooldownDays <= 0);
+
+    const shouldShowFlow = isCircleThree && computedStatus !== 'APPROVED' && circleLevel < 4;
+    const canShowCtaContent = shouldShowFlow || isLoadingStatus;
+    const canShowButton =
+      shouldShowFlow &&
+      !isLoadingStatus &&
+      (computedStatus === 'NONE' || computedStatus === 'ERROR' || (computedStatus === 'DENIED' && cooldownDays <= 0)) &&
+      !!canRequest;
+    const shouldShowStatus = shouldShowFlow && computedStatus === 'PENDING';
+    const shouldShowCooldown = shouldShowFlow && computedStatus === 'DENIED' && cooldownDays > 0;
+
     debugAccreditationLog('Circle 4 UI state', {
       circleRaw: circleLevelRaw,
       circleNormalized: circleLevel,
       latestStatus,
+      computedStatus,
       hasPending,
       hasApprovedRequest,
       cooldownDays,
+      isLoadingStatus,
       canRequest,
-      shouldShowBtn,
+      shouldShowFlow,
+      canShowButton,
       shouldShowStatus,
       shouldShowCooldown,
     });
 
     if (circleUpgradeCta) {
-      circleUpgradeCta.hidden = !shouldShowFlow;
+      circleUpgradeCta.hidden = !canShowCtaContent || !shouldShowFlow;
     }
 
     if (circleUpgradeBtn) {
-      circleUpgradeBtn.hidden = !shouldShowBtn;
-      circleUpgradeBtn.disabled = !shouldShowBtn;
+      circleUpgradeBtn.hidden = !canShowButton;
+      circleUpgradeBtn.disabled = !canShowButton;
     }
 
     if (circleUpgradeStatusEl) {
@@ -638,7 +668,7 @@
       }
     }
 
-    if (!shouldShowFlow || circleLevel >= 4) {
+    if (!shouldShowFlow || circleLevel >= 4 || computedStatus === 'APPROVED') {
       hideCircleUpgradeModal();
       hideCircleUpgradeSuccessModal();
     }
@@ -651,8 +681,14 @@
   };
 
   const loadCircleUpgradeStatus = async ({ skipLoader = false } = {}) => {
-    if (!api.getCircleUpgradeStatus) return null;
+    if (!api.getCircleUpgradeStatus) {
+      circleUpgradeStatusLoading = false;
+      renderCircleUpgradeUi(circleUpgradeStatus);
+      return null;
+    }
     try {
+      circleUpgradeStatusLoading = true;
+      renderCircleUpgradeUi(circleUpgradeStatus);
       if (!skipLoader) setAccreditationLoading(true);
       const status = await api.getCircleUpgradeStatus();
       circleUpgradeStatusLoaded = true;
@@ -678,6 +714,8 @@
       showProfileMessage('No se pudo cargar el estado de tu solicitud de Círculo 4.', 'error');
       return null;
     } finally {
+      circleUpgradeStatusLoading = false;
+      renderCircleUpgradeUi(circleUpgradeStatus);
       if (!skipLoader) setAccreditationLoading(false);
     }
   };
@@ -1293,6 +1331,16 @@
           const request = await api.requestCircleUpgrade({ socialNetwork, username });
           form.reset();
           hideCircleUpgradeModal();
+          circleUpgradeStatusLoading = true;
+          const optimisticStatus = {
+            ...(circleUpgradeStatus || {}),
+            circleLevel:
+              getNormalizedCircleLevel(circleUpgradeStatus?.circleLevel, NaN) ||
+              getNormalizedCircleLevel(window.CRONOX_ACCREDITATION_STATS?.circleLevel ?? window.CRONOX_USER?.circleLevel, 3),
+            hasPending: true,
+            latestRequest: { ...(circleUpgradeStatus?.latestRequest || {}), status: 'PENDING' },
+          };
+          setCircleUpgradeState(optimisticStatus);
           await loadCircleUpgradeStatus({ skipLoader: true });
           renderCircleUpgradeUi(circleUpgradeStatus);
           circleUpgradeJustSubmitted = true;
