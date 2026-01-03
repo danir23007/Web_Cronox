@@ -646,25 +646,44 @@
     });
 
     if (circleUpgradeCta) {
-      circleUpgradeCta.hidden = !canShowCtaContent || !shouldShowFlow;
+      const hideCta = !canShowCtaContent || !shouldShowFlow;
+      circleUpgradeCta.classList.toggle('hidden', hideCta);
+      if (hideCta) {
+        circleUpgradeCta.setAttribute('hidden', '');
+      } else {
+        circleUpgradeCta.removeAttribute('hidden');
+      }
     }
 
     if (circleUpgradeBtn) {
-      circleUpgradeBtn.hidden = !canShowButton;
-      circleUpgradeBtn.disabled = !canShowButton;
+      if (canShowButton) {
+        circleUpgradeBtn.classList.remove('hidden');
+        circleUpgradeBtn.removeAttribute('hidden');
+        circleUpgradeBtn.disabled = false;
+      } else {
+        circleUpgradeBtn.classList.add('hidden');
+        circleUpgradeBtn.setAttribute('hidden', '');
+        circleUpgradeBtn.disabled = true;
+      }
     }
 
     if (circleUpgradeStatusEl) {
-      circleUpgradeStatusEl.hidden = !shouldShowStatus;
+      circleUpgradeStatusEl.classList.toggle('hidden', !shouldShowStatus);
       if (shouldShowStatus) {
+        circleUpgradeStatusEl.removeAttribute('hidden');
         circleUpgradeStatusEl.textContent = 'La solicitud de ascenso ha sido enviada.';
+      } else {
+        circleUpgradeStatusEl.setAttribute('hidden', '');
       }
     }
 
     if (circleUpgradeCooldown) {
-      circleUpgradeCooldown.hidden = !shouldShowCooldown;
+      circleUpgradeCooldown.classList.toggle('hidden', !shouldShowCooldown);
       if (shouldShowCooldown) {
+        circleUpgradeCooldown.removeAttribute('hidden');
         circleUpgradeCooldown.textContent = formatCooldownMessage(cooldownDays);
+      } else {
+        circleUpgradeCooldown.setAttribute('hidden', '');
       }
     }
 
