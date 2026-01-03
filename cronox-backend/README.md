@@ -35,6 +35,17 @@ El servidor escucha en `http://localhost:3000` y expone documentación Swagger e
 - `npm run lint:fix`: ejecuta ESLint con autofix sobre el código.
 - `npm run start:prod`: arranca en modo producción tras compilar (`npm run build`).
 
+## MemberCode y secuencia automática
+- El backend genera `memberCode` usando la secuencia `public.user_member_code_seq`. Si la secuencia no existe (error `42P01`) se crea y se resincroniza automáticamente tomando el máximo `memberCode` válido almacenado.
+- Para probar localmente:
+  1. Crea 2-3 usuarios seguidos y comprueba que `memberCode` incrementa siguiendo el patrón `CRX-000001`, `CRX-000002`, etc.
+  2. Simula la ausencia de la secuencia (por ejemplo `ALTER SEQUENCE public.user_member_code_seq RENAME TO user_member_code_seq_bak;` o en una base vacía) y vuelve a registrar un usuario. La secuencia se recrea y se alinea con los códigos existentes.
+  3. Verifica la “regla del millón” rápidamente sin poblar la base ejecutando (con dependencias instaladas):  
+     ```bash
+     npx ts-node -e "import { formatMemberCodeFromIndex } from './src/users/member-code.util'; console.log(formatMemberCodeFromIndex(999_999n)); console.log(formatMemberCodeFromIndex(1_000_000n));"
+     ```
+     El resultado debe ser `CRX-999999` y `CRX1-000001`.
+
 ## Roles y acceso
 Cada usuario tiene un campo `role` (`USER` o `ADMIN`). Por defecto los registros nuevos son `USER`.
 Para elevar un usuario a `ADMIN` en un entorno de desarrollo puedes ejecutar directamente en la base de datos:
