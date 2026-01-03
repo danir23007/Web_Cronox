@@ -1460,6 +1460,28 @@ a.product-card{display:block;text-decoration:none;color:inherit;cursor:pointer;}
   font-weight: 400;
 }
 
+.accreditation-privileges__list {
+  margin: 0;
+  padding: 0 0 0 4px;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: clamp(6px, 2vw, 8px);
+  font-size: clamp(14px, 2.6vw, 15px);
+  line-height: 1.5;
+}
+
+.accreditation-privileges__item {
+  position: relative;
+  padding-left: 12px;
+}
+
+.accreditation-privileges__item::before {
+  content: "-";
+  position: absolute;
+  left: 0;
+}
+
 .accreditation-qr {
   display: flex;
   justify-content: center;

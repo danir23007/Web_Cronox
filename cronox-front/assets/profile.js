@@ -20,6 +20,7 @@
   const accreditationStatCreatedAt = document.querySelector('[data-acc-stat="createdAt"]');
   const accreditationStatOrders = document.querySelector('[data-acc-stat="orders"]');
   const accreditationStatItems = document.querySelector('[data-acc-stat="items"]');
+  const accreditationPrivilegesList = document.querySelector('[data-acc-privileges-list]');
   const getCircleUpgradeCta = () => document.querySelector('[data-circle4-cta]');
   const getCircleUpgradeBtn = () => document.querySelector('[data-circle4-request-btn]');
   const getCircleUpgradeStatusEl = () => document.querySelector('[data-circle4-status]');
@@ -53,6 +54,28 @@
     III: 3,
     IV: 4,
     V: 5,
+  };
+  const ACCREDITATION_PRIVILEGES = {
+    1: ['Acreditación negra, miembro oficial de CRONOX. (sirve para eventos).'],
+    2: ['Acreditación negra', 'Participación sorteo mensual de 2 códigos de descuento acumulables.'],
+    3: ['Acreditación gris', 'Acceso anticipado en drops', 'Acceso a piezas especiales y exclusivas.'],
+    4: [
+      'Acreditación blanca',
+      'Acceso anticipado en drops',
+      'Acceso a piezas especiales y exclusivas',
+      '10% de descuento permanente',
+      'Acceso a entradas para eventos privados',
+      'Posibilidad de salir en nuestra galería.',
+    ],
+    5: [
+      'Acreditación roja',
+      'Acceso anticipado en drops',
+      'Acceso a piezas especiales y exclusivas',
+      '25% de descuento permanente',
+      'Entradas gratis a eventos privados',
+      'Posibilidad de recibir piezas especiales o regalos',
+      'Posibilidad de salir en nuestra galería',
+    ],
   };
   const IS_DEV_ENV =
     (typeof process !== 'undefined' && process?.env?.NODE_ENV === 'development') ||
@@ -387,8 +410,27 @@
     if (accreditationCode) accreditationCode.textContent = user?.memberCode ? `ID: ${user.memberCode}` : 'ID: —';
   };
 
+  const renderAccreditationPrivileges = (circleLevel) => {
+    if (!accreditationPrivilegesList) return;
+    const normalized = getNormalizedCircleLevel(circleLevel, NaN);
+    const privileges =
+      Number.isInteger(normalized) && normalized >= 1 && normalized <= 5
+        ? ACCREDITATION_PRIVILEGES[normalized]
+        : null;
+    const items = Array.isArray(privileges) && privileges.length ? privileges : ['Privilegios no disponibles.'];
+
+    accreditationPrivilegesList.innerHTML = '';
+    items.forEach((text) => {
+      const li = document.createElement('li');
+      li.className = 'accreditation-privileges__item';
+      li.textContent = text;
+      accreditationPrivilegesList.appendChild(li);
+    });
+  };
+
   const fillAccreditationStats = (stats) => {
-    const circleLevel = getNormalizedCircleLevel(stats?.circleLevel ?? window.CRONOX_USER?.circleLevel, 1);
+    const circleLevelRaw = stats?.circleLevel ?? window.CRONOX_USER?.circleLevel;
+    const circleLevel = getNormalizedCircleLevel(circleLevelRaw, 1);
     const createdAt = stats?.createdAt ?? window.CRONOX_USER?.createdAt;
     const ordersCount = typeof stats?.pedidosRealizados === 'number' ? stats.pedidosRealizados : stats?.ordersCount;
     const itemsNetCount =
@@ -415,6 +457,8 @@
       accreditationStatItems.textContent =
         typeof itemsNetCount === 'number' && Number.isFinite(itemsNetCount) ? itemsNetCount : '—';
     }
+
+    renderAccreditationPrivileges(circleLevelRaw);
   };
 
   const ensureGlobalLoader = () => {
@@ -508,6 +552,7 @@
     circleUpgradeStatusLoading = true;
     const normalizedUserCircle = getNormalizedCircleLevel(window.CRONOX_USER?.circleLevel, window.CRONOX_USER?.circleLevel);
     fillAccreditation({ ...(window.CRONOX_USER || {}), circleLevel: normalizedUserCircle });
+    renderAccreditationPrivileges(normalizedUserCircle);
     updatePromotionUi({
       circleLevel: normalizedUserCircle,
       promotionRequestStatus: 'loading',
@@ -1101,6 +1146,7 @@
       window.CRONOX_USER = normalizedUser;
       fillAccount(normalizedUser);
       fillAccreditation(normalizedUser);
+      renderAccreditationPrivileges(normalizedUserCircle);
       await Promise.all([loadAddress(), loadOrders()]);
     } catch (err) {
       if (handleAuthRedirect(err)) return;
@@ -1139,6 +1185,7 @@
         window.CRONOX_USER = normalizedUpdated;
         fillAccount(normalizedUpdated);
         fillAccreditation(normalizedUpdated);
+        renderAccreditationPrivileges(normalizedUserCircle);
         showProfileMessage('Datos actualizados correctamente.', 'success');
       } catch (err) {
         if (handleAuthRedirect(err)) return;
