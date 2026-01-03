@@ -29,6 +29,15 @@
   let accreditationQrLoaded = false;
   let accreditationStatsLoaded = false;
   let globalLoader = null;
+  let isAccreditationReady = false;
+  const accreditationLoadState = {
+    base: false,
+    stats: false,
+    qr: false,
+    status: false,
+    history: false,
+    blockingError: false,
+  };
 
   // Modal state (only open after successful request)
   let isCircleRequestModalOpen = false;
@@ -470,11 +479,12 @@
   };
 
   const setAccreditationLoading = (isLoading) => {
+    if (!isAccreditationReady) {
+      syncAccreditationVisibility();
+      return;
+    }
     if (accreditationSection) {
       accreditationSection.classList.toggle('is-loading', !!isLoading);
-    }
-    if (accreditationBook) {
-      accreditationBook.hidden = !!isLoading;
     }
     setGlobalLoaderVisible(!!isLoading);
   };
@@ -491,18 +501,75 @@
       img.addEventListener('error', onDone, { once: true });
     });
 
+  const resetAccreditationGate = () => {
+    accreditationLoadState.base = Boolean(window.CRONOX_USER);
+    accreditationLoadState.stats = false;
+    accreditationLoadState.qr = false;
+    accreditationLoadState.status = false;
+    accreditationLoadState.history = false;
+    accreditationLoadState.blockingError = false;
+    isAccreditationReady = false;
+  };
+
+  const computeAccreditationReady = () =>
+    accreditationLoadState.base &&
+    accreditationLoadState.stats &&
+    accreditationLoadState.qr &&
+    accreditationLoadState.status &&
+    accreditationLoadState.history &&
+    !accreditationLoadState.blockingError;
+
+  const syncAccreditationVisibility = () => {
+    const ready = isAccreditationReady && computeAccreditationReady();
+    if (accreditationSection) {
+      accreditationSection.classList.toggle('is-loading', !ready);
+    }
+    if (accreditationBook) {
+      accreditationBook.hidden = !ready;
+    }
+    setGlobalLoaderVisible(!ready);
+  };
+
+  const setAccreditationReady = (ready) => {
+    isAccreditationReady = ready ? computeAccreditationReady() : false;
+    syncAccreditationVisibility();
+  };
+
+  const setAccreditationPartResolved = (key, value = true) => {
+    if (Object.prototype.hasOwnProperty.call(accreditationLoadState, key)) {
+      accreditationLoadState[key] = value;
+    }
+    const ready = computeAccreditationReady();
+    if (ready !== isAccreditationReady) {
+      isAccreditationReady = ready;
+    }
+    syncAccreditationVisibility();
+  };
+
+  const setAccreditationBlockingError = (hasError) => {
+    accreditationLoadState.blockingError = Boolean(hasError);
+    syncAccreditationVisibility();
+  };
+
   const ensureAccreditationQr = () => {
-    if (!accreditationQr) return Promise.resolve();
+    if (!accreditationQr) {
+      setAccreditationPartResolved('qr', true);
+      return Promise.resolve();
+    }
     if (!accreditationQrLoaded) {
       const base = typeof window.CRONOX_API_BASE === 'string' ? window.CRONOX_API_BASE : '';
       accreditationQr.src = `${base}/api/membership/me/qr`;
       accreditationQrLoaded = true;
     }
-    return waitForImageLoad(accreditationQr);
+    return waitForImageLoad(accreditationQr).finally(() => {
+      setAccreditationPartResolved('qr', true);
+    });
   };
 
   const loadAccreditationData = async () => {
-    setAccreditationLoading(true);
+    resetAccreditationGate();
+    setAccreditationPartResolved('base', Boolean(window.CRONOX_USER));
+    syncAccreditationVisibility();
     window.CRONOX_PROMOTION_STATUS = 'loading';
     circleUpgradeStatusLoaded = false;
     circleUpgradeStatusLoading = true;
@@ -515,16 +582,16 @@
     renderCircleUpgradeUi({
       circleLevel: normalizedUserCircle,
     });
+    const tasks = [
+      loadAccreditationStats().catch(() => null),
+      ensureAccreditationQr().catch(() => null),
+      loadCircleUpgradeStatus({ skipLoader: true }).catch(() => null),
+    ];
 
-    try {
-      await Promise.all([
-        loadAccreditationStats(),
-        ensureAccreditationQr(),
-        loadCircleUpgradeStatus({ skipLoader: true }),
-      ]);
-    } finally {
-      setAccreditationLoading(false);
-    }
+    const results = await Promise.allSettled(tasks);
+    debugAccreditationLog('Accreditation load results', results);
+    setAccreditationPartResolved('history', true);
+    setAccreditationReady(true);
   };
 
   const fillAddress = (address) => {
@@ -703,6 +770,7 @@
     if (!api.getCircleUpgradeStatus) {
       circleUpgradeStatusLoading = false;
       renderCircleUpgradeUi(circleUpgradeStatus);
+      setAccreditationPartResolved('status', true);
       return null;
     }
     try {
@@ -712,6 +780,7 @@
       const status = await api.getCircleUpgradeStatus();
       circleUpgradeStatusLoaded = true;
       setCircleUpgradeState(status);
+      setAccreditationPartResolved('status', true);
       return status;
     } catch (err) {
       if (handleAuthRedirect(err)) return null;
@@ -736,6 +805,7 @@
       circleUpgradeStatusLoading = false;
       renderCircleUpgradeUi(circleUpgradeStatus);
       if (!skipLoader) setAccreditationLoading(false);
+      setAccreditationPartResolved('status', true);
     }
   };
 
@@ -839,6 +909,9 @@
       fillAccreditationStats({ circleLevel: normalizedCircle });
       updatePromotionUi({ circleLevel: normalizedCircle });
       renderCircleUpgradeUi(circleUpgradeStatus || { circleLevel: normalizedCircle });
+      setAccreditationPartResolved('base', true);
+      setAccreditationPartResolved('stats', true);
+      setAccreditationPartResolved('history', true);
       return;
     }
 
@@ -854,6 +927,9 @@
         promotionRequestStatus: window.CRONOX_ACCREDITATION_STATS?.promotionRequestStatus,
       });
       renderCircleUpgradeUi(circleUpgradeStatus || { circleLevel: normalizedCircle });
+      setAccreditationPartResolved('base', true);
+      setAccreditationPartResolved('stats', true);
+      setAccreditationPartResolved('history', true);
       return;
     }
 
@@ -877,6 +953,10 @@
       console.warn('[PROFILE] No se pudieron cargar las estadísticas de acreditación', err);
       accreditationStatsLoaded = false;
       showProfileMessage('No se pudieron cargar tus datos de acreditación.', 'error');
+    } finally {
+      setAccreditationPartResolved('base', true);
+      setAccreditationPartResolved('stats', true);
+      setAccreditationPartResolved('history', true);
     }
   };
 
@@ -1099,6 +1179,7 @@
       const normalizedUserCircle = getNormalizedCircleLevel(user?.circleLevel, user?.circleLevel);
       const normalizedUser = { ...user, circleLevel: normalizedUserCircle };
       window.CRONOX_USER = normalizedUser;
+      setAccreditationPartResolved('base', true);
       fillAccount(normalizedUser);
       fillAccreditation(normalizedUser);
       await Promise.all([loadAddress(), loadOrders()]);
