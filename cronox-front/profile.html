@@ -184,7 +184,7 @@
       <section class="profile-section" data-profile-section="accreditation" aria-label="Acreditación">
         <div class="profile-card account-section--accreditation">
           <section class="crx-accreditation-stage accreditation-stage" aria-label="Escenario de acreditación CRONOX">
-            <div class="crx-accreditation-book accreditation-book" hidden>
+            <div class="crx-accreditation-book accreditation-book">
               <div class="accreditation-pages debug-pages" aria-label="Páginas de acreditación">
                 <div class="accreditation-page page-left">
                   <div class="accreditation-page-content">
@@ -516,14 +516,6 @@
       justify-content: center;
       padding: 16px;
       z-index: 2400;
-    }
-
-    .profile-section[data-profile-section="accreditation"].is-loading .crx-accreditation-book {
-      display: none !important;
-    }
-
-    .profile-section[data-profile-section="accreditation"].is-loading .accreditation-stage {
-      visibility: hidden;
     }
 
     .circle-modal {
