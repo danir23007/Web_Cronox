@@ -11,17 +11,14 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import type { Response } from 'express';
-import { Role } from '@prisma/client';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
-import { RolesGuard } from '../../common/guards/roles.guard';
-import { Roles } from '../../common/roles.decorator';
+import { AdminGuard } from '../../common/guards/admin.guard';
 import { AdminOrdersService } from './admin-orders.service';
 import { AdminOrdersQueryDto } from './dto/admin-order-query.dto';
 import { UpdateOrderStatusDto } from './dto/update-order-status.dto';
 
 @Controller('admin/orders')
-@UseGuards(JwtAuthGuard, RolesGuard)
-@Roles(Role.ADMIN)
+@UseGuards(JwtAuthGuard, AdminGuard)
 export class AdminOrdersController {
   constructor(private readonly ordersService: AdminOrdersService) {}
 

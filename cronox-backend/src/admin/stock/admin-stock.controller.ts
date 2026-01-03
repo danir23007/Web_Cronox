@@ -1,14 +1,11 @@
 import { Controller, Get, Query, UseGuards } from '@nestjs/common';
-import { Role } from '@prisma/client';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
-import { RolesGuard } from '../../common/guards/roles.guard';
-import { Roles } from '../../common/roles.decorator';
+import { AdminGuard } from '../../common/guards/admin.guard';
 import { AdminStockService } from './admin-stock.service';
 import { AdminStockMovementsQueryDto } from './dto/admin-stock-movements-query.dto';
 
 @Controller('admin/stock/movements')
-@UseGuards(JwtAuthGuard, RolesGuard)
-@Roles(Role.ADMIN)
+@UseGuards(JwtAuthGuard, AdminGuard)
 export class AdminStockController {
   constructor(private readonly stockService: AdminStockService) {}
 

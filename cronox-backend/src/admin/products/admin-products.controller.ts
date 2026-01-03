@@ -8,10 +8,8 @@ import {
   Post,
   UseGuards,
 } from '@nestjs/common';
-import { Role } from '@prisma/client';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
-import { RolesGuard } from '../../common/guards/roles.guard';
-import { Roles } from '../../common/roles.decorator';
+import { AdminGuard } from '../../common/guards/admin.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { ProductService } from '../../products/product.service';
 import { CreateProductDto } from '../../products/dto/create-product.dto';
@@ -20,8 +18,7 @@ import { CreateVariantDto } from '../../products/dto/create-variant.dto';
 import { AdjustStockDto, UpdateVariantDto } from '../../products/dto/update-variant.dto';
 
 @Controller('admin/products')
-@UseGuards(JwtAuthGuard, RolesGuard)
-@Roles(Role.ADMIN)
+@UseGuards(JwtAuthGuard, AdminGuard)
 export class AdminProductsController {
   constructor(private readonly productService: ProductService) {}
 

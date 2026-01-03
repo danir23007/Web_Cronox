@@ -4,7 +4,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { CircleUpgradeRequest, CircleUpgradeRequestStatus } from '@prisma/client';
+import { CircleUpgradeRequest, CircleUpgradeRequestStatus, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateCircleUpgradeDto, UpdateCircleUpgradeStatusDto } from './dto/circle-upgrade.dto';
 
@@ -14,6 +14,45 @@ const COOLDOWN_MS = 30 * DAY_IN_MS;
 @Injectable()
 export class CircleUpgradeService {
   constructor(private readonly prisma: PrismaService) {}
+
+  private sanitizeReviewFields(review?: { notes?: string; reviewedBy?: string }) {
+    const notes = review?.notes?.trim();
+    const reviewedBy = review?.reviewedBy?.trim();
+
+    return {
+      notes: notes || undefined,
+      reviewedBy: reviewedBy || undefined,
+    };
+  }
+
+  private assertPending(request: CircleUpgradeRequest) {
+    if (request.status !== CircleUpgradeRequestStatus.PENDING) {
+      throw new ConflictException('La solicitud ya fue revisada');
+    }
+  }
+
+  private async findRequestForReview(tx: Prisma.TransactionClient, id: string) {
+    const request = await tx.circleUpgradeRequest.findUnique({
+      where: { id },
+      include: {
+        user: {
+          select: {
+            id: true,
+            email: true,
+            firstName: true,
+            lastName: true,
+            circleLevel: true,
+          },
+        },
+      },
+    });
+
+    if (!request || request.fromCircle !== 3 || request.toCircle !== 4) {
+      throw new NotFoundException('Solicitud no encontrada');
+    }
+
+    return request;
+  }
 
   private normalizeUsername(username: string) {
     return username.trim().toLowerCase();
@@ -139,23 +178,45 @@ export class CircleUpgradeService {
     });
   }
 
-  async updateStatus(id: string, dto: UpdateCircleUpgradeStatusDto) {
-    const request = await this.prisma.circleUpgradeRequest.findUnique({
-      where: { id },
-      include: { user: { select: { circleLevel: true } } },
+  async listAdminRequests(status?: CircleUpgradeRequestStatus) {
+    const effectiveStatus = status ?? CircleUpgradeRequestStatus.PENDING;
+
+    return this.prisma.circleUpgradeRequest.findMany({
+      where: {
+        fromCircle: 3,
+        toCircle: 4,
+        status: effectiveStatus,
+      },
+      orderBy: { createdAt: 'desc' },
+      include: {
+        user: {
+          select: {
+            id: true,
+            email: true,
+            firstName: true,
+            lastName: true,
+            circleLevel: true,
+          },
+        },
+      },
     });
+  }
 
-    if (!request) {
-      throw new NotFoundException('Solicitud no encontrada');
-    }
+  async approveRequest(id: string, review?: { notes?: string; reviewedBy?: string }) {
+    const reviewFields = this.sanitizeReviewFields(review);
 
-    if (dto.status === CircleUpgradeRequestStatus.APPROVED) {
-      const duplicateApproved = await this.prisma.circleUpgradeRequest.findFirst({
+    const result = await this.prisma.$transaction(async (tx) => {
+      const request = await this.findRequestForReview(tx, id);
+      this.assertPending(request);
+
+      const normalizedUsername = request.usernameNormalized || this.normalizeUsername(request.username);
+
+      const duplicateApproved = await tx.circleUpgradeRequest.findFirst({
         where: {
           id: { not: id },
           status: CircleUpgradeRequestStatus.APPROVED,
           socialNetwork: request.socialNetwork,
-          usernameNormalized: request.usernameNormalized,
+          usernameNormalized: normalizedUsername,
           userId: { not: request.userId },
         },
         select: { id: true },
@@ -167,41 +228,89 @@ export class CircleUpgradeService {
         );
       }
 
-      const notes = dto.notes?.trim() || undefined;
-      const reviewedBy = dto.reviewedBy?.trim() || undefined;
+      await tx.circleUpgradeRequest.update({
+        where: { id },
+        data: {
+          status: CircleUpgradeRequestStatus.APPROVED,
+          approvedAt: new Date(),
+          reviewedAt: new Date(),
+          ...reviewFields,
+        },
+      });
 
-      const [, updated] = await this.prisma.$transaction([
-        this.prisma.user.update({
+      if (request.user.circleLevel < 4) {
+        await tx.user.update({
           where: { id: request.userId },
-          data: { circleLevel: Math.max(4, request.user.circleLevel ?? 1) },
-        }),
-        this.prisma.circleUpgradeRequest.update({
-          where: { id },
-          data: {
-            status: CircleUpgradeRequestStatus.APPROVED,
-            approvedAt: new Date(),
-            reviewedAt: new Date(),
-            reviewedBy,
-            notes,
-          },
-        }),
-      ]);
+          data: { circleLevel: 4 },
+        });
+      }
 
-      return updated;
+      const refreshed = await tx.circleUpgradeRequest.findUnique({
+        where: { id },
+        include: {
+          user: {
+            select: {
+              id: true,
+              email: true,
+              firstName: true,
+              lastName: true,
+              circleLevel: true,
+            },
+          },
+        },
+      });
+
+      if (!refreshed) {
+        throw new NotFoundException('Solicitud no encontrada tras la actualización');
+      }
+
+      return { request: refreshed, user: refreshed.user };
+    });
+
+    return result;
+  }
+
+  async denyRequest(id: string, review?: { notes?: string; reviewedBy?: string }) {
+    const reviewFields = this.sanitizeReviewFields(review);
+
+    const result = await this.prisma.$transaction(async (tx) => {
+      const request = await this.findRequestForReview(tx, id);
+      this.assertPending(request);
+
+      const updated = await tx.circleUpgradeRequest.update({
+        where: { id },
+        data: {
+          status: CircleUpgradeRequestStatus.DENIED,
+          reviewedAt: new Date(),
+          approvedAt: null,
+          ...reviewFields,
+        },
+        include: {
+          user: {
+            select: {
+              id: true,
+              email: true,
+              firstName: true,
+              lastName: true,
+              circleLevel: true,
+            },
+          },
+        },
+      });
+
+      return { request: updated, user: updated.user };
+    });
+
+    return result;
+  }
+
+  async updateStatus(id: string, dto: UpdateCircleUpgradeStatusDto) {
+    if (dto.status === CircleUpgradeRequestStatus.APPROVED) {
+      const result = await this.approveRequest(id, dto);
+      return result.request;
     }
 
-    const notes = dto.notes?.trim() || undefined;
-    const reviewedBy = dto.reviewedBy?.trim() || undefined;
-
-    return this.prisma.circleUpgradeRequest.update({
-      where: { id },
-      data: {
-        status: dto.status,
-        reviewedAt: new Date(),
-        reviewedBy,
-        notes,
-        approvedAt: dto.status === CircleUpgradeRequestStatus.DENIED ? null : undefined,
-      },
-    });
+    const result = await this.denyRequest(id, dto);
+    return result.request;
   }
 }
