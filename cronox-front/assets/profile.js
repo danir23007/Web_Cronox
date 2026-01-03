@@ -46,6 +46,21 @@
     4: ['#000000', '#000000', '#7C7C7C', '#EDE7DB'],
     5: ['#000000', '#000000', '#7C7C7C', '#EDE7DB', '#B1001A'],
   };
+  const ROMAN_TO_NUMBER = {
+    I: 1,
+    II: 2,
+    III: 3,
+    IV: 4,
+    V: 5,
+  };
+  const IS_DEV_ENV =
+    (typeof process !== 'undefined' && process?.env?.NODE_ENV === 'development') ||
+    (typeof window !== 'undefined' && window?.location?.hostname === 'localhost');
+  const DEBUG_ACCREDITATION = Boolean(window?.CRONOX_DEBUG_ACCREDITATION || IS_DEV_ENV);
+  const debugAccreditationLog = (...args) => {
+    if (!DEBUG_ACCREDITATION) return;
+    console.debug('[PROFILE][ACCREDITATION]', ...args);
+  };
 
   // -----------------------------
   // Robust DOM getters (IMPORTANT)
@@ -162,6 +177,26 @@
   };
 
   const safeTrim = (value) => (typeof value === 'string' ? value.trim() : '');
+  const normalizeCircleLevelValue = (value) => {
+    const raw = value;
+    if (typeof value === 'number' && Number.isFinite(value)) {
+      return { raw, normalized: value };
+    }
+    const trimmed = safeTrim(typeof value === 'string' ? value : `${value ?? ''}`);
+    if (trimmed) {
+      const roman = ROMAN_TO_NUMBER[trimmed.toUpperCase()];
+      if (Number.isFinite(roman)) return { raw, normalized: roman };
+      const parsed = Number.parseInt(trimmed, 10);
+      if (Number.isFinite(parsed)) return { raw, normalized: parsed };
+    }
+    const numeric = Number(value);
+    if (Number.isFinite(numeric)) return { raw, normalized: numeric };
+    return { raw, normalized: NaN };
+  };
+  const getNormalizedCircleLevel = (value, fallback = NaN) => {
+    const { normalized } = normalizeCircleLevelValue(value);
+    return Number.isFinite(normalized) ? normalized : fallback;
+  };
   const formatCooldownMessage = (days) => {
     const remaining = Number(days) || 0;
     if (remaining <= 0) return '';
@@ -242,7 +277,7 @@
   const renderCircleSymbol = (circleLevel) => {
     if (!accreditationSymbol) return;
 
-    const level = Number(circleLevel);
+    const level = getNormalizedCircleLevel(circleLevel, 1);
     const palette = RING_COLORS[level] || RING_COLORS[1];
     const svgNS = 'http://www.w3.org/2000/svg';
     const size = 220;
@@ -274,7 +309,7 @@
   };
 
   const applyCircleLevel = (circleLevel) => {
-    const level = Number(circleLevel);
+    const level = getNormalizedCircleLevel(circleLevel, 1);
     const normalized = level >= 1 && level <= 5 ? level : 1;
 
     if (accreditationSymbol) {
@@ -352,7 +387,7 @@
   };
 
   const fillAccreditationStats = (stats) => {
-    const circleLevel = stats?.circleLevel ?? window.CRONOX_USER?.circleLevel;
+    const circleLevel = getNormalizedCircleLevel(stats?.circleLevel ?? window.CRONOX_USER?.circleLevel, 1);
     const createdAt = stats?.createdAt ?? window.CRONOX_USER?.createdAt;
     const ordersCount = typeof stats?.pedidosRealizados === 'number' ? stats.pedidosRealizados : stats?.ordersCount;
     const itemsNetCount =
@@ -362,7 +397,8 @@
 
     if (accreditationStatCircle) {
       const normalized = applyCircleLevel(circleLevel);
-      accreditationStatCircle.textContent = Number.isFinite(normalized) ? toRomanNumeral(normalized) : '—';
+      accreditationStatCircle.textContent =
+        Number.isFinite(normalized) && normalized > 0 ? toRomanNumeral(normalized) : '—';
     }
 
     if (accreditationStatCreatedAt) {
@@ -468,13 +504,14 @@
     setAccreditationLoading(true);
     window.CRONOX_PROMOTION_STATUS = 'loading';
     circleUpgradeStatusLoaded = false;
-    fillAccreditation(window.CRONOX_USER);
+    const normalizedUserCircle = getNormalizedCircleLevel(window.CRONOX_USER?.circleLevel, window.CRONOX_USER?.circleLevel);
+    fillAccreditation({ ...(window.CRONOX_USER || {}), circleLevel: normalizedUserCircle });
     updatePromotionUi({
-      circleLevel: window.CRONOX_USER?.circleLevel,
+      circleLevel: normalizedUserCircle,
       promotionRequestStatus: 'loading',
     });
     renderCircleUpgradeUi({
-      circleLevel: window.CRONOX_USER?.circleLevel,
+      circleLevel: normalizedUserCircle,
     });
 
     try {
@@ -522,7 +559,7 @@
   };
 
   const updatePromotionUi = ({ circleLevel, promotionRequestStatus } = {}) => {
-    const normalizedLevel = Number(circleLevel ?? window.CRONOX_USER?.circleLevel ?? 1);
+    const normalizedLevel = getNormalizedCircleLevel(circleLevel ?? window.CRONOX_USER?.circleLevel, 1);
     const status = promotionRequestStatus || window.CRONOX_PROMOTION_STATUS || 'none';
     window.CRONOX_PROMOTION_STATUS = status;
     const isLoading = status === 'loading';
@@ -546,9 +583,9 @@
   };
 
   const renderCircleUpgradeUi = (status = circleUpgradeStatus) => {
-    const circleLevel = Number(
-      status?.circleLevel ?? window.CRONOX_ACCREDITATION_STATS?.circleLevel ?? window.CRONOX_USER?.circleLevel ?? 1,
-    );
+    const circleLevelRaw =
+      status?.circleLevel ?? window.CRONOX_ACCREDITATION_STATS?.circleLevel ?? window.CRONOX_USER?.circleLevel ?? 1;
+    const circleLevel = getNormalizedCircleLevel(circleLevelRaw, 1);
     const circleUpgradeCta = getCircleUpgradeCta();
     const circleUpgradeBtn = getCircleUpgradeBtn();
     const circleUpgradeStatusEl = getCircleUpgradeStatusEl();
@@ -557,7 +594,7 @@
     const latestStatus = (status?.latestRequest?.status || '').toString().toUpperCase();
     const hasPending = Boolean(status?.hasPending || latestStatus === 'PENDING');
     const hasApprovedRequest = Boolean(status?.hasApproved || latestStatus === 'APPROVED');
-    const cooldownDays = Number(status?.cooldownDaysRemaining || 0);
+    const cooldownDays = Number(status?.cooldownDaysRemaining ?? status?.cooldownDays ?? 0);
     const isCircleThree = circleLevel === 3;
     const canRequest =
       status?.canRequest ?? (isCircleThree && !hasPending && !hasApprovedRequest && cooldownDays <= 0);
@@ -565,6 +602,18 @@
     const shouldShowBtn = shouldShowFlow && !!canRequest && !hasApprovedRequest;
     const shouldShowStatus = shouldShowFlow && (hasPending || hasApprovedRequest);
     const shouldShowCooldown = shouldShowFlow && !shouldShowBtn && !shouldShowStatus && cooldownDays > 0;
+    debugAccreditationLog('Circle 4 UI state', {
+      circleRaw: circleLevelRaw,
+      circleNormalized: circleLevel,
+      latestStatus,
+      hasPending,
+      hasApprovedRequest,
+      cooldownDays,
+      canRequest,
+      shouldShowBtn,
+      shouldShowStatus,
+      shouldShowCooldown,
+    });
 
     if (circleUpgradeCta) {
       circleUpgradeCta.hidden = !shouldShowFlow;
@@ -613,7 +662,19 @@
       if (handleAuthRedirect(err)) return null;
       console.warn('[PROFILE] No se pudo cargar el estado de ascenso 3→4', err);
       circleUpgradeStatusLoaded = false;
-      renderCircleUpgradeUi();
+      const fallbackCircle = getNormalizedCircleLevel(
+        window.CRONOX_ACCREDITATION_STATS?.circleLevel ?? window.CRONOX_USER?.circleLevel,
+        NaN,
+      );
+      setCircleUpgradeState({
+        circleLevel: fallbackCircle,
+        hasPending: false,
+        hasApproved: false,
+        cooldownDaysRemaining: 0,
+        canRequest: fallbackCircle === 3,
+        latestRequest: { status: 'ERROR' },
+        error: true,
+      });
       showProfileMessage('No se pudo cargar el estado de tu solicitud de Círculo 4.', 'error');
       return null;
     } finally {
@@ -659,13 +720,14 @@
   const showCircleUpgradeModal = () => {
     const modal = getCircleUpgradeModal();
     const btn = getCircleUpgradeBtn();
-    const circleLevel = Number(
+    const circleLevel = getNormalizedCircleLevel(
       circleUpgradeStatus?.circleLevel ?? window.CRONOX_ACCREDITATION_STATS?.circleLevel ?? window.CRONOX_USER?.circleLevel,
+      1,
     );
     const latestStatus = (circleUpgradeStatus?.latestRequest?.status || '').toString().toUpperCase();
     const hasPending = Boolean(circleUpgradeStatus?.hasPending || latestStatus === 'PENDING');
     const hasApprovedRequest = Boolean(circleUpgradeStatus?.hasApproved || latestStatus === 'APPROVED');
-    const cooldownDays = Number(circleUpgradeStatus?.cooldownDaysRemaining || 0);
+    const cooldownDays = Number(circleUpgradeStatus?.cooldownDaysRemaining ?? circleUpgradeStatus?.cooldownDays ?? 0);
     const canRequest =
       circleUpgradeStatus?.canRequest ??
       (circleLevel === 3 && !hasPending && !hasApprovedRequest && cooldownDays <= 0);
@@ -716,20 +778,25 @@
 
   const loadAccreditationStats = async () => {
     if (!api.getAccreditationStats) {
-      fillAccreditationStats();
-      updatePromotionUi();
-      renderCircleUpgradeUi(circleUpgradeStatus);
+      const normalizedCircle = getNormalizedCircleLevel(window.CRONOX_USER?.circleLevel, window.CRONOX_USER?.circleLevel);
+      fillAccreditationStats({ circleLevel: normalizedCircle });
+      updatePromotionUi({ circleLevel: normalizedCircle });
+      renderCircleUpgradeUi(circleUpgradeStatus || { circleLevel: normalizedCircle });
       return;
     }
 
     if (accreditationStatsLoaded && window.CRONOX_ACCREDITATION_STATS) {
-      fillAccreditation(window.CRONOX_USER);
-      fillAccreditationStats(window.CRONOX_ACCREDITATION_STATS);
+      const normalizedCircle = getNormalizedCircleLevel(
+        window.CRONOX_ACCREDITATION_STATS?.circleLevel ?? window.CRONOX_USER?.circleLevel,
+        window.CRONOX_USER?.circleLevel,
+      );
+      fillAccreditation({ ...(window.CRONOX_USER || {}), circleLevel: normalizedCircle });
+      fillAccreditationStats({ ...window.CRONOX_ACCREDITATION_STATS, circleLevel: normalizedCircle });
       updatePromotionUi({
-        circleLevel: window.CRONOX_ACCREDITATION_STATS?.circleLevel,
+        circleLevel: normalizedCircle,
         promotionRequestStatus: window.CRONOX_ACCREDITATION_STATS?.promotionRequestStatus,
       });
-      renderCircleUpgradeUi(circleUpgradeStatus);
+      renderCircleUpgradeUi(circleUpgradeStatus || { circleLevel: normalizedCircle });
       return;
     }
 
@@ -737,16 +804,17 @@
       const stats = await api.getAccreditationStats();
       window.CRONOX_ACCREDITATION_STATS = stats;
       accreditationStatsLoaded = true;
+      const normalizedStatsCircle = getNormalizedCircleLevel(stats?.circleLevel, stats?.circleLevel);
       if (stats?.circleLevel != null) {
-        window.CRONOX_USER = { ...(window.CRONOX_USER || {}), circleLevel: stats.circleLevel };
+        window.CRONOX_USER = { ...(window.CRONOX_USER || {}), circleLevel: normalizedStatsCircle };
       }
-      fillAccreditation({ ...(window.CRONOX_USER || {}), circleLevel: stats?.circleLevel });
-      fillAccreditationStats(stats);
+      fillAccreditation({ ...(window.CRONOX_USER || {}), circleLevel: normalizedStatsCircle });
+      fillAccreditationStats({ ...stats, circleLevel: normalizedStatsCircle });
       updatePromotionUi({
-        circleLevel: stats?.circleLevel,
+        circleLevel: normalizedStatsCircle,
         promotionRequestStatus: stats?.promotionRequestStatus,
       });
-      renderCircleUpgradeUi(circleUpgradeStatus || { circleLevel: stats?.circleLevel });
+      renderCircleUpgradeUi(circleUpgradeStatus || { circleLevel: normalizedStatsCircle });
     } catch (err) {
       if (handleAuthRedirect(err)) return;
       console.warn('[PROFILE] No se pudieron cargar las estadísticas de acreditación', err);
@@ -971,9 +1039,11 @@
     try {
       const user = await api.getMe();
       if (!user) throw new Error('Usuario no autenticado');
-      window.CRONOX_USER = user;
-      fillAccount(user);
-      fillAccreditation(user);
+      const normalizedUserCircle = getNormalizedCircleLevel(user?.circleLevel, user?.circleLevel);
+      const normalizedUser = { ...user, circleLevel: normalizedUserCircle };
+      window.CRONOX_USER = normalizedUser;
+      fillAccount(normalizedUser);
+      fillAccreditation(normalizedUser);
       await Promise.all([loadAddress(), loadOrders()]);
     } catch (err) {
       if (handleAuthRedirect(err)) return;
@@ -1007,9 +1077,11 @@
       };
       try {
         const updated = await api.updateMe(payload);
-        window.CRONOX_USER = updated;
-        fillAccount(updated);
-        fillAccreditation(updated);
+        const normalizedUserCircle = getNormalizedCircleLevel(updated?.circleLevel, updated?.circleLevel);
+        const normalizedUpdated = { ...updated, circleLevel: normalizedUserCircle };
+        window.CRONOX_USER = normalizedUpdated;
+        fillAccount(normalizedUpdated);
+        fillAccreditation(normalizedUpdated);
         showProfileMessage('Datos actualizados correctamente.', 'success');
       } catch (err) {
         if (handleAuthRedirect(err)) return;
