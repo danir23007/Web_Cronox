@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>CRONOX ADMIN</title>
+  <meta name="theme-color" content="#000000">
+  <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+  <link rel="alternate icon" href="assets/logo_browser.png" type="image/png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+  <script src="assets/version.js"></script>
+  <script>
+    (function () {
+      if (window.CRONOX_ASSET) {
+        const link = document.getElementById('cronox-admin-style');
+        if (link) {
+          link.href = window.CRONOX_ASSET('assets/store.css');
+        }
+      }
+    })();
+  </script>
+  <link id="cronox-admin-style" rel="stylesheet" href="assets/store.css">
+  <style>
+    body { font-family: 'Inter', system-ui, -apple-system, sans-serif; background: #0b0b10; color: #f5f5f7; margin: 0; min-height: 100vh; }
+    .admin-shell { max-width: 1100px; margin: 0 auto; padding: 32px 20px 48px; }
+    .admin-header { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 24px; }
+    .admin-title { font-size: 1.8rem; margin: 0; letter-spacing: 0.5px; }
+    .admin-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+    .btn { border: 1px solid #272733; background: #161620; color: #f5f5f7; padding: 10px 14px; border-radius: 10px; font-weight: 600; cursor: pointer; transition: all 0.15s ease; }
+    .btn:hover { background: #1f1f2b; }
+    .btn.primary { background: linear-gradient(135deg, #7b3fe4, #6130c5); border: none; }
+    .btn.danger { background: #2a0d1c; border-color: #ff4d6d33; color: #ff6b8a; }
+    .card { background: #111119; border: 1px solid #1d1d26; border-radius: 14px; padding: 18px; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35); }
+    .card h2 { margin: 0 0 6px; font-size: 1.1rem; }
+    .card small { color: #a8a8b3; }
+    table { width: 100%; border-collapse: collapse; margin-top: 14px; }
+    th, td { padding: 10px 8px; border-bottom: 1px solid #1d1d26; text-align: left; font-size: 0.95rem; }
+    th { color: #b3b3c2; font-weight: 600; }
+    tr:last-child td { border-bottom: none; }
+    .status { display: inline-flex; align-items: center; gap: 6px; padding: 6px 10px; border-radius: 999px; font-weight: 600; font-size: 0.85rem; }
+    .status.pending { background: #1c1c26; color: #f6d365; border: 1px solid #332b10; }
+    .status.approved { background: #112415; color: #7ae08a; border: 1px solid #15351b; }
+    .status.denied { background: #2a1010; color: #f28b82; border: 1px solid #3a1717; }
+    .actions { display: flex; gap: 8px; }
+    .empty { color: #9aa0ad; margin: 12px 0 0; }
+    .message { margin-bottom: 12px; padding: 10px 12px; border-radius: 10px; border: 1px solid transparent; display: none; }
+    .message.show { display: block; }
+    .message.success { border-color: #2f9e44; background: #0f2015; color: #a8f0b0; }
+    .message.error { border-color: #ff6b6b; background: #2a0f0f; color: #ffc9c9; }
+  </style>
+</head>
+<body>
+  <div class="admin-shell">
+    <header class="admin-header">
+      <h1 class="admin-title">CRONOX ADMIN</h1>
+      <div class="admin-actions">
+        <button id="backBtn" class="btn" type="button">Volver a CRONOX</button>
+        <button id="logoutBtn" class="btn danger" type="button">Cerrar sesión</button>
+      </div>
+    </header>
+
+    <section class="card" aria-labelledby="title-upgrades">
+      <div style="display:flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap;">
+        <div>
+          <h2 id="title-upgrades">Solicitudes de ascenso 3→4</h2>
+          <small>Solo se muestran solicitudes con estado PENDING por defecto.</small>
+        </div>
+        <div>
+          <label for="filterStatus" style="font-size:0.9rem; color:#b3b3c2;">Estado:</label>
+          <select id="filterStatus" class="btn" style="padding-right: 30px;">
+            <option value="PENDING" selected>PENDIENTE</option>
+            <option value="APPROVED">APROBADA</option>
+            <option value="DENIED">DENEGADA</option>
+          </select>
+        </div>
+      </div>
+      <div id="messageBox" class="message" role="status" aria-live="polite"></div>
+      <div style="overflow-x: auto;">
+        <table aria-describedby="title-upgrades">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Creada</th>
+              <th>Usuario</th>
+              <th>userId</th>
+              <th>Red social</th>
+              <th>Username</th>
+              <th>Estado</th>
+              <th>Acciones</th>
+            </tr>
+          </thead>
+          <tbody id="requestsBody">
+            <tr><td colspan="8" class="empty">Cargando solicitudes…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </div>
+
+  <script src="assets/api.js"></script>
+  <script src="assets/admin.js"></script>
+</body>
+</html>

@@ -8,18 +8,15 @@ import {
   Query,
   UseGuards,
 } from '@nestjs/common';
-import { Role } from '@prisma/client';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
-import { RolesGuard } from '../../common/guards/roles.guard';
-import { Roles } from '../../common/roles.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { AdminGuard } from '../../common/guards/admin.guard';
 import { AdminUsersService } from './admin-users.service';
 import { AdminUserQueryDto } from './dto/admin-user-query.dto';
 import { UpdateUserRoleDto } from './dto/update-user-role.dto';
 
 @Controller('admin/users')
-@UseGuards(JwtAuthGuard, RolesGuard)
-@Roles(Role.ADMIN)
+@UseGuards(JwtAuthGuard, AdminGuard)
 export class AdminUsersController {
   constructor(private readonly usersService: AdminUsersService) {}
 

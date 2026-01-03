@@ -19,5 +19,6 @@ import { MembershipService } from './membership.service';
     AdminCircleUpgradeController,
   ],
   providers: [MembershipService, CircleService, CircleUpgradeService],
+  exports: [CircleUpgradeService],
 })
 export class MembershipModule {}

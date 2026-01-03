@@ -1489,6 +1489,10 @@ window.CRONOX_USER = window.CRONOX_USER || null;
       updateProfileIconUI();
       try { window.dispatchEvent(new CustomEvent('cronox:userChanged', { detail: user })); } catch {}
       await refreshUserDependentUI();
+      if (user?.role === 'ADMIN') {
+        window.location.href = 'admin.html';
+        return;
+      }
       closeAuthModal();
     } catch (err) {
       console.error('[AUTH] login error', err);

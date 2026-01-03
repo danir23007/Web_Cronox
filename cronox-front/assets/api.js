@@ -494,6 +494,37 @@
     return Array.isArray(data) ? data : [];
   };
 
+  // ===== ADMIN =====
+  const ensureAdminNamespace = () => {
+    if (!api.admin) {
+      api.admin = {};
+    }
+    return api.admin;
+  };
+
+  const adminApi = ensureAdminNamespace();
+
+  adminApi.listCircleUpgradeRequests = async (status = 'PENDING') => {
+    const data = await request('/admin/circle-upgrades/3-4', {
+      query: { status },
+    });
+    return Array.isArray(data) ? data : [];
+  };
+
+  adminApi.approveCircleUpgrade = async (id, payload = {}) => {
+    return request(`/admin/circle-upgrades/3-4/${encodeURIComponent(id)}/approve`, {
+      method: 'PATCH',
+      body: payload,
+    });
+  };
+
+  adminApi.denyCircleUpgrade = async (id, payload = {}) => {
+    return request(`/admin/circle-upgrades/3-4/${encodeURIComponent(id)}/deny`, {
+      method: 'PATCH',
+      body: payload,
+    });
+  };
+
   // ===== FAVORITES =====
   const normalizeProductId = (value) => { // [FAVORITES_FIX]
     const num = Number(value);

@@ -11,10 +11,8 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
-import { Role } from '@prisma/client';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
-import { RolesGuard } from '../../common/guards/roles.guard';
-import { Roles } from '../../common/roles.decorator';
+import { AdminGuard } from '../../common/guards/admin.guard';
 import { CategoriesService } from '../../categories/categories.service';
 import { CreateCategoryDto } from '../../categories/dto/create-category.dto';
 import { UpdateCategoryDto } from '../../categories/dto/update-category.dto';
@@ -23,8 +21,7 @@ import { QueryCategoriesDto } from '../../categories/dto/query-categories.dto';
 @ApiTags('Admin / Categories')
 @ApiBearerAuth()
 @Controller('admin/categories')
-@UseGuards(JwtAuthGuard, RolesGuard)
-@Roles(Role.ADMIN)
+@UseGuards(JwtAuthGuard, AdminGuard)
 export class AdminCategoriesController {
   constructor(private readonly categoriesService: CategoriesService) {}
 
