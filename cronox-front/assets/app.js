@@ -18,18 +18,9 @@
   window.addEventListener('load', () => {
     const body = document.body;
     const preloader = document.getElementById('preloader');
-    const isPersistentPreloader = preloader && preloader.dataset.persistent === 'true';
     const shouldRemovePreloader = preloader && preloader.dataset.persistent !== 'true';
     // Retraso aleatorio del preloader entre 1s y 2s para mostrar la animación
     const randomDelay = Math.floor(Math.random() * (2000 - 1000 + 1)) + 1000;
-
-    if (isPersistentPreloader) {
-      if (body) {
-        body.classList.add('is-loading');
-        body.classList.remove('is-loaded');
-      }
-      return;
-    }
 
     setTimeout(() => {
       if (body) {
