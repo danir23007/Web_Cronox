@@ -111,15 +111,16 @@
               <button class="btn danger" data-action="deny" data-id="${req.id}">DENEGAR</button>
             </div>`
           : '<span style="color:#7b7f8f;">—</span>';
+        const attemptLabel = req.requestNumber == null ? '—' : `#${req.requestNumber}`;
 
         return `<tr>
-          <td>${req.requestNumber ?? '—'}</td>
           <td>${formatDate(req.createdAt)}</td>
           <td>${userName || '—'}</td>
           <td>${req.userId}</td>
           <td>${req.socialNetwork}</td>
           <td>${req.username}</td>
           <td>${statusBadge(req.status)}</td>
+          <td>${attemptLabel}</td>
           <td>${actions}</td>
         </tr>`;
       })
@@ -150,12 +151,13 @@
           ? `${req.user?.firstName || ''} ${req.user?.lastName || ''}`.trim()
           : req.user?.email || '';
         const remaining = typeof req.remainingMs === 'number' ? formatDuration(req.remainingMs) : '—';
+        const attemptLabel = req.requestNumber == null ? '—' : `#${req.requestNumber}`;
         return `<tr>
-          <td>${req.requestNumber ?? '—'}</td>
           <td>${formatDate(req.createdAt)}</td>
           <td>${userName || '—'}</td>
           <td>${req.userId}</td>
           <td>${statusBadge(req.status)}</td>
+          <td>${attemptLabel}</td>
           <td>${remaining}</td>
         </tr>`;
       })

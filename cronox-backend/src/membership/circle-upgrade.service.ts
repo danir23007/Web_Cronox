@@ -241,7 +241,18 @@ export class CircleUpgradeService {
         status: whereStatus,
       },
       orderBy: { createdAt: 'desc' },
-      include: {
+      select: {
+        id: true,
+        createdAt: true,
+        status: true,
+        fromCircle: true,
+        toCircle: true,
+        socialNetwork: true,
+        username: true,
+        usernameNormalized: true,
+        userId: true,
+        autoProcessAt: true,
+        requestNumber: true,
         user: {
           select: {
             id: true,
