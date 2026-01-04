@@ -2,11 +2,15 @@ import {
   Body,
   Controller,
   Delete,
+  Get,
   Param,
   ParseIntPipe,
   Patch,
   Post,
+  Query,
+  UploadedFiles,
   UseGuards,
+  UseInterceptors,
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { AdminGuard } from '../../common/guards/admin.guard';
@@ -16,28 +20,54 @@ import { CreateProductDto } from '../../products/dto/create-product.dto';
 import { UpdateProductDto } from '../../products/dto/update-product.dto';
 import { CreateVariantDto } from '../../products/dto/create-variant.dto';
 import { AdjustStockDto, UpdateVariantDto } from '../../products/dto/update-variant.dto';
+import { AdminProductQueryDto } from './dto/admin-product-query.dto';
+import { FilesInterceptor } from '@nestjs/platform-express';
+import { SupabaseStorageService } from '../../common/storage/supabase-storage.service';
 
 @Controller('admin/products')
 @UseGuards(JwtAuthGuard, AdminGuard)
 export class AdminProductsController {
-  constructor(private readonly productService: ProductService) {}
+  constructor(
+    private readonly productService: ProductService,
+    private readonly storageService: SupabaseStorageService,
+  ) {}
+
+  @Get()
+  listProducts(@Query() query: AdminProductQueryDto) {
+    return this.productService.listAdminProducts(query);
+  }
+
+  @Get(':id')
+  getProduct(@Param('id', ParseIntPipe) id: number) {
+    return this.productService.getAdminProduct(id);
+  }
 
   @Post()
-  createProduct(@Body() dto: CreateProductDto) {
-    return this.productService.createProduct(dto);
+  createProduct(@Body() dto: CreateProductDto, @CurrentUser('id') adminId?: number) {
+    return this.productService.createProduct(dto, adminId);
+  }
+
+  @Post('upload-images')
+  @UseInterceptors(FilesInterceptor('files'))
+  async uploadImages(
+    @UploadedFiles() files: Express.Multer.File[],
+    @CurrentUser('id') adminId?: number,
+  ) {
+    return this.storageService.uploadProductImages(files, adminId);
   }
 
   @Patch(':id')
   updateProduct(
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: UpdateProductDto,
+    @CurrentUser('id') adminId?: number,
   ) {
-    return this.productService.updateProduct(id, dto);
+    return this.productService.updateProduct(id, dto, adminId);
   }
 
   @Delete(':id')
-  deleteProduct(@Param('id', ParseIntPipe) id: number) {
-    return this.productService.deleteProduct(id);
+  deleteProduct(@Param('id', ParseIntPipe) id: number, @CurrentUser('id') adminId?: number) {
+    return this.productService.deleteProduct(id, adminId);
   }
 
   @Post(':productId/variants')

@@ -411,6 +411,8 @@ export class OrdersService {
         await this.historialService.incrementOrderProgress(userId, quantity, tx);
       }
 
+      await this.handlePromoUsageOnPaid(tx, created, existing?.status);
+
       return this.serializeOrder(created);
     });
   }
@@ -873,6 +875,41 @@ export class OrdersService {
         await this.historialService.registerReturn(order.userId, itemsCount, tx);
       }
     });
+  }
+
+  private async handlePromoUsageOnPaid(
+    tx: Prisma.TransactionClient,
+    order: OrderWithItems,
+    previousStatus?: OrderStatus | null,
+  ) {
+    if (!order || order.status !== OrderStatus.PAID || previousStatus === OrderStatus.PAID) {
+      return;
+    }
+
+    if (!order.promoCodeId) {
+      return;
+    }
+
+    const promo = await tx.promoCode.findUnique({
+      where: { id: order.promoCodeId },
+      select: { id: true, code: true },
+    });
+
+    if (!promo) {
+      return;
+    }
+
+    await tx.promoCode.update({
+      where: { id: promo.id },
+      data: { usageCount: { increment: 1 } },
+    });
+
+    if (!order.promoCodeCode) {
+      await tx.order.update({
+        where: { id: order.id },
+        data: { promoCodeCode: promo.code },
+      });
+    }
   }
 
   private serializeOrder(order: OrderWithItems): Record<string, unknown> {
