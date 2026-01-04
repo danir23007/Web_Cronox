@@ -12,9 +12,12 @@ model Product {
   id         Int               @id @default(autoincrement())
   slug       String            @unique
   name       String
+  description String?
   price      Int
   currency   String            @default("EUR")
   imageUrl   String?
+  isActive   Boolean           @default(true)
+  collection String?
   createdAt  DateTime          @default(now())
   updatedAt  DateTime          @updatedAt
   favorites  Favorite[]
@@ -102,6 +105,8 @@ model User {
   passwordResetTokens    PasswordResetToken[]
   discountCodes          DiscountCode[]
   circleUpgradeRequests  CircleUpgradeRequest[]
+  processedUpgrades      CircleUpgradeRequest[] @relation("ProcessedRequests")
+  auditLogs              AuditLog[]
 
   // ✅ FIX: relación correcta y naming consistente
   historial              Historial?
@@ -137,11 +142,16 @@ model CircleUpgradeRequest {
   reviewedBy         String?
   notes              String?
   approvedAt         DateTime?
+  processedAt        DateTime?
+  processedById      Int?
+  autoProcessAt      DateTime?
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user          User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  processedBy   User? @relation("ProcessedRequests", fields: [processedById], references: [id])
 
   @@unique([userId, requestNumber])
   @@index([status, socialNetwork, usernameNormalized])
+  @@index([fromCircle, toCircle, status])
 }
 
 model Historial {
@@ -229,6 +239,9 @@ model Order {
   shippingMethodId   Int?
   shippingMethod     ShippingMethod?  @relation(fields: [shippingMethodId], references: [id])
   shippingMethodCode String?
+  discountCents      Int              @default(0)
+  promoCodeId        Int?
+  promoCodeCode      String?
   total              Decimal          @db.Decimal(12, 2)
   currency           String           @default("EUR")
   provider           String?
@@ -241,6 +254,7 @@ model Order {
   user               User             @relation(fields: [userId], references: [id])
   items              OrderItem[]
   stockMovements     StockMovement[]
+  promoCode          PromoCode?       @relation(fields: [promoCodeId], references: [id])
 
   @@index([userId])
   @@index([createdAt])
@@ -300,6 +314,34 @@ model PasswordResetToken {
   usedAt    DateTime?
 }
 
+model PromoCode {
+  id           Int       @id @default(autoincrement())
+  code         String    @unique
+  type         PromoCodeType
+  value        Int
+  minCartValue Int?
+  startsAt     DateTime?
+  expiresAt    DateTime?
+  isActive     Boolean   @default(true)
+  usageCount   Int       @default(0)
+  usageLimit   Int?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  orders       Order[]
+}
+
+model AuditLog {
+  id        Int      @id @default(autoincrement())
+  actorId   Int?
+  action    String
+  metadata  Json?
+  createdAt DateTime @default(now())
+
+  actor User? @relation(fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([actorId, createdAt])
+}
+
 model ShippingMethod {
   id        Int      @id @default(autoincrement())
   /// Nombre legible tipo "Envío estándar" / "Envío express"
@@ -316,12 +358,19 @@ model ShippingMethod {
 enum Role {
   ADMIN
   USER
+  SUPERADMIN
 }
 
 enum CircleUpgradeRequestStatus {
   PENDING
   APPROVED
   DENIED
+  EXPIRED
+}
+
+enum PromoCodeType {
+  PERCENT
+  FIXED
 }
 
 enum CircleUpgradeSocialNetwork {

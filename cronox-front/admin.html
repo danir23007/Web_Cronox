@@ -61,7 +61,52 @@
       </div>
     </header>
 
-    <section class="card" aria-labelledby="title-upgrades">
+    <nav class="card" style="margin-bottom:16px; padding:12px;">
+      <div class="tabs" id="adminTabs" style="display:flex; gap:8px; flex-wrap:wrap;">
+        <button class="btn" data-section="section-23">Solicitudes 2→3</button>
+        <button class="btn primary" data-section="section-34">Solicitudes 3→4</button>
+        <button class="btn" data-section="section-products">Productos</button>
+        <button class="btn" data-section="section-codes">Códigos</button>
+      </div>
+    </nav>
+
+    <section id="section-23" class="card admin-section" aria-labelledby="title-23" hidden>
+      <div style="display:flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap;">
+        <div>
+          <h2 id="title-23">Solicitudes de ascenso 2→3</h2>
+          <small>Visor automático de solicitudes en ventana de 72h.</small>
+        </div>
+        <div>
+          <label for="filterStatus23" style="font-size:0.9rem; color:#b3b3c2;">Estado:</label>
+          <select id="filterStatus23" class="btn" style="padding-right: 30px;">
+            <option value="PENDING" selected>PENDIENTE</option>
+            <option value="APPROVED">APROBADA</option>
+            <option value="DENIED">DENEGADA</option>
+            <option value="EXPIRED">EXPIRADA</option>
+          </select>
+        </div>
+      </div>
+      <div id="messageBox23" class="message" role="status" aria-live="polite"></div>
+      <div style="overflow-x: auto;">
+        <table aria-describedby="title-23">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Creada</th>
+              <th>Usuario</th>
+              <th>userId</th>
+              <th>Estado</th>
+              <th>Tiempo restante</th>
+            </tr>
+          </thead>
+          <tbody id="requestsBody23">
+            <tr><td colspan="6" class="empty">Cargando solicitudes…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="section-34" class="card admin-section" aria-labelledby="title-upgrades">
       <div style="display:flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap;">
         <div>
           <h2 id="title-upgrades">Solicitudes de ascenso 3→4</h2>
@@ -96,6 +141,28 @@
           </tbody>
         </table>
       </div>
+    </section>
+
+    <section id="section-products" class="card admin-section" aria-labelledby="title-products" hidden>
+      <div style="display:flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap;">
+        <div>
+          <h2 id="title-products">Productos</h2>
+          <small>CRUD básico con sincronización al catálogo.</small>
+        </div>
+        <button class="btn primary" type="button" disabled aria-disabled="true">Crear producto (próximamente)</button>
+      </div>
+      <p class="empty" style="margin-top:8px;">La gestión avanzada de productos llegará en la siguiente iteración.</p>
+    </section>
+
+    <section id="section-codes" class="card admin-section" aria-labelledby="title-codes" hidden>
+      <div style="display:flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap;">
+        <div>
+          <h2 id="title-codes">Códigos promocionales</h2>
+          <small>Listado y edición de cupones.</small>
+        </div>
+        <button class="btn primary" type="button" disabled aria-disabled="true">Crear código (próximamente)</button>
+      </div>
+      <p class="empty" style="margin-top:8px;">El módulo de cupones se activará tras la sincronización backend.</p>
     </section>
   </div>
 

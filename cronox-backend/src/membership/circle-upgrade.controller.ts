@@ -27,7 +27,11 @@ export class AdminCircleUpgradeController {
   constructor(private readonly circleUpgradeService: CircleUpgradeService) {}
 
   @Patch(':id')
-  updateStatus(@Param('id') id: string, @Body() dto: UpdateCircleUpgradeStatusDto) {
-    return this.circleUpgradeService.updateStatus(id, dto);
+  updateStatus(
+    @Param('id') id: string,
+    @Body() dto: UpdateCircleUpgradeStatusDto,
+    @CurrentUser('id') adminId: number,
+  ) {
+    return this.circleUpgradeService.updateStatus(id, dto, adminId);
   }
 }

@@ -2,6 +2,7 @@ import { Body, Controller, Get, Param, Patch, Query, UseGuards } from '@nestjs/c
 import { CircleUpgradeRequestStatus } from '@prisma/client';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { AdminGuard } from '../../common/guards/admin.guard';
+import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { AdminCircleUpgradesService } from './admin-circle-upgrades.service';
 import { AdminCircleUpgradeQueryDto } from './dto/admin-circle-upgrade-query.dto';
 import { AdminCircleUpgradeReviewDto } from './dto/admin-circle-upgrade-review.dto';
@@ -18,12 +19,20 @@ export class AdminCircleUpgradesController {
   }
 
   @Patch(':id/approve')
-  approve(@Param('id') id: string, @Body() review: AdminCircleUpgradeReviewDto) {
-    return this.adminCircleUpgradesService.approve(id, review);
+  approve(
+    @Param('id') id: string,
+    @Body() review: AdminCircleUpgradeReviewDto,
+    @CurrentUser('id') adminId: number,
+  ) {
+    return this.adminCircleUpgradesService.approve(id, review, adminId);
   }
 
   @Patch(':id/deny')
-  deny(@Param('id') id: string, @Body() review: AdminCircleUpgradeReviewDto) {
-    return this.adminCircleUpgradesService.deny(id, review);
+  deny(
+    @Param('id') id: string,
+    @Body() review: AdminCircleUpgradeReviewDto,
+    @CurrentUser('id') adminId: number,
+  ) {
+    return this.adminCircleUpgradesService.deny(id, review, adminId);
   }
 }

@@ -14,6 +14,7 @@ import { AdminCategoriesController } from './categories/admin-categories.control
 import { HistorialModule } from '../historial/historial.module';
 import { AdminCircleUpgradesController } from './circle-upgrades/admin-circle-upgrades.controller';
 import { AdminCircleUpgradesService } from './circle-upgrades/admin-circle-upgrades.service';
+import { AdminCirclePromotionsController } from './circle-upgrades/admin-circle-promotions.controller';
 
 @Module({
   imports: [ProductModule, CategoriesModule, HistorialModule, MembershipModule],
@@ -24,6 +25,7 @@ import { AdminCircleUpgradesService } from './circle-upgrades/admin-circle-upgra
     AdminStockController,
     AdminCategoriesController,
     AdminCircleUpgradesController,
+    AdminCirclePromotionsController,
   ],
   providers: [
     AdminOrdersService,

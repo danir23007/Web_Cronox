@@ -11,11 +11,15 @@ export class AdminCircleUpgradesService {
     return this.circleUpgradeService.listAdminRequests(status);
   }
 
-  approve(id: string, review: AdminCircleUpgradeReviewDto) {
-    return this.circleUpgradeService.approveRequest(id, review);
+  listAutoRequests(status?: CircleUpgradeRequestStatus) {
+    return this.circleUpgradeService.listAdminRequests(status, { from: 2, to: 3 });
   }
 
-  deny(id: string, review: AdminCircleUpgradeReviewDto) {
-    return this.circleUpgradeService.denyRequest(id, review);
+  approve(id: string, review: AdminCircleUpgradeReviewDto, adminId?: number) {
+    return this.circleUpgradeService.approveRequest(id, review, adminId);
+  }
+
+  deny(id: string, review: AdminCircleUpgradeReviewDto, adminId?: number) {
+    return this.circleUpgradeService.denyRequest(id, review, adminId);
   }
 }

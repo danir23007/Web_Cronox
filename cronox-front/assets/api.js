@@ -505,24 +505,31 @@
   const adminApi = ensureAdminNamespace();
 
   adminApi.listCircleUpgradeRequests = async (status = 'PENDING') => {
-    const data = await request('/admin/circle-upgrades/3-4', {
+    const data = await request('/api/admin/circle-upgrades/3-4', {
       query: { status },
     });
     return Array.isArray(data) ? data : [];
   };
 
   adminApi.approveCircleUpgrade = async (id, payload = {}) => {
-    return request(`/admin/circle-upgrades/3-4/${encodeURIComponent(id)}/approve`, {
+    return request(`/api/admin/circle-upgrades/3-4/${encodeURIComponent(id)}/approve`, {
       method: 'PATCH',
       body: payload,
     });
   };
 
   adminApi.denyCircleUpgrade = async (id, payload = {}) => {
-    return request(`/admin/circle-upgrades/3-4/${encodeURIComponent(id)}/deny`, {
+    return request(`/api/admin/circle-upgrades/3-4/${encodeURIComponent(id)}/deny`, {
       method: 'PATCH',
       body: payload,
     });
+  };
+
+  adminApi.listAutoCircleRequests = async (status = 'PENDING') => {
+    const data = await request('/api/admin/requests/2-3', {
+      query: { status },
+    });
+    return Array.isArray(data) ? data : [];
   };
 
   // ===== FAVORITES =====

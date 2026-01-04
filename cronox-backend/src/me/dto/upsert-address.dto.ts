@@ -1,8 +1,9 @@
 import { Transform, TransformFnParams } from 'class-transformer';
-import { IsOptional, IsString, Length } from 'class-validator';
+import { IsOptional, IsString, Length, Matches } from 'class-validator';
 
 const trim = ({ value }: TransformFnParams) =>
   typeof value === 'string' ? value.trim() : value;
+const PHONE_REGEX = /^[\d+\s-]+$/;
 
 export class UpsertAddressDto {
   @IsString()
@@ -13,6 +14,7 @@ export class UpsertAddressDto {
   @IsOptional()
   @IsString()
   @Length(0, 40)
+  @Matches(PHONE_REGEX, { message: 'El teléfono solo puede contener números, espacios o +' })
   @Transform(trim)
   phone?: string;
 

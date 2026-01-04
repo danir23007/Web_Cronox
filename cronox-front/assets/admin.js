@@ -3,8 +3,13 @@
   const requestsBody = $('#requestsBody');
   const messageBox = $('#messageBox');
   const filterStatus = $('#filterStatus');
+  const requestsBody23 = $('#requestsBody23');
+  const messageBox23 = $('#messageBox23');
+  const filterStatus23 = $('#filterStatus23');
+  const tabs = document.querySelectorAll('#adminTabs button');
   const logoutBtn = $('#logoutBtn');
   const backBtn = $('#backBtn');
+  const loadingRow = '<tr><td colspan="8" class="empty">Cargando solicitudes…</td></tr>';
 
   const setMessage = (text = '', type = 'success') => {
     if (!messageBox) return;
@@ -27,7 +32,7 @@
       return null;
     }
     const user = await window.CRONOX_API.getMe();
-    if (!user || user.role !== 'ADMIN') {
+    if (!user || (user.role !== 'ADMIN' && user.role !== 'SUPERADMIN')) {
       redirectToHome();
       return null;
     }
@@ -51,15 +56,44 @@
     }
   };
 
+  const formatDuration = (ms) => {
+    if (ms <= 0) return 'Expirado';
+    const totalSeconds = Math.floor(ms / 1000);
+    const hours = Math.floor(totalSeconds / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const seconds = totalSeconds % 60;
+    if (hours > 0) return `${hours}h ${minutes}m`;
+    if (minutes > 0) return `${minutes}m ${seconds}s`;
+    return `${seconds}s`;
+  };
+
   const setLoading = (isLoading) => {
     if (!requestsBody) return;
     if (isLoading) {
-      requestsBody.innerHTML = '<tr><td colspan="8" class="empty">Cargando solicitudes…</td></tr>';
+      requestsBody.innerHTML = loadingRow;
     }
   };
 
-  const renderRequests = (items) => {
+  const setLoading23 = (isLoading) => {
+    if (!requestsBody23) return;
+    if (isLoading) {
+      requestsBody23.innerHTML = '<tr><td colspan="6" class="empty">Cargando solicitudes…</td></tr>';
+    }
+  };
+
+  const renderRequests = (items, options = { error: false }) => {
     if (!requestsBody) return;
+    if (options.error) {
+      requestsBody.innerHTML = `
+        <tr>
+          <td colspan="8" class="empty">
+            No se pudieron cargar las solicitudes.
+            <button type="button" class="btn" data-retry="1" style="margin-left:8px;">Reintentar</button>
+          </td>
+        </tr>
+      `;
+      return;
+    }
     if (!Array.isArray(items) || !items.length) {
       requestsBody.innerHTML = '<tr><td colspan="8" class="empty">No hay solicitudes con ese estado.</td></tr>';
       return;
@@ -92,6 +126,42 @@
       .join('');
   };
 
+  const renderRequests23 = (items, options = { error: false }) => {
+    if (!requestsBody23) return;
+    if (options.error) {
+      requestsBody23.innerHTML = `
+        <tr>
+          <td colspan="6" class="empty">
+            No se pudieron cargar las solicitudes.
+            <button type="button" class="btn" data-retry-23="1" style="margin-left:8px;">Reintentar</button>
+          </td>
+        </tr>
+      `;
+      return;
+    }
+    if (!Array.isArray(items) || !items.length) {
+      requestsBody23.innerHTML = '<tr><td colspan="6" class="empty">No hay solicitudes con ese estado.</td></tr>';
+      return;
+    }
+
+    requestsBody23.innerHTML = items
+      .map((req) => {
+        const userName = req.user?.firstName || req.user?.lastName
+          ? `${req.user?.firstName || ''} ${req.user?.lastName || ''}`.trim()
+          : req.user?.email || '';
+        const remaining = typeof req.remainingMs === 'number' ? formatDuration(req.remainingMs) : '—';
+        return `<tr>
+          <td>${req.requestNumber ?? '—'}</td>
+          <td>${formatDate(req.createdAt)}</td>
+          <td>${userName || '—'}</td>
+          <td>${req.userId}</td>
+          <td>${statusBadge(req.status)}</td>
+          <td>${remaining}</td>
+        </tr>`;
+      })
+      .join('');
+  };
+
   const fetchRequests = async () => {
     setLoading(true);
     setMessage('');
@@ -102,7 +172,27 @@
     } catch (error) {
       console.error('[ADMIN] Error cargando solicitudes', error);
       setMessage('No se pudieron cargar las solicitudes.', 'error');
-      renderRequests([]);
+      renderRequests([], { error: true });
+    }
+  };
+
+  const fetchRequests23 = async () => {
+    setLoading23(true);
+    if (messageBox23) {
+      messageBox23.textContent = '';
+      messageBox23.className = 'message';
+    }
+    const status = filterStatus23?.value || 'PENDING';
+    try {
+      const data = await window.CRONOX_API?.admin?.listAutoCircleRequests(status);
+      renderRequests23(data || []);
+    } catch (error) {
+      console.error('[ADMIN] Error cargando solicitudes 2->3', error);
+      if (messageBox23) {
+        messageBox23.textContent = 'No se pudieron cargar las solicitudes 2→3.';
+        messageBox23.className = 'message show error';
+      }
+      renderRequests23([], { error: true });
     }
   };
 
@@ -131,6 +221,9 @@
     if (filterStatus) {
       filterStatus.addEventListener('change', fetchRequests);
     }
+    if (filterStatus23) {
+      filterStatus23.addEventListener('change', fetchRequests23);
+    }
 
     if (requestsBody) {
       requestsBody.addEventListener('click', (event) => {
@@ -138,8 +231,39 @@
         if (!(target instanceof HTMLElement)) return;
         const action = target.dataset.action;
         const id = target.dataset.id;
+        if (target.dataset.retry) {
+          fetchRequests();
+          return;
+        }
         if (!action || !id) return;
         handleAction(action, id);
+      });
+    }
+
+    if (requestsBody23) {
+      requestsBody23.addEventListener('click', (event) => {
+        const target = event.target;
+        if (!(target instanceof HTMLElement)) return;
+        if (target.dataset.retry23) {
+          fetchRequests23();
+        }
+      });
+    }
+
+    if (tabs?.length) {
+      tabs.forEach((tab) => {
+        tab.addEventListener('click', () => {
+          const targetSection = tab.dataset.section;
+          document.querySelectorAll('.admin-section').forEach((section) => {
+            section.hidden = section.id !== targetSection;
+          });
+          tabs.forEach((btn) => btn.classList.toggle('primary', btn === tab));
+          if (targetSection === 'section-34') {
+            fetchRequests();
+          } else if (targetSection === 'section-23') {
+            fetchRequests23();
+          }
+        });
       });
     }
 
@@ -160,6 +284,7 @@
     if (!user) return;
     bindEvents();
     fetchRequests();
+    fetchRequests23();
   };
 
   document.addEventListener('DOMContentLoaded', init);
