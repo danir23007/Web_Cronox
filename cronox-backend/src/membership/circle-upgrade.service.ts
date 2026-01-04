@@ -4,12 +4,17 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { CircleUpgradeRequest, CircleUpgradeRequestStatus, Prisma } from '@prisma/client';
+import {
+  CircleUpgradeRequest,
+  CircleUpgradeRequestStatus,
+  Prisma,
+} from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateCircleUpgradeDto, UpdateCircleUpgradeStatusDto } from './dto/circle-upgrade.dto';
 
 const DAY_IN_MS = 24 * 60 * 60 * 1000;
 const COOLDOWN_MS = 30 * DAY_IN_MS;
+const AUTO_WINDOW_MS = 72 * 60 * 60 * 1000;
 
 @Injectable()
 export class CircleUpgradeService {
@@ -31,7 +36,11 @@ export class CircleUpgradeService {
     }
   }
 
-  private async findRequestForReview(tx: Prisma.TransactionClient, id: string) {
+  private async findRequestForReview(
+    tx: Prisma.TransactionClient,
+    id: string,
+    options: { fromCircle?: number; toCircle?: number } = {},
+  ) {
     const request = await tx.circleUpgradeRequest.findUnique({
       where: { id },
       include: {
@@ -47,7 +56,10 @@ export class CircleUpgradeService {
       },
     });
 
-    if (!request || request.fromCircle !== 3 || request.toCircle !== 4) {
+    const expectedFrom = options.fromCircle ?? 3;
+    const expectedTo = options.toCircle ?? 4;
+
+    if (!request || request.fromCircle !== expectedFrom || request.toCircle !== expectedTo) {
       throw new NotFoundException('Solicitud no encontrada');
     }
 
@@ -161,14 +173,14 @@ export class CircleUpgradeService {
       );
     }
 
-    const requestNumber = await this.getNextRequestNumber(userId);
-    const username = dto.username.trim();
+      const requestNumber = await this.getNextRequestNumber(userId);
+      const username = dto.username.trim();
 
-    return this.prisma.circleUpgradeRequest.create({
-      data: {
-        userId,
-        fromCircle: 3,
-        toCircle: 4,
+      return this.prisma.circleUpgradeRequest.create({
+        data: {
+          userId,
+          fromCircle: 3,
+          toCircle: 4,
         socialNetwork: dto.socialNetwork,
         username,
         usernameNormalized,
@@ -178,14 +190,55 @@ export class CircleUpgradeService {
     });
   }
 
-  async listAdminRequests(status?: CircleUpgradeRequestStatus) {
-    const effectiveStatus = status ?? CircleUpgradeRequestStatus.PENDING;
+  async ensureAutoRequestForCircle2To3(userId: number, autoProcessAt?: Date) {
+    const pending = await this.prisma.circleUpgradeRequest.findFirst({
+      where: { userId, fromCircle: 2, toCircle: 3, status: CircleUpgradeRequestStatus.PENDING },
+      orderBy: { createdAt: 'desc' },
+    });
 
-    return this.prisma.circleUpgradeRequest.findMany({
+    if (pending) {
+      if (autoProcessAt && !pending.autoProcessAt) {
+        await this.prisma.circleUpgradeRequest.update({
+          where: { id: pending.id },
+          data: { autoProcessAt },
+        });
+      }
+      return pending;
+    }
+
+    const requestNumber = await this.getNextRequestNumber(userId);
+    const created = await this.prisma.circleUpgradeRequest.create({
+      data: {
+        userId,
+        fromCircle: 2,
+        toCircle: 3,
+        socialNetwork: 'INSTAGRAM',
+        username: `auto-${Date.now()}`,
+        usernameNormalized: `auto-${Date.now()}`,
+        status: CircleUpgradeRequestStatus.PENDING,
+        requestNumber,
+        autoProcessAt,
+      },
+    });
+
+    return created;
+  }
+
+  async listAdminRequests(status?: CircleUpgradeRequestStatus, options?: { from?: number; to?: number }) {
+    const effectiveStatus = status ?? CircleUpgradeRequestStatus.PENDING;
+    const fromCircle = options?.from ?? 3;
+    const toCircle = options?.to ?? 4;
+
+    const whereStatus =
+      effectiveStatus === CircleUpgradeRequestStatus.EXPIRED && fromCircle === 2 && toCircle === 3
+        ? CircleUpgradeRequestStatus.PENDING
+        : effectiveStatus;
+
+    const list = await this.prisma.circleUpgradeRequest.findMany({
       where: {
-        fromCircle: 3,
-        toCircle: 4,
-        status: effectiveStatus,
+        fromCircle,
+        toCircle,
+        status: whereStatus,
       },
       orderBy: { createdAt: 'desc' },
       include: {
@@ -200,13 +253,45 @@ export class CircleUpgradeService {
         },
       },
     });
+
+    return list
+      .map((item) => {
+        const base = item as CircleUpgradeRequest & {
+          remainingMs?: number;
+          autoRemainingMs?: number;
+        };
+
+        if (fromCircle === 2 && toCircle === 3) {
+          const expiresAt = new Date(item.createdAt.getTime() + AUTO_WINDOW_MS);
+          const remainingMs = Math.max(0, expiresAt.getTime() - Date.now());
+          base.remainingMs = remainingMs;
+          if (item.autoProcessAt) {
+            base.autoRemainingMs = Math.max(0, item.autoProcessAt.getTime() - Date.now());
+          }
+          if (remainingMs <= 0 && base.status === CircleUpgradeRequestStatus.PENDING) {
+            base.status = CircleUpgradeRequestStatus.EXPIRED;
+          }
+        }
+
+        return base;
+      })
+      .filter((item) => {
+        if (effectiveStatus === CircleUpgradeRequestStatus.EXPIRED) {
+          return item.status === CircleUpgradeRequestStatus.EXPIRED;
+        }
+        return true;
+      });
   }
 
-  async approveRequest(id: string, review?: { notes?: string; reviewedBy?: string }) {
+  async approveRequest(
+    id: string,
+    review?: { notes?: string; reviewedBy?: string },
+    adminId?: number,
+  ) {
     const reviewFields = this.sanitizeReviewFields(review);
 
     const result = await this.prisma.$transaction(async (tx) => {
-      const request = await this.findRequestForReview(tx, id);
+      const request = await this.findRequestForReview(tx, id, { fromCircle: 3, toCircle: 4 });
       this.assertPending(request);
 
       const normalizedUsername = request.usernameNormalized || this.normalizeUsername(request.username);
@@ -234,6 +319,8 @@ export class CircleUpgradeService {
           status: CircleUpgradeRequestStatus.APPROVED,
           approvedAt: new Date(),
           reviewedAt: new Date(),
+          processedAt: new Date(),
+          processedById: adminId,
           ...reviewFields,
         },
       });
@@ -270,11 +357,15 @@ export class CircleUpgradeService {
     return result;
   }
 
-  async denyRequest(id: string, review?: { notes?: string; reviewedBy?: string }) {
+  async denyRequest(
+    id: string,
+    review?: { notes?: string; reviewedBy?: string },
+    adminId?: number,
+  ) {
     const reviewFields = this.sanitizeReviewFields(review);
 
     const result = await this.prisma.$transaction(async (tx) => {
-      const request = await this.findRequestForReview(tx, id);
+      const request = await this.findRequestForReview(tx, id, { fromCircle: 3, toCircle: 4 });
       this.assertPending(request);
 
       const updated = await tx.circleUpgradeRequest.update({
@@ -283,6 +374,8 @@ export class CircleUpgradeService {
           status: CircleUpgradeRequestStatus.DENIED,
           reviewedAt: new Date(),
           approvedAt: null,
+          processedAt: new Date(),
+          processedById: adminId,
           ...reviewFields,
         },
         include: {
@@ -304,13 +397,13 @@ export class CircleUpgradeService {
     return result;
   }
 
-  async updateStatus(id: string, dto: UpdateCircleUpgradeStatusDto) {
+  async updateStatus(id: string, dto: UpdateCircleUpgradeStatusDto, adminId?: number) {
     if (dto.status === CircleUpgradeRequestStatus.APPROVED) {
-      const result = await this.approveRequest(id, dto);
+      const result = await this.approveRequest(id, dto, adminId);
       return result.request;
     }
 
-    const result = await this.denyRequest(id, dto);
+    const result = await this.denyRequest(id, dto, adminId);
     return result.request;
   }
 }

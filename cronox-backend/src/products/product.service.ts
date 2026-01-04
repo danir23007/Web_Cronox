@@ -105,7 +105,9 @@ export class ProductService {
       [sortBy]: order,
     } as Prisma.ProductOrderByWithRelationInput;
 
-    const where: Prisma.ProductWhereInput = {};
+    const where: Prisma.ProductWhereInput = {
+      isActive: true,
+    };
 
     if (query.categorySlug) {
       where.categories = {
@@ -167,9 +169,9 @@ export class ProductService {
 
   async getBySlug(slug: string) {
     const product = await this.prisma.product.findUnique({
-      where: { slug },
-      include: this.getProductInclude(),
-    });
+        where: { slug, isActive: true },
+        include: this.getProductInclude(),
+      });
 
     return this.addEffectiveVariantPrices(product);
   }
@@ -194,8 +196,11 @@ export class ProductService {
           data: {
             name: dto.name,
             slug: dto.slug,
+            description: dto.description,
             price: dto.price,
             currency,
+            isActive: dto.isActive ?? true,
+            collection: dto.collection,
             images: { create: images },
           },
         });
@@ -243,6 +248,9 @@ export class ProductService {
     if (dto.slug !== undefined) data.slug = dto.slug;
     if (dto.price !== undefined) data.price = dto.price;
     if (dto.currency !== undefined) data.currency = dto.currency;
+    if (dto.description !== undefined) data.description = dto.description;
+    if (dto.isActive !== undefined) data.isActive = dto.isActive;
+    if (dto.collection !== undefined) data.collection = dto.collection;
 
     try {
       const product = await this.prisma.$transaction(async (tx) => {

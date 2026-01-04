@@ -2,12 +2,16 @@ import { BadRequestException, ConflictException, Injectable, NotFoundException }
 import { OrderStatus } from '@prisma/client';
 import { Decimal } from '@prisma/client/runtime/library';
 import { PrismaService } from '../prisma/prisma.service';
+import { CircleUpgradeService } from './circle-upgrade.service';
 
 const HUNDRED_EUR = new Decimal(100);
 
 @Injectable()
 export class CircleService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly circleUpgradeService: CircleUpgradeService,
+  ) {}
 
   async getNetSpent(userId: number): Promise<Decimal> {
     const [purchases, refunds] = await Promise.all([
@@ -133,6 +137,8 @@ export class CircleService {
         : await this.prisma.circlePromotionRequest.create({
             data: { userId, status: 'pending', requestedAt, promoteAt },
           });
+
+    await this.circleUpgradeService.ensureAutoRequestForCircle2To3(userId, promoteAt);
 
     return request;
   }

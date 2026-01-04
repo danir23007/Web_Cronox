@@ -37,6 +37,22 @@ export class CreateProductDto {
   @MaxLength(3)
   currency?: string; // default: 'EUR'
 
+  @ApiPropertyOptional({ example: 'Descripción del producto' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(800)
+  description?: string;
+
+  @ApiPropertyOptional({ example: 'drop-01' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(140)
+  collection?: string;
+
+  @ApiPropertyOptional({ example: true })
+  @IsOptional()
+  isActive?: boolean;
+
   @ApiPropertyOptional({ type: [CreateProductImageDto] })
   @IsOptional()
   @IsArray()
