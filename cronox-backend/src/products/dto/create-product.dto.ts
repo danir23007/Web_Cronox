@@ -19,11 +19,12 @@ export class CreateProductDto {
   @MaxLength(120)
   name: string;
 
-  @ApiProperty({ example: 'camiseta-cronox-negra' })
+  @ApiPropertyOptional({ example: 'camiseta-cronox-negra' })
+  @IsOptional()
   @IsString()
   @Matches(/^[a-z0-9-]+$/)
   @MaxLength(140)
-  slug: string;
+  slug?: string;
 
   // precio en céntimos (ej: 34,95€ -> 3495)
   @ApiProperty({ example: 3495, description: 'Precio en céntimos (34,95€)' })
@@ -59,6 +60,15 @@ export class CreateProductDto {
   @ValidateNested({ each: true })
   @Type(() => CreateProductImageDto)
   images?: CreateProductImageDto[];
+
+  @ApiPropertyOptional({
+    description: 'URLs directas de las imágenes a asociar al producto',
+    type: [String],
+  })
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  imageUrls?: string[];
 
   @IsOptional()
   @IsArray()

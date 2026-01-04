@@ -111,6 +111,7 @@ export class AdminOrdersService {
       });
 
       await this.syncHistorialForStatusChange(existing, order, tx);
+      await this.handlePromoUsageOnPaid(tx, existing, order);
 
       return order;
     }).catch((error) => {
@@ -377,6 +378,39 @@ export class AdminOrdersService {
 
     if (updated.status === OrderStatus.REFUNDED && previous.status !== OrderStatus.REFUNDED) {
       await this.historialService.registerReturn(updated.userId, itemsCount, tx);
+    }
+  }
+
+  private async handlePromoUsageOnPaid(
+    tx: Prisma.TransactionClient,
+    previous: OrderWithItems,
+    updated: OrderWithItems,
+  ) {
+    if (updated.status !== OrderStatus.PAID || previous.status === OrderStatus.PAID) {
+      return;
+    }
+
+    if (!updated.promoCodeId) {
+      return;
+    }
+
+    const promo = await tx.promoCode.findUnique({
+      where: { id: updated.promoCodeId },
+      select: { id: true, code: true },
+    });
+
+    if (!promo) return;
+
+    await tx.promoCode.update({
+      where: { id: promo.id },
+      data: { usageCount: { increment: 1 } },
+    });
+
+    if (!updated.promoCodeCode) {
+      await tx.order.update({
+        where: { id: updated.id },
+        data: { promoCodeCode: promo.code },
+      });
     }
   }
 

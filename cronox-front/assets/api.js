@@ -369,6 +369,7 @@
   const request = async (path, options = {}) => {
     const url = buildUrl(path, options.query);
     const headers = buildRequestHeaders(options.headers);
+    const isFormData = typeof FormData !== 'undefined' && options.body instanceof FormData;
     const config = {
       method: options.method || 'GET',
       headers,
@@ -376,9 +377,13 @@
     };
 
     if (options.body !== undefined) {
-      config.body = typeof options.body === 'string' ? options.body : JSON.stringify(options.body);
-      if (!headers['Content-Type'] && !headers['content-type']) {
-        headers['Content-Type'] = 'application/json';
+      if (isFormData) {
+        config.body = options.body;
+      } else {
+        config.body = typeof options.body === 'string' ? options.body : JSON.stringify(options.body);
+        if (!headers['Content-Type'] && !headers['content-type']) {
+          headers['Content-Type'] = 'application/json';
+        }
       }
     }
 
@@ -530,6 +535,63 @@
       query: { status },
     });
     return Array.isArray(data) ? data : [];
+  };
+
+  adminApi.listAdminProducts = async (query = {}) => {
+    return request('/api/admin/products', { query });
+  };
+
+  adminApi.getAdminProduct = async (id) => {
+    return request(`/api/admin/products/${encodeURIComponent(id)}`);
+  };
+
+  adminApi.createAdminProduct = async (payload) => {
+    return request('/api/admin/products', {
+      method: 'POST',
+      body: payload,
+    });
+  };
+
+  adminApi.updateAdminProduct = async (id, payload) => {
+    return request(`/api/admin/products/${encodeURIComponent(id)}`, {
+      method: 'PATCH',
+      body: payload,
+    });
+  };
+
+  adminApi.deleteAdminProduct = async (id) => {
+    return request(`/api/admin/products/${encodeURIComponent(id)}`, { method: 'DELETE' });
+  };
+
+  adminApi.uploadProductImages = async (files = []) => {
+    const formData = new FormData();
+    files.forEach((file) => formData.append('files', file));
+    return request('/api/admin/products/upload-images', {
+      method: 'POST',
+      body: formData,
+    });
+  };
+
+  adminApi.listPromoCodes = async (query = {}) => {
+    return request('/api/admin/promo-codes', { query });
+  };
+
+  adminApi.createPromoCode = async (payload) => {
+    return request('/api/admin/promo-codes', {
+      method: 'POST',
+      body: payload,
+    });
+  };
+
+  adminApi.updatePromoCode = async (id, payload) => {
+    return request(`/api/admin/promo-codes/${encodeURIComponent(id)}`, {
+      method: 'PATCH',
+      body: payload,
+    });
+  };
+
+  adminApi.deletePromoCode = async (id) => {
+    return request(`/api/admin/promo-codes/${encodeURIComponent(id)}`, { method: 'DELETE' });
   };
 
   // ===== FAVORITES =====

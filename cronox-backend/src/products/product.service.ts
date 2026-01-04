@@ -1,25 +1,127 @@
-import {
-  ConflictException,
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { Prisma, VariantSize } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateProductDto } from './dto/create-product.dto';
 import { QueryProductsDto } from './dto/query-products.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
 import { CreateVariantDto } from './dto/create-variant.dto';
 import { AdjustStockDto, UpdateVariantDto } from './dto/update-variant.dto';
+import { CreateProductImageDto } from './dto/create-product-image.dto';
+import { AdminProductQueryDto } from '../admin/products/dto/admin-product-query.dto';
 
 @Injectable()
 export class ProductService {
   constructor(private readonly prisma: PrismaService) {}
+
+  private readonly defaultSizes: VariantSize[] = [
+    VariantSize.XS,
+    VariantSize.S,
+    VariantSize.M,
+    VariantSize.L,
+    VariantSize.XL,
+    VariantSize.XXL,
+  ];
 
   private readonly imageOrderBy: Prisma.ProductImageOrderByWithRelationInput[] =
     [{ sortOrder: 'asc' }, { id: 'asc' }];
 
   private readonly variantOrderBy: Prisma.ProductVariantOrderByWithRelationInput[] =
     [{ id: 'asc' }];
+
+  private slugify(value: string) {
+    return (value || '')
+      .toString()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase()
+      .trim()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .replace(/-{2,}/g, '-')
+      .slice(0, 140);
+  }
+
+  private async ensureUniqueSlug(
+    base: string,
+    tx: Prisma.TransactionClient | PrismaService = this.prisma,
+    excludeProductId?: number,
+  ): Promise<string> {
+    const normalized = this.slugify(base) || `producto-${Date.now()}`;
+    let candidate = normalized;
+    let suffix = 2;
+
+    // eslint-disable-next-line no-constant-condition
+    while (true) {
+      const existing = await tx.product.findFirst({
+        where: {
+          slug: candidate,
+          ...(excludeProductId ? { id: { not: excludeProductId } } : {}),
+        },
+        select: { id: true },
+      });
+
+      if (!existing) {
+        return candidate;
+      }
+
+      candidate = `${normalized}-${suffix}`;
+      suffix += 1;
+    }
+  }
+
+  private prepareImages(dto: { images?: CreateProductImageDto[]; imageUrls?: string[] }) {
+    const fromDto = Array.isArray(dto.images) ? dto.images : [];
+    const fromUrls =
+      Array.isArray(dto.imageUrls) && dto.imageUrls.length
+        ? dto.imageUrls.map((url, index) => ({
+            url,
+            sortOrder: index,
+            isPrimary: index === 0,
+          }))
+        : [];
+
+    let images = [...fromDto, ...fromUrls];
+
+    if (images.length > 0 && !images.some((image) => image.isPrimary)) {
+      images = images.map((image, index) => ({
+        ...image,
+        isPrimary: index === 0,
+      }));
+    }
+
+    return images;
+  }
+
+  private buildDefaultVariants(slug: string): CreateVariantDto[] {
+    return this.defaultSizes.map((size, index) => ({
+      size,
+      sku: `${slug || 'producto'}-${size}-${Date.now().toString(36)}${index}`,
+      stockQty: 0,
+      isActive: true,
+    }));
+  }
+
+  private async recordAudit(
+    action: string,
+    metadata: Prisma.InputJsonValue,
+    adminId?: number,
+    tx?: Prisma.TransactionClient,
+  ) {
+    const client = tx ?? this.prisma;
+    try {
+      await client.auditLog.create({
+        data: {
+          actorId: adminId ?? null,
+          action,
+          metadata,
+        },
+      });
+    } catch (error) {
+      // No bloquear la operación principal por fallo en auditoría
+      // eslint-disable-next-line no-console
+      console.warn('[AUDIT_LOG] Error registrando auditoría', error);
+    }
+  }
 
   private getProductInclude(options?: {
     includeInactiveVariants?: boolean;
@@ -92,6 +194,63 @@ export class ProductService {
       stock: variantData.stockQty, // [STOCK]
       effectivePrice: variantData.price ?? product.price,
     };
+  }
+
+  async listAdminProducts(query: AdminProductQueryDto) {
+    const page = query.page ?? 1;
+    const limit = query.limit ?? 20;
+    const skip = (page - 1) * limit;
+    const where: Prisma.ProductWhereInput = {};
+
+    if (query.search?.trim()) {
+      const term = query.search.trim();
+      where.OR = [
+        { name: { contains: term, mode: 'insensitive' } },
+        { slug: { contains: term, mode: 'insensitive' } },
+        { description: { contains: term, mode: 'insensitive' } },
+        { collection: { contains: term, mode: 'insensitive' } },
+      ];
+    }
+
+    if (query.isActive === 'true') {
+      where.isActive = true;
+    } else if (query.isActive === 'false') {
+      where.isActive = false;
+    }
+
+    const [items, total] = await this.prisma.$transaction([
+      this.prisma.product.findMany({
+        where,
+        skip,
+        take: limit,
+        orderBy: { createdAt: 'desc' },
+        include: this.getProductInclude({ includeInactiveVariants: true }),
+      }),
+      this.prisma.product.count({ where }),
+    ]);
+
+    return {
+      meta: {
+        page,
+        limit,
+        total,
+        pageCount: Math.ceil(total / limit) || 1,
+      },
+      items: items.map((product) => this.addEffectiveVariantPrices(product)),
+    };
+  }
+
+  async getAdminProduct(id: number) {
+    const product = await this.prisma.product.findUnique({
+      where: { id },
+      include: this.getProductInclude({ includeInactiveVariants: true }),
+    });
+
+    if (!product) {
+      throw new NotFoundException('Product not found');
+    }
+
+    return this.addEffectiveVariantPrices(product);
   }
 
   async getAllProducts(query: QueryProductsDto) {
@@ -176,41 +335,40 @@ export class ProductService {
     return this.addEffectiveVariantPrices(product);
   }
 
-  async createProduct(dto: CreateProductDto) {
+  async createProduct(dto: CreateProductDto, adminId?: number) {
     const currency = dto.currency ?? 'EUR';
-    let images = dto.images ?? [];
-
-    if (
-      images.length > 0 &&
-      !images.some((image) => image.isPrimary === true)
-    ) {
-      images = images.map((image, index) => ({
-        ...image,
-        isPrimary: index === 0,
-      }));
-    }
+    const images = this.prepareImages(dto);
+    const slug = await this.ensureUniqueSlug(dto.slug ?? this.slugify(dto.name));
+    const variants =
+      dto.variants?.length && Array.isArray(dto.variants)
+        ? dto.variants
+        : this.buildDefaultVariants(slug);
 
     try {
       const product = await this.prisma.$transaction(async (tx) => {
+        const primaryImage = images.find((img) => img.isPrimary);
         const created = await tx.product.create({
           data: {
             name: dto.name,
-            slug: dto.slug,
+            slug,
             description: dto.description,
             price: dto.price,
             currency,
             isActive: dto.isActive ?? true,
             collection: dto.collection,
-            images: { create: images },
+            imageUrl: primaryImage?.url,
+            images: images.length ? { create: images } : undefined,
           },
         });
 
-        if (dto.variants?.length) {
+        if (variants.length) {
           await tx.productVariant.createMany({
-            data: dto.variants.map((variant) => ({
+            data: variants.map((variant, index) => ({
               productId: created.id,
               size: variant.size,
-              sku: variant.sku,
+              sku:
+                variant.sku ||
+                `${slug}-${variant.size}-${Math.random().toString(36).slice(2, 6)}${index}`,
               price: variant.price ?? null,
               stockQty: variant.stockQty ?? variant.stock ?? 0, // [STOCK]
               isActive: variant.isActive ?? true,
@@ -218,6 +376,13 @@ export class ProductService {
             skipDuplicates: false,
           });
         }
+
+        await this.recordAudit(
+          'product.create',
+          { productId: created.id, slug, name: dto.name },
+          adminId,
+          tx,
+        );
 
         return tx.product.findUnique({
           where: { id: created.id },
@@ -241,11 +406,10 @@ export class ProductService {
     }
   }
 
-  async updateProduct(id: number, dto: UpdateProductDto) {
+  async updateProduct(id: number, dto: UpdateProductDto, adminId?: number) {
     const data: Prisma.ProductUpdateInput = {};
 
     if (dto.name !== undefined) data.name = dto.name;
-    if (dto.slug !== undefined) data.slug = dto.slug;
     if (dto.price !== undefined) data.price = dto.price;
     if (dto.currency !== undefined) data.currency = dto.currency;
     if (dto.description !== undefined) data.description = dto.description;
@@ -254,19 +418,52 @@ export class ProductService {
 
     try {
       const product = await this.prisma.$transaction(async (tx) => {
+        const existing = await tx.product.findUnique({ where: { id } });
+
+        if (!existing) {
+          throw new NotFoundException('Product not found');
+        }
+
+        if (dto.slug !== undefined) {
+          const baseSlug = dto.slug || this.slugify(dto.name ?? existing.name);
+          data.slug = await this.ensureUniqueSlug(baseSlug, tx, id);
+        }
+
         if (Object.keys(data).length > 0) {
           await tx.product.update({
             where: { id },
             data,
           });
-        } else {
-          const exists = await tx.product.findUnique({ where: { id } });
-          if (!exists) {
-            throw new NotFoundException('Product not found');
+        }
+
+        const replaceImages =
+          (Array.isArray(dto.imageUrls) && dto.imageUrls.length > 0) ||
+          (Array.isArray(dto.images) && dto.images.length > 0);
+
+        if (replaceImages) {
+          await tx.productImage.deleteMany({ where: { productId: id } });
+          const newImages = this.prepareImages(dto as unknown as { images?: CreateProductImageDto[]; imageUrls?: string[] });
+          if (newImages.length) {
+            await tx.productImage.createMany({
+              data: newImages.map((img) => ({
+                productId: id,
+                url: img.url,
+                alt: img.alt ?? '',
+                sortOrder: img.sortOrder ?? 0,
+                isPrimary: img.isPrimary ?? false,
+              })),
+            });
+            const primary = newImages.find((img) => img.isPrimary) ?? newImages[0];
+            await tx.product.update({
+              where: { id },
+              data: { imageUrl: primary?.url },
+            });
+          } else {
+            await tx.product.update({ where: { id }, data: { imageUrl: null } });
           }
         }
 
-        if (dto.imagesToCreate?.length) {
+        if (dto.imagesToCreate?.length && !replaceImages) {
           await tx.productImage.createMany({
             data: dto.imagesToCreate.map((img) => ({
               productId: id,
@@ -278,7 +475,7 @@ export class ProductService {
           });
         }
 
-        if (dto.imagesToUpdate?.length) {
+        if (dto.imagesToUpdate?.length && !replaceImages) {
           for (const img of dto.imagesToUpdate) {
             await tx.productImage.update({
               where: { id: img.id },
@@ -292,7 +489,7 @@ export class ProductService {
           }
         }
 
-        if (dto.imagesToDeleteIds?.length) {
+        if (dto.imagesToDeleteIds?.length && !replaceImages) {
           await tx.productImage.deleteMany({
             where: { id: { in: dto.imagesToDeleteIds } },
           });
@@ -300,10 +497,12 @@ export class ProductService {
 
         if (dto.variantsToCreate?.length) {
           await tx.productVariant.createMany({
-            data: dto.variantsToCreate.map((variant) => ({
+            data: dto.variantsToCreate.map((variant, index) => ({
               productId: id,
               size: variant.size,
-              sku: variant.sku,
+              sku:
+                variant.sku ||
+                `${existing.slug}-${variant.size}-${Math.random().toString(36).slice(2, 6)}${index}`,
               price: variant.price ?? null,
               stockQty: variant.stockQty ?? variant.stock ?? 0, // [STOCK]
               isActive: variant.isActive ?? true,
@@ -316,36 +515,27 @@ export class ProductService {
           for (const variant of dto.variantsToUpdate) {
             const { id: variantId, ...variantData } = variant;
 
-            const existing = await tx.productVariant.findFirst({
+            const variantExists = await tx.productVariant.findFirst({
               where: { id: variantId, productId: id },
               select: { id: true },
             });
 
-            if (!existing) {
+            if (!variantExists) {
               throw new NotFoundException('Variant not found');
             }
 
             await tx.productVariant.update({
               where: { id: variantId },
               data: {
-                ...(variantData.size !== undefined
-                  ? { size: variantData.size }
-                  : {}),
-                ...(variantData.sku !== undefined
-                  ? { sku: variantData.sku }
-                  : {}),
-                ...(variantData.price !== undefined
-                  ? { price: variantData.price }
-                  : {}),
+                ...(variantData.size !== undefined ? { size: variantData.size } : {}),
+                ...(variantData.sku !== undefined ? { sku: variantData.sku } : {}),
+                ...(variantData.price !== undefined ? { price: variantData.price } : {}),
                 ...(variantData.stockQty !== undefined || variantData.stock !== undefined
                   ? {
-                      stockQty:
-                        variantData.stockQty ?? variantData.stock ?? 0,
+                      stockQty: variantData.stockQty ?? variantData.stock ?? 0,
                     }
                   : {}),
-                ...(variantData.isActive !== undefined
-                  ? { isActive: variantData.isActive }
-                  : {}),
+                ...(variantData.isActive !== undefined ? { isActive: variantData.isActive } : {}),
               },
             });
           }
@@ -382,10 +572,31 @@ export class ProductService {
           });
         }
 
-        return tx.product.findUnique({
+        if (!replaceImages) {
+          const primary = images.find((img) => img.isPrimary) ?? images[0];
+          await tx.product.update({
+            where: { id },
+            data: { imageUrl: primary?.url ?? null },
+          });
+        }
+
+        const updated = await tx.product.findUnique({
           where: { id },
           include: this.getProductInclude({ includeInactiveVariants: true }),
         });
+
+        if (!updated) {
+          throw new NotFoundException('Product not found');
+        }
+
+        await this.recordAudit(
+          'product.update',
+          { productId: updated.id, payload: dto },
+          adminId,
+          tx,
+        );
+
+        return updated;
       });
 
       if (!product) {
@@ -406,18 +617,30 @@ export class ProductService {
     }
   }
 
-  async deleteProduct(id: number) {
+  async deleteProduct(id: number, adminId?: number) {
     try {
-      await this.prisma.$transaction(async (tx) => {
-        await tx.stockMovement.deleteMany({
-          where: { variant: { productId: id } },
+      const result = await this.prisma.$transaction(async (tx) => {
+        const existing = await tx.product.findUnique({ where: { id } });
+        if (!existing) {
+          throw new NotFoundException('Product not found');
+        }
+
+        await tx.product.update({
+          where: { id },
+          data: { isActive: false },
         });
 
-        await tx.productVariant.deleteMany({ where: { productId: id } });
-        await tx.productImage.deleteMany({ where: { productId: id } });
-        await tx.product.delete({ where: { id } });
+        await tx.productVariant.updateMany({
+          where: { productId: id },
+          data: { isActive: false },
+        });
+
+        await this.recordAudit('product.disable', { productId: id }, adminId, tx);
+
+        return { ok: true };
       });
-      return { ok: true };
+
+      return result;
     } catch (e) {
       if (
         e instanceof Prisma.PrismaClientKnownRequestError &&

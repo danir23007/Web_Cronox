@@ -15,6 +15,8 @@ import { HistorialModule } from '../historial/historial.module';
 import { AdminCircleUpgradesController } from './circle-upgrades/admin-circle-upgrades.controller';
 import { AdminCircleUpgradesService } from './circle-upgrades/admin-circle-upgrades.service';
 import { AdminCirclePromotionsController } from './circle-upgrades/admin-circle-promotions.controller';
+import { AdminPromoCodesController } from './promo-codes/admin-promo-codes.controller';
+import { AdminPromoCodesService } from './promo-codes/admin-promo-codes.service';
 
 @Module({
   imports: [ProductModule, CategoriesModule, HistorialModule, MembershipModule],
@@ -26,12 +28,14 @@ import { AdminCirclePromotionsController } from './circle-upgrades/admin-circle-
     AdminCategoriesController,
     AdminCircleUpgradesController,
     AdminCirclePromotionsController,
+    AdminPromoCodesController,
   ],
   providers: [
     AdminOrdersService,
     AdminUsersService,
     AdminStockService,
     AdminCircleUpgradesService,
+    AdminPromoCodesService,
     AdminGuard,
   ],
 })
