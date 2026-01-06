@@ -368,7 +368,12 @@ export class OrdersService {
       }
 
       const cart = await this.loadCartSnapshot(tx, dto.metadata.cartId, userId);
-      const shippingMethod = dto.metadata.shippingMethod;
+
+if (!cart) {
+  throw new BadRequestException('CART_NOT_FOUND');
+}
+
+const shippingMethod = dto.metadata.shippingMethod;
       if (!shippingMethod) {
         throw new BadRequestException('SHIPPING_METHOD_REQUIRED');
       }
