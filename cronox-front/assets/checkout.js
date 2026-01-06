@@ -214,6 +214,7 @@
   let currentClientSecret = null;
   let isInitializing = false;
   let paymentElementMounted = false;
+  let hasClearedPromoOnLoad = false;
 
   const state = {
     cart: null,
@@ -251,6 +252,13 @@
 
     state.isAuthenticated = false;
     return false;
+  };
+
+  const clearPromoInputOnLoad = () => {
+    if (!promoInput || hasClearedPromoOnLoad) return;
+    promoInput.value = '';
+    promoInput.setAttribute('autocomplete', 'off');
+    hasClearedPromoOnLoad = true;
   };
 
   const loadUserShippingDefaults = async () => {
@@ -459,7 +467,8 @@
       applyPromoBtn.hidden = hasPromo;
     }
     if (promoInput) {
-      if (!hasPromo && state.promo?.code) {
+      clearPromoInputOnLoad();
+      if (!hasPromo && state.promo?.code && !hasClearedPromoOnLoad) {
         promoInput.value = state.promo.code;
       }
       promoInput.disabled = hasPromo;
@@ -901,12 +910,11 @@
     const yearEl = document.getElementById('anio');
     if (yearEl) yearEl.textContent = new Date().getFullYear();
 
+    clearPromoInputOnLoad();
+    clearStoredPromo();
+    setPromoState(null);
+    renderPromoUI();
     bindEvents();
-    const storedPromo = readStoredPromo();
-    if (storedPromo) {
-      setPromoState(storedPromo);
-      renderPromoUI();
-    }
     await resolveAuthStatus();
     if (!state.isAuthenticated) {
       await renderGuestCheckout();
