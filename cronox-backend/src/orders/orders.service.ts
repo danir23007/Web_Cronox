@@ -781,7 +781,9 @@ if (!cart) {
     baseTotals: CheckoutTotals,
   ): Promise<PromoApplication> {
     const code = this.normalizePromoCode(promoCode);
-    const totalBeforeCents = baseTotals.totalCents;
+    const itemsTotalCents = baseTotals.subtotalCents;
+    const shippingCents = baseTotals.shippingCents;
+    const totalBeforeCents = Math.max(0, itemsTotalCents + shippingCents);
 
     if (!code) {
       return {
@@ -789,7 +791,7 @@ if (!cart) {
         discountCents: 0,
         totalBeforeCents,
         totalAfterCents: totalBeforeCents,
-        message: 'Código inválido',
+        message: 'Este código de descuento no existe',
       };
     }
 
@@ -807,34 +809,27 @@ if (!cart) {
     });
 
     if (!promo) {
-      return invalidResponse('Código inválido o expirado');
+      return invalidResponse('Este código de descuento no existe');
     }
 
     const now = new Date();
+    const isExpired =
+      !promo.isActive ||
+      (promo.startsAt && promo.startsAt > now) ||
+      (promo.expiresAt && promo.expiresAt < now) ||
+      (promo.usageLimit != null && promo.usageCount >= promo.usageLimit);
 
-    if (!promo.isActive) {
-      return invalidResponse('Código deshabilitado');
-    }
-
-    if (promo.startsAt && promo.startsAt > now) {
-      return invalidResponse('Código aún no disponible');
-    }
-
-    if (promo.expiresAt && promo.expiresAt < now) {
-      return invalidResponse('Código expirado');
-    }
-
-    if (promo.usageLimit != null && promo.usageCount >= promo.usageLimit) {
-      return invalidResponse('Se alcanzó el límite de usos');
+    if (isExpired) {
+      return invalidResponse('Este código ha expirado');
     }
 
     const minValue = promo.minCartValue ?? null;
-    if (minValue && totalBeforeCents < minValue) {
+    if (minValue && itemsTotalCents < minValue) {
       const minLabel = this.formatMoney(this.centsToDecimal(minValue));
       return invalidResponse(`Compra mínima: ${minLabel}`);
     }
 
-    const baseAmountCents = totalBeforeCents;
+    const baseAmountCents = itemsTotalCents;
     let discountCents = 0;
 
     if (promo.type === PromoCodeType.PERCENT) {
@@ -844,7 +839,16 @@ if (!cart) {
     }
 
     discountCents = Math.max(0, Math.min(discountCents, baseAmountCents));
-    const totalAfterCents = Math.max(0, baseAmountCents - discountCents);
+    const totalsAfterPromo = this.calculateCartTotals(
+      _cart,
+      _shippingMethod,
+      discountCents,
+    );
+    const netItemsCents = Math.max(
+      0,
+      totalsAfterPromo.subtotalCents - totalsAfterPromo.discountCents,
+    );
+    const totalAfterCents = Math.max(0, totalsAfterPromo.totalCents);
 
     const discountLineLabel =
       promo.type === PromoCodeType.PERCENT
