@@ -5,6 +5,7 @@ import {
   Post,
   Query,
   Req,
+  BadRequestException,
   UnauthorizedException,
   UseGuards,
 } from '@nestjs/common';
@@ -87,6 +88,20 @@ export class CheckoutSummaryController {
     });
 
     const appliedPromo = summary.appliedPromo;
+    const promoMessage = appliedPromo?.message ?? 'Código inválido o expirado';
+
+    if (!appliedPromo?.valid) {
+      const isNotFound = promoMessage === 'Este código de descuento no existe';
+      const isExpired = promoMessage === 'Este código ha expirado';
+
+      if (isNotFound || isExpired) {
+        throw new BadRequestException({
+          code: isNotFound ? 'PROMO_NOT_FOUND' : 'PROMO_EXPIRED',
+          message: promoMessage,
+        });
+      }
+    }
+
     const discountAmount = appliedPromo?.discountCents ?? 0;
     const totalAfter = summary.totals.totalCents;
     const totalBefore =
@@ -99,7 +114,7 @@ export class CheckoutSummaryController {
       discountAmount,
       totalBefore,
       totalAfter,
-      message: appliedPromo?.message ?? 'Código inválido o expirado',
+      message: promoMessage,
       discountLineLabel: appliedPromo?.discountLineLabel,
       appliedPromo: appliedPromo ?? null,
       totals: summary.totals,

@@ -965,7 +965,7 @@
 
     if (!hasItems) {
       cartItemsContainer.innerHTML = '';
-      renderCartEmptyState('Tu cesta está vacía.', { showCta: true });
+      renderCartEmptyState('Tu cesta está vacía', { showCta: false });
       return;
     }
 
@@ -1031,6 +1031,11 @@
   const renderCartDrawer = (cart) => {
     const items = Array.isArray(cart?.items) ? cart.items : [];
     const hasItems = items.length > 0;
+
+    if (checkoutBtn) {
+      checkoutBtn.hidden = !hasItems;
+      checkoutBtn.disabled = !hasItems;
+    }
 
     if (cartFreeShippingSection) cartFreeShippingSection.hidden = false;
     if (cartUpsellSection) cartUpsellSection.hidden = false;
