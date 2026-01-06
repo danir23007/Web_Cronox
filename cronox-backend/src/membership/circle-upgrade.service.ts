@@ -267,7 +267,7 @@ export class CircleUpgradeService {
 
     return list
       .map((item) => {
-        const base = item as CircleUpgradeRequest & {
+        const base = item as unknown as CircleUpgradeRequest & {
           remainingMs?: number;
           autoRemainingMs?: number;
         };

@@ -448,7 +448,7 @@ export class ProductService {
               data: newImages.map((img) => ({
                 productId: id,
                 url: img.url,
-                alt: img.alt ?? '',
+                alt: 'alt' in img ? (img.alt ?? '') : '',
                 sortOrder: img.sortOrder ?? 0,
                 isPrimary: img.isPrimary ?? false,
               })),
@@ -468,7 +468,7 @@ export class ProductService {
             data: dto.imagesToCreate.map((img) => ({
               productId: id,
               url: img.url,
-              alt: img.alt ?? '',
+              alt: 'alt' in img ? (img.alt ?? '') : '',
               sortOrder: img.sortOrder ?? 0,
               isPrimary: img.isPrimary ?? false,
             })),
@@ -591,7 +591,7 @@ export class ProductService {
 
         await this.recordAudit(
           'product.update',
-          { productId: updated.id, payload: dto },
+          { productId: updated.id, payload: JSON.parse(JSON.stringify(dto)) },
           adminId,
           tx,
         );
