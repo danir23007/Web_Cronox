@@ -9,22 +9,22 @@ datasource db {
 }
 
 model Product {
-  id         Int               @id @default(autoincrement())
-  slug       String            @unique
-  name       String
+  id          Int               @id @default(autoincrement())
+  slug        String            @unique
+  name        String
   description String?
-  price      Int
-  currency   String            @default("EUR")
-  imageUrl   String?
-  isActive   Boolean           @default(true)
-  collection String?
-  createdAt  DateTime          @default(now())
-  updatedAt  DateTime          @updatedAt
-  favorites  Favorite[]
-  orderItems OrderItem[]
-  categories ProductCategory[]
-  images     ProductImage[]
-  variants   ProductVariant[]
+  price       Int
+  currency    String            @default("EUR")
+  imageUrl    String?
+  isActive    Boolean           @default(true)
+  collection  String?
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+  favorites   Favorite[]
+  orderItems  OrderItem[]
+  categories  ProductCategory[]
+  images      ProductImage[]
+  variants    ProductVariant[]
 }
 
 model Category {
@@ -82,21 +82,21 @@ model ProductImage {
 }
 
 model User {
-  id                     Int                  @id @default(autoincrement())
-  email                  String               @unique
-  password               String               @map("passwordHash")
-  role                   Role                 @default(USER)
+  id                     Int                     @id @default(autoincrement())
+  email                  String                  @unique
+  password               String                  @map("passwordHash")
+  role                   Role                    @default(USER)
   name                   String?
   firstName              String?
   lastName               String?
-  memberCode             String?              @unique
-  newsletterSubscribed   Boolean              @default(false)
+  memberCode             String?                 @unique
+  newsletterSubscribed   Boolean                 @default(false)
   firstOrderDiscountCode String?
-  firstOrderDiscountUsed Boolean              @default(false)
-  circleLevel            Int                  @default(1)
+  firstOrderDiscountUsed Boolean                 @default(false)
+  circleLevel            Int                     @default(1)
   circlePromotionRequest CirclePromotionRequest?
-  createdAt              DateTime             @default(now())
-  updatedAt              DateTime             @updatedAt
+  createdAt              DateTime                @default(now())
+  updatedAt              DateTime                @updatedAt
   addresses              Address[]
   carts                  Cart?
   favorites              Favorite[]
@@ -106,11 +106,11 @@ model User {
   passwordResetTokens    PasswordResetToken[]
   discountCodes          DiscountCode[]
   circleUpgradeRequests  CircleUpgradeRequest[]
-  processedUpgrades      CircleUpgradeRequest[] @relation("ProcessedRequests")
+  processedUpgrades      CircleUpgradeRequest[]  @relation("ProcessedRequests")
   auditLogs              AuditLog[]
 
   // ✅ FIX: relación correcta y naming consistente
-  historial              Historial?
+  historial Historial?
 }
 
 model CirclePromotionRequest {
@@ -128,17 +128,17 @@ model CirclePromotionRequest {
 }
 
 model CircleUpgradeRequest {
-  id                 String                        @id @default(uuid())
+  id                 String                     @id @default(uuid())
   userId             Int
-  fromCircle         Int                           @default(3)
-  toCircle           Int                           @default(4)
+  fromCircle         Int                        @default(3)
+  toCircle           Int                        @default(4)
   socialNetwork      CircleUpgradeSocialNetwork
   username           String
   usernameNormalized String
-  status             CircleUpgradeRequestStatus    @default(PENDING)
+  status             CircleUpgradeRequestStatus @default(PENDING)
   requestNumber      Int
-  createdAt          DateTime                      @default(now())
-  updatedAt          DateTime                      @updatedAt
+  createdAt          DateTime                   @default(now())
+  updatedAt          DateTime                   @updatedAt
   reviewedAt         DateTime?
   reviewedBy         String?
   notes              String?
@@ -147,8 +147,8 @@ model CircleUpgradeRequest {
   processedById      Int?
   autoProcessAt      DateTime?
 
-  user          User @relation(fields: [userId], references: [id], onDelete: Cascade)
-  processedBy   User? @relation("ProcessedRequests", fields: [processedById], references: [id])
+  user        User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  processedBy User? @relation("ProcessedRequests", fields: [processedById], references: [id])
 
   @@unique([userId, requestNumber])
   @@index([status, socialNetwork, usernameNormalized])
@@ -171,14 +171,14 @@ model Historial {
 }
 
 model DiscountCode {
-  id        Int      @id @default(autoincrement())
-  code      String   @unique
+  id        Int       @id @default(autoincrement())
+  code      String    @unique
   type      String
   percent   Int
-  used      Boolean  @default(false)
-  user      User     @relation(fields: [userId], references: [id])
+  used      Boolean   @default(false)
+  user      User      @relation(fields: [userId], references: [id])
   userId    Int
-  createdAt DateTime @default(now())
+  createdAt DateTime  @default(now())
   usedAt    DateTime?
 
   @@index([userId])
@@ -231,31 +231,31 @@ model CartItem {
 }
 
 model Order {
-  id                 Int              @id @default(autoincrement())
-  status             OrderStatus      @default(PENDING)
-  subtotal           Decimal          @db.Decimal(12, 2)
-  taxRate            Decimal          @db.Decimal(5, 4)
-  taxAmount          Decimal          @db.Decimal(12, 2)
-  shippingCost       Int              @default(0)
-  shippingMethodId   Int?
-  shippingMethod     ShippingMethod?  @relation(fields: [shippingMethodId], references: [id])
-  shippingMethodCode String?
-  discountCents      Int              @default(0)
-  promoCodeId        Int?
-  promoCodeCode      String?
-  total              Decimal          @db.Decimal(12, 2)
-  currency           String           @default("EUR")
-  provider           String?
-  providerRef        String?          @unique
-  createdAt          DateTime         @default(now())
-  updatedAt          DateTime         @updatedAt
-  shippingAddr       Json?
-  billingAddr        Json?
-  userId             Int
-  user               User             @relation(fields: [userId], references: [id])
-  items              OrderItem[]
-  stockMovements     StockMovement[]
-  promoCode          PromoCode?       @relation(fields: [promoCodeId], references: [id])
+  id                   Int                   @id @default(autoincrement())
+  status               OrderStatus           @default(PENDING)
+  subtotal             Decimal               @db.Decimal(12, 2)
+  taxRate              Decimal               @db.Decimal(5, 4)
+  taxAmount            Decimal               @db.Decimal(12, 2)
+  shippingCost         Int                   @default(0)
+  shippingMethodId     Int?
+  shippingMethod       ShippingMethod?       @relation(fields: [shippingMethodId], references: [id])
+  shippingMethodCode   String?
+  discountCents        Int                   @default(0)
+  promoCodeId          Int?
+  promoCodeCode        String?
+  total                Decimal               @db.Decimal(12, 2)
+  currency             String                @default("EUR")
+  provider             String?
+  providerRef          String?               @unique
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  shippingAddr         Json?
+  billingAddr          Json?
+  userId               Int
+  user                 User                  @relation(fields: [userId], references: [id])
+  items                OrderItem[]
+  stockMovements       StockMovement[]
+  promoCode            PromoCode?            @relation(fields: [promoCodeId], references: [id])
   promoCodeRedemptions PromoCodeRedemption[]
 
   @@index([userId])
@@ -307,29 +307,29 @@ model Favorite {
 }
 
 model PasswordResetToken {
-  id        Int      @id @default(autoincrement())
-  token     String   @unique
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id        Int       @id @default(autoincrement())
+  token     String    @unique
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   userId    Int
-  createdAt DateTime @default(now())
+  createdAt DateTime  @default(now())
   expiresAt DateTime
   usedAt    DateTime?
 }
 
 model PromoCode {
-  id           Int       @id @default(autoincrement())
-  code         String    @unique
-  type         PromoCodeType
-  value        Int
-  minCartValue Int?
-  startsAt     DateTime?
-  expiresAt    DateTime?
-  isActive     Boolean   @default(true)
-  usageCount   Int       @default(0)
-  usageLimit   Int?
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
-  orders       Order[]
+  id                   Int                   @id @default(autoincrement())
+  code                 String                @unique
+  type                 PromoCodeType
+  value                Int
+  minCartValue         Int?
+  startsAt             DateTime?
+  expiresAt            DateTime?
+  isActive             Boolean               @default(true)
+  usageCount           Int                   @default(0)
+  usageLimit           Int?
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  orders               Order[]
   promoCodeRedemptions PromoCodeRedemption[]
 }
 
@@ -359,11 +359,11 @@ model ShippingMethod {
 }
 
 model PromoCodeRedemption {
-  id          Int       @id @default(autoincrement())
+  id          Int      @id @default(autoincrement())
   promoCodeId Int
   userId      Int
   orderId     Int
-  redeemedAt  DateTime  @default(now())
+  redeemedAt  DateTime @default(now())
 
   promoCode PromoCode @relation(fields: [promoCodeId], references: [id], onDelete: Cascade)
   user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
