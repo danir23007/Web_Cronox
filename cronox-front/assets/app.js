@@ -608,6 +608,7 @@
   const FREE_SHIPPING_THRESHOLD = 65 * 100; // 65€ en céntimos
   const CHECKOUT_URL = '/checkout.html';
   const CONTINUE_SHOPPING_URL = '/index.html#store';
+  const GUEST_CART_KEY = 'cronox_guest_cart';
 
   const formatMoney = (() => {
     const EUR = new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR' });
@@ -619,6 +620,72 @@
     toast.textContent = msg;
     toast.classList.add('show');
     setTimeout(() => toast.classList.remove('show'), 1600);
+  };
+
+  const clearGuestCartCache = () => {
+    try {
+      localStorage.removeItem(GUEST_CART_KEY);
+    } catch (err) {
+      console.warn('[CRONOX] No se pudo limpiar el carrito guest', err);
+    }
+  };
+
+  const syncGuestCartCache = (cart) => {
+    if (window.CRONOX_USER) {
+      clearGuestCartCache();
+      return;
+    }
+    try {
+      const items = Array.isArray(cart?.items)
+        ? cart.items
+            .filter((item) => item?.variantId && Number(item?.qty) > 0)
+            .map((item) => ({ variantId: item.variantId, qty: Number(item.qty) }))
+        : [];
+      localStorage.setItem(GUEST_CART_KEY, JSON.stringify(items));
+    } catch (err) {
+      console.warn('[CRONOX] No se pudo persistir el carrito guest', err);
+    }
+  };
+
+  const readGuestCartCache = () => {
+    try {
+      const raw = localStorage.getItem(GUEST_CART_KEY);
+      if (!raw) return [];
+      const parsed = JSON.parse(raw);
+      if (!Array.isArray(parsed)) return [];
+      return parsed
+        .map((item) => ({
+          variantId: item?.variantId,
+          qty: Math.max(1, Number(item?.qty) || 1),
+        }))
+        .filter((item) => item.variantId);
+    } catch (err) {
+      console.warn('[CRONOX] No se pudo leer el carrito guest', err);
+      return [];
+    }
+  };
+
+  const hydrateGuestCartAfterLogin = async () => {
+    const cachedItems = readGuestCartCache();
+    if (!cachedItems.length) return;
+
+    const current = await fetchCart();
+    if (current?.items?.length) {
+      clearGuestCartCache();
+      return;
+    }
+
+    for (const item of cachedItems) {
+      try {
+        await addCartItem({ variantId: item.variantId, qty: item.qty });
+      } catch (error) {
+        console.warn('[CRONOX] No se pudo restaurar ítem guest', error);
+      }
+    }
+
+    clearGuestCartCache();
+    const refreshed = await fetchCart();
+    if (refreshed) renderCartDrawer(refreshed);
   };
 
   const cartState = { data: null, drawerOpen: false };
@@ -660,6 +727,7 @@
       const cart = await API.getCart();
       cartState.data = cart;
       updateBadge(cart);
+      syncGuestCartCache(cart);
       window.dispatchEvent(new CustomEvent('cart:updated', { detail: cart }));
       return cart;
     } catch (error) {
@@ -681,6 +749,7 @@
     const cart = await API.addCartItem({ variantId, qty });
     cartState.data = cart;
     updateBadge(cart);
+    syncGuestCartCache(cart);
     window.dispatchEvent(new CustomEvent('cart:updated', { detail: cart }));
     return cart;
   };
@@ -690,6 +759,7 @@
     const cart = await API.updateCartItem(itemId, qty);
     cartState.data = cart;
     updateBadge(cart);
+    syncGuestCartCache(cart);
     window.dispatchEvent(new CustomEvent('cart:updated', { detail: cart }));
     return cart;
   };
@@ -699,6 +769,7 @@
     const cart = await API.removeCartItem(itemId);
     cartState.data = cart;
     updateBadge(cart);
+    syncGuestCartCache(cart);
     window.dispatchEvent(new CustomEvent('cart:updated', { detail: cart }));
     return cart;
   };
@@ -708,6 +779,7 @@
     const cart = await API.clearCart();
     cartState.data = cart;
     updateBadge(cart);
+    syncGuestCartCache(cart);
     window.dispatchEvent(new CustomEvent('cart:updated', { detail: cart }));
     return cart;
   };
@@ -893,7 +965,7 @@
 
     if (!hasItems) {
       cartItemsContainer.innerHTML = '';
-      renderCartEmptyState('No tienes productos en tu carrito todavía.', { showCta: true });
+      renderCartEmptyState('Tu cesta está vacía.', { showCta: true });
       return;
     }
 
@@ -960,22 +1032,16 @@
     const items = Array.isArray(cart?.items) ? cart.items : [];
     const hasItems = items.length > 0;
 
-    if (cartFreeShippingSection) cartFreeShippingSection.hidden = !hasItems;
-    if (cartUpsellSection) cartUpsellSection.hidden = !hasItems;
-    if (cartFooter) cartFooter.hidden = !hasItems;
+    if (cartFreeShippingSection) cartFreeShippingSection.hidden = false;
+    if (cartUpsellSection) cartUpsellSection.hidden = false;
+    if (cartFooter) cartFooter.hidden = false;
 
     renderCartItems(cart);
 
-    if (!hasItems) {
-      if (cartSubtotalEl) cartSubtotalEl.textContent = '—';
-      if (freeShippingBarFill) freeShippingBarFill.style.width = '0%';
-      return;
-    }
-
     const subtotalCents = cart?.subtotalCents || 0;
-    renderFreeShipping(subtotalCents);
+    renderFreeShipping(hasItems ? subtotalCents : 0);
     renderUpsell(cart);
-    if (cartSubtotalEl) cartSubtotalEl.textContent = formatMoney(subtotalCents);
+    if (cartSubtotalEl) cartSubtotalEl.textContent = formatMoney(hasItems ? subtotalCents : 0);
   };
 
   const applyOptimisticQty = (itemId, nextQty) => {
@@ -1276,6 +1342,15 @@
   document.addEventListener('DOMContentLoaded', () => {
     if (typeof window.initCartFromBackend === 'function') window.initCartFromBackend();
     initCartDrawer();
+  });
+
+  window.addEventListener('cronox:userChanged', (ev) => {
+    const user = ev?.detail;
+    if (user) {
+      hydrateGuestCartAfterLogin().catch((err) => console.warn('[CRONOX] Merge guest cart falló', err));
+    } else {
+      syncGuestCartCache(cartState.data);
+    }
   });
 
   // Saneado: eliminar cualquier .card-plus heredado

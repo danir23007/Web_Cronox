@@ -22,6 +22,9 @@
   const promoStatus = document.getElementById('promo-status');
   const promoMessage = document.getElementById('promo-message');
   const promoAppliedLabel = document.getElementById('promo-applied-label');
+  const paymentSection = document.getElementById('payment-section');
+  const loginCallout = document.getElementById('checkout-login-callout');
+  const loginCalloutLink = document.getElementById('checkout-login-link');
 
   const formatter = new Intl.NumberFormat('es-ES', {
     style: 'currency',
@@ -111,6 +114,25 @@
     if (promoInput) promoInput.disabled = loading && !!state.promo;
   };
 
+  const showLoginCallout = () => {
+    if (loginCallout) loginCallout.hidden = false;
+  };
+
+  const hideLoginCallout = () => {
+    if (loginCallout) loginCallout.hidden = true;
+  };
+
+  const setGuestUiState = (enabled) => {
+    const isGuest = Boolean(enabled);
+    if (paymentSection) paymentSection.classList.toggle('is-disabled', isGuest);
+    if (applyPromoBtn) applyPromoBtn.disabled = isGuest;
+    if (removePromoBtn) removePromoBtn.disabled = isGuest && !state.promo;
+    if (promoInput && !state.promo) {
+      promoInput.disabled = isGuest;
+    }
+    setPayButtonState(false);
+  };
+
   let stripe;
   let elements;
   let paymentElement;
@@ -124,12 +146,40 @@
     shippingMethod: 'STANDARD',
     totals: { subtotalCents: 0, shippingCents: 0, discountCents: 0, totalCents: 0 },
     promo: null,
+    isAuthenticated: false,
+  };
+
+  const resolveAuthStatus = async () => {
+    if (window.CRONOX_USER) {
+      state.isAuthenticated = true;
+      return true;
+    }
+
+    if (typeof API.getMe !== 'function') {
+      state.isAuthenticated = false;
+      return false;
+    }
+
+    try {
+      const me = await API.getMe();
+      if (me) {
+        window.CRONOX_USER = me;
+        state.isAuthenticated = true;
+        return true;
+      }
+    } catch (error) {
+      console.warn('[CRONOX] No se pudo resolver la sesión', error);
+    }
+
+    state.isAuthenticated = false;
+    return false;
   };
 
   const setPayButtonState = (loading) => {
     if (!payButton) return;
-    payButton.disabled = loading || !currentClientSecret;
-    payButton.textContent = loading ? 'Procesando…' : 'Pagar ahora';
+    const guestMode = !state.isAuthenticated;
+    payButton.disabled = loading || !currentClientSecret || guestMode;
+    payButton.textContent = guestMode ? 'Inicia sesión para pagar' : loading ? 'Procesando…' : 'Pagar ahora';
   };
 
   const setLoadingState = (loading) => {
@@ -250,13 +300,23 @@
     });
   };
 
+  const renderGuestShippingOptions = () => {
+    if (!shippingOptionsEl) return;
+    shippingOptionsEl.innerHTML =
+      '<p class="checkout-guest-note">Inicia sesión para ver y seleccionar métodos de envío.</p>';
+  };
+
   const renderSummary = (totals, shippingMethod) => {
     if (!totals) return;
     subtotalEl && (subtotalEl.textContent = formatEuro(totals.subtotalCents));
     if (shippingEl) {
-      shippingEl.textContent = shippingMethod
-        ? `${shippingMethod.label} · ${formatEuro(totals.shippingCents)}`
-        : formatEuro(totals.shippingCents);
+      if (shippingMethod && shippingMethod.code === 'GUEST') {
+        shippingEl.textContent = shippingMethod.label || 'Inicia sesión para calcular el envío';
+      } else {
+        shippingEl.textContent = shippingMethod
+          ? `${shippingMethod.label} · ${formatEuro(totals.shippingCents)}`
+          : formatEuro(totals.shippingCents);
+      }
     }
     const discountRow = discountEl?.closest('.summary-row');
     if (discountEl && discountRow) {
@@ -295,10 +355,62 @@
     }
   };
 
+  const renderGuestCheckout = async () => {
+    setLoadingState(true);
+    resetPaymentElement();
+    setPromoState(null);
+    setPromoMessage('');
+    setPromoStatus('');
+    showLoginCallout();
+    setGuestUiState(true);
+
+    try {
+      const guestCart = typeof API.getCart === 'function' ? await API.getCart() : null;
+      state.cart = guestCart;
+      const totals = {
+        subtotalCents: Number(guestCart?.subtotalCents ?? 0),
+        shippingCents: 0,
+        discountCents: 0,
+        totalCents: Number(guestCart?.subtotalCents ?? 0),
+      };
+      state.totals = totals;
+
+      if (!state.cart?.items?.length) {
+        renderEmptyCart({
+          title: 'Tu cesta está vacía',
+          description: 'Añade productos a tu carrito y luego inicia sesión para pagarlos.',
+        });
+      } else {
+        renderCart();
+        emptyCartEl && (emptyCartEl.hidden = true);
+      }
+
+      renderGuestShippingOptions();
+      renderSummary(totals, { label: 'Elige envío tras iniciar sesión', code: 'GUEST' });
+      renderPromoUI();
+      if (helpText) {
+        helpText.textContent = 'Inicia sesión para continuar con tu compra.';
+      }
+    } catch (error) {
+      console.warn('[CRONOX] No se pudo cargar el carrito guest', error);
+      renderEmptyCart({
+        title: 'Tu cesta está vacía',
+        description: 'Vuelve a la tienda, añade productos e inicia sesión para pagar.',
+      });
+    } finally {
+      setLoadingState(false);
+    }
+  };
+
   const findShippingMethod = (code) =>
     state.shippingMethods.find((method) => method.code === code) || null;
 
   const refreshCheckoutSummary = async (shippingMethodCode = state.shippingMethod) => {
+    if (!state.isAuthenticated) {
+      await renderGuestCheckout();
+      return false;
+    }
+
     setLoadingState(true);
     errorDiv.textContent = '';
     try {
@@ -347,6 +459,8 @@
       renderShippingOptions();
       renderSummary(state.totals, findShippingMethod(state.shippingMethod));
       renderPromoUI();
+      hideLoginCallout();
+      setGuestUiState(false);
       setLoadingState(false);
       return true;
     } catch (error) {
@@ -398,6 +512,8 @@
   };
 
   const preparePaymentIntent = async () => {
+    if (!state.isAuthenticated) return;
+
     if (isInitializing) return;
     isInitializing = true;
     setLoadingState(true);
@@ -451,6 +567,11 @@
 
   const applyPromoCode = async () => {
     if (!promoInput) return;
+    if (!state.isAuthenticated) {
+      setPromoMessage('Inicia sesión para aplicar un código de descuento.', true);
+      showLoginCallout();
+      return;
+    }
     const code = sanitizePromoCode(promoInput.value);
     promoInput.value = code;
     if (!code) {
@@ -500,7 +621,7 @@
     if (promoInput) promoInput.value = '';
     setPromoState(null);
     setPromoStatus('');
-    setPromoMessage('Código eliminado');
+    setPromoMessage('');
     renderPromoUI();
     await refreshCheckoutSummary(state.shippingMethod);
     await preparePaymentIntent();
@@ -520,6 +641,15 @@
       return cleaned;
     };
 
+    loginCalloutLink?.addEventListener('click', (event) => {
+      event.preventDefault();
+      if (typeof window.CRONOX_openAuthModal === 'function') {
+        window.CRONOX_openAuthModal('login');
+      } else {
+        window.location.href = '/index.html#store';
+      }
+    });
+
     shippingOptionsEl?.addEventListener('change', async (event) => {
       const input = event.target.closest('input[name="shippingMethod"]');
       if (!input) return;
@@ -529,6 +659,11 @@
     });
 
     payButton?.addEventListener('click', async () => {
+      if (!state.isAuthenticated) {
+        errorDiv.textContent = 'Inicia sesión para pagar tu pedido.';
+        showLoginCallout();
+        return;
+      }
       if (!stripe || !elements || !paymentElement || !currentClientSecret) {
         errorDiv.textContent = 'No se pudo iniciar el pago. Refresca la página e inténtalo de nuevo.';
         return;
@@ -568,12 +703,16 @@
 
     promoInput?.addEventListener('input', () => {
       sanitizePromoInputValue();
+      setPromoMessage('');
+      setPromoStatus('');
     });
 
     promoInput?.addEventListener('paste', (event) => {
       event.preventDefault();
       const text = event.clipboardData?.getData('text') || '';
       promoInput.value = sanitizePromoCode(text);
+      setPromoMessage('');
+      setPromoStatus('');
     });
 
     promoInput?.addEventListener('blur', () => {
@@ -586,17 +725,38 @@
     });
   };
 
+  window.addEventListener('cronox:userChanged', async (ev) => {
+    const user = ev?.detail;
+    state.isAuthenticated = Boolean(user);
+    if (state.isAuthenticated) {
+      hideLoginCallout();
+      setGuestUiState(false);
+      const loaded = await refreshCheckoutSummary();
+      if (loaded) {
+        await preparePaymentIntent();
+      }
+    } else {
+      await renderGuestCheckout();
+    }
+  });
+
   document.addEventListener('DOMContentLoaded', async () => {
     const yearEl = document.getElementById('anio');
     if (yearEl) yearEl.textContent = new Date().getFullYear();
 
-    initStripe();
     bindEvents();
     const storedPromo = readStoredPromo();
     if (storedPromo) {
       setPromoState(storedPromo);
       renderPromoUI();
     }
+    await resolveAuthStatus();
+    if (!state.isAuthenticated) {
+      await renderGuestCheckout();
+      return;
+    }
+
+    initStripe();
     const loaded = await refreshCheckoutSummary();
     if (loaded) {
       await preparePaymentIntent();
