@@ -43,6 +43,7 @@
     .status.pending { background: #1c1c26; color: #f6d365; border: 1px solid #332b10; }
     .status.approved { background: #112415; color: #7ae08a; border: 1px solid #15351b; }
     .status.denied { background: #2a1010; color: #f28b82; border: 1px solid #3a1717; }
+    .status.expired { background: #241a0d; color: #f6d365; border: 1px solid #3a2812; }
     .actions { display: flex; gap: 8px; }
     .empty { color: #9aa0ad; margin: 12px 0 0; }
     .message { margin-bottom: 12px; padding: 10px 12px; border-radius: 10px; border: 1px solid transparent; display: none; }
@@ -95,8 +96,6 @@
           <select id="filterStatus23" class="btn" style="padding-right: 30px;">
             <option value="PENDING" selected>PENDIENTE</option>
             <option value="APPROVED">APROBADA</option>
-            <option value="DENIED">DENEGADA</option>
-            <option value="EXPIRED">EXPIRADA</option>
           </select>
         </div>
       </div>
@@ -124,14 +123,15 @@
       <div style="display:flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap;">
         <div>
           <h2 id="title-upgrades">Solicitudes de ascenso 3→4</h2>
-          <small>Solo se muestran solicitudes con estado PENDING por defecto.</small>
+          <small>Solo se muestran solicitudes con estado PENDIENTE por defecto.</small>
         </div>
         <div>
           <label for="filterStatus" style="font-size:0.9rem; color:#b3b3c2;">Estado:</label>
           <select id="filterStatus" class="btn" style="padding-right: 30px;">
             <option value="PENDING" selected>PENDIENTE</option>
             <option value="APPROVED">APROBADA</option>
-            <option value="DENIED">DENEGADA</option>
+            <option value="DENIED">RECHAZADA</option>
+            <option value="EXPIRED">EXPIRADA</option>
           </select>
         </div>
       </div>

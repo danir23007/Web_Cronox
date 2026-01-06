@@ -80,10 +80,24 @@
     return user;
   };
 
+  const STATUS_LABELS = {
+    PENDING: 'PENDIENTE',
+    APPROVED: 'APROBADA',
+    DENIED: 'RECHAZADA',
+    EXPIRED: 'EXPIRADA',
+  };
+
   const statusBadge = (status) => {
     const normalized = String(status || '').toUpperCase();
-    const cls = normalized === 'APPROVED' ? 'approved' : normalized === 'DENIED' ? 'denied' : 'pending';
-    const label = normalized === 'APPROVED' ? 'APPROVED' : normalized === 'DENIED' ? 'DENIED' : 'PENDING';
+    const cls =
+      normalized === 'APPROVED'
+        ? 'approved'
+        : normalized === 'DENIED'
+          ? 'denied'
+          : normalized === 'EXPIRED'
+            ? 'expired'
+            : 'pending';
+    const label = STATUS_LABELS[normalized] || normalized || '—';
     return `<span class="status ${cls}">${label}</span>`;
   };
 
@@ -166,11 +180,12 @@
         const userName = req.user?.firstName || req.user?.lastName
           ? `${req.user?.firstName || ''} ${req.user?.lastName || ''}`.trim()
           : req.user?.email || '';
-        const isPending = req.status === 'PENDING';
-        const actions = isPending
+        const normalizedStatus = String(req.status || '').toUpperCase();
+        const isActionable = normalizedStatus === 'PENDING' || normalizedStatus === 'EXPIRED';
+        const actions = isActionable
           ? `<div class="actions">
               <button class="btn primary" data-action="approve" data-id="${req.id}">APROBAR</button>
-              <button class="btn danger" data-action="deny" data-id="${req.id}">DENEGAR</button>
+              <button class="btn danger" data-action="deny" data-id="${req.id}">RECHAZAR</button>
             </div>`
           : '<span style="color:#7b7f8f;">—</span>';
         const attemptLabel = req.requestNumber == null ? '—' : `#${req.requestNumber}`;
