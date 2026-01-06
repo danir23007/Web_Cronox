@@ -61,6 +61,7 @@ export class CheckoutSummaryController {
     const cart = await this.cartService.getCheckoutCartForRequest(req);
 
     return this.ordersService.getCheckoutSummary(cart, {
+      userId,
       shippingMethod: normalized,
       promoCode,
     });
@@ -83,6 +84,7 @@ export class CheckoutSummaryController {
 
     const cart = await this.cartService.getCheckoutCartForRequest(req);
     const summary = await this.ordersService.getCheckoutSummary(cart, {
+      userId,
       shippingMethod: dto.shippingMethod,
       promoCode: dto.code,
     });
@@ -92,14 +94,10 @@ export class CheckoutSummaryController {
 
     if (!appliedPromo?.valid) {
       const isNotFound = promoMessage === 'Este código de descuento no existe';
-      const isExpired = promoMessage === 'Este código ha expirado';
-
-      if (isNotFound || isExpired) {
-        throw new BadRequestException({
-          code: isNotFound ? 'PROMO_NOT_FOUND' : 'PROMO_EXPIRED',
-          message: promoMessage,
-        });
-      }
+      throw new BadRequestException({
+        code: isNotFound ? 'PROMO_NOT_FOUND' : 'PROMO_INVALID',
+        message: promoMessage,
+      });
     }
 
     const discountAmount = appliedPromo?.discountCents ?? 0;

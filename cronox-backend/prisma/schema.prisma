@@ -255,6 +255,7 @@ model Order {
   items              OrderItem[]
   stockMovements     StockMovement[]
   promoCode          PromoCode?       @relation(fields: [promoCodeId], references: [id])
+  promoCodeRedemptions PromoCodeRedemption[]
 
   @@index([userId])
   @@index([createdAt])
@@ -328,6 +329,7 @@ model PromoCode {
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
   orders       Order[]
+  promoCodeRedemptions PromoCodeRedemption[]
 }
 
 model AuditLog {
@@ -353,6 +355,22 @@ model ShippingMethod {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   orders    Order[]
+}
+
+model PromoCodeRedemption {
+  id          Int       @id @default(autoincrement())
+  promoCodeId Int
+  userId      Int
+  orderId     Int
+  redeemedAt  DateTime  @default(now())
+
+  promoCode PromoCode @relation(fields: [promoCodeId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  order     Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@unique([promoCodeId, userId])
+  @@index([userId])
+  @@index([orderId])
 }
 
 enum Role {

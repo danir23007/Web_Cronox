@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { OrderStatus, Prisma } from '@prisma/client';
 import { Decimal } from '@prisma/client/runtime/library';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -396,15 +400,74 @@ export class AdminOrdersService {
 
     const promo = await tx.promoCode.findUnique({
       where: { id: updated.promoCodeId },
-      select: { id: true, code: true },
+      select: {
+        id: true,
+        code: true,
+        startsAt: true,
+        expiresAt: true,
+        isActive: true,
+        usageLimit: true,
+        usageCount: true,
+      },
     });
 
     if (!promo) return;
 
-    await tx.promoCode.update({
-      where: { id: promo.id },
+    const now = new Date();
+    if (!promo.isActive) {
+      throw new BadRequestException('Código caducado');
+    }
+
+    if (promo.startsAt && promo.startsAt > now) {
+      throw new BadRequestException('Aún no disponible');
+    }
+
+    if (promo.expiresAt && promo.expiresAt < now) {
+      throw new BadRequestException('Código caducado');
+    }
+
+    if (promo.usageLimit != null && promo.usageCount >= promo.usageLimit) {
+      throw new BadRequestException('Límite de usos alcanzado');
+    }
+
+    const alreadyRedeemed = await tx.promoCodeRedemption.findFirst({
+      where: { promoCodeId: promo.id, userId: updated.userId },
+      select: { id: true },
+    });
+
+    if (alreadyRedeemed) {
+      throw new BadRequestException('Este código ya fue usado en tu cuenta');
+    }
+
+    const usageLimitCondition =
+      promo.usageLimit != null ? { usageCount: { lt: promo.usageLimit } } : {};
+
+    const incremented = await tx.promoCode.updateMany({
+      where: { id: promo.id, ...usageLimitCondition },
       data: { usageCount: { increment: 1 } },
     });
+
+    if (incremented.count === 0) {
+      throw new BadRequestException('Límite de usos alcanzado');
+    }
+
+    try {
+      await tx.promoCodeRedemption.create({
+        data: {
+          promoCodeId: promo.id,
+          userId: updated.userId,
+          orderId: updated.id,
+        },
+      });
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2002'
+      ) {
+        throw new BadRequestException('Este código ya fue usado en tu cuenta');
+      }
+      throw error;
+    }
 
     if (!updated.promoCodeCode) {
       await tx.order.update({
