@@ -20,7 +20,9 @@ class WebhookMetadataDto {
   @IsInt()
   userId!: number;
 
-  @ApiPropertyOptional({ description: 'Identificador del carrito usado en el checkout' })
+  @ApiPropertyOptional({
+    description: 'Identificador del carrito usado en el checkout',
+  })
   @IsOptional()
   @Type(() => Number)
   @IsInt()
@@ -34,25 +36,48 @@ class WebhookMetadataDto {
   @IsEnum(ShippingMethodCode)
   shippingMethod!: ShippingMethodCode;
 
-  @ApiProperty({ description: 'Coste del envío en céntimos copiado del checkout' })
+  @ApiProperty({
+    description: 'Coste del envío en céntimos copiado del checkout',
+  })
   @IsNumberString()
   shippingCostCents!: string;
 
-  @ApiProperty({ description: 'Subtotal de productos en céntimos usado para el cálculo de envío' })
+  @ApiProperty({
+    description:
+      'Subtotal de productos en céntimos usado para el cálculo de envío',
+  })
   @IsNumberString()
   itemsTotalCents!: string;
 
-  @ApiPropertyOptional({ description: 'Dirección de envío usada en el checkout', type: Object })
+  @ApiPropertyOptional({ description: 'Código promocional aplicado' })
+  @IsOptional()
+  @IsString()
+  promoCode?: string;
+
+  @ApiPropertyOptional({ description: 'Descuento aplicado en céntimos' })
+  @IsOptional()
+  @IsNumberString()
+  discountCents?: string;
+
+  @ApiPropertyOptional({
+    description: 'Dirección de envío usada en el checkout',
+    type: Object,
+  })
   @IsOptional()
   @IsObject()
   shippingAddress?: Record<string, unknown>;
 
-  @ApiPropertyOptional({ description: 'Dirección de facturación usada en el checkout', type: Object })
+  @ApiPropertyOptional({
+    description: 'Dirección de facturación usada en el checkout',
+    type: Object,
+  })
   @IsOptional()
   @IsObject()
   billingAddress?: Record<string, unknown>;
 
-  @ApiPropertyOptional({ description: 'Indica si el pago fue capturado automáticamente' })
+  @ApiPropertyOptional({
+    description: 'Indica si el pago fue capturado automáticamente',
+  })
   @IsOptional()
   @Type(() => Boolean)
   @IsBoolean()
@@ -65,12 +90,17 @@ export class CreateOrderWebhookDto {
   @IsNotEmpty()
   provider!: string;
 
-  @ApiProperty({ description: 'Referencia única del proveedor para garantizar idempotencia' })
+  @ApiProperty({
+    description: 'Referencia única del proveedor para garantizar idempotencia',
+  })
   @IsString()
   @IsNotEmpty()
   providerRef!: string;
 
-  @ApiProperty({ description: 'Cantidad total cobrada por el proveedor expresada en la divisa del pedido' })
+  @ApiProperty({
+    description:
+      'Cantidad total cobrada por el proveedor expresada en la divisa del pedido',
+  })
   @IsNumberString()
   amount!: string;
 
@@ -79,22 +109,34 @@ export class CreateOrderWebhookDto {
   @IsNotEmpty()
   currency!: string;
 
-  @ApiProperty({ description: 'Metadatos asociados al pago para reconstruir el pedido', type: WebhookMetadataDto })
+  @ApiProperty({
+    description: 'Metadatos asociados al pago para reconstruir el pedido',
+    type: WebhookMetadataDto,
+  })
   @ValidateNested()
   @Type(() => WebhookMetadataDto)
   metadata!: WebhookMetadataDto;
 
-  @ApiPropertyOptional({ description: 'Dirección de envío confirmada por el proveedor', type: Object })
+  @ApiPropertyOptional({
+    description: 'Dirección de envío confirmada por el proveedor',
+    type: Object,
+  })
   @IsOptional()
   @IsObject()
   shippingAddress?: Record<string, unknown>;
 
-  @ApiPropertyOptional({ description: 'Dirección de facturación confirmada por el proveedor', type: Object })
+  @ApiPropertyOptional({
+    description: 'Dirección de facturación confirmada por el proveedor',
+    type: Object,
+  })
   @IsOptional()
   @IsObject()
   billingAddress?: Record<string, unknown>;
 
-  @ApiPropertyOptional({ description: 'Información adicional devuelta por el proveedor', type: Object })
+  @ApiPropertyOptional({
+    description: 'Información adicional devuelta por el proveedor',
+    type: Object,
+  })
   @IsOptional()
   @IsObject()
   rawPayload?: Record<string, unknown>;

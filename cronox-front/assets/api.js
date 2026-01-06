@@ -744,6 +744,9 @@
     if (params.shippingMethod) {
       query.shippingMethod = params.shippingMethod;
     }
+    if (params.promoCode) {
+      query.promoCode = params.promoCode;
+    }
 
     const data = await request('/api/checkout/summary', { query });
     const cart = mapCart(data?.cart);
@@ -778,6 +781,7 @@
     const totals = {
       subtotalCents: Number(data?.totals?.subtotalCents ?? 0),
       shippingCents: Number(data?.totals?.shippingCents ?? 0),
+      discountCents: Number(data?.totals?.discountCents ?? 0),
       totalCents: Number(data?.totals?.totalCents ?? 0),
     };
 
@@ -787,7 +791,23 @@
       shippingMethods: methods,
       selectedShippingMethod,
       totals,
+      appliedPromo: data?.appliedPromo ?? null,
     };
+  };
+
+  api.applyPromoCode = async (payload = {}) => {
+    const body = {
+      code: payload.code,
+    };
+
+    if (payload.shippingMethod) {
+      body.shippingMethod = payload.shippingMethod;
+    }
+
+    return request('/api/checkout/apply-promo', {
+      method: 'POST',
+      body,
+    });
   };
 
   // ===== ADAPTADORES DE PRODUCTO (fallback) =====

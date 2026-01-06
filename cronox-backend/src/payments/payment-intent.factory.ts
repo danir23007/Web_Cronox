@@ -20,6 +20,7 @@ export class PaymentIntentFactory {
       userId,
       {
         shippingMethod: dto.shippingMethod,
+        promoCode: dto.promoCode,
       },
       { cart },
     ); // [STRIPE]
@@ -34,6 +35,16 @@ export class PaymentIntentFactory {
         shippingMethod: String(preview.metadata.shippingMethod),
         shippingCostCents: String(preview.metadata.shippingCostCents),
         itemsTotalCents: String(preview.metadata.itemsTotalCents),
+        ...(preview.metadata.promoCode
+          ? {
+              promoCode: preview.metadata.promoCode,
+              discountCents: String(
+                preview.metadata.discountCents ??
+                  preview.totals.discountCents ??
+                  0,
+              ),
+            }
+          : {}),
       },
     });
 
@@ -44,6 +55,13 @@ export class PaymentIntentFactory {
       shippingCostCents: String(preview.metadata.shippingCostCents),
       itemsTotalCents: String(preview.metadata.itemsTotalCents),
     } as Record<string, string>;
+
+    const discountCents =
+      preview.metadata.discountCents ?? preview.totals.discountCents ?? 0;
+    if (preview.metadata.promoCode) {
+      metadata.promoCode = preview.metadata.promoCode;
+    }
+    metadata.discountCents = String(discountCents);
 
     if (dto.addressId) {
       metadata.addressId = String(dto.addressId); // [STRIPE]

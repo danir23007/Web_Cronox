@@ -6,9 +6,13 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common';
-import { OrderStatus, Prisma, Role } from '@prisma/client';
+import { OrderStatus, Prisma, PromoCodeType, Role } from '@prisma/client';
 import { Decimal } from '@prisma/client/runtime/library';
-import { CartService, cartInclude, type CartWithItems } from '../cart/cart.service';
+import {
+  CartService,
+  cartInclude,
+  type CartWithItems,
+} from '../cart/cart.service';
 import { TaxConfigService } from '../common/tax/tax-config.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { HistorialService } from '../historial/historial.service';
@@ -44,6 +48,8 @@ type CheckoutComputation = {
   taxAmount: Prisma.Decimal;
   shippingCost: Prisma.Decimal;
   shippingCostCents: number;
+  discount: Prisma.Decimal;
+  discountCents: number;
   total: Prisma.Decimal;
   lineItems: CheckoutLineItem[];
   itemsTotalCents: number;
@@ -51,16 +57,19 @@ type CheckoutComputation = {
 
 type ShippingMethodPublic = ShippingMethodOption & { amount: string };
 
-type CheckoutSummaryResponse = { // [STRIPE]
+type CheckoutSummaryResponse = {
+  // [STRIPE]
   currency: string;
   subtotal: string;
   taxRate: string;
   taxAmount: string;
   shippingCost: string;
+  discount: string;
   total: string;
 };
 
-type CheckoutLineItemResponse = { // [STRIPE]
+type CheckoutLineItemResponse = {
+  // [STRIPE]
   productId: number;
   title: string;
   quantity: number;
@@ -74,9 +83,12 @@ type CheckoutMetadata = {
   shippingMethod: ShippingMethodCode;
   shippingCostCents: number;
   itemsTotalCents: number;
+  promoCode?: string;
+  discountCents?: number;
 };
 
-type CheckoutPreview = { // [STRIPE]
+type CheckoutPreview = {
+  // [STRIPE]
   cart: CartSnapshot;
   computation: CheckoutComputation;
   summary: CheckoutSummaryResponse;
@@ -84,11 +96,13 @@ type CheckoutPreview = { // [STRIPE]
   metadata: CheckoutMetadata;
   shippingMethod: ShippingMethodPublic;
   totals: CheckoutTotals;
+  appliedPromo?: PromoApplication | null;
 };
 
 type CheckoutTotals = {
   subtotalCents: number;
   shippingCents: number;
+  discountCents: number;
   totalCents: number;
 };
 
@@ -100,6 +114,7 @@ type CheckoutSummary = {
   shippingMethods: CheckoutShippingMethod[];
   selectedShippingMethod: CheckoutShippingMethod | null;
   totals: CheckoutTotals;
+  appliedPromo?: PromoApplication | null;
 };
 
 type AuthenticatedUser = {
@@ -107,10 +122,22 @@ type AuthenticatedUser = {
   role: Role;
 };
 
+type PromoApplication = {
+  valid: boolean;
+  code?: string;
+  discountCents: number;
+  totalBeforeCents: number;
+  totalAfterCents: number;
+  message?: string;
+  discountLineLabel?: string;
+  promoId?: number;
+};
+
 @Injectable()
 export class OrdersService {
   private readonly logger = new Logger(OrdersService.name);
-  private readonly allowNegativeStock = process.env.ALLOW_NEGATIVE_STOCK === 'true'; // [STOCK]
+  private readonly allowNegativeStock =
+    process.env.ALLOW_NEGATIVE_STOCK === 'true'; // [STOCK]
 
   constructor(
     private readonly prisma: PrismaService,
@@ -122,7 +149,7 @@ export class OrdersService {
 
   async getCheckoutSummary(
     cart: CartSnapshot | null,
-    params: { shippingMethod?: ShippingMethodCode } = {},
+    params: { shippingMethod?: ShippingMethodCode; promoCode?: string } = {},
   ): Promise<CheckoutSummary> {
     const hasItems = Array.isArray(cart?.items) && cart.items.length > 0;
 
@@ -134,10 +161,12 @@ export class OrdersService {
     }
 
     const itemsTotalCents = hasItems ? this.computeItemsTotalCents(cart) : 0;
-    const methods = await this.shippingMethods.listAvailableMethods(itemsTotalCents);
+    const methods =
+      await this.shippingMethods.listAvailableMethods(itemsTotalCents);
 
     const shippingMethods = methods.map((method: any) => {
-      const priceFromModel = typeof method.price === 'number' ? method.price : 0;
+      const priceFromModel =
+        typeof method.price === 'number' ? method.price : 0;
 
       const priceCents =
         (typeof method.priceCents === 'number' && method.priceCents) ??
@@ -159,19 +188,48 @@ export class OrdersService {
     const selectedShippingMethod = hasItems
       ? this.pickShippingMethod(shippingMethods, params.shippingMethod)
       : null;
-    const totals = hasItems
+    const baseTotals = hasItems
       ? this.calculateCartTotals(cart, selectedShippingMethod)
-      : { subtotalCents: 0, shippingCents: 0, totalCents: 0 };
-    const currency = cart?.items[0]?.variant?.product?.currency ?? DEFAULT_CURRENCY;
+      : { subtotalCents: 0, shippingCents: 0, discountCents: 0, totalCents: 0 };
 
-    return { cart, currency, shippingMethods, selectedShippingMethod, totals };
+    const currency =
+      cart?.items[0]?.variant?.product?.currency ?? DEFAULT_CURRENCY;
+    const normalizedPromo = this.normalizePromoCode(params.promoCode);
+    let appliedPromo: PromoApplication | null = null;
+    let totals = baseTotals;
+
+    if (normalizedPromo && hasItems && selectedShippingMethod) {
+      appliedPromo = await this.computePromoApplication(
+        cart,
+        selectedShippingMethod,
+        normalizedPromo,
+        baseTotals,
+      );
+      if (appliedPromo.valid && appliedPromo.discountCents > 0) {
+        totals = this.calculateCartTotals(
+          cart,
+          selectedShippingMethod,
+          appliedPromo.discountCents,
+        );
+      }
+    }
+
+    return {
+      cart,
+      currency,
+      shippingMethods,
+      selectedShippingMethod,
+      totals,
+      appliedPromo,
+    };
   }
 
   async getCheckoutPreview(
     userId: number,
-    params: { shippingMethod: ShippingMethodCode },
+    params: { shippingMethod: ShippingMethodCode; promoCode?: string },
     options: { cart?: CartSnapshot | null } = {},
-  ): Promise<CheckoutPreview> { // [STRIPE]
+  ): Promise<CheckoutPreview> {
+    // [STRIPE]
     const cart =
       options.cart ?? (await this.cartService.getOrCreateCart({ userId }));
 
@@ -187,10 +245,28 @@ export class OrdersService {
       params.shippingMethod,
       itemsTotalCents,
     );
-    const totals = this.calculateCartTotals(cart, shippingMethod);
+    const baseTotals = this.calculateCartTotals(cart, shippingMethod);
+    const normalizedPromo = this.normalizePromoCode(params.promoCode);
+    const appliedPromo = normalizedPromo
+      ? await this.computePromoApplication(
+          cart,
+          shippingMethod,
+          normalizedPromo,
+          baseTotals,
+        )
+      : null;
+    const totals =
+      appliedPromo && appliedPromo.valid && appliedPromo.discountCents > 0
+        ? this.calculateCartTotals(
+            cart,
+            shippingMethod,
+            appliedPromo.discountCents,
+          )
+        : baseTotals;
     const computation = this.buildCheckoutComputation(cart, {
       shippingCostCents: totals.shippingCents,
       itemsTotalCents: totals.subtotalCents,
+      discountCents: totals.discountCents,
     });
     const summary = this.buildCheckoutSummary(computation);
     const lineItems = this.buildPublicLineItems(computation.lineItems);
@@ -201,6 +277,10 @@ export class OrdersService {
       shippingCostCents: totals.shippingCents,
       itemsTotalCents: totals.subtotalCents,
     };
+    if (appliedPromo?.valid && appliedPromo.code) {
+      metadata.promoCode = appliedPromo.code;
+      metadata.discountCents = totals.discountCents;
+    }
 
     return {
       cart,
@@ -213,6 +293,7 @@ export class OrdersService {
         amount: this.formatMoney(totals.shippingCents),
       },
       totals,
+      appliedPromo,
     };
   }
 
@@ -225,14 +306,18 @@ export class OrdersService {
       userId,
       {
         shippingMethod: dto.shippingMethod,
+        promoCode: dto.couponCode,
       },
       { cart: options.cart },
     ); // [STRIPE]
     const provider = this.taxConfig.getPaymentProvider();
 
     const metadata: Record<string, unknown> = { ...preview.metadata };
-    if (dto.couponCode) {
-      metadata.couponCode = dto.couponCode;
+    if (preview.appliedPromo?.code) {
+      metadata.promoCode = preview.appliedPromo.code;
+      metadata.discountCents = preview.appliedPromo.discountCents;
+    } else if (dto.couponCode) {
+      metadata.promoCode = dto.couponCode;
     }
 
     const response: Record<string, unknown> = {
@@ -241,6 +326,8 @@ export class OrdersService {
       lineItems: preview.lineItems,
       metadata,
       shippingMethod: preview.shippingMethod,
+      totals: preview.totals,
+      appliedPromo: preview.appliedPromo ?? null,
     };
 
     if (dto.shippingAddress) {
@@ -294,6 +381,11 @@ export class OrdersService {
       if (!Number.isFinite(metadataItemsTotal)) {
         throw new BadRequestException('ITEMS_TOTAL_METADATA_REQUIRED');
       }
+      const promoCode = this.normalizePromoCode(dto.metadata.promoCode);
+      const discountFromMetadata = Math.max(
+        0,
+        Number(dto.metadata.discountCents ?? 0) || 0,
+      );
       const itemsTotalCents = this.computeItemsTotalCents(cart);
       const validatedMethod = await this.shippingMethods.getMethod(
         shippingMethod,
@@ -307,11 +399,28 @@ export class OrdersService {
         );
       }
 
-      const shippingCost = this.centsToDecimal(expectedShippingCents);
+      const baseTotals = this.calculateCartTotals(cart, validatedMethod);
+      const appliedPromo = promoCode
+        ? await this.computePromoApplication(
+            cart,
+            validatedMethod,
+            promoCode,
+            baseTotals,
+          )
+        : null;
+      const discountCents = appliedPromo?.valid
+        ? appliedPromo.discountCents
+        : Math.min(discountFromMetadata, baseTotals.totalCents);
+      const totalsForOrder = this.calculateCartTotals(
+        cart,
+        validatedMethod,
+        discountCents,
+      );
 
       const computation = this.buildCheckoutComputation(cart, {
-        shippingCostCents: expectedShippingCents,
+        shippingCostCents: totalsForOrder.shippingCents,
         itemsTotalCents,
+        discountCents: totalsForOrder.discountCents,
       });
       const providerAmount = this.moneyFromString(dto.amount);
       const totalsMatch = providerAmount.equals(computation.total);
@@ -345,7 +454,17 @@ export class OrdersService {
       const shippingName = this.extractNames(
         dto.shippingAddress ?? dto.metadata?.shippingAddress,
       );
-      const billingName = this.extractNames(dto.billingAddress ?? dto.metadata?.billingAddress);
+      const billingName = this.extractNames(
+        dto.billingAddress ?? dto.metadata?.billingAddress,
+      );
+
+      let promoId: number | null = appliedPromo?.promoId ?? null;
+      if (!promoId && promoCode) {
+        const promo = await tx.promoCode.findFirst({
+          where: { code: promoCode },
+        });
+        promoId = promo?.id ?? null;
+      }
 
       const order = await tx.order.create({
         data: {
@@ -354,15 +473,18 @@ export class OrdersService {
           subtotal: computation.subtotal,
           taxRate: computation.taxRate,
           taxAmount: computation.taxAmount,
-          shippingCost: expectedShippingCents,
+          shippingCost: totalsForOrder.shippingCents,
           shippingMethodId: validatedMethod.id ?? null,
           shippingMethodCode: validatedMethod.code,
+          discountCents: totalsForOrder.discountCents,
+          promoCodeId: promoId,
+          promoCodeCode: promoCode ?? null,
           total: computation.total,
           currency: dto.currency ?? computation.currency,
           provider: dto.provider,
           providerRef,
           shippingAddr: shippingAddr, // [FIX]
-          billingAddr: billingAddr,   // [FIX]
+          billingAddr: billingAddr, // [FIX]
         },
       });
 
@@ -409,7 +531,11 @@ export class OrdersService {
 
       if (status === OrderStatus.PAID) {
         const quantity = this.computeOrderItemsQuantity(created.items);
-        await this.historialService.incrementOrderProgress(userId, quantity, tx);
+        await this.historialService.incrementOrderProgress(
+          userId,
+          quantity,
+          tx,
+        );
       }
 
       await this.handlePromoUsageOnPaid(tx, created, existingStatus);
@@ -421,7 +547,10 @@ export class OrdersService {
   async listOrders(
     user: AuthenticatedUser,
     pagination: PaginationDto,
-  ): Promise<{ data: Record<string, unknown>[]; meta: Record<string, number> }> {
+  ): Promise<{
+    data: Record<string, unknown>[];
+    meta: Record<string, number>;
+  }> {
     const page = pagination.page ?? 1;
     const requestedPageSize = pagination.pageSize ?? 20;
     const pageSize = Math.min(requestedPageSize, 100);
@@ -504,20 +633,23 @@ export class OrdersService {
 
   private buildCheckoutSummary(
     computation: CheckoutComputation,
-  ): CheckoutSummaryResponse { // [STRIPE]
+  ): CheckoutSummaryResponse {
+    // [STRIPE]
     return {
       currency: computation.currency,
       subtotal: this.formatMoney(computation.subtotal),
       taxRate: this.formatRate(computation.taxRate),
       taxAmount: this.formatMoney(computation.taxAmount),
       shippingCost: this.formatMoney(computation.shippingCost),
+      discount: this.formatMoney(computation.discount.mul(-1)),
       total: this.formatMoney(computation.total),
     };
   }
 
   private buildPublicLineItems(
     lineItems: CheckoutLineItem[],
-  ): CheckoutLineItemResponse[] { // [STRIPE]
+  ): CheckoutLineItemResponse[] {
+    // [STRIPE]
     return lineItems.map((item) => ({
       productId: item.productId,
       title: item.title,
@@ -530,12 +662,14 @@ export class OrdersService {
   calculateCartTotals(
     cart: CartSnapshot | null,
     shippingMethod: ShippingMethodOption | null,
+    discountCents = 0,
   ): CheckoutTotals {
     const subtotalCents = this.computeItemsTotalCents(cart);
     let shippingCents = 0;
     if (shippingMethod) {
       const anyMethod = shippingMethod as any;
-      const rawPrice = typeof anyMethod.price === 'number' ? anyMethod.price : 0;
+      const rawPrice =
+        typeof anyMethod.price === 'number' ? anyMethod.price : 0;
 
       shippingCents =
         (typeof anyMethod.amountCents === 'number' && anyMethod.amountCents) ||
@@ -543,9 +677,116 @@ export class OrdersService {
         rawPrice ||
         0;
     }
-    const totalCents = subtotalCents + shippingCents;
+    const safeDiscount = Math.max(
+      0,
+      Math.min(discountCents, subtotalCents + shippingCents),
+    );
+    const totalCents = Math.max(
+      0,
+      subtotalCents + shippingCents - safeDiscount,
+    );
 
-    return { subtotalCents, shippingCents, totalCents };
+    return {
+      subtotalCents,
+      shippingCents,
+      discountCents: safeDiscount,
+      totalCents,
+    };
+  }
+
+  private normalizePromoCode(code?: string | null): string | null {
+    if (!code || typeof code !== 'string') return null;
+    const normalized = code.replace(/\s+/g, '').toUpperCase();
+    return normalized || null;
+  }
+
+  private async computePromoApplication(
+    _cart: CartSnapshot,
+    _shippingMethod: ShippingMethodOption,
+    promoCode: string,
+    baseTotals: CheckoutTotals,
+  ): Promise<PromoApplication> {
+    const code = this.normalizePromoCode(promoCode);
+    const totalBeforeCents = baseTotals.totalCents;
+
+    if (!code) {
+      return {
+        valid: false,
+        discountCents: 0,
+        totalBeforeCents,
+        totalAfterCents: totalBeforeCents,
+        message: 'Código inválido',
+      };
+    }
+
+    const promo = await this.prisma.promoCode.findFirst({
+      where: { code },
+    });
+
+    const invalidResponse = (message: string): PromoApplication => ({
+      valid: false,
+      code,
+      discountCents: 0,
+      totalBeforeCents,
+      totalAfterCents: totalBeforeCents,
+      message,
+    });
+
+    if (!promo) {
+      return invalidResponse('Código inválido o expirado');
+    }
+
+    const now = new Date();
+
+    if (!promo.isActive) {
+      return invalidResponse('Código deshabilitado');
+    }
+
+    if (promo.startsAt && promo.startsAt > now) {
+      return invalidResponse('Código aún no disponible');
+    }
+
+    if (promo.expiresAt && promo.expiresAt < now) {
+      return invalidResponse('Código expirado');
+    }
+
+    if (promo.usageLimit != null && promo.usageCount >= promo.usageLimit) {
+      return invalidResponse('Se alcanzó el límite de usos');
+    }
+
+    const minValue = promo.minCartValue ?? null;
+    if (minValue && totalBeforeCents < minValue) {
+      const minLabel = this.formatMoney(this.centsToDecimal(minValue));
+      return invalidResponse(`Compra mínima: ${minLabel}`);
+    }
+
+    const baseAmountCents = totalBeforeCents;
+    let discountCents = 0;
+
+    if (promo.type === PromoCodeType.PERCENT) {
+      discountCents = Math.floor((baseAmountCents * promo.value) / 100);
+    } else {
+      discountCents = promo.value;
+    }
+
+    discountCents = Math.max(0, Math.min(discountCents, baseAmountCents));
+    const totalAfterCents = Math.max(0, baseAmountCents - discountCents);
+
+    const discountLineLabel =
+      promo.type === PromoCodeType.PERCENT
+        ? `-${promo.value}% (${this.formatMoney(this.centsToDecimal(discountCents))})`
+        : `-${this.formatMoney(this.centsToDecimal(discountCents))}`;
+
+    return {
+      valid: true,
+      code,
+      promoId: promo.id,
+      discountCents,
+      totalBeforeCents,
+      totalAfterCents,
+      discountLineLabel,
+      message: 'Código aplicado',
+    };
   }
 
   private pickShippingMethod(
@@ -573,7 +814,10 @@ export class OrdersService {
       return 0;
     }
 
-    return cart.items.reduce((acc, item) => acc + item.priceAtAdd * item.qty, 0);
+    return cart.items.reduce(
+      (acc, item) => acc + item.priceAtAdd * item.qty,
+      0,
+    );
   }
 
   private computeOrderItemsQuantity(items: OrderWithItems['items']): number {
@@ -583,11 +827,18 @@ export class OrdersService {
 
   private buildCheckoutComputation(
     cart: CartSnapshot | null,
-    options: { shippingCostCents: number; itemsTotalCents: number },
+    options: {
+      shippingCostCents: number;
+      itemsTotalCents: number;
+      discountCents?: number;
+    },
   ): CheckoutComputation {
     const taxRate = this.rateFromNumber(this.taxConfig.getDefaultVat());
     const shippingCost = this.centsToDecimal(options.shippingCostCents);
-    const currency = cart?.items[0]?.variant?.product?.currency ?? DEFAULT_CURRENCY;
+    const discountCents = Math.max(0, options.discountCents ?? 0);
+    const discount = this.centsToDecimal(discountCents);
+    const currency =
+      cart?.items[0]?.variant?.product?.currency ?? DEFAULT_CURRENCY;
 
     if (!cart || !cart.items.length) {
       return {
@@ -597,13 +848,17 @@ export class OrdersService {
         taxAmount: this.moneyFromNumber(0),
         shippingCost,
         shippingCostCents: options.shippingCostCents,
+        discount,
+        discountCents,
         total: shippingCost,
         lineItems: [],
         itemsTotalCents: 0,
       };
     }
 
-    const lineItems: CheckoutLineItem[] = cart.items.map((item) => this.buildLineItem(item));
+    const lineItems: CheckoutLineItem[] = cart.items.map((item) =>
+      this.buildLineItem(item),
+    );
     const subtotal = this.centsToDecimal(options.itemsTotalCents);
 
     const taxAmount = (() => {
@@ -614,7 +869,10 @@ export class OrdersService {
       const taxBase = this.roundMoney(subtotal.dividedBy(taxRate.add(1)));
       return this.roundMoney(subtotal.minus(taxBase));
     })();
-    const total = subtotal.add(shippingCost);
+    const rawTotal = subtotal.add(shippingCost).minus(discount);
+    const total = rawTotal.isNegative()
+      ? this.moneyFromNumber(0)
+      : this.roundMoney(rawTotal);
 
     return {
       currency,
@@ -623,6 +881,8 @@ export class OrdersService {
       taxAmount,
       shippingCost,
       shippingCostCents: options.shippingCostCents,
+      discount,
+      discountCents,
       total,
       lineItems,
       itemsTotalCents: options.itemsTotalCents,
@@ -679,7 +939,9 @@ export class OrdersService {
     return trimmed || undefined;
   }
 
-  private extractNames(input: unknown): { firstName?: string; lastName?: string } | null {
+  private extractNames(
+    input: unknown,
+  ): { firstName?: string; lastName?: string } | null {
     if (!input || typeof input !== 'object') return null;
     const record = input as Record<string, unknown>;
     const primaryFirst =
@@ -706,7 +968,10 @@ export class OrdersService {
       return null;
     }
 
-    return { firstName: firstName || undefined, lastName: lastName || undefined };
+    return {
+      firstName: firstName || undefined,
+      lastName: lastName || undefined,
+    };
   }
 
   private async fillMissingUserNames(
@@ -780,7 +1045,8 @@ export class OrdersService {
     orderId: number,
     cart: CartSnapshot,
     allowNegativeStockOverride?: boolean,
-  ): Promise<void> { // [STOCK]
+  ): Promise<void> {
+    // [STOCK]
     const allowNegative =
       allowNegativeStockOverride !== undefined
         ? allowNegativeStockOverride
@@ -797,7 +1063,10 @@ export class OrdersService {
       let currentStock: number | null = null;
       if (item.variant && typeof (item.variant as any).stockQty === 'number') {
         currentStock = (item.variant as any).stockQty as number;
-      } else if (item.variant && typeof (item.variant as any).stock === 'number') {
+      } else if (
+        item.variant &&
+        typeof (item.variant as any).stock === 'number'
+      ) {
         currentStock = (item.variant as any).stock as number;
       }
 
@@ -852,7 +1121,8 @@ export class OrdersService {
     }
   }
 
-  async markOrderAsRefunded(providerRef: string): Promise<void> { // [STRIPE]
+  async markOrderAsRefunded(providerRef: string): Promise<void> {
+    // [STRIPE]
     await this.prisma.$transaction(async (tx) => {
       const order = await tx.order.findUnique({
         where: { providerRef },
@@ -873,7 +1143,11 @@ export class OrdersService {
         });
 
         const itemsCount = this.computeOrderItemsQuantity(order.items);
-        await this.historialService.registerReturn(order.userId, itemsCount, tx);
+        await this.historialService.registerReturn(
+          order.userId,
+          itemsCount,
+          tx,
+        );
       }
     });
   }
@@ -883,7 +1157,11 @@ export class OrdersService {
     order: OrderWithItems,
     previousStatus?: OrderStatus | null,
   ) {
-    if (!order || order.status !== OrderStatus.PAID || previousStatus === OrderStatus.PAID) {
+    if (
+      !order ||
+      order.status !== OrderStatus.PAID ||
+      previousStatus === OrderStatus.PAID
+    ) {
       return;
     }
 
@@ -922,10 +1200,12 @@ export class OrdersService {
       taxRate: this.formatRate(order.taxRate),
       taxAmount: this.formatMoney(order.taxAmount),
       shippingCost: this.formatMoney(order.shippingCost),
+      discount: this.formatMoney(this.centsToDecimal(order.discountCents)),
       total: this.formatMoney(order.total),
       currency: order.currency,
       provider: order.provider,
       providerRef: order.providerRef,
+      promoCode: order.promoCodeCode,
       shippingMethodId: order.shippingMethodId,
       shippingMethodCode: order.shippingMethodCode,
       createdAt: order.createdAt,

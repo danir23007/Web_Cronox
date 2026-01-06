@@ -1,6 +1,8 @@
 import {
+  Body,
   Controller,
   Get,
+  Post,
   Query,
   Req,
   UnauthorizedException,
@@ -17,6 +19,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { ShippingMethodCode } from '../common/enums/shipping-method-code.enum';
 import { CartService } from '../cart/cart.service';
 import { OrdersService } from './orders.service';
+import { ApplyPromoDto } from './dto/apply-promo.dto';
 
 @ApiTags('Checkout')
 @Controller('checkout')
@@ -39,6 +42,7 @@ export class CheckoutSummaryController {
   async getSummary(
     @Req() req: Request,
     @Query('shippingMethod') shippingMethod?: string,
+    @Query('promoCode') promoCode?: string,
   ) {
     const userId = req.user?.id;
 
@@ -57,6 +61,49 @@ export class CheckoutSummaryController {
 
     return this.ordersService.getCheckoutSummary(cart, {
       shippingMethod: normalized,
+      promoCode,
     });
+  }
+
+  @Post('apply-promo')
+  @ApiOperation({
+    summary:
+      'Valida un código de descuento y devuelve los totales actualizados',
+  })
+  @ApiOkResponse({
+    description: 'Resultado de la validación del código promocional',
+  })
+  async applyPromo(@Req() req: Request, @Body() dto: ApplyPromoDto) {
+    const userId = req.user?.id;
+
+    if (typeof userId !== 'number') {
+      throw new UnauthorizedException('USER_NOT_AUTHENTICATED');
+    }
+
+    const cart = await this.cartService.getCheckoutCartForRequest(req);
+    const summary = await this.ordersService.getCheckoutSummary(cart, {
+      shippingMethod: dto.shippingMethod,
+      promoCode: dto.code,
+    });
+
+    const appliedPromo = summary.appliedPromo;
+    const discountAmount = appliedPromo?.discountCents ?? 0;
+    const totalAfter = summary.totals.totalCents;
+    const totalBefore =
+      appliedPromo?.totalBeforeCents ??
+      totalAfter + (appliedPromo?.discountCents ?? 0);
+
+    return {
+      valid: Boolean(appliedPromo?.valid),
+      code: appliedPromo?.code ?? dto.code,
+      discountAmount,
+      totalBefore,
+      totalAfter,
+      message: appliedPromo?.message ?? 'Código inválido o expirado',
+      discountLineLabel: appliedPromo?.discountLineLabel,
+      appliedPromo: appliedPromo ?? null,
+      totals: summary.totals,
+      shippingMethod: summary.selectedShippingMethod,
+    };
   }
 }

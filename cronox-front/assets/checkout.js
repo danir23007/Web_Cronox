@@ -4,16 +4,24 @@
   const STRIPE_PUBLISHABLE_KEY =
     window.CRONOX_STRIPE_PUBLISHABLE_KEY || 'pk_test_xxx_replace_with_real_key';
   const CONTINUE_SHOPPING_URL = '/index.html#store';
+  const PROMO_STORAGE_KEY = 'cronox_checkout_promo';
 
   const cartItemsEl = document.getElementById('checkout-cart-items');
   const emptyCartEl = document.querySelector('[data-empty]');
   const shippingOptionsEl = document.getElementById('shipping-options');
   const subtotalEl = document.getElementById('summary-subtotal');
   const shippingEl = document.getElementById('summary-shipping');
+  const discountEl = document.getElementById('summary-discount');
   const totalEl = document.getElementById('summary-total');
   const payButton = document.getElementById('pay-button');
   const errorDiv = document.getElementById('payment-error');
   const helpText = document.getElementById('checkout-help');
+  const promoInput = document.getElementById('promo-code-input');
+  const applyPromoBtn = document.getElementById('apply-promo-button');
+  const removePromoBtn = document.getElementById('remove-promo-button');
+  const promoStatus = document.getElementById('promo-status');
+  const promoMessage = document.getElementById('promo-message');
+  const promoAppliedLabel = document.getElementById('promo-applied-label');
 
   const formatter = new Intl.NumberFormat('es-ES', {
     style: 'currency',
@@ -31,6 +39,63 @@
     return (amount / 100).toFixed(2).replace('.', ',') + ' €';
   };
 
+  const readStoredPromo = () => {
+    try {
+      const raw = sessionStorage.getItem(PROMO_STORAGE_KEY);
+      if (!raw) return null;
+      const parsed = JSON.parse(raw);
+      if (parsed && parsed.code) {
+        return parsed;
+      }
+      return null;
+    } catch (error) {
+      console.warn('[CRONOX] No se pudo leer el código guardado', error);
+      return null;
+    }
+  };
+
+  const persistPromo = (promo) => {
+    if (!promo || !promo.code) {
+      sessionStorage.removeItem(PROMO_STORAGE_KEY);
+      return;
+    }
+    sessionStorage.setItem(
+      PROMO_STORAGE_KEY,
+      JSON.stringify({ code: promo.code, discountCents: promo.discountCents ?? 0 }),
+    );
+  };
+
+  const clearStoredPromo = () => {
+    sessionStorage.removeItem(PROMO_STORAGE_KEY);
+  };
+
+  const setPromoState = (promo) => {
+    state.promo = promo ? { code: promo.code, discountCents: promo.discountCents ?? 0 } : null;
+    if (state.promo) {
+      persistPromo(state.promo);
+    } else {
+      clearStoredPromo();
+    }
+  };
+
+  const setPromoMessage = (message, isError = false) => {
+    if (!promoMessage) return;
+    promoMessage.textContent = message || '';
+    promoMessage.classList.toggle('is-error', isError);
+  };
+
+  const setPromoStatus = (text) => {
+    if (!promoStatus) return;
+    promoStatus.textContent = text || '';
+    promoStatus.hidden = !text;
+  };
+
+  const setPromoControlsLoading = (loading) => {
+    if (applyPromoBtn) applyPromoBtn.disabled = loading;
+    if (removePromoBtn) removePromoBtn.disabled = loading;
+    if (promoInput) promoInput.disabled = loading && !!state.promo;
+  };
+
   let stripe;
   let elements;
   let paymentElement;
@@ -41,7 +106,8 @@
     cart: null,
     shippingMethods: [],
     shippingMethod: 'STANDARD',
-    totals: { subtotalCents: 0, shippingCents: 0, totalCents: 0 },
+    totals: { subtotalCents: 0, shippingCents: 0, discountCents: 0, totalCents: 0 },
+    promo: null,
   };
 
   const setPayButtonState = (loading) => {
@@ -95,8 +161,10 @@
       });
     }
 
+    setPromoState(null);
+    renderPromoUI();
     setPayButtonState(false);
-    renderSummary({ subtotalCents: 0, shippingCents: 0, totalCents: 0 });
+    renderSummary({ subtotalCents: 0, shippingCents: 0, discountCents: 0, totalCents: 0 });
     if (helpText) {
       helpText.textContent = description;
     }
@@ -169,7 +237,41 @@
         ? `${shippingMethod.label} · ${formatEuro(totals.shippingCents)}`
         : formatEuro(totals.shippingCents);
     }
+    const discountRow = discountEl?.closest('.summary-row');
+    if (discountEl && discountRow) {
+      if (totals.discountCents > 0) {
+        discountEl.textContent = `- ${formatEuro(totals.discountCents)}`;
+        discountRow.hidden = false;
+      } else {
+        discountEl.textContent = '';
+        discountRow.hidden = true;
+      }
+    }
     totalEl && (totalEl.textContent = formatEuro(totals.totalCents));
+  };
+
+  const renderPromoUI = () => {
+    const hasPromo = Boolean(state.promo?.code && state.totals.discountCents > 0);
+    if (promoAppliedLabel) {
+      promoAppliedLabel.textContent = hasPromo && state.promo?.code ? `Aplicado: ${state.promo.code}` : '';
+      promoAppliedLabel.hidden = !hasPromo;
+    }
+    if (removePromoBtn) {
+      removePromoBtn.hidden = !hasPromo;
+    }
+    if (applyPromoBtn) {
+      applyPromoBtn.hidden = hasPromo;
+    }
+    if (promoInput) {
+      if (!hasPromo && state.promo?.code) {
+        promoInput.value = state.promo.code;
+      }
+      promoInput.disabled = hasPromo;
+    }
+    setPromoStatus(hasPromo ? 'Código aplicado' : '');
+    if (!hasPromo && !state.promo) {
+      setPromoMessage('');
+    }
   };
 
   const findShippingMethod = (code) =>
@@ -179,7 +281,10 @@
     setLoadingState(true);
     errorDiv.textContent = '';
     try {
-      const data = await API.getCheckoutSummary({ shippingMethod: shippingMethodCode });
+      const data = await API.getCheckoutSummary({
+        shippingMethod: shippingMethodCode,
+        promoCode: state.promo?.code,
+      });
 
       state.cart = data.cart;
       state.shippingMethods = Array.isArray(data.shippingMethods) ? data.shippingMethods : [];
@@ -196,10 +301,23 @@
         '';
       state.totals = data.totals || state.totals;
 
+      const appliedPromo = data.appliedPromo;
+      if (appliedPromo?.valid) {
+        setPromoState({
+          code: appliedPromo.code,
+          discountCents: appliedPromo.discountCents,
+        });
+        setPromoStatus('Código aplicado');
+        setPromoMessage(appliedPromo.message || '');
+      } else if (state.promo?.code && state.promo.code !== appliedPromo?.code) {
+        setPromoState(null);
+        setPromoMessage(appliedPromo?.message || 'Código inválido o expirado', true);
+      }
+
       if (!state.cart?.items?.length) {
         renderEmptyCart();
         state.cart = { items: [] };
-        state.totals = { subtotalCents: 0, shippingCents: 0, totalCents: 0 };
+        state.totals = { subtotalCents: 0, shippingCents: 0, discountCents: 0, totalCents: 0 };
         setLoadingState(false);
         return false;
       }
@@ -207,6 +325,7 @@
       renderCart();
       renderShippingOptions();
       renderSummary(state.totals, findShippingMethod(state.shippingMethod));
+      renderPromoUI();
       setLoadingState(false);
       return true;
     } catch (error) {
@@ -268,7 +387,10 @@
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ shippingMethod: state.shippingMethod }),
+        body: JSON.stringify({
+          shippingMethod: state.shippingMethod,
+          promoCode: state.promo?.code || undefined,
+        }),
       });
 
       if (!response.ok) {
@@ -289,6 +411,61 @@
     } finally {
       isInitializing = false;
     }
+  };
+
+  const applyPromoCode = async () => {
+    if (!promoInput) return;
+    const code = promoInput.value.trim();
+    if (!code) {
+      setPromoMessage('Introduce tu código de descuento.', true);
+      return;
+    }
+    setPromoControlsLoading(true);
+    setPromoMessage('');
+
+    try {
+      const result = await API.applyPromoCode({
+        code,
+        shippingMethod: state.shippingMethod,
+      });
+
+      state.totals = result.totals || state.totals;
+      if (result.shippingMethod?.code) {
+        state.shippingMethod = result.shippingMethod.code;
+      }
+
+      if (result.valid) {
+        setPromoState({
+          code: result.code || code,
+          discountCents: result.discountAmount ?? result.totals?.discountCents ?? 0,
+        });
+        setPromoStatus('Código aplicado');
+        setPromoMessage(result.message || 'Código aplicado');
+      } else {
+        setPromoState(null);
+        setPromoStatus('');
+        setPromoMessage(result.message || 'Código inválido o expirado', true);
+      }
+
+      renderSummary(state.totals, findShippingMethod(state.shippingMethod) || result.shippingMethod);
+      renderPromoUI();
+      await preparePaymentIntent();
+    } catch (error) {
+      console.error('[CRONOX] Error aplicando código', error);
+      setPromoMessage(error?.message || 'No se pudo validar el código.', true);
+    } finally {
+      setPromoControlsLoading(false);
+    }
+  };
+
+  const removePromoCode = async () => {
+    if (promoInput) promoInput.value = '';
+    setPromoState(null);
+    setPromoStatus('');
+    setPromoMessage('Código eliminado');
+    renderPromoUI();
+    await refreshCheckoutSummary(state.shippingMethod);
+    await preparePaymentIntent();
   };
 
   const initStripe = () => {
@@ -323,6 +500,23 @@
         setPayButtonState(false);
       }
     });
+
+    applyPromoBtn?.addEventListener('click', async (event) => {
+      event.preventDefault();
+      await applyPromoCode();
+    });
+
+    promoInput?.addEventListener('keydown', async (event) => {
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        await applyPromoCode();
+      }
+    });
+
+    removePromoBtn?.addEventListener('click', async (event) => {
+      event.preventDefault();
+      await removePromoCode();
+    });
   };
 
   document.addEventListener('DOMContentLoaded', async () => {
@@ -331,6 +525,11 @@
 
     initStripe();
     bindEvents();
+    const storedPromo = readStoredPromo();
+    if (storedPromo) {
+      setPromoState(storedPromo);
+      renderPromoUI();
+    }
     const loaded = await refreshCheckoutSummary();
     if (loaded) {
       await preparePaymentIntent();

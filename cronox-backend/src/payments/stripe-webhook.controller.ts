@@ -1,4 +1,12 @@
-import { BadRequestException, Body, Controller, HttpCode, Logger, Post, Req } from '@nestjs/common';
+import {
+  BadRequestException,
+  Body,
+  Controller,
+  HttpCode,
+  Logger,
+  Post,
+  Req,
+} from '@nestjs/common';
 import { ApiExcludeEndpoint, ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { Request } from 'express';
 import Stripe from 'stripe';
@@ -18,12 +26,18 @@ export class StripeWebhookController {
   @Post()
   @HttpCode(200)
   @ApiExcludeEndpoint()
-  @ApiOperation({ summary: 'Webhook de Stripe (firma requerida)', description: 'Endpoint para eventos de Stripe — no usar desde Swagger.' })
+  @ApiOperation({
+    summary: 'Webhook de Stripe (firma requerida)',
+    description: 'Endpoint para eventos de Stripe — no usar desde Swagger.',
+  })
   async handleStripeWebhook(@Req() req: Request, @Body() _body: unknown) {
     const signature = req.headers['stripe-signature'];
     const rawBody = req.body as Buffer; // [WEBHOOK]
 
-    const event = this.stripeService.constructEventFromPayload(signature, rawBody);
+    const event = this.stripeService.constructEventFromPayload(
+      signature,
+      rawBody,
+    );
 
     switch (event.type) {
       case 'payment_intent.succeeded':
@@ -44,7 +58,9 @@ export class StripeWebhookController {
     const userId = Number(metadata.userId);
 
     if (!userId || Number.isNaN(userId)) {
-      this.logger.error(`payment_intent.succeeded sin userId en metadata para ${paymentIntent.id}`);
+      this.logger.error(
+        `payment_intent.succeeded sin userId en metadata para ${paymentIntent.id}`,
+      );
       throw new BadRequestException('STRIPE_METADATA_USER_REQUIRED');
     }
 
@@ -62,7 +78,17 @@ export class StripeWebhookController {
     if (typeof itemsTotalCents !== 'string') {
       throw new BadRequestException('STRIPE_METADATA_ITEMS_TOTAL_REQUIRED');
     }
-    const amountCents = paymentIntent.amount_received ?? paymentIntent.amount ?? 0;
+    const promoCode =
+      typeof metadata.promoCode === 'string' && metadata.promoCode.trim()
+        ? metadata.promoCode
+        : undefined;
+    const discountCents =
+      typeof metadata.discountCents === 'string' &&
+      metadata.discountCents.trim()
+        ? metadata.discountCents
+        : undefined;
+    const amountCents =
+      paymentIntent.amount_received ?? paymentIntent.amount ?? 0;
     const amount = (amountCents / 100).toFixed(2);
     const currency = (paymentIntent.currency ?? 'eur').toUpperCase();
 
@@ -86,6 +112,8 @@ export class StripeWebhookController {
           shippingMethod,
           shippingCostCents,
           itemsTotalCents,
+          ...(promoCode ? { promoCode } : {}),
+          ...(discountCents ? { discountCents } : {}),
         } as any,
         shippingAddress: shippingAddress as any,
         rawPayload: paymentIntent as unknown as Record<string, unknown>,
@@ -119,7 +147,9 @@ export class StripeWebhookController {
     }
 
     await this.ordersService.markOrderAsRefunded(paymentIntentRef); // [STRIPE]
-    this.logger.log(`Pedido con PaymentIntent ${paymentIntentRef} marcado como REFUNDED`);
+    this.logger.log(
+      `Pedido con PaymentIntent ${paymentIntentRef} marcado como REFUNDED`,
+    );
 
     return { received: true };
   }

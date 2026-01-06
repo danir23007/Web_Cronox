@@ -167,6 +167,27 @@
           <div id="shipping-options" class="shipping-options"></div>
         </div>
 
+        <div class="checkout-promo" aria-label="Código de descuento">
+          <div class="checkout-promo__header">
+            <h3>Código de descuento</h3>
+            <span id="promo-status" class="checkout-promo__status" hidden></span>
+          </div>
+          <div class="checkout-promo__controls">
+            <input
+              id="promo-code-input"
+              type="text"
+              inputmode="text"
+              autocomplete="off"
+              placeholder="Introduce tu código"
+              aria-label="Código de descuento"
+            />
+            <button id="apply-promo-button" class="btn-secondary" type="button">Aplicar</button>
+            <button id="remove-promo-button" class="btn-ghost" type="button" hidden>Quitar</button>
+          </div>
+          <div id="promo-applied-label" class="checkout-promo__applied" hidden></div>
+          <div id="promo-message" class="checkout-error checkout-promo__message" role="alert"></div>
+        </div>
+
         <div class="checkout-summary">
           <div class="summary-row">
             <span>Subtotal</span>
@@ -175,6 +196,10 @@
           <div class="summary-row">
             <span>Envío</span>
             <strong id="summary-shipping">—</strong>
+          </div>
+          <div class="summary-row" hidden>
+            <span>Descuento</span>
+            <strong id="summary-discount">—</strong>
           </div>
           <div class="summary-row summary-total">
             <span>Total</span>
