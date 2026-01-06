@@ -118,6 +118,8 @@ type CheckoutSummary = {
   appliedPromo?: PromoApplication | null;
 };
 
+type PrismaClientOrTx = PrismaService | Prisma.TransactionClient;
+
 type AuthenticatedUser = {
   id: number;
   role: Role;
@@ -150,7 +152,11 @@ export class OrdersService {
 
   async getCheckoutSummary(
     cart: CartSnapshot | null,
-    params: { shippingMethod?: ShippingMethodCode; promoCode?: string } = {},
+    params: {
+      userId: number;
+      shippingMethod?: ShippingMethodCode;
+      promoCode?: string;
+    },
   ): Promise<CheckoutSummary> {
     const hasItems = Array.isArray(cart?.items) && cart.items.length > 0;
 
@@ -207,6 +213,7 @@ export class OrdersService {
         selectedShippingMethod,
         normalizedPromo,
         baseTotals,
+        { userId: params.userId },
       );
       if (appliedPromo.valid && appliedPromo.discountCents > 0) {
         appliedDiscountCents = appliedPromo.discountCents;
@@ -301,6 +308,7 @@ export class OrdersService {
           shippingMethod,
           normalizedPromo,
           baseTotals,
+          { userId },
         )
       : null;
     const discountCents = appliedPromo?.valid ? appliedPromo.discountCents : 0;
@@ -461,6 +469,7 @@ if (!cart) {
             methodBeforeDiscount,
             promoCode,
             baseTotals,
+            { userId, client: tx },
           )
         : null;
       const discountCents = appliedPromo?.valid
@@ -779,7 +788,9 @@ if (!cart) {
     _shippingMethod: ShippingMethodOption,
     promoCode: string,
     baseTotals: CheckoutTotals,
+    options: { userId?: number; client?: PrismaClientOrTx } = {},
   ): Promise<PromoApplication> {
+    const client = options.client ?? this.prisma;
     const code = this.normalizePromoCode(promoCode);
     const itemsTotalCents = baseTotals.subtotalCents;
     const shippingCents = baseTotals.shippingCents;
@@ -795,8 +806,20 @@ if (!cart) {
       };
     }
 
-    const promo = await this.prisma.promoCode.findFirst({
+    const promo = await client.promoCode.findFirst({
       where: { code },
+      select: {
+        id: true,
+        code: true,
+        type: true,
+        value: true,
+        minCartValue: true,
+        startsAt: true,
+        expiresAt: true,
+        isActive: true,
+        usageLimit: true,
+        usageCount: true,
+      },
     });
 
     const invalidResponse = (message: string): PromoApplication => ({
@@ -812,15 +835,13 @@ if (!cart) {
       return invalidResponse('Este código de descuento no existe');
     }
 
-    const now = new Date();
-    const isExpired =
-      !promo.isActive ||
-      (promo.startsAt && promo.startsAt > now) ||
-      (promo.expiresAt && promo.expiresAt < now) ||
-      (promo.usageLimit != null && promo.usageCount >= promo.usageLimit);
+    const validation = await this.validatePromoAvailability(promo, {
+      userId: options.userId,
+      client,
+    });
 
-    if (isExpired) {
-      return invalidResponse('Este código ha expirado');
+    if (!validation.valid) {
+      return invalidResponse(validation.message ?? 'Este código no es válido');
     }
 
     const minValue = promo.minCartValue ?? null;
@@ -865,6 +886,53 @@ if (!cart) {
       discountLineLabel,
       message: 'Código aplicado',
     };
+  }
+
+  private async validatePromoAvailability(
+    promo: {
+      id: number;
+      startsAt: Date | null;
+      expiresAt: Date | null;
+      isActive: boolean;
+      usageLimit: number | null;
+      usageCount: number;
+    },
+    options: { userId?: number; client?: PrismaClientOrTx } = {},
+  ): Promise<{ valid: boolean; message?: string }> {
+    const now = new Date();
+
+    if (!promo.isActive) {
+      return { valid: false, message: 'Código caducado' };
+    }
+
+    if (promo.startsAt && promo.startsAt > now) {
+      return { valid: false, message: 'Aún no disponible' };
+    }
+
+    if (promo.expiresAt && promo.expiresAt < now) {
+      return { valid: false, message: 'Código caducado' };
+    }
+
+    if (promo.usageLimit != null && promo.usageCount >= promo.usageLimit) {
+      return { valid: false, message: 'Límite de usos alcanzado' };
+    }
+
+    if (options.userId) {
+      const client = options.client ?? this.prisma;
+      const alreadyRedeemed = await client.promoCodeRedemption.findFirst({
+        where: { promoCodeId: promo.id, userId: options.userId },
+        select: { id: true },
+      });
+
+      if (alreadyRedeemed) {
+        return {
+          valid: false,
+          message: 'Este código ya fue usado en tu cuenta',
+        };
+      }
+    }
+
+    return { valid: true };
   }
 
   private pickShippingMethod(
@@ -1256,17 +1324,61 @@ if (!cart) {
 
     const promo = await tx.promoCode.findUnique({
       where: { id: order.promoCodeId },
-      select: { id: true, code: true },
+      select: {
+        id: true,
+        code: true,
+        startsAt: true,
+        expiresAt: true,
+        isActive: true,
+        usageLimit: true,
+        usageCount: true,
+      },
     });
 
     if (!promo) {
       return;
     }
 
-    await tx.promoCode.update({
-      where: { id: promo.id },
+    const validation = await this.validatePromoAvailability(promo, {
+      userId: order.userId,
+      client: tx,
+    });
+
+    if (!validation.valid) {
+      throw new BadRequestException(
+        validation.message ?? 'PROMO_NOT_AVAILABLE',
+      );
+    }
+
+    const usageLimitCondition =
+      promo.usageLimit != null ? { usageCount: { lt: promo.usageLimit } } : {};
+
+    const incremented = await tx.promoCode.updateMany({
+      where: { id: promo.id, ...usageLimitCondition },
       data: { usageCount: { increment: 1 } },
     });
+
+    if (incremented.count === 0) {
+      throw new BadRequestException('Límite de usos alcanzado');
+    }
+
+    try {
+      await tx.promoCodeRedemption.create({
+        data: {
+          promoCodeId: promo.id,
+          userId: order.userId,
+          orderId: order.id,
+        },
+      });
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2002'
+      ) {
+        throw new BadRequestException('Este código ya fue usado en tu cuenta');
+      }
+      throw error;
+    }
 
     if (!order.promoCodeCode) {
       await tx.order.update({
