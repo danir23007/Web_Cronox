@@ -264,10 +264,11 @@ export class OrdersService {
     const providerRef = dto.providerRef;
 
     return this.prisma.$transaction(async (tx) => {
-      const existing = await tx.order.findUnique({
+      const existing: OrderWithItems | null = await tx.order.findUnique({
         where: { providerRef },
         include: { items: true },
       });
+      const existingStatus = existing?.status;
 
       if (existing) {
         return this.serializeOrder(existing);
@@ -411,7 +412,7 @@ export class OrdersService {
         await this.historialService.incrementOrderProgress(userId, quantity, tx);
       }
 
-      await this.handlePromoUsageOnPaid(tx, created, existing?.status);
+      await this.handlePromoUsageOnPaid(tx, created, existingStatus);
 
       return this.serializeOrder(created);
     });

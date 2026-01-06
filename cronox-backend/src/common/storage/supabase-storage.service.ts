@@ -1,4 +1,5 @@
 import { BadRequestException, Injectable, InternalServerErrorException, Logger } from '@nestjs/common';
+import type { Express } from 'express';
 
 type UploadResult = { urls: string[] };
 
@@ -37,7 +38,7 @@ export class SupabaseStorageService {
           'Content-Type': file.mimetype,
           'x-upsert': 'false',
         },
-        body: file.buffer,
+        body: file.buffer as unknown as BodyInit,
       });
 
       if (!response.ok) {

@@ -16,6 +16,7 @@ import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { AdminGuard } from '../../common/guards/admin.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { ProductService } from '../../products/product.service';
+import type { Express } from 'express';
 import { CreateProductDto } from '../../products/dto/create-product.dto';
 import { UpdateProductDto } from '../../products/dto/update-product.dto';
 import { CreateVariantDto } from '../../products/dto/create-variant.dto';

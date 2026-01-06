@@ -98,7 +98,11 @@ export class AdminPromoCodesService {
         data,
       });
 
-      await this.recordAudit('promo.update', { promoCodeId: id, payload: dto }, adminId);
+      await this.recordAudit(
+        'promo.update',
+        { promoCodeId: id, payload: JSON.parse(JSON.stringify(dto)) },
+        adminId,
+      );
       return updated;
     } catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError) {
