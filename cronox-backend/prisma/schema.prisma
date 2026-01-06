@@ -101,6 +101,7 @@ model User {
   carts                  Cart?
   favorites              Favorite[]
   orders                 Order[]
+  promoCodeRedemptions   PromoCodeRedemption[]
   stockMovements         StockMovement[]
   passwordResetTokens    PasswordResetToken[]
   discountCodes          DiscountCode[]
