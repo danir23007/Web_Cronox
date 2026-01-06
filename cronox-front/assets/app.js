@@ -928,13 +928,21 @@
     return imageUrl || fallbackLogo;
   };
 
-  const renderCartEmptyState = (message = 'Tu cesta está vacía.', { showCta = false } = {}) => {
-    if (!cartEmptyState) return;
+  const renderCartEmptyState = (message = 'Tu cesta está vacía', { showCta = false } = {}) => {
+    if (!cartEmptyState || !cartItemsContainer) return;
 
     cartEmptyState.innerHTML = '';
-    const text = document.createElement('p');
-    text.textContent = message;
-    cartEmptyState.appendChild(text);
+
+    const link = document.createElement('a');
+    link.href = CONTINUE_SHOPPING_URL;
+    link.textContent = message;
+    link.className = 'cart-empty__message';
+    link.addEventListener('click', (event) => {
+      event.preventDefault();
+      closeCartDrawer();
+      window.location.href = CONTINUE_SHOPPING_URL;
+    });
+    cartEmptyState.appendChild(link);
 
     if (showCta) {
       const cta = document.createElement('button');
@@ -949,6 +957,8 @@
     }
 
     cartEmptyState.hidden = false;
+    cartItemsContainer.innerHTML = '';
+    cartItemsContainer.appendChild(cartEmptyState);
   };
 
   const renderCartItems = (cart) => {
@@ -964,12 +974,16 @@
     cartItemsContainer.classList.toggle('is-empty', !hasItems);
 
     if (!hasItems) {
-      cartItemsContainer.innerHTML = '';
       renderCartEmptyState('Tu cesta está vacía', { showCta: false });
       return;
     }
 
-    if (cartEmptyState) cartEmptyState.hidden = true;
+    if (cartEmptyState) {
+      cartEmptyState.hidden = true;
+      if (cartEmptyState.parentElement === cartItemsContainer) {
+        cartEmptyState.remove();
+      }
+    }
 
     const frag = document.createDocumentFragment();
     items.forEach((item) => {
