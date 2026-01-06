@@ -25,6 +25,19 @@
   const paymentSection = document.getElementById('payment-section');
   const loginCallout = document.getElementById('checkout-login-callout');
   const loginCalloutLink = document.getElementById('checkout-login-link');
+  const shippingForm = document.getElementById('shipping-form');
+  const shippingFields = shippingForm
+    ? {
+        firstName: shippingForm.querySelector('input[name="firstName"]'),
+        lastName: shippingForm.querySelector('input[name="lastName"]'),
+        address: shippingForm.querySelector('input[name="address"]'),
+        city: shippingForm.querySelector('input[name="city"]'),
+        state: shippingForm.querySelector('input[name="state"]'),
+        zip: shippingForm.querySelector('input[name="zip"]'),
+        phone: shippingForm.querySelector('input[name="phone"]'),
+      }
+    : {};
+  const userEditedShippingFields = new Set();
 
   const formatter = new Intl.NumberFormat('es-ES', {
     style: 'currency',
@@ -48,6 +61,57 @@
 
   const sanitizePromoCode = (value) =>
     (value || '').replace(/\s+/g, '').toUpperCase();
+
+  const cleanText = (value) => {
+    if (typeof value === 'string') return value.trim();
+    if (typeof value === 'number') return String(value);
+    return '';
+  };
+
+  const splitFullName = (fullName) => {
+    const normalized = cleanText(fullName);
+    if (!normalized) return { firstName: '', lastName: '' };
+    const [first, ...rest] = normalized.split(/\s+/);
+    return { firstName: first || '', lastName: rest.join(' ') };
+  };
+
+  const applyShippingValue = (input, value) => {
+    if (!input) return;
+    const nextValue = cleanText(value);
+    if (!nextValue) return;
+    if (input.name && userEditedShippingFields.has(input.name)) return;
+    input.value = nextValue;
+  };
+
+  const hydrateShippingFormFromProfile = (profile = {}, address = {}) => {
+    if (!shippingForm) return;
+    const addressNameParts = splitFullName(address.name);
+    const profileAddress =
+      profile.address && typeof profile.address === 'object' ? profile.address : null;
+
+    applyShippingValue(shippingFields.firstName, profile.firstName || addressNameParts.firstName);
+    applyShippingValue(shippingFields.lastName, profile.lastName || addressNameParts.lastName);
+
+    const addressLine =
+      cleanText([address.line1, address.line2].filter(Boolean).join(' ')) ||
+      cleanText([profileAddress?.line1, profileAddress?.line2].filter(Boolean).join(' ')) ||
+      cleanText(profile.address || '');
+    applyShippingValue(shippingFields.address, addressLine);
+    applyShippingValue(shippingFields.city, address.city || profileAddress?.city || profile.city);
+    applyShippingValue(shippingFields.state, address.state || profileAddress?.state || profile.state);
+    applyShippingValue(shippingFields.zip, address.zip || profileAddress?.zip || profile.zip);
+    applyShippingValue(shippingFields.phone, profile.phone || address.phone || profileAddress?.phone);
+  };
+
+  const markShippingFieldEdited = (input) => {
+    if (input?.name) userEditedShippingFields.add(input.name);
+  };
+
+  Object.values(shippingFields).forEach((input) => {
+    if (!input) return;
+    input.addEventListener('input', () => markShippingFieldEdited(input));
+    input.addEventListener('change', () => markShippingFieldEdited(input));
+  });
 
   const readStoredPromo = () => {
     try {
@@ -160,6 +224,9 @@
     isAuthenticated: false,
   };
 
+  let shippingDefaultsLoaded = false;
+  let shippingDefaultsPromise = null;
+
   const resolveAuthStatus = async () => {
     if (window.CRONOX_USER) {
       state.isAuthenticated = true;
@@ -184,6 +251,38 @@
 
     state.isAuthenticated = false;
     return false;
+  };
+
+  const loadUserShippingDefaults = async () => {
+    if (!state.isAuthenticated || !shippingForm) return null;
+    if (shippingDefaultsPromise) return shippingDefaultsPromise;
+    if (shippingDefaultsLoaded) return null;
+
+    shippingDefaultsPromise = (async () => {
+      try {
+        const profile =
+          window.CRONOX_USER || (typeof API.getMe === 'function' ? await API.getMe() : null);
+        if (profile) window.CRONOX_USER = profile;
+
+        let address = null;
+        if (typeof API.getDefaultAddress === 'function') {
+          try {
+            address = await API.getDefaultAddress();
+          } catch (error) {
+            console.warn('[CRONOX] No se pudo cargar la dirección por defecto', error);
+          }
+        }
+
+        hydrateShippingFormFromProfile(profile || {}, address || {});
+      } catch (error) {
+        console.warn('[CRONOX] No se pudieron cargar los datos de envío guardados', error);
+      } finally {
+        shippingDefaultsLoaded = true;
+        shippingDefaultsPromise = null;
+      }
+    })();
+
+    return shippingDefaultsPromise;
   };
 
   const setPayButtonState = (loading) => {
@@ -778,6 +877,9 @@
     const user = ev?.detail;
     state.isAuthenticated = Boolean(user);
     if (state.isAuthenticated) {
+      if (user) window.CRONOX_USER = user;
+      shippingDefaultsLoaded = false;
+      await loadUserShippingDefaults();
       hideLoginCallout();
       setGuestUiState(false);
       const stripeReady = ensureStripeReady();
@@ -789,6 +891,8 @@
         await preparePaymentIntent();
       }
     } else {
+      shippingDefaultsLoaded = false;
+      shippingDefaultsPromise = null;
       await renderGuestCheckout();
     }
   });
@@ -809,6 +913,7 @@
       return;
     }
 
+    await loadUserShippingDefaults();
     ensureStripeReady();
     const loaded = await refreshCheckoutSummary();
     if (loaded) {

@@ -996,6 +996,7 @@ a.product-card{display:block;text-decoration:none;color:inherit;cursor:pointer;}
   padding: 0 12px;
   width: 100%;
   min-height: 240px;
+  flex: 1;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1005,6 +1006,11 @@ a.product-card{display:block;text-decoration:none;color:inherit;cursor:pointer;}
   text-align: center;
   font-size: 15px;
   color: #fff;
+}
+.cart-empty__message {
+  color: inherit;
+  text-decoration: underline;
+  cursor: pointer;
 }
 
 .cart-line {
@@ -1202,6 +1208,24 @@ a.product-card{display:block;text-decoration:none;color:inherit;cursor:pointer;}
 .cart-drawer__row { display: flex; align-items: center; justify-content: space-between; font-size: 14px; }
 .cart-drawer__row strong { font-size: 18px; letter-spacing: 0.04em; }
 
+.cart-drawer .btn-primary {
+  background: #fff;
+  color: #000;
+  border: 0;
+  /* // fix: checkout button color in account page cart drawer */
+}
+.cart-drawer .btn-primary:hover,
+.cart-drawer .btn-primary:focus-visible,
+.cart-drawer .btn-primary:active {
+  background: #fff;
+  color: #000;
+}
+.cart-drawer .btn-primary:disabled {
+  background: #fff;
+  color: #000;
+  opacity: 0.7;
+  cursor: not-allowed;
+}
 .cart-drawer .btn-primary {
   width: 100%;
   border-radius: 6px;
