@@ -28,6 +28,10 @@
     currency: 'EUR',
   });
 
+  const appearance = {
+    theme: 'night',
+  };
+
   const formatMoney = (value) => {
     const num = Number(value);
     if (Number.isNaN(num)) return '—';
@@ -39,13 +43,16 @@
     return (amount / 100).toFixed(2).replace('.', ',') + ' €';
   };
 
+  const sanitizePromoCode = (value) =>
+    (value || '').replace(/\s+/g, '').toUpperCase();
+
   const readStoredPromo = () => {
     try {
       const raw = sessionStorage.getItem(PROMO_STORAGE_KEY);
       if (!raw) return null;
       const parsed = JSON.parse(raw);
       if (parsed && parsed.code) {
-        return parsed;
+        return { ...parsed, code: sanitizePromoCode(parsed.code) };
       }
       return null;
     } catch (error) {
@@ -61,7 +68,10 @@
     }
     sessionStorage.setItem(
       PROMO_STORAGE_KEY,
-      JSON.stringify({ code: promo.code, discountCents: promo.discountCents ?? 0 }),
+      JSON.stringify({
+        code: sanitizePromoCode(promo.code),
+        discountCents: promo.discountCents ?? 0,
+      }),
     );
   };
 
@@ -70,7 +80,12 @@
   };
 
   const setPromoState = (promo) => {
-    state.promo = promo ? { code: promo.code, discountCents: promo.discountCents ?? 0 } : null;
+    state.promo = promo
+      ? {
+          code: sanitizePromoCode(promo.code),
+          discountCents: promo.discountCents ?? 0,
+        }
+      : null;
     if (state.promo) {
       persistPromo(state.promo);
     } else {
@@ -99,8 +114,9 @@
   let stripe;
   let elements;
   let paymentElement;
-  let paymentClientSecret;
+  let currentClientSecret = null;
   let isInitializing = false;
+  let paymentElementMounted = false;
 
   const state = {
     cart: null,
@@ -112,7 +128,7 @@
 
   const setPayButtonState = (loading) => {
     if (!payButton) return;
-    payButton.disabled = loading || !paymentClientSecret;
+    payButton.disabled = loading || !currentClientSecret;
     payButton.textContent = loading ? 'Procesando…' : 'Pagar ahora';
   };
 
@@ -123,11 +139,16 @@
   };
 
   const resetPaymentElement = () => {
-    paymentClientSecret = null;
+    currentClientSecret = null;
+    paymentElementMounted = false;
     if (paymentElement) {
-      paymentElement.unmount();
-      paymentElement = null;
+      try {
+        paymentElement.unmount();
+      } catch (error) {
+        console.warn('[CRONOX] Error desmontando Payment Element', error);
+      }
     }
+    paymentElement = null;
     elements = null;
     setPayButtonState(false);
   };
@@ -210,7 +231,7 @@
     shippingOptionsEl.innerHTML = '';
 
     state.shippingMethods.forEach((method) => {
-      const priceCents = method.priceCents ?? method.amountCents ?? 0;
+      const priceCents = method.amountCents ?? method.priceCents ?? 0;
       const wrapper = document.createElement('label');
       wrapper.className = 'shipping-option';
       wrapper.innerHTML = `
@@ -349,16 +370,31 @@
     }
   };
 
-  const mountPaymentElement = (clientSecret) => {
-    if (!stripe || !clientSecret) return;
+  const ensurePaymentElement = async (clientSecret) => {
+    if (!clientSecret || !stripe) return;
 
-    if (paymentElement) {
-      paymentElement.unmount();
+    if (currentClientSecret === clientSecret && paymentElementMounted) {
+      return;
     }
 
-    elements = stripe.elements({ clientSecret });
+    if (paymentElement) {
+      try {
+        paymentElement.unmount();
+      } catch (error) {
+        console.warn('[CRONOX] Error desmontando Payment Element previo', error);
+      }
+    }
+    paymentElementMounted = false;
+
+    elements = stripe.elements({ clientSecret, appearance });
     paymentElement = elements.create('payment');
-    paymentElement.mount('#payment-element');
+    const container = document.getElementById('payment-element');
+    if (container) {
+      paymentElement.mount(container);
+      paymentElementMounted = true;
+      currentClientSecret = clientSecret;
+      setPayButtonState(false);
+    }
   };
 
   const preparePaymentIntent = async () => {
@@ -399,8 +435,8 @@
       }
 
       const data = await response.json();
-      paymentClientSecret = data.clientSecret;
-      mountPaymentElement(paymentClientSecret);
+      currentClientSecret = data.clientSecret;
+      await ensurePaymentElement(currentClientSecret);
       state.shippingMethod = data.shippingMethod?.code || state.shippingMethod;
       state.totals = data.totals || state.totals;
       renderSummary(state.totals, findShippingMethod(state.shippingMethod) || data.shippingMethod);
@@ -415,7 +451,8 @@
 
   const applyPromoCode = async () => {
     if (!promoInput) return;
-    const code = promoInput.value.trim();
+    const code = sanitizePromoCode(promoInput.value);
+    promoInput.value = code;
     if (!code) {
       setPromoMessage('Introduce tu código de descuento.', true);
       return;
@@ -449,6 +486,7 @@
 
       renderSummary(state.totals, findShippingMethod(state.shippingMethod) || result.shippingMethod);
       renderPromoUI();
+      await refreshCheckoutSummary(state.shippingMethod);
       await preparePaymentIntent();
     } catch (error) {
       console.error('[CRONOX] Error aplicando código', error);
@@ -475,6 +513,13 @@
   };
 
   const bindEvents = () => {
+    const sanitizePromoInputValue = () => {
+      if (!promoInput) return '';
+      const cleaned = sanitizePromoCode(promoInput.value);
+      promoInput.value = cleaned;
+      return cleaned;
+    };
+
     shippingOptionsEl?.addEventListener('change', async (event) => {
       const input = event.target.closest('input[name="shippingMethod"]');
       if (!input) return;
@@ -484,7 +529,10 @@
     });
 
     payButton?.addEventListener('click', async () => {
-      if (!stripe || !elements || !paymentClientSecret) return;
+      if (!stripe || !elements || !paymentElement || !currentClientSecret) {
+        errorDiv.textContent = 'No se pudo iniciar el pago. Refresca la página e inténtalo de nuevo.';
+        return;
+      }
       setPayButtonState(true);
       errorDiv.textContent = '';
 
@@ -507,10 +555,29 @@
     });
 
     promoInput?.addEventListener('keydown', async (event) => {
+      if (event.key === ' ') {
+        event.preventDefault();
+        return;
+      }
       if (event.key === 'Enter') {
         event.preventDefault();
+        sanitizePromoInputValue();
         await applyPromoCode();
       }
+    });
+
+    promoInput?.addEventListener('input', () => {
+      sanitizePromoInputValue();
+    });
+
+    promoInput?.addEventListener('paste', (event) => {
+      event.preventDefault();
+      const text = event.clipboardData?.getData('text') || '';
+      promoInput.value = sanitizePromoCode(text);
+    });
+
+    promoInput?.addEventListener('blur', () => {
+      sanitizePromoInputValue();
     });
 
     removePromoBtn?.addEventListener('click', async (event) => {

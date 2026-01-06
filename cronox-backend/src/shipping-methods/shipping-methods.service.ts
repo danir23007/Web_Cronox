@@ -11,7 +11,7 @@ export type ShippingMethodOption = {
   description?: string | null;
 };
 
-const FREE_SHIPPING_THRESHOLD_CENTS = 6500; // 65 €
+export const FREE_SHIPPING_THRESHOLD_CENTS = 6500; // 65 €
 
 // Internamente sólo guardamos lo que viene de la BD
 type ShippingRow = {
@@ -78,6 +78,7 @@ export class ShippingMethodsService {
   async getMethod(
     code: ShippingMethodCode,
     itemsTotalCents: number,
+    discountCents = 0,
   ): Promise<ShippingMethodOption> {
     const methods = await this.loadMethodsFromDb();
     const row = methods.get(code);
@@ -86,16 +87,12 @@ export class ShippingMethodsService {
       throw new NotFoundException(`Shipping method not found: ${code}`);
     }
 
-    let amountCents = row.price;
-
-    // *** ÚNICA LÓGICA EN CÓDIGO ***
-    // Si el pedido >= 65 € y el método es STANDARD -> envío gratis
-    if (
+    const netItemsCents = Math.max(0, itemsTotalCents - Math.max(0, discountCents));
+    const amountCents =
       code === ShippingMethodCode.STANDARD &&
-      itemsTotalCents >= FREE_SHIPPING_THRESHOLD_CENTS
-    ) {
-      amountCents = 0;
-    }
+      netItemsCents >= FREE_SHIPPING_THRESHOLD_CENTS
+        ? 0
+        : row.price;
 
     return {
       id: row.id,
@@ -109,22 +106,21 @@ export class ShippingMethodsService {
 
   async listAvailableMethods(
     itemsTotalCents: number,
+    discountCents = 0,
   ): Promise<ShippingMethodOption[]> {
     const methods = await this.loadMethodsFromDb();
 
     const result: ShippingMethodOption[] = [];
+    const netItemsCents = Math.max(0, itemsTotalCents - Math.max(0, discountCents));
 
     for (const [code, row] of methods.entries()) {
       if (!row.isActive) continue;
 
-      let amountCents = row.price;
-
-      if (
+      const amountCents =
         code === ShippingMethodCode.STANDARD &&
-        itemsTotalCents >= FREE_SHIPPING_THRESHOLD_CENTS
-      ) {
-        amountCents = 0;
-      }
+        netItemsCents >= FREE_SHIPPING_THRESHOLD_CENTS
+          ? 0
+          : row.price;
 
       result.push({
         id: row.id,

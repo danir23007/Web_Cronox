@@ -94,18 +94,26 @@ describe('OrdersService', () => {
     };
 
     shippingMethods = {
-      getMethod: jest.fn(async (code: ShippingMethodCode, itemsTotal: number) => {
-        const basePrice = code === 'EXPRESS' ? 495 : 295;
-        const amountCents =
-          code === 'STANDARD' && itemsTotal >= 6500 ? 0 : basePrice;
+      getMethod: jest.fn(
+        async (
+          code: ShippingMethodCode,
+          itemsTotal: number,
+          discountCents = 0,
+        ) => {
+          const basePrice = code === 'EXPRESS' ? 495 : 295;
+          const netItems = Math.max(0, itemsTotal - discountCents);
+          const amountCents =
+            code === 'STANDARD' && netItems >= 6500 ? 0 : basePrice;
 
-        return {
-          id: code === 'EXPRESS' ? 2 : 1,
-          code,
-          label: code === 'EXPRESS' ? 'Envío express' : 'Envío estándar',
-          amountCents,
-        };
-      }),
+          return {
+            id: code === 'EXPRESS' ? 2 : 1,
+            code,
+            label: code === 'EXPRESS' ? 'Envío express' : 'Envío estándar',
+            amountCents,
+            priceCents: basePrice,
+          };
+        },
+      ),
       listAvailableMethods: jest.fn(),
     };
 
@@ -153,9 +161,9 @@ describe('OrdersService', () => {
     expect(result.summary).toMatchObject({
       subtotal: '200.00',
       taxRate: '0.2100',
-      taxAmount: '42.00',
+      taxAmount: '34.71',
       shippingCost: '4.95',
-      total: '246.95',
+      total: '204.95',
     });
     expect(result.lineItems).toHaveLength(1);
     expect(result.lineItems[0]).toMatchObject({ lineTotal: '200.00', quantity: 2 });
@@ -231,7 +239,7 @@ describe('OrdersService', () => {
     const dto: CreateOrderWebhookDto = {
       provider: 'stripe',
       providerRef: 'pi_123',
-      amount: '121.00',
+      amount: '100.00',
       currency: 'EUR',
       metadata: {
         userId: 3,
@@ -244,7 +252,7 @@ describe('OrdersService', () => {
 
     const first = await service.createOrderFromWebhook(dto);
     expect(prisma.order.create).toHaveBeenCalledTimes(1);
-    expect(first).toMatchObject({ id: 99, total: '121.00', status: 'PAID' });
+    expect(first).toMatchObject({ id: 99, total: '100.00', status: 'PAID' });
 
     const second = await service.createOrderFromWebhook(dto);
     expect(prisma.order.create).toHaveBeenCalledTimes(1);
@@ -316,7 +324,7 @@ describe('OrdersService', () => {
     const dto: CreateOrderWebhookDto = {
       provider: 'stripe',
       providerRef: 'pi_stock',
-      amount: '242.00',
+      amount: '200.00',
       currency: 'EUR',
       metadata: {
         userId: 4,
