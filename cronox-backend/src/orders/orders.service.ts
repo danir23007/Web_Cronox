@@ -20,6 +20,7 @@ import { CreateCheckoutSessionDto } from './dto/create-checkout-session.dto';
 import { CreateOrderWebhookDto } from './dto/create-order-webhook.dto';
 import { PaginationDto } from './dto/pagination.dto';
 import {
+  FREE_SHIPPING_THRESHOLD_CENTS,
   ShippingMethodOption,
   ShippingMethodsService,
 } from '../shipping-methods/shipping-methods.service';
@@ -161,8 +162,9 @@ export class OrdersService {
     }
 
     const itemsTotalCents = hasItems ? this.computeItemsTotalCents(cart) : 0;
-    const methods =
-      await this.shippingMethods.listAvailableMethods(itemsTotalCents);
+    let methods = await this.shippingMethods.listAvailableMethods(
+      itemsTotalCents,
+    );
 
     const shippingMethods = methods.map((method: any) => {
       const priceFromModel =
@@ -185,7 +187,7 @@ export class OrdersService {
       } as CheckoutShippingMethod;
     });
 
-    const selectedShippingMethod = hasItems
+    let selectedShippingMethod = hasItems
       ? this.pickShippingMethod(shippingMethods, params.shippingMethod)
       : null;
     const baseTotals = hasItems
@@ -197,6 +199,7 @@ export class OrdersService {
     const normalizedPromo = this.normalizePromoCode(params.promoCode);
     let appliedPromo: PromoApplication | null = null;
     let totals = baseTotals;
+    let appliedDiscountCents = 0;
 
     if (normalizedPromo && hasItems && selectedShippingMethod) {
       appliedPromo = await this.computePromoApplication(
@@ -206,12 +209,57 @@ export class OrdersService {
         baseTotals,
       );
       if (appliedPromo.valid && appliedPromo.discountCents > 0) {
-        totals = this.calculateCartTotals(
-          cart,
-          selectedShippingMethod,
-          appliedPromo.discountCents,
-        );
+        appliedDiscountCents = appliedPromo.discountCents;
       }
+    }
+
+    if (hasItems) {
+      methods = await this.shippingMethods.listAvailableMethods(
+        itemsTotalCents,
+        appliedDiscountCents,
+      );
+
+      const methodsForTotals = methods.map((method: any) => {
+        const priceFromModel =
+          typeof method.price === 'number' ? method.price : 0;
+
+        const priceCents =
+          (typeof method.priceCents === 'number' && method.priceCents) ??
+          (typeof method.amountCents === 'number' && method.amountCents) ??
+          priceFromModel;
+
+        const amountCents =
+          (typeof method.amountCents === 'number' && method.amountCents) ??
+          (typeof method.priceCents === 'number' && method.priceCents) ??
+          priceFromModel;
+
+        return {
+          ...method,
+          priceCents,
+          amountCents,
+        } as CheckoutShippingMethod;
+      });
+
+      selectedShippingMethod = this.pickShippingMethod(
+        methodsForTotals,
+        params.shippingMethod,
+      );
+
+      totals = this.calculateCartTotals(
+        cart,
+        selectedShippingMethod,
+        appliedDiscountCents,
+      );
+
+      if (appliedPromo?.valid) {
+        appliedPromo = {
+          ...appliedPromo,
+          totalAfterCents: totals.totalCents,
+        };
+      }
+
+      // Reemplazamos la lista de métodos por la que refleja el descuento aplicado
+      shippingMethods.splice(0, shippingMethods.length, ...methodsForTotals);
     }
 
     return {
@@ -241,12 +289,12 @@ export class OrdersService {
     }
 
     const itemsTotalCents = this.computeItemsTotalCents(cart);
+    const normalizedPromo = this.normalizePromoCode(params.promoCode);
     const shippingMethod = await this.shippingMethods.getMethod(
       params.shippingMethod,
       itemsTotalCents,
     );
     const baseTotals = this.calculateCartTotals(cart, shippingMethod);
-    const normalizedPromo = this.normalizePromoCode(params.promoCode);
     const appliedPromo = normalizedPromo
       ? await this.computePromoApplication(
           cart,
@@ -255,14 +303,20 @@ export class OrdersService {
           baseTotals,
         )
       : null;
-    const totals =
-      appliedPromo && appliedPromo.valid && appliedPromo.discountCents > 0
-        ? this.calculateCartTotals(
-            cart,
-            shippingMethod,
-            appliedPromo.discountCents,
-          )
-        : baseTotals;
+    const discountCents = appliedPromo?.valid ? appliedPromo.discountCents : 0;
+    const adjustedShippingMethod = await this.shippingMethods.getMethod(
+      params.shippingMethod,
+      itemsTotalCents,
+      discountCents,
+    );
+    const totals = this.calculateCartTotals(
+      cart,
+      adjustedShippingMethod,
+      discountCents,
+    );
+    if (appliedPromo && appliedPromo.valid) {
+      appliedPromo.totalAfterCents = totals.totalCents;
+    }
     const computation = this.buildCheckoutComputation(cart, {
       shippingCostCents: totals.shippingCents,
       itemsTotalCents: totals.subtotalCents,
@@ -273,7 +327,7 @@ export class OrdersService {
     const metadata: CheckoutMetadata = {
       cartId: cart.id,
       userId,
-      shippingMethod: shippingMethod.code,
+      shippingMethod: adjustedShippingMethod.code,
       shippingCostCents: totals.shippingCents,
       itemsTotalCents: totals.subtotalCents,
     };
@@ -289,7 +343,7 @@ export class OrdersService {
       lineItems,
       metadata,
       shippingMethod: {
-        ...shippingMethod,
+        ...adjustedShippingMethod,
         amount: this.formatMoney(totals.shippingCents),
       },
       totals,
@@ -373,7 +427,7 @@ if (!cart) {
   throw new BadRequestException('CART_NOT_FOUND');
 }
 
-const shippingMethod = dto.metadata.shippingMethod;
+      const shippingMethod = dto.metadata.shippingMethod;
       if (!shippingMethod) {
         throw new BadRequestException('SHIPPING_METHOD_REQUIRED');
       }
@@ -392,23 +446,19 @@ const shippingMethod = dto.metadata.shippingMethod;
         Number(dto.metadata.discountCents ?? 0) || 0,
       );
       const itemsTotalCents = this.computeItemsTotalCents(cart);
-      const validatedMethod = await this.shippingMethods.getMethod(
+      const methodBeforeDiscount = await this.shippingMethods.getMethod(
         shippingMethod,
         itemsTotalCents,
       );
-      const expectedShippingCents = validatedMethod.amountCents;
-
-      if (expectedShippingCents !== shippingCostCents) {
-        this.logger.warn(
-          `Shipping cost mismatch for ${providerRef}: metadata=${shippingCostCents} expected=${expectedShippingCents}`,
-        );
-      }
-
-      const baseTotals = this.calculateCartTotals(cart, validatedMethod);
+      const baseTotals = this.calculateCartTotals(
+        cart,
+        methodBeforeDiscount,
+        0,
+      );
       const appliedPromo = promoCode
         ? await this.computePromoApplication(
             cart,
-            validatedMethod,
+            methodBeforeDiscount,
             promoCode,
             baseTotals,
           )
@@ -416,11 +466,23 @@ const shippingMethod = dto.metadata.shippingMethod;
       const discountCents = appliedPromo?.valid
         ? appliedPromo.discountCents
         : Math.min(discountFromMetadata, baseTotals.totalCents);
+      const validatedMethod = await this.shippingMethods.getMethod(
+        shippingMethod,
+        itemsTotalCents,
+        discountCents,
+      );
       const totalsForOrder = this.calculateCartTotals(
         cart,
         validatedMethod,
         discountCents,
       );
+      const expectedShippingCents = totalsForOrder.shippingCents;
+
+      if (expectedShippingCents !== shippingCostCents) {
+        this.logger.warn(
+          `Shipping cost mismatch for ${providerRef}: metadata=${shippingCostCents} expected=${expectedShippingCents}`,
+        );
+      }
 
       const computation = this.buildCheckoutComputation(cart, {
         shippingCostCents: totalsForOrder.shippingCents,
@@ -670,26 +732,33 @@ const shippingMethod = dto.metadata.shippingMethod;
     discountCents = 0,
   ): CheckoutTotals {
     const subtotalCents = this.computeItemsTotalCents(cart);
+    const safeDiscount = Math.max(0, Math.min(discountCents, subtotalCents));
+    const netItemsCents = Math.max(0, subtotalCents - safeDiscount);
     let shippingCents = 0;
+
     if (shippingMethod) {
       const anyMethod = shippingMethod as any;
       const rawPrice =
         typeof anyMethod.price === 'number' ? anyMethod.price : 0;
-
-      shippingCents =
-        (typeof anyMethod.amountCents === 'number' && anyMethod.amountCents) ||
-        (typeof anyMethod.priceCents === 'number' && anyMethod.priceCents) ||
-        rawPrice ||
+      const baseShipping =
+        (typeof anyMethod.priceCents === 'number' && anyMethod.priceCents) ??
+        rawPrice ??
         0;
+      const candidateAmount =
+        (typeof anyMethod.amountCents === 'number' && anyMethod.amountCents) ??
+        baseShipping;
+
+      if (
+        anyMethod.code === ShippingMethodCode.STANDARD &&
+        netItemsCents >= FREE_SHIPPING_THRESHOLD_CENTS
+      ) {
+        shippingCents = 0;
+      } else {
+        shippingCents = candidateAmount;
+      }
     }
-    const safeDiscount = Math.max(
-      0,
-      Math.min(discountCents, subtotalCents + shippingCents),
-    );
-    const totalCents = Math.max(
-      0,
-      subtotalCents + shippingCents - safeDiscount,
-    );
+
+    const totalCents = Math.max(0, netItemsCents + shippingCents);
 
     return {
       subtotalCents,
@@ -864,17 +933,24 @@ const shippingMethod = dto.metadata.shippingMethod;
     const lineItems: CheckoutLineItem[] = cart.items.map((item) =>
       this.buildLineItem(item),
     );
+    const discountedItemsCents = Math.max(
+      0,
+      options.itemsTotalCents - discountCents,
+    );
+    const discountedSubtotal = this.centsToDecimal(discountedItemsCents);
     const subtotal = this.centsToDecimal(options.itemsTotalCents);
 
     const taxAmount = (() => {
-      if (options.itemsTotalCents <= 0) {
+      if (discountedItemsCents <= 0) {
         return this.moneyFromNumber(0);
       }
 
-      const taxBase = this.roundMoney(subtotal.dividedBy(taxRate.add(1)));
-      return this.roundMoney(subtotal.minus(taxBase));
+      const taxBase = this.roundMoney(
+        discountedSubtotal.dividedBy(taxRate.add(1)),
+      );
+      return this.roundMoney(discountedSubtotal.minus(taxBase));
     })();
-    const rawTotal = subtotal.add(shippingCost).minus(discount);
+    const rawTotal = discountedSubtotal.add(shippingCost);
     const total = rawTotal.isNegative()
       ? this.moneyFromNumber(0)
       : this.roundMoney(rawTotal);
@@ -890,7 +966,7 @@ const shippingMethod = dto.metadata.shippingMethod;
       discountCents,
       total,
       lineItems,
-      itemsTotalCents: options.itemsTotalCents,
+      itemsTotalCents: discountedItemsCents,
     };
   }
 
