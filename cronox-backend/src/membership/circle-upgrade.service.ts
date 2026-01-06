@@ -15,6 +15,7 @@ import { CreateCircleUpgradeDto, UpdateCircleUpgradeStatusDto } from './dto/circ
 const DAY_IN_MS = 24 * 60 * 60 * 1000;
 const COOLDOWN_MS = 30 * DAY_IN_MS;
 const AUTO_WINDOW_MS = 72 * 60 * 60 * 1000;
+const PRO_EXPIRE_MS = 7 * DAY_IN_MS;
 
 @Injectable()
 export class CircleUpgradeService {
@@ -31,7 +32,10 @@ export class CircleUpgradeService {
   }
 
   private assertPending(request: CircleUpgradeRequest) {
-    if (request.status !== CircleUpgradeRequestStatus.PENDING) {
+    if (
+      request.status !== CircleUpgradeRequestStatus.PENDING &&
+      request.status !== CircleUpgradeRequestStatus.EXPIRED
+    ) {
       throw new ConflictException('La solicitud ya fue revisada');
     }
   }
@@ -173,14 +177,14 @@ export class CircleUpgradeService {
       );
     }
 
-      const requestNumber = await this.getNextRequestNumber(userId);
-      const username = dto.username.trim();
+    const requestNumber = await this.getNextRequestNumber(userId);
+    const username = dto.username.trim();
 
-      return this.prisma.circleUpgradeRequest.create({
-        data: {
-          userId,
-          fromCircle: 3,
-          toCircle: 4,
+    return this.prisma.circleUpgradeRequest.create({
+      data: {
+        userId,
+        fromCircle: 3,
+        toCircle: 4,
         socialNetwork: dto.socialNetwork,
         username,
         usernameNormalized,
@@ -228,6 +232,19 @@ export class CircleUpgradeService {
     const effectiveStatus = status ?? CircleUpgradeRequestStatus.PENDING;
     const fromCircle = options?.from ?? 3;
     const toCircle = options?.to ?? 4;
+
+    if (fromCircle === 3 && toCircle === 4) {
+      const expireBefore = new Date(Date.now() - PRO_EXPIRE_MS);
+      await this.prisma.circleUpgradeRequest.updateMany({
+        where: {
+          fromCircle,
+          toCircle,
+          status: CircleUpgradeRequestStatus.PENDING,
+          createdAt: { lte: expireBefore },
+        },
+        data: { status: CircleUpgradeRequestStatus.EXPIRED },
+      });
+    }
 
     const whereStatus =
       effectiveStatus === CircleUpgradeRequestStatus.EXPIRED && fromCircle === 2 && toCircle === 3
