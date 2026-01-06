@@ -109,7 +109,18 @@
   };
 
   const setPromoControlsLoading = (loading) => {
-    if (applyPromoBtn) applyPromoBtn.disabled = loading;
+    if (applyPromoBtn) {
+      if (loading) {
+        if (!applyPromoBtn.dataset.originalLabel) {
+          applyPromoBtn.dataset.originalLabel = applyPromoBtn.textContent;
+        }
+        applyPromoBtn.textContent = 'Procesando…';
+      } else if (applyPromoBtn.dataset.originalLabel) {
+        applyPromoBtn.textContent = applyPromoBtn.dataset.originalLabel;
+        delete applyPromoBtn.dataset.originalLabel;
+      }
+      applyPromoBtn.disabled = loading;
+    }
     if (removePromoBtn) removePromoBtn.disabled = loading;
     if (promoInput) promoInput.disabled = loading && !!state.promo;
   };
@@ -178,7 +189,12 @@
   const setPayButtonState = (loading) => {
     if (!payButton) return;
     const guestMode = !state.isAuthenticated;
+    const forcedLabel = payButton.dataset.forcedLabel;
     payButton.disabled = loading || !currentClientSecret || guestMode;
+    if (forcedLabel) {
+      payButton.textContent = forcedLabel;
+      return;
+    }
     payButton.textContent = guestMode ? 'Inicia sesión para pagar' : loading ? 'Procesando…' : 'Pagar ahora';
   };
 
@@ -519,22 +535,22 @@
     setLoadingState(true);
     errorDiv.textContent = '';
 
-    const hasItems = Array.isArray(state.cart?.items) && state.cart.items.length > 0;
-    if (!hasItems) {
-      renderEmptyCart();
-      setLoadingState(false);
-      isInitializing = false;
-      return;
-    }
-
-    if (!state.shippingMethod) {
-      errorDiv.textContent = 'Selecciona un método de envío.';
-      setLoadingState(false);
-      isInitializing = false;
-      return;
-    }
-
     try {
+      const hasItems = Array.isArray(state.cart?.items) && state.cart.items.length > 0;
+      if (!hasItems) {
+        renderEmptyCart();
+        return;
+      }
+
+      if (!state.shippingMethod) {
+        errorDiv.textContent = 'Selecciona un método de envío.';
+        return;
+      }
+
+      if (!ensureStripeReady()) {
+        return;
+      }
+
       const response = await fetch(`${API_BASE}/api/payments/create-payment-intent`, {
         method: 'POST',
         credentials: 'include',
@@ -556,11 +572,10 @@
       state.shippingMethod = data.shippingMethod?.code || state.shippingMethod;
       state.totals = data.totals || state.totals;
       renderSummary(state.totals, findShippingMethod(state.shippingMethod) || data.shippingMethod);
-      setLoadingState(false);
     } catch (error) {
       errorDiv.textContent = error.message || 'Error preparando el pago.';
-      setLoadingState(false);
     } finally {
+      setLoadingState(false);
       isInitializing = false;
     }
   };
@@ -611,7 +626,13 @@
       await preparePaymentIntent();
     } catch (error) {
       console.error('[CRONOX] Error aplicando código', error);
-      setPromoMessage(error?.message || 'No se pudo validar el código.', true);
+      if (error?.status === 400 && error?.payload?.message) {
+        setPromoState(null);
+        setPromoStatus('');
+        setPromoMessage(error.payload.message, true);
+      } else {
+        setPromoMessage('No se pudo validar el código. Inténtalo de nuevo.', true);
+      }
     } finally {
       setPromoControlsLoading(false);
     }
@@ -631,6 +652,34 @@
     if (!stripe && typeof Stripe === 'function') {
       stripe = Stripe(STRIPE_PUBLISHABLE_KEY);
     }
+  };
+
+  const ensureStripeReady = () => {
+    try {
+      initStripe();
+    } catch (error) {
+      console.error('[CRONOX] No se pudo inicializar Stripe', error);
+    }
+
+    if (!stripe) {
+      errorDiv.textContent =
+        'No se pudo inicializar el pago. Refresca la página e inténtalo de nuevo.';
+      currentClientSecret = null;
+      resetPaymentElement();
+      if (payButton) {
+        payButton.disabled = true;
+        payButton.dataset.forcedLabel = 'Pago no disponible';
+        payButton.textContent = 'Pago no disponible';
+      }
+      return false;
+    }
+
+    if (payButton && payButton.dataset.forcedLabel) {
+      delete payButton.dataset.forcedLabel;
+      setPayButtonState(false);
+    }
+
+    return true;
   };
 
   const bindEvents = () => {
@@ -731,8 +780,12 @@
     if (state.isAuthenticated) {
       hideLoginCallout();
       setGuestUiState(false);
+      const stripeReady = ensureStripeReady();
+      if (stripeReady && currentClientSecret && !paymentElementMounted) {
+        await ensurePaymentElement(currentClientSecret);
+      }
       const loaded = await refreshCheckoutSummary();
-      if (loaded) {
+      if (loaded && stripeReady) {
         await preparePaymentIntent();
       }
     } else {
@@ -756,7 +809,7 @@
       return;
     }
 
-    initStripe();
+    ensureStripeReady();
     const loaded = await refreshCheckoutSummary();
     if (loaded) {
       await preparePaymentIntent();

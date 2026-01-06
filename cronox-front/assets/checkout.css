@@ -341,6 +341,17 @@
   font-weight: 600;
 }
 
+.promo-message {
+  margin-top: 6px;
+  min-height: 18px;
+  font-size: 13px;
+  color: #b5b5b5;
+}
+
+.promo-message.is-error {
+  color: #ff6b6b;
+}
+
 .checkout-promo__message {
   margin-top: 8px;
   color: #b5b5b5;
