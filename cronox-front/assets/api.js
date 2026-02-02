@@ -509,6 +509,10 @@
 
   const adminApi = ensureAdminNamespace();
 
+  adminApi.getDashboard = async () => {
+    return request('/api/admin/dashboard');
+  };
+
   adminApi.listCircleUpgradeRequests = async (status = 'PENDING') => {
     const data = await request('/api/admin/circle-upgrades/3-4', {
       query: { status },

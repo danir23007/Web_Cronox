@@ -9,6 +9,18 @@
   const tabs = document.querySelectorAll('#adminTabs button');
   const logoutBtn = $('#logoutBtn');
   const backBtn = $('#backBtn');
+  const refreshDashboardBtn = $('#refreshDashboardBtn');
+  const dashboardMessage = $('#dashboardMessage');
+  const totalUsers = $('#totalUsers');
+  const usersByCircle = $('#usersByCircle');
+  const pendingRequestsTotal = $('#pendingRequestsTotal');
+  const pendingRequestsByType = $('#pendingRequestsByType');
+  const ordersTotal = $('#ordersTotal');
+  const ordersBreakdown = $('#ordersBreakdown');
+  const revenueToday = $('#revenueToday');
+  const revenueMonth = $('#revenueMonth');
+  const alertLowStock = $('#alertLowStock');
+  const alertOldRequests = $('#alertOldRequests');
   const loadingRow = '<tr><td colspan="8" class="empty">Cargando solicitudes…</td></tr>';
   const productsBody = $('#productsBody');
   const productsMessage = $('#productsMessage');
@@ -132,6 +144,18 @@
       }
     }
     return `${value.toFixed(2)} €`;
+  };
+
+  const formatCurrency = (value) => {
+    const amount = Number(value || 0);
+    if (window.CRONOX_API?.formatPrice) {
+      try {
+        return window.CRONOX_API.formatPrice(amount);
+      } catch (e) {
+        // ignore
+      }
+    }
+    return `${amount.toFixed(2)} €`;
   };
 
   const setLoading = (isLoading) => {
@@ -272,6 +296,63 @@
         messageBox23.className = 'message show error';
       }
       renderRequests23([], { error: true });
+    }
+  };
+
+  const setDashboardValue = (el, value) => {
+    if (!el) return;
+    el.textContent = value ?? '—';
+  };
+
+  const renderDashboard = (data) => {
+    if (!data) return;
+    setDashboardValue(totalUsers, data.users?.total ?? 0);
+
+    if (usersByCircle) {
+      const circles = Array.isArray(data.users?.byCircle) ? data.users.byCircle : [];
+      usersByCircle.innerHTML = circles.length
+        ? circles
+            .map((item) => `<span class="badge">Círculo ${item.circle}: ${item.count}</span>`)
+            .join('')
+        : '<span class="badge">Sin datos</span>';
+    }
+
+    setDashboardValue(pendingRequestsTotal, data.requests?.pendingTotal ?? 0);
+    if (pendingRequestsByType) {
+      const byType = data.requests?.byType || {};
+      const entries = Object.entries(byType);
+      pendingRequestsByType.innerHTML = entries.length
+        ? entries
+            .map(([key, value]) => `<span class=\"badge\">${key}: ${value ?? 0}</span>`)
+            .join('')
+        : '<span class="badge">Sin datos</span>';
+    }
+
+    setDashboardValue(ordersTotal, data.orders?.total ?? 0);
+    if (ordersBreakdown) {
+      const today = data.orders?.today ?? 0;
+      const week = data.orders?.week ?? 0;
+      ordersBreakdown.textContent = `Hoy: ${today} · Semana: ${week}`;
+    }
+
+    setDashboardValue(revenueToday, formatCurrency(data.revenue?.today ?? 0));
+    if (revenueMonth) {
+      revenueMonth.textContent = `Mes: ${formatCurrency(data.revenue?.month ?? 0)}`;
+    }
+
+    setDashboardValue(alertLowStock, data.alerts?.lowStock ?? 0);
+    setDashboardValue(alertOldRequests, data.alerts?.oldPendingRequests ?? 0);
+  };
+
+  const fetchDashboard = async () => {
+    setScopedMessage(dashboardMessage, '');
+    if (totalUsers) totalUsers.textContent = '…';
+    try {
+      const data = await window.CRONOX_API?.admin?.getDashboard?.();
+      renderDashboard(data);
+    } catch (error) {
+      console.error('No se pudo cargar el dashboard', error);
+      setScopedMessage(dashboardMessage, 'No se pudieron cargar los datos del resumen.', 'error');
     }
   };
 
@@ -851,7 +932,9 @@
             section.hidden = section.id !== targetSection;
           });
           tabs.forEach((btn) => btn.classList.toggle('primary', btn === tab));
-          if (targetSection === 'section-34') {
+          if (targetSection === 'section-dashboard') {
+            fetchDashboard();
+          } else if (targetSection === 'section-34') {
             fetchRequests();
           } else if (targetSection === 'section-23') {
             fetchRequests23();
@@ -874,14 +957,15 @@
     });
 
     backBtn?.addEventListener('click', redirectToHome);
+
+    refreshDashboardBtn?.addEventListener('click', fetchDashboard);
   };
 
   const init = async () => {
     const user = await ensureAdmin();
     if (!user) return;
     bindEvents();
-    fetchRequests();
-    fetchRequests23();
+    fetchDashboard();
   };
 
   document.addEventListener('DOMContentLoaded', init);
