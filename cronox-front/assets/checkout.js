@@ -738,6 +738,9 @@
         setPromoState(null);
         setPromoStatus('');
         setPromoMessage(error.payload.message, true);
+        renderPromoUI();
+        await refreshCheckoutSummary(state.shippingMethod);
+        await preparePaymentIntent();
       } else {
         setPromoMessage('No se pudo validar el código. Inténtalo de nuevo.', true);
       }

@@ -197,18 +197,75 @@ export class ProductService {
   }
 
   async listAdminProducts(query: AdminProductQueryDto) {
-    const page = query.page ?? 1;
-    const limit = query.limit ?? 20;
-    const skip = (page - 1) * limit;
+    const LOW_STOCK_THRESHOLD = 5;
+    const page = Math.max(query.page ?? 1, 1);
+    const pageSize = Math.min(query.pageSize ?? query.limit ?? 20, 100);
+    const searchTerm = (query.q ?? query.search)?.trim();
+    const sortBy = query.sortBy ?? 'createdAt';
+    const sortDir = query.sortDir ?? 'desc';
+    const createdAtFilter: Prisma.DateTimeFilter = {};
+    const andFilters: Prisma.ProductWhereInput[] = [];
     const where: Prisma.ProductWhereInput = {};
 
-    if (query.search?.trim()) {
-      const term = query.search.trim();
+    if (query.dateFrom) createdAtFilter.gte = new Date(query.dateFrom);
+    if (query.dateTo) createdAtFilter.lte = new Date(query.dateTo);
+    if (Object.keys(createdAtFilter).length) {
+      andFilters.push({ createdAt: createdAtFilter });
+    }
+
+    if (query.categoryId) {
+      andFilters.push({
+        categories: {
+          some: {
+            categoryId: query.categoryId,
+          },
+        },
+      });
+    } else if (query.category?.trim()) {
+      const categoryTerm = query.category.trim();
+      andFilters.push({
+        categories: {
+          some: {
+            category: {
+              OR: [
+                { name: { contains: categoryTerm, mode: 'insensitive' } },
+                { slug: { contains: categoryTerm, mode: 'insensitive' } },
+              ],
+            },
+          },
+        },
+      });
+    }
+
+    if (andFilters.length) {
+      where.AND = andFilters;
+    }
+
+    if (searchTerm) {
       where.OR = [
-        { name: { contains: term, mode: 'insensitive' } },
-        { slug: { contains: term, mode: 'insensitive' } },
-        { description: { contains: term, mode: 'insensitive' } },
-        { collection: { contains: term, mode: 'insensitive' } },
+        { name: { contains: searchTerm, mode: 'insensitive' } },
+        { slug: { contains: searchTerm, mode: 'insensitive' } },
+        { description: { contains: searchTerm, mode: 'insensitive' } },
+        { collection: { contains: searchTerm, mode: 'insensitive' } },
+        {
+          variants: {
+            some: {
+              sku: { contains: searchTerm, mode: 'insensitive' },
+            },
+          },
+        },
+        {
+          categories: {
+            some: {
+              category: {
+                OR: [
+                  { name: { contains: searchTerm, mode: 'insensitive' } },
+                  { slug: { contains: searchTerm, mode: 'insensitive' } },
+                ],
+              },
+            },
+          },
+        },
       ];
     }
 
@@ -218,25 +275,56 @@ export class ProductService {
       where.isActive = false;
     }
 
-    const [items, total] = await this.prisma.$transaction([
-      this.prisma.product.findMany({
-        where,
-        skip,
-        take: limit,
-        orderBy: { createdAt: 'desc' },
-        include: this.getProductInclude({ includeInactiveVariants: true }),
-      }),
-      this.prisma.product.count({ where }),
-    ]);
+    const items = await this.prisma.product.findMany({
+      where,
+      include: this.getProductInclude({ includeInactiveVariants: true }),
+    });
+
+    const enriched = items.map((product) => {
+      const withPrices = this.addEffectiveVariantPrices(product);
+      const totalStock = Array.isArray(withPrices.variants)
+        ? withPrices.variants.reduce((sum, variant) => sum + (variant.stockQty ?? 0), 0)
+        : 0;
+      return { product: withPrices, totalStock };
+    });
+
+    const filteredByStock = enriched.filter(({ totalStock }) => {
+      if (!query.stockState) return true;
+      if (query.stockState === 'low') {
+        return totalStock > 0 && totalStock <= LOW_STOCK_THRESHOLD;
+      }
+      if (query.stockState === 'in_stock') {
+        return totalStock > 0;
+      }
+      return totalStock <= 0;
+    });
+
+    filteredByStock.sort((a, b) => {
+      if (sortBy === 'stock') {
+        const delta = a.totalStock - b.totalStock;
+        return sortDir === 'asc' ? delta : -delta;
+      }
+      const delta = a.product.createdAt.getTime() - b.product.createdAt.getTime();
+      return sortDir === 'asc' ? delta : -delta;
+    });
+
+    const totalItems = filteredByStock.length;
+    const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
+    const start = (page - 1) * pageSize;
+    const pagedItems = filteredByStock.slice(start, start + pageSize).map(({ product }) => product);
 
     return {
+      items: pagedItems,
+      page,
+      pageSize,
+      totalItems,
+      totalPages,
       meta: {
         page,
-        limit,
-        total,
-        pageCount: Math.ceil(total / limit) || 1,
+        limit: pageSize,
+        total: totalItems,
+        pageCount: totalPages,
       },
-      items: items.map((product) => this.addEffectiveVariantPrices(product)),
     };
   }
 
