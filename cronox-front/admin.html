@@ -359,13 +359,61 @@
         <button class="btn primary" type="button" id="createProductBtn">Crear producto</button>
       </div>
       <div class="filter-bar">
-        <input id="productSearch" class="input" type="search" placeholder="Buscar por nombre o colección">
-        <select id="productStatusFilter" class="input" style="max-width:180px;">
-          <option value="">Todos</option>
-          <option value="true">Activos</option>
-          <option value="false">Inactivos</option>
-        </select>
+        <input id="productSearch" class="input" type="search" placeholder="Buscar por nombre, SKU o categoría">
       </div>
+      <details class="filters-panel">
+        <summary>Filtros</summary>
+        <div class="filters-grid">
+          <div class="form-group">
+            <label for="productDateFrom">Desde</label>
+            <input id="productDateFrom" class="input" type="date">
+          </div>
+          <div class="form-group">
+            <label for="productDateTo">Hasta</label>
+            <input id="productDateTo" class="input" type="date">
+          </div>
+          <div class="form-group">
+            <label for="productStockState">Stock</label>
+            <select id="productStockState" class="input">
+              <option value="">Todos</option>
+              <option value="low">Stock bajo</option>
+              <option value="in_stock">En stock</option>
+              <option value="out_of_stock">Sin stock</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="productCategory">Categoría</label>
+            <select id="productCategory" class="input">
+              <option value="">Todas</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="productStatusFilter">Estado</label>
+            <select id="productStatusFilter" class="input">
+              <option value="">Todos</option>
+              <option value="true">Activos</option>
+              <option value="false">Inactivos</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="productSortBy">Ordenar por</label>
+            <select id="productSortBy" class="input">
+              <option value="createdAt" selected>Antigüedad</option>
+              <option value="stock">Stock</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="productSortDir">Dirección</label>
+            <select id="productSortDir" class="input">
+              <option value="desc" selected>Descendente</option>
+              <option value="asc">Ascendente</option>
+            </select>
+          </div>
+        </div>
+        <div class="filters-actions" style="margin-top:10px;">
+          <button class="btn" type="button" id="productFiltersReset">Limpiar filtros</button>
+        </div>
+      </details>
       <div id="productsMessage" class="message" role="status" aria-live="polite"></div>
       <div style="overflow-x: auto;">
         <table aria-describedby="title-products">
@@ -376,13 +424,28 @@
               <th>Colección</th>
               <th>Estado</th>
               <th>Stock</th>
+              <th>Creado</th>
               <th>Acciones</th>
             </tr>
           </thead>
           <tbody id="productsBody">
-            <tr><td colspan="6" class="empty">Cargando productos…</td></tr>
+            <tr><td colspan="7" class="empty">Cargando productos…</td></tr>
           </tbody>
         </table>
+      </div>
+      <div class="pagination">
+        <div class="page-info" id="productsPageInfo">Página 1 de 1 · 0 resultados</div>
+        <div class="page-controls">
+          <button class="btn" type="button" id="productsPrev">Anterior</button>
+          <button class="btn" type="button" id="productsNext">Siguiente</button>
+          <label for="productsPageSize" style="color:#b3b3c2;">Filas</label>
+          <select id="productsPageSize" class="input" style="max-width:120px;">
+            <option value="10">10</option>
+            <option value="25" selected>25</option>
+            <option value="50">50</option>
+            <option value="100">100</option>
+          </select>
+        </div>
       </div>
     </section>
 

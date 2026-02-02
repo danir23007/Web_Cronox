@@ -54,6 +54,17 @@
   const productsMessage = $('#productsMessage');
   const productSearch = $('#productSearch');
   const productStatusFilter = $('#productStatusFilter');
+  const productDateFrom = $('#productDateFrom');
+  const productDateTo = $('#productDateTo');
+  const productStockState = $('#productStockState');
+  const productCategory = $('#productCategory');
+  const productSortBy = $('#productSortBy');
+  const productSortDir = $('#productSortDir');
+  const productFiltersReset = $('#productFiltersReset');
+  const productsPageInfo = $('#productsPageInfo');
+  const productsPrev = $('#productsPrev');
+  const productsNext = $('#productsNext');
+  const productsPageSize = $('#productsPageSize');
   const createProductBtn = $('#createProductBtn');
   const productModal = $('#productModal');
   const productModalTitle = $('#productModalTitle');
@@ -72,7 +83,18 @@
   const codeForm = $('#codeForm');
   const codeCancelBtn = $('#codeCancelBtn');
   const codeSubmitBtn = $('#codeSubmitBtn');
-  const productsState = { page: 1, limit: 20, search: '', isActive: '' };
+  const productsState = {
+    page: 1,
+    pageSize: 25,
+    q: '',
+    dateFrom: '',
+    dateTo: '',
+    stockState: '',
+    categoryId: '',
+    isActive: '',
+    sortBy: 'createdAt',
+    sortDir: 'desc',
+  };
   const codesState = { page: 1, limit: 20, search: '', isActive: '' };
   const requestsState = {
     page: 1,
@@ -301,6 +323,21 @@
     };
   };
 
+  const buildProductQuery = (state) => {
+    return {
+      page: state.page,
+      pageSize: state.pageSize,
+      q: state.q || undefined,
+      isActive: state.isActive || undefined,
+      dateFrom: state.dateFrom ? normalizeDateRange(state.dateFrom) : undefined,
+      dateTo: state.dateTo ? normalizeDateRange(state.dateTo, true) : undefined,
+      stockState: state.stockState || undefined,
+      categoryId: parseNumberOrNull(state.categoryId) ?? undefined,
+      sortBy: state.sortBy || undefined,
+      sortDir: state.sortDir || undefined,
+    };
+  };
+
   const normalizePaginated = (data, state) => {
     if (Array.isArray(data)) {
       return {
@@ -355,6 +392,31 @@
     if (requestUserCircle23) requests23State.userCircle = requestUserCircle23.value;
     if (requestSortBy23) requests23State.sortBy = requestSortBy23.value || 'createdAt';
     if (requestSortDir23) requests23State.sortDir = requestSortDir23.value || 'desc';
+  };
+
+  const syncProductsStateFromInputs = () => {
+    if (productSearch) productsState.q = productSearch.value.trim();
+    if (productDateFrom) productsState.dateFrom = productDateFrom.value;
+    if (productDateTo) productsState.dateTo = productDateTo.value;
+    if (productStockState) productsState.stockState = productStockState.value;
+    if (productCategory) productsState.categoryId = productCategory.value;
+    if (productStatusFilter) productsState.isActive = productStatusFilter.value;
+    if (productSortBy) productsState.sortBy = productSortBy.value || 'createdAt';
+    if (productSortDir) productsState.sortDir = productSortDir.value || 'desc';
+  };
+
+  const resetProductsFilters = () => {
+    if (productSearch) productSearch.value = '';
+    if (productDateFrom) productDateFrom.value = '';
+    if (productDateTo) productDateTo.value = '';
+    if (productStockState) productStockState.value = '';
+    if (productCategory) productCategory.value = '';
+    if (productStatusFilter) productStatusFilter.value = '';
+    if (productSortBy) productSortBy.value = 'createdAt';
+    if (productSortDir) productSortDir.value = 'desc';
+    productsState.page = 1;
+    syncProductsStateFromInputs();
+    fetchProducts();
   };
 
   const resetRequestsFilters = () => {
@@ -628,26 +690,51 @@
     if (productSubmitBtn) productSubmitBtn.disabled = false;
   };
 
+  const loadProductCategories = async () => {
+    if (!productCategory || !window.CRONOX_API?.getCategories) return;
+    try {
+      const categories = await window.CRONOX_API.getCategories({ page: 1, limit: 200 });
+      const options = Array.isArray(categories) ? categories : [];
+      const currentValue = productCategory.value;
+      productCategory.innerHTML = '<option value="">Todas</option>';
+      options.forEach((category) => {
+        const option = document.createElement('option');
+        option.value = String(category.id);
+        option.textContent = category.name || category.slug || `Categoría ${category.id}`;
+        productCategory.appendChild(option);
+      });
+      if (currentValue) {
+        productCategory.value = currentValue;
+      }
+    } catch (error) {
+      console.warn('[ADMIN] No se pudieron cargar categorías', error);
+    }
+  };
+
   const fetchProducts = async () => {
     if (!productsBody) return;
-    productsBody.innerHTML = '<tr><td colspan="6" class="empty">Cargando productos…</td></tr>';
+    productsBody.innerHTML = '<tr><td colspan="7" class="empty">Cargando productos…</td></tr>';
     setScopedMessage(productsMessage, '');
-    const query = {
-      page: productsState.page,
-      limit: productsState.limit,
-      search: productsState.search || undefined,
-      isActive: productsState.isActive || undefined,
-    };
     try {
-      const data = await window.CRONOX_API?.admin?.listAdminProducts(query);
-      const items = Array.isArray(data?.items) ? data.items : Array.isArray(data) ? data : [];
-      renderProducts(items);
+      const data = await window.CRONOX_API?.admin?.listAdminProducts(
+        buildProductQuery(productsState),
+      );
+      const meta = normalizePaginated(data, productsState);
+      productsState.page = meta.page;
+      productsState.pageSize = meta.pageSize;
+      renderProducts(meta.items || []);
+      updatePagination(meta, productsState, {
+        info: productsPageInfo,
+        prev: productsPrev,
+        next: productsNext,
+        size: productsPageSize,
+      });
     } catch (error) {
       console.error('[ADMIN] Error cargando productos', error);
       setScopedMessage(productsMessage, 'No se pudieron cargar los productos.', 'error');
       productsBody.innerHTML = `
         <tr>
-          <td colspan="6" class="empty">
+          <td colspan="7" class="empty">
             Error al cargar productos.
             <button type="button" class="btn" data-retry-products="1" style="margin-left:8px;">Reintentar</button>
           </td>
@@ -658,7 +745,7 @@
   const renderProducts = (items = []) => {
     if (!productsBody) return;
     if (!items.length) {
-      productsBody.innerHTML = '<tr><td colspan="6" class="empty">No hay productos con esos filtros.</td></tr>';
+      productsBody.innerHTML = '<tr><td colspan="7" class="empty">No hay productos con esos filtros.</td></tr>';
       return;
     }
 
@@ -671,6 +758,7 @@
           product.imageUrl ||
           (Array.isArray(product.images) && product.images.length ? product.images[0].url : '');
         const activeLabel = product.isActive ? 'Activo' : 'Inactivo';
+        const created = formatRelativeTime(product.createdAt);
         return `
           <tr>
             <td>
@@ -686,6 +774,10 @@
             <td>${product.collection || '—'}</td>
             <td>${activeLabel}</td>
             <td>${totalStock}</td>
+            <td>
+              <div class="time-label" title="${created.full}">${created.label}</div>
+              <div class="time-sub">${created.full}</div>
+            </td>
             <td>
               <div class="actions">
                 <button class="btn" data-edit-product="${product.id}">Editar</button>
@@ -1245,7 +1337,8 @@
 
     if (productStatusFilter) {
       productStatusFilter.addEventListener('change', () => {
-        productsState.isActive = productStatusFilter.value;
+        syncProductsStateFromInputs();
+        productsState.page = 1;
         fetchProducts();
       });
     }
@@ -1254,9 +1347,86 @@
       productSearch.addEventListener('input', () => {
         clearTimeout(productSearchTimeout);
         productSearchTimeout = setTimeout(() => {
-          productsState.search = productSearch.value.trim();
+          syncProductsStateFromInputs();
+          productsState.page = 1;
           fetchProducts();
         }, 250);
+      });
+    }
+
+    if (productDateFrom) {
+      productDateFrom.addEventListener('change', () => {
+        syncProductsStateFromInputs();
+        productsState.page = 1;
+        fetchProducts();
+      });
+    }
+
+    if (productDateTo) {
+      productDateTo.addEventListener('change', () => {
+        syncProductsStateFromInputs();
+        productsState.page = 1;
+        fetchProducts();
+      });
+    }
+
+    if (productStockState) {
+      productStockState.addEventListener('change', () => {
+        syncProductsStateFromInputs();
+        productsState.page = 1;
+        fetchProducts();
+      });
+    }
+
+    if (productCategory) {
+      productCategory.addEventListener('change', () => {
+        syncProductsStateFromInputs();
+        productsState.page = 1;
+        fetchProducts();
+      });
+    }
+
+    if (productSortBy) {
+      productSortBy.addEventListener('change', () => {
+        syncProductsStateFromInputs();
+        productsState.page = 1;
+        fetchProducts();
+      });
+    }
+
+    if (productSortDir) {
+      productSortDir.addEventListener('change', () => {
+        syncProductsStateFromInputs();
+        productsState.page = 1;
+        fetchProducts();
+      });
+    }
+
+    if (productFiltersReset) {
+      productFiltersReset.addEventListener('click', resetProductsFilters);
+    }
+
+    if (productsPrev) {
+      productsPrev.addEventListener('click', () => {
+        if (productsState.page > 1) {
+          productsState.page -= 1;
+          fetchProducts();
+        }
+      });
+    }
+
+    if (productsNext) {
+      productsNext.addEventListener('click', () => {
+        productsState.page += 1;
+        fetchProducts();
+      });
+    }
+
+    if (productsPageSize) {
+      productsPageSize.addEventListener('change', () => {
+        productsState.pageSize = Number(productsPageSize.value || 25);
+        productsState.page = 1;
+        fetchProducts();
       });
     }
 
@@ -1366,6 +1536,8 @@
             syncRequests23StateFromInputs();
             fetchRequests23();
           } else if (targetSection === 'section-products') {
+            syncProductsStateFromInputs();
+            loadProductCategories();
             fetchProducts();
           } else if (targetSection === 'section-codes') {
             fetchCodes();
@@ -1394,6 +1566,7 @@
     bindEvents();
     syncRequestsStateFromInputs();
     syncRequests23StateFromInputs();
+    syncProductsStateFromInputs();
     fetchDashboard();
   };
 
