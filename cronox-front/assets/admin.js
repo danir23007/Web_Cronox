@@ -2069,10 +2069,10 @@
       tabs.forEach((tab) => {
         tab.addEventListener('click', () => {
           const targetSection = tab.dataset.section;
-          if (!targetSection) return;
-          clearUserHash();
-          showSection(targetSection);
-          lastSectionId = targetSection;
+          document.querySelectorAll('.admin-section').forEach((section) => {
+            section.hidden = section.id !== targetSection;
+          });
+          tabs.forEach((btn) => btn.classList.toggle('primary', btn === tab));
           if (targetSection === 'section-dashboard') {
             fetchDashboard();
           } else if (targetSection === 'section-34') {
