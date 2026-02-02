@@ -3,17 +3,101 @@
   const requestsBody = $('#requestsBody');
   const messageBox = $('#messageBox');
   const filterStatus = $('#filterStatus');
+  const requestSearch = $('#requestSearch');
+  const requestDateFrom = $('#requestDateFrom');
+  const requestDateTo = $('#requestDateTo');
+  const requestAttemptsMin = $('#requestAttemptsMin');
+  const requestAttemptsMax = $('#requestAttemptsMax');
+  const requestSocialNetwork = $('#requestSocialNetwork');
+  const requestUserCircle = $('#requestUserCircle');
+  const requestSortBy = $('#requestSortBy');
+  const requestSortDir = $('#requestSortDir');
+  const requestFiltersReset = $('#requestFiltersReset');
+  const requestsPageInfo = $('#requestsPageInfo');
+  const requestsPrev = $('#requestsPrev');
+  const requestsNext = $('#requestsNext');
+  const requestsPageSize = $('#requestsPageSize');
   const requestsBody23 = $('#requestsBody23');
   const messageBox23 = $('#messageBox23');
   const filterStatus23 = $('#filterStatus23');
+  const requestSearch23 = $('#requestSearch23');
+  const requestDateFrom23 = $('#requestDateFrom23');
+  const requestDateTo23 = $('#requestDateTo23');
+  const requestAttemptsMin23 = $('#requestAttemptsMin23');
+  const requestAttemptsMax23 = $('#requestAttemptsMax23');
+  const requestSocialNetwork23 = $('#requestSocialNetwork23');
+  const requestUserCircle23 = $('#requestUserCircle23');
+  const requestSortBy23 = $('#requestSortBy23');
+  const requestSortDir23 = $('#requestSortDir23');
+  const requestFiltersReset23 = $('#requestFiltersReset23');
+  const requestsPageInfo23 = $('#requestsPageInfo23');
+  const requestsPrev23 = $('#requestsPrev23');
+  const requestsNext23 = $('#requestsNext23');
+  const requestsPageSize23 = $('#requestsPageSize23');
   const tabs = document.querySelectorAll('#adminTabs button');
+  const userDetailSection = $('#section-user');
+  const userDetailBackBtn = $('#userDetailBack');
+  const userDetailMessage = $('#userDetailMessage');
+  const userAvatar = $('#userAvatar');
+  const userName = $('#userName');
+  const userEmail = $('#userEmail');
+  const userBadges = $('#userBadges');
+  const userOrdersCount = $('#userOrdersCount');
+  const userTotalSpent = $('#userTotalSpent');
+  const userRequestsCount = $('#userRequestsCount');
+  const userLastActivity = $('#userLastActivity');
+  const userLastActivityFull = $('#userLastActivityFull');
+  const userDetailTabs = document.querySelectorAll('#userDetailTabs button');
+  const userTabRequests = $('#userTabRequests');
+  const userTabOrders = $('#userTabOrders');
+  const userTabCodes = $('#userTabCodes');
+  const userTabHistory = $('#userTabHistory');
+  const userRequestsBody = $('#userRequestsBody');
+  const userOrdersBody = $('#userOrdersBody');
+  const userCodesBody = $('#userCodesBody');
+  const userHistoryBody = $('#userHistoryBody');
+  const activityBody = $('#activityBody');
+  const activityMessage = $('#activityMessage');
+  const activitySearch = $('#activitySearch');
+  const activityActionType = $('#activityActionType');
+  const activityTargetType = $('#activityTargetType');
+  const activityDateFrom = $('#activityDateFrom');
+  const activityDateTo = $('#activityDateTo');
+  const activityFiltersReset = $('#activityFiltersReset');
+  const activityPageInfo = $('#activityPageInfo');
+  const activityPrev = $('#activityPrev');
+  const activityNext = $('#activityNext');
+  const activityPageSize = $('#activityPageSize');
   const logoutBtn = $('#logoutBtn');
   const backBtn = $('#backBtn');
+  const refreshDashboardBtn = $('#refreshDashboardBtn');
+  const dashboardMessage = $('#dashboardMessage');
+  const totalUsers = $('#totalUsers');
+  const usersByCircle = $('#usersByCircle');
+  const pendingRequestsTotal = $('#pendingRequestsTotal');
+  const pendingRequestsByType = $('#pendingRequestsByType');
+  const ordersTotal = $('#ordersTotal');
+  const ordersBreakdown = $('#ordersBreakdown');
+  const revenueToday = $('#revenueToday');
+  const revenueMonth = $('#revenueMonth');
+  const alertLowStock = $('#alertLowStock');
+  const alertOldRequests = $('#alertOldRequests');
   const loadingRow = '<tr><td colspan="8" class="empty">Cargando solicitudes…</td></tr>';
   const productsBody = $('#productsBody');
   const productsMessage = $('#productsMessage');
   const productSearch = $('#productSearch');
   const productStatusFilter = $('#productStatusFilter');
+  const productDateFrom = $('#productDateFrom');
+  const productDateTo = $('#productDateTo');
+  const productStockState = $('#productStockState');
+  const productCategory = $('#productCategory');
+  const productSortBy = $('#productSortBy');
+  const productSortDir = $('#productSortDir');
+  const productFiltersReset = $('#productFiltersReset');
+  const productsPageInfo = $('#productsPageInfo');
+  const productsPrev = $('#productsPrev');
+  const productsNext = $('#productsNext');
+  const productsPageSize = $('#productsPageSize');
   const createProductBtn = $('#createProductBtn');
   const productModal = $('#productModal');
   const productModalTitle = $('#productModalTitle');
@@ -32,14 +116,72 @@
   const codeForm = $('#codeForm');
   const codeCancelBtn = $('#codeCancelBtn');
   const codeSubmitBtn = $('#codeSubmitBtn');
-  const productsState = { page: 1, limit: 20, search: '', isActive: '' };
+  const productsState = {
+    page: 1,
+    pageSize: 25,
+    q: '',
+    dateFrom: '',
+    dateTo: '',
+    stockState: '',
+    categoryId: '',
+    isActive: '',
+    sortBy: 'createdAt',
+    sortDir: 'desc',
+  };
   const codesState = { page: 1, limit: 20, search: '', isActive: '' };
+  const requestsState = {
+    page: 1,
+    pageSize: 25,
+    q: '',
+    status: 'PENDING',
+    dateFrom: '',
+    dateTo: '',
+    attemptsMin: '',
+    attemptsMax: '',
+    socialNetwork: '',
+    userCircle: '',
+    sortBy: 'createdAt',
+    sortDir: 'desc',
+  };
+  const requests23State = {
+    page: 1,
+    pageSize: 25,
+    q: '',
+    status: 'PENDING',
+    dateFrom: '',
+    dateTo: '',
+    attemptsMin: '',
+    attemptsMax: '',
+    socialNetwork: '',
+    userCircle: '',
+    sortBy: 'createdAt',
+    sortDir: 'desc',
+  };
+  const activityState = {
+    page: 1,
+    pageSize: 10,
+    q: '',
+    actionType: '',
+    targetType: '',
+    dateFrom: '',
+    dateTo: '',
+  };
+  const userDetailState = {
+    userId: null,
+    activeTab: 'requests',
+    data: null,
+  };
   let editingProductId = null;
   let editingCodeId = null;
   let cachedProductImages = [];
   let codesCache = [];
   let productSearchTimeout = null;
   let codeSearchTimeout = null;
+  let requestSearchTimeout = null;
+  let requestSearchTimeout23 = null;
+  let activitySearchTimeout = null;
+  let currentSectionId = 'section-dashboard';
+  let lastSectionId = 'section-dashboard';
 
   const setMessage = (text = '', type = 'success') => {
     if (!messageBox) return;
@@ -111,6 +253,33 @@
     }
   };
 
+  const formatRelativeTime = (value) => {
+    if (!value) return { label: '—', full: '—' };
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) {
+      return { label: String(value), full: String(value) };
+    }
+    const diffMs = Date.now() - date.getTime();
+    const future = diffMs < 0;
+    const absSeconds = Math.round(Math.abs(diffMs) / 1000);
+    const absMinutes = Math.round(absSeconds / 60);
+    const absHours = Math.round(absMinutes / 60);
+    const absDays = Math.round(absHours / 24);
+
+    let label = '';
+    if (absSeconds < 60) {
+      label = `${future ? 'en' : 'hace'} ${absSeconds}s`;
+    } else if (absMinutes < 60) {
+      label = `${future ? 'en' : 'hace'} ${absMinutes}m`;
+    } else if (absHours < 24) {
+      label = `${future ? 'en' : 'hace'} ${absHours}h`;
+    } else {
+      label = `${future ? 'en' : 'hace'} ${absDays} días`;
+    }
+
+    return { label, full: formatDate(date) };
+  };
+
   const formatDuration = (ms) => {
     if (ms <= 0) return 'Expirado';
     const totalSeconds = Math.floor(ms / 1000);
@@ -132,6 +301,345 @@
       }
     }
     return `${value.toFixed(2)} €`;
+  };
+
+  const formatCurrency = (value) => {
+    const amount = Number(value || 0);
+    if (window.CRONOX_API?.formatPrice) {
+      try {
+        return window.CRONOX_API.formatPrice(amount);
+      } catch (e) {
+        // ignore
+      }
+    }
+    return `${amount.toFixed(2)} €`;
+  };
+
+  const setUserDetailMessage = (text = '', type = 'success') => {
+    if (!userDetailMessage) return;
+    if (!text) {
+      userDetailMessage.className = 'message';
+      userDetailMessage.textContent = '';
+      return;
+    }
+    userDetailMessage.textContent = text;
+    userDetailMessage.className = `message show ${type === 'error' ? 'error' : 'success'}`;
+  };
+
+  const setActiveAdminTab = (sectionId) => {
+    if (!tabs?.length) return;
+    tabs.forEach((btn) => btn.classList.toggle('primary', btn.dataset.section === sectionId));
+  };
+
+  const showSection = (sectionId) => {
+    document.querySelectorAll('.admin-section').forEach((section) => {
+      section.hidden = section.id !== sectionId;
+    });
+    currentSectionId = sectionId;
+    if (sectionId === 'section-user') {
+      if (tabs?.length) {
+        tabs.forEach((btn) => btn.classList.remove('primary'));
+      }
+      return;
+    }
+    setActiveAdminTab(sectionId);
+  };
+
+  const getInitials = (value) => {
+    if (!value) return 'CR';
+    const parts = String(value).trim().split(/\s+/).filter(Boolean);
+    const letters = parts.slice(0, 2).map((part) => part[0]?.toUpperCase());
+    return letters.join('') || value.slice(0, 2).toUpperCase();
+  };
+
+  const setUserAvatar = (avatarUrl, displayName) => {
+    if (!userAvatar) return;
+    if (avatarUrl) {
+      userAvatar.innerHTML = `<img src="${avatarUrl}" alt="${displayName || 'Avatar'}">`;
+      return;
+    }
+    userAvatar.textContent = getInitials(displayName);
+  };
+
+  const setUserDetailTab = (tabId) => {
+    userDetailState.activeTab = tabId;
+    const panels = [
+      { id: 'requests', el: userTabRequests },
+      { id: 'orders', el: userTabOrders },
+      { id: 'codes', el: userTabCodes },
+      { id: 'history', el: userTabHistory },
+    ];
+    panels.forEach((panel) => {
+      if (panel.el) {
+        panel.el.hidden = panel.id !== tabId;
+      }
+    });
+    if (userDetailTabs?.length) {
+      userDetailTabs.forEach((btn) => {
+        btn.classList.toggle('primary', btn.dataset.userTab === tabId);
+      });
+    }
+  };
+
+  const renderUserRequests = (requests = []) => {
+    if (!userRequestsBody) return;
+    if (!requests.length) {
+      userRequestsBody.innerHTML = '<tr><td colspan="6" class="empty">Sin solicitudes.</td></tr>';
+      return;
+    }
+    userRequestsBody.innerHTML = requests
+      .map((req) => {
+        const created = formatRelativeTime(req.createdAt);
+        const typeLabel = req.fromCircle && req.toCircle ? `${req.fromCircle}→${req.toCircle}` : '—';
+        const attemptLabel = req.requestNumber == null ? '—' : `#${req.requestNumber}`;
+        return `<tr>
+          <td>
+            <div class="time-label" title="${created.full}">${created.label}</div>
+            <div class="time-sub">${created.full}</div>
+          </td>
+          <td>${typeLabel}</td>
+          <td>${statusBadge(req.status)}</td>
+          <td>${req.socialNetwork || '—'}</td>
+          <td>${req.username || '—'}</td>
+          <td>${attemptLabel}</td>
+        </tr>`;
+      })
+      .join('');
+  };
+
+  const renderUserOrders = (orders = []) => {
+    if (!userOrdersBody) return;
+    if (!orders.length) {
+      userOrdersBody.innerHTML = '<tr><td colspan="4" class="empty">Sin pedidos.</td></tr>';
+      return;
+    }
+    userOrdersBody.innerHTML = orders
+      .map((order) => {
+        const created = formatRelativeTime(order.createdAt);
+        const promo = order.promoCodeCode || '—';
+        return `<tr>
+          <td>
+            <div class="time-label" title="${created.full}">${created.label}</div>
+            <div class="time-sub">${created.full}</div>
+          </td>
+          <td>${order.status || '—'}</td>
+          <td>${formatCurrency(order.total)}</td>
+          <td>${promo}</td>
+        </tr>`;
+      })
+      .join('');
+  };
+
+  const renderUserCodes = (codes = []) => {
+    if (!userCodesBody) return;
+    if (!codes.length) {
+      userCodesBody.innerHTML = '<tr><td colspan="5" class="empty">No disponible aún.</td></tr>';
+      return;
+    }
+    userCodesBody.innerHTML = codes
+      .map((entry) => {
+        const created = formatRelativeTime(entry.redeemedAt);
+        const type = entry.promoCode?.type || '—';
+        const value = entry.promoCode?.value != null ? entry.promoCode.value : '—';
+        return `<tr>
+          <td>${entry.promoCode?.code || '—'}</td>
+          <td>${type}</td>
+          <td>${value}</td>
+          <td>
+            <div class="time-label" title="${created.full}">${created.label}</div>
+            <div class="time-sub">${created.full}</div>
+          </td>
+          <td>${entry.orderId ?? '—'}</td>
+        </tr>`;
+      })
+      .join('');
+  };
+
+  const getAdminLabel = (adminUser) => {
+    if (!adminUser) return '—';
+    return (
+      adminUser.email ||
+      adminUser.name ||
+      [adminUser.firstName, adminUser.lastName].filter(Boolean).join(' ') ||
+      '—'
+    );
+  };
+
+  const renderUserHistory = (entries = []) => {
+    if (!userHistoryBody) return;
+    if (!entries.length) {
+      userHistoryBody.innerHTML = '<tr><td colspan="5" class="empty">Sin historial disponible.</td></tr>';
+      return;
+    }
+    userHistoryBody.innerHTML = entries
+      .map((entry) => {
+        const created = formatRelativeTime(entry.createdAt);
+        const detailParts = [];
+        if (entry.fromCircle && entry.toCircle) {
+          detailParts.push(`Círculo ${entry.fromCircle}→${entry.toCircle}`);
+        }
+        if (entry.targetType && entry.targetId) {
+          detailParts.push(`${entry.targetType}:${entry.targetId}`);
+        }
+        const detail = detailParts.join(' · ') || '—';
+        return `<tr>
+          <td>
+            <div class="time-label" title="${created.full}">${created.label}</div>
+            <div class="time-sub">${created.full}</div>
+          </td>
+          <td>${entry.actionType || '—'}</td>
+          <td>${getAdminLabel(entry.adminUser)}</td>
+          <td>${detail}</td>
+          <td>${entry.reason || '—'}</td>
+        </tr>`;
+      })
+      .join('');
+  };
+
+  const renderActivity = (items = [], options = { error: false }) => {
+    if (!activityBody) return;
+    if (options.error) {
+      activityBody.innerHTML = `
+        <tr>
+          <td colspan="5" class="empty">
+            No se pudo cargar la actividad.
+            <button type="button" class="btn" data-retry-activity="1" style="margin-left:8px;">Reintentar</button>
+          </td>
+        </tr>
+      `;
+      return;
+    }
+    if (!items.length) {
+      activityBody.innerHTML = '<tr><td colspan="5" class="empty">Sin actividad reciente.</td></tr>';
+      return;
+    }
+    activityBody.innerHTML = items
+      .map((entry) => {
+        const created = formatRelativeTime(entry.createdAt);
+        const adminLabel = getAdminLabel(entry.adminUser);
+        const targetLabel = entry.targetType && entry.targetId
+          ? `${entry.targetType}:${entry.targetId}`
+          : '—';
+        const targetCell =
+          entry.targetType === 'user' && entry.targetId
+            ? `<button type="button" class="link-btn" data-user-id="${entry.targetId}">${targetLabel}</button>`
+            : targetLabel;
+        return `<tr>
+          <td>
+            <div class="time-label" title="${created.full}">${created.label}</div>
+            <div class="time-sub">${created.full}</div>
+          </td>
+          <td>${adminLabel}</td>
+          <td>${entry.actionType || '—'}</td>
+          <td class="activity-target">${targetCell}</td>
+          <td>${entry.reason || '—'}</td>
+        </tr>`;
+      })
+      .join('');
+  };
+
+  const fetchUserHistory = async (userId) => {
+    if (!userId || !userHistoryBody) return;
+    userHistoryBody.innerHTML = '<tr><td colspan="5" class="empty">Cargando historial…</td></tr>';
+    try {
+      const data = await window.CRONOX_API?.admin?.getUserAuditLogs?.(userId);
+      const items = Array.isArray(data) ? data : data?.items || [];
+      renderUserHistory(items);
+    } catch (error) {
+      console.error('[ADMIN] Error cargando historial', error);
+      userHistoryBody.innerHTML = '<tr><td colspan="5" class="empty">No se pudo cargar el historial.</td></tr>';
+    }
+  };
+
+  const renderUserDetail = (payload) => {
+    if (!payload) return;
+    const user = payload.user || {};
+    const stats = payload.stats || {};
+    const displayName = user.username || user.email || `Usuario ${user.id || ''}`.trim();
+    const email = user.email || '—';
+
+    if (userName) userName.textContent = displayName;
+    if (userEmail) userEmail.textContent = email;
+    setUserAvatar(user.avatarUrl, displayName);
+
+    if (userBadges) {
+      const badges = [
+        `<span class="badge">Círculo ${user.circle ?? '—'}</span>`,
+        user.role ? `<span class="badge">${user.role}</span>` : '',
+      ].filter(Boolean);
+      userBadges.innerHTML = badges.join('');
+    }
+
+    if (userOrdersCount) userOrdersCount.textContent = stats.ordersCount ?? 0;
+    if (userTotalSpent) userTotalSpent.textContent = formatCurrency(stats.totalSpent ?? 0);
+    if (userRequestsCount) userRequestsCount.textContent = stats.requestsCount ?? 0;
+
+    const lastActivityDate = user.lastLoginAt || user.updatedAt || user.createdAt;
+    const lastActivity = formatRelativeTime(lastActivityDate);
+    if (userLastActivity) userLastActivity.textContent = lastActivity.label;
+    if (userLastActivityFull) userLastActivityFull.textContent = lastActivity.full;
+
+    renderUserRequests(payload.requests || []);
+    renderUserOrders(payload.orders || []);
+    renderUserCodes(payload.codesUsed || []);
+    fetchUserHistory(user.id);
+  };
+
+  const setUserHash = (userId) => {
+    const hash = `#user=${userId}`;
+    if (window.location.hash !== hash) {
+      window.location.hash = hash;
+    }
+  };
+
+  const clearUserHash = () => {
+    if (window.location.hash.startsWith('#user=')) {
+      history.replaceState(null, '', window.location.pathname + window.location.search);
+    }
+  };
+
+  const loadUserDetail = async (userId) => {
+    if (!userId) return;
+    setUserDetailMessage('');
+    if (userDetailSection) {
+      showSection('section-user');
+    }
+    if (userName) userName.textContent = 'Cargando…';
+    try {
+      const data = await window.CRONOX_API?.admin?.getUserDetail?.(userId);
+      userDetailState.data = data;
+      renderUserDetail(data);
+    } catch (error) {
+      console.error('[ADMIN] Error cargando usuario', error);
+      setUserDetailMessage('No se pudo cargar el detalle del usuario.', 'error');
+    }
+  };
+
+  const openUserDetail = (userId, options = {}) => {
+    if (!userId) return;
+    if (currentSectionId !== 'section-user') {
+      lastSectionId = currentSectionId || 'section-dashboard';
+    }
+    userDetailState.userId = userId;
+    setUserDetailTab(userDetailState.activeTab || 'requests');
+    if (!options.skipHash) {
+      setUserHash(userId);
+    }
+    loadUserDetail(userId);
+  };
+
+  const handleHashChange = () => {
+    const match = window.location.hash.match(/user=(\d+)/);
+    if (match) {
+      const userId = Number(match[1]);
+      if (Number.isFinite(userId)) {
+        openUserDetail(userId, { skipHash: true });
+        return;
+      }
+    }
+    if (currentSectionId === 'section-user') {
+      showSection(lastSectionId || 'section-dashboard');
+    }
   };
 
   const setLoading = (isLoading) => {
@@ -157,6 +665,200 @@
     }
   };
 
+  const parseNumberOrNull = (value) => {
+    if (value == null || value === '') return null;
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  };
+
+  const normalizeDateRange = (value, endOfDay = false) => {
+    if (!value) return '';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return '';
+    if (endOfDay) {
+      date.setHours(23, 59, 59, 999);
+    } else {
+      date.setHours(0, 0, 0, 0);
+    }
+    return date.toISOString();
+  };
+
+  const buildRequestQuery = (state) => {
+    return {
+      page: state.page,
+      pageSize: state.pageSize,
+      q: state.q || undefined,
+      status: state.status || undefined,
+      sortBy: state.sortBy || undefined,
+      sortDir: state.sortDir || undefined,
+      dateFrom: state.dateFrom ? normalizeDateRange(state.dateFrom) : undefined,
+      dateTo: state.dateTo ? normalizeDateRange(state.dateTo, true) : undefined,
+      attemptsMin: parseNumberOrNull(state.attemptsMin) ?? undefined,
+      attemptsMax: parseNumberOrNull(state.attemptsMax) ?? undefined,
+      socialNetwork: state.socialNetwork || undefined,
+      userCircle: parseNumberOrNull(state.userCircle) ?? undefined,
+    };
+  };
+
+  const buildProductQuery = (state) => {
+    return {
+      page: state.page,
+      pageSize: state.pageSize,
+      q: state.q || undefined,
+      isActive: state.isActive || undefined,
+      dateFrom: state.dateFrom ? normalizeDateRange(state.dateFrom) : undefined,
+      dateTo: state.dateTo ? normalizeDateRange(state.dateTo, true) : undefined,
+      stockState: state.stockState || undefined,
+      categoryId: parseNumberOrNull(state.categoryId) ?? undefined,
+      sortBy: state.sortBy || undefined,
+      sortDir: state.sortDir || undefined,
+    };
+  };
+
+  const buildActivityQuery = (state) => {
+    return {
+      page: state.page,
+      pageSize: state.pageSize,
+      q: state.q || undefined,
+      actionType: state.actionType || undefined,
+      targetType: state.targetType || undefined,
+      dateFrom: state.dateFrom ? normalizeDateRange(state.dateFrom) : undefined,
+      dateTo: state.dateTo ? normalizeDateRange(state.dateTo, true) : undefined,
+    };
+  };
+
+  const normalizePaginated = (data, state) => {
+    if (Array.isArray(data)) {
+      return {
+        items: data,
+        page: state.page,
+        pageSize: state.pageSize,
+        totalItems: data.length,
+        totalPages: 1,
+      };
+    }
+    const items = Array.isArray(data?.items) ? data.items : [];
+    const page = Number(data?.page ?? state.page);
+    const pageSize = Number(data?.pageSize ?? state.pageSize);
+    const totalItems = Number(data?.totalItems ?? items.length);
+    const totalPages = Number(data?.totalPages ?? Math.max(1, Math.ceil(totalItems / pageSize || 1)));
+    return { items, page, pageSize, totalItems, totalPages };
+  };
+
+  const updatePagination = (meta, state, elements) => {
+    const { info, prev, next, size } = elements;
+    if (info) {
+      info.textContent = `Página ${meta.page} de ${meta.totalPages} · ${meta.totalItems} resultados`;
+    }
+    if (prev) prev.disabled = meta.page <= 1;
+    if (next) next.disabled = meta.page >= meta.totalPages;
+    if (size && size.value !== String(state.pageSize)) {
+      size.value = String(state.pageSize);
+    }
+  };
+
+  const syncRequestsStateFromInputs = () => {
+    if (filterStatus) requestsState.status = filterStatus.value || 'PENDING';
+    if (requestSearch) requestsState.q = requestSearch.value.trim();
+    if (requestDateFrom) requestsState.dateFrom = requestDateFrom.value;
+    if (requestDateTo) requestsState.dateTo = requestDateTo.value;
+    if (requestAttemptsMin) requestsState.attemptsMin = requestAttemptsMin.value;
+    if (requestAttemptsMax) requestsState.attemptsMax = requestAttemptsMax.value;
+    if (requestSocialNetwork) requestsState.socialNetwork = requestSocialNetwork.value.trim();
+    if (requestUserCircle) requestsState.userCircle = requestUserCircle.value;
+    if (requestSortBy) requestsState.sortBy = requestSortBy.value || 'createdAt';
+    if (requestSortDir) requestsState.sortDir = requestSortDir.value || 'desc';
+  };
+
+  const syncRequests23StateFromInputs = () => {
+    if (filterStatus23) requests23State.status = filterStatus23.value || 'PENDING';
+    if (requestSearch23) requests23State.q = requestSearch23.value.trim();
+    if (requestDateFrom23) requests23State.dateFrom = requestDateFrom23.value;
+    if (requestDateTo23) requests23State.dateTo = requestDateTo23.value;
+    if (requestAttemptsMin23) requests23State.attemptsMin = requestAttemptsMin23.value;
+    if (requestAttemptsMax23) requests23State.attemptsMax = requestAttemptsMax23.value;
+    if (requestSocialNetwork23) requests23State.socialNetwork = requestSocialNetwork23.value.trim();
+    if (requestUserCircle23) requests23State.userCircle = requestUserCircle23.value;
+    if (requestSortBy23) requests23State.sortBy = requestSortBy23.value || 'createdAt';
+    if (requestSortDir23) requests23State.sortDir = requestSortDir23.value || 'desc';
+  };
+
+  const syncProductsStateFromInputs = () => {
+    if (productSearch) productsState.q = productSearch.value.trim();
+    if (productDateFrom) productsState.dateFrom = productDateFrom.value;
+    if (productDateTo) productsState.dateTo = productDateTo.value;
+    if (productStockState) productsState.stockState = productStockState.value;
+    if (productCategory) productsState.categoryId = productCategory.value;
+    if (productStatusFilter) productsState.isActive = productStatusFilter.value;
+    if (productSortBy) productsState.sortBy = productSortBy.value || 'createdAt';
+    if (productSortDir) productsState.sortDir = productSortDir.value || 'desc';
+  };
+
+  const syncActivityStateFromInputs = () => {
+    if (activitySearch) activityState.q = activitySearch.value.trim();
+    if (activityActionType) activityState.actionType = activityActionType.value;
+    if (activityTargetType) activityState.targetType = activityTargetType.value;
+    if (activityDateFrom) activityState.dateFrom = activityDateFrom.value;
+    if (activityDateTo) activityState.dateTo = activityDateTo.value;
+  };
+
+  const resetProductsFilters = () => {
+    if (productSearch) productSearch.value = '';
+    if (productDateFrom) productDateFrom.value = '';
+    if (productDateTo) productDateTo.value = '';
+    if (productStockState) productStockState.value = '';
+    if (productCategory) productCategory.value = '';
+    if (productStatusFilter) productStatusFilter.value = '';
+    if (productSortBy) productSortBy.value = 'createdAt';
+    if (productSortDir) productSortDir.value = 'desc';
+    productsState.page = 1;
+    syncProductsStateFromInputs();
+    fetchProducts();
+  };
+
+  const resetActivityFilters = () => {
+    if (activitySearch) activitySearch.value = '';
+    if (activityActionType) activityActionType.value = '';
+    if (activityTargetType) activityTargetType.value = '';
+    if (activityDateFrom) activityDateFrom.value = '';
+    if (activityDateTo) activityDateTo.value = '';
+    activityState.page = 1;
+    syncActivityStateFromInputs();
+    fetchActivity();
+  };
+
+  const resetRequestsFilters = () => {
+    if (requestSearch) requestSearch.value = '';
+    if (requestDateFrom) requestDateFrom.value = '';
+    if (requestDateTo) requestDateTo.value = '';
+    if (requestAttemptsMin) requestAttemptsMin.value = '';
+    if (requestAttemptsMax) requestAttemptsMax.value = '';
+    if (requestSocialNetwork) requestSocialNetwork.value = '';
+    if (requestUserCircle) requestUserCircle.value = '';
+    if (filterStatus) filterStatus.value = 'PENDING';
+    if (requestSortBy) requestSortBy.value = 'createdAt';
+    if (requestSortDir) requestSortDir.value = 'desc';
+    requestsState.page = 1;
+    syncRequestsStateFromInputs();
+    fetchRequests();
+  };
+
+  const resetRequests23Filters = () => {
+    if (requestSearch23) requestSearch23.value = '';
+    if (requestDateFrom23) requestDateFrom23.value = '';
+    if (requestDateTo23) requestDateTo23.value = '';
+    if (requestAttemptsMin23) requestAttemptsMin23.value = '';
+    if (requestAttemptsMax23) requestAttemptsMax23.value = '';
+    if (requestSocialNetwork23) requestSocialNetwork23.value = '';
+    if (requestUserCircle23) requestUserCircle23.value = '';
+    if (filterStatus23) filterStatus23.value = 'PENDING';
+    if (requestSortBy23) requestSortBy23.value = 'createdAt';
+    if (requestSortDir23) requestSortDir23.value = 'desc';
+    requests23State.page = 1;
+    syncRequests23StateFromInputs();
+    fetchRequests23();
+  };
+
   const renderRequests = (items, options = { error: false }) => {
     if (!requestsBody) return;
     if (options.error) {
@@ -180,6 +882,11 @@
         const userName = req.user?.firstName || req.user?.lastName
           ? `${req.user?.firstName || ''} ${req.user?.lastName || ''}`.trim()
           : req.user?.email || '';
+        const userLabel = userName || '—';
+        const userCell = req.userId
+          ? `<button type="button" class="link-btn" data-user-id="${req.userId}">${userLabel}</button>`
+          : userLabel;
+        const created = formatRelativeTime(req.createdAt);
         const normalizedStatus = String(req.status || '').toUpperCase();
         const isActionable = normalizedStatus === 'PENDING' || normalizedStatus === 'EXPIRED';
         const actions = isActionable
@@ -191,8 +898,11 @@
         const attemptLabel = req.requestNumber == null ? '—' : `#${req.requestNumber}`;
 
         return `<tr>
-          <td>${formatDate(req.createdAt)}</td>
-          <td>${userName || '—'}</td>
+          <td>
+            <div class="time-label" title="${created.full}">${created.label}</div>
+            <div class="time-sub">${created.full}</div>
+          </td>
+          <td>${userCell}</td>
           <td>${req.userId}</td>
           <td>${req.socialNetwork}</td>
           <td>${req.username}</td>
@@ -227,11 +937,19 @@
         const userName = req.user?.firstName || req.user?.lastName
           ? `${req.user?.firstName || ''} ${req.user?.lastName || ''}`.trim()
           : req.user?.email || '';
+        const userLabel = userName || '—';
+        const userCell = req.userId
+          ? `<button type="button" class="link-btn" data-user-id="${req.userId}">${userLabel}</button>`
+          : userLabel;
+        const created = formatRelativeTime(req.createdAt);
         const remaining = typeof req.remainingMs === 'number' ? formatDuration(req.remainingMs) : '—';
         const attemptLabel = req.requestNumber == null ? '—' : `#${req.requestNumber}`;
         return `<tr>
-          <td>${formatDate(req.createdAt)}</td>
-          <td>${userName || '—'}</td>
+          <td>
+            <div class="time-label" title="${created.full}">${created.label}</div>
+            <div class="time-sub">${created.full}</div>
+          </td>
+          <td>${userCell}</td>
           <td>${req.userId}</td>
           <td>${statusBadge(req.status)}</td>
           <td>${attemptLabel}</td>
@@ -244,10 +962,20 @@
   const fetchRequests = async () => {
     setLoading(true);
     setMessage('');
-    const status = filterStatus?.value || 'PENDING';
     try {
-      const data = await window.CRONOX_API?.admin?.listCircleUpgradeRequests(status);
-      renderRequests(data || []);
+      const data = await window.CRONOX_API?.admin?.listCircleUpgradeRequests(
+        buildRequestQuery(requestsState),
+      );
+      const meta = normalizePaginated(data, requestsState);
+      requestsState.page = meta.page;
+      requestsState.pageSize = meta.pageSize;
+      renderRequests(meta.items || []);
+      updatePagination(meta, requestsState, {
+        info: requestsPageInfo,
+        prev: requestsPrev,
+        next: requestsNext,
+        size: requestsPageSize,
+      });
     } catch (error) {
       console.error('[ADMIN] Error cargando solicitudes', error);
       setMessage('No se pudieron cargar las solicitudes.', 'error');
@@ -261,10 +989,20 @@
       messageBox23.textContent = '';
       messageBox23.className = 'message';
     }
-    const status = filterStatus23?.value || 'PENDING';
     try {
-      const data = await window.CRONOX_API?.admin?.listAutoCircleRequests(status);
-      renderRequests23(data || []);
+      const data = await window.CRONOX_API?.admin?.listAutoCircleRequests(
+        buildRequestQuery(requests23State),
+      );
+      const meta = normalizePaginated(data, requests23State);
+      requests23State.page = meta.page;
+      requests23State.pageSize = meta.pageSize;
+      renderRequests23(meta.items || []);
+      updatePagination(meta, requests23State, {
+        info: requestsPageInfo23,
+        prev: requestsPrev23,
+        next: requestsNext23,
+        size: requestsPageSize23,
+      });
     } catch (error) {
       console.error('[ADMIN] Error cargando solicitudes 2->3', error);
       if (messageBox23) {
@@ -272,6 +1010,88 @@
         messageBox23.className = 'message show error';
       }
       renderRequests23([], { error: true });
+    }
+  };
+
+  const setDashboardValue = (el, value) => {
+    if (!el) return;
+    el.textContent = value ?? '—';
+  };
+
+  const renderDashboard = (data) => {
+    if (!data) return;
+    setDashboardValue(totalUsers, data.users?.total ?? 0);
+
+    if (usersByCircle) {
+      const circles = Array.isArray(data.users?.byCircle) ? data.users.byCircle : [];
+      usersByCircle.innerHTML = circles.length
+        ? circles
+            .map((item) => `<span class="badge">Círculo ${item.circle}: ${item.count}</span>`)
+            .join('')
+        : '<span class="badge">Sin datos</span>';
+    }
+
+    setDashboardValue(pendingRequestsTotal, data.requests?.pendingTotal ?? 0);
+    if (pendingRequestsByType) {
+      const byType = data.requests?.byType || {};
+      const entries = Object.entries(byType);
+      pendingRequestsByType.innerHTML = entries.length
+        ? entries
+            .map(([key, value]) => `<span class=\"badge\">${key}: ${value ?? 0}</span>`)
+            .join('')
+        : '<span class="badge">Sin datos</span>';
+    }
+
+    setDashboardValue(ordersTotal, data.orders?.total ?? 0);
+    if (ordersBreakdown) {
+      const today = data.orders?.today ?? 0;
+      const week = data.orders?.week ?? 0;
+      ordersBreakdown.textContent = `Hoy: ${today} · Semana: ${week}`;
+    }
+
+    setDashboardValue(revenueToday, formatCurrency(data.revenue?.today ?? 0));
+    if (revenueMonth) {
+      revenueMonth.textContent = `Mes: ${formatCurrency(data.revenue?.month ?? 0)}`;
+    }
+
+    setDashboardValue(alertLowStock, data.alerts?.lowStock ?? 0);
+    setDashboardValue(alertOldRequests, data.alerts?.oldPendingRequests ?? 0);
+  };
+
+  const fetchDashboard = async () => {
+    setScopedMessage(dashboardMessage, '');
+    if (totalUsers) totalUsers.textContent = '…';
+    try {
+      const data = await window.CRONOX_API?.admin?.getDashboard?.();
+      renderDashboard(data);
+    } catch (error) {
+      console.error('No se pudo cargar el dashboard', error);
+      setScopedMessage(dashboardMessage, 'No se pudieron cargar los datos del resumen.', 'error');
+    }
+  };
+
+  const fetchActivity = async () => {
+    if (!activityBody) return;
+    activityBody.innerHTML = '<tr><td colspan="5" class="empty">Cargando actividad…</td></tr>';
+    setScopedMessage(activityMessage, '');
+    try {
+      const data = await window.CRONOX_API?.admin?.getAuditLogs(
+        buildActivityQuery(activityState),
+      );
+      const meta = normalizePaginated(data, activityState);
+      activityState.page = meta.page;
+      activityState.pageSize = meta.pageSize;
+      renderActivity(meta.items || []);
+      updatePagination(meta, activityState, {
+        info: activityPageInfo,
+        prev: activityPrev,
+        next: activityNext,
+        size: activityPageSize,
+      });
+    } catch (error) {
+      console.error('[ADMIN] Error cargando actividad', error);
+      setScopedMessage(activityMessage, 'No se pudo cargar la actividad.', 'error');
+      renderActivity([], { error: true });
     }
   };
 
@@ -311,26 +1131,51 @@
     if (productSubmitBtn) productSubmitBtn.disabled = false;
   };
 
+  const loadProductCategories = async () => {
+    if (!productCategory || !window.CRONOX_API?.getCategories) return;
+    try {
+      const categories = await window.CRONOX_API.getCategories({ page: 1, limit: 200 });
+      const options = Array.isArray(categories) ? categories : [];
+      const currentValue = productCategory.value;
+      productCategory.innerHTML = '<option value="">Todas</option>';
+      options.forEach((category) => {
+        const option = document.createElement('option');
+        option.value = String(category.id);
+        option.textContent = category.name || category.slug || `Categoría ${category.id}`;
+        productCategory.appendChild(option);
+      });
+      if (currentValue) {
+        productCategory.value = currentValue;
+      }
+    } catch (error) {
+      console.warn('[ADMIN] No se pudieron cargar categorías', error);
+    }
+  };
+
   const fetchProducts = async () => {
     if (!productsBody) return;
-    productsBody.innerHTML = '<tr><td colspan="6" class="empty">Cargando productos…</td></tr>';
+    productsBody.innerHTML = '<tr><td colspan="7" class="empty">Cargando productos…</td></tr>';
     setScopedMessage(productsMessage, '');
-    const query = {
-      page: productsState.page,
-      limit: productsState.limit,
-      search: productsState.search || undefined,
-      isActive: productsState.isActive || undefined,
-    };
     try {
-      const data = await window.CRONOX_API?.admin?.listAdminProducts(query);
-      const items = Array.isArray(data?.items) ? data.items : Array.isArray(data) ? data : [];
-      renderProducts(items);
+      const data = await window.CRONOX_API?.admin?.listAdminProducts(
+        buildProductQuery(productsState),
+      );
+      const meta = normalizePaginated(data, productsState);
+      productsState.page = meta.page;
+      productsState.pageSize = meta.pageSize;
+      renderProducts(meta.items || []);
+      updatePagination(meta, productsState, {
+        info: productsPageInfo,
+        prev: productsPrev,
+        next: productsNext,
+        size: productsPageSize,
+      });
     } catch (error) {
       console.error('[ADMIN] Error cargando productos', error);
       setScopedMessage(productsMessage, 'No se pudieron cargar los productos.', 'error');
       productsBody.innerHTML = `
         <tr>
-          <td colspan="6" class="empty">
+          <td colspan="7" class="empty">
             Error al cargar productos.
             <button type="button" class="btn" data-retry-products="1" style="margin-left:8px;">Reintentar</button>
           </td>
@@ -341,7 +1186,7 @@
   const renderProducts = (items = []) => {
     if (!productsBody) return;
     if (!items.length) {
-      productsBody.innerHTML = '<tr><td colspan="6" class="empty">No hay productos con esos filtros.</td></tr>';
+      productsBody.innerHTML = '<tr><td colspan="7" class="empty">No hay productos con esos filtros.</td></tr>';
       return;
     }
 
@@ -354,6 +1199,7 @@
           product.imageUrl ||
           (Array.isArray(product.images) && product.images.length ? product.images[0].url : '');
         const activeLabel = product.isActive ? 'Activo' : 'Inactivo';
+        const created = formatRelativeTime(product.createdAt);
         return `
           <tr>
             <td>
@@ -369,6 +1215,10 @@
             <td>${product.collection || '—'}</td>
             <td>${activeLabel}</td>
             <td>${totalStock}</td>
+            <td>
+              <div class="time-label" title="${created.full}">${created.label}</div>
+              <div class="time-sub">${created.full}</div>
+            </td>
             <td>
               <div class="actions">
                 <button class="btn" data-edit-product="${product.id}">Editar</button>
@@ -731,15 +1581,205 @@
 
   const bindEvents = () => {
     if (filterStatus) {
-      filterStatus.addEventListener('change', fetchRequests);
+      filterStatus.addEventListener('change', () => {
+        syncRequestsStateFromInputs();
+        requestsState.page = 1;
+        fetchRequests();
+      });
     }
+    if (requestSearch) {
+      requestSearch.addEventListener('input', () => {
+        clearTimeout(requestSearchTimeout);
+        requestSearchTimeout = setTimeout(() => {
+          syncRequestsStateFromInputs();
+          requestsState.page = 1;
+          fetchRequests();
+        }, 250);
+      });
+    }
+    if (requestDateFrom) {
+      requestDateFrom.addEventListener('change', () => {
+        syncRequestsStateFromInputs();
+        requestsState.page = 1;
+        fetchRequests();
+      });
+    }
+    if (requestDateTo) {
+      requestDateTo.addEventListener('change', () => {
+        syncRequestsStateFromInputs();
+        requestsState.page = 1;
+        fetchRequests();
+      });
+    }
+    if (requestAttemptsMin) {
+      requestAttemptsMin.addEventListener('change', () => {
+        syncRequestsStateFromInputs();
+        requestsState.page = 1;
+        fetchRequests();
+      });
+    }
+    if (requestAttemptsMax) {
+      requestAttemptsMax.addEventListener('change', () => {
+        syncRequestsStateFromInputs();
+        requestsState.page = 1;
+        fetchRequests();
+      });
+    }
+    if (requestSocialNetwork) {
+      requestSocialNetwork.addEventListener('input', () => {
+        syncRequestsStateFromInputs();
+        requestsState.page = 1;
+        fetchRequests();
+      });
+    }
+    if (requestUserCircle) {
+      requestUserCircle.addEventListener('change', () => {
+        syncRequestsStateFromInputs();
+        requestsState.page = 1;
+        fetchRequests();
+      });
+    }
+    if (requestSortBy) {
+      requestSortBy.addEventListener('change', () => {
+        syncRequestsStateFromInputs();
+        requestsState.page = 1;
+        fetchRequests();
+      });
+    }
+    if (requestSortDir) {
+      requestSortDir.addEventListener('change', () => {
+        syncRequestsStateFromInputs();
+        requestsState.page = 1;
+        fetchRequests();
+      });
+    }
+    if (requestFiltersReset) {
+      requestFiltersReset.addEventListener('click', resetRequestsFilters);
+    }
+    if (requestsPrev) {
+      requestsPrev.addEventListener('click', () => {
+        if (requestsState.page > 1) {
+          requestsState.page -= 1;
+          fetchRequests();
+        }
+      });
+    }
+    if (requestsNext) {
+      requestsNext.addEventListener('click', () => {
+        requestsState.page += 1;
+        fetchRequests();
+      });
+    }
+    if (requestsPageSize) {
+      requestsPageSize.addEventListener('change', () => {
+        requestsState.pageSize = Number(requestsPageSize.value || 25);
+        requestsState.page = 1;
+        fetchRequests();
+      });
+    }
+
     if (filterStatus23) {
-      filterStatus23.addEventListener('change', fetchRequests23);
+      filterStatus23.addEventListener('change', () => {
+        syncRequests23StateFromInputs();
+        requests23State.page = 1;
+        fetchRequests23();
+      });
+    }
+    if (requestSearch23) {
+      requestSearch23.addEventListener('input', () => {
+        clearTimeout(requestSearchTimeout23);
+        requestSearchTimeout23 = setTimeout(() => {
+          syncRequests23StateFromInputs();
+          requests23State.page = 1;
+          fetchRequests23();
+        }, 250);
+      });
+    }
+    if (requestDateFrom23) {
+      requestDateFrom23.addEventListener('change', () => {
+        syncRequests23StateFromInputs();
+        requests23State.page = 1;
+        fetchRequests23();
+      });
+    }
+    if (requestDateTo23) {
+      requestDateTo23.addEventListener('change', () => {
+        syncRequests23StateFromInputs();
+        requests23State.page = 1;
+        fetchRequests23();
+      });
+    }
+    if (requestAttemptsMin23) {
+      requestAttemptsMin23.addEventListener('change', () => {
+        syncRequests23StateFromInputs();
+        requests23State.page = 1;
+        fetchRequests23();
+      });
+    }
+    if (requestAttemptsMax23) {
+      requestAttemptsMax23.addEventListener('change', () => {
+        syncRequests23StateFromInputs();
+        requests23State.page = 1;
+        fetchRequests23();
+      });
+    }
+    if (requestSocialNetwork23) {
+      requestSocialNetwork23.addEventListener('input', () => {
+        syncRequests23StateFromInputs();
+        requests23State.page = 1;
+        fetchRequests23();
+      });
+    }
+    if (requestUserCircle23) {
+      requestUserCircle23.addEventListener('change', () => {
+        syncRequests23StateFromInputs();
+        requests23State.page = 1;
+        fetchRequests23();
+      });
+    }
+    if (requestSortBy23) {
+      requestSortBy23.addEventListener('change', () => {
+        syncRequests23StateFromInputs();
+        requests23State.page = 1;
+        fetchRequests23();
+      });
+    }
+    if (requestSortDir23) {
+      requestSortDir23.addEventListener('change', () => {
+        syncRequests23StateFromInputs();
+        requests23State.page = 1;
+        fetchRequests23();
+      });
+    }
+    if (requestFiltersReset23) {
+      requestFiltersReset23.addEventListener('click', resetRequests23Filters);
+    }
+    if (requestsPrev23) {
+      requestsPrev23.addEventListener('click', () => {
+        if (requests23State.page > 1) {
+          requests23State.page -= 1;
+          fetchRequests23();
+        }
+      });
+    }
+    if (requestsNext23) {
+      requestsNext23.addEventListener('click', () => {
+        requests23State.page += 1;
+        fetchRequests23();
+      });
+    }
+    if (requestsPageSize23) {
+      requestsPageSize23.addEventListener('change', () => {
+        requests23State.pageSize = Number(requestsPageSize23.value || 25);
+        requests23State.page = 1;
+        fetchRequests23();
+      });
     }
 
     if (productStatusFilter) {
       productStatusFilter.addEventListener('change', () => {
-        productsState.isActive = productStatusFilter.value;
+        syncProductsStateFromInputs();
+        productsState.page = 1;
         fetchProducts();
       });
     }
@@ -748,9 +1788,157 @@
       productSearch.addEventListener('input', () => {
         clearTimeout(productSearchTimeout);
         productSearchTimeout = setTimeout(() => {
-          productsState.search = productSearch.value.trim();
+          syncProductsStateFromInputs();
+          productsState.page = 1;
           fetchProducts();
         }, 250);
+      });
+    }
+
+    if (productDateFrom) {
+      productDateFrom.addEventListener('change', () => {
+        syncProductsStateFromInputs();
+        productsState.page = 1;
+        fetchProducts();
+      });
+    }
+
+    if (productDateTo) {
+      productDateTo.addEventListener('change', () => {
+        syncProductsStateFromInputs();
+        productsState.page = 1;
+        fetchProducts();
+      });
+    }
+
+    if (productStockState) {
+      productStockState.addEventListener('change', () => {
+        syncProductsStateFromInputs();
+        productsState.page = 1;
+        fetchProducts();
+      });
+    }
+
+    if (productCategory) {
+      productCategory.addEventListener('change', () => {
+        syncProductsStateFromInputs();
+        productsState.page = 1;
+        fetchProducts();
+      });
+    }
+
+    if (productSortBy) {
+      productSortBy.addEventListener('change', () => {
+        syncProductsStateFromInputs();
+        productsState.page = 1;
+        fetchProducts();
+      });
+    }
+
+    if (productSortDir) {
+      productSortDir.addEventListener('change', () => {
+        syncProductsStateFromInputs();
+        productsState.page = 1;
+        fetchProducts();
+      });
+    }
+
+    if (productFiltersReset) {
+      productFiltersReset.addEventListener('click', resetProductsFilters);
+    }
+
+    if (activityFiltersReset) {
+      activityFiltersReset.addEventListener('click', resetActivityFilters);
+    }
+
+    if (activitySearch) {
+      activitySearch.addEventListener('input', () => {
+        clearTimeout(activitySearchTimeout);
+        activitySearchTimeout = setTimeout(() => {
+          syncActivityStateFromInputs();
+          activityState.page = 1;
+          fetchActivity();
+        }, 250);
+      });
+    }
+
+    if (activityActionType) {
+      activityActionType.addEventListener('change', () => {
+        syncActivityStateFromInputs();
+        activityState.page = 1;
+        fetchActivity();
+      });
+    }
+
+    if (activityTargetType) {
+      activityTargetType.addEventListener('change', () => {
+        syncActivityStateFromInputs();
+        activityState.page = 1;
+        fetchActivity();
+      });
+    }
+
+    if (activityDateFrom) {
+      activityDateFrom.addEventListener('change', () => {
+        syncActivityStateFromInputs();
+        activityState.page = 1;
+        fetchActivity();
+      });
+    }
+
+    if (activityDateTo) {
+      activityDateTo.addEventListener('change', () => {
+        syncActivityStateFromInputs();
+        activityState.page = 1;
+        fetchActivity();
+      });
+    }
+
+    if (productsPrev) {
+      productsPrev.addEventListener('click', () => {
+        if (productsState.page > 1) {
+          productsState.page -= 1;
+          fetchProducts();
+        }
+      });
+    }
+
+    if (productsNext) {
+      productsNext.addEventListener('click', () => {
+        productsState.page += 1;
+        fetchProducts();
+      });
+    }
+
+    if (productsPageSize) {
+      productsPageSize.addEventListener('change', () => {
+        productsState.pageSize = Number(productsPageSize.value || 25);
+        productsState.page = 1;
+        fetchProducts();
+      });
+    }
+
+    if (activityPrev) {
+      activityPrev.addEventListener('click', () => {
+        if (activityState.page > 1) {
+          activityState.page -= 1;
+          fetchActivity();
+        }
+      });
+    }
+
+    if (activityNext) {
+      activityNext.addEventListener('click', () => {
+        activityState.page += 1;
+        fetchActivity();
+      });
+    }
+
+    if (activityPageSize) {
+      activityPageSize.addEventListener('change', () => {
+        activityState.pageSize = Number(activityPageSize.value || 10);
+        activityState.page = 1;
+        fetchActivity();
       });
     }
 
@@ -822,6 +2010,14 @@
       requestsBody.addEventListener('click', (event) => {
         const target = event.target;
         if (!(target instanceof HTMLElement)) return;
+        const userTarget = target.closest('[data-user-id]');
+        if (userTarget instanceof HTMLElement) {
+          const userId = Number(userTarget.dataset.userId);
+          if (Number.isFinite(userId)) {
+            openUserDetail(userId);
+            return;
+          }
+        }
         const action = target.dataset.action;
         const id = target.dataset.id;
         if (target.dataset.retry) {
@@ -837,8 +2033,34 @@
       requestsBody23.addEventListener('click', (event) => {
         const target = event.target;
         if (!(target instanceof HTMLElement)) return;
+        const userTarget = target.closest('[data-user-id]');
+        if (userTarget instanceof HTMLElement) {
+          const userId = Number(userTarget.dataset.userId);
+          if (Number.isFinite(userId)) {
+            openUserDetail(userId);
+            return;
+          }
+        }
         if (target.dataset.retry23) {
           fetchRequests23();
+        }
+      });
+    }
+
+    if (activityBody) {
+      activityBody.addEventListener('click', (event) => {
+        const target = event.target;
+        if (!(target instanceof HTMLElement)) return;
+        const userTarget = target.closest('[data-user-id]');
+        if (userTarget instanceof HTMLElement) {
+          const userId = Number(userTarget.dataset.userId);
+          if (Number.isFinite(userId)) {
+            openUserDetail(userId);
+            return;
+          }
+        }
+        if (target.dataset.retryActivity) {
+          fetchActivity();
         }
       });
     }
@@ -847,19 +2069,38 @@
       tabs.forEach((tab) => {
         tab.addEventListener('click', () => {
           const targetSection = tab.dataset.section;
-          document.querySelectorAll('.admin-section').forEach((section) => {
-            section.hidden = section.id !== targetSection;
-          });
-          tabs.forEach((btn) => btn.classList.toggle('primary', btn === tab));
-          if (targetSection === 'section-34') {
+          if (!targetSection) return;
+          clearUserHash();
+          showSection(targetSection);
+          lastSectionId = targetSection;
+          if (targetSection === 'section-dashboard') {
+            fetchDashboard();
+          } else if (targetSection === 'section-34') {
+            syncRequestsStateFromInputs();
             fetchRequests();
           } else if (targetSection === 'section-23') {
+            syncRequests23StateFromInputs();
             fetchRequests23();
+          } else if (targetSection === 'section-activity') {
+            syncActivityStateFromInputs();
+            fetchActivity();
           } else if (targetSection === 'section-products') {
+            syncProductsStateFromInputs();
+            loadProductCategories();
             fetchProducts();
           } else if (targetSection === 'section-codes') {
             fetchCodes();
           }
+        });
+      });
+    }
+
+    if (userDetailTabs?.length) {
+      userDetailTabs.forEach((tab) => {
+        tab.addEventListener('click', () => {
+          const tabId = tab.dataset.userTab;
+          if (!tabId) return;
+          setUserDetailTab(tabId);
         });
       });
     }
@@ -874,15 +2115,27 @@
     });
 
     backBtn?.addEventListener('click', redirectToHome);
+
+    userDetailBackBtn?.addEventListener('click', () => {
+      clearUserHash();
+      showSection(lastSectionId || 'section-dashboard');
+    });
+
+    refreshDashboardBtn?.addEventListener('click', fetchDashboard);
   };
 
   const init = async () => {
     const user = await ensureAdmin();
     if (!user) return;
     bindEvents();
-    fetchRequests();
-    fetchRequests23();
+    syncRequestsStateFromInputs();
+    syncRequests23StateFromInputs();
+    syncProductsStateFromInputs();
+    syncActivityStateFromInputs();
+    fetchDashboard();
+    handleHashChange();
   };
 
+  window.addEventListener('hashchange', handleHashChange);
   document.addEventListener('DOMContentLoaded', init);
 })();

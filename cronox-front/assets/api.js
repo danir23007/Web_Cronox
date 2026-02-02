@@ -509,11 +509,16 @@
 
   const adminApi = ensureAdminNamespace();
 
-  adminApi.listCircleUpgradeRequests = async (status = 'PENDING') => {
-    const data = await request('/api/admin/circle-upgrades/3-4', {
-      query: { status },
-    });
-    return Array.isArray(data) ? data : [];
+  adminApi.getDashboard = async () => {
+    return request('/api/admin/dashboard');
+  };
+
+  adminApi.listCircleUpgradeRequests = async (queryOrStatus = 'PENDING', queryOverride = {}) => {
+    const query =
+      typeof queryOrStatus === 'string'
+        ? { status: queryOrStatus, ...queryOverride }
+        : { ...queryOrStatus };
+    return request('/api/admin/circle-upgrades/3-4', { query });
   };
 
   adminApi.approveCircleUpgrade = async (id, payload = {}) => {
@@ -530,11 +535,12 @@
     });
   };
 
-  adminApi.listAutoCircleRequests = async (status = 'PENDING') => {
-    const data = await request('/api/admin/requests/2-3', {
-      query: { status },
-    });
-    return Array.isArray(data) ? data : [];
+  adminApi.listAutoCircleRequests = async (queryOrStatus = 'PENDING', queryOverride = {}) => {
+    const query =
+      typeof queryOrStatus === 'string'
+        ? { status: queryOrStatus, ...queryOverride }
+        : { ...queryOrStatus };
+    return request('/api/admin/requests/2-3', { query });
   };
 
   adminApi.listAdminProducts = async (query = {}) => {
@@ -574,6 +580,18 @@
 
   adminApi.listPromoCodes = async (query = {}) => {
     return request('/api/admin/promo-codes', { query });
+  };
+
+  adminApi.getAuditLogs = async (query = {}) => {
+    return request('/api/admin/audit-logs', { query });
+  };
+
+  adminApi.getUserDetail = async (id) => {
+    return request(`/api/admin/users/${encodeURIComponent(id)}`);
+  };
+
+  adminApi.getUserAuditLogs = async (id) => {
+    return request(`/api/admin/users/${encodeURIComponent(id)}/audit-logs`);
   };
 
   adminApi.createPromoCode = async (payload) => {

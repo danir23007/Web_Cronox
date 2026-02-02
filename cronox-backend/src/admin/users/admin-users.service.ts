@@ -4,11 +4,13 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { Prisma, Role, User } from '@prisma/client';
+import { OrderStatus, Prisma, Role, User } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AdminUserQueryDto } from './dto/admin-user-query.dto';
 
 const DEFAULT_PAGE_SIZE = 20;
+const RECENT_ITEMS_LIMIT = 20;
+const PAID_STATUSES: OrderStatus[] = [OrderStatus.PAID, OrderStatus.SHIPPED];
 
 type UserWithAddresses = Prisma.UserGetPayload<{
   include: { addresses: true };
@@ -52,14 +54,113 @@ export class AdminUsersService {
   async getUserById(id: number) {
     const user = await this.prisma.user.findUnique({
       where: { id },
-      include: { addresses: true },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        firstName: true,
+        lastName: true,
+        circleLevel: true,
+        role: true,
+        createdAt: true,
+        updatedAt: true,
+      },
     });
 
     if (!user) {
       throw new NotFoundException('User not found');
     }
 
-    return this.mapUserWithAddresses(user);
+    const [ordersCount, totalSpent, requestsCount, recentRequests, recentOrders, codesUsed] =
+      await this.prisma.$transaction([
+        this.prisma.order.count({ where: { userId: id } }),
+        this.prisma.order.aggregate({
+          where: { userId: id, status: { in: PAID_STATUSES } },
+          _sum: { total: true },
+        }),
+        this.prisma.circleUpgradeRequest.count({ where: { userId: id } }),
+        this.prisma.circleUpgradeRequest.findMany({
+          where: { userId: id },
+          orderBy: { createdAt: 'desc' },
+          take: RECENT_ITEMS_LIMIT,
+          select: {
+            id: true,
+            fromCircle: true,
+            toCircle: true,
+            status: true,
+            socialNetwork: true,
+            username: true,
+            requestNumber: true,
+            createdAt: true,
+            updatedAt: true,
+            reviewedAt: true,
+            approvedAt: true,
+            processedAt: true,
+          },
+        }),
+        this.prisma.order.findMany({
+          where: { userId: id },
+          orderBy: { createdAt: 'desc' },
+          take: RECENT_ITEMS_LIMIT,
+          select: {
+            id: true,
+            status: true,
+            total: true,
+            currency: true,
+            discountCents: true,
+            promoCodeCode: true,
+            createdAt: true,
+            updatedAt: true,
+          },
+        }),
+        this.prisma.promoCodeRedemption.findMany({
+          where: { userId: id },
+          orderBy: { redeemedAt: 'desc' },
+          take: RECENT_ITEMS_LIMIT,
+          select: {
+            redeemedAt: true,
+            orderId: true,
+            promoCode: {
+              select: {
+                code: true,
+                type: true,
+                value: true,
+              },
+            },
+          },
+        }),
+      ]);
+
+    const username =
+      user.name ||
+      [user.firstName, user.lastName].filter(Boolean).join(' ') ||
+      user.email;
+
+    return {
+      user: {
+        id: user.id,
+        email: user.email,
+        username,
+        avatarUrl: null,
+        circle: user.circleLevel ?? 1,
+        role: user.role ?? null,
+        createdAt: user.createdAt,
+        updatedAt: user.updatedAt,
+        lastLoginAt: null,
+      },
+      stats: {
+        ordersCount,
+        totalSpent: Number(totalSpent._sum.total ?? 0),
+        requestsCount,
+      },
+      requests: recentRequests,
+      orders: recentOrders.map((order) => ({
+        ...order,
+        total: Number(order.total ?? 0),
+      })),
+      codesUsed,
+      circleHistory: [],
+    };
   }
 
   async updateUserRole(id: number, role: Role, performedById: number) {
@@ -91,6 +192,44 @@ export class AdminUsersService {
     });
 
     return this.mapUser(updated);
+  }
+
+  async getUserAuditLogs(userId: number, limit = 20) {
+    const items = await this.prisma.auditLog.findMany({
+      where: {
+        OR: [
+          { targetType: 'user', targetId: String(userId) },
+          { metadata: { path: ['userId'], equals: userId } },
+        ],
+      },
+      orderBy: { createdAt: 'desc' },
+      take: limit,
+      include: {
+        actor: {
+          select: {
+            id: true,
+            email: true,
+            name: true,
+            firstName: true,
+            lastName: true,
+            role: true,
+          },
+        },
+      },
+    });
+
+    return items.map((item) => ({
+      id: item.id,
+      createdAt: item.createdAt,
+      adminUser: item.actor,
+      actionType: item.actionType ?? item.action ?? 'UNKNOWN',
+      targetType: item.targetType ?? 'unknown',
+      targetId: item.targetId ?? '',
+      fromCircle: item.fromCircle,
+      toCircle: item.toCircle,
+      reason: item.reason,
+      metadata: item.metadata,
+    }));
   }
 
   private buildWhere(query: AdminUserQueryDto): Prisma.UserWhereInput {

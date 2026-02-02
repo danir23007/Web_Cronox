@@ -8,4 +8,8 @@ export class AdminCircleUpgradeReviewDto {
   @IsOptional()
   @IsString()
   notes?: string;
+
+  @IsOptional()
+  @IsString()
+  reason?: string;
 }
