@@ -194,6 +194,44 @@ export class AdminUsersService {
     return this.mapUser(updated);
   }
 
+  async getUserAuditLogs(userId: number, limit = 20) {
+    const items = await this.prisma.auditLog.findMany({
+      where: {
+        OR: [
+          { targetType: 'user', targetId: String(userId) },
+          { metadata: { path: ['userId'], equals: userId } },
+        ],
+      },
+      orderBy: { createdAt: 'desc' },
+      take: limit,
+      include: {
+        actor: {
+          select: {
+            id: true,
+            email: true,
+            name: true,
+            firstName: true,
+            lastName: true,
+            role: true,
+          },
+        },
+      },
+    });
+
+    return items.map((item) => ({
+      id: item.id,
+      createdAt: item.createdAt,
+      adminUser: item.actor,
+      actionType: item.actionType ?? item.action ?? 'UNKNOWN',
+      targetType: item.targetType ?? 'unknown',
+      targetId: item.targetId ?? '',
+      fromCircle: item.fromCircle,
+      toCircle: item.toCircle,
+      reason: item.reason,
+      metadata: item.metadata,
+    }));
+  }
+
   private buildWhere(query: AdminUserQueryDto): Prisma.UserWhereInput {
     const where: Prisma.UserWhereInput = {};
     const search = query.search?.trim();

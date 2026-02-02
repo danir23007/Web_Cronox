@@ -582,8 +582,16 @@
     return request('/api/admin/promo-codes', { query });
   };
 
+  adminApi.getAuditLogs = async (query = {}) => {
+    return request('/api/admin/audit-logs', { query });
+  };
+
   adminApi.getUserDetail = async (id) => {
     return request(`/api/admin/users/${encodeURIComponent(id)}`);
+  };
+
+  adminApi.getUserAuditLogs = async (id) => {
+    return request(`/api/admin/users/${encodeURIComponent(id)}/audit-logs`);
   };
 
   adminApi.createPromoCode = async (payload) => {

@@ -334,15 +334,23 @@ model PromoCode {
 }
 
 model AuditLog {
-  id        Int      @id @default(autoincrement())
-  actorId   Int?
-  action    String
-  metadata  Json?
-  createdAt DateTime @default(now())
+  id         Int      @id @default(autoincrement())
+  actorId    Int?
+  action     String?
+  actionType String?
+  targetType String?
+  targetId   String?
+  fromCircle Int?
+  toCircle   Int?
+  reason     String?
+  metadata   Json?
+  createdAt  DateTime @default(now())
 
   actor User? @relation(fields: [actorId], references: [id], onDelete: SetNull)
 
   @@index([actorId, createdAt])
+  @@index([actionType, targetType, createdAt])
+  @@index([targetType, targetId])
 }
 
 model ShippingMethod {

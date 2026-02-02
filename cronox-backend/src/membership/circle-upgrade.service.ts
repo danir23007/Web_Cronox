@@ -32,6 +32,15 @@ export class CircleUpgradeService {
     };
   }
 
+  private buildAuditMetadata(request: CircleUpgradeRequest & { user: { id: number; email: string } }) {
+    return {
+      userId: request.user.id,
+      userEmail: request.user.email,
+      username: request.username,
+      socialNetwork: request.socialNetwork,
+    };
+  }
+
   private assertPending(request: CircleUpgradeRequest) {
     if (
       request.status !== CircleUpgradeRequestStatus.PENDING &&
@@ -417,7 +426,7 @@ export class CircleUpgradeService {
 
   async approveRequest(
     id: string,
-    review?: { notes?: string; reviewedBy?: string },
+    review?: { notes?: string; reviewedBy?: string; reason?: string },
     adminId?: number,
   ) {
     const reviewFields = this.sanitizeReviewFields(review);
@@ -464,6 +473,22 @@ export class CircleUpgradeService {
         });
       }
 
+      if (typeof adminId === 'number') {
+        await tx.auditLog.create({
+          data: {
+            actorId: adminId,
+            action: 'CIRCLE_REQUEST_APPROVED',
+            actionType: 'CIRCLE_REQUEST_APPROVED',
+            targetType: 'circleRequest',
+            targetId: request.id,
+            fromCircle: request.fromCircle,
+            toCircle: request.toCircle,
+            reason: review?.reason ?? null,
+            metadata: this.buildAuditMetadata(request),
+          },
+        });
+      }
+
       const refreshed = await tx.circleUpgradeRequest.findUnique({
         where: { id },
         include: {
@@ -491,7 +516,7 @@ export class CircleUpgradeService {
 
   async denyRequest(
     id: string,
-    review?: { notes?: string; reviewedBy?: string },
+    review?: { notes?: string; reviewedBy?: string; reason?: string },
     adminId?: number,
   ) {
     const reviewFields = this.sanitizeReviewFields(review);
@@ -522,6 +547,22 @@ export class CircleUpgradeService {
           },
         },
       });
+
+      if (typeof adminId === 'number') {
+        await tx.auditLog.create({
+          data: {
+            actorId: adminId,
+            action: 'CIRCLE_REQUEST_REJECTED',
+            actionType: 'CIRCLE_REQUEST_REJECTED',
+            targetType: 'circleRequest',
+            targetId: updated.id,
+            fromCircle: updated.fromCircle,
+            toCircle: updated.toCircle,
+            reason: review?.reason ?? null,
+            metadata: this.buildAuditMetadata(updated),
+          },
+        });
+      }
 
       return { request: updated, user: updated.user };
     });

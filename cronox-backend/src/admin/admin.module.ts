@@ -19,6 +19,8 @@ import { AdminPromoCodesController } from './promo-codes/admin-promo-codes.contr
 import { AdminPromoCodesService } from './promo-codes/admin-promo-codes.service';
 import { AdminDashboardController } from './dashboard/admin-dashboard.controller';
 import { AdminDashboardService } from './dashboard/admin-dashboard.service';
+import { AdminAuditLogsController } from './audit-logs/admin-audit-logs.controller';
+import { AdminAuditLogsService } from './audit-logs/admin-audit-logs.service';
 
 @Module({
   imports: [ProductModule, CategoriesModule, HistorialModule, MembershipModule],
@@ -32,6 +34,7 @@ import { AdminDashboardService } from './dashboard/admin-dashboard.service';
     AdminCirclePromotionsController,
     AdminPromoCodesController,
     AdminDashboardController,
+    AdminAuditLogsController,
   ],
   providers: [
     AdminOrdersService,
@@ -40,6 +43,7 @@ import { AdminDashboardService } from './dashboard/admin-dashboard.service';
     AdminCircleUpgradesService,
     AdminPromoCodesService,
     AdminDashboardService,
+    AdminAuditLogsService,
     AdminGuard,
   ],
 })

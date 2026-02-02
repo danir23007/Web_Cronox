@@ -38,4 +38,9 @@ export class AdminUsersController {
   ) {
     return this.usersService.updateUserRole(id, dto.role, adminId);
   }
+
+  @Get(':id/audit-logs')
+  getUserAuditLogs(@Param('id', ParseIntPipe) id: number) {
+    return this.usersService.getUserAuditLogs(id);
+  }
 }

@@ -55,6 +55,19 @@
   const userRequestsBody = $('#userRequestsBody');
   const userOrdersBody = $('#userOrdersBody');
   const userCodesBody = $('#userCodesBody');
+  const userHistoryBody = $('#userHistoryBody');
+  const activityBody = $('#activityBody');
+  const activityMessage = $('#activityMessage');
+  const activitySearch = $('#activitySearch');
+  const activityActionType = $('#activityActionType');
+  const activityTargetType = $('#activityTargetType');
+  const activityDateFrom = $('#activityDateFrom');
+  const activityDateTo = $('#activityDateTo');
+  const activityFiltersReset = $('#activityFiltersReset');
+  const activityPageInfo = $('#activityPageInfo');
+  const activityPrev = $('#activityPrev');
+  const activityNext = $('#activityNext');
+  const activityPageSize = $('#activityPageSize');
   const logoutBtn = $('#logoutBtn');
   const backBtn = $('#backBtn');
   const refreshDashboardBtn = $('#refreshDashboardBtn');
@@ -144,6 +157,15 @@
     sortBy: 'createdAt',
     sortDir: 'desc',
   };
+  const activityState = {
+    page: 1,
+    pageSize: 10,
+    q: '',
+    actionType: '',
+    targetType: '',
+    dateFrom: '',
+    dateTo: '',
+  };
   const userDetailState = {
     userId: null,
     activeTab: 'requests',
@@ -157,6 +179,7 @@
   let codeSearchTimeout = null;
   let requestSearchTimeout = null;
   let requestSearchTimeout23 = null;
+  let activitySearchTimeout = null;
   let currentSectionId = 'section-dashboard';
   let lastSectionId = 'section-dashboard';
 
@@ -432,6 +455,102 @@
       .join('');
   };
 
+  const getAdminLabel = (adminUser) => {
+    if (!adminUser) return '—';
+    return (
+      adminUser.email ||
+      adminUser.name ||
+      [adminUser.firstName, adminUser.lastName].filter(Boolean).join(' ') ||
+      '—'
+    );
+  };
+
+  const renderUserHistory = (entries = []) => {
+    if (!userHistoryBody) return;
+    if (!entries.length) {
+      userHistoryBody.innerHTML = '<tr><td colspan="5" class="empty">Sin historial disponible.</td></tr>';
+      return;
+    }
+    userHistoryBody.innerHTML = entries
+      .map((entry) => {
+        const created = formatRelativeTime(entry.createdAt);
+        const detailParts = [];
+        if (entry.fromCircle && entry.toCircle) {
+          detailParts.push(`Círculo ${entry.fromCircle}→${entry.toCircle}`);
+        }
+        if (entry.targetType && entry.targetId) {
+          detailParts.push(`${entry.targetType}:${entry.targetId}`);
+        }
+        const detail = detailParts.join(' · ') || '—';
+        return `<tr>
+          <td>
+            <div class="time-label" title="${created.full}">${created.label}</div>
+            <div class="time-sub">${created.full}</div>
+          </td>
+          <td>${entry.actionType || '—'}</td>
+          <td>${getAdminLabel(entry.adminUser)}</td>
+          <td>${detail}</td>
+          <td>${entry.reason || '—'}</td>
+        </tr>`;
+      })
+      .join('');
+  };
+
+  const renderActivity = (items = [], options = { error: false }) => {
+    if (!activityBody) return;
+    if (options.error) {
+      activityBody.innerHTML = `
+        <tr>
+          <td colspan="5" class="empty">
+            No se pudo cargar la actividad.
+            <button type="button" class="btn" data-retry-activity="1" style="margin-left:8px;">Reintentar</button>
+          </td>
+        </tr>
+      `;
+      return;
+    }
+    if (!items.length) {
+      activityBody.innerHTML = '<tr><td colspan="5" class="empty">Sin actividad reciente.</td></tr>';
+      return;
+    }
+    activityBody.innerHTML = items
+      .map((entry) => {
+        const created = formatRelativeTime(entry.createdAt);
+        const adminLabel = getAdminLabel(entry.adminUser);
+        const targetLabel = entry.targetType && entry.targetId
+          ? `${entry.targetType}:${entry.targetId}`
+          : '—';
+        const targetCell =
+          entry.targetType === 'user' && entry.targetId
+            ? `<button type="button" class="link-btn" data-user-id="${entry.targetId}">${targetLabel}</button>`
+            : targetLabel;
+        return `<tr>
+          <td>
+            <div class="time-label" title="${created.full}">${created.label}</div>
+            <div class="time-sub">${created.full}</div>
+          </td>
+          <td>${adminLabel}</td>
+          <td>${entry.actionType || '—'}</td>
+          <td class="activity-target">${targetCell}</td>
+          <td>${entry.reason || '—'}</td>
+        </tr>`;
+      })
+      .join('');
+  };
+
+  const fetchUserHistory = async (userId) => {
+    if (!userId || !userHistoryBody) return;
+    userHistoryBody.innerHTML = '<tr><td colspan="5" class="empty">Cargando historial…</td></tr>';
+    try {
+      const data = await window.CRONOX_API?.admin?.getUserAuditLogs?.(userId);
+      const items = Array.isArray(data) ? data : data?.items || [];
+      renderUserHistory(items);
+    } catch (error) {
+      console.error('[ADMIN] Error cargando historial', error);
+      userHistoryBody.innerHTML = '<tr><td colspan="5" class="empty">No se pudo cargar el historial.</td></tr>';
+    }
+  };
+
   const renderUserDetail = (payload) => {
     if (!payload) return;
     const user = payload.user || {};
@@ -463,6 +582,7 @@
     renderUserRequests(payload.requests || []);
     renderUserOrders(payload.orders || []);
     renderUserCodes(payload.codesUsed || []);
+    fetchUserHistory(user.id);
   };
 
   const setUserHash = (userId) => {
@@ -595,6 +715,18 @@
     };
   };
 
+  const buildActivityQuery = (state) => {
+    return {
+      page: state.page,
+      pageSize: state.pageSize,
+      q: state.q || undefined,
+      actionType: state.actionType || undefined,
+      targetType: state.targetType || undefined,
+      dateFrom: state.dateFrom ? normalizeDateRange(state.dateFrom) : undefined,
+      dateTo: state.dateTo ? normalizeDateRange(state.dateTo, true) : undefined,
+    };
+  };
+
   const normalizePaginated = (data, state) => {
     if (Array.isArray(data)) {
       return {
@@ -662,6 +794,14 @@
     if (productSortDir) productsState.sortDir = productSortDir.value || 'desc';
   };
 
+  const syncActivityStateFromInputs = () => {
+    if (activitySearch) activityState.q = activitySearch.value.trim();
+    if (activityActionType) activityState.actionType = activityActionType.value;
+    if (activityTargetType) activityState.targetType = activityTargetType.value;
+    if (activityDateFrom) activityState.dateFrom = activityDateFrom.value;
+    if (activityDateTo) activityState.dateTo = activityDateTo.value;
+  };
+
   const resetProductsFilters = () => {
     if (productSearch) productSearch.value = '';
     if (productDateFrom) productDateFrom.value = '';
@@ -674,6 +814,17 @@
     productsState.page = 1;
     syncProductsStateFromInputs();
     fetchProducts();
+  };
+
+  const resetActivityFilters = () => {
+    if (activitySearch) activitySearch.value = '';
+    if (activityActionType) activityActionType.value = '';
+    if (activityTargetType) activityTargetType.value = '';
+    if (activityDateFrom) activityDateFrom.value = '';
+    if (activityDateTo) activityDateTo.value = '';
+    activityState.page = 1;
+    syncActivityStateFromInputs();
+    fetchActivity();
   };
 
   const resetRequestsFilters = () => {
@@ -916,6 +1067,31 @@
     } catch (error) {
       console.error('No se pudo cargar el dashboard', error);
       setScopedMessage(dashboardMessage, 'No se pudieron cargar los datos del resumen.', 'error');
+    }
+  };
+
+  const fetchActivity = async () => {
+    if (!activityBody) return;
+    activityBody.innerHTML = '<tr><td colspan="5" class="empty">Cargando actividad…</td></tr>';
+    setScopedMessage(activityMessage, '');
+    try {
+      const data = await window.CRONOX_API?.admin?.getAuditLogs(
+        buildActivityQuery(activityState),
+      );
+      const meta = normalizePaginated(data, activityState);
+      activityState.page = meta.page;
+      activityState.pageSize = meta.pageSize;
+      renderActivity(meta.items || []);
+      updatePagination(meta, activityState, {
+        info: activityPageInfo,
+        prev: activityPrev,
+        next: activityNext,
+        size: activityPageSize,
+      });
+    } catch (error) {
+      console.error('[ADMIN] Error cargando actividad', error);
+      setScopedMessage(activityMessage, 'No se pudo cargar la actividad.', 'error');
+      renderActivity([], { error: true });
     }
   };
 
@@ -1671,6 +1847,53 @@
       productFiltersReset.addEventListener('click', resetProductsFilters);
     }
 
+    if (activityFiltersReset) {
+      activityFiltersReset.addEventListener('click', resetActivityFilters);
+    }
+
+    if (activitySearch) {
+      activitySearch.addEventListener('input', () => {
+        clearTimeout(activitySearchTimeout);
+        activitySearchTimeout = setTimeout(() => {
+          syncActivityStateFromInputs();
+          activityState.page = 1;
+          fetchActivity();
+        }, 250);
+      });
+    }
+
+    if (activityActionType) {
+      activityActionType.addEventListener('change', () => {
+        syncActivityStateFromInputs();
+        activityState.page = 1;
+        fetchActivity();
+      });
+    }
+
+    if (activityTargetType) {
+      activityTargetType.addEventListener('change', () => {
+        syncActivityStateFromInputs();
+        activityState.page = 1;
+        fetchActivity();
+      });
+    }
+
+    if (activityDateFrom) {
+      activityDateFrom.addEventListener('change', () => {
+        syncActivityStateFromInputs();
+        activityState.page = 1;
+        fetchActivity();
+      });
+    }
+
+    if (activityDateTo) {
+      activityDateTo.addEventListener('change', () => {
+        syncActivityStateFromInputs();
+        activityState.page = 1;
+        fetchActivity();
+      });
+    }
+
     if (productsPrev) {
       productsPrev.addEventListener('click', () => {
         if (productsState.page > 1) {
@@ -1692,6 +1915,30 @@
         productsState.pageSize = Number(productsPageSize.value || 25);
         productsState.page = 1;
         fetchProducts();
+      });
+    }
+
+    if (activityPrev) {
+      activityPrev.addEventListener('click', () => {
+        if (activityState.page > 1) {
+          activityState.page -= 1;
+          fetchActivity();
+        }
+      });
+    }
+
+    if (activityNext) {
+      activityNext.addEventListener('click', () => {
+        activityState.page += 1;
+        fetchActivity();
+      });
+    }
+
+    if (activityPageSize) {
+      activityPageSize.addEventListener('change', () => {
+        activityState.pageSize = Number(activityPageSize.value || 10);
+        activityState.page = 1;
+        fetchActivity();
       });
     }
 
@@ -1800,6 +2047,24 @@
       });
     }
 
+    if (activityBody) {
+      activityBody.addEventListener('click', (event) => {
+        const target = event.target;
+        if (!(target instanceof HTMLElement)) return;
+        const userTarget = target.closest('[data-user-id]');
+        if (userTarget instanceof HTMLElement) {
+          const userId = Number(userTarget.dataset.userId);
+          if (Number.isFinite(userId)) {
+            openUserDetail(userId);
+            return;
+          }
+        }
+        if (target.dataset.retryActivity) {
+          fetchActivity();
+        }
+      });
+    }
+
     if (tabs?.length) {
       tabs.forEach((tab) => {
         tab.addEventListener('click', () => {
@@ -1816,6 +2081,9 @@
           } else if (targetSection === 'section-23') {
             syncRequests23StateFromInputs();
             fetchRequests23();
+          } else if (targetSection === 'section-activity') {
+            syncActivityStateFromInputs();
+            fetchActivity();
           } else if (targetSection === 'section-products') {
             syncProductsStateFromInputs();
             loadProductCategories();
@@ -1863,6 +2131,7 @@
     syncRequestsStateFromInputs();
     syncRequests23StateFromInputs();
     syncProductsStateFromInputs();
+    syncActivityStateFromInputs();
     fetchDashboard();
     handleHashChange();
   };
