@@ -19,7 +19,7 @@ export class AdminDashboardService {
 
     const startOfWeek = new Date(now);
     const day = startOfWeek.getDay();
-    const diff = (day + 6) % 7;
+    const diff = (day + 6) % 7; // Monday as start of week
     startOfWeek.setDate(startOfWeek.getDate() - diff);
     startOfWeek.setHours(0, 0, 0, 0);
 
@@ -85,6 +85,8 @@ export class AdminDashboardService {
           product: { isActive: true },
         },
         _count: { _all: true },
+        // ✅ Prisma typings require orderBy for groupBy in your version
+        orderBy: { productId: 'asc' },
       }),
       this.prisma.circleUpgradeRequest.count({
         where: {
@@ -94,6 +96,7 @@ export class AdminDashboardService {
       }),
     ]);
 
+    // Prisma groupBy _count typing can be a union; extract _all safely.
     const getGroupCount = (row: { _count: unknown }) => {
       if (typeof row._count === 'object' && row._count) {
         return (row._count as { _all?: number })._all ?? 0;
@@ -115,6 +118,8 @@ export class AdminDashboardService {
 
     const paidTodayValue = Number(paidToday._sum.total ?? 0);
     const paidMonthValue = Number(paidMonth._sum.total ?? 0);
+
+    // lowStockVariants is grouped by productId => number of products with low-stock variants
     const lowStockProducts = lowStockVariants.length;
 
     return {
