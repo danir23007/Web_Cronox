@@ -582,6 +582,10 @@
     return request('/api/admin/promo-codes', { query });
   };
 
+  adminApi.getUserDetail = async (id) => {
+    return request(`/api/admin/users/${encodeURIComponent(id)}`);
+  };
+
   adminApi.createPromoCode = async (payload) => {
     return request('/api/admin/promo-codes', {
       method: 'POST',

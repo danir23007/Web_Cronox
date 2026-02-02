@@ -35,6 +35,26 @@
   const requestsNext23 = $('#requestsNext23');
   const requestsPageSize23 = $('#requestsPageSize23');
   const tabs = document.querySelectorAll('#adminTabs button');
+  const userDetailSection = $('#section-user');
+  const userDetailBackBtn = $('#userDetailBack');
+  const userDetailMessage = $('#userDetailMessage');
+  const userAvatar = $('#userAvatar');
+  const userName = $('#userName');
+  const userEmail = $('#userEmail');
+  const userBadges = $('#userBadges');
+  const userOrdersCount = $('#userOrdersCount');
+  const userTotalSpent = $('#userTotalSpent');
+  const userRequestsCount = $('#userRequestsCount');
+  const userLastActivity = $('#userLastActivity');
+  const userLastActivityFull = $('#userLastActivityFull');
+  const userDetailTabs = document.querySelectorAll('#userDetailTabs button');
+  const userTabRequests = $('#userTabRequests');
+  const userTabOrders = $('#userTabOrders');
+  const userTabCodes = $('#userTabCodes');
+  const userTabHistory = $('#userTabHistory');
+  const userRequestsBody = $('#userRequestsBody');
+  const userOrdersBody = $('#userOrdersBody');
+  const userCodesBody = $('#userCodesBody');
   const logoutBtn = $('#logoutBtn');
   const backBtn = $('#backBtn');
   const refreshDashboardBtn = $('#refreshDashboardBtn');
@@ -124,6 +144,11 @@
     sortBy: 'createdAt',
     sortDir: 'desc',
   };
+  const userDetailState = {
+    userId: null,
+    activeTab: 'requests',
+    data: null,
+  };
   let editingProductId = null;
   let editingCodeId = null;
   let cachedProductImages = [];
@@ -132,6 +157,8 @@
   let codeSearchTimeout = null;
   let requestSearchTimeout = null;
   let requestSearchTimeout23 = null;
+  let currentSectionId = 'section-dashboard';
+  let lastSectionId = 'section-dashboard';
 
   const setMessage = (text = '', type = 'success') => {
     if (!messageBox) return;
@@ -263,6 +290,236 @@
       }
     }
     return `${amount.toFixed(2)} €`;
+  };
+
+  const setUserDetailMessage = (text = '', type = 'success') => {
+    if (!userDetailMessage) return;
+    if (!text) {
+      userDetailMessage.className = 'message';
+      userDetailMessage.textContent = '';
+      return;
+    }
+    userDetailMessage.textContent = text;
+    userDetailMessage.className = `message show ${type === 'error' ? 'error' : 'success'}`;
+  };
+
+  const setActiveAdminTab = (sectionId) => {
+    if (!tabs?.length) return;
+    tabs.forEach((btn) => btn.classList.toggle('primary', btn.dataset.section === sectionId));
+  };
+
+  const showSection = (sectionId) => {
+    document.querySelectorAll('.admin-section').forEach((section) => {
+      section.hidden = section.id !== sectionId;
+    });
+    currentSectionId = sectionId;
+    if (sectionId === 'section-user') {
+      if (tabs?.length) {
+        tabs.forEach((btn) => btn.classList.remove('primary'));
+      }
+      return;
+    }
+    setActiveAdminTab(sectionId);
+  };
+
+  const getInitials = (value) => {
+    if (!value) return 'CR';
+    const parts = String(value).trim().split(/\s+/).filter(Boolean);
+    const letters = parts.slice(0, 2).map((part) => part[0]?.toUpperCase());
+    return letters.join('') || value.slice(0, 2).toUpperCase();
+  };
+
+  const setUserAvatar = (avatarUrl, displayName) => {
+    if (!userAvatar) return;
+    if (avatarUrl) {
+      userAvatar.innerHTML = `<img src="${avatarUrl}" alt="${displayName || 'Avatar'}">`;
+      return;
+    }
+    userAvatar.textContent = getInitials(displayName);
+  };
+
+  const setUserDetailTab = (tabId) => {
+    userDetailState.activeTab = tabId;
+    const panels = [
+      { id: 'requests', el: userTabRequests },
+      { id: 'orders', el: userTabOrders },
+      { id: 'codes', el: userTabCodes },
+      { id: 'history', el: userTabHistory },
+    ];
+    panels.forEach((panel) => {
+      if (panel.el) {
+        panel.el.hidden = panel.id !== tabId;
+      }
+    });
+    if (userDetailTabs?.length) {
+      userDetailTabs.forEach((btn) => {
+        btn.classList.toggle('primary', btn.dataset.userTab === tabId);
+      });
+    }
+  };
+
+  const renderUserRequests = (requests = []) => {
+    if (!userRequestsBody) return;
+    if (!requests.length) {
+      userRequestsBody.innerHTML = '<tr><td colspan="6" class="empty">Sin solicitudes.</td></tr>';
+      return;
+    }
+    userRequestsBody.innerHTML = requests
+      .map((req) => {
+        const created = formatRelativeTime(req.createdAt);
+        const typeLabel = req.fromCircle && req.toCircle ? `${req.fromCircle}→${req.toCircle}` : '—';
+        const attemptLabel = req.requestNumber == null ? '—' : `#${req.requestNumber}`;
+        return `<tr>
+          <td>
+            <div class="time-label" title="${created.full}">${created.label}</div>
+            <div class="time-sub">${created.full}</div>
+          </td>
+          <td>${typeLabel}</td>
+          <td>${statusBadge(req.status)}</td>
+          <td>${req.socialNetwork || '—'}</td>
+          <td>${req.username || '—'}</td>
+          <td>${attemptLabel}</td>
+        </tr>`;
+      })
+      .join('');
+  };
+
+  const renderUserOrders = (orders = []) => {
+    if (!userOrdersBody) return;
+    if (!orders.length) {
+      userOrdersBody.innerHTML = '<tr><td colspan="4" class="empty">Sin pedidos.</td></tr>';
+      return;
+    }
+    userOrdersBody.innerHTML = orders
+      .map((order) => {
+        const created = formatRelativeTime(order.createdAt);
+        const promo = order.promoCodeCode || '—';
+        return `<tr>
+          <td>
+            <div class="time-label" title="${created.full}">${created.label}</div>
+            <div class="time-sub">${created.full}</div>
+          </td>
+          <td>${order.status || '—'}</td>
+          <td>${formatCurrency(order.total)}</td>
+          <td>${promo}</td>
+        </tr>`;
+      })
+      .join('');
+  };
+
+  const renderUserCodes = (codes = []) => {
+    if (!userCodesBody) return;
+    if (!codes.length) {
+      userCodesBody.innerHTML = '<tr><td colspan="5" class="empty">No disponible aún.</td></tr>';
+      return;
+    }
+    userCodesBody.innerHTML = codes
+      .map((entry) => {
+        const created = formatRelativeTime(entry.redeemedAt);
+        const type = entry.promoCode?.type || '—';
+        const value = entry.promoCode?.value != null ? entry.promoCode.value : '—';
+        return `<tr>
+          <td>${entry.promoCode?.code || '—'}</td>
+          <td>${type}</td>
+          <td>${value}</td>
+          <td>
+            <div class="time-label" title="${created.full}">${created.label}</div>
+            <div class="time-sub">${created.full}</div>
+          </td>
+          <td>${entry.orderId ?? '—'}</td>
+        </tr>`;
+      })
+      .join('');
+  };
+
+  const renderUserDetail = (payload) => {
+    if (!payload) return;
+    const user = payload.user || {};
+    const stats = payload.stats || {};
+    const displayName = user.username || user.email || `Usuario ${user.id || ''}`.trim();
+    const email = user.email || '—';
+
+    if (userName) userName.textContent = displayName;
+    if (userEmail) userEmail.textContent = email;
+    setUserAvatar(user.avatarUrl, displayName);
+
+    if (userBadges) {
+      const badges = [
+        `<span class="badge">Círculo ${user.circle ?? '—'}</span>`,
+        user.role ? `<span class="badge">${user.role}</span>` : '',
+      ].filter(Boolean);
+      userBadges.innerHTML = badges.join('');
+    }
+
+    if (userOrdersCount) userOrdersCount.textContent = stats.ordersCount ?? 0;
+    if (userTotalSpent) userTotalSpent.textContent = formatCurrency(stats.totalSpent ?? 0);
+    if (userRequestsCount) userRequestsCount.textContent = stats.requestsCount ?? 0;
+
+    const lastActivityDate = user.lastLoginAt || user.updatedAt || user.createdAt;
+    const lastActivity = formatRelativeTime(lastActivityDate);
+    if (userLastActivity) userLastActivity.textContent = lastActivity.label;
+    if (userLastActivityFull) userLastActivityFull.textContent = lastActivity.full;
+
+    renderUserRequests(payload.requests || []);
+    renderUserOrders(payload.orders || []);
+    renderUserCodes(payload.codesUsed || []);
+  };
+
+  const setUserHash = (userId) => {
+    const hash = `#user=${userId}`;
+    if (window.location.hash !== hash) {
+      window.location.hash = hash;
+    }
+  };
+
+  const clearUserHash = () => {
+    if (window.location.hash.startsWith('#user=')) {
+      history.replaceState(null, '', window.location.pathname + window.location.search);
+    }
+  };
+
+  const loadUserDetail = async (userId) => {
+    if (!userId) return;
+    setUserDetailMessage('');
+    if (userDetailSection) {
+      showSection('section-user');
+    }
+    if (userName) userName.textContent = 'Cargando…';
+    try {
+      const data = await window.CRONOX_API?.admin?.getUserDetail?.(userId);
+      userDetailState.data = data;
+      renderUserDetail(data);
+    } catch (error) {
+      console.error('[ADMIN] Error cargando usuario', error);
+      setUserDetailMessage('No se pudo cargar el detalle del usuario.', 'error');
+    }
+  };
+
+  const openUserDetail = (userId, options = {}) => {
+    if (!userId) return;
+    if (currentSectionId !== 'section-user') {
+      lastSectionId = currentSectionId || 'section-dashboard';
+    }
+    userDetailState.userId = userId;
+    setUserDetailTab(userDetailState.activeTab || 'requests');
+    if (!options.skipHash) {
+      setUserHash(userId);
+    }
+    loadUserDetail(userId);
+  };
+
+  const handleHashChange = () => {
+    const match = window.location.hash.match(/user=(\d+)/);
+    if (match) {
+      const userId = Number(match[1]);
+      if (Number.isFinite(userId)) {
+        openUserDetail(userId, { skipHash: true });
+        return;
+      }
+    }
+    if (currentSectionId === 'section-user') {
+      showSection(lastSectionId || 'section-dashboard');
+    }
   };
 
   const setLoading = (isLoading) => {
@@ -474,6 +731,10 @@
         const userName = req.user?.firstName || req.user?.lastName
           ? `${req.user?.firstName || ''} ${req.user?.lastName || ''}`.trim()
           : req.user?.email || '';
+        const userLabel = userName || '—';
+        const userCell = req.userId
+          ? `<button type="button" class="link-btn" data-user-id="${req.userId}">${userLabel}</button>`
+          : userLabel;
         const created = formatRelativeTime(req.createdAt);
         const normalizedStatus = String(req.status || '').toUpperCase();
         const isActionable = normalizedStatus === 'PENDING' || normalizedStatus === 'EXPIRED';
@@ -490,7 +751,7 @@
             <div class="time-label" title="${created.full}">${created.label}</div>
             <div class="time-sub">${created.full}</div>
           </td>
-          <td>${userName || '—'}</td>
+          <td>${userCell}</td>
           <td>${req.userId}</td>
           <td>${req.socialNetwork}</td>
           <td>${req.username}</td>
@@ -525,6 +786,10 @@
         const userName = req.user?.firstName || req.user?.lastName
           ? `${req.user?.firstName || ''} ${req.user?.lastName || ''}`.trim()
           : req.user?.email || '';
+        const userLabel = userName || '—';
+        const userCell = req.userId
+          ? `<button type="button" class="link-btn" data-user-id="${req.userId}">${userLabel}</button>`
+          : userLabel;
         const created = formatRelativeTime(req.createdAt);
         const remaining = typeof req.remainingMs === 'number' ? formatDuration(req.remainingMs) : '—';
         const attemptLabel = req.requestNumber == null ? '—' : `#${req.requestNumber}`;
@@ -533,7 +798,7 @@
             <div class="time-label" title="${created.full}">${created.label}</div>
             <div class="time-sub">${created.full}</div>
           </td>
-          <td>${userName || '—'}</td>
+          <td>${userCell}</td>
           <td>${req.userId}</td>
           <td>${statusBadge(req.status)}</td>
           <td>${attemptLabel}</td>
@@ -1498,6 +1763,14 @@
       requestsBody.addEventListener('click', (event) => {
         const target = event.target;
         if (!(target instanceof HTMLElement)) return;
+        const userTarget = target.closest('[data-user-id]');
+        if (userTarget instanceof HTMLElement) {
+          const userId = Number(userTarget.dataset.userId);
+          if (Number.isFinite(userId)) {
+            openUserDetail(userId);
+            return;
+          }
+        }
         const action = target.dataset.action;
         const id = target.dataset.id;
         if (target.dataset.retry) {
@@ -1513,6 +1786,14 @@
       requestsBody23.addEventListener('click', (event) => {
         const target = event.target;
         if (!(target instanceof HTMLElement)) return;
+        const userTarget = target.closest('[data-user-id]');
+        if (userTarget instanceof HTMLElement) {
+          const userId = Number(userTarget.dataset.userId);
+          if (Number.isFinite(userId)) {
+            openUserDetail(userId);
+            return;
+          }
+        }
         if (target.dataset.retry23) {
           fetchRequests23();
         }
@@ -1546,6 +1827,16 @@
       });
     }
 
+    if (userDetailTabs?.length) {
+      userDetailTabs.forEach((tab) => {
+        tab.addEventListener('click', () => {
+          const tabId = tab.dataset.userTab;
+          if (!tabId) return;
+          setUserDetailTab(tabId);
+        });
+      });
+    }
+
     logoutBtn?.addEventListener('click', async () => {
       try {
         await window.CRONOX_API?.logout?.();
@@ -1556,6 +1847,11 @@
     });
 
     backBtn?.addEventListener('click', redirectToHome);
+
+    userDetailBackBtn?.addEventListener('click', () => {
+      clearUserHash();
+      showSection(lastSectionId || 'section-dashboard');
+    });
 
     refreshDashboardBtn?.addEventListener('click', fetchDashboard);
   };
@@ -1568,7 +1864,9 @@
     syncRequests23StateFromInputs();
     syncProductsStateFromInputs();
     fetchDashboard();
+    handleHashChange();
   };
 
+  window.addEventListener('hashchange', handleHashChange);
   document.addEventListener('DOMContentLoaded', init);
 })();
