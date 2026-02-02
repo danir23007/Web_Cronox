@@ -17,6 +17,8 @@ import { AdminCircleUpgradesService } from './circle-upgrades/admin-circle-upgra
 import { AdminCirclePromotionsController } from './circle-upgrades/admin-circle-promotions.controller';
 import { AdminPromoCodesController } from './promo-codes/admin-promo-codes.controller';
 import { AdminPromoCodesService } from './promo-codes/admin-promo-codes.service';
+import { AdminDashboardController } from './dashboard/admin-dashboard.controller';
+import { AdminDashboardService } from './dashboard/admin-dashboard.service';
 
 @Module({
   imports: [ProductModule, CategoriesModule, HistorialModule, MembershipModule],
@@ -29,6 +31,7 @@ import { AdminPromoCodesService } from './promo-codes/admin-promo-codes.service'
     AdminCircleUpgradesController,
     AdminCirclePromotionsController,
     AdminPromoCodesController,
+    AdminDashboardController,
   ],
   providers: [
     AdminOrdersService,
@@ -36,6 +39,7 @@ import { AdminPromoCodesService } from './promo-codes/admin-promo-codes.service'
     AdminStockService,
     AdminCircleUpgradesService,
     AdminPromoCodesService,
+    AdminDashboardService,
     AdminGuard,
   ],
 })
