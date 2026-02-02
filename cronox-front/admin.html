@@ -73,6 +73,17 @@
     .dashboard-alerts { display: grid; gap: 10px; margin-top: 8px; }
     .dashboard-alerts .alert-item { display: flex; justify-content: space-between; align-items: center; padding: 10px 12px; border-radius: 12px; border: 1px solid #1d1d26; background: #0f0f16; }
     .dashboard-alerts .alert-item strong { font-size: 1rem; }
+    details.filters-panel { border: 1px solid #1d1d26; border-radius: 12px; background: #0f0f16; padding: 10px 12px; }
+    details.filters-panel summary { cursor: pointer; font-weight: 600; list-style: none; display: flex; align-items: center; gap: 8px; }
+    details.filters-panel summary::-webkit-details-marker { display: none; }
+    details.filters-panel[open] summary { margin-bottom: 10px; }
+    .filters-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px; }
+    .filters-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+    .pagination { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-top: 12px; }
+    .pagination .page-info { color: #a8a8b3; font-size: 0.9rem; }
+    .pagination .page-controls { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .time-label { font-weight: 600; }
+    .time-sub { color: #8e93a4; font-size: 0.85rem; }
   </style>
 </head>
 <body>
@@ -144,15 +155,66 @@
           <h2 id="title-23">Solicitudes de ascenso 2→3</h2>
           <small>Visor automático de solicitudes en ventana de 72h.</small>
         </div>
-        <div>
-          <label for="filterStatus23" style="font-size:0.9rem; color:#b3b3c2;">Estado:</label>
-          <select id="filterStatus23" class="btn" style="padding-right: 30px;">
-            <option value="PENDING" selected>PENDIENTE</option>
-            <option value="APPROVED">APROBADA</option>
-          </select>
-        </div>
       </div>
       <div id="messageBox23" class="message" role="status" aria-live="polite"></div>
+      <details class="filters-panel">
+        <summary>Filtros</summary>
+        <div class="filters-grid">
+          <div class="form-group">
+            <label for="requestSearch23">Buscar usuario/email</label>
+            <input id="requestSearch23" class="input" type="search" placeholder="Buscar por usuario o email">
+          </div>
+          <div class="form-group">
+            <label for="filterStatus23">Estado</label>
+            <select id="filterStatus23" class="input">
+              <option value="PENDING" selected>PENDIENTE</option>
+              <option value="APPROVED">APROBADA</option>
+              <option value="EXPIRED">EXPIRADA</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="requestDateFrom23">Desde</label>
+            <input id="requestDateFrom23" class="input" type="date">
+          </div>
+          <div class="form-group">
+            <label for="requestDateTo23">Hasta</label>
+            <input id="requestDateTo23" class="input" type="date">
+          </div>
+          <div class="form-group">
+            <label for="requestAttemptsMin23">Intentos mín.</label>
+            <input id="requestAttemptsMin23" class="input" type="number" min="0" step="1" placeholder="0">
+          </div>
+          <div class="form-group">
+            <label for="requestAttemptsMax23">Intentos máx.</label>
+            <input id="requestAttemptsMax23" class="input" type="number" min="0" step="1" placeholder="10">
+          </div>
+          <div class="form-group">
+            <label for="requestSocialNetwork23">Red social</label>
+            <input id="requestSocialNetwork23" class="input" type="text" placeholder="INSTAGRAM">
+          </div>
+          <div class="form-group">
+            <label for="requestUserCircle23">Círculo actual</label>
+            <input id="requestUserCircle23" class="input" type="number" min="1" max="5" step="1" placeholder="3">
+          </div>
+          <div class="form-group">
+            <label for="requestSortBy23">Ordenar por</label>
+            <select id="requestSortBy23" class="input">
+              <option value="createdAt" selected>Antigüedad</option>
+              <option value="attempts">Intentos</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="requestSortDir23">Dirección</label>
+            <select id="requestSortDir23" class="input">
+              <option value="desc" selected>Descendente</option>
+              <option value="asc">Ascendente</option>
+            </select>
+          </div>
+        </div>
+        <div class="filters-actions" style="margin-top:10px;">
+          <button class="btn" type="button" id="requestFiltersReset23">Limpiar filtros</button>
+        </div>
+      </details>
       <div style="overflow-x: auto;">
         <table aria-describedby="title-23">
           <thead>
@@ -170,6 +232,20 @@
           </tbody>
         </table>
       </div>
+      <div class="pagination">
+        <div class="page-info" id="requestsPageInfo23">Página 1 de 1 · 0 resultados</div>
+        <div class="page-controls">
+          <button class="btn" type="button" id="requestsPrev23">Anterior</button>
+          <button class="btn" type="button" id="requestsNext23">Siguiente</button>
+          <label for="requestsPageSize23" style="color:#b3b3c2;">Filas</label>
+          <select id="requestsPageSize23" class="input" style="max-width:120px;">
+            <option value="10">10</option>
+            <option value="25" selected>25</option>
+            <option value="50">50</option>
+            <option value="100">100</option>
+          </select>
+        </div>
+      </div>
     </section>
 
     <section id="section-34" class="card admin-section" aria-labelledby="title-upgrades" hidden>
@@ -178,17 +254,67 @@
           <h2 id="title-upgrades">Solicitudes de ascenso 3→4</h2>
           <small>Solo se muestran solicitudes con estado PENDIENTE por defecto.</small>
         </div>
-        <div>
-          <label for="filterStatus" style="font-size:0.9rem; color:#b3b3c2;">Estado:</label>
-          <select id="filterStatus" class="btn" style="padding-right: 30px;">
-            <option value="PENDING" selected>PENDIENTE</option>
-            <option value="APPROVED">APROBADA</option>
-            <option value="DENIED">RECHAZADA</option>
-            <option value="EXPIRED">EXPIRADA</option>
-          </select>
-        </div>
       </div>
       <div id="messageBox" class="message" role="status" aria-live="polite"></div>
+      <details class="filters-panel">
+        <summary>Filtros</summary>
+        <div class="filters-grid">
+          <div class="form-group">
+            <label for="requestSearch">Buscar usuario/email</label>
+            <input id="requestSearch" class="input" type="search" placeholder="Buscar por usuario o email">
+          </div>
+          <div class="form-group">
+            <label for="filterStatus">Estado</label>
+            <select id="filterStatus" class="input">
+              <option value="PENDING" selected>PENDIENTE</option>
+              <option value="APPROVED">APROBADA</option>
+              <option value="DENIED">RECHAZADA</option>
+              <option value="EXPIRED">EXPIRADA</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="requestDateFrom">Desde</label>
+            <input id="requestDateFrom" class="input" type="date">
+          </div>
+          <div class="form-group">
+            <label for="requestDateTo">Hasta</label>
+            <input id="requestDateTo" class="input" type="date">
+          </div>
+          <div class="form-group">
+            <label for="requestAttemptsMin">Intentos mín.</label>
+            <input id="requestAttemptsMin" class="input" type="number" min="0" step="1" placeholder="0">
+          </div>
+          <div class="form-group">
+            <label for="requestAttemptsMax">Intentos máx.</label>
+            <input id="requestAttemptsMax" class="input" type="number" min="0" step="1" placeholder="10">
+          </div>
+          <div class="form-group">
+            <label for="requestSocialNetwork">Red social</label>
+            <input id="requestSocialNetwork" class="input" type="text" placeholder="INSTAGRAM">
+          </div>
+          <div class="form-group">
+            <label for="requestUserCircle">Círculo actual</label>
+            <input id="requestUserCircle" class="input" type="number" min="1" max="5" step="1" placeholder="3">
+          </div>
+          <div class="form-group">
+            <label for="requestSortBy">Ordenar por</label>
+            <select id="requestSortBy" class="input">
+              <option value="createdAt" selected>Antigüedad</option>
+              <option value="attempts">Intentos</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="requestSortDir">Dirección</label>
+            <select id="requestSortDir" class="input">
+              <option value="desc" selected>Descendente</option>
+              <option value="asc">Ascendente</option>
+            </select>
+          </div>
+        </div>
+        <div class="filters-actions" style="margin-top:10px;">
+          <button class="btn" type="button" id="requestFiltersReset">Limpiar filtros</button>
+        </div>
+      </details>
       <div style="overflow-x: auto;">
         <table aria-describedby="title-upgrades">
           <thead>
@@ -207,6 +333,20 @@
             <tr><td colspan="8" class="empty">Cargando solicitudes…</td></tr>
           </tbody>
         </table>
+      </div>
+      <div class="pagination">
+        <div class="page-info" id="requestsPageInfo">Página 1 de 1 · 0 resultados</div>
+        <div class="page-controls">
+          <button class="btn" type="button" id="requestsPrev">Anterior</button>
+          <button class="btn" type="button" id="requestsNext">Siguiente</button>
+          <label for="requestsPageSize" style="color:#b3b3c2;">Filas</label>
+          <select id="requestsPageSize" class="input" style="max-width:120px;">
+            <option value="10">10</option>
+            <option value="25" selected>25</option>
+            <option value="50">50</option>
+            <option value="100">100</option>
+          </select>
+        </div>
       </div>
     </section>
 

@@ -3,9 +3,37 @@
   const requestsBody = $('#requestsBody');
   const messageBox = $('#messageBox');
   const filterStatus = $('#filterStatus');
+  const requestSearch = $('#requestSearch');
+  const requestDateFrom = $('#requestDateFrom');
+  const requestDateTo = $('#requestDateTo');
+  const requestAttemptsMin = $('#requestAttemptsMin');
+  const requestAttemptsMax = $('#requestAttemptsMax');
+  const requestSocialNetwork = $('#requestSocialNetwork');
+  const requestUserCircle = $('#requestUserCircle');
+  const requestSortBy = $('#requestSortBy');
+  const requestSortDir = $('#requestSortDir');
+  const requestFiltersReset = $('#requestFiltersReset');
+  const requestsPageInfo = $('#requestsPageInfo');
+  const requestsPrev = $('#requestsPrev');
+  const requestsNext = $('#requestsNext');
+  const requestsPageSize = $('#requestsPageSize');
   const requestsBody23 = $('#requestsBody23');
   const messageBox23 = $('#messageBox23');
   const filterStatus23 = $('#filterStatus23');
+  const requestSearch23 = $('#requestSearch23');
+  const requestDateFrom23 = $('#requestDateFrom23');
+  const requestDateTo23 = $('#requestDateTo23');
+  const requestAttemptsMin23 = $('#requestAttemptsMin23');
+  const requestAttemptsMax23 = $('#requestAttemptsMax23');
+  const requestSocialNetwork23 = $('#requestSocialNetwork23');
+  const requestUserCircle23 = $('#requestUserCircle23');
+  const requestSortBy23 = $('#requestSortBy23');
+  const requestSortDir23 = $('#requestSortDir23');
+  const requestFiltersReset23 = $('#requestFiltersReset23');
+  const requestsPageInfo23 = $('#requestsPageInfo23');
+  const requestsPrev23 = $('#requestsPrev23');
+  const requestsNext23 = $('#requestsNext23');
+  const requestsPageSize23 = $('#requestsPageSize23');
   const tabs = document.querySelectorAll('#adminTabs button');
   const logoutBtn = $('#logoutBtn');
   const backBtn = $('#backBtn');
@@ -46,12 +74,42 @@
   const codeSubmitBtn = $('#codeSubmitBtn');
   const productsState = { page: 1, limit: 20, search: '', isActive: '' };
   const codesState = { page: 1, limit: 20, search: '', isActive: '' };
+  const requestsState = {
+    page: 1,
+    pageSize: 25,
+    q: '',
+    status: 'PENDING',
+    dateFrom: '',
+    dateTo: '',
+    attemptsMin: '',
+    attemptsMax: '',
+    socialNetwork: '',
+    userCircle: '',
+    sortBy: 'createdAt',
+    sortDir: 'desc',
+  };
+  const requests23State = {
+    page: 1,
+    pageSize: 25,
+    q: '',
+    status: 'PENDING',
+    dateFrom: '',
+    dateTo: '',
+    attemptsMin: '',
+    attemptsMax: '',
+    socialNetwork: '',
+    userCircle: '',
+    sortBy: 'createdAt',
+    sortDir: 'desc',
+  };
   let editingProductId = null;
   let editingCodeId = null;
   let cachedProductImages = [];
   let codesCache = [];
   let productSearchTimeout = null;
   let codeSearchTimeout = null;
+  let requestSearchTimeout = null;
+  let requestSearchTimeout23 = null;
 
   const setMessage = (text = '', type = 'success') => {
     if (!messageBox) return;
@@ -123,6 +181,33 @@
     }
   };
 
+  const formatRelativeTime = (value) => {
+    if (!value) return { label: '—', full: '—' };
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) {
+      return { label: String(value), full: String(value) };
+    }
+    const diffMs = Date.now() - date.getTime();
+    const future = diffMs < 0;
+    const absSeconds = Math.round(Math.abs(diffMs) / 1000);
+    const absMinutes = Math.round(absSeconds / 60);
+    const absHours = Math.round(absMinutes / 60);
+    const absDays = Math.round(absHours / 24);
+
+    let label = '';
+    if (absSeconds < 60) {
+      label = `${future ? 'en' : 'hace'} ${absSeconds}s`;
+    } else if (absMinutes < 60) {
+      label = `${future ? 'en' : 'hace'} ${absMinutes}m`;
+    } else if (absHours < 24) {
+      label = `${future ? 'en' : 'hace'} ${absHours}h`;
+    } else {
+      label = `${future ? 'en' : 'hace'} ${absDays} días`;
+    }
+
+    return { label, full: formatDate(date) };
+  };
+
   const formatDuration = (ms) => {
     if (ms <= 0) return 'Expirado';
     const totalSeconds = Math.floor(ms / 1000);
@@ -181,6 +266,129 @@
     }
   };
 
+  const parseNumberOrNull = (value) => {
+    if (value == null || value === '') return null;
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  };
+
+  const normalizeDateRange = (value, endOfDay = false) => {
+    if (!value) return '';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return '';
+    if (endOfDay) {
+      date.setHours(23, 59, 59, 999);
+    } else {
+      date.setHours(0, 0, 0, 0);
+    }
+    return date.toISOString();
+  };
+
+  const buildRequestQuery = (state) => {
+    return {
+      page: state.page,
+      pageSize: state.pageSize,
+      q: state.q || undefined,
+      status: state.status || undefined,
+      sortBy: state.sortBy || undefined,
+      sortDir: state.sortDir || undefined,
+      dateFrom: state.dateFrom ? normalizeDateRange(state.dateFrom) : undefined,
+      dateTo: state.dateTo ? normalizeDateRange(state.dateTo, true) : undefined,
+      attemptsMin: parseNumberOrNull(state.attemptsMin) ?? undefined,
+      attemptsMax: parseNumberOrNull(state.attemptsMax) ?? undefined,
+      socialNetwork: state.socialNetwork || undefined,
+      userCircle: parseNumberOrNull(state.userCircle) ?? undefined,
+    };
+  };
+
+  const normalizePaginated = (data, state) => {
+    if (Array.isArray(data)) {
+      return {
+        items: data,
+        page: state.page,
+        pageSize: state.pageSize,
+        totalItems: data.length,
+        totalPages: 1,
+      };
+    }
+    const items = Array.isArray(data?.items) ? data.items : [];
+    const page = Number(data?.page ?? state.page);
+    const pageSize = Number(data?.pageSize ?? state.pageSize);
+    const totalItems = Number(data?.totalItems ?? items.length);
+    const totalPages = Number(data?.totalPages ?? Math.max(1, Math.ceil(totalItems / pageSize || 1)));
+    return { items, page, pageSize, totalItems, totalPages };
+  };
+
+  const updatePagination = (meta, state, elements) => {
+    const { info, prev, next, size } = elements;
+    if (info) {
+      info.textContent = `Página ${meta.page} de ${meta.totalPages} · ${meta.totalItems} resultados`;
+    }
+    if (prev) prev.disabled = meta.page <= 1;
+    if (next) next.disabled = meta.page >= meta.totalPages;
+    if (size && size.value !== String(state.pageSize)) {
+      size.value = String(state.pageSize);
+    }
+  };
+
+  const syncRequestsStateFromInputs = () => {
+    if (filterStatus) requestsState.status = filterStatus.value || 'PENDING';
+    if (requestSearch) requestsState.q = requestSearch.value.trim();
+    if (requestDateFrom) requestsState.dateFrom = requestDateFrom.value;
+    if (requestDateTo) requestsState.dateTo = requestDateTo.value;
+    if (requestAttemptsMin) requestsState.attemptsMin = requestAttemptsMin.value;
+    if (requestAttemptsMax) requestsState.attemptsMax = requestAttemptsMax.value;
+    if (requestSocialNetwork) requestsState.socialNetwork = requestSocialNetwork.value.trim();
+    if (requestUserCircle) requestsState.userCircle = requestUserCircle.value;
+    if (requestSortBy) requestsState.sortBy = requestSortBy.value || 'createdAt';
+    if (requestSortDir) requestsState.sortDir = requestSortDir.value || 'desc';
+  };
+
+  const syncRequests23StateFromInputs = () => {
+    if (filterStatus23) requests23State.status = filterStatus23.value || 'PENDING';
+    if (requestSearch23) requests23State.q = requestSearch23.value.trim();
+    if (requestDateFrom23) requests23State.dateFrom = requestDateFrom23.value;
+    if (requestDateTo23) requests23State.dateTo = requestDateTo23.value;
+    if (requestAttemptsMin23) requests23State.attemptsMin = requestAttemptsMin23.value;
+    if (requestAttemptsMax23) requests23State.attemptsMax = requestAttemptsMax23.value;
+    if (requestSocialNetwork23) requests23State.socialNetwork = requestSocialNetwork23.value.trim();
+    if (requestUserCircle23) requests23State.userCircle = requestUserCircle23.value;
+    if (requestSortBy23) requests23State.sortBy = requestSortBy23.value || 'createdAt';
+    if (requestSortDir23) requests23State.sortDir = requestSortDir23.value || 'desc';
+  };
+
+  const resetRequestsFilters = () => {
+    if (requestSearch) requestSearch.value = '';
+    if (requestDateFrom) requestDateFrom.value = '';
+    if (requestDateTo) requestDateTo.value = '';
+    if (requestAttemptsMin) requestAttemptsMin.value = '';
+    if (requestAttemptsMax) requestAttemptsMax.value = '';
+    if (requestSocialNetwork) requestSocialNetwork.value = '';
+    if (requestUserCircle) requestUserCircle.value = '';
+    if (filterStatus) filterStatus.value = 'PENDING';
+    if (requestSortBy) requestSortBy.value = 'createdAt';
+    if (requestSortDir) requestSortDir.value = 'desc';
+    requestsState.page = 1;
+    syncRequestsStateFromInputs();
+    fetchRequests();
+  };
+
+  const resetRequests23Filters = () => {
+    if (requestSearch23) requestSearch23.value = '';
+    if (requestDateFrom23) requestDateFrom23.value = '';
+    if (requestDateTo23) requestDateTo23.value = '';
+    if (requestAttemptsMin23) requestAttemptsMin23.value = '';
+    if (requestAttemptsMax23) requestAttemptsMax23.value = '';
+    if (requestSocialNetwork23) requestSocialNetwork23.value = '';
+    if (requestUserCircle23) requestUserCircle23.value = '';
+    if (filterStatus23) filterStatus23.value = 'PENDING';
+    if (requestSortBy23) requestSortBy23.value = 'createdAt';
+    if (requestSortDir23) requestSortDir23.value = 'desc';
+    requests23State.page = 1;
+    syncRequests23StateFromInputs();
+    fetchRequests23();
+  };
+
   const renderRequests = (items, options = { error: false }) => {
     if (!requestsBody) return;
     if (options.error) {
@@ -204,6 +412,7 @@
         const userName = req.user?.firstName || req.user?.lastName
           ? `${req.user?.firstName || ''} ${req.user?.lastName || ''}`.trim()
           : req.user?.email || '';
+        const created = formatRelativeTime(req.createdAt);
         const normalizedStatus = String(req.status || '').toUpperCase();
         const isActionable = normalizedStatus === 'PENDING' || normalizedStatus === 'EXPIRED';
         const actions = isActionable
@@ -215,7 +424,10 @@
         const attemptLabel = req.requestNumber == null ? '—' : `#${req.requestNumber}`;
 
         return `<tr>
-          <td>${formatDate(req.createdAt)}</td>
+          <td>
+            <div class="time-label" title="${created.full}">${created.label}</div>
+            <div class="time-sub">${created.full}</div>
+          </td>
           <td>${userName || '—'}</td>
           <td>${req.userId}</td>
           <td>${req.socialNetwork}</td>
@@ -251,10 +463,14 @@
         const userName = req.user?.firstName || req.user?.lastName
           ? `${req.user?.firstName || ''} ${req.user?.lastName || ''}`.trim()
           : req.user?.email || '';
+        const created = formatRelativeTime(req.createdAt);
         const remaining = typeof req.remainingMs === 'number' ? formatDuration(req.remainingMs) : '—';
         const attemptLabel = req.requestNumber == null ? '—' : `#${req.requestNumber}`;
         return `<tr>
-          <td>${formatDate(req.createdAt)}</td>
+          <td>
+            <div class="time-label" title="${created.full}">${created.label}</div>
+            <div class="time-sub">${created.full}</div>
+          </td>
           <td>${userName || '—'}</td>
           <td>${req.userId}</td>
           <td>${statusBadge(req.status)}</td>
@@ -268,10 +484,20 @@
   const fetchRequests = async () => {
     setLoading(true);
     setMessage('');
-    const status = filterStatus?.value || 'PENDING';
     try {
-      const data = await window.CRONOX_API?.admin?.listCircleUpgradeRequests(status);
-      renderRequests(data || []);
+      const data = await window.CRONOX_API?.admin?.listCircleUpgradeRequests(
+        buildRequestQuery(requestsState),
+      );
+      const meta = normalizePaginated(data, requestsState);
+      requestsState.page = meta.page;
+      requestsState.pageSize = meta.pageSize;
+      renderRequests(meta.items || []);
+      updatePagination(meta, requestsState, {
+        info: requestsPageInfo,
+        prev: requestsPrev,
+        next: requestsNext,
+        size: requestsPageSize,
+      });
     } catch (error) {
       console.error('[ADMIN] Error cargando solicitudes', error);
       setMessage('No se pudieron cargar las solicitudes.', 'error');
@@ -285,10 +511,20 @@
       messageBox23.textContent = '';
       messageBox23.className = 'message';
     }
-    const status = filterStatus23?.value || 'PENDING';
     try {
-      const data = await window.CRONOX_API?.admin?.listAutoCircleRequests(status);
-      renderRequests23(data || []);
+      const data = await window.CRONOX_API?.admin?.listAutoCircleRequests(
+        buildRequestQuery(requests23State),
+      );
+      const meta = normalizePaginated(data, requests23State);
+      requests23State.page = meta.page;
+      requests23State.pageSize = meta.pageSize;
+      renderRequests23(meta.items || []);
+      updatePagination(meta, requests23State, {
+        info: requestsPageInfo23,
+        prev: requestsPrev23,
+        next: requestsNext23,
+        size: requestsPageSize23,
+      });
     } catch (error) {
       console.error('[ADMIN] Error cargando solicitudes 2->3', error);
       if (messageBox23) {
@@ -812,10 +1048,199 @@
 
   const bindEvents = () => {
     if (filterStatus) {
-      filterStatus.addEventListener('change', fetchRequests);
+      filterStatus.addEventListener('change', () => {
+        syncRequestsStateFromInputs();
+        requestsState.page = 1;
+        fetchRequests();
+      });
     }
+    if (requestSearch) {
+      requestSearch.addEventListener('input', () => {
+        clearTimeout(requestSearchTimeout);
+        requestSearchTimeout = setTimeout(() => {
+          syncRequestsStateFromInputs();
+          requestsState.page = 1;
+          fetchRequests();
+        }, 250);
+      });
+    }
+    if (requestDateFrom) {
+      requestDateFrom.addEventListener('change', () => {
+        syncRequestsStateFromInputs();
+        requestsState.page = 1;
+        fetchRequests();
+      });
+    }
+    if (requestDateTo) {
+      requestDateTo.addEventListener('change', () => {
+        syncRequestsStateFromInputs();
+        requestsState.page = 1;
+        fetchRequests();
+      });
+    }
+    if (requestAttemptsMin) {
+      requestAttemptsMin.addEventListener('change', () => {
+        syncRequestsStateFromInputs();
+        requestsState.page = 1;
+        fetchRequests();
+      });
+    }
+    if (requestAttemptsMax) {
+      requestAttemptsMax.addEventListener('change', () => {
+        syncRequestsStateFromInputs();
+        requestsState.page = 1;
+        fetchRequests();
+      });
+    }
+    if (requestSocialNetwork) {
+      requestSocialNetwork.addEventListener('input', () => {
+        syncRequestsStateFromInputs();
+        requestsState.page = 1;
+        fetchRequests();
+      });
+    }
+    if (requestUserCircle) {
+      requestUserCircle.addEventListener('change', () => {
+        syncRequestsStateFromInputs();
+        requestsState.page = 1;
+        fetchRequests();
+      });
+    }
+    if (requestSortBy) {
+      requestSortBy.addEventListener('change', () => {
+        syncRequestsStateFromInputs();
+        requestsState.page = 1;
+        fetchRequests();
+      });
+    }
+    if (requestSortDir) {
+      requestSortDir.addEventListener('change', () => {
+        syncRequestsStateFromInputs();
+        requestsState.page = 1;
+        fetchRequests();
+      });
+    }
+    if (requestFiltersReset) {
+      requestFiltersReset.addEventListener('click', resetRequestsFilters);
+    }
+    if (requestsPrev) {
+      requestsPrev.addEventListener('click', () => {
+        if (requestsState.page > 1) {
+          requestsState.page -= 1;
+          fetchRequests();
+        }
+      });
+    }
+    if (requestsNext) {
+      requestsNext.addEventListener('click', () => {
+        requestsState.page += 1;
+        fetchRequests();
+      });
+    }
+    if (requestsPageSize) {
+      requestsPageSize.addEventListener('change', () => {
+        requestsState.pageSize = Number(requestsPageSize.value || 25);
+        requestsState.page = 1;
+        fetchRequests();
+      });
+    }
+
     if (filterStatus23) {
-      filterStatus23.addEventListener('change', fetchRequests23);
+      filterStatus23.addEventListener('change', () => {
+        syncRequests23StateFromInputs();
+        requests23State.page = 1;
+        fetchRequests23();
+      });
+    }
+    if (requestSearch23) {
+      requestSearch23.addEventListener('input', () => {
+        clearTimeout(requestSearchTimeout23);
+        requestSearchTimeout23 = setTimeout(() => {
+          syncRequests23StateFromInputs();
+          requests23State.page = 1;
+          fetchRequests23();
+        }, 250);
+      });
+    }
+    if (requestDateFrom23) {
+      requestDateFrom23.addEventListener('change', () => {
+        syncRequests23StateFromInputs();
+        requests23State.page = 1;
+        fetchRequests23();
+      });
+    }
+    if (requestDateTo23) {
+      requestDateTo23.addEventListener('change', () => {
+        syncRequests23StateFromInputs();
+        requests23State.page = 1;
+        fetchRequests23();
+      });
+    }
+    if (requestAttemptsMin23) {
+      requestAttemptsMin23.addEventListener('change', () => {
+        syncRequests23StateFromInputs();
+        requests23State.page = 1;
+        fetchRequests23();
+      });
+    }
+    if (requestAttemptsMax23) {
+      requestAttemptsMax23.addEventListener('change', () => {
+        syncRequests23StateFromInputs();
+        requests23State.page = 1;
+        fetchRequests23();
+      });
+    }
+    if (requestSocialNetwork23) {
+      requestSocialNetwork23.addEventListener('input', () => {
+        syncRequests23StateFromInputs();
+        requests23State.page = 1;
+        fetchRequests23();
+      });
+    }
+    if (requestUserCircle23) {
+      requestUserCircle23.addEventListener('change', () => {
+        syncRequests23StateFromInputs();
+        requests23State.page = 1;
+        fetchRequests23();
+      });
+    }
+    if (requestSortBy23) {
+      requestSortBy23.addEventListener('change', () => {
+        syncRequests23StateFromInputs();
+        requests23State.page = 1;
+        fetchRequests23();
+      });
+    }
+    if (requestSortDir23) {
+      requestSortDir23.addEventListener('change', () => {
+        syncRequests23StateFromInputs();
+        requests23State.page = 1;
+        fetchRequests23();
+      });
+    }
+    if (requestFiltersReset23) {
+      requestFiltersReset23.addEventListener('click', resetRequests23Filters);
+    }
+    if (requestsPrev23) {
+      requestsPrev23.addEventListener('click', () => {
+        if (requests23State.page > 1) {
+          requests23State.page -= 1;
+          fetchRequests23();
+        }
+      });
+    }
+    if (requestsNext23) {
+      requestsNext23.addEventListener('click', () => {
+        requests23State.page += 1;
+        fetchRequests23();
+      });
+    }
+    if (requestsPageSize23) {
+      requestsPageSize23.addEventListener('change', () => {
+        requests23State.pageSize = Number(requestsPageSize23.value || 25);
+        requests23State.page = 1;
+        fetchRequests23();
+      });
     }
 
     if (productStatusFilter) {
@@ -935,8 +1360,10 @@
           if (targetSection === 'section-dashboard') {
             fetchDashboard();
           } else if (targetSection === 'section-34') {
+            syncRequestsStateFromInputs();
             fetchRequests();
           } else if (targetSection === 'section-23') {
+            syncRequests23StateFromInputs();
             fetchRequests23();
           } else if (targetSection === 'section-products') {
             fetchProducts();
@@ -965,6 +1392,8 @@
     const user = await ensureAdmin();
     if (!user) return;
     bindEvents();
+    syncRequestsStateFromInputs();
+    syncRequests23StateFromInputs();
     fetchDashboard();
   };
 

@@ -15,7 +15,7 @@ export class AdminCircleUpgradesController {
   @Get()
   list(@Query() query: AdminCircleUpgradeQueryDto) {
     const status = query.status ?? CircleUpgradeRequestStatus.PENDING;
-    return this.adminCircleUpgradesService.list(status);
+    return this.adminCircleUpgradesService.list(status, query);
   }
 
   @Patch(':id/approve')
