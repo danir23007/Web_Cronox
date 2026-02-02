@@ -37,13 +37,14 @@ export class AdminDashboardService {
       paidMonth,
       pendingRequests23,
       pendingRequests34,
-      lowStockProducts,
+      lowStockVariants,
       oldPendingRequests,
     ] = await this.prisma.$transaction([
       this.prisma.user.count(),
       this.prisma.user.groupBy({
         by: ['circleLevel'],
         _count: { _all: true },
+        orderBy: { circleLevel: 'asc' },
       }),
       this.prisma.order.count(),
       this.prisma.order.count({ where: { createdAt: { gte: startOfToday } } }),
@@ -76,13 +77,14 @@ export class AdminDashboardService {
           toCircle: 4,
         },
       }),
-      this.prisma.productVariant.count({
+      this.prisma.productVariant.groupBy({
+        by: ['productId'],
         where: {
           stockQty: { lt: LOW_STOCK_THRESHOLD },
           isActive: true,
           product: { isActive: true },
         },
-        distinct: ['productId'],
+        _count: { _all: true },
       }),
       this.prisma.circleUpgradeRequest.count({
         where: {
@@ -92,9 +94,16 @@ export class AdminDashboardService {
       }),
     ]);
 
+    const getGroupCount = (row: { _count: unknown }) => {
+      if (typeof row._count === 'object' && row._count) {
+        return (row._count as { _all?: number })._all ?? 0;
+      }
+      return 0;
+    };
+
     const circleCounts = new Map<number, number>();
     usersByCircle.forEach((row) => {
-      circleCounts.set(row.circleLevel ?? 0, row._count._all);
+      circleCounts.set(row.circleLevel ?? 0, getGroupCount(row));
     });
 
     const circleLevels = [1, 2, 3, 4, 5].map((level) => ({
@@ -106,6 +115,7 @@ export class AdminDashboardService {
 
     const paidTodayValue = Number(paidToday._sum.total ?? 0);
     const paidMonthValue = Number(paidMonth._sum.total ?? 0);
+    const lowStockProducts = lowStockVariants.length;
 
     return {
       users: {

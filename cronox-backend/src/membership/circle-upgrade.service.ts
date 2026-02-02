@@ -7,6 +7,7 @@ import {
 import {
   CircleUpgradeRequest,
   CircleUpgradeRequestStatus,
+  CircleUpgradeSocialNetwork,
   Prisma,
 } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
@@ -82,6 +83,19 @@ export class CircleUpgradeService {
 
   private normalizeUsername(username: string) {
     return username.trim().toLowerCase();
+  }
+
+  private normalizeDate(value: Date | string) {
+    return value instanceof Date ? value : new Date(value);
+  }
+
+  private parseSocialNetwork(value?: string): CircleUpgradeSocialNetwork | undefined {
+    if (!value) {
+      return undefined;
+    }
+    return Object.values(CircleUpgradeSocialNetwork).includes(value as CircleUpgradeSocialNetwork)
+      ? (value as CircleUpgradeSocialNetwork)
+      : undefined;
   }
 
   private getCooldownMs(latest?: CircleUpgradeRequest | null) {
@@ -288,10 +302,9 @@ export class CircleUpgradeService {
     ) {
       const expireBefore = new Date(Date.now() - AUTO_WINDOW_MS);
       if (createdAtFilter.lte) {
+        const lteDate = this.normalizeDate(createdAtFilter.lte);
         createdAtFilter.lte =
-          createdAtFilter.lte.getTime() < expireBefore.getTime()
-            ? createdAtFilter.lte
-            : expireBefore;
+          lteDate.getTime() < expireBefore.getTime() ? lteDate : expireBefore;
       } else {
         createdAtFilter.lte = expireBefore;
       }
@@ -303,12 +316,13 @@ export class CircleUpgradeService {
 
     const search = query?.q?.trim();
     const normalizedSearch = search?.toLowerCase();
+    const socialNetwork = this.parseSocialNetwork(query?.socialNetwork);
 
     const where: Prisma.CircleUpgradeRequestWhereInput = {
       fromCircle,
       toCircle,
       status: whereStatus,
-      ...(query?.socialNetwork ? { socialNetwork: query.socialNetwork } : {}),
+      ...(socialNetwork ? { socialNetwork } : {}),
       ...(Object.keys(createdAtFilter).length ? { createdAt: createdAtFilter } : {}),
       ...(Object.keys(requestNumberFilter).length ? { requestNumber: requestNumberFilter } : {}),
       ...(query?.userCircle != null

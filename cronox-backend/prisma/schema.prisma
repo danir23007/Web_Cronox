@@ -348,6 +348,11 @@ model AuditLog {
 
   actor User? @relation(fields: [actorId], references: [id], onDelete: SetNull)
 
+  @@index([createdAt])
+  @@index([actorId])
+  @@index([actionType])
+  @@index([targetType])
+  @@index([targetId])
   @@index([actorId, createdAt])
   @@index([actionType, targetType, createdAt])
   @@index([targetType, targetId])

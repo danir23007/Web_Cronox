@@ -14,14 +14,20 @@ export class AdminAuditLogsService {
     const pageSize = Math.min(query.pageSize ?? DEFAULT_PAGE_SIZE, 100);
     const skip = (page - 1) * pageSize;
 
+    const andFilters: Prisma.AuditLogWhereInput[] = [];
     const where: Prisma.AuditLogWhereInput = {};
 
     if (query.actionType) {
-      where.actionType = query.actionType;
+      andFilters.push({
+        OR: [
+          { actionType: query.actionType },
+          { actionType: null, action: query.actionType },
+        ],
+      });
     }
 
     if (query.targetType) {
-      where.targetType = query.targetType;
+      andFilters.push({ targetType: query.targetType });
     }
 
     if (query.dateFrom || query.dateTo) {
@@ -39,19 +45,26 @@ export class AdminAuditLogsService {
         }
       }
       if (Object.keys(createdAt).length) {
-        where.createdAt = createdAt;
+        andFilters.push({ createdAt });
       }
     }
 
     const search = query.q?.trim();
     if (search) {
-      where.OR = [
-        { targetId: { contains: search, mode: 'insensitive' } },
-        { actor: { email: { contains: search, mode: 'insensitive' } } },
-        { actor: { name: { contains: search, mode: 'insensitive' } } },
-        { actor: { firstName: { contains: search, mode: 'insensitive' } } },
-        { actor: { lastName: { contains: search, mode: 'insensitive' } } },
-      ];
+      andFilters.push({
+        OR: [
+          { targetId: { contains: search, mode: 'insensitive' } },
+          { action: { contains: search, mode: 'insensitive' } },
+          { actor: { email: { contains: search, mode: 'insensitive' } } },
+          { actor: { name: { contains: search, mode: 'insensitive' } } },
+          { actor: { firstName: { contains: search, mode: 'insensitive' } } },
+          { actor: { lastName: { contains: search, mode: 'insensitive' } } },
+        ],
+      });
+    }
+
+    if (andFilters.length) {
+      where.AND = andFilters;
     }
 
     const [items, totalItems] = await this.prisma.$transaction([
