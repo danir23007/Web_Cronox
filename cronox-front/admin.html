@@ -64,6 +64,41 @@
     .image-thumb img { width: 100%; height: 100%; object-fit: cover; }
     .badge { display: inline-block; padding: 6px 10px; border-radius: 999px; background: #1c1c26; color: #b3b3c2; font-size: 0.85rem; }
     .table-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+    .dashboard-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; }
+    .dashboard-card h3 { margin: 0 0 6px; font-size: 1rem; }
+    .dashboard-value { font-size: 1.6rem; font-weight: 700; margin-bottom: 4px; }
+    .dashboard-sub { color: #a8a8b3; font-size: 0.9rem; }
+    .dashboard-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 8px; margin-top: 10px; }
+    .dashboard-list .badge { width: 100%; text-align: center; }
+    .dashboard-alerts { display: grid; gap: 10px; margin-top: 8px; }
+    .dashboard-alerts .alert-item { display: flex; justify-content: space-between; align-items: center; padding: 10px 12px; border-radius: 12px; border: 1px solid #1d1d26; background: #0f0f16; }
+    .dashboard-alerts .alert-item strong { font-size: 1rem; }
+    details.filters-panel { border: 1px solid #1d1d26; border-radius: 12px; background: #0f0f16; padding: 10px 12px; }
+    details.filters-panel summary { cursor: pointer; font-weight: 600; list-style: none; display: flex; align-items: center; gap: 8px; }
+    details.filters-panel summary::-webkit-details-marker { display: none; }
+    details.filters-panel[open] summary { margin-bottom: 10px; }
+    .filters-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px; }
+    .filters-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+    .pagination { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-top: 12px; }
+    .pagination .page-info { color: #a8a8b3; font-size: 0.9rem; }
+    .pagination .page-controls { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .time-label { font-weight: 600; }
+    .time-sub { color: #8e93a4; font-size: 0.85rem; }
+    .link-btn { background: none; border: none; color: #b29bff; padding: 0; cursor: pointer; font-weight: 600; text-decoration: underline; }
+    .link-btn:hover { color: #d1c2ff; }
+    .user-detail-header { display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap; align-items: center; }
+    .user-detail-main { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; }
+    .user-avatar { width: 64px; height: 64px; border-radius: 16px; background: #1a1a26; border: 1px solid #2b2b38; display: flex; align-items: center; justify-content: center; font-weight: 700; color: #f5f5f7; overflow: hidden; }
+    .user-avatar img { width: 100%; height: 100%; object-fit: cover; }
+    .user-name { font-size: 1.3rem; font-weight: 700; }
+    .user-email { color: #a8a8b3; font-size: 0.95rem; }
+    .user-badges { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 6px; }
+    .user-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-top: 16px; }
+    .stat-card { display: flex; flex-direction: column; gap: 6px; background: #0f0f16; border: 1px solid #1d1d26; border-radius: 12px; padding: 12px; }
+    .stat-card span { color: #a8a8b3; font-size: 0.9rem; }
+    .stat-card strong { font-size: 1.2rem; }
+    .user-tabs { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 16px; }
+    .user-panel { margin-top: 14px; }
   </style>
 </head>
 <body>
@@ -78,12 +113,154 @@
 
     <nav class="card" style="margin-bottom:16px; padding:12px;">
       <div class="tabs" id="adminTabs" style="display:flex; gap:8px; flex-wrap:wrap;">
+        <button class="btn primary" data-section="section-dashboard">Resumen</button>
         <button class="btn" data-section="section-23">Solicitudes 2→3</button>
-        <button class="btn primary" data-section="section-34">Solicitudes 3→4</button>
+        <button class="btn" data-section="section-34">Solicitudes 3→4</button>
         <button class="btn" data-section="section-products">Productos</button>
         <button class="btn" data-section="section-codes">Códigos</button>
       </div>
     </nav>
+
+    <section id="section-user" class="card admin-section" aria-labelledby="title-user" hidden>
+      <div class="user-detail-header">
+        <div class="user-detail-main">
+          <div class="user-avatar" id="userAvatar">—</div>
+          <div>
+            <h2 id="title-user">Usuario</h2>
+            <div class="user-name" id="userName">—</div>
+            <div class="user-email" id="userEmail">—</div>
+            <div class="user-badges" id="userBadges"></div>
+          </div>
+        </div>
+        <button class="btn" type="button" id="userDetailBack">Volver</button>
+      </div>
+      <div id="userDetailMessage" class="message" role="status" aria-live="polite"></div>
+      <div class="user-stats">
+        <div class="stat-card">
+          <span>Total pedidos</span>
+          <strong id="userOrdersCount">—</strong>
+        </div>
+        <div class="stat-card">
+          <span>Total gastado</span>
+          <strong id="userTotalSpent">—</strong>
+        </div>
+        <div class="stat-card">
+          <span>Total solicitudes</span>
+          <strong id="userRequestsCount">—</strong>
+        </div>
+        <div class="stat-card">
+          <span>Última actividad</span>
+          <strong id="userLastActivity">—</strong>
+          <small class="time-sub" id="userLastActivityFull">—</small>
+        </div>
+      </div>
+      <div class="user-tabs" id="userDetailTabs">
+        <button class="btn primary" data-user-tab="requests">Solicitudes</button>
+        <button class="btn" data-user-tab="orders">Pedidos</button>
+        <button class="btn" data-user-tab="codes">Códigos</button>
+        <button class="btn" data-user-tab="history">Historial círculo</button>
+      </div>
+      <div class="user-panel" id="userTabRequests">
+        <div style="overflow-x:auto;">
+          <table aria-label="Solicitudes del usuario">
+            <thead>
+              <tr>
+                <th>Creada</th>
+                <th>Tipo</th>
+                <th>Estado</th>
+                <th>Red</th>
+                <th>Usuario</th>
+                <th>Intento</th>
+              </tr>
+            </thead>
+            <tbody id="userRequestsBody">
+              <tr><td colspan="6" class="empty">Sin solicitudes.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div class="user-panel" id="userTabOrders" hidden>
+        <div style="overflow-x:auto;">
+          <table aria-label="Pedidos del usuario">
+            <thead>
+              <tr>
+                <th>Fecha</th>
+                <th>Estado</th>
+                <th>Total</th>
+                <th>Promo</th>
+              </tr>
+            </thead>
+            <tbody id="userOrdersBody">
+              <tr><td colspan="4" class="empty">Sin pedidos.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div class="user-panel" id="userTabCodes" hidden>
+        <div style="overflow-x:auto;">
+          <table aria-label="Códigos usados">
+            <thead>
+              <tr>
+                <th>Código</th>
+                <th>Tipo</th>
+                <th>Valor</th>
+                <th>Canjeado</th>
+                <th>Pedido</th>
+              </tr>
+            </thead>
+            <tbody id="userCodesBody">
+              <tr><td colspan="5" class="empty">No disponible aún.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div class="user-panel" id="userTabHistory" hidden>
+        <div class="empty">Historial de círculo no disponible aún. Se habilitará con Audit Log.</div>
+      </div>
+    </section>
+
+    <section id="section-dashboard" class="card admin-section" aria-labelledby="title-dashboard">
+      <div style="display:flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap;">
+        <div>
+          <h2 id="title-dashboard">Resumen general</h2>
+          <small>Indicadores clave del panel administrativo.</small>
+        </div>
+        <button class="btn" type="button" id="refreshDashboardBtn">Actualizar</button>
+      </div>
+      <div id="dashboardMessage" class="message" role="status" aria-live="polite"></div>
+      <div class="dashboard-grid" style="margin-top:14px;">
+        <div class="card dashboard-card">
+          <h3>Total usuarios</h3>
+          <div class="dashboard-value" id="totalUsers">—</div>
+          <div class="dashboard-sub">Distribución por círculo</div>
+          <div class="dashboard-list" id="usersByCircle"></div>
+        </div>
+        <div class="card dashboard-card">
+          <h3>Solicitudes pendientes</h3>
+          <div class="dashboard-value" id="pendingRequestsTotal">—</div>
+          <div class="dashboard-sub">Por tipo</div>
+          <div class="dashboard-list" id="pendingRequestsByType"></div>
+        </div>
+        <div class="card dashboard-card">
+          <h3>Pedidos</h3>
+          <div class="dashboard-value" id="ordersTotal">—</div>
+          <div class="dashboard-sub" id="ordersBreakdown">Hoy: — · Semana: —</div>
+        </div>
+        <div class="card dashboard-card">
+          <h3>Ingresos (pagados)</h3>
+          <div class="dashboard-value" id="revenueToday">—</div>
+          <div class="dashboard-sub" id="revenueMonth">Mes: —</div>
+        </div>
+      </div>
+      <div class="card" style="margin-top:16px;">
+        <h3 style="margin-top:0;">Alertas</h3>
+        <div class="dashboard-alerts" id="dashboardAlerts">
+          <div class="alert-item"><span>Stock bajo</span><strong id="alertLowStock">—</strong></div>
+          <div class="alert-item"><span>Solicitudes pendientes &gt; 7 días</span><strong id="alertOldRequests">—</strong></div>
+          <div class="alert-item"><span>Errores recientes</span><strong>—</strong></div>
+        </div>
+      </div>
+    </section>
 
     <section id="section-23" class="card admin-section" aria-labelledby="title-23" hidden>
       <div style="display:flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap;">
@@ -91,15 +268,66 @@
           <h2 id="title-23">Solicitudes de ascenso 2→3</h2>
           <small>Visor automático de solicitudes en ventana de 72h.</small>
         </div>
-        <div>
-          <label for="filterStatus23" style="font-size:0.9rem; color:#b3b3c2;">Estado:</label>
-          <select id="filterStatus23" class="btn" style="padding-right: 30px;">
-            <option value="PENDING" selected>PENDIENTE</option>
-            <option value="APPROVED">APROBADA</option>
-          </select>
-        </div>
       </div>
       <div id="messageBox23" class="message" role="status" aria-live="polite"></div>
+      <details class="filters-panel">
+        <summary>Filtros</summary>
+        <div class="filters-grid">
+          <div class="form-group">
+            <label for="requestSearch23">Buscar usuario/email</label>
+            <input id="requestSearch23" class="input" type="search" placeholder="Buscar por usuario o email">
+          </div>
+          <div class="form-group">
+            <label for="filterStatus23">Estado</label>
+            <select id="filterStatus23" class="input">
+              <option value="PENDING" selected>PENDIENTE</option>
+              <option value="APPROVED">APROBADA</option>
+              <option value="EXPIRED">EXPIRADA</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="requestDateFrom23">Desde</label>
+            <input id="requestDateFrom23" class="input" type="date">
+          </div>
+          <div class="form-group">
+            <label for="requestDateTo23">Hasta</label>
+            <input id="requestDateTo23" class="input" type="date">
+          </div>
+          <div class="form-group">
+            <label for="requestAttemptsMin23">Intentos mín.</label>
+            <input id="requestAttemptsMin23" class="input" type="number" min="0" step="1" placeholder="0">
+          </div>
+          <div class="form-group">
+            <label for="requestAttemptsMax23">Intentos máx.</label>
+            <input id="requestAttemptsMax23" class="input" type="number" min="0" step="1" placeholder="10">
+          </div>
+          <div class="form-group">
+            <label for="requestSocialNetwork23">Red social</label>
+            <input id="requestSocialNetwork23" class="input" type="text" placeholder="INSTAGRAM">
+          </div>
+          <div class="form-group">
+            <label for="requestUserCircle23">Círculo actual</label>
+            <input id="requestUserCircle23" class="input" type="number" min="1" max="5" step="1" placeholder="3">
+          </div>
+          <div class="form-group">
+            <label for="requestSortBy23">Ordenar por</label>
+            <select id="requestSortBy23" class="input">
+              <option value="createdAt" selected>Antigüedad</option>
+              <option value="attempts">Intentos</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="requestSortDir23">Dirección</label>
+            <select id="requestSortDir23" class="input">
+              <option value="desc" selected>Descendente</option>
+              <option value="asc">Ascendente</option>
+            </select>
+          </div>
+        </div>
+        <div class="filters-actions" style="margin-top:10px;">
+          <button class="btn" type="button" id="requestFiltersReset23">Limpiar filtros</button>
+        </div>
+      </details>
       <div style="overflow-x: auto;">
         <table aria-describedby="title-23">
           <thead>
@@ -117,25 +345,89 @@
           </tbody>
         </table>
       </div>
+      <div class="pagination">
+        <div class="page-info" id="requestsPageInfo23">Página 1 de 1 · 0 resultados</div>
+        <div class="page-controls">
+          <button class="btn" type="button" id="requestsPrev23">Anterior</button>
+          <button class="btn" type="button" id="requestsNext23">Siguiente</button>
+          <label for="requestsPageSize23" style="color:#b3b3c2;">Filas</label>
+          <select id="requestsPageSize23" class="input" style="max-width:120px;">
+            <option value="10">10</option>
+            <option value="25" selected>25</option>
+            <option value="50">50</option>
+            <option value="100">100</option>
+          </select>
+        </div>
+      </div>
     </section>
 
-    <section id="section-34" class="card admin-section" aria-labelledby="title-upgrades">
+    <section id="section-34" class="card admin-section" aria-labelledby="title-upgrades" hidden>
       <div style="display:flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap;">
         <div>
           <h2 id="title-upgrades">Solicitudes de ascenso 3→4</h2>
           <small>Solo se muestran solicitudes con estado PENDIENTE por defecto.</small>
         </div>
-        <div>
-          <label for="filterStatus" style="font-size:0.9rem; color:#b3b3c2;">Estado:</label>
-          <select id="filterStatus" class="btn" style="padding-right: 30px;">
-            <option value="PENDING" selected>PENDIENTE</option>
-            <option value="APPROVED">APROBADA</option>
-            <option value="DENIED">RECHAZADA</option>
-            <option value="EXPIRED">EXPIRADA</option>
-          </select>
-        </div>
       </div>
       <div id="messageBox" class="message" role="status" aria-live="polite"></div>
+      <details class="filters-panel">
+        <summary>Filtros</summary>
+        <div class="filters-grid">
+          <div class="form-group">
+            <label for="requestSearch">Buscar usuario/email</label>
+            <input id="requestSearch" class="input" type="search" placeholder="Buscar por usuario o email">
+          </div>
+          <div class="form-group">
+            <label for="filterStatus">Estado</label>
+            <select id="filterStatus" class="input">
+              <option value="PENDING" selected>PENDIENTE</option>
+              <option value="APPROVED">APROBADA</option>
+              <option value="DENIED">RECHAZADA</option>
+              <option value="EXPIRED">EXPIRADA</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="requestDateFrom">Desde</label>
+            <input id="requestDateFrom" class="input" type="date">
+          </div>
+          <div class="form-group">
+            <label for="requestDateTo">Hasta</label>
+            <input id="requestDateTo" class="input" type="date">
+          </div>
+          <div class="form-group">
+            <label for="requestAttemptsMin">Intentos mín.</label>
+            <input id="requestAttemptsMin" class="input" type="number" min="0" step="1" placeholder="0">
+          </div>
+          <div class="form-group">
+            <label for="requestAttemptsMax">Intentos máx.</label>
+            <input id="requestAttemptsMax" class="input" type="number" min="0" step="1" placeholder="10">
+          </div>
+          <div class="form-group">
+            <label for="requestSocialNetwork">Red social</label>
+            <input id="requestSocialNetwork" class="input" type="text" placeholder="INSTAGRAM">
+          </div>
+          <div class="form-group">
+            <label for="requestUserCircle">Círculo actual</label>
+            <input id="requestUserCircle" class="input" type="number" min="1" max="5" step="1" placeholder="3">
+          </div>
+          <div class="form-group">
+            <label for="requestSortBy">Ordenar por</label>
+            <select id="requestSortBy" class="input">
+              <option value="createdAt" selected>Antigüedad</option>
+              <option value="attempts">Intentos</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="requestSortDir">Dirección</label>
+            <select id="requestSortDir" class="input">
+              <option value="desc" selected>Descendente</option>
+              <option value="asc">Ascendente</option>
+            </select>
+          </div>
+        </div>
+        <div class="filters-actions" style="margin-top:10px;">
+          <button class="btn" type="button" id="requestFiltersReset">Limpiar filtros</button>
+        </div>
+      </details>
       <div style="overflow-x: auto;">
         <table aria-describedby="title-upgrades">
           <thead>
@@ -155,6 +447,20 @@
           </tbody>
         </table>
       </div>
+      <div class="pagination">
+        <div class="page-info" id="requestsPageInfo">Página 1 de 1 · 0 resultados</div>
+        <div class="page-controls">
+          <button class="btn" type="button" id="requestsPrev">Anterior</button>
+          <button class="btn" type="button" id="requestsNext">Siguiente</button>
+          <label for="requestsPageSize" style="color:#b3b3c2;">Filas</label>
+          <select id="requestsPageSize" class="input" style="max-width:120px;">
+            <option value="10">10</option>
+            <option value="25" selected>25</option>
+            <option value="50">50</option>
+            <option value="100">100</option>
+          </select>
+        </div>
+      </div>
     </section>
 
     <section id="section-products" class="card admin-section" aria-labelledby="title-products" hidden>
@@ -166,13 +472,61 @@
         <button class="btn primary" type="button" id="createProductBtn">Crear producto</button>
       </div>
       <div class="filter-bar">
-        <input id="productSearch" class="input" type="search" placeholder="Buscar por nombre o colección">
-        <select id="productStatusFilter" class="input" style="max-width:180px;">
-          <option value="">Todos</option>
-          <option value="true">Activos</option>
-          <option value="false">Inactivos</option>
-        </select>
+        <input id="productSearch" class="input" type="search" placeholder="Buscar por nombre, SKU o categoría">
       </div>
+      <details class="filters-panel">
+        <summary>Filtros</summary>
+        <div class="filters-grid">
+          <div class="form-group">
+            <label for="productDateFrom">Desde</label>
+            <input id="productDateFrom" class="input" type="date">
+          </div>
+          <div class="form-group">
+            <label for="productDateTo">Hasta</label>
+            <input id="productDateTo" class="input" type="date">
+          </div>
+          <div class="form-group">
+            <label for="productStockState">Stock</label>
+            <select id="productStockState" class="input">
+              <option value="">Todos</option>
+              <option value="low">Stock bajo</option>
+              <option value="in_stock">En stock</option>
+              <option value="out_of_stock">Sin stock</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="productCategory">Categoría</label>
+            <select id="productCategory" class="input">
+              <option value="">Todas</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="productStatusFilter">Estado</label>
+            <select id="productStatusFilter" class="input">
+              <option value="">Todos</option>
+              <option value="true">Activos</option>
+              <option value="false">Inactivos</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="productSortBy">Ordenar por</label>
+            <select id="productSortBy" class="input">
+              <option value="createdAt" selected>Antigüedad</option>
+              <option value="stock">Stock</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="productSortDir">Dirección</label>
+            <select id="productSortDir" class="input">
+              <option value="desc" selected>Descendente</option>
+              <option value="asc">Ascendente</option>
+            </select>
+          </div>
+        </div>
+        <div class="filters-actions" style="margin-top:10px;">
+          <button class="btn" type="button" id="productFiltersReset">Limpiar filtros</button>
+        </div>
+      </details>
       <div id="productsMessage" class="message" role="status" aria-live="polite"></div>
       <div style="overflow-x: auto;">
         <table aria-describedby="title-products">
@@ -183,13 +537,28 @@
               <th>Colección</th>
               <th>Estado</th>
               <th>Stock</th>
+              <th>Creado</th>
               <th>Acciones</th>
             </tr>
           </thead>
           <tbody id="productsBody">
-            <tr><td colspan="6" class="empty">Cargando productos…</td></tr>
+            <tr><td colspan="7" class="empty">Cargando productos…</td></tr>
           </tbody>
         </table>
+      </div>
+      <div class="pagination">
+        <div class="page-info" id="productsPageInfo">Página 1 de 1 · 0 resultados</div>
+        <div class="page-controls">
+          <button class="btn" type="button" id="productsPrev">Anterior</button>
+          <button class="btn" type="button" id="productsNext">Siguiente</button>
+          <label for="productsPageSize" style="color:#b3b3c2;">Filas</label>
+          <select id="productsPageSize" class="input" style="max-width:120px;">
+            <option value="10">10</option>
+            <option value="25" selected>25</option>
+            <option value="50">50</option>
+            <option value="100">100</option>
+          </select>
+        </div>
       </div>
     </section>
 
