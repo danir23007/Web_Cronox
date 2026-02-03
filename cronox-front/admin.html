@@ -158,6 +158,8 @@
       </div>
     </nav>
 
+    <div id="apiUnavailable" class="message error" role="alert"></div>
+
     <section id="section-user" class="card admin-section" aria-labelledby="title-user" hidden>
       <div class="user-detail-header">
         <div class="user-detail-main">
@@ -383,12 +385,68 @@
         </div>
       </div>
       <div id="usersMessage" class="message" role="status" aria-live="polite"></div>
+      <details class="filters-panel" open>
+        <summary>Filtros y búsqueda</summary>
+        <div class="filters-grid">
+          <label class="form-group">
+            <span>Buscar (email / teléfono / nombre)</span>
+            <input id="usersSearch" class="input" type="search" placeholder="Buscar usuarios">
+          </label>
+          <label class="form-group">
+            <span>Email</span>
+            <input id="usersEmail" class="input" type="search" placeholder="cliente@email.com">
+          </label>
+          <label class="form-group">
+            <span>Teléfono</span>
+            <input id="usersPhone" class="input" type="search" placeholder="+34 600 000 000">
+          </label>
+          <label class="form-group">
+            <span>Rol</span>
+            <select id="usersRole" class="select">
+              <option value="">Todos</option>
+              <option value="USER">USER</option>
+              <option value="ADMIN">ADMIN</option>
+              <option value="SUPERADMIN">SUPERADMIN</option>
+            </select>
+          </label>
+          <label class="form-group">
+            <span>Círculo</span>
+            <select id="usersCircle" class="select">
+              <option value="">Todos</option>
+              <option value="1">1</option>
+              <option value="2">2</option>
+              <option value="3">3</option>
+              <option value="4">4</option>
+              <option value="5">5</option>
+            </select>
+          </label>
+          <label class="form-group">
+            <span>Ordenar por</span>
+            <select id="usersSort" class="select">
+              <option value="createdAt">Alta</option>
+              <option value="email">Email</option>
+              <option value="id">ID</option>
+            </select>
+          </label>
+          <label class="form-group">
+            <span>Orden</span>
+            <select id="usersOrder" class="select">
+              <option value="desc">Descendente</option>
+              <option value="asc">Ascendente</option>
+            </select>
+          </label>
+        </div>
+        <div class="filters-actions" style="margin-top:10px;">
+          <button class="btn" type="button" id="usersFiltersReset">Limpiar</button>
+        </div>
+      </details>
       <div style="overflow-x: auto;">
         <table aria-describedby="title-users">
           <thead>
             <tr>
               <th>ID</th>
               <th>Email</th>
+              <th id="usersPhoneHeader" hidden>Teléfono</th>
               <th>Nombre</th>
               <th>Rol</th>
               <th>Círculo</th>

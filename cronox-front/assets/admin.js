@@ -80,6 +80,16 @@
   const usersPageInfo = $('#usersPageInfo');
   const usersPrev = $('#usersPrev');
   const usersNext = $('#usersNext');
+  const usersSearch = $('#usersSearch');
+  const usersEmail = $('#usersEmail');
+  const usersPhone = $('#usersPhone');
+  const usersRole = $('#usersRole');
+  const usersCircle = $('#usersCircle');
+  const usersSort = $('#usersSort');
+  const usersOrder = $('#usersOrder');
+  const usersFiltersReset = $('#usersFiltersReset');
+  const usersPhoneHeader = $('#usersPhoneHeader');
+  const apiUnavailable = $('#apiUnavailable');
   const logoutBtn = $('#logoutBtn');
   const backBtn = $('#backBtn');
   const refreshDashboardBtn = $('#refreshDashboardBtn');
@@ -188,9 +198,16 @@
   };
   const usersState = {
     page: 1,
-    pageSize: 20,
+    pageSize: 10,
     total: 0,
     totalPages: 1,
+    q: '',
+    email: '',
+    phone: '',
+    role: '',
+    circle: '',
+    sort: 'createdAt',
+    order: 'desc',
   };
   const userDetailState = {
     userId: null,
@@ -217,6 +234,7 @@
   let requestSearchTimeout = null;
   let requestSearchTimeout23 = null;
   let activitySearchTimeout = null;
+  let usersSearchTimeout = null;
   let currentSectionId = 'section-dashboard';
   let lastSectionId = 'section-dashboard';
   let lastPendingCounts = { pending23: 0, pending34: 0 };
@@ -438,9 +456,14 @@
     redirectToHome();
   };
 
+  const showApiUnavailable = (reason = '') => {
+    const detail = reason ? ` ${reason}` : '';
+    setScopedMessage(apiUnavailable, `API no disponible.${detail}`, 'error');
+  };
+
   const ensureAdmin = async () => {
     if (!window.CRONOX_API?.getMe) {
-      redirectToHome();
+      showApiUnavailable('No se encontró el cliente de API.');
       return null;
     }
     const user = await window.CRONOX_API.getMe();
@@ -1234,6 +1257,20 @@
     };
   };
 
+  const buildUsersQuery = (state) => {
+    return {
+      page: state.page,
+      pageSize: state.pageSize,
+      q: state.q || undefined,
+      email: state.email || undefined,
+      phone: state.phone || undefined,
+      role: state.role || undefined,
+      circle: parseNumberOrNull(state.circle) ?? undefined,
+      sort: state.sort || undefined,
+      order: state.order || undefined,
+    };
+  };
+
   const normalizePaginated = (data, state) => {
     if (Array.isArray(data)) {
       return {
@@ -1309,6 +1346,64 @@
     if (activityDateTo) activityState.dateTo = activityDateTo.value;
   };
 
+  const syncUsersStateFromInputs = () => {
+    if (usersSearch) usersState.q = usersSearch.value.trim();
+    if (usersEmail) usersState.email = usersEmail.value.trim();
+    if (usersPhone) usersState.phone = usersPhone.value.trim();
+    if (usersRole) usersState.role = usersRole.value;
+    if (usersCircle) usersState.circle = usersCircle.value;
+    if (usersSort) usersState.sort = usersSort.value || 'createdAt';
+    if (usersOrder) usersState.order = usersOrder.value || 'desc';
+  };
+
+  const applyUsersStateToInputs = () => {
+    if (usersSearch) usersSearch.value = usersState.q || '';
+    if (usersEmail) usersEmail.value = usersState.email || '';
+    if (usersPhone) usersPhone.value = usersState.phone || '';
+    if (usersRole) usersRole.value = usersState.role || '';
+    if (usersCircle) usersCircle.value = usersState.circle || '';
+    if (usersSort) usersSort.value = usersState.sort || 'createdAt';
+    if (usersOrder) usersOrder.value = usersState.order || 'desc';
+  };
+
+  const readUsersStateFromQuery = () => {
+    const params = new URLSearchParams(window.location.search);
+    const page = Number(params.get('usersPage'));
+    const pageSize = Number(params.get('usersPageSize'));
+    usersState.page = Number.isFinite(page) && page > 0 ? page : usersState.page;
+    usersState.pageSize = Number.isFinite(pageSize) && pageSize > 0 ? pageSize : usersState.pageSize;
+    usersState.q = params.get('usersQ') ?? usersState.q;
+    usersState.email = params.get('usersEmail') ?? usersState.email;
+    usersState.phone = params.get('usersPhone') ?? usersState.phone;
+    usersState.role = params.get('usersRole') ?? usersState.role;
+    usersState.circle = params.get('usersCircle') ?? usersState.circle;
+    usersState.sort = params.get('usersSort') ?? usersState.sort;
+    usersState.order = params.get('usersOrder') ?? usersState.order;
+  };
+
+  const updateUsersQueryString = () => {
+    const params = new URLSearchParams(window.location.search);
+    const setOrDelete = (key, value) => {
+      if (value === undefined || value === null || value === '') {
+        params.delete(key);
+      } else {
+        params.set(key, String(value));
+      }
+    };
+    setOrDelete('usersPage', usersState.page);
+    setOrDelete('usersPageSize', usersState.pageSize);
+    setOrDelete('usersQ', usersState.q);
+    setOrDelete('usersEmail', usersState.email);
+    setOrDelete('usersPhone', usersState.phone);
+    setOrDelete('usersRole', usersState.role);
+    setOrDelete('usersCircle', usersState.circle);
+    setOrDelete('usersSort', usersState.sort);
+    setOrDelete('usersOrder', usersState.order);
+    const newQuery = params.toString();
+    const newUrl = newQuery ? `${window.location.pathname}?${newQuery}${window.location.hash}` : `${window.location.pathname}${window.location.hash}`;
+    window.history.replaceState({}, '', newUrl);
+  };
+
   const resetProductsFilters = () => {
     if (productSearch) productSearch.value = '';
     if (productDateFrom) productDateFrom.value = '';
@@ -1332,6 +1427,19 @@
     activityState.page = 1;
     syncActivityStateFromInputs();
     fetchActivity();
+  };
+
+  const resetUsersFilters = () => {
+    if (usersSearch) usersSearch.value = '';
+    if (usersEmail) usersEmail.value = '';
+    if (usersPhone) usersPhone.value = '';
+    if (usersRole) usersRole.value = '';
+    if (usersCircle) usersCircle.value = '';
+    if (usersSort) usersSort.value = 'createdAt';
+    if (usersOrder) usersOrder.value = 'desc';
+    usersState.page = 1;
+    syncUsersStateFromInputs();
+    fetchUsers();
   };
 
   const resetRequestsFilters = () => {
@@ -1661,21 +1769,27 @@
   };
 
   const normalizeUsersResponse = (payload) => {
-    const base = payload?.data ?? payload ?? {};
-    const items = Array.isArray(base.items)
-      ? base.items
-      : Array.isArray(base.users)
-        ? base.users
-        : Array.isArray(base.data)
-          ? base.data
-          : Array.isArray(base)
-            ? base
-            : [];
-    const metaSource = base?.meta ?? payload?.meta ?? payload?.data?.meta ?? {};
-    const total = Number(metaSource.total ?? metaSource.count ?? base.total ?? base.count ?? items.length);
-    const page = Number(metaSource.page ?? base.page ?? usersState.page);
+    const payloadData = payload?.data;
+    const dataContainer =
+      payloadData && typeof payloadData === 'object' && !Array.isArray(payloadData)
+        ? payloadData
+        : null;
+    const items = Array.isArray(payloadData)
+      ? payloadData
+      : Array.isArray(dataContainer?.data)
+        ? dataContainer.data
+        : Array.isArray(payload?.items)
+          ? payload.items
+          : Array.isArray(payload?.users)
+            ? payload.users
+            : Array.isArray(payload)
+              ? payload
+              : [];
+    const metaSource = payload?.meta ?? dataContainer?.meta ?? payloadData?.meta ?? payload?.data?.meta ?? {};
+    const total = Number(metaSource.total ?? metaSource.count ?? payload?.total ?? items.length);
+    const page = Number(metaSource.page ?? payload?.page ?? usersState.page);
     const pageSize = Number(
-      metaSource.pageSize ?? metaSource.limit ?? base.pageSize ?? base.limit ?? usersState.pageSize,
+      metaSource.pageSize ?? metaSource.limit ?? payload?.pageSize ?? payload?.limit ?? usersState.pageSize,
     );
     const safePage = Number.isFinite(page) && page > 0 ? page : usersState.page;
     const safePageSize = Number.isFinite(pageSize) && pageSize > 0 ? pageSize : usersState.pageSize;
@@ -1696,6 +1810,7 @@
     const source = item && typeof item === 'object' ? item : {};
     const id = source.id ?? source.userId ?? source._id ?? source.uid ?? '';
     const email = source.email ?? source.mail ?? source.username ?? '';
+    const phone = source.phone ?? source.phoneNumber ?? source.mobile ?? source.telefono ?? '';
     const firstName = source.firstName ?? source.first_name ?? '';
     const lastName = source.lastName ?? source.last_name ?? '';
     const displayName =
@@ -1703,9 +1818,11 @@
     return {
       id,
       email,
+      phone,
       displayName,
       role: source.role ?? source.userRole ?? source.type ?? '',
-      circle: source.circle ?? source.userCircle ?? source.level ?? source.membershipCircle ?? '',
+      circle:
+        source.circle ?? source.circleLevel ?? source.userCircle ?? source.level ?? source.membershipCircle ?? '',
       createdAt: source.createdAt ?? source.created_at ?? source.created ?? source.createdOn ?? '',
     };
   };
@@ -1714,15 +1831,26 @@
     if (!usersPageInfo) return;
     const totalPages = Math.max(1, Number(usersState.totalPages) || 1);
     const currentPage = Math.min(Math.max(usersState.page, 1), totalPages);
-    usersPageInfo.textContent = `Página ${currentPage} de ${totalPages}`;
+    const totalLabel = Number.isFinite(usersState.total) ? usersState.total : 0;
+    usersPageInfo.textContent = `Página ${currentPage} de ${totalPages} · Total: ${totalLabel}`;
     if (usersPrev) usersPrev.disabled = currentPage <= 1;
     if (usersNext) usersNext.disabled = currentPage >= totalPages;
   };
 
+  const getUsersColumnCount = () => (usersPhoneHeader && !usersPhoneHeader.hidden ? 8 : 7);
+
   const renderUsers = (items = []) => {
     if (!usersBody) return;
+    const hasPhone = items.some((item) => {
+      const user = mapUserRecord(item);
+      return Boolean(user.phone);
+    });
+    if (usersPhoneHeader) {
+      usersPhoneHeader.hidden = !hasPhone;
+    }
+    const columnCount = hasPhone ? 8 : 7;
     if (!items.length) {
-      usersBody.innerHTML = '<tr><td colspan="7" class="empty">No hay usuarios para mostrar.</td></tr>';
+      usersBody.innerHTML = `<tr><td colspan="${columnCount}" class="empty">No hay usuarios para mostrar.</td></tr>`;
       return;
     }
     usersBody.innerHTML = items
@@ -1730,6 +1858,7 @@
         const user = mapUserRecord(item);
         const idLabel = user.id != null && user.id !== '' ? escapeHtml(String(user.id)) : '—';
         const emailLabel = user.email ? escapeHtml(user.email) : '—';
+        const phoneLabel = user.phone ? escapeHtml(user.phone) : '—';
         const nameLabel = user.displayName ? escapeHtml(user.displayName) : '—';
         const roleLabel = user.role ? escapeHtml(String(user.role)) : '—';
         const circleLabel =
@@ -1743,6 +1872,7 @@
           <tr>
             <td>${idLabel}</td>
             <td>${emailLabel}</td>
+            ${hasPhone ? `<td>${phoneLabel}</td>` : ''}
             <td>${nameLabel}</td>
             <td>${roleLabel}</td>
             <td>${circleLabel}</td>
@@ -1758,23 +1888,26 @@
     if (!usersBody) return;
     if (!canAccess('users')) {
       setScopedMessage(usersMessage, 'No autorizado.', 'error');
-      usersBody.innerHTML = '<tr><td colspan="7" class="empty">No autorizado.</td></tr>';
+      usersBody.innerHTML = `<tr><td colspan="${getUsersColumnCount()}" class="empty">No autorizado.</td></tr>`;
       updateUsersPagination();
       return;
     }
-    usersBody.innerHTML = '<tr><td colspan="7" class="empty">Cargando usuarios…</td></tr>';
+    usersBody.innerHTML = `<tr><td colspan="${getUsersColumnCount()}" class="empty">Cargando usuarios…</td></tr>`;
     setScopedMessage(usersMessage, '');
     try {
-      const data = await window.CRONOX_API?.admin?.listUsers?.({
-        page: usersState.page,
-        limit: usersState.pageSize,
-      });
+      const listFn = window.CRONOX_API?.admin?.getUserList ?? window.CRONOX_API?.admin?.listUsers;
+      if (!listFn) {
+        showApiUnavailable('No se encontró el endpoint de usuarios.');
+        throw new Error('API no disponible');
+      }
+      const data = await listFn(buildUsersQuery(usersState));
       const normalized = normalizeUsersResponse(data);
       usersState.page = normalized.meta.page;
       usersState.pageSize = normalized.meta.pageSize;
       usersState.total = normalized.meta.total;
       usersState.totalPages = normalized.meta.totalPages;
       renderUsers(normalized.items || []);
+      updateUsersQueryString();
       updateUsersPagination();
     } catch (error) {
       console.error('[ADMIN] Error cargando usuarios', error);
@@ -1782,7 +1915,7 @@
         setScopedMessage(usersMessage, 'Tu sesión ha caducado. Vuelve a iniciar sesión.', 'error');
         usersBody.innerHTML = `
           <tr>
-            <td colspan="7" class="empty">
+            <td colspan="${getUsersColumnCount()}" class="empty">
               No autorizado.
               <button type="button" class="btn primary" data-users-login="1" style="margin-left:8px;">Volver a login</button>
             </td>
@@ -1791,7 +1924,7 @@
         setScopedMessage(usersMessage, 'No se pudieron cargar los usuarios.', 'error');
         usersBody.innerHTML = `
           <tr>
-            <td colspan="7" class="empty">
+            <td colspan="${getUsersColumnCount()}" class="empty">
               Error al cargar usuarios.
               <button type="button" class="btn" data-retry-users="1" style="margin-left:8px;">Reintentar</button>
             </td>
@@ -2685,6 +2818,82 @@
       });
     }
 
+    if (usersSearch) {
+      const triggerSearch = () => {
+        syncUsersStateFromInputs();
+        usersState.page = 1;
+        fetchUsers();
+      };
+      usersSearch.addEventListener('input', () => {
+        clearTimeout(usersSearchTimeout);
+        usersSearchTimeout = setTimeout(triggerSearch, 300);
+      });
+      usersSearch.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter') {
+          clearTimeout(usersSearchTimeout);
+          triggerSearch();
+        }
+      });
+    }
+
+    if (usersEmail) {
+      usersEmail.addEventListener('input', () => {
+        clearTimeout(usersSearchTimeout);
+        usersSearchTimeout = setTimeout(() => {
+          syncUsersStateFromInputs();
+          usersState.page = 1;
+          fetchUsers();
+        }, 300);
+      });
+    }
+
+    if (usersPhone) {
+      usersPhone.addEventListener('input', () => {
+        clearTimeout(usersSearchTimeout);
+        usersSearchTimeout = setTimeout(() => {
+          syncUsersStateFromInputs();
+          usersState.page = 1;
+          fetchUsers();
+        }, 300);
+      });
+    }
+
+    if (usersRole) {
+      usersRole.addEventListener('change', () => {
+        syncUsersStateFromInputs();
+        usersState.page = 1;
+        fetchUsers();
+      });
+    }
+
+    if (usersCircle) {
+      usersCircle.addEventListener('change', () => {
+        syncUsersStateFromInputs();
+        usersState.page = 1;
+        fetchUsers();
+      });
+    }
+
+    if (usersSort) {
+      usersSort.addEventListener('change', () => {
+        syncUsersStateFromInputs();
+        usersState.page = 1;
+        fetchUsers();
+      });
+    }
+
+    if (usersOrder) {
+      usersOrder.addEventListener('change', () => {
+        syncUsersStateFromInputs();
+        usersState.page = 1;
+        fetchUsers();
+      });
+    }
+
+    if (usersFiltersReset) {
+      usersFiltersReset.addEventListener('click', resetUsersFilters);
+    }
+
     if (usersPrev) {
       usersPrev.addEventListener('click', () => {
         if (usersState.page > 1) {
@@ -2915,8 +3124,7 @@
             syncActivityStateFromInputs();
             fetchActivity();
           } else if (targetSection === 'section-users') {
-            usersState.page = 1;
-            usersState.pageSize = 20;
+            syncUsersStateFromInputs();
             fetchUsers();
           } else if (targetSection === 'section-products') {
             syncProductsStateFromInputs();
@@ -2961,12 +3169,16 @@
   const init = async () => {
     const user = await ensureAdmin();
     if (!user) return;
+    setScopedMessage(apiUnavailable, '');
     applyRoleVisibility();
     bindEvents();
     syncRequestsStateFromInputs();
     syncRequests23StateFromInputs();
     syncProductsStateFromInputs();
     syncActivityStateFromInputs();
+    readUsersStateFromQuery();
+    applyUsersStateToInputs();
+    syncUsersStateFromInputs();
     fetchDashboard();
     refreshPendingCounts();
     window.setInterval(refreshPendingCounts, 60000);

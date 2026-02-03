@@ -9,7 +9,8 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { AdminUserQueryDto } from './dto/admin-user-query.dto';
 import { ADMIN_ROLE_LIST, isAdminRole } from '../../common/roles.utils';
 
-const DEFAULT_PAGE_SIZE = 20;
+const DEFAULT_PAGE_SIZE = 10;
+const MAX_PAGE_SIZE = 50;
 const RECENT_ITEMS_LIMIT = 20;
 const PAID_STATUSES: OrderStatus[] = [OrderStatus.PAID, OrderStatus.SHIPPED];
 
@@ -23,7 +24,7 @@ export class AdminUsersService {
 
   async listUsers(query: AdminUserQueryDto) {
     const page = query.page ?? 1;
-    const pageSize = Math.min(query.pageSize ?? DEFAULT_PAGE_SIZE, 100);
+    const pageSize = Math.min(query.pageSize ?? DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE);
     const skip = (page - 1) * pageSize;
 
     const where = this.buildWhere(query);
@@ -45,7 +46,7 @@ export class AdminUsersService {
         page,
         pageSize,
         total,
-        pageCount: Math.ceil(total / pageSize) || 1,
+        totalPages: Math.ceil(total / pageSize) || 1,
         sort: query.sort ?? 'createdAt',
         order: query.order ?? 'desc',
       },
@@ -239,13 +240,27 @@ export class AdminUsersService {
 
   private buildWhere(query: AdminUserQueryDto): Prisma.UserWhereInput {
     const where: Prisma.UserWhereInput = {};
-    const search = query.search?.trim();
+    const search = query.q?.trim() || query.search?.trim();
 
     if (search) {
       where.OR = [
         { email: { contains: search, mode: 'insensitive' } },
         { name: { contains: search, mode: 'insensitive' } },
+        { firstName: { contains: search, mode: 'insensitive' } },
+        { lastName: { contains: search, mode: 'insensitive' } },
       ];
+    }
+
+    if (query.email?.trim()) {
+      where.email = { contains: query.email.trim(), mode: 'insensitive' };
+    }
+
+    if (query.role) {
+      where.role = query.role;
+    }
+
+    if (typeof query.circle === 'number' && Number.isFinite(query.circle)) {
+      where.circleLevel = query.circle;
     }
 
     return where;
@@ -260,10 +275,8 @@ export class AdminUsersService {
     switch (sort) {
       case 'email':
         return { email: order };
-      case 'name':
-        return { name: order };
-      case 'role':
-        return { role: order };
+      case 'id':
+        return { id: order };
       case 'createdAt':
       default:
         return { createdAt: order };
@@ -275,9 +288,12 @@ export class AdminUsersService {
       id: user.id,
       email: user.email,
       name: user.name,
+      firstName: user.firstName,
+      lastName: user.lastName,
       role: user.role,
+      circle: user.circleLevel,
+      phone: null,
       createdAt: user.createdAt,
-      updatedAt: user.updatedAt,
     };
   }
 
