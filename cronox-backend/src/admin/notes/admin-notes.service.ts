@@ -10,6 +10,11 @@ import { isSuperAdminRole } from '../../common/roles.utils';
 export class AdminNotesService {
   constructor(private readonly prisma: PrismaService) {}
 
+  // Backward compatibility: null role behaves as SUPERADMIN
+  private normalizeRole(role: Role | null | undefined): Role {
+    return role ?? Role.SUPERADMIN;
+  }
+
   private mapNote(note: {
     id: string;
     content: string;
@@ -24,7 +29,7 @@ export class AdminNotesService {
       name: string | null;
       firstName: string | null;
       lastName: string | null;
-      role: Role;
+      role: Role | null;
     };
   }) {
     return {
@@ -35,7 +40,14 @@ export class AdminNotesService {
       targetType: note.targetType,
       targetId: note.targetId,
       authorAdminId: note.authorAdminId,
-      author: note.author,
+      author: {
+        id: note.author.id,
+        email: note.author.email,
+        name: note.author.name,
+        firstName: note.author.firstName,
+        lastName: note.author.lastName,
+        role: this.normalizeRole(note.author.role),
+      },
     };
   }
 
@@ -66,6 +78,7 @@ export class AdminNotesService {
 
   async create(adminId: number, dto: CreateAdminNoteDto) {
     const content = dto.content.trim();
+
     const created = await this.prisma.adminNote.create({
       data: {
         authorAdminId: adminId,
