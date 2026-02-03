@@ -50,6 +50,23 @@
     .message.show { display: block; }
     .message.success { border-color: #2f9e44; background: #0f2015; color: #a8f0b0; }
     .message.error { border-color: #ff6b6b; background: #2a0f0f; color: #ffc9c9; }
+    .status-area { display: grid; gap: 12px; margin-bottom: 16px; }
+    .status-banner { border-radius: 14px; border: 1px solid #242434; background: #111119; padding: 14px 16px; display: grid; gap: 10px; }
+    .status-banner__header strong { font-size: 1rem; }
+    .status-banner__message { margin: 6px 0 0; color: #d4d4e2; }
+    .status-banner__actions { display: flex; gap: 8px; flex-wrap: wrap; }
+    .status-banner__details summary { cursor: pointer; color: #b29bff; }
+    .status-banner__details pre { margin: 8px 0 0; background: #0b0b12; border-radius: 10px; padding: 10px; color: #c8c8d8; overflow: auto; }
+    .status-banner--info { border-color: #2b2b38; background: #12121b; }
+    .status-banner--warning { border-color: #4a3b12; background: #1b1a12; color: #f6d365; }
+    .status-banner--warning .status-banner__message { color: #f6d365; }
+    .status-banner--error { border-color: #4b1923; background: #2a0f0f; color: #ffb3c2; }
+    .status-banner--error .status-banner__message { color: #ffb3c2; }
+    .empty-state { border: 1px dashed #2a2a38; background: #101018; border-radius: 14px; padding: 16px; display: grid; gap: 6px; color: #a8a8b3; text-align: center; }
+    .empty-state strong { color: #f5f5f7; }
+    .empty-state__actions { display: flex; justify-content: center; gap: 8px; flex-wrap: wrap; margin-top: 6px; }
+    .empty-state__shimmer { height: 6px; border-radius: 999px; background: linear-gradient(90deg, rgba(255,255,255,0.04), rgba(255,255,255,0.18), rgba(255,255,255,0.04)); animation: shimmer 1.2s ease-in-out infinite; }
+    @keyframes shimmer { 0% { opacity: 0.4; } 50% { opacity: 1; } 100% { opacity: 0.4; } }
     .filter-bar { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-top: 8px; }
     .input, .select, .textarea { background: #0d0d15; border: 1px solid #1f1f2b; color: #f5f5f7; padding: 10px 12px; border-radius: 10px; font-size: 0.95rem; width: 100%; box-sizing: border-box; }
     .textarea { min-height: 80px; resize: vertical; }
@@ -145,6 +162,8 @@
         <button id="logoutBtn" class="btn danger" type="button">Cerrar sesión</button>
       </div>
     </header>
+
+    <div id="statusArea" class="status-area" aria-live="polite"></div>
 
     <nav class="card" style="margin-bottom:16px; padding:12px;">
       <div class="tabs" id="adminTabs" style="display:flex; gap:8px; flex-wrap:wrap;">
@@ -1008,6 +1027,7 @@
   <div class="toast-container" id="toastContainer" aria-live="polite" aria-atomic="true"></div>
 
   <script src="assets/api.js"></script>
+  <script src="assets/ui-status.js"></script>
   <script src="assets/admin.js"></script>
 </body>
 </html>

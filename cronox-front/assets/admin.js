@@ -90,6 +90,7 @@
   const usersFiltersReset = $('#usersFiltersReset');
   const usersPhoneHeader = $('#usersPhoneHeader');
   const apiUnavailable = $('#apiUnavailable');
+  const statusArea = $('#statusArea');
   const logoutBtn = $('#logoutBtn');
   const backBtn = $('#backBtn');
   const refreshDashboardBtn = $('#refreshDashboardBtn');
@@ -373,6 +374,86 @@
     el.className = `message show ${type === 'error' ? 'error' : 'success'}`;
   };
 
+  const ui = window.CRONOX_UI || {};
+  const renderBanner = ui.renderBanner;
+  const renderEmptyState = ui.renderEmptyState;
+  const setUiLoading = ui.setLoading;
+  const classifyApiError = window.CRONOX_API?.classifyApiError || (() => ({
+    severity: 'error',
+    userMessage: 'No pudimos completar la solicitud.',
+    isRetryable: true,
+  }));
+
+  const getErrorDetails = (error) => ({
+    status: error?.status ?? error?.statusCode ?? 0,
+    endpoint: error?.endpoint || '—',
+    message: error?.message || 'Error desconocido',
+  });
+
+  const showGlobalStatus = (options) => {
+    if (!renderBanner || !statusArea) return;
+    renderBanner(statusArea, options);
+  };
+
+  const clearGlobalStatus = () => {
+    if (!statusArea) return;
+    statusArea.innerHTML = '';
+  };
+
+  const showModuleError = ({
+    container,
+    error,
+    title,
+    isCritical = false,
+    retry,
+    backLink,
+    colSpan,
+  }) => {
+    if (!renderBanner || !container) return;
+    const classification = classifyApiError(error);
+    let severity = classification.severity || 'error';
+    if (!isCritical && severity === 'error') {
+      severity = 'warning';
+    }
+    const actions = [];
+    if (typeof retry === 'function') {
+      actions.push({ label: 'Reintentar', onClick: retry, variant: 'primary' });
+    }
+    if (backLink) {
+      actions.push({ label: 'Volver', href: backLink });
+    }
+    if (classification.kind === 'auth') {
+      actions.push({ label: 'Iniciar sesión', href: 'auth-modal.html', variant: 'primary' });
+    }
+    renderBanner(container, {
+      type: severity,
+      title: title || 'Ocurrió un problema',
+      message: classification.userMessage,
+      details: getErrorDetails(error),
+      actions,
+      colSpan,
+    });
+    if (isCritical) {
+      showGlobalStatus({
+        type: 'error',
+        title: 'Problema crítico',
+        message: classification.userMessage,
+        details: getErrorDetails(error),
+        actions,
+      });
+    }
+  };
+
+  const showEmptyTable = (container, options = {}) => {
+    if (!renderEmptyState || !container) return;
+    renderEmptyState(container, {
+      title: options.title,
+      message: options.message,
+      actions: options.actions,
+      colSpan: options.colSpan,
+    });
+  };
+
   const showToast = (message, type = 'success', title = '') => {
     if (!toastContainer || !message) return;
     const toast = document.createElement('div');
@@ -458,6 +539,18 @@
 
   const showApiUnavailable = (reason = '') => {
     const detail = reason ? ` ${reason}` : '';
+    if (renderBanner && statusArea) {
+      renderBanner(statusArea, {
+        type: 'error',
+        title: 'API no disponible',
+        message: `No pudimos conectar con la API.${detail}`,
+        details: { status: 0, endpoint: '—', message: reason || 'API no disponible' },
+        actions: [
+          { label: 'Recargar', onClick: () => window.location.reload(), variant: 'primary' },
+          { label: 'Volver', onClick: () => window.history.back() },
+        ],
+      });
+    }
     setScopedMessage(apiUnavailable, `API no disponible.${detail}`, 'error');
   };
 
@@ -703,7 +796,11 @@
   const renderUserRequests = (requests = []) => {
     if (!userRequestsBody) return;
     if (!requests.length) {
-      userRequestsBody.innerHTML = '<tr><td colspan="6" class="empty">Sin solicitudes.</td></tr>';
+      showEmptyTable(userRequestsBody, {
+        title: 'Sin solicitudes',
+        message: 'Este usuario no tiene solicitudes registradas.',
+        colSpan: 6,
+      });
       return;
     }
     userRequestsBody.innerHTML = requests
@@ -729,7 +826,11 @@
   const renderUserOrders = (orders = []) => {
     if (!userOrdersBody) return;
     if (!orders.length) {
-      userOrdersBody.innerHTML = '<tr><td colspan="4" class="empty">Sin pedidos.</td></tr>';
+      showEmptyTable(userOrdersBody, {
+        title: 'Sin pedidos',
+        message: 'Este usuario no tiene pedidos registrados.',
+        colSpan: 4,
+      });
       return;
     }
     userOrdersBody.innerHTML = orders
@@ -752,7 +853,11 @@
   const renderUserCodes = (codes = []) => {
     if (!userCodesBody) return;
     if (!codes.length) {
-      userCodesBody.innerHTML = '<tr><td colspan="5" class="empty">No disponible aún.</td></tr>';
+      showEmptyTable(userCodesBody, {
+        title: 'Sin códigos asociados',
+        message: 'No hay códigos promocionales utilizados.',
+        colSpan: 5,
+      });
       return;
     }
     userCodesBody.innerHTML = codes
@@ -787,7 +892,11 @@
   const renderUserHistory = (entries = []) => {
     if (!userHistoryBody) return;
     if (!entries.length) {
-      userHistoryBody.innerHTML = '<tr><td colspan="5" class="empty">Sin historial disponible.</td></tr>';
+      showEmptyTable(userHistoryBody, {
+        title: 'Sin historial disponible',
+        message: 'No hay registros de historial para este usuario.',
+        colSpan: 5,
+      });
       return;
     }
     userHistoryBody.innerHTML = entries
@@ -858,7 +967,10 @@
 
   const fetchNotesForTarget = async (targetType, targetId, state, container, messageEl) => {
     if (!targetType || !targetId) return;
-    if (messageEl) setScopedMessage(messageEl, '');
+    if (messageEl) messageEl.innerHTML = '';
+    if (setUiLoading && container) {
+      setUiLoading(container, true, { title: 'Cargando notas…' });
+    }
     try {
       const notes = await window.CRONOX_API?.admin?.listAdminNotes?.({
         targetType,
@@ -866,11 +978,29 @@
       });
       state.items = Array.isArray(notes) ? notes : [];
       state.editingId = null;
-      renderNotesList(state, container);
+      if (!state.items.length && renderEmptyState && container) {
+        renderEmptyState(container, {
+          title: 'Sin notas',
+          message: 'Todavía no hay notas internas.',
+        });
+      } else {
+        renderNotesList(state, container);
+      }
     } catch (error) {
       console.error('[ADMIN] Error cargando notas', error);
-      if (messageEl) {
-        setScopedMessage(messageEl, 'No se pudieron cargar las notas internas.', 'error');
+      showModuleError({
+        container: messageEl || statusArea,
+        error,
+        title: 'No se pudieron cargar las notas internas',
+        isCritical: false,
+        retry: () => fetchNotesForTarget(targetType, targetId, state, container, messageEl),
+      });
+      if (renderEmptyState && container) {
+        renderEmptyState(container, {
+          title: 'No disponible',
+          message: 'No pudimos cargar las notas internas.',
+          actions: [{ label: 'Reintentar', onClick: () => fetchNotesForTarget(targetType, targetId, state, container, messageEl) }],
+        });
       }
     }
   };
@@ -1005,18 +1135,20 @@
   const renderActivity = (items = [], options = { error: false }) => {
     if (!activityBody) return;
     if (options.error) {
-      activityBody.innerHTML = `
-        <tr>
-          <td colspan="5" class="empty">
-            No se pudo cargar la actividad.
-            <button type="button" class="btn" data-retry-activity="1" style="margin-left:8px;">Reintentar</button>
-          </td>
-        </tr>
-      `;
+      showEmptyTable(activityBody, {
+        title: 'No se pudo cargar la actividad',
+        message: 'Intenta nuevamente en unos segundos.',
+        actions: [{ label: 'Reintentar', onClick: fetchActivity, variant: 'primary' }],
+        colSpan: 5,
+      });
       return;
     }
     if (!items.length) {
-      activityBody.innerHTML = '<tr><td colspan="5" class="empty">Sin actividad reciente.</td></tr>';
+      showEmptyTable(activityBody, {
+        title: 'Sin actividad reciente',
+        message: 'No hay movimientos para mostrar.',
+        colSpan: 5,
+      });
       return;
     }
     activityBody.innerHTML = items
@@ -1046,14 +1178,27 @@
 
   const fetchUserHistory = async (userId) => {
     if (!userId || !userHistoryBody) return;
-    userHistoryBody.innerHTML = '<tr><td colspan="5" class="empty">Cargando historial…</td></tr>';
+    if (setUiLoading) setUiLoading(userHistoryBody, true, { title: 'Cargando historial…', colSpan: 5 });
     try {
       const data = await window.CRONOX_API?.admin?.getUserAuditLogs?.(userId);
       const items = Array.isArray(data) ? data : data?.items || [];
       renderUserHistory(items);
     } catch (error) {
       console.error('[ADMIN] Error cargando historial', error);
-      userHistoryBody.innerHTML = '<tr><td colspan="5" class="empty">No se pudo cargar el historial.</td></tr>';
+      showModuleError({
+        container: userDetailMessage || statusArea,
+        error,
+        title: 'No se pudo cargar el historial',
+        isCritical: false,
+        retry: () => fetchUserHistory(userId),
+        colSpan: 5,
+      });
+      showEmptyTable(userHistoryBody, {
+        title: 'No se pudo cargar el historial',
+        message: 'Intenta nuevamente en unos segundos.',
+        actions: [{ label: 'Reintentar', onClick: () => fetchUserHistory(userId), variant: 'primary' }],
+        colSpan: 5,
+      });
     }
   };
 
@@ -1122,10 +1267,16 @@
     if (!userId) return;
     if (!canAccess('userDetail')) {
       showSection('section-user');
-      setUserDetailMessage('No autorizado', 'error');
+      showModuleError({
+        container: userDetailMessage || statusArea,
+        error: { status: 403, message: 'No autorizado', endpoint: 'admin.getUserDetail' },
+        title: 'Sin permisos para el detalle de usuario',
+        isCritical: true,
+        backLink: 'admin.html#usuarios',
+      });
       return;
     }
-    setUserDetailMessage('');
+    if (userDetailMessage) userDetailMessage.innerHTML = '';
     if (userDetailSection) {
       showSection('section-user');
     }
@@ -1133,10 +1284,35 @@
     try {
       const data = await window.CRONOX_API?.admin?.getUserDetail?.(userId);
       userDetailState.data = data;
+      if (!data || (!data.user && Object.keys(data || {}).length === 0)) {
+        showModuleError({
+          container: userDetailMessage || statusArea,
+          error: { status: 404, message: 'Usuario no encontrado', endpoint: 'admin.getUserDetail' },
+          title: 'Usuario no encontrado o sin datos',
+          isCritical: true,
+          backLink: 'admin.html#usuarios',
+        });
+        if (userRequestsBody) {
+          showEmptyTable(userRequestsBody, {
+            title: 'Usuario no encontrado o sin datos',
+            message: 'Selecciona un usuario distinto desde la lista.',
+            actions: [{ label: 'Volver a usuarios', href: 'admin.html#usuarios', variant: 'primary' }],
+            colSpan: 6,
+          });
+        }
+        return;
+      }
       renderUserDetail(data);
     } catch (error) {
       console.error('[ADMIN] Error cargando usuario', error);
-      setUserDetailMessage('No se pudo cargar el detalle del usuario.', 'error');
+      showModuleError({
+        container: userDetailMessage || statusArea,
+        error,
+        title: 'No se pudo cargar el detalle del usuario',
+        isCritical: true,
+        retry: () => loadUserDetail(userId),
+        backLink: 'admin.html#usuarios',
+      });
     }
   };
 
@@ -1477,18 +1653,21 @@
   const renderRequests = (items, options = { error: false }) => {
     if (!requestsBody) return;
     if (options.error) {
-      requestsBody.innerHTML = `
-        <tr>
-          <td colspan="9" class="empty">
-            No se pudieron cargar las solicitudes.
-            <button type="button" class="btn" data-retry="1" style="margin-left:8px;">Reintentar</button>
-          </td>
-        </tr>
-      `;
+      showEmptyTable(requestsBody, {
+        title: 'No se pudieron cargar las solicitudes',
+        message: 'Intenta nuevamente en unos segundos.',
+        actions: [{ label: 'Reintentar', onClick: fetchRequests, variant: 'primary' }],
+        colSpan: 9,
+      });
       return;
     }
     if (!Array.isArray(items) || !items.length) {
-      requestsBody.innerHTML = '<tr><td colspan="9" class="empty">No hay solicitudes con ese estado.</td></tr>';
+      showEmptyTable(requestsBody, {
+        title: 'No hay resultados con estos filtros',
+        message: 'Prueba limpiando los filtros o ajustando la búsqueda.',
+        actions: [{ label: 'Limpiar filtros', onClick: resetRequestsFilters, variant: 'primary' }],
+        colSpan: 9,
+      });
       return;
     }
 
@@ -1541,18 +1720,21 @@
   const renderRequests23 = (items, options = { error: false }) => {
     if (!requestsBody23) return;
     if (options.error) {
-      requestsBody23.innerHTML = `
-        <tr>
-          <td colspan="7" class="empty">
-            No se pudieron cargar las solicitudes.
-            <button type="button" class="btn" data-retry-23="1" style="margin-left:8px;">Reintentar</button>
-          </td>
-        </tr>
-      `;
+      showEmptyTable(requestsBody23, {
+        title: 'No se pudieron cargar las solicitudes 2→3',
+        message: 'Intenta nuevamente en unos segundos.',
+        actions: [{ label: 'Reintentar', onClick: fetchRequests23, variant: 'primary' }],
+        colSpan: 7,
+      });
       return;
     }
     if (!Array.isArray(items) || !items.length) {
-      requestsBody23.innerHTML = '<tr><td colspan="7" class="empty">No hay solicitudes con ese estado.</td></tr>';
+      showEmptyTable(requestsBody23, {
+        title: 'No hay resultados con estos filtros',
+        message: 'Prueba limpiando los filtros o ajustando la búsqueda.',
+        actions: [{ label: 'Limpiar filtros', onClick: resetRequests23Filters, variant: 'primary' }],
+        colSpan: 7,
+      });
       return;
     }
 
@@ -1593,7 +1775,13 @@
 
   const fetchRequests = async () => {
     if (!canAccess('requests')) {
-      setMessage('No autorizado.', 'error');
+      showModuleError({
+        container: messageBox || statusArea,
+        error: { status: 403, message: 'No autorizado', endpoint: 'admin.listCircleUpgradeRequests' },
+        title: 'Sin permisos',
+        isCritical: true,
+        backLink: 'admin.html#usuarios',
+      });
       return;
     }
     setLoading(true);
@@ -1614,24 +1802,29 @@
       });
     } catch (error) {
       console.error('[ADMIN] Error cargando solicitudes', error);
-      setMessage('No se pudieron cargar las solicitudes.', 'error');
+      showModuleError({
+        container: messageBox || statusArea,
+        error,
+        title: 'No se pudieron cargar las solicitudes',
+        isCritical: true,
+        retry: fetchRequests,
+      });
       renderRequests([], { error: true });
     }
   };
 
   const fetchRequests23 = async () => {
     if (!canAccess('requests')) {
-      if (messageBox23) {
-        messageBox23.textContent = 'No autorizado.';
-        messageBox23.className = 'message show error';
-      }
+      showModuleError({
+        container: messageBox23 || statusArea,
+        error: { status: 403, message: 'No autorizado', endpoint: 'admin.listAutoCircleRequests' },
+        title: 'Sin permisos',
+        isCritical: true,
+      });
       return;
     }
     setLoading23(true);
-    if (messageBox23) {
-      messageBox23.textContent = '';
-      messageBox23.className = 'message';
-    }
+    if (messageBox23) messageBox23.innerHTML = '';
     try {
       const data = await window.CRONOX_API?.admin?.listAutoCircleRequests(
         buildRequestQuery(requests23State),
@@ -1648,10 +1841,13 @@
       });
     } catch (error) {
       console.error('[ADMIN] Error cargando solicitudes 2->3', error);
-      if (messageBox23) {
-        messageBox23.textContent = 'No se pudieron cargar las solicitudes 2→3.';
-        messageBox23.className = 'message show error';
-      }
+      showModuleError({
+        container: messageBox23 || statusArea,
+        error,
+        title: 'No se pudieron cargar las solicitudes 2→3',
+        isCritical: true,
+        retry: fetchRequests23,
+      });
       renderRequests23([], { error: true });
     }
   };
@@ -1718,14 +1914,30 @@
   };
 
   const fetchDashboard = async () => {
-    setScopedMessage(dashboardMessage, '');
+    if (dashboardMessage) dashboardMessage.innerHTML = '';
+    if (setUiLoading && dashboardMessage) {
+      setUiLoading(dashboardMessage, true, { title: 'Cargando resumen…' });
+    }
     if (totalUsers) totalUsers.textContent = '…';
     try {
       const data = await window.CRONOX_API?.admin?.getDashboard?.();
+      if (!data && renderEmptyState && dashboardMessage) {
+        renderEmptyState(dashboardMessage, {
+          title: 'Sin datos en el resumen',
+          message: 'No hay información disponible todavía.',
+          actions: [{ label: 'Recargar', onClick: fetchDashboard, variant: 'primary' }],
+        });
+      }
       renderDashboard(data);
     } catch (error) {
       console.error('No se pudo cargar el dashboard', error);
-      setScopedMessage(dashboardMessage, 'No se pudieron cargar los datos del resumen.', 'error');
+      showModuleError({
+        container: dashboardMessage || statusArea,
+        error,
+        title: 'No se pudieron cargar los datos del resumen',
+        isCritical: true,
+        retry: fetchDashboard,
+      });
     }
   };
 
@@ -1741,12 +1953,21 @@
   const fetchActivity = async () => {
     if (!activityBody) return;
     if (!canAccess('auditLog')) {
-      setScopedMessage(activityMessage, 'No autorizado.', 'error');
-      activityBody.innerHTML = '<tr><td colspan="5" class="empty">No autorizado.</td></tr>';
+      showModuleError({
+        container: activityMessage || statusArea,
+        error: { status: 403, message: 'No autorizado', endpoint: 'admin.getAuditLogs' },
+        title: 'Sin permisos para auditoría',
+        isCritical: false,
+      });
+      showEmptyTable(activityBody, {
+        title: 'No autorizado',
+        message: 'No tienes permisos para ver la actividad.',
+        colSpan: 5,
+      });
       return;
     }
-    activityBody.innerHTML = '<tr><td colspan="5" class="empty">Cargando actividad…</td></tr>';
-    setScopedMessage(activityMessage, '');
+    if (setUiLoading) setUiLoading(activityBody, true, { title: 'Cargando actividad…', colSpan: 5 });
+    if (activityMessage) activityMessage.innerHTML = '';
     try {
       const data = await window.CRONOX_API?.admin?.getAuditLogs(
         buildActivityQuery(activityState),
@@ -1754,7 +1975,16 @@
       const meta = normalizePaginated(data, activityState);
       activityState.page = meta.page;
       activityState.pageSize = meta.pageSize;
-      renderActivity(meta.items || []);
+      if (!meta.items || !meta.items.length) {
+        showEmptyTable(activityBody, {
+          title: 'Sin actividad registrada',
+          message: 'No hay movimientos con estos filtros.',
+          actions: [{ label: 'Limpiar filtros', onClick: resetActivityFilters, variant: 'primary' }],
+          colSpan: 5,
+        });
+      } else {
+        renderActivity(meta.items || []);
+      }
       updatePagination(meta, activityState, {
         info: activityPageInfo,
         prev: activityPrev,
@@ -1763,7 +1993,19 @@
       });
     } catch (error) {
       console.error('[ADMIN] Error cargando actividad', error);
-      setScopedMessage(activityMessage, 'No se pudo cargar la actividad.', 'error');
+      showModuleError({
+        container: activityMessage || statusArea,
+        error,
+        title: 'No se pudo cargar la actividad',
+        isCritical: false,
+        retry: fetchActivity,
+      });
+      showEmptyTable(activityBody, {
+        title: 'No se pudo cargar la actividad',
+        message: 'Intenta nuevamente en unos segundos.',
+        actions: [{ label: 'Reintentar', onClick: fetchActivity, variant: 'primary' }],
+        colSpan: 5,
+      });
       renderActivity([], { error: true });
     }
   };
@@ -1887,13 +2129,23 @@
   const fetchUsers = async () => {
     if (!usersBody) return;
     if (!canAccess('users')) {
-      setScopedMessage(usersMessage, 'No autorizado.', 'error');
-      usersBody.innerHTML = `<tr><td colspan="${getUsersColumnCount()}" class="empty">No autorizado.</td></tr>`;
+      showModuleError({
+        container: usersMessage || statusArea,
+        error: { status: 403, message: 'No autorizado', endpoint: 'admin.listUsers' },
+        title: 'Sin permisos para usuarios',
+        isCritical: true,
+        backLink: 'admin.html#usuarios',
+      });
+      showEmptyTable(usersBody, {
+        title: 'No autorizado',
+        message: 'No tienes permisos para ver usuarios.',
+        colSpan: getUsersColumnCount(),
+      });
       updateUsersPagination();
       return;
     }
-    usersBody.innerHTML = `<tr><td colspan="${getUsersColumnCount()}" class="empty">Cargando usuarios…</td></tr>`;
-    setScopedMessage(usersMessage, '');
+    if (setUiLoading) setUiLoading(usersBody, true, { title: 'Cargando usuarios…', colSpan: getUsersColumnCount() });
+    if (usersMessage) usersMessage.innerHTML = '';
     try {
       const listFn = window.CRONOX_API?.admin?.getUserList ?? window.CRONOX_API?.admin?.listUsers;
       if (!listFn) {
@@ -1906,30 +2158,34 @@
       usersState.pageSize = normalized.meta.pageSize;
       usersState.total = normalized.meta.total;
       usersState.totalPages = normalized.meta.totalPages;
-      renderUsers(normalized.items || []);
+      if (!normalized.items || !normalized.items.length) {
+        showEmptyTable(usersBody, {
+          title: 'No hay resultados con estos filtros',
+          message: 'Prueba limpiando los filtros o ajustando la búsqueda.',
+          actions: [{ label: 'Limpiar filtros', onClick: resetUsersFilters, variant: 'primary' }],
+          colSpan: getUsersColumnCount(),
+        });
+      } else {
+        renderUsers(normalized.items || []);
+      }
       updateUsersQueryString();
       updateUsersPagination();
     } catch (error) {
       console.error('[ADMIN] Error cargando usuarios', error);
-      if (error?.status === 401) {
-        setScopedMessage(usersMessage, 'Tu sesión ha caducado. Vuelve a iniciar sesión.', 'error');
-        usersBody.innerHTML = `
-          <tr>
-            <td colspan="${getUsersColumnCount()}" class="empty">
-              No autorizado.
-              <button type="button" class="btn primary" data-users-login="1" style="margin-left:8px;">Volver a login</button>
-            </td>
-          </tr>`;
-      } else {
-        setScopedMessage(usersMessage, 'No se pudieron cargar los usuarios.', 'error');
-        usersBody.innerHTML = `
-          <tr>
-            <td colspan="${getUsersColumnCount()}" class="empty">
-              Error al cargar usuarios.
-              <button type="button" class="btn" data-retry-users="1" style="margin-left:8px;">Reintentar</button>
-            </td>
-          </tr>`;
-      }
+      showModuleError({
+        container: usersMessage || statusArea,
+        error,
+        title: 'No se pudieron cargar los usuarios',
+        isCritical: true,
+        retry: fetchUsers,
+        backLink: 'admin.html#usuarios',
+      });
+      showEmptyTable(usersBody, {
+        title: 'No se pudieron cargar los usuarios',
+        message: 'Intenta nuevamente en unos segundos.',
+        actions: [{ label: 'Reintentar', onClick: fetchUsers, variant: 'primary' }],
+        colSpan: getUsersColumnCount(),
+      });
       updateUsersPagination();
     }
   };
@@ -1994,12 +2250,21 @@
   const fetchProducts = async () => {
     if (!productsBody) return;
     if (!canAccess('products')) {
-      setScopedMessage(productsMessage, 'No autorizado.', 'error');
-      productsBody.innerHTML = '<tr><td colspan="7" class="empty">No autorizado.</td></tr>';
+      showModuleError({
+        container: productsMessage || statusArea,
+        error: { status: 403, message: 'No autorizado', endpoint: 'admin.listAdminProducts' },
+        title: 'Sin permisos para productos',
+        isCritical: false,
+      });
+      showEmptyTable(productsBody, {
+        title: 'No autorizado',
+        message: 'No tienes permisos para ver productos.',
+        colSpan: 7,
+      });
       return;
     }
-    productsBody.innerHTML = '<tr><td colspan="7" class="empty">Cargando productos…</td></tr>';
-    setScopedMessage(productsMessage, '');
+    if (setUiLoading) setUiLoading(productsBody, true, { title: 'Cargando productos…', colSpan: 7 });
+    if (productsMessage) productsMessage.innerHTML = '';
     try {
       const data = await window.CRONOX_API?.admin?.listAdminProducts(
         buildProductQuery(productsState),
@@ -2007,7 +2272,16 @@
       const meta = normalizePaginated(data, productsState);
       productsState.page = meta.page;
       productsState.pageSize = meta.pageSize;
-      renderProducts(meta.items || []);
+      if (!meta.items || !meta.items.length) {
+        showEmptyTable(productsBody, {
+          title: 'No hay resultados con estos filtros',
+          message: 'Prueba limpiando los filtros o ajustando la búsqueda.',
+          actions: [{ label: 'Limpiar filtros', onClick: resetProductsFilters, variant: 'primary' }],
+          colSpan: 7,
+        });
+      } else {
+        renderProducts(meta.items || []);
+      }
       updatePagination(meta, productsState, {
         info: productsPageInfo,
         prev: productsPrev,
@@ -2016,21 +2290,31 @@
       });
     } catch (error) {
       console.error('[ADMIN] Error cargando productos', error);
-      setScopedMessage(productsMessage, 'No se pudieron cargar los productos.', 'error');
-      productsBody.innerHTML = `
-        <tr>
-          <td colspan="7" class="empty">
-            Error al cargar productos.
-            <button type="button" class="btn" data-retry-products="1" style="margin-left:8px;">Reintentar</button>
-          </td>
-        </tr>`;
+      showModuleError({
+        container: productsMessage || statusArea,
+        error,
+        title: 'No se pudieron cargar los productos',
+        isCritical: false,
+        retry: fetchProducts,
+      });
+      showEmptyTable(productsBody, {
+        title: 'No se pudieron cargar los productos',
+        message: 'Intenta nuevamente en unos segundos.',
+        actions: [{ label: 'Reintentar', onClick: fetchProducts, variant: 'primary' }],
+        colSpan: 7,
+      });
     }
   };
 
   const renderProducts = (items = []) => {
     if (!productsBody) return;
     if (!items.length) {
-      productsBody.innerHTML = '<tr><td colspan="7" class="empty">No hay productos con esos filtros.</td></tr>';
+      showEmptyTable(productsBody, {
+        title: 'No hay resultados con estos filtros',
+        message: 'Prueba limpiando los filtros o ajustando la búsqueda.',
+        actions: [{ label: 'Limpiar filtros', onClick: resetProductsFilters, variant: 'primary' }],
+        colSpan: 7,
+      });
       return;
     }
 
@@ -2237,15 +2521,33 @@
     if (codeModalTitle) codeModalTitle.textContent = 'Crear código';
   };
 
+  const resetCodesFilters = () => {
+    if (codeSearch) codeSearch.value = '';
+    if (codeStatusFilter) codeStatusFilter.value = '';
+    codesState.page = 1;
+    codesState.search = '';
+    codesState.isActive = '';
+    fetchCodes();
+  };
+
   const fetchCodes = async () => {
     if (!codesBody) return;
     if (!canAccess('promoCodes')) {
-      setScopedMessage(codesMessage, 'No autorizado.', 'error');
-      codesBody.innerHTML = '<tr><td colspan="6" class="empty">No autorizado.</td></tr>';
+      showModuleError({
+        container: codesMessage || statusArea,
+        error: { status: 403, message: 'No autorizado', endpoint: 'admin.listPromoCodes' },
+        title: 'Sin permisos para códigos',
+        isCritical: false,
+      });
+      showEmptyTable(codesBody, {
+        title: 'No autorizado',
+        message: 'No tienes permisos para ver códigos promocionales.',
+        colSpan: 6,
+      });
       return;
     }
-    codesBody.innerHTML = '<tr><td colspan="6" class="empty">Cargando códigos…</td></tr>';
-    setScopedMessage(codesMessage, '');
+    if (setUiLoading) setUiLoading(codesBody, true, { title: 'Cargando códigos…', colSpan: 6 });
+    if (codesMessage) codesMessage.innerHTML = '';
     const query = {
       page: codesState.page,
       limit: codesState.limit,
@@ -2256,24 +2558,43 @@
       const data = await window.CRONOX_API?.admin?.listPromoCodes(query);
       const items = Array.isArray(data?.items) ? data.items : Array.isArray(data) ? data : [];
       codesCache = items;
-      renderCodes(items);
+      if (!items.length) {
+        showEmptyTable(codesBody, {
+          title: 'No hay resultados con estos filtros',
+          message: 'Prueba limpiando los filtros o ajustando la búsqueda.',
+          actions: [{ label: 'Limpiar filtros', onClick: resetCodesFilters, variant: 'primary' }],
+          colSpan: 6,
+        });
+      } else {
+        renderCodes(items);
+      }
     } catch (error) {
       console.error('[ADMIN] Error cargando códigos', error);
-      setScopedMessage(codesMessage, 'No se pudieron cargar los códigos.', 'error');
-      codesBody.innerHTML = `
-        <tr>
-          <td colspan="6" class="empty">
-            Error al cargar códigos.
-            <button type="button" class="btn" data-retry-codes="1" style="margin-left:8px;">Reintentar</button>
-          </td>
-        </tr>`;
+      showModuleError({
+        container: codesMessage || statusArea,
+        error,
+        title: 'No se pudieron cargar los códigos',
+        isCritical: false,
+        retry: fetchCodes,
+      });
+      showEmptyTable(codesBody, {
+        title: 'No se pudieron cargar los códigos',
+        message: 'Intenta nuevamente en unos segundos.',
+        actions: [{ label: 'Reintentar', onClick: fetchCodes, variant: 'primary' }],
+        colSpan: 6,
+      });
     }
   };
 
   const renderCodes = (items = []) => {
     if (!codesBody) return;
     if (!items.length) {
-      codesBody.innerHTML = '<tr><td colspan="6" class="empty">No hay códigos con esos filtros.</td></tr>';
+      showEmptyTable(codesBody, {
+        title: 'No hay resultados con estos filtros',
+        message: 'Prueba limpiando los filtros o ajustando la búsqueda.',
+        actions: [{ label: 'Limpiar filtros', onClick: resetCodesFilters, variant: 'primary' }],
+        colSpan: 6,
+      });
       return;
     }
 

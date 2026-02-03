@@ -86,6 +86,103 @@
       color: #ffb3c2;
     }
 
+    .status-area {
+      display: grid;
+      gap: 12px;
+      margin-top: 16px;
+    }
+
+    .status-banner {
+      border-radius: 16px;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      background: rgba(14, 14, 24, 0.85);
+      padding: 16px;
+      display: grid;
+      gap: 10px;
+      box-shadow: 0 16px 30px rgba(0, 0, 0, 0.35);
+    }
+
+    .status-banner__message {
+      margin: 6px 0 0;
+      color: #d7d7e7;
+    }
+
+    .status-banner__actions {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .status-banner__details summary {
+      cursor: pointer;
+      color: #b29bff;
+    }
+
+    .status-banner__details pre {
+      margin-top: 8px;
+      background: rgba(8, 8, 12, 0.9);
+      border-radius: 12px;
+      padding: 10px;
+      color: #d3d3e5;
+      overflow: auto;
+    }
+
+    .status-banner--warning {
+      border-color: rgba(246, 211, 101, 0.45);
+      background: rgba(52, 44, 16, 0.65);
+      color: #f6d365;
+    }
+
+    .status-banner--warning .status-banner__message {
+      color: #f6d365;
+    }
+
+    .status-banner--error {
+      border-color: rgba(255, 120, 140, 0.5);
+      background: rgba(64, 18, 26, 0.72);
+      color: #ffb3c2;
+    }
+
+    .status-banner--error .status-banner__message {
+      color: #ffb3c2;
+    }
+
+    .empty-state {
+      border: 1px dashed rgba(255, 255, 255, 0.12);
+      background: rgba(12, 12, 18, 0.75);
+      border-radius: 14px;
+      padding: 16px;
+      display: grid;
+      gap: 6px;
+      text-align: center;
+      color: #a8a8b3;
+    }
+
+    .empty-state strong {
+      color: #f5f5f7;
+    }
+
+    .empty-state__actions {
+      display: flex;
+      justify-content: center;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-top: 6px;
+    }
+
+    .empty-state__shimmer {
+      height: 6px;
+      border-radius: 999px;
+      background: linear-gradient(90deg, rgba(255,255,255,0.04), rgba(255,255,255,0.18), rgba(255,255,255,0.04));
+      animation: shimmer 1.2s ease-in-out infinite;
+    }
+
+    @keyframes shimmer {
+      0% { opacity: 0.4; }
+      50% { opacity: 1; }
+      100% { opacity: 0.4; }
+    }
+
     .layout {
       display: grid;
       grid-template-columns: minmax(0, 360px) minmax(0, 1fr);
@@ -297,7 +394,7 @@
       </div>
     </header>
 
-    <div id="errorBox" class="error-box" hidden></div>
+    <div id="statusArea" class="status-area" aria-live="polite"></div>
 
     <main class="layout">
       <aside class="card summary-card">
@@ -344,10 +441,12 @@
         </div>
 
         <div class="panel active" id="panel-profile">
+          <div id="profileStatus" class="status-area"></div>
           <div class="kv-list" id="profileList"></div>
         </div>
 
         <div class="panel" id="panel-audit">
+          <div id="auditStatus" class="status-area"></div>
           <div class="panel-head">
             <div>
               <strong>Historial de acciones</strong>
@@ -373,6 +472,7 @@
         </div>
 
         <div class="panel" id="panel-notes">
+          <div id="notesStatus" class="status-area"></div>
           <div class="panel-head">
             <div>
               <strong>Notas internas</strong>
@@ -395,10 +495,12 @@
         </div>
 
         <div class="panel" id="panel-orders">
+          <div id="ordersStatus" class="status-area"></div>
           <div class="placeholder">ready to connect when endpoint exists</div>
         </div>
 
         <div class="panel" id="panel-requests">
+          <div id="requestsStatus" class="status-area"></div>
           <div class="placeholder">ready to connect when endpoint exists</div>
         </div>
       </section>
@@ -406,6 +508,7 @@
   </div>
 
   <script src="assets/api.js"></script>
+  <script src="assets/ui-status.js"></script>
   <script src="assets/admin-user.js"></script>
 </body>
 </html>
