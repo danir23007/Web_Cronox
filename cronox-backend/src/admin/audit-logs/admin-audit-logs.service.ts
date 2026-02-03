@@ -17,11 +17,12 @@ export class AdminAuditLogsService {
     const andFilters: Prisma.AuditLogWhereInput[] = [];
     const where: Prisma.AuditLogWhereInput = {};
 
-    if (query.actionType) {
+    const actionType = query.actionType?.trim();
+    if (actionType) {
       andFilters.push({
         OR: [
-          { actionType: query.actionType },
-          { actionType: null, action: query.actionType },
+          { actionType },
+          { actionType: null, action: actionType },
         ],
       });
     }
