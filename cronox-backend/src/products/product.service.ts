@@ -174,6 +174,108 @@ export class ProductService {
     return rows.map((row) => row.product_id);
   }
 
+  private buildStockSortSqlFilters({
+    searchTerm,
+    query,
+    lowStockThreshold,
+  }: {
+    searchTerm?: string;
+    query: AdminProductQueryDto;
+    lowStockThreshold: number;
+  }) {
+    const filters: Prisma.Sql[] = [];
+
+    if (query.isActive === 'true') {
+      filters.push(Prisma.sql`p."isActive" = true`);
+    } else if (query.isActive === 'false') {
+      filters.push(Prisma.sql`p."isActive" = false`);
+    }
+
+    if (query.dateFrom) {
+      filters.push(Prisma.sql`p."createdAt" >= ${new Date(query.dateFrom)}`);
+    }
+
+    if (query.dateTo) {
+      filters.push(Prisma.sql`p."createdAt" <= ${new Date(query.dateTo)}`);
+    }
+
+    if (query.categoryId) {
+      filters.push(
+        Prisma.sql`
+          EXISTS (
+            SELECT 1
+            FROM "ProductCategory" pc
+            WHERE pc."productId" = p.id
+              AND pc."categoryId" = ${query.categoryId}
+          )
+        `,
+      );
+    } else if (query.category?.trim()) {
+      const categoryTerm = `%${query.category.trim()}%`;
+      filters.push(
+        Prisma.sql`
+          EXISTS (
+            SELECT 1
+            FROM "ProductCategory" pc
+            JOIN "Category" c ON c.id = pc."categoryId"
+            WHERE pc."productId" = p.id
+              AND (c."name" ILIKE ${categoryTerm} OR c."slug" ILIKE ${categoryTerm})
+          )
+        `,
+      );
+    }
+
+    if (searchTerm) {
+      const likeTerm = `%${searchTerm}%`;
+      filters.push(
+        Prisma.sql`
+          (
+            p."name" ILIKE ${likeTerm}
+            OR p."slug" ILIKE ${likeTerm}
+            OR p."description" ILIKE ${likeTerm}
+            OR p."collection" ILIKE ${likeTerm}
+            OR EXISTS (
+              SELECT 1
+              FROM "ProductVariant" v_search
+              WHERE v_search."productId" = p.id
+                AND v_search."sku" ILIKE ${likeTerm}
+            )
+            OR EXISTS (
+              SELECT 1
+              FROM "ProductCategory" pc_search
+              JOIN "Category" c_search ON c_search.id = pc_search."categoryId"
+              WHERE pc_search."productId" = p.id
+                AND (c_search."name" ILIKE ${likeTerm} OR c_search."slug" ILIKE ${likeTerm})
+            )
+          )
+        `,
+      );
+    }
+
+    const whereClause = filters.length
+      ? Prisma.sql`WHERE ${Prisma.join(filters, Prisma.sql` AND `)}`
+      : Prisma.sql``;
+
+    const stockTotalExpr = Prisma.sql`COALESCE(SUM(v."stock"), 0)`;
+    const havingFilters: Prisma.Sql[] = [];
+
+    if (query.stockState === 'low') {
+      havingFilters.push(
+        Prisma.sql`${stockTotalExpr} > 0 AND ${stockTotalExpr} <= ${lowStockThreshold}`,
+      );
+    } else if (query.stockState === 'in_stock') {
+      havingFilters.push(Prisma.sql`${stockTotalExpr} > 0`);
+    } else if (query.stockState === 'out_of_stock') {
+      havingFilters.push(Prisma.sql`${stockTotalExpr} <= 0`);
+    }
+
+    const havingClause = havingFilters.length
+      ? Prisma.sql`HAVING ${Prisma.join(havingFilters, Prisma.sql` AND `)}`
+      : Prisma.sql``;
+
+    return { whereClause, havingClause, stockTotalExpr };
+  }
+
   private addEffectiveVariantPrices<
     T extends { price: number; variants?: { price: number | null }[] },
   >(product: T): T;
@@ -233,6 +335,7 @@ export class ProductService {
     const searchTerm = (query.q ?? query.search)?.trim();
     const sortBy = query.sortBy ?? 'createdAt';
     const sortDir = query.sortDir ?? 'desc';
+    const isStockSort = sortBy === 'stock';
     const createdAtFilter: Prisma.DateTimeFilter = {};
     const andFilters: Prisma.ProductWhereInput[] = [];
     const where: Prisma.ProductWhereInput = {};
@@ -305,7 +408,7 @@ export class ProductService {
       where.isActive = false;
     }
 
-    if (query.stockState) {
+    if (query.stockState && !isStockSort) {
       const stockProductIds = await this.getProductIdsByStockState(
         query.stockState,
         LOW_STOCK_THRESHOLD,
@@ -329,7 +432,6 @@ export class ProductService {
     }
 
     const orderBy: Prisma.ProductOrderByWithRelationInput[] = [];
-    const isStockSort = sortBy === 'stock';
     if (!isStockSort) {
       orderBy.push({ createdAt: sortDir });
       orderBy.push({ id: 'asc' });
@@ -373,24 +475,44 @@ export class ProductService {
     const skip = (page - 1) * pageSize;
 
     if (isStockSort) {
-      const grouped = await this.prisma.productVariant.groupBy({
-        by: ['productId'],
-        where: {
-          product: where,
-        },
-        _sum: {
-          stockQty: true,
-        },
-        orderBy: [
-          { _sum: { stockQty: sortDir } },
-          { productId: sortDir === 'asc' ? 'asc' : 'desc' },
-        ],
-        skip,
-        take: pageSize,
-      });
+      const { whereClause, havingClause, stockTotalExpr } =
+        this.buildStockSortSqlFilters({
+          searchTerm,
+          query,
+          lowStockThreshold: LOW_STOCK_THRESHOLD,
+        });
 
-      const totalItems = await this.prisma.product.count({ where });
-      if (!grouped.length) {
+      // Prisma no soporta ordenar por agregados con LEFT JOIN preservando productos sin variantes.
+      const orderedRows = await this.prisma.$queryRaw<{ id: number }[]>(
+        Prisma.sql`
+          SELECT p.id
+          FROM "Product" p
+          LEFT JOIN "ProductVariant" v ON v."productId" = p.id
+          ${whereClause}
+          GROUP BY p.id
+          ${havingClause}
+          ORDER BY ${stockTotalExpr} ${Prisma.raw(sortDir)}, p."createdAt" DESC, p.id ASC
+          OFFSET ${skip}
+          LIMIT ${pageSize}
+        `,
+      );
+
+      const totalRows = await this.prisma.$queryRaw<{ total: number }[]>(
+        Prisma.sql`
+          SELECT COUNT(*)::int AS total
+          FROM (
+            SELECT p.id
+            FROM "Product" p
+            LEFT JOIN "ProductVariant" v ON v."productId" = p.id
+            ${whereClause}
+            GROUP BY p.id
+            ${havingClause}
+          ) AS filtered
+        `,
+      );
+
+      const totalItems = totalRows[0]?.total ?? 0;
+      if (!orderedRows.length) {
         return {
           items: [],
           page,
@@ -406,7 +528,7 @@ export class ProductService {
         };
       }
 
-      const orderedIds = grouped.map((row) => row.productId);
+      const orderedIds = orderedRows.map((row) => row.id);
       const items = await this.prisma.product.findMany({
         where: {
           ...where,
