@@ -287,28 +287,10 @@ export class CircleUpgradeService {
       });
     }
 
-    const whereStatus =
-      effectiveStatus === CircleUpgradeRequestStatus.EXPIRED && fromCircle === 2 && toCircle === 3
-        ? CircleUpgradeRequestStatus.PENDING
-        : effectiveStatus;
-
     const createdAtFilter: Prisma.DateTimeFilter = {};
     if (query?.dateFrom) createdAtFilter.gte = new Date(query.dateFrom);
     if (query?.dateTo) createdAtFilter.lte = new Date(query.dateTo);
-    if (
-      effectiveStatus === CircleUpgradeRequestStatus.EXPIRED &&
-      fromCircle === 2 &&
-      toCircle === 3
-    ) {
-      const expireBefore = new Date(Date.now() - AUTO_WINDOW_MS);
-      if (createdAtFilter.lte) {
-        const lteDate = this.normalizeDate(createdAtFilter.lte);
-        createdAtFilter.lte =
-          lteDate.getTime() < expireBefore.getTime() ? lteDate : expireBefore;
-      } else {
-        createdAtFilter.lte = expireBefore;
-      }
-    }
+    const baseCreatedAtFilter = Object.keys(createdAtFilter).length ? createdAtFilter : undefined;
 
     const requestNumberFilter: Prisma.IntFilter = {};
     if (query?.attemptsMin != null) requestNumberFilter.gte = query.attemptsMin;
@@ -318,12 +300,10 @@ export class CircleUpgradeService {
     const normalizedSearch = search?.toLowerCase();
     const socialNetwork = this.parseSocialNetwork(query?.socialNetwork);
 
-    const where: Prisma.CircleUpgradeRequestWhereInput = {
+    const baseWhere: Prisma.CircleUpgradeRequestWhereInput = {
       fromCircle,
       toCircle,
-      status: whereStatus,
       ...(socialNetwork ? { socialNetwork } : {}),
-      ...(Object.keys(createdAtFilter).length ? { createdAt: createdAtFilter } : {}),
       ...(Object.keys(requestNumberFilter).length ? { requestNumber: requestNumberFilter } : {}),
       ...(query?.userCircle != null
         ? {
@@ -344,6 +324,87 @@ export class CircleUpgradeService {
           }
         : {}),
     };
+
+    const mergeCreatedAtFilter = (
+      base: Prisma.DateTimeFilter | undefined,
+      extra: { lte?: Date; gt?: Date },
+    ) => {
+      const filter: Prisma.DateTimeFilter = {};
+      if (base?.gte) filter.gte = this.normalizeDate(base.gte);
+      if (base?.lte) filter.lte = this.normalizeDate(base.lte);
+
+      if (extra.gt) {
+        const extraGt = this.normalizeDate(extra.gt);
+        if (filter.gte) {
+          if (extraGt.getTime() >= filter.gte.getTime()) {
+            delete filter.gte;
+            filter.gt = extraGt;
+          }
+        } else {
+          filter.gt = extraGt;
+        }
+      }
+
+      if (extra.lte) {
+        const extraLte = this.normalizeDate(extra.lte);
+        if (filter.lte) {
+          filter.lte =
+            filter.lte.getTime() <= extraLte.getTime() ? filter.lte : extraLte;
+        } else {
+          filter.lte = extraLte;
+        }
+      }
+
+      return Object.keys(filter).length ? filter : undefined;
+    };
+
+    const autoExpireBefore =
+      fromCircle === 2 && toCircle === 3 ? new Date(Date.now() - AUTO_WINDOW_MS) : undefined;
+
+    let where: Prisma.CircleUpgradeRequestWhereInput;
+    if (
+      effectiveStatus === CircleUpgradeRequestStatus.EXPIRED &&
+      fromCircle === 2 &&
+      toCircle === 3 &&
+      autoExpireBefore
+    ) {
+      const pendingCreatedAt = mergeCreatedAtFilter(baseCreatedAtFilter, {
+        lte: autoExpireBefore,
+      });
+      where = {
+        ...baseWhere,
+        OR: [
+          {
+            status: CircleUpgradeRequestStatus.EXPIRED,
+            ...(baseCreatedAtFilter ? { createdAt: baseCreatedAtFilter } : {}),
+          },
+          {
+            status: CircleUpgradeRequestStatus.PENDING,
+            ...(pendingCreatedAt ? { createdAt: pendingCreatedAt } : {}),
+          },
+        ],
+      };
+    } else if (
+      effectiveStatus === CircleUpgradeRequestStatus.PENDING &&
+      fromCircle === 2 &&
+      toCircle === 3 &&
+      autoExpireBefore
+    ) {
+      const pendingCreatedAt = mergeCreatedAtFilter(baseCreatedAtFilter, {
+        gt: autoExpireBefore,
+      });
+      where = {
+        ...baseWhere,
+        status: CircleUpgradeRequestStatus.PENDING,
+        ...(pendingCreatedAt ? { createdAt: pendingCreatedAt } : {}),
+      };
+    } else {
+      where = {
+        ...baseWhere,
+        status: effectiveStatus,
+        ...(baseCreatedAtFilter ? { createdAt: baseCreatedAtFilter } : {}),
+      };
+    }
 
     const orderBy: Prisma.CircleUpgradeRequestOrderByWithRelationInput[] = [];
     const sortBy = query?.sortBy ?? 'createdAt';
@@ -395,42 +456,35 @@ export class CircleUpgradeService {
         });
 
     const mapped = list.map((item) => {
-        const base = item as unknown as CircleUpgradeRequest & {
-          remainingMs?: number;
-          autoRemainingMs?: number;
-        };
+      const base = item as unknown as CircleUpgradeRequest & {
+        remainingMs?: number;
+        autoRemainingMs?: number;
+      };
 
-        if (fromCircle === 2 && toCircle === 3) {
-          const expiresAt = new Date(item.createdAt.getTime() + AUTO_WINDOW_MS);
-          const remainingMs = Math.max(0, expiresAt.getTime() - Date.now());
-          base.remainingMs = remainingMs;
-          if (item.autoProcessAt) {
-            base.autoRemainingMs = Math.max(0, item.autoProcessAt.getTime() - Date.now());
-          }
-          if (remainingMs <= 0 && base.status === CircleUpgradeRequestStatus.PENDING) {
-            base.status = CircleUpgradeRequestStatus.EXPIRED;
-          }
+      if (fromCircle === 2 && toCircle === 3) {
+        const expiresAt = new Date(item.createdAt.getTime() + AUTO_WINDOW_MS);
+        const remainingMs = Math.max(0, expiresAt.getTime() - Date.now());
+        base.remainingMs = remainingMs;
+        if (item.autoProcessAt) {
+          base.autoRemainingMs = Math.max(0, item.autoProcessAt.getTime() - Date.now());
         }
-
-        return base;
-      });
-
-    const filtered = mapped.filter((item) => {
-        if (effectiveStatus === CircleUpgradeRequestStatus.EXPIRED) {
-          return item.status === CircleUpgradeRequestStatus.EXPIRED;
+        if (remainingMs <= 0 && base.status === CircleUpgradeRequestStatus.PENDING) {
+          base.status = CircleUpgradeRequestStatus.EXPIRED;
         }
-        return true;
-      });
+      }
+
+      return base;
+    });
 
     if (!shouldPaginate) {
-      return filtered;
+      return mapped;
     }
 
     const totalItems = await this.prisma.circleUpgradeRequest.count({ where });
     const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
 
     return {
-      items: filtered,
+      items: mapped,
       page,
       pageSize,
       totalItems,
