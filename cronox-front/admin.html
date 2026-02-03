@@ -39,11 +39,11 @@
     th, td { padding: 10px 8px; border-bottom: 1px solid #1d1d26; text-align: left; font-size: 0.95rem; }
     th { color: #b3b3c2; font-weight: 600; }
     tr:last-child td { border-bottom: none; }
-    .status { display: inline-flex; align-items: center; gap: 6px; padding: 6px 10px; border-radius: 999px; font-weight: 600; font-size: 0.85rem; }
-    .status.pending { background: #1c1c26; color: #f6d365; border: 1px solid #332b10; }
-    .status.approved { background: #112415; color: #7ae08a; border: 1px solid #15351b; }
-    .status.denied { background: #2a1010; color: #f28b82; border: 1px solid #3a1717; }
-    .status.expired { background: #241a0d; color: #f6d365; border: 1px solid #3a2812; }
+    .chip { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; font-weight: 700; font-size: 0.72rem; letter-spacing: 0.6px; text-transform: uppercase; border: 1px solid transparent; }
+    .chip--green { background: #112415; color: #7ae08a; border-color: #15351b; }
+    .chip--yellow { background: #1c1c26; color: #f6d365; border-color: #332b10; }
+    .chip--red { background: #2a1010; color: #f28b82; border-color: #3a1717; }
+    .chip--gray { background: #1a1a24; color: #9aa0ad; border-color: #2a2a38; }
     .actions { display: flex; gap: 8px; }
     .empty { color: #9aa0ad; margin: 12px 0 0; }
     .message { margin-bottom: 12px; padding: 10px 12px; border-radius: 10px; border: 1px solid transparent; display: none; }
@@ -114,6 +114,24 @@
     .note-icon-btn { background: #171724; border: 1px solid #2a2a3a; color: #d5d6ff; border-radius: 8px; padding: 6px 8px; cursor: pointer; font-size: 1rem; line-height: 1; }
     .note-icon-btn:hover { background: #1f1f2b; }
     .note-empty { color: #9aa0ad; }
+    .tab-badge { display: inline-flex; align-items: center; justify-content: center; min-width: 22px; padding: 2px 6px; border-radius: 999px; background: #3b0d1b; color: #ffd6e0; font-size: 0.75rem; font-weight: 700; margin-left: 6px; border: 1px solid #5d1a2e; }
+    .tab-badge--pulse { animation: pulse 1.4s ease-in-out infinite; box-shadow: 0 0 0 0 rgba(255, 105, 135, 0.4); }
+    @keyframes pulse {
+      0% { box-shadow: 0 0 0 0 rgba(255, 105, 135, 0.5); }
+      70% { box-shadow: 0 0 0 8px rgba(255, 105, 135, 0); }
+      100% { box-shadow: 0 0 0 0 rgba(255, 105, 135, 0); }
+    }
+    .attempts-warning { margin-left: 6px; font-size: 0.9rem; color: #f6d365; }
+    .toast-container { position: fixed; right: 20px; bottom: 20px; display: grid; gap: 10px; z-index: 50; max-width: min(360px, 90vw); }
+    .toast { display: grid; gap: 6px; padding: 12px 14px; border-radius: 12px; background: #101018; border: 1px solid #242434; color: #f5f5f7; box-shadow: 0 10px 24px rgba(0, 0, 0, 0.4); font-size: 0.9rem; animation: toast-in 0.2s ease; }
+    .toast strong { font-size: 0.95rem; }
+    .toast--success { border-color: #1c3d25; box-shadow: 0 0 0 1px rgba(87, 226, 146, 0.2); }
+    .toast--error { border-color: #4b1923; box-shadow: 0 0 0 1px rgba(255, 105, 135, 0.2); }
+    .toast--hide { opacity: 0; transform: translateY(6px); transition: opacity 0.2s ease, transform 0.2s ease; }
+    @keyframes toast-in {
+      from { opacity: 0; transform: translateY(6px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
   </style>
 </head>
 <body>
@@ -129,8 +147,8 @@
     <nav class="card" style="margin-bottom:16px; padding:12px;">
       <div class="tabs" id="adminTabs" style="display:flex; gap:8px; flex-wrap:wrap;">
         <button class="btn primary" data-section="section-dashboard">Resumen</button>
-        <button class="btn" data-section="section-23">Solicitudes 2→3</button>
-        <button class="btn" data-section="section-34">Solicitudes 3→4</button>
+        <button class="btn" data-section="section-23">Solicitudes 2→3 <span class="tab-badge" id="requestsBadge23" hidden>0</span></button>
+        <button class="btn" data-section="section-34">Solicitudes 3→4 <span class="tab-badge" id="requestsBadge34" hidden>0</span></button>
         <button class="btn" data-section="section-activity">Actividad</button>
         <button class="btn" data-section="section-products">Productos</button>
         <button class="btn" data-section="section-codes">Códigos</button>
@@ -890,6 +908,8 @@
       </div>
     </div>
   </div>
+
+  <div class="toast-container" id="toastContainer" aria-live="polite" aria-atomic="true"></div>
 
   <script src="assets/api.js"></script>
   <script src="assets/admin.js"></script>
