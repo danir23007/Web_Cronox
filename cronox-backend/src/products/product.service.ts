@@ -144,6 +144,36 @@ export class ProductService {
     };
   }
 
+  private async getProductIdsByStockState(
+    stockState: AdminProductQueryDto['stockState'],
+    lowStockThreshold: number,
+  ): Promise<number[]> {
+    if (!stockState) return [];
+
+    const totalStockExpr = Prisma.sql`COALESCE(SUM(v."stock"), 0)`;
+    let condition: Prisma.Sql;
+
+    if (stockState === 'low') {
+      condition = Prisma.sql`${totalStockExpr} > 0 AND ${totalStockExpr} <= ${lowStockThreshold}`;
+    } else if (stockState === 'in_stock') {
+      condition = Prisma.sql`${totalStockExpr} > 0`;
+    } else {
+      condition = Prisma.sql`${totalStockExpr} <= 0`;
+    }
+
+    const rows = await this.prisma.$queryRaw<{ product_id: number }[]>(
+      Prisma.sql`
+        SELECT p.id as product_id
+        FROM "Product" p
+        LEFT JOIN "ProductVariant" v ON v."productId" = p.id
+        GROUP BY p.id
+        HAVING ${condition}
+      `,
+    );
+
+    return rows.map((row) => row.product_id);
+  }
+
   private addEffectiveVariantPrices<
     T extends { price: number; variants?: { price: number | null }[] },
   >(product: T): T;
@@ -275,43 +305,87 @@ export class ProductService {
       where.isActive = false;
     }
 
-    const items = await this.prisma.product.findMany({
-      where,
-      include: this.getProductInclude({ includeInactiveVariants: true }),
-    });
-
-    const enriched = items.map((product) => {
-      const withPrices = this.addEffectiveVariantPrices(product);
-      const totalStock = Array.isArray(withPrices.variants)
-        ? withPrices.variants.reduce((sum, variant) => sum + (variant.stockQty ?? 0), 0)
-        : 0;
-      return { product: withPrices, totalStock };
-    });
-
-    const filteredByStock = enriched.filter(({ totalStock }) => {
-      if (!query.stockState) return true;
-      if (query.stockState === 'low') {
-        return totalStock > 0 && totalStock <= LOW_STOCK_THRESHOLD;
+    if (query.stockState) {
+      const stockProductIds = await this.getProductIdsByStockState(
+        query.stockState,
+        LOW_STOCK_THRESHOLD,
+      );
+      if (!stockProductIds.length) {
+        return {
+          items: [],
+          page,
+          pageSize,
+          totalItems: 0,
+          totalPages: 1,
+          meta: {
+            page,
+            limit: pageSize,
+            total: 0,
+            pageCount: 1,
+          },
+        };
       }
-      if (query.stockState === 'in_stock') {
-        return totalStock > 0;
-      }
-      return totalStock <= 0;
-    });
+      where.id = { in: stockProductIds };
+    }
 
-    filteredByStock.sort((a, b) => {
-      if (sortBy === 'stock') {
-        const delta = a.totalStock - b.totalStock;
-        return sortDir === 'asc' ? delta : -delta;
-      }
-      const delta = a.product.createdAt.getTime() - b.product.createdAt.getTime();
-      return sortDir === 'asc' ? delta : -delta;
-    });
+    const orderBy: Prisma.ProductOrderByWithRelationInput[] = [];
+    if (sortBy === 'stock') {
+      orderBy.push({ variants: { _sum: { stockQty: sortDir } } });
+    } else {
+      orderBy.push({ createdAt: sortDir });
+    }
+    orderBy.push({ id: 'asc' });
 
-    const totalItems = filteredByStock.length;
+    const productSelect: Prisma.ProductSelect = {
+      id: true,
+      name: true,
+      slug: true,
+      description: true,
+      price: true,
+      currency: true,
+      imageUrl: true,
+      isActive: true,
+      collection: true,
+      createdAt: true,
+      updatedAt: true,
+      images: {
+        select: {
+          id: true,
+          url: true,
+          alt: true,
+          sortOrder: true,
+          isPrimary: true,
+        },
+        orderBy: this.imageOrderBy,
+      },
+      variants: {
+        select: {
+          id: true,
+          size: true,
+          sku: true,
+          price: true,
+          stockQty: true,
+          isActive: true,
+        },
+        orderBy: this.variantOrderBy,
+      },
+    };
+
+    const skip = (page - 1) * pageSize;
+
+    const [items, totalItems] = await this.prisma.$transaction([
+      this.prisma.product.findMany({
+        where,
+        orderBy,
+        skip,
+        take: pageSize,
+        select: productSelect,
+      }),
+      this.prisma.product.count({ where }),
+    ]);
+
+    const pagedItems = items.map((product) => this.addEffectiveVariantPrices(product));
     const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
-    const start = (page - 1) * pageSize;
-    const pagedItems = filteredByStock.slice(start, start + pageSize).map(({ product }) => product);
 
     return {
       items: pagedItems,
