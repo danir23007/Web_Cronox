@@ -89,6 +89,13 @@ export class CircleUpgradeService {
     return value instanceof Date ? value : new Date(value);
   }
 
+  private toDate(value?: string | Date | null) {
+    if (!value) {
+      return undefined;
+    }
+    return value instanceof Date ? value : new Date(value);
+  }
+
   private parseSocialNetwork(value?: string): CircleUpgradeSocialNetwork | undefined {
     if (!value) {
       return undefined;
@@ -330,28 +337,35 @@ export class CircleUpgradeService {
       extra: { lte?: Date; gt?: Date },
     ) => {
       const filter: Prisma.DateTimeFilter = {};
-      if (base?.gte) filter.gte = this.normalizeDate(base.gte);
-      if (base?.lte) filter.lte = this.normalizeDate(base.lte);
+      const baseGte = this.toDate(base?.gte);
+      const baseLte = this.toDate(base?.lte);
+      if (baseGte) filter.gte = baseGte;
+      if (baseLte) filter.lte = baseLte;
 
       if (extra.gt) {
-        const extraGt = this.normalizeDate(extra.gt);
-        if (filter.gte) {
-          if (extraGt.getTime() >= filter.gte.getTime()) {
-            delete filter.gte;
+        const extraGt = this.toDate(extra.gt);
+        const existingGte = this.toDate(filter.gte);
+        if (extraGt) {
+          if (existingGte) {
+            if (extraGt.getTime() >= existingGte.getTime()) {
+              delete filter.gte;
+              filter.gt = extraGt;
+            }
+          } else {
             filter.gt = extraGt;
           }
-        } else {
-          filter.gt = extraGt;
         }
       }
 
       if (extra.lte) {
-        const extraLte = this.normalizeDate(extra.lte);
-        if (filter.lte) {
-          filter.lte =
-            filter.lte.getTime() <= extraLte.getTime() ? filter.lte : extraLte;
-        } else {
-          filter.lte = extraLte;
+        const extraLte = this.toDate(extra.lte);
+        const existingLte = this.toDate(filter.lte);
+        if (extraLte) {
+          if (existingLte) {
+            filter.lte = existingLte.getTime() <= extraLte.getTime() ? existingLte : extraLte;
+          } else {
+            filter.lte = extraLte;
+          }
         }
       }
 

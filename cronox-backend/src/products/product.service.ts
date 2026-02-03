@@ -329,12 +329,11 @@ export class ProductService {
     }
 
     const orderBy: Prisma.ProductOrderByWithRelationInput[] = [];
-    if (sortBy === 'stock') {
-      orderBy.push({ variants: { _sum: { stockQty: sortDir } } });
-    } else {
+    const isStockSort = sortBy === 'stock';
+    if (!isStockSort) {
       orderBy.push({ createdAt: sortDir });
+      orderBy.push({ id: 'asc' });
     }
-    orderBy.push({ id: 'asc' });
 
     const productSelect: Prisma.ProductSelect = {
       id: true,
@@ -372,6 +371,69 @@ export class ProductService {
     };
 
     const skip = (page - 1) * pageSize;
+
+    if (isStockSort) {
+      const grouped = await this.prisma.productVariant.groupBy({
+        by: ['productId'],
+        where: {
+          product: where,
+        },
+        _sum: {
+          stockQty: true,
+        },
+        orderBy: [
+          { _sum: { stockQty: sortDir } },
+          { productId: sortDir === 'asc' ? 'asc' : 'desc' },
+        ],
+        skip,
+        take: pageSize,
+      });
+
+      const totalItems = await this.prisma.product.count({ where });
+      if (!grouped.length) {
+        return {
+          items: [],
+          page,
+          pageSize,
+          totalItems,
+          totalPages: Math.max(1, Math.ceil(totalItems / pageSize)),
+          meta: {
+            page,
+            limit: pageSize,
+            total: totalItems,
+            pageCount: Math.max(1, Math.ceil(totalItems / pageSize)),
+          },
+        };
+      }
+
+      const orderedIds = grouped.map((row) => row.productId);
+      const items = await this.prisma.product.findMany({
+        where: {
+          ...where,
+          id: { in: orderedIds },
+        },
+        select: productSelect,
+      });
+      const itemById = new Map(items.map((item) => [item.id, item]));
+      const orderedItems = orderedIds
+        .map((id) => itemById.get(id))
+        .filter((item): item is NonNullable<typeof item> => Boolean(item));
+
+      const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
+      return {
+        items: orderedItems.map((product) => this.addEffectiveVariantPrices(product)),
+        page,
+        pageSize,
+        totalItems,
+        totalPages,
+        meta: {
+          page,
+          limit: pageSize,
+          total: totalItems,
+          pageCount: totalPages,
+        },
+      };
+    }
 
     const [items, totalItems] = await this.prisma.$transaction([
       this.prisma.product.findMany({
