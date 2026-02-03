@@ -35,6 +35,8 @@
   const requestsNext23 = $('#requestsNext23');
   const requestsPageSize23 = $('#requestsPageSize23');
   const tabs = document.querySelectorAll('#adminTabs button');
+  const requestsBadge23 = $('#requestsBadge23');
+  const requestsBadge34 = $('#requestsBadge34');
   const userDetailSection = $('#section-user');
   const userDetailBackBtn = $('#userDetailBack');
   const userDetailMessage = $('#userDetailMessage');
@@ -128,6 +130,7 @@
   const notesModalTextarea = $('#notesModalTextarea');
   const notesModalSubmit = $('#notesModalSubmit');
   const notesModalClose = $('#notesModalClose');
+  const toastContainer = $('#toastContainer');
   const productsState = {
     page: 1,
     pageSize: 25,
@@ -205,6 +208,8 @@
   let activitySearchTimeout = null;
   let currentSectionId = 'section-dashboard';
   let lastSectionId = 'section-dashboard';
+  let lastPendingCounts = { pending23: 0, pending34: 0 };
+  const PENDING_STORAGE_KEY = 'cronox.admin.pendingCounts';
 
   const setMessage = (text = '', type = 'success') => {
     if (!messageBox) return;
@@ -217,6 +222,14 @@
     messageBox.className = `message show ${type === 'error' ? 'error' : 'success'}`;
   };
 
+  const escapeHtml = (value) =>
+    String(value ?? '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/\"/g, '&quot;')
+      .replace(/'/g, '&#039;');
+
   const setScopedMessage = (el, text = '', type = 'success') => {
     if (!el) return;
     if (!text) {
@@ -226,6 +239,76 @@
     }
     el.textContent = text;
     el.className = `message show ${type === 'error' ? 'error' : 'success'}`;
+  };
+
+  const showToast = (message, type = 'success', title = '') => {
+    if (!toastContainer || !message) return;
+    const toast = document.createElement('div');
+    const normalizedType = type === 'error' ? 'error' : 'success';
+    const heading = title || (normalizedType === 'success' ? 'Listo' : 'Error');
+    toast.className = `toast toast--${normalizedType}`;
+    toast.innerHTML = `
+      <strong>${escapeHtml(heading)}</strong>
+      <div>${escapeHtml(message)}</div>
+    `;
+    toastContainer.appendChild(toast);
+    const timeout = window.setTimeout(() => {
+      toast.classList.add('toast--hide');
+      window.setTimeout(() => toast.remove(), 220);
+    }, 3200);
+    toast.addEventListener('click', () => {
+      window.clearTimeout(timeout);
+      toast.remove();
+    });
+  };
+
+  const readPendingStorage = () => {
+    if (typeof localStorage === 'undefined') return {};
+    try {
+      return JSON.parse(localStorage.getItem(PENDING_STORAGE_KEY) || '{}') || {};
+    } catch (error) {
+      return {};
+    }
+  };
+
+  const writePendingStorage = (payload) => {
+    if (typeof localStorage === 'undefined') return;
+    localStorage.setItem(PENDING_STORAGE_KEY, JSON.stringify(payload || {}));
+  };
+
+  const setBadge = (el, count, pulse) => {
+    if (!el) return;
+    const safeCount = Number(count || 0);
+    if (safeCount > 0) {
+      el.hidden = false;
+      el.textContent = String(safeCount);
+      el.classList.toggle('tab-badge--pulse', Boolean(pulse));
+      return;
+    }
+    el.hidden = true;
+    el.classList.remove('tab-badge--pulse');
+  };
+
+  const updateRequestBadges = (counts = {}) => {
+    const stored = readPendingStorage();
+    const pending23 = Number(counts.pending23 || 0);
+    const pending34 = Number(counts.pending34 || 0);
+    const pulse23 = pending23 > Number(stored.pending23 || 0);
+    const pulse34 = pending34 > Number(stored.pending34 || 0);
+    setBadge(requestsBadge23, pending23, pulse23);
+    setBadge(requestsBadge34, pending34, pulse34);
+    lastPendingCounts = { pending23, pending34 };
+  };
+
+  const markRequestsSeen = () => {
+    const stored = readPendingStorage();
+    writePendingStorage({
+      ...stored,
+      pending23: lastPendingCounts.pending23,
+      pending34: lastPendingCounts.pending34,
+      updatedAt: new Date().toISOString(),
+    });
+    updateRequestBadges(lastPendingCounts);
   };
 
   const redirectToHome = () => {
@@ -249,21 +332,45 @@
     PENDING: 'PENDIENTE',
     APPROVED: 'APROBADA',
     DENIED: 'RECHAZADA',
+    REJECTED: 'RECHAZADA',
     EXPIRED: 'EXPIRADA',
+  };
+
+  const buildChip = (label, variant = 'gray') => {
+    const safeLabel = escapeHtml(label || '—');
+    return `<span class="chip chip--${variant}">${safeLabel}</span>`;
   };
 
   const statusBadge = (status) => {
     const normalized = String(status || '').toUpperCase();
-    const cls =
-      normalized === 'APPROVED'
-        ? 'approved'
-        : normalized === 'DENIED'
-          ? 'denied'
-          : normalized === 'EXPIRED'
-            ? 'expired'
-            : 'pending';
     const label = STATUS_LABELS[normalized] || normalized || '—';
-    return `<span class="status ${cls}">${label}</span>`;
+    const variant =
+      normalized === 'APPROVED'
+        ? 'green'
+        : normalized === 'DENIED' || normalized === 'REJECTED'
+          ? 'red'
+          : normalized === 'EXPIRED'
+            ? 'gray'
+            : 'yellow';
+    return buildChip(label, variant);
+  };
+
+  const orderStatusChip = (status) => {
+    const normalized = String(status || '').toUpperCase();
+    const label = normalized || '—';
+    const variant =
+      normalized === 'PAID' || normalized === 'SHIPPED' || normalized === 'DELIVERED' || normalized === 'COMPLETED'
+        ? 'green'
+        : normalized === 'PENDING'
+          ? 'yellow'
+          : normalized === 'CANCELLED' || normalized === 'CANCELED'
+            ? 'red'
+            : 'gray';
+    return buildChip(label, variant);
+  };
+
+  const promoStatusChip = (isActive) => {
+    return buildChip(isActive ? 'Activo' : 'Inactivo', isActive ? 'green' : 'red');
   };
 
   const formatDate = (value) => {
@@ -312,6 +419,17 @@
     if (hours > 0) return `${hours}h ${minutes}m`;
     if (minutes > 0) return `${minutes}m ${seconds}s`;
     return `${seconds}s`;
+  };
+
+  const formatAttemptLabel = (value) => {
+    if (value == null || value === '') return '—';
+    const attempt = Number(value);
+    const label = Number.isFinite(attempt) ? `#${attempt}` : `#${value}`;
+    const warning =
+      Number.isFinite(attempt) && attempt >= 2
+        ? ' <span class="attempts-warning" title="Muchos intentos">⚠️</span>'
+        : '';
+    return `${label}${warning}`;
   };
 
   const formatMoney = (cents) => {
@@ -375,14 +493,6 @@
     return letters.join('') || value.slice(0, 2).toUpperCase();
   };
 
-  const escapeHtml = (value) =>
-    String(value ?? '')
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/\"/g, '&quot;')
-      .replace(/'/g, '&#039;');
-
   const setUserAvatar = (avatarUrl, displayName) => {
     if (!userAvatar) return;
     if (avatarUrl) {
@@ -423,7 +533,7 @@
       .map((req) => {
         const created = formatRelativeTime(req.createdAt);
         const typeLabel = req.fromCircle && req.toCircle ? `${req.fromCircle}→${req.toCircle}` : '—';
-        const attemptLabel = req.requestNumber == null ? '—' : `#${req.requestNumber}`;
+        const attemptLabel = formatAttemptLabel(req.attempts ?? req.requestNumber);
         return `<tr>
           <td>
             <div class="time-label" title="${created.full}">${created.label}</div>
@@ -454,7 +564,7 @@
             <div class="time-label" title="${created.full}">${created.label}</div>
             <div class="time-sub">${created.full}</div>
           </td>
-          <td>${order.status || '—'}</td>
+          <td>${orderStatusChip(order.status)}</td>
           <td>${formatCurrency(order.total)}</td>
           <td>${promo}</td>
         </tr>`;
@@ -623,9 +733,11 @@
         content: trimmed,
       });
       await fetchNotesForTarget(targetType, String(targetId), state, container, messageEl);
+      showToast('Nota interna guardada.', 'success', 'Notas');
     } catch (error) {
       console.error('[ADMIN] Error creando nota', error);
       if (messageEl) setScopedMessage(messageEl, 'No se pudo guardar la nota.', 'error');
+      showToast('No se pudo guardar la nota.', 'error', 'Notas');
     }
   };
 
@@ -639,9 +751,11 @@
     try {
       await window.CRONOX_API?.admin?.updateAdminNote?.(noteId, { content: trimmed });
       await fetchNotesForTarget(state.targetType || 'user', state.targetId, state, container, messageEl);
+      showToast('Nota interna actualizada.', 'success', 'Notas');
     } catch (error) {
       console.error('[ADMIN] Error actualizando nota', error);
       if (messageEl) setScopedMessage(messageEl, 'No se pudo actualizar la nota.', 'error');
+      showToast('No se pudo actualizar la nota.', 'error', 'Notas');
     }
   };
 
@@ -652,9 +766,11 @@
     try {
       await window.CRONOX_API?.admin?.deleteAdminNote?.(noteId);
       await fetchNotesForTarget(state.targetType || 'user', state.targetId, state, container, messageEl);
+      showToast('Nota interna eliminada.', 'success', 'Notas');
     } catch (error) {
       console.error('[ADMIN] Error eliminando nota', error);
       if (messageEl) setScopedMessage(messageEl, 'No se pudo eliminar la nota.', 'error');
+      showToast('No se pudo eliminar la nota.', 'error', 'Notas');
     }
   };
 
@@ -770,8 +886,14 @@
 
     const lastActivityDate = user.lastLoginAt || user.updatedAt || user.createdAt;
     const lastActivity = formatRelativeTime(lastActivityDate);
-    if (userLastActivity) userLastActivity.textContent = lastActivity.label;
-    if (userLastActivityFull) userLastActivityFull.textContent = lastActivity.full;
+    if (userLastActivity) {
+      userLastActivity.textContent = lastActivity.label;
+      userLastActivity.title = lastActivity.full;
+    }
+    if (userLastActivityFull) {
+      userLastActivityFull.textContent = lastActivity.full;
+      userLastActivityFull.title = lastActivity.full;
+    }
 
     renderUserRequests(payload.requests || []);
     renderUserOrders(payload.orders || []);
@@ -1090,7 +1212,7 @@
               <button class="btn danger" data-action="deny" data-id="${req.id}">RECHAZAR</button>
             </div>`
           : '<span style="color:#7b7f8f;">—</span>';
-        const attemptLabel = req.requestNumber == null ? '—' : `#${req.requestNumber}`;
+        const attemptLabel = formatAttemptLabel(req.attempts ?? req.requestNumber);
         const noteTitle = escapeHtml(
           `Solicitud 3→4 · ${req.username || userLabel || req.userId || req.id}`,
         );
@@ -1143,7 +1265,7 @@
           : userLabel;
         const created = formatRelativeTime(req.createdAt);
         const remaining = typeof req.remainingMs === 'number' ? formatDuration(req.remainingMs) : '—';
-        const attemptLabel = req.requestNumber == null ? '—' : `#${req.requestNumber}`;
+        const attemptLabel = formatAttemptLabel(req.attempts ?? req.requestNumber);
         const noteTitle = escapeHtml(
           `Solicitud 2→3 · ${req.user?.email || req.userId || req.id}`,
         );
@@ -1223,6 +1345,21 @@
     el.textContent = value ?? '—';
   };
 
+  const extractPendingCounts = (data) => {
+    const requests = data?.requests || {};
+    const byType = requests.pendingByType || requests.byType || {};
+    const entries = Object.entries(byType || {});
+    const findCount = (pattern) => {
+      const match = entries.find(([key]) => pattern.test(String(key).toLowerCase()));
+      if (!match) return 0;
+      const value = Number(match[1]);
+      return Number.isFinite(value) ? value : 0;
+    };
+    const pending23 = Number(requests.pending23) || findCount(/2.*3/);
+    const pending34 = Number(requests.pending34) || findCount(/3.*4/);
+    return { pending23, pending34 };
+  };
+
   const renderDashboard = (data) => {
     if (!data) return;
     setDashboardValue(totalUsers, data.users?.total ?? 0);
@@ -1261,6 +1398,7 @@
 
     setDashboardValue(alertLowStock, data.alerts?.lowStock ?? 0);
     setDashboardValue(alertOldRequests, data.alerts?.oldPendingRequests ?? 0);
+    updateRequestBadges(extractPendingCounts(data));
   };
 
   const fetchDashboard = async () => {
@@ -1272,6 +1410,15 @@
     } catch (error) {
       console.error('No se pudo cargar el dashboard', error);
       setScopedMessage(dashboardMessage, 'No se pudieron cargar los datos del resumen.', 'error');
+    }
+  };
+
+  const refreshPendingCounts = async () => {
+    try {
+      const data = await window.CRONOX_API?.admin?.getDashboard?.();
+      updateRequestBadges(extractPendingCounts(data));
+    } catch (error) {
+      console.warn('[ADMIN] No se pudieron actualizar los badges de solicitudes', error);
     }
   };
 
@@ -1626,13 +1773,17 @@
         const typeLabel = code.type === 'PERCENT' ? `${code.value}%` : formatMoney(code.value);
         const usageLabel =
           code.usageLimit != null ? `${code.usageCount || 0} / ${code.usageLimit}` : `${code.usageCount || 0}`;
-        const activeLabel = code.isActive ? 'Activo' : 'Inactivo';
-        const dateLabel = (value) => (value ? formatDate(value) : '—');
+        const activeLabel = promoStatusChip(Boolean(code.isActive));
+        const dateLabel = (value) => {
+          if (!value) return '—';
+          const relative = formatRelativeTime(value);
+          return `<span title="${relative.full}">${relative.label}</span>`;
+        };
         return `
           <tr>
             <td>
               <div style="font-weight:600;">${code.code}</div>
-              <div style="color:#8e93a4; font-size:0.9rem;">${activeLabel}</div>
+              <div style="margin-top:6px;">${activeLabel}</div>
             </td>
             <td>${code.type}</td>
             <td>${typeLabel}</td>
@@ -1718,15 +1869,18 @@
       if (editingCodeId) {
         await window.CRONOX_API?.admin?.updatePromoCode(editingCodeId, payload);
         setScopedMessage(codesMessage, 'Código actualizado correctamente.', 'success');
+        showToast('Código actualizado correctamente.', 'success', 'Códigos');
       } else {
         await window.CRONOX_API?.admin?.createPromoCode(payload);
         setScopedMessage(codesMessage, 'Código creado correctamente.', 'success');
+        showToast('Código creado correctamente.', 'success', 'Códigos');
       }
       toggleModal(codeModal, false);
       fetchCodes();
     } catch (error) {
       console.error('[ADMIN] Error guardando código', error);
       setScopedMessage(codesMessage, error?.message || 'No se pudo guardar el código.', 'error');
+      showToast(error?.message || 'No se pudo guardar el código.', 'error', 'Códigos');
     }
   };
 
@@ -1771,14 +1925,17 @@
       if (action === 'approve') {
         await window.CRONOX_API?.admin?.approveCircleUpgrade(id, {});
         setMessage('Solicitud aprobada correctamente.', 'success');
+        showToast('Solicitud aprobada correctamente.', 'success', 'Solicitud');
       } else {
         await window.CRONOX_API?.admin?.denyCircleUpgrade(id, {});
         setMessage('Solicitud denegada.', 'success');
+        showToast('Solicitud rechazada correctamente.', 'success', 'Solicitud');
       }
       await fetchRequests();
     } catch (error) {
       console.error('[ADMIN] Acción fallida', error);
       setMessage(error?.message || 'No se pudo completar la acción.', 'error');
+      showToast(error?.message || 'No se pudo completar la acción.', 'error', 'Solicitud');
     } finally {
       if (button) button.disabled = false;
     }
@@ -2342,14 +2499,17 @@
             section.hidden = section.id !== targetSection;
           });
           tabs.forEach((btn) => btn.classList.toggle('primary', btn === tab));
+          currentSectionId = targetSection || currentSectionId;
           if (targetSection === 'section-dashboard') {
             fetchDashboard();
           } else if (targetSection === 'section-34') {
             syncRequestsStateFromInputs();
             fetchRequests();
+            markRequestsSeen();
           } else if (targetSection === 'section-23') {
             syncRequests23StateFromInputs();
             fetchRequests23();
+            markRequestsSeen();
           } else if (targetSection === 'section-activity') {
             syncActivityStateFromInputs();
             fetchActivity();
@@ -2402,6 +2562,8 @@
     syncProductsStateFromInputs();
     syncActivityStateFromInputs();
     fetchDashboard();
+    refreshPendingCounts();
+    window.setInterval(refreshPendingCounts, 60000);
     handleHashChange();
   };
 
