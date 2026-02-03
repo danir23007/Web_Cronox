@@ -21,6 +21,8 @@ import { AdminDashboardController } from './dashboard/admin-dashboard.controller
 import { AdminDashboardService } from './dashboard/admin-dashboard.service';
 import { AdminAuditLogsController } from './audit-logs/admin-audit-logs.controller';
 import { AdminAuditLogsService } from './audit-logs/admin-audit-logs.service';
+import { AdminNotesController } from './notes/admin-notes.controller';
+import { AdminNotesService } from './notes/admin-notes.service';
 
 @Module({
   imports: [ProductModule, CategoriesModule, HistorialModule, MembershipModule],
@@ -35,6 +37,7 @@ import { AdminAuditLogsService } from './audit-logs/admin-audit-logs.service';
     AdminPromoCodesController,
     AdminDashboardController,
     AdminAuditLogsController,
+    AdminNotesController,
   ],
   providers: [
     AdminOrdersService,
@@ -44,6 +47,7 @@ import { AdminAuditLogsService } from './audit-logs/admin-audit-logs.service';
     AdminPromoCodesService,
     AdminDashboardService,
     AdminAuditLogsService,
+    AdminNotesService,
     AdminGuard,
   ],
 })

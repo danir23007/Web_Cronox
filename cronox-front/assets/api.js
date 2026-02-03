@@ -594,6 +594,28 @@
     return request(`/api/admin/users/${encodeURIComponent(id)}/audit-logs`);
   };
 
+  adminApi.listAdminNotes = async (query = {}) => {
+    return request('/api/admin/notes', { query });
+  };
+
+  adminApi.createAdminNote = async (payload) => {
+    return request('/api/admin/notes', {
+      method: 'POST',
+      body: payload,
+    });
+  };
+
+  adminApi.updateAdminNote = async (id, payload) => {
+    return request(`/api/admin/notes/${encodeURIComponent(id)}`, {
+      method: 'PATCH',
+      body: payload,
+    });
+  };
+
+  adminApi.deleteAdminNote = async (id) => {
+    return request(`/api/admin/notes/${encodeURIComponent(id)}`, { method: 'DELETE' });
+  };
+
   adminApi.createPromoCode = async (payload) => {
     return request('/api/admin/promo-codes', {
       method: 'POST',
