@@ -423,7 +423,22 @@
       actions.push({ label: 'Volver', href: backLink });
     }
     if (classification.kind === 'auth') {
-      actions.push({ label: 'Iniciar sesión', href: 'auth-modal.html', variant: 'primary' });
+      actions.push({
+        label: 'Iniciar sesión',
+        onClick: () => {
+          if (typeof redirectToLogin === 'function') {
+            redirectToLogin();
+            return;
+          }
+          try {
+            localStorage.setItem('cronox_open_auth_on_load', 'login');
+          } catch (error) {
+            console.warn('[ADMIN] No se pudo marcar login automático', error);
+          }
+          window.location.href = 'index.html';
+        },
+        variant: 'primary',
+      });
     }
     renderBanner(container, {
       type: severity,
