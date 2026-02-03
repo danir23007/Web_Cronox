@@ -22,7 +22,7 @@ import { NewsletterService } from '../newsletter/newsletter.service';
 interface JwtPayload {
   sub: number;
   email: string;
-  role: Role;
+  role: Role | null;
 }
 
 type Tokens = {

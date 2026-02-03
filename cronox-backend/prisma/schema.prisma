@@ -85,7 +85,7 @@ model User {
   id                     Int                     @id @default(autoincrement())
   email                  String                  @unique
   password               String                  @map("passwordHash")
-  role                   Role                    @default(USER)
+  role                   Role?                   @default(USER)
   name                   String?
   firstName              String?
   lastName               String?
@@ -405,8 +405,12 @@ model AdminNote {
 }
 
 enum Role {
-  ADMIN
   USER
+  SUPER_ADMIN
+  MODERATOR
+  LOGISTICS
+  MARKETING
+  ADMIN
   SUPERADMIN
 }
 

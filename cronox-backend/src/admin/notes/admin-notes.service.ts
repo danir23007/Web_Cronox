@@ -4,6 +4,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { AdminNoteQueryDto } from './dto/admin-note-query.dto';
 import { CreateAdminNoteDto } from './dto/create-admin-note.dto';
 import { UpdateAdminNoteDto } from './dto/update-admin-note.dto';
+import { isSuperAdminRole } from '../../common/roles.utils';
 
 @Injectable()
 export class AdminNotesService {
@@ -89,7 +90,12 @@ export class AdminNotesService {
     return this.mapNote(created);
   }
 
-  async update(noteId: string, adminId: number, role: Role, dto: UpdateAdminNoteDto) {
+  async update(
+    noteId: string,
+    adminId: number,
+    role: Role | null,
+    dto: UpdateAdminNoteDto,
+  ) {
     const note = await this.prisma.adminNote.findUnique({
       where: { id: noteId },
       include: {
@@ -110,7 +116,7 @@ export class AdminNotesService {
       throw new NotFoundException('Nota no encontrada');
     }
 
-    if (note.authorAdminId !== adminId && role !== Role.SUPERADMIN) {
+    if (note.authorAdminId !== adminId && !isSuperAdminRole(role)) {
       throw new ForbiddenException('No puedes editar esta nota');
     }
 
@@ -134,7 +140,7 @@ export class AdminNotesService {
     return this.mapNote(updated);
   }
 
-  async remove(noteId: string, adminId: number, role: Role) {
+  async remove(noteId: string, adminId: number, role: Role | null) {
     const note = await this.prisma.adminNote.findUnique({
       where: { id: noteId },
     });
@@ -143,7 +149,7 @@ export class AdminNotesService {
       throw new NotFoundException('Nota no encontrada');
     }
 
-    if (note.authorAdminId !== adminId && role !== Role.SUPERADMIN) {
+    if (note.authorAdminId !== adminId && !isSuperAdminRole(role)) {
       throw new ForbiddenException('No puedes eliminar esta nota');
     }
 

@@ -210,6 +210,106 @@
   let lastSectionId = 'section-dashboard';
   let lastPendingCounts = { pending23: 0, pending34: 0 };
   const PENDING_STORAGE_KEY = 'cronox.admin.pendingCounts';
+  const ADMIN_ROLES = new Set(['SUPER_ADMIN', 'MODERATOR', 'LOGISTICS', 'MARKETING', 'ADMIN', 'SUPERADMIN']);
+  const PERMISSIONS = {
+    requests: ['SUPER_ADMIN', 'MODERATOR'],
+    userDetail: ['SUPER_ADMIN', 'MODERATOR'],
+    products: ['SUPER_ADMIN', 'LOGISTICS'],
+    orders: ['SUPER_ADMIN', 'LOGISTICS'],
+    promoCodes: ['SUPER_ADMIN', 'MARKETING'],
+    auditLog: ['SUPER_ADMIN'],
+    notes: ['SUPER_ADMIN', 'MODERATOR'],
+  };
+  const SECTION_PERMISSIONS = {
+    'section-23': 'requests',
+    'section-34': 'requests',
+    'section-activity': 'auditLog',
+    'section-products': 'products',
+    'section-codes': 'promoCodes',
+    'section-user': 'userDetail',
+  };
+  let currentAdminUser = null;
+  let currentAdminRole = 'SUPER_ADMIN';
+
+  const normalizeRole = (role) => {
+    if (!role) return 'SUPER_ADMIN';
+    if (role === 'SUPERADMIN' || role === 'ADMIN') return 'SUPER_ADMIN';
+    return role;
+  };
+
+  const hasAccess = (role, allowedRoles) => {
+    const effective = normalizeRole(role);
+    if (effective === 'SUPER_ADMIN') return true;
+    return Array.isArray(allowedRoles) && allowedRoles.includes(effective);
+  };
+
+  const canAccess = (key) => hasAccess(currentAdminRole, PERMISSIONS[key]);
+
+  const ensureRestrictedNotice = (section) => {
+    if (!section) return null;
+    let notice = section.querySelector('.restricted-notice');
+    if (!notice) {
+      notice = document.createElement('div');
+      notice.className = 'message error show restricted-notice';
+      notice.textContent = 'No autorizado';
+      section.prepend(notice);
+    }
+    return notice;
+  };
+
+  const applySectionAccess = (sectionId) => {
+    const section = document.getElementById(sectionId);
+    const permissionKey = SECTION_PERMISSIONS[sectionId];
+    if (!permissionKey) {
+      if (section) {
+        section.classList.remove('restricted');
+      }
+      return true;
+    }
+    const allowed = canAccess(permissionKey);
+    if (!section) return allowed;
+    const notice = ensureRestrictedNotice(section);
+    section.classList.toggle('restricted', !allowed);
+    if (notice) {
+      notice.hidden = allowed;
+      notice.classList.toggle('show', !allowed);
+    }
+    return allowed;
+  };
+
+  const setTabVisibility = (sectionId, allowed) => {
+    if (!tabs?.length) return;
+    const tab = Array.from(tabs).find((btn) => btn.dataset.section === sectionId);
+    if (tab) tab.hidden = !allowed;
+  };
+
+  const setUserTabVisibility = (tabId, allowed) => {
+    if (!userDetailTabs?.length) return;
+    const tab = Array.from(userDetailTabs).find((btn) => btn.dataset.userTab === tabId);
+    if (tab) tab.hidden = !allowed;
+  };
+
+  const applyRoleVisibility = () => {
+    setTabVisibility('section-23', canAccess('requests'));
+    setTabVisibility('section-34', canAccess('requests'));
+    setTabVisibility('section-activity', canAccess('auditLog'));
+    setTabVisibility('section-products', canAccess('products'));
+    setTabVisibility('section-codes', canAccess('promoCodes'));
+    setUserTabVisibility('notes', canAccess('notes'));
+    setUserTabVisibility('orders', canAccess('orders'));
+    setUserTabVisibility('history', canAccess('auditLog'));
+    if (!canAccess('notes') && userDetailState.activeTab === 'notes') {
+      setUserDetailTab('requests');
+    }
+    if (!canAccess('orders') && userDetailState.activeTab === 'orders') {
+      setUserDetailTab('requests');
+    }
+    if (!canAccess('auditLog') && userDetailState.activeTab === 'history') {
+      setUserDetailTab('requests');
+    }
+    if (createProductBtn) createProductBtn.hidden = !canAccess('products');
+    if (createCodeBtn) createCodeBtn.hidden = !canAccess('promoCodes');
+  };
 
   const setMessage = (text = '', type = 'success') => {
     if (!messageBox) return;
@@ -321,10 +421,13 @@
       return null;
     }
     const user = await window.CRONOX_API.getMe();
-    if (!user || (user.role !== 'ADMIN' && user.role !== 'SUPERADMIN')) {
+    const effectiveRole = normalizeRole(user?.role);
+    if (!user || !ADMIN_ROLES.has(effectiveRole)) {
       redirectToHome();
       return null;
     }
+    currentAdminUser = user;
+    currentAdminRole = effectiveRole;
     return user;
   };
 
@@ -473,6 +576,7 @@
   };
 
   const showSection = (sectionId) => {
+    const allowed = applySectionAccess(sectionId);
     document.querySelectorAll('.admin-section').forEach((section) => {
       section.hidden = section.id !== sectionId;
     });
@@ -481,9 +585,10 @@
       if (tabs?.length) {
         tabs.forEach((btn) => btn.classList.remove('primary'));
       }
-      return;
+      return allowed;
     }
     setActiveAdminTab(sectionId);
+    return allowed;
   };
 
   const getInitials = (value) => {
@@ -503,7 +608,24 @@
   };
 
   const setUserDetailTab = (tabId) => {
-    userDetailState.activeTab = tabId;
+    let resolvedTabId = tabId;
+    let deniedLabel = '';
+    if (tabId === 'notes' && !canAccess('notes')) {
+      resolvedTabId = 'requests';
+      deniedLabel = 'Notas';
+    }
+    if (tabId === 'orders' && !canAccess('orders')) {
+      resolvedTabId = 'requests';
+      deniedLabel = 'Pedidos';
+    }
+    if (tabId === 'history' && !canAccess('auditLog')) {
+      resolvedTabId = 'requests';
+      deniedLabel = 'Actividad';
+    }
+    if (resolvedTabId !== tabId) {
+      showToast('No autorizado.', 'error', deniedLabel || 'Acceso');
+    }
+    userDetailState.activeTab = resolvedTabId;
     const panels = [
       { id: 'requests', el: userTabRequests },
       { id: 'orders', el: userTabOrders },
@@ -513,7 +635,7 @@
     ];
     panels.forEach((panel) => {
       if (panel.el) {
-        panel.el.hidden = panel.id !== tabId;
+        panel.el.hidden = panel.id !== resolvedTabId;
       }
     });
     if (userDetailTabs?.length) {
@@ -706,6 +828,10 @@
 
   const openNotesModal = async ({ targetType, targetId, title }) => {
     if (!notesModal) return;
+    if (!canAccess('notes')) {
+      showToast('No autorizado.', 'error', 'Notas');
+      return;
+    }
     requestNotesState.targetType = targetType;
     requestNotesState.targetId = String(targetId);
     requestNotesState.editingId = null;
@@ -720,6 +846,11 @@
   };
 
   const createNoteForTarget = async (targetType, targetId, content, state, container, messageEl) => {
+    if (!canAccess('notes')) {
+      if (messageEl) setScopedMessage(messageEl, 'No autorizado.', 'error');
+      showToast('No autorizado.', 'error', 'Notas');
+      return;
+    }
     const trimmed = content.trim();
     if (!trimmed) {
       if (messageEl) setScopedMessage(messageEl, 'La nota no puede estar vacía.', 'error');
@@ -742,6 +873,11 @@
   };
 
   const updateNoteContent = async (noteId, content, state, container, messageEl) => {
+    if (!canAccess('notes')) {
+      if (messageEl) setScopedMessage(messageEl, 'No autorizado.', 'error');
+      showToast('No autorizado.', 'error', 'Notas');
+      return;
+    }
     const trimmed = content.trim();
     if (!trimmed) {
       if (messageEl) setScopedMessage(messageEl, 'La nota no puede estar vacía.', 'error');
@@ -761,6 +897,11 @@
 
   const deleteNote = async (noteId, state, container, messageEl) => {
     if (!noteId) return;
+    if (!canAccess('notes')) {
+      if (messageEl) setScopedMessage(messageEl, 'No autorizado.', 'error');
+      showToast('No autorizado.', 'error', 'Notas');
+      return;
+    }
     if (!confirm('¿Eliminar esta nota interna?')) return;
     if (messageEl) setScopedMessage(messageEl, '');
     try {
@@ -873,9 +1014,10 @@
     setUserAvatar(user.avatarUrl, displayName);
 
     if (userBadges) {
+      const displayRole = normalizeRole(user.role);
       const badges = [
         `<span class="badge">Círculo ${user.circle ?? '—'}</span>`,
-        user.role ? `<span class="badge">${user.role}</span>` : '',
+        displayRole ? `<span class="badge">${displayRole}</span>` : '',
       ].filter(Boolean);
       userBadges.innerHTML = badges.join('');
     }
@@ -896,10 +1038,16 @@
     }
 
     renderUserRequests(payload.requests || []);
-    renderUserOrders(payload.orders || []);
+    if (canAccess('orders')) {
+      renderUserOrders(payload.orders || []);
+    }
     renderUserCodes(payload.codesUsed || []);
-    fetchUserHistory(user.id);
-    fetchUserNotes(user.id);
+    if (canAccess('auditLog')) {
+      fetchUserHistory(user.id);
+    }
+    if (canAccess('notes')) {
+      fetchUserNotes(user.id);
+    }
   };
 
   const setUserHash = (userId) => {
@@ -917,6 +1065,11 @@
 
   const loadUserDetail = async (userId) => {
     if (!userId) return;
+    if (!canAccess('userDetail')) {
+      showSection('section-user');
+      setUserDetailMessage('No autorizado', 'error');
+      return;
+    }
     setUserDetailMessage('');
     if (userDetailSection) {
       showSection('section-user');
@@ -953,6 +1106,11 @@
         openUserDetail(userId, { skipHash: true });
         return;
       }
+    }
+    const sectionMatch = window.location.hash.match(/^#(section-[\w-]+)/);
+    if (sectionMatch) {
+      showSection(sectionMatch[1]);
+      return;
     }
     if (currentSectionId === 'section-user') {
       showSection(lastSectionId || 'section-dashboard');
@@ -1194,6 +1352,8 @@
       return;
     }
 
+    const canApprove = canAccess('requests');
+    const canUseNotes = canAccess('notes');
     requestsBody.innerHTML = items
       .map((req) => {
         const userName = req.user?.firstName || req.user?.lastName
@@ -1208,15 +1368,17 @@
         const isActionable = normalizedStatus === 'PENDING' || normalizedStatus === 'EXPIRED';
         const actions = isActionable
           ? `<div class="actions">
-              <button class="btn primary" data-action="approve" data-id="${req.id}">APROBAR</button>
-              <button class="btn danger" data-action="deny" data-id="${req.id}">RECHAZAR</button>
+              <button class="btn primary" data-action="approve" data-id="${req.id}" ${canApprove ? '' : 'disabled title="No autorizado"'}>APROBAR</button>
+              <button class="btn danger" data-action="deny" data-id="${req.id}" ${canApprove ? '' : 'disabled title="No autorizado"'}>RECHAZAR</button>
             </div>`
           : '<span style="color:#7b7f8f;">—</span>';
         const attemptLabel = formatAttemptLabel(req.attempts ?? req.requestNumber);
         const noteTitle = escapeHtml(
           `Solicitud 3→4 · ${req.username || userLabel || req.userId || req.id}`,
         );
-        const noteButton = `<button type="button" class="note-icon-btn" data-note-target-type="circleRequest" data-note-target-id="${req.id}" data-note-title="${noteTitle}">📝</button>`;
+        const noteButton = canUseNotes
+          ? `<button type="button" class="note-icon-btn" data-note-target-type="circleRequest" data-note-target-id="${req.id}" data-note-title="${noteTitle}">📝</button>`
+          : '<span style="color:#7b7f8f;">—</span>';
 
         return `<tr>
           <td>
@@ -1254,6 +1416,7 @@
       return;
     }
 
+    const canUseNotes = canAccess('notes');
     requestsBody23.innerHTML = items
       .map((req) => {
         const userName = req.user?.firstName || req.user?.lastName
@@ -1269,7 +1432,9 @@
         const noteTitle = escapeHtml(
           `Solicitud 2→3 · ${req.user?.email || req.userId || req.id}`,
         );
-        const noteButton = `<button type="button" class="note-icon-btn" data-note-target-type="circleRequest" data-note-target-id="${req.id}" data-note-title="${noteTitle}">📝</button>`;
+        const noteButton = canUseNotes
+          ? `<button type="button" class="note-icon-btn" data-note-target-type="circleRequest" data-note-target-id="${req.id}" data-note-title="${noteTitle}">📝</button>`
+          : '<span style="color:#7b7f8f;">—</span>';
         return `<tr>
           <td>
             <div class="time-label" title="${created.full}">${created.label}</div>
@@ -1287,6 +1452,10 @@
   };
 
   const fetchRequests = async () => {
+    if (!canAccess('requests')) {
+      setMessage('No autorizado.', 'error');
+      return;
+    }
     setLoading(true);
     setMessage('');
     try {
@@ -1311,6 +1480,13 @@
   };
 
   const fetchRequests23 = async () => {
+    if (!canAccess('requests')) {
+      if (messageBox23) {
+        messageBox23.textContent = 'No autorizado.';
+        messageBox23.className = 'message show error';
+      }
+      return;
+    }
     setLoading23(true);
     if (messageBox23) {
       messageBox23.textContent = '';
@@ -1424,6 +1600,11 @@
 
   const fetchActivity = async () => {
     if (!activityBody) return;
+    if (!canAccess('auditLog')) {
+      setScopedMessage(activityMessage, 'No autorizado.', 'error');
+      activityBody.innerHTML = '<tr><td colspan="5" class="empty">No autorizado.</td></tr>';
+      return;
+    }
     activityBody.innerHTML = '<tr><td colspan="5" class="empty">Cargando actividad…</td></tr>';
     setScopedMessage(activityMessage, '');
     try {
@@ -1506,6 +1687,11 @@
 
   const fetchProducts = async () => {
     if (!productsBody) return;
+    if (!canAccess('products')) {
+      setScopedMessage(productsMessage, 'No autorizado.', 'error');
+      productsBody.innerHTML = '<tr><td colspan="7" class="empty">No autorizado.</td></tr>';
+      return;
+    }
     productsBody.innerHTML = '<tr><td colspan="7" class="empty">Cargando productos…</td></tr>';
     setScopedMessage(productsMessage, '');
     try {
@@ -1735,6 +1921,11 @@
 
   const fetchCodes = async () => {
     if (!codesBody) return;
+    if (!canAccess('promoCodes')) {
+      setScopedMessage(codesMessage, 'No autorizado.', 'error');
+      codesBody.innerHTML = '<tr><td colspan="6" class="empty">No autorizado.</td></tr>';
+      return;
+    }
     codesBody.innerHTML = '<tr><td colspan="6" class="empty">Cargando códigos…</td></tr>';
     setScopedMessage(codesMessage, '');
     const query = {
@@ -1919,6 +2110,11 @@
 
   const handleAction = async (action, id) => {
     if (!id) return;
+    if (!canAccess('requests')) {
+      setMessage('No autorizado.', 'error');
+      showToast('No autorizado.', 'error', 'Solicitud');
+      return;
+    }
     const button = document.querySelector(`button[data-id="${id}"][data-action="${action}"]`);
     if (button) button.disabled = true;
     try {
@@ -2495,11 +2691,11 @@
       tabs.forEach((tab) => {
         tab.addEventListener('click', () => {
           const targetSection = tab.dataset.section;
-          document.querySelectorAll('.admin-section').forEach((section) => {
-            section.hidden = section.id !== targetSection;
-          });
-          tabs.forEach((btn) => btn.classList.toggle('primary', btn === tab));
-          currentSectionId = targetSection || currentSectionId;
+          const allowed = showSection(targetSection || currentSectionId);
+          if (!allowed) {
+            currentSectionId = targetSection || currentSectionId;
+            return;
+          }
           if (targetSection === 'section-dashboard') {
             fetchDashboard();
           } else if (targetSection === 'section-34') {
@@ -2556,6 +2752,7 @@
   const init = async () => {
     const user = await ensureAdmin();
     if (!user) return;
+    applyRoleVisibility();
     bindEvents();
     syncRequestsStateFromInputs();
     syncRequests23StateFromInputs();

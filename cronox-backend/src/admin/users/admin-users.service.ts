@@ -7,6 +7,7 @@ import {
 import { OrderStatus, Prisma, Role, User } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AdminUserQueryDto } from './dto/admin-user-query.dto';
+import { ADMIN_ROLE_LIST, isAdminRole } from '../../common/roles.utils';
 
 const DEFAULT_PAGE_SIZE = 20;
 const RECENT_ITEMS_LIMIT = 20;
@@ -164,7 +165,7 @@ export class AdminUsersService {
   }
 
   async updateUserRole(id: number, role: Role, performedById: number) {
-    if (id === performedById && role !== Role.ADMIN) {
+    if (id === performedById && !isAdminRole(role)) {
       throw new ForbiddenException('Cannot remove your own admin role');
     }
 
@@ -178,8 +179,12 @@ export class AdminUsersService {
       return this.mapUser(existing);
     }
 
-    if (existing.role === Role.ADMIN && role !== Role.ADMIN) {
-      const adminCount = await this.prisma.user.count({ where: { role: Role.ADMIN } });
+    if (isAdminRole(existing.role) && !isAdminRole(role)) {
+      const adminCount = await this.prisma.user.count({
+        where: {
+          OR: [{ role: { in: ADMIN_ROLE_LIST } }, { role: null }],
+        },
+      });
 
       if (adminCount <= 1) {
         throw new BadRequestException('At least one admin user must remain');

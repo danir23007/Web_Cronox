@@ -13,12 +13,16 @@ import {
 import type { Response } from 'express';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { AdminGuard } from '../../common/guards/admin.guard';
+import { RolesGuard } from '../../common/guards/roles.guard';
+import { Roles } from '../../common/roles.decorator';
+import { Role } from '@prisma/client';
 import { AdminOrdersService } from './admin-orders.service';
 import { AdminOrdersQueryDto } from './dto/admin-order-query.dto';
 import { UpdateOrderStatusDto } from './dto/update-order-status.dto';
 
 @Controller('admin/orders')
-@UseGuards(JwtAuthGuard, AdminGuard)
+@UseGuards(JwtAuthGuard, AdminGuard, RolesGuard)
+@Roles(Role.SUPER_ADMIN, Role.LOGISTICS)
 export class AdminOrdersController {
   constructor(private readonly ordersService: AdminOrdersService) {}
 

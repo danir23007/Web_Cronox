@@ -15,8 +15,11 @@ import {
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { AdminGuard } from '../../common/guards/admin.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { RolesGuard } from '../../common/guards/roles.guard';
+import { Roles } from '../../common/roles.decorator';
 import { ProductService } from '../../products/product.service';
 import type { Express } from 'express';
+import { Role } from '@prisma/client';
 import { CreateProductDto } from '../../products/dto/create-product.dto';
 import { UpdateProductDto } from '../../products/dto/update-product.dto';
 import { CreateVariantDto } from '../../products/dto/create-variant.dto';
@@ -26,7 +29,8 @@ import { FilesInterceptor } from '@nestjs/platform-express';
 import { SupabaseStorageService } from '../../common/storage/supabase-storage.service';
 
 @Controller('admin/products')
-@UseGuards(JwtAuthGuard, AdminGuard)
+@UseGuards(JwtAuthGuard, AdminGuard, RolesGuard)
+@Roles(Role.SUPER_ADMIN, Role.LOGISTICS)
 export class AdminProductsController {
   constructor(
     private readonly productService: ProductService,
