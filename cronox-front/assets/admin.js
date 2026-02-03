@@ -52,10 +52,15 @@
   const userTabOrders = $('#userTabOrders');
   const userTabCodes = $('#userTabCodes');
   const userTabHistory = $('#userTabHistory');
+  const userTabNotes = $('#userTabNotes');
   const userRequestsBody = $('#userRequestsBody');
   const userOrdersBody = $('#userOrdersBody');
   const userCodesBody = $('#userCodesBody');
   const userHistoryBody = $('#userHistoryBody');
+  const userNotesList = $('#userNotesList');
+  const userNoteInput = $('#userNoteInput');
+  const userNoteSubmit = $('#userNoteSubmit');
+  const userNotesMessage = $('#userNotesMessage');
   const activityBody = $('#activityBody');
   const activityMessage = $('#activityMessage');
   const activitySearch = $('#activitySearch');
@@ -82,7 +87,7 @@
   const revenueMonth = $('#revenueMonth');
   const alertLowStock = $('#alertLowStock');
   const alertOldRequests = $('#alertOldRequests');
-  const loadingRow = '<tr><td colspan="8" class="empty">Cargando solicitudes…</td></tr>';
+  const loadingRow = '<tr><td colspan="9" class="empty">Cargando solicitudes…</td></tr>';
   const productsBody = $('#productsBody');
   const productsMessage = $('#productsMessage');
   const productSearch = $('#productSearch');
@@ -116,6 +121,13 @@
   const codeForm = $('#codeForm');
   const codeCancelBtn = $('#codeCancelBtn');
   const codeSubmitBtn = $('#codeSubmitBtn');
+  const notesModal = $('#notesModal');
+  const notesModalTitle = $('#notesModalTitle');
+  const notesModalMessage = $('#notesModalMessage');
+  const notesModalList = $('#notesModalList');
+  const notesModalTextarea = $('#notesModalTextarea');
+  const notesModalSubmit = $('#notesModalSubmit');
+  const notesModalClose = $('#notesModalClose');
   const productsState = {
     page: 1,
     pageSize: 25,
@@ -170,6 +182,17 @@
     userId: null,
     activeTab: 'requests',
     data: null,
+  };
+  const userNotesState = {
+    items: [],
+    editingId: null,
+    targetId: null,
+  };
+  const requestNotesState = {
+    items: [],
+    editingId: null,
+    targetType: '',
+    targetId: '',
   };
   let editingProductId = null;
   let editingCodeId = null;
@@ -352,6 +375,14 @@
     return letters.join('') || value.slice(0, 2).toUpperCase();
   };
 
+  const escapeHtml = (value) =>
+    String(value ?? '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/\"/g, '&quot;')
+      .replace(/'/g, '&#039;');
+
   const setUserAvatar = (avatarUrl, displayName) => {
     if (!userAvatar) return;
     if (avatarUrl) {
@@ -368,6 +399,7 @@
       { id: 'orders', el: userTabOrders },
       { id: 'codes', el: userTabCodes },
       { id: 'history', el: userTabHistory },
+      { id: 'notes', el: userTabNotes },
     ];
     panels.forEach((panel) => {
       if (panel.el) {
@@ -496,6 +528,168 @@
       .join('');
   };
 
+  const renderNotesList = (state, container) => {
+    if (!container) return;
+    if (!state.items.length) {
+      container.innerHTML = '<p class="note-empty">Sin notas internas.</p>';
+      return;
+    }
+    container.innerHTML = state.items
+      .map((note) => {
+        const created = formatRelativeTime(note.createdAt);
+        const authorLabel = escapeHtml(getAdminLabel(note.author));
+        const isEditing = state.editingId === note.id;
+        if (isEditing) {
+          return `<div class="note-card" data-note-id="${note.id}">
+            <div class="note-meta">
+              <div class="note-author">${authorLabel}</div>
+              <div class="time-sub" title="${created.full}">${created.label}</div>
+            </div>
+            <textarea class="textarea" data-note-edit="${note.id}">${escapeHtml(note.content)}</textarea>
+            <div class="note-actions">
+              <button type="button" class="btn primary note-button" data-note-action="save" data-note-id="${note.id}">Guardar</button>
+              <button type="button" class="btn note-button" data-note-action="cancel" data-note-id="${note.id}">Cancelar</button>
+            </div>
+          </div>`;
+        }
+        return `<div class="note-card" data-note-id="${note.id}">
+          <div class="note-meta">
+            <div>
+              <div class="note-author">${authorLabel}</div>
+              <div class="time-sub" title="${created.full}">${created.label}</div>
+            </div>
+            <div class="note-actions">
+              <button type="button" class="btn note-button" data-note-action="edit" data-note-id="${note.id}">Editar</button>
+              <button type="button" class="btn danger note-button" data-note-action="delete" data-note-id="${note.id}">Eliminar</button>
+            </div>
+          </div>
+          <div class="note-content">${escapeHtml(note.content)}</div>
+        </div>`;
+      })
+      .join('');
+  };
+
+  const fetchNotesForTarget = async (targetType, targetId, state, container, messageEl) => {
+    if (!targetType || !targetId) return;
+    if (messageEl) setScopedMessage(messageEl, '');
+    try {
+      const notes = await window.CRONOX_API?.admin?.listAdminNotes?.({
+        targetType,
+        targetId: String(targetId),
+      });
+      state.items = Array.isArray(notes) ? notes : [];
+      state.editingId = null;
+      renderNotesList(state, container);
+    } catch (error) {
+      console.error('[ADMIN] Error cargando notas', error);
+      if (messageEl) {
+        setScopedMessage(messageEl, 'No se pudieron cargar las notas internas.', 'error');
+      }
+    }
+  };
+
+  const fetchUserNotes = async (userId) => {
+    userNotesState.targetType = 'user';
+    userNotesState.targetId = userId;
+    await fetchNotesForTarget('user', String(userId), userNotesState, userNotesList, userNotesMessage);
+  };
+
+  const openNotesModal = async ({ targetType, targetId, title }) => {
+    if (!notesModal) return;
+    requestNotesState.targetType = targetType;
+    requestNotesState.targetId = String(targetId);
+    requestNotesState.editingId = null;
+    if (notesModalTitle) {
+      notesModalTitle.textContent = title || 'Notas internas';
+    }
+    if (notesModalTextarea) {
+      notesModalTextarea.value = '';
+    }
+    toggleModal(notesModal, true);
+    await fetchNotesForTarget(targetType, String(targetId), requestNotesState, notesModalList, notesModalMessage);
+  };
+
+  const createNoteForTarget = async (targetType, targetId, content, state, container, messageEl) => {
+    const trimmed = content.trim();
+    if (!trimmed) {
+      if (messageEl) setScopedMessage(messageEl, 'La nota no puede estar vacía.', 'error');
+      return;
+    }
+    if (messageEl) setScopedMessage(messageEl, '');
+    try {
+      await window.CRONOX_API?.admin?.createAdminNote?.({
+        targetType,
+        targetId: String(targetId),
+        content: trimmed,
+      });
+      await fetchNotesForTarget(targetType, String(targetId), state, container, messageEl);
+    } catch (error) {
+      console.error('[ADMIN] Error creando nota', error);
+      if (messageEl) setScopedMessage(messageEl, 'No se pudo guardar la nota.', 'error');
+    }
+  };
+
+  const updateNoteContent = async (noteId, content, state, container, messageEl) => {
+    const trimmed = content.trim();
+    if (!trimmed) {
+      if (messageEl) setScopedMessage(messageEl, 'La nota no puede estar vacía.', 'error');
+      return;
+    }
+    if (messageEl) setScopedMessage(messageEl, '');
+    try {
+      await window.CRONOX_API?.admin?.updateAdminNote?.(noteId, { content: trimmed });
+      await fetchNotesForTarget(state.targetType || 'user', state.targetId, state, container, messageEl);
+    } catch (error) {
+      console.error('[ADMIN] Error actualizando nota', error);
+      if (messageEl) setScopedMessage(messageEl, 'No se pudo actualizar la nota.', 'error');
+    }
+  };
+
+  const deleteNote = async (noteId, state, container, messageEl) => {
+    if (!noteId) return;
+    if (!confirm('¿Eliminar esta nota interna?')) return;
+    if (messageEl) setScopedMessage(messageEl, '');
+    try {
+      await window.CRONOX_API?.admin?.deleteAdminNote?.(noteId);
+      await fetchNotesForTarget(state.targetType || 'user', state.targetId, state, container, messageEl);
+    } catch (error) {
+      console.error('[ADMIN] Error eliminando nota', error);
+      if (messageEl) setScopedMessage(messageEl, 'No se pudo eliminar la nota.', 'error');
+    }
+  };
+
+  const handleNotesListClick = (event, state, container, messageEl) => {
+    const target = event.target;
+    if (!(target instanceof HTMLElement)) return;
+    const action = target.dataset.noteAction;
+    const noteId = target.dataset.noteId;
+    if (!action || !noteId) return;
+
+    if (action === 'edit') {
+      state.editingId = noteId;
+      renderNotesList(state, container);
+      return;
+    }
+
+    if (action === 'cancel') {
+      state.editingId = null;
+      renderNotesList(state, container);
+      return;
+    }
+
+    if (action === 'save') {
+      const textarea = container?.querySelector(`[data-note-edit="${noteId}"]`);
+      if (textarea instanceof HTMLTextAreaElement) {
+        updateNoteContent(noteId, textarea.value, state, container, messageEl);
+      }
+      return;
+    }
+
+    if (action === 'delete') {
+      deleteNote(noteId, state, container, messageEl);
+    }
+  };
+
   const renderActivity = (items = [], options = { error: false }) => {
     if (!activityBody) return;
     if (options.error) {
@@ -583,6 +777,7 @@
     renderUserOrders(payload.orders || []);
     renderUserCodes(payload.codesUsed || []);
     fetchUserHistory(user.id);
+    fetchUserNotes(user.id);
   };
 
   const setUserHash = (userId) => {
@@ -652,7 +847,7 @@
   const setLoading23 = (isLoading) => {
     if (!requestsBody23) return;
     if (isLoading) {
-      requestsBody23.innerHTML = '<tr><td colspan="6" class="empty">Cargando solicitudes…</td></tr>';
+      requestsBody23.innerHTML = '<tr><td colspan="7" class="empty">Cargando solicitudes…</td></tr>';
     }
   };
 
@@ -864,7 +1059,7 @@
     if (options.error) {
       requestsBody.innerHTML = `
         <tr>
-          <td colspan="8" class="empty">
+          <td colspan="9" class="empty">
             No se pudieron cargar las solicitudes.
             <button type="button" class="btn" data-retry="1" style="margin-left:8px;">Reintentar</button>
           </td>
@@ -873,7 +1068,7 @@
       return;
     }
     if (!Array.isArray(items) || !items.length) {
-      requestsBody.innerHTML = '<tr><td colspan="8" class="empty">No hay solicitudes con ese estado.</td></tr>';
+      requestsBody.innerHTML = '<tr><td colspan="9" class="empty">No hay solicitudes con ese estado.</td></tr>';
       return;
     }
 
@@ -896,6 +1091,10 @@
             </div>`
           : '<span style="color:#7b7f8f;">—</span>';
         const attemptLabel = req.requestNumber == null ? '—' : `#${req.requestNumber}`;
+        const noteTitle = escapeHtml(
+          `Solicitud 3→4 · ${req.username || userLabel || req.userId || req.id}`,
+        );
+        const noteButton = `<button type="button" class="note-icon-btn" data-note-target-type="circleRequest" data-note-target-id="${req.id}" data-note-title="${noteTitle}">📝</button>`;
 
         return `<tr>
           <td>
@@ -909,6 +1108,7 @@
           <td>${statusBadge(req.status)}</td>
           <td>${attemptLabel}</td>
           <td>${actions}</td>
+          <td>${noteButton}</td>
         </tr>`;
       })
       .join('');
@@ -919,7 +1119,7 @@
     if (options.error) {
       requestsBody23.innerHTML = `
         <tr>
-          <td colspan="6" class="empty">
+          <td colspan="7" class="empty">
             No se pudieron cargar las solicitudes.
             <button type="button" class="btn" data-retry-23="1" style="margin-left:8px;">Reintentar</button>
           </td>
@@ -928,7 +1128,7 @@
       return;
     }
     if (!Array.isArray(items) || !items.length) {
-      requestsBody23.innerHTML = '<tr><td colspan="6" class="empty">No hay solicitudes con ese estado.</td></tr>';
+      requestsBody23.innerHTML = '<tr><td colspan="7" class="empty">No hay solicitudes con ese estado.</td></tr>';
       return;
     }
 
@@ -944,6 +1144,10 @@
         const created = formatRelativeTime(req.createdAt);
         const remaining = typeof req.remainingMs === 'number' ? formatDuration(req.remainingMs) : '—';
         const attemptLabel = req.requestNumber == null ? '—' : `#${req.requestNumber}`;
+        const noteTitle = escapeHtml(
+          `Solicitud 2→3 · ${req.user?.email || req.userId || req.id}`,
+        );
+        const noteButton = `<button type="button" class="note-icon-btn" data-note-target-type="circleRequest" data-note-target-id="${req.id}" data-note-title="${noteTitle}">📝</button>`;
         return `<tr>
           <td>
             <div class="time-label" title="${created.full}">${created.label}</div>
@@ -954,6 +1158,7 @@
           <td>${statusBadge(req.status)}</td>
           <td>${attemptLabel}</td>
           <td>${remaining}</td>
+          <td>${noteButton}</td>
         </tr>`;
       })
       .join('');
@@ -2006,10 +2211,64 @@
       codesBody.addEventListener('click', onCodesTableClick);
     }
 
+    if (userNoteSubmit) {
+      userNoteSubmit.addEventListener('click', () => {
+        if (!userDetailState.userId || !userNoteInput) return;
+        const content = userNoteInput.value || '';
+        createNoteForTarget('user', String(userDetailState.userId), content, userNotesState, userNotesList, userNotesMessage)
+          .then(() => {
+            if (userNoteInput) userNoteInput.value = '';
+          });
+      });
+    }
+
+    if (userNotesList) {
+      userNotesList.addEventListener('click', (event) => {
+        handleNotesListClick(event, userNotesState, userNotesList, userNotesMessage);
+      });
+    }
+
+    if (notesModalSubmit) {
+      notesModalSubmit.addEventListener('click', () => {
+        if (!requestNotesState.targetType || !requestNotesState.targetId || !notesModalTextarea) return;
+        const content = notesModalTextarea.value || '';
+        createNoteForTarget(
+          requestNotesState.targetType,
+          requestNotesState.targetId,
+          content,
+          requestNotesState,
+          notesModalList,
+          notesModalMessage,
+        ).then(() => {
+          if (notesModalTextarea) notesModalTextarea.value = '';
+        });
+      });
+    }
+
+    if (notesModalList) {
+      notesModalList.addEventListener('click', (event) => {
+        handleNotesListClick(event, requestNotesState, notesModalList, notesModalMessage);
+      });
+    }
+
+    if (notesModalClose) {
+      notesModalClose.addEventListener('click', () => toggleModal(notesModal, false));
+    }
+
     if (requestsBody) {
       requestsBody.addEventListener('click', (event) => {
         const target = event.target;
         if (!(target instanceof HTMLElement)) return;
+        const noteTarget = target.closest('[data-note-target-id]');
+        if (noteTarget instanceof HTMLElement) {
+          const noteType = noteTarget.dataset.noteTargetType;
+          const noteId = noteTarget.dataset.noteTargetId;
+          const noteTitle = noteTarget.dataset.noteTitle;
+          if (noteType && noteId) {
+            openNotesModal({ targetType: noteType, targetId: noteId, title: noteTitle });
+            return;
+          }
+        }
         const userTarget = target.closest('[data-user-id]');
         if (userTarget instanceof HTMLElement) {
           const userId = Number(userTarget.dataset.userId);
@@ -2033,6 +2292,16 @@
       requestsBody23.addEventListener('click', (event) => {
         const target = event.target;
         if (!(target instanceof HTMLElement)) return;
+        const noteTarget = target.closest('[data-note-target-id]');
+        if (noteTarget instanceof HTMLElement) {
+          const noteType = noteTarget.dataset.noteTargetType;
+          const noteId = noteTarget.dataset.noteTargetId;
+          const noteTitle = noteTarget.dataset.noteTitle;
+          if (noteType && noteId) {
+            openNotesModal({ targetType: noteType, targetId: noteId, title: noteTitle });
+            return;
+          }
+        }
         const userTarget = target.closest('[data-user-id]');
         if (userTarget instanceof HTMLElement) {
           const userId = Number(userTarget.dataset.userId);

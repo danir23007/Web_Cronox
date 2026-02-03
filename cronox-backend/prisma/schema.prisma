@@ -108,6 +108,7 @@ model User {
   circleUpgradeRequests  CircleUpgradeRequest[]
   processedUpgrades      CircleUpgradeRequest[]  @relation("ProcessedRequests")
   auditLogs              AuditLog[]
+  adminNotes             AdminNote[]
 
   // ✅ FIX: relación correcta y naming consistente
   historial Historial?
@@ -385,6 +386,22 @@ model PromoCodeRedemption {
   @@unique([promoCodeId, userId])
   @@index([userId])
   @@index([orderId])
+}
+
+model AdminNote {
+  id            String   @id @default(cuid())
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  authorAdminId Int
+  targetType    String
+  targetId      String
+  content       String   @db.Text
+  isDeleted     Boolean  @default(false)
+
+  author User @relation(fields: [authorAdminId], references: [id])
+
+  @@index([authorAdminId])
+  @@index([targetType, targetId])
 }
 
 enum Role {
