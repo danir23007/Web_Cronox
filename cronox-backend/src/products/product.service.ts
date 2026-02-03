@@ -69,7 +69,10 @@ export class ProductService {
     }
   }
 
-  private prepareImages(dto: { images?: CreateProductImageDto[]; imageUrls?: string[] }) {
+  private prepareImages(dto: {
+    images?: CreateProductImageDto[];
+    imageUrls?: string[];
+  }) {
     const fromDto = Array.isArray(dto.images) ? dto.images : [];
     const fromUrls =
       Array.isArray(dto.imageUrls) && dto.imageUrls.length
@@ -252,8 +255,11 @@ export class ProductService {
       );
     }
 
+    // ✅ FIX: Prisma.join separador como string (en tu versión TS lo exige así)
+    const AND = ' AND ';
+
     const whereClause = filters.length
-      ? Prisma.sql`WHERE ${Prisma.join(filters, Prisma.sql` AND `)}`
+      ? Prisma.sql`WHERE ${Prisma.join(filters, AND)}`
       : Prisma.sql``;
 
     const stockTotalExpr = Prisma.sql`COALESCE(SUM(v."stock"), 0)`;
@@ -270,7 +276,7 @@ export class ProductService {
     }
 
     const havingClause = havingFilters.length
-      ? Prisma.sql`HAVING ${Prisma.join(havingFilters, Prisma.sql` AND `)}`
+      ? Prisma.sql`HAVING ${Prisma.join(havingFilters, AND)}`
       : Prisma.sql``;
 
     return { whereClause, havingClause, stockTotalExpr };
@@ -298,9 +304,7 @@ export class ProductService {
     } as T;
   }
 
-  private handleDuplicateError(
-    error: Prisma.PrismaClientKnownRequestError,
-  ): never {
+  private handleDuplicateError(error: Prisma.PrismaClientKnownRequestError): never {
     const target = (error.meta?.target as string[]) ?? [];
 
     if (target.includes('slug')) {
@@ -674,9 +678,9 @@ export class ProductService {
 
   async getBySlug(slug: string) {
     const product = await this.prisma.product.findUnique({
-        where: { slug, isActive: true },
-        include: this.getProductInclude(),
-      });
+      where: { slug, isActive: true },
+      include: this.getProductInclude(),
+    });
 
     return this.addEffectiveVariantPrices(product);
   }
@@ -742,10 +746,7 @@ export class ProductService {
 
       return this.addEffectiveVariantPrices(product);
     } catch (e) {
-      if (
-        e instanceof Prisma.PrismaClientKnownRequestError &&
-        e.code === 'P2002'
-      ) {
+      if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') {
         this.handleDuplicateError(e);
       }
       throw e;
@@ -788,7 +789,9 @@ export class ProductService {
 
         if (replaceImages) {
           await tx.productImage.deleteMany({ where: { productId: id } });
-          const newImages = this.prepareImages(dto as unknown as { images?: CreateProductImageDto[]; imageUrls?: string[] });
+          const newImages = this.prepareImages(
+            dto as unknown as { images?: CreateProductImageDto[]; imageUrls?: string[] },
+          );
           if (newImages.length) {
             await tx.productImage.createMany({
               data: newImages.map((img) => ({
@@ -988,10 +991,7 @@ export class ProductService {
 
       return result;
     } catch (e) {
-      if (
-        e instanceof Prisma.PrismaClientKnownRequestError &&
-        e.code === 'P2025'
-      ) {
+      if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2025') {
         throw new NotFoundException('Product not found');
       }
       throw e;
@@ -1017,20 +1017,14 @@ export class ProductService {
 
       return { ok: true };
     } catch (e) {
-      if (
-        e instanceof Prisma.PrismaClientKnownRequestError &&
-        e.code === 'P2025'
-      ) {
+      if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2025') {
         throw new NotFoundException('Image not found');
       }
       throw e;
     }
   }
 
-  async createVariants(
-    productId: number,
-    dto: CreateVariantDto | CreateVariantDto[],
-  ) {
+  async createVariants(productId: number, dto: CreateVariantDto | CreateVariantDto[]) {
     const variants = Array.isArray(dto) ? dto : [dto];
 
     try {
@@ -1067,21 +1061,14 @@ export class ProductService {
 
       return this.addEffectiveVariantPrices(product);
     } catch (e) {
-      if (
-        e instanceof Prisma.PrismaClientKnownRequestError &&
-        e.code === 'P2002'
-      ) {
+      if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') {
         this.handleDuplicateError(e);
       }
       throw e;
     }
   }
 
-  async updateVariant(
-    productId: number,
-    variantId: number,
-    dto: UpdateVariantDto,
-  ) {
+  async updateVariant(productId: number, variantId: number, dto: UpdateVariantDto) {
     const existing = await this.prisma.productVariant.findFirst({
       where: { id: variantId, productId },
     });
@@ -1107,10 +1094,7 @@ export class ProductService {
 
       return this.buildVariantResponse(updated);
     } catch (e) {
-      if (
-        e instanceof Prisma.PrismaClientKnownRequestError &&
-        e.code === 'P2002'
-      ) {
+      if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') {
         this.handleDuplicateError(e);
       }
       throw e;
