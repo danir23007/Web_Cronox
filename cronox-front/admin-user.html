@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CRONOX Admin · Usuario</title>
+  <link rel="stylesheet" href="assets/store.css">
+  <style>
+    :root {
+      color-scheme: dark;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: radial-gradient(circle at top, #171722 0%, #0b0b10 55%, #050506 100%);
+      color: #f5f5f7;
+      font-family: "Inter", "Segoe UI", sans-serif;
+    }
+
+    .page {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 24px 20px 60px;
+    }
+
+    .topbar {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 14px 18px;
+      background: rgba(10, 10, 16, 0.9);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 18px;
+      backdrop-filter: blur(14px);
+      box-shadow: 0 20px 45px rgba(0, 0, 0, 0.45);
+    }
+
+    .topbar-left {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .breadcrumb {
+      font-size: 0.85rem;
+      color: #a8a8b3;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+
+    .topbar h1 {
+      margin: 0;
+      font-size: 1.6rem;
+    }
+
+    .topbar-right {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 12px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      font-size: 0.8rem;
+      color: #d8d8e5;
+    }
+
+    .error-box {
+      margin: 18px 0 0;
+      padding: 14px 16px;
+      border-radius: 14px;
+      background: rgba(196, 31, 58, 0.14);
+      border: 1px solid rgba(196, 31, 58, 0.4);
+      color: #ffb3c2;
+    }
+
+    .layout {
+      display: grid;
+      grid-template-columns: minmax(0, 360px) minmax(0, 1fr);
+      gap: 20px;
+      margin-top: 20px;
+    }
+
+    .card {
+      background: rgba(18, 18, 26, 0.88);
+      border-radius: 20px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      padding: 20px;
+      box-shadow: 0 20px 45px rgba(0, 0, 0, 0.4);
+      backdrop-filter: blur(12px);
+    }
+
+    .summary-card h2 {
+      margin-top: 0;
+      font-size: 1.2rem;
+    }
+
+    .badge-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 18px;
+    }
+
+    .pill {
+      padding: 6px 12px;
+      border-radius: 12px;
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      font-size: 0.85rem;
+      color: #e7e7f1;
+    }
+
+    .kv-list {
+      display: grid;
+      gap: 12px;
+    }
+
+    .kv-row {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 12px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+      padding-bottom: 10px;
+    }
+
+    .kv-row:last-child {
+      border-bottom: none;
+      padding-bottom: 0;
+    }
+
+    .kv-row dt {
+      font-size: 0.85rem;
+      color: #a6a6b3;
+      margin: 0;
+    }
+
+    .kv-row dd {
+      margin: 0;
+      font-weight: 600;
+      text-align: right;
+      color: #f5f5f7;
+    }
+
+    .tabs {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-bottom: 16px;
+    }
+
+    .tab {
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      background: transparent;
+      color: #d8d8e5;
+      border-radius: 999px;
+      padding: 8px 14px;
+      cursor: pointer;
+      font-size: 0.85rem;
+      transition: all 0.2s ease;
+    }
+
+    .tab.active {
+      background: #f2f2f6;
+      color: #14141b;
+      border-color: transparent;
+    }
+
+    .panel {
+      display: none;
+    }
+
+    .panel.active {
+      display: block;
+    }
+
+    .panel-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 14px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      min-width: 520px;
+    }
+
+    th,
+    td {
+      text-align: left;
+      padding: 10px 8px;
+      font-size: 0.85rem;
+    }
+
+    thead {
+      border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+      color: #b5b5c8;
+    }
+
+    tbody tr {
+      border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    }
+
+    .table-wrap {
+      overflow-x: auto;
+    }
+
+    .notes-form {
+      display: grid;
+      gap: 12px;
+      margin-bottom: 18px;
+    }
+
+    .notes-form input,
+    .notes-form textarea {
+      width: 100%;
+      border-radius: 12px;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      background: rgba(12, 12, 18, 0.7);
+      color: #f5f5f7;
+      padding: 10px 12px;
+      font-size: 0.9rem;
+    }
+
+    .notes-list {
+      display: grid;
+      gap: 12px;
+    }
+
+    .note-card {
+      padding: 14px 16px;
+      border-radius: 14px;
+      background: rgba(12, 12, 18, 0.8);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .note-header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 8px;
+    }
+
+    .note-title {
+      font-weight: 600;
+    }
+
+    .note-meta {
+      color: #a6a6b3;
+      font-size: 0.8rem;
+      margin-top: 4px;
+    }
+
+    .placeholder {
+      padding: 16px;
+      border-radius: 14px;
+      border: 1px dashed rgba(255, 255, 255, 0.2);
+      color: #9a9ab0;
+      text-align: center;
+    }
+
+    @media (max-width: 900px) {
+      .layout {
+        grid-template-columns: minmax(0, 1fr);
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <header class="topbar">
+      <div class="topbar-left">
+        <div class="breadcrumb">Admin · Usuarios</div>
+        <h1>Usuario</h1>
+      </div>
+      <div class="topbar-right">
+        <span class="badge" id="apiBaseBadge">API: —</span>
+        <button class="btn" type="button" id="refreshAll">Recargar</button>
+        <a class="btn" href="admin.html">Volver</a>
+      </div>
+    </header>
+
+    <div id="errorBox" class="error-box" hidden></div>
+
+    <main class="layout">
+      <aside class="card summary-card">
+        <h2>Resumen</h2>
+        <div class="badge-row">
+          <span class="pill" id="summarySession">Session · —</span>
+          <span class="pill" id="summaryRole">Role · —</span>
+        </div>
+        <dl class="kv-list" id="summaryList">
+          <div class="kv-row">
+            <dt>ID</dt>
+            <dd id="summaryId">—</dd>
+          </div>
+          <div class="kv-row">
+            <dt>Email</dt>
+            <dd id="summaryEmail">—</dd>
+          </div>
+          <div class="kv-row">
+            <dt>Nombre</dt>
+            <dd id="summaryName">—</dd>
+          </div>
+          <div class="kv-row">
+            <dt>Circle</dt>
+            <dd id="summaryCircle">—</dd>
+          </div>
+          <div class="kv-row">
+            <dt>Creado</dt>
+            <dd id="summaryCreated">—</dd>
+          </div>
+          <div class="kv-row">
+            <dt>Actualizado</dt>
+            <dd id="summaryUpdated">—</dd>
+          </div>
+        </dl>
+      </aside>
+
+      <section class="card detail-card">
+        <div class="tabs" role="tablist">
+          <button class="tab active" type="button" data-tab="profile">Perfil</button>
+          <button class="tab" type="button" data-tab="audit">Audit logs</button>
+          <button class="tab" type="button" data-tab="notes">Notas</button>
+          <button class="tab" type="button" data-tab="orders">Pedidos</button>
+          <button class="tab" type="button" data-tab="requests">Solicitudes</button>
+        </div>
+
+        <div class="panel active" id="panel-profile">
+          <div class="kv-list" id="profileList"></div>
+        </div>
+
+        <div class="panel" id="panel-audit">
+          <div class="panel-head">
+            <div>
+              <strong>Historial de acciones</strong>
+              <div class="note-meta">Últimas 50 entradas.</div>
+            </div>
+            <button class="btn" type="button" id="refreshAudit">Recargar</button>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Fecha</th>
+                  <th>Acción</th>
+                  <th>IP</th>
+                  <th>Meta</th>
+                </tr>
+              </thead>
+              <tbody id="auditBody">
+                <tr><td colspan="4">Cargando…</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="panel" id="panel-notes">
+          <div class="panel-head">
+            <div>
+              <strong>Notas internas</strong>
+              <div class="note-meta">Uso administrativo.</div>
+            </div>
+            <button class="btn" type="button" id="refreshNotes">Recargar</button>
+          </div>
+          <form class="notes-form" id="noteForm">
+            <div>
+              <label for="noteTitle">Título (opcional)</label>
+              <input id="noteTitle" type="text" placeholder="Resumen breve">
+            </div>
+            <div>
+              <label for="noteBody">Nota</label>
+              <textarea id="noteBody" rows="4" placeholder="Escribe una nota interna..." required></textarea>
+            </div>
+            <button class="btn" type="submit">Crear nota</button>
+          </form>
+          <div class="notes-list" id="notesList"></div>
+        </div>
+
+        <div class="panel" id="panel-orders">
+          <div class="placeholder">ready to connect when endpoint exists</div>
+        </div>
+
+        <div class="panel" id="panel-requests">
+          <div class="placeholder">ready to connect when endpoint exists</div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script src="assets/app.js"></script>
+  <script src="assets/admin-user.js"></script>
+</body>
+</html>
