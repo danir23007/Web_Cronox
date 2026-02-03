@@ -21,6 +21,8 @@
   const noteTitle = document.getElementById('noteTitle');
   const noteBody = document.getElementById('noteBody');
   const tabs = document.querySelectorAll('.tab');
+  const notesTab = document.querySelector('.tab[data-tab="notes"]');
+  let notesAvailable = true;
 
   const showError = (message) => {
     if (!errorBox) return;
@@ -184,6 +186,35 @@
       .join('');
   };
 
+  const setActiveTab = (tabId) => {
+    tabs.forEach((tab) => tab.classList.toggle('active', tab.dataset.tab === tabId));
+    document.querySelectorAll('.panel').forEach((panel) => {
+      panel.classList.toggle('active', panel.id === `panel-${tabId}`);
+    });
+  };
+
+  const setNotesAvailability = (available, message) => {
+    notesAvailable = available;
+    if (notesTab) {
+      notesTab.disabled = !available;
+      notesTab.setAttribute('aria-disabled', String(!available));
+      notesTab.classList.toggle('is-disabled', !available);
+    }
+    if (refreshNotesBtn) refreshNotesBtn.disabled = !available;
+    if (noteForm) {
+      const fields = noteForm.querySelectorAll('input, textarea, button');
+      fields.forEach((field) => {
+        field.disabled = !available;
+      });
+    }
+    if (!available && notesList) {
+      notesList.innerHTML = `<div class="note-meta">${message}</div>`;
+    }
+    if (!available && notesTab?.classList.contains('active')) {
+      setActiveTab('profile');
+    }
+  };
+
   const loadUserDetail = async () => {
     if (!window.CRONOX_API?.admin?.getUserDetail) {
       showError('La API de administración no está disponible en esta página.');
@@ -223,15 +254,22 @@
     if (!notesList) return;
     notesList.innerHTML = '<div class="note-meta">Cargando…</div>';
     if (!window.CRONOX_API?.admin?.listAdminNotes) {
-      showError('La API de notas no está disponible.');
-      notesList.innerHTML = '<div class="note-meta">Sin datos.</div>';
+      setNotesAvailability(false, 'Notas no disponibles en este entorno.');
       return;
     }
+    setNotesAvailability(true);
     try {
-      const data = await window.CRONOX_API.admin.listAdminNotes({ userId });
+      const data = await window.CRONOX_API.admin.listAdminNotes({
+        targetType: 'user',
+        targetId: String(userId),
+      });
       const notes = normalizeList(data);
       renderNotes(notes);
     } catch (error) {
+      if (error?.status === 404) {
+        setNotesAvailability(false, 'Notas no disponibles en este entorno.');
+        return;
+      }
       console.error('[ADMIN USER] Error cargando notas', error);
       showError('No se pudieron cargar las notas.');
       notesList.innerHTML = '<div class="note-meta">Sin datos.</div>';
@@ -253,17 +291,18 @@
     const target = event.target;
     if (!(target instanceof HTMLElement)) return;
     const tabId = target.dataset.tab;
-    if (!tabId) return;
-    tabs.forEach((tab) => tab.classList.toggle('active', tab === target));
-    document.querySelectorAll('.panel').forEach((panel) => {
-      panel.classList.toggle('active', panel.id === `panel-${tabId}`);
-    });
+    if (!tabId || (target instanceof HTMLButtonElement && target.disabled)) return;
+    setActiveTab(tabId);
   };
 
   const handleNoteSubmit = async (event) => {
     event.preventDefault();
+    if (!notesAvailable) {
+      setNotesAvailability(false, 'Notas no disponibles en este entorno.');
+      return;
+    }
     if (!noteBody || !window.CRONOX_API?.admin?.createAdminNote) {
-      showError('No se puede crear la nota en este momento.');
+      setNotesAvailability(false, 'Notas no disponibles en este entorno.');
       return;
     }
     const body = noteBody.value.trim();
@@ -273,8 +312,11 @@
       return;
     }
     clearError();
-    const payload = { userId, body };
-    if (title) payload.title = title;
+    const payload = {
+      targetType: 'user',
+      targetId: String(userId),
+      content: title ? `${title}\n${body}` : body,
+    };
     try {
       await window.CRONOX_API.admin.createAdminNote(payload);
       if (noteBody) noteBody.value = '';
@@ -291,8 +333,12 @@
     if (!(target instanceof HTMLElement)) return;
     const noteId = target.dataset.noteId;
     if (!noteId) return;
+    if (!notesAvailable) {
+      setNotesAvailability(false, 'Notas no disponibles en este entorno.');
+      return;
+    }
     if (!window.CRONOX_API?.admin?.deleteAdminNote) {
-      showError('No se puede eliminar la nota en este momento.');
+      setNotesAvailability(false, 'Notas no disponibles en este entorno.');
       return;
     }
     try {

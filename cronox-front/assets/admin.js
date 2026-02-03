@@ -188,8 +188,9 @@
   };
   const usersState = {
     page: 1,
-    limit: 20,
+    pageSize: 20,
     total: 0,
+    totalPages: 1,
   };
   const userDetailState = {
     userId: null,
@@ -1660,22 +1661,34 @@
   };
 
   const normalizeUsersResponse = (payload) => {
-    const base = payload?.data || payload || {};
+    const base = payload?.data ?? payload ?? {};
     const items = Array.isArray(base.items)
       ? base.items
       : Array.isArray(base.users)
         ? base.users
-        : Array.isArray(base)
-          ? base
-          : [];
-    const total = Number(base.total ?? base.count ?? items.length);
-    const page = Number(base.page ?? usersState.page);
-    const limit = Number(base.limit ?? base.pageSize ?? usersState.limit);
+        : Array.isArray(base.data)
+          ? base.data
+          : Array.isArray(base)
+            ? base
+            : [];
+    const metaSource = base?.meta ?? payload?.meta ?? payload?.data?.meta ?? {};
+    const total = Number(metaSource.total ?? metaSource.count ?? base.total ?? base.count ?? items.length);
+    const page = Number(metaSource.page ?? base.page ?? usersState.page);
+    const pageSize = Number(
+      metaSource.pageSize ?? metaSource.limit ?? base.pageSize ?? base.limit ?? usersState.pageSize,
+    );
+    const safePage = Number.isFinite(page) && page > 0 ? page : usersState.page;
+    const safePageSize = Number.isFinite(pageSize) && pageSize > 0 ? pageSize : usersState.pageSize;
+    const safeTotal = Number.isFinite(total) ? total : items.length;
+    const totalPages = Math.max(1, Math.ceil((safeTotal || 0) / (safePageSize || 1)));
     return {
       items,
-      total: Number.isFinite(total) ? total : items.length,
-      page: Number.isFinite(page) && page > 0 ? page : usersState.page,
-      limit: Number.isFinite(limit) && limit > 0 ? limit : usersState.limit,
+      meta: {
+        page: safePage,
+        pageSize: safePageSize,
+        total: safeTotal,
+        totalPages,
+      },
     };
   };
 
@@ -1699,7 +1712,7 @@
 
   const updateUsersPagination = () => {
     if (!usersPageInfo) return;
-    const totalPages = Math.max(1, Math.ceil((usersState.total || 0) / (usersState.limit || 1)));
+    const totalPages = Math.max(1, Number(usersState.totalPages) || 1);
     const currentPage = Math.min(Math.max(usersState.page, 1), totalPages);
     usersPageInfo.textContent = `Página ${currentPage} de ${totalPages}`;
     if (usersPrev) usersPrev.disabled = currentPage <= 1;
@@ -1754,12 +1767,13 @@
     try {
       const data = await window.CRONOX_API?.admin?.listUsers?.({
         page: usersState.page,
-        limit: usersState.limit,
+        limit: usersState.pageSize,
       });
       const normalized = normalizeUsersResponse(data);
-      usersState.page = normalized.page;
-      usersState.limit = normalized.limit;
-      usersState.total = normalized.total;
+      usersState.page = normalized.meta.page;
+      usersState.pageSize = normalized.meta.pageSize;
+      usersState.total = normalized.meta.total;
+      usersState.totalPages = normalized.meta.totalPages;
       renderUsers(normalized.items || []);
       updateUsersPagination();
     } catch (error) {
@@ -2902,7 +2916,7 @@
             fetchActivity();
           } else if (targetSection === 'section-users') {
             usersState.page = 1;
-            usersState.limit = 20;
+            usersState.pageSize = 20;
             fetchUsers();
           } else if (targetSection === 'section-products') {
             syncProductsStateFromInputs();
