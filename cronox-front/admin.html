@@ -128,6 +128,8 @@
     .toast--success { border-color: #1c3d25; box-shadow: 0 0 0 1px rgba(87, 226, 146, 0.2); }
     .toast--error { border-color: #4b1923; box-shadow: 0 0 0 1px rgba(255, 105, 135, 0.2); }
     .toast--hide { opacity: 0; transform: translateY(6px); transition: opacity 0.2s ease, transform 0.2s ease; }
+    .admin-section.restricted > :not(.restricted-notice) { display: none !important; }
+    .restricted-notice { display: block; }
     @keyframes toast-in {
       from { opacity: 0; transform: translateY(6px); }
       to { opacity: 1; transform: translateY(0); }

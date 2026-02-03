@@ -17,7 +17,7 @@ export type SafeUser = {
   firstOrderDiscountCode?: string | null;
   firstOrderDiscountUsed?: boolean;
   circleLevel: number;
-  role: Role;
+  role: Role | null;
   createdAt: Date;
   updatedAt: Date;
 };

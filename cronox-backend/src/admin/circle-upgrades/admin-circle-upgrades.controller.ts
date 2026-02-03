@@ -1,14 +1,17 @@
 import { Body, Controller, Get, Param, Patch, Query, UseGuards } from '@nestjs/common';
-import { CircleUpgradeRequestStatus } from '@prisma/client';
+import { CircleUpgradeRequestStatus, Role } from '@prisma/client';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { AdminGuard } from '../../common/guards/admin.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { RolesGuard } from '../../common/guards/roles.guard';
+import { Roles } from '../../common/roles.decorator';
 import { AdminCircleUpgradesService } from './admin-circle-upgrades.service';
 import { AdminCircleUpgradeQueryDto } from './dto/admin-circle-upgrade-query.dto';
 import { AdminCircleUpgradeReviewDto } from './dto/admin-circle-upgrade-review.dto';
 
 @Controller('admin/circle-upgrades/3-4')
-@UseGuards(JwtAuthGuard, AdminGuard)
+@UseGuards(JwtAuthGuard, AdminGuard, RolesGuard)
+@Roles(Role.SUPER_ADMIN, Role.MODERATOR)
 export class AdminCircleUpgradesController {
   constructor(private readonly adminCircleUpgradesService: AdminCircleUpgradesService) {}
 

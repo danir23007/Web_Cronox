@@ -25,6 +25,7 @@ import {
   ShippingMethodsService,
 } from '../shipping-methods/shipping-methods.service';
 import { ShippingMethodCode } from '../common/enums/shipping-method-code.enum';
+import { hasAnyRole } from '../common/roles.utils';
 
 const DEFAULT_CURRENCY = 'EUR';
 
@@ -122,7 +123,7 @@ type PrismaClientOrTx = PrismaService | Prisma.TransactionClient;
 
 type AuthenticatedUser = {
   id: number;
-  role: Role;
+  role: Role | null;
 };
 
 type PromoApplication = {
@@ -634,7 +635,8 @@ if (!cart) {
 
     const orderBy = this.resolveOrderBy(pagination.sort, pagination.order);
 
-    const where = user.role === Role.ADMIN ? {} : { userId: user.id };
+    const canAccessAll = hasAnyRole(user.role, [Role.SUPER_ADMIN, Role.LOGISTICS]);
+    const where = canAccessAll ? {} : { userId: user.id };
 
     const [orders, total] = await Promise.all([
       this.prisma.order.findMany({
@@ -671,7 +673,8 @@ if (!cart) {
     }
 
     const isOwner = order.userId === user.id;
-    if (user.role !== Role.ADMIN && !isOwner) {
+    const canAccessAll = hasAnyRole(user.role, [Role.SUPER_ADMIN, Role.LOGISTICS]);
+    if (!canAccessAll && !isOwner) {
       throw new ForbiddenException('ACCESS_DENIED');
     }
 

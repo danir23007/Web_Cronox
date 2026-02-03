@@ -4,16 +4,17 @@ import {
   ForbiddenException,
   Injectable,
 } from '@nestjs/common';
-import { Role } from '@prisma/client';
 import type { Request } from 'express';
+import { Role } from '@prisma/client';
+import { isAdminRole } from '../roles.utils';
 
 @Injectable()
 export class AdminGuard implements CanActivate {
   canActivate(context: ExecutionContext): boolean {
     const request = context.switchToHttp().getRequest<Request>();
-    const role = request.user?.role as Role | undefined;
+    const role = request.user?.role as Role | null | undefined;
 
-    if (role !== Role.ADMIN && role !== Role.SUPERADMIN) {
+    if (!isAdminRole(role)) {
       throw new ForbiddenException('Solo los administradores pueden acceder');
     }
 

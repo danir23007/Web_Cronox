@@ -2,6 +2,9 @@ import { Body, Controller, Delete, Get, Param, ParseIntPipe, Patch, Post, Query,
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { AdminGuard } from '../../common/guards/admin.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { RolesGuard } from '../../common/guards/roles.guard';
+import { Roles } from '../../common/roles.decorator';
+import { Role } from '@prisma/client';
 import {
   AdminCreatePromoCodeDto,
   AdminPromoCodeQueryDto,
@@ -10,7 +13,8 @@ import {
 import { AdminPromoCodesService } from './admin-promo-codes.service';
 
 @Controller('admin/promo-codes')
-@UseGuards(JwtAuthGuard, AdminGuard)
+@UseGuards(JwtAuthGuard, AdminGuard, RolesGuard)
+@Roles(Role.SUPER_ADMIN, Role.MARKETING)
 export class AdminPromoCodesController {
   constructor(private readonly promoCodes: AdminPromoCodesService) {}
 
