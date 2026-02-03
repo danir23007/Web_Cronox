@@ -11,16 +11,21 @@
   const refreshAllBtn = document.getElementById('refreshAll');
   const refreshAuditBtn = document.getElementById('refreshAudit');
   const refreshNotesBtn = document.getElementById('refreshNotes');
+  const backToUsersBtn = document.getElementById('backToUsers');
   const summarySession = document.getElementById('summarySession');
   const summaryRole = document.getElementById('summaryRole');
   const summaryId = document.getElementById('summaryId');
   const summaryEmail = document.getElementById('summaryEmail');
   const summaryName = document.getElementById('summaryName');
   const summaryCircle = document.getElementById('summaryCircle');
+  const summaryOrdersCount = document.getElementById('summaryOrdersCount');
+  const summaryTotalSpent = document.getElementById('summaryTotalSpent');
+  const summaryLastOrder = document.getElementById('summaryLastOrder');
   const summaryCreated = document.getElementById('summaryCreated');
   const summaryUpdated = document.getElementById('summaryUpdated');
   const profileList = document.getElementById('profileList');
   const auditBody = document.getElementById('auditBody');
+  const ordersBody = document.getElementById('ordersBody');
   const notesList = document.getElementById('notesList');
   const noteForm = document.getElementById('noteForm');
   const noteTitle = document.getElementById('noteTitle');
@@ -29,9 +34,13 @@
   const notesTab = document.querySelector('.tab[data-tab="notes"]');
   const ordersPanel = document.getElementById('panel-orders');
   const requestsPanel = document.getElementById('panel-requests');
-  const ordersPlaceholder = ordersPanel?.querySelector('.placeholder');
   const requestsPlaceholder = requestsPanel?.querySelector('.placeholder');
   let notesAvailable = true;
+  const kpiState = {
+    ordersCount: null,
+    totalSpent: null,
+    lastOrderAt: null,
+  };
 
   const ui = window.CRONOX_UI || {};
   const renderBanner = ui.renderBanner;
@@ -163,6 +172,17 @@
 
   setApiBaseBadge(window.CRONOX_API.API_BASE);
 
+  const getUsersReturnHash = () => {
+    const hash = window.location.hash || '';
+    // Parse hash state to return to usuarios with the same filters.
+    return hash.startsWith('#usuarios') ? hash : '#usuarios';
+  };
+
+  const usersReturnLink = `admin.html${getUsersReturnHash()}`;
+  if (backToUsersBtn) {
+    backToUsersBtn.href = usersReturnLink;
+  }
+
   const formatDate = (value) => {
     if (!value) return '—';
     const date = new Date(value);
@@ -175,6 +195,18 @@
   const formatText = (value) => {
     if (value === null || value === undefined || value === '') return '—';
     return String(value);
+  };
+
+  const formatCurrency = (value) => {
+    const amount = Number(value || 0);
+    if (window.CRONOX_API?.formatPrice) {
+      try {
+        return window.CRONOX_API.formatPrice(amount);
+      } catch (error) {
+        // ignore
+      }
+    }
+    return `${amount.toFixed(2)} €`;
   };
 
   const normalizeList = (payload) => {
@@ -212,7 +244,7 @@
     element.textContent = `${label} · ${formatText(value)}`;
   };
 
-  const renderSummary = (user = {}) => {
+  const renderSummary = (user = {}, stats = {}) => {
     setBadgeText(summaryRole, 'Role', user.role);
     const sessionStatus = user.session?.status || user.sessionStatus || (user.lastLoginAt ? 'Activa' : '—');
     setBadgeText(summarySession, 'Session', sessionStatus);
@@ -221,8 +253,31 @@
     const fullName = [user.firstName, user.lastName].filter(Boolean).join(' ');
     if (summaryName) summaryName.textContent = formatText(fullName || user.username);
     if (summaryCircle) summaryCircle.textContent = formatText(user.circle);
+    if (summaryOrdersCount) summaryOrdersCount.textContent = formatText(stats.ordersCount ?? kpiState.ordersCount);
+    if (summaryTotalSpent) {
+      const totalValue = stats.totalSpent ?? kpiState.totalSpent;
+      summaryTotalSpent.textContent = totalValue !== null && totalValue !== undefined ? formatCurrency(totalValue) : '—';
+    }
+    if (summaryLastOrder) {
+      const lastOrderAt = stats.lastOrderAt ?? kpiState.lastOrderAt;
+      summaryLastOrder.textContent = lastOrderAt ? formatDate(lastOrderAt) : '—';
+    }
     if (summaryCreated) summaryCreated.textContent = formatDate(user.createdAt);
     if (summaryUpdated) summaryUpdated.textContent = formatDate(user.updatedAt);
+  };
+
+  const updateOrderKpis = (kpis = {}) => {
+    if (kpis.ordersCount !== undefined) kpiState.ordersCount = kpis.ordersCount;
+    if (kpis.totalSpent !== undefined) kpiState.totalSpent = kpis.totalSpent;
+    if (kpis.lastOrderAt !== undefined) kpiState.lastOrderAt = kpis.lastOrderAt;
+    if (summaryOrdersCount) summaryOrdersCount.textContent = formatText(kpiState.ordersCount);
+    if (summaryTotalSpent) {
+      summaryTotalSpent.textContent =
+        kpiState.totalSpent !== null && kpiState.totalSpent !== undefined ? formatCurrency(kpiState.totalSpent) : '—';
+    }
+    if (summaryLastOrder) {
+      summaryLastOrder.textContent = kpiState.lastOrderAt ? formatDate(kpiState.lastOrderAt) : '—';
+    }
   };
 
   const renderProfile = (user = {}) => {
@@ -283,6 +338,36 @@
       `;
     });
     auditBody.innerHTML = rows.join('');
+  };
+
+  const renderOrders = (orders) => {
+    if (!ordersBody) return;
+    if (!orders.length) {
+      ordersBody.innerHTML = '<tr><td colspan="4">Sin pedidos.</td></tr>';
+      return;
+    }
+    const rows = orders.map((order) => {
+      const id = order.id ?? order.orderId ?? order._id ?? '—';
+      const dateValue = order.createdAt || order.created_at || order.date || order.orderedAt;
+      const status = order.status || order.state || '—';
+      const totalValue =
+        order.total ??
+        order.totalAmount ??
+        order.totalPaid ??
+        order.amount ??
+        order.amountTotal ??
+        order.grandTotal;
+      const totalLabel = totalValue !== undefined && totalValue !== null ? formatCurrency(totalValue) : '—';
+      return `
+        <tr>
+          <td>${escapeHtml(formatText(id))}</td>
+          <td>${escapeHtml(formatDate(dateValue))}</td>
+          <td>${escapeHtml(formatText(status))}</td>
+          <td>${escapeHtml(totalLabel)}</td>
+        </tr>
+      `;
+    });
+    ordersBody.innerHTML = rows.join('');
   };
 
   const renderNotes = (notes) => {
@@ -349,7 +434,7 @@
         error: { status: 404, message: 'Endpoint no disponible', endpoint: 'admin.getUserDetail' },
         title: 'Detalle no disponible',
         isCritical: true,
-        backLink: 'admin.html#usuarios',
+        backLink: usersReturnLink,
       });
       return;
     }
@@ -360,17 +445,23 @@
     try {
       const data = await window.CRONOX_API.admin.getUserDetail(userId);
       const user = data?.user || data || {};
+      const stats = data?.stats || data?.kpis || data?.summary || {};
       if (!user || Object.keys(user).length === 0) {
         if (renderEmptyState && profileList) {
           renderEmptyState(profileList, {
             title: 'Usuario no encontrado o sin datos',
             message: 'No hay información disponible para este usuario.',
-            actions: [{ label: 'Volver a usuarios', href: 'admin.html#usuarios', variant: 'primary' }],
+            actions: [{ label: 'Volver a usuarios', href: usersReturnLink, variant: 'primary' }],
           });
         }
         return;
       }
-      renderSummary(user);
+      updateOrderKpis({
+        ordersCount: stats.ordersCount ?? stats.orders ?? stats.ordersTotal,
+        totalSpent: stats.totalSpent ?? stats.totalPaid ?? stats.spentTotal,
+        lastOrderAt: stats.lastOrderAt ?? stats.lastOrder ?? stats.lastOrderDate,
+      });
+      renderSummary(user, stats);
       renderProfile(user);
     } catch (error) {
       console.error('[ADMIN USER] Error cargando detalle', error);
@@ -380,7 +471,7 @@
         title: 'No se pudo cargar el perfil',
         isCritical: true,
         retry: loadUserDetail,
-        backLink: 'admin.html#usuarios',
+        backLink: usersReturnLink,
       });
     }
   };
@@ -505,14 +596,17 @@
   };
 
   const loadOrders = async () => {
-    if (!ordersPlaceholder) return;
+    if (!ordersBody) return;
     if (ordersStatus) ordersStatus.innerHTML = '';
     if (setLoading) {
-      setLoading(ordersPlaceholder, true, { title: 'Cargando pedidos…' });
+      setLoading(ordersBody, true, { title: 'Cargando pedidos…', colSpan: 4 });
     }
-    const listFn = window.CRONOX_API?.admin?.getUserOrders ?? window.CRONOX_API?.admin?.listUserOrders;
+    const listFn =
+      window.CRONOX_API?.admin?.listAdminOrders ??
+      window.CRONOX_API?.admin?.getUserOrders ??
+      window.CRONOX_API?.admin?.listUserOrders;
     if (!listFn) {
-      showOptionalUnavailable(ordersStatus, ordersPlaceholder, {
+      showOptionalUnavailable(ordersStatus, ordersBody, {
         title: 'Pedidos no disponibles',
         message: 'Este módulo aún no está disponible en backend.',
         details: { status: 404, endpoint: 'admin.getUserOrders' },
@@ -521,22 +615,47 @@
       return;
     }
     try {
-      const data = await listFn(userId);
+      const data = window.CRONOX_API?.admin?.listAdminOrders
+        ? await listFn({ userId })
+        : await listFn(userId);
       const orders = normalizeList(data);
-      if (!orders.length && renderEmptyState) {
-        renderEmptyState(ordersPlaceholder, {
-          title: 'Sin pedidos',
-          message: 'Este usuario no tiene pedidos registrados.',
+      renderOrders(orders);
+      if (!orders.length) {
+        return;
+      }
+      const latest = orders
+        .map((order) => order.createdAt || order.created_at || order.date || order.orderedAt)
+        .filter(Boolean)
+        .map((value) => new Date(value))
+        .filter((date) => !Number.isNaN(date.getTime()))
+        .sort((a, b) => b.getTime() - a.getTime())[0];
+      const totals = orders
+        .map(
+          (order) =>
+            order.total ??
+            order.totalAmount ??
+            order.totalPaid ??
+            order.amount ??
+            order.amountTotal ??
+            order.grandTotal,
+        )
+        .map((value) => Number(value))
+        .filter((value) => Number.isFinite(value));
+      updateOrderKpis({
+        ordersCount: orders.length,
+        totalSpent: totals.length ? totals.reduce((acc, value) => acc + value, 0) : undefined,
+        lastOrderAt: latest ? latest.toISOString() : undefined,
+      });
+    } catch (error) {
+      if (error?.status === 404) {
+        showOptionalUnavailable(ordersStatus, ordersBody, {
+          title: 'Pedidos no disponible todavía',
+          message: 'Este módulo aún no está disponible en backend.',
+          details: getErrorDetails(error),
+          actions: [{ label: 'Reintentar', onClick: loadOrders }],
         });
         return;
       }
-      if (renderEmptyState) {
-        renderEmptyState(ordersPlaceholder, {
-          title: 'Pedidos cargados',
-          message: 'Este panel está listo para integrarse con el listado completo.',
-        });
-      }
-    } catch (error) {
       showModuleError({
         container: ordersStatus || statusArea,
         error,
@@ -545,9 +664,10 @@
         retry: loadOrders,
       });
       if (renderEmptyState) {
-        renderEmptyState(ordersPlaceholder, {
+        renderEmptyState(ordersBody, {
           title: 'No disponible',
           message: 'No pudimos cargar los pedidos.',
+          colSpan: 4,
           actions: [{ label: 'Reintentar', onClick: loadOrders }],
         });
       }
@@ -697,14 +817,14 @@
       title: 'Usuario no seleccionado',
       message: 'Falta el parámetro ?id=123 en la URL. Ejemplo: admin-user.html?id=123',
       details: { status: 400, endpoint: window.location.href, message: 'Parámetro id faltante' },
-      actions: [{ label: 'Volver a usuarios', href: 'admin.html#usuarios', variant: 'primary' }],
+      actions: [{ label: 'Volver a usuarios', href: usersReturnLink, variant: 'primary' }],
     });
     if (profileList) {
       if (renderEmptyState) {
         renderEmptyState(profileList, {
           title: 'Usuario no encontrado',
           message: 'Selecciona un usuario desde el listado.',
-          actions: [{ label: 'Volver a usuarios', href: 'admin.html#usuarios', variant: 'primary' }],
+          actions: [{ label: 'Volver a usuarios', href: usersReturnLink, variant: 'primary' }],
         });
       } else {
         profileList.innerHTML = '<div class="note-meta">No hay usuario seleccionado.</div>';

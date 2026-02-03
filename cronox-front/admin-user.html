@@ -390,7 +390,7 @@
       <div class="topbar-right">
         <span class="badge" id="apiBaseBadge">API: —</span>
         <button class="btn" type="button" id="refreshAll">Recargar</button>
-        <a class="btn" href="admin.html">Volver</a>
+        <a class="btn" id="backToUsers" href="admin.html">Volver</a>
       </div>
     </header>
 
@@ -419,6 +419,18 @@
           <div class="kv-row">
             <dt>Circle</dt>
             <dd id="summaryCircle">—</dd>
+          </div>
+          <div class="kv-row">
+            <dt>Pedidos</dt>
+            <dd id="summaryOrdersCount">—</dd>
+          </div>
+          <div class="kv-row">
+            <dt>Total gastado</dt>
+            <dd id="summaryTotalSpent">—</dd>
+          </div>
+          <div class="kv-row">
+            <dt>Último pedido</dt>
+            <dd id="summaryLastOrder">—</dd>
           </div>
           <div class="kv-row">
             <dt>Creado</dt>
@@ -496,7 +508,21 @@
 
         <div class="panel" id="panel-orders">
           <div id="ordersStatus" class="status-area"></div>
-          <div class="placeholder">ready to connect when endpoint exists</div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>Fecha</th>
+                  <th>Estado</th>
+                  <th>Total</th>
+                </tr>
+              </thead>
+              <tbody id="ordersBody">
+                <tr><td colspan="4">Cargando…</td></tr>
+              </tbody>
+            </table>
+          </div>
         </div>
 
         <div class="panel" id="panel-requests">

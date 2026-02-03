@@ -81,8 +81,6 @@
   const usersPrev = $('#usersPrev');
   const usersNext = $('#usersNext');
   const usersSearch = $('#usersSearch');
-  const usersEmail = $('#usersEmail');
-  const usersPhone = $('#usersPhone');
   const usersRole = $('#usersRole');
   const usersCircle = $('#usersCircle');
   const usersSort = $('#usersSort');
@@ -203,8 +201,6 @@
     total: 0,
     totalPages: 1,
     q: '',
-    email: '',
-    phone: '',
     role: '',
     circle: '',
     sort: 'createdAt',
@@ -1345,15 +1341,24 @@
   };
 
   const handleHashChange = () => {
-    const match = window.location.hash.match(/user=(\d+)/);
-    if (match) {
-      const userId = Number(match[1]);
+    const hash = window.location.hash || '';
+    if (hash.startsWith('#user=')) {
+      const match = hash.match(/user=(\d+)/);
+      const userId = match ? Number(match[1]) : null;
       if (Number.isFinite(userId)) {
         openUserDetail(userId, { skipHash: true });
         return;
       }
     }
-    const sectionMatch = window.location.hash.match(/^#(section-[\w-]+)/);
+    if (hash.startsWith(USERS_HASH_PREFIX)) {
+      readUsersStateFromHash();
+      applyUsersStateToInputs();
+      syncUsersStateFromInputs();
+      showSection('section-users');
+      fetchUsers();
+      return;
+    }
+    const sectionMatch = hash.match(/^#(section-[\w-]+)/);
     if (sectionMatch) {
       showSection(sectionMatch[1]);
       return;
@@ -1453,8 +1458,6 @@
       page: state.page,
       pageSize: state.pageSize,
       q: state.q || undefined,
-      email: state.email || undefined,
-      phone: state.phone || undefined,
       role: state.role || undefined,
       circle: parseNumberOrNull(state.circle) ?? undefined,
       sort: state.sort || undefined,
@@ -1539,8 +1542,6 @@
 
   const syncUsersStateFromInputs = () => {
     if (usersSearch) usersState.q = usersSearch.value.trim();
-    if (usersEmail) usersState.email = usersEmail.value.trim();
-    if (usersPhone) usersState.phone = usersPhone.value.trim();
     if (usersRole) usersState.role = usersRole.value;
     if (usersCircle) usersState.circle = usersCircle.value;
     if (usersSort) usersState.sort = usersSort.value || 'createdAt';
@@ -1549,49 +1550,55 @@
 
   const applyUsersStateToInputs = () => {
     if (usersSearch) usersSearch.value = usersState.q || '';
-    if (usersEmail) usersEmail.value = usersState.email || '';
-    if (usersPhone) usersPhone.value = usersState.phone || '';
     if (usersRole) usersRole.value = usersState.role || '';
     if (usersCircle) usersCircle.value = usersState.circle || '';
     if (usersSort) usersSort.value = usersState.sort || 'createdAt';
     if (usersOrder) usersOrder.value = usersState.order || 'desc';
   };
 
-  const readUsersStateFromQuery = () => {
-    const params = new URLSearchParams(window.location.search);
-    const page = Number(params.get('usersPage'));
-    const pageSize = Number(params.get('usersPageSize'));
-    usersState.page = Number.isFinite(page) && page > 0 ? page : usersState.page;
-    usersState.pageSize = Number.isFinite(pageSize) && pageSize > 0 ? pageSize : usersState.pageSize;
-    usersState.q = params.get('usersQ') ?? usersState.q;
-    usersState.email = params.get('usersEmail') ?? usersState.email;
-    usersState.phone = params.get('usersPhone') ?? usersState.phone;
-    usersState.role = params.get('usersRole') ?? usersState.role;
-    usersState.circle = params.get('usersCircle') ?? usersState.circle;
-    usersState.sort = params.get('usersSort') ?? usersState.sort;
-    usersState.order = params.get('usersOrder') ?? usersState.order;
+  const USERS_HASH_PREFIX = '#usuarios';
+
+  const getUsersHashParams = () => {
+    const hash = window.location.hash || '';
+    if (!hash.startsWith(USERS_HASH_PREFIX)) return null;
+    // Parse hash state for usuarios: #usuarios&q=&role=&circle=&page=&pageSize=&sort=
+    const rawParams = hash.slice(USERS_HASH_PREFIX.length);
+    const query = rawParams.startsWith('&') ? rawParams.slice(1) : rawParams;
+    return new URLSearchParams(query);
   };
 
-  const updateUsersQueryString = () => {
-    const params = new URLSearchParams(window.location.search);
-    const setOrDelete = (key, value) => {
-      if (value === undefined || value === null || value === '') {
-        params.delete(key);
-      } else {
-        params.set(key, String(value));
-      }
-    };
-    setOrDelete('usersPage', usersState.page);
-    setOrDelete('usersPageSize', usersState.pageSize);
-    setOrDelete('usersQ', usersState.q);
-    setOrDelete('usersEmail', usersState.email);
-    setOrDelete('usersPhone', usersState.phone);
-    setOrDelete('usersRole', usersState.role);
-    setOrDelete('usersCircle', usersState.circle);
-    setOrDelete('usersSort', usersState.sort);
-    setOrDelete('usersOrder', usersState.order);
-    const newQuery = params.toString();
-    const newUrl = newQuery ? `${window.location.pathname}?${newQuery}${window.location.hash}` : `${window.location.pathname}${window.location.hash}`;
+  const readUsersStateFromHash = () => {
+    const params = getUsersHashParams();
+    if (!params) return;
+    const page = Number(params.get('page'));
+    const pageSize = Number(params.get('pageSize'));
+    const sortValue = params.get('sort') || '';
+    const [sortField, sortOrder] = sortValue.split(':');
+    usersState.page = Number.isFinite(page) && page > 0 ? page : usersState.page;
+    usersState.pageSize = Number.isFinite(pageSize) && pageSize > 0 ? pageSize : usersState.pageSize;
+    usersState.q = params.get('q') ?? usersState.q;
+    usersState.role = params.get('role') ?? usersState.role;
+    usersState.circle = params.get('circle') ?? usersState.circle;
+    if (sortField) usersState.sort = sortField;
+    if (sortOrder) usersState.order = sortOrder;
+  };
+
+  const buildUsersHash = (state) => {
+    // Serialize hash state for usuarios: #usuarios&q=&role=&circle=&page=&pageSize=&sort=
+    const params = new URLSearchParams();
+    const sortValue = [state.sort, state.order].filter(Boolean).join(':');
+    params.set('q', state.q || '');
+    params.set('role', state.role || '');
+    params.set('circle', state.circle || '');
+    params.set('page', String(state.page || 1));
+    params.set('pageSize', String(state.pageSize || 10));
+    params.set('sort', sortValue);
+    return `${USERS_HASH_PREFIX}&${params.toString()}`;
+  };
+
+  const updateUsersHashState = () => {
+    const newHash = buildUsersHash(usersState);
+    const newUrl = `${window.location.pathname}${window.location.search}${newHash}`;
     window.history.replaceState({}, '', newUrl);
   };
 
@@ -1622,8 +1629,6 @@
 
   const resetUsersFilters = () => {
     if (usersSearch) usersSearch.value = '';
-    if (usersEmail) usersEmail.value = '';
-    if (usersPhone) usersPhone.value = '';
     if (usersRole) usersRole.value = '';
     if (usersCircle) usersCircle.value = '';
     if (usersSort) usersSort.value = 'createdAt';
@@ -2089,23 +2094,16 @@
     const totalPages = Math.max(1, Number(usersState.totalPages) || 1);
     const currentPage = Math.min(Math.max(usersState.page, 1), totalPages);
     const totalLabel = Number.isFinite(usersState.total) ? usersState.total : 0;
-    usersPageInfo.textContent = `Página ${currentPage} de ${totalPages} · Total: ${totalLabel}`;
+    usersPageInfo.textContent = `${totalLabel} resultados · Página ${currentPage} de ${totalPages}`;
     if (usersPrev) usersPrev.disabled = currentPage <= 1;
     if (usersNext) usersNext.disabled = currentPage >= totalPages;
   };
 
-  const getUsersColumnCount = () => (usersPhoneHeader && !usersPhoneHeader.hidden ? 8 : 7);
+  const getUsersColumnCount = () => 8;
 
   const renderUsers = (items = []) => {
     if (!usersBody) return;
-    const hasPhone = items.some((item) => {
-      const user = mapUserRecord(item);
-      return Boolean(user.phone);
-    });
-    if (usersPhoneHeader) {
-      usersPhoneHeader.hidden = !hasPhone;
-    }
-    const columnCount = hasPhone ? 8 : 7;
+    const columnCount = getUsersColumnCount();
     if (!items.length) {
       usersBody.innerHTML = `<tr><td colspan="${columnCount}" class="empty">No hay usuarios para mostrar.</td></tr>`;
       return;
@@ -2116,20 +2114,33 @@
         const idLabel = user.id != null && user.id !== '' ? escapeHtml(String(user.id)) : '—';
         const emailLabel = user.email ? escapeHtml(user.email) : '—';
         const phoneLabel = user.phone ? escapeHtml(user.phone) : '—';
+        const emailCopyButton = user.email
+          ? `<button class="btn" type="button" data-copy-value="${escapeHtml(user.email)}">Copiar</button>`
+          : '';
+        const phoneCopyButton = user.phone
+          ? `<button class="btn" type="button" data-copy-value="${escapeHtml(user.phone)}">Copiar</button>`
+          : '';
+        const emailCell = user.email
+          ? `<div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">${emailLabel}${emailCopyButton}</div>`
+          : emailLabel;
+        const phoneCell = user.phone
+          ? `<div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">${phoneLabel}${phoneCopyButton}</div>`
+          : phoneLabel;
         const nameLabel = user.displayName ? escapeHtml(user.displayName) : '—';
         const roleLabel = user.role ? escapeHtml(String(user.role)) : '—';
         const circleLabel =
           user.circle != null && user.circle !== '' ? escapeHtml(String(user.circle)) : '—';
         const createdLabel = user.createdAt ? formatDateShort(user.createdAt) : '—';
+        const usersHash = buildUsersHash(usersState);
         const actionLabel =
           user.id != null && user.id !== ''
-            ? `<a class="btn" href="admin-user.html?id=${encodeURIComponent(user.id)}">Ver</a>`
+            ? `<a class="btn" href="admin-user.html?id=${encodeURIComponent(user.id)}${usersHash}">Ver</a>`
             : '<button class="btn" type="button" disabled>Ver</button>';
         return `
           <tr>
             <td>${idLabel}</td>
-            <td>${emailLabel}</td>
-            ${hasPhone ? `<td>${phoneLabel}</td>` : ''}
+            <td>${emailCell}</td>
+            <td>${phoneCell}</td>
             <td>${nameLabel}</td>
             <td>${roleLabel}</td>
             <td>${circleLabel}</td>
@@ -2183,7 +2194,7 @@
       } else {
         renderUsers(normalized.items || []);
       }
-      updateUsersQueryString();
+      updateUsersHashState();
       updateUsersPagination();
     } catch (error) {
       console.error('[ADMIN] Error cargando usuarios', error);
@@ -2521,6 +2532,37 @@
   const onUsersTableClick = (event) => {
     const target = event.target;
     if (!(target instanceof HTMLElement)) return;
+    const copyValue = target.dataset.copyValue;
+    if (copyValue) {
+      const handleCopySuccess = () => showToast('Copiado al portapapeles.', 'success', 'Usuarios');
+      if (navigator.clipboard?.writeText) {
+        navigator.clipboard
+          .writeText(copyValue)
+          .then(handleCopySuccess)
+          .catch(() => showToast('No se pudo copiar.', 'error', 'Usuarios'));
+      } else {
+        const temp = document.createElement('textarea');
+        temp.value = copyValue;
+        temp.style.position = 'fixed';
+        temp.style.top = '-1000px';
+        document.body.appendChild(temp);
+        temp.focus();
+        temp.select();
+        try {
+          const ok = document.execCommand('copy');
+          if (ok) {
+            handleCopySuccess();
+          } else {
+            showToast('No se pudo copiar.', 'error', 'Usuarios');
+          }
+        } catch (error) {
+          showToast('No se pudo copiar.', 'error', 'Usuarios');
+        } finally {
+          document.body.removeChild(temp);
+        }
+      }
+      return;
+    }
     if (target.dataset.retryUsers) {
       fetchUsers();
       return;
@@ -3162,35 +3204,13 @@
       };
       usersSearch.addEventListener('input', () => {
         clearTimeout(usersSearchTimeout);
-        usersSearchTimeout = setTimeout(triggerSearch, 300);
+        usersSearchTimeout = setTimeout(triggerSearch, 400);
       });
       usersSearch.addEventListener('keydown', (event) => {
         if (event.key === 'Enter') {
           clearTimeout(usersSearchTimeout);
           triggerSearch();
         }
-      });
-    }
-
-    if (usersEmail) {
-      usersEmail.addEventListener('input', () => {
-        clearTimeout(usersSearchTimeout);
-        usersSearchTimeout = setTimeout(() => {
-          syncUsersStateFromInputs();
-          usersState.page = 1;
-          fetchUsers();
-        }, 300);
-      });
-    }
-
-    if (usersPhone) {
-      usersPhone.addEventListener('input', () => {
-        clearTimeout(usersSearchTimeout);
-        usersSearchTimeout = setTimeout(() => {
-          syncUsersStateFromInputs();
-          usersState.page = 1;
-          fetchUsers();
-        }, 300);
       });
     }
 
@@ -3461,6 +3481,7 @@
             fetchActivity();
           } else if (targetSection === 'section-users') {
             syncUsersStateFromInputs();
+            updateUsersHashState();
             fetchUsers();
           } else if (targetSection === 'section-products') {
             syncProductsStateFromInputs();
@@ -3512,7 +3533,7 @@
     syncRequests23StateFromInputs();
     syncProductsStateFromInputs();
     syncActivityStateFromInputs();
-    readUsersStateFromQuery();
+    readUsersStateFromHash();
     applyUsersStateToInputs();
     syncUsersStateFromInputs();
     fetchDashboard();
