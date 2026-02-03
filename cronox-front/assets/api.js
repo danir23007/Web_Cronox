@@ -598,6 +598,10 @@
     return request('/api/admin/users', { query });
   };
 
+  adminApi.getUserList = async (query = {}) => {
+    return request('/api/admin/users', { query });
+  };
+
   adminApi.listAdminNotes = async (query = {}) => {
     return request('/api/admin/notes', { query });
   };
