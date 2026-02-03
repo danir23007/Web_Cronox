@@ -152,6 +152,7 @@
         <button class="btn" data-section="section-23">Solicitudes 2→3 <span class="tab-badge" id="requestsBadge23" hidden>0</span></button>
         <button class="btn" data-section="section-34">Solicitudes 3→4 <span class="tab-badge" id="requestsBadge34" hidden>0</span></button>
         <button class="btn" data-section="section-activity">Actividad</button>
+        <button class="btn" data-section="section-users">Usuarios</button>
         <button class="btn" data-section="section-products">Productos</button>
         <button class="btn" data-section="section-codes">Códigos</button>
       </div>
@@ -370,6 +371,41 @@
             <option value="50">50</option>
             <option value="100">100</option>
           </select>
+        </div>
+      </div>
+    </section>
+
+    <section id="section-users" class="card admin-section" aria-labelledby="title-users" hidden>
+      <div style="display:flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap;">
+        <div>
+          <h2 id="title-users">Usuarios</h2>
+          <small>Listado de clientes registrados.</small>
+        </div>
+      </div>
+      <div id="usersMessage" class="message" role="status" aria-live="polite"></div>
+      <div style="overflow-x: auto;">
+        <table aria-describedby="title-users">
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Email</th>
+              <th>Nombre</th>
+              <th>Rol</th>
+              <th>Círculo</th>
+              <th>Alta</th>
+              <th>Acción</th>
+            </tr>
+          </thead>
+          <tbody id="usersBody">
+            <tr><td colspan="7" class="empty">Cargando usuarios…</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="pagination">
+        <div class="page-info" id="usersPageInfo">Página 1 de 1</div>
+        <div class="page-controls">
+          <button class="btn" type="button" id="usersPrev">Anterior</button>
+          <button class="btn" type="button" id="usersNext">Siguiente</button>
         </div>
       </div>
     </section>

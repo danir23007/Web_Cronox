@@ -75,6 +75,11 @@
   const activityPrev = $('#activityPrev');
   const activityNext = $('#activityNext');
   const activityPageSize = $('#activityPageSize');
+  const usersBody = $('#usersBody');
+  const usersMessage = $('#usersMessage');
+  const usersPageInfo = $('#usersPageInfo');
+  const usersPrev = $('#usersPrev');
+  const usersNext = $('#usersNext');
   const logoutBtn = $('#logoutBtn');
   const backBtn = $('#backBtn');
   const refreshDashboardBtn = $('#refreshDashboardBtn');
@@ -181,6 +186,11 @@
     dateFrom: '',
     dateTo: '',
   };
+  const usersState = {
+    page: 1,
+    limit: 20,
+    total: 0,
+  };
   const userDetailState = {
     userId: null,
     activeTab: 'requests',
@@ -213,6 +223,7 @@
   const ADMIN_ROLES = new Set(['SUPER_ADMIN', 'MODERATOR', 'LOGISTICS', 'MARKETING', 'ADMIN', 'SUPERADMIN']);
   const PERMISSIONS = {
     requests: ['SUPER_ADMIN', 'MODERATOR'],
+    users: ['SUPER_ADMIN', 'MODERATOR'],
     userDetail: ['SUPER_ADMIN', 'MODERATOR'],
     products: ['SUPER_ADMIN', 'LOGISTICS'],
     orders: ['SUPER_ADMIN', 'LOGISTICS'],
@@ -224,6 +235,7 @@
     'section-23': 'requests',
     'section-34': 'requests',
     'section-activity': 'auditLog',
+    'section-users': 'users',
     'section-products': 'products',
     'section-codes': 'promoCodes',
     'section-user': 'userDetail',
@@ -293,6 +305,7 @@
     setTabVisibility('section-23', canAccess('requests'));
     setTabVisibility('section-34', canAccess('requests'));
     setTabVisibility('section-activity', canAccess('auditLog'));
+    setTabVisibility('section-users', canAccess('users'));
     setTabVisibility('section-products', canAccess('products'));
     setTabVisibility('section-codes', canAccess('promoCodes'));
     setUserTabVisibility('notes', canAccess('notes'));
@@ -415,6 +428,15 @@
     window.location.href = 'index.html';
   };
 
+  const redirectToLogin = () => {
+    try {
+      localStorage.setItem('cronox_open_auth_on_load', 'login');
+    } catch (error) {
+      console.warn('[ADMIN] No se pudo marcar login automático', error);
+    }
+    redirectToHome();
+  };
+
   const ensureAdmin = async () => {
     if (!window.CRONOX_API?.getMe) {
       redirectToHome();
@@ -484,6 +506,15 @@
     } catch (e) {
       return value;
     }
+  };
+
+  const formatDateShort = (value) => {
+    if (!value) return '—';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) {
+      return String(value);
+    }
+    return date.toLocaleDateString('es-ES');
   };
 
   const formatRelativeTime = (value) => {
@@ -1628,6 +1659,134 @@
     }
   };
 
+  const normalizeUsersResponse = (payload) => {
+    const base = payload?.data || payload || {};
+    const items = Array.isArray(base.items)
+      ? base.items
+      : Array.isArray(base.users)
+        ? base.users
+        : Array.isArray(base)
+          ? base
+          : [];
+    const total = Number(base.total ?? base.count ?? items.length);
+    const page = Number(base.page ?? usersState.page);
+    const limit = Number(base.limit ?? base.pageSize ?? usersState.limit);
+    return {
+      items,
+      total: Number.isFinite(total) ? total : items.length,
+      page: Number.isFinite(page) && page > 0 ? page : usersState.page,
+      limit: Number.isFinite(limit) && limit > 0 ? limit : usersState.limit,
+    };
+  };
+
+  const mapUserRecord = (item = {}) => {
+    const source = item && typeof item === 'object' ? item : {};
+    const id = source.id ?? source.userId ?? source._id ?? source.uid ?? '';
+    const email = source.email ?? source.mail ?? source.username ?? '';
+    const firstName = source.firstName ?? source.first_name ?? '';
+    const lastName = source.lastName ?? source.last_name ?? '';
+    const displayName =
+      [firstName, lastName].filter(Boolean).join(' ') || source.name || source.fullName || '';
+    return {
+      id,
+      email,
+      displayName,
+      role: source.role ?? source.userRole ?? source.type ?? '',
+      circle: source.circle ?? source.userCircle ?? source.level ?? source.membershipCircle ?? '',
+      createdAt: source.createdAt ?? source.created_at ?? source.created ?? source.createdOn ?? '',
+    };
+  };
+
+  const updateUsersPagination = () => {
+    if (!usersPageInfo) return;
+    const totalPages = Math.max(1, Math.ceil((usersState.total || 0) / (usersState.limit || 1)));
+    const currentPage = Math.min(Math.max(usersState.page, 1), totalPages);
+    usersPageInfo.textContent = `Página ${currentPage} de ${totalPages}`;
+    if (usersPrev) usersPrev.disabled = currentPage <= 1;
+    if (usersNext) usersNext.disabled = currentPage >= totalPages;
+  };
+
+  const renderUsers = (items = []) => {
+    if (!usersBody) return;
+    if (!items.length) {
+      usersBody.innerHTML = '<tr><td colspan="7" class="empty">No hay usuarios para mostrar.</td></tr>';
+      return;
+    }
+    usersBody.innerHTML = items
+      .map((item) => {
+        const user = mapUserRecord(item);
+        const idLabel = user.id != null && user.id !== '' ? escapeHtml(String(user.id)) : '—';
+        const emailLabel = user.email ? escapeHtml(user.email) : '—';
+        const nameLabel = user.displayName ? escapeHtml(user.displayName) : '—';
+        const roleLabel = user.role ? escapeHtml(String(user.role)) : '—';
+        const circleLabel =
+          user.circle != null && user.circle !== '' ? escapeHtml(String(user.circle)) : '—';
+        const createdLabel = user.createdAt ? formatDateShort(user.createdAt) : '—';
+        const actionLabel =
+          user.id != null && user.id !== ''
+            ? `<a class="btn" href="admin-user.html?id=${encodeURIComponent(user.id)}">Ver</a>`
+            : '<button class="btn" type="button" disabled>Ver</button>';
+        return `
+          <tr>
+            <td>${idLabel}</td>
+            <td>${emailLabel}</td>
+            <td>${nameLabel}</td>
+            <td>${roleLabel}</td>
+            <td>${circleLabel}</td>
+            <td>${createdLabel}</td>
+            <td>${actionLabel}</td>
+          </tr>
+        `;
+      })
+      .join('');
+  };
+
+  const fetchUsers = async () => {
+    if (!usersBody) return;
+    if (!canAccess('users')) {
+      setScopedMessage(usersMessage, 'No autorizado.', 'error');
+      usersBody.innerHTML = '<tr><td colspan="7" class="empty">No autorizado.</td></tr>';
+      updateUsersPagination();
+      return;
+    }
+    usersBody.innerHTML = '<tr><td colspan="7" class="empty">Cargando usuarios…</td></tr>';
+    setScopedMessage(usersMessage, '');
+    try {
+      const data = await window.CRONOX_API?.admin?.listUsers?.({
+        page: usersState.page,
+        limit: usersState.limit,
+      });
+      const normalized = normalizeUsersResponse(data);
+      usersState.page = normalized.page;
+      usersState.limit = normalized.limit;
+      usersState.total = normalized.total;
+      renderUsers(normalized.items || []);
+      updateUsersPagination();
+    } catch (error) {
+      console.error('[ADMIN] Error cargando usuarios', error);
+      if (error?.status === 401) {
+        setScopedMessage(usersMessage, 'Tu sesión ha caducado. Vuelve a iniciar sesión.', 'error');
+        usersBody.innerHTML = `
+          <tr>
+            <td colspan="7" class="empty">
+              No autorizado.
+              <button type="button" class="btn primary" data-users-login="1" style="margin-left:8px;">Volver a login</button>
+            </td>
+          </tr>`;
+      } else {
+        setScopedMessage(usersMessage, 'No se pudieron cargar los usuarios.', 'error');
+        usersBody.innerHTML = `
+          <tr>
+            <td colspan="7" class="empty">
+              Error al cargar usuarios.
+              <button type="button" class="btn" data-retry-users="1" style="margin-left:8px;">Reintentar</button>
+            </td>
+          </tr>`;
+      }
+      updateUsersPagination();
+    }
+  };
+
   const renderProductImagesPreview = (urls = []) => {
     if (!productImagesPreview) return;
     if (!urls.length) {
@@ -1910,6 +2069,18 @@
     }
     if (disableId) {
       disableProduct(Number(disableId));
+    }
+  };
+
+  const onUsersTableClick = (event) => {
+    const target = event.target;
+    if (!(target instanceof HTMLElement)) return;
+    if (target.dataset.retryUsers) {
+      fetchUsers();
+      return;
+    }
+    if (target.dataset.usersLogin) {
+      redirectToLogin();
     }
   };
 
@@ -2500,6 +2671,22 @@
       });
     }
 
+    if (usersPrev) {
+      usersPrev.addEventListener('click', () => {
+        if (usersState.page > 1) {
+          usersState.page -= 1;
+          fetchUsers();
+        }
+      });
+    }
+
+    if (usersNext) {
+      usersNext.addEventListener('click', () => {
+        usersState.page += 1;
+        fetchUsers();
+      });
+    }
+
     if (productImagesInput) {
       productImagesInput.addEventListener('change', () => {
         const files = productImagesInput.files ? Array.from(productImagesInput.files) : [];
@@ -2522,6 +2709,10 @@
 
     if (productsBody) {
       productsBody.addEventListener('click', onProductTableClick);
+    }
+
+    if (usersBody) {
+      usersBody.addEventListener('click', onUsersTableClick);
     }
 
     if (codeStatusFilter) {
@@ -2709,6 +2900,10 @@
           } else if (targetSection === 'section-activity') {
             syncActivityStateFromInputs();
             fetchActivity();
+          } else if (targetSection === 'section-users') {
+            usersState.page = 1;
+            usersState.limit = 20;
+            fetchUsers();
           } else if (targetSection === 'section-products') {
             syncProductsStateFromInputs();
             loadProductCategories();

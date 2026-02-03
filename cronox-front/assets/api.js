@@ -594,6 +594,10 @@
     return request(`/api/admin/users/${encodeURIComponent(id)}/audit-logs`);
   };
 
+  adminApi.listUsers = async (query = {}) => {
+    return request('/api/admin/users', { query });
+  };
+
   adminApi.listAdminNotes = async (query = {}) => {
     return request('/api/admin/notes', { query });
   };
