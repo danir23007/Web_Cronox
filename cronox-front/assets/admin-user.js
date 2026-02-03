@@ -2,7 +2,12 @@
   const qs = new URLSearchParams(window.location.search);
   const userId = qs.get('id');
   const apiBaseBadge = document.getElementById('apiBaseBadge');
-  const errorBox = document.getElementById('errorBox');
+  const statusArea = document.getElementById('statusArea');
+  const profileStatus = document.getElementById('profileStatus');
+  const auditStatus = document.getElementById('auditStatus');
+  const notesStatus = document.getElementById('notesStatus');
+  const ordersStatus = document.getElementById('ordersStatus');
+  const requestsStatus = document.getElementById('requestsStatus');
   const refreshAllBtn = document.getElementById('refreshAll');
   const refreshAuditBtn = document.getElementById('refreshAudit');
   const refreshNotesBtn = document.getElementById('refreshNotes');
@@ -22,18 +27,97 @@
   const noteBody = document.getElementById('noteBody');
   const tabs = document.querySelectorAll('.tab');
   const notesTab = document.querySelector('.tab[data-tab="notes"]');
+  const ordersPanel = document.getElementById('panel-orders');
+  const requestsPanel = document.getElementById('panel-requests');
+  const ordersPlaceholder = ordersPanel?.querySelector('.placeholder');
+  const requestsPlaceholder = requestsPanel?.querySelector('.placeholder');
   let notesAvailable = true;
 
-  const showError = (message) => {
-    if (!errorBox) return;
-    errorBox.textContent = message;
-    errorBox.hidden = false;
+  const ui = window.CRONOX_UI || {};
+  const renderBanner = ui.renderBanner;
+  const renderEmptyState = ui.renderEmptyState;
+  const setLoading = ui.setLoading;
+  const classifyApiError = window.CRONOX_API?.classifyApiError || (() => ({
+    severity: 'error',
+    userMessage: 'No pudimos completar la solicitud.',
+    isRetryable: true,
+  }));
+
+  const getErrorDetails = (error) => ({
+    status: error?.status ?? error?.statusCode ?? 0,
+    endpoint: error?.endpoint || '—',
+    message: error?.message || 'Error desconocido',
+  });
+
+  const showGlobalBanner = (options) => {
+    if (!renderBanner || !statusArea) return;
+    renderBanner(statusArea, options);
   };
 
-  const clearError = () => {
-    if (!errorBox) return;
-    errorBox.textContent = '';
-    errorBox.hidden = true;
+  const clearGlobalBanner = () => {
+    if (!statusArea) return;
+    statusArea.innerHTML = '';
+  };
+
+  const showModuleError = ({
+    container,
+    error,
+    title,
+    isCritical = false,
+    retry,
+    backLink,
+  }) => {
+    if (!renderBanner || !container) return;
+    const classification = classifyApiError(error);
+    let severity = classification.severity || 'error';
+    if (!isCritical && severity === 'error') {
+      severity = 'warning';
+    }
+    const actions = [];
+    if (typeof retry === 'function') {
+      actions.push({ label: 'Reintentar', onClick: retry, variant: 'primary' });
+    }
+    if (backLink) {
+      actions.push({ label: 'Volver', href: backLink });
+    }
+    if (classification.kind === 'auth') {
+      actions.push({ label: 'Iniciar sesión', href: 'auth-modal.html', variant: 'primary' });
+    }
+    renderBanner(container, {
+      type: severity,
+      title: title || 'Ocurrió un problema',
+      message: classification.userMessage,
+      details: getErrorDetails(error),
+      actions,
+    });
+    if (isCritical) {
+      showGlobalBanner({
+        type: 'error',
+        title: 'No se pudo cargar el usuario',
+        message: classification.userMessage,
+        details: getErrorDetails(error),
+        actions,
+      });
+    }
+  };
+
+  const showOptionalUnavailable = (statusContainer, contentContainer, options = {}) => {
+    if (renderBanner && statusContainer) {
+      renderBanner(statusContainer, {
+        type: 'warning',
+        title: options.title || 'Módulo opcional',
+        message: options.message || 'Este módulo aún no está disponible en backend.',
+        details: options.details,
+        actions: options.actions || [],
+      });
+    }
+    if (renderEmptyState && contentContainer) {
+      renderEmptyState(contentContainer, {
+        title: options.emptyTitle || 'No disponible',
+        message: options.emptyMessage || 'Este módulo aún no está disponible.',
+        actions: options.actions || [],
+      });
+    }
   };
 
   const setApiBaseBadge = (baseValue) => {
@@ -43,7 +127,13 @@
 
   if (!window.CRONOX_API || typeof window.CRONOX_API !== 'object') {
     setApiBaseBadge('—');
-    showError('API no inicializada (falta api.js). Revisa la carga de scripts.');
+    showGlobalBanner({
+      type: 'error',
+      title: 'API no inicializada',
+      message: 'Falta api.js o no se pudo cargar correctamente.',
+      details: { status: 0, endpoint: '—', message: 'API no inicializada' },
+      actions: [{ label: 'Recargar', onClick: () => window.location.reload(), variant: 'primary' }],
+    });
     return;
   }
 
@@ -230,48 +320,118 @@
 
   const loadUserDetail = async () => {
     if (!window.CRONOX_API?.admin?.getUserDetail) {
-      showError('La API de administración no está disponible en esta página.');
+      showModuleError({
+        container: profileStatus || statusArea,
+        error: { status: 404, message: 'Endpoint no disponible', endpoint: 'admin.getUserDetail' },
+        title: 'Detalle no disponible',
+        isCritical: true,
+        backLink: 'admin.html#usuarios',
+      });
       return;
+    }
+    if (profileStatus) profileStatus.innerHTML = '';
+    if (profileList && setLoading) {
+      setLoading(profileList, true, { title: 'Cargando perfil...' });
     }
     try {
       const data = await window.CRONOX_API.admin.getUserDetail(userId);
       const user = data?.user || data || {};
+      if (!user || Object.keys(user).length === 0) {
+        if (renderEmptyState && profileList) {
+          renderEmptyState(profileList, {
+            title: 'Usuario no encontrado o sin datos',
+            message: 'No hay información disponible para este usuario.',
+            actions: [{ label: 'Volver a usuarios', href: 'admin.html#usuarios', variant: 'primary' }],
+          });
+        }
+        return;
+      }
       renderSummary(user);
       renderProfile(user);
     } catch (error) {
       console.error('[ADMIN USER] Error cargando detalle', error);
-      showError('No se pudo cargar el detalle del usuario.');
+      showModuleError({
+        container: profileStatus || statusArea,
+        error,
+        title: 'No se pudo cargar el perfil',
+        isCritical: true,
+        retry: loadUserDetail,
+        backLink: 'admin.html#usuarios',
+      });
     }
   };
 
   const loadAuditLogs = async () => {
     if (!auditBody) return;
-    auditBody.innerHTML = '<tr><td colspan="4">Cargando…</td></tr>';
+    if (auditStatus) auditStatus.innerHTML = '';
+    if (setLoading) setLoading(auditBody, true, { title: 'Cargando audit logs…', colSpan: 4 });
     if (!window.CRONOX_API?.admin?.getUserAuditLogs) {
-      showError('La API de auditoría no está disponible.');
-      auditBody.innerHTML = '<tr><td colspan="4">Sin datos.</td></tr>';
+      showModuleError({
+        container: auditStatus || statusArea,
+        error: { status: 404, message: 'Endpoint no disponible', endpoint: 'admin.getUserAuditLogs' },
+        title: 'Audit logs no disponibles',
+        isCritical: false,
+        retry: loadAuditLogs,
+      });
+      if (renderEmptyState) {
+        renderEmptyState(auditBody, {
+          title: 'No disponible',
+          message: 'Este módulo aún no está disponible en backend.',
+          colSpan: 4,
+          actions: [{ label: 'Reintentar', onClick: loadAuditLogs }],
+        });
+      }
       return;
     }
     try {
       const data = await window.CRONOX_API.admin.getUserAuditLogs(userId);
       const logs = normalizeList(data);
+      if (!logs.length) {
+        if (renderEmptyState) {
+          renderEmptyState(auditBody, {
+            title: 'Sin registros',
+            message: 'No hay audit logs para este usuario.',
+            colSpan: 4,
+          });
+          return;
+        }
+      }
       renderAuditLogs(logs);
     } catch (error) {
       console.error('[ADMIN USER] Error cargando audit logs', error);
-      if ([401, 403, 404, 501].includes(error?.status)) {
-        showError('La API de auditoría no está disponible.');
-      } else {
-        showError('No se pudieron cargar los audit logs.');
+      showModuleError({
+        container: auditStatus || statusArea,
+        error,
+        title: 'No se pudieron cargar los audit logs',
+        isCritical: false,
+        retry: loadAuditLogs,
+      });
+      if (renderEmptyState) {
+        renderEmptyState(auditBody, {
+          title: 'No disponible',
+          message: 'No pudimos cargar los audit logs.',
+          colSpan: 4,
+          actions: [{ label: 'Reintentar', onClick: loadAuditLogs }],
+        });
       }
-      auditBody.innerHTML = '<tr><td colspan="4">Sin datos.</td></tr>';
     }
   };
 
   const loadNotes = async () => {
     if (!notesList) return;
-    notesList.innerHTML = '<div class="note-meta">Cargando…</div>';
+    if (notesStatus) notesStatus.innerHTML = '';
+    if (setLoading) {
+      setLoading(notesList, true, { title: 'Cargando notas…' });
+    }
     if (!window.CRONOX_API?.admin?.listAdminNotes) {
       setNotesAvailability(false, 'Notas no disponibles en este entorno.');
+      showModuleError({
+        container: notesStatus || statusArea,
+        error: { status: 404, message: 'Endpoint no disponible', endpoint: 'admin.listAdminNotes' },
+        title: 'Notas no disponibles',
+        isCritical: false,
+        retry: loadNotes,
+      });
       return;
     }
     setNotesAvailability(true);
@@ -281,21 +441,149 @@
         targetId: String(userId),
       });
       const notes = normalizeList(data);
+      if (!notes.length && renderEmptyState) {
+        renderEmptyState(notesList, {
+          title: 'Sin notas',
+          message: 'Todavía no hay notas internas para este usuario.',
+          actions: [{ label: 'Crear nota', onClick: () => noteBody?.focus?.(), variant: 'primary' }],
+        });
+        return;
+      }
       renderNotes(notes);
     } catch (error) {
       if (error?.status === 404) {
         setNotesAvailability(false, 'Notas no disponibles en este entorno.');
+        showModuleError({
+          container: notesStatus || statusArea,
+          error,
+          title: 'Notas no disponibles',
+          isCritical: false,
+          retry: loadNotes,
+        });
         return;
       }
       console.error('[ADMIN USER] Error cargando notas', error);
-      showError('No se pudieron cargar las notas.');
-      notesList.innerHTML = '<div class="note-meta">Sin datos.</div>';
+      showModuleError({
+        container: notesStatus || statusArea,
+        error,
+        title: 'No se pudieron cargar las notas',
+        isCritical: false,
+        retry: loadNotes,
+      });
+      if (renderEmptyState) {
+        renderEmptyState(notesList, {
+          title: 'No disponible',
+          message: 'No pudimos cargar las notas.',
+          actions: [{ label: 'Reintentar', onClick: loadNotes }],
+        });
+      }
+    }
+  };
+
+  const loadOrders = async () => {
+    if (!ordersPlaceholder) return;
+    if (ordersStatus) ordersStatus.innerHTML = '';
+    if (setLoading) {
+      setLoading(ordersPlaceholder, true, { title: 'Cargando pedidos…' });
+    }
+    const listFn = window.CRONOX_API?.admin?.getUserOrders ?? window.CRONOX_API?.admin?.listUserOrders;
+    if (!listFn) {
+      showOptionalUnavailable(ordersStatus, ordersPlaceholder, {
+        title: 'Pedidos no disponibles',
+        message: 'Este módulo aún no está disponible en backend.',
+        details: { status: 404, endpoint: 'admin.getUserOrders' },
+        actions: [{ label: 'Reintentar', onClick: loadOrders }],
+      });
+      return;
+    }
+    try {
+      const data = await listFn(userId);
+      const orders = normalizeList(data);
+      if (!orders.length && renderEmptyState) {
+        renderEmptyState(ordersPlaceholder, {
+          title: 'Sin pedidos',
+          message: 'Este usuario no tiene pedidos registrados.',
+        });
+        return;
+      }
+      if (renderEmptyState) {
+        renderEmptyState(ordersPlaceholder, {
+          title: 'Pedidos cargados',
+          message: 'Este panel está listo para integrarse con el listado completo.',
+        });
+      }
+    } catch (error) {
+      showModuleError({
+        container: ordersStatus || statusArea,
+        error,
+        title: 'No se pudieron cargar los pedidos',
+        isCritical: false,
+        retry: loadOrders,
+      });
+      if (renderEmptyState) {
+        renderEmptyState(ordersPlaceholder, {
+          title: 'No disponible',
+          message: 'No pudimos cargar los pedidos.',
+          actions: [{ label: 'Reintentar', onClick: loadOrders }],
+        });
+      }
+    }
+  };
+
+  const loadRequests = async () => {
+    if (!requestsPlaceholder) return;
+    if (requestsStatus) requestsStatus.innerHTML = '';
+    if (setLoading) {
+      setLoading(requestsPlaceholder, true, { title: 'Cargando solicitudes…' });
+    }
+    const listFn =
+      window.CRONOX_API?.admin?.getUserRequests ?? window.CRONOX_API?.admin?.listUserRequests;
+    if (!listFn) {
+      showOptionalUnavailable(requestsStatus, requestsPlaceholder, {
+        title: 'Solicitudes no disponibles',
+        message: 'Este módulo aún no está disponible en backend.',
+        details: { status: 404, endpoint: 'admin.getUserRequests' },
+        actions: [{ label: 'Reintentar', onClick: loadRequests }],
+      });
+      return;
+    }
+    try {
+      const data = await listFn(userId);
+      const requests = normalizeList(data);
+      if (!requests.length && renderEmptyState) {
+        renderEmptyState(requestsPlaceholder, {
+          title: 'Sin solicitudes',
+          message: 'Este usuario no tiene solicitudes activas.',
+        });
+        return;
+      }
+      if (renderEmptyState) {
+        renderEmptyState(requestsPlaceholder, {
+          title: 'Solicitudes cargadas',
+          message: 'Este panel está listo para integrarse con el listado completo.',
+        });
+      }
+    } catch (error) {
+      showModuleError({
+        container: requestsStatus || statusArea,
+        error,
+        title: 'No se pudieron cargar las solicitudes',
+        isCritical: false,
+        retry: loadRequests,
+      });
+      if (renderEmptyState) {
+        renderEmptyState(requestsPlaceholder, {
+          title: 'No disponible',
+          message: 'No pudimos cargar las solicitudes.',
+          actions: [{ label: 'Reintentar', onClick: loadRequests }],
+        });
+      }
     }
   };
 
   const loadAll = () => {
-    clearError();
-    Promise.allSettled([loadUserDetail(), loadAuditLogs(), loadNotes()]);
+    clearGlobalBanner();
+    Promise.allSettled([loadUserDetail(), loadAuditLogs(), loadNotes(), loadOrders(), loadRequests()]);
   };
 
   const handleTabClick = (event) => {
@@ -319,10 +607,16 @@
     const body = noteBody.value.trim();
     const title = noteTitle?.value.trim();
     if (!body) {
-      showError('La nota necesita contenido.');
+      if (renderBanner && notesStatus) {
+        renderBanner(notesStatus, {
+          type: 'warning',
+          title: 'Nota incompleta',
+          message: 'La nota necesita contenido antes de guardar.',
+        });
+      }
       return;
     }
-    clearError();
+    if (notesStatus) notesStatus.innerHTML = '';
     const payload = {
       targetType: 'user',
       targetId: String(userId),
@@ -335,7 +629,13 @@
       loadNotes();
     } catch (error) {
       console.error('[ADMIN USER] Error creando nota', error);
-      showError('No se pudo crear la nota.');
+      showModuleError({
+        container: notesStatus || statusArea,
+        error,
+        title: 'No se pudo crear la nota',
+        isCritical: false,
+        retry: loadNotes,
+      });
     }
   };
 
@@ -357,14 +657,34 @@
       loadNotes();
     } catch (error) {
       console.error('[ADMIN USER] Error eliminando nota', error);
-      showError('No se pudo eliminar la nota.');
+      showModuleError({
+        container: notesStatus || statusArea,
+        error,
+        title: 'No se pudo eliminar la nota',
+        isCritical: false,
+        retry: loadNotes,
+      });
     }
   };
 
   if (!userId) {
-    showError('Falta el parámetro ?id=123 en la URL. Ejemplo: admin-user.html?id=123');
+    showGlobalBanner({
+      type: 'error',
+      title: 'Usuario no seleccionado',
+      message: 'Falta el parámetro ?id=123 en la URL. Ejemplo: admin-user.html?id=123',
+      details: { status: 400, endpoint: window.location.href, message: 'Parámetro id faltante' },
+      actions: [{ label: 'Volver a usuarios', href: 'admin.html#usuarios', variant: 'primary' }],
+    });
     if (profileList) {
-      profileList.innerHTML = '<div class="note-meta">No hay usuario seleccionado.</div>';
+      if (renderEmptyState) {
+        renderEmptyState(profileList, {
+          title: 'Usuario no encontrado',
+          message: 'Selecciona un usuario desde el listado.',
+          actions: [{ label: 'Volver a usuarios', href: 'admin.html#usuarios', variant: 'primary' }],
+        });
+      } else {
+        profileList.innerHTML = '<div class="note-meta">No hay usuario seleccionado.</div>';
+      }
     }
   }
 

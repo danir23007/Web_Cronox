@@ -387,24 +387,111 @@
       }
     }
 
-    const response = await fetch(url, config);
-    const text = await response.text();
-    const data = text ? safeJsonParse(text) : null;
+    try {
+      const response = await fetch(url, config);
+      const text = await response.text();
+      const data = text ? safeJsonParse(text) : null;
 
-    if (!response.ok) {
-      const error = new Error(data?.message || `API error ${response.status}`);
-      error.status = response.status;
-      error.payload = data;
+      if (!response.ok) {
+        const error = new Error(data?.message || `API error ${response.status}`);
+        error.status = response.status;
+        error.endpoint = url;
+        error.payload = data ?? null;
+        throw error;
+      }
+
+      return data;
+    } catch (error) {
+      if (error && typeof error === 'object') {
+        if (error.status == null) error.status = 0;
+        if (!error.endpoint) error.endpoint = url;
+        if (error.payload === undefined) {
+          error.payload = options.body && typeof options.body === 'object' ? options.body : null;
+        }
+        if (!error.message) {
+          error.message = 'Error de red o de conexión';
+        }
+      }
       throw error;
     }
+  };
 
-    return data;
+  const classifyApiError = (error = {}) => {
+    const status = Number(error.status || error.statusCode || 0);
+    const message = (error && error.message) || '';
+    const payloadMessage = error?.payload?.message || error?.payload?.error;
+
+    const base = {
+      kind: 'unknown',
+      severity: 'error',
+      userMessage: 'Ha ocurrido un error inesperado.',
+      isRetryable: true,
+    };
+
+    if (!status || status === 0 || error?.name === 'TypeError') {
+      return {
+        ...base,
+        kind: 'network',
+        userMessage: 'No pudimos conectar con el servidor. Revisa tu conexión o la API.',
+        isRetryable: true,
+      };
+    }
+
+    if (status === 401 || status === 403) {
+      return {
+        ...base,
+        kind: 'auth',
+        userMessage: 'Tu sesión expiró o no tienes permisos para esta acción.',
+        isRetryable: false,
+      };
+    }
+
+    if (status === 404) {
+      return {
+        ...base,
+        kind: 'not-found',
+        userMessage: 'Este módulo aún no está disponible en backend.',
+        isRetryable: false,
+        severity: 'warning',
+      };
+    }
+
+    if (status >= 500) {
+      return {
+        ...base,
+        kind: 'server',
+        userMessage: 'El servidor tuvo un error interno. Puedes reintentar.',
+        isRetryable: true,
+      };
+    }
+
+    if (status === 400 || status === 422) {
+      return {
+        ...base,
+        kind: 'validation',
+        userMessage: payloadMessage || 'Los datos enviados no son válidos.',
+        isRetryable: false,
+        severity: 'warning',
+      };
+    }
+
+    if (message && /fetch|network|cors|dns/i.test(message)) {
+      return {
+        ...base,
+        kind: 'network',
+        userMessage: 'No pudimos conectar con el servidor. Revisa tu conexión o la API.',
+        isRetryable: true,
+      };
+    }
+
+    return base;
   };
 
   const api = {
     API_BASE,
     formatPrice,
     getFallbackProducts,
+    classifyApiError,
   };
 
   // ===== AUTH =====
