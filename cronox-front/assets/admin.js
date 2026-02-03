@@ -973,7 +973,7 @@
           : '—';
         const targetCell =
           entry.targetType === 'user' && entry.targetId
-            ? `<button type="button" class="link-btn" data-user-id="${entry.targetId}">${targetLabel}</button>`
+            ? `<a class="link-btn" href="admin-user.html?id=${encodeURIComponent(entry.targetId)}">${targetLabel}</a>`
             : targetLabel;
         return `<tr>
           <td>
@@ -1361,7 +1361,7 @@
           : req.user?.email || '';
         const userLabel = userName || '—';
         const userCell = req.userId
-          ? `<button type="button" class="link-btn" data-user-id="${req.userId}">${userLabel}</button>`
+          ? `<a class="link-btn" href="admin-user.html?id=${encodeURIComponent(req.userId)}">${userLabel}</a>`
           : userLabel;
         const created = formatRelativeTime(req.createdAt);
         const normalizedStatus = String(req.status || '').toUpperCase();
@@ -1424,7 +1424,7 @@
           : req.user?.email || '';
         const userLabel = userName || '—';
         const userCell = req.userId
-          ? `<button type="button" class="link-btn" data-user-id="${req.userId}">${userLabel}</button>`
+          ? `<a class="link-btn" href="admin-user.html?id=${encodeURIComponent(req.userId)}">${userLabel}</a>`
           : userLabel;
         const created = formatRelativeTime(req.createdAt);
         const remaining = typeof req.remainingMs === 'number' ? formatDuration(req.remainingMs) : '—';
