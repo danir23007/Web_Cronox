@@ -36,6 +36,19 @@
     errorBox.hidden = true;
   };
 
+  const setApiBaseBadge = (baseValue) => {
+    if (!apiBaseBadge) return;
+    apiBaseBadge.textContent = `API: ${baseValue || '—'}`;
+  };
+
+  if (!window.CRONOX_API || typeof window.CRONOX_API !== 'object') {
+    setApiBaseBadge('—');
+    showError('API no inicializada (falta api.js). Revisa la carga de scripts.');
+    return;
+  }
+
+  setApiBaseBadge(window.CRONOX_API.API_BASE);
+
   const formatDate = (value) => {
     if (!value) return '—';
     const date = new Date(value);
@@ -245,7 +258,11 @@
       renderAuditLogs(logs);
     } catch (error) {
       console.error('[ADMIN USER] Error cargando audit logs', error);
-      showError('No se pudieron cargar los audit logs.');
+      if ([401, 403, 404, 501].includes(error?.status)) {
+        showError('La API de auditoría no está disponible.');
+      } else {
+        showError('No se pudieron cargar los audit logs.');
+      }
       auditBody.innerHTML = '<tr><td colspan="4">Sin datos.</td></tr>';
     }
   };
@@ -279,12 +296,6 @@
   const loadAll = () => {
     clearError();
     Promise.allSettled([loadUserDetail(), loadAuditLogs(), loadNotes()]);
-  };
-
-  const setApiBaseBadge = () => {
-    if (!apiBaseBadge) return;
-    const base = window.CRONOX_API_BASE || window.__CRONOX_API_BASE__ || '—';
-    apiBaseBadge.textContent = `API: ${base}`;
   };
 
   const handleTabClick = (event) => {
@@ -356,8 +367,6 @@
       profileList.innerHTML = '<div class="note-meta">No hay usuario seleccionado.</div>';
     }
   }
-
-  setApiBaseBadge();
 
   tabs.forEach((tab) => {
     tab.addEventListener('click', handleTabClick);
