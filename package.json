@@ -1,4 +1,8 @@
 {
+  "scripts": {
+    "admin:build": "vite build -c vite.admin.config.ts",
+    "admin:watch": "vite build -c vite.admin.config.ts --watch"
+  },
   "dependencies": {
     "@nestjs/jwt": "^11.0.1",
     "@nestjs/passport": "^11.0.5",
