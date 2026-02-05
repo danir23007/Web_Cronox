@@ -54,7 +54,8 @@
     if (Array.isArray(product.sizes)) copy.sizes = [...product.sizes];
     if (Array.isArray(product.colors)) copy.colors = [...product.colors];
     if (Array.isArray(product.categories)) copy.categories = [...product.categories];
-    if (Array.isArray(product.variants)) copy.variants = product.variants.map((variant) => ({ ...variant }));
+    if (Array.isArray(product.variants))
+      copy.variants = product.variants.map((variant) => ({ ...variant }));
     if (product.variantMap && typeof product.variantMap === 'object') {
       copy.variantMap = Object.entries(product.variantMap).reduce((acc, [key, value]) => {
         acc[key] = { ...value };
@@ -69,9 +70,8 @@
   const readManualBase = () => {
     if (typeof window === 'undefined' || typeof document === 'undefined') return '';
 
-    const globalBase = typeof window.__CRONOX_API_BASE__ === 'string'
-      ? window.__CRONOX_API_BASE__.trim()
-      : '';
+    const globalBase =
+      typeof window.__CRONOX_API_BASE__ === 'string' ? window.__CRONOX_API_BASE__.trim() : '';
     if (globalBase) return globalBase;
 
     const doc = document.documentElement;
@@ -85,7 +85,11 @@
     }
 
     const script = document.querySelector('script[data-cronox-api-base]');
-    if (script && typeof script.dataset.cronoxApiBase === 'string' && script.dataset.cronoxApiBase.trim()) {
+    if (
+      script &&
+      typeof script.dataset.cronoxApiBase === 'string' &&
+      script.dataset.cronoxApiBase.trim()
+    ) {
       return script.dataset.cronoxApiBase.trim();
     }
 
@@ -94,9 +98,8 @@
 
   const detectLocalhostPort = (fallbackPort = '3000') => {
     if (typeof window === 'undefined') return fallbackPort;
-    const raw = window.__CRONOX_BACKEND_PORT__ != null
-      ? String(window.__CRONOX_BACKEND_PORT__).trim()
-      : '';
+    const raw =
+      window.__CRONOX_BACKEND_PORT__ != null ? String(window.__CRONOX_BACKEND_PORT__).trim() : '';
     if (raw) return raw;
 
     if (typeof document !== 'undefined') {
@@ -148,7 +151,11 @@
       return safeJoin(protocol, hostname, backendPort);
     }
 
-    if (/^192\.168\./.test(hostname) || /^10\./.test(hostname) || /^172\.(1[6-9]|2[0-9]|3[0-1])\./.test(hostname)) {
+    if (
+      /^192\.168\./.test(hostname) ||
+      /^10\./.test(hostname) ||
+      /^172\.(1[6-9]|2[0-9]|3[0-1])\./.test(hostname)
+    ) {
       if (port) {
         return safeJoin(protocol, hostname, port);
       }
@@ -217,9 +224,7 @@
   const mapProduct = (product) => {
     if (!product) return null;
 
-    const images = Array.isArray(product.images)
-      ? product.images.map((img) => img?.url).filter(Boolean)
-      : [];
+    const images = Array.isArray(product.images) ? product.images.map((img) => img?.url).filter(Boolean) : [];
     const primaryImage = pickPrimaryImage(product.images, product.imageUrl || images[0] || '');
     const rawVariants = Array.isArray(product.variants) ? product.variants : [];
     const variants = rawVariants.map((variant) => mapVariant(variant, product.price));
@@ -276,17 +281,12 @@
     const product = variant.product || {};
     const priceCents = Number(item.priceAtAdd ?? variant.price ?? product.price ?? 0);
     const productImages = Array.isArray(product.images)
-      ? product.images
-          .map((img) => (typeof img?.url === 'string' ? { url: img.url } : null))
-          .filter(Boolean)
+      ? product.images.map((img) => (typeof img?.url === 'string' ? { url: img.url } : null)).filter(Boolean)
       : [];
-    const productImage =
-      product.imageUrl || pickPrimaryImage(product.images || []) || productImages[0]?.url || '';
+    const productImage = product.imageUrl || pickPrimaryImage(product.images || []) || productImages[0]?.url || '';
 
     const itemImages = Array.isArray(item.images)
-      ? item.images
-          .map((img) => (typeof img?.url === 'string' ? { url: img.url } : null))
-          .filter(Boolean)
+      ? item.images.map((img) => (typeof img?.url === 'string' ? { url: img.url } : null)).filter(Boolean)
       : [];
 
     return {
@@ -322,10 +322,7 @@
       ? cart.itemsCount
       : items.reduce((acc, item) => acc + (Number(item.qty) || 0), 0);
     const subtotalCents = Number(cart.subtotal ?? cart.subtotalCents ?? 0);
-    const currency =
-      cart.currency ||
-      items.find((item) => item?.product?.currency)?.product?.currency ||
-      'EUR';
+    const currency = cart.currency || items.find((item) => item?.product?.currency)?.product?.currency || 'EUR';
 
     return {
       id: cart.id,
@@ -338,9 +335,7 @@
   };
 
   const buildUrl = (path, query) => {
-    const normalized = path.startsWith('http')
-      ? path
-      : `${API_BASE}/${path.replace(/^\//, '')}`;
+    const normalized = path.startsWith('http') ? path : `${API_BASE}/${path.replace(/^\//, '')}`;
     const url = new URL(normalized);
     if (query && typeof query === 'object') {
       Object.entries(query).forEach(([key, value]) => {
@@ -518,18 +513,12 @@
   api.getMe = async () => {
     try {
       const data = await request('/api/me');
-      // El backend devuelve directamente el usuario "seguro"
-      // (id, email, firstName, lastName, etc.)
       return data || null;
     } catch (error) {
-      // Si no hay sesión, devolvemos null sin montar error gordo
       if (error && (error.status === 401 || error.statusCode === 401 || error.status === 404)) {
         return null;
       }
-
-      const message =
-        (error && error.message) ||
-        'Error obteniendo el usuario autenticado';
+      const message = (error && error.message) || 'Error obteniendo el usuario autenticado';
       console.error('[CRONOX_API.getMe]', message, error);
       throw new Error(message);
     }
@@ -681,6 +670,27 @@
     return request(`/api/admin/users/${encodeURIComponent(id)}/audit-logs`);
   };
 
+  // ✅ FIX: Endpoints por usuario (Solicitudes / Pedidos)
+  adminApi.getUserRequests = async (id, query = {}) => {
+    if (id == null || id === '') {
+      const error = new Error('userId requerido');
+      error.status = 400;
+      error.endpoint = 'admin.getUserRequests';
+      throw error;
+    }
+    return request(`/api/admin/users/${encodeURIComponent(id)}/requests`, { query });
+  };
+
+  adminApi.getUserOrders = async (id, query = {}) => {
+    if (id == null || id === '') {
+      const error = new Error('userId requerido');
+      error.status = 400;
+      error.endpoint = 'admin.getUserOrders';
+      throw error;
+    }
+    return request(`/api/admin/users/${encodeURIComponent(id)}/orders`, { query });
+  };
+
   adminApi.listAdminOrders = async (query = {}) => {
     return request('/api/admin/orders', { query });
   };
@@ -734,7 +744,8 @@
   };
 
   // ===== FAVORITES =====
-  const normalizeProductId = (value) => { // [FAVORITES_FIX]
+  const normalizeProductId = (value) => {
+    // [FAVORITES_FIX]
     const num = Number(value);
     return Number.isFinite(num) ? num : null;
   };
@@ -758,7 +769,8 @@
     };
   };
 
-  api.getFavorites = async () => { // [FAVORITES_BACKEND_ONLY] [FAVORITES_FIX]
+  api.getFavorites = async () => {
+    // [FAVORITES_BACKEND_ONLY] [FAVORITES_FIX]
     const data = await request('/api/favorites');
     return Array.isArray(data)
       ? data.map((item) => ({
@@ -770,7 +782,8 @@
       : [];
   };
 
-  api.addFavorite = async (productId) => { // [FAVORITES_BACKEND_ONLY] [FAVORITES_FIX]
+  api.addFavorite = async (productId) => {
+    // [FAVORITES_BACKEND_ONLY] [FAVORITES_FIX]
     const normalizedId = normalizeProductId(productId);
     if (normalizedId == null) throw new Error('productId inválido para favoritos');
 
@@ -790,7 +803,8 @@
     });
   };
 
-  api.removeFavorite = async (productId) => { // [FAVORITES_BACKEND_ONLY] [FAVORITES_FIX]
+  api.removeFavorite = async (productId) => {
+    // [FAVORITES_BACKEND_ONLY] [FAVORITES_FIX]
     const normalizedId = normalizeProductId(productId);
     if (normalizedId == null) throw new Error('productId inválido para favoritos');
 
@@ -870,9 +884,7 @@
     return Array.isArray(data)
       ? data.map((method) => ({
           ...method,
-          priceLabel: formatCents(
-            method.priceCents ?? method.amountCents ?? method.price ?? 0,
-          ),
+          priceLabel: formatCents(method.priceCents ?? method.amountCents ?? method.price ?? 0),
         }))
       : [];
   };
@@ -892,9 +904,7 @@
     const methods = Array.isArray(data?.shippingMethods)
       ? data.shippingMethods.map((method) => {
           const rawPrice = Number(method.price ?? 0);
-          const priceCents = Number(
-            method.priceCents ?? method.amountCents ?? rawPrice ?? 0,
-          );
+          const priceCents = Number(method.priceCents ?? method.amountCents ?? rawPrice ?? 0);
           const amountCents = Number(method.amountCents ?? method.priceCents ?? rawPrice ?? priceCents);
           return {
             ...method,
@@ -915,7 +925,10 @@
           return method.code === selectedRaw.code;
         }
         return false;
-      }) || selectedRaw || methods[0] || null;
+      }) ||
+      selectedRaw ||
+      methods[0] ||
+      null;
 
     const totals = {
       subtotalCents: Number(data?.totals?.subtotalCents ?? 0),
@@ -998,15 +1011,9 @@
         priceLabel: basePriceLabel || formatPrice(priceValue),
         image: candidateImage || uniqueImages[0] || template.image || '',
         images: uniqueImages,
-        categories: Array.isArray(source.categories) && source.categories.length
-          ? source.categories
-          : template.categories || [],
-        sizes: Array.isArray(source.sizes) && source.sizes.length
-          ? source.sizes
-          : template.sizes || [],
-        colors: Array.isArray(source.colors) && source.colors.length
-          ? source.colors
-          : template.colors || [],
+        categories: Array.isArray(source.categories) && source.categories.length ? source.categories : template.categories || [],
+        sizes: Array.isArray(source.sizes) && source.sizes.length ? source.sizes : template.sizes || [],
+        colors: Array.isArray(source.colors) && source.colors.length ? source.colors : template.colors || [],
         color: source.color || template.color || '',
         desc: source.desc || template.desc || '',
       };
