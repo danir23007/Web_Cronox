@@ -15,6 +15,8 @@ import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/roles.decorator';
 import { AdminUsersService } from './admin-users.service';
 import { AdminUserQueryDto } from './dto/admin-user-query.dto';
+import { AdminUserOrdersQueryDto } from './dto/admin-user-orders-query.dto';
+import { AdminUserRequestsQueryDto } from './dto/admin-user-requests-query.dto';
 import { UpdateUserRoleDto } from './dto/update-user-role.dto';
 import { Role } from '@prisma/client';
 
@@ -48,5 +50,23 @@ export class AdminUsersController {
   @Roles(Role.SUPER_ADMIN, Role.MODERATOR)
   getUserAuditLogs(@Param('id', ParseIntPipe) id: number) {
     return this.usersService.getUserAuditLogs(id);
+  }
+
+  @Get(':id/requests')
+  @Roles(Role.SUPER_ADMIN, Role.MODERATOR)
+  getUserRequests(
+    @Param('id', ParseIntPipe) id: number,
+    @Query() query: AdminUserRequestsQueryDto,
+  ) {
+    return this.usersService.getUserRequests(id, query);
+  }
+
+  @Get(':id/orders')
+  @Roles(Role.SUPER_ADMIN, Role.MODERATOR)
+  getUserOrders(
+    @Param('id', ParseIntPipe) id: number,
+    @Query() query: AdminUserOrdersQueryDto,
+  ) {
+    return this.usersService.getUserOrders(id, query);
   }
 }

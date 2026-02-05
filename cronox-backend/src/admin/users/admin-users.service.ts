@@ -4,9 +4,17 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { OrderStatus, Prisma, Role, User } from '@prisma/client';
+import {
+  CircleUpgradeRequestStatus,
+  OrderStatus,
+  Prisma,
+  Role,
+  User,
+} from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AdminUserQueryDto } from './dto/admin-user-query.dto';
+import { AdminUserOrdersQueryDto } from './dto/admin-user-orders-query.dto';
+import { AdminUserRequestsQueryDto } from './dto/admin-user-requests-query.dto';
 import { ADMIN_ROLE_LIST, isAdminRole } from '../../common/roles.utils';
 
 const DEFAULT_PAGE_SIZE = 10;
@@ -17,6 +25,18 @@ const PAID_STATUSES: OrderStatus[] = [OrderStatus.PAID, OrderStatus.SHIPPED];
 type UserWithAddresses = Prisma.UserGetPayload<{
   include: { addresses: true };
 }>;
+
+type AdminUserRequestItem = {
+  id: number | string;
+  kind: '2-3' | '3-4';
+  status: CircleUpgradeRequestStatus;
+  fromCircle: number;
+  toCircle: number;
+  createdAt: string;
+  resolvedAt: string | null;
+  resolvedBy: { id: number; email?: string | null } | null;
+  reason: string | null;
+};
 
 @Injectable()
 export class AdminUsersService {
@@ -238,6 +258,152 @@ export class AdminUsersService {
     }));
   }
 
+  async getUserRequests(userId: number, query: AdminUserRequestsQueryDto) {
+    await this.assertUserExists(userId);
+
+    const page = query.page ?? 1;
+    const pageSize = Math.min(query.pageSize ?? DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE);
+    const sort = query.sort ?? 'createdAt';
+    const order = query.order ?? 'desc';
+    const status = query.status;
+
+    const kinds: Array<'2-3' | '3-4'> = query.kind ? [query.kind] : ['2-3', '3-4'];
+
+    const requests: AdminUserRequestItem[] = [];
+
+    if (kinds.includes('2-3')) {
+      const items = await this.prisma.circleUpgradeRequest.findMany({
+        where: {
+          userId,
+          fromCircle: 2,
+          toCircle: 3,
+          ...(status ? { status } : {}),
+        },
+        select: {
+          id: true,
+          status: true,
+          fromCircle: true,
+          toCircle: true,
+          createdAt: true,
+          reviewedAt: true,
+          processedAt: true,
+          approvedAt: true,
+          notes: true,
+          processedBy: { select: { id: true, email: true } },
+        },
+      });
+
+      requests.push(
+        ...items.map((item) => ({
+          id: item.id,
+          kind: '2-3',
+          status: item.status,
+          fromCircle: item.fromCircle,
+          toCircle: item.toCircle,
+          createdAt: item.createdAt.toISOString(),
+          resolvedAt: this.resolveRequestDate(item)?.toISOString() ?? null,
+          resolvedBy: item.processedBy
+            ? { id: item.processedBy.id, email: item.processedBy.email }
+            : null,
+          reason: item.notes ?? null,
+        })),
+      );
+    }
+
+    if (kinds.includes('3-4')) {
+      const items = await this.prisma.circleUpgradeRequest.findMany({
+        where: {
+          userId,
+          fromCircle: 3,
+          toCircle: 4,
+          ...(status ? { status } : {}),
+        },
+        select: {
+          id: true,
+          status: true,
+          fromCircle: true,
+          toCircle: true,
+          createdAt: true,
+          reviewedAt: true,
+          processedAt: true,
+          approvedAt: true,
+          notes: true,
+          processedBy: { select: { id: true, email: true } },
+        },
+      });
+
+      requests.push(
+        ...items.map((item) => ({
+          id: item.id,
+          kind: '3-4',
+          status: item.status,
+          fromCircle: item.fromCircle,
+          toCircle: item.toCircle,
+          createdAt: item.createdAt.toISOString(),
+          resolvedAt: this.resolveRequestDate(item)?.toISOString() ?? null,
+          resolvedBy: item.processedBy
+            ? { id: item.processedBy.id, email: item.processedBy.email }
+            : null,
+          reason: item.notes ?? null,
+        })),
+      );
+    }
+
+    const sorted = this.sortRequests(requests, sort, order);
+    const total = sorted.length;
+    const totalPages = Math.ceil(total / pageSize) || 1;
+    const start = (page - 1) * pageSize;
+    const items = sorted.slice(start, start + pageSize);
+
+    return {
+      items,
+      meta: {
+        page,
+        pageSize,
+        total,
+        totalPages,
+      },
+    };
+  }
+
+  async getUserOrders(userId: number, query: AdminUserOrdersQueryDto) {
+    await this.assertUserExists(userId);
+
+    const page = query.page ?? 1;
+    const pageSize = Math.min(query.pageSize ?? DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE);
+    const skip = (page - 1) * pageSize;
+
+    const [items, total] = await this.prisma.$transaction([
+      this.prisma.order.findMany({
+        where: { userId },
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take: pageSize,
+        include: { _count: { select: { items: true } } },
+      }),
+      this.prisma.order.count({ where: { userId } }),
+    ]);
+
+    const totalPages = Math.ceil(total / pageSize) || 1;
+
+    return {
+      items: items.map((order) => ({
+        id: order.id,
+        status: order.status,
+        totalCents: Math.round(order.total.toNumber() * 100),
+        currency: order.currency,
+        createdAt: order.createdAt.toISOString(),
+        itemsCount: order._count.items,
+      })),
+      meta: {
+        page,
+        pageSize,
+        total,
+        totalPages,
+      },
+    };
+  }
+
   private buildWhere(query: AdminUserQueryDto): Prisma.UserWhereInput {
     const where: Prisma.UserWhereInput = {};
     const search = query.q?.trim() || query.search?.trim();
@@ -315,5 +481,42 @@ export class AdminUsersService {
         updatedAt: address.updatedAt,
       })),
     };
+  }
+
+  private async assertUserExists(userId: number) {
+    const exists = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true },
+    });
+
+    if (!exists) {
+      throw new NotFoundException('User not found');
+    }
+  }
+
+  private resolveRequestDate(request: {
+    processedAt?: Date | null;
+    reviewedAt?: Date | null;
+    approvedAt?: Date | null;
+  }) {
+    return request.processedAt ?? request.reviewedAt ?? request.approvedAt ?? null;
+  }
+
+  private sortRequests(
+    items: AdminUserRequestItem[],
+    sort: AdminUserRequestsQueryDto['sort'],
+    order: AdminUserRequestsQueryDto['order'],
+  ) {
+    const direction = order === 'asc' ? 1 : -1;
+
+    return [...items].sort((a, b) => {
+      if (sort === 'status') {
+        return a.status.localeCompare(b.status) * direction;
+      }
+
+      const aTime = new Date(a.createdAt).getTime();
+      const bTime = new Date(b.createdAt).getTime();
+      return (aTime - bTime) * direction;
+    });
   }
 }
