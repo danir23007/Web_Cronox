@@ -93,65 +93,71 @@ export class AdminUsersService {
       throw new NotFoundException('User not found');
     }
 
-    const [ordersCount, totalSpent, requestsCount, recentRequests, recentOrders, codesUsed] =
-      await this.prisma.$transaction([
-        this.prisma.order.count({ where: { userId: id } }),
-        this.prisma.order.aggregate({
-          where: { userId: id, status: { in: PAID_STATUSES } },
-          _sum: { total: true },
-        }),
-        this.prisma.circleUpgradeRequest.count({ where: { userId: id } }),
-        this.prisma.circleUpgradeRequest.findMany({
-          where: { userId: id },
-          orderBy: { createdAt: 'desc' },
-          take: RECENT_ITEMS_LIMIT,
-          select: {
-            id: true,
-            fromCircle: true,
-            toCircle: true,
-            status: true,
-            socialNetwork: true,
-            username: true,
-            requestNumber: true,
-            createdAt: true,
-            updatedAt: true,
-            reviewedAt: true,
-            approvedAt: true,
-            processedAt: true,
-          },
-        }),
-        this.prisma.order.findMany({
-          where: { userId: id },
-          orderBy: { createdAt: 'desc' },
-          take: RECENT_ITEMS_LIMIT,
-          select: {
-            id: true,
-            status: true,
-            total: true,
-            currency: true,
-            discountCents: true,
-            promoCodeCode: true,
-            createdAt: true,
-            updatedAt: true,
-          },
-        }),
-        this.prisma.promoCodeRedemption.findMany({
-          where: { userId: id },
-          orderBy: { redeemedAt: 'desc' },
-          take: RECENT_ITEMS_LIMIT,
-          select: {
-            redeemedAt: true,
-            orderId: true,
-            promoCode: {
-              select: {
-                code: true,
-                type: true,
-                value: true,
-              },
+    const [
+      ordersCount,
+      totalSpent,
+      requestsCount,
+      recentRequests,
+      recentOrders,
+      codesUsed,
+    ] = await this.prisma.$transaction([
+      this.prisma.order.count({ where: { userId: id } }),
+      this.prisma.order.aggregate({
+        where: { userId: id, status: { in: PAID_STATUSES } },
+        _sum: { total: true },
+      }),
+      this.prisma.circleUpgradeRequest.count({ where: { userId: id } }),
+      this.prisma.circleUpgradeRequest.findMany({
+        where: { userId: id },
+        orderBy: { createdAt: 'desc' },
+        take: RECENT_ITEMS_LIMIT,
+        select: {
+          id: true,
+          fromCircle: true,
+          toCircle: true,
+          status: true,
+          socialNetwork: true,
+          username: true,
+          requestNumber: true,
+          createdAt: true,
+          updatedAt: true,
+          reviewedAt: true,
+          approvedAt: true,
+          processedAt: true,
+        },
+      }),
+      this.prisma.order.findMany({
+        where: { userId: id },
+        orderBy: { createdAt: 'desc' },
+        take: RECENT_ITEMS_LIMIT,
+        select: {
+          id: true,
+          status: true,
+          total: true,
+          currency: true,
+          discountCents: true,
+          promoCodeCode: true,
+          createdAt: true,
+          updatedAt: true,
+        },
+      }),
+      this.prisma.promoCodeRedemption.findMany({
+        where: { userId: id },
+        orderBy: { redeemedAt: 'desc' },
+        take: RECENT_ITEMS_LIMIT,
+        select: {
+          redeemedAt: true,
+          orderId: true,
+          promoCode: {
+            select: {
+              code: true,
+              type: true,
+              value: true,
             },
           },
-        }),
-      ]);
+        },
+      }),
+    ]);
 
     const username =
       user.name ||
@@ -296,7 +302,7 @@ export class AdminUsersService {
       requests.push(
         ...items.map((item) => ({
           id: item.id,
-          kind: '2-3',
+          kind: '2-3' as const,
           status: item.status,
           fromCircle: item.fromCircle,
           toCircle: item.toCircle,
@@ -335,7 +341,7 @@ export class AdminUsersService {
       requests.push(
         ...items.map((item) => ({
           id: item.id,
-          kind: '3-4',
+          kind: '3-4' as const,
           status: item.status,
           fromCircle: item.fromCircle,
           toCircle: item.toCircle,
