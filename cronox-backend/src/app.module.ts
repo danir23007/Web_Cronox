@@ -10,7 +10,7 @@ import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { AuthModule } from './auth/auth.module';
 import { CartModule } from './cart/cart.module';
-import { EmailModule } from './common/email/email.module';
+import { EmailModule } from './email/email.module';
 import { AppThrottlerGuard } from './common/guards/app-throttler.guard';
 import { PrismaModule } from './prisma/prisma.module';
 import { ProductModule } from './products/product.module';
