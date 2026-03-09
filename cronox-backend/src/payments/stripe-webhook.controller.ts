@@ -10,6 +10,8 @@ import {
 import { ApiExcludeEndpoint, ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { Request } from 'express';
 import Stripe from 'stripe';
+import { EmailService } from '../email/email.service';
+import { EmailType } from '../email/email.types';
 import { OrdersService } from '../orders/orders.service';
 import { StripeService } from './stripe.service';
 
@@ -21,6 +23,7 @@ export class StripeWebhookController {
   constructor(
     private readonly stripeService: StripeService,
     private readonly ordersService: OrdersService,
+    private readonly emailService: EmailService,
   ) {}
 
   @Post()
@@ -120,6 +123,32 @@ export class StripeWebhookController {
       },
       { updateStock: true },
     );
+
+    const customerEmail =
+      paymentIntent.receipt_email ??
+      (typeof metadata.customerEmail === 'string'
+        ? metadata.customerEmail
+        : undefined);
+    const orderId =
+      typeof order.id === 'number' || typeof order.id === 'string'
+        ? String(order.id)
+        : undefined;
+
+    if (customerEmail && orderId) {
+      await this.emailService.send({
+        type: EmailType.ORDER_CONFIRMATION,
+        to: customerEmail,
+        subject: 'CRONOX · Confirmación de pedido',
+        templateData: {
+          orderId,
+          customerEmail,
+        },
+      });
+    } else {
+      this.logger.warn(
+        `No se pudo enviar email de confirmación para PaymentIntent ${paymentIntent.id}: customerEmail=${customerEmail ?? 'N/A'} orderId=${orderId ?? 'N/A'}`,
+      );
+    }
 
     this.logger.log(`Pedido confirmado para PaymentIntent ${paymentIntent.id}`); // [WEBHOOK]
 
