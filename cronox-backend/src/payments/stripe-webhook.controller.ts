@@ -135,15 +135,22 @@ export class StripeWebhookController {
         : undefined;
 
     if (customerEmail && orderId) {
-      await this.emailService.send({
-        type: EmailType.ORDER_CONFIRMATION,
-        to: customerEmail,
-        subject: 'CRONOX · Confirmación de pedido',
-        templateData: {
-          orderId,
-          customerEmail,
-        },
-      });
+      try {
+        await this.emailService.send({
+          type: EmailType.ORDER_CONFIRMATION,
+          to: customerEmail,
+          subject: 'CRONOX · Confirmación de pedido',
+          templateData: {
+            orderId,
+            customerEmail,
+          },
+        });
+      } catch (error) {
+        this.logger.error(
+          `Error enviando email de confirmación para PaymentIntent ${paymentIntent.id}`,
+          error instanceof Error ? error.stack : String(error),
+        );
+      }
     } else {
       this.logger.warn(
         `No se pudo enviar email de confirmación para PaymentIntent ${paymentIntent.id}: customerEmail=${customerEmail ?? 'N/A'} orderId=${orderId ?? 'N/A'}`,
