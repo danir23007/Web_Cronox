@@ -1,13 +1,150 @@
 <!doctype html>
 <html lang="es">
-  <body style="margin:0;background:#0b0b0d;color:#f5f5f5;font-family:Arial,sans-serif;">
-    <div style="max-width:640px;margin:24px auto;padding:24px;border:1px solid #24242a;border-radius:12px;background:#121218;">
-      <h1 style="margin:0 0 12px;color:#ffffff;font-size:22px;">{{title}}</h1>
-      <p style="margin:0 0 12px;color:#c7c7cf;">Hemos recibido tu pedido correctamente.</p>
-      <p style="margin:0 0 8px;color:#d8d8e0;"><strong>ID de pedido:</strong> {{orderId}}</p>
-      <p style="margin:0 0 16px;color:#d8d8e0;"><strong>Email cliente:</strong> {{customerEmail}}</p>
-      <p style="margin:0;color:#9a9aa5;line-height:1.5;">{{message}}</p>
-      <p style="margin:16px 0 0;color:#6f6f7c;font-size:12px;">CRONOX Orders</p>
-    </div>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Confirmación de pedido {{orderId}}</title>
+  </head>
+  <body style="margin:0;padding:0;background-color:#f5f5f7;font-family:Arial,Helvetica,sans-serif;color:#111111;">
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background-color:#f5f5f7;">
+      <tr>
+        <td align="center" style="padding:24px 12px;">
+          <table role="presentation" width="640" cellspacing="0" cellpadding="0" border="0" style="width:100%;max-width:640px;background-color:#ffffff;border:1px solid #e5e5e5;">
+            <tr>
+              <td style="padding:28px 28px 12px 28px;border-bottom:1px solid #efefef;">
+                <p style="margin:0 0 8px 0;font-size:12px;letter-spacing:1px;color:#6b6b6b;text-transform:uppercase;">CRONOX</p>
+                <h1 style="margin:0;font-size:24px;line-height:1.25;color:#111111;">Pedido confirmado · #{{orderId}}</h1>
+                <p style="margin:12px 0 0 0;font-size:14px;line-height:1.6;color:#4b4b4b;">{{message}}</p>
+              </td>
+            </tr>
+
+            <tr>
+              <td style="padding:20px 28px 8px 28px;">
+                <table role="presentation" cellspacing="0" cellpadding="0" border="0">
+                  <tr>
+                    <td style="padding-right:10px;">
+                      <a href="{{orderUrl}}" style="display:inline-block;background-color:#111111;color:#ffffff;text-decoration:none;font-size:14px;font-weight:bold;padding:12px 18px;border:1px solid #111111;">Ver tu pedido</a>
+                    </td>
+                    <td>
+                      <a href="{{storeUrl}}" style="display:inline-block;background-color:#ffffff;color:#111111;text-decoration:none;font-size:14px;font-weight:bold;padding:12px 18px;border:1px solid #111111;">Visita nuestra tienda</a>
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+
+            <tr>
+              <td style="padding:20px 28px 8px 28px;">
+                <h2 style="margin:0 0 12px 0;font-size:18px;color:#111111;">Resumen del pedido</h2>
+                <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="border:1px solid #ececec;">
+                  {{#each items}}
+                  <tr>
+                    <td style="padding:14px;border-bottom:1px solid #ececec;" width="84" valign="top">
+                      {{#if imageUrl}}
+                        <img src="{{imageUrl}}" alt="{{name}}" width="72" height="72" style="display:block;border:0;outline:none;text-decoration:none;width:72px;height:72px;object-fit:cover;background-color:#f2f2f2;" />
+                      {{else}}
+                        <div style="width:72px;height:72px;background-color:#f2f2f2;"></div>
+                      {{/if}}
+                    </td>
+                    <td style="padding:14px;border-bottom:1px solid #ececec;" valign="top">
+                      <p style="margin:0;font-size:14px;font-weight:bold;color:#111111;">{{name}}</p>
+                      {{#if variantName}}
+                        <p style="margin:6px 0 0 0;font-size:13px;color:#555555;">{{variantName}}</p>
+                      {{/if}}
+                      <p style="margin:6px 0 0 0;font-size:13px;color:#555555;">Cantidad: x{{quantity}}</p>
+                      {{#if unitPriceFormatted}}
+                        <p style="margin:6px 0 0 0;font-size:13px;color:#555555;">Precio unidad: {{unitPriceFormatted}}</p>
+                      {{/if}}
+                    </td>
+                    <td style="padding:14px;border-bottom:1px solid #ececec;" valign="top" align="right">
+                      <p style="margin:0;font-size:14px;font-weight:bold;color:#111111;">{{lineTotalFormatted}}</p>
+                    </td>
+                  </tr>
+                  {{/each}}
+                </table>
+              </td>
+            </tr>
+
+            <tr>
+              <td style="padding:8px 28px 8px 28px;">
+                <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="border:1px solid #ececec;">
+                  <tr>
+                    <td style="padding:10px 14px;font-size:14px;color:#444444;">Subtotal</td>
+                    <td style="padding:10px 14px;font-size:14px;color:#111111;" align="right">{{subtotalFormatted}}</td>
+                  </tr>
+                  <tr>
+                    <td style="padding:10px 14px;font-size:14px;color:#444444;">Descuento</td>
+                    <td style="padding:10px 14px;font-size:14px;color:#111111;" align="right">-{{discountFormatted}}</td>
+                  </tr>
+                  <tr>
+                    <td style="padding:10px 14px;font-size:14px;color:#444444;">Envío</td>
+                    <td style="padding:10px 14px;font-size:14px;color:#111111;" align="right">{{shippingFormatted}}</td>
+                  </tr>
+                  <tr>
+                    <td style="padding:10px 14px;font-size:14px;color:#444444;">Impuestos</td>
+                    <td style="padding:10px 14px;font-size:14px;color:#111111;" align="right">{{taxesFormatted}}</td>
+                  </tr>
+                  <tr>
+                    <td style="padding:12px 14px;font-size:16px;font-weight:bold;color:#111111;border-top:1px solid #ececec;">Total</td>
+                    <td style="padding:12px 14px;font-size:16px;font-weight:bold;color:#111111;border-top:1px solid #ececec;" align="right">{{totalFormatted}}</td>
+                  </tr>
+                  {{#if savingsFormatted}}
+                  <tr>
+                    <td style="padding:10px 14px;font-size:13px;color:#0b6b2a;" colspan="2">Has ahorrado {{savingsFormatted}} en este pedido.</td>
+                  </tr>
+                  {{/if}}
+                </table>
+              </td>
+            </tr>
+
+            <tr>
+              <td style="padding:12px 28px 24px 28px;">
+                <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
+                  <tr>
+                    <td width="50%" valign="top" style="padding-right:10px;">
+                      <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="border:1px solid #ececec;">
+                        <tr>
+                          <td style="padding:12px 14px;font-size:14px;font-weight:bold;color:#111111;border-bottom:1px solid #ececec;">Dirección de envío</td>
+                        </tr>
+                        <tr>
+                          <td style="padding:12px 14px;font-size:13px;line-height:1.6;color:#4d4d4d;">
+                            {{#if shippingAddress.fullName}}<div>{{shippingAddress.fullName}}</div>{{/if}}
+                            {{#if shippingAddress.line1}}<div>{{shippingAddress.line1}}</div>{{/if}}
+                            {{#if shippingAddress.line2}}<div>{{shippingAddress.line2}}</div>{{/if}}
+                            <div>
+                              {{#if shippingAddress.postalCode}}{{shippingAddress.postalCode}} {{/if}}{{shippingAddress.city}}
+                              {{#if shippingAddress.state}}, {{shippingAddress.state}}{{/if}}
+                            </div>
+                            {{#if shippingAddress.country}}<div>{{shippingAddress.country}}</div>{{/if}}
+                          </td>
+                        </tr>
+                      </table>
+                    </td>
+                    <td width="50%" valign="top" style="padding-left:10px;">
+                      <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="border:1px solid #ececec;">
+                        <tr>
+                          <td style="padding:12px 14px;font-size:14px;font-weight:bold;color:#111111;border-bottom:1px solid #ececec;">Método de envío</td>
+                        </tr>
+                        <tr>
+                          <td style="padding:12px 14px;font-size:13px;line-height:1.6;color:#4d4d4d;">
+                            {{#if shippingMethod}}{{shippingMethod}}{{else}}Envío estándar{{/if}}
+                          </td>
+                        </tr>
+                      </table>
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+
+            <tr>
+              <td style="padding:16px 28px 24px 28px;background-color:#fafafa;border-top:1px solid #efefef;">
+                <p style="margin:0;font-size:12px;line-height:1.6;color:#7a7a7a;">Has recibido este email porque realizaste un pedido en CRONOX con {{customerEmail}}.</p>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
   </body>
 </html>

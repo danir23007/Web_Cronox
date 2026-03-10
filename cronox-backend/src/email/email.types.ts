@@ -26,6 +26,38 @@ export interface EmailSendOptions {
   templateData?: Record<string, unknown>;
 }
 
+export type OrderConfirmationEmailTemplateData = {
+  orderId: string;
+  customerEmail: string;
+  message: string;
+  orderUrl: string;
+  storeUrl: string;
+  subtotalFormatted: string;
+  discountFormatted: string;
+  shippingFormatted: string;
+  taxesFormatted: string;
+  totalFormatted: string;
+  savingsFormatted?: string | null;
+  shippingMethod?: string | null;
+  shippingAddress: {
+    fullName?: string | null;
+    line1?: string | null;
+    line2?: string | null;
+    city?: string | null;
+    state?: string | null;
+    postalCode?: string | null;
+    country?: string | null;
+  };
+  items: Array<{
+    name: string;
+    variantName?: string | null;
+    quantity: number;
+    imageUrl?: string | null;
+    unitPriceFormatted?: string | null;
+    lineTotalFormatted: string;
+  }>;
+};
+
 export interface EmailSendResult {
   messageId: string;
 }

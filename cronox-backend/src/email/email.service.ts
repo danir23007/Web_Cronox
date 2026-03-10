@@ -1,4 +1,5 @@
 import { Injectable, InternalServerErrorException, Logger } from '@nestjs/common';
+import Handlebars from 'handlebars';
 import { readFile } from 'fs/promises';
 import { join } from 'path';
 import { SentMessageInfo } from 'nodemailer';
@@ -18,7 +19,7 @@ import {
 export class EmailService {
   private readonly logger = new Logger(EmailService.name);
   private readonly config = loadEmailConfig();
-  private readonly templateCache = new Map<EmailTemplate, string>();
+  private readonly templateCache = new Map<EmailTemplate, Handlebars.TemplateDelegate>();
 
   constructor(private readonly transportFactory: MailTransportFactory) {}
 
@@ -80,14 +81,13 @@ export class EmailService {
     template: EmailTemplate,
     data: Record<string, unknown>,
   ): Promise<string> {
-    const source = await this.loadTemplate(template);
-    return source.replace(/{{\s*([\w.]+)\s*}}/g, (_full, key: string) => {
-      const value = data[key];
-      return value === null || value === undefined ? '' : String(value);
-    });
+    const compiledTemplate = await this.loadTemplate(template);
+    return compiledTemplate(data);
   }
 
-  private async loadTemplate(template: EmailTemplate): Promise<string> {
+  private async loadTemplate(
+    template: EmailTemplate,
+  ): Promise<Handlebars.TemplateDelegate> {
     const cached = this.templateCache.get(template);
     if (cached) {
       return cached;
@@ -102,8 +102,9 @@ export class EmailService {
     for (const templatePath of templatePaths) {
       try {
         const content = await readFile(templatePath, 'utf8');
-        this.templateCache.set(template, content);
-        return content;
+        const compiled = Handlebars.compile(content);
+        this.templateCache.set(template, compiled);
+        return compiled;
       } catch {
         // seguimos con el siguiente path
       }
