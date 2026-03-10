@@ -12,7 +12,9 @@ import type { Request } from 'express';
 import Stripe from 'stripe';
 import { EmailService } from '../email/email.service';
 import { EmailType } from '../email/email.types';
+import { OrderConfirmationEmailMapper } from '../email/order-confirmation-email.mapper';
 import { OrdersService } from '../orders/orders.service';
+import { PrismaService } from '../prisma/prisma.service';
 import { StripeService } from './stripe.service';
 
 @ApiTags('Payments / Stripe')
@@ -24,6 +26,8 @@ export class StripeWebhookController {
     private readonly stripeService: StripeService,
     private readonly ordersService: OrdersService,
     private readonly emailService: EmailService,
+    private readonly prisma: PrismaService,
+    private readonly orderConfirmationEmailMapper: OrderConfirmationEmailMapper,
   ) {}
 
   @Post()
@@ -131,20 +135,69 @@ export class StripeWebhookController {
         : undefined);
     const orderId =
       typeof order.id === 'number' || typeof order.id === 'string'
-        ? String(order.id)
+        ? Number(order.id)
         : undefined;
 
     if (customerEmail && orderId) {
       try {
-        await this.emailService.send({
-          type: EmailType.ORDER_CONFIRMATION,
-          to: customerEmail,
-          subject: 'CRONOX · Confirmación de pedido',
-          templateData: {
-            orderId,
-            customerEmail,
+        const orderForEmail = await this.prisma.order.findUnique({
+          where: { id: orderId },
+          include: {
+            user: {
+              select: {
+                email: true,
+              },
+            },
+            shippingMethod: {
+              select: {
+                label: true,
+                code: true,
+              },
+            },
+            items: {
+              include: {
+                product: {
+                  select: {
+                    name: true,
+                    slug: true,
+                    imageUrl: true,
+                    images: {
+                      select: {
+                        url: true,
+                        isPrimary: true,
+                        sortOrder: true,
+                      },
+                      orderBy: [
+                        { isPrimary: 'desc' },
+                        { sortOrder: 'asc' },
+                        { id: 'asc' },
+                      ],
+                    },
+                    variants: {
+                      select: {
+                        size: true,
+                      },
+                    },
+                  },
+                },
+              },
+            },
           },
         });
+
+        if (!orderForEmail) {
+          this.logger.warn(`No se encontró pedido ${orderId} para email de confirmación`);
+        } else {
+          const templateData = this.orderConfirmationEmailMapper.map(orderForEmail);
+          templateData.customerEmail = customerEmail;
+
+          await this.emailService.send({
+            type: EmailType.ORDER_CONFIRMATION,
+            to: customerEmail,
+            subject: 'CRONOX · Confirmación de pedido',
+            templateData,
+          });
+        }
       } catch (error) {
         this.logger.error(
           `Error enviando email de confirmación para PaymentIntent ${paymentIntent.id}`,
