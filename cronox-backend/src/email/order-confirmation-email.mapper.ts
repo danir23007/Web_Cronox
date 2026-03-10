@@ -3,45 +3,48 @@ import { Prisma } from '@prisma/client';
 import { Decimal } from '@prisma/client/runtime/library';
 import { OrderConfirmationEmailTemplateData } from './email.types';
 
-type OrderForConfirmationEmail = Prisma.OrderGetPayload<{
+export const orderForConfirmationEmailInclude = {
   include: {
     user: {
       select: {
-        email: true;
-      };
-    };
+        email: true,
+      },
+    },
     shippingMethod: {
       select: {
-        label: true;
-        code: true;
-      };
-    };
+        name: true,
+      },
+    },
     items: {
       include: {
         product: {
           select: {
-            name: true;
-            slug: true;
-            imageUrl: true;
+            name: true,
+            slug: true,
+            imageUrl: true,
             images: {
               select: {
-                url: true;
-                isPrimary: true;
-                sortOrder: true;
-              };
-              orderBy: [{ isPrimary: 'desc' }, { sortOrder: 'asc' }, { id: 'asc' }];
-            };
+                url: true,
+                isPrimary: true,
+                sortOrder: true,
+              },
+              orderBy: [{ isPrimary: 'desc' }, { sortOrder: 'asc' }, { id: 'asc' }],
+            },
             variants: {
               select: {
-                size: true;
-              };
-            };
-          };
-        };
-      };
-    };
-  };
-}>;
+                size: true,
+              },
+            },
+          },
+        },
+      },
+    },
+  },
+} satisfies Prisma.OrderDefaultArgs;
+
+export type OrderForConfirmationEmail = Prisma.OrderGetPayload<
+  typeof orderForConfirmationEmailInclude
+>;
 
 @Injectable()
 export class OrderConfirmationEmailMapper {
@@ -73,8 +76,7 @@ export class OrderConfirmationEmailMapper {
       totalFormatted: this.formatCurrencyFromCents(totalCents),
       savingsFormatted:
         savingsCents > 0 ? this.formatCurrencyFromCents(savingsCents) : null,
-      shippingMethod:
-        order.shippingMethod?.label ?? order.shippingMethodCode ?? null,
+      shippingMethod: this.resolveShippingMethod(order),
       shippingAddress,
       items: order.items.map((item) => {
         const variantName = this.resolveVariantName(item);
@@ -90,6 +92,20 @@ export class OrderConfirmationEmailMapper {
         };
       }),
     };
+  }
+
+  private resolveShippingMethod(order: OrderForConfirmationEmail): string | null {
+    const methodName = order.shippingMethod?.name?.trim();
+    if (methodName) {
+      return methodName;
+    }
+
+    const methodCode = order.shippingMethodCode?.trim();
+    if (methodCode) {
+      return methodCode;
+    }
+
+    return order.shippingCost > 0 ? 'Envío a domicilio' : 'Sin gastos de envío';
   }
 
   private resolveStorefrontUrl(): string {
