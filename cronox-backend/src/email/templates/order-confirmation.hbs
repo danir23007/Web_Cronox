@@ -1,148 +1,355 @@
 <!doctype html>
 <html lang="es">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Confirmación de pedido {{orderId}}</title>
-  </head>
-  <body style="margin:0;padding:0;background-color:#f5f5f7;font-family:Arial,Helvetica,sans-serif;color:#111111;">
-    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background-color:#f5f5f7;">
+  <body style="margin:0;padding:0;background:#f3f3f1;-webkit-text-size-adjust:100%;-ms-text-size-adjust:100%;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;border-collapse:collapse;background:#f3f3f1;margin:0;padding:0;">
       <tr>
         <td align="center" style="padding:24px 12px;">
-          <table role="presentation" width="640" cellspacing="0" cellpadding="0" border="0" style="width:100%;max-width:640px;background-color:#ffffff;border:1px solid #e5e5e5;">
-            <tr>
-              <td style="padding:28px 28px 12px 28px;border-bottom:1px solid #efefef;">
-                <p style="margin:0 0 8px 0;font-size:12px;letter-spacing:1px;color:#6b6b6b;text-transform:uppercase;">CRONOX</p>
-                <h1 style="margin:0;font-size:24px;line-height:1.25;color:#111111;">Pedido confirmado · #{{orderId}}</h1>
-                <p style="margin:12px 0 0 0;font-size:14px;line-height:1.6;color:#4b4b4b;">{{message}}</p>
-              </td>
-            </tr>
 
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;max-width:640px;border-collapse:collapse;background:#f3f3f1;">
+
+            <!-- HERO BLOCK -->
             <tr>
-              <td style="padding:20px 28px 8px 28px;">
-                <table role="presentation" cellspacing="0" cellpadding="0" border="0">
+              <td style="background:#f7f7f5;border:1px solid #ebebe7;padding:30px 26px 34px 26px;">
+
+                <!-- HEADER -->
+                <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;border-collapse:collapse;">
                   <tr>
-                    <td style="padding-right:10px;">
-                      <a href="{{orderUrl}}" style="display:inline-block;background-color:#111111;color:#ffffff;text-decoration:none;font-size:14px;font-weight:bold;padding:12px 18px;border:1px solid #111111;">Ver tu pedido</a>
+                    <td valign="top" align="left" style="padding:0 12px 18px 0;">
+                       <div style="font-family:Georgia,'Times New Roman',serif;font-size:34px;line-height:34px;font-weight:700;color:#000000;letter-spacing:0.3px;">
+                        CRONOX
+                      </div>
                     </td>
-                    <td>
-                      <a href="{{storeUrl}}" style="display:inline-block;background-color:#ffffff;color:#111111;text-decoration:none;font-size:14px;font-weight:bold;padding:12px 18px;border:1px solid #111111;">Visita nuestra tienda</a>
+
+                    <td valign="top" align="right" style="padding:2px 0 18px 12px;">
+                      <div style="font-family:Arial,Helvetica,sans-serif;font-size:11px;line-height:15px;color:#8c8c8c;text-transform:uppercase;letter-spacing:0.8px;">
+                        Pedido n.º
+                      </div>
+                      <div style="font-family:Arial,Helvetica,sans-serif;font-size:12px;line-height:16px;color:#777777;">
+                        {{orderId}}
+                      </div>
                     </td>
                   </tr>
                 </table>
-              </td>
-            </tr>
 
-            <tr>
-              <td style="padding:20px 28px 8px 28px;">
-                <h2 style="margin:0 0 12px 0;font-size:18px;color:#111111;">Resumen del pedido</h2>
-                <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="border:1px solid #ececec;">
-                  {{#each items}}
+                <!-- TITLE -->
+                <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;border-collapse:collapse;">
                   <tr>
-                    <td style="padding:14px;border-bottom:1px solid #ececec;" width="84" valign="top">
-                      {{#if imageUrl}}
-                        <img src="{{imageUrl}}" alt="{{name}}" width="72" height="72" style="display:block;border:0;outline:none;text-decoration:none;width:72px;height:72px;object-fit:cover;background-color:#f2f2f2;" />
-                      {{else}}
-                        <div style="width:72px;height:72px;background-color:#f2f2f2;"></div>
-                      {{/if}}
-                    </td>
-                    <td style="padding:14px;border-bottom:1px solid #ececec;" valign="top">
-                      <p style="margin:0;font-size:14px;font-weight:bold;color:#111111;">{{name}}</p>
-                      {{#if variantName}}
-                        <p style="margin:6px 0 0 0;font-size:13px;color:#555555;">{{variantName}}</p>
-                      {{/if}}
-                      <p style="margin:6px 0 0 0;font-size:13px;color:#555555;">Cantidad: x{{quantity}}</p>
-                      {{#if unitPriceFormatted}}
-                        <p style="margin:6px 0 0 0;font-size:13px;color:#555555;">Precio unidad: {{unitPriceFormatted}}</p>
-                      {{/if}}
-                    </td>
-                    <td style="padding:14px;border-bottom:1px solid #ececec;" valign="top" align="right">
-                      <p style="margin:0;font-size:14px;font-weight:bold;color:#111111;">{{lineTotalFormatted}}</p>
+                    <td style="padding:0 0 16px 0;">
+                      <div style="font-family:Arial,Helvetica,sans-serif;font-size:17px;line-height:27px;color:#111111;font-weight:400;">
+                        Gracias por visitar Cronox
+                      </div>
                     </td>
                   </tr>
-                  {{/each}}
                 </table>
-              </td>
-            </tr>
 
-            <tr>
-              <td style="padding:8px 28px 8px 28px;">
-                <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="border:1px solid #ececec;">
+                <!-- INTRO -->
+                <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;border-collapse:collapse;">
                   <tr>
-                    <td style="padding:10px 14px;font-size:14px;color:#444444;">Subtotal</td>
-                    <td style="padding:10px 14px;font-size:14px;color:#111111;" align="right">{{subtotalFormatted}}</td>
+                    <td style="padding:0 0 12px 0;">
+                      <div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:22px;color:#6e6e6e;">
+                        ¡Agradecemos que formes parte de esto! Tu paquete se está preparando y te llegará muy pronto. ☽
+                      </div>
+                    </td>
                   </tr>
+
                   <tr>
-                    <td style="padding:10px 14px;font-size:14px;color:#444444;">Descuento</td>
-                    <td style="padding:10px 14px;font-size:14px;color:#111111;" align="right">-{{discountFormatted}}</td>
+                    <td style="padding:0 0 14px 0;">
+                      <div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:22px;color:#6e6e6e;">
+                        Te avisaremos cuando esté en camino. ✧
+                      </div>
+                    </td>
                   </tr>
+
+                  {{#if message}}
                   <tr>
-                    <td style="padding:10px 14px;font-size:14px;color:#444444;">Envío</td>
-                    <td style="padding:10px 14px;font-size:14px;color:#111111;" align="right">{{shippingFormatted}}</td>
-                  </tr>
-                  <tr>
-                    <td style="padding:10px 14px;font-size:14px;color:#444444;">Impuestos</td>
-                    <td style="padding:10px 14px;font-size:14px;color:#111111;" align="right">{{taxesFormatted}}</td>
-                  </tr>
-                  <tr>
-                    <td style="padding:12px 14px;font-size:16px;font-weight:bold;color:#111111;border-top:1px solid #ececec;">Total</td>
-                    <td style="padding:12px 14px;font-size:16px;font-weight:bold;color:#111111;border-top:1px solid #ececec;" align="right">{{totalFormatted}}</td>
-                  </tr>
-                  {{#if savingsFormatted}}
-                  <tr>
-                    <td style="padding:10px 14px;font-size:13px;color:#0b6b2a;" colspan="2">Has ahorrado {{savingsFormatted}} en este pedido.</td>
+                    <td style="padding:0 0 16px 0;">
+                      <div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:22px;color:#6e6e6e;">
+                        {{message}}
+                      </div>
+                    </td>
                   </tr>
                   {{/if}}
                 </table>
-              </td>
-            </tr>
 
-            <tr>
-              <td style="padding:12px 28px 24px 28px;">
-                <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
+                <!-- CTA -->
+                <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;">
                   <tr>
-                    <td width="50%" valign="top" style="padding-right:10px;">
-                      <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="border:1px solid #ececec;">
-                        <tr>
-                          <td style="padding:12px 14px;font-size:14px;font-weight:bold;color:#111111;border-bottom:1px solid #ececec;">Dirección de envío</td>
-                        </tr>
-                        <tr>
-                          <td style="padding:12px 14px;font-size:13px;line-height:1.6;color:#4d4d4d;">
-                            {{#if shippingAddress.fullName}}<div>{{shippingAddress.fullName}}</div>{{/if}}
-                            {{#if shippingAddress.line1}}<div>{{shippingAddress.line1}}</div>{{/if}}
-                            {{#if shippingAddress.line2}}<div>{{shippingAddress.line2}}</div>{{/if}}
-                            <div>
-                              {{#if shippingAddress.postalCode}}{{shippingAddress.postalCode}} {{/if}}{{shippingAddress.city}}
-                              {{#if shippingAddress.state}}, {{shippingAddress.state}}{{/if}}
-                            </div>
-                            {{#if shippingAddress.country}}<div>{{shippingAddress.country}}</div>{{/if}}
-                          </td>
-                        </tr>
-                      </table>
+                    <td style="padding:0 14px 0 0;">
+                      <a href="{{orderUrl}}" style="display:inline-block;background:#060606;color:#ffffff;text-decoration:none;font-family:Arial,Helvetica,sans-serif;font-size:13px;line-height:13px;padding:16px 22px;border-radius:2px;">
+                        Ver tu pedido
+                      </a>
                     </td>
-                    <td width="50%" valign="top" style="padding-left:10px;">
-                      <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="border:1px solid #ececec;">
-                        <tr>
-                          <td style="padding:12px 14px;font-size:14px;font-weight:bold;color:#111111;border-bottom:1px solid #ececec;">Método de envío</td>
-                        </tr>
-                        <tr>
-                          <td style="padding:12px 14px;font-size:13px;line-height:1.6;color:#4d4d4d;">
-                            {{#if shippingMethod}}{{shippingMethod}}{{else}}Envío estándar{{/if}}
-                          </td>
-                        </tr>
-                      </table>
+
+                    <td style="padding:0;">
+                      <a href="{{storeUrl}}" style="display:inline-block;background:transparent;color:#111111;text-decoration:none;font-family:Arial,Helvetica,sans-serif;font-size:13px;line-height:13px;padding:16px 0;">
+                        o visita nuestra tienda
+                      </a>
                     </td>
                   </tr>
                 </table>
+
               </td>
             </tr>
 
+            <!-- SPACE -->
             <tr>
-              <td style="padding:16px 28px 24px 28px;background-color:#fafafa;border-top:1px solid #efefef;">
-                <p style="margin:0;font-size:12px;line-height:1.6;color:#7a7a7a;">Has recibido este email porque realizaste un pedido en CRONOX con {{customerEmail}}.</p>
+              <td style="height:18px;line-height:18px;font-size:18px;">&nbsp;</td>
+            </tr>
+
+            <!-- ORDER SUMMARY -->
+            <tr>
+              <td style="background:#f7f7f5;border:1px solid #ebebe7;padding:30px 26px 24px 26px;">
+
+                <div style="font-family:Arial,Helvetica,sans-serif;font-size:17px;line-height:24px;color:#111111;font-weight:400;padding:0 0 24px 0;">
+                  Resumen del pedido
+                </div>
+
+                {{#each items}}
+                <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;border-collapse:collapse;">
+                  <tr>
+                    <td valign="top" width="76" style="width:76px;padding:0 16px 20px 0;">
+                      {{#if imageUrl}}
+                      <img
+                        src="{{imageUrl}}"
+                        alt="{{name}}"
+                        width="70"
+                        style="display:block;width:70px;height:70px;border:1px solid #e1e1dd;border-radius:8px;object-fit:cover;background:#ffffff;"
+                      />
+                      {{else}}
+                      <div style="width:70px;height:70px;border:1px solid #e1e1dd;border-radius:8px;background:#ffffff;"></div>
+                      {{/if}}
+                    </td>
+
+                    <td valign="top" style="padding:0 12px 20px 0;">
+                      <div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:20px;color:#4b4b4b;font-weight:600;">
+                        {{name}}{{#if quantity}} × {{quantity}}{{/if}}
+                      </div>
+
+                      {{#if variantName}}
+                      <div style="font-family:Arial,Helvetica,sans-serif;font-size:12px;line-height:18px;color:#929292;text-transform:uppercase;padding-top:3px;">
+                        {{variantName}}
+                      </div>
+                      {{/if}}
+                    </td>
+
+                    <td valign="top" align="right" style="padding:0 0 20px 0;white-space:nowrap;">
+                      <div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:20px;color:#4b4b4b;font-weight:600;">
+                        {{lineTotalFormatted}}
+                      </div>
+                    </td>
+                  </tr>
+
+                  <tr>
+                    <td colspan="3" style="padding:0 0 18px 0;">
+                      <div style="height:1px;line-height:1px;font-size:1px;background:#ddddda;">&nbsp;</div>
+                    </td>
+                  </tr>
+                </table>
+                {{/each}}
+
+                <!-- TOTALS -->
+                <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;border-collapse:collapse;">
+                  <tr>
+                    <td width="44%" style="width:44%;">&nbsp;</td>
+                    <td width="56%" style="width:56%;padding:8px 0 0 0;">
+
+                      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;border-collapse:collapse;">
+
+                        <tr>
+                          <td style="padding:0 0 8px 0;font-family:Arial,Helvetica,sans-serif;font-size:13px;line-height:20px;color:#7a7a7a;">
+                            Descuento
+                          </td>
+                          <td align="right" style="padding:0 0 8px 0;font-family:Arial,Helvetica,sans-serif;font-size:13px;line-height:20px;color:#4a4a4a;font-weight:600;">
+                            {{discountFormatted}}
+                          </td>
+                        </tr>
+
+                        <tr>
+                          <td style="padding:0 0 8px 0;font-family:Arial,Helvetica,sans-serif;font-size:13px;line-height:20px;color:#7a7a7a;">
+                            Total parcial
+                          </td>
+                          <td align="right" style="padding:0 0 8px 0;font-family:Arial,Helvetica,sans-serif;font-size:13px;line-height:20px;color:#4a4a4a;font-weight:600;">
+                            {{subtotalFormatted}}
+                          </td>
+                        </tr>
+
+                        <tr>
+                          <td style="padding:0 0 8px 0;font-family:Arial,Helvetica,sans-serif;font-size:13px;line-height:20px;color:#7a7a7a;">
+                            Envío
+                          </td>
+                          <td align="right" style="padding:0 0 8px 0;font-family:Arial,Helvetica,sans-serif;font-size:13px;line-height:20px;color:#4a4a4a;font-weight:600;">
+                            {{shippingFormatted}}
+                          </td>
+                        </tr>
+
+                        <tr>
+                          <td style="padding:0 0 12px 0;font-family:Arial,Helvetica,sans-serif;font-size:13px;line-height:20px;color:#7a7a7a;">
+                            Impuestos
+                          </td>
+                          <td align="right" style="padding:0 0 12px 0;font-family:Arial,Helvetica,sans-serif;font-size:13px;line-height:20px;color:#4a4a4a;font-weight:600;">
+                            {{taxesFormatted}}
+                          </td>
+                        </tr>
+
+                        <tr>
+                          <td colspan="2" style="padding:0 0 14px 0;">
+                            <div style="height:1px;line-height:1px;font-size:1px;background:#ddddda;">&nbsp;</div>
+                          </td>
+                        </tr>
+
+                        <tr>
+                          <td style="padding:0 0 4px 0;font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:22px;color:#5a5a5a;">
+                            Total
+                          </td>
+                          <td align="right" style="padding:0 0 4px 0;font-family:Arial,Helvetica,sans-serif;font-size:18px;line-height:24px;color:#3d3d3d;font-weight:700;">
+                            {{totalFormatted}}
+                          </td>
+                        </tr>
+
+                        {{#if savingsFormatted}}
+                        <tr>
+                          <td>&nbsp;</td>
+                          <td align="right" style="padding:0;font-family:Arial,Helvetica,sans-serif;font-size:12px;line-height:18px;color:#7a7a7a;">
+                            Ahorraste {{savingsFormatted}}
+                          </td>
+                        </tr>
+                        {{/if}}
+
+                      </table>
+
+                    </td>
+                  </tr>
+                </table>
+
               </td>
             </tr>
+
+            <!-- SPACE -->
+            <tr>
+              <td style="height:18px;line-height:18px;font-size:18px;">&nbsp;</td>
+            </tr>
+
+            <!-- CUSTOMER INFO -->
+            <tr>
+              <td style="background:#f7f7f5;border:1px solid #ebebe7;padding:30px 26px 26px 26px;">
+
+                <div style="font-family:Arial,Helvetica,sans-serif;font-size:17px;line-height:24px;color:#111111;font-weight:400;padding:0 0 26px 0;">
+                  Información del cliente
+                </div>
+
+                <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;border-collapse:collapse;">
+                  <tr>
+                    <!-- SHIPPING ADDRESS -->
+                    <td valign="top" width="50%" style="width:50%;padding:0 18px 24px 0;">
+                      <div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:22px;color:#555555;font-weight:400;padding:0 0 8px 0;">
+                        Dirección de envío
+                      </div>
+
+                      {{#if shippingAddress.fullName}}
+                      <div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:22px;color:#767676;">
+                        {{shippingAddress.fullName}}
+                      </div>
+                      {{/if}}
+
+                      {{#if shippingAddress.line1}}
+                      <div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:22px;color:#767676;">
+                        {{shippingAddress.line1}}
+                      </div>
+                      {{/if}}
+
+                      {{#if shippingAddress.line2}}
+                      <div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:22px;color:#767676;">
+                        {{shippingAddress.line2}}
+                      </div>
+                      {{/if}}
+
+                      {{#if shippingAddress.postalCode}}
+                      <div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:22px;color:#767676;">
+                        {{shippingAddress.postalCode}} {{shippingAddress.city}}
+                      </div>
+                      {{/if}}
+
+                      {{#if shippingAddress.state}}
+                      <div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:22px;color:#767676;">
+                        {{shippingAddress.state}}
+                      </div>
+                      {{/if}}
+
+                      {{#if shippingAddress.country}}
+                      <div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:22px;color:#767676;">
+                        {{shippingAddress.country}}
+                      </div>
+                      {{/if}}
+                    </td>
+
+                    <!-- CONTACT / DUPLICATE COLUMN STYLE -->
+                    <td valign="top" width="50%" style="width:50%;padding:0 0 24px 18px;">
+                      <div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:22px;color:#555555;font-weight:400;padding:0 0 8px 0;">
+                        Dirección de Envío
+                      </div>
+
+                      {{#if shippingAddress.fullName}}
+                      <div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:22px;color:#767676;">
+                        {{shippingAddress.fullName}}
+                      </div>
+                      {{/if}}
+
+                      {{#if shippingAddress.line1}}
+                      <div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:22px;color:#767676;">
+                        <a href="{{orderUrl}}" style="color:#4a75b5;text-decoration:underline;">{{shippingAddress.line1}}</a>
+                      </div>
+                      {{/if}}
+
+                      {{#if shippingAddress.line2}}
+                      <div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:22px;color:#767676;">
+                        {{shippingAddress.line2}}
+                      </div>
+                      {{/if}}
+
+                      <div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:22px;color:#767676;">
+                        {{#if shippingAddress.postalCode}}<a href="{{orderUrl}}" style="color:#4a75b5;text-decoration:underline;">{{shippingAddress.postalCode}} {{shippingAddress.city}}</a>{{else}}{{shippingAddress.city}}{{/if}}
+                      </div>
+
+                      {{#if shippingAddress.state}}
+                      <div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:22px;color:#767676;">
+                        <a href="{{orderUrl}}" style="color:#4a75b5;text-decoration:underline;">{{shippingAddress.state}}</a>
+                      </div>
+                      {{/if}}
+
+                      {{#if shippingAddress.country}}
+                      <div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:22px;color:#767676;">
+                        <a href="{{orderUrl}}" style="color:#4a75b5;text-decoration:underline;">{{shippingAddress.country}}</a>
+                      </div>
+                      {{/if}}
+                    </td>
+                  </tr>
+                </table>
+
+                <!-- SHIPPING METHOD -->
+                <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;border-collapse:collapse;">
+                  <tr>
+                    <td style="padding:0;">
+                      <div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:22px;color:#555555;font-weight:400;padding:0 0 8px 0;">
+                        Método de envío
+                      </div>
+
+                      <div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:22px;color:#767676;text-transform:uppercase;letter-spacing:0.2px;">
+                        {{shippingMethod}}
+                      </div>
+                    </td>
+                  </tr>
+                </table>
+
+              </td>
+            </tr>
+
+            <!-- FOOTER SPACE -->
+            <tr>
+              <td style="height:20px;line-height:20px;font-size:20px;">&nbsp;</td>
+            </tr>
+
           </table>
+
         </td>
       </tr>
     </table>
