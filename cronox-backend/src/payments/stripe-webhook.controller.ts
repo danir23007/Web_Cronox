@@ -12,7 +12,10 @@ import type { Request } from 'express';
 import Stripe from 'stripe';
 import { EmailService } from '../email/email.service';
 import { EmailType } from '../email/email.types';
-import { OrderConfirmationEmailMapper } from '../email/order-confirmation-email.mapper';
+import {
+  orderForConfirmationEmailInclude,
+  OrderConfirmationEmailMapper,
+} from '../email/order-confirmation-email.mapper';
 import { OrdersService } from '../orders/orders.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { StripeService } from './stripe.service';
@@ -142,47 +145,7 @@ export class StripeWebhookController {
       try {
         const orderForEmail = await this.prisma.order.findUnique({
           where: { id: orderId },
-          include: {
-            user: {
-              select: {
-                email: true,
-              },
-            },
-            shippingMethod: {
-              select: {
-                label: true,
-                code: true,
-              },
-            },
-            items: {
-              include: {
-                product: {
-                  select: {
-                    name: true,
-                    slug: true,
-                    imageUrl: true,
-                    images: {
-                      select: {
-                        url: true,
-                        isPrimary: true,
-                        sortOrder: true,
-                      },
-                      orderBy: [
-                        { isPrimary: 'desc' },
-                        { sortOrder: 'asc' },
-                        { id: 'asc' },
-                      ],
-                    },
-                    variants: {
-                      select: {
-                        size: true,
-                      },
-                    },
-                  },
-                },
-              },
-            },
-          },
+          ...orderForConfirmationEmailInclude,
         });
 
         if (!orderForEmail) {
