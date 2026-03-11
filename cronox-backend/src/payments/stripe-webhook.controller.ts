@@ -133,15 +133,15 @@ export class StripeWebhookController {
       { updateStock: true },
     );
 
-    const customerEmail =
-      paymentIntent.receipt_email ??
-      (typeof metadata.customerEmail === 'string'
-        ? metadata.customerEmail
-        : undefined);
+    const customerEmail = await this.resolveCustomerEmail(paymentIntent, userId);
     const orderId =
       typeof order.id === 'number' || typeof order.id === 'string'
         ? Number(order.id)
         : undefined;
+
+    this.logger.log(
+      `Email resuelto para PaymentIntent ${paymentIntent.id}: ${customerEmail ?? 'N/A'}`,
+    );
 
     if (customerEmail && orderId) {
       try {
@@ -178,6 +178,53 @@ export class StripeWebhookController {
     this.logger.log(`Pedido confirmado para PaymentIntent ${paymentIntent.id}`); // [WEBHOOK]
 
     return order;
+  }
+
+  private async resolveCustomerEmail(
+    paymentIntent: Stripe.PaymentIntent,
+    userId: number,
+  ): Promise<string | undefined> {
+    const metadata = paymentIntent.metadata ?? {};
+    const receiptEmail = paymentIntent.receipt_email?.trim();
+
+    if (receiptEmail) {
+      this.logger.debug(
+        `Email resuelto desde paymentIntent.receipt_email para ${paymentIntent.id}`,
+      );
+      return receiptEmail;
+    }
+
+    const chargeBillingEmail = await this.stripeService.getChargeBillingEmailForPaymentIntent(
+      paymentIntent,
+    );
+    if (chargeBillingEmail) {
+      this.logger.debug(
+        `Email resuelto desde charge.billing_details.email para ${paymentIntent.id}`,
+      );
+      return chargeBillingEmail;
+    }
+
+    const metadataEmail =
+      typeof metadata.email === 'string' ? metadata.email.trim() : undefined;
+    if (metadataEmail) {
+      this.logger.debug(`Email resuelto desde metadata.email para ${paymentIntent.id}`);
+      return metadataEmail;
+    }
+
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { email: true },
+    });
+    const userEmail = user?.email?.trim();
+
+    if (userEmail) {
+      this.logger.debug(
+        `Email resuelto desde usuario en base de datos para ${paymentIntent.id}`,
+      );
+      return userEmail;
+    }
+
+    return undefined;
   }
 
   private async handlePaymentIntentFailed(event: Stripe.Event) {
