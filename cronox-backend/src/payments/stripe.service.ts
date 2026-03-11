@@ -88,4 +88,36 @@ export class StripeService {
       throw new BadRequestException('STRIPE_SIGNATURE_VERIFICATION_FAILED');
     }
   }
+
+  async getChargeBillingEmailForPaymentIntent(
+    paymentIntent: Stripe.PaymentIntent,
+  ): Promise<string | undefined> {
+    const latestCharge = paymentIntent.latest_charge;
+
+    if (latestCharge && typeof latestCharge !== 'string') {
+      const email = latestCharge.billing_details?.email?.trim();
+      if (email) return email;
+    }
+
+    const latestChargeId =
+      typeof latestCharge === 'string' ? latestCharge : latestCharge?.id;
+
+    if (latestChargeId) {
+      const charge = await this.stripe.charges.retrieve(latestChargeId);
+      const email = charge.billing_details?.email?.trim();
+      if (email) return email;
+    }
+
+    const expandedIntent = await this.stripe.paymentIntents.retrieve(paymentIntent.id, {
+      expand: ['latest_charge'],
+    });
+    const expandedLatestCharge = expandedIntent.latest_charge;
+
+    if (expandedLatestCharge && typeof expandedLatestCharge !== 'string') {
+      const email = expandedLatestCharge.billing_details?.email?.trim();
+      if (email) return email;
+    }
+
+    return undefined;
+  }
 }
