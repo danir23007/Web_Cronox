@@ -2,7 +2,7 @@
   const API = window.CRONOX_API || {};
   const API_BASE = API.API_BASE || '';
   const STRIPE_PUBLISHABLE_KEY =
-    window.CRONOX_STRIPE_PUBLISHABLE_KEY || 'pk_test_xxx_replace_with_real_key';
+    window.CRONOX_STRIPE_PUBLISHABLE_KEY || 'pk_test_51SPoYpCGnUu9AYNraxWTDgTkSpqK4ikadITkNAExPeMgFiw7pX6AbyHh7UZHrRlL0G9A3zR6qwSVW8ALJTQtx2pw00WB7kkSyS';
   const CONTINUE_SHOPPING_URL = '/index.html#store';
   const PROMO_STORAGE_KEY = 'cronox_checkout_promo';
 
