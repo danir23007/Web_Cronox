@@ -42,12 +42,14 @@ export class StripeWebhookController {
   })
   async handleStripeWebhook(@Req() req: Request, @Body() _body: unknown) {
     const signature = req.headers['stripe-signature'];
-    const rawBody = req.body as Buffer; // [WEBHOOK]
+    const rawBody = req.body;
 
-    const event = this.stripeService.constructEventFromPayload(
-      signature,
-      rawBody,
-    );
+    if (!Buffer.isBuffer(rawBody)) {
+      this.logger.error('Stripe webhook body is not a raw Buffer');
+      throw new BadRequestException('STRIPE_RAW_BODY_REQUIRED');
+    }
+
+    const event = this.stripeService.constructEventFromPayload(signature, rawBody);
 
     switch (event.type) {
       case 'payment_intent.succeeded':
