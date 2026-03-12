@@ -212,6 +212,7 @@
   let elements;
   let paymentElement;
   let currentClientSecret = null;
+  let currentPaymentIntentId = null;
   let isInitializing = false;
   let paymentElementMounted = false;
   let hasClearedPromoOnLoad = false;
@@ -676,6 +677,7 @@
 
       const data = await response.json();
       currentClientSecret = data.clientSecret;
+      currentPaymentIntentId = typeof data.paymentIntentId === 'string' ? data.paymentIntentId : null;
       await ensurePaymentElement(currentClientSecret);
       state.shippingMethod = data.shippingMethod?.code || state.shippingMethod;
       state.totals = data.totals || state.totals;
@@ -831,10 +833,15 @@
       setPayButtonState(true);
       errorDiv.textContent = '';
 
+      const successUrl = new URL('/checkout-success.html', window.location.origin);
+      if (currentPaymentIntentId) {
+        successUrl.searchParams.set('ref', currentPaymentIntentId);
+      }
+
       const { error } = await stripe.confirmPayment({
         elements,
         confirmParams: {
-          return_url: `${window.location.origin}/checkout-success.html`,
+          return_url: successUrl.toString(),
         },
       });
 
