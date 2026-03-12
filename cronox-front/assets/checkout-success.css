@@ -30,9 +30,10 @@ body.page-checkout-success {
 }
 
 .checkout-success__brand img {
-  height: 40px;
+  height: 65px;
   width: auto;
   display: block;
+  object-fit: contain;
 }
 
 .checkout-success__card {
@@ -69,12 +70,14 @@ body.page-checkout-success {
 
 .checkout-success__reference {
   margin-top: 18px;
-  padding: 10px 12px;
+  padding: 12px 14px;
   border-radius: 10px;
   background: rgba(255, 255, 255, 0.06);
   border: 1px solid rgba(255, 255, 255, 0.1);
   color: #ebebeb;
-  font-size: 0.9rem;
+  font-size: 0.82rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
 }
 
 .checkout-success__cta {
