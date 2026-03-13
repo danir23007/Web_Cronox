@@ -15,13 +15,41 @@ body.page-checkout-success {
 }
 
 .checkout-success {
+  position: relative;
   min-height: 100vh;
   display: grid;
   place-items: center;
   padding: 32px 20px;
 }
 
+.checkout-success__ascii {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  z-index: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.checkout-success__ascii pre {
+  margin: 0;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+  font-size: clamp(1.1rem, 2vw, 1.9rem);
+  line-height: 1;
+  letter-spacing: 0.02em;
+  color: #ffffff;
+  opacity: 0.16;
+  transform: translate(-44px, 28px) scale(1.35);
+  transform-origin: center;
+  filter: blur(0.7px);
+  text-shadow: 0 0 18px rgba(255, 255, 255, 0.16);
+  user-select: none;
+  white-space: pre;
+}
+
 .checkout-success__brand {
+  z-index: 2;
   position: fixed;
   top: 20px;
   left: 50%;
@@ -37,6 +65,8 @@ body.page-checkout-success {
 }
 
 .checkout-success__card {
+  position: relative;
+  z-index: 1;
   width: min(560px, 92vw);
   border: 1px solid var(--checkout-success-border);
   border-radius: 18px;
@@ -98,4 +128,12 @@ body.page-checkout-success {
 .checkout-success__cta:hover {
   transform: translateY(-1px);
   box-shadow: 0 10px 22px rgba(255, 255, 255, 0.2);
+}
+
+@media (max-width: 640px) {
+  .checkout-success__ascii pre {
+    transform: translate(-24px, 20px) scale(0.95);
+    font-size: clamp(0.8rem, 2.5vw, 1.25rem);
+    opacity: 0.12;
+  }
 }
