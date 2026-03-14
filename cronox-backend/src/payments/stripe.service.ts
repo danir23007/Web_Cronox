@@ -82,7 +82,9 @@ export class StripeService {
     }
 
     try {
-      return this.stripe.webhooks.constructEvent(rawBody, signature, this.webhookSecret); // [WEBHOOK]
+      const event = this.stripe.webhooks.constructEvent(rawBody, signature, this.webhookSecret); // [WEBHOOK]
+      this.logger.debug(`Stripe signature validada para event=${event.id} type=${event.type}`);
+      return event;
     } catch (error) {
       this.logger.error('Stripe webhook signature verification failed', error as Error);
       throw new BadRequestException('STRIPE_SIGNATURE_VERIFICATION_FAILED');

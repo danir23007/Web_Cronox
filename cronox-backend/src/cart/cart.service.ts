@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { Prisma, PrismaClient } from '@prisma/client';
 import type { Request } from 'express';
 import { randomUUID } from 'node:crypto';
@@ -42,6 +42,19 @@ export type CartContext = {
   anonymousId?: string;
 };
 
+export type CartMergeIncident = {
+  variantId: number;
+  requestedQty: number;
+  mergedQty: number;
+  availableStock: number;
+  reason: 'INSUFFICIENT_STOCK';
+};
+
+export type MergeOnLoginResult = {
+  merged: boolean;
+  incidents: CartMergeIncident[];
+};
+
 const NO_CONTEXT_ERROR = 'NO_CONTEXT';
 const CART_NOT_FOUND_ERROR = 'CART_NOT_FOUND';
 const ITEM_NOT_FOUND_ERROR = 'ITEM_NOT_FOUND';
@@ -50,6 +63,8 @@ const VARIANT_PRICE_NOT_SET_ERROR = 'VARIANT_PRICE_NOT_SET';
 
 @Injectable()
 export class CartService {
+  private readonly logger = new Logger(CartService.name);
+
   constructor(private readonly prisma: PrismaClient) {}
 
   private readonly cartInclude = cartInclude;
@@ -76,10 +91,6 @@ export class CartService {
     return null;
   }
 
-  /**
-   * Carrito "normal" según un contexto concreto (usuario O anónimo).
-   * NO mira los dos a la vez.
-   */
   async getActiveCartForRequest(
     req: Request,
     contextOverride?: CartContext,
@@ -89,15 +100,6 @@ export class CartService {
     return this.getActiveCartForContext(context, tx);
   }
 
-  /**
-   * 🔥 NUEVO:
-   * Carrito "para checkout".
-   *
-   * - Mira el carrito de USUARIO y el ANÓNIMO (cookie `cartId`).
-   * - Si el anónimo tiene items, devuelve ese (es normalmente el "carrito de verdad"
-   *   cuando el usuario ha estado comprando sin iniciar sesión).
-   * - Si no, devuelve el de usuario.
-   */
   async getCheckoutCartForRequest(
     req: Request,
     tx?: Prisma.TransactionClient,
@@ -129,17 +131,14 @@ export class CartService {
         : Promise.resolve<CartWithItems | null>(null),
     ]);
 
-    // 1) Si el carrito anónimo tiene items, es el que estás usando ahora mismo.
     if (anonCart && Array.isArray(anonCart.items) && anonCart.items.length > 0) {
       return anonCart;
     }
 
-    // 2) Si no, usamos el de usuario si tiene items.
     if (userCart && Array.isArray(userCart.items) && userCart.items.length > 0) {
       return userCart;
     }
 
-    // 3) Si ninguno tiene items, devuelve lo que haya (userCart o anonCart o null).
     return userCart ?? anonCart ?? null;
   }
 
@@ -173,7 +172,7 @@ export class CartService {
       const currentQty = existingItem?.qty ?? 0;
       const newQty = currentQty + dto.qty;
 
-      this.assertStock(newQty, variant.stockQty ?? 0); // [STOCK]
+      this.assertStock(newQty, variant.stockQty ?? 0);
 
       if (existingItem) {
         await client.cartItem.update({
@@ -211,7 +210,7 @@ export class CartService {
       }
 
       const variant = await this.getVariantOrThrow(client, item.variantId);
-      this.assertStock(dto.qty, variant.stockQty ?? 0); // [STOCK]
+      this.assertStock(dto.qty, variant.stockQty ?? 0);
 
       await client.cartItem.update({
         where: { id: itemId },
@@ -251,12 +250,12 @@ export class CartService {
     });
   }
 
-  async mergeOnLogin(userId: number, anonymousId?: string): Promise<void> {
+  async mergeOnLogin(userId: number, anonymousId?: string): Promise<MergeOnLoginResult> {
     if (!anonymousId) {
-      return;
+      return { merged: false, incidents: [] };
     }
 
-    await this.prisma.$transaction(async (tx) => {
+    return this.prisma.$transaction(async (tx) => {
       const client = this.getClient(tx);
 
       const [anonCart, userCart] = await Promise.all([
@@ -271,8 +270,10 @@ export class CartService {
       ]);
 
       if (!anonCart) {
-        return;
+        return { merged: false, incidents: [] };
       }
+
+      const incidents: CartMergeIncident[] = [];
 
       if (!userCart) {
         await client.cart.update({
@@ -280,7 +281,7 @@ export class CartService {
           data: { userId, anonymousId: null },
         });
         await this.recalcTotals(client, anonCart.id);
-        return;
+        return { merged: true, incidents };
       }
 
       const existingItemsMap = new Map<number, number>(
@@ -289,27 +290,47 @@ export class CartService {
 
       for (const item of anonCart.items) {
         const currentQty = existingItemsMap.get(item.variantId) ?? 0;
-        const newQty = currentQty + item.qty;
+        const requestedTotalQty = currentQty + item.qty;
 
         const variant = await this.getVariantOrThrow(client, item.variantId);
-        this.assertStock(newQty, variant.stockQty ?? 0); // [STOCK]
+        const availableStock = Math.max(0, variant.stockQty ?? 0);
+        const mergedQty = Math.min(requestedTotalQty, availableStock);
 
-        const existingItem = userCart.items.find(
-          (i) => i.variantId === item.variantId,
-        );
+        if (mergedQty <= 0) {
+          incidents.push({
+            variantId: item.variantId,
+            requestedQty: requestedTotalQty,
+            mergedQty: 0,
+            availableStock,
+            reason: 'INSUFFICIENT_STOCK',
+          });
+          continue;
+        }
+
+        if (mergedQty < requestedTotalQty) {
+          incidents.push({
+            variantId: item.variantId,
+            requestedQty: requestedTotalQty,
+            mergedQty,
+            availableStock,
+            reason: 'INSUFFICIENT_STOCK',
+          });
+        }
+
+        const existingItem = userCart.items.find((i) => i.variantId === item.variantId);
 
         if (existingItem) {
           await client.cartItem.update({
             where: { id: existingItem.id },
-            data: { qty: newQty },
+            data: { qty: mergedQty },
           });
-          existingItem.qty = newQty;
+          existingItem.qty = mergedQty;
         } else {
           const created = await client.cartItem.create({
             data: {
               cartId: userCart.id,
               variantId: item.variantId,
-              qty: item.qty,
+              qty: mergedQty,
               priceAtAdd: item.priceAtAdd,
             },
             select: { id: true, variantId: true, qty: true },
@@ -319,14 +340,23 @@ export class CartService {
             ...item,
             id: created.id,
             cartId: userCart.id,
+            qty: mergedQty,
           });
         }
 
-        existingItemsMap.set(item.variantId, newQty);
+        existingItemsMap.set(item.variantId, mergedQty);
       }
 
       await client.cart.delete({ where: { id: anonCart.id } });
       await this.recalcTotals(client, userCart.id);
+
+      if (incidents.length > 0) {
+        this.logger.warn(
+          `Merge guest->user con incidencias para userId=${userId}: ${JSON.stringify(incidents)}`,
+        );
+      }
+
+      return { merged: true, incidents };
     });
   }
 

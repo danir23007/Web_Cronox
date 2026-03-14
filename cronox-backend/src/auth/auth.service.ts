@@ -12,7 +12,7 @@ import { Role, User } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 import { randomBytes } from 'crypto';
 import type { CookieOptions, Response } from 'express';
-import { CartService } from '../cart/cart.service';
+import { CartService, type MergeOnLoginResult } from '../cart/cart.service';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
 import { UsersService, AuthUser } from '../users/users.service';
@@ -156,10 +156,25 @@ export class AuthService {
     return this.formatAuthUser(authUser);
   }
 
-  async mergeCartOnLogin(userId: number, cartId?: string) {
-    await this.cartService.mergeOnLogin(userId, cartId);
+  async mergeCartOnLogin(userId: number, cartId?: string): Promise<MergeOnLoginResult> {
+    return this.cartService.mergeOnLogin(userId, cartId);
   }
 
+  logCartMergeResult(userId: number, result: MergeOnLoginResult) {
+    if (!result.merged) {
+      this.logger.debug(`No había carrito guest para fusionar en login/register para userId=${userId}`);
+      return;
+    }
+
+    if (result.incidents.length > 0) {
+      this.logger.warn(
+        `Carrito guest fusionado con incidencias para userId=${userId}: ${JSON.stringify(result.incidents)}`,
+      );
+      return;
+    }
+
+    this.logger.log(`Carrito guest fusionado correctamente para userId=${userId}`);
+  }
 
   logCartMergeError(userId: number, error: unknown) {
     const message = error instanceof Error ? error.message : String(error);

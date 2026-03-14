@@ -36,15 +36,21 @@ export class AuthController {
     const result = await this.authService.register(dto);
 
     const cookies = (req as Request & { cookies?: Record<string, string | undefined> }).cookies;
+    let cartMerge: Awaited<ReturnType<AuthService['mergeCartOnLogin']>> = {
+      merged: false,
+      incidents: [],
+    };
+
     try {
-      await this.authService.mergeCartOnLogin(result.user.id, cookies?.cartId);
+      cartMerge = await this.authService.mergeCartOnLogin(result.user.id, cookies?.cartId);
+      this.authService.logCartMergeResult(result.user.id, cartMerge);
     } catch (error) {
       this.authService.logCartMergeError(result.user.id, error);
     }
 
     this.authService.setAuthCookies(res, result.tokens);
 
-    return { user: result.user };
+    return { user: { ...result.user, cartMerge }, cartMerge };
   }
 
   @Post('login')
@@ -57,15 +63,21 @@ export class AuthController {
     const result = await this.authService.login(dto);
 
     const cookies = (req as Request & { cookies?: Record<string, string | undefined> }).cookies;
+    let cartMerge: Awaited<ReturnType<AuthService['mergeCartOnLogin']>> = {
+      merged: false,
+      incidents: [],
+    };
+
     try {
-      await this.authService.mergeCartOnLogin(result.user.id, cookies?.cartId);
+      cartMerge = await this.authService.mergeCartOnLogin(result.user.id, cookies?.cartId);
+      this.authService.logCartMergeResult(result.user.id, cartMerge);
     } catch (error) {
       this.authService.logCartMergeError(result.user.id, error);
     }
 
     this.authService.setAuthCookies(res, result.tokens);
 
-    return { user: result.user };
+    return { user: { ...result.user, cartMerge }, cartMerge };
   }
 
   @Post('logout')
