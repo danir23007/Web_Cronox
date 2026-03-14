@@ -2,23 +2,23 @@
   const referenceEl = document.getElementById('checkout-success-reference');
 
   const params = new URLSearchParams(window.location.search);
+  const API_BASE = window.CRONOX_API?.API_BASE || window.CRONOX_API_BASE || '';
 
-  const STRIPE_PUBLISHABLE_KEY =
-    window.CRONOX_STRIPE_PUBLISHABLE_KEY ||
-    'pk_test_51SPoYpCGnUu9AYNraxWTDgTkSpqK4ikadITkNAExPeMgFiw7pX6AbyHh7UZHrRlL0G9A3zR6qwSVW8ALJTQtx2pw00WB7kkSyS';
+  const POLL_INTERVAL_MS = 1500;
+  const POLL_TIMEOUT_MS = 45000;
 
   const normalizeRef = (value) =>
     (value || '')
       .toString()
       .trim()
-      .replace(/[^A-Za-z0-9]/g, '')
+      .replace(/[^A-Za-z0-9_]/g, '')
       .toUpperCase();
 
   const makeShortRef = (source) => {
     const cleaned = normalizeRef(source);
     if (!cleaned) return '';
 
-    if (/^PI[A-Z0-9]+$/.test(cleaned)) {
+    if (/^PI[A-Z0-9_]+$/.test(cleaned)) {
       return cleaned.slice(-6);
     }
 
@@ -37,16 +37,21 @@
     return cleaned.slice(-6);
   };
 
-  const candidateRefs = [
-    params.get('orderId'),
-    params.get('order_id'),
-    params.get('order'),
-    params.get('reference'),
-    params.get('ref'),
-    params.get('payment_intent'),
-  ];
+  const resolveProviderRef = () => {
+    const candidates = [
+      params.get('payment_intent'),
+      params.get('ref'),
+      params.get('providerRef'),
+      params.get('provider_ref'),
+      params.get('orderId'),
+      params.get('order_id'),
+    ];
 
-  const rawRef = candidateRefs.find((value) => typeof value === 'string' && value.trim().length > 0);
+    const raw = candidates.find((value) => typeof value === 'string' && value.trim().length > 0);
+    return raw ? raw.trim() : '';
+  };
+
+  const rawRef = resolveProviderRef();
   const displayRef = makeShortRef(rawRef);
 
   if (referenceEl && displayRef) {
@@ -62,54 +67,93 @@
     }
   };
 
-  const clearConfirmedCart = async () => {
-    const cart = window.CRONOX_CART || null;
+  const syncCartUiWithBackend = async () => {
     const api = window.CRONOX_API || null;
 
+    clearGuestCartCache();
+
     try {
-      if (cart?.clearCartItems) {
-        const updatedCart = await cart.clearCartItems();
+      if (typeof api?.getCart === 'function') {
+        const updatedCart = await api.getCart();
         window.dispatchEvent(new CustomEvent('cart:updated', { detail: updatedCart }));
-        clearGuestCartCache();
         return;
       }
 
-      if (api?.clearCart) {
-        const updatedCart = await api.clearCart();
-        window.dispatchEvent(new CustomEvent('cart:updated', { detail: updatedCart }));
-        clearGuestCartCache();
+      if (typeof window.initCartFromBackend === 'function') {
+        await window.initCartFromBackend();
+        return;
       }
+
+      window.dispatchEvent(
+        new CustomEvent('cart:updated', {
+          detail: { items: [], itemsCount: 0, subtotalCents: 0, subtotalLabel: '0,00 €' },
+        }),
+      );
     } catch (error) {
-      console.warn('[CRONOX] No se pudo vaciar el carrito tras confirmar el pedido', error);
+      console.warn('[CRONOX] No se pudo sincronizar el carrito tras confirmar el pedido', error);
     }
   };
 
-  const resolvePaymentIntentStatus = async () => {
-    const clientSecret = params.get('payment_intent_client_secret');
-    if (!clientSecret || typeof window.Stripe !== 'function') return null;
+  const fetchPaymentStatus = async (providerRef) => {
+    const endpoint = `${API_BASE}/api/orders/payment-status?providerRef=${encodeURIComponent(providerRef)}`;
+    const response = await fetch(endpoint, {
+      method: 'GET',
+      credentials: 'include',
+      headers: { Accept: 'application/json' },
+    });
 
-    try {
-      const stripe = window.Stripe(STRIPE_PUBLISHABLE_KEY);
-      if (!stripe || typeof stripe.retrievePaymentIntent !== 'function') return null;
-      const result = await stripe.retrievePaymentIntent(clientSecret);
-      if (result?.error) {
-        console.warn('[CRONOX] No se pudo verificar el estado del PaymentIntent', result.error);
-        return null;
-      }
-      return result?.paymentIntent?.status || null;
-    } catch (error) {
-      console.warn('[CRONOX] Error consultando el estado del PaymentIntent', error);
-      return null;
+    if (response.status === 401 || response.status === 403) {
+      throw new Error('AUTH_REQUIRED');
     }
+
+    if (!response.ok) {
+      const payload = await response.json().catch(() => null);
+      const error = new Error(payload?.message || `API error ${response.status}`);
+      error.status = response.status;
+      throw error;
+    }
+
+    return response.json();
+  };
+
+  const waitForOrderProcessing = async (providerRef) => {
+    const startTime = Date.now();
+
+    while (Date.now() - startTime < POLL_TIMEOUT_MS) {
+      const status = await fetchPaymentStatus(providerRef);
+
+      if (status?.found && status?.isProcessed) {
+        return status;
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
+    }
+
+    return null;
   };
 
   const initConfirmedCartCleanup = async () => {
     const redirectStatus = (params.get('redirect_status') || '').toLowerCase();
     if (redirectStatus && redirectStatus !== 'succeeded') return;
 
-    const paymentStatus = await resolvePaymentIntentStatus();
-    if (paymentStatus === 'succeeded') {
-      await clearConfirmedCart();
+    if (!rawRef) {
+      console.warn('[CRONOX] Success page sin referencia de pago: no se limpia carrito');
+      return;
+    }
+
+    try {
+      const status = await waitForOrderProcessing(rawRef);
+      if (status?.isProcessed) {
+        await syncCartUiWithBackend();
+      } else {
+        console.warn('[CRONOX] Timeout esperando confirmación del pedido. Reintentará al refrescar.');
+      }
+    } catch (error) {
+      if (error?.message === 'AUTH_REQUIRED') {
+        console.warn('[CRONOX] Sesión no disponible para verificar el estado del pedido');
+        return;
+      }
+      console.warn('[CRONOX] Error verificando el estado del pedido', error);
     }
   };
 
