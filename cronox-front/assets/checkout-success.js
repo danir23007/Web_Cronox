@@ -1,5 +1,8 @@
 (function () {
   const referenceEl = document.getElementById('checkout-success-reference');
+  const eyebrowEl = document.getElementById('checkout-success-eyebrow');
+  const titleEl = document.getElementById('checkout-success-title');
+  const messageEl = document.getElementById('checkout-success-message');
 
   const params = new URLSearchParams(window.location.search);
   const API_BASE = window.CRONOX_API?.API_BASE || window.CRONOX_API_BASE || '';
@@ -51,13 +54,13 @@
     return raw ? raw.trim() : '';
   };
 
-  const rawRef = resolveProviderRef();
-  const displayRef = makeShortRef(rawRef);
+  const setUiState = ({ eyebrow, title, message }) => {
+    if (eyebrowEl && typeof eyebrow === 'string') eyebrowEl.textContent = eyebrow;
+    if (titleEl && typeof title === 'string') titleEl.textContent = title;
+    if (messageEl && typeof message === 'string') messageEl.textContent = message;
+  };
 
-  if (referenceEl && displayRef) {
-    referenceEl.textContent = `Referencia: ${displayRef}`;
-    referenceEl.hidden = false;
-  }
+  const rawRef = resolveProviderRef();
 
   const clearGuestCartCache = () => {
     try {
@@ -132,27 +135,77 @@
     return null;
   };
 
+  const renderConfirmedState = (status) => {
+    const orderId = status?.orderId;
+    const displaySource = orderId ? String(orderId) : rawRef;
+    const displayRef = makeShortRef(displaySource);
+
+    setUiState({
+      eyebrow: 'Compra completada',
+      title: 'Pedido confirmado',
+      message: 'Tu pedido ha sido guardado correctamente. Te hemos enviado un correo de confirmación.',
+    });
+
+    if (referenceEl && displayRef) {
+      const prefix = orderId ? 'Pedido' : 'Referencia';
+      referenceEl.textContent = `${prefix}: ${displayRef}`;
+      referenceEl.hidden = false;
+    }
+  };
+
+  const renderPendingState = () => {
+    setUiState({
+      eyebrow: 'Pago recibido',
+      title: 'Validando pedido…',
+      message: 'Estamos confirmando tu compra con nuestro sistema. Esto puede tardar unos segundos.',
+    });
+  };
+
+  const renderFallbackState = () => {
+    setUiState({
+      eyebrow: 'Pago en revisión',
+      title: 'Estamos procesando tu pedido',
+      message:
+        'Stripe confirmó el pago, pero la confirmación del pedido aún no terminó. Recarga esta página en unos segundos o revisa “Mi cuenta”.',
+    });
+  };
+
   const initConfirmedCartCleanup = async () => {
     const redirectStatus = (params.get('redirect_status') || '').toLowerCase();
     if (redirectStatus && redirectStatus !== 'succeeded') return;
 
     if (!rawRef) {
+      setUiState({
+        eyebrow: 'Pago recibido',
+        title: 'Procesando pedido',
+        message: 'Falta la referencia del pago en la URL. Puedes revisar el estado desde tu cuenta.',
+      });
       console.warn('[CRONOX] Success page sin referencia de pago: no se limpia carrito');
       return;
     }
 
+    renderPendingState();
+
     try {
       const status = await waitForOrderProcessing(rawRef);
       if (status?.isProcessed) {
+        renderConfirmedState(status);
         await syncCartUiWithBackend();
       } else {
+        renderFallbackState();
         console.warn('[CRONOX] Timeout esperando confirmación del pedido. Reintentará al refrescar.');
       }
     } catch (error) {
       if (error?.message === 'AUTH_REQUIRED') {
+        setUiState({
+          eyebrow: 'Sesión requerida',
+          title: 'No se pudo validar el pedido automáticamente',
+          message: 'Inicia sesión para verificar el estado de tu pedido en “Mi cuenta”.',
+        });
         console.warn('[CRONOX] Sesión no disponible para verificar el estado del pedido');
         return;
       }
+      renderFallbackState();
       console.warn('[CRONOX] Error verificando el estado del pedido', error);
     }
   };

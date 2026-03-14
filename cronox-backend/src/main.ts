@@ -15,9 +15,12 @@ async function bootstrap() {
   /**
    * STRIPE WEBHOOK
    * Necesita el body en RAW, sin parsear a JSON, para verificar la firma.
-   * Ruta final con prefijo global: /api/webhooks/stripe
+   * Rutas finales con prefijo global:
+   * - /api/webhooks/stripe
+   * - /api/payments/webhook (alias retrocompatible para Stripe CLI)
    */
   app.use('/api/webhooks/stripe', express.raw({ type: 'application/json' }));
+  app.use('/api/payments/webhook', express.raw({ type: 'application/json' }));
 
   /**
    * RESTO DE LA API

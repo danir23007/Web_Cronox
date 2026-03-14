@@ -2,6 +2,7 @@ import {
   BadRequestException,
   Body,
   Controller,
+  Headers,
   HttpCode,
   Logger,
   Post,
@@ -21,7 +22,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { StripeService } from './stripe.service';
 
 @ApiTags('Payments / Stripe')
-@Controller('webhooks/stripe')
+@Controller()
 export class StripeWebhookController {
   private readonly logger = new Logger(StripeWebhookController.name);
 
@@ -33,41 +34,97 @@ export class StripeWebhookController {
     private readonly orderConfirmationEmailMapper: OrderConfirmationEmailMapper,
   ) {}
 
-  @Post()
+  @Post('webhooks/stripe')
   @HttpCode(200)
   @ApiExcludeEndpoint()
   @ApiOperation({
     summary: 'Webhook de Stripe (firma requerida)',
     description: 'Endpoint para eventos de Stripe — no usar desde Swagger.',
   })
-  async handleStripeWebhook(@Req() req: Request, @Body() _body: unknown) {
-    const signature = req.headers['stripe-signature'];
+  async handleStripeWebhook(
+    @Req() req: Request,
+    @Body() _body: unknown,
+    @Headers('stripe-signature') signature: string | undefined,
+  ) {
+    return this.processEvent(req, signature, '/webhooks/stripe');
+  }
+
+  @Post('payments/webhook')
+  @HttpCode(200)
+  @ApiExcludeEndpoint()
+  @ApiOperation({
+    summary: 'Alias del webhook de Stripe',
+    description: 'Alias retrocompatible para Stripe CLI y configuraciones antiguas.',
+  })
+  async handleStripeWebhookAlias(
+    @Req() req: Request,
+    @Body() _body: unknown,
+    @Headers('stripe-signature') signature: string | undefined,
+  ) {
+    return this.processEvent(req, signature, '/payments/webhook');
+  }
+
+  private async processEvent(
+    req: Request,
+    signature: string | undefined,
+    endpointPath: string,
+  ): Promise<Record<string, unknown>> {
     const rawBody = req.body;
 
+    this.logger.log(`Webhook Stripe recibido en ${endpointPath}`);
+
     if (!Buffer.isBuffer(rawBody)) {
-      this.logger.error('Stripe webhook body is not a raw Buffer');
+      this.logger.error(
+        `Stripe webhook body is not a raw Buffer en ${endpointPath}`,
+      );
       throw new BadRequestException('STRIPE_RAW_BODY_REQUIRED');
     }
 
     const event = this.stripeService.constructEventFromPayload(signature, rawBody);
 
+    this.logger.log(`Evento Stripe verificado: ${event.type} (${event.id})`);
+
     switch (event.type) {
+      case 'checkout.session.completed':
+        return this.handleCheckoutSessionCompleted(event);
       case 'payment_intent.succeeded':
-        return this.handlePaymentIntentSucceeded(event as Stripe.Event);
+        return this.handlePaymentIntentSucceeded(event);
       case 'payment_intent.payment_failed':
-        return this.handlePaymentIntentFailed(event as Stripe.Event);
+        return this.handlePaymentIntentFailed(event);
+      case 'charge.succeeded':
+        return this.handleChargeSucceeded(event);
       case 'charge.refunded':
-        return this.handleChargeRefunded(event as Stripe.Event);
+        return this.handleChargeRefunded(event);
       default:
         this.logger.debug(`Evento de Stripe ignorado: ${event.type}`);
-        return { received: true };
+        return { received: true, ignored: true };
     }
+  }
+
+  private async handleCheckoutSessionCompleted(event: Stripe.Event) {
+    const session = event.data.object as Stripe.Checkout.Session;
+    const paymentIntentRef =
+      typeof session.payment_intent === 'string'
+        ? session.payment_intent
+        : session.payment_intent?.id;
+
+    this.logger.log(
+      `checkout.session.completed recibido para session=${session.id} paymentIntent=${paymentIntentRef ?? 'N/A'}`,
+    );
+
+    return {
+      received: true,
+      sessionId: session.id,
+      paymentIntent: paymentIntentRef ?? null,
+    };
   }
 
   private async handlePaymentIntentSucceeded(event: Stripe.Event) {
     const paymentIntent = event.data.object as Stripe.PaymentIntent;
     const metadata = paymentIntent.metadata ?? {};
     const userId = Number(metadata.userId);
+
+    this.logger.log(`Procesando payment_intent.succeeded para ${paymentIntent.id}`);
 
     if (!userId || Number.isNaN(userId)) {
       this.logger.error(
@@ -95,8 +152,7 @@ export class StripeWebhookController {
         ? metadata.promoCode
         : undefined;
     const discountCents =
-      typeof metadata.discountCents === 'string' &&
-      metadata.discountCents.trim()
+      typeof metadata.discountCents === 'string' && metadata.discountCents.trim()
         ? metadata.discountCents
         : undefined;
     const amountCents =
@@ -140,7 +196,7 @@ export class StripeWebhookController {
         : undefined;
 
     this.logger.log(
-      `Email resuelto para PaymentIntent ${paymentIntent.id}: ${customerEmail ?? 'N/A'}`,
+      `Pedido resuelto para paymentIntent=${paymentIntent.id}: orderId=${orderId ?? 'N/A'}`,
     );
 
     if (customerEmail && orderId) {
@@ -175,9 +231,9 @@ export class StripeWebhookController {
       );
     }
 
-    this.logger.log(`Pedido confirmado para PaymentIntent ${paymentIntent.id}`); // [WEBHOOK]
+    this.logger.log(`Pedido confirmado para PaymentIntent ${paymentIntent.id}`);
 
-    return order;
+    return { received: true, order };
   }
 
   private async resolveCustomerEmail(
@@ -235,6 +291,14 @@ export class StripeWebhookController {
     return { received: true };
   }
 
+  private async handleChargeSucceeded(event: Stripe.Event) {
+    const charge = event.data.object as Stripe.Charge;
+    this.logger.debug(
+      `charge.succeeded recibido para charge=${charge.id} paymentIntent=${typeof charge.payment_intent === 'string' ? charge.payment_intent : charge.payment_intent?.id ?? 'N/A'}`,
+    );
+    return { received: true };
+  }
+
   private async handleChargeRefunded(event: Stripe.Event) {
     const charge = event.data.object as Stripe.Charge;
     const paymentIntentRef =
@@ -247,7 +311,7 @@ export class StripeWebhookController {
       return { received: true };
     }
 
-    await this.ordersService.markOrderAsRefunded(paymentIntentRef); // [STRIPE]
+    await this.ordersService.markOrderAsRefunded(paymentIntentRef);
     this.logger.log(
       `Pedido con PaymentIntent ${paymentIntentRef} marcado como REFUNDED`,
     );
