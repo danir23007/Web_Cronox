@@ -621,6 +621,53 @@ if (!cart) {
     });
   }
 
+
+  async getPaymentProcessingStatus(
+    userId: number,
+    providerRef?: string,
+  ): Promise<Record<string, unknown>> {
+    const normalizedProviderRef = String(providerRef ?? '').trim();
+
+    if (!normalizedProviderRef) {
+      throw new BadRequestException('PROVIDER_REF_REQUIRED');
+    }
+
+    const order = await this.prisma.order.findFirst({
+      where: {
+        userId,
+        providerRef: normalizedProviderRef,
+      },
+      select: {
+        id: true,
+        status: true,
+        providerRef: true,
+        updatedAt: true,
+      },
+    });
+
+    if (!order) {
+      return {
+        providerRef: normalizedProviderRef,
+        found: false,
+        isProcessed: false,
+      };
+    }
+
+    const isProcessed =
+      order.status === OrderStatus.PAID ||
+      order.status === OrderStatus.REFUNDED ||
+      order.status === OrderStatus.SHIPPED;
+
+    return {
+      providerRef: order.providerRef,
+      found: true,
+      orderId: order.id,
+      orderStatus: order.status,
+      isProcessed,
+      updatedAt: order.updatedAt,
+    };
+  }
+
   async listOrders(
     user: AuthenticatedUser,
     pagination: PaginationDto,

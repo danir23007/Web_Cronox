@@ -122,6 +122,35 @@ export class OrdersController {
     return this.ordersService.createOrderFromWebhook(dto);
   }
 
+  @Get('orders/payment-status')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Consulta el estado de procesamiento de un pago confirmado en Stripe' })
+  @ApiOkResponse({
+    description: 'Estado del pedido asociado al pago',
+    schema: {
+      example: {
+        providerRef: 'pi_12345',
+        found: true,
+        orderId: 42,
+        orderStatus: 'PAID',
+        isProcessed: true,
+      },
+    },
+  })
+  async getPaymentStatus(
+    @Req() req: Request,
+    @Query('providerRef') providerRef?: string,
+  ): Promise<Record<string, unknown>> {
+    const userId = req.user?.id;
+
+    if (typeof userId !== 'number') {
+      throw new UnauthorizedException('USER_NOT_AUTHENTICATED');
+    }
+
+    return this.ordersService.getPaymentProcessingStatus(userId, providerRef);
+  }
+
   @Get('orders')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()

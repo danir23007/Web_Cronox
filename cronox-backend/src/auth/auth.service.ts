@@ -160,6 +160,14 @@ export class AuthService {
     await this.cartService.mergeOnLogin(userId, cartId);
   }
 
+
+  logCartMergeError(userId: number, error: unknown) {
+    const message = error instanceof Error ? error.message : String(error);
+    this.logger.warn(
+      `No se pudo fusionar el carrito guest en login/register para userId=${userId}: ${message}`,
+    );
+  }
+
   async requestPasswordReset(email: string) {
     const normalizedEmail = email?.toLowerCase();
     const user = normalizedEmail

@@ -36,7 +36,11 @@ export class AuthController {
     const result = await this.authService.register(dto);
 
     const cookies = (req as Request & { cookies?: Record<string, string | undefined> }).cookies;
-    await this.authService.mergeCartOnLogin(result.user.id, cookies?.cartId);
+    try {
+      await this.authService.mergeCartOnLogin(result.user.id, cookies?.cartId);
+    } catch (error) {
+      this.authService.logCartMergeError(result.user.id, error);
+    }
 
     this.authService.setAuthCookies(res, result.tokens);
 
@@ -53,7 +57,11 @@ export class AuthController {
     const result = await this.authService.login(dto);
 
     const cookies = (req as Request & { cookies?: Record<string, string | undefined> }).cookies;
-    await this.authService.mergeCartOnLogin(result.user.id, cookies?.cartId);
+    try {
+      await this.authService.mergeCartOnLogin(result.user.id, cookies?.cartId);
+    } catch (error) {
+      this.authService.logCartMergeError(result.user.id, error);
+    }
 
     this.authService.setAuthCookies(res, result.tokens);
 
