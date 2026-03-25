@@ -144,7 +144,7 @@ export class OrderConfirmationEmailMapper {
     const fullName =
       this.pickString(record, ['name', 'fullName', 'full_name']) ??
       [firstName, lastName].filter(Boolean).join(' ').trim();
-    const line1 = this.pickString(record, ['line1', 'address1', 'address']);
+    const line1 = this.pickString(record, ['line1', 'address1']);
     const line2 = this.pickString(record, ['line2', 'address2']);
     const city = this.pickString(record, ['city', 'town']);
     const state = this.pickString(record, ['state', 'province', 'region']);
