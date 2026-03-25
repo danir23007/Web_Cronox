@@ -107,6 +107,18 @@
     if (input?.name) userEditedShippingFields.add(input.name);
   };
 
+  let shippingIntentRefreshTimer = null;
+  const schedulePaymentIntentRefreshFromShipping = (delayMs = 450) => {
+    if (!state.isAuthenticated || !currentClientSecret) return;
+    if (shippingIntentRefreshTimer) {
+      window.clearTimeout(shippingIntentRefreshTimer);
+    }
+    shippingIntentRefreshTimer = window.setTimeout(async () => {
+      shippingIntentRefreshTimer = null;
+      await preparePaymentIntent();
+    }, delayMs);
+  };
+
   const buildShippingAddressPayload = () => {
     if (!shippingForm) return undefined;
     const read = (input) => cleanText(input?.value || '');
@@ -145,8 +157,14 @@
 
   Object.values(shippingFields).forEach((input) => {
     if (!input) return;
-    input.addEventListener('input', () => markShippingFieldEdited(input));
-    input.addEventListener('change', () => markShippingFieldEdited(input));
+    input.addEventListener('input', () => {
+      markShippingFieldEdited(input);
+      schedulePaymentIntentRefreshFromShipping();
+    });
+    input.addEventListener('change', () => {
+      markShippingFieldEdited(input);
+      schedulePaymentIntentRefreshFromShipping(0);
+    });
   });
 
   const readStoredPromo = () => {
