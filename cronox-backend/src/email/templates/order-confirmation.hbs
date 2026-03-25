@@ -228,8 +228,33 @@
 
                 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;border-collapse:collapse;">
                   <tr>
-                    <!-- SHIPPING ADDRESS -->
+                    <!-- CUSTOMER CONTACT -->
                     <td valign="top" width="50%" style="width:50%;padding:0 18px 24px 0;">
+                      <div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:22px;color:#555555;font-weight:400;padding:0 0 8px 0;">
+                        Contacto
+                      </div>
+
+                      {{#if customerFullName}}
+                      <div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:22px;color:#767676;">
+                        {{customerFullName}}
+                      </div>
+                      {{/if}}
+
+                      {{#if customerEmail}}
+                      <div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:22px;color:#767676;">
+                        {{customerEmail}}
+                      </div>
+                      {{/if}}
+
+                      {{#if customerPhone}}
+                      <div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:22px;color:#767676;">
+                        {{customerPhone}}
+                      </div>
+                      {{/if}}
+                    </td>
+
+                    <!-- SHIPPING ADDRESS -->
+                    <td valign="top" width="50%" style="width:50%;padding:0 0 24px 18px;">
                       <div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:22px;color:#555555;font-weight:400;padding:0 0 8px 0;">
                         Dirección de envío
                       </div>
@@ -254,8 +279,14 @@
 
                       {{#if shippingAddress.postalCode}}
                       <div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:22px;color:#767676;">
-                        {{shippingAddress.postalCode}} {{shippingAddress.city}}
+                        {{shippingAddress.postalCode}}{{#if shippingAddress.city}}, {{shippingAddress.city}}{{/if}}
                       </div>
+                      {{else}}
+                        {{#if shippingAddress.city}}
+                        <div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:22px;color:#767676;">
+                          {{shippingAddress.city}}
+                        </div>
+                        {{/if}}
                       {{/if}}
 
                       {{#if shippingAddress.state}}
@@ -267,47 +298,6 @@
                       {{#if shippingAddress.country}}
                       <div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:22px;color:#767676;">
                         {{shippingAddress.country}}
-                      </div>
-                      {{/if}}
-                    </td>
-
-                    <!-- CONTACT / DUPLICATE COLUMN STYLE -->
-                    <td valign="top" width="50%" style="width:50%;padding:0 0 24px 18px;">
-                      <div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:22px;color:#555555;font-weight:400;padding:0 0 8px 0;">
-                        Dirección de Envío
-                      </div>
-
-                      {{#if shippingAddress.fullName}}
-                      <div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:22px;color:#767676;">
-                        {{shippingAddress.fullName}}
-                      </div>
-                      {{/if}}
-
-                      {{#if shippingAddress.line1}}
-                      <div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:22px;color:#767676;">
-                        <a href="{{orderUrl}}" style="color:#4a75b5;text-decoration:underline;">{{shippingAddress.line1}}</a>
-                      </div>
-                      {{/if}}
-
-                      {{#if shippingAddress.line2}}
-                      <div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:22px;color:#767676;">
-                        {{shippingAddress.line2}}
-                      </div>
-                      {{/if}}
-
-                      <div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:22px;color:#767676;">
-                        {{#if shippingAddress.postalCode}}<a href="{{orderUrl}}" style="color:#4a75b5;text-decoration:underline;">{{shippingAddress.postalCode}} {{shippingAddress.city}}</a>{{else}}{{shippingAddress.city}}{{/if}}
-                      </div>
-
-                      {{#if shippingAddress.state}}
-                      <div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:22px;color:#767676;">
-                        <a href="{{orderUrl}}" style="color:#4a75b5;text-decoration:underline;">{{shippingAddress.state}}</a>
-                      </div>
-                      {{/if}}
-
-                      {{#if shippingAddress.country}}
-                      <div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:22px;color:#767676;">
-                        <a href="{{orderUrl}}" style="color:#4a75b5;text-decoration:underline;">{{shippingAddress.country}}</a>
                       </div>
                       {{/if}}
                     </td>

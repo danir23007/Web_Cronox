@@ -160,13 +160,17 @@ export class StripeWebhookController {
     const amount = (amountCents / 100).toFixed(2);
     const currency = (paymentIntent.currency ?? 'eur').toUpperCase();
 
+    const metadataShippingAddress = this.parseShippingAddressFromMetadata(
+      metadata.shippingAddress,
+    );
+
     const shippingAddress = paymentIntent.shipping
       ? {
           name: paymentIntent.shipping.name,
           phone: paymentIntent.shipping.phone,
           address: paymentIntent.shipping.address,
         }
-      : undefined;
+      : metadataShippingAddress ?? undefined;
 
     const order = await this.ordersService.createOrderFromWebhook(
       {
@@ -180,6 +184,9 @@ export class StripeWebhookController {
           shippingMethod,
           shippingCostCents,
           itemsTotalCents,
+          ...(metadataShippingAddress
+            ? { shippingAddress: metadataShippingAddress }
+            : {}),
           ...(promoCode ? { promoCode } : {}),
           ...(discountCents ? { discountCents } : {}),
         } as any,
@@ -234,6 +241,29 @@ export class StripeWebhookController {
     this.logger.log(`Pedido confirmado para PaymentIntent ${paymentIntent.id}`);
 
     return { received: true, order };
+  }
+
+  private parseShippingAddressFromMetadata(
+    raw: unknown,
+  ): Record<string, unknown> | null {
+    if (typeof raw !== 'string' || !raw.trim()) {
+      return null;
+    }
+
+    try {
+      const parsed = JSON.parse(raw);
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+        return null;
+      }
+      return parsed as Record<string, unknown>;
+    } catch (error) {
+      this.logger.warn(
+        `No se pudo parsear metadata.shippingAddress: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+      return null;
+    }
   }
 
   private async resolveCustomerEmail(

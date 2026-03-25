@@ -29,6 +29,8 @@ export interface EmailSendOptions {
 export type OrderConfirmationEmailTemplateData = {
   orderId: string;
   customerEmail: string;
+  customerFullName?: string | null;
+  customerPhone?: string | null;
   message: string;
   orderUrl: string;
   storeUrl: string;
@@ -41,6 +43,7 @@ export type OrderConfirmationEmailTemplateData = {
   shippingMethod?: string | null;
   shippingAddress: {
     fullName?: string | null;
+    phone?: string | null;
     line1?: string | null;
     line2?: string | null;
     city?: string | null;

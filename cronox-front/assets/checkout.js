@@ -107,6 +107,42 @@
     if (input?.name) userEditedShippingFields.add(input.name);
   };
 
+  const buildShippingAddressPayload = () => {
+    if (!shippingForm) return undefined;
+    const read = (input) => cleanText(input?.value || '');
+
+    const firstName = read(shippingFields.firstName);
+    const lastName = read(shippingFields.lastName);
+    const line1 = read(shippingFields.address);
+    const city = read(shippingFields.city);
+    const state = read(shippingFields.state);
+    const zip = read(shippingFields.zip);
+    const phone = read(shippingFields.phone);
+    const fullName = [firstName, lastName].filter(Boolean).join(' ').trim();
+
+    const payload = {
+      firstName,
+      lastName,
+      name: fullName,
+      fullName,
+      line1,
+      address: line1,
+      city,
+      state,
+      zip,
+      postalCode: zip,
+      phone,
+      country: 'España',
+    };
+
+    const hasAnyValue = Object.values(payload).some((value) => cleanText(value));
+    if (!hasAnyValue) return undefined;
+
+    return Object.fromEntries(
+      Object.entries(payload).filter(([, value]) => cleanText(value)),
+    );
+  };
+
   Object.values(shippingFields).forEach((input) => {
     if (!input) return;
     input.addEventListener('input', () => markShippingFieldEdited(input));
@@ -667,6 +703,7 @@
         body: JSON.stringify({
           shippingMethod: state.shippingMethod,
           promoCode: state.promo?.code || undefined,
+          shippingAddress: buildShippingAddressPayload(),
         }),
       });
 
