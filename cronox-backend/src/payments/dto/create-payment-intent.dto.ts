@@ -3,6 +3,7 @@ import { Type } from 'class-transformer';
 import {
   IsEnum,
   IsInt,
+  IsObject,
   IsOptional,
   IsString,
   MaxLength,
@@ -35,4 +36,12 @@ export class CreatePaymentIntentDto {
   @IsString()
   @MaxLength(80)
   promoCode?: string;
+
+  @ApiPropertyOptional({
+    description: 'Dirección de envío capturada en el checkout',
+    type: Object,
+  })
+  @IsOptional()
+  @IsObject()
+  shippingAddress?: Record<string, unknown>;
 }

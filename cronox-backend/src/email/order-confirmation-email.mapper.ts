@@ -8,6 +8,9 @@ export const orderForConfirmationEmailInclude = {
     user: {
       select: {
         email: true,
+        firstName: true,
+        lastName: true,
+        name: true,
       },
     },
     shippingMethod: {
@@ -55,6 +58,8 @@ export class OrderConfirmationEmailMapper {
   map(order: OrderForConfirmationEmail): OrderConfirmationEmailTemplateData {
     const storefrontUrl = this.resolveStorefrontUrl();
     const shippingAddress = this.parseShippingAddress(order.shippingAddr);
+    const customerFullName = this.resolveCustomerFullName(order, shippingAddress);
+    const customerPhone = this.normalizeString(shippingAddress.phone);
     const subtotalCents = this.decimalToCents(order.subtotal);
     const taxesCents = this.decimalToCents(order.taxAmount);
     const totalCents = this.decimalToCents(order.total);
@@ -65,6 +70,8 @@ export class OrderConfirmationEmailMapper {
     return {
       orderId: String(order.id),
       customerEmail: order.user?.email ?? '',
+      customerFullName,
+      customerPhone,
       message:
         'Tu pedido se ha confirmado correctamente. Te avisaremos cuando esté en camino.',
       orderUrl: `${storefrontUrl.replace(/\/$/, '')}/profile.html?tab=orders&orderId=${order.id}`,
@@ -132,13 +139,23 @@ export class OrderConfirmationEmailMapper {
     }
 
     const record = input as Record<string, unknown>;
-    const fullName = this.pickString(record, ['name', 'fullName', 'full_name']);
-    const line1 = this.pickString(record, ['line1', 'address1']);
+    const firstName = this.pickString(record, ['firstName', 'first_name']);
+    const lastName = this.pickString(record, ['lastName', 'last_name']);
+    const fullName =
+      this.pickString(record, ['name', 'fullName', 'full_name']) ??
+      [firstName, lastName].filter(Boolean).join(' ').trim();
+    const line1 = this.pickString(record, ['line1', 'address1', 'address']);
     const line2 = this.pickString(record, ['line2', 'address2']);
     const city = this.pickString(record, ['city', 'town']);
     const state = this.pickString(record, ['state', 'province', 'region']);
-    const postalCode = this.pickString(record, ['postalCode', 'zip', 'zipCode']);
+    const postalCode = this.pickString(record, [
+      'postalCode',
+      'zip',
+      'zipCode',
+      'postal_code',
+    ]);
     const country = this.pickString(record, ['country']);
+    const phone = this.pickString(record, ['phone', 'phoneNumber']);
 
     return {
       fullName: fullName ?? null,
@@ -148,6 +165,7 @@ export class OrderConfirmationEmailMapper {
       state: state ?? null,
       postalCode: postalCode ?? null,
       country: country ?? null,
+      phone: phone ?? null,
     };
   }
 
@@ -181,6 +199,41 @@ export class OrderConfirmationEmailMapper {
     }
 
     return undefined;
+  }
+
+  private resolveCustomerFullName(
+    order: OrderForConfirmationEmail,
+    shippingAddress: OrderConfirmationEmailTemplateData['shippingAddress'],
+  ): string | null {
+    const fromUser = [order.user?.firstName, order.user?.lastName]
+      .filter((value) => typeof value === 'string' && value.trim())
+      .map((value) => value.trim())
+      .join(' ')
+      .trim();
+
+    if (fromUser) {
+      return fromUser;
+    }
+
+    const userName = this.normalizeString(order.user?.name);
+    if (userName) {
+      return userName;
+    }
+
+    const shippingName = this.normalizeString(shippingAddress.fullName);
+    if (shippingName) {
+      return shippingName;
+    }
+
+    return null;
+  }
+
+  private normalizeString(value: unknown): string | null {
+    if (typeof value !== 'string') {
+      return null;
+    }
+    const trimmed = value.trim();
+    return trimmed ? trimmed : null;
   }
 
   private resolveVariantName(
