@@ -133,7 +133,9 @@ export class OrderConfirmationEmailMapper {
     return this.fallbackStoreUrl;
   }
 
-  private parseShippingAddress(input: unknown): OrderConfirmationEmailTemplateData['shippingAddress'] {
+  private parseShippingAddress(
+    input: unknown,
+  ): OrderConfirmationEmailTemplateData['shippingAddress'] {
     if (!input || typeof input !== 'object') {
       return {};
     }
@@ -144,6 +146,7 @@ export class OrderConfirmationEmailMapper {
     const fullName =
       this.pickString(record, ['name', 'fullName', 'full_name']) ??
       [firstName, lastName].filter(Boolean).join(' ').trim();
+
     const line1 = this.pickString(record, ['line1', 'address1']);
     const line2 = this.pickString(record, ['line2', 'address2']);
     const city = this.pickString(record, ['city', 'town']);
@@ -175,11 +178,14 @@ export class OrderConfirmationEmailMapper {
   ): string | undefined {
     for (const key of keys) {
       const value = source[key];
+
       if (typeof value === 'string' && value.trim()) {
         return value.trim();
       }
+
       if (value && typeof value === 'object') {
         const nested = value as Record<string, unknown>;
+
         for (const nestedValue of Object.values(nested)) {
           if (typeof nestedValue === 'string' && nestedValue.trim()) {
             return nestedValue.trim();
@@ -190,8 +196,10 @@ export class OrderConfirmationEmailMapper {
 
     if (source.address && typeof source.address === 'object') {
       const nestedAddress = source.address as Record<string, unknown>;
+
       for (const key of keys) {
         const nested = nestedAddress[key];
+
         if (typeof nested === 'string' && nested.trim()) {
           return nested.trim();
         }
@@ -206,7 +214,7 @@ export class OrderConfirmationEmailMapper {
     shippingAddress: OrderConfirmationEmailTemplateData['shippingAddress'],
   ): string | null {
     const fromUser = [order.user?.firstName, order.user?.lastName]
-      .filter((value) => typeof value === 'string' && value.trim())
+      .filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
       .map((value) => value.trim())
       .join(' ')
       .trim();
