@@ -219,6 +219,16 @@ export class StripeWebhookController {
           const templateData = this.orderConfirmationEmailMapper.map(orderForEmail);
           templateData.customerEmail = customerEmail;
 
+          console.log(
+            'ORDER SHIPPING ADDR RAW',
+            JSON.stringify(orderForEmail.shippingAddr, null, 2),
+          );
+
+          console.log(
+            'ORDER EMAIL TEMPLATE DATA',
+            JSON.stringify(templateData, null, 2),
+          );
+
           await this.emailService.send({
             type: EmailType.ORDER_CONFIRMATION,
             to: customerEmail,
