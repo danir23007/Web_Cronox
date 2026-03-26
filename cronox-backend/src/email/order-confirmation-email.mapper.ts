@@ -77,7 +77,7 @@ export class OrderConfirmationEmailMapper {
       orderUrl: `${storefrontUrl.replace(/\/$/, '')}/profile.html?tab=orders&orderId=${order.id}`,
       storeUrl: storefrontUrl,
       subtotalFormatted: this.formatCurrencyFromCents(subtotalCents),
-      discountFormatted: this.formatCurrencyFromCents(discountCents),
+      discountFormatted: this.formatDiscountFromCents(discountCents),
       shippingFormatted: this.formatCurrencyFromCents(shippingCents),
       taxesFormatted: this.formatCurrencyFromCents(taxesCents),
       totalFormatted: this.formatCurrencyFromCents(totalCents),
@@ -296,6 +296,13 @@ export class OrderConfirmationEmailMapper {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
     }).format(amount);
+  }
+
+  private formatDiscountFromCents(cents: number): string {
+    const safeCents = Math.max(0, Number.isFinite(cents) ? cents : 0);
+    const formatted = this.formatCurrencyFromCents(safeCents);
+
+    return safeCents > 0 ? `-${formatted}` : formatted;
   }
 
   private decimalToCents(value: Prisma.Decimal | Decimal): number {
