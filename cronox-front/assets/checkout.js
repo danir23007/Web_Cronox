@@ -737,9 +737,17 @@
       }
 
       const data = await response.json();
-      currentClientSecret = data.clientSecret;
-      currentPaymentIntentId = typeof data.paymentIntentId === 'string' ? data.paymentIntentId : null;
-      await ensurePaymentElement(currentClientSecret);
+      const nextClientSecret =
+        typeof data.clientSecret === 'string' ? data.clientSecret : null;
+      const nextPaymentIntentId =
+        typeof data.paymentIntentId === 'string' ? data.paymentIntentId : null;
+
+      if (!nextClientSecret) {
+        throw new Error('No se recibió un client secret válido para el pago.');
+      }
+
+      await ensurePaymentElement(nextClientSecret);
+      currentPaymentIntentId = nextPaymentIntentId;
       state.shippingMethod = data.shippingMethod?.code || state.shippingMethod;
       state.totals = data.totals || state.totals;
       renderSummary(state.totals, findShippingMethod(state.shippingMethod) || data.shippingMethod);
