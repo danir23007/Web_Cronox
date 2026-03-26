@@ -79,12 +79,13 @@ export class StripeService {
       };
     }
 
-    const metadataFingerprint = Object.entries(metadata)
-      .sort(([a], [b]) => a.localeCompare(b))
-      .map(([key, value]) => `${key}:${value}`)
-      .join('|');
-
-    const idempotencyKey = `payment:${userId}:${cartId}:${amount}:${metadataFingerprint}`; // [STRIPE]
+    const idempotencyKey = this.buildCreatePaymentIntentIdempotencyKey({
+      userId,
+      cartId,
+      amount,
+      currency,
+      metadata,
+    });
 
     const paymentIntent = await this.stripe.paymentIntents.create(
       {
@@ -151,9 +152,21 @@ export class StripeService {
         });
       }
 
+      if (existing.currency !== args.currency) {
+        this.logger.warn(
+          `PaymentIntent ${paymentIntentId} tiene currency=${existing.currency} y se requiere ${args.currency}, creando uno nuevo`,
+        );
+        return this.stripe.paymentIntents.create({
+          amount: args.amount,
+          currency: args.currency,
+          metadata: args.metadata,
+          description: this.paymentDescription,
+          automatic_payment_methods: { enabled: true },
+        });
+      }
+
       return this.stripe.paymentIntents.update(paymentIntentId, {
         amount: args.amount,
-        currency: args.currency,
         metadata: args.metadata,
         description: this.paymentDescription,
       });
@@ -171,6 +184,34 @@ export class StripeService {
         automatic_payment_methods: { enabled: true },
       });
     }
+  }
+
+  private buildCreatePaymentIntentIdempotencyKey(args: {
+    userId: number;
+    cartId: number;
+    amount: number;
+    currency: string;
+    metadata: Record<string, string>;
+  }): string {
+    const metadataFingerprint = Object.entries(args.metadata)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([key, value]) => `${key}:${value}`)
+      .join('|');
+
+    const digest = createHash('sha256')
+      .update(
+        JSON.stringify({
+          userId: args.userId,
+          cartId: args.cartId,
+          amount: args.amount,
+          currency: args.currency,
+          metadataFingerprint,
+        }),
+      )
+      .digest('hex')
+      .slice(0, 24);
+
+    return `payment:${args.userId}:${args.cartId}:${args.amount}:${args.currency}:${digest}`;
   }
 
   constructEventFromPayload(signature: string | string[] | undefined, rawBody: Buffer) {
