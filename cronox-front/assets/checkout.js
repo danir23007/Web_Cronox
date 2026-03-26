@@ -268,6 +268,7 @@
   let currentClientSecret = null;
   let currentPaymentIntentId = null;
   let isInitializing = false;
+  let pendingPaymentIntentRefresh = false;
   let paymentElementMounted = false;
   let hasClearedPromoOnLoad = false;
 
@@ -368,6 +369,7 @@
 
   const resetPaymentElement = () => {
     currentClientSecret = null;
+    currentPaymentIntentId = null;
     paymentElementMounted = false;
     if (paymentElement) {
       try {
@@ -693,7 +695,10 @@
   const preparePaymentIntent = async () => {
     if (!state.isAuthenticated) return;
 
-    if (isInitializing) return;
+    if (isInitializing) {
+      pendingPaymentIntentRefresh = true;
+      return;
+    }
     isInitializing = true;
     setLoadingState(true);
     errorDiv.textContent = '';
@@ -722,6 +727,7 @@
           shippingMethod: state.shippingMethod,
           promoCode: state.promo?.code || undefined,
           shippingAddress: buildShippingAddressPayload(),
+          paymentIntentId: currentPaymentIntentId || undefined,
         }),
       });
 
@@ -742,6 +748,13 @@
     } finally {
       setLoadingState(false);
       isInitializing = false;
+
+      if (pendingPaymentIntentRefresh) {
+        pendingPaymentIntentRefresh = false;
+        window.setTimeout(() => {
+          preparePaymentIntent();
+        }, 0);
+      }
     }
   };
 
