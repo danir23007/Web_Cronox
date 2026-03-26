@@ -38,6 +38,14 @@ export class CreatePaymentIntentDto {
   promoCode?: string;
 
   @ApiPropertyOptional({
+    description: 'PaymentIntent existente a refrescar cuando cambian totales/metadata',
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(255)
+  paymentIntentId?: string;
+
+  @ApiPropertyOptional({
     description: 'Dirección de envío capturada en el checkout',
     type: Object,
   })

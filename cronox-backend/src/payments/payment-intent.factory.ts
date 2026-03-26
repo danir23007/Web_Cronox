@@ -38,18 +38,19 @@ export class PaymentIntentFactory {
       cartId: preview.metadata.cartId,
       amount: amountInCents,
       currency: preview.computation.currency,
+      paymentIntentId: dto.paymentIntentId,
       metadata: {
         shippingMethod: String(preview.metadata.shippingMethod),
         shippingCostCents: String(preview.metadata.shippingCostCents),
         itemsTotalCents: String(preview.metadata.itemsTotalCents),
+        discountCents: String(
+          preview.metadata.discountCents ??
+            preview.totals.discountCents ??
+            0,
+        ),
         ...(preview.metadata.promoCode
           ? {
               promoCode: preview.metadata.promoCode,
-              discountCents: String(
-                preview.metadata.discountCents ??
-                  preview.totals.discountCents ??
-                  0,
-              ),
             }
           : {}),
         ...(serializedShippingAddress
