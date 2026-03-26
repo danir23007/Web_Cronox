@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import Stripe from 'stripe';
+import { createHash } from 'crypto';
 
 export type CreateOrReusePaymentIntentArgs = {
   userId: number;
