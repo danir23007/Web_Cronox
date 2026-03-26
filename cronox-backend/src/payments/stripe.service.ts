@@ -79,14 +79,10 @@ export class StripeService {
       };
     }
 
-    const metadataFingerprintRaw = Object.entries(metadata)
+    const metadataFingerprint = Object.entries(metadata)
       .sort(([a], [b]) => a.localeCompare(b))
       .map(([key, value]) => `${key}:${value}`)
       .join('|');
-    const metadataFingerprint = createHash('sha256')
-      .update(metadataFingerprintRaw)
-      .digest('hex')
-      .slice(0, 24);
 
     const idempotencyKey = `payment:${userId}:${cartId}:${amount}:${metadataFingerprint}`; // [STRIPE]
 
