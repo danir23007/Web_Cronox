@@ -168,7 +168,14 @@ export class AdminOrdersService {
       return { updated: order, previous: existing };
     });
 
-    await this.sendStatusEmails(previous, updated, hadExplicitStatus);
+    try {
+      await this.sendStatusEmails(previous, updated, hadExplicitStatus);
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : 'Error desconocido';
+      this.logger.error(
+        `No se pudo enviar el email transaccional del pedido #${updated.id}. El pedido se actualizó correctamente. reason=${reason}`,
+      );
+    }
 
     return this.serializeOrderWithItems(updated);
   }
@@ -183,32 +190,33 @@ export class AdminOrdersService {
       },
     } as const;
 
-    const order = await this.prisma.$transaction(async (tx) => {
-      const existing = await tx.order.findUnique({ where: { id }, include });
+    const order = await this.prisma
+      .$transaction(async (tx) => {
+        const existing = await tx.order.findUnique({ where: { id }, include });
 
-      if (!existing) {
-        throw new NotFoundException('Order not found');
-      }
+        if (!existing) {
+          throw new NotFoundException('Order not found');
+        }
 
-      const updated = await tx.order.update({
-        where: { id },
-        data: { status: OrderStatus.REFUNDED },
-        include,
+        const updated = await tx.order.update({
+          where: { id },
+          data: { status: OrderStatus.REFUNDED },
+          include,
+        });
+
+        await this.syncHistorialForStatusChange(existing, updated, tx);
+
+        return updated;
+      })
+      .catch((error) => {
+        if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
+          throw new NotFoundException('Order not found');
+        }
+
+        throw error;
       });
 
-      await this.syncHistorialForStatusChange(existing, updated, tx);
-
-      return updated;
-    }).catch((error) => {
-      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
-        throw new NotFoundException('Order not found');
-      }
-
-      throw error;
-    });
-
     // TODO: Integrate Stripe refund API when available.
-
     return this.serializeOrderWithItems(order);
   }
 
@@ -480,7 +488,7 @@ export class AdminOrdersService {
     }
 
     if (updated.status === OrderStatus.SHIPPED) {
-      await this.sendStatusEmailSafely({
+      await this.emailService.send({
         type: EmailType.ORDER_SHIPPED,
         to,
         subject: `CRONOX · Pedido #${updated.id} enviado`,
@@ -495,7 +503,7 @@ export class AdminOrdersService {
     }
 
     if (updated.status === OrderStatus.DELIVERED) {
-      await this.sendStatusEmailSafely({
+      await this.emailService.send({
         type: EmailType.ORDER_DELIVERED,
         to,
         subject: `CRONOX · Pedido #${updated.id} entregado`,
@@ -504,22 +512,6 @@ export class AdminOrdersService {
           statusLabel: this.getOrderStatusLabel(updated.status),
         },
       });
-    }
-  }
-
-  private async sendStatusEmailSafely(params: {
-    type: EmailType;
-    to: string;
-    subject: string;
-    templateData: Record<string, unknown>;
-  }) {
-    try {
-      await this.emailService.send(params);
-    } catch (error) {
-      this.logger.error(
-        `No se pudo enviar el email ${params.type} a ${params.to}`,
-        error instanceof Error ? error.stack : String(error),
-      );
     }
   }
 
