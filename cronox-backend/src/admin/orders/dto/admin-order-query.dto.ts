@@ -77,6 +77,10 @@ export class AdminOrdersQueryDto {
   userId?: string;
 
   @IsOptional()
+  @IsString()
+  email?: string;
+
+  @IsOptional()
   @IsNumberString()
   minTotal?: string;
 
