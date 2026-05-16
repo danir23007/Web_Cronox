@@ -23,7 +23,7 @@
   </script>
   <link id="cronox-admin-style" rel="stylesheet" href="assets/store.css">
   <style>
-    body { font-family: 'Inter', system-ui, -apple-system, sans-serif; background: #0b0b10; color: #f5f5f7; margin: 0; min-height: 100vh; }
+    body { font-family: 'Inter', system-ui, -apple-system, sans-serif; background: #050505; color: #fff; margin: 0; min-height: 100vh; }
     .admin-shell { max-width: 1100px; margin: 0 auto; padding: 32px 20px 48px; }
     .admin-header { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 24px; }
     .admin-title { font-size: 1.8rem; margin: 0; letter-spacing: 0.5px; }
@@ -147,13 +147,34 @@
     .toast--hide { opacity: 0; transform: translateY(6px); transition: opacity 0.2s ease, transform 0.2s ease; }
     .admin-section.restricted > :not(.restricted-notice) { display: none !important; }
     .restricted-notice { display: block; }
+    .admin-index-list { display: grid; gap: 10px; margin-top: 14px; }
+    .admin-nav-item { width: 100%; text-align: left; padding: 16px 14px; font-size: 1.02rem; }
+    .admin-view-back { margin-bottom: 14px; }
+    .subtle { color: rgba(255,255,255,0.72); }
+    .bw-theme .card,
+    .bw-theme .status-banner,
+    .bw-theme .modal .modal-box,
+    .bw-theme details.filters-panel,
+    .bw-theme .dashboard-alerts .alert-item,
+    .bw-theme .stat-card,
+    .bw-theme .note-card { background: #050505; border-color: rgba(255,255,255,0.16); box-shadow: none; }
+    .bw-theme .btn { background: #000; border-color: rgba(255,255,255,0.7); color: #fff; }
+    .bw-theme .btn.primary { background: #fff; color: #000; border-color: #fff; }
+    .bw-theme .btn.danger { background: #000; color: #fff; border-color: rgba(255,255,255,0.7); }
+    .bw-theme .btn:hover { background: #0a0a0a; border-color: #fff; }
+    .bw-theme .input, .bw-theme .select, .bw-theme .textarea { background: #000; border-color: rgba(255,255,255,0.2); color: #fff; }
+    .bw-theme .chip, .bw-theme .badge, .bw-theme .tab-badge, .bw-theme .note-tag { background: #000; color: #fff; border-color: rgba(255,255,255,0.3); }
+    .bw-theme .link-btn { color: #fff; }
+    .bw-theme th, .bw-theme .empty, .bw-theme .dashboard-sub, .bw-theme .time-sub, .bw-theme small, .bw-theme .user-email { color: rgba(255,255,255,0.72); }
+    .bw-theme table, .bw-theme th, .bw-theme td { border-color: rgba(255,255,255,0.14); }
+    @media (max-width: 720px) { .admin-shell { padding: 20px 12px 32px; } .admin-nav-item { padding: 15px 12px; } }
     @keyframes toast-in {
       from { opacity: 0; transform: translateY(6px); }
       to { opacity: 1; transform: translateY(0); }
     }
   </style>
 </head>
-<body>
+<body class="bw-theme">
   <div class="admin-shell">
     <header class="admin-header">
       <h1 class="admin-title">CRONOX ADMIN</h1>
@@ -165,18 +186,29 @@
 
     <div id="statusArea" class="status-area" aria-live="polite"></div>
 
-    <nav class="card" style="margin-bottom:16px; padding:12px;">
-      <div class="tabs" id="adminTabs" style="display:flex; gap:8px; flex-wrap:wrap;">
-        <button class="btn primary" data-section="section-dashboard">Resumen</button>
-        <button class="btn" data-section="section-23">Solicitudes 2→3 <span class="tab-badge" id="requestsBadge23" hidden>0</span></button>
-        <button class="btn" data-section="section-34">Solicitudes 3→4 <span class="tab-badge" id="requestsBadge34" hidden>0</span></button>
-        <button class="btn" data-section="section-activity">Actividad</button>
-        <button class="btn" data-section="section-users">Usuarios</button>
-        <button class="btn" data-section="section-products">Productos</button>
-        <button class="btn" data-section="section-orders">Pedidos</button>
-        <button class="btn" data-section="section-codes">Códigos</button>
+    <section id="section-menu" class="card admin-section" aria-labelledby="title-menu">
+      <h2 id="title-menu">Secciones</h2>
+      <small class="subtle">Selecciona un módulo del panel de administración.</small>
+      <div class="admin-index-list" id="adminIndexList">
+        <button class="btn admin-nav-item" data-nav-target="section-dashboard">Resumen</button>
+        <button class="btn admin-nav-item" data-nav-target="section-circles-menu">Círculos</button>
+        <button class="btn admin-nav-item" data-nav-target="section-activity">Actividad</button>
+        <button class="btn admin-nav-item" data-nav-target="section-users">Usuarios</button>
+        <button class="btn admin-nav-item" data-nav-target="section-products">Productos</button>
+        <button class="btn admin-nav-item" data-nav-target="section-orders">Pedidos</button>
+        <button class="btn admin-nav-item" data-nav-target="section-codes">Códigos</button>
       </div>
-    </nav>
+    </section>
+
+    <section id="section-circles-menu" class="card admin-section" aria-labelledby="title-circles-menu" hidden>
+      <button class="btn admin-view-back" type="button" data-back-target="section-menu">← Atrás</button>
+      <h2 id="title-circles-menu">Círculos</h2>
+      <small class="subtle">Selecciona el tipo de solicitud.</small>
+      <div class="admin-index-list">
+        <button class="btn admin-nav-item" data-nav-target="section-23">Solicitudes 2 → 3 <span class="tab-badge" id="requestsBadge23" hidden>0</span></button>
+        <button class="btn admin-nav-item" data-nav-target="section-34">Solicitudes 3 → 4 <span class="tab-badge" id="requestsBadge34" hidden>0</span></button>
+      </div>
+    </section>
 
     <div id="apiUnavailable" class="message error" role="alert"></div>
 
@@ -480,7 +512,7 @@
       </div>
     </section>
 
-    <section id="section-dashboard" class="card admin-section" aria-labelledby="title-dashboard">
+    <section id="section-dashboard" class="card admin-section" aria-labelledby="title-dashboard" hidden>
       <div style="display:flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap;">
         <div>
           <h2 id="title-dashboard">Resumen general</h2>
