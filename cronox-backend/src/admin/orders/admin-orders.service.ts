@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { OrderStatus, Prisma } from '@prisma/client';
@@ -41,6 +42,8 @@ type OrderWithItems = Prisma.OrderGetPayload<{
 
 @Injectable()
 export class AdminOrdersService {
+  private readonly logger = new Logger(AdminOrdersService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly historialService: HistorialService,
@@ -477,7 +480,7 @@ export class AdminOrdersService {
     }
 
     if (updated.status === OrderStatus.SHIPPED) {
-      await this.emailService.send({
+      await this.sendStatusEmailSafely({
         type: EmailType.ORDER_SHIPPED,
         to,
         subject: `CRONOX · Pedido #${updated.id} enviado`,
@@ -492,7 +495,7 @@ export class AdminOrdersService {
     }
 
     if (updated.status === OrderStatus.DELIVERED) {
-      await this.emailService.send({
+      await this.sendStatusEmailSafely({
         type: EmailType.ORDER_DELIVERED,
         to,
         subject: `CRONOX · Pedido #${updated.id} entregado`,
@@ -501,6 +504,22 @@ export class AdminOrdersService {
           statusLabel: this.getOrderStatusLabel(updated.status),
         },
       });
+    }
+  }
+
+  private async sendStatusEmailSafely(params: {
+    type: EmailType;
+    to: string;
+    subject: string;
+    templateData: Record<string, unknown>;
+  }) {
+    try {
+      await this.emailService.send(params);
+    } catch (error) {
+      this.logger.error(
+        `No se pudo enviar el email ${params.type} a ${params.to}`,
+        error instanceof Error ? error.stack : String(error),
+      );
     }
   }
 
