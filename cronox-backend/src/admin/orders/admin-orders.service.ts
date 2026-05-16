@@ -17,7 +17,14 @@ const DEFAULT_PAGE_SIZE = 20;
 const MAX_EXPORT_ROWS = 5000;
 
 type OrderWithCount = Prisma.OrderGetPayload<{
-  include: { _count: { select: { items: true } } };
+  include: {
+    user: {
+      select: {
+        email: true;
+      };
+    };
+    _count: { select: { items: true } };
+  };
 }>;
 
 type OrderWithItems = Prisma.OrderGetPayload<{
@@ -64,7 +71,10 @@ export class AdminOrdersService {
         orderBy,
         skip,
         take: pageSize,
-        include: { _count: { select: { items: true } } },
+        include: {
+          user: { select: { email: true } },
+          _count: { select: { items: true } },
+        },
       }),
       this.prisma.order.count({ where }),
     ]);
@@ -313,6 +323,15 @@ export class AdminOrdersService {
       where.userId = Number(query.userId);
     }
 
+    if (query.email) {
+      where.user = {
+        email: {
+          contains: query.email.trim(),
+          mode: 'insensitive',
+        },
+      };
+    }
+
     const totalFilter: Prisma.DecimalFilter = {};
 
     if (query.minTotal !== undefined) {
@@ -351,6 +370,7 @@ export class AdminOrdersService {
     return {
       id: order.id,
       userId: order.userId,
+      userEmail: order.user?.email ?? null,
       status: order.status,
       trackingNumber: order.trackingNumber,
       trackingUrl: order.trackingUrl,
@@ -375,6 +395,7 @@ export class AdminOrdersService {
     return {
       id: order.id,
       userId: order.userId,
+      userEmail: order.user?.email ?? null,
       status: order.status,
       trackingNumber: order.trackingNumber,
       trackingUrl: order.trackingUrl,
