@@ -432,7 +432,7 @@ export class AdminOrdersService {
   private validateStatusTransition(from: OrderStatus, to: OrderStatus) {
     if (from === to) return;
 
-    if ([OrderStatus.CANCELLED, OrderStatus.REFUNDED].includes(from)) {
+    if (from === OrderStatus.CANCELLED || from === OrderStatus.REFUNDED) {
       throw new BadRequestException(
         `No se puede cambiar de estado desde ${from}. Usa un flujo nuevo para este pedido.`,
       );
