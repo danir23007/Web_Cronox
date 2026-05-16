@@ -23,9 +23,10 @@ import { AdminAuditLogsController } from './audit-logs/admin-audit-logs.controll
 import { AdminAuditLogsService } from './audit-logs/admin-audit-logs.service';
 import { AdminNotesController } from './notes/admin-notes.controller';
 import { AdminNotesService } from './notes/admin-notes.service';
+import { EmailModule } from '../email/email.module';
 
 @Module({
-  imports: [ProductModule, CategoriesModule, HistorialModule, MembershipModule],
+  imports: [ProductModule, CategoriesModule, HistorialModule, MembershipModule, EmailModule],
   controllers: [
     AdminOrdersController,
     AdminUsersController,

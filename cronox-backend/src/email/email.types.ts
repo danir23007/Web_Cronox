@@ -8,6 +8,8 @@ export enum EmailSenderKey {
 export enum EmailTemplate {
   TEST = 'TEST',
   ORDER_CONFIRMATION = 'ORDER_CONFIRMATION',
+  ORDER_SHIPPED = 'ORDER_SHIPPED',
+  ORDER_DELIVERED = 'ORDER_DELIVERED',
   SUPPORT_TICKET_RECEIVED = 'SUPPORT_TICKET_RECEIVED',
   GENERIC = 'GENERIC',
 }
@@ -15,6 +17,8 @@ export enum EmailTemplate {
 export enum EmailType {
   TEST = 'TEST',
   ORDER_CONFIRMATION = 'ORDER_CONFIRMATION',
+  ORDER_SHIPPED = 'ORDER_SHIPPED',
+  ORDER_DELIVERED = 'ORDER_DELIVERED',
   SUPPORT_TICKET_RECEIVED = 'SUPPORT_TICKET_RECEIVED',
   GENERIC = 'GENERIC',
 }
@@ -82,6 +86,8 @@ export interface EmailConfig {
 export const EMAIL_TYPE_TO_SENDER: Record<EmailType, EmailSenderKey> = {
   [EmailType.TEST]: EmailSenderKey.NOREPLY,
   [EmailType.ORDER_CONFIRMATION]: EmailSenderKey.ORDERS,
+  [EmailType.ORDER_SHIPPED]: EmailSenderKey.ORDERS,
+  [EmailType.ORDER_DELIVERED]: EmailSenderKey.ORDERS,
   [EmailType.SUPPORT_TICKET_RECEIVED]: EmailSenderKey.SUPPORT,
   [EmailType.GENERIC]: EmailSenderKey.INFO,
 };
@@ -89,6 +95,8 @@ export const EMAIL_TYPE_TO_SENDER: Record<EmailType, EmailSenderKey> = {
 export const EMAIL_TYPE_TO_TEMPLATE: Record<EmailType, EmailTemplate> = {
   [EmailType.TEST]: EmailTemplate.TEST,
   [EmailType.ORDER_CONFIRMATION]: EmailTemplate.ORDER_CONFIRMATION,
+  [EmailType.ORDER_SHIPPED]: EmailTemplate.ORDER_SHIPPED,
+  [EmailType.ORDER_DELIVERED]: EmailTemplate.ORDER_DELIVERED,
   [EmailType.SUPPORT_TICKET_RECEIVED]: EmailTemplate.SUPPORT_TICKET_RECEIVED,
   [EmailType.GENERIC]: EmailTemplate.GENERIC,
 };
@@ -96,6 +104,8 @@ export const EMAIL_TYPE_TO_TEMPLATE: Record<EmailType, EmailTemplate> = {
 export const EMAIL_TEMPLATE_FILE: Record<EmailTemplate, string> = {
   [EmailTemplate.TEST]: 'test.hbs',
   [EmailTemplate.ORDER_CONFIRMATION]: 'order-confirmation.hbs',
+  [EmailTemplate.ORDER_SHIPPED]: 'order-shipped.hbs',
+  [EmailTemplate.ORDER_DELIVERED]: 'order-delivered.hbs',
   [EmailTemplate.SUPPORT_TICKET_RECEIVED]: 'support-ticket-received.hbs',
   [EmailTemplate.GENERIC]: 'generic.hbs',
 };

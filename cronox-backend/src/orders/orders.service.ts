@@ -655,8 +655,10 @@ if (!cart) {
 
     const isProcessed =
       order.status === OrderStatus.PAID ||
+      order.status === OrderStatus.PROCESSING ||
       order.status === OrderStatus.REFUNDED ||
-      order.status === OrderStatus.SHIPPED;
+      order.status === OrderStatus.SHIPPED ||
+      order.status === OrderStatus.DELIVERED;
 
     return {
       providerRef: order.providerRef,

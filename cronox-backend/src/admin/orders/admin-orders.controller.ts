@@ -15,10 +15,11 @@ import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { AdminGuard } from '../../common/guards/admin.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/roles.decorator';
-import { Role } from '@prisma/client';
+import { OrderStatus, Role } from '@prisma/client';
 import { AdminOrdersService } from './admin-orders.service';
 import { AdminOrdersQueryDto } from './dto/admin-order-query.dto';
 import { UpdateOrderStatusDto } from './dto/update-order-status.dto';
+import { UpdateOrderFulfillmentDto } from './dto/update-order-fulfillment.dto';
 
 @Controller('admin/orders')
 @UseGuards(JwtAuthGuard, AdminGuard, RolesGuard)
@@ -58,6 +59,24 @@ export class AdminOrdersController {
     @Body() dto: UpdateOrderStatusDto,
   ) {
     return this.ordersService.updateOrderStatus(id, dto.status);
+  }
+
+  @Patch(':id/fulfillment')
+  updateOrderFulfillment(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: UpdateOrderFulfillmentDto,
+  ) {
+    return this.ordersService.updateOrderFulfillment(id, dto);
+  }
+
+  @Post(':id/mark-shipped')
+  markShipped(@Param('id', ParseIntPipe) id: number) {
+    return this.ordersService.updateOrderFulfillment(id, { status: OrderStatus.SHIPPED });
+  }
+
+  @Post(':id/mark-delivered')
+  markDelivered(@Param('id', ParseIntPipe) id: number) {
+    return this.ordersService.updateOrderFulfillment(id, { status: OrderStatus.DELIVERED });
   }
 
   @Post(':id/refund')

@@ -234,6 +234,12 @@ model CartItem {
 model Order {
   id                   Int                   @id @default(autoincrement())
   status               OrderStatus           @default(PENDING)
+  trackingNumber       String?
+  trackingUrl          String?
+  shippingCarrier      String?
+  shippedAt            DateTime?
+  deliveredAt          DateTime?
+  internalNote         String?
   subtotal             Decimal               @db.Decimal(12, 2)
   taxRate              Decimal               @db.Decimal(5, 4)
   taxAmount            Decimal               @db.Decimal(12, 2)
@@ -437,6 +443,8 @@ enum CircleUpgradeSocialNetwork {
 enum OrderStatus {
   PENDING
   PAID
+  PROCESSING
+  DELIVERED
   CANCELLED
   REFUNDED
   SHIPPED
