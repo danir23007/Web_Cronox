@@ -34,7 +34,7 @@
   const requestsPrev23 = $('#requestsPrev23');
   const requestsNext23 = $('#requestsNext23');
   const requestsPageSize23 = $('#requestsPageSize23');
-  const tabs = document.querySelectorAll('#adminTabs button');
+  const navButtons = document.querySelectorAll('[data-nav-target]');
   const requestsBadge23 = $('#requestsBadge23');
   const requestsBadge34 = $('#requestsBadge34');
   const userDetailSection = $('#section-user');
@@ -232,8 +232,8 @@
   let requestSearchTimeout23 = null;
   let activitySearchTimeout = null;
   let usersSearchTimeout = null;
-  let currentSectionId = 'section-dashboard';
-  let lastSectionId = 'section-dashboard';
+  let currentSectionId = 'section-menu';
+  let lastSectionId = 'section-menu';
   let lastPendingCounts = { pending23: 0, pending34: 0 };
   const PENDING_STORAGE_KEY = 'cronox.admin.pendingCounts';
   const ADMIN_ROLES = new Set(['SUPER_ADMIN', 'MODERATOR', 'LOGISTICS', 'MARKETING', 'ADMIN', 'SUPERADMIN']);
@@ -305,10 +305,12 @@
     return allowed;
   };
 
-  const setTabVisibility = (sectionId, allowed) => {
-    if (!tabs?.length) return;
-    const tab = Array.from(tabs).find((btn) => btn.dataset.section === sectionId);
-    if (tab) tab.hidden = !allowed;
+  const setNavVisibility = (sectionId, allowed) => {
+    if (!navButtons?.length) return;
+    const items = Array.from(navButtons).filter((btn) => btn.dataset.navTarget === sectionId);
+    items.forEach((item) => {
+      item.hidden = !allowed;
+    });
   };
 
   const setUserTabVisibility = (tabId, allowed) => {
@@ -318,12 +320,12 @@
   };
 
   const applyRoleVisibility = () => {
-    setTabVisibility('section-23', canAccess('requests'));
-    setTabVisibility('section-34', canAccess('requests'));
-    setTabVisibility('section-activity', canAccess('auditLog'));
-    setTabVisibility('section-users', canAccess('users'));
-    setTabVisibility('section-products', canAccess('products'));
-    setTabVisibility('section-codes', canAccess('promoCodes'));
+    setNavVisibility('section-23', canAccess('requests'));
+    setNavVisibility('section-34', canAccess('requests'));
+    setNavVisibility('section-activity', canAccess('auditLog'));
+    setNavVisibility('section-users', canAccess('users'));
+    setNavVisibility('section-products', canAccess('products'));
+    setNavVisibility('section-codes', canAccess('promoCodes'));
     setUserTabVisibility('notes', canAccess('notes'));
     setUserTabVisibility('orders', canAccess('orders'));
     setUserTabVisibility('history', canAccess('auditLog'));
@@ -729,25 +731,37 @@
     userDetailMessage.className = `message show ${type === 'error' ? 'error' : 'success'}`;
   };
 
-  const setActiveAdminTab = (sectionId) => {
-    if (!tabs?.length) return;
-    tabs.forEach((btn) => btn.classList.toggle('primary', btn.dataset.section === sectionId));
-  };
-
   const showSection = (sectionId) => {
     const allowed = applySectionAccess(sectionId);
     document.querySelectorAll('.admin-section').forEach((section) => {
       section.hidden = section.id !== sectionId;
     });
     currentSectionId = sectionId;
-    if (sectionId === 'section-user') {
-      if (tabs?.length) {
-        tabs.forEach((btn) => btn.classList.remove('primary'));
-      }
-      return allowed;
-    }
-    setActiveAdminTab(sectionId);
     return allowed;
+  };
+
+  const ensureSectionBackButtons = () => {
+    const sectionsToMain = ['section-dashboard', 'section-activity', 'section-users', 'section-products', 'section-orders', 'section-codes'];
+    sectionsToMain.forEach((sectionId) => {
+      const section = document.getElementById(sectionId);
+      if (!section || section.querySelector('[data-back-target]')) return;
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'btn admin-view-back';
+      btn.setAttribute('data-back-target', 'section-menu');
+      btn.textContent = '← Atrás';
+      section.prepend(btn);
+    });
+    ['section-23', 'section-34'].forEach((sectionId) => {
+      const section = document.getElementById(sectionId);
+      if (!section || section.querySelector('[data-back-target]')) return;
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'btn admin-view-back';
+      btn.setAttribute('data-back-target', 'section-circles-menu');
+      btn.textContent = '← Atrás a Círculos';
+      section.prepend(btn);
+    });
   };
 
   const getInitials = (value) => {
@@ -1364,8 +1378,10 @@
       return;
     }
     if (currentSectionId === 'section-user') {
-      showSection(lastSectionId || 'section-dashboard');
+      showSection(lastSectionId || 'section-menu');
+      return;
     }
+    showSection('section-menu');
   };
 
   const setLoading = (isLoading) => {
@@ -3457,42 +3473,48 @@
       });
     }
 
-    if (tabs?.length) {
-      tabs.forEach((tab) => {
-        tab.addEventListener('click', () => {
-          const targetSection = tab.dataset.section;
+    if (navButtons?.length) {
+      navButtons.forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const targetSection = btn.dataset.navTarget;
           const allowed = showSection(targetSection || currentSectionId);
-          if (!allowed) {
-            currentSectionId = targetSection || currentSectionId;
-            return;
-          }
-          if (targetSection === 'section-dashboard') {
-            fetchDashboard();
-          } else if (targetSection === 'section-34') {
+          if (!allowed) return;
+          if (targetSection === 'section-dashboard') fetchDashboard();
+          if (targetSection === 'section-34') {
             syncRequestsStateFromInputs();
             fetchRequests();
             markRequestsSeen();
-          } else if (targetSection === 'section-23') {
+          }
+          if (targetSection === 'section-23') {
             syncRequests23StateFromInputs();
             fetchRequests23();
             markRequestsSeen();
-          } else if (targetSection === 'section-activity') {
+          }
+          if (targetSection === 'section-activity') {
             syncActivityStateFromInputs();
             fetchActivity();
-          } else if (targetSection === 'section-users') {
+          }
+          if (targetSection === 'section-users') {
             syncUsersStateFromInputs();
             updateUsersHashState();
             fetchUsers();
-          } else if (targetSection === 'section-products') {
+          }
+          if (targetSection === 'section-products') {
             syncProductsStateFromInputs();
             loadProductCategories();
             fetchProducts();
-          } else if (targetSection === 'section-codes') {
-            fetchCodes();
           }
+          if (targetSection === 'section-codes') fetchCodes();
         });
       });
     }
+
+    document.querySelectorAll('[data-back-target]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const targetSection = btn.getAttribute('data-back-target') || 'section-menu';
+        showSection(targetSection);
+      });
+    });
 
     if (userDetailTabs?.length) {
       userDetailTabs.forEach((tab) => {
@@ -3517,7 +3539,7 @@
 
     userDetailBackBtn?.addEventListener('click', () => {
       clearUserHash();
-      showSection(lastSectionId || 'section-dashboard');
+      showSection(lastSectionId || 'section-menu');
     });
 
     refreshDashboardBtn?.addEventListener('click', fetchDashboard);
@@ -3528,6 +3550,7 @@
     if (!user) return;
     setScopedMessage(apiUnavailable, '');
     applyRoleVisibility();
+    ensureSectionBackButtons();
     bindEvents();
     syncRequestsStateFromInputs();
     syncRequests23StateFromInputs();
