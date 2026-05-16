@@ -173,6 +173,7 @@
         <button class="btn" data-section="section-activity">Actividad</button>
         <button class="btn" data-section="section-users">Usuarios</button>
         <button class="btn" data-section="section-products">Productos</button>
+        <button class="btn" data-section="section-orders">Pedidos</button>
         <button class="btn" data-section="section-codes">Códigos</button>
       </div>
     </nav>
@@ -725,6 +726,54 @@
       </div>
     </section>
 
+
+
+    <section id="section-orders" class="card admin-section" aria-labelledby="title-orders" hidden>
+      <div style="display:flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap;">
+        <div>
+          <h2 id="title-orders">Pedidos</h2>
+          <small>Gestión logística y fulfillment.</small>
+        </div>
+        <div class="table-actions">
+          <button class="btn" type="button" id="ordersRefreshBtn">Actualizar</button>
+          <a class="btn" id="ordersExportBtn" href="#" download>Exportar CSV</a>
+        </div>
+      </div>
+      <div id="ordersMessage" class="message" role="status" aria-live="polite"></div>
+      <div style="overflow-x:auto; margin-top:10px;">
+        <table aria-describedby="title-orders">
+          <thead>
+            <tr>
+              <th>ID pedido</th><th>Fecha</th><th>Estado</th><th>Total</th><th>Usuario</th><th>Carrier</th><th>Tracking</th><th>Shipped</th><th>Delivered</th><th>Acciones</th>
+            </tr>
+          </thead>
+          <tbody id="ordersAdminBody"><tr><td colspan="10" class="empty">Cargando pedidos…</td></tr></tbody>
+        </table>
+      </div>
+    </section>
+
+    <div class="modal" id="orderDetailModal">
+      <div class="modal-box">
+        <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap;">
+          <h3 id="orderDetailTitle" style="margin:0;">Pedido</h3>
+          <button type="button" class="btn" id="orderDetailClose">Cerrar</button>
+        </div>
+        <div id="orderDetailMessage" class="message" role="status" aria-live="polite"></div>
+        <div class="form-grid" style="margin-top:10px;">
+          <div class="form-group"><label>Estado actual</label><div id="orderDetailStatus" class="badge">—</div></div>
+          <label class="form-group"><span>Carrier</span><input id="orderCarrier" class="input" type="text" placeholder="DHL, Correos, UPS"></label>
+          <label class="form-group"><span>Tracking number</span><input id="orderTrackingNumber" class="input" type="text" placeholder="Sin tracking"></label>
+          <label class="form-group"><span>Tracking URL</span><input id="orderTrackingUrl" class="input" type="url" placeholder="https://..."></label>
+          <label class="form-group" style="grid-column:1/-1;"><span>Nota interna</span><textarea id="orderInternalNote" class="textarea" placeholder="Nota interna logística"></textarea></label>
+        </div>
+        <div class="modal-actions">
+          <button class="btn primary" id="orderSaveBtn" type="button">Guardar tracking</button>
+          <button class="btn" id="orderMarkShippedBtn" type="button">Marcar enviado</button>
+          <button class="btn" id="orderMarkDeliveredBtn" type="button">Marcar entregado</button>
+          <button class="btn danger" id="orderRefundBtn" type="button">Reembolsar</button>
+        </div>
+      </div>
+    </div>
     <section id="section-products" class="card admin-section" aria-labelledby="title-products" hidden>
       <div style="display:flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap;">
         <div>
@@ -1021,5 +1070,6 @@
   <script src="assets/api.js"></script>
   <script src="assets/ui-status.js"></script>
   <script src="assets/admin.js"></script>
+  <script src="assets/admin-orders.js"></script>
 </body>
 </html>
