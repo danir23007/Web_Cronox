@@ -244,6 +244,28 @@
     }
   };
 
+  const escapeHtml = (value) =>
+    String(value ?? '')
+      .replaceAll('&', '&amp;')
+      .replaceAll('<', '&lt;')
+      .replaceAll('>', '&gt;')
+      .replaceAll('"', '&quot;')
+      .replaceAll("'", '&#39;');
+
+  const statusLabel = (status) => {
+    const map = {
+      PENDING: 'Pendiente',
+      PAID: 'Pagado',
+      PROCESSING: 'En preparación',
+      SHIPPED: 'Enviado',
+      DELIVERED: 'Entregado',
+      CANCELLED: 'Cancelado',
+      REFUNDED: 'Reembolsado',
+    };
+    const key = String(status || '').toUpperCase();
+    return map[key] || key || '—';
+  };
+
   const formatAccreditationDate = (value) => {
     const date = value ? new Date(value) : null;
     if (!date || Number.isNaN(date.getTime())) return '—';
@@ -383,11 +405,31 @@
 
     ordersEmpty.hidden = true;
     orders.forEach((order) => {
+      const trackingBits = [];
+      if (order.shippingCarrier) {
+        trackingBits.push(`Transportista: ${escapeHtml(order.shippingCarrier)}`);
+      }
+      if (order.trackingNumber) {
+        trackingBits.push(`Seguimiento: ${escapeHtml(order.trackingNumber)}`);
+      }
+      if (order.trackingUrl) {
+        trackingBits.push(
+          `<a href=\"${escapeHtml(order.trackingUrl)}\" target=\"_blank\" rel=\"noopener noreferrer\">Seguir pedido</a>`,
+        );
+      }
+      if (order.shippedAt) {
+        trackingBits.push(`Enviado el: ${escapeHtml(formatDate(order.shippedAt))}`);
+      }
+      if (order.deliveredAt) {
+        trackingBits.push(`Entregado el: ${escapeHtml(formatDate(order.deliveredAt))}`);
+      }
+
       const tr = document.createElement('tr');
       tr.innerHTML = `
         <td>#${order.id}</td>
         <td>${formatDate(order.createdAt)}</td>
-        <td>${order.status}</td>
+        <td>${statusLabel(order.status)}</td>
+        <td>${trackingBits.length ? trackingBits.join('<br>') : '—'}</td>
         <td>${order.total ?? ''} ${order.currency || ''}</td>
       `;
       ordersBody.appendChild(tr);

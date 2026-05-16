@@ -16,6 +16,8 @@ jest.mock('@prisma/client', () => ({
   OrderStatus: {
     PENDING: 'PENDING',
     PAID: 'PAID',
+    PROCESSING: 'PROCESSING',
+    DELIVERED: 'DELIVERED',
     CANCELLED: 'CANCELLED',
     REFUNDED: 'REFUNDED',
     SHIPPED: 'SHIPPED',

@@ -42,6 +42,11 @@ export type MeOrder = {
   status: OrderStatus;
   total: number;
   currency: string;
+  trackingNumber: string | null;
+  trackingUrl: string | null;
+  shippingCarrier: string | null;
+  shippedAt: Date | null;
+  deliveredAt: Date | null;
 };
 
 const NAME_REGEX = /^[A-Za-zÁÉÍÓÚÜÑáéíóúüñ\s'-]+$/u;
@@ -215,6 +220,11 @@ export class MeService {
         status: true,
         total: true,
         currency: true,
+        trackingNumber: true,
+        trackingUrl: true,
+        shippingCarrier: true,
+        shippedAt: true,
+        deliveredAt: true,
       },
     });
 
@@ -224,6 +234,11 @@ export class MeService {
       status: order.status,
       total: order.total instanceof Decimal ? Number(order.total.toString()) : Number(order.total),
       currency: order.currency,
+      trackingNumber: order.trackingNumber,
+      trackingUrl: order.trackingUrl,
+      shippingCarrier: order.shippingCarrier,
+      shippedAt: order.shippedAt,
+      deliveredAt: order.deliveredAt,
     }));
   }
 

@@ -16,7 +16,17 @@ export class CircleService {
   async getNetSpent(userId: number): Promise<Decimal> {
     const [purchases, refunds] = await Promise.all([
       this.prisma.order.aggregate({
-        where: { userId, status: { in: [OrderStatus.PAID, OrderStatus.SHIPPED] } },
+        where: {
+          userId,
+          status: {
+            in: [
+              OrderStatus.PAID,
+              OrderStatus.PROCESSING,
+              OrderStatus.SHIPPED,
+              OrderStatus.DELIVERED,
+            ],
+          },
+        },
         _sum: { total: true },
       }),
       this.prisma.order.aggregate({

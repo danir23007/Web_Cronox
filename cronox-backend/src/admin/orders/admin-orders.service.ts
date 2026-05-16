@@ -8,6 +8,9 @@ import { Decimal } from '@prisma/client/runtime/library';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AdminOrdersQueryDto } from './dto/admin-order-query.dto';
 import { HistorialService } from '../../historial/historial.service';
+import { UpdateOrderFulfillmentDto } from './dto/update-order-fulfillment.dto';
+import { EmailService } from '../../email/email.service';
+import { EmailType } from '../../email/email.types';
 
 const DEFAULT_PAGE_SIZE = 20;
 const MAX_EXPORT_ROWS = 5000;
@@ -18,6 +21,11 @@ type OrderWithCount = Prisma.OrderGetPayload<{
 
 type OrderWithItems = Prisma.OrderGetPayload<{
   include: {
+    user: {
+      select: {
+        email: true;
+      };
+    };
     items: {
       include: {
         product: {
@@ -36,6 +44,7 @@ export class AdminOrdersService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly historialService: HistorialService,
+    private readonly emailService: EmailService,
   ) {}
 
   async listOrders(query: AdminOrdersQueryDto) {
@@ -74,6 +83,7 @@ export class AdminOrdersService {
     const order = await this.prisma.order.findUnique({
       where: { id },
       include: {
+        user: { select: { email: true } },
         items: {
           include: {
             product: { select: { id: true, name: true } },
@@ -90,7 +100,12 @@ export class AdminOrdersService {
   }
 
   async updateOrderStatus(id: number, status: OrderStatus) {
+    return this.updateOrderFulfillment(id, { status });
+  }
+
+  async updateOrderFulfillment(id: number, dto: UpdateOrderFulfillmentDto) {
     const include = {
+      user: { select: { email: true } },
       items: {
         include: {
           product: { select: { id: true, name: true } },
@@ -98,39 +113,66 @@ export class AdminOrdersService {
       },
     } as const;
 
-    const updated = await this.prisma.$transaction(async (tx) => {
-      const existing = await tx.order.findUnique({
-        where: { id },
-        include,
-      });
+    const hadExplicitStatus = typeof dto.status !== 'undefined';
 
+    const { updated, previous } = await this.prisma.$transaction(async (tx) => {
+      const existing = await tx.order.findUnique({ where: { id }, include });
       if (!existing) {
         throw new NotFoundException('Order not found');
       }
 
+      if (
+        !hadExplicitStatus &&
+        dto.trackingNumber === undefined &&
+        dto.trackingUrl === undefined &&
+        dto.shippingCarrier === undefined &&
+        dto.internalNote === undefined
+      ) {
+        throw new BadRequestException('No hay cambios para actualizar');
+      }
+
+      const targetStatus = dto.status ?? existing.status;
+      this.validateStatusTransition(existing.status, targetStatus);
+
+      const data: Prisma.OrderUpdateInput = {};
+      if (hadExplicitStatus) {
+        data.status = targetStatus;
+      }
+      if (dto.trackingNumber !== undefined) data.trackingNumber = dto.trackingNumber ?? null;
+      if (dto.trackingUrl !== undefined) data.trackingUrl = dto.trackingUrl ?? null;
+      if (dto.shippingCarrier !== undefined) data.shippingCarrier = dto.shippingCarrier ?? null;
+      if (dto.internalNote !== undefined) data.internalNote = dto.internalNote ?? null;
+
+      if (hadExplicitStatus && targetStatus === OrderStatus.SHIPPED && !existing.shippedAt) {
+        data.shippedAt = new Date();
+      }
+      if (hadExplicitStatus && targetStatus === OrderStatus.DELIVERED && !existing.deliveredAt) {
+        data.deliveredAt = new Date();
+        if (!existing.shippedAt) {
+          data.shippedAt = new Date();
+        }
+      }
+
       const order = await tx.order.update({
         where: { id },
-        data: { status },
+        data,
         include,
       });
 
       await this.syncHistorialForStatusChange(existing, order, tx);
       await this.handlePromoUsageOnPaid(tx, existing, order);
 
-      return order;
-    }).catch((error) => {
-      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
-        throw new NotFoundException('Order not found');
-      }
-
-      throw error;
+      return { updated: order, previous: existing };
     });
+
+    await this.sendStatusEmails(previous, updated, hadExplicitStatus);
 
     return this.serializeOrderWithItems(updated);
   }
 
   async refundOrder(id: number) {
     const include = {
+      user: { select: { email: true } },
       items: {
         include: {
           product: { select: { id: true, name: true } },
@@ -182,6 +224,11 @@ export class AdminOrdersService {
       'Order ID',
       'User ID',
       'Status',
+      'Carrier',
+      'Tracking Number',
+      'Tracking URL',
+      'Shipped At',
+      'Delivered At',
       'Total',
       'Subtotal',
       'Tax Amount',
@@ -198,6 +245,11 @@ export class AdminOrdersService {
       order.id,
       order.userId,
       order.status,
+      order.shippingCarrier ?? '',
+      order.trackingNumber ?? '',
+      order.trackingUrl ?? '',
+      order.shippedAt?.toISOString() ?? '',
+      order.deliveredAt?.toISOString() ?? '',
       this.formatMoney(order.total),
       this.formatMoney(order.subtotal),
       this.formatMoney(order.taxAmount),
@@ -289,6 +341,12 @@ export class AdminOrdersService {
       id: order.id,
       userId: order.userId,
       status: order.status,
+      trackingNumber: order.trackingNumber,
+      trackingUrl: order.trackingUrl,
+      shippingCarrier: order.shippingCarrier,
+      shippedAt: order.shippedAt?.toISOString() ?? null,
+      deliveredAt: order.deliveredAt?.toISOString() ?? null,
+      internalNote: order.internalNote,
       total: this.formatMoney(order.total),
       subtotal: this.formatMoney(order.subtotal),
       taxAmount: this.formatMoney(order.taxAmount),
@@ -307,6 +365,12 @@ export class AdminOrdersService {
       id: order.id,
       userId: order.userId,
       status: order.status,
+      trackingNumber: order.trackingNumber,
+      trackingUrl: order.trackingUrl,
+      shippingCarrier: order.shippingCarrier,
+      shippedAt: order.shippedAt?.toISOString() ?? null,
+      deliveredAt: order.deliveredAt?.toISOString() ?? null,
+      internalNote: order.internalNote,
       subtotal: this.formatMoney(order.subtotal),
       taxRate: order.taxRate.toFixed(4),
       taxAmount: this.formatMoney(order.taxAmount),
@@ -363,6 +427,95 @@ export class AdminOrdersService {
           .join(','),
       )
       .join('\n');
+  }
+
+  private validateStatusTransition(from: OrderStatus, to: OrderStatus) {
+    if (from === to) return;
+
+    if ([OrderStatus.CANCELLED, OrderStatus.REFUNDED].includes(from)) {
+      throw new BadRequestException(
+        `No se puede cambiar de estado desde ${from}. Usa un flujo nuevo para este pedido.`,
+      );
+    }
+
+    const allowed: Record<OrderStatus, OrderStatus[]> = {
+      [OrderStatus.PENDING]: [OrderStatus.PAID, OrderStatus.CANCELLED],
+      [OrderStatus.PAID]: [
+        OrderStatus.PROCESSING,
+        OrderStatus.SHIPPED,
+        OrderStatus.REFUNDED,
+        OrderStatus.CANCELLED,
+      ],
+      [OrderStatus.PROCESSING]: [
+        OrderStatus.SHIPPED,
+        OrderStatus.REFUNDED,
+        OrderStatus.CANCELLED,
+      ],
+      [OrderStatus.SHIPPED]: [OrderStatus.DELIVERED, OrderStatus.REFUNDED],
+      [OrderStatus.DELIVERED]: [OrderStatus.REFUNDED],
+      [OrderStatus.CANCELLED]: [],
+      [OrderStatus.REFUNDED]: [],
+    };
+
+    if (!allowed[from].includes(to)) {
+      throw new BadRequestException(`Transición no permitida: ${from} -> ${to}`);
+    }
+  }
+
+  private async sendStatusEmails(
+    previous: OrderWithItems,
+    updated: OrderWithItems,
+    statusWasExplicitlyUpdated: boolean,
+  ) {
+    if (!statusWasExplicitlyUpdated || previous.status === updated.status) {
+      return;
+    }
+
+    const to = updated.user?.email;
+    if (!to) {
+      return;
+    }
+
+    if (updated.status === OrderStatus.SHIPPED) {
+      await this.emailService.send({
+        type: EmailType.ORDER_SHIPPED,
+        to,
+        subject: `CRONOX · Pedido #${updated.id} enviado`,
+        templateData: {
+          orderId: String(updated.id),
+          statusLabel: this.getOrderStatusLabel(updated.status),
+          trackingNumber: updated.trackingNumber,
+          trackingUrl: updated.trackingUrl,
+          shippingCarrier: updated.shippingCarrier,
+        },
+      });
+    }
+
+    if (updated.status === OrderStatus.DELIVERED) {
+      await this.emailService.send({
+        type: EmailType.ORDER_DELIVERED,
+        to,
+        subject: `CRONOX · Pedido #${updated.id} entregado`,
+        templateData: {
+          orderId: String(updated.id),
+          statusLabel: this.getOrderStatusLabel(updated.status),
+        },
+      });
+    }
+  }
+
+  private getOrderStatusLabel(status: OrderStatus): string {
+    const labels: Record<OrderStatus, string> = {
+      [OrderStatus.PENDING]: 'Pendiente',
+      [OrderStatus.PAID]: 'Pagado',
+      [OrderStatus.PROCESSING]: 'En preparación',
+      [OrderStatus.SHIPPED]: 'Enviado',
+      [OrderStatus.DELIVERED]: 'Entregado',
+      [OrderStatus.CANCELLED]: 'Cancelado',
+      [OrderStatus.REFUNDED]: 'Reembolsado',
+    };
+
+    return labels[status] ?? status;
   }
 
   private async syncHistorialForStatusChange(
@@ -483,6 +636,11 @@ export class AdminOrdersService {
   }
 
   private isCompletionStatus(status: OrderStatus): boolean {
-    return status === OrderStatus.PAID || status === OrderStatus.SHIPPED;
+    return (
+      status === OrderStatus.PAID ||
+      status === OrderStatus.PROCESSING ||
+      status === OrderStatus.SHIPPED ||
+      status === OrderStatus.DELIVERED
+    );
   }
 }

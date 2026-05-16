@@ -20,7 +20,12 @@ import { ADMIN_ROLE_LIST, isAdminRole } from '../../common/roles.utils';
 const DEFAULT_PAGE_SIZE = 10;
 const MAX_PAGE_SIZE = 50;
 const RECENT_ITEMS_LIMIT = 20;
-const PAID_STATUSES: OrderStatus[] = [OrderStatus.PAID, OrderStatus.SHIPPED];
+const PAID_STATUSES: OrderStatus[] = [
+  OrderStatus.PAID,
+  OrderStatus.PROCESSING,
+  OrderStatus.SHIPPED,
+  OrderStatus.DELIVERED,
+];
 
 type UserWithAddresses = Prisma.UserGetPayload<{
   include: { addresses: true };
@@ -137,6 +142,11 @@ export class AdminUsersService {
           currency: true,
           discountCents: true,
           promoCodeCode: true,
+          trackingNumber: true,
+          trackingUrl: true,
+          shippingCarrier: true,
+          shippedAt: true,
+          deliveredAt: true,
           createdAt: true,
           updatedAt: true,
         },
