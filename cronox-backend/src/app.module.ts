@@ -40,6 +40,12 @@ import { NewsletterModule } from './newsletter/newsletter.module';
     ]),
     ServeStaticModule.forRoot(
       {
+        // Archivos estáticos globales (favicon, etc.) en cronox-front/public
+        rootPath: join(__dirname, '..', '..', 'cronox-front', 'public'),
+        serveRoot: '/',
+        exclude: ['/api', '/docs', '/webhooks'],
+      },
+      {
         // cronox-backend/../.. = carpeta padre donde está cronox-front
         rootPath: join(__dirname, '..', '..', 'cronox-front'),
         serveRoot: '/',
