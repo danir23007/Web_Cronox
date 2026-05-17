@@ -24,7 +24,7 @@
   <link id="cronox-admin-style" rel="stylesheet" href="assets/store.css">
   <style>
     body { font-family: 'Inter', system-ui, -apple-system, sans-serif; background: #050505; color: #fff; margin: 0; min-height: 100vh; }
-    .admin-shell { max-width: 1100px; margin: 0 auto; padding: 32px 20px 48px; }
+    .admin-shell { width: min(100% - 48px, 1500px); margin: 0 auto; padding: 32px 0 48px; }
     .admin-header { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 24px; }
     .admin-title { font-size: 1.8rem; margin: 0; letter-spacing: 0.5px; }
     .admin-actions { display: flex; gap: 10px; flex-wrap: wrap; }
@@ -167,7 +167,7 @@
     .bw-theme .link-btn { color: #fff; }
     .bw-theme th, .bw-theme .empty, .bw-theme .dashboard-sub, .bw-theme .time-sub, .bw-theme small, .bw-theme .user-email { color: rgba(255,255,255,0.72); }
     .bw-theme table, .bw-theme th, .bw-theme td { border-color: rgba(255,255,255,0.14); }
-    @media (max-width: 720px) { .admin-shell { padding: 20px 12px 32px; } .admin-nav-item { padding: 15px 12px; } }
+    @media (max-width: 720px) { .admin-shell { width: calc(100% - 24px); padding: 20px 0 32px; } .admin-nav-item { padding: 15px 12px; } }
     @keyframes toast-in {
       from { opacity: 0; transform: translateY(6px); }
       to { opacity: 1; transform: translateY(0); }

@@ -3504,6 +3504,9 @@
             loadProductCategories();
             fetchProducts();
           }
+          if (targetSection === 'section-orders') {
+            window.fetchOrders?.();
+          }
           if (targetSection === 'section-codes') fetchCodes();
         });
       });
