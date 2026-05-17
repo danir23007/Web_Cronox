@@ -1,15 +1,67 @@
 <!doctype html>
 <html lang="es">
-  <body style="margin:0;padding:0;background:#f3f3f1;">
-    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f3f3f1;padding:24px 12px;">
+  <body style="margin:0;padding:0;background:#000000;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#000000;padding:32px 12px;">
       <tr>
         <td align="center">
-          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:640px;background:#f7f7f5;border:1px solid #ebebe7;padding:28px;">
-            <tr><td style="font-family:Georgia,'Times New Roman',serif;font-size:34px;font-weight:700;color:#000;">CRONOX</td></tr>
-            <tr><td style="padding-top:12px;font-family:Arial,Helvetica,sans-serif;font-size:22px;color:#111;">Pedido entregado ✓</td></tr>
-            <tr><td style="padding-top:10px;font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#5a5a5a;line-height:22px;">Tu pedido #{{orderId}} figura como entregado.</td></tr>
-            <tr><td style="padding-top:10px;font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#5a5a5a;">Estado: {{statusLabel}}</td></tr>
-            <tr><td style="padding-top:16px;font-family:Arial,Helvetica,sans-serif;font-size:13px;color:#8a8a8a;">Gracias por formar parte de CRONOX.</td></tr>
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:640px;background:#0b0b0b;border:1px solid #1d1d1d;border-radius:14px;overflow:hidden;">
+            <tr>
+              <td style="padding:30px 32px 22px 32px;border-bottom:1px solid #1a1a1a;">
+                <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+                  <tr>
+                    <td align="left" valign="top">
+                      <div style="font-family:Georgia,'Times New Roman',serif;font-size:34px;line-height:1;color:#ffffff;font-weight:700;letter-spacing:0.04em;">
+                        CRONOX
+                      </div>
+                    </td>
+                    <td align="right" valign="top">
+                      <div style="font-family:Arial,Helvetica,sans-serif;font-size:11px;line-height:1.5;color:#8f8f8f;letter-spacing:0.12em;text-transform:uppercase;">
+                        Pedido n.º
+                      </div>
+                      <div style="font-family:Arial,Helvetica,sans-serif;font-size:13px;line-height:1.5;color:#ffffff;font-weight:700;">
+                        #{{orderId}}
+                      </div>
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+
+            <tr>
+              <td style="padding:28px 32px 10px 32px;">
+                <div style="font-family:Arial,Helvetica,sans-serif;font-size:30px;line-height:1.2;color:#ffffff;font-weight:700;">
+                  Tu pedido ha sido entregado.
+                </div>
+
+                <div style="padding-top:14px;font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.8;color:#d7d7d7;">
+                  Tu pedido <span style="color:#ffffff;font-weight:700;">#{{orderId}}</span> ya figura como entregado correctamente.
+                  {{#if statusLabel}}
+                  Estado actual: <span style="color:#ffffff;font-weight:700;">{{statusLabel}}</span>.
+                  {{/if}}
+                </div>
+
+                <div style="padding-top:18px;font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.8;color:#b5b5b5;">
+                  Esperamos que todo haya llegado en perfectas condiciones.
+                </div>
+              </td>
+            </tr>
+
+            <tr>
+              <td style="padding:24px 32px 0 32px;">
+                <div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.7;color:#d0d0d0;">
+                  Gracias por formar parte de CRONOX.
+                </div>
+              </td>
+            </tr>
+
+            <tr>
+              <td style="padding:28px 32px 32px 32px;">
+                <div style="height:1px;background:#1f1f1f;"></div>
+                <div style="padding-top:18px;font-family:Arial,Helvetica,sans-serif;font-size:12px;line-height:1.7;color:#8a8a8a;">
+                  Este es un correo automático de CRONOX. Si has recibido este mensaje, es porque tu pedido ha sido marcado como entregado.
+                </div>
+              </td>
+            </tr>
           </table>
         </td>
       </tr>
