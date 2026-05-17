@@ -32,5 +32,5 @@
   deliverBtn?.addEventListener('click',()=>action(()=>req(`/api/admin/orders/${encodeURIComponent(currentOrder.id)}/mark-delivered`,{method:'POST'})));
   refundBtn?.addEventListener('click',()=>{if(confirm('¿Confirmar reembolso?')) action(()=>req(`/api/admin/orders/${encodeURIComponent(currentOrder.id)}/refund`,{method:'POST'}));});
   exportBtn?.addEventListener('click',(e)=>{e.preventDefault(); window.open(endpoint('/api/admin/orders/export.csv'),'_blank');});
-  document.querySelector('#adminTabs')?.addEventListener('click',(e)=>{const b=e.target.closest('button[data-section="section-orders"]'); if(b) setTimeout(load,50);});
+  window.fetchOrders = load;
 })();
