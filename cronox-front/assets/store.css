@@ -1168,6 +1168,7 @@ a.product-card{display:block;text-decoration:none;color:inherit;cursor:pointer;}
   border-radius: 0;
   display: block;
 }
+.cart-upsell__info { min-width: 0; }
 .cart-upsell__name { margin: 0 0 4px; font-size: 13px; }
 .cart-upsell__price { margin: 0 0 8px; font-size: 12px; color: rgba(255, 255, 255, 0.75); }
 
@@ -1185,6 +1186,79 @@ a.product-card{display:block;text-decoration:none;color:inherit;cursor:pointer;}
 }
 
 .cart-upsell__add:hover { transform: translateY(-1px); box-shadow: 0 8px 18px rgba(0, 0, 0, 0.25); }
+.cart-upsell__add:focus-visible,
+.cart-upsell__size:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 2px;
+}
+
+.cart-upsell__sizes {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  margin-top: 7px;
+  max-width: 100%;
+}
+
+.cart-upsell__sizes[hidden] { display: none; }
+
+.cart-upsell__size {
+  position: relative;
+  overflow: hidden;
+  flex: 0 1 auto;
+  min-width: 28px;
+  max-width: 48px;
+  height: 24px;
+  padding: 0 5px;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  border-radius: 0;
+  background: #0b0b0b;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 22px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  cursor: pointer;
+}
+
+.cart-upsell__size:hover { border-color: #fff; }
+
+.cart-upsell__size.is-unavailable {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.cart-upsell__size.is-unavailable::after {
+  content: "";
+  position: absolute;
+  left: -12%;
+  bottom: 50%;
+  width: 124%;
+  height: 1px;
+  background: currentColor;
+  transform: rotate(-35deg);
+  transform-origin: center;
+  pointer-events: none;
+}
+
+.cart-upsell__size.is-unavailable:hover { border-color: rgba(255, 255, 255, 0.35); }
+
+.cart-upsell__sizes-status,
+.cart-upsell__sold-out {
+  color: rgba(255, 255, 255, 0.62);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  line-height: 24px;
+  text-transform: uppercase;
+}
+
+.cart-upsell__item.is-adding .cart-upsell__sizes { opacity: 0.55; }
+.cart-upsell__item.is-adding .cart-upsell__add { cursor: wait; }
 
 @media (max-width: 520px) {
   .cart-upsell__item {
@@ -1194,6 +1268,14 @@ a.product-card{display:block;text-decoration:none;color:inherit;cursor:pointer;}
 
   .cart-upsell__image-frame {
     padding: 6px;
+  }
+
+  .cart-upsell__size {
+    min-width: 26px;
+    height: 22px;
+    padding-inline: 4px;
+    font-size: 9px;
+    line-height: 20px;
   }
 }
 

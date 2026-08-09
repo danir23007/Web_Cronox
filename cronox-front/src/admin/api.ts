@@ -6,6 +6,7 @@
     headers?: Record<string, string>;
     body?: unknown;
     query?: QueryRecord;
+    cache?: RequestCache;
   }
 
   const g = typeof window !== 'undefined' ? window : (globalThis as Window);
@@ -547,6 +548,10 @@
       credentials: 'include',
     };
 
+    if (options.cache) {
+      config.cache = options.cache;
+    }
+
     if (options.body !== undefined) {
       if (isFormData) {
         config.body = options.body as BodyInit;
@@ -1010,9 +1015,9 @@
     }
   };
 
-  api.getProductBySlug = async (slug: string) => {
+  api.getProductBySlug = async (slug: string, options: { cache?: RequestCache } = {}) => {
     if (!slug) return null;
-    const data = await request(`/api/products/${slug}`);
+    const data = await request(`/api/products/${encodeURIComponent(slug)}`, { cache: options.cache });
     return mapProduct(data as UnknownRecord);
   };
 
