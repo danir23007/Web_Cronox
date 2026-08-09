@@ -26,7 +26,17 @@ import { CreateVariantDto } from '../../products/dto/create-variant.dto';
 import { AdjustStockDto, UpdateVariantDto } from '../../products/dto/update-variant.dto';
 import { AdminProductQueryDto } from './dto/admin-product-query.dto';
 import { FilesInterceptor } from '@nestjs/platform-express';
-import { SupabaseStorageService } from '../../common/storage/supabase-storage.service';
+import {
+  MAX_PRODUCT_IMAGE_BYTES,
+  MAX_PRODUCT_IMAGE_COUNT,
+  SupabaseStorageService,
+} from '../../common/storage/supabase-storage.service';
+
+const ALLOWED_PRODUCT_IMAGE_MIME_TYPES = new Set([
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+]);
 
 @Controller('admin/products')
 @UseGuards(JwtAuthGuard, AdminGuard, RolesGuard)
@@ -53,7 +63,17 @@ export class AdminProductsController {
   }
 
   @Post('upload-images')
-  @UseInterceptors(FilesInterceptor('files'))
+  @UseInterceptors(
+    FilesInterceptor('files', MAX_PRODUCT_IMAGE_COUNT, {
+      limits: {
+        files: MAX_PRODUCT_IMAGE_COUNT,
+        fileSize: MAX_PRODUCT_IMAGE_BYTES,
+      },
+      fileFilter: (_request, file, callback) => {
+        callback(null, ALLOWED_PRODUCT_IMAGE_MIME_TYPES.has(file.mimetype));
+      },
+    }),
+  )
   async uploadImages(
     @UploadedFiles() files: Express.Multer.File[],
     @CurrentUser('id') adminId?: number,

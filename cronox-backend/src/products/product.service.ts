@@ -605,7 +605,7 @@ export class ProductService {
 
   async getAllProducts(query: QueryProductsDto) {
     const page = query.page ?? 1;
-    const limit = query.limit ?? 10;
+    const limit = Math.min(query.limit ?? 10, 100);
     const skip = (page - 1) * limit;
     const sortBy = query.sortBy ?? 'id';
     const order = query.order ?? 'asc';
@@ -825,6 +825,15 @@ export class ProductService {
         }
 
         if (dto.imagesToUpdate?.length && !replaceImages) {
+          const imageIds = [...new Set(dto.imagesToUpdate.map((image) => image.id))];
+          const ownedImages = await tx.productImage.findMany({
+            where: { id: { in: imageIds }, productId: id },
+            select: { id: true },
+          });
+          if (ownedImages.length !== imageIds.length) {
+            throw new NotFoundException('Image not found for product');
+          }
+
           for (const img of dto.imagesToUpdate) {
             await tx.productImage.update({
               where: { id: img.id },
@@ -839,8 +848,17 @@ export class ProductService {
         }
 
         if (dto.imagesToDeleteIds?.length && !replaceImages) {
+          const imageIds = [...new Set(dto.imagesToDeleteIds)];
+          const ownedImages = await tx.productImage.findMany({
+            where: { id: { in: imageIds }, productId: id },
+            select: { id: true },
+          });
+          if (ownedImages.length !== imageIds.length) {
+            throw new NotFoundException('Image not found for product');
+          }
+
           await tx.productImage.deleteMany({
-            where: { id: { in: dto.imagesToDeleteIds } },
+            where: { id: { in: imageIds }, productId: id },
           });
         }
 
@@ -998,24 +1016,34 @@ export class ProductService {
     }
   }
 
-  async deleteImage(imageId: number) {
+  async deleteImage(productId: number, imageId: number) {
     try {
-      const deleted = await this.prisma.productImage.delete({
-        where: { id: imageId },
-      });
-      const images = await this.prisma.productImage.findMany({
-        where: { productId: deleted.productId },
-        orderBy: this.imageOrderBy,
-      });
-
-      if (images.length > 0 && !images.some((image) => image.isPrimary)) {
-        await this.prisma.productImage.update({
-          where: { id: images[0].id },
-          data: { isPrimary: true },
+      return await this.prisma.$transaction(async (tx) => {
+        const image = await tx.productImage.findFirst({
+          where: { id: imageId, productId },
+          select: { id: true },
         });
-      }
+        if (!image) throw new NotFoundException('Image not found for product');
 
-      return { ok: true };
+        await tx.productImage.delete({ where: { id: imageId } });
+        const images = await tx.productImage.findMany({
+          where: { productId },
+          orderBy: this.imageOrderBy,
+        });
+        const primary = images.find((candidate) => candidate.isPrimary) ?? images[0];
+        if (primary && !primary.isPrimary) {
+          await tx.productImage.update({
+            where: { id: primary.id },
+            data: { isPrimary: true },
+          });
+        }
+        await tx.product.update({
+          where: { id: productId },
+          data: { imageUrl: primary?.url ?? null },
+        });
+
+        return { ok: true };
+      });
     } catch (e) {
       if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2025') {
         throw new NotFoundException('Image not found');

@@ -60,6 +60,7 @@ const CART_NOT_FOUND_ERROR = 'CART_NOT_FOUND';
 const ITEM_NOT_FOUND_ERROR = 'ITEM_NOT_FOUND';
 const INSUFFICIENT_STOCK_ERROR = 'INSUFFICIENT_STOCK';
 const VARIANT_PRICE_NOT_SET_ERROR = 'VARIANT_PRICE_NOT_SET';
+const INACTIVE_PRODUCT_OR_VARIANT_ERROR = 'INACTIVE_PRODUCT_OR_VARIANT';
 
 @Injectable()
 export class CartService {
@@ -114,32 +115,23 @@ export class CartService {
     }).cookies;
     const anonymousId = cookies?.cartId;
 
-    const [userCart, anonCart] = await Promise.all([
-      userId
-        ? client.cart.findFirst({
-            where: { userId },
-            include: this.cartInclude,
-            orderBy: { createdAt: 'desc' },
-          })
-        : Promise.resolve<CartWithItems | null>(null),
-      anonymousId
-        ? client.cart.findFirst({
-            where: { anonymousId },
-            include: this.cartInclude,
-            orderBy: { createdAt: 'desc' },
-          })
-        : Promise.resolve<CartWithItems | null>(null),
-    ]);
-
-    if (anonCart && Array.isArray(anonCart.items) && anonCart.items.length > 0) {
-      return anonCart;
+    // Checkout is authenticated and must never let an attacker-supplied
+    // anonymous cart cookie override the account's cart. Anonymous carts are
+    // merged/adopted only through the explicit login flow.
+    if (userId) {
+      return client.cart.findFirst({
+        where: { userId },
+        include: this.cartInclude,
+        orderBy: { createdAt: 'desc' },
+      });
     }
 
-    if (userCart && Array.isArray(userCart.items) && userCart.items.length > 0) {
-      return userCart;
-    }
-
-    return userCart ?? anonCart ?? null;
+    if (!anonymousId) return null;
+    return client.cart.findFirst({
+      where: { anonymousId },
+      include: this.cartInclude,
+      orderBy: { createdAt: 'desc' },
+    });
   }
 
   async getOrCreateCart(context: CartContext): Promise<CartWithItems> {
@@ -154,11 +146,8 @@ export class CartService {
       const cart = await this.findOrCreate(where, tx);
 
       const variant = await this.getVariantOrThrow(client, dto.variantId);
-      const price = variant.price;
+      const price = this.getVariantPriceOrThrow(variant);
 
-      if (price == null) {
-        throw new BadRequestException(VARIANT_PRICE_NOT_SET_ERROR);
-      }
 
       const existingItem = await client.cartItem.findUnique({
         where: {
@@ -177,7 +166,7 @@ export class CartService {
       if (existingItem) {
         await client.cartItem.update({
           where: { id: existingItem.id },
-          data: { qty: newQty },
+          data: { qty: newQty, priceAtAdd: price },
         });
       } else {
         await client.cartItem.create({
@@ -211,10 +200,11 @@ export class CartService {
 
       const variant = await this.getVariantOrThrow(client, item.variantId);
       this.assertStock(dto.qty, variant.stockQty ?? 0);
+      const price = this.getVariantPriceOrThrow(variant);
 
       await client.cartItem.update({
         where: { id: itemId },
-        data: { qty: dto.qty },
+        data: { qty: dto.qty, priceAtAdd: price },
       });
 
       await this.recalcTotals(client, cart.id);
@@ -486,13 +476,32 @@ export class CartService {
   private async getVariantOrThrow(client: ModelClient, variantId: number) {
     const variant = await client.productVariant.findUnique({
       where: { id: variantId },
+      include: {
+        product: {
+          select: { id: true, isActive: true, price: true },
+        },
+      },
     });
 
     if (!variant) {
       throw new NotFoundException('VARIANT_NOT_FOUND');
     }
+    if (!variant.isActive || !variant.product.isActive) {
+      throw new BadRequestException(INACTIVE_PRODUCT_OR_VARIANT_ERROR);
+    }
 
     return variant;
+  }
+
+  private getVariantPriceOrThrow(variant: {
+    price: number | null;
+    product: { price: number };
+  }): number {
+    const price = variant.price ?? variant.product.price;
+    if (!Number.isInteger(price) || price < 0) {
+      throw new BadRequestException(VARIANT_PRICE_NOT_SET_ERROR);
+    }
+    return price;
   }
 
   private assertStock(required: number, stock: number) {

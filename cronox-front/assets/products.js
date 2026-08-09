@@ -25,6 +25,21 @@
   const API = window.CRONOX_API || {};
   const STAR_ICON = window.CRONOX_STAR_ICON || '<span class="icon-star"></span>';
   const PRODUCT_PLACEHOLDER = window.CRONOX_PRODUCT_PLACEHOLDER || "assets/logo_browser.png";
+  const escapeHtml = (value) => {
+    const helper = window.CRONOX_SECURITY?.escapeHtml;
+    return typeof helper === "function"
+      ? helper(value)
+      : String(value ?? "")
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/"/g, "&quot;")
+          .replace(/'/g, "&#39;");
+  };
+  const safeProductImage = (value, fallback = PRODUCT_PLACEHOLDER) => {
+    const helper = window.CRONOX_SECURITY?.productImageUrl;
+    return typeof helper === "function" ? helper(value, fallback) : fallback;
+  };
 
   const localFallbackFactory = () => [
     {
@@ -109,7 +124,7 @@
       const candidateImage = data.image || sourceImages[0] || template.image || templateImages[0] || "";
       const uniqueImages = [];
       const pushImage = (value) => {
-        const clean = typeof value === "string" ? value.trim() : "";
+        const clean = safeProductImage(value, "");
         if (clean && !uniqueImages.includes(clean)) uniqueImages.push(clean);
       };
       pushImage(candidateImage);
@@ -129,7 +144,7 @@
         name: data.name || template.name || "Producto CRONOX",
         price: priceValue,
         priceLabel: data.priceLabel || template.priceLabel || euros(priceValue),
-        image: candidateImage || uniqueImages[0] || template.image || "",
+        image: safeProductImage(candidateImage, uniqueImages[0] || safeProductImage(template.image, "")),
         images: uniqueImages,
         categories: Array.isArray(data.categories) && data.categories.length
           ? data.categories
@@ -325,7 +340,7 @@
       .map((size) => {
         const variant = variantMap[size] || variantMap[size.toUpperCase()];
         const disabled = Boolean(variant) && variant.isAvailable === false;
-        return `<button type="button" class="qa-size-btn${disabled ? ' is-disabled' : ''}" data-size="${size}" role="radio" aria-checked="false" ${disabled ? 'disabled' : ''}>${size}</button>`;
+        return `<button type="button" class="qa-size-btn${disabled ? ' is-disabled' : ''}" data-size="${escapeHtml(size)}" role="radio" aria-checked="false" ${disabled ? 'disabled' : ''}>${escapeHtml(size)}</button>`;
       })
       .join("");
 
@@ -389,8 +404,10 @@
     qaCurrentProduct = product;
 
     const imgs = Array.isArray(product.images) && product.images.length ? product.images : [product.image];
-    qaImg1.src = imgs[0];  qaImg1.alt = product.name;
-    qaImg2.src = imgs[1] || imgs[0];  qaImg2.alt = product.name;
+    qaImg1.src = safeProductImage(imgs[0]);  qaImg1.alt = product.name || "Producto";
+    qaImg1.referrerPolicy = "no-referrer";
+    qaImg2.src = safeProductImage(imgs[1] || imgs[0]);  qaImg2.alt = product.name || "Producto";
+    qaImg2.referrerPolicy = "no-referrer";
 
     qaName.textContent  = product.name || "";
     qaPrice.textContent = product.priceLabel || euros(product.price);
@@ -468,7 +485,7 @@
 
     const uniqueImages = [];
     sourceImages.forEach((src) => {
-      const clean = typeof src === "string" ? src.trim() : "";
+      const clean = safeProductImage(src, "");
       uniqueImages.push(clean || PRODUCT_PLACEHOLDER);
     });
 
@@ -481,7 +498,8 @@
       im.loading = "lazy";
       im.decoding = "async";
       im.alt = p.name || "Producto";
-      im.src = src || PRODUCT_PLACEHOLDER;
+      im.src = safeProductImage(src);
+      im.referrerPolicy = "no-referrer";
       return im;
     });
     imgEls.forEach(im => gallery.appendChild(im));

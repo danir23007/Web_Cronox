@@ -1,8 +1,11 @@
 import { Module } from '@nestjs/common';
+import { ConfigModule, ConfigService } from '@nestjs/config';
 import { JwtModule, JwtService } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
+import { getRequiredJwtSecret } from '../common/config/environment';
 import { UsersModule } from '../users/users.module';
 import { CartModule } from '../cart/cart.module';
+import { EmailModule } from '../email/email.module';
 import { NewsletterModule } from '../newsletter/newsletter.module';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
@@ -11,22 +14,29 @@ import { JwtRefreshStrategy } from './strategies/jwt-refresh.strategy';
 
 const refreshJwtProvider = {
   provide: 'JWT_REFRESH_SERVICE',
-  useFactory: () =>
+  inject: [ConfigService],
+  useFactory: (_config: ConfigService) =>
     new JwtService({
-      secret: process.env.JWT_REFRESH_SECRET ?? 'change_me_refresh',
+      secret: getRequiredJwtSecret('JWT_REFRESH_SECRET'),
       signOptions: { expiresIn: '7d' },
     }),
 };
 
 @Module({
   imports: [
-    JwtModule.register({
-      secret: process.env.JWT_ACCESS_SECRET ?? 'change_me_access',
-      signOptions: { expiresIn: '15m' },
+    ConfigModule,
+    JwtModule.registerAsync({
+      imports: [ConfigModule],
+      inject: [ConfigService],
+      useFactory: (_config: ConfigService) => ({
+        secret: getRequiredJwtSecret('JWT_ACCESS_SECRET'),
+        signOptions: { expiresIn: '15m' },
+      }),
     }),
     PassportModule,
     UsersModule,
     CartModule,
+    EmailModule,
     NewsletterModule,
   ],
   controllers: [AuthController],

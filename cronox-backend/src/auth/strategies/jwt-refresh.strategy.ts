@@ -2,6 +2,7 @@ import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
 import type { Request } from 'express';
+import { getRequiredJwtSecret } from '../../common/config/environment';
 import { UsersService } from '../../users/users.service';
 
 const extractRefreshToken = (req: Request): string | null => {
@@ -19,18 +20,25 @@ const extractRefreshToken = (req: Request): string | null => {
 };
 
 @Injectable()
-export class JwtRefreshStrategy extends PassportStrategy(Strategy, 'jwt-refresh') {
+export class JwtRefreshStrategy extends PassportStrategy(
+  Strategy,
+  'jwt-refresh',
+) {
   constructor(private readonly usersService: UsersService) {
     super({
       jwtFromRequest: ExtractJwt.fromExtractors([extractRefreshToken]),
       ignoreExpiration: false,
-      secretOrKey: process.env.JWT_REFRESH_SECRET ?? 'change_me_refresh',
+      secretOrKey: getRequiredJwtSecret('JWT_REFRESH_SECRET'),
       passReqToCallback: true,
     });
   }
 
-  async validate(req: Request, payload: { sub: number; type?: string }) {
-    const refreshToken = (req as Request & { refreshToken?: string }).refreshToken;
+  async validate(
+    req: Request,
+    payload: { sub: number; type?: string; sv?: number },
+  ) {
+    const refreshToken = (req as Request & { refreshToken?: string })
+      .refreshToken;
 
     if (!refreshToken || payload.type !== 'refresh') {
       throw new UnauthorizedException('Refresh token inválido');
@@ -44,7 +52,11 @@ export class JwtRefreshStrategy extends PassportStrategy(Strategy, 'jwt-refresh'
 
     const user = await this.usersService.findById(userId);
 
-    if (!user) {
+    if (
+      !user ||
+      !Number.isInteger(payload.sv) ||
+      payload.sv !== user.sessionVersion
+    ) {
       throw new UnauthorizedException('Refresh token inválido');
     }
 

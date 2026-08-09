@@ -27,7 +27,7 @@ export class CategoriesService {
     where?: Prisma.CategoryWhereInput,
   ) {
     const page = query.page ?? 1;
-    const limit = query.limit ?? 20;
+    const limit = Math.min(query.limit ?? 20, 100);
     const skip = (page - 1) * limit;
     const orderByField = query.orderBy ?? 'name';
     const orderDirection = query.order ?? 'asc';

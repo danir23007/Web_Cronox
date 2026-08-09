@@ -4,6 +4,7 @@ import { CircleService } from './circle.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { UsersService } from '../users/users.service';
 import { HistorialService } from '../historial/historial.service';
+import { getPublicApiUrl } from '../common/config/environment';
 
 @Injectable()
 export class MembershipService {
@@ -15,9 +16,12 @@ export class MembershipService {
   ) {}
 
   async getQrForUser(userId: number): Promise<Buffer> {
-    const memberCode = await this.usersService.ensureMemberCode(userId);
+    const publicMemberToken = await this.usersService.ensurePublicMemberToken(userId);
 
-    const url = `https://cronox.com/m/${memberCode}`;
+    // Point the QR at the actual public validation endpoint. API_PUBLIC_URL
+    // permits a separately hosted API while the default works for the
+    // same-origin storefront deployment.
+    const url = `${getPublicApiUrl()}/api/m/${encodeURIComponent(publicMemberToken)}`;
 
     const buffer = await QRCode.toBuffer(url, {
       type: 'png',
@@ -32,18 +36,15 @@ export class MembershipService {
     return buffer;
   }
 
-  async getMemberInfo(memberCode: string) {
-    const user = await this.prisma.user.findUnique({ where: { memberCode } });
+  async getMemberInfo(publicMemberToken: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { publicMemberToken },
+      select: { id: true },
+    });
 
-    if (!user) {
-      throw new NotFoundException('Member not found');
-    }
-
-    return {
-      memberCode: user.memberCode,
-      createdAt: user.createdAt,
-      valid: true,
-    };
+    // This endpoint is deliberately usable by a scanned membership QR code.
+    // Do not reveal account metadata or distinguish missing codes by status.
+    return { valid: Boolean(user) };
   }
 
   async getMyStats(userId: number) {

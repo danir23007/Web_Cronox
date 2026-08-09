@@ -3,19 +3,7 @@
     "admin:build": "vite build -c vite.admin.config.ts",
     "admin:watch": "vite build -c vite.admin.config.ts --watch"
   },
-  "dependencies": {
-    "@nestjs/jwt": "^11.0.1",
-    "@nestjs/passport": "^11.0.5",
-    "@nestjs/swagger": "^11.2.1",
-    "@nestjs/throttler": "^6.4.0",
-    "bcrypt": "^6.0.0",
-    "passport": "^0.7.0",
-    "passport-jwt": "^4.0.1",
-    "qrcode": "^1.5.4",
-    "swagger-ui-express": "^5.0.1"
-  },
   "devDependencies": {
-    "@types/bcrypt": "^6.0.0",
     "@types/node": "^25.2.1",
     "typescript": "^5.9.3",
     "vite": "^7.3.1"

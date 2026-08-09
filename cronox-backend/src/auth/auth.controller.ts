@@ -13,7 +13,9 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import type { Request, Response } from 'express';
+import { Throttle } from '@nestjs/throttler';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
+import type { CsrfTokenRequest } from '../common/guards/csrf-protection.guard';
 import { AuthService } from './auth.service';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { RefreshJwtGuard } from './guards/refresh-jwt.guard';
@@ -28,6 +30,7 @@ export class AuthController {
 
   @Post('register')
   @HttpCode(HttpStatus.CREATED)
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
   async register(
     @Req() req: Request,
     @Res({ passthrough: true }) res: Response,
@@ -35,14 +38,19 @@ export class AuthController {
   ) {
     const result = await this.authService.register(dto);
 
-    const cookies = (req as Request & { cookies?: Record<string, string | undefined> }).cookies;
+    const cookies = (
+      req as Request & { cookies?: Record<string, string | undefined> }
+    ).cookies;
     let cartMerge: Awaited<ReturnType<AuthService['mergeCartOnLogin']>> = {
       merged: false,
       incidents: [],
     };
 
     try {
-      cartMerge = await this.authService.mergeCartOnLogin(result.user.id, cookies?.cartId);
+      cartMerge = await this.authService.mergeCartOnLogin(
+        result.user.id,
+        cookies?.cartId,
+      );
       this.authService.logCartMergeResult(result.user.id, cartMerge);
     } catch (error) {
       this.authService.logCartMergeError(result.user.id, error);
@@ -55,6 +63,7 @@ export class AuthController {
 
   @Post('login')
   @HttpCode(HttpStatus.OK)
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
   async login(
     @Req() req: Request,
     @Res({ passthrough: true }) res: Response,
@@ -62,14 +71,19 @@ export class AuthController {
   ) {
     const result = await this.authService.login(dto);
 
-    const cookies = (req as Request & { cookies?: Record<string, string | undefined> }).cookies;
+    const cookies = (
+      req as Request & { cookies?: Record<string, string | undefined> }
+    ).cookies;
     let cartMerge: Awaited<ReturnType<AuthService['mergeCartOnLogin']>> = {
       merged: false,
       incidents: [],
     };
 
     try {
-      cartMerge = await this.authService.mergeCartOnLogin(result.user.id, cookies?.cartId);
+      cartMerge = await this.authService.mergeCartOnLogin(
+        result.user.id,
+        cookies?.cartId,
+      );
       this.authService.logCartMergeResult(result.user.id, cartMerge);
     } catch (error) {
       this.authService.logCartMergeError(result.user.id, error);
@@ -82,8 +96,22 @@ export class AuthController {
 
   @Post('logout')
   @HttpCode(HttpStatus.NO_CONTENT)
-  async logout(@Res({ passthrough: true }) res: Response) {
-    this.authService.clearAuthCookies(res);
+  async logout(@Req() req: Request, @Res({ passthrough: true }) res: Response) {
+    const cookies = (
+      req as Request & { cookies?: Record<string, string | undefined> }
+    ).cookies;
+
+    try {
+      await this.authService.logout(cookies?.jwt, cookies?.refresh_token);
+    } finally {
+      this.authService.clearAuthCookies(res);
+    }
+  }
+
+  @Get('csrf')
+  csrf(@Req() req: Request, @Res({ passthrough: true }) res: Response) {
+    res.setHeader('Cache-Control', 'no-store');
+    return { ok: true, csrfToken: (req as CsrfTokenRequest).csrfToken };
   }
 
   /**
@@ -109,7 +137,11 @@ export class AuthController {
   @Post('refresh')
   @UseGuards(RefreshJwtGuard)
   @HttpCode(HttpStatus.OK)
-  async refresh(@Req() req: Request, @Res({ passthrough: true }) res: Response) {
+  @Throttle({ default: { limit: 30, ttl: 60_000 } })
+  async refresh(
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+  ) {
     const userId = (req as any).user?.id;
 
     if (!userId) {
@@ -123,17 +155,21 @@ export class AuthController {
   }
 
   @Post('forgot-password')
+  @Throttle({ default: { limit: 3, ttl: 60_000 } })
   async forgotPassword(@Body() dto: ForgotPasswordDto) {
     await this.authService.requestPasswordReset(dto.email);
     return { ok: true };
   }
 
   @Post('reset-password')
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
   async resetPassword(@Body() body: ResetPasswordDto) {
     const { token, password } = body;
 
     if (!token || !password) {
-      throw new BadRequestException('Token y nueva contraseña son obligatorios');
+      throw new BadRequestException(
+        'Token y nueva contraseña son obligatorios',
+      );
     }
 
     await this.authService.resetPassword(token, password);

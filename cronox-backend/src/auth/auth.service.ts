@@ -1,4 +1,3 @@
-// src/auth/auth.service.ts
 import {
   BadRequestException,
   ConflictException,
@@ -10,19 +9,26 @@ import {
 import { JwtService } from '@nestjs/jwt';
 import { Role, User } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
-import { randomBytes } from 'crypto';
+import { createHash, randomBytes } from 'crypto';
 import type { CookieOptions, Response } from 'express';
 import { CartService, type MergeOnLoginResult } from '../cart/cart.service';
+import {
+  getBcryptSaltRounds,
+  getFrontendUrl,
+  isProductionEnvironment,
+} from '../common/config/environment';
+import { EmailService } from '../email/email.service';
+import { NewsletterService } from '../newsletter/newsletter.service';
+import { PrismaService } from '../prisma/prisma.service';
+import { UsersService, AuthUser } from '../users/users.service';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
-import { UsersService, AuthUser } from '../users/users.service';
-import { PrismaService } from '../prisma/prisma.service';
-import { NewsletterService } from '../newsletter/newsletter.service';
 
 interface JwtPayload {
   sub: number;
   email: string;
   role: Role | null;
+  sv: number;
 }
 
 type Tokens = {
@@ -30,39 +36,31 @@ type Tokens = {
   refreshToken?: string;
 };
 
+type SessionJwtPayload = {
+  sub: number;
+  sv: number;
+  type?: string;
+};
+
 @Injectable()
 export class AuthService {
-  // IMPORTANTE: en local vamos a ignorar NODE_ENV y desactivar Secure
-  private readonly isProd = process.env.NODE_ENV === 'production';
-
-  // Marca explícitamente cuando estamos en entorno local
-  private readonly isLocalhost =
-    process.env.APP_ENV === 'local' ||
-    (!this.isProd && (process.env.HOST ?? '').includes('localhost'));
-
-  // si quieres, puedes bajar esto a 8 en dev para que vaya más rápido
-  private readonly bcryptSaltRounds = Number(
-    process.env.BCRYPT_SALT_ROUNDS ?? '10',
+  private readonly isProd = isProductionEnvironment();
+  private readonly bcryptSaltRounds = getBcryptSaltRounds();
+  private readonly dummyPasswordHash = bcrypt.hashSync(
+    'CRONOX_NOT_A_REAL_ACCOUNT',
+    this.bcryptSaltRounds,
   );
-
   private readonly logger = new Logger(AuthService.name);
 
-  // Config común de las cookies JWT
-  // En local es MUY importante no usar `secure: true` con http://localhost
   private readonly jwtCookieOptions: CookieOptions = {
     httpOnly: true,
-    // navegaciones normales funcionan bien con 'lax'
     sameSite: 'lax',
-    /**
-     * Secure:
-     *  - false en localhost / entornos no productivos
-     *  - true solo cuando NODE_ENV === 'production' y no es localhost
-     */
-    secure: this.isProd && !this.isLocalhost,
+    // Production auth cookies must always be HTTPS-only. Environment aliases
+    // such as APP_ENV must not be able to silently weaken this invariant.
+    secure: this.isProd,
     path: '/',
     maxAge: 7 * 24 * 60 * 60 * 1000,
   };
-  // ⬆⬆⬆ FIN CAMBIO COOKIES ⬆⬆⬆
 
   constructor(
     private readonly usersService: UsersService,
@@ -70,6 +68,7 @@ export class AuthService {
     @Inject('JWT_REFRESH_SERVICE') private readonly refreshJwt: JwtService,
     private readonly cartService: CartService,
     private readonly prisma: PrismaService,
+    private readonly emailService: EmailService,
     private readonly newsletterService: NewsletterService,
   ) {}
 
@@ -78,11 +77,14 @@ export class AuthService {
     const existing = await this.usersService.findByEmail(email);
 
     if (existing) {
-      throw new ConflictException('El email ya está registrado');
+      throw new ConflictException('El email ya esta registrado');
     }
 
     const hashedPassword = await this.hashPassword(dto.password);
-    const fullName = [dto.firstName, dto.lastName].filter(Boolean).join(' ').trim();
+    const fullName = [dto.firstName, dto.lastName]
+      .filter(Boolean)
+      .join(' ')
+      .trim();
     const user = await this.usersService.createUser({
       email,
       password: hashedPassword,
@@ -92,15 +94,8 @@ export class AuthService {
     });
     const authUser = this.omitPassword(user);
 
-    const subscriptionResult = await this.newsletterService.subscribeIfNeeded(
-      user.email,
-    );
-
-    if (!subscriptionResult) {
-      this.logger.warn(
-        `No se pudo suscribir automáticamente al newsletter: ${user.email}`,
-      );
-    }
+    // Only a pre-verified standalone newsletter subscription is claimed here.
+    await this.newsletterService.subscribeIfNeeded(user.email);
 
     const tokens = await this.generateTokens(authUser);
 
@@ -115,7 +110,7 @@ export class AuthService {
     const user = await this.validateUser(dto.email, dto.password);
 
     if (!user) {
-      throw new UnauthorizedException('Credenciales inválidas');
+      throw new UnauthorizedException('Credenciales invalidas');
     }
 
     const tokens = await this.generateTokens(user);
@@ -151,93 +146,152 @@ export class AuthService {
       throw new UnauthorizedException('Usuario no autenticado');
     }
 
-    const authUser = this.omitPassword(user);
-
-    return this.formatAuthUser(authUser);
+    return this.formatAuthUser(this.omitPassword(user));
   }
 
-  async mergeCartOnLogin(userId: number, cartId?: string): Promise<MergeOnLoginResult> {
+  async mergeCartOnLogin(
+    userId: number,
+    cartId?: string,
+  ): Promise<MergeOnLoginResult> {
     return this.cartService.mergeOnLogin(userId, cartId);
   }
 
-  logCartMergeResult(userId: number, result: MergeOnLoginResult) {
-    if (!result.merged) {
-      this.logger.debug(`No había carrito guest para fusionar en login/register para userId=${userId}`);
-      return;
-    }
-
+  logCartMergeResult(_userId: number, result: MergeOnLoginResult) {
     if (result.incidents.length > 0) {
-      this.logger.warn(
-        `Carrito guest fusionado con incidencias para userId=${userId}: ${JSON.stringify(result.incidents)}`,
-      );
-      return;
+      this.logger.warn('Guest cart merge completed with inventory incidents');
     }
-
-    this.logger.log(`Carrito guest fusionado correctamente para userId=${userId}`);
   }
 
-  logCartMergeError(userId: number, error: unknown) {
-    const message = error instanceof Error ? error.message : String(error);
-    this.logger.warn(
-      `No se pudo fusionar el carrito guest en login/register para userId=${userId}: ${message}`,
-    );
+  logCartMergeError(_userId: number, _error: unknown) {
+    this.logger.warn('Guest cart merge failed');
+  }
+
+  /**
+   * Logout is intentionally idempotent. When a current access or refresh
+   * cookie validates, compare-and-increment sessionVersion invalidates both
+   * token types server-side. Missing or stale cookies are simply cleared by
+   * the controller.
+   */
+  async logout(accessToken?: string, refreshToken?: string): Promise<void> {
+    const session = await this.getCurrentSession(accessToken, refreshToken);
+    if (!session) {
+      return;
+    }
+
+    await this.prisma.user.updateMany({
+      where: { id: session.userId, sessionVersion: session.sessionVersion },
+      data: { sessionVersion: { increment: 1 } },
+    });
   }
 
   async requestPasswordReset(email: string) {
-    const normalizedEmail = email?.toLowerCase();
-    const user = normalizedEmail
-      ? await this.usersService.findByEmail(normalizedEmail)
-      : null;
+    const normalizedEmail = email?.trim().toLowerCase() ?? '';
+    const [user] = await Promise.all([
+      normalizedEmail
+        ? this.usersService.findByEmail(normalizedEmail)
+        : Promise.resolve(null),
+      // Make unknown and known account requests perform comparable bounded work.
+      bcrypt.compare(
+        normalizedEmail || 'missing-email',
+        this.dummyPasswordHash,
+      ),
+    ]);
 
-    if (!user) {
-      return { ok: true };
+    // Return before token persistence and SMTP work in every case. This keeps
+    // the externally observable response independent of account existence.
+    if (user && this.emailService.isEnabled()) {
+      void this.createAndSendPasswordReset(user).catch(() => {
+        this.logger.error('Password reset delivery task failed');
+      });
     }
-
-    const token = randomBytes(32).toString('hex');
-    const expiresAt = new Date(Date.now() + 60 * 60 * 1000);
-
-    await this.prisma.passwordResetToken.create({
-      data: {
-        token,
-        userId: user.id,
-        expiresAt,
-      },
-    });
-
-    console.log('Password reset token generated for user:', user.email, token);
 
     return { ok: true };
   }
 
-  async resetPassword(token: string, newPassword: string) {
-    const passwordResetToken = await this.prisma.passwordResetToken.findUnique({
-      where: { token },
+  private async createAndSendPasswordReset(
+    user: Pick<User, 'id' | 'email'>,
+  ): Promise<void> {
+    const token = randomBytes(32).toString('base64url');
+    const tokenHash = this.hashResetToken(token);
+    const now = new Date();
+    const expiresAt = new Date(now.getTime() + 60 * 60 * 1000);
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.passwordResetToken.updateMany({
+        where: { userId: user.id, usedAt: null },
+        data: { usedAt: now },
+      });
+      await tx.passwordResetToken.create({
+        data: {
+          token: tokenHash,
+          userId: user.id,
+          expiresAt,
+        },
+      });
     });
 
-    if (!passwordResetToken) {
-      throw new BadRequestException('Token inválido');
+    const resetUrl = `${getFrontendUrl()}/reset-password?token=${encodeURIComponent(token)}`;
+    try {
+      await this.emailService.sendPasswordReset(user.email, resetUrl);
+    } catch {
+      // Do not leave an actionable token if it could not be delivered.
+      await this.prisma.passwordResetToken.updateMany({
+        where: { userId: user.id, token: tokenHash, usedAt: null },
+        data: { usedAt: new Date() },
+      });
+      this.logger.error('Password reset email delivery failed');
     }
+  }
 
-    if (passwordResetToken.expiresAt < new Date()) {
-      throw new BadRequestException('Token caducado');
-    }
+  async resetPassword(token: string, newPassword: string) {
+    const tokenHash = this.hashResetToken(token);
+    const passwordResetToken = await this.prisma.passwordResetToken.findUnique({
+      where: { token: tokenHash },
+    });
 
-    if (passwordResetToken.usedAt) {
-      throw new BadRequestException('Token ya usado');
+    if (
+      !passwordResetToken ||
+      passwordResetToken.usedAt ||
+      passwordResetToken.expiresAt <= new Date()
+    ) {
+      throw new BadRequestException('Token invalido o caducado');
     }
 
     const hashedPassword = await this.hashPassword(newPassword);
+    const now = new Date();
 
-    await this.prisma.$transaction([
-      this.prisma.user.update({
+    await this.prisma.$transaction(async (tx) => {
+      const consumed = await tx.passwordResetToken.updateMany({
+        where: {
+          id: passwordResetToken.id,
+          token: tokenHash,
+          usedAt: null,
+          expiresAt: { gt: now },
+        },
+        data: { usedAt: now },
+      });
+
+      if (consumed.count !== 1) {
+        throw new BadRequestException('Token invalido o caducado');
+      }
+
+      await tx.user.update({
         where: { id: passwordResetToken.userId },
-        data: { password: hashedPassword },
-      }),
-      this.prisma.passwordResetToken.update({
-        where: { id: passwordResetToken.id },
-        data: { usedAt: new Date() },
-      }),
-    ]);
+        data: {
+          password: hashedPassword,
+          sessionVersion: { increment: 1 },
+        },
+      });
+
+      await tx.passwordResetToken.updateMany({
+        where: {
+          userId: passwordResetToken.userId,
+          id: { not: passwordResetToken.id },
+          usedAt: null,
+        },
+        data: { usedAt: now },
+      });
+    });
 
     return { ok: true };
   }
@@ -257,16 +311,20 @@ export class AuthService {
     });
   }
 
-  async validateUser(email: string, password: string): Promise<AuthUser | null> {
+  async validateUser(
+    email: string,
+    password: string,
+  ): Promise<AuthUser | null> {
     const normalizedEmail = email.toLowerCase();
     const user = await this.prisma.user.findUnique({
       where: { email: normalizedEmail },
     });
 
-    if (!user) return null;
-
-    const isValid = await bcrypt.compare(password, user.password);
-    if (!isValid) return null;
+    const isValid = await bcrypt.compare(
+      password,
+      user?.password ?? this.dummyPasswordHash,
+    );
+    if (!user || !isValid) return null;
 
     return this.omitPassword(user);
   }
@@ -281,6 +339,7 @@ export class AuthService {
     const refreshToken = await this.refreshJwt.signAsync({
       sub: user.id,
       type: 'refresh',
+      sv: user.sessionVersion,
     });
 
     return { accessToken, refreshToken };
@@ -291,6 +350,7 @@ export class AuthService {
       sub: user.id,
       email: user.email,
       role: user.role,
+      sv: user.sessionVersion,
     };
 
     return this.jwtService.signAsync(payload);
@@ -298,6 +358,49 @@ export class AuthService {
 
   private hashPassword(data: string) {
     return bcrypt.hash(data, this.bcryptSaltRounds);
+  }
+
+  private hashResetToken(token: string): string {
+    return createHash('sha256').update(token).digest('hex');
+  }
+
+  private async getCurrentSession(
+    accessToken?: string,
+    refreshToken?: string,
+  ): Promise<{ userId: number; sessionVersion: number } | null> {
+    if (accessToken) {
+      try {
+        const payload =
+          await this.jwtService.verifyAsync<SessionJwtPayload>(accessToken);
+        if (
+          payload.type === undefined &&
+          Number.isInteger(payload.sub) &&
+          Number.isInteger(payload.sv)
+        ) {
+          return { userId: payload.sub, sessionVersion: payload.sv };
+        }
+      } catch {
+        // A missing, expired, or invalid cookie is intentionally idempotent.
+      }
+    }
+
+    if (refreshToken) {
+      try {
+        const payload =
+          await this.refreshJwt.verifyAsync<SessionJwtPayload>(refreshToken);
+        if (
+          payload.type === 'refresh' &&
+          Number.isInteger(payload.sub) &&
+          Number.isInteger(payload.sv)
+        ) {
+          return { userId: payload.sub, sessionVersion: payload.sv };
+        }
+      } catch {
+        // A missing, expired, or invalid cookie is intentionally idempotent.
+      }
+    }
+
+    return null;
   }
 
   private formatAuthUser(user: AuthUser) {

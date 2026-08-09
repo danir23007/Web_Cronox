@@ -1,20 +1,21 @@
-import { BadRequestException, Injectable, Logger } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  Logger,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import Stripe from 'stripe';
-import { createHash } from 'crypto';
 
-export type CreateOrReusePaymentIntentArgs = {
-  userId: number;
-  cartId: number;
-  amount: number;
-  currency: string;
-  metadata?: Record<string, string>;
-  paymentIntentId?: string;
-};
-
-export type CreateOrReusePaymentIntentResult = {
+export type CheckoutPaymentIntentResult = {
   id: string;
   clientSecret: string;
+};
+
+export type CreatePaymentIntentForCheckoutArgs = {
+  checkoutSnapshotId: string;
+  amount: number;
+  currency: string;
 };
 
 @Injectable()
@@ -40,62 +41,22 @@ export class StripeService {
     });
   }
 
-  async createOrReusePaymentIntent(
-    args: CreateOrReusePaymentIntentArgs,
-  ): Promise<CreateOrReusePaymentIntentResult> {
-    const {
-      userId,
-      cartId,
-      amount,
-      currency,
-      metadata: extraMetadata,
-      paymentIntentId,
-    } = args;
-    const metadata = {
-      userId: String(userId),
-      cartId: String(cartId),
-      ...(extraMetadata ?? {}),
-    };
-
-    if (paymentIntentId) {
-      const refreshedIntent = await this.refreshPaymentIntent(paymentIntentId, {
-        userId,
-        cartId,
-        amount,
-        currency,
-        metadata,
-      });
-
-      if (!refreshedIntent.client_secret) {
-        this.logger.error(
-          `Stripe PaymentIntent ${refreshedIntent.id} has no client_secret after refresh`,
-        );
-        throw new BadRequestException('STRIPE_PAYMENT_INTENT_NO_CLIENT_SECRET');
-      }
-
-      return {
-        id: refreshedIntent.id,
-        clientSecret: refreshedIntent.client_secret,
-      };
+  async createPaymentIntentForCheckout(
+    args: CreatePaymentIntentForCheckoutArgs,
+  ): Promise<CheckoutPaymentIntentResult> {
+    if (!Number.isSafeInteger(args.amount) || args.amount < 0) {
+      throw new BadRequestException('STRIPE_INVALID_PAYMENT_AMOUNT');
     }
-
-    const idempotencyKey = this.buildCreatePaymentIntentIdempotencyKey({
-      userId,
-      cartId,
-      amount,
-      currency,
-      metadata,
-    });
 
     const paymentIntent = await this.stripe.paymentIntents.create(
       {
-        amount,
-        currency,
-        metadata,
+        amount: args.amount,
+        currency: args.currency,
+        metadata: { checkoutSnapshotId: args.checkoutSnapshotId },
         description: this.paymentDescription,
         automatic_payment_methods: { enabled: true },
       },
-      { idempotencyKey },
+      { idempotencyKey: `checkout:${args.checkoutSnapshotId}` },
     );
 
     if (!paymentIntent.client_secret) {
@@ -103,115 +64,99 @@ export class StripeService {
       throw new BadRequestException('STRIPE_PAYMENT_INTENT_NO_CLIENT_SECRET');
     }
 
+    return { id: paymentIntent.id, clientSecret: paymentIntent.client_secret };
+  }
+
+  async getReusableCheckoutPaymentIntent(args: {
+    paymentIntentId: string;
+    checkoutSnapshotId: string;
+    amount: number;
+    currency: string;
+  }): Promise<CheckoutPaymentIntentResult> {
+    const paymentIntent = await this.stripe.paymentIntents.retrieve(
+      args.paymentIntentId,
+    );
+    this.assertCheckoutPaymentIntentBinding(paymentIntent, args);
+
+    if (
+      paymentIntent.status === 'succeeded' ||
+      paymentIntent.status === 'canceled' ||
+      paymentIntent.status === 'processing'
+    ) {
+      throw new ConflictException('STRIPE_PAYMENT_INTENT_NOT_REUSABLE');
+    }
+    if (!paymentIntent.client_secret) {
+      throw new BadRequestException('STRIPE_PAYMENT_INTENT_NO_CLIENT_SECRET');
+    }
     return {
       id: paymentIntent.id,
       clientSecret: paymentIntent.client_secret,
     };
   }
 
-  private async refreshPaymentIntent(
+  async cancelCheckoutPaymentIntent(
     paymentIntentId: string,
-    args: {
-      userId: number;
-      cartId: number;
-      amount: number;
-      currency: string;
-      metadata: Record<string, string>;
-    },
-  ): Promise<Stripe.PaymentIntent> {
-    try {
-      const existing = await this.stripe.paymentIntents.retrieve(paymentIntentId);
+    checkoutSnapshotId: string,
+  ): Promise<void> {
+    const paymentIntent = await this.stripe.paymentIntents.retrieve(
+      paymentIntentId,
+    );
+    this.assertCheckoutPaymentIntentBinding(paymentIntent, {
+      checkoutSnapshotId,
+      amount: paymentIntent.amount,
+      currency: paymentIntent.currency,
+    });
 
-      if (existing.status !== 'requires_payment_method') {
-        this.logger.warn(
-          `PaymentIntent ${paymentIntentId} no editable (status=${existing.status}), creando uno nuevo`,
-        );
-        return this.stripe.paymentIntents.create({
-          amount: args.amount,
-          currency: args.currency,
-          metadata: args.metadata,
-          description: this.paymentDescription,
-          automatic_payment_methods: { enabled: true },
-        });
-      }
+    if (paymentIntent.status === 'canceled') return;
+    if (
+      paymentIntent.status === 'succeeded' ||
+      paymentIntent.status === 'processing'
+    ) {
+      throw new ConflictException('STRIPE_PAYMENT_INTENT_NOT_CANCELLABLE');
+    }
 
-      const ownerMatches =
-        existing.metadata?.userId === String(args.userId) &&
-        existing.metadata?.cartId === String(args.cartId);
-
-      if (!ownerMatches) {
-        this.logger.warn(
-          `PaymentIntent ${paymentIntentId} no coincide con user/cart actuales, creando uno nuevo`,
-        );
-        return this.stripe.paymentIntents.create({
-          amount: args.amount,
-          currency: args.currency,
-          metadata: args.metadata,
-          description: this.paymentDescription,
-          automatic_payment_methods: { enabled: true },
-        });
-      }
-
-      if (existing.currency !== args.currency) {
-        this.logger.warn(
-          `PaymentIntent ${paymentIntentId} tiene currency=${existing.currency} y se requiere ${args.currency}, creando uno nuevo`,
-        );
-        return this.stripe.paymentIntents.create({
-          amount: args.amount,
-          currency: args.currency,
-          metadata: args.metadata,
-          description: this.paymentDescription,
-          automatic_payment_methods: { enabled: true },
-        });
-      }
-
-      return this.stripe.paymentIntents.update(paymentIntentId, {
-        amount: args.amount,
-        metadata: args.metadata,
-        description: this.paymentDescription,
-      });
-    } catch (error) {
-      this.logger.warn(
-        `No se pudo refrescar PaymentIntent ${paymentIntentId}: ${
-          error instanceof Error ? error.message : String(error)
-        }. Creando uno nuevo.`,
-      );
-      return this.stripe.paymentIntents.create({
-        amount: args.amount,
-        currency: args.currency,
-        metadata: args.metadata,
-        description: this.paymentDescription,
-        automatic_payment_methods: { enabled: true },
-      });
+    const cancelled = await this.stripe.paymentIntents.cancel(paymentIntentId);
+    if (cancelled.status !== 'canceled') {
+      throw new BadRequestException('STRIPE_PAYMENT_INTENT_CANCEL_NOT_CONFIRMED');
     }
   }
 
-  private buildCreatePaymentIntentIdempotencyKey(args: {
-    userId: number;
-    cartId: number;
-    amount: number;
-    currency: string;
-    metadata: Record<string, string>;
-  }): string {
-    const metadataFingerprint = Object.entries(args.metadata)
-      .sort(([a], [b]) => a.localeCompare(b))
-      .map(([key, value]) => `${key}:${value}`)
-      .join('|');
+  async refundPaymentIntent(
+    paymentIntentId: string,
+    idempotencyKey: string,
+  ): Promise<{ id: string; status: string | null }> {
+    const paymentIntent = await this.stripe.paymentIntents.retrieve(paymentIntentId);
+    if (paymentIntent.status !== 'succeeded') {
+      throw new BadRequestException('STRIPE_PAYMENT_NOT_REFUNDABLE');
+    }
 
-    const digest = createHash('sha256')
-      .update(
-        JSON.stringify({
-          userId: args.userId,
-          cartId: args.cartId,
-          amount: args.amount,
-          currency: args.currency,
-          metadataFingerprint,
-        }),
-      )
-      .digest('hex')
-      .slice(0, 24);
+    const refund = await this.stripe.refunds.create(
+      { payment_intent: paymentIntentId },
+      { idempotencyKey },
+    );
 
-    return `payment:${args.userId}:${args.cartId}:${args.amount}:${args.currency}:${digest}`;
+    if (refund.status !== 'succeeded') {
+      throw new BadRequestException('STRIPE_REFUND_NOT_CONFIRMED');
+    }
+
+    return { id: refund.id, status: refund.status };
+  }
+
+  private assertCheckoutPaymentIntentBinding(
+    paymentIntent: Stripe.PaymentIntent,
+    expected: {
+      checkoutSnapshotId: string;
+      amount: number;
+      currency: string;
+    },
+  ): void {
+    if (
+      paymentIntent.metadata?.checkoutSnapshotId !== expected.checkoutSnapshotId ||
+      paymentIntent.amount !== expected.amount ||
+      paymentIntent.currency.toUpperCase() !== expected.currency.toUpperCase()
+    ) {
+      throw new ConflictException('STRIPE_PAYMENT_INTENT_SNAPSHOT_MISMATCH');
+    }
   }
 
   constructEventFromPayload(signature: string | string[] | undefined, rawBody: Buffer) {
@@ -233,35 +178,4 @@ export class StripeService {
     }
   }
 
-  async getChargeBillingEmailForPaymentIntent(
-    paymentIntent: Stripe.PaymentIntent,
-  ): Promise<string | undefined> {
-    const latestCharge = paymentIntent.latest_charge;
-
-    if (latestCharge && typeof latestCharge !== 'string') {
-      const email = latestCharge.billing_details?.email?.trim();
-      if (email) return email;
-    }
-
-    const latestChargeId =
-      typeof latestCharge === 'string' ? latestCharge : latestCharge?.id;
-
-    if (latestChargeId) {
-      const charge = await this.stripe.charges.retrieve(latestChargeId);
-      const email = charge.billing_details?.email?.trim();
-      if (email) return email;
-    }
-
-    const expandedIntent = await this.stripe.paymentIntents.retrieve(paymentIntent.id, {
-      expand: ['latest_charge'],
-    });
-    const expandedLatestCharge = expandedIntent.latest_charge;
-
-    if (expandedLatestCharge && typeof expandedLatestCharge !== 'string') {
-      const email = expandedLatestCharge.billing_details?.email?.trim();
-      if (email) return email;
-    }
-
-    return undefined;
-  }
 }

@@ -10,6 +10,34 @@
 
   const g = typeof window !== 'undefined' ? window : (globalThis as Window);
 
+  /**
+   * Browser-facing values returned by the API are data, not markup.  Keep the
+   * small set of helpers here so every page that loads api.js can apply the
+   * same URL policy before assigning untrusted values to browser URL sinks.
+   */
+  const escapeHtml = (value: unknown): string =>
+    String(value ?? '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+
+  const externalHttpUrl = (value: unknown): string => {
+    if (typeof value !== 'string' || !value.trim()) return '';
+
+    try {
+      const base = typeof g.location?.origin === 'string' ? g.location.origin : 'http://localhost';
+      const url = new URL(value.trim(), base);
+      if ((url.protocol !== 'https:' && url.protocol !== 'http:') || url.username || url.password) {
+        return '';
+      }
+      return url.href;
+    } catch (error) {
+      return '';
+    }
+  };
+
   const formatPrice = (value: number): string => {
     const amount = Number(value) || 0;
     try {
@@ -185,6 +213,44 @@
   const normalizeBase = (base: string) => (base || '').replace(/\/$/, '');
   const API_BASE = normalizeBase(detectApiBase());
 
+  const getTrustedImageOrigins = () => {
+    const origins = new Set<string>();
+    const addOrigin = (value: unknown) => {
+      if (typeof value !== 'string' || !value.trim()) return;
+      try {
+        const url = new URL(value, typeof g.location?.origin === 'string' ? g.location.origin : 'http://localhost');
+        if (url.protocol === 'https:' || url.protocol === 'http:') origins.add(url.origin);
+      } catch (error) {
+        // Ignore malformed optional origins rather than weakening the allowlist.
+      }
+    };
+
+    addOrigin(g.location?.origin);
+    addOrigin(API_BASE);
+    if (Array.isArray(g.CRONOX_TRUSTED_IMAGE_ORIGINS)) {
+      g.CRONOX_TRUSTED_IMAGE_ORIGINS.forEach(addOrigin);
+    }
+    return origins;
+  };
+
+  const productImageUrl = (value: unknown, fallback = ''): string => {
+    const candidate = externalHttpUrl(value);
+    if (!candidate) return fallback;
+
+    try {
+      const url = new URL(candidate);
+      const trustedOrigin = getTrustedImageOrigins().has(url.origin);
+      const publicSupabaseObject =
+        url.protocol === 'https:' &&
+        /(^|\.)supabase\.co$/i.test(url.hostname) &&
+        url.pathname.startsWith('/storage/v1/object/public/');
+
+      return trustedOrigin || publicSupabaseObject ? url.href : fallback;
+    } catch (error) {
+      return fallback;
+    }
+  };
+
   const safeJsonParse = (text: string) => {
     try {
       return JSON.parse(text);
@@ -210,7 +276,7 @@
     const primary = byOrder.find((img) => img?.isPrimary)?.url;
     const first = byOrder.find((img) => img?.url)?.url;
 
-    return primary || first || fallback || '';
+    return productImageUrl(primary) || productImageUrl(first) || productImageUrl(fallback) || '';
   };
 
   const normalizeSizeKey = (value?: string | number) => String(value || '').trim().toUpperCase();
@@ -238,11 +304,11 @@
     if (!product) return null;
 
     const images = Array.isArray(product.images)
-      ? (product.images as Array<{ url?: string }>).map((img) => img?.url).filter(Boolean)
+      ? (product.images as Array<{ url?: string }>).map((img) => productImageUrl(img?.url)).filter(Boolean)
       : [];
     const primaryImage = pickPrimaryImage(
       (product.images as Array<{ url?: string; sortOrder?: number; isPrimary?: boolean }>) || [],
-      (product.imageUrl as string) || images[0] || '',
+      productImageUrl(product.imageUrl) || images[0] || '',
     );
     const rawVariants = Array.isArray(product.variants) ? (product.variants as UnknownRecord[]) : [];
     const variants = rawVariants.map((variant) => mapVariant(variant, product.price as number));
@@ -302,16 +368,22 @@
     const product = (variant.product as UnknownRecord) || {};
     const priceCents = Number(item.priceAtAdd ?? variant.price ?? product.price ?? 0);
     const productImages = Array.isArray(product.images)
-      ? (product.images as Array<{ url?: string }>).map((img) => (typeof img?.url === 'string' ? { url: img.url } : null)).filter(Boolean)
+      ? (product.images as Array<{ url?: string }>).
+          map((img) => productImageUrl(img?.url)).
+          filter(Boolean).
+          map((url) => ({ url }))
       : [];
     const productImage =
-      (product.imageUrl as string) ||
+      productImageUrl(product.imageUrl) ||
       pickPrimaryImage((product.images as Array<{ url?: string; sortOrder?: number; isPrimary?: boolean }>) || []) ||
       productImages[0]?.url ||
       '';
 
     const itemImages = Array.isArray(item.images)
-      ? (item.images as Array<{ url?: string }>).map((img) => (typeof img?.url === 'string' ? { url: img.url } : null)).filter(Boolean)
+      ? (item.images as Array<{ url?: string }>).
+          map((img) => productImageUrl(img?.url)).
+          filter(Boolean).
+          map((url) => ({ url }))
       : [];
 
     return {
@@ -331,7 +403,7 @@
         name: product.name,
         currency: product.currency || 'EUR',
         image: productImage,
-        imageUrl: productImage || product.imageUrl,
+        imageUrl: productImage || productImageUrl(product.imageUrl),
         images: productImages,
       },
     };
@@ -386,12 +458,91 @@
     };
   };
 
+  const CSRF_COOKIE_NAME = 'cronox_csrf_token';
+  const CSRF_HEADER_NAME = 'X-CSRF-Token';
+  let csrfInitialization: Promise<string> | null = null;
+  let csrfTokenCache = '';
+
+  const readCookie = (name: string) => {
+    if (typeof document === 'undefined') return '';
+    const prefix = `${encodeURIComponent(name)}=`;
+    const match = document.cookie
+      .split(';')
+      .map((part) => part.trim())
+      .find((part) => part.startsWith(prefix));
+    if (!match) return '';
+
+    const value = match.slice(prefix.length);
+    try {
+      return decodeURIComponent(value);
+    } catch (error) {
+      return '';
+    }
+  };
+
+  const ensureCsrfToken = async (): Promise<string> => {
+    const existingToken = readCookie(CSRF_COOKIE_NAME) || csrfTokenCache;
+    if (existingToken) return existingToken;
+    if (csrfInitialization) return csrfInitialization;
+
+    const initialization = (async () => {
+      const response = await fetch(buildUrl('/api/auth/csrf'), {
+        method: 'GET',
+        credentials: 'include',
+        headers: { Accept: 'application/json' },
+        cache: 'no-store',
+      });
+      if (!response.ok) {
+        throw new Error('No se pudo inicializar la protección de la solicitud.');
+      }
+
+      let payload: { csrfToken?: unknown } | null = null;
+      try {
+        payload = (await response.json()) as { csrfToken?: unknown };
+      } catch (error) {
+        payload = null;
+      }
+      const token =
+        (typeof payload?.csrfToken === 'string' && payload.csrfToken) ||
+        readCookie(CSRF_COOKIE_NAME);
+      if (!token) {
+        throw new Error('No se pudo obtener el token de protección de la solicitud.');
+      }
+      csrfTokenCache = token;
+      return token;
+    })();
+
+    csrfInitialization = initialization;
+    try {
+      return await initialization;
+    } finally {
+      csrfInitialization = null;
+    }
+  };
+
+  const getCsrfHeaders = async (): Promise<Record<string, string>> => ({
+    [CSRF_HEADER_NAME]: await ensureCsrfToken(),
+  });
+
+  const requiresCsrfHeader = (url: string, method: string) => {
+    const normalizedMethod = String(method || 'GET').toUpperCase();
+    if (!['POST', 'PUT', 'PATCH', 'DELETE'].includes(normalizedMethod)) return false;
+
+    try {
+      const pathname = new URL(url).pathname;
+      return pathname === '/api' || pathname.startsWith('/api/');
+    } catch (error) {
+      return false;
+    }
+  };
+
   const request = async <T = unknown>(path: string, options: RequestOptions = {}): Promise<T> => {
     const url = buildUrl(path, options.query);
     const headers = buildRequestHeaders(options.headers);
     const isFormData = typeof FormData !== 'undefined' && options.body instanceof FormData;
+    const method = options.method || 'GET';
     const config: RequestInit = {
-      method: options.method || 'GET',
+      method,
       headers,
       credentials: 'include',
     };
@@ -408,6 +559,9 @@
     }
 
     try {
+      if (requiresCsrfHeader(url, method)) {
+        Object.assign(headers, await getCsrfHeaders());
+      }
       const response = await fetch(url, config);
       const text = await response.text();
       const data = text ? safeJsonParse(text) : null;
@@ -513,6 +667,7 @@
     API_BASE,
     formatPrice,
     getFallbackProducts,
+    getCsrfHeaders,
     classifyApiError,
   };
 
@@ -781,7 +936,9 @@
   const mapFavoriteProduct = (product: UnknownRecord) => {
     if (!product) return null;
     const images = Array.isArray(product.images)
-      ? (product.images as Array<{ url?: string; imageUrl?: string }>).map((img) => img?.url || img?.imageUrl || img).filter(Boolean)
+      ? (product.images as Array<{ url?: string; imageUrl?: string }>)
+          .map((img) => productImageUrl(img?.url || img?.imageUrl || img))
+          .filter(Boolean)
       : [];
     const priceValue = Number(product.price ?? product.priceCents ?? 0);
 
@@ -792,7 +949,7 @@
       name: product.name,
       price: priceValue,
       priceLabel: (product.priceLabel as string) || formatPrice(priceValue),
-      image: (product.imageUrl as string) || (product.image as string) || (images[0] as string) || '',
+      image: productImageUrl(product.imageUrl || product.image || images[0]) || '',
       images,
     };
   };
@@ -1022,13 +1179,14 @@
       const candidateImage = source.image || mergedImages[0] || template.image || templateImages[0] || '';
       const uniqueImages: string[] = [];
       const pushImage = (value: unknown) => {
-        const clean = typeof value === 'string' ? value.trim() : '';
+        const clean = productImageUrl(value);
         if (clean && !uniqueImages.includes(clean)) {
           uniqueImages.push(clean);
         }
       };
       pushImage(candidateImage);
       mergedImages.forEach(pushImage);
+      const safeCandidateImage = productImageUrl(candidateImage);
 
       return {
         ...template,
@@ -1037,7 +1195,7 @@
         name: source.name || template.name || 'Producto CRONOX',
         price: priceValue,
         priceLabel: basePriceLabel || formatPrice(priceValue),
-        image: candidateImage || uniqueImages[0] || template.image || '',
+        image: safeCandidateImage || uniqueImages[0] || productImageUrl(template.image) || '',
         images: uniqueImages,
         categories:
           Array.isArray(source.categories) && source.categories.length ? source.categories : template.categories || [],
@@ -1053,6 +1211,7 @@
   api.ensureFallbackList = ensureFallbackList;
   api.cloneProduct = cloneProduct;
 
+  g.CRONOX_SECURITY = Object.freeze({ escapeHtml, externalHttpUrl, productImageUrl });
   g.CRONOX_API = api;
   g.CRONOX_API_BASE = API_BASE;
 })();

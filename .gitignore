@@ -1,3 +1,8 @@
 /cronox-backend/node_modules/
 /cronox-backend/dist/
 node_modules/
+
+# All dotenv files are local-only. Safe examples remain trackable.
+**/.env
+**/.env.*
+!**/.env.example

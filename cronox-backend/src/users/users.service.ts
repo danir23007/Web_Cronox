@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma, Role, User } from '@prisma/client';
+import { randomBytes } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { getNextSequentialMemberCode } from './member-code.util';
 
@@ -129,6 +130,42 @@ export class UsersService {
       });
 
       return updated.memberCode ?? newCode;
+    });
+  }
+
+  async ensurePublicMemberToken(userId: number): Promise<string> {
+    return this.prisma.$transaction(async (tx) => {
+      const user = await tx.user.findUnique({
+        where: { id: userId },
+        select: { publicMemberToken: true },
+      });
+
+      if (!user) throw new NotFoundException('User not found');
+      if (user.publicMemberToken) return user.publicMemberToken;
+
+      for (let attempt = 0; attempt < 5; attempt += 1) {
+        const token = randomBytes(24).toString('base64url');
+
+        try {
+          const updated = await tx.user.update({
+            where: { id: userId },
+            data: { publicMemberToken: token },
+            select: { publicMemberToken: true },
+          });
+
+          return updated.publicMemberToken ?? token;
+        } catch (error) {
+          if (
+            error instanceof Prisma.PrismaClientKnownRequestError &&
+            error.code === 'P2002'
+          ) {
+            continue;
+          }
+          throw error;
+        }
+      }
+
+      throw new Error('Could not allocate a unique public membership token');
     });
   }
 }

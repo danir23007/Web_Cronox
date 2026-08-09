@@ -10,6 +10,10 @@ export class MailTransportFactory {
   private readonly transports = new Map<EmailSenderKey, Transporter>();
 
   getTransport(senderKey: EmailSenderKey): Transporter {
+    if (!this.config.enabled) {
+      throw new Error('[EmailTransport] Email delivery is disabled.');
+    }
+
     const cached = this.transports.get(senderKey);
     if (cached) {
       return cached;
@@ -38,6 +42,10 @@ export class MailTransportFactory {
   }
 
   getFrom(senderKey: EmailSenderKey): string {
+    if (!this.config.enabled) {
+      throw new Error('[EmailTransport] Email delivery is disabled.');
+    }
+
     const account = this.config.accounts[senderKey];
     const fromName = account?.fromName || this.config.defaultFromName;
 

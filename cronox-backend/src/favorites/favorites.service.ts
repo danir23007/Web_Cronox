@@ -18,7 +18,7 @@ export class FavoritesService {
 
   async list(userId: number) {
     const favorites = await this.prisma.favorite.findMany({
-      where: { userId },
+      where: { userId, product: { isActive: true } },
       include: {
         product: {
           include: { images: { orderBy: this.imageOrderBy } },
@@ -37,7 +37,7 @@ export class FavoritesService {
 
   async listProducts(userId: number) {
     const favorites = await this.prisma.favorite.findMany({
-      where: { userId },
+      where: { userId, product: { isActive: true } },
       include: {
         product: {
           include: { images: { orderBy: this.imageOrderBy } },
@@ -118,8 +118,8 @@ export class FavoritesService {
       throw new BadRequestException('Debes enviar productId o slug');
     }
 
-    const product = await this.prisma.product.findUnique({
-      where,
+    const product = await this.prisma.product.findFirst({
+      where: { ...where, isActive: true },
       include: { images: { orderBy: this.imageOrderBy } },
     });
 

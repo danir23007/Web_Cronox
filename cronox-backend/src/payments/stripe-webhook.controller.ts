@@ -10,6 +10,7 @@ import {
 } from '@nestjs/common';
 import { ApiExcludeEndpoint, ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { Request } from 'express';
+import { OrderStatus } from '@prisma/client';
 import Stripe from 'stripe';
 import { EmailService } from '../email/email.service';
 import { EmailType } from '../email/email.types';
@@ -20,6 +21,7 @@ import {
 import { OrdersService } from '../orders/orders.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { StripeService } from './stripe.service';
+import { isProductionEnvironment } from '../common/config/environment';
 
 @ApiTags('Payments / Stripe')
 @Controller()
@@ -82,22 +84,68 @@ export class StripeWebhookController {
 
     const event = this.stripeService.constructEventFromPayload(signature, rawBody);
 
+    this.assertLiveModeInProduction(event);
+
     this.logger.log(`Evento Stripe verificado: ${event.type} (${event.id})`);
 
-    switch (event.type) {
-      case 'checkout.session.completed':
-        return this.handleCheckoutSessionCompleted(event);
-      case 'payment_intent.succeeded':
-        return this.handlePaymentIntentSucceeded(event);
-      case 'payment_intent.payment_failed':
-        return this.handlePaymentIntentFailed(event);
-      case 'charge.succeeded':
-        return this.handleChargeSucceeded(event);
-      case 'charge.refunded':
-        return this.handleChargeRefunded(event);
-      default:
-        this.logger.debug(`Evento de Stripe ignorado: ${event.type}`);
-        return { received: true, ignored: true };
+    const paymentIntentId = this.extractPaymentIntentId(event);
+    const lifecycleStatus = this.getLifecycleStatus(event);
+    const closedLostDisputeAmountCents =
+      this.getClosedLostDisputeAmountCents(event);
+    const claimed = await this.ordersService.claimStripeWebhookEvent({
+      id: event.id,
+      type: event.type,
+      paymentIntentId,
+      occurredAt: new Date(event.created * 1000),
+      lifecycleStatus,
+      amountCents: closedLostDisputeAmountCents,
+    });
+
+    if (!claimed) {
+      return { received: true, duplicate: true };
+    }
+
+    try {
+      let response: Record<string, unknown>;
+      switch (event.type) {
+        case 'checkout.session.completed':
+          response = await this.handleCheckoutSessionCompleted(event);
+          break;
+        case 'payment_intent.succeeded':
+          response = await this.handlePaymentIntentSucceeded(event);
+          break;
+        case 'payment_intent.payment_failed':
+          response = await this.handlePaymentIntentFailed(event);
+          break;
+        case 'payment_intent.canceled':
+          response = await this.handlePaymentIntentCanceled(event);
+          break;
+        case 'charge.succeeded':
+          response = await this.handleChargeSucceeded(event);
+          break;
+        case 'charge.refunded':
+          response = await this.handleChargeRefunded(event);
+          break;
+        case 'charge.dispute.created':
+        case 'charge.dispute.funds_withdrawn':
+        case 'charge.dispute.funds_reinstated':
+        case 'charge.dispute.closed':
+          response = await this.handleChargeDispute(
+            event,
+            lifecycleStatus,
+            closedLostDisputeAmountCents,
+          );
+          break;
+        default:
+          this.logger.debug(`Evento de Stripe ignorado: ${event.type}`);
+          response = { received: true, ignored: true };
+      }
+
+      await this.ordersService.completeStripeWebhookEvent(event.id);
+      return response;
+    } catch (error) {
+      await this.ordersService.failStripeWebhookEvent(event.id, error);
+      throw error;
     }
   }
 
@@ -120,213 +168,228 @@ export class StripeWebhookController {
   }
 
   private async handlePaymentIntentSucceeded(event: Stripe.Event) {
-    const paymentIntent = event.data.object as Stripe.PaymentIntent;
-    const metadata = paymentIntent.metadata ?? {};
-    const userId = Number(metadata.userId);
+    return this.handleVerifiedPaymentIntentSucceeded(
+      event.data.object as Stripe.PaymentIntent,
+      new Date(event.created * 1000),
+    );
+  }
+  private async handleVerifiedPaymentIntentSucceeded(
+    paymentIntent: Stripe.PaymentIntent,
+    occurredAt: Date,
+  ): Promise<Record<string, unknown>> {
+    if (paymentIntent.status !== 'succeeded') {
+      throw new BadRequestException('STRIPE_PAYMENT_NOT_SUCCEEDED');
+    }
 
-    this.logger.log(`Procesando payment_intent.succeeded para ${paymentIntent.id}`);
+    const checkoutSnapshotId = paymentIntent.metadata?.checkoutSnapshotId?.trim();
+    if (!checkoutSnapshotId) {
+      throw new BadRequestException('STRIPE_CHECKOUT_SNAPSHOT_REQUIRED');
+    }
 
-    if (!userId || Number.isNaN(userId)) {
+    const amountCents = paymentIntent.amount_received ?? paymentIntent.amount;
+    if (!Number.isSafeInteger(amountCents) || amountCents < 0) {
+      throw new BadRequestException('STRIPE_PAYMENT_AMOUNT_REQUIRED');
+    }
+
+    let result;
+    try {
+      result = await this.ordersService.createOrderFromVerifiedStripePayment({
+        checkoutSnapshotId,
+        paymentIntentId: paymentIntent.id,
+        amountCents,
+        currency: (paymentIntent.currency ?? '').toUpperCase(),
+        occurredAt,
+      });
+    } catch (error) {
+      // A signed successful charge must not be left unfulfilled if persistence
+      // or a reservation invariant fails. The deterministic refund key makes
+      // webhook retries safe until Stripe confirms the compensating refund.
+      await this.stripeService.refundPaymentIntent(
+        paymentIntent.id,
+        `checkout-compensation:${paymentIntent.id}`,
+      );
+      await this.ordersService.applyStripePaymentLifecycle(
+        paymentIntent.id,
+        OrderStatus.REFUNDED,
+      );
       this.logger.error(
-        `payment_intent.succeeded sin userId en metadata para ${paymentIntent.id}`,
+        `Compensated checkout fulfillment failure for PaymentIntent ${paymentIntent.id}`,
       );
-      throw new BadRequestException('STRIPE_METADATA_USER_REQUIRED');
+      return { received: true, refunded: true };
     }
 
-    const cartId = metadata.cartId ? Number(metadata.cartId) : undefined;
-    const shippingMethod = metadata.shippingMethod;
-    if (!shippingMethod || typeof shippingMethod !== 'string') {
-      throw new BadRequestException('STRIPE_METADATA_SHIPPING_METHOD_REQUIRED');
+    if (result.status === OrderStatus.PAID) {
+      await this.sendConfirmationEmailOnce(result);
     }
 
-    const shippingCostCents = metadata.shippingCostCents;
-    if (typeof shippingCostCents !== 'string') {
-      throw new BadRequestException('STRIPE_METADATA_SHIPPING_COST_REQUIRED');
-    }
-    const itemsTotalCents = metadata.itemsTotalCents;
-    if (typeof itemsTotalCents !== 'string') {
-      throw new BadRequestException('STRIPE_METADATA_ITEMS_TOTAL_REQUIRED');
-    }
-    const promoCode =
-      typeof metadata.promoCode === 'string' && metadata.promoCode.trim()
-        ? metadata.promoCode
-        : undefined;
-    const discountCents =
-      typeof metadata.discountCents === 'string' && metadata.discountCents.trim()
-        ? metadata.discountCents
-        : undefined;
-    const amountCents =
-      paymentIntent.amount_received ?? paymentIntent.amount ?? 0;
-    const amount = (amountCents / 100).toFixed(2);
-    const currency = (paymentIntent.currency ?? 'eur').toUpperCase();
-
-    const metadataShippingAddress = this.parseShippingAddressFromMetadata(
-      metadata.shippingAddress,
-    );
-
-    const shippingAddress = paymentIntent.shipping
-      ? {
-          name: paymentIntent.shipping.name,
-          phone: paymentIntent.shipping.phone,
-          address: paymentIntent.shipping.address,
-        }
-      : metadataShippingAddress ?? undefined;
-
-    const order = await this.ordersService.createOrderFromWebhook(
-      {
-        provider: 'stripe',
-        providerRef: paymentIntent.id,
-        amount,
-        currency,
-        metadata: {
-          userId,
-          cartId,
-          shippingMethod,
-          shippingCostCents,
-          itemsTotalCents,
-          ...(metadataShippingAddress
-            ? { shippingAddress: metadataShippingAddress }
-            : {}),
-          ...(promoCode ? { promoCode } : {}),
-          ...(discountCents ? { discountCents } : {}),
-        } as any,
-        shippingAddress: shippingAddress as any,
-        rawPayload: paymentIntent as unknown as Record<string, unknown>,
-      },
-      { updateStock: true },
-    );
-
-    const customerEmail = await this.resolveCustomerEmail(paymentIntent, userId);
-    const orderId =
-      typeof order.id === 'number' || typeof order.id === 'string'
-        ? Number(order.id)
-        : undefined;
-
-    this.logger.log(
-      `Pedido resuelto para paymentIntent=${paymentIntent.id}: orderId=${orderId ?? 'N/A'}`,
-    );
-
-    if (customerEmail && orderId) {
-      try {
-        const orderForEmail = await this.prisma.order.findUnique({
-          where: { id: orderId },
-          ...orderForConfirmationEmailInclude,
-        });
-
-        if (!orderForEmail) {
-          this.logger.warn(`No se encontró pedido ${orderId} para email de confirmación`);
-        } else {
-          const templateData = this.orderConfirmationEmailMapper.map(orderForEmail);
-          templateData.customerEmail = customerEmail;
-
-          console.log(
-            'ORDER SHIPPING ADDR RAW',
-            JSON.stringify(orderForEmail.shippingAddr, null, 2),
-          );
-
-          console.log(
-            'ORDER EMAIL TEMPLATE DATA',
-            JSON.stringify(templateData, null, 2),
-          );
-
-          await this.emailService.send({
-            type: EmailType.ORDER_CONFIRMATION,
-            to: customerEmail,
-            subject: 'CRONOX · Confirmación de pedido',
-            templateData,
-          });
-        }
-      } catch (error) {
-        this.logger.error(
-          `Error enviando email de confirmación para PaymentIntent ${paymentIntent.id}`,
-          error instanceof Error ? error.stack : String(error),
-        );
-      }
-    } else {
-      this.logger.warn(
-        `No se pudo enviar email de confirmación para PaymentIntent ${paymentIntent.id}: customerEmail=${customerEmail ?? 'N/A'} orderId=${orderId ?? 'N/A'}`,
-      );
-    }
-
-    this.logger.log(`Pedido confirmado para PaymentIntent ${paymentIntent.id}`);
-
-    return { received: true, order };
+    return {
+      received: true,
+      created: result.created,
+      orderId: result.orderId,
+    };
   }
 
-  private parseShippingAddressFromMetadata(
-    raw: unknown,
-  ): Record<string, unknown> | null {
-    if (typeof raw !== 'string' || !raw.trim()) {
-      return null;
+  private async sendConfirmationEmailOnce(result: {
+    orderId: number;
+    checkoutSnapshotId: string;
+    status: OrderStatus;
+  }): Promise<void> {
+    if (result.status !== OrderStatus.PAID) return;
+    if (!(await this.ordersService.claimOrderConfirmationEmail(result.checkoutSnapshotId))) {
+      return;
     }
 
     try {
-      const parsed = JSON.parse(raw);
-      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-        return null;
+      const orderForEmail = await this.prisma.order.findUnique({
+        where: { id: result.orderId },
+        ...orderForConfirmationEmailInclude,
+      });
+      if (!orderForEmail) {
+        await this.ordersService.releaseOrderConfirmationEmailClaim(
+          result.checkoutSnapshotId,
+        );
+        this.logger.warn(
+          `No se pudo resolver el pedido o email de confirmación para checkout ${result.checkoutSnapshotId}`,
+        );
+        return;
       }
-      return parsed as Record<string, unknown>;
-    } catch (error) {
-      this.logger.warn(
-        `No se pudo parsear metadata.shippingAddress: ${
-          error instanceof Error ? error.message : String(error)
-        }`,
+
+      const customerEmail = orderForEmail.user?.email?.trim();
+      if (!customerEmail) {
+        await this.ordersService.releaseOrderConfirmationEmailClaim(
+          result.checkoutSnapshotId,
+        );
+        this.logger.warn(
+          `No se pudo resolver el email de confirmaciÃ³n para checkout ${result.checkoutSnapshotId}`,
+        );
+        return;
+      }
+
+      const templateData = this.orderConfirmationEmailMapper.map(orderForEmail);
+      templateData.customerEmail = customerEmail;
+      await this.emailService.send({
+        type: EmailType.ORDER_CONFIRMATION,
+        to: customerEmail,
+        subject: 'CRONOX · Confirmación de pedido',
+        templateData,
+      });
+      await this.ordersService.markOrderConfirmationEmailSent(
+        result.checkoutSnapshotId,
       );
-      return null;
+    } catch (error) {
+      await this.ordersService.releaseOrderConfirmationEmailClaim(
+        result.checkoutSnapshotId,
+      );
+      this.logger.error(
+        `Error enviando email de confirmación para checkout ${result.checkoutSnapshotId}`,
+        error instanceof Error ? error.stack : String(error),
+      );
     }
   }
 
-  private async resolveCustomerEmail(
-    paymentIntent: Stripe.PaymentIntent,
-    userId: number,
-  ): Promise<string | undefined> {
-    const metadata = paymentIntent.metadata ?? {};
-    const receiptEmail = paymentIntent.receipt_email?.trim();
-
-    if (receiptEmail) {
-      this.logger.debug(
-        `Email resuelto desde paymentIntent.receipt_email para ${paymentIntent.id}`,
-      );
-      return receiptEmail;
+  private extractPaymentIntentId(event: Stripe.Event): string | undefined {
+    const payload = event.data.object as {
+      id?: string;
+      payment_intent?: string | { id?: string } | null;
+    };
+    if (event.type.startsWith('payment_intent.')) {
+      return payload.id;
     }
 
-    const chargeBillingEmail = await this.stripeService.getChargeBillingEmailForPaymentIntent(
-      paymentIntent,
-    );
-    if (chargeBillingEmail) {
-      this.logger.debug(
-        `Email resuelto desde charge.billing_details.email para ${paymentIntent.id}`,
-      );
-      return chargeBillingEmail;
+    const ref = payload.payment_intent;
+    return typeof ref === 'string' ? ref : ref?.id;
+  }
+
+  private getLifecycleStatus(
+    event: Stripe.Event,
+  ):
+    | typeof OrderStatus.REFUNDED
+    | typeof OrderStatus.DISPUTED
+    | typeof OrderStatus.PAID
+    | undefined {
+    if (event.type === 'charge.refunded') {
+      const charge = event.data.object as Stripe.Charge;
+      if (this.isFullyRefundedCharge(charge)) {
+        return OrderStatus.REFUNDED;
+      }
+      return undefined;
     }
-
-    const metadataEmail =
-      typeof metadata.email === 'string' ? metadata.email.trim() : undefined;
-    if (metadataEmail) {
-      this.logger.debug(`Email resuelto desde metadata.email para ${paymentIntent.id}`);
-      return metadataEmail;
+    if (
+      event.type === 'charge.dispute.created' ||
+      event.type === 'charge.dispute.funds_withdrawn'
+    ) {
+      return OrderStatus.DISPUTED;
     }
-
-    const user = await this.prisma.user.findUnique({
-      where: { id: userId },
-      select: { email: true },
-    });
-    const userEmail = user?.email?.trim();
-
-    if (userEmail) {
-      this.logger.debug(
-        `Email resuelto desde usuario en base de datos para ${paymentIntent.id}`,
-      );
-      return userEmail;
+    if (event.type === 'charge.dispute.funds_reinstated') {
+      return OrderStatus.PAID;
     }
-
+    if (event.type === 'charge.dispute.closed') {
+      const dispute = event.data.object as Stripe.Dispute;
+      const disputeStatus = String(dispute.status);
+      if (
+        disputeStatus === 'won' ||
+        disputeStatus === 'warning_closed' ||
+        disputeStatus === 'prevented'
+      ) {
+        return OrderStatus.PAID;
+      }
+      // Closed losses are resolved against the immutable checkout total by
+      // handleChargeDispute. It will record PAID-with-partial-loss or a full
+      // REFUNDED lifecycle without treating every lost dispute as full.
+      if (disputeStatus === 'lost') return undefined;
+      return OrderStatus.DISPUTED;
+    }
     return undefined;
+  }
+
+  private async handleChargeDispute(
+    event: Stripe.Event,
+    lifecycleStatus:
+      | typeof OrderStatus.REFUNDED
+      | typeof OrderStatus.DISPUTED
+      | typeof OrderStatus.PAID
+      | undefined,
+    closedLostDisputeAmountCents?: number,
+  ): Promise<Record<string, unknown>> {
+    const paymentIntentId = this.extractPaymentIntentId(event);
+    if (!paymentIntentId) {
+      this.logger.warn(`Evento de disputa sin payment_intent: ${event.id}`);
+      return { received: true };
+    }
+
+    if (closedLostDisputeAmountCents !== undefined) {
+      await this.ordersService.recordStripeClosedLostDispute({
+        eventId: event.id,
+        paymentIntentId,
+        amountCents: closedLostDisputeAmountCents,
+      });
+      await this.ordersService.reconcileStripePaymentLifecycle(paymentIntentId);
+      return { received: true };
+    }
+
+    if (!lifecycleStatus) {
+      this.logger.warn(`Evento de disputa sin estado conciliable: ${event.id}`);
+      return { received: true };
+    }
+
+    await this.ordersService.reconcileStripePaymentLifecycle(paymentIntentId);
+    return { received: true };
   }
 
   private async handlePaymentIntentFailed(event: Stripe.Event) {
     const paymentIntent = event.data.object as Stripe.PaymentIntent;
+    // Stripe can retry the same PaymentIntent after payment_failed. Its stock
+    // reservation remains held until Stripe sends a terminal cancellation.
     this.logger.warn(
       `PaymentIntent ${paymentIntent.id} ha fallado con estado ${paymentIntent.status}`,
+    );
+    return { received: true };
+  }
+
+  private async handlePaymentIntentCanceled(event: Stripe.Event) {
+    const paymentIntent = event.data.object as Stripe.PaymentIntent;
+    await this.ordersService.releaseCheckoutSnapshotForCanceledPaymentIntent(
+      paymentIntent.id,
     );
     return { received: true };
   }
@@ -341,6 +404,11 @@ export class StripeWebhookController {
 
   private async handleChargeRefunded(event: Stripe.Event) {
     const charge = event.data.object as Stripe.Charge;
+    if (!this.isFullyRefundedCharge(charge)) {
+      // A partial refund must not transition the complete order, return all
+      // stock, or grant a full purchase-history return.
+      return { received: true, partial: true };
+    }
     const paymentIntentRef =
       typeof charge.payment_intent === 'string'
         ? charge.payment_intent
@@ -351,11 +419,35 @@ export class StripeWebhookController {
       return { received: true };
     }
 
-    await this.ordersService.markOrderAsRefunded(paymentIntentRef);
-    this.logger.log(
-      `Pedido con PaymentIntent ${paymentIntentRef} marcado como REFUNDED`,
-    );
+    await this.ordersService.reconcileStripePaymentLifecycle(paymentIntentRef);
+    this.logger.log('Pedido Stripe conciliado tras un reembolso completo');
 
     return { received: true };
+  }
+
+  private isFullyRefundedCharge(charge: Stripe.Charge): boolean {
+    if (charge.refunded === true) return true;
+    return (
+      Number.isSafeInteger(charge.amount) &&
+      Number.isSafeInteger(charge.amount_refunded) &&
+      charge.amount_refunded >= charge.amount
+    );
+  }
+
+  private getClosedLostDisputeAmountCents(
+    event: Stripe.Event,
+  ): number | undefined {
+    if (event.type !== 'charge.dispute.closed') return undefined;
+    const dispute = event.data.object as Stripe.Dispute;
+    if (String(dispute.status) !== 'lost') return undefined;
+    return Number.isSafeInteger(dispute.amount) && dispute.amount > 0
+      ? dispute.amount
+      : undefined;
+  }
+
+  private assertLiveModeInProduction(event: Stripe.Event): void {
+    if (isProductionEnvironment() && event.livemode !== true) {
+      throw new BadRequestException('STRIPE_TEST_EVENT_REJECTED_IN_PRODUCTION');
+    }
   }
 }

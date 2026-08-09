@@ -12,6 +12,7 @@ import { AuthModule } from './auth/auth.module';
 import { CartModule } from './cart/cart.module';
 import { EmailModule } from './email/email.module';
 import { AppThrottlerGuard } from './common/guards/app-throttler.guard';
+import { CsrfProtectionGuard } from './common/guards/csrf-protection.guard';
 import { PrismaModule } from './prisma/prisma.module';
 import { ProductModule } from './products/product.module';
 import { UsersModule } from './users/users.module';
@@ -25,17 +26,23 @@ import { FavoritesModule } from './favorites/favorites.module';
 import { MeModule } from './me/me.module';
 import { MembershipModule } from './membership/membership.module';
 import { NewsletterModule } from './newsletter/newsletter.module';
+import {
+  getRateLimitMax,
+  getRateLimitTtlMs,
+  validateEnvironment,
+} from './common/config/environment';
 
 @Module({
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
       envFilePath: '.env',
-    }), // [STRIPE]
+      validate: validateEnvironment,
+    }),
     ThrottlerModule.forRoot([
       {
-        ttl: 60_000, // ventana de 60s
-        limit: 100, // máximo 100 peticiones por IP/minuto
+        ttl: getRateLimitTtlMs(),
+        limit: getRateLimitMax(),
       },
     ]),
     ServeStaticModule.forRoot(
@@ -88,6 +95,7 @@ import { NewsletterModule } from './newsletter/newsletter.module';
   providers: [
     AppService,
     { provide: APP_GUARD, useClass: AppThrottlerGuard },
+    { provide: APP_GUARD, useClass: CsrfProtectionGuard },
   ],
 })
 export class AppModule {}

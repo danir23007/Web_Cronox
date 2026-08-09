@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   Injectable,
   NotFoundException,
@@ -15,11 +16,18 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { AdminUserQueryDto } from './dto/admin-user-query.dto';
 import { AdminUserOrdersQueryDto } from './dto/admin-user-orders-query.dto';
 import { AdminUserRequestsQueryDto } from './dto/admin-user-requests-query.dto';
-import { ADMIN_ROLE_LIST, isAdminRole } from '../../common/roles.utils';
+import {
+  ADMIN_ROLE_LIST,
+  isAdminRole,
+  isSuperAdminRole,
+  normalizeRole,
+} from '../../common/roles.utils';
 
 const DEFAULT_PAGE_SIZE = 10;
 const MAX_PAGE_SIZE = 50;
 const RECENT_ITEMS_LIMIT = 20;
+const SUPER_ADMIN_ROLE_LIST: Role[] = [Role.SUPER_ADMIN, Role.SUPERADMIN];
+const SERIALIZABLE_RETRY_LIMIT = 3;
 const PAID_STATUSES: OrderStatus[] = [
   OrderStatus.PAID,
   OrderStatus.PROCESSING,
@@ -49,7 +57,10 @@ export class AdminUsersService {
 
   async listUsers(query: AdminUserQueryDto) {
     const page = query.page ?? 1;
-    const pageSize = Math.min(query.pageSize ?? DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE);
+    const pageSize = Math.min(
+      query.pageSize ?? DEFAULT_PAGE_SIZE,
+      MAX_PAGE_SIZE,
+    );
     const skip = (page - 1) * pageSize;
 
     const where = this.buildWhere(query);
@@ -202,38 +213,81 @@ export class AdminUsersService {
   }
 
   async updateUserRole(id: number, role: Role, performedById: number) {
-    if (id === performedById && !isAdminRole(role)) {
+    const normalizedTargetRole = normalizeRole(role);
+    if (!normalizedTargetRole) {
+      throw new BadRequestException('Invalid role');
+    }
+
+    if (id === performedById && !isAdminRole(normalizedTargetRole)) {
       throw new ForbiddenException('Cannot remove your own admin role');
     }
 
-    const existing = await this.prisma.user.findUnique({ where: { id } });
+    for (let attempt = 0; attempt < SERIALIZABLE_RETRY_LIMIT; attempt += 1) {
+      try {
+        return await this.prisma.$transaction(
+          async (tx) => {
+            const existing = await tx.user.findUnique({ where: { id } });
 
-    if (!existing) {
-      throw new NotFoundException('User not found');
-    }
+            if (!existing) {
+              throw new NotFoundException('User not found');
+            }
 
-    if (existing.role === role) {
-      return this.mapUser(existing);
-    }
+            const normalizedExistingRole = normalizeRole(existing.role);
+            if (normalizedExistingRole === normalizedTargetRole) {
+              return this.mapUser(existing);
+            }
 
-    if (isAdminRole(existing.role) && !isAdminRole(role)) {
-      const adminCount = await this.prisma.user.count({
-        where: {
-          OR: [{ role: { in: ADMIN_ROLE_LIST } }, { role: null }],
-        },
-      });
+            if (
+              isSuperAdminRole(existing.role) &&
+              !isSuperAdminRole(normalizedTargetRole)
+            ) {
+              // Serializable isolation prevents concurrent demotions from both
+              // observing the same final super-admin and leaving the system
+              // without anyone authorized to recover role management.
+              const superAdminCount = await tx.user.count({
+                where: { role: { in: SUPER_ADMIN_ROLE_LIST } },
+              });
+              if (superAdminCount <= 1) {
+                throw new BadRequestException(
+                  'At least one super-admin user must remain',
+                );
+              }
+            }
 
-      if (adminCount <= 1) {
-        throw new BadRequestException('At least one admin user must remain');
+            if (
+              isAdminRole(existing.role) &&
+              !isAdminRole(normalizedTargetRole)
+            ) {
+              const adminCount = await tx.user.count({
+                where: { role: { in: ADMIN_ROLE_LIST } },
+              });
+
+              if (adminCount <= 1) {
+                throw new BadRequestException('At least one admin user must remain');
+              }
+            }
+
+            const updated = await tx.user.update({
+              where: { id },
+              data: { role: normalizedTargetRole },
+            });
+
+            return this.mapUser(updated);
+          },
+          { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+        );
+      } catch (error) {
+        if (
+          this.isSerializationFailure(error) &&
+          attempt + 1 < SERIALIZABLE_RETRY_LIMIT
+        ) {
+          continue;
+        }
+        throw error;
       }
     }
 
-    const updated = await this.prisma.user.update({
-      where: { id },
-      data: { role },
-    });
-
-    return this.mapUser(updated);
+    throw new ConflictException('Unable to update role safely; please retry');
   }
 
   async getUserAuditLogs(userId: number, limit = 20) {
@@ -278,12 +332,17 @@ export class AdminUsersService {
     await this.assertUserExists(userId);
 
     const page = query.page ?? 1;
-    const pageSize = Math.min(query.pageSize ?? DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE);
+    const pageSize = Math.min(
+      query.pageSize ?? DEFAULT_PAGE_SIZE,
+      MAX_PAGE_SIZE,
+    );
     const sort = query.sort ?? 'createdAt';
     const order = query.order ?? 'desc';
     const status = query.status;
 
-    const kinds: Array<'2-3' | '3-4'> = query.kind ? [query.kind] : ['2-3', '3-4'];
+    const kinds: Array<'2-3' | '3-4'> = query.kind
+      ? [query.kind]
+      : ['2-3', '3-4'];
 
     const requests: AdminUserRequestItem[] = [];
 
@@ -386,7 +445,10 @@ export class AdminUsersService {
     await this.assertUserExists(userId);
 
     const page = query.page ?? 1;
-    const pageSize = Math.min(query.pageSize ?? DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE);
+    const pageSize = Math.min(
+      query.pageSize ?? DEFAULT_PAGE_SIZE,
+      MAX_PAGE_SIZE,
+    );
     const skip = (page - 1) * pageSize;
 
     const [items, total] = await this.prisma.$transaction([
@@ -448,11 +510,19 @@ export class AdminUsersService {
     return where;
   }
 
+  private isSerializationFailure(error: unknown): boolean {
+    return (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === 'P2034'
+    );
+  }
+
   private buildOrderBy(
     sort: AdminUserQueryDto['sort'],
     direction: AdminUserQueryDto['order'],
   ): Prisma.UserOrderByWithRelationInput {
-    const order: Prisma.SortOrder = (direction ?? 'desc') === 'asc' ? 'asc' : 'desc';
+    const order: Prisma.SortOrder =
+      (direction ?? 'desc') === 'asc' ? 'asc' : 'desc';
 
     switch (sort) {
       case 'email':
@@ -515,7 +585,9 @@ export class AdminUsersService {
     reviewedAt?: Date | null;
     approvedAt?: Date | null;
   }) {
-    return request.processedAt ?? request.reviewedAt ?? request.approvedAt ?? null;
+    return (
+      request.processedAt ?? request.reviewedAt ?? request.approvedAt ?? null
+    );
   }
 
   private sortRequests(

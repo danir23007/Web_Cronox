@@ -2,6 +2,7 @@ import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
 import type { Request } from 'express';
+import { getRequiredJwtSecret } from '../../common/config/environment';
 import { UsersService } from '../../users/users.service';
 
 const extractAccessToken = (req: Request): string | null => {
@@ -23,12 +24,12 @@ export class JwtAccessStrategy extends PassportStrategy(Strategy, 'jwt') {
     super({
       jwtFromRequest: ExtractJwt.fromExtractors([extractAccessToken]),
       ignoreExpiration: false,
-      secretOrKey: process.env.JWT_ACCESS_SECRET ?? 'change_me_access',
+      secretOrKey: getRequiredJwtSecret('JWT_ACCESS_SECRET'),
       passReqToCallback: true,
     });
   }
 
-  async validate(req: Request, payload: { sub: number }) {
+  async validate(req: Request, payload: { sub: number; sv?: number }) {
     const userId = Number(payload?.sub);
 
     if (!Number.isFinite(userId)) {
@@ -37,7 +38,11 @@ export class JwtAccessStrategy extends PassportStrategy(Strategy, 'jwt') {
 
     const user = await this.usersService.findById(userId);
 
-    if (!user) {
+    if (
+      !user ||
+      !Number.isInteger(payload.sv) ||
+      payload.sv !== user.sessionVersion
+    ) {
       throw new UnauthorizedException();
     }
 

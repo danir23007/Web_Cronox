@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { ConflictException, Injectable } from '@nestjs/common';
 import { CartWithItems } from '../cart/cart.service';
 import { OrdersService } from '../orders/orders.service';
 import { CreatePaymentIntentDto } from './dto/create-payment-intent.dto';
@@ -16,81 +16,135 @@ export class PaymentIntentFactory {
     dto: CreatePaymentIntentDto,
     cart?: CartWithItems | null,
   ) {
-    const preview = await this.ordersService.getCheckoutPreview(
-      userId,
-      {
-        shippingMethod: dto.shippingMethod,
-        promoCode: dto.promoCode,
-      },
-      { cart },
-    ); // [STRIPE]
-    const amountInCents = preview.totals.totalCents;
-
     const normalizedShippingAddress = this.normalizeShippingAddress(
       dto.shippingAddress,
     );
-    const serializedShippingAddress = normalizedShippingAddress
-      ? JSON.stringify(normalizedShippingAddress)
-      : null;
-
-    const paymentIntent = await this.stripeService.createOrReusePaymentIntent({
+    const checkoutParams = {
+      shippingMethod: dto.shippingMethod,
+      promoCode: dto.promoCode,
+      shippingAddress: normalizedShippingAddress ?? undefined,
+    };
+    let snapshot = await this.ordersService.createCheckoutSnapshot(
       userId,
-      cartId: preview.metadata.cartId,
-      amount: amountInCents,
-      currency: preview.computation.currency,
-      paymentIntentId: dto.paymentIntentId,
-      metadata: {
-        shippingMethod: String(preview.metadata.shippingMethod),
-        shippingCostCents: String(preview.metadata.shippingCostCents),
-        itemsTotalCents: String(preview.metadata.itemsTotalCents),
-        discountCents: String(
-          preview.metadata.discountCents ??
-            preview.totals.discountCents ??
-            0,
-        ),
-        ...(preview.metadata.promoCode
-          ? {
-              promoCode: preview.metadata.promoCode,
-            }
-          : {}),
-        ...(serializedShippingAddress
-          ? {
-              shippingAddress: serializedShippingAddress,
-            }
-          : {}),
-      },
-    });
+      checkoutParams,
+      { cart },
+    );
 
-    const metadata = {
-      userId: String(preview.metadata.userId),
-      cartId: String(preview.metadata.cartId),
-      shippingMethod: String(preview.metadata.shippingMethod),
-      shippingCostCents: String(preview.metadata.shippingCostCents),
-      itemsTotalCents: String(preview.metadata.itemsTotalCents),
-    } as Record<string, string>;
-
-    const discountCents =
-      preview.metadata.discountCents ?? preview.totals.discountCents ?? 0;
-    if (preview.metadata.promoCode) {
-      metadata.promoCode = preview.metadata.promoCode;
-    }
-    metadata.discountCents = String(discountCents);
-
-    if (dto.addressId) {
-      metadata.addressId = String(dto.addressId); // [STRIPE]
-    }
-    if (serializedShippingAddress) {
-      metadata.shippingAddress = serializedShippingAddress;
+    // A stale, unconfirmed intent is explicitly cancelled before its stock
+    // reservation is released. A succeeded/disputed intent fails closed and
+    // remains for its signed webhook lifecycle instead of permitting a retry.
+    if (snapshot.expired) {
+      if (snapshot.paymentIntentId) {
+        await this.stripeService.cancelCheckoutPaymentIntent(
+          snapshot.paymentIntentId,
+          snapshot.checkoutSnapshotId,
+        );
+        await this.ordersService.releaseCheckoutSnapshot(
+          snapshot.checkoutSnapshotId,
+          'EXPIRED',
+          snapshot.paymentIntentId,
+        );
+      } else {
+        await this.ordersService.releaseCheckoutSnapshot(
+          snapshot.checkoutSnapshotId,
+          'EXPIRED',
+        );
+      }
+      snapshot = await this.ordersService.createCheckoutSnapshot(
+        userId,
+        checkoutParams,
+        { cart },
+      );
     }
 
+    if (snapshot.paymentIntentId) {
+      const paymentIntent =
+        await this.stripeService.getReusableCheckoutPaymentIntent({
+          paymentIntentId: snapshot.paymentIntentId,
+          checkoutSnapshotId: snapshot.checkoutSnapshotId,
+          amount: snapshot.amountCents,
+          currency: snapshot.currency,
+        });
+      return this.buildPaymentIntentResponse(snapshot, paymentIntent);
+    }
+
+    const claimed = await this.ordersService.claimCheckoutPaymentIntentCreation(
+      snapshot.checkoutSnapshotId,
+    );
+    if (!claimed) {
+      const concurrent = await this.ordersService.createCheckoutSnapshot(
+        userId,
+        checkoutParams,
+        { cart },
+      );
+      if (concurrent.paymentIntentId) {
+        const paymentIntent =
+          await this.stripeService.getReusableCheckoutPaymentIntent({
+            paymentIntentId: concurrent.paymentIntentId,
+            checkoutSnapshotId: concurrent.checkoutSnapshotId,
+            amount: concurrent.amountCents,
+            currency: concurrent.currency,
+          });
+        return this.buildPaymentIntentResponse(concurrent, paymentIntent);
+      }
+      throw new ConflictException('CHECKOUT_PAYMENT_INTENT_IN_PROGRESS');
+    }
+
+    let paymentIntent: { id: string; clientSecret: string } | undefined;
+    try {
+      paymentIntent = await this.stripeService.createPaymentIntentForCheckout({
+        checkoutSnapshotId: snapshot.checkoutSnapshotId,
+        amount: snapshot.amountCents,
+        currency: snapshot.currency,
+      });
+      await this.ordersService.bindStripePaymentIntent(
+        snapshot.checkoutSnapshotId,
+        paymentIntent.id,
+      );
+    } catch (error) {
+      if (!paymentIntent) {
+        await this.ordersService.resetCheckoutPaymentIntentCreation(
+          snapshot.checkoutSnapshotId,
+        );
+      } else {
+        try {
+          await this.stripeService.cancelCheckoutPaymentIntent(
+            paymentIntent.id,
+            snapshot.checkoutSnapshotId,
+          );
+          await this.ordersService.releaseCheckoutSnapshot(
+            snapshot.checkoutSnapshotId,
+            'PAYMENT_CREATION_FAILED',
+          );
+        } catch {
+          // Keep the reservation claimed if Stripe cannot confirm cancellation;
+          // this prevents a second intent from being created for this checkout.
+        }
+      }
+      throw error;
+    }
+
+    return this.buildPaymentIntentResponse(snapshot, paymentIntent);
+  }
+
+  private buildPaymentIntentResponse(
+    snapshot: {
+      checkoutSnapshotId: string;
+      summary: unknown;
+      lineItems: unknown;
+      shippingMethod: unknown;
+      totals: unknown;
+    },
+    paymentIntent: { id: string; clientSecret: string },
+  ) {
     return {
       clientSecret: paymentIntent.clientSecret,
       paymentIntentId: paymentIntent.id,
-      summary: preview.summary,
-      lineItems: preview.lineItems,
-      shippingMethod: preview.shippingMethod,
-      totals: preview.totals,
-      metadata,
+      summary: snapshot.summary,
+      lineItems: snapshot.lineItems,
+      shippingMethod: snapshot.shippingMethod,
+      totals: snapshot.totals,
+      metadata: { checkoutSnapshotId: snapshot.checkoutSnapshotId },
     };
   }
 

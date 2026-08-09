@@ -1,6 +1,6 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { IsIn, IsInt, IsOptional, IsPositive, Min } from 'class-validator';
+import { IsIn, IsInt, IsOptional, IsPositive, Max, Min } from 'class-validator';
 
 export class QueryCategoriesDto {
   @ApiPropertyOptional({ example: 1 })
@@ -15,6 +15,7 @@ export class QueryCategoriesDto {
   @Type(() => Number)
   @IsInt()
   @IsPositive()
+  @Max(100)
   limit?: number = 20;
 
   @ApiPropertyOptional({ enum: ['name', 'createdAt', 'id'], default: 'name' })

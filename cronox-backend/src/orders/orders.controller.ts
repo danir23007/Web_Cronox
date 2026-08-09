@@ -11,13 +11,12 @@ import {
   UnauthorizedException,
   UseGuards,
 } from '@nestjs/common';
-import { ApiBearerAuth, ApiCreatedResponse, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { Request } from 'express';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CartService } from '../cart/cart.service';
 import { OrdersService } from './orders.service';
 import { CreateCheckoutSessionDto } from './dto/create-checkout-session.dto';
-import { CreateOrderWebhookDto } from './dto/create-order-webhook.dto';
 import { PaginationDto } from './dto/pagination.dto';
 
 @ApiTags('Orders')
@@ -83,43 +82,6 @@ export class OrdersController {
     const cart = await this.cartService.getCheckoutCartForRequest(req);
 
     return this.ordersService.createCheckoutSession(userId, dto, { cart }); // Usa solo los ítems del carrito activo
-  }
-
-  @Post('orders')
-  @ApiOperation({ summary: 'Confirma un pedido a partir del webhook del proveedor de pagos' })
-  @ApiCreatedResponse({
-    description: 'Pedido creado (idempotente por providerRef)',
-    schema: {
-      example: {
-        id: 42,
-        status: 'PAID',
-        subtotal: '100.00',
-        taxRate: '0.2100',
-        taxAmount: '21.00',
-        shippingCost: '0.00',
-        total: '121.00',
-        currency: 'EUR',
-        provider: 'stripe',
-        providerRef: 'pi_12345',
-        shippingMethod: 'STANDARD',
-        items: [
-          {
-            id: 1,
-            orderId: 42,
-            productId: 1,
-            title: 'Camiseta (M)',
-            unitPrice: '100.00',
-            quantity: 1,
-            lineTotal: '100.00',
-          },
-        ],
-      },
-    },
-  })
-  async createOrderFromWebhook(
-    @Body() dto: CreateOrderWebhookDto,
-  ): Promise<Record<string, unknown>> {
-    return this.ordersService.createOrderFromWebhook(dto);
   }
 
   @Get('orders/payment-status')

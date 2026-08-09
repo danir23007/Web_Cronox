@@ -1,4 +1,8 @@
-import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { Role } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AdminNoteQueryDto } from './dto/admin-note-query.dto';
@@ -9,11 +13,6 @@ import { isSuperAdminRole } from '../../common/roles.utils';
 @Injectable()
 export class AdminNotesService {
   constructor(private readonly prisma: PrismaService) {}
-
-  // Backward compatibility: null role behaves as SUPERADMIN
-  private normalizeRole(role: Role | null | undefined): Role {
-    return role ?? Role.SUPERADMIN;
-  }
 
   private mapNote(note: {
     id: string;
@@ -46,7 +45,7 @@ export class AdminNotesService {
         name: note.author.name,
         firstName: note.author.firstName,
         lastName: note.author.lastName,
-        role: this.normalizeRole(note.author.role),
+        role: note.author.role,
       },
     };
   }

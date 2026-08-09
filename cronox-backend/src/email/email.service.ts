@@ -1,4 +1,8 @@
-import { Injectable, InternalServerErrorException, Logger } from '@nestjs/common';
+import {
+  Injectable,
+  InternalServerErrorException,
+  Logger,
+} from '@nestjs/common';
 import Handlebars from 'handlebars';
 import { readFile } from 'fs/promises';
 import { join } from 'path';
@@ -19,11 +23,24 @@ import {
 export class EmailService {
   private readonly logger = new Logger(EmailService.name);
   private readonly config = loadEmailConfig();
-  private readonly templateCache = new Map<EmailTemplate, Handlebars.TemplateDelegate>();
+  private readonly templateCache = new Map<
+    EmailTemplate,
+    Handlebars.TemplateDelegate
+  >();
 
   constructor(private readonly transportFactory: MailTransportFactory) {}
 
+  isEnabled(): boolean {
+    return this.config.enabled;
+  }
+
   async send(options: EmailSendOptions): Promise<EmailSendResult> {
+    if (!this.config.enabled) {
+      throw new InternalServerErrorException(
+        'El envio de email no esta habilitado.',
+      );
+    }
+
     const senderKey = EMAIL_TYPE_TO_SENDER[options.type];
     const template = EMAIL_TYPE_TO_TEMPLATE[options.type];
 
@@ -34,32 +51,53 @@ export class EmailService {
         ...options.templateData,
       });
 
-      const info = (await this.transportFactory.getTransport(senderKey).sendMail({
-        to: options.to,
-        from: this.transportFactory.getFrom(senderKey),
-        subject: options.subject,
-        html,
-      })) as SentMessageInfo;
+      const info = (await this.transportFactory
+        .getTransport(senderKey)
+        .sendMail({
+          to: options.to,
+          from: this.transportFactory.getFrom(senderKey),
+          subject: options.subject,
+          html,
+        })) as SentMessageInfo;
 
       return { messageId: info.messageId };
     } catch (error) {
-      const reason = error instanceof Error ? error.message : 'Error desconocido';
       this.logger.error(
-        `Fallo enviando email. type=${options.type} sender=${senderKey} to=${options.to} reason=${reason}`,
+        `Fallo enviando email. type=${options.type} sender=${senderKey}`,
       );
-      throw new InternalServerErrorException('No se pudo enviar el email. Revisa la configuración SMTP.');
+      throw new InternalServerErrorException(
+        'No se pudo enviar el email. Revisa la configuración SMTP.',
+      );
     }
   }
 
   async sendPasswordReset(email: string, link: string) {
     const subject = 'CRONOX · Restablece tu contraseña';
     return this.send({
-      type: EmailType.GENERIC,
+      type: EmailType.PASSWORD_RESET,
       to: email,
       subject,
       templateData: {
         title: 'Restablecimiento de contraseña',
-        message: `Haz clic en el siguiente enlace para continuar: ${link}`,
+        message:
+          'Use the secure link below to reset your password. It expires in one hour.',
+        actionUrl: link,
+        actionLabel: 'Reset password',
+      },
+    });
+  }
+
+  async sendNewsletterConfirmation(email: string, link: string) {
+    return this.send({
+      type: EmailType.NEWSLETTER_CONFIRMATION,
+      to: email,
+      subject: 'CRONOX newsletter confirmation',
+      templateData: {
+        title: 'Confirm your subscription',
+        message:
+          'Confirm your email address to activate the newsletter and welcome discount.',
+        actionUrl: link,
+        actionLabel: 'Confirm subscription',
       },
     });
   }

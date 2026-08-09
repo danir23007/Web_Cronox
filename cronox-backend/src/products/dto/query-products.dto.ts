@@ -8,6 +8,7 @@ import {
   IsString,
   Matches,
   Min,
+  Max,
   IsEnum,
 } from 'class-validator';
 import { VariantSize } from '@prisma/client';
@@ -25,6 +26,7 @@ export class QueryProductsDto {
   @Type(() => Number)
   @IsInt()
   @IsPositive()
+  @Max(100)
   limit?: number = 10;
 
   @ApiPropertyOptional({ enum: ['createdAt', 'price', 'name', 'id'], default: 'id' })

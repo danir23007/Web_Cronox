@@ -35,6 +35,21 @@
 
   const API = window.CRONOX_API || {};
   const PRODUCT_PLACEHOLDER = window.CRONOX_PRODUCT_PLACEHOLDER || "assets/logo_browser.png";
+  const safeProductImage = (value, fallback = "") => {
+    const helper = window.CRONOX_SECURITY?.productImageUrl;
+    return typeof helper === "function" ? helper(value, fallback) : fallback;
+  };
+  const escapeHtml = (value) => {
+    const helper = window.CRONOX_SECURITY?.escapeHtml;
+    return typeof helper === "function"
+      ? helper(value)
+      : String(value ?? "")
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/\"/g, "&quot;")
+          .replace(/'/g, "&#39;");
+  };
 
   // ==========================
   // Utils generales
@@ -254,7 +269,7 @@
   function sanitizeImages(list, fallback) {
     const result = [];
     const push = (src) => {
-      const value = typeof src === "string" ? src.trim() : "";
+      const value = safeProductImage(src);
       if (value && !result.includes(value)) result.push(value);
     };
     if (Array.isArray(list)) list.forEach(push);
@@ -348,14 +363,14 @@
         const idAttr = idx === 0 ? ' id="pImage"' : "";
         const altSuffix = images.length > 1 ? ` — imagen ${idx + 1}` : "";
         const loading = idx === 0 ? "eager" : "lazy";
-        return `<img${idAttr} class="pdp__media-img${activeClass}" src="${src}" alt="${altBase}${altSuffix}" loading="${loading}" decoding="async"${hiddenAttr} aria-hidden="${idx === 0 ? "false" : "true"}">`;
+        return `<img${idAttr} class="pdp__media-img${activeClass}" src="${escapeHtml(src)}" alt="${escapeHtml(`${altBase}${altSuffix}`)}" loading="${loading}" decoding="async"${hiddenAttr} aria-hidden="${idx === 0 ? "false" : "true"}">`;
       }).join("");
     }
 
     if (pThumbs) {
       pThumbs.innerHTML = images.map((src, idx) => {
         const activeClass = idx === 0 ? " is-active" : "";
-        return `<button type="button" class="pdp__thumb${activeClass}" data-index="${idx}" aria-label="Ver imagen ${idx + 1} de ${images.length}"><img src="${src}" alt="${altBase} miniatura ${idx + 1}" loading="lazy" decoding="async"></button>`;
+        return `<button type="button" class="pdp__thumb${activeClass}" data-index="${idx}" aria-label="Ver imagen ${idx + 1} de ${images.length}"><img src="${escapeHtml(src)}" alt="${escapeHtml(`${altBase} miniatura ${idx + 1}`)}" loading="lazy" decoding="async"></button>`;
       }).join("");
       const hideThumbs = images.length <= 1;
       pThumbs.hidden = hideThumbs;
@@ -462,7 +477,7 @@
       .map((size) => {
         const variant = findVariantForSize(product, size);
         const disabled = Boolean(variant) && variant.isAvailable === false;
-        return `<button type="button" class="size-btn${disabled ? ' is-disabled' : ''}" data-size="${size}" role="radio" aria-checked="false" ${disabled ? 'disabled' : ''}>${size}</button>`;
+        return `<button type="button" class="size-btn${disabled ? ' is-disabled' : ''}" data-size="${escapeHtml(size)}" role="radio" aria-checked="false" ${disabled ? 'disabled' : ''}>${escapeHtml(size)}</button>`;
       })
       .join("");
 

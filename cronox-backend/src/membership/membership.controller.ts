@@ -14,6 +14,7 @@ export class MembershipController {
     const png = await this.membershipService.getQrForUser(userId);
 
     res.setHeader('Content-Type', 'image/png');
+    res.setHeader('Cache-Control', 'private, no-store');
     res.send(png);
   }
 
@@ -28,8 +29,8 @@ export class MembershipController {
 export class MembershipPublicController {
   constructor(private readonly membershipService: MembershipService) {}
 
-  @Get(':memberCode')
-  async getMemberInfo(@Param('memberCode') memberCode: string) {
-    return this.membershipService.getMemberInfo(memberCode);
+  @Get(':publicMemberToken')
+  async getMemberInfo(@Param('publicMemberToken') publicMemberToken: string) {
+    return this.membershipService.getMemberInfo(publicMemberToken);
   }
 }

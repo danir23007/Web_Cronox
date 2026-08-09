@@ -12,6 +12,8 @@ import { HistorialService } from '../../historial/historial.service';
 import { UpdateOrderFulfillmentDto } from './dto/update-order-fulfillment.dto';
 import { EmailService } from '../../email/email.service';
 import { EmailType } from '../../email/email.types';
+import { StripeService } from '../../payments/stripe.service';
+import { OrdersService } from '../../orders/orders.service';
 
 const DEFAULT_PAGE_SIZE = 20;
 const MAX_EXPORT_ROWS = 5000;
@@ -55,6 +57,8 @@ export class AdminOrdersService {
     private readonly prisma: PrismaService,
     private readonly historialService: HistorialService,
     private readonly emailService: EmailService,
+    private readonly stripeService: StripeService,
+    private readonly checkoutOrdersService: OrdersService,
   ) {}
 
   async listOrders(query: AdminOrdersQueryDto) {
@@ -145,6 +149,24 @@ export class AdminOrdersService {
       }
 
       const targetStatus = dto.status ?? existing.status;
+      if (
+        hadExplicitStatus &&
+        (targetStatus === OrderStatus.REFUNDED ||
+          targetStatus === OrderStatus.DISPUTED)
+      ) {
+        throw new BadRequestException(
+          'Los estados de reembolso y disputa solo se actualizan desde Stripe',
+        );
+      }
+      if (
+        hadExplicitStatus &&
+        targetStatus === OrderStatus.CANCELLED &&
+        this.isCapturedStripeOrder(existing)
+      ) {
+        throw new BadRequestException(
+          'Un pedido Stripe cobrado debe reembolsarse desde el flujo de reembolso',
+        );
+      }
       this.validateStatusTransition(existing.status, targetStatus);
 
       const data: Prisma.OrderUpdateInput = {};
@@ -200,33 +222,50 @@ export class AdminOrdersService {
       },
     } as const;
 
-    const order = await this.prisma
-      .$transaction(async (tx) => {
-        const existing = await tx.order.findUnique({ where: { id }, include });
+    const existing = await this.prisma.order.findUnique({ where: { id }, include });
+    if (!existing) {
+      throw new NotFoundException('Order not found');
+    }
+    if (existing.provider !== 'stripe' || !existing.providerRef) {
+      if (existing.status === OrderStatus.REFUNDED) {
+        return this.serializeOrderWithItems(existing);
+      }
+      throw new BadRequestException('ORDER_NOT_REFUNDABLE_BY_STRIPE');
+    }
+    if (existing.status === OrderStatus.REFUNDED) {
+      // Repair any pre-hardening direct update that marked an order refunded
+      // before its consumed checkout reservation was returned to inventory.
+      await this.checkoutOrdersService.applyStripePaymentLifecycle(
+        existing.providerRef,
+        OrderStatus.REFUNDED,
+      );
+      const repaired = await this.prisma.order.findUnique({ where: { id }, include });
+      return this.serializeOrderWithItems(repaired ?? existing);
+    }
+    const refundableStatuses: OrderStatus[] = [
+        OrderStatus.PAID,
+        OrderStatus.PROCESSING,
+        OrderStatus.SHIPPED,
+        OrderStatus.DELIVERED,
+      ];
+    if (!refundableStatuses.includes(existing.status)) {
+      throw new BadRequestException('ORDER_NOT_REFUNDABLE_IN_CURRENT_STATE');
+    }
 
-        if (!existing) {
-          throw new NotFoundException('Order not found');
-        }
+    // Stripe receives a deterministic idempotency key. Local state changes only
+    // after Stripe confirms the refund, so a failed provider call fails closed.
+    await this.stripeService.refundPaymentIntent(
+      existing.providerRef,
+      `admin-refund:${existing.id}:${existing.providerRef}`,
+    );
 
-        const updated = await tx.order.update({
-          where: { id },
-          data: { status: OrderStatus.REFUNDED },
-          include,
-        });
+    await this.checkoutOrdersService.applyStripePaymentLifecycle(
+      existing.providerRef,
+      OrderStatus.REFUNDED,
+    );
+    const order = await this.prisma.order.findUnique({ where: { id }, include });
+    if (!order) throw new NotFoundException('Order not found');
 
-        await this.syncHistorialForStatusChange(existing, updated, tx);
-
-        return updated;
-      })
-      .catch((error) => {
-        if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
-          throw new NotFoundException('Order not found');
-        }
-
-        throw error;
-      });
-
-    // TODO: Integrate Stripe refund API when available.
     return this.serializeOrderWithItems(order);
   }
 
@@ -254,6 +293,7 @@ export class AdminOrdersService {
       'Subtotal',
       'Tax Amount',
       'Shipping Cost',
+      'Dispute Lost Cents',
       'Currency',
       'Provider',
       'Provider Reference',
@@ -275,6 +315,7 @@ export class AdminOrdersService {
       this.formatMoney(order.subtotal),
       this.formatMoney(order.taxAmount),
       this.formatMoney(order.shippingCost),
+      order.disputeLostCents,
       order.currency,
       order.provider ?? '',
       order.providerRef ?? '',
@@ -382,6 +423,7 @@ export class AdminOrdersService {
       subtotal: this.formatMoney(order.subtotal),
       taxAmount: this.formatMoney(order.taxAmount),
       shippingCost: this.formatMoney(order.shippingCost),
+      disputeLostCents: order.disputeLostCents,
       currency: order.currency,
       provider: order.provider,
       providerRef: order.providerRef,
@@ -407,6 +449,7 @@ export class AdminOrdersService {
       taxRate: order.taxRate.toFixed(4),
       taxAmount: this.formatMoney(order.taxAmount),
       shippingCost: this.formatMoney(order.shippingCost),
+      disputeLostCents: order.disputeLostCents,
       total: this.formatMoney(order.total),
       currency: order.currency,
       provider: order.provider,
@@ -453,12 +496,33 @@ export class AdminOrdersService {
               return '';
             }
 
-            const value = String(column).replace(/"/g, '""');
+            const rawValue = String(column);
+            // Spreadsheet software can evaluate a quoted CSV field as a formula
+            // when its first non-whitespace character is a formula operator.
+            const formulaSafeValue = /^[\u0000-\u0020\uFEFF]*[=+\-@]/.test(rawValue)
+              ? `'${rawValue}`
+              : rawValue;
+            const value = formulaSafeValue.replace(/"/g, '""');
             return `"${value}"`;
           })
           .join(','),
       )
       .join('\n');
+  }
+
+  private isCapturedStripeOrder(order: {
+    provider: string | null;
+    status: OrderStatus;
+  }): boolean {
+    if (order.provider !== 'stripe') return false;
+    const capturedStatuses: OrderStatus[] = [
+      OrderStatus.PAID,
+      OrderStatus.PROCESSING,
+      OrderStatus.SHIPPED,
+      OrderStatus.DELIVERED,
+      OrderStatus.DISPUTED,
+    ];
+    return capturedStatuses.includes(order.status);
   }
 
   private validateStatusTransition(from: OrderStatus, to: OrderStatus) {
@@ -471,20 +535,21 @@ export class AdminOrdersService {
     }
 
     const allowed: Record<OrderStatus, OrderStatus[]> = {
-      [OrderStatus.PENDING]: [OrderStatus.PAID, OrderStatus.CANCELLED],
+      [OrderStatus.PENDING]: [OrderStatus.CANCELLED],
       [OrderStatus.PAID]: [
         OrderStatus.PROCESSING,
         OrderStatus.SHIPPED,
-        OrderStatus.REFUNDED,
+        OrderStatus.DISPUTED,
         OrderStatus.CANCELLED,
       ],
       [OrderStatus.PROCESSING]: [
         OrderStatus.SHIPPED,
-        OrderStatus.REFUNDED,
+        OrderStatus.DISPUTED,
         OrderStatus.CANCELLED,
       ],
-      [OrderStatus.SHIPPED]: [OrderStatus.DELIVERED, OrderStatus.REFUNDED],
-      [OrderStatus.DELIVERED]: [OrderStatus.REFUNDED],
+      [OrderStatus.SHIPPED]: [OrderStatus.DELIVERED, OrderStatus.DISPUTED],
+      [OrderStatus.DELIVERED]: [OrderStatus.DISPUTED],
+      [OrderStatus.DISPUTED]: [],
       [OrderStatus.CANCELLED]: [],
       [OrderStatus.REFUNDED]: [],
     };
@@ -540,6 +605,7 @@ export class AdminOrdersService {
     const labels: Record<OrderStatus, string> = {
       [OrderStatus.PENDING]: 'Pendiente',
       [OrderStatus.PAID]: 'Pagado',
+      [OrderStatus.DISPUTED]: 'En disputa',
       [OrderStatus.PROCESSING]: 'En preparación',
       [OrderStatus.SHIPPED]: 'Enviado',
       [OrderStatus.DELIVERED]: 'Entregado',

@@ -23,8 +23,20 @@ function readEnv(name: (typeof REQUIRED_ENV_VARS)[number]): string {
   return process.env[name]?.trim() ?? '';
 }
 
-function parseBool(value: string): boolean {
-  return value.toLowerCase() === 'true';
+function parseBool(name: string, value: string, fallback: boolean): boolean {
+  if (!value) {
+    return fallback;
+  }
+
+  if (value.toLowerCase() === 'true') {
+    return true;
+  }
+
+  if (value.toLowerCase() === 'false') {
+    return false;
+  }
+
+  throw new Error(`[EmailConfig] ${name} debe ser true o false.`);
 }
 
 function parsePort(value: string): number {
@@ -33,25 +45,30 @@ function parsePort(value: string): number {
 }
 
 export function loadEmailConfig(): EmailConfig {
-  const isDev = process.env.NODE_ENV !== 'production';
+  const enabled = parseBool(
+    'EMAIL_ENABLED',
+    process.env.EMAIL_ENABLED?.trim() ?? '',
+    process.env.NODE_ENV === 'production',
+  );
   const missing = REQUIRED_ENV_VARS.filter((name) => !readEnv(name));
 
-  if (isDev && missing.length > 0) {
+  if (enabled && missing.length > 0) {
     throw new Error(
       `[EmailConfig] Faltan variables de entorno obligatorias para email: ${missing.join(', ')}`,
     );
   }
 
-  const smtpHost = readEnv('SMTP_HOST') || 'smtp.hostinger.com';
-  const smtpPort = parsePort(readEnv('SMTP_PORT') || '465');
-  const smtpSecure = parseBool(readEnv('SMTP_SECURE') || 'true');
+  const smtpHost = readEnv('SMTP_HOST');
+  const smtpPort = parsePort(readEnv('SMTP_PORT'));
+  const smtpSecure = parseBool('SMTP_SECURE', readEnv('SMTP_SECURE'), true);
   const defaultFromName = readEnv('EMAIL_DEFAULT_FROM_NAME') || 'CRONOX';
 
-  if (isDev && !smtpPort) {
+  if (enabled && !smtpPort) {
     throw new Error('[EmailConfig] SMTP_PORT debe ser un entero positivo.');
   }
 
   return {
+    enabled,
     smtpHost,
     smtpPort: smtpPort || 465,
     smtpSecure,

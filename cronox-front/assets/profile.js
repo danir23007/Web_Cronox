@@ -123,8 +123,7 @@
       window.CRONOX_USER?._id ||
       window.CRONOX_USER?.userId ||
       window.CRONOX_USER?.uid ||
-      window.CRONOX_USER?.memberCode ||
-      window.CRONOX_USER?.email;
+      window.CRONOX_USER?.memberCode;
     if (!userId) return null;
     return `cronox_circle_request_modal_seen_${userId}`;
   };
@@ -145,8 +144,7 @@
       window.CRONOX_USER?._id ||
       window.CRONOX_USER?.userId ||
       window.CRONOX_USER?.uid ||
-      window.CRONOX_USER?.memberCode ||
-      window.CRONOX_USER?.email;
+      window.CRONOX_USER?.memberCode;
     if (!userId) return null;
     return `cronox_circle4_request_success_${userId}`;
   };
@@ -251,6 +249,14 @@
       .replaceAll('>', '&gt;')
       .replaceAll('"', '&quot;')
       .replaceAll("'", '&#39;');
+  const safeExternalUrl = (value) => {
+    const helper = window.CRONOX_SECURITY?.externalHttpUrl;
+    return typeof helper === 'function' ? helper(value) : '';
+  };
+  const safeProductImage = (value, fallback = 'assets/logo_banner.png') => {
+    const helper = window.CRONOX_SECURITY?.productImageUrl;
+    return typeof helper === 'function' ? helper(value, fallback) : fallback;
+  };
 
   const statusLabel = (status) => {
     const map = {
@@ -406,15 +412,21 @@
     ordersEmpty.hidden = true;
     orders.forEach((order) => {
       const trackingBits = [];
+      const trackingUrl = safeExternalUrl(order.trackingUrl);
+      const orderId = escapeHtml(order.id);
+      const createdAt = escapeHtml(formatDate(order.createdAt));
+      const orderStatus = escapeHtml(statusLabel(order.status));
+      const total = escapeHtml(order.total ?? '');
+      const currency = escapeHtml(order.currency || '');
       if (order.shippingCarrier) {
         trackingBits.push(`Transportista: ${escapeHtml(order.shippingCarrier)}`);
       }
       if (order.trackingNumber) {
         trackingBits.push(`Seguimiento: ${escapeHtml(order.trackingNumber)}`);
       }
-      if (order.trackingUrl) {
+      if (trackingUrl) {
         trackingBits.push(
-          `<a href=\"${escapeHtml(order.trackingUrl)}\" target=\"_blank\" rel=\"noopener noreferrer\">Seguir pedido</a>`,
+          `<a href=\"${escapeHtml(trackingUrl)}\" target=\"_blank\" rel=\"noopener noreferrer\" referrerpolicy=\"no-referrer\">Seguir pedido</a>`,
         );
       }
       if (order.shippedAt) {
@@ -426,11 +438,11 @@
 
       const tr = document.createElement('tr');
       tr.innerHTML = `
-        <td>#${order.id}</td>
-        <td>${formatDate(order.createdAt)}</td>
-        <td>${statusLabel(order.status)}</td>
+        <td>#${orderId}</td>
+        <td>${createdAt}</td>
+        <td>${orderStatus}</td>
         <td>${trackingBits.length ? trackingBits.join('<br>') : '—'}</td>
-        <td>${order.total ?? ''} ${order.currency || ''}</td>
+        <td>${total} ${currency}</td>
       `;
       ordersBody.appendChild(tr);
     });
@@ -972,6 +984,7 @@
     const images = Array.isArray(product.images)
       ? product.images
           .map((img) => (typeof img === 'string' ? img : img?.url || img?.imageUrl || img?.image))
+          .map((image) => safeProductImage(image, ''))
           .filter(Boolean)
       : [];
 
@@ -979,7 +992,11 @@
       product.price ?? product.priceCents ?? product.price_in_cents ?? product.priceInCents ?? 0
     );
     const priceLabel = formatPriceFromCents(priceInCents);
-    const imageList = images.length ? images : product.image ? [product.image] : [];
+    const imageList = images.length
+      ? images
+      : product.image
+        ? [safeProductImage(product.image, '')].filter(Boolean)
+        : [];
 
     return {
       id: product.id ?? favorite?.id ?? favorite?.productId,
@@ -989,7 +1006,7 @@
       priceInCents,
       priceLabel,
       price: priceInCents / 100,
-      image: product.imageUrl || product.image || images[0] || '',
+      image: safeProductImage(product.imageUrl || product.image || images[0], ''),
       images: imageList,
     };
   };
@@ -1017,16 +1034,17 @@
     const gallery = document.createElement('div');
     gallery.className = 'product-images';
 
-    const imgs = (Array.isArray(product.images) && product.images.length ? product.images : [product.image]).filter(
-      Boolean
-    );
+    const imgs = (Array.isArray(product.images) && product.images.length ? product.images : [product.image])
+      .map((image) => safeProductImage(image, ''))
+      .filter(Boolean);
     const imgEls = imgs.map((src, i) => {
       const img = document.createElement('img');
       img.className = `product-img${i === 0 ? ' active' : ''}`;
       img.loading = 'lazy';
       img.decoding = 'async';
       img.alt = product.name || 'Producto';
-      img.src = src;
+      img.src = safeProductImage(src);
+      img.referrerPolicy = 'no-referrer';
       return img;
     });
     imgEls.forEach((img) => gallery.appendChild(img));

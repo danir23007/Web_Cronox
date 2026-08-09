@@ -1,11 +1,13 @@
 // [ORDERS] Lógica de negocio para checkout y pedidos
 import {
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   Injectable,
   Logger,
   NotFoundException,
 } from '@nestjs/common';
+import { createHash } from 'crypto';
 import { OrderStatus, Prisma, PromoCodeType, Role } from '@prisma/client';
 import { Decimal } from '@prisma/client/runtime/library';
 import {
@@ -17,7 +19,6 @@ import { TaxConfigService } from '../common/tax/tax-config.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { HistorialService } from '../historial/historial.service';
 import { CreateCheckoutSessionDto } from './dto/create-checkout-session.dto';
-import { CreateOrderWebhookDto } from './dto/create-order-webhook.dto';
 import { PaginationDto } from './dto/pagination.dto';
 import {
   FREE_SHIPPING_THRESHOLD_CENTS,
@@ -28,6 +29,20 @@ import { ShippingMethodCode } from '../common/enums/shipping-method-code.enum';
 import { hasAnyRole } from '../common/roles.utils';
 
 const DEFAULT_CURRENCY = 'EUR';
+const CHECKOUT_SNAPSHOT_TTL_MS = 30 * 60 * 1000;
+const WEBHOOK_EVENT_STALE_MS = 5 * 60 * 1000;
+const CONFIRMATION_EMAIL_CLAIM_STALE_MS = 10 * 60 * 1000;
+const ACTIVE_CHECKOUT_SNAPSHOT_STATUSES = [
+  'RESERVED',
+  'PAYMENT_INTENT_CREATING',
+  'PAYMENT_BOUND',
+  'DISPUTED',
+];
+const EXPIRABLE_CHECKOUT_SNAPSHOT_STATUSES = [
+  'RESERVED',
+  'PAYMENT_INTENT_CREATING',
+  'PAYMENT_BOUND',
+];
 
 type CartSnapshot = CartWithItems;
 
@@ -35,8 +50,50 @@ type OrderWithItems = Prisma.OrderGetPayload<{
   include: { items: true };
 }>;
 
+type CheckoutSnapshotWithItems = Prisma.CheckoutSnapshotGetPayload<{
+  include: { items: true };
+}>;
+
+type VerifiedStripeOrderResult = {
+  orderId: number;
+  userId: number;
+  checkoutSnapshotId: string;
+  created: boolean;
+  status: OrderStatus;
+};
+
+type StripeLifecycleStatus =
+  | typeof OrderStatus.REFUNDED
+  | typeof OrderStatus.DISPUTED
+  | typeof OrderStatus.PAID;
+
+type StripeWebhookEventInput = {
+  id: string;
+  type: string;
+  paymentIntentId?: string;
+  occurredAt: Date;
+  lifecycleStatus?: OrderStatus;
+  amountCents?: number;
+};
+
+type CheckoutSnapshotResponse = {
+  checkoutSnapshotId: string;
+  amountCents: number;
+  currency: string;
+  summary: CheckoutSummaryResponse;
+  lineItems: CheckoutLineItemResponse[];
+  shippingMethod: ShippingMethodPublic;
+  totals: CheckoutTotals;
+  paymentIntentId: string | null;
+  status: string;
+  expiresAt: Date;
+  reused: boolean;
+  expired: boolean;
+};
+
 type CheckoutLineItem = {
   productId: number;
+  variantId: number;
   title: string;
   quantity: number;
   unitPrice: Prisma.Decimal;
@@ -168,6 +225,8 @@ export class OrdersService {
       });
     }
 
+    this.assertCartEligibleForCheckout(cart);
+
     const itemsTotalCents = hasItems ? this.computeItemsTotalCents(cart) : 0;
     let methods = await this.shippingMethods.listAvailableMethods(
       itemsTotalCents,
@@ -289,12 +348,18 @@ export class OrdersService {
     const cart =
       options.cart ?? (await this.cartService.getOrCreateCart({ userId }));
 
+    if (cart.userId !== userId) {
+      throw new ForbiddenException('CART_ACCESS_DENIED');
+    }
+
     if (!cart.items.length) {
       throw new BadRequestException({
         code: 'EMPTY_CART',
         message: 'No puedes iniciar el checkout sin productos en el carrito.',
       });
     }
+
+    this.assertCartEligibleForCheckout(cart);
 
     const itemsTotalCents = this.computeItemsTotalCents(cart);
     const normalizedPromo = this.normalizePromoCode(params.promoCode);
@@ -407,220 +472,796 @@ export class OrdersService {
     return response;
   }
 
-  async createOrderFromWebhook(
-    dto: CreateOrderWebhookDto,
-    options: { updateStock?: boolean; allowNegativeStock?: boolean } = {},
-  ): Promise<Record<string, unknown>> {
-    const providerRef = dto.providerRef;
+  /**
+   * Freezes the exact checkout that will be charged before a PaymentIntent is
+   * created. Order creation later reads only this snapshot, never the cart.
+   */
+  async createCheckoutSnapshot(
+    userId: number,
+    params: {
+      shippingMethod: ShippingMethodCode;
+      promoCode?: string;
+      shippingAddress?: Record<string, unknown>;
+      billingAddress?: Record<string, unknown>;
+    },
+    options: { cart?: CartSnapshot | null } = {},
+  ): Promise<CheckoutSnapshotResponse> {
+    const preview = await this.getCheckoutPreview(
+      userId,
+      {
+        shippingMethod: params.shippingMethod,
+        promoCode: params.promoCode,
+      },
+      { cart: options.cart },
+    );
+    const cartUpdatedAt = preview.cart.updatedAt;
+    // Stripe does not create zero-value PaymentIntents. Reject before a
+    // snapshot reserves inventory, rather than entering a retry/reset loop.
+    if (preview.totals.totalCents <= 0) {
+      throw new BadRequestException('ZERO_TOTAL_CHECKOUT_NOT_SUPPORTED');
+    }
+    const requestFingerprint = this.buildCheckoutRequestFingerprint(
+      userId,
+      preview,
+      params,
+    );
+    const existing = await this.findActiveCheckoutSnapshot(
+      userId,
+      preview.cart.id,
+    );
 
-    return this.prisma.$transaction(async (tx) => {
-      const existing: OrderWithItems | null = await tx.order.findUnique({
-        where: { providerRef },
+    if (existing) {
+      return this.reuseActiveCheckoutSnapshot(
+        existing,
+        requestFingerprint,
+        new Date(),
+      );
+    }
+
+    try {
+      const snapshot = await this.prisma.$transaction(async (tx) => {
+        const currentCart = await tx.cart.findUnique({
+          where: { id: preview.cart.id },
+          select: { userId: true, updatedAt: true },
+        });
+        if (
+          !currentCart ||
+          currentCart.userId !== userId ||
+          currentCart.updatedAt.getTime() !== cartUpdatedAt.getTime()
+        ) {
+          throw new ConflictException('CART_CHANGED_DURING_CHECKOUT');
+        }
+
+        const competing = await tx.checkoutSnapshot.findFirst({
+          where: {
+            userId,
+            cartId: preview.cart.id,
+            orderId: null,
+            status: { in: ACTIVE_CHECKOUT_SNAPSHOT_STATUSES },
+          },
+          orderBy: { createdAt: 'desc' },
+          include: { items: true },
+        });
+        if (competing) {
+          return this.reuseActiveCheckoutSnapshot(
+            competing,
+            requestFingerprint,
+            new Date(),
+          );
+        }
+
+        const created = await tx.checkoutSnapshot.create({
+          data: {
+            userId,
+            cartId: preview.cart.id,
+            cartUpdatedAt,
+            requestFingerprint,
+            status: 'RESERVED',
+            currency: preview.computation.currency,
+            subtotalCents: preview.totals.subtotalCents,
+            taxRate: preview.computation.taxRate,
+            taxAmountCents: this.decimalToCents(preview.computation.taxAmount),
+            shippingCostCents: preview.totals.shippingCents,
+            shippingMethodId: preview.shippingMethod.id,
+            shippingMethodCode: preview.shippingMethod.code,
+            shippingMethodLabel: preview.shippingMethod.label,
+            shippingMethodDescription:
+              preview.shippingMethod.description ?? null,
+            shippingMethodPriceCents: preview.shippingMethod.priceCents,
+            discountCents: preview.totals.discountCents,
+            promoCodeId: preview.appliedPromo?.promoId ?? null,
+            promoCodeCode: preview.appliedPromo?.code ?? null,
+            totalCents: preview.totals.totalCents,
+            shippingAddr: this.toInputJsonValue(params.shippingAddress),
+            billingAddr: this.toInputJsonValue(params.billingAddress),
+            expiresAt: new Date(Date.now() + CHECKOUT_SNAPSHOT_TTL_MS),
+            items: {
+              create: preview.computation.lineItems.map((item) => ({
+                productId: item.productId,
+                variantId: item.variantId,
+                title: item.title,
+                unitPriceCents: this.decimalToCents(item.unitPrice),
+                quantity: item.quantity,
+                lineTotalCents: this.decimalToCents(item.lineTotal),
+              })),
+            },
+          },
+          include: { items: true },
+        });
+
+        await this.reserveStockForCheckoutSnapshot(
+          tx,
+          created.id,
+          preview.computation.lineItems,
+        );
+        return created;
+      });
+
+      if ('reused' in snapshot) {
+        return snapshot;
+      }
+      return this.buildCheckoutSnapshotResponse(snapshot, new Date(), false);
+    } catch (error) {
+      if (!this.isUniqueConstraintError(error)) {
+        throw error;
+      }
+
+      const concurrent = await this.findActiveCheckoutSnapshot(
+        userId,
+        preview.cart.id,
+      );
+      if (!concurrent) throw error;
+      return this.reuseActiveCheckoutSnapshot(
+        concurrent,
+        requestFingerprint,
+        new Date(),
+      );
+    }
+  }
+  async claimCheckoutPaymentIntentCreation(
+    checkoutSnapshotId: string,
+  ): Promise<boolean> {
+    const result = await this.prisma.checkoutSnapshot.updateMany({
+      where: {
+        id: checkoutSnapshotId,
+        stripePaymentIntentId: null,
+        status: { in: ['RESERVED', 'PAYMENT_INTENT_CREATING'] },
+        expiresAt: { gt: new Date() },
+      },
+      data: { status: 'PAYMENT_INTENT_CREATING' },
+    });
+    return result.count === 1;
+  }
+
+  async bindStripePaymentIntent(
+    checkoutSnapshotId: string,
+    paymentIntentId: string,
+  ): Promise<void> {
+    const updated = await this.prisma.checkoutSnapshot.updateMany({
+      where: {
+        id: checkoutSnapshotId,
+        stripePaymentIntentId: null,
+        status: 'PAYMENT_INTENT_CREATING',
+        expiresAt: { gt: new Date() },
+      },
+      data: { stripePaymentIntentId: paymentIntentId, status: 'PAYMENT_BOUND' },
+    });
+
+    if (updated.count === 1) return;
+
+    const snapshot = await this.prisma.checkoutSnapshot.findUnique({
+      where: { id: checkoutSnapshotId },
+      select: { stripePaymentIntentId: true, expiresAt: true },
+    });
+    if (snapshot?.stripePaymentIntentId === paymentIntentId) return;
+    if (snapshot?.expiresAt && snapshot.expiresAt <= new Date()) {
+      throw new BadRequestException('CHECKOUT_SNAPSHOT_EXPIRED');
+    }
+    throw new ConflictException('CHECKOUT_SNAPSHOT_ALREADY_BOUND');
+  }
+
+  async resetCheckoutPaymentIntentCreation(
+    checkoutSnapshotId: string,
+  ): Promise<void> {
+    await this.prisma.checkoutSnapshot.updateMany({
+      where: {
+        id: checkoutSnapshotId,
+        stripePaymentIntentId: null,
+        status: 'PAYMENT_INTENT_CREATING',
+        expiresAt: { gt: new Date() },
+      },
+      data: { status: 'RESERVED' },
+    });
+  }
+
+  async releaseCheckoutSnapshot(
+    checkoutSnapshotId: string,
+    terminalStatus: 'EXPIRED' | 'PAYMENT_CANCELLED' | 'PAYMENT_CREATION_FAILED',
+    expectedPaymentIntentId?: string,
+  ): Promise<void> {
+    await this.prisma.$transaction(async (tx) => {
+      const snapshot = await tx.checkoutSnapshot.findUnique({
+        where: { id: checkoutSnapshotId },
         include: { items: true },
       });
-      const existingStatus = existing?.status;
-
-      if (existing) {
-        return this.serializeOrder(existing);
+      if (!snapshot || snapshot.orderId) return;
+      if (
+        expectedPaymentIntentId !== undefined &&
+        snapshot.stripePaymentIntentId !== expectedPaymentIntentId
+      ) {
+        throw new ConflictException('CHECKOUT_SNAPSHOT_PAYMENT_MISMATCH');
+      }
+      if (!ACTIVE_CHECKOUT_SNAPSHOT_STATUSES.includes(snapshot.status)) {
+        return;
       }
 
-      const userId = dto.metadata.userId;
-
-      if (!userId) {
-        throw new BadRequestException('USER_ID_REQUIRED');
-      }
-
-      const cart = await this.loadCartSnapshot(tx, dto.metadata.cartId, userId);
-
-if (!cart) {
-  throw new BadRequestException('CART_NOT_FOUND');
-}
-
-      const shippingMethod = dto.metadata.shippingMethod;
-      if (!shippingMethod) {
-        throw new BadRequestException('SHIPPING_METHOD_REQUIRED');
-      }
-
-      const shippingCostCents = Number(dto.metadata.shippingCostCents);
-      if (!Number.isFinite(shippingCostCents)) {
-        throw new BadRequestException('SHIPPING_COST_METADATA_REQUIRED');
-      }
-      const metadataItemsTotal = Number(dto.metadata.itemsTotalCents);
-      if (!Number.isFinite(metadataItemsTotal)) {
-        throw new BadRequestException('ITEMS_TOTAL_METADATA_REQUIRED');
-      }
-      const promoCode = this.normalizePromoCode(dto.metadata.promoCode);
-      const discountFromMetadata = Math.max(
-        0,
-        Number(dto.metadata.discountCents ?? 0) || 0,
-      );
-      const itemsTotalCents = this.computeItemsTotalCents(cart);
-      const methodBeforeDiscount = await this.shippingMethods.getMethod(
-        shippingMethod,
-        itemsTotalCents,
-      );
-      const baseTotals = this.calculateCartTotals(
-        cart,
-        methodBeforeDiscount,
-        0,
-      );
-      const appliedPromo = promoCode
-        ? await this.computePromoApplication(
-            cart,
-            methodBeforeDiscount,
-            promoCode,
-            baseTotals,
-            { userId, client: tx },
-          )
-        : null;
-      const discountCents = appliedPromo?.valid
-        ? appliedPromo.discountCents
-        : Math.min(discountFromMetadata, baseTotals.totalCents);
-      const validatedMethod = await this.shippingMethods.getMethod(
-        shippingMethod,
-        itemsTotalCents,
-        discountCents,
-      );
-      const totalsForOrder = this.calculateCartTotals(
-        cart,
-        validatedMethod,
-        discountCents,
-      );
-      const expectedShippingCents = totalsForOrder.shippingCents;
-
-      if (expectedShippingCents !== shippingCostCents) {
-        this.logger.warn(
-          `Shipping cost mismatch for ${providerRef}: metadata=${shippingCostCents} expected=${expectedShippingCents}`,
-        );
-      }
-
-      const computation = this.buildCheckoutComputation(cart, {
-        shippingCostCents: totalsForOrder.shippingCents,
-        itemsTotalCents,
-        discountCents: totalsForOrder.discountCents,
+      await this.releaseStockReservationsForCheckoutSnapshot(tx, snapshot);
+      await tx.checkoutSnapshot.update({
+        where: { id: snapshot.id },
+        data: { status: terminalStatus },
       });
-      const providerAmount = this.moneyFromString(dto.amount);
-      const totalsMatch = providerAmount.equals(computation.total);
+    });
+  }
 
-      if (!totalsMatch) {
-        this.logger.warn(
-          `Diferencia entre el total esperado (${this.formatMoney(
-            computation.total,
-          )}) y el cobrado (${providerAmount.toFixed(2)}) para ${providerRef}`,
-        );
+  async releaseCheckoutSnapshotForCanceledPaymentIntent(
+    paymentIntentId: string,
+  ): Promise<void> {
+    const snapshot = await this.prisma.checkoutSnapshot.findUnique({
+      where: { stripePaymentIntentId: paymentIntentId },
+      select: { id: true },
+    });
+    if (!snapshot) return;
+    await this.releaseCheckoutSnapshot(
+      snapshot.id,
+      'PAYMENT_CANCELLED',
+      paymentIntentId,
+    );
+  }
+
+  async listExpiredCheckoutSnapshots(limit = 100): Promise<
+    Array<{ id: string; stripePaymentIntentId: string | null }>
+  > {
+    return this.prisma.checkoutSnapshot.findMany({
+      where: {
+        orderId: null,
+        expiresAt: { lte: new Date() },
+        status: { in: EXPIRABLE_CHECKOUT_SNAPSHOT_STATUSES },
+      },
+      orderBy: { expiresAt: 'asc' },
+      take: Math.max(1, Math.min(limit, 100)),
+      select: { id: true, stripePaymentIntentId: true },
+    });
+  }
+
+  async claimStripeWebhookEvent(input: StripeWebhookEventInput): Promise<boolean> {
+    try {
+      await this.prisma.stripeWebhookEvent.create({
+        data: {
+          id: input.id,
+          type: input.type,
+          paymentIntentId: input.paymentIntentId ?? null,
+          lifecycleStatus: input.lifecycleStatus ?? null,
+          amountCents: input.amountCents ?? null,
+          status: 'PROCESSING',
+          occurredAt: input.occurredAt,
+        },
+      });
+      return true;
+    } catch (error) {
+      if (!(error instanceof Prisma.PrismaClientKnownRequestError) || error.code !== 'P2002') {
+        throw error;
+      }
+    }
+
+    const reclaimed = await this.prisma.stripeWebhookEvent.updateMany({
+      where: {
+        id: input.id,
+        OR: [
+          { status: 'FAILED' },
+          {
+            status: 'PROCESSING',
+            updatedAt: { lt: new Date(Date.now() - WEBHOOK_EVENT_STALE_MS) },
+          },
+        ],
+      },
+      data: {
+        status: 'PROCESSING',
+        error: null,
+        lifecycleStatus: input.lifecycleStatus ?? null,
+        amountCents: input.amountCents ?? null,
+        occurredAt: input.occurredAt,
+      },
+    });
+    return reclaimed.count === 1;
+  }
+
+  async completeStripeWebhookEvent(eventId: string): Promise<void> {
+    await this.prisma.stripeWebhookEvent.update({
+      where: { id: eventId },
+      data: { status: 'PROCESSED', processedAt: new Date(), error: null },
+    });
+  }
+
+  async failStripeWebhookEvent(eventId: string, error: unknown): Promise<void> {
+    const reason = error instanceof Error ? error.message : String(error);
+    await this.prisma.stripeWebhookEvent.update({
+      where: { id: eventId },
+      data: { status: 'FAILED', error: reason.slice(0, 1000) },
+    });
+  }
+
+  /**
+   * This method has no HTTP controller. It is invoked only after the Stripe
+   * webhook signature and PaymentIntent/snapshot binding have been checked.
+   */
+  async createOrderFromVerifiedStripePayment(input: {
+    checkoutSnapshotId: string;
+    paymentIntentId: string;
+    amountCents: number;
+    currency: string;
+    occurredAt: Date;
+  }): Promise<VerifiedStripeOrderResult> {
+    const normalizedCurrency = input.currency.toUpperCase();
+
+    let result: VerifiedStripeOrderResult;
+    try {
+      result = await this.prisma.$transaction(async (tx) => {
+      const snapshot = await tx.checkoutSnapshot.findUnique({
+        where: { id: input.checkoutSnapshotId },
+        include: { items: true },
+      });
+      if (!snapshot) throw new NotFoundException('CHECKOUT_SNAPSHOT_NOT_FOUND');
+      if (snapshot.stripePaymentIntentId !== input.paymentIntentId) {
+        throw new BadRequestException('STRIPE_PAYMENT_SNAPSHOT_MISMATCH');
+      }
+      if (
+        snapshot.totalCents !== input.amountCents ||
+        snapshot.currency.toUpperCase() !== normalizedCurrency
+      ) {
+        throw new BadRequestException('STRIPE_PAYMENT_AMOUNT_MISMATCH');
+      }
+      if (input.occurredAt > snapshot.expiresAt) {
+        throw new BadRequestException('STRIPE_PAYMENT_AFTER_CHECKOUT_EXPIRY');
       }
 
-      const status = totalsMatch ? OrderStatus.PAID : OrderStatus.PENDING;
-
-      // [FIX] JsonNull es un valor, no un tipo → usamos typeof Prisma.JsonNull
-      const shippingAddr: Prisma.InputJsonValue | typeof Prisma.JsonNull =
-        dto.shippingAddress
-          ? (dto.shippingAddress as Prisma.InputJsonValue)
-          : dto.metadata?.shippingAddress
-            ? (dto.metadata.shippingAddress as Prisma.InputJsonValue)
-            : Prisma.JsonNull;
-
-      // [FIX] Igual para billing
-      const billingAddr: Prisma.InputJsonValue | typeof Prisma.JsonNull =
-        dto.billingAddress
-          ? (dto.billingAddress as Prisma.InputJsonValue)
-          : dto.metadata?.billingAddress
-            ? (dto.metadata.billingAddress as Prisma.InputJsonValue)
-            : Prisma.JsonNull;
-
-      const shippingName = this.extractNames(
-        dto.shippingAddress ?? dto.metadata?.shippingAddress,
-      );
-      const billingName = this.extractNames(
-        dto.billingAddress ?? dto.metadata?.billingAddress,
-      );
-
-      let promoId: number | null = appliedPromo?.promoId ?? null;
-      if (!promoId && promoCode) {
-        const promo = await tx.promoCode.findFirst({
-          where: { code: promoCode },
-        });
-        promoId = promo?.id ?? null;
+      const existing = await tx.order.findUnique({
+        where: { providerRef: input.paymentIntentId },
+        include: { items: true },
+      });
+      if (existing) {
+        return {
+          orderId: existing.id,
+          userId: existing.userId,
+          checkoutSnapshotId: snapshot.id,
+          created: false,
+          status: existing.status,
+        };
       }
+
+      const lifecycleStatus = await this.resolvePersistedPaymentLifecycle(
+        tx,
+        input.paymentIntentId,
+      );
+      const promo = snapshot.promoCodeId
+        ? await tx.promoCode.findUnique({
+            where: { id: snapshot.promoCodeId },
+            select: { id: true },
+          })
+        : null;
 
       const order = await tx.order.create({
         data: {
-          userId,
-          status,
-          subtotal: computation.subtotal,
-          taxRate: computation.taxRate,
-          taxAmount: computation.taxAmount,
-          shippingCost: totalsForOrder.shippingCents,
-          shippingMethodId: validatedMethod.id ?? null,
-          shippingMethodCode: validatedMethod.code,
-          discountCents: totalsForOrder.discountCents,
-          promoCodeId: promoId,
-          promoCodeCode: promoCode ?? null,
-          total: computation.total,
-          currency: dto.currency ?? computation.currency,
-          provider: dto.provider,
-          providerRef,
-          shippingAddr: shippingAddr, // [FIX]
-          billingAddr: billingAddr, // [FIX]
+          userId: snapshot.userId,
+          status: lifecycleStatus,
+          subtotal: this.centsToDecimal(snapshot.subtotalCents),
+          taxRate: snapshot.taxRate,
+          taxAmount: this.centsToDecimal(snapshot.taxAmountCents),
+          shippingCost: snapshot.shippingCostCents,
+          shippingMethodId: snapshot.shippingMethodId,
+          shippingMethodCode: snapshot.shippingMethodCode,
+          discountCents: snapshot.discountCents,
+          disputeLostCents: snapshot.disputeLostCents,
+          promoCodeId: promo?.id ?? null,
+          promoCodeCode: snapshot.promoCodeCode,
+          total: this.centsToDecimal(snapshot.totalCents),
+          currency: snapshot.currency,
+          provider: 'stripe',
+          providerRef: input.paymentIntentId,
+          shippingAddr: this.toInputJsonValue(snapshot.shippingAddr),
+          billingAddr: this.toInputJsonValue(snapshot.billingAddr),
         },
       });
 
-      if (computation.lineItems.length > 0) {
-        await tx.orderItem.createMany({
-          data: computation.lineItems.map((item) => ({
-            orderId: order.id,
-            productId: item.productId,
-            title: item.title,
-            unitPrice: item.unitPrice,
-            quantity: item.quantity,
-            lineTotal: item.lineTotal,
-          })),
-        });
-      }
-
-      if (status === OrderStatus.PAID && cart && options.updateStock) {
-        await this.adjustStockForPaidOrder(
-          tx,
-          order.id,
-          cart,
-          options.allowNegativeStock,
-        ); // [STOCK]
-      }
-
-      if (status === OrderStatus.PAID && cart) {
-        await tx.cartItem.deleteMany({ where: { cartId: cart.id } });
-        await tx.cart.update({
-          where: { id: cart.id },
-          data: { itemsCount: 0, subtotal: 0 },
-        });
-      }
-
-      await this.fillMissingUserNames(tx, userId, shippingName, billingName);
-
+      await tx.orderItem.createMany({
+        data: snapshot.items.map((item) => ({
+          orderId: order.id,
+          productId: item.productId,
+          title: item.title,
+          unitPrice: this.centsToDecimal(item.unitPriceCents),
+          quantity: item.quantity,
+          lineTotal: this.centsToDecimal(item.lineTotalCents),
+        })),
+      });
       const created = await tx.order.findUnique({
         where: { id: order.id },
         include: { items: true },
       });
+      if (!created) throw new NotFoundException('ORDER_NOT_FOUND_AFTER_CREATE');
 
-      if (!created) {
-        throw new NotFoundException('ORDER_NOT_FOUND_AFTER_CREATE');
+      if (lifecycleStatus === OrderStatus.PAID) {
+        await this.consumeStockReservationsForCheckoutSnapshot(
+          tx,
+          created.id,
+          snapshot,
+        );
+        await this.clearCartIfSnapshotStillCurrent(tx, snapshot);
+        await this.fillMissingUserNames(
+          tx,
+          snapshot.userId,
+          this.extractNames(snapshot.shippingAddr),
+          this.extractNames(snapshot.billingAddr),
+        );
+        await this.historialService.incrementOrderProgress(
+          snapshot.userId,
+          this.computeOrderItemsQuantity(created.items),
+          tx,
+        );
+        await this.handlePromoUsageOnPaid(tx, created);
+      } else if (lifecycleStatus === OrderStatus.REFUNDED) {
+        await this.releaseStockReservationsForCheckoutSnapshot(tx, snapshot);
       }
 
-      if (status === OrderStatus.PAID) {
-        const quantity = this.computeOrderItemsQuantity(created.items);
-        await this.historialService.incrementOrderProgress(
-          userId,
-          quantity,
+      await tx.checkoutSnapshot.update({
+        where: { id: snapshot.id },
+        data: {
+          orderId: order.id,
+          status:
+            lifecycleStatus === OrderStatus.PAID
+              ? 'ORDER_CREATED'
+              : lifecycleStatus,
+        },
+      });
+
+        return {
+          orderId: created.id,
+          userId: snapshot.userId,
+          checkoutSnapshotId: snapshot.id,
+          created: true,
+          status: created.status,
+        };
+      });
+    } catch (error) {
+      // A stale Stripe event may be reclaimed while the original worker is
+      // still committing. providerRef is unique, so a losing concurrent
+      // create is a duplicate fulfillment, not a reason to compensate/refund
+      // a payment the winning worker successfully created.
+      if (!this.isUniqueConstraintError(error)) throw error;
+      const existing = await this.prisma.order.findUnique({
+        where: { providerRef: input.paymentIntentId },
+        select: { id: true, userId: true, status: true },
+      });
+      if (!existing) throw error;
+      result = {
+        orderId: existing.id,
+        userId: existing.userId,
+        checkoutSnapshotId: input.checkoutSnapshotId,
+        created: false,
+        status: existing.status,
+      };
+    }
+
+    // A refund/dispute can be claimed after the transaction resolved its event
+    // ledger but before the paid order commit became visible. Reconcile again
+    // after commit so a signed concurrent lifecycle event cannot be stranded.
+    await this.reconcileStripePaymentLifecycle(input.paymentIntentId);
+    const reconciled = await this.prisma.order.findUnique({
+      where: { id: result.orderId },
+      select: { status: true },
+    });
+    return {
+      ...result,
+      status: reconciled?.status ?? result.status,
+    };
+  }
+
+  async applyStripePaymentLifecycle(
+    paymentIntentId: string,
+    targetStatus: StripeLifecycleStatus,
+  ): Promise<void> {
+    await this.prisma.$transaction(async (tx) => {
+      await this.applyStripePaymentLifecycleInTransaction(
+        tx,
+        paymentIntentId,
+        targetStatus,
+      );
+    });
+  }
+
+  /**
+   * Stripe can deliver related dispute events out of order. Re-resolve the
+   * persisted event ledger by Stripe's occurredAt timestamp instead of using
+   * the event currently being delivered as the lifecycle source of truth.
+   */
+  async reconcileStripePaymentLifecycle(paymentIntentId: string): Promise<void> {
+    await this.prisma.$transaction(async (tx) => {
+      const targetStatus = await this.resolvePersistedPaymentLifecycle(
+        tx,
+        paymentIntentId,
+      );
+      await this.applyStripePaymentLifecycleInTransaction(
+        tx,
+        paymentIntentId,
+        targetStatus,
+      );
+    });
+  }
+
+  /**
+   * A closed lost Stripe dispute is not necessarily a full refund. Aggregate
+   * the signed amounts of distinct claimed loss events, cap them at the frozen
+   * checkout total, and persist that non-additive aggregate. The caller then
+   * reconciles the derived lifecycle, including loss-before-success delivery.
+   */
+  async recordStripeClosedLostDispute(input: {
+    eventId: string;
+    paymentIntentId: string;
+    amountCents: number;
+  }): Promise<'FULL' | 'PARTIAL' | 'IGNORED'> {
+    if (!Number.isSafeInteger(input.amountCents) || input.amountCents <= 0) {
+      return 'IGNORED';
+    }
+
+    return this.prisma.$transaction(async (tx) => {
+      const snapshotRef = await tx.checkoutSnapshot.findUnique({
+        where: { stripePaymentIntentId: input.paymentIntentId },
+        select: { id: true },
+      });
+      if (!snapshotRef) {
+        return 'IGNORED';
+      }
+
+      // Serialize concurrent closed-loss handlers on the snapshot row before
+      // querying the event ledger. Without this lock, two different disputes
+      // can each read a partial total and overwrite one another.
+      await tx.checkoutSnapshot.update({
+        where: { id: snapshotRef.id },
+        data: { updatedAt: new Date() },
+      });
+      const snapshot = await tx.checkoutSnapshot.findUnique({
+        where: { id: snapshotRef.id },
+        select: {
+          id: true,
+          orderId: true,
+          status: true,
+          totalCents: true,
+        },
+      });
+      if (!snapshot || snapshot.status === OrderStatus.REFUNDED) {
+        return 'IGNORED';
+      }
+
+      // The signed event was already claimed before this method runs. Retain
+      // its exact amount; event IDs make the following aggregate replay-safe.
+      const updatedEvent = await tx.stripeWebhookEvent.updateMany({
+        where: { id: input.eventId, paymentIntentId: input.paymentIntentId },
+        data: {
+          amountCents: input.amountCents,
+        },
+      });
+      if (updatedEvent.count !== 1) {
+        throw new ConflictException('STRIPE_WEBHOOK_EVENT_NOT_CLAIMED');
+      }
+
+      const lossEvents = await tx.stripeWebhookEvent.findMany({
+        where: {
+          paymentIntentId: input.paymentIntentId,
+          type: 'charge.dispute.closed',
+          amountCents: { not: null },
+        },
+        select: { amountCents: true },
+      });
+      let lossCents = 0;
+      for (const event of lossEvents) {
+        const amount = event.amountCents ?? 0;
+        if (!Number.isSafeInteger(amount) || amount <= 0) continue;
+        lossCents = Math.min(snapshot.totalCents, lossCents + amount);
+      }
+      const fullLoss = lossCents >= snapshot.totalCents;
+      const eventLifecycleStatus = fullLoss
+        ? OrderStatus.REFUNDED
+        : OrderStatus.PAID;
+      await tx.stripeWebhookEvent.update({
+        where: { id: input.eventId },
+        data: { lifecycleStatus: eventLifecycleStatus },
+      });
+
+      await tx.checkoutSnapshot.update({
+        where: { id: snapshot.id },
+        data: { disputeLostCents: lossCents },
+      });
+      if (snapshot.orderId) {
+        await tx.order.updateMany({
+          where: { id: snapshot.orderId },
+          data: { disputeLostCents: lossCents },
+        });
+      }
+
+      return fullLoss ? 'FULL' : 'PARTIAL';
+    });
+  }
+
+  private async applyStripePaymentLifecycleInTransaction(
+    tx: Prisma.TransactionClient,
+    paymentIntentId: string,
+    targetStatus: StripeLifecycleStatus,
+  ): Promise<void> {
+    const order = await tx.order.findUnique({
+      where: { providerRef: paymentIntentId },
+      include: { items: true },
+    });
+
+    // A signed terminal event can arrive before payment_intent.succeeded.
+    // Keep a dispute reservation, but release an unfulfilled full refund.
+    if (!order) {
+      const snapshot = await tx.checkoutSnapshot.findUnique({
+        where: { stripePaymentIntentId: paymentIntentId },
+        include: { items: true },
+      });
+      if (!snapshot) return;
+
+      if (targetStatus === OrderStatus.REFUNDED) {
+        await this.releaseStockReservationsForCheckoutSnapshot(tx, snapshot);
+        await tx.checkoutSnapshot.update({
+          where: { id: snapshot.id },
+          data: { status: OrderStatus.REFUNDED },
+        });
+      } else if (targetStatus === OrderStatus.DISPUTED) {
+        await tx.checkoutSnapshot.updateMany({
+          where: { id: snapshot.id, orderId: null },
+          data: { status: OrderStatus.DISPUTED },
+        });
+      }
+      return;
+    }
+
+    const snapshot = await tx.checkoutSnapshot.findUnique({
+      where: { orderId: order.id },
+      include: { items: true },
+    });
+
+    if (targetStatus === OrderStatus.REFUNDED) {
+      // A previous direct admin update may already have set REFUNDED while
+      // leaving a consumed reservation behind. Always repair stock first;
+      // the reservation claim makes both stock and history idempotent.
+      const returnedStock = snapshot
+        ? await this.returnConsumedStockReservationsForRefund(
+            tx,
+            order.id,
+            snapshot,
+          )
+        : false;
+      if (snapshot) {
+        await this.releaseStockReservationsForCheckoutSnapshot(tx, snapshot);
+      }
+
+      const wasRefunded = order.status === OrderStatus.REFUNDED;
+      const updated = wasRefunded
+        ? order
+        : await tx.order.update({
+            where: { id: order.id },
+            data: {
+              status: OrderStatus.REFUNDED,
+              preDisputeStatus: null,
+            },
+            include: { items: true },
+          });
+
+      const legacyCompletedOrder =
+        !snapshot &&
+        !wasRefunded &&
+        (this.isCompletedOrderStatus(order.status) ||
+          (order.status === OrderStatus.DISPUTED &&
+            !!order.preDisputeStatus &&
+            this.isCompletedOrderStatus(order.preDisputeStatus)));
+      if (returnedStock || legacyCompletedOrder) {
+        await this.historialService.registerReturn(
+          updated.userId,
+          this.computeOrderItemsQuantity(updated.items),
           tx,
         );
       }
 
-      await this.handlePromoUsageOnPaid(tx, created, existingStatus);
+      await tx.checkoutSnapshot.updateMany({
+        where: { orderId: order.id },
+        data: { status: OrderStatus.REFUNDED },
+      });
+      return;
+    }
 
-      return this.serializeOrder(created);
+    // A refund is terminal. Do not let a stale dispute/reinstatement change
+    // a locally reconciled full refund.
+    if (order.status === OrderStatus.REFUNDED) return;
+
+    if (targetStatus === OrderStatus.DISPUTED) {
+      if (order.status === OrderStatus.DISPUTED) return;
+
+      await tx.order.update({
+        where: { id: order.id },
+        data: {
+          status: OrderStatus.DISPUTED,
+          preDisputeStatus: order.status,
+        },
+      });
+      await tx.checkoutSnapshot.updateMany({
+        where: { orderId: order.id },
+        data: { status: OrderStatus.DISPUTED },
+      });
+      return;
+    }
+
+    // A reinstated/won dispute must restore fulfillment progress. If the
+    // original successful event had not yet consumed the reservation, consume
+    // it now; otherwise leave already-consumed stock untouched.
+    if (order.status !== OrderStatus.DISPUTED) return;
+    if (!snapshot) throw new NotFoundException('CHECKOUT_SNAPSHOT_NOT_FOUND');
+
+    const consumedNow = await this.consumeStockReservationsForCheckoutSnapshot(
+      tx,
+      order.id,
+      snapshot,
+    );
+    const restoredStatus = order.preDisputeStatus ?? OrderStatus.PAID;
+    const restored = await tx.order.update({
+      where: { id: order.id },
+      data: { status: restoredStatus, preDisputeStatus: null },
+      include: { items: true },
+    });
+    if (consumedNow) {
+      await this.clearCartIfSnapshotStillCurrent(tx, snapshot);
+      await this.historialService.incrementOrderProgress(
+        restored.userId,
+        this.computeOrderItemsQuantity(restored.items),
+        tx,
+      );
+      await this.handlePromoUsageOnPaid(tx, restored, OrderStatus.DISPUTED);
+    }
+    await tx.checkoutSnapshot.update({
+      where: { id: snapshot.id },
+      data: { status: 'ORDER_CREATED' },
+    });
+  }
+  async claimOrderConfirmationEmail(checkoutSnapshotId: string): Promise<boolean> {
+    const result = await this.prisma.checkoutSnapshot.updateMany({
+      where: {
+        id: checkoutSnapshotId,
+        confirmationEmailSentAt: null,
+        OR: [
+          { confirmationEmailClaimedAt: null },
+          {
+            confirmationEmailClaimedAt: {
+              lt: new Date(Date.now() - CONFIRMATION_EMAIL_CLAIM_STALE_MS),
+            },
+          },
+        ],
+      },
+      data: { confirmationEmailClaimedAt: new Date() },
+    });
+    return result.count === 1;
+  }
+
+  async markOrderConfirmationEmailSent(checkoutSnapshotId: string): Promise<void> {
+    await this.prisma.checkoutSnapshot.update({
+      where: { id: checkoutSnapshotId },
+      data: { confirmationEmailSentAt: new Date() },
     });
   }
 
+  async releaseOrderConfirmationEmailClaim(checkoutSnapshotId: string): Promise<void> {
+    await this.prisma.checkoutSnapshot.updateMany({
+      where: { id: checkoutSnapshotId, confirmationEmailSentAt: null },
+      data: { confirmationEmailClaimedAt: null },
+    });
+  }
 
   async getPaymentProcessingStatus(
     userId: number,
@@ -730,33 +1371,419 @@ if (!cart) {
     return this.serializeOrder(order);
   }
 
-  private async loadCartSnapshot(
+  private async resolvePersistedPaymentLifecycle(
     tx: Prisma.TransactionClient,
-    cartId: number | undefined,
-    userId: number,
-  ): Promise<CartSnapshot | null> {
-    if (cartId) {
-      const cart = await tx.cart.findUnique({
-        where: { id: cartId },
-        include: cartInclude,
-      });
+    paymentIntentId: string,
+  ): Promise<StripeLifecycleStatus> {
+    const events = await tx.stripeWebhookEvent.findMany({
+      where: {
+        paymentIntentId,
+        lifecycleStatus: { not: null },
+      },
+      orderBy: [{ occurredAt: 'desc' }, { createdAt: 'desc' }],
+      select: { lifecycleStatus: true, occurredAt: true, type: true },
+    });
 
-      if (cart && cart.userId && cart.userId !== userId) {
-        this.logger.warn(`Cart ${cartId} no pertenece al usuario ${userId}`);
-        return null;
+    // Every row here was signature-verified before it was persisted. A FAILED
+    // processing attempt is still authoritative Stripe lifecycle evidence and
+    // must not be ignored while waiting for its retry.
+    // A refund is terminal even if a later unrelated event is delivered after
+    // it. This specifically handles refund-before-success delivery order.
+    if (events.some((event) => event.lifecycleStatus === OrderStatus.REFUNDED)) {
+      return OrderStatus.REFUNDED;
+    }
+
+    const latestOccurredAt = events[0]?.occurredAt.getTime();
+    const latestEvents =
+      latestOccurredAt === undefined
+        ? []
+        : events.filter(
+            (event) => event.occurredAt.getTime() === latestOccurredAt,
+          );
+
+    // Stripe Event.created has second precision. If a stale dispute and its
+    // closing/reinstating event share a second, do not fall back to database
+    // delivery order: a verified PAID resolution wins over DISPUTED.
+    if (
+      latestEvents.some(
+        (event) => event.lifecycleStatus === OrderStatus.PAID,
+      )
+    ) {
+      return OrderStatus.PAID;
+    }
+    if (
+      latestEvents.some(
+        (event) => event.lifecycleStatus === OrderStatus.DISPUTED,
+      )
+    ) {
+      return OrderStatus.DISPUTED;
+    }
+    return OrderStatus.PAID;
+  }
+
+  private async clearCartIfSnapshotStillCurrent(
+    tx: Prisma.TransactionClient,
+    snapshot: CheckoutSnapshotWithItems,
+  ): Promise<void> {
+    const cart = await tx.cart.findUnique({
+      where: { id: snapshot.cartId },
+      select: { updatedAt: true },
+    });
+
+    // Never erase cart changes made after the immutable checkout was created.
+    if (!cart || cart.updatedAt.getTime() !== snapshot.cartUpdatedAt.getTime()) {
+      return;
+    }
+
+    await tx.cartItem.deleteMany({ where: { cartId: snapshot.cartId } });
+    await tx.cart.update({
+      where: { id: snapshot.cartId },
+      data: { itemsCount: 0, subtotal: 0 },
+    });
+  }
+
+  private async findActiveCheckoutSnapshot(
+    userId: number,
+    cartId: number,
+  ): Promise<CheckoutSnapshotWithItems | null> {
+    return this.prisma.checkoutSnapshot.findFirst({
+      where: {
+        userId,
+        cartId,
+        orderId: null,
+        status: { in: ACTIVE_CHECKOUT_SNAPSHOT_STATUSES },
+      },
+      orderBy: { createdAt: 'desc' },
+      include: { items: true },
+    });
+  }
+
+  private reuseActiveCheckoutSnapshot(
+    snapshot: CheckoutSnapshotWithItems,
+    requestFingerprint: string,
+    now: Date,
+  ): CheckoutSnapshotResponse {
+    // The partial unique index enforces one active reservation per user/cart.
+    // A different request cannot mint another reservation by varying address or
+    // checkout fields; it must finish or safely expire the existing checkout.
+    // Once expired, hand the snapshot back to PaymentIntentFactory even if the
+    // request changed. It will cancel/release it before creating the new
+    // checkout, rather than leaving the user stranded behind the active-row
+    // constraint.
+    if (
+      snapshot.expiresAt > now &&
+      snapshot.requestFingerprint !== requestFingerprint
+    ) {
+      throw new ConflictException('CHECKOUT_ALREADY_IN_PROGRESS');
+    }
+    return this.buildCheckoutSnapshotResponse(snapshot, now, true);
+  }
+
+  private buildCheckoutSnapshotResponse(
+    snapshot: CheckoutSnapshotWithItems,
+    now: Date,
+    reused: boolean,
+  ): CheckoutSnapshotResponse {
+    const shippingCostCents = snapshot.shippingCostCents;
+    const shippingMethod: ShippingMethodPublic = {
+      id: snapshot.shippingMethodId ?? 0,
+      code: snapshot.shippingMethodCode as ShippingMethodCode,
+      label: snapshot.shippingMethodLabel ?? snapshot.shippingMethodCode ?? '',
+      priceCents: snapshot.shippingMethodPriceCents ?? shippingCostCents,
+      amountCents: shippingCostCents,
+      description: snapshot.shippingMethodDescription,
+      amount: this.formatMoney(shippingCostCents),
+    };
+
+    return {
+      checkoutSnapshotId: snapshot.id,
+      amountCents: snapshot.totalCents,
+      currency: snapshot.currency,
+      summary: {
+        currency: snapshot.currency,
+        subtotal: this.formatMoney(snapshot.subtotalCents),
+        taxRate: this.formatRate(snapshot.taxRate),
+        taxAmount: this.formatMoney(snapshot.taxAmountCents),
+        shippingCost: this.formatMoney(shippingCostCents),
+        discount: this.formatMoney(-snapshot.discountCents),
+        total: this.formatMoney(snapshot.totalCents),
+      },
+      lineItems: snapshot.items.map((item) => ({
+        productId: item.productId,
+        title: item.title,
+        quantity: item.quantity,
+        unitPrice: this.formatMoney(item.unitPriceCents),
+        lineTotal: this.formatMoney(item.lineTotalCents),
+      })),
+      shippingMethod,
+      totals: {
+        subtotalCents: snapshot.subtotalCents,
+        shippingCents: shippingCostCents,
+        discountCents: snapshot.discountCents,
+        totalCents: snapshot.totalCents,
+      },
+      paymentIntentId: snapshot.stripePaymentIntentId,
+      status: snapshot.status,
+      expiresAt: snapshot.expiresAt,
+      reused,
+      expired: snapshot.expiresAt <= now,
+    };
+  }
+
+  private buildCheckoutRequestFingerprint(
+    userId: number,
+    preview: CheckoutPreview,
+    params: {
+      shippingMethod: ShippingMethodCode;
+      promoCode?: string;
+      shippingAddress?: Record<string, unknown>;
+      billingAddress?: Record<string, unknown>;
+    },
+  ): string {
+    const fingerprintInput = {
+      userId,
+      cartId: preview.cart.id,
+      cartUpdatedAt: preview.cart.updatedAt.toISOString(),
+      shippingMethod: preview.shippingMethod.code,
+      promoCode:
+        preview.appliedPromo?.valid && preview.appliedPromo.code
+          ? preview.appliedPromo.code
+          : this.normalizePromoCode(params.promoCode),
+      shippingAddress: this.canonicalizeJsonValue(params.shippingAddress),
+      billingAddress: this.canonicalizeJsonValue(params.billingAddress),
+    };
+    return createHash('sha256')
+      .update(JSON.stringify(fingerprintInput))
+      .digest('hex');
+  }
+
+  private canonicalizeJsonValue(value: unknown): unknown {
+    if (value === null || value === undefined) return null;
+    if (
+      typeof value === 'string' ||
+      typeof value === 'number' ||
+      typeof value === 'boolean'
+    ) {
+      return value;
+    }
+    if (Array.isArray(value)) {
+      return value.map((entry) => this.canonicalizeJsonValue(entry));
+    }
+    if (typeof value === 'object') {
+      return Object.fromEntries(
+        Object.entries(value as Record<string, unknown>)
+          .sort(([left], [right]) => left.localeCompare(right))
+          .map(([key, entry]) => [key, this.canonicalizeJsonValue(entry)]),
+      );
+    }
+    return String(value);
+  }
+
+  private isUniqueConstraintError(error: unknown): boolean {
+    return (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === 'P2002'
+    );
+  }
+
+  private async reserveStockForCheckoutSnapshot(
+    tx: Prisma.TransactionClient,
+    checkoutSnapshotId: string,
+    lineItems: CheckoutLineItem[],
+  ): Promise<void> {
+    const quantities = new Map<number, number>();
+    for (const item of lineItems) {
+      quantities.set(
+        item.variantId,
+        (quantities.get(item.variantId) ?? 0) + item.quantity,
+      );
+    }
+
+    for (const [variantId, quantity] of quantities) {
+      if (!Number.isInteger(quantity) || quantity <= 0) {
+        throw new BadRequestException('INVALID_CART_ITEM_QUANTITY');
       }
 
-      if (cart) {
-        return cart;
+      const updated = await tx.productVariant.updateMany({
+        where: {
+          id: variantId,
+          isActive: true,
+          product: { is: { isActive: true } },
+          ...(this.allowNegativeStock ? {} : { stockQty: { gte: quantity } }),
+        },
+        data: { stockQty: { decrement: quantity } },
+      });
+      if (updated.count !== 1) {
+        throw new ConflictException('INSUFFICIENT_STOCK_AT_CHECKOUT');
+      }
+
+      await tx.checkoutStockReservation.create({
+        data: {
+          checkoutSnapshotId,
+          variantId,
+          quantity,
+          status: 'RESERVED',
+        },
+      });
+      await tx.stockMovement.create({
+        data: {
+          variantId,
+          delta: -quantity,
+          reason: 'checkout_reservation',
+          checkoutSnapshotId,
+        },
+      });
+    }
+  }
+
+  private async consumeStockReservationsForCheckoutSnapshot(
+    tx: Prisma.TransactionClient,
+    orderId: number,
+    snapshot: CheckoutSnapshotWithItems,
+  ): Promise<boolean> {
+    const reservations = await tx.checkoutStockReservation.findMany({
+      where: { checkoutSnapshotId: snapshot.id },
+      select: { id: true, variantId: true, quantity: true, status: true },
+    });
+    const expected = new Map<number, number>();
+    for (const item of snapshot.items) {
+      expected.set(
+        item.variantId,
+        (expected.get(item.variantId) ?? 0) + item.quantity,
+      );
+    }
+    if (
+      reservations.length !== expected.size ||
+      reservations.some(
+        (reservation) => expected.get(reservation.variantId) !== reservation.quantity,
+      )
+    ) {
+      throw new ConflictException('CHECKOUT_STOCK_RESERVATION_MISSING');
+    }
+
+    const statuses = new Set(reservations.map((reservation) => reservation.status));
+    if (statuses.size === 1 && statuses.has('CONSUMED')) {
+      return false;
+    }
+    if (statuses.size !== 1 || !statuses.has('RESERVED')) {
+      throw new ConflictException('CHECKOUT_STOCK_RESERVATION_UNAVAILABLE');
+    }
+
+    for (const reservation of reservations) {
+      const claimed = await tx.checkoutStockReservation.updateMany({
+        where: { id: reservation.id, status: 'RESERVED' },
+        data: { status: 'CONSUMED', consumedAt: new Date() },
+      });
+      if (claimed.count !== 1) {
+        throw new ConflictException('CHECKOUT_STOCK_RESERVATION_UNAVAILABLE');
       }
     }
 
-    const fallback = await tx.cart.findUnique({
-      where: { userId },
-      include: cartInclude,
+    const movements = await tx.stockMovement.updateMany({
+      where: {
+        checkoutSnapshotId: snapshot.id,
+        orderId: null,
+        reason: 'checkout_reservation',
+      },
+      data: { orderId, reason: 'order' },
+    });
+    if (movements.count !== reservations.length) {
+      throw new ConflictException('CHECKOUT_STOCK_RESERVATION_MISSING');
+    }
+    return true;
+  }
+
+  private async releaseStockReservationsForCheckoutSnapshot(
+    tx: Prisma.TransactionClient,
+    snapshot: CheckoutSnapshotWithItems,
+  ): Promise<void> {
+    const reservations = await tx.checkoutStockReservation.findMany({
+      where: { checkoutSnapshotId: snapshot.id, status: 'RESERVED' },
+      select: { id: true, variantId: true, quantity: true },
     });
 
-    return fallback ?? null;
+    for (const reservation of reservations) {
+      const claimed = await tx.checkoutStockReservation.updateMany({
+        where: { id: reservation.id, status: 'RESERVED' },
+        data: { status: 'RELEASED', releasedAt: new Date() },
+      });
+      if (claimed.count !== 1) continue;
+
+      await tx.productVariant.update({
+        where: { id: reservation.variantId },
+        data: { stockQty: { increment: reservation.quantity } },
+      });
+      await tx.stockMovement.create({
+        data: {
+          variantId: reservation.variantId,
+          delta: reservation.quantity,
+          reason: 'checkout_reservation_release',
+          checkoutSnapshotId: snapshot.id,
+        },
+      });
+    }
+  }
+
+  /**
+   * A full refund returns stock that was already consumed by a paid order.
+   * This is intentionally distinct from releasing an uncharged reservation:
+   * CONSUMED -> RETURNED is claimed per row so Stripe retries and an admin
+   * refund/webhook race cannot increment inventory twice.
+   */
+  private async returnConsumedStockReservationsForRefund(
+    tx: Prisma.TransactionClient,
+    orderId: number,
+    snapshot: CheckoutSnapshotWithItems,
+  ): Promise<boolean> {
+    // Claim the complete return before touching individual reservation rows.
+    // This also gates Historial.registerReturn, whose aggregate update is not
+    // itself idempotent when an admin action races a Stripe webhook.
+    const claimedSnapshot = await tx.checkoutSnapshot.updateMany({
+      where: { id: snapshot.id, stockReturnedAt: null },
+      data: { stockReturnedAt: new Date() },
+    });
+    if (claimedSnapshot.count !== 1) return false;
+
+    const reservations = await tx.checkoutStockReservation.findMany({
+      where: { checkoutSnapshotId: snapshot.id, status: 'CONSUMED' },
+      select: { id: true, variantId: true, quantity: true },
+    });
+
+    let returnedAny = false;
+    for (const reservation of reservations) {
+      const claimed = await tx.checkoutStockReservation.updateMany({
+        where: { id: reservation.id, status: 'CONSUMED' },
+        data: { status: 'RETURNED', returnedAt: new Date() },
+      });
+      if (claimed.count !== 1) continue;
+
+      await tx.productVariant.update({
+        where: { id: reservation.variantId },
+        data: { stockQty: { increment: reservation.quantity } },
+      });
+      await tx.stockMovement.create({
+        data: {
+          variantId: reservation.variantId,
+          delta: reservation.quantity,
+          reason: 'refund',
+          orderId,
+          checkoutSnapshotId: snapshot.id,
+        },
+      });
+      returnedAny = true;
+    }
+
+    return returnedAny;
+  }
+
+  private isCompletedOrderStatus(status: OrderStatus): boolean {
+    const completedStatuses: OrderStatus[] = [
+      OrderStatus.PAID,
+      OrderStatus.PROCESSING,
+      OrderStatus.SHIPPED,
+      OrderStatus.DELIVERED,
+    ];
+    return completedStatuses.includes(status);
   }
 
   private buildCheckoutSummary(
@@ -1007,13 +2034,51 @@ if (!cart) {
     );
   }
 
+  private assertCartEligibleForCheckout(cart: CartSnapshot | null): void {
+    if (!cart?.items?.length) return;
+
+    for (const item of cart.items) {
+      const variant = item.variant;
+      const product = variant?.product;
+      if (!variant || !product) {
+        throw new BadRequestException('INVALID_CART_ITEM_VARIANT');
+      }
+      if (!variant.isActive || !product.isActive) {
+        throw new BadRequestException('INACTIVE_PRODUCT_OR_VARIANT');
+      }
+      if (!Number.isInteger(item.qty) || item.qty <= 0) {
+        throw new BadRequestException('INVALID_CART_ITEM_QUANTITY');
+      }
+      if (item.qty > variant.stockQty) {
+        throw new BadRequestException('INSUFFICIENT_STOCK_AT_CHECKOUT');
+      }
+      this.getCheckoutUnitPriceCents(item);
+    }
+  }
+
+  private getCheckoutUnitPriceCents(
+    item: CartSnapshot['items'][number],
+  ): number {
+    const variant = item.variant;
+    const product = variant?.product;
+    if (!variant || !product) {
+      throw new BadRequestException('INVALID_CART_ITEM_VARIANT');
+    }
+
+    const price = variant.price ?? product.price;
+    if (!Number.isInteger(price) || price < 0) {
+      throw new BadRequestException('VARIANT_PRICE_NOT_SET');
+    }
+    return price;
+  }
+
   private computeItemsTotalCents(cart: CartSnapshot | null): number {
     if (!cart || !Array.isArray(cart.items) || !cart.items.length) {
       return 0;
     }
 
     return cart.items.reduce(
-      (acc, item) => acc + item.priceAtAdd * item.qty,
+      (acc, item) => acc + this.getCheckoutUnitPriceCents(item) * item.qty,
       0,
     );
   }
@@ -1099,13 +2164,14 @@ if (!cart) {
       throw new BadRequestException('INVALID_CART_ITEM_VARIANT');
     }
 
-    const unitPrice = this.centsToDecimal(item.priceAtAdd);
+    const unitPrice = this.centsToDecimal(this.getCheckoutUnitPriceCents(item));
     const lineTotal = this.roundMoney(unitPrice.mul(item.qty));
     const sizeLabel = item.variant.size ? ` (${item.variant.size})` : '';
     const title = `${item.variant.product.name}${sizeLabel}`;
 
     return {
       productId: item.variant.productId,
+      variantId: item.variantId,
       title,
       quantity: item.qty,
       unitPrice,
@@ -1136,6 +2202,15 @@ if (!cart) {
 
   private decimalToCents(value: Prisma.Decimal): number {
     return Number(value.mul(100).toFixed(0));
+  }
+
+  private toInputJsonValue(
+    value: Prisma.JsonValue | Record<string, unknown> | null | undefined,
+  ): Prisma.InputJsonValue | typeof Prisma.JsonNull {
+    if (value === null || value === undefined) {
+      return Prisma.JsonNull;
+    }
+    return value as Prisma.InputJsonValue;
   }
 
   private normalizeName(value: unknown): string | undefined {
@@ -1221,10 +2296,6 @@ if (!cart) {
     return new Decimal(amount.toFixed(2));
   }
 
-  private moneyFromString(amount: string): Prisma.Decimal {
-    return new Decimal(amount);
-  }
-
   private rateFromNumber(rate: number): Prisma.Decimal {
     return new Decimal(rate.toFixed(4));
   }
@@ -1245,118 +2316,9 @@ if (!cart) {
     return value.toFixed(4);
   }
 
-  private async adjustStockForPaidOrder(
-    tx: Prisma.TransactionClient,
-    orderId: number,
-    cart: CartSnapshot,
-    allowNegativeStockOverride?: boolean,
-  ): Promise<void> {
-    // [STOCK]
-    const allowNegative =
-      allowNegativeStockOverride !== undefined
-        ? allowNegativeStockOverride
-        : this.allowNegativeStock;
-
-    for (const item of cart.items) {
-      if (item.qty <= 0) {
-        continue;
-      }
-
-      const variantId = item.variantId;
-      const variantSku = item.variant?.sku ?? 'UNKNOWN';
-
-      let currentStock: number | null = null;
-      if (item.variant && typeof (item.variant as any).stockQty === 'number') {
-        currentStock = (item.variant as any).stockQty as number;
-      } else if (
-        item.variant &&
-        typeof (item.variant as any).stock === 'number'
-      ) {
-        currentStock = (item.variant as any).stock as number;
-      }
-
-      if (currentStock === null) {
-        const dbVariant = await tx.productVariant.findUnique({
-          where: { id: variantId },
-          select: { stockQty: true },
-        });
-        currentStock = dbVariant?.stockQty ?? 0;
-      }
-
-      if (!allowNegative && currentStock < item.qty) {
-        this.logger.warn(
-          `No hay stock suficiente para la variante ${variantSku} (${variantId}) en el pedido ${orderId}`,
-        );
-        throw new BadRequestException('INSUFFICIENT_STOCK_AT_CHECKOUT');
-      }
-
-      if (allowNegative && currentStock < item.qty) {
-        this.logger.warn(
-          `El pedido ${orderId} provocará stock negativo en la variante ${variantSku} (${variantId})`,
-        );
-      }
-
-      if (allowNegative) {
-        await tx.productVariant.update({
-          where: { id: variantId },
-          data: { stockQty: { decrement: item.qty } },
-        });
-      } else {
-        const result = await tx.productVariant.updateMany({
-          where: { id: variantId, stockQty: { gte: item.qty } },
-          data: { stockQty: { decrement: item.qty } },
-        });
-
-        if (result.count === 0) {
-          this.logger.error(
-            `No se pudo descontar stock para la variante ${variantSku} (${variantId}) en el pedido ${orderId}`,
-          );
-          throw new BadRequestException('INSUFFICIENT_STOCK_AT_CHECKOUT');
-        }
-      }
-
-      await tx.stockMovement.create({
-        data: {
-          variantId,
-          delta: -item.qty,
-          reason: 'order',
-          orderId,
-        },
-      });
-    }
-  }
-
   async markOrderAsRefunded(providerRef: string): Promise<void> {
-    // [STRIPE]
-    await this.prisma.$transaction(async (tx) => {
-      const order = await tx.order.findUnique({
-        where: { providerRef },
-        include: { items: true },
-      });
-
-      if (!order) {
-        this.logger.warn(
-          `No se encontró ningún pedido para marcar como REFUNDED con providerRef ${providerRef}`,
-        );
-        return;
-      }
-
-      if (order.status !== OrderStatus.REFUNDED) {
-        await tx.order.update({
-          where: { providerRef },
-          data: { status: OrderStatus.REFUNDED },
-        });
-
-        const itemsCount = this.computeOrderItemsQuantity(order.items);
-        await this.historialService.registerReturn(
-          order.userId,
-          itemsCount,
-          tx,
-        );
-      }
-    });
+    await this.applyStripePaymentLifecycle(providerRef, OrderStatus.REFUNDED);
   }
-
   private async handlePromoUsageOnPaid(
     tx: Prisma.TransactionClient,
     order: OrderWithItems,
@@ -1450,6 +2412,7 @@ if (!cart) {
       taxAmount: this.formatMoney(order.taxAmount),
       shippingCost: this.formatMoney(order.shippingCost),
       discount: this.formatMoney(this.centsToDecimal(order.discountCents)),
+      disputeLostCents: order.disputeLostCents,
       total: this.formatMoney(order.total),
       currency: order.currency,
       provider: order.provider,

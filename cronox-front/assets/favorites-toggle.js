@@ -1,4 +1,10 @@
 (function () {
+  const getCsrfHeaders = async () => {
+    const provider = window.CRONOX_API?.getCsrfHeaders;
+    return typeof provider === 'function' ? provider() : {};
+  };
+  const apiEndpoint = (path) => (window.CRONOX_API?.API_BASE || '') + path;
+
   const ensureGlobalSet = () => {
     if (!(window.CRONOX_FAVORITE_IDS instanceof Set)) {
       window.CRONOX_FAVORITE_IDS = new Set();
@@ -118,17 +124,18 @@
     try {
       let res;
       if (wantFav) {
-        res = await fetch('/api/favorites', {
+        res = await fetch(apiEndpoint('/api/favorites'), {
           method: 'POST',
           credentials: 'include',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', ...(await getCsrfHeaders()) },
           body: JSON.stringify(payload),
         });
       } else {
         const deleteId = payload.productId ?? payload.slug ?? id;
-        res = await fetch(`/api/favorites/${encodeURIComponent(String(deleteId))}`, {
+        res = await fetch(apiEndpoint('/api/favorites/' + encodeURIComponent(String(deleteId))), {
           method: 'DELETE',
           credentials: 'include',
+          headers: await getCsrfHeaders(),
         });
       }
 

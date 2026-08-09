@@ -11,6 +11,11 @@
   const API = window.CRONOX_API || {};
   const STAR_ICON = '<span class="icon-star"></span>';
   window.CRONOX_STAR_ICON = STAR_ICON;
+  const getCsrfHeaders = async () => {
+    const provider = window.CRONOX_API?.getCsrfHeaders;
+    return typeof provider === 'function' ? provider() : {};
+  };
+  const apiEndpoint = (path) => (window.CRONOX_API?.API_BASE || '') + path;
 
   const TOPBAR_STATES = ['topbar--transparent', 'topbar--hero', 'topbar--page'];
 
@@ -402,7 +407,7 @@
       if (this.isLoading) return this.ids;
       this.isLoading = true;
       try {
-        const meRes = await fetch('/api/me', { credentials: 'include' });
+        const meRes = await fetch(apiEndpoint('/api/me'), { credentials: 'include' });
         if (meRes.status === 401) {
           this.setIdsFromServer([]);
           return this.ids;
@@ -411,7 +416,7 @@
           throw new Error('Error comprobando sesión');
         }
 
-        const res = await fetch('/api/favorites', {
+        const res = await fetch(apiEndpoint('/api/favorites'), {
           method: 'GET',
           credentials: 'include',
         });
@@ -459,7 +464,7 @@
       if (!this.initDone) this.init();
 
       try {
-        const sessionRes = await fetch('/api/me', { credentials: 'include' });
+        const sessionRes = await fetch(apiEndpoint('/api/me'), { credentials: 'include' });
         if (sessionRes.status === 401) {
           window.dispatchEvent(new CustomEvent('cronox:authRequired', { detail: { reason: 'favorites' } }));
           return;
@@ -488,16 +493,17 @@
       try {
         let res;
         if (willBeFav) {
-          res = await fetch('/api/favorites', {
+          res = await fetch(apiEndpoint('/api/favorites'), {
             method: 'POST',
             credentials: 'include',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json', ...(await getCsrfHeaders()) },
             body: JSON.stringify({ productId: normId }),
           });
         } else {
-          res = await fetch(`/api/favorites/${encodeURIComponent(normId)}`, {
+          res = await fetch(apiEndpoint('/api/favorites/' + encodeURIComponent(normId)), {
             method: 'DELETE',
             credentials: 'include',
+            headers: await getCsrfHeaders(),
           });
         }
 
@@ -609,6 +615,21 @@
   const CHECKOUT_URL = '/checkout.html';
   const CONTINUE_SHOPPING_URL = '/index.html#store';
   const GUEST_CART_KEY = 'cronox_guest_cart';
+  const escapeHtml = (value) => {
+    const helper = window.CRONOX_SECURITY?.escapeHtml;
+    return typeof helper === 'function'
+      ? helper(value)
+      : String(value ?? '')
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;')
+          .replace(/'/g, '&#39;');
+  };
+  const safeProductImage = (value, fallback = 'assets/logo_banner.png') => {
+    const helper = window.CRONOX_SECURITY?.productImageUrl;
+    return typeof helper === 'function' ? helper(value, fallback) : fallback;
+  };
 
   const formatMoney = (() => {
     const EUR = new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR' });
@@ -878,19 +899,23 @@
     cartUpsellSection.hidden = false;
     const frag = document.createDocumentFragment();
     candidates.forEach((product) => {
-      const variant = Array.isArray(product.variants) ? product.variants[0] : null;
-      if (!variant) return;
+      const sourceVariant = Array.isArray(product.variants) ? product.variants[0] : null;
+      if (!sourceVariant) return;
+      const variant = { ...sourceVariant, id: escapeHtml(sourceVariant.id ?? '') };
+      const imageUrl = safeProductImage(product.image || product.images?.[0]);
+      const productName = escapeHtml(product.name || 'Producto CRONOX');
+      const productPrice = escapeHtml(product.priceLabel || formatMoney(product.priceCents));
       const card = document.createElement('article');
       card.className = 'cart-upsell__item';
       card.innerHTML = `
         <div class="cart-upsell__media">
           <div class="cart-upsell__image-frame">
-            <img src="${product.image || product.images?.[0] || 'assets/logo_banner.png'}" alt="${product.name}" loading="lazy">
+            <img src="${escapeHtml(imageUrl)}" alt="${productName}" loading="lazy" referrerpolicy="no-referrer">
           </div>
         </div>
         <div class="cart-upsell__info">
-          <p class="cart-upsell__name">${product.name}</p>
-          <p class="cart-upsell__price">${product.priceLabel || formatMoney(product.priceCents)}</p>
+          <p class="cart-upsell__name">${productName}</p>
+          <p class="cart-upsell__price">${productPrice}</p>
           <button class="cart-upsell__add" data-variant="${variant.id}" type="button">Añadir</button>
         </div>
       `;
@@ -925,7 +950,7 @@
     ];
 
     const imageUrl = candidates.find(Boolean);
-    return imageUrl || fallbackLogo;
+    return safeProductImage(imageUrl, fallbackLogo);
   };
 
   const renderCartEmptyState = (message = 'Tu cesta está vacía', { showCta = false } = {}) => {
@@ -987,46 +1012,53 @@
 
     const frag = document.createDocumentFragment();
     items.forEach((item) => {
-      const lineTotal = (Number(item.priceCents) || 0) * (Number(item.qty) || 0);
+      const qty = Math.max(1, Math.min(999, Number(item.qty) || 1));
+      const lineTotal = (Number(item.priceCents) || 0) * qty;
       const imageUrl = getCartItemImage(item);
       const article = document.createElement('article');
       article.className = 'cart-line';
-      article.dataset.cartLine = item.id;
+      article.dataset.cartLine = String(item.id ?? '');
 
       const isPending = pendingItemUpdates.has(item.id);
       if (isPending) article.classList.add('is-updating');
       const itemError = cartItemErrors.get(item.id);
+      const display = {
+        id: escapeHtml(item.id ?? ''),
+        qty,
+        size: item.size ? escapeHtml(String(item.size).toUpperCase()) : '',
+        productName: escapeHtml(item.product?.name || 'Producto CRONOX'),
+      };
 
       article.innerHTML = `
         <div class="cart-line__media">
           <div class="cart-line__image-frame">
-            <img src="${imageUrl}" alt="${item.product?.name || ''}" loading="lazy">
+            <img src="${escapeHtml(imageUrl)}" alt="${display.productName}" loading="lazy" referrerpolicy="no-referrer">
           </div>
         </div>
         <div class="cart-line__info">
           <div class="cart-line__title">
-            <p class="cart-line__name">${item.product?.name || 'Producto CRONOX'}</p>
-            ${item.size ? `<span class="cart-line__meta">Talla: ${String(item.size).toUpperCase()}</span>` : ''}
+            <p class="cart-line__name">${display.productName}</p>
+            ${display.size ? `<span class="cart-line__meta">Talla: ${display.size}</span>` : ''}
           </div>
           <div class="cart-line__actions">
-            <div class="cart-qty" data-id="${item.id}">
-              <button class="cart-qty__btn" data-action="dec" aria-label="Reducir cantidad" data-id="${item.id}" ${isPending ? 'disabled' : ''}>−</button>
+            <div class="cart-qty" data-id="${display.id}">
+              <button class="cart-qty__btn" data-action="dec" aria-label="Reducir cantidad" data-id="${display.id}" ${isPending ? 'disabled' : ''}>−</button>
               <input
                 type="number"
                 class="cart-qty__input"
                 min="1"
                 max="999"
                 step="1"
-                value="${item.qty}"
-                data-id="${item.id}"
-                data-last-commit="${item.qty}"
+                value="${display.qty}"
+                data-id="${display.id}"
+                data-last-commit="${display.qty}"
                 aria-label="Cantidad"
                 ${isPending ? 'disabled' : ''}
               />
-              <button class="cart-qty__btn" data-action="inc" aria-label="Aumentar cantidad" data-id="${item.id}" ${isPending ? 'disabled' : ''}>+</button>
+              <button class="cart-qty__btn" data-action="inc" aria-label="Aumentar cantidad" data-id="${display.id}" ${isPending ? 'disabled' : ''}>+</button>
             </div>
             <div class="cart-line__price">${formatMoney(lineTotal)}</div>
-            <button class="cart-line__remove" data-remove="${item.id}" aria-label="Eliminar artículo">🗑</button>
+            <button class="cart-line__remove" data-remove="${display.id}" aria-label="Eliminar artículo">🗑</button>
           </div>
         </div>
       `;
@@ -1907,15 +1939,6 @@ window.CRONOX_USER = window.CRONOX_USER || null;
     return true;
   };
 
-  const parseNewsletterResponse = async (response) => {
-    try {
-      return await response.json();
-    } catch (error) {
-      console.warn('[CRONOX] Respuesta inesperada de newsletter', error);
-      return {};
-    }
-  };
-
   const handleNewsletterSubmit = async (event) => {
     event.preventDefault();
     if (!newsletterState.emailInput) return;
@@ -1937,36 +1960,20 @@ window.CRONOX_USER = window.CRONOX_USER || null;
     setNewsletterFeedback('Enviando...');
 
     try {
-      const res = await fetch('/api/newsletter/subscribe', {
+      const res = await fetch(apiEndpoint('/api/newsletter/subscribe'), {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json', ...(await getCsrfHeaders()) },
         body: JSON.stringify({ email }),
       });
 
-      const data = await parseNewsletterResponse(res);
-
-      if (res.status === 201 || data.status === 'ok') {
+      if (res.ok) {
         setNewsletterFeedback(
-          'Te hemos enviado un correo con tu código de -10% en tu primera compra.',
+          'Si la direccion es elegible, revisa tu correo para confirmar la suscripcion.',
           'success',
         );
         persistNewsletterDismiss();
         setTimeout(closeNewsletterModal, 1200);
-        return;
-      }
-
-      if (res.status === 200 && data.status === 'already_subscribed') {
-        setNewsletterFeedback('Ya estabas dentro. Revisa tu bandeja para el código.', 'success');
-        persistNewsletterDismiss();
-        return;
-      }
-
-      if (res.status === 409 || data.status === 'already_registered') {
-        setNewsletterFeedback(
-          'Este correo ya tiene cuenta en CRONOX. Inicia sesión para usar tus beneficios.',
-          'error',
-        );
-        persistNewsletterDismiss();
         return;
       }
 

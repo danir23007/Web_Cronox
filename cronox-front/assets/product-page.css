@@ -134,15 +134,35 @@
   transition:transform .2s ease, box-shadow .2s ease;
 }
 .product-card:hover{ transform:translateY(-2px); }
-.product-img{
+/*
+ * Related cards reuse the shared product-card carousel.  Keep their image
+ * viewport square, but take every non-active image out of document flow so
+ * products with multiple images cannot increase the card height.
+ */
+.pdp-related .product-images{
+  position:relative;
   width:100%;
   aspect-ratio:1/1;
+  overflow:hidden;
+}
+.pdp-related .product-img{
+  position:absolute;
+  inset:0;
+  width:100%;
+  height:100%;
+  aspect-ratio:auto;
   object-fit:contain;
   background:#fff;
-  position:static;
-  opacity:1;
-  height:auto;
   display:block;
+  opacity:0;
+  transition:opacity .35s ease;
+}
+.pdp-related .product-img.active{
+  opacity:1;
+  z-index:2;
+}
+.pdp-related .product-images .product-arrow{
+  display:block!important;
 }
 .product-card__info{
   margin-top:auto;

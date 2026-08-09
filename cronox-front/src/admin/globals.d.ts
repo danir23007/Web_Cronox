@@ -117,15 +117,24 @@ declare global {
     API_BASE: string;
     formatPrice: (value: number) => string;
     getFallbackProducts: () => unknown[];
+    getCsrfHeaders: () => Promise<Record<string, string>>;
     classifyApiError: (error?: unknown) => CronoxApiErrorClassification;
     admin?: CronoxAdminApi;
     [key: string]: unknown;
+  }
+
+  interface CronoxSecurity {
+    escapeHtml: (value: unknown) => string;
+    externalHttpUrl: (value: unknown) => string;
+    productImageUrl: (value: unknown, fallback?: string) => string;
   }
 
   interface Window {
     CRONOX_API?: CronoxApi;
     CRONOX_API_BASE?: string;
     CRONOX_UI?: CronoxUi;
+    CRONOX_SECURITY?: CronoxSecurity;
+    CRONOX_TRUSTED_IMAGE_ORIGINS?: string[];
     __CRONOX_API_BASE__?: string;
     __CRONOX_BACKEND_PORT__?: string | number;
   }

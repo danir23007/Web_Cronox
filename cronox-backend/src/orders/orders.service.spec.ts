@@ -1,6 +1,4 @@
-// [ORDERS] Pruebas unitarias del servicio de pedidos
-import type { Role } from '@prisma/client';
-
+// Focused checkout safety tests.
 jest.mock('@prisma/client', () => ({
   PrismaClient: class PrismaClient {},
   Prisma: {
@@ -16,385 +14,755 @@ jest.mock('@prisma/client', () => ({
   OrderStatus: {
     PENDING: 'PENDING',
     PAID: 'PAID',
+    DISPUTED: 'DISPUTED',
     PROCESSING: 'PROCESSING',
     DELIVERED: 'DELIVERED',
     CANCELLED: 'CANCELLED',
     REFUNDED: 'REFUNDED',
     SHIPPED: 'SHIPPED',
   },
-  Role: {
-    ADMIN: 'ADMIN',
-    USER: 'USER',
-  },
+  PromoCodeType: { PERCENT: 'PERCENT', FIXED: 'FIXED' },
+  Role: { ADMIN: 'ADMIN', USER: 'USER' },
 }));
-import { Decimal } from '@prisma/client/runtime/library';
-import { OrdersService } from './orders.service';
-import { TaxConfigService } from '../common/tax/tax-config.service';
-import { CartService } from '../cart/cart.service';
-import { PrismaService } from '../prisma/prisma.service';
-import { CreateOrderWebhookDto } from './dto/create-order-webhook.dto';
-import type { ShippingMethodCode } from '../common/enums/shipping-method-code.enum';
 
-describe('OrdersService', () => {
+import { Prisma } from '@prisma/client';
+import { Decimal } from '@prisma/client/runtime/library';
+import { CartService } from '../cart/cart.service';
+import { TaxConfigService } from '../common/tax/tax-config.service';
+import { HistorialService } from '../historial/historial.service';
+import { PrismaService } from '../prisma/prisma.service';
+import { OrdersService } from './orders.service';
+
+describe('OrdersService checkout reservations', () => {
   let service: OrdersService;
-  let prisma: {
-    order: {
-      findUnique: jest.Mock;
-      create: jest.Mock;
-      findMany: jest.Mock;
-      count: jest.Mock;
-    };
-    orderItem: { createMany: jest.Mock };
-    cart: { findUnique: jest.Mock; update: jest.Mock };
-    cartItem: { deleteMany: jest.Mock };
-    productVariant: { updateMany: jest.Mock; update: jest.Mock; findUnique: jest.Mock };
-    stockMovement: { create: jest.Mock };
-    $transaction: jest.Mock;
+  let prisma: any;
+  let cartService: any;
+  let shippingMethods: any;
+  let historialService: any;
+
+  const updatedAt = new Date('2026-08-08T10:00:00.000Z');
+  const preview = {
+    cart: {
+      id: 10,
+      userId: 1,
+      updatedAt,
+      items: [],
+    },
+    computation: {
+      currency: 'EUR',
+      taxRate: new Decimal('0.2100'),
+      taxAmount: new Decimal('17.36'),
+      lineItems: [
+        {
+          productId: 7,
+          variantId: 8,
+          title: 'Camiseta (M)',
+          quantity: 2,
+          unitPrice: new Decimal('50.00'),
+          lineTotal: new Decimal('100.00'),
+        },
+      ],
+    },
+    summary: {
+      currency: 'EUR',
+      subtotal: '100.00',
+      taxRate: '0.2100',
+      taxAmount: '17.36',
+      shippingCost: '4.95',
+      discount: '0.00',
+      total: '104.95',
+    },
+    lineItems: [
+      {
+        productId: 7,
+        title: 'Camiseta (M)',
+        quantity: 2,
+        unitPrice: '50.00',
+        lineTotal: '100.00',
+      },
+    ],
+    shippingMethod: {
+      id: 2,
+      code: 'EXPRESS',
+      label: 'Express',
+      priceCents: 495,
+      amountCents: 495,
+      description: null,
+      amount: '4.95',
+    },
+    totals: {
+      subtotalCents: 10000,
+      shippingCents: 495,
+      discountCents: 0,
+      totalCents: 10495,
+    },
+    appliedPromo: null,
   };
-  let cartService: { getOrCreateCart: jest.Mock };
-  let taxConfig: { getDefaultVat: jest.Mock; getPaymentProvider: jest.Mock };
-  let shippingMethods: {
-    getMethod: jest.Mock<
-      Promise<{
-        id: number;
-        code: ShippingMethodCode;
-        label: string;
-        amountCents: number;
-      }>,
-      [ShippingMethodCode, number]
-    >;
-    listAvailableMethods: jest.Mock;
-  };
+
+  const makeSnapshot = (overrides: Record<string, unknown> = {}) => ({
+    id: 'snap_new',
+    requestFingerprint: 'fingerprint_1',
+    stripePaymentIntentId: null,
+    status: 'RESERVED',
+    expiresAt: new Date(Date.now() + 30 * 60 * 1000),
+    currency: 'EUR',
+    subtotalCents: 10000,
+    taxRate: new Decimal('0.2100'),
+    taxAmountCents: 1736,
+    shippingCostCents: 495,
+    shippingMethodId: 2,
+    shippingMethodCode: 'EXPRESS',
+    shippingMethodLabel: 'Express',
+    shippingMethodDescription: null,
+    shippingMethodPriceCents: 495,
+    discountCents: 0,
+    totalCents: 10495,
+    items: [
+      {
+        productId: 7,
+        variantId: 8,
+        title: 'Camiseta (M)',
+        quantity: 2,
+        unitPriceCents: 5000,
+        lineTotalCents: 10000,
+      },
+    ],
+    ...overrides,
+  });
 
   beforeEach(() => {
     prisma = {
-      order: {
+      checkoutSnapshot: {
+        findFirst: jest.fn(),
+        create: jest.fn(),
         findUnique: jest.fn(),
+        update: jest.fn(),
+        updateMany: jest.fn(),
+        findMany: jest.fn(),
+      },
+      checkoutStockReservation: {
         create: jest.fn(),
         findMany: jest.fn(),
-        count: jest.fn(),
+        updateMany: jest.fn(),
       },
-      orderItem: { createMany: jest.fn() },
+      productVariant: { updateMany: jest.fn(), update: jest.fn() },
+      stockMovement: { create: jest.fn(), updateMany: jest.fn() },
       cart: { findUnique: jest.fn(), update: jest.fn() },
       cartItem: { deleteMany: jest.fn() },
-      productVariant: {
-        updateMany: jest.fn(),
-        update: jest.fn(),
-        findUnique: jest.fn(),
-      },
-      stockMovement: { create: jest.fn() },
-      $transaction: jest.fn(),
+      order: { findUnique: jest.fn(), create: jest.fn(), update: jest.fn(), updateMany: jest.fn(), findMany: jest.fn(), count: jest.fn() },
+      orderItem: { createMany: jest.fn() },
+      promoCode: { findUnique: jest.fn(), findFirst: jest.fn(), updateMany: jest.fn() },
+      promoCodeRedemption: { create: jest.fn() },
+      user: { findUnique: jest.fn(), update: jest.fn() },
+      stripeWebhookEvent: { create: jest.fn(), update: jest.fn(), updateMany: jest.fn(), findMany: jest.fn() },
+      $transaction: jest.fn(async (callback: (tx: any) => unknown) => callback(prisma)),
     };
-
-    cartService = {
-      getOrCreateCart: jest.fn(),
+    cartService = { getOrCreateCart: jest.fn() };
+    shippingMethods = { getMethod: jest.fn(), listAvailableMethods: jest.fn() };
+    historialService = {
+      incrementOrderProgress: jest.fn(),
+      registerReturn: jest.fn(),
     };
+    service = new OrdersService(
+      prisma as PrismaService,
+      cartService as CartService,
+      { getDefaultVat: jest.fn().mockReturnValue(0.21), getPaymentProvider: jest.fn() } as unknown as TaxConfigService,
+      shippingMethods,
+      historialService as HistorialService,
+    );
+    jest.spyOn(service as any, 'getCheckoutPreview').mockResolvedValue(preview);
+    jest
+      .spyOn(service as any, 'buildCheckoutRequestFingerprint')
+      .mockReturnValue('fingerprint_1');
+  });
 
-    taxConfig = {
-      getDefaultVat: jest.fn().mockReturnValue(0.21),
-      getPaymentProvider: jest.fn().mockReturnValue('none'),
-    };
-
-    shippingMethods = {
-      getMethod: jest.fn(
-        async (
-          code: ShippingMethodCode,
-          itemsTotal: number,
-          discountCents = 0,
-        ) => {
-          const basePrice = code === 'EXPRESS' ? 495 : 295;
-          const netItems = Math.max(0, itemsTotal - discountCents);
-          const amountCents =
-            code === 'STANDARD' && netItems >= 6500 ? 0 : basePrice;
-
-          return {
-            id: code === 'EXPRESS' ? 2 : 1,
-            code,
-            label: code === 'EXPRESS' ? 'Envío express' : 'Envío estándar',
-            amountCents,
-            priceCents: basePrice,
-          };
-        },
-      ),
-      listAvailableMethods: jest.fn(),
-    };
-
-    prisma.$transaction.mockImplementation(async (cb: (tx: any) => Promise<unknown>) =>
-      cb({
-        ...prisma,
-        order: prisma.order,
-        orderItem: prisma.orderItem,
-        cart: prisma.cart,
-        cartItem: prisma.cartItem,
-        productVariant: prisma.productVariant,
-        stockMovement: prisma.stockMovement,
+  it('reuses an active snapshot for an identical checkout request', async () => {
+    const expiresAt = new Date(Date.now() + 60 * 60 * 1000);
+    prisma.checkoutSnapshot.findFirst.mockResolvedValue(
+      makeSnapshot({
+        id: 'snap_existing',
+        stripePaymentIntentId: 'pi_existing',
+        status: 'PAYMENT_BOUND',
+        expiresAt,
       }),
     );
 
-    service = new OrdersService(
-      prisma as unknown as PrismaService,
-      cartService as unknown as CartService,
-      taxConfig as unknown as TaxConfigService,
-      shippingMethods as any,
+    const result = await service.createCheckoutSnapshot(
+      1,
+      { shippingMethod: 'EXPRESS' as any },
+      { cart: preview.cart as any },
     );
+
+    expect(result).toMatchObject({
+      checkoutSnapshotId: 'snap_existing',
+      paymentIntentId: 'pi_existing',
+      amountCents: 10495,
+      lineItems: [expect.objectContaining({ title: 'Camiseta (M)' })],
+      reused: true,
+      expired: false,
+    });
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+    expect(prisma.productVariant.updateMany).not.toHaveBeenCalled();
   });
 
-  it('calcula totales e IVA correctamente durante el checkout', async () => {
-    const cartSnapshot = {
-      id: 10,
-      userId: 1,
-      items: [
-        {
-          priceAtAdd: 10000,
-          qty: 2,
-          variant: {
-            productId: 7,
-            size: 'M',
-            product: { name: 'Camiseta', currency: 'EUR' },
-          },
-        },
-      ],
-    } as any;
-
-    cartService.getOrCreateCart.mockResolvedValue(cartSnapshot);
-
-    const result = await service.createCheckoutSession(1, { shippingMethod: 'EXPRESS' } as any);
-
-    expect(result.summary).toMatchObject({
-      subtotal: '200.00',
-      taxRate: '0.2100',
-      taxAmount: '34.71',
-      shippingCost: '4.95',
-      total: '204.95',
-    });
-    expect(result.lineItems).toHaveLength(1);
-    expect(result.lineItems[0]).toMatchObject({ lineTotal: '200.00', quantity: 2 });
-    expect(result.metadata).toMatchObject({
-      shippingMethod: 'EXPRESS',
-      shippingCostCents: 495,
-      itemsTotalCents: 20000,
-    });
-    expect(result.shippingMethod).toMatchObject({
-      code: 'EXPRESS',
-      amount: '4.95',
-      amountCents: 495,
-    });
-  });
-
-  it('mantiene idempotencia por providerRef al crear pedidos desde webhook', async () => {
-    const cartSnapshot = {
-      id: 10,
-      userId: 3,
-      items: [
-        {
-          priceAtAdd: 10000,
-          qty: 1,
-          variant: {
-            productId: 2,
-            size: 'M',
-            product: { name: 'Camiseta', currency: 'EUR' },
-          },
-        },
-      ],
-    } as any;
-
-    prisma.cart.findUnique.mockResolvedValue(cartSnapshot);
-
-    const createdOrder = {
-      id: 99,
-      userId: 3,
-      status: 'PAID',
-      subtotal: new Decimal('100.00'),
-      taxRate: new Decimal('0.2100'),
-      taxAmount: new Decimal('21.00'),
-      shippingCost: 0,
-      shippingMethodId: null,
-      shippingMethodCode: 'STANDARD',
-      total: new Decimal('121.00'),
-      currency: 'EUR',
-      provider: 'stripe',
-      providerRef: 'pi_123',
-      createdAt: new Date(),
-      updatedAt: new Date(),
-      shippingAddr: null,
-      billingAddr: null,
-      items: [
-        {
-          id: 1,
-          orderId: 99,
-          productId: 2,
-          title: 'Camiseta (M)',
-          unitPrice: new Decimal('100.00'),
-          quantity: 1,
-          lineTotal: new Decimal('100.00'),
-        },
-      ],
-    };
-
-    prisma.order.findUnique
-      .mockResolvedValueOnce(null)
-      .mockResolvedValueOnce(createdOrder)
-      .mockResolvedValue(createdOrder);
-
-    prisma.order.create.mockResolvedValue({ id: 99 });
-
-    const dto: CreateOrderWebhookDto = {
-      provider: 'stripe',
-      providerRef: 'pi_123',
-      amount: '100.00',
-      currency: 'EUR',
-      metadata: {
-        userId: 3,
-        cartId: 10,
-        shippingMethod: 'STANDARD',
-        shippingCostCents: '0',
-        itemsTotalCents: '10000',
-      } as any,
-    } as CreateOrderWebhookDto;
-
-    const first = await service.createOrderFromWebhook(dto);
-    expect(prisma.order.create).toHaveBeenCalledTimes(1);
-    expect(first).toMatchObject({ id: 99, total: '100.00', status: 'PAID' });
-
-    const second = await service.createOrderFromWebhook(dto);
-    expect(prisma.order.create).toHaveBeenCalledTimes(1);
-    expect(second).toEqual(first);
-  });
-
-  it('descuenta stock y registra movimientos cuando el pago se confirma', async () => {
-    const cartSnapshot = {
-      id: 20,
-      userId: 4,
-      items: [
-        {
-          id: 1,
-          variantId: 8,
-          priceAtAdd: 10000,
-          qty: 2,
-          variant: {
-            productId: 2,
-            sku: 'SKU-123',
-            stockQty: 5,
-            product: { name: 'Camiseta', currency: 'EUR' },
-          },
-        },
-      ],
-    } as any;
-
-    prisma.cart.findUnique.mockResolvedValue(cartSnapshot);
-
-    const createdOrder = {
-      id: 77,
-      userId: 4,
-      status: 'PAID',
-      subtotal: new Decimal('200.00'),
-      taxRate: new Decimal('0.2100'),
-      taxAmount: new Decimal('42.00'),
-      shippingCost: 0,
-      shippingMethodId: null,
-      shippingMethodCode: 'STANDARD',
-      total: new Decimal('242.00'),
-      currency: 'EUR',
-      provider: 'stripe',
-      providerRef: 'pi_stock',
-      createdAt: new Date(),
-      updatedAt: new Date(),
-      shippingAddr: null,
-      billingAddr: null,
-      items: [
-        {
-          id: 1,
-          orderId: 77,
-          productId: 2,
-          title: 'Camiseta (M)',
-          unitPrice: new Decimal('100.00'),
-          quantity: 2,
-          lineTotal: new Decimal('200.00'),
-        },
-      ],
-    };
-
-    prisma.order.findUnique
-      .mockResolvedValueOnce(null)
-      .mockResolvedValueOnce(createdOrder)
-      .mockResolvedValue(createdOrder);
-
-    prisma.order.create.mockResolvedValue({ id: createdOrder.id });
+  it('atomically reserves each active variant before returning a new snapshot', async () => {
+    prisma.checkoutSnapshot.findFirst.mockResolvedValue(null);
+    prisma.cart.findUnique.mockResolvedValue({ userId: 1, updatedAt });
+    prisma.checkoutSnapshot.create.mockResolvedValue(makeSnapshot());
     prisma.productVariant.updateMany.mockResolvedValue({ count: 1 });
+    prisma.checkoutStockReservation.create.mockResolvedValue({});
     prisma.stockMovement.create.mockResolvedValue({});
 
-    const dto: CreateOrderWebhookDto = {
-      provider: 'stripe',
-      providerRef: 'pi_stock',
-      amount: '200.00',
-      currency: 'EUR',
-      metadata: {
-        userId: 4,
-        cartId: 20,
-        shippingMethod: 'STANDARD',
-        shippingCostCents: '0',
-        itemsTotalCents: '20000',
-      } as any,
-    } as CreateOrderWebhookDto;
-
-    const result = await service.createOrderFromWebhook(dto, { updateStock: true });
+    await service.createCheckoutSnapshot(
+      1,
+      { shippingMethod: 'EXPRESS' as any },
+      { cart: preview.cart as any },
+    );
 
     expect(prisma.productVariant.updateMany).toHaveBeenCalledWith({
-      where: { id: 8, stockQty: { gte: 2 } },
+      where: expect.objectContaining({
+        id: 8,
+        isActive: true,
+        stockQty: { gte: 2 },
+      }),
       data: { stockQty: { decrement: 2 } },
     });
-    expect(prisma.stockMovement.create).toHaveBeenCalledWith({
+    expect(prisma.checkoutStockReservation.create).toHaveBeenCalledWith({
       data: expect.objectContaining({
+        checkoutSnapshotId: 'snap_new',
         variantId: 8,
-        delta: -2,
-        orderId: createdOrder.id,
-        reason: 'order',
+        quantity: 2,
+        status: 'RESERVED',
       }),
     });
-    expect(result).toMatchObject({ status: 'PAID' });
   });
 
-  it('filtra pedidos por usuario autenticado', async () => {
-    const orderEntity = {
-      id: 1,
-      userId: 4,
-      status: 'PAID',
-      subtotal: new Decimal('100.00'),
-      taxRate: new Decimal('0.2100'),
-      taxAmount: new Decimal('21.00'),
-      shippingCost: 0,
-      shippingMethodId: null,
-      shippingMethodCode: 'STANDARD',
-      total: new Decimal('121.00'),
-      currency: 'EUR',
-      provider: 'stripe',
-      providerRef: 'pi_789',
-      createdAt: new Date(),
-      updatedAt: new Date(),
+  it('releases a cancelled checkout reservation exactly once', async () => {
+    prisma.checkoutSnapshot.findUnique.mockResolvedValue({
+      id: 'snap_cancelled',
+      orderId: null,
+      status: 'PAYMENT_BOUND',
+      items: [],
+    });
+    prisma.checkoutStockReservation.findMany.mockResolvedValue([
+      { id: 'reservation_1', variantId: 8, quantity: 2 },
+    ]);
+    prisma.checkoutStockReservation.updateMany.mockResolvedValue({ count: 1 });
+    prisma.productVariant.update.mockResolvedValue({});
+    prisma.stockMovement.create.mockResolvedValue({});
+    prisma.checkoutSnapshot.update.mockResolvedValue({});
+
+    await service.releaseCheckoutSnapshot('snap_cancelled', 'PAYMENT_CANCELLED');
+
+    expect(prisma.productVariant.update).toHaveBeenCalledWith({
+      where: { id: 8 },
+      data: { stockQty: { increment: 2 } },
+    });
+    expect(prisma.checkoutStockReservation.updateMany).toHaveBeenCalledWith({
+      where: { id: 'reservation_1', status: 'RESERVED' },
+      data: expect.objectContaining({ status: 'RELEASED' }),
+    });
+    expect(prisma.checkoutSnapshot.update).toHaveBeenCalledWith({
+      where: { id: 'snap_cancelled' },
+      data: { status: 'PAYMENT_CANCELLED' },
+    });
+  });
+
+  it('does not mint a second reservation when checkout fields change', async () => {
+    jest
+      .spyOn(service as any, 'buildCheckoutRequestFingerprint')
+      .mockReturnValue('different_address_fingerprint');
+    prisma.checkoutSnapshot.findFirst.mockResolvedValue(makeSnapshot());
+
+    await expect(
+      service.createCheckoutSnapshot(
+        1,
+        {
+          shippingMethod: 'EXPRESS' as any,
+          shippingAddress: { line1: 'Different address' },
+        },
+        { cart: preview.cart as any },
+      ),
+    ).rejects.toThrow('CHECKOUT_ALREADY_IN_PROGRESS');
+
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+    expect(prisma.productVariant.updateMany).not.toHaveBeenCalled();
+  });
+
+  it('returns an expired active snapshot even when the request changed so it can be safely released', async () => {
+    jest
+      .spyOn(service as any, 'buildCheckoutRequestFingerprint')
+      .mockReturnValue('different_address_fingerprint');
+    prisma.checkoutSnapshot.findFirst.mockResolvedValue(
+      makeSnapshot({ expiresAt: new Date(Date.now() - 1) }),
+    );
+
+    const result = await service.createCheckoutSnapshot(
+      1,
+      { shippingMethod: 'EXPRESS' as any },
+      { cart: preview.cart as any },
+    );
+
+    expect(result).toMatchObject({ reused: true, expired: true });
+  });
+
+  it('rejects a zero-total checkout before reserving inventory or calling Stripe', async () => {
+    jest.spyOn(service as any, 'getCheckoutPreview').mockResolvedValue({
+      ...preview,
+      totals: { ...preview.totals, totalCents: 0 },
+    });
+
+    await expect(
+      service.createCheckoutSnapshot(
+        1,
+        { shippingMethod: 'EXPRESS' as any },
+        { cart: preview.cart as any },
+      ),
+    ).rejects.toThrow('ZERO_TOTAL_CHECKOUT_NOT_SUPPORTED');
+
+    expect(prisma.checkoutSnapshot.create).not.toHaveBeenCalled();
+    expect(prisma.productVariant.updateMany).not.toHaveBeenCalled();
+  });
+
+  it('recovers a stale PaymentIntent creation claim with the deterministic snapshot key', async () => {
+    prisma.checkoutSnapshot.updateMany.mockResolvedValue({ count: 1 });
+
+    await expect(
+      service.claimCheckoutPaymentIntentCreation('snap_creating'),
+    ).resolves.toBe(true);
+
+    expect(prisma.checkoutSnapshot.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          id: 'snap_creating',
+          status: { in: ['RESERVED', 'PAYMENT_INTENT_CREATING'] },
+        }),
+      }),
+    );
+  });
+
+  it('returns consumed stock and records purchase history only once across refund retries', async () => {
+    const snapshot = makeSnapshot({ id: 'snap_refund' });
+    const refundedOrder = {
+      id: 55,
+      userId: 1,
+      status: 'REFUNDED',
+      preDisputeStatus: null,
+      items: [{ quantity: 2 }],
+    };
+    prisma.order.findUnique.mockResolvedValue(refundedOrder);
+    prisma.checkoutSnapshot.findUnique.mockResolvedValue(snapshot);
+    prisma.checkoutSnapshot.updateMany
+      .mockResolvedValueOnce({ count: 1 }) // return-stock claim
+      .mockResolvedValueOnce({ count: 1 }) // snapshot REFUNDED state
+      .mockResolvedValueOnce({ count: 0 }) // duplicate return-stock claim
+      .mockResolvedValueOnce({ count: 1 }); // duplicate snapshot state
+    prisma.checkoutStockReservation.findMany
+      .mockResolvedValueOnce([
+        { id: 'reservation_consumed', variantId: 8, quantity: 2 },
+      ])
+      .mockResolvedValue([]);
+    prisma.checkoutStockReservation.updateMany.mockResolvedValue({ count: 1 });
+    prisma.productVariant.update.mockResolvedValue({});
+    prisma.stockMovement.create.mockResolvedValue({});
+
+    await service.applyStripePaymentLifecycle('pi_refund', 'REFUNDED' as any);
+    await service.applyStripePaymentLifecycle('pi_refund', 'REFUNDED' as any);
+
+    expect(prisma.productVariant.update).toHaveBeenCalledTimes(1);
+    expect(historialService.registerReturn).toHaveBeenCalledTimes(1);
+    expect(prisma.stockMovement.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        reason: 'refund',
+        orderId: 55,
+        checkoutSnapshotId: 'snap_refund',
+      }),
+    });
+  });
+
+  it('uses Stripe occurrence order so an old dispute cannot overwrite a later reinstatement', async () => {
+    prisma.stripeWebhookEvent.findMany.mockResolvedValue([
+      {
+        lifecycleStatus: 'PAID',
+        occurredAt: new Date('2026-08-08T10:01:00.000Z'),
+        type: 'charge.dispute.closed',
+      },
+      {
+        lifecycleStatus: 'DISPUTED',
+        occurredAt: new Date('2026-08-08T10:00:00.000Z'),
+        type: 'charge.dispute.created',
+      },
+    ]);
+    prisma.order.findUnique.mockResolvedValue({
+      id: 88,
+      userId: 1,
+      status: 'SHIPPED',
+      preDisputeStatus: null,
+      items: [],
+    });
+
+    await service.reconcileStripePaymentLifecycle('pi_chronology');
+
+    expect(prisma.stripeWebhookEvent.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        orderBy: [{ occurredAt: 'desc' }, { createdAt: 'desc' }],
+      }),
+    );
+    expect(prisma.order.update).not.toHaveBeenCalled();
+  });
+
+  it('uses a paid dispute resolution as the deterministic tie-break within Stripe Event.created precision', async () => {
+    const occurredAt = new Date('2026-08-08T10:00:00.000Z');
+    prisma.stripeWebhookEvent.findMany.mockResolvedValue([
+      {
+        lifecycleStatus: 'DISPUTED',
+        occurredAt,
+        type: 'charge.dispute.created',
+      },
+      {
+        lifecycleStatus: 'PAID',
+        occurredAt,
+        type: 'charge.dispute.closed',
+      },
+    ]);
+
+    await expect(
+      (service as any).resolvePersistedPaymentLifecycle(prisma, 'pi_same_second'),
+    ).resolves.toBe('PAID');
+  });
+
+  it('keeps a signature-verified failed full-refund event authoritative for reconciliation', async () => {
+    prisma.stripeWebhookEvent.findMany.mockResolvedValue([
+      {
+        lifecycleStatus: 'REFUNDED',
+        occurredAt: new Date('2026-08-08T10:00:00.000Z'),
+        type: 'charge.refunded',
+        status: 'FAILED',
+      },
+    ]);
+
+    await expect(
+      (service as any).resolvePersistedPaymentLifecycle(prisma, 'pi_failed_refund'),
+    ).resolves.toBe('REFUNDED');
+    expect(prisma.stripeWebhookEvent.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          paymentIntentId: 'pi_failed_refund',
+          lifecycleStatus: { not: null },
+        },
+      }),
+    );
+  });
+
+  it('records a closed partial loss before payment success as a non-additive PAID lifecycle without restocking', async () => {
+    prisma.checkoutSnapshot.findUnique.mockResolvedValue({
+      id: 'snap_partial_loss',
+      orderId: null,
+      status: 'DISPUTED',
+      totalCents: 10495,
+    });
+    prisma.stripeWebhookEvent.updateMany.mockResolvedValue({ count: 1 });
+    prisma.stripeWebhookEvent.findMany.mockResolvedValue([{ amountCents: 2500 }]);
+    prisma.checkoutSnapshot.update.mockResolvedValue({});
+
+    await expect(
+      service.recordStripeClosedLostDispute({
+        eventId: 'evt_partial_loss',
+        paymentIntentId: 'pi_partial_loss',
+        amountCents: 2500,
+      }),
+    ).resolves.toBe('PARTIAL');
+
+    expect(prisma.stripeWebhookEvent.updateMany).toHaveBeenCalledWith({
+      where: { id: 'evt_partial_loss', paymentIntentId: 'pi_partial_loss' },
+      data: { amountCents: 2500 },
+    });
+    expect(prisma.stripeWebhookEvent.update).toHaveBeenCalledWith({
+      where: { id: 'evt_partial_loss' },
+      data: { lifecycleStatus: 'PAID' },
+    });
+    expect(prisma.checkoutSnapshot.update).toHaveBeenCalledWith({
+      where: { id: 'snap_partial_loss' },
+      data: { disputeLostCents: 2500 },
+    });
+    expect(prisma.productVariant.update).not.toHaveBeenCalled();
+
+    prisma.stripeWebhookEvent.findMany.mockResolvedValue([
+      {
+        lifecycleStatus: 'PAID',
+        occurredAt: new Date('2026-08-09T10:00:00.000Z'),
+        type: 'charge.dispute.closed',
+      },
+    ]);
+    await expect(
+      (service as any).resolvePersistedPaymentLifecycle(prisma, 'pi_partial_loss'),
+    ).resolves.toBe('PAID');
+  });
+
+  it('maps a closed loss equal to the frozen total into the full refund lifecycle', async () => {
+    prisma.checkoutSnapshot.findUnique.mockResolvedValue({
+      id: 'snap_full_loss',
+      orderId: 55,
+      status: 'DISPUTED',
+      totalCents: 10495,
+    });
+    prisma.stripeWebhookEvent.updateMany.mockResolvedValue({ count: 1 });
+    prisma.stripeWebhookEvent.findMany.mockResolvedValue([{ amountCents: 10495 }]);
+    prisma.checkoutSnapshot.update.mockResolvedValue({});
+    prisma.order.updateMany.mockResolvedValue({ count: 1 });
+
+    await expect(
+      service.recordStripeClosedLostDispute({
+        eventId: 'evt_full_loss',
+        paymentIntentId: 'pi_full_loss',
+        amountCents: 10495,
+      }),
+    ).resolves.toBe('FULL');
+
+    expect(prisma.stripeWebhookEvent.updateMany).toHaveBeenCalledWith({
+      where: { id: 'evt_full_loss', paymentIntentId: 'pi_full_loss' },
+      data: { amountCents: 10495 },
+    });
+    expect(prisma.stripeWebhookEvent.update).toHaveBeenCalledWith({
+      where: { id: 'evt_full_loss' },
+      data: { lifecycleStatus: 'REFUNDED' },
+    });
+    expect(prisma.order.updateMany).toHaveBeenCalledWith({
+      where: { id: 55 },
+      data: { disputeLostCents: 10495 },
+    });
+  });
+
+  it('aggregates distinct closed-loss events and turns the aggregate full only at the frozen total', async () => {
+    prisma.checkoutSnapshot.findUnique.mockResolvedValue({
+      id: 'snap_aggregate_loss',
+      orderId: 77,
+      status: 'DISPUTED',
+      totalCents: 1000,
+      disputeLostCents: 400,
+    });
+    prisma.checkoutSnapshot.update.mockResolvedValue({});
+    prisma.stripeWebhookEvent.updateMany.mockResolvedValue({ count: 1 });
+    prisma.stripeWebhookEvent.findMany.mockResolvedValue([
+      { amountCents: 400 },
+      { amountCents: 600 },
+    ]);
+    prisma.stripeWebhookEvent.update.mockResolvedValue({});
+    prisma.order.updateMany.mockResolvedValue({ count: 1 });
+
+    await expect(
+      service.recordStripeClosedLostDispute({
+        eventId: 'evt_loss_600',
+        paymentIntentId: 'pi_aggregate_loss',
+        amountCents: 600,
+      }),
+    ).resolves.toBe('FULL');
+
+    expect(prisma.checkoutSnapshot.update).toHaveBeenLastCalledWith({
+      where: { id: 'snap_aggregate_loss' },
+      data: { disputeLostCents: 1000 },
+    });
+    expect(prisma.order.updateMany).toHaveBeenCalledWith({
+      where: { id: 77 },
+      data: { disputeLostCents: 1000 },
+    });
+    expect(prisma.stripeWebhookEvent.update).toHaveBeenCalledWith({
+      where: { id: 'evt_loss_600' },
+      data: { lifecycleStatus: 'REFUNDED' },
+    });
+  });
+
+  it('does not add a replayed closed-loss event twice', async () => {
+    prisma.checkoutSnapshot.findUnique.mockResolvedValue({
+      id: 'snap_replayed_loss',
+      orderId: null,
+      status: 'DISPUTED',
+      totalCents: 1000,
+      disputeLostCents: 400,
+    });
+    prisma.checkoutSnapshot.update.mockResolvedValue({});
+    prisma.stripeWebhookEvent.updateMany.mockResolvedValue({ count: 1 });
+    prisma.stripeWebhookEvent.findMany.mockResolvedValue([{ amountCents: 400 }]);
+    prisma.stripeWebhookEvent.update.mockResolvedValue({});
+
+    await expect(
+      service.recordStripeClosedLostDispute({
+        eventId: 'evt_loss_replayed',
+        paymentIntentId: 'pi_replayed_loss',
+        amountCents: 400,
+      }),
+    ).resolves.toBe('PARTIAL');
+    await expect(
+      service.recordStripeClosedLostDispute({
+        eventId: 'evt_loss_replayed',
+        paymentIntentId: 'pi_replayed_loss',
+        amountCents: 400,
+      }),
+    ).resolves.toBe('PARTIAL');
+
+    expect(prisma.checkoutSnapshot.update).toHaveBeenLastCalledWith({
+      where: { id: 'snap_replayed_loss' },
+      data: { disputeLostCents: 400 },
+    });
+  });
+
+  it('re-reads a snapshot after locking so a delayed loss handler cannot overwrite a completed refund', async () => {
+    prisma.checkoutSnapshot.findUnique
+      .mockResolvedValueOnce({ id: 'snap_terminal_loss' })
+      .mockResolvedValueOnce({
+        id: 'snap_terminal_loss',
+        orderId: 77,
+        status: 'REFUNDED',
+        totalCents: 1000,
+      });
+    prisma.checkoutSnapshot.update.mockResolvedValue({});
+
+    await expect(
+      service.recordStripeClosedLostDispute({
+        eventId: 'evt_delayed_loss',
+        paymentIntentId: 'pi_terminal_loss',
+        amountCents: 600,
+      }),
+    ).resolves.toBe('IGNORED');
+
+    expect(prisma.checkoutSnapshot.update).toHaveBeenCalledWith({
+      where: { id: 'snap_terminal_loss' },
+      data: { updatedAt: expect.any(Date) },
+    });
+    expect(prisma.checkoutSnapshot.update).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ disputeLostCents: 400 }),
+      }),
+    );
+  });
+
+  it('copies a partial loss frozen before payment success onto the eventual paid order', async () => {
+    const snapshot = makeSnapshot({
+      id: 'snap_before_success',
+      userId: 1,
+      stripePaymentIntentId: 'pi_before_success',
+      disputeLostCents: 2500,
+      promoCodeId: null,
+      promoCodeCode: null,
       shippingAddr: null,
       billingAddr: null,
-      items: [
-        {
-          id: 1,
-          orderId: 1,
-          productId: 5,
-          title: 'Producto',
-          unitPrice: new Decimal('100.00'),
-          quantity: 1,
-          lineTotal: new Decimal('100.00'),
-        },
-      ],
+    });
+    const createdOrder = {
+      id: 101,
+      userId: 1,
+      status: 'PAID',
+      preDisputeStatus: null,
+      items: [],
     };
+    prisma.checkoutSnapshot.findUnique
+      .mockResolvedValueOnce(snapshot)
+      .mockResolvedValueOnce(snapshot);
+    prisma.order.findUnique
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(createdOrder)
+      .mockResolvedValueOnce(createdOrder)
+      .mockResolvedValueOnce({ status: 'PAID' });
+    prisma.order.create.mockResolvedValue({ id: 101 });
+    prisma.orderItem.createMany.mockResolvedValue({ count: 1 });
+    prisma.checkoutSnapshot.update.mockResolvedValue({});
+    prisma.stripeWebhookEvent.findMany.mockResolvedValue([]);
+    jest
+      .spyOn(service as any, 'consumeStockReservationsForCheckoutSnapshot')
+      .mockResolvedValue(false);
+    jest
+      .spyOn(service as any, 'clearCartIfSnapshotStillCurrent')
+      .mockResolvedValue(undefined);
+    jest.spyOn(service as any, 'fillMissingUserNames').mockResolvedValue(undefined);
+    jest.spyOn(service as any, 'handlePromoUsageOnPaid').mockResolvedValue(undefined);
 
-    prisma.order.findMany.mockResolvedValue([orderEntity]);
-    prisma.order.count.mockResolvedValue(1);
+    await expect(
+      service.createOrderFromVerifiedStripePayment({
+        checkoutSnapshotId: 'snap_before_success',
+        paymentIntentId: 'pi_before_success',
+        amountCents: 10495,
+        currency: 'EUR',
+        occurredAt: new Date('2026-08-08T10:00:00.000Z'),
+      }),
+    ).resolves.toMatchObject({ orderId: 101, status: 'PAID' });
 
-    const result = await service.listOrders({ id: 4, role: 'USER' as Role }, {} as any);
+    expect(prisma.order.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ disputeLostCents: 2500 }),
+    });
+  });
 
-    expect(prisma.order.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { userId: 4 } }),
+  it('rejects a signed payment that occurred after snapshot expiry but accepts a late delivery from before expiry', async () => {
+    const expiresAt = new Date('2026-08-08T10:30:00.000Z');
+    prisma.checkoutSnapshot.findUnique.mockResolvedValue(
+      makeSnapshot({ stripePaymentIntentId: 'pi_expiry', expiresAt }),
     );
-    expect(result.data).toHaveLength(1);
-    expect(result.data[0]).toMatchObject({ id: 1, subtotal: '100.00' });
+
+    await expect(
+      service.createOrderFromVerifiedStripePayment({
+        checkoutSnapshotId: 'snap_new',
+        paymentIntentId: 'pi_expiry',
+        amountCents: 10495,
+        currency: 'EUR',
+        occurredAt: new Date(expiresAt.getTime() + 1),
+      }),
+    ).rejects.toThrow('STRIPE_PAYMENT_AFTER_CHECKOUT_EXPIRY');
+
+    const existingOrder = {
+      id: 89,
+      userId: 1,
+      status: 'PAID',
+      preDisputeStatus: null,
+      items: [],
+    };
+    prisma.order.findUnique.mockResolvedValue(existingOrder);
+    prisma.stripeWebhookEvent.findMany.mockResolvedValue([]);
+
+    await expect(
+      service.createOrderFromVerifiedStripePayment({
+        checkoutSnapshotId: 'snap_new',
+        paymentIntentId: 'pi_expiry',
+        amountCents: 10495,
+        currency: 'EUR',
+        occurredAt: new Date(expiresAt.getTime() - 1),
+      }),
+    ).resolves.toMatchObject({ orderId: 89, status: 'PAID' });
+  });
+
+  it('treats a concurrent providerRef unique conflict as duplicate fulfillment, not a refund-worthy failure', async () => {
+    const duplicate = new (Prisma as any).PrismaClientKnownRequestError(
+      'duplicate providerRef',
+      'P2002',
+    );
+    const existingOrder = {
+      id: 91,
+      userId: 1,
+      status: 'PAID',
+      preDisputeStatus: null,
+      items: [],
+    };
+    prisma.$transaction
+      .mockRejectedValueOnce(duplicate)
+      .mockImplementationOnce(async (callback: (tx: any) => unknown) =>
+        callback(prisma),
+      );
+    prisma.order.findUnique.mockResolvedValue(existingOrder);
+    prisma.stripeWebhookEvent.findMany.mockResolvedValue([]);
+
+    await expect(
+      service.createOrderFromVerifiedStripePayment({
+        checkoutSnapshotId: 'snap_duplicate',
+        paymentIntentId: 'pi_duplicate',
+        amountCents: 10495,
+        currency: 'EUR',
+        occurredAt: new Date('2026-08-08T10:00:00.000Z'),
+      }),
+    ).resolves.toMatchObject({
+      orderId: 91,
+      created: false,
+      status: 'PAID',
+    });
+
+    expect(prisma.order.findUnique).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { providerRef: 'pi_duplicate' } }),
+    );
   });
 });

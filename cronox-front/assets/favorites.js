@@ -7,6 +7,11 @@
   }
 
   const STAR_ICON = window.CRONOX_STAR_ICON || '<span class="icon-star"></span>';
+  const apiEndpoint = (path) => (window.CRONOX_API?.API_BASE || '') + path;
+  const safeProductImage = (value, fallback = 'assets/logo_banner.png') => {
+    const helper = window.CRONOX_SECURITY?.productImageUrl;
+    return typeof helper === 'function' ? helper(value, fallback) : fallback;
+  };
   let favoriteIdsSet = new Set();
 
   const syncFavoritesDom = () => {
@@ -76,7 +81,7 @@
   }
 
   async function fetchFavoriteProducts() {
-    const res = await fetch('/api/favorites/products', {
+    const res = await fetch(apiEndpoint('/api/favorites/products'), {
       method: 'GET',
       credentials: 'include',
     });
@@ -93,7 +98,10 @@
   function normalizeFavorite(item) {
     const product = item?.product || item || {};
     const images = Array.isArray(product.images)
-      ? product.images.map((img) => (typeof img === 'string' ? img : img?.url || img?.imageUrl)).filter(Boolean)
+      ? product.images
+          .map((img) => (typeof img === 'string' ? img : img?.url || img?.imageUrl))
+          .map((image) => safeProductImage(image, ''))
+          .filter(Boolean)
       : [];
 
     const priceRaw = product.priceCents ?? product.price ?? product.price_in_cents;
@@ -107,8 +115,10 @@
       slug: product.slug,
       name: product.name || 'Producto',
       priceInCents,
-      image: product.imageUrl || product.image || images[0] || '',
-      images: images.length ? images : (product.image ? [product.image] : []),
+      image: safeProductImage(product.imageUrl || product.image || images[0], ''),
+      images: images.length
+        ? images
+        : (product.image ? [safeProductImage(product.image, '')].filter(Boolean) : []),
       backendId: product.backendId ?? product.id ?? item?.productId,
     };
   }
@@ -166,7 +176,9 @@
     const gallery = document.createElement('div');
     gallery.className = 'product-images';
 
-    const imgs = (Array.isArray(product.images) && product.images.length ? product.images : [product.image]).filter(Boolean);
+    const imgs = (Array.isArray(product.images) && product.images.length ? product.images : [product.image])
+      .map((image) => safeProductImage(image, ''))
+      .filter(Boolean);
     const imgEls = imgs.map((src, i) => {
       const im = document.createElement('img');
       im.className = 'product-img' + (i === 0 ? ' active' : '');
@@ -174,6 +186,7 @@
       im.decoding = 'async';
       im.alt = product.name || 'Producto';
       im.src = src;
+      im.referrerPolicy = 'no-referrer';
       return im;
     });
     imgEls.forEach((im) => gallery.appendChild(im));

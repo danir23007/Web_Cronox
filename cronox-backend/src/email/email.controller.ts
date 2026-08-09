@@ -1,9 +1,11 @@
 import {
   Body,
   Controller,
+  Headers,
   NotFoundException,
   Post,
 } from '@nestjs/common';
+import { timingSafeEqual } from 'crypto';
 import { IsEmail, IsEnum, IsOptional } from 'class-validator';
 import { EmailService } from './email.service';
 import { EmailType, OrderConfirmationEmailTemplateData } from './email.types';
@@ -22,8 +24,11 @@ export class EmailController {
   constructor(private readonly emailService: EmailService) {}
 
   @Post('test')
-  async testEmail(@Body() body: DevEmailTestDto) {
-    if (process.env.NODE_ENV === 'production') {
+  async testEmail(
+    @Body() body: DevEmailTestDto,
+    @Headers('x-dev-email-token') suppliedToken?: string,
+  ) {
+    if (!this.isAuthorizedDevTest(suppliedToken)) {
       throw new NotFoundException();
     }
 
@@ -33,7 +38,8 @@ export class EmailController {
         ? this.buildOrderConfirmationMock(body.to)
         : {
             title: 'Email de prueba CRONOX',
-            message: 'Este email confirma que la configuración SMTP está operativa.',
+            message:
+              'Este email confirma que la configuración SMTP está operativa.',
             customerEmail: body.to,
             orderId: 'ORDER-TEST-001',
             supportCaseId: 'SUP-TEST-001',
@@ -47,6 +53,26 @@ export class EmailController {
     });
 
     return { ok: true, messageId: result.messageId };
+  }
+
+  private isAuthorizedDevTest(suppliedToken: string | undefined): boolean {
+    if (
+      process.env.NODE_ENV === 'production' ||
+      process.env.DEV_EMAIL_TEST_ENABLED !== 'true'
+    ) {
+      return false;
+    }
+
+    const expectedToken = process.env.DEV_EMAIL_TEST_TOKEN?.trim();
+    if (!expectedToken || !suppliedToken) {
+      return false;
+    }
+
+    const expected = Buffer.from(expectedToken);
+    const supplied = Buffer.from(suppliedToken);
+    return (
+      expected.length === supplied.length && timingSafeEqual(expected, supplied)
+    );
   }
 
   private buildOrderConfirmationMock(

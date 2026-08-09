@@ -5,6 +5,25 @@
     window.CRONOX_STRIPE_PUBLISHABLE_KEY || 'pk_test_51SPoYpCGnUu9AYNraxWTDgTkSpqK4ikadITkNAExPeMgFiw7pX6AbyHh7UZHrRlL0G9A3zR6qwSVW8ALJTQtx2pw00WB7kkSyS';
   const CONTINUE_SHOPPING_URL = '/index.html#store';
   const PROMO_STORAGE_KEY = 'cronox_checkout_promo';
+  const escapeHtml = (value) => {
+    const helper = window.CRONOX_SECURITY?.escapeHtml;
+    return typeof helper === 'function'
+      ? helper(value)
+      : String(value ?? '')
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;')
+          .replace(/'/g, '&#39;');
+  };
+  const safeProductImage = (value, fallback = 'assets/logo_banner.png') => {
+    const helper = window.CRONOX_SECURITY?.productImageUrl;
+    return typeof helper === 'function' ? helper(value, fallback) : fallback;
+  };
+  const getCsrfHeaders = async () => {
+    const provider = window.CRONOX_API?.getCsrfHeaders;
+    return typeof provider === 'function' ? provider() : {};
+  };
 
   const cartItemsEl = document.getElementById('checkout-cart-items');
   const emptyCartEl = document.querySelector('[data-empty]');
@@ -399,8 +418,8 @@
       options.description || 'Añade productos a tu carrito antes de finalizar la compra.';
 
     emptyCartEl.innerHTML = `
-      <h3>${title}</h3>
-      <p>${description}</p>
+      <h3>${escapeHtml(title)}</h3>
+      <p>${escapeHtml(description)}</p>
       <button type="button" class="btn-primary" data-continue-shopping>Seguir comprando</button>
     `;
     emptyCartEl.hidden = false;
@@ -432,22 +451,26 @@
     emptyCartEl.hidden = true;
     const frag = document.createDocumentFragment();
     items.forEach((item) => {
-      const imageUrl =
+      const imageUrl = safeProductImage(
         item.imageUrl ||
         item.product?.imageUrl ||
         (Array.isArray(item.product?.images) ? item.product.images[0]?.url : '') ||
-        item.product?.image ||
-        'assets/logo_banner.png';
+        item.product?.image,
+      );
+      const qty = Math.max(1, Math.min(999, Number(item.qty) || 1));
+      const productName = escapeHtml(item.product?.name || 'Producto CRONOX');
+      const size = item.size ? escapeHtml(String(item.size).toUpperCase()) : '';
+      const priceLabel = escapeHtml(item.priceLabel || formatMoney((item.priceCents || 0) / 100));
       const article = document.createElement('article');
       article.className = 'checkout-item';
       article.innerHTML = `
         <div class="checkout-item__media">
-          <img src="${imageUrl}" alt="${item.product?.name || ''}" loading="lazy">
+          <img src="${escapeHtml(imageUrl)}" alt="${productName}" loading="lazy" referrerpolicy="no-referrer">
         </div>
         <div class="checkout-item__body">
-          <h3 class="checkout-item__title">${item.product?.name || 'Producto CRONOX'}</h3>
-          <p class="checkout-item__meta">${item.size ? `Talla ${String(item.size).toUpperCase()}` : ''} · Cant. ${item.qty}</p>
-          <div class="checkout-item__price">${item.priceLabel || formatMoney((item.priceCents || 0) / 100)}</div>
+          <h3 class="checkout-item__title">${productName}</h3>
+          <p class="checkout-item__meta">${size ? `Talla ${size}` : ''} · Cant. ${qty}</p>
+          <div class="checkout-item__price">${priceLabel}</div>
         </div>
       `;
       frag.appendChild(article);
@@ -462,11 +485,18 @@
 
     state.shippingMethods.forEach((method) => {
       const priceCents = method.amountCents ?? method.priceCents ?? 0;
+      const checked = String(method.code ?? '') === String(state.shippingMethod ?? '');
+      method = {
+        ...method,
+        code: escapeHtml(method.code ?? ''),
+        label: escapeHtml(method.label ?? ''),
+        description: method.description ? escapeHtml(method.description) : '',
+      };
       const wrapper = document.createElement('label');
       wrapper.className = 'shipping-option';
       wrapper.innerHTML = `
         <input type="radio" name="shippingMethod" value="${method.code}" ${
-          method.code === state.shippingMethod ? 'checked' : ''
+          checked ? 'checked' : ''
         }>
         <div class="shipping-option__info">
           <span class="shipping-option__label">${method.label}</span>
@@ -722,7 +752,7 @@
       const response = await fetch(`${API_BASE}/api/payments/create-payment-intent`, {
         method: 'POST',
         credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...(await getCsrfHeaders()) },
         body: JSON.stringify({
           shippingMethod: state.shippingMethod,
           promoCode: state.promo?.code || undefined,

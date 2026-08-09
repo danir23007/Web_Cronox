@@ -257,10 +257,10 @@
     'section-user': 'userDetail',
   };
   let currentAdminUser = null;
-  let currentAdminRole = 'SUPER_ADMIN';
+  let currentAdminRole = '';
 
   const normalizeRole = (role) => {
-    if (!role) return 'SUPER_ADMIN';
+    if (!role) return '';
     if (role === 'SUPERADMIN' || role === 'ADMIN') return 'SUPER_ADMIN';
     return role;
   };
@@ -360,6 +360,22 @@
       .replace(/>/g, '&gt;')
       .replace(/\"/g, '&quot;')
       .replace(/'/g, '&#039;');
+  const safeText = (value, fallback = 'â€”') =>
+    escapeHtml(value == null || value === '' ? fallback : value);
+  const safeImageUrl = (value) => {
+    const helper = window.CRONOX_SECURITY?.productImageUrl;
+    return typeof helper === 'function' ? helper(value, '') : '';
+  };
+  const safePreviewImageUrl = (value) => {
+    if (typeof value === 'string' && value.startsWith('blob:')) {
+      try {
+        return new URL(value).origin === window.location.origin ? value : '';
+      } catch (error) {
+        return '';
+      }
+    }
+    return safeImageUrl(value);
+  };
 
   const setScopedMessage = (el, text = '', type = 'success') => {
     if (!el) return;
@@ -688,7 +704,7 @@
   const formatAttemptLabel = (value) => {
     if (value == null || value === '') return '—';
     const attempt = Number(value);
-    const label = Number.isFinite(attempt) ? `#${attempt}` : `#${value}`;
+    const label = Number.isFinite(attempt) ? `#${attempt}` : `#${escapeHtml(value)}`;
     const warning =
       Number.isFinite(attempt) && attempt >= 2
         ? ' <span class="attempts-warning" title="Muchos intentos">⚠️</span>'
@@ -773,8 +789,15 @@
 
   const setUserAvatar = (avatarUrl, displayName) => {
     if (!userAvatar) return;
-    if (avatarUrl) {
-      userAvatar.innerHTML = `<img src="${avatarUrl}" alt="${displayName || 'Avatar'}">`;
+    const imageUrl = safeImageUrl(avatarUrl);
+    userAvatar.replaceChildren();
+    if (imageUrl) {
+      const image = document.createElement('img');
+      image.src = imageUrl;
+      image.alt = String(displayName || 'Avatar');
+      image.loading = 'lazy';
+      image.referrerPolicy = 'no-referrer';
+      userAvatar.appendChild(image);
       return;
     }
     userAvatar.textContent = getInitials(displayName);
@@ -833,12 +856,17 @@
         const created = formatRelativeTime(req.createdAt);
         const typeLabel = req.fromCircle && req.toCircle ? `${req.fromCircle}→${req.toCircle}` : '—';
         const attemptLabel = formatAttemptLabel(req.attempts ?? req.requestNumber);
+        created.label = safeText(created.label);
+        created.full = safeText(created.full);
+        req.socialNetwork = safeText(req.socialNetwork);
+        req.username = safeText(req.username);
+        const safeTypeLabel = safeText(typeLabel);
         return `<tr>
           <td>
             <div class="time-label" title="${created.full}">${created.label}</div>
             <div class="time-sub">${created.full}</div>
           </td>
-          <td>${typeLabel}</td>
+          <td>${safeTypeLabel}</td>
           <td>${statusBadge(req.status)}</td>
           <td>${req.socialNetwork || '—'}</td>
           <td>${req.username || '—'}</td>
@@ -864,12 +892,12 @@
         const promo = order.promoCodeCode || '—';
         return `<tr>
           <td>
-            <div class="time-label" title="${created.full}">${created.label}</div>
-            <div class="time-sub">${created.full}</div>
+            <div class="time-label" title="${safeText(created.full)}">${safeText(created.label)}</div>
+            <div class="time-sub">${safeText(created.full)}</div>
           </td>
           <td>${orderStatusChip(order.status)}</td>
           <td>${formatCurrency(order.total)}</td>
-          <td>${promo}</td>
+          <td>${safeText(promo)}</td>
         </tr>`;
       })
       .join('');
@@ -888,12 +916,19 @@
     userCodesBody.innerHTML = codes
       .map((entry) => {
         const created = formatRelativeTime(entry.redeemedAt);
+        created.label = safeText(created.label);
+        created.full = safeText(created.full);
+        entry.promoCode = {
+          ...(entry.promoCode || {}),
+          code: safeText(entry.promoCode?.code),
+        };
+        entry.orderId = safeText(entry.orderId);
         const type = entry.promoCode?.type || '—';
         const value = entry.promoCode?.value != null ? entry.promoCode.value : '—';
         return `<tr>
           <td>${entry.promoCode?.code || '—'}</td>
-          <td>${type}</td>
-          <td>${value}</td>
+          <td>${safeText(type)}</td>
+          <td>${safeText(value)}</td>
           <td>
             <div class="time-label" title="${created.full}">${created.label}</div>
             <div class="time-sub">${created.full}</div>
@@ -927,6 +962,11 @@
     userHistoryBody.innerHTML = entries
       .map((entry) => {
         const created = formatRelativeTime(entry.createdAt);
+        created.label = safeText(created.label);
+        created.full = safeText(created.full);
+        entry.actionType = safeText(entry.actionType);
+        entry.reason = safeText(entry.reason);
+        const adminLabel = safeText(getAdminLabel(entry.adminUser));
         const detailParts = [];
         if (entry.fromCircle && entry.toCircle) {
           detailParts.push(`Círculo ${entry.fromCircle}→${entry.toCircle}`);
@@ -941,8 +981,8 @@
             <div class="time-sub">${created.full}</div>
           </td>
           <td>${entry.actionType || '—'}</td>
-          <td>${getAdminLabel(entry.adminUser)}</td>
-          <td>${detail}</td>
+          <td>${adminLabel}</td>
+          <td>${safeText(detail)}</td>
           <td>${entry.reason || '—'}</td>
         </tr>`;
       })
@@ -960,6 +1000,9 @@
         const created = formatRelativeTime(note.createdAt);
         const authorLabel = escapeHtml(getAdminLabel(note.author));
         const isEditing = state.editingId === note.id;
+        created.label = safeText(created.label);
+        created.full = safeText(created.full);
+        note.id = escapeHtml(note.id);
         if (isEditing) {
           return `<div class="note-card" data-note-id="${note.id}">
             <div class="note-meta">
@@ -1179,14 +1222,19 @@
     activityBody.innerHTML = items
       .map((entry) => {
         const created = formatRelativeTime(entry.createdAt);
-        const adminLabel = getAdminLabel(entry.adminUser);
+        created.label = safeText(created.label);
+        created.full = safeText(created.full);
+        entry.actionType = safeText(entry.actionType);
+        entry.reason = safeText(entry.reason);
+        const adminLabel = safeText(getAdminLabel(entry.adminUser));
         const targetLabel = entry.targetType && entry.targetId
           ? `${entry.targetType}:${entry.targetId}`
           : '—';
+        const safeTargetLabel = safeText(targetLabel);
         const targetCell =
           entry.targetType === 'user' && entry.targetId
-            ? `<a class="link-btn" href="admin-user.html?id=${encodeURIComponent(entry.targetId)}">${targetLabel}</a>`
-            : targetLabel;
+            ? `<a class="link-btn" href="admin-user.html?id=${encodeURIComponent(entry.targetId)}">${safeTargetLabel}</a>`
+            : safeTargetLabel;
         return `<tr>
           <td>
             <div class="time-label" title="${created.full}">${created.label}</div>
@@ -1240,9 +1288,11 @@
 
     if (userBadges) {
       const displayRole = normalizeRole(user.role);
+      user.circle = safeText(user.circle);
+      const safeRole = safeText(displayRole, '');
       const badges = [
         `<span class="badge">Círculo ${user.circle ?? '—'}</span>`,
-        displayRole ? `<span class="badge">${displayRole}</span>` : '',
+        displayRole ? `<span class="badge">${safeRole}</span>` : '',
       ].filter(Boolean);
       userBadges.innerHTML = badges.join('');
     }
@@ -1715,22 +1765,31 @@
           ? `${req.user?.firstName || ''} ${req.user?.lastName || ''}`.trim()
           : req.user?.email || '';
         const userLabel = userName || '—';
-        const userCell = req.userId
-          ? `<a class="link-btn" href="admin-user.html?id=${encodeURIComponent(req.userId)}">${userLabel}</a>`
-          : userLabel;
+        const rawUserId = req.userId;
+        const safeUserLabel = safeText(userLabel);
+        const safeUserId = safeText(rawUserId);
+        const safeSocialNetwork = safeText(req.socialNetwork);
+        const safeUsername = safeText(req.username);
+        const safeRequestId = escapeHtml(req.id);
+        const userCell = rawUserId
+          ? `<a class="link-btn" href="admin-user.html?id=${encodeURIComponent(rawUserId)}">${safeUserLabel}</a>`
+          : safeUserLabel;
         const created = formatRelativeTime(req.createdAt);
+        created.label = safeText(created.label);
+        created.full = safeText(created.full);
         const normalizedStatus = String(req.status || '').toUpperCase();
         const isActionable = normalizedStatus === 'PENDING' || normalizedStatus === 'EXPIRED';
         const actions = isActionable
           ? `<div class="actions">
-              <button class="btn primary" data-action="approve" data-id="${req.id}" ${canApprove ? '' : 'disabled title="No autorizado"'}>APROBAR</button>
-              <button class="btn danger" data-action="deny" data-id="${req.id}" ${canApprove ? '' : 'disabled title="No autorizado"'}>RECHAZAR</button>
+              <button class="btn primary" data-action="approve" data-id="${safeRequestId}" ${canApprove ? '' : 'disabled title="No autorizado"'}>APROBAR</button>
+              <button class="btn danger" data-action="deny" data-id="${safeRequestId}" ${canApprove ? '' : 'disabled title="No autorizado"'}>RECHAZAR</button>
             </div>`
           : '<span style="color:#7b7f8f;">—</span>';
         const attemptLabel = formatAttemptLabel(req.attempts ?? req.requestNumber);
         const noteTitle = escapeHtml(
           `Solicitud 3→4 · ${req.username || userLabel || req.userId || req.id}`,
         );
+        req.id = safeRequestId;
         const noteButton = canUseNotes
           ? `<button type="button" class="note-icon-btn" data-note-target-type="circleRequest" data-note-target-id="${req.id}" data-note-title="${noteTitle}">📝</button>`
           : '<span style="color:#7b7f8f;">—</span>';
@@ -1741,9 +1800,9 @@
             <div class="time-sub">${created.full}</div>
           </td>
           <td>${userCell}</td>
-          <td>${req.userId}</td>
-          <td>${req.socialNetwork}</td>
-          <td>${req.username}</td>
+          <td>${safeUserId}</td>
+          <td>${safeSocialNetwork}</td>
+          <td>${safeUsername}</td>
           <td>${statusBadge(req.status)}</td>
           <td>${attemptLabel}</td>
           <td>${actions}</td>
@@ -1781,12 +1840,19 @@
           ? `${req.user?.firstName || ''} ${req.user?.lastName || ''}`.trim()
           : req.user?.email || '';
         const userLabel = userName || '—';
-        const userCell = req.userId
-          ? `<a class="link-btn" href="admin-user.html?id=${encodeURIComponent(req.userId)}">${userLabel}</a>`
-          : userLabel;
+        const rawUserId = req.userId;
+        const safeUserLabel = safeText(userLabel);
+        const safeUserId = safeText(rawUserId);
+        const safeRequestId = escapeHtml(req.id);
+        const userCell = rawUserId
+          ? `<a class="link-btn" href="admin-user.html?id=${encodeURIComponent(rawUserId)}">${safeUserLabel}</a>`
+          : safeUserLabel;
         const created = formatRelativeTime(req.createdAt);
+        created.label = safeText(created.label);
+        created.full = safeText(created.full);
         const remaining = typeof req.remainingMs === 'number' ? formatDuration(req.remainingMs) : '—';
         const attemptLabel = formatAttemptLabel(req.attempts ?? req.requestNumber);
+        req.id = safeRequestId;
         const noteTitle = escapeHtml(
           `Solicitud 2→3 · ${req.user?.email || req.userId || req.id}`,
         );
@@ -1799,7 +1865,7 @@
             <div class="time-sub">${created.full}</div>
           </td>
           <td>${userCell}</td>
-          <td>${req.userId}</td>
+          <td>${safeUserId}</td>
           <td>${statusBadge(req.status)}</td>
           <td>${attemptLabel}</td>
           <td>${remaining}</td>
@@ -1914,6 +1980,10 @@
 
     if (usersByCircle) {
       const circles = Array.isArray(data.users?.byCircle) ? data.users.byCircle : [];
+      circles.forEach((item) => {
+        item.circle = safeText(item.circle);
+        item.count = safeText(item.count);
+      });
       usersByCircle.innerHTML = circles.length
         ? circles
             .map((item) => `<span class="badge">Círculo ${item.circle}: ${item.count}</span>`)
@@ -1924,7 +1994,7 @@
     setDashboardValue(pendingRequestsTotal, data.requests?.pendingTotal ?? 0);
     if (pendingRequestsByType) {
       const byType = data.requests?.byType || {};
-      const entries = Object.entries(byType);
+      const entries = Object.entries(byType).map(([key, value]) => [safeText(key), safeText(value)]);
       pendingRequestsByType.innerHTML = entries.length
         ? entries
             .map(([key, value]) => `<span class=\"badge\">${key}: ${value ?? 0}</span>`)
@@ -2160,7 +2230,7 @@
             <td>${nameLabel}</td>
             <td>${roleLabel}</td>
             <td>${circleLabel}</td>
-            <td>${createdLabel}</td>
+            <td>${escapeHtml(createdLabel)}</td>
             <td>${actionLabel}</td>
           </tr>
         `;
@@ -2234,6 +2304,7 @@
 
   const renderProductImagesPreview = (urls = []) => {
     if (!productImagesPreview) return;
+    urls = urls.map(safePreviewImageUrl).filter(Boolean);
     if (!urls.length) {
       productImagesPreview.innerHTML = '<p class="empty" style="margin:0;">Sin imágenes seleccionadas.</p>';
       return;
@@ -2243,7 +2314,7 @@
       .map(
         (url) => `
           <div class="image-thumb">
-            <img src="${url}" alt="preview" />
+            <img src="${escapeHtml(url)}" alt="preview" referrerpolicy="no-referrer" />
           </div>
         `,
       )
@@ -2370,14 +2441,22 @@
           (Array.isArray(product.images) && product.images.length ? product.images[0].url : '');
         const activeLabel = product.isActive ? 'Activo' : 'Inactivo';
         const created = formatRelativeTime(product.createdAt);
+        const safePrimaryImage = safeImageUrl(primaryImage);
+        const productName = safeText(product.name, '');
+        const productSlug = safeText(product.slug, '');
+        const collection = safeText(product.collection);
+        const productId = escapeHtml(product.id);
+        created.label = safeText(created.label);
+        created.full = safeText(created.full);
+        product.collection = collection;
         return `
           <tr>
             <td>
               <div style="display:flex; align-items:center; gap:10px;">
-                ${primaryImage ? `<img src="${primaryImage}" alt="" style="width:44px;height:44px;object-fit:cover;border-radius:8px;border:1px solid #1d1d26;" />` : ''}
+                ${safePrimaryImage ? `<img src="${escapeHtml(safePrimaryImage)}" alt="" referrerpolicy="no-referrer" style="width:44px;height:44px;object-fit:cover;border-radius:8px;border:1px solid #1d1d26;" />` : ''}
                 <div>
-                  <div style="font-weight:600;">${product.name}</div>
-                  <div style="color:#8e93a4; font-size:0.9rem;">${product.slug || ''}</div>
+                  <div style="font-weight:600;">${productName}</div>
+                  <div style="color:#8e93a4; font-size:0.9rem;">${productSlug}</div>
                 </div>
               </div>
             </td>
@@ -2391,8 +2470,8 @@
             </td>
             <td>
               <div class="actions">
-                <button class="btn" data-edit-product="${product.id}">Editar</button>
-                <button class="btn danger" data-disable-product="${product.id}">${product.isActive ? 'Desactivar' : 'Inactivar'}</button>
+                <button class="btn" data-edit-product="${productId}">Editar</button>
+                <button class="btn danger" data-disable-product="${productId}">${product.isActive ? 'Desactivar' : 'Inactivar'}</button>
               </div>
             </td>
           </tr>
@@ -2424,7 +2503,7 @@
           if (isActiveInput) isActiveInput.checked = Boolean(product.isActive);
 
           cachedProductImages = Array.isArray(product.images)
-            ? product.images.map((img) => img?.url).filter(Boolean)
+            ? product.images.map((img) => safeImageUrl(img?.url)).filter(Boolean)
             : [];
           renderProductImagesPreview(cachedProductImages);
 
@@ -2456,7 +2535,7 @@
     try {
       const response = await window.CRONOX_API?.admin?.uploadProductImages(files);
       if (Array.isArray(response?.urls)) {
-        return response.urls;
+        return response.urls.map(safeImageUrl).filter(Boolean);
       }
     } catch (error) {
       console.error('[ADMIN] Error subiendo imágenes', error);
@@ -2677,20 +2756,23 @@
         const usageLabel =
           code.usageLimit != null ? `${code.usageCount || 0} / ${code.usageLimit}` : `${code.usageCount || 0}`;
         const activeLabel = promoStatusChip(Boolean(code.isActive));
+        const codeId = escapeHtml(code.id);
+        const codeLabel = safeText(code.code);
+        const codeType = safeText(code.type);
         const dateLabel = (value) => {
           if (!value) return '—';
           const relative = formatRelativeTime(value);
-          return `<span title="${relative.full}">${relative.label}</span>`;
+          return `<span title="${safeText(relative.full)}">${safeText(relative.label)}</span>`;
         };
         return `
           <tr>
             <td>
-              <div style="font-weight:600;">${code.code}</div>
+              <div style="font-weight:600;">${codeLabel}</div>
               <div style="margin-top:6px;">${activeLabel}</div>
             </td>
-            <td>${code.type}</td>
-            <td>${typeLabel}</td>
-            <td>${usageLabel}</td>
+            <td>${codeType}</td>
+            <td>${safeText(typeLabel)}</td>
+            <td>${safeText(usageLabel)}</td>
             <td>
               <div style="display:flex; flex-direction:column; gap:4px; color:#8e93a4; font-size:0.9rem;">
                 <span>Inicio: ${dateLabel(code.startsAt)}</span>
@@ -2699,8 +2781,8 @@
             </td>
             <td>
               <div class="actions">
-                <button class="btn" data-edit-code="${code.id}">Editar</button>
-                <button class="btn danger" data-disable-code="${code.id}">${code.isActive ? 'Desactivar' : 'Inactivar'}</button>
+                <button class="btn" data-edit-code="${codeId}">Editar</button>
+                <button class="btn danger" data-disable-code="${codeId}">${code.isActive ? 'Desactivar' : 'Inactivar'}</button>
               </div>
             </td>
           </tr>

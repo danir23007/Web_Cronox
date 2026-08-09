@@ -38,7 +38,8 @@ export class CreatePaymentIntentDto {
   promoCode?: string;
 
   @ApiPropertyOptional({
-    description: 'PaymentIntent existente a refrescar cuando cambian totales/metadata',
+    description:
+      'Campo heredado aceptado por compatibilidad; el servidor lo ignora y nunca vincula un PaymentIntent indicado por el cliente.',
   })
   @IsOptional()
   @IsString()

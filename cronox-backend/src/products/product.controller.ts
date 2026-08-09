@@ -96,7 +96,7 @@ export class ProductController {
   @ApiOperation({ summary: 'Eliminar una imagen de un producto' })
   @ApiResponse({ status: 200, description: 'Imagen eliminada.' })
   @ApiResponse({ status: 403, description: 'No autorizado.' })
-  removeImage(@Param('id') _id: string, @Param('imageId') imageId: string) {
-    return this.productService.deleteImage(Number(imageId));
+  removeImage(@Param('id') id: string, @Param('imageId') imageId: string) {
+    return this.productService.deleteImage(Number(id), Number(imageId));
   }
 }

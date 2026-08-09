@@ -20,6 +20,8 @@ export enum EmailType {
   ORDER_SHIPPED = 'ORDER_SHIPPED',
   ORDER_DELIVERED = 'ORDER_DELIVERED',
   SUPPORT_TICKET_RECEIVED = 'SUPPORT_TICKET_RECEIVED',
+  PASSWORD_RESET = 'PASSWORD_RESET',
+  NEWSLETTER_CONFIRMATION = 'NEWSLETTER_CONFIRMATION',
   GENERIC = 'GENERIC',
 }
 
@@ -76,6 +78,7 @@ export interface EmailAccountConfig {
 }
 
 export interface EmailConfig {
+  enabled: boolean;
   smtpHost: string;
   smtpPort: number;
   smtpSecure: boolean;
@@ -89,6 +92,8 @@ export const EMAIL_TYPE_TO_SENDER: Record<EmailType, EmailSenderKey> = {
   [EmailType.ORDER_SHIPPED]: EmailSenderKey.ORDERS,
   [EmailType.ORDER_DELIVERED]: EmailSenderKey.ORDERS,
   [EmailType.SUPPORT_TICKET_RECEIVED]: EmailSenderKey.SUPPORT,
+  [EmailType.PASSWORD_RESET]: EmailSenderKey.NOREPLY,
+  [EmailType.NEWSLETTER_CONFIRMATION]: EmailSenderKey.INFO,
   [EmailType.GENERIC]: EmailSenderKey.INFO,
 };
 
@@ -98,6 +103,8 @@ export const EMAIL_TYPE_TO_TEMPLATE: Record<EmailType, EmailTemplate> = {
   [EmailType.ORDER_SHIPPED]: EmailTemplate.ORDER_SHIPPED,
   [EmailType.ORDER_DELIVERED]: EmailTemplate.ORDER_DELIVERED,
   [EmailType.SUPPORT_TICKET_RECEIVED]: EmailTemplate.SUPPORT_TICKET_RECEIVED,
+  [EmailType.PASSWORD_RESET]: EmailTemplate.GENERIC,
+  [EmailType.NEWSLETTER_CONFIRMATION]: EmailTemplate.GENERIC,
   [EmailType.GENERIC]: EmailTemplate.GENERIC,
 };
 

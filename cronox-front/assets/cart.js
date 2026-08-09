@@ -14,6 +14,21 @@
 
   const EUR = new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR' });
   const money = (cents) => EUR.format((Number(cents) || 0) / 100);
+  const escapeHtml = (value) => {
+    const helper = window.CRONOX_SECURITY?.escapeHtml;
+    return typeof helper === 'function'
+      ? helper(value)
+      : String(value ?? '')
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;')
+          .replace(/'/g, '&#39;');
+  };
+  const safeProductImage = (value, fallback = 'assets/logo_banner.png') => {
+    const helper = window.CRONOX_SECURITY?.productImageUrl;
+    return typeof helper === 'function' ? helper(value, fallback) : fallback;
+  };
 
   const FREE_SHIPPING_THRESHOLD = 6500;
   const STANDARD_SHIPPING = 295;
@@ -111,27 +126,39 @@
     if (emptyEl) emptyEl.hidden = true;
     const frag = document.createDocumentFragment();
     items.forEach((item) => {
+      const itemId = String(item.id ?? '');
+      const qty = Math.max(1, Math.min(999, Number(item.qty) || 1));
+      const imageUrl = safeProductImage(item.product?.image || item.product?.imageUrl);
+      const display = {
+        id: escapeHtml(itemId),
+        qty,
+        size: item.size ? escapeHtml(String(item.size).toUpperCase()) : '',
+        priceLabel: escapeHtml(item.priceLabel || money(item.priceCents || 0)),
+        product: {
+          name: escapeHtml(item.product?.name || 'Producto CRONOX'),
+        },
+      };
       const article = document.createElement('article');
       article.className = 'cart-item';
-      article.dataset.id = String(item.id);
+      article.dataset.id = itemId;
       article.innerHTML = `
         <div class="ci-media">
-          <img src="${item.product?.image || 'assets/logo_banner.png'}" alt="${item.product?.name || ''}" loading="lazy">
+          <img src="${escapeHtml(imageUrl)}" alt="${display.product.name}" loading="lazy" referrerpolicy="no-referrer">
         </div>
         <div class="ci-info">
-          <h3 class="ci-name">${item.product?.name || 'Producto CRONOX'}</h3>
+          <h3 class="ci-name">${display.product.name}</h3>
           <p class="ci-meta">
-            ${item.size ? `<span>Talla: ${String(item.size).toUpperCase()}</span>` : ''}
+            ${display.size ? `<span>Talla: ${display.size}</span>` : ''}
           </p>
           <div class="ci-controls">
             <label>Cant.
-              <input type="number" class="ci-qty" min="1" value="${item.qty}" data-id="${item.id}" aria-label="Cantidad">
+              <input type="number" class="ci-qty" min="1" value="${display.qty}" data-id="${display.id}" aria-label="Cantidad">
             </label>
-            <button class="ci-remove" data-id="${item.id}" type="button">Eliminar</button>
+            <button class="ci-remove" data-id="${display.id}" type="button">Eliminar</button>
           </div>
         </div>
         <div class="ci-price">
-          <span>${item.priceLabel || money(item.priceCents || 0)}</span>
+          <span>${display.priceLabel}</span>
         </div>
       `;
       frag.appendChild(article);
