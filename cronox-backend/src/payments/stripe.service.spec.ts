@@ -26,9 +26,9 @@ describe('StripeService', () => {
   });
 
   it('lanza BadRequestException si no hay firma en el webhook', () => {
-    expect(() => service.constructEventFromPayload(undefined, Buffer.from(''))).toThrow(
-      BadRequestException,
-    );
+    expect(() =>
+      service.constructEventFromPayload(undefined, Buffer.from('')),
+    ).toThrow(BadRequestException);
   });
 
   it('usa el SDK de Stripe para validar la firma', () => {
@@ -38,9 +38,72 @@ describe('StripeService', () => {
       .spyOn(stripeInstance.webhooks, 'constructEvent')
       .mockReturnValue(mockEvent);
 
-    const result = service.constructEventFromPayload('sig', Buffer.from('payload'));
+    const result = service.constructEventFromPayload(
+      'sig',
+      Buffer.from('payload'),
+    );
 
-    expect(spy).toHaveBeenCalledWith(Buffer.from('payload'), 'sig', 'whsec_dummy');
+    expect(spy).toHaveBeenCalledWith(
+      Buffer.from('payload'),
+      'sig',
+      'whsec_dummy',
+    );
     expect(result).toBe(mockEvent);
   });
+
+  it('cancels only an unconfirmed PaymentIntent bound to the expected snapshot', async () => {
+    const stripeInstance = (service as any).stripe as any;
+    jest.spyOn(stripeInstance.paymentIntents, 'retrieve').mockResolvedValue({
+      id: 'pi_owned',
+      status: 'requires_payment_method',
+      amount: 3990,
+      currency: 'eur',
+      metadata: { checkoutSnapshotId: 'snap_owned' },
+    });
+    const cancel = jest
+      .spyOn(stripeInstance.paymentIntents, 'cancel')
+      .mockResolvedValue({ status: 'canceled' });
+
+    await expect(
+      service.cancelCheckoutPaymentIntent('pi_owned', 'snap_owned'),
+    ).resolves.toBeUndefined();
+    expect(cancel).toHaveBeenCalledWith('pi_owned');
+  });
+
+  it('refuses to cancel a foreign PaymentIntent', async () => {
+    const stripeInstance = (service as any).stripe as any;
+    jest.spyOn(stripeInstance.paymentIntents, 'retrieve').mockResolvedValue({
+      id: 'pi_foreign',
+      status: 'requires_payment_method',
+      amount: 3990,
+      currency: 'eur',
+      metadata: { checkoutSnapshotId: 'snap_other_user' },
+    });
+    const cancel = jest.spyOn(stripeInstance.paymentIntents, 'cancel');
+
+    await expect(
+      service.cancelCheckoutPaymentIntent('pi_foreign', 'snap_owned'),
+    ).rejects.toThrow('STRIPE_PAYMENT_INTENT_SNAPSHOT_MISMATCH');
+    expect(cancel).not.toHaveBeenCalled();
+  });
+
+  it.each(['processing', 'succeeded'])(
+    'refuses to cancel a %s PaymentIntent',
+    async (status) => {
+      const stripeInstance = (service as any).stripe as any;
+      jest.spyOn(stripeInstance.paymentIntents, 'retrieve').mockResolvedValue({
+        id: 'pi_terminal',
+        status,
+        amount: 3990,
+        currency: 'eur',
+        metadata: { checkoutSnapshotId: 'snap_owned' },
+      });
+      const cancel = jest.spyOn(stripeInstance.paymentIntents, 'cancel');
+
+      await expect(
+        service.cancelCheckoutPaymentIntent('pi_terminal', 'snap_owned'),
+      ).rejects.toThrow('STRIPE_PAYMENT_INTENT_NOT_CANCELLABLE');
+      expect(cancel).not.toHaveBeenCalled();
+    },
+  );
 });

@@ -9,6 +9,7 @@ describe('StripeWebhookController lifecycle safety', () => {
     ordersService = {
       reconcileStripePaymentLifecycle: jest.fn().mockResolvedValue(undefined),
       createOrderFromVerifiedStripePayment: jest.fn(),
+      releaseCheckoutSnapshotForCanceledPaymentIntent: jest.fn(),
       claimOrderConfirmationEmail: jest.fn(),
       releaseOrderConfirmationEmailClaim: jest.fn(),
       markOrderConfirmationEmailSent: jest.fn(),
@@ -35,7 +36,9 @@ describe('StripeWebhookController lifecycle safety', () => {
     });
 
     expect(response).toEqual({ received: true, partial: true });
-    expect(ordersService.reconcileStripePaymentLifecycle).not.toHaveBeenCalled();
+    expect(
+      ordersService.reconcileStripePaymentLifecycle,
+    ).not.toHaveBeenCalled();
   });
 
   it('reconciles a full charge refund from the persisted event timeline', async () => {
@@ -99,7 +102,9 @@ describe('StripeWebhookController lifecycle safety', () => {
       {
         id: 'evt_loss',
         type: 'charge.dispute.closed',
-        data: { object: { payment_intent: 'pi_loss', status: 'lost', amount: 250 } },
+        data: {
+          object: { payment_intent: 'pi_loss', status: 'lost', amount: 250 },
+        },
       },
       undefined,
       250,
@@ -145,7 +150,9 @@ describe('StripeWebhookController lifecycle safety', () => {
       status: OrderStatus.REFUNDED,
     });
 
-    const response = await (controller as any).handleVerifiedPaymentIntentSucceeded(
+    const response = await (
+      controller as any
+    ).handleVerifiedPaymentIntentSucceeded(
       {
         id: 'pi_receipt',
         status: 'succeeded',
@@ -158,5 +165,35 @@ describe('StripeWebhookController lifecycle safety', () => {
 
     expect(response).toEqual({ received: true, created: true, orderId: 321 });
     expect(response).not.toHaveProperty('order');
+  });
+
+  it('keeps the reservation and cart intact after a retryable payment failure', async () => {
+    const response = await (controller as any).handlePaymentIntentFailed({
+      data: {
+        object: { id: 'pi_retryable', status: 'requires_payment_method' },
+      },
+    });
+
+    expect(response).toEqual({ received: true });
+    expect(
+      ordersService.releaseCheckoutSnapshotForCanceledPaymentIntent,
+    ).not.toHaveBeenCalled();
+    expect(
+      ordersService.createOrderFromVerifiedStripePayment,
+    ).not.toHaveBeenCalled();
+  });
+
+  it('releases only the reservation after Stripe terminally cancels an intent', async () => {
+    const response = await (controller as any).handlePaymentIntentCanceled({
+      data: { object: { id: 'pi_canceled', status: 'canceled' } },
+    });
+
+    expect(response).toEqual({ received: true });
+    expect(
+      ordersService.releaseCheckoutSnapshotForCanceledPaymentIntent,
+    ).toHaveBeenCalledWith('pi_canceled');
+    expect(
+      ordersService.createOrderFromVerifiedStripePayment,
+    ).not.toHaveBeenCalled();
   });
 });

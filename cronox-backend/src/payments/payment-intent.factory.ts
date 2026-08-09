@@ -30,10 +30,20 @@ export class PaymentIntentFactory {
       { cart },
     );
 
-    // A stale, unconfirmed intent is explicitly cancelled before its stock
-    // reservation is released. A succeeded/disputed intent fails closed and
-    // remains for its signed webhook lifecycle instead of permitting a retry.
-    if (snapshot.expired) {
+    // Changed mutable checkout data and expiry use the same server-owned
+    // replacement lifecycle. The ownership claim remains under the active-cart
+    // unique index while Stripe cancellation is verified.
+    if (snapshot.replacementRequired) {
+      const replacementClaimed =
+        await this.ordersService.claimCheckoutSnapshotReplacement(
+          userId,
+          snapshot.cartId,
+          snapshot.checkoutSnapshotId,
+        );
+      if (!replacementClaimed) {
+        throw new ConflictException('CHECKOUT_REPLACEMENT_IN_PROGRESS');
+      }
+
       if (snapshot.paymentIntentId) {
         await this.stripeService.cancelCheckoutPaymentIntent(
           snapshot.paymentIntentId,
@@ -41,13 +51,13 @@ export class PaymentIntentFactory {
         );
         await this.ordersService.releaseCheckoutSnapshot(
           snapshot.checkoutSnapshotId,
-          'EXPIRED',
+          snapshot.expired ? 'EXPIRED' : 'REPLACED',
           snapshot.paymentIntentId,
         );
       } else {
         await this.ordersService.releaseCheckoutSnapshot(
           snapshot.checkoutSnapshotId,
-          'EXPIRED',
+          snapshot.expired ? 'EXPIRED' : 'REPLACED',
         );
       }
       snapshot = await this.ordersService.createCheckoutSnapshot(
@@ -55,6 +65,9 @@ export class PaymentIntentFactory {
         checkoutParams,
         { cart },
       );
+      if (snapshot.replacementRequired) {
+        throw new ConflictException('CHECKOUT_REPLACEMENT_IN_PROGRESS');
+      }
     }
 
     if (snapshot.paymentIntentId) {
@@ -167,7 +180,9 @@ export class PaymentIntentFactory {
 
     const firstName = pick('firstName', 'first_name');
     const lastName = pick('lastName', 'last_name');
-    const name = pick('name', 'fullName', 'full_name') || [firstName, lastName].filter(Boolean).join(' ').trim();
+    const name =
+      pick('name', 'fullName', 'full_name') ||
+      [firstName, lastName].filter(Boolean).join(' ').trim();
     const line1 = pick('line1', 'address', 'address1');
     const line2 = pick('line2', 'address2');
     const city = pick('city');

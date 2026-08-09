@@ -72,28 +72,36 @@
 
   const syncCartUiWithBackend = async () => {
     const api = window.CRONOX_API || null;
+    const cartController = window.CRONOX_CART || null;
 
     clearGuestCartCache();
 
     try {
+      if (typeof cartController?.fetchCart === 'function') {
+        const updatedCart = await cartController.fetchCart();
+        if (cartController.state?.drawerOpen && typeof cartController.renderCartDrawer === 'function') {
+          cartController.renderCartDrawer(updatedCart);
+        }
+        return updatedCart;
+      }
+
       if (typeof api?.getCart === 'function') {
         const updatedCart = await api.getCart();
         window.dispatchEvent(new CustomEvent('cart:updated', { detail: updatedCart }));
-        return;
+        return updatedCart;
       }
 
       if (typeof window.initCartFromBackend === 'function') {
-        await window.initCartFromBackend();
-        return;
+        return window.initCartFromBackend();
       }
 
-      window.dispatchEvent(
-        new CustomEvent('cart:updated', {
-          detail: { items: [], itemsCount: 0, subtotalCents: 0, subtotalLabel: '0,00 €' },
-        }),
-      );
+      throw new Error('CART_API_UNAVAILABLE');
     } catch (error) {
-      console.warn('[CRONOX] No se pudo sincronizar el carrito tras confirmar el pedido', error);
+      console.warn('[CRONOX checkout success cart sync]', {
+        event: 'confirmed_order_cart_sync_failed',
+        code: error?.message === 'CART_API_UNAVAILABLE' ? 'CART_API_UNAVAILABLE' : 'CART_SYNC_FAILED',
+      });
+      return null;
     }
   };
 

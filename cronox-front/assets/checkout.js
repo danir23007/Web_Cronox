@@ -127,13 +127,14 @@
 
   let shippingIntentRefreshTimer = null;
   const schedulePaymentIntentRefreshFromShipping = (delayMs = 450) => {
-    if (!state.isAuthenticated || !currentClientSecret) return;
+    if (!state.isAuthenticated) return;
+    const revision = invalidateCheckoutPayment();
     if (shippingIntentRefreshTimer) {
       window.clearTimeout(shippingIntentRefreshTimer);
     }
     shippingIntentRefreshTimer = window.setTimeout(async () => {
       shippingIntentRefreshTimer = null;
-      await preparePaymentIntent();
+      await queueCheckoutUpdate({ revision, refreshSummary: false });
     }, delayMs);
   };
 
@@ -283,10 +284,10 @@
   let paymentElement;
   let currentClientSecret = null;
   let currentPaymentIntentId = null;
-  let isInitializing = false;
-  let pendingPaymentIntentRefresh = false;
   let paymentElementMounted = false;
   let hasClearedPromoOnLoad = false;
+  const checkoutCoordinator = window.CRONOX_CHECKOUT_LIFECYCLE?.createCoordinator();
+  let checkoutRevision = checkoutCoordinator?.current() ?? 0;
 
   const state = {
     cart: null,
@@ -457,7 +458,9 @@
     const classification =
       typeof API.classifyApiError === 'function' ? API.classifyApiError(error) : { kind: 'unknown', isRetryable: true };
     const status = Number(error?.status || error?.statusCode || 0);
-    const code = cleanText(error?.payload?.code || error?.code) || 'UNKNOWN';
+    const payloadMessage = cleanText(error?.payload?.message);
+    const messageCode = /^[A-Z][A-Z0-9_]{2,80}$/.test(payloadMessage) ? payloadMessage : '';
+    const code = cleanText(error?.payload?.code || error?.code || messageCode) || 'UNKNOWN';
     let endpoint = '/api/checkout/summary';
 
     try {
@@ -477,8 +480,7 @@
 
   const renderCheckoutLoadError = (details) => {
     const retry = async () => {
-      const loaded = await refreshCheckoutSummary();
-      if (loaded) await preparePaymentIntent();
+      await queueCheckoutUpdate();
     };
     const options = {
       title: 'No pudimos cargar tu carrito',
@@ -680,7 +682,10 @@
 
   const findShippingMethod = (code) => state.shippingMethods.find((method) => method.code === code) || null;
 
-  const refreshCheckoutSummary = async (shippingMethodCode = state.shippingMethod) => {
+  const refreshCheckoutSummary = async (
+    shippingMethodCode = state.shippingMethod,
+    revision = checkoutRevision,
+  ) => {
     if (!state.isAuthenticated) {
       await renderGuestCheckout();
       return false;
@@ -693,6 +698,8 @@
         shippingMethod: shippingMethodCode,
         promoCode: state.promo?.code,
       });
+
+      if (revision !== checkoutRevision) return false;
 
       state.cart = data.cart;
       state.shippingMethods = Array.isArray(data.shippingMethods) ? data.shippingMethods : [];
@@ -741,6 +748,7 @@
       setLoadingState(false);
       return true;
     } catch (error) {
+      if (revision !== checkoutRevision) return false;
       const details = classifyCheckoutError(error);
       console.error('[CRONOX checkout summary]', {
         event: 'checkout_summary_load_failed',
@@ -793,14 +801,31 @@
     }
   };
 
-  const preparePaymentIntent = async () => {
-    if (!state.isAuthenticated) return;
-
-    if (isInitializing) {
-      pendingPaymentIntentRefresh = true;
-      return;
+  const getPaymentPreparationMessage = (details) => {
+    if (details.code === 'CHECKOUT_REPLACEMENT_IN_PROGRESS') {
+      return 'Estamos actualizando el pago con los nuevos datos. Inténtalo de nuevo en un momento.';
     }
-    isInitializing = true;
+    if (
+      details.code === 'STRIPE_PAYMENT_INTENT_NOT_CANCELLABLE' ||
+      details.code === 'STRIPE_PAYMENT_INTENT_NOT_REUSABLE'
+    ) {
+      return 'Este pago ya se está procesando. Espera la confirmación antes de volver a intentarlo.';
+    }
+    if (details.kind === 'auth') {
+      return 'Tu sesión ha caducado. Inicia sesión de nuevo para continuar.';
+    }
+    if (details.kind === 'network') {
+      return 'No pudimos conectar con el servidor de pagos. Comprueba tu conexión y reinténtalo.';
+    }
+    if (details.kind === 'validation') {
+      return 'No pudimos validar los datos actuales del checkout. Revísalos y vuelve a intentarlo.';
+    }
+    return 'No se pudo actualizar el pago. Inténtalo de nuevo en unos instantes.';
+  };
+
+  const preparePaymentIntent = async (revision = checkoutRevision) => {
+    if (!state.isAuthenticated) return;
+    if (revision !== checkoutRevision) return false;
     setLoadingState(true);
     errorDiv.textContent = '';
 
@@ -817,8 +842,12 @@
       }
 
       if (!ensureStripeReady()) {
-        return;
+        return false;
       }
+
+      const requestedShippingMethod = state.shippingMethod;
+      const requestedPromoCode = state.promo?.code || undefined;
+      const requestedShippingAddress = buildShippingAddressPayload();
 
       const response = await fetch(`${API_BASE}/api/payments/create-payment-intent`, {
         method: 'POST',
@@ -828,44 +857,83 @@
           ...(await getCsrfHeaders()),
         },
         body: JSON.stringify({
-          shippingMethod: state.shippingMethod,
-          promoCode: state.promo?.code || undefined,
-          shippingAddress: buildShippingAddressPayload(),
-          paymentIntentId: currentPaymentIntentId || undefined,
+          shippingMethod: requestedShippingMethod,
+          promoCode: requestedPromoCode,
+          shippingAddress: requestedShippingAddress,
         }),
       });
 
+      const payload = await response.json().catch(() => null);
+      if (revision !== checkoutRevision) return false;
       if (!response.ok) {
-        const payload = await response.json().catch(() => null);
-        throw new Error(payload?.message || 'No se pudo preparar el pago.');
+        const requestError = new Error(payload?.message || 'No se pudo preparar el pago.');
+        requestError.status = response.status;
+        requestError.payload = payload;
+        requestError.endpoint = '/api/payments/create-payment-intent';
+        throw requestError;
       }
 
-      const data = await response.json();
+      const data = payload;
       const nextClientSecret = typeof data.clientSecret === 'string' ? data.clientSecret : null;
       const nextPaymentIntentId = typeof data.paymentIntentId === 'string' ? data.paymentIntentId : null;
 
-      if (!nextClientSecret) {
+      if (!nextClientSecret || !nextPaymentIntentId) {
         throw new Error('No se recibió un client secret válido para el pago.');
       }
-
-      await ensurePaymentElement(nextClientSecret);
-      currentPaymentIntentId = nextPaymentIntentId;
-      state.shippingMethod = data.shippingMethod?.code || state.shippingMethod;
-      state.totals = data.totals || state.totals;
-      renderSummary(state.totals, findShippingMethod(state.shippingMethod) || data.shippingMethod);
-    } catch (error) {
-      errorDiv.textContent = error.message || 'Error preparando el pago.';
-    } finally {
-      setLoadingState(false);
-      isInitializing = false;
-
-      if (pendingPaymentIntentRefresh) {
-        pendingPaymentIntentRefresh = false;
-        window.setTimeout(() => {
-          preparePaymentIntent();
-        }, 0);
+      if (data.shippingMethod?.code !== requestedShippingMethod) {
+        throw new Error('CHECKOUT_SHIPPING_METHOD_MISMATCH');
       }
+      if (revision !== checkoutRevision) return false;
+
+      currentPaymentIntentId = nextPaymentIntentId;
+      state.shippingMethod = requestedShippingMethod;
+      state.totals = data.totals || state.totals;
+      await ensurePaymentElement(nextClientSecret);
+      renderSummary(state.totals, findShippingMethod(state.shippingMethod) || data.shippingMethod);
+      errorDiv.textContent = '';
+      return true;
+    } catch (error) {
+      if (revision !== checkoutRevision) return false;
+      const details = classifyCheckoutError(error);
+      console.error('[CRONOX checkout payment intent]', {
+        event: 'checkout_payment_intent_update_failed',
+        revision,
+        shippingMethod: state.shippingMethod,
+        ...details,
+      });
+      resetPaymentElement();
+      errorDiv.textContent = getPaymentPreparationMessage(details);
+      return false;
+    } finally {
+      if (revision === checkoutRevision) setLoadingState(false);
     }
+  };
+
+  const invalidateCheckoutPayment = () => {
+    checkoutRevision = checkoutCoordinator?.invalidate() ?? checkoutRevision + 1;
+    resetPaymentElement();
+    errorDiv.textContent = '';
+    return checkoutRevision;
+  };
+
+  const queueCheckoutUpdate = ({
+    revision = invalidateCheckoutPayment(),
+    refreshSummary = true,
+  } = {}) => {
+    const requestedShippingMethod = state.shippingMethod;
+    const run = async () => {
+      if (revision !== checkoutRevision) return false;
+      if (refreshSummary) {
+        const loaded = await refreshCheckoutSummary(
+          requestedShippingMethod,
+          revision,
+        );
+        if (!loaded || revision !== checkoutRevision) return false;
+      }
+      return preparePaymentIntent(revision);
+    };
+
+    return checkoutCoordinator?.enqueue(revision, run) ?? run();
   };
 
   const applyPromoCode = async () => {
@@ -910,8 +978,7 @@
 
       renderSummary(state.totals, findShippingMethod(state.shippingMethod) || result.shippingMethod);
       renderPromoUI();
-      await refreshCheckoutSummary(state.shippingMethod);
-      await preparePaymentIntent();
+      await queueCheckoutUpdate();
     } catch (error) {
       console.error('[CRONOX] Error aplicando código', error);
       if (error?.status === 400 && error?.payload?.message) {
@@ -919,8 +986,7 @@
         setPromoStatus('');
         setPromoMessage(error.payload.message, true);
         renderPromoUI();
-        await refreshCheckoutSummary(state.shippingMethod);
-        await preparePaymentIntent();
+        await queueCheckoutUpdate();
       } else {
         setPromoMessage('No se pudo validar el código. Inténtalo de nuevo.', true);
       }
@@ -935,8 +1001,7 @@
     setPromoStatus('');
     setPromoMessage('');
     renderPromoUI();
-    await refreshCheckoutSummary(state.shippingMethod);
-    await preparePaymentIntent();
+    await queueCheckoutUpdate();
   };
 
   const initStripe = () => {
@@ -993,8 +1058,7 @@
       const input = event.target.closest('input[name="shippingMethod"]');
       if (!input) return;
       state.shippingMethod = input.value;
-      await refreshCheckoutSummary(state.shippingMethod);
-      await preparePaymentIntent();
+      await queueCheckoutUpdate();
     });
 
     payButton?.addEventListener('click', async () => {
@@ -1082,10 +1146,7 @@
       if (stripeReady && currentClientSecret && !paymentElementMounted) {
         await ensurePaymentElement(currentClientSecret);
       }
-      const loaded = await refreshCheckoutSummary();
-      if (loaded && stripeReady) {
-        await preparePaymentIntent();
-      }
+      if (stripeReady) await queueCheckoutUpdate();
     } else {
       shippingDefaultsLoaded = false;
       shippingDefaultsPromise = null;
@@ -1110,11 +1171,6 @@
 
     await loadUserShippingDefaults();
     ensureStripeReady();
-    const loaded = await refreshCheckoutSummary();
-    if (loaded) {
-      await preparePaymentIntent();
-    } else {
-      setLoadingState(false);
-    }
+    await queueCheckoutUpdate();
   });
 })();

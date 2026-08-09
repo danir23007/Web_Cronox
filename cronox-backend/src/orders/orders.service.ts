@@ -36,12 +36,14 @@ const ACTIVE_CHECKOUT_SNAPSHOT_STATUSES = [
   'RESERVED',
   'PAYMENT_INTENT_CREATING',
   'PAYMENT_BOUND',
+  'REPLACEMENT_PENDING',
   'DISPUTED',
 ];
 const EXPIRABLE_CHECKOUT_SNAPSHOT_STATUSES = [
   'RESERVED',
   'PAYMENT_INTENT_CREATING',
   'PAYMENT_BOUND',
+  'REPLACEMENT_PENDING',
 ];
 
 type CartSnapshot = CartWithItems;
@@ -78,6 +80,7 @@ type StripeWebhookEventInput = {
 
 type CheckoutSnapshotResponse = {
   checkoutSnapshotId: string;
+  cartId: number;
   amountCents: number;
   currency: string;
   summary: CheckoutSummaryResponse;
@@ -89,6 +92,7 @@ type CheckoutSnapshotResponse = {
   expiresAt: Date;
   reused: boolean;
   expired: boolean;
+  replacementRequired: boolean;
 };
 
 type CheckoutLineItem = {
@@ -228,9 +232,8 @@ export class OrdersService {
     this.assertCartEligibleForCheckout(cart);
 
     const itemsTotalCents = hasItems ? this.computeItemsTotalCents(cart) : 0;
-    let methods = await this.shippingMethods.listAvailableMethods(
-      itemsTotalCents,
-    );
+    let methods =
+      await this.shippingMethods.listAvailableMethods(itemsTotalCents);
 
     const shippingMethods = methods.map((method: any) => {
       const priceFromModel =
@@ -674,9 +677,31 @@ export class OrdersService {
     });
   }
 
+  async claimCheckoutSnapshotReplacement(
+    userId: number,
+    cartId: number,
+    checkoutSnapshotId: string,
+  ): Promise<boolean> {
+    const claimed = await this.prisma.checkoutSnapshot.updateMany({
+      where: {
+        id: checkoutSnapshotId,
+        userId,
+        cartId,
+        orderId: null,
+        status: { in: ['RESERVED', 'PAYMENT_BOUND'] },
+      },
+      data: { status: 'REPLACEMENT_PENDING' },
+    });
+    return claimed.count === 1;
+  }
+
   async releaseCheckoutSnapshot(
     checkoutSnapshotId: string,
-    terminalStatus: 'EXPIRED' | 'PAYMENT_CANCELLED' | 'PAYMENT_CREATION_FAILED',
+    terminalStatus:
+      | 'EXPIRED'
+      | 'REPLACED'
+      | 'PAYMENT_CANCELLED'
+      | 'PAYMENT_CREATION_FAILED',
     expectedPaymentIntentId?: string,
   ): Promise<void> {
     await this.prisma.$transaction(async (tx) => {
@@ -718,9 +743,9 @@ export class OrdersService {
     );
   }
 
-  async listExpiredCheckoutSnapshots(limit = 100): Promise<
-    Array<{ id: string; stripePaymentIntentId: string | null }>
-  > {
+  async listExpiredCheckoutSnapshots(
+    limit = 100,
+  ): Promise<Array<{ id: string; stripePaymentIntentId: string | null }>> {
     return this.prisma.checkoutSnapshot.findMany({
       where: {
         orderId: null,
@@ -733,7 +758,9 @@ export class OrdersService {
     });
   }
 
-  async claimStripeWebhookEvent(input: StripeWebhookEventInput): Promise<boolean> {
+  async claimStripeWebhookEvent(
+    input: StripeWebhookEventInput,
+  ): Promise<boolean> {
     try {
       await this.prisma.stripeWebhookEvent.create({
         data: {
@@ -748,7 +775,10 @@ export class OrdersService {
       });
       return true;
     } catch (error) {
-      if (!(error instanceof Prisma.PrismaClientKnownRequestError) || error.code !== 'P2002') {
+      if (
+        !(error instanceof Prisma.PrismaClientKnownRequestError) ||
+        error.code !== 'P2002'
+      ) {
         throw error;
       }
     }
@@ -806,121 +836,123 @@ export class OrdersService {
     let result: VerifiedStripeOrderResult;
     try {
       result = await this.prisma.$transaction(async (tx) => {
-      const snapshot = await tx.checkoutSnapshot.findUnique({
-        where: { id: input.checkoutSnapshotId },
-        include: { items: true },
-      });
-      if (!snapshot) throw new NotFoundException('CHECKOUT_SNAPSHOT_NOT_FOUND');
-      if (snapshot.stripePaymentIntentId !== input.paymentIntentId) {
-        throw new BadRequestException('STRIPE_PAYMENT_SNAPSHOT_MISMATCH');
-      }
-      if (
-        snapshot.totalCents !== input.amountCents ||
-        snapshot.currency.toUpperCase() !== normalizedCurrency
-      ) {
-        throw new BadRequestException('STRIPE_PAYMENT_AMOUNT_MISMATCH');
-      }
-      if (input.occurredAt > snapshot.expiresAt) {
-        throw new BadRequestException('STRIPE_PAYMENT_AFTER_CHECKOUT_EXPIRY');
-      }
+        const snapshot = await tx.checkoutSnapshot.findUnique({
+          where: { id: input.checkoutSnapshotId },
+          include: { items: true },
+        });
+        if (!snapshot)
+          throw new NotFoundException('CHECKOUT_SNAPSHOT_NOT_FOUND');
+        if (snapshot.stripePaymentIntentId !== input.paymentIntentId) {
+          throw new BadRequestException('STRIPE_PAYMENT_SNAPSHOT_MISMATCH');
+        }
+        if (
+          snapshot.totalCents !== input.amountCents ||
+          snapshot.currency.toUpperCase() !== normalizedCurrency
+        ) {
+          throw new BadRequestException('STRIPE_PAYMENT_AMOUNT_MISMATCH');
+        }
+        if (input.occurredAt > snapshot.expiresAt) {
+          throw new BadRequestException('STRIPE_PAYMENT_AFTER_CHECKOUT_EXPIRY');
+        }
 
-      const existing = await tx.order.findUnique({
-        where: { providerRef: input.paymentIntentId },
-        include: { items: true },
-      });
-      if (existing) {
-        return {
-          orderId: existing.id,
-          userId: existing.userId,
-          checkoutSnapshotId: snapshot.id,
-          created: false,
-          status: existing.status,
-        };
-      }
+        const existing = await tx.order.findUnique({
+          where: { providerRef: input.paymentIntentId },
+          include: { items: true },
+        });
+        if (existing) {
+          return {
+            orderId: existing.id,
+            userId: existing.userId,
+            checkoutSnapshotId: snapshot.id,
+            created: false,
+            status: existing.status,
+          };
+        }
 
-      const lifecycleStatus = await this.resolvePersistedPaymentLifecycle(
-        tx,
-        input.paymentIntentId,
-      );
-      const promo = snapshot.promoCodeId
-        ? await tx.promoCode.findUnique({
-            where: { id: snapshot.promoCodeId },
-            select: { id: true },
-          })
-        : null;
-
-      const order = await tx.order.create({
-        data: {
-          userId: snapshot.userId,
-          status: lifecycleStatus,
-          subtotal: this.centsToDecimal(snapshot.subtotalCents),
-          taxRate: snapshot.taxRate,
-          taxAmount: this.centsToDecimal(snapshot.taxAmountCents),
-          shippingCost: snapshot.shippingCostCents,
-          shippingMethodId: snapshot.shippingMethodId,
-          shippingMethodCode: snapshot.shippingMethodCode,
-          discountCents: snapshot.discountCents,
-          disputeLostCents: snapshot.disputeLostCents,
-          promoCodeId: promo?.id ?? null,
-          promoCodeCode: snapshot.promoCodeCode,
-          total: this.centsToDecimal(snapshot.totalCents),
-          currency: snapshot.currency,
-          provider: 'stripe',
-          providerRef: input.paymentIntentId,
-          shippingAddr: this.toInputJsonValue(snapshot.shippingAddr),
-          billingAddr: this.toInputJsonValue(snapshot.billingAddr),
-        },
-      });
-
-      await tx.orderItem.createMany({
-        data: snapshot.items.map((item) => ({
-          orderId: order.id,
-          productId: item.productId,
-          title: item.title,
-          unitPrice: this.centsToDecimal(item.unitPriceCents),
-          quantity: item.quantity,
-          lineTotal: this.centsToDecimal(item.lineTotalCents),
-        })),
-      });
-      const created = await tx.order.findUnique({
-        where: { id: order.id },
-        include: { items: true },
-      });
-      if (!created) throw new NotFoundException('ORDER_NOT_FOUND_AFTER_CREATE');
-
-      if (lifecycleStatus === OrderStatus.PAID) {
-        await this.consumeStockReservationsForCheckoutSnapshot(
+        const lifecycleStatus = await this.resolvePersistedPaymentLifecycle(
           tx,
-          created.id,
-          snapshot,
+          input.paymentIntentId,
         );
-        await this.clearCartIfSnapshotStillCurrent(tx, snapshot);
-        await this.fillMissingUserNames(
-          tx,
-          snapshot.userId,
-          this.extractNames(snapshot.shippingAddr),
-          this.extractNames(snapshot.billingAddr),
-        );
-        await this.historialService.incrementOrderProgress(
-          snapshot.userId,
-          this.computeOrderItemsQuantity(created.items),
-          tx,
-        );
-        await this.handlePromoUsageOnPaid(tx, created);
-      } else if (lifecycleStatus === OrderStatus.REFUNDED) {
-        await this.releaseStockReservationsForCheckoutSnapshot(tx, snapshot);
-      }
+        const promo = snapshot.promoCodeId
+          ? await tx.promoCode.findUnique({
+              where: { id: snapshot.promoCodeId },
+              select: { id: true },
+            })
+          : null;
 
-      await tx.checkoutSnapshot.update({
-        where: { id: snapshot.id },
-        data: {
-          orderId: order.id,
-          status:
-            lifecycleStatus === OrderStatus.PAID
-              ? 'ORDER_CREATED'
-              : lifecycleStatus,
-        },
-      });
+        const order = await tx.order.create({
+          data: {
+            userId: snapshot.userId,
+            status: lifecycleStatus,
+            subtotal: this.centsToDecimal(snapshot.subtotalCents),
+            taxRate: snapshot.taxRate,
+            taxAmount: this.centsToDecimal(snapshot.taxAmountCents),
+            shippingCost: snapshot.shippingCostCents,
+            shippingMethodId: snapshot.shippingMethodId,
+            shippingMethodCode: snapshot.shippingMethodCode,
+            discountCents: snapshot.discountCents,
+            disputeLostCents: snapshot.disputeLostCents,
+            promoCodeId: promo?.id ?? null,
+            promoCodeCode: snapshot.promoCodeCode,
+            total: this.centsToDecimal(snapshot.totalCents),
+            currency: snapshot.currency,
+            provider: 'stripe',
+            providerRef: input.paymentIntentId,
+            shippingAddr: this.toInputJsonValue(snapshot.shippingAddr),
+            billingAddr: this.toInputJsonValue(snapshot.billingAddr),
+          },
+        });
+
+        await tx.orderItem.createMany({
+          data: snapshot.items.map((item) => ({
+            orderId: order.id,
+            productId: item.productId,
+            title: item.title,
+            unitPrice: this.centsToDecimal(item.unitPriceCents),
+            quantity: item.quantity,
+            lineTotal: this.centsToDecimal(item.lineTotalCents),
+          })),
+        });
+        const created = await tx.order.findUnique({
+          where: { id: order.id },
+          include: { items: true },
+        });
+        if (!created)
+          throw new NotFoundException('ORDER_NOT_FOUND_AFTER_CREATE');
+
+        if (lifecycleStatus === OrderStatus.PAID) {
+          await this.consumeStockReservationsForCheckoutSnapshot(
+            tx,
+            created.id,
+            snapshot,
+          );
+          await this.clearCartIfSnapshotStillCurrent(tx, snapshot);
+          await this.fillMissingUserNames(
+            tx,
+            snapshot.userId,
+            this.extractNames(snapshot.shippingAddr),
+            this.extractNames(snapshot.billingAddr),
+          );
+          await this.historialService.incrementOrderProgress(
+            snapshot.userId,
+            this.computeOrderItemsQuantity(created.items),
+            tx,
+          );
+          await this.handlePromoUsageOnPaid(tx, created);
+        } else if (lifecycleStatus === OrderStatus.REFUNDED) {
+          await this.releaseStockReservationsForCheckoutSnapshot(tx, snapshot);
+        }
+
+        await tx.checkoutSnapshot.update({
+          where: { id: snapshot.id },
+          data: {
+            orderId: order.id,
+            status:
+              lifecycleStatus === OrderStatus.PAID
+                ? 'ORDER_CREATED'
+                : lifecycleStatus,
+          },
+        });
 
         return {
           orderId: created.id,
@@ -982,7 +1014,9 @@ export class OrdersService {
    * persisted event ledger by Stripe's occurredAt timestamp instead of using
    * the event currently being delivered as the lifecycle source of truth.
    */
-  async reconcileStripePaymentLifecycle(paymentIntentId: string): Promise<void> {
+  async reconcileStripePaymentLifecycle(
+    paymentIntentId: string,
+  ): Promise<void> {
     await this.prisma.$transaction(async (tx) => {
       const targetStatus = await this.resolvePersistedPaymentLifecycle(
         tx,
@@ -1230,7 +1264,9 @@ export class OrdersService {
       data: { status: 'ORDER_CREATED' },
     });
   }
-  async claimOrderConfirmationEmail(checkoutSnapshotId: string): Promise<boolean> {
+  async claimOrderConfirmationEmail(
+    checkoutSnapshotId: string,
+  ): Promise<boolean> {
     const result = await this.prisma.checkoutSnapshot.updateMany({
       where: {
         id: checkoutSnapshotId,
@@ -1249,14 +1285,18 @@ export class OrdersService {
     return result.count === 1;
   }
 
-  async markOrderConfirmationEmailSent(checkoutSnapshotId: string): Promise<void> {
+  async markOrderConfirmationEmailSent(
+    checkoutSnapshotId: string,
+  ): Promise<void> {
     await this.prisma.checkoutSnapshot.update({
       where: { id: checkoutSnapshotId },
       data: { confirmationEmailSentAt: new Date() },
     });
   }
 
-  async releaseOrderConfirmationEmailClaim(checkoutSnapshotId: string): Promise<void> {
+  async releaseOrderConfirmationEmailClaim(
+    checkoutSnapshotId: string,
+  ): Promise<void> {
     await this.prisma.checkoutSnapshot.updateMany({
       where: { id: checkoutSnapshotId, confirmationEmailSentAt: null },
       data: { confirmationEmailClaimedAt: null },
@@ -1325,7 +1365,10 @@ export class OrdersService {
 
     const orderBy = this.resolveOrderBy(pagination.sort, pagination.order);
 
-    const canAccessAll = hasAnyRole(user.role, [Role.SUPER_ADMIN, Role.LOGISTICS]);
+    const canAccessAll = hasAnyRole(user.role, [
+      Role.SUPER_ADMIN,
+      Role.LOGISTICS,
+    ]);
     const where = canAccessAll ? {} : { userId: user.id };
 
     const [orders, total] = await Promise.all([
@@ -1363,7 +1406,10 @@ export class OrdersService {
     }
 
     const isOwner = order.userId === user.id;
-    const canAccessAll = hasAnyRole(user.role, [Role.SUPER_ADMIN, Role.LOGISTICS]);
+    const canAccessAll = hasAnyRole(user.role, [
+      Role.SUPER_ADMIN,
+      Role.LOGISTICS,
+    ]);
     if (!canAccessAll && !isOwner) {
       throw new ForbiddenException('ACCESS_DENIED');
     }
@@ -1389,7 +1435,9 @@ export class OrdersService {
     // must not be ignored while waiting for its retry.
     // A refund is terminal even if a later unrelated event is delivered after
     // it. This specifically handles refund-before-success delivery order.
-    if (events.some((event) => event.lifecycleStatus === OrderStatus.REFUNDED)) {
+    if (
+      events.some((event) => event.lifecycleStatus === OrderStatus.REFUNDED)
+    ) {
       return OrderStatus.REFUNDED;
     }
 
@@ -1405,9 +1453,7 @@ export class OrdersService {
     // closing/reinstating event share a second, do not fall back to database
     // delivery order: a verified PAID resolution wins over DISPUTED.
     if (
-      latestEvents.some(
-        (event) => event.lifecycleStatus === OrderStatus.PAID,
-      )
+      latestEvents.some((event) => event.lifecycleStatus === OrderStatus.PAID)
     ) {
       return OrderStatus.PAID;
     }
@@ -1425,20 +1471,55 @@ export class OrdersService {
     tx: Prisma.TransactionClient,
     snapshot: CheckoutSnapshotWithItems,
   ): Promise<void> {
-    const cart = await tx.cart.findUnique({
-      where: { id: snapshot.cartId },
-      select: { updatedAt: true },
+    // Lock the server-owned cart row inside the fulfillment transaction. Cart
+    // writes serialize behind this update, so subtraction and total
+    // recalculation cannot race a concurrent customer edit.
+    const cartClaim = await tx.cart.updateMany({
+      where: { id: snapshot.cartId, userId: snapshot.userId },
+      data: { updatedAt: new Date() },
     });
+    if (cartClaim.count !== 1) return;
 
-    // Never erase cart changes made after the immutable checkout was created.
-    if (!cart || cart.updatedAt.getTime() !== snapshot.cartUpdatedAt.getTime()) {
-      return;
+    const purchasedByVariant = new Map<number, number>();
+    for (const item of snapshot.items) {
+      purchasedByVariant.set(
+        item.variantId,
+        (purchasedByVariant.get(item.variantId) ?? 0) + item.quantity,
+      );
     }
 
-    await tx.cartItem.deleteMany({ where: { cartId: snapshot.cartId } });
+    const currentItems = await tx.cartItem.findMany({
+      where: { cartId: snapshot.cartId },
+      select: { id: true, variantId: true, qty: true, priceAtAdd: true },
+    });
+    for (const item of currentItems) {
+      const purchasedQuantity = purchasedByVariant.get(item.variantId) ?? 0;
+      if (purchasedQuantity <= 0) continue;
+
+      const remainingQuantity = Math.max(0, item.qty - purchasedQuantity);
+      if (remainingQuantity === 0) {
+        await tx.cartItem.delete({ where: { id: item.id } });
+      } else {
+        await tx.cartItem.update({
+          where: { id: item.id },
+          data: { qty: remainingQuantity },
+        });
+      }
+    }
+
+    const remainingItems = await tx.cartItem.findMany({
+      where: { cartId: snapshot.cartId },
+      select: { qty: true, priceAtAdd: true },
+    });
     await tx.cart.update({
       where: { id: snapshot.cartId },
-      data: { itemsCount: 0, subtotal: 0 },
+      data: {
+        itemsCount: remainingItems.reduce((sum, item) => sum + item.qty, 0),
+        subtotal: remainingItems.reduce(
+          (sum, item) => sum + item.qty * item.priceAtAdd,
+          0,
+        ),
+      },
     });
   }
 
@@ -1463,26 +1544,23 @@ export class OrdersService {
     requestFingerprint: string,
     now: Date,
   ): CheckoutSnapshotResponse {
-    // The partial unique index enforces one active reservation per user/cart.
-    // A different request cannot mint another reservation by varying address or
-    // checkout fields; it must finish or safely expire the existing checkout.
-    // Once expired, hand the snapshot back to PaymentIntentFactory even if the
-    // request changed. It will cancel/release it before creating the new
-    // checkout, rather than leaving the user stranded behind the active-row
-    // constraint.
-    if (
-      snapshot.expiresAt > now &&
-      snapshot.requestFingerprint !== requestFingerprint
-    ) {
-      throw new ConflictException('CHECKOUT_ALREADY_IN_PROGRESS');
-    }
-    return this.buildCheckoutSnapshotResponse(snapshot, now, true);
+    const replacementRequired =
+      snapshot.status === 'REPLACEMENT_PENDING' ||
+      snapshot.expiresAt <= now ||
+      snapshot.requestFingerprint !== requestFingerprint;
+    return this.buildCheckoutSnapshotResponse(
+      snapshot,
+      now,
+      true,
+      replacementRequired,
+    );
   }
 
   private buildCheckoutSnapshotResponse(
     snapshot: CheckoutSnapshotWithItems,
     now: Date,
     reused: boolean,
+    replacementRequired = false,
   ): CheckoutSnapshotResponse {
     const shippingCostCents = snapshot.shippingCostCents;
     const shippingMethod: ShippingMethodPublic = {
@@ -1497,6 +1575,7 @@ export class OrdersService {
 
     return {
       checkoutSnapshotId: snapshot.id,
+      cartId: snapshot.cartId,
       amountCents: snapshot.totalCents,
       currency: snapshot.currency,
       summary: {
@@ -1527,6 +1606,7 @@ export class OrdersService {
       expiresAt: snapshot.expiresAt,
       reused,
       expired: snapshot.expiresAt <= now,
+      replacementRequired,
     };
   }
 
@@ -1655,13 +1735,16 @@ export class OrdersService {
     if (
       reservations.length !== expected.size ||
       reservations.some(
-        (reservation) => expected.get(reservation.variantId) !== reservation.quantity,
+        (reservation) =>
+          expected.get(reservation.variantId) !== reservation.quantity,
       )
     ) {
       throw new ConflictException('CHECKOUT_STOCK_RESERVATION_MISSING');
     }
 
-    const statuses = new Set(reservations.map((reservation) => reservation.status));
+    const statuses = new Set(
+      reservations.map((reservation) => reservation.status),
+    );
     if (statuses.size === 1 && statuses.has('CONSUMED')) {
       return false;
     }
