@@ -52,6 +52,9 @@ export class AuthController {
         cookies?.cartId,
       );
       this.authService.logCartMergeResult(result.user.id, cartMerge);
+      if (cartMerge.merged) {
+        this.authService.clearMergedAnonymousCartCookie(res);
+      }
     } catch (error) {
       this.authService.logCartMergeError(result.user.id, error);
     }
@@ -85,6 +88,9 @@ export class AuthController {
         cookies?.cartId,
       );
       this.authService.logCartMergeResult(result.user.id, cartMerge);
+      if (cartMerge.merged) {
+        this.authService.clearMergedAnonymousCartCookie(res);
+      }
     } catch (error) {
       this.authService.logCartMergeError(result.user.id, error);
     }

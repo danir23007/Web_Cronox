@@ -9,18 +9,25 @@ import {
   Post,
   Req,
   Res,
+  UseGuards,
 } from '@nestjs/common';
 import type { Request, Response } from 'express';
 import { randomUUID } from 'crypto';
 import { CartService, CartContext, CartWithItems } from './cart.service';
 import { AddItemDto } from './dto/add-item.dto';
 import { UpdateItemDto } from './dto/update-item.dto';
+import { OptionalJwtAuthGuard } from '../auth/guards/optional-jwt-auth.guard';
+import {
+  CART_COOKIE_NAME,
+  getCartCookieOptions,
+} from '../common/cookies/cart-cookie';
 
 interface ResolveContextOptions {
   ensureAnonymousId?: boolean;
 }
 
 @Controller('cart')
+@UseGuards(OptionalJwtAuthGuard)
 export class CartController {
   constructor(private readonly cartService: CartService) {}
 
@@ -88,9 +95,10 @@ export class CartController {
     const user = req.user as { id?: number } | undefined;
     const userId = typeof user?.id === 'number' ? user.id : undefined;
 
-    const cookies = (req as Request & { cookies?: Record<string, string | undefined> })
-      .cookies;
-    const currentAnonymousId = cookies?.cartId;
+    const cookies = (
+      req as Request & { cookies?: Record<string, string | undefined> }
+    ).cookies;
+    const currentAnonymousId = cookies?.[CART_COOKIE_NAME];
 
     let anonymousId = currentAnonymousId;
 
@@ -118,13 +126,6 @@ export class CartController {
   }
 
   private setAnonymousCookie(res: Response, anonymousId: string) {
-    const isProduction = process.env.NODE_ENV === 'production';
-
-    res.cookie('cartId', anonymousId, {
-      httpOnly: true,
-      sameSite: 'lax',
-      secure: isProduction,
-      maxAge: 1000 * 60 * 60 * 24 * 30,
-    });
+    res.cookie(CART_COOKIE_NAME, anonymousId, getCartCookieOptions());
   }
 }

@@ -2,7 +2,8 @@
   const API = window.CRONOX_API || {};
   const API_BASE = API.API_BASE || '';
   const STRIPE_PUBLISHABLE_KEY =
-    window.CRONOX_STRIPE_PUBLISHABLE_KEY || 'pk_test_51SPoYpCGnUu9AYNraxWTDgTkSpqK4ikadITkNAExPeMgFiw7pX6AbyHh7UZHrRlL0G9A3zR6qwSVW8ALJTQtx2pw00WB7kkSyS';
+    window.CRONOX_STRIPE_PUBLISHABLE_KEY ||
+    'pk_test_51SPoYpCGnUu9AYNraxWTDgTkSpqK4ikadITkNAExPeMgFiw7pX6AbyHh7UZHrRlL0G9A3zR6qwSVW8ALJTQtx2pw00WB7kkSyS';
   const CONTINUE_SHOPPING_URL = '/index.html#store';
   const PROMO_STORAGE_KEY = 'cronox_checkout_promo';
   const escapeHtml = (value) => {
@@ -78,8 +79,7 @@
     return (amount / 100).toFixed(2).replace('.', ',') + ' €';
   };
 
-  const sanitizePromoCode = (value) =>
-    (value || '').replace(/\s+/g, '').toUpperCase();
+  const sanitizePromoCode = (value) => (value || '').replace(/\s+/g, '').toUpperCase();
 
   const cleanText = (value) => {
     if (typeof value === 'string') return value.trim();
@@ -105,8 +105,7 @@
   const hydrateShippingFormFromProfile = (profile = {}, address = {}) => {
     if (!shippingForm) return;
     const addressNameParts = splitFullName(address.name);
-    const profileAddress =
-      profile.address && typeof profile.address === 'object' ? profile.address : null;
+    const profileAddress = profile.address && typeof profile.address === 'object' ? profile.address : null;
 
     applyShippingValue(shippingFields.firstName, profile.firstName || addressNameParts.firstName);
     applyShippingValue(shippingFields.lastName, profile.lastName || addressNameParts.lastName);
@@ -169,9 +168,7 @@
     const hasAnyValue = Object.values(payload).some((value) => cleanText(value));
     if (!hasAnyValue) return undefined;
 
-    return Object.fromEntries(
-      Object.entries(payload).filter(([, value]) => cleanText(value)),
-    );
+    return Object.fromEntries(Object.entries(payload).filter(([, value]) => cleanText(value)));
   };
 
   Object.values(shippingFields).forEach((input) => {
@@ -295,7 +292,12 @@
     cart: null,
     shippingMethods: [],
     shippingMethod: 'STANDARD',
-    totals: { subtotalCents: 0, shippingCents: 0, discountCents: 0, totalCents: 0 },
+    totals: {
+      subtotalCents: 0,
+      shippingCents: 0,
+      discountCents: 0,
+      totalCents: 0,
+    },
     promo: null,
     isAuthenticated: false,
   };
@@ -343,8 +345,7 @@
 
     shippingDefaultsPromise = (async () => {
       try {
-        const profile =
-          window.CRONOX_USER || (typeof API.getMe === 'function' ? await API.getMe() : null);
+        const profile = window.CRONOX_USER || (typeof API.getMe === 'function' ? await API.getMe() : null);
         if (profile) window.CRONOX_USER = profile;
 
         let address = null;
@@ -402,42 +403,106 @@
     setPayButtonState(false);
   };
 
-  const renderEmptyCart = (
-    options = {
-      title: 'Tu carrito está vacío',
-      description: 'Añade productos a tu carrito antes de finalizar la compra.',
-    },
-  ) => {
+  const renderCartStatus = (options = {}) => {
     if (!cartItemsEl || !emptyCartEl) return;
     resetPaymentElement();
     cartItemsEl.innerHTML = '';
     if (shippingOptionsEl) shippingOptionsEl.innerHTML = '';
 
     const title = options.title || 'Tu carrito está vacío';
-    const description =
-      options.description || 'Añade productos a tu carrito antes de finalizar la compra.';
+    const description = options.description || 'Añade productos a tu carrito antes de finalizar la compra.';
+    const actionLabel = options.actionLabel || 'Seguir comprando';
 
     emptyCartEl.innerHTML = `
       <h3>${escapeHtml(title)}</h3>
       <p>${escapeHtml(description)}</p>
-      <button type="button" class="btn-primary" data-continue-shopping>Seguir comprando</button>
+      <button type="button" class="btn-primary" data-cart-status-action>${escapeHtml(actionLabel)}</button>
     `;
     emptyCartEl.hidden = false;
 
-    const cta = emptyCartEl.querySelector('[data-continue-shopping]');
+    const cta = emptyCartEl.querySelector('[data-cart-status-action]');
     if (cta) {
-      cta.addEventListener('click', () => {
-        window.location.href = CONTINUE_SHOPPING_URL;
-      });
+      cta.addEventListener(
+        'click',
+        typeof options.onAction === 'function'
+          ? options.onAction
+          : () => {
+              window.location.href = CONTINUE_SHOPPING_URL;
+            },
+      );
     }
 
     setPromoState(null);
     renderPromoUI();
     setPayButtonState(false);
-    renderSummary({ subtotalCents: 0, shippingCents: 0, discountCents: 0, totalCents: 0 });
+    renderSummary({
+      subtotalCents: 0,
+      shippingCents: 0,
+      discountCents: 0,
+      totalCents: 0,
+    });
     if (helpText) {
       helpText.textContent = description;
     }
+  };
+
+  const renderEmptyCart = (
+    options = {
+      title: 'Tu carrito está vacío',
+      description: 'Añade productos a tu carrito antes de finalizar la compra.',
+    },
+  ) => renderCartStatus(options);
+
+  const classifyCheckoutError = (error) => {
+    const classification =
+      typeof API.classifyApiError === 'function' ? API.classifyApiError(error) : { kind: 'unknown', isRetryable: true };
+    const status = Number(error?.status || error?.statusCode || 0);
+    const code = cleanText(error?.payload?.code || error?.code) || 'UNKNOWN';
+    let endpoint = '/api/checkout/summary';
+
+    try {
+      endpoint = new URL(error?.endpoint || endpoint, window.location.origin).pathname;
+    } catch {
+      // Keep the known endpoint; never log raw URLs or query values.
+    }
+
+    return {
+      kind: classification.kind || 'unknown',
+      isRetryable: classification.isRetryable !== false,
+      status,
+      code,
+      endpoint,
+    };
+  };
+
+  const renderCheckoutLoadError = (details) => {
+    const retry = async () => {
+      const loaded = await refreshCheckoutSummary();
+      if (loaded) await preparePaymentIntent();
+    };
+    const options = {
+      title: 'No pudimos cargar tu carrito',
+      description: 'Ha ocurrido un problema. Reinténtalo en unos instantes.',
+      actionLabel: 'Reintentar',
+      onAction: retry,
+    };
+
+    if (details.kind === 'auth') {
+      options.title = 'Tu sesión ya no es válida';
+      options.description = 'Vuelve a iniciar sesión y reintenta el checkout.';
+      options.actionLabel = 'Recargar';
+      options.onAction = () => window.location.reload();
+    } else if (details.kind === 'validation') {
+      options.title = 'No pudimos validar el carrito';
+      options.description = 'Revisa el carrito o reinténtalo antes de continuar con el pago.';
+    } else if (details.kind === 'network') {
+      options.title = 'No pudimos conectar con el servidor';
+      options.description = 'Comprueba tu conexión y vuelve a intentarlo.';
+    } else if (details.kind === 'server') {
+      options.description = 'El servidor no pudo cargarlo. Reinténtalo en unos instantes.';
+    }
+
+    renderCartStatus(options);
   };
 
   const renderCart = () => {
@@ -453,9 +518,9 @@
     items.forEach((item) => {
       const imageUrl = safeProductImage(
         item.imageUrl ||
-        item.product?.imageUrl ||
-        (Array.isArray(item.product?.images) ? item.product.images[0]?.url : '') ||
-        item.product?.image,
+          item.product?.imageUrl ||
+          (Array.isArray(item.product?.images) ? item.product.images[0]?.url : '') ||
+          item.product?.image,
       );
       const qty = Math.max(1, Math.min(999, Number(item.qty) || 1));
       const productName = escapeHtml(item.product?.name || 'Producto CRONOX');
@@ -495,16 +560,12 @@
       const wrapper = document.createElement('label');
       wrapper.className = 'shipping-option';
       wrapper.innerHTML = `
-        <input type="radio" name="shippingMethod" value="${method.code}" ${
-          checked ? 'checked' : ''
-        }>
+        <input type="radio" name="shippingMethod" value="${method.code}" ${checked ? 'checked' : ''}>
         <div class="shipping-option__info">
           <span class="shipping-option__label">${method.label}</span>
           ${method.description ? `<small class="shipping-option__helper">${method.description}</small>` : ''}
         </div>
-        <span class="shipping-option__price ${priceCents === 0 ? 'is-free' : ''}">${formatEuro(
-          priceCents,
-        )}</span>
+        <span class="shipping-option__price ${priceCents === 0 ? 'is-free' : ''}">${formatEuro(priceCents)}</span>
       `;
       shippingOptionsEl.appendChild(wrapper);
     });
@@ -597,24 +658,27 @@
       }
 
       renderGuestShippingOptions();
-      renderSummary(totals, { label: 'Elige envío tras iniciar sesión', code: 'GUEST' });
+      renderSummary(totals, {
+        label: 'Elige envío tras iniciar sesión',
+        code: 'GUEST',
+      });
       renderPromoUI();
       if (helpText) {
         helpText.textContent = 'Inicia sesión para continuar con tu compra.';
       }
     } catch (error) {
-      console.warn('[CRONOX] No se pudo cargar el carrito guest', error);
-      renderEmptyCart({
-        title: 'Tu cesta está vacía',
-        description: 'Vuelve a la tienda, añade productos e inicia sesión para pagar.',
+      const details = classifyCheckoutError(error);
+      console.warn('[CRONOX checkout guest cart]', {
+        event: 'checkout_guest_cart_load_failed',
+        ...details,
       });
+      renderCheckoutLoadError(details);
     } finally {
       setLoadingState(false);
     }
   };
 
-  const findShippingMethod = (code) =>
-    state.shippingMethods.find((method) => method.code === code) || null;
+  const findShippingMethod = (code) => state.shippingMethods.find((method) => method.code === code) || null;
 
   const refreshCheckoutSummary = async (shippingMethodCode = state.shippingMethod) => {
     if (!state.isAuthenticated) {
@@ -639,10 +703,7 @@
         return false;
       }
       state.shippingMethod =
-        data.selectedShippingMethod?.code ||
-        shippingMethodCode ||
-        state.shippingMethods[0]?.code ||
-        '';
+        data.selectedShippingMethod?.code || shippingMethodCode || state.shippingMethods[0]?.code || '';
       state.totals = data.totals || state.totals;
 
       const appliedPromo = data.appliedPromo;
@@ -661,7 +722,12 @@
       if (!state.cart?.items?.length) {
         renderEmptyCart();
         state.cart = { items: [] };
-        state.totals = { subtotalCents: 0, shippingCents: 0, discountCents: 0, totalCents: 0 };
+        state.totals = {
+          subtotalCents: 0,
+          shippingCents: 0,
+          discountCents: 0,
+          totalCents: 0,
+        };
         setLoadingState(false);
         return false;
       }
@@ -675,19 +741,24 @@
       setLoadingState(false);
       return true;
     } catch (error) {
-      console.error('[CRONOX] No se pudo cargar el resumen de checkout', error);
+      const details = classifyCheckoutError(error);
+      console.error('[CRONOX checkout summary]', {
+        event: 'checkout_summary_load_failed',
+        ...details,
+      });
       resetPaymentElement();
-      state.cart = { items: [] };
-      state.totals = { subtotalCents: 0, shippingCents: 0, totalCents: 0 };
+      state.cart = null;
+      state.totals = {
+        subtotalCents: 0,
+        shippingCents: 0,
+        discountCents: 0,
+        totalCents: 0,
+      };
 
-      const errorCode = error?.payload?.code || error?.code;
-      if (errorCode === 'EMPTY_CART') {
+      if (details.code === 'EMPTY_CART') {
         renderEmptyCart();
       } else {
-        renderEmptyCart({
-          title: 'No se pudo cargar el carrito',
-          description: 'Vuelve a la tienda y añade productos para continuar con el pago.',
-        });
+        renderCheckoutLoadError(details);
       }
 
       setLoadingState(false);
@@ -752,7 +823,10 @@
       const response = await fetch(`${API_BASE}/api/payments/create-payment-intent`, {
         method: 'POST',
         credentials: 'include',
-        headers: { 'Content-Type': 'application/json', ...(await getCsrfHeaders()) },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(await getCsrfHeaders()),
+        },
         body: JSON.stringify({
           shippingMethod: state.shippingMethod,
           promoCode: state.promo?.code || undefined,
@@ -767,10 +841,8 @@
       }
 
       const data = await response.json();
-      const nextClientSecret =
-        typeof data.clientSecret === 'string' ? data.clientSecret : null;
-      const nextPaymentIntentId =
-        typeof data.paymentIntentId === 'string' ? data.paymentIntentId : null;
+      const nextClientSecret = typeof data.clientSecret === 'string' ? data.clientSecret : null;
+      const nextPaymentIntentId = typeof data.paymentIntentId === 'string' ? data.paymentIntentId : null;
 
       if (!nextClientSecret) {
         throw new Error('No se recibió un client secret válido para el pago.');
@@ -881,8 +953,7 @@
     }
 
     if (!stripe) {
-      errorDiv.textContent =
-        'No se pudo inicializar el pago. Refresca la página e inténtalo de nuevo.';
+      errorDiv.textContent = 'No se pudo inicializar el pago. Refresca la página e inténtalo de nuevo.';
       currentClientSecret = null;
       resetPaymentElement();
       if (payButton) {

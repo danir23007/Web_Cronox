@@ -19,6 +19,11 @@ import {
 } from '../common/config/environment';
 import { EmailService } from '../email/email.service';
 import { NewsletterService } from '../newsletter/newsletter.service';
+import {
+  CART_COOKIE_NAME,
+  getCartCookieOptions,
+  LEGACY_CART_COOKIE_PATHS,
+} from '../common/cookies/cart-cookie';
 import { PrismaService } from '../prisma/prisma.service';
 import { UsersService, AuthUser } from '../users/users.service';
 import { LoginDto } from './dto/login.dto';
@@ -309,6 +314,16 @@ export class AuthService {
       ...this.jwtCookieOptions,
       maxAge: undefined,
     });
+  }
+
+  clearMergedAnonymousCartCookie(res: Response) {
+    for (const path of LEGACY_CART_COOKIE_PATHS) {
+      res.clearCookie(CART_COOKIE_NAME, {
+        ...getCartCookieOptions(),
+        path,
+        maxAge: undefined,
+      });
+    }
   }
 
   async validateUser(

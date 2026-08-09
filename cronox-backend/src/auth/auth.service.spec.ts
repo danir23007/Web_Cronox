@@ -203,4 +203,31 @@ describe('AuthService password reset security', () => {
       expect.objectContaining({ secure: true }),
     );
   });
+
+  it('clears a successfully merged anonymous cart cookie with its original scope', () => {
+    const response = { clearCookie: jest.fn() };
+
+    service.clearMergedAnonymousCartCookie(response as any);
+
+    expect(response.clearCookie).toHaveBeenCalledWith(
+      'cartId',
+      expect.objectContaining({
+        httpOnly: true,
+        sameSite: 'lax',
+        path: '/api',
+      }),
+    );
+    expect(response.clearCookie).toHaveBeenCalledWith(
+      'cartId',
+      expect.objectContaining({ path: '/api/cart' }),
+    );
+    expect(response.clearCookie).toHaveBeenCalledWith(
+      'cartId',
+      expect.objectContaining({ path: '/api/cart/items' }),
+    );
+    expect(response.clearCookie).toHaveBeenCalledWith(
+      'cartId',
+      expect.objectContaining({ path: '/' }),
+    );
+  });
 });

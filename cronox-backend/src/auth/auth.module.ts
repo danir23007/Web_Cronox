@@ -9,8 +9,8 @@ import { EmailModule } from '../email/email.module';
 import { NewsletterModule } from '../newsletter/newsletter.module';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
-import { JwtAccessStrategy } from './strategies/jwt-access.strategy';
 import { JwtRefreshStrategy } from './strategies/jwt-refresh.strategy';
+import { AccessAuthModule } from './access-auth.module';
 
 const refreshJwtProvider = {
   provide: 'JWT_REFRESH_SERVICE',
@@ -34,18 +34,14 @@ const refreshJwtProvider = {
       }),
     }),
     PassportModule,
+    AccessAuthModule,
     UsersModule,
     CartModule,
     EmailModule,
     NewsletterModule,
   ],
   controllers: [AuthController],
-  providers: [
-    AuthService,
-    JwtAccessStrategy,
-    JwtRefreshStrategy,
-    refreshJwtProvider,
-  ],
+  providers: [AuthService, JwtRefreshStrategy, refreshJwtProvider],
   exports: [AuthService],
 })
 export class AuthModule {}
