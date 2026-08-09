@@ -64,6 +64,13 @@
     return map[key] || map[key.toLowerCase()] || null;
   };
 
+  const isVariantAvailable = (variant) => {
+    if (!variant || variant.id == null || variant.id === "") return false;
+    if (variant.isActive === false || variant.isAvailable === false) return false;
+    const stock = variant.stockQty ?? variant.stock;
+    return stock == null || (Number.isFinite(Number(stock)) && Number(stock) > 0);
+  };
+
   function syncAddButtonWidth() {
     if (!pAdd || !pSizeGroup) return;
     requestAnimationFrame(() => {
@@ -472,23 +479,30 @@
 
   function setupSizeButtons(product) {
     if (!pSizeGroup) return;
+    selectedSize = "";
     const normalized = normalizeSizes(product?.sizes);
     pSizeGroup.innerHTML = normalized
       .map((size) => {
         const variant = findVariantForSize(product, size);
-        const disabled = Boolean(variant) && variant.isAvailable === false;
-        return `<button type="button" class="size-btn${disabled ? ' is-disabled' : ''}" data-size="${escapeHtml(size)}" role="radio" aria-checked="false" ${disabled ? 'disabled' : ''}>${escapeHtml(size)}</button>`;
+        const unavailable = !isVariantAvailable(variant);
+        const label = unavailable ? `${size}, no disponible` : size;
+        return `<button type="button" class="size-btn${unavailable ? ' is-unavailable' : ''}" data-size="${escapeHtml(size)}" role="radio" aria-label="${escapeHtml(label)}" aria-checked="false" aria-disabled="${unavailable ? 'true' : 'false'}" ${unavailable ? 'disabled' : ''}>${escapeHtml(size)}</button>`;
       })
       .join("");
 
     const buttons = Array.from(pSizeGroup.querySelectorAll(".size-btn"));
     if (!buttons.length) {
       selectedSize = "";
+      if (pAdd) {
+        pAdd.disabled = true;
+        pAdd.setAttribute("aria-disabled", "true");
+      }
       syncAddButtonWidth();
       return;
     }
 
     const activate = (btn) => {
+      if (!btn || btn.disabled) return;
       buttons.forEach(b => {
         const isActive = b === btn;
         b.classList.toggle("is-active", isActive);
@@ -497,9 +511,14 @@
       });
     };
 
-    const firstButton = buttons.find((btn) => !btn.disabled) || buttons[0];
+    const firstButton = buttons.find((btn) => !btn.disabled);
     if (firstButton) activate(firstButton);
     else selectedSize = "";
+
+    if (pAdd) {
+      pAdd.disabled = !firstButton;
+      pAdd.setAttribute("aria-disabled", firstButton ? "false" : "true");
+    }
 
     buttons.forEach(btn => {
       btn.addEventListener("click", () => activate(btn));
@@ -550,6 +569,10 @@
       if (pName) pName.textContent = "Producto no disponible";
       if (pDesc) pDesc.textContent = "Este producto ya no está activo en la colección.";
       if (pFavoriteToggle) pFavoriteToggle.hidden = true;
+      if (pAdd) {
+        pAdd.disabled = true;
+        pAdd.setAttribute("aria-disabled", "true");
+      }
       return;
     }
 
@@ -635,18 +658,15 @@
     // botón añadir al carrito
     if (target && pAdd) {
       pAdd.addEventListener("click", () => {
-        const normalizedSizes = normalizeSizes(target.sizes);
-        const fallbackSize = normalizedSizes[0] || "M";
-        const size = (selectedSize || fallbackSize || "M").toUpperCase();
+        const size = selectedSize.toUpperCase();
         const variant = findVariantForSize(target, size);
 
-        if (!variant || !variant.id) {
+        if (!size || !isVariantAvailable(variant)) {
           alert("No hay stock disponible para esa talla ahora mismo.");
           return;
         }
 
         const image = (Array.isArray(target.images) && target.images[0]) || target.image;
-
         addToCart({
           id: target.id,
           productId: target.backendId || target.id,

@@ -199,6 +199,8 @@
     .pdp__label-text{ font-size:13px; letter-spacing:.08em; text-transform:uppercase; color:#bbb; }
     .pdp__size-buttons{ display:inline-flex; flex-wrap:wrap; gap:10px; justify-content:flex-start; }
     .size-btn{
+      position:relative;
+      overflow:hidden;
       background:#0f0f0f;
       border:1px solid rgba(255,255,255,.18);
       color:#fff;
@@ -223,6 +225,25 @@
       outline:2px solid #fff;
       outline-offset:2px;
     }
+    .size-btn.is-unavailable,
+    .size-btn:disabled{
+      opacity:.42;
+      cursor:not-allowed;
+    }
+    .size-btn.is-unavailable::after{
+      content:"";
+      position:absolute;
+      left:-12%;
+      bottom:50%;
+      width:124%;
+      height:1px;
+      background:currentColor;
+      transform:rotate(-35deg);
+      transform-origin:center;
+      pointer-events:none;
+    }
+    .size-btn.is-unavailable:hover,
+    .size-btn:disabled:hover{ border-color:rgba(255,255,255,.18); }
     #pAdd{
       align-self:stretch;
       width:100%;
@@ -521,7 +542,7 @@
             <div id="pSizeGroup" class="pdp__size-buttons" role="radiogroup" aria-label="Selecciona una talla"></div>
           </div>
 
-          <button id="pAdd" class="btn-primary">Añadir al carrito</button>
+          <button id="pAdd" class="btn-primary" type="button" disabled aria-disabled="true">Añadir al carrito</button>
         </div>
 
         <section class="pdp__details" aria-label="Especificaciones del producto">
@@ -652,7 +673,7 @@
   <script src="assets/app.js?v=50" defer></script>
   <script src="assets/cart-badge.js?v=43" defer></script>
   <script src="assets/products.js?v=47" defer></script>
-  <script src="assets/product-page.js?v=35" defer></script>
+  <script src="assets/product-page.js?v=36" defer></script>
   <script src="assets/favorites-toggle.js?v=1" defer></script>
 </body>
 </html>
