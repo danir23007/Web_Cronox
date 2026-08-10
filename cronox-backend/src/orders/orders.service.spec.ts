@@ -161,6 +161,7 @@ describe('OrdersService checkout reservations', () => {
         findMany: jest.fn(),
       },
       order: {
+        findFirst: jest.fn(),
         findUnique: jest.fn(),
         create: jest.fn(),
         update: jest.fn(),
@@ -407,6 +408,66 @@ describe('OrdersService checkout reservations', () => {
       },
       data: { status: 'REPLACEMENT_PENDING' },
     });
+  });
+
+  it('reports a delayed current checkout payment without exposing its Stripe ID', async () => {
+    prisma.checkoutSnapshot.findFirst.mockResolvedValue({
+      status: 'REPLACEMENT_PENDING',
+      order: null,
+    });
+
+    await expect(
+      service.getCurrentCheckoutPaymentProcessingStatus(1),
+    ).resolves.toEqual({
+      found: false,
+      isProcessed: false,
+      paymentPending: true,
+    });
+  });
+
+  it('reports eventual current-checkout order confirmation by safe order ID', async () => {
+    const updatedAt = new Date('2026-08-10T00:08:32.000Z');
+    prisma.checkoutSnapshot.findFirst.mockResolvedValue({
+      status: 'ORDER_CREATED',
+      order: { id: 16, status: 'PAID', updatedAt },
+    });
+
+    await expect(
+      service.getCurrentCheckoutPaymentProcessingStatus(1),
+    ).resolves.toEqual({
+      found: true,
+      orderId: 16,
+      orderStatus: 'PAID',
+      isProcessed: true,
+      paymentPending: false,
+      updatedAt,
+    });
+  });
+
+  it('resolves checkout-success by an owned order ID without returning a Stripe ID', async () => {
+    const updatedAt = new Date('2026-08-10T00:08:32.000Z');
+    prisma.order.findFirst.mockResolvedValue({
+      id: 16,
+      status: 'PAID',
+      providerRef: 'pi_private',
+      updatedAt,
+    });
+
+    await expect(service.getPaymentProcessingStatus(1, '16')).resolves.toEqual({
+      found: true,
+      orderId: 16,
+      orderStatus: 'PAID',
+      isProcessed: true,
+      updatedAt,
+    });
+    expect(prisma.order.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          userId: 1,
+          OR: [{ providerRef: '16' }, { id: 16 }],
+        }),
+      }),
+    );
   });
 
   it('subtracts only purchased quantities and preserves later cart additions', async () => {

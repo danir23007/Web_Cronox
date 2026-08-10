@@ -32,9 +32,11 @@ export class StripeService {
       throw new Error('STRIPE_SECRET_KEY is not configured');
     }
 
-    this.webhookSecret = this.configService.get<string>('STRIPE_WEBHOOK_SECRET') ?? '';
+    this.webhookSecret =
+      this.configService.get<string>('STRIPE_WEBHOOK_SECRET') ?? '';
     this.paymentDescription =
-      this.configService.get<string>('STRIPE_PAYMENT_DESCRIPTION') ?? 'CRONOX Order';
+      this.configService.get<string>('STRIPE_PAYMENT_DESCRIPTION') ??
+      'CRONOX Order';
 
     this.stripe = new Stripe(secretKey, {
       apiVersion: '2024-06-20',
@@ -60,7 +62,9 @@ export class StripeService {
     );
 
     if (!paymentIntent.client_secret) {
-      this.logger.error(`Stripe PaymentIntent ${paymentIntent.id} has no client_secret`);
+      this.logger.error(
+        `Stripe PaymentIntent ${paymentIntent.id} has no client_secret`,
+      );
       throw new BadRequestException('STRIPE_PAYMENT_INTENT_NO_CLIENT_SECRET');
     }
 
@@ -80,9 +84,11 @@ export class StripeService {
 
     if (
       paymentIntent.status === 'succeeded' ||
-      paymentIntent.status === 'canceled' ||
       paymentIntent.status === 'processing'
     ) {
+      throw new ConflictException('CHECKOUT_PAYMENT_CONFIRMATION_PENDING');
+    }
+    if (paymentIntent.status === 'canceled') {
       throw new ConflictException('STRIPE_PAYMENT_INTENT_NOT_REUSABLE');
     }
     if (!paymentIntent.client_secret) {
@@ -98,9 +104,8 @@ export class StripeService {
     paymentIntentId: string,
     checkoutSnapshotId: string,
   ): Promise<void> {
-    const paymentIntent = await this.stripe.paymentIntents.retrieve(
-      paymentIntentId,
-    );
+    const paymentIntent =
+      await this.stripe.paymentIntents.retrieve(paymentIntentId);
     this.assertCheckoutPaymentIntentBinding(paymentIntent, {
       checkoutSnapshotId,
       amount: paymentIntent.amount,
@@ -112,12 +117,33 @@ export class StripeService {
       paymentIntent.status === 'succeeded' ||
       paymentIntent.status === 'processing'
     ) {
-      throw new ConflictException('STRIPE_PAYMENT_INTENT_NOT_CANCELLABLE');
+      throw new ConflictException('CHECKOUT_PAYMENT_CONFIRMATION_PENDING');
     }
 
     const cancelled = await this.stripe.paymentIntents.cancel(paymentIntentId);
     if (cancelled.status !== 'canceled') {
-      throw new BadRequestException('STRIPE_PAYMENT_INTENT_CANCEL_NOT_CONFIRMED');
+      throw new BadRequestException(
+        'STRIPE_PAYMENT_INTENT_CANCEL_NOT_CONFIRMED',
+      );
+    }
+  }
+
+  async assertCheckoutPaymentIsNotConfirming(
+    paymentIntentId: string,
+    checkoutSnapshotId: string,
+  ): Promise<void> {
+    const paymentIntent =
+      await this.stripe.paymentIntents.retrieve(paymentIntentId);
+    this.assertCheckoutPaymentIntentBinding(paymentIntent, {
+      checkoutSnapshotId,
+      amount: paymentIntent.amount,
+      currency: paymentIntent.currency,
+    });
+    if (
+      paymentIntent.status === 'succeeded' ||
+      paymentIntent.status === 'processing'
+    ) {
+      throw new ConflictException('CHECKOUT_PAYMENT_CONFIRMATION_PENDING');
     }
   }
 
@@ -125,7 +151,8 @@ export class StripeService {
     paymentIntentId: string,
     idempotencyKey: string,
   ): Promise<{ id: string; status: string | null }> {
-    const paymentIntent = await this.stripe.paymentIntents.retrieve(paymentIntentId);
+    const paymentIntent =
+      await this.stripe.paymentIntents.retrieve(paymentIntentId);
     if (paymentIntent.status !== 'succeeded') {
       throw new BadRequestException('STRIPE_PAYMENT_NOT_REFUNDABLE');
     }
@@ -151,7 +178,8 @@ export class StripeService {
     },
   ): void {
     if (
-      paymentIntent.metadata?.checkoutSnapshotId !== expected.checkoutSnapshotId ||
+      paymentIntent.metadata?.checkoutSnapshotId !==
+        expected.checkoutSnapshotId ||
       paymentIntent.amount !== expected.amount ||
       paymentIntent.currency.toUpperCase() !== expected.currency.toUpperCase()
     ) {
@@ -159,7 +187,10 @@ export class StripeService {
     }
   }
 
-  constructEventFromPayload(signature: string | string[] | undefined, rawBody: Buffer) {
+  constructEventFromPayload(
+    signature: string | string[] | undefined,
+    rawBody: Buffer,
+  ) {
     if (!this.webhookSecret) {
       throw new Error('STRIPE_WEBHOOK_SECRET is not configured');
     }
@@ -169,13 +200,21 @@ export class StripeService {
     }
 
     try {
-      const event = this.stripe.webhooks.constructEvent(rawBody, signature, this.webhookSecret); // [WEBHOOK]
-      this.logger.debug(`Stripe signature validada para event=${event.id} type=${event.type}`);
+      const event = this.stripe.webhooks.constructEvent(
+        rawBody,
+        signature,
+        this.webhookSecret,
+      ); // [WEBHOOK]
+      this.logger.debug(
+        `Stripe signature validada para event=${event.id} type=${event.type}`,
+      );
       return event;
     } catch (error) {
-      this.logger.error('Stripe webhook signature verification failed', error as Error);
+      this.logger.error(
+        'Stripe webhook signature verification failed',
+        error as Error,
+      );
       throw new BadRequestException('STRIPE_SIGNATURE_VERIFICATION_FAILED');
     }
   }
-
 }

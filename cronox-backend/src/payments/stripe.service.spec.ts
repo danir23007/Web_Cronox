@@ -102,8 +102,26 @@ describe('StripeService', () => {
 
       await expect(
         service.cancelCheckoutPaymentIntent('pi_terminal', 'snap_owned'),
-      ).rejects.toThrow('STRIPE_PAYMENT_INTENT_NOT_CANCELLABLE');
+      ).rejects.toThrow('CHECKOUT_PAYMENT_CONFIRMATION_PENDING');
       expect(cancel).not.toHaveBeenCalled();
     },
   );
+
+  it('classifies a server-bound succeeded intent without trying to cancel it', async () => {
+    const stripeInstance = (service as any).stripe as any;
+    jest.spyOn(stripeInstance.paymentIntents, 'retrieve').mockResolvedValue({
+      id: 'pi_succeeded',
+      status: 'succeeded',
+      amount: 3790,
+      currency: 'eur',
+      metadata: { checkoutSnapshotId: 'snap_owned' },
+    });
+
+    await expect(
+      service.assertCheckoutPaymentIsNotConfirming(
+        'pi_succeeded',
+        'snap_owned',
+      ),
+    ).rejects.toThrow('CHECKOUT_PAYMENT_CONFIRMATION_PENDING');
+  });
 });

@@ -802,6 +802,9 @@
   };
 
   const getPaymentPreparationMessage = (details) => {
+    if (details.code === 'CHECKOUT_PAYMENT_CONFIRMATION_PENDING') {
+      return 'Ya existe un pago anterior que se está confirmando. No vuelvas a pagar; actualizaremos el pedido automáticamente.';
+    }
     if (details.code === 'CHECKOUT_REPLACEMENT_IN_PROGRESS') {
       return 'Estamos actualizando el pago con los nuevos datos. Inténtalo de nuevo en un momento.';
     }
@@ -821,6 +824,81 @@
       return 'No pudimos validar los datos actuales del checkout. Revísalos y vuelve a intentarlo.';
     }
     return 'No se pudo actualizar el pago. Inténtalo de nuevo en unos instantes.';
+  };
+
+  const synchronizeCanonicalCart = async () => {
+    const cartController = window.CRONOX_CART || null;
+    if (typeof cartController?.fetchCart === 'function') {
+      const cart = await cartController.fetchCart();
+      if (
+        cartController.state?.drawerOpen &&
+        typeof cartController.renderCartDrawer === 'function'
+      ) {
+        cartController.renderCartDrawer(cart);
+      }
+      return cart;
+    }
+    if (typeof API.getCart === 'function') {
+      const cart = await API.getCart();
+      window.dispatchEvent(new CustomEvent('cart:updated', { detail: cart }));
+      return cart;
+    }
+    return null;
+  };
+
+  const waitForPreviousPaymentConfirmation = async (revision) => {
+    const poll = window.CRONOX_CHECKOUT_LIFECYCLE?.pollUntilProcessed;
+    if (typeof poll !== 'function') return;
+
+    try {
+      const result = await poll({
+        shouldContinue: () => revision === checkoutRevision,
+        fetchStatus: async () => {
+          const response = await fetch(
+            `${API_BASE}/api/orders/current-checkout-payment-status`,
+            {
+              method: 'GET',
+              credentials: 'include',
+              headers: { Accept: 'application/json' },
+            },
+          );
+          const payload = await response.json().catch(() => null);
+          if (!response.ok) {
+            const statusError = new Error(
+              payload?.message || 'No se pudo consultar el estado del pedido.',
+            );
+            statusError.status = response.status;
+            statusError.payload = payload;
+            throw statusError;
+          }
+          return payload;
+        },
+        onProcessed: async (status) => {
+          if (revision !== checkoutRevision) return;
+          await synchronizeCanonicalCart();
+          if (revision !== checkoutRevision) return;
+          const orderId = Number(status?.orderId);
+          if (Number.isSafeInteger(orderId) && orderId > 0) {
+            window.location.assign(
+              `/checkout-success.html?orderId=${encodeURIComponent(orderId)}`,
+            );
+          }
+        },
+      });
+      if (revision !== checkoutRevision || result.outcome === 'processed') return;
+      errorDiv.textContent =
+        'El pago anterior sigue pendiente de confirmación. No vuelvas a pagar; mantén esta página abierta o recárgala en unos segundos.';
+    } catch (error) {
+      if (revision !== checkoutRevision) return;
+      const details = classifyCheckoutError(error);
+      console.warn('[CRONOX checkout payment confirmation]', {
+        event: 'checkout_payment_confirmation_poll_failed',
+        revision,
+        ...details,
+      });
+      errorDiv.textContent =
+        'No pudimos comprobar todavía el pago anterior. No vuelvas a pagar; recarga la página en unos segundos.';
+    }
   };
 
   const preparePaymentIntent = async (revision = checkoutRevision) => {
@@ -903,6 +981,9 @@
       });
       resetPaymentElement();
       errorDiv.textContent = getPaymentPreparationMessage(details);
+      if (details.code === 'CHECKOUT_PAYMENT_CONFIRMATION_PENDING') {
+        void waitForPreviousPaymentConfirmation(revision);
+      }
       return false;
     } finally {
       if (revision === checkoutRevision) setLoadingState(false);

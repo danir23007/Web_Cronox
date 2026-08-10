@@ -11,7 +11,12 @@ import {
   UnauthorizedException,
   UseGuards,
 } from '@nestjs/common';
-import { ApiBearerAuth, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
+import {
+  ApiBearerAuth,
+  ApiOkResponse,
+  ApiOperation,
+  ApiTags,
+} from '@nestjs/swagger';
 import type { Request } from 'express';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CartService } from '../cart/cart.service';
@@ -30,7 +35,9 @@ export class OrdersController {
   @Post('checkout/session')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'Prepara una sesión de checkout con totales calculados' })
+  @ApiOperation({
+    summary: 'Prepara una sesión de checkout con totales calculados',
+  })
   @ApiOkResponse({
     description: 'Resumen del checkout con totales, impuestos y artículos',
     schema: {
@@ -87,7 +94,10 @@ export class OrdersController {
   @Get('orders/payment-status')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'Consulta el estado de procesamiento de un pago confirmado en Stripe' })
+  @ApiOperation({
+    summary:
+      'Consulta el estado de procesamiento de un pago confirmado en Stripe',
+  })
   @ApiOkResponse({
     description: 'Estado del pedido asociado al pago',
     schema: {
@@ -113,15 +123,37 @@ export class OrdersController {
     return this.ordersService.getPaymentProcessingStatus(userId, providerRef);
   }
 
+  @Get('orders/current-checkout-payment-status')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary:
+      'Consulta de forma segura si el checkout actual ya produjo un pedido',
+  })
+  async getCurrentCheckoutPaymentStatus(
+    @Req() req: Request,
+  ): Promise<Record<string, unknown>> {
+    const userId = req.user?.id;
+    if (typeof userId !== 'number') {
+      throw new UnauthorizedException('USER_NOT_AUTHENTICATED');
+    }
+    return this.ordersService.getCurrentCheckoutPaymentProcessingStatus(userId);
+  }
+
   @Get('orders')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'Lista los pedidos del usuario autenticado (o todos si es admin)' })
+  @ApiOperation({
+    summary: 'Lista los pedidos del usuario autenticado (o todos si es admin)',
+  })
   @ApiOkResponse({ description: 'Listado paginado de pedidos' })
   async listOrders(
     @Req() req: Request,
     @Query() pagination: PaginationDto,
-  ): Promise<{ data: Record<string, unknown>[]; meta: Record<string, number> }> {
+  ): Promise<{
+    data: Record<string, unknown>[];
+    meta: Record<string, number>;
+  }> {
     const userId = req.user?.id;
     const role = req.user?.role;
 

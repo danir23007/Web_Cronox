@@ -148,6 +148,28 @@ body { padding-top: var(--topbar-h); }
 }
 .btn-link:hover{ opacity:.9; }
 
+.page-cart #btnClear{
+  margin-top:8px;
+  padding:9px 12px;
+  background:#fff;
+  color:#000;
+  border:1px solid #fff;
+  border-radius:0;
+  font:inherit;
+  font-weight:700;
+  cursor:pointer;
+  transition:background-color .15s ease, border-color .15s ease;
+}
+.page-cart #btnClear:hover{
+  background:#f0f0f0;
+  border-color:#f0f0f0;
+  opacity:1;
+}
+.page-cart #btnClear:focus-visible{
+  outline:2px solid #fff;
+  outline-offset:3px;
+}
+
 .pay-trust{
   margin-top:10px; color:#cfcfcf; font-size:12px;
 }

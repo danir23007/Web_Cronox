@@ -25,5 +25,28 @@
     };
   };
 
-  return Object.freeze({ createCoordinator });
+  const pollUntilProcessed = async ({
+    fetchStatus,
+    onProcessed,
+    shouldContinue = () => true,
+    delay = (milliseconds) =>
+      new Promise((resolve) => setTimeout(resolve, milliseconds)),
+    intervalMs = 1500,
+    maxAttempts = 40,
+  }) => {
+    let lastStatus = null;
+    for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+      if (!shouldContinue()) return { outcome: 'cancelled', status: lastStatus };
+      lastStatus = await fetchStatus();
+      if (!shouldContinue()) return { outcome: 'cancelled', status: lastStatus };
+      if (lastStatus?.isProcessed) {
+        if (typeof onProcessed === 'function') await onProcessed(lastStatus);
+        return { outcome: 'processed', status: lastStatus };
+      }
+      if (attempt + 1 < maxAttempts) await delay(intervalMs);
+    }
+    return { outcome: 'timeout', status: lastStatus };
+  };
+
+  return Object.freeze({ createCoordinator, pollUntilProcessed });
 });

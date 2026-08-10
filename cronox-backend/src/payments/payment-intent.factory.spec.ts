@@ -255,7 +255,12 @@ describe('PaymentIntentFactory', () => {
       claimCheckoutSnapshotReplacement: jest.fn().mockResolvedValue(false),
       releaseCheckoutSnapshot: jest.fn(),
     };
-    const stripeService = { cancelCheckoutPaymentIntent: jest.fn() };
+    const stripeService = {
+      cancelCheckoutPaymentIntent: jest.fn(),
+      assertCheckoutPaymentIsNotConfirming: jest
+        .fn()
+        .mockResolvedValue(undefined),
+    };
     const factory = new PaymentIntentFactory(
       ordersService as any,
       stripeService as any,
@@ -271,5 +276,37 @@ describe('PaymentIntentFactory', () => {
 
     expect(stripeService.cancelCheckoutPaymentIntent).not.toHaveBeenCalled();
     expect(ordersService.releaseCheckoutSnapshot).not.toHaveBeenCalled();
+  });
+
+  it('reports confirmation pending instead of a temporary replacement conflict', async () => {
+    const ordersService = {
+      createCheckoutSnapshot: jest.fn().mockResolvedValue({
+        ...baseSnapshot,
+        paymentIntentId: 'pi_succeeded',
+        status: 'REPLACEMENT_PENDING',
+        replacementRequired: true,
+      }),
+      claimCheckoutSnapshotReplacement: jest.fn().mockResolvedValue(false),
+    };
+    const stripeService = {
+      assertCheckoutPaymentIsNotConfirming: jest
+        .fn()
+        .mockRejectedValue(new Error('CHECKOUT_PAYMENT_CONFIRMATION_PENDING')),
+    };
+    const factory = new PaymentIntentFactory(
+      ordersService as any,
+      stripeService as any,
+    );
+
+    await expect(
+      factory.createPaymentIntentForUser(
+        1,
+        { shippingMethod: 'EXPRESS' } as any,
+        { id: 10 } as any,
+      ),
+    ).rejects.toThrow('CHECKOUT_PAYMENT_CONFIRMATION_PENDING');
+    expect(
+      stripeService.assertCheckoutPaymentIsNotConfirming,
+    ).toHaveBeenCalledWith('pi_succeeded', 'snap_1');
   });
 });

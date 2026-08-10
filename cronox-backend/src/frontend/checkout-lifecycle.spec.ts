@@ -11,6 +11,17 @@ describe('checkout frontend lifecycle coordinator', () => {
         task: (isCurrent: () => boolean) => Promise<boolean>,
       ) => Promise<boolean>;
     };
+    pollUntilProcessed: (options: {
+      fetchStatus: () => Promise<Record<string, unknown>>;
+      onProcessed: (status: Record<string, unknown>) => Promise<void>;
+      shouldContinue?: () => boolean;
+      delay?: () => Promise<void>;
+      intervalMs?: number;
+      maxAttempts?: number;
+    }) => Promise<{
+      outcome: string;
+      status: Record<string, unknown> | null;
+    }>;
   }>(
     path.resolve(
       __dirname,
@@ -48,5 +59,37 @@ describe('checkout frontend lifecycle coordinator', () => {
     expect(commits).toEqual(['EXPRESS']);
     expect(coordinator.isCurrent(firstRevision)).toBe(false);
     expect(coordinator.isCurrent(secondRevision)).toBe(true);
+  });
+
+  it('polls a delayed succeeded webhook and commits only after order processing', async () => {
+    const fetchStatus = jest
+      .fn()
+      .mockResolvedValueOnce({
+        found: false,
+        isProcessed: false,
+        paymentPending: true,
+      })
+      .mockResolvedValueOnce({
+        found: true,
+        isProcessed: true,
+        orderId: 16,
+      });
+    const onProcessed = jest.fn().mockResolvedValue(undefined);
+    const delay = jest.fn().mockResolvedValue(undefined);
+
+    await expect(
+      coordinatorModule.pollUntilProcessed({
+        fetchStatus,
+        onProcessed,
+        delay,
+        maxAttempts: 3,
+      }),
+    ).resolves.toEqual({
+      outcome: 'processed',
+      status: { found: true, isProcessed: true, orderId: 16 },
+    });
+    expect(fetchStatus).toHaveBeenCalledTimes(2);
+    expect(delay).toHaveBeenCalledTimes(1);
+    expect(onProcessed).toHaveBeenCalledTimes(1);
   });
 });

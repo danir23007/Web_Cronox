@@ -41,6 +41,12 @@ export class PaymentIntentFactory {
           snapshot.checkoutSnapshotId,
         );
       if (!replacementClaimed) {
+        if (snapshot.paymentIntentId) {
+          await this.stripeService.assertCheckoutPaymentIsNotConfirming(
+            snapshot.paymentIntentId,
+            snapshot.checkoutSnapshotId,
+          );
+        }
         throw new ConflictException('CHECKOUT_REPLACEMENT_IN_PROGRESS');
       }
 

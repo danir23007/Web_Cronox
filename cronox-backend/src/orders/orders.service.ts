@@ -1313,10 +1313,18 @@ export class OrdersService {
       throw new BadRequestException('PROVIDER_REF_REQUIRED');
     }
 
+    const numericOrderId = /^\d+$/.test(normalizedProviderRef)
+      ? Number(normalizedProviderRef)
+      : null;
     const order = await this.prisma.order.findFirst({
       where: {
         userId,
-        providerRef: normalizedProviderRef,
+        OR: [
+          { providerRef: normalizedProviderRef },
+          ...(Number.isSafeInteger(numericOrderId) && numericOrderId! > 0
+            ? [{ id: numericOrderId! }]
+            : []),
+        ],
       },
       select: {
         id: true,
@@ -1342,12 +1350,55 @@ export class OrdersService {
       order.status === OrderStatus.DELIVERED;
 
     return {
-      providerRef: order.providerRef,
+      ...(numericOrderId === null ? { providerRef: order.providerRef } : {}),
       found: true,
       orderId: order.id,
       orderStatus: order.status,
       isProcessed,
       updatedAt: order.updatedAt,
+    };
+  }
+
+  async getCurrentCheckoutPaymentProcessingStatus(
+    userId: number,
+  ): Promise<Record<string, unknown>> {
+    const snapshot = await this.prisma.checkoutSnapshot.findFirst({
+      where: {
+        userId,
+        stripePaymentIntentId: { not: null },
+        status: {
+          in: ['PAYMENT_BOUND', 'REPLACEMENT_PENDING', 'ORDER_CREATED'],
+        },
+      },
+      orderBy: { updatedAt: 'desc' },
+      select: {
+        status: true,
+        order: {
+          select: { id: true, status: true, updatedAt: true },
+        },
+      },
+    });
+
+    if (!snapshot) {
+      return { found: false, isProcessed: false, paymentPending: false };
+    }
+    if (!snapshot.order) {
+      return { found: false, isProcessed: false, paymentPending: true };
+    }
+
+    const isProcessed =
+      snapshot.order.status === OrderStatus.PAID ||
+      snapshot.order.status === OrderStatus.PROCESSING ||
+      snapshot.order.status === OrderStatus.REFUNDED ||
+      snapshot.order.status === OrderStatus.SHIPPED ||
+      snapshot.order.status === OrderStatus.DELIVERED;
+    return {
+      found: true,
+      orderId: snapshot.order.id,
+      orderStatus: snapshot.order.status,
+      isProcessed,
+      paymentPending: !isProcessed,
+      updatedAt: snapshot.order.updatedAt,
     };
   }
 

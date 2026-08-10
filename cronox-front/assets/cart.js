@@ -235,7 +235,7 @@
   });
 
   btnClear?.addEventListener('click', () => {
-    if (confirm('¿Vaciar tu carrito?')) {
+    if (confirm('¿Vaciar tu cesta?')) {
       clearCart();
     }
   });
