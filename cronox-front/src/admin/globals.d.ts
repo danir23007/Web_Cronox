@@ -123,6 +123,12 @@ declare global {
     getFallbackProducts: () => unknown[];
     getCsrfHeaders: () => Promise<Record<string, string>>;
     classifyApiError: (error?: unknown) => CronoxApiErrorClassification;
+    getProducts?: (query?: QueryRecord) => Promise<unknown[]>;
+    getProductsPage?: (query?: QueryRecord) => Promise<{
+      products: unknown[];
+      meta: Record<string, unknown>;
+    }>;
+    getProductSuggestions?: (search: string, query?: QueryRecord) => Promise<unknown[]>;
     getCategoryProducts?: (slug: string, query?: QueryRecord) => Promise<unknown>;
     admin?: CronoxAdminApi;
     [key: string]: unknown;

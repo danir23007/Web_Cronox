@@ -201,11 +201,15 @@
     window.CRONOX_PRODUCTS = PRODUCTS;
   };
 
-  // ---- Navegación inicial (?q=, ?categorySlug=) ----
+  // ---- Navegación inicial (?search=, ?categorySlug=) ----
   const url = new URL(window.location);
-  const initialQueryRaw  = url.searchParams.get("q") || "";
+  const initialQueryRaw = (url.searchParams.get("search") || url.searchParams.get("q") || "")
+    .trim()
+    .replace(/\s+/g, " ")
+    .slice(0, 100);
   const categorySlugRaw = (url.searchParams.get("categorySlug") || "").trim().toLowerCase();
   const initialCategorySlug = /^[a-z0-9-]+$/.test(categorySlugRaw) ? categorySlugRaw : "";
+  let activeSearchQuery = initialQueryRaw;
   if (searchInput && initialQueryRaw) searchInput.value = initialQueryRaw;
   if (initialCategorySlug) {
     document.querySelectorAll(".black-menu__link").forEach((link) => {
@@ -610,7 +614,10 @@
           retry.type = "button";
           retry.className = "btn-primary";
           retry.textContent = "Reintentar";
-          retry.addEventListener("click", () => initCatalog());
+          retry.addEventListener("click", () => {
+            if (activeSearchQuery && productsGrid) performFullSearch(activeSearchQuery);
+            else initCatalog();
+          });
           productsFallback.appendChild(retry);
         }
       }
@@ -647,17 +654,9 @@
     return true;
   }
 
-  function matchesQuery(p, qNorm) {
-    if (!qNorm) return true;
-    const haystack = `${norm(p.name)} ${norm(p.desc)} ${(p.categories||[]).map(norm).join(" ")} ${norm(p.color)}`.trim();
-    return haystack.includes(qNorm);
-  }
-
   function applyAll() {
     const f = getActiveFilters();
-    const qRaw = searchInput ? searchInput.value : initialQueryRaw;
-    const qNorm = norm(qRaw);
-    const out = PRODUCTS.filter(p => matchesFilters(p, f) && matchesQuery(p, qNorm));
+    const out = PRODUCTS.filter(p => matchesFilters(p, f));
     renderProducts(out);
   }
 
@@ -713,12 +712,59 @@
 
   window.addEventListener("pageshow", (e) => { if (e.persisted) restoreScrollOrFocus(); });
 
+  async function loadSearchResults(search, categorySlug = "") {
+    const products = [];
+    let page = 1;
+    let pageCount = 1;
+    let category = null;
+
+    do {
+      if (categorySlug) {
+        if (!API || typeof API.getCategoryProducts !== "function") {
+          throw new Error("La API de categorías no está disponible");
+        }
+        const response = await API.getCategoryProducts(categorySlug, {
+          search,
+          page,
+          limit: 100,
+        });
+        category = response?.category || category;
+        if (Array.isArray(response?.products)) products.push(...response.products);
+        pageCount = Number(response?.meta?.pageCount || 1);
+      } else {
+        if (!API || typeof API.getProductsPage !== "function") {
+          throw new Error("La API de búsqueda no está disponible");
+        }
+        const response = await API.getProductsPage({ search, page, limit: 100 });
+        if (Array.isArray(response?.products)) products.push(...response.products);
+        pageCount = Number(response?.meta?.pageCount || 1);
+      }
+      page += 1;
+    } while (page <= pageCount && page <= 1000);
+
+    return { products: adaptCatalog(products), category };
+  }
+
   async function loadCatalog() {
     const fallback = adaptCatalog(cloneProducts(fallbackFactory()));
     if (categorySlugRaw && !initialCategorySlug) {
       const error = new Error("El identificador de categoría no es válido");
       error.status = 400;
       return { products: [], source: "category-error", category: null, error };
+    }
+    if (initialQueryRaw) {
+      try {
+        const result = await loadSearchResults(initialQueryRaw, initialCategorySlug);
+        return {
+          products: result.products,
+          source: "search-api",
+          category: result.category,
+          error: null,
+        };
+      } catch (error) {
+        console.warn("[CRONOX] No se pudo completar la búsqueda.", error);
+        return { products: [], source: "search-error", category: null, error };
+      }
     }
     if (initialCategorySlug) {
       try {
@@ -786,7 +832,16 @@
     }
     const { products, source, category, error } = await loadCatalog();
     catalogLoadError = error || null;
-    if (initialCategorySlug && category) {
+    if (initialQueryRaw) {
+      if (storeHeading) {
+        storeHeading.textContent = category?.name
+          ? `Resultados en ${category.name}`
+          : `Resultados para “${initialQueryRaw}”`;
+      }
+      catalogEmptyMessage = error
+        ? "No se pudo completar la búsqueda. Inténtalo de nuevo."
+        : "No se han encontrado productos para esta búsqueda.";
+    } else if (initialCategorySlug && category) {
       if (storeHeading) storeHeading.textContent = category.name || category.slug;
       catalogEmptyMessage = "No hay productos disponibles en esta categoría.";
     } else if (categorySlugRaw && error) {
@@ -804,10 +859,49 @@
 
   window.CRONOX_catalogReady = initCatalog();
 
+  const performFullSearch = async (rawQuery) => {
+    const query = String(rawQuery || '').trim().replace(/\s+/g, ' ').slice(0, 100);
+    if (!query || !productsGrid) return;
+    activeSearchQuery = query;
+
+    const nextUrl = new URL(window.location.href);
+    nextUrl.searchParams.delete('q');
+    nextUrl.searchParams.set('search', query);
+    nextUrl.hash = 'store';
+    window.history.pushState(null, '', nextUrl);
+    if (searchInput) searchInput.value = query;
+    if (productsFallback) {
+      productsFallback.hidden = false;
+      productsFallback.textContent = 'Buscando productos…';
+    }
+    productsGrid.replaceChildren();
+
+    try {
+      const result = await loadSearchResults(query, initialCategorySlug);
+      catalogLoadError = null;
+      catalogEmptyMessage = 'No se han encontrado productos para esta búsqueda.';
+      if (storeHeading) {
+        storeHeading.textContent = result.category?.name
+          ? `Resultados en ${result.category.name}`
+          : `Resultados para “${query}”`;
+      }
+      setProducts(result.products);
+      applyAll();
+      notifyCatalogReady('search-api');
+    } catch (error) {
+      console.warn('[CRONOX] No se pudo completar la búsqueda.', error);
+      catalogLoadError = error;
+      catalogEmptyMessage = 'No se pudo completar la búsqueda. Inténtalo de nuevo.';
+      setProducts([]);
+      applyAll();
+    }
+
+    document.getElementById('store')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+
+  if (productsGrid) window.CRONOX_handleStoreSearch = performFullSearch;
+
   // ---- Eventos búsqueda/filtros ----
-  if (searchForm) {
-    searchForm.addEventListener("submit", (e) => { e.preventDefault(); applyAll(); });
-  }
   if (filtersForm) {
     filtersForm.addEventListener("submit", (e) => { e.preventDefault(); applyAll(); });
   }

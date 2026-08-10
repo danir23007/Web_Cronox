@@ -259,11 +259,199 @@
   const searchBar = $('#searchBar');
   const btnSearch = $('#btnSearch');
   const searchInput = $('#searchInput');
+  const searchForm = searchBar ? $('#searchForm', searchBar) : null;
   const searchCloseBtn = searchBar ? $('.searchbar__close', searchBar) : null;
   let searchActive = false;
   let searchPrevTopbarState = '';
   let searchLockedTopbar = false;
   let searchHideTimer = 0;
+  let searchSuggestionsPanel = null;
+  let searchSuggestionsList = null;
+  let searchSuggestionsStatus = null;
+  let searchSuggestionItems = [];
+  let highlightedSuggestion = -1;
+  let searchDebounceTimer = 0;
+  let searchRequestSequence = 0;
+
+  const normalizeSearchQuery = (value) => String(value || '').trim().replace(/\s+/g, ' ').slice(0, 100);
+
+  const ensureSearchSuggestions = () => {
+    if (!searchForm || !searchInput || searchSuggestionsPanel) return;
+    const panelId = 'searchSuggestions';
+    const listId = `${panelId}List`;
+
+    searchSuggestionsPanel = document.createElement('div');
+    searchSuggestionsPanel.id = panelId;
+    searchSuggestionsPanel.className = 'search-suggestions';
+    searchSuggestionsPanel.hidden = true;
+
+    searchSuggestionsList = document.createElement('div');
+    searchSuggestionsList.id = listId;
+    searchSuggestionsList.className = 'search-suggestions__list';
+    searchSuggestionsList.setAttribute('role', 'listbox');
+    searchSuggestionsList.setAttribute('aria-label', 'Sugerencias de productos');
+
+    searchSuggestionsStatus = document.createElement('div');
+    searchSuggestionsStatus.className = 'search-suggestions__status sr-only';
+    searchSuggestionsStatus.setAttribute('role', 'status');
+    searchSuggestionsStatus.setAttribute('aria-live', 'polite');
+    searchSuggestionsStatus.setAttribute('aria-atomic', 'true');
+
+    searchSuggestionsPanel.appendChild(searchSuggestionsList);
+    searchForm.append(searchSuggestionsPanel, searchSuggestionsStatus);
+    searchInput.setAttribute('role', 'combobox');
+    searchInput.setAttribute('aria-autocomplete', 'list');
+    searchInput.setAttribute('aria-haspopup', 'listbox');
+    searchInput.setAttribute('aria-controls', listId);
+    searchInput.setAttribute('aria-expanded', 'false');
+    searchInput.setAttribute('maxlength', '100');
+  };
+
+  const announceSearchSuggestions = (message) => {
+    if (!searchSuggestionsStatus) return;
+    searchSuggestionsStatus.textContent = '';
+    window.requestAnimationFrame(() => {
+      if (searchSuggestionsStatus) searchSuggestionsStatus.textContent = message;
+    });
+  };
+
+  const hideSearchSuggestions = () => {
+    highlightedSuggestion = -1;
+    searchInput?.removeAttribute('aria-activedescendant');
+    searchInput?.setAttribute('aria-expanded', 'false');
+    if (searchSuggestionsPanel) searchSuggestionsPanel.hidden = true;
+    searchSuggestionsList
+      ?.querySelectorAll('[role="option"]')
+      .forEach((option) => option.setAttribute('aria-selected', 'false'));
+  };
+
+  const showSuggestionState = (message, state) => {
+    ensureSearchSuggestions();
+    if (!searchSuggestionsList || !searchSuggestionsPanel) return;
+    searchSuggestionItems = [];
+    highlightedSuggestion = -1;
+    searchInput?.removeAttribute('aria-activedescendant');
+    searchSuggestionsList.replaceChildren();
+    const status = document.createElement('div');
+    status.className = `search-suggestions__state search-suggestions__state--${state}`;
+    status.textContent = message;
+    searchSuggestionsList.appendChild(status);
+    searchSuggestionsPanel.hidden = false;
+    searchInput?.setAttribute('aria-expanded', 'true');
+    announceSearchSuggestions(message);
+  };
+
+  const getSuggestionHref = (product) => {
+    if (product?.slug) return `/producto.html?slug=${encodeURIComponent(product.slug)}`;
+    return product?.id != null ? `/producto.html?id=${encodeURIComponent(product.id)}` : '#';
+  };
+
+  const setHighlightedSuggestion = (nextIndex) => {
+    const options = Array.from(searchSuggestionsList?.querySelectorAll('[role="option"]') || []);
+    if (!options.length) return;
+    highlightedSuggestion = (nextIndex + options.length) % options.length;
+    options.forEach((option, index) => {
+      const isHighlighted = index === highlightedSuggestion;
+      option.classList.toggle('is-highlighted', isHighlighted);
+      option.setAttribute('aria-selected', String(isHighlighted));
+      if (isHighlighted) {
+        searchInput?.setAttribute('aria-activedescendant', option.id);
+        option.scrollIntoView({ block: 'nearest' });
+      }
+    });
+  };
+
+  const renderSearchSuggestions = (products) => {
+    ensureSearchSuggestions();
+    if (!searchSuggestionsList || !searchSuggestionsPanel) return;
+    searchSuggestionItems = Array.isArray(products) ? products.slice(0, 8) : [];
+    if (!searchSuggestionItems.length) {
+      showSuggestionState('No se han encontrado productos.', 'empty');
+      return;
+    }
+
+    highlightedSuggestion = -1;
+    searchSuggestionsList.replaceChildren();
+    searchSuggestionItems.forEach((product, index) => {
+      const option = document.createElement('a');
+      option.id = `searchSuggestion-${index}`;
+      option.className = 'search-suggestions__option';
+      option.href = getSuggestionHref(product);
+      option.setAttribute('role', 'option');
+      option.setAttribute('aria-selected', 'false');
+
+      const thumbnail = document.createElement('span');
+      thumbnail.className = 'search-suggestions__thumbnail';
+      if (product.image) {
+        const image = document.createElement('img');
+        image.src = product.image;
+        image.alt = '';
+        image.referrerPolicy = 'no-referrer';
+        image.addEventListener('error', () => {
+          thumbnail.replaceChildren();
+          const fallback = document.createElement('span');
+          fallback.className = 'search-suggestions__image-fallback';
+          fallback.textContent = 'Sin imagen';
+          thumbnail.appendChild(fallback);
+        }, { once: true });
+        thumbnail.appendChild(image);
+      } else {
+        const fallback = document.createElement('span');
+        fallback.className = 'search-suggestions__image-fallback';
+        fallback.textContent = 'Sin imagen';
+        thumbnail.appendChild(fallback);
+      }
+
+      const details = document.createElement('span');
+      details.className = 'search-suggestions__details';
+      const name = document.createElement('strong');
+      name.className = 'search-suggestions__name';
+      name.textContent = product.name || 'Producto CRONOX';
+      const price = document.createElement('span');
+      price.className = 'search-suggestions__price';
+      price.textContent = product.priceLabel || '';
+      details.append(name, price);
+      option.append(thumbnail, details);
+      option.addEventListener('pointermove', () => setHighlightedSuggestion(index));
+      option.addEventListener('click', hideSearchSuggestions);
+      searchSuggestionsList.appendChild(option);
+    });
+
+    searchSuggestionsPanel.hidden = false;
+    searchInput?.setAttribute('aria-expanded', 'true');
+    announceSearchSuggestions(`${searchSuggestionItems.length} sugerencias disponibles.`);
+  };
+
+  const loadSearchSuggestions = async () => {
+    ensureSearchSuggestions();
+    const query = normalizeSearchQuery(searchInput?.value);
+    if (!query) {
+      searchRequestSequence += 1;
+      searchSuggestionItems = [];
+      hideSearchSuggestions();
+      return;
+    }
+
+    const requestId = ++searchRequestSequence;
+    showSuggestionState('Buscando productos…', 'loading');
+    try {
+      if (typeof API.getProductSuggestions !== 'function') {
+        throw new Error('La búsqueda no está disponible.');
+      }
+      const currentUrl = new URL(window.location.href);
+      const categorySlug = currentUrl.searchParams.get('categorySlug') || '';
+      const products = await API.getProductSuggestions(query, {
+        limit: 8,
+        categorySlug: /^[a-z0-9-]+$/.test(categorySlug) ? categorySlug : undefined,
+      });
+      if (requestId !== searchRequestSequence || query !== normalizeSearchQuery(searchInput?.value)) return;
+      renderSearchSuggestions(products);
+    } catch (error) {
+      if (requestId !== searchRequestSequence) return;
+      console.warn('[CRONOX] No se pudieron cargar las sugerencias.', error);
+      showSuggestionState('No se pudieron cargar las sugerencias. Inténtalo de nuevo.', 'error');
+    }
+  };
 
   const lockTopbarForSearch = () => {
     if (!topbar) return;
@@ -319,6 +507,9 @@
   const closeSearch = () => {
     if (!searchBar || !searchActive) return;
     searchActive = false;
+    window.clearTimeout(searchDebounceTimer);
+    searchRequestSequence += 1;
+    hideSearchSuggestions();
     searchBar.classList.remove('is-open');
     searchBar.setAttribute('aria-hidden', 'true');
     btnSearch?.setAttribute('aria-expanded', 'false');
@@ -346,6 +537,77 @@
   searchCloseBtn?.addEventListener('click', (e) => {
     e.preventDefault();
     closeSearch();
+  });
+
+  ensureSearchSuggestions();
+
+  searchInput?.addEventListener('input', () => {
+    window.clearTimeout(searchDebounceTimer);
+    const query = normalizeSearchQuery(searchInput.value);
+    if (!query) {
+      searchRequestSequence += 1;
+      searchSuggestionItems = [];
+      hideSearchSuggestions();
+      return;
+    }
+    searchDebounceTimer = window.setTimeout(loadSearchSuggestions, 250);
+  });
+
+  searchInput?.addEventListener('focus', () => {
+    if (normalizeSearchQuery(searchInput.value) && searchSuggestionItems.length) {
+      if (searchSuggestionsPanel) searchSuggestionsPanel.hidden = false;
+      searchInput.setAttribute('aria-expanded', 'true');
+    }
+  });
+
+  searchInput?.addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowDown' && searchSuggestionItems.length) {
+      e.preventDefault();
+      setHighlightedSuggestion(highlightedSuggestion + 1);
+      return;
+    }
+    if (e.key === 'ArrowUp' && searchSuggestionItems.length) {
+      e.preventDefault();
+      setHighlightedSuggestion(highlightedSuggestion - 1);
+      return;
+    }
+    if (e.key === 'Enter' && highlightedSuggestion >= 0) {
+      const selected = searchSuggestionItems[highlightedSuggestion];
+      if (!selected) return;
+      e.preventDefault();
+      window.location.href = getSuggestionHref(selected);
+      return;
+    }
+    if (e.key === 'Escape' && searchSuggestionsPanel && !searchSuggestionsPanel.hidden) {
+      e.preventDefault();
+      e.stopPropagation();
+      hideSearchSuggestions();
+    }
+  });
+
+  searchForm?.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const query = normalizeSearchQuery(searchInput?.value);
+    if (!query) {
+      hideSearchSuggestions();
+      return;
+    }
+    hideSearchSuggestions();
+    if (typeof window.CRONOX_handleStoreSearch === 'function') {
+      window.CRONOX_handleStoreSearch(query);
+      return;
+    }
+
+    const currentUrl = new URL(window.location.href);
+    const params = new URLSearchParams();
+    const categorySlug = currentUrl.searchParams.get('categorySlug') || '';
+    if (/^[a-z0-9-]+$/.test(categorySlug)) params.set('categorySlug', categorySlug);
+    params.set('search', query);
+    window.location.href = `index.html?${params.toString()}#store`;
+  });
+
+  document.addEventListener('click', (e) => {
+    if (searchForm && !searchForm.contains(e.target)) hideSearchSuggestions();
   });
 
   document.addEventListener('keydown', (e) => {

@@ -176,6 +176,7 @@ body.is-loaded #preloader{opacity:0;transform:scale(1.02);pointer-events:none}
   display:flex;
   align-items:center;
   gap:10px;
+  position:relative;
 }
 .searchbar__input{
   flex:1;
@@ -200,6 +201,101 @@ body.is-loaded #preloader{opacity:0;transform:scale(1.02);pointer-events:none}
   cursor:pointer;
 }
 
+.search-suggestions{
+  position:absolute;
+  top:calc(100% + 9px);
+  left:0;
+  right:0;
+  z-index:2;
+  max-height:min(62vh, 520px);
+  overflow-y:auto;
+  border:1px solid rgba(255,255,255,.28);
+  border-radius:10px;
+  background:#050505;
+  box-shadow:0 16px 36px rgba(0,0,0,.58);
+}
+.search-suggestions[hidden]{display:none}
+.search-suggestions__list{display:grid;padding:5px}
+.search-suggestions__option{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  min-width:0;
+  padding:6px 8px;
+  border-radius:7px;
+  color:#fff;
+  text-decoration:none;
+  outline:none;
+}
+.search-suggestions__option:hover,
+.search-suggestions__option:focus-visible,
+.search-suggestions__option.is-highlighted{
+  background:#fff;
+  color:#000;
+}
+.search-suggestions__thumbnail{
+  width:56px;
+  height:56px;
+  flex:0 0 56px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  overflow:hidden;
+  border:1px solid #d8d8d8;
+  border-radius:8px;
+  background:#fff;
+}
+.search-suggestions__thumbnail img{
+  width:100%;
+  height:100%;
+  display:block;
+  object-fit:contain;
+  object-position:center;
+}
+.search-suggestions__image-fallback{
+  padding:4px;
+  color:#111;
+  font:600 10px/1.15 system-ui;
+  text-align:center;
+}
+.search-suggestions__details{
+  flex:1;
+  min-width:0;
+  min-height:56px;
+  display:flex;
+  flex-direction:column;
+  justify-content:center;
+  align-items:flex-start;
+  gap:4px;
+}
+.search-suggestions__name{
+  max-width:100%;
+  overflow:hidden;
+  font:700 14px/1.2 system-ui;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+.search-suggestions__price{
+  color:#bbb;
+  font:600 12px/1.2 system-ui;
+}
+.search-suggestions__option:hover .search-suggestions__price,
+.search-suggestions__option:focus-visible .search-suggestions__price,
+.search-suggestions__option.is-highlighted .search-suggestions__price{color:#333}
+.search-suggestions__state{padding:16px 14px;color:#ccc;font:500 13px/1.4 system-ui;text-align:center}
+.search-suggestions__state--error{color:#ffb8c4}
+.sr-only{
+  position:absolute!important;
+  width:1px!important;
+  height:1px!important;
+  padding:0!important;
+  margin:-1px!important;
+  overflow:hidden!important;
+  clip:rect(0,0,0,0)!important;
+  white-space:nowrap!important;
+  border:0!important;
+}
+
 .searchbar__close{
   background:none;
   border:none;
@@ -221,6 +317,9 @@ body.is-loaded #preloader{opacity:0;transform:scale(1.02);pointer-events:none}
   .searchbar__inner{ padding:8px 12px; gap:10px; }
   .searchbar__submit{ padding:0 10px; }
   .searchbar__close{ font-size:20px; padding:2px; }
+  .search-suggestions{right:-42px;max-height:65vh}
+  .search-suggestions__thumbnail{width:50px;height:50px;flex-basis:50px}
+  .search-suggestions__details{min-height:50px}
 }
 
 /* ===== HERO VIDEO ===== */

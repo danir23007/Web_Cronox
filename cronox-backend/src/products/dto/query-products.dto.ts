@@ -1,5 +1,5 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { Transform, Type } from 'class-transformer';
+import { Transform, TransformFnParams, Type } from 'class-transformer';
 import {
   IsIn,
   IsInt,
@@ -7,13 +7,31 @@ import {
   IsPositive,
   IsString,
   Matches,
+  MaxLength,
   Min,
   Max,
   IsEnum,
 } from 'class-validator';
 import { VariantSize } from '@prisma/client';
 
+const normalizeQueryText = (value: unknown, lowerCase = false): unknown => {
+  if (typeof value !== 'string') return value;
+  const normalized = value.trim().replace(/\s+/g, ' ');
+  return lowerCase ? normalized.toLowerCase() : normalized;
+};
+
 export class QueryProductsDto {
+  @ApiPropertyOptional({
+    description: 'Búsqueda pública por producto, categoría o palabras clave',
+    example: 'camiseta azul',
+    maxLength: 100,
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  @Transform(({ value }: TransformFnParams) => normalizeQueryText(value))
+  search?: string;
+
   @ApiPropertyOptional({ example: 1 })
   @IsOptional()
   @Type(() => Number)
@@ -29,7 +47,10 @@ export class QueryProductsDto {
   @Max(100)
   limit?: number = 10;
 
-  @ApiPropertyOptional({ enum: ['createdAt', 'price', 'name', 'id'], default: 'id' })
+  @ApiPropertyOptional({
+    enum: ['createdAt', 'price', 'name', 'id'],
+    default: 'id',
+  })
   @IsOptional()
   @IsString()
   @IsIn(['createdAt', 'price', 'name', 'id'])
@@ -45,19 +66,23 @@ export class QueryProductsDto {
   @IsOptional()
   @IsString()
   @Matches(/^[a-z0-9-]+$/)
-  @Transform(({ value }) =>
-    typeof value === 'string' ? value.trim().toLowerCase() : value,
-  )
+  @Transform(({ value }: TransformFnParams) => normalizeQueryText(value, true))
   categorySlug?: string;
 
-  @ApiPropertyOptional({ description: 'Precio mínimo en céntimos', example: 1000 })
+  @ApiPropertyOptional({
+    description: 'Precio mínimo en céntimos',
+    example: 1000,
+  })
   @IsOptional()
   @Type(() => Number)
   @IsInt()
   @Min(0)
   minPrice?: number;
 
-  @ApiPropertyOptional({ description: 'Precio máximo en céntimos', example: 10000 })
+  @ApiPropertyOptional({
+    description: 'Precio máximo en céntimos',
+    example: 10000,
+  })
   @IsOptional()
   @Type(() => Number)
   @IsInt()

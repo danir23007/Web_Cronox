@@ -2834,11 +2834,17 @@
           const nameInput = document.getElementById('productName');
           const descInput = document.getElementById('productDescription');
           const collectionInput = document.getElementById('productCollection');
+          const searchKeywordsInput = document.getElementById('productSearchKeywords');
           const isActiveInput = document.getElementById('productIsActive');
 
           if (nameInput) nameInput.value = product.name || '';
           if (descInput) descInput.value = product.description || '';
           if (collectionInput) collectionInput.value = product.collection || '';
+          if (searchKeywordsInput) {
+            searchKeywordsInput.value = Array.isArray(product.searchKeywords)
+              ? product.searchKeywords.join(', ')
+              : '';
+          }
           if (priceInput) priceInput.value = Number(product.price || 0) / 100;
           if (isActiveInput) isActiveInput.checked = Boolean(product.isActive);
 
@@ -2891,10 +2897,15 @@
     const formData = new FormData(productForm);
     const priceValue = Number(formData.get('price') || 0);
     const priceCents = Number.isFinite(priceValue) ? Math.round(priceValue * 100) : 0;
+    const searchKeywords = String(formData.get('searchKeywords') || '')
+      .split(',')
+      .map((keyword) => keyword.trim())
+      .filter(Boolean);
     const payload = {
       name: formData.get('name') || '',
       description: formData.get('description') || '',
       collection: formData.get('collection') || '',
+      searchKeywords: [...new Set(searchKeywords)],
       price: priceCents,
       isActive: productForm.querySelector('#productIsActive')?.checked ?? true,
       variants: collectVariantPayload(),

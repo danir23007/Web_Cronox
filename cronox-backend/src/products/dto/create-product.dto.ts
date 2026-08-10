@@ -2,6 +2,7 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import {
   IsArray,
+  ArrayMaxSize,
   IsInt,
   IsOptional,
   IsPositive,
@@ -49,6 +50,18 @@ export class CreateProductDto {
   @IsString()
   @MaxLength(140)
   collection?: string;
+
+  @ApiPropertyOptional({
+    description: 'Palabras internas para mejorar la búsqueda del producto',
+    example: ['azul', 'blue', 'camiseta', 'tee', 'washed'],
+    type: [String],
+  })
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(40)
+  @IsString({ each: true })
+  @MaxLength(60, { each: true })
+  searchKeywords?: string[];
 
   @ApiPropertyOptional({ example: true })
   @IsOptional()

@@ -13,6 +13,14 @@ import { CreateVariantDto } from './dto/create-variant.dto';
 import { AdjustStockDto, UpdateVariantDto } from './dto/update-variant.dto';
 import { CreateProductImageDto } from './dto/create-product-image.dto';
 import { AdminProductQueryDto } from '../admin/products/dto/admin-product-query.dto';
+import { ProductSuggestionsQueryDto } from './dto/product-suggestions-query.dto';
+import {
+  buildProductSearchText,
+  expandSearchTokens,
+  normalizeSearchKeywords,
+  normalizeSearchText,
+  scoreProductSearch,
+} from './product-search';
 
 @Injectable()
 export class ProductService {
@@ -46,6 +54,70 @@ export class ProductService {
       .slice(0, 140);
   }
 
+  private buildPublicSearchWhere(
+    search: string,
+    categorySlug?: string,
+  ): Prisma.ProductWhereInput {
+    const tokenGroups = expandSearchTokens(search);
+    const filters: Prisma.ProductWhereInput[] = [];
+
+    if (categorySlug) {
+      filters.push({
+        categories: {
+          some: {
+            category: { slug: categorySlug, isActive: true },
+          },
+        },
+      });
+    }
+
+    for (const terms of tokenGroups) {
+      filters.push({
+        OR: terms.flatMap((term) => [
+          { searchText: { contains: term } },
+          {
+            categories: {
+              some: {
+                category: {
+                  isActive: true,
+                  OR: [
+                    { name: { contains: term, mode: 'insensitive' as const } },
+                    { slug: { contains: term, mode: 'insensitive' as const } },
+                  ],
+                },
+              },
+            },
+          },
+        ]),
+      });
+    }
+
+    return {
+      isActive: true,
+      ...(filters.length ? { AND: filters } : {}),
+    };
+  }
+
+  private toPublicProduct<
+    T extends {
+      price: number;
+      searchKeywords: string[];
+      searchText: string;
+      variants?: { price: number | null }[];
+    },
+  >(product: T) {
+    const publicProduct = { ...product } as Omit<
+      T,
+      'searchKeywords' | 'searchText'
+    > & {
+      searchKeywords?: string[];
+      searchText?: string;
+    };
+    delete publicProduct.searchKeywords;
+    delete publicProduct.searchText;
+    return this.addEffectiveVariantPrices(publicProduct);
+  }
+
   private async ensureUniqueSlug(
     base: string,
     tx: Prisma.TransactionClient | PrismaService = this.prisma,
@@ -55,7 +127,6 @@ export class ProductService {
     let candidate = normalized;
     let suffix = 2;
 
-    // eslint-disable-next-line no-constant-condition
     while (true) {
       const existing = await tx.product.findFirst({
         where: {
@@ -126,7 +197,6 @@ export class ProductService {
       });
     } catch (error) {
       // No bloquear la operación principal por fallo en auditoría
-      // eslint-disable-next-line no-console
       console.warn('[AUDIT_LOG] Error registrando auditoría', error);
     }
   }
@@ -242,6 +312,7 @@ export class ProductService {
             OR p."slug" ILIKE ${likeTerm}
             OR p."description" ILIKE ${likeTerm}
             OR p."collection" ILIKE ${likeTerm}
+            OR p."searchText" ILIKE ${likeTerm}
             OR EXISTS (
               SELECT 1
               FROM "ProductVariant" v_search
@@ -309,7 +380,9 @@ export class ProductService {
     } as T;
   }
 
-  private handleDuplicateError(error: Prisma.PrismaClientKnownRequestError): never {
+  private handleDuplicateError(
+    error: Prisma.PrismaClientKnownRequestError,
+  ): never {
     const target = (error.meta?.target as string[]) ?? [];
 
     if (target.includes('slug')) {
@@ -389,6 +462,7 @@ export class ProductService {
         { slug: { contains: searchTerm, mode: 'insensitive' } },
         { description: { contains: searchTerm, mode: 'insensitive' } },
         { collection: { contains: searchTerm, mode: 'insensitive' } },
+        { searchText: { contains: normalizeSearchText(searchTerm) } },
         {
           variants: {
             some: {
@@ -456,6 +530,7 @@ export class ProductService {
       imageUrl: true,
       isActive: true,
       collection: true,
+      searchKeywords: true,
       createdAt: true,
       updatedAt: true,
       images: {
@@ -566,7 +641,9 @@ export class ProductService {
 
       const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
       return {
-        items: orderedItems.map((product) => this.addEffectiveVariantPrices(product)),
+        items: orderedItems.map((product) =>
+          this.addEffectiveVariantPrices(product),
+        ),
         page,
         pageSize,
         totalItems,
@@ -591,7 +668,9 @@ export class ProductService {
       this.prisma.product.count({ where }),
     ]);
 
-    const pagedItems = items.map((product) => this.addEffectiveVariantPrices(product));
+    const pagedItems = items.map((product) =>
+      this.addEffectiveVariantPrices(product),
+    );
     const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
 
     return {
@@ -658,7 +737,9 @@ export class ProductService {
             select: { id: true },
           })
         : [];
-      const existingCategoryIds = new Set(categories.map((category) => category.id));
+      const existingCategoryIds = new Set(
+        categories.map((category) => category.id),
+      );
       const missingCategoryIds = categoryIds.filter(
         (categoryId) => !existingCategoryIds.has(categoryId),
       );
@@ -717,16 +798,17 @@ export class ProductService {
     const skip = (page - 1) * limit;
     const sortBy = query.sortBy ?? 'id';
     const order = query.order ?? 'asc';
+    const normalizedSearch = normalizeSearchText(query.search).slice(0, 100);
 
     const orderBy = {
       [sortBy]: order,
     } as Prisma.ProductOrderByWithRelationInput;
 
-    const where: Prisma.ProductWhereInput = {
-      isActive: true,
-    };
+    const where: Prisma.ProductWhereInput = normalizedSearch
+      ? this.buildPublicSearchWhere(normalizedSearch, query.categorySlug)
+      : { isActive: true };
 
-    if (query.categorySlug) {
+    if (query.categorySlug && !normalizedSearch) {
       where.categories = {
         some: {
           category: {
@@ -760,6 +842,34 @@ export class ProductService {
       };
     }
 
+    if (normalizedSearch) {
+      const matchedProducts = await this.prisma.product.findMany({
+        where,
+        include: this.getProductInclude(),
+      });
+      matchedProducts.sort((left, right) => {
+        const scoreDifference =
+          scoreProductSearch(right, normalizedSearch) -
+          scoreProductSearch(left, normalizedSearch);
+        if (scoreDifference) return scoreDifference;
+        return right.createdAt.getTime() - left.createdAt.getTime();
+      });
+      const items = matchedProducts.slice(skip, skip + limit);
+      const total = matchedProducts.length;
+
+      return {
+        meta: {
+          page,
+          limit,
+          total,
+          pageCount: Math.ceil(total / limit),
+          sortBy: 'relevance',
+          order: 'desc',
+        },
+        items: items.map((product) => this.toPublicProduct(product)),
+      };
+    }
+
     const [items, total] = await this.prisma.$transaction([
       this.prisma.product.findMany({
         where,
@@ -780,7 +890,76 @@ export class ProductService {
         sortBy,
         order,
       },
-      items: items.map((product) => this.addEffectiveVariantPrices(product)),
+      items: items.map((product) => this.toPublicProduct(product)),
+    };
+  }
+
+  async getSearchSuggestions(query: ProductSuggestionsQueryDto) {
+    const normalizedSearch = normalizeSearchText(query.search).slice(0, 100);
+    if (!normalizedSearch) return { items: [] };
+
+    const limit = Math.min(Math.max(query.limit ?? 8, 1), 8);
+    const candidates = await this.prisma.product.findMany({
+      where: this.buildPublicSearchWhere(normalizedSearch, query.categorySlug),
+      take: Math.max(40, limit * 10),
+      orderBy: [{ updatedAt: 'desc' }, { id: 'asc' }],
+      select: {
+        id: true,
+        slug: true,
+        name: true,
+        description: true,
+        collection: true,
+        searchKeywords: true,
+        price: true,
+        currency: true,
+        imageUrl: true,
+        images: {
+          take: 1,
+          orderBy: [{ isPrimary: 'desc' }, { sortOrder: 'asc' }, { id: 'asc' }],
+          select: { url: true },
+        },
+        categories: {
+          where: { category: { isActive: true } },
+          orderBy: { categoryId: 'asc' },
+          select: {
+            category: { select: { name: true, slug: true } },
+          },
+        },
+      },
+    });
+
+    const searchTerms = expandSearchTokens(normalizedSearch).flat();
+    return {
+      items: candidates
+        .sort((left, right) => {
+          const scoreDifference =
+            scoreProductSearch(right, normalizedSearch) -
+            scoreProductSearch(left, normalizedSearch);
+          if (scoreDifference) return scoreDifference;
+          return left.name.localeCompare(right.name, 'es');
+        })
+        .slice(0, limit)
+        .map((product) => {
+          const relevantCategory =
+            product.categories.find(({ category }) => {
+              const categoryText = normalizeSearchText(
+                `${category.name} ${category.slug}`,
+              );
+              return searchTerms.some((term) => categoryText.includes(term));
+            })?.category ??
+            product.categories[0]?.category ??
+            null;
+
+          return {
+            id: product.id,
+            slug: product.slug,
+            name: product.name,
+            price: product.price,
+            currency: product.currency,
+            imageUrl: product.images[0]?.url ?? product.imageUrl,
+            category: relevantCategory,
+          };
+        }),
     };
   }
 
@@ -790,13 +969,21 @@ export class ProductService {
       include: this.getProductInclude(),
     });
 
-    return this.addEffectiveVariantPrices(product);
+    return product ? this.toPublicProduct(product) : null;
   }
 
   async createProduct(dto: CreateProductDto, adminId?: number) {
     const currency = dto.currency ?? 'EUR';
     const images = this.prepareImages(dto);
-    const slug = await this.ensureUniqueSlug(dto.slug ?? this.slugify(dto.name));
+    const slug = await this.ensureUniqueSlug(
+      dto.slug ?? this.slugify(dto.name),
+    );
+    const searchKeywords = normalizeSearchKeywords(dto.searchKeywords);
+    const searchText = buildProductSearchText({
+      ...dto,
+      slug,
+      searchKeywords,
+    });
     const variants =
       dto.variants?.length && Array.isArray(dto.variants)
         ? dto.variants
@@ -814,6 +1001,8 @@ export class ProductService {
             currency,
             isActive: dto.isActive ?? true,
             collection: dto.collection,
+            searchKeywords,
+            searchText,
             imageUrl: primaryImage?.url,
             images: images.length ? { create: images } : undefined,
           },
@@ -854,7 +1043,10 @@ export class ProductService {
 
       return this.addEffectiveVariantPrices(product);
     } catch (e) {
-      if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') {
+      if (
+        e instanceof Prisma.PrismaClientKnownRequestError &&
+        e.code === 'P2002'
+      ) {
         this.handleDuplicateError(e);
       }
       throw e;
@@ -870,6 +1062,9 @@ export class ProductService {
     if (dto.description !== undefined) data.description = dto.description;
     if (dto.isActive !== undefined) data.isActive = dto.isActive;
     if (dto.collection !== undefined) data.collection = dto.collection;
+    if (dto.searchKeywords !== undefined) {
+      data.searchKeywords = normalizeSearchKeywords(dto.searchKeywords);
+    }
 
     try {
       const product = await this.prisma.$transaction(async (tx) => {
@@ -883,6 +1078,18 @@ export class ProductService {
           const baseSlug = dto.slug || this.slugify(dto.name ?? existing.name);
           data.slug = await this.ensureUniqueSlug(baseSlug, tx, id);
         }
+
+        const nextSearchKeywords =
+          dto.searchKeywords !== undefined
+            ? normalizeSearchKeywords(dto.searchKeywords)
+            : existing.searchKeywords;
+        data.searchText = buildProductSearchText({
+          name: dto.name ?? existing.name,
+          slug: typeof data.slug === 'string' ? data.slug : existing.slug,
+          description: dto.description ?? existing.description,
+          collection: dto.collection ?? existing.collection,
+          searchKeywords: nextSearchKeywords,
+        });
 
         if (Object.keys(data).length > 0) {
           await tx.product.update({
@@ -898,7 +1105,10 @@ export class ProductService {
         if (replaceImages) {
           await tx.productImage.deleteMany({ where: { productId: id } });
           const newImages = this.prepareImages(
-            dto as unknown as { images?: CreateProductImageDto[]; imageUrls?: string[] },
+            dto as unknown as {
+              images?: CreateProductImageDto[];
+              imageUrls?: string[];
+            },
           );
           if (newImages.length) {
             await tx.productImage.createMany({
@@ -910,13 +1120,17 @@ export class ProductService {
                 isPrimary: img.isPrimary ?? false,
               })),
             });
-            const primary = newImages.find((img) => img.isPrimary) ?? newImages[0];
+            const primary =
+              newImages.find((img) => img.isPrimary) ?? newImages[0];
             await tx.product.update({
               where: { id },
               data: { imageUrl: primary?.url },
             });
           } else {
-            await tx.product.update({ where: { id }, data: { imageUrl: null } });
+            await tx.product.update({
+              where: { id },
+              data: { imageUrl: null },
+            });
           }
         }
 
@@ -933,7 +1147,9 @@ export class ProductService {
         }
 
         if (dto.imagesToUpdate?.length && !replaceImages) {
-          const imageIds = [...new Set(dto.imagesToUpdate.map((image) => image.id))];
+          const imageIds = [
+            ...new Set(dto.imagesToUpdate.map((image) => image.id)),
+          ];
           const ownedImages = await tx.productImage.findMany({
             where: { id: { in: imageIds }, productId: id },
             select: { id: true },
@@ -1002,15 +1218,24 @@ export class ProductService {
             await tx.productVariant.update({
               where: { id: variantId },
               data: {
-                ...(variantData.size !== undefined ? { size: variantData.size } : {}),
-                ...(variantData.sku !== undefined ? { sku: variantData.sku } : {}),
-                ...(variantData.price !== undefined ? { price: variantData.price } : {}),
-                ...(variantData.stockQty !== undefined || variantData.stock !== undefined
+                ...(variantData.size !== undefined
+                  ? { size: variantData.size }
+                  : {}),
+                ...(variantData.sku !== undefined
+                  ? { sku: variantData.sku }
+                  : {}),
+                ...(variantData.price !== undefined
+                  ? { price: variantData.price }
+                  : {}),
+                ...(variantData.stockQty !== undefined ||
+                variantData.stock !== undefined
                   ? {
                       stockQty: variantData.stockQty ?? variantData.stock ?? 0,
                     }
                   : {}),
-                ...(variantData.isActive !== undefined ? { isActive: variantData.isActive } : {}),
+                ...(variantData.isActive !== undefined
+                  ? { isActive: variantData.isActive }
+                  : {}),
               },
             });
           }
@@ -1064,9 +1289,13 @@ export class ProductService {
           throw new NotFoundException('Product not found');
         }
 
+        const serializedPayload: unknown = JSON.parse(JSON.stringify(dto));
         await this.recordAudit(
           'product.update',
-          { productId: updated.id, payload: JSON.parse(JSON.stringify(dto)) },
+          {
+            productId: updated.id,
+            payload: serializedPayload as Prisma.InputJsonValue,
+          },
           adminId,
           tx,
         );
@@ -1110,14 +1339,22 @@ export class ProductService {
           data: { isActive: false },
         });
 
-        await this.recordAudit('product.disable', { productId: id }, adminId, tx);
+        await this.recordAudit(
+          'product.disable',
+          { productId: id },
+          adminId,
+          tx,
+        );
 
         return { ok: true };
       });
 
       return result;
     } catch (e) {
-      if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2025') {
+      if (
+        e instanceof Prisma.PrismaClientKnownRequestError &&
+        e.code === 'P2025'
+      ) {
         throw new NotFoundException('Product not found');
       }
       throw e;
@@ -1138,7 +1375,8 @@ export class ProductService {
           where: { productId },
           orderBy: this.imageOrderBy,
         });
-        const primary = images.find((candidate) => candidate.isPrimary) ?? images[0];
+        const primary =
+          images.find((candidate) => candidate.isPrimary) ?? images[0];
         if (primary && !primary.isPrimary) {
           await tx.productImage.update({
             where: { id: primary.id },
@@ -1153,14 +1391,20 @@ export class ProductService {
         return { ok: true };
       });
     } catch (e) {
-      if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2025') {
+      if (
+        e instanceof Prisma.PrismaClientKnownRequestError &&
+        e.code === 'P2025'
+      ) {
         throw new NotFoundException('Image not found');
       }
       throw e;
     }
   }
 
-  async createVariants(productId: number, dto: CreateVariantDto | CreateVariantDto[]) {
+  async createVariants(
+    productId: number,
+    dto: CreateVariantDto | CreateVariantDto[],
+  ) {
     const variants = Array.isArray(dto) ? dto : [dto];
 
     try {
@@ -1197,14 +1441,21 @@ export class ProductService {
 
       return this.addEffectiveVariantPrices(product);
     } catch (e) {
-      if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') {
+      if (
+        e instanceof Prisma.PrismaClientKnownRequestError &&
+        e.code === 'P2002'
+      ) {
         this.handleDuplicateError(e);
       }
       throw e;
     }
   }
 
-  async updateVariant(productId: number, variantId: number, dto: UpdateVariantDto) {
+  async updateVariant(
+    productId: number,
+    variantId: number,
+    dto: UpdateVariantDto,
+  ) {
     const existing = await this.prisma.productVariant.findFirst({
       where: { id: variantId, productId },
     });
@@ -1230,7 +1481,10 @@ export class ProductService {
 
       return this.buildVariantResponse(updated);
     } catch (e) {
-      if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') {
+      if (
+        e instanceof Prisma.PrismaClientKnownRequestError &&
+        e.code === 'P2002'
+      ) {
         this.handleDuplicateError(e);
       }
       throw e;

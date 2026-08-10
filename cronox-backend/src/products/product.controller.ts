@@ -24,6 +24,7 @@ import { ProductService } from './product.service';
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
 import { QueryProductsDto } from './dto/query-products.dto';
+import { ProductSuggestionsQueryDto } from './dto/product-suggestions-query.dto';
 
 @ApiTags('Products')
 @Controller('products')
@@ -35,6 +36,18 @@ export class ProductController {
   @ApiResponse({ status: 200, description: 'Lista paginada.' })
   getAll(@Query() query: QueryProductsDto) {
     return this.productService.getAllProducts(query);
+  }
+
+  @Get('suggestions')
+  @ApiOperation({
+    summary: 'Sugerencias ligeras para el buscador de productos',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Hasta ocho productos activos y relevantes.',
+  })
+  getSuggestions(@Query() query: ProductSuggestionsQueryDto) {
+    return this.productService.getSearchSuggestions(query);
   }
 
   @Get(':slug')

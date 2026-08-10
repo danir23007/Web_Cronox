@@ -58,10 +58,7 @@
       price: 34.95,
       priceLabel: '34,95 €',
       image: 'assets/products/camiseta_washed_gris.png',
-      images: [
-        'assets/products/camiseta_washed_gris.png',
-        'assets/products/camiseta_washed_gris_2.png',
-      ],
+      images: ['assets/products/camiseta_washed_gris.png', 'assets/products/camiseta_washed_gris_2.png'],
       categories: ['camisetas'],
       sizes: ['s', 'm', 'l', 'xl', 'xxl'],
       color: 'gris',
@@ -74,10 +71,7 @@
       price: 34.95,
       priceLabel: '34,95 €',
       image: 'assets/products/camiseta_washed_negra.png',
-      images: [
-        'assets/products/camiseta_washed_negra.png',
-        'assets/products/camiseta_washed_negra_2.png',
-      ],
+      images: ['assets/products/camiseta_washed_negra.png', 'assets/products/camiseta_washed_negra_2.png'],
       categories: ['camisetas'],
       sizes: ['s', 'm', 'l', 'xl', 'xxl'],
       color: 'negro',
@@ -93,7 +87,9 @@
     if (Array.isArray(product.colors)) copy.colors = [...product.colors];
     if (Array.isArray(product.categories)) copy.categories = [...product.categories];
     if (Array.isArray(product.variants)) {
-      copy.variants = product.variants.map((variant) => ({ ...(variant as UnknownRecord) }));
+      copy.variants = product.variants.map((variant) => ({
+        ...(variant as UnknownRecord),
+      }));
     }
     if (product.variantMap && typeof product.variantMap === 'object') {
       copy.variantMap = Object.entries(product.variantMap as Record<string, UnknownRecord>).reduce(
@@ -112,8 +108,7 @@
   const readManualBase = () => {
     if (typeof window === 'undefined' || typeof document === 'undefined') return '';
 
-    const globalBase =
-      typeof window.__CRONOX_API_BASE__ === 'string' ? window.__CRONOX_API_BASE__.trim() : '';
+    const globalBase = typeof window.__CRONOX_API_BASE__ === 'string' ? window.__CRONOX_API_BASE__.trim() : '';
     if (globalBase) return globalBase;
 
     const doc = document.documentElement;
@@ -127,11 +122,7 @@
     }
 
     const script = document.querySelector<HTMLScriptElement>('script[data-cronox-api-base]');
-    if (
-      script &&
-      typeof script.dataset.cronoxApiBase === 'string' &&
-      script.dataset.cronoxApiBase.trim()
-    ) {
+    if (script && typeof script.dataset.cronoxApiBase === 'string' && script.dataset.cronoxApiBase.trim()) {
       return script.dataset.cronoxApiBase.trim();
     }
 
@@ -140,8 +131,7 @@
 
   const detectLocalhostPort = (fallbackPort = '3000') => {
     if (typeof window === 'undefined') return fallbackPort;
-    const raw =
-      window.__CRONOX_BACKEND_PORT__ != null ? String(window.__CRONOX_BACKEND_PORT__).trim() : '';
+    const raw = window.__CRONOX_BACKEND_PORT__ != null ? String(window.__CRONOX_BACKEND_PORT__).trim() : '';
     if (raw) return raw;
 
     if (typeof document !== 'undefined') {
@@ -193,11 +183,7 @@
       return safeJoin(protocol, hostname, backendPort);
     }
 
-    if (
-      /^192\.168\./.test(hostname) ||
-      /^10\./.test(hostname) ||
-      /^172\.(1[6-9]|2[0-9]|3[0-1])\./.test(hostname)
-    ) {
+    if (/^192\.168\./.test(hostname) || /^10\./.test(hostname) || /^172\.(1[6-9]|2[0-9]|3[0-1])\./.test(hostname)) {
       if (port) {
         return safeJoin(protocol, hostname, port);
       }
@@ -242,9 +228,7 @@
       const url = new URL(candidate);
       const trustedOrigin = getTrustedImageOrigins().has(url.origin);
       const publicSupabaseObject =
-        url.protocol === 'https:' &&
-        /(^|\.)supabase\.co$/i.test(url.hostname) &&
-        url.pathname.startsWith('/storage/v1/object/public/');
+        url.protocol === 'https:' && /(^|\.)supabase\.co$/i.test(url.hostname) && url.pathname.startsWith('/storage/v1/object/public/');
 
       return trustedOrigin || publicSupabaseObject ? url.href : fallback;
     } catch (error) {
@@ -263,7 +247,14 @@
   const centsToUnits = (value: number) => (Number(value) || 0) / 100;
   const formatCents = (cents: number) => formatPrice(centsToUnits(cents));
 
-  const pickPrimaryImage = (images: Array<{ url?: string; sortOrder?: number; isPrimary?: boolean }> = [], fallback = '') => {
+  const pickPrimaryImage = (
+    images: Array<{
+      url?: string;
+      sortOrder?: number;
+      isPrimary?: boolean;
+    }> = [],
+    fallback = '',
+  ) => {
     if (!Array.isArray(images)) {
       return fallback || '';
     }
@@ -280,7 +271,10 @@
     return productImageUrl(primary) || productImageUrl(first) || productImageUrl(fallback) || '';
   };
 
-  const normalizeSizeKey = (value?: string | number) => String(value || '').trim().toUpperCase();
+  const normalizeSizeKey = (value?: string | number) =>
+    String(value || '')
+      .trim()
+      .toUpperCase();
 
   const mapVariant = (variant: UnknownRecord = {}, fallbackPriceCents = 0) => {
     const effectivePriceCents = Number(variant.effectivePrice ?? fallbackPriceCents ?? 0);
@@ -304,21 +298,26 @@
   const mapProduct = (product?: UnknownRecord | null) => {
     if (!product) return null;
 
-    const images = Array.isArray(product.images)
-      ? (product.images as Array<{ url?: string }>).map((img) => productImageUrl(img?.url)).filter(Boolean)
-      : [];
+    const images = Array.isArray(product.images) ? (product.images as Array<{ url?: string }>).map((img) => productImageUrl(img?.url)).filter(Boolean) : [];
     const primaryImage = pickPrimaryImage(
-      (product.images as Array<{ url?: string; sortOrder?: number; isPrimary?: boolean }>) || [],
+      (product.images as Array<{
+        url?: string;
+        sortOrder?: number;
+        isPrimary?: boolean;
+      }>) || [],
       productImageUrl(product.imageUrl) || images[0] || '',
     );
     const rawVariants = Array.isArray(product.variants) ? (product.variants as UnknownRecord[]) : [];
     const variants = rawVariants.map((variant) => mapVariant(variant, product.price as number));
-    const variantMap = variants.reduce((acc, variant) => {
-      if (variant.sizeKey) {
-        acc[variant.sizeKey] = variant;
-      }
-      return acc;
-    }, {} as Record<string, ReturnType<typeof mapVariant>>);
+    const variantMap = variants.reduce(
+      (acc, variant) => {
+        if (variant.sizeKey) {
+          acc[variant.sizeKey] = variant;
+        }
+        return acc;
+      },
+      {} as Record<string, ReturnType<typeof mapVariant>>,
+    );
 
     const categories = Array.isArray(product.categories)
       ? (product.categories as UnknownRecord[])
@@ -336,11 +335,7 @@
           .map((value) => String(value).toLowerCase())
       : [];
 
-    const sizes = variants.length
-      ? variants.map((variant) => variant.size).filter(Boolean)
-      : Array.isArray(product.sizes)
-        ? (product.sizes as unknown[])
-        : [];
+    const sizes = variants.length ? variants.map((variant) => variant.size).filter(Boolean) : Array.isArray(product.sizes) ? (product.sizes as unknown[]) : [];
 
     return {
       __fromBackend: true,
@@ -369,22 +364,28 @@
     const product = (variant.product as UnknownRecord) || {};
     const priceCents = Number(item.priceAtAdd ?? variant.price ?? product.price ?? 0);
     const productImages = Array.isArray(product.images)
-      ? (product.images as Array<{ url?: string }>).
-          map((img) => productImageUrl(img?.url)).
-          filter(Boolean).
-          map((url) => ({ url }))
+      ? (product.images as Array<{ url?: string }>)
+          .map((img) => productImageUrl(img?.url))
+          .filter(Boolean)
+          .map((url) => ({ url }))
       : [];
     const productImage =
       productImageUrl(product.imageUrl) ||
-      pickPrimaryImage((product.images as Array<{ url?: string; sortOrder?: number; isPrimary?: boolean }>) || []) ||
+      pickPrimaryImage(
+        (product.images as Array<{
+          url?: string;
+          sortOrder?: number;
+          isPrimary?: boolean;
+        }>) || [],
+      ) ||
       productImages[0]?.url ||
       '';
 
     const itemImages = Array.isArray(item.images)
-      ? (item.images as Array<{ url?: string }>).
-          map((img) => productImageUrl(img?.url)).
-          filter(Boolean).
-          map((url) => ({ url }))
+      ? (item.images as Array<{ url?: string }>)
+          .map((img) => productImageUrl(img?.url))
+          .filter(Boolean)
+          .map((url) => ({ url }))
       : [];
 
     return {
@@ -412,13 +413,17 @@
 
   const mapCart = (cart?: UnknownRecord | null) => {
     if (!cart) {
-      return { id: null, items: [], itemsCount: 0, subtotalCents: 0, subtotalLabel: formatCents(0) };
+      return {
+        id: null,
+        items: [],
+        itemsCount: 0,
+        subtotalCents: 0,
+        subtotalLabel: formatCents(0),
+      };
     }
 
     const items = Array.isArray(cart.items) ? (cart.items as UnknownRecord[]).map(mapCartItem) : [];
-    const itemsCount = typeof cart.itemsCount === 'number'
-      ? cart.itemsCount
-      : items.reduce((acc, item) => acc + (Number(item.qty) || 0), 0);
+    const itemsCount = typeof cart.itemsCount === 'number' ? cart.itemsCount : items.reduce((acc, item) => acc + (Number(item.qty) || 0), 0);
     const subtotalCents = Number(cart.subtotal ?? cart.subtotalCents ?? 0);
     const currency = cart.currency || items.find((item) => item?.product?.currency)?.product?.currency || 'EUR';
 
@@ -503,9 +508,7 @@
       } catch (error) {
         payload = null;
       }
-      const token =
-        (typeof payload?.csrfToken === 'string' && payload.csrfToken) ||
-        readCookie(CSRF_COOKIE_NAME);
+      const token = (typeof payload?.csrfToken === 'string' && payload.csrfToken) || readCookie(CSRF_COOKIE_NAME);
       if (!token) {
         throw new Error('No se pudo obtener el token de protección de la solicitud.');
       }
@@ -600,7 +603,8 @@
     const error = (rawError && typeof rawError === 'object' ? rawError : {}) as Partial<CronoxApiError>;
     const status = Number(error.status || error.statusCode || 0);
     const message = (error && error.message) || '';
-    const payloadMessage = (error as { payload?: { message?: string; error?: string } })?.payload?.message ||
+    const payloadMessage =
+      (error as { payload?: { message?: string; error?: string } })?.payload?.message ||
       (error as { payload?: { message?: string; error?: string } })?.payload?.error;
 
     const base: CronoxApiErrorClassification = {
@@ -779,10 +783,7 @@
   };
 
   adminApi.listCircleUpgradeRequests = async (queryOrStatus: string | QueryRecord = 'PENDING', queryOverride: QueryRecord = {}) => {
-    const query =
-      typeof queryOrStatus === 'string'
-        ? { status: queryOrStatus, ...queryOverride }
-        : { ...queryOrStatus };
+    const query = typeof queryOrStatus === 'string' ? { status: queryOrStatus, ...queryOverride } : { ...queryOrStatus };
     return request('/api/admin/circle-upgrades/3-4', { query });
   };
 
@@ -801,10 +802,7 @@
   };
 
   adminApi.listAutoCircleRequests = async (queryOrStatus: string | QueryRecord = 'PENDING', queryOverride: QueryRecord = {}) => {
-    const query =
-      typeof queryOrStatus === 'string'
-        ? { status: queryOrStatus, ...queryOverride }
-        : { ...queryOrStatus };
+    const query = typeof queryOrStatus === 'string' ? { status: queryOrStatus, ...queryOverride } : { ...queryOrStatus };
     return request('/api/admin/requests/2-3', { query });
   };
 
@@ -831,13 +829,12 @@
   };
 
   adminApi.deleteAdminProduct = async (id: number | string) => {
-    return request(`/api/admin/products/${encodeURIComponent(id)}`, { method: 'DELETE' });
+    return request(`/api/admin/products/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+    });
   };
 
-  adminApi.updateProductCategories = async (
-    id: number | string,
-    categoryIds: number[],
-  ) => {
+  adminApi.updateProductCategories = async (id: number | string, categoryIds: number[]) => {
     return request(`/api/admin/products/${encodeURIComponent(id)}/categories`, {
       method: 'PATCH',
       body: { categoryIds },
@@ -891,7 +888,9 @@
       error.endpoint = 'admin.getUserOrders';
       throw error;
     }
-    return request<AdminUserOrdersResponse>(`/api/admin/users/${encodeURIComponent(id)}/orders`, { query });
+    return request<AdminUserOrdersResponse>(`/api/admin/users/${encodeURIComponent(id)}/orders`, {
+      query,
+    });
   };
 
   adminApi.listAdminOrders = async (query: QueryRecord = {}) => {
@@ -925,7 +924,9 @@
   };
 
   adminApi.deleteAdminNote = async (id: number | string) => {
-    return request(`/api/admin/notes/${encodeURIComponent(id)}`, { method: 'DELETE' });
+    return request(`/api/admin/notes/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+    });
   };
 
   adminApi.createPromoCode = async (payload: UnknownRecord) => {
@@ -943,7 +944,9 @@
   };
 
   adminApi.deletePromoCode = async (id: number | string) => {
-    return request(`/api/admin/promo-codes/${encodeURIComponent(id)}`, { method: 'DELETE' });
+    return request(`/api/admin/promo-codes/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+    });
   };
 
   // ===== FAVORITES =====
@@ -956,9 +959,7 @@
   const mapFavoriteProduct = (product: UnknownRecord) => {
     if (!product) return null;
     const images = Array.isArray(product.images)
-      ? (product.images as Array<{ url?: string; imageUrl?: string }>)
-          .map((img) => productImageUrl(img?.url || img?.imageUrl || img))
-          .filter(Boolean)
+      ? (product.images as Array<{ url?: string; imageUrl?: string }>).map((img) => productImageUrl(img?.url || img?.imageUrl || img)).filter(Boolean)
       : [];
     const priceValue = Number(product.price ?? product.priceCents ?? 0);
 
@@ -1017,22 +1018,54 @@
   };
 
   // ===== CATÁLOGO / PRODUCTOS =====
-  api.getProducts = async (query: QueryRecord = {}) => {
+  const getProductsPage = async (query: QueryRecord = {}) => {
     try {
       const data = await request('/api/products', { query });
       if (!data || !Array.isArray((data as { items?: unknown[] }).items)) {
         throw new Error('Formato inesperado de productos');
       }
-      return (data as { items: UnknownRecord[] }).items.map((product) => mapProduct(product));
+      return {
+        products: (data as { items: UnknownRecord[] }).items.map((product) => mapProduct(product)),
+        meta: ((data as { meta?: UnknownRecord }).meta || {}) as UnknownRecord,
+      };
     } catch (error) {
       console.warn('[CRONOX] No se pudo cargar el catálogo desde la API', error);
       throw error;
     }
   };
+  api.getProductsPage = getProductsPage;
+
+  api.getProducts = async (query: QueryRecord = {}) => {
+    const response = await getProductsPage(query);
+    return Array.isArray(response?.products) ? response.products : [];
+  };
+
+  api.getProductSuggestions = async (search: string, query: QueryRecord = {}) => {
+    const data = (await request('/api/products/suggestions', {
+      query: { ...query, search },
+    })) as { items?: UnknownRecord[] };
+    return Array.isArray(data?.items)
+      ? data.items.map((item) => {
+          const priceCents = Number(item.price ?? 0);
+          return {
+            id: item.id,
+            slug: item.slug,
+            name: item.name,
+            priceCents,
+            price: centsToUnits(priceCents),
+            priceLabel: formatCents(priceCents),
+            image: productImageUrl(item.imageUrl) || '',
+            category: item.category && typeof item.category === 'object' ? { ...(item.category as UnknownRecord) } : null,
+          };
+        })
+      : [];
+  };
 
   api.getProductBySlug = async (slug: string, options: { cache?: RequestCache } = {}) => {
     if (!slug) return null;
-    const data = await request(`/api/products/${encodeURIComponent(slug)}`, { cache: options.cache });
+    const data = await request(`/api/products/${encodeURIComponent(slug)}`, {
+      cache: options.cache,
+    });
     return mapProduct(data as UnknownRecord);
   };
 
@@ -1042,18 +1075,15 @@
   };
 
   api.getCategoryProducts = async (slug: string, query: QueryRecord = {}) => {
-    const data = (await request(
-      `/api/categories/${encodeURIComponent(slug)}/products`,
-      { query },
-    )) as {
+    const data = (await request(`/api/categories/${encodeURIComponent(slug)}/products`, {
+      query,
+    })) as {
       category?: UnknownRecord;
       products?: { items?: UnknownRecord[]; meta?: UnknownRecord };
     };
     return {
       category: data?.category || null,
-      products: Array.isArray(data?.products?.items)
-        ? data.products.items.map((product) => mapProduct(product))
-        : [],
+      products: Array.isArray(data?.products?.items) ? data.products.items.map((product) => mapProduct(product)) : [],
       meta: data?.products?.meta || null,
     };
   };
@@ -1081,7 +1111,9 @@
   };
 
   api.removeCartItem = async (itemId: number | string) => {
-    const data = await request(`/api/cart/items/${itemId}`, { method: 'DELETE' });
+    const data = await request(`/api/cart/items/${itemId}`, {
+      method: 'DELETE',
+    });
     return mapCart(data as UnknownRecord);
   };
 
@@ -1121,7 +1153,9 @@
       query.promoCode = params.promoCode;
     }
 
-    const data = (await request('/api/checkout/summary', { query })) as UnknownRecord;
+    const data = (await request('/api/checkout/summary', {
+      query,
+    })) as UnknownRecord;
     const cart = mapCart(data?.cart as UnknownRecord);
     const methods = Array.isArray(data?.shippingMethods)
       ? (data.shippingMethods as UnknownRecord[]).map((method) => {
@@ -1234,8 +1268,7 @@
         priceLabel: basePriceLabel || formatPrice(priceValue),
         image: safeCandidateImage || uniqueImages[0] || productImageUrl(template.image) || '',
         images: uniqueImages,
-        categories:
-          Array.isArray(source.categories) && source.categories.length ? source.categories : template.categories || [],
+        categories: Array.isArray(source.categories) && source.categories.length ? source.categories : template.categories || [],
         sizes: Array.isArray(source.sizes) && source.sizes.length ? source.sizes : template.sizes || [],
         colors: Array.isArray(source.colors) && source.colors.length ? source.colors : template.colors || [],
         color: source.color || template.color || '',
@@ -1248,7 +1281,11 @@
   api.ensureFallbackList = ensureFallbackList;
   api.cloneProduct = cloneProduct;
 
-  g.CRONOX_SECURITY = Object.freeze({ escapeHtml, externalHttpUrl, productImageUrl });
+  g.CRONOX_SECURITY = Object.freeze({
+    escapeHtml,
+    externalHttpUrl,
+    productImageUrl,
+  });
   g.CRONOX_API = api;
   g.CRONOX_API_BASE = API_BASE;
 })();
