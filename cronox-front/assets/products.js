@@ -11,6 +11,7 @@
   const btnClearFilters = document.getElementById("btnClearFilters");
   const searchForm = document.getElementById("searchForm");
   const searchInput = document.getElementById("searchInput");
+  const storeHeading = document.querySelector(".store-heading");
 
   const RETURN_KEY = "cronox_scroll_to";
   const SCROLL_POS_KEY = "cronox_scroll_pos";
@@ -175,6 +176,8 @@
   };
 
   let PRODUCTS = [];
+  let catalogLoadError = null;
+  let catalogEmptyMessage = "No hay productos que mostrar.";
 
   const normalizeProduct = (product) => {
     const copy = cloneProduct(product || {});
@@ -204,6 +207,14 @@
   const categorySlugRaw = (url.searchParams.get("categorySlug") || "").trim().toLowerCase();
   const initialCategorySlug = /^[a-z0-9-]+$/.test(categorySlugRaw) ? categorySlugRaw : "";
   if (searchInput && initialQueryRaw) searchInput.value = initialQueryRaw;
+  if (initialCategorySlug) {
+    document.querySelectorAll(".black-menu__link").forEach((link) => {
+      try {
+        const linkSlug = new URL(link.href, window.location.href).searchParams.get("categorySlug");
+        if (linkSlug === initialCategorySlug) link.setAttribute("aria-current", "page");
+      } catch {}
+    });
+  }
 
   // ======================================================
   // Quick-Add DOM (panel negro, sin color)
@@ -588,7 +599,20 @@
     if (!Array.isArray(list) || list.length === 0) {
       if (productsFallback) {
         productsFallback.hidden = false;
-        productsFallback.innerHTML = '<p>No hay productos que mostrar.</p>';
+        productsFallback.replaceChildren();
+        const message = document.createElement("p");
+        message.textContent = PRODUCTS.length
+          ? "No hay productos que coincidan con los filtros."
+          : catalogEmptyMessage;
+        productsFallback.appendChild(message);
+        if (catalogLoadError) {
+          const retry = document.createElement("button");
+          retry.type = "button";
+          retry.className = "btn-primary";
+          retry.textContent = "Reintentar";
+          retry.addEventListener("click", () => initCatalog());
+          productsFallback.appendChild(retry);
+        }
       }
       return;
     }
@@ -691,29 +715,60 @@
 
   async function loadCatalog() {
     const fallback = adaptCatalog(cloneProducts(fallbackFactory()));
-    const categoryFallback = initialCategorySlug
-      ? fallback.filter((product) =>
-          (product.categories || []).some((category) => norm(category) === initialCategorySlug),
-        )
-      : fallback;
+    if (categorySlugRaw && !initialCategorySlug) {
+      const error = new Error("El identificador de categoría no es válido");
+      error.status = 400;
+      return { products: [], source: "category-error", category: null, error };
+    }
+    if (initialCategorySlug) {
+      try {
+        if (!API || typeof API.getCategoryProducts !== "function") {
+          throw new Error("La API de categorías no está disponible");
+        }
+        let page = 1;
+        let pageCount = 1;
+        let response = null;
+        const categoryProducts = [];
+        do {
+          response = await API.getCategoryProducts(initialCategorySlug, {
+            page,
+            limit: 100,
+            sortBy: "createdAt",
+            order: "desc",
+          });
+          if (Array.isArray(response?.products)) categoryProducts.push(...response.products);
+          pageCount = Number(response?.meta?.pageCount || 1);
+          page += 1;
+        } while (page <= pageCount && page <= 1000);
+        if (!response?.category) {
+          throw new Error("La categoría solicitada no existe o está inactiva");
+        }
+        return {
+          products: adaptCatalog(categoryProducts),
+          source: "category-api",
+          category: response.category,
+          error: null,
+        };
+      } catch (error) {
+        console.warn("[CRONOX] No se pudo cargar la categoría solicitada.", error);
+        return { products: [], source: "category-error", category: null, error };
+      }
+    }
+
     if (!API || typeof API.getProducts !== "function") {
-      return { products: categoryFallback, source: "fallback" };
+      return { products: fallback, source: "fallback", category: null, error: null };
     }
 
     try {
       const query = { limit: 48, sortBy: "createdAt", order: "desc" };
-      if (initialCategorySlug) query.categorySlug = initialCategorySlug;
       const raw = await API.getProducts(query);
-      if (initialCategorySlug && Array.isArray(raw) && raw.length === 0) {
-        return { products: [], source: "api" };
-      }
       if (!Array.isArray(raw) || !raw.length) {
         throw new Error("Catálogo vacío");
       }
-      return { products: adaptCatalog(raw), source: "api" };
+      return { products: adaptCatalog(raw), source: "api", category: null, error: null };
     } catch (error) {
       console.warn("[CRONOX] No se pudo cargar el catálogo desde la API, usando fallback local.", error);
-      return { products: categoryFallback, source: "fallback" };
+      return { products: fallback, source: "fallback", category: null, error: null };
     }
   }
 
@@ -725,7 +780,23 @@
   };
 
   async function initCatalog() {
-    const { products, source } = await loadCatalog();
+    if (productsFallback) {
+      productsFallback.hidden = false;
+      productsFallback.textContent = "Cargando productos…";
+    }
+    const { products, source, category, error } = await loadCatalog();
+    catalogLoadError = error || null;
+    if (initialCategorySlug && category) {
+      if (storeHeading) storeHeading.textContent = category.name || category.slug;
+      catalogEmptyMessage = "No hay productos disponibles en esta categoría.";
+    } else if (categorySlugRaw && error) {
+      if (storeHeading) storeHeading.textContent = "Categoría no disponible";
+      catalogEmptyMessage = Number(error?.status || error?.statusCode) === 404
+        ? "Esta categoría no existe o no está disponible."
+        : "No se pudo cargar esta categoría. Comprueba tu conexión e inténtalo de nuevo.";
+    } else {
+      catalogEmptyMessage = "No hay productos que mostrar.";
+    }
     setProducts(products);
     applyAll();
     notifyCatalogReady(source);

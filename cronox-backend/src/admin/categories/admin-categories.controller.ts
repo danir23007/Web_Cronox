@@ -11,12 +11,14 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
+import { Role } from '@prisma/client';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { AdminGuard } from '../../common/guards/admin.guard';
 import { CategoriesService } from '../../categories/categories.service';
 import { CreateCategoryDto } from '../../categories/dto/create-category.dto';
 import { UpdateCategoryDto } from '../../categories/dto/update-category.dto';
 import { QueryCategoriesDto } from '../../categories/dto/query-categories.dto';
+import { Roles } from '../../common/roles.decorator';
 
 @ApiTags('Admin / Categories')
 @ApiBearerAuth()
@@ -26,6 +28,7 @@ export class AdminCategoriesController {
   constructor(private readonly categoriesService: CategoriesService) {}
 
   @Get()
+  @Roles(Role.SUPER_ADMIN, Role.LOGISTICS)
   list(@Query() query: QueryCategoriesDto) {
     return this.categoriesService.listAll(query);
   }
@@ -36,7 +39,10 @@ export class AdminCategoriesController {
   }
 
   @Patch(':id')
-  update(@Param('id', ParseIntPipe) id: number, @Body() dto: UpdateCategoryDto) {
+  update(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: UpdateCategoryDto,
+  ) {
     return this.categoriesService.update(id, dto);
   }
 

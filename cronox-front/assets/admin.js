@@ -127,6 +127,17 @@
   const productImagesPreview = $('#productImagesPreview');
   const productCancelBtn = $('#productCancelBtn');
   const productSubmitBtn = $('#productSubmitBtn');
+  const categoryProductSearch = $('#categoryProductSearch');
+  const categoryFilterDropdown = $('#categoryFilterDropdown');
+  const categoryFilterToggle = $('#categoryFilterToggle');
+  const categoryFilterSummary = $('#categoryFilterSummary');
+  const categoryFilterPanel = $('#categoryFilterPanel');
+  const categoryFilterOptions = $('#categoryFilterOptions');
+  const categoryFilterClear = $('#categoryFilterClear');
+  const categoryAssignmentFilter = $('#categoryAssignmentFilter');
+  const categoryProductStatusFilter = $('#categoryProductStatusFilter');
+  const categoryAssignmentsMessage = $('#categoryAssignmentsMessage');
+  const categoryAssignmentList = $('#categoryAssignmentList');
   const codesBody = $('#codesBody');
   const codesMessage = $('#codesMessage');
   const codeSearch = $('#codeSearch');
@@ -158,6 +169,13 @@
     sortDir: 'desc',
   };
   const codesState = { page: 1, limit: 20, search: '', isActive: '' };
+  const categoryAssignmentsState = {
+    products: [],
+    categories: [],
+    selectedFilterCategoryIds: new Set(),
+    saving: new Set(),
+    loaded: false,
+  };
   const requestsState = {
     page: 1,
     pageSize: 25,
@@ -226,7 +244,9 @@
   let editingCodeId = null;
   let cachedProductImages = [];
   let codesCache = [];
+  const codesStatusUpdating = new Set();
   let productSearchTimeout = null;
+  let categoryStatusTimeout = null;
   let codeSearchTimeout = null;
   let requestSearchTimeout = null;
   let requestSearchTimeout23 = null;
@@ -252,7 +272,9 @@
     'section-34': 'requests',
     'section-activity': 'auditLog',
     'section-users': 'users',
+    'section-products-menu': 'products',
     'section-products': 'products',
+    'section-product-categories': 'products',
     'section-codes': 'promoCodes',
     'section-user': 'userDetail',
   };
@@ -324,7 +346,9 @@
     setNavVisibility('section-34', canAccess('requests'));
     setNavVisibility('section-activity', canAccess('auditLog'));
     setNavVisibility('section-users', canAccess('users'));
+    setNavVisibility('section-products-menu', canAccess('products'));
     setNavVisibility('section-products', canAccess('products'));
+    setNavVisibility('section-product-categories', canAccess('products'));
     setNavVisibility('section-codes', canAccess('promoCodes'));
     setUserTabVisibility('notes', canAccess('notes'));
     setUserTabVisibility('orders', canAccess('orders'));
@@ -386,6 +410,23 @@
     }
     el.textContent = text;
     el.className = `message show ${type === 'error' ? 'error' : 'success'}`;
+  };
+
+  const setCategoryAssignmentsMessage = (text = '', type = 'success', autoHide = false) => {
+    window.clearTimeout(categoryStatusTimeout);
+    categoryStatusTimeout = null;
+    if (!categoryAssignmentsMessage) return;
+    categoryAssignmentsMessage.textContent = text;
+    categoryAssignmentsMessage.className = text
+      ? `message category-screen-status show ${type === 'error' ? 'error' : 'success'}`
+      : 'message category-screen-status';
+    if (text && type === 'success' && autoHide) {
+      categoryStatusTimeout = window.setTimeout(() => {
+        categoryAssignmentsMessage.textContent = '';
+        categoryAssignmentsMessage.className = 'message category-screen-status';
+        categoryStatusTimeout = null;
+      }, 3500);
+    }
   };
 
   const ui = window.CRONOX_UI || {};
@@ -641,7 +682,7 @@
   };
 
   const promoStatusChip = (isActive) => {
-    return buildChip(isActive ? 'Activo' : 'Inactivo', isActive ? 'green' : 'red');
+    return buildChip(isActive ? 'ACTIVO' : 'INACTIVO', isActive ? 'green' : 'red');
   };
 
   const formatDate = (value) => {
@@ -757,7 +798,7 @@
   };
 
   const ensureSectionBackButtons = () => {
-    const sectionsToMain = ['section-dashboard', 'section-activity', 'section-users', 'section-products', 'section-orders', 'section-codes'];
+    const sectionsToMain = ['section-dashboard', 'section-activity', 'section-users', 'section-orders', 'section-codes'];
     sectionsToMain.forEach((sectionId) => {
       const section = document.getElementById(sectionId);
       if (!section || section.querySelector('[data-back-target]')) return;
@@ -776,6 +817,16 @@
       btn.className = 'btn admin-view-back';
       btn.setAttribute('data-back-target', 'section-circles-menu');
       btn.textContent = '← Atrás a Círculos';
+      section.prepend(btn);
+    });
+    ['section-products', 'section-product-categories'].forEach((sectionId) => {
+      const section = document.getElementById(sectionId);
+      if (!section || section.querySelector('[data-back-target]')) return;
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'btn admin-view-back';
+      btn.setAttribute('data-back-target', 'section-products-menu');
+      btn.textContent = '← Atrás';
       section.prepend(btn);
     });
   };
@@ -1424,7 +1475,16 @@
     }
     const sectionMatch = hash.match(/^#(section-[\w-]+)/);
     if (sectionMatch) {
-      showSection(sectionMatch[1]);
+      const sectionId = sectionMatch[1];
+      showSection(sectionId);
+      if (sectionId === 'section-products') {
+        syncProductsStateFromInputs();
+        loadProductCategories();
+        fetchProducts();
+      }
+      if (sectionId === 'section-product-categories') {
+        loadCategoryAssignments();
+      }
       return;
     }
     if (currentSectionId === 'section-user') {
@@ -2419,6 +2479,274 @@
     }
   };
 
+  const assignedCategoryIds = (product) => {
+    if (!Array.isArray(product?.categories)) return [];
+    return product.categories
+      .map((assignment) => Number(assignment?.categoryId ?? assignment?.category?.id ?? assignment?.id))
+      .filter((id) => Number.isInteger(id) && id > 0);
+  };
+
+  const loadAllAdminPages = async (loader, pageSize = 100) => {
+    const items = [];
+    let page = 1;
+    let pageCount = 1;
+    do {
+      const response = await loader({ page, limit: pageSize });
+      const pageItems = Array.isArray(response?.items)
+        ? response.items
+        : Array.isArray(response)
+          ? response
+          : [];
+      items.push(...pageItems);
+      pageCount = Number(
+        response?.totalPages ?? response?.meta?.pageCount ?? response?.meta?.totalPages ?? 1,
+      );
+      page += 1;
+    } while (page <= pageCount && page <= 1000);
+    return items;
+  };
+
+  const populateCategoryAssignmentFilter = () => {
+    if (!categoryFilterOptions) return;
+    const availableIds = new Set(
+      categoryAssignmentsState.categories.map((category) => Number(category.id)),
+    );
+    categoryAssignmentsState.selectedFilterCategoryIds.forEach((categoryId) => {
+      if (!availableIds.has(categoryId)) {
+        categoryAssignmentsState.selectedFilterCategoryIds.delete(categoryId);
+      }
+    });
+    categoryFilterOptions.innerHTML = categoryAssignmentsState.categories
+      .map((category) => {
+        const categoryId = Number(category.id);
+        const checked = categoryAssignmentsState.selectedFilterCategoryIds.has(categoryId);
+        return `
+          <label class="category-filter-checkbox">
+            <input type="checkbox" value="${categoryId}" ${checked ? 'checked' : ''}>
+            <span>${safeText(category.name || category.slug)}${category.isActive ? '' : ' (inactiva)'}</span>
+          </label>`;
+      })
+      .join('');
+    updateCategoryFilterSummary();
+  };
+
+  const updateCategoryFilterSummary = () => {
+    if (!categoryFilterSummary) return;
+    const selectedIds = categoryAssignmentsState.selectedFilterCategoryIds;
+    if (selectedIds.size === 0) {
+      categoryFilterSummary.textContent = 'Todas las categorías';
+    } else if (selectedIds.size === 1) {
+      const selectedId = selectedIds.values().next().value;
+      const category = categoryAssignmentsState.categories.find(
+        (item) => Number(item.id) === selectedId,
+      );
+      categoryFilterSummary.textContent = category?.name || category?.slug || '1 categoría seleccionada';
+    } else {
+      categoryFilterSummary.textContent = `${selectedIds.size} categorías seleccionadas`;
+    }
+    if (categoryFilterClear) {
+      categoryFilterClear.disabled = selectedIds.size === 0;
+    }
+  };
+
+  const setCategoryFilterOpen = (isOpen, focusToggle = false) => {
+    if (!categoryFilterToggle || !categoryFilterPanel) return;
+    categoryFilterToggle.setAttribute('aria-expanded', String(isOpen));
+    categoryFilterPanel.hidden = !isOpen;
+    if (isOpen) {
+      const firstCheckbox = categoryFilterOptions?.querySelector('input[type="checkbox"]');
+      firstCheckbox?.focus();
+    } else if (focusToggle) {
+      categoryFilterToggle.focus();
+    }
+  };
+
+  const getFilteredCategoryProducts = () => {
+    const query = String(categoryProductSearch?.value || '').trim().toLowerCase();
+    const selectedCategoryIds = categoryAssignmentsState.selectedFilterCategoryIds;
+    const assignmentState = categoryAssignmentFilter?.value || '';
+    const activeState = categoryProductStatusFilter?.value || '';
+
+    return categoryAssignmentsState.products.filter((product) => {
+      const ids = assignedCategoryIds(product);
+      if (
+        selectedCategoryIds.size > 0 &&
+        !Array.from(selectedCategoryIds).every((categoryId) => ids.includes(categoryId))
+      ) return false;
+      if (assignmentState === 'assigned' && ids.length === 0) return false;
+      if (assignmentState === 'unassigned' && ids.length > 0) return false;
+      if (activeState === 'active' && !product.isActive) return false;
+      if (activeState === 'inactive' && product.isActive) return false;
+      if (!query) return true;
+      const skus = Array.isArray(product.variants)
+        ? product.variants.map((variant) => variant?.sku || '').join(' ')
+        : '';
+      const haystack = `${product.id ?? ''} ${product.name || ''} ${product.slug || ''} ${skus}`.toLowerCase();
+      return haystack.includes(query);
+    });
+  };
+
+  const renderCategoryAssignments = () => {
+    if (!categoryAssignmentList) return;
+    const products = getFilteredCategoryProducts();
+    if (!products.length) {
+      categoryAssignmentList.innerHTML = `
+        <div class="empty-state">
+          <strong>No hay productos que coincidan.</strong>
+          <span>Prueba otra búsqueda o cambia los filtros.</span>
+        </div>`;
+      return;
+    }
+
+    categoryAssignmentList.innerHTML = products
+      .map((product) => {
+        const productId = Number(product.id);
+        const selectedIds = new Set(assignedCategoryIds(product));
+        const totalStock = Array.isArray(product.variants)
+          ? product.variants.reduce(
+              (sum, variant) => sum + (Number(variant?.stockQty ?? variant?.stock ?? 0) || 0),
+              0,
+            )
+          : 0;
+        const primaryImage = safeImageUrl(
+          product.imageUrl ||
+            (Array.isArray(product.images) ? product.images.find((image) => image?.isPrimary)?.url || product.images[0]?.url : ''),
+        );
+        const isSaving = categoryAssignmentsState.saving.has(productId);
+        const assignedLabels = categoryAssignmentsState.categories
+          .filter((category) => selectedIds.has(Number(category.id)))
+          .map((category) => `<span class="chip">${safeText(category.name || category.slug)}</span>`)
+          .join('');
+        const checkboxes = categoryAssignmentsState.categories
+          .map((category) => {
+            const categoryId = Number(category.id);
+            return `
+              <label class="category-checkbox">
+                <input type="checkbox" value="${categoryId}" ${selectedIds.has(categoryId) ? 'checked' : ''} ${isSaving ? 'disabled' : ''}>
+                <span>${safeText(category.name || category.slug)}${category.isActive ? '' : ' (inactiva)'}</span>
+              </label>`;
+          })
+          .join('');
+
+        return `
+          <article class="category-assignment-card" data-category-product-id="${productId}">
+            <div class="category-product">
+              <div class="category-product__image-frame">
+                ${primaryImage
+                  ? `<img class="category-product__image" src="${escapeHtml(primaryImage)}" alt="${safeText(product.name, 'Producto')}" loading="lazy" referrerpolicy="no-referrer">`
+                  : '<span class="category-product__image-fallback">Sin imagen</span>'}
+              </div>
+              <div class="category-product__details">
+                <h3 class="category-product__name">${safeText(product.name)}</h3>
+                <span class="category-product__meta">ID ${productId} · ${safeText(product.slug)}</span>
+                <span class="category-product__meta">${product.isActive ? 'Activo' : 'Inactivo'} · Stock ${totalStock}</span>
+              </div>
+            </div>
+            <div class="category-assignment-editor">
+              <div>
+                <strong>Categorías asignadas</strong>
+                <div class="category-current">${assignedLabels || '<span class="category-current__empty">Sin categorías</span>'}</div>
+              </div>
+              <div class="category-checkboxes" role="group" aria-label="Categorías del producto ${safeText(product.name)}">
+                ${checkboxes || '<span class="category-current__empty">No hay categorías disponibles.</span>'}
+              </div>
+              <div class="category-assignment-actions">
+                <span class="category-save-status" aria-live="polite">${isSaving ? 'Guardando cambios…' : ''}</span>
+                <button class="btn primary" type="button" data-save-product-categories="${productId}" ${isSaving || !checkboxes ? 'disabled' : ''}>
+                  ${isSaving ? 'Guardando…' : 'Guardar cambios'}
+                </button>
+              </div>
+            </div>
+          </article>`;
+      })
+      .join('');
+  };
+
+  const loadCategoryAssignments = async () => {
+    if (!categoryAssignmentList || !canAccess('products')) return;
+    categoryAssignmentList.innerHTML = '<div class="empty-state"><strong>Cargando productos y categorías…</strong></div>';
+    setCategoryAssignmentsMessage('Cargando clasificación de productos…');
+    try {
+      const adminApi = window.CRONOX_API?.admin;
+      if (
+        typeof adminApi?.listAdminCategories !== 'function' ||
+        typeof adminApi?.listAdminProducts !== 'function'
+      ) {
+        throw new Error('La API de clasificación de productos no está disponible.');
+      }
+      const [categories, products] = await Promise.all([
+        loadAllAdminPages((query) => adminApi.listAdminCategories(query)),
+        loadAllAdminPages((query) => adminApi.listAdminProducts(query)),
+      ]);
+      categoryAssignmentsState.categories = categories.sort((a, b) =>
+        String(a.name || a.slug).localeCompare(String(b.name || b.slug), 'es'),
+      );
+      categoryAssignmentsState.products = products;
+      categoryAssignmentsState.loaded = true;
+      populateCategoryAssignmentFilter();
+      setCategoryAssignmentsMessage('Clasificación cargada.', 'success', true);
+      renderCategoryAssignments();
+    } catch (error) {
+      console.error('[ADMIN] Error cargando clasificación de productos', error);
+      categoryAssignmentsState.loaded = false;
+      setCategoryAssignmentsMessage(
+        'No se pudieron cargar los productos y sus categorías. Inténtalo de nuevo.',
+        'error',
+      );
+      categoryAssignmentList.innerHTML = `
+        <div class="empty-state">
+          <strong>No se pudo cargar la clasificación.</strong>
+          <button class="btn primary" type="button" data-retry-category-assignments>Reintentar</button>
+        </div>`;
+    }
+  };
+
+  const saveProductCategories = async (productId, card) => {
+    if (
+      !Number.isInteger(productId) ||
+      categoryAssignmentsState.saving.has(productId) ||
+      !card
+    ) return;
+    const product = categoryAssignmentsState.products.find((item) => Number(item.id) === productId);
+    if (!product) return;
+    const previousIds = assignedCategoryIds(product);
+    const selectedIds = Array.from(card.querySelectorAll('.category-checkbox input:checked'))
+      .map((input) => Number(input.value))
+      .filter((id) => Number.isInteger(id) && id > 0);
+
+    categoryAssignmentsState.saving.add(productId);
+    renderCategoryAssignments();
+    try {
+      const updateAssignments = window.CRONOX_API?.admin?.updateProductCategories;
+      if (typeof updateAssignments !== 'function') {
+        throw new Error('La API para guardar categorías no está disponible.');
+      }
+      const updated = await updateAssignments(productId, selectedIds);
+      const index = categoryAssignmentsState.products.findIndex(
+        (item) => Number(item.id) === productId,
+      );
+      if (index >= 0 && updated) {
+        categoryAssignmentsState.products[index] = updated;
+      }
+      setCategoryAssignmentsMessage(
+        `Categorías de “${product.name || product.slug}” guardadas correctamente.`,
+        'success',
+        true,
+      );
+      showToast('Categorías actualizadas correctamente.');
+    } catch (error) {
+      product.categories = previousIds.map((categoryId) => ({ categoryId }));
+      console.error('[ADMIN] Error guardando categorías', error);
+      setCategoryAssignmentsMessage(
+        `No se pudieron guardar las categorías de “${product.name || product.slug}”. Se ha restaurado la asignación anterior.`,
+        'error',
+      );
+    } finally {
+      categoryAssignmentsState.saving.delete(productId);
+      renderCategoryAssignments();
+    }
+  };
+
   const renderProducts = (items = []) => {
     if (!productsBody) return;
     if (!items.length) {
@@ -2453,7 +2781,11 @@
           <tr>
             <td>
               <div style="display:flex; align-items:center; gap:10px;">
-                ${safePrimaryImage ? `<img src="${escapeHtml(safePrimaryImage)}" alt="" referrerpolicy="no-referrer" style="width:44px;height:44px;object-fit:cover;border-radius:8px;border:1px solid #1d1d26;" />` : ''}
+                <span class="product-editor-thumbnail">
+                  ${safePrimaryImage
+                    ? `<img class="product-editor-thumbnail__image" src="${escapeHtml(safePrimaryImage)}" alt="${productName}" referrerpolicy="no-referrer" />`
+                    : '<span class="product-editor-thumbnail__fallback">Sin imagen</span>'}
+                </span>
                 <div>
                   <div style="font-weight:600;">${productName}</div>
                   <div style="color:#8e93a4; font-size:0.9rem;">${productSlug}</div>
@@ -2478,6 +2810,14 @@
         `;
       })
       .join('');
+  };
+
+  const onProductThumbnailError = (event) => {
+    const image = event.target;
+    if (!(image instanceof HTMLImageElement) || !image.classList.contains('product-editor-thumbnail__image')) return;
+    const frame = image.closest('.product-editor-thumbnail');
+    if (!frame) return;
+    frame.innerHTML = '<span class="product-editor-thumbnail__fallback">Sin imagen</span>';
   };
 
   const openProductModal = async (productId = null) => {
@@ -2699,7 +3039,7 @@
       return;
     }
     if (setUiLoading) setUiLoading(codesBody, true, { title: 'Cargando códigos…', colSpan: 6 });
-    if (codesMessage) codesMessage.innerHTML = '';
+    setScopedMessage(codesMessage, '');
     const query = {
       page: codesState.page,
       limit: codesState.limit,
@@ -2768,7 +3108,7 @@
           <tr>
             <td>
               <div style="font-weight:600;">${codeLabel}</div>
-              <div style="margin-top:6px;">${activeLabel}</div>
+              <div data-code-status="${codeId}" style="margin-top:6px;">${activeLabel}</div>
             </td>
             <td>${codeType}</td>
             <td>${safeText(typeLabel)}</td>
@@ -2782,7 +3122,7 @@
             <td>
               <div class="actions">
                 <button class="btn" data-edit-code="${codeId}">Editar</button>
-                <button class="btn danger" data-disable-code="${codeId}">${code.isActive ? 'Desactivar' : 'Inactivar'}</button>
+                <button class="btn${code.isActive ? ' danger' : ''}" data-toggle-code="${codeId}">${code.isActive ? 'Desactivar' : 'Activar'}</button>
               </div>
             </td>
           </tr>
@@ -2869,16 +3209,44 @@
     }
   };
 
-  const disableCode = async (id) => {
-    if (!id) return;
-    if (!window.confirm('¿Desactivar este código?')) return;
+  const toggleCodeStatus = async (id, button) => {
+    if (!id || codesStatusUpdating.has(id)) return;
+    const code = codesCache.find((item) => item.id === id);
+    if (!code) return;
+
+    const previousIsActive = Boolean(code.isActive);
+    const nextIsActive = !previousIsActive;
+    const actionLabel = nextIsActive ? 'Activar' : 'Desactivar';
+    if (!window.confirm(`¿${actionLabel} este código?`)) return;
+
+    const statusContainer = button?.closest('tr')?.querySelector('[data-code-status]');
+    const applyVisualState = (isActive) => {
+      code.isActive = isActive;
+      if (statusContainer) statusContainer.innerHTML = promoStatusChip(isActive);
+      if (button) {
+        button.textContent = isActive ? 'Desactivar' : 'Activar';
+        button.classList.toggle('danger', isActive);
+      }
+    };
+
+    codesStatusUpdating.add(id);
+    if (button) button.disabled = true;
+    setScopedMessage(codesMessage, '');
+    applyVisualState(nextIsActive);
+
     try {
-      await window.CRONOX_API?.admin?.deletePromoCode(id);
-      setScopedMessage(codesMessage, 'Código desactivado.', 'success');
-      fetchCodes();
+      await window.CRONOX_API?.admin?.updatePromoCode(id, { isActive: nextIsActive });
+      showToast(`Código ${nextIsActive ? 'activado' : 'desactivado'}.`, 'success', 'Códigos');
+      await fetchCodes();
     } catch (error) {
-      console.error('[ADMIN] Error desactivando código', error);
-      setScopedMessage(codesMessage, error?.message || 'No se pudo desactivar.', 'error');
+      applyVisualState(previousIsActive);
+      const errorMessage = error?.message || `No se pudo ${nextIsActive ? 'activar' : 'desactivar'} el código.`;
+      console.error('[ADMIN] Error cambiando el estado del código', error);
+      setScopedMessage(codesMessage, errorMessage, 'error');
+      showToast(errorMessage, 'error', 'Códigos');
+    } finally {
+      codesStatusUpdating.delete(id);
+      if (button) button.disabled = false;
     }
   };
 
@@ -2890,15 +3258,15 @@
       return;
     }
     const editId = target.dataset.editCode;
-    const disableId = target.dataset.disableCode;
+    const toggleId = target.dataset.toggleCode;
     if (editId) {
       const parsedId = Number(editId);
       const found = codesCache.find((item) => item.id === parsedId);
       openCodeModal(found || { id: parsedId });
       return;
     }
-    if (disableId) {
-      disableCode(Number(disableId));
+    if (toggleId) {
+      toggleCodeStatus(Number(toggleId), target);
     }
   };
 
@@ -3199,6 +3567,90 @@
       productFiltersReset.addEventListener('click', resetProductsFilters);
     }
 
+    [categoryAssignmentFilter, categoryProductStatusFilter].forEach((filter) => {
+      filter?.addEventListener('change', renderCategoryAssignments);
+    });
+
+    categoryProductSearch?.addEventListener('input', renderCategoryAssignments);
+
+    categoryFilterToggle?.addEventListener('click', () => {
+      const isOpen = categoryFilterToggle.getAttribute('aria-expanded') === 'true';
+      setCategoryFilterOpen(!isOpen);
+    });
+
+    categoryFilterToggle?.addEventListener('keydown', (event) => {
+      if (event.key === 'ArrowDown') {
+        event.preventDefault();
+        setCategoryFilterOpen(true);
+      }
+    });
+
+    categoryFilterOptions?.addEventListener('change', (event) => {
+      const input = event.target;
+      if (!(input instanceof HTMLInputElement) || input.type !== 'checkbox') return;
+      const categoryId = Number(input.value);
+      if (!Number.isInteger(categoryId)) return;
+      if (input.checked) {
+        categoryAssignmentsState.selectedFilterCategoryIds.add(categoryId);
+      } else {
+        categoryAssignmentsState.selectedFilterCategoryIds.delete(categoryId);
+      }
+      updateCategoryFilterSummary();
+      renderCategoryAssignments();
+    });
+
+    categoryFilterClear?.addEventListener('click', () => {
+      categoryAssignmentsState.selectedFilterCategoryIds.clear();
+      categoryFilterOptions
+        ?.querySelectorAll('input[type="checkbox"]')
+        .forEach((input) => { input.checked = false; });
+      updateCategoryFilterSummary();
+      renderCategoryAssignments();
+    });
+
+    document.addEventListener('click', (event) => {
+      if (
+        categoryFilterToggle?.getAttribute('aria-expanded') === 'true' &&
+        categoryFilterDropdown &&
+        !categoryFilterDropdown.contains(event.target)
+      ) {
+        setCategoryFilterOpen(false);
+      }
+    });
+
+    document.addEventListener('keydown', (event) => {
+      if (
+        event.key === 'Escape' &&
+        categoryFilterToggle?.getAttribute('aria-expanded') === 'true'
+      ) {
+        event.preventDefault();
+        setCategoryFilterOpen(false, true);
+      }
+    });
+
+    categoryAssignmentList?.addEventListener('click', (event) => {
+      const target = event.target;
+      if (!(target instanceof HTMLElement)) return;
+      if (target.closest('[data-retry-category-assignments]')) {
+        loadCategoryAssignments();
+        return;
+      }
+      const saveButton = target.closest('[data-save-product-categories]');
+      if (!(saveButton instanceof HTMLElement)) return;
+      const productId = Number(saveButton.dataset.saveProductCategories);
+      const card = saveButton.closest('[data-category-product-id]');
+      saveProductCategories(productId, card);
+    });
+
+    categoryAssignmentList?.addEventListener('error', (event) => {
+      const image = event.target;
+      if (!(image instanceof HTMLImageElement) || !image.classList.contains('category-product__image')) return;
+      const fallback = document.createElement('span');
+      fallback.className = 'category-product__image-fallback';
+      fallback.textContent = 'Sin imagen';
+      image.replaceWith(fallback);
+    }, true);
+
     if (activityFiltersReset) {
       activityFiltersReset.addEventListener('click', resetActivityFilters);
     }
@@ -3386,6 +3838,7 @@
 
     if (productsBody) {
       productsBody.addEventListener('click', onProductTableClick);
+      productsBody.addEventListener('error', onProductThumbnailError, true);
     }
 
     if (usersBody) {
@@ -3585,6 +4038,9 @@
             syncProductsStateFromInputs();
             loadProductCategories();
             fetchProducts();
+          }
+          if (targetSection === 'section-product-categories') {
+            loadCategoryAssignments();
           }
           if (targetSection === 'section-orders') {
             window.fetchOrders?.();

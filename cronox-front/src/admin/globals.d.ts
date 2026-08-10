@@ -36,7 +36,9 @@ declare global {
     meta: { page: number; pageSize: number; total: number; totalPages: number };
   }
 
-  interface CronoxApiError extends Error {
+  interface CronoxApiError {
+    name?: string;
+    message: string;
     status?: number;
     statusCode?: number;
     endpoint?: string;
@@ -92,6 +94,8 @@ declare global {
     createAdminProduct?: (payload: Record<string, unknown>) => Promise<unknown>;
     updateAdminProduct?: (id: number | string, payload: Record<string, unknown>) => Promise<unknown>;
     deleteAdminProduct?: (id: number | string) => Promise<unknown>;
+    updateProductCategories?: (id: number | string, categoryIds: number[]) => Promise<unknown>;
+    listAdminCategories?: (query?: QueryRecord) => Promise<unknown>;
     uploadProductImages?: (files?: File[]) => Promise<unknown>;
     listPromoCodes?: (query?: QueryRecord) => Promise<unknown>;
     getAuditLogs?: (query?: QueryRecord) => Promise<unknown>;
@@ -119,6 +123,7 @@ declare global {
     getFallbackProducts: () => unknown[];
     getCsrfHeaders: () => Promise<Record<string, string>>;
     classifyApiError: (error?: unknown) => CronoxApiErrorClassification;
+    getCategoryProducts?: (slug: string, query?: QueryRecord) => Promise<unknown>;
     admin?: CronoxAdminApi;
     [key: string]: unknown;
   }

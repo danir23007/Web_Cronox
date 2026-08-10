@@ -23,9 +23,21 @@ import { Role } from '@prisma/client';
 import { CreateProductDto } from '../../products/dto/create-product.dto';
 import { UpdateProductDto } from '../../products/dto/update-product.dto';
 import { CreateVariantDto } from '../../products/dto/create-variant.dto';
-import { AdjustStockDto, UpdateVariantDto } from '../../products/dto/update-variant.dto';
+import {
+  AdjustStockDto,
+  UpdateVariantDto,
+} from '../../products/dto/update-variant.dto';
 import { AdminProductQueryDto } from './dto/admin-product-query.dto';
+import { UpdateProductCategoriesDto } from './dto/update-product-categories.dto';
 import { FilesInterceptor } from '@nestjs/platform-express';
+import {
+  ApiBadRequestResponse,
+  ApiBearerAuth,
+  ApiNotFoundResponse,
+  ApiOkResponse,
+  ApiOperation,
+  ApiTags,
+} from '@nestjs/swagger';
 import {
   MAX_PRODUCT_IMAGE_BYTES,
   MAX_PRODUCT_IMAGE_COUNT,
@@ -38,6 +50,8 @@ const ALLOWED_PRODUCT_IMAGE_MIME_TYPES = new Set([
   'image/webp',
 ]);
 
+@ApiTags('Admin / Products')
+@ApiBearerAuth()
 @Controller('admin/products')
 @UseGuards(JwtAuthGuard, AdminGuard, RolesGuard)
 @Roles(Role.SUPER_ADMIN, Role.LOGISTICS)
@@ -58,7 +72,10 @@ export class AdminProductsController {
   }
 
   @Post()
-  createProduct(@Body() dto: CreateProductDto, @CurrentUser('id') adminId?: number) {
+  createProduct(
+    @Body() dto: CreateProductDto,
+    @CurrentUser('id') adminId?: number,
+  ) {
     return this.productService.createProduct(dto, adminId);
   }
 
@@ -90,8 +107,30 @@ export class AdminProductsController {
     return this.productService.updateProduct(id, dto, adminId);
   }
 
+  @Patch(':productId/categories')
+  @ApiOperation({ summary: 'Sustituye las categorías asignadas a un producto' })
+  @ApiOkResponse({ description: 'Producto con sus categorías actualizadas' })
+  @ApiBadRequestResponse({
+    description: 'IDs de categoría o producto no válidos',
+  })
+  @ApiNotFoundResponse({ description: 'Producto no encontrado' })
+  updateCategories(
+    @Param('productId', ParseIntPipe) productId: number,
+    @Body() dto: UpdateProductCategoriesDto,
+    @CurrentUser('id') adminId?: number,
+  ) {
+    return this.productService.replaceProductCategories(
+      productId,
+      dto.categoryIds,
+      adminId,
+    );
+  }
+
   @Delete(':id')
-  deleteProduct(@Param('id', ParseIntPipe) id: number, @CurrentUser('id') adminId?: number) {
+  deleteProduct(
+    @Param('id', ParseIntPipe) id: number,
+    @CurrentUser('id') adminId?: number,
+  ) {
     return this.productService.deleteProduct(id, adminId);
   }
 
@@ -127,6 +166,11 @@ export class AdminProductsController {
     @Body() dto: AdjustStockDto,
     @CurrentUser('id') adminId: number,
   ) {
-    return this.productService.adjustVariantStock(productId, variantId, dto, adminId);
+    return this.productService.adjustVariantStock(
+      productId,
+      variantId,
+      dto,
+      adminId,
+    );
   }
 }

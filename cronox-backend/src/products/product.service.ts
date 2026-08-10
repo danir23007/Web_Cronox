@@ -1,4 +1,9 @@
-import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { Prisma, VariantSize } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateProductDto } from './dto/create-product.dto';
@@ -474,6 +479,20 @@ export class ProductService {
         },
         orderBy: this.variantOrderBy,
       },
+      categories: {
+        select: {
+          categoryId: true,
+          category: {
+            select: {
+              id: true,
+              name: true,
+              slug: true,
+              isActive: true,
+            },
+          },
+        },
+        orderBy: { categoryId: 'asc' },
+      },
     };
 
     const skip = (page - 1) * pageSize;
@@ -601,6 +620,95 @@ export class ProductService {
     }
 
     return this.addEffectiveVariantPrices(product);
+  }
+
+  async replaceProductCategories(
+    productId: number,
+    categoryIds: number[],
+    adminId?: number,
+  ) {
+    if (!Number.isInteger(productId) || productId < 1) {
+      throw new BadRequestException('PRODUCT_ID_MUST_BE_A_POSITIVE_INTEGER');
+    }
+
+    if (
+      !Array.isArray(categoryIds) ||
+      categoryIds.some((id) => !Number.isInteger(id) || id < 1)
+    ) {
+      throw new BadRequestException('CATEGORY_IDS_MUST_BE_POSITIVE_INTEGERS');
+    }
+
+    if (new Set(categoryIds).size !== categoryIds.length) {
+      throw new BadRequestException('CATEGORY_IDS_MUST_BE_UNIQUE');
+    }
+
+    return this.prisma.$transaction(async (tx) => {
+      const product = await tx.product.findUnique({
+        where: { id: productId },
+        select: { id: true },
+      });
+
+      if (!product) {
+        throw new NotFoundException('PRODUCT_NOT_FOUND');
+      }
+
+      const categories = categoryIds.length
+        ? await tx.category.findMany({
+            where: { id: { in: categoryIds } },
+            select: { id: true },
+          })
+        : [];
+      const existingCategoryIds = new Set(categories.map((category) => category.id));
+      const missingCategoryIds = categoryIds.filter(
+        (categoryId) => !existingCategoryIds.has(categoryId),
+      );
+
+      if (missingCategoryIds.length) {
+        throw new BadRequestException({
+          code: 'CATEGORY_IDS_NOT_FOUND',
+          categoryIds: missingCategoryIds,
+        });
+      }
+
+      const beforeAssignments = await tx.productCategory.findMany({
+        where: { productId },
+        select: { categoryId: true },
+        orderBy: { categoryId: 'asc' },
+      });
+      const beforeCategoryIds = beforeAssignments.map(
+        (assignment) => assignment.categoryId,
+      );
+
+      await tx.productCategory.deleteMany({ where: { productId } });
+      if (categoryIds.length) {
+        await tx.productCategory.createMany({
+          data: categoryIds.map((categoryId) => ({ productId, categoryId })),
+          skipDuplicates: false,
+        });
+      }
+
+      await this.recordAudit(
+        'PRODUCT_CATEGORIES_UPDATED',
+        {
+          productId,
+          beforeCategoryIds,
+          afterCategoryIds: categoryIds,
+        },
+        adminId,
+        tx,
+      );
+
+      const updatedProduct = await tx.product.findUnique({
+        where: { id: productId },
+        include: this.getProductInclude({ includeInactiveVariants: true }),
+      });
+
+      if (!updatedProduct) {
+        throw new NotFoundException('PRODUCT_NOT_FOUND');
+      }
+
+      return this.addEffectiveVariantPrices(updatedProduct);
+    });
   }
 
   async getAllProducts(query: QueryProductsDto) {

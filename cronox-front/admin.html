@@ -151,6 +151,44 @@
     .admin-nav-item__title { flex: 0 0 auto; font-weight: 700; }
     .admin-nav-item__description { flex: 1 1 20rem; min-width: 0; color: rgba(255,255,255,0.72); font-weight: 400; overflow-wrap: anywhere; }
     .admin-view-back { margin-bottom: 14px; }
+    .category-section-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px 20px; flex-wrap: wrap; }
+    .category-section-heading { min-width: min(100%, 280px); }
+    .category-screen-status { flex: 0 1 auto; width: auto; max-width: min(100%, 520px); margin: 0 0 0 auto; padding: 7px 10px; font-size: 0.82rem; line-height: 1.3; }
+    .category-screen-status.show { display: inline-flex; align-items: center; }
+    .category-classification-filters > .input { flex: 1 1 210px; width: auto; }
+    .category-classification-filters > #categoryProductSearch { flex-grow: 2; }
+    .category-filter-dropdown { position: relative; flex: 1 1 230px; min-width: 210px; }
+    .category-filter-toggle { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; text-align: left; cursor: pointer; }
+    .category-filter-toggle::after { content: '▾'; flex: 0 0 auto; transition: transform 0.15s ease; }
+    .category-filter-toggle[aria-expanded="true"]::after { transform: rotate(180deg); }
+    .category-filter-panel { position: absolute; z-index: 12; top: calc(100% + 6px); left: 0; width: min(360px, calc(100vw - 48px)); max-height: 320px; overflow: auto; padding: 10px; border: 1px solid rgba(255,255,255,0.35); border-radius: 10px; background: #050505; box-shadow: 0 12px 28px rgba(0,0,0,0.6); }
+    .category-filter-options { display: grid; gap: 4px; }
+    .category-filter-checkbox { display: flex; align-items: center; gap: 9px; min-height: 34px; padding: 5px 7px; border-radius: 7px; cursor: pointer; }
+    .category-filter-checkbox:hover, .category-filter-checkbox:focus-within { background: rgba(255,255,255,0.08); }
+    .category-filter-checkbox input { accent-color: #fff; }
+    .category-filter-checkbox input:focus-visible, .category-filter-toggle:focus-visible, .category-filter-clear:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+    .category-filter-clear { width: 100%; margin-top: 8px; padding: 8px 10px; }
+    .category-assignment-list { display: grid; gap: 14px; margin-top: 16px; }
+    .category-assignment-card { display: grid; grid-template-columns: minmax(220px, 1fr) minmax(300px, 2fr); gap: 18px; padding: 16px; border: 1px solid rgba(255,255,255,0.18); border-radius: 12px; background: #050505; }
+    .category-product { display: flex; align-items: flex-start; gap: 12px; min-width: 0; }
+    .category-product__image-frame { width: 72px; height: 72px; flex: 0 0 72px; display: flex; align-items: center; justify-content: center; overflow: hidden; border: 1px solid rgba(255,255,255,0.2); border-radius: 8px; background: #ffffff; }
+    .category-product__image { width: 100%; height: 100%; display: block; object-fit: contain; object-position: center; background: transparent; }
+    .category-product__image-fallback { padding: 6px; color: #111; font-size: 0.7rem; line-height: 1.2; text-align: center; }
+    .product-editor-thumbnail { width: 44px; height: 44px; flex: 0 0 44px; display: flex; align-items: center; justify-content: center; overflow: hidden; border: 1px solid #1d1d26; border-radius: 8px; background: #ffffff; }
+    .product-editor-thumbnail__image { width: 100%; height: 100%; display: block; object-fit: contain; object-position: center; background: transparent; }
+    .product-editor-thumbnail__fallback { padding: 4px; color: #111; font-size: 0.62rem; line-height: 1.15; text-align: center; }
+    #codesMessage:empty { display: none !important; height: 0; margin: 0; padding: 0; border: 0; }
+    .category-product__details { min-width: 0; display: grid; gap: 5px; }
+    .category-product__name { margin: 0; font-size: 1rem; overflow-wrap: anywhere; }
+    .category-product__meta { color: rgba(255,255,255,0.68); font-size: 0.84rem; overflow-wrap: anywhere; }
+    .category-assignment-editor { display: grid; gap: 12px; }
+    .category-current { display: flex; flex-wrap: wrap; gap: 6px; min-height: 24px; }
+    .category-current__empty { color: rgba(255,255,255,0.6); font-size: 0.88rem; }
+    .category-checkboxes { display: grid; grid-template-columns: repeat(auto-fit, minmax(145px, 1fr)); gap: 8px 12px; }
+    .category-checkbox { display: flex; align-items: center; gap: 8px; min-width: 0; cursor: pointer; }
+    .category-checkbox input { accent-color: #fff; }
+    .category-assignment-actions { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+    .category-save-status { color: rgba(255,255,255,0.72); font-size: 0.88rem; }
     .subtle { color: rgba(255,255,255,0.72); }
     .bw-theme .card,
     .bw-theme .status-banner,
@@ -168,7 +206,7 @@
     .bw-theme .link-btn { color: #fff; }
     .bw-theme th, .bw-theme .empty, .bw-theme .dashboard-sub, .bw-theme .time-sub, .bw-theme small, .bw-theme .user-email { color: rgba(255,255,255,0.72); }
     .bw-theme table, .bw-theme th, .bw-theme td { border-color: rgba(255,255,255,0.14); }
-    @media (max-width: 720px) { .admin-shell { width: calc(100% - 24px); padding: 20px 0 32px; } .admin-nav-item { padding: 15px 12px; } }
+    @media (max-width: 720px) { .admin-shell { width: calc(100% - 24px); padding: 20px 0 32px; } .admin-nav-item { padding: 15px 12px; } .category-section-header { display: grid; grid-template-columns: 1fr; } .category-screen-status { margin-left: 0; } .category-classification-filters > .input, .category-filter-dropdown { flex-basis: 100%; width: 100%; min-width: 0; } .category-filter-panel { width: 100%; box-sizing: border-box; } .category-assignment-card { grid-template-columns: 1fr; } .category-product__image-frame { width: 60px; height: 60px; flex-basis: 60px; } }
     @keyframes toast-in {
       from { opacity: 0; transform: translateY(6px); }
       to { opacity: 1; transform: translateY(0); }
@@ -199,7 +237,7 @@
         <button class="btn admin-nav-item admin-nav-item--described" data-nav-target="section-circles-menu"><strong class="admin-nav-item__title">Círculos -</strong><span class="admin-nav-item__description">Solicitudes de subidas de círculos</span></button>
         <button class="btn admin-nav-item admin-nav-item--described" data-nav-target="section-activity"><strong class="admin-nav-item__title">Actividad -</strong><span class="admin-nav-item__description">Actividad en el panel de administrador</span></button>
         <button class="btn admin-nav-item admin-nav-item--described" data-nav-target="section-users"><strong class="admin-nav-item__title">Usuarios -</strong><span class="admin-nav-item__description">Info cuentas registradas</span></button>
-        <button class="btn admin-nav-item admin-nav-item--described" data-nav-target="section-products"><strong class="admin-nav-item__title">Productos -</strong><span class="admin-nav-item__description">Creación o edición de productos</span></button>
+        <button class="btn admin-nav-item admin-nav-item--described" data-nav-target="section-products-menu"><strong class="admin-nav-item__title">Productos -</strong><span class="admin-nav-item__description">Gestión, edición y clasificación de productos</span></button>
         <button class="btn admin-nav-item admin-nav-item--described" data-nav-target="section-orders"><strong class="admin-nav-item__title">Pedidos -</strong><span class="admin-nav-item__description">Información, seguimiento y estado del pedido</span></button>
         <button class="btn admin-nav-item admin-nav-item--described" data-nav-target="section-codes"><strong class="admin-nav-item__title">Códigos -</strong><span class="admin-nav-item__description">Creación y edición de códigos de descuento</span></button>
       </div>
@@ -212,6 +250,16 @@
       <div class="admin-index-list">
         <button class="btn admin-nav-item" data-nav-target="section-23">Solicitudes 2 → 3 <span class="tab-badge" id="requestsBadge23" hidden>0</span></button>
         <button class="btn admin-nav-item" data-nav-target="section-34">Solicitudes 3 → 4 <span class="tab-badge" id="requestsBadge34" hidden>0</span></button>
+      </div>
+    </section>
+
+    <section id="section-products-menu" class="card admin-section" aria-labelledby="title-products-menu" hidden>
+      <button class="btn admin-view-back" type="button" data-back-target="section-menu">← Atrás</button>
+      <h2 id="title-products-menu">Productos</h2>
+      <small class="subtle">Selecciona una función de productos.</small>
+      <div class="admin-index-list">
+        <button class="btn admin-nav-item" data-nav-target="section-products">Edición de productos</button>
+        <button class="btn admin-nav-item" data-nav-target="section-product-categories">Categorías de productos</button>
       </div>
     </section>
 
@@ -358,7 +406,7 @@
           <small>Historial de acciones administrativas recientes.</small>
         </div>
       </div>
-      <details class="filters-panel" style="margin-top:10px;">
+      <details class="filters-panel" style="margin-top:10px;" open>
         <summary>Filtros</summary>
         <div class="filters-grid">
           <div class="form-group">
@@ -818,6 +866,7 @@
       </div>
     </div>
     <section id="section-products" class="card admin-section" aria-labelledby="title-products" hidden>
+      <button class="btn admin-view-back" type="button" data-back-target="section-products-menu">← Atrás</button>
       <div style="display:flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap;">
         <div>
           <h2 id="title-products">Productos</h2>
@@ -913,6 +962,42 @@
             <option value="100">100</option>
           </select>
         </div>
+      </div>
+    </section>
+
+    <section id="section-product-categories" class="card admin-section" aria-labelledby="title-product-categories" hidden>
+      <button class="btn admin-view-back" type="button" data-back-target="section-products-menu">← Atrás</button>
+      <div class="category-section-header">
+        <div class="category-section-heading">
+          <h2 id="title-product-categories">Categorías de productos</h2>
+          <small>Asigna una o varias categorías sin modificar la información del producto.</small>
+        </div>
+        <div id="categoryAssignmentsMessage" class="message category-screen-status" role="status" aria-live="polite"></div>
+      </div>
+      <div class="filter-bar category-classification-filters" aria-label="Filtros de clasificación">
+        <input id="categoryProductSearch" class="input" type="search" placeholder="Buscar por nombre, slug, SKU o ID" autocomplete="off">
+        <div id="categoryFilterDropdown" class="category-filter-dropdown">
+          <button id="categoryFilterToggle" class="input category-filter-toggle" type="button" aria-expanded="false" aria-controls="categoryFilterPanel">
+            <span id="categoryFilterSummary">Todas las categorías</span>
+          </button>
+          <div id="categoryFilterPanel" class="category-filter-panel" role="group" aria-label="Filtrar por categorías" hidden>
+            <div id="categoryFilterOptions" class="category-filter-options"></div>
+            <button id="categoryFilterClear" class="btn category-filter-clear" type="button">Limpiar selección</button>
+          </div>
+        </div>
+        <select id="categoryAssignmentFilter" class="input" aria-label="Filtrar por asignación">
+          <option value="">Asignados y sin asignar</option>
+          <option value="assigned">Con categorías</option>
+          <option value="unassigned">Sin categorías</option>
+        </select>
+        <select id="categoryProductStatusFilter" class="input" aria-label="Filtrar por estado del producto">
+          <option value="">Activos e inactivos</option>
+          <option value="active">Activos</option>
+          <option value="inactive">Inactivos</option>
+        </select>
+      </div>
+      <div id="categoryAssignmentList" class="category-assignment-list" aria-live="polite">
+        <div class="empty-state"><strong>Cargando productos y categorías…</strong></div>
       </div>
     </section>
 

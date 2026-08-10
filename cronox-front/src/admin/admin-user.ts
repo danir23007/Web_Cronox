@@ -10,7 +10,7 @@
   const requestsStatus = document.getElementById('requestsStatus');
   const refreshAllBtn = document.getElementById('refreshAll');
   const refreshAuditBtn = document.getElementById('refreshAudit');
-  const refreshNotesBtn = document.getElementById('refreshNotes');
+  const refreshNotesBtn = document.getElementById('refreshNotes') as HTMLButtonElement | null;
   const backToUsersBtn = document.getElementById('backToUsers') as HTMLAnchorElement | null;
   const summarySession = document.getElementById('summarySession');
   const summaryRole = document.getElementById('summaryRole');

@@ -9,7 +9,7 @@
     cache?: RequestCache;
   }
 
-  const g = typeof window !== 'undefined' ? window : (globalThis as Window);
+  const g = typeof window !== 'undefined' ? window : (globalThis as unknown as Window);
 
   /**
    * Browser-facing values returned by the API are data, not markup.  Keep the
@@ -121,12 +121,12 @@
       return doc.dataset.cronoxApiBase.trim();
     }
 
-    const meta = document.querySelector('meta[name="cronox:api-base"]');
+    const meta = document.querySelector<HTMLMetaElement>('meta[name="cronox:api-base"]');
     if (meta && typeof meta.content === 'string' && meta.content.trim()) {
       return meta.content.trim();
     }
 
-    const script = document.querySelector('script[data-cronox-api-base]');
+    const script = document.querySelector<HTMLScriptElement>('script[data-cronox-api-base]');
     if (
       script &&
       typeof script.dataset.cronoxApiBase === 'string' &&
@@ -452,7 +452,7 @@
     return url.toString();
   };
 
-  const buildRequestHeaders = (customHeaders?: Record<string, string>) => {
+  const buildRequestHeaders = (customHeaders?: Record<string, string>): Record<string, string> => {
     return {
       Accept: 'application/json',
       ...(customHeaders || {}),
@@ -596,7 +596,8 @@
     }
   };
 
-  const classifyApiError = (error: CronoxApiError = {}) => {
+  const classifyApiError = (rawError: unknown = {}): CronoxApiErrorClassification => {
+    const error = (rawError && typeof rawError === 'object' ? rawError : {}) as Partial<CronoxApiError>;
     const status = Number(error.status || error.statusCode || 0);
     const message = (error && error.message) || '';
     const payloadMessage = (error as { payload?: { message?: string; error?: string } })?.payload?.message ||
@@ -833,6 +834,20 @@
     return request(`/api/admin/products/${encodeURIComponent(id)}`, { method: 'DELETE' });
   };
 
+  adminApi.updateProductCategories = async (
+    id: number | string,
+    categoryIds: number[],
+  ) => {
+    return request(`/api/admin/products/${encodeURIComponent(id)}/categories`, {
+      method: 'PATCH',
+      body: { categoryIds },
+    });
+  };
+
+  adminApi.listAdminCategories = async (query: QueryRecord = {}) => {
+    return request('/api/admin/categories', { query });
+  };
+
   adminApi.uploadProductImages = async (files: File[] = []) => {
     const formData = new FormData();
     files.forEach((file) => formData.append('files', file));
@@ -1024,6 +1039,23 @@
   api.getCategories = async (query: QueryRecord = {}) => {
     const data = await request('/api/categories', { query });
     return Array.isArray((data as { items?: unknown[] })?.items) ? (data as { items: unknown[] }).items : [];
+  };
+
+  api.getCategoryProducts = async (slug: string, query: QueryRecord = {}) => {
+    const data = (await request(
+      `/api/categories/${encodeURIComponent(slug)}/products`,
+      { query },
+    )) as {
+      category?: UnknownRecord;
+      products?: { items?: UnknownRecord[]; meta?: UnknownRecord };
+    };
+    return {
+      category: data?.category || null,
+      products: Array.isArray(data?.products?.items)
+        ? data.products.items.map((product) => mapProduct(product))
+        : [],
+      meta: data?.products?.meta || null,
+    };
   };
 
   // ===== CARRITO =====
