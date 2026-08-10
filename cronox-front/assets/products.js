@@ -198,9 +198,11 @@
     window.CRONOX_PRODUCTS = PRODUCTS;
   };
 
-  // ---- Búsqueda inicial (?q=) ----
+  // ---- Navegación inicial (?q=, ?categorySlug=) ----
   const url = new URL(window.location);
   const initialQueryRaw  = url.searchParams.get("q") || "";
+  const categorySlugRaw = (url.searchParams.get("categorySlug") || "").trim().toLowerCase();
+  const initialCategorySlug = /^[a-z0-9-]+$/.test(categorySlugRaw) ? categorySlugRaw : "";
   if (searchInput && initialQueryRaw) searchInput.value = initialQueryRaw;
 
   // ======================================================
@@ -689,19 +691,29 @@
 
   async function loadCatalog() {
     const fallback = adaptCatalog(cloneProducts(fallbackFactory()));
+    const categoryFallback = initialCategorySlug
+      ? fallback.filter((product) =>
+          (product.categories || []).some((category) => norm(category) === initialCategorySlug),
+        )
+      : fallback;
     if (!API || typeof API.getProducts !== "function") {
-      return { products: fallback, source: "fallback" };
+      return { products: categoryFallback, source: "fallback" };
     }
 
     try {
-      const raw = await API.getProducts({ limit: 48, sortBy: "createdAt", order: "desc" });
+      const query = { limit: 48, sortBy: "createdAt", order: "desc" };
+      if (initialCategorySlug) query.categorySlug = initialCategorySlug;
+      const raw = await API.getProducts(query);
+      if (initialCategorySlug && Array.isArray(raw) && raw.length === 0) {
+        return { products: [], source: "api" };
+      }
       if (!Array.isArray(raw) || !raw.length) {
         throw new Error("Catálogo vacío");
       }
       return { products: adaptCatalog(raw), source: "api" };
     } catch (error) {
       console.warn("[CRONOX] No se pudo cargar el catálogo desde la API, usando fallback local.", error);
-      return { products: fallback, source: "fallback" };
+      return { products: categoryFallback, source: "fallback" };
     }
   }
 

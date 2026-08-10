@@ -144,8 +144,12 @@
     .toast--hide { opacity: 0; transform: translateY(6px); transition: opacity 0.2s ease, transform 0.2s ease; }
     .admin-section.restricted > :not(.restricted-notice) { display: none !important; }
     .restricted-notice { display: block; }
+    #section-menu { box-sizing: border-box; }
     .admin-index-list { display: grid; gap: 10px; margin-top: 14px; }
     .admin-nav-item { width: 100%; text-align: left; padding: 16px 14px; font-size: 1.02rem; }
+    .admin-nav-item--described { display: flex; align-items: baseline; gap: 0.45rem; flex-wrap: wrap; line-height: 1.35; }
+    .admin-nav-item__title { flex: 0 0 auto; font-weight: 700; }
+    .admin-nav-item__description { flex: 1 1 20rem; min-width: 0; color: rgba(255,255,255,0.72); font-weight: 400; overflow-wrap: anywhere; }
     .admin-view-back { margin-bottom: 14px; }
     .subtle { color: rgba(255,255,255,0.72); }
     .bw-theme .card,
@@ -191,13 +195,13 @@
       <h2 id="title-menu">Secciones</h2>
       <small class="subtle">Selecciona un módulo del panel de administración.</small>
       <div class="admin-index-list" id="adminIndexList">
-        <button class="btn admin-nav-item" data-nav-target="section-dashboard">Resumen</button>
-        <button class="btn admin-nav-item" data-nav-target="section-circles-menu">Círculos</button>
-        <button class="btn admin-nav-item" data-nav-target="section-activity">Actividad</button>
-        <button class="btn admin-nav-item" data-nav-target="section-users">Usuarios</button>
-        <button class="btn admin-nav-item" data-nav-target="section-products">Productos</button>
-        <button class="btn admin-nav-item" data-nav-target="section-orders">Pedidos</button>
-        <button class="btn admin-nav-item" data-nav-target="section-codes">Códigos</button>
+        <button class="btn admin-nav-item admin-nav-item--described" data-nav-target="section-dashboard"><strong class="admin-nav-item__title">Resumen -</strong><span class="admin-nav-item__description">Estadísticas generales, info de usuarios, pedidos, ingresos, stock</span></button>
+        <button class="btn admin-nav-item admin-nav-item--described" data-nav-target="section-circles-menu"><strong class="admin-nav-item__title">Círculos -</strong><span class="admin-nav-item__description">Solicitudes de subidas de círculos</span></button>
+        <button class="btn admin-nav-item admin-nav-item--described" data-nav-target="section-activity"><strong class="admin-nav-item__title">Actividad -</strong><span class="admin-nav-item__description">Actividad en el panel de administrador</span></button>
+        <button class="btn admin-nav-item admin-nav-item--described" data-nav-target="section-users"><strong class="admin-nav-item__title">Usuarios -</strong><span class="admin-nav-item__description">Info cuentas registradas</span></button>
+        <button class="btn admin-nav-item admin-nav-item--described" data-nav-target="section-products"><strong class="admin-nav-item__title">Productos -</strong><span class="admin-nav-item__description">Creación o edición de productos</span></button>
+        <button class="btn admin-nav-item admin-nav-item--described" data-nav-target="section-orders"><strong class="admin-nav-item__title">Pedidos -</strong><span class="admin-nav-item__description">Información, seguimiento y estado del pedido</span></button>
+        <button class="btn admin-nav-item admin-nav-item--described" data-nav-target="section-codes"><strong class="admin-nav-item__title">Códigos -</strong><span class="admin-nav-item__description">Creación y edición de códigos de descuento</span></button>
       </div>
     </section>
 
