@@ -2360,14 +2360,14 @@ window.CRONOX_USER = window.CRONOX_USER || null;
     if (newsletterState.overlay) {
       newsletterState.overlay.classList.remove('newsletter-modal-overlay--visible');
     }
-    unlockScroll('newsletter');
+    if (typeof window.CRONOX_unlockScroll === 'function') window.CRONOX_unlockScroll('newsletter');
     persistNewsletterDismiss();
   };
 
   const openNewsletterModal = () => {
     if (!newsletterState.overlay) return;
     newsletterState.overlay.classList.add('newsletter-modal-overlay--visible');
-    lockScroll('newsletter');
+    if (typeof window.CRONOX_lockScroll === 'function') window.CRONOX_lockScroll('newsletter');
   };
 
   const shouldShowNewsletter = () => {
