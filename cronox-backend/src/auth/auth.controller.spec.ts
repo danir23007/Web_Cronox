@@ -18,6 +18,8 @@ describe('AuthController cart merge cookie lifecycle', () => {
       logCartMergeError: jest.fn(),
       setAuthCookies: jest.fn(),
       clearMergedAnonymousCartCookie: jest.fn(),
+      recordSuccessfulLogin: jest.fn().mockResolvedValue(undefined),
+      refresh: jest.fn().mockResolvedValue(loginResult),
     };
     controller = new AuthController(authService);
     response = {};
@@ -42,6 +44,7 @@ describe('AuthController cart merge cookie lifecycle', () => {
     expect(authService.clearMergedAnonymousCartCookie).toHaveBeenCalledWith(
       response,
     );
+    expect(authService.recordSuccessfulLogin).toHaveBeenCalledTimes(1);
   });
 
   it('preserves cartId when merge fails so an explicit later login can recover it', async () => {
@@ -56,6 +59,7 @@ describe('AuthController cart merge cookie lifecycle', () => {
     expect(authService.logCartMergeError).toHaveBeenCalled();
     expect(authService.clearMergedAnonymousCartCookie).not.toHaveBeenCalled();
     expect(authService.setAuthCookies).toHaveBeenCalled();
+    expect(authService.recordSuccessfulLogin).toHaveBeenCalledTimes(1);
   });
 
   it('also merges and clears the guest cookie after successful registration', async () => {
@@ -82,5 +86,17 @@ describe('AuthController cart merge cookie lifecycle', () => {
     expect(authService.clearMergedAnonymousCartCookie).toHaveBeenCalledWith(
       response,
     );
+    expect(authService.recordSuccessfulLogin).not.toHaveBeenCalled();
+  });
+
+  it('does not record failed authentication or refresh as a successful login', async () => {
+    authService.login.mockRejectedValueOnce(new Error('invalid credentials'));
+    await expect(controller.login({ cookies: {} } as any, response, {
+      email: 'member@example.test',
+      password: 'wrong-password',
+    })).rejects.toThrow('invalid credentials');
+    await controller.refresh({ user: { id: 42 } } as any, response);
+
+    expect(authService.recordSuccessfulLogin).not.toHaveBeenCalled();
   });
 });

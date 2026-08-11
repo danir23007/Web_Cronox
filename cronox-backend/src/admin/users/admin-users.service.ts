@@ -102,6 +102,7 @@ export class AdminUsersService {
         role: true,
         createdAt: true,
         updatedAt: true,
+        lastLoginAt: true,
       },
     });
 
@@ -195,7 +196,7 @@ export class AdminUsersService {
         role: user.role ?? null,
         createdAt: user.createdAt,
         updatedAt: user.updatedAt,
-        lastLoginAt: null,
+        lastLoginAt: user.lastLoginAt,
       },
       stats: {
         ordersCount,

@@ -870,6 +870,22 @@
     return request(`/api/admin/users/${encodeURIComponent(id)}/audit-logs`);
   };
 
+  adminApi.getUserAnalyticsSummary = async (id: number | string) => {
+    return request(`/api/admin/users/${encodeURIComponent(id)}/analytics/summary`);
+  };
+
+  adminApi.getUserAnalyticsProducts = async (id: number | string) => {
+    return request(`/api/admin/users/${encodeURIComponent(id)}/analytics/products`);
+  };
+
+  adminApi.getUserAnalyticsTimeline = async (id: number | string, query: QueryRecord = {}) => {
+    return request(`/api/admin/users/${encodeURIComponent(id)}/analytics/timeline`, { query });
+  };
+
+  adminApi.getUserLoginHistory = async (id: number | string, query: QueryRecord = {}) => {
+    return request(`/api/admin/users/${encodeURIComponent(id)}/login-history`, { query });
+  };
+
   // ✅ FIX: Endpoints por usuario (Solicitudes / Pedidos)
   adminApi.getUserRequests = async (id: number | string, query: QueryRecord = {}) => {
     if (id == null || id === '') {

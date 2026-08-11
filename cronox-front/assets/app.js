@@ -2128,10 +2128,12 @@ window.CRONOX_USER = window.CRONOX_USER || null;
   const clearCookies = () => {
     try {
       if (typeof document === 'undefined' || !document.cookie) return;
+      const consentCookieName = window.CRONOX_COOKIE_CONSENT?.CONSENT_COOKIE_NAME;
       document.cookie.split(';').forEach((cookie) => {
         const eqPos = cookie.indexOf('=');
         const name = (eqPos > -1 ? cookie.substr(0, eqPos) : cookie).trim();
         if (!name) return;
+        if (name === consentCookieName) return;
         const paths = ['/', window.location.pathname || '/'];
         paths.forEach((path) => {
           document.cookie = `${name}=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=${path}`;
@@ -2321,7 +2323,11 @@ window.CRONOX_USER = window.CRONOX_USER || null;
     feedback: null,
   };
 
+  const hasPreferenceConsent = () =>
+    window.CRONOX_COOKIE_CONSENT?.hasConsent('preferences') === true;
+
   const persistNewsletterDismiss = () => {
+    if (!hasPreferenceConsent()) return;
     try {
       sessionStorage.setItem(NEWSLETTER_STORAGE_KEY, 'true');
     } catch (error) {
@@ -2373,6 +2379,7 @@ window.CRONOX_USER = window.CRONOX_USER || null;
   const shouldShowNewsletter = () => {
     if (typeof window === 'undefined') return false;
     if (window.CRONOX_USER) return false;
+    if (!hasPreferenceConsent()) return true;
     try {
       const dismissed = sessionStorage.getItem(NEWSLETTER_STORAGE_KEY);
       if (dismissed === 'true') return false;
@@ -2465,14 +2472,14 @@ window.CRONOX_USER = window.CRONOX_USER || null;
     bindNewsletterEvents();
 
     try {
-      if (sessionStorage.getItem(NEWSLETTER_STORAGE_KEY) === 'true') return;
+      if (hasPreferenceConsent() && sessionStorage.getItem(NEWSLETTER_STORAGE_KEY) === 'true') return;
     } catch (error) {
       console.warn('[CRONOX] No se pudo leer el estado de newsletter', error);
     }
 
     setTimeout(() => {
       try {
-        if (sessionStorage.getItem(NEWSLETTER_STORAGE_KEY) === 'true') return;
+        if (hasPreferenceConsent() && sessionStorage.getItem(NEWSLETTER_STORAGE_KEY) === 'true') return;
       } catch (error) {
         console.warn('[CRONOX] No se pudo leer el estado de newsletter', error);
       }

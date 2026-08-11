@@ -8,6 +8,7 @@
   const notesStatus = document.getElementById('notesStatus');
   const ordersStatus = document.getElementById('ordersStatus');
   const requestsStatus = document.getElementById('requestsStatus');
+  const analyticsStatus = document.getElementById('analyticsStatus');
   const refreshAllBtn = document.getElementById('refreshAll');
   const refreshAuditBtn = document.getElementById('refreshAudit');
   const refreshNotesBtn = document.getElementById('refreshNotes') as HTMLButtonElement | null;
@@ -32,11 +33,28 @@
   const noteBody = document.getElementById('noteBody') as HTMLTextAreaElement | null;
   const tabs = document.querySelectorAll<HTMLButtonElement>('.tab');
   const notesTab = document.querySelector<HTMLButtonElement>('.tab[data-tab="notes"]');
+  const analyticsTab = document.querySelector<HTMLButtonElement>('.tab[data-tab="analytics"]');
+  const analyticsPanel = document.getElementById('panel-analytics');
   const ordersPanel = document.getElementById('panel-orders');
   const requestsPanel = document.getElementById('panel-requests');
   const requestsPlaceholder = requestsPanel?.querySelector<HTMLElement>('.placeholder') || null;
+  const analyticsOverview = document.getElementById('analyticsOverview');
+  const analyticsDetails = document.getElementById('analyticsDetails');
+  const analyticsProducts = document.getElementById('analyticsProducts');
+  const analyticsLogins = document.getElementById('analyticsLogins');
+  const analyticsTimeline = document.getElementById('analyticsTimeline');
+  const expandAnalyticsBtn = document.getElementById('expandAnalytics') as HTMLButtonElement | null;
+  const analyticsPrevBtn = document.getElementById('analyticsPrev') as HTMLButtonElement | null;
+  const analyticsNextBtn = document.getElementById('analyticsNext') as HTMLButtonElement | null;
+  let analyticsPage = 1;
+  let analyticsTotalPages = 1;
+  let analyticsAccessAllowed = false;
   let notesAvailable = true;
-  const kpiState: { ordersCount: number | null; totalSpent: number | null; lastOrderAt: string | null } = {
+  const kpiState: {
+    ordersCount: number | null;
+    totalSpent: number | null;
+    lastOrderAt: string | null;
+  } = {
     ordersCount: null,
     totalSpent: null,
     lastOrderAt: null,
@@ -46,12 +64,14 @@
   const renderBanner = ui.renderBanner;
   const renderEmptyState = ui.renderEmptyState;
   const setLoading = ui.setLoading;
-  const classifyApiError = window.CRONOX_API?.classifyApiError || (() => ({
-    severity: 'error',
-    userMessage: 'No pudimos completar la solicitud.',
-    isRetryable: true,
-    kind: 'unknown',
-  }));
+  const classifyApiError =
+    window.CRONOX_API?.classifyApiError ||
+    (() => ({
+      severity: 'error',
+      userMessage: 'No pudimos completar la solicitud.',
+      isRetryable: true,
+      kind: 'unknown',
+    }));
 
   const getErrorDetails = (error: CronoxApiError) => ({
     status: error?.status ?? error?.statusCode ?? 0,
@@ -177,7 +197,13 @@
       title: 'API no inicializada',
       message: 'Falta api.js o no se pudo cargar correctamente.',
       details: { status: 0, endpoint: '—', message: 'API no inicializada' },
-      actions: [{ label: 'Recargar', onClick: () => window.location.reload(), variant: 'primary' }],
+      actions: [
+        {
+          label: 'Recargar',
+          onClick: () => window.location.reload(),
+          variant: 'primary',
+        },
+      ],
     });
     return;
   }
@@ -223,7 +249,8 @@
 
   const normalizeList = (payload: unknown) => {
     if (Array.isArray(payload)) return payload;
-    if (payload && Array.isArray((payload as { items?: unknown[] }).items)) return (payload as { items: unknown[] }).items;
+    if (payload && Array.isArray((payload as { items?: unknown[] }).items))
+      return (payload as { items: unknown[] }).items;
     if (payload && Array.isArray((payload as { data?: unknown[] }).data)) return (payload as { data: unknown[] }).data;
     if (payload && Array.isArray((payload as { data?: { items?: unknown[] } }).data?.items)) {
       return (payload as { data: { items: unknown[] } }).data.items;
@@ -273,7 +300,8 @@
     if (summaryOrdersCount) summaryOrdersCount.textContent = formatText(stats.ordersCount ?? kpiState.ordersCount);
     if (summaryTotalSpent) {
       const totalValue = (stats.totalSpent as number | null | undefined) ?? kpiState.totalSpent;
-      summaryTotalSpent.textContent = totalValue !== null && totalValue !== undefined ? formatCurrency(totalValue) : '—';
+      summaryTotalSpent.textContent =
+        totalValue !== null && totalValue !== undefined ? formatCurrency(totalValue) : '—';
     }
     if (summaryLastOrder) {
       const lastOrderAt = (stats.lastOrderAt as string | null | undefined) ?? kpiState.lastOrderAt;
@@ -283,7 +311,13 @@
     if (summaryUpdated) summaryUpdated.textContent = formatDate(user.updatedAt);
   };
 
-  const updateOrderKpis = (kpis: { ordersCount?: number; totalSpent?: number; lastOrderAt?: string } = {}) => {
+  const updateOrderKpis = (
+    kpis: {
+      ordersCount?: number;
+      totalSpent?: number;
+      lastOrderAt?: string;
+    } = {},
+  ) => {
     if (kpis.ordersCount !== undefined) kpiState.ordersCount = kpis.ordersCount;
     if (kpis.totalSpent !== undefined) kpiState.totalSpent = kpis.totalSpent;
     if (kpis.lastOrderAt !== undefined) kpiState.lastOrderAt = kpis.lastOrderAt;
@@ -299,7 +333,11 @@
 
   const renderProfile = (user: Record<string, unknown> = {}) => {
     if (!profileList) return;
-    const fields: Array<{ label: string; value: unknown; format?: (value: unknown) => string }> = [
+    const fields: Array<{
+      label: string;
+      value: unknown;
+      format?: (value: unknown) => string;
+    }> = [
       { label: 'ID', value: user.id },
       { label: 'Email', value: user.email },
       { label: 'Nombre', value: user.firstName },
@@ -370,12 +408,7 @@
       const dateValue = order.createdAt || order.created_at || order.date || order.orderedAt;
       const status = order.status || order.state || '—';
       const totalValue =
-        order.total ??
-        order.totalAmount ??
-        order.totalPaid ??
-        order.amount ??
-        order.amountTotal ??
-        order.grandTotal;
+        order.total ?? order.totalAmount ?? order.totalPaid ?? order.amount ?? order.amountTotal ?? order.grandTotal;
       const totalLabel = totalValue !== undefined && totalValue !== null ? formatCurrency(totalValue) : '—';
       return `
         <tr>
@@ -454,7 +487,11 @@
     if (!window.CRONOX_API?.admin?.getUserDetail) {
       showModuleError({
         container: profileStatus || statusArea,
-        error: { status: 404, message: 'Endpoint no disponible', endpoint: 'admin.getUserDetail' },
+        error: {
+          status: 404,
+          message: 'Endpoint no disponible',
+          endpoint: 'admin.getUserDetail',
+        },
         title: 'Detalle no disponible',
         isCritical: true,
         backLink: usersReturnLink,
@@ -469,15 +506,23 @@
       const data = await window.CRONOX_API.admin.getUserDetail(userId);
       const payload = data as Record<string, unknown>;
       const user = (payload?.user as Record<string, unknown>) || (payload as Record<string, unknown>) || {};
-      const stats = (payload?.stats as Record<string, unknown>) ||
+      const stats =
+        (payload?.stats as Record<string, unknown>) ||
         (payload?.kpis as Record<string, unknown>) ||
-        (payload?.summary as Record<string, unknown>) || {};
+        (payload?.summary as Record<string, unknown>) ||
+        {};
       if (!user || Object.keys(user).length === 0) {
         if (renderEmptyState && profileList) {
           renderEmptyState(profileList, {
             title: 'Usuario no encontrado o sin datos',
             message: 'No hay información disponible para este usuario.',
-            actions: [{ label: 'Volver a usuarios', href: usersReturnLink, variant: 'primary' }],
+            actions: [
+              {
+                label: 'Volver a usuarios',
+                href: usersReturnLink,
+                variant: 'primary',
+              },
+            ],
           });
         }
         return;
@@ -505,11 +550,19 @@
   const loadAuditLogs = async () => {
     if (!userId || !auditBody) return;
     if (auditStatus) auditStatus.innerHTML = '';
-    if (setLoading) setLoading(auditBody, true, { title: 'Cargando audit logs…', colSpan: 4 });
+    if (setLoading)
+      setLoading(auditBody, true, {
+        title: 'Cargando audit logs…',
+        colSpan: 4,
+      });
     if (!window.CRONOX_API?.admin?.getUserAuditLogs) {
       showModuleError({
         container: auditStatus || statusArea,
-        error: { status: 404, message: 'Endpoint no disponible', endpoint: 'admin.getUserAuditLogs' },
+        error: {
+          status: 404,
+          message: 'Endpoint no disponible',
+          endpoint: 'admin.getUserAuditLogs',
+        },
         title: 'Audit logs no disponibles',
         isCritical: false,
         retry: loadAuditLogs,
@@ -568,7 +621,11 @@
       setNotesAvailability(false, 'Notas no disponibles en este entorno.');
       showModuleError({
         container: notesStatus || statusArea,
-        error: { status: 404, message: 'Endpoint no disponible', endpoint: 'admin.listAdminNotes' },
+        error: {
+          status: 404,
+          message: 'Endpoint no disponible',
+          endpoint: 'admin.listAdminNotes',
+        },
         title: 'Notas no disponibles',
         isCritical: false,
         retry: loadNotes,
@@ -586,7 +643,13 @@
         renderEmptyState(notesList, {
           title: 'Sin notas',
           message: 'Todavía no hay notas internas para este usuario.',
-          actions: [{ label: 'Crear nota', onClick: () => noteBody?.focus?.(), variant: 'primary' }],
+          actions: [
+            {
+              label: 'Crear nota',
+              onClick: () => noteBody?.focus?.(),
+              variant: 'primary',
+            },
+          ],
         });
         return;
       }
@@ -650,7 +713,13 @@
         return;
       }
       const latest = orders
-        .map((order) => (order as Record<string, unknown>)?.createdAt || (order as Record<string, unknown>)?.created_at || (order as Record<string, unknown>)?.date || (order as Record<string, unknown>)?.orderedAt)
+        .map(
+          (order) =>
+            (order as Record<string, unknown>)?.createdAt ||
+            (order as Record<string, unknown>)?.created_at ||
+            (order as Record<string, unknown>)?.date ||
+            (order as Record<string, unknown>)?.orderedAt,
+        )
         .filter(Boolean)
         .map((value) => new Date(value as string))
         .filter((date) => !Number.isNaN(date.getTime()))
@@ -755,9 +824,181 @@
     }
   };
 
+  const configureAnalyticsAccess = async () => {
+    try {
+      const currentUser = await window.CRONOX_API?.getMe?.();
+      analyticsAccessAllowed = ['SUPER_ADMIN', 'SUPERADMIN', 'MODERATOR'].includes(String(currentUser?.role || ''));
+    } catch {
+      analyticsAccessAllowed = false;
+    }
+
+    if (!analyticsAccessAllowed) {
+      analyticsTab?.remove();
+      analyticsPanel?.remove();
+    }
+  };
+
+  const metric = (label: string, value: unknown) => `
+    <div class="analytics-metric">
+      <span>${escapeHtml(label)}</span>
+      <strong>${escapeHtml(formatText(value))}</strong>
+    </div>`;
+
+  const eventLabels: Record<string, string> = {
+    PRODUCT_VIEWED: 'Producto visto',
+    PRODUCT_ADDED_TO_CART: 'Añadido al carrito',
+    PRODUCT_REMOVED_FROM_CART: 'Retirado del carrito',
+    CART_QUANTITY_CHANGED: 'Cantidad modificada',
+    FAVOURITE_ADDED: 'Favorito añadido',
+    FAVOURITE_REMOVED: 'Favorito retirado',
+    SEARCH_PERFORMED: 'Búsqueda',
+    CATEGORY_VIEWED: 'Categoría visitada',
+    CHECKOUT_STARTED: 'Checkout iniciado',
+    CHECKOUT_COMPLETED: 'Checkout completado',
+    CHECKOUT_ABANDONED: 'Checkout abandonado',
+    ACTIVE_TIME: 'Tiempo activo',
+  };
+
+  const renderAnalyticsSummary = (payload: Record<string, unknown>) => {
+    if (!analyticsOverview) return;
+    const consent = (payload.consent as Record<string, unknown>) || {};
+    const login = (payload.login as Record<string, unknown>) || {};
+    const analytics = (payload.analytics as Record<string, unknown>) || {};
+    const available = analytics.available === true;
+    if (analyticsStatus) {
+      analyticsStatus.innerHTML = available
+        ? ''
+        : '<div class="note-meta">No disponible: el usuario no ha consentido el análisis de comportamiento durante este periodo. No se reconstruyen datos anteriores.</div>';
+    }
+    analyticsOverview.innerHTML = [
+      metric('Consentimiento', consent.status || 'NO_DECISION'),
+      metric('Último acceso', formatDate(login.lastLoginAt)),
+      metric('Accesos totales', login.totalLogins ?? 0),
+      metric('Visitas', available ? analytics.visits : 'No disponible'),
+      metric('Última actividad', available ? formatDate(analytics.lastActivityAt) : 'No disponible'),
+      metric(
+        'Tiempo activo',
+        available ? `${Math.round(Number(analytics.activeSeconds || 0) / 60)} min` : 'No disponible',
+      ),
+      metric('Vistas de producto', available ? analytics.productViews : 'No disponible'),
+      metric('Añadidos al carrito', available ? analytics.cartAdds : 'No disponible'),
+      metric('Checkouts iniciados', available ? analytics.checkoutStarts : 'No disponible'),
+      metric('Checkouts abandonados', available ? analytics.checkoutAbandoned : 'No disponible'),
+      metric('Compras completadas', available ? analytics.completedOrders : 'No disponible'),
+    ].join('');
+    setBadgeText(summarySession, 'Último acceso', formatDate(login.lastLoginAt));
+  };
+
+  const loadAnalyticsSummary = async () => {
+    if (!analyticsAccessAllowed || !userId || !analyticsOverview) return;
+    if (!window.CRONOX_API?.admin?.getUserAnalyticsSummary) return;
+    if (setLoading) setLoading(analyticsOverview, true, { title: 'Cargando análisis…' });
+    try {
+      const data = await window.CRONOX_API.admin.getUserAnalyticsSummary(userId);
+      renderAnalyticsSummary((data || {}) as Record<string, unknown>);
+    } catch (error) {
+      showModuleError({
+        container: analyticsStatus || statusArea,
+        error: error as CronoxApiError,
+        title: 'No se pudo cargar el análisis',
+        retry: loadAnalyticsSummary,
+      });
+    }
+  };
+
+  const loadAnalyticsProducts = async () => {
+    if (!analyticsAccessAllowed || !userId || !analyticsProducts || !window.CRONOX_API?.admin?.getUserAnalyticsProducts)
+      return;
+    try {
+      const payload = (await window.CRONOX_API.admin.getUserAnalyticsProducts(userId)) as { items?: unknown[] };
+      const items = normalizeList(payload);
+      analyticsProducts.innerHTML = items.length
+        ? items
+            .map((entry) => {
+              const item = entry as Record<string, unknown>;
+              const product = (item.product as Record<string, unknown>) || {};
+              return `<div class="analytics-row"><span>${escapeHtml(product.name || `Producto ${product.id}`)}</span><span>${escapeHtml(`${item.views || 0} vistas · ${item.cartAdds || 0} carrito · ${item.purchasedUnits || 0} comprados · ${Math.round(Number(item.activeSeconds || 0) / 60)} min`)}</span></div>`;
+            })
+            .join('')
+        : '<div class="note-meta">No hay actividad de producto disponible.</div>';
+    } catch (error) {
+      analyticsProducts.textContent = 'No se pudo cargar la actividad de producto.';
+    }
+  };
+
+  const loadAnalyticsLogins = async () => {
+    if (!analyticsAccessAllowed || !userId || !analyticsLogins || !window.CRONOX_API?.admin?.getUserLoginHistory)
+      return;
+    try {
+      const payload = await window.CRONOX_API.admin.getUserLoginHistory(userId, { page: 1, pageSize: 10 });
+      const items = normalizeList(payload);
+      analyticsLogins.innerHTML = items.length
+        ? items
+            .map((entry) => {
+              const login = entry as Record<string, unknown>;
+              const client = [login.browserFamily, login.browserMajorVersion, login.osFamily, login.deviceClass]
+                .filter(Boolean)
+                .join(' · ');
+              return `<div class="analytics-row"><span>${escapeHtml(formatDate(login.createdAt))}</span><span>${escapeHtml(client)}</span></div>`;
+            })
+            .join('')
+        : '<div class="note-meta">No hay accesos registrados.</div>';
+    } catch (error) {
+      analyticsLogins.textContent = 'No se pudo cargar el historial de accesos.';
+    }
+  };
+
+  const loadAnalyticsTimeline = async () => {
+    if (!analyticsAccessAllowed || !userId || !analyticsTimeline || !window.CRONOX_API?.admin?.getUserAnalyticsTimeline)
+      return;
+    try {
+      const payload = (await window.CRONOX_API.admin.getUserAnalyticsTimeline(userId, {
+        page: analyticsPage,
+        pageSize: 20,
+      })) as Record<string, unknown>;
+      const items = normalizeList(payload);
+      const meta = (payload.meta as Record<string, unknown>) || {};
+      analyticsTotalPages = Number(meta.totalPages || 1);
+      analyticsPrevBtn && (analyticsPrevBtn.disabled = analyticsPage <= 1);
+      analyticsNextBtn && (analyticsNextBtn.disabled = analyticsPage >= analyticsTotalPages);
+      analyticsTimeline.innerHTML = items.length
+        ? items
+            .map((entry) => {
+              const item = entry as Record<string, unknown>;
+              const product = (item.product as Record<string, unknown>) || {};
+              const label =
+                item.kind === 'LOGIN'
+                  ? 'Acceso correcto'
+                  : item.kind === 'ORDER'
+                    ? `Pedido #${item.id} · ${item.status}`
+                    : eventLabels[String(item.eventType)] || String(item.eventType || 'Actividad');
+              const detail = product.name || item.searchQuery || item.categorySlug || '';
+              return `<div class="analytics-row"><span>${escapeHtml(`${label}${detail ? ` · ${detail}` : ''}`)}</span><span>${escapeHtml(formatDate(item.createdAt))}</span></div>`;
+            })
+            .join('')
+        : '<div class="note-meta">No hay actividad en esta página.</div>';
+    } catch (error) {
+      analyticsTimeline.textContent = 'No se pudo cargar la cronología.';
+    }
+  };
+
+  const expandAnalytics = () => {
+    if (!analyticsAccessAllowed || !analyticsDetails) return;
+    analyticsDetails.hidden = false;
+    if (expandAnalyticsBtn) expandAnalyticsBtn.hidden = true;
+    void Promise.allSettled([loadAnalyticsProducts(), loadAnalyticsLogins(), loadAnalyticsTimeline()]);
+  };
+
   const loadAll = () => {
     clearGlobalBanner();
-    Promise.allSettled([loadUserDetail(), loadAuditLogs(), loadNotes(), loadOrders(), loadRequests()]);
+    Promise.allSettled([
+      loadUserDetail(),
+      loadAuditLogs(),
+      loadNotes(),
+      loadOrders(),
+      loadRequests(),
+      loadAnalyticsSummary(),
+    ]);
   };
 
   const handleTabClick = (event: Event) => {
@@ -847,15 +1088,31 @@
       type: 'error',
       title: 'Usuario no seleccionado',
       message: 'Falta el parámetro ?id=123 en la URL. Ejemplo: admin-user.html?id=123',
-      details: { status: 400, endpoint: window.location.href, message: 'Parámetro id faltante' },
-      actions: [{ label: 'Volver a usuarios', href: usersReturnLink, variant: 'primary' }],
+      details: {
+        status: 400,
+        endpoint: window.location.href,
+        message: 'Parámetro id faltante',
+      },
+      actions: [
+        {
+          label: 'Volver a usuarios',
+          href: usersReturnLink,
+          variant: 'primary',
+        },
+      ],
     });
     if (profileList) {
       if (renderEmptyState) {
         renderEmptyState(profileList, {
           title: 'Usuario no encontrado',
           message: 'Selecciona un usuario desde el listado.',
-          actions: [{ label: 'Volver a usuarios', href: usersReturnLink, variant: 'primary' }],
+          actions: [
+            {
+              label: 'Volver a usuarios',
+              href: usersReturnLink,
+              variant: 'primary',
+            },
+          ],
         });
       } else {
         profileList.innerHTML = '<div class="note-meta">No hay usuario seleccionado.</div>';
@@ -872,8 +1129,17 @@
   refreshNotesBtn?.addEventListener('click', loadNotes);
   noteForm?.addEventListener('submit', handleNoteSubmit);
   notesList?.addEventListener('click', handleNoteDelete);
+  expandAnalyticsBtn?.addEventListener('click', expandAnalytics);
+  analyticsPrevBtn?.addEventListener('click', () => {
+    if (analyticsPage > 1) analyticsPage -= 1;
+    void loadAnalyticsTimeline();
+  });
+  analyticsNextBtn?.addEventListener('click', () => {
+    if (analyticsPage < analyticsTotalPages) analyticsPage += 1;
+    void loadAnalyticsTimeline();
+  });
 
   if (userId) {
-    loadAll();
+    void configureAnalyticsAccess().then(loadAll);
   }
 })();

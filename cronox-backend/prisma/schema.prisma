@@ -9,24 +9,25 @@ datasource db {
 }
 
 model Product {
-  id             Int               @id @default(autoincrement())
-  slug           String            @unique
+  id             Int                     @id @default(autoincrement())
+  slug           String                  @unique
   name           String
   description    String?
   price          Int
-  currency       String            @default("EUR")
+  currency       String                  @default("EUR")
   imageUrl       String?
-  isActive       Boolean           @default(true)
+  isActive       Boolean                 @default(true)
   collection     String?
-  searchKeywords String[]          @default([])
-  searchText     String            @default("")
-  createdAt      DateTime          @default(now())
-  updatedAt      DateTime          @updatedAt
+  searchKeywords String[]                @default([])
+  searchText     String                  @default("")
+  createdAt      DateTime                @default(now())
+  updatedAt      DateTime                @updatedAt
   favorites      Favorite[]
   orderItems     OrderItem[]
   categories     ProductCategory[]
   images         ProductImage[]
   variants       ProductVariant[]
+  activityEvents CustomerActivityEvent[]
 
   @@index([searchText(ops: raw("gin_trgm_ops"))], type: Gin, map: "Product_searchText_idx")
 }
@@ -55,19 +56,20 @@ model ProductCategory {
 }
 
 model ProductVariant {
-  id        Int             @id @default(autoincrement())
-  productId Int
-  size      VariantSize
-  sku       String          @unique
-  price     Int?
-  stockQty  Int             @default(0) @map("stock")
-  isActive  Boolean         @default(true)
-  createdAt DateTime        @default(now())
-  updatedAt DateTime        @updatedAt
-  cartItems CartItem[]
-  product   Product         @relation(fields: [productId], references: [id])
-  movements StockMovement[]
+  id                        Int                        @id @default(autoincrement())
+  productId                 Int
+  size                      VariantSize
+  sku                       String                     @unique
+  price                     Int?
+  stockQty                  Int                        @default(0) @map("stock")
+  isActive                  Boolean                    @default(true)
+  createdAt                 DateTime                   @default(now())
+  updatedAt                 DateTime                   @updatedAt
+  cartItems                 CartItem[]
+  product                   Product                    @relation(fields: [productId], references: [id])
+  movements                 StockMovement[]
   checkoutStockReservations CheckoutStockReservation[]
+  activityEvents            CustomerActivityEvent[]
 
   @@unique([productId, size])
   @@index([productId])
@@ -87,36 +89,45 @@ model ProductImage {
 }
 
 model User {
-  id                     Int                     @id @default(autoincrement())
-  email                  String                  @unique
-  password               String                  @map("passwordHash")
-  role                   Role                    @default(USER)
-  name                   String?
-  firstName              String?
-  lastName               String?
-  memberCode             String?                 @unique
-  publicMemberToken      String?                 @unique
-  sessionVersion         Int                     @default(0)
-  newsletterSubscribed   Boolean                 @default(false)
-  firstOrderDiscountCode String?
-  firstOrderDiscountUsed Boolean                 @default(false)
-  circleLevel            Int                     @default(1)
-  circlePromotionRequest CirclePromotionRequest?
-  createdAt              DateTime                @default(now())
-  updatedAt              DateTime                @updatedAt
-  addresses              Address[]
-  carts                  Cart?
-  favorites              Favorite[]
-  orders                 Order[]
-  promoCodeRedemptions   PromoCodeRedemption[]
-  stockMovements         StockMovement[]
-  passwordResetTokens    PasswordResetToken[]
-  discountCodes          DiscountCode[]
-  circleUpgradeRequests  CircleUpgradeRequest[]
-  processedUpgrades      CircleUpgradeRequest[]  @relation("ProcessedRequests")
-  auditLogs              AuditLog[]
-  adminNotes             AdminNote[]
-  checkoutSnapshots      CheckoutSnapshot[]
+  id                        Int                     @id @default(autoincrement())
+  email                     String                  @unique
+  password                  String                  @map("passwordHash")
+  role                      Role                    @default(USER)
+  name                      String?
+  firstName                 String?
+  lastName                  String?
+  memberCode                String?                 @unique
+  publicMemberToken         String?                 @unique
+  sessionVersion            Int                     @default(0)
+  newsletterSubscribed      Boolean                 @default(false)
+  firstOrderDiscountCode    String?
+  firstOrderDiscountUsed    Boolean                 @default(false)
+  circleLevel               Int                     @default(1)
+  circlePromotionRequest    CirclePromotionRequest?
+  createdAt                 DateTime                @default(now())
+  updatedAt                 DateTime                @updatedAt
+  lastLoginAt               DateTime?
+  analyticsConsentStatus    AnalyticsConsentStatus?
+  analyticsConsentVersion   String?
+  analyticsConsentDecidedAt DateTime?
+  analyticsFirstGrantedAt   DateTime?
+  analyticsLastGrantedAt    DateTime?
+  addresses                 Address[]
+  carts                     Cart?
+  favorites                 Favorite[]
+  orders                    Order[]
+  promoCodeRedemptions      PromoCodeRedemption[]
+  stockMovements            StockMovement[]
+  passwordResetTokens       PasswordResetToken[]
+  discountCodes             DiscountCode[]
+  circleUpgradeRequests     CircleUpgradeRequest[]
+  processedUpgrades         CircleUpgradeRequest[]  @relation("ProcessedRequests")
+  auditLogs                 AuditLog[]
+  adminNotes                AdminNote[]
+  checkoutSnapshots         CheckoutSnapshot[]
+  loginEvents               UserLoginEvent[]
+  analyticsSessions         AnalyticsSession[]
+  activityEvents            CustomerActivityEvent[]
 
   // ✅ FIX: relación correcta y naming consistente
   historial Historial?
@@ -242,25 +253,25 @@ model CartItem {
 // A checkout snapshot is created before a Stripe PaymentIntent is created.
 // Order creation must use these frozen values rather than a mutable cart.
 model CheckoutSnapshot {
-  id                         String                 @id @default(cuid())
+  id                         String                     @id @default(cuid())
   userId                     Int
   cartId                     Int
   cartUpdatedAt              DateTime
   requestFingerprint         String
-  stripePaymentIntentId      String?                @unique
-  status                     String                 @default("PENDING")
-  currency                   String                 @default("EUR")
+  stripePaymentIntentId      String?                    @unique
+  status                     String                     @default("PENDING")
+  currency                   String                     @default("EUR")
   subtotalCents              Int
-  taxRate                    Decimal                @db.Decimal(5, 4)
+  taxRate                    Decimal                    @db.Decimal(5, 4)
   taxAmountCents             Int
-  shippingCostCents          Int                    @default(0)
+  shippingCostCents          Int                        @default(0)
   shippingMethodId           Int?
   shippingMethodCode         String?
   shippingMethodLabel        String?
   shippingMethodDescription  String?
   shippingMethodPriceCents   Int?
-  discountCents              Int                    @default(0)
-  disputeLostCents           Int                    @default(0)
+  discountCents              Int                        @default(0)
+  disputeLostCents           Int                        @default(0)
   promoCodeId                Int?
   promoCodeCode              String?
   totalCents                 Int
@@ -269,15 +280,16 @@ model CheckoutSnapshot {
   confirmationEmailSentAt    DateTime?
   confirmationEmailClaimedAt DateTime?
   stockReturnedAt            DateTime?
-  orderId                    Int?                   @unique
+  orderId                    Int?                       @unique
   expiresAt                  DateTime
-  createdAt                  DateTime               @default(now())
-  updatedAt                  DateTime               @updatedAt
-  user                       User                   @relation(fields: [userId], references: [id])
-  order                      Order?                 @relation("CheckoutSnapshotOrder", fields: [orderId], references: [id], onDelete: SetNull)
+  createdAt                  DateTime                   @default(now())
+  updatedAt                  DateTime                   @updatedAt
+  user                       User                       @relation(fields: [userId], references: [id])
+  order                      Order?                     @relation("CheckoutSnapshotOrder", fields: [orderId], references: [id], onDelete: SetNull)
   items                      CheckoutSnapshotItem[]
   stockReservations          CheckoutStockReservation[]
   stockMovements             StockMovement[]
+  activityEvents             CustomerActivityEvent[]
 
   @@index([userId, status])
   @@index([cartId])
@@ -324,25 +336,25 @@ model CheckoutStockReservation {
 // Stripe may deliver an event more than once and in a different order from
 // related events. Store event identity and lifecycle state before acting on it.
 model StripeWebhookEvent {
-  id              String   @id
+  id              String    @id
   type            String
   paymentIntentId String?
   lifecycleStatus String?
   amountCents     Int?
-  status          String   @default("PROCESSING")
+  status          String    @default("PROCESSING")
   error           String?
   occurredAt      DateTime
   processedAt     DateTime?
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
 
   @@index([paymentIntentId, occurredAt])
   @@index([status, updatedAt])
 }
 
 model Order {
-  id                   Int                   @id @default(autoincrement())
-  status               OrderStatus           @default(PENDING)
+  id                   Int                     @id @default(autoincrement())
+  status               OrderStatus             @default(PENDING)
   // Preserve fulfillment progress while a Stripe dispute is open. A later
   // reinstatement restores this state instead of downgrading a shipped or
   // delivered order back to PAID.
@@ -353,32 +365,33 @@ model Order {
   shippedAt            DateTime?
   deliveredAt          DateTime?
   internalNote         String?
-  subtotal             Decimal               @db.Decimal(12, 2)
-  taxRate              Decimal               @db.Decimal(5, 4)
-  taxAmount            Decimal               @db.Decimal(12, 2)
-  shippingCost         Int                   @default(0)
+  subtotal             Decimal                 @db.Decimal(12, 2)
+  taxRate              Decimal                 @db.Decimal(5, 4)
+  taxAmount            Decimal                 @db.Decimal(12, 2)
+  shippingCost         Int                     @default(0)
   shippingMethodId     Int?
-  shippingMethod       ShippingMethod?       @relation(fields: [shippingMethodId], references: [id])
+  shippingMethod       ShippingMethod?         @relation(fields: [shippingMethodId], references: [id])
   shippingMethodCode   String?
-  discountCents        Int                   @default(0)
-  disputeLostCents     Int                   @default(0)
+  discountCents        Int                     @default(0)
+  disputeLostCents     Int                     @default(0)
   promoCodeId          Int?
   promoCodeCode        String?
-  total                Decimal               @db.Decimal(12, 2)
-  currency             String                @default("EUR")
+  total                Decimal                 @db.Decimal(12, 2)
+  currency             String                  @default("EUR")
   provider             String?
-  providerRef          String?               @unique
-  createdAt            DateTime              @default(now())
-  updatedAt            DateTime              @updatedAt
+  providerRef          String?                 @unique
+  createdAt            DateTime                @default(now())
+  updatedAt            DateTime                @updatedAt
   shippingAddr         Json?
   billingAddr          Json?
   userId               Int
-  user                 User                  @relation(fields: [userId], references: [id])
+  user                 User                    @relation(fields: [userId], references: [id])
   items                OrderItem[]
   stockMovements       StockMovement[]
-  promoCode            PromoCode?            @relation(fields: [promoCodeId], references: [id])
+  promoCode            PromoCode?              @relation(fields: [promoCodeId], references: [id])
   promoCodeRedemptions PromoCodeRedemption[]
-  checkoutSnapshot     CheckoutSnapshot?     @relation("CheckoutSnapshotOrder")
+  checkoutSnapshot     CheckoutSnapshot?       @relation("CheckoutSnapshotOrder")
+  activityEvents       CustomerActivityEvent[]
 
   @@index([userId])
   @@index([createdAt])
@@ -400,18 +413,18 @@ model OrderItem {
 }
 
 model StockMovement {
-  id        String         @id @default(cuid())
-  variantId Int
-  delta     Int
-  reason    String?
-  createdAt DateTime       @default(now())
-  orderId   Int?
-  userId    Int?
+  id                 String            @id @default(cuid())
+  variantId          Int
+  delta              Int
+  reason             String?
+  createdAt          DateTime          @default(now())
+  orderId            Int?
+  userId             Int?
   checkoutSnapshotId String?
-  order     Order?         @relation(fields: [orderId], references: [id])
-  user      User?          @relation(fields: [userId], references: [id])
-  variant   ProductVariant @relation(fields: [variantId], references: [id])
-  checkoutSnapshot CheckoutSnapshot? @relation(fields: [checkoutSnapshotId], references: [id], onDelete: SetNull)
+  order              Order?            @relation(fields: [orderId], references: [id])
+  user               User?             @relation(fields: [userId], references: [id])
+  variant            ProductVariant    @relation(fields: [variantId], references: [id])
+  checkoutSnapshot   CheckoutSnapshot? @relation(fields: [checkoutSnapshotId], references: [id], onDelete: SetNull)
 
   @@index([variantId])
   @@index([orderId])
@@ -540,6 +553,73 @@ model AdminNote {
   @@index([targetType, targetId])
 }
 
+/// Security/account access history. Deliberately stores coarse parsed client
+/// properties only: never raw IP addresses, raw User-Agent strings or IDs that
+/// could be combined into a fingerprint.
+model UserLoginEvent {
+  id                  String      @id @default(cuid())
+  userId              Int
+  browserFamily       String      @db.VarChar(40)
+  browserMajorVersion String?     @db.VarChar(12)
+  osFamily            String      @db.VarChar(40)
+  deviceClass         DeviceClass
+  createdAt           DateTime    @default(now())
+  user                User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@index([createdAt])
+}
+
+/// A visit is an analytics session, not a page view. The browser-provided UUID
+/// is scoped to the authenticated account and contains no identifying data.
+model AnalyticsSession {
+  id             String                  @id @db.Uuid
+  userId         Int
+  startedAt      DateTime                @default(now())
+  lastActivityAt DateTime                @default(now())
+  activeSeconds  Int                     @default(0)
+  user           User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  events         CustomerActivityEvent[]
+
+  @@index([userId, startedAt])
+  @@index([userId, lastActivityAt])
+  @@index([lastActivityAt])
+}
+
+/// Strictly structured behaviour events. There is intentionally no JSON
+/// metadata column: every accepted field is bounded and purpose-specific.
+model CustomerActivityEvent {
+  id                 String                    @id @default(cuid())
+  userId             Int
+  sessionId          String                    @db.Uuid
+  eventType          CustomerActivityEventType
+  clientEventId      String?                   @unique @db.Uuid
+  productId          Int?
+  variantId          Int?
+  categorySlug       String?                   @db.VarChar(80)
+  searchQuery        String?                   @db.VarChar(80)
+  resultCount        Int?
+  quantity           Int?
+  previousQuantity   Int?
+  activeSeconds      Int?
+  checkoutSnapshotId String?
+  orderId            Int?
+  createdAt          DateTime                  @default(now())
+  user               User                      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  session            AnalyticsSession          @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  product            Product?                  @relation(fields: [productId], references: [id], onDelete: SetNull)
+  variant            ProductVariant?           @relation(fields: [variantId], references: [id], onDelete: SetNull)
+  checkoutSnapshot   CheckoutSnapshot?         @relation(fields: [checkoutSnapshotId], references: [id], onDelete: SetNull)
+  order              Order?                    @relation(fields: [orderId], references: [id], onDelete: SetNull)
+
+  @@unique([eventType, checkoutSnapshotId])
+  @@index([userId, createdAt])
+  @@index([userId, eventType, createdAt])
+  @@index([sessionId, createdAt])
+  @@index([userId, productId, eventType])
+  @@index([createdAt])
+}
+
 enum Role {
   USER
   SUPER_ADMIN
@@ -588,4 +668,32 @@ enum VariantSize {
   L
   XL
   XXL
+}
+
+enum AnalyticsConsentStatus {
+  ACTIVE
+  REJECTED
+  WITHDRAWN
+}
+
+enum DeviceClass {
+  DESKTOP
+  MOBILE
+  TABLET
+  OTHER
+}
+
+enum CustomerActivityEventType {
+  PRODUCT_VIEWED
+  PRODUCT_ADDED_TO_CART
+  PRODUCT_REMOVED_FROM_CART
+  CART_QUANTITY_CHANGED
+  FAVOURITE_ADDED
+  FAVOURITE_REMOVED
+  SEARCH_PERFORMED
+  CATEGORY_VIEWED
+  CHECKOUT_STARTED
+  CHECKOUT_COMPLETED
+  CHECKOUT_ABANDONED
+  ACTIVE_TIME
 }

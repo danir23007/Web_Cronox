@@ -291,6 +291,47 @@
       gap: 12px;
       margin-bottom: 14px;
     }
+    .analytics-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: 12px;
+      margin: 16px 0;
+    }
+    .analytics-metric {
+      border: 1px solid #2d2d2d;
+      padding: 14px;
+      min-height: 84px;
+    }
+    .analytics-metric span {
+      display: block;
+      color: #9b9b9b;
+      font-size: 11px;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+    }
+    .analytics-metric strong {
+      display: block;
+      margin-top: 8px;
+      font-size: 18px;
+      overflow-wrap: anywhere;
+    }
+    .analytics-section {
+      margin-top: 24px;
+      padding-top: 20px;
+      border-top: 1px solid #292929;
+    }
+    .analytics-list {
+      display: grid;
+      gap: 10px;
+      margin-top: 12px;
+    }
+    .analytics-row {
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 12px;
+      border: 1px solid #292929;
+    }
 
     table {
       width: 100%;
@@ -454,6 +495,7 @@
           <button class="tab" type="button" data-tab="notes">Notas</button>
           <button class="tab" type="button" data-tab="orders">Pedidos</button>
           <button class="tab" type="button" data-tab="requests">Solicitudes</button>
+          <button class="tab" type="button" data-tab="analytics">Análisis</button>
         </div>
 
         <div class="panel active" id="panel-profile">
@@ -532,6 +574,38 @@
         <div class="panel" id="panel-requests">
           <div id="requestsStatus" class="status-area"></div>
           <div class="placeholder">ready to connect when endpoint exists</div>
+        </div>
+
+        <div class="panel" id="panel-analytics">
+          <div id="analyticsStatus" class="status-area"></div>
+          <div class="panel-head">
+            <div>
+              <strong>Actividad y comportamiento</strong>
+              <div class="note-meta">Analítica propia sujeta al consentimiento del cliente.</div>
+            </div>
+            <button class="btn" type="button" id="expandAnalytics">Ampliar</button>
+          </div>
+          <div id="analyticsOverview" class="analytics-grid"></div>
+          <div id="analyticsDetails" hidden>
+            <section class="analytics-section">
+              <strong>Productos</strong>
+              <div id="analyticsProducts" class="analytics-list"></div>
+            </section>
+            <section class="analytics-section">
+              <strong>Accesos recientes</strong>
+              <div id="analyticsLogins" class="analytics-list"></div>
+            </section>
+            <section class="analytics-section">
+              <div class="panel-head">
+                <strong>Cronología</strong>
+                <div>
+                  <button class="btn" type="button" id="analyticsPrev">Anterior</button>
+                  <button class="btn" type="button" id="analyticsNext">Siguiente</button>
+                </div>
+              </div>
+              <div id="analyticsTimeline" class="analytics-list"></div>
+            </section>
+          </div>
         </div>
       </section>
     </main>

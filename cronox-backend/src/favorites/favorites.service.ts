@@ -51,6 +51,10 @@ export class FavoritesService {
 
   async add(userId: number, dto: AddFavoriteDto) {
     const product = await this.findProduct(dto);
+    const existing = await this.prisma.favorite.findUnique({
+      where: { userId_productId: { userId, productId: product.id } },
+      select: { id: true },
+    });
 
     await this.prisma.favorite.upsert({
       where: { userId_productId: { userId, productId: product.id } },
@@ -62,6 +66,7 @@ export class FavoritesService {
       productId: product.id,
       product: this.toProductResponse(product),
       isFavorite: true,
+      created: !existing,
     };
   }
 
@@ -94,13 +99,14 @@ export class FavoritesService {
       });
 
       if (!product) {
-        return;
+        return null;
       }
 
       productId = product.id;
     }
 
-    await this.prisma.favorite.deleteMany({ where: { userId, productId } });
+    const removed = await this.prisma.favorite.deleteMany({ where: { userId, productId } });
+    return removed.count > 0 ? productId : null;
   }
 
   private async findProduct(dto: AddFavoriteDto): Promise<FavoriteProduct> {

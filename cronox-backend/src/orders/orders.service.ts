@@ -8,7 +8,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { createHash } from 'crypto';
-import { OrderStatus, Prisma, PromoCodeType, Role } from '@prisma/client';
+import { CustomerActivityEventType, OrderStatus, Prisma, PromoCodeType, Role } from '@prisma/client';
 import { Decimal } from '@prisma/client/runtime/library';
 import {
   CartService,
@@ -990,10 +990,63 @@ export class OrdersService {
       where: { id: result.orderId },
       select: { status: true },
     });
+    const finalStatus = reconciled?.status ?? result.status;
+    if (finalStatus === OrderStatus.PAID) {
+      await this.recordCompletedCheckoutAnalytics(
+        result.checkoutSnapshotId,
+        result.orderId,
+      );
+    }
     return {
       ...result,
-      status: reconciled?.status ?? result.status,
+      status: finalStatus,
     };
+  }
+
+  private async recordCompletedCheckoutAnalytics(
+    checkoutSnapshotId: string,
+    orderId: number,
+  ): Promise<void> {
+    try {
+      await this.prisma.$transaction(async (tx) => {
+        const started = await tx.customerActivityEvent.findUnique({
+          where: {
+            eventType_checkoutSnapshotId: {
+              eventType: CustomerActivityEventType.CHECKOUT_STARTED,
+              checkoutSnapshotId,
+            },
+          },
+          select: { userId: true, sessionId: true },
+        });
+        if (!started) return;
+        await tx.customerActivityEvent.deleteMany({
+          where: {
+            eventType: CustomerActivityEventType.CHECKOUT_ABANDONED,
+            checkoutSnapshotId,
+          },
+        });
+        await tx.customerActivityEvent.upsert({
+          where: {
+            eventType_checkoutSnapshotId: {
+              eventType: CustomerActivityEventType.CHECKOUT_COMPLETED,
+              checkoutSnapshotId,
+            },
+          },
+          update: { orderId },
+          create: {
+            userId: started.userId,
+            sessionId: started.sessionId,
+            eventType: CustomerActivityEventType.CHECKOUT_COMPLETED,
+            checkoutSnapshotId,
+            orderId,
+          },
+        });
+      });
+    } catch {
+      // Order fulfillment is authoritative and must never be rolled back by
+      // optional analytics persistence.
+      this.logger.warn('Checkout completed but analytics finalization failed');
+    }
   }
 
   async applyStripePaymentLifecycle(

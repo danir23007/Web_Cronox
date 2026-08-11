@@ -101,6 +101,10 @@ declare global {
     getAuditLogs?: (query?: QueryRecord) => Promise<unknown>;
     getUserDetail?: (id: number | string) => Promise<unknown>;
     getUserAuditLogs?: (id: number | string) => Promise<unknown>;
+    getUserAnalyticsSummary?: (id: number | string) => Promise<unknown>;
+    getUserAnalyticsProducts?: (id: number | string) => Promise<unknown>;
+    getUserAnalyticsTimeline?: (id: number | string, query?: QueryRecord) => Promise<unknown>;
+    getUserLoginHistory?: (id: number | string, query?: QueryRecord) => Promise<unknown>;
     getUserRequests?: (id: number | string, query?: QueryRecord) => Promise<AdminUserRequestsResponse>;
     getUserOrders?: (id: number | string, query?: QueryRecord) => Promise<AdminUserOrdersResponse>;
     listAdminOrders?: (query?: QueryRecord) => Promise<unknown>;

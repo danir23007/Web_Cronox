@@ -82,7 +82,7 @@ export class EmailController {
       process.env.FRONTEND_URL ??
       process.env.FRONT_URL ??
       process.env.STORE_URL ??
-      'https://cronoxwear.com';
+      'https://www.cronox.es';
 
     return {
       orderId: 'ORDER-TEST-001',

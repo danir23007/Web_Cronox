@@ -69,6 +69,36 @@ describe('AuthService password reset security', () => {
     Object.assign(process.env, originalEnvironment);
   });
 
+  it('records a successful login as coarse client information only', async () => {
+    prisma.userLoginEvent = {
+      create: jest.fn().mockResolvedValue({ id: 'login-1' }),
+    };
+    prisma.user.update = jest.fn().mockResolvedValue({ id: 42 });
+    prisma.$transaction = jest.fn(async (operations: Promise<unknown>[]) =>
+      Promise.all(operations),
+    );
+
+    await service.recordSuccessfulLogin(42, {
+      headers: {
+        'user-agent':
+          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/126.0 Safari/537.36',
+      },
+    } as any);
+
+    expect(prisma.userLoginEvent.create).toHaveBeenCalledWith({
+      data: {
+        userId: 42,
+        browserFamily: 'Chrome',
+        browserMajorVersion: '126',
+        osFamily: 'Windows',
+        deviceClass: 'DESKTOP',
+      },
+    });
+    expect(prisma.user.update).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 42 } }),
+    );
+  });
+
   it('stores only a hash and sends the raw token exclusively in the reset link', async () => {
     usersService.findByEmail.mockResolvedValue({
       id: 42,

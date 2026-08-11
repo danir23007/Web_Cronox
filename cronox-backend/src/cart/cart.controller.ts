@@ -7,6 +7,7 @@ import {
   ParseIntPipe,
   Patch,
   Post,
+  Optional,
   Req,
   Res,
   UseGuards,
@@ -21,6 +22,8 @@ import {
   CART_COOKIE_NAME,
   getCartCookieOptions,
 } from '../common/cookies/cart-cookie';
+import { AnalyticsService } from '../analytics/analytics.service';
+import { CustomerActivityEventType } from '@prisma/client';
 
 interface ResolveContextOptions {
   ensureAnonymousId?: boolean;
@@ -29,7 +32,10 @@ interface ResolveContextOptions {
 @Controller('cart')
 @UseGuards(OptionalJwtAuthGuard)
 export class CartController {
-  constructor(private readonly cartService: CartService) {}
+  constructor(
+    private readonly cartService: CartService,
+    @Optional() private readonly analytics?: AnalyticsService,
+  ) {}
 
   @Get()
   async getCart(
@@ -54,7 +60,16 @@ export class CartController {
     @Body() dto: AddItemDto,
   ): Promise<CartWithItems> {
     const context = this.resolveContext(req, res, { ensureAnonymousId: true });
-    return this.cartService.addItem(context, dto);
+    const cart = await this.cartService.addItem(context, dto);
+    if (context.userId) {
+      const item = cart.items.find((entry) => entry.variantId === dto.variantId);
+      void this.analytics?.recordServerEvent(req, context.userId, CustomerActivityEventType.PRODUCT_ADDED_TO_CART, {
+        productId: item?.variant.productId,
+        variantId: dto.variantId,
+        quantity: dto.qty,
+      }).catch(() => undefined);
+    }
+    return cart;
   }
 
   @Patch('items/:id')
@@ -65,7 +80,19 @@ export class CartController {
     @Body() dto: UpdateItemDto,
   ): Promise<CartWithItems> {
     const context = this.resolveContext(req, res, { ensureAnonymousId: true });
-    return this.cartService.updateItem(context, id, dto);
+    const before = context.userId
+      ? (await this.cartService.getActiveCartForRequest(req, context))?.items.find((entry) => entry.id === id)
+      : undefined;
+    const cart = await this.cartService.updateItem(context, id, dto);
+    if (context.userId && before && before.qty !== dto.qty) {
+      void this.analytics?.recordServerEvent(req, context.userId, CustomerActivityEventType.CART_QUANTITY_CHANGED, {
+        productId: before.variant.productId,
+        variantId: before.variantId,
+        previousQuantity: before.qty,
+        quantity: dto.qty,
+      }).catch(() => undefined);
+    }
+    return cart;
   }
 
   @Delete('items/:id')
@@ -75,7 +102,18 @@ export class CartController {
     @Param('id', ParseIntPipe) id: number,
   ): Promise<CartWithItems> {
     const context = this.resolveContext(req, res, { ensureAnonymousId: true });
-    return this.cartService.removeItem(context, id);
+    const before = context.userId
+      ? (await this.cartService.getActiveCartForRequest(req, context))?.items.find((entry) => entry.id === id)
+      : undefined;
+    const cart = await this.cartService.removeItem(context, id);
+    if (context.userId && before) {
+      void this.analytics?.recordServerEvent(req, context.userId, CustomerActivityEventType.PRODUCT_REMOVED_FROM_CART, {
+        productId: before.variant.productId,
+        variantId: before.variantId,
+        quantity: before.qty,
+      }).catch(() => undefined);
+    }
+    return cart;
   }
 
   @Delete()
@@ -84,7 +122,20 @@ export class CartController {
     @Res({ passthrough: true }) res: Response,
   ): Promise<CartWithItems> {
     const context = this.resolveContext(req, res, { ensureAnonymousId: true });
-    return this.cartService.clearCart(context);
+    const before = context.userId
+      ? (await this.cartService.getActiveCartForRequest(req, context))?.items ?? []
+      : [];
+    const cart = await this.cartService.clearCart(context);
+    if (context.userId) {
+      for (const item of before) {
+        void this.analytics?.recordServerEvent(req, context.userId, CustomerActivityEventType.PRODUCT_REMOVED_FROM_CART, {
+          productId: item.variant.productId,
+          variantId: item.variantId,
+          quantity: item.qty,
+        }).catch(() => undefined);
+      }
+    }
+    return cart;
   }
 
   private resolveContext(

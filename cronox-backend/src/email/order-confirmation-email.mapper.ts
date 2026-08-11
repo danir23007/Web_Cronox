@@ -31,7 +31,11 @@ export const orderForConfirmationEmailInclude = {
                 isPrimary: true,
                 sortOrder: true,
               },
-              orderBy: [{ isPrimary: 'desc' }, { sortOrder: 'asc' }, { id: 'asc' }],
+              orderBy: [
+                { isPrimary: 'desc' },
+                { sortOrder: 'asc' },
+                { id: 'asc' },
+              ],
             },
             variants: {
               select: {
@@ -51,14 +55,15 @@ export type OrderForConfirmationEmail = Prisma.OrderGetPayload<
 
 @Injectable()
 export class OrderConfirmationEmailMapper {
-  private readonly fallbackStoreUrl = 'https://cronoxwear.com';
-  private readonly fallbackImageUrl =
-    'https://via.placeholder.com/96x96.png?text=CRONOX';
+  private readonly fallbackStoreUrl = 'https://www.cronox.es';
 
   map(order: OrderForConfirmationEmail): OrderConfirmationEmailTemplateData {
     const storefrontUrl = this.resolveStorefrontUrl();
     const shippingAddress = this.parseShippingAddress(order.shippingAddr);
-    const customerFullName = this.resolveCustomerFullName(order, shippingAddress);
+    const customerFullName = this.resolveCustomerFullName(
+      order,
+      shippingAddress,
+    );
     const customerPhone = this.normalizeString(shippingAddress.phone);
     const subtotalCents = this.decimalToCents(order.subtotal);
     const taxesCents = this.decimalToCents(order.taxAmount);
@@ -87,7 +92,10 @@ export class OrderConfirmationEmailMapper {
       shippingAddress,
       items: order.items.map((item) => {
         const variantName = this.resolveVariantName(item);
-        const imageUrl = this.resolveProductImageUrl(item.product);
+        const imageUrl = this.resolveProductImageUrl(
+          item.product,
+          `${storefrontUrl.replace(/\/$/, '')}/assets/logo_banner.png`,
+        );
 
         return {
           name: item.product?.name ?? item.title,
@@ -101,7 +109,9 @@ export class OrderConfirmationEmailMapper {
     };
   }
 
-  private resolveShippingMethod(order: OrderForConfirmationEmail): string | null {
+  private resolveShippingMethod(
+    order: OrderForConfirmationEmail,
+  ): string | null {
     const methodName = order.shippingMethod?.name?.trim();
     if (methodName) {
       return methodName;
@@ -214,7 +224,10 @@ export class OrderConfirmationEmailMapper {
     shippingAddress: OrderConfirmationEmailTemplateData['shippingAddress'],
   ): string | null {
     const fromUser = [order.user?.firstName, order.user?.lastName]
-      .filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
+      .filter(
+        (value): value is string =>
+          typeof value === 'string' && value.trim().length > 0,
+      )
       .map((value) => value.trim())
       .join(' ')
       .trim();
@@ -261,13 +274,19 @@ export class OrderConfirmationEmailMapper {
   }
 
   private resolveProductImageUrl(
-    product: OrderForConfirmationEmail['items'][number]['product'] | null | undefined,
+    product:
+      | OrderForConfirmationEmail['items'][number]['product']
+      | null
+      | undefined,
+    fallbackImageUrl: string,
   ): string {
     if (!product) {
-      return this.fallbackImageUrl;
+      return fallbackImageUrl;
     }
 
-    const primary = product.images?.find((image) => image.isPrimary && image.url?.trim());
+    const primary = product.images?.find(
+      (image) => image.isPrimary && image.url?.trim(),
+    );
     if (primary?.url) {
       return primary.url;
     }
@@ -281,7 +300,7 @@ export class OrderConfirmationEmailMapper {
       return product.imageUrl;
     }
 
-    return this.fallbackImageUrl;
+    return fallbackImageUrl;
   }
 
   private formatCurrencyFromDecimal(value: Prisma.Decimal | Decimal): string {

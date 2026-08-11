@@ -1,9 +1,9 @@
 (function () {
   const API = window.CRONOX_API || {};
   const API_BASE = API.API_BASE || '';
-  const STRIPE_PUBLISHABLE_KEY =
-    window.CRONOX_STRIPE_PUBLISHABLE_KEY ||
-    'pk_test_51SPoYpCGnUu9AYNraxWTDgTkSpqK4ikadITkNAExPeMgFiw7pX6AbyHh7UZHrRlL0G9A3zR6qwSVW8ALJTQtx2pw00WB7kkSyS';
+  const STRIPE_PUBLISHABLE_KEY = String(
+    window.CRONOX_STRIPE_PUBLISHABLE_KEY || '',
+  ).trim();
   const CONTINUE_SHOPPING_URL = '/index.html#store';
   const PROMO_STORAGE_KEY = 'cronox_checkout_promo';
   const escapeHtml = (value) => {
@@ -1086,6 +1086,9 @@
   };
 
   const initStripe = () => {
+    if (!STRIPE_PUBLISHABLE_KEY) {
+      throw new Error('STRIPE_PUBLISHABLE_KEY_NOT_CONFIGURED');
+    }
     if (!stripe && typeof Stripe === 'function') {
       stripe = Stripe(STRIPE_PUBLISHABLE_KEY);
     }
@@ -1099,7 +1102,9 @@
     }
 
     if (!stripe) {
-      errorDiv.textContent = 'No se pudo inicializar el pago. Refresca la página e inténtalo de nuevo.';
+      errorDiv.textContent = STRIPE_PUBLISHABLE_KEY
+        ? 'No se pudo inicializar el pago. Refresca la página e inténtalo de nuevo.'
+        : 'El pago no está configurado en este entorno. Contacta con soporte antes de continuar.';
       currentClientSecret = null;
       resetPaymentElement();
       if (payButton) {

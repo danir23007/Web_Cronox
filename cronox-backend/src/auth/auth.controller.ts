@@ -73,6 +73,7 @@ export class AuthController {
     @Body() dto: LoginDto,
   ) {
     const result = await this.authService.login(dto);
+    await this.authService.recordSuccessfulLogin?.(result.user.id, req);
 
     const cookies = (
       req as Request & { cookies?: Record<string, string | undefined> }

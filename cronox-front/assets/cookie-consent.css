@@ -1,0 +1,363 @@
+.cronox-consent,
+.cronox-consent-panel,
+.cronox-cookie-settings {
+  --consent-black: #050505;
+  --consent-white: #fff;
+  --consent-muted: #b9b9b9;
+  --consent-line: #5c5c5c;
+  box-sizing: border-box;
+  color: var(--consent-white);
+  font-family: inherit;
+}
+
+.cronox-consent *,
+.cronox-consent-panel *,
+.cronox-cookie-settings {
+  box-sizing: border-box;
+}
+
+.cronox-consent[hidden],
+.cronox-consent-panel[hidden] {
+  display: none !important;
+}
+
+.cronox-consent {
+  position: fixed;
+  z-index: 2147483000;
+  right: 14px;
+  bottom: 14px;
+  left: 14px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 16px;
+  align-items: end;
+  max-width: 960px;
+  max-height: calc(100vh - 28px);
+  margin: 0 auto;
+  padding: 16px;
+  overflow: auto;
+  border: 1px solid var(--consent-line);
+  background: var(--consent-black);
+  box-shadow: 0 18px 60px rgb(0 0 0 / 55%);
+}
+
+.cronox-consent__copy {
+  min-width: 0;
+}
+
+.cronox-consent__eyebrow {
+  margin: 0 0 4px;
+  color: var(--consent-muted);
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.cronox-consent h2,
+.cronox-consent-panel h2,
+.cronox-consent-panel h3 {
+  color: var(--consent-white);
+  font-family: inherit;
+  text-transform: none;
+}
+
+.cronox-consent h2,
+.cronox-consent-panel h2 {
+  margin: 0;
+  font-size: clamp(1.1rem, 1.7vw, 1.4rem);
+  letter-spacing: 0.04em;
+}
+
+.cronox-consent__copy > p:last-child,
+.cronox-consent-panel__intro,
+.cronox-consent__category p {
+  color: var(--consent-muted);
+  line-height: 1.4;
+}
+
+.cronox-consent__copy > p:last-child {
+  max-width: 620px;
+  margin: 6px 0 0;
+  font-size: 0.82rem;
+}
+
+.cronox-consent a {
+  color: var(--consent-white);
+  text-underline-offset: 3px;
+}
+
+.cronox-consent__actions {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(104px, 1fr));
+  gap: 8px;
+}
+
+.cronox-consent__button,
+.cronox-consent-panel__close,
+.cronox-cookie-settings {
+  appearance: none;
+  border: 1px solid var(--consent-white);
+  border-radius: 0;
+  background: var(--consent-black);
+  color: var(--consent-white);
+  cursor: pointer;
+  font: inherit;
+}
+
+.cronox-consent__button {
+  min-height: 40px;
+  padding: 9px 12px;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.cronox-consent__button:hover,
+.cronox-consent__button:focus-visible,
+.cronox-consent-panel__close:hover,
+.cronox-consent-panel__close:focus-visible,
+.cronox-cookie-settings:hover,
+.cronox-cookie-settings:focus-visible {
+  background: var(--consent-white);
+  color: var(--consent-black);
+  outline: 3px solid var(--consent-white);
+  outline-offset: 3px;
+}
+
+.cronox-consent-panel {
+  position: fixed;
+  z-index: 2147483001;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+}
+
+.cronox-consent-panel__backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgb(0 0 0 / 78%);
+}
+
+.cronox-consent-panel__dialog {
+  position: relative;
+  width: min(640px, 100%);
+  max-height: calc(100vh - 40px);
+  overflow: auto;
+  border: 1px solid var(--consent-line);
+  background: var(--consent-black);
+  box-shadow: 0 18px 80px rgb(0 0 0 / 75%);
+}
+
+.cronox-consent-panel__header {
+  display: flex;
+  gap: 18px;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: 18px 18px 0;
+}
+
+.cronox-consent-panel__close {
+  flex: 0 0 36px;
+  width: 36px;
+  height: 36px;
+  font-size: 1.35rem;
+  line-height: 1;
+}
+
+.cronox-consent-panel__intro {
+  margin: 10px 18px 14px;
+  font-size: 0.82rem;
+}
+
+.cronox-consent-panel__categories {
+  border-top: 1px solid var(--consent-line);
+}
+
+.cronox-consent__category {
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--consent-line);
+}
+
+.cronox-consent__category-heading {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.cronox-consent__category h3 {
+  margin: 0;
+  font-size: 1rem;
+  letter-spacing: 0.025em;
+}
+
+.cronox-consent__category p {
+  margin: 6px 0 0;
+  font-size: 0.8rem;
+}
+
+.cronox-consent__always,
+.cronox-consent__unused {
+  flex: 0 0 auto;
+  color: var(--consent-muted);
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.cronox-consent__category-status {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 10px;
+  align-items: center;
+}
+
+.cronox-consent__switch {
+  position: relative;
+  flex: 0 0 auto;
+  width: 48px;
+  height: 26px;
+  cursor: pointer;
+}
+
+.cronox-consent__switch input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+}
+
+.cronox-consent__switch span[aria-hidden] {
+  position: absolute;
+  inset: 0;
+  border: 1px solid var(--consent-muted);
+  background: #232323;
+  transition: background 150ms ease;
+}
+
+.cronox-consent__switch span[aria-hidden]::after {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  width: 16px;
+  height: 16px;
+  background: var(--consent-white);
+  content: "";
+  transition: transform 150ms ease;
+}
+
+.cronox-consent__switch input:checked + span {
+  background: var(--consent-white);
+}
+
+.cronox-consent__switch input:checked + span::after {
+  background: var(--consent-black);
+  transform: translateX(22px);
+}
+
+.cronox-consent__switch input:focus-visible + span {
+  outline: 3px solid var(--consent-white);
+  outline-offset: 3px;
+}
+
+.cronox-consent__switch--disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.cronox-consent-panel__actions {
+  padding: 14px 18px 18px;
+}
+
+.cronox-consent-modal-open {
+  overflow: hidden !important;
+}
+
+.cronox-cookie-settings {
+  display: block;
+  width: max-content;
+  max-width: calc(100% - 32px);
+  min-height: 38px;
+  margin: 16px auto;
+  padding: 8px 14px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.cronox-cookie-settings--fixed {
+  position: fixed;
+  z-index: 2147482999;
+  right: 16px;
+  bottom: 16px;
+  margin: 0;
+  box-shadow: 0 8px 24px rgb(0 0 0 / 45%);
+}
+
+.cronox-consent__sr-only {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  padding: 0 !important;
+  margin: -1px !important;
+  overflow: hidden !important;
+  clip: rect(0, 0, 0, 0) !important;
+  white-space: nowrap !important;
+  border: 0 !important;
+}
+
+@media (max-width: 760px) {
+  .cronox-consent {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+}
+
+@media (max-width: 520px) {
+  .cronox-consent {
+    right: 8px;
+    bottom: 8px;
+    left: 8px;
+    max-height: calc(100vh - 16px);
+    padding: 14px;
+  }
+
+  .cronox-consent__actions {
+    grid-template-columns: 1fr;
+  }
+
+  .cronox-consent-panel {
+    padding: 8px;
+  }
+
+  .cronox-consent-panel__dialog {
+    max-height: calc(100vh - 16px);
+  }
+
+  .cronox-consent-panel__header,
+  .cronox-consent__category {
+    padding-right: 14px;
+    padding-left: 14px;
+  }
+
+  .cronox-consent-panel__intro {
+    margin-right: 14px;
+    margin-left: 14px;
+  }
+
+  .cronox-consent-panel__actions {
+    padding: 14px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cronox-consent__switch span,
+  .cronox-consent__switch span::after {
+    transition: none;
+  }
+}

@@ -10,7 +10,7 @@ import { JwtService } from '@nestjs/jwt';
 import { Role, User } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 import { createHash, randomBytes } from 'crypto';
-import type { CookieOptions, Response } from 'express';
+import type { CookieOptions, Request, Response } from 'express';
 import { CartService, type MergeOnLoginResult } from '../cart/cart.service';
 import {
   getBcryptSaltRounds,
@@ -28,6 +28,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { UsersService, AuthUser } from '../users/users.service';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
+import { parseClientInfo } from '../analytics/client-info';
 
 interface JwtPayload {
   sub: number;
@@ -125,6 +126,15 @@ export class AuthService {
       token: tokens.accessToken,
       tokens,
     };
+  }
+
+  async recordSuccessfulLogin(userId: number, req: Request): Promise<void> {
+    const client = parseClientInfo(req);
+    const now = new Date();
+    await this.prisma.$transaction([
+      this.prisma.userLoginEvent.create({ data: { userId, ...client } }),
+      this.prisma.user.update({ where: { id: userId }, data: { lastLoginAt: now } }),
+    ]);
   }
 
   async refresh(userId: number) {

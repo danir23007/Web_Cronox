@@ -654,6 +654,11 @@
     }
 
     render(target);
+    try {
+      window.dispatchEvent(new CustomEvent("cronox:productViewed", {
+        detail: { productId: Number(target.backendId) || null },
+      }));
+    } catch {}
 
     // botón añadir al carrito
     if (target && pAdd) {

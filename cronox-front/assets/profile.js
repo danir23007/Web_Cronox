@@ -131,6 +131,7 @@
   const persistCircleRequestModalSeen = () => {
     const storageKey = getCircleRequestModalStorageKey();
     if (!storageKey) return;
+    if (window.CRONOX_COOKIE_CONSENT?.hasConsent('preferences') !== true) return;
     try {
       localStorage.setItem(storageKey, '1');
     } catch (_) {
@@ -152,6 +153,7 @@
   const markCircleUpgradeModalSeen = (requestId) => {
     const storageKey = getCircleUpgradeSuccessStorageKey();
     if (!storageKey || !requestId) return;
+    if (window.CRONOX_COOKIE_CONSENT?.hasConsent('preferences') !== true) return;
     try {
       localStorage.setItem(storageKey, String(requestId));
     } catch (_) {
@@ -162,6 +164,7 @@
   const hasSeenCircleUpgradeSuccess = (requestId) => {
     const storageKey = getCircleUpgradeSuccessStorageKey();
     if (!storageKey || !requestId) return false;
+    if (window.CRONOX_COOKIE_CONSENT?.hasConsent('preferences') !== true) return false;
     try {
       return localStorage.getItem(storageKey) === String(requestId);
     } catch (_) {

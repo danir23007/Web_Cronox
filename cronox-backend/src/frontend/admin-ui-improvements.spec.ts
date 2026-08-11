@@ -88,4 +88,18 @@ describe('admin UI improvement contracts', () => {
       "setScopedMessage(codesMessage, errorMessage, 'error')",
     );
   });
+
+  it('shows customer analytics UI only to SUPER_ADMIN and MODERATOR', () => {
+    const adminUser = readFrontend('src/admin/admin-user.ts');
+
+    expect(adminUser).toMatch(
+      /analyticsAccessAllowed = \[\s*'SUPER_ADMIN',\s*'SUPERADMIN',\s*'MODERATOR',?\s*\]\.includes\(/,
+    );
+    expect(adminUser).not.toContain("'ADMIN'].includes(");
+    expect(adminUser).toContain('analyticsTab?.remove()');
+    expect(adminUser).toContain('analyticsPanel?.remove()');
+    expect(adminUser).toContain(
+      'if (!analyticsAccessAllowed || !userId || !analyticsOverview) return;',
+    );
+  });
 });
