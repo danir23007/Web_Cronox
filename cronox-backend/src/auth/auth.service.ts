@@ -29,6 +29,9 @@ import { UsersService, AuthUser } from '../users/users.service';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
 import { parseClientInfo } from '../analytics/client-info';
+import { normalizeEmail } from '../common/email';
+
+const PASSWORD_SETUP_CLAIM_STALE_MS = 10 * 60 * 1000;
 
 interface JwtPayload {
   sub: number;
@@ -79,7 +82,7 @@ export class AuthService {
   ) {}
 
   async register(dto: RegisterDto) {
-    const email = dto.email.toLowerCase();
+    const email = normalizeEmail(dto.email);
     const existing = await this.usersService.findByEmail(email);
 
     if (existing) {
@@ -199,8 +202,48 @@ export class AuthService {
     });
   }
 
+  async logoutToAnonymousCart(
+    anonymousId: string,
+    accessToken?: string,
+    refreshToken?: string,
+  ): Promise<{ cartMoved: boolean }> {
+    const session = await this.getCurrentSession(accessToken, refreshToken);
+    if (!session) return { cartMoved: false };
+
+    return this.prisma.$transaction(async (tx) => {
+      const cart = await tx.cart.findUnique({
+        where: { userId: session.userId },
+        select: { id: true },
+      });
+
+      if (cart) {
+        await tx.checkoutSnapshot.updateMany({
+          where: {
+            userId: session.userId,
+            anonymousId: null,
+            cartId: cart.id,
+          },
+          data: { userId: null, anonymousId },
+        });
+        await tx.cart.update({
+          where: { id: cart.id },
+          data: { userId: null, anonymousId },
+        });
+      }
+
+      await tx.user.updateMany({
+        where: {
+          id: session.userId,
+          sessionVersion: session.sessionVersion,
+        },
+        data: { sessionVersion: { increment: 1 } },
+      });
+      return { cartMoved: Boolean(cart) };
+    });
+  }
+
   async requestPasswordReset(email: string) {
-    const normalizedEmail = email?.trim().toLowerCase() ?? '';
+    const normalizedEmail = normalizeEmail(email);
     const [user] = await Promise.all([
       normalizedEmail
         ? this.usersService.findByEmail(normalizedEmail)
@@ -226,6 +269,58 @@ export class AuthService {
   private async createAndSendPasswordReset(
     user: Pick<User, 'id' | 'email'>,
   ): Promise<void> {
+    await this.createAndSendPasswordLink(user, 'reset');
+  }
+
+  async sendInitialPasswordSetupIfNeeded(userId: number): Promise<void> {
+    if (!this.emailService.isEnabled()) return;
+
+    const claimed = await this.prisma.user.updateMany({
+      where: {
+        id: userId,
+        password: null,
+        passwordSetupEmailSentAt: null,
+        OR: [
+          { passwordSetupClaimedAt: null },
+          {
+            passwordSetupClaimedAt: {
+              lt: new Date(Date.now() - PASSWORD_SETUP_CLAIM_STALE_MS),
+            },
+          },
+        ],
+      },
+      data: { passwordSetupClaimedAt: new Date() },
+    });
+    if (claimed.count !== 1) return;
+
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, email: true, password: true },
+    });
+    if (!user || user.password !== null) {
+      await this.releasePasswordSetupEmailClaim(userId);
+      return;
+    }
+
+    const sent = await this.createAndSendPasswordLink(user, 'initial-setup');
+    if (sent) {
+      await this.prisma.user.updateMany({
+        where: { id: userId, password: null, passwordSetupEmailSentAt: null },
+        data: {
+          passwordSetupEmailSentAt: new Date(),
+          passwordSetupClaimedAt: null,
+        },
+      });
+      return;
+    }
+
+    await this.releasePasswordSetupEmailClaim(userId);
+  }
+
+  private async createAndSendPasswordLink(
+    user: Pick<User, 'id' | 'email'>,
+    purpose: 'reset' | 'initial-setup',
+  ): Promise<boolean> {
     const token = randomBytes(32).toString('base64url');
     const tokenHash = this.hashResetToken(token);
     const now = new Date();
@@ -247,15 +342,32 @@ export class AuthService {
 
     const resetUrl = `${getFrontendUrl()}/reset-password?token=${encodeURIComponent(token)}`;
     try {
-      await this.emailService.sendPasswordReset(user.email, resetUrl);
+      if (purpose === 'initial-setup') {
+        await this.emailService.sendInitialPasswordSetup(user.email, resetUrl);
+      } else {
+        await this.emailService.sendPasswordReset(user.email, resetUrl);
+      }
+      return true;
     } catch {
       // Do not leave an actionable token if it could not be delivered.
       await this.prisma.passwordResetToken.updateMany({
         where: { userId: user.id, token: tokenHash, usedAt: null },
         data: { usedAt: new Date() },
       });
-      this.logger.error('Password reset email delivery failed');
+      this.logger.error(
+        purpose === 'initial-setup'
+          ? 'Initial password setup email delivery failed'
+          : 'Password reset email delivery failed',
+      );
+      return false;
     }
+  }
+
+  private async releasePasswordSetupEmailClaim(userId: number): Promise<void> {
+    await this.prisma.user.updateMany({
+      where: { id: userId, password: null, passwordSetupEmailSentAt: null },
+      data: { passwordSetupClaimedAt: null },
+    });
   }
 
   async resetPassword(token: string, newPassword: string) {
@@ -294,6 +406,7 @@ export class AuthService {
         where: { id: passwordResetToken.userId },
         data: {
           password: hashedPassword,
+          passwordSetupClaimedAt: null,
           sessionVersion: { increment: 1 },
         },
       });
@@ -340,9 +453,9 @@ export class AuthService {
     email: string,
     password: string,
   ): Promise<AuthUser | null> {
-    const normalizedEmail = email.toLowerCase();
-    const user = await this.prisma.user.findUnique({
-      where: { email: normalizedEmail },
+    const normalizedEmail = normalizeEmail(email);
+    const user = await this.prisma.user.findFirst({
+      where: { email: { equals: normalizedEmail, mode: 'insensitive' } },
     });
 
     const isValid = await bcrypt.compare(

@@ -8,11 +8,13 @@ import { HistorialModule } from '../historial/historial.module';
 import { CheckoutSummaryController } from './checkout-summary.controller';
 import { OrdersController } from './orders.controller';
 import { OrdersService } from './orders.service';
+import { AccessAuthModule } from '../auth/access-auth.module';
+import { GuestOrderAccountService } from './guest-order-account.service';
 
 @Module({
-  imports: [PrismaModule, CartModule, ShippingMethodsModule, HistorialModule],
+  imports: [PrismaModule, CartModule, ShippingMethodsModule, HistorialModule, AccessAuthModule],
   controllers: [OrdersController, CheckoutSummaryController],
-  providers: [OrdersService, TaxConfigService],
+  providers: [OrdersService, TaxConfigService, GuestOrderAccountService],
   exports: [OrdersService],
 })
 export class OrdersModule {}

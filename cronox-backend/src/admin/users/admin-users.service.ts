@@ -13,6 +13,7 @@ import {
   User,
 } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
+import { normalizeCountry } from '../../common/country';
 import { AdminUserQueryDto } from './dto/admin-user-query.dto';
 import { AdminUserOrdersQueryDto } from './dto/admin-user-orders-query.dto';
 import { AdminUserRequestsQueryDto } from './dto/admin-user-requests-query.dto';
@@ -561,7 +562,7 @@ export class AdminUsersService {
         city: address.city,
         state: address.state,
         zip: address.zip,
-        country: address.country,
+        country: normalizeCountry(address.country) ?? address.country,
         phone: address.phone,
         isDefault: address.isDefault,
         createdAt: address.createdAt,

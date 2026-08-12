@@ -4,11 +4,14 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { Address, Prisma } from '@prisma/client';
+import {
+  normalizeCountry,
+  UNSUPPORTED_COUNTRY_MESSAGE,
+} from '../common/country';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateAddressDto } from './dto/create-address.dto';
 import { UpdateAddressDto } from './dto/update-address.dto';
 
-const COUNTRY_REGEX = /^[A-Z]{2}$/;
 const ADDRESS_LIMIT = 10;
 
 export type SafeAddress = {
@@ -44,7 +47,7 @@ export class AddressesService {
   }
 
   async create(userId: number, dto: CreateAddressDto): Promise<SafeAddress> {
-    this.ensureValidCountry(dto.country);
+    const country = this.requireSupportedCountry(dto.country);
 
     const count = await this.prisma.address.count({ where: { userId } });
 
@@ -61,7 +64,7 @@ export class AddressesService {
       city: dto.city,
       state: dto.state ?? null,
       zip: dto.zip,
-      country: dto.country,
+      country,
       isDefault: dto.isDefault ?? false,
     };
 
@@ -91,7 +94,7 @@ export class AddressesService {
     await this.getOwned(userId, id);
 
     if (dto.country !== undefined) {
-      this.ensureValidCountry(dto.country);
+      this.requireSupportedCountry(dto.country);
     }
 
     const data: Prisma.AddressUpdateInput = {};
@@ -103,7 +106,9 @@ export class AddressesService {
     if (dto.city !== undefined) data.city = dto.city;
     if (dto.state !== undefined) data.state = dto.state ?? null;
     if (dto.zip !== undefined) data.zip = dto.zip;
-    if (dto.country !== undefined) data.country = dto.country;
+    if (dto.country !== undefined) {
+      data.country = this.requireSupportedCountry(dto.country);
+    }
     if (dto.isDefault !== undefined) data.isDefault = dto.isDefault;
 
     if (dto.isDefault === true) {
@@ -165,10 +170,12 @@ export class AddressesService {
     return address;
   }
 
-  private ensureValidCountry(country: string) {
-    if (!COUNTRY_REGEX.test(country)) {
-      throw new BadRequestException('Invalid country code');
+  private requireSupportedCountry(country: string): string {
+    const normalized = normalizeCountry(country);
+    if (!normalized) {
+      throw new BadRequestException(UNSUPPORTED_COUNTRY_MESSAGE);
     }
+    return normalized;
   }
 
   private toSafeAddress(address: Address): SafeAddress {
@@ -176,6 +183,7 @@ export class AddressesService {
 
     return {
       ...rest,
+      country: normalizeCountry(rest.country) ?? rest.country,
     };
   }
 }

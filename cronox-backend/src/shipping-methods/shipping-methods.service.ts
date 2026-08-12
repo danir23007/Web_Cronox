@@ -1,6 +1,15 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { ShippingMethodCode } from '../common/enums/shipping-method-code.enum';
+import {
+  normalizeCountry,
+  SPAIN_COUNTRY_NAME,
+  UNSUPPORTED_COUNTRY_MESSAGE,
+} from '../common/country';
 
 export type ShippingMethodOption = {
   id: number;
@@ -79,7 +88,9 @@ export class ShippingMethodsService {
     code: ShippingMethodCode,
     itemsTotalCents: number,
     discountCents = 0,
+    country: string = SPAIN_COUNTRY_NAME,
   ): Promise<ShippingMethodOption> {
+    this.assertSupportedCountry(country);
     const methods = await this.loadMethodsFromDb();
     const row = methods.get(code);
 
@@ -107,7 +118,9 @@ export class ShippingMethodsService {
   async listAvailableMethods(
     itemsTotalCents: number,
     discountCents = 0,
+    country: string = SPAIN_COUNTRY_NAME,
   ): Promise<ShippingMethodOption[]> {
+    this.assertSupportedCountry(country);
     const methods = await this.loadMethodsFromDb();
 
     const result: ShippingMethodOption[] = [];
@@ -137,5 +150,11 @@ export class ShippingMethodsService {
 
   clearCache() {
     this.cache = null;
+  }
+
+  private assertSupportedCountry(country: string): void {
+    if (!normalizeCountry(country)) {
+      throw new BadRequestException(UNSUPPORTED_COUNTRY_MESSAGE);
+    }
   }
 }

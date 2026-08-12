@@ -10,7 +10,6 @@ describe('product category frontend contracts', () => {
     'index.html',
     'producto.html',
     'cart.html',
-    'checkout.html',
     'favorites.html',
     'profile.html',
   ];
@@ -26,6 +25,14 @@ describe('product category frontend contracts', () => {
     ]) {
       expect(html).toContain(`index.html?categorySlug=${slug}#store`);
     }
+  });
+
+  it('keeps category navigation out of the focused checkout header', () => {
+    const html = readFrontend('checkout.html');
+    expect(html).not.toContain('categorySlug=');
+    expect(html).not.toContain('id="btnMenu"');
+    expect(html).toContain('class="checkout-brand"');
+    expect(html).toContain('id="cart-icon-btn"');
   });
 
   it('uses the public category endpoint and preserves the unfiltered catalogue path', () => {

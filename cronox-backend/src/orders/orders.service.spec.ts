@@ -32,6 +32,7 @@ import { TaxConfigService } from '../common/tax/tax-config.service';
 import { HistorialService } from '../historial/historial.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { OrdersService } from './orders.service';
+import { GuestOrderAccountService } from './guest-order-account.service';
 
 describe('OrdersService checkout reservations', () => {
   let service: OrdersService;
@@ -39,6 +40,7 @@ describe('OrdersService checkout reservations', () => {
   let cartService: any;
   let shippingMethods: any;
   let historialService: any;
+  let guestOrderAccountService: any;
 
   const updatedAt = new Date('2026-08-08T10:00:00.000Z');
   const preview = {
@@ -106,6 +108,9 @@ describe('OrdersService checkout reservations', () => {
     orderId: null,
     requestFingerprint: 'fingerprint_1',
     stripePaymentIntentId: null,
+    stripeAccountId: null,
+    paymentRecoveryToken: null,
+    paymentRecoveryClaimedAt: null,
     status: 'RESERVED',
     expiresAt: new Date(Date.now() + 30 * 60 * 1000),
     currency: 'EUR',
@@ -179,6 +184,7 @@ describe('OrdersService checkout reservations', () => {
       user: { findUnique: jest.fn(), update: jest.fn() },
       stripeWebhookEvent: {
         create: jest.fn(),
+        findFirst: jest.fn(),
         update: jest.fn(),
         updateMany: jest.fn(),
         findMany: jest.fn(),
@@ -187,11 +193,20 @@ describe('OrdersService checkout reservations', () => {
         callback(prisma),
       ),
     };
+    prisma.user.findUnique.mockResolvedValue({ email: 'member@cronox.test' });
     cartService = { getOrCreateCart: jest.fn() };
     shippingMethods = { getMethod: jest.fn(), listAvailableMethods: jest.fn() };
     historialService = {
       incrementOrderProgress: jest.fn(),
       registerReturn: jest.fn(),
+    };
+    guestOrderAccountService = {
+      resolveUserForCompletedOrder: jest.fn(
+        async (_tx: unknown, snapshot: { userId: number | null }) => ({
+          userId: snapshot.userId,
+          accountCreated: false,
+        }),
+      ),
     };
     service = new OrdersService(
       prisma as PrismaService,
@@ -202,6 +217,7 @@ describe('OrdersService checkout reservations', () => {
       } as unknown as TaxConfigService,
       shippingMethods,
       historialService as HistorialService,
+      guestOrderAccountService as GuestOrderAccountService,
     );
     jest.spyOn(service as any, 'getCheckoutPreview').mockResolvedValue(preview);
     jest
@@ -410,6 +426,137 @@ describe('OrdersService checkout reservations', () => {
     });
   });
 
+  const recoveryInput = {
+    checkoutSnapshotId: 'snap_recovery',
+    paymentIntentId: 'pi_missing_live',
+    stripeAccountId: 'acct_live',
+    allowStripeAccountBackfill: false,
+    userId: 1,
+    cartId: 10,
+    cartUpdatedAt: updatedAt,
+    amountCents: 10495,
+    currency: 'EUR',
+  };
+
+  const prepareSafeRecoveryState = () => {
+    prisma.checkoutSnapshot.updateMany.mockResolvedValue({ count: 1 });
+    prisma.checkoutSnapshot.findFirst.mockResolvedValue(null);
+    prisma.checkoutSnapshot.findUnique.mockImplementation((args: any) => {
+      const recoveryToken =
+        [...prisma.checkoutSnapshot.updateMany.mock.calls]
+          .reverse()
+          .find((call) => call[0]?.data?.paymentRecoveryToken)?.[0]?.data
+          ?.paymentRecoveryToken ?? 'recovery_token';
+      const snapshot = makeSnapshot({
+        id: recoveryInput.checkoutSnapshotId,
+        status: 'MISSING_RECOVERY_PENDING',
+        stripePaymentIntentId: recoveryInput.paymentIntentId,
+        stripeAccountId: recoveryInput.stripeAccountId,
+        paymentRecoveryToken: recoveryToken,
+      });
+      return Promise.resolve(args?.include ? snapshot : snapshot);
+    });
+    prisma.cart.findUnique.mockResolvedValue({ userId: 1, updatedAt });
+    prisma.order.findFirst.mockResolvedValue(null);
+    prisma.stripeWebhookEvent.findFirst.mockResolvedValue(null);
+    prisma.checkoutStockReservation.findMany.mockResolvedValue([
+      {
+        id: 'reservation_recovery',
+        variantId: 8,
+        quantity: 2,
+        status: 'RESERVED',
+      },
+    ]);
+    prisma.checkoutStockReservation.updateMany.mockResolvedValue({ count: 1 });
+    prisma.productVariant.update.mockResolvedValue({});
+    prisma.stockMovement.create.mockResolvedValue({});
+    prisma.checkoutSnapshot.update.mockResolvedValue({});
+  };
+
+  it('claims and finalizes live missing-intent recovery only after all safety checks', async () => {
+    prepareSafeRecoveryState();
+
+    const claim =
+      await service.claimUnavailableCheckoutPaymentRecovery(recoveryInput);
+    expect(claim).toMatchObject({ claimed: true });
+    if (!claim.claimed) throw new Error('Expected recovery claim');
+
+    await expect(
+      service.finalizeUnavailableCheckoutPaymentRecovery(
+        recoveryInput,
+        claim.token,
+      ),
+    ).resolves.toEqual({ released: true });
+    expect(prisma.checkoutSnapshot.update).toHaveBeenCalledWith({
+      where: { id: recoveryInput.checkoutSnapshotId },
+      data: {
+        status: 'REPLACED',
+        paymentRecoveryToken: null,
+        paymentRecoveryClaimedAt: null,
+      },
+    });
+  });
+
+  it('does not recover a missing live intent when a paid order already exists', async () => {
+    prepareSafeRecoveryState();
+    prisma.order.findFirst.mockResolvedValue({ id: 99 });
+
+    await expect(
+      service.claimUnavailableCheckoutPaymentRecovery(recoveryInput),
+    ).resolves.toEqual({ claimed: false, reason: 'ORDER_ALREADY_EXISTS' });
+  });
+
+  it('does not recover when signed success evidence makes payment state ambiguous', async () => {
+    prepareSafeRecoveryState();
+    prisma.stripeWebhookEvent.findFirst.mockResolvedValue({
+      id: 'evt_success',
+    });
+
+    await expect(
+      service.claimUnavailableCheckoutPaymentRecovery(recoveryInput),
+    ).resolves.toEqual({
+      claimed: false,
+      reason: 'SUCCESSFUL_WEBHOOK_EXISTS',
+    });
+  });
+
+  it('does not recover when another active payment snapshot exists', async () => {
+    prepareSafeRecoveryState();
+    prisma.checkoutSnapshot.findFirst.mockResolvedValue({ id: 'snap_other' });
+
+    await expect(
+      service.claimUnavailableCheckoutPaymentRecovery(recoveryInput),
+    ).resolves.toEqual({
+      claimed: false,
+      reason: 'COMPETING_PAYMENT_EXISTS',
+    });
+  });
+
+  it('does not finalize replacement when a success webhook wins the race', async () => {
+    prepareSafeRecoveryState();
+    const claim =
+      await service.claimUnavailableCheckoutPaymentRecovery(recoveryInput);
+    if (!claim.claimed) throw new Error('Expected recovery claim');
+    prisma.stripeWebhookEvent.findFirst.mockResolvedValue({
+      id: 'evt_success_race',
+    });
+
+    await expect(
+      service.finalizeUnavailableCheckoutPaymentRecovery(
+        recoveryInput,
+        claim.token,
+      ),
+    ).resolves.toEqual({
+      released: false,
+      reason: 'SUCCESSFUL_WEBHOOK_EXISTS',
+    });
+    expect(prisma.checkoutSnapshot.update).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ status: 'REPLACED' }),
+      }),
+    );
+  });
+
   it('reports a delayed current checkout payment without exposing its Stripe ID', async () => {
     prisma.checkoutSnapshot.findFirst.mockResolvedValue({
       status: 'REPLACEMENT_PENDING',
@@ -539,6 +686,40 @@ describe('OrdersService checkout reservations', () => {
     expect(prisma.productVariant.updateMany).not.toHaveBeenCalled();
   });
 
+  it('classifies a missing or stale checkout cart as EMPTY_CART', async () => {
+    await expect(
+      service.getCheckoutSummary(null, { userId: 1 }),
+    ).rejects.toMatchObject({
+      response: expect.objectContaining({ code: 'EMPTY_CART' }),
+      status: 400,
+    });
+  });
+
+  it('classifies a cart item with a missing variant as invalid cart data', () => {
+    expect(() =>
+      (service as any).assertCartEligibleForCheckout({
+        items: [{ qty: 1, variant: null }],
+      }),
+    ).toThrow('INVALID_CART_ITEM_VARIANT');
+  });
+
+  it('classifies an inactive product or variant explicitly', () => {
+    expect(() =>
+      (service as any).assertCartEligibleForCheckout({
+        items: [
+          {
+            qty: 1,
+            variant: {
+              isActive: true,
+              stockQty: 1,
+              product: { isActive: false },
+            },
+          },
+        ],
+      }),
+    ).toThrow('INACTIVE_PRODUCT_OR_VARIANT');
+  });
+
   it('recovers a stale PaymentIntent creation claim with the deterministic snapshot key', async () => {
     prisma.checkoutSnapshot.updateMany.mockResolvedValue({ count: 1 });
 
@@ -550,7 +731,13 @@ describe('OrdersService checkout reservations', () => {
       expect.objectContaining({
         where: expect.objectContaining({
           id: 'snap_creating',
-          status: { in: ['RESERVED', 'PAYMENT_INTENT_CREATING'] },
+          OR: [
+            { status: 'RESERVED' },
+            {
+              status: 'PAYMENT_INTENT_CREATING',
+              updatedAt: { lt: expect.any(Date) },
+            },
+          ],
         }),
       }),
     );
@@ -927,6 +1114,120 @@ describe('OrdersService checkout reservations', () => {
     ).toHaveBeenCalledTimes(1);
   });
 
+  it('assigns a successfully paid guest order to the email-resolved User and preserves its snapshot', async () => {
+    const snapshot = makeSnapshot({
+      id: 'snap_guest',
+      userId: null,
+      anonymousId: 'opaque-guest-owner-123456',
+      customerEmail: 'guest@example.test',
+      stripePaymentIntentId: 'pi_guest',
+      promoCodeId: null,
+      promoCodeCode: null,
+      shippingAddr: {
+        name: 'Guest Customer',
+        line1: 'Calle Uno 1',
+        zip: '28001',
+        city: 'Madrid',
+        country: 'ES',
+      },
+      billingAddr: null,
+    });
+    const createdOrder = {
+      id: 103,
+      userId: 73,
+      customerEmail: 'guest@example.test',
+      status: 'PAID',
+      preDisputeStatus: null,
+      items: [],
+    };
+    prisma.checkoutSnapshot.findUnique
+      .mockResolvedValueOnce(snapshot)
+      .mockResolvedValueOnce(snapshot);
+    prisma.order.findUnique
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(createdOrder)
+      .mockResolvedValueOnce(createdOrder)
+      .mockResolvedValueOnce({ status: 'PAID' });
+    prisma.order.create.mockResolvedValue({ id: 103 });
+    prisma.orderItem.createMany.mockResolvedValue({ count: 1 });
+    prisma.checkoutSnapshot.update.mockResolvedValue({});
+    prisma.stripeWebhookEvent.findMany.mockResolvedValue([]);
+    guestOrderAccountService.resolveUserForCompletedOrder.mockResolvedValue({
+      userId: 73,
+      accountCreated: true,
+    });
+    jest
+      .spyOn(service as any, 'consumeStockReservationsForCheckoutSnapshot')
+      .mockResolvedValue(false);
+    jest
+      .spyOn(service as any, 'clearCartIfSnapshotStillCurrent')
+      .mockResolvedValue(undefined);
+    const fillNames = jest
+      .spyOn(service as any, 'fillMissingUserNames')
+      .mockResolvedValue(undefined);
+    jest
+      .spyOn(service as any, 'handlePromoUsageOnPaid')
+      .mockResolvedValue(undefined);
+
+    await expect(
+      service.createOrderFromVerifiedStripePayment({
+        checkoutSnapshotId: 'snap_guest',
+        paymentIntentId: 'pi_guest',
+        amountCents: 10495,
+        currency: 'EUR',
+        occurredAt: new Date('2026-08-08T10:00:00.000Z'),
+      }),
+    ).resolves.toMatchObject({
+      orderId: 103,
+      userId: 73,
+      status: 'PAID',
+      accountCreated: true,
+    });
+
+    expect(prisma.order.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        userId: 73,
+        customerEmail: 'guest@example.test',
+        shippingAddr: expect.objectContaining({
+          line1: 'Calle Uno 1',
+          country: 'España',
+        }),
+        providerRef: 'pi_guest',
+      }),
+    });
+    expect(fillNames).not.toHaveBeenCalled();
+    expect(historialService.incrementOrderProgress).toHaveBeenCalledWith(
+      73,
+      0,
+      prisma,
+    );
+  });
+
+  it('scopes guest payment-status lookup to both opaque owner and PaymentIntent ref', async () => {
+    prisma.checkoutSnapshot.findFirst.mockResolvedValue(null);
+
+    await expect(
+      service.getPaymentProcessingStatusForOwner(
+        {
+          anonymousId: 'opaque-guest-owner-123456',
+          customerEmail: 'guest@example.test',
+        },
+        'pi_guest_secure',
+      ),
+    ).resolves.toMatchObject({ found: false, isProcessed: false });
+
+    expect(prisma.checkoutSnapshot.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          userId: null,
+          anonymousId: 'opaque-guest-owner-123456',
+          stripePaymentIntentId: 'pi_guest_secure',
+        }),
+      }),
+    );
+    expect(prisma.order.findFirst).not.toHaveBeenCalled();
+  });
+
   it('does not subtract cart quantities again for a duplicate successful webhook', async () => {
     const snapshot = makeSnapshot({
       stripePaymentIntentId: 'pi_already_fulfilled',
@@ -959,6 +1260,9 @@ describe('OrdersService checkout reservations', () => {
 
     expect(clearCart).not.toHaveBeenCalled();
     expect(prisma.order.create).not.toHaveBeenCalled();
+    expect(
+      guestOrderAccountService.resolveUserForCompletedOrder,
+    ).not.toHaveBeenCalled();
   });
 
   it('rejects a signed payment that occurred after snapshot expiry but accepts a late delivery from before expiry', async () => {
@@ -1035,5 +1339,84 @@ describe('OrdersService checkout reservations', () => {
     expect(prisma.order.findUnique).toHaveBeenCalledWith(
       expect.objectContaining({ where: { providerRef: 'pi_duplicate' } }),
     );
+  });
+
+  it('retries the paid-order transaction when a concurrent checkout wins the unique email create', async () => {
+    const duplicateEmail = new (Prisma as any).PrismaClientKnownRequestError(
+      'duplicate email',
+      'P2002',
+    );
+    const snapshot = makeSnapshot({
+      id: 'snap_email_race',
+      userId: null,
+      anonymousId: 'opaque-email-race-owner-123456',
+      customerEmail: 'same@example.test',
+      stripePaymentIntentId: 'pi_email_race',
+      promoCodeId: null,
+      shippingAddr: null,
+      billingAddr: null,
+    });
+    const createdOrder = {
+      id: 104,
+      userId: 88,
+      status: 'PAID',
+      preDisputeStatus: null,
+      items: [],
+    };
+
+    prisma.$transaction
+      .mockRejectedValueOnce(duplicateEmail)
+      .mockImplementation(async (callback: (tx: any) => unknown) =>
+        callback(prisma),
+      );
+    prisma.order.findUnique
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(createdOrder)
+      .mockResolvedValueOnce({ status: 'PAID' });
+    prisma.checkoutSnapshot.findUnique
+      .mockResolvedValueOnce(snapshot)
+      .mockResolvedValueOnce(snapshot);
+    prisma.order.create.mockResolvedValue({ id: 104 });
+    prisma.orderItem.createMany.mockResolvedValue({ count: 0 });
+    prisma.checkoutSnapshot.update.mockResolvedValue({});
+    prisma.stripeWebhookEvent.findMany.mockResolvedValue([]);
+    guestOrderAccountService.resolveUserForCompletedOrder.mockResolvedValue({
+      userId: 88,
+      accountCreated: false,
+    });
+    jest
+      .spyOn(service as any, 'consumeStockReservationsForCheckoutSnapshot')
+      .mockResolvedValue(false);
+    jest
+      .spyOn(service as any, 'clearCartIfSnapshotStillCurrent')
+      .mockResolvedValue(undefined);
+    jest
+      .spyOn(service as any, 'handlePromoUsageOnPaid')
+      .mockResolvedValue(undefined);
+    jest
+      .spyOn(service as any, 'recordCompletedCheckoutAnalytics')
+      .mockResolvedValue(undefined);
+    jest
+      .spyOn(service, 'reconcileStripePaymentLifecycle')
+      .mockResolvedValue(undefined);
+
+    await expect(
+      service.createOrderFromVerifiedStripePayment({
+        checkoutSnapshotId: 'snap_email_race',
+        paymentIntentId: 'pi_email_race',
+        amountCents: 10495,
+        currency: 'EUR',
+        occurredAt: new Date('2026-08-08T10:00:00.000Z'),
+      }),
+    ).resolves.toMatchObject({
+      orderId: 104,
+      userId: 88,
+      created: true,
+      status: 'PAID',
+    });
+
+    expect(prisma.$transaction).toHaveBeenCalledTimes(2);
+    expect(guestOrderAccountService.resolveUserForCompletedOrder).toHaveBeenCalledTimes(1);
   });
 });

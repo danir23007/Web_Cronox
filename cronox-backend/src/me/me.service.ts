@@ -7,7 +7,12 @@ import {
 import { Prisma, OrderStatus } from '@prisma/client';
 import { Decimal } from '@prisma/client/runtime/library';
 import { PrismaService } from '../prisma/prisma.service';
+import {
+  normalizeCountry,
+  UNSUPPORTED_COUNTRY_MESSAGE,
+} from '../common/country';
 import { UsersService } from '../users/users.service';
+import { normalizeEmail } from '../common/email';
 import { UpdateMeDto } from './dto/update-me.dto';
 import { UpsertAddressDto } from './dto/upsert-address.dto';
 
@@ -104,9 +109,12 @@ export class MeService {
     }
 
     if (dto.email !== undefined) {
-      const email = dto.email.toLowerCase();
+      const email = normalizeEmail(dto.email);
       const existing = await this.prisma.user.findFirst({
-        where: { email, NOT: { id: userId } },
+        where: {
+          email: { equals: email, mode: 'insensitive' },
+          NOT: { id: userId },
+        },
       });
 
       if (existing) {
@@ -163,6 +171,11 @@ export class MeService {
       }
     }
 
+    const country = normalizeCountry(dto.country);
+    if (!country) {
+      throw new BadRequestException(UNSUPPORTED_COUNTRY_MESSAGE);
+    }
+
     const data: Prisma.AddressUncheckedCreateInput = {
       userId,
       name: dto.name,
@@ -172,7 +185,7 @@ export class MeService {
       city: dto.city,
       state: dto.state ?? null,
       zip: dto.zip,
-      country: dto.country,
+      country,
       isDefault: true,
     };
 
@@ -201,7 +214,7 @@ export class MeService {
           city: dto.city,
           state: dto.state ?? null,
           zip: dto.zip,
-          country: dto.country,
+          country,
           isDefault: true,
         },
       });
@@ -278,6 +291,9 @@ export class MeService {
     updatedAt: Date;
   }) {
     const { userId, ...rest } = address;
-    return rest as MeAddress;
+    return {
+      ...rest,
+      country: normalizeCountry(rest.country) ?? rest.country,
+    } as MeAddress;
   }
 }

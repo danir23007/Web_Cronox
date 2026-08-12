@@ -44,7 +44,14 @@ describe('analytics checkout lifecycle', () => {
     const prisma: any = {
       $transaction: jest.fn().mockImplementation((callback) => callback(tx)),
     };
-    const orders = new OrdersService(prisma, {} as any, {} as any, {} as any, {} as any);
+    const orders = new OrdersService(
+      prisma,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+    );
 
     await (orders as any).recordCompletedCheckoutAnalytics('checkout_1', 88);
 

@@ -15,6 +15,7 @@ describe('AuthService password reset security', () => {
   const emailService = {
     isEnabled: jest.fn(),
     sendPasswordReset: jest.fn(),
+    sendInitialPasswordSetup: jest.fn(),
   };
   const newsletterService = { subscribeIfNeeded: jest.fn() };
 
@@ -35,6 +36,14 @@ describe('AuthService password reset security', () => {
       },
       user: {
         update: jest.fn().mockResolvedValue({ id: 42 }),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+      },
+      cart: {
+        findUnique: jest.fn(),
+        update: jest.fn().mockResolvedValue({ id: 9 }),
+      },
+      checkoutSnapshot: {
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
       },
     };
     prisma = {
@@ -47,6 +56,8 @@ describe('AuthService password reset security', () => {
       },
       user: {
         updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+        findUnique: jest.fn(),
+        findFirst: jest.fn(),
       },
     };
     service = new AuthService(
@@ -190,6 +201,120 @@ describe('AuthService password reset security', () => {
     );
   });
 
+  it('claims and sends one secure initial-password link for a passwordless account', async () => {
+    emailService.isEnabled.mockReturnValue(true);
+    prisma.user.updateMany
+      .mockResolvedValueOnce({ count: 1 })
+      .mockResolvedValueOnce({ count: 1 })
+      .mockResolvedValueOnce({ count: 0 });
+    prisma.user.findUnique.mockResolvedValue({
+      id: 42,
+      email: 'new@example.test',
+      password: null,
+    });
+
+    await service.sendInitialPasswordSetupIfNeeded(42);
+    await service.sendInitialPasswordSetupIfNeeded(42);
+
+    expect(emailService.sendInitialPasswordSetup).toHaveBeenCalledTimes(1);
+    const setupUrl = emailService.sendInitialPasswordSetup.mock.calls[0][1];
+    const rawToken = new URL(setupUrl).searchParams.get('token');
+    const storedToken = tx.passwordResetToken.create.mock.calls[0][0].data.token;
+    expect(storedToken).toBe(
+      createHash('sha256').update(rawToken as string).digest('hex'),
+    );
+    const expiresAt = tx.passwordResetToken.create.mock.calls[0][0].data
+      .expiresAt as Date;
+    expect(expiresAt.getTime()).toBeGreaterThan(Date.now() + 59 * 60 * 1000);
+    expect(expiresAt.getTime()).toBeLessThanOrEqual(Date.now() + 60 * 60 * 1000);
+    expect(prisma.user.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ id: 42, password: null }),
+        data: expect.objectContaining({ passwordSetupEmailSentAt: expect.any(Date) }),
+      }),
+    );
+  });
+
+  it('releases the setup-email claim without invalidating the account when delivery fails', async () => {
+    emailService.isEnabled.mockReturnValue(true);
+    emailService.sendInitialPasswordSetup.mockRejectedValue(new Error('SMTP'));
+    prisma.user.updateMany.mockResolvedValue({ count: 1 });
+    prisma.user.findUnique.mockResolvedValue({
+      id: 42,
+      email: 'new@example.test',
+      password: null,
+    });
+
+    await expect(
+      service.sendInitialPasswordSetupIfNeeded(42),
+    ).resolves.toBeUndefined();
+
+    expect(prisma.passwordResetToken.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ userId: 42, usedAt: null }),
+      }),
+    );
+    expect(prisma.user.updateMany).toHaveBeenLastCalledWith({
+      where: { id: 42, password: null, passwordSetupEmailSentAt: null },
+      data: { passwordSetupClaimedAt: null },
+    });
+  });
+
+  it('does not grant login to an automatically-created account before a password is set', async () => {
+    prisma.user.findFirst.mockResolvedValue({
+      id: 42,
+      email: 'new@example.test',
+      password: null,
+    });
+
+    await expect(
+      service.validateUser(' NEW@example.test ', 'any-password'),
+    ).resolves.toBeNull();
+  });
+
+  it('sends no setup email for an existing password-configured account', async () => {
+    emailService.isEnabled.mockReturnValue(true);
+    prisma.user.updateMany.mockResolvedValue({ count: 0 });
+
+    await service.sendInitialPasswordSetupIfNeeded(42);
+
+    expect(prisma.user.findUnique).not.toHaveBeenCalled();
+    expect(emailService.sendInitialPasswordSetup).not.toHaveBeenCalled();
+    expect(emailService.sendPasswordReset).not.toHaveBeenCalled();
+  });
+
+  it('enables ordinary password validation after consuming the initial setup token', async () => {
+    const rawToken = 'initial-account-token';
+    const tokenHash = createHash('sha256').update(rawToken).digest('hex');
+    prisma.passwordResetToken.findUnique.mockResolvedValue({
+      id: 12,
+      userId: 42,
+      token: tokenHash,
+      usedAt: null,
+      expiresAt: new Date(Date.now() + 60_000),
+    });
+    let persistedHash: string | null = null;
+    tx.user.update.mockImplementation(({ data }: any) => {
+      persistedHash = data.password;
+      return { id: 42 };
+    });
+
+    await service.resetPassword(rawToken, 'ValidPassword1');
+    prisma.user.findFirst.mockImplementation(() =>
+      Promise.resolve({
+        id: 42,
+        email: 'new@example.test',
+        password: persistedHash,
+        role: 'USER',
+        sessionVersion: 1,
+      }),
+    );
+
+    await expect(
+      service.validateUser('NEW@example.test', 'ValidPassword1'),
+    ).resolves.toMatchObject({ id: 42, email: 'new@example.test' });
+  });
+
   it('revokes a validated access session during idempotent logout', async () => {
     jwtService.verifyAsync.mockResolvedValue({ sub: 42, sv: 3 });
 
@@ -198,6 +323,31 @@ describe('AuthService password reset security', () => {
     ).resolves.toBeUndefined();
 
     expect(prisma.user.updateMany).toHaveBeenCalledWith({
+      where: { id: 42, sessionVersion: 3 },
+      data: { sessionVersion: { increment: 1 } },
+    });
+  });
+
+  it('hands the account cart and active checkout ownership to a fresh guest session on logout', async () => {
+    jwtService.verifyAsync.mockResolvedValue({ sub: 42, sv: 3 });
+    tx.cart.findUnique.mockResolvedValue({ id: 9 });
+
+    await expect(
+      service.logoutToAnonymousCart(
+        'opaque-logout-cart-owner-123456',
+        'access-token',
+      ),
+    ).resolves.toEqual({ cartMoved: true });
+
+    expect(tx.checkoutSnapshot.updateMany).toHaveBeenCalledWith({
+      where: { userId: 42, anonymousId: null, cartId: 9 },
+      data: { userId: null, anonymousId: 'opaque-logout-cart-owner-123456' },
+    });
+    expect(tx.cart.update).toHaveBeenCalledWith({
+      where: { id: 9 },
+      data: { userId: null, anonymousId: 'opaque-logout-cart-owner-123456' },
+    });
+    expect(tx.user.updateMany).toHaveBeenCalledWith({
       where: { id: 42, sessionVersion: 3 },
       data: { sessionVersion: { increment: 1 } },
     });

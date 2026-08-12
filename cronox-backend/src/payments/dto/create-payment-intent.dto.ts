@@ -2,6 +2,7 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import {
   IsEnum,
+  IsEmail,
   IsInt,
   IsObject,
   IsOptional,
@@ -53,4 +54,13 @@ export class CreatePaymentIntentDto {
   @IsOptional()
   @IsObject()
   shippingAddress?: Record<string, unknown>;
+
+  @ApiPropertyOptional({
+    description:
+      'Email de contacto requerido únicamente para un checkout invitado',
+  })
+  @IsOptional()
+  @IsEmail()
+  @MaxLength(160)
+  guestEmail?: string;
 }

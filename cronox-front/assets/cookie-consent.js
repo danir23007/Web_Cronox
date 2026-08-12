@@ -458,7 +458,7 @@
     });
   };
 
-  const installPermanentControls = () => {
+  const bindPermanentControl = () => {
     document.querySelectorAll("a.footer-link").forEach((link) => {
       if (
         link.textContent.trim().toLowerCase().includes("política de cookies")
@@ -479,31 +479,11 @@
         );
       });
     }
-    const footer = document.querySelector(
-      "footer.site-footer, body > footer.footer, body > footer",
-    );
-    if (footer?.querySelector("[data-open-cookie-preferences]")) return;
-    if (!footer && existingControls.length) return;
-
-    const button = document.createElement("button");
-    button.type = "button";
-    button.className = "cronox-cookie-settings";
-    button.dataset.openCookiePreferences = "";
-    button.textContent = "Configurar cookies";
-    button.addEventListener("click", (event) =>
-      openPreferences(event.currentTarget),
-    );
-
-    if (footer) footer.appendChild(button);
-    else {
-      button.classList.add("cronox-cookie-settings--fixed");
-      document.body.appendChild(button);
-    }
   };
 
   const initialize = () => {
     buildInterface();
-    installPermanentControls();
+    bindPermanentControl();
     const current = getConsent();
     applyConsent(current || defaultSelection(), null);
     if (!current) showBanner();

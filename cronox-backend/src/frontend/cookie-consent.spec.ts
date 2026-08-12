@@ -188,7 +188,6 @@ describe('cookie consent frontend', () => {
     const runtime = createConsentRuntime();
     runtime.api.save({ necessary: true, preferences: true });
     runtime.localStorage.setItem('cronox_circle_request_modal_seen_42', '1');
-    runtime.localStorage.setItem('cronox_guest_cart', '[]');
     runtime.sessionStorage.setItem('cronoxNewsletterShown', 'true');
 
     runtime.api.rejectAll();
@@ -197,7 +196,6 @@ describe('cookie consent frontend', () => {
       runtime.localStorage.getItem('cronox_circle_request_modal_seen_42'),
     ).toBeNull();
     expect(runtime.sessionStorage.getItem('cronoxNewsletterShown')).toBeNull();
-    expect(runtime.localStorage.getItem('cronox_guest_cart')).toBe('[]');
   });
 
   it('removes analytics session storage when analytics consent is withdrawn', () => {
@@ -255,7 +253,7 @@ describe('cookie consent frontend', () => {
     for (const page of publicPages) {
       const html = readFileSync(path.join(frontendRoot, page), 'utf8');
       expect(html).toContain('assets/cookie-consent.css?v=1');
-      expect(html).toContain('assets/cookie-consent.js?v=2');
+      expect(html).toContain('assets/cookie-consent.js?v=3');
       expect(html).toContain('assets/customer-analytics.js?v=1');
     }
     expect(consentSource).toContain('if (!current) showBanner();');

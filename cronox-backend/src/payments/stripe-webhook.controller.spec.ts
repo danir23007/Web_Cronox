@@ -3,6 +3,7 @@ import { StripeWebhookController } from './stripe-webhook.controller';
 
 describe('StripeWebhookController lifecycle safety', () => {
   let ordersService: any;
+  let authService: any;
   let controller: StripeWebhookController;
 
   beforeEach(() => {
@@ -14,12 +15,16 @@ describe('StripeWebhookController lifecycle safety', () => {
       releaseOrderConfirmationEmailClaim: jest.fn(),
       markOrderConfirmationEmailSent: jest.fn(),
     };
+    authService = {
+      sendInitialPasswordSetupIfNeeded: jest.fn().mockResolvedValue(undefined),
+    };
     controller = new StripeWebhookController(
       {} as any,
       ordersService,
       {} as any,
       {} as any,
       {} as any,
+      authService,
     );
   });
 
@@ -167,6 +172,33 @@ describe('StripeWebhookController lifecycle safety', () => {
     expect(response).not.toHaveProperty('order');
   });
 
+  it('requests password setup only after the authoritative paid-order result', async () => {
+    ordersService.createOrderFromVerifiedStripePayment.mockResolvedValue({
+      orderId: 322,
+      userId: 77,
+      checkoutSnapshotId: 'snap_paid_guest',
+      created: true,
+      accountCreated: true,
+      status: OrderStatus.PAID,
+    });
+    ordersService.claimOrderConfirmationEmail.mockResolvedValue(false);
+
+    await (controller as any).handleVerifiedPaymentIntentSucceeded(
+      {
+        id: 'pi_paid_guest',
+        status: 'succeeded',
+        amount: 1099,
+        currency: 'eur',
+        metadata: { checkoutSnapshotId: 'snap_paid_guest' },
+      },
+      new Date('2026-08-08T10:00:00.000Z'),
+    );
+
+    expect(authService.sendInitialPasswordSetupIfNeeded).toHaveBeenCalledWith(
+      77,
+    );
+  });
+
   it('keeps the reservation and cart intact after a retryable payment failure', async () => {
     const response = await (controller as any).handlePaymentIntentFailed({
       data: {
@@ -181,6 +213,35 @@ describe('StripeWebhookController lifecycle safety', () => {
     expect(
       ordersService.createOrderFromVerifiedStripePayment,
     ).not.toHaveBeenCalled();
+    expect(authService.sendInitialPasswordSetupIfNeeded).not.toHaveBeenCalled();
+  });
+
+  it('does not invalidate a paid order when password-setup delivery orchestration fails', async () => {
+    ordersService.createOrderFromVerifiedStripePayment.mockResolvedValue({
+      orderId: 323,
+      userId: 78,
+      checkoutSnapshotId: 'snap_paid_email_failure',
+      created: true,
+      accountCreated: true,
+      status: OrderStatus.PAID,
+    });
+    authService.sendInitialPasswordSetupIfNeeded.mockRejectedValue(
+      new Error('email unavailable'),
+    );
+    ordersService.claimOrderConfirmationEmail.mockResolvedValue(false);
+
+    await expect(
+      (controller as any).handleVerifiedPaymentIntentSucceeded(
+        {
+          id: 'pi_paid_email_failure',
+          status: 'succeeded',
+          amount: 1099,
+          currency: 'eur',
+          metadata: { checkoutSnapshotId: 'snap_paid_email_failure' },
+        },
+        new Date('2026-08-08T10:00:00.000Z'),
+      ),
+    ).resolves.toEqual({ received: true, created: true, orderId: 323 });
   });
 
   it('releases only the reservation after Stripe terminally cancels an intent', async () => {

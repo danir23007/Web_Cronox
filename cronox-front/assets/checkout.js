@@ -1,5 +1,8 @@
 (function () {
   const API = window.CRONOX_API || {};
+  const Country = window.CRONOX_COUNTRY || {};
+  const SPAIN = Country.SPAIN || 'España';
+  const normalizeCountry = (value) => Country.normalizeCountry?.(value) || null;
   const API_BASE = API.API_BASE || '';
   const STRIPE_PUBLISHABLE_KEY = String(
     window.CRONOX_STRIPE_PUBLISHABLE_KEY || '',
@@ -33,6 +36,7 @@
   const shippingEl = document.getElementById('summary-shipping');
   const discountEl = document.getElementById('summary-discount');
   const totalEl = document.getElementById('summary-total');
+  const taxNoteEl = document.getElementById('summary-tax-note');
   const payButton = document.getElementById('pay-button');
   const errorDiv = document.getElementById('payment-error');
   const helpText = document.getElementById('checkout-help');
@@ -43,14 +47,49 @@
   const promoMessage = document.getElementById('promo-message');
   const promoAppliedLabel = document.getElementById('promo-applied-label');
   const paymentSection = document.getElementById('payment-section');
+  const expressCheckoutRegion = document.getElementById('express-checkout-region');
+  const expressCheckoutContainer = document.getElementById('express-checkout-element');
   const loginCallout = document.getElementById('checkout-login-callout');
   const loginCalloutLink = document.getElementById('checkout-login-link');
+  const loginHeaderLink = document.getElementById('checkout-login-header-link');
+  const guestContact = document.getElementById('checkout-guest-contact');
+  const guestEmailInput = document.getElementById('checkout-guest-email');
+  const newsletterConsent = document.getElementById('checkout-newsletter-consent');
+  const customerContact = document.getElementById('checkout-customer');
+  const customerInitialEl = document.getElementById('checkout-customer-initial');
+  const customerEmailEl = document.getElementById('checkout-customer-email');
+  const accountMenuButton = document.getElementById('checkout-account-menu-button');
+  const accountMenu = document.getElementById('checkout-account-menu');
+  const logoutButton = document.getElementById('checkout-logout-button');
+  const addressDetails = document.getElementById('address-details');
+  const addressSummaryEl = document.getElementById('address-summary');
+  const addressLoadingEl = document.getElementById('address-loading');
+  const defaultAddressCard = document.getElementById('default-address-card');
+  const savedAddressSelectButton = document.getElementById('saved-address-select-button');
+  const defaultAddressNameEl = document.getElementById('default-address-name');
+  const defaultAddressLinesEl = document.getElementById('default-address-lines');
+  const differentAddressButton = document.getElementById('different-address-button');
+  const addressMenuButton = document.getElementById('address-menu-button');
+  const addressMenu = document.getElementById('address-menu');
+  const editAddressButton = document.getElementById('edit-address-button');
+  const shippingMethodSummaryEl = document.getElementById('shipping-method-summary');
+  const recommendationsSection = document.getElementById('checkout-recommendations');
+  const recommendationsList = document.getElementById('recommendations-list');
+  const recommendationsStatus = document.getElementById('recommendations-status');
   const shippingForm = document.getElementById('shipping-form');
+  const addressModal = document.getElementById('address-modal');
+  const addressEditForm = document.getElementById('address-edit-form');
+  const addressModalClose = document.getElementById('address-modal-close');
+  const addressModalCancel = document.getElementById('address-modal-cancel');
+  const addressModalSave = document.getElementById('address-modal-save');
+  const addressModalError = document.getElementById('address-modal-error');
   const shippingFields = shippingForm
     ? {
         firstName: shippingForm.querySelector('input[name="firstName"]'),
         lastName: shippingForm.querySelector('input[name="lastName"]'),
+        country: shippingForm.querySelector('[name="country"]'),
         address: shippingForm.querySelector('input[name="address"]'),
+        addressLine2: shippingForm.querySelector('input[name="addressLine2"]'),
         city: shippingForm.querySelector('input[name="city"]'),
         state: shippingForm.querySelector('input[name="state"]'),
         zip: shippingForm.querySelector('input[name="zip"]'),
@@ -66,6 +105,80 @@
 
   const appearance = {
     theme: 'night',
+    variables: {
+      colorPrimary: '#ffffff',
+      colorBackground: '#080808',
+      colorText: '#f5f5f3',
+      colorTextSecondary: '#a4a4a0',
+      colorDanger: '#ff8c8c',
+      borderRadius: '0px',
+      spacingUnit: '4px',
+      fontSizeBase: '14px',
+    },
+    rules: {
+      '.Input': {
+        border: '1px solid #3a3a3a',
+        boxShadow: 'none',
+        padding: '12px',
+      },
+      '.Input:focus': {
+        border: '1px solid #ffffff',
+        boxShadow: '0 0 0 1px #ffffff',
+      },
+      '.Label': {
+        color: '#d0d0cc',
+        fontSize: '12px',
+        fontWeight: '600',
+      },
+      '.AccordionItem': {
+        border: '1px solid #303030',
+        boxShadow: 'none',
+      },
+      '.AccordionItem--selected': {
+        borderColor: '#ffffff',
+      },
+    },
+  };
+
+  const paymentElementOptions = {
+    layout: {
+      type: 'accordion',
+      defaultCollapsed: false,
+      radios: true,
+      spacedAccordionItems: false,
+      visibleAccordionItemsCount: 3,
+    },
+    paymentMethodOrder: ['card', 'klarna', 'amazon_pay', 'paypal'],
+    wallets: {
+      applePay: 'auto',
+      googlePay: 'never',
+    },
+  };
+
+  const expressCheckoutOptions = {
+    buttonHeight: 48,
+    buttonType: {
+      paypal: 'paypal',
+      googlePay: 'checkout',
+    },
+    buttonTheme: {
+      paypal: 'gold',
+      googlePay: 'white',
+    },
+    layout: {
+      maxColumns: 2,
+      maxRows: 1,
+      overflow: 'auto',
+    },
+    paymentMethodOrder: ['paypal', 'google_pay'],
+    paymentMethods: {
+      applePay: 'never',
+      googlePay: 'auto',
+      amazonPay: 'never',
+      klarna: 'never',
+      link: 'never',
+      paypal: 'auto',
+    },
   };
 
   const formatMoney = (value) => {
@@ -87,13 +200,6 @@
     return '';
   };
 
-  const splitFullName = (fullName) => {
-    const normalized = cleanText(fullName);
-    if (!normalized) return { firstName: '', lastName: '' };
-    const [first, ...rest] = normalized.split(/\s+/);
-    return { firstName: first || '', lastName: rest.join(' ') };
-  };
-
   const applyShippingValue = (input, value) => {
     if (!input) return;
     const nextValue = cleanText(value);
@@ -104,21 +210,193 @@
 
   const hydrateShippingFormFromProfile = (profile = {}, address = {}) => {
     if (!shippingForm) return;
-    const addressNameParts = splitFullName(address.name);
-    const profileAddress = profile.address && typeof profile.address === 'object' ? profile.address : null;
+    const getDefaults =
+      window.CRONOX_CHECKOUT_LIFECYCLE?.getShippingDefaultValues;
+    if (typeof getDefaults !== 'function') return;
+    const defaults = getDefaults({ profile, address });
 
-    applyShippingValue(shippingFields.firstName, profile.firstName || addressNameParts.firstName);
-    applyShippingValue(shippingFields.lastName, profile.lastName || addressNameParts.lastName);
+    Object.entries(defaults).forEach(([field, value]) => {
+      applyShippingValue(shippingFields[field], value);
+    });
+  };
 
-    const addressLine =
-      cleanText([address.line1, address.line2].filter(Boolean).join(' ')) ||
-      cleanText([profileAddress?.line1, profileAddress?.line2].filter(Boolean).join(' ')) ||
-      cleanText(profile.address || '');
-    applyShippingValue(shippingFields.address, addressLine);
-    applyShippingValue(shippingFields.city, address.city || profileAddress?.city || profile.city);
-    applyShippingValue(shippingFields.state, address.state || profileAddress?.state || profile.state);
-    applyShippingValue(shippingFields.zip, address.zip || profileAddress?.zip || profile.zip);
-    applyShippingValue(shippingFields.phone, profile.phone || address.phone || profileAddress?.phone);
+  let activeProfile = null;
+  let savedDefaultAddress = null;
+  let newsletterSubmittedFor = '';
+
+  const isValidEmail = (value) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanText(value));
+  const getCheckoutEmail = () =>
+    state.isAuthenticated
+      ? cleanText(activeProfile?.email || window.CRONOX_USER?.email)
+      : cleanText(guestEmailInput?.value).toLowerCase();
+
+  const hasCompleteShippingAddress = () =>
+    Boolean(
+      cleanText(shippingFields.firstName?.value) &&
+        cleanText(shippingFields.lastName?.value) &&
+        cleanText(shippingFields.address?.value) &&
+        cleanText(shippingFields.zip?.value) &&
+        cleanText(shippingFields.city?.value) &&
+        cleanText(shippingFields.country?.value),
+    );
+
+  const isCheckoutContactAndShippingReady = () =>
+    (state.isAuthenticated || isValidEmail(getCheckoutEmail())) &&
+    hasCompleteShippingAddress();
+
+  const renderCustomerContact = (profile) => {
+    activeProfile = profile || null;
+    const email = cleanText(profile?.email);
+    const displayName = cleanText(profile?.firstName || profile?.name || email);
+    if (customerEmailEl) {
+      customerEmailEl.textContent = email || 'Identifica tu cuenta para continuar';
+    }
+    if (customerInitialEl) {
+      customerInitialEl.textContent = (displayName.charAt(0) || 'C').toUpperCase();
+    }
+    const authenticated = Boolean(profile && email);
+    if (customerContact) customerContact.hidden = !authenticated;
+    if (guestContact) guestContact.hidden = authenticated;
+    if (loginHeaderLink) loginHeaderLink.hidden = authenticated;
+  };
+
+  const getAddressDisplay = (address = {}) => {
+    const name = cleanText(address.name) ||
+      [cleanText(address.firstName), cleanText(address.lastName)].filter(Boolean).join(' ');
+    const lines = [
+      cleanText(address.line1 || address.address),
+      cleanText(address.line2 || address.addressLine2),
+      [cleanText(address.zip || address.postalCode), cleanText(address.city)].filter(Boolean).join(' '),
+      cleanText(address.state),
+      normalizeCountry(address.country) || cleanText(address.country),
+      cleanText(address.phone),
+    ].filter(Boolean);
+    return { name, lines };
+  };
+
+  const getCurrentAddressDisplay = () =>
+    getAddressDisplay({
+      firstName: shippingFields.firstName?.value,
+      lastName: shippingFields.lastName?.value,
+      line1: shippingFields.address?.value,
+      line2: shippingFields.addressLine2?.value,
+      zip: shippingFields.zip?.value,
+      city: shippingFields.city?.value,
+      state: shippingFields.state?.value,
+      country: shippingFields.country?.value,
+      phone: shippingFields.phone?.value,
+    });
+
+  const updateAddressSummary = () => {
+    if (!addressSummaryEl) return;
+    const display = getCurrentAddressDisplay();
+    const destination = [
+      cleanText(shippingFields.address?.value),
+      cleanText(shippingFields.city?.value),
+    ].filter(Boolean).join(', ');
+    addressSummaryEl.textContent = destination || display.name || 'Añade una dirección';
+    const street = [
+      cleanText(shippingFields.address?.value),
+      cleanText(shippingFields.addressLine2?.value),
+    ].filter(Boolean).join(', ');
+    const locality = [
+      cleanText(shippingFields.zip?.value),
+      cleanText(shippingFields.city?.value),
+    ].filter(Boolean).join(' ');
+    const addressLine = [street, locality].filter(Boolean).join(', ');
+    const region = [
+      cleanText(shippingFields.state?.value),
+      normalizeCountry(shippingFields.country?.value) || SPAIN,
+    ].filter(Boolean).join(', ');
+    const lines = [display.name, addressLine, region].filter(Boolean);
+    addressSummaryEl.classList.toggle('is-address', lines.length > 1);
+    addressSummaryEl.replaceChildren(
+      ...((lines.length ? lines : ['Add a shipping address']).map((line, index) => {
+        const span = document.createElement('span');
+        span.className = display.name && index === 0
+          ? 'address-summary__name'
+          : 'address-summary__line';
+        span.textContent = line;
+        return span;
+      })),
+    );
+  };
+
+  const hasUsableAddress = (address) =>
+    Boolean(
+      address &&
+        cleanText(address.line1 || address.address) &&
+        cleanText(address.city) &&
+        cleanText(address.zip || address.postalCode) &&
+        cleanText(address.country),
+    );
+
+  const setSavedAddressSelected = (selected) => {
+    if (savedAddressSelectButton) {
+      savedAddressSelectButton.setAttribute('aria-pressed', String(selected));
+    }
+    defaultAddressCard?.classList.toggle('is-selectable', !selected);
+  };
+
+  const showSavedAddress = ({ refreshPayment = false } = {}) => {
+    if (!hasUsableAddress(savedDefaultAddress)) return;
+    userEditedShippingFields.clear();
+    hydrateShippingFormFromProfile(activeProfile || {}, savedDefaultAddress);
+    if (addressLoadingEl) addressLoadingEl.hidden = true;
+    if (defaultAddressCard) defaultAddressCard.hidden = false;
+    setSavedAddressSelected(true);
+    if (differentAddressButton) differentAddressButton.hidden = false;
+    if (shippingForm) shippingForm.hidden = true;
+    if (addressDetails) addressDetails.open = false;
+    updateAddressSummary();
+    if (refreshPayment) schedulePaymentIntentRefreshFromShipping(0);
+  };
+
+  const showAlternativeAddress = () => {
+    const preserved = {
+      firstName: cleanText(activeProfile?.firstName),
+      lastName: cleanText(activeProfile?.lastName),
+      country: SPAIN,
+      phone: cleanText(activeProfile?.phone),
+    };
+    Object.values(shippingFields).forEach((input) => {
+      if (input) input.value = '';
+    });
+    Object.entries(preserved).forEach(([field, value]) => {
+      const input = shippingFields[field];
+      if (input) input.value = value;
+    });
+    userEditedShippingFields.clear();
+    if (defaultAddressCard) defaultAddressCard.hidden = !savedDefaultAddress;
+    setSavedAddressSelected(false);
+    if (differentAddressButton) differentAddressButton.hidden = true;
+    if (shippingForm) shippingForm.hidden = false;
+    if (addressDetails) addressDetails.open = true;
+    updateAddressSummary();
+    schedulePaymentIntentRefreshFromShipping(0);
+    shippingFields.address?.focus();
+  };
+
+  const renderAddressChoice = (profile = {}, address = null) => {
+    activeProfile = profile || null;
+    savedDefaultAddress = hasUsableAddress(address) ? address : null;
+    if (addressLoadingEl) addressLoadingEl.hidden = true;
+
+    if (!savedDefaultAddress) {
+      hydrateShippingFormFromProfile(profile || {}, {});
+      if (defaultAddressCard) defaultAddressCard.hidden = true;
+      setSavedAddressSelected(false);
+      if (differentAddressButton) differentAddressButton.hidden = true;
+      if (shippingForm) shippingForm.hidden = false;
+      if (addressDetails) addressDetails.open = true;
+      updateAddressSummary();
+      return;
+    }
+
+    const display = getAddressDisplay(savedDefaultAddress);
+    if (defaultAddressNameEl) defaultAddressNameEl.textContent = display.name || 'Dirección de envío';
+    if (defaultAddressLinesEl) defaultAddressLinesEl.textContent = display.lines.join('\n');
+    showSavedAddress();
   };
 
   const markShippingFieldEdited = (input) => {
@@ -127,8 +405,11 @@
 
   let shippingIntentRefreshTimer = null;
   const schedulePaymentIntentRefreshFromShipping = (delayMs = 450) => {
-    if (!state.isAuthenticated) return;
     const revision = invalidateCheckoutPayment();
+    if (!isCheckoutContactAndShippingReady()) {
+      setPayButtonState(false);
+      return;
+    }
     if (shippingIntentRefreshTimer) {
       window.clearTimeout(shippingIntentRefreshTimer);
     }
@@ -145,6 +426,7 @@
     const firstName = read(shippingFields.firstName);
     const lastName = read(shippingFields.lastName);
     const line1 = read(shippingFields.address);
+    const line2 = read(shippingFields.addressLine2);
     const city = read(shippingFields.city);
     const state = read(shippingFields.state);
     const zip = read(shippingFields.zip);
@@ -157,16 +439,27 @@
       name: fullName,
       fullName,
       line1,
+      line2,
       address: line1,
       city,
       state,
       zip,
       postalCode: zip,
       phone,
-      country: 'España',
+      email: getCheckoutEmail(),
+      country: normalizeCountry(read(shippingFields.country)) || SPAIN,
     };
 
-    const hasAnyValue = Object.values(payload).some((value) => cleanText(value));
+    const hasAnyValue = [
+      firstName,
+      lastName,
+      line1,
+      line2,
+      city,
+      state,
+      zip,
+      phone,
+    ].some((value) => cleanText(value));
     if (!hasAnyValue) return undefined;
 
     return Object.fromEntries(Object.entries(payload).filter(([, value]) => cleanText(value)));
@@ -176,10 +469,12 @@
     if (!input) return;
     input.addEventListener('input', () => {
       markShippingFieldEdited(input);
+      updateAddressSummary();
       schedulePaymentIntentRefreshFromShipping();
     });
     input.addEventListener('change', () => {
       markShippingFieldEdited(input);
+      updateAddressSummary();
       schedulePaymentIntentRefreshFromShipping(0);
     });
   });
@@ -270,21 +565,23 @@
 
   const setGuestUiState = (enabled) => {
     const isGuest = Boolean(enabled);
-    if (paymentSection) paymentSection.classList.toggle('is-disabled', isGuest);
-    if (applyPromoBtn) applyPromoBtn.disabled = isGuest;
-    if (removePromoBtn) removePromoBtn.disabled = isGuest && !state.promo;
-    if (promoInput && !state.promo) {
-      promoInput.disabled = isGuest;
-    }
+    if (paymentSection) paymentSection.classList.remove('is-disabled');
+    if (applyPromoBtn) applyPromoBtn.disabled = false;
+    if (removePromoBtn) removePromoBtn.disabled = false;
+    if (promoInput && !state.promo) promoInput.disabled = false;
+    if (guestContact) guestContact.hidden = !isGuest;
+    if (loginHeaderLink) loginHeaderLink.hidden = !isGuest;
     setPayButtonState(false);
   };
 
   let stripe;
   let elements;
   let paymentElement;
+  let expressCheckoutElement;
   let currentClientSecret = null;
   let currentPaymentIntentId = null;
   let paymentElementMounted = false;
+  let expressCheckoutMounted = false;
   let hasClearedPromoOnLoad = false;
   const checkoutCoordinator = window.CRONOX_CHECKOUT_LIFECYCLE?.createCoordinator();
   let checkoutRevision = checkoutCoordinator?.current() ?? 0;
@@ -309,6 +606,7 @@
   const resolveAuthStatus = async () => {
     if (window.CRONOX_USER) {
       state.isAuthenticated = true;
+      renderCustomerContact(window.CRONOX_USER);
       return true;
     }
 
@@ -322,6 +620,7 @@
       if (me) {
         window.CRONOX_USER = me;
         state.isAuthenticated = true;
+        renderCustomerContact(me);
         return true;
       }
     } catch (error) {
@@ -329,6 +628,7 @@
     }
 
     state.isAuthenticated = false;
+    renderCustomerContact(null);
     return false;
   };
 
@@ -348,6 +648,7 @@
       try {
         const profile = window.CRONOX_USER || (typeof API.getMe === 'function' ? await API.getMe() : null);
         if (profile) window.CRONOX_USER = profile;
+        renderCustomerContact(profile);
 
         let address = null;
         if (typeof API.getDefaultAddress === 'function') {
@@ -359,8 +660,10 @@
         }
 
         hydrateShippingFormFromProfile(profile || {}, address || {});
+        renderAddressChoice(profile || {}, address || null);
       } catch (error) {
         console.warn('[CRONOX] No se pudieron cargar los datos de envío guardados', error);
+        renderAddressChoice(window.CRONOX_USER || {}, null);
       } finally {
         shippingDefaultsLoaded = true;
         shippingDefaultsPromise = null;
@@ -374,12 +677,21 @@
     if (!payButton) return;
     const guestMode = !state.isAuthenticated;
     const forcedLabel = payButton.dataset.forcedLabel;
-    payButton.disabled = loading || !currentClientSecret || guestMode;
+    const buttonState = window.CRONOX_CHECKOUT_LIFECYCLE?.getPaymentButtonState?.({
+      loading,
+      authenticated: !guestMode,
+      checkoutReady: isCheckoutContactAndShippingReady(),
+      hasItems: Array.isArray(state.cart?.items) && state.cart.items.length > 0,
+      shippingMethod: state.shippingMethod,
+      clientSecret: currentClientSecret,
+      paymentElementMounted,
+    });
+    payButton.disabled = buttonState?.disabled ?? true;
     if (forcedLabel) {
       payButton.textContent = forcedLabel;
       return;
     }
-    payButton.textContent = guestMode ? 'Inicia sesión para pagar' : loading ? 'Procesando…' : 'Pagar ahora';
+    payButton.textContent = buttonState?.label ?? (guestMode ? 'Inicia sesión para pagar' : 'Pago no disponible');
   };
 
   const setLoadingState = (loading) => {
@@ -388,10 +700,34 @@
     setPayButtonState(loading);
   };
 
+  const setExpressCheckoutVisibility = (availablePaymentMethods) => {
+    if (!expressCheckoutRegion) return;
+    const hasWallet = Boolean(
+      window.CRONOX_CHECKOUT_LIFECYCLE?.hasAvailableExpressWallet?.(
+        availablePaymentMethods,
+      ),
+    );
+    expressCheckoutRegion.hidden = !hasWallet;
+  };
+
+  const resetExpressCheckoutElement = () => {
+    expressCheckoutMounted = false;
+    setExpressCheckoutVisibility(null);
+    if (expressCheckoutElement) {
+      try {
+        expressCheckoutElement.unmount();
+      } catch {
+        // Stripe can detach an unavailable wallet element before cleanup.
+      }
+    }
+    expressCheckoutElement = null;
+  };
+
   const resetPaymentElement = () => {
     currentClientSecret = null;
     currentPaymentIntentId = null;
     paymentElementMounted = false;
+    resetExpressCheckoutElement();
     if (paymentElement) {
       try {
         paymentElement.unmount();
@@ -454,6 +790,48 @@
     },
   ) => renderCartStatus(options);
 
+  let invalidSessionRecoveryInFlight = false;
+
+  const recoverInvalidCheckoutSession = async (event) => {
+    if (invalidSessionRecoveryInFlight) return;
+
+    const button = event?.currentTarget;
+    const statusCopy = emptyCartEl?.querySelector('p');
+    invalidSessionRecoveryInFlight = true;
+    if (button) {
+      button.disabled = true;
+      button.textContent = 'Recuperando…';
+    }
+
+    try {
+      if (typeof API.logout !== 'function') {
+        throw new Error('AUTH_RECOVERY_UNAVAILABLE');
+      }
+
+      // The existing logout endpoint validates either auth cookie, transfers
+      // the account cart/checkout snapshot to a fresh guest owner when safe,
+      // and clears both HttpOnly auth cookies before this page is reloaded.
+      await API.logout();
+      window.CRONOX_USER = null;
+      state.isAuthenticated = false;
+      window.location.reload();
+    } catch (error) {
+      invalidSessionRecoveryInFlight = false;
+      if (button) {
+        button.disabled = false;
+        button.textContent = 'Recargar';
+      }
+      if (statusCopy) {
+        statusCopy.textContent =
+          'No pudimos recuperar la sesión. Comprueba tu conexión y vuelve a intentarlo.';
+      }
+      console.warn('[CRONOX checkout auth recovery]', {
+        event: 'checkout_auth_recovery_failed',
+        type: error instanceof Error ? error.message : 'unexpected',
+      });
+    }
+  };
+
   const classifyCheckoutError = (error) => {
     const classification =
       typeof API.classifyApiError === 'function' ? API.classifyApiError(error) : { kind: 'unknown', isRetryable: true };
@@ -493,7 +871,7 @@
       options.title = 'Tu sesión ya no es válida';
       options.description = 'Vuelve a iniciar sesión y reintenta el checkout.';
       options.actionLabel = 'Recargar';
-      options.onAction = () => window.location.reload();
+      options.onAction = recoverInvalidCheckoutSession;
     } else if (details.kind === 'validation') {
       options.title = 'No pudimos validar el carrito';
       options.description = 'Revisa el carrito o reinténtalo antes de continuar con el pago.';
@@ -533,10 +911,13 @@
       article.innerHTML = `
         <div class="checkout-item__media">
           <img src="${escapeHtml(imageUrl)}" alt="${productName}" loading="lazy" referrerpolicy="no-referrer">
+          <span class="checkout-item__qty" aria-label="Cantidad ${qty}">${qty}</span>
         </div>
         <div class="checkout-item__body">
+          <div class="checkout-item__copy">
           <h3 class="checkout-item__title">${productName}</h3>
-          <p class="checkout-item__meta">${size ? `Talla ${size}` : ''} · Cant. ${qty}</p>
+          ${size ? `<p class="checkout-item__meta">Talla ${size}</p>` : ''}
+          </div>
           <div class="checkout-item__price">${priceLabel}</div>
         </div>
       `;
@@ -544,6 +925,245 @@
     });
     cartItemsEl.innerHTML = '';
     cartItemsEl.appendChild(frag);
+  };
+
+  const recommendationProducts = new Map();
+  let recommendationSequence = 0;
+  let recommendationLoadRevision = 0;
+  let recommendationCatalog = null;
+  let authoritativeRecommendationCart = null;
+  let authoritativeRecommendationCartRevision = 0;
+
+  const setRecommendationsStatus = (message) => {
+    if (recommendationsStatus) recommendationsStatus.textContent = message || '';
+  };
+
+  const getAvailableRecommendationVariants = (product) =>
+    window.CRONOX_CHECKOUT_LIFECYCLE?.getAvailableProductVariants?.(product) || [];
+
+  const getRecommendationVariants = (product) =>
+    window.CRONOX_CHECKOUT_LIFECYCLE?.getProductVariants?.(product) || [];
+
+  const isRecommendationVariantAvailable = (variant) =>
+    Boolean(
+      window.CRONOX_CHECKOUT_LIFECYCLE?.isProductVariantAvailable?.(variant),
+    );
+
+  const getRecommendationSizeMarkup = (product) => {
+    const variants = getRecommendationVariants(product);
+    const available = variants.filter(isRecommendationVariantAvailable);
+    const directVariant = available.length === 1 ? available[0] : null;
+    const markup = variants.map((variant) => {
+      const size = cleanText(variant.size).toUpperCase() || 'Única';
+      const isAvailable = isRecommendationVariantAvailable(variant);
+      const selected = isAvailable && directVariant?.id === variant.id;
+      return `<button type="button" class="checkout-recommendation__size${isAvailable ? '' : ' is-unavailable'}${selected ? ' is-selected' : ''}" data-recommendation-variant="${escapeHtml(String(variant.id))}" data-recommendation-unavailable="${isAvailable ? 'false' : 'true'}" aria-label="${escapeHtml(isAvailable ? `Talla ${size}` : `Talla ${size}, agotada`)}" aria-pressed="${selected ? 'true' : 'false'}" aria-disabled="${isAvailable ? 'false' : 'true'}"${isAvailable ? '' : ' disabled tabindex="-1"'}>${escapeHtml(size)}</button>`;
+    }).join('');
+    return {
+      markup,
+      selectedVariantId: directVariant ? String(directVariant.id) : '',
+    };
+  };
+
+  const hideRecommendations = () => {
+    recommendationProducts.clear();
+    if (recommendationsList) recommendationsList.innerHTML = '';
+    if (recommendationsSection) recommendationsSection.hidden = true;
+    setRecommendationsStatus('');
+  };
+
+  const hasAuthoritativeRecommendationCart = () =>
+    Boolean(
+      authoritativeRecommendationCart &&
+      Array.isArray(authoritativeRecommendationCart.items),
+    );
+
+  const commitAuthoritativeRecommendationCart = (cart) => {
+    authoritativeRecommendationCart =
+      cart && Array.isArray(cart.items) ? cart : null;
+    authoritativeRecommendationCartRevision += 1;
+  };
+
+  const renderRecommendations = (products = []) => {
+    if (!recommendationsSection || !recommendationsList) return;
+    recommendationProducts.clear();
+    recommendationsList.innerHTML = '';
+
+    if (!products.length) {
+      recommendationsSection.hidden = true;
+      return;
+    }
+
+    const fragment = document.createDocumentFragment();
+    products.forEach((product) => {
+      const productKey = String(product?.slug || '');
+      if (!productKey) return;
+      recommendationProducts.set(productKey, product);
+      const productName = escapeHtml(product.name || 'Producto CRONOX');
+      const imageUrl = safeProductImage(product.image || product.images?.[0]);
+      const price = escapeHtml(product.priceLabel || formatMoney(product.price || 0));
+      const selectorId = `checkout-recommendation-sizes-${++recommendationSequence}`;
+      const sizeOptions = getRecommendationSizeMarkup(product);
+      const article = document.createElement('article');
+      article.className = 'checkout-recommendation';
+      article.dataset.recommendationProduct = productKey;
+      article.dataset.recommendationVariant = sizeOptions.selectedVariantId;
+      article.innerHTML = `
+        <img class="checkout-recommendation__image" src="${escapeHtml(imageUrl)}" alt="${productName}" loading="lazy" referrerpolicy="no-referrer">
+        <div class="checkout-recommendation__copy">
+          <h3 class="checkout-recommendation__name">${productName}</h3>
+          <p class="checkout-recommendation__price">${price}</p>
+          <div id="${selectorId}" class="checkout-recommendation__sizes" role="group" aria-label="Tallas para ${productName}">${sizeOptions.markup}</div>
+        </div>
+        <button class="checkout-recommendation__action" type="button" aria-controls="${selectorId}">Añadir</button>
+      `;
+      fragment.appendChild(article);
+    });
+    recommendationsList.appendChild(fragment);
+    recommendationsSection.hidden = recommendationsList.children.length === 0;
+    setRecommendationsStatus('');
+  };
+
+  const reconcileRecommendationsWithCart = () => {
+    if (
+      !hasAuthoritativeRecommendationCart() ||
+      !Array.isArray(recommendationCatalog) ||
+      typeof window.CRONOX_CHECKOUT_LIFECYCLE?.getRecommendationCandidates !== 'function'
+    ) {
+      hideRecommendations();
+      return false;
+    }
+    const candidates = window.CRONOX_CHECKOUT_LIFECYCLE.getRecommendationCandidates({
+      products: recommendationCatalog,
+      cartItems: authoritativeRecommendationCart.items,
+      limit: 3,
+    }).filter((product) => cleanText(product?.slug));
+    renderRecommendations(candidates);
+    return true;
+  };
+
+  const loadRecommendations = async ({ force = false } = {}) => {
+    const loadRevision = ++recommendationLoadRevision;
+    hideRecommendations();
+    if (
+      !recommendationsSection ||
+      !hasAuthoritativeRecommendationCart() ||
+      typeof API.getProducts !== 'function' ||
+      typeof window.CRONOX_CHECKOUT_LIFECYCLE?.getRecommendationCandidates !== 'function'
+    ) {
+      return false;
+    }
+
+    try {
+      if (force || !Array.isArray(recommendationCatalog)) {
+        const products = await API.getProducts({
+          limit: 12,
+          sortBy: 'createdAt',
+          order: 'desc',
+        });
+        if (loadRevision !== recommendationLoadRevision) return false;
+        recommendationCatalog = Array.isArray(products) ? products : [];
+      }
+      if (loadRevision !== recommendationLoadRevision) return false;
+      return reconcileRecommendationsWithCart();
+    } catch (error) {
+      if (loadRevision !== recommendationLoadRevision) return false;
+      hideRecommendations();
+      console.warn('[CRONOX checkout recommendations]', {
+        event: 'checkout_recommendations_load_failed',
+        type: error instanceof Error ? error.name : 'unexpected',
+      });
+      return false;
+    }
+  };
+
+  const setRecommendationBusy = (card, busy) => {
+    if (!card) return;
+    card.setAttribute('aria-busy', busy ? 'true' : 'false');
+    card.querySelectorAll('button').forEach((button) => {
+      const unavailable = button.dataset.recommendationUnavailable === 'true';
+      button.disabled = busy || unavailable;
+      if (unavailable) button.setAttribute('aria-disabled', 'true');
+    });
+  };
+
+  const selectRecommendationVariant = (card, selectedButton) => {
+    if (
+      !card ||
+      !selectedButton ||
+      selectedButton.disabled ||
+      selectedButton.dataset.recommendationUnavailable === 'true'
+    ) {
+      return false;
+    }
+    card.querySelectorAll('[data-recommendation-variant]').forEach((button) => {
+      const selected = button === selectedButton;
+      button.classList.toggle('is-selected', selected);
+      button.setAttribute('aria-pressed', selected ? 'true' : 'false');
+    });
+    card.dataset.recommendationVariant =
+      selectedButton.dataset.recommendationVariant || '';
+    setRecommendationsStatus('');
+    return true;
+  };
+
+  const fetchFreshRecommendation = async (product) => {
+    const slug = cleanText(product?.slug);
+    if (!slug || typeof API.getProductBySlug !== 'function') {
+      throw new Error('RECOMMENDATION_PRODUCT_UNAVAILABLE');
+    }
+    const fresh = await API.getProductBySlug(slug, { cache: 'no-store' });
+    if (!fresh || fresh.isActive === false) {
+      throw new Error('RECOMMENDATION_PRODUCT_UNAVAILABLE');
+    }
+    return fresh;
+  };
+
+  const addRecommendationVariant = async (card, product, requestedVariantId) => {
+    setRecommendationBusy(card, true);
+    setRecommendationsStatus('');
+    try {
+      const fresh = await fetchFreshRecommendation(product);
+      const variants = getAvailableRecommendationVariants(fresh);
+      const variant = variants.find(
+        (candidate) => String(candidate.id) === String(requestedVariantId),
+      );
+      if (!variant) {
+        throw new Error('RECOMMENDATION_VARIANT_OUT_OF_STOCK');
+      }
+
+      const addCartItem = window.CRONOX_CART?.addCartItem || API.addCartItem;
+      if (typeof addCartItem !== 'function') throw new Error('CART_API_UNAVAILABLE');
+      state.cart = await addCartItem({ variantId: variant.id, qty: 1 });
+      commitAuthoritativeRecommendationCart(state.cart);
+      reconcileRecommendationsWithCart();
+      setRecommendationsStatus('Producto añadido. Actualizando el pedido…');
+      await queueCheckoutUpdate();
+      await loadRecommendations({ force: true });
+    } catch (error) {
+      console.warn('[CRONOX checkout recommendation add]', {
+        event: 'checkout_recommendation_add_failed',
+        type: error instanceof Error ? error.message : 'unexpected',
+      });
+      setRecommendationsStatus('Esa opción ya no está disponible. Vuelve a intentarlo.');
+    } finally {
+      if (card?.isConnected) setRecommendationBusy(card, false);
+    }
+  };
+
+  const handleRecommendationAdd = async (card) => {
+    if (!card) return;
+    const product = recommendationProducts.get(card.dataset.recommendationProduct || '');
+    const addButton = card.querySelector('.checkout-recommendation__action');
+    if (!product || !addButton) return;
+
+    const selectedVariantId = cleanText(card.dataset.recommendationVariant);
+    if (!selectedVariantId) {
+      setRecommendationsStatus('Elige una talla disponible.');
+      card.querySelector('.checkout-recommendation__size:not(:disabled)')?.focus();
+      return;
+    }
+    await addRecommendationVariant(card, product, selectedVariantId);
   };
 
   const renderShippingOptions = () => {
@@ -571,25 +1191,42 @@
       `;
       shippingOptionsEl.appendChild(wrapper);
     });
+
+    const selected = state.shippingMethods.find(
+      (method) => String(method.code ?? '') === String(state.shippingMethod ?? ''),
+    );
+    if (shippingMethodSummaryEl) {
+      const priceCents = selected?.amountCents ?? selected?.priceCents ?? 0;
+      shippingMethodSummaryEl.textContent = selected
+        ? [selected.label, selected.description, formatEuro(priceCents)].filter(Boolean).join(' · ')
+        : 'Selecciona un método';
+    }
   };
 
-  const renderGuestShippingOptions = () => {
-    if (!shippingOptionsEl) return;
-    shippingOptionsEl.innerHTML =
-      '<p class="checkout-guest-note">Inicia sesión para ver y seleccionar métodos de envío.</p>';
+  const renderTaxSummary = (summary) => {
+    if (!taxNoteEl) return;
+    const hasTaxAmount =
+      summary &&
+      summary.taxAmount !== '' &&
+      summary.taxAmount !== null &&
+      summary.taxAmount !== undefined;
+    const taxAmount = hasTaxAmount ? Number(summary.taxAmount) : Number.NaN;
+    if (!Number.isFinite(taxAmount) || taxAmount < 0) {
+      taxNoteEl.textContent = '';
+      taxNoteEl.hidden = true;
+      return;
+    }
+    taxNoteEl.textContent = `Incluye ${formatMoney(taxAmount)} de impuestos`;
+    taxNoteEl.hidden = false;
   };
 
-  const renderSummary = (totals, shippingMethod) => {
+  const renderSummary = (totals, shippingMethod, summary) => {
     if (!totals) return;
     subtotalEl && (subtotalEl.textContent = formatEuro(totals.subtotalCents));
     if (shippingEl) {
-      if (shippingMethod && shippingMethod.code === 'GUEST') {
-        shippingEl.textContent = shippingMethod.label || 'Inicia sesión para calcular el envío';
-      } else {
-        shippingEl.textContent = shippingMethod
-          ? `${shippingMethod.label} · ${formatEuro(totals.shippingCents)}`
-          : formatEuro(totals.shippingCents);
-      }
+      shippingEl.textContent = shippingMethod
+        ? `${shippingMethod.label} · ${formatEuro(totals.shippingCents)}`
+        : formatEuro(totals.shippingCents);
     }
     const discountRow = discountEl?.closest('.summary-row');
     if (discountEl && discountRow) {
@@ -602,6 +1239,7 @@
       }
     }
     totalEl && (totalEl.textContent = formatEuro(totals.totalCents));
+    renderTaxSummary(summary);
   };
 
   const renderPromoUI = () => {
@@ -630,54 +1268,18 @@
   };
 
   const renderGuestCheckout = async () => {
-    setLoadingState(true);
     resetPaymentElement();
-    setPromoState(null);
-    setPromoMessage('');
-    setPromoStatus('');
-    showLoginCallout();
+    renderCustomerContact(null);
+    userEditedShippingFields.clear();
+    Object.values(shippingFields).forEach((input) => {
+      if (input) input.value = input.name === 'country' ? SPAIN : '';
+    });
+    renderAddressChoice({}, null);
     setGuestUiState(true);
-
-    try {
-      const guestCart = typeof API.getCart === 'function' ? await API.getCart() : null;
-      state.cart = guestCart;
-      const totals = {
-        subtotalCents: Number(guestCart?.subtotalCents ?? 0),
-        shippingCents: 0,
-        discountCents: 0,
-        totalCents: Number(guestCart?.subtotalCents ?? 0),
-      };
-      state.totals = totals;
-
-      if (!state.cart?.items?.length) {
-        renderEmptyCart({
-          title: 'Tu cesta está vacía',
-          description: 'Añade productos a tu carrito y luego inicia sesión para pagarlos.',
-        });
-      } else {
-        renderCart();
-        emptyCartEl && (emptyCartEl.hidden = true);
-      }
-
-      renderGuestShippingOptions();
-      renderSummary(totals, {
-        label: 'Elige envío tras iniciar sesión',
-        code: 'GUEST',
-      });
-      renderPromoUI();
-      if (helpText) {
-        helpText.textContent = 'Inicia sesión para continuar con tu compra.';
-      }
-    } catch (error) {
-      const details = classifyCheckoutError(error);
-      console.warn('[CRONOX checkout guest cart]', {
-        event: 'checkout_guest_cart_load_failed',
-        ...details,
-      });
-      renderCheckoutLoadError(details);
-    } finally {
-      setLoadingState(false);
-    }
+    const loaded = await refreshCheckoutSummary(state.shippingMethod, checkoutRevision);
+    if (loaded) ensureStripeReady();
+    if (helpText) helpText.textContent = 'Stripe procesa tus datos de pago de forma cifrada.';
+    return loaded;
   };
 
   const findShippingMethod = (code) => state.shippingMethods.find((method) => method.code === code) || null;
@@ -686,11 +1288,10 @@
     shippingMethodCode = state.shippingMethod,
     revision = checkoutRevision,
   ) => {
-    if (!state.isAuthenticated) {
-      await renderGuestCheckout();
-      return false;
-    }
-
+    const recommendationCartRevisionAtRequest =
+      authoritativeRecommendationCartRevision;
+    recommendationLoadRevision += 1;
+    hideRecommendations();
     setLoadingState(true);
     errorDiv.textContent = '';
     try {
@@ -702,6 +1303,13 @@
       if (revision !== checkoutRevision) return false;
 
       state.cart = data.cart;
+      if (
+        recommendationCartRevisionAtRequest ===
+        authoritativeRecommendationCartRevision
+      ) {
+        commitAuthoritativeRecommendationCart(data.cart);
+      }
+      reconcileRecommendationsWithCart();
       state.shippingMethods = Array.isArray(data.shippingMethods) ? data.shippingMethods : [];
       if (!state.shippingMethods.length) {
         state.shippingMethod = '';
@@ -744,7 +1352,7 @@
       renderSummary(state.totals, findShippingMethod(state.shippingMethod));
       renderPromoUI();
       hideLoginCallout();
-      setGuestUiState(false);
+      setGuestUiState(!state.isAuthenticated);
       setLoadingState(false);
       return true;
     } catch (error) {
@@ -774,6 +1382,141 @@
     }
   };
 
+  const buildPaymentReturnUrl = () => {
+    const successUrl = new URL('/checkout-success.html', window.location.origin);
+    if (currentPaymentIntentId) {
+      successUrl.searchParams.set('ref', currentPaymentIntentId);
+    }
+    return successUrl.toString();
+  };
+
+  const subscribeNewsletterIfRequested = async () => {
+    const email = getCheckoutEmail();
+    if (
+      state.isAuthenticated ||
+      !newsletterConsent?.checked ||
+      !isValidEmail(email) ||
+      newsletterSubmittedFor === email
+    ) {
+      return;
+    }
+    try {
+      const response = await fetch(`${API_BASE}/api/newsletter/subscribe`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(await getCsrfHeaders()),
+        },
+        body: JSON.stringify({ email }),
+      });
+      if (response.ok || response.status === 409) newsletterSubmittedFor = email;
+    } catch (error) {
+      console.warn('[CRONOX checkout newsletter]', {
+        event: 'checkout_newsletter_subscription_failed',
+        type: error instanceof Error ? error.name : 'unexpected',
+      });
+    }
+  };
+
+  const confirmExpressCheckoutPayment = async (event, expectedElement) => {
+    if (
+      expressCheckoutElement !== expectedElement ||
+      !currentClientSecret ||
+      !isCheckoutContactAndShippingReady()
+    ) {
+      event?.paymentFailed?.({ reason: 'fail' });
+      return;
+    }
+
+    const confirmExpressPayment =
+      window.CRONOX_CHECKOUT_LIFECYCLE?.confirmExpressPayment;
+    if (typeof confirmExpressPayment !== 'function') {
+      event?.paymentFailed?.({ reason: 'fail' });
+      errorDiv.textContent = 'No hemos podido iniciar el pago rápido. Utiliza otro método de pago.';
+      return;
+    }
+
+    setPayButtonState(true);
+    errorDiv.textContent = '';
+    await subscribeNewsletterIfRequested();
+    const result = await confirmExpressPayment({
+      stripe,
+      elements,
+      expressCheckoutMounted,
+      confirmParams: { return_url: buildPaymentReturnUrl() },
+      onFailure: (error) => {
+        event?.paymentFailed?.({ reason: 'fail' });
+        console.error('[CRONOX checkout express payment]', {
+          event: 'checkout_express_payment_confirmation_failed',
+          type: typeof error?.type === 'string' ? error.type : 'unexpected',
+        });
+        errorDiv.textContent =
+          typeof error?.type === 'string' && error?.message
+            ? error.message
+            : 'No se pudo completar el pago rápido. Inténtalo de nuevo o utiliza otro método.';
+        setPayButtonState(false);
+      },
+    });
+
+    if (!result.attempted) {
+      event?.paymentFailed?.({ reason: 'fail' });
+      errorDiv.textContent = 'No hemos podido iniciar el pago rápido. Utiliza otro método de pago.';
+      setPayButtonState(false);
+    }
+  };
+
+  const mountExpressCheckoutElement = () => {
+    resetExpressCheckoutElement();
+    if (!elements || !expressCheckoutContainer) return;
+
+    try {
+      const nextExpressCheckoutElement = elements.create(
+        'expressCheckout',
+        expressCheckoutOptions,
+      );
+      expressCheckoutElement = nextExpressCheckoutElement;
+      nextExpressCheckoutElement.on('ready', (event) => {
+        if (expressCheckoutElement !== nextExpressCheckoutElement) return;
+        expressCheckoutMounted = true;
+        setExpressCheckoutVisibility(event?.availablePaymentMethods);
+      });
+      nextExpressCheckoutElement.on(
+        'availablepaymentmethodschange',
+        (event) => {
+          if (expressCheckoutElement !== nextExpressCheckoutElement) return;
+          setExpressCheckoutVisibility(event?.paymentMethods);
+        },
+      );
+      nextExpressCheckoutElement.on('loaderror', (event) => {
+        if (expressCheckoutElement !== nextExpressCheckoutElement) return;
+        setExpressCheckoutVisibility(null);
+        console.error('[CRONOX checkout Express Checkout Element]', {
+          event: 'checkout_express_element_load_failed',
+          type:
+            typeof event?.error?.type === 'string'
+              ? event.error.type
+              : 'unexpected',
+          code:
+            typeof event?.error?.code === 'string'
+              ? event.error.code
+              : undefined,
+        });
+      });
+      nextExpressCheckoutElement.on('confirm', (event) => {
+        void confirmExpressCheckoutPayment(event, nextExpressCheckoutElement);
+      });
+      nextExpressCheckoutElement.mount(expressCheckoutContainer);
+      expressCheckoutMounted = true;
+    } catch (error) {
+      resetExpressCheckoutElement();
+      console.warn('[CRONOX checkout Express Checkout Element]', {
+        event: 'checkout_express_element_mount_skipped',
+        type: error instanceof Error ? error.name : 'unexpected',
+      });
+    }
+  };
+
   const ensurePaymentElement = async (clientSecret) => {
     if (!clientSecret || !stripe) return;
 
@@ -791,13 +1534,71 @@
     paymentElementMounted = false;
 
     elements = stripe.elements({ clientSecret, appearance });
-    paymentElement = elements.create('payment');
-    const container = document.getElementById('payment-element');
-    if (container) {
-      paymentElement.mount(container);
+    mountExpressCheckoutElement();
+    const nextPaymentElement = elements.create('payment', paymentElementOptions);
+    paymentElement = nextPaymentElement;
+    currentClientSecret = clientSecret;
+    let loadSettled = false;
+    let loadTimeoutId = null;
+    const clearLoadTimeout = () => {
+      if (loadTimeoutId !== null) {
+        window.clearTimeout(loadTimeoutId);
+        loadTimeoutId = null;
+      }
+    };
+    const handleReady = () => {
+      if (paymentElement !== nextPaymentElement || loadSettled) return;
+      loadSettled = true;
+      clearLoadTimeout();
       paymentElementMounted = true;
-      currentClientSecret = clientSecret;
       setPayButtonState(false);
+    };
+    const handleLoadError = (event) => {
+      if (paymentElement !== nextPaymentElement || loadSettled) return;
+      loadSettled = true;
+      clearLoadTimeout();
+      paymentElementMounted = false;
+      try {
+        nextPaymentElement.unmount();
+      } catch {
+        // A failed or timed-out Stripe Element may already be detached.
+      }
+      currentClientSecret = null;
+      currentPaymentIntentId = null;
+      resetExpressCheckoutElement();
+      paymentElement = null;
+      elements = null;
+      console.error('[CRONOX checkout Payment Element]', {
+        event: 'checkout_payment_element_load_failed',
+        type: typeof event?.error?.type === 'string' ? event.error.type : 'unexpected',
+        code: typeof event?.error?.code === 'string' ? event.error.code : undefined,
+      });
+      errorDiv.textContent = 'No hemos podido preparar el pago. Inténtalo de nuevo.';
+      setPayButtonState(false);
+    };
+    const observesLoad =
+      window.CRONOX_CHECKOUT_LIFECYCLE?.observePaymentElementLoad?.({
+        paymentElement: nextPaymentElement,
+        onReady: handleReady,
+        onLoadError: handleLoadError,
+      }) ?? false;
+    const container = document.getElementById('payment-element');
+    if (!container) {
+      resetPaymentElement();
+      throw new Error('PAYMENT_ELEMENT_CONTAINER_NOT_FOUND');
+    }
+    try {
+      loadTimeoutId = window.setTimeout(() => handleLoadError({ error: { type: 'load_timeout' } }), 15_000);
+      nextPaymentElement.mount(container);
+      if (!observesLoad) handleReady();
+    } catch (error) {
+      clearLoadTimeout();
+      console.error('[CRONOX checkout Payment Element]', {
+        event: 'checkout_payment_element_mount_failed',
+        type: error instanceof Error ? error.name : 'unexpected',
+      });
+      resetPaymentElement();
+      throw new Error('PAYMENT_ELEMENT_MOUNT_FAILED');
     }
   };
 
@@ -807,6 +1608,12 @@
     }
     if (details.code === 'CHECKOUT_REPLACEMENT_IN_PROGRESS') {
       return 'Estamos actualizando el pago con los nuevos datos. Inténtalo de nuevo en un momento.';
+    }
+    if (
+      details.code === 'CHECKOUT_PAYMENT_INTENT_RECOVERY_BLOCKED' ||
+      details.code === 'CHECKOUT_PAYMENT_INTENT_IN_PROGRESS'
+    ) {
+      return 'No hemos podido preparar el pago. Inténtalo de nuevo.';
     }
     if (
       details.code === 'STRIPE_PAYMENT_INTENT_NOT_CANCELLABLE' ||
@@ -823,7 +1630,7 @@
     if (details.kind === 'validation') {
       return 'No pudimos validar los datos actuales del checkout. Revísalos y vuelve a intentarlo.';
     }
-    return 'No se pudo actualizar el pago. Inténtalo de nuevo en unos instantes.';
+    return 'No hemos podido preparar el pago. Inténtalo de nuevo.';
   };
 
   const synchronizeCanonicalCart = async () => {
@@ -878,9 +1685,13 @@
           await synchronizeCanonicalCart();
           if (revision !== checkoutRevision) return;
           const orderId = Number(status?.orderId);
-          if (Number.isSafeInteger(orderId) && orderId > 0) {
+          if (state.isAuthenticated && Number.isSafeInteger(orderId) && orderId > 0) {
             window.location.assign(
               `/checkout-success.html?orderId=${encodeURIComponent(orderId)}`,
+            );
+          } else if (currentPaymentIntentId) {
+            window.location.assign(
+              `/checkout-success.html?ref=${encodeURIComponent(currentPaymentIntentId)}`,
             );
           }
         },
@@ -902,7 +1713,6 @@
   };
 
   const preparePaymentIntent = async (revision = checkoutRevision) => {
-    if (!state.isAuthenticated) return;
     if (revision !== checkoutRevision) return false;
     setLoadingState(true);
     errorDiv.textContent = '';
@@ -923,6 +1733,13 @@
         return false;
       }
 
+      if (!isCheckoutContactAndShippingReady()) {
+        errorDiv.textContent = state.isAuthenticated
+          ? 'Completa la direccion de envio.'
+          : 'Introduce un email valido y completa la direccion de envio.';
+        return false;
+      }
+
       const requestedShippingMethod = state.shippingMethod;
       const requestedPromoCode = state.promo?.code || undefined;
       const requestedShippingAddress = buildShippingAddressPayload();
@@ -937,6 +1754,7 @@
         body: JSON.stringify({
           shippingMethod: requestedShippingMethod,
           promoCode: requestedPromoCode,
+          guestEmail: state.isAuthenticated ? undefined : getCheckoutEmail(),
           shippingAddress: requestedShippingAddress,
         }),
       });
@@ -967,7 +1785,11 @@
       state.shippingMethod = requestedShippingMethod;
       state.totals = data.totals || state.totals;
       await ensurePaymentElement(nextClientSecret);
-      renderSummary(state.totals, findShippingMethod(state.shippingMethod) || data.shippingMethod);
+      renderSummary(
+        state.totals,
+        findShippingMethod(state.shippingMethod) || data.shippingMethod,
+        data.summary,
+      );
       errorDiv.textContent = '';
       return true;
     } catch (error) {
@@ -1019,11 +1841,6 @@
 
   const applyPromoCode = async () => {
     if (!promoInput) return;
-    if (!state.isAuthenticated) {
-      setPromoMessage('Inicia sesión para aplicar un código de descuento.', true);
-      showLoginCallout();
-      return;
-    }
     const code = sanitizePromoCode(promoInput.value);
     promoInput.value = code;
     if (!code) {
@@ -1123,6 +1940,126 @@
     return true;
   };
 
+  const closeCheckoutMenus = (except = null) => {
+    [
+      [accountMenuButton, accountMenu],
+      [addressMenuButton, addressMenu],
+    ].forEach(([button, menu]) => {
+      if (!menu || menu === except) return;
+      menu.hidden = true;
+      button?.setAttribute('aria-expanded', 'false');
+    });
+  };
+
+  const toggleCheckoutMenu = (button, menu) => {
+    if (!button || !menu) return;
+    const willOpen = menu.hidden;
+    closeCheckoutMenus(willOpen ? menu : null);
+    menu.hidden = !willOpen;
+    button.setAttribute('aria-expanded', String(willOpen));
+    if (willOpen) menu.querySelector('[role="menuitem"]')?.focus();
+  };
+
+  let modalReturnFocus = null;
+  const closeAddressModal = () => {
+    if (!addressModal || addressModal.hidden) return;
+    addressModal.hidden = true;
+    document.body.classList.remove('checkout-modal-open');
+    if (addressModalError) addressModalError.textContent = '';
+    modalReturnFocus?.focus?.();
+    modalReturnFocus = null;
+  };
+
+  const openAddressModal = () => {
+    if (!addressModal || !addressEditForm || !savedDefaultAddress?.id) return;
+    closeCheckoutMenus();
+    modalReturnFocus = document.activeElement;
+    ['line1', 'line2', 'zip', 'city', 'state', 'country', 'phone'].forEach((field) => {
+      const input = addressEditForm.elements.namedItem(field);
+      if (input) {
+        input.value = field === 'country'
+          ? normalizeCountry(savedDefaultAddress[field]) || SPAIN
+          : cleanText(savedDefaultAddress[field]);
+      }
+    });
+    const fullName = cleanText(savedDefaultAddress.name);
+    const [parsedFirstName = '', ...parsedLastName] = fullName.split(/\s+/);
+    addressEditForm.elements.namedItem('firstName').value =
+      cleanText(savedDefaultAddress.firstName) || parsedFirstName;
+    addressEditForm.elements.namedItem('lastName').value =
+      cleanText(savedDefaultAddress.lastName) || parsedLastName.join(' ');
+    addressEditForm.elements.namedItem('isDefault').checked =
+      Boolean(savedDefaultAddress.isDefault);
+    const countryInput = addressEditForm.elements.namedItem('country');
+    if (countryInput && !countryInput.value) countryInput.value = SPAIN;
+    if (addressModalError) addressModalError.textContent = '';
+    addressModal.hidden = false;
+    document.body.classList.add('checkout-modal-open');
+    addressEditForm.elements.namedItem('country')?.focus();
+  };
+
+  const saveEditedAddress = async () => {
+    if (!addressEditForm || !savedDefaultAddress?.id) return;
+    if (!addressEditForm.reportValidity()) return;
+    const readField = (name) => cleanText(addressEditForm.elements.namedItem(name)?.value);
+    const payload = {
+      name: [readField('firstName'), readField('lastName')].filter(Boolean).join(' '),
+      line1: readField('line1'),
+      line2: readField('line2') || undefined,
+      zip: readField('zip'),
+      city: readField('city'),
+      state: readField('state') || undefined,
+      country: normalizeCountry(readField('country')) || SPAIN,
+      phone: readField('phone') || undefined,
+      isDefault: Boolean(addressEditForm.elements.namedItem('isDefault')?.checked),
+    };
+    if (addressModalSave) addressModalSave.disabled = true;
+    if (addressModalError) addressModalError.textContent = '';
+    try {
+      const response = await fetch(
+        `${API_BASE}/api/me/addresses/${encodeURIComponent(savedDefaultAddress.id)}`,
+        {
+          method: 'PATCH',
+          credentials: 'include',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(await getCsrfHeaders()),
+          },
+          body: JSON.stringify(payload),
+        },
+      );
+      const updated = await response.json().catch(() => null);
+      if (!response.ok) throw new Error(updated?.message || 'ADDRESS_UPDATE_FAILED');
+      const refreshed =
+        typeof API.getDefaultAddress === 'function'
+          ? await API.getDefaultAddress().catch(() => updated)
+          : updated;
+      renderAddressChoice(activeProfile || {}, refreshed || updated);
+      closeAddressModal();
+      await queueCheckoutUpdate();
+    } catch (error) {
+      if (addressModalError) {
+        addressModalError.textContent = 'No se pudo guardar la direccion. Revisa los datos e intentalo de nuevo.';
+      }
+    } finally {
+      if (addressModalSave) addressModalSave.disabled = false;
+    }
+  };
+
+  const logoutFromCheckout = async () => {
+    closeCheckoutMenus();
+    invalidateCheckoutPayment();
+    try {
+      await API.logout?.();
+      window.CRONOX_USER = null;
+      savedDefaultAddress = null;
+      activeProfile = null;
+      window.dispatchEvent(new CustomEvent('cronox:userChanged', { detail: null }));
+    } catch (error) {
+      errorDiv.textContent = 'No se pudo cerrar la sesion. Intentalo de nuevo.';
+    }
+  };
+
   const bindEvents = () => {
     const sanitizePromoInputValue = () => {
       if (!promoInput) return '';
@@ -1131,12 +2068,97 @@
       return cleaned;
     };
 
-    loginCalloutLink?.addEventListener('click', (event) => {
+    const openLogin = async (event) => {
       event.preventDefault();
       if (typeof window.CRONOX_openAuthModal === 'function') {
-        window.CRONOX_openAuthModal('login');
+        const opened = await window.CRONOX_openAuthModal('login');
+        if (opened === false) {
+          errorDiv.textContent = 'No se pudo abrir el acceso. Inténtalo de nuevo.';
+        }
       } else {
-        window.location.href = '/index.html#store';
+        errorDiv.textContent = 'No se pudo abrir el acceso. Inténtalo de nuevo.';
+      }
+    };
+    loginCalloutLink?.addEventListener('click', openLogin);
+    loginHeaderLink?.addEventListener('click', openLogin);
+
+    guestEmailInput?.addEventListener('input', () => {
+      newsletterSubmittedFor = '';
+      schedulePaymentIntentRefreshFromShipping();
+    });
+    guestEmailInput?.addEventListener('change', () => {
+      schedulePaymentIntentRefreshFromShipping(0);
+    });
+
+    accountMenuButton?.addEventListener('click', (event) => {
+      event.stopPropagation();
+      toggleCheckoutMenu(accountMenuButton, accountMenu);
+    });
+    addressMenuButton?.addEventListener('click', (event) => {
+      event.stopPropagation();
+      toggleCheckoutMenu(addressMenuButton, addressMenu);
+    });
+    logoutButton?.addEventListener('click', () => void logoutFromCheckout());
+    editAddressButton?.addEventListener('click', openAddressModal);
+
+    addressModalClose?.addEventListener('click', closeAddressModal);
+    addressModalCancel?.addEventListener('click', closeAddressModal);
+    addressModal?.querySelector('[data-address-modal-close]')?.addEventListener('click', closeAddressModal);
+    addressEditForm?.addEventListener('submit', (event) => {
+      event.preventDefault();
+      void saveEditedAddress();
+    });
+
+    document.addEventListener('click', (event) => {
+      if (!event.target.closest('.checkout-menu')) closeCheckoutMenus();
+    });
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape') {
+        if (addressModal && !addressModal.hidden) closeAddressModal();
+        else closeCheckoutMenus();
+        return;
+      }
+      if (event.key !== 'Tab' || !addressModal || addressModal.hidden) return;
+      const focusable = Array.from(
+        addressModal.querySelectorAll('button:not([disabled]), input:not([disabled])'),
+      );
+      if (!focusable.length) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    });
+
+    differentAddressButton?.addEventListener('click', () => {
+      showAlternativeAddress();
+    });
+
+    savedAddressSelectButton?.addEventListener('click', () => {
+      showSavedAddress({ refreshPayment: true });
+    });
+
+    defaultAddressCard?.addEventListener('click', (event) => {
+      if (!defaultAddressCard.classList.contains('is-selectable')) return;
+      if (event.target.closest('button, [role="menu"]')) return;
+      showSavedAddress({ refreshPayment: true });
+    });
+
+    recommendationsList?.addEventListener('click', async (event) => {
+      const card = event.target.closest('.checkout-recommendation');
+      if (!card) return;
+      const product = recommendationProducts.get(card.dataset.recommendationProduct || '');
+      const sizeButton = event.target.closest('[data-recommendation-variant]');
+      if (sizeButton && product) {
+        selectRecommendationVariant(card, sizeButton);
+        return;
+      }
+      if (event.target.closest('.checkout-recommendation__action')) {
+        await handleRecommendationAdd(card);
       }
     });
 
@@ -1148,34 +2170,50 @@
     });
 
     payButton?.addEventListener('click', async () => {
-      if (!state.isAuthenticated) {
-        errorDiv.textContent = 'Inicia sesión para pagar tu pedido.';
-        showLoginCallout();
+      if (!isCheckoutContactAndShippingReady()) {
+        errorDiv.textContent = state.isAuthenticated
+          ? 'Completa la direccion de envio.'
+          : 'Introduce un email valido y completa la direccion de envio.';
+        if (!state.isAuthenticated && !isValidEmail(getCheckoutEmail())) {
+          guestEmailInput?.focus();
+        }
         return;
       }
-      if (!stripe || !elements || !paymentElement || !currentClientSecret) {
-        errorDiv.textContent = 'No se pudo iniciar el pago. Refresca la página e inténtalo de nuevo.';
+      if (!stripe || !elements || !paymentElement || !paymentElementMounted || !currentClientSecret) {
+        errorDiv.textContent = 'No hemos podido preparar el pago. Inténtalo de nuevo.';
+        await queueCheckoutUpdate();
         return;
       }
       setPayButtonState(true);
       errorDiv.textContent = '';
+      await subscribeNewsletterIfRequested();
 
-      const successUrl = new URL('/checkout-success.html', window.location.origin);
-      if (currentPaymentIntentId) {
-        successUrl.searchParams.set('ref', currentPaymentIntentId);
+      const confirmMountedPayment = window.CRONOX_CHECKOUT_LIFECYCLE?.confirmMountedPayment;
+      if (typeof confirmMountedPayment !== 'function') {
+        errorDiv.textContent = 'No se pudo iniciar el pago. Refresca la página e inténtalo de nuevo.';
+        setPayButtonState(false);
+        return;
       }
 
-      const { error } = await stripe.confirmPayment({
+      await confirmMountedPayment({
+        stripe,
         elements,
+        paymentElementMounted,
         confirmParams: {
-          return_url: successUrl.toString(),
+          return_url: buildPaymentReturnUrl(),
+        },
+        onFailure: (error) => {
+          console.error('[CRONOX checkout payment confirmation]', {
+            event: 'checkout_payment_confirmation_failed',
+            type: typeof error?.type === 'string' ? error.type : 'unexpected',
+          });
+          errorDiv.textContent =
+            typeof error?.type === 'string' && error?.message
+              ? error.message
+              : 'No se pudo completar el pago. Inténtalo de nuevo.';
+          setPayButtonState(false);
         },
       });
-
-      if (error) {
-        errorDiv.textContent = error.message || 'Ha ocurrido un error al procesar el pago.';
-        setPayButtonState(false);
-      }
     });
 
     applyPromoBtn?.addEventListener('click', async (event) => {
@@ -1224,6 +2262,7 @@
     state.isAuthenticated = Boolean(user);
     if (state.isAuthenticated) {
       if (user) window.CRONOX_USER = user;
+      renderCustomerContact(user);
       shippingDefaultsLoaded = false;
       await loadUserShippingDefaults();
       hideLoginCallout();
@@ -1233,17 +2272,34 @@
         await ensurePaymentElement(currentClientSecret);
       }
       if (stripeReady) await queueCheckoutUpdate();
+      await loadRecommendations();
     } else {
+      savedDefaultAddress = null;
+      activeProfile = null;
       shippingDefaultsLoaded = false;
       shippingDefaultsPromise = null;
       await renderGuestCheckout();
+      await loadRecommendations();
+    }
+  });
+
+  window.addEventListener('cart:updated', (event) => {
+    const cart = event?.detail;
+    recommendationLoadRevision += 1;
+    if (!cart || !Array.isArray(cart.items)) {
+      state.cart = null;
+      commitAuthoritativeRecommendationCart(null);
+      hideRecommendations();
+      return;
+    }
+    state.cart = cart;
+    commitAuthoritativeRecommendationCart(cart);
+    if (!reconcileRecommendationsWithCart()) {
+      void loadRecommendations();
     }
   });
 
   document.addEventListener('DOMContentLoaded', async () => {
-    const yearEl = document.getElementById('anio');
-    if (yearEl) yearEl.textContent = new Date().getFullYear();
-
     clearPromoInputOnLoad();
     clearStoredPromo();
     setPromoState(null);
@@ -1252,11 +2308,13 @@
     await resolveAuthStatus();
     if (!state.isAuthenticated) {
       await renderGuestCheckout();
+      await loadRecommendations();
       return;
     }
 
     await loadUserShippingDefaults();
     ensureStripeReady();
     await queueCheckoutUpdate();
+    await loadRecommendations();
   });
 })();

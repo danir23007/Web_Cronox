@@ -1,12 +1,13 @@
-import { Body, Controller, Optional, Post, Req, UnauthorizedException, UseGuards } from '@nestjs/common';
-import { ApiBearerAuth, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { Body, Controller, Optional, Post, Req, UseGuards } from '@nestjs/common';
+import { ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { Request } from 'express';
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { OptionalJwtAuthGuard } from '../auth/guards/optional-jwt-auth.guard';
 import { CartService } from '../cart/cart.service';
 import { CreatePaymentIntentDto } from './dto/create-payment-intent.dto';
 import { PaymentIntentFactory } from './payment-intent.factory';
 import { AnalyticsService } from '../analytics/analytics.service';
 import { CustomerActivityEventType } from '@prisma/client';
+import { resolveCheckoutOwner } from '../orders/checkout-owner';
 
 @ApiTags('Payments / Stripe')
 @Controller('payments')
@@ -18,23 +19,18 @@ export class PaymentsApiController {
   ) {}
 
   @Post('create-payment-intent')
-  @UseGuards(JwtAuthGuard)
-  @ApiBearerAuth()
+  @UseGuards(OptionalJwtAuthGuard)
   @ApiOperation({ summary: 'Crea un PaymentIntent de Stripe desde el checkout integrado' })
   @ApiOkResponse({ description: 'Client secret listo para confirmar el pago con Stripe' })
   async createPaymentIntent(@Req() req: Request, @Body() dto: CreatePaymentIntentDto) {
-    const userId = req.user?.id;
-
-    if (typeof userId !== 'number') {
-      throw new UnauthorizedException('USER_NOT_AUTHENTICATED');
-    }
-
     const cart = await this.cartService.getCheckoutCartForRequest(req);
-
-    const result = await this.paymentIntentFactory.createPaymentIntentForUser(userId, dto, cart);
+    const owner = resolveCheckoutOwner(req, cart, dto.guestEmail);
+    const result = typeof owner.userId === 'number'
+      ? await this.paymentIntentFactory.createPaymentIntentForUser(owner.userId, dto, cart)
+      : await this.paymentIntentFactory.createPaymentIntentForOwner(owner, dto, cart);
     const checkoutSnapshotId = result.metadata?.checkoutSnapshotId;
-    if (checkoutSnapshotId) {
-      await this.analytics?.recordServerEvent(req, userId, CustomerActivityEventType.CHECKOUT_STARTED, { checkoutSnapshotId }).catch(() => undefined);
+    if (checkoutSnapshotId && typeof owner.userId === 'number') {
+      await this.analytics?.recordServerEvent(req, owner.userId, CustomerActivityEventType.CHECKOUT_STARTED, { checkoutSnapshotId }).catch(() => undefined);
     }
     return result;
   }

@@ -22,6 +22,7 @@ import { OrdersService } from '../orders/orders.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { StripeService } from './stripe.service';
 import { isProductionEnvironment } from '../common/config/environment';
+import { AuthService } from '../auth/auth.service';
 
 @ApiTags('Payments / Stripe')
 @Controller()
@@ -34,6 +35,7 @@ export class StripeWebhookController {
     private readonly emailService: EmailService,
     private readonly prisma: PrismaService,
     private readonly orderConfirmationEmailMapper: OrderConfirmationEmailMapper,
+    private readonly authService: AuthService,
   ) {}
 
   @Post('webhooks/stripe')
@@ -219,6 +221,7 @@ export class StripeWebhookController {
     }
 
     if (result.status === OrderStatus.PAID) {
+      await this.sendInitialPasswordSetupSafely(result.userId);
       await this.sendConfirmationEmailOnce(result);
     }
 
@@ -227,6 +230,23 @@ export class StripeWebhookController {
       created: result.created,
       orderId: result.orderId,
     };
+  }
+
+  private async sendInitialPasswordSetupSafely(
+    userId: number | null,
+  ): Promise<void> {
+    if (userId == null) return;
+    try {
+      await this.authService.sendInitialPasswordSetupIfNeeded(userId);
+    } catch (error) {
+      // A paid order remains authoritative even if token persistence or email
+      // delivery is temporarily unavailable. Normal forgot-password remains a
+      // recovery path for passwordless automatically-created accounts.
+      this.logger.error(
+        `No se pudo solicitar el email de configuración inicial para userId=${userId}`,
+        error instanceof Error ? error.stack : String(error),
+      );
+    }
   }
 
   private async sendConfirmationEmailOnce(result: {
@@ -254,7 +274,8 @@ export class StripeWebhookController {
         return;
       }
 
-      const customerEmail = orderForEmail.user?.email?.trim();
+      const customerEmail =
+        orderForEmail.customerEmail?.trim() || orderForEmail.user?.email?.trim();
       if (!customerEmail) {
         await this.ordersService.releaseOrderConfirmationEmailClaim(
           result.checkoutSnapshotId,

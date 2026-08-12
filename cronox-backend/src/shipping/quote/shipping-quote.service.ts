@@ -1,4 +1,9 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
+import {
+  normalizeCountry,
+  SPAIN_COUNTRY_NAME,
+  UNSUPPORTED_COUNTRY_MESSAGE,
+} from '../../common/country';
 
 export type ShippingQuoteRow = {
   ware: string;
@@ -22,7 +27,7 @@ export class ShippingQuoteService {
       D: 'standard',
       price: 5.5,
       distance: 0,
-      country: 'ES',
+      country: SPAIN_COUNTRY_NAME,
     },
   ];
 
@@ -31,12 +36,13 @@ export class ShippingQuoteService {
    * Se normaliza al formato con propiedad `quote` (alias de `price`).
    */
   findBestQuote(country: string): ShippingQuote {
+    const normalizedCountry = normalizeCountry(country);
     const matches = this.baseQuotes.filter((row) =>
-      row.country.localeCompare(country, undefined, { sensitivity: 'base' }) === 0,
+      normalizedCountry !== null && row.country === normalizedCountry,
     );
 
     if (!matches.length) {
-      throw new NotFoundException(`No shipping quote available for country: ${country}`);
+      throw new BadRequestException(UNSUPPORTED_COUNTRY_MESSAGE);
     }
 
     const cheapest = matches.reduce((best, current) =>

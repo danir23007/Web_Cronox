@@ -23,6 +23,11 @@ import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
+import { randomUUID } from 'node:crypto';
+import {
+  CART_COOKIE_NAME,
+  getCartCookieOptions,
+} from '../common/cookies/cart-cookie';
 
 @Controller('auth')
 export class AuthController {
@@ -108,8 +113,16 @@ export class AuthController {
       req as Request & { cookies?: Record<string, string | undefined> }
     ).cookies;
 
+    const anonymousId = randomUUID();
     try {
-      await this.authService.logout(cookies?.jwt, cookies?.refresh_token);
+      const result = await this.authService.logoutToAnonymousCart(
+        anonymousId,
+        cookies?.jwt,
+        cookies?.refresh_token,
+      );
+      if (result.cartMoved) {
+        res.cookie(CART_COOKIE_NAME, anonymousId, getCartCookieOptions());
+      }
     } finally {
       this.authService.clearAuthCookies(res);
     }

@@ -234,6 +234,13 @@
     return map[key] || map[key.toLowerCase()] || null;
   };
 
+  const isVariantAvailable = (variant) => {
+    if (!variant || variant.id == null || variant.id === "") return false;
+    if (variant.isActive === false || variant.isAvailable === false) return false;
+    const stock = variant.stockQty ?? variant.stock;
+    return stock == null || (Number.isFinite(Number(stock)) && Number(stock) > 0);
+  };
+
   function ensureQuickAddDOM() {
     if (qaOverlay) return;
 
@@ -296,7 +303,7 @@
       const color = qaCurrentProduct.color || (qaCurrentProduct.colors?.[0]) || "Único";
       const variant = findVariantForSize(qaCurrentProduct, size);
 
-      if (!variant || !variant.id) {
+      if (!isVariantAvailable(variant)) {
         alert("No hay stock disponible para esa talla ahora mismo.");
         return;
       }
@@ -344,35 +351,38 @@
     const rawSizes = Array.isArray(product?.sizes) && product.sizes.length ? product.sizes : ["m"];
     const variantMap = product?.variantMap || {};
     const variantKeys = Object.keys(variantMap);
-    const normalized = (variantKeys.length ? variantKeys : rawSizes)
-      .map((size) => String(size || "").toUpperCase());
-
-    const firstAvailable = normalized.find((size) => {
-      const variant = variantMap[size] || variantMap[size.toUpperCase()];
-      return variant ? variant.isAvailable !== false : true;
-    }) || normalized[0] || "";
-    qaSelectedSize = firstAvailable;
+    const normalized = [...new Set(
+      (variantKeys.length ? variantKeys : rawSizes)
+        .map((size) => String(size || "").trim().toUpperCase())
+        .filter(Boolean),
+    )];
+    qaSelectedSize = "";
 
     qaSizeGroup.innerHTML = normalized
       .map((size) => {
-        const variant = variantMap[size] || variantMap[size.toUpperCase()];
-        const disabled = Boolean(variant) && variant.isAvailable === false;
-        return `<button type="button" class="qa-size-btn${disabled ? ' is-disabled' : ''}" data-size="${escapeHtml(size)}" role="radio" aria-checked="false" ${disabled ? 'disabled' : ''}>${escapeHtml(size)}</button>`;
+        const variant = findVariantForSize(product, size);
+        const unavailable = !isVariantAvailable(variant);
+        const label = unavailable ? `${size}, no disponible` : size;
+        return `<button type="button" class="qa-size-btn${unavailable ? ' is-unavailable' : ''}" data-size="${escapeHtml(size)}" role="radio" aria-label="${escapeHtml(label)}" aria-checked="false" aria-disabled="${unavailable ? 'true' : 'false'}" ${unavailable ? 'disabled' : ''}>${escapeHtml(size)}</button>`;
       })
       .join("");
 
     const buttons = Array.from(qaSizeGroup.querySelectorAll(".qa-size-btn"));
+    const availableButtons = buttons.filter((btn) => !btn.disabled);
     if (!buttons.length) {
+      qaAdd.disabled = true;
+      qaAdd.setAttribute("aria-disabled", "true");
       return;
     }
 
     const updateTabIndexes = () => {
       buttons.forEach((btn) => {
-        btn.tabIndex = btn.classList.contains("is-active") ? 0 : -1;
+        btn.tabIndex = !btn.disabled && btn.classList.contains("is-active") ? 0 : -1;
       });
     };
 
     const activate = (btn) => {
+      if (!btn || btn.disabled) return;
       buttons.forEach((button) => {
         const isActive = button === btn;
         button.classList.toggle("is-active", isActive);
@@ -382,16 +392,19 @@
       updateTabIndexes();
     };
 
-    const firstButton = buttons.find((btn) => !btn.disabled) || buttons[0];
+    const firstButton = availableButtons[0];
     if (firstButton) {
       activate(firstButton);
     } else {
       qaSelectedSize = "";
     }
+    qaAdd.disabled = !firstButton;
+    qaAdd.setAttribute("aria-disabled", firstButton ? "false" : "true");
 
-    buttons.forEach((btn, index) => {
+    buttons.forEach((btn) => {
       btn.addEventListener("click", () => activate(btn));
       btn.addEventListener("keydown", (event) => {
+        if (btn.disabled) return;
         if (event.key === " " || event.key === "Enter") {
           event.preventDefault();
           activate(btn);
@@ -400,17 +413,19 @@
 
         if (event.key === "ArrowRight" || event.key === "ArrowDown") {
           event.preventDefault();
-          const nextIndex = (index + 1) % buttons.length;
-          buttons[nextIndex].focus();
-          activate(buttons[nextIndex]);
+          const index = availableButtons.indexOf(btn);
+          const next = availableButtons[(index + 1) % availableButtons.length];
+          next?.focus();
+          activate(next);
           return;
         }
 
         if (event.key === "ArrowLeft" || event.key === "ArrowUp") {
           event.preventDefault();
-          const prevIndex = (index - 1 + buttons.length) % buttons.length;
-          buttons[prevIndex].focus();
-          activate(buttons[prevIndex]);
+          const index = availableButtons.indexOf(btn);
+          const previous = availableButtons[(index - 1 + availableButtons.length) % availableButtons.length];
+          previous?.focus();
+          activate(previous);
         }
       });
     });

@@ -681,10 +681,12 @@ export class AdminOrdersService {
       throw new BadRequestException('Límite de usos alcanzado');
     }
 
-    const alreadyRedeemed = await tx.promoCodeRedemption.findFirst({
-      where: { promoCodeId: promo.id, userId: updated.userId },
-      select: { id: true },
-    });
+    const alreadyRedeemed = updated.userId
+      ? await tx.promoCodeRedemption.findFirst({
+          where: { promoCodeId: promo.id, userId: updated.userId },
+          select: { id: true },
+        })
+      : null;
 
     if (alreadyRedeemed) {
       throw new BadRequestException('Este código ya fue usado en tu cuenta');
@@ -702,7 +704,8 @@ export class AdminOrdersService {
       throw new BadRequestException('Límite de usos alcanzado');
     }
 
-    try {
+    if (updated.userId != null) {
+      try {
       await tx.promoCodeRedemption.create({
         data: {
           promoCodeId: promo.id,
@@ -710,14 +713,15 @@ export class AdminOrdersService {
           orderId: updated.id,
         },
       });
-    } catch (error) {
+      } catch (error) {
       if (
         error instanceof Prisma.PrismaClientKnownRequestError &&
         error.code === 'P2002'
       ) {
         throw new BadRequestException('Este código ya fue usado en tu cuenta');
       }
-      throw error;
+        throw error;
+      }
     }
 
     if (!updated.promoCodeCode) {

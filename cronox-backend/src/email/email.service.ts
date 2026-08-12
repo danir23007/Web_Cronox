@@ -87,6 +87,21 @@ export class EmailService {
     });
   }
 
+  async sendInitialPasswordSetup(email: string, link: string) {
+    return this.send({
+      type: EmailType.PASSWORD_RESET,
+      to: email,
+      subject: 'CRONOX · Tu cuenta ha sido creada',
+      templateData: {
+        title: 'Tu cuenta CRONOX ha sido creada',
+        message:
+          'Tu compra ya está asociada a tu nueva cuenta. Configura una contraseña para acceder a tus pedidos.',
+        actionUrl: link,
+        actionLabel: 'Configurar contraseña',
+      },
+    });
+  }
+
   async sendNewsletterConfirmation(email: string, link: string) {
     return this.send({
       type: EmailType.NEWSLETTER_CONFIRMATION,

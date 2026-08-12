@@ -62,19 +62,9 @@
 
   const rawRef = resolveProviderRef();
 
-  const clearGuestCartCache = () => {
-    try {
-      localStorage.removeItem('cronox_guest_cart');
-    } catch (error) {
-      console.warn('[CRONOX] No se pudo limpiar la caché del carrito guest', error);
-    }
-  };
-
   const syncCartUiWithBackend = async () => {
     const api = window.CRONOX_API || null;
     const cartController = window.CRONOX_CART || null;
-
-    clearGuestCartCache();
 
     try {
       if (typeof cartController?.fetchCart === 'function') {

@@ -9,9 +9,11 @@ import { PaymentsController } from './payments.controller';
 import { StripeWebhookController } from './stripe-webhook.controller';
 import { StripeService } from './stripe.service';
 import { AnalyticsModule } from '../analytics/analytics.module';
+import { AccessAuthModule } from '../auth/access-auth.module';
+import { AuthModule } from '../auth/auth.module';
 
 @Module({
-  imports: [OrdersModule, CartModule, EmailModule, AnalyticsModule],
+  imports: [OrdersModule, CartModule, EmailModule, AnalyticsModule, AccessAuthModule, AuthModule],
   controllers: [PaymentsController, PaymentsApiController, StripeWebhookController],
   providers: [
     StripeService,

@@ -19,10 +19,12 @@ import {
 } from '@nestjs/swagger';
 import type { Request } from 'express';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { OptionalJwtAuthGuard } from '../auth/guards/optional-jwt-auth.guard';
 import { CartService } from '../cart/cart.service';
 import { OrdersService } from './orders.service';
 import { CreateCheckoutSessionDto } from './dto/create-checkout-session.dto';
 import { PaginationDto } from './dto/pagination.dto';
+import { resolveCheckoutOwnerIdentity } from './checkout-owner';
 
 @ApiTags('Orders')
 @Controller()
@@ -92,8 +94,7 @@ export class OrdersController {
   }
 
   @Get('orders/payment-status')
-  @UseGuards(JwtAuthGuard)
-  @ApiBearerAuth()
+  @UseGuards(OptionalJwtAuthGuard)
   @ApiOperation({
     summary:
       'Consulta el estado de procesamiento de un pago confirmado en Stripe',
@@ -114,18 +115,13 @@ export class OrdersController {
     @Req() req: Request,
     @Query('providerRef') providerRef?: string,
   ): Promise<Record<string, unknown>> {
-    const userId = req.user?.id;
-
-    if (typeof userId !== 'number') {
-      throw new UnauthorizedException('USER_NOT_AUTHENTICATED');
-    }
-
-    return this.ordersService.getPaymentProcessingStatus(userId, providerRef);
+    const cart = await this.cartService.getCheckoutCartForRequest(req);
+    const owner = resolveCheckoutOwnerIdentity(req, cart);
+    return this.ordersService.getPaymentProcessingStatusForOwner(owner, providerRef);
   }
 
   @Get('orders/current-checkout-payment-status')
-  @UseGuards(JwtAuthGuard)
-  @ApiBearerAuth()
+  @UseGuards(OptionalJwtAuthGuard)
   @ApiOperation({
     summary:
       'Consulta de forma segura si el checkout actual ya produjo un pedido',
@@ -133,11 +129,9 @@ export class OrdersController {
   async getCurrentCheckoutPaymentStatus(
     @Req() req: Request,
   ): Promise<Record<string, unknown>> {
-    const userId = req.user?.id;
-    if (typeof userId !== 'number') {
-      throw new UnauthorizedException('USER_NOT_AUTHENTICATED');
-    }
-    return this.ordersService.getCurrentCheckoutPaymentProcessingStatus(userId);
+    const cart = await this.cartService.getCheckoutCartForRequest(req);
+    const owner = resolveCheckoutOwnerIdentity(req, cart);
+    return this.ordersService.getCurrentCheckoutPaymentProcessingStatusForOwner(owner);
   }
 
   @Get('orders')

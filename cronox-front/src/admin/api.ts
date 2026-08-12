@@ -1105,36 +1105,61 @@
   };
 
   // ===== CARRITO =====
+  const withGuestCartRecovery = async <T>(operation: () => Promise<T>): Promise<T> => {
+    try {
+      return await operation();
+    } catch (error) {
+      const err = error as CronoxApiError;
+      const isUnauthorized = err?.status === 401 || err?.statusCode === 401;
+      if (!isUnauthorized) throw error;
+
+      // An expired/revoked access cookie must not leave the browser unable to
+      // use a guest cart. The real logout endpoint validates any refresh
+      // session, transfers its cart to anonymous ownership when possible, and
+      // clears stale HttpOnly auth cookies before this one safe retry.
+      await api.logout();
+      return operation();
+    }
+  };
+
   api.getCart = async () => {
-    const data = await request('/api/cart');
+    const data = await withGuestCartRecovery(() => request('/api/cart'));
     return mapCart(data as UnknownRecord);
   };
 
   api.addCartItem = async ({ variantId, qty }: { variantId: number | string; qty: number }) => {
-    const data = await request('/api/cart/items', {
-      method: 'POST',
-      body: { variantId, qty },
-    });
+    const data = await withGuestCartRecovery(() =>
+      request('/api/cart/items', {
+        method: 'POST',
+        body: { variantId, qty },
+      }),
+    );
     return mapCart(data as UnknownRecord);
   };
 
   api.updateCartItem = async (itemId: number | string, qty: number) => {
-    const data = await request(`/api/cart/items/${itemId}`, {
-      method: 'PATCH',
-      body: { qty },
-    });
+    const data = await withGuestCartRecovery(() =>
+      request(`/api/cart/items/${itemId}`, {
+        method: 'PATCH',
+        body: { qty },
+      }),
+    );
     return mapCart(data as UnknownRecord);
   };
 
   api.removeCartItem = async (itemId: number | string) => {
-    const data = await request(`/api/cart/items/${itemId}`, {
-      method: 'DELETE',
-    });
+    const data = await withGuestCartRecovery(() =>
+      request(`/api/cart/items/${itemId}`, {
+        method: 'DELETE',
+      }),
+    );
     return mapCart(data as UnknownRecord);
   };
 
   api.clearCart = async () => {
-    const data = await request('/api/cart', { method: 'DELETE' });
+    const data = await withGuestCartRecovery(() =>
+      request('/api/cart', { method: 'DELETE' }),
+    );
     return mapCart(data as UnknownRecord);
   };
 

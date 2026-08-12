@@ -62,6 +62,9 @@ describe('CartService checkout cart selection', () => {
           product: { id: where.id, isActive: true, price: 9999 },
         })),
       },
+      checkoutSnapshot: {
+        updateMany: jest.fn().mockResolvedValue({ count: 0 }),
+      },
     };
     const prisma = {
       $transaction: jest.fn(async (callback: (client: any) => unknown) =>
@@ -103,5 +106,86 @@ describe('CartService checkout cart selection', () => {
       where: { id: 20 },
       data: { itemsCount: 9, subtotal: 16800 },
     });
+  });
+
+  it('adopts guest ownership once and makes the old anonymous owner non-reusable', async () => {
+    const anonymousCart = { id: 10, items: [] };
+    let adopted = false;
+    const tx = {
+      cart: {
+        findUnique: jest.fn(async ({ where }: any) => {
+          if (where.anonymousId) return adopted ? null : anonymousCart;
+          if (where.userId) return adopted ? { id: 10, items: [] } : null;
+          return null;
+        }),
+        update: jest.fn(async ({ data }: any) => {
+          if (data.userId === 42 && data.anonymousId === null) adopted = true;
+          return anonymousCart;
+        }),
+      },
+      cartItem: {
+        findMany: jest.fn().mockResolvedValue([]),
+      },
+      checkoutSnapshot: {
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+      },
+    };
+    const prisma = {
+      $transaction: jest.fn(async (callback: (client: any) => unknown) =>
+        callback(tx),
+      ),
+    };
+    const service = new CartService(prisma as any);
+
+    await expect(service.mergeOnLogin(42, 'guest-cookie')).resolves.toEqual({
+      merged: true,
+      incidents: [],
+    });
+    await expect(service.mergeOnLogin(42, 'guest-cookie')).resolves.toEqual({
+      merged: false,
+      incidents: [],
+    });
+
+    expect(tx.cart.update).toHaveBeenCalledWith({
+      where: { id: 10 },
+      data: { userId: 42, anonymousId: null },
+    });
+    expect(tx.checkoutSnapshot.updateMany).toHaveBeenCalledWith({
+      where: { anonymousId: 'guest-cookie', userId: null, cartId: 10 },
+      data: { anonymousId: null, userId: 42 },
+    });
+  });
+
+  it('rejects an add that bypasses the frontend when real variant stock is insufficient', async () => {
+    const tx = {
+      cart: {
+        findUnique: jest.fn().mockResolvedValue({ id: 10, items: [] }),
+      },
+      cartItem: {
+        findUnique: jest.fn().mockResolvedValue(null),
+      },
+      productVariant: {
+        findUnique: jest.fn().mockResolvedValue({
+          id: 7,
+          stockQty: 0,
+          isActive: true,
+          price: 1200,
+          product: { id: 3, isActive: true, price: 1200 },
+        }),
+      },
+    };
+    const prisma = {
+      $transaction: jest.fn(async (callback: (client: any) => unknown) =>
+        callback(tx),
+      ),
+    };
+    const service = new CartService(prisma as any);
+
+    await expect(
+      service.addItem({ anonymousId: 'opaque-guest' }, { variantId: 7, qty: 1 }),
+    ).rejects.toThrow('INSUFFICIENT_STOCK');
+    expect(tx.productVariant.findUnique).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 7 } }),
+    );
   });
 });

@@ -4,13 +4,13 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <link rel="stylesheet" href="assets/cookie-consent.css?v=1" />
-  <script src="assets/cookie-consent.js?v=2" defer></script>
+  <script src="assets/cookie-consent.js?v=3" defer></script>
   <script src="assets/customer-analytics.js?v=1" defer></script>
   <title>Mi cuenta — CRONOX</title>
   <meta name="description" content="Gestiona tu perfil, dirección y pedidos en CRONOX">
 
   <link id="cronox-main-style" rel="stylesheet" href="">
-  <script src="assets/version.js"></script>
+  <script src="assets/version.js?v=86"></script>
   <script>
     (function () {
       if (window.CRONOX_ASSET) {
@@ -30,8 +30,8 @@
     .profile-form { display: grid; gap: 12px; }
     .profile-form .form-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; }
     .profile-form label { display: flex; flex-direction: column; gap: 6px; font-size: 0.95rem; color: #dfe1e6; }
-    .profile-form input { background: #141419; border: 1px solid #2a2a33; border-radius: 8px; color: #fff; padding: 10px 12px; }
-    .profile-form input:focus { border-color: #ffffff !important; outline: 2px solid #ffffff !important; }
+    .profile-form input, .profile-form select { background: #141419; border: 1px solid #2a2a33; border-radius: 8px; color: #fff; padding: 10px 12px; }
+    .profile-form input:focus, .profile-form select:focus { border-color: #ffffff !important; outline: 2px solid #ffffff !important; }
     .profile-actions { display: flex; gap: 10px; margin-top: 8px; flex-wrap: wrap; }
     .btn-primary { background: linear-gradient(135deg, #7b3fe4, #6130c5); border: none; color: #fff; padding: 10px 16px; border-radius: 10px; cursor: pointer; font-weight: 600; letter-spacing: 0.3px; }
     .btn-primary:hover { background: linear-gradient(135deg, #8c52f5, #6d3ad7); }
@@ -310,8 +310,10 @@
                 <label>Código postal
                   <input id="addrZip" name="zip" type="text" autocomplete="postal-code" placeholder="Código postal">
                 </label>
-                <label>País
-                  <input id="addrCountry" name="country" type="text" autocomplete="country" placeholder="Ej: ES">
+                <label>País / Región
+                  <select id="addrCountry" name="country" autocomplete="country" aria-label="País / Región">
+                    <option value="España">España</option>
+                  </select>
                 </label>
               </div>
               <div class="profile-actions">
@@ -418,20 +420,17 @@
       </section>
 
       <footer class="cart-drawer__footer">
-        <div class="cart-drawer__row">
-          <span>Subtotal</span>
-          <strong id="cart-subtotal">—</strong>
-        </div>
-        <button id="cart-checkout-btn" class="btn-primary btn-block">Checkout</button>
+        <button id="cart-checkout-btn" class="btn-primary btn-block">Finalizar compra · —</button>
       </footer>
     </div>
   </aside>
 
-  <script src="assets/api.js?v=3"></script>
-  <script src="assets/app.js?v=52" defer></script>
-  <script src="assets/products.js?v=49" defer></script>
+  <script src="assets/country.js?v=1"></script>
+  <script src="assets/api.js?v=4"></script>
+  <script src="assets/app.js?v=58" defer></script>
+  <script src="assets/products.js?v=50" defer></script>
   <script src="assets/favorites-toggle.js?v=1" defer></script>
-  <script src="assets/profile.js?v=4" defer></script>
+  <script src="assets/profile.js?v=5" defer></script>
 
   <style>
     /* Profile overrides */

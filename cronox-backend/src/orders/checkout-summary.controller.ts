@@ -6,17 +6,15 @@ import {
   Query,
   Req,
   BadRequestException,
-  UnauthorizedException,
   UseGuards,
 } from '@nestjs/common';
 import {
-  ApiBearerAuth,
   ApiOkResponse,
   ApiOperation,
   ApiTags,
 } from '@nestjs/swagger';
 import type { Request } from 'express';
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { OptionalJwtAuthGuard } from '../auth/guards/optional-jwt-auth.guard';
 import { ShippingMethodCode } from '../common/enums/shipping-method-code.enum';
 import { CartService } from '../cart/cart.service';
 import { OrdersService } from './orders.service';
@@ -24,8 +22,7 @@ import { ApplyPromoDto } from './dto/apply-promo.dto';
 
 @ApiTags('Checkout')
 @Controller('checkout')
-@UseGuards(JwtAuthGuard)
-@ApiBearerAuth()
+@UseGuards(OptionalJwtAuthGuard)
 export class CheckoutSummaryController {
   constructor(
     private readonly ordersService: OrdersService,
@@ -46,10 +43,6 @@ export class CheckoutSummaryController {
     @Query('promoCode') promoCode?: string,
   ) {
     const userId = req.user?.id;
-
-    if (typeof userId !== 'number') {
-      throw new UnauthorizedException('USER_NOT_AUTHENTICATED');
-    }
 
     const normalized =
       typeof shippingMethod === 'string'
@@ -77,10 +70,6 @@ export class CheckoutSummaryController {
   })
   async applyPromo(@Req() req: Request, @Body() dto: ApplyPromoDto) {
     const userId = req.user?.id;
-
-    if (typeof userId !== 'number') {
-      throw new UnauthorizedException('USER_NOT_AUTHENTICATED');
-    }
 
     const cart = await this.cartService.getCheckoutCartForRequest(req);
     const summary = await this.ordersService.getCheckoutSummary(cart, {

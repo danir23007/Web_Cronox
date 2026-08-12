@@ -32,7 +32,7 @@ export const cartInclude = {
 
 type ModelClient = Pick<
   PrismaClient,
-  'cart' | 'cartItem' | 'productVariant' | '$transaction'
+  'cart' | 'cartItem' | 'productVariant' | 'checkoutSnapshot' | '$transaction'
 >;
 
 export type CartWithItems = Prisma.CartGetPayload<{ include: typeof cartInclude }>;
@@ -266,6 +266,10 @@ export class CartService {
       const incidents: CartMergeIncident[] = [];
 
       if (!userCart) {
+        await client.checkoutSnapshot.updateMany({
+          where: { anonymousId, userId: null, cartId: anonCart.id },
+          data: { anonymousId: null, userId },
+        });
         await client.cart.update({
           where: { id: anonCart.id },
           data: { userId, anonymousId: null },
@@ -337,6 +341,10 @@ export class CartService {
         existingItemsMap.set(item.variantId, mergedQty);
       }
 
+      await client.checkoutSnapshot.updateMany({
+        where: { anonymousId, userId: null, cartId: anonCart.id },
+        data: { anonymousId: null, userId, cartId: userCart.id },
+      });
       await client.cart.delete({ where: { id: anonCart.id } });
       await this.recalcTotals(client, userCart.id);
 

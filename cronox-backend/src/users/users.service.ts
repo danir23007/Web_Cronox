@@ -3,6 +3,7 @@ import { Prisma, Role, User } from '@prisma/client';
 import { randomBytes } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { getNextSequentialMemberCode } from './member-code.util';
+import { normalizeEmail } from '../common/email';
 
 export type AuthUser = Omit<User, 'password'>;
 export type AuthUserWithPassword = User;
@@ -44,13 +45,21 @@ export class UsersService {
       const ensuredCode = memberCode ?? (await getNextSequentialMemberCode(tx));
 
       return tx.user.create({
-        data: { ...userData, memberCode: ensuredCode },
+        data: {
+          ...userData,
+          email: normalizeEmail(userData.email),
+          memberCode: ensuredCode,
+        },
       });
     });
   }
 
   async findByEmail(email: string) {
-    return this.prisma.user.findUnique({ where: { email } });
+    return this.prisma.user.findFirst({
+      where: {
+        email: { equals: normalizeEmail(email), mode: 'insensitive' },
+      },
+    });
   }
 
   async findById(id: number) {

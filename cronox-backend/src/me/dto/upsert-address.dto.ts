@@ -1,5 +1,10 @@
 import { Transform, TransformFnParams } from 'class-transformer';
-import { IsOptional, IsString, Length, Matches } from 'class-validator';
+import { IsIn, IsOptional, IsString, Length, Matches } from 'class-validator';
+import {
+  normalizeCountry,
+  SPAIN_COUNTRY_NAME,
+  UNSUPPORTED_COUNTRY_MESSAGE,
+} from '../../common/country';
 
 const trim = ({ value }: TransformFnParams) =>
   typeof value === 'string' ? value.trim() : value;
@@ -46,9 +51,11 @@ export class UpsertAddressDto {
   zip!: string;
 
   @IsString()
-  @Length(2, 2)
+  @IsIn([SPAIN_COUNTRY_NAME], { message: UNSUPPORTED_COUNTRY_MESSAGE })
   @Transform(({ value }: TransformFnParams) =>
-    typeof value === 'string' ? value.trim().toUpperCase() : value,
+    typeof value === 'string'
+      ? normalizeCountry(value) ?? value.trim()
+      : value,
   )
   country!: string;
 }

@@ -4,239 +4,261 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <link rel="stylesheet" href="assets/cookie-consent.css?v=1" />
-  <script src="assets/cookie-consent.js?v=2" defer></script>
+  <script src="assets/cookie-consent.js?v=3" defer></script>
   <script src="assets/customer-analytics.js?v=1" defer></script>
   <title>Checkout — CRONOX</title>
   <meta name="description" content="Checkout CRONOX — Pago seguro en una sola página.">
 
-  <!-- CSS global -->
   <link id="cronox-main-style" rel="stylesheet" href="">
   <script src="assets/version.js"></script>
   <script>
     (function () {
       if (window.CRONOX_ASSET) {
         const link = document.getElementById('cronox-main-style');
-        if (link) {
-          link.href = window.CRONOX_ASSET('assets/store.css');
-        }
+        if (link) link.href = window.CRONOX_ASSET('assets/store.css');
       }
     })();
   </script>
-  <link rel="stylesheet" href="assets/cart.css?v=2" />
-  <link rel="stylesheet" href="assets/checkout.css?v=2" />
+  <link rel="stylesheet" href="assets/checkout.css?v=15" />
   <link rel="icon" type="image/png" href="/favicon.png?v=3">
   <link rel="shortcut icon" type="image/png" href="/favicon.png?v=3">
   <link rel="apple-touch-icon" href="/favicon.png?v=3">
   <meta name="theme-color" content="#000000">
 </head>
 <body class="page-checkout">
-
   <div id="overlay" class="overlay" hidden></div>
 
-  <header class="topbar topbar--page" id="topbar" role="banner">
-    <div class="topbar__left">
-      <button id="btnMenu" class="icon-btn" aria-label="Abrir menú" aria-expanded="false" aria-controls="filtersPanel">
-        <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-             stroke-linecap="round" stroke-linejoin="round" class="icon" aria-hidden="true" focusable="false">
-          <line x1="3" y1="6" x2="21" y2="6"></line>
-          <line x1="3" y1="12" x2="21" y2="12"></line>
-          <line x1="3" y1="18" x2="21" y2="18"></line>
-        </svg>
-      </button>
+  <main id="checkoutMain" class="checkout-shell">
+    <section class="checkout-flow-pane" aria-label="Finalizar compra">
+      <div class="checkout-flow-inner">
+        <header class="checkout-brandbar">
+          <a href="index.html" class="checkout-brand" aria-label="CRONOX — Volver a la tienda">
+            <img src="assets/logo_banner.png" alt="CRONOX" decoding="async">
+          </a>
+          <a href="cart.html" id="cart-icon-btn" class="checkout-cart-link" aria-label="Volver al carrito">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+              <path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"></path>
+              <path d="M3 6h18M16 10a4 4 0 0 1-8 0M6 2h12"></path>
+            </svg>
+          </a>
+        </header>
 
-      <button id="btnSearch" class="icon-btn" aria-label="Buscar productos" aria-expanded="false" aria-controls="searchBar">
-        <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-             stroke-linecap="round" stroke-linejoin="round" class="icon" aria-hidden="true" focusable="false">
-          <circle cx="11" cy="11" r="8"></circle>
-          <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
-        </svg>
-      </button>
-    </div>
+        <section id="express-checkout-region" class="express-checkout" aria-labelledby="express-title" hidden>
+          <h1 id="express-title" class="checkout-kicker">Pago exprés</h1>
+          <div id="express-checkout-element" class="express-checkout__element"></div>
+          <div class="payment-divider" aria-hidden="true"><span>O</span></div>
+        </section>
 
-    <a href="index.html" class="topbar__logo" aria-label="CRONOX — Tienda">
-      <img src="assets/logo_banner.png" alt="CRONOX" class="topbar__logo-img" decoding="async">
-    </a>
+        <section class="checkout-contact" aria-labelledby="contact-title">
+          <div class="checkout-section-heading">
+            <h2 id="contact-title" class="checkout-section-title">CONTACTO</h2>
+            <button id="checkout-login-header-link" class="checkout-login-link" type="button">Iniciar sesi&oacute;n</button>
+          </div>
+          <div id="checkout-guest-contact" class="checkout-guest-contact">
+            <label class="form-field form-field--full">
+              <span>Correo electr&oacute;nico</span>
+              <input id="checkout-guest-email" type="email" autocomplete="email" inputmode="email" maxlength="160" required placeholder="tu@email.com" />
+            </label>
+            <label class="checkout-newsletter-consent">
+              <input id="checkout-newsletter-consent" type="checkbox" />
+              <span>Enviarme novedades y ofertas por correo electr&oacute;nico</span>
+            </label>
+          </div>
+          <div id="checkout-customer" class="checkout-customer" aria-live="polite" hidden>
+            <span id="checkout-customer-initial" class="checkout-customer__initial" aria-hidden="true">C</span>
+            <strong id="checkout-customer-email"></strong>
+            <div class="checkout-menu">
+              <button id="checkout-account-menu-button" class="checkout-menu__button" type="button" aria-label="Opciones de cuenta" aria-haspopup="menu" aria-expanded="false">&#8943;</button>
+              <div id="checkout-account-menu" class="checkout-menu__popup" role="menu" hidden>
+                <button id="checkout-logout-button" type="button" role="menuitem">Cerrar sesi&oacute;n</button>
+              </div>
+            </div>
+          </div>
+        </section>
 
-    <nav class="topbar__right" aria-label="Navegación principal">
-      <a href="#" class="topbar__link topbar__profile topbar-icon topbar-icon-user" id="profileBtn" aria-label="Iniciar sesión"
-         title="Iniciar sesión">
-        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-user" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M20 21v-2a4 4 0 0 0-3-3.87"></path>
-          <path d="M4 21v-2a4 4 0 0 1 3-3.87"></path>
-          <circle cx="12" cy="7.5" r="4"></circle>
-        </svg>
-      </a>
+        <details id="address-details" class="checkout-accordion">
+          <summary>
+            <span>ENVIAR A</span>
+            <span id="address-summary" class="checkout-accordion__value">Cargando dirección…</span>
+          </summary>
+          <div class="checkout-accordion__content">
+            <p id="address-loading" class="checkout-muted">Comprobando tu dirección predeterminada…</p>
+            <div id="default-address-card" class="default-address" hidden>
+              <div class="default-address__heading">
+                <button id="saved-address-select-button" class="default-address__select" type="button" aria-pressed="true" aria-label="Usar la dirección predeterminada">
+                  <span class="default-address__indicator" aria-hidden="true"></span>
+                  <strong id="default-address-name"></strong>
+                </button>
+                <div class="default-address__actions">
+                  <span>Predeterminada</span>
+                  <div class="checkout-menu">
+                    <button id="address-menu-button" class="checkout-menu__button" type="button" aria-label="Opciones de direccion" aria-haspopup="menu" aria-expanded="false">&#8943;</button>
+                    <div id="address-menu" class="checkout-menu__popup" role="menu" hidden>
+                      <button id="edit-address-button" type="button" role="menuitem">Editar</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <p id="default-address-lines"></p>
+            </div>
+            <button id="different-address-button" class="checkout-text-button checkout-text-button--different-address" type="button" hidden>+ Usar una dirección diferente</button>
 
-      <a href="favorites.html" class="topbar__link topbar__fav topbar-icon topbar-icon-favorites" aria-label="Ver favoritos">
-        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-star" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <polygon points="12 2 15.09 8.26 22 9.27 17.3 13.97 18.18 21 12 17.77 5.82 21 6.7 13.97 2 9.27 8.91 8.26 12 2"></polygon>
-        </svg>
-        <span class="topbar-icon-badge favorites-count fav-count" hidden></span>
-      </a>
+            <form id="shipping-form" class="checkout-form" hidden>
+              <label class="form-field form-field--full">
+                <span class="checkout-visually-hidden">País / Región</span>
+                <select name="country" autocomplete="country" aria-label="País / Región">
+                  <option value="España">España</option>
+                </select>
+              </label>
+              <div class="form-grid form-grid--halves">
+                <label class="form-field">
+                  <span class="checkout-visually-hidden">Nombre</span>
+                  <input type="text" name="firstName" autocomplete="given-name" placeholder="Nombre" />
+                </label>
+                <label class="form-field">
+                  <span class="checkout-visually-hidden">Apellidos</span>
+                  <input type="text" name="lastName" autocomplete="family-name" placeholder="Apellidos" />
+                </label>
+              </div>
+              <label class="form-field form-field--full">
+                <span class="checkout-visually-hidden">Dirección</span>
+                <input type="text" name="address" autocomplete="address-line1" placeholder="Dirección (Calle y Número)" />
+              </label>
+              <label class="form-field form-field--full">
+                <span class="checkout-visually-hidden">Apartamento, piso, etc. (opcional)</span>
+                <input type="text" name="addressLine2" autocomplete="address-line2" placeholder="Apartamento, piso, etc. (opcional)" />
+              </label>
+              <div class="form-grid form-grid--location">
+                <label class="form-field">
+                  <span class="checkout-visually-hidden">Código postal</span>
+                  <input type="text" name="zip" autocomplete="postal-code" inputmode="numeric" placeholder="Código postal" />
+                </label>
+                <label class="form-field">
+                  <span class="checkout-visually-hidden">Ciudad</span>
+                  <input type="text" name="city" autocomplete="address-level2" placeholder="Ciudad" />
+                </label>
+                <label class="form-field">
+                  <span class="checkout-visually-hidden">Provincia</span>
+                  <input type="text" name="state" autocomplete="address-level1" placeholder="Provincia" />
+                </label>
+              </div>
+              <label class="form-field form-field--full">
+                <span class="checkout-visually-hidden">Teléfono</span>
+                <input type="tel" name="phone" autocomplete="tel" placeholder="Teléfono" />
+              </label>
+            </form>
+          </div>
+        </details>
 
-      <a href="cart.html" id="cart-icon-btn" class="topbar__link topbar__cart topbar-icon topbar-icon-cart" aria-label="Ver carrito">
-        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-bag" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"></path>
-          <line x1="3" y1="6" x2="21" y2="6"></line>
-          <path d="M16 10a4 4 0 0 1-8 0"></path>
-        </svg>
-        <span class="cart-count" hidden>0</span>
-      </a>
-    </nav>
-  </header>
+        <details id="shipping-details" class="checkout-accordion">
+          <summary>
+            <span>ENVÍO</span>
+            <span id="shipping-method-summary" class="checkout-accordion__value">Selecciona un método</span>
+          </summary>
+          <div class="checkout-accordion__content">
+            <div id="shipping-options" class="shipping-options"></div>
+          </div>
+        </details>
 
-  <div id="searchBar" class="searchbar" hidden aria-hidden="true">
-    <div class="searchbar__inner">
-      <form id="searchForm" class="searchbar__form" role="search" action="index.html#store">
-        <input id="searchInput" class="searchbar__input" type="text" placeholder="Buscar productos…" autocomplete="off" />
-        <button class="searchbar__submit" type="submit" aria-label="Buscar"><span>Buscar</span></button>
-      </form>
-      <button type="button" class="searchbar__close" aria-label="Cerrar búsqueda">×</button>
-    </div>
-  </div>
-
-  <aside id="filtersPanel" class="black-menu" hidden aria-label="Navegación de categorías" role="dialog" aria-modal="true">
-    <button class="filters-close" aria-label="Cerrar menú">✕</button>
-    <nav class="black-menu__list" role="menu">
-      <a class="black-menu__link" role="menuitem" href="index.html?categorySlug=novedades#store">Novedades</a>
-      <a class="black-menu__link" role="menuitem" href="index.html?categorySlug=camisetas#store">Camisetas</a>
-      <a class="black-menu__link" role="menuitem" href="index.html?categorySlug=chaquetas#store">Chaquetas</a>
-      <a class="black-menu__link" role="menuitem" href="index.html?categorySlug=pantalones#store">Pantalones</a>
-      <a class="black-menu__link" role="menuitem" href="index.html?categorySlug=complementos#store">Complementos</a>
-    </nav>
-  </aside>
-
-  <main id="checkoutMain" class="checkout container" aria-live="polite">
-    <header class="checkout__head">
-      <div>
-        <p class="eyebrow">Pago seguro</p>
-        <h1 class="checkout__title">Completa tu pedido</h1>
-        <p class="checkout__subtitle">Dirección, envío y pago en un solo paso.</p>
+        <section id="payment-section" class="checkout-payment" aria-labelledby="payment-title">
+          <h2 id="payment-title" class="checkout-section-title">PAGO</h2>
+          <p class="checkout-secure-copy">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><rect x="5" y="10" width="14" height="11" rx="2"></rect><path d="M8 10V7a4 4 0 0 1 8 0v3"></path></svg>
+            Todas las transacciones son seguras y están encriptadas.
+          </p>
+          <div id="payment-element" class="payment-element"></div>
+          <button id="pay-button" class="checkout-pay-button" type="button">Pagar ahora</button>
+          <div id="payment-error" class="checkout-error" role="alert" aria-live="assertive"></div>
+          <p id="checkout-help" class="checkout-help">Stripe procesa tus datos de pago de forma cifrada.</p>
+          <nav class="checkout-legal" aria-label="Información legal del checkout">
+            <a href="returns-exchanges.html">Devoluciones</a>
+            <a href="shipping-policy.html">Envíos</a>
+            <a href="privacy-policy.html">Privacidad</a>
+            <a href="terms-of-service.html">Términos</a>
+            <a href="aviso-legal.html">Aviso legal</a>
+            <a href="cookie-policy.html">Política de cookies</a>
+          </nav>
+        </section>
       </div>
-      <div class="checkout__trust">
-        <span class="badge">SSL</span>
-        <span>Pago cifrado con Stripe</span>
-      </div>
-    </header>
+    </section>
 
-    <div class="checkout-grid">
-      <section class="checkout-panel" aria-label="Datos de envío">
-        <h2>Datos de envío</h2>
-        <div id="checkout-login-callout" class="checkout-login-callout" role="alert" hidden>
-          <button id="checkout-login-link" type="button" class="checkout-login-callout__cta">
-            Inicia sesión para continuar con tu compra
-          </button>
-        </div>
-        <form id="shipping-form" class="checkout-form">
-          <div class="form-grid">
-            <label class="form-field">
-              <span>Nombre</span>
-              <input type="text" name="firstName" autocomplete="given-name" placeholder="Nombre" />
-            </label>
-            <label class="form-field">
-              <span>Apellidos</span>
-              <input type="text" name="lastName" autocomplete="family-name" placeholder="Apellidos" />
-            </label>
-          </div>
-          <label class="form-field">
-            <span>Dirección</span>
-            <input type="text" name="address" autocomplete="street-address" placeholder="Calle y número" />
-          </label>
-          <div class="form-grid">
-            <label class="form-field">
-              <span>Ciudad</span>
-              <input type="text" name="city" autocomplete="address-level2" placeholder="Ciudad" />
-            </label>
-            <label class="form-field">
-              <span>Provincia</span>
-              <input type="text" name="state" autocomplete="address-level1" placeholder="Provincia" />
-            </label>
-          </div>
-          <div class="form-grid">
-            <label class="form-field">
-              <span>Código postal</span>
-              <input type="text" name="zip" autocomplete="postal-code" placeholder="00000" />
-            </label>
-            <label class="form-field">
-              <span>Teléfono</span>
-              <input type="tel" name="phone" autocomplete="tel" placeholder="+34" />
-            </label>
-          </div>
-        </form>
-      </section>
-
-      <aside class="checkout-panel checkout-panel--summary" aria-label="Resumen y pago">
-        <h2>Tu pedido</h2>
+    <aside class="checkout-summary-pane" aria-label="Productos y total del pedido">
+      <div class="checkout-summary-inner">
         <div id="checkout-cart" class="checkout-cart" aria-live="polite">
           <div class="checkout-cart__empty" data-empty hidden>Tu carrito está vacío.</div>
           <div id="checkout-cart-items" class="checkout-cart__items"></div>
         </div>
 
-        <div class="checkout-shipping" aria-label="Opciones de envío">
-          <h3>Método de envío</h3>
-          <div id="shipping-options" class="shipping-options"></div>
-        </div>
-
         <div class="checkout-promo" aria-label="Código de descuento">
-          <div class="checkout-promo__header">
-            <h3>Código de descuento</h3>
-            <span id="promo-status" class="checkout-promo__status" hidden></span>
-          </div>
           <div class="checkout-promo__controls">
-            <input
-              id="promo-code-input"
-              type="text"
-              inputmode="text"
-              autocomplete="off"
-              placeholder="Introduce tu código"
-              aria-label="Código de descuento"
-            />
-            <button id="apply-promo-button" class="btn-secondary" type="button">Aplicar</button>
-            <button id="remove-promo-button" class="btn-ghost" type="button" hidden>Quitar</button>
+            <input id="promo-code-input" type="text" inputmode="text" autocomplete="off" placeholder="Código de descuento" aria-label="Código de descuento" />
+            <button id="apply-promo-button" type="button">Aplicar</button>
+            <button id="remove-promo-button" type="button" hidden>Quitar</button>
           </div>
+          <span id="promo-status" class="checkout-promo__status" hidden></span>
           <div id="promo-applied-label" class="checkout-promo__applied" hidden></div>
           <div id="promo-message" class="promo-message checkout-promo__message" aria-live="polite"></div>
         </div>
 
-        <div class="checkout-summary">
-          <div class="summary-row">
-            <span>Subtotal</span>
-            <strong id="summary-subtotal">—</strong>
-          </div>
-          <div class="summary-row">
-            <span>Envío</span>
-            <strong id="summary-shipping">—</strong>
-          </div>
-          <div class="summary-row" hidden>
-            <span>Descuento</span>
-            <strong id="summary-discount">—</strong>
-          </div>
-          <div class="summary-row summary-total">
-            <span>Total</span>
-            <strong id="summary-total">—</strong>
-          </div>
-        </div>
-
-        <section id="payment-section" class="checkout-payment" aria-label="Pago con tarjeta">
-          <h3>Pago seguro</h3>
-          <div id="payment-element" class="payment-element"></div>
-          <button id="pay-button" class="btn-primary btn-block" type="button">Pagar ahora</button>
-          <div id="payment-error" class="checkout-error" role="alert"></div>
-          <p id="checkout-help" class="checkout-help">Confirmarás el pago con Stripe sin salir de esta página.</p>
+        <section id="checkout-recommendations" class="checkout-recommendations" aria-labelledby="recommendations-title" hidden>
+          <h2 id="recommendations-title">También te puede gustar</h2>
+          <p id="recommendations-status" class="checkout-recommendations__status" aria-live="polite"></p>
+          <div id="recommendations-list" class="checkout-recommendations__list"></div>
         </section>
-      </aside>
-    </div>
-  </main>
 
-  <footer class="footer">
-    <div class="container">© <span id="anio"></span> CRONOX</div>
-  </footer>
+        <div class="checkout-summary">
+          <div class="summary-row"><span>Subtotal</span><strong id="summary-subtotal">—</strong></div>
+          <div class="summary-row"><span>Envío</span><strong id="summary-shipping">—</strong></div>
+          <div class="summary-row" hidden><span>Descuento</span><strong id="summary-discount">—</strong></div>
+          <div class="summary-row summary-total"><span>Total</span><strong id="summary-total">—</strong></div>
+          <p id="summary-tax-note" class="summary-tax-note" hidden></p>
+        </div>
+      </div>
+    </aside>
+
+    <div id="address-modal" class="checkout-modal" hidden>
+      <div class="checkout-modal__backdrop" data-address-modal-close></div>
+      <section class="checkout-modal__dialog" role="dialog" aria-modal="true" aria-labelledby="address-modal-title">
+        <div class="checkout-modal__header">
+          <h2 id="address-modal-title">Editar direcci&oacute;n</h2>
+          <button id="address-modal-close" class="checkout-modal__close" type="button" aria-label="Cerrar">&times;</button>
+        </div>
+        <form id="address-edit-form" class="checkout-form">
+          <label class="form-field form-field--full"><span>Pa&iacute;s / Regi&oacute;n</span><select name="country" autocomplete="country" aria-label="País / Región" required><option value="España">España</option></select></label>
+          <div class="form-grid form-grid--halves">
+            <label class="form-field"><span>Nombre</span><input name="firstName" autocomplete="given-name" maxlength="80" required /></label>
+            <label class="form-field"><span>Apellidos</span><input name="lastName" autocomplete="family-name" maxlength="80" required /></label>
+          </div>
+          <label class="form-field form-field--full"><span>Direcci&oacute;n</span><input name="line1" autocomplete="address-line1" minlength="3" maxlength="120" required /></label>
+          <label class="form-field form-field--full"><span>Apartamento, piso, etc. <small>(opcional)</small></span><input name="line2" autocomplete="address-line2" maxlength="120" /></label>
+          <div class="form-grid form-grid--location">
+            <label class="form-field"><span>C&oacute;digo postal</span><input name="zip" autocomplete="postal-code" minlength="2" maxlength="20" required /></label>
+            <label class="form-field"><span>Ciudad</span><input name="city" autocomplete="address-level2" minlength="2" maxlength="80" required /></label>
+            <label class="form-field"><span>Provincia</span><input name="state" autocomplete="address-level1" maxlength="80" /></label>
+          </div>
+          <label class="form-field form-field--full"><span>Tel&eacute;fono <small>(opcional)</small></span><input name="phone" autocomplete="tel" maxlength="20" /></label>
+          <label class="checkout-newsletter-consent"><input name="isDefault" type="checkbox" /><span>Direcci&oacute;n predeterminada</span></label>
+          <p id="address-modal-error" class="checkout-error" role="alert" aria-live="assertive"></p>
+          <div class="checkout-modal__actions">
+            <button id="address-modal-cancel" class="checkout-modal__cancel" type="button">Cancelar</button>
+            <button id="address-modal-save" class="checkout-modal__save" type="submit">Guardar direcci&oacute;n</button>
+          </div>
+        </form>
+      </section>
+    </div>
+
+
+    <footer class="checkout-footer">
+      <span>© 2026 CRONOX</span>
+    </footer>
+  </main>
 
   <script src="assets/runtime-config.js"></script>
   <script src="https://js.stripe.com/v3/"></script>
-  <script src="assets/api.js?v=3"></script>
-  <script src="assets/app.js?v=52"></script>
-  <script src="assets/checkout-lifecycle.js"></script>
-  <script src="assets/checkout.js"></script>
+  <script src="assets/country.js?v=1"></script>
+  <script src="assets/api.js?v=4"></script>
+  <script src="assets/app.js?v=57"></script>
+  <script src="assets/checkout-lifecycle.js?v=6"></script>
+  <script src="assets/checkout.js?v=11"></script>
 </body>
 </html>

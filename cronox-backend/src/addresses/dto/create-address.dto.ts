@@ -1,22 +1,28 @@
 import { Transform, TransformFnParams } from 'class-transformer';
 import {
   IsBoolean,
+  IsIn,
   IsOptional,
   IsString,
   Length,
   Matches,
   MaxLength,
 } from 'class-validator';
+import {
+  normalizeCountry,
+  SPAIN_COUNTRY_NAME,
+  UNSUPPORTED_COUNTRY_MESSAGE,
+} from '../../common/country';
 
 const trim = ({ value }: TransformFnParams) =>
   typeof value === 'string' ? value.trim() : value;
 
-const trimUppercase = ({ value }: TransformFnParams) => {
+const normalizeSupportedCountry = ({ value }: TransformFnParams) => {
   if (typeof value !== 'string') {
     return value;
   }
 
-  return value.trim().toUpperCase();
+  return normalizeCountry(value) ?? value.trim();
 };
 
 export class CreateAddressDto {
@@ -59,9 +65,8 @@ export class CreateAddressDto {
   zip: string;
 
   @IsString()
-  @Length(2, 2)
-  @Matches(/^[A-Z]{2}$/)
-  @Transform(trimUppercase)
+  @IsIn([SPAIN_COUNTRY_NAME], { message: UNSUPPORTED_COUNTRY_MESSAGE })
+  @Transform(normalizeSupportedCountry)
   country: string;
 
   @IsOptional()

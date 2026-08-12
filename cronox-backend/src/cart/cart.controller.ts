@@ -29,6 +29,10 @@ interface ResolveContextOptions {
   ensureAnonymousId?: boolean;
 }
 
+interface PersistAnonymousCookieOptions {
+  refreshExisting?: boolean;
+}
+
 @Controller('cart')
 @UseGuards(OptionalJwtAuthGuard)
 export class CartController {
@@ -42,15 +46,18 @@ export class CartController {
     @Req() req: Request,
     @Res({ passthrough: true }) res: Response,
   ): Promise<CartWithItems> {
-    const context = this.resolveContext(req, res, { ensureAnonymousId: true });
+    const context = this.resolveContext(req, { ensureAnonymousId: true });
 
     const cart = await this.cartService.getActiveCartForRequest(req, context);
 
     if (cart) {
+      this.persistAnonymousCookie(req, res, context);
       return cart;
     }
 
-    return this.cartService.getOrCreateCart(context);
+    const created = await this.cartService.getOrCreateCart(context);
+    this.persistAnonymousCookie(req, res, context);
+    return created;
   }
 
   @Post('items')
@@ -59,8 +66,9 @@ export class CartController {
     @Res({ passthrough: true }) res: Response,
     @Body() dto: AddItemDto,
   ): Promise<CartWithItems> {
-    const context = this.resolveContext(req, res, { ensureAnonymousId: true });
+    const context = this.resolveContext(req, { ensureAnonymousId: true });
     const cart = await this.cartService.addItem(context, dto);
+    this.persistAnonymousCookie(req, res, context, { refreshExisting: true });
     if (context.userId) {
       const item = cart.items.find((entry) => entry.variantId === dto.variantId);
       void this.analytics?.recordServerEvent(req, context.userId, CustomerActivityEventType.PRODUCT_ADDED_TO_CART, {
@@ -79,11 +87,12 @@ export class CartController {
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: UpdateItemDto,
   ): Promise<CartWithItems> {
-    const context = this.resolveContext(req, res, { ensureAnonymousId: true });
+    const context = this.resolveContext(req, { ensureAnonymousId: true });
     const before = context.userId
       ? (await this.cartService.getActiveCartForRequest(req, context))?.items.find((entry) => entry.id === id)
       : undefined;
     const cart = await this.cartService.updateItem(context, id, dto);
+    this.persistAnonymousCookie(req, res, context, { refreshExisting: true });
     if (context.userId && before && before.qty !== dto.qty) {
       void this.analytics?.recordServerEvent(req, context.userId, CustomerActivityEventType.CART_QUANTITY_CHANGED, {
         productId: before.variant.productId,
@@ -101,11 +110,12 @@ export class CartController {
     @Res({ passthrough: true }) res: Response,
     @Param('id', ParseIntPipe) id: number,
   ): Promise<CartWithItems> {
-    const context = this.resolveContext(req, res, { ensureAnonymousId: true });
+    const context = this.resolveContext(req, { ensureAnonymousId: true });
     const before = context.userId
       ? (await this.cartService.getActiveCartForRequest(req, context))?.items.find((entry) => entry.id === id)
       : undefined;
     const cart = await this.cartService.removeItem(context, id);
+    this.persistAnonymousCookie(req, res, context, { refreshExisting: true });
     if (context.userId && before) {
       void this.analytics?.recordServerEvent(req, context.userId, CustomerActivityEventType.PRODUCT_REMOVED_FROM_CART, {
         productId: before.variant.productId,
@@ -121,11 +131,12 @@ export class CartController {
     @Req() req: Request,
     @Res({ passthrough: true }) res: Response,
   ): Promise<CartWithItems> {
-    const context = this.resolveContext(req, res, { ensureAnonymousId: true });
+    const context = this.resolveContext(req, { ensureAnonymousId: true });
     const before = context.userId
       ? (await this.cartService.getActiveCartForRequest(req, context))?.items ?? []
       : [];
     const cart = await this.cartService.clearCart(context);
+    this.persistAnonymousCookie(req, res, context, { refreshExisting: true });
     if (context.userId) {
       for (const item of before) {
         void this.analytics?.recordServerEvent(req, context.userId, CustomerActivityEventType.PRODUCT_REMOVED_FROM_CART, {
@@ -140,7 +151,6 @@ export class CartController {
 
   private resolveContext(
     req: Request,
-    res: Response,
     options?: ResolveContextOptions,
   ): CartContext {
     const user = req.user as { id?: number } | undefined;
@@ -157,12 +167,6 @@ export class CartController {
       if (!anonymousId) {
         anonymousId = randomUUID();
       }
-
-      if (anonymousId) {
-        this.setAnonymousCookie(res, anonymousId);
-      }
-    } else if (!userId && anonymousId) {
-      this.setAnonymousCookie(res, anonymousId);
     }
 
     const context: CartContext = {};
@@ -174,6 +178,26 @@ export class CartController {
     }
 
     return context;
+  }
+
+  private persistAnonymousCookie(
+    req: Request,
+    res: Response,
+    context: CartContext,
+    options?: PersistAnonymousCookieOptions,
+  ) {
+    if (!context.anonymousId) return;
+
+    const cookies = (
+      req as Request & { cookies?: Record<string, string | undefined> }
+    ).cookies;
+    const hasExistingCookie = Boolean(cookies?.[CART_COOKIE_NAME]);
+
+    // A first successful read creates the opaque browser handle. Thereafter,
+    // only successful cart mutations roll the one-hour guest lifetime.
+    if (!hasExistingCookie || options?.refreshExisting) {
+      this.setAnonymousCookie(res, context.anonymousId);
+    }
   }
 
   private setAnonymousCookie(res: Response, anonymousId: string) {

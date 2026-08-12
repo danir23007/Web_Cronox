@@ -109,8 +109,12 @@ class InMemoryCartService {
   async getCheckoutCartForRequest(req: any) {
     // Mirrors the production invariant: checkout never selects cartId when a
     // user was authenticated by the required JWT guard.
-    if (typeof req.user?.id !== 'number') return null;
-    return this.carts.get(`user:${req.user.id}`) ?? null;
+    if (typeof req.user?.id === 'number') {
+      return this.carts.get(`user:${req.user.id}`) ?? null;
+    }
+    return req.cookies?.cartId
+      ? this.carts.get(`anonymous:${req.cookies.cartId}`) ?? null
+      : null;
   }
 
   private recalculate(cart: TestCart) {
@@ -137,6 +141,7 @@ describe('cart identity request flow', () => {
   };
   const paymentFactory = {
     createPaymentIntentForUser: jest.fn(),
+    createPaymentIntentForOwner: jest.fn(),
   };
 
   let app: INestApplication;
@@ -194,24 +199,57 @@ describe('cart identity request flow', () => {
       .send({ variantId: 10, qty: 1 })
       .expect(201);
 
-    expect(added.headers['set-cookie']?.[0]).toContain('cartId=');
-    expect(added.headers['set-cookie']?.[0]).toContain('HttpOnly');
+    const initialCookie = added.headers['set-cookie']?.[0] ?? '';
+    expect(initialCookie).toMatch(
+      /cartId=[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}/i,
+    );
+    expect(initialCookie).toContain('Max-Age=3600');
+    expect(initialCookie).toContain('Path=/api');
+    expect(initialCookie).toContain('HttpOnly');
+    expect(initialCookie).toContain('SameSite=Lax');
     expect(added.body).toMatchObject({ userId: null, itemsCount: 1 });
 
     const fetched = await agent.get('/api/cart').expect(200);
     expect(fetched.body.id).toBe(added.body.id);
     expect(fetched.body.items).toHaveLength(1);
+    expect(fetched.headers['set-cookie']).toBeUndefined();
 
     const itemId = fetched.body.items[0].id;
-    await agent
+    const updated = await agent
       .patch(`/api/cart/items/${itemId}`)
       .send({ qty: 3 })
       .expect(200)
       .expect(({ body }) => expect(body.itemsCount).toBe(3));
+    expect(updated.headers['set-cookie']?.[0]).toContain('Max-Age=3600');
     await agent
       .delete(`/api/cart/items/${itemId}`)
       .expect(200)
       .expect(({ body }) => expect(body.items).toHaveLength(0));
+  });
+
+  it('isolates two opaque guest owners while preserving each cart across requests', async () => {
+    const firstGuest = request.agent(app.getHttpServer());
+    const secondGuest = request.agent(app.getHttpServer());
+
+    const [firstAdded, secondAdded] = await Promise.all([
+      firstGuest.post('/api/cart/items').send({ variantId: 411, qty: 1 }),
+      secondGuest.post('/api/cart/items').send({ variantId: 422, qty: 2 }),
+    ]);
+
+    expect(firstAdded.status).toBe(201);
+    expect(secondAdded.status).toBe(201);
+    expect(firstAdded.body.id).not.toBe(secondAdded.body.id);
+
+    const [firstCart, secondCart] = await Promise.all([
+      firstGuest.get('/api/cart'),
+      secondGuest.get('/api/cart'),
+    ]);
+    expect(firstCart.body.items).toEqual([
+      expect.objectContaining({ variantId: 411, qty: 1 }),
+    ]);
+    expect(secondCart.body.items).toEqual([
+      expect.objectContaining({ variantId: 422, qty: 2 }),
+    ]);
   });
 
   it('supports authenticated CRUD and never lets cartId override the user cart', async () => {
@@ -262,6 +300,79 @@ describe('cart identity request flow', () => {
     expect(summary.body.cart.items).toEqual(added.body.items);
   });
 
+  it('creates a STANDARD PaymentIntent from the same authenticated checkout cart', async () => {
+    paymentFactory.createPaymentIntentForUser.mockResolvedValueOnce({
+      clientSecret: 'secret_test',
+      paymentIntentId: 'pi_test',
+    });
+    const cookie = await authCookie(1);
+    const summary = await request(app.getHttpServer())
+      .get('/api/checkout/summary')
+      .set('Cookie', cookie)
+      .expect(200);
+
+    const payment = await request(app.getHttpServer())
+      .post('/api/payments/create-payment-intent')
+      .set('Cookie', cookie)
+      .send({ shippingMethod: 'STANDARD' })
+      .expect(201);
+
+    expect(payment.body).toEqual({
+      clientSecret: 'secret_test',
+      paymentIntentId: 'pi_test',
+    });
+    expect(paymentFactory.createPaymentIntentForUser).toHaveBeenCalledWith(
+      1,
+      expect.objectContaining({ shippingMethod: 'STANDARD' }),
+      expect.objectContaining({ id: summary.body.cart.id }),
+    );
+  });
+
+  it('creates a guest PaymentIntent from the opaque anonymous cart owner', async () => {
+    paymentFactory.createPaymentIntentForOwner.mockResolvedValueOnce({
+      clientSecret: 'secret_guest',
+      paymentIntentId: 'pi_guest',
+    });
+    const agent = request.agent(app.getHttpServer());
+    const added = await agent
+      .post('/api/cart/items')
+      .send({ variantId: 40, qty: 1 })
+      .expect(201);
+
+    await agent.get('/api/checkout/summary').expect(200);
+    const payment = await agent
+      .post('/api/payments/create-payment-intent')
+      .send({ shippingMethod: 'STANDARD', guestEmail: 'guest@example.test' })
+      .expect(201);
+
+    expect(payment.body).toEqual({
+      clientSecret: 'secret_guest',
+      paymentIntentId: 'pi_guest',
+    });
+    expect(paymentFactory.createPaymentIntentForOwner).toHaveBeenCalledWith(
+      expect.objectContaining({
+        anonymousId: expect.any(String),
+        customerEmail: 'guest@example.test',
+      }),
+      expect.objectContaining({ shippingMethod: 'STANDARD' }),
+      expect.objectContaining({ id: added.body.id, userId: null }),
+    );
+  });
+
+  it('rejects guest PaymentIntent creation without a valid contact email', async () => {
+    const agent = request.agent(app.getHttpServer());
+    await agent.post('/api/cart/items').send({ variantId: 50, qty: 1 }).expect(201);
+    await agent
+      .post('/api/payments/create-payment-intent')
+      .send({ shippingMethod: 'STANDARD', guestEmail: 'invalid' })
+      .expect(400);
+    expect(paymentFactory.createPaymentIntentForOwner).not.toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ guestEmail: 'invalid' }),
+      expect.anything(),
+    );
+  });
+
   it('isolates carts between authenticated users', async () => {
     const userOne = await request(app.getHttpServer())
       .get('/api/cart')
@@ -284,6 +395,7 @@ describe('cart identity request flow', () => {
   });
 
   it('still rejects unauthenticated payment attempts', async () => {
+    paymentFactory.createPaymentIntentForUser.mockClear();
     await request(app.getHttpServer())
       .post('/api/payments/create-payment-intent')
       .send({ shippingMethod: 'STANDARD' })

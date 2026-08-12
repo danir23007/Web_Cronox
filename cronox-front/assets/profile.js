@@ -1,5 +1,8 @@
 (function () {
   const api = window.CRONOX_API || {};
+  const Country = window.CRONOX_COUNTRY || {};
+  const SPAIN = Country.SPAIN || 'España';
+  const normalizeCountry = (value) => Country.normalizeCountry?.(value) || null;
   const $ = (id) => document.getElementById(id);
 
   const messageEl = $('profileMessage');
@@ -638,7 +641,9 @@
     if ($('addrCity')) $('addrCity').value = address.city || '';
     if ($('addrState')) $('addrState').value = address.state || '';
     if ($('addrZip')) $('addrZip').value = address.zip || '';
-    if ($('addrCountry')) $('addrCountry').value = address.country || '';
+    if ($('addrCountry')) {
+      $('addrCountry').value = normalizeCountry(address.country) || SPAIN;
+    }
   };
 
   const handleAuthRedirect = (err) => {
@@ -1284,7 +1289,7 @@
         city: requiredValue('addrCity'),
         state: optionalValue('addrState'),
         zip: requiredValue('addrZip'),
-        country: requiredValue('addrCountry'),
+        country: normalizeCountry(requiredValue('addrCountry')) || SPAIN,
       };
 
       if (!payload.name || !payload.line1 || !payload.city || !payload.zip || !payload.country) {

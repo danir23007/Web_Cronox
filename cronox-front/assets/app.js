@@ -876,7 +876,6 @@
   const FREE_SHIPPING_THRESHOLD = 65 * 100; // 65€ en céntimos
   const CHECKOUT_URL = '/checkout.html';
   const CONTINUE_SHOPPING_URL = '/index.html#store';
-  const GUEST_CART_KEY = 'cronox_guest_cart';
   const escapeHtml = (value) => {
     const helper = window.CRONOX_SECURITY?.escapeHtml;
     return typeof helper === 'function'
@@ -898,77 +897,34 @@
     return (cents) => EUR.format((Number(cents) || 0) / 100);
   })();
 
+  const formatCheckoutButtonMoney = (cents, currency = 'EUR') => {
+    const normalizedCurrency = /^[A-Z]{3}$/.test(String(currency || '').toUpperCase())
+      ? String(currency).toUpperCase()
+      : 'EUR';
+    try {
+      const parts = new Intl.NumberFormat('es-ES', {
+        style: 'currency',
+        currency: normalizedCurrency,
+        currencyDisplay: 'narrowSymbol',
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      }).formatToParts((Number(cents) || 0) / 100);
+      const symbol = parts.find((part) => part.type === 'currency')?.value || normalizedCurrency;
+      const amount = parts
+        .filter((part) => part.type !== 'currency' && part.type !== 'literal')
+        .map((part) => part.value)
+        .join('');
+      return `${amount} ${symbol}`;
+    } catch (error) {
+      return formatMoney(cents);
+    }
+  };
+
   const showToast = (msg) => {
     if (!toast) return;
     toast.textContent = msg;
     toast.classList.add('show');
     setTimeout(() => toast.classList.remove('show'), 1600);
-  };
-
-  const clearGuestCartCache = () => {
-    try {
-      localStorage.removeItem(GUEST_CART_KEY);
-    } catch (err) {
-      console.warn('[CRONOX] No se pudo limpiar el carrito guest', err);
-    }
-  };
-
-  const syncGuestCartCache = (cart) => {
-    if (window.CRONOX_USER) {
-      clearGuestCartCache();
-      return;
-    }
-    try {
-      const items = Array.isArray(cart?.items)
-        ? cart.items
-            .filter((item) => item?.variantId && Number(item?.qty) > 0)
-            .map((item) => ({ variantId: item.variantId, qty: Number(item.qty) }))
-        : [];
-      localStorage.setItem(GUEST_CART_KEY, JSON.stringify(items));
-    } catch (err) {
-      console.warn('[CRONOX] No se pudo persistir el carrito guest', err);
-    }
-  };
-
-  const readGuestCartCache = () => {
-    try {
-      const raw = localStorage.getItem(GUEST_CART_KEY);
-      if (!raw) return [];
-      const parsed = JSON.parse(raw);
-      if (!Array.isArray(parsed)) return [];
-      return parsed
-        .map((item) => ({
-          variantId: item?.variantId,
-          qty: Math.max(1, Number(item?.qty) || 1),
-        }))
-        .filter((item) => item.variantId);
-    } catch (err) {
-      console.warn('[CRONOX] No se pudo leer el carrito guest', err);
-      return [];
-    }
-  };
-
-  const hydrateGuestCartAfterLogin = async () => {
-    const cachedItems = readGuestCartCache();
-    if (!cachedItems.length) return;
-
-    const current = await fetchCart();
-    if (current?.items?.length) {
-      clearGuestCartCache();
-      return;
-    }
-
-    for (const item of cachedItems) {
-      try {
-        await addCartItem({ variantId: item.variantId, qty: item.qty });
-      } catch (error) {
-        console.warn('[CRONOX] No se pudo restaurar ítem guest', error);
-      }
-    }
-
-    clearGuestCartCache();
-    const refreshed = await fetchCart();
-    if (refreshed) renderCartDrawer(refreshed);
   };
 
   const cartState = { data: null, drawerOpen: false };
@@ -1010,7 +966,6 @@
       const cart = await API.getCart();
       cartState.data = cart;
       updateBadge(cart);
-      syncGuestCartCache(cart);
       window.dispatchEvent(new CustomEvent('cart:updated', { detail: cart }));
       return cart;
     } catch (error) {
@@ -1032,7 +987,6 @@
     const cart = await API.addCartItem({ variantId, qty });
     cartState.data = cart;
     updateBadge(cart);
-    syncGuestCartCache(cart);
     window.dispatchEvent(new CustomEvent('cart:updated', { detail: cart }));
     return cart;
   };
@@ -1042,7 +996,6 @@
     const cart = await API.updateCartItem(itemId, qty);
     cartState.data = cart;
     updateBadge(cart);
-    syncGuestCartCache(cart);
     window.dispatchEvent(new CustomEvent('cart:updated', { detail: cart }));
     return cart;
   };
@@ -1052,7 +1005,6 @@
     const cart = await API.removeCartItem(itemId);
     cartState.data = cart;
     updateBadge(cart);
-    syncGuestCartCache(cart);
     window.dispatchEvent(new CustomEvent('cart:updated', { detail: cart }));
     return cart;
   };
@@ -1062,7 +1014,6 @@
     const cart = await API.clearCart();
     cartState.data = cart;
     updateBadge(cart);
-    syncGuestCartCache(cart);
     window.dispatchEvent(new CustomEvent('cart:updated', { detail: cart }));
     return cart;
   };
@@ -1087,7 +1038,6 @@
   const cartDrawerEl = $('#cart-drawer');
   const cartItemsContainer = $('#cart-items-container');
   const cartEmptyState = $('#cart-empty-state');
-  const cartSubtotalEl = $('#cart-subtotal');
   const cartFreeShippingSection = cartDrawerEl ? $('.cart-free-shipping', cartDrawerEl) : null;
   const freeShippingTextEl = $('#free-shipping-text');
   const freeShippingBarFill = $('#free-shipping-bar-fill');
@@ -1219,9 +1169,15 @@
     }
   };
 
-  const closeCartDrawer = () => toggleDrawer(false);
+  const closeCartDrawer = () => {
+    closeUpsellSelector();
+    toggleDrawer(false);
+  };
 
   const openCartDrawer = async () => {
+    // Never reveal a selector left open by a previous drawer session while
+    // the authoritative cart and suggestions are being refreshed.
+    closeUpsellSelector();
     toggleDrawer(true);
     const cart = await fetchCart();
     renderCartDrawer(cart);
@@ -1520,7 +1476,12 @@
     const subtotalCents = cart?.subtotalCents || 0;
     renderFreeShipping(hasItems ? subtotalCents : 0);
     renderUpsell(cart);
-    if (cartSubtotalEl) cartSubtotalEl.textContent = formatMoney(hasItems ? subtotalCents : 0);
+    if (checkoutBtn && hasItems) {
+      checkoutBtn.textContent = `Finalizar compra · ${formatCheckoutButtonMoney(
+        subtotalCents,
+        cart?.currency,
+      )}`;
+    }
   };
 
   const applyOptimisticQty = (itemId, nextQty) => {
@@ -1839,13 +1800,10 @@
     initCartDrawer();
   });
 
-  window.addEventListener('cronox:userChanged', (ev) => {
-    const user = ev?.detail;
-    if (user) {
-      hydrateGuestCartAfterLogin().catch((err) => console.warn('[CRONOX] Merge guest cart falló', err));
-    } else {
-      syncGuestCartCache(cartState.data);
-    }
+  window.addEventListener('cronox:userChanged', () => {
+    // Login/register merge guest ownership atomically on the server; logout
+    // transfers it back to a fresh opaque guest owner. Re-read that one source.
+    fetchCart().catch((err) => console.warn('[CRONOX] Cart refresh failed', err));
   });
 
   // Saneado: eliminar cualquier .card-plus heredado
@@ -1884,6 +1842,8 @@ window.CRONOX_USER = window.CRONOX_USER || null;
   let registerPassword;
   let listenersBound = false;
   let authLoaded = false;
+  let authLoadPromise = null;
+  let authReturnFocus = null;
   let currentView = 'login';
   let loginErrorMessage = '';
   let registerErrorMessage = '';
@@ -1983,8 +1943,20 @@ window.CRONOX_USER = window.CRONOX_USER || null;
     hideUserMenu();
   };
 
-  const openAuthModal = (initialView = 'login') => {
-    if (!authOverlay) return;
+  const openAuthModal = async (initialView = 'login') => {
+    if (!authOverlay) {
+      const ready = await prepareAuthExperience();
+      if (!ready) return false;
+    }
+
+    const activeElement = document.activeElement;
+    if (
+      activeElement instanceof HTMLElement &&
+      activeElement !== document.body &&
+      !authOverlay.contains(activeElement)
+    ) {
+      authReturnFocus = activeElement;
+    }
     hideUserMenu();
     selectAuthView(initialView);
     authOverlay.classList.add('is-open');
@@ -1993,10 +1965,13 @@ window.CRONOX_USER = window.CRONOX_USER || null;
     lockBody();
     const focusInput = initialView === 'register' ? registerEmail : loginEmail;
     if (focusInput) setTimeout(() => focusInput.focus({ preventScroll: true }), 60);
+    return true;
   };
 
   const closeAuthModal = () => {
     if (!authOverlay) return;
+    const returnFocus = authReturnFocus;
+    authReturnFocus = null;
     authOverlay.classList.remove('is-open');
     authOverlay.classList.add('auth-hidden');
     authOverlay.setAttribute('aria-hidden', 'true');
@@ -2004,6 +1979,9 @@ window.CRONOX_USER = window.CRONOX_USER || null;
     loginErrorMessage = '';
     registerErrorMessage = '';
     setAuthMessage('');
+    if (returnFocus?.isConnected && typeof returnFocus.focus === 'function') {
+      window.requestAnimationFrame(() => returnFocus.focus({ preventScroll: true }));
+    }
   };
 
   const updateProfileIconUI = () => {
@@ -2269,25 +2247,50 @@ window.CRONOX_USER = window.CRONOX_USER || null;
 
   const ensureAuthModal = async () => {
     if (authLoaded) return true;
+    if (authLoadPromise) return authLoadPromise;
+
+    authLoadPromise = (async () => {
+      try {
+        const res = await fetch(AUTH_HTML_PATH, { cache: 'no-cache' });
+        if (!res.ok) throw new Error(`AUTH_MODAL_LOAD_${res.status}`);
+        const html = await res.text();
+        const temp = document.createElement('div');
+        temp.innerHTML = html;
+
+        const overlay = temp.querySelector('#authOverlay');
+        const menu = temp.querySelector('#authUserMenu');
+        if (!overlay) throw new Error('AUTH_MODAL_MARKUP_MISSING');
+
+        document.querySelectorAll('#authOverlay').forEach((el) => el.remove());
+        document.querySelectorAll('#authUserMenu').forEach((el) => el.remove());
+        document.body.appendChild(overlay);
+        if (menu) document.body.appendChild(menu);
+        authLoaded = true;
+        return true;
+      } catch (err) {
+        console.error('[AUTH] No se pudo cargar auth-modal.html', err);
+        return false;
+      }
+    })();
+
     try {
-      const res = await fetch(AUTH_HTML_PATH, { cache: 'no-cache' });
-      const html = await res.text();
-      const temp = document.createElement('div');
-      temp.innerHTML = html;
-
-      document.querySelectorAll('#authOverlay').forEach((el) => el.remove());
-      document.querySelectorAll('#authUserMenu').forEach((el) => el.remove());
-
-      const overlay = temp.querySelector('#authOverlay');
-      const menu = temp.querySelector('#authUserMenu');
-      if (overlay) document.body.appendChild(overlay);
-      if (menu) document.body.appendChild(menu);
-      authLoaded = true;
-      return true;
-    } catch (err) {
-      console.error('[AUTH] No se pudo cargar auth-modal.html', err);
-      return false;
+      return await authLoadPromise;
+    } finally {
+      authLoadPromise = null;
     }
+  };
+
+  const prepareAuthExperience = async () => {
+    const ready = await ensureAuthModal();
+    if (!ready) return false;
+
+    cacheElements();
+    bindAuthEvents();
+    if (authOverlay && !authOverlay.classList.contains('is-open')) {
+      authOverlay.classList.add('auth-hidden');
+    }
+    updateProfileIconUI();
+    return Boolean(authOverlay);
   };
 
   const initAuthState = async () => {
@@ -2598,17 +2601,8 @@ window.CRONOX_USER = window.CRONOX_USER || null;
   });
 
   document.addEventListener('DOMContentLoaded', async () => {
-    const ready = await ensureAuthModal();
+    const ready = await prepareAuthExperience();
     if (!ready) return;
-
-    cacheElements();
-    bindAuthEvents();
-
-    if (authOverlay) {
-      authOverlay.classList.add('auth-hidden');
-    }
-
-    updateProfileIconUI();
     await initAuthState();
 
     // [AUTH] Abrir automáticamente el modal de login

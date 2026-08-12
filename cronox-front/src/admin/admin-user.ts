@@ -1,4 +1,9 @@
 (() => {
+  const Country = (window as Window & {
+    CRONOX_COUNTRY?: { toCountryDisplayName?: (value: unknown) => string | null };
+  }).CRONOX_COUNTRY;
+  const displayCountry = (value: unknown) =>
+    Country?.toCountryDisplayName?.(value) ?? value;
   const qs = new URLSearchParams(window.location.search);
   const userId = qs.get('id');
   const apiBaseBadge = document.getElementById('apiBaseBadge');
@@ -345,7 +350,7 @@
       { label: 'Role', value: user.role },
       { label: 'Circle', value: user.circle },
       { label: 'Teléfono', value: user.phone },
-      { label: 'País', value: user.country },
+      { label: 'País', value: displayCountry(user.country) },
       { label: 'Ciudad', value: user.city },
       { label: 'Dirección', value: user.address },
       { label: 'Código postal', value: user.postalCode },

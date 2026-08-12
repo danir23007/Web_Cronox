@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { Decimal } from '@prisma/client/runtime/library';
 import { OrderConfirmationEmailTemplateData } from './email.types';
+import { toCountryDisplayName } from '../common/country';
 
 export const orderForConfirmationEmailInclude = {
   include: {
@@ -74,12 +75,14 @@ export class OrderConfirmationEmailMapper {
 
     return {
       orderId: String(order.id),
-      customerEmail: order.user?.email ?? '',
+      customerEmail: order.customerEmail || order.user?.email || '',
       customerFullName,
       customerPhone,
       message:
         'Tu pedido se ha confirmado correctamente. Te avisaremos cuando esté en camino.',
-      orderUrl: `${storefrontUrl.replace(/\/$/, '')}/profile.html?tab=orders&orderId=${order.id}`,
+      orderUrl: order.userId
+        ? `${storefrontUrl.replace(/\/$/, '')}/profile.html?tab=orders&orderId=${order.id}`
+        : storefrontUrl,
       storeUrl: storefrontUrl,
       subtotalFormatted: this.formatCurrencyFromCents(subtotalCents),
       discountFormatted: this.formatDiscountFromCents(discountCents),
@@ -167,7 +170,8 @@ export class OrderConfirmationEmailMapper {
       'zipCode',
       'postal_code',
     ]);
-    const country = this.pickString(record, ['country']);
+    const countryValue = this.pickString(record, ['country']);
+    const country = toCountryDisplayName(countryValue) ?? countryValue;
     const phone = this.pickString(record, ['phone', 'phoneNumber']);
 
     return {
