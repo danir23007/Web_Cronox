@@ -1275,12 +1275,17 @@ a.product-card{display:block;text-decoration:none;color:inherit;cursor:pointer;}
 .cart-upsell__price { margin: 0 0 8px; font-size: 12px; color: rgba(255, 255, 255, 0.75); }
 
 .cart-upsell__add {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 22px;
   background: #fff;
   color: #000;
   border: none;
-  padding: 0.35rem 0.78rem;
-  font-size: 0.78rem;
-  letter-spacing: 0.08em;
+  padding: 0.22rem 0.52rem;
+  font-size: 0.68rem;
+  line-height: 1;
+  letter-spacing: 0.07em;
   text-transform: uppercase;
   border-radius: 999px;
   cursor: pointer;
@@ -1295,32 +1300,36 @@ a.product-card{display:block;text-decoration:none;color:inherit;cursor:pointer;}
 }
 
 .cart-upsell__sizes {
-  display: flex;
+  display: none;
   flex-wrap: wrap;
   align-items: center;
-  gap: 4px;
-  margin-top: 7px;
+  gap: 3px;
+  margin-top: 5px;
   max-width: 100%;
 }
 
-.cart-upsell__sizes[hidden] { display: none; }
+.cart-upsell__item.is-selecting-size .cart-upsell__sizes:not([hidden]) {
+  display: flex;
+}
+
+.cart-upsell__sizes[hidden] { display: none !important; }
 
 .cart-upsell__size {
   position: relative;
   overflow: hidden;
   flex: 0 1 auto;
-  min-width: 28px;
-  max-width: 48px;
-  height: 24px;
-  padding: 0 5px;
+  min-width: 22px;
+  max-width: 40px;
+  height: 19px;
+  padding: 0 3px;
   border: 1px solid rgba(255, 255, 255, 0.35);
   border-radius: 0;
   background: #0b0b0b;
   color: #fff;
-  font-size: 10px;
+  font-size: 8px;
   font-weight: 700;
-  line-height: 22px;
-  letter-spacing: 0.04em;
+  line-height: 17px;
+  letter-spacing: 0.03em;
   text-transform: uppercase;
   white-space: nowrap;
   text-overflow: ellipsis;
@@ -1355,7 +1364,7 @@ a.product-card{display:block;text-decoration:none;color:inherit;cursor:pointer;}
   font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.08em;
-  line-height: 24px;
+  line-height: 19px;
   text-transform: uppercase;
 }
 
@@ -1372,12 +1381,18 @@ a.product-card{display:block;text-decoration:none;color:inherit;cursor:pointer;}
     padding: 6px;
   }
 
+  .cart-upsell__add {
+    min-height: 20px;
+    padding: 0.18rem 0.44rem;
+    font-size: 0.64rem;
+  }
+
   .cart-upsell__size {
-    min-width: 26px;
-    height: 22px;
-    padding-inline: 4px;
-    font-size: 9px;
-    line-height: 20px;
+    min-width: 21px;
+    height: 18px;
+    padding-inline: 3px;
+    font-size: 8px;
+    line-height: 16px;
   }
 }
 
