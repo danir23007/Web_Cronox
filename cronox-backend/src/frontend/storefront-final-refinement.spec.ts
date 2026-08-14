@@ -625,4 +625,104 @@ describe('focused storefront refinement acceptance matrix', () => {
       /else \{[\s\S]*await renderGuestCheckout\(\);[\s\S]*await loadRecommendations\(\);/,
     );
   });
+
+  it('63. formats only zero-cost shipping as GRATIS everywhere checkout displays it', () => {
+    expect(checkoutScript).toContain(
+      "Number.isFinite(amount) && amount === 0 ? 'GRATIS' : formatEuro(cents)",
+    );
+    expect(checkoutScript).toContain(
+      '${formatShippingPrice(priceCents)}</span>',
+    );
+    expect(checkoutScript).toContain(
+      '[selected.label, selected.description, formatShippingPrice(priceCents)]',
+    );
+    expect(checkoutScript).toContain(
+      'const shippingPrice = formatShippingPrice(totals.shippingCents)',
+    );
+    expect(checkoutScript).not.toContain(
+      '${shippingMethod.label} · ${formatEuro(totals.shippingCents)}',
+    );
+  });
+
+  it('64. renders checkout recommendation sizes closed with no automatic selection', () => {
+    expect(checkoutScript).toContain(
+      'class="checkout-recommendation__sizes" role="group" aria-label="Tallas para ${productName}" hidden',
+    );
+    expect(checkoutScript).toContain(
+      'aria-controls="${selectorId}" aria-expanded="false"',
+    );
+    expect(checkoutScript).toContain(
+      "article.dataset.recommendationVariant = ''",
+    );
+    expect(checkoutScript).toContain('aria-pressed="false"');
+    expect(checkoutScript).not.toContain('directVariant');
+    expect(
+      cssRule(checkoutStyles, '.checkout-recommendation__sizes[hidden]'),
+    ).toContain('display: none !important');
+  });
+
+  it('65. uses Añadir as an explicit two-step recommendation action', () => {
+    const handlerStart = checkoutScript.indexOf(
+      'const handleRecommendationAdd = async',
+    );
+    const handlerEnd = checkoutScript.indexOf(
+      'const renderShippingOptions',
+      handlerStart,
+    );
+    const handler = checkoutScript.slice(handlerStart, handlerEnd);
+
+    expect(handler).toMatch(
+      /activeRecommendationCard !== card \|\| selector\?\.hidden[\s\S]*openRecommendationSelector\(card, \{ focusFirst \}\);[\s\S]*return;/,
+    );
+    expect(handler).toMatch(
+      /const selectedVariantId[\s\S]*if \(!selectedVariantId\)[\s\S]*Selecciona una talla\.[\s\S]*return;[\s\S]*await addRecommendationVariant/,
+    );
+  });
+
+  it('66. selecting a recommendation size only stores one visual selection', () => {
+    const selectStart = checkoutScript.indexOf(
+      'const selectRecommendationVariant =',
+    );
+    const selectEnd = checkoutScript.indexOf(
+      'const fetchFreshRecommendation',
+      selectStart,
+    );
+    const selection = checkoutScript.slice(selectStart, selectEnd);
+
+    expect(selection).toContain(
+      "card.querySelectorAll('[data-recommendation-variant]').forEach",
+    );
+    expect(selection).toContain("button.classList.toggle('is-selected', selected)");
+    expect(selection).toContain("button.setAttribute('aria-pressed', selected ? 'true' : 'false')");
+    expect(selection).toContain('card.dataset.recommendationVariant =');
+    expect(selection).not.toContain('addCartItem');
+  });
+
+  it('67. revalidates and adds exactly one selected recommendation only on the second action', () => {
+    expect(checkoutScript).toContain('const pendingRecommendationAdds = new Set()');
+    expect(checkoutScript).toContain('pendingRecommendationAdds.has(productKey)');
+    expect(checkoutScript).toMatch(
+      /fetchFreshRecommendation\(product\)[\s\S]*getAvailableRecommendationVariants\(fresh\)[\s\S]*await addCartItem\(\{ variantId: variant\.id, qty: 1 \}\)/,
+    );
+    expect(checkoutScript).toMatch(
+      /card\.dataset\.recommendationVariant = '';[\s\S]*closeRecommendationSelector\(\);[\s\S]*await queueCheckoutUpdate\(\);[\s\S]*await loadRecommendations\(\{ force: true \}\);[\s\S]*Producto añadido\./,
+    );
+    expect(checkoutScript).toContain('pendingRecommendationAdds.delete(productKey)');
+  });
+
+  it('68. keeps one accessible recommendation selector open at a time', () => {
+    expect(checkoutScript).toContain('let activeRecommendationCard = null');
+    expect(checkoutScript).toMatch(
+      /activeRecommendationCard && activeRecommendationCard !== card[\s\S]*closeRecommendationSelector\(\)/,
+    );
+    expect(checkoutScript).toContain("addButton.setAttribute('aria-expanded', 'true')");
+    expect(checkoutScript).toContain("addButton?.setAttribute('aria-expanded', 'false')");
+    expect(checkoutScript).toMatch(
+      /const closeRecommendationSelector[\s\S]*card\.dataset\.recommendationVariant = '';[\s\S]*button\.classList\.remove\('is-selected'\);[\s\S]*aria-pressed', 'false'/,
+    );
+    expect(checkoutScript).toContain('!activeRecommendationCard.contains(event.target)');
+    expect(checkoutScript).toContain(
+      'closeRecommendationSelector({ restoreFocus: true })',
+    );
+  });
 });

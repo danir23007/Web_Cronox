@@ -1040,6 +1040,10 @@ body.page-checkout summary:focus-visible {
   margin-top: 4px;
 }
 
+.checkout-recommendation__sizes[hidden] {
+  display: none !important;
+}
+
 .checkout-recommendation__size {
   position: relative;
   min-width: 22px;

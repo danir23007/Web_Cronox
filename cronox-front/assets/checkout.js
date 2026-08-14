@@ -192,6 +192,11 @@
     return (amount / 100).toFixed(2).replace('.', ',') + ' €';
   };
 
+  const formatShippingPrice = (cents) => {
+    const amount = Number(cents);
+    return Number.isFinite(amount) && amount === 0 ? 'GRATIS' : formatEuro(cents);
+  };
+
   const sanitizePromoCode = (value) => (value || '').replace(/\s+/g, '').toUpperCase();
 
   const cleanText = (value) => {
@@ -928,6 +933,8 @@
   };
 
   const recommendationProducts = new Map();
+  const pendingRecommendationAdds = new Set();
+  let activeRecommendationCard = null;
   let recommendationSequence = 0;
   let recommendationLoadRevision = 0;
   let recommendationCatalog = null;
@@ -951,21 +958,51 @@
 
   const getRecommendationSizeMarkup = (product) => {
     const variants = getRecommendationVariants(product);
-    const available = variants.filter(isRecommendationVariantAvailable);
-    const directVariant = available.length === 1 ? available[0] : null;
-    const markup = variants.map((variant) => {
+    return variants.map((variant) => {
       const size = cleanText(variant.size).toUpperCase() || 'Única';
       const isAvailable = isRecommendationVariantAvailable(variant);
-      const selected = isAvailable && directVariant?.id === variant.id;
-      return `<button type="button" class="checkout-recommendation__size${isAvailable ? '' : ' is-unavailable'}${selected ? ' is-selected' : ''}" data-recommendation-variant="${escapeHtml(String(variant.id))}" data-recommendation-unavailable="${isAvailable ? 'false' : 'true'}" aria-label="${escapeHtml(isAvailable ? `Talla ${size}` : `Talla ${size}, agotada`)}" aria-pressed="${selected ? 'true' : 'false'}" aria-disabled="${isAvailable ? 'false' : 'true'}"${isAvailable ? '' : ' disabled tabindex="-1"'}>${escapeHtml(size)}</button>`;
+      return `<button type="button" class="checkout-recommendation__size${isAvailable ? '' : ' is-unavailable'}" data-recommendation-variant="${escapeHtml(String(variant.id))}" data-recommendation-unavailable="${isAvailable ? 'false' : 'true'}" aria-label="${escapeHtml(isAvailable ? `Talla ${size}` : `Talla ${size}, agotada`)}" aria-pressed="false" aria-disabled="${isAvailable ? 'false' : 'true'}"${isAvailable ? '' : ' disabled tabindex="-1"'}>${escapeHtml(size)}</button>`;
     }).join('');
-    return {
-      markup,
-      selectedVariantId: directVariant ? String(directVariant.id) : '',
-    };
+  };
+
+  const closeRecommendationSelector = ({ restoreFocus = false } = {}) => {
+    const card = activeRecommendationCard;
+    if (!card) return;
+    const addButton = card.querySelector('.checkout-recommendation__action');
+    const selector = card.querySelector('.checkout-recommendation__sizes');
+    card.classList.remove('is-selecting-size');
+    card.dataset.recommendationVariant = '';
+    card.querySelectorAll('[data-recommendation-variant]').forEach((button) => {
+      button.classList.remove('is-selected');
+      button.setAttribute('aria-pressed', 'false');
+    });
+    addButton?.setAttribute('aria-expanded', 'false');
+    if (selector) selector.hidden = true;
+    activeRecommendationCard = null;
+    if (restoreFocus && addButton?.isConnected) addButton.focus();
+  };
+
+  const openRecommendationSelector = (card, { focusFirst = false } = {}) => {
+    if (!card) return false;
+    if (activeRecommendationCard && activeRecommendationCard !== card) {
+      closeRecommendationSelector();
+    }
+    const addButton = card.querySelector('.checkout-recommendation__action');
+    const selector = card.querySelector('.checkout-recommendation__sizes');
+    if (!addButton || !selector) return false;
+    activeRecommendationCard = card;
+    card.classList.add('is-selecting-size');
+    addButton.setAttribute('aria-expanded', 'true');
+    selector.hidden = false;
+    setRecommendationsStatus('');
+    if (focusFirst) {
+      selector.querySelector('.checkout-recommendation__size:not(:disabled)')?.focus();
+    }
+    return true;
   };
 
   const hideRecommendations = () => {
+    closeRecommendationSelector();
     recommendationProducts.clear();
     if (recommendationsList) recommendationsList.innerHTML = '';
     if (recommendationsSection) recommendationsSection.hidden = true;
@@ -986,6 +1023,7 @@
 
   const renderRecommendations = (products = []) => {
     if (!recommendationsSection || !recommendationsList) return;
+    closeRecommendationSelector();
     recommendationProducts.clear();
     recommendationsList.innerHTML = '';
 
@@ -1003,19 +1041,19 @@
       const imageUrl = safeProductImage(product.image || product.images?.[0]);
       const price = escapeHtml(product.priceLabel || formatMoney(product.price || 0));
       const selectorId = `checkout-recommendation-sizes-${++recommendationSequence}`;
-      const sizeOptions = getRecommendationSizeMarkup(product);
+      const sizeMarkup = getRecommendationSizeMarkup(product);
       const article = document.createElement('article');
       article.className = 'checkout-recommendation';
       article.dataset.recommendationProduct = productKey;
-      article.dataset.recommendationVariant = sizeOptions.selectedVariantId;
+      article.dataset.recommendationVariant = '';
       article.innerHTML = `
         <img class="checkout-recommendation__image" src="${escapeHtml(imageUrl)}" alt="${productName}" loading="lazy" referrerpolicy="no-referrer">
         <div class="checkout-recommendation__copy">
           <h3 class="checkout-recommendation__name">${productName}</h3>
           <p class="checkout-recommendation__price">${price}</p>
-          <div id="${selectorId}" class="checkout-recommendation__sizes" role="group" aria-label="Tallas para ${productName}">${sizeOptions.markup}</div>
+          <div id="${selectorId}" class="checkout-recommendation__sizes" role="group" aria-label="Tallas para ${productName}" hidden>${sizeMarkup}</div>
         </div>
-        <button class="checkout-recommendation__action" type="button" aria-controls="${selectorId}">Añadir</button>
+        <button class="checkout-recommendation__action" type="button" aria-controls="${selectorId}" aria-expanded="false">Añadir</button>
       `;
       fragment.appendChild(article);
     });
@@ -1120,6 +1158,9 @@
   };
 
   const addRecommendationVariant = async (card, product, requestedVariantId) => {
+    const productKey = card?.dataset.recommendationProduct || '';
+    if (!productKey || pendingRecommendationAdds.has(productKey)) return false;
+    pendingRecommendationAdds.add(productKey);
     setRecommendationBusy(card, true);
     setRecommendationsStatus('');
     try {
@@ -1135,31 +1176,42 @@
       const addCartItem = window.CRONOX_CART?.addCartItem || API.addCartItem;
       if (typeof addCartItem !== 'function') throw new Error('CART_API_UNAVAILABLE');
       state.cart = await addCartItem({ variantId: variant.id, qty: 1 });
+      card.dataset.recommendationVariant = '';
+      closeRecommendationSelector();
       commitAuthoritativeRecommendationCart(state.cart);
       reconcileRecommendationsWithCart();
-      setRecommendationsStatus('Producto añadido. Actualizando el pedido…');
       await queueCheckoutUpdate();
       await loadRecommendations({ force: true });
+      setRecommendationsStatus('Producto añadido.');
+      return true;
     } catch (error) {
       console.warn('[CRONOX checkout recommendation add]', {
         event: 'checkout_recommendation_add_failed',
         type: error instanceof Error ? error.message : 'unexpected',
       });
       setRecommendationsStatus('Esa opción ya no está disponible. Vuelve a intentarlo.');
+      return false;
     } finally {
+      pendingRecommendationAdds.delete(productKey);
       if (card?.isConnected) setRecommendationBusy(card, false);
     }
   };
 
-  const handleRecommendationAdd = async (card) => {
+  const handleRecommendationAdd = async (card, { focusFirst = false } = {}) => {
     if (!card) return;
     const product = recommendationProducts.get(card.dataset.recommendationProduct || '');
     const addButton = card.querySelector('.checkout-recommendation__action');
     if (!product || !addButton) return;
 
+    const selector = card.querySelector('.checkout-recommendation__sizes');
+    if (activeRecommendationCard !== card || selector?.hidden) {
+      openRecommendationSelector(card, { focusFirst });
+      return;
+    }
+
     const selectedVariantId = cleanText(card.dataset.recommendationVariant);
     if (!selectedVariantId) {
-      setRecommendationsStatus('Elige una talla disponible.');
+      setRecommendationsStatus('Selecciona una talla.');
       card.querySelector('.checkout-recommendation__size:not(:disabled)')?.focus();
       return;
     }
@@ -1187,7 +1239,7 @@
           <span class="shipping-option__label">${method.label}</span>
           ${method.description ? `<small class="shipping-option__helper">${method.description}</small>` : ''}
         </div>
-        <span class="shipping-option__price ${priceCents === 0 ? 'is-free' : ''}">${formatEuro(priceCents)}</span>
+        <span class="shipping-option__price ${Number(priceCents) === 0 ? 'is-free' : ''}">${formatShippingPrice(priceCents)}</span>
       `;
       shippingOptionsEl.appendChild(wrapper);
     });
@@ -1198,7 +1250,7 @@
     if (shippingMethodSummaryEl) {
       const priceCents = selected?.amountCents ?? selected?.priceCents ?? 0;
       shippingMethodSummaryEl.textContent = selected
-        ? [selected.label, selected.description, formatEuro(priceCents)].filter(Boolean).join(' · ')
+        ? [selected.label, selected.description, formatShippingPrice(priceCents)].filter(Boolean).join(' · ')
         : 'Selecciona un método';
     }
   };
@@ -1224,9 +1276,10 @@
     if (!totals) return;
     subtotalEl && (subtotalEl.textContent = formatEuro(totals.subtotalCents));
     if (shippingEl) {
+      const shippingPrice = formatShippingPrice(totals.shippingCents);
       shippingEl.textContent = shippingMethod
-        ? `${shippingMethod.label} · ${formatEuro(totals.shippingCents)}`
-        : formatEuro(totals.shippingCents);
+        ? `${shippingMethod.label} · ${shippingPrice}`
+        : shippingPrice;
     }
     const discountRow = discountEl?.closest('.summary-row');
     if (discountEl && discountRow) {
@@ -2111,10 +2164,20 @@
 
     document.addEventListener('click', (event) => {
       if (!event.target.closest('.checkout-menu')) closeCheckoutMenus();
+      if (
+        activeRecommendationCard &&
+        !activeRecommendationCard.contains(event.target)
+      ) {
+        closeRecommendationSelector();
+      }
     });
     document.addEventListener('keydown', (event) => {
       if (event.key === 'Escape') {
         if (addressModal && !addressModal.hidden) closeAddressModal();
+        else if (activeRecommendationCard) {
+          event.preventDefault();
+          closeRecommendationSelector({ restoreFocus: true });
+        }
         else closeCheckoutMenus();
         return;
       }
@@ -2158,7 +2221,7 @@
         return;
       }
       if (event.target.closest('.checkout-recommendation__action')) {
-        await handleRecommendationAdd(card);
+        await handleRecommendationAdd(card, { focusFirst: event.detail === 0 });
       }
     });
 
