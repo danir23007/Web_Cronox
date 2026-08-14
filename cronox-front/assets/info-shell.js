@@ -1,0 +1,99 @@
+(function () {
+  if (document.getElementById('topbar')) return;
+
+  document.body.insertAdjacentHTML('afterbegin', `
+    <div id="overlay" class="overlay" hidden></div>
+
+    <header class="topbar topbar--page" id="topbar" role="banner">
+      <div class="topbar__left">
+        <button id="btnMenu" class="icon-btn" type="button" aria-label="Abrir menú" aria-expanded="false" aria-controls="filtersPanel">
+          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon" aria-hidden="true" focusable="false">
+            <line x1="3" y1="6" x2="21" y2="6"></line>
+            <line x1="3" y1="12" x2="21" y2="12"></line>
+            <line x1="3" y1="18" x2="21" y2="18"></line>
+          </svg>
+        </button>
+        <button id="btnSearch" class="icon-btn" type="button" aria-label="Buscar productos" aria-expanded="false" aria-controls="searchBar">
+          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon" aria-hidden="true" focusable="false">
+            <circle cx="11" cy="11" r="8"></circle>
+            <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+          </svg>
+        </button>
+      </div>
+
+      <a href="index.html" class="topbar__logo" aria-label="CRONOX — Tienda">
+        <img src="assets/logo_banner.png" alt="CRONOX" class="topbar__logo-img" decoding="async">
+      </a>
+
+      <nav class="topbar__right" aria-label="Navegación principal">
+        <a href="#" class="topbar__link topbar__profile topbar-icon topbar-icon-user" id="profileBtn" aria-label="Iniciar sesión" title="Iniciar sesión">
+          <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-user" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M20 21v-2a4 4 0 0 0-3-3.87"></path>
+            <path d="M4 21v-2a4 4 0 0 1 3-3.87"></path>
+            <circle cx="12" cy="7.5" r="4"></circle>
+          </svg>
+        </a>
+        <a href="favorites.html" class="topbar__link topbar__fav topbar-icon topbar-icon-favorites" aria-label="Ver favoritos">
+          <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-star" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polygon points="12 2 15.09 8.26 22 9.27 17.3 13.97 18.18 21 12 17.77 5.82 21 6.7 13.97 2 9.27 8.91 8.26 12 2"></polygon>
+          </svg>
+          <span class="topbar-icon-badge favorites-count fav-count" hidden></span>
+        </a>
+        <a href="cart.html" id="cart-icon-btn" class="topbar__link topbar__cart topbar-icon topbar-icon-cart" aria-label="Ver carrito">
+          <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-bag" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"></path>
+            <line x1="3" y1="6" x2="21" y2="6"></line>
+            <path d="M16 10a4 4 0 0 1-8 0"></path>
+          </svg>
+          <span class="cart-count" aria-label="Artículos en la cesta" hidden>0</span>
+        </a>
+      </nav>
+    </header>
+
+    <div id="searchBar" class="searchbar" hidden aria-hidden="true">
+      <div class="searchbar__inner">
+        <form id="searchForm" class="searchbar__form" role="search" action="index.html#store">
+          <input id="searchInput" class="searchbar__input" type="text" placeholder="Buscar productos…" autocomplete="off">
+          <button class="searchbar__submit" type="submit" aria-label="Buscar"><span>Buscar</span></button>
+        </form>
+        <button type="button" class="searchbar__close" aria-label="Cerrar búsqueda">×</button>
+      </div>
+    </div>
+
+    <aside id="filtersPanel" class="black-menu" hidden aria-label="Navegación de categorías" role="dialog" aria-modal="true">
+      <button class="filters-close" type="button" aria-label="Cerrar menú">✕</button>
+      <nav class="black-menu__list" role="menu">
+        <a class="black-menu__link" role="menuitem" href="index.html?categorySlug=novedades#store">Novedades</a>
+        <a class="black-menu__link" role="menuitem" href="index.html?categorySlug=camisetas#store">Camisetas</a>
+        <a class="black-menu__link" role="menuitem" href="index.html?categorySlug=chaquetas#store">Chaquetas</a>
+        <a class="black-menu__link" role="menuitem" href="index.html?categorySlug=pantalones#store">Pantalones</a>
+        <a class="black-menu__link" role="menuitem" href="index.html?categorySlug=complementos#store">Complementos</a>
+      </nav>
+    </aside>
+
+    <div id="toast" class="toast" role="status" aria-live="polite"></div>
+    <div id="cart-overlay" class="cart-overlay" hidden></div>
+    <aside id="cart-drawer" class="cart-drawer" aria-hidden="true" aria-label="Carrito">
+      <div class="cart-drawer__panel">
+        <header class="cart-drawer__header">
+          <div><h2 class="cart-drawer__title">Cesta</h2></div>
+          <button id="cart-close-btn" class="cart-drawer__close" type="button" aria-label="Cerrar carrito">×</button>
+        </header>
+        <div class="cart-free-shipping">
+          <p id="free-shipping-text" class="cart-free-shipping__text">Te faltan 0€ para conseguir envío gratuito</p>
+          <div class="cart-free-shipping__bar"><span id="free-shipping-bar-fill"></span></div>
+        </div>
+        <section id="cart-items-container" class="cart-drawer__items" aria-label="Productos en el carrito">
+          <div id="cart-empty-state" class="cart-empty">Tu carrito está vacío.</div>
+        </section>
+        <section id="cart-upsell-section" class="cart-upsell" hidden aria-label="Completa tu outfit">
+          <div class="cart-upsell__head"><h3>Completa tu outfit</h3></div>
+          <div id="cart-upsell-list" class="cart-upsell__list"></div>
+        </section>
+        <footer class="cart-drawer__footer">
+          <button id="cart-checkout-btn" class="btn-primary btn-block" type="button">Finalizar compra · —</button>
+        </footer>
+      </div>
+    </aside>
+  `);
+})();

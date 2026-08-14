@@ -1,0 +1,15 @@
+html {
+  overflow-x: hidden;
+  background: #000;
+}
+
+body.page-info {
+  min-height: 100vh;
+  padding-top: var(--topbar-h, 64px);
+  overflow-x: hidden;
+}
+
+body.page-info > .topbar {
+  width: 100%;
+  background: #000;
+}

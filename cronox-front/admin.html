@@ -16,6 +16,7 @@
     })();
   </script>
   <link id="cronox-admin-style" rel="stylesheet" href="assets/store.css">
+  <link rel="stylesheet" href="assets/admin-gallery.css?v=1">
   <style>
     body { font-family: 'Inter', system-ui, -apple-system, sans-serif; background: #050505; color: #fff; margin: 0; min-height: 100vh; }
     .admin-shell { width: min(100% - 48px, 1500px); margin: 0 auto; padding: 32px 0 48px; }
@@ -235,6 +236,7 @@
         <button class="btn admin-nav-item admin-nav-item--described" data-nav-target="section-activity"><strong class="admin-nav-item__title">Actividad -</strong><span class="admin-nav-item__description">Actividad en el panel de administrador</span></button>
         <button class="btn admin-nav-item admin-nav-item--described" data-nav-target="section-users"><strong class="admin-nav-item__title">Usuarios -</strong><span class="admin-nav-item__description">Info cuentas registradas</span></button>
         <button class="btn admin-nav-item admin-nav-item--described" data-nav-target="section-products-menu"><strong class="admin-nav-item__title">Productos -</strong><span class="admin-nav-item__description">Gestión, edición y clasificación de productos</span></button>
+        <button class="btn admin-nav-item admin-nav-item--described" data-nav-target="section-gallery"><strong class="admin-nav-item__title">Galer&iacute;a -</strong><span class="admin-nav-item__description">Gesti&oacute;n de im&aacute;genes de la galer&iacute;a p&uacute;blica</span></button>
         <button class="btn admin-nav-item admin-nav-item--described" data-nav-target="section-orders"><strong class="admin-nav-item__title">Pedidos -</strong><span class="admin-nav-item__description">Información, seguimiento y estado del pedido</span></button>
         <button class="btn admin-nav-item admin-nav-item--described" data-nav-target="section-codes"><strong class="admin-nav-item__title">Códigos -</strong><span class="admin-nav-item__description">Creación y edición de códigos de descuento</span></button>
       </div>
@@ -998,6 +1000,21 @@
       </div>
     </section>
 
+    <section id="section-gallery" class="card admin-section" aria-labelledby="title-gallery" hidden>
+      <button class="btn admin-view-back" type="button" data-back-target="section-menu">&larr; Atr&aacute;s</button>
+      <div class="gallery-admin-header">
+        <div>
+          <h2 id="title-gallery">Galer&iacute;a</h2>
+          <small>Edita las 13 posiciones respetando exactamente la composici&oacute;n de la galer&iacute;a p&uacute;blica.</small>
+        </div>
+        <a class="btn" href="gallery.html" target="_blank" rel="noopener">Ver galer&iacute;a p&uacute;blica</a>
+      </div>
+      <p id="galleryAdminStatus" class="gallery-admin-status" role="status" aria-live="polite">Abre una posici&oacute;n para editarla.</p>
+      <div id="adminGalleryGrid" class="gallery-admin-grid" aria-label="Previsualizaci&oacute;n editable de la galer&iacute;a">
+        <div class="empty-state" style="grid-column: 1 / -1;"><strong>Cargando galer&iacute;a&hellip;</strong></div>
+      </div>
+    </section>
+
     <section id="section-codes" class="card admin-section" aria-labelledby="title-codes" hidden>
       <div style="display:flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap;">
         <div>
@@ -1195,11 +1212,86 @@
     </div>
   </div>
 
+  <div class="modal" id="galleryEditorModal" role="dialog" aria-modal="true" aria-hidden="true" aria-labelledby="galleryEditorTitle">
+    <div class="modal-box">
+      <div class="gallery-editor-header">
+        <div>
+          <h3 id="galleryEditorTitle">Editar posici&oacute;n de galer&iacute;a</h3>
+          <small id="galleryEditorSlotLabel">Posici&oacute;n</small>
+        </div>
+        <button type="button" class="btn" id="galleryEditorClose" aria-label="Cerrar editor">Cerrar</button>
+      </div>
+
+      <div class="gallery-editor-layout">
+        <div class="gallery-editor-column">
+          <section class="gallery-editor-section" aria-labelledby="galleryUploadTitle">
+            <h4 id="galleryUploadTitle">Subir nueva foto</h4>
+            <div class="gallery-upload-row">
+              <label for="galleryUploadInput">JPEG, PNG o WebP, m&aacute;ximo 25 MB</label>
+              <input id="galleryUploadInput" class="input" type="file" accept="image/jpeg,image/png,image/webp">
+              <progress id="galleryUploadProgress" class="gallery-upload-progress" value="0" max="100" hidden>0%</progress>
+              <small>La foto se guardar&aacute; en la biblioteca aunque canceles la edici&oacute;n.</small>
+            </div>
+          </section>
+
+          <section class="gallery-editor-section" aria-labelledby="galleryLibraryTitle">
+            <h4 id="galleryLibraryTitle">Fotos antiguas</h4>
+            <div id="galleryAssetLibrary" class="gallery-asset-library" aria-live="polite"></div>
+          </section>
+        </div>
+
+        <div class="gallery-editor-column">
+          <section class="gallery-editor-section" aria-labelledby="galleryPreviewTitle">
+            <h4 id="galleryPreviewTitle">Encuadre y contenido</h4>
+            <div id="galleryCropViewport" class="gallery-crop-viewport" aria-label="Previsualizaci&oacute;n del encuadre; arrastra para cambiar el punto focal">
+              <img id="galleryCropImage" alt="" draggable="false" hidden>
+            </div>
+            <p class="gallery-crop-help">Arrastra la foto para ajustar el punto focal.</p>
+            <div class="gallery-framing-controls">
+              <label class="gallery-range" for="galleryFocalX">Horizontal <output id="galleryFocalXValue">50%</output>
+                <input id="galleryFocalX" type="range" min="0" max="100" step="1" value="50">
+              </label>
+              <label class="gallery-range" for="galleryFocalY">Vertical <output id="galleryFocalYValue">50%</output>
+                <input id="galleryFocalY" type="range" min="0" max="100" step="1" value="50">
+              </label>
+              <label class="gallery-range" for="galleryZoom">Zoom <output id="galleryZoomValue">1.00&times;</output>
+                <input id="galleryZoom" type="range" min="1" max="3" step="0.05" value="1">
+              </label>
+            </div>
+            <button type="button" class="btn" id="galleryResetFraming">Restablecer encuadre</button>
+          </section>
+
+          <section class="gallery-editor-section" aria-label="Datos de publicaci&oacute;n">
+            <div class="form-group">
+              <label for="galleryAltText">Texto alternativo</label>
+              <input id="galleryAltText" class="input" type="text" maxlength="500" placeholder="Describe la foto para lectores de pantalla">
+              <small>Obligatorio al publicar una foto.</small>
+            </div>
+            <div class="form-group">
+              <label for="galleryInstagramUrl">Enlace de la publicaci&oacute;n de Instagram (opcional)</label>
+              <input id="galleryInstagramUrl" class="input" type="url" maxlength="2048" inputmode="url" placeholder="https://www.instagram.com/p/...">
+            </div>
+          </section>
+        </div>
+      </div>
+
+      <p id="galleryEditorMessage" class="gallery-editor-message" role="alert" aria-live="assertive"></p>
+      <div class="gallery-editor-actions">
+        <button type="button" class="btn danger" id="galleryRemovePhoto">Usar color de reserva</button>
+        <div class="gallery-editor-actions__primary">
+          <button type="button" class="btn" id="galleryEditorCancel">Cancelar</button>
+          <button type="button" class="btn primary" id="galleryEditorSave">Guardar cambios</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <div class="toast-container" id="toastContainer" aria-live="polite" aria-atomic="true"></div>
 
   <script src="assets/api.js?v=3"></script>
   <script src="assets/ui-status.js"></script>
   <script src="assets/admin.js"></script>
   <script src="assets/admin-orders.js"></script>
+  <script src="assets/admin-gallery.js?v=1"></script>
 </body>
 </html>

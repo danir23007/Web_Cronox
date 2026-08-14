@@ -646,15 +646,15 @@ describe('focused storefront refinement acceptance matrix', () => {
 
   it('64. renders checkout recommendation sizes closed with no automatic selection', () => {
     expect(checkoutScript).toContain(
-      'class="checkout-recommendation__sizes" role="group" aria-label="Tallas para ${productName}" hidden',
+      "const isOpen = Boolean(uiState?.open)",
     );
     expect(checkoutScript).toContain(
-      'aria-controls="${selectorId}" aria-expanded="false"',
+      "${isOpen ? '' : ' hidden'}",
     );
     expect(checkoutScript).toContain(
-      "article.dataset.recommendationVariant = ''",
+      "article.dataset.recommendationVariant = uiState?.selectedVariantId || ''",
     );
-    expect(checkoutScript).toContain('aria-pressed="false"');
+    expect(checkoutScript).toContain("aria-pressed=\"${selected ? 'true' : 'false'}\"");
     expect(checkoutScript).not.toContain('directVariant');
     expect(
       cssRule(checkoutStyles, '.checkout-recommendation__sizes[hidden]'),
@@ -672,10 +672,13 @@ describe('focused storefront refinement acceptance matrix', () => {
     const handler = checkoutScript.slice(handlerStart, handlerEnd);
 
     expect(handler).toMatch(
-      /activeRecommendationCard !== card \|\| selector\?\.hidden[\s\S]*openRecommendationSelector\(card, \{ focusFirst \}\);[\s\S]*return;/,
+      /selector\?\.hidden[\s\S]*await openRecommendationSelector\(card, product, \{ focusFirst \}\);[\s\S]*return;/,
     );
     expect(handler).toMatch(
       /const selectedVariantId[\s\S]*if \(!selectedVariantId\)[\s\S]*Selecciona una talla\.[\s\S]*return;[\s\S]*await addRecommendationVariant/,
+    );
+    expect(checkoutScript).toContain(
+      "target.closest('button[data-recommendation-variant]')",
     );
   });
 
@@ -705,24 +708,93 @@ describe('focused storefront refinement acceptance matrix', () => {
       /fetchFreshRecommendation\(product\)[\s\S]*getAvailableRecommendationVariants\(fresh\)[\s\S]*await addCartItem\(\{ variantId: variant\.id, qty: 1 \}\)/,
     );
     expect(checkoutScript).toMatch(
-      /card\.dataset\.recommendationVariant = '';[\s\S]*closeRecommendationSelector\(\);[\s\S]*await queueCheckoutUpdate\(\);[\s\S]*await loadRecommendations\(\{ force: true \}\);[\s\S]*Producto añadido\./,
+      /closeRecommendationSelector\(currentCard\);[\s\S]*setRecommendationActionState\(productKey, 'added'\);[\s\S]*await queueCheckoutUpdate\(\);[\s\S]*await loadRecommendations\(\{ force: true \}\);[\s\S]*Producto añadido\.[\s\S]*RECOMMENDATION_SUCCESS_FEEDBACK_MS[\s\S]*setRecommendationActionState\(productKey, 'idle'\)/,
     );
     expect(checkoutScript).toContain('pendingRecommendationAdds.delete(productKey)');
   });
 
-  it('68. keeps one accessible recommendation selector open at a time', () => {
-    expect(checkoutScript).toContain('let activeRecommendationCard = null');
-    expect(checkoutScript).toMatch(
-      /activeRecommendationCard && activeRecommendationCard !== card[\s\S]*closeRecommendationSelector\(\)/,
-    );
+  it('68. keeps each recommendation selector independent and accessible', () => {
+    expect(checkoutScript).not.toContain('activeRecommendationCard');
+    expect(checkoutScript).toContain('const closeRecommendationSelector = (card');
     expect(checkoutScript).toContain("addButton.setAttribute('aria-expanded', 'true')");
     expect(checkoutScript).toContain("addButton?.setAttribute('aria-expanded', 'false')");
     expect(checkoutScript).toMatch(
       /const closeRecommendationSelector[\s\S]*card\.dataset\.recommendationVariant = '';[\s\S]*button\.classList\.remove\('is-selected'\);[\s\S]*aria-pressed', 'false'/,
     );
-    expect(checkoutScript).toContain('!activeRecommendationCard.contains(event.target)');
     expect(checkoutScript).toContain(
-      'closeRecommendationSelector({ restoreFocus: true })',
+      "document.activeElement.closest('.checkout-recommendation')",
+    );
+  });
+
+  it('69. reuses the CRONOX loader until checkout initialization settles', () => {
+    expect(checkoutHtml).toContain('class="page-checkout is-loading"');
+    expect(checkoutHtml).toContain('data-persistent="true"');
+    expect(checkoutHtml).toContain('assets/CRONOX-GIF.gif');
+    expect(checkoutHtml).toContain('window.CRONOX_CHECKOUT_LOADING = { finish: finish }');
+    expect(checkoutHtml).toContain('window.setTimeout(finish, 20000)');
+    expect(app).toContain("if (preloader?.dataset.persistent === 'true') return");
+    expect(checkoutScript).toMatch(
+      /DOMContentLoaded[\s\S]*try \{[\s\S]*await queueCheckoutUpdate\(\);[\s\S]*finally \{[\s\S]*CRONOX_CHECKOUT_LOADING\?\.finish/,
+    );
+    expect(checkoutScript).toContain('return elementLoadPromise');
+  });
+
+  it('70. labels every shared cart drawer Cesta without changing cart actions', () => {
+    for (const file of ['cart.html', 'favorites.html', 'index.html', 'producto.html', 'profile.html']) {
+      const html = readFrontend(file);
+      expect(html).toContain('<h2 class="cart-drawer__title">Cesta</h2>');
+      expect(html).not.toContain('<h2 class="cart-drawer__title">Carrito</h2>');
+      expect(html).toContain('aria-label="Cerrar carrito"');
+    }
+  });
+
+  it('71. blocks duplicate Express Checkout confirmation attempts', () => {
+    expect(checkoutScript).toContain('let expressPaymentInFlight = false');
+    expect(checkoutScript).toMatch(
+      /confirmExpressCheckoutPayment[\s\S]*expressPaymentInFlight[\s\S]*expressPaymentInFlight = true;[\s\S]*confirmExpressPayment/,
+    );
+    expect(checkoutScript).toContain(
+      'if (!result.attempted || result.error) expressPaymentInFlight = false',
+    );
+  });
+
+  it('72. gives checkout recommendations accessible action feedback without a footer separator', () => {
+    const actionRule = cssRule(
+      checkoutStyles,
+      '.checkout-recommendation__action',
+    );
+    const footerRule = cssRule(checkoutStyles, '.checkout-footer');
+
+    expect(actionRule).toContain('transition:');
+    expect(actionRule).toContain('170ms ease');
+    expect(checkoutStyles).toContain('@media (hover: hover) and (pointer: fine)');
+    expect(checkoutStyles).toContain(
+      '.checkout-recommendation__action:not(:disabled):hover',
+    );
+    expect(checkoutStyles).toContain(
+      '.checkout-recommendation__action:not(:disabled):active',
+    );
+    expect(checkoutStyles).toContain(
+      '.checkout-recommendation__action:focus-visible',
+    );
+    expect(checkoutStyles).toContain(
+      '.checkout-recommendation.is-selecting-size .checkout-recommendation__action',
+    );
+    expect(checkoutStyles).toMatch(
+      /prefers-reduced-motion: reduce[\s\S]*\.checkout-recommendation__action:active\s*\{[\s\S]*transform: none/,
+    );
+    expect(footerRule).not.toContain('border-top');
+    expect(checkoutStyles).not.toMatch(
+      /\.checkout-footer\s*\{[^}]*border-top/,
+    );
+    expect(footerRule).toContain('border-right: 1px solid var(--checkout-line)');
+    expect(cssRule(checkoutStyles, '.checkout-recommendations')).toContain(
+      'border-top: 1px solid var(--checkout-line)',
+    );
+    expect(checkoutScript).toContain("adding: 'Añadiendo…'");
+    expect(checkoutScript).toContain("added: 'Añadido ✓'");
+    expect(checkoutScript).toContain(
+      'const RECOMMENDATION_SUCCESS_FEEDBACK_MS = 900',
     );
   });
 });

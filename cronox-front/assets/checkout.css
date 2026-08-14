@@ -1018,19 +1018,60 @@ body.page-checkout summary:focus-visible {
 }
 
 .checkout-recommendation__action {
+  position: relative;
+  z-index: 1;
   padding: 6px 9px;
   color: #fff;
   border: 1px solid #414143;
   background: transparent;
   cursor: pointer;
+  pointer-events: auto;
+  touch-action: manipulation;
   font-size: 9px;
   font-weight: 700;
   text-transform: uppercase;
+  transition:
+    color 170ms ease,
+    background-color 170ms ease,
+    border-color 170ms ease,
+    transform 170ms ease;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .checkout-recommendation__action:not(:disabled):hover {
+    color: #000;
+    border-color: #fff;
+    background: #fff;
+  }
+}
+
+.checkout-recommendation__action:not(:disabled):active {
+  transform: scale(0.96);
+}
+
+.checkout-recommendation__action:focus-visible {
+  color: #000;
+  border-color: #fff;
+  outline: 2px solid #fff;
+  outline-offset: 2px;
+  background: #fff;
+}
+
+.checkout-recommendation.is-selecting-size .checkout-recommendation__action,
+.checkout-recommendation.is-added .checkout-recommendation__action {
+  color: #000;
+  border-color: #fff;
+  background: #fff;
 }
 
 .checkout-recommendation__action:disabled {
   cursor: wait;
-  opacity: 0.5;
+  opacity: 0.72;
+}
+
+.checkout-recommendation.is-added .checkout-recommendation__action:disabled {
+  cursor: default;
+  opacity: 1;
 }
 
 .checkout-recommendation__sizes {
@@ -1042,6 +1083,12 @@ body.page-checkout summary:focus-visible {
 
 .checkout-recommendation__sizes[hidden] {
   display: none !important;
+}
+
+.checkout-recommendation__sizes-status {
+  color: var(--checkout-muted);
+  font-size: 9px;
+  line-height: 20px;
 }
 
 .checkout-recommendation__size {
@@ -1137,7 +1184,6 @@ body.page-checkout summary:focus-visible {
   min-height: 50px;
   padding: 12px clamp(28px, 4.2vw, 70px);
   color: #747471;
-  border-top: 1px solid var(--checkout-soft-line);
   border-right: 1px solid var(--checkout-line);
   background: #000;
   font-size: 9px;
@@ -1315,7 +1361,6 @@ body.checkout-modal-open {
     min-height: 56px;
     padding-right: clamp(20px, 6vw, 44px);
     padding-left: clamp(20px, 6vw, 44px);
-    border-top-color: var(--checkout-line);
     background: var(--checkout-panel);
   }
 }
@@ -1390,5 +1435,9 @@ body.checkout-modal-open {
   *::after {
     scroll-behavior: auto !important;
     transition-duration: 0.01ms !important;
+  }
+
+  .checkout-recommendation__action:active {
+    transform: none;
   }
 }

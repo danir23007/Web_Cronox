@@ -88,6 +88,39 @@ model ProductImage {
   @@index([productId, sortOrder])
 }
 
+model GalleryAsset {
+  id               String        @id @default(cuid())
+  storageKey       String        @unique
+  publicUrl        String
+  originalFilename String
+  mimeType         String
+  fileSize         Int
+  width            Int?
+  height           Int?
+  createdAt        DateTime      @default(now())
+  slots            GallerySlot[]
+
+  @@index([createdAt])
+}
+
+model GallerySlot {
+  key              String                  @id
+  displayOrder     Int                     @unique
+  featured         Boolean                 @default(false)
+  placeholderColor GalleryPlaceholderColor
+  assetId          String?
+  focalX           Float                   @default(50)
+  focalY           Float                   @default(50)
+  zoom             Float                   @default(1)
+  altText          String                  @default("")
+  instagramUrl     String?
+  createdAt        DateTime                @default(now())
+  updatedAt        DateTime                @updatedAt
+  asset            GalleryAsset?           @relation(fields: [assetId], references: [id], onDelete: SetNull)
+
+  @@index([assetId])
+}
+
 model User {
   id                        Int                     @id @default(autoincrement())
   email                     String                  @unique
@@ -706,4 +739,10 @@ enum CustomerActivityEventType {
   CHECKOUT_COMPLETED
   CHECKOUT_ABANDONED
   ACTIVE_TIME
+}
+
+enum GalleryPlaceholderColor {
+  WHITE
+  RED
+  GREY
 }

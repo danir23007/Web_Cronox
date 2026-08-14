@@ -9,6 +9,36 @@
   <title>Checkout — CRONOX</title>
   <meta name="description" content="Checkout CRONOX — Pago seguro en una sola página.">
 
+  <style>
+    /* Reuse the storefront preloader before the versioned stylesheets resolve. */
+    body.page-checkout.is-loading { overflow: hidden; }
+    body.page-checkout.is-loading .checkout-shell { visibility: hidden; }
+    #preloader {
+      position: fixed;
+      inset: 0;
+      z-index: 9999;
+      display: flex;
+      width: 100vw;
+      height: 100vh;
+      align-items: center;
+      justify-content: center;
+      background: #000;
+      opacity: 1;
+      transform: scale(1);
+      transition: opacity .4s ease, transform .4s ease;
+    }
+    #preloader .preloader-inner {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transform: scale(1.2);
+    }
+    body.is-loaded #preloader {
+      opacity: 0;
+      pointer-events: none;
+      transform: scale(1.02);
+    }
+  </style>
   <link id="cronox-main-style" rel="stylesheet" href="">
   <script src="assets/version.js"></script>
   <script>
@@ -19,13 +49,43 @@
       }
     })();
   </script>
-  <link rel="stylesheet" href="assets/checkout.css?v=16" />
+  <link rel="stylesheet" href="assets/checkout.css?v=18" />
+  <noscript><style>#preloader{display:none!important}.checkout-shell{visibility:visible!important}body.page-checkout{overflow:auto!important}</style></noscript>
   <link rel="icon" type="image/png" href="/favicon.png?v=3">
   <link rel="shortcut icon" type="image/png" href="/favicon.png?v=3">
   <link rel="apple-touch-icon" href="/favicon.png?v=3">
   <meta name="theme-color" content="#000000">
 </head>
-<body class="page-checkout">
+<body class="page-checkout is-loading">
+  <div id="preloader" class="preloader" data-persistent="true" aria-hidden="true" aria-live="polite">
+    <div class="preloader-inner">
+      <img src="assets/CRONOX-GIF.gif" alt="CRONOX" class="preloader__logo" decoding="async">
+    </div>
+  </div>
+  <script>
+    (function () {
+      var finished = false;
+      var fallbackTimer = 0;
+      function finish() {
+        if (finished) return;
+        finished = true;
+        if (fallbackTimer) window.clearTimeout(fallbackTimer);
+        var body = document.body;
+        var preloader = document.getElementById('preloader');
+        if (body) {
+          body.classList.remove('is-loading');
+          body.classList.add('is-loaded');
+        }
+        window.setTimeout(function () {
+          if (!preloader) return;
+          preloader.hidden = true;
+          preloader.style.display = 'none';
+        }, 450);
+      }
+      fallbackTimer = window.setTimeout(finish, 20000);
+      window.CRONOX_CHECKOUT_LOADING = { finish: finish };
+    })();
+  </script>
   <div id="overlay" class="overlay" hidden></div>
 
   <main id="checkoutMain" class="checkout-shell">
@@ -257,8 +317,8 @@
   <script src="https://js.stripe.com/v3/"></script>
   <script src="assets/country.js?v=1"></script>
   <script src="assets/api.js?v=4"></script>
-  <script src="assets/app.js?v=57"></script>
+  <script src="assets/app.js?v=59"></script>
   <script src="assets/checkout-lifecycle.js?v=6"></script>
-  <script src="assets/checkout.js?v=12"></script>
+  <script src="assets/checkout.js?v=15"></script>
 </body>
 </html>

@@ -76,6 +76,7 @@
   const recommendationsSection = document.getElementById('checkout-recommendations');
   const recommendationsList = document.getElementById('recommendations-list');
   const recommendationsStatus = document.getElementById('recommendations-status');
+  const checkoutMain = document.getElementById('checkoutMain');
   const shippingForm = document.getElementById('shipping-form');
   const addressModal = document.getElementById('address-modal');
   const addressEditForm = document.getElementById('address-edit-form');
@@ -587,6 +588,8 @@
   let currentPaymentIntentId = null;
   let paymentElementMounted = false;
   let expressCheckoutMounted = false;
+  let expressPaymentInFlight = false;
+  let pendingPaymentElementLoadResolver = null;
   let hasClearedPromoOnLoad = false;
   const checkoutCoordinator = window.CRONOX_CHECKOUT_LIFECYCLE?.createCoordinator();
   let checkoutRevision = checkoutCoordinator?.current() ?? 0;
@@ -717,6 +720,7 @@
 
   const resetExpressCheckoutElement = () => {
     expressCheckoutMounted = false;
+    expressPaymentInFlight = false;
     setExpressCheckoutVisibility(null);
     if (expressCheckoutElement) {
       try {
@@ -729,6 +733,10 @@
   };
 
   const resetPaymentElement = () => {
+    if (pendingPaymentElementLoadResolver) {
+      pendingPaymentElementLoadResolver(false);
+      pendingPaymentElementLoadResolver = null;
+    }
     currentClientSecret = null;
     currentPaymentIntentId = null;
     paymentElementMounted = false;
@@ -933,8 +941,9 @@
   };
 
   const recommendationProducts = new Map();
+  const recommendationUiState = new Map();
   const pendingRecommendationAdds = new Set();
-  let activeRecommendationCard = null;
+  const RECOMMENDATION_SUCCESS_FEEDBACK_MS = 900;
   let recommendationSequence = 0;
   let recommendationLoadRevision = 0;
   let recommendationCatalog = null;
@@ -943,6 +952,20 @@
 
   const setRecommendationsStatus = (message) => {
     if (recommendationsStatus) recommendationsStatus.textContent = message || '';
+  };
+
+  const getRecommendationUiState = (productKey) => {
+    const key = cleanText(productKey);
+    if (!key) return null;
+    if (!recommendationUiState.has(key)) {
+      recommendationUiState.set(key, {
+        open: false,
+        selectedVariantId: '',
+        hydratedProduct: null,
+        actionState: 'idle',
+      });
+    }
+    return recommendationUiState.get(key);
   };
 
   const getAvailableRecommendationVariants = (product) =>
@@ -956,53 +979,112 @@
       window.CRONOX_CHECKOUT_LIFECYCLE?.isProductVariantAvailable?.(variant),
     );
 
-  const getRecommendationSizeMarkup = (product) => {
+  const getRecommendationSizeMarkup = (product, selectedVariantId = '') => {
     const variants = getRecommendationVariants(product);
     return variants.map((variant) => {
       const size = cleanText(variant.size).toUpperCase() || 'Única';
       const isAvailable = isRecommendationVariantAvailable(variant);
-      return `<button type="button" class="checkout-recommendation__size${isAvailable ? '' : ' is-unavailable'}" data-recommendation-variant="${escapeHtml(String(variant.id))}" data-recommendation-unavailable="${isAvailable ? 'false' : 'true'}" aria-label="${escapeHtml(isAvailable ? `Talla ${size}` : `Talla ${size}, agotada`)}" aria-pressed="false" aria-disabled="${isAvailable ? 'false' : 'true'}"${isAvailable ? '' : ' disabled tabindex="-1"'}>${escapeHtml(size)}</button>`;
+      const selected = isAvailable && String(variant.id) === String(selectedVariantId);
+      return `<button type="button" class="checkout-recommendation__size${isAvailable ? '' : ' is-unavailable'}${selected ? ' is-selected' : ''}" data-recommendation-variant="${escapeHtml(String(variant.id))}" data-recommendation-unavailable="${isAvailable ? 'false' : 'true'}" aria-label="${escapeHtml(isAvailable ? `Talla ${size}` : `Talla ${size}, agotada`)}" aria-pressed="${selected ? 'true' : 'false'}" aria-disabled="${isAvailable ? 'false' : 'true'}"${isAvailable ? '' : ' disabled tabindex="-1"'}>${escapeHtml(size)}</button>`;
     }).join('');
   };
 
-  const closeRecommendationSelector = ({ restoreFocus = false } = {}) => {
-    const card = activeRecommendationCard;
+  const findRenderedRecommendationCard = (productKey) =>
+    Array.from(
+      recommendationsList?.querySelectorAll('.checkout-recommendation') || [],
+    ).find((card) => card.dataset.recommendationProduct === productKey) || null;
+
+  const renderRecommendationSizes = (card, product) => {
+    if (!card || !product) return false;
+    const productKey = cleanText(card.dataset.recommendationProduct);
+    const uiState = getRecommendationUiState(productKey);
+    const selector = card.querySelector('.checkout-recommendation__sizes');
+    const addButton = card.querySelector('.checkout-recommendation__action');
+    if (!uiState || !selector || !addButton) return false;
+
+    const variants = getRecommendationVariants(product);
+    const selectedVariant = variants.find(
+      (variant) =>
+        isRecommendationVariantAvailable(variant) &&
+        String(variant.id) === String(uiState.selectedVariantId),
+    );
+    uiState.selectedVariantId = selectedVariant ? String(selectedVariant.id) : '';
+    card.dataset.recommendationVariant = uiState.selectedVariantId;
+    selector.innerHTML = variants.length
+      ? getRecommendationSizeMarkup(product, uiState.selectedVariantId)
+      : '<span class="checkout-recommendation__sizes-status">No disponible</span>';
+    selector.hidden = !uiState.open;
+    selector.removeAttribute('aria-busy');
+    card.classList.toggle('is-selecting-size', uiState.open);
+    addButton.setAttribute('aria-expanded', uiState.open ? 'true' : 'false');
+    return true;
+  };
+
+  const closeRecommendationSelector = (card, { restoreFocus = false } = {}) => {
     if (!card) return;
+    const uiState = getRecommendationUiState(card.dataset.recommendationProduct);
     const addButton = card.querySelector('.checkout-recommendation__action');
     const selector = card.querySelector('.checkout-recommendation__sizes');
     card.classList.remove('is-selecting-size');
     card.dataset.recommendationVariant = '';
+    if (uiState) {
+      uiState.open = false;
+      uiState.selectedVariantId = '';
+    }
     card.querySelectorAll('[data-recommendation-variant]').forEach((button) => {
       button.classList.remove('is-selected');
       button.setAttribute('aria-pressed', 'false');
     });
     addButton?.setAttribute('aria-expanded', 'false');
     if (selector) selector.hidden = true;
-    activeRecommendationCard = null;
     if (restoreFocus && addButton?.isConnected) addButton.focus();
   };
 
-  const openRecommendationSelector = (card, { focusFirst = false } = {}) => {
+  const openRecommendationSelector = async (card, product, { focusFirst = false } = {}) => {
     if (!card) return false;
-    if (activeRecommendationCard && activeRecommendationCard !== card) {
-      closeRecommendationSelector();
-    }
+    const productKey = cleanText(card.dataset.recommendationProduct);
+    const uiState = getRecommendationUiState(productKey);
     const addButton = card.querySelector('.checkout-recommendation__action');
     const selector = card.querySelector('.checkout-recommendation__sizes');
-    if (!addButton || !selector) return false;
-    activeRecommendationCard = card;
+    if (!productKey || !uiState || !product || !addButton || !selector) return false;
+    uiState.open = true;
     card.classList.add('is-selecting-size');
     addButton.setAttribute('aria-expanded', 'true');
     selector.hidden = false;
+    selector.setAttribute('aria-busy', 'true');
+    if (!getRecommendationVariants(product).length) {
+      selector.innerHTML = '<span class="checkout-recommendation__sizes-status">Cargando…</span>';
+    }
     setRecommendationsStatus('');
-    if (focusFirst) {
-      selector.querySelector('.checkout-recommendation__size:not(:disabled)')?.focus();
+
+    try {
+      const fresh = await fetchFreshRecommendation(product);
+      uiState.hydratedProduct = fresh;
+      recommendationProducts.set(productKey, fresh);
+      const currentCard = findRenderedRecommendationCard(productKey);
+      if (!currentCard || !uiState.open) return true;
+      renderRecommendationSizes(currentCard, fresh);
+      if (focusFirst) {
+        currentCard.querySelector('.checkout-recommendation__size:not(:disabled)')?.focus();
+      }
+    } catch (error) {
+      const currentCard = findRenderedRecommendationCard(productKey);
+      const currentSelector = currentCard?.querySelector('.checkout-recommendation__sizes');
+      if (currentSelector) {
+        currentSelector.removeAttribute('aria-busy');
+        if (!currentSelector.querySelector('[data-recommendation-variant]')) {
+          currentSelector.innerHTML = '<span class="checkout-recommendation__sizes-status">No disponible</span>';
+        }
+      }
+      console.warn('[CRONOX checkout recommendation sizes]', {
+        event: 'checkout_recommendation_sizes_load_failed',
+        type: error instanceof Error ? error.message : 'unexpected',
+      });
     }
     return true;
   };
 
   const hideRecommendations = () => {
-    closeRecommendationSelector();
     recommendationProducts.clear();
     if (recommendationsList) recommendationsList.innerHTML = '';
     if (recommendationsSection) recommendationsSection.hidden = true;
@@ -1023,7 +1105,6 @@
 
   const renderRecommendations = (products = []) => {
     if (!recommendationsSection || !recommendationsList) return;
-    closeRecommendationSelector();
     recommendationProducts.clear();
     recommendationsList.innerHTML = '';
 
@@ -1033,29 +1114,48 @@
     }
 
     const fragment = document.createDocumentFragment();
+    const renderedProductKeys = new Set();
     products.forEach((product) => {
       const productKey = String(product?.slug || '');
       if (!productKey) return;
-      recommendationProducts.set(productKey, product);
-      const productName = escapeHtml(product.name || 'Producto CRONOX');
-      const imageUrl = safeProductImage(product.image || product.images?.[0]);
-      const price = escapeHtml(product.priceLabel || formatMoney(product.price || 0));
+      renderedProductKeys.add(productKey);
+      const uiState = getRecommendationUiState(productKey);
+      const renderProduct = uiState?.hydratedProduct || product;
+      const selectedVariant = getAvailableRecommendationVariants(renderProduct).find(
+        (variant) => String(variant.id) === String(uiState?.selectedVariantId),
+      );
+      if (uiState) {
+        uiState.selectedVariantId = selectedVariant ? String(selectedVariant.id) : '';
+      }
+      recommendationProducts.set(productKey, renderProduct);
+      const productName = escapeHtml(renderProduct.name || 'Producto CRONOX');
+      const imageUrl = safeProductImage(renderProduct.image || renderProduct.images?.[0]);
+      const price = escapeHtml(renderProduct.priceLabel || formatMoney(renderProduct.price || 0));
       const selectorId = `checkout-recommendation-sizes-${++recommendationSequence}`;
-      const sizeMarkup = getRecommendationSizeMarkup(product);
+      const sizeMarkup = getRecommendationSizeMarkup(
+        renderProduct,
+        uiState?.selectedVariantId,
+      );
+      const isOpen = Boolean(uiState?.open);
       const article = document.createElement('article');
       article.className = 'checkout-recommendation';
       article.dataset.recommendationProduct = productKey;
-      article.dataset.recommendationVariant = '';
+      article.dataset.recommendationVariant = uiState?.selectedVariantId || '';
       article.innerHTML = `
         <img class="checkout-recommendation__image" src="${escapeHtml(imageUrl)}" alt="${productName}" loading="lazy" referrerpolicy="no-referrer">
         <div class="checkout-recommendation__copy">
           <h3 class="checkout-recommendation__name">${productName}</h3>
           <p class="checkout-recommendation__price">${price}</p>
-          <div id="${selectorId}" class="checkout-recommendation__sizes" role="group" aria-label="Tallas para ${productName}" hidden>${sizeMarkup}</div>
+          <div id="${selectorId}" class="checkout-recommendation__sizes" role="group" aria-label="Tallas para ${productName}"${isOpen ? '' : ' hidden'}>${sizeMarkup || (isOpen ? '<span class="checkout-recommendation__sizes-status">Cargando…</span>' : '')}</div>
         </div>
-        <button class="checkout-recommendation__action" type="button" aria-controls="${selectorId}" aria-expanded="false">Añadir</button>
+        <button class="checkout-recommendation__action" type="button" aria-controls="${selectorId}" aria-expanded="${isOpen ? 'true' : 'false'}">Añadir</button>
       `;
+      article.classList.toggle('is-selecting-size', isOpen);
+      syncRecommendationActionState(article);
       fragment.appendChild(article);
+    });
+    Array.from(recommendationUiState.keys()).forEach((productKey) => {
+      if (!renderedProductKeys.has(productKey)) recommendationUiState.delete(productKey);
     });
     recommendationsList.appendChild(fragment);
     recommendationsSection.hidden = recommendationsList.children.length === 0;
@@ -1071,18 +1171,40 @@
       hideRecommendations();
       return false;
     }
-    const candidates = window.CRONOX_CHECKOUT_LIFECYCLE.getRecommendationCandidates({
+    const standardCandidates = window.CRONOX_CHECKOUT_LIFECYCLE.getRecommendationCandidates({
       products: recommendationCatalog,
       cartItems: authoritativeRecommendationCart.items,
       limit: 3,
     }).filter((product) => cleanText(product?.slug));
+    const feedbackProducts = Array.from(recommendationUiState.entries())
+      .filter(([, uiState]) => uiState.actionState !== 'idle')
+      .map(([productKey, uiState]) =>
+        uiState.hydratedProduct ||
+        recommendationProducts.get(productKey) ||
+        recommendationCatalog.find((product) => cleanText(product?.slug) === productKey),
+      )
+      .filter(Boolean);
+    const feedbackProductKeys = new Set(
+      feedbackProducts.map((product) => cleanText(product?.slug)),
+    );
+    const candidates = [
+      ...feedbackProducts,
+      ...standardCandidates.filter(
+        (product) => !feedbackProductKeys.has(cleanText(product?.slug)),
+      ),
+    ].slice(0, 3);
     renderRecommendations(candidates);
     return true;
   };
 
+  const hasRecommendationActionFeedback = () =>
+    Array.from(recommendationUiState.values()).some(
+      (uiState) => uiState.actionState !== 'idle',
+    );
+
   const loadRecommendations = async ({ force = false } = {}) => {
     const loadRevision = ++recommendationLoadRevision;
-    hideRecommendations();
+    if (!hasRecommendationActionFeedback()) hideRecommendations();
     if (
       !recommendationsSection ||
       !hasAuthoritativeRecommendationCart() ||
@@ -1115,14 +1237,37 @@
     }
   };
 
-  const setRecommendationBusy = (card, busy) => {
+  const syncRecommendationActionState = (card) => {
     if (!card) return;
-    card.setAttribute('aria-busy', busy ? 'true' : 'false');
+    const uiState = getRecommendationUiState(card.dataset.recommendationProduct);
+    const actionState = uiState?.actionState || 'idle';
+    const processing = actionState !== 'idle';
+    const actionButton = card.querySelector('.checkout-recommendation__action');
+    const labels = {
+      idle: 'Añadir',
+      adding: 'Añadiendo…',
+      added: 'Añadido ✓',
+    };
+    card.classList.toggle('is-adding', actionState === 'adding');
+    card.classList.toggle('is-added', actionState === 'added');
+    card.setAttribute('aria-busy', actionState === 'adding' ? 'true' : 'false');
+    if (actionButton) {
+      actionButton.textContent = labels[actionState] || labels.idle;
+      actionButton.disabled = processing;
+      actionButton.setAttribute('aria-disabled', processing ? 'true' : 'false');
+    }
     card.querySelectorAll('button').forEach((button) => {
       const unavailable = button.dataset.recommendationUnavailable === 'true';
-      button.disabled = busy || unavailable;
+      if (button !== actionButton) button.disabled = processing || unavailable;
       if (unavailable) button.setAttribute('aria-disabled', 'true');
     });
+  };
+
+  const setRecommendationActionState = (productKey, actionState) => {
+    const uiState = getRecommendationUiState(productKey);
+    if (!uiState) return;
+    uiState.actionState = actionState;
+    syncRecommendationActionState(findRenderedRecommendationCard(productKey));
   };
 
   const selectRecommendationVariant = (card, selectedButton) => {
@@ -1141,6 +1286,11 @@
     });
     card.dataset.recommendationVariant =
       selectedButton.dataset.recommendationVariant || '';
+    const uiState = getRecommendationUiState(card.dataset.recommendationProduct);
+    if (uiState) {
+      uiState.open = true;
+      uiState.selectedVariantId = card.dataset.recommendationVariant;
+    }
     setRecommendationsStatus('');
     return true;
   };
@@ -1161,7 +1311,7 @@
     const productKey = card?.dataset.recommendationProduct || '';
     if (!productKey || pendingRecommendationAdds.has(productKey)) return false;
     pendingRecommendationAdds.add(productKey);
-    setRecommendationBusy(card, true);
+    setRecommendationActionState(productKey, 'adding');
     setRecommendationsStatus('');
     try {
       const fresh = await fetchFreshRecommendation(product);
@@ -1176,15 +1326,23 @@
       const addCartItem = window.CRONOX_CART?.addCartItem || API.addCartItem;
       if (typeof addCartItem !== 'function') throw new Error('CART_API_UNAVAILABLE');
       state.cart = await addCartItem({ variantId: variant.id, qty: 1 });
-      card.dataset.recommendationVariant = '';
-      closeRecommendationSelector();
+      const currentCard = findRenderedRecommendationCard(productKey) || card;
+      closeRecommendationSelector(currentCard);
+      setRecommendationActionState(productKey, 'added');
       commitAuthoritativeRecommendationCart(state.cart);
       reconcileRecommendationsWithCart();
       await queueCheckoutUpdate();
       await loadRecommendations({ force: true });
       setRecommendationsStatus('Producto añadido.');
+      await new Promise((resolve) => {
+        window.setTimeout(resolve, RECOMMENDATION_SUCCESS_FEEDBACK_MS);
+      });
+      setRecommendationActionState(productKey, 'idle');
+      pendingRecommendationAdds.delete(productKey);
+      window.setTimeout(() => reconcileRecommendationsWithCart(), 0);
       return true;
     } catch (error) {
+      setRecommendationActionState(productKey, 'idle');
       console.warn('[CRONOX checkout recommendation add]', {
         event: 'checkout_recommendation_add_failed',
         type: error instanceof Error ? error.message : 'unexpected',
@@ -1193,7 +1351,10 @@
       return false;
     } finally {
       pendingRecommendationAdds.delete(productKey);
-      if (card?.isConnected) setRecommendationBusy(card, false);
+      const uiState = recommendationUiState.get(cleanText(productKey));
+      if (uiState?.actionState === 'adding') {
+        setRecommendationActionState(productKey, 'idle');
+      }
     }
   };
 
@@ -1204,12 +1365,15 @@
     if (!product || !addButton) return;
 
     const selector = card.querySelector('.checkout-recommendation__sizes');
-    if (activeRecommendationCard !== card || selector?.hidden) {
-      openRecommendationSelector(card, { focusFirst });
+    if (selector?.hidden) {
+      await openRecommendationSelector(card, product, { focusFirst });
       return;
     }
 
-    const selectedVariantId = cleanText(card.dataset.recommendationVariant);
+    const uiState = getRecommendationUiState(card.dataset.recommendationProduct);
+    const selectedVariantId = cleanText(
+      uiState?.selectedVariantId || card.dataset.recommendationVariant,
+    );
     if (!selectedVariantId) {
       setRecommendationsStatus('Selecciona una talla.');
       card.querySelector('.checkout-recommendation__size:not(:disabled)')?.focus();
@@ -1344,7 +1508,7 @@
     const recommendationCartRevisionAtRequest =
       authoritativeRecommendationCartRevision;
     recommendationLoadRevision += 1;
-    hideRecommendations();
+    if (!hasRecommendationActionFeedback()) hideRecommendations();
     setLoadingState(true);
     errorDiv.textContent = '';
     try {
@@ -1476,7 +1640,8 @@
     if (
       expressCheckoutElement !== expectedElement ||
       !currentClientSecret ||
-      !isCheckoutContactAndShippingReady()
+      !isCheckoutContactAndShippingReady() ||
+      expressPaymentInFlight
     ) {
       event?.paymentFailed?.({ reason: 'fail' });
       return;
@@ -1490,6 +1655,7 @@
       return;
     }
 
+    expressPaymentInFlight = true;
     setPayButtonState(true);
     errorDiv.textContent = '';
     await subscribeNewsletterIfRequested();
@@ -1517,6 +1683,7 @@
       errorDiv.textContent = 'No hemos podido iniciar el pago rápido. Utiliza otro método de pago.';
       setPayButtonState(false);
     }
+    if (!result.attempted || result.error) expressPaymentInFlight = false;
   };
 
   const mountExpressCheckoutElement = () => {
@@ -1571,12 +1738,16 @@
   };
 
   const ensurePaymentElement = async (clientSecret) => {
-    if (!clientSecret || !stripe) return;
+    if (!clientSecret || !stripe) return false;
 
     if (currentClientSecret === clientSecret && paymentElementMounted) {
-      return;
+      return true;
     }
 
+    if (pendingPaymentElementLoadResolver) {
+      pendingPaymentElementLoadResolver(false);
+      pendingPaymentElementLoadResolver = null;
+    }
     if (paymentElement) {
       try {
         paymentElement.unmount();
@@ -1593,6 +1764,18 @@
     currentClientSecret = clientSecret;
     let loadSettled = false;
     let loadTimeoutId = null;
+    let settleElementLoad;
+    const elementLoadPromise = new Promise((resolve) => {
+      settleElementLoad = (ready) => {
+        if (loadSettled) return;
+        loadSettled = true;
+        if (pendingPaymentElementLoadResolver === settleElementLoad) {
+          pendingPaymentElementLoadResolver = null;
+        }
+        resolve(Boolean(ready));
+      };
+      pendingPaymentElementLoadResolver = settleElementLoad;
+    });
     const clearLoadTimeout = () => {
       if (loadTimeoutId !== null) {
         window.clearTimeout(loadTimeoutId);
@@ -1601,15 +1784,15 @@
     };
     const handleReady = () => {
       if (paymentElement !== nextPaymentElement || loadSettled) return;
-      loadSettled = true;
       clearLoadTimeout();
       paymentElementMounted = true;
+      settleElementLoad(true);
       setPayButtonState(false);
     };
     const handleLoadError = (event) => {
       if (paymentElement !== nextPaymentElement || loadSettled) return;
-      loadSettled = true;
       clearLoadTimeout();
+      settleElementLoad(false);
       paymentElementMounted = false;
       try {
         nextPaymentElement.unmount();
@@ -1644,6 +1827,7 @@
       loadTimeoutId = window.setTimeout(() => handleLoadError({ error: { type: 'load_timeout' } }), 15_000);
       nextPaymentElement.mount(container);
       if (!observesLoad) handleReady();
+      return elementLoadPromise;
     } catch (error) {
       clearLoadTimeout();
       console.error('[CRONOX checkout Payment Element]', {
@@ -1837,7 +2021,8 @@
       currentPaymentIntentId = nextPaymentIntentId;
       state.shippingMethod = requestedShippingMethod;
       state.totals = data.totals || state.totals;
-      await ensurePaymentElement(nextClientSecret);
+      const paymentReady = await ensurePaymentElement(nextClientSecret);
+      if (!paymentReady || revision !== checkoutRevision) return false;
       renderSummary(
         state.totals,
         findShippingMethod(state.shippingMethod) || data.shippingMethod,
@@ -2164,19 +2349,16 @@
 
     document.addEventListener('click', (event) => {
       if (!event.target.closest('.checkout-menu')) closeCheckoutMenus();
-      if (
-        activeRecommendationCard &&
-        !activeRecommendationCard.contains(event.target)
-      ) {
-        closeRecommendationSelector();
-      }
     });
     document.addEventListener('keydown', (event) => {
       if (event.key === 'Escape') {
         if (addressModal && !addressModal.hidden) closeAddressModal();
-        else if (activeRecommendationCard) {
+        else if (document.activeElement?.closest?.('.checkout-recommendation')) {
           event.preventDefault();
-          closeRecommendationSelector({ restoreFocus: true });
+          closeRecommendationSelector(
+            document.activeElement.closest('.checkout-recommendation'),
+            { restoreFocus: true },
+          );
         }
         else closeCheckoutMenus();
         return;
@@ -2211,16 +2393,21 @@
       showSavedAddress({ refreshPayment: true });
     });
 
-    recommendationsList?.addEventListener('click', async (event) => {
-      const card = event.target.closest('.checkout-recommendation');
+    const recommendationEventRoot = checkoutMain || document;
+    recommendationEventRoot.addEventListener('click', async (event) => {
+      const target = event.target?.closest ? event.target : null;
+      if (!target?.closest('#recommendations-list')) return;
+      const card = target.closest('.checkout-recommendation');
       if (!card) return;
       const product = recommendationProducts.get(card.dataset.recommendationProduct || '');
-      const sizeButton = event.target.closest('[data-recommendation-variant]');
+      const sizeButton = target.closest('button[data-recommendation-variant]');
       if (sizeButton && product) {
+        event.preventDefault();
         selectRecommendationVariant(card, sizeButton);
         return;
       }
-      if (event.target.closest('.checkout-recommendation__action')) {
+      if (target.closest('.checkout-recommendation__action')) {
+        event.preventDefault();
         await handleRecommendationAdd(card, { focusFirst: event.detail === 0 });
       }
     });
@@ -2363,21 +2550,30 @@
   });
 
   document.addEventListener('DOMContentLoaded', async () => {
-    clearPromoInputOnLoad();
-    clearStoredPromo();
-    setPromoState(null);
-    renderPromoUI();
-    bindEvents();
-    await resolveAuthStatus();
-    if (!state.isAuthenticated) {
-      await renderGuestCheckout();
-      await loadRecommendations();
-      return;
-    }
+    try {
+      clearPromoInputOnLoad();
+      clearStoredPromo();
+      setPromoState(null);
+      renderPromoUI();
+      bindEvents();
+      await resolveAuthStatus();
+      if (!state.isAuthenticated) {
+        await renderGuestCheckout();
+        await loadRecommendations();
+        return;
+      }
 
-    await loadUserShippingDefaults();
-    ensureStripeReady();
-    await queueCheckoutUpdate();
-    await loadRecommendations();
+      await loadUserShippingDefaults();
+      ensureStripeReady();
+      await queueCheckoutUpdate();
+      await loadRecommendations();
+    } catch (error) {
+      console.error('[CRONOX checkout initialization]', {
+        event: 'checkout_initialization_failed',
+        type: error instanceof Error ? error.name : 'unexpected',
+      });
+    } finally {
+      window.CRONOX_CHECKOUT_LOADING?.finish?.();
+    }
   });
 })();
