@@ -1160,7 +1160,11 @@
     const frag = document.createDocumentFragment();
     favorites.forEach((fav) => {
       const card = cardBuilder(fav);
-      if (card) frag.appendChild(card);
+      if (card) {
+        card.querySelectorAll('img.product-img').forEach((image) => {
+        });
+        frag.appendChild(card);
+      }
     });
     favoritesGrid.appendChild(frag);
     updateFavoritesState({ loading: false, empty: false });

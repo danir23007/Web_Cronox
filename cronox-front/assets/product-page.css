@@ -113,27 +113,30 @@
 .pdp-related { margin-top:42px; }
 .pdp-related__title { font-size: clamp(18px, 2.6vw, 22px); margin: 0 0 24px; letter-spacing:.06em; }
 
-/* Mini grid reutilizando estilos base si existen, con seguros locales */
-.products-grid{
-  display:grid;
-  grid-template-columns:repeat(auto-fit,minmax(220px,1fr));
-  gap:16px;
-  justify-content:start;
-}
-@media (min-width:768px){ .products-grid{ gap:20px; } }
-
-.product-card{
+.pdp-related .product-card{
   background:#000;
-  border:1px solid rgba(255,255,255,.14);
+  border:0;
   border-radius:0;
+  outline:0;
+  box-shadow:none;
   overflow:hidden;
   display:flex;
   flex-direction:column;
   text-decoration:none;
   color:#fff;
-  transition:transform .2s ease, box-shadow .2s ease;
+  transition:transform .2s ease;
 }
-.product-card:hover{ transform:translateY(-2px); }
+.pdp-related .product-card:hover,
+.pdp-related .product-card:active{
+  border:0;
+  outline:0;
+  box-shadow:none;
+  transform:translateY(-2px);
+}
+.pdp-related .product-card:focus-visible{
+  outline:2px solid #fff;
+  outline-offset:3px;
+}
 /*
  * Related cards reuse the shared product-card carousel.  Keep their image
  * viewport square, but take every non-active image out of document flow so
@@ -164,9 +167,12 @@
 .pdp-related .product-images .product-arrow{
   display:block!important;
 }
-.product-card__info{
+.pdp-related .product-card__info{
   margin-top:auto;
   background:#000;
+  border:0;
+  outline:0;
+  box-shadow:none;
   padding:12px 14px 14px;
   display:flex;
   flex-direction:column;

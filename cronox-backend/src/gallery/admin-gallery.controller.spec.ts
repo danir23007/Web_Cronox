@@ -7,6 +7,8 @@ import {
 import { GUARDS_METADATA } from '@nestjs/common/constants';
 import { Reflector } from '@nestjs/core';
 import { Role } from '@prisma/client';
+import { plainToInstance } from 'class-transformer';
+import { validate } from 'class-validator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { AdminGuard } from '../common/guards/admin.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
@@ -17,6 +19,7 @@ import {
 } from './admin-gallery.controller';
 import { GalleryController } from './gallery.controller';
 import { GalleryService } from './gallery.service';
+import { UpdateGallerySlotDto } from './dto/update-gallery-slot.dto';
 import {
   GALLERY_UPLOAD_TOO_LARGE_MESSAGE,
   GalleryUploadSizeExceptionFilter,
@@ -79,35 +82,61 @@ describe('gallery controller access boundaries', () => {
     expect(guard.canActivate(contextFor(Role.ADMIN))).toBe(true);
   });
 
-  it('delegates reads, uploads, and slot updates to the gallery service', async () => {
+  it('delegates reads, uploads, slot updates, and reorder requests to the gallery service', async () => {
     const getAdminSlots = jest.fn().mockResolvedValue({ slots: [] });
     const getAssetLibrary = jest.fn().mockResolvedValue({ assets: [] });
+    const getAssetDetails = jest
+      .fn()
+      .mockResolvedValue({ asset: { id: 'asset-1' } });
+    const getProductRepository = jest.fn().mockResolvedValue({ products: [] });
     const uploadAsset = jest
       .fn()
       .mockResolvedValue({ asset: { id: 'asset-1' } });
     const updateSlot = jest
       .fn()
       .mockResolvedValue({ slot: { key: 'slot-01' } });
+    const reorderSlots = jest
+      .fn()
+      .mockResolvedValue({ operation: 'move', slots: [] });
     const service = {
       getAdminSlots,
       getAssetLibrary,
+      getAssetDetails,
+      getProductRepository,
       uploadAsset,
       updateSlot,
+      reorderSlots,
     } as unknown as GalleryService;
     const controller = new AdminGalleryController(service);
     const file = {} as Express.Multer.File;
 
     await controller.getSlots();
-    await controller.getAssets();
+    await controller.getAssets({ page: 2, limit: 12 });
+    await controller.getAsset('asset-1');
+    await controller.getProducts({ search: 'tee', page: 1, limit: 20 });
     await controller.uploadAsset(file, 12);
     await controller.updateSlot('slot-01', { altText: 'Cliente CRONOX' }, 12);
+    await controller.reorderSlots(
+      { sourceKey: 'slot-01', targetKey: 'slot-05' },
+      12,
+    );
 
     expect(getAdminSlots).toHaveBeenCalled();
-    expect(getAssetLibrary).toHaveBeenCalled();
+    expect(getAssetLibrary).toHaveBeenCalledWith({ page: 2, limit: 12 });
+    expect(getAssetDetails).toHaveBeenCalledWith('asset-1');
+    expect(getProductRepository).toHaveBeenCalledWith({
+      search: 'tee',
+      page: 1,
+      limit: 20,
+    });
     expect(uploadAsset).toHaveBeenCalledWith(file, 12);
     expect(updateSlot).toHaveBeenCalledWith(
       'slot-01',
       { altText: 'Cliente CRONOX' },
+      12,
+    );
+    expect(reorderSlots).toHaveBeenCalledWith(
+      { sourceKey: 'slot-01', targetKey: 'slot-05' },
       12,
     );
   });
@@ -138,5 +167,22 @@ describe('gallery controller access boundaries', () => {
       files: 1,
       fileSize: 25 * 1024 * 1024,
     });
+  });
+
+  it('validates the 2,000 character text limit and safe product identifiers', async () => {
+    const valid = plainToInstance(UpdateGallerySlotDto, {
+      description: 'x'.repeat(2000),
+      productIds: [2, 1, 2],
+    });
+    const tooLong = plainToInstance(UpdateGallerySlotDto, {
+      description: 'x'.repeat(2001),
+    });
+    const malformedIds = plainToInstance(UpdateGallerySlotDto, {
+      productIds: [1, 0, 'not-a-number'],
+    });
+
+    expect(await validate(valid)).toHaveLength(0);
+    expect(await validate(tooLong)).not.toHaveLength(0);
+    expect(await validate(malformedIds)).not.toHaveLength(0);
   });
 });

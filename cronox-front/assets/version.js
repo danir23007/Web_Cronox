@@ -1,7 +1,7 @@
 // assets/version.js
 (function () {
   // 👉 Cambiar este número cuando quiera actualizar estilos o scripts
-  const VERSION = '86';
+  const VERSION = '90';
 
   window.CRONOX_VERSION = VERSION;
 

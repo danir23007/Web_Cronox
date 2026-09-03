@@ -80,9 +80,7 @@ describe('guest checkout final refinement', () => {
     expect(html).toMatch(
       /<p id="default-address-lines"><\/p>\s*<\/div>\s*<button id="different-address-button"/,
     );
-    expect(css).toContain(
-      '#address-details[open] > summary #address-summary',
-    );
+    expect(css).toContain('#address-details[open] > summary #address-summary');
   });
 
   it('keeps the default address selectable above the temporary alternative form', () => {
@@ -99,7 +97,7 @@ describe('guest checkout final refinement', () => {
     expect(script).toContain('setSavedAddressSelected(false)');
     expect(script).toContain('savedAddressSelectButton?.addEventListener');
     expect(script).toContain("defaultAddressCard?.addEventListener('click'");
-    expect(script).toContain("event.target.closest('button, [role=\"menu\"]')");
+    expect(script).toContain('event.target.closest(\'button, [role="menu"]\')');
     expect(script).toContain('showSavedAddress({ refreshPayment: true })');
   });
 
@@ -121,7 +119,9 @@ describe('guest checkout final refinement', () => {
     ]) {
       expect(shippingForm).toContain(`placeholder="${placeholder}"`);
     }
-    expect(shippingForm.match(/class="checkout-visually-hidden"/g)).toHaveLength(9);
+    expect(
+      shippingForm.match(/class="checkout-visually-hidden"/g),
+    ).toHaveLength(9);
     expect(shippingForm).not.toContain('<span>Nombre</span>');
     expect(shippingForm).not.toContain('placeholder="Calle y número"');
     expect(shippingForm).not.toContain('placeholder="00000"');
@@ -176,6 +176,8 @@ describe('guest checkout final refinement', () => {
       "button.setAttribute('aria-expanded', String(willOpen))",
     );
     expect(css).toContain('width: min(100%, 570px)');
-    expect(css).toContain('max-height: min(760px, calc(100dvh - 40px))');
+    expect(css).toContain(
+      'max-height: min(760px, calc(100dvh - max(20px,env(safe-area-inset-top)) - max(20px,env(safe-area-inset-bottom))))',
+    );
   });
 });

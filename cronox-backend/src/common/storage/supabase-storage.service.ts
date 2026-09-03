@@ -19,9 +19,15 @@ export type GalleryUploadResult = {
   height: number | null;
 };
 
+export type WebsiteMediaUploadResult = GalleryUploadResult & {
+  mediaType: 'image' | 'video';
+  folderKey: string;
+};
+
 export const MAX_PRODUCT_IMAGE_COUNT = 8;
 export const MAX_PRODUCT_IMAGE_BYTES = 8 * 1024 * 1024;
 export const MAX_GALLERY_IMAGE_BYTES = 25 * 1024 * 1024;
+export const MAX_WEBSITE_MEDIA_BYTES = 100 * 1024 * 1024;
 
 const ALLOWED_IMAGE_MIME_TYPES = new Set([
   'image/jpeg',
@@ -33,7 +39,15 @@ const extensionForMimeType: Record<string, string> = {
   'image/jpeg': 'jpg',
   'image/png': 'png',
   'image/webp': 'webp',
+  'video/mp4': 'mp4',
+  'video/webm': 'webm',
 };
+
+const ALLOWED_WEBSITE_MEDIA_MIME_TYPES = new Set([
+  ...ALLOWED_IMAGE_MIME_TYPES,
+  'video/mp4',
+  'video/webm',
+]);
 
 @Injectable()
 export class SupabaseStorageService {
@@ -42,6 +56,10 @@ export class SupabaseStorageService {
     process.env.SUPABASE_STORAGE_BUCKET || 'products';
   private readonly galleryBucket =
     process.env.SUPABASE_GALLERY_STORAGE_BUCKET || 'gallery';
+  private readonly websiteMediaBucket =
+    process.env.SUPABASE_WEBSITE_MEDIA_STORAGE_BUCKET ||
+    process.env.SUPABASE_GALLERY_STORAGE_BUCKET ||
+    'gallery';
   private readonly supabaseUrl = process.env.SUPABASE_URL;
   private readonly serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
@@ -190,6 +208,100 @@ export class SupabaseStorageService {
     };
   }
 
+  async uploadWebsiteMedia(
+    file: Express.Multer.File | undefined,
+    folderKey: string,
+    adminId?: number,
+  ): Promise<WebsiteMediaUploadResult> {
+    if (!file) {
+      throw new BadRequestException('No se recibió un archivo para subir');
+    }
+
+    const normalizedFolder = String(folderKey || '').toLowerCase();
+    if (!/^[a-z0-9-]{1,60}$/.test(normalizedFolder)) {
+      throw new BadRequestException('La carpeta multimedia no es válida');
+    }
+
+    const byteLength = Buffer.isBuffer(file.buffer) ? file.buffer.length : 0;
+    const mediaType = file.mimetype.startsWith('video/') ? 'video' : 'image';
+    const sizeLimit =
+      mediaType === 'video' ? MAX_WEBSITE_MEDIA_BYTES : MAX_GALLERY_IMAGE_BYTES;
+    if (byteLength > sizeLimit) {
+      throw new BadRequestException(
+        mediaType === 'video'
+          ? 'El vídeo supera el tamaño máximo permitido de 100 MB.'
+          : 'La imagen supera el tamaño máximo permitido de 25 MB.',
+      );
+    }
+    if (
+      !ALLOWED_WEBSITE_MEDIA_MIME_TYPES.has(file.mimetype) ||
+      !Buffer.isBuffer(file.buffer) ||
+      byteLength <= 0 ||
+      !this.hasExpectedWebsiteMediaSignature(file.buffer, file.mimetype)
+    ) {
+      throw new BadRequestException(
+        'Archivo no válido. Solo se permiten JPEG, PNG, WebP, MP4 o WebM válidos.',
+      );
+    }
+
+    if (!this.supabaseUrl || !this.serviceRoleKey) {
+      this.logger.error(
+        'Faltan variables SUPABASE_URL o SUPABASE_SERVICE_ROLE_KEY',
+      );
+      throw new InternalServerErrorException('Almacenamiento no configurado');
+    }
+
+    const extension = extensionForMimeType[file.mimetype];
+    const kindFolder = mediaType === 'video' ? 'videos' : 'fotos';
+    const storageKey = this.buildObjectPath(
+      extension,
+      `multimedia-web/${normalizedFolder}/${kindFolder}`,
+    );
+    const response = await fetch(
+      `${this.supabaseUrl}/storage/v1/object/${this.websiteMediaBucket}/${storageKey}`,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${this.serviceRoleKey}`,
+          'Content-Type': file.mimetype,
+          'Cache-Control': '31536000',
+          'x-upsert': 'false',
+        },
+        body: file.buffer as unknown as BodyInit,
+      },
+    );
+
+    if (!response.ok) {
+      this.logger.error(
+        `Supabase website media upload failed with status ${response.status}`,
+      );
+      throw new InternalServerErrorException(
+        'No se pudo subir el archivo multimedia',
+      );
+    }
+
+    const dimensions =
+      mediaType === 'image'
+        ? this.readImageDimensions(file.buffer, file.mimetype)
+        : null;
+    const publicUrl = `${this.supabaseUrl}/storage/v1/object/public/${this.websiteMediaBucket}/${storageKey}`;
+    this.logger.log(
+      `Multimedia web subida a Supabase${adminId ? ` por admin ${adminId}` : ''}`,
+    );
+
+    return {
+      storageKey,
+      publicUrl,
+      originalFilename: this.sanitizeOriginalFilename(file.originalname),
+      mimeType: file.mimetype,
+      mediaType,
+      folderKey: normalizedFolder,
+      fileSize: byteLength,
+      width: dimensions?.width ?? null,
+      height: dimensions?.height ?? null,
+    };
+  }
+
   private hasExpectedImageSignature(buffer: Buffer, mimeType: string) {
     if (mimeType === 'image/jpeg') {
       return (
@@ -217,6 +329,25 @@ export class SupabaseStorageService {
       );
     }
 
+    return false;
+  }
+
+  private hasExpectedWebsiteMediaSignature(buffer: Buffer, mimeType: string) {
+    if (ALLOWED_IMAGE_MIME_TYPES.has(mimeType)) {
+      return this.hasExpectedImageSignature(buffer, mimeType);
+    }
+    if (mimeType === 'video/mp4') {
+      return (
+        buffer.length >= 12 &&
+        buffer.subarray(4, 8).toString('ascii') === 'ftyp'
+      );
+    }
+    if (mimeType === 'video/webm') {
+      return (
+        buffer.length >= 4 &&
+        buffer.subarray(0, 4).equals(Buffer.from([0x1a, 0x45, 0xdf, 0xa3]))
+      );
+    }
     return false;
   }
 

@@ -1,5 +1,8 @@
 import { Type } from 'class-transformer';
 import {
+  ArrayMaxSize,
+  IsArray,
+  IsInt,
   IsNumber,
   IsOptional,
   IsString,
@@ -44,4 +47,17 @@ export class UpdateGallerySlotDto {
   @IsString()
   @MaxLength(2048)
   instagramUrl?: string | null;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(2000)
+  description?: string | null;
+
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(100)
+  @Type(() => Number)
+  @IsInt({ each: true })
+  @Min(1, { each: true })
+  productIds?: number[];
 }

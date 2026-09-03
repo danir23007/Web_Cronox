@@ -5,6 +5,7 @@ import {
   Param,
   Patch,
   Post,
+  Query,
   UploadedFile,
   UseFilters,
   UseGuards,
@@ -19,6 +20,9 @@ import { AdminGuard } from '../common/guards/admin.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/roles.decorator';
 import { MAX_GALLERY_IMAGE_BYTES } from '../common/storage/supabase-storage.service';
+import { ReorderGallerySlotsDto } from './dto/reorder-gallery-slots.dto';
+import { GalleryAssetQueryDto } from './dto/gallery-asset-query.dto';
+import { GalleryProductQueryDto } from './dto/gallery-product-query.dto';
 import { UpdateGallerySlotDto } from './dto/update-gallery-slot.dto';
 import { GalleryService } from './gallery.service';
 import { GalleryUploadSizeExceptionFilter } from './gallery-upload-size-exception.filter';
@@ -53,8 +57,18 @@ export class AdminGalleryController {
   }
 
   @Get('assets')
-  getAssets() {
-    return this.galleryService.getAssetLibrary();
+  getAssets(@Query() query: GalleryAssetQueryDto) {
+    return this.galleryService.getAssetLibrary(query);
+  }
+
+  @Get('assets/:id')
+  getAsset(@Param('id') id: string) {
+    return this.galleryService.getAssetDetails(id);
+  }
+
+  @Get('products')
+  getProducts(@Query() query: GalleryProductQueryDto) {
+    return this.galleryService.getProductRepository(query);
   }
 
   @Post('assets')
@@ -72,6 +86,14 @@ export class AdminGalleryController {
     @CurrentUser('id') adminId?: number,
   ) {
     return this.galleryService.uploadAsset(file, adminId);
+  }
+
+  @Patch('slots/reorder')
+  reorderSlots(
+    @Body() dto: ReorderGallerySlotsDto,
+    @CurrentUser('id') adminId?: number,
+  ) {
+    return this.galleryService.reorderSlots(dto, adminId);
   }
 
   @Patch('slots/:key')

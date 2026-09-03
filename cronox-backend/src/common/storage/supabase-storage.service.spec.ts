@@ -4,6 +4,7 @@ import {
   MAX_GALLERY_IMAGE_BYTES,
   MAX_PRODUCT_IMAGE_BYTES,
   MAX_PRODUCT_IMAGE_COUNT,
+  MAX_WEBSITE_MEDIA_BYTES,
   SupabaseStorageService,
 } from './supabase-storage.service';
 
@@ -237,6 +238,91 @@ describe('SupabaseStorageService', () => {
     expect(MAX_PRODUCT_IMAGE_BYTES).toBe(8 * 1024 * 1024);
     expect(MAX_GALLERY_IMAGE_BYTES).toBe(25 * 1024 * 1024);
     await expect(service.uploadProductImages([image])).rejects.toThrow('8 MB');
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    [
+      'image/png',
+      (() => {
+        const buffer = Buffer.alloc(24);
+        PNG_SIGNATURE.copy(buffer);
+        buffer.writeUInt32BE(1600, 16);
+        buffer.writeUInt32BE(900, 20);
+        return buffer;
+      })(),
+      'portada.png',
+      'fotos',
+      'image',
+    ],
+    [
+      'video/mp4',
+      Buffer.from([
+        0, 0, 0, 20, 0x66, 0x74, 0x79, 0x70, 0x69, 0x73, 0x6f, 0x6d,
+      ]),
+      'portada.mp4',
+      'videos',
+      'video',
+    ],
+    [
+      'video/webm',
+      Buffer.from([0x1a, 0x45, 0xdf, 0xa3, 0x9f, 0x42, 0x86, 0x81]),
+      'portada.webm',
+      'videos',
+      'video',
+    ],
+  ])(
+    'stores valid website %s files in their reusable PORTADAS subfolder',
+    async (mimetype, buffer, originalname, subfolder, mediaType) => {
+      const fetchMock = jest.fn().mockResolvedValue({ ok: true, status: 200 });
+      global.fetch = fetchMock as typeof fetch;
+      const service = new SupabaseStorageService();
+      const file = {
+        mimetype,
+        buffer,
+        size: buffer.length,
+        originalname,
+      } as Express.Multer.File;
+
+      const result = await service.uploadWebsiteMedia(file, 'portadas', 4);
+
+      expect(result).toMatchObject({
+        folderKey: 'portadas',
+        mediaType,
+        originalFilename: originalname,
+      });
+      expect(result.storageKey).toMatch(
+        new RegExp(`^multimedia-web/portadas/${subfolder}/\\d{4}/\\d{2}/`),
+      );
+      expect(fetchMock).toHaveBeenCalledWith(
+        expect.stringContaining(
+          `/storage/v1/object/gallery/multimedia-web/portadas/${subfolder}/`,
+        ),
+        expect.objectContaining({
+          headers: expect.objectContaining({
+            'Content-Type': mimetype,
+            'x-upsert': 'false',
+          }),
+        }),
+      );
+    },
+  );
+
+  it('rejects forged website videos and keeps the 100 MB request ceiling', async () => {
+    const fetchMock = jest.fn();
+    global.fetch = fetchMock as typeof fetch;
+    const service = new SupabaseStorageService();
+    const forged = {
+      mimetype: 'video/mp4',
+      buffer: Buffer.from('not an mp4'),
+      size: 10,
+      originalname: 'forged.mp4',
+    } as Express.Multer.File;
+
+    expect(MAX_WEBSITE_MEDIA_BYTES).toBe(100 * 1024 * 1024);
+    await expect(
+      service.uploadWebsiteMedia(forged, 'portadas'),
+    ).rejects.toBeInstanceOf(BadRequestException);
     expect(fetchMock).not.toHaveBeenCalled();
   });
 });

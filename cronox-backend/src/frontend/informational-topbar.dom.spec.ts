@@ -61,8 +61,8 @@ describe('informational footer destinations use the shared CRONOX topbar', () =>
       expect(html).toMatch(
         /<body class="page-info">\s*<script src="assets\/info-shell\.js\?v=1"><\/script>/,
       );
-      expect(html).toContain('href="assets/store.css?v=86"');
-      expect(html).toContain('href="assets/info-page.css?v=1"');
+      expect(html).toContain('href="assets/store.css?v=89"');
+      expect(html).toContain('href="assets/info-page.css?v=2"');
       expect(html.match(/assets\/info-shell\.js\?v=1/g)).toHaveLength(1);
       expect(html.match(/assets\/app\.js\?v=60/g)).toHaveLength(1);
       expect(html.match(/assets\/api\.js\?v=4/g)).toHaveLength(1);
@@ -114,7 +114,9 @@ describe('informational footer destinations use the shared CRONOX topbar', () =>
     );
     expect(infoShellScript).not.toContain('topbar--transparent');
     expect(infoPageStyles).toContain('body.page-info');
-    expect(infoPageStyles).toContain('padding-top: var(--topbar-h, 64px)');
+    expect(infoPageStyles).toContain(
+      'padding-top: calc(var(--topbar-h, 64px) + env(safe-area-inset-top))',
+    );
     expect(infoPageStyles).toContain('overflow-x: hidden');
     expect(infoPageStyles).toContain('background: #000');
     expect(storeStyles).toMatch(/\.topbar\{[\s\S]*position:fixed/);

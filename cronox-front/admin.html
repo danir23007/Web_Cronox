@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>CRONOX ADMIN</title>
-  <script src="assets/version.js"></script>
+  <script src="assets/version.js?v=89"></script>
   <script>
     (function () {
       if (window.CRONOX_ASSET) {
@@ -16,7 +16,8 @@
     })();
   </script>
   <link id="cronox-admin-style" rel="stylesheet" href="assets/store.css">
-  <link rel="stylesheet" href="assets/admin-gallery.css?v=1">
+  <link rel="stylesheet" href="assets/admin-gallery.css?v=4">
+  <link rel="stylesheet" href="assets/admin-media.css?v=3">
   <style>
     body { font-family: 'Inter', system-ui, -apple-system, sans-serif; background: #050505; color: #fff; margin: 0; min-height: 100vh; }
     .admin-shell { width: min(100% - 48px, 1500px); margin: 0 auto; padding: 32px 0 48px; }
@@ -237,6 +238,7 @@
         <button class="btn admin-nav-item admin-nav-item--described" data-nav-target="section-users"><strong class="admin-nav-item__title">Usuarios -</strong><span class="admin-nav-item__description">Info cuentas registradas</span></button>
         <button class="btn admin-nav-item admin-nav-item--described" data-nav-target="section-products-menu"><strong class="admin-nav-item__title">Productos -</strong><span class="admin-nav-item__description">Gestión, edición y clasificación de productos</span></button>
         <button class="btn admin-nav-item admin-nav-item--described" data-nav-target="section-gallery"><strong class="admin-nav-item__title">Galer&iacute;a -</strong><span class="admin-nav-item__description">Gesti&oacute;n de im&aacute;genes de la galer&iacute;a p&uacute;blica</span></button>
+        <button class="btn admin-nav-item admin-nav-item--described" data-nav-target="section-media"><strong class="admin-nav-item__title">Multimedia Web -</strong><span class="admin-nav-item__description">Gesti&oacute;n y encuadre no destructivo de las im&aacute;genes y v&iacute;deos propios de la web</span></button>
         <button class="btn admin-nav-item admin-nav-item--described" data-nav-target="section-orders"><strong class="admin-nav-item__title">Pedidos -</strong><span class="admin-nav-item__description">Información, seguimiento y estado del pedido</span></button>
         <button class="btn admin-nav-item admin-nav-item--described" data-nav-target="section-codes"><strong class="admin-nav-item__title">Códigos -</strong><span class="admin-nav-item__description">Creación y edición de códigos de descuento</span></button>
       </div>
@@ -1000,6 +1002,58 @@
       </div>
     </section>
 
+    <section id="section-media" class="card admin-section media-manager" aria-labelledby="title-media" hidden>
+      <button class="btn admin-view-back" type="button" data-back-target="section-menu">&larr; Atr&aacute;s</button>
+      <div class="media-manager__header">
+        <div>
+          <h2 id="title-media">Multimedia Web</h2>
+          <small>Gesti&oacute;n y encuadre no destructivo de las im&aacute;genes y v&iacute;deos propios de la web.</small>
+        </div>
+      </div>
+      <div class="media-manager__filters" aria-label="Filtros de Multimedia Web">
+        <label>Buscar
+          <input id="mediaSearch" class="input" type="search" placeholder="Nombre, ruta o archivo">
+        </label>
+        <label>Categor&iacute;a
+          <select id="mediaCategoryFilter" class="input"><option value="">Todas</option></select>
+        </label>
+        <label>Tipo
+          <select id="mediaTypeFilter" class="input">
+            <option value="">Im&aacute;genes y v&iacute;deos</option>
+            <option value="image">Im&aacute;genes</option>
+            <option value="video">V&iacute;deos</option>
+          </select>
+        </label>
+        <label>Estado
+          <select id="mediaStatusFilter" class="input">
+            <option value="">Todos</option>
+            <option value="DEFAULT">Predeterminado</option>
+            <option value="CUSTOM">Personalizado</option>
+            <option value="RESPONSIVE_CUSTOM">Personalizado por dispositivo</option>
+          </select>
+        </label>
+      </div>
+      <p id="mediaAdminStatus" class="media-manager__status" role="status" aria-live="polite">Abre Multimedia Web para cargar las ubicaciones.</p>
+      <section class="media-library" aria-labelledby="mediaLibraryTitle">
+        <div class="media-library__header">
+          <div>
+            <h3 id="mediaLibraryTitle">Multimedia pasada</h3>
+            <p>Todos los archivos subidos se conservan para poder volver a utilizarlos.</p>
+          </div>
+          <div class="media-library__upload">
+            <label for="mediaLibraryUpload">A&ntilde;adir a PORTADAS</label>
+            <input id="mediaLibraryUpload" class="input" type="file" accept="image/jpeg,image/png,image/webp,video/mp4,video/webm">
+            <button id="mediaLibraryUploadButton" class="btn" type="button">Subir archivo</button>
+            <progress id="mediaLibraryUploadProgress" hidden>Subiendo&hellip;</progress>
+            <small>JPEG, PNG o WebP hasta 25 MB. MP4 o WebM hasta 100 MB.</small>
+          </div>
+        </div>
+        <p id="mediaLibraryStatus" class="media-manager__status" role="status" aria-live="polite"></p>
+        <div id="mediaLibraryFolders" class="media-library__folders" aria-live="polite" aria-busy="false"></div>
+      </section>
+      <div id="mediaPlacementGrid" class="media-manager__grid" aria-live="polite" aria-busy="false"></div>
+    </section>
+
     <section id="section-gallery" class="card admin-section" aria-labelledby="title-gallery" hidden>
       <button class="btn admin-view-back" type="button" data-back-target="section-menu">&larr; Atr&aacute;s</button>
       <div class="gallery-admin-header">
@@ -1212,6 +1266,76 @@
     </div>
   </div>
 
+  <div class="modal media-editor" id="mediaEditorModal" role="dialog" aria-modal="true" aria-hidden="true" aria-labelledby="mediaEditorTitle">
+    <div class="modal-box media-editor__box">
+      <div class="media-editor__header">
+        <div>
+          <h3 id="mediaEditorTitle">Editar encuadre</h3>
+          <small id="mediaEditorRoute"></small>
+        </div>
+        <button type="button" class="btn" id="mediaEditorClose" aria-label="Cerrar editor de Multimedia Web">Cerrar</button>
+      </div>
+
+      <div class="media-editor__devices" role="tablist" aria-label="Vista por dispositivo">
+        <button class="btn is-active" type="button" role="tab" aria-selected="true" data-media-device="desktop">Escritorio</button>
+        <button class="btn" type="button" role="tab" aria-selected="false" data-media-device="tablet">Tablet</button>
+        <button class="btn" type="button" role="tab" aria-selected="false" data-media-device="mobile">M&oacute;vil</button>
+      </div>
+
+      <label id="mediaInheritRow" class="media-editor__inherit" hidden>
+        <input id="mediaInheritGeneral" type="checkbox"> Usar configuraci&oacute;n general
+      </label>
+
+      <div class="media-editor__layout">
+        <div class="media-editor__preview-column">
+          <p id="mediaPreviewDimensions" class="media-editor__dimensions">Viewport de escritorio</p>
+          <div id="mediaPreviewStage" class="media-editor__preview-stage">
+            <div id="mediaPreviewFrame" class="media-editor__preview" tabindex="0" aria-label="Previsualizaci&oacute;n del hero; arrastra para mover el contenido" aria-describedby="mediaPreviewDimensions mediaMovementStatus mediaPreviewHelp">
+              <img id="mediaPreviewImage" alt="" draggable="false" hidden>
+              <video id="mediaPreviewVideo" muted playsinline loop preload="metadata" draggable="false" hidden></video>
+              <span id="mediaPreviewEmpty" class="media-editor__empty">No hay un archivo disponible para previsualizar.</span>
+              <div id="mediaHeroChrome" class="media-editor__hero-chrome" aria-hidden="true" hidden>
+                <div class="media-editor__hero-topbar"><span>MEN&Uacute;</span><strong>CRONOX</strong><span>CUENTA&nbsp;&nbsp;BOLSA</span></div>
+                <div class="media-editor__hero-copy"><strong>&quot;NOS REGIT NOX&quot;</strong></div>
+              </div>
+            </div>
+          </div>
+          <p id="mediaMovementStatus" class="media-editor__movement" role="status" aria-live="polite"></p>
+          <p id="mediaPreviewHelp" class="media-editor__help">Arrastra dentro del viewport para cambiar la posici&oacute;n. El archivo original nunca se modifica.</p>
+          <button id="mediaVideoToggle" class="btn media-editor__video-toggle" type="button" hidden>Reproducir v&iacute;deo</button>
+        </div>
+
+        <div class="media-editor__controls">
+          <label for="mediaFocalX">Posici&oacute;n horizontal <output id="mediaFocalXValue">50%</output>
+            <input id="mediaFocalX" type="range" min="0" max="100" step="1" value="50">
+          </label>
+          <label for="mediaFocalY">Posici&oacute;n vertical <output id="mediaFocalYValue">50%</output>
+            <input id="mediaFocalY" type="range" min="0" max="100" step="1" value="50">
+          </label>
+          <label for="mediaZoom">Zoom <output id="mediaZoomValue">1.00&times;</output>
+            <input id="mediaZoom" type="range" min="1" max="3" step="0.05" value="1">
+          </label>
+          <label for="mediaFit">Ajuste
+            <select id="mediaFit" class="input">
+              <option value="COVER">Cubrir</option>
+              <option value="CONTAIN">Encajar</option>
+            </select>
+          </label>
+          <div class="media-editor__reset-actions">
+            <button id="mediaResetDevice" class="btn" type="button">Restablecer este dispositivo</button>
+            <button id="mediaResetAll" class="btn" type="button">Restablecer todos</button>
+          </div>
+        </div>
+      </div>
+
+      <p id="mediaEditorMessage" class="media-editor__message" role="alert" aria-live="assertive"></p>
+      <div class="media-editor__actions">
+        <button type="button" class="btn" id="mediaEditorCancel">Cancelar</button>
+        <button type="button" class="btn primary" id="mediaEditorSave">Guardar</button>
+      </div>
+    </div>
+  </div>
+
   <div class="modal" id="galleryEditorModal" role="dialog" aria-modal="true" aria-hidden="true" aria-labelledby="galleryEditorTitle">
     <div class="modal-box">
       <div class="gallery-editor-header">
@@ -1237,6 +1361,25 @@
           <section class="gallery-editor-section" aria-labelledby="galleryLibraryTitle">
             <h4 id="galleryLibraryTitle">Fotos antiguas</h4>
             <div id="galleryAssetLibrary" class="gallery-asset-library" aria-live="polite"></div>
+          </section>
+          <section class="gallery-editor-section" aria-labelledby="galleryProductsTitle">
+            <h4 id="galleryProductsTitle">Productos de la imagen</h4>
+            <div class="gallery-product-search">
+              <label class="gallery-visually-hidden" for="galleryProductSearch">Buscar productos</label>
+              <input id="galleryProductSearch" class="input" type="search" maxlength="120" autocomplete="off" placeholder="Buscar productos&hellip;">
+              <button id="galleryProductSearchClear" class="btn gallery-product-search__clear" type="button" aria-label="Limpiar b&uacute;squeda">Limpiar</button>
+            </div>
+            <div id="gallerySelectedProducts" class="gallery-selected-products" aria-label="Productos seleccionados"></div>
+            <p id="galleryProductStatus" class="gallery-repository-status" role="status" aria-live="polite"></p>
+            <div id="galleryProductRepository" class="gallery-product-repository"></div>
+            <button id="galleryProductsMore" class="btn gallery-products-more" type="button" hidden>Cargar m&aacute;s productos</button>
+          </section>
+          <section class="gallery-editor-section" aria-labelledby="galleryDescriptionTitle">
+            <div class="gallery-text-heading">
+              <h4 id="galleryDescriptionTitle">Texto de la imagen</h4>
+              <output id="galleryDescriptionCounter" for="galleryDescription">0/2000</output>
+            </div>
+            <textarea id="galleryDescription" class="textarea gallery-description" maxlength="2000" rows="6" placeholder="Escribe un texto opcional sobre esta imagen&hellip;"></textarea>
           </section>
         </div>
 
@@ -1286,12 +1429,29 @@
     </div>
   </div>
 
+  <div class="modal gallery-library-modal" id="galleryLibraryModal" role="dialog" aria-modal="true" aria-hidden="true" aria-labelledby="galleryLibraryModalTitle">
+    <div class="modal-box">
+      <div class="gallery-editor-header">
+        <div>
+          <h3 id="galleryLibraryModalTitle">Fotos antiguas</h3>
+          <small>Selecciona una fotograf&iacute;a guardada</small>
+        </div>
+        <button type="button" class="btn" id="galleryLibraryClose" aria-label="Cerrar Fotos antiguas">Cerrar</button>
+      </div>
+      <p id="galleryLibraryStatus" class="gallery-repository-status" role="status" aria-live="polite"></p>
+      <div id="galleryLibraryGrid" class="gallery-library-grid"></div>
+      <button id="galleryLibraryMore" class="btn gallery-library-more" type="button" hidden>Cargar m&aacute;s fotos</button>
+    </div>
+  </div>
+
   <div class="toast-container" id="toastContainer" aria-live="polite" aria-atomic="true"></div>
 
   <script src="assets/api.js?v=3"></script>
   <script src="assets/ui-status.js"></script>
   <script src="assets/admin.js"></script>
   <script src="assets/admin-orders.js"></script>
-  <script src="assets/admin-gallery.js?v=1"></script>
+  <script src="assets/admin-gallery.js?v=4"></script>
+  <script src="assets/media-framing-geometry.js?v=1"></script>
+  <script src="assets/admin-media.js?v=3"></script>
 </body>
 </html>

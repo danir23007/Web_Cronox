@@ -10,7 +10,7 @@
   <meta name="description" content="Gestiona tu perfil, dirección y pedidos en CRONOX">
 
   <link id="cronox-main-style" rel="stylesheet" href="">
-  <script src="assets/version.js?v=86"></script>
+  <script src="assets/version.js?v=89"></script>
   <script>
     (function () {
       if (window.CRONOX_ASSET) {
@@ -427,10 +427,10 @@
 
   <script src="assets/country.js?v=1"></script>
   <script src="assets/api.js?v=4"></script>
-  <script src="assets/app.js?v=60" defer></script>
-  <script src="assets/products.js?v=50" defer></script>
+  <script src="assets/app.js?v=61" defer></script>
+  <script src="assets/products.js?v=51" defer></script>
   <script src="assets/favorites-toggle.js?v=1" defer></script>
-  <script src="assets/profile.js?v=5" defer></script>
+  <script src="assets/profile.js?v=6" defer></script>
 
   <style>
     /* Profile overrides */
@@ -522,7 +522,8 @@
       display: flex;
       align-items: center;
       justify-content: center;
-      padding: 16px;
+      padding: max(16px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) max(16px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
+      overflow-y: auto;
       z-index: 2400;
     }
 
@@ -534,6 +535,8 @@
       border: 1px solid rgba(255, 255, 255, 0.12);
       box-shadow: 0 18px 60px rgba(0, 0, 0, 0.55);
       width: min(360px, 96vw);
+      max-height: calc(100dvh - max(32px, env(safe-area-inset-top)) - max(32px, env(safe-area-inset-bottom)));
+      overflow-y: auto;
     }
 
     .circle-modal--large {
@@ -576,6 +579,7 @@
       flex-direction: column;
       gap: 12px;
       max-height: 80vh;
+      max-height: 80dvh;
       overflow: auto;
     }
 

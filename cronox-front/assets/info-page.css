@@ -5,7 +5,8 @@ html {
 
 body.page-info {
   min-height: 100vh;
-  padding-top: var(--topbar-h, 64px);
+  min-height: 100dvh;
+  padding-top: calc(var(--topbar-h, 64px) + env(safe-area-inset-top));
   overflow-x: hidden;
 }
 

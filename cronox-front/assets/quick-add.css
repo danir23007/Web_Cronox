@@ -6,6 +6,8 @@
   position:fixed; inset:0;
   background:rgba(0,0,0,.6);
   display:none; align-items:center; justify-content:center;
+  padding:max(8px,env(safe-area-inset-top)) max(8px,env(safe-area-inset-right)) max(8px,env(safe-area-inset-bottom)) max(8px,env(safe-area-inset-left));
+  overflow:hidden;
   z-index:1200;
 }
 .qa-overlay[aria-hidden="false"]{ display:flex; }
@@ -14,7 +16,8 @@
 .qa-panel{
   width:min(100%, 720px);
   height:auto;
-  max-height:90vh;
+  max-height:calc(100vh - 16px);
+  max-height:calc(100dvh - max(16px,env(safe-area-inset-top)) - max(16px,env(safe-area-inset-bottom)));
   overflow:auto;
   background:#000;
   color:#fff;
@@ -51,6 +54,7 @@
   padding:0;
 }
 @media (max-width:640px){
+  .qa-panel{width:100%;}
   .qa-media{
     grid-template-columns:repeat(2,minmax(0,1fr));
     height:clamp(200px,54vw,280px);

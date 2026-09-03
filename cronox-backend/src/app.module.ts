@@ -28,6 +28,7 @@ import { MembershipModule } from './membership/membership.module';
 import { NewsletterModule } from './newsletter/newsletter.module';
 import { AnalyticsModule } from './analytics/analytics.module';
 import { GalleryModule } from './gallery/gallery.module';
+import { MediaFramingModule } from './media-framing/media-framing.module';
 import {
   getRateLimitMax,
   getRateLimitTtlMs,
@@ -91,6 +92,7 @@ import {
     NewsletterModule,
     AnalyticsModule,
     GalleryModule,
+    MediaFramingModule,
     OrdersModule, // [ORDERS] Registro del módulo de pedidos
     PaymentsModule, // [STRIPE]
     AdminModule,

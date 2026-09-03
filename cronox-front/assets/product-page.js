@@ -554,7 +554,11 @@
     relatedGrid.innerHTML = "";
     rel.forEach((p) => {
       const card = buildRelatedCard(p);
-      if (card) relatedGrid.appendChild(card);
+      if (card) {
+        card.querySelectorAll("img.product-img").forEach((image) => {
+        });
+        relatedGrid.appendChild(card);
+      }
     });
     if (window.CRONOX_FAVORITES && typeof window.CRONOX_FAVORITES.updateDomState === "function") {
       window.CRONOX_FAVORITES.updateDomState();

@@ -28,6 +28,7 @@ model Product {
   images         ProductImage[]
   variants       ProductVariant[]
   activityEvents CustomerActivityEvent[]
+  galleryAssets  GalleryAssetProduct[]
 
   @@index([searchText(ops: raw("gin_trgm_ops"))], type: Gin, map: "Product_searchText_idx")
 }
@@ -89,18 +90,34 @@ model ProductImage {
 }
 
 model GalleryAsset {
-  id               String        @id @default(cuid())
-  storageKey       String        @unique
+  id               String                @id @default(cuid())
+  storageKey       String                @unique
   publicUrl        String
   originalFilename String
   mimeType         String
   fileSize         Int
   width            Int?
   height           Int?
-  createdAt        DateTime      @default(now())
+  description      String?               @db.Text
+  createdAt        DateTime              @default(now())
   slots            GallerySlot[]
+  products         GalleryAssetProduct[]
 
   @@index([createdAt])
+}
+
+model GalleryAssetProduct {
+  id             Int          @id @default(autoincrement())
+  galleryAssetId String
+  productId      Int
+  position       Int
+  createdAt      DateTime     @default(now())
+  galleryAsset   GalleryAsset @relation(fields: [galleryAssetId], references: [id], onDelete: Cascade)
+  product        Product      @relation(fields: [productId], references: [id], onDelete: Restrict)
+
+  @@unique([galleryAssetId, productId])
+  @@unique([galleryAssetId, position])
+  @@index([productId])
 }
 
 model GallerySlot {
@@ -112,6 +129,16 @@ model GallerySlot {
   focalX           Float                   @default(50)
   focalY           Float                   @default(50)
   zoom             Float                   @default(1)
+  fit              MediaFitMode            @default(COVER)
+  tabletFocalX     Float?
+  tabletFocalY     Float?
+  tabletZoom       Float?
+  tabletFit        MediaFitMode?
+  mobileFocalX     Float?
+  mobileFocalY     Float?
+  mobileZoom       Float?
+  mobileFit        MediaFitMode?
+  revision         Int                     @default(0)
   altText          String                  @default("")
   instagramUrl     String?
   createdAt        DateTime                @default(now())
@@ -119,6 +146,47 @@ model GallerySlot {
   asset            GalleryAsset?           @relation(fields: [assetId], references: [id], onDelete: SetNull)
 
   @@index([assetId])
+}
+
+model WebsiteMediaPlacement {
+  key          String             @id
+  assetId      String?
+  focalX       Float
+  focalY       Float
+  zoom         Float
+  fit          MediaFitMode
+  tabletFocalX Float?
+  tabletFocalY Float?
+  tabletZoom   Float?
+  tabletFit    MediaFitMode?
+  mobileFocalX Float?
+  mobileFocalY Float?
+  mobileZoom   Float?
+  mobileFit    MediaFitMode?
+  revision     Int                @default(0)
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+  asset        WebsiteMediaAsset? @relation(fields: [assetId], references: [id], onDelete: SetNull)
+
+  @@index([assetId])
+}
+
+model WebsiteMediaAsset {
+  id               String                  @id @default(cuid())
+  storageKey       String                  @unique
+  publicUrl        String
+  originalFilename String
+  mimeType         String
+  mediaType        String
+  folderKey        String
+  fileSize         Int
+  width            Int?
+  height           Int?
+  createdAt        DateTime                @default(now())
+  placements       WebsiteMediaPlacement[]
+
+  @@index([folderKey, mediaType, createdAt])
+  @@index([createdAt])
 }
 
 model User {
@@ -745,4 +813,9 @@ enum GalleryPlaceholderColor {
   WHITE
   RED
   GREY
+}
+
+enum MediaFitMode {
+  COVER
+  CONTAIN
 }

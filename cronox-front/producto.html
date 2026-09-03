@@ -11,7 +11,7 @@
 
   <!-- CSS global -->
   <link id="cronox-main-style" rel="stylesheet" href="">
-  <script src="assets/version.js?v=86"></script>
+  <script src="assets/version.js?v=89"></script>
   <script>
     (function () {
       if (window.CRONOX_ASSET) {
@@ -23,7 +23,7 @@
     })();
   </script>
   <!-- PDP oscuro total -->
-  <link rel="stylesheet" href="assets/product-page.css?v=4" />
+  <link rel="stylesheet" href="assets/product-page.css?v=6" />
 
   <style>
     /* ===== PDP FINAL — FONDO NEGRO, BLOQUES BLANCOS, SIN ESQUINAS ===== */
@@ -37,7 +37,7 @@
       font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Cantarell,Noto Sans,Arial;
     }
 
-    body { padding-top: var(--topbar-h); }
+    body { padding-top: calc(var(--topbar-h) + env(safe-area-inset-top)); }
 
     /* PDP layout */
     main.pdp {
@@ -81,6 +81,7 @@
       width:100%;
       height:100%;
       max-height:75vh;
+      max-height:75dvh;
       object-fit:contain;
       display:none;
       background:#fff;
@@ -314,25 +315,6 @@
       margin: 0 0 24px;
       letter-spacing:.06em;
       text-transform:uppercase;
-    }
-
-    .pdp-related .products-grid{
-      position:relative;
-      display:grid;
-      grid-template-columns:repeat(5,minmax(0,1fr));
-      gap:22px;
-      width:100%;
-      max-width:none;
-      margin:0;
-      padding:0 12px;
-    }
-    @media (max-width:768px){
-      .pdp-related .products-grid{
-        grid-template-columns:repeat(2,minmax(0,1fr));
-      }
-    }
-    @media (max-width:480px){
-      .pdp-related .products-grid{ gap:12px; }
     }
 
     /* Toast */
@@ -670,10 +652,10 @@
     </div>
   </aside>
 
-  <script src="assets/app.js?v=60" defer></script>
+  <script src="assets/app.js?v=61" defer></script>
   <script src="assets/cart-badge.js?v=43" defer></script>
-  <script src="assets/products.js?v=50" defer></script>
-  <script src="assets/product-page.js?v=36" defer></script>
+  <script src="assets/products.js?v=51" defer></script>
+  <script src="assets/product-page.js?v=37" defer></script>
   <script src="assets/favorites-toggle.js?v=1" defer></script>
 </body>
 </html>
