@@ -91,6 +91,11 @@ declare global {
     listAutoCircleRequests?: (queryOrStatus?: string | QueryRecord, queryOverride?: QueryRecord) => Promise<unknown>;
     listAdminProducts?: (query?: QueryRecord) => Promise<unknown>;
     getAdminProduct?: (id: number | string) => Promise<unknown>;
+    listInventory?: (query?: QueryRecord) => Promise<unknown>;
+    getInventorySummary?: () => Promise<unknown>;
+    getInventoryProduct?: (id: number | string) => Promise<unknown>;
+    updateInventory?: (id: number | string, payload: Record<string, unknown>) => Promise<unknown>;
+    getInventoryHistory?: (id: number | string, query?: QueryRecord) => Promise<unknown>;
     createAdminProduct?: (payload: Record<string, unknown>) => Promise<unknown>;
     updateAdminProduct?: (id: number | string, payload: Record<string, unknown>) => Promise<unknown>;
     deleteAdminProduct?: (id: number | string) => Promise<unknown>;
@@ -127,6 +132,8 @@ declare global {
     getFallbackProducts: () => unknown[];
     getCsrfHeaders: () => Promise<Record<string, string>>;
     classifyApiError: (error?: unknown) => CronoxApiErrorClassification;
+    logout: () => Promise<unknown>;
+    getMe: () => Promise<{ role?: string; [key: string]: unknown } | null>;
     getProducts?: (query?: QueryRecord) => Promise<unknown[]>;
     getProductsPage?: (query?: QueryRecord) => Promise<{
       products: unknown[];

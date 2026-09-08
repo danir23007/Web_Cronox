@@ -1524,11 +1524,25 @@ export class ProductService {
         throw new NotFoundException('Variant not found');
       }
 
-      const updated = await tx.productVariant.update({
-        where: { id: variantId },
+      const stockGuard: Prisma.IntFilter =
+        dto.delta < 0
+          ? { gte: -dto.delta }
+          : dto.delta > 0
+            ? { lte: 2_147_483_647 - dto.delta }
+            : {};
+      const changed = await tx.productVariant.updateMany({
+        where: { id: variantId, productId, stockQty: stockGuard },
         data: { stockQty: { increment: dto.delta } }, // [STOCK]
+      });
+      if (changed.count !== 1) {
+        throw new ConflictException('STOCK_ADJUSTMENT_OUT_OF_RANGE');
+      }
+
+      const updated = await tx.productVariant.findUnique({
+        where: { id: variantId },
         include: { product: { select: { price: true } } },
       });
+      if (!updated) throw new NotFoundException('Variant not found');
 
       await tx.stockMovement.create({
         data: {

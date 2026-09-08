@@ -89,6 +89,23 @@ describe('admin UI improvement contracts', () => {
     );
   });
 
+  it('edits and submits the optional one-use-per-user promo setting', () => {
+    const html = readFrontend('admin.html');
+    const admin = readFrontend('assets/admin.js');
+
+    expect(html).toContain('id="codeSingleUsePerUser"');
+    expect(html).toContain('Un solo uso por usuario');
+    expect(html).toContain(
+      'Cada usuario podrá utilizar este código una sola vez.',
+    );
+    expect(admin).toContain(
+      'singleUsePerUserInput.checked = Boolean(code.singleUsePerUser)',
+    );
+    expect(admin).toContain(
+      "codeForm.querySelector('#codeSingleUsePerUser')?.checked ?? false",
+    );
+  });
+
   it('shows customer analytics UI only to SUPER_ADMIN and MODERATOR', () => {
     const adminUser = readFrontend('src/admin/admin-user.ts');
 

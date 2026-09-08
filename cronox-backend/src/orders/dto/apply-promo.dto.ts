@@ -1,6 +1,7 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
 import {
+  IsEmail,
   IsEnum,
   IsNotEmpty,
   IsOptional,
@@ -30,4 +31,12 @@ export class ApplyPromoDto {
   @IsOptional()
   @IsEnum(ShippingMethodCode)
   shippingMethod?: ShippingMethodCode;
+
+  @ApiPropertyOptional({
+    description: 'Email normalizado que identifica un checkout invitado',
+  })
+  @IsOptional()
+  @IsEmail()
+  @MaxLength(160)
+  guestEmail?: string;
 }

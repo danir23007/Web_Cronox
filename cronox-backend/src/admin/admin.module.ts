@@ -26,6 +26,8 @@ import { AdminNotesService } from './notes/admin-notes.service';
 import { EmailModule } from '../email/email.module';
 import { PaymentsModule } from '../payments/payments.module';
 import { OrdersModule } from '../orders/orders.module';
+import { AdminInventoryController } from './inventory/admin-inventory.controller';
+import { AdminInventoryService } from './inventory/admin-inventory.service';
 
 @Module({
   imports: [
@@ -49,6 +51,7 @@ import { OrdersModule } from '../orders/orders.module';
     AdminDashboardController,
     AdminAuditLogsController,
     AdminNotesController,
+    AdminInventoryController,
   ],
   providers: [
     AdminOrdersService,
@@ -59,6 +62,7 @@ import { OrdersModule } from '../orders/orders.module';
     AdminDashboardService,
     AdminAuditLogsService,
     AdminNotesService,
+    AdminInventoryService,
     AdminGuard,
   ],
 })

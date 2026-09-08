@@ -75,6 +75,10 @@ export class AdminCreatePromoCodeDto {
   isActive?: boolean;
 
   @IsOptional()
+  @IsBoolean()
+  singleUsePerUser?: boolean;
+
+  @IsOptional()
   @Type(() => Number)
   @IsInt()
   @Min(0)

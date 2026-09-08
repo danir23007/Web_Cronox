@@ -586,6 +586,7 @@ model PromoCode {
   startsAt             DateTime?
   expiresAt            DateTime?
   isActive             Boolean               @default(true)
+  singleUsePerUser     Boolean               @default(false)
   usageCount           Int                   @default(0)
   usageLimit           Int?
   createdAt            DateTime              @default(now())

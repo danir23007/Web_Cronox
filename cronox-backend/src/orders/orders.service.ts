@@ -39,6 +39,7 @@ import {
   UNSUPPORTED_COUNTRY_MESSAGE,
 } from '../common/country';
 import { GuestOrderAccountService } from './guest-order-account.service';
+import { normalizeEmail } from '../common/email';
 
 const DEFAULT_CURRENCY = 'EUR';
 const CHECKOUT_SNAPSHOT_TTL_MS = 30 * 60 * 1000;
@@ -61,6 +62,8 @@ const EXPIRABLE_CHECKOUT_SNAPSHOT_STATUSES = [
 ];
 const PAYMENT_RECOVERY_CLAIM_STALE_MS = 60 * 1000;
 const PAYMENT_INTENT_CREATION_CLAIM_STALE_MS = 30 * 1000;
+export const PROMO_ALREADY_REDEEMED_MESSAGE =
+  'Ya has utilizado este código de descuento.';
 
 type CartSnapshot = CartWithItems;
 
@@ -264,6 +267,7 @@ export class OrdersService {
     cart: CartSnapshot | null,
     params: {
       userId?: number;
+      customerEmail?: string;
       shippingMethod?: ShippingMethodCode;
       promoCode?: string;
     },
@@ -324,7 +328,7 @@ export class OrdersService {
         selectedShippingMethod,
         normalizedPromo,
         baseTotals,
-        { userId: params.userId },
+        { userId: params.userId, customerEmail: params.customerEmail },
       );
       if (appliedPromo.valid && appliedPromo.discountCents > 0) {
         appliedDiscountCents = appliedPromo.discountCents;
@@ -438,7 +442,7 @@ export class OrdersService {
           shippingMethod,
           normalizedPromo,
           baseTotals,
-          { userId: owner.userId },
+          { userId: owner.userId, customerEmail: owner.customerEmail },
         )
       : null;
     const discountCents = appliedPromo?.valid ? appliedPromo.discountCents : 0;
@@ -602,6 +606,18 @@ export class OrdersService {
           },
           { cart: options.cart },
         );
+    const requestedPromoCode = this.normalizePromoCode(params.promoCode);
+    if (requestedPromoCode && !preview.appliedPromo?.valid) {
+      const message =
+        preview.appliedPromo?.message ?? 'Código inválido o expirado';
+      throw new BadRequestException({
+        code:
+          message === PROMO_ALREADY_REDEEMED_MESSAGE
+            ? 'PROMO_ALREADY_REDEEMED'
+            : 'PROMO_INVALID',
+        message,
+      });
+    }
     const cartUpdatedAt = preview.cart.updatedAt;
     // Stripe does not create zero-value PaymentIntents. Reject before a
     // snapshot reserves inventory, rather than entering a retry/reset loop.
@@ -2605,7 +2621,11 @@ export class OrdersService {
     _shippingMethod: ShippingMethodOption,
     promoCode: string,
     baseTotals: CheckoutTotals,
-    options: { userId?: number; client?: PrismaClientOrTx } = {},
+    options: {
+      userId?: number;
+      customerEmail?: string;
+      client?: PrismaClientOrTx;
+    } = {},
   ): Promise<PromoApplication> {
     const client = options.client ?? this.prisma;
     const code = this.normalizePromoCode(promoCode);
@@ -2634,6 +2654,7 @@ export class OrdersService {
         startsAt: true,
         expiresAt: true,
         isActive: true,
+        singleUsePerUser: true,
         usageLimit: true,
         usageCount: true,
       },
@@ -2654,6 +2675,7 @@ export class OrdersService {
 
     const validation = await this.validatePromoAvailability(promo, {
       userId: options.userId,
+      customerEmail: options.customerEmail,
       client,
     });
 
@@ -2711,10 +2733,15 @@ export class OrdersService {
       startsAt: Date | null;
       expiresAt: Date | null;
       isActive: boolean;
+      singleUsePerUser: boolean;
       usageLimit: number | null;
       usageCount: number;
     },
-    options: { userId?: number; client?: PrismaClientOrTx } = {},
+    options: {
+      userId?: number;
+      customerEmail?: string;
+      client?: PrismaClientOrTx;
+    } = {},
   ): Promise<{ valid: boolean; message?: string }> {
     const now = new Date();
 
@@ -2734,22 +2761,48 @@ export class OrdersService {
       return { valid: false, message: 'Límite de usos alcanzado' };
     }
 
-    if (options.userId) {
+    if (promo.singleUsePerUser) {
       const client = options.client ?? this.prisma;
-      const alreadyRedeemed = await client.promoCodeRedemption.findFirst({
-        where: { promoCodeId: promo.id, userId: options.userId },
-        select: { id: true },
-      });
+      const guestEmail = normalizeEmail(options.customerEmail);
+      if (options.userId == null && !guestEmail) {
+        return {
+          valid: false,
+          message: 'Introduce tu correo electrónico para utilizar este código.',
+        };
+      }
+      const userId = await this.resolvePromoRedemptionUserId(client, options);
+      const alreadyRedeemed = userId
+        ? await client.promoCodeRedemption.findFirst({
+            where: { promoCodeId: promo.id, userId },
+            select: { id: true },
+          })
+        : null;
 
       if (alreadyRedeemed) {
         return {
           valid: false,
-          message: 'Este código ya fue usado en tu cuenta',
+          message: PROMO_ALREADY_REDEEMED_MESSAGE,
         };
       }
     }
 
     return { valid: true };
+  }
+
+  private async resolvePromoRedemptionUserId(
+    client: PrismaClientOrTx,
+    identity: { userId?: number; customerEmail?: string },
+  ): Promise<number | null> {
+    if (identity.userId != null) return identity.userId;
+
+    const email = normalizeEmail(identity.customerEmail);
+    if (!email) return null;
+
+    const user = await client.user.findFirst({
+      where: { email: { equals: email, mode: 'insensitive' } },
+      select: { id: true },
+    });
+    return user?.id ?? null;
   }
 
   private pickShippingMethod(
@@ -3102,6 +3155,7 @@ export class OrdersService {
         startsAt: true,
         expiresAt: true,
         isActive: true,
+        singleUsePerUser: true,
         usageLimit: true,
         usageCount: true,
       },
@@ -3135,24 +3189,41 @@ export class OrdersService {
     }
 
     if (order.userId != null) {
-      try {
-        await tx.promoCodeRedemption.create({
-          data: {
+      if (promo.singleUsePerUser) {
+        try {
+          await tx.promoCodeRedemption.create({
+            data: {
+              promoCodeId: promo.id,
+              userId: order.userId,
+              orderId: order.id,
+            },
+          });
+        } catch (error) {
+          if (
+            error instanceof Prisma.PrismaClientKnownRequestError &&
+            error.code === 'P2002'
+          ) {
+            throw new BadRequestException(
+              PROMO_ALREADY_REDEEMED_MESSAGE,
+            );
+          }
+          throw error;
+        }
+      } else {
+        await tx.promoCodeRedemption.upsert({
+          where: {
+            promoCodeId_userId: {
+              promoCodeId: promo.id,
+              userId: order.userId,
+            },
+          },
+          create: {
             promoCodeId: promo.id,
             userId: order.userId,
             orderId: order.id,
           },
+          update: {},
         });
-      } catch (error) {
-        if (
-          error instanceof Prisma.PrismaClientKnownRequestError &&
-          error.code === 'P2002'
-        ) {
-          throw new BadRequestException(
-            'Este código ya fue usado en tu cuenta',
-          );
-        }
-        throw error;
       }
     }
 

@@ -262,6 +262,7 @@
     users: ['SUPER_ADMIN', 'MODERATOR'],
     userDetail: ['SUPER_ADMIN', 'MODERATOR'],
     products: ['SUPER_ADMIN', 'LOGISTICS'],
+    inventory: ['SUPER_ADMIN', 'LOGISTICS'],
     orders: ['SUPER_ADMIN', 'LOGISTICS'],
     promoCodes: ['SUPER_ADMIN', 'MARKETING'],
     auditLog: ['SUPER_ADMIN'],
@@ -274,6 +275,7 @@
     'section-users': 'users',
     'section-products-menu': 'products',
     'section-products': 'products',
+    'section-inventory': 'inventory',
     'section-product-categories': 'products',
     'section-codes': 'promoCodes',
     'section-user': 'userDetail',
@@ -348,6 +350,7 @@
     setNavVisibility('section-users', canAccess('users'));
     setNavVisibility('section-products-menu', canAccess('products'));
     setNavVisibility('section-products', canAccess('products'));
+    setNavVisibility('section-inventory', canAccess('inventory'));
     setNavVisibility('section-product-categories', canAccess('products'));
     setNavVisibility('section-codes', canAccess('promoCodes'));
     setUserTabVisibility('notes', canAccess('notes'));
@@ -1484,6 +1487,9 @@
       }
       if (sectionId === 'section-product-categories') {
         loadCategoryAssignments();
+      }
+      if (sectionId === 'section-inventory') {
+        window.CRONOX_INVENTORY?.load?.();
       }
       return;
     }
@@ -3155,6 +3161,7 @@
         const startsAtInput = document.getElementById('codeStartsAt');
         const expiresAtInput = document.getElementById('codeExpiresAt');
         const isActiveInput = document.getElementById('codeIsActive');
+        const singleUsePerUserInput = document.getElementById('codeSingleUsePerUser');
 
         if (codeInput) codeInput.value = code.code || '';
         const typeValue = code.type || 'PERCENT';
@@ -3172,6 +3179,9 @@
         expiresAtInput.value = new Date(code.expiresAt).toISOString().slice(0, 16);
       }
       if (isActiveInput) isActiveInput.checked = Boolean(code.isActive);
+      if (singleUsePerUserInput) {
+        singleUsePerUserInput.checked = Boolean(code.singleUsePerUser);
+      }
     }
 
     toggleModal(codeModal, true);
@@ -3196,6 +3206,8 @@
         ? new Date(formData.get('expiresAt')).toISOString()
         : undefined,
       isActive: codeForm.querySelector('#codeIsActive')?.checked ?? true,
+      singleUsePerUser:
+        codeForm.querySelector('#codeSingleUsePerUser')?.checked ?? false,
     };
 
     const isPercent = String(payload.type).toUpperCase() === 'PERCENT';
@@ -4052,6 +4064,9 @@
           }
           if (targetSection === 'section-product-categories') {
             loadCategoryAssignments();
+          }
+          if (targetSection === 'section-inventory') {
+            window.CRONOX_INVENTORY?.load?.();
           }
           if (targetSection === 'section-orders') {
             window.fetchOrders?.();

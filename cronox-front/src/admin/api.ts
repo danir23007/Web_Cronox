@@ -673,13 +673,13 @@
     return base;
   };
 
-  const api: CronoxApi = {
+  const api = {
     API_BASE,
     formatPrice,
     getFallbackProducts,
     getCsrfHeaders,
     classifyApiError,
-  };
+  } as CronoxApi;
 
   // ===== AUTH =====
   api.register = async (payload: UnknownRecord) => {
@@ -812,6 +812,32 @@
 
   adminApi.getAdminProduct = async (id: number | string) => {
     return request(`/api/admin/products/${encodeURIComponent(id)}`);
+  };
+
+  adminApi.listInventory = async (query: QueryRecord = {}) => {
+    return request('/api/admin/inventory', { query, cache: 'no-store' });
+  };
+
+  adminApi.getInventorySummary = async () => {
+    return request('/api/admin/inventory/summary', { cache: 'no-store' });
+  };
+
+  adminApi.getInventoryProduct = async (id: number | string) => {
+    return request(`/api/admin/inventory/${encodeURIComponent(id)}`, { cache: 'no-store' });
+  };
+
+  adminApi.updateInventory = async (id: number | string, payload: UnknownRecord) => {
+    return request(`/api/admin/inventory/${encodeURIComponent(id)}`, {
+      method: 'PATCH',
+      body: payload,
+    });
+  };
+
+  adminApi.getInventoryHistory = async (id: number | string, query: QueryRecord = {}) => {
+    return request(`/api/admin/inventory/${encodeURIComponent(id)}/history`, {
+      query,
+      cache: 'no-store',
+    });
   };
 
   adminApi.createAdminProduct = async (payload: UnknownRecord) => {
@@ -1184,7 +1210,9 @@
       : [];
   };
 
-  api.getCheckoutSummary = async (params: { shippingMethod?: string; promoCode?: string } = {}) => {
+  api.getCheckoutSummary = async (
+    params: { shippingMethod?: string; promoCode?: string; guestEmail?: string } = {},
+  ) => {
     const query: QueryRecord = {};
 
     if (params.shippingMethod) {
@@ -1192,6 +1220,9 @@
     }
     if (params.promoCode) {
       query.promoCode = params.promoCode;
+    }
+    if (params.guestEmail) {
+      query.guestEmail = params.guestEmail;
     }
 
     const data = (await request('/api/checkout/summary', {
@@ -1244,13 +1275,18 @@
     };
   };
 
-  api.applyPromoCode = async (payload: { code?: string; shippingMethod?: string } = {}) => {
+  api.applyPromoCode = async (
+    payload: { code?: string; shippingMethod?: string; guestEmail?: string } = {},
+  ) => {
     const body: Record<string, unknown> = {
       code: payload.code,
     };
 
     if (payload.shippingMethod) {
       body.shippingMethod = payload.shippingMethod;
+    }
+    if (payload.guestEmail) {
+      body.guestEmail = payload.guestEmail;
     }
 
     return request('/api/checkout/apply-promo', {

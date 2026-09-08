@@ -18,6 +18,7 @@
   <link id="cronox-admin-style" rel="stylesheet" href="assets/store.css">
   <link rel="stylesheet" href="assets/admin-gallery.css?v=4">
   <link rel="stylesheet" href="assets/admin-media.css?v=3">
+  <link rel="stylesheet" href="assets/admin-inventory.css?v=1">
   <style>
     body { font-family: 'Inter', system-ui, -apple-system, sans-serif; background: #050505; color: #fff; margin: 0; min-height: 100vh; }
     .admin-shell { width: min(100% - 48px, 1500px); margin: 0 auto; padding: 32px 0 48px; }
@@ -232,6 +233,7 @@
       <h2 id="title-menu">Secciones</h2>
       <small class="subtle">Selecciona un módulo del panel de administración.</small>
       <div class="admin-index-list" id="adminIndexList">
+        <button class="btn admin-nav-item admin-nav-item--described" data-nav-target="section-inventory"><strong class="admin-nav-item__title">Inventario -</strong><span class="admin-nav-item__description">Stock real por producto y talla</span></button>
         <button class="btn admin-nav-item admin-nav-item--described" data-nav-target="section-dashboard"><strong class="admin-nav-item__title">Resumen -</strong><span class="admin-nav-item__description">Estadísticas generales, info de usuarios, pedidos, ingresos, stock</span></button>
         <button class="btn admin-nav-item admin-nav-item--described" data-nav-target="section-circles-menu"><strong class="admin-nav-item__title">Círculos -</strong><span class="admin-nav-item__description">Solicitudes de subidas de círculos</span></button>
         <button class="btn admin-nav-item admin-nav-item--described" data-nav-target="section-activity"><strong class="admin-nav-item__title">Actividad -</strong><span class="admin-nav-item__description">Actividad en el panel de administrador</span></button>
@@ -866,6 +868,50 @@
         </div>
       </div>
     </div>
+    <section id="section-inventory" class="card admin-section inventory-section" aria-labelledby="title-inventory" hidden>
+      <button class="btn admin-view-back" type="button" data-back-target="section-menu">&larr; Atr&aacute;s</button>
+      <div class="inventory-heading">
+        <div>
+          <h2 id="title-inventory">Inventario</h2>
+          <small>Stock real disponible para todo el cat&aacute;logo, incluidos los productos inactivos.</small>
+        </div>
+        <button class="btn" id="inventoryRefresh" type="button">Actualizar</button>
+      </div>
+      <div id="inventorySummary" class="inventory-summary" aria-label="Resumen de inventario" aria-busy="true">
+        <div class="inventory-stat"><span>Unidades disponibles</span><strong id="inventoryTotalUnits">&mdash;</strong></div>
+        <div class="inventory-stat"><span>Productos con stock</span><strong id="inventoryProductsWithStock">&mdash;</strong></div>
+        <div class="inventory-stat"><span>Productos agotados</span><strong id="inventorySoldOutProducts">&mdash;</strong></div>
+        <div class="inventory-stat"><span>Variantes con poco stock</span><strong id="inventoryLowStockVariants">&mdash;</strong></div>
+      </div>
+      <div class="inventory-filters" aria-label="Filtros de inventario">
+        <div class="form-group inventory-search">
+          <label for="inventorySearch">Buscar productos</label>
+          <input id="inventorySearch" class="input" type="search" maxlength="120" autocomplete="off" placeholder="Nombre, SKU, slug o ID">
+        </div>
+        <div class="form-group">
+          <label for="inventoryActiveFilter">Estado</label>
+          <select id="inventoryActiveFilter" class="input"><option value="">Todos</option><option value="true">Activos</option><option value="false">Inactivos</option></select>
+        </div>
+        <div class="form-group">
+          <label for="inventoryStockFilter">Stock</label>
+          <select id="inventoryStockFilter" class="input"><option value="">Todos</option><option value="in_stock">Con stock</option><option value="low">Poco stock</option><option value="out_of_stock">Agotados</option></select>
+        </div>
+      </div>
+      <div id="inventoryMessage" class="message" role="status" aria-live="polite"></div>
+      <div id="inventoryList" class="inventory-list" aria-live="polite" aria-busy="true">
+        <div class="empty-state"><strong>Cargando inventario&hellip;</strong></div>
+      </div>
+      <div class="pagination">
+        <div class="page-info" id="inventoryPageInfo">P&aacute;gina 1 de 1 &middot; 0 resultados</div>
+        <div class="page-controls">
+          <button class="btn" type="button" id="inventoryPrev">Anterior</button>
+          <button class="btn" type="button" id="inventoryNext">Siguiente</button>
+          <label for="inventoryPageSize">Filas</label>
+          <select id="inventoryPageSize" class="input inventory-page-size"><option value="10">10</option><option value="20" selected>20</option><option value="50">50</option></select>
+        </div>
+      </div>
+    </section>
+
     <section id="section-products" class="card admin-section" aria-labelledby="title-products" hidden>
       <button class="btn admin-view-back" type="button" data-back-target="section-products-menu">← Atrás</button>
       <div style="display:flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap;">
@@ -1231,6 +1277,13 @@
               Activo
             </label>
           </div>
+          <div class="form-group" style="align-items:flex-start;">
+            <label style="display:flex; gap:8px; align-items:center;">
+              <input type="checkbox" id="codeSingleUsePerUser" name="singleUsePerUser">
+              Un solo uso por usuario
+            </label>
+            <small>Cada usuario podrá utilizar este código una sola vez.</small>
+          </div>
         </div>
         <div class="modal-actions">
           <button type="button" class="btn" id="codeCancelBtn">Cancelar</button>
@@ -1449,6 +1502,7 @@
   <script src="assets/api.js?v=3"></script>
   <script src="assets/ui-status.js"></script>
   <script src="assets/admin.js"></script>
+  <script src="assets/admin-inventory.js?v=1"></script>
   <script src="assets/admin-orders.js"></script>
   <script src="assets/admin-gallery.js?v=4"></script>
   <script src="assets/media-framing-geometry.js?v=1"></script>

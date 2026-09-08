@@ -1,0 +1,2 @@
+ALTER TABLE "PromoCode"
+ADD COLUMN "singleUsePerUser" BOOLEAN NOT NULL DEFAULT false;

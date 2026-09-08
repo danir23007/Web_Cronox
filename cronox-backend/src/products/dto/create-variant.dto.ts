@@ -4,6 +4,7 @@ import {
   IsInt,
   IsOptional,
   IsString,
+  Max,
   Min,
 } from 'class-validator';
 
@@ -21,10 +22,14 @@ export class CreateVariantDto {
 
   @IsOptional()
   @IsInt()
+  @Min(0)
+  @Max(2_147_483_647)
   stock?: number;
 
   @IsOptional()
   @IsInt()
+  @Min(0)
+  @Max(2_147_483_647)
   stockQty?: number; // [STOCK]
 
   @IsOptional()

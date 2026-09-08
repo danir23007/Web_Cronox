@@ -180,8 +180,12 @@ describe('OrdersService checkout reservations', () => {
         findFirst: jest.fn(),
         updateMany: jest.fn(),
       },
-      promoCodeRedemption: { create: jest.fn() },
-      user: { findUnique: jest.fn(), update: jest.fn() },
+      promoCodeRedemption: {
+        create: jest.fn(),
+        findFirst: jest.fn(),
+        upsert: jest.fn(),
+      },
+      user: { findUnique: jest.fn(), findFirst: jest.fn(), update: jest.fn() },
       stripeWebhookEvent: {
         create: jest.fn(),
         findFirst: jest.fn(),
@@ -252,6 +256,35 @@ describe('OrdersService checkout reservations', () => {
     });
     expect(prisma.$transaction).not.toHaveBeenCalled();
     expect(prisma.productVariant.updateMany).not.toHaveBeenCalled();
+  });
+
+  it('rejects a promo that fails definitive snapshot revalidation', async () => {
+    (service.getCheckoutPreview as jest.Mock).mockResolvedValueOnce({
+      ...preview,
+      appliedPromo: {
+        valid: false,
+        code: 'ONCE10',
+        discountCents: 0,
+        totalBeforeCents: 10495,
+        totalAfterCents: 10495,
+        message: 'Ya has utilizado este código de descuento.',
+      },
+    });
+
+    await expect(
+      service.createCheckoutSnapshot(
+        1,
+        { shippingMethod: 'EXPRESS' as any, promoCode: 'ONCE10' },
+        { cart: preview.cart as any },
+      ),
+    ).rejects.toMatchObject({
+      response: {
+        code: 'PROMO_ALREADY_REDEEMED',
+        message: 'Ya has utilizado este código de descuento.',
+      },
+    });
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+    expect(prisma.checkoutSnapshot.create).not.toHaveBeenCalled();
   });
 
   it('atomically reserves each active variant before returning a new snapshot', async () => {
@@ -1418,5 +1451,209 @@ describe('OrdersService checkout reservations', () => {
 
     expect(prisma.$transaction).toHaveBeenCalledTimes(2);
     expect(guestOrderAccountService.resolveUserForCompletedOrder).toHaveBeenCalledTimes(1);
+  });
+
+  describe('promo-code per-user redemption', () => {
+    const availablePromo = (overrides: Record<string, unknown> = {}) => ({
+      id: 41,
+      code: 'ONCE10',
+      type: 'PERCENT',
+      value: 10,
+      minCartValue: null,
+      startsAt: null,
+      expiresAt: null,
+      isActive: true,
+      singleUsePerUser: true,
+      usageLimit: null,
+      usageCount: 0,
+      ...overrides,
+    });
+
+    const paidOrder = (userId = 7) => ({
+      id: 501,
+      userId,
+      status: 'PAID',
+      promoCodeId: 41,
+      promoCodeCode: 'ONCE10',
+      items: [],
+    });
+
+    it('leaves reusable codes valid for repeated use by the same user', async () => {
+      const promo = availablePromo({ singleUsePerUser: false });
+      prisma.promoCodeRedemption.findFirst.mockResolvedValue({ id: 1 });
+
+      await expect(
+        (service as any).validatePromoAvailability(promo, { userId: 7 }),
+      ).resolves.toEqual({ valid: true });
+      await expect(
+        (service as any).validatePromoAvailability(promo, { userId: 7 }),
+      ).resolves.toEqual({ valid: true });
+
+      expect(prisma.promoCodeRedemption.findFirst).not.toHaveBeenCalled();
+    });
+
+    it('accepts a first use and rejects the same authenticated user afterward', async () => {
+      prisma.promoCodeRedemption.findFirst
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce({ id: 1 });
+
+      await expect(
+        (service as any).validatePromoAvailability(availablePromo(), {
+          userId: 7,
+        }),
+      ).resolves.toEqual({ valid: true });
+      await expect(
+        (service as any).validatePromoAvailability(availablePromo(), {
+          userId: 7,
+        }),
+      ).resolves.toEqual({
+        valid: false,
+        message: 'Ya has utilizado este código de descuento.',
+      });
+    });
+
+    it('allows different users to redeem the same restricted code once each', async () => {
+      prisma.promoCodeRedemption.findFirst.mockImplementation(
+        ({ where }: { where: { userId: number } }) =>
+          Promise.resolve(where.userId === 7 ? { id: 1 } : null),
+      );
+
+      await expect(
+        (service as any).validatePromoAvailability(availablePromo(), {
+          userId: 8,
+        }),
+      ).resolves.toEqual({ valid: true });
+      await expect(
+        (service as any).validatePromoAvailability(availablePromo(), {
+          userId: 7,
+        }),
+      ).resolves.toMatchObject({ valid: false });
+    });
+
+    it('normalizes guest email and resolves it to the canonical paid-order user', async () => {
+      prisma.user.findFirst.mockResolvedValue({ id: 73 });
+      prisma.promoCodeRedemption.findFirst.mockResolvedValue({ id: 5 });
+
+      await expect(
+        (service as any).validatePromoAvailability(availablePromo(), {
+          customerEmail: '  Guest@Example.TEST ',
+        }),
+      ).resolves.toEqual({
+        valid: false,
+        message: 'Ya has utilizado este código de descuento.',
+      });
+
+      expect(prisma.user.findFirst).toHaveBeenCalledWith({
+        where: {
+          email: { equals: 'guest@example.test', mode: 'insensitive' },
+        },
+        select: { id: true },
+      });
+      expect(prisma.promoCodeRedemption.findFirst).toHaveBeenCalledWith({
+        where: { promoCodeId: 41, userId: 73 },
+        select: { id: true },
+      });
+    });
+
+    it('accepts a new guest identity that has no completed-order account yet', async () => {
+      prisma.user.findFirst.mockResolvedValue(null);
+
+      await expect(
+        (service as any).validatePromoAvailability(availablePromo(), {
+          customerEmail: 'NewGuest@example.test',
+        }),
+      ).resolves.toEqual({ valid: true });
+
+      expect(prisma.promoCodeRedemption.findFirst).not.toHaveBeenCalled();
+    });
+
+    it('requires a guest email only for restricted codes', async () => {
+      await expect(
+        (service as any).validatePromoAvailability(availablePromo()),
+      ).resolves.toEqual({
+        valid: false,
+        message: 'Introduce tu correo electrónico para utilizar este código.',
+      });
+      await expect(
+        (service as any).validatePromoAvailability(
+          availablePromo({ singleUsePerUser: false }),
+        ),
+      ).resolves.toEqual({ valid: true });
+    });
+
+    it('combines the global usage limit with the per-user restriction', async () => {
+      await expect(
+        (service as any).validatePromoAvailability(
+          availablePromo({ usageLimit: 3, usageCount: 3 }),
+          { userId: 7 },
+        ),
+      ).resolves.toEqual({
+        valid: false,
+        message: 'Límite de usos alcanzado',
+      });
+      expect(prisma.promoCodeRedemption.findFirst).not.toHaveBeenCalled();
+    });
+
+    it('records a restricted redemption only when an order becomes paid', async () => {
+      prisma.promoCode.findUnique.mockResolvedValue(availablePromo());
+      prisma.promoCodeRedemption.findFirst.mockResolvedValue(null);
+      prisma.promoCode.updateMany.mockResolvedValue({ count: 1 });
+      prisma.promoCodeRedemption.create.mockResolvedValue({ id: 1 });
+
+      await (service as any).handlePromoUsageOnPaid(prisma, {
+        ...paidOrder(),
+        status: 'CANCELLED',
+      });
+      expect(prisma.promoCode.updateMany).not.toHaveBeenCalled();
+      expect(prisma.promoCodeRedemption.create).not.toHaveBeenCalled();
+
+      await (service as any).handlePromoUsageOnPaid(prisma, paidOrder());
+      expect(prisma.promoCode.updateMany).toHaveBeenCalledWith({
+        where: { id: 41 },
+        data: { usageCount: { increment: 1 } },
+      });
+      expect(prisma.promoCodeRedemption.create).toHaveBeenCalledWith({
+        data: { promoCodeId: 41, userId: 7, orderId: 501 },
+      });
+    });
+
+    it('keeps an idempotent first-use audit without restricting reusable codes', async () => {
+      prisma.promoCode.findUnique.mockResolvedValue(
+        availablePromo({ singleUsePerUser: false }),
+      );
+      prisma.promoCode.updateMany.mockResolvedValue({ count: 1 });
+
+      await (service as any).handlePromoUsageOnPaid(prisma, paidOrder());
+      await (service as any).handlePromoUsageOnPaid(prisma, {
+        ...paidOrder(),
+        id: 502,
+      });
+
+      expect(prisma.promoCode.updateMany).toHaveBeenCalledTimes(2);
+      expect(prisma.promoCodeRedemption.create).not.toHaveBeenCalled();
+      expect(prisma.promoCodeRedemption.upsert).toHaveBeenCalledTimes(2);
+      expect(prisma.promoCodeRedemption.upsert).toHaveBeenLastCalledWith({
+        where: {
+          promoCodeId_userId: { promoCodeId: 41, userId: 7 },
+        },
+        create: { promoCodeId: 41, userId: 7, orderId: 502 },
+        update: {},
+      });
+    });
+
+    it('turns a concurrent unique redemption claim into the Spanish rejection', async () => {
+      const duplicate = new (Prisma as any).PrismaClientKnownRequestError(
+        'duplicate promo/user claim',
+        'P2002',
+      );
+      prisma.promoCode.findUnique.mockResolvedValue(availablePromo());
+      prisma.promoCodeRedemption.findFirst.mockResolvedValue(null);
+      prisma.promoCode.updateMany.mockResolvedValue({ count: 1 });
+      prisma.promoCodeRedemption.create.mockRejectedValue(duplicate);
+
+      await expect(
+        (service as any).handlePromoUsageOnPaid(prisma, paidOrder()),
+      ).rejects.toThrow('Ya has utilizado este código de descuento.');
+    });
   });
 });

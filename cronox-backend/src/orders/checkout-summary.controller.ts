@@ -17,7 +17,10 @@ import type { Request } from 'express';
 import { OptionalJwtAuthGuard } from '../auth/guards/optional-jwt-auth.guard';
 import { ShippingMethodCode } from '../common/enums/shipping-method-code.enum';
 import { CartService } from '../cart/cart.service';
-import { OrdersService } from './orders.service';
+import {
+  OrdersService,
+  PROMO_ALREADY_REDEEMED_MESSAGE,
+} from './orders.service';
 import { ApplyPromoDto } from './dto/apply-promo.dto';
 
 @ApiTags('Checkout')
@@ -41,6 +44,7 @@ export class CheckoutSummaryController {
     @Req() req: Request,
     @Query('shippingMethod') shippingMethod?: string,
     @Query('promoCode') promoCode?: string,
+    @Query('guestEmail') guestEmail?: string,
   ) {
     const userId = req.user?.id;
 
@@ -55,6 +59,7 @@ export class CheckoutSummaryController {
 
     return this.ordersService.getCheckoutSummary(cart, {
       userId,
+      customerEmail: req.user?.email ?? guestEmail,
       shippingMethod: normalized,
       promoCode,
     });
@@ -74,6 +79,7 @@ export class CheckoutSummaryController {
     const cart = await this.cartService.getCheckoutCartForRequest(req);
     const summary = await this.ordersService.getCheckoutSummary(cart, {
       userId,
+      customerEmail: req.user?.email ?? dto.guestEmail,
       shippingMethod: dto.shippingMethod,
       promoCode: dto.code,
     });
@@ -83,8 +89,14 @@ export class CheckoutSummaryController {
 
     if (!appliedPromo?.valid) {
       const isNotFound = promoMessage === 'Este código de descuento no existe';
+      const isAlreadyRedeemed =
+        promoMessage === PROMO_ALREADY_REDEEMED_MESSAGE;
       throw new BadRequestException({
-        code: isNotFound ? 'PROMO_NOT_FOUND' : 'PROMO_INVALID',
+        code: isNotFound
+          ? 'PROMO_NOT_FOUND'
+          : isAlreadyRedeemed
+            ? 'PROMO_ALREADY_REDEEMED'
+            : 'PROMO_INVALID',
         message: promoMessage,
       });
     }

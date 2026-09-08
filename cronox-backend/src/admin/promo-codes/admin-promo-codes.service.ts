@@ -62,6 +62,7 @@ export class AdminPromoCodesService {
           startsAt: dto.startsAt ?? null,
           expiresAt: dto.expiresAt ?? null,
           isActive: dto.isActive ?? true,
+          singleUsePerUser: dto.singleUsePerUser ?? false,
           usageLimit: dto.usageLimit ?? null,
           usageCount: 0,
         },
@@ -90,6 +91,9 @@ export class AdminPromoCodesService {
     if (dto.startsAt !== undefined) data.startsAt = dto.startsAt;
     if (dto.expiresAt !== undefined) data.expiresAt = dto.expiresAt;
     if (dto.isActive !== undefined) data.isActive = dto.isActive;
+    if (dto.singleUsePerUser !== undefined) {
+      data.singleUsePerUser = dto.singleUsePerUser;
+    }
     if (dto.usageLimit !== undefined) data.usageLimit = dto.usageLimit;
 
     try {

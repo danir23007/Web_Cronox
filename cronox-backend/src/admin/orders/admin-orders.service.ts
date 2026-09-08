@@ -657,6 +657,7 @@ export class AdminOrdersService {
         startsAt: true,
         expiresAt: true,
         isActive: true,
+        singleUsePerUser: true,
         usageLimit: true,
         usageCount: true,
       },
@@ -681,7 +682,7 @@ export class AdminOrdersService {
       throw new BadRequestException('Límite de usos alcanzado');
     }
 
-    const alreadyRedeemed = updated.userId
+    const alreadyRedeemed = promo.singleUsePerUser && updated.userId
       ? await tx.promoCodeRedemption.findFirst({
           where: { promoCodeId: promo.id, userId: updated.userId },
           select: { id: true },
@@ -689,7 +690,7 @@ export class AdminOrdersService {
       : null;
 
     if (alreadyRedeemed) {
-      throw new BadRequestException('Este código ya fue usado en tu cuenta');
+      throw new BadRequestException('Ya has utilizado este código de descuento.');
     }
 
     const usageLimitCondition =
@@ -705,22 +706,39 @@ export class AdminOrdersService {
     }
 
     if (updated.userId != null) {
-      try {
-      await tx.promoCodeRedemption.create({
-        data: {
-          promoCodeId: promo.id,
-          userId: updated.userId,
-          orderId: updated.id,
-        },
-      });
-      } catch (error) {
-      if (
-        error instanceof Prisma.PrismaClientKnownRequestError &&
-        error.code === 'P2002'
-      ) {
-        throw new BadRequestException('Este código ya fue usado en tu cuenta');
-      }
-        throw error;
+      if (promo.singleUsePerUser) {
+        try {
+        await tx.promoCodeRedemption.create({
+          data: {
+            promoCodeId: promo.id,
+            userId: updated.userId,
+            orderId: updated.id,
+          },
+        });
+        } catch (error) {
+        if (
+          error instanceof Prisma.PrismaClientKnownRequestError &&
+          error.code === 'P2002'
+        ) {
+          throw new BadRequestException('Ya has utilizado este código de descuento.');
+        }
+          throw error;
+        }
+      } else {
+        await tx.promoCodeRedemption.upsert({
+          where: {
+            promoCodeId_userId: {
+              promoCodeId: promo.id,
+              userId: updated.userId,
+            },
+          },
+          create: {
+            promoCodeId: promo.id,
+            userId: updated.userId,
+            orderId: updated.id,
+          },
+          update: {},
+        });
       }
     }
 

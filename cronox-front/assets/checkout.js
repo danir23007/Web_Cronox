@@ -1515,6 +1515,7 @@
       const data = await API.getCheckoutSummary({
         shippingMethod: shippingMethodCode,
         promoCode: state.promo?.code,
+        guestEmail: state.isAuthenticated ? undefined : getCheckoutEmail(),
       });
 
       if (revision !== checkoutRevision) return false;
@@ -1840,6 +1841,9 @@
   };
 
   const getPaymentPreparationMessage = (details) => {
+    if (details.code === 'PROMO_ALREADY_REDEEMED') {
+      return 'Ya has utilizado este código de descuento.';
+    }
     if (details.code === 'CHECKOUT_PAYMENT_CONFIRMATION_PENDING') {
       return 'Ya existe un pago anterior que se está confirmando. No vuelvas a pagar; actualizaremos el pedido automáticamente.';
     }
@@ -2040,6 +2044,12 @@
         ...details,
       });
       resetPaymentElement();
+      if (details.code === 'PROMO_ALREADY_REDEEMED') {
+        setPromoState(null);
+        setPromoStatus('');
+        setPromoMessage('Ya has utilizado este código de descuento.', true);
+        renderPromoUI();
+      }
       errorDiv.textContent = getPaymentPreparationMessage(details);
       if (details.code === 'CHECKOUT_PAYMENT_CONFIRMATION_PENDING') {
         void waitForPreviousPaymentConfirmation(revision);
@@ -2092,6 +2102,7 @@
       const result = await API.applyPromoCode({
         code,
         shippingMethod: state.shippingMethod,
+        guestEmail: state.isAuthenticated ? undefined : getCheckoutEmail(),
       });
 
       state.totals = result.totals || state.totals;
