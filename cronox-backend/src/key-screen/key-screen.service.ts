@@ -402,7 +402,7 @@ export class KeyScreenService {
         width: mediaAsset.width,
         height: mediaAsset.height,
       },
-      privacyUrl: '/privacy-policy.html',
+      privacyUrl: '/privacidad',
     };
   }
 }

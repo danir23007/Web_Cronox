@@ -265,9 +265,32 @@
   // ==========================
   function getProductKey() {
     const url = new URL(window.location.href);
+    const pathMatch = url.pathname.replace(/\/+$/, "").match(/^\/producto\/([^/]+)$/);
+    let pathSlug = "";
+    if (pathMatch?.[1]) {
+      try {
+        pathSlug = decodeURIComponent(pathMatch[1]);
+      } catch {
+        pathSlug = pathMatch[1];
+      }
+    }
     const slug = url.searchParams.get("slug");
     const id   = url.searchParams.get("id");
-    return (slug || id || "").trim();
+    return (pathSlug || slug || id || "").trim();
+  }
+
+  function setCanonicalProductUrl(product) {
+    const slug = String(product?.slug || "").trim();
+    const path = slug
+      ? `/producto/${encodeURIComponent(slug)}`
+      : window.location.pathname;
+    let canonical = document.querySelector('link[rel="canonical"]');
+    if (!canonical) {
+      canonical = document.createElement("link");
+      canonical.rel = "canonical";
+      document.head.appendChild(canonical);
+    }
+    canonical.href = new URL(path, window.location.origin).href;
   }
 
   // ==========================
@@ -625,7 +648,7 @@
   }
 
   function setupBackLinks(currentId) {
-    const links = document.querySelectorAll('a.js-back[href^="index.html#store"]');
+    const links = document.querySelectorAll('a.js-back[href^="/tienda#store"]');
     links.forEach(a => {
       a.addEventListener("click", (e) => {
         const prefersReduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -662,11 +685,13 @@
 
     if (!target) {
       console.warn("[CRONOX] Producto no encontrado para clave:", keyLower);
+      setCanonicalProductUrl(null);
       render(null);
       setupBackLinks("");
       return;
     }
 
+    setCanonicalProductUrl(target);
     render(target);
     try {
       window.dispatchEvent(new CustomEvent("cronox:productViewed", {
@@ -710,7 +735,7 @@
 
   window.addEventListener("resize", syncAddButtonWidth);
 
-  // OJO: aquí ya no redirigimos nunca a index.html#store.
+  // La PDP conserva su URL limpia incluso cuando falla la carga del catálogo.
   init().catch((error) => {
     console.error("[CRONOX] Error inicializando la PDP:", error);
     // si hay error gordo, al menos mostramos mensaje

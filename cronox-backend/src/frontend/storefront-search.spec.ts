@@ -47,7 +47,7 @@ describe('storefront search contracts', () => {
     expect(css).toContain('.search-suggestions__thumbnail{');
     expect(css).toContain('background:#fff');
     expect(css).toContain('object-fit:contain');
-    expect(app).toContain('/producto.html?slug=');
+    expect(app).toContain('/producto/${encodeURIComponent(product.slug)}');
     expect(app).toContain("fallback.textContent = 'Sin imagen'");
     expect(suggestionRenderer).toContain('details.append(name, price)');
     expect(suggestionRenderer).toContain(

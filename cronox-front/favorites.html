@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <link rel="stylesheet" href="assets/cookie-consent.css?v=1" />
-  <script src="assets/cookie-consent.js?v=3" defer></script>
+  <script src="assets/cookie-consent.js?v=4" defer></script>
   <script src="assets/customer-analytics.js?v=1" defer></script>
   <title>Favoritos — CRONOX</title>
   <meta name="description" content="Lista de productos favoritos — CRONOX">
@@ -55,7 +55,7 @@
     </div>
 
     <!-- Logo centrado -->
-    <a href="index.html" class="topbar__logo" aria-label="CRONOX — Tienda">
+    <a href="/" class="topbar__logo" aria-label="CRONOX — Tienda">
       <img src="assets/logo_banner.png"
            alt="CRONOX" class="topbar__logo-img" decoding="async">
     </a>
@@ -72,7 +72,7 @@
       </a>
 
       <!-- Favoritos -->
-      <a href="favorites.html" class="topbar__link topbar__fav topbar-icon topbar-icon-favorites" aria-label="Ver favoritos">
+      <a href="/favoritos" class="topbar__link topbar__fav topbar-icon topbar-icon-favorites" aria-label="Ver favoritos">
         <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-star" viewBox="0 0 24 24" fill="none"
              stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <polygon points="12 2 15.09 8.26 22 9.27 17.3 13.97 18.18 21 12 17.77 5.82 21 6.7 13.97 2 9.27 8.91 8.26 12 2"></polygon>
@@ -81,7 +81,7 @@
       </a>
 
       <!-- Carrito -->
-      <a href="cart.html" id="cart-icon-btn" class="topbar__link topbar__cart topbar-icon topbar-icon-cart" aria-label="Ver carrito">
+      <a href="/cesta" id="cart-icon-btn" class="topbar__link topbar__cart topbar-icon topbar-icon-cart" aria-label="Ver carrito">
         <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-bag" viewBox="0 0 24 24" fill="none"
              stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"></path>
@@ -95,7 +95,7 @@
 
   <div id="searchBar" class="searchbar" hidden aria-hidden="true">
     <div class="searchbar__inner">
-      <form id="searchForm" class="searchbar__form" role="search" action="index.html#store">
+      <form id="searchForm" class="searchbar__form" role="search" action="/tienda#store">
         <input id="searchInput" class="searchbar__input" type="text" placeholder="Buscar productos…" autocomplete="off">
         <button class="searchbar__submit" type="submit">Buscar</button>
       </form>
@@ -106,11 +106,11 @@
   <aside id="filtersPanel" class="black-menu" hidden aria-label="Navegación de categorías" role="dialog" aria-modal="true">
     <button class="filters-close" aria-label="Cerrar menú">✕</button>
     <nav class="black-menu__list" role="menu">
-      <a class="black-menu__link" role="menuitem" href="index.html?categorySlug=novedades#store">Novedades</a>
-      <a class="black-menu__link" role="menuitem" href="index.html?categorySlug=camisetas#store">Camisetas</a>
-      <a class="black-menu__link" role="menuitem" href="index.html?categorySlug=chaquetas#store">Chaquetas</a>
-      <a class="black-menu__link" role="menuitem" href="index.html?categorySlug=pantalones#store">Pantalones</a>
-      <a class="black-menu__link" role="menuitem" href="index.html?categorySlug=complementos#store">Complementos</a>
+      <a class="black-menu__link" role="menuitem" href="/tienda?categorySlug=novedades#store">Novedades</a>
+      <a class="black-menu__link" role="menuitem" href="/tienda?categorySlug=camisetas#store">Camisetas</a>
+      <a class="black-menu__link" role="menuitem" href="/tienda?categorySlug=chaquetas#store">Chaquetas</a>
+      <a class="black-menu__link" role="menuitem" href="/tienda?categorySlug=pantalones#store">Pantalones</a>
+      <a class="black-menu__link" role="menuitem" href="/tienda?categorySlug=complementos#store">Complementos</a>
     </nav>
   </aside>
 
@@ -128,7 +128,7 @@
 
     <section id="favorites-empty" class="products-fallback" style="text-align:center;margin-top:40px;" hidden>
       <p>No tienes productos en favoritos todavía.</p>
-      <p><a href="index.html#store" class="topbar__link" style="color:#fff;text-decoration:underline;">Ir a la tienda</a></p>
+      <p><a href="/tienda#store" class="topbar__link" style="color:#fff;text-decoration:underline;">Ir a la tienda</a></p>
     </section>
 
     <section id="favorites-list" hidden>
@@ -172,11 +172,11 @@
   </aside>
 
   <script src="assets/api.js?v=4"></script>
-  <script src="assets/app.js?v=61" defer></script>
-  <script src="assets/products.js?v=51" defer></script>
+  <script src="assets/app.js?v=62" defer></script>
+  <script src="assets/products.js?v=52" defer></script>
   <script src="assets/cart-badge.js?v=43" defer></script>
   <script src="assets/product-gallery.js?v=1" defer></script>
-  <script src="assets/favorites.js?v=2" defer></script>
-  <script src="assets/favorites-toggle.js?v=1" defer></script>
+  <script src="assets/favorites.js?v=3" defer></script>
+  <script src="assets/favorites-toggle.js?v=2" defer></script>
 </body>
 </html>

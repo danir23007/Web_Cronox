@@ -188,7 +188,7 @@
       const href = link.getAttribute('href');
       if (!href) return false;
       try {
-        return new URL(href, window.location.href).pathname.toLowerCase().endsWith('/gallery.html');
+        return ['/galeria', '/gallery.html'].includes(new URL(href, window.location.href).pathname.toLowerCase());
       } catch {
         return false;
       }
@@ -198,11 +198,11 @@
     galleryLinks.forEach((duplicate) => duplicate.remove());
     galleryLink.className = 'black-menu__link';
     galleryLink.setAttribute('role', 'menuitem');
-    galleryLink.setAttribute('href', 'gallery.html');
+    galleryLink.setAttribute('href', '/galeria');
     galleryLink.dataset.galleryLink = '';
     galleryLink.textContent = 'GALER\u00cdA';
 
-    const isGalleryPage = window.location.pathname.toLowerCase().endsWith('/gallery.html');
+    const isGalleryPage = ['/galeria', '/gallery.html'].includes(window.location.pathname.toLowerCase().replace(/\/+$/, ''));
     if (isGalleryPage) galleryLink.setAttribute('aria-current', 'page');
     else galleryLink.removeAttribute('aria-current');
 
@@ -371,8 +371,8 @@
   };
 
   const getSuggestionHref = (product) => {
-    if (product?.slug) return `/producto.html?slug=${encodeURIComponent(product.slug)}`;
-    return product?.id != null ? `/producto.html?id=${encodeURIComponent(product.id)}` : '#';
+    if (product?.slug) return `/producto/${encodeURIComponent(product.slug)}`;
+    return product?.id != null ? `/producto?id=${encodeURIComponent(product.id)}` : '#';
   };
 
   const setHighlightedSuggestion = (nextIndex) => {
@@ -632,7 +632,7 @@
     const categorySlug = currentUrl.searchParams.get('categorySlug') || '';
     if (/^[a-z0-9-]+$/.test(categorySlug)) params.set('categorySlug', categorySlug);
     params.set('search', query);
-    window.location.href = `index.html?${params.toString()}#store`;
+    window.location.href = `/tienda?${params.toString()}#store`;
   });
 
   document.addEventListener('click', (e) => {
@@ -903,8 +903,8 @@
   const toast = document.getElementById('toast');
   const CART_LOCK_KEY = 'cart-drawer';
   const FREE_SHIPPING_THRESHOLD = 65 * 100; // 65€ en céntimos
-  const CHECKOUT_URL = '/checkout.html';
-  const CONTINUE_SHOPPING_URL = '/index.html#store';
+  const CHECKOUT_URL = '/checkout';
+  const CONTINUE_SHOPPING_URL = '/tienda#store';
   const escapeHtml = (value) => {
     const helper = window.CRONOX_SECURITY?.escapeHtml;
     return typeof helper === 'function'
@@ -2226,7 +2226,7 @@ window.CRONOX_USER = window.CRONOX_USER || null;
     document.querySelectorAll('[data-auth-forgot]').forEach((btn) => {
       btn.addEventListener('click', (ev) => {
         ev.preventDefault();
-        window.location.href = 'forgot-password.html';
+        window.location.href = '/recuperar-contrasena';
       });
     });
 
@@ -2243,7 +2243,7 @@ window.CRONOX_USER = window.CRONOX_USER || null;
         }
         if (action === 'account') {
           hideUserMenu();
-          window.location.href = 'profile.html';
+          window.location.href = '/cuenta';
         }
       });
       window.addEventListener('resize', () => {

@@ -311,7 +311,7 @@ describe('focused storefront refinement acceptance matrix', () => {
     const brandbar = cssRule(checkoutStyles, '.checkout-brandbar');
     const brand = cssRule(checkoutStyles, '.checkout-brand');
     expect(checkoutHtml).toMatch(
-      /<a href="index\.html" class="checkout-brand"[\s\S]*?<img src="assets\/logo_banner\.png"/,
+      /<a href="\/" class="checkout-brand"[\s\S]*?<img src="assets\/logo_banner\.png"/,
     );
     expect(brandbar).toContain('position: relative');
     expect(brandbar).toContain('justify-content: flex-end');
@@ -607,7 +607,7 @@ describe('focused storefront refinement acceptance matrix', () => {
     expect(authModal).toContain('id="authLoginForm"');
     expect(authModal).toContain('id="authRegisterForm"');
     expect(authModal).toContain('data-auth-forgot');
-    expect(app).toContain("window.location.href = 'forgot-password.html'");
+    expect(app).toContain("window.location.href = '/recuperar-contrasena'");
     expect(app).toContain('authReturnFocus = activeElement');
     expect(app).toContain("returnFocus.focus({ preventScroll: true })");
   });

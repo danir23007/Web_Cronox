@@ -23,7 +23,7 @@ describe('product category frontend contracts', () => {
       'pantalones',
       'complementos',
     ]) {
-      expect(html).toContain(`index.html?categorySlug=${slug}#store`);
+      expect(html).toContain(`/tienda?categorySlug=${slug}#store`);
     }
   });
 
@@ -54,7 +54,7 @@ describe('product category frontend contracts', () => {
     const products = readFrontend('assets/products.js');
     expect(products).toContain('openQuickAdd(p)');
     expect(products).toContain('CRONOX_FAVORITES.toggleFromButton');
-    expect(products).toContain('/producto.html?slug=');
+    expect(products).toContain('/producto/${encodeURIComponent(key)}');
   });
 
   it('defines the Products submenu, both child screens and their parent back target', () => {

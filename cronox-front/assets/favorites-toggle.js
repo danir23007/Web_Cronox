@@ -93,7 +93,7 @@
       window.CRONOX_openAuthModal();
       return;
     }
-    window.location.href = '/index.html';
+    window.location.href = '/';
   }
 
   async function toggleFavorite(btn, id) {

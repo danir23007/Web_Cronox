@@ -21,6 +21,14 @@ import {
 } from './common/guards/csrf-protection.guard';
 import { PrismaService } from './prisma/prisma.service';
 import { KeyScreenService } from './key-screen/key-screen.service';
+import {
+  canonicalPathForRequest,
+  cleanPageForPath,
+  legacyRedirectTarget,
+  normalizePublicPath,
+  publicGateDecision,
+  UNGATED_PUBLIC_PATHS,
+} from './common/routing/public-pages';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, { bodyParser: false });
@@ -99,13 +107,7 @@ async function bootstrap() {
   // Enforced before Nest registers the static storefront handlers. The gate
   // page, legal pages and every Admin surface remain explicitly reachable.
   const keyScreen = app.get(KeyScreenService);
-  const ungatedHtml = new Set([
-    '/key-screen',
-    '/key-screen.html',
-    '/privacy-policy.html',
-    '/cookie-policy.html',
-    '/aviso-legal.html',
-    '/terms-of-service.html',
+  const ungatedAdminPaths = new Set([
     '/admin',
     '/admin.html',
     '/admin-login.html',
@@ -113,23 +115,60 @@ async function bootstrap() {
   ]);
   app.use(async (req, res, next) => {
     if (req.method !== 'GET' && req.method !== 'HEAD') return next();
-    const pathname = req.path.replace(/\/+$/, '') || '/';
+    const pathname = normalizePublicPath(req.path);
     if (
       pathname.startsWith('/api') ||
       pathname.startsWith('/docs') ||
       pathname.startsWith('/assets') ||
       pathname.startsWith('/public') ||
-      ungatedHtml.has(pathname) ||
+      UNGATED_PUBLIC_PATHS.has(pathname) ||
+      ungatedAdminPaths.has(pathname) ||
       (!pathname.endsWith('.html') && pathname.includes('.'))
     )
       return next();
     const acceptsHtml = req.accepts(['html', 'json']) === 'html';
     if (!acceptsHtml) return next();
-    if (await keyScreen.shouldGatePublicHtml()) {
+    const gate = publicGateDecision(
+      await keyScreen.shouldGatePublicHtml(),
+      pathname,
+      req.originalUrl,
+    );
+    if (gate.kind !== 'continue') {
       res.setHeader('Cache-Control', 'no-store, max-age=0');
-      return res.redirect(307, '/key-screen.html');
+      res.setHeader('Link', '</>; rel="canonical"');
+      if (gate.kind === 'render-key-screen') {
+        return res.sendFile(join(frontendRoot, 'key-screen.html'));
+      }
+      return res.redirect(307, gate.location);
     }
     next();
+  });
+
+  // Old public filenames remain valid bookmarks but converge permanently on
+  // one clean, canonical URL. Query strings are retained by the mapper.
+  app.use((req, res, next) => {
+    if (req.method !== 'GET' && req.method !== 'HEAD') return next();
+    const target = legacyRedirectTarget(req.path, req.originalUrl);
+    return target ? res.redirect(308, target) : next();
+  });
+
+  // Clean public routes internally reuse the existing HTML entry points, so a
+  // direct request or refresh never depends on an Nginx rewrite or SPA fallback.
+  app.use((req, res, next) => {
+    if (req.method !== 'GET' && req.method !== 'HEAD') return next();
+    const pathname = normalizePublicPath(req.path);
+    const page = cleanPageForPath(pathname);
+    if (!page) return next();
+    if (req.path.length > 1 && req.path.endsWith('/')) {
+      const queryIndex = req.originalUrl.indexOf('?');
+      const query = queryIndex >= 0 ? req.originalUrl.slice(queryIndex) : '';
+      return res.redirect(308, `${pathname}${query}`);
+    }
+    res.setHeader(
+      'Link',
+      `<${canonicalPathForRequest(pathname)}>; rel="canonical"`,
+    );
+    return res.sendFile(join(frontendRoot, page));
   });
 
   // Keep the extensionless Admin entry point independent from the public SPA.

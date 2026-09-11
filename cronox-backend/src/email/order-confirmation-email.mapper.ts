@@ -81,7 +81,7 @@ export class OrderConfirmationEmailMapper {
       message:
         'Tu pedido se ha confirmado correctamente. Te avisaremos cuando esté en camino.',
       orderUrl: order.userId
-        ? `${storefrontUrl.replace(/\/$/, '')}/profile.html?tab=orders&orderId=${order.id}`
+        ? `${storefrontUrl.replace(/\/$/, '')}/cuenta?tab=orders&orderId=${order.id}`
         : storefrontUrl,
       storeUrl: storefrontUrl,
       subtotalFormatted: this.formatCurrencyFromCents(subtotalCents),

@@ -1,5 +1,5 @@
 (function () {
-  const LOGIN_PAGE_URL = '/index.html';
+  const LOGIN_PAGE_URL = '/';
 
   function formatPriceFromCents(priceInCents) {
     const euros = Number(priceInCents || 0) / 100;
@@ -165,8 +165,8 @@
     const a = document.createElement('a');
     a.className = 'product-card';
     a.href = product.slug
-      ? `/producto.html?slug=${encodeURIComponent(product.slug)}`
-      : `/producto.html?id=${encodeURIComponent(key)}`;
+      ? `/producto/${encodeURIComponent(product.slug)}`
+      : `/producto?id=${encodeURIComponent(key)}`;
     if (key) a.setAttribute('data-id', key);
     if (product.slug) a.setAttribute('data-slug', product.slug);
     if (product.backendId != null) a.setAttribute('data-backend-id', String(product.backendId));

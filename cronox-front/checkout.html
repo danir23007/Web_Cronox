@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <link rel="stylesheet" href="assets/cookie-consent.css?v=1" />
-  <script src="assets/cookie-consent.js?v=3" defer></script>
+  <script src="assets/cookie-consent.js?v=4" defer></script>
   <script src="assets/customer-analytics.js?v=1" defer></script>
   <title>Checkout — CRONOX</title>
   <meta name="description" content="Checkout CRONOX — Pago seguro en una sola página.">
@@ -93,10 +93,10 @@
     <section class="checkout-flow-pane" aria-label="Finalizar compra">
       <div class="checkout-flow-inner">
         <header class="checkout-brandbar">
-          <a href="index.html" class="checkout-brand" aria-label="CRONOX — Volver a la tienda">
+          <a href="/" class="checkout-brand" aria-label="CRONOX — Volver a la tienda">
             <img src="assets/logo_banner.png" alt="CRONOX" decoding="async">
           </a>
-          <a href="cart.html" id="cart-icon-btn" class="checkout-cart-link" aria-label="Volver al carrito">
+          <a href="/cesta" id="cart-icon-btn" class="checkout-cart-link" aria-label="Volver al carrito">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
               <path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"></path>
               <path d="M3 6h18M16 10a4 4 0 0 1-8 0M6 2h12"></path>
@@ -232,12 +232,12 @@
           <div id="payment-error" class="checkout-error" role="alert" aria-live="assertive"></div>
           <p id="checkout-help" class="checkout-help">Stripe procesa tus datos de pago de forma cifrada.</p>
           <nav class="checkout-legal" aria-label="Información legal del checkout">
-            <a href="returns-exchanges.html">Devoluciones</a>
-            <a href="shipping-policy.html">Envíos</a>
-            <a href="privacy-policy.html">Privacidad</a>
-            <a href="terms-of-service.html">Términos</a>
-            <a href="aviso-legal.html">Aviso legal</a>
-            <a href="cookie-policy.html">Política de cookies</a>
+            <a href="/devoluciones">Devoluciones</a>
+            <a href="/envios">Envíos</a>
+            <a href="/privacidad">Privacidad</a>
+            <a href="/terminos">Términos</a>
+            <a href="/aviso-legal">Aviso legal</a>
+            <a href="/cookies">Política de cookies</a>
           </nav>
         </section>
       </div>
@@ -318,8 +318,8 @@
   <script src="https://js.stripe.com/v3/"></script>
   <script src="assets/country.js?v=1"></script>
   <script src="assets/api.js?v=4"></script>
-  <script src="assets/app.js?v=61"></script>
+  <script src="assets/app.js?v=62"></script>
   <script src="assets/checkout-lifecycle.js?v=6"></script>
-  <script src="assets/checkout.js?v=16"></script>
+  <script src="assets/checkout.js?v=17"></script>
 </body>
 </html>

@@ -136,6 +136,6 @@ describe('dedicated Admin authentication flow', () => {
     expect(mainSource.indexOf("pathname.startsWith('/api')")).toBeLessThan(
       mainSource.indexOf('shouldGatePublicHtml'),
     );
-    expect(mainSource).toContain("res.redirect(307, '/key-screen.html')");
+    expect(mainSource).toContain("res.sendFile(join(frontendRoot, 'key-screen.html'))");
   });
 });

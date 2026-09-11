@@ -1,6 +1,6 @@
 (function () {
   const keyScreenPrivacyContext =
-    window.location.pathname.replace(/\/+$/, '').endsWith('/privacy-policy.html') &&
+    ['/privacidad', '/privacy-policy.html'].includes(window.location.pathname.replace(/\/+$/, '')) &&
     new URLSearchParams(window.location.search).get('source') === 'key-screen';
   if (keyScreenPrivacyContext) {
     document.documentElement.dataset.privacyContext = 'key-screen';
@@ -28,7 +28,7 @@
         </button>
       </div>
 
-      <a href="index.html" class="topbar__logo" aria-label="CRONOX — Tienda">
+      <a href="/" class="topbar__logo" aria-label="CRONOX — Tienda">
         <img src="assets/logo_banner.png" alt="CRONOX" class="topbar__logo-img" decoding="async">
       </a>
 
@@ -40,13 +40,13 @@
             <circle cx="12" cy="7.5" r="4"></circle>
           </svg>
         </a>
-        <a href="favorites.html" class="topbar__link topbar__fav topbar-icon topbar-icon-favorites" aria-label="Ver favoritos">
+        <a href="/favoritos" class="topbar__link topbar__fav topbar-icon topbar-icon-favorites" aria-label="Ver favoritos">
           <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-star" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <polygon points="12 2 15.09 8.26 22 9.27 17.3 13.97 18.18 21 12 17.77 5.82 21 6.7 13.97 2 9.27 8.91 8.26 12 2"></polygon>
           </svg>
           <span class="topbar-icon-badge favorites-count fav-count" hidden></span>
         </a>
-        <a href="cart.html" id="cart-icon-btn" class="topbar__link topbar__cart topbar-icon topbar-icon-cart" aria-label="Ver carrito">
+        <a href="/cesta" id="cart-icon-btn" class="topbar__link topbar__cart topbar-icon topbar-icon-cart" aria-label="Ver carrito">
           <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-bag" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"></path>
             <line x1="3" y1="6" x2="21" y2="6"></line>
@@ -59,7 +59,7 @@
 
     <div id="searchBar" class="searchbar" hidden aria-hidden="true">
       <div class="searchbar__inner">
-        <form id="searchForm" class="searchbar__form" role="search" action="index.html#store">
+        <form id="searchForm" class="searchbar__form" role="search" action="/tienda#store">
           <input id="searchInput" class="searchbar__input" type="text" placeholder="Buscar productos…" autocomplete="off">
           <button class="searchbar__submit" type="submit" aria-label="Buscar"><span>Buscar</span></button>
         </form>
@@ -70,11 +70,11 @@
     <aside id="filtersPanel" class="black-menu" hidden aria-label="Navegación de categorías" role="dialog" aria-modal="true">
       <button class="filters-close" type="button" aria-label="Cerrar menú">✕</button>
       <nav class="black-menu__list" role="menu">
-        <a class="black-menu__link" role="menuitem" href="index.html?categorySlug=novedades#store">Novedades</a>
-        <a class="black-menu__link" role="menuitem" href="index.html?categorySlug=camisetas#store">Camisetas</a>
-        <a class="black-menu__link" role="menuitem" href="index.html?categorySlug=chaquetas#store">Chaquetas</a>
-        <a class="black-menu__link" role="menuitem" href="index.html?categorySlug=pantalones#store">Pantalones</a>
-        <a class="black-menu__link" role="menuitem" href="index.html?categorySlug=complementos#store">Complementos</a>
+        <a class="black-menu__link" role="menuitem" href="/tienda?categorySlug=novedades#store">Novedades</a>
+        <a class="black-menu__link" role="menuitem" href="/tienda?categorySlug=camisetas#store">Camisetas</a>
+        <a class="black-menu__link" role="menuitem" href="/tienda?categorySlug=chaquetas#store">Chaquetas</a>
+        <a class="black-menu__link" role="menuitem" href="/tienda?categorySlug=pantalones#store">Pantalones</a>
+        <a class="black-menu__link" role="menuitem" href="/tienda?categorySlug=complementos#store">Complementos</a>
       </nav>
     </aside>
 

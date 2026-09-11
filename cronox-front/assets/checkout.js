@@ -7,7 +7,7 @@
   const STRIPE_PUBLISHABLE_KEY = String(
     window.CRONOX_STRIPE_PUBLISHABLE_KEY || '',
   ).trim();
-  const CONTINUE_SHOPPING_URL = '/index.html#store';
+  const CONTINUE_SHOPPING_URL = '/tienda#store';
   const PROMO_STORAGE_KEY = 'cronox_checkout_promo';
   const escapeHtml = (value) => {
     const helper = window.CRONOX_SECURITY?.escapeHtml;
@@ -1601,7 +1601,7 @@
   };
 
   const buildPaymentReturnUrl = () => {
-    const successUrl = new URL('/checkout-success.html', window.location.origin);
+    const successUrl = new URL('/checkout/exito', window.location.origin);
     if (currentPaymentIntentId) {
       successUrl.searchParams.set('ref', currentPaymentIntentId);
     }
@@ -1928,11 +1928,11 @@
           const orderId = Number(status?.orderId);
           if (state.isAuthenticated && Number.isSafeInteger(orderId) && orderId > 0) {
             window.location.assign(
-              `/checkout-success.html?orderId=${encodeURIComponent(orderId)}`,
+              `/checkout/exito?orderId=${encodeURIComponent(orderId)}`,
             );
           } else if (currentPaymentIntentId) {
             window.location.assign(
-              `/checkout-success.html?ref=${encodeURIComponent(currentPaymentIntentId)}`,
+              `/checkout/exito?ref=${encodeURIComponent(currentPaymentIntentId)}`,
             );
           }
         },

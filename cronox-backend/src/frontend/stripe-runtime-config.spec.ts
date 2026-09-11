@@ -65,10 +65,10 @@ describe('Stripe frontend runtime configuration', () => {
 
   it('uses the existing linked logo and an unbadged cart icon as the only top navigation', () => {
     expect(checkoutHtml).toMatch(
-      /<a href="index\.html" class="checkout-brand"[\s\S]*?<img src="assets\/logo_banner\.png"/,
+      /<a href="\/" class="checkout-brand"[\s\S]*?<img src="assets\/logo_banner\.png"/,
     );
     const cartLink = checkoutHtml.match(
-      /<a href="cart\.html" id="cart-icon-btn"[\s\S]*?<\/a>/,
+      /<a href="\/cesta" id="cart-icon-btn"[\s\S]*?<\/a>/,
     )?.[0];
     expect(cartLink).toContain('<svg');
     expect(cartLink).not.toContain('cart-count');
@@ -247,12 +247,12 @@ describe('Stripe frontend runtime configuration', () => {
 
   it('uses only real legal pages and ends with the requested literal footer', () => {
     for (const href of [
-      'returns-exchanges.html',
-      'shipping-policy.html',
-      'privacy-policy.html',
-      'terms-of-service.html',
-      'aviso-legal.html',
-      'cookie-policy.html',
+      '/devoluciones',
+      '/envios',
+      '/privacidad',
+      '/terminos',
+      '/aviso-legal',
+      '/cookies',
     ]) {
       expect(checkoutHtml).toContain(`href="${href}"`);
     }

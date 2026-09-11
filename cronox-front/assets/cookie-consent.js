@@ -360,7 +360,7 @@
     banner.innerHTML = `<div class="cronox-consent__copy">
         <p class="cronox-consent__eyebrow">Tu privacidad</p>
         <h2 id="cronox-consent-title">Cookies en CRONOX</h2>
-        <p id="cronox-consent-description">Usamos tecnologías necesarias para que la tienda funcione. Con tu permiso, recordamos preferencias y analizamos el uso para mejorarla; no usamos publicidad. <a href="cookie-policy.html">Política de cookies</a>.</p>
+        <p id="cronox-consent-description">Usamos tecnologías necesarias para que la tienda funcione. Con tu permiso, recordamos preferencias y analizamos el uso para mejorarla; no usamos publicidad. <a href="/cookies">Política de cookies</a>.</p>
       </div>
       <div class="cronox-consent__actions" aria-label="Opciones de cookies">
         <button type="button" class="cronox-consent__button" data-consent-action="reject">Rechazar</button>
@@ -463,7 +463,7 @@
       if (
         link.textContent.trim().toLowerCase().includes("política de cookies")
       ) {
-        link.href = "cookie-policy.html";
+        link.href = "/cookies";
       }
     });
 

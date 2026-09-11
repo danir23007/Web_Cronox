@@ -254,7 +254,7 @@ describe('cookie consent frontend', () => {
     for (const page of publicPages) {
       const html = readFileSync(path.join(frontendRoot, page), 'utf8');
       expect(html).toContain('assets/cookie-consent.css?v=1');
-      expect(html).toContain('assets/cookie-consent.js?v=3');
+      expect(html).toContain('assets/cookie-consent.js?v=4');
       expect(html).toContain('assets/customer-analytics.js?v=1');
     }
     expect(consentSource).toContain('if (!current) showBanner();');

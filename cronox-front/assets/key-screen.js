@@ -37,9 +37,13 @@
   };
 
   const privacyUrl = (value) => {
-    const safe = safeUrl(value) || `${location.origin}/privacy-policy.html`;
+    const safe = safeUrl(value) || `${location.origin}/privacidad`;
     const url = new URL(safe);
-    if (url.origin === location.origin && url.pathname.endsWith('/privacy-policy.html')) {
+    if (
+      url.origin === location.origin &&
+      ['/privacidad', '/privacy-policy.html'].includes(url.pathname.replace(/\/+$/, ''))
+    ) {
+      url.pathname = '/privacidad';
       url.searchParams.set('source', 'key-screen');
       return `${url.pathname}${url.search}${url.hash}`;
     }

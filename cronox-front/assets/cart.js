@@ -248,7 +248,7 @@
   });
 
   btnCheckout?.addEventListener('click', () => {
-    window.location.href = '/checkout.html';
+    window.location.href = '/checkout';
   });
 
   document.addEventListener('DOMContentLoaded', () => {

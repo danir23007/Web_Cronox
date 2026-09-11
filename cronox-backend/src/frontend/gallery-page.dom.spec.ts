@@ -108,7 +108,7 @@ describe('CRONOX gallery page', () => {
         ),
       );
       const galleryLinks = links.filter(
-        (link) => link.getAttribute('href') === 'gallery.html',
+        (link) => link.getAttribute('href') === '/galeria',
       );
       const galleryLink = galleryLinks[0];
       const lastCategoryIndex = links.reduce(
@@ -119,7 +119,7 @@ describe('CRONOX gallery page', () => {
 
       expect(galleryLinks).toHaveLength(1);
       expect(galleryLink.textContent).toBe('GALER\u00cdA');
-      expect(galleryLink.href).toBe('http://localhost:3000/gallery.html');
+      expect(galleryLink.href).toBe('http://localhost:3000/galeria');
       expect(galleryLink.href).not.toContain('categorySlug');
       expect(links.indexOf(galleryLink)).toBe(lastCategoryIndex + 1);
       expect(galleryLink.getAttribute('aria-current')).toBe(
@@ -174,10 +174,10 @@ describe('CRONOX gallery page', () => {
 
     expect(galleryHtml).toContain('<title>Galer&iacute;a | CRONOX</title>');
     expect(galleryHtml).toContain('href="assets/gallery.css?v=14"');
-    expect(galleryHtml).toContain('src="assets/gallery.js?v=10"');
+    expect(galleryHtml).toContain('src="assets/gallery.js?v=11"');
     expect(document.title).toBe('Galer\u00eda | CRONOX');
     expect(galleryHtml).toMatch(
-      /<body class="page-info page-gallery">\s*<script src="assets\/info-shell\.js\?v=1"><\/script>/,
+      /<body class="page-info page-gallery">\s*<script src="assets\/info-shell\.js\?v=3"><\/script>/,
     );
     expect(document.querySelectorAll('#topbar')).toHaveLength(1);
     expect(topbar?.classList.contains('topbar--page')).toBe(true);
@@ -289,7 +289,7 @@ describe('CRONOX gallery page', () => {
         dom.window.Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
     expect(homepageHtml).toContain('href="assets/gallery.css?v=14"');
-    expect(homepageHtml).toContain('src="assets/gallery.js?v=10"');
+    expect(homepageHtml).toContain('src="assets/gallery.js?v=11"');
     expect(document.querySelectorAll('#galleryLightbox')).toHaveLength(1);
     expect(document.querySelectorAll<HTMLElement>('[id]').length).toBe(
       new Set(
@@ -1036,7 +1036,7 @@ describe('CRONOX gallery page', () => {
     ]);
     expect(cards[0].tagName).toBe('A');
     expect((cards[0] as HTMLAnchorElement).href).toBe(
-      'http://localhost:3000/producto.html?slug=second-tee',
+      'http://localhost:3000/producto/second-tee',
     );
     expect(cards[1].tagName).toBe('ARTICLE');
     expect(cards[1].textContent).toContain('NO DISPONIBLE');

@@ -112,7 +112,7 @@ describe('PDP recommended-product cards', () => {
     const next = card.querySelector<HTMLButtonElement>('.product-arrow.next')!;
 
     expect(card.href).toBe(
-      'http://localhost:3000/producto.html?slug=recommended-tee',
+      'http://localhost:3000/producto/recommended-tee',
     );
     expect(media.nextElementSibling).toBe(name);
     expect(name.nextElementSibling).toBe(price);

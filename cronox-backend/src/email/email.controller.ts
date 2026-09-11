@@ -91,7 +91,7 @@ export class EmailController {
       customerPhone: '+34 600 123 123',
       message:
         'Gracias por confiar en CRONOX. Estamos preparando tu pedido y te avisaremos en cuanto salga de nuestro almacén.',
-      orderUrl: `${storeUrl.replace(/\/$/, '')}/profile.html?tab=orders&orderId=ORDER-TEST-001`,
+      orderUrl: `${storeUrl.replace(/\/$/, '')}/cuenta?tab=orders&orderId=ORDER-TEST-001`,
       storeUrl,
       subtotalFormatted: '89,90 €',
       discountFormatted: '10,00 €',

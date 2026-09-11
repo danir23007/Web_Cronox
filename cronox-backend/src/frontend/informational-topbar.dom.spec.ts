@@ -27,7 +27,7 @@ const waitFor = async (assertion: () => void, attempts = 50) => {
   throw lastError;
 };
 
-const expectedRoutes = [
+const informationalFiles = [
   'faqs.html',
   'shipping-policy.html',
   'returns-exchanges.html',
@@ -37,6 +37,18 @@ const expectedRoutes = [
   'cookie-policy.html',
   'terms-of-service.html',
   'aviso-legal.html',
+];
+
+const expectedRoutes = [
+  '/faqs',
+  '/envios',
+  '/devoluciones',
+  '/desarrolla',
+  '/eventos',
+  '/privacidad',
+  '/cookies',
+  '/terminos',
+  '/aviso-legal',
 ];
 
 describe('informational footer destinations use the shared CRONOX topbar', () => {
@@ -53,11 +65,11 @@ describe('informational footer destinations use the shared CRONOX topbar', () =>
     dom.window.close();
   });
 
-  it.each(expectedRoutes)(
+  it.each(informationalFiles)(
     '%s mounts one opaque production header immediately',
     (route) => {
       const html = readFrontend(route);
-      const shellVersion = route === 'privacy-policy.html' ? '2' : '1';
+      const shellVersion = '3';
       expect(html).toContain('<body class="page-info">');
       expect(html).toMatch(
         new RegExp(
@@ -69,7 +81,7 @@ describe('informational footer destinations use the shared CRONOX topbar', () =>
       expect(
         html.match(new RegExp(`assets/info-shell\\.js\\?v=${shellVersion}`, 'g')),
       ).toHaveLength(1);
-      expect(html.match(/assets\/app\.js\?v=60/g)).toHaveLength(1);
+      expect(html.match(/assets\/app\.js\?v=62/g)).toHaveLength(1);
       expect(html.match(/assets\/api\.js\?v=4/g)).toHaveLength(1);
       expect(html.match(/assets\/cart-badge\.js\?v=43/g)).toHaveLength(1);
 
@@ -88,7 +100,7 @@ describe('informational footer destinations use the shared CRONOX topbar', () =>
         document
           .querySelector<HTMLAnchorElement>('.topbar__logo')
           ?.getAttribute('href'),
-      ).toBe('index.html');
+      ).toBe('/');
       expect(
         document.querySelector('.topbar__logo-img')?.getAttribute('src'),
       ).toBe('assets/logo_banner.png');

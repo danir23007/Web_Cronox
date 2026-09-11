@@ -70,7 +70,7 @@ describe('Pantalla Clave frontend integration', () => {
     expect(document.querySelector('input[type="password"]')).toBeNull();
     expect(document.querySelector('#keySuccess')).not.toBeNull();
     expect(document.querySelector('#keyPrivacy')?.getAttribute('href')).toBe(
-      'privacy-policy.html?source=key-screen',
+      '/privacidad?source=key-screen',
     );
     expect(gateHtml).not.toContain('product-card');
     expect(gateScript).toContain('el.form.hidden = true');
@@ -93,7 +93,8 @@ describe('Pantalla Clave frontend integration', () => {
   it('enforces the gate before static HTML while explicitly excluding Admin and APIs', () => {
     expect(mainSource).toContain("pathname.startsWith('/api')");
     expect(mainSource).toContain("'/admin.html'");
-    expect(mainSource).toContain("res.redirect(307, '/key-screen.html')");
+    expect(mainSource).toContain("res.sendFile(join(frontendRoot, 'key-screen.html'))");
+    expect(mainSource).not.toContain("res.redirect(307, '/key-screen.html')");
     expect(mainSource.indexOf('shouldGatePublicHtml')).toBeLessThan(
       mainSource.indexOf('app.useGlobalPipes'),
     );

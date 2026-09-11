@@ -649,7 +649,7 @@
   const handleAuthRedirect = (err) => {
     if (err?.status === 401 || err?.status === 403) {
       try { localStorage.setItem('cronox_open_auth_on_load', 'login'); } catch (_) {}
-      window.location.href = 'index.html';
+      window.location.href = '/';
       return true;
     }
     return false;
@@ -1034,8 +1034,8 @@
     if (product.slug) link.dataset.slug = product.slug;
     if (product.backendId != null) link.dataset.backendId = String(product.backendId);
     link.href = product.slug
-      ? `/producto.html?slug=${encodeURIComponent(product.slug)}`
-      : `/producto.html?id=${encodeURIComponent(key)}`;
+      ? `/producto/${encodeURIComponent(product.slug)}`
+      : `/producto?id=${encodeURIComponent(key)}`;
 
     const media = document.createElement('div');
     media.className = 'product-media';
@@ -1395,7 +1395,7 @@
   const bindBackLinks = () => {
     document.querySelectorAll('[data-profile-back="store"]').forEach((btn) => {
       btn.addEventListener('click', () => {
-        window.location.href = 'index.html';
+        window.location.href = '/';
       });
     });
   };

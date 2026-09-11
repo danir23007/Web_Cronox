@@ -228,7 +228,7 @@
 
   const productUrl = (product) =>
     product.available && product.slug
-      ? `/producto.html?slug=${encodeURIComponent(product.slug)}`
+      ? `/producto/${encodeURIComponent(product.slug)}`
       : "";
 
   const renderProductCard = (product) => {

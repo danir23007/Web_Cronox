@@ -137,7 +137,7 @@ describe('Pantalla Clave focused UX contracts', () => {
     );
     expect(document.documentElement.dataset.keyScreenState).toBe('ready');
     expect(document.querySelector('#keyPrivacy')?.getAttribute('href')).toBe(
-      '/privacy-policy.html?source=key-screen',
+      '/privacidad?source=key-screen',
     );
     dom.window.close();
   });
@@ -261,7 +261,7 @@ describe('Pantalla Clave focused UX contracts', () => {
   it('suppresses every storefront control only in explicit key-screen privacy context', () => {
     const contextual = new JSDOM(privacyHtml, {
       runScripts: 'outside-only',
-      url: 'http://127.0.0.1:3000/privacy-policy.html?source=key-screen',
+      url: 'http://127.0.0.1:3000/privacidad?source=key-screen',
     });
     contextual.window.eval(infoShellScript);
     const contextualDocument = contextual.window.document;
@@ -283,22 +283,22 @@ describe('Pantalla Clave focused UX contracts', () => {
       Array.from(
         contextualDocument.querySelectorAll<HTMLAnchorElement>('body a'),
       ).map((link) => link.getAttribute('href')),
-    ).toEqual(['/key-screen.html']);
+    ).toEqual(['/']);
     expect(
       contextualDocument
         .querySelector('.key-screen-return')
         ?.getAttribute('href'),
-    ).toBe('/key-screen.html');
+    ).toBe('/');
     expect(
       contextual.window.getComputedStyle(
         contextualDocument.querySelector('.key-screen-return')!,
       ).display,
     ).toBe('inline-flex');
-    expect(mainSource).toContain("'/privacy-policy.html'");
+    expect(mainSource).toContain('UNGATED_PUBLIC_PATHS.has(pathname)');
 
     const normal = new JSDOM(privacyHtml, {
       runScripts: 'outside-only',
-      url: 'http://127.0.0.1:3000/privacy-policy.html',
+      url: 'http://127.0.0.1:3000/privacidad',
     });
     normal.window.eval(infoShellScript);
     expect(normal.window.document.documentElement.dataset.privacyContext).toBe(

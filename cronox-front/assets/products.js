@@ -338,9 +338,9 @@
       if (!qaCurrentProduct) return;
       const key = qaCurrentProduct.slug || qaCurrentProduct.id;
       if (qaCurrentProduct.slug) {
-        window.location.href = `/producto.html?slug=${encodeURIComponent(key)}`;
+        window.location.href = `/producto/${encodeURIComponent(key)}`;
       } else {
-        window.location.href = `/producto.html?id=${encodeURIComponent(key)}`;
+        window.location.href = `/producto?id=${encodeURIComponent(key)}`;
       }
     });
   }
@@ -451,9 +451,9 @@
 
     const key = product.slug || product.id;
     if (product.slug) {
-      qaLink.href = `/producto.html?slug=${encodeURIComponent(key)}`;
+      qaLink.href = `/producto/${encodeURIComponent(key)}`;
     } else {
-      qaLink.href = `/producto.html?id=${encodeURIComponent(key)}`;
+      qaLink.href = `/producto?id=${encodeURIComponent(key)}`;
     }
 
     qaOverlay.setAttribute("aria-hidden","false");
@@ -494,9 +494,9 @@
 
     const key = p.slug || String(p.id) || String(p.backendId);
     const detailHref = p.slug
-      ? `/producto.html?slug=${encodeURIComponent(key)}`
+      ? `/producto/${encodeURIComponent(key)}`
       : key
-        ? `/producto.html?id=${encodeURIComponent(key)}`
+        ? `/producto?id=${encodeURIComponent(key)}`
         : "#";
 
     const a = document.createElement("a");
