@@ -115,3 +115,40 @@ export const publicGateDecision = (
   }
   return { kind: 'redirect', location: `/${querySuffix(originalUrl)}` };
 };
+
+export const PUBLIC_SITE_URL = 'https://cronox.es/';
+
+export const robotsText = (keyScreenEnabled: boolean): string => {
+  const directives = keyScreenEnabled
+    ? [
+        'User-agent: *',
+        'Allow: /',
+        'Allow: /api/key-screen$',
+        'Disallow: /api/',
+        'Disallow: /admin',
+      ]
+    : [
+        'User-agent: *',
+        'Allow: /',
+        'Disallow: /api/',
+        'Disallow: /admin',
+        'Disallow: /admin.html',
+        'Disallow: /admin-login.html',
+        'Disallow: /admin-user.html',
+      ];
+
+  return [...directives, `Sitemap: ${PUBLIC_SITE_URL}sitemap.xml`, ''].join(
+    '\n',
+  );
+};
+
+export const prelaunchSitemapXml = (): string =>
+  [
+    '<?xml version="1.0" encoding="UTF-8"?>',
+    '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">',
+    '  <url>',
+    `    <loc>${PUBLIC_SITE_URL}</loc>`,
+    '  </url>',
+    '</urlset>',
+    '',
+  ].join('\n');

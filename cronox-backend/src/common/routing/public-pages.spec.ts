@@ -3,7 +3,10 @@ import {
   cleanPageForPath,
   legacyRedirectTarget,
   normalizePublicPath,
+  prelaunchSitemapXml,
+  PUBLIC_SITE_URL,
   publicGateDecision,
+  robotsText,
 } from './public-pages';
 
 describe('public clean routes', () => {
@@ -100,5 +103,31 @@ describe('public clean routes', () => {
         kind: 'continue',
       });
     }
+  });
+
+  it('keeps the prelaunch root crawlable while excluding API and Admin', () => {
+    const robots = robotsText(true);
+    expect(robots).toContain('Allow: /');
+    expect(robots).toContain('Allow: /api/key-screen$');
+    expect(robots).toContain('Disallow: /api/');
+    expect(robots).toContain('Disallow: /admin');
+    expect(robots).not.toContain('Disallow: /\n');
+    expect(robots).toContain(`Sitemap: ${PUBLIC_SITE_URL}sitemap.xml`);
+  });
+
+  it('restores public crawling while keeping API and Admin excluded after launch', () => {
+    const robots = robotsText(false);
+    expect(robots).toContain('Allow: /');
+    expect(robots).toContain('Disallow: /api/');
+    expect(robots).toContain('Disallow: /admin');
+    expect(robots).not.toContain('Disallow: /\n');
+  });
+
+  it('publishes a prelaunch sitemap containing only the canonical root', () => {
+    const sitemap = prelaunchSitemapXml();
+    expect(sitemap).toContain(`<loc>${PUBLIC_SITE_URL}</loc>`);
+    expect(sitemap.match(/<url>/g)).toHaveLength(1);
+    expect(sitemap).not.toContain('/tienda');
+    expect(sitemap).not.toContain('/producto');
   });
 });

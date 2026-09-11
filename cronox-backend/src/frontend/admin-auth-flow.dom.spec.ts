@@ -133,8 +133,8 @@ describe('dedicated Admin authentication flow', () => {
     expect(mainSource).toContain("'/admin-login.html'");
     expect(mainSource).toContain("app.use(['/admin', '/admin/']");
     expect(mainSource).toContain("res.redirect(307, '/admin.html')");
-    expect(mainSource.indexOf("pathname.startsWith('/api')")).toBeLessThan(
-      mainSource.indexOf('shouldGatePublicHtml'),
+    expect(mainSource).toMatch(
+      /pathname\.startsWith\('\/api'\)[\s\S]*const keyScreenEnabled = await keyScreen\.shouldGatePublicHtml\(\)/,
     );
     expect(mainSource).toContain("res.sendFile(join(frontendRoot, 'key-screen.html'))");
   });

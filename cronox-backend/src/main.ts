@@ -26,7 +26,9 @@ import {
   cleanPageForPath,
   legacyRedirectTarget,
   normalizePublicPath,
+  prelaunchSitemapXml,
   publicGateDecision,
+  robotsText,
   UNGATED_PUBLIC_PATHS,
 } from './common/routing/public-pages';
 
@@ -107,6 +109,21 @@ async function bootstrap() {
   // Enforced before Nest registers the static storefront handlers. The gate
   // page, legal pages and every Admin surface remain explicitly reachable.
   const keyScreen = app.get(KeyScreenService);
+
+  app.use('/robots.txt', async (req, res, next) => {
+    if (req.method !== 'GET' && req.method !== 'HEAD') return next();
+    res.type('text/plain');
+    res.setHeader('Cache-Control', 'no-store, max-age=0');
+    return res.send(robotsText(await keyScreen.shouldGatePublicHtml()));
+  });
+
+  app.use('/sitemap.xml', (req, res, next) => {
+    if (req.method !== 'GET' && req.method !== 'HEAD') return next();
+    res.type('application/xml');
+    res.setHeader('Cache-Control', 'public, max-age=300');
+    return res.send(prelaunchSitemapXml());
+  });
+
   const ungatedAdminPaths = new Set([
     '/admin',
     '/admin.html',
@@ -121,15 +138,21 @@ async function bootstrap() {
       pathname.startsWith('/docs') ||
       pathname.startsWith('/assets') ||
       pathname.startsWith('/public') ||
-      UNGATED_PUBLIC_PATHS.has(pathname) ||
       ungatedAdminPaths.has(pathname) ||
       (!pathname.endsWith('.html') && pathname.includes('.'))
     )
       return next();
     const acceptsHtml = req.accepts(['html', 'json']) === 'html';
     if (!acceptsHtml) return next();
+    const keyScreenEnabled = await keyScreen.shouldGatePublicHtml();
+    if (UNGATED_PUBLIC_PATHS.has(pathname)) {
+      if (keyScreenEnabled) {
+        res.setHeader('X-Robots-Tag', 'noindex, follow');
+      }
+      return next();
+    }
     const gate = publicGateDecision(
-      await keyScreen.shouldGatePublicHtml(),
+      keyScreenEnabled,
       pathname,
       req.originalUrl,
     );
@@ -139,6 +162,7 @@ async function bootstrap() {
       if (gate.kind === 'render-key-screen') {
         return res.sendFile(join(frontendRoot, 'key-screen.html'));
       }
+      res.setHeader('X-Robots-Tag', 'noindex, follow');
       return res.redirect(307, gate.location);
     }
     next();

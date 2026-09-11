@@ -77,6 +77,42 @@ describe('Pantalla Clave frontend integration', () => {
     expect(gateScript).not.toMatch(/location\.(?:assign|href).*preregister/i);
   });
 
+  it('makes only the canonical prelaunch root indexable with complete social metadata', () => {
+    const document = new JSDOM(gateHtml).window.document;
+    expect(document.title).toBe('CRONOX — Próximamente');
+    expect(
+      document.querySelector('meta[name="robots"]')?.getAttribute('content'),
+    ).toBe('index,follow');
+    expect(
+      document
+        .querySelector('meta[name="description"]')
+        ?.getAttribute('content'),
+    ).toBe(
+      'CRONOX está preparando algo nuevo. Regístrate para recibir novedades y acceso al lanzamiento.',
+    );
+    expect(
+      document.querySelector('link[rel="canonical"]')?.getAttribute('href'),
+    ).toBe('https://cronox.es/');
+    expect(
+      document.querySelector('meta[property="og:url"]')?.getAttribute('content'),
+    ).toBe('https://cronox.es/');
+    expect(
+      document
+        .querySelector('meta[property="og:image"]')
+        ?.getAttribute('content'),
+    ).toBe('https://cronox.es/assets/logo_banner.png');
+    expect(
+      document
+        .querySelector('meta[name="twitter:card"]')
+        ?.getAttribute('content'),
+    ).toBe('summary_large_image');
+    expect(
+      document
+        .querySelector('meta[name="twitter:image"]')
+        ?.getAttribute('content'),
+    ).toBe('https://cronox.es/assets/logo_banner.png');
+  });
+
   it('shares the media geometry engine and uses full viewport responsive framing', () => {
     expect(gateHtml).toContain('media-framing-geometry.js');
     expect(gateScript).toContain('CRONOX_MEDIA_GEOMETRY?.apply');
