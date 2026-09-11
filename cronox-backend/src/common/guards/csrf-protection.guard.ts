@@ -6,7 +6,7 @@ import {
 } from '@nestjs/common';
 import { timingSafeEqual } from 'crypto';
 import type { Request } from 'express';
-import { getCorsOrigins } from '../config/environment';
+import { isCorsOriginAllowed } from '../config/environment';
 
 export const CSRF_COOKIE_NAME = 'cronox_csrf_token';
 export const CSRF_HEADER_NAME = 'x-csrf-token';
@@ -68,7 +68,7 @@ export class CsrfProtectionGuard implements CanActivate {
 
     const origin =
       request.get('origin') ?? getRefererOrigin(request.get('referer'));
-    if (!origin || !getCorsOrigins().includes(origin)) {
+    if (!origin || !isCorsOriginAllowed(origin)) {
       throw new ForbiddenException('Origen de solicitud no permitido');
     }
 

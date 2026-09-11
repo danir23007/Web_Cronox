@@ -4,6 +4,11 @@ const JWT_SECRET_MIN_LENGTH = 32;
 const PLACEHOLDER_SECRET_PATTERN =
   /^(?:change|replace|your|example|test|secret)(?:[_-]|$)/i;
 
+export const CRONOX_PRODUCTION_ORIGINS = Object.freeze([
+  'https://cronox.es',
+  'https://www.cronox.es',
+]);
+
 const read = (source: EnvironmentSource, name: string): string | undefined => {
   const value = source[name]?.trim();
   return value || undefined;
@@ -38,6 +43,26 @@ const ensureAbsoluteUrl = (
     throw new Error(`${name} must use https in production`);
   }
 };
+
+export function normalizeCorsOrigin(
+  value: string,
+  production = isProductionEnvironment(),
+): string {
+  ensureAbsoluteUrl('CORS_ORIGINS', value, production);
+  const url = new URL(value);
+
+  if (
+    url.username ||
+    url.password ||
+    url.pathname !== '/' ||
+    url.search ||
+    url.hash
+  ) {
+    throw new Error('CORS_ORIGINS entries must contain only an origin');
+  }
+
+  return url.origin;
+}
 
 const ensureDatabaseUrl = (value: string): void => {
   let url: URL;
@@ -134,6 +159,15 @@ export function validateEnvironment(
     ensureAbsoluteUrl('API_PUBLIC_URL', apiPublicUrl, production);
   }
 
+  const corsOrigins = read(source, 'CORS_ORIGINS');
+  if (corsOrigins) {
+    for (const candidate of corsOrigins
+      .split(',')
+      .map((value) => value.trim())) {
+      if (candidate) normalizeCorsOrigin(candidate, production);
+    }
+  }
+
   parseInteger(
     'BCRYPT_SALT_ROUNDS',
     read(source, 'BCRYPT_SALT_ROUNDS'),
@@ -225,15 +259,27 @@ export function getCorsOrigins(): string[] {
         .filter(Boolean)
     : [getFrontendUrl()];
 
+  candidates.push(...CRONOX_PRODUCTION_ORIGINS);
+
   if (!isProductionEnvironment()) {
     candidates.push('http://localhost:3000', 'http://127.0.0.1:3000');
   }
 
   const origins = new Set<string>();
   for (const candidate of candidates) {
-    ensureAbsoluteUrl('CORS_ORIGINS', candidate, isProductionEnvironment());
-    origins.add(new URL(candidate).origin);
+    origins.add(normalizeCorsOrigin(candidate));
   }
 
   return [...origins];
+}
+
+export function isCorsOriginAllowed(
+  candidate: string,
+  allowedOrigins = getCorsOrigins(),
+): boolean {
+  try {
+    return allowedOrigins.includes(normalizeCorsOrigin(candidate));
+  } catch {
+    return false;
+  }
 }

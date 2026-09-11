@@ -10,6 +10,7 @@ describe('Pantalla Clave frontend integration', () => {
     join(frontend, 'assets', 'key-screen.js'),
     'utf8',
   );
+  const apiScript = readFileSync(join(frontend, 'assets', 'api.js'), 'utf8');
   const rendererScript = readFileSync(
     join(frontend, 'assets', 'key-screen-renderer.js'),
     'utf8',
@@ -112,6 +113,20 @@ describe('Pantalla Clave frontend integration', () => {
         ?.getAttribute('content'),
     ).toBe('https://cronox.es/assets/logo_banner.png');
   });
+
+  it.each(['https://cronox.es/', 'https://www.cronox.es/'])(
+    'keeps Key Screen API requests same-origin at %s',
+    (url) => {
+      const dom = new JSDOM(gateHtml, { runScripts: 'outside-only', url });
+      dom.window.eval(apiScript);
+      expect(dom.window.CRONOX_API.API_BASE).toBe(new URL(url).origin);
+      expect(gateScript).toContain(
+        'fetch(`${base}/api/key-screen/preregister`',
+      );
+      expect(gateScript).not.toContain('localhost');
+      dom.window.close();
+    },
+  );
 
   it('shares the media geometry engine and uses full viewport responsive framing', () => {
     expect(gateHtml).toContain('media-framing-geometry.js');

@@ -12,6 +12,7 @@ import { createContentSecurityPolicy } from './common/config/content-security-po
 import {
   getCorsOrigins,
   getTrustedProxyHops,
+  isCorsOriginAllowed,
   isProductionEnvironment,
 } from './common/config/environment';
 import {
@@ -213,7 +214,10 @@ async function bootstrap() {
 
   app.enableCors({
     origin: (origin, callback) => {
-      callback(null, !origin || allowedCorsOrigins.includes(origin));
+      callback(
+        null,
+        !origin || isCorsOriginAllowed(origin, allowedCorsOrigins),
+      );
     },
     credentials: true,
     methods: ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],

@@ -1,4 +1,10 @@
-import { validateEnvironment } from './environment';
+import {
+  CRONOX_PRODUCTION_ORIGINS,
+  getCorsOrigins,
+  isCorsOriginAllowed,
+  normalizeCorsOrigin,
+  validateEnvironment,
+} from './environment';
 
 const validEnvironment = () => ({
   NODE_ENV: 'test',
@@ -47,5 +53,72 @@ describe('validateEnvironment', () => {
     config.FRONTEND_URL = 'https://cronox.example';
 
     expect(() => validateEnvironment(config)).toThrow('live Stripe');
+  });
+
+  it('normalizes origins by exact scheme, hostname and port', () => {
+    const originalNodeEnv = process.env.NODE_ENV;
+    process.env.NODE_ENV = 'production';
+    try {
+      expect(normalizeCorsOrigin('https://cronox.es/')).toBe(
+        'https://cronox.es',
+      );
+      expect(
+        isCorsOriginAllowed(
+          'https://cronox.es:443/',
+          CRONOX_PRODUCTION_ORIGINS.slice(),
+        ),
+      ).toBe(true);
+      for (const origin of [
+        'http://cronox.es',
+        'https://shop.cronox.es',
+        'https://cronox.es.evil.example',
+        'https://cronox.es:444',
+      ]) {
+        expect(
+          isCorsOriginAllowed(origin, CRONOX_PRODUCTION_ORIGINS.slice()),
+        ).toBe(false);
+      }
+    } finally {
+      if (originalNodeEnv === undefined) delete process.env.NODE_ENV;
+      else process.env.NODE_ENV = originalNodeEnv;
+    }
+  });
+
+  it('always includes both official HTTPS origins', () => {
+    const originalNodeEnv = process.env.NODE_ENV;
+    const originalFrontendUrl = process.env.FRONTEND_URL;
+    const originalCorsOrigins = process.env.CORS_ORIGINS;
+    process.env.NODE_ENV = 'production';
+    process.env.FRONTEND_URL = 'https://cronox.es';
+    process.env.CORS_ORIGINS = 'https://cronox.es';
+    try {
+      expect(getCorsOrigins()).toEqual(
+        expect.arrayContaining(['https://cronox.es', 'https://www.cronox.es']),
+      );
+    } finally {
+      if (originalNodeEnv === undefined) delete process.env.NODE_ENV;
+      else process.env.NODE_ENV = originalNodeEnv;
+      if (originalFrontendUrl === undefined) delete process.env.FRONTEND_URL;
+      else process.env.FRONTEND_URL = originalFrontendUrl;
+      if (originalCorsOrigins === undefined) delete process.env.CORS_ORIGINS;
+      else process.env.CORS_ORIGINS = originalCorsOrigins;
+    }
+  });
+
+  it('rejects paths, credentials and HTTP production CORS entries', () => {
+    const production = validEnvironment();
+    production.NODE_ENV = 'production';
+    production.FRONTEND_URL = 'https://cronox.es';
+    production.STRIPE_SECRET_KEY = 'sk_live_not_a_real_key';
+
+    for (const origin of [
+      'https://cronox.es/path',
+      'https://user:pass@cronox.es',
+      'http://cronox.es',
+    ]) {
+      expect(() =>
+        validateEnvironment({ ...production, CORS_ORIGINS: origin }),
+      ).toThrow();
+    }
   });
 });
