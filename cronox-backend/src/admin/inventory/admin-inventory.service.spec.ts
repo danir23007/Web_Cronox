@@ -68,7 +68,7 @@ describe('AdminInventoryService', () => {
     expect(result.items).toHaveLength(1);
     expect(result.items[0]).toMatchObject({
       isActive: false,
-      totalStock: 8,
+      totalStock: 0,
       variantCount: 2,
     });
     expect(result.items[0].variants).toEqual(

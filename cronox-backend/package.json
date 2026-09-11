@@ -6,6 +6,7 @@
   "private": true,
   "license": "UNLICENSED",
   "scripts": {
+    "email:import": "ts-node src/email/managed/import-mail-templates.ts",
     "dev": "npm run start:dev",
     "prebuild": "prisma generate",
     "build": "nest build",
@@ -44,12 +45,14 @@
     "class-transformer": "^0.5.1",
     "class-validator": "^0.14.2",
     "cookie-parser": "^1.4.7",
+    "handlebars": "4.7.9",
     "nodemailer": "^9.0.5",
     "passport": "^0.7.0",
     "passport-jwt": "^4.0.1",
     "qrcode": "^1.5.4",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1",
+    "sanitize-html": "2.17.7",
     "serve-static": "^2.2.0",
     "stripe": "^16.12.0",
     "swagger-ui-express": "^5.0.1"
@@ -67,6 +70,7 @@
     "@types/multer": "^1.4.12",
     "@types/node": "^22.18.13",
     "@types/nodemailer": "^7.0.9",
+    "@types/sanitize-html": "2.16.1",
     "@types/supertest": "^6.0.2",
     "eslint": "^9.18.0",
     "eslint-config-prettier": "^10.0.1",
@@ -99,8 +103,12 @@
     "rootDir": "src",
     "testRegex": ".*\\.spec\\.ts$",
     "transform": {
-      "^.+\\.(t|j)s$": "ts-jest"
+      "^.+\\.ts$": "ts-jest",
+      "^.+\\.js$": "<rootDir>/../test/esm-transform.cjs"
     },
+    "transformIgnorePatterns": [
+      "node_modules/(?!(sanitize-html|htmlparser2|domhandler|domutils|domelementtype|entities|dom-serializer)/)"
+    ],
     "collectCoverageFrom": [
       "**/*.(t|j)s"
     ],
@@ -108,7 +116,7 @@
     "testEnvironment": "node"
   },
   "engines": {
-    "node": ">=18"
+    "node": ">=22.12.0"
   },
   "_comment_fix_deps": "// [FIX] Updated @nestjs/throttler to ^6.0.0"
 }

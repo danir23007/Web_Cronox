@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="es">
+<html lang="es" data-admin-auth-state="checking">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -19,7 +19,12 @@
   <link rel="stylesheet" href="assets/admin-gallery.css?v=4">
   <link rel="stylesheet" href="assets/admin-media.css?v=3">
   <link rel="stylesheet" href="assets/admin-inventory.css?v=1">
+  <link rel="stylesheet" href="assets/admin-mails.css?v=1">
+  <link rel="stylesheet" href="assets/admin-key-screen.css?v=2">
+  <link rel="stylesheet" href="assets/key-screen-composition.css?v=2">
   <style>
+    [hidden] { display: none !important; }
+    .admin-auth-check { min-height: 100vh; display: grid; place-items: center; color: rgba(255,255,255,0.72); letter-spacing: 0.04em; }
     body { font-family: 'Inter', system-ui, -apple-system, sans-serif; background: #050505; color: #fff; margin: 0; min-height: 100vh; }
     .admin-shell { width: min(100% - 48px, 1500px); margin: 0 auto; padding: 32px 0 48px; }
     .admin-header { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 24px; }
@@ -218,7 +223,8 @@
   <meta name="theme-color" content="#000000">
 </head>
 <body class="bw-theme">
-  <div class="admin-shell">
+  <div id="adminAuthCheck" class="admin-auth-check" role="status">Verificando acceso…</div>
+  <div id="adminShell" class="admin-shell" hidden>
     <header class="admin-header">
       <h1 class="admin-title">CRONOX ADMIN</h1>
       <div class="admin-actions">
@@ -234,6 +240,8 @@
       <small class="subtle">Selecciona un módulo del panel de administración.</small>
       <div class="admin-index-list" id="adminIndexList">
         <button class="btn admin-nav-item admin-nav-item--described" data-nav-target="section-inventory"><strong class="admin-nav-item__title">Inventario -</strong><span class="admin-nav-item__description">Stock real por producto y talla</span></button>
+        <button class="btn admin-nav-item" data-nav-target="section-mails">PLANTILLAS MAILS</button>
+        <button class="btn admin-nav-item admin-nav-item--described" data-nav-target="section-key-screen"><strong class="admin-nav-item__title">PANTALLA CLAVE -</strong><span class="admin-nav-item__description">Acceso global y prerregistro del sitio público</span></button>
         <button class="btn admin-nav-item admin-nav-item--described" data-nav-target="section-dashboard"><strong class="admin-nav-item__title">Resumen -</strong><span class="admin-nav-item__description">Estadísticas generales, info de usuarios, pedidos, ingresos, stock</span></button>
         <button class="btn admin-nav-item admin-nav-item--described" data-nav-target="section-circles-menu"><strong class="admin-nav-item__title">Círculos -</strong><span class="admin-nav-item__description">Solicitudes de subidas de círculos</span></button>
         <button class="btn admin-nav-item admin-nav-item--described" data-nav-target="section-activity"><strong class="admin-nav-item__title">Actividad -</strong><span class="admin-nav-item__description">Actividad en el panel de administrador</span></button>
@@ -521,6 +529,15 @@
             </select>
           </label>
           <label class="form-group">
+            <span>Estado de cuenta</span>
+            <select id="usersAccountState" class="select">
+              <option value="">Todos</option>
+              <option value="ACTIVE">Activa</option>
+              <option value="PENDING_PASSWORD">Pendiente de contrase&ntilde;a</option>
+              <option value="PRE_REGISTERED">Prerregistrado</option>
+            </select>
+          </label>
+          <label class="form-group">
             <span>Ordenar por</span>
             <select id="usersSort" class="select">
               <option value="createdAt">Alta</option>
@@ -549,13 +566,14 @@
               <th id="usersPhoneHeader">Teléfono</th>
               <th>Nombre</th>
               <th>Rol</th>
+              <th>Estado</th>
               <th>Círculo</th>
               <th>Alta</th>
               <th>Acción</th>
             </tr>
           </thead>
           <tbody id="usersBody">
-            <tr><td colspan="8" class="empty">Cargando usuarios…</td></tr>
+            <tr><td colspan="9" class="empty">Cargando usuarios…</td></tr>
           </tbody>
         </table>
       </div>
@@ -868,6 +886,13 @@
         </div>
       </div>
     </div>
+    <section id="section-mails" class="card admin-section" aria-labelledby="title-mails" hidden>
+      <button class="btn" data-back-target="section-menu" type="button">← Atrás</button>
+      <h2 id="title-mails">PLANTILLAS MAILS</h2>
+      <p>Biblioteca de correo · Los borradores no cambian los envíos automáticos hasta su publicación.</p>
+      <p id="mailFeedback" role="status" aria-live="polite"></p>
+      <div id="mailWorkspace"></div>
+    </section>
     <section id="section-inventory" class="card admin-section inventory-section" aria-labelledby="title-inventory" hidden>
       <button class="btn admin-view-back" type="button" data-back-target="section-menu">&larr; Atr&aacute;s</button>
       <div class="inventory-heading">
@@ -1048,6 +1073,59 @@
       </div>
     </section>
 
+    <section id="section-key-screen" class="card admin-section key-admin" aria-labelledby="title-key-screen" hidden>
+      <button class="btn admin-view-back" type="button" data-back-target="section-menu">&larr; Atr&aacute;s</button>
+      <div class="key-admin__header">
+        <div><h2 id="title-key-screen">PANTALLA CLAVE</h2><small>Control global del acceso al sitio p&uacute;blico.</small></div>
+        <label class="key-switch"><span>Pantalla clave</span><input id="keyMaster" type="checkbox"><strong id="keyMasterLabel">DESACTIVADA</strong></label>
+      </div>
+      <p id="keyAdminMessage" class="message" role="status" aria-live="polite"></p>
+      <div class="key-admin__summary"><strong id="keyCount">0</strong><span>usuarios prerregistrados</span></div>
+      <div class="key-admin__toolbar">
+        <label>Pantalla guardada<select id="keyScreenSelect" class="select"></select></label>
+        <label>Nueva pantalla<input id="keyNewName" class="input" maxlength="120" placeholder="PRELANZAMIENTO CRONOX"></label>
+        <button id="keyCreate" class="btn" type="button">Crear</button>
+        <button id="keyActivate" class="btn primary" type="button">Activar esta pantalla</button>
+        <button id="keyDelete" class="btn danger" type="button">Eliminar</button>
+      </div>
+      <div id="keyEditor" class="key-admin__editor" hidden>
+        <form id="keyForm" class="key-admin__form">
+          <label>Nombre interno<input name="internalName" class="input" maxlength="120" required></label>
+          <label>Modo<select name="mode" class="select"><option value="PREREGISTRATION">PRERREGISTRO</option><option value="ACCESS">ACCESO (futuro)</option></select></label>
+          <label>T&iacute;tulo<input name="title" class="input" maxlength="140"></label>
+          <label>Subt&iacute;tulo<textarea name="subtitle" class="input" maxlength="400"></textarea></label>
+          <label>Placeholder<input name="placeholder" class="input" maxlength="100"></label>
+          <label>Texto del bot&oacute;n<input name="buttonText" class="input" maxlength="60"></label>
+          <label>T&iacute;tulo de &eacute;xito<input name="successTitle" class="input" maxlength="140"></label>
+          <label>Mensaje de &eacute;xito<textarea name="successMessage" class="input" maxlength="400"></textarea></label>
+          <label>Color de texto<input name="textColor" type="color"></label>
+          <label>Oscurecimiento <input name="overlayStrength" type="range" min="0" max="90"><output id="keyOverlayValue"></output></label>
+          <label>Estilo de campo<select name="inputStyle" class="select"><option>LIGHT</option><option>DARK</option><option>OUTLINE</option></select></label>
+          <label>Estilo de bot&oacute;n<select name="buttonStyle" class="select"><option>DARK</option><option>LIGHT</option><option>OUTLINE</option></select></label>
+          <fieldset data-key-controls="desktop"><legend>Escritorio &middot; 1920 &times; 1080</legend><label>Foco X<input name="desktopFocalX" type="range" min="0" max="100" step="0.1"></label><label>Foco Y<input name="desktopFocalY" type="range" min="0" max="100" step="0.1"></label><label>Zoom<input name="desktopZoom" type="range" min="1" max="3" step="0.01"></label><label>Ajuste<select name="desktopFit" class="select"><option>COVER</option><option>CONTAIN</option></select></label><label>Alineaci&oacute;n horizontal<select name="desktopHorizontalAlign" class="select"><option>LEFT</option><option>CENTER</option><option>RIGHT</option></select></label><label>Alineaci&oacute;n vertical<select name="desktopVerticalAlign" class="select"><option>TOP</option><option>CENTER</option><option>BOTTOM</option></select></label><label>Desplazamiento del conjunto X<input name="desktopOffsetX" class="input" type="number" min="-400" max="400"></label><label>Desplazamiento del conjunto Y<input name="desktopOffsetY" class="input" type="number" min="-400" max="400"></label><label>Formulario X<input name="desktopFormOffsetX" class="input" type="number" min="-400" max="400"></label><label>Formulario Y<input name="desktopFormOffsetY" class="input" type="number" min="-400" max="400"></label><label>Privacidad X<input name="desktopPrivacyOffsetX" class="input" type="number" min="-400" max="400"></label><label>Privacidad Y<input name="desktopPrivacyOffsetY" class="input" type="number" min="-400" max="400"></label></fieldset>
+          <fieldset data-key-controls="mobile" hidden><legend>M&oacute;vil &middot; 390 &times; 844</legend><label>Foco X<input name="mobileFocalX" type="range" min="0" max="100" step="0.1"></label><label>Foco Y<input name="mobileFocalY" type="range" min="0" max="100" step="0.1"></label><label>Zoom<input name="mobileZoom" type="range" min="1" max="3" step="0.01"></label><label>Ajuste<select name="mobileFit" class="select"><option>COVER</option><option>CONTAIN</option></select></label><label>Alineaci&oacute;n horizontal<select name="mobileHorizontalAlign" class="select"><option>LEFT</option><option>CENTER</option><option>RIGHT</option></select></label><label>Alineaci&oacute;n vertical<select name="mobileVerticalAlign" class="select"><option>TOP</option><option>CENTER</option><option>BOTTOM</option></select></label><label>Desplazamiento del conjunto X<input name="mobileOffsetX" class="input" type="number" min="-400" max="400"></label><label>Desplazamiento del conjunto Y<input name="mobileOffsetY" class="input" type="number" min="-400" max="400"></label><label>Formulario X<input name="mobileFormOffsetX" class="input" type="number" min="-400" max="400"></label><label>Formulario Y<input name="mobileFormOffsetY" class="input" type="number" min="-400" max="400"></label><label>Privacidad X<input name="mobilePrivacyOffsetX" class="input" type="number" min="-400" max="400"></label><label>Privacidad Y<input name="mobilePrivacyOffsetY" class="input" type="number" min="-400" max="400"></label></fieldset>
+          <button class="btn primary" type="submit">Guardar cambios</button>
+        </form>
+        <div class="key-admin__media">
+          <div class="key-admin__preview-tools"><div class="key-device-switch" role="group" aria-label="Vista previa"><button class="btn active" type="button" data-key-device="desktop" aria-pressed="true">Escritorio</button><button class="btn" type="button" data-key-device="mobile" aria-pressed="false">M&oacute;vil</button></div><small>Arrastra el fondo o el contenido. Usa la rueda para ampliar.</small></div>
+          <div id="keyPreviewStage" class="key-preview-stage">
+            <div id="keyPreview" class="key-preview key-composition" data-key-device="desktop">
+              <div id="keyPreviewMedia" class="key-composition__media" aria-hidden="true"></div>
+              <div id="keyPreviewOverlay" class="key-composition__shade"></div>
+              <section id="keyPreviewContent" class="key-composition__content">
+                <h1></h1><p></p>
+                <div id="keyPreviewForm" class="key-composition__form-group"><div class="key-composition__form-row"><input type="email" tabindex="-1" aria-label="Vista previa del correo"><button type="button" tabindex="-1"></button></div><p class="key-composition__message"></p></div>
+                <a id="keyPreviewPrivacy" class="key-composition__privacy" tabindex="-1"></a>
+              </section>
+            </div>
+          </div>
+          <label>Subir imagen o v&iacute;deo<input id="keyMediaUpload" class="input" type="file" accept="image/jpeg,image/png,image/webp,video/mp4,video/webm"></label>
+          <button id="keyUpload" class="btn" type="button">Subir multimedia</button>
+          <div id="keyAssetGrid" class="key-assets"></div>
+        </div>
+      </div>
+    </section>
+
     <section id="section-media" class="card admin-section media-manager" aria-labelledby="title-media" hidden>
       <button class="btn admin-view-back" type="button" data-back-target="section-menu">&larr; Atr&aacute;s</button>
       <div class="media-manager__header">
@@ -1177,8 +1255,9 @@
           </div>
         </div>
         <div class="form-group">
-          <label for="productDescription">Descripción</label>
-          <textarea id="productDescription" name="description" class="textarea" maxlength="800" placeholder="Descripción del producto"></textarea>
+          <label for="productDescription">Detalles del producto</label>
+          <textarea id="productDescription" name="description" class="textarea" maxlength="800" aria-describedby="productDetailsHelp" placeholder="Escribe cada detalle del producto en una línea diferente"></textarea>
+          <small id="productDetailsHelp">Cada línea no vacía aparecerá como un detalle individual en la ficha pública.</small>
         </div>
         <div class="form-group">
           <label for="productSearchKeywords">Palabras de búsqueda</label>
@@ -1499,13 +1578,18 @@
 
   <div class="toast-container" id="toastContainer" aria-live="polite" aria-atomic="true"></div>
 
-  <script src="assets/api.js?v=3"></script>
+  <script src="assets/api.js?v=4"></script>
+  <script src="assets/admin-auth-routing.js?v=1"></script>
   <script src="assets/ui-status.js"></script>
   <script src="assets/admin.js"></script>
   <script src="assets/admin-inventory.js?v=1"></script>
+  <script src="assets/admin-mail-document.js?v=2"></script>
+  <script src="assets/admin-mails.js?v=2"></script>
   <script src="assets/admin-orders.js"></script>
   <script src="assets/admin-gallery.js?v=4"></script>
-  <script src="assets/media-framing-geometry.js?v=1"></script>
+  <script src="assets/media-framing-geometry.js?v=2"></script>
+  <script src="assets/key-screen-renderer.js?v=2"></script>
+  <script src="assets/admin-key-screen.js?v=3"></script>
   <script src="assets/admin-media.js?v=3"></script>
 </body>
 </html>

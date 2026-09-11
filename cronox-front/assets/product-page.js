@@ -484,7 +484,7 @@
     pSizeGroup.innerHTML = normalized
       .map((size) => {
         const variant = findVariantForSize(product, size);
-        const unavailable = !isVariantAvailable(variant);
+        const unavailable = window.CRONOX_STOCK?.classifyStock(window.CRONOX_STOCK.availableStock(product.variants)) === 'out_of_stock' || !isVariantAvailable(variant);
         const label = unavailable ? `${size}, no disponible` : size;
         return `<button type="button" class="size-btn${unavailable ? ' is-unavailable' : ''}" data-size="${escapeHtml(size)}" role="radio" aria-label="${escapeHtml(label)}" aria-checked="false" aria-disabled="${unavailable ? 'true' : 'false'}" ${unavailable ? 'disabled' : ''}>${escapeHtml(size)}</button>`;
       })
@@ -584,7 +584,16 @@
 
     if (pName)  pName.textContent  = product.name || "";
     if (pPrice) pPrice.textContent = product.priceLabel || money(product.price);
-    if (pDesc)  pDesc.textContent  = product.desc || "";
+    const details = document.getElementById('pDetails');
+    const description = product.description ?? product.desc ?? '';
+    if (details) {
+      details.replaceChildren(...String(description).split(/\r\n|\n|\r/).map(line => line.trim()).filter(Boolean).map(line => {
+        const item = document.createElement('li');
+        item.textContent = line;
+        return item;
+      }));
+    }
+    if (pDesc) { pDesc.textContent = ''; pDesc.hidden = true; }
 
     if (pFavoriteToggle) {
       const pid = product.backendId ?? product.id ?? "";
@@ -604,6 +613,7 @@
     }
 
     setupSizeButtons(product);
+    if (pPrice && pAdd) window.CRONOX_STOCK?.decoratePurchase(pPrice, pAdd, product);
     setPageTitle(product);
     renderRelated(product);
     if (window.CRONOX_FAVORITES && typeof window.CRONOX_FAVORITES.updateDomState === "function") {
@@ -667,6 +677,7 @@
     // botón añadir al carrito
     if (target && pAdd) {
       pAdd.addEventListener("click", () => {
+        if (pAdd.disabled || window.CRONOX_STOCK?.classifyStock(window.CRONOX_STOCK.availableStock(target.variants)) === 'out_of_stock') return;
         const size = selectedSize.toUpperCase();
         const variant = findVariantForSize(target, size);
 

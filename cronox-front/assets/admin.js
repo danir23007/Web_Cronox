@@ -83,6 +83,7 @@
   const usersSearch = $('#usersSearch');
   const usersRole = $('#usersRole');
   const usersCircle = $('#usersCircle');
+  const usersAccountState = $('#usersAccountState');
   const usersSort = $('#usersSort');
   const usersOrder = $('#usersOrder');
   const usersFiltersReset = $('#usersFiltersReset');
@@ -90,6 +91,8 @@
   const apiUnavailable = $('#apiUnavailable');
   const statusArea = $('#statusArea');
   const logoutBtn = $('#logoutBtn');
+  const adminAuthCheck = $('#adminAuthCheck');
+  const adminShell = $('#adminShell');
   const backBtn = $('#backBtn');
   const refreshDashboardBtn = $('#refreshDashboardBtn');
   const dashboardMessage = $('#dashboardMessage');
@@ -221,6 +224,7 @@
     q: '',
     role: '',
     circle: '',
+    accountState: '',
     sort: 'createdAt',
     order: 'desc',
   };
@@ -263,6 +267,8 @@
     userDetail: ['SUPER_ADMIN', 'MODERATOR'],
     products: ['SUPER_ADMIN', 'LOGISTICS'],
     inventory: ['SUPER_ADMIN', 'LOGISTICS'],
+    mails: ['SUPER_ADMIN'],
+    keyScreen: ['SUPER_ADMIN'],
     orders: ['SUPER_ADMIN', 'LOGISTICS'],
     promoCodes: ['SUPER_ADMIN', 'MARKETING'],
     auditLog: ['SUPER_ADMIN'],
@@ -276,6 +282,8 @@
     'section-products-menu': 'products',
     'section-products': 'products',
     'section-inventory': 'inventory',
+    'section-mails': 'mails',
+    'section-key-screen': 'keyScreen',
     'section-product-categories': 'products',
     'section-codes': 'promoCodes',
     'section-user': 'userDetail',
@@ -351,6 +359,8 @@
     setNavVisibility('section-products-menu', canAccess('products'));
     setNavVisibility('section-products', canAccess('products'));
     setNavVisibility('section-inventory', canAccess('inventory'));
+    setNavVisibility('section-mails', canAccess('mails'));
+    setNavVisibility('section-key-screen', canAccess('keyScreen'));
     setNavVisibility('section-product-categories', canAccess('products'));
     setNavVisibility('section-codes', canAccess('promoCodes'));
     setUserTabVisibility('notes', canAccess('notes'));
@@ -488,12 +498,7 @@
             redirectToLogin();
             return;
           }
-          try {
-            localStorage.setItem('cronox_open_auth_on_load', 'login');
-          } catch (error) {
-            console.warn('[ADMIN] No se pudo marcar login automático', error);
-          }
-          window.location.href = 'index.html';
+          window.CRONOX_ADMIN_AUTH?.redirectToLogin?.();
         },
         variant: 'primary',
       });
@@ -598,16 +603,17 @@
   };
 
   const redirectToHome = () => {
-    window.location.href = 'index.html';
+    window.location.href = '/';
   };
 
   const redirectToLogin = () => {
-    try {
-      localStorage.setItem('cronox_open_auth_on_load', 'login');
-    } catch (error) {
-      console.warn('[ADMIN] No se pudo marcar login automático', error);
-    }
-    redirectToHome();
+    window.CRONOX_ADMIN_AUTH?.redirectToLogin?.();
+  };
+
+  const revealAdmin = () => {
+    if (adminAuthCheck) adminAuthCheck.hidden = true;
+    if (adminShell) adminShell.hidden = false;
+    document.documentElement.dataset.adminAuthState = 'authorized';
   };
 
   const showApiUnavailable = (reason = '') => {
@@ -632,10 +638,18 @@
       showApiUnavailable('No se encontró el cliente de API.');
       return null;
     }
-    const user = await window.CRONOX_API.getMe();
+    let user = null;
+    try {
+      user = await window.CRONOX_API.getMe();
+    } catch (error) {
+      showApiUnavailable(error?.message || 'No se pudo verificar la sesión.');
+      if (adminAuthCheck) adminAuthCheck.textContent = 'No se pudo verificar el acceso.';
+      document.documentElement.dataset.adminAuthState = 'error';
+      return null;
+    }
     const effectiveRole = normalizeRole(user?.role);
     if (!user || !ADMIN_ROLES.has(effectiveRole)) {
-      redirectToHome();
+      redirectToLogin();
       return null;
     }
     currentAdminUser = user;
@@ -792,6 +806,7 @@
   };
 
   const showSection = (sectionId) => {
+    if (currentSectionId === 'section-mails' && sectionId !== currentSectionId && window.CRONOX_MAILS && !window.CRONOX_MAILS.canLeave()) return false;
     const allowed = applySectionAccess(sectionId);
     document.querySelectorAll('.admin-section').forEach((section) => {
       section.hidden = section.id !== sectionId;
@@ -1491,6 +1506,7 @@
       if (sectionId === 'section-inventory') {
         window.CRONOX_INVENTORY?.load?.();
       }
+      if (sectionId === 'section-mails') window.CRONOX_MAILS?.load?.();
       return;
     }
     if (currentSectionId === 'section-user') {
@@ -1592,6 +1608,7 @@
       q: state.q || undefined,
       role: state.role || undefined,
       circle: parseNumberOrNull(state.circle) ?? undefined,
+      accountState: state.accountState || undefined,
       sort: state.sort || undefined,
       order: state.order || undefined,
     };
@@ -1676,6 +1693,7 @@
     if (usersSearch) usersState.q = usersSearch.value.trim();
     if (usersRole) usersState.role = usersRole.value;
     if (usersCircle) usersState.circle = usersCircle.value;
+    if (usersAccountState) usersState.accountState = usersAccountState.value;
     if (usersSort) usersState.sort = usersSort.value || 'createdAt';
     if (usersOrder) usersState.order = usersOrder.value || 'desc';
   };
@@ -1684,6 +1702,7 @@
     if (usersSearch) usersSearch.value = usersState.q || '';
     if (usersRole) usersRole.value = usersState.role || '';
     if (usersCircle) usersCircle.value = usersState.circle || '';
+    if (usersAccountState) usersAccountState.value = usersState.accountState || '';
     if (usersSort) usersSort.value = usersState.sort || 'createdAt';
     if (usersOrder) usersOrder.value = usersState.order || 'desc';
   };
@@ -1711,6 +1730,7 @@
     usersState.q = params.get('q') ?? usersState.q;
     usersState.role = params.get('role') ?? usersState.role;
     usersState.circle = params.get('circle') ?? usersState.circle;
+    usersState.accountState = params.get('accountState') ?? usersState.accountState;
     if (sortField) usersState.sort = sortField;
     if (sortOrder) usersState.order = sortOrder;
   };
@@ -1722,6 +1742,7 @@
     params.set('q', state.q || '');
     params.set('role', state.role || '');
     params.set('circle', state.circle || '');
+    params.set('accountState', state.accountState || '');
     params.set('page', String(state.page || 1));
     params.set('pageSize', String(state.pageSize || 10));
     params.set('sort', sortValue);
@@ -1763,6 +1784,7 @@
     if (usersSearch) usersSearch.value = '';
     if (usersRole) usersRole.value = '';
     if (usersCircle) usersCircle.value = '';
+    if (usersAccountState) usersAccountState.value = '';
     if (usersSort) usersSort.value = 'createdAt';
     if (usersOrder) usersOrder.value = 'desc';
     usersState.page = 1;
@@ -2235,6 +2257,7 @@
       phone,
       displayName,
       role: source.role ?? source.userRole ?? source.type ?? '',
+      accountState: source.accountState || 'ACTIVE',
       circle:
         source.circle ?? source.circleLevel ?? source.userCircle ?? source.level ?? source.membershipCircle ?? '',
       createdAt: source.createdAt ?? source.created_at ?? source.created ?? source.createdOn ?? '',
@@ -2251,7 +2274,7 @@
     if (usersNext) usersNext.disabled = currentPage >= totalPages;
   };
 
-  const getUsersColumnCount = () => 8;
+  const getUsersColumnCount = () => 9;
 
   const renderUsers = (items = []) => {
     if (!usersBody) return;
@@ -2280,6 +2303,7 @@
           : phoneLabel;
         const nameLabel = user.displayName ? escapeHtml(user.displayName) : '—';
         const roleLabel = user.role ? escapeHtml(String(user.role)) : '—';
+        const accountStateLabel = { ACTIVE: 'Activa', PENDING_PASSWORD: 'Pendiente de contraseña', PRE_REGISTERED: 'Prerregistrado' }[user.accountState] || '—';
         const circleLabel =
           user.circle != null && user.circle !== '' ? escapeHtml(String(user.circle)) : '—';
         const createdLabel = user.createdAt ? formatDateShort(user.createdAt) : '—';
@@ -2295,6 +2319,7 @@
             <td>${phoneCell}</td>
             <td>${nameLabel}</td>
             <td>${roleLabel}</td>
+            <td><span class="badge">${escapeHtml(accountStateLabel)}</span></td>
             <td>${circleLabel}</td>
             <td>${escapeHtml(createdLabel)}</td>
             <td>${actionLabel}</td>
@@ -3864,6 +3889,14 @@
       productsBody.addEventListener('error', onProductThumbnailError, true);
     }
 
+    if (usersAccountState) {
+      usersAccountState.addEventListener('change', () => {
+        syncUsersStateFromInputs();
+        usersState.page = 1;
+        fetchUsers();
+      });
+    }
+
     if (usersBody) {
       usersBody.addEventListener('click', onUsersTableClick);
     }
@@ -4068,6 +4101,8 @@
           if (targetSection === 'section-inventory') {
             window.CRONOX_INVENTORY?.load?.();
           }
+          if (targetSection === 'section-mails') window.CRONOX_MAILS?.load?.();
+          if (targetSection === 'section-key-screen') window.CRONOX_KEY_SCREEN?.load?.();
           if (targetSection === 'section-orders') {
             window.fetchOrders?.();
           }
@@ -4099,7 +4134,7 @@
       } catch (e) {
         console.warn('No se pudo cerrar sesión', e);
       }
-      redirectToHome();
+      redirectToLogin();
     });
 
     backBtn?.addEventListener('click', redirectToHome);
@@ -4115,6 +4150,7 @@
   const init = async () => {
     const user = await ensureAdmin();
     if (!user) return;
+    revealAdmin();
     setScopedMessage(apiUnavailable, '');
     applyRoleVisibility();
     ensureSectionBackButtons();

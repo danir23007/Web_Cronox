@@ -20,6 +20,7 @@ import {
   type CsrfTokenRequest,
 } from './common/guards/csrf-protection.guard';
 import { PrismaService } from './prisma/prisma.service';
+import { KeyScreenService } from './key-screen/key-screen.service';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, { bodyParser: false });
@@ -76,6 +77,7 @@ async function bootstrap() {
   /**
    * RESTO DE LA API
    */
+  app.use('/api/admin/mail-templates', express.json({ limit: '256kb' }));
   app.use(express.json({ limit: '100kb' }));
   app.use(express.urlencoded({ extended: true, limit: '100kb' }));
   app.use(cookieParser());
@@ -92,6 +94,49 @@ async function bootstrap() {
       res.cookie(CSRF_COOKIE_NAME, csrfToken, csrfCookieOptions);
     }
     next();
+  });
+
+  // Enforced before Nest registers the static storefront handlers. The gate
+  // page, legal pages and every Admin surface remain explicitly reachable.
+  const keyScreen = app.get(KeyScreenService);
+  const ungatedHtml = new Set([
+    '/key-screen',
+    '/key-screen.html',
+    '/privacy-policy.html',
+    '/cookie-policy.html',
+    '/aviso-legal.html',
+    '/terms-of-service.html',
+    '/admin',
+    '/admin.html',
+    '/admin-login.html',
+    '/admin-user.html',
+  ]);
+  app.use(async (req, res, next) => {
+    if (req.method !== 'GET' && req.method !== 'HEAD') return next();
+    const pathname = req.path.replace(/\/+$/, '') || '/';
+    if (
+      pathname.startsWith('/api') ||
+      pathname.startsWith('/docs') ||
+      pathname.startsWith('/assets') ||
+      pathname.startsWith('/public') ||
+      ungatedHtml.has(pathname) ||
+      (!pathname.endsWith('.html') && pathname.includes('.'))
+    )
+      return next();
+    const acceptsHtml = req.accepts(['html', 'json']) === 'html';
+    if (!acceptsHtml) return next();
+    if (await keyScreen.shouldGatePublicHtml()) {
+      res.setHeader('Cache-Control', 'no-store, max-age=0');
+      return res.redirect(307, '/key-screen.html');
+    }
+    next();
+  });
+
+  // Keep the extensionless Admin entry point independent from the public SPA.
+  // The protected Admin shell resolves its existing cookie session next.
+  app.use(['/admin', '/admin/'], (req, res, next) => {
+    if (req.method !== 'GET' && req.method !== 'HEAD') return next();
+    return res.redirect(307, '/admin.html');
   });
 
   app.useGlobalPipes(

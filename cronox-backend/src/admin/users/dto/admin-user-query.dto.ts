@@ -1,6 +1,14 @@
 import { Type } from 'class-transformer';
-import { IsEnum, IsIn, IsInt, IsOptional, IsString, Max, Min } from 'class-validator';
-import { Role } from '@prisma/client';
+import {
+  IsEnum,
+  IsIn,
+  IsInt,
+  IsOptional,
+  IsString,
+  Max,
+  Min,
+} from 'class-validator';
+import { Role, UserAccountState } from '@prisma/client';
 
 export class AdminUserQueryDto {
   @IsOptional()
@@ -35,6 +43,10 @@ export class AdminUserQueryDto {
   @IsOptional()
   @IsEnum(Role)
   role?: Role;
+
+  @IsOptional()
+  @IsEnum(UserAccountState)
+  accountState?: UserAccountState;
 
   @IsOptional()
   @Type(() => Number)

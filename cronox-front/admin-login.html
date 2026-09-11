@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <title>CRONOX ADMIN · Acceso</title>
+  <link rel="stylesheet" href="assets/admin-login.css?v=1">
+  <link rel="icon" type="image/png" href="/favicon.png?v=3">
+</head>
+<body>
+  <main class="admin-login" aria-labelledby="adminLoginTitle">
+    <p class="admin-login__eyebrow">Acceso restringido</p>
+    <h1 id="adminLoginTitle">CRONOX ADMIN</h1>
+    <p id="adminLoginChecking" class="admin-login__checking" role="status">Verificando sesión…</p>
+    <form id="adminLoginForm" class="admin-login__form" hidden novalidate>
+      <label class="admin-login__field">
+        <span>Email / usuario</span>
+        <input id="adminLoginEmail" name="email" type="text" inputmode="email" autocomplete="username" required>
+      </label>
+      <label class="admin-login__field">
+        <span>Contraseña</span>
+        <input id="adminLoginPassword" name="password" type="password" autocomplete="current-password" required>
+      </label>
+      <p id="adminLoginStatus" class="admin-login__status" role="alert" aria-live="polite"></p>
+      <button id="adminLoginSubmit" class="admin-login__submit" type="submit">INICIAR SESIÓN</button>
+    </form>
+  </main>
+  <script src="assets/api.js?v=4"></script>
+  <script src="assets/admin-auth-routing.js?v=1"></script>
+  <script src="assets/admin-login.js?v=1"></script>
+</body>
+</html>

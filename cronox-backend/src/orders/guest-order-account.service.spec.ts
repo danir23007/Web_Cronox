@@ -89,6 +89,7 @@ describe('GuestOrderAccountService', () => {
     expect(tx.user.create).toHaveBeenCalledWith({
       data: {
         email: 'new.customer@example.com',
+        accountState: 'PENDING_PASSWORD',
         password: null,
         role: Role.USER,
         name: 'Daniel Rivas Cruz',

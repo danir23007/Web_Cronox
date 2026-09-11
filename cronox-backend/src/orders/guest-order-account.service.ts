@@ -1,5 +1,5 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
-import { Prisma, Role } from '@prisma/client';
+import { Prisma, Role, UserAccountState } from '@prisma/client';
 import { normalizeCountry } from '../common/country';
 import { normalizeEmail } from '../common/email';
 
@@ -59,6 +59,7 @@ export class GuestOrderAccountService {
         email,
         password: null,
         role: Role.USER,
+        accountState: UserAccountState.PENDING_PASSWORD,
         name: fullName || null,
         firstName: names?.firstName ?? null,
         lastName: names?.lastName ?? null,
@@ -105,8 +106,7 @@ export class GuestOrderAccountService {
       null;
     const city = this.clean(input.city, 120);
     const state = this.clean(input.state, 120) || null;
-    const zip =
-      this.clean(input.zip, 30) || this.clean(input.postalCode, 30);
+    const zip = this.clean(input.zip, 30) || this.clean(input.postalCode, 30);
     const country = normalizeCountry(input.country);
     const phone = this.clean(input.phone, 40)?.replace(/[^\d+]/g, '') || null;
 

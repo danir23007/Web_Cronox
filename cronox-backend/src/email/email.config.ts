@@ -50,7 +50,12 @@ export function loadEmailConfig(): EmailConfig {
     process.env.EMAIL_ENABLED?.trim() ?? '',
     process.env.NODE_ENV === 'production',
   );
-  const missing = REQUIRED_ENV_VARS.filter((name) => !readEnv(name));
+  // Individual accounts can be unconfigured; the transport checks them on send.
+  const missing = REQUIRED_ENV_VARS.filter(
+    (name) =>
+      ['SMTP_HOST', 'SMTP_PORT', 'SMTP_SECURE'].includes(name) &&
+      !readEnv(name),
+  );
 
   if (enabled && missing.length > 0) {
     throw new Error(

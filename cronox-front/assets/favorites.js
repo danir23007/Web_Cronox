@@ -120,6 +120,7 @@
         ? images
         : (product.image ? [safeProductImage(product.image, '')].filter(Boolean) : []),
       backendId: product.backendId ?? product.id ?? item?.productId,
+      variants: product.variants,
     };
   }
 
@@ -271,6 +272,7 @@
     a.appendChild(media);
     a.appendChild(name);
     a.appendChild(price);
+    window.CRONOX_STOCK?.decorateCard(a, price, product);
     return a;
   }
 
@@ -319,7 +321,7 @@
     const frag = document.createDocumentFragment();
     favorites.forEach((fav) => {
       const catalogProduct = findCatalogProduct(fav);
-      const cardData = catalogProduct || {
+      const cardData = catalogProduct ? { ...catalogProduct, variants: fav.variants } : {
         ...fav,
         id: String(fav.id || fav.backendId || ''),
         backendId: fav.backendId,

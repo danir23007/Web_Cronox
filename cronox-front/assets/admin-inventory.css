@@ -7,6 +7,12 @@
 .inventory-filters { display: grid; grid-template-columns: minmax(240px, 2fr) repeat(2, minmax(150px, 1fr)); gap: 10px; align-items: end; }
 .inventory-list { display: grid; gap: 12px; margin-top: 16px; min-width: 0; }
 .inventory-product { border: 1px solid #252532; border-radius: 12px; background: #0b0b11; overflow: hidden; }
+.inventory-product--out-of-stock { border-color: #e45d64; }
+.inventory-product--low-stock { border-color: #d5b84e; }
+.inventory-product--in-stock { border-color: #55b87b; }
+.inventory-product--out-of-stock > .inventory-product__overview { background: rgba(228,93,100,.10); }
+.inventory-product--low-stock > .inventory-product__overview { background: rgba(213,184,78,.10); }
+.inventory-product--in-stock > .inventory-product__overview { background: rgba(85,184,123,.10); }
 .inventory-product__overview { display: grid; grid-template-columns: minmax(260px, 2fr) repeat(3, minmax(105px, .7fr)) auto; gap: 12px; align-items: center; padding: 14px; }
 .inventory-product__identity { display: flex; align-items: center; gap: 12px; min-width: 0; }
 .inventory-product__image { width: 64px; height: 64px; flex: 0 0 64px; display: grid; place-items: center; overflow: hidden; border-radius: 9px; background: #fff; color: #111; font-size: .7rem; text-align: center; }

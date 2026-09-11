@@ -29,6 +29,7 @@ import { NewsletterModule } from './newsletter/newsletter.module';
 import { AnalyticsModule } from './analytics/analytics.module';
 import { GalleryModule } from './gallery/gallery.module';
 import { MediaFramingModule } from './media-framing/media-framing.module';
+import { KeyScreenModule } from './key-screen/key-screen.module';
 import {
   getRateLimitMax,
   getRateLimitTtlMs,
@@ -93,6 +94,7 @@ import {
     AnalyticsModule,
     GalleryModule,
     MediaFramingModule,
+    KeyScreenModule,
     OrdersModule, // [ORDERS] Registro del módulo de pedidos
     PaymentsModule, // [STRIPE]
     AdminModule,

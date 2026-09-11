@@ -1009,6 +1009,7 @@
     return {
       id: product.id ?? favorite?.id ?? favorite?.productId,
       backendId: product.backendId ?? product.id ?? favorite?.productId,
+      variants: product.variants,
       slug: product.slug,
       name: product.name || 'Producto',
       priceInCents,
@@ -1137,6 +1138,7 @@
     link.appendChild(media);
     link.appendChild(nameEl);
     link.appendChild(priceEl);
+    window.CRONOX_STOCK?.decorateCard(link, priceEl, product);
 
     return link;
   };

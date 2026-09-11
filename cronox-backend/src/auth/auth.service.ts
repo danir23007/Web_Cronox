@@ -7,7 +7,7 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
-import { Role, User } from '@prisma/client';
+import { Role, User, UserAccountState } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 import { createHash, randomBytes } from 'crypto';
 import type { CookieOptions, Request, Response } from 'express';
@@ -85,7 +85,7 @@ export class AuthService {
     const email = normalizeEmail(dto.email);
     const existing = await this.usersService.findByEmail(email);
 
-    if (existing) {
+    if (existing && existing.accountState !== UserAccountState.PRE_REGISTERED) {
       throw new ConflictException('El email ya esta registrado');
     }
 
@@ -94,13 +94,21 @@ export class AuthService {
       .filter(Boolean)
       .join(' ')
       .trim();
-    const user = await this.usersService.createUser({
-      email,
-      password: hashedPassword,
-      name: fullName || undefined,
-      firstName: dto.firstName,
-      lastName: dto.lastName,
-    });
+    const user = existing
+      ? await this.usersService.activatePreRegisteredUser(existing.id, {
+          password: hashedPassword,
+          name: fullName || undefined,
+          firstName: dto.firstName,
+          lastName: dto.lastName,
+        })
+      : await this.usersService.createUser({
+          email,
+          password: hashedPassword,
+          name: fullName || undefined,
+          firstName: dto.firstName,
+          lastName: dto.lastName,
+        });
+    if (!user) throw new ConflictException('El email ya esta registrado');
     const authUser = this.omitPassword(user);
 
     // Only a pre-verified standalone newsletter subscription is claimed here.
@@ -136,7 +144,10 @@ export class AuthService {
     const now = new Date();
     await this.prisma.$transaction([
       this.prisma.userLoginEvent.create({ data: { userId, ...client } }),
-      this.prisma.user.update({ where: { id: userId }, data: { lastLoginAt: now } }),
+      this.prisma.user.update({
+        where: { id: userId },
+        data: { lastLoginAt: now },
+      }),
     ]);
   }
 
@@ -257,7 +268,11 @@ export class AuthService {
 
     // Return before token persistence and SMTP work in every case. This keeps
     // the externally observable response independent of account existence.
-    if (user && this.emailService.isEnabled()) {
+    if (
+      user &&
+      user.accountState !== UserAccountState.PRE_REGISTERED &&
+      this.emailService.isEnabled()
+    ) {
       void this.createAndSendPasswordReset(user).catch(() => {
         this.logger.error('Password reset delivery task failed');
       });

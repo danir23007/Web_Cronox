@@ -243,6 +243,7 @@ describe('cookie consent frontend', () => {
   it('loads the consent interface on every public HTML page', () => {
     const excluded = new Set([
       'admin.html',
+      'admin-login.html',
       'admin-user.html',
       'auth-modal.html',
     ]);

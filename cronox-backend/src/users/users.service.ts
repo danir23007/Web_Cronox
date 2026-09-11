@@ -1,5 +1,5 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { Prisma, Role, User } from '@prisma/client';
+import { Prisma, Role, User, UserAccountState } from '@prisma/client';
 import { randomBytes } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { getNextSequentialMemberCode } from './member-code.util';
@@ -139,6 +139,30 @@ export class UsersService {
       });
 
       return updated.memberCode ?? newCode;
+    });
+  }
+
+  async activatePreRegisteredUser(
+    id: number,
+    data: {
+      password: string;
+      name?: string;
+      firstName: string;
+      lastName: string;
+    },
+  ) {
+    return this.prisma.$transaction(async (tx) => {
+      const memberCode = await getNextSequentialMemberCode(tx);
+      const updated = await tx.user.updateMany({
+        where: {
+          id,
+          accountState: UserAccountState.PRE_REGISTERED,
+          password: null,
+        },
+        data: { ...data, memberCode, accountState: UserAccountState.ACTIVE },
+      });
+      if (updated.count !== 1) return null;
+      return tx.user.findUnique({ where: { id } });
     });
   }
 

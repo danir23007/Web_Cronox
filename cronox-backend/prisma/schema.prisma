@@ -8,6 +8,124 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+model EmailSenderProfile {
+  key                String                 @id
+  initializedAt      DateTime?
+  defaultSignatureId String?                @unique
+  defaultSignature   EmailSignature?        @relation("DefaultMailSignature", fields: [defaultSignatureId], references: [id], onDelete: SetNull)
+  folders            EmailTemplateFolder[]
+  templates          ManagedEmailTemplate[]
+  signatures         EmailSignature[]       @relation("MailSignatures")
+  assets             EmailAsset[]
+  publications       EmailPublication[]
+  createdAt          DateTime               @default(now())
+  updatedAt          DateTime               @updatedAt
+}
+
+model EmailTemplateFolder {
+  id        String                 @id @default(cuid())
+  senderKey String
+  sender    EmailSenderProfile     @relation(fields: [senderKey], references: [key], onDelete: Restrict)
+  name      String
+  position  Int                    @default(0)
+  templates ManagedEmailTemplate[]
+  createdAt DateTime               @default(now())
+  updatedAt DateTime               @updatedAt
+
+  @@unique([senderKey, name])
+  @@unique([id, senderKey])
+  @@index([senderKey, position])
+}
+
+model ManagedEmailTemplate {
+  id            String                 @id @default(cuid())
+  senderKey     String
+  sender        EmailSenderProfile     @relation(fields: [senderKey], references: [key], onDelete: Restrict)
+  folderId      String
+  folder        EmailTemplateFolder    @relation(fields: [folderId, senderKey], references: [id, senderKey], onDelete: Restrict)
+  importKey     String?                @unique
+  name          String
+  purpose       String?
+  subject       String
+  preheader     String                 @default("")
+  document      Json
+  html          String                 @db.Text
+  text          String                 @db.Text
+  signatureMode String                 @default("none")
+  signatureId   String?
+  signature     EmailSignature?        @relation(fields: [signatureId], references: [id], onDelete: Restrict)
+  revision      Int                    @default(1)
+  archivedAt    DateTime?
+  createdBy     Int?
+  updatedBy     Int?
+  createdAt     DateTime               @default(now())
+  updatedAt     DateTime               @updatedAt
+  versions      EmailTemplateVersion[]
+
+  @@index([senderKey, folderId, archivedAt, updatedAt])
+  @@index([senderKey, name])
+}
+
+model EmailTemplateVersion {
+  id           String               @id @default(cuid())
+  templateId   String
+  template     ManagedEmailTemplate @relation(fields: [templateId], references: [id], onDelete: Restrict)
+  snapshot     Json
+  createdBy    Int?
+  createdAt    DateTime             @default(now())
+  publications EmailPublication[]
+
+  @@index([templateId, createdAt])
+}
+
+model EmailPublication {
+  senderKey String
+  purpose   String
+  sender    EmailSenderProfile   @relation(fields: [senderKey], references: [key], onDelete: Restrict)
+  versionId String
+  version   EmailTemplateVersion @relation(fields: [versionId], references: [id], onDelete: Restrict)
+  updatedAt DateTime             @updatedAt
+
+  @@id([senderKey, purpose])
+}
+
+model EmailSignature {
+  id         String                 @id @default(cuid())
+  senderKey  String
+  sender     EmailSenderProfile     @relation("MailSignatures", fields: [senderKey], references: [key], onDelete: Restrict)
+  defaultFor EmailSenderProfile?    @relation("DefaultMailSignature")
+  name       String
+  document   Json
+  revision   Int                    @default(1)
+  archivedAt DateTime?
+  createdBy  Int?
+  updatedBy  Int?
+  createdAt  DateTime               @default(now())
+  updatedAt  DateTime               @updatedAt
+  templates  ManagedEmailTemplate[]
+
+  @@index([senderKey, archivedAt])
+}
+
+model EmailAsset {
+  id         String             @id @default(cuid())
+  senderKey  String
+  sender     EmailSenderProfile @relation(fields: [senderKey], references: [key], onDelete: Restrict)
+  url        String
+  storageKey String             @unique
+  name       String
+  alt        String
+  mimeType   String
+  fileSize   Int
+  width      Int
+  height     Int
+  createdBy  Int?
+  createdAt  DateTime           @default(now())
+  updatedAt  DateTime           @updatedAt
+
+  @@index([senderKey, createdAt])
+}
+
 model Product {
   id             Int                     @id @default(autoincrement())
   slug           String                  @unique
@@ -184,6 +302,7 @@ model WebsiteMediaAsset {
   height           Int?
   createdAt        DateTime                @default(now())
   placements       WebsiteMediaPlacement[]
+  keyScreens       KeyScreen[]
 
   @@index([folderKey, mediaType, createdAt])
   @@index([createdAt])
@@ -231,9 +350,93 @@ model User {
   loginEvents               UserLoginEvent[]
   analyticsSessions         AnalyticsSession[]
   activityEvents            CustomerActivityEvent[]
+  accountState              UserAccountState        @default(ACTIVE)
+  preRegistration           PreRegistration?
 
   // ✅ FIX: relación correcta y naming consistente
   historial Historial?
+}
+
+model KeyScreenSettings {
+  id             String     @id @default("global")
+  enabled        Boolean    @default(false)
+  activeScreenId String?    @unique
+  activeScreen   KeyScreen? @relation(fields: [activeScreenId], references: [id], onDelete: SetNull)
+  updatedBy      Int?
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+}
+
+model KeyScreen {
+  id                     String                   @id @default(cuid())
+  internalName           String
+  mode                   KeyScreenMode            @default(PREREGISTRATION)
+  mediaAssetId           String?
+  mediaAsset             WebsiteMediaAsset?       @relation(fields: [mediaAssetId], references: [id], onDelete: SetNull)
+  desktopFocalX          Float                    @default(50)
+  desktopFocalY          Float                    @default(50)
+  desktopZoom            Float                    @default(1)
+  desktopFit             MediaFitMode             @default(COVER)
+  mobileFocalX           Float?
+  mobileFocalY           Float?
+  mobileZoom             Float?
+  mobileFit              MediaFitMode?
+  title                  String                   @default("PRÓXIMAMENTE")
+  subtitle               String                   @default("")
+  placeholder            String                   @default("Correo electrónico")
+  buttonText             String                   @default("NOTIFICARME")
+  successTitle           String                   @default("YA FORMAS PARTE.")
+  successMessage         String                   @default("Si el correo es válido, ya formas parte.")
+  privacyLabel           String                   @default("Política de privacidad")
+  textColor              String                   @default("#ffffff")
+  inputStyle             KeyScreenControlStyle    @default(LIGHT)
+  buttonStyle            KeyScreenControlStyle    @default(DARK)
+  horizontalAlign        KeyScreenHorizontalAlign @default(CENTER)
+  verticalAlign          KeyScreenVerticalAlign   @default(CENTER)
+  offsetX                Int                      @default(0)
+  offsetY                Int                      @default(0)
+  desktopHorizontalAlign KeyScreenHorizontalAlign @default(CENTER)
+  desktopVerticalAlign   KeyScreenVerticalAlign   @default(CENTER)
+  desktopOffsetX         Int                      @default(0)
+  desktopOffsetY         Int                      @default(0)
+  mobileHorizontalAlign  KeyScreenHorizontalAlign @default(CENTER)
+  mobileVerticalAlign    KeyScreenVerticalAlign   @default(CENTER)
+  mobileOffsetX          Int                      @default(0)
+  mobileOffsetY          Int                      @default(0)
+  desktopFormOffsetX     Int                      @default(0)
+  desktopFormOffsetY     Int                      @default(0)
+  desktopPrivacyOffsetX  Int                      @default(0)
+  desktopPrivacyOffsetY  Int                      @default(0)
+  mobileFormOffsetX      Int                      @default(0)
+  mobileFormOffsetY      Int                      @default(0)
+  mobilePrivacyOffsetX   Int                      @default(0)
+  mobilePrivacyOffsetY   Int                      @default(0)
+  overlayStrength        Int                      @default(25)
+  revision               Int                      @default(1)
+  createdBy              Int?
+  updatedBy              Int?
+  createdAt              DateTime                 @default(now())
+  updatedAt              DateTime                 @updatedAt
+  globalSelection        KeyScreenSettings?
+  preRegistrations       PreRegistration[]
+
+  @@index([updatedAt])
+  @@index([mediaAssetId])
+}
+
+model PreRegistration {
+  userId                Int        @id
+  user                  User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  screenId              String?
+  screen                KeyScreen? @relation(fields: [screenId], references: [id], onDelete: SetNull)
+  submittedAt           DateTime   @default(now())
+  confirmationClaimedAt DateTime?
+  confirmationSentAt    DateTime?
+  createdAt             DateTime   @default(now())
+  updatedAt             DateTime   @updatedAt
+
+  @@index([screenId, submittedAt])
+  @@index([submittedAt])
 }
 
 model CirclePromotionRequest {
@@ -819,4 +1022,33 @@ enum GalleryPlaceholderColor {
 enum MediaFitMode {
   COVER
   CONTAIN
+}
+
+enum KeyScreenMode {
+  PREREGISTRATION
+  ACCESS
+}
+
+enum KeyScreenControlStyle {
+  LIGHT
+  DARK
+  OUTLINE
+}
+
+enum KeyScreenHorizontalAlign {
+  LEFT
+  CENTER
+  RIGHT
+}
+
+enum KeyScreenVerticalAlign {
+  TOP
+  CENTER
+  BOTTOM
+}
+
+enum UserAccountState {
+  ACTIVE
+  PENDING_PASSWORD
+  PRE_REGISTERED
 }

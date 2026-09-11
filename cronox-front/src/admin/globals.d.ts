@@ -85,6 +85,7 @@ declare global {
 
   interface CronoxAdminApi {
     getDashboard?: () => Promise<unknown>;
+    mailRequest?: (path: string, method?: string, body?: Record<string, unknown> | FormData) => Promise<unknown>;
     listCircleUpgradeRequests?: (queryOrStatus?: string | QueryRecord, queryOverride?: QueryRecord) => Promise<unknown>;
     approveCircleUpgrade?: (id: number | string, payload?: Record<string, unknown>) => Promise<unknown>;
     denyCircleUpgrade?: (id: number | string, payload?: Record<string, unknown>) => Promise<unknown>;
@@ -152,6 +153,20 @@ declare global {
   }
 
   interface Window {
+    CRONOX_ADMIN_AUTH?: {
+      currentReturnTo: () => string;
+      isAdmin: (user: { role?: string } | null | undefined) => boolean;
+      loginUrl: (returnTo?: string) => string;
+      normalizeRole: (role: unknown) => string;
+      redirectToLogin: (returnTo?: string) => void;
+      safeReturnTo: (candidate?: string | null) => string;
+    };
+    CRONOX_STOCK?: {
+      decoratePurchase: (price: HTMLElement, button: HTMLButtonElement, product: Record<string, unknown>) => void;
+      availableStock: (variants: unknown) => number;
+      classifyStock: (total: number) => string;
+      decorateCard: (card: HTMLElement, price: HTMLElement, product: Record<string, unknown>) => void;
+    };
     CRONOX_API?: CronoxApi;
     CRONOX_API_BASE?: string;
     CRONOX_UI?: CronoxUi;

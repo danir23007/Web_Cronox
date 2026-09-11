@@ -7,6 +7,8 @@
   const qs = new URLSearchParams(window.location.search);
   const userId = qs.get('id');
   const apiBaseBadge = document.getElementById('apiBaseBadge');
+  const adminAuthCheck = document.getElementById('adminAuthCheck');
+  const adminUserPage = document.getElementById('adminUserPage');
   const statusArea = document.getElementById('statusArea');
   const profileStatus = document.getElementById('profileStatus');
   const auditStatus = document.getElementById('auditStatus');
@@ -95,12 +97,7 @@
   };
 
   const redirectToLogin = () => {
-    try {
-      localStorage.setItem('cronox_open_auth_on_load', 'login');
-    } catch (error) {
-      console.warn('[ADMIN-USER] No se pudo marcar login automático', error);
-    }
-    window.location.href = 'index.html';
+    window.CRONOX_ADMIN_AUTH?.redirectToLogin?.();
   };
 
   const showModuleError = ({
@@ -139,12 +136,7 @@
             redirectToLogin();
             return;
           }
-          try {
-            localStorage.setItem('cronox_open_auth_on_load', 'login');
-          } catch (error) {
-            console.warn('[ADMIN-USER] No se pudo marcar login automático', error);
-          }
-          window.location.href = 'index.html';
+          window.CRONOX_ADMIN_AUTH?.redirectToLogin?.();
         },
         variant: 'primary',
       });
@@ -829,17 +821,35 @@
     }
   };
 
-  const configureAnalyticsAccess = async () => {
-    try {
-      const currentUser = await window.CRONOX_API?.getMe?.();
-      analyticsAccessAllowed = ['SUPER_ADMIN', 'SUPERADMIN', 'MODERATOR'].includes(String(currentUser?.role || ''));
-    } catch {
-      analyticsAccessAllowed = false;
-    }
+  const configureAnalyticsAccess = (currentUser: { role?: string } | null) => {
+    analyticsAccessAllowed = ['SUPER_ADMIN', 'SUPERADMIN', 'MODERATOR'].includes(String(currentUser?.role || ''));
 
     if (!analyticsAccessAllowed) {
       analyticsTab?.remove();
       analyticsPanel?.remove();
+    }
+  };
+
+  const ensureAdminAccess = async () => {
+    if (!window.CRONOX_API?.getMe || !window.CRONOX_ADMIN_AUTH) {
+      if (adminAuthCheck) adminAuthCheck.textContent = 'No se pudo verificar el acceso.';
+      document.documentElement.dataset.adminAuthState = 'error';
+      return null;
+    }
+    try {
+      const currentUser = await window.CRONOX_API.getMe();
+      if (!window.CRONOX_ADMIN_AUTH.isAdmin(currentUser)) {
+        redirectToLogin();
+        return null;
+      }
+      if (adminAuthCheck) adminAuthCheck.hidden = true;
+      if (adminUserPage) adminUserPage.hidden = false;
+      document.documentElement.dataset.adminAuthState = 'authorized';
+      return currentUser;
+    } catch {
+      if (adminAuthCheck) adminAuthCheck.textContent = 'No se pudo verificar el acceso.';
+      document.documentElement.dataset.adminAuthState = 'error';
+      return null;
     }
   };
 
@@ -1144,7 +1154,9 @@
     void loadAnalyticsTimeline();
   });
 
-  if (userId) {
-    void configureAnalyticsAccess().then(loadAll);
-  }
+  void ensureAdminAccess().then((currentUser) => {
+    if (!currentUser) return;
+    configureAnalyticsAccess(currentUser);
+    if (userId) loadAll();
+  });
 })();

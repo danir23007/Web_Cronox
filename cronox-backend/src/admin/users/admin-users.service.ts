@@ -265,7 +265,9 @@ export class AdminUsersService {
               });
 
               if (adminCount <= 1) {
-                throw new BadRequestException('At least one admin user must remain');
+                throw new BadRequestException(
+                  'At least one admin user must remain',
+                );
               }
             }
 
@@ -505,6 +507,10 @@ export class AdminUsersService {
       where.role = query.role;
     }
 
+    if (query.accountState) {
+      where.accountState = query.accountState;
+    }
+
     if (typeof query.circle === 'number' && Number.isFinite(query.circle)) {
       where.circleLevel = query.circle;
     }
@@ -548,6 +554,7 @@ export class AdminUsersService {
       circle: user.circleLevel,
       phone: null,
       createdAt: user.createdAt,
+      accountState: user.accountState,
     };
   }
 

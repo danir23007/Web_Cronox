@@ -12,6 +12,7 @@ export enum EmailTemplate {
   ORDER_DELIVERED = 'ORDER_DELIVERED',
   SUPPORT_TICKET_RECEIVED = 'SUPPORT_TICKET_RECEIVED',
   GENERIC = 'GENERIC',
+  PRE_REGISTRATION_CONFIRMATION = 'PRE_REGISTRATION_CONFIRMATION',
 }
 
 export enum EmailType {
@@ -22,10 +23,12 @@ export enum EmailType {
   SUPPORT_TICKET_RECEIVED = 'SUPPORT_TICKET_RECEIVED',
   PASSWORD_RESET = 'PASSWORD_RESET',
   NEWSLETTER_CONFIRMATION = 'NEWSLETTER_CONFIRMATION',
+  PRE_REGISTRATION_CONFIRMATION = 'PRE_REGISTRATION_CONFIRMATION',
   GENERIC = 'GENERIC',
 }
 
 export interface EmailSendOptions {
+  purpose?: 'INITIAL_PASSWORD_SETUP' | 'FIRST_ORDER_DISCOUNT';
   type: EmailType;
   to: string;
   subject: string;
@@ -94,6 +97,7 @@ export const EMAIL_TYPE_TO_SENDER: Record<EmailType, EmailSenderKey> = {
   [EmailType.SUPPORT_TICKET_RECEIVED]: EmailSenderKey.SUPPORT,
   [EmailType.PASSWORD_RESET]: EmailSenderKey.NOREPLY,
   [EmailType.NEWSLETTER_CONFIRMATION]: EmailSenderKey.INFO,
+  [EmailType.PRE_REGISTRATION_CONFIRMATION]: EmailSenderKey.INFO,
   [EmailType.GENERIC]: EmailSenderKey.INFO,
 };
 
@@ -105,6 +109,8 @@ export const EMAIL_TYPE_TO_TEMPLATE: Record<EmailType, EmailTemplate> = {
   [EmailType.SUPPORT_TICKET_RECEIVED]: EmailTemplate.SUPPORT_TICKET_RECEIVED,
   [EmailType.PASSWORD_RESET]: EmailTemplate.GENERIC,
   [EmailType.NEWSLETTER_CONFIRMATION]: EmailTemplate.GENERIC,
+  [EmailType.PRE_REGISTRATION_CONFIRMATION]:
+    EmailTemplate.PRE_REGISTRATION_CONFIRMATION,
   [EmailType.GENERIC]: EmailTemplate.GENERIC,
 };
 
@@ -115,4 +121,6 @@ export const EMAIL_TEMPLATE_FILE: Record<EmailTemplate, string> = {
   [EmailTemplate.ORDER_DELIVERED]: 'order-delivered.hbs',
   [EmailTemplate.SUPPORT_TICKET_RECEIVED]: 'support-ticket-received.hbs',
   [EmailTemplate.GENERIC]: 'generic.hbs',
+  [EmailTemplate.PRE_REGISTRATION_CONFIRMATION]:
+    'pre-registration-confirmation.hbs',
 };

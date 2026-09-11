@@ -2,13 +2,14 @@ import {
   Injectable,
   InternalServerErrorException,
   Logger,
+  Optional,
 } from '@nestjs/common';
 import Handlebars from 'handlebars';
 import { readFile } from 'fs/promises';
 import { join } from 'path';
-import { SentMessageInfo } from 'nodemailer';
 import { loadEmailConfig } from './email.config';
 import { MailTransportFactory } from './mail-transport.factory';
+import { ManagedMailService } from './managed/managed-mail.service';
 import {
   EMAIL_TEMPLATE_FILE,
   EMAIL_TYPE_TO_SENDER,
@@ -28,7 +29,10 @@ export class EmailService {
     Handlebars.TemplateDelegate
   >();
 
-  constructor(private readonly transportFactory: MailTransportFactory) {}
+  constructor(
+    private readonly transportFactory: MailTransportFactory,
+    @Optional() private readonly managed?: ManagedMailService,
+  ) {}
 
   isEnabled(): boolean {
     return this.config.enabled;
@@ -45,23 +49,38 @@ export class EmailService {
     const template = EMAIL_TYPE_TO_TEMPLATE[options.type];
 
     try {
-      const html = await this.renderTemplate(template, {
+      const data = {
         subject: options.subject,
         title: options.subject,
         ...options.templateData,
-      });
+      };
+      let custom: { html: string; text: string; subject: string } | null = null;
+      try {
+        custom =
+          (await this.managed?.published(
+            senderKey,
+            options.purpose || options.type,
+            data,
+          )) || null;
+      } catch {
+        this.logger.warn(
+          `Plantilla gestionada no disponible; usando respaldo. type=${options.type}`,
+        );
+      }
+      const html = custom?.html || (await this.renderTemplate(template, data));
 
       const info = (await this.transportFactory
         .getTransport(senderKey)
         .sendMail({
           to: options.to,
           from: this.transportFactory.getFrom(senderKey),
-          subject: options.subject,
+          subject: custom?.subject || options.subject,
           html,
-        })) as SentMessageInfo;
+          ...(custom ? { text: custom.text } : {}),
+        })) as { messageId: string };
 
       return { messageId: info.messageId };
-    } catch (error) {
+    } catch {
       this.logger.error(
         `Fallo enviando email. type=${options.type} sender=${senderKey}`,
       );
@@ -89,6 +108,7 @@ export class EmailService {
 
   async sendInitialPasswordSetup(email: string, link: string) {
     return this.send({
+      purpose: 'INITIAL_PASSWORD_SETUP',
       type: EmailType.PASSWORD_RESET,
       to: email,
       subject: 'CRONOX · Tu cuenta ha sido creada',
@@ -117,9 +137,25 @@ export class EmailService {
     });
   }
 
+  async sendPreRegistrationConfirmation(email: string, registeredAt: Date) {
+    return this.send({
+      type: EmailType.PRE_REGISTRATION_CONFIRMATION,
+      to: email,
+      subject: 'CRONOX · Prerregistro confirmado',
+      templateData: {
+        title: 'Ya formas parte.',
+        message:
+          'Hemos recibido tu preregistro para el próximo lanzamiento de CRONOX.',
+        email,
+        preRegistrationDate: registeredAt.toISOString(),
+      },
+    });
+  }
+
   async sendFirstOrderDiscount(email: string, code: string) {
     const subject = 'CRONOX · Tu descuento de bienvenida';
     return this.send({
+      purpose: 'FIRST_ORDER_DISCOUNT',
       type: EmailType.GENERIC,
       to: email,
       subject,

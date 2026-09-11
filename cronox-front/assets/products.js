@@ -297,7 +297,7 @@
 
     // Añadir al carrito
     qaAdd.addEventListener("click", () => {
-      if (!qaCurrentProduct) return;
+      if (!qaCurrentProduct || qaAdd.disabled || window.CRONOX_STOCK?.classifyStock(window.CRONOX_STOCK.availableStock(qaCurrentProduct.variants)) === 'out_of_stock') return;
       const fallbackSize = qaCurrentProduct.sizes?.[0] || "M";
       const size = (qaSelectedSize || String(fallbackSize)).toUpperCase();
       const color = qaCurrentProduct.color || (qaCurrentProduct.colors?.[0]) || "Único";
@@ -329,7 +329,7 @@
       qaAdd.disabled = true;
       const prev = qaAdd.textContent;
       qaAdd.textContent = "Añadido ✓";
-      setTimeout(() => { qaAdd.textContent = prev; qaAdd.disabled = false; }, 1100);
+      qaFeedbackTimer = setTimeout(() => { qaAdd.textContent = prev; qaAdd.disabled = false; }, 1100);
     });
 
     // Ver detalles
@@ -361,7 +361,7 @@
     qaSizeGroup.innerHTML = normalized
       .map((size) => {
         const variant = findVariantForSize(product, size);
-        const unavailable = !isVariantAvailable(variant);
+        const unavailable = window.CRONOX_STOCK?.classifyStock(window.CRONOX_STOCK.availableStock(product.variants)) === 'out_of_stock' || !isVariantAvailable(variant);
         const label = unavailable ? `${size}, no disponible` : size;
         return `<button type="button" class="qa-size-btn${unavailable ? ' is-unavailable' : ''}" data-size="${escapeHtml(size)}" role="radio" aria-label="${escapeHtml(label)}" aria-checked="false" aria-disabled="${unavailable ? 'true' : 'false'}" ${unavailable ? 'disabled' : ''}>${escapeHtml(size)}</button>`;
       })
@@ -431,7 +431,9 @@
     });
   }
 
+  let qaFeedbackTimer;
   function openQuickAdd(product) {
+    clearTimeout(qaFeedbackTimer);
     ensureQuickAddDOM();
     qaCurrentProduct = product;
 
@@ -445,6 +447,7 @@
     qaPrice.textContent = product.priceLabel || euros(product.price);
 
     setupQuickAddSizes(product);
+    window.CRONOX_STOCK?.decoratePurchase(qaPrice, qaAdd, product);
 
     const key = product.slug || product.id;
     if (product.slug) {
@@ -608,6 +611,7 @@
     a.appendChild(media);
     a.appendChild(name);
     a.appendChild(price);
+    window.CRONOX_STOCK?.decorateCard(a, price, p);
     return a;
   }
 

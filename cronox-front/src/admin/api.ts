@@ -1,3 +1,5 @@
+import { availableStock, classifyStock } from '../../../cronox-backend/src/common/stock-status';
+
 (() => {
   type UnknownRecord = Record<string, unknown>;
 
@@ -777,6 +779,49 @@
   };
 
   const adminApi = ensureAdminNamespace();
+  adminApi.mailRequest = (path: string, method = 'GET', body?: UnknownRecord | FormData) => request(`/api/admin/mail-templates${path}`, { method, body, cache: 'no-store' });
+
+  g.CRONOX_STOCK = {
+    availableStock,
+    classifyStock,
+    decoratePurchase(price: HTMLElement, button: HTMLButtonElement, product: UnknownRecord) {
+      const status = classifyStock(availableStock(product.variants));
+      let row = price.parentElement;
+      if (!row?.classList.contains('stock-price-row')) {
+        row = document.createElement('div');
+        row.className = 'stock-price-row';
+        price.replaceWith(row);
+        row.appendChild(price);
+      }
+      row.querySelector('.stock-status')?.remove();
+      price.classList.toggle('price--out-of-stock', status === 'out_of_stock');
+      if (status !== 'in_stock') {
+        const label = document.createElement('span');
+        label.className = `stock-status stock-status--${status === 'low' ? 'low' : 'out'}`;
+        label.textContent = status === 'low' ? 'ÚLTIMAS TALLAS' : 'AGOTADO';
+        row.appendChild(label);
+      }
+      button.textContent = status === 'out_of_stock' ? 'AGOTADO' : 'Añadir al carrito';
+      button.classList.toggle('product-cta--disabled', status === 'out_of_stock');
+      if (status === 'out_of_stock') button.disabled = true;
+      button.setAttribute('aria-disabled', String(button.disabled));
+    },
+    decorateCard(card: HTMLElement, price: HTMLElement, product: UnknownRecord) {
+      const status = classifyStock(availableStock(product.variants));
+      card.classList.remove('product-card--out-of-stock', 'product-card--low-stock', 'product-card--in-stock');
+      card.classList.add(`product-card--${status === 'low' ? 'low-stock' : status.replace(/_/g, '-')}`);
+      const row = document.createElement('div');
+      row.className = 'product-card__price-row';
+      price.replaceWith(row);
+      row.appendChild(price);
+      if (status !== 'in_stock') {
+        const label = document.createElement('span');
+        label.className = 'product-card__stock-label';
+        label.textContent = status === 'out_of_stock' ? 'AGOTADO' : 'ÚLTIMAS TALLAS';
+        row.appendChild(label);
+      }
+    },
+  };
 
   adminApi.getDashboard = async () => {
     return request('/api/admin/dashboard');
@@ -1008,6 +1053,7 @@
     return {
       id: product.id ?? product.productId,
       backendId: product.id ?? product.productId,
+      variants: product.variants,
       slug: product.slug,
       name: product.name,
       price: priceValue,

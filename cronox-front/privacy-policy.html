@@ -64,6 +64,28 @@
       opacity:0.95;
       text-decoration:underline;
     }
+    .key-screen-return{display:none}
+    html[data-privacy-context="key-screen"] .key-screen-return{
+      position:fixed;
+      top:max(16px, env(safe-area-inset-top));
+      left:max(16px, env(safe-area-inset-left));
+      z-index:10;
+      display:inline-flex;
+      align-items:center;
+      min-height:40px;
+      padding:8px 12px;
+      border:1px solid rgba(255,255,255,0.3);
+      border-radius:999px;
+      background:rgba(0,0,0,0.88);
+      color:#fff;
+      font-family:Inter,system-ui,sans-serif;
+      font-size:14px;
+      text-decoration:none;
+    }
+    html[data-privacy-context="key-screen"] .key-screen-return:focus-visible{
+      outline:2px solid #fff;
+      outline-offset:3px;
+    }
   </style>
   <link rel="icon" type="image/png" href="/favicon.png?v=3">
   <link rel="shortcut icon" type="image/png" href="/favicon.png?v=3">
@@ -71,7 +93,8 @@
   <meta name="theme-color" content="#000000">
 </head>
 <body class="page-info">
-  <script src="assets/info-shell.js?v=1"></script>
+  <script src="assets/info-shell.js?v=2"></script>
+  <a class="key-screen-return" href="/key-screen.html" aria-label="Volver a Pantalla Clave">&larr; Volver</a>
   <div class="container">
     <h1>POLÍTICA DE PRIVACIDAD</h1>
 

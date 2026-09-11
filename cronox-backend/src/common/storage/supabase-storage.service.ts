@@ -3,6 +3,7 @@ import {
   Injectable,
   InternalServerErrorException,
   Logger,
+  ServiceUnavailableException,
 } from '@nestjs/common';
 import type { Express } from 'express';
 import { randomUUID } from 'node:crypto';
@@ -62,6 +63,90 @@ export class SupabaseStorageService {
     'gallery';
   private readonly supabaseUrl = process.env.SUPABASE_URL;
   private readonly serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+  async uploadEmailImage(
+    file: Express.Multer.File | undefined,
+    senderKey: string,
+  ) {
+    if (
+      !/^(SUPPORT|ORDERS|NOREPLY|INFO)$/.test(senderKey) ||
+      !file ||
+      !Buffer.isBuffer(file.buffer) ||
+      file.buffer.length > 5 * 1024 * 1024 ||
+      !ALLOWED_IMAGE_MIME_TYPES.has(file.mimetype) ||
+      !this.hasExpectedImageSignature(file.buffer, file.mimetype)
+    ) {
+      throw new BadRequestException(
+        'Imagen no válida. Usa JPEG, PNG o WebP de hasta 5 MB.',
+      );
+    }
+    const dimensions = this.readImageDimensions(file.buffer, file.mimetype);
+    if (
+      !dimensions ||
+      dimensions.width < 1 ||
+      dimensions.height < 1 ||
+      dimensions.width > 4096 ||
+      dimensions.height > 4096
+    )
+      throw new BadRequestException(
+        'Dimensiones no válidas: máximo 4096 × 4096 píxeles.',
+      );
+    if (!this.supabaseUrl?.startsWith('https://') || !this.serviceRoleKey)
+      throw new InternalServerErrorException(
+        'Almacenamiento de correo no configurado.',
+      );
+    const bucket =
+      process.env.SUPABASE_EMAIL_STORAGE_BUCKET ||
+      process.env.SUPABASE_GALLERY_STORAGE_BUCKET ||
+      'gallery';
+    if (!/^[a-zA-Z0-9_-]+$/.test(bucket))
+      throw new InternalServerErrorException(
+        'Almacenamiento de correo no configurado.',
+      );
+    const storageKey = this.buildObjectPath(
+      extensionForMimeType[file.mimetype],
+      `${senderKey}/images`,
+    );
+    const response = await fetch(
+      `${this.supabaseUrl}/storage/v1/object/${bucket}/${storageKey}`,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${this.serviceRoleKey}`,
+          'Content-Type': file.mimetype,
+          'x-upsert': 'false',
+        },
+        body: file.buffer as unknown as BodyInit,
+      },
+    );
+    if (!response.ok) {
+      this.logger.error(
+        `Fallo de almacenamiento de imagen de correo. status=${response.status} bucket=${bucket} sender=${senderKey}`,
+      );
+      if (response.status === 404)
+        throw new ServiceUnavailableException(
+          'El almacenamiento de imágenes no está disponible.',
+        );
+      if (response.status === 401 || response.status === 403)
+        throw new ServiceUnavailableException(
+          'El servicio de imágenes no está autorizado correctamente.',
+        );
+      if (response.status === 413)
+        throw new BadRequestException(
+          'La imagen supera el tamaño permitido por el almacenamiento.',
+        );
+      throw new ServiceUnavailableException(
+        'El servicio de imágenes no pudo completar la subida.',
+      );
+    }
+    return {
+      url: `${this.supabaseUrl}/storage/v1/object/public/${bucket}/${storageKey}`,
+      storageKey,
+      mimeType: file.mimetype,
+      fileSize: file.buffer.length,
+      ...dimensions,
+    };
+  }
 
   async uploadProductImages(
     files: Express.Multer.File[] = [],

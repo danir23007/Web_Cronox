@@ -54,6 +54,6 @@ export const createContentSecurityPolicy = (frontendRoot: string): string => {
       'https://*.stripe.com',
     ].join(' '),
     "connect-src 'self' https:",
-    'frame-src https://js.stripe.com https://*.stripe.com',
+    "frame-src 'self' https://js.stripe.com https://*.stripe.com",
   ].join('; ');
 };

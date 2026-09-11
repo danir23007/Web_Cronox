@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="es">
+<html lang="es" data-admin-auth-state="checking">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -8,6 +8,16 @@
   <style>
     :root {
       color-scheme: dark;
+    }
+
+    [hidden] { display: none !important; }
+
+    .admin-auth-check {
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      color: rgba(255, 255, 255, 0.72);
+      letter-spacing: 0.04em;
     }
 
     body {
@@ -426,7 +436,8 @@
   <meta name="theme-color" content="#000000">
 </head>
 <body>
-  <div class="page">
+  <div id="adminAuthCheck" class="admin-auth-check" role="status">Verificando acceso…</div>
+  <div id="adminUserPage" class="page" hidden>
     <header class="topbar">
       <div class="topbar-left">
         <div class="breadcrumb">Admin · Usuarios</div>
@@ -612,7 +623,8 @@
   </div>
 
   <script src="assets/country.js?v=1"></script>
-  <script src="assets/api.js"></script>
+  <script src="assets/api.js?v=4"></script>
+  <script src="assets/admin-auth-routing.js?v=1"></script>
   <script src="assets/ui-status.js"></script>
   <script src="assets/admin-user.js"></script>
 </body>

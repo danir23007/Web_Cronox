@@ -57,13 +57,18 @@ describe('informational footer destinations use the shared CRONOX topbar', () =>
     '%s mounts one opaque production header immediately',
     (route) => {
       const html = readFrontend(route);
+      const shellVersion = route === 'privacy-policy.html' ? '2' : '1';
       expect(html).toContain('<body class="page-info">');
       expect(html).toMatch(
-        /<body class="page-info">\s*<script src="assets\/info-shell\.js\?v=1"><\/script>/,
+        new RegExp(
+          `<body class="page-info">\\s*<script src="assets/info-shell\\.js\\?v=${shellVersion}"></script>`,
+        ),
       );
       expect(html).toContain('href="assets/store.css?v=89"');
       expect(html).toContain('href="assets/info-page.css?v=2"');
-      expect(html.match(/assets\/info-shell\.js\?v=1/g)).toHaveLength(1);
+      expect(
+        html.match(new RegExp(`assets/info-shell\\.js\\?v=${shellVersion}`, 'g')),
+      ).toHaveLength(1);
       expect(html.match(/assets\/app\.js\?v=60/g)).toHaveLength(1);
       expect(html.match(/assets\/api\.js\?v=4/g)).toHaveLength(1);
       expect(html.match(/assets\/cart-badge\.js\?v=43/g)).toHaveLength(1);

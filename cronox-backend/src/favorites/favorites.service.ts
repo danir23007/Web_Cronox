@@ -1,18 +1,20 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { AddFavoriteDto } from './dto/add-favorite.dto';
 
 type FavoriteProduct = Prisma.ProductGetPayload<{
-  include: { images: true };
+  include: { images: true; variants: true };
 }>;
 
 @Injectable()
 export class FavoritesService {
-  private readonly imageOrderBy: Prisma.ProductImageOrderByWithRelationInput[] = [
-    { sortOrder: 'asc' },
-    { id: 'asc' },
-  ];
+  private readonly imageOrderBy: Prisma.ProductImageOrderByWithRelationInput[] =
+    [{ sortOrder: 'asc' }, { id: 'asc' }];
 
   constructor(private readonly prisma: PrismaService) {}
 
@@ -21,7 +23,7 @@ export class FavoritesService {
       where: { userId, product: { isActive: true } },
       include: {
         product: {
-          include: { images: { orderBy: this.imageOrderBy } },
+          include: { images: { orderBy: this.imageOrderBy }, variants: true },
         },
       },
       orderBy: { createdAt: 'desc' },
@@ -40,13 +42,15 @@ export class FavoritesService {
       where: { userId, product: { isActive: true } },
       include: {
         product: {
-          include: { images: { orderBy: this.imageOrderBy } },
+          include: { images: { orderBy: this.imageOrderBy }, variants: true },
         },
       },
       orderBy: { createdAt: 'desc' },
     });
 
-    return favorites.map((favorite) => this.toProductResponse(favorite.product));
+    return favorites.map((favorite) =>
+      this.toProductResponse(favorite.product),
+    );
   }
 
   async add(userId: number, dto: AddFavoriteDto) {
@@ -77,12 +81,24 @@ export class FavoritesService {
     });
 
     if (existing) {
-      await this.prisma.favorite.delete({ where: { userId_productId: { userId, productId: product.id } } });
-      return { productId: product.id, product: this.toProductResponse(product), isFavorite: false };
+      await this.prisma.favorite.delete({
+        where: { userId_productId: { userId, productId: product.id } },
+      });
+      return {
+        productId: product.id,
+        product: this.toProductResponse(product),
+        isFavorite: false,
+      };
     }
 
-    await this.prisma.favorite.create({ data: { userId, productId: product.id } });
-    return { productId: product.id, product: this.toProductResponse(product), isFavorite: true };
+    await this.prisma.favorite.create({
+      data: { userId, productId: product.id },
+    });
+    return {
+      productId: product.id,
+      product: this.toProductResponse(product),
+      isFavorite: true,
+    };
   }
 
   async remove(userId: number, productIdOrSlug: string) {
@@ -105,7 +121,9 @@ export class FavoritesService {
       productId = product.id;
     }
 
-    const removed = await this.prisma.favorite.deleteMany({ where: { userId, productId } });
+    const removed = await this.prisma.favorite.deleteMany({
+      where: { userId, productId },
+    });
     return removed.count > 0 ? productId : null;
   }
 
@@ -126,7 +144,7 @@ export class FavoritesService {
 
     const product = await this.prisma.product.findFirst({
       where: { ...where, isActive: true },
-      include: { images: { orderBy: this.imageOrderBy } },
+      include: { images: { orderBy: this.imageOrderBy }, variants: true },
     });
 
     if (!product) {
@@ -137,7 +155,8 @@ export class FavoritesService {
   }
 
   private toProductResponse(product: FavoriteProduct) {
-    const primaryImage = product.images.find((image) => image.isPrimary) ?? product.images[0];
+    const primaryImage =
+      product.images.find((image) => image.isPrimary) ?? product.images[0];
 
     return {
       id: product.id,
@@ -147,6 +166,10 @@ export class FavoritesService {
       price: product.price,
       priceInCents: product.price,
       currency: product.currency,
+      variants: product.variants.map(({ stockQty, isActive }) => ({
+        stockQty,
+        isActive,
+      })),
       imageUrl: product.imageUrl ?? primaryImage?.url ?? null,
       images: product.images.map((image) => image.url),
     };

@@ -11,6 +11,30 @@ import {
 const PNG_SIGNATURE = Buffer.from([
   0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a,
 ]);
+const emailPng = () => {
+  const bytes = Buffer.alloc(24);
+  PNG_SIGNATURE.copy(bytes);
+  bytes.writeUInt32BE(640, 16);
+  bytes.writeUInt32BE(320, 20);
+  return bytes;
+};
+const emailJpeg = () => {
+  const bytes = Buffer.alloc(24);
+  bytes.set([0xff, 0xd8, 0xff, 0xc0], 0);
+  bytes.writeUInt16BE(17, 4);
+  bytes.writeUInt16BE(320, 7);
+  bytes.writeUInt16BE(640, 9);
+  return bytes;
+};
+const emailWebp = () => {
+  const bytes = Buffer.alloc(30);
+  bytes.write('RIFF', 0, 'ascii');
+  bytes.write('WEBP', 8, 'ascii');
+  bytes.write('VP8X', 12, 'ascii');
+  bytes.writeUIntLE(639, 24, 3);
+  bytes.writeUIntLE(319, 27, 3);
+  return bytes;
+};
 
 describe('SupabaseStorageService', () => {
   const originalFetch = global.fetch;
@@ -18,12 +42,14 @@ describe('SupabaseStorageService', () => {
   const originalKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
   const originalProductBucket = process.env.SUPABASE_STORAGE_BUCKET;
   const originalGalleryBucket = process.env.SUPABASE_GALLERY_STORAGE_BUCKET;
+  const originalEmailBucket = process.env.SUPABASE_EMAIL_STORAGE_BUCKET;
 
   beforeEach(() => {
     process.env.SUPABASE_URL = 'https://storage.example.test';
     process.env.SUPABASE_SERVICE_ROLE_KEY = 'test-service-key';
     process.env.SUPABASE_STORAGE_BUCKET = 'product-images';
     process.env.SUPABASE_GALLERY_STORAGE_BUCKET = 'gallery';
+    delete process.env.SUPABASE_EMAIL_STORAGE_BUCKET;
   });
 
   afterEach(() => {
@@ -44,6 +70,10 @@ describe('SupabaseStorageService', () => {
     if (originalGalleryBucket === undefined)
       delete process.env.SUPABASE_GALLERY_STORAGE_BUCKET;
     else process.env.SUPABASE_GALLERY_STORAGE_BUCKET = originalGalleryBucket;
+
+    if (originalEmailBucket === undefined)
+      delete process.env.SUPABASE_EMAIL_STORAGE_BUCKET;
+    else process.env.SUPABASE_EMAIL_STORAGE_BUCKET = originalEmailBucket;
   });
 
   it('rejects an image whose declared MIME type does not match its bytes', async () => {
@@ -324,5 +354,77 @@ describe('SupabaseStorageService', () => {
       service.uploadWebsiteMedia(forged, 'portadas'),
     ).rejects.toBeInstanceOf(BadRequestException);
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('stores email images in an isolated sender path with dimensions and no credentials in metadata', async () => {
+    const fetchMock = jest.fn().mockResolvedValue({ ok: true, status: 200 });
+    global.fetch = fetchMock as typeof fetch;
+    const bytes = Buffer.alloc(24);
+    PNG_SIGNATURE.copy(bytes);
+    bytes.writeUInt32BE(640, 16);
+    bytes.writeUInt32BE(320, 20);
+    const file = {
+      mimetype: 'image/png',
+      buffer: bytes,
+      originalname: '../../unsafe.svg',
+    } as Express.Multer.File;
+    const result = await new SupabaseStorageService().uploadEmailImage(
+      file,
+      'INFO',
+    );
+    expect(result.storageKey).toMatch(/^INFO\/images\//);
+    expect(result.width).toBe(640);
+    expect(result.height).toBe(320);
+    expect(result.url).toContain('/storage/v1/object/public/');
+    expect(fetchMock.mock.calls[0][0]).toContain(
+      '/storage/v1/object/gallery/INFO/images/',
+    );
+    expect(result.url).not.toContain('unsafe');
+    expect(JSON.stringify(result)).not.toContain('test-service-key');
+    bytes.writeUInt32BE(4097, 16);
+    await expect(
+      new SupabaseStorageService().uploadEmailImage(file, 'INFO'),
+    ).rejects.toThrow('Dimensiones');
+    await expect(
+      new SupabaseStorageService().uploadEmailImage(file, '../ORDERS'),
+    ).rejects.toThrow('Imagen no válida');
+    await expect(
+      new SupabaseStorageService().uploadEmailImage(
+        { ...file, buffer: Buffer.from('fake') },
+        'INFO',
+      ),
+    ).rejects.toThrow('Imagen no válida');
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+  it.each([
+    ['image/jpeg', emailJpeg, 'mail.jpg'],
+    ['image/png', emailPng, 'mail.png'],
+    ['image/webp', emailWebp, 'mail.webp'],
+  ])('accepts a valid %s email image', async (mimetype, createBytes, name) => {
+    global.fetch = jest.fn().mockResolvedValue({ ok: true, status: 200 });
+    const buffer = createBytes();
+    await expect(
+      new SupabaseStorageService().uploadEmailImage(
+        { mimetype, buffer, originalname: name } as Express.Multer.File,
+        'ORDERS',
+      ),
+    ).resolves.toMatchObject({
+      mimeType: mimetype,
+      width: 640,
+      height: 320,
+    });
+  });
+  it('maps a missing bucket to a safe diagnostic without leaking storage details', async () => {
+    global.fetch = jest.fn().mockResolvedValue({ ok: false, status: 404 });
+    await expect(
+      new SupabaseStorageService().uploadEmailImage(
+        {
+          mimetype: 'image/png',
+          buffer: emailPng(),
+          originalname: 'mail.png',
+        } as Express.Multer.File,
+        'INFO',
+      ),
+    ).rejects.toThrow('almacenamiento de imágenes no está disponible');
   });
 });

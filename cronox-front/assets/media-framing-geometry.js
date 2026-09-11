@@ -56,6 +56,10 @@
 
     return {
       valid: true,
+      frameWidth,
+      frameHeight,
+      mediaWidth,
+      mediaHeight,
       fit,
       focalX,
       focalY,
@@ -172,12 +176,42 @@
       : Number(start.focalY),
   });
 
+  const zoomAtPoint = (geometry, nextZoom, pointX, pointY) => {
+    if (!geometry?.valid) {
+      return {
+        zoom: clamp(nextZoom, 1, 3, 1),
+        focalX: Number(geometry?.focalX ?? 50),
+        focalY: Number(geometry?.focalY ?? 50),
+      };
+    }
+    const zoom = clamp(nextZoom, 1, 3, geometry.zoom);
+    const mediaX = (Number(pointX) - geometry.translateX) / geometry.scale;
+    const mediaY = (Number(pointY) - geometry.translateY) / geometry.scale;
+    const scale = geometry.baseScale * zoom;
+    const rangeX = geometry.frameWidth - geometry.mediaWidth * scale;
+    const rangeY = geometry.frameHeight - geometry.mediaHeight * scale;
+    const translateX = Number(pointX) - mediaX * scale;
+    const translateY = Number(pointY) - mediaY * scale;
+    return {
+      zoom,
+      focalX:
+        Math.abs(rangeX) > EPSILON
+          ? clamp((translateX / rangeX) * 100, 0, 100, geometry.focalX)
+          : geometry.focalX,
+      focalY:
+        Math.abs(rangeY) > EPSILON
+          ? clamp((translateY / rangeY) * 100, 0, 100, geometry.focalY)
+          : geometry.focalY,
+    };
+  };
+
   const api = Object.freeze({
-    version: 1,
+    version: 2,
     calculate,
     apply,
     clear,
     focalFromDrag,
+    zoomAtPoint,
   });
   globalScope.CRONOX_MEDIA_GEOMETRY = api;
   if (typeof module !== "undefined" && module.exports) module.exports = api;

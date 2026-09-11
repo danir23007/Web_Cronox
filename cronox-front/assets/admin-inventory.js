@@ -105,7 +105,9 @@
     list.innerHTML = state.items.map((product) => {
       const expanded = state.expanded.has(product.id);
       const image = safeImage(product.imageUrl);
-      return `<article class="inventory-product" data-inventory-product="${product.id}"><div class="inventory-product__overview">
+      const status = window.CRONOX_STOCK?.classifyStock(product.totalStock) || product.stockStatus;
+      const statusClass = status === 'low' ? 'low-stock' : status.replace(/_/g, '-');
+      return `<article class="inventory-product inventory-product--${statusClass}" aria-label="${escapeHtml(product.name)}: ${stockLabel(status)}" data-inventory-product="${product.id}"><div class="inventory-product__overview">
         <div class="inventory-product__identity"><div class="inventory-product__image">${image ? `<img src="${escapeHtml(image)}" alt="" loading="lazy" referrerpolicy="no-referrer">` : 'Sin imagen'}</div>
           <div><h3 class="inventory-product__name">${escapeHtml(product.name)}</h3><div class="inventory-product__meta">ID ${product.id} · ${escapeHtml(product.slug)}</div></div></div>
         <div class="inventory-metric"><span>Estado</span><strong>${product.isActive ? 'Activo' : 'Inactivo'}</strong></div>

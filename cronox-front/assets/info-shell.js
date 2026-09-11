@@ -1,4 +1,11 @@
 (function () {
+  const keyScreenPrivacyContext =
+    window.location.pathname.replace(/\/+$/, '').endsWith('/privacy-policy.html') &&
+    new URLSearchParams(window.location.search).get('source') === 'key-screen';
+  if (keyScreenPrivacyContext) {
+    document.documentElement.dataset.privacyContext = 'key-screen';
+    return;
+  }
   if (document.getElementById('topbar')) return;
 
   document.body.insertAdjacentHTML('afterbegin', `

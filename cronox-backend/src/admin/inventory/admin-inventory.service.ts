@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
+import { availableStock, classifyStock } from '../../common/stock-status';
 import {
   INVENTORY_AUDIT_ACTION,
   INVENTORY_AUDIT_TARGET,
@@ -85,21 +86,21 @@ export class AdminInventoryService {
       }>
     >(Prisma.sql`
       SELECT
-        COALESCE((SELECT SUM(v."stock") FROM "ProductVariant" v), 0)::bigint AS "totalUnits",
+        COALESCE((SELECT SUM(GREATEST(v."stock", 0)) FROM "ProductVariant" v WHERE v."isActive"), 0)::bigint AS "totalUnits",
         COUNT(*) FILTER (
           WHERE EXISTS (
             SELECT 1 FROM "ProductVariant" v
-            WHERE v."productId" = p.id AND v."stock" > 0
+            WHERE v."productId" = p.id AND v."isActive" AND v."stock" > 0
           )
         )::bigint AS "productsWithStock",
         COUNT(*) FILTER (
           WHERE NOT EXISTS (
             SELECT 1 FROM "ProductVariant" v
-            WHERE v."productId" = p.id AND v."stock" > 0
+            WHERE v."productId" = p.id AND v."isActive" AND v."stock" > 0
           )
         )::bigint AS "soldOutProducts",
         (SELECT COUNT(*) FROM "ProductVariant" v
-          WHERE v."stock" > 0 AND v."stock" <= ${INVENTORY_LOW_STOCK_THRESHOLD}
+          WHERE v."isActive" AND v."stock" > 0 AND v."stock" <= ${INVENTORY_LOW_STOCK_THRESHOLD}
         )::bigint AS "lowStockVariants"
       FROM "Product" p
     `);
@@ -286,7 +287,7 @@ export class AdminInventoryService {
   private async productIdsForStockStatus(
     status: NonNullable<AdminInventoryQueryDto['stockStatus']>,
   ) {
-    const total = Prisma.sql`COALESCE(SUM(v."stock"), 0)`;
+    const total = Prisma.sql`COALESCE(SUM(CASE WHEN v."isActive" THEN GREATEST(v."stock", 0) ELSE 0 END), 0)`;
     const condition =
       status === 'in_stock'
         ? Prisma.sql`${total} > 0`
@@ -304,10 +305,7 @@ export class AdminInventoryService {
   }
 
   private mapProduct(product: InventoryProduct) {
-    const totalStock = product.variants.reduce(
-      (sum, variant) => sum + variant.stockQty,
-      0,
-    );
+    const totalStock = availableStock(product.variants);
     return {
       ...product,
       imageUrl:
@@ -316,12 +314,7 @@ export class AdminInventoryService {
         product.imageUrl,
       totalStock,
       variantCount: product.variants.length,
-      stockStatus:
-        totalStock === 0
-          ? 'out_of_stock'
-          : totalStock <= INVENTORY_LOW_STOCK_THRESHOLD
-            ? 'low'
-            : 'in_stock',
+      stockStatus: classifyStock(totalStock),
       variants: product.variants.map((variant) => ({
         ...variant,
         stock: variant.stockQty,
