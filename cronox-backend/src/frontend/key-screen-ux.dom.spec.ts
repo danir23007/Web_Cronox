@@ -11,6 +11,7 @@ describe('Pantalla Clave focused UX contracts', () => {
   const gateScript = readFrontend('assets/key-screen.js');
   const rendererScript = readFrontend('assets/key-screen-renderer.js');
   const gateStyles = readFrontend('assets/key-screen.css');
+  const compositionStyles = readFrontend('assets/key-screen-composition.css');
   const privacyHtml = readFrontend('privacy-policy.html');
   const infoShellScript = readFrontend('assets/info-shell.js');
   const mainSource = readFileSync(
@@ -105,6 +106,20 @@ describe('Pantalla Clave focused UX contracts', () => {
     expect(gateStyles).toMatch(/height:\s*100dvh/);
     expect(gateStyles).toMatch(/width:\s*160px/);
     expect(gateStyles).toMatch(/@media\s*\(prefers-reduced-motion:\s*reduce\)/);
+  });
+
+  it('keeps the public composition visible with dynamic viewport and safe-area fallbacks', () => {
+    expect(gateStyles).toMatch(/min-height:\s*100dvh/);
+    expect(gateStyles).toMatch(/overflow-y:\s*auto/);
+    expect(gateStyles).toMatch(/env\(safe-area-inset-top\)/);
+    expect(gateStyles).toMatch(/env\(safe-area-inset-bottom\)/);
+    expect(gateStyles).not.toMatch(/html, body[^}]*overflow:\s*hidden/s);
+    expect(compositionStyles).toContain('--key-fit-shift-y');
+    expect(gateScript).toContain('window.visualViewport');
+    expect(gateScript).toMatch(
+      /el\.content\.dataset\.fitOverflow\s*=\s*["']true["']/,
+    );
+    expect(gateScript).toContain('new ResizeObserver(fitComposition)');
   });
 
   it('keeps configured content hidden until an image is ready', async () => {

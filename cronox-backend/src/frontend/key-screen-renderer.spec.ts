@@ -130,4 +130,62 @@ describe('Pantalla Clave shared renderer', () => {
       }),
     ).toEqual({ offsetX: 20, offsetY: -272 });
   });
+
+  it.each([
+    [1920, 1080],
+    [1536, 864],
+    [1366, 768],
+    [1280, 720],
+    [1024, 768],
+    [820, 1180],
+    [768, 1024],
+    [430, 932],
+    [390, 844],
+    [375, 667],
+    [320, 568],
+  ])(
+    'scales authored vertical positions for a %i x %i viewport',
+    (width, height) => {
+      const properties = new Map<string, string>();
+      const root = {
+        dataset: {} as Record<string, string>,
+        style: {
+          setProperty: (name: string, value: string) =>
+            properties.set(name, value),
+        },
+      };
+      const elementProperties = new Map<string, string>();
+      const element = {
+        dataset: {} as Record<string, string>,
+        style: {
+          setProperty: (name: string, value: string) =>
+            elementProperties.set(name, value),
+        },
+        closest: () => root,
+      };
+
+      const metrics = renderer.applyViewport(root, width, height);
+      const device = renderer.deviceForWidth(width);
+      renderer.applyContent(
+        element,
+        {
+          [`${device}HorizontalAlign`]: 'CENTER',
+          [`${device}VerticalAlign`]: 'CENTER',
+          [`${device}OffsetX`]: 0,
+          [`${device}OffsetY`]: device === 'mobile' ? 267 : 400,
+        },
+        device,
+      );
+
+      expect(metrics.scaleY).toBeCloseTo(
+        height / renderer.VIEWPORTS[device].height,
+      );
+      expect(parseFloat(elementProperties.get('--key-offset-y')!)).toBeCloseTo(
+        (device === 'mobile' ? 267 : 400) * metrics.scaleY,
+      );
+      expect(
+        parseFloat(properties.get('--key-title-size')!),
+      ).toBeGreaterThanOrEqual(device === 'mobile' ? 28 : 32);
+    },
+  );
 });

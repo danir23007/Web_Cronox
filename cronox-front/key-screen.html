@@ -1,60 +1,121 @@
 <!doctype html>
 <html lang="es" data-key-screen-state="loading">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-  <meta name="robots" content="index,follow">
-  <title>CRONOX — Próximamente</title>
-  <meta name="description" content="CRONOX está preparando algo nuevo. Regístrate para recibir novedades y acceso al lanzamiento.">
-  <link rel="canonical" href="https://cronox.es/">
-  <meta property="og:title" content="CRONOX — Próximamente">
-  <meta property="og:description" content="CRONOX está preparando algo nuevo. Regístrate para recibir novedades y acceso al lanzamiento.">
-  <meta property="og:url" content="https://cronox.es/">
-  <meta property="og:type" content="website">
-  <meta property="og:site_name" content="CRONOX">
-  <meta property="og:image" content="https://cronox.es/assets/logo_banner.png">
-  <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="CRONOX — Próximamente">
-  <meta name="twitter:description" content="CRONOX está preparando algo nuevo. Regístrate para recibir novedades y acceso al lanzamiento.">
-  <meta name="twitter:image" content="https://cronox.es/assets/logo_banner.png">
-  <link rel="icon" type="image/png" href="/favicon.png?v=3">
-  <link rel="shortcut icon" type="image/png" href="/favicon.png?v=3">
-  <link rel="apple-touch-icon" href="/favicon.png?v=3">
-  <meta name="theme-color" content="#000000">
-  <link rel="stylesheet" href="assets/key-screen.css?v=4">
-  <link rel="stylesheet" href="assets/key-screen-composition.css?v=2">
-  <link rel="stylesheet" href="assets/cookie-consent.css?v=1">
-</head>
-<body>
-  <main id="keyGate" class="key-gate key-composition" aria-busy="true">
-    <div id="keyLoader" class="key-gate__loader" aria-hidden="true">
-      <div class="key-gate__loader-inner">
-        <img src="assets/CRONOX-GIF.gif" alt="" class="key-gate__loader-logo" decoding="async">
-      </div>
-    </div>
-    <div id="keyMediaFrame" class="key-gate__media key-composition__media" aria-hidden="true"></div>
-    <div id="keyShade" class="key-gate__shade key-composition__shade"></div>
-    <section id="keyContent" class="key-gate__content key-composition__content" hidden>
-      <h1 id="keyTitle"></h1>
-      <p id="keySubtitle"></p>
-      <form id="keyRegister" class="key-composition__form-group" novalidate>
-        <label class="sr-only" for="keyEmail">Correo electr&oacute;nico</label>
-        <div class="key-gate__form-row key-composition__form-row">
-          <input id="keyEmail" name="email" type="email" inputmode="email" autocomplete="email" maxlength="254" required>
-          <button id="keySubmit" type="submit"></button>
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width,initial-scale=1,viewport-fit=cover"
+    />
+    <meta name="robots" content="index,follow" />
+    <title>CRONOX — Próximamente</title>
+    <meta
+      name="description"
+      content="CRONOX está preparando algo nuevo. Regístrate para recibir novedades y acceso al lanzamiento."
+    />
+    <link rel="canonical" href="https://cronox.es/" />
+    <meta property="og:title" content="CRONOX — Próximamente" />
+    <meta
+      property="og:description"
+      content="CRONOX está preparando algo nuevo. Regístrate para recibir novedades y acceso al lanzamiento."
+    />
+    <meta property="og:url" content="https://cronox.es/" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="CRONOX" />
+    <meta
+      property="og:image"
+      content="https://cronox.es/assets/logo_banner.png"
+    />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="CRONOX — Próximamente" />
+    <meta
+      name="twitter:description"
+      content="CRONOX está preparando algo nuevo. Regístrate para recibir novedades y acceso al lanzamiento."
+    />
+    <meta
+      name="twitter:image"
+      content="https://cronox.es/assets/logo_banner.png"
+    />
+    <link rel="icon" type="image/png" href="/favicon.png?v=3" />
+    <link rel="shortcut icon" type="image/png" href="/favicon.png?v=3" />
+    <link rel="apple-touch-icon" href="/favicon.png?v=3" />
+    <meta name="theme-color" content="#000000" />
+    <link rel="stylesheet" href="assets/key-screen.css?v=5" />
+    <link rel="stylesheet" href="assets/key-screen-composition.css?v=3" />
+    <link rel="stylesheet" href="assets/cookie-consent.css?v=1" />
+  </head>
+  <body>
+    <main id="keyGate" class="key-gate key-composition" aria-busy="true">
+      <div id="keyLoader" class="key-gate__loader" aria-hidden="true">
+        <div class="key-gate__loader-inner">
+          <img
+            src="assets/CRONOX-GIF.gif"
+            alt=""
+            class="key-gate__loader-logo"
+            decoding="async"
+          />
         </div>
-        <p id="keyFormMessage" class="key-gate__message key-composition__message" role="alert" aria-live="polite"></p>
-      </form>
-      <div id="keySuccess" class="key-gate__success key-composition__success" hidden tabindex="-1"><h2></h2><p></p></div>
-      <a id="keyPrivacy" class="key-gate__privacy key-composition__privacy" href="/privacidad?source=key-screen"></a>
-    </section>
-    <section id="keyUnavailable" class="key-gate__unavailable" hidden><h1>CRONOX</h1><p>Estamos preparando algo nuevo.</p></section>
-  </main>
-  <script src="assets/cookie-consent.js?v=4" defer></script>
-  <script src="assets/customer-analytics.js?v=1" defer></script>
-  <script src="assets/api.js?v=3"></script>
-  <script src="assets/media-framing-geometry.js?v=2"></script>
-  <script src="assets/key-screen-renderer.js?v=2"></script>
-  <script src="assets/key-screen.js?v=7"></script>
-</body>
+      </div>
+      <div
+        id="keyMediaFrame"
+        class="key-gate__media key-composition__media"
+        aria-hidden="true"
+      ></div>
+      <div id="keyShade" class="key-gate__shade key-composition__shade"></div>
+      <section
+        id="keyContent"
+        class="key-gate__content key-composition__content"
+        hidden
+      >
+        <h1 id="keyTitle"></h1>
+        <p id="keySubtitle"></p>
+        <form id="keyRegister" class="key-composition__form-group" novalidate>
+          <label class="sr-only" for="keyEmail"
+            >Correo electr&oacute;nico</label
+          >
+          <div class="key-gate__form-row key-composition__form-row">
+            <input
+              id="keyEmail"
+              name="email"
+              type="email"
+              inputmode="email"
+              autocomplete="email"
+              maxlength="254"
+              required
+            />
+            <button id="keySubmit" type="submit"></button>
+          </div>
+          <p
+            id="keyFormMessage"
+            class="key-gate__message key-composition__message"
+            role="alert"
+            aria-live="polite"
+          ></p>
+        </form>
+        <div
+          id="keySuccess"
+          class="key-gate__success key-composition__success"
+          hidden
+          tabindex="-1"
+        >
+          <h2></h2>
+          <p></p>
+        </div>
+        <a
+          id="keyPrivacy"
+          class="key-gate__privacy key-composition__privacy"
+          href="/privacidad?source=key-screen"
+        ></a>
+      </section>
+      <section id="keyUnavailable" class="key-gate__unavailable" hidden>
+        <h1>CRONOX</h1>
+        <p>Estamos preparando algo nuevo.</p>
+      </section>
+    </main>
+    <script src="assets/cookie-consent.js?v=4" defer></script>
+    <script src="assets/customer-analytics.js?v=1" defer></script>
+    <script src="assets/api.js?v=3"></script>
+    <script src="assets/media-framing-geometry.js?v=2"></script>
+    <script src="assets/key-screen-renderer.js?v=3"></script>
+    <script src="assets/key-screen.js?v=8"></script>
+  </body>
 </html>

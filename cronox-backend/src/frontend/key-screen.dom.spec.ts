@@ -43,7 +43,7 @@ describe('Pantalla Clave frontend integration', () => {
       adminHtml.indexOf('admin-key-screen.js'),
     );
     expect(adminHtml).toContain('assets/key-screen-composition.css?v=2');
-    expect(gateHtml).toContain('assets/key-screen-composition.css?v=2');
+    expect(gateHtml).toContain('assets/key-screen-composition.css?v=3');
     expect(
       document.querySelector('#keyPreview.key-composition'),
     ).not.toBeNull();
@@ -95,7 +95,9 @@ describe('Pantalla Clave frontend integration', () => {
       document.querySelector('link[rel="canonical"]')?.getAttribute('href'),
     ).toBe('https://cronox.es/');
     expect(
-      document.querySelector('meta[property="og:url"]')?.getAttribute('content'),
+      document
+        .querySelector('meta[property="og:url"]')
+        ?.getAttribute('content'),
     ).toBe('https://cronox.es/');
     expect(
       document
@@ -132,7 +134,9 @@ describe('Pantalla Clave frontend integration', () => {
     expect(gateHtml).toContain('media-framing-geometry.js');
     expect(gateScript).toContain('CRONOX_MEDIA_GEOMETRY?.apply');
     expect(rendererScript).toContain('mobileFocalX');
-    expect(gateStyles).toMatch(/position:\s*fixed;\s*inset:\s*0/);
+    expect(gateStyles).toMatch(
+      /\.key-gate \.key-composition__media,[\s\S]*\.key-gate \.key-composition__shade\s*\{\s*position:\s*fixed;/,
+    );
     expect(gateStyles).toMatch(
       /\.key-gate__unavailable\[hidden\].*\.key-gate__content\[hidden\]/s,
     );
@@ -144,7 +148,9 @@ describe('Pantalla Clave frontend integration', () => {
   it('enforces the gate before static HTML while explicitly excluding Admin and APIs', () => {
     expect(mainSource).toContain("pathname.startsWith('/api')");
     expect(mainSource).toContain("'/admin.html'");
-    expect(mainSource).toContain("res.sendFile(join(frontendRoot, 'key-screen.html'))");
+    expect(mainSource).toContain(
+      "res.sendFile(join(frontendRoot, 'key-screen.html'))",
+    );
     expect(mainSource).not.toContain("res.redirect(307, '/key-screen.html')");
     expect(mainSource.indexOf('shouldGatePublicHtml')).toBeLessThan(
       mainSource.indexOf('app.useGlobalPipes'),
@@ -176,6 +182,10 @@ describe('Pantalla Clave frontend integration', () => {
     });
     Object.defineProperty(window, 'innerWidth', {
       value: 390,
+      configurable: true,
+    });
+    Object.defineProperty(window, 'innerHeight', {
+      value: 844,
       configurable: true,
     });
     Object.defineProperty(window, 'fetch', {
@@ -297,6 +307,10 @@ describe('Pantalla Clave frontend integration', () => {
       value: 1200,
       configurable: true,
     });
+    Object.defineProperty(window, 'innerHeight', {
+      value: 1080,
+      configurable: true,
+    });
     window.dispatchEvent(new window.Event('resize'));
     expect(applyGeometry).toHaveBeenLastCalledWith(
       expect.anything(),
@@ -311,7 +325,7 @@ describe('Pantalla Clave frontend integration', () => {
       window.document
         .querySelector<HTMLElement>('#keyContent')!
         .style.getPropertyValue('--key-offset-x'),
-    ).toBe('30px');
+    ).toBe('18.75px');
     expect(
       window.document
         .querySelector<HTMLElement>('#keyRegister')!
