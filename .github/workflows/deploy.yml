@@ -1,0 +1,20 @@
+name: Deploy CRONOX
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy to VPS
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.CRONOX_VPS_HOST }}
+          username: ${{ secrets.CRONOX_VPS_USER }}
+          key: ${{ secrets.CRONOX_VPS_SSH_KEY }}
+          port: ${{ secrets.CRONOX_VPS_PORT }}
+          script: |
+            /var/www/cronox/deploy.sh
