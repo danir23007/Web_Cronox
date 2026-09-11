@@ -130,6 +130,10 @@
   const productImagesPreview = $('#productImagesPreview');
   const productCancelBtn = $('#productCancelBtn');
   const productSubmitBtn = $('#productSubmitBtn');
+  const MAX_PRODUCT_IMAGE_COUNT = 8;
+  const MAX_PRODUCT_IMAGE_BYTES = 25 * 1024 * 1024;
+  const PRODUCT_IMAGE_TOO_LARGE_MESSAGE = 'Cada imagen puede pesar como máximo 25 MB.';
+  const ALLOWED_PRODUCT_IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
   const categoryProductSearch = $('#categoryProductSearch');
   const categoryFilterDropdown = $('#categoryFilterDropdown');
   const categoryFilterToggle = $('#categoryFilterToggle');
@@ -2916,9 +2920,25 @@
       }
     } catch (error) {
       console.error('[ADMIN] Error subiendo imágenes', error);
+      if (error?.status === 413 || error?.statusCode === 413) {
+        throw new Error(PRODUCT_IMAGE_TOO_LARGE_MESSAGE);
+      }
       throw new Error(error?.message || 'No se pudieron subir las imágenes');
     }
     return [];
+  };
+
+  const validateProductImages = (files = []) => {
+    if (files.some((file) => file.size > MAX_PRODUCT_IMAGE_BYTES)) {
+      return PRODUCT_IMAGE_TOO_LARGE_MESSAGE;
+    }
+    if (files.length > MAX_PRODUCT_IMAGE_COUNT) {
+      return `Se pueden subir como máximo ${MAX_PRODUCT_IMAGE_COUNT} imágenes.`;
+    }
+    if (files.some((file) => !ALLOWED_PRODUCT_IMAGE_TYPES.has(file.type))) {
+      return 'Solo se permiten imágenes JPEG, PNG o WebP.';
+    }
+    return '';
   };
 
   const submitProduct = async (event) => {
@@ -2946,6 +2966,10 @@
     const files = productImagesInput?.files ? Array.from(productImagesInput.files) : [];
 
     try {
+      const imageValidationMessage = validateProductImages(files);
+      if (imageValidationMessage) {
+        throw new Error(imageValidationMessage);
+      }
       if (files.length) {
         imageUrls = await uploadProductImages(files);
       } else if (!editingProductId) {
@@ -3867,6 +3891,13 @@
     if (productImagesInput) {
       productImagesInput.addEventListener('change', () => {
         const files = productImagesInput.files ? Array.from(productImagesInput.files) : [];
+        const imageValidationMessage = validateProductImages(files);
+        if (imageValidationMessage) {
+          setScopedMessage(productsMessage, imageValidationMessage, 'error');
+          productImagesInput.value = '';
+          renderProductImagesPreview(cachedProductImages);
+          return;
+        }
         const urls = files.map((file) => URL.createObjectURL(file));
         renderProductImagesPreview(urls);
       });

@@ -917,12 +917,17 @@ import { availableStock, classifyStock } from '../../../cronox-backend/src/commo
   };
 
   adminApi.uploadProductImages = async (files: File[] = []) => {
-    const formData = new FormData();
-    files.forEach((file) => formData.append('files', file));
-    return request('/api/admin/products/upload-images', {
-      method: 'POST',
-      body: formData,
-    });
+    const urls: string[] = [];
+    for (const file of files) {
+      const formData = new FormData();
+      formData.append('files', file);
+      const result = (await request('/api/admin/products/upload-images', {
+        method: 'POST',
+        body: formData,
+      })) as { urls?: string[] } | null;
+      if (Array.isArray(result?.urls)) urls.push(...result.urls);
+    }
+    return { urls };
   };
 
   adminApi.listPromoCodes = async (query: QueryRecord = {}) => {

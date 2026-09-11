@@ -28,6 +28,7 @@ import { PaymentsModule } from '../payments/payments.module';
 import { OrdersModule } from '../orders/orders.module';
 import { AdminInventoryController } from './inventory/admin-inventory.controller';
 import { AdminInventoryService } from './inventory/admin-inventory.service';
+import { ProductImageUploadSizeExceptionFilter } from './products/product-image-upload-size-exception.filter';
 
 @Module({
   imports: [
@@ -63,6 +64,7 @@ import { AdminInventoryService } from './inventory/admin-inventory.service';
     AdminAuditLogsService,
     AdminNotesService,
     AdminInventoryService,
+    ProductImageUploadSizeExceptionFilter,
     AdminGuard,
   ],
 })

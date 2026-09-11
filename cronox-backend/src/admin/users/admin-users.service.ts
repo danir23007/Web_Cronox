@@ -27,7 +27,11 @@ import {
 const DEFAULT_PAGE_SIZE = 10;
 const MAX_PAGE_SIZE = 50;
 const RECENT_ITEMS_LIMIT = 20;
-const SUPER_ADMIN_ROLE_LIST: Role[] = [Role.SUPER_ADMIN, Role.SUPERADMIN];
+const SUPER_ADMIN_ROLE_LIST: Role[] = [
+  Role.SUPER_ADMIN,
+  Role.SUPERADMIN,
+  Role.ADMIN,
+];
 const SERIALIZABLE_RETRY_LIMIT = 3;
 const PAID_STATUSES: OrderStatus[] = [
   OrderStatus.PAID,

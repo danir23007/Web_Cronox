@@ -39,13 +39,9 @@ describe('AdminCustomerAnalyticsController authorization', () => {
     expect(guard.canActivate(context('logins', Role.MODERATOR))).toBe(true);
   });
 
-  it('does not treat the legacy ADMIN enum value as an authorized admin role', () => {
-    expect(() => guard.canActivate(context('summary', Role.ADMIN))).toThrow(
-      ForbiddenException,
-    );
-    expect(() => guard.canActivate(context('logins', Role.ADMIN))).toThrow(
-      ForbiddenException,
-    );
+  it('treats the legacy ADMIN enum value as a full administrator', () => {
+    expect(guard.canActivate(context('summary', Role.ADMIN))).toBe(true);
+    expect(guard.canActivate(context('logins', Role.ADMIN))).toBe(true);
   });
 
   it('rejects normal users from customer analytics and login history', () => {

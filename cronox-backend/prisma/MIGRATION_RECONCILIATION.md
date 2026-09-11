@@ -26,8 +26,10 @@ rename, or checksum-rewrite migrations that may already be recorded in
 ## Role reconciliation before deployment
 
 The hardening migration changes `NULL` roles to `USER` and enforces `NOT NULL`.
-It deliberately does not elevate legacy `ADMIN` values. Before deployment,
-have an authorized operator review the affected accounts on the staging copy:
+At runtime, the legacy `ADMIN` and `SUPERADMIN` values are treated as
+`SUPER_ADMIN` so existing full administrators retain the same access exposed by
+the admin panel. Before deployment, have an authorized operator review the
+affected accounts on the staging copy:
 
 ```sql
 SELECT "role", COUNT(*)
@@ -41,11 +43,11 @@ WHERE "role" IS NULL OR "role" IN ('ADMIN', 'SUPERADMIN')
 ORDER BY "id";
 ```
 
-Reassign each legacy `ADMIN` account to the least privileged current role that
-matches its job. Reassign a legacy `SUPERADMIN` account to `SUPER_ADMIN` only
-after confirming that it is an intended super-administrator. Record each
-decision in the change ticket. `NULL` becomes `USER` automatically and never
-receives administrative access.
+Normalize confirmed full-administrator accounts from either legacy value to
+`SUPER_ADMIN`. If a legacy account should have a narrower job, assign the least
+privileged current role that matches it. Record each decision in the change
+ticket. `NULL` becomes `USER` automatically and never receives administrative
+access.
 
 ## New databases
 

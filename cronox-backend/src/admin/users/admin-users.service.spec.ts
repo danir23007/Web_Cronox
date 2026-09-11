@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access */
 import { BadRequestException } from '@nestjs/common';
 import { Role } from '@prisma/client';
 import { AdminUsersService } from './admin-users.service';
@@ -44,8 +45,21 @@ describe('AdminUsersService role safety', () => {
 
     expect(tx.user.update).not.toHaveBeenCalled();
     expect(tx.user.count).toHaveBeenCalledWith({
-      where: { role: { in: [Role.SUPER_ADMIN, Role.SUPERADMIN] } },
+      where: {
+        role: { in: [Role.SUPER_ADMIN, Role.SUPERADMIN, Role.ADMIN] },
+      },
     });
+  });
+
+  it('protects a legacy ADMIN as a full super-admin', async () => {
+    tx.user.findUnique.mockResolvedValue({ ...superAdmin, role: Role.ADMIN });
+    tx.user.count.mockResolvedValue(1);
+
+    await expect(
+      service.updateUserRole(1, Role.MODERATOR, 1),
+    ).rejects.toBeInstanceOf(BadRequestException);
+
+    expect(tx.user.update).not.toHaveBeenCalled();
   });
 
   it('permits a super-admin demotion when another super-admin remains', async () => {

@@ -8,6 +8,20 @@ import { AdminProductsController } from './admin-products.controller';
 import { UpdateProductCategoriesDto } from './dto/update-product-categories.dto';
 
 describe('Admin product category endpoint', () => {
+  it('allows legacy ADMIN users to manage product categories', () => {
+    const controller = new AdminProductsController({} as any, {} as any);
+    const guard = new AdminGuard(new Reflector());
+    const context = {
+      getHandler: () => controller.updateCategories,
+      getClass: () => AdminProductsController,
+      switchToHttp: () => ({
+        getRequest: () => ({ user: { role: Role.ADMIN } }),
+      }),
+    } as any;
+
+    expect(guard.canActivate(context)).toBe(true);
+  });
+
   it('rejects non-admin users through the existing admin authorization policy', () => {
     const controller = new AdminProductsController({} as any, {} as any);
     const guard = new AdminGuard(new Reflector());

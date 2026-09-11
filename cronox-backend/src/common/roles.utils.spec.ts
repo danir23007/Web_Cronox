@@ -15,12 +15,14 @@ describe('role normalization', () => {
     expect(hasAnyRole(null, [Role.SUPER_ADMIN])).toBe(false);
   });
 
-  it('only maps the legacy SUPERADMIN value to super-admin', () => {
+  it('maps both legacy full-administrator values to super-admin', () => {
     expect(normalizeRole(Role.SUPERADMIN)).toBe(Role.SUPER_ADMIN);
     expect(isSuperAdminRole(Role.SUPERADMIN)).toBe(true);
     expect(ADMIN_ROLE_LIST).toContain(Role.SUPERADMIN);
-    expect(normalizeRole(Role.ADMIN)).toBe(Role.ADMIN);
-    expect(isAdminRole(Role.ADMIN)).toBe(false);
+    expect(normalizeRole(Role.ADMIN)).toBe(Role.SUPER_ADMIN);
+    expect(isAdminRole(Role.ADMIN)).toBe(true);
+    expect(isSuperAdminRole(Role.ADMIN)).toBe(true);
+    expect(ADMIN_ROLE_LIST).toContain(Role.ADMIN);
   });
 
   it('allows scoped staff roles only when explicitly listed', () => {

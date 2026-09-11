@@ -26,7 +26,7 @@ export type WebsiteMediaUploadResult = GalleryUploadResult & {
 };
 
 export const MAX_PRODUCT_IMAGE_COUNT = 8;
-export const MAX_PRODUCT_IMAGE_BYTES = 8 * 1024 * 1024;
+export const MAX_PRODUCT_IMAGE_BYTES = 25 * 1024 * 1024;
 export const MAX_GALLERY_IMAGE_BYTES = 25 * 1024 * 1024;
 export const MAX_WEBSITE_MEDIA_BYTES = 100 * 1024 * 1024;
 
@@ -156,6 +156,18 @@ export class SupabaseStorageService {
       throw new BadRequestException('No se recibieron archivos para subir');
     }
 
+    const oversized = files.find((file) => {
+      const byteLength = Buffer.isBuffer(file.buffer)
+        ? file.buffer.length
+        : (file.size ?? 0);
+      return byteLength > MAX_PRODUCT_IMAGE_BYTES;
+    });
+    if (oversized) {
+      throw new BadRequestException(
+        'Cada imagen puede pesar como m\u00e1ximo 25 MB.',
+      );
+    }
+
     if (files.length > MAX_PRODUCT_IMAGE_COUNT) {
       throw new BadRequestException(
         `A maximum of ${MAX_PRODUCT_IMAGE_COUNT} images can be uploaded per request`,
@@ -170,18 +182,19 @@ export class SupabaseStorageService {
     }
 
     const invalid = files.find((file) => {
-      const byteLength = file.size ?? file.buffer?.length ?? 0;
+      const byteLength = Buffer.isBuffer(file.buffer)
+        ? file.buffer.length
+        : (file.size ?? 0);
       return (
         !ALLOWED_IMAGE_MIME_TYPES.has(file.mimetype) ||
         !Buffer.isBuffer(file.buffer) ||
         byteLength <= 0 ||
-        byteLength > MAX_PRODUCT_IMAGE_BYTES ||
         !this.hasExpectedImageSignature(file.buffer, file.mimetype)
       );
     });
     if (invalid) {
       throw new BadRequestException(
-        'Invalid image. Only valid JPEG, PNG, or WEBP files up to 8 MB are allowed.',
+        'Imagen no v\u00e1lida. Solo se permiten archivos JPEG, PNG o WebP v\u00e1lidos.',
       );
     }
 

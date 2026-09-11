@@ -9,6 +9,7 @@ import {
   Post,
   Query,
   UploadedFiles,
+  UseFilters,
   UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
@@ -43,12 +44,17 @@ import {
   MAX_PRODUCT_IMAGE_COUNT,
   SupabaseStorageService,
 } from '../../common/storage/supabase-storage.service';
+import { ProductImageUploadSizeExceptionFilter } from './product-image-upload-size-exception.filter';
 
 const ALLOWED_PRODUCT_IMAGE_MIME_TYPES = new Set([
   'image/jpeg',
   'image/png',
   'image/webp',
 ]);
+export const PRODUCT_IMAGE_UPLOAD_MULTER_LIMITS = Object.freeze({
+  files: MAX_PRODUCT_IMAGE_COUNT,
+  fileSize: MAX_PRODUCT_IMAGE_BYTES,
+});
 
 @ApiTags('Admin / Products')
 @ApiBearerAuth()
@@ -80,12 +86,10 @@ export class AdminProductsController {
   }
 
   @Post('upload-images')
+  @UseFilters(ProductImageUploadSizeExceptionFilter)
   @UseInterceptors(
     FilesInterceptor('files', MAX_PRODUCT_IMAGE_COUNT, {
-      limits: {
-        files: MAX_PRODUCT_IMAGE_COUNT,
-        fileSize: MAX_PRODUCT_IMAGE_BYTES,
-      },
+      limits: PRODUCT_IMAGE_UPLOAD_MULTER_LIMITS,
       fileFilter: (_request, file, callback) => {
         callback(null, ALLOWED_PRODUCT_IMAGE_MIME_TYPES.has(file.mimetype));
       },

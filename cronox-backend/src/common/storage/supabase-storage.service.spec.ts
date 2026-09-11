@@ -254,21 +254,57 @@ describe('SupabaseStorageService', () => {
     },
   );
 
-  it('keeps the product image limit unchanged at 8 MB', async () => {
-    const fetchMock = jest.fn();
+  it.each([
+    ['one byte below', 25 * 1024 * 1024 - 1, true],
+    ['exactly at', 25 * 1024 * 1024, true],
+    ['one byte above', 25 * 1024 * 1024 + 1, false],
+  ])(
+    '%s the 25 MB product image limit is handled per file',
+    async (_case, size, accepted) => {
+      const fetchMock = jest.fn().mockResolvedValue({ ok: true, status: 200 });
+      global.fetch = fetchMock as typeof fetch;
+      const service = new SupabaseStorageService();
+      const buffer = Buffer.alloc(size);
+      PNG_SIGNATURE.copy(buffer);
+      const image = {
+        mimetype: 'image/png',
+        buffer,
+        size,
+        originalname: 'product-boundary.png',
+      } as Express.Multer.File;
+
+      expect(MAX_PRODUCT_IMAGE_BYTES).toBe(25 * 1024 * 1024);
+      if (accepted) {
+        await expect(service.uploadProductImages([image])).resolves.toEqual({
+          urls: [expect.stringMatching(/\.png$/)],
+        });
+        expect(fetchMock).toHaveBeenCalledTimes(1);
+      } else {
+        await expect(service.uploadProductImages([image])).rejects.toThrow(
+          'Cada imagen puede pesar como máximo 25 MB.',
+        );
+        expect(fetchMock).not.toHaveBeenCalled();
+      }
+    },
+  );
+
+  it('uploads the original product image bytes without quality reduction', async () => {
+    const fetchMock = jest.fn().mockResolvedValue({ ok: true, status: 200 });
     global.fetch = fetchMock as typeof fetch;
     const service = new SupabaseStorageService();
     const image = {
       mimetype: 'image/png',
       buffer: PNG_SIGNATURE,
-      size: MAX_PRODUCT_IMAGE_BYTES + 1,
-      originalname: 'product-too-large.png',
+      size: PNG_SIGNATURE.length,
+      originalname: 'product.png',
     } as Express.Multer.File;
 
-    expect(MAX_PRODUCT_IMAGE_BYTES).toBe(8 * 1024 * 1024);
-    expect(MAX_GALLERY_IMAGE_BYTES).toBe(25 * 1024 * 1024);
-    await expect(service.uploadProductImages([image])).rejects.toThrow('8 MB');
-    expect(fetchMock).not.toHaveBeenCalled();
+    await service.uploadProductImages([image]);
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({ body: image.buffer }),
+    );
   });
 
   it.each([
@@ -376,9 +412,8 @@ describe('SupabaseStorageService', () => {
     expect(result.width).toBe(640);
     expect(result.height).toBe(320);
     expect(result.url).toContain('/storage/v1/object/public/');
-    expect(fetchMock.mock.calls[0][0]).toContain(
-      '/storage/v1/object/gallery/INFO/images/',
-    );
+    const [uploadUrl] = fetchMock.mock.calls[0] as unknown as [string];
+    expect(uploadUrl).toContain('/storage/v1/object/gallery/INFO/images/');
     expect(result.url).not.toContain('unsafe');
     expect(JSON.stringify(result)).not.toContain('test-service-key');
     bytes.writeUInt32BE(4097, 16);
