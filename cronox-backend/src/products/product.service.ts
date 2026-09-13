@@ -21,6 +21,7 @@ import {
   normalizeSearchText,
   scoreProductSearch,
 } from './product-search';
+import { randomUUID } from 'crypto';
 
 @Injectable()
 export class ProductService {
@@ -171,13 +172,26 @@ export class ProductService {
     return images;
   }
 
-  private buildDefaultVariants(slug: string): CreateVariantDto[] {
-    return this.defaultSizes.map((size, index) => ({
+  private buildDefaultVariants(): CreateVariantDto[] {
+    return this.defaultSizes.map((size) => ({
       size,
-      sku: `${slug || 'producto'}-${size}-${Date.now().toString(36)}${index}`,
       stockQty: 0,
       isActive: true,
     }));
+  }
+
+  private resolveVariantSku(
+    productSlug: string,
+    variant: Pick<CreateVariantDto, 'size' | 'sku'>,
+  ): string {
+    if (typeof variant.sku === 'string' && variant.sku.trim().length > 0) {
+      return variant.sku;
+    }
+
+    const slug = this.slugify(productSlug) || 'producto';
+    const size = String(variant.size).toLowerCase();
+    const suffix = randomUUID().replace(/-/g, '');
+    return `${slug}-${size}-${suffix}`;
   }
 
   private async recordAudit(
@@ -987,7 +1001,7 @@ export class ProductService {
     const variants =
       dto.variants?.length && Array.isArray(dto.variants)
         ? dto.variants
-        : this.buildDefaultVariants(slug);
+        : this.buildDefaultVariants();
 
     try {
       const product = await this.prisma.$transaction(async (tx) => {
@@ -1010,12 +1024,10 @@ export class ProductService {
 
         if (variants.length) {
           await tx.productVariant.createMany({
-            data: variants.map((variant, index) => ({
+            data: variants.map((variant) => ({
               productId: created.id,
               size: variant.size,
-              sku:
-                variant.sku ||
-                `${slug}-${variant.size}-${Math.random().toString(36).slice(2, 6)}${index}`,
+              sku: this.resolveVariantSku(slug, variant),
               price: variant.price ?? null,
               stockQty: variant.stockQty ?? variant.stock ?? 0, // [STOCK]
               isActive: variant.isActive ?? true,
@@ -1187,13 +1199,13 @@ export class ProductService {
         }
 
         if (dto.variantsToCreate?.length) {
+          const productSlug =
+            typeof data.slug === 'string' ? data.slug : existing.slug;
           await tx.productVariant.createMany({
-            data: dto.variantsToCreate.map((variant, index) => ({
+            data: dto.variantsToCreate.map((variant) => ({
               productId: id,
               size: variant.size,
-              sku:
-                variant.sku ||
-                `${existing.slug}-${variant.size}-${Math.random().toString(36).slice(2, 6)}${index}`,
+              sku: this.resolveVariantSku(productSlug, variant),
               price: variant.price ?? null,
               stockQty: variant.stockQty ?? variant.stock ?? 0, // [STOCK]
               isActive: variant.isActive ?? true,
@@ -1407,8 +1419,12 @@ export class ProductService {
   ) {
     const variants = Array.isArray(dto) ? dto : [dto];
 
+    let existingProduct: { slug: string };
     try {
-      await this.prisma.product.findUniqueOrThrow({ where: { id: productId } });
+      existingProduct = await this.prisma.product.findUniqueOrThrow({
+        where: { id: productId },
+        select: { slug: true },
+      });
     } catch {
       throw new NotFoundException('Product not found');
     }
@@ -1420,7 +1436,7 @@ export class ProductService {
             data: variants.map((variant) => ({
               productId,
               size: variant.size,
-              sku: variant.sku,
+              sku: this.resolveVariantSku(existingProduct.slug, variant),
               price: variant.price ?? null,
               stockQty: variant.stockQty ?? variant.stock ?? 0, // [STOCK]
               isActive: variant.isActive ?? true,
