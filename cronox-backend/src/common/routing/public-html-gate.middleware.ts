@@ -16,7 +16,7 @@ const UNGATED_ADMIN_PATHS = new Set([
 ]);
 
 type PublicHtmlGateDependencies = {
-  authService: Pick<AuthService, 'hasValidAdminAccessSession'>;
+  authService: Pick<AuthService, 'hasValidAdminSession'>;
   keyScreen: Pick<KeyScreenService, 'shouldGatePublicHtml'>;
   frontendRoot: string;
 };
@@ -37,8 +37,12 @@ const hasAdminPreviewSession = async (
     .cookies;
   const accessToken =
     typeof cookies?.jwt === 'string' ? cookies.jwt : undefined;
+  const refreshToken =
+    typeof cookies?.refresh_token === 'string'
+      ? cookies.refresh_token
+      : undefined;
   try {
-    return await authService.hasValidAdminAccessSession(accessToken);
+    return await authService.hasValidAdminSession(accessToken, refreshToken);
   } catch {
     return false;
   }

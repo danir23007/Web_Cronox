@@ -345,9 +345,49 @@ describe('AuthService password reset security', () => {
     });
 
     await expect(
-      service.hasValidAdminAccessSession('valid-access-token'),
+      service.hasValidAdminSession('valid-access-token'),
     ).resolves.toBe(true);
     expect(usersService.findById).toHaveBeenCalledWith(42);
+  });
+
+  it('accepts an expired access cookie through a valid current administrator refresh session', async () => {
+    jwtService.verifyAsync.mockRejectedValue(new Error('access expired'));
+    refreshJwt.verifyAsync.mockResolvedValue({
+      sub: 42,
+      sv: 3,
+      type: 'refresh',
+    });
+    usersService.findById.mockResolvedValue({
+      id: 42,
+      role: Role.SUPER_ADMIN,
+      sessionVersion: 3,
+    });
+
+    await expect(
+      service.hasValidAdminSession('expired-access', 'valid-refresh'),
+    ).resolves.toBe(true);
+    expect(jwtService.verifyAsync).toHaveBeenCalledWith('expired-access');
+    expect(refreshJwt.verifyAsync).toHaveBeenCalledWith('valid-refresh');
+    expect(usersService.findById).toHaveBeenCalledWith(42);
+  });
+
+  it('accepts a valid current administrator refresh session without an access cookie', async () => {
+    refreshJwt.verifyAsync.mockResolvedValue({
+      sub: 42,
+      sv: 3,
+      type: 'refresh',
+    });
+    usersService.findById.mockResolvedValue({
+      id: 42,
+      role: Role.LOGISTICS,
+      sessionVersion: 3,
+    });
+
+    await expect(
+      service.hasValidAdminSession(undefined, 'valid-refresh'),
+    ).resolves.toBe(true);
+    expect(jwtService.verifyAsync).not.toHaveBeenCalled();
+    expect(refreshJwt.verifyAsync).toHaveBeenCalledWith('valid-refresh');
   });
 
   it('rejects a valid session when the current database role is not administrative', async () => {
@@ -359,7 +399,7 @@ describe('AuthService password reset security', () => {
     });
 
     await expect(
-      service.hasValidAdminAccessSession('user-access-token'),
+      service.hasValidAdminSession('user-access-token'),
     ).resolves.toBe(false);
   });
 
@@ -372,7 +412,24 @@ describe('AuthService password reset security', () => {
     });
 
     await expect(
-      service.hasValidAdminAccessSession('stale-access-token'),
+      service.hasValidAdminSession('stale-access-token'),
+    ).resolves.toBe(false);
+  });
+
+  it('rejects a refresh session invalidated by a changed session version', async () => {
+    refreshJwt.verifyAsync.mockResolvedValue({
+      sub: 42,
+      sv: 3,
+      type: 'refresh',
+    });
+    usersService.findById.mockResolvedValue({
+      id: 42,
+      role: Role.SUPER_ADMIN,
+      sessionVersion: 4,
+    });
+
+    await expect(
+      service.hasValidAdminSession(undefined, 'stale-refresh'),
     ).resolves.toBe(false);
   });
 
@@ -382,13 +439,22 @@ describe('AuthService password reset security', () => {
       jwtService.verifyAsync.mockRejectedValue(new Error('invalid token'));
 
       await expect(
-        service.hasValidAdminAccessSession('untrusted-token'),
+        service.hasValidAdminSession('untrusted-token'),
       ).resolves.toBe(false);
       expect(usersService.findById).not.toHaveBeenCalled();
     },
   );
 
-  it('never treats a refresh-token payload as an access session', async () => {
+  it('rejects a refresh cookie signed with the wrong secret without raising an application error', async () => {
+    refreshJwt.verifyAsync.mockRejectedValue(new Error('invalid signature'));
+
+    await expect(
+      service.hasValidAdminSession(undefined, 'wrong-secret-refresh'),
+    ).resolves.toBe(false);
+    expect(usersService.findById).not.toHaveBeenCalled();
+  });
+
+  it('never treats a refresh token as an access token', async () => {
     jwtService.verifyAsync.mockResolvedValue({
       sub: 42,
       sv: 3,
@@ -396,9 +462,53 @@ describe('AuthService password reset security', () => {
     });
 
     await expect(
-      service.hasValidAdminAccessSession('refresh-token'),
+      service.hasValidAdminSession('refresh-as-access'),
+    ).resolves.toBe(false);
+    expect(refreshJwt.verifyAsync).not.toHaveBeenCalled();
+    expect(usersService.findById).not.toHaveBeenCalled();
+  });
+
+  it('never treats an access token as a refresh token', async () => {
+    refreshJwt.verifyAsync.mockResolvedValue({ sub: 42, sv: 3 });
+
+    await expect(
+      service.hasValidAdminSession(undefined, 'access-as-refresh'),
     ).resolves.toBe(false);
     expect(usersService.findById).not.toHaveBeenCalled();
+  });
+
+  it('invalidates both old token types for the preview immediately after logout', async () => {
+    const accessPayload = { sub: 42, sv: 3 };
+    const refreshPayload = { sub: 42, sv: 3, type: 'refresh' };
+    jwtService.verifyAsync.mockResolvedValue(accessPayload);
+    refreshJwt.verifyAsync.mockResolvedValue(refreshPayload);
+    usersService.findById.mockResolvedValue({
+      id: 42,
+      role: Role.SUPER_ADMIN,
+      sessionVersion: 3,
+    });
+
+    await expect(
+      service.hasValidAdminSession('old-access', 'old-refresh'),
+    ).resolves.toBe(true);
+    await service.logout('old-access', 'old-refresh');
+
+    expect(prisma.user.updateMany).toHaveBeenCalledWith({
+      where: { id: 42, sessionVersion: 3 },
+      data: { sessionVersion: { increment: 1 } },
+    });
+
+    usersService.findById.mockResolvedValue({
+      id: 42,
+      role: Role.SUPER_ADMIN,
+      sessionVersion: 4,
+    });
+    await expect(
+      service.hasValidAdminSession('old-access', 'old-refresh'),
+    ).resolves.toBe(false);
+    await expect(
+      service.hasValidAdminSession(undefined, 'old-refresh'),
+    ).resolves.toBe(false);
   });
 
   it('hands the account cart and active checkout ownership to a fresh guest session on logout', async () => {

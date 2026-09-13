@@ -179,27 +179,23 @@ export class AuthService {
     return this.formatAuthUser(this.omitPassword(user));
   }
 
-  async hasValidAdminAccessSession(accessToken?: string): Promise<boolean> {
-    if (!accessToken) return false;
-
+  async hasValidAdminSession(
+    accessToken?: string,
+    refreshToken?: string,
+  ): Promise<boolean> {
     try {
-      const payload =
-        await this.jwtService.verifyAsync<SessionJwtPayload>(accessToken);
-      if (
-        payload.type !== undefined ||
-        !Number.isInteger(payload.sub) ||
-        !Number.isInteger(payload.sv)
-      ) {
-        return false;
-      }
+      const session = await this.getCurrentSession(accessToken, refreshToken);
+      if (!session) return false;
 
-      const user = await this.usersService.findById(payload.sub);
+      const user = await this.usersService.findById(session.userId);
       return Boolean(
-        user && user.sessionVersion === payload.sv && isAdminRole(user.role),
+        user &&
+          user.sessionVersion === session.sessionVersion &&
+          isAdminRole(user.role),
       );
     } catch {
       // Public navigation must fall back to the Key Screen for any invalid,
-      // expired or unverifiable access cookie.
+      // expired or unverifiable authentication cookie.
       return false;
     }
   }

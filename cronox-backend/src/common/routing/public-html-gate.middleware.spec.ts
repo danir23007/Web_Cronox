@@ -9,7 +9,10 @@ describe('public HTML Key Screen gate', () => {
 
   const createApp = (
     gateEnabled: boolean,
-    validateToken: (token?: string) => boolean | Promise<boolean> = () => false,
+    validateToken: (
+      accessToken?: string,
+      refreshToken?: string,
+    ) => boolean | Promise<boolean> = () => false,
   ) => {
     const app = express();
     app.use(cookieParser());
@@ -20,7 +23,7 @@ describe('public HTML Key Screen gate', () => {
           shouldGatePublicHtml: jest.fn().mockResolvedValue(gateEnabled),
         },
         authService: {
-          hasValidAdminAccessSession: jest.fn(validateToken),
+          hasValidAdminSession: jest.fn(validateToken),
         },
       }),
     );
@@ -53,6 +56,28 @@ describe('public HTML Key Screen gate', () => {
 
     expect(response.status).toBe(200);
     expect(response.text).toBe('PUBLIC:/');
+    expect(response.headers['cache-control']).toBe('private, no-store');
+    expect(response.headers.vary).toContain('Cookie');
+  });
+
+  it('passes both HttpOnly session cookies and permits a refresh-only preview', async () => {
+    const validateSession = jest.fn(
+      (_accessToken?: string, refreshToken?: string) =>
+        refreshToken === 'valid-refresh-token',
+    );
+    const response = await request(createApp(true, validateSession))
+      .get('/')
+      .set(
+        'Cookie',
+        'jwt=expired-access-token; refresh_token=valid-refresh-token',
+      );
+
+    expect(response.status).toBe(200);
+    expect(response.text).toBe('PUBLIC:/');
+    expect(validateSession).toHaveBeenCalledWith(
+      'expired-access-token',
+      'valid-refresh-token',
+    );
     expect(response.headers['cache-control']).toBe('private, no-store');
     expect(response.headers.vary).toContain('Cookie');
   });
@@ -105,14 +130,19 @@ describe('public HTML Key Screen gate', () => {
           shouldGatePublicHtml: () => Promise.resolve(true),
         },
         authService: {
-          hasValidAdminAccessSession: (token) =>
-            Promise.resolve(sessionValid && token === 'valid-admin-token'),
+          hasValidAdminSession: (accessToken, refreshToken) =>
+            Promise.resolve(
+              sessionValid &&
+                (accessToken === 'valid-admin-token' ||
+                  refreshToken === 'valid-refresh-token'),
+            ),
         },
       }),
     );
     app.post('/api/auth/logout', (_req, res) => {
       sessionValid = false;
       res.clearCookie('jwt', { path: '/' });
+      res.clearCookie('refresh_token', { path: '/' });
       res.status(204).send();
     });
     app.use((req, res) => res.status(200).send(`PUBLIC:${req.path}`));
@@ -120,11 +150,11 @@ describe('public HTML Key Screen gate', () => {
 
     await agent
       .get('/')
-      .set('Cookie', 'jwt=valid-admin-token')
+      .set('Cookie', 'jwt=valid-admin-token; refresh_token=valid-refresh-token')
       .expect(200, 'PUBLIC:/');
     await agent
       .post('/api/auth/logout')
-      .set('Cookie', 'jwt=valid-admin-token')
+      .set('Cookie', 'jwt=valid-admin-token; refresh_token=valid-refresh-token')
       .expect(204);
     const response = await agent.get('/');
     expect(response.text).not.toBe('PUBLIC:/');

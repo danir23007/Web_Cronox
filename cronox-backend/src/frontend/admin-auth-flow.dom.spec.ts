@@ -18,6 +18,10 @@ describe('dedicated Admin authentication flow', () => {
     path.resolve(__dirname, '../main.ts'),
     'utf8',
   );
+  const publicHtmlGateSource = readFileSync(
+    path.resolve(__dirname, '../common/routing/public-html-gate.middleware.ts'),
+    'utf8',
+  );
 
   it('serves a dedicated, password-based Admin login without storefront content', () => {
     const document = new JSDOM(loginHtml).window.document;
@@ -130,12 +134,14 @@ describe('dedicated Admin authentication flow', () => {
   });
 
   it('keeps Admin pages outside Pantalla Clave and normalizes the extensionless route', () => {
-    expect(mainSource).toContain("'/admin-login.html'");
+    expect(publicHtmlGateSource).toContain("'/admin-login.html'");
     expect(mainSource).toContain("app.use(['/admin', '/admin/']");
     expect(mainSource).toContain("res.redirect(307, '/admin.html')");
-    expect(mainSource).toMatch(
+    expect(publicHtmlGateSource).toMatch(
       /pathname\.startsWith\('\/api'\)[\s\S]*const keyScreenEnabled = await keyScreen\.shouldGatePublicHtml\(\)/,
     );
-    expect(mainSource).toContain("res.sendFile(join(frontendRoot, 'key-screen.html'))");
+    expect(publicHtmlGateSource).toContain(
+      "res.sendFile(join(frontendRoot, 'key-screen.html'))",
+    );
   });
 });
