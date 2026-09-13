@@ -30,6 +30,7 @@ import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
 import { parseClientInfo } from '../analytics/client-info';
 import { normalizeEmail } from '../common/email';
+import { isAdminRole } from '../common/roles.utils';
 
 const PASSWORD_SETUP_CLAIM_STALE_MS = 10 * 60 * 1000;
 
@@ -176,6 +177,31 @@ export class AuthService {
     }
 
     return this.formatAuthUser(this.omitPassword(user));
+  }
+
+  async hasValidAdminAccessSession(accessToken?: string): Promise<boolean> {
+    if (!accessToken) return false;
+
+    try {
+      const payload =
+        await this.jwtService.verifyAsync<SessionJwtPayload>(accessToken);
+      if (
+        payload.type !== undefined ||
+        !Number.isInteger(payload.sub) ||
+        !Number.isInteger(payload.sv)
+      ) {
+        return false;
+      }
+
+      const user = await this.usersService.findById(payload.sub);
+      return Boolean(
+        user && user.sessionVersion === payload.sv && isAdminRole(user.role),
+      );
+    } catch {
+      // Public navigation must fall back to the Key Screen for any invalid,
+      // expired or unverifiable access cookie.
+      return false;
+    }
   }
 
   async mergeCartOnLogin(

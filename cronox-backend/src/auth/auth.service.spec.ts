@@ -1,4 +1,5 @@
 import { createHash } from 'crypto';
+import { Role } from '@prisma/client';
 import { AuthService } from './auth.service';
 
 describe('AuthService password reset security', () => {
@@ -219,18 +220,25 @@ describe('AuthService password reset security', () => {
     expect(emailService.sendInitialPasswordSetup).toHaveBeenCalledTimes(1);
     const setupUrl = emailService.sendInitialPasswordSetup.mock.calls[0][1];
     const rawToken = new URL(setupUrl).searchParams.get('token');
-    const storedToken = tx.passwordResetToken.create.mock.calls[0][0].data.token;
+    const storedToken =
+      tx.passwordResetToken.create.mock.calls[0][0].data.token;
     expect(storedToken).toBe(
-      createHash('sha256').update(rawToken as string).digest('hex'),
+      createHash('sha256')
+        .update(rawToken as string)
+        .digest('hex'),
     );
     const expiresAt = tx.passwordResetToken.create.mock.calls[0][0].data
       .expiresAt as Date;
     expect(expiresAt.getTime()).toBeGreaterThan(Date.now() + 59 * 60 * 1000);
-    expect(expiresAt.getTime()).toBeLessThanOrEqual(Date.now() + 60 * 60 * 1000);
+    expect(expiresAt.getTime()).toBeLessThanOrEqual(
+      Date.now() + 60 * 60 * 1000,
+    );
     expect(prisma.user.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: expect.objectContaining({ id: 42, password: null }),
-        data: expect.objectContaining({ passwordSetupEmailSentAt: expect.any(Date) }),
+        data: expect.objectContaining({
+          passwordSetupEmailSentAt: expect.any(Date),
+        }),
       }),
     );
   });
@@ -326,6 +334,71 @@ describe('AuthService password reset security', () => {
       where: { id: 42, sessionVersion: 3 },
       data: { sessionVersion: { increment: 1 } },
     });
+  });
+
+  it('accepts an access session only after verifying its current administrative user', async () => {
+    jwtService.verifyAsync.mockResolvedValue({ sub: 42, sv: 3 });
+    usersService.findById.mockResolvedValue({
+      id: 42,
+      role: Role.LOGISTICS,
+      sessionVersion: 3,
+    });
+
+    await expect(
+      service.hasValidAdminAccessSession('valid-access-token'),
+    ).resolves.toBe(true);
+    expect(usersService.findById).toHaveBeenCalledWith(42);
+  });
+
+  it('rejects a valid session when the current database role is not administrative', async () => {
+    jwtService.verifyAsync.mockResolvedValue({ sub: 42, sv: 3 });
+    usersService.findById.mockResolvedValue({
+      id: 42,
+      role: Role.USER,
+      sessionVersion: 3,
+    });
+
+    await expect(
+      service.hasValidAdminAccessSession('user-access-token'),
+    ).resolves.toBe(false);
+  });
+
+  it('rejects a session invalidated by a changed session version or role', async () => {
+    jwtService.verifyAsync.mockResolvedValue({ sub: 42, sv: 3 });
+    usersService.findById.mockResolvedValue({
+      id: 42,
+      role: Role.SUPER_ADMIN,
+      sessionVersion: 4,
+    });
+
+    await expect(
+      service.hasValidAdminAccessSession('stale-access-token'),
+    ).resolves.toBe(false);
+  });
+
+  it.each(['forged', 'expired', 'invalid'])(
+    'fails closed for a %s access cookie without raising an application error',
+    async () => {
+      jwtService.verifyAsync.mockRejectedValue(new Error('invalid token'));
+
+      await expect(
+        service.hasValidAdminAccessSession('untrusted-token'),
+      ).resolves.toBe(false);
+      expect(usersService.findById).not.toHaveBeenCalled();
+    },
+  );
+
+  it('never treats a refresh-token payload as an access session', async () => {
+    jwtService.verifyAsync.mockResolvedValue({
+      sub: 42,
+      sv: 3,
+      type: 'refresh',
+    });
+
+    await expect(
+      service.hasValidAdminAccessSession('refresh-token'),
+    ).resolves.toBe(false);
+    expect(usersService.findById).not.toHaveBeenCalled();
   });
 
   it('hands the account cart and active checkout ownership to a fresh guest session on logout', async () => {

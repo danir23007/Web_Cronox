@@ -22,15 +22,15 @@ import {
 } from './common/guards/csrf-protection.guard';
 import { PrismaService } from './prisma/prisma.service';
 import { KeyScreenService } from './key-screen/key-screen.service';
+import { AuthService } from './auth/auth.service';
+import { createPublicHtmlGateMiddleware } from './common/routing/public-html-gate.middleware';
 import {
   canonicalPathForRequest,
   cleanPageForPath,
   legacyRedirectTarget,
   normalizePublicPath,
   prelaunchSitemapXml,
-  publicGateDecision,
   robotsText,
-  UNGATED_PUBLIC_PATHS,
 } from './common/routing/public-pages';
 
 async function bootstrap() {
@@ -110,6 +110,7 @@ async function bootstrap() {
   // Enforced before Nest registers the static storefront handlers. The gate
   // page, legal pages and every Admin surface remain explicitly reachable.
   const keyScreen = app.get(KeyScreenService);
+  const authService = app.get(AuthService);
 
   app.use('/robots.txt', async (req, res, next) => {
     if (req.method !== 'GET' && req.method !== 'HEAD') return next();
@@ -125,49 +126,13 @@ async function bootstrap() {
     return res.send(prelaunchSitemapXml());
   });
 
-  const ungatedAdminPaths = new Set([
-    '/admin',
-    '/admin.html',
-    '/admin-login.html',
-    '/admin-user.html',
-  ]);
-  app.use(async (req, res, next) => {
-    if (req.method !== 'GET' && req.method !== 'HEAD') return next();
-    const pathname = normalizePublicPath(req.path);
-    if (
-      pathname.startsWith('/api') ||
-      pathname.startsWith('/docs') ||
-      pathname.startsWith('/assets') ||
-      pathname.startsWith('/public') ||
-      ungatedAdminPaths.has(pathname) ||
-      (!pathname.endsWith('.html') && pathname.includes('.'))
-    )
-      return next();
-    const acceptsHtml = req.accepts(['html', 'json']) === 'html';
-    if (!acceptsHtml) return next();
-    const keyScreenEnabled = await keyScreen.shouldGatePublicHtml();
-    if (UNGATED_PUBLIC_PATHS.has(pathname)) {
-      if (keyScreenEnabled) {
-        res.setHeader('X-Robots-Tag', 'noindex, follow');
-      }
-      return next();
-    }
-    const gate = publicGateDecision(
-      keyScreenEnabled,
-      pathname,
-      req.originalUrl,
-    );
-    if (gate.kind !== 'continue') {
-      res.setHeader('Cache-Control', 'no-store, max-age=0');
-      res.setHeader('Link', '</>; rel="canonical"');
-      if (gate.kind === 'render-key-screen') {
-        return res.sendFile(join(frontendRoot, 'key-screen.html'));
-      }
-      res.setHeader('X-Robots-Tag', 'noindex, follow');
-      return res.redirect(307, gate.location);
-    }
-    next();
-  });
+  app.use(
+    createPublicHtmlGateMiddleware({
+      authService,
+      keyScreen,
+      frontendRoot,
+    }),
+  );
 
   // Old public filenames remain valid bookmarks but converge permanently on
   // one clean, canonical URL. Query strings are retained by the mapper.

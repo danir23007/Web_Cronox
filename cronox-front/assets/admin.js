@@ -4162,10 +4162,10 @@
     logoutBtn?.addEventListener('click', async () => {
       try {
         await window.CRONOX_API?.logout?.();
+        redirectToHome();
       } catch (e) {
         console.warn('No se pudo cerrar sesión', e);
       }
-      redirectToLogin();
     });
 
     backBtn?.addEventListener('click', redirectToHome);
