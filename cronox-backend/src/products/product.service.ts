@@ -1062,6 +1062,9 @@ export class ProductService {
             collection: dto.collection,
             searchKeywords,
             searchText,
+            cardImagePositionX: dto.cardImagePositionX ?? 50,
+            cardImagePositionY: dto.cardImagePositionY ?? 50,
+            cardImageZoom: dto.cardImageZoom ?? 1,
             imageUrl: primaryImage?.url,
             images: images.length ? { create: images } : undefined,
           },
@@ -1152,6 +1155,11 @@ export class ProductService {
     if (dto.searchKeywords !== undefined) {
       data.searchKeywords = normalizeSearchKeywords(dto.searchKeywords);
     }
+    if (dto.cardImagePositionX !== undefined)
+      data.cardImagePositionX = dto.cardImagePositionX;
+    if (dto.cardImagePositionY !== undefined)
+      data.cardImagePositionY = dto.cardImagePositionY;
+    if (dto.cardImageZoom !== undefined) data.cardImageZoom = dto.cardImageZoom;
 
     try {
       const product = await this.prisma.$transaction(async (tx) => {

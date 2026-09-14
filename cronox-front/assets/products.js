@@ -538,6 +538,7 @@
       return im;
     });
     imgEls.forEach(im => gallery.appendChild(im));
+    window.CRONOX_PRODUCT_CARD_FRAMING?.bind(imgEls[0], gallery, p);
 
     if (imgEls.length > 1 && !options.hideArrows) {
       const prev = document.createElement("button");
@@ -608,9 +609,13 @@
     price.className = "product-price";
     price.textContent = p.priceLabel || euros(p.price);
 
+    const info = document.createElement("div");
+    info.className = "product-card__info";
+    info.appendChild(name);
+    info.appendChild(price);
+
     a.appendChild(media);
-    a.appendChild(name);
-    a.appendChild(price);
+    a.appendChild(info);
     window.CRONOX_STOCK?.decorateCard(a, price, p);
     return a;
   }

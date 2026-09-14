@@ -138,6 +138,9 @@ model Product {
   collection         String?
   searchKeywords     String[]                   @default([])
   searchText         String                     @default("")
+  cardImagePositionX Float                      @default(50)
+  cardImagePositionY Float                      @default(50)
+  cardImageZoom      Float                      @default(1)
   createdAt          DateTime                   @default(now())
   updatedAt          DateTime                   @updatedAt
   favorites          Favorite[]

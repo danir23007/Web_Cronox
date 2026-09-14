@@ -356,6 +356,9 @@ import { availableStock, classifyStock } from '../../../cronox-backend/src/commo
       sizes: sizes.map((size) => String(size || '').toLowerCase()),
       colors: product.colors || [],
       color: product.color || '',
+      cardImagePositionX: Number(product.cardImagePositionX ?? 50),
+      cardImagePositionY: Number(product.cardImagePositionY ?? 50),
+      cardImageZoom: Number(product.cardImageZoom ?? 1),
       variants,
       variantMap,
     };
@@ -1066,6 +1069,9 @@ import { availableStock, classifyStock } from '../../../cronox-backend/src/commo
       priceLabel: (product.priceLabel as string) || formatPrice(priceValue),
       image: productImageUrl(product.imageUrl || product.image || images[0]) || '',
       images,
+      cardImagePositionX: Number(product.cardImagePositionX ?? 50),
+      cardImagePositionY: Number(product.cardImagePositionY ?? 50),
+      cardImageZoom: Number(product.cardImageZoom ?? 1),
     };
   };
 

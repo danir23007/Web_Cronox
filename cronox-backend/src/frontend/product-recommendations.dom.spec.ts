@@ -106,15 +106,15 @@ describe('PDP recommended-product cards', () => {
     dom.window.document.getElementById('relatedGrid')?.appendChild(card);
 
     const media = card.querySelector('.product-media')!;
+    const info = card.querySelector('.product-card__info')!;
     const name = card.querySelector('.product-name')!;
     const price = card.querySelector('.product-price')!;
     const images = card.querySelectorAll('.product-img');
     const next = card.querySelector<HTMLButtonElement>('.product-arrow.next')!;
 
-    expect(card.href).toBe(
-      'http://localhost:3000/producto/recommended-tee',
-    );
-    expect(media.nextElementSibling).toBe(name);
+    expect(card.href).toBe('http://localhost:3000/producto/recommended-tee');
+    expect(media.nextElementSibling).toBe(info);
+    expect(info.firstElementChild).toBe(name);
     expect(name.nextElementSibling).toBe(price);
     expect(name.textContent).toBe('RECOMMENDED TEE');
     expect(price.textContent).toBe('34,95 €');

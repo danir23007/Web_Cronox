@@ -79,6 +79,16 @@
     .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
     .form-group { display: flex; flex-direction: column; gap: 6px; }
     .image-preview { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 8px; }
+    .product-card-framing-editor { margin: 14px 0; padding: 14px; border: 1px solid #2a2a36; border-radius: 12px; background: #0b0b11; }
+    .product-card-framing-layout { display: grid; grid-template-columns: minmax(180px, 260px) 1fr; gap: 18px; align-items: start; }
+    .product-card-framing-preview { display: grid; grid-template-rows: auto 88px; width: 100%; border: 1px solid #000; background: #fff; overflow: hidden; }
+    .product-card-framing-preview .product-images { cursor: grab; touch-action: none; user-select: none; }
+    .product-card-framing-preview .product-images:active { cursor: grabbing; }
+    .product-card-framing-preview .product-card__info { height: 88px; }
+    .product-card-framing-controls { display: grid; gap: 12px; }
+    .product-card-framing-controls label { display: grid; grid-template-columns: 1fr auto; gap: 8px; }
+    .product-card-framing-controls input { grid-column: 1 / -1; width: 100%; }
+    @media (max-width: 620px) { .product-card-framing-layout { grid-template-columns: 1fr; } .product-card-framing-preview { max-width: 280px; margin: 0 auto; } }
     .image-thumb { width: 74px; height: 74px; border: 1px solid #1f1f2b; border-radius: 10px; overflow: hidden; background: #0d0d15; display: flex; align-items: center; justify-content: center; }
     .image-thumb img { width: 100%; height: 100%; object-fit: cover; }
     .badge { display: inline-block; padding: 6px 10px; border-radius: 999px; background: #1c1c26; color: #b3b3c2; font-size: 0.85rem; }
@@ -1277,6 +1287,22 @@
             </div>
           </div>
         </div>
+        <section class="product-card-framing-editor" aria-labelledby="productCardFramingTitle">
+          <h4 id="productCardFramingTitle" style="margin:0 0 6px;">Encuadre de la tarjeta de producto</h4>
+          <small>Arrastra la imagen (ratón o táctil) y ajusta el zoom. Solo afecta a la imagen principal de las tarjetas.</small>
+          <div class="product-card-framing-layout" style="margin-top:12px;">
+            <div id="productCardFramingPreview" class="product-card product-card-framing-preview">
+              <div class="product-media"><div id="productCardFramingFrame" class="product-images"><img id="productCardFramingImage" class="product-img active" alt="Vista previa del encuadre" referrerpolicy="no-referrer"></div></div>
+              <div class="product-card__info"><h3 id="productCardFramingName" class="product-name">PRODUCTO</h3><p id="productCardFramingPrice" class="product-price">0,00 €</p></div>
+            </div>
+            <div class="product-card-framing-controls">
+              <label for="productCardImagePositionX">Posición horizontal <output id="productCardImagePositionXValue">50%</output><input id="productCardImagePositionX" type="range" min="0" max="100" step="1" value="50"></label>
+              <label for="productCardImagePositionY">Posición vertical <output id="productCardImagePositionYValue">50%</output><input id="productCardImagePositionY" type="range" min="0" max="100" step="1" value="50"></label>
+              <label for="productCardImageZoom">Zoom <output id="productCardImageZoomValue">1.00×</output><input id="productCardImageZoom" type="range" min="0.5" max="3" step="0.01" value="1"></label>
+              <button id="productCardFramingReset" class="btn" type="button">Restablecer encuadre</button>
+            </div>
+          </div>
+        </section>
         <div class="form-group">
           <label>Stock por talla</label>
           <div class="form-grid">
@@ -1597,13 +1623,14 @@
   <script src="assets/api.js?v=4"></script>
   <script src="assets/admin-auth-routing.js?v=1"></script>
   <script src="assets/ui-status.js"></script>
+  <script src="assets/media-framing-geometry.js?v=3"></script>
+  <script src="assets/product-card-framing.js?v=1"></script>
   <script src="assets/admin.js"></script>
   <script src="assets/admin-inventory.js?v=1"></script>
   <script src="assets/admin-mail-document.js?v=2"></script>
   <script src="assets/admin-mails.js?v=2"></script>
   <script src="assets/admin-orders.js"></script>
   <script src="assets/admin-gallery.js?v=4"></script>
-  <script src="assets/media-framing-geometry.js?v=2"></script>
   <script src="assets/key-screen-renderer.js?v=2"></script>
   <script src="assets/admin-key-screen.js?v=3"></script>
   <script src="assets/admin-media.js?v=3"></script>

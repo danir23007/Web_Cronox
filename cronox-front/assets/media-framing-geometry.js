@@ -39,7 +39,9 @@
         : "COVER";
     const focalX = clamp(input.focalX, 0, 100, 50);
     const focalY = clamp(input.focalY, 0, 100, 50);
-    const zoom = clamp(input.zoom, 1, 3, 1);
+    const minZoom = clamp(input.minZoom, 0.05, 3, 1);
+    const maxZoom = clamp(input.maxZoom, minZoom, 10, 3);
+    const zoom = clamp(input.zoom, minZoom, maxZoom, Math.max(1, minZoom));
     const widthScale = frameWidth / mediaWidth;
     const heightScale = frameHeight / mediaHeight;
     const baseScale =
@@ -64,6 +66,8 @@
       focalX,
       focalY,
       zoom,
+      minZoom,
+      maxZoom,
       baseScale,
       scale,
       renderedWidth,
@@ -128,6 +132,8 @@
       focalX: framing?.focalX,
       focalY: framing?.focalY,
       zoom: framing?.zoom,
+      minZoom: framing?.minZoom,
+      maxZoom: framing?.maxZoom,
       fit: framing?.fit,
     });
 
@@ -184,7 +190,12 @@
         focalY: Number(geometry?.focalY ?? 50),
       };
     }
-    const zoom = clamp(nextZoom, 1, 3, geometry.zoom);
+    const zoom = clamp(
+      nextZoom,
+      Number(geometry.minZoom ?? 1),
+      Number(geometry.maxZoom ?? 3),
+      geometry.zoom,
+    );
     const mediaX = (Number(pointX) - geometry.translateX) / geometry.scale;
     const mediaY = (Number(pointY) - geometry.translateY) / geometry.scale;
     const scale = geometry.baseScale * zoom;
@@ -206,7 +217,7 @@
   };
 
   const api = Object.freeze({
-    version: 2,
+    version: 3,
     calculate,
     apply,
     clear,

@@ -4,11 +4,14 @@ import {
   IsArray,
   ArrayMaxSize,
   IsInt,
+  IsNumber,
   IsOptional,
   IsPositive,
   IsString,
   Matches,
+  Max,
   MaxLength,
+  Min,
   ValidateNested,
 } from 'class-validator';
 import { CreateProductImageDto } from './create-product-image.dto';
@@ -62,6 +65,27 @@ export class CreateProductDto {
   @IsString({ each: true })
   @MaxLength(60, { each: true })
   searchKeywords?: string[];
+
+  @ApiPropertyOptional({ example: 50, minimum: 0, maximum: 100 })
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  @Max(100)
+  cardImagePositionX?: number;
+
+  @ApiPropertyOptional({ example: 50, minimum: 0, maximum: 100 })
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  @Max(100)
+  cardImagePositionY?: number;
+
+  @ApiPropertyOptional({ example: 1, minimum: 0.5, maximum: 3 })
+  @IsOptional()
+  @IsNumber()
+  @Min(0.5)
+  @Max(3)
+  cardImageZoom?: number;
 
   @ApiPropertyOptional({ example: true })
   @IsOptional()

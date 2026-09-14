@@ -205,4 +205,95 @@ describe('ProductService administrative lifecycle', () => {
     );
     expect(a.id).not.toBe(b.id);
   });
+
+  it('persists card framing on normal creation and returns it when reopened', async () => {
+    let persisted: any;
+    const tx: any = {
+      adminProductCreateRequest: { create: jest.fn(), update: jest.fn() },
+      product: {
+        create: jest.fn(({ data }) => {
+          persisted = { ...product, ...data, id: 91 };
+          return persisted;
+        }),
+        findUnique: jest.fn(() => ({
+          ...persisted,
+          images: [],
+          variants: [],
+          categories: [],
+        })),
+      },
+      productVariant: { createMany: jest.fn() },
+      auditLog: { create: jest.fn() },
+    };
+    const prisma: any = { $transaction: jest.fn((callback) => callback(tx)) };
+    const service = new ProductService(prisma);
+
+    const reopened: any = await service.createProduct(
+      {
+        name: 'Framed tee',
+        price: 4000,
+        variants: [],
+        cardImagePositionX: 18,
+        cardImagePositionY: 82,
+        cardImageZoom: 0.75,
+      },
+      1,
+      'framing-test-1234567890',
+    );
+
+    expect(tx.product.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        cardImagePositionX: 18,
+        cardImagePositionY: 82,
+        cardImageZoom: 0.75,
+      }),
+    });
+    expect(reopened).toMatchObject({
+      cardImagePositionX: 18,
+      cardImagePositionY: 82,
+      cardImageZoom: 0.75,
+    });
+  });
+
+  it('saves edited card framing and restores the exact normalized values', async () => {
+    let persisted: any = {
+      ...product,
+      cardImagePositionX: 50,
+      cardImagePositionY: 50,
+      cardImageZoom: 1,
+    };
+    const tx: any = {
+      product: {
+        findUnique: jest.fn(() => ({ ...persisted })),
+        update: jest.fn(({ data }) => {
+          persisted = { ...persisted, ...data };
+          return persisted;
+        }),
+      },
+      productImage: { findMany: jest.fn().mockResolvedValue([]) },
+      auditLog: { create: jest.fn() },
+    };
+    const prisma: any = { $transaction: jest.fn((callback) => callback(tx)) };
+    const service = new ProductService(prisma);
+
+    const reopened: any = await service.updateProduct(7, {
+      cardImagePositionX: 4.25,
+      cardImagePositionY: 96.75,
+      cardImageZoom: 2.35,
+    });
+
+    expect(tx.product.update).toHaveBeenCalledWith({
+      where: { id: 7 },
+      data: expect.objectContaining({
+        cardImagePositionX: 4.25,
+        cardImagePositionY: 96.75,
+        cardImageZoom: 2.35,
+      }),
+    });
+    expect(reopened).toMatchObject({
+      cardImagePositionX: 4.25,
+      cardImagePositionY: 96.75,
+      cardImageZoom: 2.35,
+    });
+  });
 });

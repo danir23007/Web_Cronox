@@ -128,6 +128,17 @@
   const productForm = $('#productForm');
   const productImagesInput = $('#productImages');
   const productImagesPreview = $('#productImagesPreview');
+  const productCardFramingFrame = $('#productCardFramingFrame');
+  const productCardFramingImage = $('#productCardFramingImage');
+  const productCardFramingName = $('#productCardFramingName');
+  const productCardFramingPrice = $('#productCardFramingPrice');
+  const productCardImagePositionX = $('#productCardImagePositionX');
+  const productCardImagePositionY = $('#productCardImagePositionY');
+  const productCardImageZoom = $('#productCardImageZoom');
+  const productCardImagePositionXValue = $('#productCardImagePositionXValue');
+  const productCardImagePositionYValue = $('#productCardImagePositionYValue');
+  const productCardImageZoomValue = $('#productCardImageZoomValue');
+  const productCardFramingReset = $('#productCardFramingReset');
   const productCancelBtn = $('#productCancelBtn');
   const productSubmitBtn = $('#productSubmitBtn');
   const deleteProductModal = $('#deleteProductModal');
@@ -139,6 +150,8 @@
   const MAX_PRODUCT_IMAGE_BYTES = 25 * 1024 * 1024;
   const PRODUCT_IMAGE_TOO_LARGE_MESSAGE = 'Cada imagen puede pesar como máximo 25 MB.';
   const ALLOWED_PRODUCT_IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
+  const PRODUCT_CARD_FRAMING_DEFAULTS = { cardImagePositionX: 50, cardImagePositionY: 50, cardImageZoom: 1 };
+  const productCardFramingState = { ...PRODUCT_CARD_FRAMING_DEFAULTS };
   const categoryProductSearch = $('#categoryProductSearch');
   const categoryFilterDropdown = $('#categoryFilterDropdown');
   const categoryFilterToggle = $('#categoryFilterToggle');
@@ -2410,9 +2423,37 @@
     }
   };
 
+  const renderProductCardFraming = () => {
+    if (!productCardFramingImage || !productCardFramingFrame) return;
+    if (productCardImagePositionX) productCardImagePositionX.value = String(productCardFramingState.cardImagePositionX);
+    if (productCardImagePositionY) productCardImagePositionY.value = String(productCardFramingState.cardImagePositionY);
+    if (productCardImageZoom) productCardImageZoom.value = String(productCardFramingState.cardImageZoom);
+    if (productCardImagePositionXValue) productCardImagePositionXValue.textContent = `${Math.round(productCardFramingState.cardImagePositionX)}%`;
+    if (productCardImagePositionYValue) productCardImagePositionYValue.textContent = `${Math.round(productCardFramingState.cardImagePositionY)}%`;
+    if (productCardImageZoomValue) productCardImageZoomValue.textContent = `${Number(productCardFramingState.cardImageZoom).toFixed(2)}×`;
+    window.CRONOX_PRODUCT_CARD_FRAMING?.apply(productCardFramingImage, productCardFramingFrame, productCardFramingState);
+  };
+
+  const setProductCardFraming = (product = PRODUCT_CARD_FRAMING_DEFAULTS) => {
+    const resolved = window.CRONOX_PRODUCT_CARD_FRAMING?.resolve(product) || { focalX: 50, focalY: 50, zoom: 1 };
+    productCardFramingState.cardImagePositionX = resolved.focalX;
+    productCardFramingState.cardImagePositionY = resolved.focalY;
+    productCardFramingState.cardImageZoom = resolved.zoom;
+    renderProductCardFraming();
+  };
+
   const renderProductImagesPreview = (urls = []) => {
     if (!productImagesPreview) return;
     urls = urls.map(safePreviewImageUrl).filter(Boolean);
+    if (productCardFramingImage) {
+      if (urls[0]) {
+        productCardFramingImage.src = urls[0];
+        productCardFramingImage.hidden = false;
+      } else {
+        productCardFramingImage.removeAttribute('src');
+        productCardFramingImage.hidden = true;
+      }
+    }
     if (!urls.length) {
       productImagesPreview.innerHTML = '<p class="empty" style="margin:0;">Sin imágenes seleccionadas.</p>';
       return;
@@ -2442,6 +2483,7 @@
     editingProductId = null;
     cachedProductImages = [];
     productForm?.reset();
+    setProductCardFraming();
     renderProductImagesPreview([]);
     if (productModalTitle) productModalTitle.textContent = 'Crear producto';
     productSubmitInFlight = false;
@@ -2904,6 +2946,11 @@
           }
           if (priceInput) priceInput.value = Number(product.price || 0) / 100;
           if (isActiveInput) isActiveInput.checked = Boolean(product.isActive);
+          if (productCardFramingName) productCardFramingName.textContent = product.name || 'PRODUCTO';
+          if (productCardFramingPrice) {
+            productCardFramingPrice.textContent = `${(Number(product.price || 0) / 100).toFixed(2).replace('.', ',')} €`;
+          }
+          setProductCardFraming(product);
 
           cachedProductImages = Array.isArray(product.images)
             ? product.images.map((img) => safeImageUrl(img?.url)).filter(Boolean)
@@ -2987,6 +3034,9 @@
       price: priceCents,
       isActive: productForm.querySelector('#productIsActive')?.checked ?? true,
       variants: collectVariantPayload(),
+      cardImagePositionX: productCardFramingState.cardImagePositionX,
+      cardImagePositionY: productCardFramingState.cardImagePositionY,
+      cardImageZoom: productCardFramingState.cardImageZoom,
     };
 
     let imageUrls = [];
@@ -4021,6 +4071,63 @@
         fetchUsers();
       });
     }
+
+    [productCardImagePositionX, productCardImagePositionY, productCardImageZoom].forEach((input) => {
+      input?.addEventListener('input', () => {
+        productCardFramingState.cardImagePositionX = Number(productCardImagePositionX?.value || 50);
+        productCardFramingState.cardImagePositionY = Number(productCardImagePositionY?.value || 50);
+        productCardFramingState.cardImageZoom = Number(productCardImageZoom?.value || 1);
+        renderProductCardFraming();
+      });
+    });
+    productCardFramingReset?.addEventListener('click', () => setProductCardFraming());
+    productCardFramingImage?.addEventListener('load', renderProductCardFraming);
+    let productCardDrag = null;
+    productCardFramingFrame?.addEventListener('pointerdown', (event) => {
+      const geometry = window.CRONOX_PRODUCT_CARD_FRAMING?.apply(
+        productCardFramingImage,
+        productCardFramingFrame,
+        productCardFramingState,
+      );
+      if (!geometry?.valid) return;
+      productCardDrag = {
+        pointerId: event.pointerId,
+        x: event.clientX,
+        y: event.clientY,
+        focalX: productCardFramingState.cardImagePositionX,
+        focalY: productCardFramingState.cardImagePositionY,
+        geometry,
+      };
+      productCardFramingFrame.setPointerCapture?.(event.pointerId);
+      event.preventDefault();
+    });
+    productCardFramingFrame?.addEventListener('pointermove', (event) => {
+      if (!productCardDrag || productCardDrag.pointerId !== event.pointerId) return;
+      const focal = window.CRONOX_MEDIA_GEOMETRY?.focalFromDrag(
+        productCardDrag.geometry,
+        productCardDrag,
+        event.clientX - productCardDrag.x,
+        event.clientY - productCardDrag.y,
+      );
+      if (!focal) return;
+      productCardFramingState.cardImagePositionX = focal.focalX;
+      productCardFramingState.cardImagePositionY = focal.focalY;
+      renderProductCardFraming();
+    });
+    const endProductCardDrag = (event) => {
+      if (productCardDrag?.pointerId === event.pointerId) productCardDrag = null;
+    };
+    productCardFramingFrame?.addEventListener('pointerup', endProductCardDrag);
+    productCardFramingFrame?.addEventListener('pointercancel', endProductCardDrag);
+    document.getElementById('productName')?.addEventListener('input', (event) => {
+      if (productCardFramingName) productCardFramingName.textContent = event.target.value || 'PRODUCTO';
+    });
+    document.getElementById('productPrice')?.addEventListener('input', (event) => {
+      if (productCardFramingPrice) {
+        const price = Number(event.target.value || 0);
+        productCardFramingPrice.textContent = `${(Number.isFinite(price) ? price : 0).toFixed(2).replace('.', ',')} €`;
+      }
+    });
 
     if (productImagesInput) {
       productImagesInput.addEventListener('change', () => {
