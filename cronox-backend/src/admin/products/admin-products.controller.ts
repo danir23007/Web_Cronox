@@ -3,6 +3,7 @@ import {
   Controller,
   Delete,
   Get,
+  Headers,
   Param,
   ParseIntPipe,
   Patch,
@@ -81,8 +82,9 @@ export class AdminProductsController {
   createProduct(
     @Body() dto: CreateProductDto,
     @CurrentUser('id') adminId?: number,
+    @Headers('idempotency-key') idempotencyKey?: string,
   ) {
-    return this.productService.createProduct(dto, adminId);
+    return this.productService.createProduct(dto, adminId, idempotencyKey);
   }
 
   @Post('upload-images')

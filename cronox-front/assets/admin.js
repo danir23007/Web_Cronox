@@ -130,6 +130,11 @@
   const productImagesPreview = $('#productImagesPreview');
   const productCancelBtn = $('#productCancelBtn');
   const productSubmitBtn = $('#productSubmitBtn');
+  const deleteProductModal = $('#deleteProductModal');
+  const deleteProductName = $('#deleteProductName');
+  const deleteProductConfirmation = $('#deleteProductConfirmation');
+  const deleteProductCancelBtn = $('#deleteProductCancelBtn');
+  const deleteProductConfirmBtn = $('#deleteProductConfirmBtn');
   const MAX_PRODUCT_IMAGE_COUNT = 8;
   const MAX_PRODUCT_IMAGE_BYTES = 25 * 1024 * 1024;
   const PRODUCT_IMAGE_TOO_LARGE_MESSAGE = 'Cada imagen puede pesar como máximo 25 MB.';
@@ -251,6 +256,12 @@
   let editingProductId = null;
   let editingCodeId = null;
   let cachedProductImages = [];
+  let productSubmitInFlight = false;
+  let productCreateIdempotencyKey = '';
+  let pendingProductDeletion = null;
+  let deleteModalPreviousFocus = null;
+  const productActionsInFlight = new Set();
+  const renderedProducts = new Map();
   let codesCache = [];
   const codesStatusUpdating = new Set();
   let productSearchTimeout = null;
@@ -1538,8 +1549,10 @@
     if (!modalEl) return;
     if (open) {
       modalEl.classList.add('show');
+      modalEl.setAttribute('aria-hidden', 'false');
     } else {
       modalEl.classList.remove('show');
+      modalEl.setAttribute('aria-hidden', 'true');
     }
   };
 
@@ -2431,7 +2444,12 @@
     productForm?.reset();
     renderProductImagesPreview([]);
     if (productModalTitle) productModalTitle.textContent = 'Crear producto';
-    if (productSubmitBtn) productSubmitBtn.disabled = false;
+    productSubmitInFlight = false;
+    productCreateIdempotencyKey = '';
+    if (productSubmitBtn) {
+      productSubmitBtn.disabled = false;
+      productSubmitBtn.textContent = 'Crear producto';
+    }
   };
 
   const loadProductCategories = async () => {
@@ -2794,6 +2812,8 @@
       return;
     }
 
+    renderedProducts.clear();
+    items.forEach((product) => renderedProducts.set(Number(product.id), product));
     productsBody.innerHTML = items
       .map((product) => {
         const totalStock = Array.isArray(product.variants)
@@ -2813,7 +2833,7 @@
         created.full = safeText(created.full);
         product.collection = collection;
         return `
-          <tr>
+          <tr data-product-row="${productId}">
             <td>
               <div style="display:flex; align-items:center; gap:10px;">
                 <span class="product-editor-thumbnail">
@@ -2829,7 +2849,7 @@
             </td>
             <td>${formatMoney(product.price)}</td>
             <td>${product.collection || '—'}</td>
-            <td>${activeLabel}</td>
+            <td data-product-status>${activeLabel}</td>
             <td>${totalStock}</td>
             <td>
               <div class="time-label" title="${created.full}">${created.label}</div>
@@ -2837,8 +2857,9 @@
             </td>
             <td>
               <div class="actions">
-                <button class="btn" data-edit-product="${productId}">Editar</button>
-                <button class="btn danger" data-disable-product="${productId}">${product.isActive ? 'Desactivar' : 'Inactivar'}</button>
+                <button class="btn" type="button" data-edit-product="${productId}">Editar</button>
+                <button class="btn" type="button" data-toggle-product="${productId}" data-current-active="${Boolean(product.isActive)}">${product.isActive ? 'Desactivar' : 'Activar'}</button>
+                <button class="btn danger" type="button" data-delete-product="${productId}">Eliminar</button>
               </div>
             </td>
           </tr>
@@ -2862,6 +2883,7 @@
 
     if (productId) {
       if (productModalTitle) productModalTitle.textContent = 'Editar producto';
+      if (productSubmitBtn) productSubmitBtn.textContent = 'Guardar cambios';
       try {
         const product = await window.CRONOX_API?.admin?.getAdminProduct(productId);
         if (product) {
@@ -2943,7 +2965,12 @@
 
   const submitProduct = async (event) => {
     event?.preventDefault();
-    if (!productForm) return;
+    if (!productForm || productSubmitInFlight) return;
+    productSubmitInFlight = true;
+    if (productSubmitBtn) {
+      productSubmitBtn.disabled = true;
+      productSubmitBtn.textContent = editingProductId ? 'Guardando…' : 'Creando…';
+    }
 
     const formData = new FormData(productForm);
     const priceValue = Number(formData.get('price') || 0);
@@ -2972,6 +2999,8 @@
       }
       if (files.length) {
         imageUrls = await uploadProductImages(files);
+        cachedProductImages = [...imageUrls];
+        if (productImagesInput) productImagesInput.value = '';
       } else if (!editingProductId) {
         imageUrls = cachedProductImages;
       }
@@ -2984,7 +3013,11 @@
         await window.CRONOX_API?.admin?.updateAdminProduct(editingProductId, payload);
         setScopedMessage(productsMessage, 'Producto actualizado correctamente.', 'success');
       } else {
-        await window.CRONOX_API?.admin?.createAdminProduct(payload);
+        if (!productCreateIdempotencyKey) {
+          productCreateIdempotencyKey = window.crypto?.randomUUID?.() ||
+            `product-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+        }
+        await window.CRONOX_API?.admin?.createAdminProduct(payload, productCreateIdempotencyKey);
         setScopedMessage(productsMessage, 'Producto creado correctamente.', 'success');
       }
 
@@ -2995,20 +3028,116 @@
       const message = error?.message || 'No se pudo guardar el producto.';
       setScopedMessage(productsMessage, message, 'error');
     } finally {
-      if (productSubmitBtn) productSubmitBtn.disabled = false;
+      if (productModal?.classList.contains('show')) {
+        productSubmitInFlight = false;
+        if (productSubmitBtn) {
+          productSubmitBtn.disabled = false;
+          productSubmitBtn.textContent = editingProductId ? 'Guardar cambios' : 'Crear producto';
+        }
+      }
     }
   };
 
-  const disableProduct = async (productId) => {
-    if (!productId) return;
-    if (!window.confirm('¿Desactivar este producto?')) return;
+  const setProductRowBusy = (productId, busy) => {
+    const row = productsBody?.querySelector(`[data-product-row="${productId}"]`);
+    row?.querySelectorAll('button').forEach((button) => { button.disabled = busy; });
+  };
+
+  const toggleProductActive = async (productId, button) => {
+    if (!productId || productActionsInFlight.has(productId)) return;
+    const isActive = button?.dataset.currentActive === 'true';
+    productActionsInFlight.add(productId);
+    setProductRowBusy(productId, true);
+    if (button) button.textContent = isActive ? 'Desactivando…' : 'Activando…';
     try {
-      await window.CRONOX_API?.admin?.deleteAdminProduct(productId);
-      setScopedMessage(productsMessage, 'Producto desactivado.', 'success');
-      fetchProducts();
+      await window.CRONOX_API?.admin?.updateAdminProduct(productId, { isActive: !isActive });
+      const row = productsBody?.querySelector(`[data-product-row="${productId}"]`);
+      const status = row?.querySelector('[data-product-status]');
+      if (status) status.textContent = isActive ? 'Inactivo' : 'Activo';
+      if (button) {
+        button.dataset.currentActive = String(!isActive);
+        button.textContent = isActive ? 'Activar' : 'Desactivar';
+      }
+      const product = renderedProducts.get(productId);
+      if (product) product.isActive = !isActive;
+      setScopedMessage(productsMessage, isActive ? 'Producto desactivado.' : 'Producto activado.', 'success');
     } catch (error) {
-      console.error('[ADMIN] Error al desactivar producto', error);
-      setScopedMessage(productsMessage, error?.message || 'No se pudo desactivar.', 'error');
+      console.error('[ADMIN] Error cambiando el estado del producto', error);
+      if (button) button.textContent = isActive ? 'Desactivar' : 'Activar';
+      setScopedMessage(productsMessage, error?.message || 'No se pudo cambiar el estado.', 'error');
+    } finally {
+      productActionsInFlight.delete(productId);
+      setProductRowBusy(productId, false);
+    }
+  };
+
+  const closeDeleteProductModal = () => {
+    if (pendingProductDeletion?.deleting) return;
+    toggleModal(deleteProductModal, false);
+    pendingProductDeletion = null;
+    deleteModalPreviousFocus?.focus?.();
+    deleteModalPreviousFocus = null;
+  };
+
+  const openDeleteProductModal = (productId) => {
+    if (productActionsInFlight.has(productId)) return;
+    const product = renderedProducts.get(productId);
+    if (!product || !deleteProductModal) return;
+    deleteModalPreviousFocus = document.activeElement;
+    pendingProductDeletion = {
+      id: productId,
+      name: product.name || product.slug || `Producto ${productId}`,
+      deleting: false,
+    };
+    if (deleteProductName) deleteProductName.textContent = pendingProductDeletion.name;
+    if (deleteProductConfirmation) {
+      deleteProductConfirmation.checked = false;
+      deleteProductConfirmation.disabled = false;
+    }
+    if (deleteProductCancelBtn) deleteProductCancelBtn.disabled = false;
+    if (deleteProductConfirmBtn) {
+      deleteProductConfirmBtn.disabled = true;
+      deleteProductConfirmBtn.textContent = 'Eliminar';
+    }
+    toggleModal(deleteProductModal, true);
+    deleteProductConfirmation?.focus();
+  };
+
+  const confirmDeleteProduct = async () => {
+    const pending = pendingProductDeletion;
+    if (!pending || pending.deleting || !deleteProductConfirmation?.checked) return;
+    pending.deleting = true;
+    productActionsInFlight.add(pending.id);
+    setProductRowBusy(pending.id, true);
+    deleteProductConfirmation.disabled = true;
+    if (deleteProductCancelBtn) deleteProductCancelBtn.disabled = true;
+    if (deleteProductConfirmBtn) {
+      deleteProductConfirmBtn.disabled = true;
+      deleteProductConfirmBtn.textContent = 'Eliminando…';
+    }
+    try {
+      await window.CRONOX_API?.admin?.deleteAdminProduct(pending.id);
+      productsBody?.querySelector(`[data-product-row="${pending.id}"]`)?.remove();
+      renderedProducts.delete(pending.id);
+      pending.deleting = false;
+      toggleModal(deleteProductModal, false);
+      pendingProductDeletion = null;
+      setScopedMessage(productsMessage, `Producto “${pending.name}” eliminado permanentemente.`, 'success');
+      showToast('Producto eliminado permanentemente.');
+      deleteModalPreviousFocus = null;
+    } catch (error) {
+      console.error('[ADMIN] Error eliminando producto', error);
+      pending.deleting = false;
+      setScopedMessage(productsMessage, error?.message || 'No se pudo eliminar el producto.', 'error');
+      deleteProductConfirmation.disabled = false;
+      if (deleteProductCancelBtn) deleteProductCancelBtn.disabled = false;
+      if (deleteProductConfirmBtn) {
+        deleteProductConfirmBtn.disabled = !deleteProductConfirmation.checked;
+        deleteProductConfirmBtn.textContent = 'Eliminar';
+      }
+    } finally {
+      productActionsInFlight.delete(pending.id);
+      if (pendingProductDeletion) setProductRowBusy(pending.id, false);
     }
   };
 
@@ -3016,7 +3145,8 @@
     const target = event.target;
     if (!(target instanceof HTMLElement)) return;
     const editId = target.dataset.editProduct;
-    const disableId = target.dataset.disableProduct;
+    const toggleId = target.dataset.toggleProduct;
+    const deleteId = target.dataset.deleteProduct;
     if (target.dataset.retryProducts) {
       fetchProducts();
       return;
@@ -3025,8 +3155,12 @@
       openProductModal(Number(editId));
       return;
     }
-    if (disableId) {
-      disableProduct(Number(disableId));
+    if (toggleId) {
+      toggleProductActive(Number(toggleId), target);
+      return;
+    }
+    if (deleteId) {
+      openDeleteProductModal(Number(deleteId));
     }
   };
 
@@ -3908,7 +4042,9 @@
     }
 
     if (productCancelBtn) {
-      productCancelBtn.addEventListener('click', () => toggleModal(productModal, false));
+      productCancelBtn.addEventListener('click', () => {
+        if (!productSubmitInFlight) toggleModal(productModal, false);
+      });
     }
 
     if (createProductBtn) {
@@ -3919,6 +4055,37 @@
       productsBody.addEventListener('click', onProductTableClick);
       productsBody.addEventListener('error', onProductThumbnailError, true);
     }
+
+    deleteProductConfirmation?.addEventListener('change', () => {
+      if (deleteProductConfirmBtn && !pendingProductDeletion?.deleting) {
+        deleteProductConfirmBtn.disabled = !deleteProductConfirmation.checked;
+      }
+    });
+    deleteProductCancelBtn?.addEventListener('click', closeDeleteProductModal);
+    deleteProductConfirmBtn?.addEventListener('click', confirmDeleteProduct);
+    deleteProductModal?.addEventListener('click', (event) => {
+      if (event.target === deleteProductModal) closeDeleteProductModal();
+    });
+    document.addEventListener('keydown', (event) => {
+      if (!deleteProductModal?.classList.contains('show')) return;
+      if (event.key === 'Escape' && !pendingProductDeletion?.deleting) {
+        event.preventDefault();
+        closeDeleteProductModal();
+        return;
+      }
+      if (event.key !== 'Tab') return;
+      const focusable = [...deleteProductModal.querySelectorAll('button:not([disabled]), input:not([disabled])')];
+      if (!focusable.length) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    });
 
     if (usersAccountState) {
       usersAccountState.addEventListener('change', () => {

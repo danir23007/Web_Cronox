@@ -3,6 +3,7 @@ import {
   Controller,
   Delete,
   Get,
+  Headers,
   Param,
   Patch,
   Post,
@@ -65,8 +66,11 @@ export class ProductController {
   @ApiOperation({ summary: 'Crear un nuevo producto con imágenes' })
   @ApiResponse({ status: 201, description: 'Producto creado correctamente.' })
   @ApiResponse({ status: 403, description: 'No autorizado.' })
-  create(@Body() body: CreateProductDto) {
-    return this.productService.createProduct(body);
+  create(
+    @Body() body: CreateProductDto,
+    @Headers('idempotency-key') idempotencyKey?: string,
+  ) {
+    return this.productService.createProduct(body, undefined, idempotencyKey);
   }
 
   @Put(':id')

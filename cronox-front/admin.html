@@ -1230,7 +1230,7 @@
     </section>
   </div>
 
-  <div class="modal" id="productModal">
+  <div class="modal" id="productModal" role="dialog" aria-modal="true" aria-hidden="true" aria-labelledby="productModalTitle">
     <div class="modal-box">
       <h3 id="productModalTitle" style="margin-top:0;">Crear producto</h3>
       <form id="productForm">
@@ -1308,7 +1308,7 @@
         </div>
         <div class="modal-actions">
           <button type="button" class="btn" id="productCancelBtn">Cancelar</button>
-          <button type="submit" class="btn primary" id="productSubmitBtn">Guardar</button>
+          <button type="submit" class="btn primary" id="productSubmitBtn">Crear producto</button>
         </div>
       </form>
     </div>
@@ -1464,6 +1464,22 @@
       <div class="media-editor__actions">
         <button type="button" class="btn" id="mediaEditorCancel">Cancelar</button>
         <button type="button" class="btn primary" id="mediaEditorSave">Guardar</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal" id="deleteProductModal" role="dialog" aria-modal="true" aria-hidden="true" aria-labelledby="deleteProductTitle" aria-describedby="deleteProductDescription">
+    <div class="modal-box" style="width:min(520px, 100%);">
+      <h3 id="deleteProductTitle" style="margin-top:0;">Eliminar producto permanentemente</h3>
+      <p id="deleteProductDescription">Esta acción elimina el producto y no se puede deshacer.</p>
+      <p>Producto: <strong id="deleteProductName"></strong></p>
+      <label style="display:flex;align-items:flex-start;gap:10px;margin-top:18px;">
+        <input id="deleteProductConfirmation" type="checkbox">
+        <span>Confirmo que quiero eliminar este producto permanentemente.</span>
+      </label>
+      <div class="modal-actions">
+        <button type="button" class="btn" id="deleteProductCancelBtn">Cancelar</button>
+        <button type="button" class="btn danger" id="deleteProductConfirmBtn" disabled>Eliminar</button>
       </div>
     </div>
   </div>

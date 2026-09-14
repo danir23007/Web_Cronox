@@ -885,10 +885,11 @@ import { availableStock, classifyStock } from '../../../cronox-backend/src/commo
     });
   };
 
-  adminApi.createAdminProduct = async (payload: UnknownRecord) => {
+  adminApi.createAdminProduct = async (payload: UnknownRecord, idempotencyKey: string) => {
     return request('/api/admin/products', {
       method: 'POST',
       body: payload,
+      headers: { 'Idempotency-Key': idempotencyKey },
     });
   };
 

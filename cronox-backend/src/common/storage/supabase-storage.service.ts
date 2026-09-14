@@ -235,6 +235,50 @@ export class SupabaseStorageService {
     return { urls };
   }
 
+  async deleteProductImages(urls: string[]): Promise<void> {
+    const objectPaths = [...new Set(urls)]
+      .map((url) => this.productObjectPath(url))
+      .filter((path): path is string => Boolean(path));
+    if (!objectPaths.length) return;
+    if (!this.supabaseUrl || !this.serviceRoleKey) {
+      throw new Error('Almacenamiento de productos no configurado');
+    }
+
+    const response = await fetch(
+      `${this.supabaseUrl}/storage/v1/object/${this.productBucket}`,
+      {
+        method: 'DELETE',
+        headers: {
+          Authorization: `Bearer ${this.serviceRoleKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ prefixes: objectPaths }),
+      },
+    );
+    if (!response.ok) {
+      this.logger.error(
+        `Supabase product cleanup failed with status ${response.status}`,
+      );
+      throw new Error('No se pudieron limpiar los archivos del producto');
+    }
+  }
+
+  private productObjectPath(value: string): string | null {
+    try {
+      if (!this.supabaseUrl) return null;
+      const url = new URL(value);
+      const base = new URL(this.supabaseUrl);
+      const prefix = `/storage/v1/object/public/${this.productBucket}/`;
+      if (url.origin !== base.origin || !url.pathname.startsWith(prefix)) {
+        return null;
+      }
+      const path = decodeURIComponent(url.pathname.slice(prefix.length));
+      return path && !path.split('/').includes('..') ? path : null;
+    } catch {
+      return null;
+    }
+  }
+
   async uploadGalleryImage(
     file: Express.Multer.File | undefined,
     adminId?: number,

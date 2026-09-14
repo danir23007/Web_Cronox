@@ -2,7 +2,9 @@ import {
   BadRequestException,
   ConflictException,
   Injectable,
+  Logger,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
 import { Prisma, VariantSize } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
@@ -21,11 +23,17 @@ import {
   normalizeSearchText,
   scoreProductSearch,
 } from './product-search';
-import { randomUUID } from 'crypto';
+import { createHash, randomUUID } from 'crypto';
+import { SupabaseStorageService } from '../common/storage/supabase-storage.service';
 
 @Injectable()
 export class ProductService {
-  constructor(private readonly prisma: PrismaService) {}
+  private readonly logger = new Logger(ProductService.name);
+
+  constructor(
+    private readonly prisma: PrismaService,
+    @Optional() private readonly storage?: SupabaseStorageService,
+  ) {}
 
   private readonly defaultSizes: VariantSize[] = [
     VariantSize.XS,
@@ -41,6 +49,34 @@ export class ProductService {
 
   private readonly variantOrderBy: Prisma.ProductVariantOrderByWithRelationInput[] =
     [{ id: 'asc' }];
+
+  private productCreateHash(dto: CreateProductDto): string {
+    const normalize = (value: unknown): unknown => {
+      if (Array.isArray(value)) return value.map(normalize);
+      if (value && typeof value === 'object') {
+        return Object.keys(value as Record<string, unknown>)
+          .sort()
+          .reduce<Record<string, unknown>>((result, key) => {
+            result[key] = normalize((value as Record<string, unknown>)[key]);
+            return result;
+          }, {});
+      }
+      return value;
+    };
+    return createHash('sha256')
+      .update(JSON.stringify(normalize(dto)))
+      .digest('hex');
+  }
+
+  private validateIdempotencyKey(value?: string): string {
+    const key = String(value || '').trim();
+    if (!/^[A-Za-z0-9][A-Za-z0-9._:-]{15,99}$/.test(key)) {
+      throw new BadRequestException(
+        'La cabecera Idempotency-Key es obligatoria y no es válida.',
+      );
+    }
+    return key;
+  }
 
   private slugify(value: string) {
     return (value || '')
@@ -986,12 +1022,18 @@ export class ProductService {
     return product ? this.toPublicProduct(product) : null;
   }
 
-  async createProduct(dto: CreateProductDto, adminId?: number) {
+  async createProduct(
+    dto: CreateProductDto,
+    adminId?: number,
+    idempotencyKey?: string,
+  ) {
+    const requestKey = this.validateIdempotencyKey(idempotencyKey);
+    const requestHash = this.productCreateHash(dto);
     const currency = dto.currency ?? 'EUR';
     const images = this.prepareImages(dto);
-    const slug = await this.ensureUniqueSlug(
-      dto.slug ?? this.slugify(dto.name),
-    );
+    const slug = this.slugify(dto.slug ?? dto.name);
+    if (!slug)
+      throw new BadRequestException('El slug del producto no es válido.');
     const searchKeywords = normalizeSearchKeywords(dto.searchKeywords);
     const searchText = buildProductSearchText({
       ...dto,
@@ -1005,6 +1047,9 @@ export class ProductService {
 
     try {
       const product = await this.prisma.$transaction(async (tx) => {
+        await tx.adminProductCreateRequest.create({
+          data: { idempotencyKey: requestKey, requestHash },
+        });
         const primaryImage = images.find((img) => img.isPrimary);
         const created = await tx.product.create({
           data: {
@@ -1043,6 +1088,11 @@ export class ProductService {
           tx,
         );
 
+        await tx.adminProductCreateRequest.update({
+          where: { idempotencyKey: requestKey },
+          data: { productId: created.id },
+        });
+
         return tx.product.findUnique({
           where: { id: created.id },
           include: this.getProductInclude({ includeInactiveVariants: true }),
@@ -1059,6 +1109,31 @@ export class ProductService {
         e instanceof Prisma.PrismaClientKnownRequestError &&
         e.code === 'P2002'
       ) {
+        const target = (e.meta?.target as string[]) ?? [];
+        if (target.includes('idempotencyKey')) {
+          const previous =
+            await this.prisma.adminProductCreateRequest.findUnique({
+              where: { idempotencyKey: requestKey },
+              include: {
+                product: {
+                  include: this.getProductInclude({
+                    includeInactiveVariants: true,
+                  }),
+                },
+              },
+            });
+          if (previous?.requestHash !== requestHash) {
+            throw new ConflictException(
+              'La clave de idempotencia ya se utilizó con otros datos.',
+            );
+          }
+          if (!previous.product) {
+            throw new ConflictException(
+              'La solicitud ya fue procesada, pero el producto ya no está disponible.',
+            );
+          }
+          return this.addEffectiveVariantPrices(previous.product);
+        }
         this.handleDuplicateError(e);
       }
       throw e;
@@ -1334,40 +1409,97 @@ export class ProductService {
   }
 
   async deleteProduct(id: number, adminId?: number) {
+    if (!Number.isInteger(id) || id < 1) {
+      throw new BadRequestException('ID de producto no válido');
+    }
     try {
       const result = await this.prisma.$transaction(async (tx) => {
-        const existing = await tx.product.findUnique({ where: { id } });
+        const existing = await tx.product.findUnique({
+          where: { id },
+          include: { images: { select: { url: true } } },
+        });
         if (!existing) {
-          throw new NotFoundException('Product not found');
+          throw new NotFoundException('Producto no encontrado');
         }
 
-        await tx.product.update({
-          where: { id },
-          data: { isActive: false },
-        });
+        const [orderItems, checkoutItems, stockReservations, stockMovements] =
+          await Promise.all([
+            tx.orderItem.count({ where: { productId: id } }),
+            tx.checkoutSnapshotItem.count({ where: { productId: id } }),
+            tx.checkoutStockReservation.count({
+              where: { variant: { productId: id } },
+            }),
+            tx.stockMovement.count({ where: { variant: { productId: id } } }),
+          ]);
+        if (
+          orderItems ||
+          checkoutItems ||
+          stockReservations ||
+          stockMovements
+        ) {
+          throw new ConflictException(
+            'No se puede eliminar este producto porque está vinculado a pedidos, checkout o historial de inventario. Puedes desactivarlo para conservar la información histórica.',
+          );
+        }
 
-        await tx.productVariant.updateMany({
-          where: { productId: id },
-          data: { isActive: false },
-        });
+        await tx.galleryAssetProduct.deleteMany({ where: { productId: id } });
+        await tx.favorite.deleteMany({ where: { productId: id } });
+        await tx.cartItem.deleteMany({ where: { variant: { productId: id } } });
+        await tx.productCategory.deleteMany({ where: { productId: id } });
+        await tx.productImage.deleteMany({ where: { productId: id } });
+        await tx.productVariant.deleteMany({ where: { productId: id } });
+        await tx.product.delete({ where: { id } });
 
         await this.recordAudit(
-          'product.disable',
-          { productId: id },
+          'product.delete',
+          { productId: id, name: existing.name, slug: existing.slug },
           adminId,
           tx,
         );
 
-        return { ok: true };
+        return {
+          ok: true,
+          productId: id,
+          imageUrls: [
+            ...new Set([
+              ...existing.images.map((image) => image.url),
+              ...(existing.imageUrl ? [existing.imageUrl] : []),
+            ]),
+          ],
+        };
       });
 
-      return result;
+      const removableUrls: string[] = [];
+      for (const url of result.imageUrls) {
+        const [products, images, galleries, websiteMedia, emailAssets] =
+          await Promise.all([
+            this.prisma.product.count({ where: { imageUrl: url } }),
+            this.prisma.productImage.count({ where: { url } }),
+            this.prisma.galleryAsset.count({ where: { publicUrl: url } }),
+            this.prisma.websiteMediaAsset.count({ where: { publicUrl: url } }),
+            this.prisma.emailAsset.count({ where: { url } }),
+          ]);
+        if (!(products + images + galleries + websiteMedia + emailAssets)) {
+          removableUrls.push(url);
+        }
+      }
+      if (removableUrls.length && this.storage) {
+        try {
+          await this.storage.deleteProductImages(removableUrls);
+        } catch (error) {
+          this.logger.error(
+            `Producto ${id} eliminado, pero falló la limpieza de ${removableUrls.length} archivo(s)`,
+            error instanceof Error ? error.stack : undefined,
+          );
+        }
+      }
+      return { ok: true, productId: result.productId };
     } catch (e) {
       if (
         e instanceof Prisma.PrismaClientKnownRequestError &&
         e.code === 'P2025'
       ) {
-        throw new NotFoundException('Product not found');
+        throw new NotFoundException('Producto no encontrado');
       }
       throw e;
     }

@@ -127,28 +127,42 @@ model EmailAsset {
 }
 
 model Product {
-  id             Int                     @id @default(autoincrement())
-  slug           String                  @unique
-  name           String
-  description    String?
-  price          Int
-  currency       String                  @default("EUR")
-  imageUrl       String?
-  isActive       Boolean                 @default(true)
-  collection     String?
-  searchKeywords String[]                @default([])
-  searchText     String                  @default("")
-  createdAt      DateTime                @default(now())
-  updatedAt      DateTime                @updatedAt
-  favorites      Favorite[]
-  orderItems     OrderItem[]
-  categories     ProductCategory[]
-  images         ProductImage[]
-  variants       ProductVariant[]
-  activityEvents CustomerActivityEvent[]
-  galleryAssets  GalleryAssetProduct[]
+  id                 Int                        @id @default(autoincrement())
+  slug               String                     @unique
+  name               String
+  description        String?
+  price              Int
+  currency           String                     @default("EUR")
+  imageUrl           String?
+  isActive           Boolean                    @default(true)
+  collection         String?
+  searchKeywords     String[]                   @default([])
+  searchText         String                     @default("")
+  createdAt          DateTime                   @default(now())
+  updatedAt          DateTime                   @updatedAt
+  favorites          Favorite[]
+  orderItems         OrderItem[]
+  categories         ProductCategory[]
+  images             ProductImage[]
+  variants           ProductVariant[]
+  activityEvents     CustomerActivityEvent[]
+  galleryAssets      GalleryAssetProduct[]
+  adminCreateRequest AdminProductCreateRequest?
 
   @@index([searchText(ops: raw("gin_trgm_ops"))], type: Gin, map: "Product_searchText_idx")
+}
+
+/// Makes administrative product creation safe to retry without creating a
+/// second product. The payload hash prevents reusing a key for different data.
+model AdminProductCreateRequest {
+  id             String   @id @default(cuid())
+  idempotencyKey String   @unique @db.VarChar(100)
+  requestHash    String   @db.VarChar(64)
+  productId      Int?     @unique
+  createdAt      DateTime @default(now())
+  product        Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
+
+  @@index([createdAt])
 }
 
 model Category {

@@ -186,7 +186,12 @@ async function bootstrap() {
     },
     credentials: true,
     methods: ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Authorization', 'Content-Type', CSRF_HEADER_NAME],
+    allowedHeaders: [
+      'Authorization',
+      'Content-Type',
+      CSRF_HEADER_NAME,
+      'Idempotency-Key',
+    ],
     maxAge: 600,
   });
 

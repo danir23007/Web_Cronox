@@ -40,6 +40,10 @@ describe('ProductService variant SKU generation', () => {
     };
 
     const tx = {
+      adminProductCreateRequest: {
+        create: jest.fn().mockResolvedValue({ id: 'request' }),
+        update: jest.fn().mockResolvedValue({ id: 'request' }),
+      },
       product: {
         create: jest.fn().mockResolvedValue(baseProduct),
         findUnique: jest.fn().mockImplementation(() =>
@@ -116,7 +120,11 @@ describe('ProductService variant SKU generation', () => {
     expect(validationErrors).toEqual([]);
 
     const harness = createHarness();
-    await harness.service.createProduct(dto);
+    await harness.service.createProduct(
+      dto,
+      undefined,
+      '11111111-1111-4111-8111-111111111111',
+    );
     const saved = harness.getStoredVariants();
     const generatedSkus = saved.map((variant) => variant.sku);
 
@@ -135,11 +143,15 @@ describe('ProductService variant SKU generation', () => {
   it('preserves an explicitly supplied SKU', async () => {
     const harness = createHarness();
 
-    await harness.service.createProduct({
-      name: 'Camiseta Core',
-      price: 3495,
-      variants: [{ size: 'M', stockQty: 4, sku: 'SKU-EXTERNO-M' }],
-    });
+    await harness.service.createProduct(
+      {
+        name: 'Camiseta Core',
+        price: 3495,
+        variants: [{ size: 'M', stockQty: 4, sku: 'SKU-EXTERNO-M' }],
+      },
+      undefined,
+      '22222222-2222-4222-8222-222222222222',
+    );
 
     expect(harness.getStoredVariants()[0].sku).toBe('SKU-EXTERNO-M');
   });
