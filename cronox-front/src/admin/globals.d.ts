@@ -86,6 +86,7 @@ declare global {
   interface CronoxAdminApi {
     getDashboard?: () => Promise<unknown>;
     mailRequest?: (path: string, method?: string, body?: Record<string, unknown> | FormData) => Promise<unknown>;
+    downloadExcel?: (module: string, query?: QueryRecord) => Promise<{ blob: Blob; filename: string }>;
     listCircleUpgradeRequests?: (queryOrStatus?: string | QueryRecord, queryOverride?: QueryRecord) => Promise<unknown>;
     approveCircleUpgrade?: (id: number | string, payload?: Record<string, unknown>) => Promise<unknown>;
     denyCircleUpgrade?: (id: number | string, payload?: Record<string, unknown>) => Promise<unknown>;

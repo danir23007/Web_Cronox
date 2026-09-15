@@ -796,6 +796,41 @@ import { availableStock, classifyStock } from '../../../cronox-backend/src/commo
   const adminApi = ensureAdminNamespace();
   adminApi.mailRequest = (path: string, method = 'GET', body?: UnknownRecord | FormData) => request(`/api/admin/mail-templates${path}`, { method, body, cache: 'no-store' });
 
+  adminApi.downloadExcel = async (module: string, query: QueryRecord = {}) => {
+    const allowedModules = new Set([
+      'users',
+      'orders',
+      'products',
+      'inventory',
+      'circles',
+      'promo-codes',
+      'audit',
+    ]);
+    if (!allowedModules.has(module)) throw new Error('Módulo de exportación no permitido.');
+    const url = buildUrl(`/api/admin/exports/${module}`, query);
+    const response = await fetch(url, {
+      method: 'GET',
+      credentials: 'include',
+      cache: 'no-store',
+      headers: { Accept: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' },
+    });
+    if (!response.ok) {
+      const text = await response.text();
+      const payload = text ? safeJsonParse(text) : null;
+      const error = new Error((payload as { message?: string } | null)?.message || `API error ${response.status}`) as CronoxApiError;
+      error.status = response.status;
+      error.endpoint = url;
+      error.payload = payload;
+      throw error;
+    }
+    const disposition = response.headers.get('content-disposition') || '';
+    const match = disposition.match(/filename="?([^";]+)"?/i);
+    return {
+      blob: await response.blob(),
+      filename: match?.[1] || `cronox_${module}.xlsx`,
+    };
+  };
+
   g.CRONOX_STOCK = {
     availableStock,
     classifyStock,

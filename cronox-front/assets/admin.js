@@ -404,6 +404,134 @@
     if (createCodeBtn) createCodeBtn.hidden = !canAccess('promoCodes');
   };
 
+  // Data-bearing Admin views only. Gallery, media/framing, Key Screen and
+  // email templates are visual editors and intentionally have no export.
+  const EXCEL_EXPORT_SECTIONS = {
+    'section-activity': 'audit',
+    'section-users': 'users',
+    'section-23': 'circles',
+    'section-34': 'circles',
+    'section-orders': 'orders',
+    'section-inventory': 'inventory',
+    'section-products': 'products',
+    'section-codes': 'promo-codes',
+  };
+  const excelExportsInFlight = new Set();
+
+  const inputValue = (id) => document.getElementById(id)?.value?.trim() || '';
+  const compactQuery = (query) =>
+    Object.fromEntries(Object.entries(query).filter(([, value]) => value !== '' && value != null));
+
+  const excelFiltersFor = (module, sectionId) => {
+    if (module === 'users') return compactQuery({
+      q: inputValue('usersSearch'),
+      role: inputValue('usersRole'),
+      circle: inputValue('usersCircle'),
+      accountState: inputValue('usersAccountState'),
+      sort: inputValue('usersSort'),
+      order: inputValue('usersOrder'),
+    });
+    if (module === 'orders') return compactQuery({ email: inputValue('ordersEmailSearch') });
+    if (module === 'inventory') return compactQuery({
+      q: inputValue('inventorySearch'),
+      isActive: inputValue('inventoryActiveFilter'),
+      stockStatus: inputValue('inventoryStockFilter'),
+    });
+    if (module === 'products') return compactQuery({
+      q: inputValue('productSearch'),
+      dateFrom: inputValue('productDateFrom'),
+      dateTo: inputValue('productDateTo'),
+      stockStatus: inputValue('productStockState'),
+      category: inputValue('productCategory'),
+      isActive: inputValue('productStatusFilter'),
+      sort: inputValue('productSortBy'),
+      order: inputValue('productSortDir'),
+    });
+    if (module === 'promo-codes') return compactQuery({
+      q: inputValue('codeSearch'),
+      isActive: inputValue('codeStatusFilter'),
+    });
+    if (module === 'audit') return compactQuery({
+      q: inputValue('activitySearch'),
+      actionType: inputValue('activityActionType'),
+      targetType: inputValue('activityTargetType'),
+      dateFrom: inputValue('activityDateFrom'),
+      dateTo: inputValue('activityDateTo'),
+    });
+    if (module === 'circles') {
+      const suffix = sectionId === 'section-23' ? '23' : '';
+      return compactQuery({
+        q: inputValue(`requestSearch${suffix}`),
+        status: inputValue(`filterStatus${suffix}`),
+        dateFrom: inputValue(`requestDateFrom${suffix}`),
+        dateTo: inputValue(`requestDateTo${suffix}`),
+        sort: inputValue(`requestSortBy${suffix}`),
+        order: inputValue(`requestSortDir${suffix}`),
+      });
+    }
+    return {};
+  };
+
+  const startExcelDownload = async (button) => {
+    const module = button.dataset.exportModule;
+    const scope = button.dataset.exportScope;
+    const sectionId = button.closest('.admin-section')?.id || '';
+    const key = `${module}:${scope}:${sectionId}`;
+    if (!module || excelExportsInFlight.has(key)) return;
+    const downloadExcel = window.CRONOX_API?.admin?.downloadExcel;
+    if (typeof downloadExcel !== 'function') {
+      showToast('La exportación Excel no está disponible.', 'error');
+      return;
+    }
+    excelExportsInFlight.add(key);
+    const originalText = button.textContent;
+    button.disabled = true;
+    button.setAttribute('aria-busy', 'true');
+    button.textContent = 'Preparando Excel…';
+    try {
+      const filters = scope === 'all' ? {} : excelFiltersFor(module, sectionId);
+      const result = await downloadExcel(module, { scope, ...filters });
+      const url = URL.createObjectURL(result.blob);
+      const anchor = document.createElement('a');
+      anchor.href = url;
+      anchor.download = String(result.filename || `cronox_${module}.xlsx`).replace(/[\\/]/g, '_');
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 0);
+      showToast('Excel generado correctamente.');
+    } catch (error) {
+      const classification = classifyApiError(error);
+      showToast(error?.message || classification.userMessage || 'No se pudo generar el Excel.', 'error');
+    } finally {
+      excelExportsInFlight.delete(key);
+      button.disabled = false;
+      button.removeAttribute('aria-busy');
+      button.textContent = originalText;
+    }
+  };
+
+  const setupExcelExports = () => {
+    if (currentAdminRole !== 'SUPERADMIN') return;
+    Object.entries(EXCEL_EXPORT_SECTIONS).forEach(([sectionId, module]) => {
+      const section = document.getElementById(sectionId);
+      if (!section || section.querySelector('.excel-export-actions')) return;
+      const actions = document.createElement('div');
+      actions.className = 'table-actions excel-export-actions';
+      actions.setAttribute('aria-label', 'Descargar Excel');
+      actions.innerHTML = `
+        <button class="btn" type="button" data-export-module="${module}" data-export-scope="filtered">Descargar resultados filtrados</button>
+        <button class="btn" type="button" data-export-module="${module}" data-export-scope="all">Descargar todos</button>
+      `;
+      const heading = section.querySelector('h2')?.parentElement?.parentElement || section.firstElementChild;
+      heading?.insertAdjacentElement('afterend', actions);
+      actions.addEventListener('click', (event) => {
+        const button = event.target.closest('button[data-export-module]');
+        if (button) startExcelDownload(button);
+      });
+    });
+  };
+
   const setMessage = (text = '', type = 'success') => {
     if (!messageBox) return;
     if (!text) {
@@ -4462,6 +4590,7 @@
     revealAdmin();
     setScopedMessage(apiUnavailable, '');
     applyRoleVisibility();
+    setupExcelExports();
     ensureSectionBackButtons();
     bindEvents();
     syncRequestsStateFromInputs();

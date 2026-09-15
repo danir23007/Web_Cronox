@@ -30,6 +30,9 @@ import { AdminInventoryController } from './inventory/admin-inventory.controller
 import { AdminInventoryService } from './inventory/admin-inventory.service';
 import { ProductImageUploadSizeExceptionFilter } from './products/product-image-upload-size-exception.filter';
 import { SuperAdminGuard } from '../common/guards/super-admin.guard';
+import { AdminExportsController } from './exports/admin-exports.controller';
+import { AdminExportsService } from './exports/admin-exports.service';
+import { ExcelWorkbookService } from './exports/excel-workbook.service';
 
 @Module({
   imports: [
@@ -54,6 +57,7 @@ import { SuperAdminGuard } from '../common/guards/super-admin.guard';
     AdminAuditLogsController,
     AdminNotesController,
     AdminInventoryController,
+    AdminExportsController,
   ],
   providers: [
     AdminOrdersService,
@@ -68,6 +72,8 @@ import { SuperAdminGuard } from '../common/guards/super-admin.guard';
     ProductImageUploadSizeExceptionFilter,
     AdminGuard,
     SuperAdminGuard,
+    AdminExportsService,
+    ExcelWorkbookService,
   ],
 })
 export class AdminModule {}

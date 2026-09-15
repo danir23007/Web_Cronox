@@ -5,7 +5,6 @@
 
   const message = $('#ordersMessage');
   const refreshButton = $('#ordersRefreshBtn');
-  const exportButton = $('#ordersExportBtn');
   const emailSearch = $('#ordersEmailSearch');
   const modal = $('#orderDetailModal');
   const closeButton = $('#orderDetailClose');
@@ -256,11 +255,6 @@
     if (window.confirm('Confirmar reembolso?')) {
       action(() => request('/api/admin/orders/' + encodeURIComponent(currentOrder.id) + '/refund', { method: 'POST' }));
     }
-  });
-  exportButton?.addEventListener('click', (event) => {
-    event.preventDefault();
-    const popup = window.open(endpoint('/api/admin/orders/export.csv'), '_blank', 'noopener,noreferrer');
-    if (popup) popup.opener = null;
   });
   window.fetchOrders = load;
 })();
