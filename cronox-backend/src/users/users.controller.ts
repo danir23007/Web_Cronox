@@ -44,7 +44,7 @@ export class UsersController {
 
   @Get('users/admin/ping')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(Role.SUPER_ADMIN, Role.MODERATOR, Role.LOGISTICS, Role.MARKETING)
+  @Roles(Role.SUPERADMIN)
   adminPing() {
     return { message: 'pong' };
   }

@@ -14,7 +14,7 @@ import { AdminPromoCodesService } from './admin-promo-codes.service';
 
 @Controller('admin/promo-codes')
 @UseGuards(JwtAuthGuard, AdminGuard, RolesGuard)
-@Roles(Role.SUPER_ADMIN, Role.MARKETING)
+@Roles(Role.SUPERADMIN)
 export class AdminPromoCodesController {
   constructor(private readonly promoCodes: AdminPromoCodesService) {}
 

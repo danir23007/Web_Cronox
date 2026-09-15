@@ -9,7 +9,7 @@ import { AdminCircleUpgradeQueryDto } from './dto/admin-circle-upgrade-query.dto
 
 @Controller('admin/requests/2-3')
 @UseGuards(JwtAuthGuard, AdminGuard, RolesGuard)
-@Roles(Role.SUPER_ADMIN, Role.MODERATOR)
+@Roles(Role.SUPERADMIN)
 export class AdminCirclePromotionsController {
   constructor(private readonly circleUpgradesService: AdminCircleUpgradesService) {}
 

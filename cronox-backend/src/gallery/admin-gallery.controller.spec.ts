@@ -37,16 +37,7 @@ describe('gallery controller access boundaries', () => {
     ) as Role[];
 
     expect(guards).toEqual([JwtAuthGuard, AdminGuard, RolesGuard]);
-    expect(roles).toEqual(
-      expect.arrayContaining([
-        Role.SUPER_ADMIN,
-        Role.MODERATOR,
-        Role.LOGISTICS,
-        Role.MARKETING,
-        Role.ADMIN,
-        Role.SUPERADMIN,
-      ]),
-    );
+    expect(roles).toEqual([Role.ADMIN, Role.SUPERADMIN]);
     expect(roles).not.toContain(Role.USER);
   });
 

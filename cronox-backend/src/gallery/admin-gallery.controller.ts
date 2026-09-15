@@ -28,10 +28,6 @@ import { GalleryService } from './gallery.service';
 import { GalleryUploadSizeExceptionFilter } from './gallery-upload-size-exception.filter';
 
 const GALLERY_ADMIN_ROLES = [
-  Role.SUPER_ADMIN,
-  Role.MODERATOR,
-  Role.LOGISTICS,
-  Role.MARKETING,
   Role.ADMIN,
   Role.SUPERADMIN,
 ];

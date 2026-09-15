@@ -23,7 +23,7 @@ import { UpdateOrderFulfillmentDto } from './dto/update-order-fulfillment.dto';
 
 @Controller('admin/orders')
 @UseGuards(JwtAuthGuard, AdminGuard, RolesGuard)
-@Roles(Role.SUPER_ADMIN, Role.LOGISTICS)
+@Roles(Role.SUPERADMIN)
 export class AdminOrdersController {
   constructor(private readonly ordersService: AdminOrdersService) {}
 

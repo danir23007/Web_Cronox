@@ -61,7 +61,7 @@ export const PRODUCT_IMAGE_UPLOAD_MULTER_LIMITS = Object.freeze({
 @ApiBearerAuth()
 @Controller('admin/products')
 @UseGuards(JwtAuthGuard, AdminGuard, RolesGuard)
-@Roles(Role.SUPER_ADMIN, Role.LOGISTICS)
+@Roles(Role.SUPERADMIN)
 export class AdminProductsController {
   constructor(
     private readonly productService: ProductService,

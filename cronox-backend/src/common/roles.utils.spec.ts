@@ -2,6 +2,7 @@ import { Role } from '@prisma/client';
 import {
   ADMIN_ROLE_LIST,
   hasAnyRole,
+  isAdminPanelRole,
   isAdminRole,
   isSuperAdminRole,
   normalizeRole,
@@ -12,22 +13,32 @@ describe('role normalization', () => {
     expect(normalizeRole(null)).toBeNull();
     expect(isAdminRole(null)).toBe(false);
     expect(isSuperAdminRole(undefined)).toBe(false);
-    expect(hasAnyRole(null, [Role.SUPER_ADMIN])).toBe(false);
+    expect(hasAnyRole(null, [Role.SUPERADMIN])).toBe(false);
   });
 
-  it('maps both legacy full-administrator values to super-admin', () => {
-    expect(normalizeRole(Role.SUPERADMIN)).toBe(Role.SUPER_ADMIN);
+  it('recognizes only the canonical Super Admin value', () => {
+    expect(normalizeRole(Role.SUPERADMIN)).toBe(Role.SUPERADMIN);
     expect(isSuperAdminRole(Role.SUPERADMIN)).toBe(true);
     expect(ADMIN_ROLE_LIST).toContain(Role.SUPERADMIN);
-    expect(normalizeRole(Role.ADMIN)).toBe(Role.SUPER_ADMIN);
+    expect(normalizeRole(Role.ADMIN)).toBe(Role.ADMIN);
     expect(isAdminRole(Role.ADMIN)).toBe(true);
-    expect(isSuperAdminRole(Role.ADMIN)).toBe(true);
+    expect(isSuperAdminRole(Role.ADMIN)).toBe(false);
+    expect(isAdminPanelRole(Role.ADMIN)).toBe(true);
+    expect(isAdminPanelRole(Role.SUPERADMIN)).toBe(true);
     expect(ADMIN_ROLE_LIST).toContain(Role.ADMIN);
+    expect(normalizeRole('SUPER_ADMIN' as Role)).toBeNull();
+    expect(isSuperAdminRole('SUPER_ADMIN' as Role)).toBe(false);
+    expect(isAdminPanelRole('SUPER_ADMIN' as Role)).toBe(false);
   });
 
-  it('allows scoped staff roles only when explicitly listed', () => {
-    expect(hasAnyRole(Role.LOGISTICS, [Role.LOGISTICS])).toBe(true);
-    expect(hasAnyRole(Role.LOGISTICS, [Role.MARKETING])).toBe(false);
-    expect(hasAnyRole(Role.SUPER_ADMIN, [Role.MARKETING])).toBe(true);
+  it('does not grant customer roles access to the admin panel', () => {
+    expect(isAdminPanelRole(Role.FRIEND)).toBe(false);
+    expect(isAdminPanelRole(Role.USER)).toBe(false);
+  });
+
+  it('keeps ADMIN and SUPERADMIN administrative permissions', () => {
+    expect(hasAnyRole(Role.ADMIN, [Role.SUPERADMIN])).toBe(true);
+    expect(hasAnyRole(Role.SUPERADMIN, [Role.ADMIN])).toBe(true);
+    expect(hasAnyRole(Role.FRIEND, [Role.ADMIN])).toBe(false);
   });
 });

@@ -20,7 +20,7 @@ describe('AdminInventoryController access control', () => {
     expect(guards).toEqual(
       expect.arrayContaining([JwtAuthGuard, AdminGuard, RolesGuard]),
     );
-    expect(roles).toEqual([Role.SUPER_ADMIN, Role.LOGISTICS]);
+    expect(roles).toEqual([Role.SUPERADMIN]);
     expect(roles).not.toContain(Role.USER);
   });
 });

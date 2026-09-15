@@ -28,7 +28,7 @@ export class AdminCategoriesController {
   constructor(private readonly categoriesService: CategoriesService) {}
 
   @Get()
-  @Roles(Role.SUPER_ADMIN, Role.LOGISTICS)
+  @Roles(Role.SUPERADMIN)
   list(@Query() query: QueryCategoriesDto) {
     return this.categoriesService.listAll(query);
   }

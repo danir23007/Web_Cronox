@@ -25,11 +25,11 @@ rename, or checksum-rewrite migrations that may already be recorded in
 
 ## Role reconciliation before deployment
 
-The hardening migration changes `NULL` roles to `USER` and enforces `NOT NULL`.
-At runtime, the legacy `ADMIN` and `SUPERADMIN` values are treated as
-`SUPER_ADMIN` so existing full administrators retain the same access exposed by
-the admin panel. Before deployment, have an authorized operator review the
-affected accounts on the staging copy:
+The canonical roles are `USER`, `FRIEND`, `ADMIN`, and `SUPERADMIN`. The pending
+canonical-role migration preserves `USER` as the default and converts the former
+underscored Super Admin spelling to `SUPERADMIN` before replacing the PostgreSQL
+enum. Before deployment, have an authorized operator review role counts on the
+staging copy:
 
 ```sql
 SELECT "role", COUNT(*)
@@ -37,17 +37,30 @@ FROM "User"
 GROUP BY "role"
 ORDER BY "role";
 
-SELECT "id", "email", "role"
+SELECT "role", COUNT(*)
 FROM "User"
-WHERE "role" IS NULL OR "role" IN ('ADMIN', 'SUPERADMIN')
-ORDER BY "id";
+WHERE "role"::text NOT IN ('USER', 'FRIEND', 'ADMIN', 'SUPERADMIN')
+GROUP BY "role"
+ORDER BY "role";
 ```
 
-Normalize confirmed full-administrator accounts from either legacy value to
-`SUPER_ADMIN`. If a legacy account should have a narrower job, assign the least
-privileged current role that matches it. Record each decision in the change
-ticket. `NULL` becomes `USER` automatically and never receives administrative
-access.
+The migration intentionally aborts before changing data if any unsupported role
+other than the former Super Admin spelling is assigned. Resolve such records in
+an approved change before retrying deployment; do not silently reclassify them.
+
+## Account phone migration order
+
+`20260915110000_add_user_account_phone` follows
+`20260915100000_canonical_user_roles`. It only adds the nullable `User.phone`
+column used as the account/administrative contact phone.
+
+`20260915120000_backfill_user_account_phone` then performs a one-time copy for
+users whose account phone is still null. It selects only an address marked as
+default and copies its non-empty phone without changing the address. If corrupt
+historical data has multiple defaults, it deterministically selects the newest
+`updatedAt`, breaking ties with the highest address `id`; it never falls back to
+an older default whose phone happens to be populated. Deploy all three through
+one ordered `prisma migrate deploy` run after the role preflight succeeds.
 
 ## New databases
 

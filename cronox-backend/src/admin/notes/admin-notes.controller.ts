@@ -12,7 +12,7 @@ import { Role } from '@prisma/client';
 
 @Controller('admin/notes')
 @UseGuards(JwtAuthGuard, AdminGuard, RolesGuard)
-@Roles(Role.SUPER_ADMIN, Role.MODERATOR)
+@Roles(Role.SUPERADMIN)
 export class AdminNotesController {
   constructor(private readonly notes: AdminNotesService) {}
 

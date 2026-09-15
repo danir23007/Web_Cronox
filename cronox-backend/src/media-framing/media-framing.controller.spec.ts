@@ -41,7 +41,7 @@ describe('media framing controller security and validation', () => {
     ) as Role[];
     expect(guards).toEqual([JwtAuthGuard, AdminGuard, RolesGuard]);
     expect(roles).toContain(Role.ADMIN);
-    expect(roles).toContain(Role.MARKETING);
+    expect(roles).toContain(Role.SUPERADMIN);
     expect(roles).not.toContain(Role.USER);
 
     const reflector = {

@@ -49,7 +49,7 @@ export class PublicKeyScreenController {
 
 @Controller('admin/key-screens')
 @UseGuards(JwtAuthGuard, AdminGuard, RolesGuard)
-@Roles(Role.SUPER_ADMIN, Role.SUPERADMIN)
+@Roles(Role.SUPERADMIN)
 export class AdminKeyScreenController {
   constructor(private readonly keyScreen: KeyScreenService) {}
 

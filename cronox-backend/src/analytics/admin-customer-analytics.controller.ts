@@ -16,7 +16,7 @@ import { AdminActivityQueryDto } from './dto/admin-activity-query.dto';
 
 @Controller('admin/users')
 @UseGuards(JwtAuthGuard, AdminGuard, RolesGuard)
-@Roles(Role.SUPER_ADMIN, Role.MODERATOR)
+@Roles(Role.SUPERADMIN)
 export class AdminCustomerAnalyticsController {
   constructor(private readonly analytics: AdminCustomerAnalyticsService) {}
 

@@ -11,27 +11,19 @@ import {
   Prisma,
   Role,
   User,
+  UserAccountState,
 } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { normalizeCountry } from '../../common/country';
 import { AdminUserQueryDto } from './dto/admin-user-query.dto';
 import { AdminUserOrdersQueryDto } from './dto/admin-user-orders-query.dto';
 import { AdminUserRequestsQueryDto } from './dto/admin-user-requests-query.dto';
-import {
-  ADMIN_ROLE_LIST,
-  isAdminRole,
-  isSuperAdminRole,
-  normalizeRole,
-} from '../../common/roles.utils';
+import { isAdminPanelRole, isSuperAdminRole } from '../../common/roles.utils';
+import { UpdateAdminUserDto } from './dto/update-admin-user.dto';
 
 const DEFAULT_PAGE_SIZE = 10;
 const MAX_PAGE_SIZE = 50;
 const RECENT_ITEMS_LIMIT = 20;
-const SUPER_ADMIN_ROLE_LIST: Role[] = [
-  Role.SUPER_ADMIN,
-  Role.SUPERADMIN,
-  Role.ADMIN,
-];
 const SERIALIZABLE_RETRY_LIMIT = 3;
 const PAID_STATUSES: OrderStatus[] = [
   OrderStatus.PAID,
@@ -43,6 +35,12 @@ const PAID_STATUSES: OrderStatus[] = [
 type UserWithAddresses = Prisma.UserGetPayload<{
   include: { addresses: true };
 }>;
+
+export type AdminUserUpdateRequestMetadata = {
+  ip?: string;
+  userAgent?: string;
+  requestId?: string;
+};
 
 type AdminUserRequestItem = {
   id: number | string;
@@ -59,6 +57,15 @@ type AdminUserRequestItem = {
 @Injectable()
 export class AdminUsersService {
   constructor(private readonly prisma: PrismaService) {}
+
+  getEditOptions() {
+    return {
+      roles: Object.values(Role),
+      accountStates: Object.values(UserAccountState),
+      circles: [1, 2, 3, 4, 5],
+      circleNullable: false,
+    };
+  }
 
   async listUsers(query: AdminUserQueryDto) {
     const page = query.page ?? 1;
@@ -101,6 +108,7 @@ export class AdminUsersService {
         id: true,
         email: true,
         name: true,
+        phone: true,
         firstName: true,
         lastName: true,
         circleLevel: true,
@@ -108,11 +116,12 @@ export class AdminUsersService {
         createdAt: true,
         updatedAt: true,
         lastLoginAt: true,
+        accountState: true,
       },
     });
 
     if (!user) {
-      throw new NotFoundException('User not found');
+      throw new NotFoundException('Usuario no encontrado');
     }
 
     const [
@@ -199,6 +208,11 @@ export class AdminUsersService {
         avatarUrl: null,
         circle: user.circleLevel ?? 1,
         role: user.role ?? null,
+        accountState: user.accountState,
+        name: user.name,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        phone: user.phone,
         createdAt: user.createdAt,
         updatedAt: user.updatedAt,
         lastLoginAt: user.lastLoginAt,
@@ -218,67 +232,177 @@ export class AdminUsersService {
     };
   }
 
-  async updateUserRole(id: number, role: Role, performedById: number) {
-    const normalizedTargetRole = normalizeRole(role);
-    if (!normalizedTargetRole) {
-      throw new BadRequestException('Invalid role');
-    }
-
-    if (id === performedById && !isAdminRole(normalizedTargetRole)) {
-      throw new ForbiddenException('Cannot remove your own admin role');
-    }
-
+  async updateAdminUser(
+    id: number,
+    dto: UpdateAdminUserDto,
+    performedById: number,
+    requestMetadata: AdminUserUpdateRequestMetadata = {},
+  ) {
     for (let attempt = 0; attempt < SERIALIZABLE_RETRY_LIMIT; attempt += 1) {
       try {
         return await this.prisma.$transaction(
           async (tx) => {
-            const existing = await tx.user.findUnique({ where: { id } });
+            const existing = await tx.user.findUnique({
+              where: { id },
+            });
 
             if (!existing) {
-              throw new NotFoundException('User not found');
+              throw new NotFoundException('Usuario no encontrado');
             }
 
-            const normalizedExistingRole = normalizeRole(existing.role);
-            if (normalizedExistingRole === normalizedTargetRole) {
-              return this.mapUser(existing);
+            if (
+              existing.updatedAt.toISOString() !==
+              new Date(dto.expectedUpdatedAt).toISOString()
+            ) {
+              throw new ConflictException(
+                'El usuario ha cambiado desde que se abrió. Recarga los datos e inténtalo de nuevo.',
+              );
+            }
+
+            const targetRole = dto.role ?? existing.role;
+            const targetState = dto.accountState ?? existing.accountState;
+            if (
+              id === performedById &&
+              (!isAdminPanelRole(targetRole) ||
+                targetState !== UserAccountState.ACTIVE)
+            ) {
+              throw new ForbiddenException(
+                'No puedes retirar tu propio acceso administrativo',
+              );
             }
 
             if (
               isSuperAdminRole(existing.role) &&
-              !isSuperAdminRole(normalizedTargetRole)
+              existing.accountState === UserAccountState.ACTIVE &&
+              (!isSuperAdminRole(targetRole) ||
+                targetState !== UserAccountState.ACTIVE)
             ) {
-              // Serializable isolation prevents concurrent demotions from both
-              // observing the same final super-admin and leaving the system
-              // without anyone authorized to recover role management.
               const superAdminCount = await tx.user.count({
-                where: { role: { in: SUPER_ADMIN_ROLE_LIST } },
+                where: {
+                  role: Role.SUPERADMIN,
+                  accountState: UserAccountState.ACTIVE,
+                },
               });
               if (superAdminCount <= 1) {
                 throw new BadRequestException(
-                  'At least one super-admin user must remain',
+                  'Debe permanecer al menos un Super Admin activo',
                 );
               }
             }
 
             if (
-              isAdminRole(existing.role) &&
-              !isAdminRole(normalizedTargetRole)
+              isAdminPanelRole(existing.role) &&
+              existing.accountState === UserAccountState.ACTIVE &&
+              (!isAdminPanelRole(targetRole) ||
+                targetState !== UserAccountState.ACTIVE)
             ) {
               const adminCount = await tx.user.count({
-                where: { role: { in: ADMIN_ROLE_LIST } },
+                where: {
+                  role: {
+                    in: [Role.SUPERADMIN, Role.ADMIN],
+                  },
+                  accountState: UserAccountState.ACTIVE,
+                },
               });
 
               if (adminCount <= 1) {
                 throw new BadRequestException(
-                  'At least one admin user must remain',
+                  'Debe permanecer al menos un administrador activo',
                 );
               }
             }
 
-            const updated = await tx.user.update({
-              where: { id },
-              data: { role: normalizedTargetRole },
+            const currentPhone = existing.phone;
+            const nextPhone =
+              dto.phone === undefined
+                ? currentPhone
+                : this.normalizePhone(dto.phone);
+            const before = {
+              name: existing.name,
+              phone: currentPhone,
+              role: existing.role,
+              accountState: existing.accountState,
+              circleLevel: existing.circleLevel,
+            };
+            const after = {
+              name: dto.name === undefined ? existing.name : dto.name,
+              phone: nextPhone,
+              role: targetRole,
+              accountState: targetState,
+              circleLevel: dto.circleLevel ?? existing.circleLevel,
+            };
+            const changedFields = (
+              Object.keys(before) as Array<keyof typeof before>
+            ).filter((field) => before[field] !== after[field]);
+
+            if (!changedFields.length) {
+              return this.mapUser(existing);
+            }
+
+            const permissionsChanged =
+              before.role !== after.role ||
+              before.accountState !== after.accountState;
+            const updateResult = await tx.user.updateMany({
+              where: { id, updatedAt: existing.updatedAt },
+              data: {
+                ...(before.name !== after.name ? { name: after.name } : {}),
+                ...(before.phone !== after.phone ? { phone: after.phone } : {}),
+                ...(before.role !== after.role ? { role: after.role } : {}),
+                ...(before.accountState !== after.accountState
+                  ? { accountState: after.accountState }
+                  : {}),
+                ...(before.circleLevel !== after.circleLevel
+                  ? { circleLevel: after.circleLevel }
+                  : {}),
+                ...(permissionsChanged
+                  ? { sessionVersion: { increment: 1 } }
+                  : {}),
+                updatedAt: new Date(),
+              },
             });
+
+            if (updateResult.count !== 1) {
+              throw new ConflictException(
+                'El usuario ha cambiado durante la edición. Recarga los datos.',
+              );
+            }
+
+            await tx.auditLog.create({
+              data: {
+                actorId: performedById,
+                action: 'admin.user.update',
+                actionType: 'admin.user.update',
+                targetType: 'user',
+                targetId: String(id),
+                fromCircle:
+                  before.circleLevel !== after.circleLevel
+                    ? before.circleLevel
+                    : null,
+                toCircle:
+                  before.circleLevel !== after.circleLevel
+                    ? after.circleLevel
+                    : null,
+                metadata: {
+                  changedFields,
+                  before,
+                  after,
+                  request: {
+                    ...(requestMetadata.ip ? { ip: requestMetadata.ip } : {}),
+                    ...(requestMetadata.userAgent
+                      ? { userAgent: requestMetadata.userAgent }
+                      : {}),
+                    ...(requestMetadata.requestId
+                      ? { requestId: requestMetadata.requestId }
+                      : {}),
+                  },
+                },
+              },
+            });
+
+            const updated = await tx.user.findUnique({
+              where: { id },
+            });
+            if (!updated) throw new NotFoundException('Usuario no encontrado');
 
             return this.mapUser(updated);
           },
@@ -295,7 +419,18 @@ export class AdminUsersService {
       }
     }
 
-    throw new ConflictException('Unable to update role safely; please retry');
+    throw new ConflictException(
+      'No se pudo actualizar el usuario de forma segura; inténtalo de nuevo',
+    );
+  }
+
+  async updateUserRole(
+    id: number,
+    role: Role,
+    performedById: number,
+    expectedUpdatedAt: string,
+  ) {
+    return this.updateAdminUser(id, { role, expectedUpdatedAt }, performedById);
   }
 
   async getUserAuditLogs(userId: number, limit = 20) {
@@ -507,6 +642,10 @@ export class AdminUsersService {
       where.email = { contains: query.email.trim(), mode: 'insensitive' };
     }
 
+    if (query.phone?.trim()) {
+      where.phone = { contains: query.phone.trim(), mode: 'insensitive' };
+    }
+
     if (query.role) {
       where.role = query.role;
     }
@@ -556,10 +695,28 @@ export class AdminUsersService {
       lastName: user.lastName,
       role: user.role,
       circle: user.circleLevel,
-      phone: null,
+      phone: user.phone,
       createdAt: user.createdAt,
+      updatedAt: user.updatedAt,
       accountState: user.accountState,
     };
+  }
+
+  private normalizePhone(phone: string | null): string | null {
+    const trimmed = phone?.trim();
+    if (!trimmed) return null;
+    if (!/^\+?[\d\s()-]+$/.test(trimmed)) {
+      throw new BadRequestException(
+        'El teléfono debe usar un formato internacional válido con números y un único + inicial opcional',
+      );
+    }
+    const digits = trimmed.replace(/\D/g, '');
+    if (digits.length < 6 || digits.length > 15) {
+      throw new BadRequestException(
+        'El teléfono debe contener entre 6 y 15 dígitos',
+      );
+    }
+    return trimmed.startsWith('+') ? `+${digits}` : digits;
   }
 
   private mapUserWithAddresses(user: UserWithAddresses) {

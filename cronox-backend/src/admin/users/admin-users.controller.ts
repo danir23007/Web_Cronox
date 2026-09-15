@@ -6,8 +6,10 @@ import {
   ParseIntPipe,
   Patch,
   Query,
+  Req,
   UseGuards,
 } from '@nestjs/common';
+import type { Request } from 'express';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { AdminGuard } from '../../common/guards/admin.guard';
@@ -19,6 +21,8 @@ import { AdminUserOrdersQueryDto } from './dto/admin-user-orders-query.dto';
 import { AdminUserRequestsQueryDto } from './dto/admin-user-requests-query.dto';
 import { UpdateUserRoleDto } from './dto/update-user-role.dto';
 import { Role } from '@prisma/client';
+import { SuperAdminGuard } from '../../common/guards/super-admin.guard';
+import { UpdateAdminUserDto } from './dto/update-admin-user.dto';
 
 @Controller('admin/users')
 @UseGuards(JwtAuthGuard, AdminGuard, RolesGuard)
@@ -30,30 +34,58 @@ export class AdminUsersController {
     return this.usersService.listUsers(query);
   }
 
+  @Get('edit-options')
+  @UseGuards(SuperAdminGuard)
+  getEditOptions() {
+    return this.usersService.getEditOptions();
+  }
+
   @Get(':id')
-  @Roles(Role.SUPER_ADMIN, Role.MODERATOR)
+  @Roles(Role.SUPERADMIN)
   getUser(@Param('id', ParseIntPipe) id: number) {
     return this.usersService.getUserById(id);
   }
 
   @Patch(':id/role')
-  @Roles(Role.SUPER_ADMIN)
+  @Roles(Role.SUPERADMIN)
+  @UseGuards(SuperAdminGuard)
   updateUserRole(
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: UpdateUserRoleDto,
     @CurrentUser('id') adminId: number,
   ) {
-    return this.usersService.updateUserRole(id, dto.role, adminId);
+    return this.usersService.updateUserRole(
+      id,
+      dto.role,
+      adminId,
+      dto.expectedUpdatedAt,
+    );
+  }
+
+  @Patch(':id')
+  @UseGuards(SuperAdminGuard)
+  updateUser(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: UpdateAdminUserDto,
+    @CurrentUser('id') adminId: number,
+    @Req() request: Request,
+  ) {
+    const requestId = request.headers['x-request-id'];
+    return this.usersService.updateAdminUser(id, dto, adminId, {
+      ip: request.ip,
+      userAgent: request.get('user-agent'),
+      requestId: Array.isArray(requestId) ? requestId[0] : requestId,
+    });
   }
 
   @Get(':id/audit-logs')
-  @Roles(Role.SUPER_ADMIN, Role.MODERATOR)
+  @Roles(Role.SUPERADMIN)
   getUserAuditLogs(@Param('id', ParseIntPipe) id: number) {
     return this.usersService.getUserAuditLogs(id);
   }
 
   @Get(':id/requests')
-  @Roles(Role.SUPER_ADMIN, Role.MODERATOR)
+  @Roles(Role.SUPERADMIN)
   getUserRequests(
     @Param('id', ParseIntPipe) id: number,
     @Query() query: AdminUserRequestsQueryDto,
@@ -62,7 +94,7 @@ export class AdminUsersController {
   }
 
   @Get(':id/orders')
-  @Roles(Role.SUPER_ADMIN, Role.MODERATOR)
+  @Roles(Role.SUPERADMIN)
   getUserOrders(
     @Param('id', ParseIntPipe) id: number,
     @Query() query: AdminUserOrdersQueryDto,

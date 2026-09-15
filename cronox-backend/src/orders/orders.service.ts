@@ -1873,8 +1873,7 @@ export class OrdersService {
     const orderBy = this.resolveOrderBy(pagination.sort, pagination.order);
 
     const canAccessAll = hasAnyRole(user.role, [
-      Role.SUPER_ADMIN,
-      Role.LOGISTICS,
+      Role.SUPERADMIN,
     ]);
     const where = canAccessAll ? {} : { userId: user.id };
 
@@ -1914,8 +1913,7 @@ export class OrdersService {
 
     const isOwner = order.userId === user.id;
     const canAccessAll = hasAnyRole(user.role, [
-      Role.SUPER_ADMIN,
-      Role.LOGISTICS,
+      Role.SUPERADMIN,
     ]);
     if (!canAccessAll && !isOwner) {
       throw new ForbiddenException('ACCESS_DENIED');

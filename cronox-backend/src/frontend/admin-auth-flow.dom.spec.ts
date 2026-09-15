@@ -93,7 +93,11 @@ describe('dedicated Admin authentication flow', () => {
     );
     expect(auth.safeReturnTo('/key-screen.html')).toBe('/admin.html');
     expect(auth.currentReturnTo()).toBe('/admin-user.html?id=42#perfil');
-    expect(auth.isAdmin({ role: 'LOGISTICS' })).toBe(true);
+    expect(auth.isAdmin({ role: 'ADMIN' })).toBe(true);
+    expect(auth.isAdmin({ role: 'SUPERADMIN' })).toBe(true);
+    expect(auth.isAdmin({ role: 'SUPER_ADMIN' })).toBe(false);
+    expect(auth.isAdmin({ role: 'LOGISTICS' })).toBe(false);
+    expect(auth.isAdmin({ role: 'FRIEND' })).toBe(false);
     expect(auth.isAdmin({ role: 'USER' })).toBe(false);
   });
 

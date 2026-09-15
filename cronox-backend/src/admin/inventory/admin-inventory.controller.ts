@@ -23,7 +23,7 @@ import { UpdateInventoryDto } from './dto/update-inventory.dto';
 
 @Controller('admin/inventory')
 @UseGuards(JwtAuthGuard, AdminGuard, RolesGuard)
-@Roles(Role.SUPER_ADMIN, Role.LOGISTICS)
+@Roles(Role.SUPERADMIN)
 export class AdminInventoryController {
   constructor(private readonly inventoryService: AdminInventoryService) {}
 

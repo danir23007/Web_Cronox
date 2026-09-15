@@ -1,23 +1,11 @@
 import { Role } from '@prisma/client';
 
-export const ADMIN_ROLES = new Set<Role>([
-  Role.SUPER_ADMIN,
-  Role.MODERATOR,
-  Role.LOGISTICS,
-  Role.MARKETING,
-]);
+export const ADMIN_ROLES = new Set<Role>([Role.ADMIN, Role.SUPERADMIN]);
 
-// Keep legacy full-administrator records in aggregate queries until the
-// database values have been normalized.
-export const ADMIN_ROLE_LIST = Array.from(
-  new Set<Role>([...ADMIN_ROLES, Role.ADMIN, Role.SUPERADMIN]),
-);
+export const ADMIN_ROLE_LIST = Array.from(ADMIN_ROLES);
 
 export const normalizeRole = (role?: Role | null): Role | null => {
-  if (!role) return null;
-  if (role === Role.ADMIN || role === Role.SUPERADMIN) {
-    return Role.SUPER_ADMIN;
-  }
+  if (!role || !Object.values(Role).includes(role)) return null;
   return role;
 };
 
@@ -28,11 +16,14 @@ export const isAdminRole = (role?: Role | null): boolean => {
 };
 
 export const isSuperAdminRole = (role?: Role | null): boolean =>
-  normalizeRole(role) === Role.SUPER_ADMIN;
+  role === Role.SUPERADMIN;
+
+export const isAdminPanelRole = (role?: Role | null): boolean =>
+  role === Role.ADMIN || isSuperAdminRole(role);
 
 export const hasAnyRole = (role: Role | null | undefined, allowed: Role[]) => {
   const effectiveRole = normalizeRole(role);
   if (!effectiveRole) return false;
-  if (effectiveRole === Role.SUPER_ADMIN) return true;
+  if (isAdminPanelRole(effectiveRole)) return true;
   return allowed.includes(effectiveRole);
 };

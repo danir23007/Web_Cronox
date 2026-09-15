@@ -4,6 +4,7 @@ import { PassportModule } from '@nestjs/passport';
 import { Test } from '@nestjs/testing';
 import cookieParser from 'cookie-parser';
 import request from 'supertest';
+import { UserAccountState } from '@prisma/client';
 import { JwtAccessStrategy } from '../auth/strategies/jwt-access.strategy';
 import { UsersService } from '../users/users.service';
 import { CheckoutSummaryController } from '../orders/checkout-summary.controller';
@@ -129,8 +130,8 @@ class InMemoryCartService {
 describe('cart identity request flow', () => {
   const jwtSecret = 'cart-flow-test-secret-that-is-long-enough';
   const users = new Map([
-    [1, { id: 1, email: 'one@example.test', role: 'USER', sessionVersion: 0 }],
-    [2, { id: 2, email: 'two@example.test', role: 'USER', sessionVersion: 0 }],
+    [1, { id: 1, email: 'one@example.test', role: 'USER', sessionVersion: 0, accountState: UserAccountState.ACTIVE }],
+    [2, { id: 2, email: 'two@example.test', role: 'USER', sessionVersion: 0, accountState: UserAccountState.ACTIVE }],
   ]);
   const usersService = {
     findById: jest.fn(async (id: number) => users.get(id) ?? null),

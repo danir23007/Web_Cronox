@@ -29,10 +29,6 @@ import { MAX_WEBSITE_MEDIA_BYTES } from '../common/storage/supabase-storage.serv
 import { WebsiteMediaUploadSizeExceptionFilter } from './media-upload-size-exception.filter';
 
 export const MEDIA_ADMIN_ROLES = [
-  Role.SUPER_ADMIN,
-  Role.MODERATOR,
-  Role.LOGISTICS,
-  Role.MARKETING,
   Role.ADMIN,
   Role.SUPERADMIN,
 ];

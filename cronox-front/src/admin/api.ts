@@ -647,6 +647,18 @@ import { availableStock, classifyStock } from '../../../cronox-backend/src/commo
       };
     }
 
+    if (status === 409) {
+      return {
+        ...base,
+        kind: 'conflict',
+        userMessage:
+          payloadMessage ||
+          'Los datos cambiaron mientras editabas. Recarga antes de guardar de nuevo.',
+        isRetryable: true,
+        severity: 'warning',
+      };
+    }
+
     if (status >= 500) {
       return {
         ...base,
@@ -944,6 +956,17 @@ import { availableStock, classifyStock } from '../../../cronox-backend/src/commo
 
   adminApi.getUserDetail = async (id: number | string) => {
     return request(`/api/admin/users/${encodeURIComponent(id)}`);
+  };
+
+  adminApi.getUserEditOptions = async () => {
+    return request('/api/admin/users/edit-options');
+  };
+
+  adminApi.updateAdminUser = async (id: number | string, payload: UnknownRecord) => {
+    return request(`/api/admin/users/${encodeURIComponent(id)}`, {
+      method: 'PATCH',
+      body: payload,
+    });
   };
 
   adminApi.getUserAuditLogs = async (id: number | string) => {

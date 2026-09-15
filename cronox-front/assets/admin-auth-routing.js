@@ -1,16 +1,6 @@
 (() => {
-  const ADMIN_ROLES = new Set([
-    'SUPER_ADMIN', 'SUPERADMIN', 'ADMIN', 'MODERATOR', 'LOGISTICS', 'MARKETING',
-  ]);
-
-  const normalizeRole = (role) => {
-    const normalized = String(role || '').trim().toUpperCase();
-    return normalized === 'SUPERADMIN' || normalized === 'ADMIN'
-      ? 'SUPER_ADMIN'
-      : normalized;
-  };
-
-  const isAdmin = (user) => ADMIN_ROLES.has(normalizeRole(user?.role));
+  const ADMIN_ROLES = new Set(['SUPERADMIN', 'ADMIN']);
+  const isAdmin = (user) => ADMIN_ROLES.has(user?.role);
 
   const safeReturnTo = (candidate) => {
     if (!candidate) return '/admin.html';
@@ -40,6 +30,6 @@
   };
 
   window.CRONOX_ADMIN_AUTH = Object.freeze({
-    currentReturnTo, isAdmin, loginUrl, normalizeRole, redirectToLogin, safeReturnTo,
+    currentReturnTo, isAdmin, loginUrl, redirectToLogin, safeReturnTo,
   });
 })();

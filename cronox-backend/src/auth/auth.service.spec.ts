@@ -1,5 +1,5 @@
 import { createHash } from 'crypto';
-import { Role } from '@prisma/client';
+import { Role, UserAccountState } from '@prisma/client';
 import { AuthService } from './auth.service';
 
 describe('AuthService password reset security', () => {
@@ -314,6 +314,7 @@ describe('AuthService password reset security', () => {
         email: 'new@example.test',
         password: persistedHash,
         role: 'USER',
+        accountState: UserAccountState.ACTIVE,
         sessionVersion: 1,
       }),
     );
@@ -340,7 +341,8 @@ describe('AuthService password reset security', () => {
     jwtService.verifyAsync.mockResolvedValue({ sub: 42, sv: 3 });
     usersService.findById.mockResolvedValue({
       id: 42,
-      role: Role.LOGISTICS,
+      role: Role.ADMIN,
+      accountState: UserAccountState.ACTIVE,
       sessionVersion: 3,
     });
 
@@ -359,7 +361,8 @@ describe('AuthService password reset security', () => {
     });
     usersService.findById.mockResolvedValue({
       id: 42,
-      role: Role.SUPER_ADMIN,
+      role: Role.SUPERADMIN,
+      accountState: UserAccountState.ACTIVE,
       sessionVersion: 3,
     });
 
@@ -379,7 +382,8 @@ describe('AuthService password reset security', () => {
     });
     usersService.findById.mockResolvedValue({
       id: 42,
-      role: Role.LOGISTICS,
+      role: Role.ADMIN,
+      accountState: UserAccountState.ACTIVE,
       sessionVersion: 3,
     });
 
@@ -395,6 +399,7 @@ describe('AuthService password reset security', () => {
     usersService.findById.mockResolvedValue({
       id: 42,
       role: Role.USER,
+      accountState: UserAccountState.ACTIVE,
       sessionVersion: 3,
     });
 
@@ -407,7 +412,8 @@ describe('AuthService password reset security', () => {
     jwtService.verifyAsync.mockResolvedValue({ sub: 42, sv: 3 });
     usersService.findById.mockResolvedValue({
       id: 42,
-      role: Role.SUPER_ADMIN,
+      role: Role.SUPERADMIN,
+      accountState: UserAccountState.ACTIVE,
       sessionVersion: 4,
     });
 
@@ -424,7 +430,8 @@ describe('AuthService password reset security', () => {
     });
     usersService.findById.mockResolvedValue({
       id: 42,
-      role: Role.SUPER_ADMIN,
+      role: Role.SUPERADMIN,
+      accountState: UserAccountState.ACTIVE,
       sessionVersion: 4,
     });
 
@@ -484,7 +491,8 @@ describe('AuthService password reset security', () => {
     refreshJwt.verifyAsync.mockResolvedValue(refreshPayload);
     usersService.findById.mockResolvedValue({
       id: 42,
-      role: Role.SUPER_ADMIN,
+      role: Role.SUPERADMIN,
+      accountState: UserAccountState.ACTIVE,
       sessionVersion: 3,
     });
 
@@ -500,7 +508,8 @@ describe('AuthService password reset security', () => {
 
     usersService.findById.mockResolvedValue({
       id: 42,
-      role: Role.SUPER_ADMIN,
+      role: Role.SUPERADMIN,
+      accountState: UserAccountState.ACTIVE,
       sessionVersion: 4,
     });
     await expect(

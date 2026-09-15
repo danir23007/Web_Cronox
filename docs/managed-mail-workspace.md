@@ -27,7 +27,7 @@ Metadatos observados localmente (sin leer ni imprimir contraseñas): SUPPORT `su
 
 ## Arquitectura y seguridad
 
-- Ruta protegida: `/api/admin/mail-templates`, con JWT, AdminGuard y RolesGuard; acceso SUPER_ADMIN, incluidas las equivalencias de rol del proyecto. También se conserva la protección CSRF global.
+- Ruta protegida: `/api/admin/mail-templates`, con JWT, AdminGuard y RolesGuard; acceso administrativo canónico mediante `ADMIN` o `SUPERADMIN`. También se conserva la protección CSRF global.
 - Modelos nuevos: `EmailSenderProfile`, `EmailTemplateFolder`, `ManagedEmailTemplate`, `EmailTemplateVersion`, `EmailPublication`, `EmailSignature`, `EmailAsset`. Claves foráneas, índices, unicidad de importación y clave compuesta cuenta/propósito para una única publicación activa. La carpeta y la plantilla comparten una FK compuesta de cuenta.
 - La primera apertura de cada cuenta ejecuta una inicialización transaccional con bloqueo por cuenta y marca `initializedAt`. Se crean cinco Círculos y cinco copias independientes de cada propósito de esa cuenta: 20 carpetas y 50 plantillas en total. Repetir no sobrescribe ediciones, renombres ni carpetas eliminadas. No envía ni publica nada.
 - Cada guardado y acción de plantilla compara `revision`. Una publicación crea una instantánea y actualiza una referencia única. Editar el borrador no modifica la instantánea. Restaurar una versión crea contenido de borrador que requiere publicación explícita.
@@ -59,7 +59,7 @@ Vídeo: imagen de portada enlazada al vídeo externo, texto/indicador de reprodu
 1. Usar Node >=22.12 y ejecutar `npm ci` en `cronox-backend`.
 2. Mantener las migraciones con `npx prisma migrate deploy`. No ejecutar `db push` ni modificar migraciones previas. La base configurada ya informa que sus 31 migraciones están aplicadas.
 3. Configurar `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` y, sólo si se quiere separar los activos, `SUPABASE_EMAIL_STORAGE_BUCKET`. No exponer la clave de servicio al navegador. El fallback `gallery` se comprobó con una subida PNG pública temporal y su limpieza posterior.
-4. Para cuentas aún no inicializadas, ejecutar `npm run email:import` o abrir cada cuenta como SUPER_ADMIN. El importador autónomo no inicia la aplicación ni envía correos y repetirlo es seguro. La adaptación de borradores HTML first-party existentes no requiere ejecutar este importador ni ningún script: ocurre al leer y sólo se persiste al guardar.
+4. Para cuentas aún no inicializadas, ejecutar `npm run email:import` o abrir cada cuenta como `SUPERADMIN`. El importador autónomo no inicia la aplicación ni envía correos y repetirlo es seguro. La adaptación de borradores HTML first-party existentes no requiere ejecutar este importador ni ningún script: ocurre al leer y sólo se persiste al guardar.
 5. Ejecutar `npm run build` en backend y `npm run admin:build` en la raíz; desplegar backend y assets conjuntamente.
 6. Configurar/habilitar SMTP en servidor si procede. Entrar en la biblioteca, revisar desktop/móvil y enviar una prueba **solo** a un destinatario confirmado por el administrador. Publicar únicamente tras revisar el resultado. Ninguna plantilla importada está activa por defecto.
 
@@ -85,6 +85,6 @@ Las modificaciones locales anteriores de inventario, tarjetas, stock, favoritos 
 - `git diff --check`: **correcto**; Git avisa de conversión LF/CRLF del entorno Windows, sin errores de espacios.
 - `npm audit`: **16 vulnerabilidades reportadas (3 moderadas, 13 altas)** en el árbol de dependencias. No se realizó un `audit fix` global ni se afirma que el proyecto esté libre de vulnerabilidades.
 - El fallo de auditoría posterior a una aceptación SMTP no convierte el envío en un error ni lo reintenta: el intento ya está registrado y el fallo posterior produce un aviso sin datos sensibles. Comprobado con transporte y base simulados.
-- Servidor local Nest reiniciado en modo watch al terminar. Comprobación HTTP sin autenticación: `/admin.html` devuelve **200**; `/api/admin/mail-templates` y `/api/admin/mail-templates/catalog` devuelven **401**. Esto comprueba disponibilidad y rechazo anónimo, no sustituye una prueba visual ni una sesión SUPER_ADMIN real.
+- Servidor local Nest reiniciado en modo watch al terminar. Comprobación HTTP sin autenticación: `/admin.html` devuelve **200**; `/api/admin/mail-templates` y `/api/admin/mail-templates/catalog` devuelven **401**. Esto comprueba disponibilidad y rechazo anónimo, no sustituye una prueba visual ni una sesión `SUPERADMIN` real.
 
 Pendientes: despliegue de estos cambios, disponibilidad SMTP, revisión autenticada en navegador, interacción táctil y comprobación Gmail/Outlook. No se ha hecho ningún commit ni despliegue.

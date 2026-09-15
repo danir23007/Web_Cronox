@@ -333,6 +333,7 @@ model User {
   passwordSetupClaimedAt    DateTime?
   role                      Role                    @default(USER)
   name                      String?
+  phone                     String?
   firstName                 String?
   lastName                  String?
   memberCode                String?                 @unique
@@ -954,10 +955,7 @@ model CustomerActivityEvent {
 
 enum Role {
   USER
-  SUPER_ADMIN
-  MODERATOR
-  LOGISTICS
-  MARKETING
+  FRIEND
   ADMIN
   SUPERADMIN
 }

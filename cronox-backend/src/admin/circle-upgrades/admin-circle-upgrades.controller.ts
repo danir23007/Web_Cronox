@@ -11,7 +11,7 @@ import { AdminCircleUpgradeReviewDto } from './dto/admin-circle-upgrade-review.d
 
 @Controller('admin/circle-upgrades/3-4')
 @UseGuards(JwtAuthGuard, AdminGuard, RolesGuard)
-@Roles(Role.SUPER_ADMIN, Role.MODERATOR)
+@Roles(Role.SUPERADMIN)
 export class AdminCircleUpgradesController {
   constructor(private readonly adminCircleUpgradesService: AdminCircleUpgradesService) {}
 

@@ -17,29 +17,21 @@ describe('AdminCustomerAnalyticsController authorization', () => {
     }) as unknown as ExecutionContext;
   const guard = new RolesGuard(new Reflector());
 
-  it('limits every customer analytics and login-history endpoint to SUPER_ADMIN and MODERATOR', () => {
+  it('uses the canonical SUPERADMIN role on every analytics endpoint', () => {
     expect(
       Reflect.getMetadata(ROLES_KEY, AdminCustomerAnalyticsController),
-    ).toEqual([Role.SUPER_ADMIN, Role.MODERATOR]);
+    ).toEqual([Role.SUPERADMIN]);
   });
 
-  it('allows SUPER_ADMIN to access customer analytics', () => {
-    expect(guard.canActivate(context('summary', Role.SUPER_ADMIN))).toBe(true);
+  it('allows SUPERADMIN to access customer analytics', () => {
+    expect(guard.canActivate(context('summary', Role.SUPERADMIN))).toBe(true);
   });
 
-  it('allows SUPER_ADMIN to access login history', () => {
-    expect(guard.canActivate(context('logins', Role.SUPER_ADMIN))).toBe(true);
+  it('allows SUPERADMIN to access login history', () => {
+    expect(guard.canActivate(context('logins', Role.SUPERADMIN))).toBe(true);
   });
 
-  it('allows MODERATOR to access customer analytics', () => {
-    expect(guard.canActivate(context('summary', Role.MODERATOR))).toBe(true);
-  });
-
-  it('allows MODERATOR to access login history', () => {
-    expect(guard.canActivate(context('logins', Role.MODERATOR))).toBe(true);
-  });
-
-  it('treats the legacy ADMIN enum value as a full administrator', () => {
+  it('keeps ADMIN access to existing administrative analytics', () => {
     expect(guard.canActivate(context('summary', Role.ADMIN))).toBe(true);
     expect(guard.canActivate(context('logins', Role.ADMIN))).toBe(true);
   });

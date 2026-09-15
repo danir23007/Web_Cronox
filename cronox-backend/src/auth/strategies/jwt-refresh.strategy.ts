@@ -4,6 +4,7 @@ import { ExtractJwt, Strategy } from 'passport-jwt';
 import type { Request } from 'express';
 import { getRequiredJwtSecret } from '../../common/config/environment';
 import { UsersService } from '../../users/users.service';
+import { UserAccountState } from '@prisma/client';
 
 const extractRefreshToken = (req: Request): string | null => {
   if (!req) {
@@ -54,6 +55,7 @@ export class JwtRefreshStrategy extends PassportStrategy(
 
     if (
       !user ||
+      user.accountState !== UserAccountState.ACTIVE ||
       !Number.isInteger(payload.sv) ||
       payload.sv !== user.sessionVersion
     ) {

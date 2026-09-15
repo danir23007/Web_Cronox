@@ -288,19 +288,19 @@
   let lastSectionId = 'section-menu';
   let lastPendingCounts = { pending23: 0, pending34: 0 };
   const PENDING_STORAGE_KEY = 'cronox.admin.pendingCounts';
-  const ADMIN_ROLES = new Set(['SUPER_ADMIN', 'MODERATOR', 'LOGISTICS', 'MARKETING', 'ADMIN', 'SUPERADMIN']);
+  const ADMIN_ROLES = new Set(['ADMIN', 'SUPERADMIN']);
   const PERMISSIONS = {
-    requests: ['SUPER_ADMIN', 'MODERATOR'],
-    users: ['SUPER_ADMIN', 'MODERATOR'],
-    userDetail: ['SUPER_ADMIN', 'MODERATOR'],
-    products: ['SUPER_ADMIN', 'LOGISTICS'],
-    inventory: ['SUPER_ADMIN', 'LOGISTICS'],
-    mails: ['SUPER_ADMIN'],
-    keyScreen: ['SUPER_ADMIN'],
-    orders: ['SUPER_ADMIN', 'LOGISTICS'],
-    promoCodes: ['SUPER_ADMIN', 'MARKETING'],
-    auditLog: ['SUPER_ADMIN'],
-    notes: ['SUPER_ADMIN', 'MODERATOR'],
+    requests: ['ADMIN', 'SUPERADMIN'],
+    users: ['ADMIN', 'SUPERADMIN'],
+    userDetail: ['ADMIN', 'SUPERADMIN'],
+    products: ['ADMIN', 'SUPERADMIN'],
+    inventory: ['ADMIN', 'SUPERADMIN'],
+    mails: ['ADMIN', 'SUPERADMIN'],
+    keyScreen: ['ADMIN', 'SUPERADMIN'],
+    orders: ['ADMIN', 'SUPERADMIN'],
+    promoCodes: ['ADMIN', 'SUPERADMIN'],
+    auditLog: ['ADMIN', 'SUPERADMIN'],
+    notes: ['ADMIN', 'SUPERADMIN'],
   };
   const SECTION_PERMISSIONS = {
     'section-23': 'requests',
@@ -320,14 +320,11 @@
   let currentAdminRole = '';
 
   const normalizeRole = (role) => {
-    if (!role) return '';
-    if (role === 'SUPERADMIN' || role === 'ADMIN') return 'SUPER_ADMIN';
-    return role;
+    return ['USER', 'FRIEND', 'ADMIN', 'SUPERADMIN'].includes(role) ? role : '';
   };
 
   const hasAccess = (role, allowedRoles) => {
     const effective = normalizeRole(role);
-    if (effective === 'SUPER_ADMIN') return true;
     return Array.isArray(allowedRoles) && allowedRoles.includes(effective);
   };
 
@@ -2280,7 +2277,7 @@
     const firstName = source.firstName ?? source.first_name ?? '';
     const lastName = source.lastName ?? source.last_name ?? '';
     const displayName =
-      [firstName, lastName].filter(Boolean).join(' ') || source.name || source.fullName || '';
+      source.name || [firstName, lastName].filter(Boolean).join(' ') || source.fullName || '';
     return {
       id,
       email,
@@ -2305,6 +2302,13 @@
   };
 
   const getUsersColumnCount = () => 9;
+
+  const formatUserRole = (role) => {
+    if (role === 'FRIEND') return 'Friend';
+    if (role === 'SUPERADMIN') return 'Super Admin';
+    if (role === 'ADMIN') return 'Admin';
+    return role || '—';
+  };
 
   const renderUsers = (items = []) => {
     if (!usersBody) return;
@@ -2332,7 +2336,7 @@
           ? `<div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">${phoneLabel}${phoneCopyButton}</div>`
           : phoneLabel;
         const nameLabel = user.displayName ? escapeHtml(user.displayName) : '—';
-        const roleLabel = user.role ? escapeHtml(String(user.role)) : '—';
+        const roleLabel = escapeHtml(formatUserRole(user.role));
         const accountStateLabel = { ACTIVE: 'Activa', PENDING_PASSWORD: 'Pendiente de contraseña', PRE_REGISTERED: 'Prerregistrado' }[user.accountState] || '—';
         const circleLabel =
           user.circle != null && user.circle !== '' ? escapeHtml(String(user.circle)) : '—';

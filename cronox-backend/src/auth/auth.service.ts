@@ -30,7 +30,7 @@ import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
 import { parseClientInfo } from '../analytics/client-info';
 import { normalizeEmail } from '../common/email';
-import { isAdminRole } from '../common/roles.utils';
+import { isAdminPanelRole } from '../common/roles.utils';
 
 const PASSWORD_SETUP_CLAIM_STALE_MS = 10 * 60 * 1000;
 
@@ -191,7 +191,8 @@ export class AuthService {
       return Boolean(
         user &&
           user.sessionVersion === session.sessionVersion &&
-          isAdminRole(user.role),
+          user.accountState === UserAccountState.ACTIVE &&
+          isAdminPanelRole(user.role),
       );
     } catch {
       // Public navigation must fall back to the Key Screen for any invalid,
@@ -499,7 +500,8 @@ export class AuthService {
       password,
       user?.password ?? this.dummyPasswordHash,
     );
-    if (!user || !isValid) return null;
+    if (!user || !isValid || user.accountState !== UserAccountState.ACTIVE)
+      return null;
 
     return this.omitPassword(user);
   }

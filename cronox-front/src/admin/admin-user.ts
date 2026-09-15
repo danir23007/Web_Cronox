@@ -17,6 +17,15 @@
   const requestsStatus = document.getElementById('requestsStatus');
   const analyticsStatus = document.getElementById('analyticsStatus');
   const refreshAllBtn = document.getElementById('refreshAll');
+  const editUserBtn = document.getElementById('editUser') as HTMLButtonElement | null;
+  const userEditForm = document.getElementById('userEditForm') as HTMLFormElement | null;
+  const editUserName = document.getElementById('editUserName') as HTMLInputElement | null;
+  const editUserPhone = document.getElementById('editUserPhone') as HTMLInputElement | null;
+  const editUserRole = document.getElementById('editUserRole') as HTMLSelectElement | null;
+  const editUserStatus = document.getElementById('editUserStatus') as HTMLSelectElement | null;
+  const editUserCircle = document.getElementById('editUserCircle') as HTMLSelectElement | null;
+  const cancelUserEditBtn = document.getElementById('cancelUserEdit') as HTMLButtonElement | null;
+  const saveUserEditBtn = document.getElementById('saveUserEdit') as HTMLButtonElement | null;
   const refreshAuditBtn = document.getElementById('refreshAudit');
   const refreshNotesBtn = document.getElementById('refreshNotes') as HTMLButtonElement | null;
   const backToUsersBtn = document.getElementById('backToUsers') as HTMLAnchorElement | null;
@@ -57,6 +66,10 @@
   let analyticsTotalPages = 1;
   let analyticsAccessAllowed = false;
   let notesAvailable = true;
+  let currentUserDetail: Record<string, unknown> | null = null;
+  let currentEditOptions: Record<string, unknown> | null = null;
+  let canEditProtectedUserFields = false;
+  let authenticatedAdminId: string | null = null;
   const kpiState: {
     ordersCount: number | null;
     totalSpent: number | null;
@@ -282,8 +295,16 @@
     element.textContent = `${label} · ${formatText(value)}`;
   };
 
+  const roleLabel = (value: unknown) => {
+    const role = String(value || '');
+    if (role === 'FRIEND') return 'Friend';
+    if (role === 'SUPERADMIN') return 'Super Admin';
+    if (role === 'ADMIN') return 'Admin';
+    return role || '—';
+  };
+
   const renderSummary = (user: Record<string, unknown> = {}, stats: Record<string, unknown> = {}) => {
-    setBadgeText(summaryRole, 'Role', user.role);
+    setBadgeText(summaryRole, 'Role', roleLabel(user.role));
     const sessionStatus =
       (user.session as { status?: string } | undefined)?.status ||
       (user.sessionStatus as string) ||
@@ -292,7 +313,7 @@
     if (summaryId) summaryId.textContent = formatText(user.id);
     if (summaryEmail) summaryEmail.textContent = formatText(user.email);
     const fullName = [user.firstName, user.lastName].filter(Boolean).join(' ');
-    if (summaryName) summaryName.textContent = formatText(fullName || user.username);
+    if (summaryName) summaryName.textContent = formatText(user.name || fullName || user.username);
     if (summaryCircle) summaryCircle.textContent = formatText(user.circle);
     if (summaryOrdersCount) summaryOrdersCount.textContent = formatText(stats.ordersCount ?? kpiState.ordersCount);
     if (summaryTotalSpent) {
@@ -337,9 +358,10 @@
     }> = [
       { label: 'ID', value: user.id },
       { label: 'Email', value: user.email },
-      { label: 'Nombre', value: user.firstName },
+      { label: 'Nombre', value: user.name || user.firstName },
       { label: 'Apellidos', value: user.lastName },
-      { label: 'Role', value: user.role },
+      { label: 'Role', value: roleLabel(user.role) },
+      { label: 'Estado', value: user.accountState },
       { label: 'Circle', value: user.circle },
       { label: 'Teléfono', value: user.phone },
       { label: 'País', value: displayCountry(user.country) },
@@ -479,6 +501,117 @@
     }
   };
 
+  const selectOptions = (
+    select: HTMLSelectElement | null,
+    values: unknown[],
+    current: unknown,
+    label: (value: unknown) => string = (value) => String(value),
+  ) => {
+    if (!select) return;
+    select.replaceChildren();
+    values.forEach((value) => {
+      const option = document.createElement('option');
+      option.value = String(value);
+      option.textContent = label(value);
+      option.selected = String(value) === String(current);
+      select.appendChild(option);
+    });
+  };
+
+  const closeUserEdit = () => {
+    if (userEditForm) userEditForm.hidden = true;
+    if (editUserBtn) editUserBtn.hidden = !canEditProtectedUserFields;
+  };
+
+  const openUserEdit = async () => {
+    if (!canEditProtectedUserFields || !currentUserDetail || !userEditForm) return;
+    try {
+      if (!currentEditOptions) {
+        if (!window.CRONOX_API?.admin?.getUserEditOptions) {
+          throw Object.assign(new Error('Opciones de edición no disponibles'), { status: 404 });
+        }
+        currentEditOptions = (await window.CRONOX_API.admin.getUserEditOptions()) as Record<string, unknown>;
+      }
+      const roles = Array.isArray(currentEditOptions.roles) ? currentEditOptions.roles : [];
+      const statuses = Array.isArray(currentEditOptions.accountStates) ? currentEditOptions.accountStates : [];
+      const circles = Array.isArray(currentEditOptions.circles) ? currentEditOptions.circles : [];
+      if (editUserName) editUserName.value = String(currentUserDetail.name || '');
+      if (editUserPhone) editUserPhone.value = String(currentUserDetail.phone || '');
+      selectOptions(editUserRole, roles, currentUserDetail.role, roleLabel);
+      selectOptions(editUserStatus, statuses, currentUserDetail.accountState);
+      selectOptions(editUserCircle, circles, currentUserDetail.circle);
+      editUserBtn && (editUserBtn.hidden = true);
+      userEditForm.hidden = false;
+      editUserName?.focus();
+    } catch (error) {
+      showModuleError({
+        container: profileStatus || statusArea,
+        error: error as CronoxApiError,
+        title: 'No se pudo abrir la edición de usuario',
+      });
+    }
+  };
+
+  const saveUserEdit = async (event: SubmitEvent) => {
+    event.preventDefault();
+    if (
+      !canEditProtectedUserFields ||
+      !userId ||
+      !currentUserDetail ||
+      !window.CRONOX_API?.admin?.updateAdminUser
+    )
+      return;
+    const previousLabel = saveUserEditBtn?.textContent || 'Guardar cambios';
+    if (saveUserEditBtn) {
+      saveUserEditBtn.disabled = true;
+      saveUserEditBtn.textContent = 'Guardando…';
+    }
+    if (profileStatus) profileStatus.innerHTML = '';
+    const previousRole = currentUserDetail.role;
+    const previousState = currentUserDetail.accountState;
+    try {
+      const updated = (await window.CRONOX_API.admin.updateAdminUser(userId, {
+        name: editUserName?.value.trim() || null,
+        phone: editUserPhone?.value.trim() || null,
+        role: editUserRole?.value,
+        accountState: editUserStatus?.value,
+        circleLevel: Number(editUserCircle?.value),
+        expectedUpdatedAt: currentUserDetail.updatedAt,
+      })) as Record<string, unknown>;
+      currentUserDetail = { ...currentUserDetail, ...updated };
+      renderSummary(currentUserDetail);
+      renderProfile(currentUserDetail);
+      closeUserEdit();
+      if (renderBanner && profileStatus) {
+        renderBanner(profileStatus, {
+          type: 'success',
+          title: 'Usuario actualizado',
+          message: 'Los cambios se han guardado y la vista muestra los datos persistidos.',
+        });
+      }
+      if (
+        authenticatedAdminId === String(userId) &&
+        (updated.role !== previousRole || updated.accountState !== previousState)
+      ) {
+        redirectToLogin();
+        return;
+      }
+      void loadAuditLogs();
+    } catch (error) {
+      showModuleError({
+        container: profileStatus || statusArea,
+        error: error as CronoxApiError,
+        title: 'No se pudo actualizar el usuario',
+        retry: (error as CronoxApiError)?.status === 409 ? loadUserDetail : undefined,
+      });
+    } finally {
+      if (saveUserEditBtn) {
+        saveUserEditBtn.disabled = false;
+        saveUserEditBtn.textContent = previousLabel;
+      }
+    }
+  };
+
   const loadUserDetail = async () => {
     if (!userId) return;
     if (!window.CRONOX_API?.admin?.getUserDetail) {
@@ -524,6 +657,7 @@
         }
         return;
       }
+      currentUserDetail = user;
       updateOrderKpis({
         ordersCount: (stats.ordersCount as number) ?? (stats.orders as number) ?? (stats.ordersTotal as number),
         totalSpent: (stats.totalSpent as number) ?? (stats.totalPaid as number) ?? (stats.spentTotal as number),
@@ -822,7 +956,7 @@
   };
 
   const configureAnalyticsAccess = (currentUser: { role?: string } | null) => {
-    analyticsAccessAllowed = ['SUPER_ADMIN', 'SUPERADMIN', 'MODERATOR'].includes(String(currentUser?.role || ''));
+    analyticsAccessAllowed = currentUser?.role === 'SUPERADMIN';
 
     if (!analyticsAccessAllowed) {
       analyticsTab?.remove();
@@ -843,6 +977,7 @@
         return null;
       }
       if (adminAuthCheck) adminAuthCheck.hidden = true;
+      authenticatedAdminId = String(currentUser?.id ?? '');
       if (adminUserPage) adminUserPage.hidden = false;
       document.documentElement.dataset.adminAuthState = 'authorized';
       return currentUser;
@@ -1143,6 +1278,9 @@
   refreshAuditBtn?.addEventListener('click', loadAuditLogs);
   refreshNotesBtn?.addEventListener('click', loadNotes);
   noteForm?.addEventListener('submit', handleNoteSubmit);
+  editUserBtn?.addEventListener('click', () => void openUserEdit());
+  cancelUserEditBtn?.addEventListener('click', closeUserEdit);
+  userEditForm?.addEventListener('submit', saveUserEdit);
   notesList?.addEventListener('click', handleNoteDelete);
   expandAnalyticsBtn?.addEventListener('click', expandAnalytics);
   analyticsPrevBtn?.addEventListener('click', () => {
@@ -1156,6 +1294,8 @@
 
   void ensureAdminAccess().then((currentUser) => {
     if (!currentUser) return;
+    canEditProtectedUserFields = currentUser.role === 'SUPERADMIN';
+    if (editUserBtn) editUserBtn.hidden = !canEditProtectedUserFields;
     configureAnalyticsAccess(currentUser);
     if (userId) loadAll();
   });

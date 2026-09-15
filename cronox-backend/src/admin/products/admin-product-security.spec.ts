@@ -14,9 +14,7 @@ describe('AdminProductsController security', () => {
     const roles = Reflect.getMetadata(ROLES_KEY, AdminProductsController) || [];
     expect(guards).toContain(JwtAuthGuard);
     expect(guards).toContain(AdminGuard);
-    expect(roles).toEqual(
-      expect.arrayContaining([Role.SUPER_ADMIN, Role.LOGISTICS]),
-    );
+    expect(roles).toEqual([Role.SUPERADMIN]);
     expect(roles).not.toContain(Role.USER);
   });
 
@@ -24,7 +22,7 @@ describe('AdminProductsController security', () => {
     const guard = new AdminGuard({
       getAllAndOverride: jest
         .fn()
-        .mockReturnValue([Role.SUPER_ADMIN, Role.LOGISTICS]),
+        .mockReturnValue([Role.SUPERADMIN]),
     } as any);
     const context = {
       switchToHttp: () => ({

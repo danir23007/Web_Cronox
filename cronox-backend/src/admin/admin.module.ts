@@ -29,6 +29,7 @@ import { OrdersModule } from '../orders/orders.module';
 import { AdminInventoryController } from './inventory/admin-inventory.controller';
 import { AdminInventoryService } from './inventory/admin-inventory.service';
 import { ProductImageUploadSizeExceptionFilter } from './products/product-image-upload-size-exception.filter';
+import { SuperAdminGuard } from '../common/guards/super-admin.guard';
 
 @Module({
   imports: [
@@ -66,6 +67,7 @@ import { ProductImageUploadSizeExceptionFilter } from './products/product-image-
     AdminInventoryService,
     ProductImageUploadSizeExceptionFilter,
     AdminGuard,
+    SuperAdminGuard,
   ],
 })
 export class AdminModule {}

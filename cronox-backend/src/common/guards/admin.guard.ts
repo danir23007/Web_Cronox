@@ -8,7 +8,7 @@ import { Reflector } from '@nestjs/core';
 import type { Request } from 'express';
 import { Role } from '@prisma/client';
 import { ROLES_KEY } from '../roles.decorator';
-import { hasAnyRole, isSuperAdminRole } from '../roles.utils';
+import { hasAnyRole, isAdminPanelRole } from '../roles.utils';
 
 @Injectable()
 export class AdminGuard implements CanActivate {
@@ -23,9 +23,8 @@ export class AdminGuard implements CanActivate {
     ]);
 
     if (
-      requiredRoles?.length
-        ? !hasAnyRole(role, requiredRoles)
-        : !isSuperAdminRole(role)
+      !isAdminPanelRole(role) ||
+      (requiredRoles?.length && !hasAnyRole(role, requiredRoles))
     ) {
       throw new ForbiddenException('Solo los administradores pueden acceder');
     }

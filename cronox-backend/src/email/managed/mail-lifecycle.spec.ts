@@ -42,7 +42,7 @@ describe('email permissions, publication and controlled tests', () => {
       RolesGuard,
     ]);
     expect(reflector.get(ROLES_KEY, ManagedMailController)).toEqual([
-      Role.SUPER_ADMIN,
+      Role.SUPERADMIN,
     ]);
     expect(
       reflector.get(

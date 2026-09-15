@@ -44,7 +44,7 @@ import {
 
 @Controller('admin/mail-templates')
 @UseGuards(JwtAuthGuard, AdminGuard, RolesGuard)
-@Roles(Role.SUPER_ADMIN)
+@Roles(Role.SUPERADMIN)
 @UseFilters(MailExceptionFilter)
 export class ManagedMailController {
   @Post(':key/signatures/preview')

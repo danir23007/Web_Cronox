@@ -410,6 +410,13 @@
       font-weight: 600;
     }
 
+    .user-edit-form { display: grid; gap: 14px; margin-top: 18px; padding-top: 18px; border-top: 1px solid rgba(255,255,255,.1); }
+    .user-edit-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+    .user-edit-field { display: grid; gap: 7px; color: #cfcfdb; font-size: .88rem; }
+    .user-edit-field input, .user-edit-field select { width: 100%; border: 1px solid rgba(255,255,255,.16); border-radius: 10px; background: #0b0b10; color: #fff; padding: 10px 12px; }
+    .user-edit-actions { display: flex; justify-content: flex-end; gap: 10px; }
+    @media (max-width: 640px) { .user-edit-grid { grid-template-columns: 1fr; } }
+
     .note-meta {
       color: #a6a6b3;
       font-size: 0.8rem;
@@ -445,6 +452,7 @@
       </div>
       <div class="topbar-right">
         <span class="badge" id="apiBaseBadge">API: —</span>
+        <button class="btn" type="button" id="editUser" hidden>Editar usuario</button>
         <button class="btn" type="button" id="refreshAll">Recargar</button>
         <a class="btn" id="backToUsers" href="admin.html">Volver</a>
       </div>
@@ -512,6 +520,19 @@
         <div class="panel active" id="panel-profile">
           <div id="profileStatus" class="status-area"></div>
           <div class="kv-list" id="profileList"></div>
+          <form id="userEditForm" class="user-edit-form" hidden>
+            <div class="user-edit-grid">
+              <label class="user-edit-field">Nombre<input id="editUserName" name="name" maxlength="160"></label>
+              <label class="user-edit-field">Teléfono<input id="editUserPhone" name="phone" minlength="6" maxlength="32" inputmode="tel" autocomplete="tel" pattern="\+?[0-9() -]{6,32}" title="Entre 6 y 15 dígitos; se permiten espacios, paréntesis, guiones y un + inicial"></label>
+              <label class="user-edit-field">Rol<select id="editUserRole" name="role"></select></label>
+              <label class="user-edit-field">Estado<select id="editUserStatus" name="accountState"></select></label>
+              <label class="user-edit-field">Círculo<select id="editUserCircle" name="circleLevel"></select></label>
+            </div>
+            <div class="user-edit-actions">
+              <button class="btn" id="cancelUserEdit" type="button">Cancelar</button>
+              <button class="btn" id="saveUserEdit" type="submit">Guardar cambios</button>
+            </div>
+          </form>
         </div>
 
         <div class="panel" id="panel-audit">

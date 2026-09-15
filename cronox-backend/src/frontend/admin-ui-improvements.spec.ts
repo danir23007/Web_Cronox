@@ -106,17 +106,79 @@ describe('admin UI improvement contracts', () => {
     );
   });
 
-  it('shows customer analytics UI only to SUPER_ADMIN and MODERATOR', () => {
+  it('shows customer analytics UI only to canonical SUPERADMIN', () => {
     const adminUser = readFrontend('src/admin/admin-user.ts');
 
-    expect(adminUser).toMatch(
-      /analyticsAccessAllowed = \[\s*'SUPER_ADMIN',\s*'SUPERADMIN',\s*'MODERATOR',?\s*\]\.includes\(/,
+    expect(adminUser).toContain(
+      "analyticsAccessAllowed = currentUser?.role === 'SUPERADMIN'",
     );
-    expect(adminUser).not.toContain("'ADMIN'].includes(");
+    expect(adminUser).not.toContain("currentUser?.role === 'SUPER_ADMIN'");
     expect(adminUser).toContain('analyticsTab?.remove()');
     expect(adminUser).toContain('analyticsPanel?.remove()');
     expect(adminUser).toContain(
       'if (!analyticsAccessAllowed || !userId || !analyticsOverview) return;',
     );
+  });
+
+  it('offers protected user editing only to exact Super Admin roles and refreshes persisted detail data', () => {
+    const html = readFrontend('admin-user.html');
+    const adminUser = readFrontend('src/admin/admin-user.ts');
+    const adminList = readFrontend('assets/admin.js');
+    const api = readFrontend('src/admin/api.ts');
+
+    expect(html).toContain('id="editUser"');
+    expect(html).toContain('id="userEditForm"');
+    expect(html).toContain('id="editUserName"');
+    expect(html).toContain('id="editUserPhone"');
+    expect(html).toContain('pattern="\\+?[0-9() -]{6,32}"');
+    expect(html).toContain('id="editUserRole"');
+    expect(html).toContain('id="editUserStatus"');
+    expect(html).toContain('id="editUserCircle"');
+    expect(adminUser).toContain(
+      "canEditProtectedUserFields = currentUser.role === 'SUPERADMIN'",
+    );
+    expect(adminUser).not.toMatch(
+      /canEditProtectedUserFields = \[[^\]]*'ADMIN'/,
+    );
+    expect(adminUser).toContain(
+      'currentUserDetail = { ...currentUserDetail, ...updated }',
+    );
+    expect(adminUser).toContain(
+      "editUserPhone.value = String(currentUserDetail.phone || '')",
+    );
+    expect(adminUser).toContain('phone: editUserPhone?.value.trim() || null');
+    expect(adminUser).toContain('renderSummary(currentUserDetail)');
+    expect(adminUser).toContain('renderProfile(currentUserDetail)');
+    expect(adminList).toContain(
+      'const phone = source.phone ?? source.phoneNumber ?? source.mobile ?? source.telefono ??',
+    );
+    expect(adminList).toContain('<td>${phoneCell}</td>');
+    expect(adminUser).toContain(
+      "cancelUserEditBtn?.addEventListener('click', closeUserEdit)",
+    );
+    expect(adminUser).toContain("if (role === 'FRIEND') return 'Friend'");
+    expect(api).toContain(
+      'request(`/api/admin/users/${encodeURIComponent(id)}`',
+    );
+    expect(api).toContain("method: 'PATCH'");
+  });
+
+  it('exposes exactly the four canonical roles in filters and selectors', () => {
+    const html = readFrontend('admin.html');
+    const admin = readFrontend('assets/admin.js');
+    const adminUser = readFrontend('src/admin/admin-user.ts');
+    const routing = readFrontend('assets/admin-auth-routing.js');
+    const values = [...html.matchAll(/<option value="([A-Z_]+)"/g)]
+      .map((match) => match[1])
+      .filter((value) =>
+        ['USER', 'FRIEND', 'ADMIN', 'SUPERADMIN'].includes(value),
+      );
+
+    expect(new Set(values)).toEqual(
+      new Set(['USER', 'FRIEND', 'ADMIN', 'SUPERADMIN']),
+    );
+    expect(admin).not.toContain('SUPER_ADMIN');
+    expect(adminUser).not.toContain('SUPER_ADMIN');
+    expect(routing).not.toContain('SUPER_ADMIN');
   });
 });
