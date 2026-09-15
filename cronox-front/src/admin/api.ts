@@ -817,10 +817,29 @@ import { availableStock, classifyStock } from '../../../cronox-backend/src/commo
     if (!response.ok) {
       const text = await response.text();
       const payload = text ? safeJsonParse(text) : null;
-      const error = new Error((payload as { message?: string } | null)?.message || `API error ${response.status}`) as CronoxApiError;
+      console.error('Admin Excel export failed', {
+        status: response.status,
+        endpoint: url,
+        responseType: response.headers.get('content-type') || '',
+      });
+      const error = new Error('No se ha podido preparar el archivo Excel. Inténtalo de nuevo.') as CronoxApiError;
       error.status = response.status;
       error.endpoint = url;
       error.payload = payload;
+      throw error;
+    }
+    const contentType = (response.headers.get('content-type') || '').split(';', 1)[0].trim().toLowerCase();
+    const excelMime = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+    if (contentType !== excelMime) {
+      console.error('Admin Excel export returned an unexpected content type', {
+        status: response.status,
+        endpoint: url,
+        responseType: contentType,
+      });
+      const error = new Error('No se ha podido preparar el archivo Excel. Inténtalo de nuevo.') as CronoxApiError;
+      error.status = response.status;
+      error.endpoint = url;
+      error.payload = null;
       throw error;
     }
     const disposition = response.headers.get('content-disposition') || '';

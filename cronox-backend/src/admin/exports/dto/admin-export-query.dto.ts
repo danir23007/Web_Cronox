@@ -1,4 +1,10 @@
-import { Role, UserAccountState } from '@prisma/client';
+import {
+  CircleUpgradeRequestStatus,
+  CircleUpgradeSocialNetwork,
+  OrderStatus,
+  Role,
+  UserAccountState,
+} from '@prisma/client';
 import { Transform, Type } from 'class-transformer';
 import {
   IsEnum,
@@ -58,9 +64,10 @@ export class AdminExportQueryDto {
   circle?: number;
 
   @IsOptional()
-  @IsString()
-  @MaxLength(160)
-  @Transform(trim)
+  @IsIn([
+    ...Object.values(OrderStatus),
+    ...Object.values(CircleUpgradeRequestStatus),
+  ])
   status?: string;
 
   @IsOptional()
@@ -70,12 +77,48 @@ export class AdminExportQueryDto {
   category?: string;
 
   @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  categoryId?: number;
+
+  @IsOptional()
   @IsIn(['true', 'false'])
   isActive?: string;
 
   @IsOptional()
   @IsIn(['in_stock', 'low', 'out_of_stock'])
   stockStatus?: 'in_stock' | 'low' | 'out_of_stock';
+
+  @IsOptional()
+  @IsIn(['in_stock', 'low', 'out_of_stock'])
+  stockState?: 'in_stock' | 'low' | 'out_of_stock';
+
+  @IsOptional()
+  @IsIn(['2-3', '3-4'])
+  requestType?: '2-3' | '3-4';
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  attemptsMin?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  attemptsMax?: number;
+
+  @IsOptional()
+  @IsEnum(CircleUpgradeSocialNetwork)
+  socialNetwork?: CircleUpgradeSocialNetwork;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  userCircle?: number;
 
   @IsOptional()
   @IsISO8601()
@@ -116,4 +159,12 @@ export class AdminExportQueryDto {
   @IsOptional()
   @IsIn(['asc', 'desc'])
   order?: 'asc' | 'desc';
+
+  @IsOptional()
+  @IsIn(['createdAt', 'stock', 'attempts'])
+  sortBy?: 'createdAt' | 'stock' | 'attempts';
+
+  @IsOptional()
+  @IsIn(['asc', 'desc'])
+  sortDir?: 'asc' | 'desc';
 }

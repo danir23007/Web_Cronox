@@ -5,8 +5,47 @@ on:
     branches:
       - main
 
+concurrency:
+  group: cronox-production
+  cancel-in-progress: false
+
 jobs:
+  verify-release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the exact release commit
+        uses: actions/checkout@v4
+
+      - name: Use production Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            cronox-backend/package-lock.json
+
+      - name: Install frontend build dependencies exactly
+        run: npm ci
+
+      - name: Install backend dependencies, including ExcelJS, exactly
+        run: npm ci --prefix cronox-backend
+
+      - name: Build matching frontend and backend artifacts
+        run: |
+          npm run admin:build
+          npm run build --prefix cronox-backend
+
+      - name: Verify Excel HTTP routes, filters, workbooks and artifacts
+        run: |
+          npm test --prefix cronox-backend -- --runInBand \
+            src/admin/exports \
+            src/frontend/admin-excel
+          npm run smoke:exports:artifacts --prefix cronox-backend
+          npm run smoke:exports:compiled --prefix cronox-backend
+
   deploy:
+    needs: verify-release
     runs-on: ubuntu-latest
     steps:
       - name: Deploy to VPS
@@ -16,5 +55,13 @@ jobs:
           username: ${{ secrets.CRONOX_VPS_USER }}
           key: ${{ secrets.CRONOX_VPS_SSH_KEY }}
           port: ${{ secrets.CRONOX_VPS_PORT }}
+          script_stop: true
           script: |
+            set -euo pipefail
             /var/www/cronox/deploy.sh
+            status="$(curl --silent --show-error --output /tmp/cronox-export-smoke.json --write-out '%{http_code}' 'http://127.0.0.1:3000/api/admin/exports/users?scope=all')"
+            if [ "$status" != "401" ] && [ "$status" != "429" ]; then
+              echo "Admin export route smoke failed with HTTP $status"
+              sed -n '1,5p' /tmp/cronox-export-smoke.json
+              exit 1
+            fi

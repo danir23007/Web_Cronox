@@ -47,7 +47,7 @@ describe('Admin Excel export UI contracts', () => {
     expect(admin).toContain("button.textContent = 'Preparando Excel…'");
     expect(admin).toContain('excelExportsInFlight.delete(key)');
     expect(admin).toContain(
-      'showToast(error?.message || classification.userMessage',
+      "showToast('No se ha podido preparar el archivo Excel. Inténtalo de nuevo.'",
     );
   });
 
@@ -60,6 +60,31 @@ describe('Admin Excel export UI contracts', () => {
     expect(api).toContain('if (!allowedModules.has(module))');
     expect(api).toContain("credentials: 'include'");
     expect(api).toContain("cache: 'no-store'");
+    expect(api).toContain('contentType !== excelMime');
+    expect(api).toContain(
+      'Admin Excel export returned an unexpected content type',
+    );
+    expect(api).not.toContain(
+      'new Error((payload as { message?: string } | null)?.message',
+    );
     expect(api).toContain('await response.blob()');
+  });
+
+  it('maps the normalized table state, omits pagination and never sends empty filters', () => {
+    expect(admin).toContain('withoutPagination(buildUsersQuery(usersState))');
+    expect(admin).toContain(
+      'withoutPagination(buildProductQuery(productsState))',
+    );
+    expect(admin).toContain(
+      'withoutPagination(buildActivityQuery(activityState))',
+    );
+    expect(admin).toContain(
+      'withoutPagination(buildRequestQuery(is23 ? requests23State : requestsState))',
+    );
+    expect(admin).toContain("requestType: is23 ? '2-3' : '3-4'");
+    expect(admin).toContain("search: inputValue('inventorySearch')");
+    expect(admin).toContain(
+      "Object.entries(query).filter(([, value]) => value !== '' && value != null)",
+    );
   });
 });

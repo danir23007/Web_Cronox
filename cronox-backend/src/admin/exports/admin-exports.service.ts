@@ -5,6 +5,7 @@ import {
 } from '@nestjs/common';
 import {
   CircleUpgradeRequestStatus,
+  CircleUpgradeSocialNetwork,
   OrderStatus,
   Prisma,
   Role,
@@ -368,10 +369,13 @@ export class AdminExportsService {
   private async products(
     query: AdminExportQueryDto,
   ): Promise<ExcelSheetDefinition[]> {
-    const where = this.productWhere(query);
-    const products = await this.prisma.product.findMany({
+    const where = await this.productWhere(query);
+    let products = await this.prisma.product.findMany({
       where,
-      orderBy: [{ createdAt: query.order ?? 'desc' }, { id: 'asc' }],
+      orderBy: [
+        { createdAt: query.sortDir ?? query.order ?? 'desc' },
+        { id: 'asc' },
+      ],
       take: TAKE_WITH_LIMIT_SENTINEL,
       include: {
         categories: { include: { category: true } },
@@ -383,6 +387,23 @@ export class AdminExportsService {
       take: TAKE_WITH_LIMIT_SENTINEL,
       include: { product: { select: { name: true } } },
     });
+    if (query.sortBy === 'stock') {
+      const totals = new Map<number, number>();
+      variants.forEach((variant) => {
+        if (!variant.isActive || variant.stockQty <= 0) return;
+        totals.set(
+          variant.productId,
+          (totals.get(variant.productId) ?? 0) + variant.stockQty,
+        );
+      });
+      const direction = query.sortDir === 'asc' ? 1 : -1;
+      products = [...products].sort(
+        (left, right) =>
+          direction *
+            ((totals.get(left.id) ?? 0) - (totals.get(right.id) ?? 0)) ||
+          left.id - right.id,
+      );
+    }
     return [
       {
         name: 'Productos',
@@ -476,14 +497,10 @@ export class AdminExportsService {
   private async inventory(
     query: AdminExportQueryDto,
   ): Promise<ExcelSheetDefinition[]> {
-    const productWhere = this.productWhere(query);
+    const productWhere = await this.productWhere(query);
     const variantWhere: Prisma.ProductVariantWhereInput = {
       product: productWhere,
     };
-    if (query.stockStatus === 'out_of_stock')
-      variantWhere.stockQty = { lte: 0 };
-    if (query.stockStatus === 'low') variantWhere.stockQty = { gt: 0, lte: 5 };
-    if (query.stockStatus === 'in_stock') variantWhere.stockQty = { gt: 5 };
     const [variants, movements] = await this.prisma.$transaction(
       [
         this.prisma.productVariant.findMany({
@@ -589,6 +606,56 @@ export class AdminExportsService {
           ],
         }
       : {};
+    const requestSearch = query.q
+      ? {
+          OR: [
+            {
+              username: {
+                contains: query.q,
+                mode: Prisma.QueryMode.insensitive,
+              },
+            },
+            {
+              usernameNormalized: {
+                contains: query.q.toLocaleLowerCase('en-US'),
+              },
+            },
+            { user: userSearch },
+          ],
+        }
+      : {};
+    const requestWhere: Prisma.CircleUpgradeRequestWhereInput = {
+      ...(query.status &&
+      Object.values(CircleUpgradeRequestStatus).includes(
+        query.status as CircleUpgradeRequestStatus,
+      )
+        ? { status: query.status as CircleUpgradeRequestStatus }
+        : {}),
+      ...(date ? { createdAt: date } : {}),
+      ...requestSearch,
+      ...(query.userCircle
+        ? { user: { ...userSearch, circleLevel: query.userCircle } }
+        : {}),
+      ...(query.socialNetwork &&
+      Object.values(CircleUpgradeSocialNetwork).includes(query.socialNetwork)
+        ? { socialNetwork: query.socialNetwork }
+        : {}),
+      ...(query.attemptsMin !== undefined || query.attemptsMax !== undefined
+        ? {
+            requestNumber: {
+              ...(query.attemptsMin !== undefined
+                ? { gte: query.attemptsMin }
+                : {}),
+              ...(query.attemptsMax !== undefined
+                ? { lte: query.attemptsMax }
+                : {}),
+            },
+          }
+        : {}),
+      ...(query.requestType === '2-3' ? { fromCircle: 2, toCircle: 3 } : {}),
+      ...(query.requestType === '3-4' ? { fromCircle: 3, toCircle: 4 } : {}),
+    };
+    const includeLegacyPromotions = !query.requestType;
     const [users, upgrades, promotions] = await this.prisma.$transaction(
       [
         this.prisma.user.findMany({
@@ -607,22 +674,20 @@ export class AdminExportsService {
           },
         }),
         this.prisma.circleUpgradeRequest.findMany({
-          where: {
-            ...(query.status &&
-            Object.values(CircleUpgradeRequestStatus).includes(
-              query.status as CircleUpgradeRequestStatus,
-            )
-              ? { status: query.status as CircleUpgradeRequestStatus }
-              : {}),
-            ...(date ? { createdAt: date } : {}),
-            ...(query.q ? { user: userSearch } : {}),
-          },
-          orderBy: [{ createdAt: 'desc' }, { id: 'asc' }],
+          where: requestWhere,
+          orderBy: [
+            {
+              [query.sortBy === 'attempts' ? 'requestNumber' : 'createdAt']:
+                query.sortDir ?? 'desc',
+            },
+            { id: 'asc' },
+          ],
           take: TAKE_WITH_LIMIT_SENTINEL,
           include: { user: { select: { email: true } } },
         }),
         this.prisma.circlePromotionRequest.findMany({
           where: {
+            ...(!includeLegacyPromotions ? { id: { in: [] } } : {}),
             ...(query.status
               ? { status: query.status.toLocaleLowerCase('en-US') }
               : {}),
@@ -883,7 +948,9 @@ export class AdminExportsService {
     ];
   }
 
-  private productWhere(query: AdminExportQueryDto): Prisma.ProductWhereInput {
+  private async productWhere(
+    query: AdminExportQueryDto,
+  ): Promise<Prisma.ProductWhereInput> {
     const where: Prisma.ProductWhereInput = {};
     const search = query.q || query.search;
     if (search)
@@ -897,15 +964,16 @@ export class AdminExportsService {
           },
         },
       ];
-    if (query.category) {
-      const categoryId = Number(query.category);
+    if (query.category || query.categoryId) {
+      const category = query.category ?? String(query.categoryId);
+      const categoryId = query.categoryId ?? Number(category);
       where.categories = {
         some: {
           category: {
             OR: [
               ...(Number.isSafeInteger(categoryId) ? [{ id: categoryId }] : []),
-              { slug: query.category },
-              { name: { equals: query.category, mode: 'insensitive' } },
+              { slug: category },
+              { name: { equals: category, mode: 'insensitive' } },
             ],
           },
         },
@@ -914,14 +982,27 @@ export class AdminExportsService {
     if (query.isActive) where.isActive = query.isActive === 'true';
     const createdAt = this.dateFilter(query);
     if (createdAt) where.createdAt = createdAt;
-    if (query.stockStatus === 'out_of_stock') {
-      where.variants = { none: { stockQty: { gt: 0 } } };
-    }
-    if (query.stockStatus === 'low') {
-      where.variants = { some: { stockQty: { gt: 0, lte: 5 } } };
-    }
-    if (query.stockStatus === 'in_stock') {
-      where.variants = { some: { stockQty: { gt: 5 } } };
+    const stockState = query.stockState ?? query.stockStatus;
+    if (stockState) {
+      const total = query.stockState
+        ? Prisma.sql`COALESCE(SUM(v."stock"), 0)`
+        : Prisma.sql`COALESCE(SUM(CASE WHEN v."isActive" THEN GREATEST(v."stock", 0) ELSE 0 END), 0)`;
+      const condition =
+        stockState === 'in_stock'
+          ? Prisma.sql`${total} > 0`
+          : stockState === 'low'
+            ? Prisma.sql`${total} > 0 AND ${total} <= 5`
+            : Prisma.sql`${total} = 0`;
+      const rows = await this.prisma.$queryRaw<
+        Array<{ id: number }>
+      >(Prisma.sql`
+        SELECT p.id
+        FROM "Product" p
+        LEFT JOIN "ProductVariant" v ON v."productId" = p.id
+        GROUP BY p.id
+        HAVING ${condition}
+      `);
+      where.id = { in: rows.map((row) => row.id) };
     }
     return where;
   }

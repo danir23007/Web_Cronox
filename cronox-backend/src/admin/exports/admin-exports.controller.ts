@@ -1,4 +1,13 @@
-import { Controller, Get, Query, Req, Res, UseGuards } from '@nestjs/common';
+import {
+  BadRequestException,
+  Controller,
+  Get,
+  Param,
+  Query,
+  Req,
+  Res,
+  UseGuards,
+} from '@nestjs/common';
 import { Role } from '@prisma/client';
 import { Throttle } from '@nestjs/throttler';
 import type { Request, Response } from 'express';
@@ -87,6 +96,13 @@ export class AdminExportsController {
     @Res() response: Response,
   ) {
     return this.send('actividad', query, actorId, request, response);
+  }
+
+  // Keep valid modules explicit and provide a controlled response for typos
+  // instead of leaking Express' raw "Cannot GET" route message.
+  @Get(':module')
+  invalidModule(@Param('module') module: string): never {
+    throw new BadRequestException(`Módulo de exportación no válido: ${module}`);
   }
 
   private async send(

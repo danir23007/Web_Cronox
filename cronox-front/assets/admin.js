@@ -423,50 +423,25 @@
     Object.fromEntries(Object.entries(query).filter(([, value]) => value !== '' && value != null));
 
   const excelFiltersFor = (module, sectionId) => {
-    if (module === 'users') return compactQuery({
-      q: inputValue('usersSearch'),
-      role: inputValue('usersRole'),
-      circle: inputValue('usersCircle'),
-      accountState: inputValue('usersAccountState'),
-      sort: inputValue('usersSort'),
-      order: inputValue('usersOrder'),
-    });
+    const withoutPagination = ({ page, pageSize, ...filters }) => compactQuery(filters);
+    if (module === 'users') return withoutPagination(buildUsersQuery(usersState));
     if (module === 'orders') return compactQuery({ email: inputValue('ordersEmailSearch') });
     if (module === 'inventory') return compactQuery({
-      q: inputValue('inventorySearch'),
+      search: inputValue('inventorySearch'),
       isActive: inputValue('inventoryActiveFilter'),
       stockStatus: inputValue('inventoryStockFilter'),
     });
-    if (module === 'products') return compactQuery({
-      q: inputValue('productSearch'),
-      dateFrom: inputValue('productDateFrom'),
-      dateTo: inputValue('productDateTo'),
-      stockStatus: inputValue('productStockState'),
-      category: inputValue('productCategory'),
-      isActive: inputValue('productStatusFilter'),
-      sort: inputValue('productSortBy'),
-      order: inputValue('productSortDir'),
-    });
+    if (module === 'products') return withoutPagination(buildProductQuery(productsState));
     if (module === 'promo-codes') return compactQuery({
       q: inputValue('codeSearch'),
       isActive: inputValue('codeStatusFilter'),
     });
-    if (module === 'audit') return compactQuery({
-      q: inputValue('activitySearch'),
-      actionType: inputValue('activityActionType'),
-      targetType: inputValue('activityTargetType'),
-      dateFrom: inputValue('activityDateFrom'),
-      dateTo: inputValue('activityDateTo'),
-    });
+    if (module === 'audit') return withoutPagination(buildActivityQuery(activityState));
     if (module === 'circles') {
-      const suffix = sectionId === 'section-23' ? '23' : '';
+      const is23 = sectionId === 'section-23';
       return compactQuery({
-        q: inputValue(`requestSearch${suffix}`),
-        status: inputValue(`filterStatus${suffix}`),
-        dateFrom: inputValue(`requestDateFrom${suffix}`),
-        dateTo: inputValue(`requestDateTo${suffix}`),
-        sort: inputValue(`requestSortBy${suffix}`),
-        order: inputValue(`requestSortDir${suffix}`),
+        ...withoutPagination(buildRequestQuery(is23 ? requests23State : requestsState)),
+        requestType: is23 ? '2-3' : '3-4',
       });
     }
     return {};
@@ -501,8 +476,7 @@
       window.setTimeout(() => URL.revokeObjectURL(url), 0);
       showToast('Excel generado correctamente.');
     } catch (error) {
-      const classification = classifyApiError(error);
-      showToast(error?.message || classification.userMessage || 'No se pudo generar el Excel.', 'error');
+      showToast('No se ha podido preparar el archivo Excel. Inténtalo de nuevo.', 'error');
     } finally {
       excelExportsInFlight.delete(key);
       button.disabled = false;

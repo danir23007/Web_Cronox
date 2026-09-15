@@ -27,6 +27,9 @@
     "prisma:migrate": "prisma migrate dev",
     "prisma:deploy": "prisma migrate deploy",
     "prisma:gen": "prisma generate",
+    "smoke:exports:artifacts": "node scripts/verify-admin-exports.mjs --artifacts-only",
+    "smoke:exports:compiled": "node scripts/verify-admin-exports.mjs --compiled",
+    "smoke:exports:url": "node scripts/verify-admin-exports.mjs --url",
     "lint:fix": "eslint . --ext .ts --fix",
     "seed": "ts-node prisma/seed.ts"
   },

@@ -25,6 +25,12 @@ export class PrismaService
   }
 
   async onModuleInit(): Promise<void> {
+    if (process.env.CRONOX_ROUTE_SMOKE_MODE === 'true') {
+      this.logger.warn(
+        'Database connection skipped for isolated route smoke test',
+      );
+      return;
+    }
     try {
       await this.$connect();
       this.logger.log('Database connection established');
@@ -38,10 +44,9 @@ export class PrismaService
     await this.$disconnect();
   }
 
-  async enableShutdownHooks(app: INestApplication): Promise<void> {
-    process.once('beforeExit', async () => {
-      await this.$disconnect();
-      await app.close();
+  enableShutdownHooks(app: INestApplication): void {
+    process.once('beforeExit', () => {
+      void this.$disconnect().then(() => app.close());
     });
   }
 }
