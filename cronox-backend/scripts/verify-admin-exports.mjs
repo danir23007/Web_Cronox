@@ -18,6 +18,9 @@ const modules = [
   'audit',
 ];
 const requireFromBackend = createRequire(join(backendRoot, 'package.json'));
+const { withTestEnvironment } = requireFromBackend(
+  './test/test-environment.cjs',
+);
 
 const fail = (message) => {
   throw new Error(`Admin export smoke failed: ${message}`);
@@ -131,21 +134,13 @@ const runCompiled = async () => {
     [join(backendRoot, 'dist', 'main.js')],
     {
       cwd: backendRoot,
-      env: {
-        ...process.env,
-        PORT: String(port),
-        NODE_ENV: 'test',
-        CRONOX_ROUTE_SMOKE_MODE: 'true',
-        DATABASE_URL: 'postgresql://smoke:smoke@127.0.0.1:1/cronox_route_smoke',
-        JWT_ACCESS_SECRET: 'cronox_route_smoke_access_7f21a9c4b6038d52',
-        JWT_REFRESH_SECRET: 'cronox_route_smoke_refresh_91e6c2a8475b3d08',
-        STRIPE_SECRET_KEY: 'sk_test_cronox_route_smoke',
-        STRIPE_WEBHOOK_SECRET: 'whsec_cronox_route_smoke',
-        FRONTEND_URL: 'http://127.0.0.1:43119',
-        API_PUBLIC_URL: 'http://127.0.0.1:43119',
-        CORS_ORIGINS: 'http://127.0.0.1:43119',
-        EMAIL_ENABLED: 'false',
-      },
+      env: withTestEnvironment(process.env, {
+        force: true,
+        overrides: {
+          PORT: String(port),
+          CRONOX_ROUTE_SMOKE_MODE: 'true',
+        },
+      }),
       stdio: ['ignore', 'pipe', 'pipe'],
     },
   );

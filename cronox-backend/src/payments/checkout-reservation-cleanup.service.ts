@@ -29,6 +29,7 @@ export class CheckoutReservationCleanupService
   ) {}
 
   onModuleInit(): void {
+    if (process.env.CRONOX_ROUTE_SMOKE_MODE === 'true') return;
     this.interval = setInterval(() => {
       void this.releaseExpiredReservations();
     }, CLEANUP_INTERVAL_MS);
@@ -45,9 +46,10 @@ export class CheckoutReservationCleanupService
     this.running = true;
 
     try {
-      const snapshots = await this.ordersService.listExpiredCheckoutSnapshots(
-        CLEANUP_BATCH_SIZE,
-      );
+      const snapshots =
+        await this.ordersService.listExpiredCheckoutSnapshots(
+          CLEANUP_BATCH_SIZE,
+        );
       let released = 0;
 
       for (const snapshot of snapshots) {

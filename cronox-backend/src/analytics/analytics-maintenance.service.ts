@@ -25,6 +25,7 @@ export class AnalyticsMaintenanceService
   constructor(private readonly prisma: PrismaService) {}
 
   onModuleInit(): void {
+    if (process.env.CRONOX_ROUTE_SMOKE_MODE === 'true') return;
     this.interval = setInterval(() => void this.run(), MAINTENANCE_INTERVAL_MS);
     this.interval.unref?.();
     void this.run();

@@ -49,6 +49,7 @@ const delegate = () => ({
 
 describe('Admin Excel exports through the real AdminModule', () => {
   let app: INestApplication;
+  const previousSmokeMode = process.env.CRONOX_ROUTE_SMOKE_MODE;
   const prisma = {
     user: delegate(),
     order: delegate(),
@@ -78,9 +79,10 @@ describe('Admin Excel exports through the real AdminModule', () => {
   ];
 
   beforeAll(async () => {
+    process.env.CRONOX_ROUTE_SMOKE_MODE = 'true';
     const moduleRef = await Test.createTestingModule({
       imports: [
-        ConfigModule.forRoot({ isGlobal: true }),
+        ConfigModule.forRoot({ isGlobal: true, ignoreEnvFile: true }),
         PrismaModule,
         AdminModule,
       ],
@@ -102,7 +104,12 @@ describe('Admin Excel exports through the real AdminModule', () => {
     await app.init();
   });
 
-  afterAll(async () => app?.close());
+  afterAll(async () => {
+    await app?.close();
+    if (previousSmokeMode === undefined)
+      delete process.env.CRONOX_ROUTE_SMOKE_MODE;
+    else process.env.CRONOX_ROUTE_SMOKE_MODE = previousSmokeMode;
+  });
 
   it.each(
     routes.flatMap((route) =>

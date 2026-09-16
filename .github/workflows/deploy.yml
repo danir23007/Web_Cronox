@@ -12,12 +12,24 @@ concurrency:
 jobs:
   verify-release:
     runs-on: ubuntu-latest
+    env:
+      NODE_ENV: test
+      DATABASE_URL: postgresql://ci_export_test:ci_export_test@127.0.0.1:1/cronox_ci_export_test
+      JWT_ACCESS_SECRET: ci-only-access-jwt-value-7f21a9c4b6038d52
+      JWT_REFRESH_SECRET: ci-only-refresh-jwt-value-91e6c2a8475b3d08
+      STRIPE_SECRET_KEY: sk_test_ci_only_not_a_real_stripe_key
+      STRIPE_WEBHOOK_SECRET: whsec_ci_only_not_a_real_webhook_secret
+      FRONTEND_URL: http://127.0.0.1:43119
+      API_PUBLIC_URL: http://127.0.0.1:43119
+      CORS_ORIGINS: http://127.0.0.1:43119
+      EMAIL_ENABLED: 'false'
+      ENABLE_SWAGGER: 'false'
     steps:
       - name: Check out the exact release commit
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Use production Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: npm
@@ -31,16 +43,19 @@ jobs:
       - name: Install backend dependencies, including ExcelJS, exactly
         run: npm ci --prefix cronox-backend
 
+      - name: Generate the Prisma client
+        run: npm run prisma:generate --prefix cronox-backend
+
       - name: Build matching frontend and backend artifacts
         run: |
+          set -euo pipefail
           npm run admin:build
-          npm run build --prefix cronox-backend
+          npm run build:compiled --prefix cronox-backend
 
       - name: Verify Excel HTTP routes, filters, workbooks and artifacts
         run: |
-          npm test --prefix cronox-backend -- --runInBand \
-            src/admin/exports \
-            src/frontend/admin-excel
+          set -euo pipefail
+          npm run test:exports:ci --prefix cronox-backend
           npm run smoke:exports:artifacts --prefix cronox-backend
           npm run smoke:exports:compiled --prefix cronox-backend
 
