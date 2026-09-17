@@ -1,29 +1,44 @@
-import { ExecutionContext, Injectable, Logger, UnauthorizedException } from '@nestjs/common';
+import {
+  ExecutionContext,
+  Injectable,
+  Logger,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import type { Request } from 'express';
+import { clearFailedSession } from '../session-cookies';
 
 @Injectable()
 export class JwtAuthGuard extends AuthGuard('jwt') {
   private readonly logger = new Logger(JwtAuthGuard.name);
 
-  handleRequest(err: unknown, user: any, info: any, context: ExecutionContext) {
+  handleRequest<TUser = Express.User>(
+    err: unknown,
+    user: TUser | false | null,
+    info: unknown,
+    context: ExecutionContext,
+  ): TUser {
     const request = context.switchToHttp().getRequest<Request>();
     const path = request?.path || request?.url || '';
-    const hasJwtCookie = Boolean(request?.cookies?.jwt);
+    const cookies = request.cookies as Record<string, unknown> | undefined;
+    const hasJwtCookie = Boolean(cookies?.jwt);
+    const infoMessage = info instanceof Error ? info.message : '';
 
     if (err || !user) {
+      clearFailedSession(context.switchToHttp().getResponse(), err);
       if (path.includes('/me')) {
         if (!hasJwtCookie) {
           this.logger.warn(`Solicitud a ${path} sin cookie jwt`);
-        } else if (info?.message) {
-          this.logger.warn(`Token JWT inválido para ${path}: ${info.message}`);
+        } else if (infoMessage) {
+          this.logger.warn(`Token JWT inválido para ${path}: ${infoMessage}`);
         } else {
           this.logger.warn(`No se pudo autenticar solicitud a ${path}`);
         }
       }
-      throw err || new UnauthorizedException('Usuario no autenticado');
+      if (err instanceof Error) throw err;
+      throw new UnauthorizedException('Usuario no autenticado');
     }
 
-    return user;
+    return user as TUser;
   }
 }

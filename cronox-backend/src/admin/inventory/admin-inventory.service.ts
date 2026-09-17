@@ -28,6 +28,7 @@ const productSelect = {
   imageUrl: true,
   isActive: true,
   images: {
+    where: { isActive: true },
     select: { url: true, alt: true, isPrimary: true, sortOrder: true },
     orderBy: [{ isPrimary: 'desc' }, { sortOrder: 'asc' }, { id: 'asc' }],
     take: 1,

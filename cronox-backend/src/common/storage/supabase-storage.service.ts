@@ -263,6 +263,10 @@ export class SupabaseStorageService {
     }
   }
 
+  isManagedProductImage(value: string): boolean {
+    return Boolean(this.productObjectPath(value));
+  }
+
   private productObjectPath(value: string): string | null {
     try {
       if (!this.supabaseUrl) return null;

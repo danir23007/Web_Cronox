@@ -212,16 +212,27 @@ model ProductVariant {
 }
 
 model ProductImage {
-  id        Int      @id @default(autoincrement())
-  productId Int
-  url       String
-  alt       String?  @default("")
-  sortOrder Int      @default(0)
-  isPrimary Boolean  @default(false)
-  createdAt DateTime @default(now())
-  product   Product  @relation(fields: [productId], references: [id])
+  id               Int       @id @default(autoincrement())
+  productId        Int
+  url              String
+  storageKey       String?
+  alt              String?   @default("")
+  sortOrder        Int       @default(0)
+  isPrimary        Boolean   @default(false)
+  isActive         Boolean   @default(true)
+  galleryPositionX Float     @default(50)
+  galleryPositionY Float     @default(50)
+  galleryZoom      Float     @default(1)
+  galleryFit       String    @default("CONTAIN")
+  archivedAt       DateTime?
+  deletionState    String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  product          Product   @relation(fields: [productId], references: [id])
 
   @@index([productId, sortOrder])
+  @@index([productId, isActive, sortOrder])
+  @@index([url])
 }
 
 model GalleryAsset {
@@ -339,6 +350,7 @@ model User {
   memberCode                String?                 @unique
   publicMemberToken         String?                 @unique
   sessionVersion            Int                     @default(0)
+  authSessions              AuthSession[]
   newsletterSubscribed      Boolean                 @default(false)
   firstOrderDiscountCode    String?
   firstOrderDiscountUsed    Boolean                 @default(false)
@@ -373,6 +385,24 @@ model User {
 
   // ✅ FIX: relación correcta y naming consistente
   historial Historial?
+}
+
+model AuthSession {
+  id                  String   @id
+  userId              Int
+  user                User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sessionVersion      Int
+  lastActivityAt      DateTime @default(now())
+  createdAt           DateTime @default(now())
+  revokedAt           DateTime?
+  refreshHash         String
+  previousRefreshHash String?
+  previousValidUntil  DateTime?
+  generation          Int      @default(0)
+  refreshIssuedAt     Int
+
+  @@index([userId])
+  @@index([lastActivityAt])
 }
 
 model KeyScreenSettings {

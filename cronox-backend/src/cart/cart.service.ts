@@ -16,6 +16,7 @@ export const cartInclude = {
           product: {
             include: {
               images: {
+                where: { isActive: true },
                 orderBy: [
                   { isPrimary: 'desc' },
                   { sortOrder: 'asc' },

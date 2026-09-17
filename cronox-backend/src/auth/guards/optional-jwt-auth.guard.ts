@@ -5,6 +5,7 @@ import {
 } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import type { Request } from 'express';
+import { clearFailedSession } from '../session-cookies';
 
 @Injectable()
 export class OptionalJwtAuthGuard extends AuthGuard('jwt') {
@@ -15,6 +16,7 @@ export class OptionalJwtAuthGuard extends AuthGuard('jwt') {
     context: ExecutionContext,
   ): TUser {
     if (err) {
+      clearFailedSession(context.switchToHttp().getResponse(), err);
       if (err instanceof Error) throw err;
       throw new UnauthorizedException('Usuario no autenticado');
     }

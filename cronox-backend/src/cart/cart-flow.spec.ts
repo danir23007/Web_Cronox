@@ -6,6 +6,7 @@ import cookieParser from 'cookie-parser';
 import request from 'supertest';
 import { UserAccountState } from '@prisma/client';
 import { JwtAccessStrategy } from '../auth/strategies/jwt-access.strategy';
+import { AuthSessionsService } from '../auth/auth-sessions.service';
 import { UsersService } from '../users/users.service';
 import { CheckoutSummaryController } from '../orders/checkout-summary.controller';
 import { OrdersService } from '../orders/orders.service';
@@ -162,6 +163,12 @@ describe('cart identity request flow', () => {
       ],
       providers: [
         JwtAccessStrategy,
+        {
+          provide: AuthSessionsService,
+          useValue: {
+            validate: jest.fn().mockResolvedValue({ lastActivityAt: new Date() }),
+          },
+        },
         { provide: UsersService, useValue: usersService },
         { provide: CartService, useClass: InMemoryCartService },
         { provide: OrdersService, useValue: ordersService },
@@ -189,6 +196,8 @@ describe('cart identity request flow', () => {
       email: user.email,
       role: user.role,
       sv: user.sessionVersion,
+      sid: `cart-test-session-${user.id}`,
+      type: 'access',
     });
     return `jwt=${token}`;
   };

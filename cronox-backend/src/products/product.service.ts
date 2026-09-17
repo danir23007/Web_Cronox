@@ -10,7 +10,10 @@ import { Prisma, VariantSize } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateProductDto } from './dto/create-product.dto';
 import { QueryProductsDto } from './dto/query-products.dto';
-import { UpdateProductDto } from './dto/update-product.dto';
+import {
+  GalleryImageItemDto,
+  UpdateProductDto,
+} from './dto/update-product.dto';
 import { CreateVariantDto } from './dto/create-variant.dto';
 import { AdjustStockDto, UpdateVariantDto } from './dto/update-variant.dto';
 import { CreateProductImageDto } from './dto/create-product-image.dto';
@@ -152,6 +155,15 @@ export class ProductService {
     };
     delete publicProduct.searchKeywords;
     delete publicProduct.searchText;
+    const publicImages = (
+      publicProduct as { images?: Array<{ isPrimary?: boolean }> }
+    ).images;
+    if (Array.isArray(publicImages)) {
+      publicImages.sort(
+        (left, right) =>
+          Number(Boolean(right.isPrimary)) - Number(Boolean(left.isPrimary)),
+      );
+    }
     return this.addEffectiveVariantPrices(publicProduct);
   }
 
@@ -208,6 +220,62 @@ export class ProductService {
     return images;
   }
 
+  private galleryImageData(image: GalleryImageItemDto) {
+    return {
+      url: image.url,
+      alt: image.alt?.trim() ?? '',
+      sortOrder: image.sortOrder,
+      isPrimary: image.isPrimary,
+      isActive: image.isActive,
+      galleryPositionX: image.galleryPositionX,
+      galleryPositionY: image.galleryPositionY,
+      galleryZoom: image.galleryZoom,
+      galleryFit: image.galleryFit,
+      archivedAt: image.isActive ? null : new Date(),
+      deletionState: null,
+    };
+  }
+
+  private validateGallery(images: GalleryImageItemDto[]) {
+    const ids = images.flatMap((image) => (image.id ? [image.id] : []));
+    if (new Set(ids).size !== ids.length) {
+      throw new BadRequestException(
+        'La galerÃ­a contiene imÃ¡genes duplicadas.',
+      );
+    }
+    const urls = images.map((image) => image.url);
+    if (new Set(urls).size !== urls.length) {
+      throw new BadRequestException(
+        'La galerÃ­a contiene archivos duplicados.',
+      );
+    }
+    const active = images.filter((image) => image.isActive);
+    if (!active.length && images.length) {
+      throw new BadRequestException(
+        'El producto debe conservar al menos una imagen activa.',
+      );
+    }
+    if (
+      active.filter((image) => image.isPrimary).length !==
+      (active.length ? 1 : 0)
+    ) {
+      throw new BadRequestException(
+        'La galerÃ­a debe tener exactamente una imagen principal.',
+      );
+    }
+    const ordered = [...active].sort((a, b) => a.sortOrder - b.sortOrder);
+    if (ordered.some((image, index) => image.sortOrder !== index)) {
+      throw new BadRequestException(
+        'El orden de la galerÃ­a debe ser consecutivo y sin duplicados.',
+      );
+    }
+    if (ordered[0] && !ordered[0].isPrimary) {
+      throw new BadRequestException(
+        'La imagen principal debe ocupar la primera posiciÃ³n.',
+      );
+    }
+  }
+
   private buildDefaultVariants(): CreateVariantDto[] {
     return this.defaultSizes.map((size) => ({
       size,
@@ -253,6 +321,7 @@ export class ProductService {
 
   private getProductInclude(options?: {
     includeInactiveVariants?: boolean;
+    includeArchivedImages?: boolean;
   }): Prisma.ProductInclude {
     const variantArgs: Prisma.ProductVariantFindManyArgs = {
       orderBy: this.variantOrderBy,
@@ -263,7 +332,10 @@ export class ProductService {
     }
 
     return {
-      images: { orderBy: this.imageOrderBy },
+      images: {
+        where: options?.includeArchivedImages ? undefined : { isActive: true },
+        orderBy: this.imageOrderBy,
+      },
       variants: variantArgs,
       categories: {
         orderBy: { id: 'asc' },
@@ -584,6 +656,7 @@ export class ProductService {
       createdAt: true,
       updatedAt: true,
       images: {
+        where: { isActive: true },
         select: {
           id: true,
           url: true,
@@ -741,7 +814,10 @@ export class ProductService {
   async getAdminProduct(id: number) {
     const product = await this.prisma.product.findUnique({
       where: { id },
-      include: this.getProductInclude({ includeInactiveVariants: true }),
+      include: this.getProductInclude({
+        includeInactiveVariants: true,
+        includeArchivedImages: true,
+      }),
     });
 
     if (!product) {
@@ -831,7 +907,10 @@ export class ProductService {
 
       const updatedProduct = await tx.product.findUnique({
         where: { id: productId },
-        include: this.getProductInclude({ includeInactiveVariants: true }),
+        include: this.getProductInclude({
+          includeInactiveVariants: true,
+          includeArchivedImages: true,
+        }),
       });
 
       if (!updatedProduct) {
@@ -964,6 +1043,7 @@ export class ProductService {
         currency: true,
         imageUrl: true,
         images: {
+          where: { isActive: true },
           take: 1,
           orderBy: [{ isPrimary: 'desc' }, { sortOrder: 'asc' }, { id: 'asc' }],
           select: { url: true },
@@ -1169,6 +1249,27 @@ export class ProductService {
           throw new NotFoundException('Product not found');
         }
 
+        if (
+          dto.expectedUpdatedAt &&
+          existing.updatedAt.getTime() !==
+            new Date(dto.expectedUpdatedAt).getTime()
+        ) {
+          throw new ConflictException(
+            'La galerÃ­a cambiÃ³ en otra sesiÃ³n. Recarga el producto antes de guardar.',
+          );
+        }
+        if (dto.expectedUpdatedAt) {
+          const claimed = await tx.product.updateMany({
+            where: { id, updatedAt: existing.updatedAt },
+            data: { updatedAt: new Date() },
+          });
+          if (claimed.count !== 1) {
+            throw new ConflictException(
+              'La galerÃ­a cambiÃ³ en otra sesiÃ³n. Recarga el producto antes de guardar.',
+            );
+          }
+        }
+
         if (dto.slug !== undefined) {
           const baseSlug = dto.slug || this.slugify(dto.name ?? existing.name);
           data.slug = await this.ensureUniqueSlug(baseSlug, tx, id);
@@ -1281,6 +1382,124 @@ export class ProductService {
           });
         }
 
+        if (dto.galleryImages) {
+          this.validateGallery(dto.galleryImages);
+          const persistedImages = await tx.productImage.findMany({
+            where: { productId: id },
+          });
+          const persistedIds = new Set(
+            persistedImages.map((image) => image.id),
+          );
+          const submittedIds = new Set(
+            dto.galleryImages.flatMap((image) => (image.id ? [image.id] : [])),
+          );
+          if (
+            submittedIds.size !== persistedIds.size ||
+            [...submittedIds].some((imageId) => !persistedIds.has(imageId))
+          ) {
+            throw new ConflictException(
+              'La galerÃ­a cambiÃ³ en otra sesiÃ³n. Recarga el producto antes de guardar.',
+            );
+          }
+          const newImages = dto.galleryImages.filter((image) => !image.id);
+          if (
+            newImages.some(
+              (image) => !this.storage?.isManagedProductImage(image.url),
+            )
+          ) {
+            throw new BadRequestException(
+              'Una imagen nueva no pertenece al almacenamiento de productos.',
+            );
+          }
+
+          await tx.productImage.updateMany({
+            where: { productId: id },
+            data: { isPrimary: false },
+          });
+          const galleryAuditActions: Array<{
+            action: string;
+            imageId?: number;
+          }> = [];
+          for (const image of dto.galleryImages) {
+            const previous = image.id
+              ? persistedImages.find((candidate) => candidate.id === image.id)
+              : undefined;
+            if (!previous) {
+              galleryAuditActions.push({ action: 'product.gallery.upload' });
+            } else {
+              if (!previous.isActive && image.isActive) {
+                galleryAuditActions.push({
+                  action: 'product.gallery.restore',
+                  imageId: image.id,
+                });
+              }
+              if (previous.isActive && !image.isActive) {
+                galleryAuditActions.push({
+                  action: 'product.gallery.archive',
+                  imageId: image.id,
+                });
+              }
+              if (previous.sortOrder !== image.sortOrder) {
+                galleryAuditActions.push({
+                  action: 'product.gallery.reorder',
+                  imageId: image.id,
+                });
+              }
+              if (!previous.isPrimary && image.isPrimary) {
+                galleryAuditActions.push({
+                  action: 'product.gallery.primary',
+                  imageId: image.id,
+                });
+              }
+            }
+            const imageData = {
+              ...this.galleryImageData(image),
+              archivedAt: image.isActive
+                ? null
+                : (previous?.archivedAt ?? new Date()),
+            };
+            if (image.id) {
+              await tx.productImage.update({
+                where: { id: image.id },
+                data: imageData,
+              });
+            } else {
+              await tx.productImage.create({
+                data: { productId: id, ...imageData },
+              });
+            }
+          }
+          const primary = dto.galleryImages.find((image) => image.isPrimary);
+          await tx.product.update({
+            where: { id },
+            data: { imageUrl: primary?.url ?? null },
+          });
+          for (const event of galleryAuditActions) {
+            await tx.auditLog.create({
+              data: {
+                actorId: adminId ?? null,
+                action: event.action,
+                metadata: { productId: id, imageId: event.imageId ?? null },
+              },
+            });
+          }
+          await tx.auditLog.create({
+            data: {
+              actorId: adminId ?? null,
+              action: 'product.gallery.update',
+              metadata: {
+                productId: id,
+                activeImageCount: dto.galleryImages.filter(
+                  (image) => image.isActive,
+                ).length,
+                archivedImageCount: dto.galleryImages.filter(
+                  (image) => !image.isActive,
+                ).length,
+              },
+            },
+          });
+        }
+
         if (dto.variantsToCreate?.length) {
           const productSlug =
             typeof data.slug === 'string' ? data.slug : existing.slug;
@@ -1356,7 +1575,7 @@ export class ProductService {
         }
 
         const images = await tx.productImage.findMany({
-          where: { productId: id },
+          where: { productId: id, isActive: true },
           orderBy: this.imageOrderBy,
         });
 
@@ -1367,7 +1586,7 @@ export class ProductService {
           });
         }
 
-        if (!replaceImages) {
+        if (!replaceImages && !dto.galleryImages) {
           const primary = images.find((img) => img.isPrimary) ?? images[0];
           await tx.product.update({
             where: { id },
@@ -1377,7 +1596,10 @@ export class ProductService {
 
         const updated = await tx.product.findUnique({
           where: { id },
-          include: this.getProductInclude({ includeInactiveVariants: true }),
+          include: this.getProductInclude({
+            includeInactiveVariants: true,
+            includeArchivedImages: true,
+          }),
         });
 
         if (!updated) {
@@ -1551,6 +1773,131 @@ export class ProductService {
       }
       throw e;
     }
+  }
+
+  async permanentlyDeleteArchivedImage(
+    productId: number,
+    imageId: number,
+    expectedUpdatedAt: string,
+    adminId?: number,
+  ) {
+    if (!this.storage) {
+      throw new ConflictException(
+        'El almacenamiento de productos no estÃ¡ disponible.',
+      );
+    }
+
+    const removed = await this.prisma.$transaction(async (tx) => {
+      const product = await tx.product.findUnique({
+        where: { id: productId },
+        select: { id: true, updatedAt: true },
+      });
+      if (!product) throw new NotFoundException('Producto no encontrado');
+      if (
+        product.updatedAt.getTime() !== new Date(expectedUpdatedAt).getTime()
+      ) {
+        throw new ConflictException(
+          'La galerÃ­a cambiÃ³ en otra sesiÃ³n. Recarga el producto antes de continuar.',
+        );
+      }
+
+      const image = await tx.productImage.findFirst({
+        where: { id: imageId, productId },
+      });
+      if (!image) throw new NotFoundException('Imagen no encontrada');
+      if (image.isActive || image.isPrimary) {
+        throw new ConflictException(
+          'Solo se pueden eliminar definitivamente imÃ¡genes archivadas.',
+        );
+      }
+      if (!this.storage?.isManagedProductImage(image.url)) {
+        throw new ConflictException(
+          'El archivo no pertenece al almacenamiento administrado y no se puede borrar con seguridad.',
+        );
+      }
+
+      const [products, productImages, galleries, websiteMedia, emailAssets] =
+        await Promise.all([
+          tx.product.count({ where: { imageUrl: image.url } }),
+          tx.productImage.count({
+            where: { url: image.url, id: { not: image.id } },
+          }),
+          tx.galleryAsset.count({ where: { publicUrl: image.url } }),
+          tx.websiteMediaAsset.count({ where: { publicUrl: image.url } }),
+          tx.emailAsset.count({ where: { url: image.url } }),
+        ]);
+      if (
+        products + productImages + galleries + websiteMedia + emailAssets >
+        0
+      ) {
+        throw new ConflictException(
+          'La imagen sigue referenciada por otro registro y no se puede eliminar definitivamente.',
+        );
+      }
+
+      const touched = await tx.product.updateMany({
+        where: { id: productId, updatedAt: product.updatedAt },
+        data: { updatedAt: new Date() },
+      });
+      if (touched.count !== 1) {
+        throw new ConflictException(
+          'La galerÃ­a cambiÃ³ en otra sesiÃ³n. Recarga el producto antes de continuar.',
+        );
+      }
+      await tx.productImage.update({
+        where: { id: image.id },
+        data: { deletionState: 'PENDING' },
+      });
+      await tx.auditLog.create({
+        data: {
+          actorId: adminId ?? null,
+          action: 'product.gallery.image.delete.requested',
+          metadata: { productId, imageId },
+        },
+      });
+      return image;
+    });
+
+    try {
+      await this.storage.deleteProductImages([removed.url]);
+    } catch (error) {
+      await this.prisma.productImage.updateMany({
+        where: {
+          id: imageId,
+          productId,
+          isActive: false,
+          deletionState: 'PENDING',
+        },
+        data: { deletionState: null },
+      });
+      this.logger.error(
+        `No se pudo eliminar del almacenamiento la imagen archivada ${imageId} del producto ${productId}`,
+        error instanceof Error ? error.stack : undefined,
+      );
+      throw new ConflictException(
+        'No se pudo eliminar el archivo. La imagen se ha conservado en el historial para poder reintentarlo.',
+      );
+    }
+
+    const finalized = await this.prisma.productImage.deleteMany({
+      where: {
+        id: imageId,
+        productId,
+        isActive: false,
+        deletionState: 'PENDING',
+      },
+    });
+    if (finalized.count !== 1) {
+      throw new ConflictException(
+        'El archivo se eliminÃ³, pero queda una limpieza de base de datos pendiente. Recarga y vuelve a intentarlo.',
+      );
+    }
+
+    const product = await this.prisma.product.findUnique({
+      where: { id: productId },
+      select: { updatedAt: true },
+    });
+    return { ok: true, productId, imageId, updatedAt: product?.updatedAt };
   }
 
   async createVariants(

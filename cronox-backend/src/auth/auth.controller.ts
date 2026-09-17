@@ -24,6 +24,7 @@ import { RegisterDto } from './dto/register.dto';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
 import { randomUUID } from 'node:crypto';
+import { SessionClaims } from './auth-sessions.service';
 import {
   CART_COOKIE_NAME,
   getCartCookieOptions,
@@ -168,10 +169,28 @@ export class AuthController {
       throw new UnauthorizedException('Usuario no autenticado');
     }
 
-    const result = await this.authService.refresh(userId);
-    this.authService.setAuthCookies(res, result.tokens);
+    try {
+      const result = await this.authService.refresh(
+        userId,
+        (req as Request & { refreshToken: string }).refreshToken,
+      );
+      this.authService.setAuthCookies(res, result.tokens);
+      return { user: result.user };
+    } catch (error) {
+      if (error instanceof UnauthorizedException)
+        this.authService.clearAuthCookies(res);
+      throw error;
+    }
+  }
 
-    return { user: result.user };
+  @Post('activity')
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.OK)
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  activity(@Req() req: Request) {
+    return this.authService.reportActivity(
+      (req as Request & { authSession: SessionClaims }).authSession,
+    );
   }
 
   @Post('forgot-password')

@@ -32,6 +32,7 @@ const isExcludedPath = (pathname: string): boolean =>
 const hasAdminPreviewSession = async (
   req: Request,
   authService: PublicHtmlGateDependencies['authService'],
+  res: Response,
 ): Promise<boolean> => {
   const cookies = (req as unknown as { cookies?: Record<string, unknown> })
     .cookies;
@@ -42,7 +43,11 @@ const hasAdminPreviewSession = async (
       ? cookies.refresh_token
       : undefined;
   try {
-    return await authService.hasValidAdminSession(accessToken, refreshToken);
+    return await authService.hasValidAdminSession(
+      accessToken,
+      refreshToken,
+      res,
+    );
   } catch {
     return false;
   }
@@ -72,7 +77,7 @@ export const createPublicHtmlGateMiddleware =
     }
 
     const adminPreviewAllowed =
-      keyScreenEnabled && (await hasAdminPreviewSession(req, authService));
+      keyScreenEnabled && (await hasAdminPreviewSession(req, authService, res));
     if (adminPreviewAllowed) {
       res.setHeader('Cache-Control', 'private, no-store');
       res.vary('Cookie');

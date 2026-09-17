@@ -24,6 +24,7 @@ import type { Express } from 'express';
 import { Role } from '@prisma/client';
 import { CreateProductDto } from '../../products/dto/create-product.dto';
 import { UpdateProductDto } from '../../products/dto/update-product.dto';
+import { DeleteProductImageDto } from '../../products/dto/update-product.dto';
 import { CreateVariantDto } from '../../products/dto/create-variant.dto';
 import {
   AdjustStockDto,
@@ -138,6 +139,21 @@ export class AdminProductsController {
     @CurrentUser('id') adminId?: number,
   ) {
     return this.productService.deleteProduct(id, adminId);
+  }
+
+  @Delete(':productId/images/:imageId')
+  permanentlyDeleteImage(
+    @Param('productId', ParseIntPipe) productId: number,
+    @Param('imageId', ParseIntPipe) imageId: number,
+    @Body() dto: DeleteProductImageDto,
+    @CurrentUser('id') adminId?: number,
+  ) {
+    return this.productService.permanentlyDeleteArchivedImage(
+      productId,
+      imageId,
+      dto.expectedUpdatedAt,
+      adminId,
+    );
   }
 
   @Post(':productId/variants')

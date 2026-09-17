@@ -5,6 +5,7 @@ import type { Request } from 'express';
 import { getRequiredJwtSecret } from '../../common/config/environment';
 import { UsersService } from '../../users/users.service';
 import { UserAccountState } from '@prisma/client';
+import { AuthSessionsService } from '../auth-sessions.service';
 
 const extractRefreshToken = (req: Request): string | null => {
   if (!req) {
@@ -25,11 +26,15 @@ export class JwtRefreshStrategy extends PassportStrategy(
   Strategy,
   'jwt-refresh',
 ) {
-  constructor(private readonly usersService: UsersService) {
+  constructor(
+    private readonly usersService: UsersService,
+    private readonly sessions: AuthSessionsService,
+  ) {
     super({
       jwtFromRequest: ExtractJwt.fromExtractors([extractRefreshToken]),
       ignoreExpiration: false,
       secretOrKey: getRequiredJwtSecret('JWT_REFRESH_SECRET'),
+      algorithms: ['HS256'],
       passReqToCallback: true,
     });
   }
@@ -62,6 +67,7 @@ export class JwtRefreshStrategy extends PassportStrategy(
       throw new UnauthorizedException('Refresh token inválido');
     }
 
+    await this.sessions.verify(refreshToken, 'refresh');
     return this.usersService.toSafeUser(user);
   }
 }

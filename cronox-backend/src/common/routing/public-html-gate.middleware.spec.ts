@@ -77,6 +77,7 @@ describe('public HTML Key Screen gate', () => {
     expect(validateSession).toHaveBeenCalledWith(
       'expired-access-token',
       'valid-refresh-token',
+      expect.anything(),
     );
     expect(response.headers['cache-control']).toBe('private, no-store');
     expect(response.headers.vary).toContain('Cookie');

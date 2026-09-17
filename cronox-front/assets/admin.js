@@ -2589,6 +2589,7 @@
     editingProductId = null;
     cachedProductImages = [];
     productForm?.reset();
+    window.CRONOX_PRODUCT_GALLERY?.reset?.();
     setProductCardFraming();
     renderProductImagesPreview([]);
     if (productModalTitle) productModalTitle.textContent = 'Crear producto';
@@ -3059,9 +3060,10 @@
           setProductCardFraming(product);
 
           cachedProductImages = Array.isArray(product.images)
-            ? product.images.map((img) => safeImageUrl(img?.url)).filter(Boolean)
+            ? product.images.filter((img) => img?.isActive !== false).map((img) => safeImageUrl(img?.url)).filter(Boolean)
             : [];
-          renderProductImagesPreview(cachedProductImages);
+          window.CRONOX_PRODUCT_GALLERY?.load?.(product);
+          renderProductImagesPreview([window.CRONOX_PRODUCT_GALLERY?.primaryUrl?.()].filter(Boolean));
 
           const variantMap = Array.isArray(product.variants)
             ? product.variants.reduce((acc, variant) => {
@@ -3091,6 +3093,15 @@
     try {
       const response = await window.CRONOX_API?.admin?.uploadProductImages(files);
       if (Array.isArray(response?.urls)) {
+        if (response.failures) {
+          window.CRONOX_PRODUCT_GALLERY?.notify?.(
+            `${response.urls.length} imagen${response.urls.length === 1 ? '' : 'es'} subida${response.urls.length === 1 ? '' : 's'}; ${response.failures} no se pudo subir.`,
+            true,
+          );
+        }
+        if (!response.urls.length && response.failures) {
+          throw new Error('No se pudo subir ninguna de las imágenes seleccionadas.');
+        }
         return response.urls.map(safeImageUrl).filter(Boolean);
       }
     } catch (error) {
@@ -3155,13 +3166,24 @@
       }
       if (files.length) {
         imageUrls = await uploadProductImages(files);
-        cachedProductImages = [...imageUrls];
+        window.CRONOX_PRODUCT_GALLERY?.addUploaded?.(imageUrls);
+        cachedProductImages = window.CRONOX_PRODUCT_GALLERY?.serialize?.().filter((image) => image.isActive).map((image) => image.url) || [...imageUrls];
         if (productImagesInput) productImagesInput.value = '';
       } else if (!editingProductId) {
-        imageUrls = cachedProductImages;
+        imageUrls = window.CRONOX_PRODUCT_GALLERY?.serialize?.().filter((image) => image.isActive).map((image) => image.url) || cachedProductImages;
       }
 
-      if (imageUrls.length) {
+      const galleryImages = window.CRONOX_PRODUCT_GALLERY?.serialize?.() || [];
+      if (editingProductId) {
+        payload.galleryImages = galleryImages;
+        payload.expectedUpdatedAt = window.CRONOX_PRODUCT_GALLERY?.expectedUpdatedAt?.();
+      } else if (galleryImages.length) {
+        payload.images = galleryImages
+          .filter((image) => image.isActive)
+          .map(({ url, alt, sortOrder, isPrimary, galleryPositionX, galleryPositionY, galleryZoom, galleryFit }) => ({
+            url, alt, sortOrder, isPrimary, galleryPositionX, galleryPositionY, galleryZoom, galleryFit,
+          }));
+      } else if (imageUrls.length) {
         payload.imageUrls = imageUrls;
       }
 
@@ -3181,7 +3203,7 @@
       await fetchProducts();
     } catch (error) {
       console.error('[ADMIN] Error guardando producto', error);
-      const message = error?.message || 'No se pudo guardar el producto.';
+      const message = error?.payload?.message || error?.message || 'No se pudo guardar el producto.';
       setScopedMessage(productsMessage, message, 'error');
     } finally {
       if (productModal?.classList.contains('show')) {
@@ -4236,7 +4258,7 @@
     });
 
     if (productImagesInput) {
-      productImagesInput.addEventListener('change', () => {
+      productImagesInput.addEventListener('change', async () => {
         const files = productImagesInput.files ? Array.from(productImagesInput.files) : [];
         const imageValidationMessage = validateProductImages(files);
         if (imageValidationMessage) {
@@ -4245,10 +4267,33 @@
           renderProductImagesPreview(cachedProductImages);
           return;
         }
-        const urls = files.map((file) => URL.createObjectURL(file));
-        renderProductImagesPreview(urls);
+        productImagesInput.disabled = true;
+        try {
+          const urls = await uploadProductImages(files);
+          window.CRONOX_PRODUCT_GALLERY?.addUploaded?.(urls);
+          const primaryUrl = window.CRONOX_PRODUCT_GALLERY?.primaryUrl?.();
+          if (productCardFramingImage && primaryUrl) productCardFramingImage.src = primaryUrl;
+          productImagesInput.value = '';
+        } catch (error) {
+          setScopedMessage(productsMessage, error?.message || 'No se pudieron subir las imágenes.', 'error');
+        } finally {
+          productImagesInput.disabled = false;
+        }
       });
     }
+
+    document.addEventListener('cronox:primary-image-changed', (event) => {
+      setProductCardFraming();
+      const url = safeImageUrl(event.detail?.url);
+      if (productCardFramingImage) {
+        if (url) {
+          productCardFramingImage.src = url;
+          productCardFramingImage.hidden = false;
+        } else {
+          productCardFramingImage.hidden = true;
+        }
+      }
+    });
 
     if (productForm) {
       productForm.addEventListener('submit', submitProduct);

@@ -23,7 +23,10 @@ export class FavoritesService {
       where: { userId, product: { isActive: true } },
       include: {
         product: {
-          include: { images: { orderBy: this.imageOrderBy }, variants: true },
+          include: {
+            images: { where: { isActive: true }, orderBy: this.imageOrderBy },
+            variants: true,
+          },
         },
       },
       orderBy: { createdAt: 'desc' },
@@ -42,7 +45,10 @@ export class FavoritesService {
       where: { userId, product: { isActive: true } },
       include: {
         product: {
-          include: { images: { orderBy: this.imageOrderBy }, variants: true },
+          include: {
+            images: { where: { isActive: true }, orderBy: this.imageOrderBy },
+            variants: true,
+          },
         },
       },
       orderBy: { createdAt: 'desc' },
@@ -144,7 +150,10 @@ export class FavoritesService {
 
     const product = await this.prisma.product.findFirst({
       where: { ...where, isActive: true },
-      include: { images: { orderBy: this.imageOrderBy }, variants: true },
+      include: {
+        images: { where: { isActive: true }, orderBy: this.imageOrderBy },
+        variants: true,
+      },
     });
 
     if (!product) {

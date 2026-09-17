@@ -27,6 +27,7 @@ export const orderForConfirmationEmailInclude = {
             slug: true,
             imageUrl: true,
             images: {
+              where: { isActive: true },
               select: {
                 url: true,
                 isPrimary: true,

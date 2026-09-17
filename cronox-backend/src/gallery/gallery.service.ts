@@ -104,6 +104,7 @@ const GALLERY_PRODUCT_SELECT = Prisma.validator<Prisma.ProductSelect>()({
   imageUrl: true,
   isActive: true,
   images: {
+    where: { isActive: true },
     select: { url: true },
     orderBy: [{ isPrimary: 'desc' }, { sortOrder: 'asc' }, { id: 'asc' }],
     take: 1,

@@ -1,4 +1,5 @@
 import { availableStock, classifyStock } from '../../../cronox-backend/src/common/stock-status';
+import { installSessionTransport } from './session';
 
 (() => {
   type UnknownRecord = Record<string, unknown>;
@@ -230,7 +231,9 @@ import { availableStock, classifyStock } from '../../../cronox-backend/src/commo
       const url = new URL(candidate);
       const trustedOrigin = getTrustedImageOrigins().has(url.origin);
       const publicSupabaseObject =
-        url.protocol === 'https:' && /(^|\.)supabase\.co$/i.test(url.hostname) && url.pathname.startsWith('/storage/v1/object/public/');
+        url.protocol === 'https:' &&
+        /(^|\.)supabase\.co$/i.test(url.hostname) &&
+        url.pathname.startsWith('/storage/v1/object/public/');
 
       return trustedOrigin || publicSupabaseObject ? url.href : fallback;
     } catch (error) {
@@ -300,7 +303,24 @@ import { availableStock, classifyStock } from '../../../cronox-backend/src/commo
   const mapProduct = (product?: UnknownRecord | null) => {
     if (!product) return null;
 
-    const images = Array.isArray(product.images) ? (product.images as Array<{ url?: string }>).map((img) => productImageUrl(img?.url)).filter(Boolean) : [];
+    const galleryImages = Array.isArray(product.images)
+      ? (product.images as Array<Record<string, unknown>>)
+          .filter((img) => img?.isActive !== false)
+          .sort((a, b) => Number(a?.sortOrder ?? 0) - Number(b?.sortOrder ?? 0))
+          .map((img) => ({
+            id: img.id,
+            url: productImageUrl(img?.url),
+            alt: String(img?.alt ?? ''),
+            sortOrder: Number(img?.sortOrder ?? 0),
+            isPrimary: Boolean(img?.isPrimary),
+            galleryPositionX: Number(img?.galleryPositionX ?? 50),
+            galleryPositionY: Number(img?.galleryPositionY ?? 50),
+            galleryZoom: Number(img?.galleryZoom ?? 1),
+            galleryFit: String(img?.galleryFit ?? 'CONTAIN').toUpperCase() === 'COVER' ? 'COVER' : 'CONTAIN',
+          }))
+          .filter((img) => Boolean(img.url))
+      : [];
+    const images = galleryImages.map((img) => img.url);
     const primaryImage = pickPrimaryImage(
       (product.images as Array<{
         url?: string;
@@ -337,7 +357,11 @@ import { availableStock, classifyStock } from '../../../cronox-backend/src/commo
           .map((value) => String(value).toLowerCase())
       : [];
 
-    const sizes = variants.length ? variants.map((variant) => variant.size).filter(Boolean) : Array.isArray(product.sizes) ? (product.sizes as unknown[]) : [];
+    const sizes = variants.length
+      ? variants.map((variant) => variant.size).filter(Boolean)
+      : Array.isArray(product.sizes)
+        ? (product.sizes as unknown[])
+        : [];
 
     return {
       __fromBackend: true,
@@ -352,6 +376,7 @@ import { availableStock, classifyStock } from '../../../cronox-backend/src/commo
       desc: product.description || product.desc || '',
       image: primaryImage,
       images: images.length ? images : primaryImage ? [primaryImage] : [],
+      galleryImages,
       categories,
       sizes: sizes.map((size) => String(size || '').toLowerCase()),
       colors: product.colors || [],
@@ -428,7 +453,10 @@ import { availableStock, classifyStock } from '../../../cronox-backend/src/commo
     }
 
     const items = Array.isArray(cart.items) ? (cart.items as UnknownRecord[]).map(mapCartItem) : [];
-    const itemsCount = typeof cart.itemsCount === 'number' ? cart.itemsCount : items.reduce((acc, item) => acc + (Number(item.qty) || 0), 0);
+    const itemsCount =
+      typeof cart.itemsCount === 'number'
+        ? cart.itemsCount
+        : items.reduce((acc, item) => acc + (Number(item.qty) || 0), 0);
     const subtotalCents = Number(cart.subtotal ?? cart.subtotalCents ?? 0);
     const currency = cart.currency || items.find((item) => item?.product?.currency)?.product?.currency || 'EUR';
 
@@ -533,6 +561,8 @@ import { availableStock, classifyStock } from '../../../cronox-backend/src/commo
     [CSRF_HEADER_NAME]: await ensureCsrfToken(),
   });
 
+  installSessionTransport(API_BASE, getCsrfHeaders);
+
   const requiresCsrfHeader = (url: string, method: string) => {
     const normalizedMethod = String(method || 'GET').toUpperCase();
     if (!['POST', 'PUT', 'PATCH', 'DELETE'].includes(normalizedMethod)) return false;
@@ -580,7 +610,9 @@ import { availableStock, classifyStock } from '../../../cronox-backend/src/commo
       const data = text ? safeJsonParse(text) : null;
 
       if (!response.ok) {
-        const error = new Error((data as { message?: string })?.message || `API error ${response.status}`) as CronoxApiError;
+        const error = new Error(
+          (data as { message?: string })?.message || `API error ${response.status}`,
+        ) as CronoxApiError;
         error.status = response.status;
         error.endpoint = url;
         error.payload = data ?? null;
@@ -651,9 +683,7 @@ import { availableStock, classifyStock } from '../../../cronox-backend/src/commo
       return {
         ...base,
         kind: 'conflict',
-        userMessage:
-          payloadMessage ||
-          'Los datos cambiaron mientras editabas. Recarga antes de guardar de nuevo.',
+        userMessage: payloadMessage || 'Los datos cambiaron mientras editabas. Recarga antes de guardar de nuevo.',
         isRetryable: true,
         severity: 'warning',
       };
@@ -794,25 +824,24 @@ import { availableStock, classifyStock } from '../../../cronox-backend/src/commo
   };
 
   const adminApi = ensureAdminNamespace();
-  adminApi.mailRequest = (path: string, method = 'GET', body?: UnknownRecord | FormData) => request(`/api/admin/mail-templates${path}`, { method, body, cache: 'no-store' });
+  adminApi.mailRequest = (path: string, method = 'GET', body?: UnknownRecord | FormData) =>
+    request(`/api/admin/mail-templates${path}`, {
+      method,
+      body,
+      cache: 'no-store',
+    });
 
   adminApi.downloadExcel = async (module: string, query: QueryRecord = {}) => {
-    const allowedModules = new Set([
-      'users',
-      'orders',
-      'products',
-      'inventory',
-      'circles',
-      'promo-codes',
-      'audit',
-    ]);
+    const allowedModules = new Set(['users', 'orders', 'products', 'inventory', 'circles', 'promo-codes', 'audit']);
     if (!allowedModules.has(module)) throw new Error('Módulo de exportación no permitido.');
     const url = buildUrl(`/api/admin/exports/${module}`, query);
     const response = await fetch(url, {
       method: 'GET',
       credentials: 'include',
       cache: 'no-store',
-      headers: { Accept: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' },
+      headers: {
+        Accept: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      },
     });
     if (!response.ok) {
       const text = await response.text();
@@ -896,8 +925,12 @@ import { availableStock, classifyStock } from '../../../cronox-backend/src/commo
     return request('/api/admin/dashboard');
   };
 
-  adminApi.listCircleUpgradeRequests = async (queryOrStatus: string | QueryRecord = 'PENDING', queryOverride: QueryRecord = {}) => {
-    const query = typeof queryOrStatus === 'string' ? { status: queryOrStatus, ...queryOverride } : { ...queryOrStatus };
+  adminApi.listCircleUpgradeRequests = async (
+    queryOrStatus: string | QueryRecord = 'PENDING',
+    queryOverride: QueryRecord = {},
+  ) => {
+    const query =
+      typeof queryOrStatus === 'string' ? { status: queryOrStatus, ...queryOverride } : { ...queryOrStatus };
     return request('/api/admin/circle-upgrades/3-4', { query });
   };
 
@@ -915,8 +948,12 @@ import { availableStock, classifyStock } from '../../../cronox-backend/src/commo
     });
   };
 
-  adminApi.listAutoCircleRequests = async (queryOrStatus: string | QueryRecord = 'PENDING', queryOverride: QueryRecord = {}) => {
-    const query = typeof queryOrStatus === 'string' ? { status: queryOrStatus, ...queryOverride } : { ...queryOrStatus };
+  adminApi.listAutoCircleRequests = async (
+    queryOrStatus: string | QueryRecord = 'PENDING',
+    queryOverride: QueryRecord = {},
+  ) => {
+    const query =
+      typeof queryOrStatus === 'string' ? { status: queryOrStatus, ...queryOverride } : { ...queryOrStatus };
     return request('/api/admin/requests/2-3', { query });
   };
 
@@ -937,7 +974,9 @@ import { availableStock, classifyStock } from '../../../cronox-backend/src/commo
   };
 
   adminApi.getInventoryProduct = async (id: number | string) => {
-    return request(`/api/admin/inventory/${encodeURIComponent(id)}`, { cache: 'no-store' });
+    return request(`/api/admin/inventory/${encodeURIComponent(id)}`, {
+      cache: 'no-store',
+    });
   };
 
   adminApi.updateInventory = async (id: number | string, payload: UnknownRecord) => {
@@ -975,6 +1014,17 @@ import { availableStock, classifyStock } from '../../../cronox-backend/src/commo
     });
   };
 
+  adminApi.deleteProductImage = async (
+    productId: number | string,
+    imageId: number | string,
+    expectedUpdatedAt: string,
+  ) => {
+    return request(`/api/admin/products/${encodeURIComponent(productId)}/images/${encodeURIComponent(imageId)}`, {
+      method: 'DELETE',
+      body: { expectedUpdatedAt },
+    });
+  };
+
   adminApi.updateProductCategories = async (id: number | string, categoryIds: number[]) => {
     return request(`/api/admin/products/${encodeURIComponent(id)}/categories`, {
       method: 'PATCH',
@@ -988,16 +1038,25 @@ import { availableStock, classifyStock } from '../../../cronox-backend/src/commo
 
   adminApi.uploadProductImages = async (files: File[] = []) => {
     const urls: string[] = [];
-    for (const file of files) {
-      const formData = new FormData();
-      formData.append('files', file);
-      const result = (await request('/api/admin/products/upload-images', {
-        method: 'POST',
-        body: formData,
-      })) as { urls?: string[] } | null;
+    const results = await Promise.allSettled(
+      files.map(async (file) => {
+        const formData = new FormData();
+        formData.append('files', file);
+        return request('/api/admin/products/upload-images', {
+          method: 'POST',
+          body: formData,
+        }) as Promise<{ urls?: string[] } | null>;
+      }),
+    );
+    results.forEach((entry) => {
+      if (entry.status !== 'fulfilled') return;
+      const result = entry.value;
       if (Array.isArray(result?.urls)) urls.push(...result.urls);
-    }
-    return { urls };
+    });
+    return {
+      urls,
+      failures: results.filter((entry) => entry.status === 'rejected').length,
+    };
   };
 
   adminApi.listPromoCodes = async (query: QueryRecord = {}) => {
@@ -1040,7 +1099,9 @@ import { availableStock, classifyStock } from '../../../cronox-backend/src/commo
   };
 
   adminApi.getUserLoginHistory = async (id: number | string, query: QueryRecord = {}) => {
-    return request(`/api/admin/users/${encodeURIComponent(id)}/login-history`, { query });
+    return request(`/api/admin/users/${encodeURIComponent(id)}/login-history`, {
+      query,
+    });
   };
 
   // ✅ FIX: Endpoints por usuario (Solicitudes / Pedidos)
@@ -1132,7 +1193,9 @@ import { availableStock, classifyStock } from '../../../cronox-backend/src/commo
   const mapFavoriteProduct = (product: UnknownRecord) => {
     if (!product) return null;
     const images = Array.isArray(product.images)
-      ? (product.images as Array<{ url?: string; imageUrl?: string }>).map((img) => productImageUrl(img?.url || img?.imageUrl || img)).filter(Boolean)
+      ? (product.images as Array<{ url?: string; imageUrl?: string }>)
+          .map((img) => productImageUrl(img?.url || img?.imageUrl || img))
+          .filter(Boolean)
       : [];
     const priceValue = Number(product.price ?? product.priceCents ?? 0);
 
@@ -1232,7 +1295,8 @@ import { availableStock, classifyStock } from '../../../cronox-backend/src/commo
             price: centsToUnits(priceCents),
             priceLabel: formatCents(priceCents),
             image: productImageUrl(item.imageUrl) || '',
-            category: item.category && typeof item.category === 'object' ? { ...(item.category as UnknownRecord) } : null,
+            category:
+              item.category && typeof item.category === 'object' ? { ...(item.category as UnknownRecord) } : null,
           };
         })
       : [];
@@ -1318,9 +1382,7 @@ import { availableStock, classifyStock } from '../../../cronox-backend/src/commo
   };
 
   api.clearCart = async () => {
-    const data = await withGuestCartRecovery(() =>
-      request('/api/cart', { method: 'DELETE' }),
-    );
+    const data = await withGuestCartRecovery(() => request('/api/cart', { method: 'DELETE' }));
     return mapCart(data as UnknownRecord);
   };
 
@@ -1346,7 +1408,11 @@ import { availableStock, classifyStock } from '../../../cronox-backend/src/commo
   };
 
   api.getCheckoutSummary = async (
-    params: { shippingMethod?: string; promoCode?: string; guestEmail?: string } = {},
+    params: {
+      shippingMethod?: string;
+      promoCode?: string;
+      guestEmail?: string;
+    } = {},
   ) => {
     const query: QueryRecord = {};
 
@@ -1411,7 +1477,11 @@ import { availableStock, classifyStock } from '../../../cronox-backend/src/commo
   };
 
   api.applyPromoCode = async (
-    payload: { code?: string; shippingMethod?: string; guestEmail?: string } = {},
+    payload: {
+      code?: string;
+      shippingMethod?: string;
+      guestEmail?: string;
+    } = {},
   ) => {
     const body: Record<string, unknown> = {
       code: payload.code,
@@ -1480,7 +1550,8 @@ import { availableStock, classifyStock } from '../../../cronox-backend/src/commo
         priceLabel: basePriceLabel || formatPrice(priceValue),
         image: safeCandidateImage || uniqueImages[0] || productImageUrl(template.image) || '',
         images: uniqueImages,
-        categories: Array.isArray(source.categories) && source.categories.length ? source.categories : template.categories || [],
+        categories:
+          Array.isArray(source.categories) && source.categories.length ? source.categories : template.categories || [],
         sizes: Array.isArray(source.sizes) && source.sizes.length ? source.sizes : template.sizes || [],
         colors: Array.isArray(source.colors) && source.colors.length ? source.colors : template.colors || [],
         color: source.color || template.color || '',

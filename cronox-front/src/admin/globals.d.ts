@@ -101,6 +101,7 @@ declare global {
     createAdminProduct?: (payload: Record<string, unknown>, idempotencyKey: string) => Promise<unknown>;
     updateAdminProduct?: (id: number | string, payload: Record<string, unknown>) => Promise<unknown>;
     deleteAdminProduct?: (id: number | string) => Promise<unknown>;
+    deleteProductImage?: (productId: number | string, imageId: number | string, expectedUpdatedAt: string) => Promise<unknown>;
     updateProductCategories?: (id: number | string, categoryIds: number[]) => Promise<unknown>;
     listAdminCategories?: (query?: QueryRecord) => Promise<unknown>;
     uploadProductImages?: (files?: File[]) => Promise<unknown>;

@@ -298,9 +298,19 @@
   // ==========================
   function sanitizeImages(list, fallback) {
     const result = [];
-    const push = (src) => {
-      const value = safeProductImage(src);
-      if (value && !result.includes(value)) result.push(value);
+    const push = (candidate) => {
+      const source = candidate && typeof candidate === "object" ? candidate : { url: candidate };
+      const value = safeProductImage(source.url || source.imageUrl || candidate);
+      if (value && !result.some(item => item.url === value)) {
+        result.push({
+          url: value,
+          alt: String(source.alt || ""),
+          galleryPositionX: Math.min(100, Math.max(0, Number(source.galleryPositionX ?? 50))),
+          galleryPositionY: Math.min(100, Math.max(0, Number(source.galleryPositionY ?? 50))),
+          galleryZoom: Math.min(3, Math.max(0.5, Number(source.galleryZoom ?? 1))),
+          galleryFit: String(source.galleryFit || "CONTAIN").toUpperCase() === "COVER" ? "cover" : "contain",
+        });
+      }
     };
     if (Array.isArray(list)) list.forEach(push);
     push(fallback);
@@ -317,9 +327,16 @@
     if (pMedia) pMedia.classList.remove("is-zoomed", "is-zoomed-max");
     const active = getActiveImage();
     if (active) {
-      active.style.transform = "";
-      active.style.transformOrigin = "";
+      applyGalleryFraming(active, galleryImages[currentImageIndex]);
     }
+  }
+
+  function applyGalleryFraming(image, item) {
+    if (!image || !item) return;
+    image.style.objectFit = item.galleryFit || "contain";
+    image.style.objectPosition = `${item.galleryPositionX}% ${item.galleryPositionY}%`;
+    image.style.transformOrigin = `${item.galleryPositionX}% ${item.galleryPositionY}%`;
+    image.style.transform = `scale(${item.galleryZoom})`;
   }
 
   function updateZoomClass() {
@@ -363,6 +380,7 @@
     currentImageIndex = normalized;
     updateThumbState(normalized);
     resetZoom();
+    applyGalleryFraming(imgs[normalized], galleryImages[normalized]);
 
     const single = total <= 1;
     if (pMediaPrev) pMediaPrev.hidden = single;
@@ -370,7 +388,7 @@
   }
 
   function setupGallery(p) {
-    const images = sanitizeImages(p?.images, p?.image);
+    const images = sanitizeImages(p?.galleryImages?.length ? p.galleryImages : p?.images, p?.image);
     galleryImages = images;
 
     if (!images.length) {
@@ -387,20 +405,29 @@
     const altBase = p?.name ? String(p.name) : "Producto CRONOX";
 
     if (pMediaViewport) {
-      pMediaViewport.innerHTML = images.map((src, idx) => {
+      pMediaViewport.innerHTML = images.map((item, idx) => {
         const activeClass = idx === 0 ? " is-active" : "";
         const hiddenAttr = idx === 0 ? "" : " hidden";
         const idAttr = idx === 0 ? ' id="pImage"' : "";
         const altSuffix = images.length > 1 ? ` — imagen ${idx + 1}` : "";
         const loading = idx === 0 ? "eager" : "lazy";
-        return `<img${idAttr} class="pdp__media-img${activeClass}" src="${escapeHtml(src)}" alt="${escapeHtml(`${altBase}${altSuffix}`)}" loading="${loading}" decoding="async"${hiddenAttr} aria-hidden="${idx === 0 ? "false" : "true"}">`;
+        const alt = item.alt || `${altBase}${altSuffix}`;
+        return `<img${idAttr} class="pdp__media-img${activeClass}" src="${escapeHtml(item.url)}" alt="${escapeHtml(alt)}" loading="${loading}" decoding="async"${hiddenAttr} aria-hidden="${idx === 0 ? "false" : "true"}">`;
       }).join("");
+      pMediaViewport.querySelectorAll(".pdp__media-img").forEach((image, idx) => {
+        image.addEventListener("load", () => applyGalleryFraming(image, images[idx]));
+        image.addEventListener("error", () => {
+          image.hidden = true;
+          image.setAttribute("aria-hidden", "true");
+        });
+        applyGalleryFraming(image, images[idx]);
+      });
     }
 
     if (pThumbs) {
-      pThumbs.innerHTML = images.map((src, idx) => {
+      pThumbs.innerHTML = images.map((item, idx) => {
         const activeClass = idx === 0 ? " is-active" : "";
-        return `<button type="button" class="pdp__thumb${activeClass}" data-index="${idx}" aria-label="Ver imagen ${idx + 1} de ${images.length}"><img src="${escapeHtml(src)}" alt="${escapeHtml(`${altBase} miniatura ${idx + 1}`)}" loading="lazy" decoding="async"></button>`;
+        return `<button type="button" class="pdp__thumb${activeClass}" data-index="${idx}" aria-label="Ver imagen ${idx + 1} de ${images.length}"><img src="${escapeHtml(item.url)}" alt="" loading="lazy" decoding="async"></button>`;
       }).join("");
       const hideThumbs = images.length <= 1;
       pThumbs.hidden = hideThumbs;
@@ -467,7 +494,8 @@
         return;
       }
 
-      const scale = zoomLevel === 1 ? 2 : 4;
+      const savedZoom = Number(galleryImages[currentImageIndex]?.galleryZoom || 1);
+      const scale = savedZoom * (zoomLevel === 1 ? 2 : 4);
       updateOrigin(event);
       img.style.transform = `scale(${scale})`;
       pMedia.classList.add("is-zoomed");

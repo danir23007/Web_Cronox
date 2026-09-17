@@ -19,6 +19,13 @@ describe('AuthService password reset security', () => {
     sendInitialPasswordSetup: jest.fn(),
   };
   const newsletterService = { subscribeIfNeeded: jest.fn() };
+  const sessions = {
+    create: jest.fn(),
+    verify: jest.fn(),
+    rotate: jest.fn(),
+    touch: jest.fn(),
+    revoke: jest.fn(),
+  };
 
   let tx: any;
   let prisma: any;
@@ -29,6 +36,13 @@ describe('AuthService password reset security', () => {
     process.env.NODE_ENV = 'test';
     process.env.FRONTEND_URL = 'http://localhost:3000';
     process.env.BCRYPT_SALT_ROUNDS = '10';
+    sessions.verify.mockResolvedValue({
+      id: 'session-1',
+      userId: 42,
+      sessionVersion: 3,
+      lastActivityAt: new Date(),
+    });
+    sessions.revoke.mockResolvedValue(undefined);
 
     tx = {
       passwordResetToken: {
@@ -44,6 +58,9 @@ describe('AuthService password reset security', () => {
         update: jest.fn().mockResolvedValue({ id: 9 }),
       },
       checkoutSnapshot: {
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+      },
+      authSession: {
         updateMany: jest.fn().mockResolvedValue({ count: 1 }),
       },
     };
@@ -69,6 +86,7 @@ describe('AuthService password reset security', () => {
       prisma,
       emailService as any,
       newsletterService as any,
+      sessions as any,
     );
   });
 
@@ -331,10 +349,7 @@ describe('AuthService password reset security', () => {
       service.logout('access-token', undefined),
     ).resolves.toBeUndefined();
 
-    expect(prisma.user.updateMany).toHaveBeenCalledWith({
-      where: { id: 42, sessionVersion: 3 },
-      data: { sessionVersion: { increment: 1 } },
-    });
+    expect(sessions.revoke).toHaveBeenCalledWith('session-1');
   });
 
   it('accepts an access session only after verifying its current administrative user', async () => {
@@ -353,6 +368,13 @@ describe('AuthService password reset security', () => {
   });
 
   it('accepts an expired access cookie through a valid current administrator refresh session', async () => {
+    sessions.verify
+      .mockRejectedValueOnce(new Error('access expired'))
+      .mockResolvedValueOnce({
+        id: 'session-1',
+        userId: 42,
+        sessionVersion: 3,
+      });
     jwtService.verifyAsync.mockRejectedValue(new Error('access expired'));
     refreshJwt.verifyAsync.mockResolvedValue({
       sub: 42,
@@ -369,8 +391,16 @@ describe('AuthService password reset security', () => {
     await expect(
       service.hasValidAdminSession('expired-access', 'valid-refresh'),
     ).resolves.toBe(true);
-    expect(jwtService.verifyAsync).toHaveBeenCalledWith('expired-access');
-    expect(refreshJwt.verifyAsync).toHaveBeenCalledWith('valid-refresh');
+    expect(sessions.verify).toHaveBeenNthCalledWith(
+      1,
+      'expired-access',
+      'access',
+    );
+    expect(sessions.verify).toHaveBeenNthCalledWith(
+      2,
+      'valid-refresh',
+      'refresh',
+    );
     expect(usersService.findById).toHaveBeenCalledWith(42);
   });
 
@@ -390,8 +420,7 @@ describe('AuthService password reset security', () => {
     await expect(
       service.hasValidAdminSession(undefined, 'valid-refresh'),
     ).resolves.toBe(true);
-    expect(jwtService.verifyAsync).not.toHaveBeenCalled();
-    expect(refreshJwt.verifyAsync).toHaveBeenCalledWith('valid-refresh');
+    expect(sessions.verify).toHaveBeenCalledWith('valid-refresh', 'refresh');
   });
 
   it('rejects a valid session when the current database role is not administrative', async () => {
@@ -443,7 +472,7 @@ describe('AuthService password reset security', () => {
   it.each(['forged', 'expired', 'invalid'])(
     'fails closed for a %s access cookie without raising an application error',
     async () => {
-      jwtService.verifyAsync.mockRejectedValue(new Error('invalid token'));
+      sessions.verify.mockRejectedValue(new Error('invalid token'));
 
       await expect(
         service.hasValidAdminSession('untrusted-token'),
@@ -453,6 +482,7 @@ describe('AuthService password reset security', () => {
   );
 
   it('rejects a refresh cookie signed with the wrong secret without raising an application error', async () => {
+    sessions.verify.mockRejectedValue(new Error('invalid signature'));
     refreshJwt.verifyAsync.mockRejectedValue(new Error('invalid signature'));
 
     await expect(
@@ -462,6 +492,7 @@ describe('AuthService password reset security', () => {
   });
 
   it('never treats a refresh token as an access token', async () => {
+    sessions.verify.mockRejectedValue(new Error('wrong type'));
     jwtService.verifyAsync.mockResolvedValue({
       sub: 42,
       sv: 3,
@@ -476,6 +507,7 @@ describe('AuthService password reset security', () => {
   });
 
   it('never treats an access token as a refresh token', async () => {
+    sessions.verify.mockRejectedValue(new Error('wrong type'));
     refreshJwt.verifyAsync.mockResolvedValue({ sub: 42, sv: 3 });
 
     await expect(
@@ -501,10 +533,8 @@ describe('AuthService password reset security', () => {
     ).resolves.toBe(true);
     await service.logout('old-access', 'old-refresh');
 
-    expect(prisma.user.updateMany).toHaveBeenCalledWith({
-      where: { id: 42, sessionVersion: 3 },
-      data: { sessionVersion: { increment: 1 } },
-    });
+    expect(sessions.revoke).toHaveBeenCalledWith('session-1');
+    sessions.verify.mockRejectedValue(new Error('revoked'));
 
     usersService.findById.mockResolvedValue({
       id: 42,
@@ -539,9 +569,9 @@ describe('AuthService password reset security', () => {
       where: { id: 9 },
       data: { userId: null, anonymousId: 'opaque-logout-cart-owner-123456' },
     });
-    expect(tx.user.updateMany).toHaveBeenCalledWith({
-      where: { id: 42, sessionVersion: 3 },
-      data: { sessionVersion: { increment: 1 } },
+    expect(tx.authSession.updateMany).toHaveBeenCalledWith({
+      where: { id: 'session-1', revokedAt: null },
+      data: { revokedAt: expect.any(Date) },
     });
   });
 
@@ -556,8 +586,9 @@ describe('AuthService password reset security', () => {
       prisma,
       emailService as any,
       newsletterService as any,
+      sessions as any,
     );
-    const response = { cookie: jest.fn() };
+    const response = { cookie: jest.fn(), setHeader: jest.fn() };
 
     productionService.setAuthCookies(response as any, {
       accessToken: 'access',

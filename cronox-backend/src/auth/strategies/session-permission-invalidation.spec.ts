@@ -12,6 +12,7 @@ describe('role/status session invalidation', () => {
     findById: jest.fn(),
     toSafeUser: jest.fn((user) => ({ id: user.id, role: user.role })),
   };
+  const sessions = { validate: jest.fn(), verify: jest.fn() };
   let access: JwtAccessStrategy;
   let refresh: JwtRefreshStrategy;
 
@@ -20,8 +21,8 @@ describe('role/status session invalidation', () => {
       'access-test-secret-at-least-thirty-two-characters';
     process.env.JWT_REFRESH_SECRET =
       'refresh-test-secret-at-least-thirty-two-characters';
-    access = new JwtAccessStrategy(usersService as never);
-    refresh = new JwtRefreshStrategy(usersService as never);
+    access = new JwtAccessStrategy(usersService as never, sessions as never);
+    refresh = new JwtRefreshStrategy(usersService as never, sessions as never);
   });
 
   afterAll(() => {
@@ -33,7 +34,11 @@ describe('role/status session invalidation', () => {
     else process.env.JWT_REFRESH_SECRET = originalRefreshSecret;
   });
 
-  beforeEach(() => jest.clearAllMocks());
+  beforeEach(() => {
+    jest.clearAllMocks();
+    sessions.validate.mockResolvedValue({ lastActivityAt: new Date() });
+    sessions.verify.mockResolvedValue({ id: 'session-1' });
+  });
 
   it('rejects an existing access token after a role change increments sessionVersion', async () => {
     usersService.findById.mockResolvedValue({

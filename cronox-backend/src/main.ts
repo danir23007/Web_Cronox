@@ -185,6 +185,7 @@ async function bootstrap() {
       );
     },
     credentials: true,
+    exposedHeaders: ['X-Session-Idle-Expires', 'Content-Disposition'],
     methods: ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: [
       'Authorization',

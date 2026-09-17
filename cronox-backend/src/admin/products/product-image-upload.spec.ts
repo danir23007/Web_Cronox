@@ -50,9 +50,7 @@ describe('Product image upload limit', () => {
     );
 
     expect(html).toContain('accept="image/png,image/jpeg,image/webp"');
-    expect(html).toContain(
-      'JPEG, PNG o WEBP. Máximo 25 MB por imagen. La primera imagen será la principal.',
-    );
+    expect(html).toContain('JPEG, PNG o WebP. Máximo 25 MB por imagen.');
     expect(script).toContain(
       'const MAX_PRODUCT_IMAGE_BYTES = 25 * 1024 * 1024;',
     );
@@ -60,14 +58,16 @@ describe('Product image upload limit', () => {
     expect(script).toContain(PRODUCT_IMAGE_TOO_LARGE_MESSAGE);
   });
 
-  it('uploads selected product images in separate multipart requests', () => {
+  it('uploads selected product images independently and preserves partial successes', () => {
     const source = readFileSync(
       path.join(frontendRoot, 'src/admin/api.ts'),
       'utf8',
     );
 
-    expect(source).toMatch(
-      /for \(const file of files\) \{[\s\S]*new FormData\(\)[\s\S]*formData\.append\('files', file\)/,
-    );
+    expect(source).toContain('Promise.allSettled');
+    expect(source).toContain('files.map(async (file) =>');
+    expect(source).toMatch(/formData\.append\(["']files["'], file\)/);
+    expect(source).toMatch(/entry\.status !== ["']fulfilled["']/);
+    expect(source).toContain('failures: results.filter');
   });
 });

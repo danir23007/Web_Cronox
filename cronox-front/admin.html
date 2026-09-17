@@ -89,6 +89,23 @@
     .product-card-framing-controls label { display: grid; grid-template-columns: 1fr auto; gap: 8px; }
     .product-card-framing-controls input { grid-column: 1 / -1; width: 100%; }
     @media (max-width: 620px) { .product-card-framing-layout { grid-template-columns: 1fr; } .product-card-framing-preview { max-width: 280px; margin: 0 auto; } }
+    .product-gallery-manager { margin:14px 0; padding:14px; border:1px solid #2a2a36; border-radius:12px; background:#0b0b11; }
+    .product-gallery-thumbnails { display:flex; gap:10px; overflow-x:auto; padding:8px 2px 12px; }
+    .product-gallery-thumb { position:relative; flex:0 0 92px; border:2px solid transparent; border-radius:8px; padding:4px; color:inherit; background:#15151d; }
+    .product-gallery-thumb[aria-pressed="true"] { border-color:#fff; }
+    .product-gallery-thumb img { width:80px; height:96px; object-fit:contain; background:#fff; display:block; }
+    .product-gallery-badge { position:absolute; left:6px; top:6px; padding:2px 5px; background:#000; color:#fff; font-size:10px; }
+    .product-gallery-layout { display:grid; grid-template-columns:minmax(220px, 1fr) minmax(220px, 1fr); gap:18px; }
+    .product-gallery-preview { position:relative; min-height:360px; overflow:hidden; background:#fff; touch-action:none; cursor:grab; }
+    .product-gallery-preview img { position:absolute; }
+    .product-gallery-controls { display:grid; gap:10px; align-content:start; }
+    .product-gallery-controls label { display:grid; grid-template-columns:1fr auto; gap:8px; }
+    .product-gallery-controls label input[type="range"] { grid-column:1/-1; }
+    .product-gallery-actions { display:flex; flex-wrap:wrap; gap:8px; }
+    .product-gallery-history-grid { display:flex; flex-wrap:wrap; gap:12px; margin-top:10px; }
+    .product-gallery-history-item { width:140px; padding:8px; border:1px solid #30303b; border-radius:8px; }
+    .product-gallery-history-item img { width:122px; height:122px; object-fit:contain; background:#fff; }
+    @media (max-width:760px) { .product-gallery-layout { grid-template-columns:1fr; } .product-gallery-preview { min-height:300px; } }
     .image-thumb { width: 74px; height: 74px; border: 1px solid #1f1f2b; border-radius: 10px; overflow: hidden; background: #0d0d15; display: flex; align-items: center; justify-content: center; }
     .image-thumb img { width: 100%; height: 100%; object-fit: cover; }
     .badge { display: inline-block; padding: 6px 10px; border-radius: 999px; background: #1c1c26; color: #b3b3c2; font-size: 0.85rem; }
@@ -1274,20 +1291,36 @@
           <input id="productSearchKeywords" name="searchKeywords" class="input" type="text" maxlength="600" placeholder="azul, blue, camiseta, tee, washed">
           <small style="color:#8e93a4;">Añade colores, tipos de prenda o términos relacionados separados por comas.</small>
         </div>
-        <div class="form-grid" style="align-items: flex-end;">
+        <section class="product-gallery-manager" aria-labelledby="productGalleryTitle">
+          <h4 id="productGalleryTitle" style="margin:0 0 6px;">Galería del producto</h4>
           <div class="form-group">
-            <label for="productImages">Imágenes</label>
-            <input id="productImages" class="input" type="file" multiple accept="image/png,image/jpeg,image/webp">
-            <small style="color:#8e93a4;">JPEG, PNG o WEBP. Máximo 25 MB por imagen. La primera imagen será la principal.</small>
+            <label for="productImages" class="btn">Añadir imágenes</label>
+            <input id="productImages" type="file" multiple accept="image/png,image/jpeg,image/webp" hidden>
+            <small>JPEG, PNG o WebP. Máximo 25 MB por imagen.</small>
           </div>
-          <div class="form-group">
-            <label>Previsualización</label>
-            <div id="productImagesPreview" class="image-preview">
-              <p class="empty" style="margin:0;">Sin imágenes seleccionadas.</p>
+          <div id="productGalleryStatus" class="empty" role="status" aria-live="polite"></div>
+          <div id="productGalleryThumbnails" class="product-gallery-thumbnails" aria-label="Imágenes activas"></div>
+          <div id="productGalleryEditor" class="product-gallery-layout" hidden>
+            <div id="productGalleryPreview" class="product-gallery-preview"><img id="productGalleryPreviewImage" alt=""></div>
+            <div class="product-gallery-controls">
+              <label for="productGalleryPositionX">Posición horizontal <output id="productGalleryPositionXValue">50%</output><input id="productGalleryPositionX" type="range" min="0" max="100" step="1" value="50"></label>
+              <label for="productGalleryPositionY">Posición vertical <output id="productGalleryPositionYValue">50%</output><input id="productGalleryPositionY" type="range" min="0" max="100" step="1" value="50"></label>
+              <label for="productGalleryZoom">Zoom <output id="productGalleryZoomValue">1.00×</output><input id="productGalleryZoom" type="range" min="0.5" max="3" step="0.01" value="1"></label>
+              <label for="productGalleryFit">Ajuste<select id="productGalleryFit" class="input"><option value="CONTAIN">Contener</option><option value="COVER">Cubrir</option></select></label>
+              <label for="productGalleryAlt">Texto alternativo (SEO)<input id="productGalleryAlt" class="input" type="text" maxlength="160"></label>
+              <button id="productGalleryReset" class="btn" type="button">Restablecer encuadre</button>
+              <div class="product-gallery-actions">
+                <button id="productGalleryPrimary" class="btn" type="button">Establecer como principal</button>
+                <button id="productGalleryLeft" class="btn" type="button" aria-label="Mover imagen a la izquierda">Mover a la izquierda</button>
+                <button id="productGalleryRight" class="btn" type="button" aria-label="Mover imagen a la derecha">Mover a la derecha</button>
+                <button id="productGalleryArchive" class="btn danger" type="button">Quitar de la galería</button>
+              </div>
             </div>
           </div>
-        </div>
-        <section class="product-card-framing-editor" aria-labelledby="productCardFramingTitle">
+          <details id="productGalleryHistory"><summary>Ver historial de imágenes</summary><div id="productGalleryHistoryGrid" class="product-gallery-history-grid"></div></details>
+        </section>
+        <div id="productImagesPreview" hidden></div>
+        <section id="productCardFramingEditor" class="product-card-framing-editor" aria-labelledby="productCardFramingTitle" hidden>
           <h4 id="productCardFramingTitle" style="margin:0 0 6px;">Encuadre de la tarjeta de producto</h4>
           <small>Arrastra la imagen (ratón o táctil) y ajusta el zoom. Solo afecta a la imagen principal de las tarjetas.</small>
           <div class="product-card-framing-layout" style="margin-top:12px;">
@@ -1620,11 +1653,12 @@
 
   <div class="toast-container" id="toastContainer" aria-live="polite" aria-atomic="true"></div>
 
-  <script src="assets/api.js?v=4"></script>
+  <script src="assets/api.js?v=5"></script>
   <script src="assets/admin-auth-routing.js?v=1"></script>
   <script src="assets/ui-status.js"></script>
   <script src="assets/media-framing-geometry.js?v=3"></script>
   <script src="assets/product-card-framing.js?v=1"></script>
+  <script src="assets/admin-product-gallery.js?v=1"></script>
   <script src="assets/admin.js"></script>
   <script src="assets/admin-inventory.js?v=1"></script>
   <script src="assets/admin-mail-document.js?v=2"></script>

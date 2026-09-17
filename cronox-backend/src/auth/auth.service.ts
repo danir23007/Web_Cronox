@@ -7,7 +7,7 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
-import { Role, User, UserAccountState } from '@prisma/client';
+import { User, UserAccountState } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 import { createHash, randomBytes } from 'crypto';
 import type { CookieOptions, Request, Response } from 'express';
@@ -31,25 +31,14 @@ import { RegisterDto } from './dto/register.dto';
 import { parseClientInfo } from '../analytics/client-info';
 import { normalizeEmail } from '../common/email';
 import { isAdminPanelRole } from '../common/roles.utils';
+import { AuthSessionsService, SessionClaims } from './auth-sessions.service';
 
 const PASSWORD_SETUP_CLAIM_STALE_MS = 10 * 60 * 1000;
 
-interface JwtPayload {
-  sub: number;
-  email: string;
-  role: Role | null;
-  sv: number;
-}
-
 type Tokens = {
+  idleExpiresAt?: number;
   accessToken: string;
   refreshToken?: string;
-};
-
-type SessionJwtPayload = {
-  sub: number;
-  sv: number;
-  type?: string;
 };
 
 @Injectable()
@@ -80,6 +69,7 @@ export class AuthService {
     private readonly prisma: PrismaService,
     private readonly emailService: EmailService,
     private readonly newsletterService: NewsletterService,
+    private readonly sessions: AuthSessionsService,
   ) {}
 
   async register(dto: RegisterDto) {
@@ -152,7 +142,7 @@ export class AuthService {
     ]);
   }
 
-  async refresh(userId: number) {
+  async refresh(userId: number, refreshToken: string) {
     const user = await this.usersService.findById(userId);
 
     if (!user) {
@@ -160,7 +150,9 @@ export class AuthService {
     }
 
     const authUser = this.omitPassword(user);
-    const tokens = await this.generateTokens(authUser);
+    const session = await this.sessions.verify(refreshToken, 'refresh');
+    if (session.userId !== userId) throw new UnauthorizedException();
+    const tokens = await this.sessions.rotate(refreshToken);
 
     return {
       user: this.formatAuthUser(authUser),
@@ -182,21 +174,31 @@ export class AuthService {
   async hasValidAdminSession(
     accessToken?: string,
     refreshToken?: string,
+    res?: Response,
   ): Promise<boolean> {
     try {
-      const session = await this.getCurrentSession(accessToken, refreshToken);
+      const session = await this.getCurrentSession(
+        accessToken,
+        refreshToken,
+        true,
+      );
       if (!session) return false;
 
       const user = await this.usersService.findById(session.userId);
-      return Boolean(
+      const allowed = Boolean(
         user &&
           user.sessionVersion === session.sessionVersion &&
           user.accountState === UserAccountState.ACTIVE &&
           isAdminPanelRole(user.role),
       );
+      if (allowed && res && refreshToken) {
+        this.setAuthCookies(res, await this.sessions.rotate(refreshToken));
+      }
+      return allowed;
     } catch {
       // Public navigation must fall back to the Key Screen for any invalid,
       // expired or unverifiable authentication cookie.
+      if (res) this.clearAuthCookies(res);
       return false;
     }
   }
@@ -230,10 +232,7 @@ export class AuthService {
       return;
     }
 
-    await this.prisma.user.updateMany({
-      where: { id: session.userId, sessionVersion: session.sessionVersion },
-      data: { sessionVersion: { increment: 1 } },
-    });
+    await this.sessions.revoke(session.id);
   }
 
   async logoutToAnonymousCart(
@@ -265,12 +264,12 @@ export class AuthService {
         });
       }
 
-      await tx.user.updateMany({
+      await tx.authSession.updateMany({
         where: {
-          id: session.userId,
-          sessionVersion: session.sessionVersion,
+          id: session.id,
+          revokedAt: null,
         },
-        data: { sessionVersion: { increment: 1 } },
+        data: { revokedAt: new Date() },
       });
       return { cartMoved: Boolean(cart) };
     });
@@ -463,6 +462,9 @@ export class AuthService {
   }
 
   setAuthCookies(res: Response, tokens: Tokens) {
+    res.setHeader('Cache-Control', 'no-store');
+    if (tokens.idleExpiresAt)
+      res.setHeader('X-Session-Idle-Expires', String(tokens.idleExpiresAt));
     res.cookie('jwt', tokens.accessToken, this.jwtCookieOptions);
     if (tokens.refreshToken) {
       res.cookie('refresh_token', tokens.refreshToken, this.jwtCookieOptions);
@@ -512,25 +514,11 @@ export class AuthService {
   }
 
   private async generateTokens(user: AuthUser): Promise<Tokens> {
-    const accessToken = await this.generateAccessToken(user);
-    const refreshToken = await this.refreshJwt.signAsync({
-      sub: user.id,
-      type: 'refresh',
-      sv: user.sessionVersion,
-    });
-
-    return { accessToken, refreshToken };
+    return this.sessions.create(user);
   }
 
-  private async generateAccessToken(user: AuthUser) {
-    const payload: JwtPayload = {
-      sub: user.id,
-      email: user.email,
-      role: user.role,
-      sv: user.sessionVersion,
-    };
-
-    return this.jwtService.signAsync(payload);
+  reportActivity(payload: SessionClaims) {
+    return this.sessions.touch(payload);
   }
 
   private hashPassword(data: string) {
@@ -544,39 +532,32 @@ export class AuthService {
   private async getCurrentSession(
     accessToken?: string,
     refreshToken?: string,
-  ): Promise<{ userId: number; sessionVersion: number } | null> {
+    throwOnInvalid = false,
+  ) {
+    let validationError: unknown;
     if (accessToken) {
       try {
-        const payload =
-          await this.jwtService.verifyAsync<SessionJwtPayload>(accessToken);
-        if (
-          payload.type === undefined &&
-          Number.isInteger(payload.sub) &&
-          Number.isInteger(payload.sv)
-        ) {
-          return { userId: payload.sub, sessionVersion: payload.sv };
-        }
-      } catch {
+        return await this.sessions.verify(accessToken, 'access');
+      } catch (error) {
+        validationError = error;
         // A missing, expired, or invalid cookie is intentionally idempotent.
       }
     }
 
     if (refreshToken) {
       try {
-        const payload =
-          await this.refreshJwt.verifyAsync<SessionJwtPayload>(refreshToken);
-        if (
-          payload.type === 'refresh' &&
-          Number.isInteger(payload.sub) &&
-          Number.isInteger(payload.sv)
-        ) {
-          return { userId: payload.sub, sessionVersion: payload.sv };
-        }
-      } catch {
+        return await this.sessions.verify(refreshToken, 'refresh');
+      } catch (error) {
+        validationError = error;
         // A missing, expired, or invalid cookie is intentionally idempotent.
       }
     }
 
+    if (throwOnInvalid && validationError) {
+      throw validationError instanceof Error
+        ? validationError
+        : new UnauthorizedException('Inicia sesión de nuevo.');
+    }
     return null;
   }
 
