@@ -105,7 +105,7 @@ describe('CRONOX responsive design system', () => {
       /\.hero-video\{[^}]*width:100%;[^}]*height:100%;[^}]*object-fit:cover;[^}]*object-position:center;[^}]*transform:none;/,
     );
     expect(storeStyles).toMatch(
-      /\.hero-overlay-text h1\{[^}]*padding:0 clamp\([^}]*font:800 clamp\(/,
+      /\.hero-overlay-text\{[^}]*position:absolute;[^}]*transform:translate\(-50%,-50%\);[^}]*pointer-events:none;/,
     );
   });
 

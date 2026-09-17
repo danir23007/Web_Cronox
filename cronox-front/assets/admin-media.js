@@ -30,6 +30,24 @@
     dimensions: document.getElementById("mediaPreviewDimensions"),
     movement: document.getElementById("mediaMovementStatus"),
     heroChrome: document.getElementById("mediaHeroChrome"),
+    heroTextPreview: document.getElementById("mediaHeroTextPreview"),
+    heroTextControls: document.getElementById("mediaHeroTextControls"),
+    heroTextEnabled: document.getElementById("mediaHeroTextEnabled"),
+    heroTextContent: document.getElementById("mediaHeroTextContent"),
+    heroTextX: document.getElementById("mediaHeroTextX"),
+    heroTextY: document.getElementById("mediaHeroTextY"),
+    heroTextXValue: document.getElementById("mediaHeroTextXValue"),
+    heroTextYValue: document.getElementById("mediaHeroTextYValue"),
+    heroTextAlign: document.getElementById("mediaHeroTextAlign"),
+    heroTextColor: document.getElementById("mediaHeroTextColor"),
+    heroTextFontSize: document.getElementById("mediaHeroTextFontSize"),
+    heroTextFontSizeValue: document.getElementById("mediaHeroTextFontSizeValue"),
+    heroTextWeight: document.getElementById("mediaHeroTextWeight"),
+    heroTextSpacing: document.getElementById("mediaHeroTextSpacing"),
+    heroTextSpacingValue: document.getElementById("mediaHeroTextSpacingValue"),
+    heroTextUppercase: document.getElementById("mediaHeroTextUppercase"),
+    heroTextMaxWidth: document.getElementById("mediaHeroTextMaxWidth"),
+    heroTextMaxWidthValue: document.getElementById("mediaHeroTextMaxWidthValue"),
     image: document.getElementById("mediaPreviewImage"),
     video: document.getElementById("mediaPreviewVideo"),
     empty: document.getElementById("mediaPreviewEmpty"),
@@ -56,6 +74,7 @@
     loadPromise: null,
     placement: null,
     draft: null,
+    heroText: null,
     initial: null,
     device: "desktop",
     saving: false,
@@ -439,6 +458,7 @@
       try {
         window.localStorage.removeItem("cronox.mediaFraming.web.v2");
         window.localStorage.removeItem("cronox.mediaFraming.web.v3");
+        window.localStorage.removeItem("cronox.mediaFraming.web.v4");
       } catch {
         // Storage can be unavailable in hardened/private browsing contexts.
       }
@@ -605,8 +625,27 @@
   const dirty = () =>
     Boolean(
       state.draft &&
-        JSON.stringify(state.draft) !== JSON.stringify(state.initial),
+        JSON.stringify({ framing: state.draft, heroText: state.heroText }) !==
+          JSON.stringify(state.initial),
     );
+
+  const renderHeroText = () => {
+    const value = state.heroText;
+    const visible = state.placement?.key === "home.hero.video" && value?.enabled && value.content.trim();
+    elements.heroTextPreview.hidden = !visible;
+    if (!visible) return;
+    elements.heroTextPreview.textContent = value.uppercase
+      ? value.content.toUpperCase()
+      : value.content;
+    const mobile = state.device === "mobile";
+    Object.assign(elements.heroTextPreview.style, {
+      position: "absolute",
+      transform: "translate(-50%, -50%)",
+      margin: "0",
+      whiteSpace: "pre-wrap",
+      ...(geometryEngine?.heroTextStyle?.(value, mobile) || {}),
+    });
+  };
 
   const simulatedViewport = () => {
     if (state.device === "tablet") {
@@ -678,6 +717,7 @@
       frameHeight: size.height,
     });
     state.geometry = result;
+    renderHeroText();
     if (!result.valid) {
       elements.movement.textContent =
         "Esperando las dimensiones del archivo multimedia\u2026";
@@ -711,6 +751,31 @@
     elements.focalXValue.value = `${Math.round(frame.focalX)}%`;
     elements.focalYValue.value = `${Math.round(frame.focalY)}%`;
     elements.zoomValue.value = `${Number(frame.zoom).toFixed(2)}\u00d7`;
+    const hero = state.heroText;
+    const isHero = state.placement.key === "home.hero.video";
+    elements.heroTextControls.hidden = !isHero;
+    if (isHero && hero) {
+      const mobile = state.device === "mobile";
+      const x = mobile ? hero.mobileX : hero.x;
+      const y = mobile ? hero.mobileY : hero.y;
+      const size = mobile ? hero.mobileFontSize : hero.fontSize;
+      elements.heroTextEnabled.checked = hero.enabled;
+      elements.heroTextContent.value = hero.content;
+      elements.heroTextX.value = String(x);
+      elements.heroTextY.value = String(y);
+      elements.heroTextXValue.value = `${Math.round(x)}%`;
+      elements.heroTextYValue.value = `${Math.round(y)}%`;
+      elements.heroTextAlign.value = hero.align;
+      elements.heroTextColor.value = hero.color;
+      elements.heroTextFontSize.value = String(size);
+      elements.heroTextFontSizeValue.value = `${Math.round(size)} px`;
+      elements.heroTextWeight.value = String(hero.fontWeight);
+      elements.heroTextSpacing.value = String(hero.letterSpacing);
+      elements.heroTextSpacingValue.value = `${hero.letterSpacing} px`;
+      elements.heroTextUppercase.checked = hero.uppercase;
+      elements.heroTextMaxWidth.value = String(hero.maxWidth);
+      elements.heroTextMaxWidthValue.value = `${hero.maxWidth}%`;
+    }
 
     const result = renderPreview();
     elements.focalX.disabled = inherited || !result?.movementX;
@@ -786,7 +851,12 @@
     }
     state.placement = placement;
     state.draft = clone(placement.framing);
-    state.initial = clone(placement.framing);
+    state.heroText = clone(placement.heroText || placement.heroTextDefaults || {
+      enabled: false, content: "", x: 50, y: 50, mobileX: 50, mobileY: 50,
+      align: "CENTER", color: "#ffffff", fontSize: 42, mobileFontSize: 30,
+      fontWeight: 800, letterSpacing: 1.5, uppercase: false, maxWidth: 90,
+    });
+    state.initial = clone({ framing: placement.framing, heroText: state.heroText });
     state.device = "desktop";
     state.resetAll = false;
     state.geometry = null;
@@ -823,6 +893,7 @@
     state.geometry = null;
     state.placement = null;
     state.draft = null;
+    state.heroText = null;
     state.initial = null;
     const target = state.returnFocus;
     state.returnFocus = null;
@@ -881,6 +952,7 @@
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
               ...state.draft,
+              ...(state.placement.key === "home.hero.video" ? { heroText: state.heroText } : {}),
               expectedRevision: state.placement.revision,
             }),
           });
@@ -890,6 +962,8 @@
       );
       if (index >= 0 && updated) state.placements[index] = updated;
       try {
+        window.localStorage.removeItem("cronox.mediaFraming.web.v4");
+        window.localStorage.removeItem("cronox.mediaFraming.web.v3");
         window.localStorage.removeItem("cronox.mediaFraming.web.v2");
         window.localStorage.removeItem("cronox.mediaFraming.v1");
       } catch {
@@ -900,7 +974,10 @@
         `${updated?.label || "La ubicaci\u00f3n"} se ha actualizado.`,
         "success",
       );
-      state.initial = clone(updated?.framing || state.draft);
+      state.initial = clone({
+        framing: updated?.framing || state.draft,
+        heroText: updated?.heroText || state.heroText,
+      });
       closeEditor(true);
     } catch (error) {
       setMessage(
@@ -955,6 +1032,33 @@
   elements.fit.addEventListener("change", () =>
     setFrameValue("fit", elements.fit.value),
   );
+  const updateHeroText = (property, value) => {
+    if (!state.heroText) return;
+    state.heroText[property] = value;
+    state.resetAll = false;
+    syncControls();
+  };
+  elements.heroTextEnabled?.addEventListener("change", () =>
+    updateHeroText("enabled", elements.heroTextEnabled.checked),
+  );
+  elements.heroTextContent?.addEventListener("input", () =>
+    updateHeroText("content", elements.heroTextContent.value.slice(0, 160)),
+  );
+  elements.heroTextX?.addEventListener("input", () =>
+    updateHeroText(state.device === "mobile" ? "mobileX" : "x", clamp(elements.heroTextX.value, 0, 100)),
+  );
+  elements.heroTextY?.addEventListener("input", () =>
+    updateHeroText(state.device === "mobile" ? "mobileY" : "y", clamp(elements.heroTextY.value, 0, 100)),
+  );
+  elements.heroTextAlign?.addEventListener("change", () => updateHeroText("align", elements.heroTextAlign.value));
+  elements.heroTextColor?.addEventListener("input", () => updateHeroText("color", elements.heroTextColor.value));
+  elements.heroTextFontSize?.addEventListener("input", () =>
+    updateHeroText(state.device === "mobile" ? "mobileFontSize" : "fontSize", clamp(elements.heroTextFontSize.value, 12, 120)),
+  );
+  elements.heroTextWeight?.addEventListener("change", () => updateHeroText("fontWeight", Number(elements.heroTextWeight.value)));
+  elements.heroTextSpacing?.addEventListener("input", () => updateHeroText("letterSpacing", clamp(elements.heroTextSpacing.value, -2, 20)));
+  elements.heroTextUppercase?.addEventListener("change", () => updateHeroText("uppercase", elements.heroTextUppercase.checked));
+  elements.heroTextMaxWidth?.addEventListener("input", () => updateHeroText("maxWidth", clamp(elements.heroTextMaxWidth.value, 10, 100)));
   elements.resetDevice.addEventListener("click", resetDevice);
   elements.resetAll.addEventListener("click", resetAll);
   elements.save.addEventListener("click", save);

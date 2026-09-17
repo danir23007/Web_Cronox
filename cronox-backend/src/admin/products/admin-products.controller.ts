@@ -32,6 +32,7 @@ import {
 } from '../../products/dto/update-variant.dto';
 import { AdminProductQueryDto } from './dto/admin-product-query.dto';
 import { UpdateProductCategoriesDto } from './dto/update-product-categories.dto';
+import { ReorderProductsDto } from './dto/reorder-products.dto';
 import { FilesInterceptor } from '@nestjs/platform-express';
 import {
   ApiBadRequestResponse,
@@ -72,6 +73,19 @@ export class AdminProductsController {
   @Get()
   listProducts(@Query() query: AdminProductQueryDto) {
     return this.productService.listAdminProducts(query);
+  }
+
+  @Get('order')
+  getProductOrder() {
+    return this.productService.getProductOrder();
+  }
+
+  @Patch('order')
+  reorderProducts(
+    @Body() dto: ReorderProductsDto,
+    @CurrentUser('id') adminId?: number,
+  ) {
+    return this.productService.reorderProducts(dto.productIds, adminId);
   }
 
   @Get(':id')

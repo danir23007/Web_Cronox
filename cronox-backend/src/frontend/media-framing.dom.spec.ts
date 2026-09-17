@@ -240,9 +240,11 @@ describe('Multimedia Web admin manager', () => {
       'Multimedia Web',
     );
     expect(document.getElementById('mediaPreviewDimensions')).not.toBeNull();
-    expect(document.getElementById('mediaHeroChrome')?.textContent).toContain(
-      'NOS REGIT NOX',
-    );
+    expect(document.getElementById('mediaHeroTextPreview')).not.toBeNull();
+    expect(document.getElementById('mediaHeroTextControls')).not.toBeNull();
+    expect(
+      document.getElementById('mediaHeroChrome')?.textContent,
+    ).not.toContain('NOS REGIT NOX');
     expect(adminHtml.indexOf('media-framing-geometry.js')).toBeLessThan(
       adminHtml.indexOf('admin-media.js'),
     );
@@ -479,7 +481,7 @@ const makePublicDom = (
   cached?: unknown,
 ) => {
   const dom = new JSDOM(
-    '<!doctype html><html><body><section class="hero-video-section"><video class="hero-video" data-media-placement="home.hero.video"></video><div class="hero-overlay-text"><h1>"NOS REGIT NOX"</h1></div></section></body></html>',
+    '<!doctype html><html><body><section class="hero-video-section"><video class="hero-video" data-media-placement="home.hero.video"></video></section></body></html>',
     { url: 'https://store.example.test/', runScripts: 'outside-only' },
   );
   Object.defineProperty(dom.window, 'innerWidth', { value: viewport.width });
@@ -502,7 +504,7 @@ const makePublicDom = (
   (dom.window as any).CRONOX_API = { API_BASE: '' };
   if (cached) {
     dom.window.localStorage.setItem(
-      'cronox.mediaFraming.web.v3',
+      'cronox.mediaFraming.web.v4',
       JSON.stringify(cached),
     );
   }
@@ -512,6 +514,59 @@ const makePublicDom = (
 };
 
 describe('public hero framing', () => {
+  it('renders no hero text by default and uses textContent for enabled plain text', async () => {
+    const fetchMock = jest.fn().mockResolvedValue(
+      jsonResponse({
+        version: 3,
+        placements: {
+          'home.hero.video': {
+            desktop: baseline,
+            tablet: null,
+            mobile: null,
+            source: '/assets/VIDEO_LOGO_CRONOX.mp4',
+            poster: '/assets/logo_banner.png',
+            mediaType: 'video',
+            heroText: {
+              enabled: true,
+              content: '<img src=x onerror=alert(1)>',
+              x: 25,
+              y: 70,
+              mobileX: 80,
+              mobileY: 20,
+              align: 'LEFT',
+              color: '#112233',
+              fontSize: 44,
+              mobileFontSize: 22,
+              fontWeight: 700,
+              letterSpacing: 2,
+              uppercase: false,
+              maxWidth: 60,
+            },
+          },
+        },
+      }),
+    );
+    const { dom } = makePublicDom(fetchMock, { width: 390, height: 844 });
+    await flushAsync();
+    await flushAsync();
+    const text = dom.window.document.querySelector(
+      '.hero-overlay-text',
+    ) as HTMLElement;
+    expect(text.textContent).toBe('<img src=x onerror=alert(1)>');
+    expect(text.querySelector('img')).toBeNull();
+    expect(text.style.fontSize).toBe('22px');
+    expect(text.style.top).toBe('26%');
+
+    const offline = makePublicDom(
+      jest.fn().mockRejectedValue(new Error('offline')),
+    );
+    await flushAsync();
+    await flushAsync();
+    expect(
+      offline.dom.window.document.querySelector('.hero-overlay-text'),
+    ).toBeNull();
+  });
+
   it('uses the shared engine and applies the mobile override from one request', async () => {
     const mobile = { focalX: 65, focalY: 35, zoom: 1.4, fit: 'COVER' };
     const fetchMock = jest.fn().mockResolvedValue(
@@ -584,7 +639,7 @@ describe('public hero framing', () => {
       'default',
     );
     expect(
-      dom.window.localStorage.getItem('cronox.mediaFraming.web.v3'),
+      dom.window.localStorage.getItem('cronox.mediaFraming.web.v4'),
     ).toBeNull();
   });
 
@@ -619,8 +674,8 @@ describe('public hero framing', () => {
   });
 
   it('loads framing assets only on the homepage and leaves Products/Gallery untouched', () => {
-    expect(indexHtml).toContain('media-framing-geometry.js?v=3');
-    expect(indexHtml).toContain('media-framing.js?v=3');
+    expect(indexHtml).toContain('media-framing-geometry.js?v=4');
+    expect(indexHtml).toContain('media-framing.js?v=4');
     expect(indexHtml).toContain('data-media-placement="home.hero.video"');
     expect(publicStyles).toContain(
       '.hero-video[data-media-placement="home.hero.video"]',

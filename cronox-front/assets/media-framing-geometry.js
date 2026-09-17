@@ -216,6 +216,22 @@
     };
   };
 
+  const heroTextStyle = (value, mobile = false) => {
+    const maxWidth = clamp(value?.maxWidth, 10, 100, 90);
+    const x = clamp(mobile ? value?.mobileX : value?.x, 0, 100, 50);
+    const y = clamp(mobile ? value?.mobileY : value?.y, 0, 100, 50);
+    return {
+      left: `${maxWidth / 2 + (x / 100) * (100 - maxWidth)}%`,
+      top: `${10 + y * 0.8}%`,
+      width: `${maxWidth}%`,
+      textAlign: String(value?.align || "CENTER").toLowerCase(),
+      color: String(value?.color || "#ffffff"),
+      fontSize: `${clamp(mobile ? value?.mobileFontSize : value?.fontSize, 12, 120, mobile ? 30 : 42)}px`,
+      fontWeight: String(value?.fontWeight || 800),
+      letterSpacing: `${clamp(value?.letterSpacing, -2, 20, 1.5)}px`,
+    };
+  };
+
   const api = Object.freeze({
     version: 3,
     calculate,
@@ -223,6 +239,7 @@
     clear,
     focalFromDrag,
     zoomAtPoint,
+    heroTextStyle,
   });
   globalScope.CRONOX_MEDIA_GEOMETRY = api;
   if (typeof module !== "undefined" && module.exports) module.exports = api;

@@ -13,7 +13,10 @@ describe('sliding auth session migration', () => {
     const ordered = readdirSync(migrations)
       .filter((entry: string) => /^\d/.test(entry))
       .sort();
-    expect(ordered.at(-1)).toBe(name);
+    expect(ordered).toContain(name);
+    expect(ordered.indexOf(name)).toBeLessThan(
+      ordered.indexOf('20260917140000_product_order_and_hero_text'),
+    );
     expect(sql).toContain('CREATE TABLE "AuthSession"');
     expect(sql).toContain('ON DELETE CASCADE');
     expect(sql).not.toMatch(/UPDATE\s+"?User"?/i);

@@ -81,6 +81,14 @@ export class ProductService {
     return key;
   }
 
+  private async lockProductOrder(tx: Prisma.TransactionClient) {
+    // Prisma always exposes this in production. The runtime guard keeps the
+    // service compatible with the project's lightweight transaction fakes.
+    if (typeof tx.$executeRaw === 'function') {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(435276901)`;
+    }
+  }
+
   private slugify(value: string) {
     return (value || '')
       .toString()
@@ -651,6 +659,7 @@ export class ProductService {
       currency: true,
       imageUrl: true,
       isActive: true,
+      displayOrder: true,
       collection: true,
       searchKeywords: true,
       createdAt: true,
@@ -811,6 +820,75 @@ export class ProductService {
     };
   }
 
+  async getProductOrder() {
+    const items = await this.prisma.product.findMany({
+      orderBy: [{ displayOrder: 'asc' }, { id: 'asc' }],
+      select: {
+        id: true,
+        name: true,
+        slug: true,
+        isActive: true,
+        displayOrder: true,
+        imageUrl: true,
+        images: {
+          where: { isActive: true },
+          orderBy: this.imageOrderBy,
+          take: 1,
+          select: { url: true },
+        },
+      },
+    });
+    return { items };
+  }
+
+  async reorderProducts(productIds: number[], adminId?: number) {
+    if (!Array.isArray(productIds) || !productIds.length) {
+      throw new BadRequestException('PRODUCT_ORDER_REQUIRED');
+    }
+    if (
+      productIds.some((id) => !Number.isInteger(id) || id < 1) ||
+      new Set(productIds).size !== productIds.length
+    ) {
+      throw new BadRequestException('PRODUCT_ORDER_IDS_INVALID_OR_DUPLICATED');
+    }
+
+    return this.prisma.$transaction(async (tx) => {
+      // Serializes reorders and product creation so two admins cannot produce
+      // a partial or internally inconsistent sequence.
+      await this.lockProductOrder(tx);
+      const existing = await tx.product.findMany({
+        select: { id: true },
+        orderBy: [{ displayOrder: 'asc' }, { id: 'asc' }],
+      });
+      const existingIds = new Set(existing.map(({ id }) => id));
+      const missing = existing
+        .map(({ id }) => id)
+        .filter((id) => !productIds.includes(id));
+      const unknown = productIds.filter((id) => !existingIds.has(id));
+      if (
+        missing.length ||
+        unknown.length ||
+        productIds.length !== existing.length
+      ) {
+        throw new BadRequestException({
+          code: 'PRODUCT_ORDER_MUST_BE_COMPLETE',
+          missingProductIds: missing,
+          unknownProductIds: unknown,
+        });
+      }
+      for (const [displayOrder, id] of productIds.entries()) {
+        await tx.product.update({ where: { id }, data: { displayOrder } });
+      }
+      await this.recordAudit(
+        'product.order.update',
+        { productIds },
+        adminId,
+        tx,
+      );
+      return { ok: true, productIds };
+    });
+  }
+
   async getAdminProduct(id: number) {
     const product = await this.prisma.product.findUnique({
       where: { id },
@@ -925,13 +1003,14 @@ export class ProductService {
     const page = query.page ?? 1;
     const limit = Math.min(query.limit ?? 10, 100);
     const skip = (page - 1) * limit;
-    const sortBy = query.sortBy ?? 'id';
+    const sortBy = query.sortBy ?? 'displayOrder';
     const order = query.order ?? 'asc';
     const normalizedSearch = normalizeSearchText(query.search).slice(0, 100);
 
-    const orderBy = {
-      [sortBy]: order,
-    } as Prisma.ProductOrderByWithRelationInput;
+    const orderBy: Prisma.ProductOrderByWithRelationInput[] = [
+      { [sortBy]: order } as Prisma.ProductOrderByWithRelationInput,
+      { id: 'asc' },
+    ];
 
     const where: Prisma.ProductWhereInput = normalizedSearch
       ? this.buildPublicSearchWhere(normalizedSearch, query.categorySlug)
@@ -981,7 +1060,7 @@ export class ProductService {
           scoreProductSearch(right, normalizedSearch) -
           scoreProductSearch(left, normalizedSearch);
         if (scoreDifference) return scoreDifference;
-        return right.createdAt.getTime() - left.createdAt.getTime();
+        return left.displayOrder - right.displayOrder || left.id - right.id;
       });
       const items = matchedProducts.slice(skip, skip + limit);
       const total = matchedProducts.length;
@@ -1031,7 +1110,7 @@ export class ProductService {
     const candidates = await this.prisma.product.findMany({
       where: this.buildPublicSearchWhere(normalizedSearch, query.categorySlug),
       take: Math.max(40, limit * 10),
-      orderBy: [{ updatedAt: 'desc' }, { id: 'asc' }],
+      orderBy: [{ displayOrder: 'asc' }, { id: 'asc' }],
       select: {
         id: true,
         slug: true,
@@ -1039,6 +1118,7 @@ export class ProductService {
         description: true,
         collection: true,
         searchKeywords: true,
+        displayOrder: true,
         price: true,
         currency: true,
         imageUrl: true,
@@ -1066,7 +1146,7 @@ export class ProductService {
             scoreProductSearch(right, normalizedSearch) -
             scoreProductSearch(left, normalizedSearch);
           if (scoreDifference) return scoreDifference;
-          return left.name.localeCompare(right.name, 'es');
+          return left.displayOrder - right.displayOrder || left.id - right.id;
         })
         .slice(0, limit)
         .map((product) => {
@@ -1127,10 +1207,18 @@ export class ProductService {
 
     try {
       const product = await this.prisma.$transaction(async (tx) => {
+        await this.lockProductOrder(tx);
         await tx.adminProductCreateRequest.create({
           data: { idempotencyKey: requestKey, requestHash },
         });
         const primaryImage = images.find((img) => img.isPrimary);
+        const lastProduct =
+          typeof tx.product.findFirst === 'function'
+            ? await tx.product.findFirst({
+                orderBy: [{ displayOrder: 'desc' }, { id: 'desc' }],
+                select: { displayOrder: true },
+              })
+            : null;
         const created = await tx.product.create({
           data: {
             name: dto.name,
@@ -1139,6 +1227,7 @@ export class ProductService {
             price: dto.price,
             currency,
             isActive: dto.isActive ?? true,
+            displayOrder: (lastProduct?.displayOrder ?? -1) + 1,
             collection: dto.collection,
             searchKeywords,
             searchText,

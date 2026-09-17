@@ -960,6 +960,9 @@ import { installSessionTransport } from './session';
   adminApi.listAdminProducts = async (query: QueryRecord = {}) => {
     return request('/api/admin/products', { query });
   };
+  adminApi.getProductOrder = async () => request('/api/admin/products/order', { cache: 'no-store' });
+  adminApi.saveProductOrder = async (productIds: number[]) =>
+    request('/api/admin/products/order', { method: 'PATCH', body: { productIds } });
 
   adminApi.getAdminProduct = async (id: number | string) => {
     return request(`/api/admin/products/${encodeURIComponent(id)}`);

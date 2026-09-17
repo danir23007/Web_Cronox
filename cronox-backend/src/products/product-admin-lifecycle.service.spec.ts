@@ -136,6 +136,7 @@ describe('ProductService administrative lifecycle', () => {
     >();
     let createCount = 0;
     const tx: any = {
+      $executeRaw: jest.fn(),
       adminProductCreateRequest: {
         create: jest.fn(({ data }) => {
           if (requests.has(data.idempotencyKey)) throw duplicateKeyError();
@@ -149,6 +150,7 @@ describe('ProductService administrative lifecycle', () => {
         }),
       },
       product: {
+        findFirst: jest.fn().mockResolvedValue({ displayOrder: 6 }),
         create: jest.fn(({ data }) => ({
           ...product,
           ...data,
@@ -182,8 +184,10 @@ describe('ProductService administrative lifecycle', () => {
   it('allows different request keys to create different products', async () => {
     let id = 0;
     const tx: any = {
+      $executeRaw: jest.fn(),
       adminProductCreateRequest: { create: jest.fn(), update: jest.fn() },
       product: {
+        findFirst: jest.fn().mockResolvedValue(null),
         create: jest.fn(({ data }) => ({ ...product, ...data, id: ++id })),
         findUnique: jest.fn(({ where }) => ({ ...product, id: where.id })),
       },
@@ -209,8 +213,10 @@ describe('ProductService administrative lifecycle', () => {
   it('persists card framing on normal creation and returns it when reopened', async () => {
     let persisted: any;
     const tx: any = {
+      $executeRaw: jest.fn(),
       adminProductCreateRequest: { create: jest.fn(), update: jest.fn() },
       product: {
+        findFirst: jest.fn().mockResolvedValue({ displayOrder: 6 }),
         create: jest.fn(({ data }) => {
           persisted = { ...product, ...data, id: 91 };
           return persisted;
@@ -236,6 +242,7 @@ describe('ProductService administrative lifecycle', () => {
         cardImagePositionX: 18,
         cardImagePositionY: 82,
         cardImageZoom: 0.75,
+        displayOrder: 7,
       },
       1,
       'framing-test-1234567890',

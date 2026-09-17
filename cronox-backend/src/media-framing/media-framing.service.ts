@@ -36,6 +36,20 @@ type NullableFrameFields = {
   updatedAt?: Date | null;
   assetId?: string | null;
   asset?: WebsiteMediaAssetRecord | null;
+  heroText?: string | null;
+  heroTextEnabled?: boolean;
+  heroTextX?: number;
+  heroTextY?: number;
+  heroTextMobileX?: number | null;
+  heroTextMobileY?: number | null;
+  heroTextAlign?: string;
+  heroTextColor?: string;
+  heroTextFontSize?: number;
+  heroTextMobileFontSize?: number | null;
+  heroTextFontWeight?: number;
+  heroTextLetterSpacing?: number;
+  heroTextUppercase?: boolean;
+  heroTextMaxWidth?: number;
 };
 
 type WebsiteMediaAssetRecord = {
@@ -57,6 +71,75 @@ type ResponsiveFrames = {
   tablet: MediaFrame | null;
   mobile: MediaFrame | null;
 };
+
+const defaultHeroText = () => ({
+  enabled: false,
+  content: '',
+  x: 50,
+  y: 50,
+  mobileX: 50,
+  mobileY: 50,
+  align: 'CENTER' as const,
+  color: '#ffffff',
+  fontSize: 42,
+  mobileFontSize: 30,
+  fontWeight: 800,
+  letterSpacing: 1.5,
+  uppercase: false,
+  maxWidth: 90,
+});
+
+const resolveHeroText = (record?: NullableFrameFields | null) => ({
+  enabled: Boolean(record?.heroTextEnabled),
+  content: record?.heroText ?? '',
+  x: record?.heroTextX ?? 50,
+  y: record?.heroTextY ?? 50,
+  mobileX: record?.heroTextMobileX ?? record?.heroTextX ?? 50,
+  mobileY: record?.heroTextMobileY ?? record?.heroTextY ?? 50,
+  align: ['LEFT', 'CENTER', 'RIGHT'].includes(record?.heroTextAlign || '')
+    ? record!.heroTextAlign
+    : 'CENTER',
+  color: record?.heroTextColor ?? '#ffffff',
+  fontSize: record?.heroTextFontSize ?? 42,
+  mobileFontSize: record?.heroTextMobileFontSize ?? 30,
+  fontWeight: record?.heroTextFontWeight ?? 800,
+  letterSpacing: record?.heroTextLetterSpacing ?? 1.5,
+  uppercase: Boolean(record?.heroTextUppercase),
+  maxWidth: record?.heroTextMaxWidth ?? 90,
+});
+
+const heroTextFields = (value: UpdateMediaFramingDto['heroText']) =>
+  value
+    ? {
+        heroText:
+          value.content
+            .split('')
+            .filter((character) => {
+              const code = character.charCodeAt(0);
+              return (
+                code === 9 ||
+                code === 10 ||
+                code === 13 ||
+                (code >= 32 && code !== 127)
+              );
+            })
+            .join('')
+            .trim() || null,
+        heroTextEnabled: value.enabled,
+        heroTextX: value.x,
+        heroTextY: value.y,
+        heroTextMobileX: value.mobileX,
+        heroTextMobileY: value.mobileY,
+        heroTextAlign: value.align,
+        heroTextColor: value.color.toLowerCase(),
+        heroTextFontSize: value.fontSize,
+        heroTextMobileFontSize: value.mobileFontSize,
+        heroTextFontWeight: value.fontWeight,
+        heroTextLetterSpacing: value.letterSpacing,
+        heroTextUppercase: value.uppercase,
+        heroTextMaxWidth: value.maxWidth,
+      }
+    : {};
 
 const toOptionalFrame = (
   focalX: number | null,
@@ -183,7 +266,7 @@ export class MediaFramingService {
     });
     const byKey = new Map(stored.map((record) => [record.key, record]));
     return {
-      version: 3,
+      version: 4,
       placements: Object.fromEntries(
         MEDIA_PLACEMENTS.map((definition) => [
           definition.key,
@@ -192,6 +275,9 @@ export class MediaFramingService {
             const media = this.resolveMedia(definition, record);
             return {
               ...this.resolveFrames(definition, record),
+              ...(definition.key === 'home.hero.video'
+                ? { heroText: resolveHeroText(record) }
+                : {}),
               source: media.source,
               mediaType: media.mediaType,
               poster: media.poster,
@@ -232,6 +318,12 @@ export class MediaFramingService {
           defaults: { ...definition.defaults },
           status: statusFor(framing, definition.defaults),
           framing,
+          ...(definition.key === 'home.hero.video'
+            ? {
+                heroText: resolveHeroText(record),
+                heroTextDefaults: defaultHeroText(),
+              }
+            : {}),
           revision: record?.revision ?? 0,
           updatedAt: record?.updatedAt ?? null,
         };
@@ -470,6 +562,7 @@ export class MediaFramingService {
       dto.expectedRevision,
       adminId,
       false,
+      dto.heroText,
     );
     return this.getAdminPlacement(key);
   }
@@ -497,8 +590,12 @@ export class MediaFramingService {
     expectedRevision: number,
     adminId: number | undefined,
     reset: boolean,
+    heroText?: UpdateMediaFramingDto['heroText'],
   ) {
-    const fields = writeFields(frames);
+    const fields = {
+      ...writeFields(frames),
+      ...(key === 'home.hero.video' ? heroTextFields(heroText) : {}),
+    };
     try {
       await this.prisma.$transaction(async (tx) => {
         const current = await tx.websiteMediaPlacement.findUnique({
@@ -533,6 +630,14 @@ export class MediaFramingService {
             metadata: {
               before: current ? toResponsiveFrames(current) : null,
               after: frames,
+              ...(heroText
+                ? {
+                    heroText: {
+                      ...heroText,
+                      content: '[stored as plain text]',
+                    },
+                  }
+                : {}),
               previousRevision: currentRevision,
               revision,
             },

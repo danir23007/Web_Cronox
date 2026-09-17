@@ -973,6 +973,16 @@
         </div>
         <button class="btn primary" type="button" id="createProductBtn">Crear producto</button>
       </div>
+      <details class="product-order" id="productOrderPanel">
+        <summary>Orden de aparici&oacute;n en la web</summary>
+        <p class="subtle">Arrastra los productos o usa los botones de subir y bajar. El orden se guarda completo.</p>
+        <div id="productOrderMessage" class="message" role="status" aria-live="polite"></div>
+        <ol id="productOrderList" class="product-order__list" aria-label="Orden de productos"></ol>
+        <div class="product-order__actions">
+          <button class="btn" type="button" id="productOrderReload">Descartar cambios</button>
+          <button class="btn primary" type="button" id="productOrderSave" disabled>Guardar orden</button>
+        </div>
+      </details>
       <div class="filter-bar">
         <input id="productSearch" class="input" type="search" placeholder="Buscar por nombre, SKU o categoría">
       </div>
@@ -1487,7 +1497,7 @@
               <span id="mediaPreviewEmpty" class="media-editor__empty">No hay un archivo disponible para previsualizar.</span>
               <div id="mediaHeroChrome" class="media-editor__hero-chrome" aria-hidden="true" hidden>
                 <div class="media-editor__hero-topbar"><span>MEN&Uacute;</span><strong>CRONOX</strong><span>CUENTA&nbsp;&nbsp;BOLSA</span></div>
-                <div class="media-editor__hero-copy"><strong>&quot;NOS REGIT NOX&quot;</strong></div>
+                <p id="mediaHeroTextPreview" class="media-editor__hero-copy" hidden></p>
               </div>
             </div>
           </div>
@@ -1512,6 +1522,21 @@
               <option value="CONTAIN">Encajar</option>
             </select>
           </label>
+          <fieldset id="mediaHeroTextControls" class="media-editor__text-controls" hidden>
+            <legend>Texto sobre la portada</legend>
+            <label><input id="mediaHeroTextEnabled" type="checkbox"> Mostrar texto</label>
+            <label for="mediaHeroTextContent">Contenido<textarea id="mediaHeroTextContent" class="textarea" maxlength="160" rows="3" placeholder="Texto opcional"></textarea></label>
+            <label for="mediaHeroTextX">Posici&oacute;n horizontal <output id="mediaHeroTextXValue">50%</output><input id="mediaHeroTextX" type="range" min="0" max="100" step="1" value="50"></label>
+            <label for="mediaHeroTextY">Posici&oacute;n vertical <output id="mediaHeroTextYValue">50%</output><input id="mediaHeroTextY" type="range" min="0" max="100" step="1" value="50"></label>
+            <label for="mediaHeroTextAlign">Alineaci&oacute;n<select id="mediaHeroTextAlign" class="input"><option value="LEFT">Izquierda</option><option value="CENTER">Centro</option><option value="RIGHT">Derecha</option></select></label>
+            <label for="mediaHeroTextColor">Color <input id="mediaHeroTextColor" type="color" value="#ffffff"></label>
+            <label for="mediaHeroTextFontSize">Tama&ntilde;o <output id="mediaHeroTextFontSizeValue">42 px</output><input id="mediaHeroTextFontSize" type="range" min="12" max="120" step="1" value="42"></label>
+            <label for="mediaHeroTextWeight">Grosor<select id="mediaHeroTextWeight" class="input"><option value="300">Ligero</option><option value="400">Normal</option><option value="600">Seminegrita</option><option value="700">Negrita</option><option value="800" selected>Extra negrita</option><option value="900">Negra</option></select></label>
+            <label for="mediaHeroTextSpacing">Espaciado <output id="mediaHeroTextSpacingValue">1.5 px</output><input id="mediaHeroTextSpacing" type="range" min="-2" max="20" step="0.5" value="1.5"></label>
+            <label><input id="mediaHeroTextUppercase" type="checkbox"> Convertir a may&uacute;sculas</label>
+            <label for="mediaHeroTextMaxWidth">Ancho m&aacute;ximo <output id="mediaHeroTextMaxWidthValue">90%</output><input id="mediaHeroTextMaxWidth" type="range" min="10" max="100" step="1" value="90"></label>
+            <small>En M&oacute;vil, posici&oacute;n y tama&ntilde;o se guardan de forma independiente.</small>
+          </fieldset>
           <div class="media-editor__reset-actions">
             <button id="mediaResetDevice" class="btn" type="button">Restablecer este dispositivo</button>
             <button id="mediaResetAll" class="btn" type="button">Restablecer todos</button>
@@ -1656,7 +1681,7 @@
   <script src="assets/api.js?v=5"></script>
   <script src="assets/admin-auth-routing.js?v=1"></script>
   <script src="assets/ui-status.js"></script>
-  <script src="assets/media-framing-geometry.js?v=3"></script>
+  <script src="assets/media-framing-geometry.js?v=4"></script>
   <script src="assets/product-card-framing.js?v=1"></script>
   <script src="assets/admin-product-gallery.js?v=1"></script>
   <script src="assets/admin.js"></script>
@@ -1667,6 +1692,7 @@
   <script src="assets/admin-gallery.js?v=4"></script>
   <script src="assets/key-screen-renderer.js?v=2"></script>
   <script src="assets/admin-key-screen.js?v=3"></script>
-  <script src="assets/admin-media.js?v=3"></script>
+  <script src="assets/admin-media.js?v=4"></script>
+  <script src="assets/admin-product-order.js?v=1"></script>
 </body>
 </html>

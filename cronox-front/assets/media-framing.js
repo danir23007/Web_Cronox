@@ -3,7 +3,7 @@
 
   if (window.CRONOX_MEDIA_FRAMING?.initialized) return;
 
-  const CACHE_KEY = "cronox.mediaFraming.web.v3";
+  const CACHE_KEY = "cronox.mediaFraming.web.v4";
   const HERO_KEY = "home.hero.video";
   const DEFAULT_FRAME = Object.freeze({
     focalX: 50,
@@ -12,7 +12,7 @@
     fit: "COVER",
   });
   const DEFAULT_CONFIGURATION = Object.freeze({
-    version: 3,
+    version: 4,
     placements: {
       [HERO_KEY]: Object.freeze({
         desktop: DEFAULT_FRAME,
@@ -21,6 +21,7 @@
         source: "/assets/VIDEO_LOGO_CRONOX.mp4",
         poster: "/assets/logo_banner.png",
         mediaType: "video",
+        heroText: Object.freeze({ enabled: false, content: "" }),
       }),
     },
   });
@@ -75,6 +76,33 @@
     return { focalX, focalY, zoom, fit };
   };
 
+  const normalizeHeroText = (value) => {
+    if (!value || typeof value !== "object" || Array.isArray(value)) {
+      return { enabled: false, content: "" };
+    }
+    const content = typeof value.content === "string" ? value.content.trim().slice(0, 160) : "";
+    const number = (candidate, fallback, min, max) =>
+      typeof candidate === "number" && Number.isFinite(candidate)
+        ? Math.min(max, Math.max(min, candidate))
+        : fallback;
+    return {
+      enabled: value.enabled === true && Boolean(content),
+      content,
+      x: number(value.x, 50, 0, 100),
+      y: number(value.y, 50, 0, 100),
+      mobileX: number(value.mobileX, number(value.x, 50, 0, 100), 0, 100),
+      mobileY: number(value.mobileY, number(value.y, 50, 0, 100), 0, 100),
+      align: ["LEFT", "CENTER", "RIGHT"].includes(value.align) ? value.align : "CENTER",
+      color: /^#[0-9a-f]{6}$/i.test(value.color || "") ? value.color : "#ffffff",
+      fontSize: number(value.fontSize, 42, 12, 120),
+      mobileFontSize: number(value.mobileFontSize, 30, 12, 120),
+      fontWeight: [300, 400, 500, 600, 700, 800, 900].includes(value.fontWeight) ? value.fontWeight : 800,
+      letterSpacing: number(value.letterSpacing, 1.5, -2, 20),
+      uppercase: value.uppercase === true,
+      maxWidth: number(value.maxWidth, 90, 10, 100),
+    };
+  };
+
   const normalizeConfiguration = (payload) => {
     const value = payload?.placements?.[HERO_KEY];
     const desktop = validFrame(value?.desktop);
@@ -84,7 +112,7 @@
       return null;
     }
     return {
-      version: 3,
+      version: 4,
       placements: {
         [HERO_KEY]: {
           desktop,
@@ -93,6 +121,7 @@
           source,
           poster: safeMediaUrl(value?.poster),
           mediaType,
+          heroText: normalizeHeroText(value?.heroText),
         },
       },
     };
@@ -108,6 +137,26 @@
   const currentFrame = () => {
     const responsive = configuration.placements[HERO_KEY];
     return responsive[currentDevice()] || responsive.desktop;
+  };
+
+  const ensureHeroText = () => {
+    const heroText = configuration.placements[HERO_KEY]?.heroText;
+    const section = pageDocument.querySelector(".hero-video-section");
+    let node = section?.querySelector(".hero-overlay-text");
+    if (!section || !heroText?.enabled || !heroText.content) {
+      node?.remove();
+      return;
+    }
+    if (!node) {
+      node = pageDocument.createElement("p");
+      node.className = "hero-overlay-text";
+      section.appendChild(node);
+    }
+    node.textContent = heroText.uppercase
+      ? heroText.content.toUpperCase()
+      : heroText.content;
+    const mobile = currentDevice() === "mobile";
+    Object.assign(node.style, geometry?.heroTextStyle?.(heroText, mobile) || {});
   };
 
   const ensureHeroElement = () => {
@@ -174,6 +223,7 @@
   const applyAll = () => {
     const element = ensureHeroElement();
     if (element) applyHero(element);
+    ensureHeroText();
     pageDocument.documentElement.dataset.mediaFramingState =
       configuration === DEFAULT_CONFIGURATION ? "default" : "ready";
   };
@@ -200,6 +250,7 @@
     try {
       window.localStorage.removeItem(CACHE_KEY);
       window.localStorage.removeItem("cronox.mediaFraming.web.v2");
+      window.localStorage.removeItem("cronox.mediaFraming.web.v3");
       window.localStorage.removeItem("cronox.mediaFraming.v1");
     } catch {
       // Storage can be unavailable in hardened/private browsing contexts.

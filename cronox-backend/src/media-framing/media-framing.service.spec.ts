@@ -103,6 +103,7 @@ describe('MediaFramingService', () => {
       source: '/assets/VIDEO_LOGO_CRONOX.mp4',
       mediaType: 'video',
       poster: '/assets/logo_banner.png',
+      heroText: expect.objectContaining({ enabled: false, content: '' }),
     });
     expect(adminResponse.placements).toHaveLength(1);
     expect(adminResponse.placements[0]).toMatchObject({
@@ -147,6 +148,68 @@ describe('MediaFramingService', () => {
       action: 'media.framing.update',
       targetId: 'home.hero.video',
     });
+  });
+
+  it('creates, edits, disables and removes plain hero text with independent mobile positioning', async () => {
+    const framing = {
+      desktop: { focalX: 50, focalY: 50, zoom: 1, fit: MediaFitMode.COVER },
+      tablet: null,
+      mobile: null,
+    };
+    const first = await service.updatePlacement(
+      'home.hero.video',
+      {
+        ...framing,
+        expectedRevision: 0,
+        heroText: {
+          enabled: true,
+          content: '<b>Texto seguro</b>\u0000',
+          x: 20,
+          y: 30,
+          mobileX: 75,
+          mobileY: 80,
+          align: 'RIGHT',
+          color: '#AABBCC',
+          fontSize: 48,
+          mobileFontSize: 24,
+          fontWeight: 700,
+          letterSpacing: 2,
+          uppercase: false,
+          maxWidth: 70,
+        },
+      },
+      8,
+    );
+    expect(first.placement.heroText).toMatchObject({
+      enabled: true,
+      content: '<b>Texto seguro</b>',
+      x: 20,
+      mobileX: 75,
+      color: '#aabbcc',
+    });
+
+    const disabled = await service.updatePlacement(
+      'home.hero.video',
+      {
+        ...framing,
+        expectedRevision: 1,
+        heroText: { ...first.placement.heroText, enabled: false },
+      },
+      8,
+    );
+    expect(disabled.placement.heroText.enabled).toBe(false);
+
+    const removed = await service.updatePlacement(
+      'home.hero.video',
+      {
+        ...framing,
+        expectedRevision: 2,
+        heroText: { ...disabled.placement.heroText, content: '' },
+      },
+      8,
+    );
+    expect(removed.placement.heroText.content).toBe('');
+    expect(websiteRecords[0].heroText).toBeNull();
   });
 
   it('resets the hero to the verified cover/center/no-zoom baseline', async () => {

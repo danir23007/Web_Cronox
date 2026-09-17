@@ -135,6 +135,7 @@ model Product {
   currency           String                     @default("EUR")
   imageUrl           String?
   isActive           Boolean                    @default(true)
+  displayOrder       Int                        @default(0)
   collection         String?
   searchKeywords     String[]                   @default([])
   searchText         String                     @default("")
@@ -153,6 +154,7 @@ model Product {
   adminCreateRequest AdminProductCreateRequest?
 
   @@index([searchText(ops: raw("gin_trgm_ops"))], type: Gin, map: "Product_searchText_idx")
+  @@index([displayOrder, id])
 }
 
 /// Makes administrative product creation safe to retry without creating a
@@ -309,6 +311,20 @@ model WebsiteMediaPlacement {
   mobileFocalY Float?
   mobileZoom   Float?
   mobileFit    MediaFitMode?
+  heroText                String?
+  heroTextEnabled         Boolean            @default(false)
+  heroTextX               Float              @default(50)
+  heroTextY               Float              @default(50)
+  heroTextMobileX         Float?
+  heroTextMobileY         Float?
+  heroTextAlign           String             @default("CENTER")
+  heroTextColor           String             @default("#ffffff")
+  heroTextFontSize        Int                @default(42)
+  heroTextMobileFontSize  Int?
+  heroTextFontWeight      Int                @default(800)
+  heroTextLetterSpacing   Float              @default(1.5)
+  heroTextUppercase       Boolean            @default(false)
+  heroTextMaxWidth        Int                @default(90)
   revision     Int                @default(0)
   createdAt    DateTime           @default(now())
   updatedAt    DateTime           @updatedAt

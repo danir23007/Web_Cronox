@@ -48,13 +48,14 @@ export class QueryProductsDto {
   limit?: number = 10;
 
   @ApiPropertyOptional({
-    enum: ['createdAt', 'price', 'name', 'id'],
-    default: 'id',
+    enum: ['displayOrder', 'createdAt', 'price', 'name', 'id'],
+    default: 'displayOrder',
   })
   @IsOptional()
   @IsString()
-  @IsIn(['createdAt', 'price', 'name', 'id'])
-  sortBy?: 'createdAt' | 'price' | 'name' | 'id' = 'id';
+  @IsIn(['displayOrder', 'createdAt', 'price', 'name', 'id'])
+  sortBy?: 'displayOrder' | 'createdAt' | 'price' | 'name' | 'id' =
+    'displayOrder';
 
   @ApiPropertyOptional({ enum: ['asc', 'desc'], default: 'asc' })
   @IsOptional()
