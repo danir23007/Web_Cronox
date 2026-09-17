@@ -803,8 +803,6 @@
           response = await API.getCategoryProducts(initialCategorySlug, {
             page,
             limit: 100,
-            sortBy: "createdAt",
-            order: "desc",
           });
           if (Array.isArray(response?.products)) categoryProducts.push(...response.products);
           pageCount = Number(response?.meta?.pageCount || 1);
@@ -830,7 +828,7 @@
     }
 
     try {
-      const query = { limit: 48, sortBy: "createdAt", order: "desc" };
+      const query = { limit: 48 };
       const raw = await API.getProducts(query);
       if (!Array.isArray(raw) || !raw.length) {
         throw new Error("Catálogo vacío");

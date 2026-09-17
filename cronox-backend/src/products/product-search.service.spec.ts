@@ -48,6 +48,7 @@ describe('ProductService search', () => {
       collection: null,
       searchKeywords: ['black', 'tee'],
       searchText: 'black tee',
+      displayOrder: 20,
       price: 3495,
       createdAt: new Date('2026-01-01'),
       variants: [],
@@ -66,5 +67,54 @@ describe('ProductService search', () => {
     expect(response.items[0]).not.toHaveProperty('searchKeywords');
     expect(response.items[0]).not.toHaveProperty('searchText');
     expect(findMany.mock.calls[0][0].where.isActive).toBe(true);
+  });
+
+  it('keeps relevance primary and breaks equal-score ties by displayOrder then id', async () => {
+    const base = {
+      description: '',
+      collection: null,
+      searchKeywords: ['black', 'tee'],
+      searchText: 'black tee',
+      price: 3495,
+      createdAt: new Date('2026-01-01'),
+      variants: [],
+      images: [],
+      categories: [],
+    };
+    const findMany = jest.fn().mockResolvedValue([
+      {
+        ...base,
+        id: 90,
+        slug: 'washed-black-tee',
+        name: 'Washed Black Tee',
+        displayOrder: 0,
+      },
+      {
+        ...base,
+        id: 8,
+        slug: 'black-tee-eight',
+        name: 'Black Tee',
+        displayOrder: 4,
+      },
+      {
+        ...base,
+        id: 7,
+        slug: 'black-tee-seven',
+        name: 'Black Tee',
+        displayOrder: 4,
+      },
+      {
+        ...base,
+        id: 6,
+        slug: 'black-tee-six',
+        name: 'Black Tee',
+        displayOrder: 2,
+      },
+    ]);
+    const service = new ProductService({ product: { findMany } } as any);
+
+    const response = await service.getAllProducts({ search: 'black tee' });
+
+    expect(response.items.map((product) => product.id)).toEqual([6, 7, 8, 90]);
   });
 });

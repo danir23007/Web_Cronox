@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access */
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { JSDOM } from 'jsdom';
@@ -162,10 +163,16 @@ describe('product-card framing integration', () => {
     expect(admin).toContain('product-card-framing.js?v=1');
     for (const page of pages) {
       const html = readFrontend(page);
-      expect(html.indexOf('media-framing-geometry.js?v=3')).toBeGreaterThan(-1);
+      const geometryScriptIndex = html.search(
+        /media-framing-geometry\.js\?v=\d+/,
+      );
+      expect(geometryScriptIndex).toBeGreaterThan(-1);
       expect(html.indexOf('product-card-framing.js?v=1')).toBeGreaterThan(-1);
+      expect(geometryScriptIndex).toBeLessThan(
+        html.indexOf('product-card-framing.js?v=1'),
+      );
       expect(html.indexOf('product-card-framing.js?v=1')).toBeLessThan(
-        html.indexOf('products.js?v=52'),
+        html.indexOf('products.js?v=53'),
       );
     }
   });

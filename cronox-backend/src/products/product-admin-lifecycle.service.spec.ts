@@ -179,6 +179,11 @@ describe('ProductService administrative lifecycle', () => {
 
     expect(first.id).toBe(second.id);
     expect(createCount).toBe(1);
+    expect(tx.product.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ displayOrder: 7 }),
+      }),
+    );
   });
 
   it('allows different request keys to create different products', async () => {

@@ -171,6 +171,7 @@ describe('ProductService category assignments', () => {
 
     expect(prisma.product.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
+        orderBy: [{ displayOrder: 'asc' }, { id: 'asc' }],
         where: {
           isActive: true,
           categories: {

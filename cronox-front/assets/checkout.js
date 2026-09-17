@@ -1218,8 +1218,6 @@
       if (force || !Array.isArray(recommendationCatalog)) {
         const products = await API.getProducts({
           limit: 12,
-          sortBy: 'createdAt',
-          order: 'desc',
         });
         if (loadRevision !== recommendationLoadRevision) return false;
         recommendationCatalog = Array.isArray(products) ? products : [];
