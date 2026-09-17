@@ -414,11 +414,13 @@
 }
 .media-editor__hero-copy {
   position: absolute;
-  inset: 0;
-  display: grid;
-  place-items: center;
-  text-align: center;
+  z-index: 2;
+  pointer-events: auto;
+  cursor: grab;
+  line-height: 1.1;
+  outline-offset: 3px;
 }
+.media-editor__hero-copy:active { cursor: grabbing; }
 .media-editor__text-controls {
   display:grid;
   gap:12px;
@@ -429,6 +431,10 @@
 }
 .media-editor__text-controls legend { padding:0 6px; font-weight:700; }
 .media-editor__text-controls textarea { margin-top:6px; resize:vertical; }
+.media-editor__text-formats { display:grid; grid-template-columns:repeat(3,1fr); gap:6px; }
+.media-editor__text-formats .btn { min-width:0; padding-inline:6px; }
+.media-editor__text-formats .is-active { background:#fff; color:#000; border-color:#fff; }
+.media-editor__dirty { margin:12px 0 0; color:#ffd166; font-weight:700; }
 .media-editor__hero-copy strong {
   padding: 0 12px;
   font-size: clamp(10px, 2.4vw, 30px);

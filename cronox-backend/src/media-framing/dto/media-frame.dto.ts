@@ -36,14 +36,7 @@ export class MediaFrameDto {
   fit!: MediaFitMode;
 }
 
-export class HeroTextDto {
-  @IsBoolean()
-  enabled!: boolean;
-
-  @IsString()
-  @MaxLength(160)
-  content!: string;
-
+export class HeroTextViewportDto {
   @IsNumber({ allowInfinity: false, allowNaN: false })
   @Min(0)
   @Max(100)
@@ -53,16 +46,6 @@ export class HeroTextDto {
   @Min(0)
   @Max(100)
   y!: number;
-
-  @IsNumber({ allowInfinity: false, allowNaN: false })
-  @Min(0)
-  @Max(100)
-  mobileX!: number;
-
-  @IsNumber({ allowInfinity: false, allowNaN: false })
-  @Min(0)
-  @Max(100)
-  mobileY!: number;
 
   @IsString()
   @IsIn(['LEFT', 'CENTER', 'RIGHT'])
@@ -76,11 +59,6 @@ export class HeroTextDto {
   @Min(12)
   @Max(120)
   fontSize!: number;
-
-  @IsInt()
-  @Min(12)
-  @Max(120)
-  mobileFontSize!: number;
 
   @IsInt()
   @IsIn([300, 400, 500, 600, 700, 800, 900])
@@ -98,6 +76,27 @@ export class HeroTextDto {
   @Min(10)
   @Max(100)
   maxWidth!: number;
+}
+
+export class HeroTextDto {
+  @IsBoolean()
+  enabled!: boolean;
+
+  @IsString()
+  @MaxLength(160)
+  content!: string;
+
+  @ValidateNested()
+  @Type(() => HeroTextViewportDto)
+  desktop!: HeroTextViewportDto;
+
+  @ValidateNested()
+  @Type(() => HeroTextViewportDto)
+  tablet!: HeroTextViewportDto;
+
+  @ValidateNested()
+  @Type(() => HeroTextViewportDto)
+  mobile!: HeroTextViewportDto;
 }
 
 export class UpdateMediaFramingDto {

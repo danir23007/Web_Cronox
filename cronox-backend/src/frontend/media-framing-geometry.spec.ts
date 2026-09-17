@@ -30,6 +30,14 @@ const cover = {
   focalX: 50,
   focalY: 50,
 };
+const heroViewportStyle = {
+  align: 'CENTER',
+  color: '#ffffff',
+  fontWeight: 800,
+  letterSpacing: 1.5,
+  uppercase: false,
+  maxWidth: 80,
+};
 
 describe('shared media framing geometry', () => {
   it('calculates wide desktop cover movement at 0, 50, and 100 percent', () => {
@@ -247,5 +255,45 @@ describe('shared media framing geometry', () => {
     const mobile = engine.calculate({ ...cover, ...options });
     expect(mobile.renderedWidth).not.toBe(desktop.renderedWidth);
     expect(mobile.translateX).not.toBe(desktop.translateX);
+  });
+
+  it('maps 0/0 and 100/100 across the complete viewport while keeping text visible', () => {
+    const { engine } = loadEngine();
+    expect(
+      engine.calculateHeroTextPosition({
+        viewportWidth: 390,
+        viewportHeight: 844,
+        textWidth: 160,
+        textHeight: 80,
+        x: 0,
+        y: 0,
+      }),
+    ).toMatchObject({ left: 0, top: 0 });
+    expect(
+      engine.calculateHeroTextPosition({
+        viewportWidth: 390,
+        viewportHeight: 844,
+        textWidth: 160,
+        textHeight: 80,
+        x: 100,
+        y: 100,
+      }),
+    ).toMatchObject({ left: 230, top: 764 });
+  });
+
+  it('uses independent responsive styles and no media geometry inputs', () => {
+    const { engine } = loadEngine();
+    const value = {
+      desktop: { ...heroViewportStyle, x: 0, y: 0, fontSize: 60 },
+      tablet: { ...heroViewportStyle, x: 50, y: 100, fontSize: 40 },
+      mobile: { ...heroViewportStyle, x: 100, y: 50, fontSize: 24 },
+    };
+    expect(engine.heroTextViewport(value, 'desktop').fontSize).toBe(60);
+    expect(engine.heroTextViewport(value, 'tablet').y).toBe(100);
+    expect(engine.heroTextViewport(value, 'mobile').x).toBe(100);
+    expect(engine.heroTextStyle(value, 'tablet').fontSize).toBe('40px');
+    expect(JSON.stringify(engine.heroTextStyle(value, 'desktop'))).not.toMatch(
+      /focal|zoom|fit|object/i,
+    );
   });
 });

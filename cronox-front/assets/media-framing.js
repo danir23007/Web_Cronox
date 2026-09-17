@@ -3,7 +3,7 @@
 
   if (window.CRONOX_MEDIA_FRAMING?.initialized) return;
 
-  const CACHE_KEY = "cronox.mediaFraming.web.v4";
+  const CACHE_KEY = "cronox.mediaFraming.web.v5";
   const HERO_KEY = "home.hero.video";
   const DEFAULT_FRAME = Object.freeze({
     focalX: 50,
@@ -12,7 +12,7 @@
     fit: "COVER",
   });
   const DEFAULT_CONFIGURATION = Object.freeze({
-    version: 4,
+    version: 5,
     placements: {
       [HERO_KEY]: Object.freeze({
         desktop: DEFAULT_FRAME,
@@ -21,14 +21,20 @@
         source: "/assets/VIDEO_LOGO_CRONOX.mp4",
         poster: "/assets/logo_banner.png",
         mediaType: "video",
-        heroText: Object.freeze({ enabled: false, content: "" }),
+        heroText: Object.freeze({
+          enabled: false,
+          content: "",
+          desktop: Object.freeze({ x: 50, y: 50, align: "CENTER", color: "#ffffff", fontSize: 42, fontWeight: 800, letterSpacing: 1.5, uppercase: false, maxWidth: 90 }),
+          tablet: Object.freeze({ x: 50, y: 50, align: "CENTER", color: "#ffffff", fontSize: 42, fontWeight: 800, letterSpacing: 1.5, uppercase: false, maxWidth: 90 }),
+          mobile: Object.freeze({ x: 50, y: 50, align: "CENTER", color: "#ffffff", fontSize: 30, fontWeight: 800, letterSpacing: 1.5, uppercase: false, maxWidth: 90 }),
+        }),
       }),
     },
   });
   const geometry = window.CRONOX_MEDIA_GEOMETRY;
   const pageDocument = window.document;
-  const mobileQuery = window.matchMedia?.("(max-width: 640px)");
-  const tabletQuery = window.matchMedia?.("(max-width: 1024px)");
+  const mobileQuery = window.matchMedia?.("(max-width: 767px)");
+  const tabletQuery = window.matchMedia?.("(max-width: 1023px)");
   const observedFrames = new WeakSet();
   const observedMedia = new WeakSet();
   let configuration = DEFAULT_CONFIGURATION;
@@ -85,21 +91,36 @@
       typeof candidate === "number" && Number.isFinite(candidate)
         ? Math.min(max, Math.max(min, candidate))
         : fallback;
+    const viewport = (candidate, fallback) => ({
+      x: number(candidate?.x, fallback.x, 0, 100),
+      y: number(candidate?.y, fallback.y, 0, 100),
+      align: ["LEFT", "CENTER", "RIGHT"].includes(candidate?.align) ? candidate.align : fallback.align,
+      color: /^#[0-9a-f]{6}$/i.test(candidate?.color || "") ? candidate.color : fallback.color,
+      fontSize: number(candidate?.fontSize, fallback.fontSize, 12, 120),
+      fontWeight: [300, 400, 500, 600, 700, 800, 900].includes(candidate?.fontWeight) ? candidate.fontWeight : fallback.fontWeight,
+      letterSpacing: number(candidate?.letterSpacing, fallback.letterSpacing, -2, 20),
+      uppercase:
+        candidate?.uppercase === undefined
+          ? fallback.uppercase
+          : candidate.uppercase === true,
+      maxWidth: number(candidate?.maxWidth, fallback.maxWidth, 10, 100),
+    });
+    const legacyDesktop = viewport(value, {
+      x: 50, y: 50, align: "CENTER", color: "#ffffff", fontSize: 42,
+      fontWeight: 800, letterSpacing: 1.5, uppercase: false, maxWidth: 90,
+    });
+    const legacyMobile = viewport({
+      ...value,
+      x: value.mobileX,
+      y: value.mobileY,
+      fontSize: value.mobileFontSize,
+    }, { ...legacyDesktop, fontSize: 30 });
     return {
       enabled: value.enabled === true && Boolean(content),
       content,
-      x: number(value.x, 50, 0, 100),
-      y: number(value.y, 50, 0, 100),
-      mobileX: number(value.mobileX, number(value.x, 50, 0, 100), 0, 100),
-      mobileY: number(value.mobileY, number(value.y, 50, 0, 100), 0, 100),
-      align: ["LEFT", "CENTER", "RIGHT"].includes(value.align) ? value.align : "CENTER",
-      color: /^#[0-9a-f]{6}$/i.test(value.color || "") ? value.color : "#ffffff",
-      fontSize: number(value.fontSize, 42, 12, 120),
-      mobileFontSize: number(value.mobileFontSize, 30, 12, 120),
-      fontWeight: [300, 400, 500, 600, 700, 800, 900].includes(value.fontWeight) ? value.fontWeight : 800,
-      letterSpacing: number(value.letterSpacing, 1.5, -2, 20),
-      uppercase: value.uppercase === true,
-      maxWidth: number(value.maxWidth, 90, 10, 100),
+      desktop: viewport(value.desktop, legacyDesktop),
+      tablet: viewport(value.tablet, legacyDesktop),
+      mobile: viewport(value.mobile, legacyMobile),
     };
   };
 
@@ -112,7 +133,7 @@
       return null;
     }
     return {
-      version: 4,
+      version: 5,
       placements: {
         [HERO_KEY]: {
           desktop,
@@ -152,11 +173,12 @@
       node.className = "hero-overlay-text";
       section.appendChild(node);
     }
-    node.textContent = heroText.uppercase
+    const device = currentDevice();
+    const selected = geometry?.heroTextViewport?.(heroText, device) || heroText[device];
+    node.textContent = selected?.uppercase
       ? heroText.content.toUpperCase()
       : heroText.content;
-    const mobile = currentDevice() === "mobile";
-    Object.assign(node.style, geometry?.heroTextStyle?.(heroText, mobile) || {});
+    geometry?.applyHeroText?.(node, section, heroText, device);
   };
 
   const ensureHeroElement = () => {
@@ -249,6 +271,7 @@
   const clearCache = () => {
     try {
       window.localStorage.removeItem(CACHE_KEY);
+      window.localStorage.removeItem("cronox.mediaFraming.web.v4");
       window.localStorage.removeItem("cronox.mediaFraming.web.v2");
       window.localStorage.removeItem("cronox.mediaFraming.web.v3");
       window.localStorage.removeItem("cronox.mediaFraming.v1");

@@ -23,6 +23,7 @@
     cancel: document.getElementById("mediaEditorCancel"),
     save: document.getElementById("mediaEditorSave"),
     deviceButtons: document.querySelectorAll("[data-media-device]"),
+    heroDeviceButtons: document.querySelectorAll("[data-hero-text-device]"),
     inheritRow: document.getElementById("mediaInheritRow"),
     inherit: document.getElementById("mediaInheritGeneral"),
     previewStage: document.getElementById("mediaPreviewStage"),
@@ -62,6 +63,7 @@
     resetDevice: document.getElementById("mediaResetDevice"),
     resetAll: document.getElementById("mediaResetAll"),
     message: document.getElementById("mediaEditorMessage"),
+    dirty: document.getElementById("mediaEditorDirty"),
   };
 
   if (!elements.section || !elements.grid || !elements.modal) return;
@@ -81,6 +83,7 @@
     resetAll: false,
     returnFocus: null,
     drag: null,
+    textDrag: null,
     geometry: null,
     previewSize: null,
     resizeFrame: 0,
@@ -456,6 +459,7 @@
       await loadLibrary(true);
       setStatus(`${updated?.sourceFilename || "El archivo"} está ahora en uso.`, "success");
       try {
+        window.localStorage.removeItem("cronox.mediaFraming.web.v5");
         window.localStorage.removeItem("cronox.mediaFraming.web.v2");
         window.localStorage.removeItem("cronox.mediaFraming.web.v3");
         window.localStorage.removeItem("cronox.mediaFraming.web.v4");
@@ -629,22 +633,42 @@
           JSON.stringify(state.initial),
     );
 
-  const renderHeroText = () => {
+  const currentHeroTextViewport = () => state.heroText?.[state.device];
+
+  const renderHeroText = (viewport, size) => {
     const value = state.heroText;
     const visible = state.placement?.key === "home.hero.video" && value?.enabled && value.content.trim();
     elements.heroTextPreview.hidden = !visible;
     if (!visible) return;
-    elements.heroTextPreview.textContent = value.uppercase
+    const selected = currentHeroTextViewport();
+    elements.heroTextPreview.textContent = selected?.uppercase
       ? value.content.toUpperCase()
       : value.content;
-    const mobile = state.device === "mobile";
-    Object.assign(elements.heroTextPreview.style, {
-      position: "absolute",
-      transform: "translate(-50%, -50%)",
-      margin: "0",
-      whiteSpace: "pre-wrap",
-      ...(geometryEngine?.heroTextStyle?.(value, mobile) || {}),
+    geometryEngine?.applyHeroText?.(
+      elements.heroTextPreview,
+      elements.preview,
+      value,
+      state.device,
+      {
+        viewportWidth: size.width,
+        viewportHeight: size.height,
+        visualScale: size.width / viewport.width,
+      },
+    );
+  };
+
+  const defaultHeroText = () => {
+    const viewport = (fontSize) => ({
+      x: 50, y: 50, align: "CENTER", color: "#ffffff", fontSize,
+      fontWeight: 800, letterSpacing: 1.5, uppercase: false, maxWidth: 90,
     });
+    return {
+      enabled: false,
+      content: "",
+      desktop: viewport(42),
+      tablet: viewport(42),
+      mobile: viewport(30),
+    };
   };
 
   const simulatedViewport = () => {
@@ -655,8 +679,8 @@
       return state.placement?.preview?.mobile || { width: 390, height: 844 };
     }
     return {
-      width: Math.max(320, Math.round(window.innerWidth || 1440)),
-      height: Math.max(320, Math.round(window.innerHeight || 900)),
+      width: 1440,
+      height: 900,
     };
   };
 
@@ -704,6 +728,7 @@
           ? "Tablet"
           : "M\u00f3vil";
     elements.dimensions.textContent = `${deviceLabel} \u00b7 ${viewport.width} \u00d7 ${viewport.height} px`;
+    renderHeroText(viewport, size);
     if (!frame || !media || !geometryEngine || media.hidden) {
       state.geometry = null;
       geometryEngine?.clear(media, elements.preview);
@@ -717,7 +742,6 @@
       frameHeight: size.height,
     });
     state.geometry = result;
-    renderHeroText();
     if (!result.valid) {
       elements.movement.textContent =
         "Esperando las dimensiones del archivo multimedia\u2026";
@@ -744,6 +768,11 @@
       button.classList.toggle("is-active", active);
       button.setAttribute("aria-selected", String(active));
     });
+    elements.heroDeviceButtons.forEach((button) => {
+      const active = button.dataset.heroTextDevice === state.device;
+      button.classList.toggle("is-active", active);
+      button.setAttribute("aria-selected", String(active));
+    });
     elements.focalX.value = String(frame.focalX);
     elements.focalY.value = String(frame.focalY);
     elements.zoom.value = String(frame.zoom);
@@ -755,27 +784,28 @@
     const isHero = state.placement.key === "home.hero.video";
     elements.heroTextControls.hidden = !isHero;
     if (isHero && hero) {
-      const mobile = state.device === "mobile";
-      const x = mobile ? hero.mobileX : hero.x;
-      const y = mobile ? hero.mobileY : hero.y;
-      const size = mobile ? hero.mobileFontSize : hero.fontSize;
+      const selected = currentHeroTextViewport();
+      const x = selected.x;
+      const y = selected.y;
+      const size = selected.fontSize;
       elements.heroTextEnabled.checked = hero.enabled;
       elements.heroTextContent.value = hero.content;
       elements.heroTextX.value = String(x);
       elements.heroTextY.value = String(y);
       elements.heroTextXValue.value = `${Math.round(x)}%`;
       elements.heroTextYValue.value = `${Math.round(y)}%`;
-      elements.heroTextAlign.value = hero.align;
-      elements.heroTextColor.value = hero.color;
+      elements.heroTextAlign.value = selected.align;
+      elements.heroTextColor.value = selected.color;
       elements.heroTextFontSize.value = String(size);
       elements.heroTextFontSizeValue.value = `${Math.round(size)} px`;
-      elements.heroTextWeight.value = String(hero.fontWeight);
-      elements.heroTextSpacing.value = String(hero.letterSpacing);
-      elements.heroTextSpacingValue.value = `${hero.letterSpacing} px`;
-      elements.heroTextUppercase.checked = hero.uppercase;
-      elements.heroTextMaxWidth.value = String(hero.maxWidth);
-      elements.heroTextMaxWidthValue.value = `${hero.maxWidth}%`;
+      elements.heroTextWeight.value = String(selected.fontWeight);
+      elements.heroTextSpacing.value = String(selected.letterSpacing);
+      elements.heroTextSpacingValue.value = `${selected.letterSpacing} px`;
+      elements.heroTextUppercase.checked = selected.uppercase;
+      elements.heroTextMaxWidth.value = String(selected.maxWidth);
+      elements.heroTextMaxWidthValue.value = `${selected.maxWidth}%`;
     }
+    if (elements.dirty) elements.dirty.hidden = !dirty();
 
     const result = renderPreview();
     elements.focalX.disabled = inherited || !result?.movementX;
@@ -851,11 +881,7 @@
     }
     state.placement = placement;
     state.draft = clone(placement.framing);
-    state.heroText = clone(placement.heroText || placement.heroTextDefaults || {
-      enabled: false, content: "", x: 50, y: 50, mobileX: 50, mobileY: 50,
-      align: "CENTER", color: "#ffffff", fontSize: 42, mobileFontSize: 30,
-      fontWeight: 800, letterSpacing: 1.5, uppercase: false, maxWidth: 90,
-    });
+    state.heroText = clone(placement.heroText || placement.heroTextDefaults || defaultHeroText());
     state.initial = clone({ framing: placement.framing, heroText: state.heroText });
     state.device = "desktop";
     state.resetAll = false;
@@ -890,6 +916,7 @@
     elements.modal.setAttribute("aria-hidden", "true");
     pageDocument.body.style.overflow = "";
     state.drag = null;
+    state.textDrag = null;
     state.geometry = null;
     state.placement = null;
     state.draft = null;
@@ -962,6 +989,7 @@
       );
       if (index >= 0 && updated) state.placements[index] = updated;
       try {
+        window.localStorage.removeItem("cronox.mediaFraming.web.v5");
         window.localStorage.removeItem("cronox.mediaFraming.web.v4");
         window.localStorage.removeItem("cronox.mediaFraming.web.v3");
         window.localStorage.removeItem("cronox.mediaFraming.web.v2");
@@ -1012,6 +1040,14 @@
       syncControls();
     }),
   );
+  elements.heroDeviceButtons.forEach((button) =>
+    button.addEventListener("click", () => {
+      state.device = button.dataset.heroTextDevice;
+      state.drag = null;
+      state.textDrag = null;
+      syncControls();
+    }),
+  );
   elements.inherit.addEventListener("change", () => {
     if (!state.draft || state.device === "desktop") return;
     state.draft[state.device] = elements.inherit.checked
@@ -1032,28 +1068,29 @@
   elements.fit.addEventListener("change", () =>
     setFrameValue("fit", elements.fit.value),
   );
-  const updateHeroText = (property, value) => {
+  const updateHeroText = (property, value, shared = false) => {
     if (!state.heroText) return;
-    state.heroText[property] = value;
+    if (shared) state.heroText[property] = value;
+    else currentHeroTextViewport()[property] = value;
     state.resetAll = false;
     syncControls();
   };
   elements.heroTextEnabled?.addEventListener("change", () =>
-    updateHeroText("enabled", elements.heroTextEnabled.checked),
+    updateHeroText("enabled", elements.heroTextEnabled.checked, true),
   );
   elements.heroTextContent?.addEventListener("input", () =>
-    updateHeroText("content", elements.heroTextContent.value.slice(0, 160)),
+    updateHeroText("content", elements.heroTextContent.value.slice(0, 160), true),
   );
   elements.heroTextX?.addEventListener("input", () =>
-    updateHeroText(state.device === "mobile" ? "mobileX" : "x", clamp(elements.heroTextX.value, 0, 100)),
+    updateHeroText("x", clamp(elements.heroTextX.value, 0, 100)),
   );
   elements.heroTextY?.addEventListener("input", () =>
-    updateHeroText(state.device === "mobile" ? "mobileY" : "y", clamp(elements.heroTextY.value, 0, 100)),
+    updateHeroText("y", clamp(elements.heroTextY.value, 0, 100)),
   );
   elements.heroTextAlign?.addEventListener("change", () => updateHeroText("align", elements.heroTextAlign.value));
   elements.heroTextColor?.addEventListener("input", () => updateHeroText("color", elements.heroTextColor.value));
   elements.heroTextFontSize?.addEventListener("input", () =>
-    updateHeroText(state.device === "mobile" ? "mobileFontSize" : "fontSize", clamp(elements.heroTextFontSize.value, 12, 120)),
+    updateHeroText("fontSize", clamp(elements.heroTextFontSize.value, 12, 120)),
   );
   elements.heroTextWeight?.addEventListener("change", () => updateHeroText("fontWeight", Number(elements.heroTextWeight.value)));
   elements.heroTextSpacing?.addEventListener("input", () => updateHeroText("letterSpacing", clamp(elements.heroTextSpacing.value, -2, 20)));
@@ -1081,7 +1118,75 @@
     }
   });
 
+  elements.heroTextPreview?.addEventListener("pointerdown", (event) => {
+    if (!state.heroText || elements.heroTextPreview.hidden) return;
+    const previewRect = elements.preview.getBoundingClientRect();
+    const textRect = elements.heroTextPreview.getBoundingClientRect();
+    state.textDrag = {
+      pointerId: event.pointerId,
+      device: state.device,
+      offsetX: event.clientX - textRect.left,
+      offsetY: event.clientY - textRect.top,
+      textWidth: textRect.width,
+      textHeight: textRect.height,
+      viewportWidth: previewRect.width,
+      viewportHeight: previewRect.height,
+    };
+    elements.heroTextPreview.setPointerCapture?.(event.pointerId);
+    event.preventDefault();
+    event.stopPropagation();
+  });
+  elements.heroTextPreview?.addEventListener("pointermove", (event) => {
+    if (
+      !state.textDrag ||
+      state.textDrag.pointerId !== event.pointerId ||
+      state.textDrag.device !== state.device
+    ) return;
+    const previewRect = elements.preview.getBoundingClientRect();
+    const next = geometryEngine?.heroTextCoordinates?.(
+      event.clientX - previewRect.left - state.textDrag.offsetX,
+      event.clientY - previewRect.top - state.textDrag.offsetY,
+      state.textDrag.viewportWidth,
+      state.textDrag.viewportHeight,
+      state.textDrag.textWidth,
+      state.textDrag.textHeight,
+    );
+    if (!next) return;
+    Object.assign(currentHeroTextViewport(), next);
+    state.resetAll = false;
+    syncControls();
+    event.preventDefault();
+  });
+  const stopTextDrag = (event) => {
+    if (!state.textDrag || state.textDrag.pointerId !== event.pointerId) return;
+    if (elements.heroTextPreview.hasPointerCapture?.(event.pointerId)) {
+      elements.heroTextPreview.releasePointerCapture(event.pointerId);
+    }
+    state.textDrag = null;
+  };
+  elements.heroTextPreview?.addEventListener("pointerup", stopTextDrag);
+  elements.heroTextPreview?.addEventListener("pointercancel", stopTextDrag);
+  elements.heroTextPreview?.addEventListener("keydown", (event) => {
+    const deltas = {
+      ArrowLeft: [-1, 0],
+      ArrowRight: [1, 0],
+      ArrowUp: [0, -1],
+      ArrowDown: [0, 1],
+    };
+    const delta = deltas[event.key];
+    if (!delta || !state.heroText) return;
+    const amount = event.shiftKey ? 5 : 1;
+    const selected = currentHeroTextViewport();
+    selected.x = clamp(selected.x + delta[0] * amount, 0, 100);
+    selected.y = clamp(selected.y + delta[1] * amount, 0, 100);
+    state.resetAll = false;
+    syncControls();
+    event.preventDefault();
+    event.stopPropagation();
+  });
+
   elements.preview.addEventListener("pointerdown", (event) => {
+    if (event.target?.closest?.(".media-editor__hero-copy")) return;
     if (
       !state.draft ||
       isInherited() ||

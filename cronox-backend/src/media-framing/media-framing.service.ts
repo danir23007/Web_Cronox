@@ -40,12 +40,27 @@ type NullableFrameFields = {
   heroTextEnabled?: boolean;
   heroTextX?: number;
   heroTextY?: number;
-  heroTextMobileX?: number | null;
-  heroTextMobileY?: number | null;
+  heroTextTabletX?: number;
+  heroTextTabletY?: number;
+  heroTextTabletAlign?: string;
+  heroTextTabletColor?: string;
+  heroTextTabletFontSize?: number;
+  heroTextTabletFontWeight?: number;
+  heroTextTabletLetterSpacing?: number;
+  heroTextTabletUppercase?: boolean;
+  heroTextTabletMaxWidth?: number;
+  heroTextMobileX?: number;
+  heroTextMobileY?: number;
+  heroTextMobileAlign?: string;
+  heroTextMobileColor?: string;
   heroTextAlign?: string;
   heroTextColor?: string;
   heroTextFontSize?: number;
-  heroTextMobileFontSize?: number | null;
+  heroTextMobileFontSize?: number;
+  heroTextMobileFontWeight?: number;
+  heroTextMobileLetterSpacing?: number;
+  heroTextMobileUppercase?: boolean;
+  heroTextMobileMaxWidth?: number;
   heroTextFontWeight?: number;
   heroTextLetterSpacing?: number;
   heroTextUppercase?: boolean;
@@ -72,40 +87,83 @@ type ResponsiveFrames = {
   mobile: MediaFrame | null;
 };
 
-const defaultHeroText = () => ({
-  enabled: false,
-  content: '',
+const defaultHeroTextViewport = (fontSize = 42) => ({
   x: 50,
   y: 50,
-  mobileX: 50,
-  mobileY: 50,
   align: 'CENTER' as const,
   color: '#ffffff',
-  fontSize: 42,
-  mobileFontSize: 30,
+  fontSize,
   fontWeight: 800,
   letterSpacing: 1.5,
   uppercase: false,
   maxWidth: 90,
 });
 
+const defaultHeroText = () => ({
+  enabled: false,
+  content: '',
+  desktop: defaultHeroTextViewport(),
+  tablet: defaultHeroTextViewport(),
+  mobile: defaultHeroTextViewport(30),
+});
+
+const supportedAlignment = (value?: string) =>
+  ['LEFT', 'CENTER', 'RIGHT'].includes(value || '')
+    ? (value as 'LEFT' | 'CENTER' | 'RIGHT')
+    : 'CENTER';
+
 const resolveHeroText = (record?: NullableFrameFields | null) => ({
   enabled: Boolean(record?.heroTextEnabled),
   content: record?.heroText ?? '',
-  x: record?.heroTextX ?? 50,
-  y: record?.heroTextY ?? 50,
-  mobileX: record?.heroTextMobileX ?? record?.heroTextX ?? 50,
-  mobileY: record?.heroTextMobileY ?? record?.heroTextY ?? 50,
-  align: ['LEFT', 'CENTER', 'RIGHT'].includes(record?.heroTextAlign || '')
-    ? record!.heroTextAlign
-    : 'CENTER',
-  color: record?.heroTextColor ?? '#ffffff',
-  fontSize: record?.heroTextFontSize ?? 42,
-  mobileFontSize: record?.heroTextMobileFontSize ?? 30,
-  fontWeight: record?.heroTextFontWeight ?? 800,
-  letterSpacing: record?.heroTextLetterSpacing ?? 1.5,
-  uppercase: Boolean(record?.heroTextUppercase),
-  maxWidth: record?.heroTextMaxWidth ?? 90,
+  desktop: {
+    x: record?.heroTextX ?? 50,
+    y: record?.heroTextY ?? 50,
+    align: supportedAlignment(record?.heroTextAlign),
+    color: record?.heroTextColor ?? '#ffffff',
+    fontSize: record?.heroTextFontSize ?? 42,
+    fontWeight: record?.heroTextFontWeight ?? 800,
+    letterSpacing: record?.heroTextLetterSpacing ?? 1.5,
+    uppercase: Boolean(record?.heroTextUppercase),
+    maxWidth: record?.heroTextMaxWidth ?? 90,
+  },
+  tablet: {
+    x: record?.heroTextTabletX ?? record?.heroTextX ?? 50,
+    y: record?.heroTextTabletY ?? record?.heroTextY ?? 50,
+    align: supportedAlignment(
+      record?.heroTextTabletAlign ?? record?.heroTextAlign,
+    ),
+    color: record?.heroTextTabletColor ?? record?.heroTextColor ?? '#ffffff',
+    fontSize: record?.heroTextTabletFontSize ?? record?.heroTextFontSize ?? 42,
+    fontWeight:
+      record?.heroTextTabletFontWeight ?? record?.heroTextFontWeight ?? 800,
+    letterSpacing:
+      record?.heroTextTabletLetterSpacing ??
+      record?.heroTextLetterSpacing ??
+      1.5,
+    uppercase: Boolean(
+      record?.heroTextTabletUppercase ?? record?.heroTextUppercase,
+    ),
+    maxWidth: record?.heroTextTabletMaxWidth ?? record?.heroTextMaxWidth ?? 90,
+  },
+  mobile: {
+    x: record?.heroTextMobileX ?? record?.heroTextX ?? 50,
+    y: record?.heroTextMobileY ?? record?.heroTextY ?? 50,
+    align: supportedAlignment(
+      record?.heroTextMobileAlign ?? record?.heroTextAlign,
+    ),
+    color: record?.heroTextMobileColor ?? record?.heroTextColor ?? '#ffffff',
+    fontSize: record?.heroTextMobileFontSize ?? 30,
+    fontWeight:
+      record?.heroTextMobileFontWeight ?? record?.heroTextFontWeight ?? 800,
+    letterSpacing:
+      record?.heroTextMobileLetterSpacing ??
+      record?.heroTextLetterSpacing ??
+      1.5,
+    uppercase: Boolean(
+      record?.heroTextMobileUppercase ?? record?.heroTextUppercase,
+    ),
+    maxWidth: record?.heroTextMobileMaxWidth ?? record?.heroTextMaxWidth ?? 90,
+  },
 });
 
 const heroTextFields = (value: UpdateMediaFramingDto['heroText']) =>
@@ -126,18 +184,33 @@ const heroTextFields = (value: UpdateMediaFramingDto['heroText']) =>
             .join('')
             .trim() || null,
         heroTextEnabled: value.enabled,
-        heroTextX: value.x,
-        heroTextY: value.y,
-        heroTextMobileX: value.mobileX,
-        heroTextMobileY: value.mobileY,
-        heroTextAlign: value.align,
-        heroTextColor: value.color.toLowerCase(),
-        heroTextFontSize: value.fontSize,
-        heroTextMobileFontSize: value.mobileFontSize,
-        heroTextFontWeight: value.fontWeight,
-        heroTextLetterSpacing: value.letterSpacing,
-        heroTextUppercase: value.uppercase,
-        heroTextMaxWidth: value.maxWidth,
+        heroTextX: value.desktop.x,
+        heroTextY: value.desktop.y,
+        heroTextAlign: value.desktop.align,
+        heroTextColor: value.desktop.color.toLowerCase(),
+        heroTextFontSize: value.desktop.fontSize,
+        heroTextFontWeight: value.desktop.fontWeight,
+        heroTextLetterSpacing: value.desktop.letterSpacing,
+        heroTextUppercase: value.desktop.uppercase,
+        heroTextMaxWidth: value.desktop.maxWidth,
+        heroTextTabletX: value.tablet.x,
+        heroTextTabletY: value.tablet.y,
+        heroTextTabletAlign: value.tablet.align,
+        heroTextTabletColor: value.tablet.color.toLowerCase(),
+        heroTextTabletFontSize: value.tablet.fontSize,
+        heroTextTabletFontWeight: value.tablet.fontWeight,
+        heroTextTabletLetterSpacing: value.tablet.letterSpacing,
+        heroTextTabletUppercase: value.tablet.uppercase,
+        heroTextTabletMaxWidth: value.tablet.maxWidth,
+        heroTextMobileX: value.mobile.x,
+        heroTextMobileY: value.mobile.y,
+        heroTextMobileAlign: value.mobile.align,
+        heroTextMobileColor: value.mobile.color.toLowerCase(),
+        heroTextMobileFontSize: value.mobile.fontSize,
+        heroTextMobileFontWeight: value.mobile.fontWeight,
+        heroTextMobileLetterSpacing: value.mobile.letterSpacing,
+        heroTextMobileUppercase: value.mobile.uppercase,
+        heroTextMobileMaxWidth: value.mobile.maxWidth,
       }
     : {};
 
@@ -266,7 +339,7 @@ export class MediaFramingService {
     });
     const byKey = new Map(stored.map((record) => [record.key, record]));
     return {
-      version: 4,
+      version: 5,
       placements: Object.fromEntries(
         MEDIA_PLACEMENTS.map((definition) => [
           definition.key,
@@ -633,8 +706,11 @@ export class MediaFramingService {
               ...(heroText
                 ? {
                     heroText: {
-                      ...heroText,
+                      enabled: heroText.enabled,
                       content: '[stored as plain text]',
+                      desktop: { ...heroText.desktop },
+                      tablet: { ...heroText.tablet },
+                      mobile: { ...heroText.mobile },
                     },
                   }
                 : {}),

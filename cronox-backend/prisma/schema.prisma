@@ -297,38 +297,53 @@ model GallerySlot {
 }
 
 model WebsiteMediaPlacement {
-  key          String             @id
-  assetId      String?
-  focalX       Float
-  focalY       Float
-  zoom         Float
-  fit          MediaFitMode
-  tabletFocalX Float?
-  tabletFocalY Float?
-  tabletZoom   Float?
-  tabletFit    MediaFitMode?
-  mobileFocalX Float?
-  mobileFocalY Float?
-  mobileZoom   Float?
-  mobileFit    MediaFitMode?
-  heroText                String?
-  heroTextEnabled         Boolean            @default(false)
-  heroTextX               Float              @default(50)
-  heroTextY               Float              @default(50)
-  heroTextMobileX         Float?
-  heroTextMobileY         Float?
-  heroTextAlign           String             @default("CENTER")
-  heroTextColor           String             @default("#ffffff")
-  heroTextFontSize        Int                @default(42)
-  heroTextMobileFontSize  Int?
-  heroTextFontWeight      Int                @default(800)
-  heroTextLetterSpacing   Float              @default(1.5)
-  heroTextUppercase       Boolean            @default(false)
-  heroTextMaxWidth        Int                @default(90)
-  revision     Int                @default(0)
-  createdAt    DateTime           @default(now())
-  updatedAt    DateTime           @updatedAt
-  asset        WebsiteMediaAsset? @relation(fields: [assetId], references: [id], onDelete: SetNull)
+  key                         String             @id
+  assetId                     String?
+  focalX                      Float
+  focalY                      Float
+  zoom                        Float
+  fit                         MediaFitMode
+  tabletFocalX                Float?
+  tabletFocalY                Float?
+  tabletZoom                  Float?
+  tabletFit                   MediaFitMode?
+  mobileFocalX                Float?
+  mobileFocalY                Float?
+  mobileZoom                  Float?
+  mobileFit                   MediaFitMode?
+  heroText                    String?
+  heroTextEnabled             Boolean            @default(false)
+  heroTextX                   Float              @default(50)
+  heroTextY                   Float              @default(50)
+  heroTextTabletX             Float              @default(50)
+  heroTextTabletY             Float              @default(50)
+  heroTextTabletAlign         String             @default("CENTER")
+  heroTextTabletColor         String             @default("#ffffff")
+  heroTextTabletFontSize      Int                @default(42)
+  heroTextTabletFontWeight    Int                @default(800)
+  heroTextTabletLetterSpacing Float              @default(1.5)
+  heroTextTabletUppercase     Boolean            @default(false)
+  heroTextTabletMaxWidth      Int                @default(90)
+  heroTextMobileX             Float              @default(50)
+  heroTextMobileY             Float              @default(50)
+  heroTextMobileAlign         String             @default("CENTER")
+  heroTextMobileColor         String             @default("#ffffff")
+  heroTextAlign               String             @default("CENTER")
+  heroTextColor               String             @default("#ffffff")
+  heroTextFontSize            Int                @default(42)
+  heroTextMobileFontSize      Int                @default(30)
+  heroTextMobileFontWeight    Int                @default(800)
+  heroTextMobileLetterSpacing Float              @default(1.5)
+  heroTextMobileUppercase     Boolean            @default(false)
+  heroTextMobileMaxWidth      Int                @default(90)
+  heroTextFontWeight          Int                @default(800)
+  heroTextLetterSpacing       Float              @default(1.5)
+  heroTextUppercase           Boolean            @default(false)
+  heroTextMaxWidth            Int                @default(90)
+  revision                    Int                @default(0)
+  createdAt                   DateTime           @default(now())
+  updatedAt                   DateTime           @updatedAt
+  asset                       WebsiteMediaAsset? @relation(fields: [assetId], references: [id], onDelete: SetNull)
 
   @@index([assetId])
 }
@@ -404,17 +419,17 @@ model User {
 }
 
 model AuthSession {
-  id                  String   @id
+  id                  String    @id
   userId              Int
-  user                User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user                User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   sessionVersion      Int
-  lastActivityAt      DateTime @default(now())
-  createdAt           DateTime @default(now())
+  lastActivityAt      DateTime  @default(now())
+  createdAt           DateTime  @default(now())
   revokedAt           DateTime?
   refreshHash         String
   previousRefreshHash String?
   previousValidUntil  DateTime?
-  generation          Int      @default(0)
+  generation          Int       @default(0)
   refreshIssuedAt     Int
 
   @@index([userId])

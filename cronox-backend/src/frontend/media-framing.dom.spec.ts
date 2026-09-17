@@ -17,6 +17,17 @@ const flushAsync = () => new Promise((resolve) => setTimeout(resolve, 0));
 
 const baseline = { focalX: 50, focalY: 50, zoom: 1, fit: 'COVER' };
 const initialFrame = { focalX: 15, focalY: 30, zoom: 1.5, fit: 'COVER' };
+const heroViewport = (fontSize: number, x = 50, y = 50) => ({
+  x,
+  y,
+  align: 'CENTER',
+  color: '#ffffff',
+  fontSize,
+  fontWeight: 800,
+  letterSpacing: 1.5,
+  uppercase: false,
+  maxWidth: 90,
+});
 const initialPlacement = {
   key: 'home.hero.video',
   label: 'V\u00eddeo principal de portada',
@@ -41,6 +52,13 @@ const initialPlacement = {
   defaults: baseline,
   status: 'CUSTOM',
   framing: { desktop: initialFrame, tablet: null, mobile: null },
+  heroText: {
+    enabled: true,
+    content: 'CRONOX VIEWPORT',
+    desktop: heroViewport(42, 10, 20),
+    tablet: heroViewport(36, 50, 90),
+    mobile: heroViewport(28, 85, 55),
+  },
   revision: 3,
 };
 
@@ -146,6 +164,7 @@ const makeAdminDom = () => {
       placement = {
         ...placement,
         framing,
+        heroText: body.heroText || placement.heroText,
         revision: placement.revision + 1,
         status: method === 'POST' ? 'DEFAULT' : 'RESPONSIVE_CUSTOM',
       };
@@ -178,9 +197,22 @@ const makeAdminDom = () => {
   const stage = dom.window.document.getElementById('mediaPreviewStage')!;
   stage.getBoundingClientRect = () => ({ width: 720, height: 540 }) as DOMRect;
   const preview = dom.window.document.getElementById('mediaPreviewFrame')!;
+  preview.getBoundingClientRect = () =>
+    ({ left: 0, top: 0, width: 720, height: 450 }) as DOMRect;
   (preview as any).setPointerCapture = jest.fn();
   (preview as any).releasePointerCapture = jest.fn();
   (preview as any).hasPointerCapture = jest.fn().mockReturnValue(true);
+  const heroText = dom.window.document.getElementById('mediaHeroTextPreview')!;
+  heroText.getBoundingClientRect = () =>
+    ({
+      left: Number.parseFloat(heroText.style.left) || 0,
+      top: Number.parseFloat(heroText.style.top) || 0,
+      width: 180,
+      height: 40,
+    }) as DOMRect;
+  (heroText as any).setPointerCapture = jest.fn();
+  (heroText as any).releasePointerCapture = jest.fn();
+  (heroText as any).hasPointerCapture = jest.fn().mockReturnValue(true);
   (dom.window as any).CRONOX_API = {
     API_BASE: '',
     getCsrfHeaders: jest
@@ -325,6 +357,94 @@ describe('Multimedia Web admin manager', () => {
     expect(document.getElementById('mediaZoomValue')?.textContent).toBe(
       '2.00\u00d7',
     );
+  });
+
+  it('keeps unsaved desktop, tablet and mobile text settings independent', async () => {
+    const { dom, writes } = makeAdminDom();
+    await openHeroEditor(dom);
+    const document = dom.window.document;
+    const x = document.getElementById('mediaHeroTextX') as HTMLInputElement;
+    const align = document.getElementById(
+      'mediaHeroTextAlign',
+    ) as HTMLSelectElement;
+    const select = (device: string) =>
+      (
+        document.querySelector(
+          `[data-hero-text-device="${device}"]`,
+        ) as HTMLButtonElement
+      ).click();
+
+    x.value = '12';
+    x.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
+    align.value = 'LEFT';
+    align.dispatchEvent(new dom.window.Event('change', { bubbles: true }));
+    select('tablet');
+    expect(x.value).toBe('50');
+    expect(align.value).toBe('CENTER');
+    x.value = '64';
+    x.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
+    select('mobile');
+    expect(x.value).toBe('85');
+    x.value = '91';
+    x.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
+    select('desktop');
+    expect(x.value).toBe('12');
+    expect(align.value).toBe('LEFT');
+    expect(document.getElementById('mediaEditorDirty')?.hidden).toBe(false);
+
+    (document.getElementById('mediaEditorSave') as HTMLButtonElement).click();
+    await flushAsync();
+    expect(writes.at(-1)?.body.heroText).toMatchObject({
+      desktop: { x: 12, align: 'LEFT' },
+      tablet: { x: 64, align: 'CENTER' },
+      mobile: { x: 91 },
+    });
+  });
+
+  it('moves only hero text with pointer and keyboard without changing media framing', async () => {
+    const { dom } = makeAdminDom();
+    await openHeroEditor(dom);
+    const document = dom.window.document;
+    const text = document.getElementById('mediaHeroTextPreview') as HTMLElement;
+    const x = document.getElementById('mediaHeroTextX') as HTMLInputElement;
+    const y = document.getElementById('mediaHeroTextY') as HTMLInputElement;
+    const frameBefore = structuredClone(
+      (dom.window as any).CRONOX_ADMIN_MEDIA.state.draft,
+    );
+
+    text.dispatchEvent(pointerEvent(dom, 'pointerdown', 7, 80, 80));
+    text.dispatchEvent(pointerEvent(dom, 'pointermove', 7, 620, 400));
+    text.dispatchEvent(pointerEvent(dom, 'pointerup', 7, 620, 400));
+    expect(Number(x.value)).toBeGreaterThan(70);
+    expect(Number(y.value)).toBeGreaterThan(70);
+
+    const beforeKeyboard = Number(x.value);
+    text.dispatchEvent(
+      new dom.window.KeyboardEvent('keydown', {
+        key: 'ArrowLeft',
+        shiftKey: true,
+        bubbles: true,
+      }),
+    );
+    expect(Number(x.value)).toBe(beforeKeyboard - 5);
+    expect((dom.window as any).CRONOX_ADMIN_MEDIA.state.draft).toEqual(
+      frameBefore,
+    );
+  });
+
+  it('keeps viewport text fixed when media crop, zoom and fit change', async () => {
+    const { dom } = makeAdminDom();
+    await openHeroEditor(dom);
+    const document = dom.window.document;
+    const text = document.getElementById('mediaHeroTextPreview') as HTMLElement;
+    const before = { left: text.style.left, top: text.style.top };
+    const zoom = document.getElementById('mediaZoom') as HTMLInputElement;
+    const fit = document.getElementById('mediaFit') as HTMLSelectElement;
+    zoom.value = '2.4';
+    zoom.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
+    fit.value = 'CONTAIN';
+    fit.dispatchEvent(new dom.window.Event('change', { bubbles: true }));
+    expect({ left: text.style.left, top: text.style.top }).toEqual(before);
   });
 
   it('shows the PORTADAS/Fotos/Vídeos archive and reuses an old photo', async () => {
@@ -487,14 +607,15 @@ const makePublicDom = (
   Object.defineProperty(dom.window, 'innerWidth', { value: viewport.width });
   Object.defineProperty(dom.window, 'innerHeight', { value: viewport.height });
   Object.defineProperty(dom.window, 'matchMedia', {
-    value: jest.fn((query: string) => ({
-      media: query,
-      matches: query.includes('640')
-        ? viewport.width <= 640
-        : viewport.width <= 1024,
-      addEventListener: jest.fn(),
-      addListener: jest.fn(),
-    })),
+    value: jest.fn((query: string) => {
+      const maximum = Number(query.match(/max-width:\s*(\d+)px/)?.[1]);
+      return {
+        media: query,
+        matches: Number.isFinite(maximum) && viewport.width <= maximum,
+        addEventListener: jest.fn(),
+        addListener: jest.fn(),
+      };
+    }),
   });
   Object.defineProperty(dom.window, 'fetch', { value: fetchImpl });
   defineVideoDimensions(dom);
@@ -555,7 +676,7 @@ describe('public hero framing', () => {
     expect(text.textContent).toBe('<img src=x onerror=alert(1)>');
     expect(text.querySelector('img')).toBeNull();
     expect(text.style.fontSize).toBe('22px');
-    expect(text.style.top).toBe('26%');
+    expect(text.style.top).toBe('168.8px');
 
     const offline = makePublicDom(
       jest.fn().mockRejectedValue(new Error('offline')),
@@ -566,6 +687,48 @@ describe('public hero framing', () => {
       offline.dom.window.document.querySelector('.hero-overlay-text'),
     ).toBeNull();
   });
+
+  it.each([
+    [1440, 900, 'desktop', '52px', '0px', '0px'],
+    [1024, 768, 'desktop', '52px', '0px', '0px'],
+    [768, 1024, 'tablet', '38px', '384px', '1024px'],
+    [390, 844, 'mobile', '24px', '390px', '422px'],
+    [360, 800, 'mobile', '24px', '360px', '400px'],
+  ])(
+    'selects %s x %s %s hero text from the shared viewport engine',
+    async (width, height, _device, fontSize, left, top) => {
+      const fetchMock = jest.fn().mockResolvedValue(
+        jsonResponse({
+          version: 5,
+          placements: {
+            'home.hero.video': {
+              desktop: baseline,
+              tablet: baseline,
+              mobile: baseline,
+              source: '/assets/VIDEO_LOGO_CRONOX.mp4',
+              mediaType: 'video',
+              heroText: {
+                enabled: true,
+                content: 'Responsive hero',
+                desktop: { ...heroViewport(52, 0, 0), align: 'LEFT' },
+                tablet: { ...heroViewport(38, 50, 100), align: 'CENTER' },
+                mobile: { ...heroViewport(24, 100, 50), align: 'RIGHT' },
+              },
+            },
+          },
+        }),
+      );
+      const { dom } = makePublicDom(fetchMock, { width, height });
+      await flushAsync();
+      await flushAsync();
+      const text = dom.window.document.querySelector(
+        '.hero-overlay-text',
+      ) as HTMLElement;
+      expect(text.style.fontSize).toBe(fontSize);
+      expect(text.style.left).toBe(left);
+      expect(text.style.top).toBe(top);
+    },
+  );
 
   it('uses the shared engine and applies the mobile override from one request', async () => {
     const mobile = { focalX: 65, focalY: 35, zoom: 1.4, fit: 'COVER' };
@@ -674,8 +837,8 @@ describe('public hero framing', () => {
   });
 
   it('loads framing assets only on the homepage and leaves Products/Gallery untouched', () => {
-    expect(indexHtml).toContain('media-framing-geometry.js?v=4');
-    expect(indexHtml).toContain('media-framing.js?v=4');
+    expect(indexHtml).toContain('media-framing-geometry.js?v=5');
+    expect(indexHtml).toContain('media-framing.js?v=5');
     expect(indexHtml).toContain('data-media-placement="home.hero.video"');
     expect(publicStyles).toContain(
       '.hero-video[data-media-placement="home.hero.video"]',

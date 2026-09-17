@@ -216,30 +216,104 @@
     };
   };
 
-  const heroTextStyle = (value, mobile = false) => {
-    const maxWidth = clamp(value?.maxWidth, 10, 100, 90);
-    const x = clamp(mobile ? value?.mobileX : value?.x, 0, 100, 50);
-    const y = clamp(mobile ? value?.mobileY : value?.y, 0, 100, 50);
+  const heroTextViewport = (value, device = "desktop") => {
+    const legacy = value || {};
+    const selected = value?.[device];
+    if (selected && typeof selected === "object") return selected;
+    const mobile = device === "mobile";
     return {
-      left: `${maxWidth / 2 + (x / 100) * (100 - maxWidth)}%`,
-      top: `${10 + y * 0.8}%`,
-      width: `${maxWidth}%`,
-      textAlign: String(value?.align || "CENTER").toLowerCase(),
-      color: String(value?.color || "#ffffff"),
-      fontSize: `${clamp(mobile ? value?.mobileFontSize : value?.fontSize, 12, 120, mobile ? 30 : 42)}px`,
-      fontWeight: String(value?.fontWeight || 800),
-      letterSpacing: `${clamp(value?.letterSpacing, -2, 20, 1.5)}px`,
+      x: mobile ? legacy.mobileX : legacy.x,
+      y: mobile ? legacy.mobileY : legacy.y,
+      align: legacy.align,
+      color: legacy.color,
+      fontSize: mobile ? legacy.mobileFontSize : legacy.fontSize,
+      fontWeight: legacy.fontWeight,
+      letterSpacing: legacy.letterSpacing,
+      uppercase: legacy.uppercase,
+      maxWidth: legacy.maxWidth,
     };
   };
 
+  const heroTextStyle = (value, device = "desktop", visualScale = 1) => {
+    if (typeof device === "boolean") device = device ? "mobile" : "desktop";
+    const selected = heroTextViewport(value, device);
+    const scale = clamp(visualScale, 0.05, 4, 1);
+    const maxWidth = clamp(selected?.maxWidth, 10, 100, 90);
+    return {
+      position: "absolute",
+      width: "max-content",
+      maxWidth: `${maxWidth}%`,
+      textAlign: String(selected?.align || "CENTER").toLowerCase(),
+      color: String(selected?.color || "#ffffff"),
+      fontSize: `${clamp(selected?.fontSize, 12, 120, device === "mobile" ? 30 : 42) * scale}px`,
+      fontWeight: String(selected?.fontWeight || 800),
+      letterSpacing: `${clamp(selected?.letterSpacing, -2, 20, 1.5) * scale}px`,
+      transform: "none",
+      margin: "0",
+      whiteSpace: "pre-wrap",
+      overflowWrap: "anywhere",
+    };
+  };
+
+  const calculateHeroTextPosition = (input = {}) => {
+    const viewportWidth = Math.max(0, Number(input.viewportWidth) || 0);
+    const viewportHeight = Math.max(0, Number(input.viewportHeight) || 0);
+    const textWidth = Math.min(viewportWidth, Math.max(0, Number(input.textWidth) || 0));
+    const textHeight = Math.min(viewportHeight, Math.max(0, Number(input.textHeight) || 0));
+    const x = clamp(input.x, 0, 100, 50);
+    const y = clamp(input.y, 0, 100, 50);
+    return {
+      x,
+      y,
+      left: ((viewportWidth - textWidth) * x) / 100,
+      top: ((viewportHeight - textHeight) * y) / 100,
+      viewportWidth,
+      viewportHeight,
+      textWidth,
+      textHeight,
+    };
+  };
+
+  const heroTextCoordinates = (left, top, viewportWidth, viewportHeight, textWidth, textHeight) => ({
+    x: viewportWidth > textWidth
+      ? clamp((Number(left) / (viewportWidth - textWidth)) * 100, 0, 100, 50)
+      : 0,
+    y: viewportHeight > textHeight
+      ? clamp((Number(top) / (viewportHeight - textHeight)) * 100, 0, 100, 50)
+      : 0,
+  });
+
+  const applyHeroText = (element, viewportElement, value, device = "desktop", options = {}) => {
+    if (!element?.style || !viewportElement) return null;
+    const selected = heroTextViewport(value, device);
+    Object.assign(element.style, heroTextStyle(value, device, options.visualScale));
+    const viewportRect = viewportElement.getBoundingClientRect?.() || {};
+    const textRect = element.getBoundingClientRect?.() || {};
+    const position = calculateHeroTextPosition({
+      viewportWidth: options.viewportWidth || viewportRect.width || viewportElement.clientWidth,
+      viewportHeight: options.viewportHeight || viewportRect.height || viewportElement.clientHeight,
+      textWidth: options.textWidth || textRect.width || element.offsetWidth,
+      textHeight: options.textHeight || textRect.height || element.offsetHeight,
+      x: selected?.x,
+      y: selected?.y,
+    });
+    element.style.left = `${position.left}px`;
+    element.style.top = `${position.top}px`;
+    return position;
+  };
+
   const api = Object.freeze({
-    version: 3,
+    version: 4,
     calculate,
     apply,
     clear,
     focalFromDrag,
     zoomAtPoint,
+    heroTextViewport,
     heroTextStyle,
+    calculateHeroTextPosition,
+    heroTextCoordinates,
+    applyHeroText,
   });
   globalScope.CRONOX_MEDIA_GEOMETRY = api;
   if (typeof module !== "undefined" && module.exports) module.exports = api;
