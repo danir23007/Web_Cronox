@@ -128,11 +128,11 @@
     items.forEach((item) => {
       const itemId = String(item.id ?? '');
       const qty = Math.max(1, Math.min(999, Number(item.qty) || 1));
-      const imageUrl = safeProductImage(item.product?.image || item.product?.imageUrl);
+      const imageUrl = window.CRONOX_IMAGES?.resolveProduct(item, 'cart')?.src || safeProductImage(item.product?.image || item.product?.imageUrl);
       const display = {
         id: escapeHtml(itemId),
         qty,
-        size: item.size ? escapeHtml(String(item.size).toUpperCase()) : '',
+        size: item.size ? escapeHtml(window.CRONOX_SIZES?.label?.(item.size) || String(item.size).toUpperCase()) : '',
         priceLabel: escapeHtml(item.priceLabel || money(item.priceCents || 0)),
         product: {
           name: escapeHtml(item.product?.name || 'Producto CRONOX'),
@@ -161,6 +161,7 @@
           <span>${display.priceLabel}</span>
         </div>
       `;
+      window.CRONOX_IMAGES?.applyProduct(article.querySelector('.ci-media img'), item, 'cart');
       frag.appendChild(article);
     });
     listEl.innerHTML = '';

@@ -60,7 +60,7 @@
   const findVariantForSize = (product, size) => {
     if (!product || !size) return null;
     const map = product.variantMap || {};
-    const key = String(size).toUpperCase();
+    const key = window.CRONOX_SIZES?.key?.(size) || String(size).toUpperCase();
     return map[key] || map[key.toLowerCase()] || null;
   };
 
@@ -305,6 +305,9 @@
         result.push({
           url: value,
           alt: String(source.alt || ""),
+          variants: source.variants || null,
+          width: Number(source.width) || null,
+          height: Number(source.height) || null,
           galleryPositionX: Math.min(100, Math.max(0, Number(source.galleryPositionX ?? 50))),
           galleryPositionY: Math.min(100, Math.max(0, Number(source.galleryPositionY ?? 50))),
           galleryZoom: Math.min(3, Math.max(0.5, Number(source.galleryZoom ?? 1))),
@@ -412,14 +415,14 @@
         const altSuffix = images.length > 1 ? ` — imagen ${idx + 1}` : "";
         const loading = idx === 0 ? "eager" : "lazy";
         const alt = item.alt || `${altBase}${altSuffix}`;
-        return `<img${idAttr} class="pdp__media-img${activeClass}" src="${escapeHtml(item.url)}" alt="${escapeHtml(alt)}" loading="${loading}" decoding="async"${hiddenAttr} aria-hidden="${idx === 0 ? "false" : "true"}">`;
+        const resolved = window.CRONOX_IMAGES?.resolve(item, "pdp") || { src: item.url, srcset: "", sizes: "" };
+        const responsive = resolved.srcset ? ` srcset="${escapeHtml(resolved.srcset)}" sizes="${escapeHtml(resolved.sizes)}"` : "";
+        const dimensions = resolved.width && resolved.height ? ` width="${resolved.width}" height="${resolved.height}"` : "";
+        return `<img${idAttr} class="pdp__media-img${activeClass}" src="${escapeHtml(resolved.src)}"${responsive}${dimensions} alt="${escapeHtml(alt)}" loading="${loading}" decoding="async"${hiddenAttr} aria-hidden="${idx === 0 ? "false" : "true"}">`;
       }).join("");
       pMediaViewport.querySelectorAll(".pdp__media-img").forEach((image, idx) => {
+        window.CRONOX_IMAGES?.applyProduct(image, images[idx], "pdp");
         image.addEventListener("load", () => applyGalleryFraming(image, images[idx]));
-        image.addEventListener("error", () => {
-          image.hidden = true;
-          image.setAttribute("aria-hidden", "true");
-        });
         applyGalleryFraming(image, images[idx]);
       });
     }
@@ -427,12 +430,15 @@
     if (pThumbs) {
       pThumbs.innerHTML = images.map((item, idx) => {
         const activeClass = idx === 0 ? " is-active" : "";
-        return `<button type="button" class="pdp__thumb${activeClass}" data-index="${idx}" aria-label="Ver imagen ${idx + 1} de ${images.length}"><img src="${escapeHtml(item.url)}" alt="" loading="lazy" decoding="async"></button>`;
+        const resolved = window.CRONOX_IMAGES?.resolve(item, "small") || { src: item.url, srcset: "", sizes: "" };
+        return `<button type="button" class="pdp__thumb${activeClass}" data-index="${idx}" aria-label="Ver imagen ${idx + 1} de ${images.length}"><img src="${escapeHtml(resolved.src)}"${resolved.srcset ? ` srcset="${escapeHtml(resolved.srcset)}" sizes="${escapeHtml(resolved.sizes)}"` : ""} alt="" loading="lazy" decoding="async"></button>`;
       }).join("");
       const hideThumbs = images.length <= 1;
       pThumbs.hidden = hideThumbs;
       pThumbs.setAttribute("aria-hidden", hideThumbs ? "true" : "false");
       pThumbs.querySelectorAll(".pdp__thumb").forEach(btn => {
+        const imageIndex = Number(btn.dataset.index);
+        window.CRONOX_IMAGES?.applyProduct(btn.querySelector("img"), images[imageIndex], "small");
         btn.addEventListener("click", () => {
           const idx = Number(btn.dataset.index);
           if (!Number.isNaN(idx)) showImage(idx);
@@ -519,13 +525,14 @@
     const arr = Array.isArray(list) && list.length ? list : ["M"];
     const seen = new Set();
     return arr
-      .map(s => String(s || "").trim().toUpperCase())
+      .map(s => window.CRONOX_SIZES?.key?.(s) || String(s || "").trim().toUpperCase())
       .filter(s => {
         if (!s) return false;
         if (seen.has(s)) return false;
         seen.add(s);
         return true;
-      });
+      })
+      .sort((left, right) => (window.CRONOX_SIZES?.order?.(left) ?? 0) - (window.CRONOX_SIZES?.order?.(right) ?? 0));
   }
 
   function setupSizeButtons(product) {
@@ -536,8 +543,9 @@
       .map((size) => {
         const variant = findVariantForSize(product, size);
         const unavailable = window.CRONOX_STOCK?.classifyStock(window.CRONOX_STOCK.availableStock(product.variants)) === 'out_of_stock' || !isVariantAvailable(variant);
-        const label = unavailable ? `${size}, no disponible` : size;
-        return `<button type="button" class="size-btn${unavailable ? ' is-unavailable' : ''}" data-size="${escapeHtml(size)}" role="radio" aria-label="${escapeHtml(label)}" aria-checked="false" aria-disabled="${unavailable ? 'true' : 'false'}" ${unavailable ? 'disabled' : ''}>${escapeHtml(size)}</button>`;
+        const displaySize = window.CRONOX_SIZES?.label?.(size) || size;
+        const label = unavailable ? `${displaySize}, no disponible` : displaySize;
+        return `<button type="button" class="size-btn${unavailable ? ' is-unavailable' : ''}" data-size="${escapeHtml(size)}" role="radio" aria-label="${escapeHtml(label)}" aria-checked="false" aria-disabled="${unavailable ? 'true' : 'false'}" ${unavailable ? 'disabled' : ''}>${escapeHtml(displaySize)}</button>`;
       })
       .join("");
 
@@ -731,7 +739,7 @@
     if (target && pAdd) {
       pAdd.addEventListener("click", () => {
         if (pAdd.disabled || window.CRONOX_STOCK?.classifyStock(window.CRONOX_STOCK.availableStock(target.variants)) === 'out_of_stock') return;
-        const size = selectedSize.toUpperCase();
+        const size = window.CRONOX_SIZES?.label?.(selectedSize) || selectedSize.toUpperCase();
         const variant = findVariantForSize(target, size);
 
         if (!size || !isVariantAvailable(variant)) {

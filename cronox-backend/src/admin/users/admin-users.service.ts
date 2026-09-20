@@ -20,9 +20,11 @@ import { AdminUserOrdersQueryDto } from './dto/admin-user-orders-query.dto';
 import { AdminUserRequestsQueryDto } from './dto/admin-user-requests-query.dto';
 import { isAdminPanelRole, isSuperAdminRole } from '../../common/roles.utils';
 import { UpdateAdminUserDto } from './dto/update-admin-user.dto';
+import { ADMIN_PAGE_SIZES } from '../admin-pagination.constants';
+import { retainedAuditLogDateFilter } from '../audit-logs/audit-log-retention';
 
-const DEFAULT_PAGE_SIZE = 10;
-const MAX_PAGE_SIZE = 50;
+const DEFAULT_PAGE_SIZE = ADMIN_PAGE_SIZES.USERS;
+const MAX_PAGE_SIZE = ADMIN_PAGE_SIZES.USERS;
 const RECENT_ITEMS_LIMIT = 20;
 const SERIALIZABLE_RETRY_LIMIT = 3;
 const PAID_STATUSES: OrderStatus[] = [
@@ -436,9 +438,14 @@ export class AdminUsersService {
   async getUserAuditLogs(userId: number, limit = 20) {
     const items = await this.prisma.auditLog.findMany({
       where: {
-        OR: [
-          { targetType: 'user', targetId: String(userId) },
-          { metadata: { path: ['userId'], equals: userId } },
+        AND: [
+          { createdAt: retainedAuditLogDateFilter() },
+          {
+            OR: [
+              { targetType: 'user', targetId: String(userId) },
+              { metadata: { path: ['userId'], equals: userId } },
+            ],
+          },
         ],
       },
       orderBy: { createdAt: 'desc' },

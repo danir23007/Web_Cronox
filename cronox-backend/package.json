@@ -7,6 +7,7 @@
   "license": "UNLICENSED",
   "scripts": {
     "email:import": "ts-node src/email/managed/import-mail-templates.ts",
+    "images:backfill": "ts-node src/images/backfill-images.ts",
     "dev": "npm run start:dev",
     "prebuild": "prisma generate",
     "build": "nest build",
@@ -60,6 +61,7 @@
     "rxjs": "^7.8.1",
     "sanitize-html": "2.17.7",
     "serve-static": "^2.2.0",
+    "sharp": "^0.34.5",
     "stripe": "^16.12.0",
     "swagger-ui-express": "^5.0.1"
   },

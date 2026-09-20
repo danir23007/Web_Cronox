@@ -1,4 +1,8 @@
-import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import {
@@ -6,6 +10,7 @@ import {
   AdminPromoCodeQueryDto,
   AdminUpdatePromoCodeDto,
 } from './dto/admin-promo-code.dto';
+import { ADMIN_PAGE_SIZES } from '../admin-pagination.constants';
 
 @Injectable()
 export class AdminPromoCodesService {
@@ -13,7 +18,10 @@ export class AdminPromoCodesService {
 
   async list(query: AdminPromoCodeQueryDto) {
     const page = query.page ?? 1;
-    const limit = query.limit ?? 20;
+    const limit = Math.min(
+      query.limit ?? ADMIN_PAGE_SIZES.PROMO_CODES,
+      ADMIN_PAGE_SIZES.PROMO_CODES,
+    );
     const skip = (page - 1) * limit;
 
     const where: Prisma.PromoCodeWhereInput = {};
@@ -68,10 +76,17 @@ export class AdminPromoCodesService {
         },
       });
 
-      await this.recordAudit('promo.create', { promoCodeId: created.id, code }, adminId);
+      await this.recordAudit(
+        'promo.create',
+        { promoCodeId: created.id, code },
+        adminId,
+      );
       return created;
     } catch (error) {
-      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2002'
+      ) {
         throw new ConflictException('El código ya existe');
       }
       throw error;
@@ -122,15 +137,20 @@ export class AdminPromoCodesService {
   }
 
   async softDelete(id: number, adminId?: number) {
-    const updated = await this.prisma.promoCode.update({
-      where: { id },
-      data: { isActive: false },
-    }).catch((error) => {
-      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
-        throw new NotFoundException('PromoCode not found');
-      }
-      throw error;
-    });
+    const updated = await this.prisma.promoCode
+      .update({
+        where: { id },
+        data: { isActive: false },
+      })
+      .catch((error) => {
+        if (
+          error instanceof Prisma.PrismaClientKnownRequestError &&
+          error.code === 'P2025'
+        ) {
+          throw new NotFoundException('PromoCode not found');
+        }
+        throw error;
+      });
 
     await this.recordAudit('promo.disable', { promoCodeId: id }, adminId);
     return updated;
@@ -140,7 +160,11 @@ export class AdminPromoCodesService {
     return (code || '').replace(/\s+/g, '').toUpperCase();
   }
 
-  private async recordAudit(action: string, metadata: Prisma.InputJsonValue, adminId?: number) {
+  private async recordAudit(
+    action: string,
+    metadata: Prisma.InputJsonValue,
+    adminId?: number,
+  ) {
     try {
       await this.prisma.auditLog.create({
         data: {

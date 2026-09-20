@@ -18,8 +18,10 @@ import {
   AdminInventoryQueryDto,
 } from './dto/admin-inventory-query.dto';
 import { UpdateInventoryDto } from './dto/update-inventory.dto';
+import { ADMIN_PAGE_SIZES } from '../admin-pagination.constants';
+import { retainedAuditLogDateFilter } from '../audit-logs/audit-log-retention';
 
-const DEFAULT_PAGE_SIZE = 20;
+const DEFAULT_PAGE_SIZE = ADMIN_PAGE_SIZES.INVENTORY;
 
 const productSelect = {
   id: true,
@@ -221,6 +223,7 @@ export class AdminInventoryService {
       actionType: INVENTORY_AUDIT_ACTION,
       targetType: INVENTORY_AUDIT_TARGET,
       targetId: { in: variantIds },
+      createdAt: retainedAuditLogDateFilter(),
     };
     const [logs, totalItems] = await this.prisma.$transaction([
       this.prisma.auditLog.findMany({

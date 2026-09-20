@@ -2,8 +2,8 @@ import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AdminAuditLogQueryDto } from './dto/admin-audit-log-query.dto';
-
-const DEFAULT_PAGE_SIZE = 20;
+import { ADMIN_PAGE_SIZES } from '../admin-pagination.constants';
+import { retainedAuditLogDateFilter } from './audit-log-retention';
 
 @Injectable()
 export class AdminAuditLogsService {
@@ -11,7 +11,10 @@ export class AdminAuditLogsService {
 
   async list(query: AdminAuditLogQueryDto) {
     const page = query.page ?? 1;
-    const pageSize = Math.min(query.pageSize ?? DEFAULT_PAGE_SIZE, 100);
+    const pageSize = Math.min(
+      query.pageSize ?? ADMIN_PAGE_SIZES.AUDIT_LOGS,
+      ADMIN_PAGE_SIZES.AUDIT_LOGS,
+    );
     const skip = (page - 1) * pageSize;
 
     const andFilters: Prisma.AuditLogWhereInput[] = [];
@@ -20,10 +23,7 @@ export class AdminAuditLogsService {
     const actionType = query.actionType?.trim();
     if (actionType) {
       andFilters.push({
-        OR: [
-          { actionType },
-          { actionType: null, action: actionType },
-        ],
+        OR: [{ actionType }, { actionType: null, action: actionType }],
       });
     }
 
@@ -45,9 +45,9 @@ export class AdminAuditLogsService {
           createdAt.lte = toDate;
         }
       }
-      if (Object.keys(createdAt).length) {
-        andFilters.push({ createdAt });
-      }
+      andFilters.push({ createdAt: retainedAuditLogDateFilter(createdAt) });
+    } else {
+      andFilters.push({ createdAt: retainedAuditLogDateFilter() });
     }
 
     const search = query.q?.trim();
@@ -115,9 +115,14 @@ export class AdminAuditLogsService {
   async listForUser(userId: number, limit = 20) {
     const items = await this.prisma.auditLog.findMany({
       where: {
-        OR: [
-          { targetType: 'user', targetId: String(userId) },
-          { metadata: { path: ['userId'], equals: userId } },
+        AND: [
+          { createdAt: retainedAuditLogDateFilter() },
+          {
+            OR: [
+              { targetType: 'user', targetId: String(userId) },
+              { metadata: { path: ['userId'], equals: userId } },
+            ],
+          },
         ],
       },
       orderBy: { createdAt: 'desc' },

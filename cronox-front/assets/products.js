@@ -230,7 +230,7 @@
   const findVariantForSize = (product, size) => {
     if (!product || !size) return null;
     const map = product.variantMap || {};
-    const key = String(size).toUpperCase();
+    const key = window.CRONOX_SIZES?.key?.(size) || String(size).toUpperCase();
     return map[key] || map[key.toLowerCase()] || null;
   };
 
@@ -299,7 +299,7 @@
     qaAdd.addEventListener("click", () => {
       if (!qaCurrentProduct || qaAdd.disabled || window.CRONOX_STOCK?.classifyStock(window.CRONOX_STOCK.availableStock(qaCurrentProduct.variants)) === 'out_of_stock') return;
       const fallbackSize = qaCurrentProduct.sizes?.[0] || "M";
-      const size = (qaSelectedSize || String(fallbackSize)).toUpperCase();
+      const size = window.CRONOX_SIZES?.label?.(qaSelectedSize || fallbackSize) || String(qaSelectedSize || fallbackSize).toUpperCase();
       const color = qaCurrentProduct.color || (qaCurrentProduct.colors?.[0]) || "Único";
       const variant = findVariantForSize(qaCurrentProduct, size);
 
@@ -348,22 +348,29 @@
   function setupQuickAddSizes(product) {
     if (!qaSizeGroup) return;
 
+    const rawSizeSystem = String(product?.sizeSystem || "APPAREL").trim().toUpperCase();
+    const normalizedSizeSystem = window.CRONOX_SIZES?.key?.(rawSizeSystem) || rawSizeSystem;
+    const sizeSystem = normalizedSizeSystem === "US_RING" ? "US_RING" : "APPAREL";
+    qaSizeGroup.dataset.sizeSystem = sizeSystem;
+
     const rawSizes = Array.isArray(product?.sizes) && product.sizes.length ? product.sizes : ["m"];
     const variantMap = product?.variantMap || {};
     const variantKeys = Object.keys(variantMap);
-    const normalized = [...new Set(
+    const normalizedSizes = [...new Set(
       (variantKeys.length ? variantKeys : rawSizes)
-        .map((size) => String(size || "").trim().toUpperCase())
+        .map((size) => window.CRONOX_SIZES?.key?.(size) || String(size || "").trim().toUpperCase())
         .filter(Boolean),
     )];
+    const normalized = window.CRONOX_SIZES?.sort?.(normalizedSizes) || normalizedSizes;
     qaSelectedSize = "";
 
     qaSizeGroup.innerHTML = normalized
       .map((size) => {
         const variant = findVariantForSize(product, size);
         const unavailable = window.CRONOX_STOCK?.classifyStock(window.CRONOX_STOCK.availableStock(product.variants)) === 'out_of_stock' || !isVariantAvailable(variant);
-        const label = unavailable ? `${size}, no disponible` : size;
-        return `<button type="button" class="qa-size-btn${unavailable ? ' is-unavailable' : ''}" data-size="${escapeHtml(size)}" role="radio" aria-label="${escapeHtml(label)}" aria-checked="false" aria-disabled="${unavailable ? 'true' : 'false'}" ${unavailable ? 'disabled' : ''}>${escapeHtml(size)}</button>`;
+        const displaySize = window.CRONOX_SIZES?.label?.(size) || size;
+        const label = unavailable ? `${displaySize}, no disponible` : displaySize;
+        return `<button type="button" class="qa-size-btn${unavailable ? ' is-unavailable' : ''}" data-size="${escapeHtml(size)}" role="radio" aria-label="${escapeHtml(label)}" aria-checked="false" aria-disabled="${unavailable ? 'true' : 'false'}" ${unavailable ? 'disabled' : ''}>${escapeHtml(displaySize)}</button>`;
       })
       .join("");
 
@@ -437,10 +444,14 @@
     ensureQuickAddDOM();
     qaCurrentProduct = product;
 
-    const imgs = Array.isArray(product.images) && product.images.length ? product.images : [product.image];
-    qaImg1.src = safeProductImage(imgs[0]);  qaImg1.alt = product.name || "Producto";
+    const records = window.CRONOX_IMAGES?.productRecords?.(product) || (Array.isArray(product.images) ? product.images : [product.image]).filter(Boolean).map((image) => typeof image === 'string' ? { url: image } : image);
+    window.CRONOX_IMAGES?.applyProduct(qaImg1, product, "quick");
+    if (!qaImg1.src) qaImg1.src = safeProductImage(product.image);
+    qaImg1.alt = product.name || "Producto";
     qaImg1.referrerPolicy = "no-referrer";
-    qaImg2.src = safeProductImage(imgs[1] || imgs[0]);  qaImg2.alt = product.name || "Producto";
+    window.CRONOX_IMAGES?.apply(qaImg2, records[1] || records[0], "quick");
+    if (!qaImg2.src) qaImg2.src = qaImg1.src;
+    qaImg2.alt = product.name || "Producto";
     qaImg2.referrerPolicy = "no-referrer";
 
     qaName.textContent  = product.name || "";
@@ -514,31 +525,117 @@
     const gallery = document.createElement("div");
     gallery.className = "product-images";
 
-    const sourceImages = Array.isArray(p.images) && p.images.length
-      ? p.images
-      : [p.image || PRODUCT_PLACEHOLDER];
+    const records = window.CRONOX_IMAGES?.productRecords?.(p) || (Array.isArray(p.images) ? p.images : [p.image]).filter(Boolean).map((image) => typeof image === 'string' ? { url: image } : image);
+    const imgs = options.useFirstImageOnly ? records.slice(0, 1) : records;
+    if (!imgs.length) imgs.push({ url: PRODUCT_PLACEHOLDER });
 
-    const uniqueImages = [];
-    sourceImages.forEach((src) => {
-      const clean = safeProductImage(src, "");
-      uniqueImages.push(clean || PRODUCT_PLACEHOLDER);
-    });
-
-    const imgs = options.useFirstImageOnly ? [uniqueImages[0]] : uniqueImages;
-    if (!imgs.length) imgs.push(PRODUCT_PLACEHOLDER);
-
-    const imgEls = imgs.map((src, i) => {
+    const imageFallbacks = [];
+    const imgEls = imgs.map((record, i) => {
       const im = document.createElement("img");
       im.className = "product-img" + (i === 0 ? " active" : "");
       im.loading = "lazy";
       im.decoding = "async";
       im.alt = p.name || "Producto";
-      im.src = safeProductImage(src);
+      if (window.CRONOX_IMAGES) {
+        if (i === 0 && window.CRONOX_IMAGES.applyProduct) window.CRONOX_IMAGES.applyProduct(im, p, "card");
+        else {
+          const resolved = window.CRONOX_IMAGES.apply(im, record, "card");
+          const original = window.CRONOX_IMAGES.originalUrl?.(record) || safeProductImage(record?.url || record, "");
+          imageFallbacks[i] = [...new Set([resolved?.src, original].filter(Boolean))];
+        }
+      } else im.src = safeProductImage(record?.url || record);
       im.referrerPolicy = "no-referrer";
       return im;
     });
     imgEls.forEach(im => gallery.appendChild(im));
     window.CRONOX_PRODUCT_CARD_FRAMING?.bind(imgEls[0], gallery, p);
+
+    let galleryIndex = 0;
+    let pointerStart = null;
+    let suppressCardClickUntil = 0;
+    let desktopHoverActive = false;
+    const isGalleryImageAvailable = (index) => imgEls[index]?.dataset.galleryUnavailable !== "true";
+    const showGalleryImage = (nextIndex, direction = 0) => {
+      let targetIndex = (nextIndex + imgEls.length) % imgEls.length;
+      if (!isGalleryImageAvailable(targetIndex)) {
+        if (direction) {
+          for (let offset = 1; offset < imgEls.length; offset += 1) {
+            const candidateIndex = (targetIndex + direction * offset + imgEls.length) % imgEls.length;
+            if (isGalleryImageAvailable(candidateIndex)) {
+              targetIndex = candidateIndex;
+              break;
+            }
+          }
+        } else {
+          targetIndex = 0;
+        }
+      }
+      galleryIndex = targetIndex;
+      imgEls.forEach((el, imageIndex) => el.classList.toggle("active", imageIndex === galleryIndex));
+      gallery.dataset.activeIndex = String(galleryIndex);
+    };
+    const moveGallery = (step) => showGalleryImage(galleryIndex + step, Math.sign(step));
+
+    imageFallbacks.forEach((candidates, imageIndex) => {
+      if (!candidates?.length || imageIndex === 0) return;
+      let candidateIndex = 0;
+      imgEls[imageIndex].addEventListener("error", () => {
+        candidateIndex += 1;
+        const nextCandidate = candidates[candidateIndex];
+        if (nextCandidate) {
+          imgEls[imageIndex].removeAttribute("srcset");
+          imgEls[imageIndex].removeAttribute("sizes");
+          imgEls[imageIndex].src = nextCandidate;
+          return;
+        }
+        imgEls[imageIndex].dataset.galleryUnavailable = "true";
+        imgEls[imageIndex].classList.remove("active");
+        if (galleryIndex === imageIndex) showGalleryImage(0);
+      });
+    });
+
+    a.dataset.cardGalleryBound = "true";
+    gallery.dataset.activeIndex = "0";
+
+    if (imgEls.length > 1) {
+      gallery.addEventListener("pointerdown", (event) => {
+        if (event.pointerType === "mouse" || event.button > 0 || event.target?.closest?.("button")) return;
+        pointerStart = { id: event.pointerId, x: event.clientX, y: event.clientY };
+        gallery.setPointerCapture?.(event.pointerId);
+      });
+      gallery.addEventListener("pointerup", (event) => {
+        if (!pointerStart || event.pointerId !== pointerStart.id) return;
+        const deltaX = event.clientX - pointerStart.x;
+        const deltaY = event.clientY - pointerStart.y;
+        pointerStart = null;
+        gallery.releasePointerCapture?.(event.pointerId);
+        if (Math.abs(deltaX) < 42 || Math.abs(deltaX) <= Math.abs(deltaY) * 1.25) return;
+        moveGallery(deltaX < 0 ? 1 : -1);
+        suppressCardClickUntil = Date.now() + 500;
+        event.preventDefault();
+      });
+      gallery.addEventListener("pointercancel", () => { pointerStart = null; });
+
+      a.addEventListener("click", (event) => {
+        if (Date.now() >= suppressCardClickUntil) return;
+        if (event.target?.closest?.("button")) return;
+        event.preventDefault();
+        event.stopImmediatePropagation();
+      }, true);
+
+      a.addEventListener("pointerenter", (event) => {
+        if (event.pointerType === "mouse" && window.matchMedia?.("(hover: hover) and (pointer: fine)").matches) {
+          desktopHoverActive = true;
+          showGalleryImage(1);
+        }
+      });
+      a.addEventListener("pointerleave", (event) => {
+        if (event.pointerType === "mouse" && desktopHoverActive) {
+          desktopHoverActive = false;
+          showGalleryImage(0);
+        }
+      });
+    }
 
     if (imgEls.length > 1 && !options.hideArrows) {
       const prev = document.createElement("button");
@@ -553,10 +650,8 @@
       next.setAttribute("aria-label", "Imagen siguiente");
       next.textContent = "›";
 
-      let index = 0;
-      const show = (i) => imgEls.forEach((el, j) => el.classList.toggle("active", j === i));
-      prev.addEventListener("click", (ev) => { ev.preventDefault(); ev.stopPropagation(); index=(index-1+imgEls.length)%imgEls.length; show(index); });
-      next.addEventListener("click", (ev) => { ev.preventDefault(); ev.stopPropagation(); index=(index+1)%imgEls.length; show(index); });
+      prev.addEventListener("click", (ev) => { ev.preventDefault(); ev.stopPropagation(); moveGallery(-1); });
+      next.addEventListener("click", (ev) => { ev.preventDefault(); ev.stopPropagation(); moveGallery(1); });
 
       gallery.appendChild(prev);
       gallery.appendChild(next);
@@ -573,7 +668,7 @@
       favBtn.dataset.slug = p.slug || "";
       favBtn.dataset.name = p.name || "Producto";
       favBtn.dataset.price = p.priceLabel || euros(p.price);
-      favBtn.dataset.image = imgs[0] || p.image || PRODUCT_PLACEHOLDER;
+      favBtn.dataset.image = safeProductImage(imgs[0]?.url || imgs[0] || p.image, PRODUCT_PLACEHOLDER);
       favBtn.innerHTML = STAR_ICON;
       favBtn.dataset.favBound = "1";
       favBtn.addEventListener("click", (ev) => {

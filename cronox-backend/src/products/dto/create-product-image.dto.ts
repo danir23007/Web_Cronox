@@ -5,6 +5,7 @@ import {
   IsIn,
   IsInt,
   IsNumber,
+  IsObject,
   IsOptional,
   IsString,
   IsUrl,
@@ -20,6 +21,41 @@ export class CreateProductImageDto {
   })
   @IsUrl()
   url: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  storageKey?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  @MaxLength(80)
+  mimeType?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  fileSize?: number;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  width?: number;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  height?: number;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsObject()
+  variants?: Record<string, unknown>;
 
   @ApiPropertyOptional({ example: 'Vista frontal del producto' })
   @IsOptional()

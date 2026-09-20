@@ -3,6 +3,7 @@ import {
   Controller,
   Get,
   Param,
+  ParseIntPipe,
   Patch,
   Post,
   Query,
@@ -20,17 +21,17 @@ import { AdminGuard } from '../common/guards/admin.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/roles.decorator';
 import { MAX_GALLERY_IMAGE_BYTES } from '../common/storage/supabase-storage.service';
+import { ReorderGalleryCarouselDto } from './dto/reorder-gallery-carousel.dto';
 import { ReorderGallerySlotsDto } from './dto/reorder-gallery-slots.dto';
+import { UpdateGalleryCarouselSlotDto } from './dto/update-gallery-carousel-slot.dto';
+import { UpdateGalleryModeDto } from './dto/update-gallery-mode.dto';
 import { GalleryAssetQueryDto } from './dto/gallery-asset-query.dto';
 import { GalleryProductQueryDto } from './dto/gallery-product-query.dto';
 import { UpdateGallerySlotDto } from './dto/update-gallery-slot.dto';
 import { GalleryService } from './gallery.service';
 import { GalleryUploadSizeExceptionFilter } from './gallery-upload-size-exception.filter';
 
-const GALLERY_ADMIN_ROLES = [
-  Role.ADMIN,
-  Role.SUPERADMIN,
-];
+const GALLERY_ADMIN_ROLES = [Role.ADMIN, Role.SUPERADMIN];
 const ALLOWED_GALLERY_MIME_TYPES = new Set([
   'image/jpeg',
   'image/png',
@@ -50,6 +51,11 @@ export class AdminGalleryController {
   @Get('slots')
   getSlots() {
     return this.galleryService.getAdminSlots();
+  }
+
+  @Get('configuration')
+  getConfiguration() {
+    return this.galleryService.getAdminConfiguration();
   }
 
   @Get('assets')
@@ -99,5 +105,30 @@ export class AdminGalleryController {
     @CurrentUser('id') adminId?: number,
   ) {
     return this.galleryService.updateSlot(key, dto, adminId);
+  }
+
+  @Patch('mode')
+  updateMode(
+    @Body() dto: UpdateGalleryModeDto,
+    @CurrentUser('id') adminId?: number,
+  ) {
+    return this.galleryService.updateMode(dto, adminId);
+  }
+
+  @Patch('carousel/reorder')
+  reorderCarousel(
+    @Body() dto: ReorderGalleryCarouselDto,
+    @CurrentUser('id') adminId?: number,
+  ) {
+    return this.galleryService.reorderCarousel(dto, adminId);
+  }
+
+  @Patch('carousel/:position')
+  updateCarouselSlot(
+    @Param('position', ParseIntPipe) position: number,
+    @Body() dto: UpdateGalleryCarouselSlotDto,
+    @CurrentUser('id') adminId?: number,
+  ) {
+    return this.galleryService.updateCarouselSlot(position, dto, adminId);
   }
 }

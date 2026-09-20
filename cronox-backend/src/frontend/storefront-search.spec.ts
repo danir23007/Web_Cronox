@@ -36,7 +36,7 @@ describe('storefront search contracts', () => {
     expect(app).toContain('!searchForm.contains(e.target)');
   });
 
-  it('uses white contained thumbnails and the existing product detail route', () => {
+  it('uses neutral contained thumbnails and the existing product detail route', () => {
     const app = readFrontend('assets/app.js');
     const css = readFrontend('assets/store.css');
     const suggestionRenderer = app.slice(
@@ -45,7 +45,7 @@ describe('storefront search contracts', () => {
     );
 
     expect(css).toContain('.search-suggestions__thumbnail{');
-    expect(css).toContain('background:#fff');
+    expect(css).toContain('background:transparent');
     expect(css).toContain('object-fit:contain');
     expect(app).toContain('/producto/${encodeURIComponent(product.slug)}');
     expect(app).toContain("fallback.textContent = 'Sin imagen'");

@@ -17,6 +17,8 @@ import {
   ExcelWorkbookService,
 } from './excel-workbook.service';
 import { AdminExportQueryDto } from './dto/admin-export-query.dto';
+import { variantSizeLabel } from '../../products/product-size-system';
+import { retainedAuditLogDateFilter } from '../audit-logs/audit-log-retention';
 
 const MAX_EXPORT_ROWS = 5000;
 const TAKE_WITH_LIMIT_SENTINEL = MAX_EXPORT_ROWS + 1;
@@ -483,7 +485,7 @@ export class AdminExportsService {
           id: variant.id,
           productId: variant.productId,
           product: variant.product.name,
-          size: variant.size,
+          size: variantSizeLabel(variant.size),
           sku: variant.sku,
           price: variant.price == null ? null : variant.price / 100,
           stock: variant.stockQty,
@@ -547,7 +549,7 @@ export class AdminExportsService {
           id: variant.id,
           productId: variant.product.id,
           product: variant.product.name,
-          size: variant.size,
+          size: variantSizeLabel(variant.size),
           sku: variant.sku,
           stock: variant.stockQty,
           active: variant.isActive ? 'Sí' : 'No',
@@ -581,7 +583,7 @@ export class AdminExportsService {
           id: movement.id,
           variantId: movement.variantId,
           product: movement.variant.product.name,
-          size: movement.variant.size,
+          size: variantSizeLabel(movement.variant.size),
           sku: movement.variant.sku,
           delta: movement.delta,
           reason: movement.reason,
@@ -900,7 +902,7 @@ export class AdminExportsService {
       });
     if (query.targetType) and.push({ targetType: query.targetType });
     const date = this.dateFilter(query);
-    if (date) and.push({ createdAt: date });
+    and.push({ createdAt: retainedAuditLogDateFilter(date ?? {}) });
     if (query.q)
       and.push({
         OR: [

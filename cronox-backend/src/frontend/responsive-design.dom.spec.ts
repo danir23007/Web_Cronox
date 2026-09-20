@@ -102,6 +102,12 @@ describe('CRONOX responsive design system', () => {
       /\.hero-video-section\{[^}]*min-height:100vh;[^}]*min-height:100svh;[^}]*height:100vh;[^}]*height:100dvh;[^}]*overflow:hidden;/,
     );
     expect(storeStyles).toMatch(
+      /@media \(max-width:480px\)\{\s*\.hero-video-section\{[^}]*height:100vh;[^}]*height:100svh;[^}]*min-height:100vh;[^}]*min-height:100svh;/,
+    );
+    expect(storeStyles).not.toMatch(
+      /@media \(max-width:480px\)\{\s*\.hero-video-section\{[^}]*height:100dvh;/,
+    );
+    expect(storeStyles).toMatch(
       /\.hero-video\{[^}]*width:100%;[^}]*height:100%;[^}]*object-fit:cover;[^}]*object-position:center;[^}]*transform:none;/,
     );
     expect(storeStyles).toMatch(
@@ -117,7 +123,7 @@ describe('CRONOX responsive design system', () => {
       /\.topbar\{[^}]*height:calc\(var\(--topbar-h\) \+ env\(safe-area-inset-top\)\);[^}]*padding:env\(safe-area-inset-top\)/,
     );
     expect(storeStyles).toMatch(
-      /@media \(max-width:520px\)[\s\S]*?\.topbar\{[^}]*grid-template-columns:auto minmax\(74px,1fr\) auto;[^}]*padding-right:max\(6px,env\(safe-area-inset-right\)\);[^}]*padding-left:max\(6px,env\(safe-area-inset-left\)\);/,
+      /@media \(max-width:520px\)[\s\S]*?\.topbar\{[^}]*grid-template-columns:minmax\(0,1fr\) auto minmax\(0,1fr\);[^}]*padding-right:max\(12px,env\(safe-area-inset-right\)\);[^}]*padding-left:max\(10px,env\(safe-area-inset-left\)\);/,
     );
     expect(storeStyles).toMatch(
       /\.black-menu\{[^}]*height:100vh;[^}]*height:100dvh;[^}]*max-width:100%;[^}]*overflow-y:auto;/,
@@ -301,20 +307,20 @@ describe('CRONOX responsive design system', () => {
   );
 
   it('loads each modified stylesheet through its exact incremented cache version', () => {
-    expect(readFrontend('assets/version.js')).toContain("VERSION = '91'");
-    expect(readFrontend('index.html')).toContain('assets/gallery.css?v=14');
-    expect(readFrontend('index.html')).toContain('assets/quick-add.css?v=3');
+    expect(readFrontend('assets/version.js')).toContain("VERSION = '93'");
+    expect(readFrontend('index.html')).toContain('assets/gallery.css?v=15');
+    expect(readFrontend('index.html')).toContain('assets/quick-add.css?v=4');
     expect(readFrontend('index.html')).toContain(
       'assets/product-detail.css?v=2',
     );
-    expect(readFrontend('gallery.html')).toContain('assets/info-page.css?v=2');
+    expect(readFrontend('gallery.html')).toContain('assets/info-page.css?v=3');
     expect(readFrontend('cart.html')).toContain('assets/cart.css?v=4');
     expect(readFrontend('checkout.html')).toContain('assets/checkout.css?v=19');
     expect(readFrontend('checkout-success.html')).toContain(
       'assets/checkout-success.css?v=1',
     );
     expect(readFrontend('producto.html')).toContain(
-      'assets/product-page.css?v=6',
+      'assets/product-page.css?v=7',
     );
   });
 });

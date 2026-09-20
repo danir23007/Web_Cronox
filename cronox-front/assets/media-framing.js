@@ -142,6 +142,7 @@
           source,
           poster: safeMediaUrl(value?.poster),
           mediaType,
+          variants: value?.variants && typeof value.variants === "object" ? value.variants : null,
           heroText: normalizeHeroText(value?.heroText),
         },
       },
@@ -209,7 +210,12 @@
       element = replacement;
     }
     const source = configured.source;
-    if (element.getAttribute("src") !== source) {
+    if (element instanceof HTMLImageElement && window.CRONOX_IMAGES) {
+      window.CRONOX_IMAGES.apply(element, { url: source, variants: configured.variants }, "hero", {
+        loading: "eager",
+        fetchPriority: "high",
+      });
+    } else if (element.getAttribute("src") !== source) {
       element.setAttribute("src", source);
     }
     if (element instanceof HTMLVideoElement) {

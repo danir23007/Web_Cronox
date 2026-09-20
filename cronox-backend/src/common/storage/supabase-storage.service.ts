@@ -6,9 +6,18 @@ import {
   ServiceUnavailableException,
 } from '@nestjs/common';
 import type { Express } from 'express';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
+import { ImageProcessorService } from '../../images/image-processor.service';
+import {
+  GALLERY_IMAGE_PRESETS,
+  HERO_IMAGE_PRESETS,
+  ImagePresetName,
+  ImageVariants,
+  MasterImageMetadata,
+  PRODUCT_IMAGE_PRESETS,
+} from '../../images/image-presets';
 
-type UploadResult = { urls: string[] };
+type UploadResult = { urls: string[]; images: MasterImageMetadata[] };
 
 export type GalleryUploadResult = {
   storageKey: string;
@@ -18,6 +27,7 @@ export type GalleryUploadResult = {
   fileSize: number;
   width: number | null;
   height: number | null;
+  variants: ImageVariants;
 };
 
 export type WebsiteMediaUploadResult = GalleryUploadResult & {
@@ -63,6 +73,193 @@ export class SupabaseStorageService {
     'gallery';
   private readonly supabaseUrl = process.env.SUPABASE_URL;
   private readonly serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+  constructor(
+    private readonly imageProcessor: ImageProcessorService = new ImageProcessorService(),
+  ) {}
+
+  private publicUrl(bucket: string, storageKey: string) {
+    return `${this.supabaseUrl}/storage/v1/object/public/${bucket}/${storageKey}`;
+  }
+
+  private imageIdentity(buffer: Buffer) {
+    return createHash('sha256').update(buffer).digest('hex');
+  }
+
+  private async uploadObject(
+    bucket: string,
+    storageKey: string,
+    buffer: Buffer,
+    mimeType: string,
+    immutable = false,
+  ) {
+    const response = await fetch(
+      `${this.supabaseUrl}/storage/v1/object/${bucket}/${storageKey}`,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${this.serviceRoleKey}`,
+          'Content-Type': mimeType,
+          ...(immutable ? { 'Cache-Control': '31536000' } : {}),
+          'x-upsert': 'false',
+        },
+        body: buffer as unknown as BodyInit,
+      },
+    );
+    // Immutable, content-addressed paths make a conflict an idempotent success.
+    if (!response.ok && response.status !== 409) {
+      this.logger.error(
+        `Supabase image upload failed status=${response.status} bucket=${bucket}`,
+      );
+      throw new InternalServerErrorException('No se pudo subir la imagen');
+    }
+    return response.ok;
+  }
+
+  private async uploadOptimizedImage(
+    file: Express.Multer.File,
+    bucket: string,
+    prefix: string,
+    presets: readonly ImagePresetName[],
+  ): Promise<MasterImageMetadata> {
+    const metadata = await this.imageProcessor.inspect(file.buffer);
+    const derivatives = await this.imageProcessor.createVariants(
+      file.buffer,
+      presets,
+    );
+    const identity = this.imageIdentity(file.buffer);
+    const extension = extensionForMimeType[file.mimetype];
+    const storageKey = `${prefix}/originals/${identity}.${extension}`;
+
+    await this.uploadObject(
+      bucket,
+      storageKey,
+      file.buffer,
+      file.mimetype,
+      true,
+    );
+
+    const variants: ImageVariants = {};
+    const uploadedVariantKeys: string[] = [];
+    try {
+      for (const derivative of derivatives) {
+        const variantKey = `${prefix}/variants/${identity}/${derivative.role}.webp`;
+        const created = await this.uploadObject(
+          bucket,
+          variantKey,
+          derivative.buffer,
+          derivative.mimeType,
+          true,
+        );
+        if (created) uploadedVariantKeys.push(variantKey);
+        variants[derivative.role] = {
+          role: derivative.role,
+          url: this.publicUrl(bucket, variantKey),
+          storageKey: variantKey,
+          mimeType: derivative.mimeType,
+          width: derivative.width,
+          height: derivative.height,
+          fileSize: derivative.fileSize,
+        };
+        if (process.env.NODE_ENV !== 'production') {
+          const savings = Math.round(
+            (1 - derivative.fileSize / file.buffer.length) * 100,
+          );
+          this.logger.debug(
+            `Image derivative preset=${derivative.preset} original=${metadata.autoOrient.width ?? metadata.width}x${metadata.autoOrient.height ?? metadata.height}/${file.buffer.length}B output=${derivative.width}x${derivative.height}/${derivative.fileSize}B savings=${savings}%`,
+          );
+        }
+      }
+    } catch (error) {
+      // The original is deliberately preserved. Only this attempt's derivative
+      // paths are eligible for cleanup, and metadata is never returned/persisted.
+      await this.deleteObjectPaths(bucket, uploadedVariantKeys).catch(
+        () => undefined,
+      );
+      throw error;
+    }
+
+    return {
+      storageKey,
+      url: this.publicUrl(bucket, storageKey),
+      mimeType: file.mimetype,
+      width: metadata.autoOrient.width ?? metadata.width,
+      height: metadata.autoOrient.height ?? metadata.height,
+      fileSize: file.buffer.length,
+      variants,
+    };
+  }
+
+  async backfillManagedImage(options: {
+    url: string;
+    bucket: string;
+    prefix: string;
+    presets: readonly ImagePresetName[];
+    execute: boolean;
+  }) {
+    if (!this.supabaseUrl || !this.serviceRoleKey) {
+      throw new Error('Almacenamiento no configurado');
+    }
+    const parsed = new URL(options.url);
+    const base = new URL(this.supabaseUrl);
+    const publicPrefix = `/storage/v1/object/public/${options.bucket}/`;
+    if (
+      parsed.origin !== base.origin ||
+      !parsed.pathname.startsWith(publicPrefix)
+    ) {
+      throw new Error('La URL maestra no pertenece al bucket esperado');
+    }
+    const response = await fetch(parsed);
+    if (!response.ok)
+      throw new Error(`No se pudo leer el original (${response.status})`);
+    const buffer = Buffer.from(await response.arrayBuffer());
+    const metadata = await this.imageProcessor.inspect(buffer);
+    const derivatives = await this.imageProcessor.createVariants(
+      buffer,
+      options.presets,
+    );
+    const identity = this.imageIdentity(buffer);
+    const variants: ImageVariants = {};
+    for (const derivative of derivatives) {
+      const storageKey = `${options.prefix}/variants/${identity}/${derivative.role}.webp`;
+      if (options.execute) {
+        await this.uploadObject(
+          options.bucket,
+          storageKey,
+          derivative.buffer,
+          derivative.mimeType,
+          true,
+        );
+      }
+      variants[derivative.role] = {
+        role: derivative.role,
+        storageKey,
+        url: this.publicUrl(options.bucket, storageKey),
+        mimeType: derivative.mimeType,
+        width: derivative.width,
+        height: derivative.height,
+        fileSize: derivative.fileSize,
+      };
+    }
+    return {
+      variants,
+      width: metadata.autoOrient.width ?? metadata.width,
+      height: metadata.autoOrient.height ?? metadata.height,
+      originalBytes: buffer.length,
+      derivativeBytes: derivatives.reduce(
+        (total, item) => total + item.fileSize,
+        0,
+      ),
+    };
+  }
+
+  getBuckets() {
+    return {
+      products: this.productBucket,
+      gallery: this.galleryBucket,
+      websiteMedia: this.websiteMediaBucket,
+    };
+  }
 
   async uploadEmailImage(
     file: Express.Multer.File | undefined,
@@ -198,41 +395,23 @@ export class SupabaseStorageService {
       );
     }
 
-    const urls: string[] = [];
-
+    const images: MasterImageMetadata[] = [];
     for (const file of files) {
-      const extension = extensionForMimeType[file.mimetype];
-      const path = this.buildObjectPath(extension);
-      const response = await fetch(
-        `${this.supabaseUrl}/storage/v1/object/${this.productBucket}/${path}`,
-        {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${this.serviceRoleKey}`,
-            'Content-Type': file.mimetype,
-            'x-upsert': 'false',
-          },
-          body: file.buffer as unknown as BodyInit,
-        },
+      images.push(
+        await this.uploadOptimizedImage(
+          file,
+          this.productBucket,
+          'products',
+          PRODUCT_IMAGE_PRESETS,
+        ),
       );
-
-      if (!response.ok) {
-        // Do not include a third-party response body in application logs: it
-        // is untrusted and can contain sensitive or log-forging content.
-        this.logger.error(
-          `Supabase image upload failed with status ${response.status}`,
-        );
-        throw new InternalServerErrorException('No se pudo subir la imagen');
-      }
-
-      const publicUrl = `${this.supabaseUrl}/storage/v1/object/public/${this.productBucket}/${path}`;
-      urls.push(publicUrl);
     }
+    const urls = images.map((image) => image.url);
 
     this.logger.log(
       `Subida de ${urls.length} imagenes a Supabase${adminId ? ` por admin ${adminId}` : ''}`,
     );
-    return { urls };
+    return { urls, images };
   }
 
   async deleteProductImages(urls: string[]): Promise<void> {
@@ -261,6 +440,47 @@ export class SupabaseStorageService {
       );
       throw new Error('No se pudieron limpiar los archivos del producto');
     }
+  }
+
+  async deleteProductImageAssets(
+    urls: string[],
+    variants: Array<ImageVariants | null | undefined> = [],
+  ): Promise<void> {
+    const originalPaths = urls
+      .map((url) => this.productObjectPath(url))
+      .filter((path): path is string => Boolean(path));
+    const variantPaths = variants.flatMap((record) =>
+      Object.values(record || {})
+        .map((variant) => variant?.storageKey)
+        .filter((path): path is string =>
+          Boolean(
+            path &&
+              /^products\/variants\/[a-f0-9]{64}\/[a-z]+\.webp$/.test(path),
+          ),
+        ),
+    );
+    await this.deleteObjectPaths(this.productBucket, [
+      ...new Set([...originalPaths, ...variantPaths]),
+    ]);
+  }
+
+  private async deleteObjectPaths(bucket: string, objectPaths: string[]) {
+    if (!objectPaths.length) return;
+    if (!this.supabaseUrl || !this.serviceRoleKey) {
+      throw new Error('Almacenamiento no configurado');
+    }
+    const response = await fetch(
+      `${this.supabaseUrl}/storage/v1/object/${bucket}`,
+      {
+        method: 'DELETE',
+        headers: {
+          Authorization: `Bearer ${this.serviceRoleKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ prefixes: objectPaths }),
+      },
+    );
+    if (!response.ok) throw new Error('No se pudieron limpiar los archivos');
   }
 
   isManagedProductImage(value: string): boolean {
@@ -315,42 +535,25 @@ export class SupabaseStorageService {
       throw new InternalServerErrorException('Almacenamiento no configurado');
     }
 
-    const extension = extensionForMimeType[file.mimetype];
-    const storageKey = this.buildObjectPath(extension, 'fotos-antiguas');
-    const response = await fetch(
-      `${this.supabaseUrl}/storage/v1/object/${this.galleryBucket}/${storageKey}`,
-      {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${this.serviceRoleKey}`,
-          'Content-Type': file.mimetype,
-          'x-upsert': 'false',
-        },
-        body: file.buffer as unknown as BodyInit,
-      },
+    const optimized = await this.uploadOptimizedImage(
+      file,
+      this.galleryBucket,
+      'fotos-antiguas',
+      GALLERY_IMAGE_PRESETS,
     );
-
-    if (!response.ok) {
-      this.logger.error(
-        `Supabase gallery upload failed with status ${response.status}`,
-      );
-      throw new InternalServerErrorException('No se pudo subir la imagen');
-    }
-
-    const dimensions = this.readImageDimensions(file.buffer, file.mimetype);
-    const publicUrl = `${this.supabaseUrl}/storage/v1/object/public/${this.galleryBucket}/${storageKey}`;
     this.logger.log(
       `Imagen de galeria subida a Supabase${adminId ? ` por admin ${adminId}` : ''}`,
     );
 
     return {
-      storageKey,
-      publicUrl,
+      storageKey: optimized.storageKey,
+      publicUrl: optimized.url,
       originalFilename: this.sanitizeOriginalFilename(file.originalname),
       mimeType: file.mimetype,
       fileSize: byteLength,
-      width: dimensions?.width ?? null,
-      height: dimensions?.height ?? null,
+      width: optimized.width,
+      height: optimized.height,
+      variants: optimized.variants,
     };
   }
 
@@ -399,6 +602,26 @@ export class SupabaseStorageService {
 
     const extension = extensionForMimeType[file.mimetype];
     const kindFolder = mediaType === 'video' ? 'videos' : 'fotos';
+    if (mediaType === 'image') {
+      const optimized = await this.uploadOptimizedImage(
+        file,
+        this.websiteMediaBucket,
+        `multimedia-web/${normalizedFolder}/${kindFolder}`,
+        HERO_IMAGE_PRESETS,
+      );
+      return {
+        storageKey: optimized.storageKey,
+        publicUrl: optimized.url,
+        originalFilename: this.sanitizeOriginalFilename(file.originalname),
+        mimeType: file.mimetype,
+        mediaType,
+        folderKey: normalizedFolder,
+        fileSize: byteLength,
+        width: optimized.width,
+        height: optimized.height,
+        variants: optimized.variants,
+      };
+    }
     const storageKey = this.buildObjectPath(
       extension,
       `multimedia-web/${normalizedFolder}/${kindFolder}`,
@@ -426,10 +649,6 @@ export class SupabaseStorageService {
       );
     }
 
-    const dimensions =
-      mediaType === 'image'
-        ? this.readImageDimensions(file.buffer, file.mimetype)
-        : null;
     const publicUrl = `${this.supabaseUrl}/storage/v1/object/public/${this.websiteMediaBucket}/${storageKey}`;
     this.logger.log(
       `Multimedia web subida a Supabase${adminId ? ` por admin ${adminId}` : ''}`,
@@ -443,8 +662,9 @@ export class SupabaseStorageService {
       mediaType,
       folderKey: normalizedFolder,
       fileSize: byteLength,
-      width: dimensions?.width ?? null,
-      height: dimensions?.height ?? null,
+      width: null,
+      height: null,
+      variants: {},
     };
   }
 

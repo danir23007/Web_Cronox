@@ -1017,6 +1017,7 @@
       price: priceInCents / 100,
       image: safeProductImage(product.imageUrl || product.image || images[0], ''),
       images: imageList,
+      imageRecords: product.imageRecords || product.galleryImages || (Array.isArray(product.images) ? product.images : []),
     };
   };
 
@@ -1043,16 +1044,17 @@
     const gallery = document.createElement('div');
     gallery.className = 'product-images';
 
-    const imgs = (Array.isArray(product.images) && product.images.length ? product.images : [product.image])
-      .map((image) => safeProductImage(image, ''))
-      .filter(Boolean);
-    const imgEls = imgs.map((src, i) => {
+    const records = window.CRONOX_IMAGES?.productRecords?.(product) || [];
+    const imgEls = (records.length ? records : [{ url: product.image }]).map((record, i) => {
       const img = document.createElement('img');
       img.className = `product-img${i === 0 ? ' active' : ''}`;
       img.loading = 'lazy';
       img.decoding = 'async';
       img.alt = product.name || 'Producto';
-      img.src = safeProductImage(src);
+      if (window.CRONOX_IMAGES) {
+        if (i === 0) window.CRONOX_IMAGES.applyProduct(img, product, 'card');
+        else window.CRONOX_IMAGES.apply(img, record, 'card');
+      } else img.src = safeProductImage(record?.url || record);
       img.referrerPolicy = 'no-referrer';
       return img;
     });
@@ -1098,7 +1100,7 @@
     favBtn.dataset.slug = product.slug || '';
     favBtn.dataset.name = product.name || 'Producto';
     favBtn.dataset.price = product.priceLabel || formatPriceFromCents(product.priceInCents);
-    favBtn.dataset.image = imgs[0] || product.image || '';
+    favBtn.dataset.image = imgEls[0]?.src || product.image || '';
     favBtn.innerHTML = window.CRONOX_STAR_ICON || '<span class="icon-star"></span>';
     favBtn.dataset.favBound = '1';
     favBtn.addEventListener('click', (ev) => {

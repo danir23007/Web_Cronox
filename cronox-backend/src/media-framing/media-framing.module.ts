@@ -8,8 +8,10 @@ import {
 } from './media-framing.controller';
 import { MediaFramingService } from './media-framing.service';
 import { WebsiteMediaUploadSizeExceptionFilter } from './media-upload-size-exception.filter';
+import { ImagesModule } from '../images/images.module';
 
 @Module({
+  imports: [ImagesModule],
   controllers: [MediaFramingController, AdminMediaFramingController],
   providers: [
     MediaFramingService,

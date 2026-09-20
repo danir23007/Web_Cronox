@@ -77,7 +77,7 @@ describe('informational footer destinations use the shared CRONOX topbar', () =>
         ),
       );
       expect(html).toContain('href="assets/store.css?v=89"');
-      expect(html).toContain('href="assets/info-page.css?v=2"');
+      expect(html).toContain('href="assets/info-page.css?v=3"');
       expect(
         html.match(new RegExp(`assets/info-shell\\.js\\?v=${shellVersion}`, 'g')),
       ).toHaveLength(1);

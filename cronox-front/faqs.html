@@ -1,52 +1,582 @@
 <!doctype html>
 <html lang="es">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>FAQs — CRONOX</title>
-  <meta name="description" content="Preguntas frecuentes de CRONOX.">
-  <link rel="stylesheet" href="assets/cookie-consent.css?v=1">
-  <link rel="stylesheet" href="assets/store.css?v=89">
-  <link rel="stylesheet" href="assets/info-page.css?v=2">
-  <script src="assets/cookie-consent.js?v=4" defer></script>
-  <script src="assets/customer-analytics.js?v=1" defer></script>
-  <style>
-    body {
-      margin: 0;
-      min-height: 100vh;
-      padding: 64px 20px;
-      background: #000;
-      color: #fff;
-      font-family: "Times New Roman", serif;
-      text-align: center;
-    }
-    .container { width: 100%; max-width: 800px; margin: 0 auto; }
-    h1 { margin: 0 0 32px; font-size: 28px; letter-spacing: 0.12em; }
-    h2 { margin: 32px 0 10px; font-size: 17px; letter-spacing: 0.08em; text-transform: uppercase; }
-    p { margin: 0; font-size: 15px; line-height: 1.8; opacity: 0.88; }
-  </style>
-  <link rel="icon" type="image/png" href="/favicon.png?v=3">
-  <meta name="theme-color" content="#000000">
-</head>
-<body class="page-info">
-  <script src="assets/info-shell.js?v=3"></script>
-  <main class="container">
-    <h1>FAQS</h1>
-    <section>
-      <h2>¿Cómo puedo consultar mi pedido?</h2>
-      <p>Recibirás por correo electrónico la confirmación y la información de seguimiento cuando el pedido sea enviado.</p>
-    </section>
-    <section>
-      <h2>¿Qué métodos de pago están disponibles?</h2>
-      <p>Los métodos disponibles se muestran de forma segura durante el proceso de compra.</p>
-    </section>
-    <section>
-      <h2>¿Dónde consulto los envíos y devoluciones?</h2>
-      <p>Puedes revisar las páginas de Política de envíos y Devoluciones y cambios enlazadas desde el pie de la tienda.</p>
-    </section>
-  </main>
-  <script src="assets/api.js?v=5"></script>
-  <script src="assets/app.js?v=62" defer></script>
-  <script src="assets/cart-badge.js?v=43" defer></script>
-</body>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Preguntas frecuentes — CRONOX</title>
+    <meta
+      name="description"
+      content="Respuestas sobre pedidos, envíos, cambios, devoluciones, pagos, productos, cuenta, privacidad y cookies en CRONOX."
+    />
+    <link rel="stylesheet" href="assets/cookie-consent.css?v=1" />
+    <link rel="stylesheet" href="assets/store.css?v=89" />
+    <link rel="stylesheet" href="assets/info-page.css?v=3" />
+    <link rel="stylesheet" href="assets/faq.css?v=1" />
+    <script src="assets/cookie-consent.js?v=4" defer></script>
+    <script src="assets/customer-analytics.js?v=1" defer></script>
+    <script src="assets/faq.js?v=1" defer></script>
+    <link rel="icon" type="image/png" href="/favicon.png?v=3" />
+    <meta name="theme-color" content="#000000" />
+  </head>
+  <body class="page-info">
+    <script src="assets/info-shell.js?v=3"></script>
+    <main class="faq-page page-faq" aria-labelledby="faq-title">
+      <header class="faq-intro">
+        <p class="faq-eyebrow">AYUDA</p>
+        <h1 id="faq-title">FAQS</h1>
+        <p>
+          Encuentra información práctica sobre tu compra. Para las condiciones
+          completas, consulta siempre la política enlazada en cada respuesta.
+        </p>
+      </header>
+
+      <section class="faq-category" aria-labelledby="faq-orders">
+        <h2 id="faq-orders">PEDIDOS Y COMPRA</h2>
+        <div class="faq-list">
+          <article class="faq-item">
+            <h3>
+              <button
+                type="button"
+                aria-expanded="false"
+                aria-controls="faq-answer-1"
+              >
+                ¿Cómo realizo un pedido?<span aria-hidden="true">+</span>
+              </button>
+            </h3>
+            <div id="faq-answer-1" class="faq-answer" hidden>
+              <p>
+                Selecciona el producto y sus opciones disponibles, añádelo a la
+                cesta y completa los datos solicitados durante el checkout.
+                Antes de confirmar, revisa artículos, dirección, envío e importe
+                total.
+              </p>
+            </div>
+          </article>
+          <article class="faq-item">
+            <h3>
+              <button
+                type="button"
+                aria-expanded="false"
+                aria-controls="faq-answer-2"
+              >
+                  ¿Cuándo recibiré la confirmación de mi pedido?<span aria-hidden="true"
+                  >+</span
+                >
+              </button>
+            </h3>
+            <div id="faq-answer-2" class="faq-answer" hidden>
+              <p>
+                  Cuando el pago se complete y el pedido quede registrado,
+                  recibirás la confirmación en el correo electrónico facilitado
+                  durante la compra.
+              </p>
+            </div>
+          </article>
+          <article class="faq-item">
+            <h3>
+              <button
+                type="button"
+                aria-expanded="false"
+                aria-controls="faq-answer-3"
+              >
+                ¿Puedo aplicar un código promocional?<span aria-hidden="true"
+                  >+</span
+                >
+              </button>
+            </h3>
+            <div id="faq-answer-3" class="faq-answer" hidden>
+              <p>
+                Si tienes un código vigente, introdúcelo en el campo
+                correspondiente de la cesta. El descuento y sus condiciones se
+                validan antes de completar el pago.
+              </p>
+            </div>
+          </article>
+          <article class="faq-item">
+            <h3>
+              <button
+                type="button"
+                aria-expanded="false"
+                aria-controls="faq-answer-4"
+              >
+                ¿Puedo cambiar la dirección después de confirmar el pedido?<span
+                  aria-hidden="true"
+                  >+</span
+                >
+              </button>
+            </h3>
+            <div id="faq-answer-4" class="faq-answer" hidden>
+              <p>
+                La dirección no puede modificarse una vez confirmado el pedido.
+                Revisa cuidadosamente los datos antes de pagar y, si detectas un
+                error, contacta cuanto antes con soporte.
+              </p>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section class="faq-category" aria-labelledby="faq-shipping">
+        <h2 id="faq-shipping">ENVÍOS</h2>
+        <div class="faq-list">
+          <article class="faq-item">
+            <h3>
+              <button
+                type="button"
+                aria-expanded="false"
+                aria-controls="faq-answer-5"
+              >
+                ¿Cuánto tarda el envío estándar?<span aria-hidden="true"
+                  >+</span
+                >
+              </button>
+            </h3>
+            <div id="faq-answer-5" class="faq-answer" hidden>
+              <p>
+                En España, el envío estándar tarda entre 1 y 5 días laborables.
+                En lanzamientos y periodos de alta demanda puede haber demoras.
+                Consulta la <a href="/envios">política de envíos</a>.
+              </p>
+            </div>
+          </article>
+          <article class="faq-item">
+            <h3>
+              <button
+                type="button"
+                aria-expanded="false"
+                aria-controls="faq-answer-6"
+              >
+                ¿Hay envío exprés?<span aria-hidden="true">+</span>
+              </button>
+            </h3>
+            <div id="faq-answer-6" class="faq-answer" hidden>
+              <p>
+                Cuando está disponible, el envío exprés en España tarda entre 24
+                y 48 horas laborables y cuesta 4,95 €.
+              </p>
+            </div>
+          </article>
+          <article class="faq-item">
+            <h3>
+              <button
+                type="button"
+                aria-expanded="false"
+                aria-controls="faq-answer-7"
+              >
+                ¿Cuánto cuesta el envío estándar?<span aria-hidden="true"
+                  >+</span
+                >
+              </button>
+            </h3>
+            <div id="faq-answer-7" class="faq-answer" hidden>
+              <p>
+                El envío estándar en España cuesta 2,95 € y es gratuito en
+                pedidos superiores a 65 €.
+              </p>
+            </div>
+          </article>
+          <article class="faq-item">
+            <h3>
+              <button
+                type="button"
+                aria-expanded="false"
+                aria-controls="faq-answer-8"
+              >
+                ¿Cómo sigo mi pedido?<span aria-hidden="true">+</span>
+              </button>
+            </h3>
+            <div id="faq-answer-8" class="faq-answer" hidden>
+              <p>
+                Recibirás por correo electrónico la información de seguimiento
+                cuando el pedido sea enviado. Si tienes cuenta, también puedes
+                consultar tus pedidos desde tu perfil.
+              </p>
+            </div>
+          </article>
+          <article class="faq-item">
+            <h3>
+              <button
+                type="button"
+                aria-expanded="false"
+                aria-controls="faq-answer-9"
+              >
+                ¿Qué ocurre si mi envío se retrasa?<span aria-hidden="true"
+                  >+</span
+                >
+              </button>
+            </h3>
+            <div id="faq-answer-9" class="faq-answer" hidden>
+              <p>
+                Comprueba primero el enlace de seguimiento. Si ha transcurrido
+                el plazo laborable indicado, contacta con soporte incluyendo tu
+                número de pedido para que podamos revisar el envío.
+              </p>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section class="faq-category" aria-labelledby="faq-returns">
+        <h2 id="faq-returns">CAMBIOS Y DEVOLUCIONES</h2>
+        <div class="faq-list">
+          <article class="faq-item">
+            <h3>
+              <button
+                type="button"
+                aria-expanded="false"
+                aria-controls="faq-answer-10"
+              >
+                ¿Qué plazo tengo para cambiar o devolver un artículo?<span
+                  aria-hidden="true"
+                  >+</span
+                >
+              </button>
+            </h3>
+            <div id="faq-answer-10" class="faq-answer" hidden>
+              <p>
+                Puedes solicitar un cambio durante los 30 días posteriores a la
+                recepción. Para una devolución, el plazo es de 15 días desde la
+                recepción. Consulta todas las
+                <a href="/devoluciones">condiciones de cambios y devoluciones</a
+                >.
+              </p>
+            </div>
+          </article>
+          <article class="faq-item">
+            <h3>
+              <button
+                type="button"
+                aria-expanded="false"
+                aria-controls="faq-answer-11"
+              >
+                ¿En qué estado debe estar el artículo?<span aria-hidden="true"
+                  >+</span
+                >
+              </button>
+            </h3>
+            <div id="faq-answer-11" class="faq-answer" hidden>
+              <p>
+                Debe estar sin usar, en perfecto estado y conservar su embalaje
+                y etiquetas originales.
+              </p>
+            </div>
+          </article>
+          <article class="faq-item">
+            <h3>
+              <button
+                type="button"
+                aria-expanded="false"
+                aria-controls="faq-answer-12"
+              >
+                ¿Cuánto cuesta un cambio o una devolución?<span
+                  aria-hidden="true"
+                  >+</span
+                >
+              </button>
+            </h3>
+            <div id="faq-answer-12" class="faq-answer" hidden>
+              <p>
+                En la Península, una devolución cuesta 4,90 € y un cambio 2,95
+                €. Para Baleares, Canarias, Ceuta y Melilla, cambios y
+                devoluciones cuestan 8,90 €. Los gastos del envío inicial no son
+                reembolsables.
+              </p>
+            </div>
+          </article>
+          <article class="faq-item">
+            <h3>
+              <button
+                type="button"
+                aria-expanded="false"
+                aria-controls="faq-answer-13"
+              >
+                ¿Cuándo recibiré el reembolso?<span aria-hidden="true">+</span>
+              </button>
+            </h3>
+            <div id="faq-answer-13" class="faq-answer" hidden>
+              <p>
+                Tras recibir y comprobar el artículo en almacén, el reembolso se
+                emite al método de pago original. Puede tardar entre 5 y 10 días
+                laborables en reflejarse.
+              </p>
+            </div>
+          </article>
+          <article class="faq-item">
+            <h3>
+              <button
+                type="button"
+                aria-expanded="false"
+                aria-controls="faq-answer-14"
+              >
+                ¿Hay artículos que no admiten devolución?<span
+                  aria-hidden="true"
+                  >+</span
+                >
+              </button>
+            </h3>
+            <div id="faq-answer-14" class="faq-answer" hidden>
+              <p>
+                La ropa interior y las tarjetas regalo no admiten devolución, y
+                las compras pagadas con tarjeta regalo tampoco pueden
+                devolverse. Los artículos de pop-up u outlet solo admiten
+                cambios mientras el evento esté activo.
+              </p>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section class="faq-category" aria-labelledby="faq-payments">
+        <h2 id="faq-payments">PAGOS</h2>
+        <div class="faq-list">
+          <article class="faq-item">
+            <h3>
+              <button
+                type="button"
+                aria-expanded="false"
+                aria-controls="faq-answer-15"
+              >
+                ¿Qué métodos de pago puedo usar?<span aria-hidden="true"
+                  >+</span
+                >
+              </button>
+            </h3>
+            <div id="faq-answer-15" class="faq-answer" hidden>
+              <p>
+                Los métodos disponibles para tu dispositivo, ubicación y compra
+                se muestran directamente en el checkout. Selecciona allí la
+                opción que prefieras.
+              </p>
+            </div>
+          </article>
+          <article class="faq-item">
+            <h3>
+              <button
+                type="button"
+                aria-expanded="false"
+                aria-controls="faq-answer-16"
+              >
+                ¿El pago es seguro?<span aria-hidden="true">+</span>
+              </button>
+            </h3>
+            <div id="faq-answer-16" class="faq-answer" hidden>
+              <p>
+                El pago se procesa mediante Stripe en un entorno cifrado. CRONOX
+                no almacena los datos completos de tu tarjeta. Recibirás un
+                correo de confirmación cuando el pedido quede registrado.
+              </p>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section class="faq-category" aria-labelledby="faq-products">
+        <h2 id="faq-products">PRODUCTOS Y TALLAS</h2>
+        <div class="faq-list">
+          <article class="faq-item">
+            <h3>
+              <button
+                type="button"
+                aria-expanded="false"
+                aria-controls="faq-answer-17"
+              >
+                ¿Cómo sé qué tallas están disponibles?<span aria-hidden="true"
+                  >+</span
+                >
+              </button>
+            </h3>
+            <div id="faq-answer-17" class="faq-answer" hidden>
+              <p>
+                La ficha de cada producto muestra las variantes y tallas que
+                pueden seleccionarse en ese momento. Una opción agotada no podrá
+                añadirse a la cesta.
+              </p>
+            </div>
+          </article>
+          <article class="faq-item">
+            <h3>
+              <button
+                type="button"
+                aria-expanded="false"
+                aria-controls="faq-answer-18"
+              >
+                ¿Cómo elijo mi talla?<span aria-hidden="true">+</span>
+              </button>
+            </h3>
+            <div id="faq-answer-18" class="faq-answer" hidden>
+              <p>
+                Usa la guía de tallas de la ficha como orientación y compara sus
+                medidas con una prenda o accesorio similar. Puede existir una
+                variación de hasta 2 cm según el producto.
+              </p>
+            </div>
+          </article>
+          <article class="faq-item">
+            <h3>
+              <button
+                type="button"
+                aria-expanded="false"
+                aria-controls="faq-answer-19"
+              >
+                ¿Las imágenes representan exactamente el producto?<span
+                  aria-hidden="true"
+                  >+</span
+                >
+              </button>
+            </h3>
+            <div id="faq-answer-19" class="faq-answer" hidden>
+              <p>
+                Trabajamos para mostrar cada artículo con fidelidad, aunque el
+                color puede variar ligeramente por la pantalla, la iluminación o
+                el dispositivo utilizado.
+              </p>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section class="faq-category" aria-labelledby="faq-account">
+        <h2 id="faq-account">CUENTA</h2>
+        <div class="faq-list">
+          <article class="faq-item">
+            <h3>
+              <button
+                type="button"
+                aria-expanded="false"
+                aria-controls="faq-answer-20"
+              >
+                ¿Qué ventajas tiene crear una cuenta?<span aria-hidden="true"
+                  >+</span
+                >
+              </button>
+            </h3>
+            <div id="faq-answer-20" class="faq-answer" hidden>
+              <p>
+                Una cuenta te permite consultar pedidos vinculados, acceder
+                rápidamente a su seguimiento y gestionar tus datos desde el
+                perfil.
+              </p>
+            </div>
+          </article>
+          <article class="faq-item">
+            <h3>
+              <button
+                type="button"
+                aria-expanded="false"
+                aria-controls="faq-answer-21"
+              >
+                He olvidado mi contraseña, ¿qué hago?<span aria-hidden="true"
+                  >+</span
+                >
+              </button>
+            </h3>
+            <div id="faq-answer-21" class="faq-answer" hidden>
+              <p>
+                Usa la opción «He olvidado mi contraseña» en el acceso. Te
+                enviaremos al correo de la cuenta un enlace para crear una
+                nueva.
+              </p>
+            </div>
+          </article>
+          <article class="faq-item">
+            <h3>
+              <button
+                type="button"
+                aria-expanded="false"
+                aria-controls="faq-answer-22"
+              >
+                ¿Dónde veo mis pedidos?<span aria-hidden="true">+</span>
+              </button>
+            </h3>
+            <div id="faq-answer-22" class="faq-answer" hidden>
+              <p>
+                Inicia sesión y abre tu perfil para consultar el historial
+                disponible y, cuando exista, el enlace de seguimiento de cada
+                pedido.
+              </p>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section class="faq-category" aria-labelledby="faq-privacy">
+        <h2 id="faq-privacy">PRIVACIDAD Y COOKIES</h2>
+        <div class="faq-list">
+          <article class="faq-item">
+            <h3>
+              <button
+                type="button"
+                aria-expanded="false"
+                aria-controls="faq-answer-23"
+              >
+                ¿Para qué utiliza CRONOX mis datos?<span aria-hidden="true"
+                  >+</span
+                >
+              </button>
+            </h3>
+            <div id="faq-answer-23" class="faq-answer" hidden>
+              <p>
+                Usamos los datos necesarios para gestionar compras, atención al
+                cliente y obligaciones legales, además de los usos que
+                autorices. Puedes ampliar la información en la
+                <a href="/privacidad">política de privacidad</a>.
+              </p>
+            </div>
+          </article>
+          <article class="faq-item">
+            <h3>
+              <button
+                type="button"
+                aria-expanded="false"
+                aria-controls="faq-answer-24"
+              >
+                ¿Puedo elegir qué cookies aceptar?<span aria-hidden="true"
+                  >+</span
+                >
+              </button>
+            </h3>
+            <div id="faq-answer-24" class="faq-answer" hidden>
+              <p>
+                Sí. Las cookies necesarias mantienen funciones esenciales; las
+                categorías opcionales, como analítica, solo se activan según tu
+                elección. Consulta la
+                <a href="/cookies">política de cookies</a>.
+              </p>
+            </div>
+          </article>
+          <article class="faq-item">
+            <h3>
+              <button
+                type="button"
+                aria-expanded="false"
+                aria-controls="faq-answer-25"
+              >
+                ¿Puedo cambiar mi consentimiento más adelante?<span
+                  aria-hidden="true"
+                  >+</span
+                >
+              </button>
+            </h3>
+            <div id="faq-answer-25" class="faq-answer" hidden>
+              <p>
+                Sí. Puedes abrir la configuración de cookies desde el enlace
+                permanente del sitio y modificar o retirar el consentimiento de
+                las categorías opcionales.
+              </p>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <aside class="faq-more" aria-label="Más información">
+        <p>
+          ¿Necesitas revisar las condiciones legales completas? Consulta los
+          <a href="/terminos">términos y condiciones</a>.
+        </p>
+      </aside>
+    </main>
+    <script src="assets/api.js?v=5"></script>
+    <script src="assets/app.js?v=62" defer></script>
+    <script src="assets/cart-badge.js?v=43" defer></script>
+  </body>
 </html>

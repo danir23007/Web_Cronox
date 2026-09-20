@@ -32,6 +32,7 @@
       if (body) {
         body.classList.remove('is-loading');
         body.classList.add('is-loaded');
+        try { window.dispatchEvent(new CustomEvent('cronox:storefront-ready')); } catch {}
       }
 
       if (shouldRemovePreloader) {
@@ -93,6 +94,9 @@
   window.syncTopbarActiveIcon = syncTopbarActiveIcon;
 
   const getLockedTopbarState = () => {
+    if (document.documentElement.classList.contains('category-page')) {
+      return 'topbar--page';
+    }
     if (!document.body) return '';
     const ds = document.body.dataset || {};
     const lock = typeof ds.topbarLock === 'string' ? ds.topbarLock.trim() : '';
@@ -113,6 +117,9 @@
     if (atTop && rect.top >= 0) applyTopbarState('topbar--transparent');
     else if (rect.bottom > 0)   applyTopbarState('topbar--hero');
     else                        applyTopbarState('topbar--page');
+  }
+  if (topbar && document.documentElement.classList.contains('category-page')) {
+    applyTopbarState('topbar--page');
   }
   if (hero && topbar) {
     try {
@@ -413,7 +420,8 @@
       thumbnail.className = 'search-suggestions__thumbnail';
       if (product.image) {
         const image = document.createElement('img');
-        image.src = product.image;
+        if (window.CRONOX_IMAGES) window.CRONOX_IMAGES.applyProduct(image, product, 'small');
+        else image.src = product.image;
         image.alt = '';
         image.referrerPolicy = 'no-referrer';
         image.addEventListener('error', () => {
@@ -1080,7 +1088,7 @@
   let activeUpsellCard = null;
   let upsellSelectorSequence = 0;
 
-  const normalizeUpsellSize = (value) => String(value || '').trim().toUpperCase();
+  const normalizeUpsellSize = (value) => window.CRONOX_SIZES?.key?.(value) || String(value || '').trim().toUpperCase();
 
   const isUpsellVariantAvailable = (variant) => {
     if (!variant || variant.id == null || variant.id === '') return false;
@@ -1151,19 +1159,20 @@
     variants.forEach((variant) => addSize(variant?.size));
 
     let availableCount = 0;
-    sizes.forEach((size) => {
+    (window.CRONOX_SIZES?.sort?.(sizes) || sizes).forEach((size) => {
       const variant = getUpsellVariant(product, size);
       const available = isUpsellVariantAvailable(variant);
       if (available) availableCount += 1;
       const button = document.createElement('button');
       button.type = 'button';
       button.className = `cart-upsell__size${available ? '' : ' is-unavailable'}`;
-      button.textContent = size;
+      const displaySize = window.CRONOX_SIZES?.label?.(size) || size;
+      button.textContent = displaySize;
       button.dataset.size = size;
       button.dataset.available = available ? 'true' : 'false';
       button.disabled = !available;
       button.setAttribute('aria-disabled', available ? 'false' : 'true');
-      button.setAttribute('aria-label', available ? `Añadir talla ${size}` : `Talla ${size}, agotada`);
+      button.setAttribute('aria-label', available ? `Añadir talla ${displaySize}` : `Talla ${displaySize}, agotada`);
       selector.appendChild(button);
     });
 
@@ -1250,7 +1259,7 @@
       const productKey = String(product.slug || product.backendId || product.id || '');
       if (!productKey) return;
       upsellProducts.set(productKey, product);
-      const imageUrl = safeProductImage(product.image || product.images?.[0]);
+      const imageUrl = window.CRONOX_IMAGES?.resolveProduct(product, 'recommendation')?.src || safeProductImage(product.image || product.images?.[0]);
       const productName = escapeHtml(product.name || 'Producto CRONOX');
       const productPrice = escapeHtml(product.priceLabel || formatMoney(product.priceCents));
       const card = document.createElement('article');
@@ -1270,6 +1279,11 @@
           <div class="cart-upsell__sizes" id="${selectorId}" role="group" aria-label="Tallas disponibles para ${productName}" hidden></div>
         </div>
       `;
+      window.CRONOX_IMAGES?.applyProduct(
+        card.querySelector('.cart-upsell__image-frame img'),
+        product,
+        'recommendation',
+      );
       frag.appendChild(card);
     });
     cartUpsellList.appendChild(frag);
@@ -1338,6 +1352,8 @@
   };
 
   const getCartItemImage = (item) => {
+    const canonical = window.CRONOX_IMAGES?.resolveProduct(item, 'cart');
+    if (canonical?.src) return canonical.src;
     const fallbackLogo = 'assets/logo_banner.png';
     const normalizeImage = (img) => {
       if (!img) return '';
@@ -1364,6 +1380,17 @@
 
     const imageUrl = candidates.find(Boolean);
     return safeProductImage(imageUrl, fallbackLogo);
+  };
+
+  const getCartItemImageRecord = (item) => {
+    const canonical = window.CRONOX_IMAGES?.resolveProduct(item, 'cart');
+    if (canonical?.record) return canonical.record;
+    const selectedUrl = getCartItemImage(item);
+    const records = [
+      ...(Array.isArray(item?.product?.images) ? item.product.images : []),
+      ...(Array.isArray(item?.images) ? item.images : []),
+    ];
+    return records.find((record) => (record?.url || record?.imageUrl) === selectedUrl) || { url: selectedUrl };
   };
 
   const renderCartEmptyState = (message = 'Tu cesta está vacía', { showCta = false } = {}) => {
@@ -1438,7 +1465,7 @@
       const display = {
         id: escapeHtml(item.id ?? ''),
         qty,
-        size: item.size ? escapeHtml(String(item.size).toUpperCase()) : '',
+        size: item.size ? escapeHtml(window.CRONOX_SIZES?.label?.(item.size) || String(item.size).toUpperCase()) : '',
         productName: escapeHtml(item.product?.name || 'Producto CRONOX'),
       };
 
@@ -1475,6 +1502,11 @@
           </div>
         </div>
       `;
+      window.CRONOX_IMAGES?.applyProduct(
+        article.querySelector(".cart-line__image-frame img"),
+        item,
+        "cart",
+      );
       if (itemError) {
         const errorEl = document.createElement('p');
         errorEl.className = 'cart-line__error';
@@ -2342,7 +2374,6 @@ window.CRONOX_USER = window.CRONOX_USER || null;
   window.CRONOX_logout = logoutAndReload;
 
   // ===== Newsletter Popup =====
-  const NEWSLETTER_STORAGE_KEY = 'cronoxNewsletterShown';
   const BTN_LABEL_IDLE = 'UNIRSE';
   const BTN_LABEL_LOADING = 'ENVIANDO…';
   const newsletterState = {
@@ -2353,18 +2384,33 @@ window.CRONOX_USER = window.CRONOX_USER || null;
     emailInput: null,
     submitBtn: null,
     feedback: null,
+    loginLink: null,
+    renderer: null,
+    retryTimer: 0,
+    initialized: false,
+    listenersBound: false,
+    shownInMemory: false,
+    previousFocus: null,
   };
 
   const hasPreferenceConsent = () =>
     window.CRONOX_COOKIE_CONSENT?.hasConsent('preferences') === true;
 
+  const newsletterVisit = window.CRONOX_NEWSLETTER_VISIT?.create({ hasConsent: hasPreferenceConsent });
+
+  const markNewsletterShown = () => {
+    newsletterState.shownInMemory = true;
+    newsletterVisit?.markShown();
+  };
+
   const persistNewsletterDismiss = () => {
-    if (!hasPreferenceConsent()) return;
-    try {
-      sessionStorage.setItem(NEWSLETTER_STORAGE_KEY, 'true');
-    } catch (error) {
-      console.warn('[CRONOX] No se pudo persistir la preferencia de newsletter', error);
-    }
+    newsletterVisit?.dismiss();
+  };
+
+  const clearNewsletterTimers = () => {
+    newsletterVisit?.cancel();
+    if (newsletterState.retryTimer) clearTimeout(newsletterState.retryTimer);
+    newsletterState.retryTimer = 0;
   };
 
   const setNewsletterFeedback = (message, kind = '') => {
@@ -2394,32 +2440,66 @@ window.CRONOX_USER = window.CRONOX_USER || null;
     }
   };
 
-  const closeNewsletterModal = () => {
+  const closeNewsletterModal = ({ dismiss = true, restoreFocus = true } = {}) => {
+    clearNewsletterTimers();
     if (newsletterState.overlay) {
       newsletterState.overlay.classList.remove('newsletter-modal-overlay--visible');
+      newsletterState.overlay.setAttribute('aria-hidden', 'true');
     }
     if (typeof window.CRONOX_unlockScroll === 'function') window.CRONOX_unlockScroll('newsletter');
-    persistNewsletterDismiss();
+    if (dismiss) persistNewsletterDismiss();
+    if (restoreFocus && newsletterState.previousFocus?.isConnected) {
+      requestAnimationFrame(() => newsletterState.previousFocus.focus({ preventScroll: true }));
+    }
+    newsletterState.previousFocus = null;
   };
+
+  const hasBlockingModal = () => Boolean(
+    document.querySelector('#authOverlay.is-open, .cronox-consent:not([hidden]), .cronox-consent-panel:not([hidden])') ||
+    document.body?.classList.contains('cart-open')
+  );
 
   const openNewsletterModal = () => {
-    if (!newsletterState.overlay) return;
+    if (!newsletterState.overlay || newsletterState.shownInMemory) return false;
+    if (hasBlockingModal()) {
+      if (!newsletterState.retryTimer) {
+        newsletterState.retryTimer = setTimeout(() => {
+          newsletterState.retryTimer = 0;
+          openNewsletterModal();
+        }, 500);
+      }
+      return false;
+    }
+    newsletterState.previousFocus = document.activeElement instanceof HTMLElement
+      ? document.activeElement
+      : null;
+    markNewsletterShown();
     newsletterState.overlay.classList.add('newsletter-modal-overlay--visible');
+    newsletterState.overlay.setAttribute('aria-hidden', 'false');
     if (typeof window.CRONOX_lockScroll === 'function') window.CRONOX_lockScroll('newsletter');
+    newsletterState.renderer?.reflow?.();
+    setTimeout(() => newsletterState.closeBtn?.focus({ preventScroll: true }), 40);
+    return true;
   };
 
-  const shouldShowNewsletter = () => {
-    if (typeof window === 'undefined') return false;
+  const shouldShowNewsletter = (now = Date.now()) => {
+    if (newsletterState.shownInMemory || newsletterVisit?.wasShown()) return false;
     if (window.CRONOX_USER) return false;
-    if (!hasPreferenceConsent()) return true;
-    try {
-      const dismissed = sessionStorage.getItem(NEWSLETTER_STORAGE_KEY);
-      if (dismissed === 'true') return false;
-    } catch (error) {
-      console.warn('[CRONOX] No se pudo leer el estado de newsletter', error);
-    }
+    return newsletterVisit?.eligible(now) ?? true;
+  };
 
-    return true;
+  const loadNewsletterConfiguration = async () => {
+    try {
+      const response = await fetch(apiEndpoint('/api/newsletter/config'), {
+        credentials: 'include',
+        headers: { Accept: 'application/json' },
+      });
+      if (!response.ok) throw new Error(`NEWSLETTER_CONFIG_${response.status}`);
+      newsletterState.renderer?.update?.(await response.json());
+    } catch (error) {
+      console.warn('[CRONOX] Configuración newsletter no disponible; usando fallback.', error);
+      newsletterState.renderer?.update?.(window.CRONOX_NEWSLETTER_RENDERER?.DEFAULT_CONFIG || {});
+    }
   };
 
   const handleNewsletterSubmit = async (event) => {
@@ -2456,7 +2536,7 @@ window.CRONOX_USER = window.CRONOX_USER || null;
           'success',
         );
         persistNewsletterDismiss();
-        setTimeout(closeNewsletterModal, 1200);
+        setTimeout(() => closeNewsletterModal({ dismiss: false }), 1200);
         return;
       }
 
@@ -2470,6 +2550,8 @@ window.CRONOX_USER = window.CRONOX_USER || null;
   };
 
   const bindNewsletterEvents = () => {
+    if (newsletterState.listenersBound) return;
+    newsletterState.listenersBound = true;
     if (newsletterState.overlay) {
       newsletterState.overlay.addEventListener('click', (ev) => {
         if (ev.target === newsletterState.overlay) closeNewsletterModal();
@@ -2482,6 +2564,19 @@ window.CRONOX_USER = window.CRONOX_USER || null;
     });
 
     newsletterState.form?.addEventListener('submit', handleNewsletterSubmit);
+    newsletterState.loginLink?.addEventListener('click', async () => {
+      const returnFocus = newsletterState.previousFocus;
+      closeNewsletterModal({ dismiss: true, restoreFocus: false });
+      if (returnFocus?.isConnected) returnFocus.focus({ preventScroll: true });
+      else newsletterState.loginLink?.blur();
+      await window.CRONOX_openAuthModal?.('login');
+    });
+    document.addEventListener('keydown', (event) => {
+      if (
+        event.key === 'Escape' &&
+        newsletterState.overlay?.classList.contains('newsletter-modal-overlay--visible')
+      ) closeNewsletterModal();
+    });
   };
 
   const cacheNewsletterElements = () => {
@@ -2491,6 +2586,7 @@ window.CRONOX_USER = window.CRONOX_USER || null;
     newsletterState.form = document.getElementById('newsletterForm');
     newsletterState.emailInput = document.getElementById('newsletterEmail');
     newsletterState.submitBtn = newsletterState.overlay?.querySelector('.newsletter-modal-button') || null;
+    newsletterState.loginLink = newsletterState.overlay?.querySelector('.newsletter-login-link') || null;
     if (newsletterState.submitBtn) {
       newsletterState.submitBtn.textContent = BTN_LABEL_IDLE;
     }
@@ -2498,28 +2594,25 @@ window.CRONOX_USER = window.CRONOX_USER || null;
   };
 
   const initNewsletterModal = () => {
+    if (newsletterState.initialized) return;
+    newsletterState.initialized = true;
     cacheNewsletterElements();
     if (!newsletterState.overlay || !newsletterState.modal) return;
-
     bindNewsletterEvents();
+    newsletterState.renderer = window.CRONOX_NEWSLETTER_RENDERER?.mount?.(
+      newsletterState.modal,
+      window.CRONOX_NEWSLETTER_RENDERER?.DEFAULT_CONFIG || {},
+    );
+    void loadNewsletterConfiguration();
 
-    try {
-      if (hasPreferenceConsent() && sessionStorage.getItem(NEWSLETTER_STORAGE_KEY) === 'true') return;
-    } catch (error) {
-      console.warn('[CRONOX] No se pudo leer el estado de newsletter', error);
-    }
-
-    setTimeout(() => {
-      try {
-        if (hasPreferenceConsent() && sessionStorage.getItem(NEWSLETTER_STORAGE_KEY) === 'true') return;
-      } catch (error) {
-        console.warn('[CRONOX] No se pudo leer el estado de newsletter', error);
-      }
-
-      if (shouldShowNewsletter()) {
-        openNewsletterModal();
-      }
-    }, 3000);
+    const schedule = () => {
+      if (newsletterState.shownInMemory || !shouldShowNewsletter()) return;
+      newsletterVisit?.schedule(() => {
+        if (shouldShowNewsletter()) openNewsletterModal();
+      });
+    };
+    window.addEventListener('cronox:storefront-ready', schedule, { once: true });
+    if (document.body?.classList.contains('is-loaded') || !document.getElementById('preloader')) schedule();
   };
 
   const initFooterAccordion = () => {

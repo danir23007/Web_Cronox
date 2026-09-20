@@ -242,4 +242,23 @@ describe('Admin export filter mapping', () => {
       ]),
     );
   });
+
+  it('clamps AuditLog exports to the retained 30-day window', async () => {
+    jest.useFakeTimers().setSystemTime(new Date('2026-09-20T12:00:00.000Z'));
+    try {
+      const { prisma, service } = setup();
+      await service.export(
+        'actividad',
+        { scope: 'filtered', dateFrom: '2020-01-01T00:00:00.000Z' },
+        1,
+        {},
+      );
+      const where = prisma.auditLog.findMany.mock.calls[0][0].where;
+      expect(where.AND).toContainEqual({
+        createdAt: { gte: new Date('2026-08-21T12:00:00.000Z') },
+      });
+    } finally {
+      jest.useRealTimers();
+    }
+  });
 });

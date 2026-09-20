@@ -795,9 +795,9 @@ body.page-checkout summary:focus-visible {
   position: relative;
   width: 96px;
   height: 108px;
-  padding: 8px;
+  padding: 0;
   border: 1px solid #2b2b2d;
-  background: #fff;
+  background: transparent;
 }
 
 .checkout-item__media img {
@@ -989,9 +989,9 @@ body.page-checkout summary:focus-visible {
 .checkout-recommendation__image {
   width: 76px;
   height: 86px;
-  padding: 6px;
+  padding: 0;
   border: 1px solid #29292b;
-  background: #fff;
+  background: transparent;
   object-fit: contain;
 }
 

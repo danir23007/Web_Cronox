@@ -64,7 +64,7 @@
 .qa-media img{
   width:100%; height:100%;
   object-fit:contain;
-  background:#fff;
+  background:transparent;
   border:none;
   border-radius:0;
   display:block;
@@ -283,5 +283,29 @@
 .qa-btn{ padding:12px 16px !important; }
 
 @media (max-width:640px){
-  .qa-info{ padding:0 14px !important; }
+  .qa-overlay{
+    padding-left:max(4px,env(safe-area-inset-left));
+    padding-right:max(4px,env(safe-area-inset-right));
+  }
+
+  .qa-info{
+    margin-top:22px !important;
+    padding:0 14px !important;
+  }
+
+  .qa-sizes[data-size-system="APPAREL"]{
+    display:grid;
+    grid-template-columns:repeat(6,minmax(0,1fr));
+    gap:4px;
+    width:100%;
+  }
+
+  .qa-sizes[data-size-system="APPAREL"] .qa-size-btn{
+    width:100%;
+    min-width:0;
+    min-height:44px;
+    padding:9px 2px;
+    font-size:clamp(10px,3.1vw,12px);
+    letter-spacing:.02em;
+  }
 }

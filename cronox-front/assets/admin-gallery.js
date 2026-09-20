@@ -90,6 +90,11 @@
   const elements = {
     section: document.getElementById("section-gallery"),
     grid: document.getElementById("adminGalleryGrid"),
+    carouselGrid: document.getElementById("adminGalleryCarousel"),
+    mosaicEditor: document.getElementById("galleryMosaicEditor"),
+    carouselEditor: document.getElementById("galleryCarouselEditor"),
+    modeMosaic: document.getElementById("galleryModeMosaic"),
+    modeCarousel: document.getElementById("galleryModeCarousel"),
     status: document.getElementById("galleryAdminStatus"),
     modal: document.getElementById("galleryEditorModal"),
     title: document.getElementById("galleryEditorTitle"),
@@ -133,6 +138,9 @@
 
   const state = {
     slots: [],
+    carouselSlots: [],
+    activeMode: "MOSAIC",
+    modeSaving: false,
     assets: [],
     recentAssets: [],
     assetTotal: 0,
@@ -146,6 +154,8 @@
     reorderSaving: false,
     dragSourceKey: null,
     dropTargetKey: null,
+    carouselDragSource: null,
+    carouselDropTarget: null,
     dragPreview: null,
     assetDetailRequest: 0,
     contentRevision: 0,
@@ -294,6 +304,35 @@
       normalizedSlot(definition, byKey.get(definition.key)),
     );
   };
+  const normalizeCarouselSlots = (slots) => {
+    const byPosition = new Map(
+      (Array.isArray(slots) ? slots : []).map((slot) => [
+        Number(slot?.position),
+        slot,
+      ]),
+    );
+    return [1, 2, 3, 4, 5].map((position) => {
+      const candidate = byPosition.get(position) || {};
+      return {
+        ...candidate,
+        position,
+        key: `carousel-${position}`,
+        displayOrder: position,
+        featured: false,
+        placeholderColor: "grey",
+        focalX: clamp(candidate.focalX ?? 50, 0, 100),
+        focalY: clamp(candidate.focalY ?? 50, 0, 100),
+        zoom: clamp(candidate.zoom ?? 1, 1, 3),
+        altText:
+          typeof candidate.altText === "string" ? candidate.altText : "",
+        instagramUrl:
+          typeof candidate.instagramUrl === "string"
+            ? candidate.instagramUrl
+            : "",
+        asset: normalizeAsset(candidate.asset),
+      };
+    });
+  };
   const slotLabel = (slot) =>
     slot.featured
       ? "Foto destacada"
@@ -304,6 +343,68 @@
     target.style.setProperty("--focal-x", `${slot.focalX}%`);
     target.style.setProperty("--focal-y", `${slot.focalY}%`);
     target.style.setProperty("--zoom", String(slot.zoom));
+  };
+
+  const syncModeEditors = () => {
+    const carousel = state.activeMode === "CAROUSEL";
+    elements.mosaicEditor.hidden = carousel;
+    elements.carouselEditor.hidden = !carousel;
+    elements.modeMosaic.classList.toggle("is-active", !carousel);
+    elements.modeCarousel.classList.toggle("is-active", carousel);
+    elements.modeMosaic.setAttribute("aria-pressed", String(!carousel));
+    elements.modeCarousel.setAttribute("aria-pressed", String(carousel));
+    elements.modeMosaic.disabled = state.modeSaving;
+    elements.modeCarousel.disabled = state.modeSaving;
+  };
+
+  const renderCarouselGrid = () => {
+    if (!elements.carouselGrid) return;
+    const fragment = pageDocument.createDocumentFragment();
+    state.carouselSlots.forEach((slot) => {
+      const tile = pageDocument.createElement("div");
+      tile.className = "gallery-admin-carousel__slot";
+      tile.dataset.galleryCarouselPosition = String(slot.position);
+      tile.draggable = Boolean(slot.asset) && !state.reorderSaving;
+      tile.setAttribute(
+        "aria-label",
+        `Posición ${String(slot.position).padStart(2, "0")}${slot.asset ? ", foto asignada y arrastrable" : ", vacía"}`,
+      );
+      applyFraming(tile, slot);
+      if (slot.asset?.imageUrl) {
+        const image = pageDocument.createElement("img");
+        image.src = slot.asset.imageUrl;
+        image.alt = slot.altText || "";
+        image.loading = "lazy";
+        image.decoding = "async";
+        image.draggable = false;
+        tile.appendChild(image);
+      }
+      const number = pageDocument.createElement("span");
+      number.className = "gallery-admin-carousel__number";
+      number.textContent = String(slot.position).padStart(2, "0");
+      const edit = pageDocument.createElement("button");
+      edit.type = "button";
+      edit.className = "gallery-admin-carousel__edit";
+      edit.setAttribute(
+        "aria-label",
+        `Editar posición ${String(slot.position).padStart(2, "0")}`,
+      );
+      edit.textContent = "✎";
+      edit.addEventListener("pointerdown", (event) => event.stopPropagation());
+      edit.addEventListener("dragstart", (event) => event.preventDefault());
+      edit.addEventListener("click", (event) => {
+        event.stopPropagation();
+        if (!state.reorderSaving)
+          openEditor(slot.position, edit, "CAROUSEL");
+      });
+      tile.append(number, edit);
+      fragment.appendChild(tile);
+    });
+    elements.carouselGrid.replaceChildren(fragment);
+    elements.carouselGrid.setAttribute(
+      "aria-busy",
+      String(state.reorderSaving),
+    );
   };
 
   const renderGrid = () => {
@@ -525,6 +626,177 @@
     }
   };
 
+  const changeMode = async (nextMode) => {
+    if (!state.loaded) {
+      try {
+        await loadGallery();
+      } catch {
+        return false;
+      }
+    }
+    if (
+      state.modeSaving ||
+      !["MOSAIC", "CAROUSEL"].includes(nextMode) ||
+      state.activeMode === nextMode
+    ) {
+      return false;
+    }
+    state.modeSaving = true;
+    syncModeEditors();
+    setStatus(
+      nextMode === "CAROUSEL"
+        ? "Activando el carrusel…"
+        : "Activando el mosaico…",
+    );
+    try {
+      const response = await requestJson("/api/admin/gallery/mode", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ activeMode: nextMode }),
+      });
+      state.activeMode =
+        response.activeMode === "CAROUSEL" ? "CAROUSEL" : "MOSAIC";
+      setStatus(
+        state.activeMode === "CAROUSEL"
+          ? "Carrusel activado."
+          : "Mosaico activado.",
+        "success",
+      );
+      return true;
+    } catch (error) {
+      setStatus(
+        error.message || "No se pudo cambiar el formato de la galería.",
+        "error",
+      );
+      return false;
+    } finally {
+      state.modeSaving = false;
+      syncModeEditors();
+    }
+  };
+
+  const carouselTileFromEvent = (event) => {
+    const target = event.target;
+    if (!(target instanceof Element)) return null;
+    const tile = target.closest("[data-gallery-carousel-position]");
+    return tile && elements.carouselGrid.contains(tile) ? tile : null;
+  };
+  const clearCarouselDragState = () => {
+    elements.carouselGrid
+      ?.querySelectorAll(".is-dragging, .is-drop-target")
+      .forEach((tile) =>
+        tile.classList.remove("is-dragging", "is-drop-target"),
+      );
+    state.carouselDragSource = null;
+    state.carouselDropTarget = null;
+  };
+  const reorderCarousel = async (sourcePosition, targetPosition) => {
+    if (
+      state.reorderSaving ||
+      sourcePosition === targetPosition ||
+      !state.carouselSlots.find(
+        (slot) => slot.position === sourcePosition && slot.asset,
+      )
+    ) {
+      return false;
+    }
+    const previousSlots = state.carouselSlots.map((slot) => ({
+      ...slot,
+      asset: slot.asset ? { ...slot.asset } : null,
+    }));
+    state.reorderSaving = true;
+    renderCarouselGrid();
+    setStatus("Guardando el nuevo orden del carrusel…");
+    try {
+      const response = await requestJson(
+        "/api/admin/gallery/carousel/reorder",
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ sourcePosition, targetPosition }),
+        },
+      );
+      if (!Array.isArray(response.carouselSlots)) {
+        throw new Error("El servidor no devolvió un carrusel válido.");
+      }
+      state.carouselSlots = normalizeCarouselSlots(response.carouselSlots);
+      upsertAssets(
+        state.carouselSlots.map((slot) => slot.asset).filter(Boolean),
+      );
+      setStatus(
+        `Foto movida a la posición ${String(targetPosition).padStart(2, "0")} del carrusel.`,
+        "success",
+      );
+      return true;
+    } catch (error) {
+      state.carouselSlots = previousSlots;
+      setStatus(
+        `${error.message || "No se pudo reordenar el carrusel."} Se ha restaurado el orden anterior.`,
+        "error",
+      );
+      return false;
+    } finally {
+      state.reorderSaving = false;
+      clearCarouselDragState();
+      renderCarouselGrid();
+    }
+  };
+
+  const handleCarouselDragStart = (event) => {
+    const tile = carouselTileFromEvent(event);
+    const position = Number(tile?.dataset.galleryCarouselPosition);
+    const slot = state.carouselSlots.find(
+      (item) => item.position === position,
+    );
+    if (
+      !tile ||
+      !slot?.asset ||
+      state.reorderSaving ||
+      event.target.closest?.(".gallery-admin-carousel__edit") ||
+      !event.dataTransfer
+    ) {
+      event.preventDefault();
+      return;
+    }
+    state.carouselDragSource = position;
+    tile.classList.add("is-dragging");
+    event.dataTransfer.effectAllowed = "move";
+    event.dataTransfer.setData("text/plain", String(position));
+  };
+  const handleCarouselDragOver = (event) => {
+    const tile = carouselTileFromEvent(event);
+    const position = Number(tile?.dataset.galleryCarouselPosition);
+    elements.carouselGrid
+      .querySelectorAll(".is-drop-target")
+      .forEach((item) => item.classList.remove("is-drop-target"));
+    if (
+      !tile ||
+      !state.carouselDragSource ||
+      state.carouselDragSource === position ||
+      state.reorderSaving
+    ) {
+      state.carouselDropTarget = null;
+      return;
+    }
+    event.preventDefault();
+    state.carouselDropTarget = position;
+    tile.classList.add("is-drop-target");
+    if (event.dataTransfer) event.dataTransfer.dropEffect = "move";
+  };
+  const handleCarouselDrop = (event) => {
+    const targetPosition = Number(
+      carouselTileFromEvent(event)?.dataset.galleryCarouselPosition,
+    );
+    const sourcePosition = state.carouselDragSource;
+    if (!sourcePosition || !targetPosition) {
+      clearCarouselDragState();
+      return;
+    }
+    event.preventDefault();
+    clearCarouselDragState();
+    void reorderCarousel(sourcePosition, targetPosition);
+  };
+
   const loadGallery = async (force = false) => {
     if (state.loadPromise) return state.loadPromise;
     if (state.loaded && !force) return state.slots;
@@ -532,11 +804,20 @@
     state.loadPromise = Promise.all([
       requestJson("/api/admin/gallery/slots"),
       requestJson("/api/admin/gallery/assets"),
+      requestJson("/api/admin/gallery/configuration"),
     ])
-      .then(([slotResponse, assetResponse]) => {
+      .then(([slotResponse, assetResponse, configuration]) => {
         state.slots = normalizeSlots(slotResponse.slots);
+        state.carouselSlots = normalizeCarouselSlots(
+          configuration.carouselSlots,
+        );
+        state.activeMode =
+          configuration.activeMode === "CAROUSEL" ? "CAROUSEL" : "MOSAIC";
         upsertAssets(assetResponse.assets);
         upsertAssets(state.slots.map((slot) => slot.asset).filter(Boolean));
+        upsertAssets(
+          state.carouselSlots.map((slot) => slot.asset).filter(Boolean),
+        );
         state.recentAssets = (
           Array.isArray(assetResponse.assets) ? assetResponse.assets : []
         )
@@ -548,13 +829,24 @@
           : state.recentAssets.length;
         state.loaded = true;
         renderGrid();
-        setStatus("13 posiciones listas para editar.", "success");
-        return state.slots;
+        renderCarouselGrid();
+        syncModeEditors();
+        setStatus(
+          state.activeMode === "CAROUSEL"
+            ? "Carrusel activo y listo para editar."
+            : "Mosaico activo y listo para editar.",
+          "success",
+        );
+        return configuration;
       })
       .catch((error) => {
         state.loaded = false;
         state.slots = normalizeSlots([]);
+        state.carouselSlots = normalizeCarouselSlots([]);
+        state.activeMode = "MOSAIC";
         renderGrid();
+        renderCarouselGrid();
+        syncModeEditors();
         setStatus(error.message || "No se pudo cargar la galería.", "error");
         throw error;
       })
@@ -980,13 +1272,18 @@
     renderProductRepository();
   };
 
-  const openEditor = (key, trigger) => {
-    const slot = state.slots.find((item) => item.key === key);
+  const openEditor = (key, trigger, mode = "MOSAIC") => {
+    const carousel = mode === "CAROUSEL";
+    const slot = carousel
+      ? state.carouselSlots.find((item) => item.position === Number(key))
+      : state.slots.find((item) => item.key === key);
     if (!slot) return;
     state.returnFocus = trigger || pageDocument.activeElement;
     if (slot.asset) upsertAssets([slot.asset]);
     state.draft = {
       key: slot.key,
+      mode: carousel ? "CAROUSEL" : "MOSAIC",
+      position: carousel ? slot.position : null,
       featured: slot.featured,
       placeholderColor: slot.placeholderColor,
       assetId: slot.asset?.id || null,
@@ -998,10 +1295,14 @@
     };
     state.contentRevision += 1;
     setAssetContent(slot.asset);
-    elements.title.textContent = `Editar ${slotLabel(slot).toLowerCase()}`;
-    elements.slotLabel.textContent = slot.featured
-      ? "Ocupa dos columnas y tres filas"
-      : `Posición ${slot.displayOrder} de 12`;
+    elements.title.textContent = carousel
+      ? `Editar posición ${String(slot.position).padStart(2, "0")} del carrusel`
+      : `Editar ${slotLabel(slot).toLowerCase()}`;
+    elements.slotLabel.textContent = carousel
+      ? `Posición ${slot.position} de 5 · configura entre 3 y 5 fotos`
+      : slot.featured
+        ? "Ocupa dos columnas y tres filas"
+        : `Posición ${slot.displayOrder} de 12`;
     setEditorMessage("");
     elements.upload.value = "";
     elements.progress.hidden = true;
@@ -1089,28 +1390,49 @@
         body.description = elements.description.value;
         body.productIds = [...state.selectedProductIds];
       }
+      const carousel = state.draft.mode === "CAROUSEL";
       const payload = await requestJson(
-        `/api/admin/gallery/slots/${encodeURIComponent(state.draft.key)}`,
+        carousel
+          ? `/api/admin/gallery/carousel/${state.draft.position}`
+          : `/api/admin/gallery/slots/${encodeURIComponent(state.draft.key)}`,
         {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(body),
         },
       );
-      const index = state.slots.findIndex(
-        (slot) => slot.key === state.draft.key,
-      );
-      if (index >= 0) {
-        state.slots[index] = normalizedSlot(
-          SLOT_DEFINITIONS[index],
-          payload.slot,
+      let label = "Posición";
+      if (carousel) {
+        const index = state.carouselSlots.findIndex(
+          (slot) => slot.position === state.draft.position,
         );
-        if (state.slots[index].asset) upsertAssets([state.slots[index].asset]);
+        if (index >= 0) {
+          const updated = normalizeCarouselSlots([payload.slot]).find(
+            (slot) => slot.position === state.draft.position,
+          );
+          if (updated) state.carouselSlots[index] = updated;
+          if (updated?.asset) upsertAssets([updated.asset]);
+        }
+        label = `Posición ${String(state.draft.position).padStart(2, "0")} del carrusel`;
+      } else {
+        const index = state.slots.findIndex(
+          (slot) => slot.key === state.draft.key,
+        );
+        if (index >= 0) {
+          state.slots[index] = normalizedSlot(
+            SLOT_DEFINITIONS[index],
+            payload.slot,
+          );
+          if (state.slots[index].asset)
+            upsertAssets([state.slots[index].asset]);
+          label = slotLabel(state.slots[index]);
+        }
       }
       state.assetContentDirty = false;
       renderGrid();
+      renderCarouselGrid();
       setStatus(
-        `${index >= 0 ? slotLabel(state.slots[index]) : "Posición"} actualizada con sus productos y texto.`,
+        `${label} actualizada con sus productos y texto.`,
         "success",
       );
       closeEditor(true);
@@ -1309,6 +1631,25 @@
   elements.grid.addEventListener("dragleave", handleTileDragLeave);
   elements.grid.addEventListener("drop", handleTileDrop);
   elements.grid.addEventListener("dragend", clearDragState);
+  elements.carouselGrid?.addEventListener("dragstart", handleCarouselDragStart);
+  elements.carouselGrid?.addEventListener("dragover", handleCarouselDragOver);
+  elements.carouselGrid?.addEventListener("drop", handleCarouselDrop);
+  elements.carouselGrid?.addEventListener("dragend", clearCarouselDragState);
+  elements.carouselGrid?.addEventListener("dragleave", (event) => {
+    if (
+      event.relatedTarget instanceof Node &&
+      elements.carouselGrid.contains(event.relatedTarget)
+    ) {
+      return;
+    }
+    clearCarouselDragState();
+  });
+  elements.modeMosaic?.addEventListener("click", () =>
+    changeMode("MOSAIC"),
+  );
+  elements.modeCarousel?.addEventListener("click", () =>
+    changeMode("CAROUSEL"),
+  );
   elements.viewport.addEventListener("pointerdown", (event) => {
     if (!state.draft?.assetId) return;
     state.cropDrag = {
@@ -1368,5 +1709,11 @@
   if (window.location.hash === "#section-gallery")
     loadGallery().catch(() => undefined);
 
-  window.CRONOX_ADMIN_GALLERY = { load: loadGallery, openEditor, state };
+  window.CRONOX_ADMIN_GALLERY = {
+    load: loadGallery,
+    openEditor,
+    changeMode,
+    reorderCarousel,
+    state,
+  };
 })();
