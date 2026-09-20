@@ -1,0 +1,12 @@
+CREATE TYPE "ProductSizeSystem" AS ENUM ('APPAREL', 'US_RING');
+
+ALTER TYPE "VariantSize" ADD VALUE 'US_6';
+ALTER TYPE "VariantSize" ADD VALUE 'US_7';
+ALTER TYPE "VariantSize" ADD VALUE 'US_8';
+ALTER TYPE "VariantSize" ADD VALUE 'US_9';
+ALTER TYPE "VariantSize" ADD VALUE 'US_10';
+ALTER TYPE "VariantSize" ADD VALUE 'US_11';
+ALTER TYPE "VariantSize" ADD VALUE 'US_12';
+
+ALTER TABLE "Product"
+ADD COLUMN "sizeSystem" "ProductSizeSystem" NOT NULL DEFAULT 'APPAREL';

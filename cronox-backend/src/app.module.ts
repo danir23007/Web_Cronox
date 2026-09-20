@@ -30,6 +30,8 @@ import { AnalyticsModule } from './analytics/analytics.module';
 import { GalleryModule } from './gallery/gallery.module';
 import { MediaFramingModule } from './media-framing/media-framing.module';
 import { KeyScreenModule } from './key-screen/key-screen.module';
+import { ImagesModule } from './images/images.module';
+import { FooterModule } from './footer/footer.module';
 import {
   getRateLimitMax,
   getRateLimitTtlMs,
@@ -79,6 +81,8 @@ import {
       },
     ),
     PrismaModule,
+    ImagesModule,
+    FooterModule,
     EmailModule,
     AuthModule,
     CartModule,

@@ -13,6 +13,7 @@
   const OPTIONAL_STORAGE = Object.freeze({
     preferences: [
       "cronoxNewsletterShown",
+      "cronoxNewsletterDismissedAt",
       /^cronox_circle_request_modal_seen_/,
       /^cronox_circle4_request_success_/,
     ],
@@ -384,7 +385,7 @@
         <form id="cronox-consent-form">
           <div class="cronox-consent-panel__categories">
             ${categoryRow({ id: "necessary", title: "Cookies necesarias", required: true, description: "Permiten proteger el sitio frente a solicitudes fraudulentas, mantener la sesión, conservar la cesta, aplicar promociones durante el checkout y procesar el pago con Stripe." })}
-            ${categoryRow({ id: "preferences", title: "Cookies de preferencias", available: true, description: "Permiten recordar durante la sesión que has cerrado el aviso de newsletter y, en tu cuenta, qué avisos de círculo ya has visto." })}
+            ${categoryRow({ id: "preferences", title: "Cookies de preferencias", available: true, description: "Permiten recordar que ya se mostró el aviso de newsletter, su cooldown de 20 minutos y, en tu cuenta, qué avisos de círculo ya has visto." })}
             ${categoryRow({ id: "analytics", title: "Cookies de análisis", available: true, description: "Con tu permiso, CRONOX mide visitas, actividad, búsquedas y acciones sobre productos para entender y mejorar la tienda. Es un sistema propio, sin terceros, direcciones IP ni identificadores publicitarios." })}
             ${categoryRow({ id: "marketing", title: "Cookies de marketing", available: false, description: "CRONOX no utiliza actualmente píxeles publicitarios, perfiles de comportamiento ni cookies de publicidad." })}
           </div>

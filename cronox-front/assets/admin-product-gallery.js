@@ -43,6 +43,12 @@
     id: Number(raw?.id) || undefined,
     clientId: raw?.clientId || `new:${globalScope.crypto?.randomUUID?.() || `${Date.now()}-${index}-${Math.random()}`}`,
     url: safeUrl(raw?.url),
+    storageKey: String(raw?.storageKey || ""),
+    mimeType: String(raw?.mimeType || ""),
+    fileSize: Number(raw?.fileSize) || undefined,
+    width: Number(raw?.width) || undefined,
+    height: Number(raw?.height) || undefined,
+    variants: raw?.variants && typeof raw.variants === "object" ? raw.variants : undefined,
     alt: String(raw?.alt || ""),
     sortOrder: Number(raw?.sortOrder ?? index),
     isPrimary: Boolean(raw?.isPrimary),
@@ -264,7 +270,7 @@
     },
     addUploaded(urls) {
       const existing = new Set(images.map((image) => image.url));
-      const additions = urls.map((url, index) => normalizeImage({ url, isActive:true, isPrimary:active().length === 0 && index === 0, sortOrder:active().length + index }, index)).filter((image) => image.url && !existing.has(image.url));
+      const additions = urls.map((value, index) => normalizeImage({ ...(typeof value === "object" ? value : { url:value }), isActive:true, isPrimary:active().length === 0 && index === 0, sortOrder:active().length + index }, index)).filter((image) => image.url && !existing.has(image.url));
       images.push(...additions);
       normalizeOrder();
       if (additions[0]) selectedKey = keyOf(additions[0]);

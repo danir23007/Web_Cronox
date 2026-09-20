@@ -5,6 +5,7 @@ import {
 } from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { sizeOrder, variantSizeLabel } from '../products/product-size-system';
 import { AddFavoriteDto } from './dto/add-favorite.dto';
 
 type FavoriteProduct = Prisma.ProductGetPayload<{
@@ -166,6 +167,7 @@ export class FavoritesService {
   private toProductResponse(product: FavoriteProduct) {
     const primaryImage =
       product.images.find((image) => image.isPrimary) ?? product.images[0];
+    const imageRecords = product.images.map((image) => ({ ...image }));
 
     return {
       id: product.id,
@@ -175,12 +177,21 @@ export class FavoritesService {
       price: product.price,
       priceInCents: product.price,
       currency: product.currency,
-      variants: product.variants.map(({ stockQty, isActive }) => ({
-        stockQty,
-        isActive,
-      })),
-      imageUrl: product.imageUrl ?? primaryImage?.url ?? null,
+      sizeSystem: product.sizeSystem,
+      variants: product.variants
+        .map(({ id, size, sku, price, stockQty, isActive }) => ({
+          id,
+          size,
+          sizeLabel: variantSizeLabel(size),
+          sku,
+          price,
+          stockQty,
+          isActive,
+        }))
+        .sort((left, right) => sizeOrder(left.size) - sizeOrder(right.size)),
+      imageUrl: primaryImage?.url ?? product.imageUrl ?? null,
       images: product.images.map((image) => image.url),
+      imageRecords,
     };
   }
 }

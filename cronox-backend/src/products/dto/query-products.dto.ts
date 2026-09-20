@@ -12,7 +12,8 @@ import {
   Max,
   IsEnum,
 } from 'class-validator';
-import { VariantSize } from '@prisma/client';
+import type { VariantSize } from '@prisma/client';
+import { VARIANT_SIZE_VALUES } from '../product-size-system';
 
 const normalizeQueryText = (value: unknown, lowerCase = false): unknown => {
   if (typeof value !== 'string') return value;
@@ -92,9 +93,9 @@ export class QueryProductsDto {
 
   @ApiPropertyOptional({
     description: 'Filtra por talla disponible con stock',
-    enum: VariantSize,
+    enum: VARIANT_SIZE_VALUES,
   })
   @IsOptional()
-  @IsEnum(VariantSize)
+  @IsEnum(VARIANT_SIZE_VALUES)
   size?: VariantSize;
 }

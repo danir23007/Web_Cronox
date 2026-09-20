@@ -4,6 +4,7 @@ import { createHash, randomBytes, randomInt } from 'crypto';
 import { getPublicApiUrl } from '../common/config/environment';
 import { EmailService } from '../email/email.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { NewsletterSettingsService } from './newsletter-settings.service';
 
 const FIRST_ORDER_DISCOUNT_PERCENT = 10;
 const VERIFICATION_TTL_MS = 24 * 60 * 60 * 1000;
@@ -34,7 +35,22 @@ export class NewsletterService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly emailService: EmailService,
+    private readonly settingsService?: NewsletterSettingsService,
   ) {}
+
+  getPublicSettings() {
+    return (
+      this.settingsService?.getPublicSettings() ?? {
+        version: 1,
+        source: null,
+        variants: null,
+        desktop: { focalX: 50, focalY: 50, zoom: 1, fit: 'COVER' },
+        mobile: { focalX: 50, focalY: 50, zoom: 1, fit: 'COVER' },
+        asciiEnabled: true,
+        asciiOpacity: 1,
+      }
+    );
+  }
 
   /**
    * Registration may only claim a subscription that was already confirmed.

@@ -74,7 +74,6 @@
   const activityPageInfo = $('#activityPageInfo');
   const activityPrev = $('#activityPrev');
   const activityNext = $('#activityNext');
-  const activityPageSize = $('#activityPageSize');
   const usersBody = $('#usersBody');
   const usersMessage = $('#usersMessage');
   const usersPageInfo = $('#usersPageInfo');
@@ -121,7 +120,6 @@
   const productsPageInfo = $('#productsPageInfo');
   const productsPrev = $('#productsPrev');
   const productsNext = $('#productsNext');
-  const productsPageSize = $('#productsPageSize');
   const createProductBtn = $('#createProductBtn');
   const productModal = $('#productModal');
   const productModalTitle = $('#productModalTitle');
@@ -167,6 +165,9 @@
   const codesMessage = $('#codesMessage');
   const codeSearch = $('#codeSearch');
   const codeStatusFilter = $('#codeStatusFilter');
+  const codesPageInfo = $('#codesPageInfo');
+  const codesPrev = $('#codesPrev');
+  const codesNext = $('#codesNext');
   const createCodeBtn = $('#createCodeBtn');
   const codeModal = $('#codeModal');
   const codeModalTitle = $('#codeModalTitle');
@@ -181,9 +182,12 @@
   const notesModalSubmit = $('#notesModalSubmit');
   const notesModalClose = $('#notesModalClose');
   const toastContainer = $('#toastContainer');
+  const ADMIN_PAGE_SIZES = window.CRONOX_ADMIN_PAGINATION?.PAGE_SIZES ||
+    Object.freeze({ inventory: 50, products: 50, promoCodes: 50, activity: 100, users: 100 });
   const productsState = {
     page: 1,
-    pageSize: 25,
+    pageSize: ADMIN_PAGE_SIZES.products,
+    totalPages: 1,
     q: '',
     dateFrom: '',
     dateTo: '',
@@ -193,7 +197,14 @@
     sortBy: 'createdAt',
     sortDir: 'desc',
   };
-  const codesState = { page: 1, limit: 20, search: '', isActive: '' };
+  const codesState = {
+    page: 1,
+    limit: ADMIN_PAGE_SIZES.promoCodes,
+    total: 0,
+    totalPages: 1,
+    search: '',
+    isActive: '',
+  };
   const categoryAssignmentsState = {
     products: [],
     categories: [],
@@ -231,7 +242,8 @@
   };
   const activityState = {
     page: 1,
-    pageSize: 10,
+    pageSize: ADMIN_PAGE_SIZES.activity,
+    totalPages: 1,
     q: '',
     actionType: '',
     targetType: '',
@@ -240,7 +252,7 @@
   };
   const usersState = {
     page: 1,
-    pageSize: 10,
+    pageSize: ADMIN_PAGE_SIZES.users,
     total: 0,
     totalPages: 1,
     q: '',
@@ -297,6 +309,7 @@
     inventory: ['ADMIN', 'SUPERADMIN'],
     mails: ['ADMIN', 'SUPERADMIN'],
     keyScreen: ['ADMIN', 'SUPERADMIN'],
+    newsletter: ['ADMIN', 'SUPERADMIN'],
     orders: ['ADMIN', 'SUPERADMIN'],
     promoCodes: ['ADMIN', 'SUPERADMIN'],
     auditLog: ['ADMIN', 'SUPERADMIN'],
@@ -312,6 +325,7 @@
     'section-inventory': 'inventory',
     'section-mails': 'mails',
     'section-key-screen': 'keyScreen',
+    'section-newsletter': 'newsletter',
     'section-product-categories': 'products',
     'section-codes': 'promoCodes',
     'section-user': 'userDetail',
@@ -386,6 +400,7 @@
     setNavVisibility('section-inventory', canAccess('inventory'));
     setNavVisibility('section-mails', canAccess('mails'));
     setNavVisibility('section-key-screen', canAccess('keyScreen'));
+    setNavVisibility('section-newsletter', canAccess('newsletter'));
     setNavVisibility('section-product-categories', canAccess('products'));
     setNavVisibility('section-codes', canAccess('promoCodes'));
     setUserTabVisibility('notes', canAccess('notes'));
@@ -524,8 +539,17 @@
       .replace(/>/g, '&gt;')
       .replace(/\"/g, '&quot;')
       .replace(/'/g, '&#039;');
-  const safeText = (value, fallback = 'â€”') =>
+  const safeText = (value, fallback = '\u2014') =>
     escapeHtml(value == null || value === '' ? fallback : value);
+  const ACTIVITY_REASON_PLACEHOLDERS = new Set([
+    '\u2014',
+    '\u00e2\u20ac\u201d',
+    '\u00c3\u00a2\u00e2\u201a\u00ac\u00e2\u20ac\u009d',
+  ]);
+  const normalizeActivityReason = (value) => {
+    const text = String(value ?? '').trim();
+    return !text || ACTIVITY_REASON_PLACEHOLDERS.has(text) ? '\u2014' : text;
+  };
   const safeImageUrl = (value) => {
     const helper = window.CRONOX_SECURITY?.productImageUrl;
     return typeof helper === 'function' ? helper(value, '') : '';
@@ -1161,7 +1185,7 @@
         created.label = safeText(created.label);
         created.full = safeText(created.full);
         entry.actionType = safeText(entry.actionType);
-        entry.reason = safeText(entry.reason);
+        const reason = safeText(normalizeActivityReason(entry.reason));
         const adminLabel = safeText(getAdminLabel(entry.adminUser));
         const detailParts = [];
         if (entry.fromCircle && entry.toCircle) {
@@ -1179,7 +1203,7 @@
           <td>${entry.actionType || '—'}</td>
           <td>${adminLabel}</td>
           <td>${safeText(detail)}</td>
-          <td>${entry.reason || '—'}</td>
+          <td>${reason}</td>
         </tr>`;
       })
       .join('');
@@ -1421,7 +1445,7 @@
         created.label = safeText(created.label);
         created.full = safeText(created.full);
         entry.actionType = safeText(entry.actionType);
-        entry.reason = safeText(entry.reason);
+        const reason = safeText(normalizeActivityReason(entry.reason));
         const adminLabel = safeText(getAdminLabel(entry.adminUser));
         const targetLabel = entry.targetType && entry.targetId
           ? `${entry.targetType}:${entry.targetId}`
@@ -1438,8 +1462,8 @@
           </td>
           <td>${adminLabel}</td>
           <td>${entry.actionType || '—'}</td>
-          <td class="activity-target">${targetCell}</td>
-          <td>${entry.reason || '—'}</td>
+          <td class="activity-target"><div class="activity-target__content">${targetCell}</div></td>
+          <td>${reason}</td>
         </tr>`;
       })
       .join('');
@@ -1762,15 +1786,27 @@
   };
 
   const updatePagination = (meta, state, elements) => {
-    const { info, prev, next, size } = elements;
+    const { info, prev, next } = elements;
+    const shared = window.CRONOX_ADMIN_PAGINATION?.apply?.({
+      info,
+      prev,
+      next,
+      page: meta.page,
+      pageSize: state.pageSize || state.limit,
+      totalItems: meta.totalItems,
+    });
+    if (shared) {
+      state.page = shared.page;
+      state.totalPages = shared.totalPages;
+      return;
+    }
     if (info) {
       info.textContent = `Página ${meta.page} de ${meta.totalPages} · ${meta.totalItems} resultados`;
     }
     if (prev) prev.disabled = meta.page <= 1;
     if (next) next.disabled = meta.page >= meta.totalPages;
-    if (size && size.value !== String(state.pageSize)) {
-      size.value = String(state.pageSize);
-    }
+    const controls = prev?.closest('.page-controls') || next?.closest('.page-controls');
+    if (controls) controls.hidden = meta.totalPages <= 1;
   };
 
   const syncRequestsStateFromInputs = () => {
@@ -1841,7 +1877,7 @@
   const getUsersHashParams = () => {
     const hash = window.location.hash || '';
     if (!hash.startsWith(USERS_HASH_PREFIX)) return null;
-    // Parse hash state for usuarios: #usuarios&q=&role=&circle=&page=&pageSize=&sort=
+    // Parse hash state for usuarios: #usuarios&q=&role=&circle=&page=&sort=
     const rawParams = hash.slice(USERS_HASH_PREFIX.length);
     const query = rawParams.startsWith('&') ? rawParams.slice(1) : rawParams;
     return new URLSearchParams(query);
@@ -1851,11 +1887,9 @@
     const params = getUsersHashParams();
     if (!params) return;
     const page = Number(params.get('page'));
-    const pageSize = Number(params.get('pageSize'));
     const sortValue = params.get('sort') || '';
     const [sortField, sortOrder] = sortValue.split(':');
     usersState.page = Number.isFinite(page) && page > 0 ? page : usersState.page;
-    usersState.pageSize = Number.isFinite(pageSize) && pageSize > 0 ? pageSize : usersState.pageSize;
     usersState.q = params.get('q') ?? usersState.q;
     usersState.role = params.get('role') ?? usersState.role;
     usersState.circle = params.get('circle') ?? usersState.circle;
@@ -1865,7 +1899,7 @@
   };
 
   const buildUsersHash = (state) => {
-    // Serialize hash state for usuarios: #usuarios&q=&role=&circle=&page=&pageSize=&sort=
+    // Serialize hash state for usuarios: #usuarios&q=&role=&circle=&page=&sort=
     const params = new URLSearchParams();
     const sortValue = [state.sort, state.order].filter(Boolean).join(':');
     params.set('q', state.q || '');
@@ -1873,7 +1907,6 @@
     params.set('circle', state.circle || '');
     params.set('accountState', state.accountState || '');
     params.set('page', String(state.page || 1));
-    params.set('pageSize', String(state.pageSize || 10));
     params.set('sort', sortValue);
     return `${USERS_HASH_PREFIX}&${params.toString()}`;
   };
@@ -2297,7 +2330,8 @@
       );
       const meta = normalizePaginated(data, activityState);
       activityState.page = meta.page;
-      activityState.pageSize = meta.pageSize;
+      activityState.pageSize = ADMIN_PAGE_SIZES.activity;
+      activityState.totalPages = meta.totalPages;
       if (!meta.items || !meta.items.length) {
         showEmptyTable(activityBody, {
           title: 'Sin actividad registrada',
@@ -2312,7 +2346,6 @@
         info: activityPageInfo,
         prev: activityPrev,
         next: activityNext,
-        size: activityPageSize,
       });
     } catch (error) {
       console.error('[ADMIN] Error cargando actividad', error);
@@ -2395,12 +2428,27 @@
 
   const updateUsersPagination = () => {
     if (!usersPageInfo) return;
+    const shared = window.CRONOX_ADMIN_PAGINATION?.apply?.({
+      info: usersPageInfo,
+      prev: usersPrev,
+      next: usersNext,
+      page: usersState.page,
+      pageSize: ADMIN_PAGE_SIZES.users,
+      totalItems: usersState.total,
+    });
+    if (shared) {
+      usersState.page = shared.page;
+      usersState.totalPages = shared.totalPages;
+      return;
+    }
     const totalPages = Math.max(1, Number(usersState.totalPages) || 1);
     const currentPage = Math.min(Math.max(usersState.page, 1), totalPages);
     const totalLabel = Number.isFinite(usersState.total) ? usersState.total : 0;
     usersPageInfo.textContent = `${totalLabel} resultados · Página ${currentPage} de ${totalPages}`;
     if (usersPrev) usersPrev.disabled = currentPage <= 1;
     if (usersNext) usersNext.disabled = currentPage >= totalPages;
+    const controls = usersPrev?.closest('.page-controls') || usersNext?.closest('.page-controls');
+    if (controls) controls.hidden = totalPages <= 1;
   };
 
   const getUsersColumnCount = () => 9;
@@ -2494,7 +2542,7 @@
       const data = await listFn(buildUsersQuery(usersState));
       const normalized = normalizeUsersResponse(data);
       usersState.page = normalized.meta.page;
-      usersState.pageSize = normalized.meta.pageSize;
+      usersState.pageSize = ADMIN_PAGE_SIZES.users;
       usersState.total = normalized.meta.total;
       usersState.totalPages = normalized.meta.totalPages;
       if (!normalized.items || !normalized.items.length) {
@@ -2576,11 +2624,29 @@
       .join('');
   };
 
+  const variantEditorStocks = new Map();
+  const selectedSizeSystem = () => document.getElementById('productSizeSystem')?.value || 'APPAREL';
+  const sizeKeysForSystem = (system = selectedSizeSystem()) =>
+    window.CRONOX_SIZES?.values?.(system) || ['XS', 'S', 'M', 'L', 'XL', 'XXL'];
+  const captureVariantEditorStocks = () => {
+    document.querySelectorAll('#productVariantStockFields [data-variant-size]').forEach((input) => {
+      variantEditorStocks.set(input.dataset.variantSize, Number(input.value || 0));
+    });
+  };
+  const renderVariantStockFields = () => {
+    const container = document.getElementById('productVariantStockFields');
+    if (!container) return;
+    container.innerHTML = sizeKeysForSystem().map((size) => {
+      const label = window.CRONOX_SIZES?.label?.(size) || size;
+      const stock = variantEditorStocks.get(size) ?? 0;
+      return `<div class="form-group"><label for="stock-${escapeHtml(size)}">${escapeHtml(label)}</label><input id="stock-${escapeHtml(size)}" data-variant-size="${escapeHtml(size)}" class="input" type="number" min="0" step="1" value="${stock}"></div>`;
+    }).join('');
+  };
   const collectVariantPayload = () => {
-    const sizes = ['XS', 'S', 'M', 'L', 'XL', 'XXL'];
+    captureVariantEditorStocks();
+    const sizes = sizeKeysForSystem();
     return sizes.map((size) => {
-      const input = document.getElementById(`stock${size}`);
-      const stock = Number(input?.value || 0);
+      const stock = Number(variantEditorStocks.get(size) || 0);
       return { size, stockQty: Number.isFinite(stock) ? stock : 0 };
     });
   };
@@ -2589,6 +2655,10 @@
     editingProductId = null;
     cachedProductImages = [];
     productForm?.reset();
+    variantEditorStocks.clear();
+    const sizeSystemInput = document.getElementById('productSizeSystem');
+    if (sizeSystemInput) sizeSystemInput.value = 'APPAREL';
+    renderVariantStockFields();
     window.CRONOX_PRODUCT_GALLERY?.reset?.();
     setProductCardFraming();
     renderProductImagesPreview([]);
@@ -2646,7 +2716,8 @@
       );
       const meta = normalizePaginated(data, productsState);
       productsState.page = meta.page;
-      productsState.pageSize = meta.pageSize;
+      productsState.pageSize = ADMIN_PAGE_SIZES.products;
+      productsState.totalPages = meta.totalPages;
       if (!meta.items || !meta.items.length) {
         showEmptyTable(productsBody, {
           title: 'No hay resultados con estos filtros',
@@ -2661,7 +2732,6 @@
         info: productsPageInfo,
         prev: productsPrev,
         next: productsNext,
-        size: productsPageSize,
       });
     } catch (error) {
       console.error('[ADMIN] Error cargando productos', error);
@@ -3065,18 +3135,14 @@
           window.CRONOX_PRODUCT_GALLERY?.load?.(product);
           renderProductImagesPreview([window.CRONOX_PRODUCT_GALLERY?.primaryUrl?.()].filter(Boolean));
 
-          const variantMap = Array.isArray(product.variants)
-            ? product.variants.reduce((acc, variant) => {
-                if (variant.size) acc[String(variant.size).toUpperCase()] = variant;
-                return acc;
-              }, {})
-            : {};
-          ['XS', 'S', 'M', 'L', 'XL', 'XXL'].forEach((size) => {
-            const input = document.getElementById(`stock${size}`);
-            if (input) {
-              input.value = variantMap[size]?.stockQty ?? variantMap[size]?.stock ?? 0;
-            }
+          const sizeSystemInput = document.getElementById('productSizeSystem');
+          if (sizeSystemInput) sizeSystemInput.value = product.sizeSystem || 'APPAREL';
+          variantEditorStocks.clear();
+          (Array.isArray(product.variants) ? product.variants : []).forEach((variant) => {
+            const size = window.CRONOX_SIZES?.key?.(variant.size) || String(variant.size || '').toUpperCase();
+            if (size) variantEditorStocks.set(size, variant.stockQty ?? variant.stock ?? 0);
           });
+          renderVariantStockFields();
         }
       } catch (error) {
         console.error('[ADMIN] Error obteniendo producto', error);
@@ -3092,7 +3158,10 @@
     if (!files || !files.length) return [];
     try {
       const response = await window.CRONOX_API?.admin?.uploadProductImages(files);
-      if (Array.isArray(response?.urls)) {
+      if (Array.isArray(response?.images) || Array.isArray(response?.urls)) {
+        const uploaded = Array.isArray(response?.images)
+          ? response.images
+          : response.urls.map((url) => ({ url }));
         if (response.failures) {
           window.CRONOX_PRODUCT_GALLERY?.notify?.(
             `${response.urls.length} imagen${response.urls.length === 1 ? '' : 'es'} subida${response.urls.length === 1 ? '' : 's'}; ${response.failures} no se pudo subir.`,
@@ -3102,7 +3171,7 @@
         if (!response.urls.length && response.failures) {
           throw new Error('No se pudo subir ninguna de las imágenes seleccionadas.');
         }
-        return response.urls.map(safeImageUrl).filter(Boolean);
+        return uploaded.map((image) => ({ ...image, url: safeImageUrl(image?.url) })).filter((image) => image.url);
       }
     } catch (error) {
       console.error('[ADMIN] Error subiendo imágenes', error);
@@ -3150,6 +3219,7 @@
       searchKeywords: [...new Set(searchKeywords)],
       price: priceCents,
       isActive: productForm.querySelector('#productIsActive')?.checked ?? true,
+      sizeSystem: selectedSizeSystem(),
       variants: collectVariantPayload(),
       cardImagePositionX: productCardFramingState.cardImagePositionX,
       cardImagePositionY: productCardFramingState.cardImagePositionY,
@@ -3180,8 +3250,8 @@
       } else if (galleryImages.length) {
         payload.images = galleryImages
           .filter((image) => image.isActive)
-          .map(({ url, alt, sortOrder, isPrimary, galleryPositionX, galleryPositionY, galleryZoom, galleryFit }) => ({
-            url, alt, sortOrder, isPrimary, galleryPositionX, galleryPositionY, galleryZoom, galleryFit,
+          .map(({ url, storageKey, mimeType, fileSize, width, height, variants, alt, sortOrder, isPrimary, galleryPositionX, galleryPositionY, galleryZoom, galleryFit }) => ({
+            url, storageKey, mimeType, fileSize, width, height, variants, alt, sortOrder, isPrimary, galleryPositionX, galleryPositionY, galleryZoom, galleryFit,
           }));
       } else if (imageUrls.length) {
         payload.imageUrls = imageUrls;
@@ -3427,6 +3497,15 @@
     try {
       const data = await window.CRONOX_API?.admin?.listPromoCodes(query);
       const items = Array.isArray(data?.items) ? data.items : Array.isArray(data) ? data : [];
+      const meta = data?.meta || {};
+      codesState.page = Number(meta.page) || 1;
+      codesState.limit = ADMIN_PAGE_SIZES.promoCodes;
+      codesState.total = Number(meta.total) || 0;
+      codesState.totalPages = Math.max(
+        1,
+        Number(meta.pageCount ?? meta.totalPages) ||
+          Math.ceil(codesState.total / codesState.limit),
+      );
       codesCache = items;
       if (!items.length) {
         showEmptyTable(codesBody, {
@@ -3438,6 +3517,15 @@
       } else {
         renderCodes(items);
       }
+      updatePagination(
+        {
+          page: codesState.page,
+          totalPages: codesState.totalPages,
+          totalItems: codesState.total,
+        },
+        codesState,
+        { info: codesPageInfo, prev: codesPrev, next: codesNext },
+      );
     } catch (error) {
       console.error('[ADMIN] Error cargando códigos', error);
       showModuleError({
@@ -4093,16 +4181,10 @@
 
     if (productsNext) {
       productsNext.addEventListener('click', () => {
-        productsState.page += 1;
-        fetchProducts();
-      });
-    }
-
-    if (productsPageSize) {
-      productsPageSize.addEventListener('change', () => {
-        productsState.pageSize = Number(productsPageSize.value || 25);
-        productsState.page = 1;
-        fetchProducts();
+        if (productsState.page < productsState.totalPages) {
+          productsState.page += 1;
+          fetchProducts();
+        }
       });
     }
 
@@ -4117,16 +4199,10 @@
 
     if (activityNext) {
       activityNext.addEventListener('click', () => {
-        activityState.page += 1;
-        fetchActivity();
-      });
-    }
-
-    if (activityPageSize) {
-      activityPageSize.addEventListener('change', () => {
-        activityState.pageSize = Number(activityPageSize.value || 10);
-        activityState.page = 1;
-        fetchActivity();
+        if (activityState.page < activityState.totalPages) {
+          activityState.page += 1;
+          fetchActivity();
+        }
       });
     }
 
@@ -4195,8 +4271,10 @@
 
     if (usersNext) {
       usersNext.addEventListener('click', () => {
-        usersState.page += 1;
-        fetchUsers();
+        if (usersState.page < usersState.totalPages) {
+          usersState.page += 1;
+          fetchUsers();
+        }
       });
     }
 
@@ -4255,6 +4333,10 @@
         const price = Number(event.target.value || 0);
         productCardFramingPrice.textContent = `${(Number.isFinite(price) ? price : 0).toFixed(2).replace('.', ',')} €`;
       }
+    });
+    document.getElementById('productSizeSystem')?.addEventListener('change', () => {
+      captureVariantEditorStocks();
+      renderVariantStockFields();
     });
 
     if (productImagesInput) {
@@ -4360,6 +4442,7 @@
     if (codeStatusFilter) {
       codeStatusFilter.addEventListener('change', () => {
         codesState.isActive = codeStatusFilter.value;
+        codesState.page = 1;
         fetchCodes();
       });
     }
@@ -4369,10 +4452,24 @@
         clearTimeout(codeSearchTimeout);
         codeSearchTimeout = setTimeout(() => {
           codesState.search = codeSearch.value.trim();
+          codesState.page = 1;
           fetchCodes();
         }, 250);
       });
     }
+
+    codesPrev?.addEventListener('click', () => {
+      if (codesState.page > 1) {
+        codesState.page -= 1;
+        fetchCodes();
+      }
+    });
+    codesNext?.addEventListener('click', () => {
+      if (codesState.page < codesState.totalPages) {
+        codesState.page += 1;
+        fetchCodes();
+      }
+    });
 
     if (codeForm) {
       codeForm.addEventListener('submit', submitCode);

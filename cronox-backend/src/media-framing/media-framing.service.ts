@@ -78,6 +78,7 @@ type WebsiteMediaAssetRecord = {
   fileSize: number;
   width: number | null;
   height: number | null;
+  variants: Prisma.JsonValue | null;
   createdAt: Date;
 };
 
@@ -315,6 +316,7 @@ export class MediaFramingService {
       return {
         assetId: asset.id,
         source: asset.publicUrl,
+        variants: asset.variants,
         sourceFilename: asset.originalFilename,
         mediaType:
           asset.mediaType === 'video' ? ('video' as const) : ('image' as const),
@@ -329,6 +331,7 @@ export class MediaFramingService {
       mediaType: definition.mediaType,
       poster: definition.staticPoster ? `/${definition.staticPoster}` : null,
       authority: definition.sourceKind,
+      variants: null,
     };
   }
 
@@ -352,6 +355,9 @@ export class MediaFramingService {
                 ? { heroText: resolveHeroText(record) }
                 : {}),
               source: media.source,
+              ...(media.mediaType === 'image'
+                ? { variants: media.variants }
+                : {}),
               mediaType: media.mediaType,
               poster: media.poster,
             };
@@ -382,6 +388,7 @@ export class MediaFramingService {
           defaultMediaType: definition.mediaType,
           authority: media.authority,
           source: media.source,
+          variants: media.variants,
           sourceFilename: media.sourceFilename,
           poster: media.poster,
           activeAssetId: media.assetId,
@@ -474,6 +481,7 @@ export class MediaFramingService {
       const item = {
         id: asset.id,
         source: asset.publicUrl,
+        variants: asset.variants,
         poster: null,
         originalFilename: asset.originalFilename,
         mimeType: asset.mimeType,

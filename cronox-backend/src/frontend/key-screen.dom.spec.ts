@@ -24,6 +24,16 @@ describe('Pantalla Clave frontend integration', () => {
     'utf8',
   );
   const mainSource = readFileSync(join(__dirname, '..', 'main.ts'), 'utf8');
+  const gateMiddlewareSource = readFileSync(
+    join(
+      __dirname,
+      '..',
+      'common',
+      'routing',
+      'public-html-gate.middleware.ts',
+    ),
+    'utf8',
+  );
 
   it('adds the main Admin section with separate save, preview, activate and master controls', () => {
     const document = new JSDOM(adminHtml).window.document;
@@ -145,15 +155,27 @@ describe('Pantalla Clave frontend integration', () => {
     );
   });
 
-  it('enforces the gate before static HTML while explicitly excluding Admin and APIs', () => {
-    expect(mainSource).toContain("pathname.startsWith('/api')");
-    expect(mainSource).toContain("'/admin.html'");
+  it('delegates the gate before static HTML while explicitly excluding Admin and APIs', () => {
     expect(mainSource).toContain(
+      "import { createPublicHtmlGateMiddleware } from './common/routing/public-html-gate.middleware'",
+    );
+    expect(mainSource).toContain('createPublicHtmlGateMiddleware({');
+    expect(mainSource.indexOf('createPublicHtmlGateMiddleware({')).toBeLessThan(
+      mainSource.indexOf('app.useGlobalPipes'),
+    );
+    expect(gateMiddlewareSource).toContain("pathname.startsWith('/api')");
+    expect(gateMiddlewareSource).toContain("'/admin.html'");
+    expect(gateMiddlewareSource).toContain(
       "res.sendFile(join(frontendRoot, 'key-screen.html'))",
     );
-    expect(mainSource).not.toContain("res.redirect(307, '/key-screen.html')");
-    expect(mainSource.indexOf('shouldGatePublicHtml')).toBeLessThan(
-      mainSource.indexOf('app.useGlobalPipes'),
+    expect(gateMiddlewareSource).not.toContain(
+      "res.redirect(307, '/key-screen.html')",
+    );
+    expect(gateMiddlewareSource).toContain(
+      "res.setHeader('Cache-Control', 'no-store, max-age=0')",
+    );
+    expect(gateMiddlewareSource).toContain(
+      "res.setHeader('X-Robots-Tag', 'noindex, follow')",
     );
   });
 

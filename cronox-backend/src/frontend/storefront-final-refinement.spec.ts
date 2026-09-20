@@ -342,11 +342,11 @@ describe('focused storefront refinement acceptance matrix', () => {
     expect(checkoutScript).toContain('data.summary,');
   });
 
-  it('48. presents checkout product thumbnails on white without cropping', () => {
+  it('48. presents checkout product thumbnails neutrally without cropping', () => {
     const media = cssRule(checkoutStyles, '.checkout-item__media');
     const image = cssRule(checkoutStyles, '.checkout-item__media img');
-    expect(media).toContain('background: #fff');
-    expect(media).toContain('padding: 8px');
+    expect(media).toContain('background: transparent');
+    expect(media).toContain('padding: 0');
     expect(image).toContain('object-fit: contain');
   });
 
@@ -406,7 +406,7 @@ describe('focused storefront refinement acceptance matrix', () => {
     );
   });
 
-  it('54. scales the right summary and gives recommendations white contained images', () => {
+  it('54. scales the right summary and gives recommendations neutral contained images', () => {
     const itemMedia = cssRule(checkoutStyles, '.checkout-item__media');
     const recommendationImage = cssRule(
       checkoutStyles,
@@ -416,7 +416,7 @@ describe('focused storefront refinement acceptance matrix', () => {
     expect(itemMedia).toContain('height: 108px');
     expect(recommendationImage).toContain('width: 76px');
     expect(recommendationImage).toContain('height: 86px');
-    expect(recommendationImage).toContain('background: #fff');
+    expect(recommendationImage).toContain('background: transparent');
     expect(recommendationImage).toContain('object-fit: contain');
     expect(cssRule(checkoutStyles, '.checkout-item__title')).toContain(
       'font-size: 16px',

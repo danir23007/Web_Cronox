@@ -1,0 +1,80 @@
+(function () {
+  "use strict";
+  const section = document.getElementById("section-newsletter");
+  if (!section) return;
+  const $ = (id) => document.getElementById(id);
+  const elements = {
+    status: $("newsletterAdminStatus"), save: $("newsletterAdminSave"), upload: $("newsletterAssetUpload"),
+    uploadButton: $("newsletterAssetUploadButton"), assets: $("newsletterAssetGrid"),
+    focalX: $("newsletterFocalX"), focalY: $("newsletterFocalY"), zoom: $("newsletterZoom"),
+    focalXValue: $("newsletterFocalXValue"), focalYValue: $("newsletterFocalYValue"), zoomValue: $("newsletterZoomValue"),
+    reset: $("newsletterFrameReset"), asciiEnabled: $("newsletterAsciiEnabled"),
+    asciiOpacity: $("newsletterAsciiOpacity"), asciiOpacityValue: $("newsletterAsciiOpacityValue"),
+  };
+  const roots = [...section.querySelectorAll("[data-newsletter-preview]")];
+  const geometry = window.CRONOX_MEDIA_GEOMETRY;
+  const renderer = window.CRONOX_NEWSLETTER_RENDERER;
+  const state = { loaded: false, loading: null, saving: false, device: "desktop", draft: null, assets: [], controllers: [], drag: null };
+  const apiBase = () => window.CRONOX_API?.API_BASE || "";
+  const frame = (value) => ({ focalX: Number(value?.focalX ?? 50), focalY: Number(value?.focalY ?? 50), zoom: Number(value?.zoom ?? 1), fit: value?.fit || "COVER" });
+  const setStatus = (message, kind = "info") => { elements.status.textContent = message; elements.status.dataset.state = kind; };
+  const parse = async (response) => {
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(payload?.message || `Error del servidor (${response.status})`);
+    return payload;
+  };
+  const request = async (path, options = {}) => {
+    const method = options.method || "GET";
+    const headers = { Accept: "application/json", ...(options.headers || {}) };
+    if (method !== "GET") Object.assign(headers, await window.CRONOX_API?.getCsrfHeaders?.());
+    return parse(await fetch(`${apiBase()}${path}`, { ...options, method, headers, credentials: "include", cache: method === "GET" ? "no-store" : undefined }));
+  };
+  const selectedSource = () => state.assets.find((asset) => asset.id === state.draft?.mediaAssetId)?.source || state.draft?.source || renderer?.FALLBACK_SOURCE;
+  const previewConfig = () => ({ ...state.draft, source: selectedSource() });
+  const updatePreviews = () => state.controllers.forEach((controller) => controller?.update?.(previewConfig()));
+  const syncControls = () => {
+    if (!state.draft) return;
+    const current = state.draft[state.device];
+    elements.focalX.value = String(current.focalX); elements.focalY.value = String(current.focalY); elements.zoom.value = String(current.zoom);
+    elements.focalXValue.textContent = `${Math.round(current.focalX)}%`; elements.focalYValue.textContent = `${Math.round(current.focalY)}%`; elements.zoomValue.textContent = `${current.zoom.toFixed(2)}×`;
+    elements.asciiEnabled.checked = state.draft.asciiEnabled; elements.asciiOpacity.value = String(Math.round(state.draft.asciiOpacity * 100)); elements.asciiOpacityValue.textContent = `${Math.round(state.draft.asciiOpacity * 100)}%`;
+    section.querySelectorAll("[data-newsletter-edit-device]").forEach((button) => { const active = button.dataset.newsletterEditDevice === state.device; button.classList.toggle("is-active", active); button.setAttribute("aria-selected", String(active)); });
+  };
+  const renderAssets = () => {
+    elements.assets.replaceChildren();
+    const fallback = document.createElement("button"); fallback.type = "button"; fallback.className = `newsletter-asset${state.draft?.mediaAssetId ? "" : " is-selected"}`; fallback.dataset.assetId = "";
+    fallback.innerHTML = `<img src="${renderer.FALLBACK_SOURCE}" alt=""><span>Imagen predeterminada</span>`; elements.assets.appendChild(fallback);
+    state.assets.forEach((asset) => { const button = document.createElement("button"); button.type = "button"; button.className = `newsletter-asset${state.draft?.mediaAssetId === asset.id ? " is-selected" : ""}`; button.dataset.assetId = asset.id; const image = document.createElement("img"); image.src = asset.source; image.alt = ""; image.loading = "lazy"; const label = document.createElement("span"); label.textContent = asset.originalFilename; button.append(image, label); elements.assets.appendChild(button); });
+  };
+  const load = () => {
+    if (state.loading) return state.loading;
+    state.loading = Promise.all([request("/api/admin/newsletter"), request("/api/admin/newsletter/assets")]).then(([settings, library]) => {
+      state.assets = Array.isArray(library.assets) ? library.assets : [];
+      state.draft = { mediaAssetId: settings.mediaAssetId || null, source: settings.source || null, desktop: frame(settings.desktop), mobile: frame(settings.mobile), asciiEnabled: settings.asciiEnabled !== false, asciiOpacity: Number(settings.asciiOpacity ?? 1), revision: Number(settings.revision || 0) };
+      state.controllers = roots.map((root) => renderer.mount(root, previewConfig()));
+      state.loaded = true; renderAssets(); syncControls(); updatePreviews(); setStatus("Configuración cargada.");
+    }).catch((error) => setStatus(error.message || "No se pudo cargar Newsletter.", "error")).finally(() => { state.loading = null; });
+    return state.loading;
+  };
+  const changeFrame = (key, value) => { if (!state.draft) return; state.draft[state.device][key] = Number(value); syncControls(); updatePreviews(); };
+  elements.focalX.addEventListener("input", () => changeFrame("focalX", elements.focalX.value));
+  elements.focalY.addEventListener("input", () => changeFrame("focalY", elements.focalY.value));
+  elements.zoom.addEventListener("input", () => changeFrame("zoom", elements.zoom.value));
+  elements.reset.addEventListener("click", () => { if (!state.draft) return; state.draft[state.device] = frame(); syncControls(); updatePreviews(); });
+  elements.asciiEnabled.addEventListener("change", () => { if (!state.draft) return; state.draft.asciiEnabled = elements.asciiEnabled.checked; updatePreviews(); });
+  elements.asciiOpacity.addEventListener("input", () => { if (!state.draft) return; state.draft.asciiOpacity = Number(elements.asciiOpacity.value) / 100; syncControls(); updatePreviews(); });
+  section.querySelectorAll("[data-newsletter-edit-device]").forEach((button) => button.addEventListener("click", () => { state.device = button.dataset.newsletterEditDevice; syncControls(); }));
+  elements.assets.addEventListener("click", (event) => { const button = event.target.closest("[data-asset-id]"); if (!button || !state.draft) return; const asset = state.assets.find((item) => item.id === button.dataset.assetId); state.draft.mediaAssetId = asset?.id || null; state.draft.source = asset?.source || null; renderAssets(); updatePreviews(); });
+  roots.forEach((root) => {
+    const wrapper = root.querySelector(".popup-image-wrapper"); const image = root.querySelector(".popup-image"); const device = root.dataset.newsletterDevice;
+    wrapper?.addEventListener("pointerdown", (event) => { if (!state.draft || state.device !== device) return; const current = state.draft[device]; const result = geometry?.apply?.(image, wrapper, current); if (!result?.valid) return; state.drag = { pointerId: event.pointerId, x: event.clientX, y: event.clientY, focalX: current.focalX, focalY: current.focalY, geometry: result, device, wrapper }; wrapper.setPointerCapture?.(event.pointerId); wrapper.classList.add("is-dragging"); event.preventDefault(); });
+    wrapper?.addEventListener("pointermove", (event) => { if (!state.drag || state.drag.pointerId !== event.pointerId) return; const next = geometry.focalFromDrag(state.drag.geometry, state.drag, event.clientX - state.drag.x, event.clientY - state.drag.y); state.draft[state.drag.device].focalX = next.focalX; state.draft[state.drag.device].focalY = next.focalY; syncControls(); updatePreviews(); });
+    const stop = (event) => { if (!state.drag || state.drag.pointerId !== event.pointerId) return; state.drag.wrapper.releasePointerCapture?.(event.pointerId); state.drag.wrapper.classList.remove("is-dragging"); state.drag = null; };
+    wrapper?.addEventListener("pointerup", stop); wrapper?.addEventListener("pointercancel", stop);
+  });
+  elements.uploadButton.addEventListener("click", async () => { const file = elements.upload.files?.[0]; if (!file) return setStatus("Selecciona una imagen.", "error"); elements.uploadButton.disabled = true; try { const form = new FormData(); form.append("file", file); const response = await request("/api/admin/newsletter/assets", { method: "POST", body: form }); const uploaded = { ...response.asset, source: response.asset.publicUrl || response.asset.source }; state.assets.unshift(uploaded); state.draft.mediaAssetId = uploaded.id; state.draft.source = uploaded.source; renderAssets(); updatePreviews(); setStatus("Imagen subida. Guarda para publicarla.", "success"); } catch (error) { setStatus(error.message, "error"); } finally { elements.uploadButton.disabled = false; } });
+  elements.save.addEventListener("click", async () => { if (!state.draft || state.saving) return; state.saving = true; elements.save.disabled = true; setStatus("Guardando…"); try { const saved = await request("/api/admin/newsletter", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ mediaAssetId: state.draft.mediaAssetId, desktop: state.draft.desktop, mobile: state.draft.mobile, asciiEnabled: state.draft.asciiEnabled, asciiOpacity: state.draft.asciiOpacity, expectedRevision: state.draft.revision }) }); state.draft.revision = saved.revision; state.draft.source = saved.source; setStatus("Newsletter guardada correctamente.", "success"); } catch (error) { setStatus(error.message, "error"); } finally { state.saving = false; elements.save.disabled = false; } });
+  document.querySelectorAll('[data-nav-target="section-newsletter"]').forEach((button) => button.addEventListener("click", load));
+  if (window.location.hash === "#section-newsletter") void load();
+  window.CRONOX_NEWSLETTER_ADMIN = { load };
+})();

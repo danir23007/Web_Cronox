@@ -59,13 +59,13 @@ describe('PDP recommended-product cards', () => {
     );
   });
 
-  it('keeps the white contained image panel and responsive recommendation grid', () => {
+  it('keeps a neutral contained image panel and responsive recommendation grid', () => {
     const image = cssRule(productStyles, '.pdp-related .product-img');
 
     expect(image).toContain('width:100%');
     expect(image).toContain('height:100%');
     expect(image).toContain('object-fit:contain');
-    expect(image).toContain('background:#fff');
+    expect(image).toContain('background:transparent');
     expect(productHtml).not.toMatch(/\.pdp-related \.products-grid\s*\{/);
     expect(productStyles).not.toMatch(/(^|\n)\.products-grid\s*\{/);
     expect(storeStyles).toMatch(
@@ -127,7 +127,7 @@ describe('PDP recommended-product cards', () => {
   });
 
   it('loads exactly the incremented PDP stylesheet cache version', () => {
-    expect(productHtml).toContain('href="assets/product-page.css?v=6"');
+    expect(productHtml).toContain('href="assets/product-page.css?v=7"');
     expect(productHtml).not.toContain('href="assets/product-page.css?v=5"');
   });
 });

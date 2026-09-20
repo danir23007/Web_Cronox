@@ -31,6 +31,7 @@ describe('ProductService search', () => {
           price: 3495,
           currency: 'EUR',
           imageUrl: 'https://example.com/black.png',
+          image: { url: 'https://example.com/black.png' },
           category: { name: 'Camisetas', slug: 'camisetas' },
         },
       ],

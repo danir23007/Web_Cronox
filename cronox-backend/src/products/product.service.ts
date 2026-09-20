@@ -6,7 +6,7 @@ import {
   NotFoundException,
   Optional,
 } from '@nestjs/common';
-import { Prisma, VariantSize } from '@prisma/client';
+import { Prisma, ProductSizeSystem } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateProductDto } from './dto/create-product.dto';
 import { QueryProductsDto } from './dto/query-products.dto';
@@ -28,6 +28,15 @@ import {
 } from './product-search';
 import { createHash, randomUUID } from 'crypto';
 import { SupabaseStorageService } from '../common/storage/supabase-storage.service';
+import {
+  assertSizesMatchSystem,
+  DEFAULT_PRODUCT_SIZE_SYSTEM,
+  PRODUCT_SIZE_SYSTEMS,
+  sizeOrder,
+  variantSizeLabel,
+  variantSizeSkuToken,
+} from './product-size-system';
+import { ADMIN_PAGE_SIZES } from '../admin/admin-pagination.constants';
 
 @Injectable()
 export class ProductService {
@@ -37,15 +46,6 @@ export class ProductService {
     private readonly prisma: PrismaService,
     @Optional() private readonly storage?: SupabaseStorageService,
   ) {}
-
-  private readonly defaultSizes: VariantSize[] = [
-    VariantSize.XS,
-    VariantSize.S,
-    VariantSize.M,
-    VariantSize.L,
-    VariantSize.XL,
-    VariantSize.XXL,
-  ];
 
   private readonly imageOrderBy: Prisma.ProductImageOrderByWithRelationInput[] =
     [{ sortOrder: 'asc' }, { id: 'asc' }];
@@ -231,6 +231,12 @@ export class ProductService {
   private galleryImageData(image: GalleryImageItemDto) {
     return {
       url: image.url,
+      storageKey: image.storageKey,
+      mimeType: image.mimeType,
+      fileSize: image.fileSize,
+      width: image.width,
+      height: image.height,
+      variants: image.variants as Prisma.InputJsonValue | undefined,
       alt: image.alt?.trim() ?? '',
       sortOrder: image.sortOrder,
       isPrimary: image.isPrimary,
@@ -284,8 +290,10 @@ export class ProductService {
     }
   }
 
-  private buildDefaultVariants(): CreateVariantDto[] {
-    return this.defaultSizes.map((size) => ({
+  private buildDefaultVariants(
+    sizeSystem: ProductSizeSystem = DEFAULT_PRODUCT_SIZE_SYSTEM,
+  ): CreateVariantDto[] {
+    return PRODUCT_SIZE_SYSTEMS[sizeSystem].map((size) => ({
       size,
       stockQty: 0,
       isActive: true,
@@ -301,9 +309,40 @@ export class ProductService {
     }
 
     const slug = this.slugify(productSlug) || 'producto';
-    const size = String(variant.size).toLowerCase();
+    const size = variantSizeSkuToken(variant.size).toLowerCase();
     const suffix = randomUUID().replace(/-/g, '');
     return `${slug}-${size}-${suffix}`;
+  }
+
+  private async assertVariantsCanBeReplaced(
+    tx: Prisma.TransactionClient,
+    productId: number,
+    variantIds: number[],
+  ) {
+    if (!variantIds.length) return;
+    const [protectedVariants, snapshotItems, orderItems] = await Promise.all([
+      tx.productVariant.count({
+        where: {
+          id: { in: variantIds },
+          OR: [
+            { stockQty: { gt: 0 } },
+            { movements: { some: {} } },
+            { cartItems: { some: {} } },
+            { checkoutStockReservations: { some: {} } },
+            { activityEvents: { some: {} } },
+          ],
+        },
+      }),
+      tx.checkoutSnapshotItem.count({
+        where: { variantId: { in: variantIds } },
+      }),
+      tx.orderItem.count({ where: { productId } }),
+    ]);
+    if (protectedVariants || snapshotItems || orderItems) {
+      throw new ConflictException(
+        'No se puede cambiar el sistema de tallas ni eliminar sus variantes porque existe stock, carrito, checkout, pedido o historial de inventario asociado.',
+      );
+    }
   }
 
   private async recordAudit(
@@ -503,10 +542,19 @@ export class ProductService {
 
     return {
       ...product,
-      variants: product.variants.map((variant) => ({
-        ...variant,
-        effectivePrice: variant.price ?? product.price,
-      })),
+      variants: product.variants
+        .map((variant) => ({
+          ...variant,
+          sizeLabel: variantSizeLabel(
+            (variant as { size?: string }).size || '',
+          ),
+          effectivePrice: variant.price ?? product.price,
+        }))
+        .sort(
+          (left, right) =>
+            sizeOrder((left as { size?: string }).size || '') -
+            sizeOrder((right as { size?: string }).size || ''),
+        ),
     } as T;
   }
 
@@ -543,7 +591,10 @@ export class ProductService {
   async listAdminProducts(query: AdminProductQueryDto) {
     const LOW_STOCK_THRESHOLD = 5;
     const page = Math.max(query.page ?? 1, 1);
-    const pageSize = Math.min(query.pageSize ?? query.limit ?? 20, 100);
+    const pageSize = Math.min(
+      query.pageSize ?? query.limit ?? ADMIN_PAGE_SIZES.PRODUCTS,
+      100,
+    );
     const searchTerm = (query.q ?? query.search)?.trim();
     const sortBy = query.sortBy ?? 'createdAt';
     const sortDir = query.sortDir ?? 'desc';
@@ -672,6 +723,12 @@ export class ProductService {
           alt: true,
           sortOrder: true,
           isPrimary: true,
+          storageKey: true,
+          mimeType: true,
+          fileSize: true,
+          width: true,
+          height: true,
+          variants: true,
         },
         orderBy: this.imageOrderBy,
       },
@@ -834,7 +891,7 @@ export class ProductService {
           where: { isActive: true },
           orderBy: this.imageOrderBy,
           take: 1,
-          select: { url: true },
+          select: { url: true, variants: true, width: true, height: true },
         },
       },
     });
@@ -1167,6 +1224,7 @@ export class ProductService {
             price: product.price,
             currency: product.currency,
             imageUrl: product.images[0]?.url ?? product.imageUrl,
+            image: product.images[0] ?? null,
             category: relevantCategory,
           };
         }),
@@ -1200,10 +1258,15 @@ export class ProductService {
       slug,
       searchKeywords,
     });
+    const sizeSystem = dto.sizeSystem ?? DEFAULT_PRODUCT_SIZE_SYSTEM;
     const variants =
       dto.variants?.length && Array.isArray(dto.variants)
         ? dto.variants
-        : this.buildDefaultVariants();
+        : this.buildDefaultVariants(sizeSystem);
+    assertSizesMatchSystem(
+      sizeSystem,
+      variants.map((variant) => variant.size),
+    );
 
     try {
       const product = await this.prisma.$transaction(async (tx) => {
@@ -1234,8 +1297,18 @@ export class ProductService {
             cardImagePositionX: dto.cardImagePositionX ?? 50,
             cardImagePositionY: dto.cardImagePositionY ?? 50,
             cardImageZoom: dto.cardImageZoom ?? 1,
+            sizeSystem,
             imageUrl: primaryImage?.url,
-            images: images.length ? { create: images } : undefined,
+            images: images.length
+              ? {
+                  create: images.map((image) => ({
+                    ...image,
+                    variants: ('variants' in image
+                      ? image.variants
+                      : undefined) as Prisma.InputJsonValue | undefined,
+                  })),
+                }
+              : undefined,
           },
         });
 
@@ -1336,6 +1409,29 @@ export class ProductService {
 
         if (!existing) {
           throw new NotFoundException('Product not found');
+        }
+
+        const currentSizeSystem =
+          existing.sizeSystem ?? DEFAULT_PRODUCT_SIZE_SYSTEM;
+        const nextSizeSystem = dto.sizeSystem ?? currentSizeSystem;
+        const changingSizeSystem = nextSizeSystem !== currentSizeSystem;
+        if (dto.variants?.length) {
+          assertSizesMatchSystem(
+            nextSizeSystem,
+            dto.variants.map((variant) => variant.size),
+          );
+        }
+        if (changingSizeSystem) {
+          const currentVariants = await tx.productVariant.findMany({
+            where: { productId: id },
+            select: { id: true },
+          });
+          await this.assertVariantsCanBeReplaced(
+            tx,
+            id,
+            currentVariants.map((variant) => variant.id),
+          );
+          data.sizeSystem = nextSizeSystem;
         }
 
         if (
@@ -1589,7 +1685,70 @@ export class ProductService {
           });
         }
 
+        if (changingSizeSystem) {
+          const replacementVariants = dto.variants?.length
+            ? dto.variants
+            : this.buildDefaultVariants(nextSizeSystem);
+          await tx.productVariant.deleteMany({ where: { productId: id } });
+          await tx.productVariant.createMany({
+            data: replacementVariants.map((variant) => ({
+              productId: id,
+              size: variant.size,
+              sku: this.resolveVariantSku(
+                typeof data.slug === 'string' ? data.slug : existing.slug,
+                variant,
+              ),
+              price: variant.price ?? null,
+              stockQty: variant.stockQty ?? variant.stock ?? 0,
+              isActive: variant.isActive ?? true,
+            })),
+            skipDuplicates: false,
+          });
+        } else if (dto.variants?.length) {
+          assertSizesMatchSystem(
+            currentSizeSystem,
+            dto.variants.map((variant) => variant.size),
+          );
+          const currentVariants = await tx.productVariant.findMany({
+            where: { productId: id },
+          });
+          const currentBySize = new Map(
+            currentVariants.map((variant) => [variant.size, variant]),
+          );
+          const productSlug =
+            typeof data.slug === 'string' ? data.slug : existing.slug;
+          for (const variant of dto.variants) {
+            const current = currentBySize.get(variant.size);
+            if (current) {
+              await tx.productVariant.update({
+                where: { id: current.id },
+                data: {
+                  ...(variant.sku !== undefined ? { sku: variant.sku } : {}),
+                  price: variant.price ?? null,
+                  stockQty: variant.stockQty ?? variant.stock ?? 0,
+                  isActive: variant.isActive ?? true,
+                },
+              });
+            } else {
+              await tx.productVariant.create({
+                data: {
+                  productId: id,
+                  size: variant.size,
+                  sku: this.resolveVariantSku(productSlug, variant),
+                  price: variant.price ?? null,
+                  stockQty: variant.stockQty ?? variant.stock ?? 0,
+                  isActive: variant.isActive ?? true,
+                },
+              });
+            }
+          }
+        }
+
         if (dto.variantsToCreate?.length) {
+          assertSizesMatchSystem(
+            nextSizeSystem,
+            dto.variantsToCreate.map((variant) => variant.size),
+          );
           const productSlug =
             typeof data.slug === 'string' ? data.slug : existing.slug;
           await tx.productVariant.createMany({
@@ -1616,6 +1775,10 @@ export class ProductService {
 
             if (!variantExists) {
               throw new NotFoundException('Variant not found');
+            }
+
+            if (variantData.size !== undefined) {
+              assertSizesMatchSystem(nextSizeSystem, [variantData.size]);
             }
 
             await tx.productVariant.update({
@@ -1653,10 +1816,7 @@ export class ProductService {
           const idsToRemove = variants.map((variant) => variant.id);
 
           if (idsToRemove.length) {
-            await tx.stockMovement.deleteMany({
-              where: { variantId: { in: idsToRemove } },
-            });
-
+            await this.assertVariantsCanBeReplaced(tx, id, idsToRemove);
             await tx.productVariant.deleteMany({
               where: { id: { in: idsToRemove } },
             });
@@ -1735,7 +1895,7 @@ export class ProductService {
       const result = await this.prisma.$transaction(async (tx) => {
         const existing = await tx.product.findUnique({
           where: { id },
-          include: { images: { select: { url: true } } },
+          include: { images: { select: { url: true, variants: true } } },
         });
         if (!existing) {
           throw new NotFoundException('Producto no encontrado');
@@ -1785,6 +1945,7 @@ export class ProductService {
               ...(existing.imageUrl ? [existing.imageUrl] : []),
             ]),
           ],
+          imageAssets: existing.images,
         };
       });
 
@@ -1804,7 +1965,19 @@ export class ProductService {
       }
       if (removableUrls.length && this.storage) {
         try {
-          await this.storage.deleteProductImages(removableUrls);
+          if (typeof this.storage.deleteProductImageAssets === 'function') {
+            await this.storage.deleteProductImageAssets(
+              removableUrls,
+              result.imageAssets
+                .filter((image) => removableUrls.includes(image.url))
+                .map(
+                  (image) =>
+                    image.variants as unknown as import('../images/image-presets').ImageVariants,
+                ),
+            );
+          } else {
+            await this.storage.deleteProductImages(removableUrls);
+          }
         } catch (error) {
           this.logger.error(
             `Producto ${id} eliminado, pero falló la limpieza de ${removableUrls.length} archivo(s)`,
@@ -1948,7 +2121,16 @@ export class ProductService {
     });
 
     try {
-      await this.storage.deleteProductImages([removed.url]);
+      if (typeof this.storage.deleteProductImageAssets === 'function') {
+        await this.storage.deleteProductImageAssets(
+          [removed.url],
+          [
+            removed.variants as unknown as import('../images/image-presets').ImageVariants,
+          ],
+        );
+      } else {
+        await this.storage.deleteProductImages([removed.url]);
+      }
     } catch (error) {
       await this.prisma.productImage.updateMany({
         where: {
@@ -1995,15 +2177,19 @@ export class ProductService {
   ) {
     const variants = Array.isArray(dto) ? dto : [dto];
 
-    let existingProduct: { slug: string };
+    let existingProduct: { slug: string; sizeSystem: ProductSizeSystem };
     try {
       existingProduct = await this.prisma.product.findUniqueOrThrow({
         where: { id: productId },
-        select: { slug: true },
+        select: { slug: true, sizeSystem: true },
       });
     } catch {
       throw new NotFoundException('Product not found');
     }
+    assertSizesMatchSystem(
+      existingProduct.sizeSystem ?? DEFAULT_PRODUCT_SIZE_SYSTEM,
+      variants.map((variant) => variant.size),
+    );
 
     try {
       const product = await this.prisma.$transaction(async (tx) => {
@@ -2050,10 +2236,14 @@ export class ProductService {
   ) {
     const existing = await this.prisma.productVariant.findFirst({
       where: { id: variantId, productId },
+      include: { product: { select: { sizeSystem: true } } },
     });
 
     if (!existing) {
       throw new NotFoundException('Variant not found');
+    }
+    if (dto.size !== undefined) {
+      assertSizesMatchSystem(existing.product.sizeSystem, [dto.size]);
     }
 
     try {
@@ -2093,10 +2283,10 @@ export class ProductService {
       throw new NotFoundException('Variant not found');
     }
 
-    await this.prisma.$transaction([
-      this.prisma.stockMovement.deleteMany({ where: { variantId } }),
-      this.prisma.productVariant.delete({ where: { id: variantId } }),
-    ]);
+    await this.prisma.$transaction(async (tx) => {
+      await this.assertVariantsCanBeReplaced(tx, productId, [variantId]);
+      await tx.productVariant.delete({ where: { id: variantId } });
+    });
 
     return { ok: true };
   }

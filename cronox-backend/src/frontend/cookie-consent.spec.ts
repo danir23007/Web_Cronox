@@ -189,6 +189,7 @@ describe('cookie consent frontend', () => {
     runtime.api.save({ necessary: true, preferences: true });
     runtime.localStorage.setItem('cronox_circle_request_modal_seen_42', '1');
     runtime.sessionStorage.setItem('cronoxNewsletterShown', 'true');
+    runtime.localStorage.setItem('cronoxNewsletterDismissedAt', '1234');
 
     runtime.api.rejectAll();
 
@@ -196,6 +197,9 @@ describe('cookie consent frontend', () => {
       runtime.localStorage.getItem('cronox_circle_request_modal_seen_42'),
     ).toBeNull();
     expect(runtime.sessionStorage.getItem('cronoxNewsletterShown')).toBeNull();
+    expect(
+      runtime.localStorage.getItem('cronoxNewsletterDismissedAt'),
+    ).toBeNull();
   });
 
   it('removes analytics session storage when analytics consent is withdrawn', () => {

@@ -20,6 +20,8 @@ import {
 import { GalleryController } from './gallery.controller';
 import { GalleryService } from './gallery.service';
 import { UpdateGallerySlotDto } from './dto/update-gallery-slot.dto';
+import { ReorderGalleryCarouselDto } from './dto/reorder-gallery-carousel.dto';
+import { UpdateGalleryModeDto } from './dto/update-gallery-mode.dto';
 import {
   GALLERY_UPLOAD_TOO_LARGE_MESSAGE,
   GalleryUploadSizeExceptionFilter,
@@ -75,6 +77,9 @@ describe('gallery controller access boundaries', () => {
 
   it('delegates reads, uploads, slot updates, and reorder requests to the gallery service', async () => {
     const getAdminSlots = jest.fn().mockResolvedValue({ slots: [] });
+    const getAdminConfiguration = jest
+      .fn()
+      .mockResolvedValue({ activeMode: 'MOSAIC', carouselSlots: [] });
     const getAssetLibrary = jest.fn().mockResolvedValue({ assets: [] });
     const getAssetDetails = jest
       .fn()
@@ -89,19 +94,29 @@ describe('gallery controller access boundaries', () => {
     const reorderSlots = jest
       .fn()
       .mockResolvedValue({ operation: 'move', slots: [] });
+    const updateMode = jest.fn().mockResolvedValue({ activeMode: 'CAROUSEL' });
+    const updateCarouselSlot = jest
+      .fn()
+      .mockResolvedValue({ slot: { position: 1 } });
+    const reorderCarousel = jest.fn().mockResolvedValue({ carouselSlots: [] });
     const service = {
       getAdminSlots,
+      getAdminConfiguration,
       getAssetLibrary,
       getAssetDetails,
       getProductRepository,
       uploadAsset,
       updateSlot,
       reorderSlots,
+      updateMode,
+      updateCarouselSlot,
+      reorderCarousel,
     } as unknown as GalleryService;
     const controller = new AdminGalleryController(service);
     const file = {} as Express.Multer.File;
 
     await controller.getSlots();
+    await controller.getConfiguration();
     await controller.getAssets({ page: 2, limit: 12 });
     await controller.getAsset('asset-1');
     await controller.getProducts({ search: 'tee', page: 1, limit: 20 });
@@ -111,8 +126,19 @@ describe('gallery controller access boundaries', () => {
       { sourceKey: 'slot-01', targetKey: 'slot-05' },
       12,
     );
+    await controller.updateMode({ activeMode: 'CAROUSEL' as never }, 12);
+    await controller.updateCarouselSlot(
+      1,
+      { assetId: 'asset-1', altText: 'Cliente CRONOX' },
+      12,
+    );
+    await controller.reorderCarousel(
+      { sourcePosition: 4, targetPosition: 2 },
+      12,
+    );
 
     expect(getAdminSlots).toHaveBeenCalled();
+    expect(getAdminConfiguration).toHaveBeenCalled();
     expect(getAssetLibrary).toHaveBeenCalledWith({ page: 2, limit: 12 });
     expect(getAssetDetails).toHaveBeenCalledWith('asset-1');
     expect(getProductRepository).toHaveBeenCalledWith({
@@ -128,6 +154,16 @@ describe('gallery controller access boundaries', () => {
     );
     expect(reorderSlots).toHaveBeenCalledWith(
       { sourceKey: 'slot-01', targetKey: 'slot-05' },
+      12,
+    );
+    expect(updateMode).toHaveBeenCalledWith({ activeMode: 'CAROUSEL' }, 12);
+    expect(updateCarouselSlot).toHaveBeenCalledWith(
+      1,
+      { assetId: 'asset-1', altText: 'Cliente CRONOX' },
+      12,
+    );
+    expect(reorderCarousel).toHaveBeenCalledWith(
+      { sourcePosition: 4, targetPosition: 2 },
       12,
     );
   });
@@ -175,5 +211,27 @@ describe('gallery controller access boundaries', () => {
     expect(await validate(valid)).toHaveLength(0);
     expect(await validate(tooLong)).not.toHaveLength(0);
     expect(await validate(malformedIds)).not.toHaveLength(0);
+  });
+
+  it('validates persisted Gallery modes and the fixed 1-5 carousel positions', async () => {
+    const validMode = plainToInstance(UpdateGalleryModeDto, {
+      activeMode: 'CAROUSEL',
+    });
+    const invalidMode = plainToInstance(UpdateGalleryModeDto, {
+      activeMode: 'SLIDER',
+    });
+    const validOrder = plainToInstance(ReorderGalleryCarouselDto, {
+      sourcePosition: 4,
+      targetPosition: 2,
+    });
+    const sixthPosition = plainToInstance(ReorderGalleryCarouselDto, {
+      sourcePosition: 6,
+      targetPosition: 2,
+    });
+
+    expect(await validate(validMode)).toHaveLength(0);
+    expect(await validate(invalidMode)).not.toHaveLength(0);
+    expect(await validate(validOrder)).toHaveLength(0);
+    expect(await validate(sixthPosition)).not.toHaveLength(0);
   });
 });

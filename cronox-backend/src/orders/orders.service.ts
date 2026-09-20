@@ -40,6 +40,7 @@ import {
 } from '../common/country';
 import { GuestOrderAccountService } from './guest-order-account.service';
 import { normalizeEmail } from '../common/email';
+import { variantSizeLabel } from '../products/product-size-system';
 
 const DEFAULT_CURRENCY = 'EUR';
 const CHECKOUT_SNAPSHOT_TTL_MS = 30 * 60 * 1000;
@@ -2955,7 +2956,9 @@ export class OrdersService {
 
     const unitPrice = this.centsToDecimal(this.getCheckoutUnitPriceCents(item));
     const lineTotal = this.roundMoney(unitPrice.mul(item.qty));
-    const sizeLabel = item.variant.size ? ` (${item.variant.size})` : '';
+    const sizeLabel = item.variant.size
+      ? ` (${variantSizeLabel(item.variant.size)})`
+      : '';
     const title = `${item.variant.product.name}${sizeLabel}`;
 
     return {

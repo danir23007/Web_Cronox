@@ -81,6 +81,35 @@ export class GalleryImageItemDto {
 
   @IsOptional()
   @IsString()
+  storageKey?: string;
+
+  @IsOptional()
+  @IsString()
+  mimeType?: string;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  fileSize?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  width?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  height?: number;
+
+  @IsOptional()
+  variants?: Record<string, unknown>;
+
+  @IsOptional()
+  @IsString()
   @MaxLength(160)
   alt?: string;
 

@@ -155,10 +155,10 @@
   height:100%;
   aspect-ratio:auto;
   object-fit:contain;
-  background:#fff;
+  background:transparent;
   display:block;
   opacity:0;
-  transition:opacity .35s ease;
+  transition:opacity .28s ease;
 }
 .pdp-related .product-img.active{
   opacity:1;

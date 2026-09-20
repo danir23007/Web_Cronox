@@ -82,6 +82,17 @@ const makeSlots = () =>
     asset: null,
   }));
 
+const makeCarouselSlots = () =>
+  [1, 2, 3, 4, 5].map((position) => ({
+    position,
+    focalX: 50,
+    focalY: 50,
+    zoom: 1,
+    altText: '',
+    instagramUrl: null,
+    asset: null,
+  }));
+
 const jsonResponse = (payload: unknown, status = 200) => ({
   ok: status >= 200 && status < 300,
   status,
@@ -179,7 +190,9 @@ const dragEvent = (
 
 const makeDom = (assets: any[] = [oldAsset]) => {
   const slots = makeSlots();
+  const carouselSlots = makeCarouselSlots();
   const server = {
+    activeMode: 'MOSAIC',
     failNextReorder: false,
     failNextSave: false,
     reorderCalls: 0,
@@ -193,6 +206,34 @@ const makeDom = (assets: any[] = [oldAsset]) => {
         (!init?.method || init.method === 'GET')
       ) {
         return jsonResponse({ slots });
+      }
+      if (
+        url.endsWith('/api/admin/gallery/configuration') &&
+        (!init?.method || init.method === 'GET')
+      ) {
+        return jsonResponse({
+          activeMode: server.activeMode,
+          carouselSlots,
+          constraints: { minimumItems: 3, maximumItems: 5 },
+        });
+      }
+      if (url.endsWith('/api/admin/gallery/mode') && init?.method === 'PATCH') {
+        const body = JSON.parse(String(init.body || '{}'));
+        if (
+          body.activeMode === 'CAROUSEL' &&
+          carouselSlots.filter((slot) => slot.asset).length < 3
+        ) {
+          return jsonResponse(
+            {
+              message:
+                'El carrusel necesita entre 3 y 5 imágenes para activarse',
+            },
+            400,
+          );
+        }
+        server.activeMode =
+          body.activeMode === 'CAROUSEL' ? 'CAROUSEL' : 'MOSAIC';
+        return jsonResponse({ activeMode: server.activeMode, revision: 1 });
       }
       if (url.endsWith('/api/admin/gallery/assets')) {
         return jsonResponse({
@@ -260,6 +301,39 @@ const makeDom = (assets: any[] = [oldAsset]) => {
         return jsonResponse({ operation, sourceKey, targetKey, slots });
       }
       if (
+        url.endsWith('/api/admin/gallery/carousel/reorder') &&
+        init?.method === 'PATCH'
+      ) {
+        const { sourcePosition, targetPosition } = JSON.parse(
+          String(init.body || '{}'),
+        );
+        const sourceIndex = carouselSlots.findIndex(
+          (slot) => slot.position === sourcePosition,
+        );
+        const targetIndex = carouselSlots.findIndex(
+          (slot) => slot.position === targetPosition,
+        );
+        const content = carouselSlots.map(galleryContent);
+        const [moved] = content.splice(sourceIndex, 1);
+        content.splice(targetIndex, 0, moved);
+        carouselSlots.forEach((slot, index) =>
+          Object.assign(slot, content[index]),
+        );
+        return jsonResponse({ carouselSlots });
+      }
+      if (
+        url.includes('/api/admin/gallery/carousel/') &&
+        init?.method === 'PATCH'
+      ) {
+        const position = Number(url.split('/').pop());
+        const body = JSON.parse(String(init.body || '{}'));
+        const slot = carouselSlots.find((item) => item.position === position)!;
+        const selected =
+          assets.find((asset) => asset.id === body.assetId) || null;
+        Object.assign(slot, body, { asset: selected });
+        return jsonResponse({ slot });
+      }
+      if (
         url.includes('/api/admin/gallery/slots/') &&
         init?.method === 'PATCH'
       ) {
@@ -299,7 +373,7 @@ const makeDom = (assets: any[] = [oldAsset]) => {
       .mockResolvedValue({ 'X-CSRF-Token': 'csrf-gallery' }),
   };
   dom.window.eval(adminGalleryScript);
-  return { dom, fetchMock, slots, assets, server };
+  return { dom, fetchMock, slots, carouselSlots, assets, server };
 };
 
 describe('CRONOX admin gallery', () => {
@@ -326,8 +400,8 @@ describe('CRONOX admin gallery', () => {
     expect(document.getElementById('galleryUploadProgress')).not.toBeNull();
     expect(document.getElementById('galleryMoveModal')).toBeNull();
     expect(document.getElementById('galleryMoveDestination')).toBeNull();
-    expect(adminHtml).toContain('assets/admin-gallery.css?v=4');
-    expect(adminHtml).toContain('assets/admin-gallery.js?v=4');
+    expect(adminHtml).toContain('assets/admin-gallery.css?v=5');
+    expect(adminHtml).toContain('assets/admin-gallery.js?v=5');
     expect(document.getElementById('galleryProductsTitle')?.textContent).toBe(
       'Productos de la imagen',
     );
@@ -1041,6 +1115,100 @@ describe('CRONOX admin gallery', () => {
     expect(
       document.getElementById('galleryEditorModal')?.classList.contains('show'),
     ).toBe(false);
+    dom.window.close();
+  });
+
+  it('keeps mode selection server-backed and rejects an incomplete Carousel without losing Mosaic data', async () => {
+    const { dom, slots, carouselSlots, server } = makeDom([oldAsset]);
+    assignSlot(slots, 'slot-01', oldAsset);
+    const gallery = (dom.window as any).CRONOX_ADMIN_GALLERY;
+    await gallery.load();
+    const document = dom.window.document;
+
+    (
+      document.getElementById('galleryModeCarousel') as HTMLButtonElement
+    ).click();
+    await flushAsync();
+    expect(server.activeMode).toBe('MOSAIC');
+    expect(gallery.state.activeMode).toBe('MOSAIC');
+    expect(
+      document.getElementById('galleryAdminStatus')?.textContent,
+    ).toContain('entre 3 y 5');
+
+    carouselSlots.slice(0, 3).forEach((slot, index) =>
+      Object.assign(slot, {
+        asset: oldAsset,
+        altText: `Carrusel ${index + 1}`,
+      }),
+    );
+    await gallery.load(true);
+    (
+      document.getElementById('galleryModeCarousel') as HTMLButtonElement
+    ).click();
+    await flushAsync();
+    expect(server.activeMode).toBe('CAROUSEL');
+    expect(document.getElementById('galleryMosaicEditor')?.hidden).toBe(true);
+    expect(document.getElementById('galleryCarouselEditor')?.hidden).toBe(
+      false,
+    );
+
+    (document.getElementById('galleryModeMosaic') as HTMLButtonElement).click();
+    await flushAsync();
+    expect(slots.find((slot) => slot.key === 'slot-01')?.asset?.id).toBe(
+      'asset-old',
+    );
+    expect(carouselSlots.slice(0, 3).every((slot) => slot.asset)).toBe(true);
+    dom.window.close();
+  });
+
+  it('edits Carousel positions through the shared asset modal and persists insertion order', async () => {
+    const assets = ['A', 'B', 'C', 'D'].map((suffix) => ({
+      ...oldAsset,
+      id: `asset-${suffix}`,
+      imageUrl: `https://storage.example.test/gallery/${suffix}.png`,
+    }));
+    const { dom, carouselSlots, fetchMock } = makeDom(assets);
+    carouselSlots.slice(0, 4).forEach((slot, index) =>
+      Object.assign(slot, {
+        asset: assets[index],
+        altText: `Foto ${assets[index].id}`,
+      }),
+    );
+    const gallery = (dom.window as any).CRONOX_ADMIN_GALLERY;
+    await gallery.load();
+    const document = dom.window.document;
+
+    gallery.openEditor(1, null, 'CAROUSEL');
+    expect(
+      document.getElementById('galleryEditorTitle')?.textContent,
+    ).toContain('carrusel');
+    (
+      document.querySelector(
+        '[data-gallery-asset="asset-B"]',
+      ) as HTMLButtonElement
+    ).click();
+    await flushAsync();
+    const alt = document.getElementById('galleryAltText') as HTMLInputElement;
+    alt.value = 'Nueva foto compartida';
+    alt.dispatchEvent(new dom.window.Event('input'));
+    (document.getElementById('galleryEditorSave') as HTMLButtonElement).click();
+    await flushAsync();
+    expect(carouselSlots[0].asset.id).toBe('asset-B');
+    expect(
+      fetchMock.mock.calls.some(
+        ([url, init]) =>
+          String(url).endsWith('/api/admin/gallery/carousel/1') &&
+          init?.method === 'PATCH',
+      ),
+    ).toBe(true);
+
+    await gallery.reorderCarousel(4, 2);
+    expect(
+      gallery.state.carouselSlots.slice(0, 4).map((slot: any) => slot.asset.id),
+    ).toEqual(['asset-B', 'asset-D', 'asset-B', 'asset-C']);
+    expect(
+      document.querySelectorAll('[data-gallery-carousel-position]'),
+    ).toHaveLength(5);
     dom.window.close();
   });
 });

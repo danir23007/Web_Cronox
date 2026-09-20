@@ -1,6 +1,6 @@
 import {
   IsBoolean,
-  IsIn,
+  IsEnum,
   IsInt,
   IsOptional,
   IsString,
@@ -8,10 +8,12 @@ import {
   Max,
   Min,
 } from 'class-validator';
+import type { VariantSize } from '@prisma/client';
+import { VARIANT_SIZE_VALUES } from '../product-size-system';
 
 export class CreateVariantDto {
-  @IsIn(['XS', 'S', 'M', 'L', 'XL', 'XXL'])
-  size: 'XS' | 'S' | 'M' | 'L' | 'XL' | 'XXL';
+  @IsEnum(VARIANT_SIZE_VALUES)
+  size: VariantSize;
 
   @IsOptional()
   @IsString()

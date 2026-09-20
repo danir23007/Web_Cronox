@@ -21,7 +21,7 @@ export class AdminUserQueryDto {
   @Type(() => Number)
   @IsInt()
   @Min(1)
-  @Max(50)
+  @Max(100)
   pageSize?: number;
 
   @IsOptional()

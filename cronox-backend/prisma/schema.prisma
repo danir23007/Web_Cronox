@@ -142,6 +142,7 @@ model Product {
   cardImagePositionX Float                      @default(50)
   cardImagePositionY Float                      @default(50)
   cardImageZoom      Float                      @default(1)
+  sizeSystem         ProductSizeSystem          @default(APPAREL)
   createdAt          DateTime                   @default(now())
   updatedAt          DateTime                   @updatedAt
   favorites          Favorite[]
@@ -218,6 +219,11 @@ model ProductImage {
   productId        Int
   url              String
   storageKey       String?
+  mimeType         String?
+  fileSize         Int?
+  width            Int?
+  height           Int?
+  variants         Json?
   alt              String?   @default("")
   sortOrder        Int       @default(0)
   isPrimary        Boolean   @default(false)
@@ -246,12 +252,71 @@ model GalleryAsset {
   fileSize         Int
   width            Int?
   height           Int?
+  variants         Json?
   description      String?               @db.Text
   createdAt        DateTime              @default(now())
   slots            GallerySlot[]
+  carouselSlots    GalleryCarouselSlot[]
   products         GalleryAssetProduct[]
 
   @@index([createdAt])
+}
+
+model GallerySettings {
+  id         String                  @id @default("global")
+  activeMode GalleryPresentationMode @default(MOSAIC)
+  revision   Int                     @default(0)
+  updatedBy  Int?
+  createdAt  DateTime                @default(now())
+  updatedAt  DateTime                @updatedAt
+}
+
+model FooterSettings {
+  id                   String   @id @default("global")
+  supportTitle         String   @default("SOPORTE")
+  supportFaqLabel      String   @default("FAQS")
+  supportShippingLabel String   @default("POLÍTICA DE ENVÍOS")
+  supportReturnsLabel  String   @default("DEVOLUCIONES Y CAMBIOS")
+  collabTitle          String   @default("COLABORA")
+  collabDevelopLabel   String   @default("DESARROLLA")
+  collabEventsLabel    String   @default("EVENTOS")
+  legalTitle           String   @default("LEGAL")
+  legalPrivacyLabel    String   @default("POLÍTICA DE PRIVACIDAD")
+  legalCookiesLabel    String   @default("POLÍTICA DE COOKIES")
+  legalTermsLabel      String   @default("TÉRMINOS DE SERVICIO")
+  legalNoticeLabel     String   @default("AVISO LEGAL")
+  instagramUrl         String   @default("https://www.instagram.com/cronox.es/")
+  tiktokUrl            String   @default("https://tiktok.com/@tu_cuenta")
+  youtubeUrl           String   @default("https://youtube.com/@tu_cuenta")
+  revision             Int      @default(0)
+  updatedBy            Int?
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+}
+
+model GalleryCarouselSlot {
+  position     Int           @id
+  assetId      String?
+  focalX       Float         @default(50)
+  focalY       Float         @default(50)
+  zoom         Float         @default(1)
+  fit          MediaFitMode  @default(COVER)
+  tabletFocalX Float?
+  tabletFocalY Float?
+  tabletZoom   Float?
+  tabletFit    MediaFitMode?
+  mobileFocalX Float?
+  mobileFocalY Float?
+  mobileZoom   Float?
+  mobileFit    MediaFitMode?
+  revision     Int           @default(0)
+  altText      String        @default("")
+  instagramUrl String?
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  asset        GalleryAsset? @relation(fields: [assetId], references: [id], onDelete: SetNull)
+
+  @@index([assetId])
 }
 
 model GalleryAssetProduct {
@@ -349,22 +414,46 @@ model WebsiteMediaPlacement {
 }
 
 model WebsiteMediaAsset {
-  id               String                  @id @default(cuid())
-  storageKey       String                  @unique
-  publicUrl        String
-  originalFilename String
-  mimeType         String
-  mediaType        String
-  folderKey        String
-  fileSize         Int
-  width            Int?
-  height           Int?
-  createdAt        DateTime                @default(now())
-  placements       WebsiteMediaPlacement[]
-  keyScreens       KeyScreen[]
+  id                 String                  @id @default(cuid())
+  storageKey         String                  @unique
+  publicUrl          String
+  originalFilename   String
+  mimeType           String
+  mediaType          String
+  folderKey          String
+  fileSize           Int
+  width              Int?
+  height             Int?
+  variants           Json?
+  createdAt          DateTime                @default(now())
+  placements         WebsiteMediaPlacement[]
+  keyScreens         KeyScreen[]
+  newsletterSettings NewsletterSettings[]
 
   @@index([folderKey, mediaType, createdAt])
   @@index([createdAt])
+}
+
+model NewsletterSettings {
+  id            String             @id @default("global")
+  mediaAssetId  String?
+  desktopFocalX Float              @default(50)
+  desktopFocalY Float              @default(50)
+  desktopZoom   Float              @default(1)
+  desktopFit    MediaFitMode       @default(COVER)
+  mobileFocalX  Float              @default(50)
+  mobileFocalY  Float              @default(50)
+  mobileZoom    Float              @default(1)
+  mobileFit     MediaFitMode       @default(COVER)
+  asciiEnabled  Boolean            @default(true)
+  asciiOpacity  Float              @default(1)
+  revision      Int                @default(0)
+  updatedBy     Int?
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+  mediaAsset    WebsiteMediaAsset? @relation(fields: [mediaAssetId], references: [id], onDelete: SetNull)
+
+  @@index([mediaAssetId])
 }
 
 model User {
@@ -1059,6 +1148,18 @@ enum VariantSize {
   L
   XL
   XXL
+  US_6
+  US_7
+  US_8
+  US_9
+  US_10
+  US_11
+  US_12
+}
+
+enum ProductSizeSystem {
+  APPAREL
+  US_RING
 }
 
 enum AnalyticsConsentStatus {
@@ -1093,6 +1194,11 @@ enum GalleryPlaceholderColor {
   WHITE
   RED
   GREY
+}
+
+enum GalleryPresentationMode {
+  MOSAIC
+  CAROUSEL
 }
 
 enum MediaFitMode {

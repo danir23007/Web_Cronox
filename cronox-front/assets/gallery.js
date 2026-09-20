@@ -25,6 +25,11 @@
   );
   let galleryLoadPromise = null;
   let loadedGalleryItems = null;
+  let loadedGalleryMode = "MOSAIC";
+  let loadedCarouselItems = [];
+  const CAROUSEL_SPEED_PX_PER_SECOND = 24;
+  const CAROUSEL_DRAG_THRESHOLD_PX = 10;
+  const carouselCleanups = new WeakMap();
 
   const lightboxElements = {
     root: pageDocument.getElementById("galleryLightbox"),
@@ -118,6 +123,21 @@
     };
   };
 
+  const normalizeCarouselOffset = (offset, cycleWidth) => {
+    const width = Number(cycleWidth);
+    if (!Number.isFinite(width) || width <= 0) return 0;
+    const value = Number.isFinite(Number(offset)) ? Number(offset) : 0;
+    return -((((-value % width) + width) % width));
+  };
+
+  const advanceCarouselOffset = (offset, deltaMs, cycleWidth) =>
+    normalizeCarouselOffset(
+      offset -
+        CAROUSEL_SPEED_PX_PER_SECOND *
+          (Math.max(0, Number(deltaMs) || 0) / 1000),
+      cycleWidth,
+    );
+
   const fitLightboxImage = (naturalWidth, naturalHeight, hasInfo) => {
     const viewportWidth = Math.max(
       1,
@@ -210,6 +230,7 @@
       ? slot.placeholderColor
       : fallback.color,
     imageSrc: getImageUrl(slot.imageSrc),
+    variants: slot.variants && typeof slot.variants === "object" ? slot.variants : null,
     alt: typeof slot.alt === "string" ? slot.alt : "",
     instagramUrl: getInstagramPostUrl(slot.instagramUrl),
     focalX: clamp(slot.focalX, 0, 100, 50),
@@ -225,6 +246,77 @@
       .map(normalizeProduct)
       .filter(Boolean),
   });
+
+  const applyItemFrame = (target, item) => {
+    target.style.setProperty(
+      "--desktop-focal-x",
+      `${clamp(item.focalX, 0, 100, 50)}%`,
+    );
+    target.style.setProperty(
+      "--desktop-focal-y",
+      `${clamp(item.focalY, 0, 100, 50)}%`,
+    );
+    target.style.setProperty(
+      "--desktop-zoom",
+      String(clamp(item.zoom, 1, 3, 1)),
+    );
+    target.style.setProperty(
+      "--desktop-fit",
+      String(item.fit || "COVER").toLowerCase(),
+    );
+    target.style.setProperty(
+      "--focal-x",
+      `${clamp(item.focalX, 0, 100, 50)}%`,
+    );
+    target.style.setProperty(
+      "--focal-y",
+      `${clamp(item.focalY, 0, 100, 50)}%`,
+    );
+    target.style.setProperty("--zoom", String(clamp(item.zoom, 1, 3, 1)));
+    if (item.tablet) {
+      target.style.setProperty("--tablet-focal-x", `${item.tablet.focalX}%`);
+      target.style.setProperty("--tablet-focal-y", `${item.tablet.focalY}%`);
+      target.style.setProperty("--tablet-zoom", String(item.tablet.zoom));
+      target.style.setProperty("--tablet-fit", item.tablet.fit.toLowerCase());
+    }
+    if (item.mobile) {
+      target.style.setProperty("--mobile-focal-x", `${item.mobile.focalX}%`);
+      target.style.setProperty("--mobile-focal-y", `${item.mobile.focalY}%`);
+      target.style.setProperty("--mobile-zoom", String(item.mobile.zoom));
+      target.style.setProperty("--mobile-fit", item.mobile.fit.toLowerCase());
+    }
+  };
+
+  const applyGalleryImage = (
+    image,
+    item,
+    context,
+    options,
+    onFinalError,
+  ) => {
+    const original = getImageUrl(item?.imageSrc);
+    if (window.CRONOX_IMAGES) {
+      window.CRONOX_IMAGES.apply(
+        image,
+        { url: original, variants: item?.variants },
+        context,
+        options,
+      );
+    } else if (original) {
+      image.src = original;
+    }
+    const optimizedSource = image.getAttribute("src") || "";
+    image.onerror = () => {
+      if (original && optimizedSource && optimizedSource !== original) {
+        image.removeAttribute("srcset");
+        image.removeAttribute("sizes");
+        image.onerror = onFinalError || null;
+        image.src = original;
+        return;
+      }
+      onFinalError?.();
+    };
+  };
 
   const productUrl = (product) =>
     product.available && product.slug
@@ -324,8 +416,13 @@
       lightboxElements.root.setAttribute("aria-busy", "false");
     };
     lightboxElements.image.onload = ready;
-    lightboxElements.image.onerror = failed;
-    lightboxElements.image.src = item.imageSrc;
+    applyGalleryImage(
+      lightboxElements.image,
+      item,
+      "galleryLarge",
+      { loading: "eager" },
+      failed,
+    );
     if (typeof lightboxElements.image.decode === "function") {
       lightboxElements.image
         .decode()
@@ -441,31 +538,14 @@
       tile.draggable = false;
       tile.setAttribute("aria-haspopup", "dialog");
       tile.setAttribute("aria-label", `Abrir en pantalla completa: ${alt}`);
-      tile.style.setProperty("--desktop-focal-x", `${clamp(item.focalX, 0, 100, 50)}%`);
-      tile.style.setProperty("--desktop-focal-y", `${clamp(item.focalY, 0, 100, 50)}%`);
-      tile.style.setProperty("--desktop-zoom", String(clamp(item.zoom, 1, 3, 1)));
-      tile.style.setProperty("--desktop-fit", String(item.fit || "COVER").toLowerCase());
-      tile.style.setProperty("--focal-x", `${clamp(item.focalX, 0, 100, 50)}%`);
-      tile.style.setProperty("--focal-y", `${clamp(item.focalY, 0, 100, 50)}%`);
-      tile.style.setProperty("--zoom", String(clamp(item.zoom, 1, 3, 1)));
-      if (item.tablet) {
-        tile.style.setProperty("--tablet-focal-x", `${item.tablet.focalX}%`);
-        tile.style.setProperty("--tablet-focal-y", `${item.tablet.focalY}%`);
-        tile.style.setProperty("--tablet-zoom", String(item.tablet.zoom));
-        tile.style.setProperty("--tablet-fit", item.tablet.fit.toLowerCase());
-      }
-      if (item.mobile) {
-        tile.style.setProperty("--mobile-focal-x", `${item.mobile.focalX}%`);
-        tile.style.setProperty("--mobile-focal-y", `${item.mobile.focalY}%`);
-        tile.style.setProperty("--mobile-zoom", String(item.mobile.zoom));
-        tile.style.setProperty("--mobile-fit", item.mobile.fit.toLowerCase());
-      }
+      applyItemFrame(tile, item);
       tile.addEventListener("click", () => onOpen?.(item, tile));
 
       const image = pageDocument.createElement("img");
-      image.src = imageSource;
+      applyGalleryImage(image, item, "galleryGrid");
       image.alt = alt;
       image.decoding = "async";
+      image.loading = "lazy";
       image.draggable = false;
 
       const media = pageDocument.createElement("span");
@@ -483,11 +563,272 @@
     return tile;
   };
 
+  const createCarouselSlide = (item, index, clone, onOpen) => {
+    const button = pageDocument.createElement("button");
+    const alt = item.alt?.trim() || "Imagen de la galería CRONOX";
+    button.type = "button";
+    button.className = "gallery-carousel__slide";
+    button.dataset.galleryCarouselIndex = String(index);
+    button.setAttribute("aria-haspopup", "dialog");
+    button.setAttribute("aria-label", `Abrir en pantalla completa: ${alt}`);
+    button.draggable = false;
+    applyItemFrame(button, item);
+    if (clone) {
+      button.tabIndex = -1;
+      button.setAttribute("aria-hidden", "true");
+    }
+    const media = pageDocument.createElement("span");
+    media.className = "gallery-carousel__media";
+    const image = pageDocument.createElement("img");
+    image.alt = clone ? "" : alt;
+    image.decoding = "async";
+    image.loading = "lazy";
+    image.draggable = false;
+    applyGalleryImage(image, item, "galleryGrid");
+    media.appendChild(image);
+    button.appendChild(media);
+    button.addEventListener("click", (event) => onOpen(item, index, event));
+    return button;
+  };
+
+  const renderCarousel = (items, root) => {
+    if (!root) {
+      galleryRoots.forEach((galleryRoot) => renderCarousel(items, galleryRoot));
+      return;
+    }
+    carouselCleanups.get(root)?.();
+    const logicalItems = items.filter((item) => item?.imageSrc).slice(0, 5);
+    root.classList.add("gallery-carousel");
+    root.classList.remove("gallery-grid--mosaic");
+    root.dataset.galleryMode = "CAROUSEL";
+
+    const pause = pageDocument.createElement("button");
+    pause.type = "button";
+    pause.className = "gallery-carousel__pause";
+    pause.textContent = "Pausar movimiento";
+    pause.setAttribute("aria-pressed", "false");
+
+    const viewport = pageDocument.createElement("div");
+    viewport.className = "gallery-carousel__viewport";
+    const track = pageDocument.createElement("div");
+    track.className = "gallery-carousel__track";
+    const firstGroup = pageDocument.createElement("div");
+    firstGroup.className = "gallery-carousel__group";
+    const cloneGroup = pageDocument.createElement("div");
+    cloneGroup.className = "gallery-carousel__group";
+    cloneGroup.setAttribute("aria-hidden", "true");
+    const realTriggers = [];
+
+    const state = {
+      offset: 0,
+      cycleWidth: 0,
+      lastTimestamp: null,
+      frame: null,
+      pointer: null,
+      suppressClickUntil: 0,
+      reducedMotion: Boolean(
+        window.matchMedia?.("(prefers-reduced-motion: reduce)").matches,
+      ),
+      pageVisible: !pageDocument.hidden,
+      inView: true,
+      hovered: false,
+      focusWithin: false,
+      userPaused: false,
+      resumeTimer: null,
+    };
+
+    const updateTransform = () => {
+      track.style.transform = `translate3d(${state.offset.toFixed(3)}px,0,0)`;
+    };
+    const isPaused = () =>
+      state.reducedMotion ||
+      !state.pageVisible ||
+      !state.inView ||
+      state.hovered ||
+      state.focusWithin ||
+      state.userPaused ||
+      Boolean(state.pointer);
+    const cancelFrame = () => {
+      if (state.frame !== null) window.cancelAnimationFrame?.(state.frame);
+      state.frame = null;
+      state.lastTimestamp = null;
+    };
+    const tick = (timestamp) => {
+      state.frame = null;
+      if (isPaused()) {
+        state.lastTimestamp = null;
+        return;
+      }
+      if (state.lastTimestamp !== null && state.cycleWidth > 0) {
+        state.offset = advanceCarouselOffset(
+          state.offset,
+          Math.min(64, timestamp - state.lastTimestamp),
+          state.cycleWidth,
+        );
+        updateTransform();
+      }
+      state.lastTimestamp = timestamp;
+      state.frame = window.requestAnimationFrame?.(tick) ?? null;
+    };
+    const syncAnimation = () => {
+      if (isPaused()) cancelFrame();
+      else if (state.frame === null) {
+        state.frame = window.requestAnimationFrame?.(tick) ?? null;
+      }
+    };
+    const openItem = (item, index, event) => {
+      if (Date.now() < state.suppressClickUntil) {
+        event.preventDefault();
+        event.stopPropagation();
+        return;
+      }
+      openLightbox(item, realTriggers[index], logicalItems);
+    };
+
+    logicalItems.forEach((item, index) => {
+      const slide = createCarouselSlide(item, index, false, openItem);
+      realTriggers.push(slide);
+      firstGroup.appendChild(slide);
+      cloneGroup.appendChild(createCarouselSlide(item, index, true, openItem));
+    });
+    track.append(firstGroup, cloneGroup);
+    viewport.appendChild(track);
+    root.replaceChildren(pause, viewport);
+
+    const recalculate = () => {
+      const previousWidth = state.cycleWidth;
+      const previousProgress = previousWidth > 0 ? state.offset / previousWidth : 0;
+      state.cycleWidth = firstGroup.getBoundingClientRect().width;
+      state.offset = normalizeCarouselOffset(
+        previousProgress * state.cycleWidth,
+        state.cycleWidth,
+      );
+      updateTransform();
+      syncAnimation();
+    };
+
+    pause.addEventListener("click", () => {
+      state.userPaused = !state.userPaused;
+      pause.setAttribute("aria-pressed", String(state.userPaused));
+      pause.textContent = state.userPaused
+        ? "Reanudar movimiento"
+        : "Pausar movimiento";
+      syncAnimation();
+    });
+    viewport.addEventListener("pointerdown", (event) => {
+      if (event.button > 0) return;
+      clearTimeout(state.resumeTimer);
+      state.pointer = {
+        id: event.pointerId,
+        startX: event.clientX,
+        startY: event.clientY,
+        startOffset: state.offset,
+        intent: null,
+        moved: false,
+      };
+      viewport.setPointerCapture?.(event.pointerId);
+      syncAnimation();
+    });
+    viewport.addEventListener("pointermove", (event) => {
+      const pointer = state.pointer;
+      if (!pointer || pointer.id !== event.pointerId) return;
+      const deltaX = event.clientX - pointer.startX;
+      const deltaY = event.clientY - pointer.startY;
+      if (!pointer.intent && Math.max(Math.abs(deltaX), Math.abs(deltaY)) >= 6) {
+        pointer.intent =
+          Math.abs(deltaX) > Math.abs(deltaY) * 1.15
+            ? "horizontal"
+            : "vertical";
+      }
+      if (pointer.intent !== "horizontal") return;
+      event.preventDefault();
+      pointer.moved = Math.abs(deltaX) >= CAROUSEL_DRAG_THRESHOLD_PX;
+      state.offset = normalizeCarouselOffset(
+        pointer.startOffset + deltaX,
+        state.cycleWidth,
+      );
+      updateTransform();
+    });
+    const finishPointer = (event) => {
+      const pointer = state.pointer;
+      if (!pointer || pointer.id !== event.pointerId) return;
+      if (pointer.intent === "horizontal" && pointer.moved) {
+        state.suppressClickUntil = Date.now() + 450;
+        event.preventDefault();
+      }
+      state.pointer = null;
+      viewport.releasePointerCapture?.(event.pointerId);
+      state.resumeTimer = setTimeout(syncAnimation, 180);
+    };
+    viewport.addEventListener("pointerup", finishPointer);
+    viewport.addEventListener("pointercancel", finishPointer);
+    viewport.addEventListener("pointerenter", (event) => {
+      if (event.pointerType && event.pointerType !== "mouse") return;
+      state.hovered = true;
+      syncAnimation();
+    });
+    viewport.addEventListener("pointerleave", (event) => {
+      if (event.pointerType && event.pointerType !== "mouse") return;
+      state.hovered = false;
+      syncAnimation();
+    });
+    root.addEventListener("focusin", () => {
+      state.focusWithin = true;
+      syncAnimation();
+    });
+    root.addEventListener("focusout", (event) => {
+      state.focusWithin = root.contains(event.relatedTarget);
+      syncAnimation();
+    });
+    const visibility = () => {
+      state.pageVisible = !pageDocument.hidden;
+      syncAnimation();
+    };
+    pageDocument.addEventListener("visibilitychange", visibility);
+    const motionQuery = window.matchMedia?.("(prefers-reduced-motion: reduce)");
+    const motionChange = (event) => {
+      state.reducedMotion = event.matches;
+      syncAnimation();
+    };
+    motionQuery?.addEventListener?.("change", motionChange);
+    const intersection = window.IntersectionObserver
+      ? new window.IntersectionObserver(
+          (entries) => {
+            state.inView = entries.some((entry) => entry.isIntersecting);
+            syncAnimation();
+          },
+          { rootMargin: "200px 0px" },
+        )
+      : null;
+    intersection?.observe(root);
+    const resize = window.ResizeObserver
+      ? new window.ResizeObserver(recalculate)
+      : null;
+    resize?.observe(firstGroup);
+    window.addEventListener("resize", recalculate);
+    window.requestAnimationFrame?.(recalculate);
+
+    carouselCleanups.set(root, () => {
+      cancelFrame();
+      clearTimeout(state.resumeTimer);
+      intersection?.disconnect();
+      resize?.disconnect();
+      pageDocument.removeEventListener("visibilitychange", visibility);
+      motionQuery?.removeEventListener?.("change", motionChange);
+      window.removeEventListener("resize", recalculate);
+    });
+  };
+
   const renderGallery = (items = galleryItems, root) => {
     if (!root) {
       galleryRoots.forEach((galleryRoot) => renderGallery(items, galleryRoot));
       return;
     }
+    carouselCleanups.get(root)?.();
+    carouselCleanups.delete(root);
+    root.classList.remove("gallery-carousel");
+    root.classList.add("gallery-grid--mosaic");
+    root.dataset.galleryMode = "MOSAIC";
     const normalizedItems = Array.isArray(items) ? items : galleryItems;
     const fragment = pageDocument.createDocumentFragment();
     normalizedItems.forEach((item) =>
@@ -509,6 +850,35 @@
     );
   };
 
+  const normalizeApiCarouselItems = (items) => {
+    if (!Array.isArray(items)) return [];
+    return items
+      .slice(0, 5)
+      .map((item, index) =>
+        normalizeItem(
+          {
+            key: `carousel-${Number(item?.position) || index + 1}`,
+            color: "grey",
+            featured: false,
+          },
+          item,
+        ),
+      )
+      .filter((item) => item.imageSrc);
+  };
+
+  const renderActiveGallery = (root) => {
+    if (!root) {
+      galleryRoots.forEach(renderActiveGallery);
+      return;
+    }
+    if (loadedGalleryMode === "CAROUSEL" && loadedCarouselItems.length >= 3) {
+      renderCarousel(loadedCarouselItems, root);
+    } else {
+      renderGallery(loadedGalleryItems || galleryItems, root);
+    }
+  };
+
   const loadGallery = () => {
     if (loadedGalleryItems) return Promise.resolve(loadedGalleryItems);
     if (galleryLoadPromise) return galleryLoadPromise;
@@ -523,8 +893,17 @@
         throw new Error(`No se pudo cargar la galería (${response.status})`);
       const payload = await response.json();
       loadedGalleryItems = normalizeApiSlots(payload?.slots);
-      window.CRONOX_GALLERY.items = loadedGalleryItems;
-      renderGallery(loadedGalleryItems);
+      loadedCarouselItems = normalizeApiCarouselItems(payload?.carouselItems);
+      loadedGalleryMode =
+        payload?.mode === "CAROUSEL" && loadedCarouselItems.length >= 3
+          ? "CAROUSEL"
+          : "MOSAIC";
+      window.CRONOX_GALLERY.mode = loadedGalleryMode;
+      window.CRONOX_GALLERY.items =
+        loadedGalleryMode === "CAROUSEL"
+          ? loadedCarouselItems
+          : loadedGalleryItems;
+      renderActiveGallery();
       return loadedGalleryItems;
     })().catch((error) => {
       galleryLoadPromise = null;
@@ -608,10 +987,17 @@
 
   window.CRONOX_GALLERY = {
     initialized: true,
+    mode: "MOSAIC",
     items: galleryItems,
     render: renderGallery,
+    renderCarousel,
     load: loadGallery,
     closeLightbox,
+    carouselMath: Object.freeze({
+      speed: CAROUSEL_SPEED_PX_PER_SECOND,
+      normalizeOffset: normalizeCarouselOffset,
+      advanceOffset: advanceCarouselOffset,
+    }),
   };
 
   galleryRoots.forEach((root) => {

@@ -43,8 +43,8 @@
     }
   </style>
   <link id="cronox-main-style" rel="stylesheet" href="">
-  <link rel="stylesheet" href="assets/gallery.css?v=14">
-  <script src="assets/version.js?v=91"></script>
+  <link rel="stylesheet" href="assets/gallery.css?v=15">
+  <script src="assets/version.js?v=93"></script>
   <script>
     (function () {
       if (window.CRONOX_ASSET) {
@@ -56,8 +56,9 @@
     })();
   </script>
   <link rel="stylesheet" href="assets/product-detail.css?v=2">
-  <link rel="stylesheet" href="assets/quick-add.css?v=3">
+  <link rel="stylesheet" href="assets/quick-add.css?v=4">
   <link rel="stylesheet" href="assets/media-framing.css?v=2">
+  <link rel="stylesheet" href="assets/newsletter-popup.css?v=1">
 
   <noscript><style>#preloader{display:none!important}</style></noscript>
   <link rel="icon" type="image/png" href="/favicon.png?v=3">
@@ -432,38 +433,8 @@
       <div class="newsletter-modal-grid">
         <div class="newsletter-modal-image" role="presentation">
           <div class="popup-image-wrapper">
-            <img
-              src="https://frqlgocxnyppzdgxxjuq.supabase.co/storage/v1/object/public/newsletter/chains-newsletter.jpg"
-              alt=""
-              class="popup-image"
-            />
-
-              <div class="ascii-overlay">
-                <pre>
-
-
-                        #@@@@@@@@@.
-                     @@@@@@@@@@@@@@@@-
-                   @@@@@@@@@@@@@@@@@@@@:
-                 -@@@@@@@@@@@@@%.    +@@@
-                +@@@@@@@@@@@@            %
-                @@@@@@@@@@@         =                :
-               @@@@@@@@@@@           .@@          @@
-               @@@@@@@@@@@             @@@@-   @@@@
-               @@@@@@@@@@*              @@@@@@@@@@:
-               @@@@@@@@@@@               @@@@@@@@+
-               @@@@@@@@@@@               *@@@@@@@
-                @@@@@@@@@@@              @@@@@@@@@
-                @@@@@@@@@@@@=           @@@@@@@@@@@#
-                 @@@@@@@@@@@@@@       #@@@      *@@@@
-                   @@@@@@@@@@@@@@@@@@@@@           #@@@
-                    :@@@@@@@@@@@@@@@@@                @@
-                       +@@@@@@@@@@@                      @
-
-
-
-                </pre>
-              </div>
+            <img alt="" class="popup-image" draggable="false" referrerpolicy="no-referrer">
+            <div class="ascii-overlay"><pre aria-hidden="true"></pre></div>
           </div>
         </div>
         <div class="newsletter-modal-content">
@@ -481,6 +452,7 @@
               required
             >
             <button type="submit" class="newsletter-modal-button">UNIRSE</button>
+            <p class="newsletter-login-prompt">O si ya tienes cuenta, <button type="button" class="newsletter-login-link">inicia sesi&oacute;n</button></p>
             <p id="newsletterFeedback" class="newsletter-modal-feedback" role="status" aria-live="polite"></p>
           </form>
         </div>
@@ -521,17 +493,21 @@
   </script>
 
   <!-- ===== BADGE FAVORITOS ===== -->
+  <script src="assets/size-systems.js?v=1"></script>
   <script src="assets/api.js?v=5"></script>
+  <script src="assets/responsive-images.js?v=1"></script>
   <!-- ===== MAIN SCRIPTS ===== -->
-  <script src="assets/app.js?v=62" defer></script>
   <script src="assets/media-framing-geometry.js?v=5" defer></script>
+  <script src="assets/newsletter-renderer.js?v=1" defer></script>
+  <script src="assets/newsletter-visit.js?v=1" defer></script>
+  <script src="assets/app.js?v=63" defer></script>
   <script src="assets/product-card-framing.js?v=1" defer></script>
-  <script src="assets/products.js?v=53" defer></script>
+  <script src="assets/products.js?v=55" defer></script>
   <script src="assets/favorites-toggle.js?v=2" defer></script>
   <script src="assets/cart-badge.js?v=43" defer></script>
-  <script src="assets/product-gallery.js?v=1" defer></script>
+  <script src="assets/product-gallery.js?v=2" defer></script>
   <script src="assets/media-framing.js?v=5" defer></script>
-  <script src="assets/gallery.js?v=11" defer></script>
+  <script src="assets/gallery.js?v=12" defer></script>
 
   <footer class="site-footer">
     <div class="footer-inner">
@@ -545,13 +521,13 @@
           </div>
 
           <div class="footer-social">
-            <a href="https://instagram.com/tu_cuenta" target="_blank" rel="noopener">
+            <a href="https://www.instagram.com/cronox.es/" target="_blank" rel="noopener noreferrer" data-footer-social="instagramUrl">
               <img src="assets/icons/instagram.svg" class="social-icon" alt="Instagram">
             </a>
-            <a href="https://tiktok.com/@tu_cuenta" target="_blank" rel="noopener">
+            <a href="https://tiktok.com/@tu_cuenta" target="_blank" rel="noopener noreferrer" data-footer-social="tiktokUrl">
               <img src="assets/icons/tiktok.svg" class="social-icon" alt="TikTok">
             </a>
-            <a href="https://youtube.com/@tu_cuenta" target="_blank" rel="noopener">
+            <a href="https://youtube.com/@tu_cuenta" target="_blank" rel="noopener noreferrer" data-footer-social="youtubeUrl">
               <img src="assets/icons/youtube.svg" class="social-icon" alt="YouTube">
             </a>
           </div>
@@ -567,45 +543,45 @@
         <div class="footer-links-block footer-accordion" id="footerAccordion">
           <div class="footer-acc-item">
             <button class="footer-acc-trigger" type="button" aria-expanded="false" aria-controls="footer-panel-soporte">
-              <span class="footer-acc-title">SOPORTE</span>
+              <span class="footer-acc-title" data-footer-label="supportTitle">SOPORTE</span>
               <span class="footer-acc-icon" aria-hidden="true">+</span>
             </button>
             <div class="footer-acc-panel footer-column" id="footer-panel-soporte">
-              <h4 class="footer-title">SOPORTE</h4>
+              <h4 class="footer-title" data-footer-label="supportTitle">SOPORTE</h4>
               <ul class="footer-list">
-                <li><a href="/faqs" class="footer-link">FAQS</a></li>
-                <li><a href="/envios" class="footer-link">POLÍTICA DE ENVÍOS</a></li>
-                <li><a href="/devoluciones" class="footer-link">DEVOLUCIONES Y CAMBIOS</a></li>
+                <li><a href="/faqs" class="footer-link" data-footer-label="supportFaqLabel">FAQS</a></li>
+                <li><a href="/envios" class="footer-link" data-footer-label="supportShippingLabel">POLÍTICA DE ENVÍOS</a></li>
+                <li><a href="/devoluciones" class="footer-link" data-footer-label="supportReturnsLabel">DEVOLUCIONES Y CAMBIOS</a></li>
               </ul>
             </div>
           </div>
 
           <div class="footer-acc-item">
             <button class="footer-acc-trigger" type="button" aria-expanded="false" aria-controls="footer-panel-colabora">
-              <span class="footer-acc-title">COLABORA</span>
+              <span class="footer-acc-title" data-footer-label="collabTitle">COLABORA</span>
               <span class="footer-acc-icon" aria-hidden="true">+</span>
             </button>
             <div class="footer-acc-panel footer-column" id="footer-panel-colabora">
-              <h4 class="footer-title">COLABORA</h4>
+              <h4 class="footer-title" data-footer-label="collabTitle">COLABORA</h4>
               <ul class="footer-list">
-                <li><a href="/desarrolla" class="footer-link">DESARROLLA</a></li>
-                <li><a href="/eventos" class="footer-link">EVENTOS</a></li>
+                <li><a href="/desarrolla" class="footer-link" data-footer-label="collabDevelopLabel">DESARROLLA</a></li>
+                <li><a href="/eventos" class="footer-link" data-footer-label="collabEventsLabel">EVENTOS</a></li>
               </ul>
             </div>
           </div>
 
           <div class="footer-acc-item">
             <button class="footer-acc-trigger" type="button" aria-expanded="false" aria-controls="footer-panel-legal">
-              <span class="footer-acc-title">LEGAL</span>
+              <span class="footer-acc-title" data-footer-label="legalTitle">LEGAL</span>
               <span class="footer-acc-icon" aria-hidden="true">+</span>
             </button>
             <div class="footer-acc-panel footer-column" id="footer-panel-legal">
-              <h4 class="footer-title">LEGAL</h4>
+              <h4 class="footer-title" data-footer-label="legalTitle">LEGAL</h4>
               <ul class="footer-list">
-                <li><a href="/privacidad" class="footer-link">POLÍTICA DE PRIVACIDAD</a></li>
-                <li><a href="/cookies" class="footer-link">POLÍTICA DE COOKIES</a></li>
-                <li><a href="/terminos" class="footer-link">TÉRMINOS DE SERVICIO</a></li>
-                <li><a href="/aviso-legal" class="footer-link">AVISO LEGAL</a></li>
+                <li><a href="/privacidad" class="footer-link" data-footer-label="legalPrivacyLabel">POLÍTICA DE PRIVACIDAD</a></li>
+                <li><a href="/cookies" class="footer-link" data-footer-label="legalCookiesLabel">POLÍTICA DE COOKIES</a></li>
+                <li><a href="/terminos" class="footer-link" data-footer-label="legalTermsLabel">TÉRMINOS DE SERVICIO</a></li>
+                <li><a href="/aviso-legal" class="footer-link" data-footer-label="legalNoticeLabel">AVISO LEGAL</a></li>
               </ul>
             </div>
           </div>
@@ -636,5 +612,6 @@
       </div>
     </div>
   </footer>
+  <script src="assets/footer-config.js?v=1" defer></script>
 </body>
 </html>

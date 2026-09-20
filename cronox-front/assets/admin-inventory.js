@@ -12,10 +12,10 @@
   const pageInfo = byId('inventoryPageInfo');
   const previous = byId('inventoryPrev');
   const next = byId('inventoryNext');
-  const pageSize = byId('inventoryPageSize');
   const refresh = byId('inventoryRefresh');
+  const INVENTORY_PAGE_SIZE = window.CRONOX_ADMIN_PAGINATION?.PAGE_SIZES?.inventory || 50;
   const state = {
-    page: 1, pageSize: 20, totalPages: 1, items: [],
+    page: 1, pageSize: INVENTORY_PAGE_SIZE, totalPages: 1, items: [],
     expanded: new Set(), edits: new Map(), saving: new Set(), history: new Map(), loaded: false,
   };
   let searchTimer = null;
@@ -64,7 +64,7 @@
       const admin = item.admin?.name || item.admin?.email || 'Administrador';
       return `<div class="inventory-history-item">
         <div><strong>${escapeHtml(formatDate(item.createdAt))}</strong><br><small>${escapeHtml(admin)}</small></div>
-        <div><strong>${delta > 0 ? '+' : ''}${delta}</strong><br><small>${escapeHtml(item.size || item.sku || `Variante ${item.variantId}`)}</small></div>
+        <div><strong>${delta > 0 ? '+' : ''}${delta}</strong><br><small>${escapeHtml(window.CRONOX_SIZES?.label?.(item.size) || item.size || item.sku || `Variante ${item.variantId}`)}</small></div>
         <div><strong>${formatNumber(item.previousStock)} &rarr; ${formatNumber(item.newStock)}</strong><br><small>${escapeHtml(item.reason || 'Ajuste manual')}</small></div>
       </div>`;
     }).join('');
@@ -79,10 +79,10 @@
       const value = edit ? edit.value : variant.stockQty;
       const dirty = Boolean(edit && edit.value !== edit.expectedStock);
       return `<tr class="inventory-row${dirty ? ' is-dirty' : ''}" data-inventory-row="${variant.id}">
-        <td><strong>${escapeHtml(variant.size || 'Única')}</strong>${variant.isActive ? '' : '<br><small>Variante inactiva</small>'}</td>
+        <td><strong>${escapeHtml(window.CRONOX_SIZES?.label?.(variant.size) || variant.size || 'Única')}</strong>${variant.isActive ? '' : '<br><small>Variante inactiva</small>'}</td>
         <td>${escapeHtml(variant.sku || '—')}</td><td>${formatNumber(variant.stockQty)}</td>
         <td><span class="chip ${stockChip(variant.status)}">${stockLabel(variant.status)}</span></td>
-        <td><label class="inventory-visually-hidden" for="inventory-stock-${variant.id}">Nuevo stock para ${escapeHtml(variant.size || variant.sku)}</label>
+        <td><label class="inventory-visually-hidden" for="inventory-stock-${variant.id}">Nuevo stock para ${escapeHtml(window.CRONOX_SIZES?.label?.(variant.size) || variant.size || variant.sku)}</label>
           <input id="inventory-stock-${variant.id}" class="input inventory-stock-input${dirty ? ' is-dirty' : ''}" data-inventory-stock="${variant.id}" data-product-id="${product.id}" type="number" min="0" max="2147483647" step="1" inputmode="numeric" value="${escapeHtml(Number.isNaN(value) ? '' : value)}" ${saving ? 'disabled' : ''}></td>
       </tr>`;
     }).join('');
@@ -132,9 +132,23 @@
       state.page = Number(response?.meta?.page) || 1;
       state.totalPages = Number(response?.meta?.totalPages) || 1;
       const total = Number(response?.meta?.totalItems) || 0;
+      const pagination = window.CRONOX_ADMIN_PAGINATION?.apply?.({
+        info: pageInfo,
+        prev: previous,
+        next,
+        page: state.page,
+        pageSize: state.pageSize,
+        totalItems: total,
+      });
+      if (pagination) {
+        state.page = pagination.page;
+        state.totalPages = pagination.totalPages;
+      }
       if (pageInfo) pageInfo.textContent = `Página ${state.page} de ${state.totalPages} · ${total} resultados`;
       if (previous) previous.disabled = state.page <= 1;
       if (next) next.disabled = state.page >= state.totalPages;
+      const controls = previous?.closest('.page-controls') || next?.closest('.page-controls');
+      if (controls) controls.hidden = state.totalPages <= 1;
       renderSummary(summary); render(); state.loaded = true;
     } catch (error) {
       console.error('[INVENTARIO] Error al cargar', error);
@@ -214,7 +228,6 @@
   const resetAndLoad = () => { state.page = 1; void load(); };
   search?.addEventListener('input', () => { clearTimeout(searchTimer); searchTimer = setTimeout(resetAndLoad, 300); });
   activeFilter?.addEventListener('change', resetAndLoad); stockFilter?.addEventListener('change', resetAndLoad);
-  pageSize?.addEventListener('change', () => { state.pageSize = Number(pageSize.value) || 20; resetAndLoad(); });
   previous?.addEventListener('click', () => { if (state.page > 1) { state.page -= 1; void load(); } });
   next?.addEventListener('click', () => { if (state.page < state.totalPages) { state.page += 1; void load(); } });
   refresh?.addEventListener('click', () => void load());

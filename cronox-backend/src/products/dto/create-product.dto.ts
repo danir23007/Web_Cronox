@@ -16,8 +16,22 @@ import {
 } from 'class-validator';
 import { CreateProductImageDto } from './create-product-image.dto';
 import { CreateVariantDto } from './create-variant.dto';
+import type { ProductSizeSystem } from '@prisma/client';
+import { IsEnum } from 'class-validator';
+import {
+  DEFAULT_PRODUCT_SIZE_SYSTEM,
+  PRODUCT_SIZE_SYSTEM_VALUES,
+} from '../product-size-system';
 
 export class CreateProductDto {
+  @ApiPropertyOptional({
+    enum: PRODUCT_SIZE_SYSTEM_VALUES,
+    default: DEFAULT_PRODUCT_SIZE_SYSTEM,
+  })
+  @IsOptional()
+  @IsEnum(PRODUCT_SIZE_SYSTEM_VALUES)
+  sizeSystem?: ProductSizeSystem;
+
   @ApiProperty({ example: 'Camiseta Cronox Negra' })
   @IsString()
   @MaxLength(120)

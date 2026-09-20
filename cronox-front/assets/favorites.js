@@ -121,6 +121,7 @@
         : (product.image ? [safeProductImage(product.image, '')].filter(Boolean) : []),
       backendId: product.backendId ?? product.id ?? item?.productId,
       variants: product.variants,
+      imageRecords: product.imageRecords || product.galleryImages || (Array.isArray(product.images) ? product.images : []),
     };
   }
 
@@ -177,16 +178,17 @@
     const gallery = document.createElement('div');
     gallery.className = 'product-images';
 
-    const imgs = (Array.isArray(product.images) && product.images.length ? product.images : [product.image])
-      .map((image) => safeProductImage(image, ''))
-      .filter(Boolean);
-    const imgEls = imgs.map((src, i) => {
+    const records = window.CRONOX_IMAGES?.productRecords?.(product) || [];
+    const imgEls = (records.length ? records : [{ url: product.image }]).map((record, i) => {
       const im = document.createElement('img');
       im.className = 'product-img' + (i === 0 ? ' active' : '');
       im.loading = 'lazy';
       im.decoding = 'async';
       im.alt = product.name || 'Producto';
-      im.src = src;
+      if (window.CRONOX_IMAGES) {
+        if (i === 0) window.CRONOX_IMAGES.applyProduct(im, product, 'card');
+        else window.CRONOX_IMAGES.apply(im, record, 'card');
+      } else im.src = safeProductImage(record?.url || record);
       im.referrerPolicy = 'no-referrer';
       return im;
     });
@@ -200,7 +202,7 @@
     favBtn.dataset.slug = product.slug || '';
     favBtn.dataset.name = product.name || 'Producto';
     favBtn.dataset.price = formatPriceFromCents(product.priceInCents);
-    favBtn.dataset.image = imgs[0] || product.image || '';
+    favBtn.dataset.image = imgEls[0]?.src || product.image || '';
     favBtn.innerHTML = STAR_ICON;
     favBtn.dataset.favBound = '1';
     favBtn.addEventListener('click', (ev) => {
@@ -328,6 +330,8 @@
         price: Number(fav.priceInCents || 0) / 100,
         priceLabel: formatPriceFromCents(fav.priceInCents),
         images: Array.isArray(fav.images) && fav.images.length ? fav.images : (fav.image ? [fav.image] : []),
+        imageRecords: fav.imageRecords || [],
+        galleryImages: fav.imageRecords || [],
       };
       const card = cardBuilder(cardData);
       frag.appendChild(card);

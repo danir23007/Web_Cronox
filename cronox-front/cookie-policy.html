@@ -10,7 +10,7 @@
     <title>Política de Cookies – CRONOX</title>
     <link rel="stylesheet" href="assets/cookie-consent.css?v=1" />
     <link rel="stylesheet" href="assets/store.css?v=89" />
-    <link rel="stylesheet" href="assets/info-page.css?v=2" />
+    <link rel="stylesheet" href="assets/info-page.css?v=3" />
   <script src="assets/cookie-consent.js?v=4" defer></script>
   <script src="assets/customer-analytics.js?v=1" defer></script>
     <link rel="icon" type="image/png" href="/favicon.png?v=3" />
@@ -31,7 +31,7 @@
       main {
         width: min(1100px, calc(100% - 40px));
         margin: 0 auto;
-        padding: 64px 0 96px;
+        padding: 0 0 96px;
       }
       .back-link {
         display: inline-block;
@@ -223,8 +223,9 @@
 
       <h3>Preferencias</h3>
       <p>
-        Con tu consentimiento, CRONOX recuerda que has cerrado el aviso de
-        newsletter durante la sesión y qué avisos de círculo ya has visto en tu
+        Con tu consentimiento, CRONOX recuerda que el aviso de newsletter ya se
+        mostró durante la sesión y aplica un cooldown de 20 minutos tras
+        cerrarlo, además de recordar qué avisos de círculo ya has visto en tu
         cuenta. Si no las aceptas, puedes seguir utilizando y comprando en la
         tienda; esos avisos simplemente podrían mostrarse de nuevo.
       </p>
@@ -393,6 +394,14 @@
                 Recordar que se cerró el aviso de newsletter durante esa sesión.
               </td>
               <td>Sesión</td>
+              <td>Propia</td>
+            </tr>
+            <tr>
+              <td><code>cronoxNewsletterDismissedAt</code></td>
+              <td>CRONOX</td>
+              <td>Preferencias &middot; localStorage</td>
+              <td>Evitar que el aviso de newsletter reaparezca durante los 20 minutos posteriores a su cierre.</td>
+              <td>20 minutos de uso efectivo; se elimina al retirar el consentimiento o borrar los datos del navegador</td>
               <td>Propia</td>
             </tr>
             <tr>

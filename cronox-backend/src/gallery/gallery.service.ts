@@ -3,14 +3,21 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { GalleryPlaceholderColor, Prisma } from '@prisma/client';
+import {
+  GalleryPlaceholderColor,
+  GalleryPresentationMode,
+  Prisma,
+} from '@prisma/client';
 import type { Express } from 'express';
 import { SupabaseStorageService } from '../common/storage/supabase-storage.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { normalizeSearchText } from '../products/product-search';
 import { GalleryAssetQueryDto } from './dto/gallery-asset-query.dto';
 import { GalleryProductQueryDto } from './dto/gallery-product-query.dto';
+import { ReorderGalleryCarouselDto } from './dto/reorder-gallery-carousel.dto';
 import { ReorderGallerySlotsDto } from './dto/reorder-gallery-slots.dto';
+import { UpdateGalleryCarouselSlotDto } from './dto/update-gallery-carousel-slot.dto';
+import { UpdateGalleryModeDto } from './dto/update-gallery-mode.dto';
 import { UpdateGallerySlotDto } from './dto/update-gallery-slot.dto';
 import { normalizeInstagramPostUrl } from './gallery-url';
 
@@ -95,6 +102,10 @@ export const GALLERY_SLOT_DEFINITIONS = [
   },
 ] as const;
 
+export const GALLERY_CAROUSEL_POSITIONS = [1, 2, 3, 4, 5] as const;
+export const MIN_ACTIVE_CAROUSEL_ITEMS = 3;
+export const MAX_ACTIVE_CAROUSEL_ITEMS = 5;
+
 const GALLERY_PRODUCT_SELECT = Prisma.validator<Prisma.ProductSelect>()({
   id: true,
   slug: true,
@@ -121,12 +132,19 @@ const GALLERY_ASSET_INCLUDE = Prisma.validator<Prisma.GalleryAssetInclude>()({
 const GALLERY_SLOT_INCLUDE = Prisma.validator<Prisma.GallerySlotInclude>()({
   asset: { include: GALLERY_ASSET_INCLUDE },
 });
+const GALLERY_CAROUSEL_SLOT_INCLUDE =
+  Prisma.validator<Prisma.GalleryCarouselSlotInclude>()({
+    asset: { include: GALLERY_ASSET_INCLUDE },
+  });
 
 type GalleryAssetWithProducts = Prisma.GalleryAssetGetPayload<{
   include: typeof GALLERY_ASSET_INCLUDE;
 }>;
 type GallerySlotWithAsset = Prisma.GallerySlotGetPayload<{
   include: typeof GALLERY_SLOT_INCLUDE;
+}>;
+type GalleryCarouselSlotWithAsset = Prisma.GalleryCarouselSlotGetPayload<{
+  include: typeof GALLERY_CAROUSEL_SLOT_INCLUDE;
 }>;
 type GalleryProductSummary = Prisma.ProductGetPayload<{
   select: typeof GALLERY_PRODUCT_SELECT;
@@ -142,6 +160,13 @@ export class GalleryService {
   private async ensureStableSlots() {
     await this.prisma.gallerySlot.createMany({
       data: GALLERY_SLOT_DEFINITIONS.map((slot) => ({ ...slot })),
+      skipDuplicates: true,
+    });
+  }
+
+  private async ensureCarouselSlots() {
+    await this.prisma.galleryCarouselSlot.createMany({
+      data: GALLERY_CAROUSEL_POSITIONS.map((position) => ({ position })),
       skipDuplicates: true,
     });
   }
@@ -162,6 +187,7 @@ export class GalleryService {
     return {
       id: asset.id,
       imageUrl: asset.publicUrl,
+      variants: asset.variants,
       originalFilename: asset.originalFilename,
       mimeType: asset.mimeType,
       fileSize: asset.fileSize,
@@ -208,6 +234,74 @@ export class GalleryService {
       featured: slot.featured,
       placeholderColor: slot.placeholderColor.toLowerCase(),
       imageSrc: slot.asset?.publicUrl ?? null,
+      variants: slot.asset?.variants ?? null,
+      alt: slot.asset ? slot.altText : '',
+      instagramUrl: slot.asset ? slot.instagramUrl : null,
+      focalX: slot.focalX,
+      focalY: slot.focalY,
+      zoom: slot.zoom,
+      fit: slot.fit,
+      tablet:
+        slot.tabletFocalX !== null &&
+        slot.tabletFocalY !== null &&
+        slot.tabletZoom !== null &&
+        slot.tabletFit !== null
+          ? {
+              focalX: slot.tabletFocalX,
+              focalY: slot.tabletFocalY,
+              zoom: slot.tabletZoom,
+              fit: slot.tabletFit,
+            }
+          : null,
+      mobile:
+        slot.mobileFocalX !== null &&
+        slot.mobileFocalY !== null &&
+        slot.mobileZoom !== null &&
+        slot.mobileFit !== null
+          ? {
+              focalX: slot.mobileFocalX,
+              focalY: slot.mobileFocalY,
+              zoom: slot.mobileZoom,
+              fit: slot.mobileFit,
+            }
+          : null,
+      description: slot.asset?.description ?? null,
+      products:
+        slot.asset?.products?.map((item) =>
+          this.toProductSummary(item.product),
+        ) ?? [],
+    };
+  }
+
+  private toAdminCarouselSlot(slot: GalleryCarouselSlotWithAsset) {
+    return {
+      position: slot.position,
+      focalX: slot.focalX,
+      focalY: slot.focalY,
+      zoom: slot.zoom,
+      fit: slot.fit,
+      tabletFocalX: slot.tabletFocalX,
+      tabletFocalY: slot.tabletFocalY,
+      tabletZoom: slot.tabletZoom,
+      tabletFit: slot.tabletFit,
+      mobileFocalX: slot.mobileFocalX,
+      mobileFocalY: slot.mobileFocalY,
+      mobileZoom: slot.mobileZoom,
+      mobileFit: slot.mobileFit,
+      revision: slot.revision,
+      altText: slot.altText,
+      instagramUrl: slot.instagramUrl,
+      updatedAt: slot.updatedAt,
+      asset: slot.asset ? this.toAdminAsset(slot.asset) : null,
+    };
+  }
+
+  private toPublicCarouselItem(slot: GalleryCarouselSlotWithAsset) {
+    return {
+      key: `carousel-${slot.position}`,
+      position: slot.position,
+      imageSrc: slot.asset?.publicUrl ?? null,
+      variants: slot.asset?.variants ?? null,
       alt: slot.asset ? slot.altText : '',
       instagramUrl: slot.asset ? slot.instagramUrl : null,
       focalX: slot.focalX,
@@ -271,7 +365,37 @@ export class GalleryService {
         products: [],
       };
     });
-    return { slots };
+    let configuredMode: GalleryPresentationMode =
+      GalleryPresentationMode.MOSAIC;
+    let carouselItems: ReturnType<GalleryService['toPublicCarouselItem']>[] =
+      [];
+    try {
+      const [settings, carouselSlots] = await Promise.all([
+        this.prisma.gallerySettings.findUnique({ where: { id: 'global' } }),
+        this.prisma.galleryCarouselSlot.findMany({
+          where: { assetId: { not: null } },
+          orderBy: { position: 'asc' },
+          include: GALLERY_CAROUSEL_SLOT_INCLUDE,
+        }),
+      ]);
+      configuredMode =
+        settings?.activeMode === GalleryPresentationMode.CAROUSEL
+          ? GalleryPresentationMode.CAROUSEL
+          : GalleryPresentationMode.MOSAIC;
+      carouselItems = carouselSlots
+        .filter((slot) => Boolean(slot.asset?.publicUrl))
+        .map((slot) => this.toPublicCarouselItem(slot));
+    } catch {
+      // Deploys remain backwards compatible while the additive migration is pending.
+      configuredMode = GalleryPresentationMode.MOSAIC;
+      carouselItems = [];
+    }
+    const mode =
+      configuredMode === GalleryPresentationMode.CAROUSEL &&
+      carouselItems.length >= MIN_ACTIVE_CAROUSEL_ITEMS
+        ? GalleryPresentationMode.CAROUSEL
+        : GalleryPresentationMode.MOSAIC;
+    return { mode, slots, carouselItems };
   }
 
   async getAdminSlots() {
@@ -281,6 +405,27 @@ export class GalleryService {
       include: GALLERY_SLOT_INCLUDE,
     });
     return { slots: slots.map((slot) => this.toAdminSlot(slot)) };
+  }
+
+  async getAdminConfiguration() {
+    await this.ensureCarouselSlots();
+    const [settings, carouselSlots] = await Promise.all([
+      this.prisma.gallerySettings.findUnique({ where: { id: 'global' } }),
+      this.prisma.galleryCarouselSlot.findMany({
+        orderBy: { position: 'asc' },
+        include: GALLERY_CAROUSEL_SLOT_INCLUDE,
+      }),
+    ]);
+    return {
+      activeMode: settings?.activeMode ?? GalleryPresentationMode.MOSAIC,
+      carouselSlots: carouselSlots.map((slot) =>
+        this.toAdminCarouselSlot(slot),
+      ),
+      constraints: {
+        minimumItems: MIN_ACTIVE_CAROUSEL_ITEMS,
+        maximumItems: MAX_ACTIVE_CAROUSEL_ITEMS,
+      },
+    };
   }
 
   async getAssetLibrary(query: GalleryAssetQueryDto = {}) {
@@ -599,6 +744,266 @@ export class GalleryService {
           sourceKey,
           targetKey,
           slots: slots.map((slot) => this.toAdminSlot(slot)),
+        };
+      },
+      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+    );
+  }
+
+  async updateMode(dto: UpdateGalleryModeDto, adminId?: number) {
+    await this.ensureCarouselSlots();
+    return this.prisma.$transaction(async (tx) => {
+      const current = await tx.gallerySettings.findUnique({
+        where: { id: 'global' },
+      });
+      if (dto.activeMode === GalleryPresentationMode.CAROUSEL) {
+        const carouselCandidates = await tx.galleryCarouselSlot.findMany({
+          where: { assetId: { not: null } },
+          select: { asset: { select: { publicUrl: true } } },
+        });
+        const activeItems = carouselCandidates.filter((slot) =>
+          Boolean(slot.asset?.publicUrl?.trim()),
+        ).length;
+        if (
+          activeItems < MIN_ACTIVE_CAROUSEL_ITEMS ||
+          activeItems > MAX_ACTIVE_CAROUSEL_ITEMS
+        ) {
+          throw new BadRequestException(
+            `El carrusel necesita entre ${MIN_ACTIVE_CAROUSEL_ITEMS} y ${MAX_ACTIVE_CAROUSEL_ITEMS} imágenes para activarse`,
+          );
+        }
+      }
+
+      if (current?.activeMode === dto.activeMode) {
+        return { activeMode: current.activeMode, revision: current.revision };
+      }
+      const settings = await tx.gallerySettings.upsert({
+        where: { id: 'global' },
+        create: {
+          id: 'global',
+          activeMode: dto.activeMode,
+          updatedBy: adminId ?? null,
+        },
+        update: {
+          activeMode: dto.activeMode,
+          updatedBy: adminId ?? null,
+          revision: { increment: 1 },
+        },
+      });
+      await tx.auditLog.create({
+        data: {
+          actorId: adminId ?? null,
+          action: 'gallery.mode.update',
+          actionType: 'UPDATE',
+          targetType: 'gallery-settings',
+          targetId: 'global',
+          metadata: {
+            before: current?.activeMode ?? GalleryPresentationMode.MOSAIC,
+            after: settings.activeMode,
+          },
+        },
+      });
+      return { activeMode: settings.activeMode, revision: settings.revision };
+    });
+  }
+
+  async updateCarouselSlot(
+    position: number,
+    dto: UpdateGalleryCarouselSlotDto,
+    adminId?: number,
+  ) {
+    if (!GALLERY_CAROUSEL_POSITIONS.includes(position as 1 | 2 | 3 | 4 | 5)) {
+      throw new NotFoundException('Posición de carrusel no encontrada');
+    }
+    await this.ensureCarouselSlots();
+
+    return this.prisma.$transaction(async (tx) => {
+      const current = await tx.galleryCarouselSlot.findUnique({
+        where: { position },
+        include: GALLERY_CAROUSEL_SLOT_INCLUDE,
+      });
+      if (!current) {
+        throw new NotFoundException('Posición de carrusel no encontrada');
+      }
+
+      const nextAssetId =
+        dto.assetId === undefined ? current.assetId : dto.assetId || null;
+      const updatesAssetContent =
+        dto.description !== undefined || dto.productIds !== undefined;
+      let nextAsset: GalleryAssetWithProducts | null = null;
+      if (nextAssetId) {
+        nextAsset = await tx.galleryAsset.findUnique({
+          where: { id: nextAssetId },
+          include: GALLERY_ASSET_INCLUDE,
+        });
+        if (!nextAsset)
+          throw new NotFoundException('Foto antigua no encontrada');
+      } else if (updatesAssetContent) {
+        throw new BadRequestException(
+          'Selecciona una foto antes de guardar productos o texto',
+        );
+      }
+
+      const productIds =
+        dto.productIds === undefined
+          ? undefined
+          : this.uniqueProductIds(dto.productIds);
+      if (productIds?.length) {
+        const products = await tx.product.findMany({
+          where: { id: { in: productIds } },
+          select: { id: true },
+        });
+        if (products.length !== productIds.length) {
+          throw new BadRequestException(
+            'Uno o más productos seleccionados no son válidos',
+          );
+        }
+      }
+
+      const altText =
+        dto.altText === undefined ? current.altText : dto.altText.trim();
+      if (nextAssetId && altText.length < 3) {
+        throw new BadRequestException(
+          'El texto alternativo es obligatorio para una imagen publicada',
+        );
+      }
+      const instagramUrl =
+        dto.instagramUrl === undefined
+          ? current.instagramUrl
+          : normalizeInstagramPostUrl(dto.instagramUrl);
+      const description =
+        dto.description === undefined
+          ? undefined
+          : dto.description?.trim() || null;
+
+      if (nextAsset && updatesAssetContent) {
+        await tx.galleryAsset.update({
+          where: { id: nextAsset.id },
+          data: {
+            ...(description !== undefined ? { description } : {}),
+            ...(productIds !== undefined
+              ? {
+                  products: {
+                    deleteMany: {},
+                    create: productIds.map((productId, productPosition) => ({
+                      productId,
+                      position: productPosition,
+                    })),
+                  },
+                }
+              : {}),
+          },
+        });
+      }
+
+      const updated = await tx.galleryCarouselSlot.update({
+        where: { position },
+        data: {
+          assetId: nextAssetId,
+          focalX: dto.focalX ?? current.focalX,
+          focalY: dto.focalY ?? current.focalY,
+          zoom: dto.zoom ?? current.zoom,
+          revision: { increment: 1 },
+          altText: nextAssetId ? altText : '',
+          instagramUrl: nextAssetId ? instagramUrl : null,
+        },
+        include: GALLERY_CAROUSEL_SLOT_INCLUDE,
+      });
+      await tx.auditLog.create({
+        data: {
+          actorId: adminId ?? null,
+          action: 'gallery.carousel.slot.update',
+          actionType: 'UPDATE',
+          targetType: 'gallery-carousel-slot',
+          targetId: String(position),
+          metadata: {
+            assetId: nextAssetId,
+            focalX: updated.focalX,
+            focalY: updated.focalY,
+            zoom: updated.zoom,
+            productCount: updated.asset?.products?.length ?? 0,
+          },
+        },
+      });
+      return { slot: this.toAdminCarouselSlot(updated) };
+    });
+  }
+
+  async reorderCarousel(dto: ReorderGalleryCarouselDto, adminId?: number) {
+    const { sourcePosition, targetPosition } = dto;
+    if (sourcePosition === targetPosition) {
+      throw new BadRequestException(
+        'La posición de origen y destino deben ser diferentes',
+      );
+    }
+    await this.ensureCarouselSlots();
+    return this.prisma.$transaction(
+      async (tx) => {
+        const slots = await tx.galleryCarouselSlot.findMany({
+          orderBy: { position: 'asc' },
+          include: GALLERY_CAROUSEL_SLOT_INCLUDE,
+        });
+        const sourceIndex = slots.findIndex(
+          (slot) => slot.position === sourcePosition,
+        );
+        const targetIndex = slots.findIndex(
+          (slot) => slot.position === targetPosition,
+        );
+        if (sourceIndex < 0 || targetIndex < 0) {
+          throw new NotFoundException('Posición de carrusel no encontrada');
+        }
+        if (!slots[sourceIndex].assetId) {
+          throw new BadRequestException(
+            'La posición de origen no contiene ninguna foto',
+          );
+        }
+        const content = slots.map((slot) => ({
+          assetId: slot.assetId,
+          altText: slot.altText,
+          instagramUrl: slot.instagramUrl,
+          focalX: slot.focalX,
+          focalY: slot.focalY,
+          zoom: slot.zoom,
+          fit: slot.fit,
+          tabletFocalX: slot.tabletFocalX,
+          tabletFocalY: slot.tabletFocalY,
+          tabletZoom: slot.tabletZoom,
+          tabletFit: slot.tabletFit,
+          mobileFocalX: slot.mobileFocalX,
+          mobileFocalY: slot.mobileFocalY,
+          mobileZoom: slot.mobileZoom,
+          mobileFit: slot.mobileFit,
+        }));
+        const [moved] = content.splice(sourceIndex, 1);
+        content.splice(targetIndex, 0, moved);
+        await Promise.all(
+          slots.map((slot, index) =>
+            tx.galleryCarouselSlot.update({
+              where: { position: slot.position },
+              data: { ...content[index], revision: { increment: 1 } },
+            }),
+          ),
+        );
+        await tx.auditLog.create({
+          data: {
+            actorId: adminId ?? null,
+            action: 'gallery.carousel.reorder',
+            actionType: 'UPDATE',
+            targetType: 'gallery-carousel',
+            targetId: `${sourcePosition}:${targetPosition}`,
+            metadata: { sourcePosition, targetPosition },
+          },
+        });
+        const reordered = await tx.galleryCarouselSlot.findMany({
+          orderBy: { position: 'asc' },
+          include: GALLERY_CAROUSEL_SLOT_INCLUDE,
+        });
+        return {
+          sourcePosition,
+          targetPosition,
+          carouselSlots: reordered.map((slot) =>
+            this.toAdminCarouselSlot(slot),
+          ),
         };
       },
       { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },

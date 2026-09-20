@@ -14,8 +14,12 @@ describe('Pantalla Clave focused UX contracts', () => {
   const compositionStyles = readFrontend('assets/key-screen-composition.css');
   const privacyHtml = readFrontend('privacy-policy.html');
   const infoShellScript = readFrontend('assets/info-shell.js');
-  const mainSource = readFileSync(
-    path.resolve(__dirname, '../main.ts'),
+  const gateMiddlewareSource = readFileSync(
+    path.resolve(__dirname, '../common/routing/public-html-gate.middleware.ts'),
+    'utf8',
+  );
+  const publicPagesSource = readFileSync(
+    path.resolve(__dirname, '../common/routing/public-pages.ts'),
     'utf8',
   );
 
@@ -309,7 +313,12 @@ describe('Pantalla Clave focused UX contracts', () => {
         contextualDocument.querySelector('.key-screen-return')!,
       ).display,
     ).toBe('inline-flex');
-    expect(mainSource).toContain('UNGATED_PUBLIC_PATHS.has(pathname)');
+    expect(gateMiddlewareSource).toContain(
+      'UNGATED_PUBLIC_PATHS.has(pathname)',
+    );
+    expect(publicPagesSource).toMatch(
+      /export const UNGATED_PUBLIC_PATHS = new Set\(\[[\s\S]*'\/privacidad'[\s\S]*'\/privacy-policy\.html'/,
+    );
 
     const normal = new JSDOM(privacyHtml, {
       runScripts: 'outside-only',

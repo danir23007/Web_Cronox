@@ -7,6 +7,8 @@ import {
   MAX_WEBSITE_MEDIA_BYTES,
   SupabaseStorageService,
 } from './supabase-storage.service';
+import { ImageProcessorService } from '../../images/image-processor.service';
+import sharp from 'sharp';
 
 const PNG_SIGNATURE = Buffer.from([
   0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a,
@@ -50,10 +52,27 @@ describe('SupabaseStorageService', () => {
     process.env.SUPABASE_STORAGE_BUCKET = 'product-images';
     process.env.SUPABASE_GALLERY_STORAGE_BUCKET = 'gallery';
     delete process.env.SUPABASE_EMAIL_STORAGE_BUCKET;
+    jest
+      .spyOn(ImageProcessorService.prototype, 'inspect')
+      .mockImplementation((buffer) =>
+        Promise.resolve({
+          format: 'png',
+          width: buffer.length >= 24 ? buffer.readUInt32BE(16) || 1 : 1,
+          height: buffer.length >= 24 ? buffer.readUInt32BE(20) || 1 : 1,
+          autoOrient: {
+            width: buffer.length >= 24 ? buffer.readUInt32BE(16) || 1 : 1,
+            height: buffer.length >= 24 ? buffer.readUInt32BE(20) || 1 : 1,
+          },
+        }),
+      );
+    jest
+      .spyOn(ImageProcessorService.prototype, 'createVariants')
+      .mockResolvedValue([]);
   });
 
   afterEach(() => {
     global.fetch = originalFetch;
+    jest.restoreAllMocks();
   });
 
   afterAll(() => {
@@ -121,7 +140,7 @@ describe('SupabaseStorageService', () => {
 
     expect(fetchMock).toHaveBeenCalledWith(
       expect.stringMatching(
-        /\/storage\/v1\/object\/product-images\/products\/.+\.png$/,
+        /\/storage\/v1\/object\/product-images\/products\/originals\/.+\.png$/,
       ),
       expect.objectContaining({
         headers: expect.objectContaining({ 'Content-Type': 'image/png' }),
@@ -149,7 +168,7 @@ describe('SupabaseStorageService', () => {
     const result = await service.uploadGalleryImage(image, 7);
 
     expect(result.storageKey).toMatch(
-      /^fotos-antiguas\/\d{4}\/\d{2}\/.+\.png$/,
+      /^fotos-antiguas\/originals\/[a-f0-9]{64}\.png$/,
     );
     expect(result.publicUrl).toContain(
       `/storage/v1/object/public/gallery/${result.storageKey}`,
@@ -275,9 +294,9 @@ describe('SupabaseStorageService', () => {
 
       expect(MAX_PRODUCT_IMAGE_BYTES).toBe(25 * 1024 * 1024);
       if (accepted) {
-        await expect(service.uploadProductImages([image])).resolves.toEqual({
-          urls: [expect.stringMatching(/\.png$/)],
-        });
+        await expect(service.uploadProductImages([image])).resolves.toEqual(
+          expect.objectContaining({ urls: [expect.stringMatching(/\.png$/)] }),
+        );
         expect(fetchMock).toHaveBeenCalledTimes(1);
       } else {
         await expect(service.uploadProductImages([image])).rejects.toThrow(
@@ -305,6 +324,70 @@ describe('SupabaseStorageService', () => {
       expect.any(String),
       expect.objectContaining({ body: image.buffer }),
     );
+  });
+
+  it('preserves the master and cleans only newly uploaded variants after a derivative failure', async () => {
+    jest.restoreAllMocks();
+    const buffer = await sharp({
+      create: {
+        width: 800,
+        height: 1200,
+        channels: 4,
+        background: { r: 20, g: 30, b: 40, alpha: 0.5 },
+      },
+    })
+      .png()
+      .toBuffer();
+    const calls: Array<{ url: string; init?: RequestInit }> = [];
+    global.fetch = jest.fn(
+      (input: string | URL | Request, init?: RequestInit) => {
+        const url =
+          typeof input === 'string'
+            ? input
+            : input instanceof URL
+              ? input.href
+              : input.url;
+        calls.push({ url, init });
+        if (init?.method === 'DELETE')
+          return Promise.resolve({ ok: true, status: 200 } as Response);
+        const variantUploads = calls.filter(
+          (call) =>
+            call.url.includes('/variants/') && call.init?.method === 'POST',
+        );
+        if (url.includes('/variants/') && variantUploads.length === 2) {
+          return Promise.resolve({ ok: false, status: 500 } as Response);
+        }
+        return Promise.resolve({ ok: true, status: 200 } as Response);
+      },
+    ) as typeof fetch;
+    const service = new SupabaseStorageService(new ImageProcessorService());
+    const image = {
+      mimetype: 'image/png',
+      buffer,
+      size: buffer.length,
+      originalname: 'master.png',
+    } as Express.Multer.File;
+
+    await expect(service.uploadProductImages([image])).rejects.toThrow(
+      'No se pudo subir la imagen',
+    );
+
+    const originalUpload = calls.find((call) =>
+      call.url.includes('/originals/'),
+    );
+    expect(originalUpload?.init?.body).toBe(buffer);
+    const cleanup = calls.find((call) => call.init?.method === 'DELETE');
+    expect(typeof cleanup?.init?.body).toBe('string');
+    const cleanupBody = JSON.parse(cleanup?.init?.body as string) as {
+      prefixes: string[];
+    };
+    expect(cleanupBody.prefixes).toHaveLength(1);
+    expect(cleanupBody.prefixes[0]).toMatch(
+      /^products\/variants\/[a-f0-9]{64}\/card\.webp$/,
+    );
+    expect(
+      cleanupBody.prefixes.some((path) => path.includes('/originals/')),
+    ).toBe(false);
   });
 
   it.each([
@@ -358,7 +441,7 @@ describe('SupabaseStorageService', () => {
         originalFilename: originalname,
       });
       expect(result.storageKey).toMatch(
-        new RegExp(`^multimedia-web/portadas/${subfolder}/\\d{4}/\\d{2}/`),
+        new RegExp(`^multimedia-web/portadas/${subfolder}/(?:originals/)?`),
       );
       expect(fetchMock).toHaveBeenCalledWith(
         expect.stringContaining(

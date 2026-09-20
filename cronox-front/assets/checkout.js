@@ -909,15 +909,10 @@
     emptyCartEl.hidden = true;
     const frag = document.createDocumentFragment();
     items.forEach((item) => {
-      const imageUrl = safeProductImage(
-        item.imageUrl ||
-          item.product?.imageUrl ||
-          (Array.isArray(item.product?.images) ? item.product.images[0]?.url : '') ||
-          item.product?.image,
-      );
+      const imageUrl = window.CRONOX_IMAGES?.resolveProduct(item, 'checkout', { preferSnapshot: true })?.src || safeProductImage(item.imageUrl || item.product?.imageUrl || item.product?.image);
       const qty = Math.max(1, Math.min(999, Number(item.qty) || 1));
       const productName = escapeHtml(item.product?.name || 'Producto CRONOX');
-      const size = item.size ? escapeHtml(String(item.size).toUpperCase()) : '';
+      const size = item.size ? escapeHtml(window.CRONOX_SIZES?.label?.(item.size) || String(item.size).toUpperCase()) : '';
       const priceLabel = escapeHtml(item.priceLabel || formatMoney((item.priceCents || 0) / 100));
       const article = document.createElement('article');
       article.className = 'checkout-item';
@@ -934,6 +929,12 @@
           <div class="checkout-item__price">${priceLabel}</div>
         </div>
       `;
+      window.CRONOX_IMAGES?.applyProduct(
+        article.querySelector('.checkout-item__media img'),
+        item,
+        'checkout',
+        { preferSnapshot: true },
+      );
       frag.appendChild(article);
     });
     cartItemsEl.innerHTML = '';
@@ -982,7 +983,7 @@
   const getRecommendationSizeMarkup = (product, selectedVariantId = '') => {
     const variants = getRecommendationVariants(product);
     return variants.map((variant) => {
-      const size = cleanText(variant.size).toUpperCase() || 'Única';
+      const size = window.CRONOX_SIZES?.label?.(variant.size) || cleanText(variant.size).toUpperCase() || 'Única';
       const isAvailable = isRecommendationVariantAvailable(variant);
       const selected = isAvailable && String(variant.id) === String(selectedVariantId);
       return `<button type="button" class="checkout-recommendation__size${isAvailable ? '' : ' is-unavailable'}${selected ? ' is-selected' : ''}" data-recommendation-variant="${escapeHtml(String(variant.id))}" data-recommendation-unavailable="${isAvailable ? 'false' : 'true'}" aria-label="${escapeHtml(isAvailable ? `Talla ${size}` : `Talla ${size}, agotada`)}" aria-pressed="${selected ? 'true' : 'false'}" aria-disabled="${isAvailable ? 'false' : 'true'}"${isAvailable ? '' : ' disabled tabindex="-1"'}>${escapeHtml(size)}</button>`;
@@ -1129,7 +1130,7 @@
       }
       recommendationProducts.set(productKey, renderProduct);
       const productName = escapeHtml(renderProduct.name || 'Producto CRONOX');
-      const imageUrl = safeProductImage(renderProduct.image || renderProduct.images?.[0]);
+      const imageUrl = window.CRONOX_IMAGES?.resolveProduct(renderProduct, 'recommendation')?.src || safeProductImage(renderProduct.image || renderProduct.images?.[0]);
       const price = escapeHtml(renderProduct.priceLabel || formatMoney(renderProduct.price || 0));
       const selectorId = `checkout-recommendation-sizes-${++recommendationSequence}`;
       const sizeMarkup = getRecommendationSizeMarkup(
@@ -1150,6 +1151,11 @@
         </div>
         <button class="checkout-recommendation__action" type="button" aria-controls="${selectorId}" aria-expanded="${isOpen ? 'true' : 'false'}">Añadir</button>
       `;
+      window.CRONOX_IMAGES?.applyProduct(
+        article.querySelector('.checkout-recommendation__image'),
+        renderProduct,
+        'recommendation',
+      );
       article.classList.toggle('is-selecting-size', isOpen);
       syncRecommendationActionState(article);
       fragment.appendChild(article);

@@ -1,4 +1,7 @@
-import { availableStock, classifyStock } from '../../../cronox-backend/src/common/stock-status';
+import {
+  availableStock,
+  classifyStock,
+} from '../../../cronox-backend/src/common/stock-status';
 import { installSessionTransport } from './session';
 
 (() => {
@@ -12,7 +15,8 @@ import { installSessionTransport } from './session';
     cache?: RequestCache;
   }
 
-  const g = typeof window !== 'undefined' ? window : (globalThis as unknown as Window);
+  const g =
+    typeof window !== 'undefined' ? window : (globalThis as unknown as Window);
 
   /**
    * Browser-facing values returned by the API are data, not markup.  Keep the
@@ -31,9 +35,16 @@ import { installSessionTransport } from './session';
     if (typeof value !== 'string' || !value.trim()) return '';
 
     try {
-      const base = typeof g.location?.origin === 'string' ? g.location.origin : 'http://localhost';
+      const base =
+        typeof g.location?.origin === 'string'
+          ? g.location.origin
+          : 'http://localhost';
       const url = new URL(value.trim(), base);
-      if ((url.protocol !== 'https:' && url.protocol !== 'http:') || url.username || url.password) {
+      if (
+        (url.protocol !== 'https:' && url.protocol !== 'http:') ||
+        url.username ||
+        url.password
+      ) {
         return '';
       }
       return url.href;
@@ -61,7 +72,10 @@ import { installSessionTransport } from './session';
       price: 34.95,
       priceLabel: '34,95 €',
       image: 'assets/products/camiseta_washed_gris.png',
-      images: ['assets/products/camiseta_washed_gris.png', 'assets/products/camiseta_washed_gris_2.png'],
+      images: [
+        'assets/products/camiseta_washed_gris.png',
+        'assets/products/camiseta_washed_gris_2.png',
+      ],
       categories: ['camisetas'],
       sizes: ['s', 'm', 'l', 'xl', 'xxl'],
       color: 'gris',
@@ -74,7 +88,10 @@ import { installSessionTransport } from './session';
       price: 34.95,
       priceLabel: '34,95 €',
       image: 'assets/products/camiseta_washed_negra.png',
-      images: ['assets/products/camiseta_washed_negra.png', 'assets/products/camiseta_washed_negra_2.png'],
+      images: [
+        'assets/products/camiseta_washed_negra.png',
+        'assets/products/camiseta_washed_negra_2.png',
+      ],
       categories: ['camisetas'],
       sizes: ['s', 'm', 'l', 'xl', 'xxl'],
       color: 'negro',
@@ -88,14 +105,17 @@ import { installSessionTransport } from './session';
     if (Array.isArray(product.images)) copy.images = [...product.images];
     if (Array.isArray(product.sizes)) copy.sizes = [...product.sizes];
     if (Array.isArray(product.colors)) copy.colors = [...product.colors];
-    if (Array.isArray(product.categories)) copy.categories = [...product.categories];
+    if (Array.isArray(product.categories))
+      copy.categories = [...product.categories];
     if (Array.isArray(product.variants)) {
       copy.variants = product.variants.map((variant) => ({
         ...(variant as UnknownRecord),
       }));
     }
     if (product.variantMap && typeof product.variantMap === 'object') {
-      copy.variantMap = Object.entries(product.variantMap as Record<string, UnknownRecord>).reduce(
+      copy.variantMap = Object.entries(
+        product.variantMap as Record<string, UnknownRecord>,
+      ).reduce(
         (acc, [key, value]) => {
           acc[key] = { ...value };
           return acc;
@@ -106,26 +126,43 @@ import { installSessionTransport } from './session';
     return copy;
   };
 
-  const getFallbackProducts = () => FALLBACK_SOURCE.map((product) => cloneProduct(product));
+  const getFallbackProducts = () =>
+    FALLBACK_SOURCE.map((product) => cloneProduct(product));
 
   const readManualBase = () => {
-    if (typeof window === 'undefined' || typeof document === 'undefined') return '';
+    if (typeof window === 'undefined' || typeof document === 'undefined')
+      return '';
 
-    const globalBase = typeof window.__CRONOX_API_BASE__ === 'string' ? window.__CRONOX_API_BASE__.trim() : '';
+    const globalBase =
+      typeof window.__CRONOX_API_BASE__ === 'string'
+        ? window.__CRONOX_API_BASE__.trim()
+        : '';
     if (globalBase) return globalBase;
 
     const doc = document.documentElement;
-    if (doc && typeof doc.dataset?.cronoxApiBase === 'string' && doc.dataset.cronoxApiBase.trim()) {
+    if (
+      doc &&
+      typeof doc.dataset?.cronoxApiBase === 'string' &&
+      doc.dataset.cronoxApiBase.trim()
+    ) {
       return doc.dataset.cronoxApiBase.trim();
     }
 
-    const meta = document.querySelector<HTMLMetaElement>('meta[name="cronox:api-base"]');
+    const meta = document.querySelector<HTMLMetaElement>(
+      'meta[name="cronox:api-base"]',
+    );
     if (meta && typeof meta.content === 'string' && meta.content.trim()) {
       return meta.content.trim();
     }
 
-    const script = document.querySelector<HTMLScriptElement>('script[data-cronox-api-base]');
-    if (script && typeof script.dataset.cronoxApiBase === 'string' && script.dataset.cronoxApiBase.trim()) {
+    const script = document.querySelector<HTMLScriptElement>(
+      'script[data-cronox-api-base]',
+    );
+    if (
+      script &&
+      typeof script.dataset.cronoxApiBase === 'string' &&
+      script.dataset.cronoxApiBase.trim()
+    ) {
       return script.dataset.cronoxApiBase.trim();
     }
 
@@ -134,7 +171,10 @@ import { installSessionTransport } from './session';
 
   const detectLocalhostPort = (fallbackPort = '3000') => {
     if (typeof window === 'undefined') return fallbackPort;
-    const raw = window.__CRONOX_BACKEND_PORT__ != null ? String(window.__CRONOX_BACKEND_PORT__).trim() : '';
+    const raw =
+      window.__CRONOX_BACKEND_PORT__ != null
+        ? String(window.__CRONOX_BACKEND_PORT__).trim()
+        : '';
     if (raw) return raw;
 
     if (typeof document !== 'undefined') {
@@ -186,7 +226,11 @@ import { installSessionTransport } from './session';
       return safeJoin(protocol, hostname, backendPort);
     }
 
-    if (/^192\.168\./.test(hostname) || /^10\./.test(hostname) || /^172\.(1[6-9]|2[0-9]|3[0-1])\./.test(hostname)) {
+    if (
+      /^192\.168\./.test(hostname) ||
+      /^10\./.test(hostname) ||
+      /^172\.(1[6-9]|2[0-9]|3[0-1])\./.test(hostname)
+    ) {
       if (port) {
         return safeJoin(protocol, hostname, port);
       }
@@ -208,8 +252,14 @@ import { installSessionTransport } from './session';
     const addOrigin = (value: unknown) => {
       if (typeof value !== 'string' || !value.trim()) return;
       try {
-        const url = new URL(value, typeof g.location?.origin === 'string' ? g.location.origin : 'http://localhost');
-        if (url.protocol === 'https:' || url.protocol === 'http:') origins.add(url.origin);
+        const url = new URL(
+          value,
+          typeof g.location?.origin === 'string'
+            ? g.location.origin
+            : 'http://localhost',
+        );
+        if (url.protocol === 'https:' || url.protocol === 'http:')
+          origins.add(url.origin);
       } catch (error) {
         // Ignore malformed optional origins rather than weakening the allowlist.
       }
@@ -273,22 +323,57 @@ import { installSessionTransport } from './session';
     const primary = byOrder.find((img) => img?.isPrimary)?.url;
     const first = byOrder.find((img) => img?.url)?.url;
 
-    return productImageUrl(primary) || productImageUrl(first) || productImageUrl(fallback) || '';
+    return (
+      productImageUrl(primary) ||
+      productImageUrl(first) ||
+      productImageUrl(fallback) ||
+      ''
+    );
   };
 
-  const normalizeSizeKey = (value?: string | number) =>
-    String(value || '')
-      .trim()
-      .toUpperCase();
+  const normalizeSizeKey = (value?: string | number) => {
+    const helper = g.CRONOX_SIZES as
+      | { key?: (input: unknown) => string }
+      | undefined;
+    return (
+      helper?.key?.(value) ||
+      String(value || '')
+        .trim()
+        .toUpperCase()
+        .replace(/\s+/g, '_')
+    );
+  };
+  const sizeLabel = (value?: string | number) => {
+    const helper = g.CRONOX_SIZES as
+      | { label?: (input: unknown) => string }
+      | undefined;
+    return (
+      helper?.label?.(value) || normalizeSizeKey(value).replace(/^US_/, 'US ')
+    );
+  };
+  const sortVariants = <T extends { size?: unknown }>(variants: T[]): T[] => {
+    const helper = g.CRONOX_SIZES as
+      | { order?: (input: unknown) => number }
+      | undefined;
+    return [...variants].sort(
+      (left, right) =>
+        (helper?.order?.(left.size) ?? 0) - (helper?.order?.(right.size) ?? 0),
+    );
+  };
 
   const mapVariant = (variant: UnknownRecord = {}, fallbackPriceCents = 0) => {
-    const effectivePriceCents = Number(variant.effectivePrice ?? fallbackPriceCents ?? 0);
-    const sizeKey = normalizeSizeKey(variant.size as string | number | undefined);
+    const effectivePriceCents = Number(
+      variant.effectivePrice ?? fallbackPriceCents ?? 0,
+    );
+    const sizeKey = normalizeSizeKey(
+      variant.size as string | number | undefined,
+    );
     const stockQty = Number(variant.stockQty ?? variant.stock ?? 0);
 
     return {
       id: variant.id,
-      size: variant.size,
+      size: sizeLabel(variant.size as string | number | undefined),
+      sizeCode: sizeKey,
       sizeKey,
       sku: variant.sku,
       stock: stockQty,
@@ -303,34 +388,67 @@ import { installSessionTransport } from './session';
   const mapProduct = (product?: UnknownRecord | null) => {
     if (!product) return null;
 
-    const galleryImages = Array.isArray(product.images)
-      ? (product.images as Array<Record<string, unknown>>)
+    const productImages = [
+      product.imageRecords,
+      product.galleryImages,
+      product.images,
+    ].find((images) => Array.isArray(images) && images.length > 0) as
+      | Array<Record<string, unknown> | string>
+      | undefined;
+    const imageSource =
+      productImages ||
+      (product.image
+        ? [product.image as Record<string, unknown> | string]
+        : []);
+    const galleryImages = imageSource.length
+      ? imageSource
+          .map((value) => (typeof value === 'string' ? { url: value } : value))
           .filter((img) => img?.isActive !== false)
           .sort((a, b) => Number(a?.sortOrder ?? 0) - Number(b?.sortOrder ?? 0))
-          .map((img) => ({
-            id: img.id,
-            url: productImageUrl(img?.url),
-            alt: String(img?.alt ?? ''),
-            sortOrder: Number(img?.sortOrder ?? 0),
-            isPrimary: Boolean(img?.isPrimary),
-            galleryPositionX: Number(img?.galleryPositionX ?? 50),
-            galleryPositionY: Number(img?.galleryPositionY ?? 50),
-            galleryZoom: Number(img?.galleryZoom ?? 1),
-            galleryFit: String(img?.galleryFit ?? 'CONTAIN').toUpperCase() === 'COVER' ? 'COVER' : 'CONTAIN',
-          }))
+          .map((img) => {
+            return {
+              id: img.id,
+              url: productImageUrl(img?.url),
+              alt: String(img?.alt ?? ''),
+              sortOrder: Number(img?.sortOrder ?? 0),
+              isPrimary: Boolean(img?.isPrimary),
+              galleryPositionX: Number(img?.galleryPositionX ?? 50),
+              galleryPositionY: Number(img?.galleryPositionY ?? 50),
+              galleryZoom: Number(img?.galleryZoom ?? 1),
+              galleryFit:
+                String(img?.galleryFit ?? 'CONTAIN').toUpperCase() === 'COVER'
+                  ? 'COVER'
+                  : 'CONTAIN',
+              storageKey: img?.storageKey,
+              mimeType: img?.mimeType,
+              fileSize: img?.fileSize,
+              width: img?.width,
+              height: img?.height,
+              variants:
+                img?.variants && typeof img.variants === 'object'
+                  ? { ...(img.variants as UnknownRecord) }
+                  : null,
+            };
+          })
           .filter((img) => Boolean(img.url))
       : [];
     const images = galleryImages.map((img) => img.url);
     const primaryImage = pickPrimaryImage(
-      (product.images as Array<{
+      (galleryImages as Array<{
         url?: string;
         sortOrder?: number;
         isPrimary?: boolean;
       }>) || [],
       productImageUrl(product.imageUrl) || images[0] || '',
     );
-    const rawVariants = Array.isArray(product.variants) ? (product.variants as UnknownRecord[]) : [];
-    const variants = rawVariants.map((variant) => mapVariant(variant, product.price as number));
+    const rawVariants = Array.isArray(product.variants)
+      ? (product.variants as UnknownRecord[])
+      : [];
+    const variants = sortVariants(
+      rawVariants.map((variant) =>
+        mapVariant(variant, product.price as number),
+      ),
+    );
     const variantMap = variants.reduce(
       (acc, variant) => {
         if (variant.sizeKey) {
@@ -373,10 +491,12 @@ import { installSessionTransport } from './session';
       price: centsToUnits(product.price as number),
       priceLabel: formatCents(product.price as number),
       currency: product.currency || 'EUR',
+      sizeSystem: product.sizeSystem || 'APPAREL',
       desc: product.description || product.desc || '',
       image: primaryImage,
       images: images.length ? images : primaryImage ? [primaryImage] : [],
       galleryImages,
+      imageRecords: galleryImages,
       categories,
       sizes: sizes.map((size) => String(size || '').toLowerCase()),
       colors: product.colors || [],
@@ -392,15 +512,31 @@ import { installSessionTransport } from './session';
   const mapCartItem = (item: UnknownRecord = {}) => {
     const variant = (item.variant as UnknownRecord) || {};
     const product = (variant.product as UnknownRecord) || {};
-    const priceCents = Number(item.priceAtAdd ?? variant.price ?? product.price ?? 0);
+    const priceCents = Number(
+      item.priceAtAdd ?? variant.price ?? product.price ?? 0,
+    );
     const productImages = Array.isArray(product.images)
-      ? (product.images as Array<{ url?: string }>)
-          .map((img) => productImageUrl(img?.url))
-          .filter(Boolean)
-          .map((url) => ({ url }))
+      ? (
+          product.images as Array<{
+            url?: string;
+            variants?: unknown;
+            width?: unknown;
+            height?: unknown;
+            sortOrder?: unknown;
+            isPrimary?: unknown;
+          }>
+        )
+          .map((img) => ({
+            url: productImageUrl(img?.url),
+            variants: img?.variants,
+            width: img?.width,
+            height: img?.height,
+            sortOrder: Number(img?.sortOrder ?? 0),
+            isPrimary: Boolean(img?.isPrimary),
+          }))
+          .filter((img) => Boolean(img.url))
       : [];
     const productImage =
-      productImageUrl(product.imageUrl) ||
       pickPrimaryImage(
         (product.images as Array<{
           url?: string;
@@ -409,6 +545,7 @@ import { installSessionTransport } from './session';
         }>) || [],
       ) ||
       productImages[0]?.url ||
+      productImageUrl(product.imageUrl) ||
       '';
 
     const itemImages = Array.isArray(item.images)
@@ -425,7 +562,8 @@ import { installSessionTransport } from './session';
       priceCents,
       price: centsToUnits(priceCents),
       priceLabel: formatCents(priceCents),
-      size: variant.size,
+      size: sizeLabel(variant.size as string | number | undefined),
+      sizeCode: normalizeSizeKey(variant.size as string | number | undefined),
       sku: variant.sku,
       imageUrl: productImage || null,
       images: itemImages,
@@ -434,9 +572,11 @@ import { installSessionTransport } from './session';
         slug: product.slug,
         name: product.name,
         currency: product.currency || 'EUR',
+        sizeSystem: product.sizeSystem || 'APPAREL',
         image: productImage,
         imageUrl: productImage || productImageUrl(product.imageUrl),
         images: productImages,
+        imageRecords: productImages,
       },
     };
   };
@@ -452,13 +592,18 @@ import { installSessionTransport } from './session';
       };
     }
 
-    const items = Array.isArray(cart.items) ? (cart.items as UnknownRecord[]).map(mapCartItem) : [];
+    const items = Array.isArray(cart.items)
+      ? (cart.items as UnknownRecord[]).map(mapCartItem)
+      : [];
     const itemsCount =
       typeof cart.itemsCount === 'number'
         ? cart.itemsCount
         : items.reduce((acc, item) => acc + (Number(item.qty) || 0), 0);
     const subtotalCents = Number(cart.subtotal ?? cart.subtotalCents ?? 0);
-    const currency = cart.currency || items.find((item) => item?.product?.currency)?.product?.currency || 'EUR';
+    const currency =
+      cart.currency ||
+      items.find((item) => item?.product?.currency)?.product?.currency ||
+      'EUR';
 
     return {
       id: cart.id,
@@ -471,7 +616,9 @@ import { installSessionTransport } from './session';
   };
 
   const buildUrl = (path: string, query?: QueryRecord) => {
-    const normalized = path.startsWith('http') ? path : `${API_BASE}/${path.replace(/^\//, '')}`;
+    const normalized = path.startsWith('http')
+      ? path
+      : `${API_BASE}/${path.replace(/^\//, '')}`;
     const url = new URL(normalized);
     if (query && typeof query === 'object') {
       Object.entries(query).forEach(([key, value]) => {
@@ -490,7 +637,9 @@ import { installSessionTransport } from './session';
     return url.toString();
   };
 
-  const buildRequestHeaders = (customHeaders?: Record<string, string>): Record<string, string> => {
+  const buildRequestHeaders = (
+    customHeaders?: Record<string, string>,
+  ): Record<string, string> => {
     return {
       Accept: 'application/json',
       ...(customHeaders || {}),
@@ -532,7 +681,9 @@ import { installSessionTransport } from './session';
         cache: 'no-store',
       });
       if (!response.ok) {
-        throw new Error('No se pudo inicializar la protección de la solicitud.');
+        throw new Error(
+          'No se pudo inicializar la protección de la solicitud.',
+        );
       }
 
       let payload: { csrfToken?: unknown } | null = null;
@@ -541,9 +692,13 @@ import { installSessionTransport } from './session';
       } catch (error) {
         payload = null;
       }
-      const token = (typeof payload?.csrfToken === 'string' && payload.csrfToken) || readCookie(CSRF_COOKIE_NAME);
+      const token =
+        (typeof payload?.csrfToken === 'string' && payload.csrfToken) ||
+        readCookie(CSRF_COOKIE_NAME);
       if (!token) {
-        throw new Error('No se pudo obtener el token de protección de la solicitud.');
+        throw new Error(
+          'No se pudo obtener el token de protección de la solicitud.',
+        );
       }
       csrfTokenCache = token;
       return token;
@@ -565,7 +720,8 @@ import { installSessionTransport } from './session';
 
   const requiresCsrfHeader = (url: string, method: string) => {
     const normalizedMethod = String(method || 'GET').toUpperCase();
-    if (!['POST', 'PUT', 'PATCH', 'DELETE'].includes(normalizedMethod)) return false;
+    if (!['POST', 'PUT', 'PATCH', 'DELETE'].includes(normalizedMethod))
+      return false;
 
     try {
       const pathname = new URL(url).pathname;
@@ -575,10 +731,14 @@ import { installSessionTransport } from './session';
     }
   };
 
-  const request = async <T = unknown>(path: string, options: RequestOptions = {}): Promise<T> => {
+  const request = async <T = unknown>(
+    path: string,
+    options: RequestOptions = {},
+  ): Promise<T> => {
     const url = buildUrl(path, options.query);
     const headers = buildRequestHeaders(options.headers);
-    const isFormData = typeof FormData !== 'undefined' && options.body instanceof FormData;
+    const isFormData =
+      typeof FormData !== 'undefined' && options.body instanceof FormData;
     const method = options.method || 'GET';
     const config: RequestInit = {
       method,
@@ -594,7 +754,10 @@ import { installSessionTransport } from './session';
       if (isFormData) {
         config.body = options.body as BodyInit;
       } else {
-        config.body = typeof options.body === 'string' ? options.body : JSON.stringify(options.body);
+        config.body =
+          typeof options.body === 'string'
+            ? options.body
+            : JSON.stringify(options.body);
         if (!headers['Content-Type'] && !headers['content-type']) {
           headers['Content-Type'] = 'application/json';
         }
@@ -611,7 +774,8 @@ import { installSessionTransport } from './session';
 
       if (!response.ok) {
         const error = new Error(
-          (data as { message?: string })?.message || `API error ${response.status}`,
+          (data as { message?: string })?.message ||
+            `API error ${response.status}`,
         ) as CronoxApiError;
         error.status = response.status;
         error.endpoint = url;
@@ -626,7 +790,10 @@ import { installSessionTransport } from './session';
         if (err.status == null) err.status = 0;
         if (!err.endpoint) err.endpoint = url;
         if (err.payload === undefined) {
-          err.payload = options.body && typeof options.body === 'object' ? options.body : null;
+          err.payload =
+            options.body && typeof options.body === 'object'
+              ? options.body
+              : null;
         }
         if (!err.message) {
           err.message = 'Error de red o de conexión';
@@ -636,13 +803,19 @@ import { installSessionTransport } from './session';
     }
   };
 
-  const classifyApiError = (rawError: unknown = {}): CronoxApiErrorClassification => {
-    const error = (rawError && typeof rawError === 'object' ? rawError : {}) as Partial<CronoxApiError>;
+  const classifyApiError = (
+    rawError: unknown = {},
+  ): CronoxApiErrorClassification => {
+    const error = (
+      rawError && typeof rawError === 'object' ? rawError : {}
+    ) as Partial<CronoxApiError>;
     const status = Number(error.status || error.statusCode || 0);
     const message = (error && error.message) || '';
     const payloadMessage =
-      (error as { payload?: { message?: string; error?: string } })?.payload?.message ||
-      (error as { payload?: { message?: string; error?: string } })?.payload?.error;
+      (error as { payload?: { message?: string; error?: string } })?.payload
+        ?.message ||
+      (error as { payload?: { message?: string; error?: string } })?.payload
+        ?.error;
 
     const base: CronoxApiErrorClassification = {
       kind: 'unknown',
@@ -655,7 +828,8 @@ import { installSessionTransport } from './session';
       return {
         ...base,
         kind: 'network',
-        userMessage: 'No pudimos conectar con el servidor. Revisa tu conexión o la API.',
+        userMessage:
+          'No pudimos conectar con el servidor. Revisa tu conexión o la API.',
         isRetryable: true,
       };
     }
@@ -683,7 +857,9 @@ import { installSessionTransport } from './session';
       return {
         ...base,
         kind: 'conflict',
-        userMessage: payloadMessage || 'Los datos cambiaron mientras editabas. Recarga antes de guardar de nuevo.',
+        userMessage:
+          payloadMessage ||
+          'Los datos cambiaron mientras editabas. Recarga antes de guardar de nuevo.',
         isRetryable: true,
         severity: 'warning',
       };
@@ -712,7 +888,8 @@ import { installSessionTransport } from './session';
       return {
         ...base,
         kind: 'network',
-        userMessage: 'No pudimos conectar con el servidor. Revisa tu conexión o la API.',
+        userMessage:
+          'No pudimos conectar con el servidor. Revisa tu conexión o la API.',
         isRetryable: true,
       };
     }
@@ -755,10 +932,14 @@ import { installSessionTransport } from './session';
       return data || null;
     } catch (error) {
       const err = error as CronoxApiError;
-      if (err && (err.status === 401 || err.statusCode === 401 || err.status === 404)) {
+      if (
+        err &&
+        (err.status === 401 || err.statusCode === 401 || err.status === 404)
+      ) {
         return null;
       }
-      const message = (err && err.message) || 'Error obteniendo el usuario autenticado';
+      const message =
+        (err && err.message) || 'Error obteniendo el usuario autenticado';
       console.error('[CRONOX_API.getMe]', message, err);
       throw new Error(message);
     }
@@ -824,7 +1005,11 @@ import { installSessionTransport } from './session';
   };
 
   const adminApi = ensureAdminNamespace();
-  adminApi.mailRequest = (path: string, method = 'GET', body?: UnknownRecord | FormData) =>
+  adminApi.mailRequest = (
+    path: string,
+    method = 'GET',
+    body?: UnknownRecord | FormData,
+  ) =>
     request(`/api/admin/mail-templates${path}`, {
       method,
       body,
@@ -832,15 +1017,25 @@ import { installSessionTransport } from './session';
     });
 
   adminApi.downloadExcel = async (module: string, query: QueryRecord = {}) => {
-    const allowedModules = new Set(['users', 'orders', 'products', 'inventory', 'circles', 'promo-codes', 'audit']);
-    if (!allowedModules.has(module)) throw new Error('Módulo de exportación no permitido.');
+    const allowedModules = new Set([
+      'users',
+      'orders',
+      'products',
+      'inventory',
+      'circles',
+      'promo-codes',
+      'audit',
+    ]);
+    if (!allowedModules.has(module))
+      throw new Error('Módulo de exportación no permitido.');
     const url = buildUrl(`/api/admin/exports/${module}`, query);
     const response = await fetch(url, {
       method: 'GET',
       credentials: 'include',
       cache: 'no-store',
       headers: {
-        Accept: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        Accept:
+          'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
       },
     });
     if (!response.ok) {
@@ -851,21 +1046,29 @@ import { installSessionTransport } from './session';
         endpoint: url,
         responseType: response.headers.get('content-type') || '',
       });
-      const error = new Error('No se ha podido preparar el archivo Excel. Inténtalo de nuevo.') as CronoxApiError;
+      const error = new Error(
+        'No se ha podido preparar el archivo Excel. Inténtalo de nuevo.',
+      ) as CronoxApiError;
       error.status = response.status;
       error.endpoint = url;
       error.payload = payload;
       throw error;
     }
-    const contentType = (response.headers.get('content-type') || '').split(';', 1)[0].trim().toLowerCase();
-    const excelMime = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+    const contentType = (response.headers.get('content-type') || '')
+      .split(';', 1)[0]
+      .trim()
+      .toLowerCase();
+    const excelMime =
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
     if (contentType !== excelMime) {
       console.error('Admin Excel export returned an unexpected content type', {
         status: response.status,
         endpoint: url,
         responseType: contentType,
       });
-      const error = new Error('No se ha podido preparar el archivo Excel. Inténtalo de nuevo.') as CronoxApiError;
+      const error = new Error(
+        'No se ha podido preparar el archivo Excel. Inténtalo de nuevo.',
+      ) as CronoxApiError;
       error.status = response.status;
       error.endpoint = url;
       error.payload = null;
@@ -882,7 +1085,11 @@ import { installSessionTransport } from './session';
   g.CRONOX_STOCK = {
     availableStock,
     classifyStock,
-    decoratePurchase(price: HTMLElement, button: HTMLButtonElement, product: UnknownRecord) {
+    decoratePurchase(
+      price: HTMLElement,
+      button: HTMLButtonElement,
+      product: UnknownRecord,
+    ) {
       const status = classifyStock(availableStock(product.variants));
       let row = price.parentElement;
       if (!row?.classList.contains('stock-price-row')) {
@@ -899,15 +1106,29 @@ import { installSessionTransport } from './session';
         label.textContent = status === 'low' ? 'ÚLTIMAS TALLAS' : 'AGOTADO';
         row.appendChild(label);
       }
-      button.textContent = status === 'out_of_stock' ? 'AGOTADO' : 'Añadir al carrito';
-      button.classList.toggle('product-cta--disabled', status === 'out_of_stock');
+      button.textContent =
+        status === 'out_of_stock' ? 'AGOTADO' : 'Añadir al carrito';
+      button.classList.toggle(
+        'product-cta--disabled',
+        status === 'out_of_stock',
+      );
       if (status === 'out_of_stock') button.disabled = true;
       button.setAttribute('aria-disabled', String(button.disabled));
     },
-    decorateCard(card: HTMLElement, price: HTMLElement, product: UnknownRecord) {
+    decorateCard(
+      card: HTMLElement,
+      price: HTMLElement,
+      product: UnknownRecord,
+    ) {
       const status = classifyStock(availableStock(product.variants));
-      card.classList.remove('product-card--out-of-stock', 'product-card--low-stock', 'product-card--in-stock');
-      card.classList.add(`product-card--${status === 'low' ? 'low-stock' : status.replace(/_/g, '-')}`);
+      card.classList.remove(
+        'product-card--out-of-stock',
+        'product-card--low-stock',
+        'product-card--in-stock',
+      );
+      card.classList.add(
+        `product-card--${status === 'low' ? 'low-stock' : status.replace(/_/g, '-')}`,
+      );
       const row = document.createElement('div');
       row.className = 'product-card__price-row';
       price.replaceWith(row);
@@ -915,7 +1136,8 @@ import { installSessionTransport } from './session';
       if (status !== 'in_stock') {
         const label = document.createElement('span');
         label.className = 'product-card__stock-label';
-        label.textContent = status === 'out_of_stock' ? 'AGOTADO' : 'ÚLTIMAS TALLAS';
+        label.textContent =
+          status === 'out_of_stock' ? 'AGOTADO' : 'ÚLTIMAS TALLAS';
         row.appendChild(label);
       }
     },
@@ -930,22 +1152,36 @@ import { installSessionTransport } from './session';
     queryOverride: QueryRecord = {},
   ) => {
     const query =
-      typeof queryOrStatus === 'string' ? { status: queryOrStatus, ...queryOverride } : { ...queryOrStatus };
+      typeof queryOrStatus === 'string'
+        ? { status: queryOrStatus, ...queryOverride }
+        : { ...queryOrStatus };
     return request('/api/admin/circle-upgrades/3-4', { query });
   };
 
-  adminApi.approveCircleUpgrade = async (id: number | string, payload: UnknownRecord = {}) => {
-    return request(`/api/admin/circle-upgrades/3-4/${encodeURIComponent(id)}/approve`, {
-      method: 'PATCH',
-      body: payload,
-    });
+  adminApi.approveCircleUpgrade = async (
+    id: number | string,
+    payload: UnknownRecord = {},
+  ) => {
+    return request(
+      `/api/admin/circle-upgrades/3-4/${encodeURIComponent(id)}/approve`,
+      {
+        method: 'PATCH',
+        body: payload,
+      },
+    );
   };
 
-  adminApi.denyCircleUpgrade = async (id: number | string, payload: UnknownRecord = {}) => {
-    return request(`/api/admin/circle-upgrades/3-4/${encodeURIComponent(id)}/deny`, {
-      method: 'PATCH',
-      body: payload,
-    });
+  adminApi.denyCircleUpgrade = async (
+    id: number | string,
+    payload: UnknownRecord = {},
+  ) => {
+    return request(
+      `/api/admin/circle-upgrades/3-4/${encodeURIComponent(id)}/deny`,
+      {
+        method: 'PATCH',
+        body: payload,
+      },
+    );
   };
 
   adminApi.listAutoCircleRequests = async (
@@ -953,16 +1189,22 @@ import { installSessionTransport } from './session';
     queryOverride: QueryRecord = {},
   ) => {
     const query =
-      typeof queryOrStatus === 'string' ? { status: queryOrStatus, ...queryOverride } : { ...queryOrStatus };
+      typeof queryOrStatus === 'string'
+        ? { status: queryOrStatus, ...queryOverride }
+        : { ...queryOrStatus };
     return request('/api/admin/requests/2-3', { query });
   };
 
   adminApi.listAdminProducts = async (query: QueryRecord = {}) => {
     return request('/api/admin/products', { query });
   };
-  adminApi.getProductOrder = async () => request('/api/admin/products/order', { cache: 'no-store' });
+  adminApi.getProductOrder = async () =>
+    request('/api/admin/products/order', { cache: 'no-store' });
   adminApi.saveProductOrder = async (productIds: number[]) =>
-    request('/api/admin/products/order', { method: 'PATCH', body: { productIds } });
+    request('/api/admin/products/order', {
+      method: 'PATCH',
+      body: { productIds },
+    });
 
   adminApi.getAdminProduct = async (id: number | string) => {
     return request(`/api/admin/products/${encodeURIComponent(id)}`);
@@ -982,21 +1224,30 @@ import { installSessionTransport } from './session';
     });
   };
 
-  adminApi.updateInventory = async (id: number | string, payload: UnknownRecord) => {
+  adminApi.updateInventory = async (
+    id: number | string,
+    payload: UnknownRecord,
+  ) => {
     return request(`/api/admin/inventory/${encodeURIComponent(id)}`, {
       method: 'PATCH',
       body: payload,
     });
   };
 
-  adminApi.getInventoryHistory = async (id: number | string, query: QueryRecord = {}) => {
+  adminApi.getInventoryHistory = async (
+    id: number | string,
+    query: QueryRecord = {},
+  ) => {
     return request(`/api/admin/inventory/${encodeURIComponent(id)}/history`, {
       query,
       cache: 'no-store',
     });
   };
 
-  adminApi.createAdminProduct = async (payload: UnknownRecord, idempotencyKey: string) => {
+  adminApi.createAdminProduct = async (
+    payload: UnknownRecord,
+    idempotencyKey: string,
+  ) => {
     return request('/api/admin/products', {
       method: 'POST',
       body: payload,
@@ -1004,7 +1255,10 @@ import { installSessionTransport } from './session';
     });
   };
 
-  adminApi.updateAdminProduct = async (id: number | string, payload: UnknownRecord) => {
+  adminApi.updateAdminProduct = async (
+    id: number | string,
+    payload: UnknownRecord,
+  ) => {
     return request(`/api/admin/products/${encodeURIComponent(id)}`, {
       method: 'PATCH',
       body: payload,
@@ -1022,13 +1276,19 @@ import { installSessionTransport } from './session';
     imageId: number | string,
     expectedUpdatedAt: string,
   ) => {
-    return request(`/api/admin/products/${encodeURIComponent(productId)}/images/${encodeURIComponent(imageId)}`, {
-      method: 'DELETE',
-      body: { expectedUpdatedAt },
-    });
+    return request(
+      `/api/admin/products/${encodeURIComponent(productId)}/images/${encodeURIComponent(imageId)}`,
+      {
+        method: 'DELETE',
+        body: { expectedUpdatedAt },
+      },
+    );
   };
 
-  adminApi.updateProductCategories = async (id: number | string, categoryIds: number[]) => {
+  adminApi.updateProductCategories = async (
+    id: number | string,
+    categoryIds: number[],
+  ) => {
     return request(`/api/admin/products/${encodeURIComponent(id)}/categories`, {
       method: 'PATCH',
       body: { categoryIds },
@@ -1040,7 +1300,7 @@ import { installSessionTransport } from './session';
   };
 
   adminApi.uploadProductImages = async (files: File[] = []) => {
-    const urls: string[] = [];
+    const images: UnknownRecord[] = [];
     const results = await Promise.allSettled(
       files.map(async (file) => {
         const formData = new FormData();
@@ -1048,16 +1308,19 @@ import { installSessionTransport } from './session';
         return request('/api/admin/products/upload-images', {
           method: 'POST',
           body: formData,
-        }) as Promise<{ urls?: string[] } | null>;
+        }) as Promise<{ urls?: string[]; images?: UnknownRecord[] } | null>;
       }),
     );
     results.forEach((entry) => {
       if (entry.status !== 'fulfilled') return;
       const result = entry.value;
-      if (Array.isArray(result?.urls)) urls.push(...result.urls);
+      if (Array.isArray(result?.images)) images.push(...result.images);
+      else if (Array.isArray(result?.urls))
+        images.push(...result.urls.map((url) => ({ url })));
     });
     return {
-      urls,
+      urls: images.map((image) => String(image.url || '')).filter(Boolean),
+      images,
       failures: results.filter((entry) => entry.status === 'rejected').length,
     };
   };
@@ -1078,7 +1341,10 @@ import { installSessionTransport } from './session';
     return request('/api/admin/users/edit-options');
   };
 
-  adminApi.updateAdminUser = async (id: number | string, payload: UnknownRecord) => {
+  adminApi.updateAdminUser = async (
+    id: number | string,
+    payload: UnknownRecord,
+  ) => {
     return request(`/api/admin/users/${encodeURIComponent(id)}`, {
       method: 'PATCH',
       body: payload,
@@ -1090,44 +1356,69 @@ import { installSessionTransport } from './session';
   };
 
   adminApi.getUserAnalyticsSummary = async (id: number | string) => {
-    return request(`/api/admin/users/${encodeURIComponent(id)}/analytics/summary`);
+    return request(
+      `/api/admin/users/${encodeURIComponent(id)}/analytics/summary`,
+    );
   };
 
   adminApi.getUserAnalyticsProducts = async (id: number | string) => {
-    return request(`/api/admin/users/${encodeURIComponent(id)}/analytics/products`);
+    return request(
+      `/api/admin/users/${encodeURIComponent(id)}/analytics/products`,
+    );
   };
 
-  adminApi.getUserAnalyticsTimeline = async (id: number | string, query: QueryRecord = {}) => {
-    return request(`/api/admin/users/${encodeURIComponent(id)}/analytics/timeline`, { query });
+  adminApi.getUserAnalyticsTimeline = async (
+    id: number | string,
+    query: QueryRecord = {},
+  ) => {
+    return request(
+      `/api/admin/users/${encodeURIComponent(id)}/analytics/timeline`,
+      { query },
+    );
   };
 
-  adminApi.getUserLoginHistory = async (id: number | string, query: QueryRecord = {}) => {
+  adminApi.getUserLoginHistory = async (
+    id: number | string,
+    query: QueryRecord = {},
+  ) => {
     return request(`/api/admin/users/${encodeURIComponent(id)}/login-history`, {
       query,
     });
   };
 
   // ✅ FIX: Endpoints por usuario (Solicitudes / Pedidos)
-  adminApi.getUserRequests = async (id: number | string, query: QueryRecord = {}) => {
+  adminApi.getUserRequests = async (
+    id: number | string,
+    query: QueryRecord = {},
+  ) => {
     if (id == null || id === '') {
       const error = new Error('userId requerido') as CronoxApiError;
       error.status = 400;
       error.endpoint = 'admin.getUserRequests';
       throw error;
     }
-    return request<AdminUserRequestsResponse>(`/api/admin/users/${encodeURIComponent(id)}/requests`, { query });
+    return request<AdminUserRequestsResponse>(
+      `/api/admin/users/${encodeURIComponent(id)}/requests`,
+      { query },
+    );
   };
 
-  adminApi.getUserOrders = async (id: number | string, query: QueryRecord = {}) => {
+  adminApi.getUserOrders = async (
+    id: number | string,
+    query: QueryRecord = {},
+  ) => {
     if (id == null || id === '') {
       const error = new Error('userId requerido') as CronoxApiError;
       error.status = 400;
       error.endpoint = 'admin.getUserOrders';
       throw error;
     }
-    return request<AdminUserOrdersResponse>(`/api/admin/users/${encodeURIComponent(id)}/orders`, {
-      query,
-    });
+    return request<AdminUserOrdersResponse>(
+      `/api/admin/users/${encodeURIComponent(id)}/orders`,
+      {
+        query,
+      },
+    );
   };
 
   adminApi.listAdminOrders = async (query: QueryRecord = {}) => {
@@ -1153,7 +1444,10 @@ import { installSessionTransport } from './session';
     });
   };
 
-  adminApi.updateAdminNote = async (id: number | string, payload: UnknownRecord) => {
+  adminApi.updateAdminNote = async (
+    id: number | string,
+    payload: UnknownRecord,
+  ) => {
     return request(`/api/admin/notes/${encodeURIComponent(id)}`, {
       method: 'PATCH',
       body: payload,
@@ -1173,7 +1467,10 @@ import { installSessionTransport } from './session';
     });
   };
 
-  adminApi.updatePromoCode = async (id: number | string, payload: UnknownRecord) => {
+  adminApi.updatePromoCode = async (
+    id: number | string,
+    payload: UnknownRecord,
+  ) => {
     return request(`/api/admin/promo-codes/${encodeURIComponent(id)}`, {
       method: 'PATCH',
       body: payload,
@@ -1195,27 +1492,7 @@ import { installSessionTransport } from './session';
 
   const mapFavoriteProduct = (product: UnknownRecord) => {
     if (!product) return null;
-    const images = Array.isArray(product.images)
-      ? (product.images as Array<{ url?: string; imageUrl?: string }>)
-          .map((img) => productImageUrl(img?.url || img?.imageUrl || img))
-          .filter(Boolean)
-      : [];
-    const priceValue = Number(product.price ?? product.priceCents ?? 0);
-
-    return {
-      id: product.id ?? product.productId,
-      backendId: product.id ?? product.productId,
-      variants: product.variants,
-      slug: product.slug,
-      name: product.name,
-      price: priceValue,
-      priceLabel: (product.priceLabel as string) || formatPrice(priceValue),
-      image: productImageUrl(product.imageUrl || product.image || images[0]) || '',
-      images,
-      cardImagePositionX: Number(product.cardImagePositionX ?? 50),
-      cardImagePositionY: Number(product.cardImagePositionY ?? 50),
-      cardImageZoom: Number(product.cardImageZoom ?? 1),
-    };
+    return mapProduct(product);
   };
 
   api.getFavorites = async () => {
@@ -1234,7 +1511,8 @@ import { installSessionTransport } from './session';
   api.addFavorite = async (productId: unknown) => {
     // [FAVORITES_BACKEND_ONLY] [FAVORITES_FIX]
     const normalizedId = normalizeProductId(productId);
-    if (normalizedId == null) throw new Error('productId inválido para favoritos');
+    if (normalizedId == null)
+      throw new Error('productId inválido para favoritos');
 
     return request('/api/favorites', {
       method: 'POST',
@@ -1244,7 +1522,8 @@ import { installSessionTransport } from './session';
 
   api.toggleFavorite = async (productId: unknown) => {
     const normalizedId = normalizeProductId(productId);
-    if (normalizedId == null) throw new Error('productId inválido para favoritos');
+    if (normalizedId == null)
+      throw new Error('productId inválido para favoritos');
 
     return request('/api/favorites/toggle', {
       method: 'POST',
@@ -1255,7 +1534,8 @@ import { installSessionTransport } from './session';
   api.removeFavorite = async (productId: unknown) => {
     // [FAVORITES_BACKEND_ONLY] [FAVORITES_FIX]
     const normalizedId = normalizeProductId(productId);
-    if (normalizedId == null) throw new Error('productId inválido para favoritos');
+    if (normalizedId == null)
+      throw new Error('productId inválido para favoritos');
 
     await request(`/api/favorites/${normalizedId}`, { method: 'DELETE' });
   };
@@ -1268,11 +1548,16 @@ import { installSessionTransport } from './session';
         throw new Error('Formato inesperado de productos');
       }
       return {
-        products: (data as { items: UnknownRecord[] }).items.map((product) => mapProduct(product)),
+        products: (data as { items: UnknownRecord[] }).items.map((product) =>
+          mapProduct(product),
+        ),
         meta: ((data as { meta?: UnknownRecord }).meta || {}) as UnknownRecord,
       };
     } catch (error) {
-      console.warn('[CRONOX] No se pudo cargar el catálogo desde la API', error);
+      console.warn(
+        '[CRONOX] No se pudo cargar el catálogo desde la API',
+        error,
+      );
       throw error;
     }
   };
@@ -1283,7 +1568,10 @@ import { installSessionTransport } from './session';
     return Array.isArray(response?.products) ? response.products : [];
   };
 
-  api.getProductSuggestions = async (search: string, query: QueryRecord = {}) => {
+  api.getProductSuggestions = async (
+    search: string,
+    query: QueryRecord = {},
+  ) => {
     const data = (await request('/api/products/suggestions', {
       query: { ...query, search },
     })) as { items?: UnknownRecord[] };
@@ -1298,14 +1586,28 @@ import { installSessionTransport } from './session';
             price: centsToUnits(priceCents),
             priceLabel: formatCents(priceCents),
             image: productImageUrl(item.imageUrl) || '',
+            imageRecord:
+              item.image && typeof item.image === 'object'
+                ? {
+                    ...(item.image as UnknownRecord),
+                    url: productImageUrl(
+                      (item.image as UnknownRecord).url || item.imageUrl,
+                    ),
+                  }
+                : { url: productImageUrl(item.imageUrl) || '' },
             category:
-              item.category && typeof item.category === 'object' ? { ...(item.category as UnknownRecord) } : null,
+              item.category && typeof item.category === 'object'
+                ? { ...(item.category as UnknownRecord) }
+                : null,
           };
         })
       : [];
   };
 
-  api.getProductBySlug = async (slug: string, options: { cache?: RequestCache } = {}) => {
+  api.getProductBySlug = async (
+    slug: string,
+    options: { cache?: RequestCache } = {},
+  ) => {
     if (!slug) return null;
     const data = await request(`/api/products/${encodeURIComponent(slug)}`, {
       cache: options.cache,
@@ -1315,25 +1617,34 @@ import { installSessionTransport } from './session';
 
   api.getCategories = async (query: QueryRecord = {}) => {
     const data = await request('/api/categories', { query });
-    return Array.isArray((data as { items?: unknown[] })?.items) ? (data as { items: unknown[] }).items : [];
+    return Array.isArray((data as { items?: unknown[] })?.items)
+      ? (data as { items: unknown[] }).items
+      : [];
   };
 
   api.getCategoryProducts = async (slug: string, query: QueryRecord = {}) => {
-    const data = (await request(`/api/categories/${encodeURIComponent(slug)}/products`, {
-      query,
-    })) as {
+    const data = (await request(
+      `/api/categories/${encodeURIComponent(slug)}/products`,
+      {
+        query,
+      },
+    )) as {
       category?: UnknownRecord;
       products?: { items?: UnknownRecord[]; meta?: UnknownRecord };
     };
     return {
       category: data?.category || null,
-      products: Array.isArray(data?.products?.items) ? data.products.items.map((product) => mapProduct(product)) : [],
+      products: Array.isArray(data?.products?.items)
+        ? data.products.items.map((product) => mapProduct(product))
+        : [],
       meta: data?.products?.meta || null,
     };
   };
 
   // ===== CARRITO =====
-  const withGuestCartRecovery = async <T>(operation: () => Promise<T>): Promise<T> => {
+  const withGuestCartRecovery = async <T>(
+    operation: () => Promise<T>,
+  ): Promise<T> => {
     try {
       return await operation();
     } catch (error) {
@@ -1355,7 +1666,13 @@ import { installSessionTransport } from './session';
     return mapCart(data as UnknownRecord);
   };
 
-  api.addCartItem = async ({ variantId, qty }: { variantId: number | string; qty: number }) => {
+  api.addCartItem = async ({
+    variantId,
+    qty,
+  }: {
+    variantId: number | string;
+    qty: number;
+  }) => {
     const data = await withGuestCartRecovery(() =>
       request('/api/cart/items', {
         method: 'POST',
@@ -1385,12 +1702,16 @@ import { installSessionTransport } from './session';
   };
 
   api.clearCart = async () => {
-    const data = await withGuestCartRecovery(() => request('/api/cart', { method: 'DELETE' }));
+    const data = await withGuestCartRecovery(() =>
+      request('/api/cart', { method: 'DELETE' }),
+    );
     return mapCart(data as UnknownRecord);
   };
 
   // ===== ENVÍOS / CHECKOUT =====
-  api.getShippingMethods = async (params: { country?: string; itemsTotalCents?: number } = {}) => {
+  api.getShippingMethods = async (
+    params: { country?: string; itemsTotalCents?: number } = {},
+  ) => {
     const query: QueryRecord = {};
 
     if (params.country) {
@@ -1405,7 +1726,11 @@ import { installSessionTransport } from './session';
     return Array.isArray(data)
       ? data.map((method: UnknownRecord) => ({
           ...method,
-          priceLabel: formatCents(Number(method.priceCents ?? method.amountCents ?? method.price ?? 0)),
+          priceLabel: formatCents(
+            Number(
+              method.priceCents ?? method.amountCents ?? method.price ?? 0,
+            ),
+          ),
         }))
       : [];
   };
@@ -1436,8 +1761,12 @@ import { installSessionTransport } from './session';
     const methods = Array.isArray(data?.shippingMethods)
       ? (data.shippingMethods as UnknownRecord[]).map((method) => {
           const rawPrice = Number(method.price ?? 0);
-          const priceCents = Number(method.priceCents ?? method.amountCents ?? rawPrice ?? 0);
-          const amountCents = Number(method.amountCents ?? method.priceCents ?? rawPrice ?? priceCents);
+          const priceCents = Number(
+            method.priceCents ?? method.amountCents ?? rawPrice ?? 0,
+          );
+          const amountCents = Number(
+            method.amountCents ?? method.priceCents ?? rawPrice ?? priceCents,
+          );
           return {
             ...method,
             priceCents,
@@ -1447,7 +1776,9 @@ import { installSessionTransport } from './session';
         })
       : [];
 
-    const selectedRaw = data?.selectedShippingMethod as UnknownRecord | undefined;
+    const selectedRaw = data?.selectedShippingMethod as
+      | UnknownRecord
+      | undefined;
     const selectedShippingMethod =
       methods.find((method: UnknownRecord) => {
         if (selectedRaw?.id != null) {
@@ -1463,9 +1794,15 @@ import { installSessionTransport } from './session';
       null;
 
     const totals = {
-      subtotalCents: Number((data?.totals as UnknownRecord)?.subtotalCents ?? 0),
-      shippingCents: Number((data?.totals as UnknownRecord)?.shippingCents ?? 0),
-      discountCents: Number((data?.totals as UnknownRecord)?.discountCents ?? 0),
+      subtotalCents: Number(
+        (data?.totals as UnknownRecord)?.subtotalCents ?? 0,
+      ),
+      shippingCents: Number(
+        (data?.totals as UnknownRecord)?.shippingCents ?? 0,
+      ),
+      discountCents: Number(
+        (data?.totals as UnknownRecord)?.discountCents ?? 0,
+      ),
       totalCents: Number((data?.totals as UnknownRecord)?.totalCents ?? 0),
     };
 
@@ -1511,12 +1848,17 @@ import { installSessionTransport } from './session';
     return getFallbackProducts();
   };
 
-  const adaptProducts = (rawList: UnknownRecord[], fallbackList: UnknownRecord[]) => {
+  const adaptProducts = (
+    rawList: UnknownRecord[],
+    fallbackList: UnknownRecord[],
+  ) => {
     if (!Array.isArray(rawList)) {
       return [];
     }
 
-    const alreadyMapped = rawList.every((item) => item && (item as { __fromBackend?: boolean }).__fromBackend);
+    const alreadyMapped = rawList.every(
+      (item) => item && (item as { __fromBackend?: boolean }).__fromBackend,
+    );
     if (alreadyMapped) {
       return rawList.map(cloneProduct);
     }
@@ -1525,14 +1867,29 @@ import { installSessionTransport } from './session';
 
     return rawList.map((item, index) => {
       const source = typeof item === 'object' && item ? item : {};
-      const template = cloneProduct((fallback[index % fallback.length] || {}) as UnknownRecord);
-      const priceValue = source.price != null ? Number(source.price) : Number(template.price) || 0;
-      const basePriceLabel = source.priceLabel || template.priceLabel || formatPrice(priceValue);
+      const template = cloneProduct(
+        (fallback[index % fallback.length] || {}) as UnknownRecord,
+      );
+      const priceValue =
+        source.price != null
+          ? Number(source.price)
+          : Number(template.price) || 0;
+      const basePriceLabel =
+        source.priceLabel || template.priceLabel || formatPrice(priceValue);
 
-      const templateImages = Array.isArray(template.images) ? [...template.images] : [];
-      const sourceImages = Array.isArray(source.images) ? [...source.images] : [];
+      const templateImages = Array.isArray(template.images)
+        ? [...template.images]
+        : [];
+      const sourceImages = Array.isArray(source.images)
+        ? [...source.images]
+        : [];
       const mergedImages = sourceImages.length ? sourceImages : templateImages;
-      const candidateImage = source.image || mergedImages[0] || template.image || templateImages[0] || '';
+      const candidateImage =
+        source.image ||
+        mergedImages[0] ||
+        template.image ||
+        templateImages[0] ||
+        '';
       const uniqueImages: string[] = [];
       const pushImage = (value: unknown) => {
         const clean = productImageUrl(value);
@@ -1547,16 +1904,31 @@ import { installSessionTransport } from './session';
       return {
         ...template,
         ...source,
-        id: source.id != null ? String(source.id) : template.id || `product-${index + 1}`,
+        id:
+          source.id != null
+            ? String(source.id)
+            : template.id || `product-${index + 1}`,
         name: source.name || template.name || 'Producto CRONOX',
         price: priceValue,
         priceLabel: basePriceLabel || formatPrice(priceValue),
-        image: safeCandidateImage || uniqueImages[0] || productImageUrl(template.image) || '',
+        image:
+          safeCandidateImage ||
+          uniqueImages[0] ||
+          productImageUrl(template.image) ||
+          '',
         images: uniqueImages,
         categories:
-          Array.isArray(source.categories) && source.categories.length ? source.categories : template.categories || [],
-        sizes: Array.isArray(source.sizes) && source.sizes.length ? source.sizes : template.sizes || [],
-        colors: Array.isArray(source.colors) && source.colors.length ? source.colors : template.colors || [],
+          Array.isArray(source.categories) && source.categories.length
+            ? source.categories
+            : template.categories || [],
+        sizes:
+          Array.isArray(source.sizes) && source.sizes.length
+            ? source.sizes
+            : template.sizes || [],
+        colors:
+          Array.isArray(source.colors) && source.colors.length
+            ? source.colors
+            : template.colors || [],
         color: source.color || template.color || '',
         desc: source.desc || template.desc || '',
       };
