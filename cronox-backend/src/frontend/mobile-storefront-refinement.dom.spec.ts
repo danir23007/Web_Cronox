@@ -164,7 +164,7 @@ describe('mobile storefront refinement', () => {
       /\.qa-sizes\[data-size-system="APPAREL"\] \.qa-size-btn\{[^}]*min-width:0;[^}]*min-height:44px;[^}]*padding:9px 2px;/,
     );
     expect(quickAddStyles).toMatch(
-      /@media \(max-width:640px\)[\s\S]*?\.qa-info\{[^}]*margin-top:28px !important;/,
+      /@media \(max-width:640px\)[\s\S]*?\.qa-info\{[^}]*margin-top:32px !important;/,
     );
     expect(quickAddStyles).toMatch(
       /\.qa-sizes\{\s*display:flex;\s*flex-wrap:wrap;/,

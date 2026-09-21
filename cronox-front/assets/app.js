@@ -1667,6 +1667,7 @@
 
     document.addEventListener('keydown', (ev) => {
       if (!cartState.drawerOpen) return;
+      if (document.getElementById('quickAdd')?.getAttribute('aria-hidden') === 'false') return;
       if (ev.key === 'Escape') {
         ev.preventDefault();
         ev.stopImmediatePropagation();
@@ -1691,6 +1692,7 @@
       }
     }, true);
     document.addEventListener('focusin', (ev) => {
+      if (document.getElementById('quickAdd')?.getAttribute('aria-hidden') === 'false') return;
       if (cartState.drawerOpen && !cartDrawerEl.contains(ev.target)) {
         cartCloseBtn?.focus({ preventScroll: true });
       }

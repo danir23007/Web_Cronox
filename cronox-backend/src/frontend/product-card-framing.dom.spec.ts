@@ -172,7 +172,7 @@ describe('product-card framing integration', () => {
         html.indexOf('product-card-framing.js?v=1'),
       );
       expect(html.indexOf('product-card-framing.js?v=1')).toBeLessThan(
-        html.indexOf('products.js?v=56'),
+        html.indexOf('products.js?v=57'),
       );
     }
   });

@@ -8,7 +8,7 @@
   display:none; align-items:center; justify-content:center;
   padding:max(8px,env(safe-area-inset-top)) max(8px,env(safe-area-inset-right)) max(8px,env(safe-area-inset-bottom)) max(8px,env(safe-area-inset-left));
   overflow:hidden;
-  z-index:1200;
+  z-index:2000;
 }
 .qa-overlay[aria-hidden="false"]{ display:flex; }
 
@@ -262,7 +262,7 @@
 }
 
 .qa-info{
-  margin:28px 0 0 !important;
+  margin:40px 0 0 !important;
   padding:0 18px !important;   /* sin aire arriba/abajo, solo lateral para legibilidad */
   gap:10px !important;
   border-top:none !important;
@@ -289,7 +289,7 @@
   }
 
   .qa-info{
-    margin-top:28px !important;
+    margin-top:32px !important;
     padding:0 14px !important;
   }
 

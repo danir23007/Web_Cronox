@@ -32,6 +32,24 @@ const waitFor = async (assertion: () => void, attempts = 50) => {
 };
 
 describe('checkout recommendation production DOM path', () => {
+  it('renders the full price summary before recommendations in reading order', () => {
+    const document = new JSDOM(checkoutHtml).window.document;
+    const summaryPane = document.querySelector('.checkout-summary-inner')!;
+    expect(
+      Array.from(summaryPane.children, (element) => element.className),
+    ).toEqual([
+      'checkout-cart',
+      'checkout-promo',
+      'checkout-summary',
+      'checkout-recommendations',
+    ]);
+    expect(
+      summaryPane
+        .querySelector('#summary-tax-note')
+        ?.closest('.checkout-summary'),
+    ).not.toBeNull();
+  });
+
   it('keeps the exact delegated two-step add flow alive across rerenders', async () => {
     const dom = new JSDOM(checkoutHtml, {
       runScripts: 'outside-only',

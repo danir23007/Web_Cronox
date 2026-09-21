@@ -173,7 +173,7 @@ describe('CRONOX gallery page', () => {
     ];
 
     expect(galleryHtml).toContain('<title>Galer&iacute;a | CRONOX</title>');
-    expect(galleryHtml).toContain('href="assets/gallery.css?v=17"');
+    expect(galleryHtml).toContain('href="assets/gallery.css?v=18"');
     expect(galleryHtml).toContain('src="assets/gallery.js?v=14"');
     expect(document.title).toBe('Galer\u00eda | CRONOX');
     expect(galleryHtml).toMatch(
@@ -288,7 +288,7 @@ describe('CRONOX gallery page', () => {
       homepageGallerySection.compareDocumentPosition(footer) &
         dom.window.Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
-    expect(homepageHtml).toContain('href="assets/gallery.css?v=17"');
+    expect(homepageHtml).toContain('href="assets/gallery.css?v=18"');
     expect(homepageHtml).toContain('src="assets/gallery.js?v=14"');
     expect(document.querySelectorAll('#galleryLightbox')).toHaveLength(1);
     expect(document.querySelectorAll<HTMLElement>('[id]').length).toBe(
@@ -966,7 +966,7 @@ describe('CRONOX gallery page', () => {
       /\.gallery-lightbox__product-media\s*\{[^}]*overflow:\s*hidden;[^}]*background:\s*#fff;/s,
     );
     expect(galleryStyles).toMatch(
-      /\.gallery-lightbox__product-media img\s*\{[^}]*width:\s*100%;[^}]*height:\s*100%;[^}]*object-fit:\s*contain;[^}]*transform:\s*scale\(1\);[^}]*transform-origin:\s*center;[^}]*transition:\s*transform 500ms ease-out;/s,
+      /\.gallery-lightbox__product-media img\s*\{[^}]*width:\s*84%;[^}]*height:\s*84%;[^}]*object-fit:\s*contain;[^}]*object-position:\s*center center;[^}]*transform:\s*scale\(1\);[^}]*transform-origin:\s*center;[^}]*transition:\s*transform 500ms ease-out;/s,
     );
     expect(galleryStyles).toMatch(
       /@media \(hover: hover\) and \(pointer: fine\)\s*\{[\s\S]*\.gallery-lightbox__product:hover \.gallery-lightbox__product-media img\s*\{[^}]*transform:\s*scale\(1\.025\);[^}]*transition-duration:\s*1\.5s;/,
@@ -993,10 +993,10 @@ describe('CRONOX gallery page', () => {
       /\.gallery-lightbox__product\s*\{[^}]*display:\s*grid;[^}]*grid-template-columns:\s*minmax\(0, 1fr\);[^}]*width:\s*100%;/s,
     );
     expect(galleryStyles).toMatch(
-      /\.gallery-lightbox__product-media\s*\{[^}]*width:\s*100%;[^}]*aspect-ratio:\s*1 \/ 1;[^}]*background:\s*#fff;/s,
+      /\.gallery-lightbox__product-media\s*\{[^}]*position:\s*relative;[^}]*width:\s*100%;[^}]*aspect-ratio:\s*1 \/ 1;[^}]*background:\s*#fff;/s,
     );
     expect(galleryStyles).toMatch(
-      /\.gallery-lightbox__product-media img\s*\{[^}]*width:\s*100%;[^}]*height:\s*100%;[^}]*object-fit:\s*contain;/s,
+      /\.gallery-lightbox__product-media img\s*\{[^}]*position:\s*absolute;[^}]*inset:\s*8%;[^}]*width:\s*84%;[^}]*height:\s*84%;[^}]*object-fit:\s*contain;[^}]*object-position:\s*center center;/s,
     );
     expect(galleryStyles).toMatch(
       /\.gallery-lightbox__product-action\s*\{[^}]*display:\s*flex;[^}]*width:\s*100%;/s,
