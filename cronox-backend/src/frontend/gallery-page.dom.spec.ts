@@ -177,7 +177,7 @@ describe('CRONOX gallery page', () => {
     expect(galleryHtml).toContain('src="assets/gallery.js?v=14"');
     expect(document.title).toBe('Galer\u00eda | CRONOX');
     expect(galleryHtml).toMatch(
-      /<body class="page-info page-gallery">\s*<script src="assets\/info-shell\.js\?v=3"><\/script>/,
+      /<body class="page-info page-gallery">\s*<script src="assets\/info-shell\.js\?v=4"><\/script>/,
     );
     expect(document.querySelectorAll('#topbar')).toHaveLength(1);
     expect(topbar?.classList.contains('topbar--page')).toBe(true);

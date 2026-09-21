@@ -574,7 +574,7 @@
     gallery.className = "product-images";
 
     const records = window.CRONOX_IMAGES?.productRecords?.(p) || (Array.isArray(p.images) ? p.images : [p.image]).filter(Boolean).map((image) => typeof image === 'string' ? { url: image } : image);
-    const imgs = options.useFirstImageOnly ? records.slice(0, 1) : records;
+    const imgs = options.useFirstImageOnly ? records.slice(0, 1) : [...records];
     if (!imgs.length) imgs.push({ url: PRODUCT_PLACEHOLDER });
 
     const imageFallbacks = [];
@@ -585,7 +585,7 @@
       im.decoding = "async";
       im.alt = p.name || "Producto";
       if (window.CRONOX_IMAGES) {
-        if (i === 0 && window.CRONOX_IMAGES.applyProduct) window.CRONOX_IMAGES.applyProduct(im, p, "card");
+        if (imgs.length === 1 && i === 0 && window.CRONOX_IMAGES.applyProduct) window.CRONOX_IMAGES.applyProduct(im, p, "card");
         else {
           const resolved = window.CRONOX_IMAGES.apply(im, record, "card");
           const original = window.CRONOX_IMAGES.originalUrl?.(record) || safeProductImage(record?.url || record, "");
@@ -598,11 +598,34 @@
     imgEls.forEach(im => gallery.appendChild(im));
     window.CRONOX_PRODUCT_CARD_FRAMING?.bind(imgEls[0], gallery, p);
 
+    const dots = document.createElement("div");
+    dots.className = "product-gallery-dots";
+    dots.setAttribute("aria-hidden", "true");
+    const dotEls = records.length > 1 && !options.useFirstImageOnly
+      ? imgEls.map(() => {
+        const dot = document.createElement("span");
+        dot.className = "product-gallery-dot";
+        dots.appendChild(dot);
+        return dot;
+      })
+      : [];
+    if (dotEls.length) gallery.appendChild(dots);
+
     let galleryIndex = 0;
     let pointerStart = null;
     let suppressCardClickUntil = 0;
     let desktopHoverActive = false;
-    const isGalleryImageAvailable = (index) => imgEls[index]?.dataset.galleryUnavailable !== "true";
+    const isGalleryImageAvailable = (index) => Boolean(imgEls[index]) && imgEls[index].dataset.galleryUnavailable !== "true";
+    const syncGalleryDots = () => {
+      const availableCount = imgEls.filter((_, index) => isGalleryImageAvailable(index)).length;
+      dots.hidden = availableCount < 2;
+      dotEls.forEach((dot, index) => {
+        dot.hidden = !isGalleryImageAvailable(index);
+        dot.classList.toggle("is-active", index === galleryIndex && !dot.hidden);
+        if (index === galleryIndex && !dot.hidden) dot.setAttribute("aria-current", "true");
+        else dot.removeAttribute("aria-current");
+      });
+    };
     const showGalleryImage = (nextIndex, direction = 0) => {
       let targetIndex = (nextIndex + imgEls.length) % imgEls.length;
       if (!isGalleryImageAvailable(targetIndex)) {
@@ -614,18 +637,18 @@
               break;
             }
           }
-        } else {
-          targetIndex = 0;
-        }
+        } else targetIndex = imgEls.findIndex((_, index) => isGalleryImageAvailable(index));
       }
+      if (targetIndex < 0 || !isGalleryImageAvailable(targetIndex)) return;
       galleryIndex = targetIndex;
       imgEls.forEach((el, imageIndex) => el.classList.toggle("active", imageIndex === galleryIndex));
       gallery.dataset.activeIndex = String(galleryIndex);
+      syncGalleryDots();
     };
     const moveGallery = (step) => showGalleryImage(galleryIndex + step, Math.sign(step));
 
     imageFallbacks.forEach((candidates, imageIndex) => {
-      if (!candidates?.length || imageIndex === 0) return;
+      if (!candidates?.length || imgEls.length === 1) return;
       let candidateIndex = 0;
       imgEls[imageIndex].addEventListener("error", () => {
         candidateIndex += 1;
@@ -638,12 +661,18 @@
         }
         imgEls[imageIndex].dataset.galleryUnavailable = "true";
         imgEls[imageIndex].classList.remove("active");
-        if (galleryIndex === imageIndex) showGalleryImage(0);
+        if (imgEls.every((_, index) => !isGalleryImageAvailable(index)) && imgEls[0].getAttribute("src") !== PRODUCT_PLACEHOLDER) {
+          imgEls[0].dataset.galleryUnavailable = "false";
+          imgEls[0].src = PRODUCT_PLACEHOLDER;
+          showGalleryImage(0);
+        } else if (galleryIndex === imageIndex) showGalleryImage(0);
+        syncGalleryDots();
       });
     });
 
     a.dataset.cardGalleryBound = "true";
     gallery.dataset.activeIndex = "0";
+    syncGalleryDots();
 
     if (imgEls.length > 1) {
       gallery.addEventListener("pointerdown", (event) => {

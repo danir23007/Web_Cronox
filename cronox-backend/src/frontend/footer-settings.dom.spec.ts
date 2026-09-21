@@ -248,7 +248,7 @@ describe('Footer settings public and Admin UI', () => {
     );
     expect(
       dom.window.document.querySelector('#footerPageContent h1')?.textContent,
-    ).toBe('FAQS');
+    ).toBe('Preguntas frecuentes y ayuda');
     expect(fetch.mock.calls[0][0]).toBe('/api/admin/footer/pages/faqs');
   });
 

@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-return */
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { JSDOM } from 'jsdom';
@@ -39,15 +40,7 @@ const createHarness = async () => {
     productImageUrl: (value: unknown, fallback: string) =>
       typeof value === 'string' && value ? value : fallback,
   };
-  app.CRONOX_IMAGES = {
-    productRecords: (product: any) => product.images,
-    applyProduct: (image: HTMLImageElement, product: any) => {
-      image.src = product.images[0].url;
-    },
-    apply: (image: HTMLImageElement, record: any) => {
-      image.src = record.url;
-    },
-  };
+  app.eval(read('assets/responsive-images.js'));
   app.eval(productsScript);
   await app.CRONOX_catalogReady;
   return { dom, app };
@@ -141,7 +134,46 @@ describe('mobile storefront refinement', () => {
     }
   });
 
-  it('uses independent mobile row and column gaps and visible proportional arrows', () => {
+  it('anchors the favorites badge to the star at mobile widths without changing its count state', () => {
+    expect(storeStyles).toContain(
+      '.topbar__fav-icon{display:inline-flex;width:22px;height:22px;',
+    );
+    expect(storeStyles).toMatch(
+      /@media \(max-width:520px\)\{[\s\S]*?\.topbar__fav-icon\{position:relative;\}/,
+    );
+    expect(storeStyles).toMatch(
+      /\.topbar__fav \.favorites-count,\.topbar__fav \.fav-count\{top:-5px;right:-7px;\}/,
+    );
+    expect(storeStyles).not.toMatch(
+      /\.topbar__fav \.favorites-count[^}]*(?:vw|vh|position:fixed)/,
+    );
+    for (const route of [
+      'index.html',
+      'cart.html',
+      'favorites.html',
+      'producto.html',
+      'profile.html',
+    ]) {
+      const dom = new JSDOM(read(route));
+      const wrapper = dom.window.document.querySelector('.topbar__fav-icon');
+      expect(wrapper?.querySelector('.icon-star')).not.toBeNull();
+      const badge = wrapper?.querySelector('.favorites-count') as HTMLElement;
+      expect(badge?.hidden).toBe(true);
+      for (const count of [1, 12]) {
+        badge.textContent = String(count);
+        badge.hidden = false;
+        expect(wrapper?.querySelector('.favorites-count')?.textContent).toBe(
+          String(count),
+        );
+      }
+      dom.window.close();
+    }
+    expect(read('assets/info-shell.js')).toContain(
+      '<span class="topbar__fav-icon">',
+    );
+  });
+
+  it('uses independent mobile row and column gaps and hides arrows on touch layouts', () => {
     expect(storeStyles).toMatch(
       /@media \(max-width:480px\)[\s\S]*?\.products-grid\{\s*column-gap:12px;\s*row-gap:8px;/,
     );
@@ -149,7 +181,13 @@ describe('mobile storefront refinement', () => {
       /@media \(max-width:480px\)[\s\S]*?\.product-images\{[^}]*touch-action:pan-y;/,
     );
     expect(storeStyles).toMatch(
-      /@media \(max-width:480px\)[\s\S]*?\.product-arrow\{[^}]*display:block!important;[^}]*width:26px!important;[^}]*height:36px!important;/,
+      /@media \(max-width:480px\), \(hover:none\) and \(pointer:coarse\)\{[\s\S]*?\.product-images\{touch-action:pan-y;\}[\s\S]*?\.product-arrow\{display:none!important;\}/,
+    );
+    expect(storeStyles).toContain(
+      '.product-gallery-dots:not([hidden]){display:flex;}',
+    );
+    expect(storeStyles).toContain(
+      '.product-media .fav-add{left:6px;right:auto;bottom:6px;}',
     );
     expect(storeStyles).toContain(
       '.products-grid{position:relative;display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:clamp(12px,1.5vw,22px)',
@@ -183,13 +221,26 @@ describe('mobile storefront refinement', () => {
     app.document.getElementById('productsGrid').appendChild(card);
     const gallery = card.querySelector('.product-images')!;
     const activeIndex = () => Number(gallery.getAttribute('data-active-index'));
+    const dots = () => card.querySelectorAll('.product-gallery-dot');
+    const activeDot = () =>
+      Array.from(dots()).findIndex(
+        (dot) => dot.getAttribute('aria-current') === 'true',
+      );
 
     expect(card.querySelectorAll('.product-arrow')).toHaveLength(2);
+    expect(dots()).toHaveLength(3);
     expect(activeIndex()).toBe(0);
+    expect(activeDot()).toBe(0);
+    expect(
+      card.dispatchEvent(
+        new dom.window.MouseEvent('click', { bubbles: true, cancelable: true }),
+      ),
+    ).toBe(true);
 
     gallery.dispatchEvent(pointer(dom.window, 'pointerdown', 220, 100));
     gallery.dispatchEvent(pointer(dom.window, 'pointerup', 150, 104));
     expect(activeIndex()).toBe(1);
+    expect(activeDot()).toBe(1);
     expect(
       card.dispatchEvent(
         new dom.window.MouseEvent('click', { bubbles: true, cancelable: true }),
@@ -199,25 +250,88 @@ describe('mobile storefront refinement', () => {
     gallery.dispatchEvent(pointer(dom.window, 'pointerdown', 100, 100));
     gallery.dispatchEvent(pointer(dom.window, 'pointerup', 112, 102));
     expect(activeIndex()).toBe(1);
+    expect(activeDot()).toBe(1);
 
     gallery.dispatchEvent(pointer(dom.window, 'pointerdown', 100, 100));
     gallery.dispatchEvent(pointer(dom.window, 'pointerup', 130, 175));
     expect(activeIndex()).toBe(1);
+    expect(activeDot()).toBe(1);
 
     gallery.dispatchEvent(pointer(dom.window, 'pointerdown', 100, 100));
     gallery.dispatchEvent(pointer(dom.window, 'pointerup', 165, 103));
     expect(activeIndex()).toBe(0);
+    expect(activeDot()).toBe(0);
 
     app.matchMedia = jest.fn(() => ({ matches: true }));
     card.dispatchEvent(hoverPointer(dom.window, 'pointerenter'));
     expect(activeIndex()).toBe(1);
+    expect(activeDot()).toBe(1);
     card.querySelector<HTMLButtonElement>('.product-arrow.next')!.click();
     expect(activeIndex()).toBe(2);
+    expect(activeDot()).toBe(2);
     card.dispatchEvent(hoverPointer(dom.window, 'pointerleave'));
     expect(activeIndex()).toBe(0);
+    expect(activeDot()).toBe(0);
 
     const single = app.CRONOX_createProductCard(product(['/only.webp']));
     expect(single.querySelectorAll('.product-arrow')).toHaveLength(0);
+    expect(single.querySelectorAll('.product-gallery-dot')).toHaveLength(0);
+    const four = app.CRONOX_createProductCard(
+      product(['/one.webp', '/two.webp', '/three.webp', '/four.webp']),
+    );
+    expect(four.querySelectorAll('.product-gallery-dot')).toHaveLength(4);
+    const normalized = app.CRONOX_createProductCard(
+      product([
+        '/one.webp',
+        '/one.webp',
+        '',
+        '/two.webp',
+        'assets/logo_browser.png',
+      ]),
+    );
+    expect(normalized.querySelectorAll('.product-gallery-dot')).toHaveLength(2);
+    normalized
+      .querySelectorAll('.product-img')[1]
+      .dispatchEvent(new dom.window.Event('error'));
+    normalized
+      .querySelectorAll('.product-img')[1]
+      .dispatchEvent(new dom.window.Event('error'));
+    expect(
+      normalized.querySelectorAll('.product-gallery-dot:not([hidden])'),
+    ).toHaveLength(1);
+    expect(
+      (normalized.querySelector('.product-gallery-dots') as HTMLElement).hidden,
+    ).toBe(true);
+    const brokenFirst = app.CRONOX_createProductCard(
+      product(['/missing.webp', '/valid.webp']),
+    );
+    brokenFirst
+      .querySelectorAll('.product-img')[0]
+      .dispatchEvent(new dom.window.Event('error'));
+    brokenFirst
+      .querySelectorAll('.product-img')[0]
+      .dispatchEvent(new dom.window.Event('error'));
+    expect(
+      brokenFirst
+        .querySelector('.product-images')
+        .getAttribute('data-active-index'),
+    ).toBe('1');
+    expect(
+      brokenFirst.querySelectorAll('.product-gallery-dot:not([hidden])'),
+    ).toHaveLength(1);
+    expect(
+      (brokenFirst.querySelector('.product-gallery-dots') as HTMLElement)
+        .hidden,
+    ).toBe(true);
+    const rerendered = app.CRONOX_createProductCard(product());
+    expect(rerendered.querySelectorAll('.product-gallery-dot')).toHaveLength(3);
+    expect(card.querySelectorAll('.product-gallery-dot')).toHaveLength(3);
+    const rerenderedGallery = rerendered.querySelector('.product-images');
+    rerenderedGallery.dispatchEvent(
+      pointer(dom.window, 'pointerdown', 220, 100),
+    );
+    rerenderedGallery.dispatchEvent(pointer(dom.window, 'pointerup', 150, 104));
+    expect(rerenderedGallery.getAttribute('data-active-index')).toBe('1');
     dom.window.close();
   });
 
@@ -225,7 +339,17 @@ describe('mobile storefront refinement', () => {
     const { dom, app } = await createHarness();
     const apparelCard = app.CRONOX_createProductCard(product());
     app.document.body.appendChild(apparelCard);
-    apparelCard.querySelector<HTMLButtonElement>('.fav-add')!.click();
+    const quickAdd = apparelCard.querySelector<HTMLButtonElement>('.fav-add')!;
+    expect(
+      quickAdd.dispatchEvent(
+        new dom.window.MouseEvent('click', { bubbles: true, cancelable: true }),
+      ),
+    ).toBe(false);
+    expect(
+      apparelCard
+        .querySelector('.product-images')
+        .getAttribute('data-active-index'),
+    ).toBe('0');
     const sizes = app.document.querySelector('.qa-sizes');
     expect(sizes.dataset.sizeSystem).toBe('APPAREL');
     expect(sizes.querySelectorAll('.qa-size-btn')).toHaveLength(6);
