@@ -47,6 +47,12 @@ export class UpdateNewsletterSettingsDto {
   @Type(() => NewsletterFrameDto)
   mobile!: NewsletterFrameDto;
 
+  @IsOptional()
+  @IsNumber({ allowInfinity: false, allowNaN: false })
+  @Min(0)
+  @Max(1)
+  mediaOpacity?: number;
+
   @IsBoolean()
   asciiEnabled!: boolean;
 

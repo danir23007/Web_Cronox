@@ -61,6 +61,11 @@
       push(product.image);
       push(product.imageUrl);
     };
+    // Accept an already-selected canonical image record as well as a product.
+    // This prevents a valid managed URL from falling through to the logo.
+    if (subject && typeof subject === "object" && (subject.url || subject.publicUrl || subject.source)) {
+      push(subject);
+    }
     if (options.preferSnapshot) {
       push(subject?.imageRecord);
       push(subject?.image);

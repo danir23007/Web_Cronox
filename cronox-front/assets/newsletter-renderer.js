@@ -33,6 +33,7 @@
     source: FALLBACK_SOURCE,
     desktop: DEFAULT_FRAME,
     mobile: DEFAULT_FRAME,
+    mediaOpacity: 1,
     asciiEnabled: true,
     asciiOpacity: 1,
   });
@@ -53,6 +54,7 @@
     source: String(value.source || FALLBACK_SOURCE),
     desktop: frame(value.desktop),
     mobile: frame(value.mobile || value.desktop),
+    mediaOpacity: number(value.mediaOpacity, 0, 1, 1),
     asciiEnabled: value.asciiEnabled !== false,
     asciiOpacity: number(value.asciiOpacity, 0, 1, 1),
   });
@@ -74,8 +76,40 @@
     return scale;
   };
 
+  const renderStructure = (root, { preview = false } = {}) => {
+    if (!root || root.querySelector('.newsletter-modal-grid')) return root;
+    const id = (value) => preview ? '' : ` id="${value}"`;
+    root.setAttribute('role', 'dialog');
+    root.setAttribute('aria-modal', 'true');
+    if (!preview) root.setAttribute('aria-labelledby', 'newsletterTitle');
+    root.innerHTML = `
+      <button type="button" class="newsletter-modal-close" aria-label="Cerrar"${preview ? ' tabindex="-1"' : ''}>×</button>
+      <div class="newsletter-modal-grid">
+        <div class="newsletter-modal-image" role="presentation">
+          <div class="popup-image-wrapper">
+            <img alt="" class="popup-image" draggable="false" referrerpolicy="no-referrer">
+            <div class="ascii-overlay"><pre aria-hidden="true"></pre></div>
+          </div>
+        </div>
+        <div class="newsletter-modal-content">
+          <p class="newsletter-modal-kicker">CRONOX</p>
+          <h3${id('newsletterTitle')} class="newsletter-modal-title">INÍCIATE CON UN 10% DE DESCUENTO</h3>
+          <p class="newsletter-modal-subtitle">Suscríbete para drops, descuentos y acceso anticipado.</p>
+          <form${id('newsletterForm')} class="newsletter-modal-form" novalidate>
+            <input${id('newsletterEmail')} class="newsletter-modal-input" type="email" name="email" placeholder="Email" autocomplete="email" required${preview ? ' tabindex="-1"' : ''}>
+            <button type="submit" class="newsletter-modal-button"${preview ? ' tabindex="-1"' : ''}>UNIRSE</button>
+            <p class="newsletter-login-prompt">O si ya tienes cuenta, <button type="button" class="newsletter-login-link"${preview ? ' tabindex="-1"' : ''}>inicia sesión</button></p>
+            <p${id('newsletterFeedback')} class="newsletter-modal-feedback" role="status" aria-live="polite"></p>
+          </form>
+        </div>
+      </div>`;
+    if (preview) root.querySelector('.newsletter-modal-form')?.addEventListener('submit', (event) => event.preventDefault());
+    return root;
+  };
+
   const mount = (root, initialConfig = {}) => {
     if (!root) return null;
+    renderStructure(root, { preview: root.hasAttribute('data-newsletter-preview') });
     const existing = controllers.get(root);
     if (existing) {
       existing.update(initialConfig);
@@ -103,6 +137,7 @@
         overlay.style.opacity = String(config.asciiOpacity);
       }
       if (image && image.src !== config.source) image.src = config.source;
+      if (image) image.style.opacity = String(config.mediaOpacity);
       globalScope.requestAnimationFrame?.(reflow) || reflow();
     };
     const onImageError = () => {
@@ -140,6 +175,7 @@
     DEFAULT_CONFIG,
     normalize,
     scaleAscii,
+    renderStructure,
     mount,
   });
 })(typeof window !== "undefined" ? window : globalThis);

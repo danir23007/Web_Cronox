@@ -29,43 +29,16 @@ const cssRule = (source: string, selector: string) => {
 };
 
 describe('PDP recommended-product cards', () => {
-  it('removes only the permanent related-card enclosure and preserves keyboard focus', () => {
-    const card = cssRule(productStyles, '.pdp-related .product-card');
-    const hoverAndActive = productStyles.match(
-      /\.pdp-related \.product-card:hover,\s*\.pdp-related \.product-card:active\s*\{([^}]*)\}/,
-    )?.[1];
-    const focus = cssRule(
-      productStyles,
-      '.pdp-related .product-card:focus-visible',
-    );
-    const info = cssRule(productStyles, '.pdp-related .product-card__info');
-
-    expect(card).toContain('border:0');
-    expect(card).toContain('outline:0');
-    expect(card).toContain('box-shadow:none');
-    expect(card).not.toMatch(/border:\s*1px/);
-    expect(hoverAndActive).toContain('border:0');
-    expect(hoverAndActive).toContain('outline:0');
-    expect(hoverAndActive).toContain('box-shadow:none');
-    expect(info).toContain('border:0');
-    expect(info).toContain('outline:0');
-    expect(info).toContain('box-shadow:none');
-    expect(focus).toContain('outline:2px solid #fff');
-    expect(focus).toContain('outline-offset:3px');
-
+  it('inherits the normal shared product-card enclosure and focus treatment', () => {
     expect(productStyles).not.toMatch(/^\.product-card\s*\{/m);
+    expect(productStyles).not.toContain('.pdp-related .product-card');
     expect(storeStyles).toMatch(
       /\.product-card\{[^}]*border:1px solid #000;[^}]*box-shadow:0 6px 18px/s,
     );
   });
 
   it('keeps a neutral contained image panel and responsive recommendation grid', () => {
-    const image = cssRule(productStyles, '.pdp-related .product-img');
-
-    expect(image).toContain('width:100%');
-    expect(image).toContain('height:100%');
-    expect(image).toContain('object-fit:contain');
-    expect(image).toContain('background:transparent');
+    expect(productStyles).not.toContain('.pdp-related .product-img');
     expect(productHtml).not.toMatch(/\.pdp-related \.products-grid\s*\{/);
     expect(productStyles).not.toMatch(/(^|\n)\.products-grid\s*\{/);
     expect(storeStyles).toMatch(
@@ -111,6 +84,8 @@ describe('PDP recommended-product cards', () => {
     const price = card.querySelector('.product-price')!;
     const images = card.querySelectorAll('.product-img');
     const next = card.querySelector<HTMLButtonElement>('.product-arrow.next')!;
+    const quickAdd = card.querySelector<HTMLButtonElement>('.fav-add');
+    const favorite = card.querySelector<HTMLButtonElement>('.favorite-toggle');
 
     expect(card.href).toBe('http://localhost:3000/producto/recommended-tee');
     expect(media.nextElementSibling).toBe(info);
@@ -119,6 +94,8 @@ describe('PDP recommended-product cards', () => {
     expect(name.textContent).toBe('RECOMMENDED TEE');
     expect(price.textContent).toBe('34,95 €');
     expect(images).toHaveLength(2);
+    expect(quickAdd?.textContent).toBe('+');
+    expect(favorite).not.toBeNull();
     expect(images[0].classList.contains('active')).toBe(true);
     next.click();
     expect(images[0].classList.contains('active')).toBe(false);
@@ -127,7 +104,7 @@ describe('PDP recommended-product cards', () => {
   });
 
   it('loads exactly the incremented PDP stylesheet cache version', () => {
-    expect(productHtml).toContain('href="assets/product-page.css?v=7"');
-    expect(productHtml).not.toContain('href="assets/product-page.css?v=5"');
+    expect(productHtml).toContain('href="assets/product-page.css?v=8"');
+    expect(productHtml).not.toContain('href="assets/product-page.css?v=7"');
   });
 });

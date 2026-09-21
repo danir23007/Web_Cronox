@@ -6,7 +6,6 @@
     return euros.toFixed(2).replace('.', ',') + ' €';
   }
 
-  const STAR_ICON = window.CRONOX_STAR_ICON || '<span class="icon-star"></span>';
   const apiEndpoint = (path) => (window.CRONOX_API?.API_BASE || '') + path;
   const safeProductImage = (value, fallback = 'assets/logo_banner.png') => {
     const helper = window.CRONOX_SECURITY?.productImageUrl;
@@ -161,123 +160,6 @@
     syncFavoritesDom();
   };
 
-  function createProductCard(product) {
-    const key = product.slug || String(product.id || product.backendId || '');
-    const a = document.createElement('a');
-    a.className = 'product-card';
-    a.href = product.slug
-      ? `/producto/${encodeURIComponent(product.slug)}`
-      : `/producto?id=${encodeURIComponent(key)}`;
-    if (key) a.setAttribute('data-id', key);
-    if (product.slug) a.setAttribute('data-slug', product.slug);
-    if (product.backendId != null) a.setAttribute('data-backend-id', String(product.backendId));
-
-    const media = document.createElement('div');
-    media.className = 'product-media';
-
-    const gallery = document.createElement('div');
-    gallery.className = 'product-images';
-
-    const records = window.CRONOX_IMAGES?.productRecords?.(product) || [];
-    const imgEls = (records.length ? records : [{ url: product.image }]).map((record, i) => {
-      const im = document.createElement('img');
-      im.className = 'product-img' + (i === 0 ? ' active' : '');
-      im.loading = 'lazy';
-      im.decoding = 'async';
-      im.alt = product.name || 'Producto';
-      if (window.CRONOX_IMAGES) {
-        if (i === 0) window.CRONOX_IMAGES.applyProduct(im, product, 'card');
-        else window.CRONOX_IMAGES.apply(im, record, 'card');
-      } else im.src = safeProductImage(record?.url || record);
-      im.referrerPolicy = 'no-referrer';
-      return im;
-    });
-    imgEls.forEach((im) => gallery.appendChild(im));
-
-    const favBtn = document.createElement('button');
-    favBtn.className = 'favorite-toggle';
-    favBtn.type = 'button';
-    favBtn.setAttribute('aria-label', 'Marcar como favorito');
-    favBtn.dataset.productId = String(product.backendId ?? product.id ?? '');
-    favBtn.dataset.slug = product.slug || '';
-    favBtn.dataset.name = product.name || 'Producto';
-    favBtn.dataset.price = formatPriceFromCents(product.priceInCents);
-    favBtn.dataset.image = imgEls[0]?.src || product.image || '';
-    favBtn.innerHTML = STAR_ICON;
-    favBtn.dataset.favBound = '1';
-    favBtn.addEventListener('click', (ev) => {
-      ev.preventDefault();
-      ev.stopPropagation();
-      if (window.CRONOX_FAVORITES && typeof window.CRONOX_FAVORITES.toggleFromButton === 'function') {
-        window.CRONOX_FAVORITES.toggleFromButton(favBtn);
-      }
-    });
-
-    if (imgEls.length > 1) {
-      const prev = document.createElement('button');
-      prev.className = 'product-arrow prev';
-      prev.type = 'button';
-      prev.setAttribute('aria-label', 'Imagen anterior');
-      prev.textContent = '‹';
-
-      const next = document.createElement('button');
-      next.className = 'product-arrow next';
-      next.type = 'button';
-      next.setAttribute('aria-label', 'Imagen siguiente');
-      next.textContent = '›';
-
-      let index = 0;
-      const show = (i) => imgEls.forEach((el, j) => el.classList.toggle('active', j === i));
-      prev.addEventListener('click', (ev) => {
-        ev.preventDefault();
-        ev.stopPropagation();
-        index = (index - 1 + imgEls.length) % imgEls.length;
-        show(index);
-      });
-      next.addEventListener('click', (ev) => {
-        ev.preventDefault();
-        ev.stopPropagation();
-        index = (index + 1) % imgEls.length;
-        show(index);
-      });
-
-      gallery.appendChild(prev);
-      gallery.appendChild(next);
-    }
-
-    const plus = document.createElement('button');
-    plus.className = 'fav-add';
-    plus.type = 'button';
-    plus.setAttribute('aria-label', `Añadir rápido ${product.name}`);
-    plus.textContent = '+';
-    plus.addEventListener('click', (ev) => {
-      ev.preventDefault();
-      ev.stopPropagation();
-      if (typeof window.CRONOX_openQuickAddById === 'function') {
-        const key = product.slug || product.id || product.backendId;
-        window.CRONOX_openQuickAddById(key != null ? String(key) : '');
-      }
-    });
-
-    media.appendChild(gallery);
-    media.appendChild(favBtn);
-    media.appendChild(plus);
-
-    const name = document.createElement('h3');
-    name.className = 'product-name';
-    name.textContent = product.name || '';
-
-    const price = document.createElement('p');
-    price.className = 'product-price';
-    price.textContent = formatPriceFromCents(product.priceInCents);
-
-    a.appendChild(media);
-    a.appendChild(name);
-    a.appendChild(price);
-    window.CRONOX_STOCK?.decorateCard(a, price, product);
-    return a;
-  }
-
   const normalizeFavoritesList = (list) =>
     (Array.isArray(list) ? list : [])
       .map(normalizeFavorite)
@@ -314,11 +196,11 @@
       return;
     }
 
-    const cardBuilder = typeof window.CRONOX_buildFavoriteCard === 'function'
-      ? window.CRONOX_buildFavoriteCard
-      : (typeof window.CRONOX_createProductCard === 'function'
-        ? window.CRONOX_createProductCard
-        : createProductCard);
+    const cardBuilder = window.CRONOX_createProductCard;
+    if (typeof cardBuilder !== 'function') {
+      showLoading('No se ha podido cargar el catálogo.');
+      return;
+    }
 
     const frag = document.createDocumentFragment();
     favorites.forEach((fav) => {

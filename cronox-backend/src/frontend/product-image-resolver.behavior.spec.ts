@@ -68,6 +68,25 @@ describe('canonical product image resolver', () => {
     expect(images.originalUrl({ unexpected: true })).toBe('');
   });
 
+  it('keeps a directly selected PDP image record instead of replacing it with the logo', () => {
+    const dom = createRuntime();
+    const images = (dom.window as any).CRONOX_IMAGES;
+    const element = dom.window.document.querySelector('img') as HTMLImageElement;
+    images.applyProduct(
+      element,
+      {
+        url: 'https://cdn.test/pdp-original.jpg',
+        variants: { pdp: { url: 'https://cdn.test/pdp.webp', width: 1200 } },
+      },
+      'pdp',
+    );
+    expect(element.src).toBe('https://cdn.test/pdp.webp');
+    expect(element.src).not.toContain('logo_browser.png');
+    expect(readFileSync(path.join(frontendRoot, 'assets/product-page.js'), 'utf8')).toContain(
+      'CRONOX_IMAGES?.apply(image, images[idx], "pdp")',
+    );
+  });
+
   it('rotates through every real candidate before the logo on load errors', () => {
     const dom = createRuntime();
     const images = (dom.window as any).CRONOX_IMAGES;

@@ -1,0 +1,2 @@
+ALTER TABLE "NewsletterSettings"
+ADD COLUMN "mediaOpacity" DOUBLE PRECISION NOT NULL DEFAULT 1;

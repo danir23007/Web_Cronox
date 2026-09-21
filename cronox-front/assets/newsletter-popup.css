@@ -1,4 +1,5 @@
 .newsletter-modal-overlay {
+  container-type: inline-size;
   position: fixed;
   inset: 0;
   z-index: 2200;
@@ -100,14 +101,16 @@
 .newsletter-modal-feedback { min-height: 20px; margin: 2px 0 0; color: #d0d0d0; font-size: 13px; }
 .newsletter-modal-feedback--error { color: #ffb2b2; }
 .newsletter-modal-feedback--success { color: #ff0000; }
-@media (max-width:860px) {
+@container (max-width:860px) {
   .newsletter-modal { width: min(560px,100%); }
   .newsletter-modal-grid { grid-template-columns: 1fr; min-height: 0; }
   .newsletter-modal-image { min-height: clamp(180px,32dvh,240px); }
   .newsletter-modal-content { padding: 26px 22px 28px; }
 }
 @media (max-width:480px) {
-  .newsletter-modal-overlay { padding: max(10px,env(safe-area-inset-top)) max(10px,env(safe-area-inset-right)) max(10px,env(safe-area-inset-bottom)) max(10px,env(safe-area-inset-left)); }
+  .newsletter-modal-overlay:not(.newsletter-preview__surface) { padding: max(10px,env(safe-area-inset-top)) max(10px,env(safe-area-inset-right)) max(10px,env(safe-area-inset-bottom)) max(10px,env(safe-area-inset-left)); }
+}
+@container (max-width:480px) {
   .newsletter-modal { max-height: calc(100vh - 20px); max-height: calc(100dvh - 20px); border-radius: 10px; }
   .newsletter-modal-image { min-height: clamp(160px,29dvh,205px); }
   .newsletter-modal-content { gap: 8px; padding: 18px 16px 20px; }

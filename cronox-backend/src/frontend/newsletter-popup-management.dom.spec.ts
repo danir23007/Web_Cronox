@@ -7,7 +7,12 @@ const read = (file: string) => readFileSync(path.join(root, file), 'utf8');
 
 describe('Newsletter popup and Admin management', () => {
   it('keeps one accessible close button and the login transition below JOIN', () => {
-    const document = new JSDOM(read('index.html')).window.document;
+    const dom = new JSDOM(read('index.html'), { runScripts: 'outside-only' });
+    dom.window.eval(read('assets/newsletter-renderer.js'));
+    const document = dom.window.document;
+    (dom.window as any).CRONOX_NEWSLETTER_RENDERER.renderStructure(
+      document.querySelector('.newsletter-modal'),
+    );
     expect(document.querySelectorAll('.newsletter-modal-close')).toHaveLength(
       1,
     );
@@ -16,6 +21,7 @@ describe('Newsletter popup and Admin management', () => {
       'O si ya tienes cuenta, inicia sesión',
     );
     expect(prompt?.querySelector('button')?.textContent).toBe('inicia sesión');
+    expect(read('index.html')).not.toContain('newsletter-login-prompt');
     const script = read('assets/app.js');
     expect(script.indexOf('closeNewsletterModal({ dismiss: true')).toBeLessThan(
       script.indexOf("window.CRONOX_openAuthModal?.('login')"),
@@ -114,11 +120,33 @@ describe('Newsletter popup and Admin management', () => {
       document.querySelector('[data-newsletter-device="mobile"]'),
     ).not.toBeNull();
     expect(document.getElementById('newsletterAsciiEnabled')).not.toBeNull();
+    expect(document.getElementById('newsletterMediaOpacity')).not.toBeNull();
     expect(document.getElementById('newsletterAsciiOpacity')).not.toBeNull();
     expect(document.getElementById('newsletterAdminSave')).not.toBeNull();
     const script = read('assets/admin-newsletter.js');
     expect(script).toContain('pointerdown');
     expect(script).toContain('focalFromDrag');
     expect(script).toContain('expectedRevision');
+    expect(script).toContain('mediaOpacity: state.draft.mediaOpacity');
+    expect(script).toContain('resizePreviewSurfaces');
+    expect(read('assets/admin-newsletter.css')).not.toContain(
+      '.newsletter-preview--mobile .newsletter-modal-grid',
+    );
+  });
+
+  it('normalizes and applies independent media opacity in the shared renderer', () => {
+    const dom = new JSDOM('<div class="newsletter-modal"></div>', {
+      runScripts: 'outside-only',
+    });
+    (dom.window as any).requestAnimationFrame = (callback: () => void) => callback();
+    dom.window.eval(read('assets/newsletter-renderer.js'));
+    const root = dom.window.document.querySelector('.newsletter-modal')!;
+    const controller = (dom.window as any).CRONOX_NEWSLETTER_RENDERER.mount(root, {
+      mediaOpacity: 0.37,
+    });
+    expect(controller.getConfig().mediaOpacity).toBe(0.37);
+    expect((root.querySelector('.popup-image') as HTMLElement).style.opacity).toBe('0.37');
+    controller.update({ mediaOpacity: 9 });
+    expect(controller.getConfig().mediaOpacity).toBe(1);
   });
 });
