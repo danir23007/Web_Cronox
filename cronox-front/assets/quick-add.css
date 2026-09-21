@@ -262,7 +262,7 @@
 }
 
 .qa-info{
-  margin:18px 0 0 !important;
+  margin:28px 0 0 !important;
   padding:0 18px !important;   /* sin aire arriba/abajo, solo lateral para legibilidad */
   gap:10px !important;
   border-top:none !important;
@@ -289,7 +289,7 @@
   }
 
   .qa-info{
-    margin-top:22px !important;
+    margin-top:28px !important;
     padding:0 14px !important;
   }
 

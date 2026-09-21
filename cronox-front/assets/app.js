@@ -1175,8 +1175,11 @@
         <div class="cart-upsell__info">
           <p class="cart-upsell__name">${productName}</p>
           <p class="cart-upsell__price">${productPrice}</p>
-          <button class="cart-upsell__add" type="button" aria-label="Añadir rápidamente ${productName}">+</button>
         </div>
+        <button class="cart-upsell__add" type="button" aria-label="Añadir rápidamente ${productName}">
+          <span>Añadir</span>
+          <span class="cart-upsell__add-icon" aria-hidden="true">+</span>
+        </button>
       `;
       window.CRONOX_IMAGES?.applyProduct(
         card.querySelector('.cart-upsell__image-frame img'),
@@ -1315,6 +1318,7 @@
         <div class="cart-line__info">
           <div class="cart-line__title">
             <p class="cart-line__name">${display.productName}</p>
+            <p class="cart-line__price">${formatMoney(lineTotal)}</p>
             ${display.size ? `<span class="cart-line__meta">Talla: ${display.size}</span>` : ''}
           </div>
           <div class="cart-line__actions">
@@ -1334,7 +1338,6 @@
               />
               <button class="cart-qty__btn" data-action="inc" aria-label="Aumentar cantidad" data-id="${display.id}" ${isPending ? 'disabled' : ''}>+</button>
             </div>
-            <div class="cart-line__price">${formatMoney(lineTotal)}</div>
             <button class="cart-line__remove" data-remove="${display.id}" aria-label="Eliminar artículo">🗑</button>
           </div>
         </div>

@@ -77,8 +77,8 @@ describe('Stripe frontend runtime configuration', () => {
 
   it('uses a genuine Stripe Express Checkout Element for PayPal and Google Pay only', () => {
     expect(checkoutHtml).toContain('id="express-checkout-element"');
-    expect(checkoutScript).toContain(
-      "elements.create(\n        'expressCheckout'",
+    expect(checkoutScript).toMatch(
+      /elements\.create\(\s*['"]expressCheckout['"]\s*,\s*expressCheckoutOptions\s*,?\s*\)/,
     );
     expect(checkoutScript).toContain(
       "paymentMethodOrder: ['paypal', 'google_pay']",

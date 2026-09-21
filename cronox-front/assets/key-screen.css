@@ -60,7 +60,10 @@ body {
 .key-gate__loader-logo {
   display: block;
   width: 160px;
+  height: auto;
   max-width: 60vw;
+  object-fit: contain;
+  object-position: center;
   opacity: 0.95;
 }
 .key-gate__loader.is-leaving {

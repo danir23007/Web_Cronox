@@ -65,18 +65,35 @@ const infoStyles = readFrontend('assets/info-page.css');
 const successStyles = readFrontend('assets/checkout-success.css');
 
 describe('CRONOX responsive design system', () => {
-  it('uses a static high-contrast favicon instead of the spinner-like circular mark', () => {
-    const favicon = readFrontend('public/favicon.svg');
+  it('uses the original static browser logo instead of an animated favicon', () => {
     const index = readFrontend('index.html');
 
-    expect(favicon).toContain('<rect width="64" height="64"');
-    expect(favicon).toContain('fill="#050505"');
-    expect(favicon).not.toMatch(/<(?:animate|animateTransform)\b/);
     expect(index).toContain(
-      '<link rel="icon" type="image/svg+xml" href="/favicon.svg?v=1">',
+      '<link rel="icon" type="image/png" href="/assets/logo_browser.png?v=1">',
     );
     expect(index).toContain(
-      '<link rel="apple-touch-icon" href="/favicon.png?v=3">',
+      '<link rel="apple-touch-icon" href="/assets/logo_browser.png?v=1">',
+    );
+    expect(index).not.toContain('favicon.svg');
+  });
+
+  it('keeps the official wordmark static and intrinsically proportioned', () => {
+    const loadingSurfaces = [
+      readFrontend('index.html'),
+      readFrontend('checkout.html'),
+      readFrontend('key-screen.html'),
+      readFrontend('assets/profile.js'),
+    ];
+
+    loadingSurfaces.forEach((surface) => {
+      expect(surface).toContain('assets/logo_banner.png');
+      expect(surface).not.toContain('assets/CRONOX-GIF.gif');
+    });
+    expect(storeStyles).toMatch(
+      /\.preloader__logo\{[^}]*height:auto;[^}]*object-fit:contain;[^}]*object-position:center;/,
+    );
+    expect(storeStyles).toMatch(
+      /\.topbar__logo-img\{[^}]*width:108px;[^}]*height:auto;[^}]*object-fit:contain;[^}]*object-position:center;/,
     );
   });
 
@@ -322,9 +339,9 @@ describe('CRONOX responsive design system', () => {
   );
 
   it('loads each modified stylesheet through its exact incremented cache version', () => {
-    expect(readFrontend('assets/version.js')).toContain("VERSION = '94'");
+    expect(readFrontend('assets/version.js')).toContain("VERSION = '96'");
     expect(readFrontend('index.html')).toContain('assets/gallery.css?v=15');
-    expect(readFrontend('index.html')).toContain('assets/quick-add.css?v=4');
+    expect(readFrontend('index.html')).toContain('assets/quick-add.css?v=5');
     expect(readFrontend('index.html')).toContain(
       'assets/product-detail.css?v=2',
     );

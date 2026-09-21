@@ -95,6 +95,17 @@
     carouselEditor: document.getElementById("galleryCarouselEditor"),
     modeMosaic: document.getElementById("galleryModeMosaic"),
     modeCarousel: document.getElementById("galleryModeCarousel"),
+    publicMode: document.getElementById("galleryPublicMode"),
+    activateMosaic: document.getElementById("galleryActivateMosaic"),
+    activateCarousel: document.getElementById("galleryActivateCarousel"),
+    carouselCount: document.getElementById("galleryCarouselCount"),
+    carouselActivationHint: document.getElementById(
+      "galleryCarouselActivationHint",
+    ),
+    carouselPreview: document.getElementById("galleryCarouselPreview"),
+    carouselPreviewEmpty: document.getElementById(
+      "galleryCarouselPreviewEmpty",
+    ),
     status: document.getElementById("galleryAdminStatus"),
     modal: document.getElementById("galleryEditorModal"),
     title: document.getElementById("galleryEditorTitle"),
@@ -140,6 +151,7 @@
     slots: [],
     carouselSlots: [],
     activeMode: "MOSAIC",
+    editorMode: null,
     modeSaving: false,
     assets: [],
     recentAssets: [],
@@ -346,15 +358,105 @@
   };
 
   const syncModeEditors = () => {
-    const carousel = state.activeMode === "CAROUSEL";
+    const carousel = state.editorMode === "CAROUSEL";
     elements.mosaicEditor.hidden = carousel;
     elements.carouselEditor.hidden = !carousel;
     elements.modeMosaic.classList.toggle("is-active", !carousel);
     elements.modeCarousel.classList.toggle("is-active", carousel);
     elements.modeMosaic.setAttribute("aria-pressed", String(!carousel));
     elements.modeCarousel.setAttribute("aria-pressed", String(carousel));
-    elements.modeMosaic.disabled = state.modeSaving;
-    elements.modeCarousel.disabled = state.modeSaving;
+    elements.modeMosaic.disabled = false;
+    elements.modeCarousel.disabled = false;
+    syncPublicationControls();
+  };
+
+  const validCarouselSlots = () =>
+    state.carouselSlots.filter((slot) => Boolean(slot.asset?.imageUrl));
+
+  const toPublicCarouselItem = (slot) => ({
+    key: `carousel-${slot.position}`,
+    position: slot.position,
+    imageSrc: slot.asset.imageUrl,
+    variants: slot.asset.variants || null,
+    alt: slot.altText || "Imagen de la galerÃ­a CRONOX",
+    instagramUrl: slot.instagramUrl || "",
+    focalX: slot.focalX,
+    focalY: slot.focalY,
+    zoom: slot.zoom,
+    fit: slot.fit || "COVER",
+    tablet:
+      slot.tabletFocalX == null
+        ? null
+        : {
+            focalX: slot.tabletFocalX,
+            focalY: slot.tabletFocalY,
+            zoom: slot.tabletZoom,
+            fit: slot.tabletFit,
+          },
+    mobile:
+      slot.mobileFocalX == null
+        ? null
+        : {
+            focalX: slot.mobileFocalX,
+            focalY: slot.mobileFocalY,
+            zoom: slot.mobileZoom,
+            fit: slot.mobileFit,
+          },
+    description: slot.asset.description || "",
+    products: Array.isArray(slot.asset.products) ? slot.asset.products : [],
+  });
+
+  const renderCarouselPreview = () => {
+    if (!elements.carouselPreview || !elements.carouselPreviewEmpty) return;
+    const items = validCarouselSlots().map(toPublicCarouselItem);
+    elements.carouselPreview.hidden = items.length === 0;
+    elements.carouselPreviewEmpty.hidden = items.length > 0;
+    if (!items.length) {
+      elements.carouselPreview.replaceChildren();
+      return;
+    }
+    if (typeof window.CRONOX_GALLERY?.renderCarousel === "function") {
+      window.CRONOX_GALLERY.renderCarousel(items, elements.carouselPreview);
+      return;
+    }
+    elements.carouselPreview.replaceChildren();
+    elements.carouselPreviewEmpty.hidden = false;
+    elements.carouselPreviewEmpty.textContent =
+      "No se pudo iniciar la previsualizaciÃ³n del carrusel.";
+  };
+
+  const syncPublicationControls = () => {
+    const count = validCarouselSlots().length;
+    const missing = Math.max(0, 3 - count);
+    const carouselIsActive = state.activeMode === "CAROUSEL";
+    if (elements.publicMode) {
+      elements.publicMode.textContent = carouselIsActive
+        ? "CARRUSEL"
+        : "MOSAICO";
+    }
+    if (elements.carouselCount) {
+      elements.carouselCount.textContent = `${count} / 5 imÃ¡genes`;
+    }
+    if (elements.carouselActivationHint) {
+      elements.carouselActivationHint.textContent = carouselIsActive
+        ? "El carrusel es la galerÃ­a pÃºblica actual."
+        : missing > 0
+          ? `Faltan ${missing} ${missing === 1 ? "imagen" : "imÃ¡genes"} para poder activar el carrusel.`
+          : "El carrusel estÃ¡ listo para activarse.";
+    }
+    if (elements.activateMosaic) {
+      elements.activateMosaic.disabled =
+        state.modeSaving || state.activeMode === "MOSAIC";
+      elements.activateMosaic.textContent =
+        state.activeMode === "MOSAIC" ? "MOSAICO ACTIVO" : "ACTIVAR MOSAICO";
+    }
+    if (elements.activateCarousel) {
+      elements.activateCarousel.disabled =
+        state.modeSaving || carouselIsActive || count < 3 || count > 5;
+      elements.activateCarousel.textContent = carouselIsActive
+        ? "CARRUSEL ACTIVO"
+        : "ACTIVAR CARRUSEL";
+    }
   };
 
   const renderCarouselGrid = () => {
@@ -378,6 +480,11 @@
         image.decoding = "async";
         image.draggable = false;
         tile.appendChild(image);
+      } else {
+        const empty = pageDocument.createElement("span");
+        empty.className = "gallery-admin-carousel__empty";
+        empty.textContent = "Sin imagen";
+        tile.appendChild(empty);
       }
       const number = pageDocument.createElement("span");
       number.className = "gallery-admin-carousel__number";
@@ -390,6 +497,11 @@
         `Editar posición ${String(slot.position).padStart(2, "0")}`,
       );
       edit.textContent = "✎";
+      edit.setAttribute(
+        "aria-label",
+        `${slot.asset ? "Cambiar imagen de la" : "A\u00f1adir imagen a la"} posici\u00f3n ${String(slot.position).padStart(2, "0")}`,
+      );
+      edit.textContent = slot.asset ? "Cambiar" : "A\u00f1adir imagen";
       edit.addEventListener("pointerdown", (event) => event.stopPropagation());
       edit.addEventListener("dragstart", (event) => event.preventDefault());
       edit.addEventListener("click", (event) => {
@@ -398,6 +510,27 @@
           openEditor(slot.position, edit, "CAROUSEL");
       });
       tile.append(number, edit);
+      if (slot.asset) {
+        const remove = pageDocument.createElement("button");
+        remove.type = "button";
+        remove.className = "gallery-admin-carousel__remove";
+        remove.textContent = "Quitar";
+        remove.setAttribute(
+          "aria-label",
+          `Quitar imagen de la posici\u00f3n ${String(slot.position).padStart(2, "0")}`,
+        );
+        remove.addEventListener("pointerdown", (event) =>
+          event.stopPropagation(),
+        );
+        remove.addEventListener("dragstart", (event) =>
+          event.preventDefault(),
+        );
+        remove.addEventListener("click", (event) => {
+          event.stopPropagation();
+          if (!state.reorderSaving) void removeCarouselAsset(slot.position);
+        });
+        tile.appendChild(remove);
+      }
       fragment.appendChild(tile);
     });
     elements.carouselGrid.replaceChildren(fragment);
@@ -405,6 +538,8 @@
       "aria-busy",
       String(state.reorderSaving),
     );
+    if (state.editorMode === "CAROUSEL") renderCarouselPreview();
+    syncPublicationControls();
   };
 
   const renderGrid = () => {
@@ -626,7 +761,15 @@
     }
   };
 
-  const changeMode = async (nextMode) => {
+  const selectEditorMode = (nextMode) => {
+    if (!["MOSAIC", "CAROUSEL"].includes(nextMode)) return false;
+    state.editorMode = nextMode;
+    syncModeEditors();
+    if (nextMode === "CAROUSEL") renderCarouselPreview();
+    return true;
+  };
+
+  const activateMode = async (nextMode) => {
     if (!state.loaded) {
       try {
         await loadGallery();
@@ -639,6 +782,14 @@
       !["MOSAIC", "CAROUSEL"].includes(nextMode) ||
       state.activeMode === nextMode
     ) {
+      return false;
+    }
+    if (nextMode === "CAROUSEL" && validCarouselSlots().length < 3) {
+      syncPublicationControls();
+      setStatus(
+        "El carrusel necesita entre 3 y 5 im\u00e1genes para activarse.",
+        "error",
+      );
       return false;
     }
     state.modeSaving = true;
@@ -672,6 +823,45 @@
     } finally {
       state.modeSaving = false;
       syncModeEditors();
+    }
+  };
+
+  const removeCarouselAsset = async (position) => {
+    const slot = state.carouselSlots.find(
+      (candidate) => candidate.position === position,
+    );
+    if (!slot?.asset || state.reorderSaving) return false;
+    state.reorderSaving = true;
+    renderCarouselGrid();
+    setStatus(`Quitando la imagen de la posici\u00f3n ${String(position).padStart(2, "0")}...`);
+    try {
+      const payload = await requestJson(
+        `/api/admin/gallery/carousel/${position}`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ assetId: null }),
+        },
+      );
+      const updated = normalizeCarouselSlots([payload.slot]).find(
+        (candidate) => candidate.position === position,
+      );
+      if (!updated) throw new Error("El servidor no devolvi\u00f3 una posici\u00f3n v\u00e1lida.");
+      state.carouselSlots[position - 1] = updated;
+      setStatus(
+        `Imagen retirada de la posici\u00f3n ${String(position).padStart(2, "0")}.`,
+        "success",
+      );
+      return true;
+    } catch (error) {
+      setStatus(
+        error.message || "No se pudo quitar la imagen del carrusel.",
+        "error",
+      );
+      return false;
+    } finally {
+      state.reorderSaving = false;
+      renderCarouselGrid();
     }
   };
 
@@ -813,6 +1003,7 @@
         );
         state.activeMode =
           configuration.activeMode === "CAROUSEL" ? "CAROUSEL" : "MOSAIC";
+        if (!state.editorMode) state.editorMode = state.activeMode;
         upsertAssets(assetResponse.assets);
         upsertAssets(state.slots.map((slot) => slot.asset).filter(Boolean));
         upsertAssets(
@@ -844,6 +1035,7 @@
         state.slots = normalizeSlots([]);
         state.carouselSlots = normalizeCarouselSlots([]);
         state.activeMode = "MOSAIC";
+        if (!state.editorMode) state.editorMode = "MOSAIC";
         renderGrid();
         renderCarouselGrid();
         syncModeEditors();
@@ -1645,10 +1837,16 @@
     clearCarouselDragState();
   });
   elements.modeMosaic?.addEventListener("click", () =>
-    changeMode("MOSAIC"),
+    selectEditorMode("MOSAIC"),
   );
   elements.modeCarousel?.addEventListener("click", () =>
-    changeMode("CAROUSEL"),
+    selectEditorMode("CAROUSEL"),
+  );
+  elements.activateMosaic?.addEventListener("click", () =>
+    activateMode("MOSAIC"),
+  );
+  elements.activateCarousel?.addEventListener("click", () =>
+    activateMode("CAROUSEL"),
   );
   elements.viewport.addEventListener("pointerdown", (event) => {
     if (!state.draft?.assetId) return;
@@ -1712,8 +1910,11 @@
   window.CRONOX_ADMIN_GALLERY = {
     load: loadGallery,
     openEditor,
-    changeMode,
+    selectEditorMode,
+    activateMode,
+    changeMode: activateMode,
     reorderCarousel,
+    removeCarouselAsset,
     state,
   };
 })();

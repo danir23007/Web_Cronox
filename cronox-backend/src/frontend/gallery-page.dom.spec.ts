@@ -946,13 +946,16 @@ describe('CRONOX gallery page', () => {
     const onloadIndex = galleryScript.indexOf(
       'lightboxElements.image.onload = ready',
     );
-    const sourceIndex = galleryScript.indexOf(
-      'applyGalleryImage(\n      lightboxElements.image',
+    const sourceIndex = galleryScript.search(
+      /applyGalleryImage\(\s*lightboxElements\.image,\s*item,\s*["']galleryLarge["'],\s*\{\s*loading:\s*["']eager["']\s*\}/,
     );
     expect(loadingIndex).toBeGreaterThan(-1);
     expect(decodingIndex).toBeGreaterThan(loadingIndex);
     expect(onloadIndex).toBeGreaterThan(decodingIndex);
     expect(sourceIndex).toBeGreaterThan(onloadIndex);
+    expect(galleryScript).toMatch(
+      /const applyGalleryImage = \([\s\S]*?window\.CRONOX_IMAGES\.apply\([\s\S]*?image\.src = original;/,
+    );
     expect(galleryScript).not.toMatch(
       /galleryLightboxImage[^\n]*(?:width|height)\s*=/,
     );

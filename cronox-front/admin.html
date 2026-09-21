@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>CRONOX ADMIN</title>
-  <script src="assets/version.js?v=94"></script>
+  <script src="assets/version.js?v=96"></script>
   <script>
     (function () {
       if (window.CRONOX_ASSET) {
@@ -16,7 +16,8 @@
     })();
   </script>
   <link id="cronox-admin-style" rel="stylesheet" href="assets/store.css">
-  <link rel="stylesheet" href="assets/admin-gallery.css?v=5">
+  <link rel="stylesheet" href="assets/gallery.css?v=15">
+  <link rel="stylesheet" href="assets/admin-gallery.css?v=6">
   <link rel="stylesheet" href="assets/admin-media.css?v=4">
   <link rel="stylesheet" href="assets/admin-inventory.css?v=1">
   <link rel="stylesheet" href="assets/admin-mails.css?v=1">
@@ -248,9 +249,9 @@
       to { opacity: 1; transform: translateY(0); }
     }
   </style>
-  <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=1">
-  <link rel="shortcut icon" type="image/svg+xml" href="/favicon.svg?v=1">
-  <link rel="apple-touch-icon" href="/favicon.png?v=3">
+  <link rel="icon" type="image/png" href="/assets/logo_browser.png?v=1">
+  <link rel="shortcut icon" type="image/png" href="/assets/logo_browser.png?v=1">
+  <link rel="apple-touch-icon" href="/assets/logo_browser.png?v=1">
   <meta name="theme-color" content="#000000">
 </head>
 <body class="bw-theme">
@@ -1310,15 +1311,34 @@
         <button id="galleryModeMosaic" class="gallery-mode-control__button is-active" type="button" data-gallery-mode="MOSAIC" aria-pressed="true">MOSAICO</button>
         <button id="galleryModeCarousel" class="gallery-mode-control__button" type="button" data-gallery-mode="CAROUSEL" aria-pressed="false">CARRUSEL</button>
       </div>
+      <p class="gallery-public-mode">Galer&iacute;a p&uacute;blica actual: <strong id="galleryPublicMode">MOSAICO</strong></p>
       <p id="galleryAdminStatus" class="gallery-admin-status" role="status" aria-live="polite">Abre una posici&oacute;n para editarla.</p>
       <div id="galleryMosaicEditor" data-gallery-editor="MOSAIC">
         <div id="adminGalleryGrid" class="gallery-admin-grid" aria-label="Previsualizaci&oacute;n editable del mosaico">
           <div class="empty-state" style="grid-column: 1 / -1;"><strong>Cargando galer&iacute;a&hellip;</strong></div>
         </div>
+        <div class="gallery-publish-actions">
+          <button id="galleryActivateMosaic" class="btn primary" type="button">ACTIVAR MOSAICO</button>
+        </div>
       </div>
       <div id="galleryCarouselEditor" data-gallery-editor="CAROUSEL" hidden>
-        <p class="gallery-carousel-admin-help">Ordena entre 3 y 5 im&aacute;genes. Arrastra una posici&oacute;n para cambiar el orden; las posiciones vac&iacute;as no se publican.</p>
+        <div class="gallery-carousel-admin-heading">
+          <div>
+            <h3>Carrusel</h3>
+            <p class="gallery-carousel-admin-help">El carrusel necesita entre 3 y 5 im&aacute;genes para activarse. Arrastra las posiciones para cambiar su orden.</p>
+          </div>
+          <strong id="galleryCarouselCount" class="gallery-carousel-count">0 / 5 im&aacute;genes</strong>
+        </div>
         <div id="adminGalleryCarousel" class="gallery-admin-carousel" aria-label="Previsualizaci&oacute;n editable del carrusel"></div>
+        <section class="gallery-admin-preview" aria-labelledby="galleryCarouselPreviewTitle">
+          <h3 id="galleryCarouselPreviewTitle">PREVISUALIZACI&Oacute;N</h3>
+          <div id="galleryCarouselPreview" class="gallery-grid gallery-admin-preview__surface" aria-label="Previsualizaci&oacute;n real del carrusel"></div>
+          <p id="galleryCarouselPreviewEmpty" class="gallery-admin-preview__empty">A&ntilde;ade una imagen para ver la previsualizaci&oacute;n.</p>
+        </section>
+        <div class="gallery-publish-actions gallery-publish-actions--carousel">
+          <p id="galleryCarouselActivationHint" class="gallery-carousel-activation-hint">Faltan 3 im&aacute;genes para poder activar el carrusel.</p>
+          <button id="galleryActivateCarousel" class="btn primary" type="button" disabled>ACTIVAR CARRUSEL</button>
+        </div>
       </div>
     </section>
 
@@ -1780,7 +1800,8 @@
   <script src="assets/admin-mail-document.js?v=2"></script>
   <script src="assets/admin-mails.js?v=2"></script>
   <script src="assets/admin-orders.js"></script>
-  <script src="assets/admin-gallery.js?v=5"></script>
+  <script src="assets/gallery.js?v=12"></script>
+  <script src="assets/admin-gallery.js?v=6"></script>
   <script src="assets/key-screen-renderer.js?v=2"></script>
   <script src="assets/admin-key-screen.js?v=3"></script>
   <script src="assets/admin-media.js?v=5"></script>

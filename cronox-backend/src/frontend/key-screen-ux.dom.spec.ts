@@ -90,13 +90,13 @@ describe('Pantalla Clave focused UX contracts', () => {
     jest.restoreAllMocks();
   });
 
-  it('makes the existing CRONOX GIF the first fullscreen state', () => {
+  it('makes the fixed official CRONOX logo the first fullscreen state', () => {
     const document = new JSDOM(gateHtml).window.document;
     const loaderImage = document.querySelector<HTMLImageElement>(
       '#keyLoader .key-gate__loader-logo',
     );
 
-    expect(loaderImage?.getAttribute('src')).toBe('assets/CRONOX-GIF.gif');
+    expect(loaderImage?.getAttribute('src')).toBe('assets/logo_banner.png');
     expect(loaderImage?.getAttribute('alt')).toBe('');
     expect(document.querySelector('#keyContent')?.hasAttribute('hidden')).toBe(
       true,
