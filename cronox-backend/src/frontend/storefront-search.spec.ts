@@ -36,7 +36,7 @@ describe('storefront search contracts', () => {
     expect(app).toContain('!searchForm.contains(e.target)');
   });
 
-  it('uses neutral contained thumbnails and the existing product detail route', () => {
+  it('uses permanently white contained thumbnails and the existing product detail route', () => {
     const app = readFrontend('assets/app.js');
     const css = readFrontend('assets/store.css');
     const suggestionRenderer = app.slice(
@@ -45,7 +45,9 @@ describe('storefront search contracts', () => {
     );
 
     expect(css).toContain('.search-suggestions__thumbnail{');
-    expect(css).toContain('background:transparent');
+    expect(css).toMatch(
+      /\.search-suggestions__thumbnail\{[^}]*background:#fff;/,
+    );
     expect(css).toContain('object-fit:contain');
     expect(app).toContain('/producto/${encodeURIComponent(product.slug)}');
     expect(app).toContain("fallback.textContent = 'Sin imagen'");
@@ -55,6 +57,21 @@ describe('storefront search contracts', () => {
     );
     expect(suggestionRenderer).not.toContain('categoryName');
     expect(css).toContain('.search-suggestions__price{');
+  });
+
+  it('keeps pointer hover transient while preserving keyboard highlighting', () => {
+    const app = readFrontend('assets/app.js');
+    const css = readFrontend('assets/store.css');
+    expect(app).toContain(
+      "option.addEventListener('pointerenter', clearHighlightedSuggestion)",
+    );
+    expect(app).not.toContain(
+      "option.addEventListener('pointermove', () => setHighlightedSuggestion(index))",
+    );
+    expect(app).toContain("option.classList.remove('is-highlighted')");
+    expect(css).toMatch(
+      /\.search-suggestions__option:hover,[\s\S]*\.search-suggestions__option\.is-highlighted\{\s*background:#fff;\s*color:#000;/,
+    );
   });
 
   it('loads URL-backed full results through the existing grid', () => {
@@ -69,7 +86,9 @@ describe('storefront search contracts', () => {
     expect(products).toContain("nextUrl.searchParams.delete('categorySlug')");
     expect(products).toContain('loadSearchResults(initialQueryRaw)');
     expect(products).toContain('loadSearchResults(query)');
-    expect(products).toContain('API.getCategoryProducts(initialCategorySlug, {');
+    expect(products).toContain(
+      'API.getCategoryProducts(initialCategorySlug, {',
+    );
     expect(products).toContain('setProducts(result.products)');
     expect(products).toContain('applyAll()');
     expect(products).toContain(

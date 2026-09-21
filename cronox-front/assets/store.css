@@ -229,6 +229,7 @@ body.is-loaded #preloader{opacity:0;transform:scale(1.02);pointer-events:none}
   text-decoration:none;
   outline:none;
 }
+.search-suggestions__option:visited{color:#fff;text-decoration:none;}
 .search-suggestions__option:hover,
 .search-suggestions__option:focus-visible,
 .search-suggestions__option.is-highlighted{
@@ -245,7 +246,7 @@ body.is-loaded #preloader{opacity:0;transform:scale(1.02);pointer-events:none}
   overflow:hidden;
   border:1px solid #d8d8d8;
   border-radius:8px;
-  background:transparent;
+  background:#fff;
 }
 .search-suggestions__thumbnail img{
   width:100%;
@@ -253,6 +254,7 @@ body.is-loaded #preloader{opacity:0;transform:scale(1.02);pointer-events:none}
   display:block;
   object-fit:contain;
   object-position:center;
+  background:#fff;
 }
 .search-suggestions__image-fallback{
   padding:4px;

@@ -65,6 +65,21 @@ const infoStyles = readFrontend('assets/info-page.css');
 const successStyles = readFrontend('assets/checkout-success.css');
 
 describe('CRONOX responsive design system', () => {
+  it('uses a static high-contrast favicon instead of the spinner-like circular mark', () => {
+    const favicon = readFrontend('public/favicon.svg');
+    const index = readFrontend('index.html');
+
+    expect(favicon).toContain('<rect width="64" height="64"');
+    expect(favicon).toContain('fill="#050505"');
+    expect(favicon).not.toMatch(/<(?:animate|animateTransform)\b/);
+    expect(index).toContain(
+      '<link rel="icon" type="image/svg+xml" href="/favicon.svg?v=1">',
+    );
+    expect(index).toContain(
+      '<link rel="apple-touch-icon" href="/favicon.png?v=3">',
+    );
+  });
+
   it.each(routes)(
     '%s declares a device-width viewport without duplicate IDs',
     (route) => {
@@ -307,7 +322,7 @@ describe('CRONOX responsive design system', () => {
   );
 
   it('loads each modified stylesheet through its exact incremented cache version', () => {
-    expect(readFrontend('assets/version.js')).toContain("VERSION = '93'");
+    expect(readFrontend('assets/version.js')).toContain("VERSION = '94'");
     expect(readFrontend('index.html')).toContain('assets/gallery.css?v=15');
     expect(readFrontend('index.html')).toContain('assets/quick-add.css?v=4');
     expect(readFrontend('index.html')).toContain(

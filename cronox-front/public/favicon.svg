@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="CRONOX">
+  <rect width="64" height="64" rx="12" fill="#050505"/>
+  <path fill="#fff" d="M31 10a22 22 0 1 0 0 44V43a11 11 0 1 1 0-22Z"/>
+  <path fill="#fff" d="m28 22 27-12-13 22 14 23-28-13 8-10Z"/>
+</svg>

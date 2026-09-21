@@ -351,14 +351,21 @@
     });
   };
 
-  const hideSearchSuggestions = () => {
+  const clearHighlightedSuggestion = () => {
     highlightedSuggestion = -1;
     searchInput?.removeAttribute('aria-activedescendant');
-    searchInput?.setAttribute('aria-expanded', 'false');
-    if (searchSuggestionsPanel) searchSuggestionsPanel.hidden = true;
     searchSuggestionsList
       ?.querySelectorAll('[role="option"]')
-      .forEach((option) => option.setAttribute('aria-selected', 'false'));
+      .forEach((option) => {
+        option.classList.remove('is-highlighted');
+        option.setAttribute('aria-selected', 'false');
+      });
+  };
+
+  const hideSearchSuggestions = () => {
+    clearHighlightedSuggestion();
+    searchInput?.setAttribute('aria-expanded', 'false');
+    if (searchSuggestionsPanel) searchSuggestionsPanel.hidden = true;
   };
 
   const showSuggestionState = (message, state) => {
@@ -449,7 +456,9 @@
       price.textContent = product.priceLabel || '';
       details.append(name, price);
       option.append(thumbnail, details);
-      option.addEventListener('pointermove', () => setHighlightedSuggestion(index));
+      // Hover is a transient CSS state. Clear any keyboard selection when the
+      // pointer enters so leaving the row always restores its natural state.
+      option.addEventListener('pointerenter', clearHighlightedSuggestion);
       option.addEventListener('click', hideSearchSuggestions);
       searchSuggestionsList.appendChild(option);
     });
