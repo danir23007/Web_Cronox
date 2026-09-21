@@ -796,8 +796,10 @@ body.page-checkout summary:focus-visible {
   width: 96px;
   height: 108px;
   padding: 0;
-  border: 1px solid #2b2b2d;
+  border: 0;
   background: transparent;
+  box-shadow: none;
+  outline: none;
 }
 
 .checkout-item__media img {
@@ -990,8 +992,10 @@ body.page-checkout summary:focus-visible {
   width: 76px;
   height: 86px;
   padding: 0;
-  border: 1px solid #29292b;
+  border: 0;
   background: transparent;
+  box-shadow: none;
+  outline: none;
   object-fit: contain;
 }
 

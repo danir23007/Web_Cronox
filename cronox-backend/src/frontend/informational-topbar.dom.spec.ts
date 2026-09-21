@@ -79,7 +79,9 @@ describe('informational footer destinations use the shared CRONOX topbar', () =>
       expect(html).toContain('href="assets/store.css?v=89"');
       expect(html).toContain('href="assets/info-page.css?v=3"');
       expect(
-        html.match(new RegExp(`assets/info-shell\\.js\\?v=${shellVersion}`, 'g')),
+        html.match(
+          new RegExp(`assets/info-shell\\.js\\?v=${shellVersion}`, 'g'),
+        ),
       ).toHaveLength(1);
       expect(html.match(/assets\/app\.js\?v=62/g)).toHaveLength(1);
       expect(html.match(/assets\/api\.js\?v=5/g)).toHaveLength(1);
@@ -238,6 +240,60 @@ describe('informational footer destinations use the shared CRONOX topbar', () =>
     expect(document.querySelectorAll('#searchBar')).toHaveLength(1);
     expect(document.querySelectorAll('#filtersPanel')).toHaveLength(1);
     expect(document.querySelectorAll('#cart-drawer')).toHaveLength(1);
+    const topbar = document.getElementById('topbar') as HTMLElement;
+    const overlay = document.getElementById('cart-overlay') as HTMLElement;
+    const drawer = document.getElementById('cart-drawer') as HTMLElement;
+    const trigger = document.getElementById(
+      'cart-icon-btn',
+    ) as HTMLAnchorElement;
+    expect(topbar.classList.contains('topbar--page')).toBe(true);
+    expect(topbar.classList.contains('topbar--cart-open')).toBe(false);
+    expect(topbar.inert).toBe(true);
+    expect(overlay.hidden).toBe(false);
+    expect(document.activeElement?.id).toBe('cart-close-btn');
+    browserWindow.HTMLElement.prototype.getClientRects = () => ({ length: 1 });
+    const focusable = Array.from(
+      drawer.querySelectorAll<HTMLElement>('button:not([disabled]), a[href]'),
+    );
+    const lastFocusable = focusable[focusable.length - 1];
+    document.dispatchEvent(
+      new browserWindow.KeyboardEvent('keydown', {
+        key: 'Tab',
+        shiftKey: true,
+        bubbles: true,
+      }),
+    );
+    expect(document.activeElement).toBe(lastFocusable);
+    document.dispatchEvent(
+      new browserWindow.KeyboardEvent('keydown', { key: 'Tab', bubbles: true }),
+    );
+    expect(document.activeElement?.id).toBe('cart-close-btn');
+
+    (document.getElementById('cart-close-btn') as HTMLButtonElement).click();
+    expect(overlay.hidden).toBe(true);
+    expect(drawer.hidden).toBe(true);
+    expect(topbar.inert).not.toBe(true);
+    expect(document.activeElement).toBe(trigger);
+
+    trigger.click();
+    overlay.click();
+    expect(drawer.hidden).toBe(true);
+    trigger.click();
+    document.dispatchEvent(
+      new browserWindow.KeyboardEvent('keydown', {
+        key: 'Escape',
+        bubbles: true,
+      }),
+    );
+    expect(drawer.hidden).toBe(true);
+    trigger.click();
+    (document.getElementById('cart-close-btn') as HTMLButtonElement).click();
+    trigger.click();
+    expect(overlay.hidden).toBe(false);
+    (document.getElementById('cart-close-btn') as HTMLButtonElement).click();
+    expect(overlay.hidden).toBe(true);
+    expect(document.body.classList.contains('cart-open')).toBe(false);
+    await new Promise((resolve) => setTimeout(resolve, 0));
     dom.window.close();
   });
 

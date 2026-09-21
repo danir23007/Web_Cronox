@@ -979,8 +979,6 @@
   const setCartUiState = (isOpen) => {
     const body = document.body;
     if (body) body.classList.toggle('cart-open', isOpen);
-    if (topbar) topbar.classList.toggle('topbar--cart-open', isOpen);
-    setActiveTopbarIcon(isOpen ? 'cart' : getPageActiveIconType());
   };
 
   function updateBadge(cart) {
@@ -1089,27 +1087,63 @@
   const cartCloseBtn = $('#cart-close-btn');
   const cartFooter = cartDrawerEl ? $('.cart-drawer__footer', cartDrawerEl) : null;
   const upsellProducts = new Map();
+  const cartBackgroundInert = new Map();
+  let cartAnimationFrame = 0;
+  let cartReturnFocus = null;
+
+  const setCartBackgroundInert = (isOpen) => {
+    if (isOpen) {
+      for (const element of document.body.children) {
+        if (element === cartOverlayEl || element === cartDrawerEl || cartBackgroundInert.has(element)) continue;
+        cartBackgroundInert.set(element, element.inert);
+        element.inert = true;
+      }
+    } else {
+      for (const [element, wasInert] of cartBackgroundInert) element.inert = wasInert;
+      cartBackgroundInert.clear();
+    }
+  };
+
+  const cartFocusable = () => Array.from(cartDrawerEl.querySelectorAll(
+    'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+  )).filter((element) => !element.hidden && element.getClientRects().length);
 
   const toggleDrawer = (open) => {
     if (!cartOverlayEl || !cartDrawerEl) return;
-    cartState.drawerOpen = Boolean(open);
-    setCartUiState(cartState.drawerOpen);
+    const nextOpen = Boolean(open);
+    if (cartState.drawerOpen === nextOpen) return;
+    cartState.drawerOpen = nextOpen;
+    setCartUiState(nextOpen);
+    if (cartAnimationFrame) cancelAnimationFrame(cartAnimationFrame);
     if (open) {
+      cartReturnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
       cartOverlayEl.hidden = false;
       cartDrawerEl.hidden = false;
-      requestAnimationFrame(() => {
+      cartDrawerEl.inert = false;
+      cartDrawerEl.setAttribute('role', 'dialog');
+      cartDrawerEl.setAttribute('aria-modal', 'true');
+      cartDrawerEl.setAttribute('aria-hidden', 'false');
+      setCartBackgroundInert(true);
+      cartAnimationFrame = requestAnimationFrame(() => {
+        cartAnimationFrame = 0;
         cartOverlayEl.classList.add('is-visible');
         cartDrawerEl.classList.add('is-visible');
       });
       lockScroll(CART_LOCK_KEY);
+      cartCloseBtn?.focus({ preventScroll: true });
     } else {
       cartOverlayEl.classList.remove('is-visible');
       cartDrawerEl.classList.remove('is-visible');
-      setTimeout(() => {
-        cartOverlayEl.hidden = true;
-        cartDrawerEl.hidden = true;
-      }, 260);
+      cartOverlayEl.hidden = true;
+      cartDrawerEl.hidden = true;
+      cartDrawerEl.inert = true;
+      cartDrawerEl.setAttribute('aria-hidden', 'true');
+      cartDrawerEl.removeAttribute('aria-modal');
+      setCartBackgroundInert(false);
       unlockScroll(CART_LOCK_KEY);
+      const focusTarget = cartTopbarIcon || document.getElementById('cart-icon-btn') || cartReturnFocus;
+      if (focusTarget?.isConnected) focusTarget.focus({ preventScroll: true });
+      cartReturnFocus = null;
     }
   };
 
@@ -1632,8 +1666,33 @@
     }
 
     document.addEventListener('keydown', (ev) => {
-      if (ev.key === 'Escape' && cartState.drawerOpen) {
+      if (!cartState.drawerOpen) return;
+      if (ev.key === 'Escape') {
+        ev.preventDefault();
+        ev.stopImmediatePropagation();
         closeCartDrawer();
+        return;
+      }
+      if (ev.key !== 'Tab') return;
+      const focusable = cartFocusable();
+      if (!focusable.length) {
+        ev.preventDefault();
+        cartCloseBtn?.focus({ preventScroll: true });
+        return;
+      }
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (ev.shiftKey && (document.activeElement === first || !cartDrawerEl.contains(document.activeElement))) {
+        ev.preventDefault();
+        last.focus({ preventScroll: true });
+      } else if (!ev.shiftKey && (document.activeElement === last || !cartDrawerEl.contains(document.activeElement))) {
+        ev.preventDefault();
+        first.focus({ preventScroll: true });
+      }
+    }, true);
+    document.addEventListener('focusin', (ev) => {
+      if (cartState.drawerOpen && !cartDrawerEl.contains(ev.target)) {
+        cartCloseBtn?.focus({ preventScroll: true });
       }
     });
   };

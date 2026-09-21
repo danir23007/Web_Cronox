@@ -297,7 +297,7 @@ describe('CRONOX responsive design system', () => {
       /\.cronox-auth__dialog\{[^}]*max-height:calc\(100dvh[^}]*overflow-y:auto;/,
     );
     expect(storeStyles).toMatch(
-      /\.cart-drawer\s*\{[^}]*height:\s*calc\(100dvh[^}]*safe-area-inset-top/,
+      /\.cart-drawer\s*\{[^}]*top:\s*0;[^}]*height:\s*100dvh;/,
     );
     expect(quickAddStyles).toMatch(
       /\.qa-panel\{[^}]*max-height:calc\(100dvh[^}]*safe-area-inset-bottom/,
