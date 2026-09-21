@@ -15,6 +15,8 @@ describe('Admin Newsletter security and validation', () => {
     mediaAssetId: 'asset-1',
     desktop: { focalX: 50, focalY: 50, zoom: 1, fit: 'COVER' },
     mobile: { focalX: 40, focalY: 60, zoom: 2, fit: 'COVER' },
+    desktopAscii: { x: 30, y: 40, scale: 1.2 },
+    mobileAscii: { x: 70, y: 60, scale: 0.8 },
     mediaOpacity: 0.5,
     asciiEnabled: true,
     asciiOpacity: 0.75,
@@ -44,6 +46,14 @@ describe('Admin Newsletter security and validation', () => {
     ['media opacity above one', { mediaOpacity: 1.01 }],
     ['invalid zoom', { desktop: { ...valid.desktop, zoom: 3.01 } }],
     ['invalid focal coordinate', { mobile: { ...valid.mobile, focalX: 101 } }],
+    [
+      'invalid ASCII coordinate',
+      { desktopAscii: { ...valid.desktopAscii, x: 4 } },
+    ],
+    [
+      'invalid ASCII scale',
+      { mobileAscii: { ...valid.mobileAscii, scale: 2.01 } },
+    ],
   ])('rejects %s', async (_label, override) => {
     const dto = plainToInstance(UpdateNewsletterSettingsDto, {
       ...valid,

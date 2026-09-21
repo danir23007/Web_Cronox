@@ -37,7 +37,7 @@
   const apply = (settings = {}) => {
     document.querySelectorAll("[data-footer-label]").forEach((element) => {
       const key = element.dataset.footerLabel;
-      element.textContent = safeText(settings[key], DEFAULTS[key]);
+      element.textContent = safeText(DEFAULTS[key], "");
     });
     document.querySelectorAll("[data-footer-social]").forEach((link) => {
       const key = link.dataset.footerSocial;

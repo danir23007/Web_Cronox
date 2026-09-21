@@ -294,6 +294,15 @@ model FooterSettings {
   updatedAt            DateTime @updatedAt
 }
 
+model FooterPageContent {
+  slug      String   @id
+  html      String   @db.Text
+  revision  Int      @default(0)
+  updatedBy Int?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
 model GalleryCarouselSlot {
   position     Int           @id
   assetId      String?
@@ -448,6 +457,12 @@ model NewsletterSettings {
   mediaOpacity  Float              @default(1)
   asciiEnabled  Boolean            @default(true)
   asciiOpacity  Float              @default(1)
+  desktopAsciiX Float              @default(50)
+  desktopAsciiY Float              @default(50)
+  desktopAsciiScale Float          @default(1)
+  mobileAsciiX Float               @default(50)
+  mobileAsciiY Float               @default(50)
+  mobileAsciiScale Float           @default(1)
   revision      Int                @default(0)
   updatedBy     Int?
   createdAt     DateTime           @default(now())

@@ -65,19 +65,20 @@ const infoStyles = readFrontend('assets/info-page.css');
 const successStyles = readFrontend('assets/checkout-success.css');
 
 describe('CRONOX responsive design system', () => {
-  it('uses the original static browser logo instead of an animated favicon', () => {
+  it('uses the original square PNG favicon with an explicit cache revision', () => {
     const index = readFrontend('index.html');
 
     expect(index).toContain(
-      '<link rel="icon" type="image/png" href="/assets/logo_browser.png?v=1">',
+      '<link rel="icon" type="image/png" href="/favicon.png?v=4">',
     );
     expect(index).toContain(
-      '<link rel="apple-touch-icon" href="/assets/logo_browser.png?v=1">',
+      '<link rel="apple-touch-icon" href="/favicon.png?v=4">',
     );
     expect(index).not.toContain('favicon.svg');
+    expect(index).not.toContain('/assets/logo_browser.png');
   });
 
-  it('keeps the official wordmark static and intrinsically proportioned', () => {
+  it('keeps the original animated CRONOX loader and proportioned wordmarks', () => {
     const loadingSurfaces = [
       readFrontend('index.html'),
       readFrontend('checkout.html'),
@@ -86,14 +87,16 @@ describe('CRONOX responsive design system', () => {
     ];
 
     loadingSurfaces.forEach((surface) => {
-      expect(surface).toContain('assets/logo_banner.png');
-      expect(surface).not.toContain('assets/CRONOX-GIF.gif');
+      expect(surface).toContain('assets/CRONOX-GIF.gif');
     });
     expect(storeStyles).toMatch(
       /\.preloader__logo\{[^}]*height:auto;[^}]*object-fit:contain;[^}]*object-position:center;/,
     );
     expect(storeStyles).toMatch(
-      /\.topbar__logo-img\{[^}]*width:108px;[^}]*height:auto;[^}]*object-fit:contain;[^}]*object-position:center;/,
+      /\.topbar__logo-img\{[^}]*height:\s*65px;[^}]*width:\s*auto;[^}]*object-fit:\s*contain;[^}]*object-position:center;/,
+    );
+    expect(storeStyles).toMatch(
+      /@media \(max-width:520px\)[\s\S]*?\.topbar__logo-img\{[^}]*max-height:56px;/,
     );
   });
 
@@ -155,7 +158,7 @@ describe('CRONOX responsive design system', () => {
       /\.topbar\{[^}]*height:calc\(var\(--topbar-h\) \+ env\(safe-area-inset-top\)\);[^}]*padding:env\(safe-area-inset-top\)/,
     );
     expect(storeStyles).toMatch(
-      /@media \(max-width:520px\)[\s\S]*?\.topbar\{[^}]*grid-template-columns:minmax\(0,1fr\) auto minmax\(0,1fr\);[^}]*padding-right:max\(12px,env\(safe-area-inset-right\)\);[^}]*padding-left:max\(10px,env\(safe-area-inset-left\)\);/,
+      /@media \(max-width:520px\)[\s\S]*?\.topbar\{[^}]*grid-template-columns:minmax\(0,1fr\) auto minmax\(0,1fr\);[^}]*padding-right:max\(12px,env\(safe-area-inset-right\)\);[^}]*padding-left:max\(12px,env\(safe-area-inset-left\)\);/,
     );
     expect(storeStyles).toMatch(
       /\.black-menu\{[^}]*height:100vh;[^}]*height:100dvh;[^}]*max-width:100%;[^}]*overflow-y:auto;/,

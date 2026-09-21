@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/require-await, @typescript-eslint/no-base-to-string */
+/* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-return, @typescript-eslint/require-await, @typescript-eslint/no-base-to-string */
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { JSDOM } from 'jsdom';
@@ -9,6 +9,7 @@ const readFrontend = (file: string) =>
 const adminHtml = readFrontend('admin.html');
 const adminGalleryScript = readFrontend('assets/admin-gallery.js');
 const adminGalleryStyles = readFrontend('assets/admin-gallery.css');
+const publicGalleryScript = readFrontend('assets/gallery.js');
 
 const definitions = [
   ['featured', 'grey'],
@@ -188,11 +189,15 @@ const dragEvent = (
   return event;
 };
 
-const makeDom = (assets: any[] = [oldAsset]) => {
+const makeDom = (
+  assets: any[] = [oldAsset],
+  options: { realRenderer?: boolean } = {},
+) => {
   const slots = makeSlots();
   const carouselSlots = makeCarouselSlots();
   const server = {
     activeMode: 'MOSAIC',
+    modePatchCalls: 0,
     failNextReorder: false,
     failNextSave: false,
     reorderCalls: 0,
@@ -218,6 +223,7 @@ const makeDom = (assets: any[] = [oldAsset]) => {
         });
       }
       if (url.endsWith('/api/admin/gallery/mode') && init?.method === 'PATCH') {
+        server.modePatchCalls += 1;
         const body = JSON.parse(String(init.body || '{}'));
         if (
           body.activeMode === 'CAROUSEL' &&
@@ -372,8 +378,53 @@ const makeDom = (assets: any[] = [oldAsset]) => {
       .fn()
       .mockResolvedValue({ 'X-CSRF-Token': 'csrf-gallery' }),
   };
+  let sharedCarouselRenderer: jest.Mock;
+  if (options.realRenderer) {
+    dom.window.requestAnimationFrame = jest.fn(() => 1);
+    dom.window.cancelAnimationFrame = jest.fn();
+    dom.window.matchMedia = jest.fn().mockReturnValue({
+      matches: false,
+      addEventListener: jest.fn(),
+      removeEventListener: jest.fn(),
+    });
+    Object.defineProperty(dom.window, 'IntersectionObserver', {
+      configurable: true,
+      value: undefined,
+    });
+    Object.defineProperty(dom.window, 'ResizeObserver', {
+      configurable: true,
+      value: undefined,
+    });
+    dom.window.eval(publicGalleryScript);
+    const renderCarousel = (dom.window as any).CRONOX_GALLERY.renderCarousel;
+    sharedCarouselRenderer = jest.fn(renderCarousel);
+    (dom.window as any).CRONOX_GALLERY.renderCarousel = sharedCarouselRenderer;
+  } else {
+    sharedCarouselRenderer = jest.fn((items: any[], root: HTMLElement) => {
+      root.dataset.galleryMode = 'CAROUSEL';
+      root.replaceChildren(
+        ...items.map((item) => {
+          const slide = dom.window.document.createElement('button');
+          slide.className = 'gallery-carousel__slide';
+          slide.dataset.galleryCarouselIndex = String(item.position - 1);
+          return slide;
+        }),
+      );
+    });
+    (dom.window as any).CRONOX_GALLERY = {
+      renderCarousel: sharedCarouselRenderer,
+    };
+  }
   dom.window.eval(adminGalleryScript);
-  return { dom, fetchMock, slots, carouselSlots, assets, server };
+  return {
+    dom,
+    fetchMock,
+    slots,
+    carouselSlots,
+    assets,
+    server,
+    sharedCarouselRenderer,
+  };
 };
 
 describe('CRONOX admin gallery', () => {
@@ -400,8 +451,10 @@ describe('CRONOX admin gallery', () => {
     expect(document.getElementById('galleryUploadProgress')).not.toBeNull();
     expect(document.getElementById('galleryMoveModal')).toBeNull();
     expect(document.getElementById('galleryMoveDestination')).toBeNull();
-    expect(adminHtml).toContain('assets/admin-gallery.css?v=5');
-    expect(adminHtml).toContain('assets/admin-gallery.js?v=5');
+    expect(adminHtml).toContain('assets/gallery.css?v=15');
+    expect(adminHtml).toContain('assets/gallery.js?v=12');
+    expect(adminHtml).toContain('assets/admin-gallery.css?v=6');
+    expect(adminHtml).toContain('assets/admin-gallery.js?v=6');
     expect(document.getElementById('galleryProductsTitle')?.textContent).toBe(
       'Productos de la imagen',
     );
@@ -1118,9 +1171,13 @@ describe('CRONOX admin gallery', () => {
     dom.window.close();
   });
 
-  it('keeps mode selection server-backed and rejects an incomplete Carousel without losing Mosaic data', async () => {
+  it('switches editors without publishing and preserves both saved configurations', async () => {
     const { dom, slots, carouselSlots, server } = makeDom([oldAsset]);
     assignSlot(slots, 'slot-01', oldAsset);
+    Object.assign(carouselSlots[0], {
+      asset: oldAsset,
+      altText: 'Carrusel 1',
+    });
     const gallery = (dom.window as any).CRONOX_ADMIN_GALLERY;
     await gallery.load();
     const document = dom.window.document;
@@ -1128,36 +1185,226 @@ describe('CRONOX admin gallery', () => {
     (
       document.getElementById('galleryModeCarousel') as HTMLButtonElement
     ).click();
-    await flushAsync();
     expect(server.activeMode).toBe('MOSAIC');
     expect(gallery.state.activeMode).toBe('MOSAIC');
-    expect(
-      document.getElementById('galleryAdminStatus')?.textContent,
-    ).toContain('entre 3 y 5');
-
-    carouselSlots.slice(0, 3).forEach((slot, index) =>
-      Object.assign(slot, {
-        asset: oldAsset,
-        altText: `Carrusel ${index + 1}`,
-      }),
-    );
-    await gallery.load(true);
-    (
-      document.getElementById('galleryModeCarousel') as HTMLButtonElement
-    ).click();
-    await flushAsync();
-    expect(server.activeMode).toBe('CAROUSEL');
+    expect(server.modePatchCalls).toBe(0);
     expect(document.getElementById('galleryMosaicEditor')?.hidden).toBe(true);
     expect(document.getElementById('galleryCarouselEditor')?.hidden).toBe(
       false,
     );
+    expect(
+      document.querySelectorAll('[data-gallery-carousel-position]'),
+    ).toHaveLength(5);
+    expect(
+      document.getElementById('galleryCarouselCount')?.textContent,
+    ).toContain('1 / 5');
+    expect(
+      (document.getElementById('galleryActivateCarousel') as HTMLButtonElement)
+        .disabled,
+    ).toBe(true);
 
     (document.getElementById('galleryModeMosaic') as HTMLButtonElement).click();
-    await flushAsync();
+    expect(server.modePatchCalls).toBe(0);
+    expect(document.getElementById('galleryMosaicEditor')?.hidden).toBe(false);
     expect(slots.find((slot) => slot.key === 'slot-01')?.asset?.id).toBe(
       'asset-old',
     );
-    expect(carouselSlots.slice(0, 3).every((slot) => slot.asset)).toBe(true);
+    expect(carouselSlots[0].asset?.id).toBe('asset-old');
+    dom.window.close();
+  });
+
+  it.each([0, 1, 2])(
+    'keeps Carousel activation disabled with %i configured images',
+    async (count) => {
+      const { dom, carouselSlots, server } = makeDom([oldAsset]);
+      carouselSlots.slice(0, count).forEach((slot, index) =>
+        Object.assign(slot, {
+          asset: oldAsset,
+          altText: `Carrusel ${index}`,
+        }),
+      );
+      const gallery = (dom.window as any).CRONOX_ADMIN_GALLERY;
+      await gallery.load();
+      const document = dom.window.document;
+      (
+        document.getElementById('galleryModeCarousel') as HTMLButtonElement
+      ).click();
+      const activate = document.getElementById(
+        'galleryActivateCarousel',
+      ) as HTMLButtonElement;
+
+      expect(activate.disabled).toBe(true);
+      activate.click();
+      await flushAsync();
+      expect(server.modePatchCalls).toBe(0);
+      expect(server.activeMode).toBe('MOSAIC');
+      dom.window.close();
+    },
+  );
+
+  it.each([3, 4, 5])(
+    'enables and explicitly publishes Carousel with %i configured images',
+    async (count) => {
+      const { dom, carouselSlots, server, fetchMock } = makeDom([oldAsset]);
+      carouselSlots.slice(0, count).forEach((slot, index) =>
+        Object.assign(slot, {
+          asset: oldAsset,
+          altText: `Carrusel ${index}`,
+        }),
+      );
+      const gallery = (dom.window as any).CRONOX_ADMIN_GALLERY;
+      await gallery.load();
+      const document = dom.window.document;
+      (
+        document.getElementById('galleryModeCarousel') as HTMLButtonElement
+      ).click();
+      const activateCarousel = document.getElementById(
+        'galleryActivateCarousel',
+      ) as HTMLButtonElement;
+
+      expect(activateCarousel.disabled).toBe(false);
+      activateCarousel.click();
+      await flushAsync();
+      expect(server.modePatchCalls).toBe(1);
+      expect(server.activeMode).toBe('CAROUSEL');
+      expect(
+        fetchMock.mock.calls.some(
+          ([url, init]) =>
+            String(url).endsWith('/api/admin/gallery/mode') &&
+            init?.method === 'PATCH' &&
+            JSON.parse(String(init.body)).activeMode === 'CAROUSEL',
+        ),
+      ).toBe(true);
+      expect(document.getElementById('galleryPublicMode')?.textContent).toBe(
+        'CARRUSEL',
+      );
+
+      (
+        document.getElementById('galleryModeMosaic') as HTMLButtonElement
+      ).click();
+      const activateMosaic = document.getElementById(
+        'galleryActivateMosaic',
+      ) as HTMLButtonElement;
+      expect(server.modePatchCalls).toBe(1);
+      activateMosaic.click();
+      await flushAsync();
+      expect(server.modePatchCalls).toBe(2);
+      expect(server.activeMode).toBe('MOSAIC');
+      expect(
+        fetchMock.mock.calls.some(
+          ([url, init]) =>
+            String(url).endsWith('/api/admin/gallery/mode') &&
+            init?.method === 'PATCH' &&
+            JSON.parse(String(init.body)).activeMode === 'MOSAIC',
+        ),
+      ).toBe(true);
+      dom.window.close();
+    },
+  );
+
+  it('renders the saved Carousel draft through the shared public renderer', async () => {
+    const { dom, carouselSlots, server, sharedCarouselRenderer } = makeDom([
+      oldAsset,
+    ]);
+    carouselSlots
+      .slice(0, 3)
+      .forEach((slot, index) =>
+        Object.assign(slot, { asset: oldAsset, altText: `Carrusel ${index}` }),
+      );
+    const gallery = (dom.window as any).CRONOX_ADMIN_GALLERY;
+    await gallery.load();
+    const document = dom.window.document;
+    (
+      document.getElementById('galleryModeCarousel') as HTMLButtonElement
+    ).click();
+
+    expect(server.activeMode).toBe('MOSAIC');
+    expect(sharedCarouselRenderer).toHaveBeenLastCalledWith(
+      expect.arrayContaining([
+        expect.objectContaining({
+          imageSrc: oldAsset.imageUrl,
+          position: 1,
+        }),
+      ]),
+      document.getElementById('galleryCarouselPreview'),
+    );
+    expect(
+      document.querySelectorAll(
+        '#galleryCarouselPreview .gallery-carousel__slide',
+      ),
+    ).toHaveLength(3);
+    dom.window.close();
+  });
+
+  it('uses the real public carousel groups and clone behavior in Admin preview', async () => {
+    const { dom, carouselSlots } = makeDom([oldAsset], {
+      realRenderer: true,
+    });
+    carouselSlots
+      .slice(0, 3)
+      .forEach((slot, index) =>
+        Object.assign(slot, { asset: oldAsset, altText: `Carrusel ${index}` }),
+      );
+    const gallery = (dom.window as any).CRONOX_ADMIN_GALLERY;
+    await gallery.load();
+    const document = dom.window.document;
+    (
+      document.getElementById('galleryModeCarousel') as HTMLButtonElement
+    ).click();
+
+    const preview = document.getElementById('galleryCarouselPreview')!;
+    expect(preview.dataset.galleryMode).toBe('CAROUSEL');
+    expect(preview.querySelectorAll('.gallery-carousel__group')).toHaveLength(
+      2,
+    );
+    expect(preview.querySelectorAll('.gallery-carousel__slide')).toHaveLength(
+      6,
+    );
+    expect(
+      preview
+        .querySelector('.gallery-carousel__viewport')
+        ?.getAttribute('style'),
+    ).toBeNull();
+    dom.window.close();
+  });
+
+  it('caps the editor at five positions and removes an assigned image in place', async () => {
+    const { dom, carouselSlots, fetchMock } = makeDom([oldAsset]);
+    carouselSlots.forEach((slot, index) =>
+      Object.assign(slot, { asset: oldAsset, altText: `Carrusel ${index}` }),
+    );
+    const gallery = (dom.window as any).CRONOX_ADMIN_GALLERY;
+    await gallery.load();
+    const document = dom.window.document;
+    (
+      document.getElementById('galleryModeCarousel') as HTMLButtonElement
+    ).click();
+
+    expect(
+      document.querySelectorAll('[data-gallery-carousel-position]'),
+    ).toHaveLength(5);
+    expect(
+      document.querySelector('[data-gallery-carousel-position="6"]'),
+    ).toBeNull();
+    (
+      document.querySelector(
+        '[data-gallery-carousel-position="5"] .gallery-admin-carousel__remove',
+      ) as HTMLButtonElement
+    ).click();
+    await flushAsync();
+
+    expect(gallery.state.carouselSlots[4].asset).toBeNull();
+    expect(
+      document.getElementById('galleryCarouselCount')?.textContent,
+    ).toContain('4 / 5');
+    expect(
+      fetchMock.mock.calls.some(
+        ([url, init]) =>
+          String(url).endsWith('/api/admin/gallery/carousel/5') &&
+          init?.method === 'PATCH' &&
+          JSON.parse(String(init.body)).assetId === null,
+      ),
+    ).toBe(true);
     dom.window.close();
   });
 

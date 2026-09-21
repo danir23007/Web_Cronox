@@ -257,7 +257,7 @@ describe('cookie consent frontend', () => {
 
     for (const page of publicPages) {
       const html = readFileSync(path.join(frontendRoot, page), 'utf8');
-      expect(html).toContain('assets/cookie-consent.css?v=1');
+      expect(html).toContain('assets/cookie-consent.css?v=2');
       expect(html).toContain('assets/cookie-consent.js?v=4');
       expect(html).toContain('assets/customer-analytics.js?v=1');
     }
@@ -301,6 +301,31 @@ describe('cookie consent frontend', () => {
     expect(css).toContain('@media (max-width: 520px)');
     expect(css).toContain('grid-template-columns: 1fr');
     expect(css).toContain(':focus-visible');
+  });
+
+  it('orders compact banner actions as accept, reject and configure', () => {
+    const css = readFileSync(
+      path.join(frontendRoot, 'assets/cookie-consent.css'),
+      'utf8',
+    );
+    const accept = consentSource.indexOf(
+      'data-consent-action="accept">ACEPTAR',
+    );
+    const reject = consentSource.indexOf(
+      'data-consent-action="reject">RECHAZAR',
+    );
+    const configure = consentSource.indexOf(
+      'data-consent-action="configure">CONFIGURAR',
+    );
+
+    expect(accept).toBeGreaterThan(-1);
+    expect(reject).toBeGreaterThan(accept);
+    expect(configure).toBeGreaterThan(reject);
+    expect(css).toContain(
+      'grid-template-columns: repeat(3, minmax(92px, 1fr))',
+    );
+    expect(css).toContain('min-height: 38px');
+    expect(css).toContain('padding: 7px 10px');
   });
 
   it('documents the audited categories and permanent withdrawal control', () => {

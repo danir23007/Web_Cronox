@@ -52,6 +52,7 @@
 }
 .ascii-overlay[hidden] { display: none !important; }
 .ascii-overlay pre {
+  position: absolute;
   flex: none;
   margin: 0;
   color: #fff;
@@ -64,7 +65,7 @@
   white-space: pre;
   tab-size: 4;
   text-align: left;
-  transform: scale(var(--newsletter-ascii-scale, 1));
+  transform: translate(-50%, -50%) scale(var(--newsletter-ascii-scale, 1));
   transform-origin: center center;
 }
 .newsletter-modal-content { display: flex; flex-direction: column; justify-content: center; gap: 12px; padding: 32px 30px; }
@@ -78,15 +79,17 @@
   width: 44px;
   height: 44px;
   padding: 0;
-  border: 1px solid rgba(255,255,255,.32);
-  border-radius: 999px;
-  background: rgba(0,0,0,.44);
+  border: 0;
+  border-radius: 0;
+  background: transparent;
   color: #fff;
   font-size: 22px;
   line-height: 1;
   cursor: pointer;
+  opacity: .82;
+  transition: opacity .2s ease, transform .2s ease;
 }
-.newsletter-modal-close:hover { background: rgba(255,255,255,.16); }
+.newsletter-modal-close:hover { background: transparent; opacity: 1; transform: scale(1.06); }
 .newsletter-modal-close:focus-visible, .newsletter-login-link:focus-visible { outline: 2px solid #fff; outline-offset: 3px; }
 .newsletter-modal-kicker { margin: 0; color: #c5c5c5; font-size: 12px; letter-spacing: .22em; text-transform: uppercase; }
 .newsletter-modal-title { margin: 4px 0; font-size: clamp(22px,3vw,30px); letter-spacing: .12em; }

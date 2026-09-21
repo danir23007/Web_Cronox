@@ -23,9 +23,9 @@
   <link rel="stylesheet" href="assets/admin-mails.css?v=1">
   <link rel="stylesheet" href="assets/admin-key-screen.css?v=2">
   <link rel="stylesheet" href="assets/key-screen-composition.css?v=2">
-  <link rel="stylesheet" href="assets/newsletter-popup.css?v=2">
-  <link rel="stylesheet" href="assets/admin-newsletter.css?v=2">
-  <link rel="stylesheet" href="assets/admin-footer.css?v=1">
+  <link rel="stylesheet" href="assets/newsletter-popup.css?v=4">
+  <link rel="stylesheet" href="assets/admin-newsletter.css?v=3">
+  <link rel="stylesheet" href="assets/admin-footer.css?v=2">
   <style>
     [hidden] { display: none !important; }
     .admin-auth-check { min-height: 100vh; display: grid; place-items: center; color: rgba(255,255,255,0.72); letter-spacing: 0.04em; }
@@ -249,9 +249,9 @@
       to { opacity: 1; transform: translateY(0); }
     }
   </style>
-  <link rel="icon" type="image/png" href="/assets/logo_browser.png?v=1">
-  <link rel="shortcut icon" type="image/png" href="/assets/logo_browser.png?v=1">
-  <link rel="apple-touch-icon" href="/assets/logo_browser.png?v=1">
+  <link rel="icon" type="image/png" href="/favicon.png?v=4">
+  <link rel="shortcut icon" type="image/png" href="/favicon.png?v=4">
+  <link rel="apple-touch-icon" href="/favicon.png?v=4">
   <meta name="theme-color" content="#000000">
 </head>
 <body class="bw-theme">
@@ -1170,14 +1170,18 @@
             <div id="newsletterAssetGrid" class="newsletter-assets" aria-live="polite"></div>
             <label>Opacidad de la imagen <output id="newsletterMediaOpacityValue">100%</output><input id="newsletterMediaOpacity" type="range" min="0" max="100" step="1" value="100"></label>
           </section>
-          <section><h3>ENCUADRE</h3>
+          <section><h3>VISTA Y CAPA</h3>
             <div class="newsletter-device-tabs" role="tablist" aria-label="Dispositivo del encuadre">
-              <button class="btn is-active" type="button" data-newsletter-edit-device="desktop" aria-selected="true">Desktop</button>
-              <button class="btn" type="button" data-newsletter-edit-device="mobile" aria-selected="false">Mobile</button>
+              <button class="btn is-active" type="button" role="tab" data-newsletter-edit-device="desktop" aria-selected="true">Desktop</button>
+              <button class="btn" type="button" role="tab" data-newsletter-edit-device="mobile" aria-selected="false">Mobile</button>
             </div>
-            <label>Posici&oacute;n X <output id="newsletterFocalXValue">50%</output><input id="newsletterFocalX" type="range" min="0" max="100" step="1" value="50"></label>
-            <label>Posici&oacute;n Y <output id="newsletterFocalYValue">50%</output><input id="newsletterFocalY" type="range" min="0" max="100" step="1" value="50"></label>
-            <label>Zoom <output id="newsletterZoomValue">1.00&times;</output><input id="newsletterZoom" type="range" min="1" max="3" step="0.01" value="1"></label>
+            <div class="newsletter-layer-tabs" role="tablist" aria-label="Capa del encuadre">
+              <button class="btn is-active" type="button" role="tab" data-newsletter-edit-layer="background" aria-selected="true">Fondo</button>
+              <button class="btn" type="button" role="tab" data-newsletter-edit-layer="ascii" aria-selected="false">ASCII</button>
+            </div>
+            <label><span id="newsletterFocalXLabel">Posici&oacute;n X</span> <output id="newsletterFocalXValue">50%</output><input id="newsletterFocalX" type="range" min="0" max="100" step="1" value="50"></label>
+            <label><span id="newsletterFocalYLabel">Posici&oacute;n Y</span> <output id="newsletterFocalYValue">50%</output><input id="newsletterFocalY" type="range" min="0" max="100" step="1" value="50"></label>
+            <label><span id="newsletterZoomLabel">Zoom</span> <output id="newsletterZoomValue">1.00&times;</output><input id="newsletterZoom" type="range" min="1" max="3" step="0.01" value="1"></label>
             <button id="newsletterFrameReset" class="btn" type="button">Restablecer encuadre</button>
           </section>
           <section><h3>ASCII</h3>
@@ -1185,21 +1189,12 @@
             <label>Opacidad del ASCII <output id="newsletterAsciiOpacityValue">100%</output><input id="newsletterAsciiOpacity" type="range" min="0" max="100" step="1" value="100"></label>
           </section>
         </aside>
-        <section class="newsletter-admin__previews" aria-label="Previsualizaciones del popup">
-          <article><h3>Desktop</h3>
-            <div class="newsletter-preview newsletter-preview--desktop">
+        <section class="newsletter-admin__previews" aria-label="Previsualizaci&oacute;n del popup">
+          <article><div class="newsletter-preview__heading"><h3 id="newsletterPreviewTitle">Desktop</h3><small>Arrastra la capa seleccionada dentro de la composici&oacute;n.</small></div>
+            <div id="newsletterPreview" class="newsletter-preview newsletter-preview--desktop">
               <div class="newsletter-preview__viewport">
-                <div class="newsletter-preview__surface newsletter-modal-overlay newsletter-modal-overlay--visible" data-newsletter-logical-width="1280" data-newsletter-logical-height="720">
-                  <div class="newsletter-modal" data-newsletter-preview data-newsletter-device="desktop"></div>
-                </div>
-              </div>
-            </div>
-          </article>
-          <article><h3>Mobile</h3>
-            <div class="newsletter-preview newsletter-preview--mobile">
-              <div class="newsletter-preview__viewport">
-                <div class="newsletter-preview__surface newsletter-modal-overlay newsletter-modal-overlay--visible" data-newsletter-logical-width="390" data-newsletter-logical-height="844">
-                  <div class="newsletter-modal" data-newsletter-preview data-newsletter-device="mobile"></div>
+                <div id="newsletterPreviewSurface" class="newsletter-preview__surface newsletter-modal-overlay newsletter-modal-overlay--visible" data-newsletter-logical-width="1280" data-newsletter-logical-height="720">
+                  <div id="newsletterPreviewRoot" class="newsletter-modal" data-newsletter-preview data-newsletter-device="desktop"></div>
                 </div>
               </div>
             </div>
@@ -1210,37 +1205,40 @@
 
     <section id="section-footer" class="card admin-section footer-admin" aria-labelledby="title-footer" hidden>
       <div class="section-head">
-        <div><h2 id="title-footer">FOOTER</h2><small>Edita textos visibles y destinos sociales sin alterar las rutas internas.</small></div>
-        <button id="footerSettingsSave" class="btn btn-primary" type="button">Guardar cambios</button>
+        <div><h2 id="title-footer">FOOTER Y P&Aacute;GINAS</h2><small>Selecciona una ruta fija para editar su contenido p&uacute;blico.</small></div>
       </div>
       <p id="footerSettingsStatus" class="footer-admin__status" role="status" aria-live="polite"></p>
-      <form id="footerSettingsForm" class="footer-admin__form" novalidate>
-        <fieldset class="footer-admin__group">
-          <legend>SOPORTE</legend>
-          <label>T&iacute;tulo<input class="input" name="supportTitle" maxlength="80" required></label>
-          <label>FAQS<input class="input" name="supportFaqLabel" maxlength="80" required></label>
-          <label>Pol&iacute;tica de env&iacute;os<input class="input" name="supportShippingLabel" maxlength="80" required></label>
-          <label>Devoluciones y cambios<input class="input" name="supportReturnsLabel" maxlength="80" required></label>
+      <div id="footerPageList" class="footer-admin__page-list">
+        <fieldset class="footer-admin__group"><legend>SOPORTE</legend>
+          <button class="footer-admin__page" type="button" data-footer-page="faqs" data-public-path="/faqs" data-source-file="faqs.html">FAQS</button>
+          <button class="footer-admin__page" type="button" data-footer-page="shipping-policy" data-public-path="/envios" data-source-file="shipping-policy.html">Pol&iacute;tica de env&iacute;os</button>
+          <button class="footer-admin__page" type="button" data-footer-page="returns-exchanges" data-public-path="/devoluciones" data-source-file="returns-exchanges.html">Devoluciones y cambios</button>
         </fieldset>
-        <fieldset class="footer-admin__group">
-          <legend>COLABORA</legend>
-          <label>T&iacute;tulo<input class="input" name="collabTitle" maxlength="80" required></label>
-          <label>Desarrolla<input class="input" name="collabDevelopLabel" maxlength="80" required></label>
-          <label>Eventos<input class="input" name="collabEventsLabel" maxlength="80" required></label>
+        <fieldset class="footer-admin__group"><legend>COLABORA</legend>
+          <button class="footer-admin__page" type="button" data-footer-page="develop" data-public-path="/desarrolla" data-source-file="develop.html">Desarrolla</button>
+          <button class="footer-admin__page" type="button" data-footer-page="events" data-public-path="/eventos" data-source-file="events.html">Eventos</button>
         </fieldset>
-        <fieldset class="footer-admin__group">
-          <legend>LEGAL</legend>
-          <label>T&iacute;tulo<input class="input" name="legalTitle" maxlength="80" required></label>
-          <label>Pol&iacute;tica de privacidad<input class="input" name="legalPrivacyLabel" maxlength="80" required></label>
-          <label>Pol&iacute;tica de cookies<input class="input" name="legalCookiesLabel" maxlength="80" required></label>
-          <label>T&eacute;rminos de servicio<input class="input" name="legalTermsLabel" maxlength="80" required></label>
-          <label>Aviso legal<input class="input" name="legalNoticeLabel" maxlength="80" required></label>
+        <fieldset class="footer-admin__group"><legend>LEGAL</legend>
+          <button class="footer-admin__page" type="button" data-footer-page="privacy-policy" data-public-path="/privacidad" data-source-file="privacy-policy.html">Pol&iacute;tica de privacidad</button>
+          <button class="footer-admin__page" type="button" data-footer-page="cookie-policy" data-public-path="/cookies" data-source-file="cookie-policy.html">Pol&iacute;tica de cookies</button>
+          <button class="footer-admin__page" type="button" data-footer-page="terms-of-service" data-public-path="/terminos" data-source-file="terms-of-service.html">T&eacute;rminos de servicio</button>
+          <button class="footer-admin__page" type="button" data-footer-page="legal-notice" data-public-path="/aviso-legal" data-source-file="aviso-legal.html">Aviso legal</button>
         </fieldset>
+      </div>
+      <section id="footerPageEditor" class="footer-page-editor" hidden aria-labelledby="footerPageEditorTitle">
+        <div class="footer-page-editor__header"><button id="footerPageBack" class="btn" type="button">&larr; Volver a p&aacute;ginas</button><div><h3 id="footerPageEditorTitle"></h3><small id="footerPageEditorRoute"></small></div><button id="footerPageSave" class="btn primary" type="button">Guardar cambios</button></div>
+        <div class="footer-page-editor__toolbar" role="toolbar" aria-label="Formato del contenido">
+          <button type="button" data-content-command="formatBlock" data-content-value="p">P&aacute;rrafo</button><button type="button" data-content-command="formatBlock" data-content-value="h2">T&iacute;tulo de secci&oacute;n</button><button type="button" data-content-command="bold">Negrita</button><button type="button" data-content-command="insertUnorderedList">Lista</button><button type="button" data-content-command="createLink">Enlace</button>
+        </div>
+        <div id="footerPageContent" class="footer-page-editor__content" contenteditable="true" role="textbox" aria-multiline="true" spellcheck="true"></div>
+      </section>
+      <form id="footerSettingsForm" class="footer-admin__socials" novalidate>
         <fieldset class="footer-admin__group">
           <legend>REDES SOCIALES</legend>
           <label>Instagram<input class="input" type="url" name="instagramUrl" maxlength="2048" required></label>
           <label>TikTok<input class="input" type="url" name="tiktokUrl" maxlength="2048" required></label>
           <label>YouTube<input class="input" type="url" name="youtubeUrl" maxlength="2048" required></label>
+          <button id="footerSettingsSave" class="btn primary" type="button">Guardar redes sociales</button>
         </fieldset>
       </form>
     </section>
@@ -1302,7 +1300,7 @@
       <div class="gallery-admin-header">
         <div>
           <h2 id="title-gallery">Galer&iacute;a</h2>
-          <small>Edita las 13 posiciones respetando exactamente la composici&oacute;n de la galer&iacute;a p&uacute;blica.</small>
+          <small>Configura y previsualiza el mosaico y el carrusel antes de elegir qu&eacute; formato se publica.</small>
         </div>
         <a class="btn" href="/galeria" target="_blank" rel="noopener">Ver galer&iacute;a p&uacute;blica</a>
       </div>
@@ -1791,7 +1789,7 @@
   <script src="assets/admin-auth-routing.js?v=1"></script>
   <script src="assets/ui-status.js"></script>
   <script src="assets/media-framing-geometry.js?v=5"></script>
-  <script src="assets/newsletter-renderer.js?v=2"></script>
+  <script src="assets/newsletter-renderer.js?v=3"></script>
   <script src="assets/product-card-framing.js?v=1"></script>
   <script src="assets/admin-product-gallery.js?v=1"></script>
   <script src="assets/admin-pagination.js?v=1"></script>
@@ -1805,8 +1803,8 @@
   <script src="assets/key-screen-renderer.js?v=2"></script>
   <script src="assets/admin-key-screen.js?v=3"></script>
   <script src="assets/admin-media.js?v=5"></script>
-  <script src="assets/admin-newsletter.js?v=2"></script>
-  <script src="assets/admin-footer.js?v=1"></script>
+  <script src="assets/admin-newsletter.js?v=3"></script>
+  <script src="assets/admin-footer.js?v=2"></script>
   <script src="assets/admin-product-order.js?v=1"></script>
 </body>
 </html>

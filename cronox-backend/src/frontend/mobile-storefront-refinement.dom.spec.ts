@@ -98,6 +98,9 @@ describe('mobile storefront refinement', () => {
   });
 
   it('anchors a growing cart badge to the icon and balances the mobile topbar', () => {
+    expect(storeStyles).toContain(
+      'grid-template-columns:minmax(0,1fr) auto minmax(0,1fr)',
+    );
     expect(storeStyles).toMatch(
       /\.topbar__cart\{[^}]*position:relative;[^}]*justify-content:center;[^}]*width:36px;[^}]*height:36px;/,
     );
@@ -111,10 +114,16 @@ describe('mobile storefront refinement', () => {
       /@media \(max-width:520px\)[\s\S]*?grid-template-columns:minmax\(0,1fr\) auto minmax\(0,1fr\);[\s\S]*?\.topbar__right\{gap:4px;/,
     );
     expect(storeStyles).toContain(
-      'padding-left:max(10px,env(safe-area-inset-left))',
+      'padding-left:max(12px,env(safe-area-inset-left))',
     );
     expect(storeStyles).toContain(
       '.topbar__right{justify-self:end;display:flex;gap:16px;align-items:center}',
+    );
+    expect(storeStyles).toContain(
+      '.topbar__fav + .topbar__cart{margin-left:-6px;}',
+    );
+    expect(storeStyles).toMatch(
+      /@media \(max-width:520px\)[\s\S]*?\.topbar__fav \+ \.topbar__cart\{margin-left:0;\}/,
     );
 
     for (const route of [

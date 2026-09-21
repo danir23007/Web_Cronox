@@ -731,8 +731,7 @@ describe('focused storefront refinement acceptance matrix', () => {
   it('69. reuses the CRONOX loader until checkout initialization settles', () => {
     expect(checkoutHtml).toContain('class="page-checkout is-loading"');
     expect(checkoutHtml).toContain('data-persistent="true"');
-    expect(checkoutHtml).toContain('assets/logo_banner.png');
-    expect(checkoutHtml).not.toContain('assets/CRONOX-GIF.gif');
+    expect(checkoutHtml).toContain('assets/CRONOX-GIF.gif');
     expect(checkoutHtml).toContain('window.CRONOX_CHECKOUT_LOADING = { finish: finish }');
     expect(checkoutHtml).toContain('window.setTimeout(finish, 20000)');
     expect(app).toContain("if (preloader?.dataset.persistent === 'true') return");

@@ -89,7 +89,7 @@
 
 .cronox-consent__actions {
   display: grid;
-  grid-template-columns: repeat(3, minmax(104px, 1fr));
+  grid-template-columns: repeat(3, minmax(92px, 1fr));
   gap: 8px;
 }
 
@@ -106,8 +106,8 @@
 }
 
 .cronox-consent__button {
-  min-height: 40px;
-  padding: 9px 12px;
+  min-height: 38px;
+  padding: 7px 10px;
   font-size: 0.68rem;
   font-weight: 700;
   letter-spacing: 0.1em;

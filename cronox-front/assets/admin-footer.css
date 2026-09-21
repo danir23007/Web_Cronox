@@ -11,11 +11,15 @@
   color: #ffc9c9;
 }
 
-.footer-admin__form {
+.footer-admin__page-list {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 16px;
 }
+
+.footer-admin__socials { margin-top: 22px; }
+.footer-admin__socials .footer-admin__group { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.footer-admin__socials .btn { grid-column: 1 / -1; justify-self: start; }
 
 .footer-admin__group {
   display: grid;
@@ -40,8 +44,34 @@
   font-size: 0.82rem;
 }
 
+.footer-admin__page {
+  width: 100%;
+  min-height: 46px;
+  padding: 10px 12px;
+  border: 1px solid #3a3a45;
+  border-radius: 0;
+  background: #050505;
+  color: #fff;
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
+}
+.footer-admin__page:hover, .footer-admin__page:focus-visible { border-color: #fff; background: #fff; color: #000; outline: none; }
+.footer-page-editor { display: grid; gap: 14px; }
+.footer-page-editor[hidden], .footer-admin__page-list[hidden], .footer-admin__socials[hidden] { display: none !important; }
+.footer-page-editor__header { display: grid; grid-template-columns: auto minmax(0,1fr) auto; align-items: center; gap: 16px; }
+.footer-page-editor__header h3 { margin: 0 0 4px; }
+.footer-page-editor__toolbar { display: flex; flex-wrap: wrap; gap: 8px; padding: 10px; border: 1px solid #2d2d36; }
+.footer-page-editor__toolbar button { min-height: 38px; padding: 7px 10px; border: 1px solid #555; background: #080808; color: #fff; cursor: pointer; }
+.footer-page-editor__content { min-height: 520px; max-height: 68vh; overflow: auto; padding: clamp(18px,3vw,36px); border: 1px solid #444; background: #fff; color: #111; font-family: Arial,sans-serif; line-height: 1.65; }
+.footer-page-editor__content:focus { outline: 2px solid #fff; outline-offset: 3px; }
+.footer-page-editor__content h1 { text-align: center; text-transform: uppercase; }
+.footer-page-editor__content table { width: 100%; border-collapse: collapse; }
+.footer-page-editor__content th, .footer-page-editor__content td { padding: 8px; border: 1px solid #bbb; }
+
 @media (max-width: 760px) {
-  .footer-admin__form {
+  .footer-admin__page-list, .footer-admin__socials .footer-admin__group {
     grid-template-columns: minmax(0, 1fr);
   }
+  .footer-page-editor__header { grid-template-columns: 1fr; }
 }

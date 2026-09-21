@@ -17,6 +17,7 @@ const DEFAULT_FRAME = Object.freeze({
   zoom: 1,
   fit: MediaFitMode.COVER,
 });
+const DEFAULT_ASCII_FRAME = Object.freeze({ x: 50, y: 50, scale: 1 });
 
 type SettingsWithAsset = Prisma.NewsletterSettingsGetPayload<{
   include: { mediaAsset: true };
@@ -50,6 +51,20 @@ export class NewsletterSettingsService {
             fit: record.mobileFit,
           }
         : { ...DEFAULT_FRAME },
+      desktopAscii: record
+        ? {
+            x: record.desktopAsciiX,
+            y: record.desktopAsciiY,
+            scale: record.desktopAsciiScale,
+          }
+        : { ...DEFAULT_ASCII_FRAME },
+      mobileAscii: record
+        ? {
+            x: record.mobileAsciiX,
+            y: record.mobileAsciiY,
+            scale: record.mobileAsciiScale,
+          }
+        : { ...DEFAULT_ASCII_FRAME },
       mediaOpacity: record?.mediaOpacity ?? 1,
       asciiEnabled: record?.asciiEnabled ?? true,
       asciiOpacity: record?.asciiOpacity ?? 1,
@@ -73,6 +88,8 @@ export class NewsletterSettingsService {
       variants: value.variants,
       desktop: value.desktop,
       mobile: value.mobile,
+      desktopAscii: value.desktopAscii,
+      mobileAscii: value.mobileAscii,
       mediaOpacity: value.mediaOpacity,
       asciiEnabled: value.asciiEnabled,
       asciiOpacity: value.asciiOpacity,
@@ -165,6 +182,12 @@ export class NewsletterSettingsService {
           mobileFocalY: dto.mobile.focalY,
           mobileZoom: dto.mobile.zoom,
           mobileFit: dto.mobile.fit,
+          desktopAsciiX: dto.desktopAscii.x,
+          desktopAsciiY: dto.desktopAscii.y,
+          desktopAsciiScale: dto.desktopAscii.scale,
+          mobileAsciiX: dto.mobileAscii.x,
+          mobileAsciiY: dto.mobileAscii.y,
+          mobileAsciiScale: dto.mobileAscii.scale,
           mediaOpacity: dto.mediaOpacity ?? current?.mediaOpacity ?? 1,
           asciiEnabled: dto.asciiEnabled,
           asciiOpacity: dto.asciiOpacity,
@@ -206,6 +229,16 @@ export class NewsletterSettingsService {
                       zoom: current.mobileZoom,
                       fit: current.mobileFit,
                     },
+                    desktopAscii: {
+                      x: current.desktopAsciiX,
+                      y: current.desktopAsciiY,
+                      scale: current.desktopAsciiScale,
+                    },
+                    mobileAscii: {
+                      x: current.mobileAsciiX,
+                      y: current.mobileAsciiY,
+                      scale: current.mobileAsciiScale,
+                    },
                     mediaOpacity: current.mediaOpacity,
                     asciiEnabled: current.asciiEnabled,
                     asciiOpacity: current.asciiOpacity,
@@ -215,6 +248,8 @@ export class NewsletterSettingsService {
                 mediaAssetId: assetId,
                 desktop: { ...dto.desktop },
                 mobile: { ...dto.mobile },
+                desktopAscii: { ...dto.desktopAscii },
+                mobileAscii: { ...dto.mobileAscii },
                 mediaOpacity: dto.mediaOpacity ?? current?.mediaOpacity ?? 1,
                 asciiEnabled: dto.asciiEnabled,
                 asciiOpacity: dto.asciiOpacity,

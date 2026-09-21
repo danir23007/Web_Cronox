@@ -9,6 +9,7 @@ const indexHtml = read('index.html');
 const adminHtml = read('admin.html');
 const publicScript = read('assets/footer-config.js');
 const adminScript = read('assets/admin-footer.js');
+const pageContentScript = read('assets/page-content.js');
 
 const settings = {
   supportTitle: 'AYUDA',
@@ -30,6 +31,26 @@ const settings = {
 };
 
 describe('Footer settings public and Admin UI', () => {
+  it.each([
+    ['faqs.html', 'faqs'],
+    ['shipping-policy.html', 'shipping-policy'],
+    ['returns-exchanges.html', 'returns-exchanges'],
+    ['develop.html', 'develop'],
+    ['events.html', 'events'],
+    ['privacy-policy.html', 'privacy-policy'],
+    ['cookie-policy.html', 'cookie-policy'],
+    ['terms-of-service.html', 'terms-of-service'],
+    ['aviso-legal.html', 'legal-notice'],
+  ])('%s exposes its stable editable content slug and loader', (file, slug) => {
+    const document = new JSDOM(read(file)).window.document;
+    expect(
+      document
+        .querySelector('[data-footer-content]')
+        ?.getAttribute('data-footer-page-slug'),
+    ).toBe(slug);
+    expect(read(file)).toContain('assets/page-content.js?v=1');
+  });
+
   it('keeps safe static defaults, immutable routes, icons and external-link security', () => {
     const document = new JSDOM(indexHtml).window.document;
     const instagram = document.querySelector<HTMLAnchorElement>(
@@ -62,7 +83,7 @@ describe('Footer settings public and Admin UI', () => {
     expect(document.querySelectorAll('.footer-acc-trigger')).toHaveLength(3);
   });
 
-  it('progressively applies configured text and URLs without allowing HTML injection', async () => {
+  it('keeps labels fixed while progressively applying validated social URLs', async () => {
     const dom = new JSDOM(indexHtml, {
       runScripts: 'outside-only',
       url: 'http://localhost/',
@@ -79,7 +100,7 @@ describe('Footer settings public and Admin UI', () => {
     const faq = dom.window.document.querySelector(
       '[data-footer-label="supportFaqLabel"]',
     )!;
-    expect(faq.textContent).toBe('<img src=x onerror=alert(1)>');
+    expect(faq.textContent).toBe('FAQS');
     expect(faq.querySelector('img')).toBeNull();
     expect(
       dom.window.document.querySelector<HTMLAnchorElement>(
@@ -107,7 +128,7 @@ describe('Footer settings public and Admin UI', () => {
     ).toBe('SOPORTE');
   });
 
-  it('exposes all four Admin groups, loads values and saves one validated payload', async () => {
+  it('exposes fixed page navigation and saves only social destinations', async () => {
     const dom = new JSDOM(adminHtml, {
       runScripts: 'outside-only',
       url: 'http://localhost/admin.html',
@@ -131,25 +152,31 @@ describe('Footer settings public and Admin UI', () => {
     ).not.toBeNull();
     expect(
       Array.from(
-        dom.window.document.querySelectorAll('#footerSettingsForm legend'),
+        dom.window.document.querySelectorAll('#footerPageList legend'),
       ).map((node) => node.textContent),
-    ).toEqual(['SOPORTE', 'COLABORA', 'LEGAL', 'REDES SOCIALES']);
+    ).toEqual(['SOPORTE', 'COLABORA', 'LEGAL']);
+    expect(
+      dom.window.document.querySelectorAll('[data-footer-page]'),
+    ).toHaveLength(9);
+    expect(
+      dom.window.document.querySelector('[name="supportTitle"]'),
+    ).toBeNull();
     expect(
       (
         dom.window.document.querySelector(
-          '[name="supportTitle"]',
+          '[name="instagramUrl"]',
         ) as HTMLInputElement
       ).value,
-    ).toBe('AYUDA');
+    ).toBe('https://instagram.com/cronox.test/');
 
     await (dom.window as any).CRONOX_ADMIN_FOOTER.save();
     const request = fetch.mock.calls[1][1];
     expect(request.method).toBe('PATCH');
     expect(JSON.parse(request.body)).toEqual({
       expectedRevision: 4,
-      ...Object.fromEntries(
-        Object.entries(settings).filter(([key]) => key !== 'revision'),
-      ),
+      instagramUrl: settings.instagramUrl,
+      tiktokUrl: settings.tiktokUrl,
+      youtubeUrl: settings.youtubeUrl,
     });
     expect(request.headers['X-CSRF-Token']).toBe('token');
     expect(
@@ -171,9 +198,7 @@ describe('Footer settings public and Admin UI', () => {
         '#footerSettingsForm input',
       ),
     );
-    fields.forEach((field) => {
-      field.value = field.type === 'url' ? 'https://example.com/' : 'Texto';
-    });
+    fields.forEach((field) => (field.value = 'https://example.com/'));
     fields[0].value = '   ';
     await (dom.window as any).CRONOX_ADMIN_FOOTER.save();
     expect(fetch).not.toHaveBeenCalled();
@@ -181,7 +206,7 @@ describe('Footer settings public and Admin UI', () => {
       dom.window.document.getElementById('footerSettingsStatus')?.textContent,
     ).toContain('obligatorios');
 
-    fields[0].value = 'Texto';
+    fields[0].value = 'https://example.com/';
     const instagram = dom.window.document.querySelector<HTMLInputElement>(
       '[name="instagramUrl"]',
     )!;
@@ -191,5 +216,79 @@ describe('Footer settings public and Admin UI', () => {
     expect(
       dom.window.document.getElementById('footerSettingsStatus')?.dataset.state,
     ).toBe('error');
+  });
+
+  it('opens the selected destination editor with its current static fallback', async () => {
+    const dom = new JSDOM(adminHtml, {
+      runScripts: 'outside-only',
+      url: 'http://localhost/admin.html',
+    });
+    const fetch = jest
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ slug: 'faqs', html: null, revision: 0 }),
+      })
+      .mockResolvedValueOnce({ ok: true, text: async () => read('faqs.html') });
+    dom.window.fetch = fetch as any;
+    (dom.window as any).CRONOX_API = {
+      API_BASE: '',
+      getCsrfHeaders: jest.fn(),
+    };
+    dom.window.eval(adminScript);
+    const button = dom.window.document.querySelector(
+      '[data-footer-page="faqs"]',
+    ) as HTMLButtonElement;
+    await (dom.window as any).CRONOX_ADMIN_FOOTER.openPage(button);
+    expect(dom.window.document.getElementById('footerPageList')?.hidden).toBe(
+      true,
+    );
+    expect(dom.window.document.getElementById('footerPageEditor')?.hidden).toBe(
+      false,
+    );
+    expect(
+      dom.window.document.querySelector('#footerPageContent h1')?.textContent,
+    ).toBe('FAQS');
+    expect(fetch.mock.calls[0][0]).toBe('/api/admin/footer/pages/faqs');
+  });
+
+  it('renders stored page content and retains the static fallback on failure', async () => {
+    const html = read('shipping-policy.html');
+    const configured = new JSDOM(html, {
+      runScripts: 'outside-only',
+      url: 'http://localhost/envios',
+    });
+    (configured.window as any).CRONOX_API = { API_BASE: '' };
+    configured.window.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        slug: 'shipping-policy',
+        html: '<h1>ENVÍOS ACTUALIZADOS</h1><p>Contenido seguro.</p>',
+      }),
+    }) as any;
+    configured.window.eval(pageContentScript);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(
+      configured.window.document.querySelector('[data-footer-content] h1')
+        ?.textContent,
+    ).toBe('ENVÍOS ACTUALIZADOS');
+
+    const fallback = new JSDOM(html, {
+      runScripts: 'outside-only',
+      url: 'http://localhost/envios',
+    });
+    (fallback.window as any).CRONOX_API = { API_BASE: '' };
+    fallback.window.fetch = jest
+      .fn()
+      .mockRejectedValue(new Error('offline')) as any;
+    const original = fallback.window.document.querySelector(
+      '[data-footer-content] h1',
+    )?.textContent;
+    fallback.window.eval(pageContentScript);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(
+      fallback.window.document.querySelector('[data-footer-content] h1')
+        ?.textContent,
+    ).toBe(original);
   });
 });

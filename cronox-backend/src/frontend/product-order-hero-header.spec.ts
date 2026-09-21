@@ -39,6 +39,10 @@ describe('product order, hero text and topbar release contract', () => {
       '.topbar--transparent .topbar__logo-img{filter:brightness(0);}',
     );
     expect(css).toMatch(/\.topbar--hero,\.topbar--page[^{]*\{color:#fff;/);
+    expect(css).toContain(
+      'transition:stroke .2s ease,fill .2s ease,color .2s ease,opacity .2s ease,transform .2s ease;',
+    );
+    expect(css).not.toContain('transition:all .3s ease');
     expect(app).toContain(
       "if (atTop && rect.top >= 0) applyTopbarState('topbar--transparent')",
     );

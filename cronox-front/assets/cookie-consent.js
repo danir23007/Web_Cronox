@@ -364,9 +364,9 @@
         <p id="cronox-consent-description">Usamos tecnologías necesarias para que la tienda funcione. Con tu permiso, recordamos preferencias y analizamos el uso para mejorarla; no usamos publicidad. <a href="/cookies">Política de cookies</a>.</p>
       </div>
       <div class="cronox-consent__actions" aria-label="Opciones de cookies">
-        <button type="button" class="cronox-consent__button" data-consent-action="reject">Rechazar</button>
-        <button type="button" class="cronox-consent__button" data-consent-action="configure">Configurar</button>
-        <button type="button" class="cronox-consent__button" data-consent-action="accept">Aceptar</button>
+        <button type="button" class="cronox-consent__button" data-consent-action="accept">ACEPTAR</button>
+        <button type="button" class="cronox-consent__button" data-consent-action="reject">RECHAZAR</button>
+        <button type="button" class="cronox-consent__button" data-consent-action="configure">CONFIGURAR</button>
       </div>`;
 
     preferencesOverlay = document.createElement("div");

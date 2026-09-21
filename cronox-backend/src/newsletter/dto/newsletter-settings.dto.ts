@@ -33,6 +33,23 @@ export class NewsletterFrameDto {
   fit!: MediaFitMode;
 }
 
+export class NewsletterAsciiFrameDto {
+  @IsNumber({ allowInfinity: false, allowNaN: false })
+  @Min(5)
+  @Max(95)
+  x!: number;
+
+  @IsNumber({ allowInfinity: false, allowNaN: false })
+  @Min(5)
+  @Max(95)
+  y!: number;
+
+  @IsNumber({ allowInfinity: false, allowNaN: false })
+  @Min(0.5)
+  @Max(2)
+  scale!: number;
+}
+
 export class UpdateNewsletterSettingsDto {
   @IsOptional()
   @IsString()
@@ -46,6 +63,14 @@ export class UpdateNewsletterSettingsDto {
   @ValidateNested()
   @Type(() => NewsletterFrameDto)
   mobile!: NewsletterFrameDto;
+
+  @ValidateNested()
+  @Type(() => NewsletterAsciiFrameDto)
+  desktopAscii!: NewsletterAsciiFrameDto;
+
+  @ValidateNested()
+  @Type(() => NewsletterAsciiFrameDto)
+  mobileAscii!: NewsletterAsciiFrameDto;
 
   @IsOptional()
   @IsNumber({ allowInfinity: false, allowNaN: false })

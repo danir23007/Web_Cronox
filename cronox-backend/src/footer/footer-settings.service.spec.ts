@@ -15,10 +15,16 @@ describe('FooterSettingsService', () => {
         create: jest.fn().mockResolvedValue({ id: 'global' }),
         updateMany: jest.fn().mockResolvedValue({ count: 1 }),
       },
+      footerPageContent: {
+        findUnique: jest.fn().mockResolvedValue(null),
+        create: jest.fn().mockResolvedValue({ slug: 'faqs' }),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+      },
       auditLog: { create: jest.fn() },
     };
     const prisma = {
       footerSettings: { findUnique: jest.fn().mockResolvedValue(null) },
+      footerPageContent: { findUnique: jest.fn().mockResolvedValue(null) },
       $transaction: jest.fn((callback) => callback(tx)),
     };
     return {
@@ -96,5 +102,67 @@ describe('FooterSettingsService', () => {
     await expect(stale.service.update(payload, 17)).rejects.toBeInstanceOf(
       ConflictException,
     );
+  });
+
+  it('sanitizes page HTML, persists one slug and audits atomically', async () => {
+    const { service, tx, prisma } = setup();
+    prisma.footerPageContent.findUnique.mockResolvedValue({
+      slug: 'faqs',
+      html: '<h1>FAQS</h1><p>Seguro</p>',
+      revision: 1,
+      updatedAt: new Date(),
+    });
+    await service.updatePageContent(
+      'faqs',
+      {
+        html: '<h1>FAQS</h1><p onclick="alert(1)">Seguro<script>alert(1)</script></p><a href="javascript:alert(1)">No</a>',
+        expectedRevision: 0,
+      },
+      17,
+    );
+    expect(tx.footerPageContent.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        slug: 'faqs',
+        html: '<h1>FAQS</h1><p>Seguro</p><a>No</a>',
+        revision: 1,
+        updatedBy: 17,
+      }),
+    });
+    expect(tx.auditLog.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        action: 'footer.page-content.update',
+        targetId: 'faqs',
+      }),
+    });
+  });
+
+  it('rejects unknown pages, title-less documents and stale page revisions', async () => {
+    const unknown = setup();
+    await expect(
+      unknown.service.updatePageContent(
+        'other',
+        { html: '<h1>Otro</h1>', expectedRevision: 0 },
+        17,
+      ),
+    ).rejects.toBeInstanceOf(BadRequestException);
+
+    const malformed = setup();
+    await expect(
+      malformed.service.updatePageContent(
+        'faqs',
+        { html: '<p>Sin título</p>', expectedRevision: 0 },
+        17,
+      ),
+    ).rejects.toBeInstanceOf(BadRequestException);
+
+    const stale = setup();
+    stale.tx.footerPageContent.findUnique.mockResolvedValue({ revision: 2 });
+    await expect(
+      stale.service.updatePageContent(
+        'faqs',
+        { html: '<h1>FAQS</h1>', expectedRevision: 0 },
+        17,
+      ),
+    ).rejects.toBeInstanceOf(ConflictException);
   });
 });

@@ -28,11 +28,14 @@
 
                 `;
   const DEFAULT_FRAME = Object.freeze({ focalX: 50, focalY: 50, zoom: 1, fit: "COVER" });
+  const DEFAULT_ASCII_FRAME = Object.freeze({ x: 50, y: 50, scale: 1 });
   const DEFAULT_CONFIG = Object.freeze({
     version: 1,
     source: FALLBACK_SOURCE,
     desktop: DEFAULT_FRAME,
     mobile: DEFAULT_FRAME,
+    desktopAscii: DEFAULT_ASCII_FRAME,
+    mobileAscii: DEFAULT_ASCII_FRAME,
     mediaOpacity: 1,
     asciiEnabled: true,
     asciiOpacity: 1,
@@ -49,11 +52,18 @@
     zoom: number(value?.zoom, 1, 3, 1),
     fit: String(value?.fit || "COVER").toUpperCase() === "CONTAIN" ? "CONTAIN" : "COVER",
   });
+  const asciiFrame = (value) => ({
+    x: number(value?.x, 5, 95, 50),
+    y: number(value?.y, 5, 95, 50),
+    scale: number(value?.scale, 0.5, 2, 1),
+  });
   const normalize = (value = {}) => ({
     version: 1,
     source: String(value.source || FALLBACK_SOURCE),
     desktop: frame(value.desktop),
     mobile: frame(value.mobile || value.desktop),
+    desktopAscii: asciiFrame(value.desktopAscii),
+    mobileAscii: asciiFrame(value.mobileAscii || value.desktopAscii),
     mediaOpacity: number(value.mediaOpacity, 0, 1, 1),
     asciiEnabled: value.asciiEnabled !== false,
     asciiOpacity: number(value.asciiOpacity, 0, 1, 1),
@@ -62,7 +72,7 @@
     root?.dataset?.newsletterDevice ||
     (globalScope.matchMedia?.("(max-width: 860px)")?.matches ? "mobile" : "desktop");
 
-  const scaleAscii = (overlay, pre) => {
+  const scaleAscii = (overlay, pre, selected = DEFAULT_ASCII_FRAME) => {
     if (!overlay || !pre || pre.hidden) return 0;
     pre.style.transform = "none";
     const width = Math.max(pre.scrollWidth, pre.getBoundingClientRect?.().width || 0);
@@ -70,9 +80,12 @@
     const availableWidth = Math.max(0, overlay.clientWidth - 24);
     const availableHeight = Math.max(0, overlay.clientHeight - 24);
     if (!width || !height || !availableWidth || !availableHeight) return 0;
-    const scale = Math.min(availableWidth / width, availableHeight / height);
+    const fitScale = Math.min(availableWidth / width, availableHeight / height);
+    const scale = fitScale * selected.scale;
+    pre.style.left = `${selected.x}%`;
+    pre.style.top = `${selected.y}%`;
     pre.style.setProperty("--newsletter-ascii-scale", String(scale));
-    pre.style.transform = `scale(${scale})`;
+    pre.style.transform = `translate(-50%, -50%) scale(${scale})`;
     return scale;
   };
 
@@ -83,7 +96,7 @@
     root.setAttribute('aria-modal', 'true');
     if (!preview) root.setAttribute('aria-labelledby', 'newsletterTitle');
     root.innerHTML = `
-      <button type="button" class="newsletter-modal-close" aria-label="Cerrar"${preview ? ' tabindex="-1"' : ''}>×</button>
+      <button type="button" class="newsletter-modal-close" aria-label="Cerrar newsletter"${preview ? ' tabindex="-1"' : ''}>×</button>
       <div class="newsletter-modal-grid">
         <div class="newsletter-modal-image" role="presentation">
           <div class="popup-image-wrapper">
@@ -124,11 +137,16 @@
     let observer = null;
 
     const reflow = () => {
+      const mobile = deviceFor(root) === "mobile";
       if (image && wrapper) {
-        const selected = deviceFor(root) === "mobile" ? config.mobile : config.desktop;
+        const selected = mobile ? config.mobile : config.desktop;
         globalScope.CRONOX_MEDIA_GEOMETRY?.apply?.(image, wrapper, selected);
       }
-      scaleAscii(overlay, pre);
+      scaleAscii(
+        overlay,
+        pre,
+        mobile ? config.mobileAscii : config.desktopAscii,
+      );
     };
     const update = (next) => {
       config = normalize(next);
@@ -173,6 +191,7 @@
     FALLBACK_SOURCE,
     ASCII_ART,
     DEFAULT_CONFIG,
+    DEFAULT_ASCII_FRAME,
     normalize,
     scaleAscii,
     renderStructure,

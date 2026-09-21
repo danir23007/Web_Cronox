@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Patch, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, UseGuards } from '@nestjs/common';
 import { Role } from '@prisma/client';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
@@ -6,6 +6,7 @@ import { AdminGuard } from '../common/guards/admin.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/roles.decorator';
 import { UpdateFooterSettingsDto } from './dto/update-footer-settings.dto';
+import { UpdateFooterPageContentDto } from './dto/update-footer-page-content.dto';
 import { FooterSettingsService } from './footer-settings.service';
 
 @Controller('admin/footer')
@@ -25,5 +26,19 @@ export class AdminFooterController {
     @CurrentUser('id') adminId?: number,
   ) {
     return this.settings.update(dto, adminId);
+  }
+
+  @Get('pages/:slug')
+  getPage(@Param('slug') slug: string) {
+    return this.settings.getPageContent(slug, true);
+  }
+
+  @Patch('pages/:slug')
+  updatePage(
+    @Param('slug') slug: string,
+    @Body() dto: UpdateFooterPageContentDto,
+    @CurrentUser('id') adminId?: number,
+  ) {
+    return this.settings.updatePageContent(slug, dto, adminId);
   }
 }
