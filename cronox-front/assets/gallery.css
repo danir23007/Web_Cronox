@@ -52,6 +52,10 @@ body.page-gallery {
   padding-top: 20px;
 }
 
+.gallery-homepage--carousel {
+  padding-top: 0;
+}
+
 .gallery-homepage[hidden] {
   display: none;
 }
@@ -60,6 +64,11 @@ body.page-gallery {
   margin: 0 0 16px;
   padding: 0 16px;
   text-align: left;
+}
+
+.gallery-homepage__heading[hidden],
+.gallery-visually-hidden[hidden] {
+  display: none;
 }
 
 .gallery__tile {
@@ -223,12 +232,19 @@ body.page-gallery {
   aspect-ratio: 4 / 5;
   margin: 0;
   padding: 0;
-  overflow: hidden;
+  overflow: visible;
   border: 0;
   border-radius: 0;
   background: #111;
   box-shadow: none;
   cursor: pointer;
+}
+
+.gallery-carousel__media {
+  position: relative;
+  transform: scale(1);
+  transform-origin: center;
+  transition: transform 420ms cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
 .gallery-carousel__media,
@@ -239,27 +255,24 @@ body.page-gallery {
   overflow: hidden;
 }
 
+@media (hover: hover) and (pointer: fine) {
+  .gallery-carousel__slide:hover {
+    z-index: 2;
+  }
+
+  .gallery-carousel__slide:hover .gallery-carousel__media {
+    transform: scale(1.025);
+  }
+}
+
 .gallery-carousel__slide:focus-visible {
   z-index: 2;
   outline: 3px solid #fff;
   outline-offset: -3px;
 }
 
-.gallery-carousel__pause {
-  position: absolute;
-  top: 4px;
-  right: max(12px, env(safe-area-inset-right));
-  z-index: 3;
-  min-height: 32px;
-  padding: 6px 10px;
-  border: 1px solid rgba(255, 255, 255, 0.55);
-  border-radius: 0;
-  background: rgba(0, 0, 0, 0.78);
-  color: #fff;
-  font: 700 10px/1.2 system-ui, sans-serif;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  cursor: pointer;
+.gallery-carousel__slide:focus-visible .gallery-carousel__media {
+  transform: scale(1.025);
 }
 
 @media (max-width: 1024px) {
@@ -283,12 +296,6 @@ body.page-gallery {
   .gallery-carousel__group {
     gap: 8px;
     padding-right: 8px;
-  }
-
-  .gallery-carousel__pause {
-    top: 0;
-    min-height: 30px;
-    font-size: 9px;
   }
 }
 
@@ -602,6 +609,13 @@ body.page-gallery {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .gallery-carousel__media,
+  .gallery-carousel__slide:hover .gallery-carousel__media,
+  .gallery-carousel__slide:focus-visible .gallery-carousel__media {
+    transform: scale(1);
+    transition: none;
+  }
+
   .gallery__media,
   .gallery__tile--image:hover .gallery__media {
     transform: scale(1);

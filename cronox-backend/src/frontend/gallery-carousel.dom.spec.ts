@@ -8,6 +8,10 @@ const galleryHtml = readFileSync(
   path.join(frontendRoot, 'gallery.html'),
   'utf8',
 );
+const homepageHtml = readFileSync(
+  path.join(frontendRoot, 'index.html'),
+  'utf8',
+);
 const galleryScript = readFileSync(
   path.join(frontendRoot, 'assets/gallery.js'),
   'utf8',
@@ -72,19 +76,38 @@ type TestDom = {
 const makeDom = (
   payload: Record<string, unknown> | null = null,
   reducedMotion = false,
+  html = galleryHtml,
 ): TestDom => {
-  const dom = new JSDOM(galleryHtml, {
+  const dom = new JSDOM(html, {
     runScripts: 'outside-only',
-    url: 'http://localhost:3000/gallery.html',
+    pretendToBeVisual: true,
+    url:
+      html === homepageHtml
+        ? 'http://localhost:3000/index.html'
+        : 'http://localhost:3000/gallery.html',
   });
   const frames: FrameRequestCallback[] = [];
+  const pendingFrames = new Map<number, FrameRequestCallback>();
+  let nextFrameId = 1;
   const imageContexts: string[] = [];
   dom.window.scrollTo = jest.fn();
   dom.window.requestAnimationFrame = ((callback: FrameRequestCallback) => {
-    frames.push(callback);
-    return frames.length;
+    const id = nextFrameId++;
+    const scheduled = (timestamp: number) => {
+      pendingFrames.delete(id);
+      callback(timestamp);
+    };
+    pendingFrames.set(id, scheduled);
+    frames.push(scheduled);
+    return id;
   }) as typeof requestAnimationFrame;
-  dom.window.cancelAnimationFrame = jest.fn();
+  dom.window.cancelAnimationFrame = jest.fn((id: number) => {
+    const scheduled = pendingFrames.get(id);
+    if (!scheduled) return;
+    const index = frames.indexOf(scheduled);
+    if (index >= 0) frames.splice(index, 1);
+    pendingFrames.delete(id);
+  });
   dom.window.matchMedia = jest.fn().mockReturnValue({
     matches: reducedMotion,
     addEventListener: jest.fn(),
@@ -108,7 +131,7 @@ const makeDom = (
   dom.window.fetch = (payload
     ? jest.fn().mockResolvedValue({
         ok: true,
-        json: async () => payload,
+        json: () => Promise.resolve(payload),
       })
     : jest.fn(() => new Promise(() => undefined))) as unknown as typeof fetch;
   dom.window.eval(galleryScript);
@@ -152,6 +175,13 @@ describe('Gallery continuous carousel', () => {
     expect(groups).toHaveLength(2);
     expect(groups[1].getAttribute('aria-hidden')).toBe('true');
     expect(slides).toHaveLength(6);
+    expect(document.querySelector('.gallery-carousel__pause')).toBeNull();
+    expect(
+      root.querySelector('.gallery-carousel__viewport')?.parentElement,
+    ).toBe(root);
+    expect(
+      document.querySelector('.gallery-page h1')?.hasAttribute('hidden'),
+    ).toBe(true);
     expect(
       Array.from(slides)
         .slice(0, 3)
@@ -168,6 +198,8 @@ describe('Gallery continuous carousel', () => {
         .every((slide) => slide.getAttribute('aria-hidden') === 'true'),
     ).toBe(true);
     expect((dom.window as any).CRONOX_GALLERY.items).toHaveLength(3);
+    expect(slides[0].dataset.galleryItemKey).toBe('carousel-1');
+    expect(slides[3].dataset.galleryItemKey).toBe('carousel-1');
     expect(slides[0].querySelector('img')?.src).toContain('1-grid.webp');
     const optimizedImage = slides[0].querySelector('img')!;
     optimizedImage.dispatchEvent(new dom.window.Event('error'));
@@ -179,16 +211,20 @@ describe('Gallery continuous carousel', () => {
   });
 
   it('uses the shared lightbox with large variants, metadata, unique navigation, and clone mapping', async () => {
+    const items = [1, 2, 3].map(carouselItem);
+    items[0].key = 'stable-gallery-photo-a';
     const { dom, imageContexts } = makeDom({
       mode: 'CAROUSEL',
       slots: mosaicSlots,
-      carouselItems: [1, 2, 3].map(carouselItem),
+      carouselItems: items,
     });
     await (dom.window as any).CRONOX_GALLERY.load();
     const document = dom.window.document;
     const slides = document.querySelectorAll<HTMLButtonElement>(
       '.gallery-carousel__slide',
     );
+    expect(slides[0].dataset.galleryItemKey).toBe('stable-gallery-photo-a');
+    expect(slides[3].dataset.galleryItemKey).toBe('stable-gallery-photo-a');
 
     slides[3].click();
 
@@ -220,7 +256,7 @@ describe('Gallery continuous carousel', () => {
       document.getElementById('galleryLightboxDescription')?.textContent,
     ).toBe('Descripción 1');
     document.getElementById('galleryLightboxClose')?.click();
-    expect(document.activeElement).toBe(slides[0]);
+    expect(document.activeElement).toBe(slides[3]);
     dom.window.close();
   });
 
@@ -228,11 +264,125 @@ describe('Gallery continuous carousel', () => {
     const { dom } = makeDom();
     const math = (dom.window as any).CRONOX_GALLERY.carouselMath;
 
-    expect(math.speed).toBe(24);
-    expect(math.advanceOffset(-100, 500, 900)).toBe(-112);
-    expect(math.advanceOffset(-100, 1000, 900)).toBe(-124);
+    expect(math.speed).toBe(27);
+    expect(math.advanceOffset(-100, 500, 900)).toBe(-113.5);
+    expect(math.advanceOffset(-100, 1000, 900)).toBe(-127);
     expect(math.normalizeOffset(-950, 900)).toBe(-50);
     expect(math.normalizeOffset(-50, 900)).toBe(-50);
+    dom.window.close();
+  });
+
+  it('keeps autoplay continuous across pointer hover and keyboard focus, pausing only for the lightbox', () => {
+    const { dom, frames } = makeDom();
+    const document = dom.window.document;
+    const root = document.getElementById('galleryGrid')!;
+    (dom.window as any).CRONOX_GALLERY.renderCarousel(
+      [1, 2, 3].map(carouselItem),
+      root,
+    );
+    const group = root.querySelector<HTMLElement>('.gallery-carousel__group')!;
+    group.getBoundingClientRect = () => ({ width: 900 }) as DOMRect;
+    frames.shift()?.(0);
+    frames.shift()?.(100);
+    frames.shift()?.(116);
+    const track = root.querySelector<HTMLElement>('.gallery-carousel__track')!;
+    const beforeHover = track.style.transform;
+    const viewport = root.querySelector<HTMLElement>(
+      '.gallery-carousel__viewport',
+    )!;
+    viewport.dispatchEvent(new dom.window.Event('pointerenter'));
+    root.querySelector<HTMLButtonElement>('.gallery-carousel__slide')!.focus();
+    frames.shift()?.(132);
+    expect(track.style.transform).not.toBe(beforeHover);
+    expect(frames).toHaveLength(1);
+
+    const positionAtOpen = track.style.transform;
+    root.querySelector<HTMLButtonElement>('.gallery-carousel__slide')!.click();
+    expect(document.getElementById('galleryLightbox')?.hidden).toBe(false);
+    expect(frames).toHaveLength(0);
+    expect(track.style.transform).toBe(positionAtOpen);
+    expect(document.body.style.position).toBe('fixed');
+    expect(document.activeElement?.id).toBe('galleryLightboxClose');
+    document.dispatchEvent(
+      new dom.window.KeyboardEvent('keydown', { key: 'Escape' }),
+    );
+    expect(document.getElementById('galleryLightbox')?.hidden).toBe(true);
+    expect(document.activeElement).toBe(
+      root.querySelector('.gallery-carousel__slide'),
+    );
+    expect(document.body.style.position).toBe('');
+    expect(track.style.transform).toBe(positionAtOpen);
+    expect(frames).toHaveLength(1);
+    frames.shift()?.(200);
+    frames.shift()?.(216);
+    expect(track.style.transform).not.toBe(positionAtOpen);
+    expect(frames).toHaveLength(1);
+    dom.window.close();
+  });
+
+  it('switches the homepage heading and spacing only in carousel mode', async () => {
+    const { dom } = makeDom(
+      {
+        mode: 'CAROUSEL',
+        slots: mosaicSlots,
+        carouselItems: [1, 2, 3].map(carouselItem),
+      },
+      false,
+      homepageHtml,
+    );
+    await (dom.window as any).CRONOX_GALLERY.load();
+    const document = dom.window.document;
+    const root = document.querySelector<HTMLElement>(
+      '[data-gallery-homepage]',
+    )!;
+    const section = root.closest<HTMLElement>(
+      '[data-gallery-homepage-section]',
+    )!;
+    const heading = section.querySelector<HTMLElement>(
+      '.gallery-homepage__heading',
+    )!;
+    expect(root.dataset.galleryMode).toBe('CAROUSEL');
+    expect(heading.hidden).toBe(true);
+    expect(section.classList.contains('gallery-homepage--carousel')).toBe(true);
+    expect(galleryStyles).toMatch(
+      /\.gallery-homepage--carousel\s*\{[^}]*padding-top:\s*0;/,
+    );
+    (dom.window as any).CRONOX_GALLERY.render(mosaicSlots, root);
+    expect(heading.hidden).toBe(false);
+    expect(section.classList.contains('gallery-homepage--carousel')).toBe(
+      false,
+    );
+    expect(root.dataset.galleryMode).toBe('MOSAIC');
+    dom.window.close();
+  });
+
+  it('omits empty carousel metadata and opens a short mobile tap without requiring a pause control', () => {
+    const { dom } = makeDom();
+    const items = [1, 2, 3].map(carouselItem);
+    items[1].description = '  ';
+    items[1].products = [];
+    const root = dom.window.document.getElementById('galleryGrid')!;
+    (dom.window as any).CRONOX_GALLERY.renderCarousel(items, root);
+    const viewport = root.querySelector<HTMLElement>(
+      '.gallery-carousel__viewport',
+    )!;
+    const slide = root.querySelectorAll<HTMLButtonElement>(
+      '.gallery-carousel__slide',
+    )[1];
+    viewport.dispatchEvent(pointerEvent(dom, 'pointerdown', { x: 100, y: 50 }));
+    viewport.dispatchEvent(pointerEvent(dom, 'pointerup', { x: 102, y: 51 }));
+    slide.click();
+    const document = dom.window.document;
+    expect(document.getElementById('galleryLightbox')?.hidden).toBe(false);
+    expect(document.getElementById('galleryLightboxDescription')?.hidden).toBe(
+      true,
+    );
+    expect(document.getElementById('galleryLightboxProducts')?.hidden).toBe(
+      true,
+    );
+    expect(document.getElementById('galleryLightboxInfo')?.hidden).toBe(true);
+    document.getElementById('galleryLightboxClose')?.click();
+    expect(document.activeElement).toBe(slide);
     dom.window.close();
   });
 
@@ -347,5 +497,24 @@ describe('Gallery continuous carousel', () => {
     expect(galleryStyles).toContain('width: 42vw');
     expect(galleryStyles).toContain('width: 72vw');
     expect(galleryStyles).not.toContain('touch-action: none');
+    expect(galleryStyles).not.toContain('.gallery-carousel__pause');
+    expect(galleryScript).not.toContain('Pausar movimiento');
+    expect(galleryScript).not.toContain('state.hovered');
+    expect(galleryScript).not.toContain('state.focusWithin');
+    expect(galleryStyles).toMatch(
+      /\.gallery-carousel__slide\s*\{[^}]*overflow:\s*visible;/s,
+    );
+    expect(galleryStyles).toMatch(
+      /\.gallery-carousel__media\s*\{[^}]*transform:\s*scale\(1\);[^}]*transition:\s*transform 420ms/s,
+    );
+    expect(galleryStyles).toMatch(
+      /\.gallery-carousel__slide:hover \.gallery-carousel__media\s*\{[^}]*transform:\s*scale\(1\.025\)/s,
+    );
+    expect(galleryStyles).toMatch(
+      /\.gallery-carousel__slide:focus-visible \.gallery-carousel__media\s*\{[^}]*transform:\s*scale\(1\.025\)/s,
+    );
+    expect(galleryStyles).toMatch(
+      /@media \(prefers-reduced-motion: reduce\)\s*\{\s*\.gallery-carousel__media,/s,
+    );
   });
 });

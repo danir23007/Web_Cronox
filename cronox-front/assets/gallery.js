@@ -27,9 +27,13 @@
   let loadedGalleryItems = null;
   let loadedGalleryMode = "MOSAIC";
   let loadedCarouselItems = [];
-  const CAROUSEL_SPEED_PX_PER_SECOND = 24;
+  const CAROUSEL_SPEED_PX_PER_SECOND = 27;
   const CAROUSEL_DRAG_THRESHOLD_PX = 10;
   const carouselCleanups = new WeakMap();
+  const activeCarouselAnimations = new Set();
+  const syncCarouselAnimations = () => {
+    activeCarouselAnimations.forEach((sync) => sync());
+  };
 
   const lightboxElements = {
     root: pageDocument.getElementById("galleryLightbox"),
@@ -491,6 +495,7 @@
     lightboxElements.root.hidden = false;
     lightboxElements.root.setAttribute("aria-hidden", "false");
     pageDocument.body.classList.add("gallery-lightbox-open");
+    syncCarouselAnimations();
     updateLightbox();
     lightboxElements.close.focus();
   };
@@ -511,6 +516,7 @@
     if (trigger?.isConnected && typeof trigger.focus === "function") {
       trigger.focus();
     }
+    syncCarouselAnimations();
   };
 
   const navigateLightbox = (offset) => {
@@ -563,12 +569,20 @@
     return tile;
   };
 
-  const createCarouselSlide = (item, index, clone, onOpen) => {
+  const syncGalleryHeading = (root, carousel) => {
+    const homepage = root.closest("[data-gallery-homepage-section]");
+    homepage?.classList.toggle("gallery-homepage--carousel", carousel);
+    const heading = homepage?.querySelector(".gallery-homepage__heading") ||
+      root.closest(".gallery-page")?.querySelector(".gallery-visually-hidden");
+    if (heading) heading.hidden = carousel;
+  };
+
+  const createCarouselSlide = (item, clone, onOpen) => {
     const button = pageDocument.createElement("button");
     const alt = item.alt?.trim() || "Imagen de la galería CRONOX";
     button.type = "button";
     button.className = "gallery-carousel__slide";
-    button.dataset.galleryCarouselIndex = String(index);
+    button.dataset.galleryItemKey = item.key;
     button.setAttribute("aria-haspopup", "dialog");
     button.setAttribute("aria-label", `Abrir en pantalla completa: ${alt}`);
     button.draggable = false;
@@ -587,7 +601,9 @@
     applyGalleryImage(image, item, "galleryGrid");
     media.appendChild(image);
     button.appendChild(media);
-    button.addEventListener("click", (event) => onOpen(item, index, event));
+    button.addEventListener("click", (event) =>
+      onOpen(item.key, event.currentTarget, event),
+    );
     return button;
   };
 
@@ -601,12 +617,7 @@
     root.classList.add("gallery-carousel");
     root.classList.remove("gallery-grid--mosaic");
     root.dataset.galleryMode = "CAROUSEL";
-
-    const pause = pageDocument.createElement("button");
-    pause.type = "button";
-    pause.className = "gallery-carousel__pause";
-    pause.textContent = "Pausar movimiento";
-    pause.setAttribute("aria-pressed", "false");
+    syncGalleryHeading(root, true);
 
     const viewport = pageDocument.createElement("div");
     viewport.className = "gallery-carousel__viewport";
@@ -617,8 +628,7 @@
     const cloneGroup = pageDocument.createElement("div");
     cloneGroup.className = "gallery-carousel__group";
     cloneGroup.setAttribute("aria-hidden", "true");
-    const realTriggers = [];
-
+    const itemsByKey = new Map(logicalItems.map((item) => [item.key, item]));
     const state = {
       offset: 0,
       cycleWidth: 0,
@@ -631,10 +641,7 @@
       ),
       pageVisible: !pageDocument.hidden,
       inView: true,
-      hovered: false,
-      focusWithin: false,
-      userPaused: false,
-      resumeTimer: null,
+      destroyed: false,
     };
 
     const updateTransform = () => {
@@ -644,9 +651,8 @@
       state.reducedMotion ||
       !state.pageVisible ||
       !state.inView ||
-      state.hovered ||
-      state.focusWithin ||
-      state.userPaused ||
+      state.destroyed ||
+      Boolean(lightboxElements.root && !lightboxElements.root.hidden) ||
       Boolean(state.pointer);
     const cancelFrame = () => {
       if (state.frame !== null) window.cancelAnimationFrame?.(state.frame);
@@ -676,24 +682,24 @@
         state.frame = window.requestAnimationFrame?.(tick) ?? null;
       }
     };
-    const openItem = (item, index, event) => {
+    const openItem = (key, trigger, event) => {
       if (Date.now() < state.suppressClickUntil) {
         event.preventDefault();
         event.stopPropagation();
         return;
       }
-      openLightbox(item, realTriggers[index], logicalItems);
+      const item = itemsByKey.get(key);
+      if (item) openLightbox(item, trigger, logicalItems);
     };
 
-    logicalItems.forEach((item, index) => {
-      const slide = createCarouselSlide(item, index, false, openItem);
-      realTriggers.push(slide);
-      firstGroup.appendChild(slide);
-      cloneGroup.appendChild(createCarouselSlide(item, index, true, openItem));
+    logicalItems.forEach((item) => {
+      firstGroup.appendChild(createCarouselSlide(item, false, openItem));
+      cloneGroup.appendChild(createCarouselSlide(item, true, openItem));
     });
     track.append(firstGroup, cloneGroup);
     viewport.appendChild(track);
-    root.replaceChildren(pause, viewport);
+    root.replaceChildren(viewport);
+    activeCarouselAnimations.add(syncAnimation);
 
     const recalculate = () => {
       const previousWidth = state.cycleWidth;
@@ -707,17 +713,8 @@
       syncAnimation();
     };
 
-    pause.addEventListener("click", () => {
-      state.userPaused = !state.userPaused;
-      pause.setAttribute("aria-pressed", String(state.userPaused));
-      pause.textContent = state.userPaused
-        ? "Reanudar movimiento"
-        : "Pausar movimiento";
-      syncAnimation();
-    });
     viewport.addEventListener("pointerdown", (event) => {
       if (event.button > 0) return;
-      clearTimeout(state.resumeTimer);
       state.pointer = {
         id: event.pointerId,
         startX: event.clientX,
@@ -758,28 +755,10 @@
       }
       state.pointer = null;
       viewport.releasePointerCapture?.(event.pointerId);
-      state.resumeTimer = setTimeout(syncAnimation, 180);
+      syncAnimation();
     };
     viewport.addEventListener("pointerup", finishPointer);
     viewport.addEventListener("pointercancel", finishPointer);
-    viewport.addEventListener("pointerenter", (event) => {
-      if (event.pointerType && event.pointerType !== "mouse") return;
-      state.hovered = true;
-      syncAnimation();
-    });
-    viewport.addEventListener("pointerleave", (event) => {
-      if (event.pointerType && event.pointerType !== "mouse") return;
-      state.hovered = false;
-      syncAnimation();
-    });
-    root.addEventListener("focusin", () => {
-      state.focusWithin = true;
-      syncAnimation();
-    });
-    root.addEventListener("focusout", (event) => {
-      state.focusWithin = root.contains(event.relatedTarget);
-      syncAnimation();
-    });
     const visibility = () => {
       state.pageVisible = !pageDocument.hidden;
       syncAnimation();
@@ -809,8 +788,9 @@
     window.requestAnimationFrame?.(recalculate);
 
     carouselCleanups.set(root, () => {
+      state.destroyed = true;
       cancelFrame();
-      clearTimeout(state.resumeTimer);
+      activeCarouselAnimations.delete(syncAnimation);
       intersection?.disconnect();
       resize?.disconnect();
       pageDocument.removeEventListener("visibilitychange", visibility);
@@ -829,6 +809,7 @@
     root.classList.remove("gallery-carousel");
     root.classList.add("gallery-grid--mosaic");
     root.dataset.galleryMode = "MOSAIC";
+    syncGalleryHeading(root, false);
     const normalizedItems = Array.isArray(items) ? items : galleryItems;
     const fragment = pageDocument.createDocumentFragment();
     normalizedItems.forEach((item) =>
@@ -857,7 +838,10 @@
       .map((item, index) =>
         normalizeItem(
           {
-            key: `carousel-${Number(item?.position) || index + 1}`,
+            key:
+              typeof item?.key === "string" && item.key.trim()
+                ? item.key.trim()
+                : `carousel-${Number(item?.position) || index + 1}`,
             color: "grey",
             featured: false,
           },
