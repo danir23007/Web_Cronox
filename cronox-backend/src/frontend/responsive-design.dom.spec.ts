@@ -343,7 +343,7 @@ describe('CRONOX responsive design system', () => {
 
   it('loads each modified stylesheet through its exact incremented cache version', () => {
     expect(readFrontend('assets/version.js')).toContain("VERSION = '96'");
-    expect(readFrontend('index.html')).toContain('assets/gallery.css?v=16');
+    expect(readFrontend('index.html')).toContain('assets/gallery.css?v=17');
     expect(readFrontend('index.html')).toContain('assets/quick-add.css?v=5');
     expect(readFrontend('index.html')).toContain(
       'assets/product-detail.css?v=2',

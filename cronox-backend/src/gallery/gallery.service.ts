@@ -1,5 +1,7 @@
+import { randomUUID } from 'node:crypto';
 import {
   BadRequestException,
+  ConflictException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -183,6 +185,43 @@ export class GalleryService {
     };
   }
 
+  private carouselProductIds(value: Prisma.JsonValue | null): number[] {
+    if (!Array.isArray(value)) return [];
+    return value.filter(
+      (id): id is number => Number.isSafeInteger(id) && Number(id) > 0,
+    );
+  }
+
+  private async loadCarouselProducts(
+    slots: GalleryCarouselSlotWithAsset[],
+    client: Pick<PrismaService, 'product'> = this.prisma,
+  ) {
+    const ids = [
+      ...new Set(
+        slots.flatMap((slot) =>
+          this.carouselProductIds(slot.relatedProductIds),
+        ),
+      ),
+    ];
+    const products = ids.length
+      ? await client.product.findMany({
+          where: { id: { in: ids } },
+          select: GALLERY_PRODUCT_SELECT,
+        })
+      : [];
+    return new Map(products.map((product) => [product.id, product]));
+  }
+
+  private carouselProducts(
+    slot: GalleryCarouselSlotWithAsset,
+    products: Map<number, GalleryProductSummary>,
+  ) {
+    return this.carouselProductIds(slot.relatedProductIds)
+      .map((id) => products.get(id))
+      .filter((product): product is GalleryProductSummary => Boolean(product))
+      .map((product) => this.toProductSummary(product));
+  }
+
   private toAdminAsset(asset: GalleryAssetWithProducts) {
     return {
       id: asset.id,
@@ -273,9 +312,15 @@ export class GalleryService {
     };
   }
 
-  private toAdminCarouselSlot(slot: GalleryCarouselSlotWithAsset) {
+  private toAdminCarouselSlot(
+    slot: GalleryCarouselSlotWithAsset,
+    products: Map<number, GalleryProductSummary>,
+  ) {
     return {
       position: slot.position,
+      itemId: slot.asset ? slot.itemId : null,
+      description: slot.asset ? slot.description : null,
+      products: slot.asset ? this.carouselProducts(slot, products) : [],
       focalX: slot.focalX,
       focalY: slot.focalY,
       zoom: slot.zoom,
@@ -296,9 +341,13 @@ export class GalleryService {
     };
   }
 
-  private toPublicCarouselItem(slot: GalleryCarouselSlotWithAsset) {
+  private toPublicCarouselItem(
+    slot: GalleryCarouselSlotWithAsset,
+    products: Map<number, GalleryProductSummary>,
+  ) {
     return {
-      key: `carousel-${slot.position}`,
+      key: slot.itemId || `carousel-${slot.position}`,
+      itemId: slot.itemId,
       position: slot.position,
       imageSrc: slot.asset?.publicUrl ?? null,
       variants: slot.asset?.variants ?? null,
@@ -332,11 +381,8 @@ export class GalleryService {
               fit: slot.mobileFit,
             }
           : null,
-      description: slot.asset?.description ?? null,
-      products:
-        slot.asset?.products?.map((item) =>
-          this.toProductSummary(item.product),
-        ) ?? [],
+      description: slot.description,
+      products: this.carouselProducts(slot, products),
     };
   }
 
@@ -382,9 +428,10 @@ export class GalleryService {
         settings?.activeMode === GalleryPresentationMode.CAROUSEL
           ? GalleryPresentationMode.CAROUSEL
           : GalleryPresentationMode.MOSAIC;
+      const carouselProducts = await this.loadCarouselProducts(carouselSlots);
       carouselItems = carouselSlots
         .filter((slot) => Boolean(slot.asset?.publicUrl))
-        .map((slot) => this.toPublicCarouselItem(slot));
+        .map((slot) => this.toPublicCarouselItem(slot, carouselProducts));
     } catch {
       // Deploys remain backwards compatible while the additive migration is pending.
       configuredMode = GalleryPresentationMode.MOSAIC;
@@ -416,10 +463,11 @@ export class GalleryService {
         include: GALLERY_CAROUSEL_SLOT_INCLUDE,
       }),
     ]);
+    const carouselProducts = await this.loadCarouselProducts(carouselSlots);
     return {
       activeMode: settings?.activeMode ?? GalleryPresentationMode.MOSAIC,
       carouselSlots: carouselSlots.map((slot) =>
-        this.toAdminCarouselSlot(slot),
+        this.toAdminCarouselSlot(slot, carouselProducts),
       ),
       constraints: {
         minimumItems: MIN_ACTIVE_CAROUSEL_ITEMS,
@@ -825,6 +873,14 @@ export class GalleryService {
       if (!current) {
         throw new NotFoundException('Posición de carrusel no encontrada');
       }
+      if (
+        dto.expectedRevision !== undefined &&
+        dto.expectedRevision !== current.revision
+      ) {
+        throw new ConflictException(
+          'La posición ha cambiado. Recarga la galería antes de guardar.',
+        );
+      }
 
       const nextAssetId =
         dto.assetId === undefined ? current.assetId : dto.assetId || null;
@@ -876,30 +932,28 @@ export class GalleryService {
           ? undefined
           : dto.description?.trim() || null;
 
-      if (nextAsset && updatesAssetContent) {
-        await tx.galleryAsset.update({
-          where: { id: nextAsset.id },
-          data: {
-            ...(description !== undefined ? { description } : {}),
-            ...(productIds !== undefined
-              ? {
-                  products: {
-                    deleteMany: {},
-                    create: productIds.map((productId, productPosition) => ({
-                      productId,
-                      position: productPosition,
-                    })),
-                  },
-                }
-              : {}),
-          },
-        });
-      }
-
       const updated = await tx.galleryCarouselSlot.update({
         where: { position },
         data: {
           assetId: nextAssetId,
+          itemId: nextAssetId
+            ? current.assetId === nextAssetId && current.itemId
+              ? current.itemId
+              : randomUUID()
+            : null,
+          description: nextAssetId
+            ? current.assetId === nextAssetId
+              ? description === undefined
+                ? current.description
+                : description
+              : (description ?? null)
+            : null,
+          relatedProductIds: nextAssetId
+            ? current.assetId === nextAssetId
+              ? (productIds ??
+                this.carouselProductIds(current.relatedProductIds))
+              : (productIds ?? [])
+            : Prisma.DbNull,
           focalX: dto.focalX ?? current.focalX,
           focalY: dto.focalY ?? current.focalY,
           zoom: dto.zoom ?? current.zoom,
@@ -921,11 +975,13 @@ export class GalleryService {
             focalX: updated.focalX,
             focalY: updated.focalY,
             zoom: updated.zoom,
-            productCount: updated.asset?.products?.length ?? 0,
+            productCount: this.carouselProductIds(updated.relatedProductIds)
+              .length,
           },
         },
       });
-      return { slot: this.toAdminCarouselSlot(updated) };
+      const carouselProducts = await this.loadCarouselProducts([updated], tx);
+      return { slot: this.toAdminCarouselSlot(updated, carouselProducts) };
     });
   }
 
@@ -959,6 +1015,9 @@ export class GalleryService {
         }
         const content = slots.map((slot) => ({
           assetId: slot.assetId,
+          itemId: slot.itemId,
+          description: slot.description,
+          relatedProductIds: slot.relatedProductIds ?? Prisma.DbNull,
           altText: slot.altText,
           instagramUrl: slot.instagramUrl,
           focalX: slot.focalX,
@@ -976,6 +1035,16 @@ export class GalleryService {
         }));
         const [moved] = content.splice(sourceIndex, 1);
         content.splice(targetIndex, 0, moved);
+        await Promise.all(
+          slots
+            .filter((slot) => slot.itemId)
+            .map((slot) =>
+              tx.galleryCarouselSlot.update({
+                where: { position: slot.position },
+                data: { itemId: randomUUID() },
+              }),
+            ),
+        );
         await Promise.all(
           slots.map((slot, index) =>
             tx.galleryCarouselSlot.update({
@@ -998,11 +1067,12 @@ export class GalleryService {
           orderBy: { position: 'asc' },
           include: GALLERY_CAROUSEL_SLOT_INCLUDE,
         });
+        const carouselProducts = await this.loadCarouselProducts(reordered, tx);
         return {
           sourcePosition,
           targetPosition,
           carouselSlots: reordered.map((slot) =>
-            this.toAdminCarouselSlot(slot),
+            this.toAdminCarouselSlot(slot, carouselProducts),
           ),
         };
       },

@@ -256,11 +256,11 @@ body.page-gallery {
 }
 
 @media (hover: hover) and (pointer: fine) {
-  .gallery-carousel__slide:hover {
+  .gallery-carousel__slide.is-pointer-underneath {
     z-index: 2;
   }
 
-  .gallery-carousel__slide:hover .gallery-carousel__media {
+  .gallery-carousel__slide.is-pointer-underneath .gallery-carousel__media {
     transform: scale(1.025);
   }
 }

@@ -577,7 +577,7 @@
     if (heading) heading.hidden = carousel;
   };
 
-  const createCarouselSlide = (item, clone, onOpen) => {
+  const createCarouselSlide = (item, clone) => {
     const button = pageDocument.createElement("button");
     const alt = item.alt?.trim() || "Imagen de la galería CRONOX";
     button.type = "button";
@@ -601,9 +601,6 @@
     applyGalleryImage(image, item, "galleryGrid");
     media.appendChild(image);
     button.appendChild(media);
-    button.addEventListener("click", (event) =>
-      onOpen(item.key, event.currentTarget, event),
-    );
     return button;
   };
 
@@ -635,6 +632,8 @@
       lastTimestamp: null,
       frame: null,
       pointer: null,
+      hoverPoint: null,
+      hoveredSlide: null,
       suppressClickUntil: 0,
       reducedMotion: Boolean(
         window.matchMedia?.("(prefers-reduced-motion: reduce)").matches,
@@ -647,13 +646,44 @@
     const updateTransform = () => {
       track.style.transform = `translate3d(${state.offset.toFixed(3)}px,0,0)`;
     };
+    const clearPointerHover = () => {
+      state.hoveredSlide?.classList.remove("is-pointer-underneath");
+      state.hoveredSlide = null;
+    };
+    const syncPointerHover = () => {
+      if (
+        !state.hoverPoint || !state.pageVisible || state.destroyed ||
+        (lightboxElements.root && !lightboxElements.root.hidden)
+      ) {
+        clearPointerHover();
+        return;
+      }
+      const hits = pageDocument.elementsFromPoint?.(
+        state.hoverPoint.x, state.hoverPoint.y,
+      ) || [pageDocument.elementFromPoint?.(
+        state.hoverPoint.x, state.hoverPoint.y,
+      )];
+      const next = hits.map((hit) => hit?.closest?.(".gallery-carousel__slide"))
+        .find((slide) => {
+          if (!slide || !viewport.contains(slide)) return false;
+          const bounds = slide.getBoundingClientRect();
+          return state.hoverPoint.x >= bounds.left &&
+            state.hoverPoint.x < bounds.right &&
+            state.hoverPoint.y >= bounds.top &&
+            state.hoverPoint.y < bounds.bottom;
+        }) || null;
+      if (next === state.hoveredSlide) return;
+      clearPointerHover();
+      state.hoveredSlide = next;
+      next?.classList.add("is-pointer-underneath");
+    };
     const isPaused = () =>
       state.reducedMotion ||
       !state.pageVisible ||
       !state.inView ||
       state.destroyed ||
       Boolean(lightboxElements.root && !lightboxElements.root.hidden) ||
-      Boolean(state.pointer);
+      state.pointer?.intent === "horizontal";
     const cancelFrame = () => {
       if (state.frame !== null) window.cancelAnimationFrame?.(state.frame);
       state.frame = null;
@@ -673,12 +703,18 @@
         );
         updateTransform();
       }
+      syncPointerHover();
       state.lastTimestamp = timestamp;
       state.frame = window.requestAnimationFrame?.(tick) ?? null;
     };
     const syncAnimation = () => {
-      if (isPaused()) cancelFrame();
+      if (isPaused()) {
+        cancelFrame();
+        if (lightboxElements.root && !lightboxElements.root.hidden)
+          clearPointerHover();
+      }
       else if (state.frame === null) {
+        syncPointerHover();
         state.frame = window.requestAnimationFrame?.(tick) ?? null;
       }
     };
@@ -693,13 +729,29 @@
     };
 
     logicalItems.forEach((item) => {
-      firstGroup.appendChild(createCarouselSlide(item, false, openItem));
-      cloneGroup.appendChild(createCarouselSlide(item, true, openItem));
+      firstGroup.appendChild(createCarouselSlide(item, false));
+      cloneGroup.appendChild(createCarouselSlide(item, true));
     });
     track.append(firstGroup, cloneGroup);
     viewport.appendChild(track);
     root.replaceChildren(viewport);
     activeCarouselAnimations.add(syncAnimation);
+    viewport.addEventListener("click", (event) => {
+      const slide = event.target.closest?.(".gallery-carousel__slide");
+      if (slide && viewport.contains(slide))
+        openItem(slide.dataset.galleryItemKey, slide, event);
+    });
+    const rememberHover = (event) => {
+      if (event.pointerType !== "mouse" && event.pointerType !== "pen") return;
+      state.hoverPoint = { x: event.clientX, y: event.clientY };
+      syncPointerHover();
+    };
+    viewport.addEventListener("pointerenter", rememberHover);
+    viewport.addEventListener("pointermove", rememberHover);
+    viewport.addEventListener("pointerleave", () => {
+      state.hoverPoint = null;
+      clearPointerHover();
+    });
 
     const recalculate = () => {
       const previousWidth = state.cycleWidth;
@@ -717,14 +769,14 @@
       if (event.button > 0) return;
       state.pointer = {
         id: event.pointerId,
+        key: event.target.closest?.(".gallery-carousel__slide")?.dataset.galleryItemKey,
+        trigger: event.target.closest?.(".gallery-carousel__slide"),
         startX: event.clientX,
         startY: event.clientY,
         startOffset: state.offset,
         intent: null,
         moved: false,
       };
-      viewport.setPointerCapture?.(event.pointerId);
-      syncAnimation();
     });
     viewport.addEventListener("pointermove", (event) => {
       const pointer = state.pointer;
@@ -738,6 +790,10 @@
             : "vertical";
       }
       if (pointer.intent !== "horizontal") return;
+      if (!pointer.captured) {
+        viewport.setPointerCapture?.(event.pointerId);
+        pointer.captured = true;
+      }
       event.preventDefault();
       pointer.moved = Math.abs(deltaX) >= CAROUSEL_DRAG_THRESHOLD_PX;
       state.offset = normalizeCarouselOffset(
@@ -745,22 +801,40 @@
         state.cycleWidth,
       );
       updateTransform();
+      syncAnimation();
     });
     const finishPointer = (event) => {
       const pointer = state.pointer;
       if (!pointer || pointer.id !== event.pointerId) return;
-      if (pointer.intent === "horizontal" && pointer.moved) {
+      const moved = Math.hypot(
+        event.clientX - pointer.startX,
+        event.clientY - pointer.startY,
+      ) >= CAROUSEL_DRAG_THRESHOLD_PX;
+      if (moved || pointer.intent === "vertical" || event.type === "pointercancel") {
         state.suppressClickUntil = Date.now() + 450;
         event.preventDefault();
+      } else if (pointer.key && pointer.trigger?.isConnected) {
+        // The track can move between down/up, so the browser click may target
+        // their common ancestor rather than the original slide.
+        state.suppressClickUntil = Date.now() + 450;
+        window.setTimeout(() => {
+          if (!state.destroyed) openLightbox(
+            itemsByKey.get(pointer.key), pointer.trigger, logicalItems,
+          );
+        }, 0);
       }
       state.pointer = null;
-      viewport.releasePointerCapture?.(event.pointerId);
+      if (pointer.captured) viewport.releasePointerCapture?.(event.pointerId);
       syncAnimation();
     };
     viewport.addEventListener("pointerup", finishPointer);
     viewport.addEventListener("pointercancel", finishPointer);
     const visibility = () => {
       state.pageVisible = !pageDocument.hidden;
+      if (!state.pageVisible) {
+        state.hoverPoint = null;
+        clearPointerHover();
+      }
       syncAnimation();
     };
     pageDocument.addEventListener("visibilitychange", visibility);
@@ -789,6 +863,7 @@
 
     carouselCleanups.set(root, () => {
       state.destroyed = true;
+      clearPointerHover();
       cancelFrame();
       activeCarouselAnimations.delete(syncAnimation);
       intersection?.disconnect();

@@ -13,13 +13,6 @@
   margin: 0 auto clamp(52px, 8vw, 88px);
   text-align: center;
 }
-.faq-eyebrow {
-  margin: 0 0 14px;
-  font:
-    700 11px/1.4 Arial,
-    sans-serif;
-  letter-spacing: 0.24em;
-}
 .faq-intro h1 {
   margin: 0 0 22px;
   font-size: clamp(28px, 5vw, 48px);

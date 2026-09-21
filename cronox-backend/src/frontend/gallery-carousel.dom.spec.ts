@@ -141,7 +141,7 @@ const makeDom = (
 const pointerEvent = (
   dom: JSDOM,
   type: string,
-  options: { x: number; y: number; id?: number },
+  options: { x: number; y: number; id?: number; pointerType?: string },
 ) => {
   const event = new dom.window.MouseEvent(type, {
     bubbles: true,
@@ -151,7 +151,9 @@ const pointerEvent = (
     button: 0,
   });
   Object.defineProperty(event, 'pointerId', { value: options.id ?? 1 });
-  Object.defineProperty(event, 'pointerType', { value: 'touch' });
+  Object.defineProperty(event, 'pointerType', {
+    value: options.pointerType ?? 'touch',
+  });
   return event;
 };
 
@@ -320,6 +322,63 @@ describe('Gallery continuous carousel', () => {
     dom.window.close();
   });
 
+  it('transfers enlargement under a stationary mouse across moving slides and clears gaps, exit and touch', () => {
+    const { dom, frames } = makeDom();
+    const root = dom.window.document.getElementById('galleryGrid')!;
+    (dom.window as any).CRONOX_GALLERY.renderCarousel(
+      [1, 2, 3].map(carouselItem),
+      root,
+    );
+    const group = root.querySelector<HTMLElement>('.gallery-carousel__group')!;
+    group.getBoundingClientRect = () => ({ width: 300 }) as DOMRect;
+    frames.shift()?.(0);
+    const track = root.querySelector<HTMLElement>('.gallery-carousel__track')!;
+    const viewport = root.querySelector<HTMLElement>(
+      '.gallery-carousel__viewport',
+    )!;
+    const slides = Array.from(
+      root.querySelectorAll<HTMLElement>('.gallery-carousel__slide'),
+    );
+    slides.forEach((slide, index) => {
+      slide.getBoundingClientRect = () => {
+        const offset = Number(
+          track.style.transform.match(/translate3d\((-?\d+(?:\.\d+)?)/)?.[1] ||
+            0,
+        );
+        const left = index * 100 + offset;
+        return { left, right: left + 80, top: 0, bottom: 100 } as DOMRect;
+      };
+    });
+    Object.defineProperty(dom.window.document, 'elementsFromPoint', {
+      configurable: true,
+      value: (x: number, y: number) =>
+        slides.filter((slide) => {
+          const rect = slide.getBoundingClientRect();
+          return (
+            x >= rect.left && x < rect.right && y >= rect.top && y < rect.bottom
+          );
+        }),
+    });
+    const enter = pointerEvent(dom, 'pointerenter', {
+      x: 50,
+      y: 50,
+      pointerType: 'mouse',
+    });
+    viewport.dispatchEvent(enter);
+    expect(slides[0].classList.contains('is-pointer-underneath')).toBe(true);
+    for (let i = 1; i <= 25; i += 1) frames.shift()?.(i * 64);
+    expect(track.style.transform).toContain('-41.472px');
+    expect(root.querySelectorAll('.is-pointer-underneath')).toHaveLength(0);
+    for (let i = 26; i <= 65; i += 1) frames.shift()?.(i * 64);
+    expect(slides[1].classList.contains('is-pointer-underneath')).toBe(true);
+    expect(slides[0].classList.contains('is-pointer-underneath')).toBe(false);
+    viewport.dispatchEvent(new dom.window.Event('pointerleave'));
+    expect(root.querySelectorAll('.is-pointer-underneath')).toHaveLength(0);
+    viewport.dispatchEvent(pointerEvent(dom, 'pointerenter', { x: 50, y: 50 }));
+    expect(root.querySelectorAll('.is-pointer-underneath')).toHaveLength(0);
+    dom.window.close();
+  });
+
   it('switches the homepage heading and spacing only in carousel mode', async () => {
     const { dom } = makeDom(
       {
@@ -383,6 +442,50 @@ describe('Gallery continuous carousel', () => {
     expect(document.getElementById('galleryLightboxInfo')?.hidden).toBe(true);
     document.getElementById('galleryLightboxClose')?.click();
     expect(document.activeElement).toBe(slide);
+    dom.window.close();
+  });
+
+  it('activates the canonical slide on pointer up even if autoplay moves its DOM target', async () => {
+    const { dom, frames } = makeDom();
+    const root = dom.window.document.getElementById('galleryGrid')!;
+    const items = [1, 2, 3].map(carouselItem);
+    items[0].key = 'carousel-independent-a';
+    (dom.window as any).CRONOX_GALLERY.renderCarousel(items, root);
+    const group = root.querySelector<HTMLElement>('.gallery-carousel__group')!;
+    group.getBoundingClientRect = () => ({ width: 900 }) as DOMRect;
+    frames.shift()?.(0);
+    const track = root.querySelector<HTMLElement>('.gallery-carousel__track')!;
+    const viewport = root.querySelector<HTMLElement>(
+      '.gallery-carousel__viewport',
+    )!;
+    const slides = root.querySelectorAll<HTMLButtonElement>(
+      '.gallery-carousel__slide',
+    );
+    slides[0].dispatchEvent(
+      pointerEvent(dom, 'pointerdown', { x: 100, y: 50 }),
+    );
+    frames.shift()?.(100);
+    frames.shift()?.(116);
+    expect(track.style.transform).not.toContain('(0.000px');
+    viewport.dispatchEvent(pointerEvent(dom, 'pointerup', { x: 100, y: 50 }));
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    const document = dom.window.document;
+    expect(document.getElementById('galleryLightbox')?.hidden).toBe(false);
+    expect(
+      document.getElementById('galleryLightboxDescription')?.textContent,
+    ).toBe(items[0].description);
+    document.getElementById('galleryLightboxClose')?.click();
+    expect(document.activeElement).toBe(slides[0]);
+    slides[3].dispatchEvent(
+      pointerEvent(dom, 'pointerdown', { x: 100, y: 50, id: 2 }),
+    );
+    viewport.dispatchEvent(
+      pointerEvent(dom, 'pointerup', { x: 100, y: 50, id: 2 }),
+    );
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    expect(
+      document.getElementById('galleryLightboxDescription')?.textContent,
+    ).toBe(items[0].description);
     dom.window.close();
   });
 
@@ -499,7 +602,7 @@ describe('Gallery continuous carousel', () => {
     expect(galleryStyles).not.toContain('touch-action: none');
     expect(galleryStyles).not.toContain('.gallery-carousel__pause');
     expect(galleryScript).not.toContain('Pausar movimiento');
-    expect(galleryScript).not.toContain('state.hovered');
+    expect(galleryScript).toContain('state.hoveredSlide');
     expect(galleryScript).not.toContain('state.focusWithin');
     expect(galleryStyles).toMatch(
       /\.gallery-carousel__slide\s*\{[^}]*overflow:\s*visible;/s,
@@ -508,7 +611,7 @@ describe('Gallery continuous carousel', () => {
       /\.gallery-carousel__media\s*\{[^}]*transform:\s*scale\(1\);[^}]*transition:\s*transform 420ms/s,
     );
     expect(galleryStyles).toMatch(
-      /\.gallery-carousel__slide:hover \.gallery-carousel__media\s*\{[^}]*transform:\s*scale\(1\.025\)/s,
+      /\.gallery-carousel__slide\.is-pointer-underneath \.gallery-carousel__media\s*\{[^}]*transform:\s*scale\(1\.025\)/s,
     );
     expect(galleryStyles).toMatch(
       /\.gallery-carousel__slide:focus-visible \.gallery-carousel__media\s*\{[^}]*transform:\s*scale\(1\.025\)/s,

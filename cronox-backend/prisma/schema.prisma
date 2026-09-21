@@ -306,6 +306,9 @@ model FooterPageContent {
 model GalleryCarouselSlot {
   position     Int           @id
   assetId      String?
+  itemId       String?       @unique
+  description  String?       @db.Text
+  relatedProductIds Json?
   focalX       Float         @default(50)
   focalY       Float         @default(50)
   zoom         Float         @default(1)

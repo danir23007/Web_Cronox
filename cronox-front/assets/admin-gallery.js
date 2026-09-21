@@ -328,7 +328,10 @@
       return {
         ...candidate,
         position,
-        key: `carousel-${position}`,
+        key: candidate.itemId || `carousel-${position}`,
+        itemId: candidate.itemId || null,
+        description: typeof candidate.description === "string" ? candidate.description : "",
+        products: Array.isArray(candidate.products) ? candidate.products.map(normalizeProduct).filter(Boolean) : [],
         displayOrder: position,
         featured: false,
         placeholderColor: "grey",
@@ -374,11 +377,11 @@
     state.carouselSlots.filter((slot) => Boolean(slot.asset?.imageUrl));
 
   const toPublicCarouselItem = (slot) => ({
-    key: `carousel-${slot.position}`,
+    key: slot.itemId || `carousel-${slot.position}`,
     position: slot.position,
     imageSrc: slot.asset.imageUrl,
     variants: slot.asset.variants || null,
-    alt: slot.altText || "Imagen de la galerÃ­a CRONOX",
+    alt: slot.altText || "Imagen de la galería CRONOX",
     instagramUrl: slot.instagramUrl || "",
     focalX: slot.focalX,
     focalY: slot.focalY,
@@ -402,8 +405,8 @@
             zoom: slot.mobileZoom,
             fit: slot.mobileFit,
           },
-    description: slot.asset.description || "",
-    products: Array.isArray(slot.asset.products) ? slot.asset.products : [],
+    description: slot.description || "",
+    products: slot.products,
   });
 
   const renderCarouselPreview = () => {
@@ -422,7 +425,7 @@
     elements.carouselPreview.replaceChildren();
     elements.carouselPreviewEmpty.hidden = false;
     elements.carouselPreviewEmpty.textContent =
-      "No se pudo iniciar la previsualizaciÃ³n del carrusel.";
+      "No se pudo iniciar la previsualización del carrusel.";
   };
 
   const syncPublicationControls = () => {
@@ -435,14 +438,14 @@
         : "MOSAICO";
     }
     if (elements.carouselCount) {
-      elements.carouselCount.textContent = `${count} / 5 imÃ¡genes`;
+      elements.carouselCount.textContent = `${count} / 5 imágenes`;
     }
     if (elements.carouselActivationHint) {
       elements.carouselActivationHint.textContent = carouselIsActive
-        ? "El carrusel es la galerÃ­a pÃºblica actual."
+        ? "El carrusel es la galería pública actual."
         : missing > 0
-          ? `Faltan ${missing} ${missing === 1 ? "imagen" : "imÃ¡genes"} para poder activar el carrusel.`
-          : "El carrusel estÃ¡ listo para activarse.";
+          ? `Faltan ${missing} ${missing === 1 ? "imagen" : "imágenes"} para poder activar el carrusel.`
+          : "El carrusel está listo para activarse.";
     }
     if (elements.activateMosaic) {
       elements.activateMosaic.disabled =
@@ -501,7 +504,7 @@
         "aria-label",
         `${slot.asset ? "Cambiar imagen de la" : "A\u00f1adir imagen a la"} posici\u00f3n ${String(slot.position).padStart(2, "0")}`,
       );
-      edit.textContent = slot.asset ? "Cambiar" : "A\u00f1adir imagen";
+      edit.textContent = slot.asset ? "Editar información / imagen" : "Añadir imagen";
       edit.addEventListener("pointerdown", (event) => event.stopPropagation());
       edit.addEventListener("dragstart", (event) => event.preventDefault());
       edit.addEventListener("click", (event) => {
@@ -1407,20 +1410,30 @@
   const selectAsset = async (assetId) => {
     const asset = getAsset(assetId);
     if (!state.draft || !asset) return false;
+    if (state.draft.assetId === assetId) return true;
     if (state.draft.assetId !== assetId && !confirmDiscardContent())
       return false;
+    const carouselReplacement =
+      state.draft.mode === "CAROUSEL" && state.draft.assetId !== assetId;
+    if (
+      carouselReplacement && state.draft.assetId &&
+      !window.confirm(
+        "Al cambiar esta foto se borrarán su descripción y sus productos del carrusel. ¿Quieres continuar?",
+      )
+    ) return false;
     state.draft.assetId = assetId;
     state.draft.focalX = 50;
     state.draft.focalY = 50;
     state.draft.zoom = 1;
     state.contentRevision += 1;
     const revision = state.contentRevision;
-    setAssetContent(asset);
+    setAssetContent(state.draft.mode === "CAROUSEL" ? null : asset);
     setEditorMessage("");
     renderCompactLibrary();
     renderFullLibrary();
     syncControls();
-    void loadAssetDetails(assetId, revision);
+    if (state.draft.mode !== "CAROUSEL")
+      void loadAssetDetails(assetId, revision);
     return true;
   };
 
@@ -1476,6 +1489,7 @@
       key: slot.key,
       mode: carousel ? "CAROUSEL" : "MOSAIC",
       position: carousel ? slot.position : null,
+      revision: slot.revision,
       featured: slot.featured,
       placeholderColor: slot.placeholderColor,
       assetId: slot.asset?.id || null,
@@ -1486,7 +1500,7 @@
       instagramUrl: slot.instagramUrl || "",
     };
     state.contentRevision += 1;
-    setAssetContent(slot.asset);
+    setAssetContent(carousel ? slot : slot.asset);
     elements.title.textContent = carousel
       ? `Editar posición ${String(slot.position).padStart(2, "0")} del carrusel`
       : `Editar ${slotLabel(slot).toLowerCase()}`;
@@ -1578,6 +1592,8 @@
         altText: state.draft.altText,
         instagramUrl: state.draft.instagramUrl || null,
       };
+      if (state.draft.mode === "CAROUSEL")
+        body.expectedRevision = state.draft.revision;
       if (state.draft.assetId) {
         body.description = elements.description.value;
         body.productIds = [...state.selectedProductIds];

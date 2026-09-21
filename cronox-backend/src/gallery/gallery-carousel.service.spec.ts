@@ -1,5 +1,9 @@
-/* eslint-disable @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-call */
-import { BadRequestException, NotFoundException } from '@nestjs/common';
+/* eslint-disable @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-call, @typescript-eslint/require-await */
+import {
+  BadRequestException,
+  ConflictException,
+  NotFoundException,
+} from '@nestjs/common';
 import { GalleryPresentationMode } from '@prisma/client';
 import { GalleryService } from './gallery.service';
 
@@ -47,6 +51,9 @@ describe('GalleryService carousel configuration', () => {
           carouselSlots.push({
             position,
             assetId: null,
+            itemId: null,
+            description: null,
+            relatedProductIds: null,
             focalX: 50,
             focalY: 50,
             zoom: 1,
@@ -136,7 +143,24 @@ describe('GalleryService carousel configuration', () => {
         return asset;
       }),
     };
-    const product = { findMany: jest.fn(async () => []) };
+    const product = {
+      findMany: jest.fn(async ({ where }: any) =>
+        where?.id?.in?.includes(100)
+          ? [
+              {
+                id: 100,
+                slug: 'jacket',
+                name: 'Jacket',
+                price: 9000,
+                currency: 'EUR',
+                imageUrl: null,
+                isActive: true,
+                images: [{ url: 'https://cdn.example.test/jacket.jpg' }],
+              },
+            ]
+          : [],
+      ),
+    };
     const tx = {
       galleryCarouselSlot,
       gallerySettings,
@@ -159,6 +183,7 @@ describe('GalleryService carousel configuration', () => {
     carouselSlots.forEach((slot, index) => {
       if (index < count) {
         slot.assetId = assets[index].id;
+        slot.itemId = `item-${index + 1}`;
         slot.altText = `Foto ${assets[index].id}`;
       }
     });
@@ -182,8 +207,8 @@ describe('GalleryService carousel configuration', () => {
 
     expect(result.mode).toBe(GalleryPresentationMode.MOSAIC);
     expect(result.carouselItems.map((item) => item.key)).toEqual([
-      'carousel-1',
-      'carousel-2',
+      'item-1',
+      'item-2',
     ]);
   });
 
@@ -244,7 +269,7 @@ describe('GalleryService carousel configuration', () => {
 
     expect(result.mode).toBe(GalleryPresentationMode.CAROUSEL);
     expect(result.carouselItems[0]).toMatchObject({
-      key: 'carousel-1',
+      key: 'item-1',
       imageSrc: 'https://cdn.example.test/A.jpg',
       variants: {
         galleryGrid: { url: 'https://cdn.example.test/A-grid.webp' },
@@ -271,6 +296,88 @@ describe('GalleryService carousel configuration', () => {
         data: expect.objectContaining({ action: 'gallery.carousel.reorder' }),
       }),
     );
+  });
+
+  it('persists carousel-only description and ordered products through reload and reorder without editing shared assets', async () => {
+    await populate(3);
+    settings = { id: 'global', activeMode: GalleryPresentationMode.CAROUSEL };
+    const sharedDescription = assets[0].description;
+    const saved = await service.updateCarouselSlot(
+      1,
+      {
+        description: 'Solo en carrusel',
+        productIds: [100, 100],
+      },
+      9,
+    );
+    expect(saved.slot).toMatchObject({
+      itemId: 'item-1',
+      description: 'Solo en carrusel',
+      products: [{ id: 100, slug: 'jacket' }],
+    });
+    expect(assets[0].description).toBe(sharedDescription);
+    expect(prisma.galleryAsset.update).not.toHaveBeenCalled();
+    expect(
+      (await service.getAdminConfiguration()).carouselSlots[0].description,
+    ).toBe('Solo en carrusel');
+    await service.reorderCarousel({ sourcePosition: 1, targetPosition: 3 }, 9);
+    const publicItems = (await service.getPublicGallery()).carouselItems;
+    expect(publicItems[2]).toMatchObject({
+      key: 'item-1',
+      description: 'Solo en carrusel',
+      products: [{ id: 100, slug: 'jacket' }],
+    });
+    expect(publicItems[0].description).toBeNull();
+  });
+
+  it('clears prior carousel metadata and creates a new identity when an image is replaced', async () => {
+    await populate(1);
+    const mosaicDescription = assets[0].description;
+    await service.updateCarouselSlot(1, {
+      description: 'Anterior',
+      productIds: [100],
+    });
+    const originalId = carouselSlots[0].itemId;
+    const result = await service.updateCarouselSlot(1, {
+      assetId: 'B',
+      altText: 'Foto B',
+    });
+    expect(result.slot.itemId).not.toBe(originalId);
+    expect(result.slot.description).toBeNull();
+    expect(result.slot.products).toEqual([]);
+    expect(assets[0].description).toBe(mosaicDescription);
+  });
+
+  it('rejects a stale Admin edit without changing the carousel item', async () => {
+    await populate(1);
+    await expect(
+      service.updateCarouselSlot(1, {
+        description: 'Obsoleto',
+        expectedRevision: 9,
+      }),
+    ).rejects.toBeInstanceOf(ConflictException);
+    expect(carouselSlots[0].description).toBeNull();
+  });
+
+  it('keeps two carousel uses of the same asset independent from each other and from Mosaic', async () => {
+    await populate(2);
+    carouselSlots[1].assetId = carouselSlots[0].assetId;
+    await service.updateCarouselSlot(1, {
+      description: 'Primera selección',
+      productIds: [100],
+    });
+    await service.updateCarouselSlot(2, {
+      description: 'Segunda selección',
+      productIds: [],
+    });
+    const items = (await service.getPublicGallery()).carouselItems;
+    expect(items[0].imageSrc).toBe(items[1].imageSrc);
+    expect(items[0].description).toBe('Primera selección');
+    expect(items[1].description).toBe('Segunda selección');
+    expect(items[0].products).toHaveLength(1);
+    expect(items[1].products).toHaveLength(0);
+    expect(assets[0].description).not.toBe(items[0].description);
+    expect(assets[0].description).not.toBe(items[1].description);
   });
 
   it('rejects a sixth placement and keeps the persisted five-position bound', async () => {

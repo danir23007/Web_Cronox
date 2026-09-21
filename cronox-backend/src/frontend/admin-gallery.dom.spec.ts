@@ -86,6 +86,10 @@ const makeSlots = () =>
 const makeCarouselSlots = () =>
   [1, 2, 3, 4, 5].map((position) => ({
     position,
+    itemId: null as string | null,
+    description: null as string | null,
+    products: [] as any[],
+    revision: 0,
     focalX: 50,
     focalY: 50,
     zoom: 1,
@@ -107,6 +111,13 @@ const galleryContent = (slot: any) => ({
   focalX: slot.focalX,
   focalY: slot.focalY,
   zoom: slot.zoom,
+});
+
+const carouselContent = (slot: any) => ({
+  ...galleryContent(slot),
+  itemId: slot.itemId,
+  description: slot.description,
+  products: [...slot.products],
 });
 
 const emptyGalleryContent = () => ({
@@ -319,7 +330,7 @@ const makeDom = (
         const targetIndex = carouselSlots.findIndex(
           (slot) => slot.position === targetPosition,
         );
-        const content = carouselSlots.map(galleryContent);
+        const content = carouselSlots.map(carouselContent);
         const [moved] = content.splice(sourceIndex, 1);
         content.splice(targetIndex, 0, moved);
         carouselSlots.forEach((slot, index) =>
@@ -334,9 +345,35 @@ const makeDom = (
         const position = Number(url.split('/').pop());
         const body = JSON.parse(String(init.body || '{}'));
         const slot = carouselSlots.find((item) => item.position === position)!;
+        if (
+          body.expectedRevision !== undefined &&
+          body.expectedRevision !== slot.revision
+        )
+          return jsonResponse({ message: 'La posición ha cambiado.' }, 409);
         const selected =
           assets.find((asset) => asset.id === body.assetId) || null;
-        Object.assign(slot, body, { asset: selected });
+        const replaced = slot.asset?.id !== selected?.id;
+        slot.itemId = selected
+          ? replaced
+            ? `item-${position}-${slot.revision + 1}`
+            : slot.itemId
+          : null;
+        slot.description = selected
+          ? String(body.description || '').trim() || null
+          : null;
+        slot.products = selected
+          ? (body.productIds || [])
+              .map((id: number) =>
+                repositoryProducts.find((product) => product.id === id),
+              )
+              .filter(Boolean)
+          : [];
+        Object.assign(slot, body, {
+          asset: selected,
+          description: slot.description,
+          products: slot.products,
+          revision: slot.revision + 1,
+        });
         return jsonResponse({ slot });
       }
       if (
@@ -451,10 +488,10 @@ describe('CRONOX admin gallery', () => {
     expect(document.getElementById('galleryUploadProgress')).not.toBeNull();
     expect(document.getElementById('galleryMoveModal')).toBeNull();
     expect(document.getElementById('galleryMoveDestination')).toBeNull();
-    expect(adminHtml).toContain('assets/gallery.css?v=16');
-    expect(adminHtml).toContain('assets/gallery.js?v=13');
+    expect(adminHtml).toContain('assets/gallery.css?v=17');
+    expect(adminHtml).toContain('assets/gallery.js?v=14');
     expect(adminHtml).toContain('assets/admin-gallery.css?v=6');
-    expect(adminHtml).toContain('assets/admin-gallery.js?v=6');
+    expect(adminHtml).toContain('assets/admin-gallery.js?v=7');
     expect(document.getElementById('galleryProductsTitle')?.textContent).toBe(
       'Productos de la imagen',
     );
@@ -1415,6 +1452,7 @@ describe('CRONOX admin gallery', () => {
       imageUrl: `https://storage.example.test/gallery/${suffix}.png`,
     }));
     const { dom, carouselSlots, fetchMock } = makeDom(assets);
+    dom.window.confirm = jest.fn().mockReturnValue(true);
     carouselSlots.slice(0, 4).forEach((slot, index) =>
       Object.assign(slot, {
         asset: assets[index],
@@ -1456,6 +1494,158 @@ describe('CRONOX admin gallery', () => {
     expect(
       document.querySelectorAll('[data-gallery-carousel-position]'),
     ).toHaveLength(5);
+    dom.window.close();
+  });
+
+  it('edits independent carousel metadata, reloads it, and keeps it with the item on reorder', async () => {
+    const asset = { ...oldAsset, description: 'Solo mosaico', products: [] };
+    const { dom, carouselSlots, slots, fetchMock } = makeDom([asset]);
+    assignSlot(slots, 'featured', asset);
+    Object.assign(carouselSlots[0], {
+      asset,
+      itemId: 'independent-item',
+      altText: 'Foto carrusel',
+      description: 'Antes',
+      products: [],
+    });
+    const gallery = (dom.window as any).CRONOX_ADMIN_GALLERY;
+    await gallery.load();
+    const document = dom.window.document;
+    expect(
+      document.querySelector(
+        '[data-gallery-carousel-position="1"] .gallery-admin-carousel__edit',
+      )?.textContent,
+    ).toContain('Editar información');
+    gallery.openEditor(1, null, 'CAROUSEL');
+    expect(
+      (document.getElementById('galleryDescription') as HTMLTextAreaElement)
+        .value,
+    ).toBe('Antes');
+    await flushAsync();
+    const description = document.getElementById(
+      'galleryDescription',
+    ) as HTMLTextAreaElement;
+    description.value = 'Texto propio del carrusel';
+    description.dispatchEvent(new dom.window.Event('input'));
+    (
+      document.querySelector('[data-gallery-product="1"]') as HTMLButtonElement
+    ).click();
+    (document.getElementById('galleryEditorSave') as HTMLButtonElement).click();
+    await flushAsync();
+    expect(carouselSlots[0].description).toBe('Texto propio del carrusel');
+    expect(carouselSlots[0].products.map((product: any) => product.id)).toEqual(
+      [1],
+    );
+    expect(asset.description).toBe('Solo mosaico');
+    expect(asset.products).toEqual([]);
+    expect(
+      fetchMock.mock.calls.some(
+        ([url, init]) =>
+          String(url).endsWith('/api/admin/gallery/carousel/1') &&
+          JSON.parse(String(init?.body)).productIds[0] === 1,
+      ),
+    ).toBe(true);
+    await gallery.load(true);
+    gallery.openEditor(1, null, 'CAROUSEL');
+    expect(description.value).toBe('Texto propio del carrusel');
+    expect(
+      document.querySelectorAll('#gallerySelectedProducts button'),
+    ).toHaveLength(1);
+    document.getElementById('galleryEditorCancel')?.click();
+    await gallery.reorderCarousel(1, 2);
+    expect(gallery.state.carouselSlots[1]).toMatchObject({
+      itemId: 'independent-item',
+      description: 'Texto propio del carrusel',
+      products: [{ id: 1 }],
+    });
+    dom.window.close();
+  });
+
+  it('contains no mojibake in the Gallery Admin source and declares UTF-8', () => {
+    expect(adminHtml).toMatch(/<meta charset="?UTF-8"?/i);
+    for (const source of [adminHtml, adminGalleryScript])
+      expect(source).not.toMatch(/Ãƒ|Ã‚|Ã¡|Ã­a|ï¿½/);
+  });
+
+  it('warns before replacing a carousel image and clears only its own metadata', async () => {
+    const { dom, carouselSlots } = makeDom([oldAsset, secondAsset]);
+    Object.assign(carouselSlots[0], {
+      asset: oldAsset,
+      itemId: 'original-item',
+      altText: 'Foto original',
+      description: 'Texto anterior',
+      products: [repositoryProducts[0]],
+    });
+    const gallery = (dom.window as any).CRONOX_ADMIN_GALLERY;
+    await gallery.load();
+    const confirm = jest
+      .fn()
+      .mockReturnValueOnce(false)
+      .mockReturnValueOnce(true);
+    dom.window.confirm = confirm;
+    gallery.openEditor(1, null, 'CAROUSEL');
+    dom.window.document
+      .querySelector<HTMLButtonElement>('[data-gallery-asset="asset-old"]')
+      ?.click();
+    expect(
+      (
+        dom.window.document.getElementById(
+          'galleryDescription',
+        ) as HTMLTextAreaElement
+      ).value,
+    ).toBe('Texto anterior');
+    const change = dom.window.document.querySelector<HTMLButtonElement>(
+      '[data-gallery-asset="asset-second"]',
+    )!;
+    change.click();
+    await flushAsync();
+    expect(
+      (
+        dom.window.document.getElementById(
+          'galleryDescription',
+        ) as HTMLTextAreaElement
+      ).value,
+    ).toBe('Texto anterior');
+    change.click();
+    await flushAsync();
+    expect(
+      (
+        dom.window.document.getElementById(
+          'galleryDescription',
+        ) as HTMLTextAreaElement
+      ).value,
+    ).toBe('');
+    expect(
+      dom.window.document.querySelectorAll('#gallerySelectedProducts button'),
+    ).toHaveLength(0);
+    expect(confirm).toHaveBeenCalledWith(
+      expect.stringContaining('se borrarán'),
+    );
+    dom.window.close();
+  });
+
+  it('shows a conflict rather than overwriting a carousel item changed after loading', async () => {
+    const { dom, carouselSlots } = makeDom([oldAsset]);
+    Object.assign(carouselSlots[0], {
+      asset: oldAsset,
+      itemId: 'stable-a',
+      altText: 'Foto original',
+      description: 'Guardado',
+    });
+    const gallery = (dom.window as any).CRONOX_ADMIN_GALLERY;
+    await gallery.load();
+    gallery.openEditor(1, null, 'CAROUSEL');
+    carouselSlots[0].revision += 1;
+    (
+      dom.window.document.getElementById(
+        'galleryEditorSave',
+      ) as HTMLButtonElement
+    ).click();
+    await flushAsync();
+    expect(
+      dom.window.document.getElementById('galleryEditorMessage')?.textContent,
+    ).toContain('ha cambiado');
+    expect(carouselSlots[0].description).toBe('Guardado');
     dom.window.close();
   });
 });
