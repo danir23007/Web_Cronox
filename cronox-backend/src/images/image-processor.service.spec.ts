@@ -1,5 +1,9 @@
 import sharp from 'sharp';
-import { ImageProcessorService } from './image-processor.service';
+import {
+  ImageProcessorService,
+  MAX_IMAGE_PIXELS,
+  MAX_MANAGED_IMAGE_RECOVERY_PIXELS,
+} from './image-processor.service';
 
 describe('ImageProcessorService', () => {
   const service = new ImageProcessorService();
@@ -111,5 +115,39 @@ describe('ImageProcessorService', () => {
     await expect(
       service.createVariants(Buffer.from('not-an-image'), ['productCard']),
     ).rejects.toThrow('Imagen no valida');
+  });
+
+  it('keeps the normal limit while allowing a bounded managed-original recovery', async () => {
+    const width = 10_000;
+    const height = 9_000;
+    const source = Buffer.from(
+      `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}"><rect width="100%" height="100%" fill="#123456"/></svg>`,
+    );
+
+    expect(width * height).toBeGreaterThan(MAX_IMAGE_PIXELS);
+    expect(width * height).toBeLessThan(MAX_MANAGED_IMAGE_RECOVERY_PIXELS);
+    await expect(service.inspect(source)).rejects.toThrow('Imagen no valida');
+    await expect(service.inspectManagedOriginal(source)).resolves.toMatchObject(
+      {
+        width,
+        height,
+      },
+    );
+  });
+
+  it('rejects managed originals above the finite recovery ceiling', async () => {
+    const source = Buffer.from(
+      '<svg xmlns="http://www.w3.org/2000/svg" width="15000" height="9000"></svg>',
+    );
+
+    await expect(service.inspectManagedOriginal(source)).rejects.toThrow(
+      `limite seguro ${MAX_MANAGED_IMAGE_RECOVERY_PIXELS} pixeles`,
+    );
+  });
+
+  it('reports the underlying decoder error for a corrupt managed original', async () => {
+    await expect(
+      service.inspectManagedOriginal(Buffer.from('not-an-image')),
+    ).rejects.toThrow(/Original gestionado no procesable: .+/);
   });
 });

@@ -68,6 +68,22 @@ describe('SupabaseStorageService', () => {
     jest
       .spyOn(ImageProcessorService.prototype, 'createVariants')
       .mockResolvedValue([]);
+    jest
+      .spyOn(ImageProcessorService.prototype, 'inspectManagedOriginal')
+      .mockImplementation((buffer) =>
+        Promise.resolve({
+          format: 'png',
+          width: buffer.length >= 24 ? buffer.readUInt32BE(16) || 1 : 1,
+          height: buffer.length >= 24 ? buffer.readUInt32BE(20) || 1 : 1,
+          autoOrient: {
+            width: buffer.length >= 24 ? buffer.readUInt32BE(16) || 1 : 1,
+            height: buffer.length >= 24 ? buffer.readUInt32BE(20) || 1 : 1,
+          },
+        }),
+      );
+    jest
+      .spyOn(ImageProcessorService.prototype, 'createManagedOriginalVariants')
+      .mockResolvedValue([]);
   });
 
   afterEach(() => {
@@ -473,6 +489,143 @@ describe('SupabaseStorageService', () => {
       service.uploadWebsiteMedia(forged, 'portadas'),
     ).rejects.toBeInstanceOf(BadRequestException);
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('backfills a managed HERO original with deterministic keys and no writes in dry-run', async () => {
+    const buffer = Buffer.concat([PNG_SIGNATURE, Buffer.from('managed')]);
+    const derivatives = [
+      ['heroDesktop', 'desktop'],
+      ['heroTablet', 'tablet'],
+      ['heroMobile', 'mobile'],
+    ].map(([preset, role]) => ({
+      preset,
+      role,
+      buffer: Buffer.from(`webp-${role}`),
+      mimeType: 'image/webp' as const,
+      width: 100,
+      height: 50,
+      fileSize: 10,
+      quality: 95,
+    }));
+    jest
+      .spyOn(ImageProcessorService.prototype, 'createManagedOriginalVariants')
+      .mockResolvedValue(derivatives as never);
+    const fetchMock = jest.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      arrayBuffer: async () => buffer,
+    });
+    global.fetch = fetchMock as typeof fetch;
+    const service = new SupabaseStorageService();
+    const options = {
+      url: 'https://storage.example.test/storage/v1/object/public/gallery/original.png',
+      bucket: 'gallery',
+      prefix: 'multimedia-web/portadas/fotos',
+      presets: ['heroDesktop', 'heroTablet', 'heroMobile'] as const,
+      execute: false,
+      declaredMimeType: 'image/png',
+      allowLargeManagedOriginal: true,
+    };
+
+    const first = await service.backfillManagedImage(options);
+    const second = await service.backfillManagedImage(options);
+
+    expect(first.variants).toEqual(second.variants);
+    expect(Object.keys(first.variants)).toEqual([
+      'desktop',
+      'tablet',
+      'mobile',
+    ]);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(
+      fetchMock.mock.calls.some(([, init]) => init?.method === 'POST'),
+    ).toBe(false);
+    expect(
+      Object.values(first.variants).every((variant) =>
+        variant?.storageKey.startsWith(
+          'multimedia-web/portadas/fotos/variants/',
+        ),
+      ),
+    ).toBe(true);
+  });
+
+  it('never replaces or deletes an original during managed backfill and remains retryable after a partial upload', async () => {
+    const buffer = Buffer.concat([PNG_SIGNATURE, Buffer.from('managed')]);
+    const derivatives = ['desktop', 'tablet', 'mobile'].map((role, index) => ({
+      preset: ['heroDesktop', 'heroTablet', 'heroMobile'][index],
+      role,
+      buffer: Buffer.from(`webp-${role}`),
+      mimeType: 'image/webp' as const,
+      width: 100,
+      height: 50,
+      fileSize: 10,
+      quality: 95,
+    }));
+    jest
+      .spyOn(ImageProcessorService.prototype, 'createManagedOriginalVariants')
+      .mockResolvedValue(derivatives as never);
+    const calls: Array<{ url: string; init?: RequestInit }> = [];
+    global.fetch = jest.fn(
+      (input: string | URL | Request, init?: RequestInit) => {
+        const url = typeof input === 'string' ? input : input.toString();
+        calls.push({ url, init });
+        if (!init) {
+          return Promise.resolve({
+            ok: true,
+            status: 200,
+            arrayBuffer: async () => buffer,
+          } as Response);
+        }
+        const uploads = calls.filter((call) => call.init?.method === 'POST');
+        return Promise.resolve({
+          ok: uploads.length !== 2,
+          status: uploads.length === 2 ? 500 : 200,
+        } as Response);
+      },
+    ) as typeof fetch;
+
+    await expect(
+      new SupabaseStorageService().backfillManagedImage({
+        url: 'https://storage.example.test/storage/v1/object/public/gallery/original.png',
+        bucket: 'gallery',
+        prefix: 'multimedia-web/portadas/fotos',
+        presets: ['heroDesktop', 'heroTablet', 'heroMobile'],
+        execute: true,
+        declaredMimeType: 'image/png',
+        allowLargeManagedOriginal: true,
+      }),
+    ).rejects.toThrow('No se pudo subir la imagen');
+
+    const writes = calls.filter((call) => call.init);
+    expect(writes).toHaveLength(2);
+    expect(writes.every((call) => call.init?.method === 'POST')).toBe(true);
+    expect(writes.every((call) => call.url.includes('/variants/'))).toBe(true);
+    expect(writes.every((call) => !call.url.includes('/originals/'))).toBe(
+      true,
+    );
+  });
+
+  it('rejects a managed original MIME mismatch before any storage write', async () => {
+    const buffer = Buffer.concat([PNG_SIGNATURE, Buffer.from('managed')]);
+    const fetchMock = jest.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      arrayBuffer: async () => buffer,
+    });
+    global.fetch = fetchMock as typeof fetch;
+
+    await expect(
+      new SupabaseStorageService().backfillManagedImage({
+        url: 'https://storage.example.test/storage/v1/object/public/gallery/original.png',
+        bucket: 'gallery',
+        prefix: 'multimedia-web/portadas/fotos',
+        presets: ['heroDesktop', 'heroTablet', 'heroMobile'],
+        execute: true,
+        declaredMimeType: 'image/jpeg',
+        allowLargeManagedOriginal: true,
+      }),
+    ).rejects.toThrow('no coincide con el contenido');
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
   it('stores email images in an isolated sender path with dimensions and no credentials in metadata', async () => {

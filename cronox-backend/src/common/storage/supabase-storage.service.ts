@@ -196,6 +196,8 @@ export class SupabaseStorageService {
     prefix: string;
     presets: readonly ImagePresetName[];
     execute: boolean;
+    declaredMimeType?: string;
+    allowLargeManagedOriginal?: boolean;
   }) {
     if (!this.supabaseUrl || !this.serviceRoleKey) {
       throw new Error('Almacenamiento no configurado');
@@ -213,11 +215,36 @@ export class SupabaseStorageService {
     if (!response.ok)
       throw new Error(`No se pudo leer el original (${response.status})`);
     const buffer = Buffer.from(await response.arrayBuffer());
-    const metadata = await this.imageProcessor.inspect(buffer);
-    const derivatives = await this.imageProcessor.createVariants(
-      buffer,
-      options.presets,
-    );
+    const detectedMimeType = this.detectImageMimeType(buffer);
+    if (!detectedMimeType) {
+      throw new Error(
+        'El original gestionado no tiene una firma de imagen valida',
+      );
+    }
+    if (
+      options.declaredMimeType &&
+      options.declaredMimeType !== detectedMimeType
+    ) {
+      throw new Error(
+        `El MIME registrado (${options.declaredMimeType}) no coincide con el contenido (${detectedMimeType})`,
+      );
+    }
+    if (
+      options.allowLargeManagedOriginal &&
+      (options.presets.length !== HERO_IMAGE_PRESETS.length ||
+        options.presets.some((preset) => !HERO_IMAGE_PRESETS.includes(preset)))
+    ) {
+      throw new Error('La recuperacion ampliada solo admite presets HERO');
+    }
+    const metadata = options.allowLargeManagedOriginal
+      ? await this.imageProcessor.inspectManagedOriginal(buffer)
+      : await this.imageProcessor.inspect(buffer);
+    const derivatives = options.allowLargeManagedOriginal
+      ? await this.imageProcessor.createManagedOriginalVariants(
+          buffer,
+          options.presets,
+        )
+      : await this.imageProcessor.createVariants(buffer, options.presets);
     const identity = this.imageIdentity(buffer);
     const variants: ImageVariants = {};
     for (const derivative of derivatives) {
@@ -696,6 +723,12 @@ export class SupabaseStorageService {
     }
 
     return false;
+  }
+
+  private detectImageMimeType(buffer: Buffer) {
+    return [...ALLOWED_IMAGE_MIME_TYPES].find((mimeType) =>
+      this.hasExpectedImageSignature(buffer, mimeType),
+    );
   }
 
   private hasExpectedWebsiteMediaSignature(buffer: Buffer, mimeType: string) {

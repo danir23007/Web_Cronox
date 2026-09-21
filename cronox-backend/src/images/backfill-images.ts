@@ -27,6 +27,19 @@ const integerArg = (name: string, fallback: number) => {
   return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : fallback;
 };
 
+const optionalIdArg = (name: string) => {
+  const prefix = `--${name}=`;
+  const value = process.argv
+    .find((argument) => argument.startsWith(prefix))
+    ?.slice(prefix.length)
+    .trim();
+  if (!value) return undefined;
+  if (!/^[a-z0-9]{10,40}$/.test(value)) {
+    throw new Error(`El valor de --${name} no es valido.`);
+  }
+  return value;
+};
+
 const hasAllRoles = (
   variants: unknown,
   presets: readonly ImagePresetName[],
@@ -61,6 +74,7 @@ async function main() {
   }
   const batchSize = Math.min(integerArg('batch-size', 20), 100);
   const concurrency = Math.min(integerArg('concurrency', 2), 4);
+  const websiteMediaId = optionalIdArg('website-media-id');
   const app = await NestFactory.createApplicationContext(AppModule, {
     logger: false,
   });
@@ -78,7 +92,12 @@ async function main() {
 
   const run = async (
     label: string,
-    records: Array<{ id: string | number; url: string; variants: unknown }>,
+    records: Array<{
+      id: string | number;
+      url: string;
+      variants: unknown;
+      mimeType?: string;
+    }>,
     bucket: string,
     prefix: (record: { id: string | number }) => string,
     presets: readonly ImagePresetName[],
@@ -86,6 +105,7 @@ async function main() {
       id: string | number,
       result: Awaited<ReturnType<typeof storage.backfillManagedImage>>,
     ) => Promise<unknown>,
+    allowLargeManagedOriginal = false,
   ) => {
     for (let offset = 0; offset < records.length; offset += concurrency) {
       await Promise.all(
@@ -102,11 +122,13 @@ async function main() {
               prefix: prefix(record),
               presets,
               execute,
+              declaredMimeType: record.mimeType,
+              allowLargeManagedOriginal,
             });
             summary.originalTotalBytes += result.originalBytes;
             summary.generatedDerivativeBytes += result.derivativeBytes;
-            summary.generated += 1;
             if (execute) await update(record.id, result);
+            summary.generated += 1;
             process.stdout.write(
               `${execute ? 'generated' : 'would-generate'} ${label}:${record.id}\n`,
             );
@@ -123,7 +145,7 @@ async function main() {
 
   try {
     let cursor = 0;
-    while (true) {
+    while (!websiteMediaId) {
       const records = await prisma.productImage.findMany({
         where: { id: { gt: cursor } },
         orderBy: { id: 'asc' },
@@ -151,7 +173,7 @@ async function main() {
     }
 
     let galleryCursor: string | undefined;
-    while (true) {
+    while (!websiteMediaId) {
       const records = await prisma.galleryAsset.findMany({
         orderBy: { id: 'asc' },
         take: batchSize,
@@ -185,11 +207,20 @@ async function main() {
     let mediaCursor: string | undefined;
     while (true) {
       const records = await prisma.websiteMediaAsset.findMany({
-        where: { mediaType: 'image' },
+        where: {
+          mediaType: 'image',
+          ...(websiteMediaId ? { id: websiteMediaId } : {}),
+        },
         orderBy: { id: 'asc' },
         take: batchSize,
         ...(mediaCursor ? { cursor: { id: mediaCursor }, skip: 1 } : {}),
-        select: { id: true, publicUrl: true, folderKey: true, variants: true },
+        select: {
+          id: true,
+          publicUrl: true,
+          folderKey: true,
+          mimeType: true,
+          variants: true,
+        },
       });
       if (!records.length) break;
       await run(
@@ -199,6 +230,7 @@ async function main() {
           url: item.publicUrl,
           variants: item.variants,
           folderKey: item.folderKey,
+          mimeType: item.mimeType,
         })),
         buckets.websiteMedia,
         (record) => {
@@ -215,7 +247,9 @@ async function main() {
               height: result.height,
             },
           }),
+        true,
       );
+      if (websiteMediaId) break;
       mediaCursor = records.at(-1)!.id;
     }
   } finally {
