@@ -483,8 +483,12 @@
   }
 
   window.CRONOX_openQuickAddById = function(id){
-    const p = PRODUCTS.find(x => x.id === id || x.slug === id);
+    const key = String(id ?? "");
+    const p = PRODUCTS.find(x => [x.id, x.backendId, x.slug].some(value => String(value ?? "") === key));
     if (p) openQuickAdd(p);
+  };
+  window.CRONOX_openQuickAdd = function(product) {
+    if (product && typeof product === "object") openQuickAdd(product);
   };
 
   window.CRONOX_createProductCard = createCard;
@@ -831,37 +835,22 @@
 
   window.addEventListener("pageshow", (e) => { if (e.persisted) restoreScrollOrFocus(); });
 
-  async function loadSearchResults(search, categorySlug = "") {
+  async function loadSearchResults(search) {
     const products = [];
     let page = 1;
     let pageCount = 1;
-    let category = null;
 
     do {
-      if (categorySlug) {
-        if (!API || typeof API.getCategoryProducts !== "function") {
-          throw new Error("La API de categorías no está disponible");
-        }
-        const response = await API.getCategoryProducts(categorySlug, {
-          search,
-          page,
-          limit: 100,
-        });
-        category = response?.category || category;
-        if (Array.isArray(response?.products)) products.push(...response.products);
-        pageCount = Number(response?.meta?.pageCount || 1);
-      } else {
-        if (!API || typeof API.getProductsPage !== "function") {
-          throw new Error("La API de búsqueda no está disponible");
-        }
-        const response = await API.getProductsPage({ search, page, limit: 100 });
-        if (Array.isArray(response?.products)) products.push(...response.products);
-        pageCount = Number(response?.meta?.pageCount || 1);
+      if (!API || typeof API.getProductsPage !== "function") {
+        throw new Error("La API de búsqueda no está disponible");
       }
+      const response = await API.getProductsPage({ search, page, limit: 100 });
+      if (Array.isArray(response?.products)) products.push(...response.products);
+      pageCount = Number(response?.meta?.pageCount || 1);
       page += 1;
     } while (page <= pageCount && page <= 1000);
 
-    return { products: adaptCatalog(products), category };
+    return { products: adaptCatalog(products), category: null };
   }
 
   async function loadCatalog() {
@@ -873,7 +862,7 @@
     }
     if (initialQueryRaw) {
       try {
-        const result = await loadSearchResults(initialQueryRaw, initialCategorySlug);
+        const result = await loadSearchResults(initialQueryRaw);
         return {
           products: result.products,
           source: "search-api",
@@ -983,6 +972,7 @@
 
     const nextUrl = new URL(window.location.href);
     nextUrl.searchParams.delete('q');
+    nextUrl.searchParams.delete('categorySlug');
     nextUrl.searchParams.set('search', query);
     nextUrl.hash = 'store';
     window.history.pushState(null, '', nextUrl);
@@ -994,7 +984,7 @@
     productsGrid.replaceChildren();
 
     try {
-      const result = await loadSearchResults(query, initialCategorySlug);
+      const result = await loadSearchResults(query);
       catalogLoadError = null;
       catalogEmptyMessage = 'No se han encontrado productos para esta búsqueda.';
       if (storeHeading) {
@@ -1003,6 +993,9 @@
           : `Resultados para “${query}”`;
       }
       setProducts(result.products);
+      filtersForm?.querySelectorAll('input[type="checkbox"]:checked').forEach((input) => {
+        input.checked = false;
+      });
       applyAll();
       notifyCatalogReady('search-api');
     } catch (error) {

@@ -445,6 +445,7 @@ model NewsletterSettings {
   mobileFocalY  Float              @default(50)
   mobileZoom    Float              @default(1)
   mobileFit     MediaFitMode       @default(COVER)
+  mediaOpacity  Float              @default(1)
   asciiEnabled  Boolean            @default(true)
   asciiOpacity  Float              @default(1)
   revision      Int                @default(0)

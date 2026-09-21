@@ -19,19 +19,10 @@
 .newsletter-admin__previews { display:grid; grid-template-columns:minmax(0,1fr) minmax(240px,.42fr); gap:18px; align-items:start; }
 .newsletter-admin__previews article { display:grid; gap:9px; min-width:0; }
 .newsletter-preview { position:relative; overflow:hidden; border:1px solid #40404a; border-radius:10px; background:#18181f; padding:12px; }
-.newsletter-preview .newsletter-modal { width:100%; max-height:none; overflow:hidden; opacity:1; transform:none; box-shadow:none; }
-.newsletter-preview--desktop .newsletter-modal { font-size:clamp(7px,1vw,14px); }
-.newsletter-preview--desktop .newsletter-modal-grid { min-height:0; aspect-ratio:8/3; }
-.newsletter-preview--desktop .newsletter-modal-content { padding:clamp(10px,2vw,28px); gap:clamp(4px,1vw,12px); }
-.newsletter-preview--desktop .newsletter-modal-title { font-size:clamp(11px,2vw,25px); }
-.newsletter-preview--desktop .newsletter-modal-input { padding:8px; }
-.newsletter-preview--desktop .newsletter-modal-button { height:36px; }
+.newsletter-preview__viewport { position:relative; width:100%; overflow:hidden; }
+.newsletter-preview__surface { position:absolute; inset:auto; display:flex; opacity:1; visibility:visible; transition:none; transform-origin:top left; }
+.newsletter-preview__surface[data-newsletter-logical-width="390"] { padding:10px; }
 .newsletter-preview--mobile { max-width:390px; margin-inline:auto; }
-.newsletter-preview--mobile .newsletter-modal-grid { grid-template-columns:1fr; min-height:0; }
-.newsletter-preview--mobile .newsletter-modal-image { min-height:180px; }
-.newsletter-preview--mobile .newsletter-modal-content { padding:16px; gap:7px; }
-.newsletter-preview--mobile .newsletter-modal-title { font-size:18px; }
-.newsletter-preview .newsletter-modal-close { width:34px; height:34px; font-size:18px; }
 .newsletter-preview .popup-image-wrapper { touch-action:none; cursor:grab; }
 .newsletter-preview .popup-image-wrapper.is-dragging { cursor:grabbing; }
 @media(max-width:1050px){.newsletter-admin__layout{grid-template-columns:1fr}.newsletter-admin__previews{grid-template-columns:1fr}.newsletter-preview--mobile{width:min(390px,100%)}}

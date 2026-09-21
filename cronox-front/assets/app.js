@@ -475,11 +475,8 @@
       if (typeof API.getProductSuggestions !== 'function') {
         throw new Error('La búsqueda no está disponible.');
       }
-      const currentUrl = new URL(window.location.href);
-      const categorySlug = currentUrl.searchParams.get('categorySlug') || '';
       const products = await API.getProductSuggestions(query, {
         limit: 8,
-        categorySlug: /^[a-z0-9-]+$/.test(categorySlug) ? categorySlug : undefined,
       });
       if (requestId !== searchRequestSequence || query !== normalizeSearchQuery(searchInput?.value)) return;
       renderSearchSuggestions(products);
@@ -635,10 +632,7 @@
       return;
     }
 
-    const currentUrl = new URL(window.location.href);
     const params = new URLSearchParams();
-    const categorySlug = currentUrl.searchParams.get('categorySlug') || '';
-    if (/^[a-z0-9-]+$/.test(categorySlug)) params.set('categorySlug', categorySlug);
     params.set('search', query);
     window.location.href = `/tienda?${params.toString()}#store`;
   });
@@ -786,8 +780,8 @@
         this.ids.delete(normId);
         btn.classList.remove('is-favorite');
       }
+      this.updateDomState();
       this.updateTopbarCount();
-      this.emitChange();
 
       try {
         let res;
@@ -809,6 +803,7 @@
         if (!res.ok) {
           throw new Error('Error al sincronizar favorito');
         }
+        this.emitChange();
       } catch (err) {
         console.error('[CRONOX] Error actualizando favorito', err);
         if (willBeFav) {
@@ -818,6 +813,7 @@
           this.ids.add(normId);
           btn.classList.add('is-favorite');
         }
+        this.updateDomState();
         this.updateTopbarCount();
         this.emitChange();
         if (typeof showToast === 'function') {
@@ -1084,105 +1080,6 @@
   const cartCloseBtn = $('#cart-close-btn');
   const cartFooter = cartDrawerEl ? $('.cart-drawer__footer', cartDrawerEl) : null;
   const upsellProducts = new Map();
-  const pendingUpsellAdds = new Set();
-  let activeUpsellCard = null;
-  let upsellSelectorSequence = 0;
-
-  const normalizeUpsellSize = (value) => window.CRONOX_SIZES?.key?.(value) || String(value || '').trim().toUpperCase();
-
-  const isUpsellVariantAvailable = (variant) => {
-    if (!variant || variant.id == null || variant.id === '') return false;
-    if (variant.isActive === false || variant.isAvailable === false) return false;
-    const stock = variant.stockQty ?? variant.stock;
-    return stock != null && Number.isFinite(Number(stock)) && Number(stock) > 0;
-  };
-
-  const getUpsellVariant = (product, size) => {
-    const normalized = normalizeUpsellSize(size);
-    if (!normalized || !Array.isArray(product?.variants)) return null;
-    const matches = product.variants.filter((variant) => normalizeUpsellSize(variant?.size) === normalized);
-    return matches.find(isUpsellVariantAvailable) || matches[0] || null;
-  };
-
-  const fetchFreshUpsellProduct = async (product) => {
-    const slug = String(product?.slug || '').trim();
-    if (!slug || typeof API?.getProductBySlug !== 'function') {
-      throw new Error('No se puede validar el stock de este producto.');
-    }
-    const fresh = await API.getProductBySlug(slug, { cache: 'no-store' });
-    if (!fresh) throw new Error('Producto no disponible.');
-    return fresh;
-  };
-
-  const setUpsellBusy = (card, busy) => {
-    if (!card) return;
-    card.classList.toggle('is-adding', busy);
-    card.setAttribute('aria-busy', busy ? 'true' : 'false');
-    const addButton = card.querySelector('.cart-upsell__add');
-    if (addButton) addButton.disabled = busy;
-    card.querySelectorAll('.cart-upsell__size').forEach((button) => {
-      button.disabled = busy || button.dataset.available !== 'true';
-    });
-  };
-
-  const closeUpsellSelector = ({ restoreFocus = false } = {}) => {
-    const card = activeUpsellCard;
-    if (!card) return;
-    const addButton = card.querySelector('.cart-upsell__add');
-    const selector = card.querySelector('.cart-upsell__sizes');
-    card.classList.remove('is-selecting-size');
-    if (addButton) addButton.setAttribute('aria-expanded', 'false');
-    if (selector) {
-      selector.hidden = true;
-      selector.removeAttribute('aria-busy');
-    }
-    activeUpsellCard = null;
-    if (restoreFocus && addButton && addButton.isConnected) addButton.focus();
-  };
-
-  const renderUpsellSizes = (card, product) => {
-    const selector = card?.querySelector('.cart-upsell__sizes');
-    if (!selector) return;
-    selector.innerHTML = '';
-    selector.removeAttribute('aria-busy');
-
-    const variants = Array.isArray(product?.variants) ? product.variants : [];
-    const sizes = [];
-    const seen = new Set();
-    const addSize = (value) => {
-      const size = normalizeUpsellSize(value);
-      if (!size || seen.has(size)) return;
-      seen.add(size);
-      sizes.push(size);
-    };
-    (Array.isArray(product?.sizes) ? product.sizes : []).forEach(addSize);
-    variants.forEach((variant) => addSize(variant?.size));
-
-    let availableCount = 0;
-    (window.CRONOX_SIZES?.sort?.(sizes) || sizes).forEach((size) => {
-      const variant = getUpsellVariant(product, size);
-      const available = isUpsellVariantAvailable(variant);
-      if (available) availableCount += 1;
-      const button = document.createElement('button');
-      button.type = 'button';
-      button.className = `cart-upsell__size${available ? '' : ' is-unavailable'}`;
-      const displaySize = window.CRONOX_SIZES?.label?.(size) || size;
-      button.textContent = displaySize;
-      button.dataset.size = size;
-      button.dataset.available = available ? 'true' : 'false';
-      button.disabled = !available;
-      button.setAttribute('aria-disabled', available ? 'false' : 'true');
-      button.setAttribute('aria-label', available ? `Añadir talla ${displaySize}` : `Talla ${displaySize}, agotada`);
-      selector.appendChild(button);
-    });
-
-    if (!availableCount) {
-      const soldOut = document.createElement('span');
-      soldOut.className = 'cart-upsell__sold-out';
-      soldOut.textContent = 'Agotado';
-      selector.appendChild(soldOut);
-    }
-  };
 
   const toggleDrawer = (open) => {
     if (!cartOverlayEl || !cartDrawerEl) return;
@@ -1208,14 +1105,10 @@
   };
 
   const closeCartDrawer = () => {
-    closeUpsellSelector();
     toggleDrawer(false);
   };
 
   const openCartDrawer = async () => {
-    // Never reveal a selector left open by a previous drawer session while
-    // the authoritative cart and suggestions are being refreshed.
-    closeUpsellSelector();
     toggleDrawer(true);
     const cart = await fetchCart();
     renderCartDrawer(cart);
@@ -1245,7 +1138,6 @@
 
   const renderUpsell = (cart) => {
     if (!cartUpsellList || !cartUpsellSection) return;
-    closeUpsellSelector();
     upsellProducts.clear();
     const candidates = getUpsellCandidates(cart);
     cartUpsellList.innerHTML = '';
@@ -1265,7 +1157,6 @@
       const card = document.createElement('article');
       card.className = 'cart-upsell__item';
       card.dataset.upsellProduct = productKey;
-      const selectorId = `cart-upsell-sizes-${++upsellSelectorSequence}`;
       card.innerHTML = `
         <div class="cart-upsell__media">
           <div class="cart-upsell__image-frame">
@@ -1275,8 +1166,7 @@
         <div class="cart-upsell__info">
           <p class="cart-upsell__name">${productName}</p>
           <p class="cart-upsell__price">${productPrice}</p>
-          <button class="cart-upsell__add" type="button" aria-expanded="false" aria-controls="${selectorId}" aria-label="Elegir talla para ${productName}">Añadir</button>
-          <div class="cart-upsell__sizes" id="${selectorId}" role="group" aria-label="Tallas disponibles para ${productName}" hidden></div>
+          <button class="cart-upsell__add" type="button" aria-label="Añadir rápidamente ${productName}">+</button>
         </div>
       `;
       window.CRONOX_IMAGES?.applyProduct(
@@ -1287,68 +1177,6 @@
       frag.appendChild(card);
     });
     cartUpsellList.appendChild(frag);
-  };
-
-  const openUpsellSelector = async (card, { focusFirst = false } = {}) => {
-    if (!card) return;
-    closeUpsellSelector();
-    activeUpsellCard = card;
-    const addButton = card.querySelector('.cart-upsell__add');
-    const selector = card.querySelector('.cart-upsell__sizes');
-    if (!addButton || !selector) return;
-
-    card.classList.add('is-selecting-size');
-    addButton.setAttribute('aria-expanded', 'true');
-    selector.hidden = false;
-    selector.setAttribute('aria-busy', 'true');
-    selector.innerHTML = '<span class="cart-upsell__sizes-status">Cargando…</span>';
-
-    const product = upsellProducts.get(card.dataset.upsellProduct || '');
-    try {
-      const fresh = await fetchFreshUpsellProduct(product);
-      if (activeUpsellCard !== card || !card.isConnected) return;
-      renderUpsellSizes(card, fresh);
-      if (focusFirst) card.querySelector('.cart-upsell__size:not(:disabled)')?.focus();
-    } catch (error) {
-      if (activeUpsellCard !== card || !card.isConnected) return;
-      console.error('[CRONOX] No se pudieron validar las tallas del sugerido', error);
-      selector.removeAttribute('aria-busy');
-      selector.innerHTML = '<span class="cart-upsell__sold-out">No disponible</span>';
-    }
-  };
-
-  const addUpsellSize = async (card, sizeButton) => {
-    if (!card || !sizeButton || sizeButton.disabled) return;
-    const productKey = card.dataset.upsellProduct || '';
-    if (!productKey || pendingUpsellAdds.has(productKey)) return;
-    const product = upsellProducts.get(productKey);
-    const size = normalizeUpsellSize(sizeButton.dataset.size);
-    if (!product || !size) return;
-
-    pendingUpsellAdds.add(productKey);
-    setUpsellBusy(card, true);
-    try {
-      // Validate again at the moment of adding: the selector may have stayed
-      // open while another customer consumed the last unit.
-      const fresh = await fetchFreshUpsellProduct(product);
-      const variant = getUpsellVariant(fresh, size);
-      if (!isUpsellVariantAvailable(variant)) {
-        renderUpsellSizes(card, fresh);
-        showToast('Esa talla ya no está disponible');
-        return;
-      }
-
-      const variantId = Number(variant.id) || variant.id;
-      const cart = await addCartItem({ variantId, qty: 1 });
-      showToast('Añadido al carrito ✓');
-      renderCartDrawer(cart);
-    } catch (error) {
-      console.error('[CRONOX] No se pudo añadir sugerido', error);
-      showToast('No se pudo añadir el producto');
-    } finally {
-      pendingUpsellAdds.delete(productKey);
-      if (card.isConnected) setUpsellBusy(card, false);
-    }
   };
 
   const getCartItemImage = (item) => {
@@ -1771,30 +1599,16 @@
     }, true);
 
     cartUpsellList?.addEventListener('click', (ev) => {
-      const sizeButton = ev.target.closest('.cart-upsell__size');
-      if (sizeButton) {
-        ev.preventDefault();
-        ev.stopPropagation();
-        const card = sizeButton.closest('.cart-upsell__item');
-        addUpsellSize(card, sizeButton);
-        return;
-      }
-
       const addButton = ev.target.closest('.cart-upsell__add');
       if (!addButton) return;
       ev.preventDefault();
       ev.stopPropagation();
       const card = addButton.closest('.cart-upsell__item');
       if (!card) return;
-      if (activeUpsellCard === card) {
-        closeUpsellSelector();
-        return;
+      const product = upsellProducts.get(card.dataset.upsellProduct || '');
+      if (product && typeof window.CRONOX_openQuickAdd === 'function') {
+        window.CRONOX_openQuickAdd(product);
       }
-      openUpsellSelector(card, { focusFirst: ev.detail === 0 });
-    });
-
-    document.addEventListener('click', (ev) => {
-      if (activeUpsellCard && !activeUpsellCard.contains(ev.target)) closeUpsellSelector();
     });
 
     const cartIcon = cartTopbarIcon || document.getElementById('cart-icon-btn');
@@ -1807,11 +1621,6 @@
 
     document.addEventListener('keydown', (ev) => {
       if (ev.key === 'Escape' && cartState.drawerOpen) {
-        if (activeUpsellCard) {
-          ev.preventDefault();
-          closeUpsellSelector({ restoreFocus: true });
-          return;
-        }
         closeCartDrawer();
       }
     });
@@ -2583,26 +2392,28 @@ window.CRONOX_USER = window.CRONOX_USER || null;
     newsletterState.overlay = document.querySelector('.newsletter-modal-overlay');
     newsletterState.modal = newsletterState.overlay?.querySelector('.newsletter-modal') || null;
     newsletterState.closeBtn = newsletterState.overlay?.querySelector('.newsletter-modal-close') || null;
-    newsletterState.form = document.getElementById('newsletterForm');
-    newsletterState.emailInput = document.getElementById('newsletterEmail');
+    newsletterState.form = newsletterState.overlay?.querySelector('.newsletter-modal-form') || null;
+    newsletterState.emailInput = newsletterState.overlay?.querySelector('.newsletter-modal-input') || null;
     newsletterState.submitBtn = newsletterState.overlay?.querySelector('.newsletter-modal-button') || null;
     newsletterState.loginLink = newsletterState.overlay?.querySelector('.newsletter-login-link') || null;
     if (newsletterState.submitBtn) {
       newsletterState.submitBtn.textContent = BTN_LABEL_IDLE;
     }
-    newsletterState.feedback = document.getElementById('newsletterFeedback');
+    newsletterState.feedback = newsletterState.overlay?.querySelector('.newsletter-modal-feedback') || null;
   };
 
   const initNewsletterModal = () => {
     if (newsletterState.initialized) return;
     newsletterState.initialized = true;
-    cacheNewsletterElements();
+    newsletterState.overlay = document.querySelector('.newsletter-modal-overlay');
+    newsletterState.modal = newsletterState.overlay?.querySelector('.newsletter-modal') || null;
     if (!newsletterState.overlay || !newsletterState.modal) return;
-    bindNewsletterEvents();
     newsletterState.renderer = window.CRONOX_NEWSLETTER_RENDERER?.mount?.(
       newsletterState.modal,
       window.CRONOX_NEWSLETTER_RENDERER?.DEFAULT_CONFIG || {},
     );
+    cacheNewsletterElements();
+    bindNewsletterEvents();
     void loadNewsletterConfiguration();
 
     const schedule = () => {

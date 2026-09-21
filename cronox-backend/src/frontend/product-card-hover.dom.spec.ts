@@ -176,12 +176,8 @@ describe('premium product-card hover gallery', () => {
     expect(storeStyles).toContain(
       '.product-img:not(.active){pointer-events:none;}',
     );
-    expect(storeStyles).toMatch(
-      /\.page-favorites #favorites-grid \.product-img\{[^}]*position:absolute;[^}]*opacity:0;[^}]*transition:opacity \.28s ease;/,
-    );
-    expect(relatedStyles).toMatch(
-      /\.pdp-related \.product-img\{[^}]*position:absolute;[^}]*opacity:0;[^}]*transition:opacity \.28s ease;/,
-    );
+    expect(storeStyles).not.toContain('.page-favorites #favorites-grid .product-img');
+    expect(relatedStyles).not.toContain('.pdp-related .product-img');
     expect(storeStyles).toMatch(
       /@media \(prefers-reduced-motion:reduce\)\{\s*\.product-img\{transition:none!important;/,
     );

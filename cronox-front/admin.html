@@ -22,8 +22,8 @@
   <link rel="stylesheet" href="assets/admin-mails.css?v=1">
   <link rel="stylesheet" href="assets/admin-key-screen.css?v=2">
   <link rel="stylesheet" href="assets/key-screen-composition.css?v=2">
-  <link rel="stylesheet" href="assets/newsletter-popup.css?v=1">
-  <link rel="stylesheet" href="assets/admin-newsletter.css?v=1">
+  <link rel="stylesheet" href="assets/newsletter-popup.css?v=2">
+  <link rel="stylesheet" href="assets/admin-newsletter.css?v=2">
   <link rel="stylesheet" href="assets/admin-footer.css?v=1">
   <style>
     [hidden] { display: none !important; }
@@ -1167,6 +1167,7 @@
             <input id="newsletterAssetUpload" class="input" type="file" accept="image/jpeg,image/png,image/webp">
             <button id="newsletterAssetUploadButton" class="btn" type="button">Subir y seleccionar</button>
             <div id="newsletterAssetGrid" class="newsletter-assets" aria-live="polite"></div>
+            <label>Opacidad de la imagen <output id="newsletterMediaOpacityValue">100%</output><input id="newsletterMediaOpacity" type="range" min="0" max="100" step="1" value="100"></label>
           </section>
           <section><h3>ENCUADRE</h3>
             <div class="newsletter-device-tabs" role="tablist" aria-label="Dispositivo del encuadre">
@@ -1186,19 +1187,19 @@
         <section class="newsletter-admin__previews" aria-label="Previsualizaciones del popup">
           <article><h3>Desktop</h3>
             <div class="newsletter-preview newsletter-preview--desktop">
-              <div class="newsletter-modal" data-newsletter-preview data-newsletter-device="desktop">
-                <button type="button" class="newsletter-modal-close" tabindex="-1">&times;</button>
-                <div class="newsletter-modal-grid"><div class="newsletter-modal-image"><div class="popup-image-wrapper"><img class="popup-image" alt=""><div class="ascii-overlay"><pre></pre></div></div></div>
-                <div class="newsletter-modal-content"><p class="newsletter-modal-kicker">CRONOX</p><h3 class="newsletter-modal-title">IN&Iacute;CIATE CON UN 10% DE DESCUENTO</h3><p class="newsletter-modal-subtitle">Suscr&iacute;bete para drops, descuentos y acceso anticipado.</p><div class="newsletter-modal-form"><input class="newsletter-modal-input" value="Email" tabindex="-1"><button class="newsletter-modal-button" type="button" tabindex="-1">UNIRSE</button><p class="newsletter-login-prompt">O si ya tienes cuenta, <span class="newsletter-login-link">inicia sesi&oacute;n</span></p></div></div></div>
+              <div class="newsletter-preview__viewport">
+                <div class="newsletter-preview__surface newsletter-modal-overlay newsletter-modal-overlay--visible" data-newsletter-logical-width="1280" data-newsletter-logical-height="720">
+                  <div class="newsletter-modal" data-newsletter-preview data-newsletter-device="desktop"></div>
+                </div>
               </div>
             </div>
           </article>
           <article><h3>Mobile</h3>
             <div class="newsletter-preview newsletter-preview--mobile">
-              <div class="newsletter-modal" data-newsletter-preview data-newsletter-device="mobile">
-                <button type="button" class="newsletter-modal-close" tabindex="-1">&times;</button>
-                <div class="newsletter-modal-grid"><div class="newsletter-modal-image"><div class="popup-image-wrapper"><img class="popup-image" alt=""><div class="ascii-overlay"><pre></pre></div></div></div>
-                <div class="newsletter-modal-content"><p class="newsletter-modal-kicker">CRONOX</p><h3 class="newsletter-modal-title">IN&Iacute;CIATE CON UN 10% DE DESCUENTO</h3><p class="newsletter-modal-subtitle">Suscr&iacute;bete para drops, descuentos y acceso anticipado.</p><div class="newsletter-modal-form"><input class="newsletter-modal-input" value="Email" tabindex="-1"><button class="newsletter-modal-button" type="button" tabindex="-1">UNIRSE</button><p class="newsletter-login-prompt">O si ya tienes cuenta, <span class="newsletter-login-link">inicia sesi&oacute;n</span></p></div></div></div>
+              <div class="newsletter-preview__viewport">
+                <div class="newsletter-preview__surface newsletter-modal-overlay newsletter-modal-overlay--visible" data-newsletter-logical-width="390" data-newsletter-logical-height="844">
+                  <div class="newsletter-modal" data-newsletter-preview data-newsletter-device="mobile"></div>
+                </div>
               </div>
             </div>
           </article>
@@ -1770,7 +1771,7 @@
   <script src="assets/admin-auth-routing.js?v=1"></script>
   <script src="assets/ui-status.js"></script>
   <script src="assets/media-framing-geometry.js?v=5"></script>
-  <script src="assets/newsletter-renderer.js?v=1"></script>
+  <script src="assets/newsletter-renderer.js?v=2"></script>
   <script src="assets/product-card-framing.js?v=1"></script>
   <script src="assets/admin-product-gallery.js?v=1"></script>
   <script src="assets/admin-pagination.js?v=1"></script>
@@ -1783,7 +1784,7 @@
   <script src="assets/key-screen-renderer.js?v=2"></script>
   <script src="assets/admin-key-screen.js?v=3"></script>
   <script src="assets/admin-media.js?v=5"></script>
-  <script src="assets/admin-newsletter.js?v=1"></script>
+  <script src="assets/admin-newsletter.js?v=2"></script>
   <script src="assets/admin-footer.js?v=1"></script>
   <script src="assets/admin-product-order.js?v=1"></script>
 </body>

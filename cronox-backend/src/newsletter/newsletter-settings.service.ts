@@ -50,6 +50,7 @@ export class NewsletterSettingsService {
             fit: record.mobileFit,
           }
         : { ...DEFAULT_FRAME },
+      mediaOpacity: record?.mediaOpacity ?? 1,
       asciiEnabled: record?.asciiEnabled ?? true,
       asciiOpacity: record?.asciiOpacity ?? 1,
       revision: record?.revision ?? 0,
@@ -72,6 +73,7 @@ export class NewsletterSettingsService {
       variants: value.variants,
       desktop: value.desktop,
       mobile: value.mobile,
+      mediaOpacity: value.mediaOpacity,
       asciiEnabled: value.asciiEnabled,
       asciiOpacity: value.asciiOpacity,
     };
@@ -163,6 +165,7 @@ export class NewsletterSettingsService {
           mobileFocalY: dto.mobile.focalY,
           mobileZoom: dto.mobile.zoom,
           mobileFit: dto.mobile.fit,
+          mediaOpacity: dto.mediaOpacity ?? current?.mediaOpacity ?? 1,
           asciiEnabled: dto.asciiEnabled,
           asciiOpacity: dto.asciiOpacity,
           updatedBy: adminId ?? null,
@@ -203,6 +206,7 @@ export class NewsletterSettingsService {
                       zoom: current.mobileZoom,
                       fit: current.mobileFit,
                     },
+                    mediaOpacity: current.mediaOpacity,
                     asciiEnabled: current.asciiEnabled,
                     asciiOpacity: current.asciiOpacity,
                   }
@@ -211,6 +215,7 @@ export class NewsletterSettingsService {
                 mediaAssetId: assetId,
                 desktop: { ...dto.desktop },
                 mobile: { ...dto.mobile },
+                mediaOpacity: dto.mediaOpacity ?? current?.mediaOpacity ?? 1,
                 asciiEnabled: dto.asciiEnabled,
                 asciiOpacity: dto.asciiOpacity,
               },

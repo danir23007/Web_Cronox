@@ -6,16 +6,18 @@ const root = join(__dirname, '../../../cronox-front');
 const read = (path: string) => readFileSync(join(root, path), 'utf8');
 
 describe('stock status presentation', () => {
-  it('uses the shared decoration in standard and both fallback renderers', () => {
+  it('uses the shared card decoration without page-specific fallback renderers', () => {
     expect(read('assets/products.js')).toContain(
       'CRONOX_STOCK?.decorateCard(a, price, p)',
     );
     expect(read('assets/favorites.js')).toContain(
-      'CRONOX_STOCK?.decorateCard(a, price, product)',
+      'const cardBuilder = window.CRONOX_createProductCard',
     );
     expect(read('assets/profile.js')).toContain(
-      'CRONOX_STOCK?.decorateCard(link, priceEl, product)',
+      'const cardBuilder = window.CRONOX_createProductCard',
     );
+    expect(read('assets/favorites.js')).not.toContain('function createProductCard');
+    expect(read('assets/profile.js')).not.toContain('createFallbackProductCard');
   });
   it('centers the vertical information block and keeps distinct, safely wrapping warnings', () => {
     const css = read('assets/store.css');

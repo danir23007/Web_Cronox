@@ -421,7 +421,7 @@
         return `<img${idAttr} class="pdp__media-img${activeClass}" src="${escapeHtml(resolved.src)}"${responsive}${dimensions} alt="${escapeHtml(alt)}" loading="${loading}" decoding="async"${hiddenAttr} aria-hidden="${idx === 0 ? "false" : "true"}">`;
       }).join("");
       pMediaViewport.querySelectorAll(".pdp__media-img").forEach((image, idx) => {
-        window.CRONOX_IMAGES?.applyProduct(image, images[idx], "pdp");
+        window.CRONOX_IMAGES?.apply(image, images[idx], "pdp");
         image.addEventListener("load", () => applyGalleryFraming(image, images[idx]));
         applyGalleryFraming(image, images[idx]);
       });
@@ -438,7 +438,7 @@
       pThumbs.setAttribute("aria-hidden", hideThumbs ? "true" : "false");
       pThumbs.querySelectorAll(".pdp__thumb").forEach(btn => {
         const imageIndex = Number(btn.dataset.index);
-        window.CRONOX_IMAGES?.applyProduct(btn.querySelector("img"), images[imageIndex], "small");
+        window.CRONOX_IMAGES?.apply(btn.querySelector("img"), images[imageIndex], "small");
         btn.addEventListener("click", () => {
           const idx = Number(btn.dataset.index);
           if (!Number.isNaN(idx)) showImage(idx);

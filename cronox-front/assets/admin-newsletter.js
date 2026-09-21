@@ -9,11 +9,26 @@
     focalX: $("newsletterFocalX"), focalY: $("newsletterFocalY"), zoom: $("newsletterZoom"),
     focalXValue: $("newsletterFocalXValue"), focalYValue: $("newsletterFocalYValue"), zoomValue: $("newsletterZoomValue"),
     reset: $("newsletterFrameReset"), asciiEnabled: $("newsletterAsciiEnabled"),
+    mediaOpacity: $("newsletterMediaOpacity"), mediaOpacityValue: $("newsletterMediaOpacityValue"),
     asciiOpacity: $("newsletterAsciiOpacity"), asciiOpacityValue: $("newsletterAsciiOpacityValue"),
   };
   const roots = [...section.querySelectorAll("[data-newsletter-preview]")];
   const geometry = window.CRONOX_MEDIA_GEOMETRY;
   const renderer = window.CRONOX_NEWSLETTER_RENDERER;
+  roots.forEach((root) => renderer?.renderStructure?.(root, { preview: true }));
+  const resizePreviewSurfaces = () => {
+    section.querySelectorAll('.newsletter-preview__surface').forEach((surface) => {
+      const viewport = surface.parentElement;
+      const width = Number(surface.dataset.newsletterLogicalWidth || 0);
+      const height = Number(surface.dataset.newsletterLogicalHeight || 0);
+      if (!viewport || !width || !height) return;
+      const scale = Math.min(1, viewport.clientWidth / width);
+      surface.style.width = `${width}px`;
+      surface.style.height = `${height}px`;
+      surface.style.transform = `scale(${scale})`;
+      viewport.style.height = `${height * scale}px`;
+    });
+  };
   const state = { loaded: false, loading: null, saving: false, device: "desktop", draft: null, assets: [], controllers: [], drag: null };
   const apiBase = () => window.CRONOX_API?.API_BASE || "";
   const frame = (value) => ({ focalX: Number(value?.focalX ?? 50), focalY: Number(value?.focalY ?? 50), zoom: Number(value?.zoom ?? 1), fit: value?.fit || "COVER" });
@@ -37,6 +52,7 @@
     const current = state.draft[state.device];
     elements.focalX.value = String(current.focalX); elements.focalY.value = String(current.focalY); elements.zoom.value = String(current.zoom);
     elements.focalXValue.textContent = `${Math.round(current.focalX)}%`; elements.focalYValue.textContent = `${Math.round(current.focalY)}%`; elements.zoomValue.textContent = `${current.zoom.toFixed(2)}×`;
+    elements.mediaOpacity.value = String(Math.round(state.draft.mediaOpacity * 100)); elements.mediaOpacityValue.textContent = `${Math.round(state.draft.mediaOpacity * 100)}%`;
     elements.asciiEnabled.checked = state.draft.asciiEnabled; elements.asciiOpacity.value = String(Math.round(state.draft.asciiOpacity * 100)); elements.asciiOpacityValue.textContent = `${Math.round(state.draft.asciiOpacity * 100)}%`;
     section.querySelectorAll("[data-newsletter-edit-device]").forEach((button) => { const active = button.dataset.newsletterEditDevice === state.device; button.classList.toggle("is-active", active); button.setAttribute("aria-selected", String(active)); });
   };
@@ -50,9 +66,9 @@
     if (state.loading) return state.loading;
     state.loading = Promise.all([request("/api/admin/newsletter"), request("/api/admin/newsletter/assets")]).then(([settings, library]) => {
       state.assets = Array.isArray(library.assets) ? library.assets : [];
-      state.draft = { mediaAssetId: settings.mediaAssetId || null, source: settings.source || null, desktop: frame(settings.desktop), mobile: frame(settings.mobile), asciiEnabled: settings.asciiEnabled !== false, asciiOpacity: Number(settings.asciiOpacity ?? 1), revision: Number(settings.revision || 0) };
+      state.draft = { mediaAssetId: settings.mediaAssetId || null, source: settings.source || null, desktop: frame(settings.desktop), mobile: frame(settings.mobile), mediaOpacity: Number(settings.mediaOpacity ?? 1), asciiEnabled: settings.asciiEnabled !== false, asciiOpacity: Number(settings.asciiOpacity ?? 1), revision: Number(settings.revision || 0) };
       state.controllers = roots.map((root) => renderer.mount(root, previewConfig()));
-      state.loaded = true; renderAssets(); syncControls(); updatePreviews(); setStatus("Configuración cargada.");
+      state.loaded = true; renderAssets(); syncControls(); updatePreviews(); resizePreviewSurfaces(); setStatus("Configuración cargada.");
     }).catch((error) => setStatus(error.message || "No se pudo cargar Newsletter.", "error")).finally(() => { state.loading = null; });
     return state.loading;
   };
@@ -61,6 +77,7 @@
   elements.focalY.addEventListener("input", () => changeFrame("focalY", elements.focalY.value));
   elements.zoom.addEventListener("input", () => changeFrame("zoom", elements.zoom.value));
   elements.reset.addEventListener("click", () => { if (!state.draft) return; state.draft[state.device] = frame(); syncControls(); updatePreviews(); });
+  elements.mediaOpacity.addEventListener("input", () => { if (!state.draft) return; state.draft.mediaOpacity = Number(elements.mediaOpacity.value) / 100; syncControls(); updatePreviews(); });
   elements.asciiEnabled.addEventListener("change", () => { if (!state.draft) return; state.draft.asciiEnabled = elements.asciiEnabled.checked; updatePreviews(); });
   elements.asciiOpacity.addEventListener("input", () => { if (!state.draft) return; state.draft.asciiOpacity = Number(elements.asciiOpacity.value) / 100; syncControls(); updatePreviews(); });
   section.querySelectorAll("[data-newsletter-edit-device]").forEach((button) => button.addEventListener("click", () => { state.device = button.dataset.newsletterEditDevice; syncControls(); }));
@@ -73,7 +90,9 @@
     wrapper?.addEventListener("pointerup", stop); wrapper?.addEventListener("pointercancel", stop);
   });
   elements.uploadButton.addEventListener("click", async () => { const file = elements.upload.files?.[0]; if (!file) return setStatus("Selecciona una imagen.", "error"); elements.uploadButton.disabled = true; try { const form = new FormData(); form.append("file", file); const response = await request("/api/admin/newsletter/assets", { method: "POST", body: form }); const uploaded = { ...response.asset, source: response.asset.publicUrl || response.asset.source }; state.assets.unshift(uploaded); state.draft.mediaAssetId = uploaded.id; state.draft.source = uploaded.source; renderAssets(); updatePreviews(); setStatus("Imagen subida. Guarda para publicarla.", "success"); } catch (error) { setStatus(error.message, "error"); } finally { elements.uploadButton.disabled = false; } });
-  elements.save.addEventListener("click", async () => { if (!state.draft || state.saving) return; state.saving = true; elements.save.disabled = true; setStatus("Guardando…"); try { const saved = await request("/api/admin/newsletter", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ mediaAssetId: state.draft.mediaAssetId, desktop: state.draft.desktop, mobile: state.draft.mobile, asciiEnabled: state.draft.asciiEnabled, asciiOpacity: state.draft.asciiOpacity, expectedRevision: state.draft.revision }) }); state.draft.revision = saved.revision; state.draft.source = saved.source; setStatus("Newsletter guardada correctamente.", "success"); } catch (error) { setStatus(error.message, "error"); } finally { state.saving = false; elements.save.disabled = false; } });
+  elements.save.addEventListener("click", async () => { if (!state.draft || state.saving) return; state.saving = true; elements.save.disabled = true; setStatus("Guardando…"); try { const saved = await request("/api/admin/newsletter", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ mediaAssetId: state.draft.mediaAssetId, desktop: state.draft.desktop, mobile: state.draft.mobile, mediaOpacity: state.draft.mediaOpacity, asciiEnabled: state.draft.asciiEnabled, asciiOpacity: state.draft.asciiOpacity, expectedRevision: state.draft.revision }) }); state.draft.revision = saved.revision; state.draft.source = saved.source; setStatus("Newsletter guardada correctamente.", "success"); } catch (error) { setStatus(error.message, "error"); } finally { state.saving = false; elements.save.disabled = false; } });
+  if (typeof ResizeObserver === "function") new ResizeObserver(() => { resizePreviewSurfaces(); state.controllers.forEach((controller) => controller?.reflow?.()); }).observe(section.querySelector('.newsletter-admin__previews'));
+  else window.addEventListener('resize', resizePreviewSurfaces);
   document.querySelectorAll('[data-nav-target="section-newsletter"]').forEach((button) => button.addEventListener("click", load));
   if (window.location.hash === "#section-newsletter") void load();
   window.CRONOX_NEWSLETTER_ADMIN = { load };

@@ -65,13 +65,24 @@ describe('storefront search contracts', () => {
     expect(products).toContain(
       'API.getProductsPage({ search, page, limit: 100 })',
     );
-    expect(products).toContain('API.getCategoryProducts(categorySlug, {');
+    expect(products).toContain('async function loadSearchResults(search)');
+    expect(products).toContain("nextUrl.searchParams.delete('categorySlug')");
+    expect(products).toContain('loadSearchResults(initialQueryRaw)');
+    expect(products).toContain('loadSearchResults(query)');
+    expect(products).toContain('API.getCategoryProducts(initialCategorySlug, {');
     expect(products).toContain('setProducts(result.products)');
     expect(products).toContain('applyAll()');
     expect(products).toContain(
       'No se han encontrado productos para esta búsqueda.',
     );
     expect(products).toContain("scrollIntoView({ behavior: 'smooth'");
+    const app = readFrontend('assets/app.js');
+    const suggestions = app.slice(
+      app.indexOf('const loadSearchSuggestions ='),
+      app.indexOf('const navigateSearchSuggestion ='),
+    );
+    expect(suggestions).not.toContain('categorySlug');
+    expect(app).not.toContain("params.set('categorySlug'");
   });
 
   it('exposes editable search keywords only in the admin product flow', () => {

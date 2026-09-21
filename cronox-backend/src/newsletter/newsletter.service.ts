@@ -46,6 +46,7 @@ export class NewsletterService {
         variants: null,
         desktop: { focalX: 50, focalY: 50, zoom: 1, fit: 'COVER' },
         mobile: { focalX: 50, focalY: 50, zoom: 1, fit: 'COVER' },
+        mediaOpacity: 1,
         asciiEnabled: true,
         asciiOpacity: 1,
       }
