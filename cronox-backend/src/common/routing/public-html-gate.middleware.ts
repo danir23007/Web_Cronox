@@ -8,12 +8,8 @@ import {
   UNGATED_PUBLIC_PATHS,
 } from './public-pages';
 
-const UNGATED_ADMIN_PATHS = new Set([
-  '/admin',
-  '/admin.html',
-  '/admin-login.html',
-  '/admin-user.html',
-]);
+const PROTECTED_ADMIN_PATHS = new Set(['/admin.html', '/admin-user.html']);
+const UNGATED_ADMIN_PATHS = new Set(['/admin', '/admin-login.html']);
 
 type PublicHtmlGateDependencies = {
   authService: Pick<AuthService, 'hasValidAdminSession'>;
@@ -63,6 +59,15 @@ export const createPublicHtmlGateMiddleware =
     if (req.method !== 'GET' && req.method !== 'HEAD') return next();
 
     const pathname = normalizePublicPath(req.path);
+    if (PROTECTED_ADMIN_PATHS.has(pathname)) {
+      res.setHeader('Cache-Control', 'private, no-store');
+      res.vary('Cookie');
+      if (await hasAdminPreviewSession(req, authService, res)) return next();
+      return res.redirect(
+        307,
+        `/admin-login.html?returnTo=${encodeURIComponent(req.originalUrl)}`,
+      );
+    }
     if (isExcludedPath(pathname)) return next();
 
     const acceptsHtml = req.accepts(['html', 'json']) === 'html';

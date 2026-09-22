@@ -101,7 +101,7 @@ describe('dedicated Admin authentication flow', () => {
     expect(auth.isAdmin({ role: 'USER' })).toBe(false);
   });
 
-  it('rejects non-Admin credentials generically and clears the newly created user session', async () => {
+  it('rejects non-Admin panel access while preserving the customer session', async () => {
     const dom = new JSDOM(loginHtml, {
       runScripts: 'outside-only',
       url: 'https://cronox.test/admin-login.html',
@@ -131,9 +131,9 @@ describe('dedicated Admin authentication flow', () => {
       email: 'person@example.test',
       password: 'not-an-admin',
     });
-    expect(logout).toHaveBeenCalledTimes(1);
+    expect(logout).not.toHaveBeenCalled();
     expect(document.querySelector('#adminLoginStatus')?.textContent).toBe(
-      'No se pudo iniciar sesión. Revisa tus credenciales.',
+      'Esta cuenta no tiene acceso al panel.',
     );
   });
 

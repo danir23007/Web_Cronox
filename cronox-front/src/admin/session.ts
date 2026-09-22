@@ -13,7 +13,6 @@ export function installSessionTransport(
     window.location.href,
   ).origin;
   const endpoint = (path: string) => new URL(path, origin).href;
-  const IDLE = 90 * 60_000;
   const THROTTLE = 3 * 60_000;
   const KEY = "cronox.session.event";
   const LOCK = "cronox.session.refresh-lock";
@@ -22,6 +21,7 @@ export function installSessionTransport(
   let lastReport = 0;
   let dirty = false;
   let ended = false;
+  let authenticated = false;
   let refreshPromise: Promise<boolean> | null = null;
   let activityPromise: Promise<void> | null = null;
   let idleTimer: ReturnType<typeof setTimeout> | undefined;
@@ -61,6 +61,7 @@ export function installSessionTransport(
   function terminate(idle: boolean, broadcast = true, navigate = true) {
     if (ended) return;
     ended = true;
+    authenticated = false;
     deadline = 0;
     clearTimeout(idleTimer);
     clearTimeout(activityTimer);
@@ -108,10 +109,17 @@ export function installSessionTransport(
     );
   }
 
-  function observe(response: Response) {
+  function observe(response: Response, authResponse = false) {
     if (response.ok) {
       const value = Number(response.headers.get("X-Session-Idle-Expires"));
       if (value) acceptDeadline(value);
+      if (authResponse) {
+        authenticated = true;
+        if (!value) {
+          deadline = 0;
+          clearTimeout(idleTimer);
+        }
+      }
     }
     return response;
   }
@@ -158,6 +166,7 @@ export function installSessionTransport(
         credentials: "include",
         cache: "no-store",
       }),
+      true,
     );
     if (probe.ok) return true;
     const response = observe(
@@ -167,6 +176,7 @@ export function installSessionTransport(
         headers: await csrfHeaders(),
         cache: "no-store",
       }),
+      true,
     );
     if (response.ok) {
       refreshedAt = Date.now();
@@ -177,9 +187,7 @@ export function installSessionTransport(
       const code = await errorCode(response);
       // Anonymous visits do not redirect. Previously authenticated pages do.
       const known =
-        Boolean(deadline) ||
-        code === "SESSION_IDLE" ||
-        code === "SESSION_REAUTH_REQUIRED";
+        authenticated || Boolean(deadline) || Boolean(code?.startsWith("SESSION_"));
       terminate(code === "SESSION_IDLE", true, known);
       return false;
     }
@@ -256,7 +264,10 @@ export function installSessionTransport(
       typeof Request !== "undefined" && input instanceof Request
         ? input.clone()
         : input;
-    let response = observe(await rawFetch(input, init));
+    const authResponse =
+      url.pathname === "/api/me" ||
+      /^\/api\/auth\/(?:login|register|refresh)$/.test(url.pathname);
+    let response = observe(await rawFetch(input, init), authResponse);
     if (response.status === 401 && !noRetry.test(url.pathname)) {
       const code = await errorCode(response);
       if (code?.startsWith("SESSION_")) {
@@ -264,13 +275,12 @@ export function installSessionTransport(
         return response;
       }
       if (!ended && (await refresh()))
-        response = observe(await rawFetch(retryInput, init));
+        response = observe(await rawFetch(retryInput, init), authResponse);
       if (response.status === 401 && deadline)
         terminate((await errorCode(response)) === "SESSION_IDLE");
     }
     if (response.ok && /\/auth\/(login|register)$/.test(url.pathname)) {
       ended = false;
-      if (!deadline) acceptDeadline(Date.now() + IDLE);
       announce("activity");
     }
     if (response.ok && url.pathname === "/api/auth/logout")
@@ -328,7 +338,6 @@ export function installSessionTransport(
   }
   for (const name of [
     "pointerdown",
-    "pointermove",
     "keydown",
     "touchstart",
     "scroll",

@@ -7,6 +7,11 @@ import {
   REFRESH_RACE_MS,
   SESSION_IDLE_MS,
 } from './auth-sessions.service';
+import {
+  ACCESS_TOKEN_SECONDS,
+  ADMIN_REFRESH_SECONDS,
+  PERSISTENT_SESSION_SECONDS,
+} from './session-policy';
 
 describe('server-authoritative sliding auth sessions', () => {
   const originalEnv = { ...process.env };
@@ -40,6 +45,11 @@ describe('server-authoritative sliding auth sessions', () => {
     const matches = (row: any, where: any) => {
       if (where.id && row.id !== where.id) return false;
       if (where.generation !== undefined && row.generation !== where.generation)
+        return false;
+      if (
+        where.refreshIssuedAt?.gt !== undefined &&
+        row.refreshIssuedAt <= where.refreshIssuedAt.gt
+      )
         return false;
       if (where.revokedAt === null && row.revokedAt !== null) return false;
       if (
@@ -112,7 +122,78 @@ describe('server-authoritative sliding auth sessions', () => {
     },
   );
 
-  it('allows refresh at 89 minutes and rejects/revokes after more than 90 minutes', async () => {
+  it.each([Role.USER, Role.FRIEND, Role.SUPERADMIN])(
+    'gives %s a rolling 500-day server session and a 15-minute access JWT',
+    async (role) => {
+      user.role = role;
+      const first = await service.create(user);
+      const session = [...records.values()][0];
+      const accessPayload = JSON.parse(
+        Buffer.from(first.accessToken.split('.')[1], 'base64url').toString(),
+      ) as { exp: number; iat: number };
+      expect(accessPayload.exp - accessPayload.iat).toBe(ACCESS_TOKEN_SECONDS);
+      expect(first.idleExpiresAt).toBeUndefined();
+      expect(first.refreshExpiresAt.getTime()).toBe(
+        (session.refreshIssuedAt + PERSISTENT_SESSION_SECONDS) * 1000,
+      );
+
+      jest.setSystemTime(now + (PERSISTENT_SESSION_SECONDS - 120) * 1000);
+      await expect(
+        service.verify(first.refreshToken, 'refresh'),
+      ).resolves.toBeTruthy();
+      const renewed = await service.rotate(first.refreshToken);
+      expect(renewed.refreshExpiresAt.getTime()).toBe(
+        (session.refreshIssuedAt + PERSISTENT_SESSION_SECONDS) * 1000,
+      );
+      expect(renewed.refreshExpiresAt.getTime()).toBeGreaterThan(
+        first.refreshExpiresAt.getTime(),
+      );
+      await expect(
+        service.verify(renewed.refreshToken, 'refresh'),
+      ).resolves.toBeTruthy();
+    },
+  );
+
+  it('rejects a persistent session unused beyond 500 days', async () => {
+    const first = await service.create(user);
+    jest.setSystemTime(now + (PERSISTENT_SESSION_SECONDS + 1) * 1000);
+    await expect(
+      service.verify(first.refreshToken, 'refresh'),
+    ).rejects.toBeInstanceOf(UnauthorizedException);
+  });
+
+  it('keeps the existing seven-day refresh lifetime for ADMIN and does not renew on passive refresh validation', async () => {
+    user.role = Role.ADMIN;
+    const first = await service.create(user);
+    const session = [...records.values()][0];
+    expect(first.refreshExpiresAt.getTime()).toBe(
+      (session.refreshIssuedAt + ADMIN_REFRESH_SECONDS) * 1000,
+    );
+    expect(first.idleExpiresAt).toBe(now + SESSION_IDLE_MS);
+    jest.setSystemTime(now + 89 * 60_000);
+    await service.verify(first.refreshToken, 'refresh');
+    expect(session.lastActivityAt.getTime()).toBe(now);
+    await service.rotate(first.refreshToken);
+    expect(session.lastActivityAt.getTime()).toBe(now);
+    jest.setSystemTime(now + 90 * 60_000 + 1);
+    await expect(
+      service.verify(first.refreshToken, 'refresh'),
+    ).rejects.toMatchObject({
+      response: { code: 'SESSION_IDLE' },
+    });
+  });
+
+  it('does not apply the ADMIN idle timeout to SUPERADMIN', async () => {
+    user.role = Role.SUPERADMIN;
+    const first = await service.create(user);
+    jest.setSystemTime(now + 91 * 60_000);
+    await expect(
+      service.verify(first.refreshToken, 'refresh'),
+    ).resolves.toBeTruthy();
+  });
+
+  it('keeps ADMIN valid at 89 minutes and rejects/revokes after more than 90 minutes', async () => {
+    user.role = Role.ADMIN;
     const first = await service.create(user);
     jest.advanceTimersByTime(89 * 60_000);
     await expect(
@@ -131,6 +212,7 @@ describe('server-authoritative sliding auth sessions', () => {
   });
 
   it('touches atomically only after the write throttle and resets the idle deadline', async () => {
+    user.role = Role.ADMIN;
     const first = await service.create(user);
     const claims = {
       sub: 7,
@@ -152,6 +234,7 @@ describe('server-authoritative sliding auth sessions', () => {
   });
 
   it('gives separate devices independent inactivity deadlines', async () => {
+    user.role = Role.ADMIN;
     const deviceA = await service.create(user);
     const idA = [...records.keys()][0];
     jest.advanceTimersByTime(2 * 60_000);
@@ -165,6 +248,21 @@ describe('server-authoritative sliding auth sessions', () => {
     await expect(
       service.verify(deviceB.refreshToken, 'refresh'),
     ).resolves.toBeTruthy();
+  });
+
+  it('revokes only the logged-out device while the other device refreshes', async () => {
+    const deviceA = await service.create(user);
+    const idA = [...records.keys()][0];
+    const deviceB = await service.create(user);
+    await service.revoke(idA);
+    await expect(
+      service.verify(deviceA.refreshToken, 'refresh'),
+    ).rejects.toBeInstanceOf(UnauthorizedException);
+    const renewedB = await service.rotate(deviceB.refreshToken);
+    await expect(
+      service.verify(renewedB.refreshToken, 'refresh'),
+    ).resolves.toBeTruthy();
+    expect(user.sessionVersion).toBe(3);
   });
 
   it('returns one rotation result during a tab race and revokes replay outside grace', async () => {

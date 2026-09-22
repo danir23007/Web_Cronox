@@ -1,12 +1,10 @@
 import {
   BadRequestException,
   ConflictException,
-  Inject,
   Injectable,
   Logger,
   UnauthorizedException,
 } from '@nestjs/common';
-import { JwtService } from '@nestjs/jwt';
 import { User, UserAccountState } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 import { createHash, randomBytes } from 'crypto';
@@ -32,11 +30,13 @@ import { parseClientInfo } from '../analytics/client-info';
 import { normalizeEmail } from '../common/email';
 import { isAdminPanelRole } from '../common/roles.utils';
 import { AuthSessionsService, SessionClaims } from './auth-sessions.service';
+import { ACCESS_TOKEN_SECONDS } from './session-policy';
 
 const PASSWORD_SETUP_CLAIM_STALE_MS = 10 * 60 * 1000;
 
 type Tokens = {
   idleExpiresAt?: number;
+  refreshExpiresAt: Date;
   accessToken: string;
   refreshToken?: string;
 };
@@ -58,13 +58,10 @@ export class AuthService {
     // such as APP_ENV must not be able to silently weaken this invariant.
     secure: this.isProd,
     path: '/',
-    maxAge: 7 * 24 * 60 * 60 * 1000,
   };
 
   constructor(
     private readonly usersService: UsersService,
-    private readonly jwtService: JwtService,
-    @Inject('JWT_REFRESH_SERVICE') private readonly refreshJwt: JwtService,
     private readonly cartService: CartService,
     private readonly prisma: PrismaService,
     private readonly emailService: EmailService,
@@ -220,12 +217,7 @@ export class AuthService {
     this.logger.warn('Guest cart merge failed');
   }
 
-  /**
-   * Logout is intentionally idempotent. When a current access or refresh
-   * cookie validates, compare-and-increment sessionVersion invalidates both
-   * token types server-side. Missing or stale cookies are simply cleared by
-   * the controller.
-   */
+  /** Logout revokes only the current browser's AuthSession. */
   async logout(accessToken?: string, refreshToken?: string): Promise<void> {
     const session = await this.getCurrentSession(accessToken, refreshToken);
     if (!session) {
@@ -246,22 +238,61 @@ export class AuthService {
     return this.prisma.$transaction(async (tx) => {
       const cart = await tx.cart.findUnique({
         where: { userId: session.userId },
-        select: { id: true },
+        select: {
+          id: true,
+          itemsCount: true,
+          subtotal: true,
+          items: {
+            select: { variantId: true, qty: true, priceAtAdd: true },
+          },
+        },
       });
 
       if (cart) {
-        await tx.checkoutSnapshot.updateMany({
+        const otherSessions = await tx.authSession.count({
           where: {
             userId: session.userId,
-            anonymousId: null,
-            cartId: cart.id,
+            id: { not: session.id },
+            revokedAt: null,
           },
-          data: { userId: null, anonymousId },
         });
-        await tx.cart.update({
-          where: { id: cart.id },
-          data: { userId: null, anonymousId },
-        });
+        const pendingCheckout = otherSessions
+          ? await tx.checkoutSnapshot.count({
+              where: {
+                userId: session.userId,
+                cartId: cart.id,
+                orderId: null,
+                expiresAt: { gt: new Date() },
+              },
+            })
+          : 0;
+        if (otherSessions && !pendingCheckout) {
+          // Keep the account cart available to other devices while this
+          // browser receives an independent guest copy.
+          await tx.cart.create({
+            data: {
+              anonymousId,
+              itemsCount: cart.itemsCount,
+              subtotal: cart.subtotal,
+              items: { create: cart.items },
+            },
+          });
+        } else {
+          // An in-flight Stripe checkout keeps the established cart and
+          // snapshot handoff so its return can still complete as a guest.
+          await tx.checkoutSnapshot.updateMany({
+            where: {
+              userId: session.userId,
+              anonymousId: null,
+              cartId: cart.id,
+            },
+            data: { userId: null, anonymousId },
+          });
+          await tx.cart.update({
+            where: { id: cart.id },
+            data: { userId: null, anonymousId },
+          });
+        }
       }
 
       await tx.authSession.updateMany({
@@ -465,18 +496,21 @@ export class AuthService {
     res.setHeader('Cache-Control', 'no-store');
     if (tokens.idleExpiresAt)
       res.setHeader('X-Session-Idle-Expires', String(tokens.idleExpiresAt));
-    res.cookie('jwt', tokens.accessToken, this.jwtCookieOptions);
+    res.cookie('jwt', tokens.accessToken, {
+      ...this.jwtCookieOptions,
+      maxAge: ACCESS_TOKEN_SECONDS * 1000,
+    });
     if (tokens.refreshToken) {
-      res.cookie('refresh_token', tokens.refreshToken, this.jwtCookieOptions);
+      res.cookie('refresh_token', tokens.refreshToken, {
+        ...this.jwtCookieOptions,
+        expires: tokens.refreshExpiresAt,
+      });
     }
   }
 
   clearAuthCookies(res: Response) {
-    res.clearCookie('jwt', { ...this.jwtCookieOptions, maxAge: undefined });
-    res.clearCookie('refresh_token', {
-      ...this.jwtCookieOptions,
-      maxAge: undefined,
-    });
+    res.clearCookie('jwt', this.jwtCookieOptions);
+    res.clearCookie('refresh_token', this.jwtCookieOptions);
   }
 
   clearMergedAnonymousCartCookie(res: Response) {

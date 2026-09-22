@@ -4,8 +4,9 @@ import { ExtractJwt, Strategy } from 'passport-jwt';
 import type { Request } from 'express';
 import { getRequiredJwtSecret } from '../../common/config/environment';
 import { UsersService } from '../../users/users.service';
-import { UserAccountState } from '@prisma/client';
+import { Role, UserAccountState } from '@prisma/client';
 import { AuthSessionsService, SessionClaims } from '../auth-sessions.service';
+import { ADMIN_IDLE_MS } from '../session-policy';
 
 const extractAccessToken = (req: Request): string | null => {
   if (!req) {
@@ -61,10 +62,11 @@ export class JwtAccessStrategy extends PassportStrategy(Strategy, 'jwt') {
     const session = await this.sessions.validate(payload as SessionClaims);
     (req as Request & { authSession?: SessionClaims }).authSession =
       payload as SessionClaims;
-    req.res?.setHeader(
-      'X-Session-Idle-Expires',
-      String(session.lastActivityAt.getTime() + 90 * 60_000),
-    );
+    if (user.role === Role.ADMIN)
+      req.res?.setHeader(
+        'X-Session-Idle-Expires',
+        String(session.lastActivityAt.getTime() + ADMIN_IDLE_MS),
+      );
     return this.usersService.toSafeUser(user);
   }
 }

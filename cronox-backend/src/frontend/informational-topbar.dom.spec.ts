@@ -84,7 +84,7 @@ describe('informational footer destinations use the shared CRONOX topbar', () =>
         ),
       ).toHaveLength(1);
       expect(html.match(/assets\/app\.js\?v=63/g)).toHaveLength(1);
-      expect(html.match(/assets\/api\.js\?v=5/g)).toHaveLength(1);
+      expect(html.match(/assets\/api\.js\?v=6/g)).toHaveLength(1);
       expect(html.match(/assets\/cart-badge\.js\?v=43/g)).toHaveLength(1);
 
       const dom = new JSDOM(html, {

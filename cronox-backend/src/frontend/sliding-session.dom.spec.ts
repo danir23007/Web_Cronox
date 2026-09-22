@@ -18,9 +18,16 @@ describe('browser sliding-session transport', () => {
     expect(source).toMatch(/new BroadcastChannel\(["']cronox\.session["']\)/);
     expect(source).toMatch(/window\.addEventListener\(["']storage["']/);
     expect(source).toContain('navigator.locks?.request');
-    for (const eventName of ['pointerdown', 'pointermove', 'keydown', 'touchstart', 'scroll']) {
+    for (const eventName of [
+      'pointerdown',
+      'keydown',
+      'touchstart',
+      'scroll',
+    ]) {
       expect(source).toContain(eventName);
     }
+    expect(source).not.toContain('"pointermove"');
+    expect(source).not.toContain('Date.now() + IDLE');
     expect(source).not.toMatch(/setInterval\([^)]*activity/i);
     expect(bundle).toContain('cronox.session');
   });
@@ -127,7 +134,9 @@ describe('browser sliding-session transport', () => {
     dom.window.dispatchEvent(new dom.window.Event('pointerdown'));
     await jest.advanceTimersByTimeAsync(30 * 60_000);
 
-    expect(calls.filter((entry) => entry === '/api/auth/activity')).toHaveLength(0);
+    expect(
+      calls.filter((entry) => entry === '/api/auth/activity'),
+    ).toHaveLength(0);
     dom.window.close();
     jest.useRealTimers();
   });

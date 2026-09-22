@@ -1,11 +1,18 @@
 import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { AuthSession, Role, User, UserAccountState } from '@prisma/client';
-import { createHash, randomUUID } from 'node:crypto';
+import { createHash, randomUUID, timingSafeEqual } from 'node:crypto';
 import { getRequiredJwtSecret } from '../common/config/environment';
 import { PrismaService } from '../prisma/prisma.service';
+import {
+  ACCESS_TOKEN_SECONDS,
+  ADMIN_IDLE_MS,
+  PERSISTENT_SESSION_SECONDS,
+  refreshExpiresAt,
+  refreshLifetimeSeconds,
+} from './session-policy';
 
-export const SESSION_IDLE_MS = 90 * 60_000;
+export const SESSION_IDLE_MS = ADMIN_IDLE_MS;
 export const ACTIVITY_WRITE_MS = 3 * 60_000;
 export const REFRESH_RACE_MS = 15_000;
 export type SessionClaims = {
@@ -17,7 +24,8 @@ export type SessionClaims = {
 };
 type SessionWithUser = AuthSession & { user: User };
 type SessionTokens = {
-  idleExpiresAt: number;
+  idleExpiresAt?: number;
+  refreshExpiresAt: Date;
   accessToken: string;
   refreshToken: string;
 };
@@ -43,6 +51,11 @@ export class AuthSessionsService {
     return createHash('sha256').update(token).digest('hex');
   }
 
+  private hashesEqual(left: string, right: string | null): boolean {
+    if (!right || left.length !== right.length) return false;
+    return timingSafeEqual(Buffer.from(left, 'hex'), Buffer.from(right, 'hex'));
+  }
+
   // No raw token is persisted. The exact current JWT can be reconstructed so
   // racing requests receive the SAME replacement, not competing descendants.
   private refreshToken(
@@ -50,6 +63,7 @@ export class AuthSessionsService {
       AuthSession,
       'id' | 'userId' | 'sessionVersion' | 'generation' | 'refreshIssuedAt'
     >,
+    role: Role,
   ) {
     return this.jwt.sign(
       {
@@ -59,7 +73,7 @@ export class AuthSessionsService {
         type: 'refresh',
         generation: session.generation,
         iat: session.refreshIssuedAt,
-        exp: session.refreshIssuedAt + 7 * 86400,
+        exp: session.refreshIssuedAt + refreshLifetimeSeconds(role),
       },
       {
         secret: getRequiredJwtSecret('JWT_REFRESH_SECRET'),
@@ -68,9 +82,13 @@ export class AuthSessionsService {
     );
   }
 
-  private tokens(session: AuthSession): SessionTokens {
+  private tokens(session: AuthSession, role: Role): SessionTokens {
     return {
-      idleExpiresAt: session.lastActivityAt.getTime() + SESSION_IDLE_MS,
+      idleExpiresAt:
+        role === Role.ADMIN
+          ? session.lastActivityAt.getTime() + SESSION_IDLE_MS
+          : undefined,
+      refreshExpiresAt: refreshExpiresAt(session.refreshIssuedAt, role),
       accessToken: this.jwt.sign(
         {
           sub: session.userId,
@@ -81,24 +99,40 @@ export class AuthSessionsService {
         {
           secret: getRequiredJwtSecret('JWT_ACCESS_SECRET'),
           algorithm: 'HS256',
-          expiresIn: '15m',
+          expiresIn: ACCESS_TOKEN_SECONDS,
         },
       ),
-      refreshToken: this.refreshToken(session),
+      refreshToken: this.refreshToken(session, role),
     };
   }
 
   async create(user: {
     id: number;
     sessionVersion: number;
+    role: Role;
   }): Promise<SessionTokens> {
     const now = new Date();
     // Opportunistic cleanup, at most hourly per worker, only auth-session rows.
-    // Idle sessions cannot resurrect; retain seven days for diagnostics/replay.
+    // Remove revoked rows and expired sessions after a short replay window.
+    // Persistent sessions must never be deleted after just seven idle days.
     if (now.getTime() >= this.nextCleanupAt) {
       await this.prisma.authSession.deleteMany({
         where: {
-          lastActivityAt: { lt: new Date(now.getTime() - 7 * 86400_000) },
+          OR: [
+            { revokedAt: { lt: new Date(now.getTime() - 7 * 86400_000) } },
+            {
+              user: { role: Role.ADMIN },
+              lastActivityAt: { lt: new Date(now.getTime() - 7 * 86400_000) },
+            },
+            {
+              refreshIssuedAt: {
+                lt:
+                  Math.floor(now.getTime() / 1000) -
+                  PERSISTENT_SESSION_SECONDS -
+                  7 * 86400,
+              },
+            },
+          ],
         },
       });
       this.nextCleanupAt = now.getTime() + 3600_000;
@@ -114,10 +148,10 @@ export class AuthSessionsService {
     const session = await this.prisma.authSession.create({
       data: {
         ...data,
-        refreshHash: this.hash(this.refreshToken(data)),
+        refreshHash: this.hash(this.refreshToken(data, user.role)),
       },
     });
-    return this.tokens(session);
+    return this.tokens(session, user.role);
   }
 
   async validate(payload: SessionClaims): Promise<SessionWithUser> {
@@ -139,7 +173,17 @@ export class AuthSessionsService {
       !Object.values(Role).includes(session.user.role)
     )
       this.denied();
-    if (session.lastActivityAt.getTime() <= Date.now() - SESSION_IDLE_MS) {
+    if (
+      refreshExpiresAt(session.refreshIssuedAt, session.user.role).getTime() <=
+      Date.now()
+    ) {
+      await this.revoke(session.id);
+      this.denied('SESSION_EXPIRED');
+    }
+    if (
+      session.user.role === Role.ADMIN &&
+      session.lastActivityAt.getTime() <= Date.now() - SESSION_IDLE_MS
+    ) {
       // Conditional revocation cannot race a successful activity touch.
       const expired = await this.prisma.authSession.updateMany({
         where: {
@@ -179,9 +223,9 @@ export class AuthSessionsService {
     if (type === 'refresh') {
       const hash = this.hash(token);
       if (
-        hash !== session.refreshHash &&
+        !this.hashesEqual(hash, session.refreshHash) &&
         !(
-          hash === session.previousRefreshHash &&
+          this.hashesEqual(hash, session.previousRefreshHash) &&
           session.previousValidUntil &&
           session.previousValidUntil.getTime() > Date.now()
         )
@@ -198,7 +242,7 @@ export class AuthSessionsService {
     const now = new Date();
     // A repeat during grace must not advance the family again.
     if (session.previousValidUntil && session.previousValidUntil > now)
-      return this.tokens(session);
+      return this.tokens(session, session.user.role);
     const next = {
       ...session,
       generation: session.generation + 1,
@@ -209,7 +253,16 @@ export class AuthSessionsService {
         id: session.id,
         generation: session.generation,
         revokedAt: null,
-        lastActivityAt: { gt: new Date(now.getTime() - SESSION_IDLE_MS) },
+        ...(session.user.role === Role.ADMIN
+          ? {
+              lastActivityAt: { gt: new Date(now.getTime() - SESSION_IDLE_MS) },
+            }
+          : {}),
+        refreshIssuedAt: {
+          gt:
+            Math.floor(now.getTime() / 1000) -
+            refreshLifetimeSeconds(session.user.role),
+        },
         user: {
           sessionVersion: session.sessionVersion,
           accountState: UserAccountState.ACTIVE,
@@ -218,20 +271,21 @@ export class AuthSessionsService {
       data: {
         generation: next.generation,
         refreshIssuedAt: next.refreshIssuedAt,
-        refreshHash: this.hash(this.refreshToken(next)),
+        refreshHash: this.hash(this.refreshToken(next, session.user.role)),
         previousRefreshHash: session.refreshHash,
         previousValidUntil: new Date(now.getTime() + REFRESH_RACE_MS),
       },
     });
     if (!changed.count) {
       const winner = await this.verify(token, 'refresh');
-      return this.tokens(winner);
+      return this.tokens(winner, winner.user.role);
     }
-    return this.tokens(next);
+    return this.tokens(next, session.user.role);
   }
 
   async touch(payload: SessionClaims): Promise<{ idleExpiresAt: number }> {
     const session = await this.validate(payload);
+    if (session.user.role !== Role.ADMIN) return { idleExpiresAt: 0 };
     const now = new Date();
     if (now.getTime() - session.lastActivityAt.getTime() < ACTIVITY_WRITE_MS) {
       return {

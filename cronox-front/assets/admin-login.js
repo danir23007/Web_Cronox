@@ -48,8 +48,7 @@
         password: password.value,
       });
       if (!auth?.isAdmin(user)) {
-        await window.CRONOX_API?.logout?.().catch(() => undefined);
-        showError();
+        status.textContent = 'Esta cuenta no tiene acceso al panel.';
         return;
       }
       redirectToAdmin();

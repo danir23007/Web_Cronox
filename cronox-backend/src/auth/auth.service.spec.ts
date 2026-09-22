@@ -56,12 +56,15 @@ describe('AuthService password reset security', () => {
       cart: {
         findUnique: jest.fn(),
         update: jest.fn().mockResolvedValue({ id: 9 }),
+        create: jest.fn().mockResolvedValue({ id: 10 }),
       },
       checkoutSnapshot: {
         updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+        count: jest.fn().mockResolvedValue(0),
       },
       authSession: {
         updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+        count: jest.fn().mockResolvedValue(0),
       },
     };
     prisma = {
@@ -80,8 +83,6 @@ describe('AuthService password reset security', () => {
     };
     service = new AuthService(
       usersService as any,
-      jwtService as any,
-      refreshJwt as any,
       cartService as any,
       prisma,
       emailService as any,
@@ -423,19 +424,22 @@ describe('AuthService password reset security', () => {
     expect(sessions.verify).toHaveBeenCalledWith('valid-refresh', 'refresh');
   });
 
-  it('rejects a valid session when the current database role is not administrative', async () => {
-    jwtService.verifyAsync.mockResolvedValue({ sub: 42, sv: 3 });
-    usersService.findById.mockResolvedValue({
-      id: 42,
-      role: Role.USER,
-      accountState: UserAccountState.ACTIVE,
-      sessionVersion: 3,
-    });
+  it.each([Role.USER, Role.FRIEND])(
+    'rejects a valid %s session from admin preview',
+    async (role) => {
+      jwtService.verifyAsync.mockResolvedValue({ sub: 42, sv: 3 });
+      usersService.findById.mockResolvedValue({
+        id: 42,
+        role,
+        accountState: UserAccountState.ACTIVE,
+        sessionVersion: 3,
+      });
 
-    await expect(
-      service.hasValidAdminSession('user-access-token'),
-    ).resolves.toBe(false);
-  });
+      await expect(
+        service.hasValidAdminSession('user-access-token'),
+      ).resolves.toBe(false);
+    },
+  );
 
   it('rejects a session invalidated by a changed session version or role', async () => {
     jwtService.verifyAsync.mockResolvedValue({ sub: 42, sv: 3 });
@@ -552,7 +556,12 @@ describe('AuthService password reset security', () => {
 
   it('hands the account cart and active checkout ownership to a fresh guest session on logout', async () => {
     jwtService.verifyAsync.mockResolvedValue({ sub: 42, sv: 3 });
-    tx.cart.findUnique.mockResolvedValue({ id: 9 });
+    tx.cart.findUnique.mockResolvedValue({
+      id: 9,
+      itemsCount: 1,
+      subtotal: 1000,
+      items: [{ variantId: 5, qty: 1, priceAtAdd: 1000 }],
+    });
 
     await expect(
       service.logoutToAnonymousCart(
@@ -575,13 +584,60 @@ describe('AuthService password reset security', () => {
     });
   });
 
+  it('preserves a pending Stripe return when another device is signed in', async () => {
+    tx.authSession.count.mockResolvedValue(1);
+    tx.checkoutSnapshot.count.mockResolvedValue(1);
+    tx.cart.findUnique.mockResolvedValue({
+      id: 9,
+      itemsCount: 1,
+      subtotal: 1000,
+      items: [{ variantId: 5, qty: 1, priceAtAdd: 1000 }],
+    });
+
+    await service.logoutToAnonymousCart('guest-device-a', 'access-token');
+
+    expect(tx.cart.create).not.toHaveBeenCalled();
+    expect(tx.cart.update).toHaveBeenCalledWith({
+      where: { id: 9 },
+      data: { userId: null, anonymousId: 'guest-device-a' },
+    });
+    expect(tx.checkoutSnapshot.updateMany).toHaveBeenCalled();
+  });
+
+  it('keeps the account cart and checkout owned by another active device', async () => {
+    tx.authSession.count.mockResolvedValue(1);
+    tx.cart.findUnique.mockResolvedValue({
+      id: 9,
+      itemsCount: 2,
+      subtotal: 2000,
+      items: [{ variantId: 5, qty: 2, priceAtAdd: 1000 }],
+    });
+
+    await expect(
+      service.logoutToAnonymousCart('guest-device-a', 'access-token'),
+    ).resolves.toEqual({ cartMoved: true });
+
+    expect(tx.cart.create).toHaveBeenCalledWith({
+      data: {
+        anonymousId: 'guest-device-a',
+        itemsCount: 2,
+        subtotal: 2000,
+        items: { create: [{ variantId: 5, qty: 2, priceAtAdd: 1000 }] },
+      },
+    });
+    expect(tx.cart.update).not.toHaveBeenCalled();
+    expect(tx.checkoutSnapshot.updateMany).not.toHaveBeenCalled();
+    expect(tx.authSession.updateMany).toHaveBeenCalledWith({
+      where: { id: 'session-1', revokedAt: null },
+      data: { revokedAt: expect.any(Date) },
+    });
+  });
+
   it('keeps production auth cookies Secure despite a stray local-mode flag', () => {
     process.env.NODE_ENV = 'production';
     process.env.APP_ENV = 'local';
     const productionService = new AuthService(
       usersService as any,
-      jwtService as any,
-      refreshJwt as any,
       cartService as any,
       prisma,
       emailService as any,
@@ -593,6 +649,7 @@ describe('AuthService password reset security', () => {
     productionService.setAuthCookies(response as any, {
       accessToken: 'access',
       refreshToken: 'refresh',
+      refreshExpiresAt: new Date('2028-01-01T00:00:00Z'),
     });
 
     expect(response.cookie).toHaveBeenCalledWith(
@@ -603,8 +660,35 @@ describe('AuthService password reset security', () => {
     expect(response.cookie).toHaveBeenCalledWith(
       'refresh_token',
       'refresh',
-      expect.objectContaining({ secure: true }),
+      expect.objectContaining({
+        secure: true,
+        httpOnly: true,
+        sameSite: 'lax',
+        path: '/',
+        expires: new Date('2028-01-01T00:00:00Z'),
+      }),
     );
+    expect(response.cookie).toHaveBeenCalledWith(
+      'jwt',
+      'access',
+      expect.objectContaining({ maxAge: 15 * 60_000 }),
+    );
+  });
+
+  it('clears only the current browser auth cookies with their original scope', () => {
+    const response = { clearCookie: jest.fn() };
+    service.clearAuthCookies(response as any);
+    for (const name of ['jwt', 'refresh_token'])
+      expect(response.clearCookie).toHaveBeenCalledWith(
+        name,
+        expect.objectContaining({
+          path: '/',
+          sameSite: 'lax',
+          httpOnly: true,
+          secure: false,
+        }),
+      );
+    expect(prisma.user.updateMany).not.toHaveBeenCalled();
   });
 
   it('clears a successfully merged anonymous cart cookie with its original scope', () => {

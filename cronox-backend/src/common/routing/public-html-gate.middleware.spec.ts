@@ -170,7 +170,6 @@ describe('public HTML Key Screen gate', () => {
 
   it.each([
     '/admin',
-    '/admin.html',
     '/api/products',
     '/assets/app.js',
     '/privacidad',
@@ -182,5 +181,31 @@ describe('public HTML Key Screen gate', () => {
 
     expect(response.status).toBe(200);
     expect(response.text).toBe(`PUBLIC:${path}`);
+  });
+
+  it.each(['/admin.html', '/admin-user.html'])(
+    'denies direct %s HTML to a FRIEND or anonymous visitor',
+    async (path) => {
+      for (const cookie of [undefined, 'jwt=friend-access']) {
+        const response = await request(createApp(false))
+          .get(path)
+          .set('Cookie', cookie || '');
+        expect(response.status).toBe(307);
+        expect(response.headers.location).toBe(
+          `/admin-login.html?returnTo=${encodeURIComponent(path)}`,
+        );
+        expect(response.text).not.toContain('PUBLIC:');
+      }
+    },
+  );
+
+  it('serves Admin HTML to a currently authorized role even when the Key Screen is disabled', async () => {
+    const response = await request(
+      createApp(false, (token) => token === 'admin-access'),
+    )
+      .get('/admin.html')
+      .set('Cookie', 'jwt=admin-access');
+    expect(response.status).toBe(200);
+    expect(response.headers['cache-control']).toBe('private, no-store');
   });
 });
