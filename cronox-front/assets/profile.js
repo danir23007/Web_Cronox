@@ -546,7 +546,7 @@
     inner.className = 'preloader-inner';
 
     const img = document.createElement('img');
-    img.src = 'assets/CRONOX-GIF.gif';
+    img.src = 'assets/CRONOX-preloader.webp';
     img.alt = 'CRONOX';
     img.className = 'preloader__logo';
     img.decoding = 'async';

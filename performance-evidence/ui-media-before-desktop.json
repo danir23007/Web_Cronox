@@ -1,0 +1,3867 @@
+{
+  "version": {
+    "protocolVersion": "1.3",
+    "product": "Chrome/153.0.8010.50",
+    "revision": "@583c5b4655acea7450a3b5224ea5121ae8caca9b",
+    "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/153.0.0.0 Safari/537.36",
+    "jsVersion": "15.3.76.12"
+  },
+  "mode": "local",
+  "note": "Anonymous browser; non-read requests blocked; local API uses fixtures. No native tab UI captured.",
+  "runs": [
+    {
+      "route": "/",
+      "cache": "cold",
+      "slow": false,
+      "snapshot": {
+        "readyState": "complete",
+        "url": "http://127.0.0.1:58632/",
+        "navigation": [
+          {
+            "domContentLoaded": 126.39999961853027,
+            "load": 293.5999994277954,
+            "responseEnd": 7.699999809265137
+          }
+        ],
+        "resources": [
+          {
+            "name": "logo_banner.png",
+            "start": 11.300000190734863,
+            "responseStart": 33.30000019073486,
+            "responseEnd": 34,
+            "transferSize": 31300,
+            "decodedBodySize": 31000
+          },
+          {
+            "name": "chains-newsletter.jpg",
+            "start": 125.69999980926514,
+            "responseStart": 0,
+            "responseEnd": 281.5,
+            "transferSize": 0,
+            "decodedBodySize": 0
+          }
+        ],
+        "topbarLogo": {
+          "src": "http://127.0.0.1:58632/assets/logo_banner.png",
+          "naturalWidth": 680,
+          "naturalHeight": 307,
+          "width": 143.96875,
+          "height": 65
+        },
+        "hero": [
+          {
+            "src": "http://127.0.0.1:58632/assets/VIDEO_LOGO_CRONOX.mp4",
+            "readyState": 4,
+            "networkState": 1,
+            "time": 7.620061,
+            "paused": false
+          }
+        ],
+        "preloader": "page-home is-loaded",
+        "icons": [
+          "http://127.0.0.1:58632/favicon.png?v=4",
+          "http://127.0.0.1:58632/favicon.png?v=4",
+          "http://127.0.0.1:58632/favicon.png?v=4"
+        ]
+      },
+      "events": [
+        {
+          "event": "Page.frameStartedLoading",
+          "at": 4,
+          "frame": "9AA3E8E5D173662ECF6DF0143F59B99A"
+        },
+        {
+          "event": "Page.frameNavigated",
+          "at": 14,
+          "frame": "9AA3E8E5D173662ECF6DF0143F59B99A",
+          "url": "http://127.0.0.1:58632/"
+        },
+        {
+          "event": "Page.domContentEventFired",
+          "at": 140
+        },
+        {
+          "event": "Page.loadEventFired",
+          "at": 300
+        },
+        {
+          "event": "Page.frameStoppedLoading",
+          "at": 300,
+          "frame": "9AA3E8E5D173662ECF6DF0143F59B99A"
+        },
+        {
+          "event": "Page.frameStartedLoading",
+          "at": 8024,
+          "frame": "9AA3E8E5D173662ECF6DF0143F59B99A"
+        },
+        {
+          "event": "Page.frameNavigated",
+          "at": 8051,
+          "frame": "9AA3E8E5D173662ECF6DF0143F59B99A",
+          "url": "nullblank"
+        },
+        {
+          "event": "Page.domContentEventFired",
+          "at": 8056
+        },
+        {
+          "event": "Page.loadEventFired",
+          "at": 8056
+        },
+        {
+          "event": "Page.frameStoppedLoading",
+          "at": 8056,
+          "frame": "9AA3E8E5D173662ECF6DF0143F59B99A"
+        }
+      ],
+      "pending": [],
+      "requests": [
+        {
+          "url": "http://127.0.0.1:58632/",
+          "type": "Document",
+          "method": "GET",
+          "at": 4,
+          "initiator": "other",
+          "status": 200,
+          "mime": "text/html",
+          "cache": false,
+          "headers": {
+            "Content-Length": "24817",
+            "Content-Type": "text/html; charset=utf-8"
+          },
+          "end": 22,
+          "duration": 18,
+          "bytes": 25050
+        },
+        {
+          "url": "http://127.0.0.1:58632/assets/cookie-consent.css",
+          "type": "Stylesheet",
+          "method": "GET",
+          "at": 19,
+          "initiator": "parser",
+          "status": 200,
+          "mime": "text/css",
+          "cache": false,
+          "headers": {
+            "Cache-Control": "public, max-age=0",
+            "Accept-Ranges": "bytes",
+            "Content-Length": "6995",
+            "Content-Type": "text/css; charset=utf-8"
+          },
+          "end": 40,
+          "duration": 21,
+          "bytes": 7312
+        },
+        {
+          "url": "http://127.0.0.1:58632/assets/cookie-consent.js",
+          "type": "Script",
+          "method": "GET",
+          "at": 19,
+          "initiator": "parser",
+          "status": 200,
+          "mime": "text/javascript",
+          "cache": false,
+          "headers": {
+            "Cache-Control": "public, max-age=0",
+            "Accept-Ranges": "bytes",
+            "Content-Length": "19694",
+            "Content-Type": "text/javascript; charset=utf-8"
+          },
+          "end": 42,
+          "duration": 23,
+          "bytes": 20019
+        },
+        {
+          "url": "http://127.0.0.1:58632/assets/customer-analytics.js",
+          "type": "Script",
+          "method": "GET",
+          "at": 19,
+          "initiator": "parser",
+          "status": 200,
+          "mime": "text/javascript",
+          "cache": false,
+          "headers": {
+            "Cache-Control": "public, max-age=0",
+            "Accept-Ranges": "bytes",
+            "Content-Length": "8404",
+            "Content-Type": "text/javascript; charset=utf-8"
+          },
+          "end": 87,
+          "duration": 68,
+          "bytes": 8728
+        },
+        {
+          "url": "http://127.0.0.1:58632/assets/category-page.js",
+          "type": "Script",
+          "method": "GET",
+          "at": 19,
+          "initiator": "parser",
+          "status": 200,
+          "mime": "text/javascript",
+          "cache": false,
+          "headers": {
+            "Cache-Control": "public, max-age=0",
+            "Accept-Ranges": "bytes",
+            "Content-Length": "405",
+            "Content-Type": "text/javascript; charset=utf-8"
+          },
+          "end": 43,
+          "duration": 24,
+          "bytes": 727
+        },
+        {
+          "url": "http://127.0.0.1:58632/assets/gallery.css",
+          "type": "Stylesheet",
+          "method": "GET",
+          "at": 19,
+          "initiator": "parser",
+          "status": 200,
+          "mime": "text/css",
+          "cache": false,
+          "headers": {
+            "Cache-Control": "public, max-age=0",
+            "Accept-Ranges": "bytes",
+            "Content-Length": "17607",
+            "Content-Type": "text/css; charset=utf-8"
+          },
+          "end": 45,
+          "duration": 26,
+          "bytes": 17925
+        },
+        {
+          "url": "http://127.0.0.1:58632/assets/version.js",
+          "type": "Script",
+          "method": "GET",
+          "at": 19,
+          "initiator": "parser",
+          "status": 200,
+          "mime": "text/javascript",
+          "cache": false,
+          "headers": {
+            "Cache-Control": "public, max-age=0",
+            "Accept-Ranges": "bytes",
+            "Content-Length": "382",
+            "Content-Type": "text/javascript; charset=utf-8"
+          },
+          "end": 48,
+          "duration": 29,
+          "bytes": 704
+        },
+        {
+          "url": "http://127.0.0.1:58632/assets/product-detail.css",
+          "type": "Stylesheet",
+          "method": "GET",
+          "at": 19,
+          "initiator": "parser",
+          "status": 200,
+          "mime": "text/css",
+          "cache": false,
+          "headers": {
+            "Cache-Control": "public, max-age=0",
+            "Accept-Ranges": "bytes",
+            "Content-Length": "2871",
+            "Content-Type": "text/css; charset=utf-8"
+          },
+          "end": 48,
+          "duration": 29,
+          "bytes": 3187
+        },
+        {
+          "url": "http://127.0.0.1:58632/assets/quick-add.css",
+          "type": "Stylesheet",
+          "method": "GET",
+          "at": 19,
+          "initiator": "parser",
+          "status": 200,
+          "mime": "text/css",
+          "cache": false,
+          "headers": {
+            "Cache-Control": "public, max-age=0",
+            "Accept-Ranges": "bytes",
+            "Content-Length": "6845",
+            "Content-Type": "text/css; charset=utf-8"
+          },
+          "end": 62,
+          "duration": 43,
+          "bytes": 7162
+        },
+        {
+          "url": "http://127.0.0.1:58632/assets/media-framing.css",
+          "type": "Stylesheet",
+          "method": "GET",
+          "at": 20,
+          "initiator": "parser",
+          "status": 200,
+          "mime": "text/css",
+          "cache": false,
+          "headers": {
+            "Cache-Control": "public, max-age=0",
+            "Accept-Ranges": "bytes",
+            "Content-Length": "521",
+            "Content-Type": "text/css; charset=utf-8"
+          },
+          "end": 63,
+          "duration": 43,
+          "bytes": 836
+        },
+        {
+          "url": "http://127.0.0.1:58632/assets/newsletter-popup.css",
+          "type": "Stylesheet",
+          "method": "GET",
+          "at": 20,
+          "initiator": "parser",
+          "status": 200,
+          "mime": "text/css",
+          "cache": false,
+          "headers": {
+            "Cache-Control": "public, max-age=0",
+            "Accept-Ranges": "bytes",
+            "Content-Length": "6473",
+            "Content-Type": "text/css; charset=utf-8"
+          },
+          "end": 65,
+          "duration": 45,
+          "bytes": 6790
+        },
+        {
+          "url": "http://127.0.0.1:58632/assets/CRONOX-GIF.gif",
+          "type": "Image",
+          "method": "GET",
+          "at": 20,
+          "initiator": "parser",
+          "status": 200,
+          "mime": "image/gif",
+          "cache": false,
+          "headers": {
+            "Cache-Control": "public, max-age=0",
+            "Accept-Ranges": "bytes",
+            "Content-Length": "7036718",
+            "Content-Type": "image/gif"
+          },
+          "end": 93,
+          "duration": 73,
+          "bytes": 7037026
+        },
+        {
+          "url": "http://127.0.0.1:58632/assets/logo_banner.png",
+          "type": "Image",
+          "method": "GET",
+          "at": 20,
+          "initiator": "parser",
+          "status": 200,
+          "mime": "image/png",
+          "cache": false,
+          "headers": {
+            "Cache-Control": "public, max-age=0",
+            "Accept-Ranges": "bytes",
+            "Content-Length": "31000",
+            "Content-Type": "image/png"
+          },
+          "end": 83,
+          "duration": 63,
+          "bytes": 31304
+        },
+        {
+          "url": "http://127.0.0.1:58632/assets/size-systems.js",
+          "type": "Script",
+          "method": "GET",
+          "at": 20,
+          "initiator": "parser",
+          "status": 200,
+          "mime": "text/javascript",
+          "cache": false,
+          "headers": {
+            "Cache-Control": "public, max-age=0",
+            "Accept-Ranges": "bytes",
+            "Content-Length": "1104",
+            "Content-Type": "text/javascript; charset=utf-8"
+          },
+          "end": 86,
+          "duration": 66,
+          "bytes": 1427
+        },
+        {
+          "url": "http://127.0.0.1:58632/assets/api.js",
+          "type": "Script",
+          "method": "GET",
+          "at": 20,
+          "initiator": "parser",
+          "status": 200,
+          "mime": "text/javascript",
+          "cache": false,
+          "headers": {
+            "Cache-Control": "public, max-age=0",
+            "Accept-Ranges": "bytes",
+            "Content-Length": "31346",
+            "Content-Type": "text/javascript; charset=utf-8"
+          },
+          "end": 86,
+          "duration": 66,
+          "bytes": 31671
+        },
+        {
+          "url": "http://127.0.0.1:58632/assets/responsive-images.js",
+          "type": "Script",
+          "method": "GET",
+          "at": 21,
+          "initiator": "parser",
+          "status": 200,
+          "mime": "text/javascript",
+          "cache": false,
+          "headers": {
+            "Cache-Control": "public, max-age=0",
+            "Accept-Ranges": "bytes",
+            "Content-Length": "7540",
+            "Content-Type": "text/javascript; charset=utf-8"
+          },
+          "end": 86,
+          "duration": 65,
+          "bytes": 7864
+        },
+        {
+          "url": "http://127.0.0.1:58632/assets/media-framing-geometry.js",
+          "type": "Script",
+          "method": "GET",
+          "at": 21,
+          "initiator": "parser",
+          "status": 200,
+          "mime": "text/javascript",
+          "cache": false,
+          "headers": {
+            "Cache-Control": "public, max-age=0",
+            "Accept-Ranges": "bytes",
+            "Content-Length": "10855",
+            "Content-Type": "text/javascript; charset=utf-8"
+          },
+          "end": 87,
+          "duration": 66,
+          "bytes": 11180
+        },
+        {
+          "url": "http://127.0.0.1:58632/assets/newsletter-renderer.js",
+          "type": "Script",
+          "method": "GET",
+          "at": 21,
+          "initiator": "parser",
+          "status": 200,
+          "mime": "text/javascript",
+          "cache": false,
+          "headers": {
+            "Cache-Control": "public, max-age=0",
+            "Accept-Ranges": "bytes",
+            "Content-Length": "10162",
+            "Content-Type": "text/javascript; charset=utf-8"
+          },
+          "end": 88,
+          "duration": 67,
+          "bytes": 10487
+        },
+        {
+          "url": "http://127.0.0.1:58632/assets/newsletter-visit.js",
+          "type": "Script",
+          "method": "GET",
+          "at": 21,
+          "initiator": "parser",
+          "status": 200,
+          "mime": "text/javascript",
+          "cache": false,
+          "headers": {
+            "Cache-Control": "public, max-age=0",
+            "Accept-Ranges": "bytes",
+            "Content-Length": "2447",
+            "Content-Type": "text/javascript; charset=utf-8"
+          },
+          "end": 88,
+          "duration": 67,
+          "bytes": 2770
+        },
+        {
+          "url": "http://127.0.0.1:58632/assets/app.js",
+          "type": "Script",
+          "method": "GET",
+          "at": 21,
+          "initiator": "parser",
+          "status": 200,
+          "mime": "text/javascript",
+          "cache": false,
+          "headers": {
+            "Cache-Control": "public, max-age=0",
+            "Accept-Ranges": "bytes",
+            "Content-Length": "98397",
+            "Content-Type": "text/javascript; charset=utf-8"
+          },
+          "end": 94,
+          "duration": 73,
+          "bytes": 98723
+        },
+        {
+          "url": "http://127.0.0.1:58632/assets/product-card-framing.js",
+          "type": "Script",
+          "method": "GET",
+          "at": 21,
+          "initiator": "parser",
+          "status": 200,
+          "mime": "text/javascript",
+          "cache": false,
+          "headers": {
+            "Cache-Control": "public, max-age=0",
+            "Accept-Ranges": "bytes",
+            "Content-Length": "2023",
+            "Content-Type": "text/javascript; charset=utf-8"
+          },
+          "end": 94,
+          "duration": 73,
+          "bytes": 2346
+        },
+        {
+          "url": "http://127.0.0.1:58632/assets/products.js",
+          "type": "Script",
+          "method": "GET",
+          "at": 21,
+          "initiator": "parser",
+          "status": 200,
+          "mime": "text/javascript",
+          "cache": false,
+          "headers": {
+            "Cache-Control": "public, max-age=0",
+            "Accept-Ranges": "bytes",
+            "Content-Length": "45137",
+            "Content-Type": "text/javascript; charset=utf-8"
+          },
+          "end": 95,
+          "duration": 74,
+          "bytes": 45462
+        },
+        {
+          "url": "http://127.0.0.1:58632/assets/favorites-toggle.js",
+          "type": "Script",
+          "method": "GET",
+          "at": 21,
+          "initiator": "parser",
+          "status": 200,
+          "mime": "text/javascript",
+          "cache": false,
+          "headers": {
+            "Cache-Control": "public, max-age=0",
+            "Accept-Ranges": "bytes",
+            "Content-Length": "2074",
+            "Content-Type": "text/javascript; charset=utf-8"
+          },
+          "end": 94,
+          "duration": 73,
+          "bytes": 2397
+        },
+        {
+          "url": "http://127.0.0.1:58632/assets/cart-badge.js",
+          "type": "Script",
+          "method": "GET",
+          "at": 21,
+          "initiator": "parser",
+          "status": 200,
+          "mime": "text/javascript",
+          "cache": false,
+          "headers": {
+            "Cache-Control": "public, max-age=0",
+            "Accept-Ranges": "bytes",
+            "Content-Length": "1680",
+            "Content-Type": "text/javascript; charset=utf-8"
+          },
+          "end": 95,
+          "duration": 74,
+          "bytes": 2003
+        },
+        {
+          "url": "http://127.0.0.1:58632/assets/product-gallery.js",
+          "type": "Script",
+          "method": "GET",
+          "at": 21,
+          "initiator": "parser",
+          "status": 200,
+          "mime": "text/javascript",
+          "cache": false,
+          "headers": {
+            "Cache-Control": "public, max-age=0",
+            "Accept-Ranges": "bytes",
+            "Content-Length": "1163",
+            "Content-Type": "text/javascript; charset=utf-8"
+          },
+          "end": 95,
+          "duration": 74,
+          "bytes": 1486
+        },
+        {
+          "url": "http://127.0.0.1:58632/assets/media-framing.js",
+          "type": "Script",
+          "method": "GET",
+          "at": 21,
+          "initiator": "parser",
+          "status": 200,
+          "mime": "text/javascript",
+          "cache": false,
+          "headers": {
+            "Cache-Control": "public, max-age=0",
+            "Accept-Ranges": "bytes",
+            "Content-Length": "12130",
+            "Content-Type": "text/javascript; charset=utf-8"
+          },
+          "end": 96,
+          "duration": 75,
+          "bytes": 12455
+        },
+        {
+          "url": "http://127.0.0.1:58632/assets/gallery.js",
+          "type": "Script",
+          "method": "GET",
+          "at": 21,
+          "initiator": "parser",
+          "status": 200,
+          "mime": "text/javascript",
+          "cache": false,
+          "headers": {
+            "Cache-Control": "public, max-age=0",
+            "Accept-Ranges": "bytes",
+            "Content-Length": "38721",
+            "Content-Type": "text/javascript; charset=utf-8"
+          },
+          "end": 96,
+          "duration": 75,
+          "bytes": 39046
+        },
+        {
+          "url": "http://127.0.0.1:58632/assets/icons/instagram.svg",
+          "type": "Image",
+          "method": "GET",
+          "at": 22,
+          "initiator": "parser",
+          "status": 200,
+          "mime": "image/svg+xml",
+          "cache": false,
+          "headers": {
+            "Cache-Control": "public, max-age=0",
+            "Accept-Ranges": "bytes",
+            "Content-Length": "2086",
+            "Content-Type": "image/svg+xml"
+          },
+          "end": 85,
+          "duration": 63,
+          "bytes": 2392
+        },
+        {
+          "url": "http://127.0.0.1:58632/assets/icons/tiktok.svg",
+          "type": "Image",
+          "method": "GET",
+          "at": 22,
+          "initiator": "parser",
+          "status": 200,
+          "mime": "image/svg+xml",
+          "cache": false,
+          "headers": {
+            "Cache-Control": "public, max-age=0",
+            "Accept-Ranges": "bytes",
+            "Content-Length": "1589",
+            "Content-Type": "image/svg+xml"
+          },
+          "end": 89,
+          "duration": 67,
+          "bytes": 1895
+        },
+        {
+          "url": "http://127.0.0.1:58632/assets/icons/youtube.svg",
+          "type": "Image",
+          "method": "GET",
+          "at": 22,
+          "initiator": "parser",
+          "status": 200,
+          "mime": "image/svg+xml",
+          "cache": false,
+          "headers": {
+            "Cache-Control": "public, max-age=0",
+            "Accept-Ranges": "bytes",
+            "Content-Length": "1708",
+            "Content-Type": "image/svg+xml"
+          },
+          "end": 89,
+          "duration": 67,
+          "bytes": 2014
+        },
+        {
+          "url": "http://127.0.0.1:58632/assets/footer-config.js",
+          "type": "Script",
+          "method": "GET",
+          "at": 22,
+          "initiator": "parser",
+          "status": 200,
+          "mime": "text/javascript",
+          "cache": false,
+          "headers": {
+            "Cache-Control": "public, max-age=0",
+            "Accept-Ranges": "bytes",
+            "Content-Length": "2256",
+            "Content-Type": "text/javascript; charset=utf-8"
+          },
+          "end": 96,
+          "duration": 74,
+          "bytes": 2579
+        },
+        {
+          "url": "http://127.0.0.1:58632/assets/store.css",
+          "type": "Stylesheet",
+          "method": "GET",
+          "at": 58,
+          "initiator": "script",
+          "caller": [
+            {
+              "url": "http://127.0.0.1:58632/",
+              "line": 52,
+              "function": ""
+            },
+            {
+              "url": "http://127.0.0.1:58632/",
+              "line": 55,
+              "function": ""
+            }
+          ],
+          "status": 200,
+          "mime": "text/css",
+          "cache": false,
+          "headers": {
+            "Cache-Control": "public, max-age=0",
+            "Accept-Ranges": "bytes",
+            "Content-Length": "69001",
+            "Content-Type": "text/css; charset=utf-8"
+          },
+          "end": 84,
+          "duration": 26,
+          "bytes": 69320
+        },
+        {
+          "url": "http://127.0.0.1:58632/assets/VIDEO_LOGO_CRONOX.mp4",
+          "type": "Media",
+          "method": "GET",
+          "at": 63,
+          "initiator": "parser",
+          "status": 206,
+          "mime": "application/mp4",
+          "cache": false,
+          "headers": {
+            "Cache-Control": "public, max-age=0",
+            "Content-Range": "bytes 0-2901932/2901933",
+            "Accept-Ranges": "bytes",
+            "Content-Length": "2901933",
+            "Content-Type": "application/mp4"
+          },
+          "end": 92,
+          "duration": 29,
+          "bytes": 2902300
+        },
+        {
+          "url": "http://127.0.0.1:3000/api/products",
+          "type": "Fetch",
+          "method": "GET",
+          "at": 118,
+          "initiator": "script",
+          "caller": [
+            {
+              "url": "http://127.0.0.1:58632/assets/api.js",
+              "line": 0,
+              "function": "K"
+            },
+            {
+              "url": "http://127.0.0.1:58632/assets/api.js",
+              "line": 0,
+              "function": "a"
+            },
+            {
+              "url": "http://127.0.0.1:58632/assets/api.js",
+              "line": 0,
+              "function": "J"
+            }
+          ],
+          "end": 746,
+          "duration": 628,
+          "failed": "net::ERR_FAILED"
+        },
+        {
+          "url": "http://127.0.0.1:3000/api/media-framing",
+          "type": "Fetch",
+          "method": "GET",
+          "at": 124,
+          "initiator": "script",
+          "caller": [
+            {
+              "url": "http://127.0.0.1:58632/assets/api.js",
+              "line": 0,
+              "function": "K"
+            },
+            {
+              "url": "http://127.0.0.1:58632/assets/media-framing.js",
+              "line": 291,
+              "function": "load"
+            },
+            {
+              "url": "http://127.0.0.1:58632/assets/media-framing.js",
+              "line": 337,
+              "function": ""
+            }
+          ],
+          "end": 396,
+          "duration": 272,
+          "failed": "net::ERR_FAILED"
+        },
+        {
+          "url": "http://127.0.0.1:3000/api/gallery",
+          "type": "Fetch",
+          "method": "GET",
+          "at": 126,
+          "initiator": "script",
+          "caller": [
+            {
+              "url": "http://127.0.0.1:58632/assets/api.js",
+              "line": 0,
+              "function": "K"
+            },
+            {
+              "url": "http://127.0.0.1:58632/assets/gallery.js",
+              "line": 945,
+              "function": ""
+            },
+            {
+              "url": "http://127.0.0.1:58632/assets/gallery.js",
+              "line": 966,
+              "function": "loadGallery"
+            }
+          ],
+          "end": 2147,
+          "duration": 2021,
+          "failed": "net::ERR_FAILED"
+        },
+        {
+          "url": "http://127.0.0.1:3000/api/footer",
+          "type": "Fetch",
+          "method": "GET",
+          "at": 129,
+          "initiator": "script",
+          "caller": [
+            {
+              "url": "http://127.0.0.1:58632/assets/api.js",
+              "line": 0,
+              "function": "K"
+            },
+            {
+              "url": "http://127.0.0.1:58632/assets/footer-config.js",
+              "line": 53,
+              "function": "load"
+            },
+            {
+              "url": "http://127.0.0.1:58632/assets/footer-config.js",
+              "line": 67,
+              "function": ""
+            }
+          ],
+          "end": 1040,
+          "duration": 911,
+          "failed": "net::ERR_FAILED"
+        },
+        {
+          "url": "http://127.0.0.1:3000/api/me",
+          "type": "Fetch",
+          "method": "GET",
+          "at": 129,
+          "initiator": "script",
+          "caller": [
+            {
+              "url": "http://127.0.0.1:58632/assets/api.js",
+              "line": 0,
+              "function": "K"
+            },
+            {
+              "url": "http://127.0.0.1:58632/assets/app.js",
+              "line": 721,
+              "function": "loadFromServer"
+            },
+            {
+              "url": "http://127.0.0.1:58632/assets/app.js",
+              "line": 707,
+              "function": "run"
+            }
+          ],
+          "end": 143,
+          "duration": 14,
+          "failed": "net::ERR_FAILED"
+        },
+        {
+          "url": "http://127.0.0.1:3000/api/cart",
+          "type": "Fetch",
+          "method": "GET",
+          "at": 129,
+          "initiator": "script",
+          "caller": [
+            {
+              "url": "http://127.0.0.1:58632/assets/api.js",
+              "line": 0,
+              "function": "K"
+            },
+            {
+              "url": "http://127.0.0.1:58632/assets/api.js",
+              "line": 0,
+              "function": "a"
+            },
+            {
+              "url": "http://127.0.0.1:58632/assets/api.js",
+              "line": 0,
+              "function": ""
+            }
+          ],
+          "end": 2470,
+          "duration": 2341,
+          "failed": "net::ERR_FAILED"
+        },
+        {
+          "url": "https://frqlgocxnyppzdgxxjuq.supabase.co/storage/v1/object/public/newsletter/chains-newsletter.jpg",
+          "type": "Image",
+          "method": "GET",
+          "at": 139,
+          "initiator": "parser",
+          "status": 200,
+          "mime": "image/jpeg",
+          "cache": false,
+          "headers": {
+            "content-type": "image/jpeg",
+            "cache-control": "public, max-age=3600",
+            "accept-ranges": "bytes",
+            "content-length": "10646"
+          },
+          "end": 287,
+          "duration": 148,
+          "bytes": 11304
+        },
+        {
+          "url": "http://127.0.0.1:3000/api/me",
+          "type": "Fetch",
+          "method": "GET",
+          "at": 140,
+          "initiator": "script",
+          "caller": [
+            {
+              "url": "http://127.0.0.1:58632/assets/api.js",
+              "line": 0,
+              "function": "K"
+            },
+            {
+              "url": "http://127.0.0.1:58632/assets/api.js",
+              "line": 0,
+              "function": "a"
+            },
+            {
+              "url": "http://127.0.0.1:58632/assets/api.js",
+              "line": 0,
+              "function": "o.getMe"
+            }
+          ],
+          "end": 146,
+          "duration": 6,
+          "failed": "net::ERR_FAILED"
+        },
+        {
+          "url": "http://127.0.0.1:58632/auth-modal.html",
+          "type": "Fetch",
+          "method": "GET",
+          "at": 140,
+          "initiator": "script",
+          "caller": [
+            {
+              "url": "http://127.0.0.1:58632/assets/api.js",
+              "line": 0,
+              "function": "K"
+            },
+            {
+              "url": "http://127.0.0.1:58632/assets/app.js",
+              "line": 2223,
+              "function": ""
+            },
+            {
+              "url": "http://127.0.0.1:58632/assets/app.js",
+              "line": 2243,
+              "function": "ensureAuthModal"
+            }
+          ],
+          "status": 200,
+          "mime": "text/html",
+          "cache": false,
+          "headers": {
+            "Cache-Control": "public, max-age=0",
+            "Accept-Ranges": "bytes",
+            "Content-Length": "4068",
+            "Content-Type": "text/html; charset=utf-8"
+          },
+          "end": 141,
+          "duration": 1,
+          "bytes": 4385
+        },
+        {
+          "url": "http://127.0.0.1:3000/api/cart",
+          "type": "Fetch",
+          "method": "GET",
+          "at": 140,
+          "initiator": "script",
+          "caller": [
+            {
+              "url": "http://127.0.0.1:58632/assets/api.js",
+              "line": 0,
+              "function": "K"
+            },
+            {
+              "url": "http://127.0.0.1:58632/assets/api.js",
+              "line": 0,
+              "function": "a"
+            },
+            {
+              "url": "http://127.0.0.1:58632/assets/api.js",
+              "line": 0,
+              "function": ""
+            }
+          ],
+          "end": 3153,
+          "duration": 3013,
+          "failed": "net::ERR_FAILED"
+        },
+        {
+          "url": "http://127.0.0.1:58632/favicon.png",
+          "type": "Other",
+          "method": "GET",
+          "at": 300,
+          "initiator": "other",
+          "status": 200,
+          "mime": "image/png",
+          "cache": false,
+          "headers": {
+            "Cache-Control": "public, max-age=0",
+            "Accept-Ranges": "bytes",
+            "Content-Length": "11204",
+            "Content-Type": "image/png"
+          },
+          "end": 304,
+          "duration": 4,
+          "bytes": 11508
+        },
+        {
+          "url": "http://127.0.0.1:58632/favicon.png",
+          "type": "Other",
+          "method": "GET",
+          "at": 304,
+          "initiator": "other",
+          "status": 200,
+          "mime": "image/png",
+          "cache": false,
+          "headers": {
+            "Cache-Control": "public, max-age=0",
+            "Accept-Ranges": "bytes",
+            "Content-Length": "11204",
+            "Content-Type": "image/png"
+          },
+          "end": 308,
+          "duration": 4,
+          "bytes": 266
+        },
+        {
+          "url": "http://127.0.0.1:3000/api/products",
+          "type": "Fetch",
+          "method": "GET",
+          "at": 1001,
+          "initiator": "script",
+          "caller": [
+            {
+              "url": "http://127.0.0.1:58632/assets/api.js",
+              "line": 0,
+              "function": "K"
+            },
+            {
+              "url": "http://127.0.0.1:58632/assets/api.js",
+              "line": 0,
+              "function": "a"
+            },
+            {
+              "url": "http://127.0.0.1:58632/assets/api.js",
+              "line": 0,
+              "function": "J"
+            }
+          ],
+          "end": 1580,
+          "duration": 579,
+          "failed": "net::ERR_FAILED"
+        },
+        {
+          "url": "http://127.0.0.1:3000/api/products",
+          "type": "Fetch",
+          "method": "GET",
+          "at": 2333,
+          "initiator": "script",
+          "caller": [
+            {
+              "url": "http://127.0.0.1:58632/assets/api.js",
+              "line": 0,
+              "function": "K"
+            },
+            {
+              "url": "http://127.0.0.1:58632/assets/api.js",
+              "line": 0,
+              "function": "a"
+            },
+            {
+              "url": "http://127.0.0.1:58632/assets/api.js",
+              "line": 0,
+              "function": "J"
+            }
+          ],
+          "end": 2912,
+          "duration": 579,
+          "failed": "net::ERR_FAILED"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "route": "/",
+      "cache": "warm",
+      "slow": false,
+      "snapshot": {
+        "readyState": "complete",
+        "url": "http://127.0.0.1:58632/",
+        "navigation": [
+          {
+            "domContentLoaded": 98,
+            "load": 132.5,
+            "responseEnd": 3.90000057220459
+          }
+        ],
+        "resources": [
+          {
+            "name": "logo_banner.png",
+            "start": 6.90000057220459,
+            "responseStart": 20.600000381469727,
+            "responseEnd": 21.40000057220459,
+            "transferSize": 300,
+            "decodedBodySize": 31000
+          },
+          {
+            "name": "chains-newsletter.jpg",
+            "start": 97.60000038146973,
+            "responseStart": 0,
+            "responseEnd": 100,
+            "transferSize": 0,
+            "decodedBodySize": 0
+          }
+        ],
+        "topbarLogo": {
+          "src": "http://127.0.0.1:58632/assets/logo_banner.png",
+          "naturalWidth": 680,
+          "naturalHeight": 307,
+          "width": 143.96875,
+          "height": 65
+        },
+        "hero": [
+          {
+            "src": "http://127.0.0.1:58632/assets/VIDEO_LOGO_CRONOX.mp4",
+            "readyState": 4,
+            "networkState": 1,
+            "time": 7.787212,
+            "paused": false
+          }
+        ],
+        "preloader": "page-home is-loaded",
+        "icons": [
+          "http://127.0.0.1:58632/favicon.png?v=4",
+          "http://127.0.0.1:58632/favicon.png?v=4",
+          "http://127.0.0.1:58632/favicon.png?v=4"
+        ]
+      },
+      "events": [
+        {
+          "event": "Page.frameStartedLoading",
+          "at": 3,
+          "frame": "9AA3E8E5D173662ECF6DF0143F59B99A"
+        },
+        {
+          "event": "Page.frameNavigated",
+          "at": 9,
+          "frame": "9AA3E8E5D173662ECF6DF0143F59B99A",
+          "url": "http://127.0.0.1:58632/"
+        },
+        {
+          "event": "Page.domContentEventFired",
+          "at": 111
+        },
+        {
+          "event": "Page.loadEventFired",
+          "at": 137
+        },
+        {
+          "event": "Page.frameStoppedLoading",
+          "at": 137,
+          "frame": "9AA3E8E5D173662ECF6DF0143F59B99A"
+        },
+        {
+          "event": "Page.frameStartedLoading",
+          "at": 8021,
+          "frame": "9AA3E8E5D173662ECF6DF0143F59B99A"
+        },
+        {
+          "event": "Page.frameNavigated",
+          "at": 8053,
+          "frame": "9AA3E8E5D173662ECF6DF0143F59B99A",
+          "url": "nullblank"
+        },
+        {
+          "event": "Page.domContentEventFired",
+          "at": 8057
+        },
+        {
+          "event": "Page.loadEventFired",
+          "at": 8057
+        },
+        {
+          "event": "Page.frameStoppedLoading",
+          "at": 8057,
+          "frame": "9AA3E8E5D173662ECF6DF0143F59B99A"
+        }
+      ],
+      "pending": [],
+      "requests": [
+        {
+          "url": "http://127.0.0.1:58632/",
+          "type": "Document",
+          "method": "GET",
+          "at": 4,
+          "initiator": "other",
+          "status": 200,
+          "mime": "text/html",
+          "cache": false,
+          "headers": {
+            "Content-Length": "24817",
+            "Content-Type": "text/html; charset=utf-8"
+          },
+          "end": 15,
+          "duration": 11,
+          "bytes": 180
+        },
+        {
+          "url": "http://127.0.0.1:58632/assets/cookie-consent.css",
+          "type": "Stylesheet",
+          "method": "GET",
+          "at": 13,
+          "initiator": "parser",
+          "status": 200,
+          "mime": "text/css",
+          "cache": false,
+          "headers": {
+            "Cache-Control": "public, max-age=0",
+            "Accept-Ranges": "bytes",
+            "Content-Length": "6995",
+            "Content-Type": "text/css; charset=utf-8"
+          },
+          "end": 24,
+          "duration": 11,
+          "bytes": 266
+        },
+        {
+          "url": "http://127.0.0.1:58632/assets/cookie-consent.js",
+          "type": "Script",
+          "method": "GET",
+          "at": 13,
+          "initiator": "parser",
+          "status": 200,
+          "mime": "text/javascript",
+          "cache": false,
+          "headers": {
+            "Cache-Control": "public, max-age=0",
+            "Accept-Ranges": "bytes",
+            "Content-Length": "19694",
+            "Content-Type": "text/javascript; charset=utf-8"
+          },
+          "end": 24,
+          "duration": 11,
+          "bytes": 266
+        },
+        {
+          "url": "http://127.0.0.1:58632/assets/customer-analytics.js",
+          "type": "Script",
+          "method": "GET",
+          "at": 13,
+          "initiator": "parser",
+          "status": 200,
+          "mime": "text/javascript",
+          "cache": false,
+          "headers": {
+            "Cache-Control": "public, max-age=0",
+            "Accept-Ranges": "bytes",
+            "Content-Length": "8404",
+            "Content-Type": "text/javascript; charset=utf-8"
+          },
+          "end": 61,
+          "duration": 48,
+          "bytes": 266
+        },
+        {
+          "url": "http://127.0.0.1:58632/assets/category-page.js",
+          "type": "Script",
+          "method": "GET",
+          "at": 14,
+          "initiator": "parser",
+          "status": 200,
+          "mime": "text/javascript",
+          "cache": false,
+          "headers": {
+            "Cache-Control": "public, max-age=0",
+            "Accept-Ranges": "bytes",
+            "Content-Length": "405",
+            "Content-Type": "text/javascript; charset=utf-8"
+          },
+          "end": 25,
+          "duration": 11,
+          "bytes": 265
+        },
+        {
+          "url": "http://127.0.0.1:58632/assets/gallery.css",
+          "type": "Stylesheet",
+          "method": "GET",
+          "at": 14,
+          "initiator": "parser",
+          "status": 200,
+          "mime": "text/css",
+          "cache": false,
+          "headers": {
+            "Cache-Control": "public, max-age=0",
+            "Accept-Ranges": "bytes",
+            "Content-Length": "17607",
+            "Content-Type": "text/css; charset=utf-8"
+          },
+          "end": 25,
+          "duration": 11,
+          "bytes": 266
+        },
+        {
+          "url": "http://127.0.0.1:58632/assets/version.js",
+          "type": "Script",
+          "method": "GET",
+          "at": 14,
+          "initiator": "parser",
+          "status": 200,
+          "mime": "text/javascript",
+          "cache": false,
+          "headers": {
+            "Cache-Control": "public, max-age=0",
+            "Accept-Ranges": "bytes",
+            "Content-Length": "382",
+            "Content-Type": "text/javascript; charset=utf-8"
+          },
+          "end": 27,
+          "duration": 13,
+          "bytes": 265
+        },
+        {
+          "url": "http://127.0.0.1:58632/assets/product-detail.css",
+          "type": "Stylesheet",
+          "method": "GET",
+          "at": 14,
+          "initiator": "parser",
+          "status": 200,
+          "mime": "text/css",
+          "cache": false,
+          "headers": {
+            "Cache-Control": "public, max-age=0",
+            "Accept-Ranges": "bytes",
+            "Content-Length": "2871",
+            "Content-Type": "text/css; charset=utf-8"
+          },
+          "end": 26,
+          "duration": 12,
+          "bytes": 265
+        },
+        {
+          "url": "http://127.0.0.1:58632/assets/quick-add.css",
+          "type": "Stylesheet",
+          "method": "GET",
+          "at": 14,
+          "initiator": "parser",
+          "status": 200,
+          "mime": "text/css",
+          "cache": false,
+          "headers": {
+            "Cache-Control": "public, max-age=0",
+            "Accept-Ranges": "bytes",
+            "Content-Length": "6845",
+            "Content-Type": "text/css; charset=utf-8"
+          },
+          "end": 27,
+          "duration": 13,
+          "bytes": 266
+        },
+        {
+          "url": "http://127.0.0.1:58632/assets/media-framing.css",
+          "type": "Stylesheet",
+          "method": "GET",
+          "at": 14,
+          "initiator": "parser",
+          "status": 200,
+          "mime": "text/css",
+          "cache": false,
+          "headers": {
+            "Cache-Control": "public, max-age=0",
+            "Accept-Ranges": "bytes",
+            "Content-Length": "521",
+            "Content-Type": "text/css; charset=utf-8"
+          },
+          "end": 34,
+          "duration": 20,
+          "bytes": 265
+        },
+        {
+          "url": "http://127.0.0.1:58632/assets/newsletter-popup.css",
+          "type": "Stylesheet",
+          "method": "GET",
+          "at": 14,
+          "initiator": "parser",
+          "status": 200,
+          "mime": "text/css",
+          "cache": false,
+          "headers": {
+            "Cache-Control": "public, max-age=0",
+            "Accept-Ranges": "bytes",
+            "Content-Length": "6473",
+            "Content-Type": "text/css; charset=utf-8"
+          },
+          "end": 37,
+          "duration": 23,
+          "bytes": 266
+        },
+        {
+          "url": "http://127.0.0.1:58632/assets/CRONOX-GIF.gif",
+          "type": "Image",
+          "method": "GET",
+          "at": 14,
+          "initiator": "parser",
+          "status": 200,
+          "mime": "image/gif",
+          "cache": false,
+          "headers": {
+            "Cache-Control": "public, max-age=0",
+            "Accept-Ranges": "bytes",
+            "Content-Length": "7036718",
+            "Content-Type": "image/gif"
+          },
+          "end": 56,
+          "duration": 42,
+          "bytes": 268
+        },
+        {
+          "url": "http://127.0.0.1:58632/assets/logo_banner.png",
+          "type": "Image",
+          "method": "GET",
+          "at": 14,
+          "initiator": "parser",
+          "status": 200,
+          "mime": "image/png",
+          "cache": false,
+          "headers": {
+            "Cache-Control": "public, max-age=0",
+            "Accept-Ranges": "bytes",
+            "Content-Length": "31000",
+            "Content-Type": "image/png"
+          },
+          "end": 38,
+          "duration": 24,
+          "bytes": 266
+        },
+        {
+          "url": "http://127.0.0.1:58632/assets/size-systems.js",
+          "type": "Script",
+          "method": "GET",
+          "at": 14,
+          "initiator": "parser",
+          "status": 200,
+          "mime": "text/javascript",
+          "cache": false,
+          "headers": {
+            "Cache-Control": "public, max-age=0",
+            "Accept-Ranges": "bytes",
+            "Content-Length": "1104",
+            "Content-Type": "text/javascript; charset=utf-8"
+          },
+          "end": 60,
+          "duration": 46,
+          "bytes": 265
+        },
+        {
+          "url": "http://127.0.0.1:58632/assets/api.js",
+          "type": "Script",
+          "method": "GET",
+          "at": 14,
+          "initiator": "parser",
+          "status": 200,
+          "mime": "text/javascript",
+          "cache": false,
+          "headers": {
+            "Cache-Control": "public, max-age=0",
+            "Accept-Ranges": "bytes",
+            "Content-Length": "31346",
+            "Content-Type": "text/javascript; charset=utf-8"
+          },
+          "end": 60,
+          "duration": 46,
+          "bytes": 266
+        },
+        {
+          "url": "http://127.0.0.1:58632/assets/responsive-images.js",
+          "type": "Script",
+          "method": "GET",
+          "at": 14,
+          "initiator": "parser",
+          "status": 200,
+          "mime": "text/javascript",
+          "cache": false,
+          "headers": {
+            "Cache-Control": "public, max-age=0",
+            "Accept-Ranges": "bytes",
+            "Content-Length": "7540",
+            "Content-Type": "text/javascript; charset=utf-8"
+          },
+          "end": 60,
+          "duration": 46,
+          "bytes": 266
+        },
+        {
+          "url": "http://127.0.0.1:58632/assets/media-framing-geometry.js",
+          "type": "Script",
+          "method": "GET",
+          "at": 14,
+          "initiator": "parser",
+          "status": 200,
+          "mime": "text/javascript",
+          "cache": false,
+          "headers": {
+            "Cache-Control": "public, max-age=0",
+            "Accept-Ranges": "bytes",
+            "Content-Length": "10855",
+            "Content-Type": "text/javascript; charset=utf-8"
+          },
+          "end": 61,
+          "duration": 47,
+          "bytes": 266
+        },
+        {
+          "url": "http://127.0.0.1:58632/assets/newsletter-renderer.js",
+          "type": "Script",
+          "method": "GET",
+          "at": 14,
+          "initiator": "parser",
+          "status": 200,
+          "mime": "text/javascript",
+          "cache": false,
+          "headers": {
+            "Cache-Control": "public, max-age=0",
+            "Accept-Ranges": "bytes",
+            "Content-Length": "10162",
+            "Content-Type": "text/javascript; charset=utf-8"
+          },
+          "end": 62,
+          "duration": 48,
+          "bytes": 266
+        },
+        {
+          "url": "http://127.0.0.1:58632/assets/newsletter-visit.js",
+          "type": "Script",
+          "method": "GET",
+          "at": 15,
+          "initiator": "parser",
+          "status": 200,
+          "mime": "text/javascript",
+          "cache": false,
+          "headers": {
+            "Cache-Control": "public, max-age=0",
+            "Accept-Ranges": "bytes",
+            "Content-Length": "2447",
+            "Content-Type": "text/javascript; charset=utf-8"
+          },
+          "end": 62,
+          "duration": 47,
+          "bytes": 265
+        },
+        {
+          "url": "http://127.0.0.1:58632/assets/app.js",
+          "type": "Script",
+          "method": "GET",
+          "at": 15,
+          "initiator": "parser",
+          "status": 200,
+          "mime": "text/javascript",
+          "cache": false,
+          "headers": {
+            "Cache-Control": "public, max-age=0",
+            "Accept-Ranges": "bytes",
+            "Content-Length": "98397",
+            "Content-Type": "text/javascript; charset=utf-8"
+          },
+          "end": 63,
+          "duration": 48,
+          "bytes": 267
+        },
+        {
+          "url": "http://127.0.0.1:58632/assets/product-card-framing.js",
+          "type": "Script",
+          "method": "GET",
+          "at": 15,
+          "initiator": "parser",
+          "status": 200,
+          "mime": "text/javascript",
+          "cache": false,
+          "headers": {
+            "Cache-Control": "public, max-age=0",
+            "Accept-Ranges": "bytes",
+            "Content-Length": "2023",
+            "Content-Type": "text/javascript; charset=utf-8"
+          },
+          "end": 62,
+          "duration": 47,
+          "bytes": 265
+        },
+        {
+          "url": "http://127.0.0.1:58632/assets/products.js",
+          "type": "Script",
+          "method": "GET",
+          "at": 15,
+          "initiator": "parser",
+          "status": 200,
+          "mime": "text/javascript",
+          "cache": false,
+          "headers": {
+            "Cache-Control": "public, max-age=0",
+            "Accept-Ranges": "bytes",
+            "Content-Length": "45137",
+            "Content-Type": "text/javascript; charset=utf-8"
+          },
+          "end": 63,
+          "duration": 48,
+          "bytes": 266
+        },
+        {
+          "url": "http://127.0.0.1:58632/assets/favorites-toggle.js",
+          "type": "Script",
+          "method": "GET",
+          "at": 15,
+          "initiator": "parser",
+          "status": 200,
+          "mime": "text/javascript",
+          "cache": false,
+          "headers": {
+            "Cache-Control": "public, max-age=0",
+            "Accept-Ranges": "bytes",
+            "Content-Length": "2074",
+            "Content-Type": "text/javascript; charset=utf-8"
+          },
+          "end": 63,
+          "duration": 48,
+          "bytes": 265
+        },
+        {
+          "url": "http://127.0.0.1:58632/assets/cart-badge.js",
+          "type": "Script",
+          "method": "GET",
+          "at": 15,
+          "initiator": "parser",
+          "status": 200,
+          "mime": "text/javascript",
+          "cache": false,
+          "headers": {
+            "Cache-Control": "public, max-age=0",
+            "Accept-Ranges": "bytes",
+            "Content-Length": "1680",
+            "Content-Type": "text/javascript; charset=utf-8"
+          },
+          "end": 63,
+          "duration": 48,
+          "bytes": 265
+        },
+        {
+          "url": "http://127.0.0.1:58632/assets/product-gallery.js",
+          "type": "Script",
+          "method": "GET",
+          "at": 15,
+          "initiator": "parser",
+          "status": 200,
+          "mime": "text/javascript",
+          "cache": false,
+          "headers": {
+            "Cache-Control": "public, max-age=0",
+            "Accept-Ranges": "bytes",
+            "Content-Length": "1163",
+            "Content-Type": "text/javascript; charset=utf-8"
+          },
+          "end": 63,
+          "duration": 48,
+          "bytes": 265
+        },
+        {
+          "url": "http://127.0.0.1:58632/assets/media-framing.js",
+          "type": "Script",
+          "method": "GET",
+          "at": 15,
+          "initiator": "parser",
+          "status": 200,
+          "mime": "text/javascript",
+          "cache": false,
+          "headers": {
+            "Cache-Control": "public, max-age=0",
+            "Accept-Ranges": "bytes",
+            "Content-Length": "12130",
+            "Content-Type": "text/javascript; charset=utf-8"
+          },
+          "end": 64,
+          "duration": 49,
+          "bytes": 266
+        },
+        {
+          "url": "http://127.0.0.1:58632/assets/gallery.js",
+          "type": "Script",
+          "method": "GET",
+          "at": 15,
+          "initiator": "parser",
+          "status": 200,
+          "mime": "text/javascript",
+          "cache": false,
+          "headers": {
+            "Cache-Control": "public, max-age=0",
+            "Accept-Ranges": "bytes",
+            "Content-Length": "38721",
+            "Content-Type": "text/javascript; charset=utf-8"
+          },
+          "end": 64,
+          "duration": 49,
+          "bytes": 266
+        },
+        {
+          "url": "http://127.0.0.1:58632/assets/icons/instagram.svg",
+          "type": "Image",
+          "method": "GET",
+          "at": 15,
+          "initiator": "parser",
+          "status": 200,
+          "mime": "image/svg+xml",
+          "cache": false,
+          "headers": {
+            "Cache-Control": "public, max-age=0",
+            "Accept-Ranges": "bytes",
+            "Content-Length": "2086",
+            "Content-Type": "image/svg+xml"
+          },
+          "end": 51,
+          "duration": 36,
+          "bytes": 265
+        },
+        {
+          "url": "http://127.0.0.1:58632/assets/icons/tiktok.svg",
+          "type": "Image",
+          "method": "GET",
+          "at": 15,
+          "initiator": "parser",
+          "status": 200,
+          "mime": "image/svg+xml",
+          "cache": false,
+          "headers": {
+            "Cache-Control": "public, max-age=0",
+            "Accept-Ranges": "bytes",
+            "Content-Length": "1589",
+            "Content-Type": "image/svg+xml"
+          },
+          "end": 52,
+          "duration": 37,
+          "bytes": 265
+        },
+        {
+          "url": "http://127.0.0.1:58632/assets/icons/youtube.svg",
+          "type": "Image",
+          "method": "GET",
+          "at": 15,
+          "initiator": "parser",
+          "status": 200,
+          "mime": "image/svg+xml",
+          "cache": false,
+          "headers": {
+            "Cache-Control": "public, max-age=0",
+            "Accept-Ranges": "bytes",
+            "Content-Length": "1708",
+            "Content-Type": "image/svg+xml"
+          },
+          "end": 52,
+          "duration": 37,
+          "bytes": 265
+        },
+        {
+          "url": "http://127.0.0.1:58632/assets/footer-config.js",
+          "type": "Script",
+          "method": "GET",
+          "at": 15,
+          "initiator": "parser",
+          "status": 200,
+          "mime": "text/javascript",
+          "cache": false,
+          "headers": {
+            "Cache-Control": "public, max-age=0",
+            "Accept-Ranges": "bytes",
+            "Content-Length": "2256",
+            "Content-Type": "text/javascript; charset=utf-8"
+          },
+          "end": 64,
+          "duration": 49,
+          "bytes": 265
+        },
+        {
+          "url": "http://127.0.0.1:58632/assets/store.css",
+          "type": "Stylesheet",
+          "method": "GET",
+          "at": 32,
+          "initiator": "script",
+          "caller": [
+            {
+              "url": "http://127.0.0.1:58632/",
+              "line": 52,
+              "function": ""
+            },
+            {
+              "url": "http://127.0.0.1:58632/",
+              "line": 55,
+              "function": ""
+            }
+          ],
+          "status": 200,
+          "mime": "text/css",
+          "cache": false,
+          "headers": {
+            "Cache-Control": "public, max-age=0",
+            "Accept-Ranges": "bytes",
+            "Content-Length": "69001",
+            "Content-Type": "text/css; charset=utf-8"
+          },
+          "end": 50,
+          "duration": 18,
+          "bytes": 267
+        },
+        {
+          "url": "http://127.0.0.1:58632/assets/VIDEO_LOGO_CRONOX.mp4",
+          "type": "Media",
+          "method": "GET",
+          "at": 35,
+          "initiator": "parser",
+          "status": 206,
+          "mime": "application/mp4",
+          "cache": false,
+          "headers": {
+            "Cache-Control": "public, max-age=0",
+            "Content-Range": "bytes 0-2901932/2901933",
+            "Accept-Ranges": "bytes",
+            "Content-Length": "2901933",
+            "Content-Type": "application/mp4"
+          },
+          "end": 59,
+          "duration": 24,
+          "bytes": 268
+        },
+        {
+          "url": "http://127.0.0.1:3000/api/products",
+          "type": "Fetch",
+          "method": "GET",
+          "at": 90,
+          "initiator": "script",
+          "caller": [
+            {
+              "url": "http://127.0.0.1:58632/assets/api.js",
+              "line": 0,
+              "function": "K"
+            },
+            {
+              "url": "http://127.0.0.1:58632/assets/api.js",
+              "line": 0,
+              "function": "a"
+            },
+            {
+              "url": "http://127.0.0.1:58632/assets/api.js",
+              "line": 0,
+              "function": "J"
+            }
+          ],
+          "end": 670,
+          "duration": 580,
+          "failed": "net::ERR_FAILED"
+        },
+        {
+          "url": "http://127.0.0.1:3000/api/media-framing",
+          "type": "Fetch",
+          "method": "GET",
+          "at": 97,
+          "initiator": "script",
+          "caller": [
+            {
+              "url": "http://127.0.0.1:58632/assets/api.js",
+              "line": 0,
+              "function": "K"
+            },
+            {
+              "url": "http://127.0.0.1:58632/assets/media-framing.js",
+              "line": 291,
+              "function": "load"
+            },
+            {
+              "url": "http://127.0.0.1:58632/assets/media-framing.js",
+              "line": 337,
+              "function": ""
+            }
+          ],
+          "end": 352,
+          "duration": 255,
+          "failed": "net::ERR_FAILED"
+        },
+        {
+          "url": "http://127.0.0.1:3000/api/gallery",
+          "type": "Fetch",
+          "method": "GET",
+          "at": 98,
+          "initiator": "script",
+          "caller": [
+            {
+              "url": "http://127.0.0.1:58632/assets/api.js",
+              "line": 0,
+              "function": "K"
+            },
+            {
+              "url": "http://127.0.0.1:58632/assets/gallery.js",
+              "line": 945,
+              "function": ""
+            },
+            {
+              "url": "http://127.0.0.1:58632/assets/gallery.js",
+              "line": 966,
+              "function": "loadGallery"
+            }
+          ],
+          "end": 2279,
+          "duration": 2181,
+          "failed": "net::ERR_FAILED"
+        },
+        {
+          "url": "http://127.0.0.1:3000/api/footer",
+          "type": "Fetch",
+          "method": "GET",
+          "at": 101,
+          "initiator": "script",
+          "caller": [
+            {
+              "url": "http://127.0.0.1:58632/assets/api.js",
+              "line": 0,
+              "function": "K"
+            },
+            {
+              "url": "http://127.0.0.1:58632/assets/footer-config.js",
+              "line": 53,
+              "function": "load"
+            },
+            {
+              "url": "http://127.0.0.1:58632/assets/footer-config.js",
+              "line": 67,
+              "function": ""
+            }
+          ],
+          "end": 992,
+          "duration": 891,
+          "failed": "net::ERR_FAILED"
+        },
+        {
+          "url": "http://127.0.0.1:3000/api/me",
+          "type": "Fetch",
+          "method": "GET",
+          "at": 101,
+          "initiator": "script",
+          "caller": [
+            {
+              "url": "http://127.0.0.1:58632/assets/api.js",
+              "line": 0,
+              "function": "K"
+            },
+            {
+              "url": "http://127.0.0.1:58632/assets/app.js",
+              "line": 721,
+              "function": "loadFromServer"
+            },
+            {
+              "url": "http://127.0.0.1:58632/assets/app.js",
+              "line": 707,
+              "function": "run"
+            }
+          ],
+          "end": 115,
+          "duration": 14,
+          "failed": "net::ERR_FAILED"
+        },
+        {
+          "url": "http://127.0.0.1:3000/api/cart",
+          "type": "Fetch",
+          "method": "GET",
+          "at": 101,
+          "initiator": "script",
+          "caller": [
+            {
+              "url": "http://127.0.0.1:58632/assets/api.js",
+              "line": 0,
+              "function": "K"
+            },
+            {
+              "url": "http://127.0.0.1:58632/assets/api.js",
+              "line": 0,
+              "function": "a"
+            },
+            {
+              "url": "http://127.0.0.1:58632/assets/api.js",
+              "line": 0,
+              "function": ""
+            }
+          ],
+          "end": 1241,
+          "duration": 1140,
+          "failed": "net::ERR_FAILED"
+        },
+        {
+          "url": "https://frqlgocxnyppzdgxxjuq.supabase.co/storage/v1/object/public/newsletter/chains-newsletter.jpg",
+          "type": "Image",
+          "method": "GET",
+          "at": 110,
+          "initiator": "parser",
+          "status": 200,
+          "mime": "image/jpeg",
+          "cache": true,
+          "headers": {
+            "content-type": "image/jpeg",
+            "cache-control": "public, max-age=3600",
+            "accept-ranges": "bytes",
+            "content-length": "10646"
+          },
+          "end": 111,
+          "duration": 1,
+          "bytes": 0
+        },
+        {
+          "url": "http://127.0.0.1:3000/api/me",
+          "type": "Fetch",
+          "method": "GET",
+          "at": 110,
+          "initiator": "script",
+          "caller": [
+            {
+              "url": "http://127.0.0.1:58632/assets/api.js",
+              "line": 0,
+              "function": "K"
+            },
+            {
+              "url": "http://127.0.0.1:58632/assets/api.js",
+              "line": 0,
+              "function": "a"
+            },
+            {
+              "url": "http://127.0.0.1:58632/assets/api.js",
+              "line": 0,
+              "function": ""
+            }
+          ],
+          "end": 115,
+          "duration": 5,
+          "failed": "net::ERR_FAILED"
+        },
+        {
+          "url": "http://127.0.0.1:58632/auth-modal.html",
+          "type": "Fetch",
+          "method": "GET",
+          "at": 111,
+          "initiator": "script",
+          "caller": [
+            {
+              "url": "http://127.0.0.1:58632/assets/api.js",
+              "line": 0,
+              "function": "K"
+            },
+            {
+              "url": "http://127.0.0.1:58632/assets/app.js",
+              "line": 2223,
+              "function": ""
+            },
+            {
+              "url": "http://127.0.0.1:58632/assets/app.js",
+              "line": 2243,
+              "function": "ensureAuthModal"
+            }
+          ],
+          "status": 200,
+          "mime": "text/html",
+          "cache": false,
+          "headers": {
+            "Cache-Control": "public, max-age=0",
+            "Accept-Ranges": "bytes",
+            "Content-Length": "4068",
+            "Content-Type": "text/html; charset=utf-8"
+          },
+          "end": 117,
+          "duration": 6,
+          "bytes": 265
+        },
+        {
+          "url": "http://127.0.0.1:3000/api/cart",
+          "type": "Fetch",
+          "method": "GET",
+          "at": 111,
+          "initiator": "script",
+          "caller": [
+            {
+              "url": "http://127.0.0.1:58632/assets/api.js",
+              "line": 0,
+              "function": "K"
+            },
+            {
+              "url": "http://127.0.0.1:58632/assets/api.js",
+              "line": 0,
+              "function": "a"
+            },
+            {
+              "url": "http://127.0.0.1:58632/assets/api.js",
+              "line": 0,
+              "function": ""
+            }
+          ],
+          "end": 1993,
+          "duration": 1882,
+          "failed": "net::ERR_FAILED"
+        },
+        {
+          "url": "http://127.0.0.1:3000/api/products",
+          "type": "Fetch",
+          "method": "GET",
+          "at": 930,
+          "initiator": "script",
+          "caller": [
+            {
+              "url": "http://127.0.0.1:58632/assets/api.js",
+              "line": 0,
+              "function": "K"
+            },
+            {
+              "url": "http://127.0.0.1:58632/assets/api.js",
+              "line": 0,
+              "function": "a"
+            },
+            {
+              "url": "http://127.0.0.1:58632/assets/api.js",
+              "line": 0,
+              "function": "J"
+            }
+          ],
+          "end": 1514,
+          "duration": 584,
+          "failed": "net::ERR_FAILED"
+        },
+        {
+          "url": "http://127.0.0.1:3000/api/products",
+          "type": "Fetch",
+          "method": "GET",
+          "at": 2266,
+          "initiator": "script",
+          "caller": [
+            {
+              "url": "http://127.0.0.1:58632/assets/api.js",
+              "line": 0,
+              "function": "K"
+            },
+            {
+              "url": "http://127.0.0.1:58632/assets/api.js",
+              "line": 0,
+              "function": "a"
+            },
+            {
+              "url": "http://127.0.0.1:58632/assets/api.js",
+              "line": 0,
+              "function": "J"
+            }
+          ],
+          "end": 2842,
+          "duration": 576,
+          "failed": "net::ERR_FAILED"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "route": "/faqs",
+      "cache": "cold",
+      "slow": false,
+      "snapshot": {
+        "readyState": "complete",
+        "url": "http://127.0.0.1:58632/faqs",
+        "navigation": [
+          {
+            "domContentLoaded": 66,
+            "load": 68.5,
+            "responseEnd": 4.699999809265137
+          }
+        ],
+        "resources": [
+          {
+            "name": "logo_banner.png",
+            "start": 23.59999942779541,
+            "responseStart": 30.299999237060547,
+            "responseEnd": 30.59999942779541,
+            "transferSize": 31300,
+            "decodedBodySize": 31000
+          }
+        ],
+        "topbarLogo": {
+          "src": "http://127.0.0.1:58632/assets/logo_banner.png",
+          "naturalWidth": 680,
+          "naturalHeight": 307,
+          "width": 143.96875,
+          "height": 65
+        },
+        "hero": [],
+        "preloader": "page-info is-loaded",
+        "icons": [
+          "http://127.0.0.1:58632/favicon.png?v=4"
+        ]
+      },
+      "events": [
+        {
+          "event": "Page.frameStartedLoading",
+          "at": 3,
+          "frame": "9AA3E8E5D173662ECF6DF0143F59B99A"
+        },
+        {
+          "event": "Page.frameNavigated",
+          "at": 10,
+          "frame": "9AA3E8E5D173662ECF6DF0143F59B99A",
+          "url": "http://127.0.0.1:58632/faqs"
+        },
+        {
+          "event": "Page.domContentEventFired",
+          "at": 71
+        },
+        {
+          "event": "Page.loadEventFired",
+          "at": 73
+        },
+        {
+          "event": "Page.frameStoppedLoading",
+          "at": 73,
+          "frame": "9AA3E8E5D173662ECF6DF0143F59B99A"
+        },
+        {
+          "event": "Page.frameStartedLoading",
+          "at": 8018,
+          "frame": "9AA3E8E5D173662ECF6DF0143F59B99A"
+        },
+        {
+          "event": "Page.frameNavigated",
+          "at": 8044,
+          "frame": "9AA3E8E5D173662ECF6DF0143F59B99A",
+          "url": "nullblank"
+        },
+        {
+          "event": "Page.domContentEventFired",
+          "at": 8048
+        },
+        {
+          "event": "Page.loadEventFired",
+          "at": 8048
+        },
+        {
+          "event": "Page.frameStoppedLoading",
+          "at": 8049,
+          "frame": "9AA3E8E5D173662ECF6DF0143F59B99A"
+        }
+      ],
+      "pending": [],
+      "requests": [
+        {
+          "url": "http://127.0.0.1:58632/faqs",
+          "type": "Document",
+          "method": "GET",
+          "at": 4,
+          "initiator": "other",
+          "status": 200,
+          "mime": "text/html",
+          "cache": false,
+          "headers": {
+            "Accept-Ranges": "bytes",
+            "Cache-Control": "public, max-age=0",
+            "Content-Length": "21742",
+            "Content-Type": "text/html; charset=utf-8"
+          },
+          "end": 16,
+          "duration": 12,
+          "bytes": 22061
+        },
+        {
+          "url": "http://127.0.0.1:58632/assets/cookie-consent.css",
+          "type": "Stylesheet",
+          "method": "GET",
+          "at": 15,
+          "initiator": "parser",
+          "status": 200,
+          "mime": "text/css",
+          "cache": false,
+          "headers": {
+            "Cache-Control": "public, max-age=0",
+            "Accept-Ranges": "bytes",
+            "Content-Length": "6995",
+            "Content-Type": "text/css; charset=utf-8"
+          },
+          "end": 29,
+          "duration": 14,
+          "bytes": 7312
+        },
+        {
+          "url": "http://127.0.0.1:58632/assets/store.css",
+          "type": "Stylesheet",
+          "method": "GET",
+          "at": 15,
+          "initiator": "parser",
+          "status": 200,
+          "mime": "text/css",
+          "cache": false,
+          "headers": {
+            "Cache-Control": "public, max-age=0",
+            "Accept-Ranges": "bytes",
+            "Content-Length": "69001",
+            "Content-Type": "text/css; charset=utf-8"
+          },
+          "end": 29,
+          "duration": 14,
+          "bytes": 69320
+        },
+        {
+          "url": "http://127.0.0.1:58632/assets/info-page.css",
+          "type": "Stylesheet",
+          "method": "GET",
+          "at": 15,
+          "initiator": "parser",
+          "status": 200,
+          "mime": "text/css",
+          "cache": false,
+          "headers": {
+            "Cache-Control": "public, max-age=0",
+            "Accept-Ranges": "bytes",
+            "Content-Length": "579",
+            "Content-Type": "text/css; charset=utf-8"
+          },
+          "end": 30,
+          "duration": 15,
+          "bytes": 894
+        },
+        {
+          "url": "http://127.0.0.1:58632/assets/faq.css",
+          "type": "Stylesheet",
+          "method": "GET",
+          "at": 15,
+          "initiator": "parser",
+          "status": 200,
+          "mime": "text/css",
+          "cache": false,
+          "headers": {
+            "Cache-Control": "public, max-age=0",
+            "Accept-Ranges": "bytes",
+            "Content-Length": "2220",
+            "Content-Type": "text/css; charset=utf-8"
+          },
+          "end": 31,
+          "duration": 16,
+          "bytes": 2536
+        },
+        {
+          "url": "http://127.0.0.1:58632/assets/cookie-consent.js",
+          "type": "Script",
+          "method": "GET",
+          "at": 15,
+          "initiator": "parser",
+          "status": 200,
+          "mime": "text/javascript",
+          "cache": false,
+          "headers": {
+            "Cache-Control": "public, max-age=0",
+            "Accept-Ranges": "bytes",
+            "Content-Length": "19694",
+            "Content-Type": "text/javascript; charset=utf-8"
+          },
+          "end": 32,
+          "duration": 17,
+          "bytes": 20019
+        },
+        {
+          "url": "http://127.0.0.1:58632/assets/customer-analytics.js",
+          "type": "Script",
+          "method": "GET",
+          "at": 15,
+          "initiator": "parser",
+          "status": 200,
+          "mime": "text/javascript",
+          "cache": false,
+          "headers": {
+            "Cache-Control": "public, max-age=0",
+            "Accept-Ranges": "bytes",
+            "Content-Length": "8404",
+            "Content-Type": "text/javascript; charset=utf-8"
+          },
+          "end": 33,
+          "duration": 18,
+          "bytes": 8728
+        },
+        {
+          "url": "http://127.0.0.1:58632/assets/page-content.js",
+          "type": "Script",
+          "method": "GET",
+          "at": 15,
+          "initiator": "parser",
+          "status": 200,
+          "mime": "text/javascript",
+          "cache": false,
+          "headers": {
+            "Cache-Control": "public, max-age=0",
+            "Accept-Ranges": "bytes",
+            "Content-Length": "948",
+            "Content-Type": "text/javascript; charset=utf-8"
+          },
+          "end": 33,
+          "duration": 18,
+          "bytes": 1270
+        },
+        {
+          "url": "http://127.0.0.1:58632/assets/faq.js",
+          "type": "Script",
+          "method": "GET",
+          "at": 15,
+          "initiator": "parser",
+          "status": 200,
+          "mime": "text/javascript",
+          "cache": false,
+          "headers": {
+            "Cache-Control": "public, max-age=0",
+            "Accept-Ranges": "bytes",
+            "Content-Length": "805",
+            "Content-Type": "text/javascript; charset=utf-8"
+          },
+          "end": 34,
+          "duration": 19,
+          "bytes": 1127
+        },
+        {
+          "url": "http://127.0.0.1:58632/assets/info-shell.js",
+          "type": "Script",
+          "method": "GET",
+          "at": 15,
+          "initiator": "parser",
+          "status": 200,
+          "mime": "text/javascript",
+          "cache": false,
+          "headers": {
+            "Cache-Control": "public, max-age=0",
+            "Accept-Ranges": "bytes",
+            "Content-Length": "6634",
+            "Content-Type": "text/javascript; charset=utf-8"
+          },
+          "end": 31,
+          "duration": 16,
+          "bytes": 6958
+        },
+        {
+          "url": "http://127.0.0.1:58632/assets/api.js",
+          "type": "Script",
+          "method": "GET",
+          "at": 15,
+          "initiator": "parser",
+          "status": 200,
+          "mime": "text/javascript",
+          "cache": false,
+          "headers": {
+            "Cache-Control": "public, max-age=0",
+            "Accept-Ranges": "bytes",
+            "Content-Length": "31346",
+            "Content-Type": "text/javascript; charset=utf-8"
+          },
+          "end": 32,
+          "duration": 17,
+          "bytes": 31671
+        },
+        {
+          "url": "http://127.0.0.1:58632/assets/app.js",
+          "type": "Script",
+          "method": "GET",
+          "at": 15,
+          "initiator": "parser",
+          "status": 200,
+          "mime": "text/javascript",
+          "cache": false,
+          "headers": {
+            "Cache-Control": "public, max-age=0",
+            "Accept-Ranges": "bytes",
+            "Content-Length": "98397",
+            "Content-Type": "text/javascript; charset=utf-8"
+          },
+          "end": 63,
+          "duration": 48,
+          "bytes": 98723
+        },
+        {
+          "url": "http://127.0.0.1:58632/assets/cart-badge.js",
+          "type": "Script",
+          "method": "GET",
+          "at": 15,
+          "initiator": "parser",
+          "status": 200,
+          "mime": "text/javascript",
+          "cache": false,
+          "headers": {
+            "Cache-Control": "public, max-age=0",
+            "Accept-Ranges": "bytes",
+            "Content-Length": "1680",
+            "Content-Type": "text/javascript; charset=utf-8"
+          },
+          "end": 34,
+          "duration": 19,
+          "bytes": 2003
+        },
+        {
+          "url": "http://127.0.0.1:58632/assets/logo_banner.png",
+          "type": "Image",
+          "method": "GET",
+          "at": 32,
+          "initiator": "parser",
+          "status": 200,
+          "mime": "image/png",
+          "cache": false,
+          "headers": {
+            "Cache-Control": "public, max-age=0",
+            "Accept-Ranges": "bytes",
+            "Content-Length": "31000",
+            "Content-Type": "image/png"
+          },
+          "end": 63,
+          "duration": 31,
+          "bytes": 31304
+        },
+        {
+          "url": "http://127.0.0.1:3000/api/footer/pages/faqs",
+          "type": "Fetch",
+          "method": "GET",
+          "at": 34,
+          "initiator": "script",
+          "caller": [
+            {
+              "url": "http://127.0.0.1:58632/assets/api.js",
+              "line": 0,
+              "function": "K"
+            },
+            {
+              "url": "http://127.0.0.1:58632/assets/page-content.js",
+              "line": 8,
+              "function": ""
+            },
+            {
+              "url": "http://127.0.0.1:58632/assets/page-content.js",
+              "line": 27,
+              "function": ""
+            }
+          ],
+          "end": 216,
+          "duration": 182,
+          "failed": "net::ERR_FAILED"
+        },
+        {
+          "url": "http://127.0.0.1:3000/api/me",
+          "type": "Fetch",
+          "method": "GET",
+          "at": 70,
+          "initiator": "script",
+          "caller": [
+            {
+              "url": "http://127.0.0.1:58632/assets/api.js",
+              "line": 0,
+              "function": "K"
+            },
+            {
+              "url": "http://127.0.0.1:58632/assets/app.js",
+              "line": 721,
+              "function": "loadFromServer"
+            },
+            {
+              "url": "http://127.0.0.1:58632/assets/app.js",
+              "line": 707,
+              "function": "run"
+            }
+          ],
+          "end": 74,
+          "duration": 4,
+          "failed": "net::ERR_FAILED"
+        },
+        {
+          "url": "http://127.0.0.1:3000/api/cart",
+          "type": "Fetch",
+          "method": "GET",
+          "at": 71,
+          "initiator": "script",
+          "caller": [
+            {
+              "url": "http://127.0.0.1:58632/assets/api.js",
+              "line": 0,
+              "function": "K"
+            },
+            {
+              "url": "http://127.0.0.1:58632/assets/api.js",
+              "line": 0,
+              "function": "a"
+            },
+            {
+              "url": "http://127.0.0.1:58632/assets/api.js",
+              "line": 0,
+              "function": ""
+            }
+          ],
+          "end": 465,
+          "duration": 394,
+          "failed": "net::ERR_FAILED"
+        },
+        {
+          "url": "http://127.0.0.1:3000/api/me",
+          "type": "Fetch",
+          "method": "GET",
+          "at": 71,
+          "initiator": "script",
+          "caller": [
+            {
+              "url": "http://127.0.0.1:58632/assets/api.js",
+              "line": 0,
+              "function": "K"
+            },
+            {
+              "url": "http://127.0.0.1:58632/assets/api.js",
+              "line": 0,
+              "function": "a"
+            },
+            {
+              "url": "http://127.0.0.1:58632/assets/api.js",
+              "line": 0,
+              "function": "o.getMe"
+            }
+          ],
+          "end": 75,
+          "duration": 4,
+          "failed": "net::ERR_FAILED"
+        },
+        {
+          "url": "http://127.0.0.1:58632/auth-modal.html",
+          "type": "Fetch",
+          "method": "GET",
+          "at": 71,
+          "initiator": "script",
+          "caller": [
+            {
+              "url": "http://127.0.0.1:58632/assets/api.js",
+              "line": 0,
+              "function": "K"
+            },
+            {
+              "url": "http://127.0.0.1:58632/assets/app.js",
+              "line": 2223,
+              "function": ""
+            },
+            {
+              "url": "http://127.0.0.1:58632/assets/app.js",
+              "line": 2243,
+              "function": "ensureAuthModal"
+            }
+          ],
+          "status": 200,
+          "mime": "text/html",
+          "cache": false,
+          "headers": {
+            "Cache-Control": "public, max-age=0",
+            "Accept-Ranges": "bytes",
+            "Content-Length": "4068",
+            "Content-Type": "text/html; charset=utf-8"
+          },
+          "end": 76,
+          "duration": 5,
+          "bytes": 4385
+        },
+        {
+          "url": "http://127.0.0.1:3000/api/cart",
+          "type": "Fetch",
+          "method": "GET",
+          "at": 71,
+          "initiator": "script",
+          "caller": [
+            {
+              "url": "http://127.0.0.1:58632/assets/api.js",
+              "line": 0,
+              "function": "K"
+            },
+            {
+              "url": "http://127.0.0.1:58632/assets/api.js",
+              "line": 0,
+              "function": "a"
+            },
+            {
+              "url": "http://127.0.0.1:58632/assets/api.js",
+              "line": 0,
+              "function": ""
+            }
+          ],
+          "end": 716,
+          "duration": 645,
+          "failed": "net::ERR_FAILED"
+        },
+        {
+          "url": "http://127.0.0.1:58632/favicon.png",
+          "type": "Other",
+          "method": "GET",
+          "at": 74,
+          "initiator": "other",
+          "status": 200,
+          "mime": "image/png",
+          "cache": false,
+          "headers": {
+            "Cache-Control": "public, max-age=0",
+            "Accept-Ranges": "bytes",
+            "Content-Length": "11204",
+            "Content-Type": "image/png"
+          },
+          "end": 78,
+          "duration": 4,
+          "bytes": 11508
+        }
+      ],
+      "errors": []
+    },
+    {
+      "route": "/",
+      "cache": "cold",
+      "slow": true,
+      "snapshot": {
+        "readyState": "complete",
+        "url": "http://127.0.0.1:58632/",
+        "navigation": [
+          {
+            "domContentLoaded": 3717.199999809265,
+            "load": 4483.60000038147,
+            "responseEnd": 294.69999980926514
+          }
+        ],
+        "resources": [
+          {
+            "name": "logo_banner.png",
+            "start": 201.80000019073486,
+            "responseStart": 591.3999996185303,
+            "responseEnd": 1428.5,
+            "transferSize": 31300,
+            "decodedBodySize": 31000
+          },
+          {
+            "name": "chains-newsletter.jpg",
+            "start": 3716.6000003814697,
+            "responseStart": 0,
+            "responseEnd": 4041.3999996185303,
+            "transferSize": 0,
+            "decodedBodySize": 0
+          }
+        ],
+        "topbarLogo": {
+          "src": "http://127.0.0.1:58632/assets/logo_banner.png",
+          "naturalWidth": 680,
+          "naturalHeight": 307,
+          "width": 143.96875,
+          "height": 65
+        },
+        "hero": [
+          {
+            "src": "http://127.0.0.1:58632/assets/VIDEO_LOGO_CRONOX.mp4",
+            "readyState": 4,
+            "networkState": 2,
+            "time": 2.831019,
+            "paused": false
+          }
+        ],
+        "preloader": "page-home is-loaded",
+        "icons": [
+          "http://127.0.0.1:58632/favicon.png?v=4",
+          "http://127.0.0.1:58632/favicon.png?v=4",
+          "http://127.0.0.1:58632/favicon.png?v=4"
+        ]
+      },
+      "events": [
+        {
+          "event": "Page.frameStartedLoading",
+          "at": 4,
+          "frame": "9AA3E8E5D173662ECF6DF0143F59B99A"
+        },
+        {
+          "event": "Page.frameNavigated",
+          "at": 178,
+          "frame": "9AA3E8E5D173662ECF6DF0143F59B99A",
+          "url": "http://127.0.0.1:58632/"
+        },
+        {
+          "event": "Page.domContentEventFired",
+          "at": 3731
+        },
+        {
+          "event": "Page.loadEventFired",
+          "at": 4489
+        },
+        {
+          "event": "Page.frameStoppedLoading",
+          "at": 4489,
+          "frame": "9AA3E8E5D173662ECF6DF0143F59B99A"
+        }
+      ],
+      "pending": [
+        {
+          "url": "http://127.0.0.1:58632/assets/VIDEO_LOGO_CRONOX.mp4",
+          "type": "Media",
+          "method": "GET",
+          "at": 3733,
+          "initiator": "parser",
+          "status": 206,
+          "mime": "application/mp4",
+          "cache": false,
+          "headers": {
+            "Cache-Control": "public, max-age=0",
+            "Content-Range": "bytes 32768-2901932/2901933",
+            "Accept-Ranges": "bytes",
+            "Content-Length": "2869165",
+            "Content-Type": "application/mp4"
+          }
+        }
+      ],
+      "requests": [
+        {
+          "url": "http://127.0.0.1:58632/",
+          "type": "Document",
+          "method": "GET",
+          "at": 5,
+          "initiator": "other",
+          "status": 200,
+          "mime": "text/html",
+          "cache": false,
+          "headers": {
+            "Content-Length": "24817",
+            "Content-Type": "text/html; charset=utf-8"
+          },
+          "end": 300,
+          "duration": 295,
+          "bytes": 25050
+        },
+        {
+          "url": "http://127.0.0.1:58632/assets/cookie-consent.css",
+          "type": "Stylesheet",
+          "method": "GET",
+          "at": 182,
+          "initiator": "parser",
+          "status": 200,
+          "mime": "text/css",
+          "cache": false,
+          "headers": {
+            "Cache-Control": "public, max-age=0",
+            "Accept-Ranges": "bytes",
+            "Content-Length": "6995",
+            "Content-Type": "text/css; charset=utf-8"
+          },
+          "end": 487,
+          "duration": 305,
+          "bytes": 7312
+        },
+        {
+          "url": "http://127.0.0.1:58632/assets/cookie-consent.js",
+          "type": "Script",
+          "method": "GET",
+          "at": 182,
+          "initiator": "parser",
+          "status": 200,
+          "mime": "text/javascript",
+          "cache": false,
+          "headers": {
+            "Cache-Control": "public, max-age=0",
+            "Accept-Ranges": "bytes",
+            "Content-Length": "19694",
+            "Content-Type": "text/javascript; charset=utf-8"
+          },
+          "end": 690,
+          "duration": 508,
+          "bytes": 20019
+        },
+        {
+          "url": "http://127.0.0.1:58632/assets/customer-analytics.js",
+          "type": "Script",
+          "method": "GET",
+          "at": 182,
+          "initiator": "parser",
+          "status": 200,
+          "mime": "text/javascript",
+          "cache": false,
+          "headers": {
+            "Cache-Control": "public, max-age=0",
+            "Accept-Ranges": "bytes",
+            "Content-Length": "8404",
+            "Content-Type": "text/javascript; charset=utf-8"
+          },
+          "end": 1482,
+          "duration": 1300,
+          "bytes": 8728
+        },
+        {
+          "url": "http://127.0.0.1:58632/assets/category-page.js",
+          "type": "Script",
+          "method": "GET",
+          "at": 182,
+          "initiator": "parser",
+          "status": 200,
+          "mime": "text/javascript",
+          "cache": false,
+          "headers": {
+            "Cache-Control": "public, max-age=0",
+            "Accept-Ranges": "bytes",
+            "Content-Length": "405",
+            "Content-Type": "text/javascript; charset=utf-8"
+          },
+          "end": 379,
+          "duration": 197,
+          "bytes": 727
+        },
+        {
+          "url": "http://127.0.0.1:58632/assets/gallery.css",
+          "type": "Stylesheet",
+          "method": "GET",
+          "at": 183,
+          "initiator": "parser",
+          "status": 200,
+          "mime": "text/css",
+          "cache": false,
+          "headers": {
+            "Cache-Control": "public, max-age=0",
+            "Accept-Ranges": "bytes",
+            "Content-Length": "17607",
+            "Content-Type": "text/css; charset=utf-8"
+          },
+          "end": 673,
+          "duration": 490,
+          "bytes": 17925
+        },
+        {
+          "url": "http://127.0.0.1:58632/assets/version.js",
+          "type": "Script",
+          "method": "GET",
+          "at": 183,
+          "initiator": "parser",
+          "status": 200,
+          "mime": "text/javascript",
+          "cache": false,
+          "headers": {
+            "Cache-Control": "public, max-age=0",
+            "Accept-Ranges": "bytes",
+            "Content-Length": "382",
+            "Content-Type": "text/javascript; charset=utf-8"
+          },
+          "end": 658,
+          "duration": 475,
+          "bytes": 704
+        },
+        {
+          "url": "http://127.0.0.1:58632/assets/product-detail.css",
+          "type": "Stylesheet",
+          "method": "GET",
+          "at": 183,
+          "initiator": "parser",
+          "status": 200,
+          "mime": "text/css",
+          "cache": false,
+          "headers": {
+            "Cache-Control": "public, max-age=0",
+            "Accept-Ranges": "bytes",
+            "Content-Length": "2871",
+            "Content-Type": "text/css; charset=utf-8"
+          },
+          "end": 456,
+          "duration": 273,
+          "bytes": 3187
+        },
+        {
+          "url": "http://127.0.0.1:58632/assets/quick-add.css",
+          "type": "Stylesheet",
+          "method": "GET",
+          "at": 183,
+          "initiator": "parser",
+          "status": 200,
+          "mime": "text/css",
+          "cache": false,
+          "headers": {
+            "Cache-Control": "public, max-age=0",
+            "Accept-Ranges": "bytes",
+            "Content-Length": "6845",
+            "Content-Type": "text/css; charset=utf-8"
+          },
+          "end": 595,
+          "duration": 412,
+          "bytes": 7162
+        },
+        {
+          "url": "http://127.0.0.1:58632/assets/media-framing.css",
+          "type": "Stylesheet",
+          "method": "GET",
+          "at": 183,
+          "initiator": "parser",
+          "status": 200,
+          "mime": "text/css",
+          "cache": false,
+          "headers": {
+            "Cache-Control": "public, max-age=0",
+            "Accept-Ranges": "bytes",
+            "Content-Length": "521",
+            "Content-Type": "text/css; charset=utf-8"
+          },
+          "end": 550,
+          "duration": 367,
+          "bytes": 836
+        },
+        {
+          "url": "http://127.0.0.1:58632/assets/newsletter-popup.css",
+          "type": "Stylesheet",
+          "method": "GET",
+          "at": 183,
+          "initiator": "parser",
+          "status": 200,
+          "mime": "text/css",
+          "cache": false,
+          "headers": {
+            "Cache-Control": "public, max-age=0",
+            "Accept-Ranges": "bytes",
+            "Content-Length": "6473",
+            "Content-Type": "text/css; charset=utf-8"
+          },
+          "end": 703,
+          "duration": 520,
+          "bytes": 6790
+        },
+        {
+          "url": "http://127.0.0.1:58632/assets/CRONOX-GIF.gif",
+          "type": "Image",
+          "method": "GET",
+          "at": 183,
+          "initiator": "parser",
+          "status": 200,
+          "mime": "image/gif",
+          "cache": false,
+          "headers": {
+            "Cache-Control": "public, max-age=0",
+            "Accept-Ranges": "bytes",
+            "Content-Length": "7036718",
+            "Content-Type": "image/gif"
+          },
+          "end": 4334,
+          "duration": 4151,
+          "failed": "net::ERR_ABORTED"
+        },
+        {
+          "url": "http://127.0.0.1:58632/assets/logo_banner.png",
+          "type": "Image",
+          "method": "GET",
+          "at": 207,
+          "initiator": "parser",
+          "status": 200,
+          "mime": "image/png",
+          "cache": false,
+          "headers": {
+            "Cache-Control": "public, max-age=0",
+            "Accept-Ranges": "bytes",
+            "Content-Length": "31000",
+            "Content-Type": "image/png"
+          },
+          "end": 1434,
+          "duration": 1227,
+          "bytes": 31304
+        },
+        {
+          "url": "http://127.0.0.1:58632/assets/size-systems.js",
+          "type": "Script",
+          "method": "GET",
+          "at": 270,
+          "initiator": "parser",
+          "status": 200,
+          "mime": "text/javascript",
+          "cache": false,
+          "headers": {
+            "Cache-Control": "public, max-age=0",
+            "Accept-Ranges": "bytes",
+            "Content-Length": "1104",
+            "Content-Type": "text/javascript; charset=utf-8"
+          },
+          "end": 845,
+          "duration": 575,
+          "bytes": 1427
+        },
+        {
+          "url": "http://127.0.0.1:58632/assets/api.js",
+          "type": "Script",
+          "method": "GET",
+          "at": 270,
+          "initiator": "parser",
+          "status": 200,
+          "mime": "text/javascript",
+          "cache": false,
+          "headers": {
+            "Cache-Control": "public, max-age=0",
+            "Accept-Ranges": "bytes",
+            "Content-Length": "31346",
+            "Content-Type": "text/javascript; charset=utf-8"
+          },
+          "end": 1640,
+          "duration": 1370,
+          "bytes": 31671
+        },
+        {
+          "url": "http://127.0.0.1:58632/assets/responsive-images.js",
+          "type": "Script",
+          "method": "GET",
+          "at": 270,
+          "initiator": "parser",
+          "status": 200,
+          "mime": "text/javascript",
+          "cache": false,
+          "headers": {
+            "Cache-Control": "public, max-age=0",
+            "Accept-Ranges": "bytes",
+            "Content-Length": "7540",
+            "Content-Type": "text/javascript; charset=utf-8"
+          },
+          "end": 1093,
+          "duration": 823,
+          "bytes": 7864
+        },
+        {
+          "url": "http://127.0.0.1:58632/assets/media-framing-geometry.js",
+          "type": "Script",
+          "method": "GET",
+          "at": 270,
+          "initiator": "parser",
+          "status": 200,
+          "mime": "text/javascript",
+          "cache": false,
+          "headers": {
+            "Cache-Control": "public, max-age=0",
+            "Accept-Ranges": "bytes",
+            "Content-Length": "10855",
+            "Content-Type": "text/javascript; charset=utf-8"
+          },
+          "end": 1561,
+          "duration": 1291,
+          "bytes": 11180
+        },
+        {
+          "url": "http://127.0.0.1:58632/assets/newsletter-renderer.js",
+          "type": "Script",
+          "method": "GET",
+          "at": 270,
+          "initiator": "parser",
+          "status": 200,
+          "mime": "text/javascript",
+          "cache": false,
+          "headers": {
+            "Cache-Control": "public, max-age=0",
+            "Accept-Ranges": "bytes",
+            "Content-Length": "10162",
+            "Content-Type": "text/javascript; charset=utf-8"
+          },
+          "end": 1780,
+          "duration": 1510,
+          "bytes": 10487
+        },
+        {
+          "url": "http://127.0.0.1:58632/assets/newsletter-visit.js",
+          "type": "Script",
+          "method": "GET",
+          "at": 270,
+          "initiator": "parser",
+          "status": 200,
+          "mime": "text/javascript",
+          "cache": false,
+          "headers": {
+            "Cache-Control": "public, max-age=0",
+            "Accept-Ranges": "bytes",
+            "Content-Length": "2447",
+            "Content-Type": "text/javascript; charset=utf-8"
+          },
+          "end": 1701,
+          "duration": 1431,
+          "bytes": 2770
+        },
+        {
+          "url": "http://127.0.0.1:58632/assets/app.js",
+          "type": "Script",
+          "method": "GET",
+          "at": 270,
+          "initiator": "parser",
+          "status": 200,
+          "mime": "text/javascript",
+          "cache": false,
+          "headers": {
+            "Cache-Control": "public, max-age=0",
+            "Accept-Ranges": "bytes",
+            "Content-Length": "98397",
+            "Content-Type": "text/javascript; charset=utf-8"
+          },
+          "end": 3712,
+          "duration": 3442,
+          "bytes": 98723
+        },
+        {
+          "url": "http://127.0.0.1:58632/assets/product-card-framing.js",
+          "type": "Script",
+          "method": "GET",
+          "at": 271,
+          "initiator": "parser",
+          "status": 200,
+          "mime": "text/javascript",
+          "cache": false,
+          "headers": {
+            "Cache-Control": "public, max-age=0",
+            "Accept-Ranges": "bytes",
+            "Content-Length": "2023",
+            "Content-Type": "text/javascript; charset=utf-8"
+          },
+          "end": 1842,
+          "duration": 1571,
+          "bytes": 2346
+        },
+        {
+          "url": "http://127.0.0.1:58632/assets/products.js",
+          "type": "Script",
+          "method": "GET",
+          "at": 271,
+          "initiator": "parser",
+          "status": 200,
+          "mime": "text/javascript",
+          "cache": false,
+          "headers": {
+            "Cache-Control": "public, max-age=0",
+            "Accept-Ranges": "bytes",
+            "Content-Length": "45137",
+            "Content-Type": "text/javascript; charset=utf-8"
+          },
+          "end": 2948,
+          "duration": 2677,
+          "bytes": 45462
+        },
+        {
+          "url": "http://127.0.0.1:58632/assets/favorites-toggle.js",
+          "type": "Script",
+          "method": "GET",
+          "at": 271,
+          "initiator": "parser",
+          "status": 200,
+          "mime": "text/javascript",
+          "cache": false,
+          "headers": {
+            "Cache-Control": "public, max-age=0",
+            "Accept-Ranges": "bytes",
+            "Content-Length": "2074",
+            "Content-Type": "text/javascript; charset=utf-8"
+          },
+          "end": 2012,
+          "duration": 1741,
+          "bytes": 2397
+        },
+        {
+          "url": "http://127.0.0.1:58632/assets/cart-badge.js",
+          "type": "Script",
+          "method": "GET",
+          "at": 271,
+          "initiator": "parser",
+          "status": 200,
+          "mime": "text/javascript",
+          "cache": false,
+          "headers": {
+            "Cache-Control": "public, max-age=0",
+            "Accept-Ranges": "bytes",
+            "Content-Length": "1680",
+            "Content-Type": "text/javascript; charset=utf-8"
+          },
+          "end": 2075,
+          "duration": 1804,
+          "bytes": 2003
+        },
+        {
+          "url": "http://127.0.0.1:58632/assets/product-gallery.js",
+          "type": "Script",
+          "method": "GET",
+          "at": 271,
+          "initiator": "parser",
+          "status": 200,
+          "mime": "text/javascript",
+          "cache": false,
+          "headers": {
+            "Cache-Control": "public, max-age=0",
+            "Accept-Ranges": "bytes",
+            "Content-Length": "1163",
+            "Content-Type": "text/javascript; charset=utf-8"
+          },
+          "end": 2186,
+          "duration": 1915,
+          "bytes": 1486
+        },
+        {
+          "url": "http://127.0.0.1:58632/assets/media-framing.js",
+          "type": "Script",
+          "method": "GET",
+          "at": 271,
+          "initiator": "parser",
+          "status": 200,
+          "mime": "text/javascript",
+          "cache": false,
+          "headers": {
+            "Cache-Control": "public, max-age=0",
+            "Accept-Ranges": "bytes",
+            "Content-Length": "12130",
+            "Content-Type": "text/javascript; charset=utf-8"
+          },
+          "end": 2590,
+          "duration": 2319,
+          "bytes": 12455
+        },
+        {
+          "url": "http://127.0.0.1:58632/assets/gallery.js",
+          "type": "Script",
+          "method": "GET",
+          "at": 271,
+          "initiator": "parser",
+          "status": 200,
+          "mime": "text/javascript",
+          "cache": false,
+          "headers": {
+            "Cache-Control": "public, max-age=0",
+            "Accept-Ranges": "bytes",
+            "Content-Length": "38721",
+            "Content-Type": "text/javascript; charset=utf-8"
+          },
+          "end": 3259,
+          "duration": 2988,
+          "bytes": 39046
+        },
+        {
+          "url": "http://127.0.0.1:58632/assets/icons/instagram.svg",
+          "type": "Image",
+          "method": "GET",
+          "at": 271,
+          "initiator": "parser",
+          "status": 200,
+          "mime": "image/svg+xml",
+          "cache": false,
+          "headers": {
+            "Cache-Control": "public, max-age=0",
+            "Accept-Ranges": "bytes",
+            "Content-Length": "2086",
+            "Content-Type": "image/svg+xml"
+          },
+          "end": 1078,
+          "duration": 807,
+          "bytes": 2392
+        },
+        {
+          "url": "http://127.0.0.1:58632/assets/icons/tiktok.svg",
+          "type": "Image",
+          "method": "GET",
+          "at": 271,
+          "initiator": "parser",
+          "status": 200,
+          "mime": "image/svg+xml",
+          "cache": false,
+          "headers": {
+            "Cache-Control": "public, max-age=0",
+            "Accept-Ranges": "bytes",
+            "Content-Length": "1589",
+            "Content-Type": "image/svg+xml"
+          },
+          "end": 2651,
+          "duration": 2380,
+          "bytes": 1895
+        },
+        {
+          "url": "http://127.0.0.1:58632/assets/icons/youtube.svg",
+          "type": "Image",
+          "method": "GET",
+          "at": 285,
+          "initiator": "parser",
+          "status": 200,
+          "mime": "image/svg+xml",
+          "cache": false,
+          "headers": {
+            "Cache-Control": "public, max-age=0",
+            "Accept-Ranges": "bytes",
+            "Content-Length": "1708",
+            "Content-Type": "image/svg+xml"
+          },
+          "end": 2821,
+          "duration": 2536,
+          "bytes": 2014
+        },
+        {
+          "url": "http://127.0.0.1:58632/assets/footer-config.js",
+          "type": "Script",
+          "method": "GET",
+          "at": 300,
+          "initiator": "parser",
+          "status": 200,
+          "mime": "text/javascript",
+          "cache": false,
+          "headers": {
+            "Cache-Control": "public, max-age=0",
+            "Accept-Ranges": "bytes",
+            "Content-Length": "2256",
+            "Content-Type": "text/javascript; charset=utf-8"
+          },
+          "end": 2867,
+          "duration": 2567,
+          "bytes": 2579
+        },
+        {
+          "url": "http://127.0.0.1:58632/assets/store.css",
+          "type": "Stylesheet",
+          "method": "GET",
+          "at": 678,
+          "initiator": "script",
+          "caller": [
+            {
+              "url": "http://127.0.0.1:58632/",
+              "line": 52,
+              "function": ""
+            },
+            {
+              "url": "http://127.0.0.1:58632/",
+              "line": 55,
+              "function": ""
+            }
+          ],
+          "status": 200,
+          "mime": "text/css",
+          "cache": false,
+          "headers": {
+            "Cache-Control": "public, max-age=0",
+            "Accept-Ranges": "bytes",
+            "Content-Length": "69001",
+            "Content-Type": "text/css; charset=utf-8"
+          },
+          "end": 2434,
+          "duration": 1756,
+          "bytes": 69320
+        },
+        {
+          "url": "http://127.0.0.1:58632/assets/VIDEO_LOGO_CRONOX.mp4",
+          "type": "Media",
+          "method": "GET",
+          "at": 678,
+          "initiator": "parser",
+          "status": 206,
+          "mime": "application/mp4",
+          "cache": false,
+          "headers": {
+            "Cache-Control": "public, max-age=0",
+            "Content-Range": "bytes 0-2901932/2901933",
+            "Accept-Ranges": "bytes",
+            "Content-Length": "2901933",
+            "Content-Type": "application/mp4"
+          },
+          "end": 3733,
+          "duration": 3055,
+          "failed": "net::ERR_ABORTED"
+        },
+        {
+          "url": "http://127.0.0.1:3000/api/products",
+          "type": "Fetch",
+          "method": "GET",
+          "at": 3715,
+          "initiator": "script",
+          "caller": [
+            {
+              "url": "http://127.0.0.1:58632/assets/api.js",
+              "line": 0,
+              "function": "K"
+            },
+            {
+              "url": "http://127.0.0.1:58632/assets/api.js",
+              "line": 0,
+              "function": "a"
+            },
+            {
+              "url": "http://127.0.0.1:58632/assets/api.js",
+              "line": 0,
+              "function": "J"
+            }
+          ],
+          "end": 4337,
+          "duration": 622,
+          "failed": "net::ERR_FAILED"
+        },
+        {
+          "url": "http://127.0.0.1:3000/api/media-framing",
+          "type": "Fetch",
+          "method": "GET",
+          "at": 3717,
+          "initiator": "script",
+          "caller": [
+            {
+              "url": "http://127.0.0.1:58632/assets/api.js",
+              "line": 0,
+              "function": "K"
+            },
+            {
+              "url": "http://127.0.0.1:58632/assets/media-framing.js",
+              "line": 291,
+              "function": "load"
+            },
+            {
+              "url": "http://127.0.0.1:58632/assets/media-framing.js",
+              "line": 337,
+              "function": ""
+            }
+          ],
+          "end": 4030,
+          "duration": 313,
+          "failed": "net::ERR_FAILED"
+        },
+        {
+          "url": "http://127.0.0.1:3000/api/gallery",
+          "type": "Fetch",
+          "method": "GET",
+          "at": 3718,
+          "initiator": "script",
+          "caller": [
+            {
+              "url": "http://127.0.0.1:58632/assets/api.js",
+              "line": 0,
+              "function": "K"
+            },
+            {
+              "url": "http://127.0.0.1:58632/assets/gallery.js",
+              "line": 945,
+              "function": ""
+            },
+            {
+              "url": "http://127.0.0.1:58632/assets/gallery.js",
+              "line": 966,
+              "function": "loadGallery"
+            }
+          ],
+          "end": 5906,
+          "duration": 2188,
+          "failed": "net::ERR_FAILED"
+        },
+        {
+          "url": "http://127.0.0.1:3000/api/footer",
+          "type": "Fetch",
+          "method": "GET",
+          "at": 3721,
+          "initiator": "script",
+          "caller": [
+            {
+              "url": "http://127.0.0.1:58632/assets/api.js",
+              "line": 0,
+              "function": "K"
+            },
+            {
+              "url": "http://127.0.0.1:58632/assets/footer-config.js",
+              "line": 53,
+              "function": "load"
+            },
+            {
+              "url": "http://127.0.0.1:58632/assets/footer-config.js",
+              "line": 67,
+              "function": ""
+            }
+          ],
+          "end": 4671,
+          "duration": 950,
+          "failed": "net::ERR_FAILED"
+        },
+        {
+          "url": "http://127.0.0.1:3000/api/me",
+          "type": "Fetch",
+          "method": "GET",
+          "at": 3721,
+          "initiator": "script",
+          "caller": [
+            {
+              "url": "http://127.0.0.1:58632/assets/api.js",
+              "line": 0,
+              "function": "K"
+            },
+            {
+              "url": "http://127.0.0.1:58632/assets/app.js",
+              "line": 721,
+              "function": "loadFromServer"
+            },
+            {
+              "url": "http://127.0.0.1:58632/assets/app.js",
+              "line": 707,
+              "function": "run"
+            }
+          ],
+          "end": 3893,
+          "duration": 172,
+          "failed": "net::ERR_FAILED"
+        },
+        {
+          "url": "http://127.0.0.1:3000/api/cart",
+          "type": "Fetch",
+          "method": "GET",
+          "at": 3721,
+          "initiator": "script",
+          "caller": [
+            {
+              "url": "http://127.0.0.1:58632/assets/api.js",
+              "line": 0,
+              "function": "K"
+            },
+            {
+              "url": "http://127.0.0.1:58632/assets/api.js",
+              "line": 0,
+              "function": "a"
+            },
+            {
+              "url": "http://127.0.0.1:58632/assets/api.js",
+              "line": 0,
+              "function": ""
+            }
+          ],
+          "end": 4920,
+          "duration": 1199,
+          "failed": "net::ERR_FAILED"
+        },
+        {
+          "url": "https://frqlgocxnyppzdgxxjuq.supabase.co/storage/v1/object/public/newsletter/chains-newsletter.jpg",
+          "type": "Image",
+          "method": "GET",
+          "at": 3731,
+          "initiator": "parser",
+          "status": 200,
+          "mime": "image/jpeg",
+          "cache": false,
+          "headers": {
+            "content-type": "image/jpeg",
+            "cache-control": "public, max-age=3600",
+            "accept-ranges": "bytes",
+            "content-length": "10646"
+          },
+          "end": 4047,
+          "duration": 316,
+          "bytes": 11301
+        },
+        {
+          "url": "http://127.0.0.1:3000/api/me",
+          "type": "Fetch",
+          "method": "GET",
+          "at": 3731,
+          "initiator": "script",
+          "caller": [
+            {
+              "url": "http://127.0.0.1:58632/assets/api.js",
+              "line": 0,
+              "function": "K"
+            },
+            {
+              "url": "http://127.0.0.1:58632/assets/api.js",
+              "line": 0,
+              "function": "a"
+            },
+            {
+              "url": "http://127.0.0.1:58632/assets/api.js",
+              "line": 0,
+              "function": "o.getMe"
+            }
+          ],
+          "end": 4061,
+          "duration": 330,
+          "failed": "net::ERR_FAILED"
+        },
+        {
+          "url": "http://127.0.0.1:58632/auth-modal.html",
+          "type": "Fetch",
+          "method": "GET",
+          "at": 3731,
+          "initiator": "script",
+          "caller": [
+            {
+              "url": "http://127.0.0.1:58632/assets/api.js",
+              "line": 0,
+              "function": "K"
+            },
+            {
+              "url": "http://127.0.0.1:58632/assets/app.js",
+              "line": 2223,
+              "function": ""
+            },
+            {
+              "url": "http://127.0.0.1:58632/assets/app.js",
+              "line": 2243,
+              "function": "ensureAuthModal"
+            }
+          ],
+          "status": 200,
+          "mime": "text/html",
+          "cache": false,
+          "headers": {
+            "Cache-Control": "public, max-age=0",
+            "Accept-Ranges": "bytes",
+            "Content-Length": "4068",
+            "Content-Type": "text/html; charset=utf-8"
+          },
+          "end": 3938,
+          "duration": 207,
+          "bytes": 4385
+        },
+        {
+          "url": "http://127.0.0.1:3000/api/cart",
+          "type": "Fetch",
+          "method": "GET",
+          "at": 3731,
+          "initiator": "script",
+          "caller": [
+            {
+              "url": "http://127.0.0.1:58632/assets/api.js",
+              "line": 0,
+              "function": "K"
+            },
+            {
+              "url": "http://127.0.0.1:58632/assets/api.js",
+              "line": 0,
+              "function": "a"
+            },
+            {
+              "url": "http://127.0.0.1:58632/assets/api.js",
+              "line": 0,
+              "function": ""
+            }
+          ],
+          "end": 5661,
+          "duration": 1930,
+          "failed": "net::ERR_FAILED"
+        },
+        {
+          "url": "http://127.0.0.1:58632/assets/VIDEO_LOGO_CRONOX.mp4",
+          "type": "Media",
+          "method": "GET",
+          "at": 3733,
+          "initiator": "parser",
+          "status": 206,
+          "mime": "application/mp4",
+          "cache": false,
+          "headers": {
+            "Cache-Control": "public, max-age=0",
+            "Content-Range": "bytes 32768-2901932/2901933",
+            "Accept-Ranges": "bytes",
+            "Content-Length": "2869165",
+            "Content-Type": "application/mp4"
+          }
+        },
+        {
+          "url": "http://127.0.0.1:58632/favicon.png",
+          "type": "Other",
+          "method": "GET",
+          "at": 4489,
+          "initiator": "other",
+          "status": 200,
+          "mime": "image/png",
+          "cache": false,
+          "headers": {
+            "Cache-Control": "public, max-age=0",
+            "Accept-Ranges": "bytes",
+            "Content-Length": "11204",
+            "Content-Type": "image/png"
+          },
+          "end": 4781,
+          "duration": 292,
+          "bytes": 11508
+        },
+        {
+          "url": "http://127.0.0.1:3000/api/products",
+          "type": "Fetch",
+          "method": "GET",
+          "at": 4594,
+          "initiator": "script",
+          "caller": [
+            {
+              "url": "http://127.0.0.1:58632/assets/api.js",
+              "line": 0,
+              "function": "K"
+            },
+            {
+              "url": "http://127.0.0.1:58632/assets/api.js",
+              "line": 0,
+              "function": "a"
+            },
+            {
+              "url": "http://127.0.0.1:58632/assets/api.js",
+              "line": 0,
+              "function": "J"
+            }
+          ],
+          "end": 5178,
+          "duration": 584,
+          "failed": "net::ERR_FAILED"
+        },
+        {
+          "url": "http://127.0.0.1:58632/favicon.png",
+          "type": "Other",
+          "method": "GET",
+          "at": 4781,
+          "initiator": "other",
+          "status": 200,
+          "mime": "image/png",
+          "cache": false,
+          "headers": {
+            "Cache-Control": "public, max-age=0",
+            "Accept-Ranges": "bytes",
+            "Content-Length": "11204",
+            "Content-Type": "image/png"
+          },
+          "end": 4951,
+          "duration": 170,
+          "bytes": 266
+        },
+        {
+          "url": "http://127.0.0.1:3000/api/products",
+          "type": "Fetch",
+          "method": "GET",
+          "at": 5938,
+          "initiator": "script",
+          "caller": [
+            {
+              "url": "http://127.0.0.1:58632/assets/api.js",
+              "line": 0,
+              "function": "K"
+            },
+            {
+              "url": "http://127.0.0.1:58632/assets/api.js",
+              "line": 0,
+              "function": "a"
+            },
+            {
+              "url": "http://127.0.0.1:58632/assets/api.js",
+              "line": 0,
+              "function": "J"
+            }
+          ],
+          "end": 6530,
+          "duration": 592,
+          "failed": "net::ERR_FAILED"
+        }
+      ],
+      "errors": []
+    }
+  ]
+}

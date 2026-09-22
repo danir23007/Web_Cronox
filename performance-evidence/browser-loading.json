@@ -1,0 +1,2588 @@
+[
+  {
+    "scenario": "cronox-loading-local.json",
+    "browser": "Chrome/153.0.8010.50",
+    "mode": "local",
+    "runs": [
+      {
+        "route": "/",
+        "cache": "cold",
+        "slow": false,
+        "snapshot": {
+          "readyState": "complete",
+          "url": "http://127.0.0.1:57264/",
+          "navigation": [
+            {
+              "domContentLoaded": 140.10000038146973,
+              "load": 361.70000076293945,
+              "responseEnd": 9.90000057220459
+            }
+          ],
+          "hero": [
+            {
+              "src": "http://127.0.0.1:57264/assets/VIDEO_LOGO_CRONOX.mp4",
+              "readyState": 4,
+              "networkState": 1,
+              "time": 14.579643,
+              "paused": false
+            }
+          ],
+          "preloader": "page-home is-loaded",
+          "icons": [
+            "http://127.0.0.1:57264/favicon.png?v=4",
+            "http://127.0.0.1:57264/favicon.png?v=4",
+            "http://127.0.0.1:57264/favicon.png?v=4"
+          ]
+        },
+        "events": [
+          {
+            "event": "Page.frameStartedLoading",
+            "at": 4,
+            "frame": "EF8C2642DEE019A3D097AA1BB57728FC"
+          },
+          {
+            "event": "Page.frameNavigated",
+            "at": 16,
+            "frame": "EF8C2642DEE019A3D097AA1BB57728FC",
+            "url": "http://127.0.0.1:57264/"
+          },
+          {
+            "event": "Page.domContentEventFired",
+            "at": 160
+          },
+          {
+            "event": "Page.loadEventFired",
+            "at": 367
+          },
+          {
+            "event": "Page.frameStoppedLoading",
+            "at": 368,
+            "frame": "EF8C2642DEE019A3D097AA1BB57728FC"
+          },
+          {
+            "event": "Page.frameStartedLoading",
+            "at": 15029,
+            "frame": "EF8C2642DEE019A3D097AA1BB57728FC"
+          },
+          {
+            "event": "Page.frameNavigated",
+            "at": 15054,
+            "frame": "EF8C2642DEE019A3D097AA1BB57728FC",
+            "url": "nullblank"
+          },
+          {
+            "event": "Page.domContentEventFired",
+            "at": 15060
+          },
+          {
+            "event": "Page.loadEventFired",
+            "at": 15060
+          },
+          {
+            "event": "Page.frameStoppedLoading",
+            "at": 15060,
+            "frame": "EF8C2642DEE019A3D097AA1BB57728FC"
+          }
+        ],
+        "pending": [],
+        "relevantRequests": [
+          {
+            "url": "http://127.0.0.1:57264/assets/CRONOX-GIF.gif",
+            "type": "Image",
+            "method": "GET",
+            "at": 23,
+            "initiator": "parser",
+            "status": 200,
+            "mime": "image/gif",
+            "cache": false,
+            "headers": {
+              "Cache-Control": "public, max-age=0",
+              "Accept-Ranges": "bytes",
+              "Content-Length": "7036718",
+              "Content-Type": "image/gif"
+            },
+            "end": 103,
+            "duration": 80,
+            "bytes": 7037026
+          },
+          {
+            "url": "http://127.0.0.1:57264/assets/VIDEO_LOGO_CRONOX.mp4",
+            "type": "Media",
+            "method": "GET",
+            "at": 73,
+            "initiator": "parser",
+            "status": 206,
+            "mime": "application/mp4",
+            "cache": false,
+            "headers": {
+              "Cache-Control": "public, max-age=0",
+              "Content-Range": "bytes 0-2901932/2901933",
+              "Accept-Ranges": "bytes",
+              "Content-Length": "2901933",
+              "Content-Type": "application/mp4"
+            },
+            "end": 117,
+            "duration": 44,
+            "bytes": 2902300
+          },
+          {
+            "url": "http://127.0.0.1:57264/favicon.png",
+            "type": "Other",
+            "method": "GET",
+            "at": 369,
+            "initiator": "other",
+            "status": 200,
+            "mime": "image/png",
+            "cache": false,
+            "headers": {
+              "Cache-Control": "public, max-age=0",
+              "Accept-Ranges": "bytes",
+              "Content-Length": "11204",
+              "Content-Type": "image/png"
+            },
+            "end": 374,
+            "duration": 5,
+            "bytes": 11508
+          },
+          {
+            "url": "http://127.0.0.1:57264/favicon.png",
+            "type": "Other",
+            "method": "GET",
+            "at": 374,
+            "initiator": "other",
+            "status": 200,
+            "mime": "image/png",
+            "cache": false,
+            "headers": {
+              "Cache-Control": "public, max-age=0",
+              "Accept-Ranges": "bytes",
+              "Content-Length": "11204",
+              "Content-Type": "image/png"
+            },
+            "end": 378,
+            "duration": 4,
+            "bytes": 266
+          }
+        ],
+        "errors": []
+      },
+      {
+        "route": "/",
+        "cache": "warm",
+        "slow": false,
+        "snapshot": {
+          "readyState": "complete",
+          "url": "http://127.0.0.1:57264/",
+          "navigation": [
+            {
+              "domContentLoaded": 105.39999961853027,
+              "load": 139.80000019073486,
+              "responseEnd": 4.399999618530273
+            }
+          ],
+          "hero": [
+            {
+              "src": "http://127.0.0.1:57264/assets/VIDEO_LOGO_CRONOX.mp4",
+              "readyState": 4,
+              "networkState": 1,
+              "time": 14.781386,
+              "paused": false
+            }
+          ],
+          "preloader": "page-home is-loaded",
+          "icons": [
+            "http://127.0.0.1:57264/favicon.png?v=4",
+            "http://127.0.0.1:57264/favicon.png?v=4",
+            "http://127.0.0.1:57264/favicon.png?v=4"
+          ]
+        },
+        "events": [
+          {
+            "event": "Page.frameStartedLoading",
+            "at": 3,
+            "frame": "EF8C2642DEE019A3D097AA1BB57728FC"
+          },
+          {
+            "event": "Page.frameNavigated",
+            "at": 10,
+            "frame": "EF8C2642DEE019A3D097AA1BB57728FC",
+            "url": "http://127.0.0.1:57264/"
+          },
+          {
+            "event": "Page.domContentEventFired",
+            "at": 118
+          },
+          {
+            "event": "Page.loadEventFired",
+            "at": 143
+          },
+          {
+            "event": "Page.frameStoppedLoading",
+            "at": 144,
+            "frame": "EF8C2642DEE019A3D097AA1BB57728FC"
+          },
+          {
+            "event": "Page.frameStartedLoading",
+            "at": 15025,
+            "frame": "EF8C2642DEE019A3D097AA1BB57728FC"
+          },
+          {
+            "event": "Page.frameNavigated",
+            "at": 15050,
+            "frame": "EF8C2642DEE019A3D097AA1BB57728FC",
+            "url": "nullblank"
+          },
+          {
+            "event": "Page.domContentEventFired",
+            "at": 15055
+          },
+          {
+            "event": "Page.loadEventFired",
+            "at": 15055
+          },
+          {
+            "event": "Page.frameStoppedLoading",
+            "at": 15055,
+            "frame": "EF8C2642DEE019A3D097AA1BB57728FC"
+          }
+        ],
+        "pending": [],
+        "relevantRequests": [
+          {
+            "url": "http://127.0.0.1:57264/assets/CRONOX-GIF.gif",
+            "type": "Image",
+            "method": "GET",
+            "at": 16,
+            "initiator": "parser",
+            "status": 200,
+            "mime": "image/gif",
+            "cache": false,
+            "headers": {
+              "Cache-Control": "public, max-age=0",
+              "Accept-Ranges": "bytes",
+              "Content-Length": "7036718",
+              "Content-Type": "image/gif"
+            },
+            "end": 59,
+            "duration": 43,
+            "bytes": 268
+          },
+          {
+            "url": "http://127.0.0.1:57264/assets/VIDEO_LOGO_CRONOX.mp4",
+            "type": "Media",
+            "method": "GET",
+            "at": 41,
+            "initiator": "parser",
+            "status": 206,
+            "mime": "application/mp4",
+            "cache": false,
+            "headers": {
+              "Cache-Control": "public, max-age=0",
+              "Content-Range": "bytes 0-2901932/2901933",
+              "Accept-Ranges": "bytes",
+              "Content-Length": "2901933",
+              "Content-Type": "application/mp4"
+            },
+            "end": 64,
+            "duration": 23,
+            "bytes": 268
+          }
+        ],
+        "errors": []
+      },
+      {
+        "route": "/faqs",
+        "cache": "cold",
+        "slow": false,
+        "snapshot": {
+          "readyState": "complete",
+          "url": "http://127.0.0.1:57264/faqs",
+          "navigation": [
+            {
+              "domContentLoaded": 70,
+              "load": 79.09999942779541,
+              "responseEnd": 4.699999809265137
+            }
+          ],
+          "hero": [],
+          "preloader": "page-info is-loaded",
+          "icons": [
+            "http://127.0.0.1:57264/favicon.png?v=4"
+          ]
+        },
+        "events": [
+          {
+            "event": "Page.frameStartedLoading",
+            "at": 3,
+            "frame": "EF8C2642DEE019A3D097AA1BB57728FC"
+          },
+          {
+            "event": "Page.frameNavigated",
+            "at": 10,
+            "frame": "EF8C2642DEE019A3D097AA1BB57728FC",
+            "url": "http://127.0.0.1:57264/faqs"
+          },
+          {
+            "event": "Page.domContentEventFired",
+            "at": 81
+          },
+          {
+            "event": "Page.loadEventFired",
+            "at": 83
+          },
+          {
+            "event": "Page.frameStoppedLoading",
+            "at": 83,
+            "frame": "EF8C2642DEE019A3D097AA1BB57728FC"
+          },
+          {
+            "event": "Page.frameStartedLoading",
+            "at": 15015,
+            "frame": "EF8C2642DEE019A3D097AA1BB57728FC"
+          },
+          {
+            "event": "Page.frameNavigated",
+            "at": 15042,
+            "frame": "EF8C2642DEE019A3D097AA1BB57728FC",
+            "url": "nullblank"
+          },
+          {
+            "event": "Page.domContentEventFired",
+            "at": 15048
+          },
+          {
+            "event": "Page.loadEventFired",
+            "at": 15048
+          },
+          {
+            "event": "Page.frameStoppedLoading",
+            "at": 15048,
+            "frame": "EF8C2642DEE019A3D097AA1BB57728FC"
+          }
+        ],
+        "pending": [],
+        "relevantRequests": [
+          {
+            "url": "http://127.0.0.1:57264/favicon.png",
+            "type": "Other",
+            "method": "GET",
+            "at": 85,
+            "initiator": "other",
+            "status": 200,
+            "mime": "image/png",
+            "cache": false,
+            "headers": {
+              "Cache-Control": "public, max-age=0",
+              "Accept-Ranges": "bytes",
+              "Content-Length": "11204",
+              "Content-Type": "image/png"
+            },
+            "end": 89,
+            "duration": 4,
+            "bytes": 11508
+          }
+        ],
+        "errors": []
+      },
+      {
+        "route": "/",
+        "cache": "cold",
+        "slow": true,
+        "snapshot": {
+          "readyState": "interactive",
+          "url": "http://127.0.0.1:57264/",
+          "navigation": [
+            {
+              "domContentLoaded": 3714.300000190735,
+              "load": 0,
+              "responseEnd": 283.5
+            }
+          ],
+          "hero": [
+            {
+              "src": "http://127.0.0.1:57264/assets/VIDEO_LOGO_CRONOX.mp4",
+              "readyState": 4,
+              "networkState": 2,
+              "time": 1.773297,
+              "paused": false
+            }
+          ],
+          "preloader": "page-home is-loaded",
+          "icons": [
+            "http://127.0.0.1:57264/favicon.png?v=4",
+            "http://127.0.0.1:57264/favicon.png?v=4",
+            "http://127.0.0.1:57264/favicon.png?v=4"
+          ]
+        },
+        "events": [
+          {
+            "event": "Page.frameStartedLoading",
+            "at": 3,
+            "frame": "EF8C2642DEE019A3D097AA1BB57728FC"
+          },
+          {
+            "event": "Page.frameNavigated",
+            "at": 180,
+            "frame": "EF8C2642DEE019A3D097AA1BB57728FC",
+            "url": "http://127.0.0.1:57264/"
+          },
+          {
+            "event": "Page.domContentEventFired",
+            "at": 3727
+          }
+        ],
+        "pending": [
+          {
+            "url": "http://127.0.0.1:57264/assets/CRONOX-GIF.gif",
+            "type": "Image",
+            "method": "GET",
+            "at": 185,
+            "initiator": "parser",
+            "status": 200,
+            "mime": "image/gif",
+            "cache": false,
+            "headers": {
+              "Cache-Control": "public, max-age=0",
+              "Accept-Ranges": "bytes",
+              "Content-Length": "7036718",
+              "Content-Type": "image/gif"
+            }
+          },
+          {
+            "url": "http://127.0.0.1:57264/assets/VIDEO_LOGO_CRONOX.mp4",
+            "type": "Media",
+            "method": "GET",
+            "at": 3729,
+            "initiator": "parser",
+            "status": 206,
+            "mime": "application/mp4",
+            "cache": false,
+            "headers": {
+              "Cache-Control": "public, max-age=0",
+              "Content-Range": "bytes 32768-2901932/2901933",
+              "Accept-Ranges": "bytes",
+              "Content-Length": "2869165",
+              "Content-Type": "application/mp4"
+            }
+          }
+        ],
+        "relevantRequests": [
+          {
+            "url": "http://127.0.0.1:57264/assets/CRONOX-GIF.gif",
+            "type": "Image",
+            "method": "GET",
+            "at": 185,
+            "initiator": "parser",
+            "status": 200,
+            "mime": "image/gif",
+            "cache": false,
+            "headers": {
+              "Cache-Control": "public, max-age=0",
+              "Accept-Ranges": "bytes",
+              "Content-Length": "7036718",
+              "Content-Type": "image/gif"
+            }
+          },
+          {
+            "url": "http://127.0.0.1:57264/assets/VIDEO_LOGO_CRONOX.mp4",
+            "type": "Media",
+            "method": "GET",
+            "at": 653,
+            "initiator": "parser",
+            "status": 206,
+            "mime": "application/mp4",
+            "cache": false,
+            "headers": {
+              "Cache-Control": "public, max-age=0",
+              "Content-Range": "bytes 0-2901932/2901933",
+              "Accept-Ranges": "bytes",
+              "Content-Length": "2901933",
+              "Content-Type": "application/mp4"
+            },
+            "end": 3729,
+            "duration": 3076,
+            "failed": "net::ERR_ABORTED"
+          },
+          {
+            "url": "http://127.0.0.1:57264/assets/VIDEO_LOGO_CRONOX.mp4",
+            "type": "Media",
+            "method": "GET",
+            "at": 3729,
+            "initiator": "parser",
+            "status": 206,
+            "mime": "application/mp4",
+            "cache": false,
+            "headers": {
+              "Cache-Control": "public, max-age=0",
+              "Content-Range": "bytes 32768-2901932/2901933",
+              "Accept-Ranges": "bytes",
+              "Content-Length": "2869165",
+              "Content-Type": "application/mp4"
+            }
+          }
+        ],
+        "errors": []
+      }
+    ]
+  },
+  {
+    "scenario": "cronox-loading-production.json",
+    "browser": "Chrome/153.0.8010.50",
+    "mode": "production",
+    "runs": [
+      {
+        "route": "/",
+        "cache": "cold",
+        "slow": false,
+        "snapshot": {
+          "readyState": "complete",
+          "url": "https://cronox.es/",
+          "navigation": [
+            {
+              "domContentLoaded": 618.5999994277954,
+              "load": 1214.8999996185303,
+              "responseEnd": 451.79999923706055
+            }
+          ],
+          "hero": [],
+          "preloader": "",
+          "icons": [
+            "https://cronox.es/favicon.png?v=4",
+            "https://cronox.es/favicon.png?v=4",
+            "https://cronox.es/favicon.png?v=4"
+          ]
+        },
+        "events": [
+          {
+            "event": "Page.frameStartedLoading",
+            "at": 5,
+            "frame": "620CFC265486117374BF0E475A85414B"
+          },
+          {
+            "event": "Page.frameNavigated",
+            "at": 466,
+            "frame": "620CFC265486117374BF0E475A85414B",
+            "url": "https://cronox.es/"
+          },
+          {
+            "event": "Page.domContentEventFired",
+            "at": 636
+          },
+          {
+            "event": "Page.loadEventFired",
+            "at": 1229
+          },
+          {
+            "event": "Page.frameStoppedLoading",
+            "at": 1229,
+            "frame": "620CFC265486117374BF0E475A85414B"
+          },
+          {
+            "event": "Page.frameStartedLoading",
+            "at": 15478,
+            "frame": "620CFC265486117374BF0E475A85414B"
+          },
+          {
+            "event": "Page.frameNavigated",
+            "at": 15482,
+            "frame": "620CFC265486117374BF0E475A85414B",
+            "url": "nullblank"
+          },
+          {
+            "event": "Page.domContentEventFired",
+            "at": 15488
+          },
+          {
+            "event": "Page.loadEventFired",
+            "at": 15488
+          },
+          {
+            "event": "Page.frameStoppedLoading",
+            "at": 15488,
+            "frame": "620CFC265486117374BF0E475A85414B"
+          }
+        ],
+        "pending": [],
+        "relevantRequests": [
+          {
+            "url": "https://cronox.es/assets/CRONOX-GIF.gif",
+            "type": "Image",
+            "method": "GET",
+            "at": 472,
+            "initiator": "parser",
+            "status": 200,
+            "mime": "image/gif",
+            "cache": false,
+            "headers": {
+              "Content-Type": "image/gif",
+              "Cache-Control": "public, max-age=0",
+              "Accept-Ranges": "bytes",
+              "Content-Length": "7036718"
+            },
+            "end": 1047,
+            "duration": 575,
+            "bytes": 7038146
+          },
+          {
+            "url": "https://cronox.es/favicon.png",
+            "type": "Other",
+            "method": "GET",
+            "at": 1232,
+            "initiator": "other",
+            "status": 200,
+            "mime": "image/png",
+            "cache": false,
+            "headers": {
+              "Content-Type": "image/png",
+              "Cache-Control": "public, max-age=0",
+              "Accept-Ranges": "bytes",
+              "Content-Length": "11204"
+            },
+            "end": 1784,
+            "duration": 552,
+            "bytes": 12628
+          },
+          {
+            "url": "https://cronox.es/favicon.png",
+            "type": "Other",
+            "method": "GET",
+            "at": 1828,
+            "initiator": "other",
+            "status": 200,
+            "mime": "image/png",
+            "cache": false,
+            "headers": {
+              "Content-Type": "image/png",
+              "Cache-Control": "public, max-age=0",
+              "Accept-Ranges": "bytes",
+              "Content-Length": "11204"
+            },
+            "end": 1860,
+            "duration": 32,
+            "bytes": 1386
+          }
+        ],
+        "errors": []
+      },
+      {
+        "route": "/",
+        "cache": "warm",
+        "slow": false,
+        "snapshot": {
+          "readyState": "complete",
+          "url": "https://cronox.es/",
+          "navigation": [
+            {
+              "domContentLoaded": 378.80000019073486,
+              "load": 379.4000005722046,
+              "responseEnd": 274.4000005722046
+            }
+          ],
+          "hero": [],
+          "preloader": "",
+          "icons": [
+            "https://cronox.es/favicon.png?v=4",
+            "https://cronox.es/favicon.png?v=4",
+            "https://cronox.es/favicon.png?v=4"
+          ]
+        },
+        "events": [
+          {
+            "event": "Page.frameStartedLoading",
+            "at": 4,
+            "frame": "620CFC265486117374BF0E475A85414B"
+          },
+          {
+            "event": "Page.frameNavigated",
+            "at": 281,
+            "frame": "620CFC265486117374BF0E475A85414B",
+            "url": "https://cronox.es/"
+          },
+          {
+            "event": "Page.domContentEventFired",
+            "at": 383
+          },
+          {
+            "event": "Page.loadEventFired",
+            "at": 383
+          },
+          {
+            "event": "Page.frameStoppedLoading",
+            "at": 384,
+            "frame": "620CFC265486117374BF0E475A85414B"
+          },
+          {
+            "event": "Page.frameStartedLoading",
+            "at": 15284,
+            "frame": "620CFC265486117374BF0E475A85414B"
+          },
+          {
+            "event": "Page.frameNavigated",
+            "at": 15287,
+            "frame": "620CFC265486117374BF0E475A85414B",
+            "url": "nullblank"
+          },
+          {
+            "event": "Page.domContentEventFired",
+            "at": 15293
+          },
+          {
+            "event": "Page.loadEventFired",
+            "at": 15293
+          },
+          {
+            "event": "Page.frameStoppedLoading",
+            "at": 15293,
+            "frame": "620CFC265486117374BF0E475A85414B"
+          }
+        ],
+        "pending": [],
+        "relevantRequests": [
+          {
+            "url": "https://cronox.es/assets/CRONOX-GIF.gif",
+            "type": "Image",
+            "method": "GET",
+            "at": 286,
+            "initiator": "parser",
+            "status": 304,
+            "mime": "image/gif",
+            "cache": false,
+            "headers": {
+              "Cache-Control": "public, max-age=0",
+              "Accept-Ranges": "bytes"
+            },
+            "end": 377,
+            "duration": 91,
+            "bytes": 1388
+          }
+        ],
+        "errors": []
+      },
+      {
+        "route": "/faqs",
+        "cache": "cold",
+        "slow": false,
+        "snapshot": {
+          "readyState": "complete",
+          "url": "https://cronox.es/",
+          "navigation": [
+            {
+              "domContentLoaded": 363.4000005722046,
+              "load": 816.6999998092651,
+              "responseEnd": 258.30000019073486
+            }
+          ],
+          "hero": [],
+          "preloader": "",
+          "icons": [
+            "https://cronox.es/favicon.png?v=4",
+            "https://cronox.es/favicon.png?v=4",
+            "https://cronox.es/favicon.png?v=4"
+          ]
+        },
+        "events": [
+          {
+            "event": "Page.frameStartedLoading",
+            "at": 3,
+            "frame": "620CFC265486117374BF0E475A85414B"
+          },
+          {
+            "event": "Page.frameNavigated",
+            "at": 265,
+            "frame": "620CFC265486117374BF0E475A85414B",
+            "url": "https://cronox.es/"
+          },
+          {
+            "event": "Page.domContentEventFired",
+            "at": 368
+          },
+          {
+            "event": "Page.loadEventFired",
+            "at": 821
+          },
+          {
+            "event": "Page.frameStoppedLoading",
+            "at": 821,
+            "frame": "620CFC265486117374BF0E475A85414B"
+          },
+          {
+            "event": "Page.frameStartedLoading",
+            "at": 15277,
+            "frame": "620CFC265486117374BF0E475A85414B"
+          },
+          {
+            "event": "Page.frameNavigated",
+            "at": 15280,
+            "frame": "620CFC265486117374BF0E475A85414B",
+            "url": "nullblank"
+          },
+          {
+            "event": "Page.domContentEventFired",
+            "at": 15285
+          },
+          {
+            "event": "Page.loadEventFired",
+            "at": 15285
+          },
+          {
+            "event": "Page.frameStoppedLoading",
+            "at": 15285,
+            "frame": "620CFC265486117374BF0E475A85414B"
+          }
+        ],
+        "pending": [],
+        "relevantRequests": [
+          {
+            "url": "https://cronox.es/assets/CRONOX-GIF.gif",
+            "type": "Image",
+            "method": "GET",
+            "at": 272,
+            "initiator": "parser",
+            "status": 200,
+            "mime": "image/gif",
+            "cache": false,
+            "headers": {
+              "Content-Type": "image/gif",
+              "Cache-Control": "public, max-age=0",
+              "Accept-Ranges": "bytes",
+              "Content-Length": "7036718"
+            },
+            "end": 611,
+            "duration": 339,
+            "bytes": 7038146
+          },
+          {
+            "url": "https://cronox.es/favicon.png",
+            "type": "Other",
+            "method": "GET",
+            "at": 821,
+            "initiator": "other",
+            "status": 200,
+            "mime": "image/png",
+            "cache": false,
+            "headers": {
+              "Content-Type": "image/png",
+              "Cache-Control": "public, max-age=0",
+              "Accept-Ranges": "bytes",
+              "Content-Length": "11204"
+            },
+            "end": 1457,
+            "duration": 636,
+            "bytes": 12628
+          },
+          {
+            "url": "https://cronox.es/favicon.png",
+            "type": "Other",
+            "method": "GET",
+            "at": 1484,
+            "initiator": "other",
+            "status": 200,
+            "mime": "image/png",
+            "cache": false,
+            "headers": {
+              "Content-Type": "image/png",
+              "Cache-Control": "public, max-age=0",
+              "Accept-Ranges": "bytes",
+              "Content-Length": "11204"
+            },
+            "end": 1515,
+            "duration": 31,
+            "bytes": 1386
+          }
+        ],
+        "errors": []
+      },
+      {
+        "route": "/",
+        "cache": "cold",
+        "slow": true,
+        "snapshot": {
+          "readyState": "interactive",
+          "url": "https://cronox.es/",
+          "navigation": [
+            {
+              "domContentLoaded": 1288.8000001907349,
+              "load": 0,
+              "responseEnd": 312.6000003814697
+            }
+          ],
+          "hero": [],
+          "preloader": "",
+          "icons": [
+            "https://cronox.es/favicon.png?v=4",
+            "https://cronox.es/favicon.png?v=4",
+            "https://cronox.es/favicon.png?v=4"
+          ]
+        },
+        "events": [
+          {
+            "event": "Page.frameStartedLoading",
+            "at": 4,
+            "frame": "620CFC265486117374BF0E475A85414B"
+          },
+          {
+            "event": "Page.frameNavigated",
+            "at": 319,
+            "frame": "620CFC265486117374BF0E475A85414B",
+            "url": "https://cronox.es/"
+          },
+          {
+            "event": "Page.domContentEventFired",
+            "at": 1294
+          }
+        ],
+        "pending": [
+          {
+            "url": "https://cronox.es/assets/CRONOX-GIF.gif",
+            "type": "Image",
+            "method": "GET",
+            "at": 324,
+            "initiator": "parser",
+            "status": 200,
+            "mime": "image/gif",
+            "cache": false,
+            "headers": {
+              "Content-Type": "image/gif",
+              "Cache-Control": "public, max-age=0",
+              "Accept-Ranges": "bytes",
+              "Content-Length": "7036718"
+            }
+          },
+          {
+            "url": "https://frqlgocxnyppzdgxxjuq.supabase.co/storage/v1/object/public/gallery/multimedia-web/pantalla-clave/fotos/2026/09/1789516461992-f216e76c-a76f-4113-93a5-a33c9dc80a89.png",
+            "type": "Image",
+            "method": "GET",
+            "at": 1480,
+            "initiator": "parser",
+            "status": 200,
+            "mime": "image/png",
+            "cache": false,
+            "headers": {
+              "content-type": "image/png",
+              "cache-control": "public, 31536000",
+              "accept-ranges": "bytes",
+              "content-length": "16158047"
+            }
+          }
+        ],
+        "relevantRequests": [
+          {
+            "url": "https://cronox.es/assets/CRONOX-GIF.gif",
+            "type": "Image",
+            "method": "GET",
+            "at": 324,
+            "initiator": "parser",
+            "status": 200,
+            "mime": "image/gif",
+            "cache": false,
+            "headers": {
+              "Content-Type": "image/gif",
+              "Cache-Control": "public, max-age=0",
+              "Accept-Ranges": "bytes",
+              "Content-Length": "7036718"
+            }
+          }
+        ],
+        "errors": []
+      }
+    ]
+  },
+  {
+    "scenario": "cronox-gif-baseline.json",
+    "browser": "Chrome/153.0.8010.50",
+    "mode": "local",
+    "runs": [
+      {
+        "route": "/",
+        "cache": "cold",
+        "slow": true,
+        "snapshot": {
+          "readyState": "complete",
+          "url": "http://127.0.0.1:58724/",
+          "navigation": [
+            {
+              "domContentLoaded": 3688.5,
+              "load": 53042.800000190735,
+              "responseEnd": 286.5
+            }
+          ],
+          "hero": [
+            {
+              "src": "http://127.0.0.1:58724/assets/VIDEO_LOGO_CRONOX.mp4",
+              "readyState": 4,
+              "networkState": 1,
+              "time": 1.48111,
+              "paused": false
+            }
+          ],
+          "preloader": "page-home is-loaded",
+          "icons": [
+            "http://127.0.0.1:58724/favicon.png?v=4",
+            "http://127.0.0.1:58724/favicon.png?v=4",
+            "http://127.0.0.1:58724/favicon.png?v=4"
+          ]
+        },
+        "events": [
+          {
+            "event": "Page.frameStartedLoading",
+            "at": 3,
+            "frame": "E661FAA272568A61E59CBB7990F23D7F"
+          },
+          {
+            "event": "Page.frameNavigated",
+            "at": 170,
+            "frame": "E661FAA272568A61E59CBB7990F23D7F",
+            "url": "http://127.0.0.1:58724/"
+          },
+          {
+            "event": "Page.domContentEventFired",
+            "at": 3702
+          },
+          {
+            "event": "Page.loadEventFired",
+            "at": 53047
+          },
+          {
+            "event": "Page.frameStoppedLoading",
+            "at": 53047,
+            "frame": "E661FAA272568A61E59CBB7990F23D7F"
+          }
+        ],
+        "pending": [],
+        "relevantRequests": [
+          {
+            "url": "http://127.0.0.1:58724/assets/CRONOX-GIF.gif",
+            "type": "Image",
+            "method": "GET",
+            "at": 187,
+            "initiator": "parser",
+            "status": 200,
+            "mime": "image/gif",
+            "cache": false,
+            "headers": {
+              "Cache-Control": "public, max-age=0",
+              "Accept-Ranges": "bytes",
+              "Content-Length": "7036718",
+              "Content-Type": "image/gif"
+            },
+            "end": 53046,
+            "duration": 52859,
+            "bytes": 7037026
+          },
+          {
+            "url": "http://127.0.0.1:58724/assets/VIDEO_LOGO_CRONOX.mp4",
+            "type": "Media",
+            "method": "GET",
+            "at": 655,
+            "initiator": "parser",
+            "status": 206,
+            "mime": "application/mp4",
+            "cache": false,
+            "headers": {
+              "Cache-Control": "public, max-age=0",
+              "Content-Range": "bytes 0-2901932/2901933",
+              "Accept-Ranges": "bytes",
+              "Content-Length": "2901933",
+              "Content-Type": "application/mp4"
+            },
+            "end": 3705,
+            "duration": 3050,
+            "failed": "net::ERR_ABORTED"
+          },
+          {
+            "url": "http://127.0.0.1:58724/assets/VIDEO_LOGO_CRONOX.mp4",
+            "type": "Media",
+            "method": "GET",
+            "at": 3705,
+            "initiator": "parser",
+            "status": 206,
+            "mime": "application/mp4",
+            "cache": false,
+            "headers": {
+              "Cache-Control": "public, max-age=0",
+              "Content-Range": "bytes 32768-2901932/2901933",
+              "Accept-Ranges": "bytes",
+              "Content-Length": "2869165",
+              "Content-Type": "application/mp4"
+            },
+            "end": 32855,
+            "duration": 29150,
+            "bytes": 2858343
+          },
+          {
+            "url": "http://127.0.0.1:58724/favicon.png",
+            "type": "Other",
+            "method": "GET",
+            "at": 53047,
+            "initiator": "other",
+            "status": 200,
+            "mime": "image/png",
+            "cache": false,
+            "headers": {
+              "Cache-Control": "public, max-age=0",
+              "Accept-Ranges": "bytes",
+              "Content-Length": "11204",
+              "Content-Type": "image/png"
+            },
+            "end": 53275,
+            "duration": 228,
+            "bytes": 11508
+          },
+          {
+            "url": "http://127.0.0.1:58724/favicon.png",
+            "type": "Other",
+            "method": "GET",
+            "at": 53275,
+            "initiator": "other",
+            "status": 200,
+            "mime": "image/png",
+            "cache": false,
+            "headers": {
+              "Cache-Control": "public, max-age=0",
+              "Accept-Ranges": "bytes",
+              "Content-Length": "11204",
+              "Content-Type": "image/png"
+            },
+            "end": 53460,
+            "duration": 185,
+            "bytes": 266
+          }
+        ],
+        "errors": []
+      }
+    ]
+  },
+  {
+    "scenario": "cronox-gif-blocked.json",
+    "browser": "Chrome/153.0.8010.50",
+    "mode": "local",
+    "runs": [
+      {
+        "route": "/",
+        "cache": "cold",
+        "slow": true,
+        "snapshot": {
+          "readyState": "complete",
+          "url": "http://127.0.0.1:58725/",
+          "navigation": [
+            {
+              "domContentLoaded": 2964.699999809265,
+              "load": 3546,
+              "responseEnd": 283.5999994277954
+            }
+          ],
+          "hero": [
+            {
+              "src": "http://127.0.0.1:58725/assets/VIDEO_LOGO_CRONOX.mp4",
+              "readyState": 4,
+              "networkState": 1,
+              "time": 10.915205,
+              "paused": false
+            }
+          ],
+          "preloader": "page-home is-loaded",
+          "icons": [
+            "http://127.0.0.1:58725/favicon.png?v=4",
+            "http://127.0.0.1:58725/favicon.png?v=4",
+            "http://127.0.0.1:58725/favicon.png?v=4"
+          ]
+        },
+        "events": [
+          {
+            "event": "Page.frameStartedLoading",
+            "at": 3,
+            "frame": "518BA285D14E9A6F560785238AD15BA3"
+          },
+          {
+            "event": "Page.frameNavigated",
+            "at": 163,
+            "frame": "518BA285D14E9A6F560785238AD15BA3",
+            "url": "http://127.0.0.1:58725/"
+          },
+          {
+            "event": "Page.domContentEventFired",
+            "at": 2982
+          },
+          {
+            "event": "Page.loadEventFired",
+            "at": 3550
+          },
+          {
+            "event": "Page.frameStoppedLoading",
+            "at": 3550,
+            "frame": "518BA285D14E9A6F560785238AD15BA3"
+          }
+        ],
+        "pending": [],
+        "relevantRequests": [
+          {
+            "url": "http://127.0.0.1:58725/assets/CRONOX-GIF.gif",
+            "type": "Image",
+            "method": "GET",
+            "at": 175,
+            "initiator": "parser",
+            "end": 187,
+            "duration": 12,
+            "failed": "net::ERR_BLOCKED_BY_CLIENT.Inspector"
+          },
+          {
+            "url": "http://127.0.0.1:58725/assets/VIDEO_LOGO_CRONOX.mp4",
+            "type": "Media",
+            "method": "GET",
+            "at": 653,
+            "initiator": "parser",
+            "status": 206,
+            "mime": "application/mp4",
+            "cache": false,
+            "headers": {
+              "Cache-Control": "public, max-age=0",
+              "Content-Range": "bytes 0-2901932/2901933",
+              "Accept-Ranges": "bytes",
+              "Content-Length": "2901933",
+              "Content-Type": "application/mp4"
+            },
+            "end": 2986,
+            "duration": 2333,
+            "failed": "net::ERR_ABORTED"
+          },
+          {
+            "url": "http://127.0.0.1:58725/assets/VIDEO_LOGO_CRONOX.mp4",
+            "type": "Media",
+            "method": "GET",
+            "at": 2987,
+            "initiator": "parser",
+            "status": 206,
+            "mime": "application/mp4",
+            "cache": false,
+            "headers": {
+              "Cache-Control": "public, max-age=0",
+              "Content-Range": "bytes 32768-2901932/2901933",
+              "Accept-Ranges": "bytes",
+              "Content-Length": "2869165",
+              "Content-Type": "application/mp4"
+            },
+            "end": 17842,
+            "duration": 14855,
+            "bytes": 2846343
+          },
+          {
+            "url": "http://127.0.0.1:58725/favicon.png",
+            "type": "Other",
+            "method": "GET",
+            "at": 3551,
+            "initiator": "other",
+            "status": 200,
+            "mime": "image/png",
+            "cache": false,
+            "headers": {
+              "Cache-Control": "public, max-age=0",
+              "Accept-Ranges": "bytes",
+              "Content-Length": "11204",
+              "Content-Type": "image/png"
+            },
+            "end": 3824,
+            "duration": 273,
+            "bytes": 11508
+          },
+          {
+            "url": "http://127.0.0.1:58725/favicon.png",
+            "type": "Other",
+            "method": "GET",
+            "at": 3824,
+            "initiator": "other",
+            "status": 200,
+            "mime": "image/png",
+            "cache": false,
+            "headers": {
+              "Cache-Control": "public, max-age=0",
+              "Accept-Ranges": "bytes",
+              "Content-Length": "11204",
+              "Content-Type": "image/png"
+            },
+            "end": 3995,
+            "duration": 171,
+            "bytes": 266
+          }
+        ],
+        "errors": []
+      }
+    ]
+  },
+  {
+    "scenario": "cronox-gif-stalled-before.json",
+    "browser": "Chrome/153.0.8010.50",
+    "mode": "local",
+    "runs": [
+      {
+        "route": "/",
+        "cache": "cold",
+        "slow": false,
+        "snapshot": {
+          "readyState": "interactive",
+          "url": "http://127.0.0.1:56869/",
+          "navigation": [
+            {
+              "domContentLoaded": 125.70000076293945,
+              "load": 0,
+              "responseEnd": 10.40000057220459
+            }
+          ],
+          "hero": [
+            {
+              "src": "http://127.0.0.1:56869/assets/VIDEO_LOGO_CRONOX.mp4",
+              "readyState": 4,
+              "networkState": 1,
+              "time": 9.624285,
+              "paused": false
+            }
+          ],
+          "preloader": "page-home is-loaded",
+          "icons": [
+            "http://127.0.0.1:56869/favicon.png?v=4",
+            "http://127.0.0.1:56869/favicon.png?v=4",
+            "http://127.0.0.1:56869/favicon.png?v=4"
+          ]
+        },
+        "events": [
+          {
+            "event": "Page.frameStartedLoading",
+            "at": 3,
+            "frame": "E0A4ADCB9BFE74204FF26F5A06CC83AE"
+          },
+          {
+            "event": "Page.frameNavigated",
+            "at": 16,
+            "frame": "E0A4ADCB9BFE74204FF26F5A06CC83AE",
+            "url": "http://127.0.0.1:56869/"
+          },
+          {
+            "event": "Page.domContentEventFired",
+            "at": 142
+          }
+        ],
+        "pending": [
+          {
+            "url": "http://127.0.0.1:56869/assets/CRONOX-GIF.gif",
+            "type": "Image",
+            "method": "GET",
+            "at": 22,
+            "initiator": "parser",
+            "status": 200,
+            "mime": "image/gif",
+            "cache": false,
+            "headers": {
+              "Content-Length": "7036718",
+              "Content-Type": "image/gif"
+            }
+          }
+        ],
+        "relevantRequests": [
+          {
+            "url": "http://127.0.0.1:56869/assets/CRONOX-GIF.gif",
+            "type": "Image",
+            "method": "GET",
+            "at": 22,
+            "initiator": "parser",
+            "status": 200,
+            "mime": "image/gif",
+            "cache": false,
+            "headers": {
+              "Content-Length": "7036718",
+              "Content-Type": "image/gif"
+            }
+          },
+          {
+            "url": "http://127.0.0.1:56869/assets/VIDEO_LOGO_CRONOX.mp4",
+            "type": "Media",
+            "method": "GET",
+            "at": 54,
+            "initiator": "parser",
+            "status": 206,
+            "mime": "application/mp4",
+            "cache": false,
+            "headers": {
+              "Cache-Control": "public, max-age=0",
+              "Content-Range": "bytes 0-2901932/2901933",
+              "Accept-Ranges": "bytes",
+              "Content-Length": "2901933",
+              "Content-Type": "application/mp4"
+            },
+            "end": 88,
+            "duration": 34,
+            "bytes": 2902300
+          }
+        ],
+        "errors": []
+      }
+    ]
+  },
+  {
+    "scenario": "cronox-gif-slow-after.json",
+    "browser": "Chrome/153.0.8010.50",
+    "mode": "local",
+    "runs": [
+      {
+        "route": "/",
+        "cache": "cold",
+        "slow": true,
+        "snapshot": {
+          "readyState": "complete",
+          "url": "http://127.0.0.1:49897/",
+          "navigation": [
+            {
+              "domContentLoaded": 3711.4000005722046,
+              "load": 4477.400000572205,
+              "responseEnd": 299.69999980926514
+            }
+          ],
+          "hero": [
+            {
+              "src": "http://127.0.0.1:49897/assets/VIDEO_LOGO_CRONOX.mp4",
+              "readyState": 4,
+              "networkState": 2,
+              "time": 9.883802,
+              "paused": false
+            }
+          ],
+          "preloader": "page-home is-loaded",
+          "icons": [
+            "http://127.0.0.1:49897/favicon.png?v=4",
+            "http://127.0.0.1:49897/favicon.png?v=4",
+            "http://127.0.0.1:49897/favicon.png?v=4"
+          ]
+        },
+        "events": [
+          {
+            "event": "Page.frameStartedLoading",
+            "at": 6,
+            "frame": "7FE382CDA75F94EE6EA337D8D025A064"
+          },
+          {
+            "event": "Page.frameNavigated",
+            "at": 187,
+            "frame": "7FE382CDA75F94EE6EA337D8D025A064",
+            "url": "http://127.0.0.1:49897/"
+          },
+          {
+            "event": "Page.domContentEventFired",
+            "at": 3727
+          },
+          {
+            "event": "Page.loadEventFired",
+            "at": 4483
+          },
+          {
+            "event": "Page.frameStoppedLoading",
+            "at": 4484,
+            "frame": "7FE382CDA75F94EE6EA337D8D025A064"
+          }
+        ],
+        "pending": [
+          {
+            "url": "http://127.0.0.1:49897/assets/VIDEO_LOGO_CRONOX.mp4",
+            "type": "Media",
+            "method": "GET",
+            "at": 3729,
+            "initiator": "parser",
+            "status": 206,
+            "mime": "application/mp4",
+            "cache": false,
+            "headers": {
+              "Cache-Control": "public, max-age=0",
+              "Content-Range": "bytes 32768-2901932/2901933",
+              "Accept-Ranges": "bytes",
+              "Content-Length": "2869165",
+              "Content-Type": "application/mp4"
+            }
+          }
+        ],
+        "relevantRequests": [
+          {
+            "url": "http://127.0.0.1:49897/assets/CRONOX-GIF.gif",
+            "type": "Image",
+            "method": "GET",
+            "at": 206,
+            "initiator": "parser",
+            "status": 200,
+            "mime": "image/gif",
+            "cache": false,
+            "headers": {
+              "Cache-Control": "public, max-age=0",
+              "Accept-Ranges": "bytes",
+              "Content-Length": "7036718",
+              "Content-Type": "image/gif"
+            },
+            "end": 4329,
+            "duration": 4123,
+            "failed": "net::ERR_ABORTED"
+          },
+          {
+            "url": "http://127.0.0.1:49897/assets/VIDEO_LOGO_CRONOX.mp4",
+            "type": "Media",
+            "method": "GET",
+            "at": 678,
+            "initiator": "parser",
+            "status": 206,
+            "mime": "application/mp4",
+            "cache": false,
+            "headers": {
+              "Cache-Control": "public, max-age=0",
+              "Content-Range": "bytes 0-2901932/2901933",
+              "Accept-Ranges": "bytes",
+              "Content-Length": "2901933",
+              "Content-Type": "application/mp4"
+            },
+            "end": 3729,
+            "duration": 3051,
+            "failed": "net::ERR_ABORTED"
+          },
+          {
+            "url": "http://127.0.0.1:49897/assets/VIDEO_LOGO_CRONOX.mp4",
+            "type": "Media",
+            "method": "GET",
+            "at": 3729,
+            "initiator": "parser",
+            "status": 206,
+            "mime": "application/mp4",
+            "cache": false,
+            "headers": {
+              "Cache-Control": "public, max-age=0",
+              "Content-Range": "bytes 32768-2901932/2901933",
+              "Accept-Ranges": "bytes",
+              "Content-Length": "2869165",
+              "Content-Type": "application/mp4"
+            }
+          },
+          {
+            "url": "http://127.0.0.1:49897/favicon.png",
+            "type": "Other",
+            "method": "GET",
+            "at": 4485,
+            "initiator": "other",
+            "status": 200,
+            "mime": "image/png",
+            "cache": false,
+            "headers": {
+              "Cache-Control": "public, max-age=0",
+              "Accept-Ranges": "bytes",
+              "Content-Length": "11204",
+              "Content-Type": "image/png"
+            },
+            "end": 4773,
+            "duration": 288,
+            "bytes": 11508
+          },
+          {
+            "url": "http://127.0.0.1:49897/favicon.png",
+            "type": "Other",
+            "method": "GET",
+            "at": 4773,
+            "initiator": "other",
+            "status": 200,
+            "mime": "image/png",
+            "cache": false,
+            "headers": {
+              "Cache-Control": "public, max-age=0",
+              "Accept-Ranges": "bytes",
+              "Content-Length": "11204",
+              "Content-Type": "image/png"
+            },
+            "end": 4943,
+            "duration": 170,
+            "bytes": 266
+          }
+        ],
+        "errors": []
+      }
+    ]
+  },
+  {
+    "scenario": "cronox-gif-stalled-after.json",
+    "browser": "Chrome/153.0.8010.50",
+    "mode": "local",
+    "runs": [
+      {
+        "route": "/",
+        "cache": "cold",
+        "slow": false,
+        "snapshot": {
+          "readyState": "complete",
+          "url": "http://127.0.0.1:49898/",
+          "navigation": [
+            {
+              "domContentLoaded": 137.69999980926514,
+              "load": 836.3999996185303,
+              "responseEnd": 12.699999809265137
+            }
+          ],
+          "hero": [
+            {
+              "src": "http://127.0.0.1:49898/assets/VIDEO_LOGO_CRONOX.mp4",
+              "readyState": 4,
+              "networkState": 1,
+              "time": 14.592876,
+              "paused": false
+            }
+          ],
+          "preloader": "page-home is-loaded",
+          "icons": [
+            "http://127.0.0.1:49898/favicon.png?v=4",
+            "http://127.0.0.1:49898/favicon.png?v=4",
+            "http://127.0.0.1:49898/favicon.png?v=4"
+          ]
+        },
+        "events": [
+          {
+            "event": "Page.frameStartedLoading",
+            "at": 4,
+            "frame": "E177CF5811120E52477D679C71583C75"
+          },
+          {
+            "event": "Page.frameNavigated",
+            "at": 20,
+            "frame": "E177CF5811120E52477D679C71583C75",
+            "url": "http://127.0.0.1:49898/"
+          },
+          {
+            "event": "Page.domContentEventFired",
+            "at": 154
+          },
+          {
+            "event": "Page.loadEventFired",
+            "at": 843
+          },
+          {
+            "event": "Page.frameStoppedLoading",
+            "at": 843,
+            "frame": "E177CF5811120E52477D679C71583C75"
+          }
+        ],
+        "pending": [],
+        "relevantRequests": [
+          {
+            "url": "http://127.0.0.1:49898/assets/CRONOX-GIF.gif",
+            "type": "Image",
+            "method": "GET",
+            "at": 26,
+            "initiator": "parser",
+            "status": 200,
+            "mime": "image/gif",
+            "cache": false,
+            "headers": {
+              "Content-Length": "7036718",
+              "Content-Type": "image/gif"
+            },
+            "end": 843,
+            "duration": 817,
+            "failed": "net::ERR_ABORTED"
+          },
+          {
+            "url": "http://127.0.0.1:49898/assets/VIDEO_LOGO_CRONOX.mp4",
+            "type": "Media",
+            "method": "GET",
+            "at": 68,
+            "initiator": "parser",
+            "status": 206,
+            "mime": "application/mp4",
+            "cache": false,
+            "headers": {
+              "Cache-Control": "public, max-age=0",
+              "Content-Range": "bytes 0-2901932/2901933",
+              "Accept-Ranges": "bytes",
+              "Content-Length": "2901933",
+              "Content-Type": "application/mp4"
+            },
+            "end": 98,
+            "duration": 30,
+            "bytes": 2902300
+          },
+          {
+            "url": "http://127.0.0.1:49898/favicon.png",
+            "type": "Other",
+            "method": "GET",
+            "at": 844,
+            "initiator": "other",
+            "status": 200,
+            "mime": "image/png",
+            "cache": false,
+            "headers": {
+              "Cache-Control": "public, max-age=0",
+              "Accept-Ranges": "bytes",
+              "Content-Length": "11204",
+              "Content-Type": "image/png"
+            },
+            "end": 849,
+            "duration": 5,
+            "bytes": 11508
+          },
+          {
+            "url": "http://127.0.0.1:49898/favicon.png",
+            "type": "Other",
+            "method": "GET",
+            "at": 849,
+            "initiator": "other",
+            "status": 200,
+            "mime": "image/png",
+            "cache": false,
+            "headers": {
+              "Cache-Control": "public, max-age=0",
+              "Accept-Ranges": "bytes",
+              "Content-Length": "11204",
+              "Content-Type": "image/png"
+            },
+            "end": 854,
+            "duration": 5,
+            "bytes": 266
+          }
+        ],
+        "errors": []
+      }
+    ]
+  },
+  {
+    "scenario": "cronox-loading-after-matrix.json",
+    "browser": "Chrome/153.0.8010.50",
+    "mode": "local",
+    "runs": [
+      {
+        "route": "/",
+        "cache": "cold",
+        "slow": false,
+        "snapshot": {
+          "readyState": "complete",
+          "url": "http://127.0.0.1:57452/",
+          "navigation": [
+            {
+              "domContentLoaded": 217.9000005722046,
+              "load": 535.3000001907349,
+              "responseEnd": 14.600000381469727
+            }
+          ],
+          "hero": [
+            {
+              "src": "http://127.0.0.1:57452/assets/VIDEO_LOGO_CRONOX.mp4",
+              "readyState": 4,
+              "networkState": 1,
+              "time": 11.3882,
+              "paused": false
+            }
+          ],
+          "preloader": "page-home is-loaded",
+          "icons": [
+            "http://127.0.0.1:57452/favicon.png?v=4",
+            "http://127.0.0.1:57452/favicon.png?v=4",
+            "http://127.0.0.1:57452/favicon.png?v=4"
+          ]
+        },
+        "events": [
+          {
+            "event": "Page.frameStartedLoading",
+            "at": 6,
+            "frame": "9EF6CB1798EDE066D708FC1CED6FFB07"
+          },
+          {
+            "event": "Page.frameNavigated",
+            "at": 25,
+            "frame": "9EF6CB1798EDE066D708FC1CED6FFB07",
+            "url": "http://127.0.0.1:57452/"
+          },
+          {
+            "event": "Page.domContentEventFired",
+            "at": 323
+          },
+          {
+            "event": "Page.loadEventFired",
+            "at": 543
+          },
+          {
+            "event": "Page.frameStoppedLoading",
+            "at": 543,
+            "frame": "9EF6CB1798EDE066D708FC1CED6FFB07"
+          },
+          {
+            "event": "Page.frameStartedLoading",
+            "at": 12030,
+            "frame": "9EF6CB1798EDE066D708FC1CED6FFB07"
+          },
+          {
+            "event": "Page.frameNavigated",
+            "at": 12056,
+            "frame": "9EF6CB1798EDE066D708FC1CED6FFB07",
+            "url": "nullblank"
+          },
+          {
+            "event": "Page.domContentEventFired",
+            "at": 12063
+          },
+          {
+            "event": "Page.loadEventFired",
+            "at": 12063
+          },
+          {
+            "event": "Page.frameStoppedLoading",
+            "at": 12063,
+            "frame": "9EF6CB1798EDE066D708FC1CED6FFB07"
+          }
+        ],
+        "pending": [],
+        "relevantRequests": [
+          {
+            "url": "http://127.0.0.1:57452/assets/CRONOX-GIF.gif",
+            "type": "Image",
+            "method": "GET",
+            "at": 40,
+            "initiator": "parser",
+            "status": 200,
+            "mime": "image/gif",
+            "cache": false,
+            "headers": {
+              "Cache-Control": "public, max-age=0",
+              "Accept-Ranges": "bytes",
+              "Content-Length": "7036718",
+              "Content-Type": "image/gif"
+            },
+            "end": 250,
+            "duration": 210,
+            "bytes": 7037026
+          },
+          {
+            "url": "http://127.0.0.1:57452/assets/VIDEO_LOGO_CRONOX.mp4",
+            "type": "Media",
+            "method": "GET",
+            "at": 105,
+            "initiator": "parser",
+            "status": 206,
+            "mime": "application/mp4",
+            "cache": false,
+            "headers": {
+              "Cache-Control": "public, max-age=0",
+              "Content-Range": "bytes 0-2901932/2901933",
+              "Accept-Ranges": "bytes",
+              "Content-Length": "2901933",
+              "Content-Type": "application/mp4"
+            },
+            "end": 262,
+            "duration": 157,
+            "bytes": 2902300
+          },
+          {
+            "url": "http://127.0.0.1:57452/favicon.png",
+            "type": "Other",
+            "method": "GET",
+            "at": 544,
+            "initiator": "other",
+            "status": 200,
+            "mime": "image/png",
+            "cache": false,
+            "headers": {
+              "Cache-Control": "public, max-age=0",
+              "Accept-Ranges": "bytes",
+              "Content-Length": "11204",
+              "Content-Type": "image/png"
+            },
+            "end": 557,
+            "duration": 13,
+            "bytes": 11508
+          },
+          {
+            "url": "http://127.0.0.1:57452/favicon.png",
+            "type": "Other",
+            "method": "GET",
+            "at": 557,
+            "initiator": "other",
+            "status": 200,
+            "mime": "image/png",
+            "cache": false,
+            "headers": {
+              "Cache-Control": "public, max-age=0",
+              "Accept-Ranges": "bytes",
+              "Content-Length": "11204",
+              "Content-Type": "image/png"
+            },
+            "end": 564,
+            "duration": 7,
+            "bytes": 266
+          }
+        ],
+        "errors": []
+      },
+      {
+        "route": "/",
+        "cache": "warm",
+        "slow": false,
+        "snapshot": {
+          "readyState": "complete",
+          "url": "http://127.0.0.1:57452/",
+          "navigation": [
+            {
+              "domContentLoaded": 116,
+              "load": 153.30000019073486,
+              "responseEnd": 5
+            }
+          ],
+          "hero": [
+            {
+              "src": "http://127.0.0.1:57452/assets/VIDEO_LOGO_CRONOX.mp4",
+              "readyState": 4,
+              "networkState": 1,
+              "time": 11.764579,
+              "paused": false
+            }
+          ],
+          "preloader": "page-home is-loaded",
+          "icons": [
+            "http://127.0.0.1:57452/favicon.png?v=4",
+            "http://127.0.0.1:57452/favicon.png?v=4",
+            "http://127.0.0.1:57452/favicon.png?v=4"
+          ]
+        },
+        "events": [
+          {
+            "event": "Page.frameStartedLoading",
+            "at": 3,
+            "frame": "9EF6CB1798EDE066D708FC1CED6FFB07"
+          },
+          {
+            "event": "Page.frameNavigated",
+            "at": 11,
+            "frame": "9EF6CB1798EDE066D708FC1CED6FFB07",
+            "url": "http://127.0.0.1:57452/"
+          },
+          {
+            "event": "Page.domContentEventFired",
+            "at": 129
+          },
+          {
+            "event": "Page.loadEventFired",
+            "at": 157
+          },
+          {
+            "event": "Page.frameStoppedLoading",
+            "at": 158,
+            "frame": "9EF6CB1798EDE066D708FC1CED6FFB07"
+          },
+          {
+            "event": "Page.frameStartedLoading",
+            "at": 12016,
+            "frame": "9EF6CB1798EDE066D708FC1CED6FFB07"
+          },
+          {
+            "event": "Page.frameNavigated",
+            "at": 12042,
+            "frame": "9EF6CB1798EDE066D708FC1CED6FFB07",
+            "url": "nullblank"
+          },
+          {
+            "event": "Page.domContentEventFired",
+            "at": 12048
+          },
+          {
+            "event": "Page.loadEventFired",
+            "at": 12048
+          },
+          {
+            "event": "Page.frameStoppedLoading",
+            "at": 12048,
+            "frame": "9EF6CB1798EDE066D708FC1CED6FFB07"
+          }
+        ],
+        "pending": [],
+        "relevantRequests": [
+          {
+            "url": "http://127.0.0.1:57452/assets/CRONOX-GIF.gif",
+            "type": "Image",
+            "method": "GET",
+            "at": 17,
+            "initiator": "parser",
+            "status": 200,
+            "mime": "image/gif",
+            "cache": false,
+            "headers": {
+              "Cache-Control": "public, max-age=0",
+              "Accept-Ranges": "bytes",
+              "Content-Length": "7036718",
+              "Content-Type": "image/gif"
+            },
+            "end": 68,
+            "duration": 51,
+            "bytes": 268
+          },
+          {
+            "url": "http://127.0.0.1:57452/assets/VIDEO_LOGO_CRONOX.mp4",
+            "type": "Media",
+            "method": "GET",
+            "at": 31,
+            "initiator": "parser",
+            "status": 206,
+            "mime": "application/mp4",
+            "cache": false,
+            "headers": {
+              "Cache-Control": "public, max-age=0",
+              "Content-Range": "bytes 0-2901932/2901933",
+              "Accept-Ranges": "bytes",
+              "Content-Length": "2901933",
+              "Content-Type": "application/mp4"
+            },
+            "end": 66,
+            "duration": 35,
+            "bytes": 268
+          }
+        ],
+        "errors": []
+      },
+      {
+        "route": "/faqs",
+        "cache": "cold",
+        "slow": false,
+        "snapshot": {
+          "readyState": "complete",
+          "url": "http://127.0.0.1:57452/faqs",
+          "navigation": [
+            {
+              "domContentLoaded": 64.39999961853027,
+              "load": 73.39999961853027,
+              "responseEnd": 6.199999809265137
+            }
+          ],
+          "hero": [],
+          "preloader": "page-info is-loaded",
+          "icons": [
+            "http://127.0.0.1:57452/favicon.png?v=4"
+          ]
+        },
+        "events": [
+          {
+            "event": "Page.frameStartedLoading",
+            "at": 3,
+            "frame": "9EF6CB1798EDE066D708FC1CED6FFB07"
+          },
+          {
+            "event": "Page.frameNavigated",
+            "at": 12,
+            "frame": "9EF6CB1798EDE066D708FC1CED6FFB07",
+            "url": "http://127.0.0.1:57452/faqs"
+          },
+          {
+            "event": "Page.domContentEventFired",
+            "at": 74
+          },
+          {
+            "event": "Page.loadEventFired",
+            "at": 77
+          },
+          {
+            "event": "Page.frameStoppedLoading",
+            "at": 77,
+            "frame": "9EF6CB1798EDE066D708FC1CED6FFB07"
+          },
+          {
+            "event": "Page.frameStartedLoading",
+            "at": 12024,
+            "frame": "9EF6CB1798EDE066D708FC1CED6FFB07"
+          },
+          {
+            "event": "Page.frameNavigated",
+            "at": 12052,
+            "frame": "9EF6CB1798EDE066D708FC1CED6FFB07",
+            "url": "nullblank"
+          },
+          {
+            "event": "Page.domContentEventFired",
+            "at": 12057
+          },
+          {
+            "event": "Page.loadEventFired",
+            "at": 12058
+          },
+          {
+            "event": "Page.frameStoppedLoading",
+            "at": 12058,
+            "frame": "9EF6CB1798EDE066D708FC1CED6FFB07"
+          }
+        ],
+        "pending": [],
+        "relevantRequests": [
+          {
+            "url": "http://127.0.0.1:57452/favicon.png",
+            "type": "Other",
+            "method": "GET",
+            "at": 80,
+            "initiator": "other",
+            "status": 200,
+            "mime": "image/png",
+            "cache": false,
+            "headers": {
+              "Cache-Control": "public, max-age=0",
+              "Accept-Ranges": "bytes",
+              "Content-Length": "11204",
+              "Content-Type": "image/png"
+            },
+            "end": 84,
+            "duration": 4,
+            "bytes": 11508
+          }
+        ],
+        "errors": []
+      },
+      {
+        "route": "/",
+        "cache": "cold",
+        "slow": true,
+        "snapshot": {
+          "readyState": "complete",
+          "url": "http://127.0.0.1:57452/",
+          "navigation": [
+            {
+              "domContentLoaded": 3727.300000190735,
+              "load": 4494.5,
+              "responseEnd": 281.8999996185303
+            }
+          ],
+          "hero": [
+            {
+              "src": "http://127.0.0.1:57452/assets/VIDEO_LOGO_CRONOX.mp4",
+              "readyState": 4,
+              "networkState": 2,
+              "time": 6.819162,
+              "paused": false
+            }
+          ],
+          "preloader": "page-home is-loaded",
+          "icons": [
+            "http://127.0.0.1:57452/favicon.png?v=4",
+            "http://127.0.0.1:57452/favicon.png?v=4",
+            "http://127.0.0.1:57452/favicon.png?v=4"
+          ]
+        },
+        "events": [
+          {
+            "event": "Page.frameStartedLoading",
+            "at": 3,
+            "frame": "9EF6CB1798EDE066D708FC1CED6FFB07"
+          },
+          {
+            "event": "Page.frameNavigated",
+            "at": 180,
+            "frame": "9EF6CB1798EDE066D708FC1CED6FFB07",
+            "url": "http://127.0.0.1:57452/"
+          },
+          {
+            "event": "Page.domContentEventFired",
+            "at": 3740
+          },
+          {
+            "event": "Page.loadEventFired",
+            "at": 4498
+          },
+          {
+            "event": "Page.frameStoppedLoading",
+            "at": 4499,
+            "frame": "9EF6CB1798EDE066D708FC1CED6FFB07"
+          }
+        ],
+        "pending": [
+          {
+            "url": "http://127.0.0.1:57452/assets/VIDEO_LOGO_CRONOX.mp4",
+            "type": "Media",
+            "method": "GET",
+            "at": 3742,
+            "initiator": "parser",
+            "status": 206,
+            "mime": "application/mp4",
+            "cache": false,
+            "headers": {
+              "Cache-Control": "public, max-age=0",
+              "Content-Range": "bytes 32768-2901932/2901933",
+              "Accept-Ranges": "bytes",
+              "Content-Length": "2869165",
+              "Content-Type": "application/mp4"
+            }
+          }
+        ],
+        "relevantRequests": [
+          {
+            "url": "http://127.0.0.1:57452/assets/CRONOX-GIF.gif",
+            "type": "Image",
+            "method": "GET",
+            "at": 185,
+            "initiator": "parser",
+            "status": 200,
+            "mime": "image/gif",
+            "cache": false,
+            "headers": {
+              "Cache-Control": "public, max-age=0",
+              "Accept-Ranges": "bytes",
+              "Content-Length": "7036718",
+              "Content-Type": "image/gif"
+            },
+            "end": 4355,
+            "duration": 4170,
+            "failed": "net::ERR_ABORTED"
+          },
+          {
+            "url": "http://127.0.0.1:57452/assets/VIDEO_LOGO_CRONOX.mp4",
+            "type": "Media",
+            "method": "GET",
+            "at": 670,
+            "initiator": "parser",
+            "status": 206,
+            "mime": "application/mp4",
+            "cache": false,
+            "headers": {
+              "Cache-Control": "public, max-age=0",
+              "Content-Range": "bytes 0-2901932/2901933",
+              "Accept-Ranges": "bytes",
+              "Content-Length": "2901933",
+              "Content-Type": "application/mp4"
+            },
+            "end": 3742,
+            "duration": 3072,
+            "failed": "net::ERR_ABORTED"
+          },
+          {
+            "url": "http://127.0.0.1:57452/assets/VIDEO_LOGO_CRONOX.mp4",
+            "type": "Media",
+            "method": "GET",
+            "at": 3742,
+            "initiator": "parser",
+            "status": 206,
+            "mime": "application/mp4",
+            "cache": false,
+            "headers": {
+              "Cache-Control": "public, max-age=0",
+              "Content-Range": "bytes 32768-2901932/2901933",
+              "Accept-Ranges": "bytes",
+              "Content-Length": "2869165",
+              "Content-Type": "application/mp4"
+            }
+          },
+          {
+            "url": "http://127.0.0.1:57452/favicon.png",
+            "type": "Other",
+            "method": "GET",
+            "at": 4500,
+            "initiator": "other",
+            "status": 200,
+            "mime": "image/png",
+            "cache": false,
+            "headers": {
+              "Cache-Control": "public, max-age=0",
+              "Accept-Ranges": "bytes",
+              "Content-Length": "11204",
+              "Content-Type": "image/png"
+            },
+            "end": 4792,
+            "duration": 292,
+            "bytes": 11508
+          },
+          {
+            "url": "http://127.0.0.1:57452/favicon.png",
+            "type": "Other",
+            "method": "GET",
+            "at": 4792,
+            "initiator": "other",
+            "status": 200,
+            "mime": "image/png",
+            "cache": false,
+            "headers": {
+              "Cache-Control": "public, max-age=0",
+              "Accept-Ranges": "bytes",
+              "Content-Length": "11204",
+              "Content-Type": "image/png"
+            },
+            "end": 4964,
+            "duration": 172,
+            "bytes": 266
+          }
+        ],
+        "errors": []
+      }
+    ]
+  },
+  {
+    "scenario": "cronox-loading-after-mobile.json",
+    "browser": "Chrome/153.0.8010.50",
+    "mode": "local",
+    "runs": [
+      {
+        "route": "/",
+        "cache": "cold",
+        "slow": false,
+        "snapshot": {
+          "readyState": "complete",
+          "url": "http://127.0.0.1:57453/",
+          "navigation": [
+            {
+              "domContentLoaded": 169.39999961853027,
+              "load": 847.1999998092651,
+              "responseEnd": 14.09999942779541
+            }
+          ],
+          "hero": [
+            {
+              "src": "http://127.0.0.1:57453/assets/VIDEO_LOGO_CRONOX.mp4",
+              "readyState": 4,
+              "networkState": 1,
+              "time": 9.312463,
+              "paused": false
+            }
+          ],
+          "preloader": "page-home is-loaded",
+          "icons": [
+            "http://127.0.0.1:57453/favicon.png?v=4",
+            "http://127.0.0.1:57453/favicon.png?v=4",
+            "http://127.0.0.1:57453/favicon.png?v=4"
+          ]
+        },
+        "events": [
+          {
+            "event": "Page.frameStartedLoading",
+            "at": 6,
+            "frame": "2163E5DD58FFDBCCDB2E15EC485C6D0C"
+          },
+          {
+            "event": "Page.frameNavigated",
+            "at": 24,
+            "frame": "2163E5DD58FFDBCCDB2E15EC485C6D0C",
+            "url": "http://127.0.0.1:57453/"
+          },
+          {
+            "event": "Page.domContentEventFired",
+            "at": 192
+          },
+          {
+            "event": "Page.loadEventFired",
+            "at": 855
+          },
+          {
+            "event": "Page.frameStoppedLoading",
+            "at": 855,
+            "frame": "2163E5DD58FFDBCCDB2E15EC485C6D0C"
+          }
+        ],
+        "pending": [],
+        "relevantRequests": [
+          {
+            "url": "http://127.0.0.1:57453/assets/CRONOX-GIF.gif",
+            "type": "Image",
+            "method": "GET",
+            "at": 32,
+            "initiator": "parser",
+            "status": 200,
+            "mime": "image/gif",
+            "cache": false,
+            "headers": {
+              "Content-Length": "7036718",
+              "Content-Type": "image/gif"
+            },
+            "end": 855,
+            "duration": 823,
+            "failed": "net::ERR_ABORTED"
+          },
+          {
+            "url": "http://127.0.0.1:57453/assets/VIDEO_LOGO_CRONOX.mp4",
+            "type": "Media",
+            "method": "GET",
+            "at": 84,
+            "initiator": "parser",
+            "status": 206,
+            "mime": "application/mp4",
+            "cache": false,
+            "headers": {
+              "Cache-Control": "public, max-age=0",
+              "Content-Range": "bytes 0-2901932/2901933",
+              "Accept-Ranges": "bytes",
+              "Content-Length": "2901933",
+              "Content-Type": "application/mp4"
+            },
+            "end": 146,
+            "duration": 62,
+            "bytes": 2902300
+          },
+          {
+            "url": "http://127.0.0.1:57453/favicon.png",
+            "type": "Other",
+            "method": "GET",
+            "at": 856,
+            "initiator": "other",
+            "status": 200,
+            "mime": "image/png",
+            "cache": false,
+            "headers": {
+              "Cache-Control": "public, max-age=0",
+              "Accept-Ranges": "bytes",
+              "Content-Length": "11204",
+              "Content-Type": "image/png"
+            },
+            "end": 862,
+            "duration": 6,
+            "bytes": 11508
+          },
+          {
+            "url": "http://127.0.0.1:57453/favicon.png",
+            "type": "Other",
+            "method": "GET",
+            "at": 862,
+            "initiator": "other",
+            "status": 200,
+            "mime": "image/png",
+            "cache": false,
+            "headers": {
+              "Cache-Control": "public, max-age=0",
+              "Accept-Ranges": "bytes",
+              "Content-Length": "11204",
+              "Content-Type": "image/png"
+            },
+            "end": 868,
+            "duration": 6,
+            "bytes": 266
+          }
+        ],
+        "errors": []
+      }
+    ]
+  },
+  {
+    "scenario": "cronox-loading-after-failsafe.json",
+    "browser": "Chrome/153.0.8010.50",
+    "mode": "local",
+    "runs": [
+      {
+        "route": "/",
+        "cache": "cold",
+        "slow": false,
+        "snapshot": {
+          "readyState": "complete",
+          "url": "http://127.0.0.1:57454/",
+          "navigation": [
+            {
+              "domContentLoaded": 149.5,
+              "load": 4262.800000190735,
+              "responseEnd": 14.399999618530273
+            }
+          ],
+          "hero": [
+            {
+              "src": "http://127.0.0.1:57454/assets/VIDEO_LOGO_CRONOX.mp4",
+              "readyState": 4,
+              "networkState": 1,
+              "time": 9.371294,
+              "paused": false
+            }
+          ],
+          "preloader": "page-home is-loaded",
+          "icons": [
+            "http://127.0.0.1:57454/favicon.png?v=4",
+            "http://127.0.0.1:57454/favicon.png?v=4",
+            "http://127.0.0.1:57454/favicon.png?v=4"
+          ]
+        },
+        "events": [
+          {
+            "event": "Page.frameStartedLoading",
+            "at": 5,
+            "frame": "F0E8523364A876F5F97B49392B47BF6F"
+          },
+          {
+            "event": "Page.frameNavigated",
+            "at": 22,
+            "frame": "F0E8523364A876F5F97B49392B47BF6F",
+            "url": "http://127.0.0.1:57454/"
+          },
+          {
+            "event": "Page.domContentEventFired",
+            "at": 161
+          },
+          {
+            "event": "Page.loadEventFired",
+            "at": 4269
+          },
+          {
+            "event": "Page.frameStoppedLoading",
+            "at": 4269,
+            "frame": "F0E8523364A876F5F97B49392B47BF6F"
+          }
+        ],
+        "pending": [],
+        "relevantRequests": [
+          {
+            "url": "http://127.0.0.1:57454/assets/CRONOX-GIF.gif",
+            "type": "Image",
+            "method": "GET",
+            "at": 30,
+            "initiator": "parser",
+            "status": 200,
+            "mime": "image/gif",
+            "cache": false,
+            "headers": {
+              "Content-Length": "7036718",
+              "Content-Type": "image/gif"
+            },
+            "end": 4269,
+            "duration": 4239,
+            "failed": "net::ERR_ABORTED"
+          },
+          {
+            "url": "http://127.0.0.1:57454/assets/VIDEO_LOGO_CRONOX.mp4",
+            "type": "Media",
+            "method": "GET",
+            "at": 96,
+            "initiator": "parser",
+            "status": 206,
+            "mime": "application/mp4",
+            "cache": false,
+            "headers": {
+              "Cache-Control": "public, max-age=0",
+              "Content-Range": "bytes 0-2901932/2901933",
+              "Accept-Ranges": "bytes",
+              "Content-Length": "2901933",
+              "Content-Type": "application/mp4"
+            },
+            "end": 136,
+            "duration": 40,
+            "bytes": 2902300
+          },
+          {
+            "url": "http://127.0.0.1:57454/favicon.png",
+            "type": "Other",
+            "method": "GET",
+            "at": 4270,
+            "initiator": "other",
+            "status": 200,
+            "mime": "image/png",
+            "cache": false,
+            "headers": {
+              "Cache-Control": "public, max-age=0",
+              "Accept-Ranges": "bytes",
+              "Content-Length": "11204",
+              "Content-Type": "image/png"
+            },
+            "end": 4274,
+            "duration": 4,
+            "bytes": 11508
+          },
+          {
+            "url": "http://127.0.0.1:57454/favicon.png",
+            "type": "Other",
+            "method": "GET",
+            "at": 4274,
+            "initiator": "other",
+            "status": 200,
+            "mime": "image/png",
+            "cache": false,
+            "headers": {
+              "Cache-Control": "public, max-age=0",
+              "Accept-Ranges": "bytes",
+              "Content-Length": "11204",
+              "Content-Type": "image/png"
+            },
+            "end": 4277,
+            "duration": 3,
+            "bytes": 266
+          }
+        ],
+        "errors": []
+      }
+    ]
+  }
+]

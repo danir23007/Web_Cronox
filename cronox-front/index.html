@@ -71,7 +71,7 @@
   <!-- ===== Preloader ===== -->
   <div id="preloader" class="preloader" aria-hidden="true" aria-live="polite">
     <div class="preloader-inner">
-      <img src="assets/CRONOX-GIF.gif"
+      <img src="assets/CRONOX-preloader.webp"
            alt="CRONOX" class="preloader__logo" decoding="async">
     </div>
   </div>
@@ -198,7 +198,7 @@
 
     <!-- Logo centrado -->
     <a href="/" class="topbar__logo" aria-label="CRONOX — Tienda">
-      <img src="assets/logo_banner.png"
+      <img src="assets/logo-topbar.webp"
            alt="CRONOX" class="topbar__logo-img" decoding="async">
     </a>
 
@@ -445,7 +445,13 @@
       document.body.classList.add('is-loaded');
       try{window.dispatchEvent(new CustomEvent('cronox:storefront-ready'));}catch(e){}
       var p=document.getElementById('preloader');
-      if(p)setTimeout(function(){p.remove();},600);
+      if(p)setTimeout(function(){
+        p.querySelectorAll('img').forEach(function(image){
+          image.removeAttribute('srcset');
+          image.removeAttribute('src');
+        });
+        p.remove();
+      },600);
     }
     function hide(){
       finish();
@@ -466,7 +472,7 @@
   <script src="assets/media-framing-geometry.js?v=6" defer></script>
   <script src="assets/newsletter-renderer.js?v=5" defer></script>
   <script src="assets/newsletter-visit.js?v=1" defer></script>
-  <script src="assets/app.js?v=70" defer></script>
+  <script src="assets/app.js?v=71" defer></script>
   <script src="assets/product-card-framing.js?v=1" defer></script>
   <script src="assets/products.js?v=59" defer></script>
   <script src="assets/favorites-toggle.js?v=3" defer></script>

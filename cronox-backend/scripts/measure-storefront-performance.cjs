@@ -11,7 +11,7 @@ const appPreloader = app.slice(app.indexOf('  // ===== Preloader ====='), app.in
 const home = new JSDOM(read('index.html'));
 const fallback = [...home.window.document.scripts].find(s => s.textContent.includes('FAILSAFE') || s.textContent.includes('var tried=false'))?.textContent || '';
 function simulate(domAt, loadAt, options = {}) {
-  let now = 0, nextId = 0, unlockAt = null, hiddenAt = null, readyEvents = 0;
+  let now = 0, nextId = 0, unlockAt = null, hiddenAt = null, imageReleasedAt = null, readyEvents = 0;
   const tasks = new Map(), listeners = {};
   const classes = new Set(['is-loading']);
   const body = { classList: {
@@ -19,7 +19,7 @@ function simulate(domAt, loadAt, options = {}) {
     remove: n => { classes.delete(n); if (n === 'is-loading' && unlockAt === null) unlockAt = now; },
     add: n => classes.add(n),
   } };
-  const preloader = { dataset: options.persistent ? { persistent: 'true' } : {}, style: new Proxy({}, { set(o, k, v) { o[k] = v; if (k === 'display' && v === 'none' && hiddenAt === null) hiddenAt = now; return true; } }), remove() { if (hiddenAt === null) hiddenAt = now; } };
+  const preloader = { dataset: options.persistent ? { persistent: 'true' } : {}, querySelectorAll: () => [{ removeAttribute(name) { if (name === 'src') imageReleasedAt = now; } }], style: new Proxy({}, { set(o, k, v) { o[k] = v; if (k === 'display' && v === 'none' && hiddenAt === null) hiddenAt = now; return true; } }), remove() { if (hiddenAt === null) hiddenAt = now; } };
   const addEventListener = (name, fn) => (listeners[name] ||= []).push(fn);
   const setTimeout = (fn, delay = 0) => { const id = ++nextId; tasks.set(id, { at: now + delay, fn }); return id; };
   const document = { body, readyState: 'loading', getElementById: () => preloader, addEventListener };
@@ -33,7 +33,7 @@ function simulate(domAt, loadAt, options = {}) {
     const [id, task] = [...tasks].sort((a, b) => a[1].at - b[1].at)[0];
     tasks.delete(id); now = task.at; if (now > 15000) break; task.fn();
   }
-  return { domAtMs: domAt, loadAtMs: loadAt, scrollUnlockedAtMs: unlockAt, overlayRemovedAtMs: hiddenAt, readyEvents };
+  return { domAtMs: domAt, loadAtMs: loadAt, scrollUnlockedAtMs: unlockAt, overlayRemovedAtMs: hiddenAt, imageReleasedAtMs: imageReleasedAt, readyEvents };
 }
 const pages = ['index.html', 'producto.html', 'favorites.html', 'cart.html', 'checkout.html', 'gallery.html'].map(file => {
   const html = read(file), dom = new JSDOM(html);

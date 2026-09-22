@@ -78,17 +78,18 @@ describe('CRONOX responsive design system', () => {
     expect(index).not.toContain('/assets/logo_browser.png');
   });
 
-  it('keeps the original animated CRONOX loader and proportioned wordmarks', () => {
-    const loadingSurfaces = [
+  it('keeps optimized storefront loaders and the excluded key-screen loader proportioned', () => {
+    const optimizedLoadingSurfaces = [
       readFrontend('index.html'),
       readFrontend('checkout.html'),
-      readFrontend('key-screen.html'),
       readFrontend('assets/profile.js'),
     ];
 
-    loadingSurfaces.forEach((surface) => {
-      expect(surface).toContain('assets/CRONOX-GIF.gif');
+    optimizedLoadingSurfaces.forEach((surface) => {
+      expect(surface).toContain('assets/CRONOX-preloader.webp');
+      expect(surface).not.toContain('assets/CRONOX-GIF.gif');
     });
+    expect(readFrontend('key-screen.html')).toContain('assets/CRONOX-GIF.gif');
     expect(storeStyles).toMatch(
       /\.preloader__logo\{[^}]*height:auto;[^}]*object-fit:contain;[^}]*object-position:center;/,
     );

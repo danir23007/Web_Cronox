@@ -24,12 +24,72 @@ const audit = JSON.parse(
 ) as Audit;
 
 describe('storefront preloader performance', () => {
+  it.each(['app', 'failsafe'])(
+    '%s releases only loader images after the existing fade',
+    (implementation) => {
+      const dom = new JSDOM(
+        '<body class="is-loading"><div id="preloader"><img src="loader.gif" srcset="loader-2x.gif 2x"></div><img id="product" src="product.jpg"><video src="hero.mp4"></video></body>',
+        { runScripts: 'outside-only', url: 'http://localhost/' },
+      );
+      const callbacks: Array<() => void> = [];
+      dom.window.setTimeout = (callback: TimerHandler) => {
+        callbacks.push(callback as () => void);
+        return callbacks.length;
+      };
+      dom.window.requestAnimationFrame = (callback) => {
+        callback(0);
+        return 1;
+      };
+      const document = dom.window.document;
+      const loaderImage = document.querySelector('#preloader img')!;
+      if (implementation === 'app') {
+        const script = readFileSync(
+          path.join(root, 'cronox-front/assets/app.js'),
+          'utf8',
+        );
+        dom.window.eval(
+          script.slice(
+            script.indexOf('  // ===== Preloader ====='),
+            script.indexOf('  // ===== Topbar ====='),
+          ),
+        );
+      } else {
+        const html = new JSDOM(
+          readFileSync(path.join(root, 'cronox-front/index.html'), 'utf8'),
+        );
+        const script = Array.from(html.window.document.scripts).find((s) =>
+          s.textContent?.includes('var tried=false'),
+        )!;
+        dom.window.eval(script.textContent);
+        html.window.close();
+      }
+      document.dispatchEvent(
+        new dom.window.Event('DOMContentLoaded', { bubbles: true }),
+      );
+      if (implementation === 'failsafe') callbacks.shift()!();
+      expect(loaderImage.hasAttribute('src')).toBe(true);
+      expect(document.body.classList.contains('is-loaded')).toBe(true);
+      callbacks.shift()!();
+      expect(loaderImage.hasAttribute('src')).toBe(false);
+      expect(loaderImage.hasAttribute('srcset')).toBe(false);
+      expect(document.getElementById('preloader')).toBeNull();
+      expect(document.querySelector('#product')?.getAttribute('src')).toBe(
+        'product.jpg',
+      );
+      expect(document.querySelector('video')?.getAttribute('src')).toBe(
+        'hero.mp4',
+      );
+      dom.window.close();
+    },
+  );
+
   it.each(['slowResources', 'missingLoad'])(
     'reveals the DOM without waiting for %s',
     (scenario) => {
       expect(audit.preloader[scenario]).toMatchObject({
         scrollUnlockedAtMs: 532,
         overlayRemovedAtMs: 1132,
+        imageReleasedAtMs: 1132,
         readyEvents: 1,
       });
     },
@@ -47,6 +107,7 @@ describe('storefront preloader performance', () => {
     expect(audit.preloader.appFailure).toMatchObject({
       scrollUnlockedAtMs: 4000,
       overlayRemovedAtMs: 4600,
+      imageReleasedAtMs: 4600,
       readyEvents: 1,
     });
   });
@@ -55,6 +116,7 @@ describe('storefront preloader performance', () => {
     expect(audit.preloader.persistentCheckout).toMatchObject({
       scrollUnlockedAtMs: null,
       overlayRemovedAtMs: null,
+      imageReleasedAtMs: null,
       readyEvents: 0,
     });
   });
@@ -71,7 +133,7 @@ describe('storefront preloader performance', () => {
     }
     expect(
       dom.window.document.querySelector('#preloader img')?.getAttribute('src'),
-    ).toBe('assets/CRONOX-GIF.gif');
+    ).toBe('assets/CRONOX-preloader.webp');
     dom.window.close();
   });
 });

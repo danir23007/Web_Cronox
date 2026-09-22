@@ -1,0 +1,42 @@
+{
+  "version": 1,
+  "runtimeRoot": "cronox-front",
+  "assets": [
+    {
+      "purpose": "storefront-preloader",
+      "originalPublicPath": "/assets/CRONOX-GIF.gif",
+      "archivePath": "docs/original-assets/ui-media/cronox-front/assets/CRONOX-GIF.gif",
+      "originalFormat": "gif",
+      "originalBytes": 7036718,
+      "originalSha256": "7e5b572863953ff1a01af225c595d38d8163d9cda8261413ddc0c197ccc0682b",
+      "optimizedPublicPath": "/assets/CRONOX-preloader.webp",
+      "optimizedFormat": "webp",
+      "optimizedBytes": 4584550,
+      "optimizedSha256": "8d8767406697ab40cf124a6573be48e5af56743d169250acb8bf188e6409b68f",
+      "dimensions": "1280x720",
+      "frames": 81,
+      "frameDelayMs": 30,
+      "durationMs": 2430,
+      "loop": 0,
+      "alpha": true,
+      "savedPercent": 34.84
+    },
+    {
+      "purpose": "homepage-topbar-logo",
+      "originalPublicPath": "/assets/logo_banner.png",
+      "archivePath": "docs/original-assets/ui-media/cronox-front/assets/logo_banner.png",
+      "originalFormat": "png",
+      "originalBytes": 31000,
+      "originalSha256": "9d19c96a2aae07458b143f6a5c89d1010290bf9667e11472cf0fc5b7d8f9d196",
+      "optimizedPublicPath": "/assets/logo-topbar.webp",
+      "optimizedFormat": "webp",
+      "optimizedBytes": 14650,
+      "optimizedSha256": "a63732168be6caeb4e336307b5a1eaeb334502d0af632f329e9f6c1493952b2d",
+      "dimensions": "680x307",
+      "frames": 1,
+      "alpha": true,
+      "lossless": true,
+      "savedPercent": 52.74
+    }
+  ]
+}

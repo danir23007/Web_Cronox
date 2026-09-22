@@ -30,7 +30,15 @@
     body.classList.add('is-loaded');
     try { window.dispatchEvent(new CustomEvent('cronox:storefront-ready')); } catch {}
     // Preserve the existing CSS transition before removing its overlay.
-    if (shouldRemovePreloader) setTimeout(() => preloader.remove(), 600);
+    if (shouldRemovePreloader) setTimeout(() => {
+      // Removing an <img> from the DOM does not cancel its pending load.
+      // Release only the finished loader's image so it cannot delay window.load.
+      preloader.querySelectorAll('img').forEach((image) => {
+        image.removeAttribute('srcset');
+        image.removeAttribute('src');
+      });
+      preloader.remove();
+    }, 600);
   };
   const scheduleStorefrontReveal = () => {
     // Deferred scripts and styles are ready at DOMContentLoaded. Allow the

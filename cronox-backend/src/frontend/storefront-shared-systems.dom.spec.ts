@@ -30,7 +30,9 @@ describe('shared storefront systems', () => {
     const html = read(page);
     expect(html).toContain('assets/quick-add.css?v=6');
     expect(html).toContain('assets/products.js?v=59');
-    expect(html).toContain('assets/app.js?v=70');
+    expect(html).toContain(
+      `assets/app.js?v=${page === 'index.html' ? 71 : 70}`,
+    );
   });
 
   it('places each cart price below its product name and before size and quantity', () => {
