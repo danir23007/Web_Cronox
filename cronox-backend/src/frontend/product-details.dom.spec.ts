@@ -29,6 +29,7 @@ describe('authoritative product details', () => {
         CRONOX_PRODUCTS: [
           {
             id: 'core',
+            backendId: 1,
             slug: 'core',
             name: 'Core',
             [field]:

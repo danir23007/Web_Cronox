@@ -11,6 +11,34 @@ type SurfaceWindow = {
 };
 
 describe('PDP and quick-add stock presentation', () => {
+  it('does not call incomplete stock data AGOTADO, but labels a confirmed zero', () => {
+    const dom = new JSDOM('<a id="card"><p id="price">40 €</p></a>', {
+      url: 'http://localhost/',
+      runScripts: 'outside-only',
+    });
+    dom.window.eval(read('assets/api.js'));
+    const stock = (
+      dom.window as unknown as {
+        CRONOX_STOCK: {
+          decorateCard: (
+            card: HTMLElement,
+            price: HTMLElement,
+            product: unknown,
+          ) => void;
+        };
+      }
+    ).CRONOX_STOCK;
+    const card = dom.window.document.getElementById('card')!;
+    const price = dom.window.document.getElementById('price')!;
+    stock.decorateCard(card, price, { name: 'Incomplete' });
+    expect(card.textContent).not.toContain('AGOTADO');
+    stock.decorateCard(card, price, {
+      variants: [{ id: 1, stockQty: 0, isActive: true }],
+    });
+    expect(card.textContent).toContain('AGOTADO');
+    dom.window.close();
+  });
+
   it.each(['pdp', 'quick-add'])(
     '%s uses shared state and guards exhausted activation',
     async (surface) => {

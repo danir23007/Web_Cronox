@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/require-await */
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { JSDOM } from 'jsdom';
@@ -52,8 +53,10 @@ describe('Newsletter popup and Admin management', () => {
       /\.newsletter-modal-close\s*\{[^}]*border:\s*0;[^}]*border-radius:\s*0;[^}]*background:\s*transparent;/,
     );
     expect(css).toMatch(
-      /\.newsletter-modal-close:hover\s*\{[^}]*background:\s*transparent;[^}]*opacity:\s*1;/,
+      /\.newsletter-modal-close:hover,[\s\S]*\.newsletter-modal-close:focus-visible\s*\{[^}]*outline:\s*0;[^}]*background:\s*transparent;[^}]*box-shadow:\s*none;/,
     );
+    expect(css).toContain('appearance: none');
+    expect(css).toContain('-webkit-appearance: none');
     expect(legacyCss).not.toContain('chains-newsletter.jpg');
     expect(html).not.toContain('chains-newsletter.jpg');
   });
@@ -99,7 +102,8 @@ describe('Newsletter popup and Admin management', () => {
       observe() {}
       disconnect() {}
     };
-    (dom.window as any).requestAnimationFrame = (callback: () => void) => callback();
+    (dom.window as any).requestAnimationFrame = (callback: () => void) =>
+      callback();
     const apply = jest.fn();
     (dom.window as any).CRONOX_MEDIA_GEOMETRY = { apply };
     dom.window.eval(read('assets/newsletter-renderer.js'));
@@ -117,6 +121,45 @@ describe('Newsletter popup and Admin management', () => {
     const calls = apply.mock.calls.length;
     resizeCallback?.();
     expect(apply.mock.calls.length).toBeGreaterThan(calls);
+  });
+
+  it('measures logical layout dimensions inside a scaled preview', () => {
+    const dom = new JSDOM('<div id="frame"><img id="media"></div>', {
+      runScripts: 'outside-only',
+    });
+    dom.window.eval(read('assets/media-framing-geometry.js'));
+    const frame = dom.window.document.getElementById('frame') as HTMLElement;
+    const media = dom.window.document.getElementById(
+      'media',
+    ) as HTMLImageElement;
+    Object.defineProperties(frame, {
+      clientWidth: { value: 480 },
+      clientHeight: { value: 360 },
+    });
+    frame.getBoundingClientRect = () =>
+      ({ width: 240, height: 180 }) as DOMRect;
+    Object.defineProperties(media, {
+      naturalWidth: { value: 1200 },
+      naturalHeight: { value: 800 },
+    });
+    const result = (dom.window as any).CRONOX_MEDIA_GEOMETRY.apply(
+      media,
+      frame,
+      { focalX: 50, focalY: 18, zoom: 1.5, fit: 'COVER' },
+    );
+    expect(result.frameWidth).toBe(480);
+    expect(result.frameHeight).toBe(360);
+    expect(result.renderedWidth).toBeGreaterThanOrEqual(480);
+    expect(result.renderedHeight).toBeGreaterThan(360);
+    const y18 = result.translateY;
+    const y100 = (dom.window as any).CRONOX_MEDIA_GEOMETRY.apply(media, frame, {
+      focalX: 50,
+      focalY: 100,
+      zoom: 1.5,
+      fit: 'COVER',
+    }).translateY;
+    expect(y100).not.toBe(y18);
+    expect(media.style.height).toBe(`${result.renderedHeight}px`);
   });
 
   it('provides the complete first-class Admin editor', () => {
@@ -156,19 +199,125 @@ describe('Newsletter popup and Admin management', () => {
     expect(read('assets/admin-newsletter.css')).not.toContain(
       '.newsletter-preview--mobile .newsletter-modal-grid',
     );
+    expect(read('assets/admin-newsletter.css')).toContain(
+      '.bw-theme .newsletter-device-tabs .btn.is-active',
+    );
+    expect(read('assets/admin-newsletter.css')).toContain(
+      'width:min(416px,100%)',
+    );
   });
 
-  it('normalizes independent desktop/mobile ASCII framing with safe defaults', () => {
+  it('fits the 390 by 844 mobile design exactly once and independently of layer zoom', () => {
     const dom = new JSDOM('', { runScripts: 'outside-only' });
     dom.window.eval(read('assets/newsletter-renderer.js'));
     const renderer = (dom.window as any).CRONOX_NEWSLETTER_RENDERER;
-    const legacy = renderer.normalize({ desktop: {}, mobile: {} });
-    expect(legacy.desktopAscii).toEqual({ x: 50, y: 50, scale: 1 });
-    expect(legacy.mobileAscii).toEqual({ x: 50, y: 50, scale: 1 });
+    const full = renderer.previewFit(390, 390, 844);
+    expect(full).toEqual({
+      availableWidth: 390,
+      designWidth: 390,
+      designHeight: 844,
+      scale: 1,
+      renderedWidth: 390,
+      renderedHeight: 844,
+    });
+    const constrained = renderer.previewFit(300, 390, 844);
+    expect(constrained.scale).toBeCloseTo(300 / 390);
+    expect(constrained.renderedWidth).toBeCloseTo(300);
+    expect(constrained.renderedHeight).toBeCloseTo(844 * (300 / 390));
+    expect(renderer.previewFit(390, 390, 844).scale).toBe(1);
+    dom.window.close();
+  });
+
+  it('renders a complete proportional mobile composition in the Admin viewport', async () => {
+    const dom = new JSDOM(read('admin.html'), {
+      runScripts: 'outside-only',
+      url: 'http://localhost/admin.html',
+    });
+    const window = dom.window as any;
+    window.requestAnimationFrame = (callback: () => void) => callback();
+    window.ResizeObserver = class {
+      observe() {}
+      disconnect() {}
+    };
+    window.CRONOX_API = { API_BASE: '', getCsrfHeaders: jest.fn() };
+    window.fetch = jest
+      .fn()
+      .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({}) })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ assets: [] }),
+      });
+    const viewport = window.document.querySelector(
+      '.newsletter-preview__viewport',
+    );
+    Object.defineProperty(viewport, 'clientWidth', { value: 390 });
+    window.eval(read('assets/media-framing-geometry.js'));
+    window.eval(read('assets/newsletter-renderer.js'));
+    window.eval(read('assets/admin-newsletter.js'));
+    try {
+      await window.CRONOX_NEWSLETTER_ADMIN.load();
+      window.document
+        .querySelector('[data-newsletter-edit-device="mobile"]')
+        .click();
+      const surface = window.document.getElementById(
+        'newsletterPreviewSurface',
+      );
+      const preview = window.document.getElementById('newsletterPreviewRoot');
+      expect(surface.style.width).toBe('390px');
+      expect(surface.style.height).toBe('844px');
+      expect(surface.style.transform).toBe('scale(1)');
+      expect(surface.dataset.newsletterPreviewAvailableWidth).toBe('390');
+      expect(surface.dataset.newsletterPreviewScale).toBe('1');
+      expect(surface.dataset.newsletterPreviewRenderedWidth).toBe('390');
+      expect(surface.dataset.newsletterPreviewRenderedHeight).toBe('844');
+      expect(viewport.style.width).toBe('390px');
+      expect(viewport.style.height).toBe('844px');
+      expect(preview.dataset.newsletterDevice).toBe('mobile');
+      expect(
+        (preview.querySelector('.popup-image') as HTMLImageElement).src,
+      ).toBe(window.CRONOX_NEWSLETTER_RENDERER.FALLBACK_SOURCE);
+      for (const selector of [
+        '.popup-image',
+        '.ascii-overlay pre',
+        '.newsletter-modal-kicker',
+        '.newsletter-modal-title',
+        '.newsletter-modal-subtitle',
+        '.newsletter-modal-input',
+        '.newsletter-modal-button',
+        '.newsletter-login-link',
+        '.newsletter-modal-close',
+      ]) {
+        expect(preview.querySelector(selector)).not.toBeNull();
+      }
+    } finally {
+      dom.window.close();
+    }
+  });
+
+  it('adapts missing or invalid mobile framing from desktop and preserves explicit mobile framing', () => {
+    const dom = new JSDOM('', { runScripts: 'outside-only' });
+    dom.window.eval(read('assets/newsletter-renderer.js'));
+    const renderer = (dom.window as any).CRONOX_NEWSLETTER_RENDERER;
+    const legacy = renderer.normalize({
+      desktop: { focalX: 23, focalY: 67, zoom: 1.6, fit: 'COVER' },
+      mobile: { focalX: Number.NaN, focalY: 50, zoom: 1 },
+      desktopAscii: { x: 34, y: 72, scale: 1.25 },
+      mobileAscii: { x: 2, y: 50, scale: 1 },
+    });
+    expect(legacy.mobile).toEqual(legacy.desktop);
+    expect(legacy.mobileAscii).toEqual(legacy.desktopAscii);
 
     const configured = renderer.normalize({
+      desktop: { focalX: 20, focalY: 30, zoom: 1.4, fit: 'COVER' },
+      mobile: { focalX: 71, focalY: 63, zoom: 1.8, fit: 'CONTAIN' },
       desktopAscii: { x: 20, y: 30, scale: 1.4 },
       mobileAscii: { x: 80, y: 70, scale: 0.7 },
+    });
+    expect(configured.mobile).toEqual({
+      focalX: 71,
+      focalY: 63,
+      zoom: 1.8,
+      fit: 'CONTAIN',
     });
     expect(configured.desktopAscii).toEqual({ x: 20, y: 30, scale: 1.4 });
     expect(configured.mobileAscii).toEqual({ x: 80, y: 70, scale: 0.7 });
@@ -182,11 +331,16 @@ describe('Newsletter popup and Admin management', () => {
       callback();
     dom.window.eval(read('assets/newsletter-renderer.js'));
     const root = dom.window.document.querySelector('.newsletter-modal')!;
-    const controller = (dom.window as any).CRONOX_NEWSLETTER_RENDERER.mount(root, {
-      mediaOpacity: 0.37,
-    });
+    const controller = (dom.window as any).CRONOX_NEWSLETTER_RENDERER.mount(
+      root,
+      {
+        mediaOpacity: 0.37,
+      },
+    );
     expect(controller.getConfig().mediaOpacity).toBe(0.37);
-    expect((root.querySelector('.popup-image') as HTMLElement).style.opacity).toBe('0.37');
+    expect(
+      (root.querySelector('.popup-image') as HTMLElement).style.opacity,
+    ).toBe('0.37');
     controller.update({ mediaOpacity: 9 });
     expect(controller.getConfig().mediaOpacity).toBe(1);
   });
@@ -227,6 +381,7 @@ describe('Newsletter popup and Admin management', () => {
     };
     (dom.window as any).CRONOX_NEWSLETTER_RENDERER = {
       FALLBACK_SOURCE: '/fallback.jpg',
+      normalize: (value: unknown) => value,
       renderStructure: (root: HTMLElement) => {
         root.innerHTML =
           '<div class="popup-image-wrapper"><img class="popup-image"><div class="ascii-overlay"><pre></pre></div></div>';
@@ -238,12 +393,43 @@ describe('Newsletter popup and Admin management', () => {
     dom.window.eval(read('assets/admin-newsletter.js'));
     await (dom.window as any).CRONOX_NEWSLETTER_ADMIN.load();
     const state = (dom.window as any).CRONOX_NEWSLETTER_ADMIN.state;
+    const controller = (dom.window as any).CRONOX_NEWSLETTER_RENDERER.mount.mock
+      .results[0].value;
     const originalBackground = { ...state.draft.desktop };
+    const desktopButton = dom.window.document.querySelector(
+      '[data-newsletter-edit-device="desktop"]',
+    ) as HTMLButtonElement;
+    const backgroundButton = dom.window.document.querySelector(
+      '[data-newsletter-edit-layer="background"]',
+    ) as HTMLButtonElement;
+    expect(desktopButton.classList).toContain('is-active');
+    expect(desktopButton.getAttribute('aria-pressed')).toBe('true');
+    expect(backgroundButton.classList).toContain('is-active');
+    expect(backgroundButton.getAttribute('aria-pressed')).toBe('true');
+
+    const y = dom.window.document.getElementById(
+      'newsletterFocalY',
+    ) as HTMLInputElement;
+    y.value = '18';
+    y.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
+    expect(state.draft.desktop.focalY).toBe(18);
+    expect(controller.update).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        desktop: expect.objectContaining({ focalY: 18 }),
+      }),
+    );
     (
       dom.window.document.querySelector(
         '[data-newsletter-edit-layer="ascii"]',
       ) as HTMLButtonElement
     ).click();
+    expect(backgroundButton.classList).not.toContain('is-active');
+    expect(backgroundButton.getAttribute('aria-pressed')).toBe('false');
+    expect(
+      dom.window.document
+        .querySelector('[data-newsletter-edit-layer="ascii"]')
+        ?.getAttribute('aria-pressed'),
+    ).toBe('true');
     const wrapper = dom.window.document.querySelector(
       '.popup-image-wrapper',
     ) as HTMLElement;
@@ -261,7 +447,7 @@ describe('Newsletter popup and Admin management', () => {
     wrapper.dispatchEvent(pointer('pointerdown', 10, 10));
     wrapper.dispatchEvent(pointer('pointermove', 30, 40));
 
-    expect(state.draft.desktop).toEqual(originalBackground);
+    expect(state.draft.desktop).toEqual({ ...originalBackground, focalY: 18 });
     expect(state.draft.desktopAscii).toEqual({ x: 70, y: 80, scale: 1 });
     expect(state.draft.mobileAscii).toEqual(ascii);
 
@@ -270,6 +456,25 @@ describe('Newsletter popup and Admin management', () => {
         '[data-newsletter-edit-device="mobile"]',
       ) as HTMLButtonElement
     ).click();
+    const mobileButton = dom.window.document.querySelector(
+      '[data-newsletter-edit-device="mobile"]',
+    ) as HTMLButtonElement;
+    expect(mobileButton.classList).toContain('is-active');
+    expect(mobileButton.getAttribute('aria-pressed')).toBe('true');
+    expect(
+      dom.window.document.querySelector('[data-newsletter-edit-layer="ascii"]')
+        ?.classList,
+    ).toContain('is-active');
+    expect(state.draft.desktop.focalY).toBe(18);
+    y.value = '100';
+    y.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
+    expect(state.draft.mobileAscii.y).toBe(95);
+    expect(state.draft.desktopAscii.y).toBe(80);
+    backgroundButton.click();
+    y.value = '100';
+    y.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
+    expect(state.draft.mobile.focalY).toBe(100);
+    expect(state.draft.desktop.focalY).toBe(18);
     expect(
       dom.window.document
         .getElementById('newsletterPreviewRoot')
@@ -280,5 +485,15 @@ describe('Newsletter popup and Admin management', () => {
         .getElementById('newsletterPreviewSurface')
         ?.getAttribute('data-newsletter-logical-width'),
     ).toBe('390');
+    desktopButton.click();
+    expect(state.draft.desktop.focalY).toBe(18);
+    expect(state.draft.desktopAscii).toEqual({ x: 70, y: 80, scale: 1 });
+    expect(state.draft.mobile.focalY).toBe(100);
+    expect(state.draft.mobileAscii.y).toBe(95);
+    expect(
+      dom.window.document
+        .getElementById('newsletterPreviewRoot')
+        ?.getAttribute('data-newsletter-device'),
+    ).toBe('desktop');
   });
 });

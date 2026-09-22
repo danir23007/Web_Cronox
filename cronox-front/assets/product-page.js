@@ -110,49 +110,8 @@
   }
 
   // ==========================
-  // Catálogo (API + fallback)
+  // Catálogo obtenido de la API
   // ==========================
-
-  const localFallbackFactory = () => [
-    {
-      id: "camiseta-washed-gris",
-      slug: "camiseta-washed-gris",
-      name: "Grey Core Tee",
-      price: 34.95,
-      priceLabel: "34,95 €",
-      image: "assets/products/camiseta_washed_gris.png",
-      images: [
-        "assets/products/camiseta_washed_gris.png",
-        "assets/products/camiseta_washed_gris_2.png",
-      ],
-      categories: ["camisetas"],
-      sizes: ["s", "m", "l", "xl", "xxl"],
-      color: "gris",
-      colors: ["gris"],
-      desc: "Camiseta premium lavado gris, corte oversized y tacto suave.",
-    },
-    {
-      id: "camiseta-washed-negra",
-      slug: "camiseta-washed-negra",
-      name: "Black Core Tee",
-      price: 34.95,
-      priceLabel: "34,95 €",
-      image: "assets/products/camiseta_washed_negra.png",
-      images: [
-        "assets/products/camiseta_washed_negra.png",
-        "assets/products/camiseta_washed_negra_2.png",
-      ],
-      categories: ["camisetas"],
-      sizes: ["s", "m", "l", "xl", "xxl"],
-      color: "negro",
-      colors: ["negro"],
-      desc: "Camiseta premium lavado negro, corte oversized y tacto suave.",
-    },
-  ];
-
-  const fallbackFactory = typeof API.getFallbackProducts === "function"
-    ? API.getFallbackProducts.bind(API)
-    : localFallbackFactory;
 
   const cloneProduct = typeof API.cloneProduct === "function"
     ? API.cloneProduct.bind(API)
@@ -177,31 +136,8 @@
 
   const cloneProducts = (list) => (Array.isArray(list) ? list.map(cloneProduct) : []);
 
-  const getFallbackList = () => {
-    try {
-      const list = fallbackFactory();
-      if (Array.isArray(list) && list.length) return cloneProducts(list);
-    } catch {}
-    return cloneProducts(localFallbackFactory());
-  };
-
-  const adaptWithApi = typeof API.adaptProducts === "function"
-    ? API.adaptProducts.bind(API)
-    : null;
-
-  const ensureFallbackList = typeof API.ensureFallbackList === "function"
-    ? API.ensureFallbackList.bind(API)
-    : null;
-
   const adaptCatalog = (rawList) => {
-    const fallback = ensureFallbackList ? ensureFallbackList(rawList) : getFallbackList();
-    if (adaptWithApi) {
-      try {
-        const adapted = adaptWithApi(rawList, fallback);
-        if (Array.isArray(adapted) && adapted.length) return adapted;
-      } catch {}
-    }
-    return cloneProducts(Array.isArray(rawList) && rawList.length ? rawList : fallback);
+    return cloneProducts(Array.isArray(rawList) ? rawList : []);
   };
 
   const normalizeProduct = (product) => {
@@ -239,7 +175,9 @@
       : [];
     const hasIdentifiers = globalCatalog.some((p) => p && (p.slug || p.backendId != null));
 
-    if (globalCatalog.length && hasIdentifiers) {
+    const authoritative = globalCatalog.every((product) =>
+      product?.__fromBackend === true || product?.backendId != null);
+    if (globalCatalog.length && hasIdentifiers && authoritative) {
       setProducts(globalCatalog);
       return PRODUCTS;
     }
@@ -253,9 +191,8 @@
       setProducts(adapted);
       return PRODUCTS;
     } catch (error) {
-      console.warn("[CRONOX] No se pudo cargar el catálogo en PDP, usando fallback local.", error);
-      const fallback = adaptCatalog(getFallbackList());
-      setProducts(fallback);
+      console.warn("[CRONOX] pdp_catalog_load_failed");
+      setProducts([]);
       return PRODUCTS;
     }
   }

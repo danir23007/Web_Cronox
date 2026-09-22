@@ -1,0 +1,634 @@
+﻿{
+  "note": "Static references are not measured network requests or transferred bytes. Simulations use identical DOM/load timing, no CPU/network emulation. /tienda reuses index.html.",
+  "preloader": {
+    "fast": {
+      "domAtMs": 100,
+      "loadAtMs": 500,
+      "scrollUnlockedAtMs": 132,
+      "overlayRemovedAtMs": 732,
+      "readyEvents": 1
+    },
+    "slowResources": {
+      "domAtMs": 500,
+      "loadAtMs": 8000,
+      "scrollUnlockedAtMs": 532,
+      "overlayRemovedAtMs": 1132,
+      "readyEvents": 1
+    },
+    "missingLoad": {
+      "domAtMs": 500,
+      "loadAtMs": null,
+      "scrollUnlockedAtMs": 532,
+      "overlayRemovedAtMs": 1132,
+      "readyEvents": 1
+    },
+    "appFailure": {
+      "domAtMs": 500,
+      "loadAtMs": null,
+      "scrollUnlockedAtMs": 4000,
+      "overlayRemovedAtMs": 4600,
+      "readyEvents": 1
+    },
+    "persistentCheckout": {
+      "domAtMs": 500,
+      "loadAtMs": 8000,
+      "scrollUnlockedAtMs": null,
+      "overlayRemovedAtMs": null,
+      "readyEvents": 0
+    }
+  },
+  "pages": [
+    {
+      "file": "index.html",
+      "htmlBytes": 24656,
+      "staticResourceReferences": 31,
+      "localReferencedBytes": 10307924,
+      "resources": [
+        {
+          "url": "assets/cookie-consent.css?v=2",
+          "bytes": 6995,
+          "gzipBytes": 1689
+        },
+        {
+          "url": "assets/cookie-consent.js?v=4",
+          "bytes": 19694,
+          "gzipBytes": 5122
+        },
+        {
+          "url": "assets/customer-analytics.js?v=1",
+          "bytes": 8404,
+          "gzipBytes": 2614
+        },
+        {
+          "url": "assets/VIDEO_LOGO_CRONOX.mp4",
+          "bytes": 2901933,
+          "gzipBytes": null
+        },
+        {
+          "url": "assets/category-page.js?v=1",
+          "bytes": 405,
+          "gzipBytes": 266
+        },
+        {
+          "url": "assets/gallery.css?v=18",
+          "bytes": 17607,
+          "gzipBytes": 3198
+        },
+        {
+          "url": "assets/version.js?v=98",
+          "bytes": 382,
+          "gzipBytes": 278
+        },
+        {
+          "url": "assets/product-detail.css?v=2",
+          "bytes": 2871,
+          "gzipBytes": 1052
+        },
+        {
+          "url": "assets/quick-add.css?v=6",
+          "bytes": 6845,
+          "gzipBytes": 2171
+        },
+        {
+          "url": "assets/media-framing.css?v=2",
+          "bytes": 521,
+          "gzipBytes": 288
+        },
+        {
+          "url": "assets/newsletter-popup.css?v=4",
+          "bytes": 6089,
+          "gzipBytes": 1816
+        },
+        {
+          "url": "assets/CRONOX-GIF.gif",
+          "bytes": 7036718,
+          "gzipBytes": null
+        },
+        {
+          "url": "assets/logo_banner.png",
+          "bytes": 31000,
+          "gzipBytes": null
+        },
+        {
+          "url": "assets/size-systems.js?v=1",
+          "bytes": 1104,
+          "gzipBytes": 552
+        },
+        {
+          "url": "assets/api.js?v=7",
+          "bytes": 31346,
+          "gzipBytes": 10343
+        },
+        {
+          "url": "assets/responsive-images.js?v=2",
+          "bytes": 7540,
+          "gzipBytes": 2205
+        },
+        {
+          "url": "assets/media-framing-geometry.js?v=5",
+          "bytes": 10623,
+          "gzipBytes": 2746
+        },
+        {
+          "url": "assets/newsletter-renderer.js?v=3",
+          "bytes": 8560,
+          "gzipBytes": 2701
+        },
+        {
+          "url": "assets/newsletter-visit.js?v=1",
+          "bytes": 2447,
+          "gzipBytes": 866
+        },
+        {
+          "url": "assets/app.js?v=68",
+          "bytes": 96273,
+          "gzipBytes": 20837
+        },
+        {
+          "url": "assets/product-card-framing.js?v=1",
+          "bytes": 2023,
+          "gzipBytes": 781
+        },
+        {
+          "url": "assets/products.js?v=59",
+          "bytes": 45137,
+          "gzipBytes": 11438
+        },
+        {
+          "url": "assets/favorites-toggle.js?v=3",
+          "bytes": 2074,
+          "gzipBytes": 827
+        },
+        {
+          "url": "assets/cart-badge.js?v=43",
+          "bytes": 1680,
+          "gzipBytes": 653
+        },
+        {
+          "url": "assets/product-gallery.js?v=2",
+          "bytes": 1163,
+          "gzipBytes": 463
+        },
+        {
+          "url": "assets/media-framing.js?v=5",
+          "bytes": 12130,
+          "gzipBytes": 3378
+        },
+        {
+          "url": "assets/gallery.js?v=14",
+          "bytes": 38721,
+          "gzipBytes": 8920
+        },
+        {
+          "url": "assets/icons/instagram.svg",
+          "bytes": 2086,
+          "gzipBytes": null
+        },
+        {
+          "url": "assets/icons/tiktok.svg",
+          "bytes": 1589,
+          "gzipBytes": null
+        },
+        {
+          "url": "assets/icons/youtube.svg",
+          "bytes": 1708,
+          "gzipBytes": null
+        },
+        {
+          "url": "assets/footer-config.js?v=1",
+          "bytes": 2256,
+          "gzipBytes": 996
+        }
+      ]
+    },
+    {
+      "file": "producto.html",
+      "htmlBytes": 22267,
+      "staticResourceReferences": 17,
+      "localReferencedBytes": 302344,
+      "resources": [
+        {
+          "url": "assets/cookie-consent.css?v=2",
+          "bytes": 6995,
+          "gzipBytes": 1689
+        },
+        {
+          "url": "assets/cookie-consent.js?v=4",
+          "bytes": 19694,
+          "gzipBytes": 5122
+        },
+        {
+          "url": "assets/customer-analytics.js?v=1",
+          "bytes": 8404,
+          "gzipBytes": 2614
+        },
+        {
+          "url": "assets/version.js?v=98",
+          "bytes": 382,
+          "gzipBytes": 278
+        },
+        {
+          "url": "assets/quick-add.css?v=6",
+          "bytes": 6845,
+          "gzipBytes": 2171
+        },
+        {
+          "url": "assets/product-page.css?v=8",
+          "bytes": 4058,
+          "gzipBytes": 1409
+        },
+        {
+          "url": "assets/logo_banner.png",
+          "bytes": 31000,
+          "gzipBytes": null
+        },
+        {
+          "url": "assets/size-systems.js?v=1",
+          "bytes": 1104,
+          "gzipBytes": 552
+        },
+        {
+          "url": "assets/api.js?v=7",
+          "bytes": 31346,
+          "gzipBytes": 10343
+        },
+        {
+          "url": "assets/responsive-images.js?v=2",
+          "bytes": 7540,
+          "gzipBytes": 2205
+        },
+        {
+          "url": "assets/app.js?v=68",
+          "bytes": 96273,
+          "gzipBytes": 20837
+        },
+        {
+          "url": "assets/cart-badge.js?v=43",
+          "bytes": 1680,
+          "gzipBytes": 653
+        },
+        {
+          "url": "assets/media-framing-geometry.js?v=5",
+          "bytes": 10623,
+          "gzipBytes": 2746
+        },
+        {
+          "url": "assets/product-card-framing.js?v=1",
+          "bytes": 2023,
+          "gzipBytes": 781
+        },
+        {
+          "url": "assets/products.js?v=59",
+          "bytes": 45137,
+          "gzipBytes": 11438
+        },
+        {
+          "url": "assets/product-page.js?v=40",
+          "bytes": 27166,
+          "gzipBytes": 7184
+        },
+        {
+          "url": "assets/favorites-toggle.js?v=3",
+          "bytes": 2074,
+          "gzipBytes": 827
+        }
+      ]
+    },
+    {
+      "file": "favorites.html",
+      "htmlBytes": 9224,
+      "staticResourceReferences": 17,
+      "localReferencedBytes": 281986,
+      "resources": [
+        {
+          "url": "assets/cookie-consent.css?v=2",
+          "bytes": 6995,
+          "gzipBytes": 1689
+        },
+        {
+          "url": "assets/cookie-consent.js?v=4",
+          "bytes": 19694,
+          "gzipBytes": 5122
+        },
+        {
+          "url": "assets/customer-analytics.js?v=1",
+          "bytes": 8404,
+          "gzipBytes": 2614
+        },
+        {
+          "url": "assets/version.js?v=98",
+          "bytes": 382,
+          "gzipBytes": 278
+        },
+        {
+          "url": "assets/quick-add.css?v=6",
+          "bytes": 6845,
+          "gzipBytes": 2171
+        },
+        {
+          "url": "assets/logo_banner.png",
+          "bytes": 31000,
+          "gzipBytes": null
+        },
+        {
+          "url": "assets/size-systems.js?v=1",
+          "bytes": 1104,
+          "gzipBytes": 552
+        },
+        {
+          "url": "assets/api.js?v=7",
+          "bytes": 31346,
+          "gzipBytes": 10343
+        },
+        {
+          "url": "assets/responsive-images.js?v=2",
+          "bytes": 7540,
+          "gzipBytes": 2205
+        },
+        {
+          "url": "assets/app.js?v=68",
+          "bytes": 96273,
+          "gzipBytes": 20837
+        },
+        {
+          "url": "assets/media-framing-geometry.js?v=5",
+          "bytes": 10623,
+          "gzipBytes": 2746
+        },
+        {
+          "url": "assets/product-card-framing.js?v=1",
+          "bytes": 2023,
+          "gzipBytes": 781
+        },
+        {
+          "url": "assets/products.js?v=59",
+          "bytes": 45137,
+          "gzipBytes": 11438
+        },
+        {
+          "url": "assets/cart-badge.js?v=43",
+          "bytes": 1680,
+          "gzipBytes": 653
+        },
+        {
+          "url": "assets/product-gallery.js?v=2",
+          "bytes": 1163,
+          "gzipBytes": 463
+        },
+        {
+          "url": "assets/favorites.js?v=4",
+          "bytes": 9703,
+          "gzipBytes": 2692
+        },
+        {
+          "url": "assets/favorites-toggle.js?v=3",
+          "bytes": 2074,
+          "gzipBytes": 827
+        }
+      ]
+    },
+    {
+      "file": "cart.html",
+      "htmlBytes": 10092,
+      "staticResourceReferences": 16,
+      "localReferencedBytes": 283640,
+      "resources": [
+        {
+          "url": "assets/cookie-consent.css?v=2",
+          "bytes": 6995,
+          "gzipBytes": 1689
+        },
+        {
+          "url": "assets/cookie-consent.js?v=4",
+          "bytes": 19694,
+          "gzipBytes": 5122
+        },
+        {
+          "url": "assets/customer-analytics.js?v=1",
+          "bytes": 8404,
+          "gzipBytes": 2614
+        },
+        {
+          "url": "assets/version.js?v=98",
+          "bytes": 382,
+          "gzipBytes": 278
+        },
+        {
+          "url": "assets/cart.css?v=4",
+          "bytes": 4886,
+          "gzipBytes": 1677
+        },
+        {
+          "url": "assets/quick-add.css?v=6",
+          "bytes": 6845,
+          "gzipBytes": 2171
+        },
+        {
+          "url": "assets/logo_banner.png",
+          "bytes": 31000,
+          "gzipBytes": null
+        },
+        {
+          "url": "assets/size-systems.js?v=1",
+          "bytes": 1104,
+          "gzipBytes": 552
+        },
+        {
+          "url": "assets/api.js?v=7",
+          "bytes": 31346,
+          "gzipBytes": 10343
+        },
+        {
+          "url": "assets/responsive-images.js?v=2",
+          "bytes": 7540,
+          "gzipBytes": 2205
+        },
+        {
+          "url": "assets/app.js?v=68",
+          "bytes": 96273,
+          "gzipBytes": 20837
+        },
+        {
+          "url": "assets/media-framing-geometry.js?v=5",
+          "bytes": 10623,
+          "gzipBytes": 2746
+        },
+        {
+          "url": "assets/product-card-framing.js?v=1",
+          "bytes": 2023,
+          "gzipBytes": 781
+        },
+        {
+          "url": "assets/products.js?v=59",
+          "bytes": 45137,
+          "gzipBytes": 11438
+        },
+        {
+          "url": "assets/cart-badge.js?v=43",
+          "bytes": 1680,
+          "gzipBytes": 653
+        },
+        {
+          "url": "assets/cart.js?v=4",
+          "bytes": 9708,
+          "gzipBytes": 2811
+        }
+      ]
+    },
+    {
+      "file": "checkout.html",
+      "htmlBytes": 18230,
+      "staticResourceReferences": 16,
+      "localReferencedBytes": 7375541,
+      "resources": [
+        {
+          "url": "assets/cookie-consent.css?v=2",
+          "bytes": 6995,
+          "gzipBytes": 1689
+        },
+        {
+          "url": "assets/cookie-consent.js?v=4",
+          "bytes": 19694,
+          "gzipBytes": 5122
+        },
+        {
+          "url": "assets/customer-analytics.js?v=1",
+          "bytes": 8404,
+          "gzipBytes": 2614
+        },
+        {
+          "url": "assets/version.js?v=98",
+          "bytes": 382,
+          "gzipBytes": 278
+        },
+        {
+          "url": "assets/checkout.css?v=19",
+          "bytes": 27158,
+          "gzipBytes": 5142
+        },
+        {
+          "url": "assets/CRONOX-GIF.gif",
+          "bytes": 7036718,
+          "gzipBytes": null
+        },
+        {
+          "url": "assets/logo_banner.png",
+          "bytes": 31000,
+          "gzipBytes": null
+        },
+        {
+          "url": "assets/runtime-config.js",
+          "bytes": 489,
+          "gzipBytes": 358
+        },
+        {
+          "url": "https://js.stripe.com/v3/",
+          "bytes": null
+        },
+        {
+          "url": "assets/country.js?v=1",
+          "bytes": 1026,
+          "gzipBytes": 483
+        },
+        {
+          "url": "assets/size-systems.js?v=1",
+          "bytes": 1104,
+          "gzipBytes": 552
+        },
+        {
+          "url": "assets/api.js?v=7",
+          "bytes": 31346,
+          "gzipBytes": 10343
+        },
+        {
+          "url": "assets/responsive-images.js?v=1",
+          "bytes": 7540,
+          "gzipBytes": 2205
+        },
+        {
+          "url": "assets/app.js?v=68",
+          "bytes": 96273,
+          "gzipBytes": 20837
+        },
+        {
+          "url": "assets/checkout-lifecycle.js?v=6",
+          "bytes": 8470,
+          "gzipBytes": 2435
+        },
+        {
+          "url": "assets/checkout.js?v=18",
+          "bytes": 98942,
+          "gzipBytes": 20377
+        }
+      ]
+    },
+    {
+      "file": "gallery.html",
+      "htmlBytes": 4200,
+      "staticResourceReferences": 12,
+      "localReferencedBytes": 304474,
+      "resources": [
+        {
+          "url": "assets/cookie-consent.css?v=2",
+          "bytes": 6995,
+          "gzipBytes": 1689
+        },
+        {
+          "url": "assets/store.css?v=91",
+          "bytes": 69001,
+          "gzipBytes": 13621
+        },
+        {
+          "url": "assets/info-page.css?v=3",
+          "bytes": 579,
+          "gzipBytes": 291
+        },
+        {
+          "url": "assets/gallery.css?v=18",
+          "bytes": 17607,
+          "gzipBytes": 3198
+        },
+        {
+          "url": "assets/cookie-consent.js?v=4",
+          "bytes": 19694,
+          "gzipBytes": 5122
+        },
+        {
+          "url": "assets/customer-analytics.js?v=1",
+          "bytes": 8404,
+          "gzipBytes": 2614
+        },
+        {
+          "url": "assets/info-shell.js?v=4",
+          "bytes": 6634,
+          "gzipBytes": 1990
+        },
+        {
+          "url": "assets/api.js?v=7",
+          "bytes": 31346,
+          "gzipBytes": 10343
+        },
+        {
+          "url": "assets/responsive-images.js?v=1",
+          "bytes": 7540,
+          "gzipBytes": 2205
+        },
+        {
+          "url": "assets/app.js?v=68",
+          "bytes": 96273,
+          "gzipBytes": 20837
+        },
+        {
+          "url": "assets/cart-badge.js?v=43",
+          "bytes": 1680,
+          "gzipBytes": 653
+        },
+        {
+          "url": "assets/gallery.js?v=14",
+          "bytes": 38721,
+          "gzipBytes": 8920
+        }
+      ]
+    }
+  ]
+}

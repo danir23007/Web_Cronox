@@ -58,7 +58,7 @@
   <link rel="stylesheet" href="assets/product-detail.css?v=2">
   <link rel="stylesheet" href="assets/quick-add.css?v=6">
   <link rel="stylesheet" href="assets/media-framing.css?v=2">
-  <link rel="stylesheet" href="assets/newsletter-popup.css?v=4">
+  <link rel="stylesheet" href="assets/newsletter-popup.css?v=5">
 
   <noscript><style>#preloader{display:none!important}</style></noscript>
   <link rel="icon" type="image/png" href="/favicon.png?v=4">
@@ -437,24 +437,17 @@
   <script>
   (function(){
     var tried=false;
-    var minTime=1500;
-    var start=Date.now();
-    var hideTimer=0;
     function finish(){
       if(tried)return;
       tried=true;
+      if(document.body.classList.contains('is-loaded'))return;
+      document.body.classList.remove('is-loading');
+      document.body.classList.add('is-loaded');
+      try{window.dispatchEvent(new CustomEvent('cronox:storefront-ready'));}catch(e){}
       var p=document.getElementById('preloader');
-      if(p)p.style.display='none';
-      hideTimer=0;
+      if(p)setTimeout(function(){p.remove();},600);
     }
     function hide(){
-      if(tried)return;
-      var elapsed=Date.now()-start;
-      if(elapsed<minTime){
-        if(hideTimer)clearTimeout(hideTimer);
-        hideTimer=setTimeout(finish,minTime-elapsed);
-        return;
-      }
       finish();
     }
     try{window.history.scrollRestoration='manual';}catch(e){}
@@ -467,15 +460,15 @@
 
   <!-- ===== BADGE FAVORITOS ===== -->
   <script src="assets/size-systems.js?v=1"></script>
-  <script src="assets/api.js?v=6"></script>
+  <script src="assets/api.js?v=7"></script>
   <script src="assets/responsive-images.js?v=2"></script>
   <!-- ===== MAIN SCRIPTS ===== -->
-  <script src="assets/media-framing-geometry.js?v=5" defer></script>
-  <script src="assets/newsletter-renderer.js?v=3" defer></script>
+  <script src="assets/media-framing-geometry.js?v=6" defer></script>
+  <script src="assets/newsletter-renderer.js?v=5" defer></script>
   <script src="assets/newsletter-visit.js?v=1" defer></script>
-  <script src="assets/app.js?v=67" defer></script>
+  <script src="assets/app.js?v=70" defer></script>
   <script src="assets/product-card-framing.js?v=1" defer></script>
-  <script src="assets/products.js?v=58" defer></script>
+  <script src="assets/products.js?v=59" defer></script>
   <script src="assets/favorites-toggle.js?v=3" defer></script>
   <script src="assets/cart-badge.js?v=43" defer></script>
   <script src="assets/product-gallery.js?v=2" defer></script>

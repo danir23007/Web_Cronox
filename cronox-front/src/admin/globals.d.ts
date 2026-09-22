@@ -92,6 +92,8 @@ declare global {
     denyCircleUpgrade?: (id: number | string, payload?: Record<string, unknown>) => Promise<unknown>;
     listAutoCircleRequests?: (queryOrStatus?: string | QueryRecord, queryOverride?: QueryRecord) => Promise<unknown>;
     listAdminProducts?: (query?: QueryRecord) => Promise<unknown>;
+    getProductOrder?: () => Promise<unknown>;
+    saveProductOrder?: (productIds: number[]) => Promise<unknown>;
     getAdminProduct?: (id: number | string) => Promise<unknown>;
     listInventory?: (query?: QueryRecord) => Promise<unknown>;
     getInventorySummary?: () => Promise<unknown>;
@@ -175,6 +177,11 @@ declare global {
     CRONOX_API_BASE?: string;
     CRONOX_UI?: CronoxUi;
     CRONOX_SECURITY?: CronoxSecurity;
+    CRONOX_SIZES?: {
+      key?: (input: unknown) => string;
+      label?: (input: unknown) => string;
+      order?: (input: unknown) => number;
+    };
     CRONOX_TRUSTED_IMAGE_ORIGINS?: string[];
     __CRONOX_API_BASE__?: string;
     __CRONOX_BACKEND_PORT__?: string | number;

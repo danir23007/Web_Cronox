@@ -837,7 +837,7 @@ describe('public hero framing', () => {
   });
 
   it('loads framing assets only on the homepage and leaves Products/Gallery untouched', () => {
-    expect(indexHtml).toContain('media-framing-geometry.js?v=5');
+    expect(indexHtml).toContain('media-framing-geometry.js?v=6');
     expect(indexHtml).toContain('media-framing.js?v=5');
     expect(indexHtml).toContain('data-media-placement="home.hero.video"');
     expect(publicStyles).toContain(

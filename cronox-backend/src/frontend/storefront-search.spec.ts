@@ -80,14 +80,14 @@ describe('storefront search contracts', () => {
     expect(products).toContain('url.searchParams.get("search")');
     expect(products).toContain("nextUrl.searchParams.set('search', query)");
     expect(products).toContain(
-      'API.getProductsPage({ search, page, limit: 100 })',
+      'currentApi.getProductsPage({ search, page, limit: 100 })',
     );
     expect(products).toContain('async function loadSearchResults(search)');
     expect(products).toContain("nextUrl.searchParams.delete('categorySlug')");
     expect(products).toContain('loadSearchResults(initialQueryRaw)');
     expect(products).toContain('loadSearchResults(query)');
     expect(products).toContain(
-      'API.getCategoryProducts(initialCategorySlug, {',
+      'currentApi.getCategoryProducts(initialCategorySlug, {',
     );
     expect(products).toContain('setProducts(result.products)');
     expect(products).toContain('applyAll()');

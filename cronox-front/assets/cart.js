@@ -169,9 +169,11 @@
     renderSummary();
   };
 
-  const syncCart = async () => {
+  const syncCart = async ({ initial = false } = {}) => {
     try {
-      if (Cart?.fetchCart) {
+      if (initial && window.CRONOX_CART_READY) {
+        state.cart = await window.CRONOX_CART_READY;
+      } else if (Cart?.fetchCart) {
         state.cart = await Cart.fetchCart();
       } else if (API?.getCart) {
         state.cart = await API.getCart();
@@ -258,7 +260,7 @@
       yearEl.textContent = new Date().getFullYear();
     }
     renderShippingOptions();
-    syncCart();
+    syncCart({ initial: true });
   });
 
   window.addEventListener('cart:updated', (event) => {

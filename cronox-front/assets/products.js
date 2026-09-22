@@ -42,45 +42,6 @@
     return typeof helper === "function" ? helper(value, fallback) : fallback;
   };
 
-  const localFallbackFactory = () => [
-    {
-      id: "camiseta-washed-gris",
-      name: "Grey Core Tee",
-      price: 34.95,
-      priceLabel: "34,95 €",
-      image: "assets/products/camiseta_washed_gris.png",
-      images: [
-        "assets/products/camiseta_washed_gris.png",
-        "assets/products/camiseta_washed_gris_2.png"
-      ],
-      categories: ["camisetas"],
-      sizes: ["s", "m", "l", "xl", "xxl"],
-      color: "gris",
-      colors: ["gris"],
-      desc: "Camiseta premium lavado gris, corte oversized y tacto suave."
-    },
-    {
-      id: "camiseta-washed-negra",
-      name: "Black Core Tee",
-      price: 34.95,
-      priceLabel: "34,95 €",
-      image: "assets/products/camiseta_washed_negra.png",
-      images: [
-        "assets/products/camiseta_washed_negra.png",
-        "assets/products/camiseta_washed_negra_2.png"
-      ],
-      categories: ["camisetas"],
-      sizes: ["s", "m", "l", "xl", "xxl"],
-      color: "negro",
-      colors: ["negro"],
-      desc: "Camiseta premium lavado negro, corte oversized y tacto suave."
-    }
-  ];
-
-  const fallbackFactory = typeof API.getFallbackProducts === "function"
-    ? API.getFallbackProducts.bind(API)
-    : localFallbackFactory;
-
   const cloneProduct = (product = {}) => {
     const copy = { ...product };
     if (Array.isArray(product.images)) copy.images = [...product.images];
@@ -102,27 +63,14 @@
 
   const cloneProducts = (list) => (Array.isArray(list) ? list.map(cloneProduct) : []);
 
-  const getFallbackList = () => {
-    try {
-      const list = fallbackFactory();
-      if (Array.isArray(list) && list.length) return cloneProducts(list);
-    } catch {}
-    return cloneProducts(localFallbackFactory());
-  };
-
-  const adaptCatalogLocally = (rawList, fallbackList) => {
+  const adaptCatalogLocally = (rawList) => {
     const source = Array.isArray(rawList) ? rawList : [];
-    const fallback = Array.isArray(fallbackList) && fallbackList.length
-      ? fallbackList
-      : getFallbackList();
 
     return source.map((item, index) => {
       const data = typeof item === "object" && item ? item : {};
-      const template = cloneProduct(fallback[index % fallback.length] || {});
-      const priceValue = data.price != null ? Number(data.price) : Number(template.price) || 0;
-      const templateImages = Array.isArray(template.images) ? [...template.images] : [];
+      const priceValue = data.price != null ? Number(data.price) : 0;
       const sourceImages = Array.isArray(data.images) ? [...data.images] : [];
-      const candidateImage = data.image || sourceImages[0] || template.image || templateImages[0] || "";
+      const candidateImage = data.image || sourceImages[0] || "";
       const uniqueImages = [];
       const pushImage = (value) => {
         const clean = safeProductImage(value, "");
@@ -130,54 +78,74 @@
       };
       pushImage(candidateImage);
       sourceImages.forEach(pushImage);
-      templateImages.forEach(pushImage);
-
       const backendId = data.backendId != null
         ? data.backendId
-        : (data.id != null ? data.id : template.backendId);
+        : data.id;
 
       return {
-        ...template,
         ...data,
-        id: data.id != null ? String(data.id) : template.id || `product-${index + 1}`,
+        id: data.id != null ? String(data.id) : `product-${index + 1}`,
         backendId: backendId != null ? backendId : undefined,
-        slug: data.slug || template.slug || undefined,
-        name: data.name || template.name || "Producto CRONOX",
+        slug: data.slug || undefined,
+        name: data.name || "Producto CRONOX",
         price: priceValue,
-        priceLabel: data.priceLabel || template.priceLabel || euros(priceValue),
-        image: safeProductImage(candidateImage, uniqueImages[0] || safeProductImage(template.image, "")),
+        priceLabel: data.priceLabel || euros(priceValue),
+        image: safeProductImage(candidateImage, uniqueImages[0] || ""),
         images: uniqueImages,
-        categories: Array.isArray(data.categories) && data.categories.length
-          ? data.categories
-          : template.categories || [],
-        sizes: Array.isArray(data.sizes) && data.sizes.length
-          ? data.sizes
-          : template.sizes || [],
-        colors: Array.isArray(data.colors) && data.colors.length
-          ? data.colors
-          : template.colors || [],
-        color: data.color || template.color || "",
-        desc: data.desc || template.desc || "",
+        categories: Array.isArray(data.categories) ? data.categories : [],
+        sizes: Array.isArray(data.sizes) ? data.sizes : [],
+        colors: Array.isArray(data.colors) ? data.colors : [],
+        color: data.color || "",
+        desc: data.desc || "",
       };
     });
   };
 
   const adaptCatalog = (rawList) => {
-    const fallback = getFallbackList();
-    if (typeof API.adaptProducts === "function") {
-      try {
-        const adapted = API.adaptProducts(rawList, fallback);
-        if (Array.isArray(adapted) && adapted.length) {
-          return adapted;
-        }
-      } catch {}
-    }
-    return adaptCatalogLocally(rawList, fallback);
+    return adaptCatalogLocally(rawList);
   };
 
   let PRODUCTS = [];
   let catalogLoadError = null;
   let catalogEmptyMessage = "No hay productos que mostrar.";
+  let catalogRequestId = 0;
+  let catalogInFlight = null;
+
+  const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+  const withCatalogTimeout = (load) => {
+    let timer;
+    return Promise.race([
+      Promise.resolve().then(load),
+      new Promise((_, reject) => {
+        timer = setTimeout(() => {
+          const error = new Error("CATALOG_TIMEOUT");
+          error.kind = "timeout";
+          reject(error);
+        }, 8000);
+      }),
+    ]).finally(() => clearTimeout(timer));
+  };
+  const catalogFailureKind = (error) => {
+    if (error?.kind === "timeout") return "timeout";
+    const status = Number(error?.status || error?.statusCode || 0);
+    if (status >= 500) return "server";
+    if (status === 0 && error?.kind !== "configuration") return "network";
+    return error?.kind || "response";
+  };
+  const loadWithRetry = async (load) => {
+    for (let attempt = 1; attempt <= 3; attempt += 1) {
+      try {
+        return await withCatalogTimeout(load);
+      } catch (error) {
+        const kind = catalogFailureKind(error);
+        console.warn(`[CRONOX] catalog_load_failed kind=${kind} attempt=${attempt}`);
+        if (attempt === 3 || !["timeout", "server", "network", "configuration"].includes(kind)) {
+          throw error;
+        }
+        await wait(attempt === 1 ? 250 : 750);
+      }
+    }
+  };
 
   const normalizeProduct = (product) => {
     const copy = cloneProduct(product || {});
@@ -914,10 +882,11 @@
     let pageCount = 1;
 
     do {
-      if (!API || typeof API.getProductsPage !== "function") {
+      const currentApi = window.CRONOX_API || API;
+      if (typeof currentApi.getProductsPage !== "function") {
         throw new Error("La API de búsqueda no está disponible");
       }
-      const response = await API.getProductsPage({ search, page, limit: 100 });
+      const response = await loadWithRetry(() => currentApi.getProductsPage({ search, page, limit: 100 }));
       if (Array.isArray(response?.products)) products.push(...response.products);
       pageCount = Number(response?.meta?.pageCount || 1);
       page += 1;
@@ -927,7 +896,7 @@
   }
 
   async function loadCatalog() {
-    const fallback = adaptCatalog(cloneProducts(fallbackFactory()));
+    const currentApi = window.CRONOX_API || API;
     if (categorySlugRaw && !initialCategorySlug) {
       const error = new Error("El identificador de categoría no es válido");
       error.status = 400;
@@ -949,7 +918,7 @@
     }
     if (initialCategorySlug) {
       try {
-        if (!API || typeof API.getCategoryProducts !== "function") {
+        if (typeof currentApi.getCategoryProducts !== "function") {
           throw new Error("La API de categorías no está disponible");
         }
         let page = 1;
@@ -957,10 +926,10 @@
         let response = null;
         const categoryProducts = [];
         do {
-          response = await API.getCategoryProducts(initialCategorySlug, {
+          response = await loadWithRetry(() => currentApi.getCategoryProducts(initialCategorySlug, {
             page,
             limit: 100,
-          });
+          }));
           if (Array.isArray(response?.products)) categoryProducts.push(...response.products);
           pageCount = Number(response?.meta?.pageCount || 1);
           page += 1;
@@ -980,20 +949,31 @@
       }
     }
 
-    if (!API || typeof API.getProducts !== "function") {
-      return { products: fallback, source: "fallback", category: null, error: null };
+    if (typeof currentApi.getProducts !== "function") {
+      const error = new Error("CATALOG_API_UNAVAILABLE");
+      error.kind = "configuration";
+      console.warn("[CRONOX] catalog_load_failed kind=configuration attempt=1");
+      return { products: [], source: "api-error", category: null, error };
     }
 
     try {
       const query = { limit: 48 };
-      const raw = await API.getProducts(query);
-      if (!Array.isArray(raw) || !raw.length) {
-        throw new Error("Catálogo vacío");
+      const raw = await loadWithRetry(() => currentApi.getProducts(query));
+      if (!Array.isArray(raw)) throw new Error("CATALOG_MALFORMED");
+      if (raw.some((item) => !item || typeof item !== "object" ||
+        (item.backendId == null && item.id == null) ||
+        typeof item.name !== "string" || !item.name.trim())) {
+        throw new Error("CATALOG_MALFORMED");
       }
-      return { products: adaptCatalog(raw), source: "api", category: null, error: null };
+      if (!raw.length) console.info("[CRONOX] catalog_load_empty source=api");
+      const products = adaptCatalog(raw);
+      if (raw.length && products.length !== raw.length) throw new Error("CATALOG_MALFORMED");
+      return { products, source: "api", category: null, error: null };
     } catch (error) {
-      console.warn("[CRONOX] No se pudo cargar el catálogo desde la API, usando fallback local.", error);
-      return { products: fallback, source: "fallback", category: null, error: null };
+      if (error?.message === "CATALOG_MALFORMED") {
+        console.warn("[CRONOX] catalog_load_failed kind=response attempt=1");
+      }
+      return { products: [], source: "api-error", category: null, error };
     }
   }
 
@@ -1004,12 +984,13 @@
     } catch {}
   };
 
-  async function initCatalog() {
-    if (productsFallback) {
+  async function runCatalogLoad(requestId) {
+    if (productsFallback && !PRODUCTS.length) {
       productsFallback.hidden = false;
       productsFallback.textContent = "Cargando productos…";
     }
     const { products, source, category, error } = await loadCatalog();
+    if (requestId !== catalogRequestId) return;
     catalogLoadError = error || null;
     if (initialQueryRaw) {
       if (storeHeading) {
@@ -1029,19 +1010,31 @@
         ? "Esta categoría no existe o no está disponible."
         : "No se pudo cargar esta categoría. Comprueba tu conexión e inténtalo de nuevo.";
     } else {
-      catalogEmptyMessage = "No hay productos que mostrar.";
+      catalogEmptyMessage = error
+        ? "No hemos podido cargar los productos. Inténtalo de nuevo."
+        : "No hay productos que mostrar.";
     }
-    setProducts(products);
+    if (!error || !PRODUCTS.length) setProducts(products);
     applyAll();
-    notifyCatalogReady(source);
+    if (!error) notifyCatalogReady(source);
   }
 
-  window.CRONOX_catalogReady = initCatalog();
+  function initCatalog() {
+    if (catalogInFlight) return catalogInFlight;
+    const requestId = ++catalogRequestId;
+    catalogInFlight = runCatalogLoad(requestId).finally(() => { catalogInFlight = null; });
+    return catalogInFlight;
+  }
+
+  if (productsGrid) window.CRONOX_reloadCatalog = initCatalog;
+  const standaloneProductPage = /^\/producto(?:\.html|\/|$)/.test(window.location.pathname);
+  window.CRONOX_catalogReady = standaloneProductPage ? Promise.resolve() : initCatalog();
 
   const performFullSearch = async (rawQuery) => {
     const query = String(rawQuery || '').trim().replace(/\s+/g, ' ').slice(0, 100);
     if (!query || !productsGrid) return;
     activeSearchQuery = query;
+    const requestId = ++catalogRequestId;
 
     const nextUrl = new URL(window.location.href);
     nextUrl.searchParams.delete('q');
@@ -1058,6 +1051,7 @@
 
     try {
       const result = await loadSearchResults(query);
+      if (requestId !== catalogRequestId) return;
       catalogLoadError = null;
       catalogEmptyMessage = 'No se han encontrado productos para esta búsqueda.';
       if (storeHeading) {
@@ -1072,6 +1066,7 @@
       applyAll();
       notifyCatalogReady('search-api');
     } catch (error) {
+      if (requestId !== catalogRequestId) return;
       console.warn('[CRONOX] No se pudo completar la búsqueda.', error);
       catalogLoadError = error;
       catalogEmptyMessage = 'No se pudo completar la búsqueda. Inténtalo de nuevo.';

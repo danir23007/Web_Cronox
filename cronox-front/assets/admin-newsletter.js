@@ -24,11 +24,26 @@
       const width = Number(surface.dataset.newsletterLogicalWidth || 0);
       const height = Number(surface.dataset.newsletterLogicalHeight || 0);
       if (!viewport || !width || !height) return;
-      const scale = Math.min(1, viewport.clientWidth / width);
+      viewport.style.width = "100%";
+      const availableWidth = Number(viewport.clientWidth || viewport.getBoundingClientRect?.().width || 0);
+      if (!availableWidth) return;
+      const fit = renderer?.previewFit?.(availableWidth, width, height) || {
+        availableWidth,
+        designWidth: width,
+        designHeight: height,
+        scale: Math.min(1, availableWidth / width),
+        renderedWidth: Math.min(availableWidth, width),
+        renderedHeight: height * Math.min(1, availableWidth / width),
+      };
       surface.style.width = `${width}px`;
       surface.style.height = `${height}px`;
-      surface.style.transform = `scale(${scale})`;
-      viewport.style.height = `${height * scale}px`;
+      surface.style.transform = `scale(${fit.scale})`;
+      viewport.style.width = `${fit.renderedWidth}px`;
+      viewport.style.height = `${fit.renderedHeight}px`;
+      surface.dataset.newsletterPreviewAvailableWidth = String(fit.availableWidth);
+      surface.dataset.newsletterPreviewScale = String(fit.scale);
+      surface.dataset.newsletterPreviewRenderedWidth = String(fit.renderedWidth);
+      surface.dataset.newsletterPreviewRenderedHeight = String(fit.renderedHeight);
     });
   };
   const state = { loaded: false, loading: null, saving: false, device: "desktop", layer: "background", draft: null, assets: [], controllers: [], drag: null };
@@ -52,15 +67,20 @@
   const updatePreviews = () => state.controllers.forEach((controller) => controller?.update?.(previewConfig()));
   const updatePreviewViewport = () => {
     const mobile = state.device === "mobile";
+    const viewport = renderer?.VIEWPORTS?.[state.device] || (mobile ? { width: 390, height: 844 } : { width: 1280, height: 720 });
     elements.previewRoot.dataset.newsletterDevice = state.device;
-    elements.previewSurface.dataset.newsletterLogicalWidth = mobile ? "390" : "1280";
-    elements.previewSurface.dataset.newsletterLogicalHeight = mobile ? "844" : "720";
+    elements.previewSurface.dataset.newsletterLogicalWidth = String(viewport.width);
+    elements.previewSurface.dataset.newsletterLogicalHeight = String(viewport.height);
     elements.preview.classList.toggle("newsletter-preview--mobile", mobile);
     elements.preview.classList.toggle("newsletter-preview--desktop", !mobile);
     elements.preview.dataset.editLayer = state.layer;
     elements.previewTitle.textContent = mobile ? "Mobile · 390 px" : "Desktop";
     resizePreviewSurfaces();
     state.controllers.forEach((controller) => controller?.reflow?.());
+    window.requestAnimationFrame?.(() => {
+      resizePreviewSurfaces();
+      state.controllers.forEach((controller) => controller?.reflow?.());
+    });
   };
   const syncControls = () => {
     if (!state.draft) return;
@@ -79,8 +99,8 @@
     elements.zoomLabel.textContent = ascii ? "Escala ASCII" : "Zoom";
     elements.mediaOpacity.value = String(Math.round(state.draft.mediaOpacity * 100)); elements.mediaOpacityValue.textContent = `${Math.round(state.draft.mediaOpacity * 100)}%`;
     elements.asciiEnabled.checked = state.draft.asciiEnabled; elements.asciiOpacity.value = String(Math.round(state.draft.asciiOpacity * 100)); elements.asciiOpacityValue.textContent = `${Math.round(state.draft.asciiOpacity * 100)}%`;
-    section.querySelectorAll("[data-newsletter-edit-device]").forEach((button) => { const active = button.dataset.newsletterEditDevice === state.device; button.classList.toggle("is-active", active); button.setAttribute("aria-selected", String(active)); });
-    section.querySelectorAll("[data-newsletter-edit-layer]").forEach((button) => { const active = button.dataset.newsletterEditLayer === state.layer; button.classList.toggle("is-active", active); button.setAttribute("aria-selected", String(active)); });
+    section.querySelectorAll("[data-newsletter-edit-device]").forEach((button) => { const active = button.dataset.newsletterEditDevice === state.device; button.classList.toggle("is-active", active); button.setAttribute("aria-selected", String(active)); button.setAttribute("aria-pressed", String(active)); });
+    section.querySelectorAll("[data-newsletter-edit-layer]").forEach((button) => { const active = button.dataset.newsletterEditLayer === state.layer; button.classList.toggle("is-active", active); button.setAttribute("aria-selected", String(active)); button.setAttribute("aria-pressed", String(active)); });
     updatePreviewViewport();
   };
   const renderAssets = () => {
@@ -93,7 +113,8 @@
     if (state.loading) return state.loading;
     state.loading = Promise.all([request("/api/admin/newsletter"), request("/api/admin/newsletter/assets")]).then(([settings, library]) => {
       state.assets = Array.isArray(library.assets) ? library.assets : [];
-      state.draft = { mediaAssetId: settings.mediaAssetId || null, source: settings.source || null, desktop: frame(settings.desktop), mobile: frame(settings.mobile), desktopAscii: asciiFrame(settings.desktopAscii), mobileAscii: asciiFrame(settings.mobileAscii || settings.desktopAscii), mediaOpacity: Number(settings.mediaOpacity ?? 1), asciiEnabled: settings.asciiEnabled !== false, asciiOpacity: Number(settings.asciiOpacity ?? 1), revision: Number(settings.revision || 0) };
+      const normalized = renderer.normalize(settings);
+      state.draft = { mediaAssetId: settings.mediaAssetId || null, source: settings.source || null, desktop: frame(normalized.desktop), mobile: frame(normalized.mobile), desktopAscii: asciiFrame(normalized.desktopAscii), mobileAscii: asciiFrame(normalized.mobileAscii), mediaOpacity: normalized.mediaOpacity, asciiEnabled: normalized.asciiEnabled, asciiOpacity: normalized.asciiOpacity, revision: Number(settings.revision || 0) };
       state.controllers = roots.map((root) => renderer.mount(root, previewConfig()));
       state.loaded = true; renderAssets(); syncControls(); updatePreviews(); resizePreviewSurfaces(); setStatus("Configuración cargada.");
     }).catch((error) => setStatus(error.message || "No se pudo cargar Newsletter.", "error")).finally(() => { state.loading = null; });

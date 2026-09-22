@@ -39,8 +39,10 @@ describe('product category frontend contracts', () => {
     const products = readFrontend('assets/products.js');
     const apiSource = readFrontend('src/admin/api.ts');
 
-    expect(products).toContain('API.getCategoryProducts(initialCategorySlug');
-    expect(products).toContain('API.getProducts(query)');
+    expect(products).toContain(
+      'currentApi.getCategoryProducts(initialCategorySlug',
+    );
+    expect(products).toContain('currentApi.getProducts(query)');
     expect(products).toContain(
       'No hay productos disponibles en esta categoría.',
     );

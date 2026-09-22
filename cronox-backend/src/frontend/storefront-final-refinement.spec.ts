@@ -616,8 +616,9 @@ describe('focused storefront refinement acceptance matrix', () => {
 
   it('62. keeps login on checkout and refreshes cart, customer, address and checkout state', () => {
     expect(app).toContain('const user = await window.CRONOX_API.login({ email, password })');
+    expect(app).toContain('publishAuthState(user)');
     expect(app).toContain(
-      "window.dispatchEvent(new CustomEvent('cronox:userChanged', { detail: user }))",
+      "new CustomEvent('cronox:userChanged', { detail: user || null })",
     );
     expect(authController).toContain('this.authService.mergeCartOnLogin(');
     expect(checkoutScript).toMatch(
@@ -728,7 +729,7 @@ describe('focused storefront refinement acceptance matrix', () => {
     );
   });
 
-  it('69. reuses the CRONOX loader until checkout initialization settles', () => {
+  it('69. reuses the CRONOX loader until the core checkout settles', () => {
     expect(checkoutHtml).toContain('class="page-checkout is-loading"');
     expect(checkoutHtml).toContain('data-persistent="true"');
     expect(checkoutHtml).toContain('assets/CRONOX-GIF.gif');
@@ -736,7 +737,7 @@ describe('focused storefront refinement acceptance matrix', () => {
     expect(checkoutHtml).toContain('window.setTimeout(finish, 20000)');
     expect(app).toContain("if (preloader?.dataset.persistent === 'true') return");
     expect(checkoutScript).toMatch(
-      /DOMContentLoaded[\s\S]*try \{[\s\S]*await queueCheckoutUpdate\(\);[\s\S]*finally \{[\s\S]*CRONOX_CHECKOUT_LOADING\?\.finish/,
+      /const refreshCheckoutSummary = async[\s\S]*renderSummary\([\s\S]*finally \{[\s\S]*if \(revision === checkoutRevision\) window\.CRONOX_CHECKOUT_LOADING\?\.finish/,
     );
     expect(checkoutScript).toContain('return elementLoadPromise');
   });

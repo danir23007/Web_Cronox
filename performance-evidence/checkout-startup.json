@@ -1,0 +1,44 @@
+﻿{
+  "environment": "JSDOM, mocked immediate core API/modal; recommendations never resolve; no real network",
+  "baseline": "HEAD request orchestration; working-tree HTML and unchanged lifecycle/country helpers",
+  "routes": {
+    "cart.html": {
+      "before": {
+        "requests": {
+          "session": 3,
+          "cart": 4,
+          "summary": 0,
+          "recommendations": 0
+        }
+      },
+      "after": {
+        "requests": {
+          "session": 2,
+          "cart": 1,
+          "summary": 0,
+          "recommendations": 0
+        }
+      }
+    },
+    "checkout.html": {
+      "before": {
+        "requests": {
+          "session": 4,
+          "cart": 3,
+          "summary": 2,
+          "recommendations": 5
+        },
+        "revealedWhileRecommendationsPending": false
+      },
+      "after": {
+        "requests": {
+          "session": 2,
+          "cart": 1,
+          "summary": 1,
+          "recommendations": 1
+        },
+        "revealedWhileRecommendationsPending": true
+      }
+    }
+  }
+}

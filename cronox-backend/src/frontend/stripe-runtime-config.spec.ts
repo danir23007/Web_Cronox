@@ -22,7 +22,7 @@ describe('Stripe frontend runtime configuration', () => {
 
   it('loads explicit runtime configuration before Stripe and checkout', () => {
     const configPosition = checkoutHtml.indexOf('assets/runtime-config.js');
-    const stripePosition = checkoutHtml.indexOf('https://js.stripe.com/v3/');
+    const stripePosition = checkoutHtml.indexOf('assets/checkout-stripe.js');
     const checkoutPosition = checkoutHtml.indexOf('assets/checkout.js');
     expect(configPosition).toBeGreaterThan(-1);
     expect(configPosition).toBeLessThan(stripePosition);
@@ -50,6 +50,7 @@ describe('Stripe frontend runtime configuration', () => {
       .map((file) => readFileSync(path.join(frontendRoot, file), 'utf8'))
       .join('\n');
     expect(otherPages).not.toContain('https://js.stripe.com/v3/');
+    expect(otherPages).not.toContain('assets/checkout-stripe.js');
     expect(otherPages).not.toContain('assets/runtime-config.js');
   });
 

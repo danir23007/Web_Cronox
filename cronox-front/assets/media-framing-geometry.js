@@ -91,8 +91,11 @@
   const frameSize = (element) => {
     const rect = element?.getBoundingClientRect?.();
     return {
-      width: Number(rect?.width || element?.clientWidth || 0),
-      height: Number(rect?.height || element?.clientHeight || 0),
+      // clientWidth/clientHeight are the layout dimensions. A scaled Admin
+      // preview changes the bounding rect; using it here applies that scale a
+      // second time to the media and leaves empty space in the composition.
+      width: Number(element?.clientWidth || rect?.width || 0),
+      height: Number(element?.clientHeight || rect?.height || 0),
     };
   };
 

@@ -624,7 +624,7 @@
     }
 
     try {
-      const me = await API.getMe();
+      const me = await (window.CRONOX_AUTH_READY || API.getMe());
       if (me) {
         window.CRONOX_USER = me;
         state.isAuthenticated = true;
@@ -948,6 +948,7 @@
   let recommendationSequence = 0;
   let recommendationLoadRevision = 0;
   let recommendationCatalog = null;
+  let recommendationCatalogPromise = null;
   let authoritativeRecommendationCart = null;
   let authoritativeRecommendationCartRevision = 0;
 
@@ -1222,9 +1223,11 @@
 
     try {
       if (force || !Array.isArray(recommendationCatalog)) {
-        const products = await API.getProducts({
-          limit: 12,
-        });
+        if (!recommendationCatalogPromise) {
+          recommendationCatalogPromise = API.getProducts({ limit: 12 })
+            .finally(() => { recommendationCatalogPromise = null; });
+        }
+        const products = await recommendationCatalogPromise;
         if (loadRevision !== recommendationLoadRevision) return false;
         recommendationCatalog = Array.isArray(products) ? products : [];
       }
@@ -1498,7 +1501,9 @@
     renderAddressChoice({}, null);
     setGuestUiState(true);
     const loaded = await refreshCheckoutSummary(state.shippingMethod, checkoutRevision);
-    if (loaded) ensureStripeReady();
+    if (loaded) {
+      void Promise.resolve(window.CRONOX_STRIPE_READY).then(() => ensureStripeReady());
+    }
     if (helpText) helpText.textContent = 'Stripe procesa tus datos de pago de forma cifrada.';
     return loaded;
   };
@@ -1601,6 +1606,10 @@
 
       setLoadingState(false);
       return false;
+    } finally {
+      // The core checkout is usable once its authoritative summary (or error)
+      // is rendered. Stripe and recommendations must not cover the whole page.
+      if (revision === checkoutRevision) window.CRONOX_CHECKOUT_LOADING?.finish?.();
     }
   };
 
@@ -1974,6 +1983,12 @@
         return;
       }
 
+      // Shipping can be changed while saved defaults are still loading.
+      // Let that latest queued revision use the defaults when they arrive.
+      if (shippingDefaultsPromise) await shippingDefaultsPromise;
+      if (revision !== checkoutRevision) return false;
+      await window.CRONOX_STRIPE_READY;
+      if (revision !== checkoutRevision) return false;
       if (!ensureStripeReady()) {
         return false;
       }
@@ -2523,6 +2538,7 @@
   };
 
   window.addEventListener('cronox:userChanged', async (ev) => {
+    if (ev.initial) return;
     const user = ev?.detail;
     state.isAuthenticated = Boolean(user);
     if (state.isAuthenticated) {
@@ -2532,6 +2548,7 @@
       await loadUserShippingDefaults();
       hideLoginCallout();
       setGuestUiState(false);
+      await window.CRONOX_STRIPE_READY;
       const stripeReady = ensureStripeReady();
       if (stripeReady && currentClientSecret && !paymentElementMounted) {
         await ensurePaymentElement(currentClientSecret);
@@ -2574,14 +2591,18 @@
       await resolveAuthStatus();
       if (!state.isAuthenticated) {
         await renderGuestCheckout();
-        await loadRecommendations();
+        void loadRecommendations();
         return;
       }
 
-      await loadUserShippingDefaults();
-      ensureStripeReady();
-      await queueCheckoutUpdate();
-      await loadRecommendations();
+      const revision = invalidateCheckoutPayment();
+      const defaultsReady = loadUserShippingDefaults();
+      const loaded = await refreshCheckoutSummary(state.shippingMethod, revision);
+      void loadRecommendations();
+      await defaultsReady;
+      if (loaded && revision === checkoutRevision) {
+        await queueCheckoutUpdate({ revision, refreshSummary: false });
+      }
     } catch (error) {
       console.error('[CRONOX checkout initialization]', {
         event: 'checkout_initialization_failed',

@@ -52,22 +52,55 @@
     zoom: number(value?.zoom, 1, 3, 1),
     fit: String(value?.fit || "COVER").toUpperCase() === "CONTAIN" ? "CONTAIN" : "COVER",
   });
+  const VIEWPORTS = Object.freeze({
+    desktop: Object.freeze({ width: 1280, height: 720 }),
+    mobile: Object.freeze({ width: 390, height: 844 }),
+  });
+  const validFrame = (value) =>
+    value &&
+    Number.isFinite(Number(value.focalX)) && Number(value.focalX) >= 0 && Number(value.focalX) <= 100 &&
+    Number.isFinite(Number(value.focalY)) && Number(value.focalY) >= 0 && Number(value.focalY) <= 100 &&
+    Number.isFinite(Number(value.zoom)) && Number(value.zoom) >= 1 && Number(value.zoom) <= 3 &&
+    ["COVER", "CONTAIN"].includes(String(value.fit || "").toUpperCase());
+  const validAsciiFrame = (value) =>
+    value &&
+    Number.isFinite(Number(value.x)) && Number(value.x) >= 5 && Number(value.x) <= 95 &&
+    Number.isFinite(Number(value.y)) && Number(value.y) >= 5 && Number(value.y) <= 95 &&
+    Number.isFinite(Number(value.scale)) && Number(value.scale) >= 0.5 && Number(value.scale) <= 2;
+  const previewFit = (availableWidth, designWidth, designHeight) => {
+    const available = Math.max(0, Number(availableWidth) || 0);
+    const width = Math.max(0, Number(designWidth) || 0);
+    const height = Math.max(0, Number(designHeight) || 0);
+    const scale = available && width ? Math.min(1, available / width) : 0;
+    return Object.freeze({
+      availableWidth: available,
+      designWidth: width,
+      designHeight: height,
+      scale,
+      renderedWidth: width * scale,
+      renderedHeight: height * scale,
+    });
+  };
   const asciiFrame = (value) => ({
     x: number(value?.x, 5, 95, 50),
     y: number(value?.y, 5, 95, 50),
     scale: number(value?.scale, 0.5, 2, 1),
   });
-  const normalize = (value = {}) => ({
-    version: 1,
-    source: String(value.source || FALLBACK_SOURCE),
-    desktop: frame(value.desktop),
-    mobile: frame(value.mobile || value.desktop),
-    desktopAscii: asciiFrame(value.desktopAscii),
-    mobileAscii: asciiFrame(value.mobileAscii || value.desktopAscii),
-    mediaOpacity: number(value.mediaOpacity, 0, 1, 1),
-    asciiEnabled: value.asciiEnabled !== false,
-    asciiOpacity: number(value.asciiOpacity, 0, 1, 1),
-  });
+  const normalize = (value = {}) => {
+    const desktop = frame(value.desktop);
+    const desktopAscii = asciiFrame(value.desktopAscii);
+    return {
+      version: 1,
+      source: String(value.source || FALLBACK_SOURCE),
+      desktop,
+      mobile: frame(validFrame(value.mobile) ? value.mobile : desktop),
+      desktopAscii,
+      mobileAscii: asciiFrame(validAsciiFrame(value.mobileAscii) ? value.mobileAscii : desktopAscii),
+      mediaOpacity: number(value.mediaOpacity, 0, 1, 1),
+      asciiEnabled: value.asciiEnabled !== false,
+      asciiOpacity: number(value.asciiOpacity, 0, 1, 1),
+    };
+  };
   const deviceFor = (root) =>
     root?.dataset?.newsletterDevice ||
     (globalScope.matchMedia?.("(max-width: 860px)")?.matches ? "mobile" : "desktop");
@@ -192,6 +225,8 @@
     ASCII_ART,
     DEFAULT_CONFIG,
     DEFAULT_ASCII_FRAME,
+    VIEWPORTS,
+    previewFit,
     normalize,
     scaleAscii,
     renderStructure,

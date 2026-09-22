@@ -20,27 +20,29 @@
   const TOPBAR_STATES = ['topbar--transparent', 'topbar--hero', 'topbar--page'];
 
   // ===== Preloader =====
-  window.addEventListener('load', () => {
+  const revealStorefront = () => {
     const body = document.body;
     const preloader = document.getElementById('preloader');
     if (preloader?.dataset.persistent === 'true') return;
+    if (!body || body.classList.contains('is-loaded')) return;
     const shouldRemovePreloader = Boolean(preloader);
-    // Retraso aleatorio del preloader entre 1s y 2s para mostrar la animación
-    const randomDelay = Math.floor(Math.random() * (2000 - 1000 + 1)) + 1000;
-
-    setTimeout(() => {
-      if (body) {
-        body.classList.remove('is-loading');
-        body.classList.add('is-loaded');
-        try { window.dispatchEvent(new CustomEvent('cronox:storefront-ready')); } catch {}
-      }
-
-      if (shouldRemovePreloader) {
-        // Espera ligeramente más que la transición CSS y elimina el nodo para evitar parpadeos
-        setTimeout(() => preloader.remove(), 600);
-      }
-    }, randomDelay);
-  });
+    body.classList.remove('is-loading');
+    body.classList.add('is-loaded');
+    try { window.dispatchEvent(new CustomEvent('cronox:storefront-ready')); } catch {}
+    // Preserve the existing CSS transition before removing its overlay.
+    if (shouldRemovePreloader) setTimeout(() => preloader.remove(), 600);
+  };
+  const scheduleStorefrontReveal = () => {
+    // Deferred scripts and styles are ready at DOMContentLoaded. Allow the
+    // browser to lay out the page without waiting for below-fold media.
+    if (typeof requestAnimationFrame === 'function') {
+      requestAnimationFrame(() => requestAnimationFrame(revealStorefront));
+    } else revealStorefront();
+  };
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', scheduleStorefrontReveal, { once: true });
+  } else scheduleStorefrontReveal();
+  window.addEventListener('load', revealStorefront, { once: true });
 
   // ===== Topbar =====
   const topbar = $('.topbar');
@@ -1739,11 +1741,14 @@
 
   // Inicializar badge + drawer
   document.addEventListener('DOMContentLoaded', () => {
-    if (typeof window.initCartFromBackend === 'function') window.initCartFromBackend();
+    if (typeof window.initCartFromBackend === 'function') {
+      window.CRONOX_CART_READY = window.initCartFromBackend();
+    }
     initCartDrawer();
   });
 
-  window.addEventListener('cronox:userChanged', () => {
+  window.addEventListener('cronox:userChanged', (event) => {
+    if (event.initial) return;
     // Login/register merge guest ownership atomically on the server; logout
     // transfers it back to a fresh opaque guest owner. Re-read that one source.
     fetchCart().catch((err) => console.warn('[CRONOX] Cart refresh failed', err));
@@ -1765,6 +1770,7 @@
 
 // [AUTH] Lógica de sesión y modal
 window.CRONOX_USER = window.CRONOX_USER || null;
+window.CRONOX_AUTH_STATE = window.CRONOX_USER ? 'authenticated' : 'unknown';
 
 (function () {
   const AUTH_HTML_PATH = 'auth-modal.html';
@@ -1790,6 +1796,22 @@ window.CRONOX_USER = window.CRONOX_USER || null;
   let currentView = 'login';
   let loginErrorMessage = '';
   let registerErrorMessage = '';
+
+  const publishAuthState = (user, { initial = false } = {}) => {
+    window.CRONOX_USER = user || null;
+    window.CRONOX_AUTH_STATE = user ? 'authenticated' : 'anonymous';
+    updateProfileIconUI();
+    try {
+      window.dispatchEvent(Object.assign(
+        new CustomEvent('cronox:userChanged', { detail: user || null }),
+        { initial },
+      ));
+      window.dispatchEvent(new CustomEvent('cronox:authResolved', {
+        detail: { state: window.CRONOX_AUTH_STATE, user: user || null },
+      }));
+    } catch {}
+    return user || null;
+  };
 
   const lockBody = () => {
     if (typeof window.CRONOX_lockScroll === 'function') window.CRONOX_lockScroll(AUTH_LOCK_KEY);
@@ -1976,9 +1998,7 @@ window.CRONOX_USER = window.CRONOX_USER || null;
       loginErrorMessage = '';
       setAuthMessage('Iniciando sesión...');
       const user = await window.CRONOX_API.login({ email, password });
-      window.CRONOX_USER = user;
-      updateProfileIconUI();
-      try { window.dispatchEvent(new CustomEvent('cronox:userChanged', { detail: user })); } catch {}
+      publishAuthState(user);
       await refreshUserDependentUI();
       if (['ADMIN', 'SUPERADMIN'].includes(user?.role)) {
         window.location.href = 'admin.html';
@@ -2014,9 +2034,7 @@ window.CRONOX_USER = window.CRONOX_USER || null;
       registerErrorMessage = '';
       setAuthMessage('Creando cuenta...');
       const user = await window.CRONOX_API.register({ firstName, lastName, email, password });
-      window.CRONOX_USER = user;
-      updateProfileIconUI();
-      try { window.dispatchEvent(new CustomEvent('cronox:userChanged', { detail: user })); } catch {}
+      publishAuthState(user);
       await refreshUserDependentUI();
       closeAuthModal();
     } catch (err) {
@@ -2066,6 +2084,7 @@ window.CRONOX_USER = window.CRONOX_USER || null;
   };
 
   const resetClientSessionState = () => {
+    window.CRONOX_AUTH_STATE = 'anonymous';
     window.CRONOX_USER = null;
     if (window.CRONOX_FAVORITES && typeof window.CRONOX_FAVORITES.setIdsFromServer === 'function') {
       window.CRONOX_FAVORITES.setIdsFromServer([]);
@@ -2240,11 +2259,13 @@ window.CRONOX_USER = window.CRONOX_USER || null;
     if (!window.CRONOX_API?.getMe) return;
     try {
       const user = await window.CRONOX_API.getMe();
-      window.CRONOX_USER = user;
-      updateProfileIconUI();
-      try { window.dispatchEvent(new CustomEvent('cronox:userChanged', { detail: user })); } catch {}
-      await refreshUserDependentUI();
+      // Initial reads already use the same session cookies. Only an actual
+      // login/logout needs to reload the cart and checkout a second time.
+      return publishAuthState(user, { initial: true });
     } catch (err) {
+      // A transport/session recovery error is not proof of anonymity. Keep
+      // the state unknown so authenticated visitors never see a popup flash.
+      window.CRONOX_AUTH_STATE = 'unknown';
       console.warn('[AUTH] No se pudo obtener el usuario actual', err);
     }
   };
@@ -2273,6 +2294,7 @@ window.CRONOX_USER = window.CRONOX_USER || null;
     listenersBound: false,
     shownInMemory: false,
     previousFocus: null,
+    storefrontReady: false,
   };
 
   const hasPreferenceConsent = () =>
@@ -2342,7 +2364,11 @@ window.CRONOX_USER = window.CRONOX_USER || null;
   );
 
   const openNewsletterModal = () => {
-    if (!newsletterState.overlay || newsletterState.shownInMemory) return false;
+    if (
+      !newsletterState.overlay ||
+      newsletterState.shownInMemory ||
+      window.CRONOX_AUTH_STATE !== 'anonymous'
+    ) return false;
     if (hasBlockingModal()) {
       if (!newsletterState.retryTimer) {
         newsletterState.retryTimer = setTimeout(() => {
@@ -2366,8 +2392,15 @@ window.CRONOX_USER = window.CRONOX_USER || null;
 
   const shouldShowNewsletter = (now = Date.now()) => {
     if (newsletterState.shownInMemory || newsletterVisit?.wasShown()) return false;
-    if (window.CRONOX_USER) return false;
+    if (window.CRONOX_AUTH_STATE !== 'anonymous' || window.CRONOX_USER) return false;
     return newsletterVisit?.eligible(now) ?? true;
+  };
+
+  const suppressNewsletterForAuthentication = () => {
+    clearNewsletterTimers();
+    if (newsletterState.overlay?.classList.contains('newsletter-modal-overlay--visible')) {
+      closeNewsletterModal({ dismiss: false, restoreFocus: false });
+    }
   };
 
   const loadNewsletterConfiguration = async () => {
@@ -2490,13 +2523,28 @@ window.CRONOX_USER = window.CRONOX_USER || null;
     void loadNewsletterConfiguration();
 
     const schedule = () => {
+      if (!newsletterState.storefrontReady) return;
       if (newsletterState.shownInMemory || !shouldShowNewsletter()) return;
       newsletterVisit?.schedule(() => {
         if (shouldShowNewsletter()) openNewsletterModal();
       });
     };
-    window.addEventListener('cronox:storefront-ready', schedule, { once: true });
-    if (document.body?.classList.contains('is-loaded') || !document.getElementById('preloader')) schedule();
+    window.addEventListener('cronox:storefront-ready', () => {
+      newsletterState.storefrontReady = true;
+      schedule();
+    }, { once: true });
+    window.addEventListener('cronox:authResolved', (event) => {
+      if (event.detail?.state === 'authenticated') suppressNewsletterForAuthentication();
+      else if (event.detail?.state === 'anonymous') schedule();
+    });
+    window.addEventListener('cronox:userChanged', (event) => {
+      if (event.detail) suppressNewsletterForAuthentication();
+    });
+    window.addEventListener('cronox:session-ended', suppressNewsletterForAuthentication);
+    if (document.body?.classList.contains('is-loaded') || !document.getElementById('preloader')) {
+      newsletterState.storefrontReady = true;
+      schedule();
+    }
   };
 
   const initFooterAccordion = () => {
@@ -2607,9 +2655,11 @@ window.CRONOX_USER = window.CRONOX_USER || null;
   });
 
   document.addEventListener('DOMContentLoaded', async () => {
+    // Session resolution must not wait for the optional login modal download.
+    window.CRONOX_AUTH_READY = initAuthState();
     const ready = await prepareAuthExperience();
     if (!ready) return;
-    await initAuthState();
+    await window.CRONOX_AUTH_READY;
 
     // [AUTH] Abrir automáticamente el modal de login
     // si venimos de la página de "Recuperar contraseña"

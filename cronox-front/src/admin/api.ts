@@ -368,7 +368,8 @@ import { installSessionTransport } from './session';
     const sizeKey = normalizeSizeKey(
       variant.size as string | number | undefined,
     );
-    const stockQty = Number(variant.stockQty ?? variant.stock ?? 0);
+    const rawStock = variant.stockQty ?? variant.stock;
+    const stockQty = rawStock == null ? null : Number(rawStock);
 
     return {
       id: variant.id,
@@ -381,7 +382,7 @@ import { installSessionTransport } from './session';
       priceCents: effectivePriceCents,
       price: centsToUnits(effectivePriceCents),
       priceLabel: formatCents(effectivePriceCents),
-      isAvailable: Boolean((variant.isActive ?? true) && stockQty > 0),
+      isAvailable: Boolean((variant.isActive ?? true) && stockQty !== null && stockQty > 0),
     };
   };
 
@@ -1090,7 +1091,16 @@ import { installSessionTransport } from './session';
       button: HTMLButtonElement,
       product: UnknownRecord,
     ) {
-      const status = classifyStock(availableStock(product.variants));
+      const hasStockData = Array.isArray(product.variants) &&
+        product.variants.length > 0 &&
+        product.variants.every((variant: unknown) =>
+          variant && typeof variant === 'object' &&
+          ((variant as UnknownRecord).stockQty ?? (variant as UnknownRecord).stock) != null &&
+          Number.isFinite(Number((variant as UnknownRecord).stockQty ?? (variant as UnknownRecord).stock))
+        );
+      const status = hasStockData
+        ? classifyStock(availableStock(product.variants))
+        : 'unknown';
       let row = price.parentElement;
       if (!row?.classList.contains('stock-price-row')) {
         row = document.createElement('div');
@@ -1100,7 +1110,7 @@ import { installSessionTransport } from './session';
       }
       row.querySelector('.stock-status')?.remove();
       price.classList.toggle('price--out-of-stock', status === 'out_of_stock');
-      if (status !== 'in_stock') {
+      if (status === 'low' || status === 'out_of_stock') {
         const label = document.createElement('span');
         label.className = `stock-status stock-status--${status === 'low' ? 'low' : 'out'}`;
         label.textContent = status === 'low' ? 'ÚLTIMAS TALLAS' : 'AGOTADO';
@@ -1120,20 +1130,29 @@ import { installSessionTransport } from './session';
       price: HTMLElement,
       product: UnknownRecord,
     ) {
-      const status = classifyStock(availableStock(product.variants));
+      const hasStockData = Array.isArray(product.variants) &&
+        product.variants.length > 0 &&
+        product.variants.every((variant: unknown) =>
+          variant && typeof variant === 'object' &&
+          ((variant as UnknownRecord).stockQty ?? (variant as UnknownRecord).stock) != null &&
+          Number.isFinite(Number((variant as UnknownRecord).stockQty ?? (variant as UnknownRecord).stock))
+        );
+      const status = hasStockData
+        ? classifyStock(availableStock(product.variants))
+        : 'unknown';
       card.classList.remove(
         'product-card--out-of-stock',
         'product-card--low-stock',
         'product-card--in-stock',
       );
-      card.classList.add(
+      if (status !== 'unknown') card.classList.add(
         `product-card--${status === 'low' ? 'low-stock' : status.replace(/_/g, '-')}`,
       );
       const row = document.createElement('div');
       row.className = 'product-card__price-row';
       price.replaceWith(row);
       row.appendChild(price);
-      if (status !== 'in_stock') {
+      if (status === 'low' || status === 'out_of_stock') {
         const label = document.createElement('span');
         label.className = 'product-card__stock-label';
         label.textContent =
@@ -1542,24 +1561,16 @@ import { installSessionTransport } from './session';
 
   // ===== CATÁLOGO / PRODUCTOS =====
   const getProductsPage = async (query: QueryRecord = {}) => {
-    try {
-      const data = await request('/api/products', { query });
-      if (!data || !Array.isArray((data as { items?: unknown[] }).items)) {
-        throw new Error('Formato inesperado de productos');
-      }
-      return {
-        products: (data as { items: UnknownRecord[] }).items.map((product) =>
-          mapProduct(product),
-        ),
-        meta: ((data as { meta?: UnknownRecord }).meta || {}) as UnknownRecord,
-      };
-    } catch (error) {
-      console.warn(
-        '[CRONOX] No se pudo cargar el catálogo desde la API',
-        error,
-      );
-      throw error;
+    const data = await request('/api/products', { query, cache: 'no-store' });
+    if (!data || !Array.isArray((data as { items?: unknown[] }).items)) {
+      throw new Error('Formato inesperado de productos');
     }
+    return {
+      products: (data as { items: UnknownRecord[] }).items.map((product) =>
+        mapProduct(product),
+      ),
+      meta: ((data as { meta?: UnknownRecord }).meta || {}) as UnknownRecord,
+    };
   };
   api.getProductsPage = getProductsPage;
 

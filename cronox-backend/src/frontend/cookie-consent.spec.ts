@@ -274,8 +274,15 @@ describe('cookie consent frontend', () => {
       'utf8',
     );
 
-    expect(checkout).toContain('https://js.stripe.com/v3/');
+    expect(checkout).toContain('assets/checkout-stripe.js?v=1');
+    expect(
+      readFileSync(
+        path.join(frontendRoot, 'assets/checkout-stripe.js'),
+        'utf8',
+      ),
+    ).toContain('https://js.stripe.com/v3/');
     expect(success).not.toContain('https://js.stripe.com/v3/');
+    expect(success).not.toContain('assets/checkout-stripe.js');
   });
 
   it('contains no analytics or advertising script before consent', () => {
