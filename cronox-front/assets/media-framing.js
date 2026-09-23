@@ -37,6 +37,8 @@
   const tabletQuery = window.matchMedia?.("(max-width: 1023px)");
   const observedFrames = new WeakSet();
   const observedMedia = new WeakSet();
+  let pendingHeroSwap = null;
+  let heroSwapScheduled = false;
   let configuration = DEFAULT_CONFIGURATION;
   let requestPromise = null;
 
@@ -182,6 +184,28 @@
     geometry?.applyHeroText?.(node, section, heroText, device);
   };
 
+  const deferHeroSwapUntilLoad = (current, replacement) => {
+    pendingHeroSwap = { current, replacement };
+    if (heroSwapScheduled) return;
+    heroSwapScheduled = true;
+    window.addEventListener(
+      "load",
+      () => {
+        heroSwapScheduled = false;
+        const pending = pendingHeroSwap;
+        pendingHeroSwap = null;
+        if (!pending?.current?.isConnected) return;
+        pending.current.replaceWith(pending.replacement);
+        if (typeof window.requestAnimationFrame === "function") {
+          window.requestAnimationFrame(applyAll);
+        } else {
+          applyAll();
+        }
+      },
+      { once: true },
+    );
+  };
+
   const ensureHeroElement = () => {
     const configured = configuration.placements[HERO_KEY];
     let element = pageDocument.querySelector(
@@ -206,7 +230,11 @@
         replacement.alt = "";
         replacement.decoding = "async";
       }
-      element.replaceWith(replacement);
+      if (pageDocument.readyState === "complete") {
+        element.replaceWith(replacement);
+      } else {
+        deferHeroSwapUntilLoad(element, replacement);
+      }
       element = replacement;
     }
     const source = configured.source;

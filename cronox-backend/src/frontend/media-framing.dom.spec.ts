@@ -599,6 +599,7 @@ const makePublicDom = (
   fetchImpl: jest.Mock,
   viewport = { width: 1440, height: 900 },
   cached?: unknown,
+  holdInitialLoad = false,
 ) => {
   const dom = new JSDOM(
     '<!doctype html><html><body><section class="hero-video-section"><video class="hero-video" data-media-placement="home.hero.video"></video></section></body></html>',
@@ -618,6 +619,15 @@ const makePublicDom = (
     }),
   });
   Object.defineProperty(dom.window, 'fetch', { value: fetchImpl });
+  let readyState: DocumentReadyState = holdInitialLoad
+    ? 'interactive'
+    : dom.window.document.readyState;
+  if (holdInitialLoad) {
+    Object.defineProperty(dom.window.document, 'readyState', {
+      configurable: true,
+      get: () => readyState,
+    });
+  }
   defineVideoDimensions(dom);
   const section = dom.window.document.querySelector('section')!;
   section.getBoundingClientRect = () =>
@@ -631,7 +641,13 @@ const makePublicDom = (
   }
   dom.window.eval(geometryScript);
   dom.window.eval(publicScript);
-  return { dom };
+  return {
+    dom,
+    finishInitialLoad: () => {
+      readyState = 'complete';
+      dom.window.dispatchEvent(new dom.window.Event('load'));
+    },
+  };
 };
 
 describe('public hero framing', () => {
@@ -836,9 +852,52 @@ describe('public hero framing', () => {
     expect(hero?.classList.contains('hero-video')).toBe(true);
   });
 
+  it('defers a hero media-type swap until the initial document load finishes', async () => {
+    const fetchMock = jest.fn().mockResolvedValue(
+      jsonResponse({
+        version: 5,
+        placements: {
+          'home.hero.video': {
+            desktop: baseline,
+            tablet: null,
+            mobile: null,
+            source: 'https://storage.example.test/portada.jpg',
+            poster: null,
+            mediaType: 'image',
+          },
+        },
+      }),
+    );
+    const { dom, finishInitialLoad } = makePublicDom(
+      fetchMock,
+      { width: 1440, height: 900 },
+      undefined,
+      true,
+    );
+    await flushAsync();
+    await flushAsync();
+
+    expect(
+      dom.window.document.querySelector(
+        '[data-media-placement="home.hero.video"]',
+      )?.tagName,
+    ).toBe('VIDEO');
+
+    finishInitialLoad();
+    await flushAsync();
+
+    const hero = dom.window.document.querySelector(
+      '[data-media-placement="home.hero.video"]',
+    );
+    expect(hero?.tagName).toBe('IMG');
+    expect(hero?.getAttribute('src')).toBe(
+      'https://storage.example.test/portada.jpg',
+    );
+  });
+
   it('loads framing assets only on the homepage and leaves Products/Gallery untouched', () => {
     expect(indexHtml).toContain('media-framing-geometry.js?v=6');
-    expect(indexHtml).toContain('media-framing.js?v=5');
+    expect(indexHtml).toContain('media-framing.js?v=6');
     expect(indexHtml).toContain('data-media-placement="home.hero.video"');
     expect(publicStyles).toContain(
       '.hero-video[data-media-placement="home.hero.video"]',
