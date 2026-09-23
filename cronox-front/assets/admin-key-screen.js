@@ -11,10 +11,13 @@
     stage: $("keyPreviewStage"), preview: $("keyPreview"), frame: $("keyPreviewMedia"),
     overlay: $("keyPreviewOverlay"), content: $("keyPreviewContent"), overlayValue: $("keyOverlayValue"),
     formGroup: $("keyPreviewForm"), privacy: $("keyPreviewPrivacy"),
+    expirationInput: $("keyExpirationInput"), expirationStatus: $("keyExpirationStatus"),
+    expirationSave: $("keyExpirationSave"), expirationClear: $("keyExpirationClear"),
   };
   const renderer = window.CRONOX_KEY_SCREEN_RENDERER;
   const geometryEngine = window.CRONOX_MEDIA_GEOMETRY;
-  const state = { loaded: false, screens: [], assets: [], settings: null, current: null, device: "desktop", media: null, mediaKey: "", geometry: null, drag: null };
+  const madridTime = window.CRONOX_MADRID_TIME;
+  const state = { loaded: false, screens: [], assets: [], settings: null, current: null, device: "desktop", media: null, mediaKey: "", geometry: null, drag: null, serverEpochMs: 0, serverMonotonicMs: 0, expirationTimer: 0 };
   const names = [
     "internalName", "mode", "title", "subtitle", "placeholder", "buttonText", "successTitle", "successMessage", "textColor", "overlayStrength", "inputStyle", "buttonStyle",
     "desktopFocalX", "desktopFocalY", "desktopZoom", "desktopFit", "desktopHorizontalAlign", "desktopVerticalAlign", "desktopOffsetX", "desktopOffsetY",
@@ -36,6 +39,53 @@
     return parse(await fetch(`${base()}${path}`, { ...options, method, headers, credentials: "include", cache: "no-store", body: options.body instanceof FormData ? options.body : options.body ? JSON.stringify(options.body) : undefined }));
   };
   const message = (text, error = false) => { el.message.textContent = text || ""; el.message.className = `message${text ? " show" : ""}${error ? " error" : " success"}`; };
+  const monotonicNow = () => window.performance?.now?.() ?? Date.now();
+  const syncServerClock = (value) => {
+    const parsed = Date.parse(value || "");
+    if (!Number.isFinite(parsed)) return;
+    state.serverEpochMs = parsed;
+    state.serverMonotonicMs = monotonicNow();
+  };
+  const estimatedServerNow = () => state.serverEpochMs
+    ? state.serverEpochMs + Math.max(0, monotonicNow() - state.serverMonotonicMs)
+    : Date.now();
+  const remainingLabel = (milliseconds) => {
+    const totalMinutes = Math.max(1, Math.ceil(milliseconds / 60_000));
+    const days = Math.floor(totalMinutes / 1440);
+    const hours = Math.floor((totalMinutes % 1440) / 60);
+    const minutes = totalMinutes % 60;
+    return [days ? `${days} d` : "", hours ? `${hours} h` : "", minutes || (!days && !hours) ? `${minutes} min` : ""].filter(Boolean).join(" ");
+  };
+  const renderExpirationStatus = () => {
+    if (!state.settings) return;
+    const expirationMs = Date.parse(state.settings.expiresAt || "");
+    if (!state.settings.enabled) {
+      el.expirationStatus.textContent = "Desactivada manualmente";
+    } else if (!Number.isFinite(expirationMs)) {
+      el.expirationStatus.textContent = "Sin desactivación programada";
+    } else if (expirationMs <= estimatedServerNow()) {
+      el.expirationStatus.textContent = `Finalizada el ${madridTime.display(state.settings.expiresAt)}`;
+    } else {
+      el.expirationStatus.textContent = `Programada para el ${madridTime.display(state.settings.expiresAt)}. La pantalla clave se desactivará en ${remainingLabel(expirationMs - estimatedServerNow())}.`;
+    }
+    el.expirationClear.disabled = !state.settings.expiresAt;
+  };
+  const applySettings = (settings, fillInput = true) => {
+    state.settings = settings;
+    syncServerClock(settings.serverTime);
+    el.master.checked = settings.enabled;
+    el.masterLabel.textContent = settings.enabled ? "ACTIVA" : "DESACTIVADA";
+    if (fillInput) el.expirationInput.value = madridTime.utcToMadridLocal(settings.expiresAt);
+    window.clearInterval(state.expirationTimer);
+    renderExpirationStatus();
+    if (settings.expiresAt) state.expirationTimer = window.setInterval(renderExpirationStatus, 1_000);
+  };
+  const expirationError = (error) => {
+    if (error.message === "NONEXISTENT_MADRID_LOCAL_TIME") return "Esa hora no existe en Madrid por el cambio al horario de verano. Elige otra hora.";
+    if (error.message === "AMBIGUOUS_MADRID_LOCAL_TIME") return "Esa hora ocurre dos veces en Madrid por el cambio al horario de invierno. Elige otra hora.";
+    if (error.message === "INVALID_MADRID_LOCAL_TIME") return "Introduce una fecha y hora válidas.";
+    return error.message;
+  };
   const safeUrl = (value) => { try { const url = new URL(value, location.origin); return ["http:", "https:"].includes(url.protocol) && !url.username && !url.password ? url.href : ""; } catch { return ""; } };
   const selectedScreen = () => state.screens.find((screen) => screen.id === el.select.value) || null;
   const inputFor = (name) => el.form.elements[name];
@@ -264,8 +314,7 @@
       state.assets = data.assets;
       state.loaded = true;
       el.count.textContent = data.preregisteredCount;
-      el.master.checked = data.settings.enabled;
-      el.masterLabel.textContent = data.settings.enabled ? "ACTIVA" : "DESACTIVADA";
+      applySettings(data.settings);
       renderSelect();
       message("");
     } catch (error) { message(error.message, true); }
@@ -275,8 +324,26 @@
   el.form.addEventListener("submit", (event) => { event.preventDefault(); save(formValues()); });
   el.select.addEventListener("change", () => fill(selectedScreen()));
   el.create.addEventListener("click", async () => { const internalName = el.newName.value.trim(); if (!internalName) return message("Escribe un nombre para la pantalla.", true); try { const screen = await request("/api/admin/key-screens", { method: "POST", body: { internalName } }); state.screens.unshift(screen); state.current = screen; el.newName.value = ""; renderSelect(); message("Pantalla creada."); } catch (error) { message(error.message, true); } });
-  el.activate.addEventListener("click", async () => { if (!state.current) return; try { state.settings = await request("/api/admin/key-screens/active", { method: "PATCH", body: { screenId: state.current.id } }); renderSelect(); message("Pantalla seleccionada. Usa el interruptor para mostrarla al público."); } catch (error) { message(error.message, true); } });
-  el.master.addEventListener("change", async () => { try { state.settings = await request("/api/admin/key-screens/master", { method: "PATCH", body: { enabled: el.master.checked } }); el.masterLabel.textContent = state.settings.enabled ? "ACTIVA" : "DESACTIVADA"; message(state.settings.enabled ? "Pantalla clave activada." : "Pantalla clave desactivada."); } catch (error) { el.master.checked = !el.master.checked; message(error.message, true); } });
+  el.activate.addEventListener("click", async () => { if (!state.current) return; try { applySettings(await request("/api/admin/key-screens/active", { method: "PATCH", body: { screenId: state.current.id } })); renderSelect(); message("Pantalla seleccionada. Usa el interruptor para mostrarla al público."); } catch (error) { message(error.message, true); } });
+  el.master.addEventListener("change", async () => { try { applySettings(await request("/api/admin/key-screens/master", { method: "PATCH", body: { enabled: el.master.checked } })); message(state.settings.enabled ? "Pantalla clave activada." : "Pantalla clave desactivada."); } catch (error) { el.master.checked = Boolean(state.settings?.enabled); message(error.message, true); } });
+  el.expirationSave.addEventListener("click", async () => {
+    try {
+      if (!el.expirationInput.value) throw new Error("INVALID_MADRID_LOCAL_TIME");
+      const expiresAt = madridTime.madridLocalToUtc(el.expirationInput.value);
+      if (Date.parse(expiresAt) <= estimatedServerNow()) throw new Error("La fecha debe estar en el futuro.");
+      el.expirationSave.disabled = true;
+      applySettings(await request("/api/admin/key-screens/expiration", { method: "PATCH", body: { expiresAt } }));
+      message("Desactivación automática programada.");
+    } catch (error) { message(expirationError(error), true); }
+    finally { el.expirationSave.disabled = false; }
+  });
+  el.expirationClear.addEventListener("click", async () => {
+    try {
+      el.expirationClear.disabled = true;
+      applySettings(await request("/api/admin/key-screens/expiration", { method: "PATCH", body: { expiresAt: null } }));
+      message("Fecha programada eliminada.");
+    } catch (error) { message(error.message, true); renderExpirationStatus(); }
+  });
   el.remove.addEventListener("click", async () => { if (!state.current || !confirm(`¿Eliminar "${state.current.internalName}"?`)) return; try { await request(`/api/admin/key-screens/${encodeURIComponent(state.current.id)}`, { method: "DELETE" }); state.screens = state.screens.filter((screen) => screen.id !== state.current.id); state.current = null; renderSelect(); message("Pantalla eliminada."); } catch (error) { message(error.message, true); } });
   el.upload.addEventListener("click", async () => { const file = el.uploadInput.files?.[0]; if (!file) return message("Selecciona un archivo.", true); const body = new FormData(); body.append("file", file); try { el.upload.disabled = true; const asset = await request("/api/admin/key-screens/media", { method: "POST", body }); state.assets.unshift(asset); renderAssets(); await save({ mediaAssetId: asset.id }); el.uploadInput.value = ""; } catch (error) { message(error.message, true); } finally { el.upload.disabled = false; } });
   section.querySelectorAll("[data-key-device]").forEach((button) => button.addEventListener("click", () => switchDevice(button.dataset.keyDevice)));

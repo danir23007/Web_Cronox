@@ -1108,6 +1108,20 @@
         <label class="key-switch"><span>Pantalla clave</span><input id="keyMaster" type="checkbox"><strong id="keyMasterLabel">DESACTIVADA</strong></label>
       </div>
       <p id="keyAdminMessage" class="message" role="status" aria-live="polite"></p>
+      <section class="key-expiration" aria-labelledby="keyExpirationTitle">
+        <div>
+          <h3 id="keyExpirationTitle">Desactivaci&oacute;n autom&aacute;tica</h3>
+          <p id="keyExpirationStatus" role="status" aria-live="polite">Sin desactivaci&oacute;n programada</p>
+        </div>
+        <label>Fecha y hora
+          <input id="keyExpirationInput" class="input" type="datetime-local" step="60">
+          <small>Horario de Madrid (Europe/Madrid)</small>
+        </label>
+        <div class="key-expiration__actions">
+          <button id="keyExpirationSave" class="btn primary" type="button">Guardar programaci&oacute;n</button>
+          <button id="keyExpirationClear" class="btn" type="button">Quitar fecha programada</button>
+        </div>
+      </section>
       <div class="key-admin__summary"><strong id="keyCount">0</strong><span>usuarios prerregistrados</span></div>
       <div class="key-admin__toolbar">
         <label>Pantalla guardada<select id="keyScreenSelect" class="select"></select></label>
@@ -1801,7 +1815,8 @@
   <script src="assets/gallery.js?v=14"></script>
   <script src="assets/admin-gallery.js?v=7"></script>
   <script src="assets/key-screen-renderer.js?v=2"></script>
-  <script src="assets/admin-key-screen.js?v=3"></script>
+  <script src="assets/key-screen-time.js?v=1"></script>
+  <script src="assets/admin-key-screen.js?v=4"></script>
   <script src="assets/admin-media.js?v=5"></script>
   <script src="assets/admin-newsletter.js?v=5"></script>
   <script src="assets/admin-footer.js?v=2"></script>

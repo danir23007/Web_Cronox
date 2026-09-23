@@ -25,12 +25,43 @@
   let loaderRemovalTimer = 0;
   let mediaReadyTimer = 0;
   let fitFrame = 0;
+  let expirationAtMs = null;
+  let serverEpochMs = 0;
+  let serverSyncMonotonicMs = 0;
+  let expirationTimer = 0;
+  let retryDelayMs = 15_000;
+  let checkInFlight = false;
+  let lastCheckMonotonicMs = 0;
   const requestFrame =
     window.requestAnimationFrame?.bind(window) ||
     ((callback) => window.setTimeout(callback, 0));
   const cancelFrame =
     window.cancelAnimationFrame?.bind(window) ||
     window.clearTimeout.bind(window);
+  const monotonicNow = () => window.performance?.now?.() ?? Date.now();
+  const estimatedServerNow = () =>
+    serverEpochMs
+      ? serverEpochMs + Math.max(0, monotonicNow() - serverSyncMonotonicMs)
+      : Date.now();
+
+  const syncServerClock = (serverTime, expiresAt) => {
+    const parsedServerTime = Date.parse(serverTime || "");
+    if (Number.isFinite(parsedServerTime)) {
+      serverEpochMs = parsedServerTime;
+      serverSyncMonotonicMs = monotonicNow();
+    }
+    const parsedExpiration = Date.parse(expiresAt || "");
+    expirationAtMs = Number.isFinite(parsedExpiration)
+      ? parsedExpiration
+      : null;
+  };
+  const leaveGate = () => {
+    if (typeof window.CRONOX_KEY_SCREEN_NAVIGATE === "function") {
+      window.CRONOX_KEY_SCREEN_NAVIGATE("/");
+      return;
+    }
+    location.replace("/");
+  };
 
   const viewportSize = () => ({
     width: Math.max(
@@ -291,7 +322,20 @@
     prepareMedia(source, mediaType);
   };
 
-  const load = async () => {
+  const scheduleExpirationCheck = (callback, delayOverride) => {
+    window.clearTimeout(expirationTimer);
+    const remaining = expirationAtMs === null
+      ? null
+      : expirationAtMs - estimatedServerNow();
+    if (remaining === null && delayOverride === undefined) return;
+    const delay = delayOverride ?? Math.max(0, Math.min(300_000, remaining + 50));
+    expirationTimer = window.setTimeout(callback, delay);
+  };
+
+  const load = async (initial = false) => {
+    if (checkInFlight) return;
+    checkInFlight = true;
+    lastCheckMonotonicMs = monotonicNow();
     try {
       const endpoint = `${base}/api/key-screen`;
       const response = await fetch(endpoint, {
@@ -302,6 +346,7 @@
       if (!response.ok)
         throw new Error(`La API pública respondió HTTP ${response.status}.`);
       const payload = await response.json();
+      syncServerClock(payload.serverTime, payload.expiresAt);
       if (!payload.enabled || !payload.screen) {
         console.error(
           "[CRONOX PANTALLA CLAVE] El servidor mostró la puerta, pero la API pública no devolvió una pantalla activa.",
@@ -311,13 +356,31 @@
             endpoint,
           },
         );
-        location.replace("/");
+        leaveGate();
         return;
       }
-      render(payload.screen);
+      retryDelayMs = 15_000;
+      if (initial || !screen) render(payload.screen);
+      scheduleExpirationCheck(() => load(false));
     } catch (error) {
-      showEmergencyFallback(error);
+      if (initial && !screen) showEmergencyFallback(error);
+      else {
+        console.error(
+          "[CRONOX PANTALLA CLAVE] No se pudo verificar la caducidad; se mantiene la puerta y se reintentará.",
+          error,
+        );
+        scheduleExpirationCheck(() => load(false), retryDelayMs);
+        retryDelayMs = Math.min(60_000, retryDelayMs * 2);
+      }
+    } finally {
+      checkInFlight = false;
     }
+  };
+
+  const refreshIfStale = () => {
+    if (document.visibilityState === "hidden") return;
+    if (monotonicNow() - lastCheckMonotonicMs < 5_000) return;
+    load(false);
   };
 
   el.form.addEventListener("submit", async (event) => {
@@ -384,7 +447,13 @@
   window.visualViewport?.addEventListener("scroll", fitComposition, {
     passive: true,
   });
+  document.addEventListener("visibilitychange", refreshIfStale);
+  window.addEventListener("focus", refreshIfStale);
   if (window.ResizeObserver)
     new ResizeObserver(fitComposition).observe(el.content);
-  load();
+  window.CRONOX_KEY_SCREEN_EXPIRATION = Object.freeze({
+    estimatedServerNow,
+    refresh: () => load(false),
+  });
+  load(true);
 })();

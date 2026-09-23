@@ -3,6 +3,7 @@ import {
   IsEmail,
   IsBoolean,
   IsEnum,
+  IsISO8601,
   IsHexColor,
   IsInt,
   IsNotEmpty,
@@ -10,7 +11,9 @@ import {
   IsString,
   Max,
   MaxLength,
+  Matches,
   Min,
+  ValidateIf,
 } from 'class-validator';
 import {
   KeyScreenControlStyle,
@@ -182,6 +185,15 @@ export class SelectKeyScreenDto {
 
 export class SetKeyScreenEnabledDto {
   @IsBoolean() enabled!: boolean;
+}
+
+export class SetKeyScreenExpirationDto {
+  @ValidateIf((_object, value) => value !== null)
+  @IsISO8601({ strict: true, strictSeparator: true })
+  @Matches(/(?:Z|[+-]\d{2}:\d{2})$/, {
+    message: 'expiresAt debe incluir una zona horaria explícita',
+  })
+  expiresAt!: string | null;
 }
 
 export class PreRegisterDto {

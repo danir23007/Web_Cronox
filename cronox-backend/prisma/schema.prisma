@@ -547,6 +547,7 @@ model AuthSession {
 model KeyScreenSettings {
   id             String     @id @default("global")
   enabled        Boolean    @default(false)
+  expiresAt      DateTime?  @db.Timestamptz(3)
   activeScreenId String?    @unique
   activeScreen   KeyScreen? @relation(fields: [activeScreenId], references: [id], onDelete: SetNull)
   updatedBy      Int?

@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-argument */
+/* eslint-disable @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-call, @typescript-eslint/require-await */
 import { BadRequestException, ConflictException } from '@nestjs/common';
 import { KeyScreenMode, UserAccountState } from '@prisma/client';
 import { KeyScreenService } from './key-screen.service';
@@ -50,6 +50,109 @@ describe('KeyScreenService', () => {
       sendPreRegistrationConfirmation: jest.fn(),
     };
     service = new KeyScreenService(prisma, {} as any, email);
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
+  it('keeps the manual switch authoritative and expires at the exact UTC instant', async () => {
+    jest.useFakeTimers();
+    jest.setSystemTime(new Date('2026-06-15T10:00:00.000Z'));
+    prisma.keyScreenSettings.findUnique.mockResolvedValue({
+      enabled: true,
+      expiresAt: new Date('2026-06-15T10:00:01.000Z'),
+      activeScreen: {
+        mode: KeyScreenMode.PREREGISTRATION,
+        mediaAssetId: 'asset-1',
+      },
+    });
+
+    await expect(service.shouldGatePublicHtml()).resolves.toBe(true);
+    jest.setSystemTime(new Date('2026-06-15T10:00:00.999Z'));
+    await expect(service.shouldGatePublicHtml()).resolves.toBe(true);
+    jest.setSystemTime(new Date('2026-06-15T10:00:01.000Z'));
+    await expect(service.shouldGatePublicHtml()).resolves.toBe(false);
+    jest.setSystemTime(new Date('2026-06-15T10:00:01.001Z'));
+    await expect(service.shouldGatePublicHtml()).resolves.toBe(false);
+
+    service.invalidateGateCache();
+    prisma.keyScreenSettings.findUnique.mockResolvedValue({
+      enabled: false,
+      expiresAt: new Date('2026-06-15T11:00:00.000Z'),
+      activeScreen: {
+        mode: KeyScreenMode.PREREGISTRATION,
+        mediaAssetId: 'asset-1',
+      },
+    });
+    await expect(service.shouldGatePublicHtml()).resolves.toBe(false);
+  });
+
+  it('persists or clears a future expiration and rejects invalid or past instants', async () => {
+    jest.useFakeTimers();
+    jest.setSystemTime(new Date('2026-01-15T11:00:00.000Z'));
+    prisma.keyScreenSettings.update.mockImplementation(
+      async ({ data }: any) => ({
+        id: 'global',
+        enabled: true,
+        activeScreenId: 'screen-1',
+        expiresAt: data.expiresAt,
+      }),
+    );
+
+    await expect(
+      service.setExpiration('2026-01-15T12:00:00.000Z', 7),
+    ).resolves.toMatchObject({
+      expiresAt: '2026-01-15T12:00:00.000Z',
+      effectiveEnabled: true,
+      serverTime: '2026-01-15T11:00:00.000Z',
+    });
+    expect(prisma.keyScreenSettings.update).toHaveBeenLastCalledWith({
+      where: { id: 'global' },
+      data: {
+        expiresAt: new Date('2026-01-15T12:00:00.000Z'),
+        updatedBy: 7,
+      },
+    });
+
+    await expect(service.setExpiration(null, 7)).resolves.toMatchObject({
+      expiresAt: null,
+      effectiveEnabled: true,
+    });
+    prisma.keyScreenSettings.findUnique.mockResolvedValue({
+      enabled: true,
+      expiresAt: null,
+      activeScreen: {
+        mode: KeyScreenMode.PREREGISTRATION,
+        mediaAssetId: 'asset-1',
+      },
+    });
+    await expect(service.shouldGatePublicHtml()).resolves.toBe(true);
+    await expect(service.setExpiration('not-a-date', 7)).rejects.toBeInstanceOf(
+      BadRequestException,
+    );
+    await expect(
+      service.setExpiration('2026-01-15T12:00:00', 7),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    await expect(
+      service.setExpiration('2026-01-15T11:00:00.000Z', 7),
+    ).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('rejects preregistration at and after expiration', async () => {
+    jest.useFakeTimers();
+    jest.setSystemTime(new Date('2026-07-01T08:00:00.000Z'));
+    prisma.keyScreenSettings.findUnique.mockResolvedValue({
+      enabled: true,
+      expiresAt: new Date('2026-07-01T08:00:00.000Z'),
+      activeScreenId: 'screen-1',
+      activeScreen: { mode: KeyScreenMode.PREREGISTRATION },
+    });
+
+    await expect(service.preregister('test@example.com')).rejects.toThrow(
+      'Pantalla de preregistro no disponible',
+    );
+    expect(prisma.user.create).not.toHaveBeenCalled();
   });
 
   it('fails closed if the persistent gate state cannot be read', async () => {

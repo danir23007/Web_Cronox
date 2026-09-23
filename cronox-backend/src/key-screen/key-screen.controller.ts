@@ -26,6 +26,7 @@ import {
   PreRegisterDto,
   SelectKeyScreenDto,
   SetKeyScreenEnabledDto,
+  SetKeyScreenExpirationDto,
   UpdateKeyScreenDto,
 } from './dto/key-screen.dto';
 import { KeyScreenService } from './key-screen.service';
@@ -67,6 +68,12 @@ export class AdminKeyScreenController {
     @CurrentUser('id') id?: number,
   ) {
     return this.keyScreen.setEnabled(dto.enabled, id);
+  }
+  @Patch('expiration') setExpiration(
+    @Body() dto: SetKeyScreenExpirationDto,
+    @CurrentUser('id') id?: number,
+  ) {
+    return this.keyScreen.setExpiration(dto.expiresAt, id);
   }
   @Patch('active') activate(
     @Body() dto: SelectKeyScreenDto,

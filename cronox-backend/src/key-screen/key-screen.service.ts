@@ -16,11 +16,18 @@ import { CreateKeyScreenDto, UpdateKeyScreenDto } from './dto/key-screen.dto';
 const GLOBAL_ID = 'global';
 const CONFIRMATION_CLAIM_STALE_MS = 10 * 60 * 1000;
 const ALREADY_REGISTERED_MESSAGE = 'Este usuario ya está registrado.';
+type PublicKeyScreen = Prisma.KeyScreenGetPayload<{
+  include: { mediaAsset: true };
+}>;
 
 @Injectable()
 export class KeyScreenService {
   private readonly logger = new Logger(KeyScreenService.name);
-  private cachedGate: { enabled: boolean; expiresAt: number } | null = null;
+  private cachedGate: {
+    enabled: boolean;
+    expirationMs: number | null;
+    validUntilMs: number;
+  } | null = null;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -33,7 +40,8 @@ export class KeyScreenService {
   }
 
   async shouldGatePublicHtml(): Promise<boolean> {
-    if (this.cachedGate && this.cachedGate.expiresAt > Date.now()) {
+    const now = Date.now();
+    if (this.cachedGate && this.cachedGate.validUntilMs > now) {
       return this.cachedGate.enabled;
     }
     try {
@@ -43,16 +51,30 @@ export class KeyScreenService {
           activeScreen: { select: { mode: true, mediaAssetId: true } },
         },
       });
+      const expirationMs = settings?.expiresAt?.getTime() ?? null;
       const enabled = Boolean(
         settings?.enabled &&
+          (expirationMs === null || now < expirationMs) &&
           settings.activeScreen?.mode === KeyScreenMode.PREREGISTRATION &&
           settings.activeScreen.mediaAssetId,
       );
-      this.cachedGate = { enabled, expiresAt: Date.now() + 1_000 };
+      this.cachedGate = {
+        enabled,
+        expirationMs,
+        validUntilMs:
+          expirationMs !== null && expirationMs > now
+            ? Math.min(now + 1_000, expirationMs)
+            : now + 1_000,
+      };
       return enabled;
     } catch {
       this.logger.error('No se pudo comprobar el estado de Pantalla Clave');
-      return this.cachedGate?.enabled ?? true;
+      if (!this.cachedGate) return true;
+      return Boolean(
+        this.cachedGate.enabled &&
+          (this.cachedGate.expirationMs === null ||
+            now < this.cachedGate.expirationMs),
+      );
     }
   }
 
@@ -69,23 +91,36 @@ export class KeyScreenService {
         orderBy: { createdAt: 'desc' },
       }),
     ]);
-    return { settings, screens, preregisteredCount, assets };
+    return {
+      settings: this.toAdminSettings(settings),
+      screens,
+      preregisteredCount,
+      assets,
+    };
   }
 
   async publicState() {
     try {
+      const now = new Date();
       const settings = await this.prisma.keyScreenSettings.findUnique({
         where: { id: GLOBAL_ID },
         include: { activeScreen: { include: { mediaAsset: true } } },
       });
       const screen = settings?.activeScreen;
-      if (!settings?.enabled) return { enabled: false };
+      const timing = {
+        serverTime: now.toISOString(),
+        expiresAt: settings?.expiresAt?.toISOString() ?? null,
+      };
+      if (!this.isEffectivelyEnabled(settings, now)) {
+        return { enabled: false, ...timing };
+      }
       if (!screen) {
         this.logger.error(
           'Pantalla Clave está activa, pero activeScreenId no resuelve una pantalla.',
         );
         return {
           enabled: true,
+          ...timing,
           screen: null,
           diagnostic: 'ACTIVE_SCREEN_MISSING',
         };
@@ -96,11 +131,16 @@ export class KeyScreenService {
         );
         return {
           enabled: true,
+          ...timing,
           screen: null,
           diagnostic: 'MEDIA_ASSET_MISSING',
         };
       }
-      return { enabled: true, screen: this.toPublicScreen(screen) };
+      return {
+        enabled: true,
+        ...timing,
+        screen: this.toPublicScreen(screen),
+      };
     } catch (error) {
       this.logger.error(
         'La API pública no pudo cargar la configuración persistida de Pantalla Clave.',
@@ -170,7 +210,7 @@ export class KeyScreenService {
       update: { activeScreenId: screenId, updatedBy: adminId },
     });
     this.invalidateGateCache();
-    return settings;
+    return this.toAdminSettings(settings);
   }
 
   async setEnabled(enabled: boolean, adminId?: number) {
@@ -195,7 +235,36 @@ export class KeyScreenService {
       data: { enabled, updatedBy: adminId },
     });
     this.invalidateGateCache();
-    return settings;
+    return this.toAdminSettings(settings);
+  }
+
+  async setExpiration(expiresAt: string | null, adminId?: number) {
+    let parsed: Date | null = null;
+    if (expiresAt !== null) {
+      if (!/(?:Z|[+-]\d{2}:\d{2})$/.test(expiresAt)) {
+        throw new BadRequestException(
+          'La fecha debe incluir una zona horaria explícita.',
+        );
+      }
+      parsed = new Date(expiresAt);
+      if (!Number.isFinite(parsed.getTime())) {
+        throw new BadRequestException(
+          'La fecha de desactivación no es válida.',
+        );
+      }
+      if (parsed.getTime() <= Date.now()) {
+        throw new BadRequestException(
+          'La fecha debe estar en el futuro. Para desactivar ahora, usa el interruptor principal.',
+        );
+      }
+    }
+    await this.ensureSettings();
+    const settings = await this.prisma.keyScreenSettings.update({
+      where: { id: GLOBAL_ID },
+      data: { expiresAt: parsed, updatedBy: adminId },
+    });
+    this.invalidateGateCache();
+    return this.toAdminSettings(settings);
   }
 
   async remove(id: string) {
@@ -238,7 +307,8 @@ export class KeyScreenService {
           include: { activeScreen: true },
         });
         if (
-          !active?.enabled ||
+          !active ||
+          !this.isEffectivelyEnabled(active) ||
           active.activeScreen?.mode !== KeyScreenMode.PREREGISTRATION
         ) {
           throw new NotFoundException('Pantalla de preregistro no disponible');
@@ -340,6 +410,30 @@ export class KeyScreenService {
     });
   }
 
+  private isEffectivelyEnabled(
+    settings: { enabled?: boolean; expiresAt?: Date | null } | null | undefined,
+    now = new Date(),
+  ) {
+    return Boolean(
+      settings?.enabled &&
+        (!settings.expiresAt || settings.expiresAt.getTime() > now.getTime()),
+    );
+  }
+
+  private toAdminSettings(settings: {
+    enabled: boolean;
+    expiresAt?: Date | null;
+    [key: string]: unknown;
+  }) {
+    const now = new Date();
+    return {
+      ...settings,
+      expiresAt: settings.expiresAt?.toISOString() ?? null,
+      effectiveEnabled: this.isEffectivelyEnabled(settings, now),
+      serverTime: now.toISOString(),
+    };
+  }
+
   private async assertKeyScreenAsset(id: string) {
     const asset = await this.prisma.websiteMediaAsset.findUnique({
       where: { id },
@@ -351,8 +445,11 @@ export class KeyScreenService {
     }
   }
 
-  private toPublicScreen(screen: any) {
+  private toPublicScreen(screen: PublicKeyScreen) {
     const { mediaAsset } = screen;
+    if (!mediaAsset) {
+      throw new Error('La pantalla pública no tiene multimedia asociada.');
+    }
     return {
       mode: screen.mode,
       desktopFocalX: screen.desktopFocalX,
