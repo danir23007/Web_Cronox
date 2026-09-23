@@ -36,9 +36,9 @@ const initialPlacement = {
   category: 'Portada',
   mediaType: 'video',
   authority: 'static',
-  source: '/assets/VIDEO_LOGO_CRONOX.mp4',
+  source: '/assets/portada-demo.mp4',
   poster: '/assets/logo_banner.png',
-  sourceFilename: 'VIDEO_LOGO_CRONOX.mp4',
+  sourceFilename: 'portada-demo.mp4',
   frame: {
     desktop: 'Viewport actual',
     tablet: '768 \u00d7 1024',
@@ -80,6 +80,21 @@ const defineVideoDimensions = (dom: JSDOM) => {
   });
 };
 
+const defineImageDimensions = (dom: JSDOM) => {
+  Object.defineProperty(dom.window.HTMLImageElement.prototype, 'naturalWidth', {
+    configurable: true,
+    get: () => 1920,
+  });
+  Object.defineProperty(
+    dom.window.HTMLImageElement.prototype,
+    'naturalHeight',
+    {
+      configurable: true,
+      get: () => 1080,
+    },
+  );
+};
+
 const makeAdminDom = () => {
   const dom = new JSDOM(adminHtml, {
     url: 'https://admin.example.test/admin.html',
@@ -117,9 +132,9 @@ const makeAdminDom = () => {
             videos: [
               {
                 id: 'builtin:home.hero.video',
-                source: '/assets/VIDEO_LOGO_CRONOX.mp4',
+                source: '/assets/portada-demo.mp4',
                 poster: '/assets/logo_banner.png',
-                originalFilename: 'VIDEO_LOGO_CRONOX.mp4',
+                originalFilename: 'portada-demo.mp4',
                 mediaType: 'video',
                 builtin: true,
                 activeFor: activeAssetId ? [] : ['home.hero.video'],
@@ -141,10 +156,10 @@ const makeAdminDom = () => {
         mediaType: body.assetId ? 'image' : 'video',
         source: body.assetId
           ? 'https://storage.example.test/portada.jpg'
-          : '/assets/VIDEO_LOGO_CRONOX.mp4',
+          : '/assets/portada-demo.mp4',
         sourceFilename: body.assetId
           ? 'portada-anterior.jpg'
-          : 'VIDEO_LOGO_CRONOX.mp4',
+          : 'portada-demo.mp4',
         poster: body.assetId ? null : '/assets/logo_banner.png',
         revision: placement.revision + 1,
       };
@@ -194,6 +209,7 @@ const makeAdminDom = () => {
     value: jest.fn().mockResolvedValue(undefined),
   });
   defineVideoDimensions(dom);
+  defineImageDimensions(dom);
   const stage = dom.window.document.getElementById('mediaPreviewStage')!;
   stage.getBoundingClientRect = () => ({ width: 720, height: 540 }) as DOMRect;
   const preview = dom.window.document.getElementById('mediaPreviewFrame')!;
@@ -602,7 +618,7 @@ const makePublicDom = (
   holdInitialLoad = false,
 ) => {
   const dom = new JSDOM(
-    '<!doctype html><html><body><section class="hero-video-section"><video class="hero-video" data-media-placement="home.hero.video"></video></section></body></html>',
+    '<!doctype html><html><body><section class="hero-video-section"><img class="hero-video" data-media-placement="home.hero.video" alt=""></section></body></html>',
     { url: 'https://store.example.test/', runScripts: 'outside-only' },
   );
   Object.defineProperty(dom.window, 'innerWidth', { value: viewport.width });
@@ -629,6 +645,7 @@ const makePublicDom = (
     });
   }
   defineVideoDimensions(dom);
+  defineImageDimensions(dom);
   const section = dom.window.document.querySelector('section')!;
   section.getBoundingClientRect = () =>
     ({ width: viewport.width, height: viewport.height }) as DOMRect;
@@ -660,7 +677,7 @@ describe('public hero framing', () => {
             desktop: baseline,
             tablet: null,
             mobile: null,
-            source: '/assets/VIDEO_LOGO_CRONOX.mp4',
+            source: '/assets/portada-demo.mp4',
             poster: '/assets/logo_banner.png',
             mediaType: 'video',
             heroText: {
@@ -721,7 +738,7 @@ describe('public hero framing', () => {
               desktop: baseline,
               tablet: baseline,
               mobile: baseline,
-              source: '/assets/VIDEO_LOGO_CRONOX.mp4',
+              source: '/assets/portada-demo.mp4',
               mediaType: 'video',
               heroText: {
                 enabled: true,
@@ -756,7 +773,7 @@ describe('public hero framing', () => {
             desktop: baseline,
             tablet: null,
             mobile,
-            source: '/assets/VIDEO_LOGO_CRONOX.mp4',
+            source: '/assets/portada-demo.mp4',
             poster: '/assets/logo_banner.png',
             mediaType: 'video',
           },
@@ -802,7 +819,7 @@ describe('public hero framing', () => {
     );
     await flushAsync();
     await flushAsync();
-    const video = dom.window.document.querySelector('video') as HTMLElement;
+    const image = dom.window.document.querySelector('img') as HTMLElement;
     const engine = (dom.window as any).CRONOX_MEDIA_GEOMETRY;
     const expected = engine.calculate({
       frameWidth: 1440,
@@ -811,7 +828,7 @@ describe('public hero framing', () => {
       mediaHeight: 1080,
       ...baseline,
     });
-    expect(video.style.transform).toBe(
+    expect(image.style.transform).toBe(
       `translate3d(${expected.translateX}px, ${expected.translateY}px, 0)`,
     );
     expect(dom.window.document.documentElement.dataset.mediaFramingState).toBe(
@@ -852,7 +869,7 @@ describe('public hero framing', () => {
     expect(hero?.classList.contains('hero-video')).toBe(true);
   });
 
-  it('defers a hero media-type swap until the initial document load finishes', async () => {
+  it('keeps the configured hero image in the initial document through load', async () => {
     const fetchMock = jest.fn().mockResolvedValue(
       jsonResponse({
         version: 5,
@@ -877,11 +894,13 @@ describe('public hero framing', () => {
     await flushAsync();
     await flushAsync();
 
-    expect(
-      dom.window.document.querySelector(
-        '[data-media-placement="home.hero.video"]',
-      )?.tagName,
-    ).toBe('VIDEO');
+    const beforeLoad = dom.window.document.querySelector(
+      '[data-media-placement="home.hero.video"]',
+    );
+    expect(beforeLoad?.tagName).toBe('IMG');
+    expect(beforeLoad?.getAttribute('src')).toBe(
+      'https://storage.example.test/portada.jpg',
+    );
 
     finishInitialLoad();
     await flushAsync();
@@ -897,8 +916,11 @@ describe('public hero framing', () => {
 
   it('loads framing assets only on the homepage and leaves Products/Gallery untouched', () => {
     expect(indexHtml).toContain('media-framing-geometry.js?v=6');
-    expect(indexHtml).toContain('media-framing.js?v=6');
+    expect(indexHtml).toContain('media-framing.js?v=7');
+    expect(indexHtml).toContain('responsive-images.js?v=3');
     expect(indexHtml).toContain('data-media-placement="home.hero.video"');
+    expect(indexHtml).toContain('<img class="hero-video"');
+    expect(indexHtml).not.toContain('<video class="hero-video"');
     expect(publicStyles).toContain(
       '.hero-video[data-media-placement="home.hero.video"]',
     );

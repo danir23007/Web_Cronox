@@ -38,39 +38,39 @@ export type MediaPlacementDefinition = Readonly<{
  * Server-owned allowlist of structural/editorial media that belongs to the
  * website layout itself. Product and Gallery media have their own managers.
  */
-export const MEDIA_PLACEMENTS = Object.freeze([
-  {
-    key: 'home.hero.video',
-    label: 'V\u00eddeo principal de portada',
-    route: 'Portada (/)',
-    publicUrl: '/',
-    category: 'Portada',
-    mediaType: 'video',
-    sourceKind: 'static',
-    staticSource: 'assets/VIDEO_LOGO_CRONOX.mp4',
-    staticPoster: 'assets/logo_banner.png',
-    libraryFolder: {
-      key: 'portadas',
-      label: 'PORTADAS',
+export const MEDIA_PLACEMENTS: readonly MediaPlacementDefinition[] =
+  Object.freeze([
+    {
+      key: 'home.hero.video',
+      label: 'Imagen principal de portada',
+      route: 'Portada (/)',
+      publicUrl: '/',
+      category: 'Portada',
+      mediaType: 'image',
+      sourceKind: 'static',
+      staticSource: 'assets/logo_banner.png',
+      libraryFolder: {
+        key: 'portadas',
+        label: 'PORTADAS',
+      },
+      frame: {
+        desktop: 'Viewport actual',
+        tablet: '768 \u00d7 1024',
+        mobile: '390 \u00d7 844',
+      },
+      preview: {
+        kind: 'viewport',
+        tablet: { width: 768, height: 1024 },
+        mobile: { width: 390, height: 844 },
+      },
+      defaults: {
+        focalX: 50,
+        focalY: 50,
+        zoom: 1,
+        fit: MediaFitMode.COVER,
+      },
     },
-    frame: {
-      desktop: 'Viewport actual',
-      tablet: '768 \u00d7 1024',
-      mobile: '390 \u00d7 844',
-    },
-    preview: {
-      kind: 'viewport',
-      tablet: { width: 768, height: 1024 },
-      mobile: { width: 390, height: 844 },
-    },
-    defaults: {
-      focalX: 50,
-      focalY: 50,
-      zoom: 1,
-      fit: MediaFitMode.COVER,
-    },
-  },
-] satisfies readonly MediaPlacementDefinition[]);
+  ] satisfies readonly MediaPlacementDefinition[]);
 
 export const MEDIA_PLACEMENT_BY_KEY = new Map(
   MEDIA_PLACEMENTS.map((placement) => [placement.key, placement]),

@@ -87,7 +87,8 @@ async function main() {
   const newsletter = read('cronox-front/assets/newsletter-renderer.js');
   assert.match(index, /class="preloader__logo"[^>]*src=|src="assets\/CRONOX-preloader\.webp"[\s\S]*?class="preloader__logo"/);
   assert.match(index, /class="topbar__logo"[\s\S]*?src="assets\/logo-topbar\.webp"/);
-  assert.match(index, /class="hero-video"[^>]*poster="assets\/logo_banner\.png"/);
+  assert.match(index, /<img class="hero-video"[^>]*data-media-placement="home\.hero\.video"/);
+  assert.doesNotMatch(index, /<video class="hero-video"/);
   assert.match(index, /class="footer-logo"/);
   assert.match(checkout, /src="assets\/CRONOX-preloader\.webp"/);
   assert.match(profile, /img\.src = 'assets\/CRONOX-preloader\.webp'/);

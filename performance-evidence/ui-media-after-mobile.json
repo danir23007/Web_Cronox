@@ -25,7 +25,7 @@
         ],
         "hero": [
           {
-            "src": "http://127.0.0.1:51577/assets/VIDEO_LOGO_CRONOX.mp4",
+            "src": "http://127.0.0.1:51577/assets/[removed-hero-video]",
             "readyState": 4,
             "networkState": 1,
             "time": 7.626084,
@@ -731,7 +731,7 @@
           "bytes": 69320
         },
         {
-          "url": "http://127.0.0.1:51577/assets/VIDEO_LOGO_CRONOX.mp4",
+          "url": "http://127.0.0.1:51577/assets/[removed-hero-video]",
           "type": "Media",
           "method": "GET",
           "at": 71,
@@ -1132,7 +1132,7 @@
         ],
         "hero": [
           {
-            "src": "http://127.0.0.1:51577/assets/VIDEO_LOGO_CRONOX.mp4",
+            "src": "http://127.0.0.1:51577/assets/[removed-hero-video]",
             "readyState": 4,
             "networkState": 1,
             "time": 7.768147,
@@ -1838,7 +1838,7 @@
           "bytes": 267
         },
         {
-          "url": "http://127.0.0.1:51577/assets/VIDEO_LOGO_CRONOX.mp4",
+          "url": "http://127.0.0.1:51577/assets/[removed-hero-video]",
           "type": "Media",
           "method": "GET",
           "at": 46,
@@ -2732,7 +2732,7 @@
         ],
         "hero": [
           {
-            "src": "http://127.0.0.1:51577/assets/VIDEO_LOGO_CRONOX.mp4",
+            "src": "http://127.0.0.1:51577/assets/[removed-hero-video]",
             "readyState": 4,
             "networkState": 2,
             "time": 2.786996,
@@ -2774,7 +2774,7 @@
       ],
       "pending": [
         {
-          "url": "http://127.0.0.1:51577/assets/VIDEO_LOGO_CRONOX.mp4",
+          "url": "http://127.0.0.1:51577/assets/[removed-hero-video]",
           "type": "Media",
           "method": "GET",
           "at": 3837,
@@ -3432,7 +3432,7 @@
           "bytes": 69320
         },
         {
-          "url": "http://127.0.0.1:51577/assets/VIDEO_LOGO_CRONOX.mp4",
+          "url": "http://127.0.0.1:51577/assets/[removed-hero-video]",
           "type": "Media",
           "method": "GET",
           "at": 677,
@@ -3723,7 +3723,7 @@
           "failed": "net::ERR_FAILED"
         },
         {
-          "url": "http://127.0.0.1:51577/assets/VIDEO_LOGO_CRONOX.mp4",
+          "url": "http://127.0.0.1:51577/assets/[removed-hero-video]",
           "type": "Media",
           "method": "GET",
           "at": 3837,

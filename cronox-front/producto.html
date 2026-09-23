@@ -11,7 +11,7 @@
   <meta name="description" content="Detalle de producto CRONOX — Dark streetwear premium.">
 
   <!-- CSS global -->
-  <link id="cronox-main-style" rel="stylesheet" href="">
+  <link id="cronox-main-style" rel="stylesheet" href="assets/store.css?v=98">
   <script src="assets/version.js?v=98"></script>
   <script>
     (function () {
@@ -68,6 +68,7 @@
       border:1px solid rgba(255,255,255,.12);
       border-radius:0;
       min-height:320px;
+      height:75svh;
       display:flex;
       align-items:center;
       justify-content:center;
@@ -179,12 +180,14 @@
     /* Info derecha */
     .pdp__info{ display:flex; flex-direction:column; gap:12px; }
     .pdp__name{
+      min-height:1.2em;
       font-size: clamp(22px, 3.5vw, 32px);
       letter-spacing:.02em;
       margin:.2em 0 0;
       text-transform:uppercase;
     }
-    .pdp__price{ color:#ddd; font-weight:700; font-size: clamp(18px, 2.5vw, 22px); margin:0; }
+    .pdp__price{ color:#ddd; font-weight:700; font-size: clamp(18px, 2.5vw, 22px); margin:0; min-height:1.2em; }
+    .pdp__desc:empty{ display:none; }
     .pdp__desc{ color:#cfcfcf; line-height:1.6; margin:0 0 .8em; }
 
     .pdp__actions{
@@ -203,7 +206,7 @@
       width:100%;
     }
     .pdp__label-text{ font-size:13px; letter-spacing:.08em; text-transform:uppercase; color:#bbb; }
-    .pdp__size-buttons{ display:inline-flex; flex-wrap:wrap; gap:10px; justify-content:flex-start; }
+    .pdp__size-buttons{ display:inline-flex; flex-wrap:wrap; gap:10px; justify-content:flex-start; min-height:44px; }
     .size-btn{
       position:relative;
       overflow:hidden;
@@ -569,8 +572,8 @@
   </footer>
 
   <script src="assets/size-systems.js?v=1"></script>
-  <script src="assets/api.js?v=7"></script>
-  <script src="assets/responsive-images.js?v=2"></script>
+  <script src="assets/api.js?v=8"></script>
+  <script src="assets/responsive-images.js?v=3"></script>
   <script>
     (function(){
       var yearEl = document.getElementById('anio');
@@ -613,7 +616,7 @@
   </aside>
 
   <script src="assets/app.js?v=70" defer></script>
-  <script src="assets/cart-badge.js?v=43" defer></script>
+  <script src="assets/cart-badge.js?v=44" defer></script>
   <script src="assets/media-framing-geometry.js?v=6" defer></script>
   <script src="assets/product-card-framing.js?v=1" defer></script>
   <script src="assets/products.js?v=59" defer></script>

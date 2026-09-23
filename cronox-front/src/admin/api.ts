@@ -732,6 +732,16 @@ import { installSessionTransport } from './session';
     }
   };
 
+  let pendingMe: Promise<UnknownRecord | null> | null = null;
+  if (typeof window !== 'undefined') {
+    window.addEventListener('cronox:session-ended', () => {
+      pendingMe = null;
+    });
+    window.addEventListener('cronox:userChanged', () => {
+      pendingMe = null;
+    });
+  }
+
   const request = async <T = unknown>(
     path: string,
     options: RequestOptions = {},
@@ -741,6 +751,8 @@ import { installSessionTransport } from './session';
     const isFormData =
       typeof FormData !== 'undefined' && options.body instanceof FormData;
     const method = options.method || 'GET';
+    const mutating = !['GET', 'HEAD'].includes(method.toUpperCase());
+    if (mutating) pendingMe = null;
     const config: RequestInit = {
       method,
       headers,
@@ -801,6 +813,8 @@ import { installSessionTransport } from './session';
         }
       }
       throw err;
+    } finally {
+      if (mutating) pendingMe = null;
     }
   };
 
@@ -927,7 +941,7 @@ import { installSessionTransport } from './session';
     await request('/api/auth/logout', { method: 'POST' });
   };
 
-  api.getMe = async () => {
+  const readMe = async () => {
     try {
       const data = await request<UnknownRecord>('/api/me');
       return data || null;
@@ -1571,6 +1585,15 @@ import { installSessionTransport } from './session';
       ),
       meta: ((data as { meta?: UnknownRecord }).meta || {}) as UnknownRecord,
     };
+  };
+
+  api.getMe = () => {
+    if (pendingMe) return pendingMe;
+    const reading = readMe().finally(() => {
+      if (pendingMe === reading) pendingMe = null;
+    });
+    pendingMe = reading;
+    return reading;
   };
   api.getProductsPage = getProductsPage;
 

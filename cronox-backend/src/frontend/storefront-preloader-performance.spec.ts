@@ -121,16 +121,16 @@ describe('storefront preloader performance', () => {
     });
   });
 
-  it('preserves the hero video, poster, playback attributes and preloader image', () => {
+  it('renders the configured hero image directly and preserves the preloader image', () => {
     const dom = new JSDOM(
       readFileSync(path.join(root, 'cronox-front/index.html'), 'utf8'),
     );
-    const video = dom.window.document.querySelector('video.hero-video')!;
-    expect(video.getAttribute('src')).toBe('assets/VIDEO_LOGO_CRONOX.mp4');
-    expect(video.getAttribute('poster')).toBe('assets/logo_banner.png');
-    for (const attribute of ['autoplay', 'muted', 'loop', 'playsinline']) {
-      expect(video.hasAttribute(attribute)).toBe(true);
-    }
+    const image = dom.window.document.querySelector('img.hero-video')!;
+    expect(image).not.toBeNull();
+    expect(image.getAttribute('src')).toContain('/portadas/fotos/variants/');
+    expect(image.getAttribute('srcset')).toContain('/mobile.webp 1600w');
+    expect(image.getAttribute('srcset')).toContain('/desktop.webp 3000w');
+    expect(dom.window.document.querySelector('video.hero-video')).toBeNull();
     expect(
       dom.window.document.querySelector('#preloader img')?.getAttribute('src'),
     ).toBe('assets/CRONOX-preloader.webp');

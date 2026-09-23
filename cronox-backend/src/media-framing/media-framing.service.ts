@@ -461,7 +461,7 @@ export class MediaFramingService {
         source: `/${definition.staticSource}`,
         poster: definition.staticPoster ? `/${definition.staticPoster}` : null,
         originalFilename: safeFilename(definition.staticSource),
-        mimeType: 'video/mp4',
+        mimeType: definition.mediaType === 'video' ? 'video/mp4' : 'image/png',
         mediaType: definition.mediaType,
         fileSize: null,
         width: null,

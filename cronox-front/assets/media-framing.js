@@ -18,9 +18,14 @@
         desktop: DEFAULT_FRAME,
         tablet: null,
         mobile: null,
-        source: "/assets/VIDEO_LOGO_CRONOX.mp4",
-        poster: "/assets/logo_banner.png",
-        mediaType: "video",
+        source: "https://frqlgocxnyppzdgxxjuq.supabase.co/storage/v1/object/public/gallery/multimedia-web/portadas/fotos/2026/09/1789515856282-30978632-9069-4813-9fce-1814d60f3751.png",
+        poster: null,
+        mediaType: "image",
+        variants: Object.freeze({
+          mobile: Object.freeze({ url: "https://frqlgocxnyppzdgxxjuq.supabase.co/storage/v1/object/public/gallery/multimedia-web/portadas/fotos/variants/53f241f019f5627701c65fe084e33ad9338e9f7c7085a25b44be6d5f9df5d402/mobile.webp", width: 1600, height: 900 }),
+          tablet: Object.freeze({ url: "https://frqlgocxnyppzdgxxjuq.supabase.co/storage/v1/object/public/gallery/multimedia-web/portadas/fotos/variants/53f241f019f5627701c65fe084e33ad9338e9f7c7085a25b44be6d5f9df5d402/tablet.webp", width: 2200, height: 1238 }),
+          desktop: Object.freeze({ url: "https://frqlgocxnyppzdgxxjuq.supabase.co/storage/v1/object/public/gallery/multimedia-web/portadas/fotos/variants/53f241f019f5627701c65fe084e33ad9338e9f7c7085a25b44be6d5f9df5d402/desktop.webp", width: 3000, height: 1688 }),
+        }),
         heroText: Object.freeze({
           enabled: false,
           content: "",
@@ -37,8 +42,6 @@
   const tabletQuery = window.matchMedia?.("(max-width: 1023px)");
   const observedFrames = new WeakSet();
   const observedMedia = new WeakSet();
-  let pendingHeroSwap = null;
-  let heroSwapScheduled = false;
   let configuration = DEFAULT_CONFIGURATION;
   let requestPromise = null;
 
@@ -184,28 +187,6 @@
     geometry?.applyHeroText?.(node, section, heroText, device);
   };
 
-  const deferHeroSwapUntilLoad = (current, replacement) => {
-    pendingHeroSwap = { current, replacement };
-    if (heroSwapScheduled) return;
-    heroSwapScheduled = true;
-    window.addEventListener(
-      "load",
-      () => {
-        heroSwapScheduled = false;
-        const pending = pendingHeroSwap;
-        pendingHeroSwap = null;
-        if (!pending?.current?.isConnected) return;
-        pending.current.replaceWith(pending.replacement);
-        if (typeof window.requestAnimationFrame === "function") {
-          window.requestAnimationFrame(applyAll);
-        } else {
-          applyAll();
-        }
-      },
-      { once: true },
-    );
-  };
-
   const ensureHeroElement = () => {
     const configured = configuration.placements[HERO_KEY];
     let element = pageDocument.querySelector(
@@ -230,11 +211,7 @@
         replacement.alt = "";
         replacement.decoding = "async";
       }
-      if (pageDocument.readyState === "complete") {
-        element.replaceWith(replacement);
-      } else {
-        deferHeroSwapUntilLoad(element, replacement);
-      }
+      element.replaceWith(replacement);
       element = replacement;
     }
     const source = configured.source;

@@ -100,16 +100,17 @@ describe('MediaFramingService', () => {
       desktop: { focalX: 50, focalY: 50, zoom: 1, fit: 'COVER' },
       tablet: null,
       mobile: null,
-      source: '/assets/VIDEO_LOGO_CRONOX.mp4',
-      mediaType: 'video',
-      poster: '/assets/logo_banner.png',
+      source: '/assets/logo_banner.png',
+      variants: null,
+      mediaType: 'image',
+      poster: null,
       heroText: expect.objectContaining({ enabled: false, content: '' }),
     });
     expect(adminResponse.placements).toHaveLength(1);
     expect(adminResponse.placements[0]).toMatchObject({
       key: 'home.hero.video',
       authority: 'static',
-      source: '/assets/VIDEO_LOGO_CRONOX.mp4',
+      source: '/assets/logo_banner.png',
       preview: {
         kind: 'viewport',
         tablet: { width: 768, height: 1024 },
@@ -283,16 +284,17 @@ describe('MediaFramingService', () => {
       label: 'PORTADAS',
       placementKeys: ['home.hero.video'],
     });
-    expect(before.folders[0].photos).toHaveLength(1);
-    expect(before.folders[0].videos).toEqual(
+    expect(before.folders[0].photos).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           id: 'builtin:home.hero.video',
-          poster: '/assets/logo_banner.png',
+          source: '/assets/logo_banner.png',
+          mediaType: 'image',
           builtin: true,
         }),
       ]),
     );
+    expect(before.folders[0].videos).toEqual([]);
 
     const selected = await service.selectAsset(
       'home.hero.video',
@@ -319,8 +321,8 @@ describe('MediaFramingService', () => {
     );
     expect(restored.placement).toMatchObject({
       activeAssetId: null,
-      mediaType: 'video',
-      source: '/assets/VIDEO_LOGO_CRONOX.mp4',
+      mediaType: 'image',
+      source: '/assets/logo_banner.png',
     });
     expect(mediaAssets).toHaveLength(1);
   });

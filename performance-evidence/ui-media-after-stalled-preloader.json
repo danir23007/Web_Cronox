@@ -25,7 +25,7 @@
         ],
         "hero": [
           {
-            "src": "http://127.0.0.1:54870/assets/VIDEO_LOGO_CRONOX.mp4",
+            "src": "http://127.0.0.1:54870/assets/[removed-hero-video]",
             "readyState": 4,
             "networkState": 1,
             "time": 5.639677,
@@ -705,7 +705,7 @@
           "bytes": 69320
         },
         {
-          "url": "http://127.0.0.1:54870/assets/VIDEO_LOGO_CRONOX.mp4",
+          "url": "http://127.0.0.1:54870/assets/[removed-hero-video]",
           "type": "Media",
           "method": "GET",
           "at": 58,

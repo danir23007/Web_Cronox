@@ -132,6 +132,13 @@ body.page-checkout summary:focus-visible {
 
 .express-checkout {
   margin-bottom: 30px;
+  min-height: 112px;
+}
+
+/* Keep the wallet slot stable while its availability is discovered. */
+.express-checkout[hidden] {
+  display: block !important;
+  visibility: hidden;
 }
 
 .express-checkout .checkout-kicker {
@@ -683,7 +690,8 @@ body.page-checkout summary:focus-visible {
 }
 
 .payment-element {
-  min-height: 48px;
+  /* Reserve room for the card form and optional billing fields. */
+  min-height: 900px;
 }
 
 .checkout-pay-button {

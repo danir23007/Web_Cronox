@@ -350,8 +350,8 @@ describe('CRONOX responsive design system', () => {
       'assets/product-detail.css?v=2',
     );
     expect(readFrontend('gallery.html')).toContain('assets/info-page.css?v=3');
-    expect(readFrontend('cart.html')).toContain('assets/cart.css?v=4');
-    expect(readFrontend('checkout.html')).toContain('assets/checkout.css?v=19');
+    expect(readFrontend('cart.html')).toContain('assets/cart.css?v=5');
+    expect(readFrontend('checkout.html')).toContain('assets/checkout.css?v=20');
     expect(readFrontend('checkout-success.html')).toContain(
       'assets/checkout-success.css?v=1',
     );

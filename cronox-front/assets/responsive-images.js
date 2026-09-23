@@ -123,13 +123,19 @@
   };
   const applyResolved = (element, resolved, options) => {
     if (!element) return resolved;
-    if (resolved.src) element.src = resolved.src;
     if (resolved.srcset) {
-      element.srcset = resolved.srcset;
-      element.sizes = resolved.sizes;
+      if (element.getAttribute("sizes") !== resolved.sizes) {
+        element.sizes = resolved.sizes;
+      }
+      if (element.getAttribute("srcset") !== resolved.srcset) {
+        element.srcset = resolved.srcset;
+      }
     } else {
       element.removeAttribute("srcset");
       element.removeAttribute("sizes");
+    }
+    if (resolved.src && element.getAttribute("src") !== resolved.src) {
+      element.src = resolved.src;
     }
     if (resolved.width && resolved.height) {
       element.width = resolved.width;

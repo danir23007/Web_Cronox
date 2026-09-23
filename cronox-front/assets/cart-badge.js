@@ -56,6 +56,15 @@
   });
 
   document.addEventListener('DOMContentLoaded', () => {
-    refreshFromApi();
+    // app.js starts the authoritative initial read before this listener runs.
+    // Reuse it instead of sending a second cart request on every navigation.
+    if (window.CRONOX_CART_READY) {
+      Promise.resolve(window.CRONOX_CART_READY).then(
+        (cart) => render(cart?.itemsCount ?? 0),
+        () => refreshFromApi(),
+      );
+    } else {
+      refreshFromApi();
+    }
   });
 })();

@@ -20,7 +20,7 @@
           ],
           "hero": [
             {
-              "src": "http://127.0.0.1:57264/assets/VIDEO_LOGO_CRONOX.mp4",
+              "src": "http://127.0.0.1:57264/assets/[removed-hero-video]",
               "readyState": 4,
               "networkState": 1,
               "time": 14.579643,
@@ -106,7 +106,7 @@
             "bytes": 7037026
           },
           {
-            "url": "http://127.0.0.1:57264/assets/VIDEO_LOGO_CRONOX.mp4",
+            "url": "http://127.0.0.1:57264/assets/[removed-hero-video]",
             "type": "Media",
             "method": "GET",
             "at": 73,
@@ -182,7 +182,7 @@
           ],
           "hero": [
             {
-              "src": "http://127.0.0.1:57264/assets/VIDEO_LOGO_CRONOX.mp4",
+              "src": "http://127.0.0.1:57264/assets/[removed-hero-video]",
               "readyState": 4,
               "networkState": 1,
               "time": 14.781386,
@@ -268,7 +268,7 @@
             "bytes": 268
           },
           {
-            "url": "http://127.0.0.1:57264/assets/VIDEO_LOGO_CRONOX.mp4",
+            "url": "http://127.0.0.1:57264/assets/[removed-hero-video]",
             "type": "Media",
             "method": "GET",
             "at": 41,
@@ -400,7 +400,7 @@
           ],
           "hero": [
             {
-              "src": "http://127.0.0.1:57264/assets/VIDEO_LOGO_CRONOX.mp4",
+              "src": "http://127.0.0.1:57264/assets/[removed-hero-video]",
               "readyState": 4,
               "networkState": 2,
               "time": 1.773297,
@@ -449,7 +449,7 @@
             }
           },
           {
-            "url": "http://127.0.0.1:57264/assets/VIDEO_LOGO_CRONOX.mp4",
+            "url": "http://127.0.0.1:57264/assets/[removed-hero-video]",
             "type": "Media",
             "method": "GET",
             "at": 3729,
@@ -484,7 +484,7 @@
             }
           },
           {
-            "url": "http://127.0.0.1:57264/assets/VIDEO_LOGO_CRONOX.mp4",
+            "url": "http://127.0.0.1:57264/assets/[removed-hero-video]",
             "type": "Media",
             "method": "GET",
             "at": 653,
@@ -504,7 +504,7 @@
             "failed": "net::ERR_ABORTED"
           },
           {
-            "url": "http://127.0.0.1:57264/assets/VIDEO_LOGO_CRONOX.mp4",
+            "url": "http://127.0.0.1:57264/assets/[removed-hero-video]",
             "type": "Media",
             "method": "GET",
             "at": 3729,
@@ -1008,7 +1008,7 @@
           ],
           "hero": [
             {
-              "src": "http://127.0.0.1:58724/assets/VIDEO_LOGO_CRONOX.mp4",
+              "src": "http://127.0.0.1:58724/assets/[removed-hero-video]",
               "readyState": 4,
               "networkState": 1,
               "time": 1.48111,
@@ -1070,7 +1070,7 @@
             "bytes": 7037026
           },
           {
-            "url": "http://127.0.0.1:58724/assets/VIDEO_LOGO_CRONOX.mp4",
+            "url": "http://127.0.0.1:58724/assets/[removed-hero-video]",
             "type": "Media",
             "method": "GET",
             "at": 655,
@@ -1090,7 +1090,7 @@
             "failed": "net::ERR_ABORTED"
           },
           {
-            "url": "http://127.0.0.1:58724/assets/VIDEO_LOGO_CRONOX.mp4",
+            "url": "http://127.0.0.1:58724/assets/[removed-hero-video]",
             "type": "Media",
             "method": "GET",
             "at": 3705,
@@ -1173,7 +1173,7 @@
           ],
           "hero": [
             {
-              "src": "http://127.0.0.1:58725/assets/VIDEO_LOGO_CRONOX.mp4",
+              "src": "http://127.0.0.1:58725/assets/[removed-hero-video]",
               "readyState": 4,
               "networkState": 1,
               "time": 10.915205,
@@ -1226,7 +1226,7 @@
             "failed": "net::ERR_BLOCKED_BY_CLIENT.Inspector"
           },
           {
-            "url": "http://127.0.0.1:58725/assets/VIDEO_LOGO_CRONOX.mp4",
+            "url": "http://127.0.0.1:58725/assets/[removed-hero-video]",
             "type": "Media",
             "method": "GET",
             "at": 653,
@@ -1246,7 +1246,7 @@
             "failed": "net::ERR_ABORTED"
           },
           {
-            "url": "http://127.0.0.1:58725/assets/VIDEO_LOGO_CRONOX.mp4",
+            "url": "http://127.0.0.1:58725/assets/[removed-hero-video]",
             "type": "Media",
             "method": "GET",
             "at": 2987,
@@ -1329,7 +1329,7 @@
           ],
           "hero": [
             {
-              "src": "http://127.0.0.1:56869/assets/VIDEO_LOGO_CRONOX.mp4",
+              "src": "http://127.0.0.1:56869/assets/[removed-hero-video]",
               "readyState": 4,
               "networkState": 1,
               "time": 9.624285,
@@ -1392,7 +1392,7 @@
             }
           },
           {
-            "url": "http://127.0.0.1:56869/assets/VIDEO_LOGO_CRONOX.mp4",
+            "url": "http://127.0.0.1:56869/assets/[removed-hero-video]",
             "type": "Media",
             "method": "GET",
             "at": 54,
@@ -1437,7 +1437,7 @@
           ],
           "hero": [
             {
-              "src": "http://127.0.0.1:49897/assets/VIDEO_LOGO_CRONOX.mp4",
+              "src": "http://127.0.0.1:49897/assets/[removed-hero-video]",
               "readyState": 4,
               "networkState": 2,
               "time": 9.883802,
@@ -1479,7 +1479,7 @@
         ],
         "pending": [
           {
-            "url": "http://127.0.0.1:49897/assets/VIDEO_LOGO_CRONOX.mp4",
+            "url": "http://127.0.0.1:49897/assets/[removed-hero-video]",
             "type": "Media",
             "method": "GET",
             "at": 3729,
@@ -1517,7 +1517,7 @@
             "failed": "net::ERR_ABORTED"
           },
           {
-            "url": "http://127.0.0.1:49897/assets/VIDEO_LOGO_CRONOX.mp4",
+            "url": "http://127.0.0.1:49897/assets/[removed-hero-video]",
             "type": "Media",
             "method": "GET",
             "at": 678,
@@ -1537,7 +1537,7 @@
             "failed": "net::ERR_ABORTED"
           },
           {
-            "url": "http://127.0.0.1:49897/assets/VIDEO_LOGO_CRONOX.mp4",
+            "url": "http://127.0.0.1:49897/assets/[removed-hero-video]",
             "type": "Media",
             "method": "GET",
             "at": 3729,
@@ -1617,7 +1617,7 @@
           ],
           "hero": [
             {
-              "src": "http://127.0.0.1:49898/assets/VIDEO_LOGO_CRONOX.mp4",
+              "src": "http://127.0.0.1:49898/assets/[removed-hero-video]",
               "readyState": 4,
               "networkState": 1,
               "time": 14.592876,
@@ -1677,7 +1677,7 @@
             "failed": "net::ERR_ABORTED"
           },
           {
-            "url": "http://127.0.0.1:49898/assets/VIDEO_LOGO_CRONOX.mp4",
+            "url": "http://127.0.0.1:49898/assets/[removed-hero-video]",
             "type": "Media",
             "method": "GET",
             "at": 68,
@@ -1760,7 +1760,7 @@
           ],
           "hero": [
             {
-              "src": "http://127.0.0.1:57452/assets/VIDEO_LOGO_CRONOX.mp4",
+              "src": "http://127.0.0.1:57452/assets/[removed-hero-video]",
               "readyState": 4,
               "networkState": 1,
               "time": 11.3882,
@@ -1846,7 +1846,7 @@
             "bytes": 7037026
           },
           {
-            "url": "http://127.0.0.1:57452/assets/VIDEO_LOGO_CRONOX.mp4",
+            "url": "http://127.0.0.1:57452/assets/[removed-hero-video]",
             "type": "Media",
             "method": "GET",
             "at": 105,
@@ -1922,7 +1922,7 @@
           ],
           "hero": [
             {
-              "src": "http://127.0.0.1:57452/assets/VIDEO_LOGO_CRONOX.mp4",
+              "src": "http://127.0.0.1:57452/assets/[removed-hero-video]",
               "readyState": 4,
               "networkState": 1,
               "time": 11.764579,
@@ -2008,7 +2008,7 @@
             "bytes": 268
           },
           {
-            "url": "http://127.0.0.1:57452/assets/VIDEO_LOGO_CRONOX.mp4",
+            "url": "http://127.0.0.1:57452/assets/[removed-hero-video]",
             "type": "Media",
             "method": "GET",
             "at": 31,
@@ -2140,7 +2140,7 @@
           ],
           "hero": [
             {
-              "src": "http://127.0.0.1:57452/assets/VIDEO_LOGO_CRONOX.mp4",
+              "src": "http://127.0.0.1:57452/assets/[removed-hero-video]",
               "readyState": 4,
               "networkState": 2,
               "time": 6.819162,
@@ -2182,7 +2182,7 @@
         ],
         "pending": [
           {
-            "url": "http://127.0.0.1:57452/assets/VIDEO_LOGO_CRONOX.mp4",
+            "url": "http://127.0.0.1:57452/assets/[removed-hero-video]",
             "type": "Media",
             "method": "GET",
             "at": 3742,
@@ -2220,7 +2220,7 @@
             "failed": "net::ERR_ABORTED"
           },
           {
-            "url": "http://127.0.0.1:57452/assets/VIDEO_LOGO_CRONOX.mp4",
+            "url": "http://127.0.0.1:57452/assets/[removed-hero-video]",
             "type": "Media",
             "method": "GET",
             "at": 670,
@@ -2240,7 +2240,7 @@
             "failed": "net::ERR_ABORTED"
           },
           {
-            "url": "http://127.0.0.1:57452/assets/VIDEO_LOGO_CRONOX.mp4",
+            "url": "http://127.0.0.1:57452/assets/[removed-hero-video]",
             "type": "Media",
             "method": "GET",
             "at": 3742,
@@ -2320,7 +2320,7 @@
           ],
           "hero": [
             {
-              "src": "http://127.0.0.1:57453/assets/VIDEO_LOGO_CRONOX.mp4",
+              "src": "http://127.0.0.1:57453/assets/[removed-hero-video]",
               "readyState": 4,
               "networkState": 1,
               "time": 9.312463,
@@ -2380,7 +2380,7 @@
             "failed": "net::ERR_ABORTED"
           },
           {
-            "url": "http://127.0.0.1:57453/assets/VIDEO_LOGO_CRONOX.mp4",
+            "url": "http://127.0.0.1:57453/assets/[removed-hero-video]",
             "type": "Media",
             "method": "GET",
             "at": 84,
@@ -2463,7 +2463,7 @@
           ],
           "hero": [
             {
-              "src": "http://127.0.0.1:57454/assets/VIDEO_LOGO_CRONOX.mp4",
+              "src": "http://127.0.0.1:57454/assets/[removed-hero-video]",
               "readyState": 4,
               "networkState": 1,
               "time": 9.371294,
@@ -2523,7 +2523,7 @@
             "failed": "net::ERR_ABORTED"
           },
           {
-            "url": "http://127.0.0.1:57454/assets/VIDEO_LOGO_CRONOX.mp4",
+            "url": "http://127.0.0.1:57454/assets/[removed-hero-video]",
             "type": "Media",
             "method": "GET",
             "at": 96,

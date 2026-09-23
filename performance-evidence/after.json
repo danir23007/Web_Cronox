@@ -1,4 +1,4 @@
-﻿{
+{
   "note": "Static references are not measured network requests or transferred bytes. Simulations use identical DOM/load timing, no CPU/network emulation. /tienda reuses index.html.",
   "preloader": {
     "fast": {
@@ -60,7 +60,7 @@
           "gzipBytes": 2614
         },
         {
-          "url": "assets/VIDEO_LOGO_CRONOX.mp4",
+          "url": "assets/[removed-hero-video]",
           "bytes": 2901933,
           "gzipBytes": null
         },
