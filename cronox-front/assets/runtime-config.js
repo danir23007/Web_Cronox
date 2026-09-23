@@ -3,5 +3,5 @@
   // Local development: paste your real pk_test_... value between the quotes.
   // Production later: replace it with the intended pk_live_... publishable key.
   // Never place a Stripe secret key (sk_test_... or sk_live_...) in this file.
-  window.CRONOX_STRIPE_PUBLISHABLE_KEY = 'pk_test_51SPoZCFk1nGlnJwaa2ugPS3p8dcOEM1f6RC6H96Vtphu1NVJs6Z8OFob8vKcPbJwr5udDnwRmW6RFeKhixd2TrFt007tnjyaTo';
+  window.CRONOX_STRIPE_PUBLISHABLE_KEY = 'pk_live_51SPoYpCGnUu9AYNr1Pg2UOe5obKFWRmqRir5dLPK9xR5DD2uoHp3JQQnrfisUCSU7bCRUyFqaYDDg8xkVESiGfqu00WfdCID8w';
 })();
