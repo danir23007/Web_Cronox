@@ -30,6 +30,10 @@ jobs:
               let apps;
               for(let i=raw.indexOf('[');i>=0;i=raw.indexOf('[',i+1)){try{const v=JSON.parse(raw.slice(i));if(Array.isArray(v)){apps=v;break;}}catch{}}
               if(!apps) throw new Error('PM2_JSON_PARSE_FAILED');
+              if(apps.length===0){
+                const rootRaw=cp.execFileSync('sudo',['-n','pm2','jlist'],{encoding:'utf8',stdio:['ignore','pipe','pipe']});
+                for(let i=rootRaw.indexOf('[');i>=0;i=rootRaw.indexOf('[',i+1)){try{const v=JSON.parse(rootRaw.slice(i));if(Array.isArray(v)){apps=v;break;}}catch{}}
+              }
               if(apps.length===0) throw new Error('PM2_PROCESS_LIST_EMPTY');
               const matches=apps.filter(x=>/cronox/i.test([x.name,x.pm2_env?.name,x.pm2_env?.pm_cwd,x.pm2_env?.pm_exec_path].join(' ')));
               if(matches.length!==1) throw new Error('CRONOX_PROCESS_SELECTION_FAILED');
@@ -47,5 +51,5 @@ jobs:
               if(account.id!=='acct_1SPoZCFk1nGlnJwa'||!key.startsWith('sk_test_')) throw new Error('TEST_ACCOUNT_MISMATCH');
               if(env.NODE_ENV==='production') throw new Error('TEST_MODE_INCOMPATIBLE_WITH_PRODUCTION');
               console.log('STRIPE_TEST_CONFIGURATION_VERIFIED');
-            })().catch(e=>{console.error(e.message);process.exit(1)});
+            })().catch(e=>{console.error(/^[A-Z0-9_]+$/.test(e.message)?e.message:'RUNTIME_AUDIT_FAILED');process.exit(1)});
             NODE
