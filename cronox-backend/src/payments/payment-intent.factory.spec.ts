@@ -23,6 +23,30 @@ describe('PaymentIntentFactory', () => {
     replacementRequired: false,
   };
 
+  it('retains the reservation and retries the same snapshot after Stripe rejects a payment method', async () => {
+    const ordersService = {
+      createCheckoutSnapshot: jest.fn().mockResolvedValue(baseSnapshot),
+      claimCheckoutPaymentIntentCreation: jest.fn().mockResolvedValue(true),
+      resetCheckoutPaymentIntentCreation: jest.fn().mockResolvedValue(undefined),
+      bindStripePaymentIntent: jest.fn().mockResolvedValue(undefined),
+      releaseCheckoutSnapshot: jest.fn(),
+    };
+    const rejection = Object.assign(new Error('The payment method type "paypal" is invalid.'), { statusCode: 400 });
+    const stripeService = {
+      createPaymentIntentForCheckout: jest.fn().mockRejectedValueOnce(rejection).mockResolvedValueOnce({
+        id: 'pi_retry', clientSecret: 'mock_secret', stripeAccountId: 'acct_live',
+      }),
+    };
+    const factory = new PaymentIntentFactory(ordersService as any, stripeService as any);
+    const dto = { shippingMethod: 'STANDARD' } as any;
+    await expect(factory.createPaymentIntentForUser(1, dto)).rejects.toBe(rejection);
+    expect(ordersService.resetCheckoutPaymentIntentCreation).toHaveBeenCalledWith('snap_1');
+    expect(ordersService.bindStripePaymentIntent).not.toHaveBeenCalled();
+    expect(ordersService.releaseCheckoutSnapshot).not.toHaveBeenCalled();
+    await expect(factory.createPaymentIntentForUser(1, dto)).resolves.toMatchObject({ paymentIntentId: 'pi_retry' });
+    expect(stripeService.createPaymentIntentForCheckout.mock.calls[0]).toEqual(stripeService.createPaymentIntentForCheckout.mock.calls[1]);
+  });
+
   it('reuses the server-bound PaymentIntent instead of honoring a client ID', async () => {
     const ordersService = {
       createCheckoutSnapshot: jest.fn().mockResolvedValue({

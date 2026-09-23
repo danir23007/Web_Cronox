@@ -29,12 +29,11 @@ describe('Stripe frontend runtime configuration', () => {
     expect(stripePosition).toBeLessThan(checkoutPosition);
   });
 
-  it('provides a public test key without secret-key material', () => {
+  it('provides a public test or live key without secret-key material', () => {
     const configuredKey = runtimeConfig.match(
       /window\.CRONOX_STRIPE_PUBLISHABLE_KEY\s*=\s*'([^']+)'/,
     )?.[1];
-    expect(configuredKey).toMatch(/^pk_test_[A-Za-z0-9]+$/);
-    expect(runtimeConfig).toContain('publishable keys are not secrets');
+    expect(configuredKey).toMatch(/^pk_(?:test|live)_[A-Za-z0-9]+$/);
     expect(runtimeConfig).not.toMatch(/sk_(?:test|live)_[A-Za-z0-9]+/);
   });
 

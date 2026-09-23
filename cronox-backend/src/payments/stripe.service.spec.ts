@@ -1,7 +1,6 @@
 // [STRIPE] Pruebas unitarias para el wrapper de Stripe
 import { BadRequestException } from '@nestjs/common';
 import {
-  CHECKOUT_PAYMENT_METHOD_TYPES,
   CheckoutPaymentIntentConfigurationException,
   StripeService,
 } from './stripe.service';
@@ -222,6 +221,28 @@ describe('StripeService', () => {
     ).resolves.toEqual({ safe: false, reason: 'STRIPE_CHARGE_EXISTS' });
   });
 
+  it('prepares a live checkout even when PayPal is unavailable in the account', async () => {
+    config.get.mockImplementation((key: string) =>
+      key === 'STRIPE_SECRET_KEY' ? 'sk_live_dummy' : undefined,
+    );
+    const liveService = new StripeService(config as any);
+    const stripe = (liveService as any).stripe as import('stripe');
+    jest.spyOn(stripe.accounts, 'retrieve').mockResolvedValue({ id: 'acct_live' } as any);
+    const create = jest.spyOn(stripe.paymentIntents, 'create').mockImplementation((async (params: import('stripe').PaymentIntentCreateParams) => {
+      if (params.payment_method_types?.includes('paypal')) {
+        throw Object.assign(new Error('The payment method type "paypal" is invalid.'), { statusCode: 400 });
+      }
+      return { id: 'pi_live_mock', client_secret: 'mock_secret', automatic_payment_methods: { enabled: true }, payment_method_types: ['card'] };
+    }) as any);
+
+    await expect(liveService.createPaymentIntentForCheckout({
+      checkoutSnapshotId: 'snap_live', amount: 3990, currency: 'EUR',
+    })).resolves.toMatchObject({ id: 'pi_live_mock', stripeAccountId: 'acct_live' });
+    expect(create.mock.calls[0][0]).toMatchObject({ automatic_payment_methods: { enabled: true }, amount: 3990 });
+    expect(create.mock.calls[0][0]).not.toHaveProperty('payment_method_types');
+    expect(create.mock.calls[0][0]).not.toHaveProperty('confirm');
+  });
+
   it('uses the snapshot ID as the deterministic PaymentIntent idempotency key', async () => {
     const stripeInstance = (service as any).stripe as any;
     jest
@@ -242,19 +263,16 @@ describe('StripeService', () => {
     expect(create).toHaveBeenCalledTimes(2);
     expect(create.mock.calls[0][0]).toEqual(
       expect.objectContaining({
-        payment_method_types: ['card', 'klarna', 'amazon_pay', 'paypal'],
+        automatic_payment_methods: { enabled: true },
         metadata: expect.objectContaining({
           checkoutSnapshotId: 'snap_idempotent',
-          checkoutPaymentConfiguration: 'cronox_checkout_v3',
+          checkoutPaymentConfiguration: 'cronox_checkout_v4_dynamic',
         }),
       }),
     );
     expect(create.mock.calls[0][0]).not.toHaveProperty(
-      'automatic_payment_methods',
+      'payment_method_types',
     );
-    expect(CHECKOUT_PAYMENT_METHOD_TYPES).not.toContain('bancontact');
-    expect(CHECKOUT_PAYMENT_METHOD_TYPES).not.toContain('eps');
-    expect(CHECKOUT_PAYMENT_METHOD_TYPES).toContain('paypal');
     expect(create.mock.calls[0][1]).toEqual({
       idempotencyKey: 'checkout:snap_idempotent',
     });
@@ -300,7 +318,7 @@ describe('StripeService', () => {
     );
   });
 
-  it('reuses only an intent with the current Card, Klarna, Amazon Pay and PayPal configuration', async () => {
+  it('reuses an automatic-method intent when the account does not offer PayPal', async () => {
     const stripeInstance = (service as any).stripe as any;
     jest
       .spyOn(stripeInstance.accounts, 'retrieve')
@@ -313,9 +331,10 @@ describe('StripeService', () => {
       client_secret: 'secret_current',
       metadata: {
         checkoutSnapshotId: 'snap_current',
-        checkoutPaymentConfiguration: 'cronox_checkout_v3',
+        checkoutPaymentConfiguration: 'cronox_checkout_v4_dynamic',
       },
-      payment_method_types: ['paypal', 'amazon_pay', 'card', 'klarna'],
+      automatic_payment_methods: { enabled: true },
+      payment_method_types: ['card'],
     });
 
     await expect(
@@ -340,6 +359,7 @@ describe('StripeService', () => {
       ['card', 'klarna', 'amazon_pay', 'paypal', 'bancontact'],
     ],
     ['cronox_checkout_v3', ['card', 'klarna', 'amazon_pay', 'paypal', 'eps']],
+    ['cronox_checkout_v4_dynamic', ['card']],
   ])(
     'forces safe replacement of a stale or over-broad checkout configuration',
     async (configuration, paymentMethodTypes) => {

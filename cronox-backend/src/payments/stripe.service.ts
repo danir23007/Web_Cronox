@@ -35,13 +35,7 @@ export type MissingPaymentIntentRecoveryProof = {
     | 'STRIPE_PROOF_UNAVAILABLE';
 };
 
-export const CHECKOUT_PAYMENT_METHOD_TYPES = [
-  'card',
-  'klarna',
-  'amazon_pay',
-  'paypal',
-] as const;
-const CHECKOUT_PAYMENT_CONFIGURATION = 'cronox_checkout_v3';
+const CHECKOUT_PAYMENT_CONFIGURATION = 'cronox_checkout_v4_dynamic';
 
 export class CheckoutPaymentIntentCancelledException extends ConflictException {
   constructor(readonly stripeAccountId: string) {
@@ -168,7 +162,9 @@ export class StripeService {
           checkoutPaymentConfiguration: CHECKOUT_PAYMENT_CONFIGURATION,
         },
         description: this.paymentDescription,
-        payment_method_types: [...CHECKOUT_PAYMENT_METHOD_TYPES],
+        // Account availability differs between test and live mode. Let Stripe
+        // select eligible methods enabled in this account's Dashboard.
+        automatic_payment_methods: { enabled: true },
         ...(shipping ? { shipping } : {}),
       },
       { idempotencyKey: `checkout:${args.checkoutSnapshotId}` },
@@ -346,11 +342,7 @@ export class StripeService {
       return false;
     }
 
-    const actual = new Set(paymentIntent.payment_method_types);
-    return (
-      actual.size === CHECKOUT_PAYMENT_METHOD_TYPES.length &&
-      CHECKOUT_PAYMENT_METHOD_TYPES.every((type) => actual.has(type))
-    );
+    return paymentIntent.automatic_payment_methods?.enabled === true;
   }
 
   constructEventFromPayload(
