@@ -25,12 +25,14 @@ jobs:
             const fs = require('node:fs');
             const path = require('node:path');
             const cp = require('node:child_process');
+            let stage='PROCESS_LOOKUP';
             (async () => {
               const raw=cp.execFileSync('pm2',['jlist'],{encoding:'utf8'});
               let apps;
               for(let i=raw.indexOf('[');i>=0;i=raw.indexOf('[',i+1)){try{const v=JSON.parse(raw.slice(i));if(Array.isArray(v)){apps=v;break;}}catch{}}
               if(!apps) throw new Error('PM2_JSON_PARSE_FAILED');
               if(apps.length===0){
+                stage='SERVICE_OWNER_LOOKUP';
                 const rootRaw=cp.execFileSync('sudo',['-n','pm2','jlist'],{encoding:'utf8',stdio:['ignore','pipe','pipe']});
                 for(let i=rootRaw.indexOf('[');i>=0;i=rootRaw.indexOf('[',i+1)){try{const v=JSON.parse(rootRaw.slice(i));if(Array.isArray(v)){apps=v;break;}}catch{}}
               }
@@ -39,17 +41,19 @@ jobs:
               if(matches.length!==1) throw new Error('CRONOX_PROCESS_SELECTION_FAILED');
               const app=matches[0];
               if (!app) throw new Error('CRONOX_PROCESS_NOT_FOUND');
+              stage='READ_APPLICATION_CONFIG';
               const cwd=app.pm2_env.pm_cwd;
               const envPath=path.join(cwd,'.env');
               const dotenv=require(path.join(cwd,'node_modules/dotenv'));
               const file=dotenv.parse(fs.readFileSync(envPath));
               const env={...file,...app.pm2_env.env};
               const key=env.STRIPE_SECRET_KEY;
+              stage='STRIPE_ACCOUNT_CHECK';
               const res=await fetch('https://api.stripe.com/v1/account',{headers:{Authorization:'Bearer '+key}});
               if(!res.ok) throw new Error('STRIPE_ACCOUNT_LOOKUP_FAILED_'+res.status);
               const account=await res.json();
               if(account.id!=='acct_1SPoZCFk1nGlnJwa'||!key.startsWith('sk_test_')) throw new Error('TEST_ACCOUNT_MISMATCH');
               if(env.NODE_ENV==='production') throw new Error('TEST_MODE_INCOMPATIBLE_WITH_PRODUCTION');
               console.log('STRIPE_TEST_CONFIGURATION_VERIFIED');
-            })().catch(e=>{console.error(/^[A-Z0-9_]+$/.test(e.message)?e.message:'RUNTIME_AUDIT_FAILED');process.exit(1)});
+            })().catch(e=>{console.error(/^[A-Z0-9_]+$/.test(e.message)?e.message:stage+'_FAILED');process.exit(1)});
             NODE
