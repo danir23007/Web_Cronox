@@ -33,7 +33,9 @@ jobs:
               if(!apps) throw new Error('PM2_JSON_PARSE_FAILED');
               if(apps.length===0){
                 stage='SERVICE_OWNER_LOOKUP';
-                const rootRaw=cp.execFileSync('sudo',['-n','pm2','jlist'],{encoding:'utf8',stdio:['ignore','pipe','pipe']});
+                let rootRaw;
+                try{rootRaw=cp.execFileSync('sudo',['-n','pm2','jlist'],{encoding:'utf8',stdio:['ignore','pipe','pipe']});}
+                catch(e){const err=String(e.stderr||'');throw new Error(/password|not allowed|sudoers|permission/i.test(err)?'SERVICE_OWNER_PERMISSION_REQUIRED':/not found|No such file/i.test(err)?'SERVICE_OWNER_COMMAND_UNAVAILABLE':'SERVICE_OWNER_UNAVAILABLE');}
                 for(let i=rootRaw.indexOf('[');i>=0;i=rootRaw.indexOf('[',i+1)){try{const v=JSON.parse(rootRaw.slice(i));if(Array.isArray(v)){apps=v;break;}}catch{}}
               }
               if(apps.length===0) throw new Error('PM2_PROCESS_LIST_EMPTY');
