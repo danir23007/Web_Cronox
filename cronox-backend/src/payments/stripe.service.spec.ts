@@ -243,7 +243,7 @@ describe('StripeService', () => {
     expect(create.mock.calls[0][0]).not.toHaveProperty('confirm');
   });
 
-  it('uses the snapshot ID as the deterministic PaymentIntent idempotency key', async () => {
+  it('keeps the configuration and snapshot idempotency key stable on retry and separate from legacy keys', async () => {
     const stripeInstance = (service as any).stripe as any;
     jest
       .spyOn(stripeInstance.accounts, 'retrieve')
@@ -274,9 +274,24 @@ describe('StripeService', () => {
       'payment_method_types',
     );
     expect(create.mock.calls[0][1]).toEqual({
-      idempotencyKey: 'checkout:snap_idempotent',
+      idempotencyKey: 'checkout:cronox_checkout_v4_dynamic:snap_idempotent',
     });
     expect(create.mock.calls[1][1]).toEqual(create.mock.calls[0][1]);
+    expect(create.mock.calls[1][0]).toEqual(create.mock.calls[0][0]);
+    expect(create.mock.calls[0][1].idempotencyKey).not.toBe(
+      `checkout:${args.checkoutSnapshotId}`,
+    );
+    expect(create.mock.calls[0][1].idempotencyKey).not.toBe(
+      `checkout:cronox_checkout_v3:${args.checkoutSnapshotId}`,
+    );
+
+    await service.createPaymentIntentForCheckout({
+      ...args,
+      checkoutSnapshotId: 'snap_other',
+    });
+    expect(create.mock.calls[2][1]).toEqual({
+      idempotencyKey: 'checkout:cronox_checkout_v4_dynamic:snap_other',
+    });
   });
 
   it('maps the internal España country to ISO ES in the Stripe request', async () => {

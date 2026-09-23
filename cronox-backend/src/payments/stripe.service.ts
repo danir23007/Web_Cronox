@@ -167,7 +167,10 @@ export class StripeService {
         automatic_payment_methods: { enabled: true },
         ...(shipping ? { shipping } : {}),
       },
-      { idempotencyKey: `checkout:${args.checkoutSnapshotId}` },
+      {
+        // Keep retries stable without reusing a previous configuration's key.
+        idempotencyKey: `checkout:${CHECKOUT_PAYMENT_CONFIGURATION}:${args.checkoutSnapshotId}`,
+      },
     );
 
     if (!paymentIntent.client_secret) {
