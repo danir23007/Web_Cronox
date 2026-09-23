@@ -12,7 +12,7 @@ describe('StripeWebhookController lifecycle safety', () => {
       createOrderFromVerifiedStripePayment: jest.fn(),
       releaseCheckoutSnapshotForCanceledPaymentIntent: jest.fn(),
       claimOrderConfirmationEmail: jest.fn(),
-      releaseOrderConfirmationEmailClaim: jest.fn(),
+      releaseOrderConfirmationEmailClaim: jest.fn().mockResolvedValue(undefined),
       markOrderConfirmationEmailSent: jest.fn(),
     };
     authService = {
@@ -44,6 +44,24 @@ describe('StripeWebhookController lifecycle safety', () => {
     expect(
       ordersService.reconcileStripePaymentLifecycle,
     ).not.toHaveBeenCalled();
+  });
+
+  it('keeps failed event processing retryable and deduplicates completed delivery', async () => {
+    const event = { id: 'evt_refund_retry', type: 'charge.refunded', created: 1790194651, livemode: true,
+      data: { object: { payment_intent: 'pi_retry', refunded: true, amount: 320, amount_refunded: 320 } } };
+    const webhook = new StripeWebhookController({ constructEventFromPayload: () => event } as any, ordersService, {} as any, {} as any, {} as any, authService);
+    ordersService.claimStripeWebhookEvent = jest.fn().mockResolvedValueOnce(true).mockResolvedValueOnce(true).mockResolvedValueOnce(false);
+    ordersService.failStripeWebhookEvent = jest.fn().mockResolvedValue(undefined);
+    ordersService.completeStripeWebhookEvent = jest.fn().mockResolvedValue(undefined);
+    ordersService.reconcileStripePaymentLifecycle.mockRejectedValueOnce(new Error('temporary database failure')).mockResolvedValue(undefined);
+    const req = { body: Buffer.from('{}') } as any;
+    await expect(webhook.handleStripeWebhook(req, undefined, 'mock-signature')).rejects.toThrow('temporary database failure');
+    expect(ordersService.failStripeWebhookEvent).toHaveBeenCalledWith(event.id, expect.any(Error));
+    expect(ordersService.completeStripeWebhookEvent).not.toHaveBeenCalled();
+    await expect(webhook.handleStripeWebhook(req, undefined, 'mock-signature')).resolves.toEqual({ received: true });
+    await expect(webhook.handleStripeWebhook(req, undefined, 'mock-signature')).resolves.toEqual({ received: true, duplicate: true });
+    expect(ordersService.reconcileStripePaymentLifecycle).toHaveBeenCalledTimes(2);
+    expect(ordersService.completeStripeWebhookEvent).toHaveBeenCalledTimes(1);
   });
 
   it('reconciles a full charge refund from the persisted event timeline', async () => {
@@ -170,6 +188,8 @@ describe('StripeWebhookController lifecycle safety', () => {
 
     expect(response).toEqual({ received: true, created: true, orderId: 321 });
     expect(response).not.toHaveProperty('order');
+    expect(ordersService.claimOrderConfirmationEmail).not.toHaveBeenCalled();
+    expect(authService.sendInitialPasswordSetupIfNeeded).not.toHaveBeenCalled();
   });
 
   it('requests password setup only after the authoritative paid-order result', async () => {
@@ -256,5 +276,46 @@ describe('StripeWebhookController lifecycle safety', () => {
     expect(
       ordersService.createOrderFromVerifiedStripePayment,
     ).not.toHaveBeenCalled();
+  });
+
+  it('retries a failed confirmation independently of webhook deduplication and marks only accepted mail', async () => {
+    const prisma = {
+      checkoutSnapshot: { findUnique: jest.fn().mockResolvedValue({ id: 'snap_mail', order: { status: 'PAID' } }) },
+      order: { findUnique: jest.fn().mockResolvedValue({ status: 'PAID', customerEmail: 'buyer@example.test' }) },
+    };
+    const email = { send: jest.fn().mockRejectedValueOnce(new Error('SMTP unavailable')).mockResolvedValueOnce({ messageId: 'accepted' }) };
+    const mapper = { map: jest.fn().mockReturnValue({}) };
+    const retryController = new StripeWebhookController({} as any, ordersService, email as any, prisma as any, mapper as any, authService);
+    ordersService.claimOrderConfirmationEmail.mockResolvedValue(true);
+    await expect(retryController.retryOrderConfirmationEmail(18)).resolves.toEqual({ outcome: 'retry_required' });
+    expect(ordersService.markOrderConfirmationEmailSent).not.toHaveBeenCalled();
+    expect(ordersService.releaseOrderConfirmationEmailClaim).toHaveBeenCalledWith('snap_mail');
+    await expect(retryController.retryOrderConfirmationEmail(18)).resolves.toEqual({ outcome: 'accepted' });
+    expect(ordersService.markOrderConfirmationEmailSent).toHaveBeenCalledTimes(1);
+    ordersService.claimOrderConfirmationEmail.mockResolvedValue(false);
+    await expect(retryController.retryOrderConfirmationEmail(18)).resolves.toEqual({ outcome: 'already_sent_or_claimed' });
+    expect(email.send).toHaveBeenCalledTimes(2);
+  });
+
+  it('refuses a paid confirmation after a refund, including a refund between claim and read', async () => {
+    const prisma = {
+      checkoutSnapshot: { findUnique: jest.fn().mockResolvedValue({ id: 'snap_refunded', order: { status: 'REFUNDED' } }) },
+      order: { findUnique: jest.fn().mockResolvedValue({ status: 'REFUNDED', customerEmail: 'buyer@example.test' }) },
+    };
+    const email = { send: jest.fn() };
+    const retryController = new StripeWebhookController({} as any, ordersService, email as any, prisma as any, {} as any, authService);
+    await expect(retryController.retryOrderConfirmationEmail(18)).resolves.toEqual({ outcome: 'not_paid' });
+    expect(ordersService.claimOrderConfirmationEmail).not.toHaveBeenCalled();
+    prisma.checkoutSnapshot.findUnique.mockResolvedValue({ id: 'snap_refunded', order: { status: 'PAID' } });
+    ordersService.claimOrderConfirmationEmail.mockResolvedValue(true);
+    await expect(retryController.retryOrderConfirmationEmail(18)).resolves.toEqual({ outcome: 'unavailable' });
+    expect(email.send).not.toHaveBeenCalled();
+    expect(ordersService.markOrderConfirmationEmailSent).not.toHaveBeenCalled();
+  });
+
+  it('does not fail persisted order confirmation when claiming email fails', async () => {
+    ordersService.createOrderFromVerifiedStripePayment.mockResolvedValue({ orderId: 19, userId: 2, checkoutSnapshotId: 'snap_mail', status: 'PAID', created: true });
+    ordersService.claimOrderConfirmationEmail.mockRejectedValue(new Error('database unavailable'));
+    await expect((controller as any).handleVerifiedPaymentIntentSucceeded({ id: 'pi_mail', status: 'succeeded', amount_received: 320, currency: 'eur', metadata: { checkoutSnapshotId: 'snap_mail' } }, new Date())).resolves.toMatchObject({ orderId: 19, created: true });
   });
 });

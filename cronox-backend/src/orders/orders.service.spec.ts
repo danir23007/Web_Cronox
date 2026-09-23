@@ -1086,6 +1086,24 @@ describe('OrdersService checkout reservations', () => {
     );
   });
 
+  it('creates a refunded audit order when the full refund was recorded before success', async () => {
+    const snapshot = makeSnapshot({ id: 'snap_refund_first', userId: 1, stripePaymentIntentId: 'pi_refund_first', status: 'REFUNDED', promoCodeId: null });
+    const order = { id: 101, userId: 1, status: 'REFUNDED', items: [] };
+    prisma.checkoutSnapshot.findUnique.mockResolvedValue(snapshot);
+    prisma.order.findUnique.mockResolvedValueOnce(null).mockResolvedValue(order);
+    prisma.order.create.mockResolvedValue({ id: 101 });
+    prisma.orderItem.createMany.mockResolvedValue({ count: 1 });
+    prisma.checkoutSnapshot.update.mockResolvedValue({});
+    prisma.stripeWebhookEvent.findMany.mockResolvedValue([{ lifecycleStatus: 'REFUNDED', type: 'charge.refunded', occurredAt: new Date() }]);
+    const release = jest.spyOn(service as any, 'releaseStockReservationsForCheckoutSnapshot').mockResolvedValue(undefined);
+    const consume = jest.spyOn(service as any, 'consumeStockReservationsForCheckoutSnapshot');
+    jest.spyOn(service, 'reconcileStripePaymentLifecycle').mockResolvedValue(undefined);
+    await expect(service.createOrderFromVerifiedStripePayment({ checkoutSnapshotId: snapshot.id, paymentIntentId: 'pi_refund_first', amountCents: 10495, currency: 'EUR', occurredAt: new Date('2026-08-08T10:00:00.000Z') })).resolves.toMatchObject({ orderId: 101, status: 'REFUNDED' });
+    expect(prisma.order.create).toHaveBeenCalledWith({ data: expect.objectContaining({ status: 'REFUNDED' }) });
+    expect(release).toHaveBeenCalledTimes(1);
+    expect(consume).not.toHaveBeenCalled();
+  });
+
   it('copies a partial loss frozen before payment success onto the eventual paid order', async () => {
     const snapshot = makeSnapshot({
       id: 'snap_before_success',

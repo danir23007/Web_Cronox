@@ -138,11 +138,19 @@
     const displaySource = orderId ? String(orderId) : rawRef;
     const displayRef = makeShortRef(displaySource);
 
-    setUiState({
-      eyebrow: 'Compra completada',
-      title: 'Pedido confirmado',
-      message: 'Tu pedido ha sido guardado correctamente. Guarda el número de pedido para cualquier consulta.',
-    });
+    if (status?.orderStatus === 'REFUNDED') {
+      setUiState({
+        eyebrow: 'Pago reembolsado',
+        title: 'Pedido reembolsado',
+        message: 'El pago de este pedido ha sido reembolsado. No necesitas volver a pagar. Si tienes dudas, contacta con nosotros.',
+      });
+    } else {
+      setUiState({
+        eyebrow: 'Compra completada',
+        title: 'Pedido confirmado',
+        message: 'Tu pedido ha sido guardado correctamente. Guarda el número de pedido para cualquier consulta.',
+      });
+    }
 
     if (referenceEl && displayRef) {
       const prefix = orderId ? 'Pedido' : 'Referencia';

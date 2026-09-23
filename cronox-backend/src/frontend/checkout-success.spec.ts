@@ -3,7 +3,7 @@ import path from 'node:path';
 import vm from 'node:vm';
 
 describe('checkout success cart synchronization', () => {
-  it('waits for processed backend status and publishes the canonical cart', async () => {
+  it.each(['PAID', 'REFUNDED'])('waits for processed backend status and renders %s correctly', async (orderStatus) => {
     const source = readFileSync(
       path.resolve(
         __dirname,
@@ -41,14 +41,18 @@ describe('checkout success cart synchronization', () => {
       CRONOX_API: { API_BASE: '', getCart },
       dispatchEvent,
     };
-    const fetch = jest.fn().mockResolvedValue({
+    const fetch = jest.fn().mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: jest.fn().mockResolvedValue({ found: false, isProcessed: false }),
+    }).mockResolvedValue({
       ok: true,
       status: 200,
       json: jest.fn().mockResolvedValue({
         found: true,
         isProcessed: true,
         orderId: 77,
-        orderStatus: 'PAID',
+        orderStatus,
       }),
     });
 
@@ -60,12 +64,15 @@ describe('checkout success cart synchronization', () => {
       URLSearchParams,
       console: { warn: jest.fn() },
       localStorage: { removeItem: jest.fn() },
-      setTimeout,
+      setTimeout: (callback: () => void) => callback(),
       clearTimeout,
       Date,
       Promise,
       encodeURIComponent,
     });
+
+    expect(elements.get('checkout-success-title')?.textContent).toBe('Validando pedido…');
+    expect(getCart).not.toHaveBeenCalled();
 
     for (
       let attempt = 0;
@@ -80,6 +87,10 @@ describe('checkout success cart synchronization', () => {
       expect.objectContaining({ credentials: 'include' }),
     );
     expect(getCart).toHaveBeenCalledTimes(1);
+    expect(fetch).toHaveBeenCalledTimes(2);
+    expect(elements.get('checkout-success-title')?.textContent).toBe(
+      orderStatus === 'REFUNDED' ? 'Pedido reembolsado' : 'Pedido confirmado',
+    );
     expect(dispatchEvent).toHaveBeenCalledWith(
       expect.objectContaining({
         type: 'cart:updated',

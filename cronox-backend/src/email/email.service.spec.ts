@@ -2,6 +2,15 @@ import { EmailService } from './email.service';
 import { EmailType } from './email.types';
 
 describe('EmailService account setup', () => {
+  it.each([{ accepted: [] }, { accepted: ['buyer@example.test'] }])('requires SMTP recipient acceptance (%j)', async ({ accepted }) => {
+    const transport = { sendMail: jest.fn().mockResolvedValue({ messageId: 'mail-1', accepted }) };
+    const service = new EmailService({ getTransport: () => transport, getFrom: () => 'orders@example.test' } as any);
+    (service as any).config.enabled = true;
+    jest.spyOn(service as any, 'renderTemplate').mockResolvedValue('<p>Order</p>');
+    const result = service.send({ type: EmailType.ORDER_CONFIRMATION, to: 'buyer@example.test', subject: 'Order', templateData: {} });
+    if (accepted.length) await expect(result).resolves.toEqual({ messageId: 'mail-1' });
+    else await expect(result).rejects.toThrow('No se pudo enviar el email');
+  });
   it('routes preregistration confirmation through its managed purpose', async () => {
     const service = new EmailService({} as any);
     const send = jest

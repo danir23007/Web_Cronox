@@ -77,7 +77,11 @@ export class EmailService {
           subject: custom?.subject || options.subject,
           html,
           ...(custom ? { text: custom.text } : {}),
-        })) as { messageId: string };
+        })) as { messageId: string; accepted?: unknown[] };
+
+      if (!Array.isArray(info.accepted) || info.accepted.length === 0) {
+        throw new Error('SMTP_RECIPIENT_NOT_ACCEPTED');
+      }
 
       return { messageId: info.messageId };
     } catch {

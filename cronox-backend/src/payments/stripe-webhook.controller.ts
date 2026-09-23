@@ -5,12 +5,20 @@ import {
   Headers,
   HttpCode,
   Logger,
+  NotFoundException,
+  Param,
+  ParseIntPipe,
   Post,
   Req,
+  UseGuards,
 } from '@nestjs/common';
 import { ApiExcludeEndpoint, ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { Request } from 'express';
-import { OrderStatus } from '@prisma/client';
+import { OrderStatus, Role } from '@prisma/client';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { AdminGuard } from '../common/guards/admin.guard';
+import { RolesGuard } from '../common/guards/roles.guard';
+import { Roles } from '../common/roles.decorator';
 import Stripe from 'stripe';
 import { EmailService } from '../email/email.service';
 import { EmailType } from '../email/email.types';
@@ -37,6 +45,24 @@ export class StripeWebhookController {
     private readonly orderConfirmationEmailMapper: OrderConfirmationEmailMapper,
     private readonly authService: AuthService,
   ) {}
+
+  @Post('admin/orders/:id/confirmation-email')
+  @UseGuards(JwtAuthGuard, AdminGuard, RolesGuard)
+  @Roles(Role.SUPERADMIN)
+  async retryOrderConfirmationEmail(@Param('id', ParseIntPipe) id: number) {
+    const snapshot = await this.prisma.checkoutSnapshot.findUnique({
+      where: { orderId: id },
+      select: { id: true, order: { select: { status: true } } },
+    });
+    if (!snapshot?.order) throw new NotFoundException('ORDER_CHECKOUT_NOT_FOUND');
+    return {
+      outcome: await this.sendConfirmationEmailOnce({
+        orderId: id,
+        checkoutSnapshotId: snapshot.id,
+        status: snapshot.order.status,
+      }),
+    };
+  }
 
   @Post('webhooks/stripe')
   @HttpCode(200)
@@ -253,25 +279,28 @@ export class StripeWebhookController {
     orderId: number;
     checkoutSnapshotId: string;
     status: OrderStatus;
-  }): Promise<void> {
-    if (result.status !== OrderStatus.PAID) return;
-    if (!(await this.ordersService.claimOrderConfirmationEmail(result.checkoutSnapshotId))) {
-      return;
-    }
-
+  }): Promise<
+    'accepted' | 'not_paid' | 'already_sent_or_claimed' | 'unavailable' | 'retry_required'
+  > {
+    if (result.status !== OrderStatus.PAID) return 'not_paid';
+    let claimed = false;
     try {
+      claimed = await this.ordersService.claimOrderConfirmationEmail(
+        result.checkoutSnapshotId,
+      );
+      if (!claimed) return 'already_sent_or_claimed';
       const orderForEmail = await this.prisma.order.findUnique({
         where: { id: result.orderId },
         ...orderForConfirmationEmailInclude,
       });
-      if (!orderForEmail) {
+      if (!orderForEmail || orderForEmail.status !== OrderStatus.PAID) {
         await this.ordersService.releaseOrderConfirmationEmailClaim(
           result.checkoutSnapshotId,
         );
         this.logger.warn(
           `No se pudo resolver el pedido o email de confirmación para checkout ${result.checkoutSnapshotId}`,
         );
-        return;
+        return 'unavailable';
       }
 
       const customerEmail =
@@ -283,7 +312,7 @@ export class StripeWebhookController {
         this.logger.warn(
           `No se pudo resolver el email de confirmaciÃ³n para checkout ${result.checkoutSnapshotId}`,
         );
-        return;
+        return 'unavailable';
       }
 
       const templateData = this.orderConfirmationEmailMapper.map(orderForEmail);
@@ -297,14 +326,18 @@ export class StripeWebhookController {
       await this.ordersService.markOrderConfirmationEmailSent(
         result.checkoutSnapshotId,
       );
+      return 'accepted';
     } catch (error) {
-      await this.ordersService.releaseOrderConfirmationEmailClaim(
-        result.checkoutSnapshotId,
-      );
+      if (claimed) {
+        await this.ordersService.releaseOrderConfirmationEmailClaim(
+          result.checkoutSnapshotId,
+        ).catch(() => undefined);
+      }
       this.logger.error(
         `Error enviando email de confirmación para checkout ${result.checkoutSnapshotId}`,
         error instanceof Error ? error.stack : String(error),
       );
+      return 'retry_required';
     }
   }
 
