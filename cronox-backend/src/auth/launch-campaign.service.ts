@@ -5,9 +5,9 @@ import { EmailService } from '../email/email.service';
 import { EmailType } from '../email/email.types';
 import { getFrontendUrl } from '../common/config/environment';
 
-export const LAUNCH_SUBJECT = 'CRONOX ya está abierta. Tu acceso empieza aquí.';
+export const LAUNCH_SUBJECT = 'CRONOX ya está abierto. Tu acceso empieza aquí.';
 export const launchMessage = (code: string) =>
-  `La espera ha terminado. CRONOX ya está abierta. Gracias por estar aquí antes del comienzo: tienes un 15% de descuento con tu código ${code}. Es personal, válido únicamente con tu cuenta y de un solo uso. Entra, descubre la colección y déjate corromper. El enlace de acceso caduca en 24 horas y solo se puede utilizar una vez; después podrás entrar con tu contraseña o restablecerla. No compartas este correo: el enlace da acceso a tu cuenta.`;
+  `La espera ha terminado. CRONOX ya está abierto. Gracias por estar aquí antes del comienzo: tienes un 15% de descuento con tu código ${code}. Es personal, válido únicamente con tu cuenta y de un solo uso. El enlace de acceso caduca en 72 horas y solo se puede utilizar una vez; después podrás entrar con tu contraseña o restablecerla. No compartas este correo: el enlace da acceso a tu cuenta.`;
 
 @Injectable()
 export class LaunchCampaignService {
@@ -57,7 +57,7 @@ export class LaunchCampaignService {
         }
         await tx.preRegistration.update({ where: { userId: registration.userId }, data: {
           launchCode: code, launchTokenHash: createHash('sha256').update(token).digest('hex'),
-          launchTokenExpiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000), launchTokenUsedAt: null,
+          launchTokenExpiresAt: new Date(Date.now() + 72 * 60 * 60 * 1000), launchTokenUsedAt: null,
         } });
         return { email: registration.user.email, code };
       });
