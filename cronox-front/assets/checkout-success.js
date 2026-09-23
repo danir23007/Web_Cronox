@@ -141,7 +141,7 @@
     setUiState({
       eyebrow: 'Compra completada',
       title: 'Pedido confirmado',
-      message: 'Tu pedido ha sido guardado correctamente. Te hemos enviado un correo de confirmación.',
+      message: 'Tu pedido ha sido guardado correctamente. Guarda el número de pedido para cualquier consulta.',
     });
 
     if (referenceEl && displayRef) {
