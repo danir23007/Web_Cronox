@@ -11,6 +11,22 @@
   const title = $('#orderDetailTitle');
   const detailMessage = $('#orderDetailMessage');
   const statusElement = $('#orderDetailStatus');
+  const orderNumber = $('#orderDetailNumber');
+  const paymentStatus = $('#orderPaymentStatus');
+  const fulfillmentStatus = $('#orderFulfillmentStatus');
+  const customerName = $('#orderCustomerName');
+  const customerEmail = $('#orderCustomerEmail');
+  const customerPhone = $('#orderCustomerPhone');
+  const addressRecipient = $('#orderAddressRecipient');
+  const addressLine1 = $('#orderAddressLine1');
+  const addressLine2 = $('#orderAddressLine2');
+  const addressPostcode = $('#orderAddressPostcode');
+  const addressCity = $('#orderAddressCity');
+  const addressProvince = $('#orderAddressProvince');
+  const addressCountry = $('#orderAddressCountry');
+  const itemsBody = $('#orderItemsBody');
+  const shippingMethod = $('#orderShippingMethod');
+  const shippingCost = $('#orderShippingCost');
   const carrierInput = $('#orderCarrier');
   const trackingNumberInput = $('#orderTrackingNumber');
   const trackingUrlInput = $('#orderTrackingUrl');
@@ -23,7 +39,25 @@
   let currentOrder = null;
   let busy = false;
 
-  const text = (value, fallback = '—') => (value == null || value === '' ? fallback : String(value));
+  const text = (value, fallback = 'No disponible') =>
+    value == null || value === '' ? fallback : String(value);
+  const setText = (element, value, fallback) => {
+    if (element) element.textContent = text(value, fallback);
+  };
+  const statusLabel = (value) => {
+    const labels = {
+      PENDING: 'Pendiente',
+      PAID: 'Pagado',
+      PROCESSING: 'En preparación',
+      NOT_SHIPPED: 'No enviado',
+      SHIPPED: 'Enviado',
+      DELIVERED: 'Entregado',
+      REFUNDED: 'Reembolsado',
+      DISPUTED: 'En disputa',
+      CANCELLED: 'Cancelado',
+    };
+    return labels[value] || text(value);
+  };
   const formatDate = (value) => {
     if (!value) return '—';
     const date = new Date(value);
@@ -53,7 +87,7 @@
   const createStatusChip = (status) => {
     const chip = document.createElement('span');
     chip.className = 'chip ' + statusClass(status);
-    chip.textContent = text(status);
+    chip.textContent = statusLabel(status);
     return chip;
   };
   const createCell = (row, value, className = '') => {
@@ -118,21 +152,70 @@
   };
   const applyActions = () => {
     const status = currentOrder?.status;
+    const missingOrder = !currentOrder?.id;
     const blocked = status === 'DELIVERED' || status === 'REFUNDED' || status === 'CANCELLED';
-    if (shipButton) shipButton.disabled = busy || blocked || status === 'SHIPPED';
-    if (deliverButton) deliverButton.disabled = busy || blocked || status === 'DELIVERED';
-    if (refundButton) refundButton.disabled = busy || status === 'REFUNDED';
+    if (saveButton) saveButton.disabled = busy || missingOrder;
+    if (shipButton) shipButton.disabled = busy || missingOrder || blocked || status === 'SHIPPED';
+    if (deliverButton) deliverButton.disabled = busy || missingOrder || blocked || status === 'DELIVERED';
+    if (refundButton) refundButton.disabled = busy || missingOrder || status === 'REFUNDED';
   };
   const fill = (order) => {
     currentOrder = order || null;
     if (title) title.textContent = 'Pedido #' + text(order?.id);
     if (statusElement) statusElement.replaceChildren(createStatusChip(order?.status));
+    setText(orderNumber, order?.id);
+    setText(paymentStatus, statusLabel(order?.paymentStatus));
+    setText(fulfillmentStatus, statusLabel(order?.fulfillmentStatus));
+    setText(customerName, order?.customer?.name);
+    setText(customerEmail, order?.customer?.email || order?.userEmail);
+    setText(customerPhone, order?.customer?.phone);
+    setText(addressRecipient, order?.shippingAddress?.recipient);
+    setText(addressLine1, order?.shippingAddress?.line1);
+    setText(addressLine2, order?.shippingAddress?.line2);
+    setText(addressPostcode, order?.shippingAddress?.postalCode);
+    setText(addressCity, order?.shippingAddress?.city);
+    setText(addressProvince, order?.shippingAddress?.province);
+    setText(addressCountry, order?.shippingAddress?.country);
+    const methodLabel = order?.shippingMethod?.label;
+    const methodCode = order?.shippingMethod?.code;
+    setText(
+      shippingMethod,
+      methodLabel && methodCode && methodLabel !== methodCode
+        ? methodLabel + ' (' + methodCode + ')'
+        : methodLabel || methodCode,
+    );
+    setText(shippingCost, order?.shippingCost == null ? null : money(order.shippingCost));
+    renderOrderItems(order?.items);
     if (carrierInput) carrierInput.value = text(order?.shippingCarrier, '');
     if (trackingNumberInput) trackingNumberInput.value = text(order?.trackingNumber, '');
     if (trackingUrlInput) trackingUrlInput.value = text(order?.trackingUrl, '');
     if (internalNoteInput) internalNoteInput.value = text(order?.internalNote, '');
     setMessage(detailMessage, '');
     applyActions();
+  };
+  const renderOrderItems = (items) => {
+    if (!itemsBody) return;
+    if (!Array.isArray(items) || !items.length) {
+      const row = document.createElement('tr');
+      const cell = document.createElement('td');
+      cell.colSpan = 4;
+      cell.className = 'empty';
+      cell.textContent = 'No hay productos disponibles en este pedido.';
+      row.appendChild(cell);
+      itemsBody.replaceChildren(row);
+      return;
+    }
+
+    const fragment = document.createDocumentFragment();
+    items.forEach((item) => {
+      const row = document.createElement('tr');
+      createCell(row, item?.title);
+      createCell(row, item?.variant);
+      createCell(row, item?.quantity);
+      createCell(row, item?.lineTotal == null ? null : money(item.lineTotal));
+      fragment.appendChild(row);
+    });
+    itemsBody.replaceChildren(fragment);
   };
   const normalizeResponse = (response) => {
     if (Array.isArray(response)) return { items: response };
@@ -189,6 +272,9 @@
     }
   }
   async function openOrder(id) {
+    fill(null);
+    if (title) title.textContent = 'Pedido #' + text(id);
+    setText(orderNumber, id);
     setMessage(detailMessage, 'Cargando...');
     toggleModal(true);
     try {

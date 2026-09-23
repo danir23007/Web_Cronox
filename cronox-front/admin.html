@@ -79,8 +79,16 @@
     .modal { position: fixed; inset: 0; background: rgba(0,0,0,0.7); display: none; align-items: center; justify-content: center; padding: 20px; z-index: 20; }
     .modal.show { display: flex; }
     .modal .modal-box { background: #111119; border: 1px solid #1d1d26; border-radius: 14px; width: min(720px, 100%); max-height: 90vh; overflow-y: auto; padding: 18px; box-shadow: 0 10px 30px rgba(0,0,0,0.45); }
+    .modal .modal-box.order-detail { width: min(960px, 100%); }
     .modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 16px; }
     .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
+    .order-detail__section { margin-top:16px; padding-top:14px; border-top:1px solid #292933; }
+    .order-detail__section h4 { margin:0 0 10px; }
+    .order-detail__facts { display:grid; grid-template-columns:repeat(auto-fit, minmax(180px, 1fr)); gap:10px 16px; margin:0; }
+    .order-detail__fact { min-width:0; }
+    .order-detail__fact dt { color:#aaa; font-size:12px; margin-bottom:3px; }
+    .order-detail__fact dd { margin:0; overflow-wrap:anywhere; white-space:pre-wrap; }
+    .order-detail__items { overflow-x:auto; }
     .form-group { display: flex; flex-direction: column; gap: 6px; }
     .image-preview { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 8px; }
     .product-card-framing-editor { margin: 14px 0; padding: 14px; border: 1px solid #2a2a36; border-radius: 12px; background: #0b0b11; }
@@ -892,19 +900,63 @@
     </section>
 
     <div class="modal" id="orderDetailModal">
-      <div class="modal-box">
+      <div class="modal-box order-detail">
         <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap;">
           <h3 id="orderDetailTitle" style="margin:0;">Pedido</h3>
           <button type="button" class="btn" id="orderDetailClose">Cerrar</button>
         </div>
         <div id="orderDetailMessage" class="message" role="status" aria-live="polite"></div>
+        <section class="order-detail__section" aria-labelledby="orderSummaryHeading">
+          <h4 id="orderSummaryHeading">Resumen del pedido</h4>
+          <dl class="order-detail__facts">
+            <div class="order-detail__fact"><dt>N&uacute;mero de pedido</dt><dd id="orderDetailNumber">No disponible</dd></div>
+            <div class="order-detail__fact"><dt>Estado de pago</dt><dd id="orderPaymentStatus">No disponible</dd></div>
+            <div class="order-detail__fact"><dt>Estado de preparaci&oacute;n</dt><dd id="orderFulfillmentStatus">No disponible</dd></div>
+            <div class="order-detail__fact"><dt>Estado actual</dt><dd id="orderDetailStatus" class="badge">No disponible</dd></div>
+          </dl>
+        </section>
+        <section class="order-detail__section" aria-labelledby="orderCustomerHeading">
+          <h4 id="orderCustomerHeading">Cliente</h4>
+          <dl class="order-detail__facts">
+            <div class="order-detail__fact"><dt>Nombre</dt><dd id="orderCustomerName">No disponible</dd></div>
+            <div class="order-detail__fact"><dt>Email</dt><dd id="orderCustomerEmail">No disponible</dd></div>
+            <div class="order-detail__fact"><dt>Tel&eacute;fono</dt><dd id="orderCustomerPhone">No disponible</dd></div>
+          </dl>
+        </section>
+        <section class="order-detail__section" aria-labelledby="orderAddressHeading">
+          <h4 id="orderAddressHeading">Direcci&oacute;n de env&iacute;o</h4>
+          <dl class="order-detail__facts">
+            <div class="order-detail__fact"><dt>Destinatario</dt><dd id="orderAddressRecipient">No disponible</dd></div>
+            <div class="order-detail__fact"><dt>Calle y n&uacute;mero</dt><dd id="orderAddressLine1">No disponible</dd></div>
+            <div class="order-detail__fact"><dt>Detalles adicionales</dt><dd id="orderAddressLine2">No disponible</dd></div>
+            <div class="order-detail__fact"><dt>C&oacute;digo postal</dt><dd id="orderAddressPostcode">No disponible</dd></div>
+            <div class="order-detail__fact"><dt>Ciudad</dt><dd id="orderAddressCity">No disponible</dd></div>
+            <div class="order-detail__fact"><dt>Provincia</dt><dd id="orderAddressProvince">No disponible</dd></div>
+            <div class="order-detail__fact"><dt>Pa&iacute;s</dt><dd id="orderAddressCountry">No disponible</dd></div>
+          </dl>
+        </section>
+        <section class="order-detail__section" aria-labelledby="orderItemsHeading">
+          <h4 id="orderItemsHeading">Productos</h4>
+          <div class="order-detail__items">
+            <table>
+              <thead><tr><th>Producto</th><th>Variante / talla</th><th>Cantidad</th><th>Total de l&iacute;nea</th></tr></thead>
+              <tbody id="orderItemsBody"><tr><td colspan="4" class="empty">No disponible</td></tr></tbody>
+            </table>
+          </div>
+          <dl class="order-detail__facts" style="margin-top:10px;">
+            <div class="order-detail__fact"><dt>M&eacute;todo de env&iacute;o</dt><dd id="orderShippingMethod">No disponible</dd></div>
+            <div class="order-detail__fact"><dt>Coste de env&iacute;o</dt><dd id="orderShippingCost">No disponible</dd></div>
+          </dl>
+        </section>
+        <section class="order-detail__section" aria-labelledby="orderTrackingHeading">
+          <h4 id="orderTrackingHeading">Seguimiento y notas</h4>
         <div class="form-grid" style="margin-top:10px;">
-          <div class="form-group"><label>Estado actual</label><div id="orderDetailStatus" class="badge">—</div></div>
           <label class="form-group"><span>Carrier</span><input id="orderCarrier" class="input" type="text" placeholder="DHL, Correos, UPS"></label>
           <label class="form-group"><span>Tracking number</span><input id="orderTrackingNumber" class="input" type="text" placeholder="Sin tracking"></label>
           <label class="form-group"><span>Tracking URL</span><input id="orderTrackingUrl" class="input" type="url" placeholder="https://..."></label>
           <label class="form-group" style="grid-column:1/-1;"><span>Nota interna</span><textarea id="orderInternalNote" class="textarea" placeholder="Nota interna logística"></textarea></label>
         </div>
+        </section>
         <div class="modal-actions">
           <button class="btn primary" id="orderSaveBtn" type="button">Guardar tracking</button>
           <button class="btn" id="orderMarkShippedBtn" type="button">Marcar enviado</button>

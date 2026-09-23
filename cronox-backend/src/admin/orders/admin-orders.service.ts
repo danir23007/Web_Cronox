@@ -14,6 +14,7 @@ import { EmailService } from '../../email/email.service';
 import { EmailType } from '../../email/email.types';
 import { StripeService } from '../../payments/stripe.service';
 import { OrdersService } from '../../orders/orders.service';
+import { toCountryDisplayName } from '../../common/country';
 
 const DEFAULT_PAGE_SIZE = 20;
 const MAX_EXPORT_ROWS = 5000;
@@ -44,6 +45,12 @@ type OrderWithItems = Prisma.OrderGetPayload<{
             name: true;
           };
         };
+      };
+    };
+    checkoutSnapshot: {
+      select: {
+        shippingMethodCode: true;
+        shippingMethodLabel: true;
       };
     };
   };
@@ -101,6 +108,12 @@ export class AdminOrdersService {
       where: { id },
       include: {
         user: { select: { email: true } },
+        checkoutSnapshot: {
+          select: {
+            shippingMethodCode: true,
+            shippingMethodLabel: true,
+          },
+        },
         items: {
           include: {
             product: { select: { id: true, name: true } },
@@ -123,6 +136,12 @@ export class AdminOrdersService {
   async updateOrderFulfillment(id: number, dto: UpdateOrderFulfillmentDto) {
     const include = {
       user: { select: { email: true } },
+      checkoutSnapshot: {
+        select: {
+          shippingMethodCode: true,
+          shippingMethodLabel: true,
+        },
+      },
       items: {
         include: {
           product: { select: { id: true, name: true } },
@@ -173,15 +192,27 @@ export class AdminOrdersService {
       if (hadExplicitStatus) {
         data.status = targetStatus;
       }
-      if (dto.trackingNumber !== undefined) data.trackingNumber = dto.trackingNumber ?? null;
-      if (dto.trackingUrl !== undefined) data.trackingUrl = dto.trackingUrl ?? null;
-      if (dto.shippingCarrier !== undefined) data.shippingCarrier = dto.shippingCarrier ?? null;
-      if (dto.internalNote !== undefined) data.internalNote = dto.internalNote ?? null;
+      if (dto.trackingNumber !== undefined)
+        data.trackingNumber = dto.trackingNumber ?? null;
+      if (dto.trackingUrl !== undefined)
+        data.trackingUrl = dto.trackingUrl ?? null;
+      if (dto.shippingCarrier !== undefined)
+        data.shippingCarrier = dto.shippingCarrier ?? null;
+      if (dto.internalNote !== undefined)
+        data.internalNote = dto.internalNote ?? null;
 
-      if (hadExplicitStatus && targetStatus === OrderStatus.SHIPPED && !existing.shippedAt) {
+      if (
+        hadExplicitStatus &&
+        targetStatus === OrderStatus.SHIPPED &&
+        !existing.shippedAt
+      ) {
         data.shippedAt = new Date();
       }
-      if (hadExplicitStatus && targetStatus === OrderStatus.DELIVERED && !existing.deliveredAt) {
+      if (
+        hadExplicitStatus &&
+        targetStatus === OrderStatus.DELIVERED &&
+        !existing.deliveredAt
+      ) {
         data.deliveredAt = new Date();
         if (!existing.shippedAt) {
           data.shippedAt = new Date();
@@ -203,7 +234,8 @@ export class AdminOrdersService {
     try {
       await this.sendStatusEmails(previous, updated, hadExplicitStatus);
     } catch (error) {
-      const reason = error instanceof Error ? error.message : 'Error desconocido';
+      const reason =
+        error instanceof Error ? error.message : 'Error desconocido';
       this.logger.error(
         `No se pudo enviar el email transaccional del pedido #${updated.id}. El pedido se actualizó correctamente. reason=${reason}`,
       );
@@ -215,6 +247,12 @@ export class AdminOrdersService {
   async refundOrder(id: number) {
     const include = {
       user: { select: { email: true } },
+      checkoutSnapshot: {
+        select: {
+          shippingMethodCode: true,
+          shippingMethodLabel: true,
+        },
+      },
       items: {
         include: {
           product: { select: { id: true, name: true } },
@@ -222,7 +260,10 @@ export class AdminOrdersService {
       },
     } as const;
 
-    const existing = await this.prisma.order.findUnique({ where: { id }, include });
+    const existing = await this.prisma.order.findUnique({
+      where: { id },
+      include,
+    });
     if (!existing) {
       throw new NotFoundException('Order not found');
     }
@@ -239,15 +280,18 @@ export class AdminOrdersService {
         existing.providerRef,
         OrderStatus.REFUNDED,
       );
-      const repaired = await this.prisma.order.findUnique({ where: { id }, include });
+      const repaired = await this.prisma.order.findUnique({
+        where: { id },
+        include,
+      });
       return this.serializeOrderWithItems(repaired ?? existing);
     }
     const refundableStatuses: OrderStatus[] = [
-        OrderStatus.PAID,
-        OrderStatus.PROCESSING,
-        OrderStatus.SHIPPED,
-        OrderStatus.DELIVERED,
-      ];
+      OrderStatus.PAID,
+      OrderStatus.PROCESSING,
+      OrderStatus.SHIPPED,
+      OrderStatus.DELIVERED,
+    ];
     if (!refundableStatuses.includes(existing.status)) {
       throw new BadRequestException('ORDER_NOT_REFUNDABLE_IN_CURRENT_STATE');
     }
@@ -263,7 +307,10 @@ export class AdminOrdersService {
       existing.providerRef,
       OrderStatus.REFUNDED,
     );
-    const order = await this.prisma.order.findUnique({ where: { id }, include });
+    const order = await this.prisma.order.findUnique({
+      where: { id },
+      include,
+    });
     if (!order) throw new NotFoundException('Order not found');
 
     return this.serializeOrderWithItems(order);
@@ -325,7 +372,10 @@ export class AdminOrdersService {
     ]);
 
     const csv = this.stringifyCsv([header, ...rows]);
-    const timestamp = new Date().toISOString().replace(/[:T]/g, '-').split('.')[0];
+    const timestamp = new Date()
+      .toISOString()
+      .replace(/[:T]/g, '-')
+      .split('.')[0];
 
     return {
       fileName: `orders-${timestamp}.csv`,
@@ -394,7 +444,8 @@ export class AdminOrdersService {
     sort: AdminOrdersQueryDto['sort'],
     direction: AdminOrdersQueryDto['order'],
   ): Prisma.OrderOrderByWithRelationInput {
-    const order: Prisma.SortOrder = (direction ?? 'desc') === 'asc' ? 'asc' : 'desc';
+    const order: Prisma.SortOrder =
+      (direction ?? 'desc') === 'asc' ? 'asc' : 'desc';
 
     switch (sort) {
       case 'total':
@@ -434,11 +485,28 @@ export class AdminOrdersService {
   }
 
   private serializeOrderWithItems(order: OrderWithItems) {
+    const shippingAddress = this.parseShippingAddress(order.shippingAddr);
+
     return {
       id: order.id,
       userId: order.userId,
-      userEmail: order.user?.email ?? null,
+      userEmail: order.customerEmail || order.user?.email || null,
+      customer: {
+        name: shippingAddress.recipient,
+        email: order.customerEmail || order.user?.email || null,
+        phone: shippingAddress.phone,
+      },
+      shippingAddress,
+      shippingMethod: {
+        code:
+          order.checkoutSnapshot?.shippingMethodCode ??
+          order.shippingMethodCode ??
+          null,
+        label: order.checkoutSnapshot?.shippingMethodLabel ?? null,
+      },
       status: order.status,
+      paymentStatus: this.getPaymentStatus(order.status),
+      fulfillmentStatus: this.getFulfillmentStatus(order),
       trackingNumber: order.trackingNumber,
       trackingUrl: order.trackingUrl,
       shippingCarrier: order.shippingCarrier,
@@ -461,6 +529,7 @@ export class AdminOrdersService {
         orderId: item.orderId,
         productId: item.productId,
         title: item.title,
+        variant: this.extractItemVariant(item.title),
         unitPrice: item.unitPrice.toFixed(2),
         quantity: item.quantity,
         lineTotal: item.lineTotal.toFixed(2),
@@ -472,6 +541,120 @@ export class AdminOrdersService {
           : undefined,
       })),
     };
+  }
+
+  private parseShippingAddress(input: unknown) {
+    const source =
+      input && typeof input === 'object' && !Array.isArray(input)
+        ? (input as Record<string, unknown>)
+        : {};
+    const firstName = this.pickAddressString(source, [
+      'firstName',
+      'firstname',
+      'first_name',
+    ]);
+    const lastName = this.pickAddressString(source, [
+      'lastName',
+      'lastname',
+      'last_name',
+    ]);
+    const recipient =
+      this.pickAddressString(source, ['fullName', 'full_name', 'name']) ??
+      ([firstName, lastName].filter(Boolean).join(' ').trim() || null);
+    const countryValue = this.pickAddressString(source, [
+      'country',
+      'countryCode',
+      'country_code',
+    ]);
+
+    return {
+      recipient,
+      line1: this.pickAddressString(source, [
+        'line1',
+        'address1',
+        'address',
+        'street',
+      ]),
+      line2: this.pickAddressString(source, [
+        'line2',
+        'address2',
+        'addressLine2',
+        'additionalAddress',
+      ]),
+      postalCode: this.pickAddressString(source, [
+        'postalCode',
+        'postal_code',
+        'zip',
+        'zipCode',
+      ]),
+      city: this.pickAddressString(source, ['city', 'town', 'locality']),
+      province: this.pickAddressString(source, ['state', 'province', 'region']),
+      country: toCountryDisplayName(countryValue) ?? countryValue,
+      phone: this.pickAddressString(source, [
+        'phone',
+        'phoneNumber',
+        'telephone',
+      ]),
+    };
+  }
+
+  private pickAddressString(
+    source: Record<string, unknown>,
+    keys: string[],
+  ): string | null {
+    const nested =
+      source.address &&
+      typeof source.address === 'object' &&
+      !Array.isArray(source.address)
+        ? (source.address as Record<string, unknown>)
+        : null;
+
+    for (const key of keys) {
+      for (const candidate of [source[key], nested?.[key]]) {
+        if (typeof candidate === 'string' && candidate.trim()) {
+          return candidate.trim();
+        }
+      }
+    }
+    return null;
+  }
+
+  private extractItemVariant(title: string): string | null {
+    return title.match(/\(([^)]+)\)\s*$/)?.[1]?.trim() || null;
+  }
+
+  private getPaymentStatus(status: OrderStatus): string {
+    if (
+      status === OrderStatus.PAID ||
+      status === OrderStatus.PROCESSING ||
+      status === OrderStatus.SHIPPED ||
+      status === OrderStatus.DELIVERED
+    ) {
+      return 'PAID';
+    }
+    return status;
+  }
+
+  private getFulfillmentStatus(
+    order: Pick<
+      OrderWithItems,
+      'status' | 'preDisputeStatus' | 'shippedAt' | 'deliveredAt'
+    >,
+  ): string {
+    if (order.deliveredAt || order.status === OrderStatus.DELIVERED) {
+      return 'DELIVERED';
+    }
+    if (order.shippedAt || order.status === OrderStatus.SHIPPED)
+      return 'SHIPPED';
+    const effectiveStatus = order.preDisputeStatus ?? order.status;
+    if (effectiveStatus === OrderStatus.PROCESSING) return 'PROCESSING';
+    if (
+      effectiveStatus === OrderStatus.CANCELLED ||
+      effectiveStatus === OrderStatus.REFUNDED
+    ) {
+      return effectiveStatus;
+    }
+    return 'NOT_SHIPPED';
   }
 
   private formatMoney(value: Prisma.Decimal | number): string {
@@ -499,7 +682,9 @@ export class AdminOrdersService {
             const rawValue = String(column);
             // Spreadsheet software can evaluate a quoted CSV field as a formula
             // when its first non-whitespace character is a formula operator.
-            const formulaSafeValue = /^[\u0000-\u0020\uFEFF]*[=+\-@]/.test(rawValue)
+            const formulaSafeValue = /^[\u0000-\u0020\uFEFF]*[=+\-@]/.test(
+              rawValue,
+            )
               ? `'${rawValue}`
               : rawValue;
             const value = formulaSafeValue.replace(/"/g, '""');
@@ -555,7 +740,9 @@ export class AdminOrdersService {
     };
 
     if (!allowed[from].includes(to)) {
-      throw new BadRequestException(`Transición no permitida: ${from} -> ${to}`);
+      throw new BadRequestException(
+        `Transición no permitida: ${from} -> ${to}`,
+      );
     }
   }
 
@@ -625,14 +812,26 @@ export class AdminOrdersService {
 
     const itemsCount = this.computeItemsQuantity(updated.items);
     const movedToCompletion =
-      this.isCompletionStatus(updated.status) && !this.isCompletionStatus(previous.status);
+      this.isCompletionStatus(updated.status) &&
+      !this.isCompletionStatus(previous.status);
 
     if (movedToCompletion) {
-      await this.historialService.incrementOrderProgress(updated.userId, itemsCount, tx);
+      await this.historialService.incrementOrderProgress(
+        updated.userId,
+        itemsCount,
+        tx,
+      );
     }
 
-    if (updated.status === OrderStatus.REFUNDED && previous.status !== OrderStatus.REFUNDED) {
-      await this.historialService.registerReturn(updated.userId, itemsCount, tx);
+    if (
+      updated.status === OrderStatus.REFUNDED &&
+      previous.status !== OrderStatus.REFUNDED
+    ) {
+      await this.historialService.registerReturn(
+        updated.userId,
+        itemsCount,
+        tx,
+      );
     }
   }
 
@@ -641,7 +840,10 @@ export class AdminOrdersService {
     previous: OrderWithItems,
     updated: OrderWithItems,
   ) {
-    if (updated.status !== OrderStatus.PAID || previous.status === OrderStatus.PAID) {
+    if (
+      updated.status !== OrderStatus.PAID ||
+      previous.status === OrderStatus.PAID
+    ) {
       return;
     }
 
@@ -682,15 +884,18 @@ export class AdminOrdersService {
       throw new BadRequestException('Límite de usos alcanzado');
     }
 
-    const alreadyRedeemed = promo.singleUsePerUser && updated.userId
-      ? await tx.promoCodeRedemption.findFirst({
-          where: { promoCodeId: promo.id, userId: updated.userId },
-          select: { id: true },
-        })
-      : null;
+    const alreadyRedeemed =
+      promo.singleUsePerUser && updated.userId
+        ? await tx.promoCodeRedemption.findFirst({
+            where: { promoCodeId: promo.id, userId: updated.userId },
+            select: { id: true },
+          })
+        : null;
 
     if (alreadyRedeemed) {
-      throw new BadRequestException('Ya has utilizado este código de descuento.');
+      throw new BadRequestException(
+        'Ya has utilizado este código de descuento.',
+      );
     }
 
     const usageLimitCondition =
@@ -708,20 +913,22 @@ export class AdminOrdersService {
     if (updated.userId != null) {
       if (promo.singleUsePerUser) {
         try {
-        await tx.promoCodeRedemption.create({
-          data: {
-            promoCodeId: promo.id,
-            userId: updated.userId,
-            orderId: updated.id,
-          },
-        });
+          await tx.promoCodeRedemption.create({
+            data: {
+              promoCodeId: promo.id,
+              userId: updated.userId,
+              orderId: updated.id,
+            },
+          });
         } catch (error) {
-        if (
-          error instanceof Prisma.PrismaClientKnownRequestError &&
-          error.code === 'P2002'
-        ) {
-          throw new BadRequestException('Ya has utilizado este código de descuento.');
-        }
+          if (
+            error instanceof Prisma.PrismaClientKnownRequestError &&
+            error.code === 'P2002'
+          ) {
+            throw new BadRequestException(
+              'Ya has utilizado este código de descuento.',
+            );
+          }
           throw error;
         }
       } else {
