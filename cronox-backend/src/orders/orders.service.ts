@@ -1063,6 +1063,9 @@ export class OrdersService {
   async claimStripeWebhookEvent(
     input: StripeWebhookEventInput,
   ): Promise<boolean> {
+    if (input.paymentIntentId && await this.prisma.archivedCheckoutPayment.findUnique({
+      where: { paymentIntentId: input.paymentIntentId }, select: { paymentIntentId: true },
+    })) return false;
     try {
       await this.prisma.stripeWebhookEvent.create({
         data: {
@@ -1283,6 +1286,9 @@ export class OrdersService {
           await this.handlePromoUsageOnPaid(tx, created);
         } else if (lifecycleStatus === OrderStatus.REFUNDED) {
           await this.releaseStockReservationsForCheckoutSnapshot(tx, snapshot);
+          // A refund arriving before success must not leave the purchased items
+          // in the cart. This transaction only runs once per PaymentIntent.
+          await this.clearCartIfSnapshotStillCurrent(tx, snapshot);
         }
 
         await tx.checkoutSnapshot.update({
@@ -2654,6 +2660,8 @@ export class OrdersService {
         expiresAt: true,
         isActive: true,
         singleUsePerUser: true,
+        ownerUserId: true,
+        ownerEmail: true,
         usageLimit: true,
         usageCount: true,
       },
@@ -2733,6 +2741,8 @@ export class OrdersService {
       expiresAt: Date | null;
       isActive: boolean;
       singleUsePerUser: boolean;
+      ownerUserId?: number | null;
+      ownerEmail?: string | null;
       usageLimit: number | null;
       usageCount: number;
     },
@@ -2743,6 +2753,19 @@ export class OrdersService {
     } = {},
   ): Promise<{ valid: boolean; message?: string }> {
     const now = new Date();
+
+    if (promo.ownerUserId != null) {
+      // An email typed into guest checkout is not proof of account ownership.
+      if (options.userId !== promo.ownerUserId) {
+        return { valid: false, message: 'Este código es personal. Inicia sesión con la cuenta que lo recibió.' };
+      }
+      const user = await (options.client ?? this.prisma).user.findUnique({
+        where: { id: options.userId }, select: { email: true },
+      });
+      if (!user || normalizeEmail(user.email) !== normalizeEmail(promo.ownerEmail)) {
+        return { valid: false, message: 'Este código no corresponde a tu cuenta.' };
+      }
+    }
 
     if (!promo.isActive) {
       return { valid: false, message: 'Código caducado' };
@@ -3157,6 +3180,8 @@ export class OrdersService {
         expiresAt: true,
         isActive: true,
         singleUsePerUser: true,
+        ownerUserId: true,
+        ownerEmail: true,
         usageLimit: true,
         usageCount: true,
       },

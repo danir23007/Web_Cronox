@@ -1,3 +1,5 @@
+import { LaunchCampaignController } from './launch-campaign.controller';
+import { LaunchCampaignService } from './launch-campaign.service';
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { PassportModule } from '@nestjs/passport';
@@ -20,8 +22,8 @@ import { AccessAuthModule } from './access-auth.module';
     EmailModule,
     NewsletterModule,
   ],
-  controllers: [AuthController],
-  providers: [AuthService, JwtRefreshStrategy],
+  controllers: [AuthController, LaunchCampaignController],
+  providers: [AuthService, JwtRefreshStrategy, LaunchCampaignService],
   exports: [AuthService],
 })
 export class AuthModule {}

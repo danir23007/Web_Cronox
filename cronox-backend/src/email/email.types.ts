@@ -28,7 +28,7 @@ export enum EmailType {
 }
 
 export interface EmailSendOptions {
-  purpose?: 'INITIAL_PASSWORD_SETUP' | 'FIRST_ORDER_DISCOUNT';
+  purpose?: 'INITIAL_PASSWORD_SETUP' | 'FIRST_ORDER_DISCOUNT' | 'LAUNCH';
   type: EmailType;
   to: string;
   subject: string;

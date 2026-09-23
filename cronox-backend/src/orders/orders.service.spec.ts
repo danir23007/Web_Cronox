@@ -1097,10 +1097,12 @@ describe('OrdersService checkout reservations', () => {
     prisma.stripeWebhookEvent.findMany.mockResolvedValue([{ lifecycleStatus: 'REFUNDED', type: 'charge.refunded', occurredAt: new Date() }]);
     const release = jest.spyOn(service as any, 'releaseStockReservationsForCheckoutSnapshot').mockResolvedValue(undefined);
     const consume = jest.spyOn(service as any, 'consumeStockReservationsForCheckoutSnapshot');
+    const clear = jest.spyOn(service as any, 'clearCartIfSnapshotStillCurrent').mockResolvedValue(undefined);
     jest.spyOn(service, 'reconcileStripePaymentLifecycle').mockResolvedValue(undefined);
     await expect(service.createOrderFromVerifiedStripePayment({ checkoutSnapshotId: snapshot.id, paymentIntentId: 'pi_refund_first', amountCents: 10495, currency: 'EUR', occurredAt: new Date('2026-08-08T10:00:00.000Z') })).resolves.toMatchObject({ orderId: 101, status: 'REFUNDED' });
     expect(prisma.order.create).toHaveBeenCalledWith({ data: expect.objectContaining({ status: 'REFUNDED' }) });
     expect(release).toHaveBeenCalledTimes(1);
+    expect(clear).toHaveBeenCalledTimes(1);
     expect(consume).not.toHaveBeenCalled();
   });
 
@@ -1673,5 +1675,41 @@ describe('OrdersService checkout reservations', () => {
         (service as any).handlePromoUsageOnPaid(prisma, paidOrder()),
       ).rejects.toThrow('Ya has utilizado este código de descuento.');
     });
+  });
+});
+
+
+describe('Personal launch code ownership', () => {
+  const promo = { id: 1, ownerUserId: 7, ownerEmail: 'owner@example.test',
+    isActive: true, startsAt: null, expiresAt: null, usageLimit: 1, usageCount: 0, singleUsePerUser: true };
+  const validate = (userId?: number, email = 'owner@example.test', customerEmail?: string) =>
+    (OrdersService.prototype as any).validatePromoAvailability.call({
+      prisma: { user: { findUnique: async () => ({ email }) }, promoCodeRedemption: { findFirst: async () => null } },
+      resolvePromoRedemptionUserId: async () => userId,
+    }, promo, { userId, customerEmail });
+  it('rejects guest email impersonation', async () => {
+    expect(await validate(undefined, undefined, promo.ownerEmail)).toMatchObject({ valid: false });
+  });
+  it('rejects another signed-in account', async () => {
+    expect(await validate(8)).toMatchObject({ valid: false });
+  });
+  it('rejects a changed account email', async () => {
+    expect(await validate(7, 'changed@example.test')).toMatchObject({ valid: false });
+  });
+  it('accepts only the authenticated recipient', async () => {
+    expect(await validate(7)).toMatchObject({ valid: true });
+  });
+});
+
+
+describe('Archived test payment retries', () => {
+  it('does not claim a new event for a deleted test payment', async () => {
+    const create = jest.fn();
+    const result = await OrdersService.prototype.claimStripeWebhookEvent.call({
+      prisma: { archivedCheckoutPayment: { findUnique: async () => ({ paymentIntentId: 'pi_old' }) },
+        stripeWebhookEvent: { create } },
+    } as any, { id: 'evt_new', type: 'payment_intent.succeeded', paymentIntentId: 'pi_old', occurredAt: new Date() });
+    expect(result).toBe(false);
+    expect(create).not.toHaveBeenCalled();
   });
 });

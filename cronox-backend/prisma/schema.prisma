@@ -618,6 +618,12 @@ model PreRegistration {
   screenId              String?
   screen                KeyScreen? @relation(fields: [screenId], references: [id], onDelete: SetNull)
   submittedAt           DateTime   @default(now())
+  launchCode            String?    @unique
+  launchTokenHash       String?    @unique
+  launchTokenExpiresAt  DateTime?
+  launchTokenUsedAt     DateTime?
+  launchClaimedAt       DateTime?
+  launchSentAt          DateTime?
   confirmationClaimedAt DateTime?
   confirmationSentAt    DateTime?
   createdAt             DateTime   @default(now())
@@ -969,6 +975,8 @@ model NewsletterSubscription {
 }
 
 model PromoCode {
+  ownerUserId          Int?
+  ownerEmail           String?
   id                   Int                   @id @default(autoincrement())
   code                 String                @unique
   type                 PromoCodeType
@@ -1253,4 +1261,10 @@ enum UserAccountState {
   ACTIVE
   PENDING_PASSWORD
   PRE_REGISTERED
+}
+
+// Tombstones prevent historical Stripe retries from recreating deleted test orders.
+model ArchivedCheckoutPayment {
+  paymentIntentId String @id
+  archivedAt DateTime @default(now())
 }
