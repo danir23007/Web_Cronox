@@ -44,7 +44,13 @@
   const state = {
     cart: null,
     shippingMethod: 'STANDARD',
+    status: 'loading',
+    error: null,
   };
+  const statusEl = document.createElement('div');
+  statusEl.className = 'cart-status';
+  statusEl.setAttribute('role', 'status');
+  listEl?.parentElement.before(statusEl);
 
   const calculateShipping = (itemsTotal, method) => {
     if (method === 'EXPRESS') return EXPRESS_SHIPPING;
@@ -76,7 +82,8 @@
 
   const renderSummary = () => {
     const subtotalCents = state.cart?.subtotalCents || 0;
-    const shippingCents = state.cart
+    const hasItems = Boolean(state.cart?.items?.length);
+    const shippingCents = hasItems
       ? calculateShipping(subtotalCents, state.shippingMethod)
       : 0;
     const isFree = shippingCents === 0 && state.shippingMethod === 'STANDARD';
@@ -87,8 +94,11 @@
         )}`;
 
     subtotalEl && (subtotalEl.textContent = money(subtotalCents));
-    shippingLabelEl && (shippingLabelEl.textContent = state.cart ? shippingLabel : '—');
+    shippingLabelEl && (shippingLabelEl.textContent = hasItems ? shippingLabel : '—');
     totalEl && (totalEl.textContent = money((state.cart ? subtotalCents : 0) + shippingCents));
+    const unavailable = !hasItems || state.status === 'loading' || state.status === 'error' || Boolean(Cart?.state.pending);
+    if (btnCheckout) btnCheckout.disabled = unavailable;
+    if (btnClear) btnClear.disabled = unavailable;
 
     if (shippingOptionsEl) {
       shippingOptionsEl.querySelectorAll('.shipping-option__price').forEach((priceEl) => {
@@ -108,14 +118,38 @@
   const renderEmpty = () => {
     if (!listEl) return;
     listEl.innerHTML = '';
-    if (emptyEl) emptyEl.hidden = false;
+    if (emptyEl) {
+      emptyEl.hidden = false;
+      listEl.appendChild(emptyEl);
+    }
     renderSummary();
   };
 
   const renderCart = () => {
     if (!listEl) return;
+    if (Cart) {
+      state.cart = Cart.state.data;
+      state.status = Cart.state.status;
+      state.error = Cart.state.error;
+    }
+    listEl.setAttribute('aria-busy', String(state.status === 'loading'));
+    statusEl.replaceChildren();
+    statusEl.hidden = state.status !== 'loading' && state.status !== 'error';
+    if (!statusEl.hidden) {
+      const message = document.createElement('p');
+      message.textContent = state.status === 'error' ? state.error : state.cart ? 'Actualizando cesta…' : 'Cargando cesta…';
+      statusEl.appendChild(message);
+      if (state.status === 'error') {
+        const retry = document.createElement('button');
+        retry.type = 'button';
+        retry.textContent = 'Reintentar';
+        retry.addEventListener('click', () => syncCart());
+        statusEl.appendChild(retry);
+      }
+    }
     if (!state.cart) {
-      renderEmpty();
+      listEl.replaceChildren();
+      renderSummary();
       return;
     }
     const items = Array.isArray(state.cart.items) ? state.cart.items : [];
@@ -133,7 +167,7 @@
         id: escapeHtml(itemId),
         qty,
         size: item.size ? escapeHtml(window.CRONOX_SIZES?.label?.(item.size) || String(item.size).toUpperCase()) : '',
-        priceLabel: escapeHtml(item.priceLabel || money(item.priceCents || 0)),
+        priceLabel: escapeHtml(money((item.priceCents || 0) * qty)),
         product: {
           name: escapeHtml(item.product?.name || 'Producto CRONOX'),
         },
@@ -170,6 +204,9 @@
   };
 
   const syncCart = async ({ initial = false } = {}) => {
+    state.status = 'loading';
+    state.error = null;
+    renderCart();
     try {
       if (initial && window.CRONOX_CART_READY) {
         state.cart = await window.CRONOX_CART_READY;
@@ -178,11 +215,13 @@
       } else if (API?.getCart) {
         state.cart = await API.getCart();
       } else {
-        state.cart = { items: [], subtotalCents: 0, itemsCount: 0 };
+        throw new Error('CART_API_UNAVAILABLE');
       }
+      state.status = state.cart?.items?.length ? 'populated' : 'empty';
     } catch (error) {
       console.warn('[CRONOX] Error cargando el carrito', error);
-      state.cart = { items: [], subtotalCents: 0, itemsCount: 0 };
+      state.status = 'error';
+      state.error = 'No se pudo cargar la cesta. Vuelve a intentarlo.';
     }
     renderCart();
   };
@@ -197,7 +236,9 @@
       renderCart();
     } catch (error) {
       console.error('[CRONOX] No se pudo actualizar la cantidad', error);
-      await syncCart();
+      state.status = 'error';
+      state.error = 'No se pudo actualizar la cantidad. Vuelve a intentarlo.';
+      renderCart();
     }
   };
 
@@ -209,7 +250,9 @@
       renderCart();
     } catch (error) {
       console.error('[CRONOX] No se pudo eliminar el artículo', error);
-      await syncCart();
+      state.status = 'error';
+      state.error = 'No se pudo eliminar el artículo. Vuelve a intentarlo.';
+      renderCart();
     }
   };
 
@@ -220,10 +263,13 @@
       renderCart();
     } catch (error) {
       console.error('[CRONOX] No se pudo vaciar el carrito', error);
+      state.status = 'error';
+      state.error = 'No se pudo vaciar la cesta. Vuelve a intentarlo.';
+      renderCart();
     }
   };
 
-  listEl?.addEventListener('input', (event) => {
+  listEl?.addEventListener('change', (event) => {
     const input = event.target.closest('.ci-qty');
     if (!input) return;
     handleQtyChange(input);
@@ -251,17 +297,22 @@
   });
 
   btnCheckout?.addEventListener('click', () => {
+    if (btnCheckout.disabled) return;
     window.location.href = '/checkout';
   });
 
-  document.addEventListener('DOMContentLoaded', () => {
+  const init = () => {
     const yearEl = document.getElementById('anio');
     if (yearEl) {
       yearEl.textContent = new Date().getFullYear();
     }
     renderShippingOptions();
     syncCart({ initial: true });
-  });
+  };
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init, { once: true });
+  else init();
+
+  window.addEventListener('cart:state', renderCart);
 
   window.addEventListener('cart:updated', (event) => {
     const cart = event?.detail;

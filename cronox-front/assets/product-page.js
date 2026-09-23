@@ -106,7 +106,9 @@
   }
 
   function addToCart(item) {
-    window.dispatchEvent(new CustomEvent("cronox:addToCart", { detail: item }));
+    return new Promise((resolve) => {
+      window.dispatchEvent(new CustomEvent("cronox:addToCart", { detail: { ...item, onComplete: resolve } }));
+    });
   }
 
   // ==========================
@@ -674,7 +676,7 @@
 
     // botón añadir al carrito
     if (target && pAdd) {
-      pAdd.addEventListener("click", () => {
+      pAdd.addEventListener("click", async () => {
         if (pAdd.disabled || window.CRONOX_STOCK?.classifyStock(window.CRONOX_STOCK.availableStock(target.variants)) === 'out_of_stock') return;
         const size = window.CRONOX_SIZES?.label?.(selectedSize) || selectedSize.toUpperCase();
         const variant = findVariantForSize(target, size);
@@ -685,7 +687,10 @@
         }
 
         const image = (Array.isArray(target.images) && target.images[0]) || target.image;
-        addToCart({
+        pAdd.disabled = true;
+        const previousLabel = pAdd.textContent;
+        pAdd.textContent = 'Añadiendo…';
+        const added = await addToCart({
           id: target.id,
           productId: target.backendId || target.id,
           slug: target.slug,
@@ -699,7 +704,9 @@
           qty: 1,
           variantId: variant.id,
         });
-        showToast("Añadido al carrito ✓");
+        pAdd.disabled = false;
+        pAdd.textContent = previousLabel;
+        showToast(added ? 'Añadido al carrito ✓' : 'No se pudo añadir. Vuelve a intentarlo.');
       });
     }
 

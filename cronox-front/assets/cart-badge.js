@@ -1,70 +1,30 @@
-// ======================================================
-// assets/cart-badge.js — contador de carrito en topbar
-// ======================================================
+// The controller owns cart reads; the badge only observes its current state.
 (function () {
-  const API = window.CRONOX_API || {};
-  const Cart = window.CRONOX_CART || null;
-
-  function updateBagVisual(hasItems) {
-    document.querySelectorAll('.topbar__cart .icon-bag').forEach(icon => {
-      if (hasItems) {
-        icon.classList.add('has-items');
-      } else {
-        icon.classList.remove('has-items');
-      }
+  const render = (cart) => {
+    const count = Number(cart?.itemsCount) || 0;
+    document.querySelectorAll('.cart-count').forEach((el) => {
+      el.textContent = String(count);
+      el.hidden = count <= 0;
     });
-  }
-
-  const render = (count) => {
-    const value = Number.isFinite(count) ? count : 0;
-    document.querySelectorAll('.cart-count').forEach(el => {
-      if (value > 0) {
-        el.textContent = String(value);
-        el.hidden = false;
-      } else {
-        el.hidden = true;
-      }
+    document.querySelectorAll('.topbar__cart .icon-bag').forEach((icon) => {
+      icon.classList.toggle('has-items', count > 0);
     });
-    updateBagVisual(value > 0);
   };
-
-  const refreshFromApi = async () => {
-    try {
-      if (Cart?.fetchCart) {
-        const cart = await Cart.fetchCart();
-        render(cart?.itemsCount ?? 0);
-        return;
-      }
-      if (API?.getCart) {
-        const cart = await API.getCart();
-        render(cart?.itemsCount ?? 0);
-        return;
-      }
-    } catch (error) {
-      console.warn('[CRONOX] No se pudo refrescar el badge del carrito', error);
-    }
-    render(0);
-  };
-
+  const current = () => render(window.CRONOX_CART?.state.data);
+  window.addEventListener('cart:state', current);
   window.addEventListener('cart:updated', (event) => {
-    const cart = event?.detail;
-    if (cart && typeof cart.itemsCount === 'number') {
-      render(cart.itemsCount);
-    } else {
-      refreshFromApi();
-    }
+    render(window.CRONOX_CART ? window.CRONOX_CART.state.data : event.detail);
   });
-
-  document.addEventListener('DOMContentLoaded', () => {
-    // app.js starts the authoritative initial read before this listener runs.
-    // Reuse it instead of sending a second cart request on every navigation.
-    if (window.CRONOX_CART_READY) {
-      Promise.resolve(window.CRONOX_CART_READY).then(
-        (cart) => render(cart?.itemsCount ?? 0),
-        () => refreshFromApi(),
-      );
+  const init = () => {
+    if (window.CRONOX_CART) {
+      current();
+      Promise.resolve(window.CRONOX_CART_READY).then(current, current);
+    } else if (window.CRONOX_CART_READY) {
+      Promise.resolve(window.CRONOX_CART_READY).then(render, () => undefined);
     } else {
-      refreshFromApi();
+      window.CRONOX_API?.getCart?.().then(render).catch(() => undefined);
     }
-  });
+  };
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init, { once: true });
+  else init();
 })();

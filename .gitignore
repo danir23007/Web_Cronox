@@ -1,6 +1,8 @@
 /cronox-backend/node_modules/
 /cronox-backend/dist/
 node_modules/
+test-results/
+playwright-report/
 
 # All dotenv files are local-only. Safe examples remain trackable.
 **/.env

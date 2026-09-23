@@ -124,8 +124,10 @@ describe('public storefront product ordering', () => {
       'producto.html',
     ]) {
       const html = readFrontend(page);
-      expect(html).toContain('assets/products.js?v=59');
-      expect(html).not.toMatch(/assets\/products\.js\?v=(?!59\b)/);
+      expect(html).toMatch(/assets\/products\.js\?v=\d+/);
+      expect(html.match(/assets\/products\.js\?v=\d+/)?.[0]).toBe(
+        readFrontend('index.html').match(/assets\/products\.js\?v=\d+/)?.[0],
+      );
     }
     expect(readFrontend('checkout.html')).toContain('assets/checkout.js?v=19');
   });

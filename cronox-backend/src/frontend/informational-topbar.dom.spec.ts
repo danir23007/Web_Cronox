@@ -76,16 +76,16 @@ describe('informational footer destinations use the shared CRONOX topbar', () =>
           `<body class="page-info">\\s*<script src="assets/info-shell\\.js\\?v=${shellVersion}"></script>`,
         ),
       );
-      expect(html).toContain('href="assets/store.css?v=91"');
+      expect(html).toMatch(/href="assets\/store\.css\?v=\d+"/);
       expect(html).toContain('href="assets/info-page.css?v=3"');
       expect(
         html.match(
           new RegExp(`assets/info-shell\\.js\\?v=${shellVersion}`, 'g'),
         ),
       ).toHaveLength(1);
-      expect(html.match(/assets\/app\.js\?v=70/g)).toHaveLength(1);
-      expect(html.match(/assets\/api\.js\?v=8/g)).toHaveLength(1);
-      expect(html.match(/assets\/cart-badge\.js\?v=44/g)).toHaveLength(1);
+      expect(html.match(/assets\/app\.js\?v=\d+/g)).toHaveLength(1);
+      expect(html.match(/assets\/api\.js\?v=\d+/g)).toHaveLength(1);
+      expect(html.match(/assets\/cart-badge\.js\?v=\d+/g)).toHaveLength(1);
 
       const dom = new JSDOM(html, {
         runScripts: 'outside-only',

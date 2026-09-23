@@ -1695,9 +1695,16 @@ import { installSessionTransport } from './session';
     }
   };
 
-  api.getCart = async () => {
-    const data = await withGuestCartRecovery(() => request('/api/cart'));
+  const mapCartResponse = (data: unknown) => {
+    if (!data || !Array.isArray((data as UnknownRecord).items)) {
+      throw new Error('CART_RESPONSE_INVALID');
+    }
     return mapCart(data as UnknownRecord);
+  };
+
+  api.getCart = async () => {
+    const data = await withGuestCartRecovery(() => request('/api/cart', { cache: 'no-store' }));
+    return mapCartResponse(data);
   };
 
   api.addCartItem = async ({
@@ -1713,7 +1720,7 @@ import { installSessionTransport } from './session';
         body: { variantId, qty },
       }),
     );
-    return mapCart(data as UnknownRecord);
+    return mapCartResponse(data);
   };
 
   api.updateCartItem = async (itemId: number | string, qty: number) => {
@@ -1723,7 +1730,7 @@ import { installSessionTransport } from './session';
         body: { qty },
       }),
     );
-    return mapCart(data as UnknownRecord);
+    return mapCartResponse(data);
   };
 
   api.removeCartItem = async (itemId: number | string) => {
@@ -1732,14 +1739,14 @@ import { installSessionTransport } from './session';
         method: 'DELETE',
       }),
     );
-    return mapCart(data as UnknownRecord);
+    return mapCartResponse(data);
   };
 
   api.clearCart = async () => {
     const data = await withGuestCartRecovery(() =>
       request('/api/cart', { method: 'DELETE' }),
     );
-    return mapCart(data as UnknownRecord);
+    return mapCartResponse(data);
   };
 
   // ===== ENVÍOS / CHECKOUT =====

@@ -51,7 +51,7 @@ describe('focused storefront refinement acceptance matrix', () => {
   });
 
   it('4. retrieves the guest cart from the same API', () => {
-    expect(app).toContain('const cart = await API.getCart()');
+    expect(app).toContain('return API.getCart()');
     expect(cartController).toContain('this.cartService.getOrCreateCart(context)');
   });
 

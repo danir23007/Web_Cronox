@@ -24,7 +24,7 @@ body { padding-top: calc(var(--topbar-h) + env(safe-area-inset-top)); }
 /* Grid del carrito: 2 columnas en desktop; 1 columna en móvil */
 .cart-grid{
   display:grid;
-  grid-template-columns: 1fr 420px;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 420px);
   gap:22px;
 }
 @media (max-width: 900px){
@@ -36,13 +36,14 @@ body { padding-top: calc(var(--topbar-h) + env(safe-area-inset-top)); }
 /* Lista de productos */
 .cart-items{
   display:flex; flex-direction:column; gap:12px;
+  min-width:0;
   min-height:180px;
 }
 
 /* Ítem de carrito */
 .cart-item{
   display:grid;
-  grid-template-columns: 96px 1fr auto;
+  grid-template-columns: 96px minmax(0, 1fr) auto;
   gap:12px;
   background: rgba(12,12,12,.88);
   border:1px solid rgba(255,255,255,.12);
@@ -54,7 +55,7 @@ body { padding-top: calc(var(--topbar-h) + env(safe-area-inset-top)); }
 @media (max-width:600px){
   .container{width:min(calc(100% - 24px),1200px);}
   .cart-item{
-    grid-template-columns: 76px 1fr;
+    grid-template-columns: 76px minmax(0, 1fr);
     grid-template-areas:
       "media info"
       "price info";
@@ -71,16 +72,20 @@ body { padding-top: calc(var(--topbar-h) + env(safe-area-inset-top)); }
   width:100%; height:100%; display:grid; place-items:center;
   background:transparent; border:1px solid rgba(255,255,255,.12); border-radius:0;
 }
+@media (max-width:600px){
+  .ci-media{grid-area:media;}
+  .ci-info{grid-area:info;}
+}
 .ci-media img{
   width:100%; height:100%; object-fit:contain; display:block; background:transparent;
 }
 
 /* Información */
-.ci-info{ display:flex; flex-direction:column; gap:6px; }
-.ci-name{ margin:0; font-weight:700; font-size:14px; color:#fff; }
+.ci-info{ display:flex; flex-direction:column; gap:6px; min-width:0; }
+.ci-name{ margin:0; font-weight:700; font-size:14px; color:#fff; overflow-wrap:anywhere; }
 .ci-meta{ margin:0; color:#cfcfcf; font-size:12px; display:flex; gap:10px; flex-wrap:wrap; }
 
-.ci-controls{ display:flex; gap:10px; align-items:center; margin-top:6px; }
+.ci-controls{ display:flex; flex-wrap:wrap; gap:10px; align-items:center; margin-top:6px; }
 .ci-qty{
   width:70px; background:#0f0f0f; border:1px solid rgba(255,255,255,.15); color:#fff;
   border-radius:0; padding:6px 8px;

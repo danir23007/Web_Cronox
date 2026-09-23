@@ -48,7 +48,7 @@ describe('storefront image, cart and footer corrections', () => {
     );
     expect(rule(storeCss, '.cart-overlay')).toMatch(/z-index:\s*1900;/);
     expect(rule(storeCss, '.cart-drawer')).toMatch(
-      /top:\s*0;[\s\S]*height:\s*100dvh;/,
+      /top:\s*var\(--cart-viewport-top,\s*0px\);[\s\S]*height:\s*100dvh;/,
     );
     expect(rule(storeCss, '.cart-drawer')).toMatch(/z-index:\s*1901;/);
     expect(storeCss).not.toContain('.topbar--cart-open');

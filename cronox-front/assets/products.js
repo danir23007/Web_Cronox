@@ -239,6 +239,7 @@
           <div class="qa-row">
             <button id="qaAdd" class="qa-btn">Añadir al carrito</button>
           </div>
+          <p id="qaCartStatus" role="status"></p>
 
           <a id="qaLink" class="qa-muted-link" href="#" rel="nofollow">Ver detalles del producto</a>
         </div>
@@ -296,8 +297,19 @@
         return;
       }
 
+      const productAtRequest = qaCurrentProduct;
+      qaAdd.disabled = true;
+      qaAdd.textContent = 'Añadiendo…';
+      const feedback = qaOverlay.querySelector('#qaCartStatus');
+      feedback.textContent = '';
       const ev = new CustomEvent("cronox:addToCart", {
         detail: {
+          onComplete: (success) => {
+            if (qaCurrentProduct !== productAtRequest) return;
+            qaAdd.textContent = success ? 'Añadido ✓' : 'Reintentar';
+            feedback.textContent = success ? 'Artículo añadido a tu cesta.' : 'No se pudo añadir. Vuelve a intentarlo.';
+            qaAdd.disabled = false;
+          },
           id: qaCurrentProduct.id,
           productId: qaCurrentProduct.backendId || qaCurrentProduct.id,
           slug: qaCurrentProduct.slug,
@@ -313,11 +325,6 @@
         }
       });
       window.dispatchEvent(ev);
-
-      qaAdd.disabled = true;
-      const prev = qaAdd.textContent;
-      qaAdd.textContent = "Añadido ✓";
-      qaFeedbackTimer = setTimeout(() => { qaAdd.textContent = prev; qaAdd.disabled = false; }, 1100);
     });
 
     // Ver detalles
@@ -426,10 +433,10 @@
     });
   }
 
-  let qaFeedbackTimer;
   function openQuickAdd(product) {
-    clearTimeout(qaFeedbackTimer);
     ensureQuickAddDOM();
+    qaOverlay.querySelector('#qaCartStatus').textContent = '';
+    qaAdd.textContent = 'Añadir al carrito';
     qaReturnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     qaOverlay.inert = false;
     const cartDrawer = document.getElementById('cart-drawer');

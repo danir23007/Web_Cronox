@@ -979,12 +979,16 @@
     setTimeout(() => toast.classList.remove('show'), 1600);
   };
 
-  const cartState = { data: null, drawerOpen: false };
+  const cartState = { data: null, drawerOpen: false, status: 'loading', error: null, pending: 0 };
+  // One queue for every entry point. In particular the first guest GET must
+  // finish setting its ownership cookie before the first add is sent.
+  let cartQueue = Promise.resolve();
+  let cartRead = null;
+  let cartVersion = 0;
+  let cartOwner = 0;
   const pendingItemUpdates = new Map();
   const queuedItemQty = new Map();
-  const qtyInputTimers = new Map();
   const cartItemErrors = new Map();
-  const ITEM_DEBOUNCE_MS = 320;
 
   const setCartUiState = (isOpen) => {
     const body = document.body;
@@ -1006,66 +1010,88 @@
     }
   };
 
-  const fetchCart = async () => {
-    if (!API || typeof API.getCart !== 'function') {
-      console.warn('[CRONOX] La API de carrito no está disponible');
-      updateBadge();
-      return null;
-    }
-    try {
-      const cart = await API.getCart();
-      cartState.data = cart;
-      updateBadge(cart);
-      window.dispatchEvent(new CustomEvent('cart:updated', { detail: cart }));
-      return cart;
-    } catch (error) {
-      console.warn('[CRONOX] No se pudo sincronizar el carrito con la API', error);
-      updateBadge();
-      return null;
-    }
+  const notifyCartState = () => {
+    renderCartDrawer(cartState.data);
+    window.dispatchEvent(new CustomEvent('cart:state', { detail: cartState }));
+  };
+
+  const publishCart = (cart) => {
+    if (!cart || !Array.isArray(cart.items)) throw new Error('CART_RESPONSE_INVALID');
+    cartState.data = cart;
+    cartState.status = cart.items.length ? 'populated' : 'empty';
+    cartState.error = null;
+    updateBadge(cart);
+    notifyCartState();
+    window.dispatchEvent(Object.assign(new CustomEvent('cart:updated', { detail: cart }), { cartSource: true }));
+    return cart;
+  };
+
+  const requestCart = (operation, mutation = false) => {
+    const owner = cartOwner;
+    if (mutation) cartRead = null;
+    cartState.pending += 1;
+    const task = cartQueue.then(async () => {
+      if (owner !== cartOwner) return cartState.data;
+      const version = cartVersion;
+      cartState.status = 'loading';
+      cartState.error = null;
+      notifyCartState();
+      try {
+        const cart = await operation();
+        if (owner === cartOwner && version === cartVersion) publishCart(cart);
+        return cartState.data;
+      } catch (error) {
+        if (owner === cartOwner && version === cartVersion) {
+          cartState.status = 'error';
+          cartState.error = mutation
+            ? 'No se pudo actualizar la cesta. Comprueba los artículos y vuelve a intentarlo.'
+            : 'No se pudo cargar la cesta. Vuelve a intentarlo.';
+          notifyCartState();
+        }
+        throw error;
+      }
+    }).finally(() => {
+      cartState.pending -= 1;
+      notifyCartState();
+    });
+    cartQueue = task.catch(() => undefined);
+    return task;
+  };
+
+  const fetchCart = () => {
+    if (cartRead) return cartRead;
+    const task = requestCart(() => {
+      if (!API?.getCart) throw new Error('CART_API_UNAVAILABLE');
+      return API.getCart();
+    });
+    cartRead = task;
+    task.finally(() => { if (cartRead === task) cartRead = null; }).catch(() => undefined);
+    return task;
   };
 
   // Sincroniza el carrito desde el backend y refresca el badge
   const initCartFromBackend = async () => {
-    const cart = await fetchCart();
-    updateBadge(cart);
-    return cart;
+    return fetchCart();
   };
 
   const addCartItem = async ({ variantId, qty }) => {
     if (!API?.addCartItem) throw new Error('API de carrito no disponible');
-    const cart = await API.addCartItem({ variantId, qty });
-    cartState.data = cart;
-    updateBadge(cart);
-    window.dispatchEvent(new CustomEvent('cart:updated', { detail: cart }));
-    return cart;
+    return requestCart(() => API.addCartItem({ variantId, qty }), true);
   };
 
   const updateCartItem = async (itemId, qty) => {
     if (!API?.updateCartItem) throw new Error('API de carrito no disponible');
-    const cart = await API.updateCartItem(itemId, qty);
-    cartState.data = cart;
-    updateBadge(cart);
-    window.dispatchEvent(new CustomEvent('cart:updated', { detail: cart }));
-    return cart;
+    return requestCart(() => API.updateCartItem(itemId, qty), true);
   };
 
   const removeCartItem = async (itemId) => {
     if (!API?.removeCartItem) throw new Error('API de carrito no disponible');
-    const cart = await API.removeCartItem(itemId);
-    cartState.data = cart;
-    updateBadge(cart);
-    window.dispatchEvent(new CustomEvent('cart:updated', { detail: cart }));
-    return cart;
+    return requestCart(() => API.removeCartItem(itemId), true);
   };
 
   const clearCartItems = async () => {
     if (!API?.clearCart) throw new Error('API de carrito no disponible');
-    const cart = await API.clearCart();
-    cartState.data = cart;
-    updateBadge(cart);
-    window.dispatchEvent(new CustomEvent('cart:updated', { detail: cart }));
-    return cart;
+    return requestCart(() => API.clearCart(), true);
   };
 
   async function addToCartLine(item) {
@@ -1078,9 +1104,11 @@
       const cart = await addCartItem({ variantId: item.variantId, qty });
       showToast('Añadido al carrito ✓');
       if (cartState.drawerOpen) renderCartDrawer(cart);
+      return cart;
     } catch (error) {
       console.error('[CRONOX] Error añadiendo al carrito', error);
       showToast('No se pudo añadir al carrito');
+      return null;
     }
   }
 
@@ -1096,6 +1124,11 @@
   const checkoutBtn = $('#cart-checkout-btn');
   const cartCloseBtn = $('#cart-close-btn');
   const cartFooter = cartDrawerEl ? $('.cart-drawer__footer', cartDrawerEl) : null;
+  const cartStatus = document.createElement('div');
+  cartStatus.className = 'cart-status';
+  cartStatus.setAttribute('role', 'status');
+  cartStatus.hidden = true;
+  cartItemsContainer?.before(cartStatus);
   const upsellProducts = new Map();
   const cartBackgroundInert = new Map();
   let cartAnimationFrame = 0;
@@ -1163,8 +1196,10 @@
 
   const openCartDrawer = async () => {
     toggleDrawer(true);
-    const cart = await fetchCart();
-    renderCartDrawer(cart);
+    const panel = cartDrawerEl?.querySelector('.cart-drawer__panel');
+    if (panel) panel.scrollTop = 0;
+    renderCartDrawer(cartState.data);
+    try { await fetchCart(); } catch { /* The shared error state provides retry. */ }
   };
 
   const renderFreeShipping = (subtotalCents = 0) => {
@@ -1382,7 +1417,7 @@
               />
               <button class="cart-qty__btn" data-action="inc" aria-label="Aumentar cantidad" data-id="${display.id}" ${isPending ? 'disabled' : ''}>+</button>
             </div>
-            <button class="cart-line__remove" data-remove="${display.id}" aria-label="Eliminar artículo">🗑</button>
+            <button class="cart-line__remove" data-remove="${display.id}" aria-label="Eliminar artículo" ${isPending ? 'disabled' : ''}>🗑</button>
           </div>
         </div>
       `;
@@ -1404,23 +1439,44 @@
   };
 
   const renderCartDrawer = (cart) => {
+    // Callers never render an earlier request's return value over current data.
+    cart = cartState.data;
     const items = Array.isArray(cart?.items) ? cart.items : [];
     const hasItems = items.length > 0;
+    const loading = cartState.status === 'loading';
+    const failed = cartState.status === 'error';
+    cartDrawerEl?.setAttribute('aria-busy', String(loading));
+    cartStatus.hidden = !loading && !failed;
+    cartStatus.replaceChildren();
+    if (loading || failed) {
+      const text = document.createElement('p');
+      text.textContent = failed ? cartState.error : cart ? 'Actualizando cesta…' : 'Cargando cesta…';
+      cartStatus.appendChild(text);
+      if (failed) {
+        const retry = document.createElement('button');
+        retry.type = 'button';
+        retry.textContent = 'Reintentar';
+        retry.addEventListener('click', () => fetchCart().catch(() => undefined));
+        cartStatus.appendChild(retry);
+      }
+    }
 
     if (checkoutBtn) {
       checkoutBtn.hidden = !hasItems;
-      checkoutBtn.disabled = !hasItems;
+      checkoutBtn.disabled = !hasItems || loading || failed || cartState.pending > 0;
     }
 
-    if (cartFreeShippingSection) cartFreeShippingSection.hidden = false;
+    if (cartFreeShippingSection) cartFreeShippingSection.hidden = !cart;
     if (cartUpsellSection) cartUpsellSection.hidden = false;
     if (cartFooter) cartFooter.hidden = false;
 
-    renderCartItems(cart);
+    if (cart) renderCartItems(cart);
+    else cartItemsContainer?.replaceChildren();
 
     const subtotalCents = cart?.subtotalCents || 0;
     renderFreeShipping(hasItems ? subtotalCents : 0);
-    renderUpsell(cart);
+    if (cart) renderUpsell(cart);
+    else if (cartUpsellSection) cartUpsellSection.hidden = true;
     if (checkoutBtn && hasItems) {
       checkoutBtn.textContent = `Finalizar compra · ${formatCheckoutButtonMoney(
         subtotalCents,
@@ -1429,38 +1485,13 @@
     }
   };
 
-  const applyOptimisticQty = (itemId, nextQty) => {
-    if (!cartState.data || !Array.isArray(cartState.data.items)) return null;
-    const desiredQty = Math.max(1, Number(nextQty) || 1);
-    let touched = false;
-
-    const nextItems = cartState.data.items.map((item) => {
-      if (item.id !== itemId) return item;
-      touched = true;
-      return { ...item, qty: desiredQty };
-    });
-
-    if (!touched) return null;
-
-    const subtotalCents = nextItems.reduce(
-      (sum, item) => sum + (Number(item.priceCents) || 0) * (Number(item.qty) || 0),
-      0,
-    );
-    const itemsCount = nextItems.reduce((sum, item) => sum + (Number(item.qty) || 0), 0);
-
-    const nextCart = { ...cartState.data, items: nextItems, subtotalCents, itemsCount };
-    cartState.data = nextCart;
-    renderCartDrawer(nextCart);
-    return nextCart;
-  };
-
   const syncCartLineUiState = (itemId) => {
     if (!cartItemsContainer || !itemId) return;
     const line = cartItemsContainer.querySelector(`[data-cart-line="${itemId}"]`);
     if (!line) return;
     const isPending = pendingItemUpdates.has(itemId);
     line.classList.toggle('is-updating', isPending);
-    line.querySelectorAll('.cart-qty__btn, .cart-qty__input').forEach((el) => {
+    line.querySelectorAll('.cart-qty__btn, .cart-qty__input, .cart-line__remove').forEach((el) => {
       el.disabled = isPending;
     });
   };
@@ -1482,9 +1513,8 @@
   const handleCartUpdateError = async (itemId, error) => {
     console.error('[CRONOX] No se pudo actualizar la cantidad', error);
     setCartItemError(itemId, parseCartErrorMessage(error));
-    const refreshed = await fetchCart();
-    if (refreshed) renderCartDrawer(refreshed);
-    else renderCartDrawer(cartState.data);
+    try { await fetchCart(); } catch { /* Preserve the last known cart and error. */ }
+    renderCartDrawer(cartState.data);
   };
 
   const processQueuedUpdate = async (itemId) => {
@@ -1495,7 +1525,6 @@
     pendingItemUpdates.set(itemId, true);
     setCartItemError(itemId, '');
     syncCartLineUiState(itemId);
-    applyOptimisticQty(itemId, targetQty);
 
     try {
       const cart = await updateCartItem(itemId, targetQty);
@@ -1516,7 +1545,6 @@
     if (!itemId) return;
     const normalizedQty = Math.max(1, Number(qty) || 1);
     queuedItemQty.set(itemId, normalizedQty);
-    applyOptimisticQty(itemId, normalizedQty);
     if (!pendingItemUpdates.has(itemId)) {
       processQueuedUpdate(itemId);
     }
@@ -1591,7 +1619,7 @@
           .catch((error) => {
             console.error('[CRONOX] No se pudo eliminar el artículo', error);
             setCartItemError(id, parseCartErrorMessage(error));
-            fetchCart().then(renderCartDrawer);
+            fetchCart().catch(() => undefined);
           })
           .finally(() => {
             pendingItemUpdates.delete(id);
@@ -1600,35 +1628,18 @@
       }
     });
 
-    const scheduleQtyCommit = (itemId, value, immediate = false) => {
-      const normalized = Math.max(1, Number(value) || 1);
-      const existing = qtyInputTimers.get(itemId);
-      if (existing) clearTimeout(existing);
-      if (immediate) {
-        qtyInputTimers.delete(itemId);
-        queueCartUpdate(itemId, normalized);
-        return;
-      }
-      const timer = window.setTimeout(() => {
-        qtyInputTimers.delete(itemId);
-        queueCartUpdate(itemId, normalized);
-      }, ITEM_DEBOUNCE_MS);
-      qtyInputTimers.set(itemId, timer);
-    };
-
-    const commitQtyInput = (input, immediate = false) => {
+    const commitQtyInput = (input) => {
       const itemId = Number(input.dataset.id);
       let value = parseInt(input.value, 10);
       if (!Number.isFinite(value) || value < 1) value = 1;
       const lastCommit = Number(input.dataset.lastCommit);
-      if (Number.isFinite(lastCommit) && lastCommit === value && !immediate) {
+      if (Number.isFinite(lastCommit) && lastCommit === value) {
         input.value = String(value);
         return;
       }
       input.value = String(value);
       input.dataset.lastCommit = String(value);
-      applyOptimisticQty(itemId, value);
-      scheduleQtyCommit(itemId, value, immediate);
+      queueCartUpdate(itemId, value);
     };
 
     cartItemsContainer?.addEventListener('change', (ev) => {
@@ -1644,15 +1655,6 @@
       ev.preventDefault();
       qtyInput.dispatchEvent(new Event('change', { bubbles: true }));
     });
-
-    cartItemsContainer?.addEventListener('blur', (ev) => {
-      const qtyInput = ev.target.closest('.cart-qty__input');
-      if (!qtyInput) return;
-      let value = parseInt(qtyInput.value, 10);
-      if (!Number.isFinite(value) || value < 1) value = 1;
-      qtyInput.value = String(value);
-      commitQtyInput(qtyInput, true);
-    }, true);
 
     cartUpsellList?.addEventListener('click', (ev) => {
       const addButton = ev.target.closest('.cart-upsell__add');
@@ -1712,6 +1714,21 @@
   const initCartDrawer = () => {
     if (!cartOverlayEl || !cartDrawerEl) return;
     bindCartDrawerEvents();
+    const fitViewport = () => {
+      const viewport = window.visualViewport;
+      // Respect pinch zoom; use the visible height for browser bars/keyboards
+      // only at the normal visual scale.
+      if (viewport && viewport.scale === 1) {
+        cartDrawerEl.style.setProperty('--cart-viewport-height', `${viewport.height}px`);
+        cartDrawerEl.style.setProperty('--cart-viewport-top', `${viewport.offsetTop}px`);
+      } else {
+        cartDrawerEl.style.removeProperty('--cart-viewport-height');
+        cartDrawerEl.style.removeProperty('--cart-viewport-top');
+      }
+    };
+    fitViewport();
+    window.visualViewport?.addEventListener('resize', fitViewport);
+    window.visualViewport?.addEventListener('scroll', fitViewport);
   };
 
   window.CRONOX_CART = {
@@ -1744,22 +1761,48 @@
   window.addEventListener('cronox:addToCart', (ev) => {
     const item = ev?.detail;
     if (!item) return;
-    addToCartLine(item);
+    addToCartLine(item).then((cart) => item.onComplete?.(Boolean(cart)));
   });
 
   // Inicializar badge + drawer
-  document.addEventListener('DOMContentLoaded', () => {
+  const startCart = () => {
     if (typeof window.initCartFromBackend === 'function') {
       window.CRONOX_CART_READY = window.initCartFromBackend();
+      window.CRONOX_CART_READY.catch(() => undefined);
     }
     initCartDrawer();
+  };
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', startCart, { once: true });
+  else startCart();
+
+  window.addEventListener('cart:updated', (event) => {
+    if (event.cartSource) return;
+    if (event.detail && Array.isArray(event.detail.items)) {
+      cartVersion += 1;
+      publishCart(event.detail);
+    } else fetchCart().catch(() => undefined);
+  });
+
+  window.addEventListener('pageshow', (event) => {
+    if (event.persisted) fetchCart().catch(() => undefined);
   });
 
   window.addEventListener('cronox:userChanged', (event) => {
     if (event.initial) return;
     // Login/register merge guest ownership atomically on the server; logout
     // transfers it back to a fresh opaque guest owner. Re-read that one source.
-    fetchCart().catch((err) => console.warn('[CRONOX] Cart refresh failed', err));
+    cartOwner += 1;
+    cartVersion += 1;
+    cartRead = null;
+    cartState.data = null;
+    cartState.status = 'loading';
+    cartState.error = null;
+    pendingItemUpdates.clear();
+    queuedItemQty.clear();
+    cartItemErrors.clear();
+    updateBadge();
+    notifyCartState();
+    fetchCart().catch(() => undefined);
   });
 
   // Saneado: eliminar cualquier .card-plus heredado
@@ -2099,9 +2142,6 @@ window.CRONOX_AUTH_STATE = window.CRONOX_USER ? 'authenticated' : 'unknown';
     } else {
       window.CRONOX_FAVORITE_IDS = new Set();
     }
-    cartState.data = null;
-    updateBadge();
-    try { window.dispatchEvent(new CustomEvent('cart:updated', { detail: null })); } catch {}
     updateProfileIconUI();
     try { window.dispatchEvent(new CustomEvent('cronox:userChanged', { detail: null })); } catch {}
   };

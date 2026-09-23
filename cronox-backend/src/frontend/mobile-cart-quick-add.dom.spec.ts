@@ -51,13 +51,13 @@ describe('mobile cart and Quick Add layers', () => {
       'cart-drawer__footer',
     ]);
     expect(storeCss).toMatch(
-      /@media \(max-width: 640px\)[\s\S]*?\.cart-drawer__panel\s*\{[^}]*overflow-y: auto;[^}]*overscroll-behavior: contain;/,
+      /\.cart-drawer__panel\s*\{[^}]*overflow-y: auto;[^}]*overscroll-behavior: contain;/,
     );
     expect(storeCss).toMatch(
-      /@media \(max-width: 640px\)[\s\S]*?\.cart-drawer__items\s*\{[^}]*overflow: visible;/,
+      /\.cart-drawer__items\s*\{[^}]*overflow: visible;/,
     );
     expect(storeCss).toMatch(
-      /@media \(max-width: 640px\)[\s\S]*?\.cart-drawer__footer\s*\{[^}]*bottom: 0;/,
+      /\.cart-drawer__footer\s*\{[^}]*bottom: 0;/,
     );
     expect(
       Number(storeCss.match(/\.cart-drawer\s*\{[^}]*z-index: (\d+);/)?.[1]),
