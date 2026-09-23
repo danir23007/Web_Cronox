@@ -32,13 +32,19 @@ jobs:
               for(let i=raw.indexOf('[');i>=0;i=raw.indexOf('[',i+1)){try{const v=JSON.parse(raw.slice(i));if(Array.isArray(v)){apps=v;break;}}catch{}}
               if(!apps) throw new Error('PM2_JSON_PARSE_FAILED');
               if(apps.length===0){
-                stage='SERVICE_OWNER_LOOKUP';
-                let rootRaw;
-                try{rootRaw=cp.execFileSync('sudo',['-n','pm2','jlist'],{encoding:'utf8',stdio:['ignore','pipe','pipe']});}
-                catch(e){const err=String(e.stderr||'');throw new Error(/password|not allowed|sudoers|permission/i.test(err)?'SERVICE_OWNER_PERMISSION_REQUIRED':/not found|No such file/i.test(err)?'SERVICE_OWNER_COMMAND_UNAVAILABLE':'SERVICE_OWNER_UNAVAILABLE');}
-                for(let i=rootRaw.indexOf('[');i>=0;i=rootRaw.indexOf('[',i+1)){try{const v=JSON.parse(rootRaw.slice(i));if(Array.isArray(v)){apps=v;break;}}catch{}}
+                stage='RUNNING_SERVICE_LOOKUP';
+                const processList=cp.execFileSync('ps',['-eo','args'],{encoding:'utf8',stdio:['ignore','pipe','pipe']});
+                const homes=[...processList.matchAll(/PM2[^\n]*God Daemon \(([^)]+)\)/g)].map(m=>m[1]);
+                for(const pm2Home of [...new Set(homes)]){
+                  try{
+                    fs.accessSync(pm2Home,fs.constants.R_OK);
+                    const rawService=cp.execFileSync('pm2',['jlist'],{encoding:'utf8',env:{...process.env,PM2_HOME:pm2Home},stdio:['ignore','pipe','pipe']});
+                    for(let i=rawService.indexOf('[');i>=0;i=rawService.indexOf('[',i+1)){try{const v=JSON.parse(rawService.slice(i));if(Array.isArray(v)&&v.length){apps=v;break;}}catch{}}
+                    if(apps.length)break;
+                  }catch{}
+                }
               }
-              if(apps.length===0) throw new Error('PM2_PROCESS_LIST_EMPTY');
+              if(apps.length===0) throw new Error('RUNNING_SERVICE_NOT_ACCESSIBLE');
               const matches=apps.filter(x=>/cronox/i.test([x.name,x.pm2_env?.name,x.pm2_env?.pm_cwd,x.pm2_env?.pm_exec_path].join(' ')));
               if(matches.length!==1) throw new Error('CRONOX_PROCESS_SELECTION_FAILED');
               const app=matches[0];
