@@ -19,6 +19,7 @@ import type { CsrfTokenRequest } from '../common/guards/csrf-protection.guard';
 import { AuthService } from './auth.service';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { RefreshJwtGuard } from './guards/refresh-jwt.guard';
+import { LaunchLoginDto } from './dto/launch-login.dto';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
@@ -68,6 +69,19 @@ export class AuthController {
     this.authService.setAuthCookies(res, result.tokens);
 
     return { user: { ...result.user, cartMerge }, cartMerge };
+  }
+
+  @Post('launch-login')
+  @HttpCode(HttpStatus.OK)
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
+  async launchLogin(
+    @Res({ passthrough: true }) res: Response,
+    @Body() dto: LaunchLoginDto,
+  ) {
+    const result = await this.authService.consumeLaunchLink(dto.token);
+    res.setHeader('Cache-Control', 'no-store');
+    this.authService.setAuthCookies(res, result.tokens);
+    return { user: result.user };
   }
 
   @Post('login')

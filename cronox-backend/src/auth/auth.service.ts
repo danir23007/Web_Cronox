@@ -111,6 +111,31 @@ export class AuthService {
     };
   }
 
+  async consumeLaunchLink(token: string) {
+    const tokenHash = createHash('sha256').update(token).digest('hex');
+    const user = await this.prisma.$transaction(async (tx) => {
+      const registration = await tx.preRegistration.findUnique({
+        where: { launchTokenHash: tokenHash }, include: { user: true },
+      });
+      const now = new Date();
+      if (!registration || registration.launchTokenUsedAt ||
+          !registration.launchTokenExpiresAt || registration.launchTokenExpiresAt <= now ||
+          !['USER', 'FRIEND'].includes(registration.user.role)) {
+        throw new UnauthorizedException('El enlace ha caducado o ya se ha utilizado. Inicia sesión o restablece tu contraseña.');
+      }
+      const claimed = await tx.preRegistration.updateMany({
+        where: { userId: registration.userId, launchTokenHash: tokenHash,
+          launchTokenUsedAt: null, launchTokenExpiresAt: { gt: now } },
+        data: { launchTokenUsedAt: now },
+      });
+      if (claimed.count !== 1) throw new UnauthorizedException('Enlace ya utilizado');
+      return tx.user.update({ where: { id: registration.userId },
+        data: { accountState: UserAccountState.ACTIVE } });
+    });
+    const authUser = this.omitPassword(user);
+    return { user: this.formatAuthUser(authUser), tokens: await this.generateTokens(authUser) };
+  }
+
   async login(dto: LoginDto) {
     const user = await this.validateUser(dto.email, dto.password);
 
