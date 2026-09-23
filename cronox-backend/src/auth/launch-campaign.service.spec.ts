@@ -26,6 +26,7 @@ describe('Launch campaign', () => {
     expect(mail.send).not.toHaveBeenCalled();
   });
   it('creates a bound 15% single-use code and stores only the login token hash', async () => {
+    const startedAt = Date.now();
     await service.sendBatch();
     expect(db.promoCode.create).toHaveBeenCalledWith({ data: expect.objectContaining({
       ownerUserId: 1, ownerEmail: 'user@example.test', value: 15, usageLimit: 1, singleUsePerUser: true,
@@ -34,6 +35,11 @@ describe('Launch campaign', () => {
     const token = url.split('#')[1];
     const prepared = db.preRegistration.update.mock.calls[0][0].data;
     expect(token).toMatch(/^[a-f0-9]{64}$/);
+    expect(prepared.launchTokenExpiresAt.getTime()).toBeGreaterThanOrEqual(startedAt + 72 * 60 * 60 * 1000);
+    expect(prepared.launchTokenExpiresAt.getTime()).toBeLessThanOrEqual(Date.now() + 72 * 60 * 60 * 1000);
+    expect(mail.send.mock.calls[0][0].subject).toContain('CRONOX ya está abierto.');
+    expect(mail.send.mock.calls[0][0].templateData.message).toContain('caduca en 72 horas');
+    expect(mail.send.mock.calls[0][0].templateData.message).not.toContain('descubre la colección');
     expect(prepared.launchTokenHash).not.toEqual(token);
     expect(prepared.launchTokenHash).toMatch(/^[a-f0-9]{64}$/);
   });
