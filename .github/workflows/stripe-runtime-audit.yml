@@ -30,7 +30,9 @@ jobs:
               let apps;
               for(let i=raw.indexOf('[');i>=0;i=raw.indexOf('[',i+1)){try{const v=JSON.parse(raw.slice(i));if(Array.isArray(v)){apps=v;break;}}catch{}}
               if(!apps) throw new Error('PM2_JSON_PARSE_FAILED');
-              const app=apps.find(x=>x.name==='cronox');
+              const matches=apps.filter(x=>x.name==='cronox'||String(x.pm2_env?.pm_cwd||'').startsWith('/var/www/cronox/')||String(x.pm2_env?.pm_exec_path||'').startsWith('/var/www/cronox/'));
+              if(matches.length!==1) throw new Error('CRONOX_PROCESS_SELECTION_FAILED');
+              const app=matches[0];
               if (!app) throw new Error('CRONOX_PROCESS_NOT_FOUND');
               const cwd=app.pm2_env.pm_cwd;
               const envPath=path.join(cwd,'.env');
@@ -41,6 +43,8 @@ jobs:
               const res=await fetch('https://api.stripe.com/v1/account',{headers:{Authorization:'Bearer '+key}});
               if(!res.ok) throw new Error('STRIPE_ACCOUNT_LOOKUP_FAILED_'+res.status);
               const account=await res.json();
-              console.log(JSON.stringify({cwd,envPath,script:app.pm2_env.pm_exec_path,status:app.pm2_env.status,nodeEnv:env.NODE_ENV||'development',stripeMode:key?.startsWith('sk_test_')?'test':key?.startsWith('sk_live_')?'live':'unknown',stripeAccountId:account.id,frontendUrl:env.FRONTEND_URL,apiPublicUrl:env.API_PUBLIC_URL||null,webhookSecretConfigured:!!env.STRIPE_WEBHOOK_SECRET,pm2HasStripeKey:!!app.pm2_env.env?.STRIPE_SECRET_KEY,pm2HasWebhookSecret:!!app.pm2_env.env?.STRIPE_WEBHOOK_SECRET,envIsSymlink:fs.lstatSync(envPath).isSymbolicLink(),envRealPath:fs.realpathSync(envPath)}));
+              if(account.id!=='acct_1SPoZCFk1nGlnJwa'||!key.startsWith('sk_test_')) throw new Error('TEST_ACCOUNT_MISMATCH');
+              if(env.NODE_ENV==='production') throw new Error('TEST_MODE_INCOMPATIBLE_WITH_PRODUCTION');
+              console.log('STRIPE_TEST_CONFIGURATION_VERIFIED');
             })().catch(e=>{console.error(e.message);process.exit(1)});
             NODE
