@@ -19,7 +19,6 @@ jobs:
           username: ${{ secrets.CRONOX_VPS_USER }}
           key: ${{ secrets.CRONOX_VPS_SSH_KEY }}
           port: ${{ secrets.CRONOX_VPS_PORT }}
-          script_stop: true
           script: |
             set -eu
             node <<'NODE'
