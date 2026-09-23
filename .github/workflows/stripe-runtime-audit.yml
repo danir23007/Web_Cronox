@@ -26,7 +26,11 @@ jobs:
             const path = require('node:path');
             const cp = require('node:child_process');
             (async () => {
-              const app = JSON.parse(cp.execFileSync('pm2',['jlist'],{encoding:'utf8'})).find(x=>x.name==='cronox');
+              const raw=cp.execFileSync('pm2',['jlist'],{encoding:'utf8'});
+              let apps;
+              for(let i=raw.indexOf('[');i>=0;i=raw.indexOf('[',i+1)){try{const v=JSON.parse(raw.slice(i));if(Array.isArray(v)){apps=v;break;}}catch{}}
+              if(!apps) throw new Error('PM2_JSON_PARSE_FAILED');
+              const app=apps.find(x=>x.name==='cronox');
               if (!app) throw new Error('CRONOX_PROCESS_NOT_FOUND');
               const cwd=app.pm2_env.pm_cwd;
               const envPath=path.join(cwd,'.env');
