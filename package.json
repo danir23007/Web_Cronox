@@ -1,5 +1,6 @@
 {
   "scripts": {
+    "test:accreditation:browser": "playwright test --config playwright.accreditation.config.cjs",
     "test:cart:browser": "playwright test --config playwright.cart.config.cjs",
     "admin:build": "vite build -c vite.admin.config.ts",
     "admin:watch": "vite build -c vite.admin.config.ts --watch"

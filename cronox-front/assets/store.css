@@ -1488,22 +1488,21 @@ button.product-cta--disabled:disabled { opacity:.5; cursor:not-allowed; filter:n
 .crx-accreditation-book,
 .accreditation-book {
   position: relative;
-  width: min(1100px, 88vw);
+  width: min(1100px, 100%);
   aspect-ratio: 1.36;
   margin-inline: auto;
   display: block;
   z-index: 1;
 }
 
-.crx-accreditation-book::before,
-.accreditation-book::before {
-  content: "";
+.accreditation-book-art {
   position: absolute;
   inset: 0;
-  background-image: url("https://frqlgocxnyppzdgxxjuq.supabase.co/storage/v1/object/public/Acreditation/Libro-antiguo.png");
-  background-repeat: no-repeat;
-  background-position: center;
-  background-size: contain;
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  object-position: center;
   pointer-events: none;
   z-index: 1;
 }
@@ -1511,10 +1510,9 @@ button.product-cta--disabled:disabled { opacity:.5; cursor:not-allowed; filter:n
 .accreditation-pages {
   position: absolute;
   top: 0;
-  left: 43%;
+  left: 50%;
   transform: translateX(-50%);
-  width: min(1400px, 96vw);
-  max-width: 100%;
+  width: 100%;
   height: 100%;
   z-index: 2;
   pointer-events: none;
@@ -1536,11 +1534,11 @@ button.product-cta--disabled:disabled { opacity:.5; cursor:not-allowed; filter:n
 }
 
 .accreditation-pages .page-left {
-  left: 18.5%;
+  left: 11.5%;
 }
 
 .accreditation-pages .page-right {
-  right: 5.5%;
+  right: 12.5%;
 }
 
 .accreditation-page .accreditation-page-content {
@@ -1630,14 +1628,14 @@ button.product-cta--disabled:disabled { opacity:.5; cursor:not-allowed; filter:n
 
 .accreditation-id--code {
   font-family: "Libre Baskerville", "Cormorant Garamond", Georgia, serif;
-  font-size: clamp(15px, 3vw, 10px);
+  font-size: clamp(10px, 1.35vw, 15px);
   font-weight: 600;
   letter-spacing: 0.06em;
   line-height: 1.15;
   font-variant-numeric: lining-nums proportional-nums;
 }
 
-.accreditation-page-right-content {
+.accreditation-page .accreditation-page-right-content {
   align-items: flex-start;
   justify-content: flex-start;
   gap: clamp(16px, 3vw, 22px);
@@ -1650,6 +1648,7 @@ button.product-cta--disabled:disabled { opacity:.5; cursor:not-allowed; filter:n
 .accreditation-right-section {
   display: flex;
   flex-direction: column;
+  flex-shrink: 0;
   gap: clamp(8px, 2vw, 12px);
 }
 .accreditation-page-right-content .accreditation-right-section:last-of-type {
@@ -1722,7 +1721,9 @@ button.product-cta--disabled:disabled { opacity:.5; cursor:not-allowed; filter:n
 
 #cronox-member-qr {
   display: block;
-  width: clamp(170px, 34vw, 105px);
+  width: clamp(105px, 14vw, 170px);
+  aspect-ratio: 1;
+  object-fit: contain;
   height: auto;
   filter: drop-shadow(0 3px 6px rgba(0, 0, 0, 0.18));
 }
@@ -1730,7 +1731,7 @@ button.product-cta--disabled:disabled { opacity:.5; cursor:not-allowed; filter:n
 @media (max-width: 1200px) {
   .crx-accreditation-book,
   .accreditation-book {
-    width: min(960px, 92vw);
+    width: min(960px, 100%);
   }
 }
 
@@ -1742,7 +1743,7 @@ button.product-cta--disabled:disabled { opacity:.5; cursor:not-allowed; filter:n
 
   .crx-accreditation-book,
   .accreditation-book {
-    width: min(720px, 94vw);
+    width: min(720px, 100%);
   }
 
   .accreditation-symbol {
@@ -1751,9 +1752,164 @@ button.product-cta--disabled:disabled { opacity:.5; cursor:not-allowed; filter:n
 }
 
 @media (max-width: 560px) {
+  .profile-tabs {
+    max-width: 100%;
+    overflow-x: auto;
+    overflow-y: hidden;
+    overscroll-behavior-inline: contain;
+    scrollbar-width: thin;
+  }
+
+  .profile-tab {
+    flex: 0 0 auto;
+  }
+
+  .profile-tab--logout {
+    margin-left: 0;
+  }
+
+  .page-profile .account-section--accreditation {
+    padding-inline: 0;
+  }
+
+  .crx-accreditation-stage,
+  .accreditation-stage {
+    width: 100%;
+    padding-inline: 0;
+    overflow: visible;
+  }
+
   .crx-accreditation-book,
   .accreditation-book {
-    width: min(520px, 94vw);
+    width: 100%;
+    min-width: 0;
+    aspect-ratio: 1.2;
+  }
+
+  .accreditation-pages .accreditation-page {
+    top: 10.5%;
+    width: 38%;
+    height: 75%;
+    padding: clamp(4px, 1.8vw, 7px);
+  }
+
+  .accreditation-pages .page-left {
+    left: 10.5%;
+  }
+
+  .accreditation-pages .page-right {
+    right: 10.5%;
+  }
+
+  .accreditation-top {
+    gap: clamp(2px, 1vw, 4px);
+  }
+
+  .accreditation-top__left {
+    gap: 2px;
+  }
+
+  .accreditation-symbol {
+    width: clamp(42px, 14vw, 56px);
+  }
+
+  .accreditation-meta {
+    min-width: 0;
+    gap: 3px;
+    margin-top: 3px;
+  }
+
+  .accreditation-name {
+    max-width: 100%;
+    font-size: clamp(7px, 2.45vw, 10px);
+    line-height: 1.08;
+    overflow-wrap: anywhere;
+  }
+
+  .accreditation-circle {
+    font-size: clamp(5px, 1.7vw, 7px);
+    line-height: 1.1;
+  }
+
+  .accreditation-id,
+  .accreditation-id--code {
+    max-width: 100%;
+    font-size: clamp(5.5px, 1.8vw, 7.5px);
+    line-height: 1.08;
+    letter-spacing: 0.02em;
+    overflow-wrap: anywhere;
+  }
+
+  .account-section--accreditation .accreditation-promo,
+  .account-section--accreditation .accreditation-upgrade {
+    gap: 2px;
+    margin: 1px 0;
+  }
+
+  .account-section--accreditation .accreditation-circle-btn {
+    min-width: 0;
+    width: 100%;
+    padding: 3px 4px;
+    font-size: clamp(5px, 1.6vw, 7px);
+  }
+
+  .account-section--accreditation .accreditation-circle-status {
+    font-size: clamp(5px, 1.6vw, 7px);
+    line-height: 1.15;
+    text-align: center;
+  }
+
+  .accreditation-qr {
+    margin-bottom: 0;
+  }
+
+  .accreditation-qr__label {
+    margin-bottom: 2px;
+    font-size: clamp(5px, 1.65vw, 7px);
+    line-height: 1;
+    transform: none;
+  }
+
+  #cronox-member-qr {
+    width: clamp(66px, 21vw, 82px);
+  }
+
+  .accreditation-page-right-content {
+    gap: clamp(3px, 1.2vw, 5px);
+    padding-left: 1px;
+  }
+
+  .accreditation-right-section {
+    width: 100%;
+    gap: 2px;
+  }
+
+  .accreditation-page-right-content .accreditation-right-section:last-of-type {
+    transform: none;
+  }
+
+  .accreditation-right-title {
+    font-size: clamp(7px, 2.2vw, 9px);
+    line-height: 1.05;
+  }
+
+  .accreditation-right-row {
+    gap: 2px;
+    align-items: flex-start;
+    flex-wrap: wrap;
+    font-size: clamp(5.5px, 1.8vw, 7.5px);
+    line-height: 1.15;
+  }
+
+  .accreditation-privileges__list {
+    gap: 1px;
+    padding-left: 1px;
+    font-size: clamp(5px, 1.7vw, 7px);
+    line-height: 1.12;
+  }
+
+  .accreditation-privileges__item {
+    padding-left: 6px;
   }
 }
 

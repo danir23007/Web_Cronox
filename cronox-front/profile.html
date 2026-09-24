@@ -15,7 +15,8 @@
     .topbar__logo-img { display: block; width: 140px; height: auto; }
     .topbar svg { width: 24px; height: 24px; }
   </style>
-  <link id="cronox-main-style" rel="stylesheet" href="assets/store.css?v=100">
+  <link rel="preload" as="image" href="https://frqlgocxnyppzdgxxjuq.supabase.co/storage/v1/object/public/Acreditation/Libro-antiguo.png" fetchpriority="high">
+  <link id="cronox-main-style" rel="stylesheet" href="assets/store.css?v=101">
   <link rel="stylesheet" href="assets/quick-add.css?v=6">
   <style>
     .profile-wrapper { padding: 0 0 60px; }
@@ -186,6 +187,14 @@
         <div class="profile-card account-section--accreditation">
           <section class="crx-accreditation-stage accreditation-stage" aria-label="Escenario de acreditación CRONOX">
             <div class="crx-accreditation-book accreditation-book">
+              <img
+                class="accreditation-book-art"
+                src="https://frqlgocxnyppzdgxxjuq.supabase.co/storage/v1/object/public/Acreditation/Libro-antiguo.png"
+                alt=""
+                aria-hidden="true"
+                decoding="async"
+                fetchpriority="high"
+              >
               <div class="accreditation-pages debug-pages" aria-label="Páginas de acreditación">
                 <div class="accreditation-page page-left">
                   <div class="accreditation-page-content">
@@ -432,7 +441,7 @@
   <script src="assets/product-card-framing.js?v=1" defer></script>
   <script src="assets/products.js?v=63" defer></script>
   <script src="assets/favorites-toggle.js?v=3" defer></script>
-  <script src="assets/profile.js?v=11" defer></script>
+  <script src="assets/profile.js?v=12" defer></script>
 
   <style>
     /* Profile overrides */

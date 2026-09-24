@@ -19,6 +19,7 @@
   const accreditationSymbol = document.querySelector('[data-accreditation-rings]');
   const accreditationQr = $('cronox-member-qr');
   const accreditationBook = accreditationSection?.querySelector('.crx-accreditation-book');
+  const accreditationBookArt = accreditationBook?.querySelector('.accreditation-book-art');
   const accreditationStatCircle = document.querySelector('[data-acc-stat="circle"]');
   const accreditationStatCreatedAt = document.querySelector('[data-acc-stat="createdAt"]');
   const accreditationStatOrders = document.querySelector('[data-acc-stat="orders"]');
@@ -585,24 +586,42 @@
 
   const waitForImageLoad = (img) =>
     new Promise((resolve) => {
-      if (!img) return resolve();
-      if (img.complete && img.naturalWidth > 0) {
-        resolve();
+      if (!img) return resolve(false);
+      if (img.complete) {
+        resolve(img.naturalWidth > 0);
         return;
       }
-      const onDone = () => resolve();
-      img.addEventListener('load', onDone, { once: true });
-      img.addEventListener('error', onDone, { once: true });
+      const onLoad = () => resolve(true);
+      const onError = () => resolve(false);
+      img.addEventListener('load', onLoad, { once: true });
+      img.addEventListener('error', onError, { once: true });
     });
 
-  const ensureAccreditationQr = () => {
-    if (!accreditationQr) return Promise.resolve();
-    if (!accreditationQrLoaded) {
+  const retryImage = async (img) => {
+    if (!img?.src) return false;
+    const retryUrl = new URL(img.src, window.location.href);
+    retryUrl.searchParams.set('crx_retry', Date.now().toString());
+    img.src = retryUrl.href;
+    return waitForImageLoad(img);
+  };
+
+  const ensureAccreditationBook = async () => {
+    if (!accreditationBookArt) return false;
+    const loaded = await waitForImageLoad(accreditationBookArt);
+    if (loaded) return true;
+    return retryImage(accreditationBookArt);
+  };
+
+  const ensureAccreditationQr = async () => {
+    if (!accreditationQr) return false;
+    if (!accreditationQrLoaded || accreditationQr.naturalWidth === 0) {
       const base = typeof window.CRONOX_API_BASE === 'string' ? window.CRONOX_API_BASE : '';
       accreditationQr.src = `${base}/api/membership/me/qr`;
-      accreditationQrLoaded = true;
     }
-    return waitForImageLoad(accreditationQr);
+    let loaded = await waitForImageLoad(accreditationQr);
+    if (!loaded) loaded = await retryImage(accreditationQr);
+    accreditationQrLoaded = loaded;
+    return loaded;
   };
 
   const loadAccreditationData = async () => {
@@ -624,6 +643,7 @@
     try {
       await Promise.all([
         loadAccreditationStats(),
+        ensureAccreditationBook(),
         ensureAccreditationQr(),
         loadCircleUpgradeStatus({ skipLoader: true }),
       ]);
