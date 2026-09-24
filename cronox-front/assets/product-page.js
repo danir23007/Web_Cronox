@@ -509,7 +509,8 @@
       });
     };
 
-    const firstButton = buttons.find((btn) => !btn.disabled);
+    const requestedSize = new URLSearchParams(location.search).get('size')?.toUpperCase();
+    const firstButton = buttons.find(btn => !btn.disabled && String(btn.dataset.size).toUpperCase() === requestedSize) || buttons.find((btn) => !btn.disabled);
     if (firstButton) activate(firstButton);
     else selectedSize = "";
 
@@ -611,6 +612,7 @@
     }
 
     setupSizeButtons(product);
+    window.CRONOX_WAITLIST?.mount(product, pAdd?.closest('.pdp__actions') || pSizeGroup);
     if (pPrice && pAdd) window.CRONOX_STOCK?.decoratePurchase(pPrice, pAdd, product);
     setPageTitle(product);
     renderRelated(product);

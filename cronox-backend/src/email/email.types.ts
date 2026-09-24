@@ -6,6 +6,7 @@ export enum EmailSenderKey {
 }
 
 export enum EmailTemplate {
+  RESTOCK = 'RESTOCK',
   TEST = 'TEST',
   ORDER_CONFIRMATION = 'ORDER_CONFIRMATION',
   ORDER_SHIPPED = 'ORDER_SHIPPED',
@@ -115,6 +116,7 @@ export const EMAIL_TYPE_TO_TEMPLATE: Record<EmailType, EmailTemplate> = {
 };
 
 export const EMAIL_TEMPLATE_FILE: Record<EmailTemplate, string> = {
+  [EmailTemplate.RESTOCK]: 'restock.hbs',
   [EmailTemplate.TEST]: 'test.hbs',
   [EmailTemplate.ORDER_CONFIRMATION]: 'order-confirmation.hbs',
   [EmailTemplate.ORDER_SHIPPED]: 'order-shipped.hbs',

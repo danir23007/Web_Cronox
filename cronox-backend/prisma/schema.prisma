@@ -195,6 +195,7 @@ model ProductCategory {
 }
 
 model ProductVariant {
+  restockRequests           RestockRequest[]
   id                        Int                        @id @default(autoincrement())
   productId                 Int
   size                      VariantSize
@@ -476,6 +477,7 @@ model NewsletterSettings {
 }
 
 model User {
+  restockRequests           RestockRequest[]
   id                        Int                     @id @default(autoincrement())
   email                     String                  @unique
   password                  String?                 @map("passwordHash")
@@ -1274,4 +1276,26 @@ enum UserAccountState {
 model ArchivedCheckoutPayment {
   paymentIntentId String @id
   archivedAt DateTime @default(now())
+}
+
+// One row per explicitly requested cycle; partial active uniqueness is in SQL.
+model RestockRequest {
+  id          String   @id @default(uuid())
+  userId      Int
+  variantId   Int
+  status      String   @default("WAITING")
+  requestedAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime @default(now()) @updatedAt @db.Timestamptz(3)
+  readyAt     DateTime? @db.Timestamptz(3)
+  claimedAt   DateTime? @db.Timestamptz(3)
+  claimToken  String?
+  acceptedAt  DateTime? @db.Timestamptz(3)
+  attempts    Int      @default(0)
+  errorCode   String?
+  user        User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  variant     ProductVariant @relation(fields: [variantId], references: [id], onDelete: Cascade)
+
+  @@index([variantId, status])
+  @@index([userId, variantId, requestedAt])
+  @@index([status, readyAt])
 }

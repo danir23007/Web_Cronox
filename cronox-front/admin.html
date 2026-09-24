@@ -20,6 +20,7 @@
   <link rel="stylesheet" href="assets/admin-gallery.css?v=6">
   <link rel="stylesheet" href="assets/admin-media.css?v=4">
   <link rel="stylesheet" href="assets/admin-inventory.css?v=1">
+  <link rel="stylesheet" href="assets/waitlist.css?v=1">
   <link rel="stylesheet" href="assets/admin-mails.css?v=1">
   <link rel="stylesheet" href="assets/admin-key-screen.css?v=3">
   <link rel="stylesheet" href="assets/key-screen-composition.css?v=2">
@@ -279,6 +280,7 @@
       <h2 id="title-menu">Secciones</h2>
       <small class="subtle">Selecciona un módulo del panel de administración.</small>
       <div class="admin-index-list" id="adminIndexList">
+        <button class="btn admin-nav-item admin-nav-item--described" data-nav-target="section-waitlist"><strong class="admin-nav-item__title">Waitlist</strong><span class="admin-nav-item__description">Avisos de reposición y demanda por talla</span></button>
         <button class="btn admin-nav-item admin-nav-item--described" data-nav-target="section-inventory"><strong class="admin-nav-item__title">Inventario -</strong><span class="admin-nav-item__description">Stock real por producto y talla</span></button>
         <button class="btn admin-nav-item" data-nav-target="section-mails">PLANTILLAS MAILS</button>
         <button class="btn admin-nav-item admin-nav-item--described" data-nav-target="section-key-screen"><strong class="admin-nav-item__title">PANTALLA CLAVE -</strong><span class="admin-nav-item__description">Acceso global y prerregistro del sitio público</span></button>
@@ -972,6 +974,22 @@
       <p id="mailFeedback" role="status" aria-live="polite"></p>
       <div id="mailWorkspace"></div>
     </section>
+    <section id="section-waitlist" class="card admin-section" aria-labelledby="title-waitlist" hidden>
+      <button class="btn" data-back-target="section-menu" type="button">Volver</button>
+      <h2 id="title-waitlist">Waitlist</h2>
+      <p>Demanda por talla. Las solicitudes activas incluyen las que están en espera, en cola, en proceso, fallidas o con entrega incierta. Los estados de envío se muestran por separado.</p>
+      <form id="waitlistFilters" class="waitlist-filters">
+        <label>Buscar producto<input id="waitlistSearch" class="input" type="search" maxlength="120" placeholder="Nombre, SKU, slug o ID"></label>
+        <label>Talla<select id="waitlistSize" class="input"><option value="">Todas</option></select></label>
+        <label>Estado del aviso<select id="waitlistStatus" class="input"><option value="">Todos</option></select></label>
+        <button class="btn" type="submit">Filtrar</button>
+      </form>
+      <button id="waitlistRefresh" class="btn" type="button">Actualizar</button>
+      <p id="waitlistMessage" role="status" aria-live="polite"></p>
+      <div id="waitlistList" aria-busy="false"></div>
+      <div class="waitlist-pages"><button id="waitlistPrev" class="btn" type="button" disabled>Anterior</button><span id="waitlistPage"></span><button id="waitlistNext" class="btn" type="button" disabled>Siguiente</button></div>
+    </section>
+
     <section id="section-inventory" class="card admin-section inventory-section" aria-labelledby="title-inventory" hidden>
       <button class="btn admin-view-back" type="button" data-back-target="section-menu">&larr; Atr&aacute;s</button>
       <div class="inventory-heading">
@@ -1872,6 +1890,8 @@
   <script src="assets/admin-pagination.js?v=1"></script>
   <script src="assets/admin.js"></script>
   <script src="assets/admin-inventory.js?v=1"></script>
+  <script src="assets/admin-waitlist.js?v=1"></script>
+  <script src="assets/responsive-images.js?v=3"></script>
   <script src="assets/admin-mail-document.js?v=2"></script>
   <script src="assets/admin-mails.js?v=2"></script>
   <script src="assets/admin-orders.js"></script>

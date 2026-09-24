@@ -1,0 +1,17 @@
+.restock-panel { margin-block: 24px; padding: 20px 0; border-block: 1px solid #444; color: #fff; overflow-wrap: anywhere; }
+.restock-panel summary { cursor: pointer; font-weight: 600; padding-block: 8px; }
+.restock-panel label { display: block; margin-block: 16px 8px; }
+.restock-panel select { display: block; width: 100%; min-height: 44px; padding: 10px; background: #111; color: #fff; border: 1px solid #777; font: inherit; }
+.restock-panel button { max-width: 100%; min-height: 44px; white-space: normal; padding: 12px 20px; background: #fff; color: #000; border: 1px solid #fff; font: inherit; cursor: pointer; }
+.restock-panel button:disabled { opacity: .55; cursor: default; }
+.restock-status { min-height: 3em; line-height: 1.5; }
+.restock-help { font-size: .85rem; color: #aaa; line-height: 1.5; }
+.restock-panel :focus-visible { outline: 2px solid #fff; outline-offset: 4px; }
+.waitlist-filters { display: flex; flex-wrap: wrap; gap: 12px; margin-block: 16px; }
+.waitlist-filters label { flex: 1 1 180px; }
+.waitlist-filters input, .waitlist-filters select { width: 100%; }
+.waitlist-row { border-top: 1px solid #444; padding: 20px 0; display: grid; grid-template-columns: 72px minmax(0,1fr); gap: 16px; overflow-wrap: anywhere; }
+.waitlist-row img { width: 72px; height: 90px; object-fit: contain; }
+.waitlist-row h3 { margin-top: 0; }
+.waitlist-row p { line-height: 1.5; }
+.waitlist-pages { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }

@@ -461,6 +461,8 @@
     qaPrice.textContent = product.priceLabel || euros(product.price);
 
     setupQuickAddSizes(product);
+    qaLink.textContent = (product.variants || []).some(v => v.isActive !== false && Number(v.stockQty ?? v.stock ?? 0) <= 0)
+      ? '¿Tu talla está agotada? Activa un aviso en el producto' : 'Ver detalles del producto';
     window.CRONOX_STOCK?.decoratePurchase(qaPrice, qaAdd, product);
 
     const key = product.slug || product.id;

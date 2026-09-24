@@ -32,6 +32,7 @@ import { MediaFramingModule } from './media-framing/media-framing.module';
 import { KeyScreenModule } from './key-screen/key-screen.module';
 import { ImagesModule } from './images/images.module';
 import { FooterModule } from './footer/footer.module';
+import { WaitlistModule } from './waitlist/waitlist.module';
 import {
   getRateLimitMax,
   getRateLimitTtlMs,
@@ -83,6 +84,7 @@ import {
     PrismaModule,
     ImagesModule,
     FooterModule,
+    WaitlistModule,
     EmailModule,
     AuthModule,
     CartModule,

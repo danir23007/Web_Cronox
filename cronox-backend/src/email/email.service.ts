@@ -10,6 +10,7 @@ import { join } from 'path';
 import { loadEmailConfig } from './email.config';
 import { MailTransportFactory } from './mail-transport.factory';
 import { ManagedMailService } from './managed/managed-mail.service';
+import { RestockDeliveryError, restockDeliveryOutcome } from './restock-delivery.error';
 import {
   EMAIL_TEMPLATE_FILE,
   EMAIL_TYPE_TO_SENDER,
@@ -42,6 +43,31 @@ export class EmailService {
   isLaunchSenderConfigured(): boolean {
     const account = this.config.accounts[EmailSenderKey.INFO];
     return Boolean(this.config.enabled && account?.user && account.pass);
+  }
+
+  isRestockSenderConfigured(): boolean {
+    return this.isLaunchSenderConfigured();
+  }
+
+  // Dedicated opt-in availability notice, independent from launch publications.
+  async sendRestock(to: string, data: { product: string; size: string; actionUrl: string; imageUrl?: string }) {
+    let html: string;
+    let transport: ReturnType<MailTransportFactory['getTransport']>;
+    let from: string;
+    try {
+      html = await this.renderTemplate(EmailTemplate.RESTOCK, data);
+      transport = this.transportFactory.getTransport(EmailSenderKey.INFO);
+      from = this.transportFactory.getFrom(EmailSenderKey.INFO);
+    } catch { throw new RestockDeliveryError('RETRY'); }
+    let info: { accepted?: unknown[] };
+    try {
+      info = await transport.sendMail({
+        to, from, subject: `Tu talla ha vuelto: ${data.product} · ${data.size}`,
+        html,
+        text: `Ya está disponible\nNos pediste que te avisáramos: ${data.product}, en la talla ${data.size}, vuelve a estar disponible en CRONOX.\nVER PRODUCTO: ${data.actionUrl}\nDisponibilidad sujeta a existencias. Este aviso no reserva la prenda.`,
+      });
+    } catch (error) { throw new RestockDeliveryError(restockDeliveryOutcome(error)); }
+    if (!info.accepted?.length) throw new RestockDeliveryError('FAILED');
   }
 
   async send(options: EmailSendOptions): Promise<EmailSendResult> {

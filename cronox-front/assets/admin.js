@@ -307,6 +307,7 @@
     userDetail: ['ADMIN', 'SUPERADMIN'],
     products: ['ADMIN', 'SUPERADMIN'],
     inventory: ['ADMIN', 'SUPERADMIN'],
+    waitlist: ['ADMIN', 'SUPERADMIN'],
     mails: ['ADMIN', 'SUPERADMIN'],
     keyScreen: ['ADMIN', 'SUPERADMIN'],
     newsletter: ['ADMIN', 'SUPERADMIN'],
@@ -323,6 +324,7 @@
     'section-products-menu': 'products',
     'section-products': 'products',
     'section-inventory': 'inventory',
+    'section-waitlist': 'waitlist',
     'section-mails': 'mails',
     'section-key-screen': 'keyScreen',
     'section-newsletter': 'newsletter',
@@ -398,6 +400,7 @@
     setNavVisibility('section-products-menu', canAccess('products'));
     setNavVisibility('section-products', canAccess('products'));
     setNavVisibility('section-inventory', canAccess('inventory'));
+    setNavVisibility('section-waitlist', canAccess('waitlist'));
     setNavVisibility('section-mails', canAccess('mails'));
     setNavVisibility('section-key-screen', canAccess('keyScreen'));
     setNavVisibility('section-newsletter', canAccess('newsletter'));
@@ -1657,6 +1660,7 @@
       if (sectionId === 'section-inventory') {
         window.CRONOX_INVENTORY?.load?.();
       }
+      if (sectionId === 'section-waitlist') window.CRONOX_WAITLIST_ADMIN?.load?.();
       if (sectionId === 'section-mails') window.CRONOX_MAILS?.load?.();
       return;
     }
@@ -4654,6 +4658,7 @@
           if (targetSection === 'section-inventory') {
             window.CRONOX_INVENTORY?.load?.();
           }
+          if (targetSection === 'section-waitlist') window.CRONOX_WAITLIST_ADMIN?.load?.();
           if (targetSection === 'section-mails') window.CRONOX_MAILS?.load?.();
           if (targetSection === 'section-key-screen') window.CRONOX_KEY_SCREEN?.load?.();
           if (targetSection === 'section-orders') {
