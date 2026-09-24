@@ -2,11 +2,11 @@ const { test, expect } = require('@playwright/test');
 const fs = require('node:fs');
 const path = require('node:path');
 
-async function fixture(page, allSoldOut = false) {
-  const state = { signedIn: false, role: 'USER', requests: new Map(), writes: [], fail: false, delay: 0 };
+async function fixture(page, allSoldOut = false, fixtureVariants = null) {
+  const state = { signedIn: false, role: 'USER', requests: new Map(), writes: [], fail: false, productFail: false, delay: 0 };
   const product = { id: 1, slug: 'test-tee', name: 'Camiseta CRONOX de nombre largo <especial>', price: 3500, currency: 'EUR',
     imageUrl: '/assets/logo_banner.png', images: [{ url: '/assets/logo_banner.png', isPrimary: true }],
-    variants: [{ id: 101, size: 'M', stock: 0, isActive: true }, { id: 102, size: 'L', stock: allSoldOut ? 0 : 4, isActive: true }],
+    variants: fixtureVariants || [{ id: 101, size: 'M', stock: 0, isActive: true }, { id: 102, size: 'L', stock: allSoldOut ? 0 : 4, isActive: true }],
   };
   const user = { id: 1, email: 'fixture@example.test', role: 'USER' };
   await page.addInitScript(() => {
@@ -24,7 +24,10 @@ async function fixture(page, allSoldOut = false) {
     else if (url.pathname === '/api/me') data = state.signedIn ? { ...user, role: state.role } : null;
     else if (['/api/auth/login','/api/auth/register'].includes(url.pathname)) { state.signedIn = true; data = { user }; }
     else if (url.pathname === '/api/products') data = { items: [product], meta: { total: 1 } };
-    else if (url.pathname.startsWith('/api/products/')) data = product;
+    else if (url.pathname.startsWith('/api/products/')) {
+      if (state.productFail) return route.fulfill({ status: 503, json: {} });
+      data = product;
+    }
     else if (url.pathname.startsWith('/api/cart')) data = { id: 1, items: [], itemsCount: 0, subtotal: 0 };
     else if (url.pathname.startsWith('/api/favorites')) data = [];
     else if (url.pathname.startsWith('/api/waitlist/')) {
@@ -61,8 +64,10 @@ for (const width of [320, 390, 768, 1366]) {
     expect(state.writes).toEqual([]);
     await expect(root.locator('.restock-choice')).toContainText('Talla L');
     await button.click(); await expect(button).toHaveText('Cancelar aviso');
+    await expect(root.locator('.restock-status')).toHaveText('Ya tienes un aviso activado para esta talla. Recibirás un mail avisándote cuando volvamos a tener esta talla de este producto.');
     expect(state.writes).toEqual(['102']);
     await page.reload(); await expect(button).toHaveText('Cancelar aviso');
+    await expect(root.locator('.restock-status')).toHaveText('Ya tienes un aviso activado para esta talla. Recibirás un mail avisándote cuando volvamos a tener esta talla de este producto.');
     await root.scrollIntoViewIfNeeded();
     const box = await root.boundingBox(); expect(box.width).toBeLessThanOrEqual(width);
     await page.screenshot({ path: info.outputPath(`waitlist-${width}.png`), fullPage: true });
@@ -85,9 +90,81 @@ test('one exhausted size remains discoverable; slow/error requests never show fa
   state.fail = false; state.delay = 0; await button.click();
   await expect(button).toHaveText('Avísame cuando vuelva');
   await button.click(); await expect(button).toHaveText('Cancelar aviso');
-  await root.locator('select').selectOption('102');
-  await expect(root.locator('.restock-status')).toContainText('Esta talla está disponible');
-  await expect(button).toBeDisabled(); expect(errors).toEqual([]);
+  await expect(root.locator('select option')).toHaveCount(1);
+  await expect(root.locator('select')).toHaveValue('101');
+  expect(errors).toEqual([]);
+});
+
+for (const [name, stocks, expected] of [
+  ['all available', [2, 1, 4], []],
+  ['one sold out', [0, 1, 4], ['201']],
+  ['several sold out', [0, 1, 0], ['201', '203']],
+  ['all sold out', [0, 0, 0], ['201', '202', '203']],
+]) {
+  test(`Waitlist visibility and selectable sizes: ${name}`, async ({ page }) => {
+    const variants = ['S', 'M', 'L'].map((size, index) => ({ id: 201 + index, size, stock: stocks[index], isActive: true }));
+    // A hidden variant and a variant without known stock must not create an aviso.
+    variants.push({ id: 204, size: 'XL', stock: 0, isActive: false }, { id: 205, size: 'XXL', stock: null, isActive: true });
+    const { errors } = await fixture(page, false, variants);
+    await page.goto('/producto/test-tee?size=M&waitlist=202');
+    const root = page.locator('#productWaitlist');
+    if (!expected.length) await expect(root).toHaveCount(0);
+    else {
+      await expect(root).toBeVisible();
+      await expect(root.locator('select option')).toHaveCount(expected.length);
+      expect(await root.locator('select option').evaluateAll(options => options.map(option => option.value))).toEqual(expected);
+      await expect(root.locator('select')).toHaveValue(expected.includes('202') ? '202' : expected[0]);
+    }
+    expect(errors).toEqual([]);
+  });
+}
+
+test('US sizes: purchase selection does not insert available sizes; subscriptions stay bound to each size', async ({ page }) => {
+  const variants = [6, 7, 8, 9, 10, 11, 12].map((size, index) => ({ id: 301 + index, size: `US_${size}`, stock: [6, 11, 12].includes(size) ? 0 : 3, isActive: true }));
+  const { state, errors } = await fixture(page, false, variants); state.signedIn = true;
+  await page.goto('/producto/test-tee?size=US_7');
+  const root = page.locator('#productWaitlist'), select = root.locator('select'), button = root.locator('button');
+  await expect(root).toBeVisible();
+  expect(await select.locator('option').evaluateAll(options => options.map(option => option.value))).toEqual(['301', '306', '307']);
+  await expect(select).toHaveValue('301');
+  await page.locator('#pSizeGroup [data-size="US_8"]').click();
+  await expect(select).toHaveValue('301');
+  await button.click(); await expect(button).toHaveText('Cancelar aviso');
+  await expect(root.locator('.restock-status')).toHaveText('Ya tienes un aviso activado para esta talla. Recibirás un mail avisándote cuando volvamos a tener esta talla de este producto.');
+  await select.selectOption('306'); await expect(button).toHaveText('Avísame cuando vuelva');
+  await button.click(); await expect(button).toHaveText('Cancelar aviso');
+  await page.reload(); await expect(select).toHaveValue('306'); await expect(button).toHaveText('Cancelar aviso');
+  await select.selectOption('301'); await expect(button).toHaveText('Cancelar aviso');
+  await button.click(); await expect(root.locator('.restock-status')).toHaveText('Aviso cancelado.');
+  expect([...state.requests.keys()]).toEqual(['306']);
+  expect(state.writes).toEqual(['301', '306']); expect(errors).toEqual([]);
+});
+
+test('fresh availability before POST removes a newly available size without subscribing', async ({ page }) => {
+  const { state, product, errors } = await fixture(page, true); state.signedIn = true;
+  await page.goto('/producto/test-tee');
+  const root = page.locator('#productWaitlist'), button = root.locator('button');
+  await expect(root.locator('select')).toHaveValue('101');
+  product.variants[0].stock = 1;
+  await button.click();
+  await expect(root.locator('select')).toHaveValue('102');
+  await expect(root.locator('.restock-status')).toContainText('Esta talla ya está disponible');
+  expect(state.writes).toEqual([]);
+  product.variants[1].stock = 2;
+  await button.click(); await expect(root).toHaveCount(0);
+  expect(state.writes).toEqual([]); expect(errors).toEqual([]);
+});
+
+test('an unavailable product recheck never submits an unverified aviso', async ({ page }) => {
+  const { state, errors } = await fixture(page); state.signedIn = true;
+  await page.goto('/producto/test-tee');
+  const root = page.locator('#productWaitlist'), button = root.locator('button');
+  await expect(button).toHaveText('Avísame cuando vuelva');
+  state.productFail = true;
+  await button.click();
+  await expect(button).toHaveText('Volver a comprobar');
+  await expect(root.locator('.restock-status')).not.toContainText('Ya tienes un aviso activado');
+  expect(state.writes).toEqual([]); expect(errors).toEqual([]);
 });
 
 test('quick add links sold-out customers to PDP, and email URL preselects a purchasable size', async ({ page }) => {
