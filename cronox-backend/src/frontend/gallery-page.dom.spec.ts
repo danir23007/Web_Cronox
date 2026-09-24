@@ -85,7 +85,7 @@ const galleryProduct = (overrides: Record<string, unknown> = {}) => ({
 });
 
 describe('CRONOX gallery page', () => {
-  it('adds one direct gallery link through the shared drawer runtime', () => {
+  it('keeps category filters without a gallery entry on every shared drawer page', () => {
     const drawerPages = getDrawerPages();
     expect(drawerPages).toEqual(expectedDrawerPages);
 
@@ -110,26 +110,14 @@ describe('CRONOX gallery page', () => {
       const galleryLinks = links.filter(
         (link) => link.getAttribute('href') === '/galeria',
       );
-      const galleryLink = galleryLinks[0];
-      const lastCategoryIndex = links.reduce(
-        (lastIndex, link, index) =>
-          link.href.includes('categorySlug=') ? index : lastIndex,
-        -1,
-      );
-
-      expect(galleryLinks).toHaveLength(1);
-      expect(galleryLink.textContent).toBe('GALER\u00cdA');
-      expect(galleryLink.href).toBe('http://localhost:3000/galeria');
-      expect(galleryLink.href).not.toContain('categorySlug');
-      expect(links.indexOf(galleryLink)).toBe(lastCategoryIndex + 1);
-      expect(galleryLink.getAttribute('aria-current')).toBe(
-        page === 'gallery.html' ? 'page' : null,
-      );
+      expect(galleryLinks).toHaveLength(0);
+      expect(links).toHaveLength(5);
+      expect(links.every((link) => link.href.includes('categorySlug='))).toBe(true);
       dom.window.close();
     });
   });
 
-  it('renders the opaque production topbar and exactly thirteen placeholders', () => {
+  it('renders the opaque production topbar and loading state until the mode is known', () => {
     const dom = new JSDOM(galleryHtml, {
       runScripts: 'outside-only',
       url: 'http://localhost:3000/gallery.html',
@@ -156,25 +144,9 @@ describe('CRONOX gallery page', () => {
     const tiles = Array.from(
       document.querySelectorAll<HTMLElement>('#galleryGrid .gallery__tile'),
     );
-    const pattern = [
-      'grey',
-      'white',
-      'red',
-      'grey',
-      'white',
-      'grey',
-      'white',
-      'red',
-      'grey',
-      'red',
-      'grey',
-      'white',
-      'red',
-    ];
-
     expect(galleryHtml).toContain('<title>Galer&iacute;a | CRONOX</title>');
-    expect(galleryHtml).toContain('href="assets/gallery.css?v=18"');
-    expect(galleryHtml).toContain('src="assets/gallery.js?v=14"');
+    expect(galleryHtml).toContain('href="assets/gallery.css?v=19"');
+    expect(galleryHtml).toContain('src="assets/gallery.js?v=16"');
     expect(document.title).toBe('Galer\u00eda | CRONOX');
     expect(galleryHtml).toMatch(
       /<body class="page-info page-gallery">\s*<script src="assets\/info-shell\.js\?v=4"><\/script>/,
@@ -184,39 +156,17 @@ describe('CRONOX gallery page', () => {
     expect(topbar?.classList.contains('topbar--transparent')).toBe(false);
     expect(document.querySelector('.hero-video-section')).toBeNull();
     expect(grid).not.toBeNull();
-    expect(tiles).toHaveLength(13);
-    expect(
-      document.querySelectorAll('#galleryGrid .gallery__tile--featured'),
-    ).toHaveLength(1);
-    expect(tiles[0].classList.contains('gallery__tile--featured')).toBe(true);
-    expect(tiles.slice(1)).toHaveLength(12);
+    expect(tiles).toHaveLength(0);
+    expect(grid?.dataset.galleryState).toBe('loading');
+    expect(grid?.querySelector('[role="status"]')?.textContent).toContain('Cargando');
     expect(grid?.querySelector('h1')).toBeNull();
     expect(document.querySelector('h1.gallery-visually-hidden')).not.toBeNull();
 
-    pattern.forEach((color, index) => {
-      expect(tiles[index].classList.contains(`gallery__tile--${color}`)).toBe(
-        true,
-      );
-      expect(tiles[index].querySelector('.gallery__media')).toBeNull();
-    });
     expect(document.querySelectorAll('#galleryGrid a')).toHaveLength(0);
     expect(galleryScript).not.toContain('href="#"');
 
     const gridStyle = dom.window.getComputedStyle(grid as HTMLElement);
-    const featuredStyle = dom.window.getComputedStyle(tiles[0]);
-    const regularStyle = dom.window.getComputedStyle(tiles[1]);
-    expect(gridStyle.display).toBe('grid');
-    expect(gridStyle.gridTemplateColumns).toBe('repeat(6, minmax(0, 1fr))');
-    expect(gridStyle.gridTemplateRows).toBe('repeat(3, minmax(0, 1fr))');
-    expect(gridStyle.gap).toBe('0');
-    expect(featuredStyle.gridColumn).toBe('span 2');
-    expect(featuredStyle.gridRow).toBe('span 3');
-    expect(regularStyle.margin).toBe('0px');
-    expect(regularStyle.padding).toBe('0px');
-    expect(regularStyle.borderWidth).toBe('0px');
-    expect(regularStyle.borderRadius).toBe('0');
-    expect(regularStyle.boxShadow).toBe('none');
-    expect(regularStyle.overflow).toBe('hidden');
+    expect(gridStyle.display).toBe('flex');
 
     (document.getElementById('btnMenu') as HTMLButtonElement).click();
     expect(
@@ -288,8 +238,8 @@ describe('CRONOX gallery page', () => {
       homepageGallerySection.compareDocumentPosition(footer) &
         dom.window.Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
-    expect(homepageHtml).toContain('href="assets/gallery.css?v=18"');
-    expect(homepageHtml).toContain('src="assets/gallery.js?v=14"');
+    expect(homepageHtml).toContain('href="assets/gallery.css?v=19"');
+    expect(homepageHtml).toContain('src="assets/gallery.js?v=16"');
     expect(document.querySelectorAll('#galleryLightbox')).toHaveLength(1);
     expect(document.querySelectorAll<HTMLElement>('[id]').length).toBe(
       new Set(
@@ -474,6 +424,7 @@ describe('CRONOX gallery page', () => {
     );
     await Promise.resolve();
     await Promise.resolve();
+    await new Promise((resolve) => setTimeout(resolve, 0));
     const document = dom.window.document;
     expect(document.getElementById('productsGrid')).not.toBeNull();
     expect(document.getElementById('btnMenu')).not.toBeNull();
@@ -482,9 +433,9 @@ describe('CRONOX gallery page', () => {
     expect(document.querySelector('.topbar__fav')).not.toBeNull();
     expect(document.getElementById('cart-icon-btn')).not.toBeNull();
     expect(document.querySelector('footer.site-footer')).not.toBeNull();
-    expect(
-      document.querySelectorAll('[data-gallery-root] .gallery__tile'),
-    ).toHaveLength(13);
+    expect(document.querySelectorAll('[data-gallery-root] .gallery__tile')).toHaveLength(0);
+    expect(document.querySelector('[data-gallery-root]')?.getAttribute('data-gallery-state')).toBe('error');
+    expect(document.querySelector('[data-gallery-root] [role="status"]')?.textContent).toContain('No se pudo cargar');
     dom.window.close();
   });
 

@@ -230,9 +230,29 @@ export class KeyScreenService {
         );
       }
     }
+    if (!enabled) {
+      for (let attempt = 0; attempt < 3; attempt++) {
+        const latest = await this.prisma.keyScreenSettings.findUnique({ where: { id: GLOBAL_ID } });
+        if (!latest?.enabled) {
+          this.invalidateGateCache();
+          return this.toAdminSettings(latest || current);
+        }
+        const armed = latest.launchStatus === 'ARMED';
+        const updated = await this.prisma.keyScreenSettings.updateMany({
+          where: { id: GLOBAL_ID, enabled: true, launchStatus: latest.launchStatus },
+          data: { enabled: false, updatedBy: adminId,
+            ...(armed ? { launchStatus: 'SENDING', launchStartedAt: new Date(), launchTrigger: 'MANUAL' } : {}) },
+        });
+        if (updated.count === 1) {
+          const settings = await this.prisma.keyScreenSettings.findUniqueOrThrow({ where: { id: GLOBAL_ID } });
+          this.invalidateGateCache();
+          return this.toAdminSettings(settings);
+        }
+      }
+      throw new ConflictException('La pantalla cambió. Recarga antes de desactivarla.');
+    }
     const settings = await this.prisma.keyScreenSettings.update({
-      where: { id: GLOBAL_ID },
-      data: { enabled, updatedBy: adminId },
+      where: { id: GLOBAL_ID }, data: { enabled, updatedBy: adminId },
     });
     this.invalidateGateCache();
     return this.toAdminSettings(settings);

@@ -553,13 +553,16 @@
     if (!imgs.length) imgs.push({ url: PRODUCT_PLACEHOLDER });
 
     const imageFallbacks = [];
+    const deferredRecords = [];
     const imgEls = imgs.map((record, i) => {
       const im = document.createElement("img");
       im.className = "product-img" + (i === 0 ? " active" : "");
       im.loading = "lazy";
       im.decoding = "async";
       im.alt = p.name || "Producto";
-      if (window.CRONOX_IMAGES) {
+      if (i > 0) {
+        deferredRecords[i] = record;
+      } else if (window.CRONOX_IMAGES) {
         if (imgs.length === 1 && i === 0 && window.CRONOX_IMAGES.applyProduct) window.CRONOX_IMAGES.applyProduct(im, p, "card");
         else {
           const resolved = window.CRONOX_IMAGES.apply(im, record, "card");
@@ -590,6 +593,20 @@
     let pointerStart = null;
     let suppressCardClickUntil = 0;
     let desktopHoverActive = false;
+    const loadDeferredImage = (index) => {
+      const record = deferredRecords[index];
+      if (!record) return;
+      deferredRecords[index] = null;
+      const image = imgEls[index];
+      if (window.CRONOX_IMAGES) {
+        const resolved = window.CRONOX_IMAGES.apply(image, record, "card", { loading: "eager" });
+        const original = window.CRONOX_IMAGES.originalUrl?.(record) || safeProductImage(record?.url || record, "");
+        imageFallbacks[index] = [...new Set([resolved?.src, original].filter(Boolean))];
+      } else {
+        image.loading = "eager";
+        image.src = safeProductImage(record?.url || record);
+      }
+    };
     const isGalleryImageAvailable = (index) => Boolean(imgEls[index]) && imgEls[index].dataset.galleryUnavailable !== "true";
     const syncGalleryDots = () => {
       const availableCount = imgEls.filter((_, index) => isGalleryImageAvailable(index)).length;
@@ -616,16 +633,27 @@
       }
       if (targetIndex < 0 || !isGalleryImageAvailable(targetIndex)) return;
       galleryIndex = targetIndex;
-      imgEls.forEach((el, imageIndex) => el.classList.toggle("active", imageIndex === galleryIndex));
+      loadDeferredImage(targetIndex);
+      const targetImage = imgEls[targetIndex];
+      if (targetImage.complete && targetImage.naturalWidth > 0) {
+        imgEls.forEach((el, imageIndex) => el.classList.toggle("active", imageIndex === galleryIndex));
+      } else {
+        targetImage.addEventListener("load", () => {
+          if (galleryIndex === targetIndex) {
+            imgEls.forEach((el, imageIndex) => el.classList.toggle("active", imageIndex === galleryIndex));
+          }
+        }, { once: true });
+      }
       gallery.dataset.activeIndex = String(galleryIndex);
       syncGalleryDots();
     };
     const moveGallery = (step) => showGalleryImage(galleryIndex + step, Math.sign(step));
 
-    imageFallbacks.forEach((candidates, imageIndex) => {
-      if (!candidates?.length || imgEls.length === 1) return;
+    imgEls.forEach((image, imageIndex) => {
+      if (imgEls.length === 1) return;
       let candidateIndex = 0;
-      imgEls[imageIndex].addEventListener("error", () => {
+      image.addEventListener("error", () => {
+        const candidates = imageFallbacks[imageIndex] || [];
         candidateIndex += 1;
         const nextCandidate = candidates[candidateIndex];
         if (nextCandidate) {

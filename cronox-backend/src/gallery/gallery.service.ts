@@ -118,7 +118,7 @@ const GALLERY_PRODUCT_SELECT = Prisma.validator<Prisma.ProductSelect>()({
   isActive: true,
   images: {
     where: { isActive: true },
-    select: { url: true },
+    select: { url: true, variants: true, width: true, height: true },
     orderBy: [{ isPrimary: 'desc' }, { sortOrder: 'asc' }, { id: 'asc' }],
     take: 1,
   },
@@ -181,6 +181,14 @@ export class GalleryService {
       price: product.price,
       currency: product.currency,
       imageUrl: product.images[0]?.url || product.imageUrl || null,
+      imageRecord: product.images[0]
+        ? {
+            url: product.images[0].url,
+            variants: product.images[0].variants,
+            width: product.images[0].width,
+            height: product.images[0].height,
+          }
+        : null,
       available: product.isActive,
     };
   }

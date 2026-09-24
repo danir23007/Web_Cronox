@@ -13,11 +13,13 @@
     formGroup: $("keyPreviewForm"), privacy: $("keyPreviewPrivacy"),
     expirationInput: $("keyExpirationInput"), expirationStatus: $("keyExpirationStatus"),
     expirationSave: $("keyExpirationSave"), expirationClear: $("keyExpirationClear"),
+    launchStatus: $("keyLaunchStatus"), launchCounts: $("keyLaunchCounts"),
+    launchArm: $("keyLaunchArm"), launchDisarm: $("keyLaunchDisarm"), launchResume: $("keyLaunchResume"),
   };
   const renderer = window.CRONOX_KEY_SCREEN_RENDERER;
   const geometryEngine = window.CRONOX_MEDIA_GEOMETRY;
   const madridTime = window.CRONOX_MADRID_TIME;
-  const state = { loaded: false, screens: [], assets: [], settings: null, current: null, device: "desktop", media: null, mediaKey: "", geometry: null, drag: null, serverEpochMs: 0, serverMonotonicMs: 0, expirationTimer: 0 };
+  const state = { loaded: false, screens: [], assets: [], settings: null, current: null, device: "desktop", media: null, mediaKey: "", geometry: null, drag: null, serverEpochMs: 0, serverMonotonicMs: 0, expirationTimer: 0, launch: null, launchTimer: 0 };
   const names = [
     "internalName", "mode", "title", "subtitle", "placeholder", "buttonText", "successTitle", "successMessage", "textColor", "overlayStrength", "inputStyle", "buttonStyle",
     "desktopFocalX", "desktopFocalY", "desktopZoom", "desktopFit", "desktopHorizontalAlign", "desktopVerticalAlign", "desktopOffsetX", "desktopOffsetY",
@@ -39,6 +41,16 @@
     return parse(await fetch(`${base()}${path}`, { ...options, method, headers, credentials: "include", cache: "no-store", body: options.body instanceof FormData ? options.body : options.body ? JSON.stringify(options.body) : undefined }));
   };
   const message = (text, error = false) => { el.message.textContent = text || ""; el.message.className = `message${text ? " show" : ""}${error ? " error" : " success"}`; };
+  const renderLaunch = (launch) => {
+    state.launch = launch;
+    const labels = { PENDING: "Pendiente: no se enviará al abrir si no se arma.", ARMED: "Armada: la próxima apertura real iniciará el envío.", SENDING: "Enviando desde el servidor; puedes cerrar esta pestaña.", COMPLETED: "Completada.", ERROR: "Detenida: hay un error o envíos de resultado incierto." };
+    el.launchStatus.textContent = `${labels[launch.status] || "Estado desconocido."}${launch.errorCode ? ` Motivo: ${launch.errorCode}.` : ""}${launch.emailReady ? "" : " Correo desactivado o remitente INFO sin configurar."}`;
+    el.launchCounts.textContent = `${launch.recipients} destinatarios · ${launch.sent} aceptados por SMTP · ${launch.pending} pendientes · ${launch.uncertain} por revisar (no se reenvían automáticamente).`;
+    el.launchArm.hidden = launch.status !== "PENDING" || !launch.keyScreenEnabled || !launch.emailReady || launch.uncertain > 0;
+    el.launchDisarm.hidden = launch.status !== "ARMED";
+    el.launchResume.hidden = launch.status !== "ERROR" || !launch.pending || !launch.emailReady;
+  };
+  const loadLaunch = async () => renderLaunch(await request("/api/admin/launch"));
   const monotonicNow = () => window.performance?.now?.() ?? Date.now();
   const syncServerClock = (value) => {
     const parsed = Date.parse(value || "");
@@ -90,6 +102,13 @@
   const selectedScreen = () => state.screens.find((screen) => screen.id === el.select.value) || null;
   const inputFor = (name) => el.form.elements[name];
   const setInput = (name, value) => { const input = inputFor(name); if (input) input.value = String(value); };
+  const zoomOutputs = ["desktopZoom", "mobileZoom"].map((name) => {
+    const input = inputFor(name);
+    const output = document.createElement("output");
+    output.className = "key-zoom-value";
+    input.before(output);
+    return { input, output };
+  });
   const legacyValue = (screen, name) => {
     if (name === "desktopHorizontalAlign" || name === "mobileHorizontalAlign") return screen.horizontalAlign || "CENTER";
     if (name === "desktopVerticalAlign" || name === "mobileVerticalAlign") return screen.verticalAlign || "CENTER";
@@ -191,6 +210,7 @@
 
   const renderPreview = () => {
     if (!state.current) return;
+    zoomOutputs.forEach(({ input, output }) => { output.textContent = `${Number(input.value).toFixed(2)}×`; });
     const screen = formFrame();
     const asset = state.assets.find((item) => item.id === state.current.mediaAssetId);
     const size = viewport();
@@ -289,23 +309,6 @@
     el.preview.classList.remove("is-dragging");
   };
 
-  const zoomMedia = (event) => {
-    if (!state.geometry?.valid || !state.current) return;
-    event.preventDefault();
-    const rect = el.preview.getBoundingClientRect();
-    const scale = rect.width > 0 ? rect.width / viewport().width : 1;
-    const pointX = (event.clientX - rect.left) / scale;
-    const pointY = (event.clientY - rect.top) / scale;
-    const config = renderer.resolve(formFrame(), state.device);
-    const nextZoom = Math.min(3, Math.max(1, config.zoom * Math.exp(-event.deltaY * 0.0015)));
-    const next = geometryEngine.zoomAtPoint(state.geometry, nextZoom, pointX, pointY);
-    const prefix = devicePrefix();
-    setInput(`${prefix}Zoom`, next.zoom.toFixed(2));
-    setInput(`${prefix}FocalX`, next.focalX.toFixed(1));
-    setInput(`${prefix}FocalY`, next.focalY.toFixed(1));
-    renderPreview();
-  };
-
   const load = async () => {
     try {
       const data = await request("/api/admin/key-screens");
@@ -315,6 +318,9 @@
       state.loaded = true;
       el.count.textContent = data.preregisteredCount;
       applySettings(data.settings);
+      await loadLaunch();
+      window.clearInterval(state.launchTimer);
+      state.launchTimer = window.setInterval(() => { if (!section.hidden) void loadLaunch().catch(() => { el.launchStatus.textContent = "No se pudo actualizar el estado de la campaña."; }); }, 10_000);
       renderSelect();
       message("");
     } catch (error) { message(error.message, true); }
@@ -325,7 +331,34 @@
   el.select.addEventListener("change", () => fill(selectedScreen()));
   el.create.addEventListener("click", async () => { const internalName = el.newName.value.trim(); if (!internalName) return message("Escribe un nombre para la pantalla.", true); try { const screen = await request("/api/admin/key-screens", { method: "POST", body: { internalName } }); state.screens.unshift(screen); state.current = screen; el.newName.value = ""; renderSelect(); message("Pantalla creada."); } catch (error) { message(error.message, true); } });
   el.activate.addEventListener("click", async () => { if (!state.current) return; try { applySettings(await request("/api/admin/key-screens/active", { method: "PATCH", body: { screenId: state.current.id } })); renderSelect(); message("Pantalla seleccionada. Usa el interruptor para mostrarla al público."); } catch (error) { message(error.message, true); } });
-  el.master.addEventListener("change", async () => { try { applySettings(await request("/api/admin/key-screens/master", { method: "PATCH", body: { enabled: el.master.checked } })); message(state.settings.enabled ? "Pantalla clave activada." : "Pantalla clave desactivada."); } catch (error) { el.master.checked = Boolean(state.settings?.enabled); message(error.message, true); } });
+  el.master.addEventListener("change", async () => {
+    if (!el.master.checked && state.launch?.status === "ARMED" && !confirm("La campaña está armada. Desactivar ahora la pantalla clave abrirá la web e iniciará el envío real. ¿Continuar?")) {
+      el.master.checked = true;
+      return;
+    }
+    try { applySettings(await request("/api/admin/key-screens/master", { method: "PATCH", body: { enabled: el.master.checked } })); await loadLaunch(); message(state.settings.enabled ? "Pantalla clave activada." : "Pantalla clave desactivada."); }
+    catch (error) { el.master.checked = Boolean(state.settings?.enabled); message(error.message, true); }
+  });
+  el.launchArm.addEventListener("click", async () => {
+    if (!confirm("¿Armar la campaña de apertura? Esto NO envía correos. La próxima desactivación real de la pantalla clave, manual o programada, sí iniciará el envío.")) return;
+    el.launchArm.disabled = true;
+    try { renderLaunch(await request("/api/admin/launch/arm", { method: "POST" })); message("Campaña armada. Aún no se ha enviado nada."); }
+    catch (error) { message(error.message, true); }
+    finally { el.launchArm.disabled = false; }
+  });
+  el.launchDisarm.addEventListener("click", async () => {
+    el.launchDisarm.disabled = true;
+    try { renderLaunch(await request("/api/admin/launch/disarm", { method: "POST" })); message("Campaña desarmada. La apertura ya no enviará el correo."); }
+    catch (error) { message(error.message, true); }
+    finally { el.launchDisarm.disabled = false; }
+  });
+  el.launchResume.addEventListener("click", async () => {
+    if (!confirm("Solo se procesarán destinatarios pendientes. Los envíos inciertos no se repetirán. ¿Continuar?")) return;
+    el.launchResume.disabled = true;
+    try { renderLaunch(await request("/api/admin/launch/resume", { method: "POST" })); message("Continuando solo con los pendientes."); }
+    catch (error) { message(error.message, true); }
+    finally { el.launchResume.disabled = false; }
+  });
   el.expirationSave.addEventListener("click", async () => {
     try {
       if (!el.expirationInput.value) throw new Error("INVALID_MADRID_LOCAL_TIME");
@@ -351,7 +384,6 @@
   el.preview.addEventListener("pointermove", moveDrag);
   el.preview.addEventListener("pointerup", endDrag);
   el.preview.addEventListener("pointercancel", endDrag);
-  el.preview.addEventListener("wheel", zoomMedia, { passive: false });
   window.addEventListener("resize", scalePreview, { passive: true });
   if (window.ResizeObserver) new ResizeObserver(scalePreview).observe(el.stage);
   window.CRONOX_KEY_SCREEN = { load };

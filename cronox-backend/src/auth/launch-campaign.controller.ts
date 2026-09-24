@@ -14,6 +14,10 @@ export class LaunchCampaignController {
   @Get()
   @Header('Cache-Control', 'no-store')
   preview() { return this.launch.preview(); }
-  @Post('send')
-  send() { return this.launch.sendBatch(); }
+  @Post('arm')
+  arm() { return this.launch.arm(); }
+  @Post('disarm')
+  disarm() { return this.launch.disarm(); }
+  @Post('resume')
+  resume() { return this.launch.resume(); }
 }

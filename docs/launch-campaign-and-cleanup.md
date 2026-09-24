@@ -1,11 +1,13 @@
 # CRONOX launch preparation
 
+The order-cleanup instructions below describe a separate historical operation. They are **not** part of arming or sending the launch campaign; do not run that script to launch the site. See [launch-campaign-operator.md](launch-campaign-operator.md) for the current campaign procedure.
+
 ## What is ready
 
 - Purchase fulfillment now removes purchased cart quantities even when a full refund was recorded before the success webhook. Existing successful-payment cleanup remains transactional and duplicate-safe. Unrelated cart items are retained. This does not prove the cause of a particular historical charge.
-- `/admin-launch.html`: SUPERADMIN-only campaign preview and batch sending. Open the store first using the existing key-screen control. Each recipient gets a cryptographically random 15% code, bound to their authenticated user ID and original email, with a global use limit of one. Guest checkout cannot claim ownership by typing an email.
+- The SUPERADMIN's **Pantalla Clave** panel shows a durable launch campaign state. Arming it never sends mail; an armed manual opening or scheduled expiration starts the server-side worker. `/admin-launch.html` is now read-only. Each recipient gets a cryptographically random 15% code, bound to their authenticated user ID and original email, with a global use limit of one. Guest checkout cannot claim ownership by typing an email.
 - `/launch.html`: one-use login token, hashed in the database, valid for 72 hours. A second click on the landing page protects against email link scanners consuming the token. The token stays in the URL fragment and is removed before requests. Standard session cookies are issued. This email grants access to the account and must not be forwarded. Admin accounts are excluded.
-- SMTP claims persist after ambiguous failures to avoid automatic duplicate messages; review those recipients before resetting any claim. Sending never starts on deployment or preview.
+- SMTP claims persist after ambiguous failures to avoid automatic duplicate messages. The panel reports uncertain recipients; continuing only processes recipients never claimed. Sending never starts on deployment, preview, or an unarmed key-screen toggle. SMTP acceptance is not proof of inbox delivery.
 - Cleanup script defaults to read-only and has no Stripe/refund/inventory-service calls. It keeps a private recovery copy, records payment tombstones, deletes the selected test orders and checkout records, removes their activity and redemptions, and resets purchase counters for affected accounts with no later orders. Existing promotional usage counters and member levels are not rewritten.
 
 ## Deployment order
@@ -25,7 +27,7 @@
 
    The flag is an operator assertion: actually stop the backend/workers first. The transaction locks relevant tables, refuses unresolved reservations and later orders on affected accounts, verifies every product variant is byte-for-byte unchanged and verifies every stock movement except detached order/checkout foreign keys. No stock quantity, size, product, price, movement delta or movement row is changed/deleted. Recovery data is stored in the restricted `cronox_private.prelaunch_backup` table; keep the external backup too. Stripe's own payment/refund history remains intact. Customer baskets are not globally wiped by cleanup.
 
-6. Restart the backend; verify purchase histories are empty and inventory unchanged. Disable the key screen when ready. Open `/admin-launch.html`, review the exact message/count and press send. 32 eligible preregistrations were found during the read-only inspection; the preview reports the current count.
+6. Restart the backend; verify purchase histories are empty and inventory unchanged. Before the **real** opening, ensure `EMAIL_ENABLED=true` and the INFO SMTP sender is configured, then sign in as SUPERADMIN. In **Pantalla Clave**, activate the preregistration gate if it is currently off, review recipients and the campaign state, and press **Armar campaña**. This does not send anything. When ready, disable the gate manually or allow its scheduled expiration. The server worker then sends without requiring an open browser tab. Watch for **Completada** with zero pending and zero uncertain; **Error** or uncertain results require investigation, not a blind resend. The historical recipient count in this document is not a current production count.
 
 ## Validation
 

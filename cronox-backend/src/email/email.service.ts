@@ -16,6 +16,7 @@ import {
   EMAIL_TYPE_TO_TEMPLATE,
   EmailSendOptions,
   EmailSendResult,
+  EmailSenderKey,
   EmailTemplate,
   EmailType,
 } from './email.types';
@@ -36,6 +37,11 @@ export class EmailService {
 
   isEnabled(): boolean {
     return this.config.enabled;
+  }
+
+  isLaunchSenderConfigured(): boolean {
+    const account = this.config.accounts[EmailSenderKey.INFO];
+    return Boolean(this.config.enabled && account?.user && account.pass);
   }
 
   async send(options: EmailSendOptions): Promise<EmailSendResult> {

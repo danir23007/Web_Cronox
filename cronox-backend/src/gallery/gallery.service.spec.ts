@@ -42,7 +42,12 @@ describe('GalleryService', () => {
         currency: 'EUR',
         imageUrl: null,
         isActive: true,
-        images: [{ url: 'https://storage.example.test/grey.png' }],
+        images: [{
+          url: 'https://storage.example.test/grey.png',
+          width: 3400,
+          height: 4500,
+          variants: { small: { url: 'https://storage.example.test/grey-small.webp', width: 450, height: 600 } },
+        }],
       },
       {
         id: 2,
@@ -539,6 +544,12 @@ describe('GalleryService', () => {
     });
     expect(publicSlot.products[0]).not.toHaveProperty('searchKeywords');
     expect(publicSlot.products[0]).not.toHaveProperty('variants');
+    expect(publicSlot.products[1].imageRecord).toMatchObject({
+      url: 'https://storage.example.test/grey.png',
+      width: 3400,
+      height: 4500,
+      variants: { small: { url: 'https://storage.example.test/grey-small.webp' } },
+    });
   });
 
   it('rejects an unknown product and rolls back slot plus asset content', async () => {

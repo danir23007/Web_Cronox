@@ -37,6 +37,20 @@ body.page-gallery {
   overflow: hidden;
 }
 
+.gallery-grid[data-gallery-state="loading"],
+.gallery-grid[data-gallery-state="error"] {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #000;
+  color: #fff;
+}
+
+.gallery-state { margin: 0; padding: 20px; text-align: center; }
+.gallery-state button { display: block; margin: 12px auto 0; padding: 8px 16px; color: #fff; background: transparent; border: 1px solid currentColor; cursor: pointer; }
+.gallery-homepage[data-gallery-state="loading"] .gallery-homepage__heading,
+.gallery-homepage[data-gallery-state="error"] .gallery-homepage__heading { display: none; }
+
 .gallery-grid.gallery--homepage {
   height: auto;
   aspect-ratio: 2 / 1;

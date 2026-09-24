@@ -553,6 +553,12 @@ model KeyScreenSettings {
   updatedBy      Int?
   createdAt      DateTime   @default(now())
   updatedAt      DateTime   @updatedAt
+  launchStatus      String    @default("PENDING")
+  launchArmedAt     DateTime? @db.Timestamptz(3)
+  launchStartedAt   DateTime? @db.Timestamptz(3)
+  launchCompletedAt DateTime? @db.Timestamptz(3)
+  launchTrigger     String?
+  launchErrorCode   String?
 }
 
 model KeyScreen {
@@ -624,6 +630,7 @@ model PreRegistration {
   launchTokenUsedAt     DateTime?
   launchClaimedAt       DateTime?
   launchSentAt          DateTime?
+  launchErrorCode       String?
   confirmationClaimedAt DateTime?
   confirmationSentAt    DateTime?
   createdAt             DateTime   @default(now())

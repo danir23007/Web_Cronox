@@ -197,39 +197,6 @@
 
   const filtersPanel = $('#filtersPanel');
   const menuBtn = $('#btnMenu');
-  const ensureGalleryNavigationLink = () => {
-    const menuList = filtersPanel ? $('.black-menu__list', filtersPanel) : null;
-    if (!menuList) return null;
-
-    const galleryLinks = $$('a.black-menu__link', menuList).filter((link) => {
-      const href = link.getAttribute('href');
-      if (!href) return false;
-      try {
-        return ['/galeria', '/gallery.html'].includes(new URL(href, window.location.href).pathname.toLowerCase());
-      } catch {
-        return false;
-      }
-    });
-
-    const galleryLink = galleryLinks.shift() || document.createElement('a');
-    galleryLinks.forEach((duplicate) => duplicate.remove());
-    galleryLink.className = 'black-menu__link';
-    galleryLink.setAttribute('role', 'menuitem');
-    galleryLink.setAttribute('href', '/galeria');
-    galleryLink.dataset.galleryLink = '';
-    galleryLink.textContent = 'GALER\u00cdA';
-
-    const isGalleryPage = ['/galeria', '/gallery.html'].includes(window.location.pathname.toLowerCase().replace(/\/+$/, ''));
-    if (isGalleryPage) galleryLink.setAttribute('aria-current', 'page');
-    else galleryLink.removeAttribute('aria-current');
-
-    const categoryLinks = $$('a.black-menu__link[href*="categorySlug="]', menuList);
-    const lastCategoryLink = categoryLinks[categoryLinks.length - 1];
-    if (lastCategoryLink) lastCategoryLink.insertAdjacentElement('afterend', galleryLink);
-    else menuList.appendChild(galleryLink);
-    return galleryLink;
-  };
-  ensureGalleryNavigationLink();
   const filtersCloseBtn = filtersPanel ? $('.filters-close', filtersPanel) : null;
   const FILTERS_KEY = 'filters';
   const FILTERS_TRANSITION_MS = 220;

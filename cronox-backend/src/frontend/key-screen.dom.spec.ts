@@ -15,6 +15,7 @@ describe('Pantalla Clave frontend integration', () => {
     join(frontend, 'assets', 'key-screen-renderer.js'),
     'utf8',
   );
+  const timeScript = readFileSync(join(frontend, 'assets', 'key-screen-time.js'), 'utf8');
   const gateStyles = readFileSync(
     join(frontend, 'assets', 'key-screen.css'),
     'utf8',
@@ -23,6 +24,7 @@ describe('Pantalla Clave frontend integration', () => {
     join(frontend, 'assets', 'admin-key-screen.js'),
     'utf8',
   );
+  const launchAdminScript = readFileSync(join(frontend, 'assets', 'admin-launch.js'), 'utf8');
   const mainSource = readFileSync(join(__dirname, '..', 'main.ts'), 'utf8');
   const gateMiddlewareSource = readFileSync(
     join(
@@ -71,8 +73,47 @@ describe('Pantalla Clave frontend integration', () => {
         ?.hasAttribute('hidden'),
     ).toBe(true);
     expect(adminScript).toContain('addEventListener("pointerdown"');
-    expect(adminScript).toContain('addEventListener("wheel"');
-    expect(adminScript).toContain('{ passive: false }');
+    expect(adminScript).not.toContain('addEventListener("wheel"');
+    expect(adminScript).not.toContain('event.deltaY');
+    expect(launchAdminScript).not.toContain('/admin/launch/send');
+    expect(adminHtml).toContain('id="keyLaunchArm"');
+  });
+
+  it('lets wheel events pass over the key-screen image while the zoom slider still changes framing', async () => {
+    const dom = new JSDOM(adminHtml, { runScripts: 'outside-only', url: 'https://cronox.es/admin.html' });
+    const { window } = dom;
+    const apply = jest.fn(() => ({ valid: true }));
+    Object.defineProperty(window, 'CRONOX_MEDIA_GEOMETRY', { value: { apply } });
+    Object.defineProperty(window, 'CRONOX_API', { value: { API_BASE: '', getCsrfHeaders: async () => ({}) } });
+    Object.defineProperty(window, 'fetch', { value: jest.fn(async (url: string) => ({
+      ok: true,
+      json: async () => url.includes('/api/admin/launch')
+        ? { status: 'PENDING', recipients: 1, sent: 0, pending: 1, uncertain: 0, emailReady: false, keyScreenEnabled: true }
+        : { settings: { enabled: true, activeScreenId: 'screen', expiresAt: null, serverTime: new Date().toISOString() },
+          screens: [{ id: 'screen', internalName: 'Prerregistro', mediaAssetId: 'asset', desktopZoom: 1.3, mobileZoom: 1, overlayStrength: 25 }],
+          assets: [{ id: 'asset', publicUrl: 'https://example.test/image.png', mediaType: 'image', originalFilename: 'image.png' }],
+          preregisteredCount: 1 },
+    })) });
+    window.eval(timeScript);
+    window.eval(rendererScript);
+    window.eval(adminScript);
+    await (window as any).CRONOX_KEY_SCREEN.load();
+    const preview = window.document.getElementById('keyPreview')!;
+    const zoom = window.document.querySelector<HTMLInputElement>('[name="desktopZoom"]')!;
+    const value = zoom.previousElementSibling as HTMLOutputElement;
+    expect(zoom.value).toBe('1.3');
+    expect(value.textContent).toBe('1.30×');
+    const wheel = new window.WheelEvent('wheel', { bubbles: true, cancelable: true, deltaY: 120 });
+    expect(preview.dispatchEvent(wheel)).toBe(true);
+    expect(wheel.defaultPrevented).toBe(false);
+    expect(zoom.value).toBe('1.3');
+    expect(value.textContent).toBe('1.30×');
+    zoom.value = '2';
+    zoom.dispatchEvent(new window.Event('input', { bubbles: true }));
+    expect(value.textContent).toBe('2.00×');
+    expect(apply).toHaveBeenLastCalledWith(expect.anything(), preview.querySelector('#keyPreviewMedia'),
+      expect.objectContaining({ zoom: 2 }), expect.anything());
+    dom.window.close();
   });
 
   it('renders a passwordless preregistration form, success state and privacy link without storefront content', () => {

@@ -16,12 +16,12 @@
     })();
   </script>
   <link id="cronox-admin-style" rel="stylesheet" href="assets/store.css">
-  <link rel="stylesheet" href="assets/gallery.css?v=18">
+  <link rel="stylesheet" href="assets/gallery.css?v=19">
   <link rel="stylesheet" href="assets/admin-gallery.css?v=6">
   <link rel="stylesheet" href="assets/admin-media.css?v=4">
   <link rel="stylesheet" href="assets/admin-inventory.css?v=1">
   <link rel="stylesheet" href="assets/admin-mails.css?v=1">
-  <link rel="stylesheet" href="assets/admin-key-screen.css?v=2">
+  <link rel="stylesheet" href="assets/admin-key-screen.css?v=3">
   <link rel="stylesheet" href="assets/key-screen-composition.css?v=2">
   <link rel="stylesheet" href="assets/newsletter-popup.css?v=5">
   <link rel="stylesheet" href="assets/admin-newsletter.css?v=5">
@@ -1174,6 +1174,17 @@
           <button id="keyExpirationClear" class="btn" type="button">Quitar fecha programada</button>
         </div>
       </section>
+      <section class="key-launch" aria-labelledby="keyLaunchTitle">
+        <h3 id="keyLaunchTitle">Correo de apertura</h3>
+        <p>Armar prepara la campaña, pero no envía nada. Solo la apertura real de la web, manual o programada, iniciará el envío.</p>
+        <p id="keyLaunchStatus" role="status" aria-live="polite">Consultando campaña…</p>
+        <p id="keyLaunchCounts"></p>
+        <div class="key-launch__actions">
+          <button id="keyLaunchArm" class="btn primary" type="button" hidden>Armar campaña</button>
+          <button id="keyLaunchDisarm" class="btn" type="button" hidden>Desarmar campaña</button>
+          <button id="keyLaunchResume" class="btn" type="button" hidden>Continuar solo pendientes</button>
+        </div>
+      </section>
       <div class="key-admin__summary"><strong id="keyCount">0</strong><span>usuarios prerregistrados</span></div>
       <div class="key-admin__toolbar">
         <label>Pantalla guardada<select id="keyScreenSelect" class="select"></select></label>
@@ -1864,11 +1875,11 @@
   <script src="assets/admin-mail-document.js?v=2"></script>
   <script src="assets/admin-mails.js?v=2"></script>
   <script src="assets/admin-orders.js"></script>
-  <script src="assets/gallery.js?v=14"></script>
+  <script src="assets/gallery.js?v=16"></script>
   <script src="assets/admin-gallery.js?v=7"></script>
   <script src="assets/key-screen-renderer.js?v=2"></script>
   <script src="assets/key-screen-time.js?v=1"></script>
-  <script src="assets/admin-key-screen.js?v=4"></script>
+  <script src="assets/admin-key-screen.js?v=5"></script>
   <script src="assets/admin-media.js?v=5"></script>
   <script src="assets/admin-newsletter.js?v=5"></script>
   <script src="assets/admin-footer.js?v=2"></script>

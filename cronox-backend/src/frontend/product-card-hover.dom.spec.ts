@@ -144,9 +144,12 @@ describe('premium product-card hover gallery', () => {
     );
     app.document.body.appendChild(card);
     const images = card.querySelectorAll<HTMLImageElement>('.product-img');
-    expect(images[1].src).toContain('/broken.webp?card');
+    expect(images[1].getAttribute('src')).toBeNull();
+    expect(images[2].getAttribute('src')).toBeNull();
 
     card.dispatchEvent(pointer(dom.window, 'pointerenter', 'mouse'));
+    expect(images[1].src).toContain('/broken.webp?card');
+    expect(images[2].getAttribute('src')).toBeNull();
     expect(activeIndex(card)).toBe(1);
     images[1].dispatchEvent(new dom.window.Event('error'));
     expect(images[1].src).toBe('http://localhost:3000/broken.webp');

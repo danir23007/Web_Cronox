@@ -211,6 +211,9 @@
       price: Number.isFinite(price) && price >= 0 ? price : null,
       currency,
       imageUrl: getImageUrl(product?.imageUrl),
+      imageRecord: product?.imageRecord && typeof product.imageRecord === "object"
+        ? product.imageRecord
+        : null,
       available: product?.available === true,
     };
   };
@@ -335,12 +338,19 @@
 
     const media = pageDocument.createElement("span");
     media.className = "gallery-lightbox__product-media";
-    if (product.imageUrl) {
+    if (product.imageRecord || product.imageUrl) {
       const image = pageDocument.createElement("img");
-      image.src = product.imageUrl;
       image.alt = "";
       image.loading = "lazy";
       image.decoding = "async";
+      if (window.CRONOX_IMAGES?.applyProduct) {
+        window.CRONOX_IMAGES.applyProduct(image, {
+          imageRecord: product.imageRecord,
+          imageUrl: product.imageUrl,
+        }, "small");
+      } else {
+        image.src = product.imageUrl;
+      }
       media.appendChild(image);
     }
 
@@ -577,7 +587,44 @@
     if (heading) heading.hidden = carousel;
   };
 
-  const createCarouselSlide = (item, clone) => {
+  const setGalleryState = (root, state) => {
+    root.dataset.galleryState = state;
+    const homepage = root.closest("[data-gallery-homepage-section]");
+    if (homepage) homepage.dataset.galleryState = state;
+  };
+
+  const showGalleryError = () => {
+    galleryRoots.forEach((root) => {
+      carouselCleanups.get(root)?.();
+      carouselCleanups.delete(root);
+      root.classList.remove("gallery-carousel", "gallery-grid--mosaic");
+      delete root.dataset.galleryMode;
+      const status = pageDocument.createElement("p");
+      status.className = "gallery-state";
+      status.setAttribute("role", "status");
+      status.textContent = "No se pudo cargar la galería.";
+      const retry = pageDocument.createElement("button");
+      retry.type = "button";
+      retry.textContent = "Reintentar";
+      retry.addEventListener("click", loadVisibleGalleries);
+      status.appendChild(retry);
+      root.replaceChildren(status);
+      setGalleryState(root, "error");
+    });
+  };
+
+  const showGalleryLoading = () => {
+    galleryRoots.forEach((root) => {
+      const status = pageDocument.createElement("p");
+      status.className = "gallery-state";
+      status.setAttribute("role", "status");
+      status.textContent = "Cargando galería…";
+      root.replaceChildren(status);
+      setGalleryState(root, "loading");
+    });
+  };
+
+  const createCarouselSlide = (item, clone, deferredImages) => {
     const button = pageDocument.createElement("button");
     const alt = item.alt?.trim() || "Imagen de la galería CRONOX";
     button.type = "button";
@@ -598,7 +645,7 @@
     image.decoding = "async";
     image.loading = "lazy";
     image.draggable = false;
-    applyGalleryImage(image, item, "galleryGrid");
+    deferredImages.push({ image, item, button });
     media.appendChild(image);
     button.appendChild(media);
     return button;
@@ -626,6 +673,7 @@
     cloneGroup.className = "gallery-carousel__group";
     cloneGroup.setAttribute("aria-hidden", "true");
     const itemsByKey = new Map(logicalItems.map((item) => [item.key, item]));
+    const deferredImages = [];
     const state = {
       offset: 0,
       cycleWidth: 0,
@@ -729,12 +777,28 @@
     };
 
     logicalItems.forEach((item) => {
-      firstGroup.appendChild(createCarouselSlide(item, false));
-      cloneGroup.appendChild(createCarouselSlide(item, true));
+      firstGroup.appendChild(createCarouselSlide(item, false, deferredImages));
+      cloneGroup.appendChild(createCarouselSlide(item, true, deferredImages));
     });
     track.append(firstGroup, cloneGroup);
     viewport.appendChild(track);
     root.replaceChildren(viewport);
+    const slideObserver = window.IntersectionObserver
+      ? new window.IntersectionObserver((entries) => {
+          entries.forEach((entry) => {
+            if (!entry.isIntersecting) return;
+            const slide = deferredImages.find(({ button }) => button === entry.target);
+            if (!slide || slide.image.hasAttribute("src")) return;
+            applyGalleryImage(slide.image, slide.item, "galleryGrid", { loading: "eager" });
+            slideObserver.unobserve(slide.button);
+          });
+        }, { root: viewport, rootMargin: "0px 200px" })
+      : null;
+    deferredImages.forEach(({ image, item, button }) => {
+      if (slideObserver) slideObserver.observe(button);
+      else applyGalleryImage(image, item, "galleryGrid");
+    });
+    setGalleryState(root, "ready");
     activeCarouselAnimations.add(syncAnimation);
     viewport.addEventListener("click", (event) => {
       const slide = event.target.closest?.(".gallery-carousel__slide");
@@ -867,6 +931,7 @@
       cancelFrame();
       activeCarouselAnimations.delete(syncAnimation);
       intersection?.disconnect();
+      slideObserver?.disconnect();
       resize?.disconnect();
       pageDocument.removeEventListener("visibilitychange", visibility);
       motionQuery?.removeEventListener?.("change", motionChange);
@@ -895,6 +960,7 @@
       ),
     );
     root.replaceChildren(fragment);
+    setGalleryState(root, "ready");
   };
 
   const normalizeApiSlots = (slots) => {
@@ -993,9 +1059,11 @@
 
   const loadVisibleGalleries = () => {
     if (!syncHomepageGalleryVisibility()) return;
+    if (galleryRoots.some((root) => root.dataset.galleryState === "error")) {
+      showGalleryLoading();
+    }
     loadGallery().catch(() => {
-      window.CRONOX_GALLERY.items = galleryItems;
-      renderGallery(galleryItems);
+      showGalleryError();
     });
   };
 
@@ -1046,8 +1114,8 @@
 
   window.CRONOX_GALLERY = {
     initialized: true,
-    mode: "MOSAIC",
-    items: galleryItems,
+    mode: null,
+    items: [],
     render: renderGallery,
     renderCarousel,
     load: loadGallery,
@@ -1059,11 +1127,7 @@
     }),
   };
 
-  galleryRoots.forEach((root) => {
-    if (root.dataset.galleryInitialized === "true") return;
-    root.dataset.galleryInitialized = "true";
-    renderGallery(galleryItems, root);
-  });
+  galleryRoots.forEach((root) => { root.dataset.galleryInitialized = "true"; });
   window.addEventListener("cronox:productsLoaded", loadVisibleGalleries);
   window.addEventListener("popstate", loadVisibleGalleries);
   loadVisibleGalleries();

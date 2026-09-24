@@ -127,6 +127,10 @@ const makeDom = (
       const role = context === 'galleryLarge' ? 'large' : 'grid';
       image.src = source.variants?.[role]?.url || source.url;
     },
+    applyProduct: (image: HTMLImageElement, source: any, context: string) => {
+      imageContexts.push(context);
+      image.src = source.imageRecord?.variants?.small?.url || source.imageUrl;
+    },
   };
   dom.window.fetch = (payload
     ? jest.fn().mockResolvedValue({
@@ -158,6 +162,32 @@ const pointerEvent = (
 };
 
 describe('Gallery continuous carousel', () => {
+  it('defers off-screen carousel files until the slide approaches the viewport', async () => {
+    const { dom } = makeDom({
+      mode: 'CAROUSEL',
+      slots: mosaicSlots,
+      carouselItems: [1, 2, 3].map(carouselItem),
+    });
+    const observers: any[] = [];
+    Object.defineProperty(dom.window, 'IntersectionObserver', { configurable: true, value: class {
+      targets: Element[] = [];
+      constructor(public callback: any, public options: any) { observers.push(this); }
+      observe(target: Element) { this.targets.push(target); }
+      unobserve(target: Element) { this.targets = this.targets.filter(item => item !== target); }
+      disconnect() { this.targets = []; }
+    } });
+    await (dom.window as any).CRONOX_GALLERY.load();
+    const slides = dom.window.document.querySelectorAll('.gallery-carousel__slide');
+    expect(slides[0].querySelector('img')?.getAttribute('src')).toBeNull();
+    expect(slides[2].querySelector('img')?.getAttribute('src')).toBeNull();
+    const slideObserver = observers.find(observer => observer.options.root?.classList.contains('gallery-carousel__viewport'));
+    expect(slideObserver).toBeDefined();
+    slideObserver.callback([{ target: slides[0], isIntersecting: true }]);
+    expect(slides[0].querySelector('img')?.getAttribute('src')).toContain('1-grid.webp');
+    expect(slides[2].querySelector('img')?.getAttribute('src')).toBeNull();
+    dom.window.close();
+  });
+
   it('loads 3 unique items, renders one hidden clone group, and reuses optimized variants', async () => {
     const { dom, imageContexts } = makeDom({
       mode: 'CAROUSEL',
@@ -215,6 +245,10 @@ describe('Gallery continuous carousel', () => {
   it('uses the shared lightbox with large variants, metadata, unique navigation, and clone mapping', async () => {
     const items = [1, 2, 3].map(carouselItem);
     items[0].key = 'stable-gallery-photo-a';
+    (items[0].products[0] as any).imageRecord = {
+      url: 'https://cdn.example.test/product-1-original.jpg',
+      variants: { small: { url: 'https://cdn.example.test/product-1-small.webp', width: 450, height: 600 } },
+    };
     const { dom, imageContexts } = makeDom({
       mode: 'CAROUSEL',
       slots: mosaicSlots,
@@ -241,6 +275,9 @@ describe('Gallery continuous carousel', () => {
     expect(
       document.querySelectorAll('#galleryLightboxProducts > *'),
     ).toHaveLength(1);
+    expect(document.querySelector('#galleryLightboxProducts img')?.getAttribute('src'))
+      .toBe('https://cdn.example.test/product-1-small.webp');
+    expect(imageContexts).toContain('small');
     expect(
       document
         .getElementById('galleryLightboxInstagramInfo')
