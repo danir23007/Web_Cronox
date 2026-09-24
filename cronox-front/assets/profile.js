@@ -259,7 +259,7 @@
     const helper = window.CRONOX_SECURITY?.externalHttpUrl;
     return typeof helper === 'function' ? helper(value) : '';
   };
-  const safeProductImage = (value, fallback = 'assets/logo_banner.png') => {
+  const safeProductImage = (value, fallback = 'assets/product-image-unavailable.svg') => {
     const helper = window.CRONOX_SECURITY?.productImageUrl;
     return typeof helper === 'function' ? helper(value, fallback) : fallback;
   };

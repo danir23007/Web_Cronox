@@ -7,7 +7,7 @@
   }
 
   const apiEndpoint = (path) => (window.CRONOX_API?.API_BASE || '') + path;
-  const safeProductImage = (value, fallback = 'assets/logo_banner.png') => {
+  const safeProductImage = (value, fallback = 'assets/product-image-unavailable.svg') => {
     const helper = window.CRONOX_SECURITY?.productImageUrl;
     return typeof helper === 'function' ? helper(value, fallback) : fallback;
   };
@@ -163,7 +163,7 @@
   const normalizeFavoritesList = (list) =>
     (Array.isArray(list) ? list : [])
       .map(normalizeFavorite)
-      .filter((fav) => fav.id && (fav.image || fav.images.length));
+      .filter((fav) => fav.id);
 
   const signatureFromIds = (idsLike) => {
     const ids = idsLike instanceof Set ? Array.from(idsLike) : Array.from(idsLike || []);

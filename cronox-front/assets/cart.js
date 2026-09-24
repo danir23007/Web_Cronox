@@ -25,7 +25,7 @@
           .replace(/"/g, '&quot;')
           .replace(/'/g, '&#39;');
   };
-  const safeProductImage = (value, fallback = 'assets/logo_banner.png') => {
+  const safeProductImage = (value, fallback = 'assets/product-image-unavailable.svg') => {
     const helper = window.CRONOX_SECURITY?.productImageUrl;
     return typeof helper === 'function' ? helper(value, fallback) : fallback;
   };

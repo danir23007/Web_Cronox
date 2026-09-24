@@ -906,7 +906,7 @@
           .replace(/"/g, '&quot;')
           .replace(/'/g, '&#39;');
   };
-  const safeProductImage = (value, fallback = 'assets/logo_banner.png') => {
+  const safeProductImage = (value, fallback = 'assets/product-image-unavailable.svg') => {
     const helper = window.CRONOX_SECURITY?.productImageUrl;
     return typeof helper === 'function' ? helper(value, fallback) : fallback;
   };
@@ -1240,7 +1240,7 @@
   const getCartItemImage = (item) => {
     const canonical = window.CRONOX_IMAGES?.resolveProduct(item, 'cart');
     if (canonical?.src) return canonical.src;
-    const fallbackLogo = 'assets/logo_banner.png';
+    const fallbackImage = 'assets/product-image-unavailable.svg';
     const normalizeImage = (img) => {
       if (!img) return '';
       if (typeof img === 'string') return img;
@@ -1265,7 +1265,7 @@
     ];
 
     const imageUrl = candidates.find(Boolean);
-    return safeProductImage(imageUrl, fallbackLogo);
+    return safeProductImage(imageUrl, fallbackImage);
   };
 
   const getCartItemImageRecord = (item) => {

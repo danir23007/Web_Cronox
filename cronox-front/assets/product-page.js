@@ -34,7 +34,7 @@
     : null;
 
   const API = window.CRONOX_API || {};
-  const PRODUCT_PLACEHOLDER = window.CRONOX_PRODUCT_PLACEHOLDER || "assets/logo_browser.png";
+  const PRODUCT_PLACEHOLDER = window.CRONOX_PRODUCT_PLACEHOLDER || "assets/product-image-unavailable.svg";
   const safeProductImage = (value, fallback = "") => {
     const helper = window.CRONOX_SECURITY?.productImageUrl;
     return typeof helper === "function" ? helper(value, fallback) : fallback;
@@ -256,6 +256,7 @@
     };
     if (Array.isArray(list)) list.forEach(push);
     push(fallback);
+    if (!result.length) push(PRODUCT_PLACEHOLDER);
     return result;
   }
 
@@ -279,6 +280,22 @@
     image.style.objectPosition = `${item.galleryPositionX}% ${item.galleryPositionY}%`;
     image.style.transformOrigin = `${item.galleryPositionX}% ${item.galleryPositionY}%`;
     image.style.transform = `scale(${item.galleryZoom})`;
+  }
+
+  function installImageFallback(image, item) {
+    if (!image) return;
+    let triedOriginal = false;
+    image.addEventListener("error", () => {
+      if (!triedOriginal && item.url && item.url !== PRODUCT_PLACEHOLDER &&
+          (image.hasAttribute("srcset") || image.getAttribute("src") !== item.url)) {
+        triedOriginal = true;
+        image.removeAttribute("srcset"); image.removeAttribute("sizes");
+        image.src = item.url;
+      } else if (image.getAttribute("src") !== PRODUCT_PLACEHOLDER) {
+        image.removeAttribute("srcset"); image.removeAttribute("sizes");
+        image.src = PRODUCT_PLACEHOLDER;
+      }
+    });
   }
 
   function updateZoomClass() {
@@ -361,6 +378,7 @@
       }).join("");
       pMediaViewport.querySelectorAll(".pdp__media-img").forEach((image, idx) => {
         window.CRONOX_IMAGES?.apply(image, images[idx], "pdp");
+        installImageFallback(image, images[idx]);
         image.addEventListener("load", () => applyGalleryFraming(image, images[idx]));
         applyGalleryFraming(image, images[idx]);
       });
@@ -377,7 +395,9 @@
       pThumbs.setAttribute("aria-hidden", hideThumbs ? "true" : "false");
       pThumbs.querySelectorAll(".pdp__thumb").forEach(btn => {
         const imageIndex = Number(btn.dataset.index);
-        window.CRONOX_IMAGES?.apply(btn.querySelector("img"), images[imageIndex], "small");
+        const image = btn.querySelector("img");
+        window.CRONOX_IMAGES?.apply(image, images[imageIndex], "small");
+        installImageFallback(image, images[imageIndex]);
         btn.addEventListener("click", () => {
           const idx = Number(btn.dataset.index);
           if (!Number.isNaN(idx)) showImage(idx);

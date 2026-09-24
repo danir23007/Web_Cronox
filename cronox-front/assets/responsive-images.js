@@ -13,7 +13,7 @@
     galleryLarge: { roles: ["large"], sizes: "100vw", loading: "eager" },
     hero: { roles: ["mobile", "tablet", "desktop"], sizes: "100vw", loading: "eager" },
   });
-  const DEFAULT_PLACEHOLDER = globalScope.CRONOX_PRODUCT_PLACEHOLDER || "assets/logo_browser.png";
+  const DEFAULT_PLACEHOLDER = globalScope.CRONOX_PRODUCT_PLACEHOLDER || "assets/product-image-unavailable.svg";
 
   const validUrl = (value) => {
     if (typeof value !== "string" || !value.trim() || value.trim() === "[object Object]") return "";
@@ -28,7 +28,7 @@
     const url = validUrl(variant?.url);
     return url ? { url, width: Number(variant.width) || 0, height: Number(variant.height) || 0 } : null;
   };
-  const isPlaceholder = (url) => /\/(?:logo_banner|logo_browser)\.png(?:$|[?#])/i.test(url || "");
+  const isPlaceholder = (url) => /\/(?:logo_banner|logo_browser)\.png(?:$|[?#])|\/product-image-unavailable\.svg(?:$|[?#])/i.test(url || "");
   const asRecord = (value) => {
     if (typeof value === "string") return originalUrl(value) ? { url: originalUrl(value) } : null;
     if (!value || typeof value !== "object") return null;

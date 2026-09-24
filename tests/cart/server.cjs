@@ -9,6 +9,10 @@ http.createServer((req, res) => {
   // API requests must be intercepted by the tests. Never forward them.
   if (pathname.startsWith('/api/')) { res.writeHead(501); res.end(); return; }
   let file = pathname === '/' || pathname === '/tienda' ? '/index.html' : pathname;
+  if (pathname === '/favoritos') file = '/favorites.html';
+  if (pathname === '/cesta') file = '/cart.html';
+  if (pathname === '/checkout') file = '/checkout.html';
+  if (pathname === '/galeria') file = '/gallery.html';
   if (pathname.startsWith('/producto/') || pathname === '/producto') file = '/producto.html';
   if (pathname === '/cart') file = '/cart.html';
   if (pathname.includes('/assets/')) file = pathname.slice(pathname.indexOf('/assets/'));
@@ -16,7 +20,9 @@ http.createServer((req, res) => {
   if (!target.startsWith(root + path.sep)) { res.writeHead(403); res.end(); return; }
   fs.readFile(target, (error, data) => {
     if (error) { res.writeHead(404); res.end(); return; }
-    res.writeHead(200, { 'Content-Type': types[path.extname(target)] || 'application/octet-stream', 'Cache-Control': 'no-store' });
+    const cacheControl = process.env.CRONOX_TEST_CACHE_ASSETS === '1' && pathname.startsWith('/assets/')
+      ? 'public, max-age=3600' : 'no-store';
+    res.writeHead(200, { 'Content-Type': types[path.extname(target)] || 'application/octet-stream', 'Cache-Control': cacheControl });
     res.end(data);
   });
 }).listen(4173, '127.0.0.1');

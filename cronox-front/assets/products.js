@@ -25,7 +25,7 @@
 
   const API = window.CRONOX_API || {};
   const STAR_ICON = window.CRONOX_STAR_ICON || '<span class="icon-star"></span>';
-  const PRODUCT_PLACEHOLDER = window.CRONOX_PRODUCT_PLACEHOLDER || "assets/logo_browser.png";
+  const PRODUCT_PLACEHOLDER = window.CRONOX_PRODUCT_PLACEHOLDER || "assets/product-image-unavailable.svg";
   const escapeHtml = (value) => {
     const helper = window.CRONOX_SECURITY?.escapeHtml;
     return typeof helper === "function"
