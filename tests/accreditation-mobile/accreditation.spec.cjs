@@ -31,7 +31,7 @@ test.beforeEach(async ({ page }) => {
     if (pathname === '/api/me') {
       return json(route, {
         id: 7,
-        firstName: 'Alejandra',
+        firstName: 'Alejandra Isabel',
         lastName: 'Cronox Mobile',
         email: 'mobile@example.test',
         memberCode: 'CRX-000007',
@@ -94,6 +94,15 @@ test('keeps the complete book, page content and retried QR inside narrow viewpor
       book: rect('.crx-accreditation-book'),
       art: rect('.accreditation-book-art'),
       qr: rect('#cronox-member-qr'),
+      leftTop: rect('.page-left .accreditation-top'),
+      rightSections: (() => {
+        const sections = [...document.querySelectorAll('.page-right .accreditation-right-section')]
+          .map((section) => section.getBoundingClientRect());
+        return {
+          top: Math.min(...sections.map((section) => section.top)),
+          bottom: Math.max(...sections.map((section) => section.bottom)),
+        };
+      })(),
       pages,
     };
   });
@@ -103,9 +112,20 @@ test('keeps the complete book, page content and retried QR inside narrow viewpor
   expect(layout.book.right).toBeLessThanOrEqual(layout.viewportWidth);
   expect(layout.art.left).toBeGreaterThanOrEqual(0);
   expect(layout.art.right).toBeLessThanOrEqual(layout.viewportWidth);
-  expect(layout.qr.left).toBeGreaterThanOrEqual(layout.book.left);
-  expect(layout.qr.right).toBeLessThanOrEqual(layout.book.right);
+  expect(layout.book.width / (layout.book.bottom - layout.book.top)).toBeCloseTo(1.36, 1);
+  const [leftPage, rightPage] = layout.pages;
+  expect(layout.leftTop.top - leftPage.rect.top).toBeGreaterThanOrEqual(5);
+  expect(layout.qr.left - leftPage.rect.left).toBeGreaterThanOrEqual(4);
+  expect(leftPage.rect.right - layout.qr.right).toBeGreaterThanOrEqual(4);
+  expect(leftPage.rect.bottom - layout.qr.bottom).toBeGreaterThanOrEqual(5);
   expect(layout.qr.width).toBeGreaterThanOrEqual(testInfo.project.name === 'chromium-desktop' ? 105 : 66);
+  const rightTopMargin = layout.rightSections.top - rightPage.rect.top;
+  const rightBottomMargin = rightPage.rect.bottom - layout.rightSections.bottom;
+  expect(rightTopMargin).toBeGreaterThanOrEqual(4);
+  expect(rightBottomMargin).toBeGreaterThanOrEqual(4);
+  if (testInfo.project.name !== 'chromium-desktop') {
+    expect(Math.abs(rightTopMargin - rightBottomMargin)).toBeLessThanOrEqual(4);
+  }
   for (const pageLayout of layout.pages) {
     expect(pageLayout.rect.left).toBeGreaterThanOrEqual(layout.book.left);
     expect(pageLayout.rect.right).toBeLessThanOrEqual(layout.book.right);

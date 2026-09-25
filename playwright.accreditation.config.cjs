@@ -7,7 +7,9 @@ module.exports = defineConfig({
   use: { baseURL: 'http://127.0.0.1:4173' },
   projects: [
     { name: 'chromium-320', use: { browserName: 'chromium', viewport: { width: 320, height: 568 } } },
+    { name: 'chromium-375', use: { browserName: 'chromium', viewport: { width: 375, height: 667 } } },
     { name: 'webkit-iphone-13', use: { browserName: 'webkit', ...devices['iPhone 13'] } },
+    { name: 'chromium-430', use: { browserName: 'chromium', viewport: { width: 430, height: 932 } } },
     { name: 'chromium-desktop', use: { browserName: 'chromium', viewport: { width: 1440, height: 900 } } },
   ],
   webServer: {

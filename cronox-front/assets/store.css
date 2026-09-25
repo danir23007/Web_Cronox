@@ -1490,6 +1490,7 @@ button.product-cta--disabled:disabled { opacity:.5; cursor:not-allowed; filter:n
   position: relative;
   width: min(1100px, 100%);
   aspect-ratio: 1.36;
+  container-type: inline-size;
   margin-inline: auto;
   display: block;
   z-index: 1;
@@ -1752,6 +1753,10 @@ button.product-cta--disabled:disabled { opacity:.5; cursor:not-allowed; filter:n
 }
 
 @media (max-width: 560px) {
+  html {
+    scrollbar-gutter: auto;
+  }
+
   .profile-tabs {
     max-width: 100%;
     overflow-x: auto;
@@ -1774,7 +1779,9 @@ button.product-cta--disabled:disabled { opacity:.5; cursor:not-allowed; filter:n
 
   .crx-accreditation-stage,
   .accreditation-stage {
-    width: 100%;
+    width: calc(100vw - 4px);
+    max-width: 560px;
+    margin-left: calc(50% - 50vw + 2px);
     padding-inline: 0;
     overflow: visible;
   }
@@ -1783,58 +1790,58 @@ button.product-cta--disabled:disabled { opacity:.5; cursor:not-allowed; filter:n
   .accreditation-book {
     width: 100%;
     min-width: 0;
-    aspect-ratio: 1.2;
+    aspect-ratio: 1.36;
   }
 
   .accreditation-pages .accreditation-page {
-    top: 10.5%;
-    width: 38%;
-    height: 75%;
-    padding: clamp(4px, 1.8vw, 7px);
+    top: 9%;
+    width: 37%;
+    height: 76%;
+    padding: clamp(6px, 2.55cqw, 9px);
   }
 
   .accreditation-pages .page-left {
-    left: 10.5%;
+    left: 11.5%;
   }
 
   .accreditation-pages .page-right {
-    right: 10.5%;
+    right: 12.5%;
   }
 
   .accreditation-top {
-    gap: clamp(2px, 1vw, 4px);
+    gap: clamp(3px, 1.64cqw, 6px);
   }
 
   .accreditation-top__left {
-    gap: 2px;
+    gap: clamp(2px, 0.91cqw, 3px);
   }
 
   .accreditation-symbol {
-    width: clamp(42px, 14vw, 56px);
+    width: clamp(42px, 14.55cqw, 52px);
   }
 
   .accreditation-meta {
     min-width: 0;
-    gap: 3px;
-    margin-top: 3px;
+    gap: clamp(3px, 1.18cqw, 4px);
+    margin-top: clamp(4px, 1.64cqw, 6px);
   }
 
   .accreditation-name {
     max-width: 100%;
-    font-size: clamp(7px, 2.45vw, 10px);
+    font-size: clamp(7px, 2.55cqw, 9px);
     line-height: 1.08;
     overflow-wrap: anywhere;
   }
 
   .accreditation-circle {
-    font-size: clamp(5px, 1.7vw, 7px);
+    font-size: clamp(5px, 1.09cqw, 6px);
     line-height: 1.1;
   }
 
   .accreditation-id,
   .accreditation-id--code {
     max-width: 100%;
-    font-size: clamp(5.5px, 1.8vw, 7.5px);
+    font-size: clamp(5.5px, 1.36cqw, 6.5px);
     line-height: 1.08;
     letter-spacing: 0.02em;
     overflow-wrap: anywhere;
@@ -1850,38 +1857,39 @@ button.product-cta--disabled:disabled { opacity:.5; cursor:not-allowed; filter:n
     min-width: 0;
     width: 100%;
     padding: 3px 4px;
-    font-size: clamp(5px, 1.6vw, 7px);
+    font-size: clamp(5px, 1.36cqw, 6px);
   }
 
   .account-section--accreditation .accreditation-circle-status {
-    font-size: clamp(5px, 1.6vw, 7px);
+    font-size: clamp(5px, 1.36cqw, 6px);
     line-height: 1.15;
     text-align: center;
   }
 
   .accreditation-qr {
-    margin-bottom: 0;
+    margin-bottom: clamp(5px, 1.82cqw, 7px);
   }
 
   .accreditation-qr__label {
     margin-bottom: 2px;
-    font-size: clamp(5px, 1.65vw, 7px);
+    font-size: clamp(5px, 1.36cqw, 6px);
     line-height: 1;
     transform: none;
   }
 
   #cronox-member-qr {
-    width: clamp(66px, 21vw, 82px);
+    width: max(66px, 15.45cqw);
   }
 
-  .accreditation-page-right-content {
-    gap: clamp(3px, 1.2vw, 5px);
+  .accreditation-page .accreditation-page-right-content {
+    justify-content: center;
+    gap: clamp(5px, 2cqw, 7px);
     padding-left: 1px;
   }
 
   .accreditation-right-section {
     width: 100%;
-    gap: 2px;
+    gap: clamp(2px, 1.09cqw, 4px);
   }
 
   .accreditation-page-right-content .accreditation-right-section:last-of-type {
@@ -1889,7 +1897,7 @@ button.product-cta--disabled:disabled { opacity:.5; cursor:not-allowed; filter:n
   }
 
   .accreditation-right-title {
-    font-size: clamp(7px, 2.2vw, 9px);
+    font-size: clamp(7px, 1.64cqw, 8px);
     line-height: 1.05;
   }
 
@@ -1897,14 +1905,14 @@ button.product-cta--disabled:disabled { opacity:.5; cursor:not-allowed; filter:n
     gap: 2px;
     align-items: flex-start;
     flex-wrap: wrap;
-    font-size: clamp(5.5px, 1.8vw, 7.5px);
+    font-size: clamp(5.5px, 1.45cqw, 6.5px);
     line-height: 1.15;
   }
 
   .accreditation-privileges__list {
     gap: 1px;
     padding-left: 1px;
-    font-size: clamp(5px, 1.7vw, 7px);
+    font-size: clamp(5px, 1.36cqw, 6px);
     line-height: 1.12;
   }
 
