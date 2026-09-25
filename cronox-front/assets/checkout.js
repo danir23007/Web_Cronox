@@ -1641,7 +1641,8 @@
         },
         body: JSON.stringify({ email }),
       });
-      if (response.ok || response.status === 409) newsletterSubmittedFor = email;
+      const result = await response.json().catch(() => null);
+      if (response.status === 202 && result?.status === 'accepted') newsletterSubmittedFor = email;
     } catch (error) {
       console.warn('[CRONOX checkout newsletter]', {
         event: 'checkout_newsletter_subscription_failed',

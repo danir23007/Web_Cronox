@@ -2,6 +2,16 @@ import { EmailService } from './email.service';
 import { EmailType } from './email.types';
 
 describe('EmailService account setup', () => {
+  it('falls back to the first-party template if a newsletter publication loses its confirmation link', async () => {
+    const sendMail = jest.fn().mockResolvedValue({ messageId: 'confirmation', accepted: ['test@example.test'] });
+    const service = new EmailService({ getTransport: () => ({ sendMail }), getFrom: () => 'test@example.test' } as any,
+      { published: jest.fn().mockResolvedValue({ html: '<p>No action</p>', text: 'No action', subject: 'Custom' }) } as any);
+    (service as any).config.enabled = true;
+    jest.spyOn(service as any, 'renderTemplate').mockResolvedValue('<a href="https://example.test/confirm?token=test-only">Confirmar</a>');
+    await service.sendNewsletterConfirmation('test@example.test', 'https://example.test/confirm?token=test-only');
+    expect(sendMail.mock.calls[0][0].html).toContain('token=test-only');
+    expect(sendMail.mock.calls[0][0].subject).toContain('Confirma tu suscripción');
+  });
   it.each([{ accepted: [] }, { accepted: ['buyer@example.test'] }])('requires SMTP recipient acceptance (%j)', async ({ accepted }) => {
     const transport = { sendMail: jest.fn().mockResolvedValue({ messageId: 'mail-1', accepted }) };
     const service = new EmailService({ getTransport: () => transport, getFrom: () => 'orders@example.test' } as any);

@@ -1856,6 +1856,14 @@ window.CRONOX_AUTH_STATE = window.CRONOX_USER ? 'authenticated' : 'unknown';
 
 (function () {
   const AUTH_HTML_PATH = 'auth-modal.html';
+  // This IIFE cannot access the storefront IIFE's private API helpers.
+  const apiEndpoint = (path) => (window.CRONOX_API?.API_BASE || '') + path;
+  const getCsrfHeaders = async () => {
+    if (typeof window.CRONOX_API?.getCsrfHeaders !== 'function') {
+      throw new Error('La protección de la solicitud no está disponible. Recarga la página.');
+    }
+    return window.CRONOX_API.getCsrfHeaders();
+  };
   const AUTH_LOCK_KEY = 'auth-modal';
   let authOverlay;
   let authDialog;
@@ -2498,10 +2506,10 @@ window.CRONOX_AUTH_STATE = window.CRONOX_USER ? 'authenticated' : 'unknown';
 
   const handleNewsletterSubmit = async (event) => {
     event.preventDefault();
-    if (!newsletterState.emailInput) return;
+    if (!newsletterState.emailInput || newsletterState.submitBtn?.disabled) return;
 
     const email = newsletterState.emailInput.value.trim();
-    const emailRegex = /[^@\s]+@[^@\s]+\.[^@\s]+/;
+    const emailRegex = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 
     if (!emailRegex.test(email)) {
       setNewsletterFeedback('Introduce un email válido.', 'error');
@@ -2524,20 +2532,25 @@ window.CRONOX_AUTH_STATE = window.CRONOX_USER ? 'authenticated' : 'unknown';
         body: JSON.stringify({ email }),
       });
 
-      if (res.ok) {
+      const result = await res.json().catch(() => null);
+      if (res.status === 202 && result?.status === 'accepted') {
         setNewsletterFeedback(
-          'Si la direccion es elegible, revisa tu correo para confirmar la suscripcion.',
+          'Solicitud aceptada. Revisa tu correo y spam y abre el enlace para confirmar. Si reintentas, utiliza el correo más reciente.',
           'success',
         );
         persistNewsletterDismiss();
-        setTimeout(() => closeNewsletterModal({ dismiss: false }), 1200);
         return;
       }
 
-      setNewsletterFeedback('Ha habido un problema, inténtalo de nuevo.', 'error');
+      const message = res.status === 429
+        ? 'Has realizado varios intentos. Espera un minuto antes de volver a intentarlo.'
+        : res.status === 400
+          ? 'Introduce un email válido.'
+          : 'No hemos podido completar la solicitud. Inténtalo de nuevo en unos minutos.';
+      setNewsletterFeedback(message, 'error');
     } catch (error) {
       console.error('[CRONOX] Error al enviar newsletter', error);
-      setNewsletterFeedback('Ha habido un problema, inténtalo de nuevo.', 'error');
+      setNewsletterFeedback('No hemos podido comprobar el envío. Revisa tu conexión y vuelve a intentarlo.', 'error');
     } finally {
       setNewsletterLoading(false);
     }

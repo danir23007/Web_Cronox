@@ -81,7 +81,7 @@ export class EmailService {
     const template = EMAIL_TYPE_TO_TEMPLATE[options.type];
 
     try {
-      const data = {
+      const data: Record<string, unknown> = {
         subject: options.subject,
         title: options.subject,
         ...options.templateData,
@@ -98,6 +98,13 @@ export class EmailService {
         this.logger.warn(
           `Plantilla gestionada no disponible; usando respaldo. type=${options.type}`,
         );
+      }
+      // A published design must never remove the verification action.
+      if (options.type === EmailType.NEWSLETTER_CONFIRMATION && custom) {
+        const link = Handlebars.escapeExpression(String(data.actionUrl || ''));
+        if (!link || !(custom.html.includes(`href="${link}"`) || custom.html.includes(`href='${link}'`))) {
+          custom = null;
+        }
       }
       const html = custom?.html || (await this.renderTemplate(template, data));
 
@@ -162,13 +169,13 @@ export class EmailService {
     return this.send({
       type: EmailType.NEWSLETTER_CONFIRMATION,
       to: email,
-      subject: 'CRONOX newsletter confirmation',
+      subject: 'CRONOX · Confirma tu suscripción',
       templateData: {
-        title: 'Confirm your subscription',
+        title: 'Confirma tu suscripción',
         message:
-          'Confirm your email address to activate the newsletter and welcome discount.',
+          'Confirma tu dirección para activar la newsletter y, si corresponde, tu descuento de bienvenida. El enlace caduca en 24 horas. Si has repetido la solicitud, utiliza el correo más reciente.',
         actionUrl: link,
-        actionLabel: 'Confirm subscription',
+        actionLabel: 'Confirmar suscripción',
       },
     });
   }

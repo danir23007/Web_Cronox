@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, ServiceUnavailableException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { createHash, randomBytes, randomInt } from 'crypto';
 import { getPublicApiUrl } from '../common/config/environment';
@@ -100,19 +100,19 @@ export class NewsletterService {
    */
   async subscribe(email: string): Promise<SubscriptionResult> {
     const normalizedEmail = this.normalizeEmail(email);
+    // Persist consent before attempting delivery, so an outage is recoverable.
+    // Verified addresses follow the same delivery path: status codes must not
+    // become an oracle for whether an address is already subscribed.
+    const pending = await this.createOrRefreshPendingVerification(normalizedEmail);
 
     if (!this.emailService.isEnabled()) {
       this.logger.warn(
-        'Newsletter verification skipped because email delivery is disabled',
+        'Newsletter attempt saved; verification email delivery is disabled',
       );
-      return { status: 'accepted', httpStatus: 202 };
+      throw this.deliveryUnavailable();
     }
 
-    const pending =
-      await this.createOrRefreshPendingVerification(normalizedEmail);
-    if (pending) {
-      await this.safeSendVerificationEmail(normalizedEmail, pending);
-    }
+    await this.sendVerificationEmail(normalizedEmail, pending);
 
     return { status: 'accepted', httpStatus: 202 };
   }
@@ -132,8 +132,7 @@ export class NewsletterService {
 
       if (
         !subscription ||
-        !subscription.verificationExpiresAt ||
-        subscription.verifiedAt
+        !subscription.verificationExpiresAt
       ) {
         return null;
       }
@@ -142,11 +141,10 @@ export class NewsletterService {
         where: {
           id: subscription.id,
           verificationTokenHash: tokenHash,
-          verifiedAt: null,
           verificationExpiresAt: { gt: now },
         },
         data: {
-          verifiedAt: now,
+          verifiedAt: subscription.verifiedAt ?? now,
           verificationTokenHash: null,
           verificationExpiresAt: null,
         },
@@ -188,7 +186,8 @@ export class NewsletterService {
 
   private async createOrRefreshPendingVerification(
     email: string,
-  ): Promise<PendingVerification | null> {
+    retryUniqueConflict = true,
+  ): Promise<PendingVerification> {
     const token = randomBytes(32).toString('base64url');
     const tokenHash = this.hashToken(token);
     const verificationExpiresAt = new Date(Date.now() + VERIFICATION_TTL_MS);
@@ -199,15 +198,16 @@ export class NewsletterService {
           where: { email },
         });
 
-        if (existing?.verifiedAt) {
-          return null;
-        }
-
         if (existing) {
-          await tx.newsletterSubscription.update({
-            where: { id: existing.id },
+          const updated = await tx.newsletterSubscription.updateMany({
+            where: {
+              id: existing.id,
+              verificationTokenHash: existing.verificationTokenHash,
+              verifiedAt: existing.verifiedAt,
+            },
             data: { verificationTokenHash: tokenHash, verificationExpiresAt },
           });
+          if (updated.count !== 1) throw this.deliveryUnavailable();
         } else {
           await tx.newsletterSubscription.create({
             data: {
@@ -223,20 +223,23 @@ export class NewsletterService {
     } catch (error) {
       if (
         error instanceof Prisma.PrismaClientKnownRequestError &&
-        error.code === 'P2002'
+        error.code === 'P2002' && retryUniqueConflict
       ) {
-        await this.prisma.newsletterSubscription.update({
-          where: { email },
-          data: { verificationTokenHash: tokenHash, verificationExpiresAt },
-        });
-        return { token, tokenHash };
+        return this.createOrRefreshPendingVerification(email, false);
       }
 
       throw error;
     }
   }
 
-  private async safeSendVerificationEmail(
+  private deliveryUnavailable() {
+    return new ServiceUnavailableException({
+      code: 'NEWSLETTER_UNAVAILABLE',
+      message: 'No hemos podido completar la solicitud. Inténtalo de nuevo en unos minutos.',
+    });
+  }
+
+  private async sendVerificationEmail(
     email: string,
     pending: PendingVerification,
   ): Promise<void> {
@@ -248,15 +251,10 @@ export class NewsletterService {
         confirmationUrl,
       );
     } catch {
-      await this.prisma.newsletterSubscription.updateMany({
-        where: {
-          email,
-          verificationTokenHash: pending.tokenHash,
-          verifiedAt: null,
-        },
-        data: { verificationTokenHash: null, verificationExpiresAt: null },
-      });
+      // Keep the pending attempt and token. SMTP can time out after accepting
+      // mail; clearing the hash would break a link that may still be delivered.
       this.logger.error('Newsletter verification email delivery failed');
+      throw this.deliveryUnavailable();
     }
   }
 
