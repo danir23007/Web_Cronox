@@ -7,6 +7,23 @@ const read = (file: string) =>
   readFileSync(join(__dirname, '../../../cronox-front', file), 'utf8');
 
 describe('PLANTILLAS MAILS visual workspace', () => {
+  it('shows the new delivery history without treating SMTP acceptance as inbox receipt', async () => {
+    const dom = new JSDOM('<div id="mailFeedback"></div><div id="mailWorkspace"></div>', { url: 'http://localhost/admin.html', runScripts: 'outside-only' });
+    const win = dom.window as any;
+    win.CRONOX_MAIL_DOCUMENT = {};
+    win.CRONOX_API = { admin: { mailRequest: jest.fn(async (path: string) => path.startsWith('/deliveries')
+      ? { total: 1, items: [{ recipient: 'test@example.test', subject: '<unsafe>', senderKey: 'INFO', purpose: 'NEWSLETTER_WELCOME', status: 'SMTP_ACCEPTED', createdAt: new Date().toISOString() }] }
+      : []) } };
+    win.eval(read('assets/admin-mails.js'));
+    await win.CRONOX_MAILS.load();
+    win.document.querySelector('[data-mail-action="deliveries"]').click();
+    await new Promise(resolve => setTimeout(resolve, 0));
+    expect(win.document.body.textContent).toContain('Aceptado por SMTP');
+    expect(win.document.body.textContent).toContain('no acredita recepción');
+    expect(win.document.querySelector('unsafe')).toBeNull();
+    expect(win.document.querySelector('[data-mail-action="delivery-next"]').disabled).toBe(true);
+    dom.window.close();
+  });
   it('navigates account → circle → templates and edits the canvas directly', async () => {
     const dom = new JSDOM(
       '<div id="mailFeedback"></div><div id="mailWorkspace"></div>',

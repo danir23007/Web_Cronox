@@ -911,13 +911,12 @@ export class ManagedMailService {
       await this.audit(tx, actorId, 'EMAIL_TEST_ATTEMPT', id);
     });
     try {
-      const info = (await this.transport.getTransport(key).sendMail({
-        from: this.transport.getFrom(key),
+      const info = (await this.transport.sendMail(key, {
         to,
         subject: `[PRUEBA] ${rendered.subject}`,
         html: rendered.html,
         text: rendered.text,
-      })) as { messageId: string; accepted?: unknown[] };
+      }, 'ADMIN_TEST')) as { messageId: string; accepted?: unknown[] };
       if (info.accepted && !info.accepted.length)
         throw new Error('No aceptado');
       // The attempt is already durable. An audit failure after SMTP acceptance

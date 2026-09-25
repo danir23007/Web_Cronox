@@ -1,37 +1,16 @@
 import { Injectable, Logger, ServiceUnavailableException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
-import { createHash, randomBytes, randomInt } from 'crypto';
-import { getPublicApiUrl } from '../common/config/environment';
+import { generateDiscountCode } from '../common/discount-code';
 import { EmailService } from '../email/email.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { NewsletterSettingsService } from './newsletter-settings.service';
 
-const FIRST_ORDER_DISCOUNT_PERCENT = 10;
-const VERIFICATION_TTL_MS = 24 * 60 * 60 * 1000;
-
-export type SubscriptionResult = {
-  status: 'accepted';
-  httpStatus: number;
-};
-
-export type ExistingSubscriptionClaimResult =
-  | { status: 'claimed'; code?: string }
-  | { status: 'not_subscribed' };
-
-type PendingVerification = {
-  token: string;
-  tokenHash: string;
-};
-
-type GrantedBenefits = {
-  code?: string;
-  sendDiscount: boolean;
-};
+export type SubscriptionResult = { status: 'accepted'; httpStatus: number };
+export type ExistingSubscriptionClaimResult = { status: 'claimed'; code?: string } | { status: 'not_subscribed' };
 
 @Injectable()
 export class NewsletterService {
   private readonly logger = new Logger(NewsletterService.name);
-
   constructor(
     private readonly prisma: PrismaService,
     private readonly emailService: EmailService,
@@ -39,328 +18,112 @@ export class NewsletterService {
   ) {}
 
   getPublicSettings() {
-    return (
-      this.settingsService?.getPublicSettings() ?? {
-        version: 1,
-        source: null,
-        variants: null,
-        desktop: { focalX: 50, focalY: 50, zoom: 1, fit: 'COVER' },
-        mobile: { focalX: 50, focalY: 50, zoom: 1, fit: 'COVER' },
-        desktopAscii: { x: 50, y: 50, scale: 1 },
-        mobileAscii: { x: 50, y: 50, scale: 1 },
-        mediaOpacity: 1,
-        asciiEnabled: true,
-        asciiOpacity: 1,
-      }
-    );
+    return this.settingsService?.getPublicSettings() ?? {
+      version: 1, source: null, variants: null,
+      desktop: { focalX: 50, focalY: 50, zoom: 1, fit: 'COVER' },
+      mobile: { focalX: 50, focalY: 50, zoom: 1, fit: 'COVER' },
+      desktopAscii: { x: 50, y: 50, scale: 1 }, mobileAscii: { x: 50, y: 50, scale: 1 },
+      mediaOpacity: 1, asciiEnabled: true, asciiOpacity: 1,
+    };
   }
 
-  /**
-   * Registration may only claim a subscription that was already confirmed.
-   * It never subscribes a newly registered account without consent.
-   */
-  async subscribeIfNeeded(
-    email: string,
-  ): Promise<ExistingSubscriptionClaimResult | null> {
+  /** Inherit existing consent, never account verification or another coupon. */
+  async subscribeIfNeeded(email: string): Promise<ExistingSubscriptionClaimResult | null> {
     try {
-      const normalizedEmail = this.normalizeEmail(email);
-      const benefits = await this.prisma.$transaction(async (tx) => {
-        const subscription = await tx.newsletterSubscription.findUnique({
-          where: { email: normalizedEmail },
-        });
-        const user = await tx.user.findUnique({
-          where: { email: normalizedEmail },
-        });
-
-        if (!subscription?.verifiedAt || !user) {
-          return null;
-        }
-
-        return this.grantVerifiedSubscriptionBenefits(tx, user);
+      return await this.prisma.$transaction(async tx => {
+        const normalized = email.trim().toLowerCase();
+        const subscription = await tx.newsletterSubscription.findUnique({ where: { email: normalized } });
+        const user = await tx.user.findUnique({ where: { email: normalized } });
+        if (!subscription?.subscribedAt || !user) return { status: 'not_subscribed' };
+        await tx.user.update({ where: { id: user.id }, data: { newsletterSubscribed: true } });
+        return { status: 'claimed' };
       });
-
-      if (!benefits) {
-        return { status: 'not_subscribed' };
-      }
-
-      if (benefits.sendDiscount && benefits.code) {
-        await this.safeSendDiscountEmail(normalizedEmail, benefits.code);
-      }
-
-      return { status: 'claimed', code: benefits.code };
     } catch {
-      this.logger.error('Newsletter subscription claim failed');
+      this.logger.error('Newsletter consent claim failed');
       return null;
     }
   }
 
-  /**
-   * Accept a subscription request without revealing account or subscription
-   * state. Unknown addresses are stored separately from User records.
-   */
+  /** Single opt-in: durable consent + one welcome email, no verification token. */
   async subscribe(email: string): Promise<SubscriptionResult> {
-    const normalizedEmail = this.normalizeEmail(email);
-    // Persist consent before attempting delivery, so an outage is recoverable.
-    // Verified addresses follow the same delivery path: status codes must not
-    // become an oracle for whether an address is already subscribed.
-    const pending = await this.createOrRefreshPendingVerification(normalizedEmail);
-
-    if (!this.emailService.isEnabled()) {
-      this.logger.warn(
-        'Newsletter attempt saved; verification email delivery is disabled',
-      );
-      throw this.deliveryUnavailable();
+    const normalized = email.trim().toLowerCase();
+    const prepared = await this.prepareWelcome(normalized);
+    if (!prepared.send) return { status: 'accepted', httpStatus: 202 };
+    try {
+      await this.emailService.sendNewsletterWelcome(normalized, prepared.code);
+    } catch (error) {
+      if ((error as { deliveryUnknown?: boolean }).deliveryUnknown) throw this.unavailable();
+      await this.prisma.newsletterSubscription.updateMany({
+        where: { id: prepared.id, welcomeSentAt: null, welcomeClaimedAt: prepared.claimedAt },
+        data: { welcomeClaimedAt: null },
+      });
+      this.logger.error('Newsletter welcome delivery failed; consent and code preserved');
+      throw this.unavailable();
     }
-
-    await this.sendVerificationEmail(normalizedEmail, pending);
-
+    // Keep the claim if recording acceptance fails; inspect before resending.
+    await this.prisma.newsletterSubscription.update({
+      where: { id: prepared.id }, data: { welcomeSentAt: new Date(), welcomeClaimedAt: null },
+    });
     return { status: 'accepted', httpStatus: 202 };
   }
 
-  async confirm(token: string | undefined): Promise<boolean> {
-    if (!token || token.length < 32 || token.length > 512) {
-      return false;
-    }
-
-    const tokenHash = this.hashToken(token);
-    const now = new Date();
-
-    const confirmation = await this.prisma.$transaction(async (tx) => {
-      const subscription = await tx.newsletterSubscription.findUnique({
-        where: { verificationTokenHash: tokenHash },
-      });
-
-      if (
-        !subscription ||
-        !subscription.verificationExpiresAt
-      ) {
-        return null;
-      }
-
-      const claimed = await tx.newsletterSubscription.updateMany({
-        where: {
-          id: subscription.id,
-          verificationTokenHash: tokenHash,
-          verificationExpiresAt: { gt: now },
-        },
-        data: {
-          verifiedAt: subscription.verifiedAt ?? now,
-          verificationTokenHash: null,
-          verificationExpiresAt: null,
-        },
-      });
-
-      if (claimed.count !== 1) {
-        return null;
-      }
-
-      const user = await tx.user.findUnique({
-        where: { email: subscription.email },
-      });
-      if (!user) {
-        return {
-          email: subscription.email,
-          benefits: null as GrantedBenefits | null,
-        };
-      }
-
-      return {
-        email: subscription.email,
-        benefits: await this.grantVerifiedSubscriptionBenefits(tx, user),
-      };
-    });
-
-    if (!confirmation) {
-      return false;
-    }
-
-    if (confirmation.benefits?.sendDiscount && confirmation.benefits.code) {
-      await this.safeSendDiscountEmail(
-        confirmation.email,
-        confirmation.benefits.code,
-      );
-    }
-
-    return true;
+  private unavailable() {
+    return new ServiceUnavailableException({ code: 'NEWSLETTER_UNAVAILABLE',
+      message: 'No hemos podido completar el envío del correo de bienvenida. Inténtalo de nuevo en unos minutos.' });
   }
 
-  private async createOrRefreshPendingVerification(
-    email: string,
-    retryUniqueConflict = true,
-  ): Promise<PendingVerification> {
-    const token = randomBytes(32).toString('base64url');
-    const tokenHash = this.hashToken(token);
-    const verificationExpiresAt = new Date(Date.now() + VERIFICATION_TTL_MS);
-
+  private async prepareWelcome(email: string, retries = 2): Promise<{
+    id: string; send: boolean; code?: string; claimedAt?: Date;
+  }> {
     try {
-      return await this.prisma.$transaction(async (tx) => {
-        const existing = await tx.newsletterSubscription.findUnique({
-          where: { email },
+      return await this.prisma.$transaction(async tx => {
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${'newsletter:' + email}))`;
+        const now = new Date();
+        const subscription = await tx.newsletterSubscription.upsert({
+          where: { email }, create: { email, subscribedAt: now },
+          update: {}, include: { welcomePromoCode: true },
         });
-
-        if (existing) {
-          const updated = await tx.newsletterSubscription.updateMany({
-            where: {
-              id: existing.id,
-              verificationTokenHash: existing.verificationTokenHash,
-              verifiedAt: existing.verifiedAt,
-            },
-            data: { verificationTokenHash: tokenHash, verificationExpiresAt },
-          });
-          if (updated.count !== 1) throw this.deliveryUnavailable();
-        } else {
-          await tx.newsletterSubscription.create({
-            data: {
-              email,
-              verificationTokenHash: tokenHash,
-              verificationExpiresAt,
-            },
-          });
+        if (!subscription.subscribedAt) {
+          await tx.newsletterSubscription.update({ where: { id: subscription.id }, data: {
+            subscribedAt: now, verificationTokenHash: null, verificationExpiresAt: null,
+          } });
         }
-
-        return { token, tokenHash };
+        const user = await tx.user.findUnique({ where: { email } });
+        if (user && !user.newsletterSubscribed) {
+          await tx.user.update({ where: { id: user.id }, data: { newsletterSubscribed: true } });
+        }
+        if (subscription.welcomeSentAt) return { id: subscription.id, send: false };
+        if (subscription.welcomeClaimedAt) throw this.unavailable();
+        let promo = subscription.welcomePromoCode;
+        const previousPurchase = await tx.order.findFirst({
+          where: { OR: [{ customerEmail: { equals: email, mode: 'insensitive' } }, ...(user ? [{ userId: user.id }] : [])],
+            status: { notIn: ['PENDING', 'CANCELLED'] } }, select: { id: true },
+        });
+        if (!promo && !previousPurchase && !user?.firstOrderDiscountUsed) {
+          const legacy = user && await tx.discountCode.findFirst({
+            where: { userId: user.id, type: 'FIRST_ORDER' }, orderBy: { createdAt: 'desc' },
+          });
+          if (!legacy?.used) {
+            const code = legacy?.code ?? await generateDiscountCode(tx);
+            promo = await tx.promoCode.upsert({
+              where: { code }, update: {}, create: {
+                code, type: 'PERCENT', value: 10, ownerEmail: email,
+                usageLimit: 1, singleUsePerUser: true, firstOrderOnly: true,
+              },
+            });
+            if (promo.ownerEmail !== email || !promo.firstOrderOnly) throw this.unavailable();
+            await tx.newsletterSubscription.update({ where: { id: subscription.id }, data: { welcomePromoCodeId: promo.id } });
+          }
+        }
+        await tx.newsletterSubscription.update({ where: { id: subscription.id }, data: { welcomeClaimedAt: now } });
+        return { id: subscription.id, send: true, claimedAt: now,
+          code: promo && promo.isActive && promo.usageCount === 0 ? promo.code : undefined };
       });
     } catch (error) {
-      if (
-        error instanceof Prisma.PrismaClientKnownRequestError &&
-        error.code === 'P2002' && retryUniqueConflict
-      ) {
-        return this.createOrRefreshPendingVerification(email, false);
+      if (retries && error instanceof Prisma.PrismaClientKnownRequestError && ['P2002', 'P2034'].includes(error.code)) {
+        return this.prepareWelcome(email, retries - 1);
       }
-
       throw error;
     }
-  }
-
-  private deliveryUnavailable() {
-    return new ServiceUnavailableException({
-      code: 'NEWSLETTER_UNAVAILABLE',
-      message: 'No hemos podido completar la solicitud. Inténtalo de nuevo en unos minutos.',
-    });
-  }
-
-  private async sendVerificationEmail(
-    email: string,
-    pending: PendingVerification,
-  ): Promise<void> {
-    const confirmationUrl = `${getPublicApiUrl()}/api/newsletter/confirm?token=${encodeURIComponent(pending.token)}`;
-
-    try {
-      await this.emailService.sendNewsletterConfirmation(
-        email,
-        confirmationUrl,
-      );
-    } catch {
-      // Keep the pending attempt and token. SMTP can time out after accepting
-      // mail; clearing the hash would break a link that may still be delivered.
-      this.logger.error('Newsletter verification email delivery failed');
-      throw this.deliveryUnavailable();
-    }
-  }
-
-  private async grantVerifiedSubscriptionBenefits(
-    tx: Prisma.TransactionClient,
-    user: {
-      id: number;
-      newsletterSubscribed: boolean;
-      firstOrderDiscountCode: string | null;
-      firstOrderDiscountUsed: boolean;
-    },
-  ): Promise<GrantedBenefits> {
-    const existingDiscount = await this.findFirstOrderDiscount(tx, user.id);
-    const existingCode =
-      existingDiscount?.code ?? user.firstOrderDiscountCode ?? undefined;
-    let code = existingCode;
-    let sendDiscount = false;
-
-    if (!user.firstOrderDiscountUsed && !code) {
-      code = await this.createFirstOrderDiscount(tx, user.id);
-      sendDiscount = true;
-    }
-
-    if (!user.newsletterSubscribed || user.firstOrderDiscountCode !== code) {
-      await tx.user.update({
-        where: { id: user.id },
-        data: {
-          newsletterSubscribed: true,
-          firstOrderDiscountCode: code,
-        },
-      });
-    }
-
-    return { code, sendDiscount };
-  }
-
-  private async generateDiscountCode(
-    tx: Prisma.TransactionClient,
-  ): Promise<string> {
-    const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-
-    for (let attempt = 0; attempt < 20; attempt += 1) {
-      const random = Array.from(
-        { length: 6 },
-        () => alphabet[randomInt(alphabet.length)],
-      ).join('');
-      const code = `CRX10-${random}`;
-      const found = await tx.discountCode.findUnique({
-        where: { code },
-        select: { id: true },
-      });
-
-      if (!found) {
-        return code;
-      }
-    }
-
-    throw new Error('Unable to allocate a unique first-order discount code');
-  }
-
-  private async createFirstOrderDiscount(
-    tx: Prisma.TransactionClient,
-    userId: number,
-  ): Promise<string> {
-    const code = await this.generateDiscountCode(tx);
-
-    await tx.discountCode.create({
-      data: {
-        code,
-        type: 'FIRST_ORDER',
-        percent: FIRST_ORDER_DISCOUNT_PERCENT,
-        used: false,
-        userId,
-      },
-    });
-
-    return code;
-  }
-
-  private findFirstOrderDiscount(tx: Prisma.TransactionClient, userId: number) {
-    return tx.discountCode.findFirst({
-      where: { userId, type: 'FIRST_ORDER' },
-      orderBy: { createdAt: 'desc' },
-    });
-  }
-
-  private async safeSendDiscountEmail(
-    email: string,
-    code: string,
-  ): Promise<void> {
-    if (!this.emailService.isEnabled()) {
-      return;
-    }
-
-    try {
-      await this.emailService.sendFirstOrderDiscount(email, code);
-    } catch {
-      this.logger.error('Newsletter discount email delivery failed');
-    }
-  }
-
-  private normalizeEmail(email: string): string {
-    return email.trim().toLowerCase();
-  }
-
-  private hashToken(token: string): string {
-    return createHash('sha256').update(token).digest('hex');
   }
 }

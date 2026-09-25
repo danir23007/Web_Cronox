@@ -1,5 +1,6 @@
 import { BadRequestException, Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { createHash, randomBytes } from 'crypto';
+import { generateDiscountCode } from '../common/discount-code';
 import { PrismaService } from '../prisma/prisma.service';
 import { EmailService } from '../email/email.service';
 import { EmailType } from '../email/email.types';
@@ -181,7 +182,7 @@ export class LaunchCampaignService implements OnModuleInit, OnModuleDestroy {
         if (!ELIGIBLE_ROLES.includes(registration.user.role as (typeof ELIGIBLE_ROLES)[number])) {
           throw new BadRequestException('El destinatario ya no es elegible.');
         }
-        const code = registration.launchCode || `CX-${randomBytes(10).toString('hex').toUpperCase()}`;
+        const code = registration.launchCode || await generateDiscountCode(tx);
         if (!registration.launchCode) {
           await tx.promoCode.create({ data: { code, type: 'PERCENT', value: 15,
             ownerUserId: registration.userId, ownerEmail: registration.user.email.toLowerCase().trim(),

@@ -32,7 +32,7 @@ for (const width of [1366, 390]) {
     expect(attempts).toBe(1);
     await expect(page.locator('.newsletter-modal-button')).toBeEnabled();
     await page.locator('.newsletter-modal-button').click();
-    await expect(page.locator('.newsletter-modal-feedback')).toContainText('Revisa tu correo');
+    await expect(page.locator('.newsletter-modal-feedback')).toContainText('Tu suscripción está activa');
     expect(attempts).toBe(2);
     expect(errors).toEqual([]);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);

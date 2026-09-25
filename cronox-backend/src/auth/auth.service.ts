@@ -99,7 +99,7 @@ export class AuthService {
     if (!user) throw new ConflictException('El email ya esta registrado');
     const authUser = this.omitPassword(user);
 
-    // Only a pre-verified standalone newsletter subscription is claimed here.
+      // Inherit existing newsletter consent; this does not verify account identity.
     await this.newsletterService.subscribeIfNeeded(user.email);
 
     const tokens = await this.generateTokens(authUser);

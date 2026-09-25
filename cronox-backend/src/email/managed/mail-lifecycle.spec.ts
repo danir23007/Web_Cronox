@@ -208,7 +208,7 @@ describe('email permissions, publication and controlled tests', () => {
       accepted: ['alex@example.test'],
     });
     const transport = {
-      getTransport: jest.fn().mockReturnValue({ sendMail }),
+      sendMail: jest.fn((_key: string, options: any) => sendMail(options)),
       getFrom: jest.fn().mockReturnValue('info@example.test'),
     };
     const db = {
@@ -246,7 +246,7 @@ describe('email permissions, publication and controlled tests', () => {
       1,
     );
     expect(result.messageId).toBe('mock');
-    expect(transport.getTransport).toHaveBeenCalledWith(EmailSenderKey.INFO);
+    expect(transport.sendMail).toHaveBeenCalledWith(EmailSenderKey.INFO, expect.any(Object), 'ADMIN_TEST');
     expect(sendMail).toHaveBeenCalledTimes(1);
     expect(JSON.stringify(db.auditLog.create.mock.calls)).not.toContain(
       'alex@example.test',

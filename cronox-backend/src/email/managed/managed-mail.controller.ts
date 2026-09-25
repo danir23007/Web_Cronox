@@ -68,6 +68,19 @@ export class ManagedMailController {
   @Get('catalog') catalog() {
     return this.service.catalog();
   }
+  @Get('deliveries') async deliveries(@Query() dto: MailListDto) {
+    const search = dto.search?.trim();
+    const where = search ? { OR: [
+      { recipient: { contains: search, mode: 'insensitive' as const } },
+      { subject: { contains: search, mode: 'insensitive' as const } },
+    ] } : {};
+    const [items, total] = await Promise.all([
+      this.db.emailDelivery.findMany({ where, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        skip: (dto.page - 1) * dto.limit, take: dto.limit }),
+      this.db.emailDelivery.count({ where }),
+    ]);
+    return { items, total, page: dto.page, limit: dto.limit };
+  }
   @Post(':key/initialize') initialize(
     @Param('key', new ParseEnumPipe(EmailSenderKey)) key: EmailSenderKey,
     @CurrentUser('id') actor?: number,

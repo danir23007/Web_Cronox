@@ -71,7 +71,8 @@
     message("Cargando cuentas…");
     const accounts = await api();
     root.innerHTML = '<header class="mail-view-heading"><div><span class="mail-eyebrow">Comunicaciones</span>' +
-      '<h3>Cuentas de envío</h3><p>Elige desde qué dirección trabaja la plantilla.</p></div></header>' +
+      '<h3>Cuentas de envío</h3><p>Elige desde qué dirección trabaja la plantilla.</p></div>' +
+      button('deliveries', 'Historial de envíos', '', 'btn mail-secondary') + '</header>' +
       '<div class="mail-accounts">' + accounts.map((a) => navCard(
         a.email || a.name || a.key,
         a.counts.folders + " círculos · " + a.counts.templates + " plantillas",
@@ -585,6 +586,23 @@
   async function handleAction(name, element) {
     const path = (element.dataset.path || "").split("/").filter(Boolean).map(Number);
     if (name === "accounts") return load();
+    if (name === 'deliveries' || name === 'delivery-next' || name === 'delivery-previous') {
+      if (!canLeave()) return;
+      state.deliveryPage = name === 'deliveries' ? 1 : Math.max(1, (state.deliveryPage || 1) + (name === 'delivery-next' ? 1 : -1));
+      const result = await api('/deliveries?page=' + state.deliveryPage + '&limit=30');
+      const labels = { PENDING: 'Pendiente de resultado', SMTP_ACCEPTED: 'Aceptado por SMTP', FAILED: 'Fallido', UNKNOWN: 'Resultado incierto' };
+      root.innerHTML = breadcrumb('accounts', 'Cuentas', 'Historial de envíos') +
+        '<p>Registro desde la activación de esta función. SMTP aceptado no acredita recepción ni lectura. No se guardan enlaces privados ni códigos.</p>' +
+        '<div class="mail-template-grid">' + result.items.map(item =>
+          '<article class="mail-template-card"><h3>' + esc(item.subject) + '</h3><p>' + esc(item.recipient) + '</p><p>' +
+          esc(item.senderKey) + ' · ' + esc(item.purpose || 'Correo') + '</p><p>' + esc(labels[item.status] || item.status) + '</p><p>' +
+          esc(new Date(item.createdAt).toLocaleString('es-ES')) + '</p></article>').join('') + '</div>' +
+        '<p>' + esc(result.total) + ' envíos · Página ' + state.deliveryPage + '</p>' +
+        button('delivery-previous', 'Anterior', state.deliveryPage <= 1 ? 'disabled' : '') +
+        button('delivery-next', 'Siguiente', state.deliveryPage * 30 >= result.total ? 'disabled' : '');
+      state.current = null; state.dirty = false;
+      return;
+    }
     if (name === "account") return openAccount(element.dataset.key);
     if (name === "circles") { if (canLeave()) renderCircles(); return; }
     if (name === "circle") return openCircle(element.dataset.id);

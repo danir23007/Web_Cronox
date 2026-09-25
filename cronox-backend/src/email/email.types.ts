@@ -17,6 +17,7 @@ export enum EmailTemplate {
 }
 
 export enum EmailType {
+  RESTOCK = 'RESTOCK',
   TEST = 'TEST',
   ORDER_CONFIRMATION = 'ORDER_CONFIRMATION',
   ORDER_SHIPPED = 'ORDER_SHIPPED',
@@ -29,7 +30,7 @@ export enum EmailType {
 }
 
 export interface EmailSendOptions {
-  purpose?: 'INITIAL_PASSWORD_SETUP' | 'FIRST_ORDER_DISCOUNT' | 'LAUNCH';
+  purpose?: 'INITIAL_PASSWORD_SETUP' | 'FIRST_ORDER_DISCOUNT' | 'NEWSLETTER_WELCOME' | 'LAUNCH';
   type: EmailType;
   to: string;
   subject: string;
@@ -91,6 +92,7 @@ export interface EmailConfig {
 }
 
 export const EMAIL_TYPE_TO_SENDER: Record<EmailType, EmailSenderKey> = {
+  [EmailType.RESTOCK]: EmailSenderKey.INFO,
   [EmailType.TEST]: EmailSenderKey.NOREPLY,
   [EmailType.ORDER_CONFIRMATION]: EmailSenderKey.ORDERS,
   [EmailType.ORDER_SHIPPED]: EmailSenderKey.ORDERS,
@@ -103,6 +105,7 @@ export const EMAIL_TYPE_TO_SENDER: Record<EmailType, EmailSenderKey> = {
 };
 
 export const EMAIL_TYPE_TO_TEMPLATE: Record<EmailType, EmailTemplate> = {
+  [EmailType.RESTOCK]: EmailTemplate.RESTOCK,
   [EmailType.TEST]: EmailTemplate.TEST,
   [EmailType.ORDER_CONFIRMATION]: EmailTemplate.ORDER_CONFIRMATION,
   [EmailType.ORDER_SHIPPED]: EmailTemplate.ORDER_SHIPPED,

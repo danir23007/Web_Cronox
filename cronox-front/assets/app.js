@@ -2535,7 +2535,7 @@ window.CRONOX_AUTH_STATE = window.CRONOX_USER ? 'authenticated' : 'unknown';
       const result = await res.json().catch(() => null);
       if (res.status === 202 && result?.status === 'accepted') {
         setNewsletterFeedback(
-          'Solicitud aceptada. Revisa tu correo y spam y abre el enlace para confirmar. Si reintentas, utiliza el correo más reciente.',
+          '¡Gracias por unirte a CRONOX! Tu suscripción está activa. Revisa tu correo de bienvenida; si ya te habías unido, no recibirás otro código.',
           'success',
         );
         persistNewsletterDismiss();

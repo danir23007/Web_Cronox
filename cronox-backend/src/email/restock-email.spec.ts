@@ -7,7 +7,7 @@ describe('Restock email (fake transport only)', () => {
       .fn()
       .mockResolvedValue({ accepted: ['buyer@example.test'] });
     const email = new EmailService({
-      getTransport: () => ({ sendMail }),
+      sendMail: (_key: string, options: any) => sendMail(options),
       getFrom: () => 'info@example.test',
     } as any);
     await email.sendRestock('buyer@example.test', {
@@ -49,7 +49,7 @@ describe('Restock email (fake transport only)', () => {
   it('template/config failure occurs before transport and is safe to retry', async () => {
     const sendMail = jest.fn();
     const email = new EmailService({
-      getTransport: () => ({ sendMail }),
+      sendMail: (_key: string, options: any) => sendMail(options),
     } as any);
     jest
       .spyOn(email as any, 'renderTemplate')

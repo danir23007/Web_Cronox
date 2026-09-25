@@ -126,6 +126,22 @@ model EmailAsset {
   @@index([senderKey, createdAt])
 }
 
+model EmailDelivery {
+  id                String   @id @default(cuid())
+  senderKey         String
+  recipient         String
+  subject           String
+  purpose           String?
+  status            String   @default("PENDING")
+  providerMessageId String?
+  errorCode         String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@index([createdAt, id])
+  @@index([senderKey, createdAt])
+}
+
 model Product {
   id                 Int                        @id @default(autoincrement())
   slug               String                     @unique
@@ -997,6 +1013,11 @@ model NewsletterSubscription {
   verificationTokenHash String?   @unique
   verificationExpiresAt DateTime?
   verifiedAt            DateTime?
+  subscribedAt          DateTime?
+  welcomePromoCodeId    Int?      @unique
+  welcomePromoCode      PromoCode? @relation(fields: [welcomePromoCodeId], references: [id], onDelete: Restrict)
+  welcomeSentAt         DateTime?
+  welcomeClaimedAt      DateTime?
   createdAt             DateTime  @default(now())
   updatedAt             DateTime  @updatedAt
 
@@ -1004,6 +1025,8 @@ model NewsletterSubscription {
 }
 
 model PromoCode {
+  firstOrderOnly       Boolean                @default(false)
+  newsletterSubscription NewsletterSubscription?
   ownerUserId          Int?
   ownerEmail           String?
   id                   Int                   @id @default(autoincrement())

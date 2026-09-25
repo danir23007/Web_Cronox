@@ -26,6 +26,7 @@ const emailConfig: EmailConfig = {
   ) as EmailConfig['accounts'],
 };
 const transport = () => ({
+  sendMail: jest.fn(),
   getTransport: jest.fn(),
   getFrom: jest.fn().mockReturnValue('CRONOX <test@example.test>'),
 });
@@ -138,7 +139,7 @@ describe('managed email safety and import', () => {
     }
     expect(profiles.size).toBe(4);
     expect(folderRows.size).toBe(20);
-    expect(templateRows.size).toBe(55);
+    expect(templateRows.size).toBe(MAIL_PURPOSES.length * 5);
     for (const p of MAIL_PURPOSES) {
       const copies = [...templateRows.values()].filter(
         (t) => t.purpose === p.key,
@@ -264,9 +265,10 @@ describe('managed email safety and import', () => {
     ).rejects.toBeInstanceOf(ConflictException);
   });
   it('falls back before SMTP on database/render failure, and never retries an SMTP failure', async () => {
-    const sendMail = jest.fn().mockResolvedValue({ messageId: 'mock-1' });
+    const sendMail = jest.fn().mockResolvedValue({ messageId: 'mock-1', accepted: ['test@example.test'] });
     const factory = transport();
     factory.getTransport.mockReturnValue({ sendMail });
+    factory.sendMail.mockImplementation((_key: string, options: any) => sendMail(options));
     const managed = {
       published: jest.fn().mockRejectedValue(new Error('DB unavailable')),
     };

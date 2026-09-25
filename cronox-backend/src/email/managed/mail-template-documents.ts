@@ -322,6 +322,13 @@ export function structuredDocumentForPurpose(
 ): VisualDocument | null {
   let blocks: MailBlock[];
   switch (purpose) {
+    case 'RESTOCK':
+      blocks = [section([
+        heading('Ya está disponible'), text('{{product}} · Talla {{size}}'),
+        text('La talla que nos pediste vuelve a estar disponible. Sujeto a existencias; este aviso no reserva la prenda.'),
+        button('VER PRODUCTO', '{{actionUrl}}'), text('CRONOX'),
+      ])];
+      break;
     case 'ORDER_CONFIRMATION':
       blocks = confirmation();
       break;
@@ -341,6 +348,8 @@ export function structuredDocumentForPurpose(
     case 'INITIAL_PASSWORD_SETUP':
     case 'NEWSLETTER_CONFIRMATION':
     case 'FIRST_ORDER_DISCOUNT':
+    case 'NEWSLETTER_WELCOME':
+    case 'LAUNCH':
     case 'GENERIC':
       blocks = generic();
       break;

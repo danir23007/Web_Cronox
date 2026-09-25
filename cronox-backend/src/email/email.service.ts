@@ -52,31 +52,26 @@ export class EmailService {
   // Dedicated opt-in availability notice, independent from launch publications.
   async sendRestock(to: string, data: { product: string; size: string; actionUrl: string; imageUrl?: string }) {
     let html: string;
-    let transport: ReturnType<MailTransportFactory['getTransport']>;
-    let from: string;
     try {
       html = await this.renderTemplate(EmailTemplate.RESTOCK, data);
-      transport = this.transportFactory.getTransport(EmailSenderKey.INFO);
-      from = this.transportFactory.getFrom(EmailSenderKey.INFO);
+      try {
+        const custom = await this.managed?.published(EmailSenderKey.INFO, 'RESTOCK', data);
+        const link = Handlebars.escapeExpression(data.actionUrl);
+        if (custom && (custom.html.includes(`href="${link}"`) || custom.html.includes(`href='${link}'`))) html = custom.html;
+      } catch { /* Preserve the working first-party template. */ }
     } catch { throw new RestockDeliveryError('RETRY'); }
     let info: { accepted?: unknown[] };
     try {
-      info = await transport.sendMail({
-        to, from, subject: `Tu talla ha vuelto: ${data.product} · ${data.size}`,
+      info = await this.transportFactory.sendMail(EmailSenderKey.INFO, {
+        to, subject: `Tu talla ha vuelto: ${data.product} · ${data.size}`,
         html,
         text: `Ya está disponible\nNos pediste que te avisáramos: ${data.product}, en la talla ${data.size}, vuelve a estar disponible en CRONOX.\nVER PRODUCTO: ${data.actionUrl}\nDisponibilidad sujeta a existencias. Este aviso no reserva la prenda.`,
-      });
+      }, 'RESTOCK');
     } catch (error) { throw new RestockDeliveryError(restockDeliveryOutcome(error)); }
     if (!info.accepted?.length) throw new RestockDeliveryError('FAILED');
   }
 
   async send(options: EmailSendOptions): Promise<EmailSendResult> {
-    if (!this.config.enabled) {
-      throw new InternalServerErrorException(
-        'El envio de email no esta habilitado.',
-      );
-    }
-
     const senderKey = EMAIL_TYPE_TO_SENDER[options.type];
     const template = EMAIL_TYPE_TO_TEMPLATE[options.type];
 
@@ -100,6 +95,8 @@ export class EmailService {
         );
       }
       // A published design must never remove the verification action.
+      if (options.purpose === 'NEWSLETTER_WELCOME' && custom && data.discountCode &&
+          !custom.html.includes(Handlebars.escapeExpression(String(data.discountCode)))) custom = null;
       if (options.type === EmailType.NEWSLETTER_CONFIRMATION && custom) {
         const link = Handlebars.escapeExpression(String(data.actionUrl || ''));
         if (!link || !(custom.html.includes(`href="${link}"`) || custom.html.includes(`href='${link}'`))) {
@@ -109,27 +106,27 @@ export class EmailService {
       const html = custom?.html || (await this.renderTemplate(template, data));
 
       const info = (await this.transportFactory
-        .getTransport(senderKey)
-        .sendMail({
+        .sendMail(senderKey, {
           to: options.to,
-          from: this.transportFactory.getFrom(senderKey),
           subject: custom?.subject || options.subject,
           html,
           ...(custom ? { text: custom.text } : {}),
-        })) as { messageId: string; accepted?: unknown[] };
+        }, options.purpose || options.type)) as { messageId: string; accepted?: unknown[] };
 
       if (!Array.isArray(info.accepted) || info.accepted.length === 0) {
         throw new Error('SMTP_RECIPIENT_NOT_ACCEPTED');
       }
 
       return { messageId: info.messageId };
-    } catch {
+    } catch (error) {
       this.logger.error(
         `Fallo enviando email. type=${options.type} sender=${senderKey}`,
       );
-      throw new InternalServerErrorException(
+      const failure = new InternalServerErrorException(
         'No se pudo enviar el email. Revisa la configuración SMTP.',
       );
+      if ((error as { deliveryUnknown?: boolean }).deliveryUnknown) Object.assign(failure, { deliveryUnknown: true });
+      throw failure;
     }
   }
 
@@ -205,6 +202,20 @@ export class EmailService {
       templateData: {
         title: 'Descuento de primera compra',
         message: `Tu código de descuento es: ${code}`,
+      },
+    });
+  }
+
+  async sendNewsletterWelcome(email: string, code?: string) {
+    return this.send({
+      purpose: 'NEWSLETTER_WELCOME', type: EmailType.GENERIC, to: email,
+      subject: 'CRONOX · Te damos la bienvenida',
+      templateData: {
+        title: 'Bienvenido a CRONOX',
+        message: code
+          ? `Ya formas parte de nuestra newsletter. Tu código de bienvenida es ${code}: 10% de descuento en tu primera compra, de un solo uso y asociado a este correo. Utiliza esta misma dirección al comprar. ¡Gracias por unirte!`
+          : 'Ya formas parte de nuestra newsletter. Recibirás nuestras novedades y próximos drops. ¡Gracias por unirte a CRONOX!',
+        discountCode: code || '',
       },
     });
   }

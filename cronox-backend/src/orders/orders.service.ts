@@ -2655,6 +2655,7 @@ export class OrdersService {
         singleUsePerUser: true,
         ownerUserId: true,
         ownerEmail: true,
+        firstOrderOnly: true,
         usageLimit: true,
         usageCount: true,
       },
@@ -2736,6 +2737,7 @@ export class OrdersService {
       singleUsePerUser: boolean;
       ownerUserId?: number | null;
       ownerEmail?: string | null;
+      firstOrderOnly?: boolean;
       usageLimit: number | null;
       usageCount: number;
     },
@@ -2743,9 +2745,30 @@ export class OrdersService {
       userId?: number;
       customerEmail?: string;
       client?: PrismaClientOrTx;
+      excludeOrderId?: number;
     } = {},
   ): Promise<{ valid: boolean; message?: string }> {
     const now = new Date();
+
+    if (promo.firstOrderOnly) {
+      const client = options.client ?? this.prisma;
+      const user = options.userId != null
+        ? await client.user.findUnique({ where: { id: options.userId }, select: { id: true, email: true } })
+        : null;
+      const email = normalizeEmail(user?.email || options.customerEmail);
+      if (!email || email !== normalizeEmail(promo.ownerEmail)) {
+        return { valid: false, message: 'Utiliza el correo que recibió este código de bienvenida.' };
+      }
+      const userId = user?.id ?? await this.resolvePromoRedemptionUserId(client, { customerEmail: email });
+      {
+        const previous = await client.order.findFirst({ where: {
+          OR: [{ customerEmail: { equals: email, mode: 'insensitive' } }, ...(userId ? [{ userId }] : [])],
+          status: { notIn: [OrderStatus.PENDING, OrderStatus.CANCELLED] },
+          ...(options.excludeOrderId ? { id: { not: options.excludeOrderId } } : {}),
+        }, select: { id: true } });
+        if (previous) return { valid: false, message: 'El descuento de bienvenida es solo para la primera compra.' };
+      }
+    }
 
     if (promo.ownerUserId != null) {
       // An email typed into guest checkout is not proof of account ownership.
@@ -3175,6 +3198,7 @@ export class OrdersService {
         singleUsePerUser: true,
         ownerUserId: true,
         ownerEmail: true,
+        firstOrderOnly: true,
         usageLimit: true,
         usageCount: true,
       },
@@ -3187,6 +3211,8 @@ export class OrdersService {
     const validation = await this.validatePromoAvailability(promo, {
       userId: order.userId ?? undefined,
       client: tx,
+      excludeOrderId: order.id,
+      customerEmail: order.customerEmail,
     });
 
     if (!validation.valid) {
@@ -3205,6 +3231,11 @@ export class OrdersService {
 
     if (incremented.count === 0) {
       throw new BadRequestException('Límite de usos alcanzado');
+    }
+
+    if (promo.firstOrderOnly && order.userId != null) {
+      await tx.user.update({ where: { id: order.userId }, data: { firstOrderDiscountUsed: true } });
+      await tx.discountCode.updateMany({ where: { code: promo.code, type: 'FIRST_ORDER' }, data: { used: true, usedAt: new Date() } });
     }
 
     if (order.userId != null) {

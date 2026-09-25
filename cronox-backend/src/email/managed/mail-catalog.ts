@@ -6,6 +6,15 @@ import {
 
 // Distinct purposes preserve the existing sender/transport types.
 export const MAIL_PURPOSES = [
+  { key: 'LAUNCH', name: 'Lanzamiento de la tienda', type: EmailType.GENERIC,
+    subject: 'CRONOX · La espera ha terminado', required: ['message', 'actionUrl'] },
+  { key: 'RESTOCK', name: 'Aviso de reposición de talla', type: EmailType.RESTOCK,
+    subject: 'Tu talla ha vuelto: {{product}} · {{size}}', required: ['product', 'size', 'actionUrl'] },
+  {
+    key: 'NEWSLETTER_WELCOME', name: 'Bienvenida a la newsletter y descuento',
+    type: EmailType.GENERIC, subject: 'CRONOX · Te damos la bienvenida',
+    required: ['message'],
+  },
   {
     key: 'PRE_REGISTRATION_CONFIRMATION',
     name: 'Confirmación de prerregistro',
@@ -90,10 +99,12 @@ export const MAIL_PURPOSES = [
 }));
 
 export const SAMPLE_DATA: Record<string, unknown> = {
+  product: 'Camiseta de ejemplo', size: 'M', imageUrl: 'https://example.com/camiseta.png',
   subject: 'Correo de ejemplo CRONOX',
   title: 'Hola, Alex',
   message:
-    'Mensaje de prueba con datos ficticios. Código de ejemplo: BIENVENIDA-PRUEBA.',
+    'Mensaje de prueba con datos ficticios. Código de ejemplo: ABC234.',
+  discountCode: 'ABC234',
   customerEmail: 'alex@example.com',
   email: 'alex@example.com',
   preRegistrationDate: '2026-09-10T12:00:00.000Z',
@@ -137,6 +148,7 @@ export const SAMPLE_DATA: Record<string, unknown> = {
   ],
 };
 export const VARIABLE_DESCRIPTIONS: Record<string, string> = {
+  product: 'Nombre del producto', size: 'Talla solicitada', discountCode: 'Código de bienvenida',
   subject: 'Asunto del correo',
   title: 'Título del mensaje',
   message: 'Contenido del mensaje',
@@ -193,6 +205,8 @@ export function variablesFor(purpose?: string | null) {
     'lineTotalFormatted',
   ];
   switch (MAIL_PURPOSES.find((x) => x.key === purpose)?.type) {
+    case EmailType.RESTOCK:
+      return [...base, 'product', 'size', 'imageUrl', 'actionUrl'];
     case EmailType.ORDER_CONFIRMATION:
       return [
         ...base,
@@ -228,6 +242,6 @@ export function variablesFor(purpose?: string | null) {
     default:
       return purpose === 'PRE_REGISTRATION_CONFIRMATION'
         ? [...base, 'email', 'preRegistrationDate']
-        : [...base, 'actionUrl', 'actionLabel'];
+        : [...base, 'actionUrl', 'actionLabel', ...(purpose === 'NEWSLETTER_WELCOME' ? ['discountCode'] : [])];
   }
 }

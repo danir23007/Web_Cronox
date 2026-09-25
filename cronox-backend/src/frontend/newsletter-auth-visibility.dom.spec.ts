@@ -114,7 +114,8 @@ describe('public newsletter authoritative authentication gate', () => {
       form.dispatchEvent(new win.Event('submit', { cancelable: true }));
       await flush();
       expect(subscribe).toHaveBeenCalledTimes(2);
-      expect(feedback.textContent).toContain('Revisa tu correo');
+      expect(feedback.textContent).toContain('Tu suscripción está activa');
+      expect(feedback.textContent).not.toContain('para confirmar');
       expect(feedback.classList).toContain('newsletter-modal-feedback--success');
       expect(win.document.querySelector('.newsletter-modal-overlay').classList).toContain('newsletter-modal-overlay--visible');
     } finally { context.dom.window.close(); }

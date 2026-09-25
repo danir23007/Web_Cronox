@@ -21,6 +21,7 @@ describe('durable launch campaign', () => {
       user: { email: 'one@example.test', role: 'USER' } }];
     codes = [];
     db = {
+      $executeRaw: jest.fn(),
       keyScreenSettings: {
         findUnique: jest.fn(async () => gate),
         findUniqueOrThrow: jest.fn(async () => gate),
@@ -54,7 +55,8 @@ describe('durable launch campaign', () => {
         update: jest.fn(async ({ where, data }: any) => Object.assign(
           registrations.find(row => row.userId === where.userId), data)),
       },
-      promoCode: { create: jest.fn(async ({ data }: any) => { codes.push(data); return data; }) },
+      promoCode: { findUnique: jest.fn().mockResolvedValue(null), create: jest.fn(async ({ data }: any) => { codes.push(data); return data; }) },
+      discountCode: { findUnique: jest.fn().mockResolvedValue(null) },
     };
     db.$transaction = jest.fn(async (fn: any) => fn(db));
     mail = { isLaunchSenderConfigured: jest.fn(() => true), send: jest.fn(async () => ({ messageId: 'accepted' })) };
