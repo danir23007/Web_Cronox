@@ -35,7 +35,7 @@ test.beforeEach(async ({ page }) => {
         lastName: 'Cronox Mobile',
         email: 'mobile@example.test',
         memberCode: 'CRX-000007',
-        circleLevel: 3,
+        circleLevel: 5,
         createdAt: '2026-01-02T01:02:57.851Z',
       });
     }
@@ -43,14 +43,14 @@ test.beforeEach(async ({ page }) => {
     if (pathname === '/api/me/address') return json(route, null);
     if (pathname.includes('accreditation') && pathname.includes('stats')) {
       return json(route, {
-        circleLevel: 3,
+        circleLevel: 5,
         createdAt: '2026-01-02T01:02:57.851Z',
         ordersCount: 18,
         itemsNetCount: 23,
       });
     }
     if (pathname.includes('circle-upgrade')) {
-      return json(route, { circleLevel: 3, hasPending: false, hasApproved: false, canRequest: true });
+      return json(route, { circleLevel: 5, hasPending: false, hasApproved: false, canRequest: false });
     }
     if (pathname === '/api/products') return json(route, []);
     if (pathname === '/api/cart') return json(route, { items: [], itemsCount: 0, subtotal: 0 });
