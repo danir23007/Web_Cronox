@@ -1882,7 +1882,7 @@ button.product-cta--disabled:disabled { opacity:.5; cursor:not-allowed; filter:n
   }
 
   .accreditation-page .accreditation-page-right-content {
-    justify-content: center;
+    justify-content: flex-start;
     gap: clamp(5px, 2cqw, 7px);
     padding-left: 1px;
   }

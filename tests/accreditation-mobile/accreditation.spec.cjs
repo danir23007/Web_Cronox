@@ -124,7 +124,7 @@ test('keeps the complete book, page content and retried QR inside narrow viewpor
   expect(rightTopMargin).toBeGreaterThanOrEqual(4);
   expect(rightBottomMargin).toBeGreaterThanOrEqual(4);
   if (testInfo.project.name !== 'chromium-desktop') {
-    expect(Math.abs(rightTopMargin - rightBottomMargin)).toBeLessThanOrEqual(4);
+    expect(Math.abs(rightTopMargin - (layout.leftTop.top - leftPage.rect.top))).toBeLessThanOrEqual(3);
   }
   for (const pageLayout of layout.pages) {
     expect(pageLayout.rect.left).toBeGreaterThanOrEqual(layout.book.left);
