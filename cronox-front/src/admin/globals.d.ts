@@ -92,6 +92,9 @@ declare global {
     denyCircleUpgrade?: (id: number | string, payload?: Record<string, unknown>) => Promise<unknown>;
     listAutoCircleRequests?: (queryOrStatus?: string | QueryRecord, queryOverride?: QueryRecord) => Promise<unknown>;
     listAdminProducts?: (query?: QueryRecord) => Promise<unknown>;
+    getInPersonPurchaseOptions?: (userId: number | string) => Promise<unknown>;
+    createInPersonPurchase?: (userId: number | string, payload: Record<string, unknown>, idempotencyKey: string) => Promise<unknown>;
+    voidInPersonPurchase?: (orderId: number | string, reason: string) => Promise<unknown>;
     getProductOrder?: () => Promise<unknown>;
     saveProductOrder?: (productIds: number[]) => Promise<unknown>;
     getAdminProduct?: (id: number | string) => Promise<unknown>;

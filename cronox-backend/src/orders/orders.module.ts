@@ -15,6 +15,6 @@ import { GuestOrderAccountService } from './guest-order-account.service';
   imports: [PrismaModule, CartModule, ShippingMethodsModule, HistorialModule, AccessAuthModule],
   controllers: [OrdersController, CheckoutSummaryController],
   providers: [OrdersService, TaxConfigService, GuestOrderAccountService],
-  exports: [OrdersService],
+  exports: [OrdersService, TaxConfigService],
 })
 export class OrdersModule {}

@@ -203,6 +203,7 @@ describe('OrdersService checkout reservations', () => {
     historialService = {
       incrementOrderProgress: jest.fn(),
       registerReturn: jest.fn(),
+      syncFromOrders: jest.fn(),
     };
     guestOrderAccountService = {
       resolveUserForCompletedOrder: jest.fn(
@@ -805,7 +806,7 @@ describe('OrdersService checkout reservations', () => {
     await service.applyStripePaymentLifecycle('pi_refund', 'REFUNDED' as any);
 
     expect(prisma.productVariant.update).toHaveBeenCalledTimes(1);
-    expect(historialService.registerReturn).toHaveBeenCalledTimes(1);
+    expect(historialService.syncFromOrders).toHaveBeenCalledTimes(1);
     expect(prisma.stockMovement.create).toHaveBeenCalledWith({
       data: expect.objectContaining({
         reason: 'refund',

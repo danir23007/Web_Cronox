@@ -1231,6 +1231,22 @@ import { installSessionTransport } from './session';
   adminApi.listAdminProducts = async (query: QueryRecord = {}) => {
     return request('/api/admin/products', { query });
   };
+  adminApi.getInPersonPurchaseOptions = async (userId: number | string) =>
+    request(`/api/admin/users/${encodeURIComponent(userId)}/in-person-purchase-options`, { cache: 'no-store' });
+  adminApi.createInPersonPurchase = async (
+    userId: number | string,
+    payload: UnknownRecord,
+    idempotencyKey: string,
+  ) => request(`/api/admin/users/${encodeURIComponent(userId)}/in-person-purchases`, {
+    method: 'POST',
+    body: payload,
+    headers: { 'Idempotency-Key': idempotencyKey },
+  });
+  adminApi.voidInPersonPurchase = async (orderId: number | string, reason: string) =>
+    request(`/api/admin/orders/${encodeURIComponent(orderId)}/void-manual`, {
+      method: 'POST',
+      body: { reason },
+    });
   adminApi.getProductOrder = async () =>
     request('/api/admin/products/order', { cache: 'no-store' });
   adminApi.saveProductOrder = async (productIds: number[]) =>

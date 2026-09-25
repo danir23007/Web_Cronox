@@ -41,12 +41,13 @@ test.beforeEach(async ({ page }) => {
     }
     if (pathname === '/api/me/orders' || pathname === '/api/favorites') return json(route, []);
     if (pathname === '/api/me/address') return json(route, null);
-    if (pathname.includes('accreditation') && pathname.includes('stats')) {
+    if (pathname === '/api/membership/me/stats') {
       return json(route, {
         circleLevel: 5,
         createdAt: '2026-01-02T01:02:57.851Z',
         ordersCount: 18,
         itemsNetCount: 23,
+        productosDiferentes: 7,
       });
     }
     if (pathname.includes('circle-upgrade')) {
@@ -65,6 +66,7 @@ async function openAccreditation(page) {
   await expect(page.locator('.crx-accreditation-book')).toBeVisible();
   await expect.poll(() => page.locator('.accreditation-book-art').evaluate((image) => image.naturalWidth)).toBeGreaterThan(0);
   await expect(page.locator('#cronox-member-qr')).toHaveJSProperty('naturalWidth', 1);
+  await expect(page.locator('[data-acc-stat="products"]')).toHaveText('7');
 }
 
 test('keeps the complete book, page content and retried QR inside narrow viewports', async ({ page }, testInfo) => {

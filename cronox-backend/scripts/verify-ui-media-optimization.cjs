@@ -92,7 +92,7 @@ async function main() {
   assert.match(index, /class="footer-logo"/);
   assert.match(checkout, /src="assets\/CRONOX-preloader\.webp"/);
   assert.match(profile, /img\.src = 'assets\/CRONOX-preloader\.webp'/);
-  assert.match(profileHtml, /assets\/profile\.js\?v=10/);
+  assert.match(profileHtml, /assets\/profile\.js\?v=14/);
   assert.match(keyScreen, /src="assets\/CRONOX-GIF\.gif"/);
   assert.match(newsletter, /supabase\.co\/storage\/v1\/object\/public\/newsletter\/chains-newsletter\.jpg/);
   assert.ok(!index.includes('assets/CRONOX-GIF.gif'));

@@ -34,6 +34,8 @@ import { SuperAdminGuard } from '../common/guards/super-admin.guard';
 import { AdminExportsController } from './exports/admin-exports.controller';
 import { AdminExportsService } from './exports/admin-exports.service';
 import { ExcelWorkbookService } from './exports/excel-workbook.service';
+import { AdminManualPurchasesService } from './manual-purchases/admin-manual-purchases.service';
+import { AdminManualPurchaseCorrectionsController, AdminManualPurchasesController } from './manual-purchases/admin-manual-purchases.controller';
 
 @Module({
   imports: [
@@ -59,6 +61,8 @@ import { ExcelWorkbookService } from './exports/excel-workbook.service';
     AdminNotesController,
     AdminInventoryController,
     AdminExportsController,
+    AdminManualPurchasesController,
+    AdminManualPurchaseCorrectionsController,
   ],
   providers: [
     AdminOrdersService,
@@ -76,6 +80,7 @@ import { ExcelWorkbookService } from './exports/excel-workbook.service';
     SuperAdminGuard,
     AdminExportsService,
     ExcelWorkbookService,
+    AdminManualPurchasesService,
   ],
 })
 export class AdminModule {}

@@ -24,9 +24,12 @@ describe('profile accreditation image and mobile layout', () => {
   });
 
   it('uses centered, container-relative pages and valid responsive QR bounds', () => {
+    const document = new JSDOM(html).window.document;
+    expect(document.querySelector('[data-acc-stat="products"]')).not.toBeNull();
+    expect(script).toContain('stats.productosDiferentes');
     expect(css).toMatch(/\.accreditation-pages\s*\{[^}]*left:\s*50%;[^}]*width:\s*100%;/s);
     expect(css).toContain('width: clamp(105px, 14vw, 170px);');
-    expect(css).toMatch(/@media \(max-width: 560px\)[\s\S]*?#cronox-member-qr\s*\{[^}]*width:\s*clamp\(66px, 21vw, 82px\);/);
+    expect(css).toMatch(/@media \(max-width: 560px\)[\s\S]*?#cronox-member-qr\s*\{[^}]*width:\s*max\(66px, 15\.45cqw\);/);
     expect(css).not.toContain('clamp(170px, 34vw, 105px)');
     expect(css).not.toContain('clamp(15px, 3vw, 10px)');
   });

@@ -1248,6 +1248,7 @@ export class OrdersService {
           data: snapshot.items.map((item) => ({
             orderId: order.id,
             productId: item.productId,
+            variantId: item.variantId,
             title: item.title,
             unitPrice: this.centsToDecimal(item.unitPriceCents),
             quantity: item.quantity,
@@ -1604,19 +1605,11 @@ export class OrdersService {
             include: { items: true },
           });
 
-      const legacyCompletedOrder =
-        !snapshot &&
-        !wasRefunded &&
-        (this.isCompletedOrderStatus(order.status) ||
-          (order.status === OrderStatus.DISPUTED &&
-            !!order.preDisputeStatus &&
-            this.isCompletedOrderStatus(order.preDisputeStatus)));
-      if ((returnedStock || legacyCompletedOrder) && updated.userId != null) {
-        await this.historialService.registerReturn(
-          updated.userId,
-          this.computeOrderItemsQuantity(updated.items),
-          tx,
-        );
+      if ((!wasRefunded || returnedStock) && updated.userId != null) {
+        // Stock restoration has its own idempotency claim. Accreditation is
+        // derived from the newly authoritative REFUNDED status even when an
+        // older order has no reservation rows to return.
+        await this.historialService.syncFromOrders(updated.userId, tx);
       }
 
       await tx.checkoutSnapshot.updateMany({
@@ -3276,6 +3269,9 @@ export class OrdersService {
       currency: order.currency,
       provider: order.provider,
       providerRef: order.providerRef,
+      source: order.source,
+      paymentMethod: order.paymentMethod,
+      purchasedAt: order.purchasedAt,
       promoCode: order.promoCodeCode,
       shippingMethodId: order.shippingMethodId,
       shippingMethodCode: order.shippingMethodCode,
@@ -3297,6 +3293,7 @@ export class OrdersService {
         id: item.id,
         orderId: item.orderId,
         productId: item.productId,
+        variantId: item.variantId,
         title: item.title,
         unitPrice: this.formatMoney(item.unitPrice),
         quantity: item.quantity,

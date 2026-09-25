@@ -24,6 +24,7 @@
   const accreditationStatCreatedAt = document.querySelector('[data-acc-stat="createdAt"]');
   const accreditationStatOrders = document.querySelector('[data-acc-stat="orders"]');
   const accreditationStatItems = document.querySelector('[data-acc-stat="items"]');
+  const accreditationStatProducts = document.querySelector('[data-acc-stat="products"]');
   const accreditationPrivilegesList = document.querySelector('[data-acc-privileges-list]');
   const getCircleUpgradeCta = () => document.querySelector('[data-circle4-cta]');
   const getCircleUpgradeBtn = () => document.querySelector('[data-circle4-request-btn]');
@@ -421,7 +422,7 @@
       const trackingBits = [];
       const trackingUrl = safeExternalUrl(order.trackingUrl);
       const orderId = escapeHtml(order.id);
-      const createdAt = escapeHtml(formatDate(order.createdAt));
+      const createdAt = escapeHtml(formatDate(order.purchasedAt || order.createdAt));
       const orderStatus = escapeHtml(statusLabel(order.status));
       const total = escapeHtml(order.total ?? '');
       const currency = escapeHtml(order.currency || '');
@@ -498,6 +499,10 @@
       typeof stats?.articulosAdquiridos === 'number'
         ? stats.articulosAdquiridos
         : stats?.itemsNetCount;
+    const distinctProductsCount =
+      typeof stats?.productosDiferentes === 'number'
+        ? stats.productosDiferentes
+        : stats?.distinctProductsCount;
 
     if (accreditationStatCircle) {
       const normalized = applyCircleLevel(circleLevel);
@@ -517,6 +522,13 @@
     if (accreditationStatItems) {
       accreditationStatItems.textContent =
         typeof itemsNetCount === 'number' && Number.isFinite(itemsNetCount) ? itemsNetCount : '—';
+    }
+
+    if (accreditationStatProducts) {
+      accreditationStatProducts.textContent =
+        typeof distinctProductsCount === 'number' && Number.isFinite(distinctProductsCount)
+          ? distinctProductsCount
+          : '—';
     }
 
     renderAccreditationPrivileges(circleLevelRaw);

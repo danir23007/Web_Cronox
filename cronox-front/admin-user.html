@@ -415,7 +415,16 @@
     .user-edit-field { display: grid; gap: 7px; color: #cfcfdb; font-size: .88rem; }
     .user-edit-field input, .user-edit-field select { width: 100%; border: 1px solid rgba(255,255,255,.16); border-radius: 10px; background: #0b0b10; color: #fff; padding: 10px 12px; }
     .user-edit-actions { display: flex; justify-content: flex-end; gap: 10px; }
+    .manual-purchase { margin-bottom: 20px; padding: 16px; border: 1px solid rgba(255,255,255,.12); border-radius: 14px; background: rgba(12,12,18,.72); }
+    .manual-purchase-grid { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 12px; }
+    .manual-purchase-field { display: grid; gap: 6px; color: #cfcfdb; font-size: .86rem; }
+    .manual-purchase-field input, .manual-purchase-field select, .manual-purchase-field textarea { width: 100%; border: 1px solid rgba(255,255,255,.16); border-radius: 9px; background: #0b0b10; color: #fff; padding: 9px 10px; }
+    .manual-purchase-items { display: grid; gap: 8px; margin: 14px 0; }
+    .manual-purchase-item { display: grid; grid-template-columns: minmax(0,1fr) 90px auto; gap: 8px; align-items: end; }
+    .manual-purchase-review { margin-top: 14px; padding: 12px; border: 1px solid rgba(255,255,255,.18); background: #08080c; line-height: 1.55; }
+    .manual-order-action { white-space: nowrap; }
     @media (max-width: 640px) { .user-edit-grid { grid-template-columns: 1fr; } }
+    @media (max-width: 640px) { .manual-purchase-grid, .manual-purchase-item { grid-template-columns: 1fr; } }
 
     .note-meta {
       color: #a6a6b3;
@@ -586,6 +595,45 @@
 
         <div class="panel" id="panel-orders">
           <div id="ordersStatus" class="status-area"></div>
+          <section class="manual-purchase" id="manualPurchaseSection" hidden>
+            <div class="panel-head">
+              <div>
+                <strong>Registrar compra presencial</strong>
+                <div class="note-meta">No crea pagos de Stripe ni datos de envío. Revisa el resumen antes de guardar.</div>
+              </div>
+              <button class="btn" type="button" id="toggleManualPurchase">Nueva compra</button>
+            </div>
+            <form id="manualPurchaseForm" hidden>
+              <div class="manual-purchase-grid">
+                <label class="manual-purchase-field">Fecha de compra<input id="manualPurchasedAt" type="datetime-local" required></label>
+                <label class="manual-purchase-field">Método de pago
+                  <select id="manualPaymentMethod" required>
+                    <option value="CASH">Efectivo</option>
+                    <option value="EXTERNAL_CARD">Tarjeta presencial (terminal externo)</option>
+                    <option value="BANK_TRANSFER">Transferencia</option>
+                    <option value="OTHER">Otro</option>
+                  </select>
+                </label>
+                <label class="manual-purchase-field">Tratamiento de stock
+                  <select id="manualStockHandling" required>
+                    <option value="DEDUCT_NOW">Todavía no ajustado: descontar ahora</option>
+                    <option value="ALREADY_ADJUSTED">Ya ajustado físicamente: no volver a descontar</option>
+                  </select>
+                </label>
+                <label class="manual-purchase-field">Nota interna<textarea id="manualPurchaseNote" rows="2" maxlength="500"></textarea></label>
+              </div>
+              <div id="manualPurchaseItems" class="manual-purchase-items"></div>
+              <div class="user-edit-actions">
+                <button class="btn" type="button" id="addManualPurchaseItem">Añadir producto</button>
+                <button class="btn" type="button" id="reviewManualPurchase">Revisar compra</button>
+              </div>
+              <div id="manualPurchaseReview" class="manual-purchase-review" hidden></div>
+              <div class="user-edit-actions" id="manualPurchaseConfirmActions" hidden>
+                <button class="btn" type="button" id="editManualPurchase">Volver a editar</button>
+                <button class="btn" type="submit" id="confirmManualPurchase">Confirmar y registrar</button>
+              </div>
+            </form>
+          </section>
           <div class="table-wrap">
             <table>
               <thead>
@@ -594,10 +642,11 @@
                   <th>Fecha</th>
                   <th>Estado</th>
                   <th>Total</th>
+                  <th>Acción</th>
                 </tr>
               </thead>
               <tbody id="ordersBody">
-                <tr><td colspan="4">Cargando…</td></tr>
+                <tr><td colspan="5">Cargando…</td></tr>
               </tbody>
             </table>
           </div>
@@ -644,9 +693,9 @@
   </div>
 
   <script src="assets/country.js?v=1"></script>
-  <script src="assets/api.js?v=9"></script>
+  <script src="assets/api.js?v=10"></script>
   <script src="assets/admin-auth-routing.js?v=1"></script>
   <script src="assets/ui-status.js"></script>
-  <script src="assets/admin-user.js"></script>
+  <script src="assets/admin-user.js?v=2"></script>
 </body>
 </html>

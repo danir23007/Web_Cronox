@@ -208,6 +208,7 @@ model ProductVariant {
   cartItems                 CartItem[]
   product                   Product                    @relation(fields: [productId], references: [id])
   movements                 StockMovement[]
+  orderItems                OrderItem[]
   checkoutStockReservations CheckoutStockReservation[]
   activityEvents            CustomerActivityEvent[]
 
@@ -305,29 +306,29 @@ model FooterPageContent {
 }
 
 model GalleryCarouselSlot {
-  position     Int           @id
-  assetId      String?
-  itemId       String?       @unique
-  description  String?       @db.Text
+  position          Int           @id
+  assetId           String?
+  itemId            String?       @unique
+  description       String?       @db.Text
   relatedProductIds Json?
-  focalX       Float         @default(50)
-  focalY       Float         @default(50)
-  zoom         Float         @default(1)
-  fit          MediaFitMode  @default(COVER)
-  tabletFocalX Float?
-  tabletFocalY Float?
-  tabletZoom   Float?
-  tabletFit    MediaFitMode?
-  mobileFocalX Float?
-  mobileFocalY Float?
-  mobileZoom   Float?
-  mobileFit    MediaFitMode?
-  revision     Int           @default(0)
-  altText      String        @default("")
-  instagramUrl String?
-  createdAt    DateTime      @default(now())
-  updatedAt    DateTime      @updatedAt
-  asset        GalleryAsset? @relation(fields: [assetId], references: [id], onDelete: SetNull)
+  focalX            Float         @default(50)
+  focalY            Float         @default(50)
+  zoom              Float         @default(1)
+  fit               MediaFitMode  @default(COVER)
+  tabletFocalX      Float?
+  tabletFocalY      Float?
+  tabletZoom        Float?
+  tabletFit         MediaFitMode?
+  mobileFocalX      Float?
+  mobileFocalY      Float?
+  mobileZoom        Float?
+  mobileFit         MediaFitMode?
+  revision          Int           @default(0)
+  altText           String        @default("")
+  instagramUrl      String?
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+  asset             GalleryAsset? @relation(fields: [assetId], references: [id], onDelete: SetNull)
 
   @@index([assetId])
 }
@@ -448,30 +449,30 @@ model WebsiteMediaAsset {
 }
 
 model NewsletterSettings {
-  id            String             @id @default("global")
-  mediaAssetId  String?
-  desktopFocalX Float              @default(50)
-  desktopFocalY Float              @default(50)
-  desktopZoom   Float              @default(1)
-  desktopFit    MediaFitMode       @default(COVER)
-  mobileFocalX  Float              @default(50)
-  mobileFocalY  Float              @default(50)
-  mobileZoom    Float              @default(1)
-  mobileFit     MediaFitMode       @default(COVER)
-  mediaOpacity  Float              @default(1)
-  asciiEnabled  Boolean            @default(true)
-  asciiOpacity  Float              @default(1)
-  desktopAsciiX Float              @default(50)
-  desktopAsciiY Float              @default(50)
-  desktopAsciiScale Float          @default(1)
-  mobileAsciiX Float               @default(50)
-  mobileAsciiY Float               @default(50)
-  mobileAsciiScale Float           @default(1)
-  revision      Int                @default(0)
-  updatedBy     Int?
-  createdAt     DateTime           @default(now())
-  updatedAt     DateTime           @updatedAt
-  mediaAsset    WebsiteMediaAsset? @relation(fields: [mediaAssetId], references: [id], onDelete: SetNull)
+  id                String             @id @default("global")
+  mediaAssetId      String?
+  desktopFocalX     Float              @default(50)
+  desktopFocalY     Float              @default(50)
+  desktopZoom       Float              @default(1)
+  desktopFit        MediaFitMode       @default(COVER)
+  mobileFocalX      Float              @default(50)
+  mobileFocalY      Float              @default(50)
+  mobileZoom        Float              @default(1)
+  mobileFit         MediaFitMode       @default(COVER)
+  mediaOpacity      Float              @default(1)
+  asciiEnabled      Boolean            @default(true)
+  asciiOpacity      Float              @default(1)
+  desktopAsciiX     Float              @default(50)
+  desktopAsciiY     Float              @default(50)
+  desktopAsciiScale Float              @default(1)
+  mobileAsciiX      Float              @default(50)
+  mobileAsciiY      Float              @default(50)
+  mobileAsciiScale  Float              @default(1)
+  revision          Int                @default(0)
+  updatedBy         Int?
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  mediaAsset        WebsiteMediaAsset? @relation(fields: [mediaAssetId], references: [id], onDelete: SetNull)
 
   @@index([mediaAssetId])
 }
@@ -509,6 +510,8 @@ model User {
   carts                     Cart?
   favorites                 Favorite[]
   orders                    Order[]
+  ordersRecorded            Order[]                 @relation("OrderRecordedBy")
+  ordersVoided              Order[]                 @relation("OrderVoidedBy")
   promoCodeRedemptions      PromoCodeRedemption[]
   stockMovements            StockMovement[]
   passwordResetTokens       PasswordResetToken[]
@@ -547,18 +550,18 @@ model AuthSession {
 }
 
 model KeyScreenSettings {
-  id             String     @id @default("global")
-  enabled        Boolean    @default(false)
-  expiresAt      DateTime?  @db.Timestamptz(3)
-  activeScreenId String?    @unique
-  activeScreen   KeyScreen? @relation(fields: [activeScreenId], references: [id], onDelete: SetNull)
-  updatedBy      Int?
-  createdAt      DateTime   @default(now())
-  updatedAt      DateTime   @updatedAt
-  launchStatus      String    @default("PENDING")
-  launchArmedAt     DateTime? @db.Timestamptz(3)
-  launchStartedAt   DateTime? @db.Timestamptz(3)
-  launchCompletedAt DateTime? @db.Timestamptz(3)
+  id                String     @id @default("global")
+  enabled           Boolean    @default(false)
+  expiresAt         DateTime?  @db.Timestamptz(3)
+  activeScreenId    String?    @unique
+  activeScreen      KeyScreen? @relation(fields: [activeScreenId], references: [id], onDelete: SetNull)
+  updatedBy         Int?
+  createdAt         DateTime   @default(now())
+  updatedAt         DateTime   @updatedAt
+  launchStatus      String     @default("PENDING")
+  launchArmedAt     DateTime?  @db.Timestamptz(3)
+  launchStartedAt   DateTime?  @db.Timestamptz(3)
+  launchCompletedAt DateTime?  @db.Timestamptz(3)
   launchTrigger     String?
   launchErrorCode   String?
 }
@@ -896,6 +899,18 @@ model Order {
   currency             String                  @default("EUR")
   provider             String?
   providerRef          String?                 @unique
+  source               OrderSource             @default(ONLINE)
+  paymentMethod        OrderPaymentMethod?
+  purchasedAt          DateTime?
+  recordedById         Int?
+  recordedBy           User?                   @relation("OrderRecordedBy", fields: [recordedById], references: [id], onDelete: SetNull)
+  manualStockHandling  ManualStockHandling?
+  manualIdempotencyKey String?                 @unique @db.VarChar(100)
+  manualRequestHash    String?                 @db.VarChar(64)
+  voidedAt             DateTime?
+  voidedById           Int?
+  voidedBy             User?                   @relation("OrderVoidedBy", fields: [voidedById], references: [id], onDelete: SetNull)
+  voidReason           String?                 @db.VarChar(500)
   createdAt            DateTime                @default(now())
   updatedAt            DateTime                @updatedAt
   shippingAddr         Json?
@@ -913,20 +928,25 @@ model Order {
   @@index([userId])
   @@index([createdAt])
   @@index([status])
+  @@index([source, createdAt])
+  @@index([recordedById, createdAt])
 }
 
 model OrderItem {
-  id        Int     @id @default(autoincrement())
+  id        Int             @id @default(autoincrement())
   orderId   Int
   productId Int
+  variantId Int?
   title     String
-  unitPrice Decimal @db.Decimal(12, 2)
+  unitPrice Decimal         @db.Decimal(12, 2)
   quantity  Int
-  lineTotal Decimal @db.Decimal(12, 2)
-  order     Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  product   Product @relation(fields: [productId], references: [id])
+  lineTotal Decimal         @db.Decimal(12, 2)
+  order     Order           @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product   Product         @relation(fields: [productId], references: [id])
+  variant   ProductVariant? @relation(fields: [variantId], references: [id], onDelete: Restrict)
 
   @@index([orderId])
+  @@index([variantId])
 }
 
 model StockMovement {
@@ -1274,25 +1294,43 @@ enum UserAccountState {
 
 // Tombstones prevent historical Stripe retries from recreating deleted test orders.
 model ArchivedCheckoutPayment {
-  paymentIntentId String @id
-  archivedAt DateTime @default(now())
+  paymentIntentId String   @id
+  archivedAt      DateTime @default(now())
+}
+
+enum OrderSource {
+  ONLINE
+  IN_PERSON_ADMIN
+}
+
+enum OrderPaymentMethod {
+  STRIPE
+  CASH
+  EXTERNAL_CARD
+  BANK_TRANSFER
+  OTHER
+}
+
+enum ManualStockHandling {
+  DEDUCT_NOW
+  ALREADY_ADJUSTED
 }
 
 // One row per explicitly requested cycle; partial active uniqueness is in SQL.
 model RestockRequest {
-  id          String   @id @default(uuid())
+  id          String         @id @default(uuid())
   userId      Int
   variantId   Int
-  status      String   @default("WAITING")
-  requestedAt DateTime @default(now()) @db.Timestamptz(3)
-  updatedAt   DateTime @default(now()) @updatedAt @db.Timestamptz(3)
-  readyAt     DateTime? @db.Timestamptz(3)
-  claimedAt   DateTime? @db.Timestamptz(3)
+  status      String         @default("WAITING")
+  requestedAt DateTime       @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime       @default(now()) @updatedAt @db.Timestamptz(3)
+  readyAt     DateTime?      @db.Timestamptz(3)
+  claimedAt   DateTime?      @db.Timestamptz(3)
   claimToken  String?
-  acceptedAt  DateTime? @db.Timestamptz(3)
-  attempts    Int      @default(0)
+  acceptedAt  DateTime?      @db.Timestamptz(3)
+  attempts    Int            @default(0)
   errorCode   String?
-  user        User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user        User           @relation(fields: [userId], references: [id], onDelete: Cascade)
   variant     ProductVariant @relation(fields: [variantId], references: [id], onDelete: Cascade)
 
   @@index([variantId, status])

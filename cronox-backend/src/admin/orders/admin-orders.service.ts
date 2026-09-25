@@ -478,6 +478,12 @@ export class AdminOrdersService {
       currency: order.currency,
       provider: order.provider,
       providerRef: order.providerRef,
+      source: order.source,
+      paymentMethod: order.paymentMethod,
+      purchasedAt: order.purchasedAt?.toISOString() ?? null,
+      manualStockHandling: order.manualStockHandling,
+      voidedAt: order.voidedAt?.toISOString() ?? null,
+      voidReason: order.voidReason,
       createdAt: order.createdAt.toISOString(),
       updatedAt: order.updatedAt.toISOString(),
       itemsCount: order._count.items,
@@ -522,6 +528,14 @@ export class AdminOrdersService {
       currency: order.currency,
       provider: order.provider,
       providerRef: order.providerRef,
+      source: order.source,
+      paymentMethod: order.paymentMethod,
+      purchasedAt: order.purchasedAt?.toISOString() ?? null,
+      manualStockHandling: order.manualStockHandling,
+      recordedById: order.recordedById,
+      voidedAt: order.voidedAt?.toISOString() ?? null,
+      voidedById: order.voidedById,
+      voidReason: order.voidReason,
       createdAt: order.createdAt.toISOString(),
       updatedAt: order.updatedAt.toISOString(),
       items: order.items.map((item) => ({
@@ -808,31 +822,12 @@ export class AdminOrdersService {
     updated: OrderWithItems,
     tx: Prisma.TransactionClient,
   ) {
-    if (!updated.userId) return;
+    if (!updated.userId || updated.status === previous.status) return;
 
-    const itemsCount = this.computeItemsQuantity(updated.items);
-    const movedToCompletion =
-      this.isCompletionStatus(updated.status) &&
-      !this.isCompletionStatus(previous.status);
-
-    if (movedToCompletion) {
-      await this.historialService.incrementOrderProgress(
-        updated.userId,
-        itemsCount,
-        tx,
-      );
-    }
-
-    if (
-      updated.status === OrderStatus.REFUNDED &&
-      previous.status !== OrderStatus.REFUNDED
-    ) {
-      await this.historialService.registerReturn(
-        updated.userId,
-        itemsCount,
-        tx,
-      );
-    }
+    // Status is authoritative for accreditation statistics. Rebuild the
+    // legacy cache for every transition so cancellations and refunds cannot
+    // leave counters that drift from Order/OrderItem.
+    await this.historialService.syncFromOrders(updated.userId, tx);
   }
 
   private async handlePromoUsageOnPaid(
@@ -957,17 +952,4 @@ export class AdminOrdersService {
     }
   }
 
-  private computeItemsQuantity(items: OrderWithItems['items']): number {
-    if (!Array.isArray(items) || !items.length) return 0;
-    return items.reduce((total, item) => total + Math.max(0, item.quantity), 0);
-  }
-
-  private isCompletionStatus(status: OrderStatus): boolean {
-    return (
-      status === OrderStatus.PAID ||
-      status === OrderStatus.PROCESSING ||
-      status === OrderStatus.SHIPPED ||
-      status === OrderStatus.DELIVERED
-    );
-  }
 }

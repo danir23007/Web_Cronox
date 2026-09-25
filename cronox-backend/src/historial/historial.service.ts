@@ -1,10 +1,85 @@
 import { Injectable } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import { OrderStatus, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
 export class HistorialService {
   constructor(private readonly prisma: PrismaService) {}
+
+  private readonly recordedPurchaseStatuses: OrderStatus[] = [
+    OrderStatus.PAID,
+    OrderStatus.PROCESSING,
+    OrderStatus.SHIPPED,
+    OrderStatus.DELIVERED,
+    OrderStatus.DISPUTED,
+    OrderStatus.REFUNDED,
+  ];
+
+  private readonly retainedItemStatuses: OrderStatus[] = [
+    OrderStatus.PAID,
+    OrderStatus.PROCESSING,
+    OrderStatus.SHIPPED,
+    OrderStatus.DELIVERED,
+    OrderStatus.DISPUTED,
+  ];
+
+  async calculatePurchaseStats(
+    userId: number,
+    client: Prisma.TransactionClient | PrismaService = this.prisma,
+  ) {
+    const orders = await client.order.findMany({
+      where: { userId, status: { in: this.recordedPurchaseStatuses } },
+      select: {
+        status: true,
+        items: { select: { productId: true, quantity: true } },
+      },
+    });
+
+    let articulosAdquiridos = 0;
+    let devoluciones = 0;
+    const productIds = new Set<number>();
+    for (const order of orders) {
+      const isRetained = this.retainedItemStatuses.includes(order.status);
+      for (const item of order.items) {
+        const quantity = Math.max(0, item.quantity);
+        if (isRetained) {
+          articulosAdquiridos += quantity;
+          if (quantity > 0) productIds.add(item.productId);
+        } else if (order.status === OrderStatus.REFUNDED) {
+          devoluciones += quantity;
+        }
+      }
+    }
+
+    return {
+      pedidosRealizados: orders.length,
+      articulosAdquiridos,
+      productosDiferentes: productIds.size,
+      devoluciones,
+    };
+  }
+
+  async syncFromOrders(
+    userId: number,
+    client: Prisma.TransactionClient | PrismaService = this.prisma,
+  ) {
+    const stats = await this.calculatePurchaseStats(userId, client);
+    await client.historial.upsert({
+      where: { userId },
+      update: {
+        pedidosRealizados: stats.pedidosRealizados,
+        articulosAdquiridos: stats.articulosAdquiridos,
+        devoluciones: stats.devoluciones,
+      },
+      create: {
+        userId,
+        pedidosRealizados: stats.pedidosRealizados,
+        articulosAdquiridos: stats.articulosAdquiridos,
+        devoluciones: stats.devoluciones,
+      },
+    });
+    return stats;
+  }
 
   async ensureForUser(
     userId: number,
@@ -19,23 +94,10 @@ export class HistorialService {
 
   async incrementOrderProgress(
     userId: number,
-    itemsCount: number,
+    _itemsCount: number,
     client: Prisma.TransactionClient | PrismaService = this.prisma,
   ) {
-    const safeItems = Math.max(0, itemsCount);
-
-    return client.historial.upsert({
-      where: { userId },
-      update: {
-        pedidosRealizados: { increment: 1 },
-        articulosAdquiridos: { increment: safeItems },
-      },
-      create: {
-        userId,
-        pedidosRealizados: 1,
-        articulosAdquiridos: safeItems,
-      },
-    });
+    return this.syncFromOrders(userId, client);
   }
 
   async registerReturn(
@@ -43,32 +105,7 @@ export class HistorialService {
     returnedItems: number,
     client: Prisma.TransactionClient | PrismaService = this.prisma,
   ) {
-    const safeReturns = Math.max(0, returnedItems);
-
-    if (safeReturns === 0) {
-      return this.ensureForUser(userId, client);
-    }
-
-    const existing = await client.historial.findUnique({ where: { userId } });
-
-    if (!existing) {
-      return client.historial.create({
-        data: {
-          userId,
-          devoluciones: safeReturns,
-          articulosAdquiridos: 0,
-        },
-      });
-    }
-
-    const netArticles = Math.max(0, existing.articulosAdquiridos - safeReturns);
-
-    return client.historial.update({
-      where: { userId },
-      data: {
-        devoluciones: { increment: safeReturns },
-        articulosAdquiridos: netArticles,
-      },
-    });
+    void returnedItems;
+    return this.syncFromOrders(userId, client);
   }
 }

@@ -64,8 +64,8 @@ export class MembershipService {
       throw new NotFoundException('User not found');
     }
 
-    const [record, netSpent, promotionRequestStatus] = await Promise.all([
-      this.historialService.ensureForUser(userId),
+    const [purchaseStats, netSpent, promotionRequestStatus] = await Promise.all([
+      this.historialService.calculatePurchaseStats(userId),
       this.circleService.getNetSpent(userId),
       this.circleService.getPromotionStatus(userId),
     ]);
@@ -73,8 +73,9 @@ export class MembershipService {
     return {
       circleLevel: user.circleLevel,
       createdAt: user.createdAt,
-      pedidosRealizados: record.pedidosRealizados,
-      articulosAdquiridos: record.articulosAdquiridos,
+      pedidosRealizados: purchaseStats.pedidosRealizados,
+      articulosAdquiridos: purchaseStats.articulosAdquiridos,
+      productosDiferentes: purchaseStats.productosDiferentes,
       netSpent: Number(netSpent.toString()),
       promotionRequestStatus,
     };

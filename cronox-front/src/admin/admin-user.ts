@@ -43,6 +43,20 @@
   const profileList = document.getElementById('profileList');
   const auditBody = document.getElementById('auditBody');
   const ordersBody = document.getElementById('ordersBody');
+  const manualPurchaseSection = document.getElementById('manualPurchaseSection');
+  const toggleManualPurchaseBtn = document.getElementById('toggleManualPurchase') as HTMLButtonElement | null;
+  const manualPurchaseForm = document.getElementById('manualPurchaseForm') as HTMLFormElement | null;
+  const manualPurchasedAt = document.getElementById('manualPurchasedAt') as HTMLInputElement | null;
+  const manualPaymentMethod = document.getElementById('manualPaymentMethod') as HTMLSelectElement | null;
+  const manualStockHandling = document.getElementById('manualStockHandling') as HTMLSelectElement | null;
+  const manualPurchaseNote = document.getElementById('manualPurchaseNote') as HTMLTextAreaElement | null;
+  const manualPurchaseItems = document.getElementById('manualPurchaseItems');
+  const addManualPurchaseItemBtn = document.getElementById('addManualPurchaseItem') as HTMLButtonElement | null;
+  const reviewManualPurchaseBtn = document.getElementById('reviewManualPurchase') as HTMLButtonElement | null;
+  const manualPurchaseReview = document.getElementById('manualPurchaseReview');
+  const manualPurchaseConfirmActions = document.getElementById('manualPurchaseConfirmActions');
+  const editManualPurchaseBtn = document.getElementById('editManualPurchase') as HTMLButtonElement | null;
+  const confirmManualPurchaseBtn = document.getElementById('confirmManualPurchase') as HTMLButtonElement | null;
   const notesList = document.getElementById('notesList');
   const noteForm = document.getElementById('noteForm') as HTMLFormElement | null;
   const noteTitle = document.getElementById('noteTitle') as HTMLInputElement | null;
@@ -70,6 +84,8 @@
   let currentEditOptions: Record<string, unknown> | null = null;
   let canEditProtectedUserFields = false;
   let authenticatedAdminId: string | null = null;
+  let manualPurchaseOptions: Array<Record<string, unknown>> = [];
+  let manualPurchaseIdempotencyKey: string | null = null;
   const kpiState: {
     ordersCount: number | null;
     totalSpent: number | null;
@@ -415,26 +431,137 @@
     auditBody.innerHTML = rows.join('');
   };
 
+  const manualVariantOptions = () => manualPurchaseOptions.flatMap((product) => {
+    const variants = Array.isArray(product.variants) ? product.variants as Array<Record<string, unknown>> : [];
+    return variants.map((variant) => ({
+      id: Number(variant.id),
+      label: `${formatText(product.name)} · ${formatText(variant.size)} · ${formatText(variant.sku)} · ${formatCurrency(Number(variant.price ?? product.price ?? 0) / 100)} · stock ${formatText(variant.stockQty)}`,
+      productName: String(product.name || 'Producto'),
+      size: String(variant.size || ''),
+      priceCents: Number(variant.price ?? product.price ?? 0),
+    }));
+  });
+
+  const invalidateManualPurchaseReview = () => {
+    manualPurchaseIdempotencyKey = null;
+    if (manualPurchaseReview) manualPurchaseReview.hidden = true;
+    if (manualPurchaseConfirmActions) manualPurchaseConfirmActions.hidden = true;
+  };
+
+  const addManualPurchaseRow = () => {
+    if (!manualPurchaseItems) return;
+    const options = manualVariantOptions();
+    const row = document.createElement('div');
+    row.className = 'manual-purchase-item';
+    row.innerHTML = `
+      <label class="manual-purchase-field">Producto y variante<select data-manual-variant required>
+        <option value="">Selecciona…</option>
+        ${options.map((option) => `<option value="${option.id}">${escapeHtml(option.label)}</option>`).join('')}
+      </select></label>
+      <label class="manual-purchase-field">Cantidad<input data-manual-quantity type="number" min="1" max="100" value="1" required></label>
+      <button class="btn" type="button" data-remove-manual-item>Quitar</button>`;
+    row.addEventListener('input', invalidateManualPurchaseReview);
+    row.querySelector('[data-remove-manual-item]')?.addEventListener('click', () => {
+      row.remove();
+      invalidateManualPurchaseReview();
+    });
+    manualPurchaseItems.appendChild(row);
+    invalidateManualPurchaseReview();
+  };
+
+  const readManualPurchase = () => {
+    const rows = [...(manualPurchaseItems?.querySelectorAll<HTMLElement>('.manual-purchase-item') || [])];
+    const items = rows.map((row) => ({
+      variantId: Number(row.querySelector<HTMLSelectElement>('[data-manual-variant]')?.value),
+      quantity: Number(row.querySelector<HTMLInputElement>('[data-manual-quantity]')?.value),
+    }));
+    if (!items.length || items.some((item) => !Number.isInteger(item.variantId) || item.variantId < 1 || !Number.isInteger(item.quantity) || item.quantity < 1)) {
+      throw new Error('Selecciona al menos un producto y una cantidad válida.');
+    }
+    if (new Set(items.map((item) => item.variantId)).size !== items.length) throw new Error('No repitas una variante; aumenta su cantidad en una sola línea.');
+    const purchasedAtValue = manualPurchasedAt?.value;
+    if (!purchasedAtValue) throw new Error('Indica la fecha de la compra.');
+    return {
+      items,
+      paymentMethod: manualPaymentMethod?.value || 'CASH',
+      stockHandling: manualStockHandling?.value || 'DEDUCT_NOW',
+      purchasedAt: new Date(purchasedAtValue).toISOString(),
+      note: manualPurchaseNote?.value.trim() || undefined,
+    };
+  };
+
+  const reviewManualPurchase = () => {
+    try {
+      const payload = readManualPurchase();
+      const options = manualVariantOptions();
+      const lines = payload.items.map((item) => {
+        const option = options.find((candidate) => candidate.id === item.variantId)!;
+        return { ...item, ...option, lineCents: option.priceCents * item.quantity };
+      });
+      const totalCents = lines.reduce((sum, line) => sum + line.lineCents, 0);
+      manualPurchaseIdempotencyKey = crypto.randomUUID();
+      if (manualPurchaseReview) {
+        manualPurchaseReview.innerHTML = `<strong>Revisión final</strong><ul>${lines.map((line) => `<li>${escapeHtml(line.productName)} · ${escapeHtml(line.size)} × ${line.quantity} — ${escapeHtml(formatCurrency(line.lineCents / 100))}</li>`).join('')}</ul><p><strong>Total:</strong> ${escapeHtml(formatCurrency(totalCents / 100))}</p><p><strong>Pago:</strong> ${escapeHtml(payload.paymentMethod)}<br><strong>Stock:</strong> ${payload.stockHandling === 'DEDUCT_NOW' ? 'se descontará al guardar' : 'ya estaba ajustado; no se modificará'}</p>`;
+        manualPurchaseReview.hidden = false;
+      }
+      if (manualPurchaseConfirmActions) manualPurchaseConfirmActions.hidden = false;
+    } catch (error) {
+      showModuleError({ container: ordersStatus || statusArea, error: error as CronoxApiError, title: 'Revisa los datos de la compra' });
+    }
+  };
+
+  const submitManualPurchase = async (event: Event) => {
+    event.preventDefault();
+    if (!userId || !manualPurchaseIdempotencyKey || !window.CRONOX_API?.admin?.createInPersonPurchase) return;
+    confirmManualPurchaseBtn && (confirmManualPurchaseBtn.disabled = true);
+    try {
+      await window.CRONOX_API.admin.createInPersonPurchase(userId, readManualPurchase(), manualPurchaseIdempotencyKey);
+      if (ordersStatus && renderBanner) renderBanner(ordersStatus, { type: 'success', title: 'Compra presencial registrada', message: 'El pedido, el stock y la acreditación se han actualizado de forma atómica.' });
+      manualPurchaseForm?.reset();
+      manualPurchaseItems?.replaceChildren();
+      invalidateManualPurchaseReview();
+      if (manualPurchaseForm) manualPurchaseForm.hidden = true;
+      await Promise.all([loadOrders(), loadUserDetail(), loadAuditLogs()]);
+    } catch (error) {
+      showModuleError({ container: ordersStatus || statusArea, error: error as CronoxApiError, title: 'No se pudo registrar la compra' });
+    } finally {
+      confirmManualPurchaseBtn && (confirmManualPurchaseBtn.disabled = false);
+    }
+  };
+
+  const voidManualPurchase = async (orderId: string) => {
+    const reason = window.prompt('Motivo de la corrección (mínimo 5 caracteres). El pedido quedará anulado y, si CRONOX descontó el stock, se repondrá una sola vez.');
+    if (!reason || reason.trim().length < 5 || !window.CRONOX_API?.admin?.voidInPersonPurchase) return;
+    try {
+      await window.CRONOX_API.admin.voidInPersonPurchase(orderId, reason.trim());
+      await Promise.all([loadOrders(), loadUserDetail(), loadAuditLogs()]);
+    } catch (error) {
+      showModuleError({ container: ordersStatus || statusArea, error: error as CronoxApiError, title: 'No se pudo corregir la compra' });
+    }
+  };
+
   const renderOrders = (orders: unknown[]) => {
     if (!ordersBody) return;
     if (!orders.length) {
-      ordersBody.innerHTML = '<tr><td colspan="4">Sin pedidos.</td></tr>';
+      ordersBody.innerHTML = '<tr><td colspan="5">Sin pedidos.</td></tr>';
       return;
     }
     const rows = orders.map((orderEntry) => {
       const order = orderEntry as Record<string, unknown>;
       const id = order.id ?? order.orderId ?? order._id ?? '—';
-      const dateValue = order.createdAt || order.created_at || order.date || order.orderedAt;
+      const dateValue = order.purchasedAt || order.createdAt || order.created_at || order.date || order.orderedAt;
       const status = order.status || order.state || '—';
       const totalValue =
         order.total ?? order.totalAmount ?? order.totalPaid ?? order.amount ?? order.amountTotal ?? order.grandTotal;
       const totalLabel = totalValue !== undefined && totalValue !== null ? formatCurrency(totalValue) : '—';
+      const canVoid = order.source === 'IN_PERSON_ADMIN' && order.status === 'PAID';
       return `
         <tr>
           <td>${escapeHtml(formatText(id))}</td>
           <td>${escapeHtml(formatDate(dateValue))}</td>
           <td>${escapeHtml(formatText(status))}</td>
           <td>${escapeHtml(totalLabel)}</td>
+          <td>${canVoid ? `<button class="btn manual-order-action" type="button" data-void-manual-order="${escapeHtml(String(id))}">Anular/corregir</button>` : '—'}</td>
         </tr>
       `;
     });
@@ -820,7 +947,7 @@
     if (!userId || !ordersBody) return;
     if (ordersStatus) ordersStatus.innerHTML = '';
     if (setLoading) {
-      setLoading(ordersBody, true, { title: 'Cargando pedidos…', colSpan: 4 });
+      setLoading(ordersBody, true, { title: 'Cargando pedidos…', colSpan: 5 });
     }
     const adminApi = window.CRONOX_API?.admin;
     if (!adminApi?.listAdminOrders && !adminApi?.getUserOrders && !adminApi?.listUserOrders) {
@@ -896,7 +1023,7 @@
         renderEmptyState(ordersBody, {
           title: 'No disponible',
           message: 'No pudimos cargar los pedidos.',
-          colSpan: 4,
+          colSpan: 5,
           actions: [{ label: 'Reintentar', onClick: loadOrders }],
         });
       }
@@ -952,6 +1079,24 @@
           actions: [{ label: 'Reintentar', onClick: loadRequests }],
         });
       }
+    }
+  };
+
+  const openManualPurchase = async () => {
+    if (!userId || !manualPurchaseForm || !window.CRONOX_API?.admin?.getInPersonPurchaseOptions) return;
+    try {
+      if (!manualPurchaseOptions.length) {
+        const response = await window.CRONOX_API.admin.getInPersonPurchaseOptions(userId) as { products?: Array<Record<string, unknown>> };
+        manualPurchaseOptions = Array.isArray(response?.products) ? response.products : [];
+      }
+      manualPurchaseForm.hidden = !manualPurchaseForm.hidden;
+      if (!manualPurchaseForm.hidden && manualPurchaseItems && !manualPurchaseItems.children.length) addManualPurchaseRow();
+      if (!manualPurchaseForm.hidden && manualPurchasedAt && !manualPurchasedAt.value) {
+        const now = new Date(Date.now() - new Date().getTimezoneOffset() * 60_000);
+        manualPurchasedAt.value = now.toISOString().slice(0, 16);
+      }
+    } catch (error) {
+      showModuleError({ container: ordersStatus || statusArea, error: error as CronoxApiError, title: 'No se pudieron cargar los productos' });
     }
   };
 
@@ -1282,6 +1427,16 @@
   cancelUserEditBtn?.addEventListener('click', closeUserEdit);
   userEditForm?.addEventListener('submit', saveUserEdit);
   notesList?.addEventListener('click', handleNoteDelete);
+  toggleManualPurchaseBtn?.addEventListener('click', () => void openManualPurchase());
+  addManualPurchaseItemBtn?.addEventListener('click', addManualPurchaseRow);
+  reviewManualPurchaseBtn?.addEventListener('click', reviewManualPurchase);
+  editManualPurchaseBtn?.addEventListener('click', invalidateManualPurchaseReview);
+  manualPurchaseForm?.addEventListener('input', invalidateManualPurchaseReview);
+  manualPurchaseForm?.addEventListener('submit', submitManualPurchase);
+  ordersBody?.addEventListener('click', (event) => {
+    const button = (event.target as Element | null)?.closest<HTMLElement>('[data-void-manual-order]');
+    if (button?.dataset.voidManualOrder) void voidManualPurchase(button.dataset.voidManualOrder);
+  });
   expandAnalyticsBtn?.addEventListener('click', expandAnalytics);
   analyticsPrevBtn?.addEventListener('click', () => {
     if (analyticsPage > 1) analyticsPage -= 1;
@@ -1296,6 +1451,7 @@
     if (!currentUser) return;
     canEditProtectedUserFields = currentUser.role === 'SUPERADMIN';
     if (editUserBtn) editUserBtn.hidden = !canEditProtectedUserFields;
+    if (manualPurchaseSection) manualPurchaseSection.hidden = !canEditProtectedUserFields;
     configureAnalyticsAccess(currentUser);
     if (userId) loadAll();
   });
