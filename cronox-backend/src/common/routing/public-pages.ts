@@ -79,7 +79,13 @@ export const legacyRedirectTarget = (
   pathname: string,
   originalUrl: string,
 ): string | null => {
-  const normalized = normalizePublicPath(pathname);
+  // Former password-recovery static mounts exposed every frontend HTML file
+  // below these prefixes, including obsolete launch pages. Keep known bookmarks
+  // as redirects, never serve a second copy of the storefront or admin shell.
+  const normalized = normalizePublicPath(pathname).replace(
+    /^\/(?:forgot-password|reset-password)\/([^/]+\.html)$/,
+    '/$1',
+  );
   if (normalized === '/producto.html') {
     const url = new URL(originalUrl, 'http://cronox.local');
     const slug = url.searchParams.get('slug')?.trim();
@@ -125,16 +131,18 @@ export const robotsText = (keyScreenEnabled: boolean): string => {
         'Allow: /',
         'Allow: /api/key-screen$',
         'Disallow: /api/',
-        'Disallow: /admin',
       ]
     : [
         'User-agent: *',
         'Allow: /',
+        // Rendering uses these read-only public endpoints. Other APIs stay out of crawl.
+        'Allow: /api/products',
+        'Allow: /api/categories',
+        'Allow: /api/gallery',
+        'Allow: /api/footer',
+        'Allow: /api/key-screen$',
+        'Allow: /api/media-framing',
         'Disallow: /api/',
-        'Disallow: /admin',
-        'Disallow: /admin.html',
-        'Disallow: /admin-login.html',
-        'Disallow: /admin-user.html',
       ];
 
   return [...directives, `Sitemap: ${PUBLIC_SITE_URL}sitemap.xml`, ''].join(

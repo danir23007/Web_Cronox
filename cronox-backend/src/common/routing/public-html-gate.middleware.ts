@@ -6,6 +6,7 @@ import {
   normalizePublicPath,
   publicGateDecision,
   UNGATED_PUBLIC_PATHS,
+  PUBLIC_SITE_URL,
 } from './public-pages';
 
 const PROTECTED_ADMIN_PATHS = new Set(['/admin.html', '/admin-user.html']);
@@ -96,7 +97,7 @@ export const createPublicHtmlGateMiddleware =
     if (gate.kind === 'continue') return next();
 
     res.setHeader('Cache-Control', 'no-store, max-age=0');
-    res.setHeader('Link', '</>; rel="canonical"');
+    res.setHeader('Link', `<${PUBLIC_SITE_URL}>; rel="canonical"`);
     if (gate.kind === 'render-key-screen') {
       return res.sendFile(join(frontendRoot, 'key-screen.html'));
     }

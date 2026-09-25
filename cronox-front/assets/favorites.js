@@ -79,7 +79,19 @@
     setVisible(refs.list, true);
   }
 
-  async function fetchFavoriteProducts() {
+  async function fetchFavoriteProducts(force = false) {
+    const manager = window.CRONOX_FAVORITES;
+    if (manager) {
+      // /api/favorites already includes the full product records. Share that
+      // request instead of waiting for the catalogue and requesting them again.
+      await manager.loadFromServer({ force: force || !manager.serverFavorites });
+      if (!manager.ready || manager.anonymous) {
+        const error = new Error('No se pudieron cargar los favoritos');
+        error.status = manager.anonymous ? 401 : 503;
+        throw error;
+      }
+      return (manager.serverFavorites || []).map(item => item.product || item);
+    }
     const res = await fetch(apiEndpoint('/api/favorites/products'), {
       method: 'GET',
       credentials: 'include',
@@ -150,7 +162,9 @@
     });
     favoriteIdsSet = ids;
     if (window.CRONOX_FAVORITES && typeof window.CRONOX_FAVORITES.setIdsFromServer === 'function') {
-      window.CRONOX_FAVORITES.setIdsFromServer(list);
+      const manager = window.CRONOX_FAVORITES;
+      const unchanged = manager.ready && manager.ids.size === ids.size && [...ids].every(id => manager.ids.has(id));
+      if (!unchanged) manager.setIdsFromServer(list);
       favoriteIdsSet = window.CRONOX_FAVORITES.ids;
     } else if (typeof window.CRONOX_setFavoriteIds === 'function') {
       favoriteIdsSet = window.CRONOX_setFavoriteIds(ids);
@@ -233,9 +247,11 @@
     loginLinkBound = true;
   }
 
+  let favoriteFlowId = 0;
   async function loadFavoritesFlow({ force = false } = {}) {
     if (isLoadingFavorites || isRefreshingFavorites) return;
     if (favoritesLoaded && !force) return;
+    const flowId = ++favoriteFlowId;
 
     const useLoadingState = !favoritesLoaded;
     if (useLoadingState) {
@@ -247,6 +263,9 @@
 
     try {
       setupLoginLink();
+      const epoch = window.CRONOX_FAVORITES?.sessionEpoch;
+      const favorites = await fetchFavoriteProducts(force);
+      const revision = window.CRONOX_FAVORITES?.revision;
 
       if (window.CRONOX_catalogReady instanceof Promise) {
         try {
@@ -254,7 +273,7 @@
         } catch {}
       }
 
-      const favorites = await fetchFavoriteProducts();
+      if (flowId !== favoriteFlowId || epoch !== window.CRONOX_FAVORITES?.sessionEpoch || revision !== window.CRONOX_FAVORITES?.revision) return;
       const normalized = normalizeFavoritesList(favorites);
       lastFavoriteIdsSignature = signatureFromFavorites(normalized);
       favoritesLoaded = true;
@@ -265,6 +284,7 @@
       }
       renderFavorites(normalized, { preNormalized: true });
     } catch (error) {
+      if (flowId !== favoriteFlowId) return;
       console.error('[CRONOX] Error al cargar favoritos', error);
       if (error?.status === 401) {
         favoritesLoaded = true;
@@ -274,10 +294,9 @@
       }
       showLoading('No se pudieron cargar tus favoritos. Inténtalo de nuevo más tarde.');
     } finally {
-      if (useLoadingState) {
-        isLoadingFavorites = false;
-      } else {
-        isRefreshingFavorites = false;
+      if (flowId === favoriteFlowId) {
+        if (useLoadingState) isLoadingFavorites = false;
+        else isRefreshingFavorites = false;
       }
     }
   }
@@ -296,4 +315,15 @@
 
   document.addEventListener('DOMContentLoaded', loadFavoritesFlow);
   window.addEventListener('cronox:favsChanged', handleFavsChanged);
+  const handleSessionChange = event => {
+    if (event.initial && event.detail) return;
+    favoriteFlowId += 1;
+    isLoadingFavorites = false;
+    isRefreshingFavorites = false;
+    favoritesLoaded = false;
+    if (!event.detail) showLogin();
+    else loadFavoritesFlow({ force: true });
+  };
+  window.addEventListener('cronox:userChanged', handleSessionChange);
+  window.addEventListener('cronox:session-ended', () => handleSessionChange({ detail: null }));
 })();

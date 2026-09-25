@@ -61,6 +61,18 @@ describe('public clean routes', () => {
       '/privacidad?source=footer',
     ],
     ['/forgot-password', '/forgot-password', '/recuperar-contrasena'],
+    [
+      '/forgot-password/key-screen.html',
+      '/forgot-password/key-screen.html',
+      '/',
+    ],
+    ['/reset-password/key-screen.html', '/reset-password/key-screen.html', '/'],
+    ['/forgot-password/index.html', '/forgot-password/index.html', '/'],
+    [
+      '/reset-password/reset-password.html?token=test',
+      '/reset-password/reset-password.html',
+      '/restablecer-contrasena?token=test',
+    ],
   ])('preserves legacy query parameters for %s', (original, path, target) => {
     expect(legacyRedirectTarget(path, original)).toBe(target);
   });
@@ -110,7 +122,7 @@ describe('public clean routes', () => {
     expect(robots).toContain('Allow: /');
     expect(robots).toContain('Allow: /api/key-screen$');
     expect(robots).toContain('Disallow: /api/');
-    expect(robots).toContain('Disallow: /admin');
+    expect(robots).not.toContain('Disallow: /admin');
     expect(robots).not.toContain('Disallow: /\n');
     expect(robots).toContain(`Sitemap: ${PUBLIC_SITE_URL}sitemap.xml`);
   });
@@ -119,7 +131,8 @@ describe('public clean routes', () => {
     const robots = robotsText(false);
     expect(robots).toContain('Allow: /');
     expect(robots).toContain('Disallow: /api/');
-    expect(robots).toContain('Disallow: /admin');
+    expect(robots).not.toContain('Disallow: /admin');
+    expect(robots).toContain('Allow: /api/products');
     expect(robots).not.toContain('Disallow: /\n');
   });
 

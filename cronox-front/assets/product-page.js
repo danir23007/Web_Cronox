@@ -92,6 +92,7 @@
   function setPageTitle(p) {
     try {
       if (!p) return;
+      if (document.querySelector('meta[name="cronox-seo"][content="server"]')) return;
       document.title = `${p.name} — CRONOX`;
       const metaDesc = document.querySelector('meta[name="description"]');
       if (metaDesc) metaDesc.setAttribute("content", `${p.name} · ${p.desc || "Producto CRONOX"}`);
@@ -229,7 +230,7 @@
       canonical.rel = "canonical";
       document.head.appendChild(canonical);
     }
-    canonical.href = new URL(path, window.location.origin).href;
+    canonical.href = new URL(path, 'https://cronox.es/').href;
   }
 
   // ==========================
@@ -520,23 +521,29 @@
     }
 
     const activate = (btn) => {
-      if (!btn || btn.disabled) return;
+      if (!btn) return;
       buttons.forEach(b => {
         const isActive = b === btn;
         b.classList.toggle("is-active", isActive);
         b.setAttribute("aria-checked", isActive ? "true" : "false");
         if (isActive) selectedSize = b.dataset.size || "";
       });
+      const variant = findVariantForSize(product, selectedSize);
+      if (pPrice) pPrice.textContent = variant?.priceLabel || money(variant?.price ?? product.price);
+      if (pAdd) {
+        pAdd.disabled = !isVariantAvailable(variant);
+        pAdd.setAttribute('aria-disabled', pAdd.disabled ? 'true' : 'false');
+      }
     };
 
     const requestedSize = new URLSearchParams(location.search).get('size')?.toUpperCase();
-    const firstButton = buttons.find(btn => !btn.disabled && String(btn.dataset.size).toUpperCase() === requestedSize) || buttons.find((btn) => !btn.disabled);
+    const firstButton = buttons.find(btn => String(btn.dataset.size).toUpperCase() === requestedSize) || buttons.find((btn) => !btn.disabled);
     if (firstButton) activate(firstButton);
     else selectedSize = "";
 
     if (pAdd) {
-      pAdd.disabled = !firstButton;
-      pAdd.setAttribute("aria-disabled", firstButton ? "false" : "true");
+      pAdd.disabled = !firstButton || firstButton.disabled;
+      pAdd.setAttribute("aria-disabled", pAdd.disabled ? "true" : "false");
     }
 
     buttons.forEach(btn => {
@@ -631,9 +638,10 @@
       }
     }
 
-    setupSizeButtons(product);
     window.CRONOX_WAITLIST?.mount(product, pAdd?.closest('.pdp__actions') || pSizeGroup);
     if (pPrice && pAdd) window.CRONOX_STOCK?.decoratePurchase(pPrice, pAdd, product);
+    // A directly linked size owns the displayed price and purchase availability.
+    setupSizeButtons(product);
     setPageTitle(product);
     renderRelated(product);
     if (window.CRONOX_FAVORITES && typeof window.CRONOX_FAVORITES.updateDomState === "function") {
@@ -679,6 +687,16 @@
       String(p.id).toLowerCase() === keyLower ||
       String(p.backendId || "").toLowerCase() === keyLower
     );
+
+    // A product must not disappear merely because it is beyond the first catalogue page.
+    if (!target && key && typeof API.getProductBySlug === 'function') {
+      try {
+        const direct = await API.getProductBySlug(key);
+        if (direct) target = normalizeProduct(direct);
+      } catch {
+        if (document.querySelector('#cronox-seo')) return; // retain valid server content during a transient API failure
+      }
+    }
 
     if (!target) {
       console.warn("[CRONOX] Producto no encontrado para clave:", keyLower);

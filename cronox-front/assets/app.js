@@ -663,6 +663,13 @@
     ready: false,
     ids: new Set(),
     isLoading: false,
+    loadPromise: null,
+    sessionEpoch: 0,
+    revision: 0,
+    anonymous: false,
+    sessionObserved: false,
+    serverFavorites: null,
+    pendingProducts: new Set(),
     initDone: false,
     normalizeId(value) {
       const str = value == null ? '' : String(value).trim();
@@ -671,49 +678,67 @@
     init() {
       if (this.initDone) return;
       this.initDone = true;
-      const run = async () => {
-        await this.loadFromServer();
-        this.updateDomState();
-        this.ready = true;
-      };
-      if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', run, { once: true });
-      } else {
-        run();
-      }
     },
-    async loadFromServer() {
-      if (this.isLoading) return this.ids;
+    invalidateSession() {
+      this.sessionEpoch += 1;
+      this.revision += 1;
+      this.loadPromise = null;
+      this.isLoading = false;
+      this.ready = false;
+      this.anonymous = false;
+      this.serverFavorites = null;
+      this.ids = new Set();
+      this.pendingProducts.clear();
+      window.CRONOX_FAVORITE_IDS = this.ids;
+      this.updateDomState();
+      this.updateTopbarCount();
+    },
+    loadFromServer({ force = false } = {}) {
+      if (this.loadPromise) return this.loadPromise;
+      if (this.ready && !force) return Promise.resolve(this.ids);
+      const epoch = this.sessionEpoch;
+      const revision = this.revision;
       this.isLoading = true;
-      try {
-        const meRes = await fetch(apiEndpoint('/api/me'), { credentials: 'include' });
-        if (meRes.status === 401) {
-          this.setIdsFromServer([]);
+      this.loadPromise = (async () => {
+        try {
+          // This endpoint is already protected by JwtAuthGuard. A separate /me
+          // preflight duplicates session resolution and delays a trustworthy count.
+          const res = await fetch(apiEndpoint('/api/favorites'), {
+            method: 'GET',
+            credentials: 'include',
+            cache: 'no-store',
+          });
+          if (epoch !== this.sessionEpoch || revision !== this.revision) return this.ids;
+          if (res.status === 401) {
+            this.anonymous = true;
+            this.serverFavorites = [];
+            this.setIdsFromServer([]);
+            return this.ids;
+          }
+          if (!res.ok) throw new Error('Error al cargar favoritos');
+          const favorites = await res.json();
+          if (epoch !== this.sessionEpoch || revision !== this.revision) return this.ids;
+          if (!Array.isArray(favorites)) throw new Error('Respuesta de favoritos inválida');
+          this.anonymous = false;
+          this.serverFavorites = favorites;
+          this.setIdsFromServer(favorites);
           return this.ids;
+        } catch (err) {
+          console.error('[CRONOX] No se pudieron cargar favoritos', err);
+          // Failure is not a trustworthy zero. Do not publish an invented count.
+          if (epoch === this.sessionEpoch && revision === this.revision) {
+            this.ready = false;
+            this.updateTopbarCount();
+          }
+          return this.ids;
+        } finally {
+          if (epoch === this.sessionEpoch) {
+            this.isLoading = false;
+            this.loadPromise = null;
+          }
         }
-        if (!meRes.ok) {
-          throw new Error('Error comprobando sesión');
-        }
-
-        const res = await fetch(apiEndpoint('/api/favorites'), {
-          method: 'GET',
-          credentials: 'include',
-        });
-
-        if (!res.ok) {
-          throw new Error('Error al cargar favoritos');
-        }
-
-        const favorites = await res.json();
-        this.setIdsFromServer(Array.isArray(favorites) ? favorites : []);
-        return this.ids;
-      } catch (err) {
-        console.error('[CRONOX] No se pudieron cargar favoritos', err);
-        this.setIdsFromServer([]);
-        return this.ids;
-      } finally {
-        this.isLoading = false;
-      }
+      })();
+      return this.loadPromise;
     },
     setIdsFromServer(list) {
       const next = new Set();
@@ -722,6 +747,8 @@
         if (id) next.add(id);
       });
       this.ids = next;
+      this.revision += 1;
+      this.ready = true;
       window.CRONOX_FAVORITE_IDS = this.ids;
       if (typeof window.CRONOX_setFavoriteIds === 'function') {
         try { window.CRONOX_setFavoriteIds(new Set(next)); } catch {}
@@ -741,6 +768,10 @@
       const normId = this.normalizeId(productId);
       if (!normId) return;
       if (!this.initDone) this.init();
+      const epoch = this.sessionEpoch;
+      await this.loadFromServer();
+      if (epoch !== this.sessionEpoch || this.pendingProducts.has(normId)) return;
+      if (!this.ready) return;
 
       try {
         const sessionRes = await fetch(apiEndpoint('/api/me'), { credentials: 'include' });
@@ -755,6 +786,10 @@
         console.error('[CRONOX] No se pudo verificar la sesión', err);
         return;
       }
+      if (epoch !== this.sessionEpoch || this.pendingProducts.has(normId)) return;
+      this.pendingProducts.add(normId);
+      this.revision += 1;
+      this.serverFavorites = null;
 
       const currentlyFav = this.isFavorite(normId);
       const willBeFav = !currentlyFav;
@@ -789,8 +824,10 @@
         if (!res.ok) {
           throw new Error('Error al sincronizar favorito');
         }
+        if (epoch !== this.sessionEpoch) return;
         this.emitChange();
       } catch (err) {
+        if (epoch !== this.sessionEpoch) return;
         console.error('[CRONOX] Error actualizando favorito', err);
         if (willBeFav) {
           this.ids.delete(normId);
@@ -807,6 +844,8 @@
         } else if (typeof window.showToast === 'function') {
           window.showToast('No se pudo actualizar tu favorito. Inténtalo de nuevo.');
         }
+      } finally {
+        if (epoch === this.sessionEpoch) this.pendingProducts.delete(normId);
       }
     },
     updateDomState() {
@@ -831,7 +870,7 @@
     updateTopbarCount() {
       const topbarFav = document.querySelector('.topbar__fav');
       const badge = topbarFav?.querySelector('.favorites-count, .fav-count');
-      const count = this.ids.size;
+      const count = this.ready ? this.ids.size : 0;
       let target = badge || null;
       if (!target && topbarFav && count > 0) {
         target = document.createElement('span');
@@ -884,8 +923,33 @@
 
   window.initFavoritesFromBackend = initFavoritesFromBackend;
 
-  document.addEventListener('DOMContentLoaded', () => {
-    if (typeof window.initFavoritesFromBackend === 'function') window.initFavoritesFromBackend();
+  // Deferred app.js runs after the topbar has been parsed (including info-shell).
+  // Start now, without waiting for later deferred scripts or the auth modal.
+  void initFavoritesFromBackend();
+  document.addEventListener('DOMContentLoaded', () => FavoritesManager.updateTopbarCount(), { once: true });
+  window.addEventListener('cronox:userChanged', (event) => {
+    if (event.initial && FavoritesManager.sessionObserved) return;
+    FavoritesManager.sessionObserved = true;
+    if (event.initial && event.detail && !FavoritesManager.anonymous) return;
+    FavoritesManager.invalidateSession();
+    if (event.detail) void FavoritesManager.loadFromServer();
+    else {
+      FavoritesManager.anonymous = true;
+      FavoritesManager.ready = true;
+      FavoritesManager.serverFavorites = [];
+    }
+  });
+  window.addEventListener('cronox:session-ended', () => {
+    FavoritesManager.sessionObserved = true;
+    FavoritesManager.invalidateSession();
+    FavoritesManager.anonymous = true;
+    FavoritesManager.ready = true;
+    FavoritesManager.serverFavorites = [];
+  });
+  // A restored bfcache page must not expose the previous session's badge.
+  window.addEventListener('pagehide', () => FavoritesManager.invalidateSession());
+  window.addEventListener('pageshow', (event) => {
+    if (event.persisted) void FavoritesManager.loadFromServer();
   });
 
   // ===== Carrito (API + Drawer) =====

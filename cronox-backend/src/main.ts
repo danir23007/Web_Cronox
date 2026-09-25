@@ -24,14 +24,13 @@ import { PrismaService } from './prisma/prisma.service';
 import { KeyScreenService } from './key-screen/key-screen.service';
 import { AuthService } from './auth/auth.service';
 import { createPublicHtmlGateMiddleware } from './common/routing/public-html-gate.middleware';
+import { legacyRedirectTarget } from './common/routing/public-pages';
 import {
-  canonicalPathForRequest,
-  cleanPageForPath,
-  legacyRedirectTarget,
-  normalizePublicPath,
-  prelaunchSitemapXml,
-  robotsText,
-} from './common/routing/public-pages';
+  createSeoCatalog,
+  createSeoDiscovery,
+  createSeoPages,
+  seoRequestSignals,
+} from './common/routing/public-seo';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, { bodyParser: false });
@@ -112,19 +111,11 @@ async function bootstrap() {
   const keyScreen = app.get(KeyScreenService);
   const authService = app.get(AuthService);
 
-  app.use('/robots.txt', async (req, res, next) => {
-    if (req.method !== 'GET' && req.method !== 'HEAD') return next();
-    res.type('text/plain');
-    res.setHeader('Cache-Control', 'no-store, max-age=0');
-    return res.send(robotsText(await keyScreen.shouldGatePublicHtml()));
-  });
-
-  app.use('/sitemap.xml', (req, res, next) => {
-    if (req.method !== 'GET' && req.method !== 'HEAD') return next();
-    res.type('application/xml');
-    res.setHeader('Cache-Control', 'public, max-age=300');
-    return res.send(prelaunchSitemapXml());
-  });
+  const seoCatalog = createSeoCatalog(app.get(PrismaService));
+  app.use(seoRequestSignals);
+  app.use(
+    createSeoDiscovery(seoCatalog, () => keyScreen.shouldGatePublicHtml()),
+  );
 
   app.use(
     createPublicHtmlGateMiddleware({
@@ -144,22 +135,7 @@ async function bootstrap() {
 
   // Clean public routes internally reuse the existing HTML entry points, so a
   // direct request or refresh never depends on an Nginx rewrite or SPA fallback.
-  app.use((req, res, next) => {
-    if (req.method !== 'GET' && req.method !== 'HEAD') return next();
-    const pathname = normalizePublicPath(req.path);
-    const page = cleanPageForPath(pathname);
-    if (!page) return next();
-    if (req.path.length > 1 && req.path.endsWith('/')) {
-      const queryIndex = req.originalUrl.indexOf('?');
-      const query = queryIndex >= 0 ? req.originalUrl.slice(queryIndex) : '';
-      return res.redirect(308, `${pathname}${query}`);
-    }
-    res.setHeader(
-      'Link',
-      `<${canonicalPathForRequest(pathname)}>; rel="canonical"`,
-    );
-    return res.sendFile(join(frontendRoot, page));
-  });
+  app.use(createSeoPages(frontendRoot, seoCatalog));
 
   // Keep the extensionless Admin entry point independent from the public SPA.
   // The protected Admin shell resolves its existing cookie session next.

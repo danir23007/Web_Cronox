@@ -68,18 +68,6 @@ import {
         exclude: ['/api', '/docs', '/webhooks'],
         serveStaticOptions: { index: 'index.html' },
       },
-      {
-        rootPath: join(__dirname, '..', '..', 'cronox-front'),
-        serveRoot: '/reset-password',
-        renderPath: '/reset-password',
-        serveStaticOptions: { index: 'reset-password.html' },
-      },
-      {
-        rootPath: join(__dirname, '..', '..', 'cronox-front'),
-        serveRoot: '/forgot-password',
-        renderPath: '/forgot-password',
-        serveStaticOptions: { index: 'forgot-password.html' },
-      },
     ),
     PrismaModule,
     ImagesModule,
