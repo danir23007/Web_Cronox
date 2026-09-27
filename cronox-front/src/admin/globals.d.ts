@@ -174,6 +174,7 @@ declare global {
       decoratePurchase: (price: HTMLElement, button: HTMLButtonElement, product: Record<string, unknown>) => void;
       availableStock: (variants: unknown) => number;
       classifyStock: (total: number) => string;
+      classifyVariantStock: (stock: number) => string;
       decorateCard: (card: HTMLElement, price: HTMLElement, product: Record<string, unknown>) => void;
     };
     CRONOX_API?: CronoxApi;

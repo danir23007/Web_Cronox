@@ -1,6 +1,9 @@
 <!doctype html>
 <html lang="es" data-admin-auth-state="checking">
 <head>
+  <script src="/assets/admin-theme.js?v=1"></script>
+  <link rel="stylesheet" href="/assets/password-visibility.css?v=1">
+  <script src="/assets/password-visibility.js?v=1" defer></script>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>CRONOX ADMIN</title>
@@ -262,42 +265,57 @@
   <link rel="shortcut icon" type="image/png" href="/favicon.png?v=4">
   <link rel="apple-touch-icon" href="/favicon.png?v=4">
   <meta name="theme-color" content="#000000">
+  <link rel="stylesheet" href="assets/admin-shell.css?v=1">
+  <link rel="stylesheet" href="/assets/admin-theme.css?v=1">
 </head>
-<body class="bw-theme">
+<body class="bw-theme cronox-admin">
   <div id="adminAuthCheck" class="admin-auth-check" role="status">Verificando acceso…</div>
   <div id="adminShell" class="admin-shell" hidden>
-    <header class="admin-header">
-      <h1 class="admin-title">CRONOX ADMIN</h1>
-      <div class="admin-actions">
-        <button id="backBtn" class="btn" type="button">Volver a CRONOX</button>
-        <button id="logoutBtn" class="btn danger" type="button">Cerrar sesión</button>
+    <aside class="admin-sidebar" id="adminSidebar" aria-label="Administración">
+      <a class="admin-brand" href="#section-dashboard">CRONOX<span>ADMINISTRACIÓN</span></a>
+      <nav aria-label="Navegación principal">
+        <button class="sidebar-group" aria-expanded="false" aria-controls="navProducto"><span aria-hidden="true">▧</span>Producto<span class="sidebar-chevron">⌄</span></button>
+        <div id="navProducto" class="sidebar-children" hidden>
+          <button data-nav-target="section-products">Productos</button>
+          <button data-nav-target="section-inventory">Stock</button>
+          <button data-nav-target="section-waitlist">Waitlist</button>
+          <button data-nav-target="section-codes">Códigos</button>
+        </div>
+        <button class="sidebar-destination" data-nav-target="section-money"><span aria-hidden="true">€</span>Dinero</button>
+        <button class="sidebar-group" aria-expanded="false" aria-controls="navMultimedia"><span aria-hidden="true">▣</span>Multimedia<span class="sidebar-chevron">⌄</span></button>
+        <div id="navMultimedia" class="sidebar-children" hidden>
+          <button class="sidebar-group" aria-expanded="false" aria-controls="navGaleria">Galería<span class="sidebar-chevron">⌄</span></button>
+          <div id="navGaleria" class="sidebar-children" hidden>
+            <button data-nav-target="section-gallery-mosaic">Mosaico</button>
+            <button data-nav-target="section-gallery-carousel">Carrusel</button>
+          </div>
+          <button data-nav-target="section-media">Tienda</button>
+          <button data-nav-target="section-key-screen">Pantalla Clave</button>
+          <button data-nav-target="section-newsletter">Newsletter</button>
+        </div>
+        <button class="sidebar-group" aria-expanded="false" aria-controls="navCliente"><span aria-hidden="true">♙</span>Cliente<span class="sidebar-chevron">⌄</span></button>
+        <div id="navCliente" class="sidebar-children" hidden>
+          <button data-nav-target="section-users">Usuarios</button>
+          <button data-nav-target="section-circles-menu">Círculos</button>
+          <button data-nav-target="section-orders">Pedidos</button>
+          <button data-nav-target="section-mails">Plantillas Mail</button>
+        </div>
+        <button class="sidebar-group" aria-expanded="false" aria-controls="navAdmin"><span aria-hidden="true">⚙</span>Admin<span class="sidebar-chevron">⌄</span></button>
+        <div id="navAdmin" class="sidebar-children" hidden>
+          <button data-nav-target="section-dashboard">Resumen</button>
+          <button data-nav-target="section-activity">Actividad</button>
+          <button data-nav-target="section-footer">Footer</button>
+        </div>
+      </nav>
+      <div class="sidebar-account">
+        <button id="backBtn" type="button">↗ Volver a CRONOX</button>
+        <button id="logoutBtn" type="button">Cerrar sesión</button>
       </div>
-    </header>
-
+    </aside>
+    <button class="sidebar-backdrop" id="sidebarBackdrop" aria-label="Cerrar menú" hidden></button>
+    <header class="admin-header"><button id="sidebarToggle" type="button" aria-controls="adminSidebar" aria-expanded="false" aria-label="Abrir menú">☰</button><span id="adminBreadcrumb">Admin / Resumen</span><span class="admin-header-mark">CR</span></header>
+    <main id="adminMain" class="admin-main">
     <div id="statusArea" class="status-area" aria-live="polite"></div>
-
-    <section id="section-menu" class="card admin-section" aria-labelledby="title-menu">
-      <h2 id="title-menu">Secciones</h2>
-      <small class="subtle">Selecciona un módulo del panel de administración.</small>
-      <div class="admin-index-list" id="adminIndexList">
-        <button class="btn admin-nav-item admin-nav-item--described" data-nav-target="section-waitlist"><strong class="admin-nav-item__title">Waitlist</strong><span class="admin-nav-item__description">Avisos de reposición y demanda por talla</span></button>
-        <button class="btn admin-nav-item admin-nav-item--described" data-nav-target="section-inventory"><strong class="admin-nav-item__title">Inventario -</strong><span class="admin-nav-item__description">Stock real por producto y talla</span></button>
-        <button class="btn admin-nav-item" data-nav-target="section-mails">PLANTILLAS MAILS</button>
-        <button class="btn admin-nav-item admin-nav-item--described" data-nav-target="section-key-screen"><strong class="admin-nav-item__title">PANTALLA CLAVE -</strong><span class="admin-nav-item__description">Acceso global y prerregistro del sitio público</span></button>
-        <button class="btn admin-nav-item admin-nav-item--described" data-nav-target="section-dashboard"><strong class="admin-nav-item__title">Resumen -</strong><span class="admin-nav-item__description">Estadísticas generales, info de usuarios, pedidos, ingresos, stock</span></button>
-        <button class="btn admin-nav-item admin-nav-item--described" data-nav-target="section-circles-menu"><strong class="admin-nav-item__title">Círculos -</strong><span class="admin-nav-item__description">Solicitudes de subidas de círculos</span></button>
-        <button class="btn admin-nav-item admin-nav-item--described" data-nav-target="section-activity"><strong class="admin-nav-item__title">Actividad -</strong><span class="admin-nav-item__description">Actividad en el panel de administrador</span></button>
-        <button class="btn admin-nav-item admin-nav-item--described" data-nav-target="section-users"><strong class="admin-nav-item__title">Usuarios -</strong><span class="admin-nav-item__description">Info cuentas registradas</span></button>
-        <button class="btn admin-nav-item admin-nav-item--described" data-nav-target="section-products-menu"><strong class="admin-nav-item__title">Productos -</strong><span class="admin-nav-item__description">Gestión, edición y clasificación de productos</span></button>
-        <button class="btn admin-nav-item admin-nav-item--described" data-nav-target="section-gallery"><strong class="admin-nav-item__title">Galer&iacute;a -</strong><span class="admin-nav-item__description">Gesti&oacute;n de im&aacute;genes de la galer&iacute;a p&uacute;blica</span></button>
-        <button class="btn admin-nav-item admin-nav-item--described" data-nav-target="section-media"><strong class="admin-nav-item__title">Multimedia Web -</strong><span class="admin-nav-item__description">Gesti&oacute;n y encuadre no destructivo de las im&aacute;genes y v&iacute;deos propios de la web</span></button>
-        <button class="btn admin-nav-item admin-nav-item--described" data-nav-target="section-newsletter"><strong class="admin-nav-item__title">NEWSLETTER -</strong><span class="admin-nav-item__description">Popup, imagen, encuadre y ASCII</span></button>
-        <button class="btn admin-nav-item admin-nav-item--described" data-nav-target="section-footer"><strong class="admin-nav-item__title">FOOTER -</strong><span class="admin-nav-item__description">Etiquetas y redes sociales del pie p&uacute;blico</span></button>
-        <button class="btn admin-nav-item admin-nav-item--described" data-nav-target="section-orders"><strong class="admin-nav-item__title">Pedidos -</strong><span class="admin-nav-item__description">Información, seguimiento y estado del pedido</span></button>
-        <button class="btn admin-nav-item admin-nav-item--described" data-nav-target="section-codes"><strong class="admin-nav-item__title">Códigos -</strong><span class="admin-nav-item__description">Creación y edición de códigos de descuento</span></button>
-      </div>
-    </section>
-
     <section id="section-circles-menu" class="card admin-section" aria-labelledby="title-circles-menu" hidden>
       <button class="btn admin-view-back" type="button" data-back-target="section-menu">← Atrás</button>
       <h2 id="title-circles-menu">Círculos</h2>
@@ -624,10 +642,15 @@
       </div>
     </section>
 
+    <section id="section-money" class="admin-section" aria-labelledby="title-money" hidden>
+      <div id="moneyFinance" class="finance-root" data-finance-page="money"></div>
+    </section>
     <section id="section-dashboard" class="card admin-section" aria-labelledby="title-dashboard" hidden>
+      <div id="dashboardFinance" class="finance-root" data-finance-page="dashboard"></div>
+      <div class="legacy-summary-heading"><span>VISTA GENERAL</span><h2>Actividad de la tienda</h2><p>Información general y alertas del resumen existente. Estos indicadores conservan sus periodos propios.</p></div>
       <div style="display:flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap;">
         <div>
-          <h2 id="title-dashboard">Resumen general</h2>
+          <h3 id="title-dashboard">Resumen general</h3>
           <small>Indicadores clave del panel administrativo.</small>
         </div>
         <button class="btn" type="button" id="refreshDashboardBtn">Actualizar</button>
@@ -876,7 +899,7 @@
       <div style="display:flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap;">
         <div>
           <h2 id="title-orders">Pedidos</h2>
-          <small>Gestión logística y fulfillment.</small>
+          <small>Gestión de pedidos y envíos.</small>
         </div>
         <div class="table-actions">
           <button class="btn" type="button" id="ordersRefreshBtn">Actualizar</button>
@@ -893,7 +916,7 @@
         <table aria-describedby="title-orders">
           <thead>
             <tr>
-              <th>ID pedido</th><th>Fecha</th><th>Estado</th><th>Total</th><th>Usuario</th><th>Carrier</th><th>Tracking</th><th>Shipped</th><th>Delivered</th><th>Acciones</th>
+              <th>ID pedido</th><th>Fecha</th><th>Estado</th><th>Total</th><th>Usuario</th><th>Transportista</th><th>Seguimiento</th><th>Enviado</th><th>Entregado</th><th>Acciones</th>
             </tr>
           </thead>
           <tbody id="ordersAdminBody"><tr><td colspan="10" class="empty">Cargando pedidos…</td></tr></tbody>
@@ -953,9 +976,9 @@
         <section class="order-detail__section" aria-labelledby="orderTrackingHeading">
           <h4 id="orderTrackingHeading">Seguimiento y notas</h4>
         <div class="form-grid" style="margin-top:10px;">
-          <label class="form-group"><span>Carrier</span><input id="orderCarrier" class="input" type="text" placeholder="DHL, Correos, UPS"></label>
-          <label class="form-group"><span>Tracking number</span><input id="orderTrackingNumber" class="input" type="text" placeholder="Sin tracking"></label>
-          <label class="form-group"><span>Tracking URL</span><input id="orderTrackingUrl" class="input" type="url" placeholder="https://..."></label>
+          <label class="form-group"><span>Transportista</span><input id="orderCarrier" class="input" type="text" placeholder="DHL, Correos, UPS"></label>
+          <label class="form-group"><span>Número de seguimiento</span><input id="orderTrackingNumber" class="input" type="text" placeholder="Sin seguimiento"></label>
+          <label class="form-group"><span>Enlace de seguimiento</span><input id="orderTrackingUrl" class="input" type="url" placeholder="https://..."></label>
           <label class="form-group" style="grid-column:1/-1;"><span>Nota interna</span><textarea id="orderInternalNote" class="textarea" placeholder="Nota interna logística"></textarea></label>
         </div>
         </section>
@@ -1036,7 +1059,7 @@
       <button class="btn admin-view-back" type="button" data-back-target="section-products-menu">← Atrás</button>
       <div style="display:flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap;">
         <div>
-          <h2 id="title-products">Productos</h2>
+          <button class="btn" data-nav-target="section-product-categories" type="button">Categorías de productos</button><h2 id="title-products">Productos</h2>
           <small>CRUD básico con sincronización al catálogo.</small>
         </div>
         <button class="btn primary" type="button" id="createProductBtn">Crear producto</button>
@@ -1208,7 +1231,7 @@
         <label>Pantalla guardada<select id="keyScreenSelect" class="select"></select></label>
         <label>Nueva pantalla<input id="keyNewName" class="input" maxlength="120" placeholder="PRELANZAMIENTO CRONOX"></label>
         <button id="keyCreate" class="btn" type="button">Crear</button>
-        <button id="keyActivate" class="btn primary" type="button">Activar esta pantalla</button>
+        <button id="keyActivate" class="btn primary" type="button">Seleccionar esta pantalla</button>
         <button id="keyDelete" class="btn danger" type="button">Eliminar</button>
       </div>
       <div id="keyEditor" class="key-admin__editor" hidden>
@@ -1217,16 +1240,16 @@
           <label>Modo<select name="mode" class="select"><option value="PREREGISTRATION">PRERREGISTRO</option><option value="ACCESS">ACCESO (futuro)</option></select></label>
           <label>T&iacute;tulo<input name="title" class="input" maxlength="140"></label>
           <label>Subt&iacute;tulo<textarea name="subtitle" class="input" maxlength="400"></textarea></label>
-          <label>Placeholder<input name="placeholder" class="input" maxlength="100"></label>
+          <label>Texto del campo<input name="placeholder" class="input" maxlength="100"></label>
           <label>Texto del bot&oacute;n<input name="buttonText" class="input" maxlength="60"></label>
           <label>T&iacute;tulo de &eacute;xito<input name="successTitle" class="input" maxlength="140"></label>
           <label>Mensaje de &eacute;xito<textarea name="successMessage" class="input" maxlength="400"></textarea></label>
           <label>Color de texto<input name="textColor" type="color"></label>
           <label>Oscurecimiento <input name="overlayStrength" type="range" min="0" max="90"><output id="keyOverlayValue"></output></label>
-          <label>Estilo de campo<select name="inputStyle" class="select"><option>LIGHT</option><option>DARK</option><option>OUTLINE</option></select></label>
-          <label>Estilo de bot&oacute;n<select name="buttonStyle" class="select"><option>DARK</option><option>LIGHT</option><option>OUTLINE</option></select></label>
-          <fieldset data-key-controls="desktop"><legend>Escritorio &middot; 1920 &times; 1080</legend><label>Foco X<input name="desktopFocalX" type="range" min="0" max="100" step="0.1"></label><label>Foco Y<input name="desktopFocalY" type="range" min="0" max="100" step="0.1"></label><label>Zoom<input name="desktopZoom" type="range" min="1" max="3" step="0.01"></label><label>Ajuste<select name="desktopFit" class="select"><option>COVER</option><option>CONTAIN</option></select></label><label>Alineaci&oacute;n horizontal<select name="desktopHorizontalAlign" class="select"><option>LEFT</option><option>CENTER</option><option>RIGHT</option></select></label><label>Alineaci&oacute;n vertical<select name="desktopVerticalAlign" class="select"><option>TOP</option><option>CENTER</option><option>BOTTOM</option></select></label><label>Desplazamiento del conjunto X<input name="desktopOffsetX" class="input" type="number" min="-400" max="400"></label><label>Desplazamiento del conjunto Y<input name="desktopOffsetY" class="input" type="number" min="-400" max="400"></label><label>Formulario X<input name="desktopFormOffsetX" class="input" type="number" min="-400" max="400"></label><label>Formulario Y<input name="desktopFormOffsetY" class="input" type="number" min="-400" max="400"></label><label>Privacidad X<input name="desktopPrivacyOffsetX" class="input" type="number" min="-400" max="400"></label><label>Privacidad Y<input name="desktopPrivacyOffsetY" class="input" type="number" min="-400" max="400"></label></fieldset>
-          <fieldset data-key-controls="mobile" hidden><legend>M&oacute;vil &middot; 390 &times; 844</legend><label>Foco X<input name="mobileFocalX" type="range" min="0" max="100" step="0.1"></label><label>Foco Y<input name="mobileFocalY" type="range" min="0" max="100" step="0.1"></label><label>Zoom<input name="mobileZoom" type="range" min="1" max="3" step="0.01"></label><label>Ajuste<select name="mobileFit" class="select"><option>COVER</option><option>CONTAIN</option></select></label><label>Alineaci&oacute;n horizontal<select name="mobileHorizontalAlign" class="select"><option>LEFT</option><option>CENTER</option><option>RIGHT</option></select></label><label>Alineaci&oacute;n vertical<select name="mobileVerticalAlign" class="select"><option>TOP</option><option>CENTER</option><option>BOTTOM</option></select></label><label>Desplazamiento del conjunto X<input name="mobileOffsetX" class="input" type="number" min="-400" max="400"></label><label>Desplazamiento del conjunto Y<input name="mobileOffsetY" class="input" type="number" min="-400" max="400"></label><label>Formulario X<input name="mobileFormOffsetX" class="input" type="number" min="-400" max="400"></label><label>Formulario Y<input name="mobileFormOffsetY" class="input" type="number" min="-400" max="400"></label><label>Privacidad X<input name="mobilePrivacyOffsetX" class="input" type="number" min="-400" max="400"></label><label>Privacidad Y<input name="mobilePrivacyOffsetY" class="input" type="number" min="-400" max="400"></label></fieldset>
+          <label>Estilo de campo<select name="inputStyle" class="select"><option value="LIGHT">Claro</option><option value="DARK">Oscuro</option><option>OUTLINE</option></select></label>
+          <label>Estilo de bot&oacute;n<select name="buttonStyle" class="select"><option value="DARK">Oscuro</option><option value="LIGHT">Claro</option><option>OUTLINE</option></select></label>
+          <fieldset data-key-controls="desktop"><legend>Escritorio &middot; 1920 &times; 1080</legend><label>Foco X<input name="desktopFocalX" type="range" min="0" max="100" step="0.1"></label><label>Foco Y<input name="desktopFocalY" type="range" min="0" max="100" step="0.1"></label><label>Zoom<input name="desktopZoom" type="range" min="1" max="3" step="0.01"></label><label>Ajuste<select name="desktopFit" class="select"><option value="COVER">Cubrir</option><option value="CONTAIN">Contener</option></select></label><label>Alineaci&oacute;n horizontal<select name="desktopHorizontalAlign" class="select"><option value="LEFT">Izquierda</option><option value="CENTER">Centro</option><option value="RIGHT">Derecha</option></select></label><label>Alineaci&oacute;n vertical<select name="desktopVerticalAlign" class="select"><option value="TOP">Arriba</option><option value="CENTER">Centro</option><option value="BOTTOM">Abajo</option></select></label><label>Desplazamiento del conjunto X<input name="desktopOffsetX" class="input" type="number" min="-400" max="400"></label><label>Desplazamiento del conjunto Y<input name="desktopOffsetY" class="input" type="number" min="-400" max="400"></label><label>Formulario X<input name="desktopFormOffsetX" class="input" type="number" min="-400" max="400"></label><label>Formulario Y<input name="desktopFormOffsetY" class="input" type="number" min="-400" max="400"></label><label>Privacidad X<input name="desktopPrivacyOffsetX" class="input" type="number" min="-400" max="400"></label><label>Privacidad Y<input name="desktopPrivacyOffsetY" class="input" type="number" min="-400" max="400"></label></fieldset>
+          <fieldset data-key-controls="mobile" hidden><legend>M&oacute;vil &middot; 390 &times; 844</legend><label>Foco X<input name="mobileFocalX" type="range" min="0" max="100" step="0.1"></label><label>Foco Y<input name="mobileFocalY" type="range" min="0" max="100" step="0.1"></label><label>Zoom<input name="mobileZoom" type="range" min="1" max="3" step="0.01"></label><label>Ajuste<select name="mobileFit" class="select"><option value="COVER">Cubrir</option><option value="CONTAIN">Contener</option></select></label><label>Alineaci&oacute;n horizontal<select name="mobileHorizontalAlign" class="select"><option value="LEFT">Izquierda</option><option value="CENTER">Centro</option><option value="RIGHT">Derecha</option></select></label><label>Alineaci&oacute;n vertical<select name="mobileVerticalAlign" class="select"><option value="TOP">Arriba</option><option value="CENTER">Centro</option><option value="BOTTOM">Abajo</option></select></label><label>Desplazamiento del conjunto X<input name="mobileOffsetX" class="input" type="number" min="-400" max="400"></label><label>Desplazamiento del conjunto Y<input name="mobileOffsetY" class="input" type="number" min="-400" max="400"></label><label>Formulario X<input name="mobileFormOffsetX" class="input" type="number" min="-400" max="400"></label><label>Formulario Y<input name="mobileFormOffsetY" class="input" type="number" min="-400" max="400"></label><label>Privacidad X<input name="mobilePrivacyOffsetX" class="input" type="number" min="-400" max="400"></label><label>Privacidad Y<input name="mobilePrivacyOffsetY" class="input" type="number" min="-400" max="400"></label></fieldset>
           <button class="btn primary" type="submit">Guardar cambios</button>
         </form>
         <div class="key-admin__media">
@@ -1477,12 +1500,14 @@
         </div>
       </div>
     </section>
+    </main>
   </div>
 
   <div class="modal" id="productModal" role="dialog" aria-modal="true" aria-hidden="true" aria-labelledby="productModalTitle">
     <div class="modal-box">
       <h3 id="productModalTitle" style="margin-top:0;">Crear producto</h3>
       <form id="productForm">
+        <p id="productFormMessage" role="alert" hidden></p>
         <div class="form-grid">
           <div class="form-group">
             <label for="productName">Nombre</label>
@@ -1492,9 +1517,26 @@
             <label for="productCollection">Colección</label>
             <input id="productCollection" name="collection" class="input" type="text" maxlength="140" placeholder="drop-01">
           </div>
+          <div class="form-group product-category-picker" id="productCreationCategoryField">
+            <span id="productCreationCategoryLabel">Categorías</span>
+            <details id="productCreationCategories">
+              <summary class="input" aria-labelledby="productCreationCategoryLabel productCreationCategoryNames"><span id="productCreationCategoryNames">Sin categorías</span></summary>
+              <div class="product-category-options" role="group" aria-labelledby="productCreationCategoryLabel">
+                <p id="productCreationCategoryStatus" role="status" aria-live="polite"></p>
+                <button id="productCreationCategoryRetry" class="btn" type="button" hidden>Reintentar</button>
+                <div id="productCreationCategoryOptions"></div>
+              </div>
+            </details>
+            <small>Opcional. Puedes seleccionar varias; la colección se guarda por separado.</small>
+          </div>
           <div class="form-group">
             <label for="productPrice">Precio (€)</label>
             <input id="productPrice" name="price" class="input" type="number" min="0" step="0.01" required>
+          </div>
+          <div class="form-group">
+            <label for="productCost">Coste del producto (€)</label>
+            <input id="productCost" name="unitCost" class="input" type="number" min="0" max="21474836.47" step="0.01" aria-describedby="productCostHelp">
+            <small id="productCostHelp">Privado. Coste por unidad para todas las variantes. Vacío = desconocido; 0 = coste cero.</small>
           </div>
           <div class="form-group" style="align-items:flex-start; justify-content:flex-end;">
             <label style="display:flex; gap:8px; align-items:center; margin-top:26px;">
@@ -1888,6 +1930,8 @@
   <script src="assets/product-card-framing.js?v=1"></script>
   <script src="assets/admin-product-gallery.js?v=1"></script>
   <script src="assets/admin-pagination.js?v=1"></script>
+  <script src="assets/admin-shell.js?v=1"></script>
+  <script src="assets/admin-finance.js?v=1"></script>
   <script src="assets/admin.js"></script>
   <script src="assets/admin-inventory.js?v=1"></script>
   <script src="assets/admin-waitlist.js?v=1"></script>

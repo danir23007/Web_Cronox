@@ -73,6 +73,8 @@ export class ManagedMailService {
       key: String(key),
       email: config.accounts[key].user,
       name: config.accounts[key].fromName,
+      label: ({ INFO: 'Información y novedades', ORDERS: 'Pedidos', NOREPLY: 'Acceso y seguridad', SUPPORT: 'Soporte' })[key],
+      localOnly: process.env.CRONOX_LOCAL_DEV === 'true',
       configured: Boolean(
         config.enabled &&
           config.smtpHost &&
@@ -885,6 +887,12 @@ export class ManagedMailService {
     confirmed: boolean,
     actorId?: number,
   ) {
+    if (process.env.CRONOX_LOCAL_DEV === 'true') {
+      const template = await this.template(key, id);
+      const rendered = await this.render(key, template, SAMPLE_DATA);
+      return { localOnly: true, html: rendered.html, text: rendered.text, subject: rendered.subject,
+        message: 'Prueba local con variables de ejemplo. No se ha enviado ningún correo.' };
+    }
     if (
       !confirmed ||
       !this.metadata().find((a) => a.key === String(key))?.configured

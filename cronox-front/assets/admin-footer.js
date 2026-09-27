@@ -72,6 +72,7 @@
         headers: { Accept: "application/json" },
       });
       fill(await parse(response));
+      window.CRONOX_ADMIN_SHELL?.clear(document.getElementById("section-footer"));
       loaded = true;
       message("Configuración del footer cargada.", "success");
     } catch (error) {
@@ -208,6 +209,7 @@
       );
       pageRevision = Number(saved.revision) || pageRevision + 1;
       pageContent.innerHTML = saved.html;
+      window.CRONOX_ADMIN_SHELL?.clear(document.getElementById("section-footer"));
       message(`${selectedPage.label} actualizada correctamente.`, "success");
     } catch (error) {
       message(error.message || "No se pudo guardar la página.", "error");
@@ -242,12 +244,5 @@
     }
     document.execCommand(command, false, value);
   });
-  document
-    .querySelectorAll('[data-nav-target="section-footer"]')
-    .forEach((button) => button.addEventListener("click", () => void load()));
-  window.addEventListener("hashchange", () => {
-    if (window.location.hash === "#section-footer") void load();
-  });
-  if (window.location.hash === "#section-footer") void load();
   window.CRONOX_ADMIN_FOOTER = { load, save: saveSettings, openPage, savePage };
 })();

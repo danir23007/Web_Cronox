@@ -1,6 +1,9 @@
 <!DOCTYPE html>
 <html lang="es" data-admin-auth-state="checking">
 <head>
+  <script src="/assets/admin-theme.js?v=1"></script>
+  <link rel="stylesheet" href="/assets/password-visibility.css?v=1">
+  <script src="/assets/password-visibility.js?v=1" defer></script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>CRONOX Admin · Usuario</title>
@@ -450,10 +453,57 @@
   <link rel="shortcut icon" type="image/png" href="/favicon.png?v=4">
   <link rel="apple-touch-icon" href="/favicon.png?v=4">
   <meta name="theme-color" content="#000000">
+  <link rel="stylesheet" href="assets/admin-shell.css?v=1">
+  <link rel="stylesheet" href="/assets/admin-theme.css?v=1">
 </head>
-<body>
+<body class="cronox-admin cronox-admin-user">
   <div id="adminAuthCheck" class="admin-auth-check" role="status">Verificando acceso…</div>
-  <div id="adminUserPage" class="page" hidden>
+  <div id="adminUserPage" class="page admin-shell" hidden>
+    <aside class="admin-sidebar" id="adminSidebar" aria-label="Administración">
+      <a class="admin-brand" href="#section-dashboard">CRONOX<span>ADMINISTRACIÓN</span></a>
+      <nav aria-label="Navegación principal">
+        <button class="sidebar-group" aria-expanded="false" aria-controls="navProducto"><span aria-hidden="true">▧</span>Producto<span class="sidebar-chevron">⌄</span></button>
+        <div id="navProducto" class="sidebar-children" hidden>
+          <button data-nav-target="section-products">Productos</button>
+          <button data-nav-target="section-inventory">Stock</button>
+          <button data-nav-target="section-waitlist">Waitlist</button>
+          <button data-nav-target="section-codes">Códigos</button>
+        </div>
+        <button class="sidebar-destination" data-nav-target="section-money"><span aria-hidden="true">€</span>Dinero</button>
+        <button class="sidebar-group" aria-expanded="false" aria-controls="navMultimedia"><span aria-hidden="true">▣</span>Multimedia<span class="sidebar-chevron">⌄</span></button>
+        <div id="navMultimedia" class="sidebar-children" hidden>
+          <button class="sidebar-group" aria-expanded="false" aria-controls="navGaleria">Galería<span class="sidebar-chevron">⌄</span></button>
+          <div id="navGaleria" class="sidebar-children" hidden>
+            <button data-nav-target="section-gallery-mosaic">Mosaico</button>
+            <button data-nav-target="section-gallery-carousel">Carrusel</button>
+          </div>
+          <button data-nav-target="section-media">Tienda</button>
+          <button data-nav-target="section-key-screen">Pantalla Clave</button>
+          <button data-nav-target="section-newsletter">Newsletter</button>
+        </div>
+        <button class="sidebar-group" aria-expanded="false" aria-controls="navCliente"><span aria-hidden="true">♙</span>Cliente<span class="sidebar-chevron">⌄</span></button>
+        <div id="navCliente" class="sidebar-children" hidden>
+          <button data-nav-target="section-users">Usuarios</button>
+          <button data-nav-target="section-circles-menu">Círculos</button>
+          <button data-nav-target="section-orders">Pedidos</button>
+          <button data-nav-target="section-mails">Plantillas Mail</button>
+        </div>
+        <button class="sidebar-group" aria-expanded="false" aria-controls="navAdmin"><span aria-hidden="true">⚙</span>Admin<span class="sidebar-chevron">⌄</span></button>
+        <div id="navAdmin" class="sidebar-children" hidden>
+          <button data-nav-target="section-dashboard">Resumen</button>
+          <button data-nav-target="section-activity">Actividad</button>
+          <button data-nav-target="section-footer">Footer</button>
+        </div>
+      </nav>
+      <div class="sidebar-account">
+        <button id="backBtn" type="button">↗ Volver a CRONOX</button>
+        <button id="logoutBtn" type="button">Cerrar sesión</button>
+      </div>
+    </aside>
+    <button class="sidebar-backdrop" id="sidebarBackdrop" aria-label="Cerrar menú" hidden></button>
+    <header class="admin-header"><button id="sidebarToggle" type="button" aria-controls="adminSidebar" aria-expanded="false" aria-label="Abrir menú">☰</button><span id="adminBreadcrumb">Admin / Resumen</span><span class="admin-header-mark">CR</span></header>
+
+    <div class="admin-main">
     <header class="topbar">
       <div class="topbar-left">
         <div class="breadcrumb">Admin · Usuarios</div>
@@ -690,12 +740,15 @@
         </div>
       </section>
     </main>
+    </div>
   </div>
 
   <script src="assets/country.js?v=1"></script>
   <script src="assets/api.js?v=10"></script>
   <script src="assets/admin-auth-routing.js?v=1"></script>
   <script src="assets/ui-status.js"></script>
+  <script src="assets/admin-shell.js?v=1"></script>
+  <script src="assets/admin-user-shell.js?v=1"></script>
   <script src="assets/admin-user.js?v=2"></script>
 </body>
 </html>

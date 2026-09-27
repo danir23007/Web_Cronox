@@ -99,6 +99,7 @@ type StripeWebhookEventInput = {
   occurredAt: Date;
   lifecycleStatus?: OrderStatus;
   amountCents?: number;
+  refundCumulativeCents?: number;
 };
 
 type CheckoutSnapshotResponse = {
@@ -676,6 +677,11 @@ export class OrdersService {
           );
         }
 
+        const costProducts = await tx.product.findMany({
+          where: { id: { in: preview.computation.lineItems.map(item => item.productId) } },
+          select: { id: true, name: true, imageUrl: true, privateCost: true },
+        });
+        const costByProduct = new Map(costProducts.map(product => [product.id, product]));
         const created = await tx.checkoutSnapshot.create({
           data: {
             userId: resolvedOwner.userId ?? null,
@@ -711,6 +717,11 @@ export class OrdersService {
                 unitPriceCents: this.decimalToCents(item.unitPrice),
                 quantity: item.quantity,
                 lineTotalCents: this.decimalToCents(item.lineTotal),
+                financialSnapshot: { create: {
+                  unitCostCents: costByProduct.get(item.productId)?.privateCost?.unitCostCents ?? null,
+                  productName: costByProduct.get(item.productId)?.name ?? item.title,
+                  imageUrl: costByProduct.get(item.productId)?.imageUrl ?? null,
+                } },
               })),
             },
           },
@@ -1074,6 +1085,7 @@ export class OrdersService {
           paymentIntentId: input.paymentIntentId ?? null,
           lifecycleStatus: input.lifecycleStatus ?? null,
           amountCents: input.amountCents ?? null,
+          refundCumulativeCents: input.refundCumulativeCents ?? null,
           status: 'PROCESSING',
           occurredAt: input.occurredAt,
         },
@@ -1104,6 +1116,7 @@ export class OrdersService {
         error: null,
         lifecycleStatus: input.lifecycleStatus ?? null,
         amountCents: input.amountCents ?? null,
+          refundCumulativeCents: input.refundCumulativeCents ?? null,
         occurredAt: input.occurredAt,
       },
     });
@@ -1225,6 +1238,7 @@ export class OrdersService {
             userId: resolvedAccount.userId,
             customerEmail: snapshot.customerEmail,
             status: lifecycleStatus,
+            paidAt: input.occurredAt,
             subtotal: this.centsToDecimal(snapshot.subtotalCents),
             taxRate: snapshot.taxRate,
             taxAmount: this.centsToDecimal(snapshot.taxAmountCents),
@@ -1261,6 +1275,16 @@ export class OrdersService {
         });
         if (!created)
           throw new NotFoundException('ORDER_NOT_FOUND_AFTER_CREATE');
+        const financialSnapshots = await tx.checkoutItemFinancial.findMany({
+          where: { itemId: { in: snapshot.items.map(item => item.id) } },
+        });
+        await tx.orderItemFinancial.createMany({ data: created.items.map(item => {
+          const source = snapshot.items.find(line => line.variantId === item.variantId);
+          const financial = financialSnapshots.find(line => line.itemId === source?.id);
+          return { itemId: item.id, unitCostCents: financial?.unitCostCents ?? null,
+            productName: financial?.productName ?? item.title, imageUrl: financial?.imageUrl ?? null };
+        }) });
+
 
         if (lifecycleStatus === OrderStatus.PAID) {
           await this.consumeStockReservationsForCheckoutSnapshot(

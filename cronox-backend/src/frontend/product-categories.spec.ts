@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
+import { JSDOM } from 'jsdom';
 
 const frontendRoot = path.resolve(__dirname, '../../../cronox-front');
 const readFrontend = (file: string) =>
@@ -59,20 +60,14 @@ describe('product category frontend contracts', () => {
     expect(products).toContain('/producto/${encodeURIComponent(key)}');
   });
 
-  it('defines the Products submenu, both child screens and their parent back target', () => {
-    const html = readFrontend('admin.html');
-    const admin = readFrontend('assets/admin.js');
-
-    expect(html).toContain('data-nav-target="section-products-menu"');
-    expect(html).toContain(
-      'data-nav-target="section-products">Edición de productos',
-    );
-    expect(html).toContain(
-      'data-nav-target="section-product-categories">Categorías de productos',
-    );
-    expect(admin).toContain(
-      "btn.setAttribute('data-back-target', 'section-products-menu')",
-    );
+  it('keeps category management reachable from Products in the redesigned sidebar', () => {
+    const dom = new JSDOM(readFrontend('admin.html'));
+    const document = dom.window.document;
+    expect(document.querySelector('#navProducto [data-nav-target="section-products"]')?.textContent).toBe('Productos');
+    expect(document.querySelector('#section-products [data-nav-target="section-product-categories"]')?.textContent).toBe('Categorías de productos');
+    expect(document.querySelector('#section-product-categories')).not.toBeNull();
+    expect(document.querySelector('#section-product-categories [data-back-target]')?.getAttribute('data-back-target')).toBe('section-products-menu');
+    dom.window.close();
   });
 
   it('renders assignments, sends selected IDs, restores failures and implements all filters', () => {

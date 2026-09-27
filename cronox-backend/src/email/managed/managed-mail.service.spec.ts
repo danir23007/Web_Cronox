@@ -61,6 +61,8 @@ describe('managed email safety and import', () => {
       email: 'support@example.test',
       name: 'CRONOX',
       configured: true,
+      label: 'Soporte',
+      localOnly: false,
     });
     jest
       .spyOn(config, 'loadEmailConfig')

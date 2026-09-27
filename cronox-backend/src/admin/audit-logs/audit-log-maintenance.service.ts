@@ -20,6 +20,7 @@ export class AuditLogMaintenanceService
   constructor(private readonly prisma: PrismaService) {}
 
   onModuleInit(): void {
+    if (process.env.BACKGROUND_JOBS_ENABLED === 'false') return;
     if (process.env.CRONOX_ROUTE_SMOKE_MODE === 'true') return;
     this.interval = setInterval(
       () => void this.cleanup(),

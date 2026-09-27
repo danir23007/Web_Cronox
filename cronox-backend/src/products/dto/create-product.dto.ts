@@ -24,6 +24,20 @@ import {
 } from '../product-size-system';
 
 export class CreateProductDto {
+  @ApiPropertyOptional({ type: [Number], description: 'Categorías existentes. Omitir o enviar [] conserva el alta sin categorías.' })
+  @IsOptional()
+  @IsArray()
+  @IsInt({ each: true })
+  @Min(1, { each: true })
+  @Max(2147483647, { each: true })
+  categoryIds?: number[];
+
+  @ApiPropertyOptional({ description: 'Coste privado por unidad, en céntimos. null = desconocido.', nullable: true })
+  @IsOptional()
+  @IsInt({ message: 'El coste debe expresarse en céntimos enteros.' })
+  @Min(0, { message: 'El coste no puede ser negativo.' })
+  @Max(2147483647, { message: 'El coste supera el máximo permitido.' })
+  unitCostCents?: number | null;
   @ApiPropertyOptional({
     enum: PRODUCT_SIZE_SYSTEM_VALUES,
     default: DEFAULT_PRODUCT_SIZE_SYSTEM,

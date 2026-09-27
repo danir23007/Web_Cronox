@@ -242,11 +242,8 @@ const makeAdminDom = () => {
 
 const openHeroEditor = async (dom: JSDOM) => {
   const document = dom.window.document;
-  (
-    document.querySelector(
-      '[data-nav-target="section-media"]',
-    ) as HTMLButtonElement
-  ).click();
+  // The shared admin router invokes the module's lazy loader.
+  await (dom.window as any).CRONOX_ADMIN_MEDIA.load();
   await flushAsync();
   await flushAsync();
   (
@@ -283,7 +280,7 @@ describe('Multimedia Web admin manager', () => {
     const document = dom.window.document;
     expect(
       document.querySelector('[data-nav-target="section-media"]')?.textContent,
-    ).toContain('Multimedia Web');
+    ).toContain('Tienda');
     expect(document.getElementById('title-media')?.textContent).toBe(
       'Multimedia Web',
     );
@@ -304,11 +301,7 @@ describe('Multimedia Web admin manager', () => {
     const { dom, fetchMock } = makeAdminDom();
     const document = dom.window.document;
     expect(fetchMock).not.toHaveBeenCalled();
-    (
-      document.querySelector(
-        '[data-nav-target="section-media"]',
-      ) as HTMLButtonElement
-    ).click();
+    await (dom.window as any).CRONOX_ADMIN_MEDIA.load();
     await flushAsync();
     await flushAsync();
 
@@ -466,11 +459,7 @@ describe('Multimedia Web admin manager', () => {
   it('shows the PORTADAS/Fotos/Vídeos archive and reuses an old photo', async () => {
     const { dom, writes } = makeAdminDom();
     const document = dom.window.document;
-    (
-      document.querySelector(
-        '[data-nav-target="section-media"]',
-      ) as HTMLButtonElement
-    ).click();
+    await (dom.window as any).CRONOX_ADMIN_MEDIA.load();
     await flushAsync();
     await flushAsync();
 

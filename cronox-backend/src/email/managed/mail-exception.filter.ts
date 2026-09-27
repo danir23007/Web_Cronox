@@ -24,6 +24,7 @@ export class MailExceptionFilter implements ExceptionFilter {
         !body.message.startsWith('Validation')
           ? body.message
           : 'Datos no válidos. Revisa los campos y sus límites.';
+      if (status === 429) message = 'Has realizado demasiadas pruebas seguidas. Espera un minuto antes de volver a intentarlo.';
     } else if (error.code === 'P2021' || error.code === 'P2022') {
       status = 503;
       message =

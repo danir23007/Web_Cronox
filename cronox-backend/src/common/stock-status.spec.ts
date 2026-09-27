@@ -1,4 +1,11 @@
-import { availableStock, classifyStock } from './stock-status';
+import { availableStock, classifyStock, classifyVariantStock } from './stock-status';
+
+describe('administrative individual-size thresholds', () => {
+  it.each([[0,'out_of_stock'],[1,'low'],[4,'low'],[5,'in_stock'],[8,'in_stock'],[10,'in_stock']])('classifies saved size stock %s', (stock, status) => {
+    expect(classifyVariantStock(Number(stock))).toBe(status);
+  });
+  it('keeps product aggregate semantics distinct',()=>{expect(classifyStock(8)).toBe('low');expect(classifyVariantStock(8)).toBe('in_stock');});
+});
 
 describe('shared sellable stock classification', () => {
   it.each([

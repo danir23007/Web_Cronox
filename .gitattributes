@@ -1,0 +1,2 @@
+# Preserve the exact bytes/checksum of this migration already applied in production.
+cronox-backend/prisma/migrations/20260926120000_private_product_finance/migration.sql -text

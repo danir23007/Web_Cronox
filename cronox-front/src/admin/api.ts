@@ -1,6 +1,7 @@
 import {
   availableStock,
   classifyStock,
+  classifyVariantStock,
 } from '../../../cronox-backend/src/common/stock-status';
 import { installSessionTransport } from './session';
 
@@ -1098,6 +1099,7 @@ import { installSessionTransport } from './session';
   };
 
   g.CRONOX_STOCK = {
+    classifyVariantStock,
     availableStock,
     classifyStock,
     decoratePurchase(

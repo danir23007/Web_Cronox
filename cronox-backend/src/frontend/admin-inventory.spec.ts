@@ -21,7 +21,7 @@ describe('Admin inventory UI', () => {
     expect(
       document.querySelector('[data-nav-target="section-inventory"]')
         ?.textContent,
-    ).toContain('Inventario');
+    ).toContain('Stock');
     expect(
       document.querySelector('#inventorySearch')?.getAttribute('type'),
     ).toBe('search');

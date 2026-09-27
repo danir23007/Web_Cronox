@@ -702,6 +702,7 @@ export class ProductService {
     }
 
     const productSelect: Prisma.ProductSelect = {
+      privateCost: true,
       id: true,
       name: true,
       slug: true,
@@ -949,10 +950,10 @@ export class ProductService {
   async getAdminProduct(id: number) {
     const product = await this.prisma.product.findUnique({
       where: { id },
-      include: this.getProductInclude({
+      include: { ...this.getProductInclude({
         includeInactiveVariants: true,
         includeArchivedImages: true,
-      }),
+      }), privateCost: true },
     });
 
     if (!product) {
@@ -1240,13 +1241,25 @@ export class ProductService {
     return product ? this.toPublicProduct(product) : null;
   }
 
+  private validatePrivateCost(value: unknown) {
+    if (value !== undefined && value !== null && (!Number.isSafeInteger(value) || Number(value) < 0 || Number(value) > 2147483647)) {
+      throw new BadRequestException("El coste debe ser un número entero de céntimos no negativo.");
+    }
+  }
+
   async createProduct(
     dto: CreateProductDto,
     adminId?: number,
     idempotencyKey?: string,
   ) {
+    this.validatePrivateCost(dto.unitCostCents);
+    if (dto.categoryIds != null && (!Array.isArray(dto.categoryIds) ||
+      dto.categoryIds.some(id => !Number.isInteger(id) || id < 1 || id > 2147483647))) {
+      throw new BadRequestException('Las categorías deben ser identificadores enteros positivos.');
+    }
+    const categoryIds = [...new Set(dto.categoryIds ?? [])].sort((a, b) => a - b);
     const requestKey = this.validateIdempotencyKey(idempotencyKey);
-    const requestHash = this.productCreateHash(dto);
+    const requestHash = this.productCreateHash(dto.categoryIds == null ? dto : { ...dto, categoryIds });
     const currency = dto.currency ?? 'EUR';
     const images = this.prepareImages(dto);
     const slug = this.slugify(dto.slug ?? dto.name);
@@ -1274,6 +1287,17 @@ export class ProductService {
         await tx.adminProductCreateRequest.create({
           data: { idempotencyKey: requestKey, requestHash },
         });
+        // Same eligibility as the category-assignment endpoint: all existing categories,
+        // including inactive ones. Validation and relationships share the creation transaction.
+        if (categoryIds.length) {
+          const categories = await tx.category.findMany({ where: { id: { in: categoryIds } }, select: { id: true } });
+          const found = new Set(categories.map(category => category.id));
+          const missing = categoryIds.filter(id => !found.has(id));
+          if (missing.length) throw new BadRequestException({
+            code: 'CATEGORY_IDS_NOT_FOUND', categoryIds: missing,
+            message: 'Alguna categoría ya no existe. Revisa las categorías seleccionadas antes de reintentar.',
+          });
+        }
         const primaryImage = images.find((img) => img.isPrimary);
         const lastProduct =
           typeof tx.product.findFirst === 'function'
@@ -1288,10 +1312,12 @@ export class ProductService {
             slug,
             description: dto.description,
             price: dto.price,
+            privateCost: dto.unitCostCents !== undefined ? { create: { unitCostCents: dto.unitCostCents } } : undefined,
             currency,
             isActive: dto.isActive ?? true,
             displayOrder: (lastProduct?.displayOrder ?? -1) + 1,
             collection: dto.collection,
+            categories: categoryIds.length ? { create: categoryIds.map(categoryId => ({ categoryId })) } : undefined,
             searchKeywords,
             searchText,
             cardImagePositionX: dto.cardImagePositionX ?? 50,
@@ -1386,7 +1412,9 @@ export class ProductService {
   }
 
   async updateProduct(id: number, dto: UpdateProductDto, adminId?: number) {
+    this.validatePrivateCost(dto.unitCostCents);
     const data: Prisma.ProductUpdateInput = {};
+    if (dto.unitCostCents !== undefined) data.privateCost = { upsert: { create: { unitCostCents: dto.unitCostCents }, update: { unitCostCents: dto.unitCostCents } } };
 
     if (dto.name !== undefined) data.name = dto.name;
     if (dto.price !== undefined) data.price = dto.price;

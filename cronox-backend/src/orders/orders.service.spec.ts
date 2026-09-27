@@ -140,6 +140,9 @@ describe('OrdersService checkout reservations', () => {
 
   beforeEach(() => {
     prisma = {
+      product: { findMany: jest.fn().mockResolvedValue([{ id: 7, name: 'Camiseta', imageUrl: null, privateCost: { unitCostCents: 1000 } }]) },
+      checkoutItemFinancial: { findMany: jest.fn().mockResolvedValue([]) },
+      orderItemFinancial: { createMany: jest.fn().mockResolvedValue({ count: 1 }) },
       checkoutSnapshot: {
         findFirst: jest.fn(),
         create: jest.fn(),
@@ -318,6 +321,11 @@ describe('OrdersService checkout reservations', () => {
         status: 'RESERVED',
       }),
     });
+    expect(prisma.checkoutSnapshot.create).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({
+      items: { create: [expect.objectContaining({ financialSnapshot: { create: {
+        unitCostCents: 1000, productName: 'Camiseta', imageUrl: null,
+      } } })] },
+    }) }));
   });
 
   it('releases a cancelled checkout reservation exactly once', async () => {

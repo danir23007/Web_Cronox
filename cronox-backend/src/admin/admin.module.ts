@@ -1,4 +1,6 @@
 import { Module } from '@nestjs/common';
+import { AdminFinanceController } from './finance/admin-finance.controller';
+import { AdminFinanceService } from './finance/admin-finance.service';
 import { ProductModule } from '../products/product.module';
 import { AdminGuard } from '../common/guards/admin.guard';
 import { CategoriesModule } from '../categories/categories.module';
@@ -48,6 +50,7 @@ import { AdminManualPurchaseCorrectionsController, AdminManualPurchasesControlle
     OrdersModule,
   ],
   controllers: [
+    AdminFinanceController,
     AdminOrdersController,
     AdminUsersController,
     AdminProductsController,
@@ -65,6 +68,7 @@ import { AdminManualPurchaseCorrectionsController, AdminManualPurchasesControlle
     AdminManualPurchaseCorrectionsController,
   ],
   providers: [
+    AdminFinanceService,
     AdminOrdersService,
     AdminUsersService,
     AdminStockService,

@@ -469,7 +469,7 @@ describe('CRONOX admin gallery', () => {
     const document = new JSDOM(adminHtml).window.document;
 
     expect(
-      document.querySelector('[data-nav-target="section-gallery"]')
+      document.querySelector('[aria-controls="navGaleria"]')
         ?.textContent,
     ).toContain('Galería');
     expect(document.getElementById('section-gallery')).not.toBeNull();

@@ -6,7 +6,7 @@ import {
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
-import { availableStock, classifyStock } from '../../common/stock-status';
+import { availableStock, classifyStock, classifyVariantStock, VARIANT_LOW_STOCK_MAX } from '../../common/stock-status';
 import {
   INVENTORY_AUDIT_ACTION,
   INVENTORY_AUDIT_TARGET,
@@ -76,6 +76,7 @@ export class AdminInventoryService {
       items: products.map((product) => this.mapProduct(product)),
       meta: { page, pageSize, totalItems, totalPages },
       lowStockThreshold: INVENTORY_LOW_STOCK_THRESHOLD,
+      variantLowStockThreshold: VARIANT_LOW_STOCK_MAX,
     };
   }
 
@@ -103,7 +104,7 @@ export class AdminInventoryService {
           )
         )::bigint AS "soldOutProducts",
         (SELECT COUNT(*) FROM "ProductVariant" v
-          WHERE v."isActive" AND v."stock" > 0 AND v."stock" <= ${INVENTORY_LOW_STOCK_THRESHOLD}
+          WHERE v."isActive" AND v."stock" > 0 AND v."stock" <= ${VARIANT_LOW_STOCK_MAX}
         )::bigint AS "lowStockVariants"
       FROM "Product" p
     `);
@@ -114,6 +115,7 @@ export class AdminInventoryService {
       soldOutProducts: Number(row?.soldOutProducts ?? 0),
       lowStockVariants: Number(row?.lowStockVariants ?? 0),
       lowStockThreshold: INVENTORY_LOW_STOCK_THRESHOLD,
+      variantLowStockThreshold: VARIANT_LOW_STOCK_MAX,
     };
   }
 
@@ -322,12 +324,7 @@ export class AdminInventoryService {
       variants: product.variants.map((variant) => ({
         ...variant,
         stock: variant.stockQty,
-        status:
-          variant.stockQty === 0
-            ? 'out_of_stock'
-            : variant.stockQty <= INVENTORY_LOW_STOCK_THRESHOLD
-              ? 'low'
-              : 'in_stock',
+        status: classifyVariantStock(variant.stockQty),
       })),
     };
   }

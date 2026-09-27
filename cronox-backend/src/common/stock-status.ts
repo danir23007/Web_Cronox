@@ -1,5 +1,11 @@
 // Shared by Nest and the browser API bundle. No browser or database dependencies.
 export const LOW_STOCK_MAX = 14;
+// Administrative per-size state; product totals and storefront semantics stay unchanged.
+export const VARIANT_LOW_STOCK_MAX = 4;
+export function classifyVariantStock(stock: number) {
+  if (!Number.isSafeInteger(stock) || stock <= 0) return 'out_of_stock';
+  return stock <= VARIANT_LOW_STOCK_MAX ? 'low' : 'in_stock';
+}
 export function classifyStock(total: number) {
   if (!Number.isSafeInteger(total) || total <= 0) return 'out_of_stock';
   return total <= LOW_STOCK_MAX ? 'low' : 'in_stock';

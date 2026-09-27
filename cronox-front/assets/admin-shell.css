@@ -1,0 +1,161 @@
+/* All redesign rules are confined to the administration document. */
+body.cronox-admin { --admin-line:var(--admin-c-e5e8ee); --admin-muted:var(--admin-c-687386); --admin-ink:var(--admin-c-19202c); background:var(--admin-c-f2f4f8); color:var(--admin-ink); font-family:Inter,Arial,sans-serif; font-size:14px; }
+.cronox-admin-user { color-scheme:light; }
+.cronox-admin-user .topbar { position:static; background:var(--admin-c-fff); color:var(--admin-c-19202c); border:1px solid var(--admin-c-e5e8ee); border-radius:8px; box-shadow:none; margin-bottom:20px; }
+.cronox-admin-user .page { max-width:none; }
+.cronox-admin-user .pill,.cronox-admin-user .tab,.cronox-admin-user .panel { background:var(--admin-c-fff); color:var(--admin-c-394252); border-color:var(--admin-c-e5e8ee); }
+.cronox-admin-user .kv-list dt,.cronox-admin-user .breadcrumb { color:var(--admin-c-687386); }
+.cronox-admin-user .kv-row dd { color:var(--admin-c-202734); }
+.cronox-admin-user .user-edit-field,.cronox-admin-user .manual-purchase-field { color:var(--admin-c-475166); }
+.cronox-admin-user .notes-form input,.cronox-admin-user .notes-form textarea,.cronox-admin-user .user-edit-field input,.cronox-admin-user .user-edit-field select,.cronox-admin-user .manual-purchase-field input,.cronox-admin-user .manual-purchase-field select,.cronox-admin-user .manual-purchase-field textarea { background:var(--admin-c-fff); color:var(--admin-c-202734); border-color:var(--admin-c-d8dee7); }
+.cronox-admin-user .manual-purchase,.cronox-admin-user .manual-purchase-review { background:var(--admin-c-f8f9fb); color:var(--admin-c-202734); border-color:var(--admin-c-e5e8ee); }
+.cronox-admin *, .cronox-admin *::before, .cronox-admin *::after { box-sizing:border-box; }
+.cronox-admin .admin-auth-check { color:var(--admin-c-687386); }
+.cronox-admin button,.cronox-admin input,.cronox-admin select { font:inherit; }
+.cronox-admin :focus-visible { outline:3px solid #4b7ce7; outline-offset:3px; }
+.cronox-admin .admin-shell { width:100%; max-width:none; padding:0 0 40px 204px; margin:0; }
+.cronox-admin .admin-sidebar { position:fixed; inset:0 auto 0 0; width:204px; background:var(--admin-c-fff); border-right:1px solid var(--admin-line); display:flex; flex-direction:column; padding:25px 12px 16px; z-index:30; overflow-y:auto; }
+.cronox-admin .admin-brand { display:block; padding:5px 16px 29px; font-size:25px; font-weight:900; letter-spacing:2.2px; color:var(--admin-c-111); text-decoration:none; }
+.cronox-admin .admin-brand span { display:block; font-size:8px; letter-spacing:2px; color:var(--admin-muted); margin-top:7px; }
+.cronox-admin .admin-sidebar button { width:100%; padding:12px 11px; border:0; border-radius:5px; background:none; color:var(--admin-c-394252); text-align:left; cursor:pointer; display:flex; align-items:center; gap:10px; font-size:13px; min-height:41px; }
+.cronox-admin .admin-sidebar button:hover { background:var(--admin-c-f4f6f9); }
+.cronox-admin .admin-sidebar button[aria-current="page"] { background:var(--admin-c-edf2fa); color:var(--admin-c-13274a); font-weight:700; box-shadow:inset 3px 0 var(--admin-c-111); }
+.cronox-admin .sidebar-chevron { margin-left:auto; font-size:15px; transition:transform .15s; }
+.cronox-admin .sidebar-group[aria-expanded="true"]>.sidebar-chevron { transform:rotate(180deg); }
+.cronox-admin .sidebar-children { padding-left:19px; }
+.cronox-admin .sidebar-children .sidebar-children { padding-left:12px; }
+.cronox-admin .sidebar-account { border-top:1px solid var(--admin-line); margin-top:auto; padding-top:14px; }
+.cronox-admin .admin-header { min-height:66px; margin:0; padding:15px 30px; display:flex; flex-wrap:nowrap; gap:15px; background:var(--admin-c-fff); border-bottom:1px solid var(--admin-line); color:var(--admin-muted); font-size:12px; }
+.cronox-admin .admin-header-mark { margin-left:auto; display:grid; place-items:center; width:29px; height:29px; background:var(--admin-c-edf5ee); color:var(--admin-c-285e3b); border-radius:50%; font-weight:700; }
+.cronox-admin #sidebarToggle { display:none; border:0; background:transparent; color:var(--admin-c-111); font-size:22px; cursor:pointer; }
+.cronox-admin .admin-main { padding:30px; max-width:1900px; margin:0 auto; }
+.cronox-admin .admin-section { min-width:0; }
+.cronox-admin .card,.cronox-admin .modal .modal-box { background:var(--admin-c-fff); color:var(--admin-ink); border:1px solid var(--admin-line); border-radius:10px; box-shadow:none; }
+.cronox-admin :is(.inventory-stat,.inventory-product,.stat-card,.note-card,.category-filter-panel,.category-assignment-card,.product-order,.product-order__item,.product-gallery-manager,.product-card-framing-editor,.key-admin__summary,.key-launch,.key-expiration,.media-library,.media-library__folder,.media-card,.media-asset,.gallery-editor-section,.mail-nav-card,.mail-template-card) { background:var(--admin-c-fff); color:var(--admin-ink); border-color:var(--admin-line); box-shadow:none; }
+.cronox-admin .inventory-product--in-stock { border-color:var(--admin-c-b8dcc4); }
+.cronox-admin .inventory-product--low-stock { border-color:var(--admin-c-e5d396); }
+.cronox-admin .inventory-product--out-of-stock { border-color:var(--admin-c-e4babc); }
+.cronox-admin :is(.inventory-stat span,.inventory-metric span,.inventory-product__meta,.stat-card span,.note-content,.category-product__meta,.category-current__empty,.category-save-status,.subtle,.admin-nav-item__description,.key-launch p,.key-expiration p,.media-manager__filters label,.media-editor__controls label,.media-manager__status,.media-editor__message,.media-editor__help,.media-library__header p,.media-card__meta,.media-editor__dimensions,.gallery-public-mode,.gallery-admin-status,.gallery-carousel-admin-help,.gallery-carousel-activation-hint,.gallery-publish-actions p,.footer-admin__status,.footer-admin label,.newsletter-admin__status) { color:var(--admin-muted); }
+.cronox-admin .media-card__actions a { color:var(--admin-c-245ab0); }
+.cronox-admin .inventory-unsaved,.cronox-admin .media-editor__dirty { color:var(--admin-c-88651c); }
+.cronox-admin .gallery-public-mode strong { color:var(--admin-c-202734); }
+.cronox-admin .newsletter-admin__controls section { background:var(--admin-c-f8f9fb); border-color:var(--admin-line); }
+.cronox-admin .newsletter-admin__controls label { color:var(--admin-c-475166); }
+.cronox-admin .newsletter-asset,.cronox-admin .key-asset { background:var(--admin-c-fff); color:var(--admin-c-202734); border-color:var(--admin-c-d8dee7); }
+.cronox-admin .newsletter-asset.is-selected { border-color:#326ad0; box-shadow:0 0 0 1px #326ad0 inset; }
+.cronox-admin .product-gallery-thumb { background:var(--admin-c-f3f5f8); color:var(--admin-c-202734); }
+.cronox-admin .product-gallery-thumb[aria-pressed="true"] { border-color:#326ad0; }
+.cronox-admin .mail-nav-card h3,.cronox-admin .mail-template-card h3,.cronox-admin .mail-breadcrumb strong { color:var(--admin-c-202734); }
+.cronox-admin .mail-editor-shell { background:#101014; color:#f3f4f6; border-radius:6px; }
+.cronox-admin .mail-editor-shell .btn { color:var(--admin-c-fff); background:#202026; border-color:#41414c; }
+.cronox-admin .mail-editor-shell .mail-primary { background:var(--admin-c-fff) !important; color:var(--admin-c-111) !important; }
+.cronox-admin .footer-admin__status[data-state="success"],.cronox-admin .newsletter-admin__status[data-state="success"],.cronox-admin .media-manager__status[data-state="success"] { color:var(--admin-c-21613b); }
+.cronox-admin .footer-admin__status[data-state="error"],.cronox-admin .newsletter-admin__status[data-state="error"],.cronox-admin .media-manager__status[data-state="error"] { color:var(--admin-c-9b3229); }
+.cronox-admin #section-dashboard { padding:0; border:0; background:none; }
+.cronox-admin .btn { background:var(--admin-c-fff); color:var(--admin-c-252d3a); border:1px solid var(--admin-c-d7dce5); border-radius:5px; padding:9px 13px; font-size:12px; }
+.cronox-admin .btn:hover { background:var(--admin-c-f0f3f7); border-color:var(--admin-c-bac3d0); }
+.cronox-admin .btn.primary { background:var(--admin-c-101114); color:var(--admin-c-fff); border:1px solid var(--admin-c-101114); }
+.cronox-admin .btn.danger { background:var(--admin-c-fff); border-color:var(--admin-c-e3c7c7); color:var(--admin-c-a32c2c); }
+.cronox-admin .input,.cronox-admin .select,.cronox-admin .textarea { background:var(--admin-c-fff); color:var(--admin-c-202734); border:1px solid var(--admin-c-d8dee7); border-radius:5px; }
+.cronox-admin small,.cronox-admin th,.cronox-admin .empty,.cronox-admin .dashboard-sub,.cronox-admin .time-sub,.cronox-admin .user-email,.cronox-admin .page-info { color:var(--admin-muted); }
+.cronox-admin th { font-size:11px; font-weight:600; }
+.cronox-admin td { font-size:13px; }
+.cronox-admin th,.cronox-admin td { border-color:var(--admin-line); }
+.cronox-admin .badge,.cronox-admin .chip,.cronox-admin .tab-badge,.cronox-admin .note-tag { background:var(--admin-c-f3f5f8); color:var(--admin-c-3c485a); border-color:var(--admin-c-e1e5ec); }
+.cronox-admin .link-btn { color:var(--admin-c-245ab0); }
+.cronox-admin .dashboard-alerts .alert-item,.cronox-admin details.filters-panel,.cronox-admin .empty-state,.cronox-admin .status-banner { background:var(--admin-c-fff); color:var(--admin-ink); border-color:var(--admin-line); }
+.cronox-admin .empty-state strong,.cronox-admin .status-banner__message { color:var(--admin-ink); }
+.cronox-admin .message.success { color:var(--admin-c-21613b); background:var(--admin-c-edf7f0); border-color:var(--admin-c-cde4d4); }
+.cronox-admin .message.error,.cronox-admin .status-banner--error { background:var(--admin-c-fff0ef); color:var(--admin-c-9b3229); border-color:var(--admin-c-efccc8); }
+.cronox-admin [data-back-target="section-menu"] { display:none; }
+.cronox-admin .legacy-summary-heading { margin:32px 0 22px; padding-top:25px; border-top:1px solid var(--admin-c-dfe4ec); }
+.cronox-admin .legacy-summary-heading span { font-size:10px; letter-spacing:1.7px; color:var(--admin-muted); }
+.cronox-admin .legacy-summary-heading h2 { font-size:19px; margin:8px 0; }
+.cronox-admin .legacy-summary-heading p { color:var(--admin-muted); font-size:12px; }
+.cronox-admin .finance-heading { display:flex; align-items:center; justify-content:space-between; gap:16px; margin:3px 0 22px; }
+.cronox-admin .finance-heading h1 { font-size:23px; font-weight:650; letter-spacing:-.5px; margin:0 0 6px; color:var(--admin-c-141a24); }
+.cronox-admin .finance-heading p { color:var(--admin-muted); margin:0; font-size:12px; }
+.cronox-admin .finance-controls { display:flex; flex-wrap:wrap; justify-content:flex-end; align-items:center; gap:10px; }
+.cronox-admin .finance-card { background:var(--admin-c-fff); border:1px solid var(--admin-line); border-radius:10px; padding:22px; }
+.cronox-admin .finance-card h2 { margin:0 0 7px; font-weight:600; font-size:17px; }
+.cronox-admin .finance-card p { color:var(--admin-muted); font-size:12px; line-height:1.6; margin:0 0 12px; }
+.cronox-admin .finance-chart-head { display:flex; align-items:flex-start; justify-content:space-between; gap:16px; }
+.cronox-admin .finance-totals { display:flex; gap:35px; margin:25px 0 16px; }
+.cronox-admin .finance-total { border-left:3px solid #1bad68; padding-left:12px; }
+.cronox-admin .finance-total.profit { border-color:#3e72ed; }
+.cronox-admin .finance-total span { color:var(--admin-muted); font-size:12px; display:block; margin-bottom:5px; }
+.cronox-admin .finance-total strong { font-size:26px; font-weight:600; letter-spacing:-.5px; }
+.cronox-admin .finance-segment { display:flex; padding:3px; gap:3px; background:var(--admin-c-f2f4f8); border-radius:6px; }
+.cronox-admin .finance-segment button { border:0; border-radius:4px; padding:6px 12px; color:var(--admin-muted); background:none; cursor:pointer; font-size:12px; }
+.cronox-admin .finance-segment button[aria-pressed="true"] { background:var(--admin-c-fff); color:#202936; box-shadow:0 1px 4px #17284b12; }
+.cronox-admin .finance-chart { position:relative; width:100%; height:285px; touch-action:pan-y; }
+.cronox-admin .finance-chart svg { width:100%; height:100%; overflow:visible; }
+.cronox-admin .finance-chart text { fill:#778191; font:11px Arial,sans-serif; }
+.cronox-admin .finance-tooltip { position:absolute; z-index:3; pointer-events:none; background:#202936; color:white; border-radius:6px; padding:11px; font-size:12px; line-height:1.7; white-space:nowrap; box-shadow:0 5px 15px #17284b22; }
+.cronox-admin .finance-chart-status { color:var(--admin-muted); font-size:12px; text-align:center; min-height:18px; }
+.cronox-admin .finance-overviews { display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-top:16px; }
+.cronox-admin .finance-list { min-height:185px; margin:12px 0; }
+.cronox-admin .finance-row { display:flex; align-items:center; gap:11px; padding:11px 0; border-bottom:1px solid #f0f2f5; color:inherit; text-decoration:none; }
+.cronox-admin .finance-row:last-child { border-bottom:0; }
+.cronox-admin .finance-thumb { width:37px; height:42px; background:#f1f3f7; border-radius:4px; object-fit:cover; flex-shrink:0; display:grid; place-items:center; font-size:11px; color:#8390a0; }
+.cronox-admin .finance-row-title { flex:1; min-width:0; }
+.cronox-admin .finance-row-title strong { display:block; font-size:12px; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.cronox-admin .finance-row-title small { display:block; font-size:10px; margin-top:5px; }
+.cronox-admin .finance-row-amount { font-size:12px; white-space:nowrap; }
+.cronox-admin .finance-card-action { width:100%; display:block; text-align:center; text-decoration:none; background:var(--admin-c-111); color:var(--admin-c-fff); padding:10px; border:0; border-radius:4px; font-size:11px; cursor:pointer; }
+.cronox-admin .finance-empty { padding:35px 10px; text-align:center; font-size:12px; color:var(--admin-muted); }
+.cronox-admin .finance-warning { border:1px solid #ebdfb4; background:#fffaf0; color:#82611b; font-size:12px; line-height:1.6; padding:12px 15px; border-radius:6px; margin:12px 0; }
+.cronox-admin .finance-notice { font-size:11px; color:var(--admin-muted); line-height:1.6; margin:15px 0; }
+.cronox-admin .finance-error { padding:25px; background:var(--admin-c-fff); border:1px solid var(--admin-c-efccc8); border-radius:8px; color:#963d34; }
+.cronox-admin .finance-searchbar { display:flex; gap:12px; flex-wrap:wrap; margin:20px 0; }
+.cronox-admin .finance-searchbar input { flex:1; min-width:180px; }
+.cronox-admin .finance-searchbar select { width:auto; min-width:230px; }
+.cronox-admin .finance-table-wrap { overflow:auto; }
+.cronox-admin .finance-table { min-width:690px; }
+.cronox-admin .finance-table th:not(:first-child),.cronox-admin .finance-table td:not(:first-child) { text-align:right; white-space:nowrap; }
+.cronox-admin .finance-table td:first-child { min-width:220px; }
+.cronox-admin .finance-table .finance-row { padding:0; }
+.cronox-admin .finance-unknown { color:#8b6924; font-size:11px; }
+.cronox-admin .finance-range { position:relative; }
+.cronox-admin .finance-range-button { background:var(--admin-c-fff); border:1px solid var(--admin-c-dfe4ec); border-radius:5px; padding:10px 13px; color:#445067; cursor:pointer; font-size:11px; white-space:nowrap; }
+.cronox-admin .finance-range-button span { border-right:1px solid #dce2ea; padding-right:9px; margin-right:9px; }
+.cronox-admin .finance-picker { position:absolute; right:0; top:calc(100% + 10px); z-index:15; width:465px; background:var(--admin-c-fff); border:1px solid #e8ebf1; border-radius:7px; box-shadow:0 12px 35px #14213d26; display:grid; grid-template-columns:140px 1fr; padding:15px; text-align:left; }
+.cronox-admin .finance-presets { border-right:1px solid #edf0f4; padding-right:12px; display:flex; flex-direction:column; gap:5px; }
+.cronox-admin .finance-presets button { border:0; background:none; text-align:center; font-size:11px; color:#546076; padding:13px 5px; border-radius:4px; cursor:pointer; }
+.cronox-admin .finance-presets button[aria-pressed="true"] { background:#eef4ff; color:#356fe4; }
+.cronox-admin .finance-calendar-panel { padding-left:15px; min-width:0; }
+.cronox-admin .finance-date-fields { display:flex; gap:8px; }
+.cronox-admin .finance-date-fields label { width:50%; text-align:center; color:var(--admin-c-5f6a7b); font-size:10px; }
+.cronox-admin .finance-date-fields input { width:100%; font-size:10px; color:var(--admin-c-475166); border:1px solid var(--admin-c-e0e5ed); background:var(--admin-c-fff); border-radius:3px; padding:7px 5px; margin-top:6px; }
+.cronox-admin .finance-month-nav { display:flex; align-items:center; justify-content:space-between; margin:13px 0 7px; }
+.cronox-admin .finance-month-nav strong { font-size:13px; font-weight:500; text-transform:capitalize; }
+.cronox-admin .finance-month-nav button { border:0; background:none; cursor:pointer; padding:5px; }
+.cronox-admin .finance-calendar { display:grid; grid-template-columns:repeat(7,1fr); gap:0; }
+.cronox-admin .finance-calendar span { text-align:center; color:var(--admin-c-808896); font-size:10px; padding:5px 0; }
+.cronox-admin .finance-calendar button { border:0; border-radius:0; background:var(--admin-c-fff); min-height:32px; color:var(--admin-c-495468); font-size:11px; cursor:pointer; }
+.cronox-admin .finance-calendar button.outside { color:var(--admin-c-c0c7d0); }
+.cronox-admin .finance-calendar button.in-range { background:var(--admin-c-eef3fc); }
+.cronox-admin .finance-calendar button.endpoint { background:#4a88e9; color:var(--admin-c-fff); border-radius:50%; }
+.cronox-admin .finance-picker-actions { display:flex; justify-content:flex-end; gap:6px; margin-top:12px; }
+.cronox-admin .finance-picker-actions button { border:0; border-radius:3px; padding:7px 10px; cursor:pointer; font-size:11px; background:var(--admin-c-fff); color:var(--admin-c-556075); }
+.cronox-admin .finance-picker-actions .apply { background:#168f86; color:var(--admin-c-fff); }
+.cronox-admin .finance-picker-error { color:var(--admin-c-ac352c); font-size:11px; margin-top:8px; }
+.cronox-admin .sidebar-backdrop { position:fixed; inset:0; background:#17203370; border:0; z-index:25; }
+@media(min-width:1700px) { .cronox-admin .finance-chart { height:350px; } }
+@media(max-width:1050px) { .cronox-admin .finance-heading { align-items:flex-start; flex-direction:column; } .cronox-admin .admin-main { padding:22px; } }
+@media(max-width:800px) {
+  .cronox-admin .admin-shell { padding-left:0; }
+  .cronox-admin .admin-sidebar { transform:translateX(-100%); width:240px; transition:transform .15s; }
+  .cronox-admin.sidebar-open .admin-sidebar { transform:translateX(0); }
+  .cronox-admin #sidebarToggle { display:block; }
+  .cronox-admin .admin-header { padding:12px 18px; }
+  .cronox-admin .admin-main { padding:20px 14px; }
+  .cronox-admin .finance-overviews { grid-template-columns:1fr; }
+  .cronox-admin .finance-card { padding:16px; }
+  .cronox-admin .finance-controls { justify-content:flex-start; width:100%; }
+  .cronox-admin .finance-picker { position:fixed; top:125px; left:12px; right:12px; width:auto; max-width:465px; max-height:calc(100vh - 140px); overflow:auto; grid-template-columns:108px 1fr; padding:10px; }
+  .cronox-admin .finance-calendar-panel { padding-left:10px; }
+  .cronox-admin .finance-total strong { font-size:22px; }
+  .cronox-admin .finance-totals { gap:24px; }
+  .cronox-admin .finance-chart { height:250px; }
+}

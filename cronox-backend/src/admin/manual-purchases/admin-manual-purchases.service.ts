@@ -91,7 +91,7 @@ export class AdminManualPurchasesService {
           if (!user) throw new NotFoundException('Usuario no encontrado');
           const variants = await tx.productVariant.findMany({
             where: { id: { in: [...quantities.keys()] }, isActive: true, product: { isActive: true } },
-            include: { product: { select: { id: true, name: true, price: true, currency: true } } },
+            include: { product: { select: { id: true, name: true, price: true, currency: true, imageUrl: true, privateCost: true } } },
           });
           if (variants.length !== quantities.size) throw new BadRequestException('VARIANT_NOT_AVAILABLE');
           const currencies = new Set(variants.map((variant) => variant.product.currency));
@@ -146,6 +146,11 @@ export class AdminManualPurchasesService {
                   unitPrice: toDecimal(unitPriceCents),
                   quantity,
                   lineTotal: toDecimal(unitPriceCents * quantity),
+                  financialSnapshot: { create: {
+                    // A backdated sale has no reliable historical cost evidence.
+                    unitCostCents: dto.purchasedAt ? null : variant.product.privateCost?.unitCostCents ?? null,
+                    productName: variant.product.name, imageUrl: variant.product.imageUrl,
+                  } },
                 })),
               },
             },

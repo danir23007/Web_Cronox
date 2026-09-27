@@ -15,8 +15,19 @@
     form.hidden = false;
     email.focus();
   };
-  const showError = () => {
-    status.textContent = 'No se pudo iniciar sesión. Revisa tus credenciales.';
+  const showError = (error) => {
+    const code = Number(error?.status || error?.statusCode || 0);
+    status.textContent = code === 401
+      ? 'No se pudo iniciar sesión. Revisa tus credenciales.'
+      : code === 429
+        ? 'Demasiados intentos de acceso. Espera un minuto antes de volver a intentarlo.'
+        : code === 403
+          ? 'No se pudo validar la sesión del navegador. Recarga la página y permite las cookies de este sitio.'
+          : code >= 500
+            ? 'El servidor no pudo completar el acceso. Inténtalo de nuevo.'
+            : code === 400
+              ? 'Revisa que hayas introducido el correo y la contraseña completos.'
+              : 'No se pudo conectar con el servidor. Comprueba la conexión y que el servidor esté iniciado.';
   };
   const redirectToAdmin = () => window.location.replace(requestedReturnTo);
 
@@ -52,8 +63,8 @@
         return;
       }
       redirectToAdmin();
-    } catch {
-      showError();
+    } catch (error) {
+      showError(error);
     } finally {
       submit.disabled = false;
       submit.textContent = 'INICIAR SESIÓN';

@@ -1909,22 +1909,10 @@
   elements.viewport.addEventListener("pointerup", stopDrag);
   elements.viewport.addEventListener("pointercancel", stopDrag);
 
-  pageDocument
-    .querySelectorAll('[data-nav-target="section-gallery"]')
-    .forEach((button) =>
-      button.addEventListener("click", () =>
-        loadGallery().catch(() => undefined),
-      ),
-    );
-  window.addEventListener("hashchange", () => {
-    if (window.location.hash === "#section-gallery")
-      loadGallery().catch(() => undefined);
-  });
-  if (window.location.hash === "#section-gallery")
-    loadGallery().catch(() => undefined);
-
   window.CRONOX_ADMIN_GALLERY = {
     load: loadGallery,
+    hasUnsavedChanges: () => !!state.draft,
+    discard: () => closeEditor(true),
     openEditor,
     selectEditorMode,
     activateMode,

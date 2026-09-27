@@ -74,10 +74,10 @@
       '<h3>Cuentas de envío</h3><p>Elige desde qué dirección trabaja la plantilla.</p></div>' +
       button('deliveries', 'Historial de envíos', '', 'btn mail-secondary') + '</header>' +
       '<div class="mail-accounts">' + accounts.map((a) => navCard(
-        a.email || a.name || a.key,
+        a.label || a.email || a.name || a.key,
         a.counts.folders + " círculos · " + a.counts.templates + " plantillas",
         '<span class="mail-status ' + (a.configured ? "is-ready" : "") + '"><i></i>' +
-          (a.configured ? "SMTP configurado" : "SMTP pendiente") + "</span>",
+          (a.localOnly ? "Envío externo desactivado · vista previa local" : a.configured ? "SMTP configurado" : "SMTP pendiente") + "</span>",
         "account", a.key,
       )).join("") + "</div>";
     message("Selecciona una cuenta de correo.");
@@ -297,7 +297,7 @@
       esc(state.account.email || state.key) + '" readonly></label>' +
       (!state.signatureEditor
         ? '<label><span>Asunto</span><input data-field="subject" value="' + esc(current.subject) +
-          '" maxlength="200" placeholder="Asunto del correo"></label><label><span>Preheader</span>' +
+          '" maxlength="200" placeholder="Asunto del correo"></label><label><span>Texto previo</span>' +
           '<input data-field="preheader" value="' + esc(current.preheader || "") +
           '" maxlength="300" placeholder="Texto que se ve junto al asunto"></label>'
         : "") + '</section><div class="mail-builder"><aside class="mail-add-panel"><h4>Añadir</h4>' +
@@ -322,7 +322,7 @@
           button("compiled-preview", "Vista previa del HTML final", "", "btn mail-secondary") +
           button("plain-text", "Ver texto plano", "", "btn mail-secondary") +
           button("export", "Exportar HTML", "", "btn mail-secondary") +
-          button("test", "Enviar prueba", state.account.configured ? "" : 'disabled title="SMTP no configurado"', "btn mail-secondary") +
+          button("test", state.account.localOnly ? "Probar localmente" : "Enviar prueba", (state.account.localOnly || state.account.configured) ? "" : 'disabled title="SMTP no configurado"', "btn mail-secondary") +
           (current.id
             ? button("duplicate-template", "Duplicar plantilla", "", "btn mail-secondary") +
               button(current.archivedAt ? "restore-template" : "archive-template",
@@ -744,6 +744,11 @@
     }
     if (name === "test") {
       if (!state.current.id || state.dirty) return message("Guarda el borrador antes de enviar una prueba.");
+      if (state.account.localOnly) {
+        const result = await api(pathFor("/templates/" + state.current.id + "/test"), "POST", {to:'preview@localhost.invalid',confirmed:true});
+        await compiledPreview(false);
+        return message(result.message, "success");
+      }
       const to = window.prompt("Destinatario de la prueba");
       if (!to || !window.confirm("¿Enviar una prueba real a " + to + "?")) return;
       const result = await api(pathFor("/templates/" + state.current.id + "/test"), "POST", {

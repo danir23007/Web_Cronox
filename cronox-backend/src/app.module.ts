@@ -43,7 +43,7 @@ import {
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
-      envFilePath: '.env',
+      envFilePath: process.env.CRONOX_ENV_FILE || '.env',
       validate: validateEnvironment,
     }),
     ThrottlerModule.forRoot([

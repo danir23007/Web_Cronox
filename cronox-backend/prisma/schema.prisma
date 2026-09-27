@@ -143,6 +143,7 @@ model EmailDelivery {
 }
 
 model Product {
+  privateCost        ProductCost?
   id                 Int                        @id @default(autoincrement())
   slug               String                     @unique
   name               String
@@ -833,6 +834,7 @@ model CheckoutSnapshot {
 }
 
 model CheckoutSnapshotItem {
+  financialSnapshot  CheckoutItemFinancial?
   id                 Int              @id @default(autoincrement())
   checkoutSnapshotId String
   productId          Int
@@ -871,6 +873,7 @@ model CheckoutStockReservation {
 // Stripe may deliver an event more than once and in a different order from
 // related events. Store event identity and lifecycle state before acting on it.
 model StripeWebhookEvent {
+  refundCumulativeCents Int?
   id              String    @id
   type            String
   paymentIntentId String?
@@ -888,6 +891,7 @@ model StripeWebhookEvent {
 }
 
 model Order {
+  paidAt               DateTime?
   id                   Int                     @id @default(autoincrement())
   status               OrderStatus             @default(PENDING)
   // Preserve fulfillment progress while a Stripe dispute is open. A later
@@ -949,6 +953,7 @@ model Order {
 }
 
 model OrderItem {
+  financialSnapshot OrderItemFinancial?
   id        Int             @id @default(autoincrement())
   orderId   Int
   productId Int
@@ -963,6 +968,30 @@ model OrderItem {
 
   @@index([orderId])
   @@index([variantId])
+}
+
+// Private relations are never included by public product/cart/order queries.
+model ProductCost {
+  productId     Int      @id
+  unitCostCents Int?
+  updatedAt     DateTime @updatedAt
+  product       Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+}
+
+model CheckoutItemFinancial {
+  itemId        Int                  @id
+  unitCostCents Int?
+  productName   String
+  imageUrl      String?
+  item          CheckoutSnapshotItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+}
+
+model OrderItemFinancial {
+  itemId        Int       @id
+  unitCostCents Int?
+  productName   String
+  imageUrl      String?
+  item          OrderItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
 }
 
 model StockMovement {

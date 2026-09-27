@@ -124,7 +124,7 @@
       method,
       credentials: 'include',
       headers,
-    });
+    }).catch(() => { throw new Error('No se pudo conectar con el servidor. Inténtalo de nuevo.'); });
     const responseText = await response.text();
     let data = null;
     try {
@@ -132,7 +132,16 @@
     } catch (error) {
       data = null;
     }
-    if (!response.ok) throw new Error(data?.message || 'Error ' + response.status);
+    if (!response.ok) {
+      // Internal exceptions remain in Nest logs; never expose SQL or English 5xx text.
+      const message = response.status >= 500 ? 'No se pudieron cargar o actualizar los pedidos. Inténtalo de nuevo.'
+        : response.status === 401 ? 'Tu sesión ha caducado. Inicia sesión de nuevo.'
+        : response.status === 403 ? 'No tienes permiso para realizar esta operación.'
+        : response.status === 404 ? 'No se encontró el pedido solicitado.'
+        : typeof data?.message === 'string' && data.message !== 'Internal server error' ? data.message
+        : 'No se pudo completar la operación. Revisa los datos e inténtalo de nuevo.';
+      throw new Error(message);
+    }
     return data;
   }
 
@@ -343,4 +352,5 @@
     }
   });
   window.fetchOrders = load;
+  window.CRONOX_ADMIN_ORDERS = { open: openOrder };
 })();

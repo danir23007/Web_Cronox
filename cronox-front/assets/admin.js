@@ -296,8 +296,9 @@
   let requestSearchTimeout23 = null;
   let activitySearchTimeout = null;
   let usersSearchTimeout = null;
-  let currentSectionId = 'section-menu';
-  let lastSectionId = 'section-menu';
+  let currentSectionId = 'section-dashboard';
+  let activeRouteHash = window.location.hash || '#section-dashboard';
+  let lastSectionId = 'section-dashboard';
   let lastPendingCounts = { pending23: 0, pending34: 0 };
   const PENDING_STORAGE_KEY = 'cronox.admin.pendingCounts';
   const ADMIN_ROLES = new Set(['ADMIN', 'SUPERADMIN']);
@@ -961,11 +962,14 @@
 
   const showSection = (sectionId) => {
     if (currentSectionId === 'section-mails' && sectionId !== currentSectionId && window.CRONOX_MAILS && !window.CRONOX_MAILS.canLeave()) return false;
+    const destination = sectionId === 'section-gallery' ? (window.location.hash.includes('carousel') ? 'section-gallery-carousel' : 'section-gallery-mosaic') : sectionId;
+    if (window.CRONOX_ADMIN_SHELL && !window.CRONOX_ADMIN_SHELL.canLeave(destination)) return false;
     const allowed = applySectionAccess(sectionId);
     document.querySelectorAll('.admin-section').forEach((section) => {
       section.hidden = section.id !== sectionId;
     });
     currentSectionId = sectionId;
+    window.CRONOX_ADMIN_SHELL?.select?.(destination);
     return allowed;
   };
 
@@ -1627,49 +1631,60 @@
     loadUserDetail(userId);
   };
 
-  const handleHashChange = () => {
-    const hash = window.location.hash || '';
-    if (hash.startsWith('#user=')) {
-      const match = hash.match(/user=(\d+)/);
-      const userId = match ? Number(match[1]) : null;
-      if (Number.isFinite(userId)) {
-        openUserDetail(userId, { skipHash: true });
-        return;
-      }
+  const loadSection = (sectionId) => {
+    if (sectionId === 'section-dashboard') { fetchDashboard(); window.CRONOX_FINANCE?.load('dashboard'); }
+    if (sectionId === 'section-money') window.CRONOX_FINANCE?.load('money');
+    if (sectionId === 'section-34') { syncRequestsStateFromInputs(); fetchRequests(); markRequestsSeen(); }
+    if (sectionId === 'section-23') { syncRequests23StateFromInputs(); fetchRequests23(); markRequestsSeen(); }
+    if (sectionId === 'section-activity') { syncActivityStateFromInputs(); fetchActivity(); }
+    if (sectionId === 'section-users') { readUsersStateFromHash(); applyUsersStateToInputs(); syncUsersStateFromInputs(); fetchUsers(); }
+    if (sectionId === 'section-products') { syncProductsStateFromInputs(); loadProductCategories(); fetchProducts(); }
+    if (sectionId === 'section-product-categories') loadCategoryAssignments();
+    if (sectionId === 'section-inventory') window.CRONOX_INVENTORY?.load?.();
+    if (sectionId === 'section-waitlist') window.CRONOX_WAITLIST_ADMIN?.load?.();
+    if (sectionId === 'section-mails') window.CRONOX_MAILS?.load?.();
+    if (sectionId === 'section-key-screen') window.CRONOX_KEY_SCREEN?.load?.();
+    if (sectionId === 'section-newsletter') window.CRONOX_NEWSLETTER_ADMIN?.load?.();
+    if (sectionId === 'section-footer') window.CRONOX_ADMIN_FOOTER?.load?.();
+    if (sectionId === 'section-media') window.CRONOX_ADMIN_MEDIA?.load?.();
+    if (sectionId === 'section-orders') {
+      window.fetchOrders?.();
+      const orderId = Number(new URLSearchParams(window.location.hash.split('?')[1] || '').get('order'));
+      if (orderId > 0) window.CRONOX_ADMIN_ORDERS?.open?.(orderId);
     }
-    if (hash.startsWith(USERS_HASH_PREFIX)) {
-      readUsersStateFromHash();
-      applyUsersStateToInputs();
-      syncUsersStateFromInputs();
-      showSection('section-users');
-      fetchUsers();
-      return;
+    if (sectionId === 'section-codes') fetchCodes();
+    if (sectionId === 'section-gallery') {
+      const mode = window.location.hash.includes('carousel') ? 'CAROUSEL' : 'MOSAIC';
+      window.CRONOX_ADMIN_GALLERY?.selectEditorMode(mode);
+      window.CRONOX_ADMIN_GALLERY?.load?.().catch(() => {});
+      window.CRONOX_ADMIN_SHELL?.select?.('section-gallery-' + (mode === 'CAROUSEL' ? 'carousel' : 'mosaic'));
     }
-    const sectionMatch = hash.match(/^#(section-[\w-]+)/);
-    if (sectionMatch) {
-      const sectionId = sectionMatch[1];
-      showSection(sectionId);
-      if (sectionId === 'section-products') {
-        syncProductsStateFromInputs();
-        loadProductCategories();
-        fetchProducts();
-      }
-      if (sectionId === 'section-product-categories') {
-        loadCategoryAssignments();
-      }
-      if (sectionId === 'section-inventory') {
-        window.CRONOX_INVENTORY?.load?.();
-      }
-      if (sectionId === 'section-waitlist') window.CRONOX_WAITLIST_ADMIN?.load?.();
-      if (sectionId === 'section-mails') window.CRONOX_MAILS?.load?.();
-      return;
-    }
-    if (currentSectionId === 'section-user') {
-      showSection(lastSectionId || 'section-menu');
-      return;
-    }
-    showSection('section-menu');
   };
+  const handleHashChange = () => {
+    if (!currentAdminUser) return;
+    const hash = window.location.hash || '#section-dashboard';
+    if (hash.startsWith('#user=')) {
+      const id = Number(hash.match(/user=(\d+)/)?.[1]);
+      if (id && window.CRONOX_ADMIN_SHELL?.canLeave?.('section-user')) { openUserDetail(id, { skipHash: true }); activeRouteHash = hash; }
+      return;
+    }
+    let sectionId = hash.startsWith(USERS_HASH_PREFIX) ? 'section-users' : hash.match(/^#(section-[\w-]+)/)?.[1] || 'section-dashboard';
+    if (sectionId === 'section-menu') sectionId = 'section-dashboard';
+    if (sectionId.startsWith('section-gallery-')) sectionId = 'section-gallery';
+    if (!document.getElementById(sectionId)?.classList.contains('admin-section')) sectionId = 'section-dashboard';
+    if (!showSection(sectionId)) { history.replaceState(null, '', activeRouteHash); return; }
+    activeRouteHash = hash;
+    loadSection(sectionId);
+  };
+  const navigate = (destination) => {
+    const hash = destination.startsWith('#') ? destination : '#' + destination;
+    if (hash === window.location.hash) { handleHashChange(); return; }
+    const section = hash.split('?')[0].replace('#', '');
+    if (window.CRONOX_ADMIN_SHELL && !window.CRONOX_ADMIN_SHELL.canLeave(section)) return;
+    history.pushState(null, '', hash);
+    handleHashChange();
+  };
+  window.CRONOX_ADMIN_NAV = { navigate };
 
   const setLoading = (isLoading) => {
     if (!requestsBody) return;
@@ -2273,24 +2288,24 @@
     updateRequestBadges(extractPendingCounts(data));
   };
 
+  const markDashboardUnavailable = (loading = false) => {
+    const value = loading ? '…' : 'No disponible';
+    [totalUsers, pendingRequestsTotal, ordersTotal, revenueToday, alertLowStock, alertOldRequests].forEach(element => setDashboardValue(element, value));
+    [usersByCircle, pendingRequestsByType, ordersBreakdown, revenueMonth].forEach(element => { if (element) element.textContent = value; });
+  };
   const fetchDashboard = async () => {
     if (dashboardMessage) dashboardMessage.innerHTML = '';
     if (setUiLoading && dashboardMessage) {
       setUiLoading(dashboardMessage, true, { title: 'Cargando resumen…' });
     }
-    if (totalUsers) totalUsers.textContent = '…';
+    markDashboardUnavailable(true);
     try {
       const data = await window.CRONOX_API?.admin?.getDashboard?.();
-      if (!data && renderEmptyState && dashboardMessage) {
-        renderEmptyState(dashboardMessage, {
-          title: 'Sin datos en el resumen',
-          message: 'No hay información disponible todavía.',
-          actions: [{ label: 'Recargar', onClick: fetchDashboard, variant: 'primary' }],
-        });
-      }
+      const metrics = [data?.users?.total, data?.requests?.pendingTotal, data?.orders?.total, data?.orders?.today, data?.orders?.week, data?.revenue?.today, data?.revenue?.month, data?.alerts?.lowStock, data?.alerts?.oldPendingRequests];
+      if (metrics.some(value => typeof value !== 'number' || !Number.isFinite(value))) throw new Error('La respuesta del resumen está incompleta. Inténtalo de nuevo.');
       renderDashboard(data);
     } catch (error) {
-      console.error('No se pudo cargar el dashboard', error);
+      markDashboardUnavailable();
       showModuleError({
         container: dashboardMessage || statusArea,
         error,
@@ -2655,10 +2670,81 @@
     });
   };
 
+  const creationCategories = { selected: new Set(), names: new Map(), request: 0 };
+  const creationCategoryField = document.getElementById('productCreationCategoryField');
+  const creationCategoryDetails = document.getElementById('productCreationCategories');
+  const creationCategoryOptions = document.getElementById('productCreationCategoryOptions');
+  const creationCategoryStatus = document.getElementById('productCreationCategoryStatus');
+  const creationCategoryRetry = document.getElementById('productCreationCategoryRetry');
+  const compareAssignableCategories = (a, b) => String(a.name || a.slug).localeCompare(String(b.name || b.slug), 'es');
+  const loadAssignableCategories = async () => {
+    const api = window.CRONOX_API?.admin;
+    if (typeof api?.listAdminCategories !== 'function') throw new Error('La API de categorías no está disponible.');
+    return (await loadAllAdminPages(query => api.listAdminCategories(query))).sort(compareAssignableCategories);
+  };
+  const renderCreationCategoryNames = () => {
+    const names = [...creationCategories.selected].map(id => creationCategories.names.get(id) || `Categoría ${id}`).sort((a, b) => a.localeCompare(b, 'es'));
+    const summary = document.getElementById('productCreationCategoryNames');
+    if (summary) summary.textContent = names.join(', ') || 'Sin categorías';
+  };
+  const loadCreationCategories = async () => {
+    const request = ++creationCategories.request;
+    creationCategoryStatus.textContent = 'Cargando categorías…';
+    if (!creationCategories.selected.size) document.getElementById('productCreationCategoryNames').textContent = 'Cargando categorías…';
+    creationCategoryRetry.hidden = true;
+    creationCategoryOptions.setAttribute('aria-busy', 'true');
+    try {
+      const categories = await loadAssignableCategories();
+      if (request !== creationCategories.request) return;
+      creationCategoryOptions.replaceChildren();
+      categories.forEach(category => {
+        const id = Number(category.id);
+        const name = String(category.name || category.slug) + (category.isActive ? '' : ' (inactiva)');
+        creationCategories.names.set(id, name);
+        const label = document.createElement('label');
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox'; checkbox.value = String(id); checkbox.checked = creationCategories.selected.has(id);
+        checkbox.name = 'creationCategoryIds';
+        checkbox.addEventListener('change', () => {
+          if (checkbox.checked) creationCategories.selected.add(id); else creationCategories.selected.delete(id);
+          renderCreationCategoryNames();
+        });
+        const text = document.createElement('span'); text.textContent = name;
+        label.append(checkbox, text); creationCategoryOptions.append(label);
+      });
+      creationCategoryStatus.textContent = categories.length ? '' : 'No hay categorías disponibles. Puedes crear el producto sin categorías.';
+      renderCreationCategoryNames();
+    } catch {
+      if (request !== creationCategories.request) return;
+      creationCategoryStatus.textContent = 'No se pudieron cargar las categorías. Reintenta o crea el producto sin categorías si no has seleccionado ninguna.';
+      if (!creationCategories.selected.size) document.getElementById('productCreationCategoryNames').textContent = 'No se pudieron cargar las categorías';
+      creationCategoryRetry.hidden = false;
+    } finally {
+      if (request === creationCategories.request) creationCategoryOptions.setAttribute('aria-busy', 'false');
+    }
+  };
+  creationCategoryRetry?.addEventListener('click', loadCreationCategories);
+  creationCategoryDetails?.addEventListener('keydown', event => {
+    if (event.key === 'Escape' && creationCategoryDetails.open) {
+      event.preventDefault(); event.stopPropagation(); creationCategoryDetails.open = false;
+      creationCategoryDetails.querySelector('summary').focus();
+    }
+  });
+  document.addEventListener('click', event => {
+    if (creationCategoryDetails?.open && !creationCategoryDetails.contains(event.target)) creationCategoryDetails.open = false;
+  });
+
   const resetProductForm = () => {
     editingProductId = null;
     cachedProductImages = [];
     productForm?.reset();
+    const formMessage = document.getElementById('productFormMessage');
+    if (formMessage) { formMessage.textContent = ''; formMessage.hidden = true; }
+    creationCategories.request++;
+    creationCategories.selected.clear(); creationCategories.names.clear();
+    if (creationCategoryDetails) creationCategoryDetails.open = false;
+    creationCategoryOptions?.replaceChildren();
+    renderCreationCategoryNames();
     variantEditorStocks.clear();
     const sizeSystemInput = document.getElementById('productSizeSystem');
     if (sizeSystemInput) sizeSystemInput.value = 'APPAREL';
@@ -2951,12 +3037,10 @@
         throw new Error('La API de clasificación de productos no está disponible.');
       }
       const [categories, products] = await Promise.all([
-        loadAllAdminPages((query) => adminApi.listAdminCategories(query)),
+        loadAssignableCategories(),
         loadAllAdminPages((query) => adminApi.listAdminProducts(query)),
       ]);
-      categoryAssignmentsState.categories = categories.sort((a, b) =>
-        String(a.name || a.slug).localeCompare(String(b.name || b.slug), 'es'),
-      );
+      categoryAssignmentsState.categories = categories;
       categoryAssignmentsState.products = products;
       categoryAssignmentsState.loaded = true;
       populateCategoryAssignmentFilter();
@@ -3103,6 +3187,8 @@
     resetProductForm();
     editingProductId = productId;
     if (!productModal) return;
+    if (creationCategoryField) creationCategoryField.hidden = Boolean(productId);
+    if (!productId) void loadCreationCategories();
 
     if (productId) {
       if (productModalTitle) productModalTitle.textContent = 'Editar producto';
@@ -3126,6 +3212,8 @@
               : '';
           }
           if (priceInput) priceInput.value = Number(product.price || 0) / 100;
+          const costInput = document.getElementById('productCost');
+          if (costInput) costInput.value = product.privateCost?.unitCostCents == null ? '' : (product.privateCost.unitCostCents / 100).toFixed(2);
           if (isActiveInput) isActiveInput.checked = Boolean(product.isActive);
           if (productCardFramingName) productCardFramingName.textContent = product.name || 'PRODUCTO';
           if (productCardFramingPrice) {
@@ -3155,6 +3243,10 @@
       }
     }
 
+    window.CRONOX_ADMIN_SHELL?.capture?.(productForm, () => JSON.stringify({
+      gallery: window.CRONOX_PRODUCT_GALLERY?.serialize?.() || [], framing: productCardFramingState,
+      categoryIds: [...creationCategories.selected].sort((a, b) => a - b),
+    }));
     toggleModal(productModal, true);
   };
 
@@ -3203,6 +3295,18 @@
   const submitProduct = async (event) => {
     event?.preventDefault();
     if (!productForm || productSubmitInFlight) return;
+    const formMessage = document.getElementById('productFormMessage');
+    if (formMessage) { formMessage.textContent = ''; formMessage.hidden = true; }
+    const costText = String(new FormData(productForm).get('unitCost') || '').trim();
+    if (costText && !/^\d+(?:\.\d{1,2})?$/.test(costText)) {
+      const input = document.getElementById('productCost');
+      input?.setCustomValidity('Introduce un coste válido con un máximo de dos decimales.');
+      input?.reportValidity();
+      input?.addEventListener('input', () => input.setCustomValidity(''), { once: true });
+      return;
+    }
+    const [costWhole, costFraction = ''] = costText.split('.');
+    const unitCostCents = costText ? Number(costWhole) * 100 + Number(costFraction.padEnd(2, '0')) : null;
     productSubmitInFlight = true;
     if (productSubmitBtn) {
       productSubmitBtn.disabled = true;
@@ -3218,10 +3322,12 @@
       .filter(Boolean);
     const payload = {
       name: formData.get('name') || '',
+      ...(!editingProductId ? { categoryIds: [...creationCategories.selected] } : {}),
       description: formData.get('description') || '',
       collection: formData.get('collection') || '',
       searchKeywords: [...new Set(searchKeywords)],
       price: priceCents,
+      unitCostCents,
       isActive: productForm.querySelector('#productIsActive')?.checked ?? true,
       sizeSystem: selectedSizeSystem(),
       variants: collectVariantPayload(),
@@ -3273,12 +3379,14 @@
         setScopedMessage(productsMessage, 'Producto creado correctamente.', 'success');
       }
 
+      window.CRONOX_ADMIN_SHELL?.clear(productForm);
       toggleModal(productModal, false);
       await fetchProducts();
     } catch (error) {
       console.error('[ADMIN] Error guardando producto', error);
       const message = error?.payload?.message || error?.message || 'No se pudo guardar el producto.';
       setScopedMessage(productsMessage, message, 'error');
+      if (formMessage) { formMessage.textContent = Array.isArray(message) ? message.join(' ') : message; formMessage.hidden = false; }
     } finally {
       if (productModal?.classList.contains('show')) {
         productSubmitInFlight = false;
@@ -4624,47 +4732,7 @@
     if (navButtons?.length) {
       navButtons.forEach((btn) => {
         btn.addEventListener('click', () => {
-          const targetSection = btn.dataset.navTarget;
-          const allowed = showSection(targetSection || currentSectionId);
-          if (!allowed) return;
-          if (targetSection === 'section-dashboard') fetchDashboard();
-          if (targetSection === 'section-34') {
-            syncRequestsStateFromInputs();
-            fetchRequests();
-            markRequestsSeen();
-          }
-          if (targetSection === 'section-23') {
-            syncRequests23StateFromInputs();
-            fetchRequests23();
-            markRequestsSeen();
-          }
-          if (targetSection === 'section-activity') {
-            syncActivityStateFromInputs();
-            fetchActivity();
-          }
-          if (targetSection === 'section-users') {
-            syncUsersStateFromInputs();
-            updateUsersHashState();
-            fetchUsers();
-          }
-          if (targetSection === 'section-products') {
-            syncProductsStateFromInputs();
-            loadProductCategories();
-            fetchProducts();
-          }
-          if (targetSection === 'section-product-categories') {
-            loadCategoryAssignments();
-          }
-          if (targetSection === 'section-inventory') {
-            window.CRONOX_INVENTORY?.load?.();
-          }
-          if (targetSection === 'section-waitlist') window.CRONOX_WAITLIST_ADMIN?.load?.();
-          if (targetSection === 'section-mails') window.CRONOX_MAILS?.load?.();
-          if (targetSection === 'section-key-screen') window.CRONOX_KEY_SCREEN?.load?.();
-          if (targetSection === 'section-orders') {
-            window.fetchOrders?.();
-          }
-          if (targetSection === 'section-codes') fetchCodes();
+          navigate(btn.dataset.navTarget || 'section-dashboard');
         });
       });
     }
@@ -4672,7 +4740,7 @@
     document.querySelectorAll('[data-back-target]').forEach((btn) => {
       btn.addEventListener('click', () => {
         const targetSection = btn.getAttribute('data-back-target') || 'section-menu';
-        showSection(targetSection);
+        navigate(targetSection);
       });
     });
 
@@ -4721,12 +4789,14 @@
     readUsersStateFromHash();
     applyUsersStateToInputs();
     syncUsersStateFromInputs();
-    fetchDashboard();
     refreshPendingCounts();
     window.setInterval(refreshPendingCounts, 60000);
     handleHashChange();
   };
 
-  window.addEventListener('hashchange', handleHashChange);
+  let routeTimer;
+  const scheduleRoute = () => { clearTimeout(routeTimer); routeTimer = setTimeout(handleHashChange, 0); };
+  window.addEventListener('hashchange', scheduleRoute);
+  window.addEventListener('popstate', scheduleRoute);
   document.addEventListener('DOMContentLoaded', init);
 })();

@@ -1264,22 +1264,10 @@
     event.returnValue = "";
   });
 
-  pageDocument
-    .querySelectorAll('[data-nav-target="section-media"]')
-    .forEach((button) =>
-      button.addEventListener("click", () => load().catch(() => undefined)),
-    );
-  window.addEventListener("hashchange", () => {
-    if (window.location.hash === "#section-media") {
-      load().catch(() => undefined);
-    }
-  });
-  if (window.location.hash === "#section-media") {
-    load().catch(() => undefined);
-  }
-
   window.CRONOX_ADMIN_MEDIA = {
     load,
+    hasUnsavedChanges: dirty,
+    discard: () => closeEditor(true),
     openEditor,
     renderPreview,
     state,

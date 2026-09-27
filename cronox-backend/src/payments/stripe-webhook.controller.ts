@@ -127,6 +127,8 @@ export class StripeWebhookController {
       occurredAt: new Date(event.created * 1000),
       lifecycleStatus,
       amountCents: closedLostDisputeAmountCents,
+      ...(event.type === 'charge.refunded' && Number.isSafeInteger((event.data.object as Stripe.Charge).amount_refunded)
+        ? { refundCumulativeCents: (event.data.object as Stripe.Charge).amount_refunded } : {}),
     });
 
     if (!claimed) {

@@ -61,6 +61,7 @@ export class WaitlistService implements OnModuleInit, OnModuleDestroy {
   ) {}
 
   onModuleInit() {
+    if (process.env.BACKGROUND_JOBS_ENABLED === 'false') return;
     if (!waitlistWorkerEnabled()) return;
     this.timer = setInterval(
       () =>

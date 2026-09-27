@@ -248,6 +248,7 @@
       const updated = await request(`/api/admin/key-screens/${encodeURIComponent(state.current.id)}`, { method: "PATCH", body: { expectedRevision: state.current.revision, ...partial } });
       state.screens = state.screens.map((screen) => screen.id === updated.id ? updated : screen);
       state.current = updated;
+      window.CRONOX_ADMIN_SHELL?.clear(section);
       renderSelect();
       message("Cambios guardados.");
     } catch (error) { message(error.message, true); }

@@ -1,4 +1,4 @@
-import 'dotenv/config';
+import './common/config/load-environment';
 import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
@@ -9,6 +9,8 @@ import type { CookieOptions } from 'express';
 import { join } from 'path';
 import { AppModule } from './app.module';
 import { createContentSecurityPolicy } from './common/config/content-security-policy';
+import { localReviewSafety } from './common/config/local-review-safety';
+import { localLoginDiagnostics } from './common/config/local-login-diagnostics';
 import {
   getCorsOrigins,
   getTrustedProxyHops,
@@ -49,6 +51,8 @@ async function bootstrap() {
   app.setGlobalPrefix('api');
   const expressApp = app.getHttpAdapter().getInstance() as express.Application;
   expressApp.disable('x-powered-by');
+  app.use(localReviewSafety);
+  app.use(localLoginDiagnostics);
 
   if (trustedProxyHops > 0) {
     expressApp.set('trust proxy', trustedProxyHops);
@@ -194,7 +198,7 @@ async function bootstrap() {
   }
 
   const port = process.env.PORT ? Number(process.env.PORT) : 3000;
-  await app.listen(port, '0.0.0.0');
+  await app.listen(port, process.env.HOST || '0.0.0.0');
 }
 
 bootstrap();

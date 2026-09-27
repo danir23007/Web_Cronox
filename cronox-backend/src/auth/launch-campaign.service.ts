@@ -23,6 +23,7 @@ export class LaunchCampaignService implements OnModuleInit, OnModuleDestroy {
   constructor(private readonly prisma: PrismaService, private readonly email: EmailService) {}
 
   onModuleInit() {
+    if (process.env.BACKGROUND_JOBS_ENABLED === 'false') return;
     this.timer = setInterval(() => { void this.tick().catch(error => this.logger.error('Launch worker failed', error)); }, 10_000);
     this.timer.unref();
     void this.tick().catch(error => this.logger.error('Launch worker failed on startup', error));

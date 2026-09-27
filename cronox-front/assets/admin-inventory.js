@@ -3,6 +3,9 @@
 
   const section = document.getElementById('section-inventory');
   if (!section) return;
+  section.addEventListener('error', event => {
+    if (event.target.matches?.('.inventory-product__image img')) event.target.parentElement.textContent = 'Sin imagen';
+  }, true);
   const byId = (id) => document.getElementById(id);
   const list = byId('inventoryList');
   const message = byId('inventoryMessage');
@@ -78,10 +81,11 @@
       const edit = edits.get(variant.id);
       const value = edit ? edit.value : variant.stockQty;
       const dirty = Boolean(edit && edit.value !== edit.expectedStock);
-      return `<tr class="inventory-row${dirty ? ' is-dirty' : ''}" data-inventory-row="${variant.id}">
+      const savedStatus = window.CRONOX_STOCK?.classifyVariantStock(variant.stockQty) || variant.status;
+      return `<tr class="inventory-row inventory-row--${savedStatus}${dirty ? ' is-dirty' : ''}" data-inventory-row="${variant.id}">
         <td><strong>${escapeHtml(window.CRONOX_SIZES?.label?.(variant.size) || variant.size || 'Única')}</strong>${variant.isActive ? '' : '<br><small>Variante inactiva</small>'}</td>
         <td>${escapeHtml(variant.sku || '—')}</td><td>${formatNumber(variant.stockQty)}</td>
-        <td><span class="chip ${stockChip(variant.status)}">${stockLabel(variant.status)}</span></td>
+        <td><span class="chip ${stockChip(savedStatus)}">${stockLabel(savedStatus)}</span></td>
         <td><label class="inventory-visually-hidden" for="inventory-stock-${variant.id}">Nuevo stock para ${escapeHtml(window.CRONOX_SIZES?.label?.(variant.size) || variant.size || variant.sku)}</label>
           <input id="inventory-stock-${variant.id}" class="input inventory-stock-input${dirty ? ' is-dirty' : ''}" data-inventory-stock="${variant.id}" data-product-id="${product.id}" type="number" min="0" max="2147483647" step="1" inputmode="numeric" value="${escapeHtml(Number.isNaN(value) ? '' : value)}" ${saving ? 'disabled' : ''}></td>
       </tr>`;
@@ -171,6 +175,7 @@
       const index = state.items.findIndex((product) => product.id === productId);
       if (index >= 0) state.items[index] = updated;
       state.edits.delete(productId); state.history.delete(productId);
+      window.CRONOX_ADMIN_SHELL?.clear(list);
       setMessage('Inventario actualizado correctamente.', 'success');
       await window.CRONOX_API.admin.getInventorySummary().then(renderSummary);
     } catch (error) {
@@ -231,5 +236,8 @@
   previous?.addEventListener('click', () => { if (state.page > 1) { state.page -= 1; void load(); } });
   next?.addEventListener('click', () => { if (state.page < state.totalPages) { state.page += 1; void load(); } });
   refresh?.addEventListener('click', () => void load());
-  window.CRONOX_INVENTORY = { load };
+  window.CRONOX_INVENTORY = { load,
+    hasUnsavedChanges: () => [...state.edits.values()].some(edits => [...edits.values()].some(edit => edit.value !== edit.expectedStock)),
+    discard: () => state.edits.clear(),
+  };
 })();

@@ -148,4 +148,19 @@ describe('dedicated Admin authentication flow', () => {
       "res.sendFile(join(frontendRoot, 'key-screen.html'))",
     );
   });
+
+  it.each([[401, 'credenciales'], [403, 'cookies'], [429, 'un minuto'], [500, 'servidor'], [0, 'conectar']])('describes login error %s without leaking technical details', async (code, expected) => {
+    const dom = new JSDOM(loginHtml, { runScripts: 'outside-only', url: 'http://localhost:3000/admin-login.html' });
+    Object.defineProperty(dom.window, 'CRONOX_API', { value: {
+      getMe: jest.fn().mockResolvedValue(null),
+      login: jest.fn().mockRejectedValue(Object.assign(new Error('private server detail'), { status: code })),
+    } });
+    dom.window.eval(routingScript); dom.window.eval(loginScript);
+    await new Promise(resolve => setTimeout(resolve, 0));
+    dom.window.document.querySelector('#adminLoginForm')?.dispatchEvent(new dom.window.Event('submit', { bubbles: true, cancelable: true }));
+    await new Promise(resolve => setTimeout(resolve, 0));
+    const message = dom.window.document.querySelector('#adminLoginStatus')?.textContent;
+    expect(message).toContain(expected); expect(message).not.toContain('private server detail');
+    dom.window.close();
+  });
 });
