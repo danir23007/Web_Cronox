@@ -27,11 +27,30 @@
   window.addEventListener('storage', event => { if(event.key === key) {root.dataset.adminTheme = event.newValue === 'dark' ? 'dark' : 'light';sync();} });
   document.addEventListener('DOMContentLoaded', () => {
     install();
-    const wrapTables = () => document.querySelectorAll('.admin-main table').forEach(table => {
-      if (table.closest('.admin-table-scroll,.mail-stage,.key-composition') || /auto|scroll/.test(getComputedStyle(table.parentElement).overflowX)) return;
-      const wrapper = document.createElement('div'); wrapper.className = 'admin-table-scroll';
-      table.before(wrapper); wrapper.append(table);
-    });
+    const observed = new Set();
+    const updateScroll = wrapper => {
+      const scrollable = wrapper.clientWidth > 0 && wrapper.scrollWidth > wrapper.clientWidth + 1;
+      wrapper.classList.toggle('is-scrollable', scrollable);
+      if (scrollable) { wrapper.tabIndex = 0; wrapper.setAttribute('role', 'region'); wrapper.setAttribute('aria-label', 'Tabla desplazable horizontalmente. Usa las flechas para ver todas las columnas.'); }
+      else { wrapper.removeAttribute('tabindex'); wrapper.removeAttribute('role'); wrapper.removeAttribute('aria-label'); }
+    };
+    const resize = typeof ResizeObserver === 'function' ? new ResizeObserver(entries => entries.forEach(({target}) => {
+      const wrapper = target.closest('.admin-table-scroll'); if (wrapper) updateScroll(wrapper);
+    })) : null;
+    const wrapTables = () => {
+      for (const node of observed) if (!node.isConnected) { resize?.unobserve(node); observed.delete(node); }
+      document.querySelectorAll('.cronox-admin table').forEach(table => {
+        if (table.closest('.mail-stage,.key-composition')) return;
+        let wrapper = table.closest('.admin-table-scroll');
+        if (!wrapper) {
+          if (/auto|scroll/.test(getComputedStyle(table.parentElement).overflowX)) wrapper = table.parentElement;
+          else { wrapper = document.createElement('div'); table.before(wrapper); wrapper.append(table); }
+          wrapper.classList.add('admin-table-scroll');
+        }
+        for (const node of [wrapper, table]) if (!observed.has(node)) { observed.add(node); resize?.observe(node); }
+        updateScroll(wrapper);
+      });
+    };
     wrapTables(); new MutationObserver(wrapTables).observe(document.body,{childList:true,subtree:true});
   },{once:true});
 })();

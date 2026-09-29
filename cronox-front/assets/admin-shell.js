@@ -6,18 +6,68 @@
   const backdrop = document.getElementById('sidebarBackdrop');
   const mobile = window.matchMedia('(max-width: 800px)');
   const syncInert = () => { sidebar.inert = mobile.matches && !document.body.classList.contains('sidebar-open'); };
+  const main = document.querySelector('.admin-main');
+  let drawerOverflow = null;
   let current = 'section-dashboard';
   const dirty = new Map();
   const snapshots = new Map();
-  const closeDrawer = () => { document.body.classList.remove('sidebar-open'); toggle.setAttribute('aria-expanded', 'false'); backdrop.hidden = true; syncInert(); };
-  mobile.addEventListener('change', syncInert); syncInert();
+  const closeDrawer = () => {
+    const wasOpen = document.body.classList.contains('sidebar-open');
+    document.body.classList.remove('sidebar-open'); toggle.setAttribute('aria-expanded', 'false'); backdrop.hidden = true;
+    if (main) main.inert = false;
+    if (drawerOverflow !== null) { document.body.style.overflow = drawerOverflow; drawerOverflow = null; }
+    syncInert();
+    if (wasOpen && mobile.matches && sidebar.contains(document.activeElement)) toggle.focus();
+  };
+  const closeButton = document.createElement('button');
+  closeButton.type = 'button'; closeButton.className = 'sidebar-close'; closeButton.textContent = 'Cerrar menú';
+  sidebar.prepend(closeButton);
+  closeButton.addEventListener('click', closeDrawer);
+  mobile.addEventListener('change', closeDrawer); syncInert();
   toggle.addEventListener('click', () => {
     const open = !document.body.classList.contains('sidebar-open');
-    document.body.classList.toggle('sidebar-open', open); toggle.setAttribute('aria-expanded', String(open)); backdrop.hidden = !open;
+    if (!open) { closeDrawer(); return; }
+    drawerOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    if (main) main.inert = true;
+    document.body.classList.add('sidebar-open'); toggle.setAttribute('aria-expanded', 'true'); backdrop.hidden = false;
     syncInert();
     if (open) sidebar.querySelector('a,button')?.focus();
   });
   backdrop.addEventListener('click', () => { closeDrawer(); toggle.focus(); });
+  // Keep keyboard focus in the existing dialogs, using each module's own cancel action.
+  const modalTriggers = new Map();
+  const focusable = root => [...root.querySelectorAll('a[href],button,input,select,textarea,summary,[tabindex]')]
+    .filter(node => node.getClientRects().length && !node.disabled && node.tabIndex >= 0);
+  const syncModal = modal => {
+    if (modal.classList.contains('show')) {
+      if (modalTriggers.has(modal)) return;
+      modalTriggers.set(modal, document.activeElement);
+      modal.setAttribute('role', 'dialog'); modal.setAttribute('aria-modal', 'true');
+      const heading = modal.querySelector('h2[id],h3[id]');
+      if (heading && !modal.hasAttribute('aria-labelledby')) modal.setAttribute('aria-labelledby', heading.id);
+      if (!modal.contains(document.activeElement)) focusable(modal)[0]?.focus();
+    } else if (modalTriggers.has(modal)) {
+      const trigger = modalTriggers.get(modal); modalTriggers.delete(modal);
+      if (trigger?.isConnected && (modal.contains(document.activeElement) || document.activeElement === document.body)) trigger.focus();
+    }
+  };
+  const modalObserver = new MutationObserver(records => records.forEach(({target}) => syncModal(target)));
+  document.querySelectorAll('.modal').forEach(modal => modalObserver.observe(modal, { attributes:true, attributeFilter:['class'] }));
+  document.addEventListener('keydown', event => {
+    if (event.defaultPrevented) return;
+    const modal = [...document.querySelectorAll('.modal.show')].at(-1);
+    if (!modal) return;
+    const nodes = focusable(modal), first = nodes[0], last = nodes.at(-1);
+    if (event.key === 'Tab' && first) {
+      if (!modal.contains(document.activeElement) || (!event.shiftKey && document.activeElement === last)) { event.preventDefault(); first.focus(); }
+      else if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+    }
+    if (event.key === 'Escape' && !modal.querySelector('details[open]')) {
+      const cancel = modal.querySelector('#productCancelBtn,#codeCancelBtn,#orderDetailClose,#notesModalClose');
+      if (cancel && !cancel.disabled) { event.preventDefault(); cancel.click(); }
+    }
+  });
   sidebar.querySelectorAll('.sidebar-group').forEach(button => button.addEventListener('click', () => {
     const expanded = button.getAttribute('aria-expanded') !== 'true';
     button.setAttribute('aria-expanded', String(expanded));
@@ -26,9 +76,10 @@
   document.addEventListener('keydown', event => {
     if (event.key === 'Escape' && document.body.classList.contains('sidebar-open')) { closeDrawer(); toggle.focus(); }
     if (event.key === 'Tab' && document.body.classList.contains('sidebar-open')) {
-      const nodes = [...sidebar.querySelectorAll('a,button')].filter(node => node.getClientRects().length);
+      const nodes = [...sidebar.querySelectorAll('a,button')].filter(node => node.getClientRects().length && !node.disabled);
       const first = nodes[0], last = nodes[nodes.length - 1];
-      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+      if (!sidebar.contains(document.activeElement)) { event.preventDefault(); first.focus(); }
+      else if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
       else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
     }
   });

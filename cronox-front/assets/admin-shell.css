@@ -159,3 +159,72 @@ body.cronox-admin { --admin-line:var(--admin-c-e5e8ee); --admin-muted:var(--admi
   .cronox-admin .finance-totals { gap:24px; }
   .cronox-admin .finance-chart { height:250px; }
 }
+
+/* Responsive admin chrome; scrolling stays local to genuine tables and dialogs. */
+.cronox-admin .admin-sidebar .sidebar-close { display:none; }
+.cronox-admin :is(.form-grid,.dashboard-grid) { grid-template-columns:repeat(auto-fit,minmax(min(220px,100%),1fr)); }
+.cronox-admin :is(.form-group,.finance-controls,.finance-range,.finance-searchbar,.modal-actions) { min-width:0; max-width:100%; }
+.cronox-admin :is(.input,.select,.textarea) { min-width:0; max-width:100%; }
+.cronox-admin :is(.modal-actions,.actions,.finance-chart-head,.finance-totals) { flex-wrap:wrap; }
+.cronox-admin .finance-range-button { max-width:100%; white-space:normal; line-height:1.6; text-align:left; }
+.cronox-admin .finance-total { min-width:0; overflow-wrap:anywhere; }
+.cronox-admin .finance-overviews { grid-template-columns:repeat(2,minmax(0,1fr)); }
+.cronox-admin .finance-card { min-width:0; }
+.cronox-admin .gallery-selected-products { flex-wrap:wrap; overflow:visible; }
+.cronox-admin .gallery-selected-product { min-height:44px; max-width:100%; }
+.cronox-admin .gallery-selected-product span { white-space:normal; overflow-wrap:anywhere; }
+.cronox-admin .key-switch { flex-wrap:wrap; max-width:100%; }
+.cronox-admin .key-switch strong { overflow-wrap:anywhere; }
+.cronox-admin .key-expiration > * { min-width:0; }
+.cronox-admin .key-admin__form input { width:100%; }
+.cronox-admin .key-admin__form label { grid-template-columns:minmax(0,1fr); overflow-wrap:anywhere; }
+.cronox-admin .finance-searchbar > :is(input,select) { min-width:0; max-width:100%; }
+.cronox-admin .finance-tooltip { max-width:100%; white-space:normal; overflow-wrap:anywhere; }
+.cronox-admin .finance-picker { max-height:calc(100dvh - 32px); overflow-y:auto; overscroll-behavior:contain; }
+.cronox-admin .finance-date-fields input { min-width:0; }
+.cronox-admin .modal { z-index:60; padding:12px; }
+.cronox-admin .modal .modal-box { max-height:calc(100dvh - 24px); min-width:0; overscroll-behavior:contain; }
+.cronox-admin .modal :is(button,summary) { white-space:normal; overflow-wrap:anywhere; }
+.cronox-admin .admin-table-scroll:focus-visible { outline:2px solid var(--admin-c-245ab0); outline-offset:2px; }
+.cronox-admin .admin-table-scroll { position:relative; }
+.cronox-admin .admin-table-scroll.is-scrollable::before { content:'Tabla desplazable · desliza o usa las flechas ← →'; display:block; position:sticky; left:0; width:100%; padding:8px 2px; color:var(--admin-muted); font-size:12px; white-space:normal; }
+.cronox-admin :is(.mail-modal-card,.gallery-editor-layout,.media-editor__layout) { min-width:0; }
+@media(max-width:1100px) {
+  .cronox-admin .inventory-product__overview { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .cronox-admin .inventory-product__identity { grid-column:1/-1; }
+  .cronox-admin .inventory-filters { grid-template-columns:repeat(auto-fit,minmax(min(180px,100%),1fr)); }
+  .cronox-admin .mail-builder { grid-template-columns:minmax(0,1fr); }
+  .cronox-admin .mail-add-panel { position:static; display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); max-height:none; }
+  .cronox-admin .mail-add-panel :is(h4,p,.mail-library-button) { grid-column:1/-1; }
+}
+@media(min-width:801px) and (max-width:1050px) {
+  .cronox-admin .finance-picker { left:0; right:auto; max-width:calc(100vw - 310px); }
+}
+@media(max-width:800px) {
+  .cronox-admin .finance-overviews { grid-template-columns:minmax(0,1fr); }
+  .cronox-admin .admin-sidebar { width:min(280px,calc(100% - 40px)); overscroll-behavior:contain; }
+  .cronox-admin .admin-sidebar .sidebar-close { display:block; min-height:44px; text-align:right; }
+  .cronox-admin #sidebarToggle { min-width:44px; min-height:44px; }
+  .cronox-admin .admin-header { gap:8px; padding:10px 12px; }
+  .cronox-admin #adminBreadcrumb { min-width:0; overflow-wrap:anywhere; }
+  .cronox-admin :is(.btn,.finance-segment button,.finance-month-nav button,.finance-picker-actions button) { min-height:44px; }
+  .cronox-admin .finance-picker { top:12px; max-height:calc(100dvh - 24px); }
+  .cronox-admin .finance-presets button { min-height:44px; padding:8px 4px; }
+  .cronox-admin .finance-date-fields input { font-size:16px; }
+  .cronox-admin .finance-calendar button { min-height:38px; }
+  .cronox-admin .modal :is(input,select,textarea):not([type=checkbox]):not([type=radio]):not([type=range]) { font-size:16px; }
+  .cronox-admin .mail-modal-card { max-height:calc(100dvh - 24px); padding:14px; }
+}
+@media(max-width:480px) {
+  .cronox-admin #section-key-screen .key-admin__form fieldset { grid-template-columns:minmax(0,1fr); }
+  .cronox-admin .finance-picker { grid-template-columns:minmax(0,1fr); }
+  .cronox-admin .finance-presets { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); border:0; padding:0 0 8px; }
+  .cronox-admin .finance-calendar-panel { padding-left:0; }
+  .cronox-admin .finance-totals { gap:16px; }
+  .cronox-admin .finance-total strong { font-size:22px; }
+  .cronox-admin .finance-row { flex-wrap:wrap; }
+  .cronox-admin .finance-row-title { flex-basis:calc(100% - 50px); }
+  .cronox-admin .finance-row-amount { margin-left:auto; }
+  .cronox-admin .form-grid { grid-template-columns:minmax(0,1fr); }
+}
+@media(prefers-reduced-motion:reduce) { .cronox-admin .admin-sidebar { transition:none; } }

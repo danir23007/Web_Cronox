@@ -43,10 +43,12 @@
       this.button.addEventListener('click', () => this.panel.hidden ? this.open() : this.close());
       this.outside = event => { if (!event.composedPath().includes(host)) this.close(false); };
       this.keyboard = event => { if (event.key === 'Escape' && !this.panel.hidden) { event.stopPropagation(); this.close(); } };
+      this.focusout = event => { if (event.relatedTarget && !host.contains(event.relatedTarget)) this.close(false); };
       document.addEventListener('click', this.outside);
       host.addEventListener('keydown', this.keyboard);
+      host.addEventListener('focusout', this.focusout);
     }
-    destroy() { document.removeEventListener('click', this.outside); this.host.removeEventListener('keydown', this.keyboard); }
+    destroy() { document.removeEventListener('click', this.outside); this.host.removeEventListener('keydown', this.keyboard); this.host.removeEventListener('focusout', this.focusout); }
     presetName(range) { return presets.slice(1).find(name => { const p = presetRange(name); return p.from === range.from && p.to === range.to; }) || 'Personalizado'; }
     open() {
       this.draft = { ...this.applied }; this.month = this.draft.to.slice(0, 7); this.anchor = null;
@@ -58,7 +60,10 @@
       this.panel.innerHTML = `<div class="finance-presets">${presets.map(name => `<button type="button" data-preset="${esc(name)}" aria-pressed="${name === active}">${esc(name)}</button>`).join('')}</div><div class="finance-calendar-panel"><div class="finance-date-fields"><label>Desde<input type="date" data-date="from" value="${esc(this.draft.from)}" min="2000-01-01" max="2100-12-31"></label><label>Hasta<input type="date" data-date="to" value="${esc(this.draft.to)}" min="2000-01-01" max="2100-12-31"></label></div><div class="finance-month-nav"><button type="button" data-month="-1" aria-label="Mes anterior">‹</button><strong>${date(this.month + '-01').toLocaleDateString('es-ES', { month:'long', year:'numeric', timeZone:'UTC' })}</strong><button type="button" data-month="1" aria-label="Mes siguiente">›</button></div><div class="finance-calendar" role="group" aria-label="Calendario"></div><div class="finance-picker-error" role="alert"></div><div class="finance-picker-actions"><button type="button" data-cancel>Cancelar</button><button type="button" class="apply" data-apply>Aplicar</button></div></div>`;
       this.renderCalendar();
       this.panel.querySelectorAll('[data-preset]').forEach(button => button.addEventListener('click', () => {
-        if (button.dataset.preset !== 'Personalizado') { this.draft = presetRange(button.dataset.preset); this.month = this.draft.to.slice(0, 7); this.anchor = null; this.render(); }
+        if (button.dataset.preset !== 'Personalizado') {
+          this.draft = presetRange(button.dataset.preset); this.month = this.draft.to.slice(0, 7); this.anchor = null; this.render();
+          [...this.panel.querySelectorAll('[data-preset]')].find(next => next.dataset.preset === button.dataset.preset)?.focus();
+        }
         else this.panel.querySelector('input')?.focus();
       }));
       this.panel.querySelectorAll('[data-date]').forEach(input => input.addEventListener('change', () => {
@@ -68,6 +73,7 @@
       }));
       this.panel.querySelectorAll('[data-month]').forEach(button => button.addEventListener('click', () => {
         const d = date(this.month + '-01'); d.setUTCMonth(d.getUTCMonth() + Number(button.dataset.month)); this.month = iso(d).slice(0, 7); this.render();
+        this.panel.querySelector(`[data-month="${button.dataset.month}"]`)?.focus();
       }));
       this.panel.querySelector('[data-cancel]').addEventListener('click', () => this.close());
       this.panel.querySelector('[data-apply]').addEventListener('click', () => {
@@ -105,12 +111,15 @@
   }
 
   function drawChart(host, report, money) {
-    const data = report.buckets, width = Math.max(320, host.clientWidth || 1000), height = host.clientHeight || 285;
-    const left = width < 500 ? 55 : 72, right = 14, top = 20, bottom = 37, w = width - left - right, h = height - top - bottom;
+    const data = report.buckets, width = host.clientWidth || 1000, height = host.clientHeight || 285;
+    const right = 14, top = 20, bottom = 37, h = height - top - bottom;
     const values = data.flatMap(point => [point.revenueCents, point.profitCents]).filter(value => value !== null);
     let min = Math.min(0, ...values), max = Math.max(0, ...values);
     if (max === min) max = 100;
     const pad = (max - min) * .08; max += pad; if (min < 0) min -= pad;
+    // Reserve space for the complete currency labels, including large/negative totals.
+    const labelWidth = Math.max(money(Math.round(min)).length, money(Math.round(max)).length) * 6.5 + 16;
+    const left = Math.min(width * .5, Math.max(width < 500 ? 55 : 72, labelWidth)), w = width - left - right;
     const x = index => left + index / Math.max(1, data.length - 1) * w;
     const y = value => top + (max - value) / (max - min) * h;
     const path = field => { let open = false; return data.map((point, i) => {
@@ -136,6 +145,7 @@
       crosshair.setAttribute('x1', x(index)); crosshair.setAttribute('x2', x(index)); crosshair.setAttribute('visibility', 'visible');
     };
     host.onpointermove = event => show(Math.round((event.clientX - host.getBoundingClientRect().left - left) / w * (data.length-1)));
+    host.onpointerdown = host.onpointermove;
     host.onpointerleave = () => { tooltip.hidden = true; crosshair.setAttribute('visibility', 'hidden'); };
     host.onfocus = () => show(index);
     host.onblur = host.onpointerleave;
