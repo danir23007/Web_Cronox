@@ -25,9 +25,16 @@ export class NewsletterController {
 
   @Post('subscribe')
   @HttpCode(202)
-  @Throttle({ default: { limit: 3, ttl: 60_000 } })
+  @Throttle({ default: { limit: 5, ttl: 15 * 60_000 } })
   async subscribe(@Body() dto: NewsletterSubscribeDto) {
     return this.newsletterService.subscribe(dto.email);
+  }
+
+  @Post('request-access')
+  @HttpCode(202)
+  @Throttle({ default: { limit: 5, ttl: 15 * 60_000 } })
+  async requestAccess(@Body() dto: NewsletterSubscribeDto) {
+    return this.newsletterService.requestAccess(dto.email);
   }
 
   @Get('confirm')

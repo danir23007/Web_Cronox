@@ -56,6 +56,7 @@ export const UNGATED_PUBLIC_PATHS = new Set([
   '/terms-of-service.html',
   '/key-screen',
   '/key-screen.html',
+  '/newsletter-access.html',
 ]);
 
 export const normalizePublicPath = (pathname: string): string =>

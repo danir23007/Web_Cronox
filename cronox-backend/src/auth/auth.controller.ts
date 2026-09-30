@@ -84,6 +84,19 @@ export class AuthController {
     return { user: result.user };
   }
 
+  @Post('newsletter-login')
+  @HttpCode(HttpStatus.OK)
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
+  async newsletterLogin(
+    @Res({ passthrough: true }) res: Response,
+    @Body() dto: LaunchLoginDto,
+  ) {
+    const result = await this.authService.consumeNewsletterLink(dto.token);
+    res.setHeader('Cache-Control', 'no-store');
+    this.authService.setAuthCookies(res, result.tokens);
+    return { user: result.user };
+  }
+
   @Post('login')
   @HttpCode(HttpStatus.OK)
   @Throttle({ default: { limit: 10, ttl: 60_000 } })

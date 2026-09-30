@@ -3,6 +3,7 @@ import { EmailModule } from '../email/email.module';
 import { PrismaModule } from '../prisma/prisma.module';
 import { NewsletterController } from './newsletter.controller';
 import { NewsletterService } from './newsletter.service';
+import { NewsletterDeliveryService } from './newsletter-delivery.service';
 import { NewsletterSettingsService } from './newsletter-settings.service';
 import { AdminNewsletterController } from './admin-newsletter.controller';
 import { AdminGuard } from '../common/guards/admin.guard';
@@ -16,6 +17,7 @@ import { ImagesModule } from '../images/images.module';
   controllers: [NewsletterController, AdminNewsletterController],
   providers: [
     NewsletterService,
+    NewsletterDeliveryService,
     NewsletterSettingsService,
     SupabaseStorageService,
     WebsiteMediaUploadSizeExceptionFilter,

@@ -119,7 +119,14 @@
 .newsletter-login-link { padding: 0; border: 0; background: none; color: inherit; font: inherit; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
 .newsletter-modal-feedback { min-height: 20px; margin: 2px 0 0; color: #d0d0d0; font-size: 13px; }
 .newsletter-modal-feedback--error { color: #ffb2b2; }
-.newsletter-modal-feedback--success { color: #ff0000; }
+.newsletter-modal-content [hidden] { display: none !important; }
+.newsletter-modal-result { display: grid; justify-items: start; gap: 22px; margin-top: 10px; }
+.newsletter-modal-result-copy { margin: 0; color: #e8e8e8; font-size: 15px; line-height: 1.6; }
+.newsletter-modal-done { min-height: 44px; padding: 0 24px; border: 1px solid rgba(255,255,255,.45); border-radius: 9px; background: #fff; color: #080808; font: inherit; font-weight: 700; cursor: pointer; }
+.newsletter-modal-done:hover { background: #e0e0e0; }
+.newsletter-modal-done:focus-visible, .newsletter-modal-title:focus-visible { outline: 2px solid #fff; outline-offset: 4px; }
+.newsletter-modal-title { overflow-wrap: anywhere; }
+.newsletter-modal-content--result .newsletter-modal-title { letter-spacing: .02em; line-height: 1.2; }
 @container (max-width:860px) {
   .newsletter-modal { width: min(560px,100%); }
   .newsletter-modal-grid { grid-template-columns: 1fr; min-height: 0; }

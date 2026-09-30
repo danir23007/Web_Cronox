@@ -114,11 +114,36 @@
     const availableHeight = Math.max(0, overlay.clientHeight - 24);
     if (!width || !height || !availableWidth || !availableHeight) return 0;
     const fitScale = Math.min(availableWidth / width, availableHeight / height);
-    const scale = fitScale * selected.scale;
-    pre.style.left = `${selected.x}%`;
-    pre.style.top = `${selected.y}%`;
+    // Measure visible glyph ink, including the asymmetric whitespace in the art.
+    // CSS centers the line boxes; these bounds center the drawing itself.
+    const style = globalScope.getComputedStyle(pre);
+    const context = pre.ownerDocument.createElement('canvas').getContext('2d');
+    if (!context) return 0;
+    context.font = `${style.fontWeight} ${style.fontSize} ${style.fontFamily}`;
+    const reference = context.measureText('@#%+:.*=-');
+    const ascent = reference.fontBoundingBoxAscent ?? reference.actualBoundingBoxAscent;
+    const descent = reference.fontBoundingBoxDescent ?? reference.actualBoundingBoxDescent;
+    const lineHeight = parseFloat(style.lineHeight);
+    const baseline = (lineHeight - ascent - descent) / 2 + ascent;
+    let left = Infinity, top = Infinity, right = -Infinity, bottom = -Infinity;
+    pre.textContent.split('\n').forEach((line, index) => {
+      if (!line.trim()) return;
+      // WebKit includes leading whitespace in actualBoundingBoxLeft. Measure
+      // the visible run separately and add the whitespace advance explicitly.
+      const indent = context.measureText(line.slice(0, line.search(/\S/))).width;
+      const ink = context.measureText(line.trim());
+      left = Math.min(left, indent - ink.actualBoundingBoxLeft);
+      right = Math.max(right, indent + ink.actualBoundingBoxRight);
+      top = Math.min(top, index * lineHeight + baseline - ink.actualBoundingBoxAscent);
+      bottom = Math.max(bottom, index * lineHeight + baseline + ink.actualBoundingBoxDescent);
+    });
+    if (!Number.isFinite(left) || right <= left || bottom <= top) return 0;
+    const scale = Math.min(fitScale * selected.scale, availableWidth / (right - left), availableHeight / (bottom - top));
+    pre.style.left = '50%';
+    pre.style.top = '50%';
+    pre.style.transformOrigin = '0 0';
     pre.style.setProperty("--newsletter-ascii-scale", String(scale));
-    pre.style.transform = `translate(-50%, -50%) scale(${scale})`;
+    pre.style.transform = `translate(${-((left + right) / 2) * scale}px, ${-((top + bottom) / 2) * scale}px) scale(${scale})`;
     return scale;
   };
 
@@ -147,6 +172,10 @@
             <p class="newsletter-login-prompt">O si ya tienes cuenta, <button type="button" class="newsletter-login-link"${preview ? ' tabindex="-1"' : ''}>inicia sesión</button></p>
             <p${id('newsletterFeedback')} class="newsletter-modal-feedback" role="status" aria-live="polite"></p>
           </form>
+          <div class="newsletter-modal-result" hidden>
+            <p class="newsletter-modal-result-copy"></p>
+            <button type="button" class="newsletter-modal-done"${preview ? ' tabindex="-1"' : ''}>Cerrar</button>
+          </div>
         </div>
       </div>`;
     if (preview) root.querySelector('.newsletter-modal-form')?.addEventListener('submit', (event) => event.preventDefault());
@@ -217,6 +246,7 @@
     };
     controllers.set(root, controller);
     update(initialConfig);
+    pre?.ownerDocument.fonts?.ready.then(reflow);
     return controller;
   };
 

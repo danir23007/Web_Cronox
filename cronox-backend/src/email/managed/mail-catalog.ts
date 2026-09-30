@@ -15,6 +15,9 @@ export const MAIL_PURPOSES = [
     type: EmailType.GENERIC, subject: 'CRONOX · Te damos la bienvenida',
     required: ['message'],
   },
+  { key: 'NEWSLETTER_ACCESS', name: 'Acceso solicitado desde newsletter',
+    type: EmailType.GENERIC, subject: 'CRONOX · Accede a tu cuenta',
+    required: ['message', 'actionUrl'] },
   {
     key: 'PRE_REGISTRATION_CONFIRMATION',
     name: 'Confirmación de prerregistro',

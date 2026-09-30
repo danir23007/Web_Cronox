@@ -97,6 +97,11 @@ export class EmailService {
       // A published design must never remove the verification action.
       if (options.purpose === 'NEWSLETTER_WELCOME' && custom && data.discountCode &&
           !custom.html.includes(Handlebars.escapeExpression(String(data.discountCode)))) custom = null;
+      if (options.purpose === 'NEWSLETTER_ACCESS' && custom) {
+        const link = Handlebars.escapeExpression(String(data.actionUrl || ''));
+        if (!link || !(custom.html.includes(`href="${link}"`) || custom.html.includes(`href='${link}'`)) ||
+            !custom.html.includes('Entrar en Cronox')) custom = null;
+      }
       if (options.type === EmailType.NEWSLETTER_CONFIRMATION && custom) {
         const link = Handlebars.escapeExpression(String(data.actionUrl || ''));
         if (!link || !(custom.html.includes(`href="${link}"`) || custom.html.includes(`href='${link}'`))) {
@@ -216,6 +221,21 @@ export class EmailService {
           ? `Ya formas parte de nuestra newsletter. Tu código de bienvenida es ${code}: 10% de descuento en tu primera compra, de un solo uso y asociado a este correo. Utiliza esta misma dirección al comprar. ¡Gracias por unirte!`
           : 'Ya formas parte de nuestra newsletter. Recibirás nuestras novedades y próximos drops. ¡Gracias por unirte a CRONOX!',
         discountCode: code || '',
+      },
+    });
+  }
+
+  async sendNewsletterAccess(email: string, link: string, accountEligible: boolean) {
+    return this.send({
+      purpose: 'NEWSLETTER_ACCESS', type: EmailType.GENERIC, to: email,
+      subject: 'CRONOX · Accede a tu cuenta',
+      templateData: {
+        title: 'Tu acceso a Cronox',
+        message: accountEligible
+          ? 'Solicitaste un enlace de acceso. Pulsa el botón para entrar; caduca en 20 minutos y solo funciona una vez. Si no lo solicitaste, ignora este correo.'
+          : 'Para acceder a Cronox, continúa con el registro o inicia sesión con tu contraseña. Esta solicitud no ha creado ninguna cuenta.',
+        actionUrl: link,
+        actionLabel: 'Entrar en Cronox',
       },
     });
   }

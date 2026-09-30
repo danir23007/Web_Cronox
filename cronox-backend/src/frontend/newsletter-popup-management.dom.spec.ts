@@ -70,6 +70,13 @@ describe('Newsletter popup and Admin management', () => {
       dom.window.eval(read('assets/newsletter-renderer.js'));
       const overlay = dom.window.document.getElementById('overlay')!;
       const pre = overlay.querySelector('pre')!;
+      pre.textContent = '   @@';
+      pre.style.lineHeight = '12px';
+      dom.window.HTMLCanvasElement.prototype.getContext = jest.fn(() => ({
+        measureText: (text: string) => ({ width: text.length * 6, actualBoundingBoxLeft: 0, actualBoundingBoxRight: 12,
+          actualBoundingBoxAscent: 8, actualBoundingBoxDescent: 2,
+          fontBoundingBoxAscent: 9, fontBoundingBoxDescent: 3 }),
+      })) as any;
       Object.defineProperties(overlay, {
         clientWidth: { value: width },
         clientHeight: { value: width < 500 ? 180 : 360 },
@@ -83,7 +90,9 @@ describe('Newsletter popup and Admin management', () => {
         pre,
       );
       expect(scale).toBeGreaterThan(0);
-      expect(pre.style.transform).toBe(`translate(-50%, -50%) scale(${scale})`);
+      expect(pre.style.left).toBe('50%');
+      expect(pre.style.top).toBe('50%');
+      expect(pre.style.transform).toBe(`translate(${-24 * scale}px, ${-6 * scale}px) scale(${scale})`);
       expect(pre.style.transform).not.toMatch(/scale[XY]/);
       expect(520 * scale).toBeLessThanOrEqual(width - 24 + 0.001);
     },

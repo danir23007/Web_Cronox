@@ -22,6 +22,17 @@ const flatten = (blocks: MailBlock[]): MailBlock[] =>
   ]);
 
 describe('first-party managed mail documents', () => {
+  it('preserves the account-access action in the editable newsletter template', () => {
+    const rendered = renderMail(
+      structuredDocumentForPurpose('NEWSLETTER_ACCESS'),
+      'CRONOX · Accede a tu cuenta', '', 'NEWSLETTER_ACCESS',
+      { ...SAMPLE_DATA, actionLabel: 'Entrar en Cronox',
+        actionUrl: 'https://cronox.es/newsletter-access.html#local-preview-token' },
+      undefined, true,
+    );
+    expect(rendered.html).toContain('Entrar en Cronox');
+    expect(rendered.html).toContain('https://cronox.es/newsletter-access.html#local-preview-token');
+  });
   it.each(MAIL_PURPOSES)(
     'creates a structured visual document for $key',
     (purpose) => {

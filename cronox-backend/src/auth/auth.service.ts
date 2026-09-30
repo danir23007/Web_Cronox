@@ -136,6 +136,33 @@ export class AuthService {
     return { user: this.formatAuthUser(authUser), tokens: await this.generateTokens(authUser) };
   }
 
+  async consumeNewsletterLink(token: string) {
+    const invalid = () => new UnauthorizedException('El enlace ha caducado o ya se ha utilizado. Solicita otro enlace o inicia sesión.');
+    if (!/^[a-f0-9]{64}$/.test(token)) throw invalid();
+    const tokenHash = createHash('sha256').update(token).digest('hex');
+    const user = await this.prisma.$transaction(async tx => {
+      const job = await tx.newsletterMailJob.findUnique({
+        where: { tokenHash }, include: { user: true },
+      });
+      const now = new Date();
+      if (!job || !job.user || job.kind !== 'ACCESS' ||
+          !['SENT', 'UNCERTAIN'].includes(job.status) || job.tokenUsedAt ||
+          !job.tokenExpiresAt || job.tokenExpiresAt <= now ||
+          job.user.email.toLowerCase() !== job.email ||
+          job.user.accountState !== UserAccountState.ACTIVE ||
+          !['USER', 'FRIEND'].includes(job.user.role)) throw invalid();
+      const claimed = await tx.newsletterMailJob.updateMany({
+        where: { id: job.id, tokenHash, tokenUsedAt: null,
+          tokenExpiresAt: { gt: now }, status: { in: ['SENT', 'UNCERTAIN'] } },
+        data: { tokenUsedAt: now },
+      });
+      if (claimed.count !== 1) throw invalid();
+      return job.user;
+    });
+    const authUser = this.omitPassword(user);
+    return { user: this.formatAuthUser(authUser), tokens: await this.generateTokens(authUser) };
+  }
+
   async login(dto: LoginDto) {
     const user = await this.validateUser(dto.email, dto.password);
 

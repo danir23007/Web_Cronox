@@ -349,6 +349,7 @@ export function structuredDocumentForPurpose(
     case 'NEWSLETTER_CONFIRMATION':
     case 'FIRST_ORDER_DISCOUNT':
     case 'NEWSLETTER_WELCOME':
+    case 'NEWSLETTER_ACCESS':
     case 'LAUNCH':
     case 'GENERIC':
       blocks = generic();

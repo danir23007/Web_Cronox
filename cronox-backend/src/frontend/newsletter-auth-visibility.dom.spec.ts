@@ -92,7 +92,7 @@ describe('public newsletter authoritative authentication gate', () => {
       const originalFetch = win.fetch;
       const pending = deferred<any>();
       const subscribe = jest.fn().mockImplementationOnce(() => pending.promise).mockResolvedValue({
-        ok: true, status: 202, json: async () => ({ status: 'accepted' }),
+        ok: true, status: 202, json: async () => ({ status: 'accepted', httpStatus: 202 }),
       });
       win.CRONOX_API.getCsrfHeaders = jest.fn().mockResolvedValue({ 'x-csrf-token': 'fixture-only' });
       win.fetch = jest.fn((input: string, init: any) => String(input).includes('/api/newsletter/subscribe') ? subscribe(init) : originalFetch(input, init));
@@ -114,9 +114,12 @@ describe('public newsletter authoritative authentication gate', () => {
       form.dispatchEvent(new win.Event('submit', { cancelable: true }));
       await flush();
       expect(subscribe).toHaveBeenCalledTimes(2);
-      expect(feedback.textContent).toContain('Tu suscripción está activa');
-      expect(feedback.textContent).not.toContain('para confirmar');
-      expect(feedback.classList).toContain('newsletter-modal-feedback--success');
+      expect(win.document.querySelector('.newsletter-modal-title').textContent).toBe('Bienvenido a Cronox');
+      expect(win.document.querySelector('.newsletter-modal-result-copy').textContent).toBe('Has activado tu cuenta. Consulta tu correo para conocer las novedades de Cronox y poder disfrutar del código de 10% en tu próxima compra.');
+      expect(win.document.querySelector('.newsletter-modal-result-mark')).toBeNull();
+      expect(form.hidden).toBe(true);
+      expect(win.document.querySelector('.newsletter-modal-result').hidden).toBe(false);
+      expect(win.document.activeElement).toBe(win.document.querySelector('.newsletter-modal-title'));
       expect(win.document.querySelector('.newsletter-modal-overlay').classList).toContain('newsletter-modal-overlay--visible');
     } finally { context.dom.window.close(); }
   });

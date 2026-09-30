@@ -180,17 +180,39 @@
   };
 
   const scrollLocks = new Set();
+  let scrollLockStyles = null;
+  let scrollLockHadNoScroll = false;
   function lockScroll(key = 'default') {
     const body = document.body;
     if (!body) return;
+    if (!scrollLocks.size) {
+      scrollLockHadNoScroll = body.classList.contains('no-scroll');
+      const root = document.documentElement;
+      const gap = Math.max(0, window.innerWidth - root.getBoundingClientRect().width);
+      const padding = parseFloat(getComputedStyle(root).paddingRight) || 0;
+      scrollLockStyles = ['--scroll-lock-gap', '--scroll-lock-padding'].map(name =>
+        [name, root.style.getPropertyValue(name), root.style.getPropertyPriority(name)]);
+      root.style.setProperty('--scroll-lock-gap', `${gap}px`);
+      root.style.setProperty('--scroll-lock-padding', `${padding + gap}px`);
+      root.classList.add('has-scroll-lock');
+    }
     scrollLocks.add(key);
     body.classList.add('no-scroll');
   }
   function unlockScroll(key = 'default') {
     const body = document.body;
     if (!body) return;
-    scrollLocks.delete(key);
-    if (!scrollLocks.size) body.classList.remove('no-scroll');
+    if (!scrollLocks.delete(key)) return;
+    if (!scrollLocks.size) {
+      if (!scrollLockHadNoScroll) body.classList.remove('no-scroll');
+      const root = document.documentElement;
+      root.classList.remove('has-scroll-lock');
+      scrollLockStyles?.forEach(([name, value, priority]) => {
+        if (value) root.style.setProperty(name, value, priority);
+        else root.style.removeProperty(name);
+      });
+      scrollLockStyles = null;
+    }
   }
   window.CRONOX_lockScroll = lockScroll;
   window.CRONOX_unlockScroll = unlockScroll;
@@ -2374,6 +2396,14 @@ window.CRONOX_AUTH_STATE = window.CRONOX_USER ? 'authenticated' : 'unknown';
     emailInput: null,
     submitBtn: null,
     feedback: null,
+    title: null,
+    subtitle: null,
+    result: null,
+    resultCopy: null,
+    doneBtn: null,
+    completed: false,
+    originalTitle: '',
+    originalSubtitle: '',
     loginLink: null,
     renderer: null,
     retryTimer: 0,
@@ -2409,14 +2439,46 @@ window.CRONOX_AUTH_STATE = window.CRONOX_USER ? 'authenticated' : 'unknown';
     newsletterState.feedback.textContent = message || '';
     newsletterState.feedback.classList.remove(
       'newsletter-modal-feedback--error',
-      'newsletter-modal-feedback--success',
     );
     if (kind === 'error') {
       newsletterState.feedback.classList.add('newsletter-modal-feedback--error');
     }
-    if (kind === 'success') {
-      newsletterState.feedback.classList.add('newsletter-modal-feedback--success');
-    }
+  };
+
+  const showNewsletterResult = (confirmation = 'welcome') => {
+    newsletterState.completed = true;
+    newsletterState.modal.querySelector('.newsletter-modal-content')?.classList.add('newsletter-modal-content--result');
+    const welcome = confirmation === 'welcome';
+    newsletterState.title.textContent = welcome ? 'Bienvenido a Cronox' : '';
+    newsletterState.title.hidden = !welcome;
+    newsletterState.modal.setAttribute('aria-labelledby', welcome ? 'newsletterTitle' : 'newsletterResultCopy');
+    newsletterState.subtitle.hidden = true;
+    newsletterState.form.hidden = true;
+    newsletterState.resultCopy.id = 'newsletterResultCopy';
+    newsletterState.resultCopy.textContent = confirmation === 'existing_account'
+      ? 'Este correo ya estaba asociado a una cuenta. Te hemos enviado un correo, revisa tu bandeja de entrada.'
+      : welcome ? 'Has activado tu cuenta. Consulta tu correo para conocer las novedades de Cronox y poder disfrutar del código de 10% en tu próxima compra.'
+      : 'Ya estás suscrito a las novedades de Cronox. Consulta tu correo para continuar con el registro o el acceso.';
+    newsletterState.result.hidden = false;
+    const focusTarget = welcome ? newsletterState.title : newsletterState.resultCopy;
+    focusTarget.tabIndex = -1;
+    focusTarget.focus({ preventScroll: true });
+    newsletterState.renderer?.reflow?.();
+  };
+
+  const resetNewsletterResult = () => {
+    if (!newsletterState.completed) return;
+    newsletterState.completed = false;
+    newsletterState.modal.querySelector('.newsletter-modal-content')?.classList.remove('newsletter-modal-content--result');
+    newsletterState.title.textContent = newsletterState.originalTitle;
+    newsletterState.title.hidden = false;
+    newsletterState.modal.setAttribute('aria-labelledby', 'newsletterTitle');
+    newsletterState.title.removeAttribute('tabindex');
+    newsletterState.subtitle.textContent = newsletterState.originalSubtitle;
+    newsletterState.subtitle.hidden = false;
+    newsletterState.result.hidden = true;
+    newsletterState.form.hidden = false;
+    setNewsletterFeedback('');
   };
 
   const setNewsletterLoading = (isLoading) => {
@@ -2439,8 +2501,9 @@ window.CRONOX_AUTH_STATE = window.CRONOX_USER ? 'authenticated' : 'unknown';
     }
     if (typeof window.CRONOX_unlockScroll === 'function') window.CRONOX_unlockScroll('newsletter');
     if (dismiss) persistNewsletterDismiss();
-    if (restoreFocus && newsletterState.previousFocus?.isConnected) {
-      requestAnimationFrame(() => newsletterState.previousFocus.focus({ preventScroll: true }));
+    const returnFocus = newsletterState.previousFocus;
+    if (restoreFocus && returnFocus?.isConnected) {
+      requestAnimationFrame(() => returnFocus.focus({ preventScroll: true }));
     }
     newsletterState.previousFocus = null;
   };
@@ -2450,11 +2513,11 @@ window.CRONOX_AUTH_STATE = window.CRONOX_USER ? 'authenticated' : 'unknown';
     document.body?.classList.contains('cart-open')
   );
 
-  const openNewsletterModal = () => {
+  const openNewsletterModal = ({ manual = false } = {}) => {
     if (
       !newsletterState.overlay ||
-      newsletterState.shownInMemory ||
-      window.CRONOX_AUTH_STATE !== 'anonymous'
+      (!manual && newsletterState.shownInMemory) ||
+      (!manual && window.CRONOX_AUTH_STATE !== 'anonymous')
     ) return false;
     if (hasBlockingModal()) {
       if (!newsletterState.retryTimer) {
@@ -2473,7 +2536,9 @@ window.CRONOX_AUTH_STATE = window.CRONOX_USER ? 'authenticated' : 'unknown';
     newsletterState.overlay.setAttribute('aria-hidden', 'false');
     if (typeof window.CRONOX_lockScroll === 'function') window.CRONOX_lockScroll('newsletter');
     newsletterState.renderer?.reflow?.();
-    setTimeout(() => newsletterState.closeBtn?.focus({ preventScroll: true }), 40);
+    setTimeout(() => {
+      if (!newsletterState.completed) newsletterState.closeBtn?.focus({ preventScroll: true });
+    }, 40);
     return true;
   };
 
@@ -2506,7 +2571,7 @@ window.CRONOX_AUTH_STATE = window.CRONOX_USER ? 'authenticated' : 'unknown';
 
   const handleNewsletterSubmit = async (event) => {
     event.preventDefault();
-    if (!newsletterState.emailInput || newsletterState.submitBtn?.disabled) return;
+    if (!newsletterState.emailInput || newsletterState.submitBtn?.disabled || newsletterState.completed) return;
 
     const email = newsletterState.emailInput.value.trim();
     const emailRegex = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
@@ -2534,10 +2599,7 @@ window.CRONOX_AUTH_STATE = window.CRONOX_USER ? 'authenticated' : 'unknown';
 
       const result = await res.json().catch(() => null);
       if (res.status === 202 && result?.status === 'accepted') {
-        setNewsletterFeedback(
-          '¡Gracias por unirte a CRONOX! Tu suscripción está activa. Revisa tu correo de bienvenida; si ya te habías unido, no recibirás otro código.',
-          'success',
-        );
+        showNewsletterResult(result.confirmation);
         persistNewsletterDismiss();
         return;
       }
@@ -2553,6 +2615,9 @@ window.CRONOX_AUTH_STATE = window.CRONOX_USER ? 'authenticated' : 'unknown';
       setNewsletterFeedback('No hemos podido comprobar el envío. Revisa tu conexión y vuelve a intentarlo.', 'error');
     } finally {
       setNewsletterLoading(false);
+      if (!newsletterState.completed && newsletterState.feedback?.classList.contains('newsletter-modal-feedback--error')) {
+        newsletterState.submitBtn.textContent = 'REINTENTAR';
+      }
     }
   };
 
@@ -2568,6 +2633,17 @@ window.CRONOX_AUTH_STATE = window.CRONOX_USER ? 'authenticated' : 'unknown';
     newsletterState.closeBtn?.addEventListener('click', (ev) => {
       ev.preventDefault();
       closeNewsletterModal();
+    });
+    newsletterState.doneBtn?.addEventListener('click', () => closeNewsletterModal());
+    document.querySelector('.footer-newsletter-form')?.addEventListener('submit', (event) => {
+      event.preventDefault();
+      const email = event.currentTarget.querySelector('input[type="email"]')?.value.trim() || '';
+      if (!openNewsletterModal({ manual: true })) return;
+      newsletterState.previousFocus = event.submitter || event.currentTarget.querySelector('input[type="email"]');
+      if (newsletterState.submitBtn?.disabled) return;
+      resetNewsletterResult();
+      newsletterState.emailInput.value = email;
+      newsletterState.form.requestSubmit();
     });
 
     newsletterState.form?.addEventListener('submit', handleNewsletterSubmit);
@@ -2598,6 +2674,13 @@ window.CRONOX_AUTH_STATE = window.CRONOX_USER ? 'authenticated' : 'unknown';
       newsletterState.submitBtn.textContent = BTN_LABEL_IDLE;
     }
     newsletterState.feedback = newsletterState.overlay?.querySelector('.newsletter-modal-feedback') || null;
+    newsletterState.title = newsletterState.overlay?.querySelector('.newsletter-modal-title') || null;
+    newsletterState.subtitle = newsletterState.overlay?.querySelector('.newsletter-modal-subtitle') || null;
+    newsletterState.result = newsletterState.overlay?.querySelector('.newsletter-modal-result') || null;
+    newsletterState.resultCopy = newsletterState.overlay?.querySelector('.newsletter-modal-result-copy') || null;
+    newsletterState.doneBtn = newsletterState.overlay?.querySelector('.newsletter-modal-done') || null;
+    newsletterState.originalTitle = newsletterState.title?.textContent || '';
+    newsletterState.originalSubtitle = newsletterState.subtitle?.textContent || '';
   };
 
   const initNewsletterModal = () => {
@@ -2752,6 +2835,16 @@ window.CRONOX_AUTH_STATE = window.CRONOX_USER ? 'authenticated' : 'unknown';
     const ready = await prepareAuthExperience();
     if (!ready) return;
     await window.CRONOX_AUTH_READY;
+
+    const entryUrl = new URL(location.href);
+    const entryView = entryUrl.searchParams.get('register') === '1' ? 'register'
+      : entryUrl.searchParams.get('login') === '1' ? 'login' : null;
+    if (entryView && !window.CRONOX_USER) {
+      entryUrl.searchParams.delete('register');
+      entryUrl.searchParams.delete('login');
+      history.replaceState(history.state, '', entryUrl.pathname + entryUrl.search + entryUrl.hash);
+      await openAuthModal(entryView);
+    }
 
     // [AUTH] Abrir automáticamente el modal de login
     // si venimos de la página de "Recuperar contraseña"

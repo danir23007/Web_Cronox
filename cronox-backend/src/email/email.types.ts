@@ -30,7 +30,7 @@ export enum EmailType {
 }
 
 export interface EmailSendOptions {
-  purpose?: 'INITIAL_PASSWORD_SETUP' | 'FIRST_ORDER_DISCOUNT' | 'NEWSLETTER_WELCOME' | 'LAUNCH';
+  purpose?: 'INITIAL_PASSWORD_SETUP' | 'FIRST_ORDER_DISCOUNT' | 'NEWSLETTER_WELCOME' | 'NEWSLETTER_ACCESS' | 'LAUNCH';
   type: EmailType;
   to: string;
   subject: string;

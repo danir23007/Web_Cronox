@@ -496,6 +496,7 @@ model NewsletterSettings {
 
 model User {
   restockRequests           RestockRequest[]
+  newsletterMailJobs        NewsletterMailJob[]
   id                        Int                     @id @default(autoincrement())
   email                     String                  @unique
   password                  String?                 @map("passwordHash")
@@ -1051,6 +1052,32 @@ model NewsletterSubscription {
   updatedAt             DateTime  @updatedAt
 
   @@index([verifiedAt])
+}
+
+/// Durable newsletter delivery and single-use access-link record. Public clients
+/// never query this table directly; raw access tokens exist only in worker memory.
+model NewsletterMailJob {
+  id             String    @id @default(cuid())
+  email          String
+  kind           String
+  status         String    @default("QUEUED")
+  readyAt        DateTime  @default(now()) @db.Timestamptz(3)
+  claimedAt      DateTime? @db.Timestamptz(3)
+  claimToken     String?
+  attempts       Int       @default(0)
+  errorCode      String?
+  sentAt         DateTime? @db.Timestamptz(3)
+  tokenHash      String?   @unique
+  tokenExpiresAt DateTime? @db.Timestamptz(3)
+  tokenUsedAt    DateTime? @db.Timestamptz(3)
+  userId         Int?
+  user           User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+  createdAt      DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime  @updatedAt @db.Timestamptz(3)
+
+  @@index([status, readyAt])
+  @@index([email, createdAt])
+  @@index([userId, createdAt])
 }
 
 model PromoCode {

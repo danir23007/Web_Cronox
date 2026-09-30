@@ -5,7 +5,7 @@ import { EmailService } from '../email/email.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { NewsletterSettingsService } from './newsletter-settings.service';
 
-export type SubscriptionResult = { status: 'accepted'; httpStatus: number };
+export type SubscriptionResult = { status: 'accepted'; httpStatus: number; confirmation?: 'welcome' | 'existing_account' | 'subscribed' };
 export type ExistingSubscriptionClaimResult = { status: 'claimed'; code?: string } | { status: 'not_subscribed' };
 
 @Injectable()
@@ -44,41 +44,39 @@ export class NewsletterService {
     }
   }
 
-  /** Single opt-in: durable consent + one welcome email, no verification token. */
+  /** Single opt-in: persist consent and email work atomically before accepting. */
   async subscribe(email: string): Promise<SubscriptionResult> {
     const normalized = email.trim().toLowerCase();
-    const prepared = await this.prepareWelcome(normalized);
-    if (!prepared.send) return { status: 'accepted', httpStatus: 202 };
-    try {
-      await this.emailService.sendNewsletterWelcome(normalized, prepared.code);
-    } catch (error) {
-      if ((error as { deliveryUnknown?: boolean }).deliveryUnknown) throw this.unavailable();
-      await this.prisma.newsletterSubscription.updateMany({
-        where: { id: prepared.id, welcomeSentAt: null, welcomeClaimedAt: prepared.claimedAt },
-        data: { welcomeClaimedAt: null },
-      });
-      this.logger.error('Newsletter welcome delivery failed; consent and code preserved');
-      throw this.unavailable();
-    }
-    // Keep the claim if recording acceptance fails; inspect before resending.
-    await this.prisma.newsletterSubscription.update({
-      where: { id: prepared.id }, data: { welcomeSentAt: new Date(), welcomeClaimedAt: null },
+    const confirmation = await this.scheduleSubscription(normalized);
+    return { status: 'accepted', httpStatus: 202, confirmation };
+  }
+
+  /** Replacement requests never create consent or reveal whether an account exists. */
+  async requestAccess(email: string): Promise<SubscriptionResult> {
+    const normalized = email.trim().toLowerCase();
+    await this.prisma.$transaction(async tx => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${'newsletter:' + normalized}))`;
+      const subscription = await tx.newsletterSubscription.findUnique({ where: { email: normalized } });
+      if (!subscription?.subscribedAt) return;
+      await this.scheduleAccess(tx, normalized, new Date());
     });
     return { status: 'accepted', httpStatus: 202 };
   }
 
-  private unavailable() {
-    return new ServiceUnavailableException({ code: 'NEWSLETTER_UNAVAILABLE',
-      message: 'No hemos podido completar el envío del correo de bienvenida. Inténtalo de nuevo en unos minutos.' });
+  private async scheduleAccess(tx: Prisma.TransactionClient, email: string, now: Date) {
+    const recent = await tx.newsletterMailJob.findFirst({
+      where: { email, kind: 'ACCESS', createdAt: { gte: new Date(now.getTime() - 15 * 60_000) } },
+      select: { id: true },
+    });
+    if (!recent) await tx.newsletterMailJob.create({ data: { email, kind: 'ACCESS' } });
   }
 
-  private async prepareWelcome(email: string, retries = 2): Promise<{
-    id: string; send: boolean; code?: string; claimedAt?: Date;
-  }> {
+  private async scheduleSubscription(email: string, retries = 2): Promise<NonNullable<SubscriptionResult['confirmation']>> {
     try {
       return await this.prisma.$transaction(async tx => {
         await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${'newsletter:' + email}))`;
         const now = new Date();
+        const previous = await tx.newsletterSubscription.findUnique({ where: { email } });
         const subscription = await tx.newsletterSubscription.upsert({
           where: { email }, create: { email, subscribedAt: now },
           update: {}, include: { welcomePromoCode: true },
@@ -88,12 +86,26 @@ export class NewsletterService {
             subscribedAt: now, verificationTokenHash: null, verificationExpiresAt: null,
           } });
         }
-        const user = await tx.user.findUnique({ where: { email } });
+        const matches = await tx.user.findMany({ where: { email: { equals: email, mode: 'insensitive' } }, take: 2 });
+        const user = matches.length === 1 ? matches[0] : null;
         if (user && !user.newsletterSubscribed) {
           await tx.user.update({ where: { id: user.id }, data: { newsletterSubscribed: true } });
         }
-        if (subscription.welcomeSentAt) return { id: subscription.id, send: false };
-        if (subscription.welcomeClaimedAt) throw this.unavailable();
+        const welcomeJob = await tx.newsletterMailJob.findFirst({
+          where: { email, kind: 'WELCOME' }, select: { id: true },
+        });
+        const eligible = user?.accountState === 'ACTIVE' && ['USER', 'FRIEND'].includes(user.role);
+        if (eligible) {
+          await this.scheduleAccess(tx, email, now);
+          if (previous?.subscribedAt || welcomeJob) return 'existing_account';
+        }
+        if (welcomeJob && !subscription.welcomeSentAt) return 'subscribed';
+        // Historical subscribers keep their existing consent and discounts.
+        if (previous?.subscribedAt) {
+          await this.scheduleAccess(tx, email, now);
+          return 'subscribed';
+        }
+        if (subscription.welcomeClaimedAt) throw new ServiceUnavailableException({ code: 'NEWSLETTER_UNAVAILABLE' });
         let promo = subscription.welcomePromoCode;
         const previousPurchase = await tx.order.findFirst({
           where: { OR: [{ customerEmail: { equals: email, mode: 'insensitive' } }, ...(user ? [{ userId: user.id }] : [])],
@@ -111,17 +123,16 @@ export class NewsletterService {
                 usageLimit: 1, singleUsePerUser: true, firstOrderOnly: true,
               },
             });
-            if (promo.ownerEmail !== email || !promo.firstOrderOnly) throw this.unavailable();
+            if (promo.ownerEmail !== email || !promo.firstOrderOnly) throw new ServiceUnavailableException({ code: 'NEWSLETTER_UNAVAILABLE' });
             await tx.newsletterSubscription.update({ where: { id: subscription.id }, data: { welcomePromoCodeId: promo.id } });
           }
         }
-        await tx.newsletterSubscription.update({ where: { id: subscription.id }, data: { welcomeClaimedAt: now } });
-        return { id: subscription.id, send: true, claimedAt: now,
-          code: promo && promo.isActive && promo.usageCount === 0 ? promo.code : undefined };
+        await tx.newsletterMailJob.create({ data: { email, kind: 'WELCOME' } });
+        return eligible ? 'existing_account' : 'welcome';
       });
     } catch (error) {
       if (retries && error instanceof Prisma.PrismaClientKnownRequestError && ['P2002', 'P2034'].includes(error.code)) {
-        return this.prepareWelcome(email, retries - 1);
+        return this.scheduleSubscription(email, retries - 1);
       }
       throw error;
     }
