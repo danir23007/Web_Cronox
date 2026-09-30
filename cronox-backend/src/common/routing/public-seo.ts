@@ -22,6 +22,10 @@ export const HOME_DESCRIPTION =
 // deliberately remain crawlable so crawlers can read their noindex response.
 export const PUBLIC_METADATA: Record<string, [string, string]> = {
   '/': [HOME_TITLE, HOME_DESCRIPTION],
+  '/sobre-cronox': [
+    'Sobre CRONOX | La cara B del ser humano',
+    'Conoce CRONOX, la marca de streetwear creada en Madrid por Daniel Rivas. Su origen, sus diseños y una visión: dar expresión a la cara B del ser humano.',
+  ],
   '/galeria': [
     'Galería de la comunidad | Cronox',
     'Explora la galería visual de Cronox: prendas, imágenes y comunidad.',
@@ -364,6 +368,7 @@ export function createSeoPages(
         metadata.description =
           'Página de servicio de la tienda oficial de Cronox.';
       }
+      if (path === '/sobre-cronox') metadata.image = absolute('/assets/logo_banner.png');
       if (path === '/' || path === '/tienda') {
         metadata.schema = {
           '@context': 'https://schema.org',

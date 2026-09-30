@@ -251,6 +251,20 @@
   }
 
   if (filtersPanel) {
+    // Independent navigation, outside the category list and its filter handlers.
+    if (!filtersPanel.querySelector('.black-menu__discover')) {
+      const discover = document.createElement('a');
+      discover.className = 'black-menu__discover';
+      discover.href = '/sobre-cronox';
+      discover.textContent = 'DESCUBRE CRONOX';
+      discover.addEventListener('click', () => {
+        closeFilters();
+        filtersPanel.hidden = true;
+        hideOverlay(FILTERS_KEY);
+        unlockScroll(FILTERS_KEY);
+      });
+      filtersPanel.append(discover);
+    }
     document.addEventListener('click', (e) => {
       if (e.target.closest('[data-open-filters]')) {
         e.preventDefault();
@@ -1039,6 +1053,9 @@
   let cartRead = null;
   let cartVersion = 0;
   let cartOwner = 0;
+  let cartIdentity;
+  let cartSyncedAt = 0;
+  const CART_FRESH_MS = 30_000;
   const pendingItemUpdates = new Map();
   const queuedItemQty = new Map();
   const cartItemErrors = new Map();
@@ -1050,10 +1067,12 @@
 
   function updateBadge(cart) {
     const source = cart || cartState.data;
+    const known = Boolean(source && Array.isArray(source.items));
     const count = source?.itemsCount ?? 0;
     if (cartCountEl) {
-      cartCountEl.textContent = String(clamp(count, 0, 999));
-      cartCountEl.hidden = count <= 0;
+      cartCountEl.textContent = known ? String(count) : '';
+      cartCountEl.hidden = !known || count <= 0;
+      cartCountEl.setAttribute('aria-busy', String(!known));
     }
   }
   window.updateCartBadge = (q) => {
@@ -1073,6 +1092,7 @@
     cartState.data = cart;
     cartState.status = cart.items.length ? 'populated' : 'empty';
     cartState.error = null;
+    cartSyncedAt = Date.now();
     updateBadge(cart);
     notifyCartState();
     window.dispatchEvent(Object.assign(new CustomEvent('cart:updated', { detail: cart }), { cartSource: true }));
@@ -1090,6 +1110,20 @@
       cartState.error = null;
       notifyCartState();
       try {
+        // An optional-auth cart GET may return a valid guest cart while /me
+        // is still renewing an expired access cookie. Resolve that renewal first.
+        // getMe shares its in-flight request with the normal auth bootstrap.
+        if (API?.getMe && (!mutation || !cartSyncedAt || Date.now() - cartSyncedAt >= CART_FRESH_MS)) {
+          const user = await API.getMe();
+          if (owner !== cartOwner) return cartState.data;
+          const identity = user?.id ?? null;
+          if (cartIdentity !== undefined && identity !== cartIdentity) {
+            invalidateCart(identity);
+            fetchCart().catch(() => undefined);
+            return null;
+          }
+          cartIdentity = identity;
+        }
         const cart = await operation();
         if (owner === cartOwner && version === cartVersion) publishCart(cart);
         return cartState.data;
@@ -1836,16 +1870,13 @@
     } else fetchCart().catch(() => undefined);
   });
 
-  window.addEventListener('pageshow', (event) => {
-    if (event.persisted) fetchCart().catch(() => undefined);
-  });
-
-  window.addEventListener('cronox:userChanged', (event) => {
-    if (event.initial) return;
+  const invalidateCart = (identity) => {
     // Login/register merge guest ownership atomically on the server; logout
     // transfers it back to a fresh opaque guest owner. Re-read that one source.
     cartOwner += 1;
     cartVersion += 1;
+    cartIdentity = identity;
+    cartSyncedAt = 0;
     cartRead = null;
     cartState.data = null;
     cartState.status = 'loading';
@@ -1855,6 +1886,26 @@
     cartItemErrors.clear();
     updateBadge();
     notifyCartState();
+    // Null is an invalidation, never an authoritative empty cart.
+    window.dispatchEvent(Object.assign(new CustomEvent('cart:updated', { detail: null }), { cartSource: true }));
+  };
+  const revalidateCart = () => {
+    if (document.visibilityState === 'hidden') return;
+    if (!cartSyncedAt || Date.now() - cartSyncedAt >= CART_FRESH_MS) fetchCart().catch(() => undefined);
+  };
+  window.addEventListener('pagehide', () => invalidateCart(undefined));
+  window.addEventListener('pageshow', (event) => {
+    if (event.persisted) fetchCart().catch(() => undefined);
+  });
+  window.addEventListener('focus', revalidateCart);
+  document.addEventListener('visibilitychange', revalidateCart);
+  window.addEventListener('cronox:session-ended', () => {
+    invalidateCart(undefined);
+    fetchCart().catch(() => undefined);
+  });
+  window.addEventListener('cronox:userChanged', (event) => {
+    if (event.initial) return; // The initial read already awaits getMe/refresh.
+    invalidateCart(event.detail?.id ?? null);
     fetchCart().catch(() => undefined);
   });
 
@@ -1949,11 +2000,6 @@ window.CRONOX_AUTH_STATE = window.CRONOX_USER ? 'authenticated' : 'unknown';
       safeCalls.push(Promise.resolve()
         .then(() => window.initFavoritesFromBackend())
         .catch((err) => console.warn('[AUTH] No se pudieron sincronizar favoritos tras login', err)));
-    }
-    if (typeof window.initCartFromBackend === 'function') {
-      safeCalls.push(Promise.resolve()
-        .then(() => window.initCartFromBackend())
-        .catch((err) => console.warn('[AUTH] No se pudo sincronizar carrito tras login', err)));
     }
     await Promise.all(safeCalls);
   };

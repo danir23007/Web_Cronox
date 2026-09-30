@@ -61,6 +61,21 @@ function app(source = catalog, gated = false) {
 }
 const doc = (html: string) => new JSDOM(html).window.document;
 describe('public SEO server HTML (no database connection)', () => {
+  it('serves the complete brand article and its metadata without JavaScript', async () => {
+    const response = await request(app()).get('/sobre-cronox');
+    expect(response.status).toBe(200);
+    const document = doc(response.text);
+    expect(document.title).toBe('Sobre CRONOX | La cara B del ser humano');
+    expect(document.querySelectorAll('h1')).toHaveLength(1);
+    expect(document.querySelectorAll('main h2')).toHaveLength(8);
+    expect(document.querySelectorAll('main section p')).toHaveLength(13);
+    expect(document.querySelector('link[rel=canonical]')?.getAttribute('href')).toBe('https://cronox.es/sobre-cronox');
+    expect(document.querySelector('meta[name=robots]')?.getAttribute('content')).not.toContain('noindex');
+    expect(document.querySelector('meta[property="og:image"]')?.getAttribute('content')).toBe('https://cronox.es/assets/logo_banner.png');
+    expect(document.querySelector('main')?.textContent).toContain('Daniel Rivas');
+    expect((await request(app()).get('/sobre-cronox.html')).headers.location).toBe('/sobre-cronox');
+    expect((await request(app()).get('/sitemap.xml')).text).toContain('<loc>https://cronox.es/sobre-cronox</loc>');
+  });
   it('has one homepage WebSite, consistent identity and crawlable product links without JavaScript', async () => {
     const result = await request(app()).get('/');
     const document = doc(result.text);

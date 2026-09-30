@@ -39,7 +39,19 @@ async function fixture(page, count = 2) {
     if (!url.pathname.startsWith('/api/')) return route.continue();
     let data = {};
     if (url.pathname === '/api/auth/csrf') data = { csrfToken: 'local-cart-fixture' };
-    else if (url.pathname === '/api/me') data = state.signedIn ? { id: 1, email: 'fixture@example.test', role: 'USER' } : null;
+    else if (url.pathname === '/api/me') {
+      if (state.meFailure) return route.fulfill({ status: 503, json: { message: 'Offline' } });
+      if (state.accessExpired) return route.fulfill({ status: 401, json: { message: 'Expired access' } });
+      data = state.signedIn ? { id: state.userId || 1, email: 'fixture@example.test', role: 'USER' } : null;
+    }
+    else if (url.pathname === '/api/auth/refresh') {
+      state.refreshes = (state.refreshes || 0) + 1;
+      if (state.refreshGate) await state.refreshGate;
+      if (state.refreshFailure) return route.fulfill({ status: 503, json: { message: 'Offline' } });
+      if (state.anonymous) return route.fulfill({ status: 401, json: { message: 'No session' } });
+      state.accessExpired = false;
+      data = { ok: true };
+    }
     else if (url.pathname === '/api/auth/login') {
       state.signedIn = true;
       state.cart = cartWith(3);
@@ -52,7 +64,8 @@ async function fixture(page, count = 2) {
     else if (url.pathname.startsWith('/api/cart')) {
       if (request.method() === 'GET') {
         state.reads++;
-        const snapshot = structuredClone(totals(state.cart));
+        const snapshot = structuredClone(totals(state.accessExpired && state.signedIn ? cartWith(0) : state.cart));
+        if (state.cartGate) await state.cartGate;
         if (state.delay) await new Promise(resolve => setTimeout(resolve, state.delay));
         if (state.fail) return route.fulfill({ status: 503, json: { message: 'Fixture unavailable' } });
         if (state.malformed) return route.fulfill({ json: {} });
@@ -93,6 +106,39 @@ test('first opening keeps purchased rows visible with six recommendations on a s
   expect(bounds.height).toBeGreaterThan(120);
   await expect(page.locator('#cart-items-container .cart-line').first()).toBeInViewport();
   await expect(page.locator('#cart-checkout-btn')).toBeInViewport();
+});
+
+test('stale focus and visibility share a read and preserve the known count on failure', async ({ page }) => {
+  const state = await fixture(page, 2);
+  await page.goto('/');
+  await expect(page.locator('.cart-count').first()).toHaveText('2');
+  await page.clock.setFixedTime(Date.now() + 60_000);
+  let release;
+  state.cartGate = new Promise(resolve => release = resolve);
+  state.fail = true;
+  await page.evaluate(() => {
+    window.dispatchEvent(new Event('focus'));
+    document.dispatchEvent(new Event('visibilitychange'));
+  });
+  await expect.poll(() => state.reads).toBe(2);
+  release();
+  await expect.poll(() => page.evaluate(() => window.CRONOX_CART.state.status)).toBe('error');
+  await expect(page.locator('.cart-count').first()).toHaveText('2');
+  state.fail = false;
+  state.cart = cartWith(1);
+  await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+  await expect(page.locator('.cart-count').first()).toHaveText('1');
+  expect(state.reads).toBe(3);
+});
+
+test('anonymous 401 session resolution retains the saved guest cart', async ({ page }) => {
+  const state = await fixture(page, 2);
+  state.accessExpired = true;
+  state.anonymous = true;
+  await page.goto('/');
+  await expect.poll(() => page.evaluate(() => window.CRONOX_CART.state.status)).toBe('populated');
+  await expect(page.locator('.cart-count').first()).toHaveText('2');
+  expect(state.reads).toBe(1);
 });
 
 test('a slow initial read cannot replace a newer add response', async ({ page }) => {
@@ -390,3 +436,87 @@ for (const zoom of [1.25, 1.5, 2]) {
     await context.close();
   });
 }
+
+// These cases exercise the real session transport and shared cart controller;
+// only HTTP responses are controlled. No external services or database writes.
+test('persistent account cart loads before opening; badge counts units, not lines', async ({page}, info) => {
+ const state=await fixture(page,2);state.signedIn=true;state.cart.items[0].qty=4;
+ await page.goto('/producto/test-tee-1');
+ await expect(page.locator('.cart-count').first()).toHaveText('5');
+ await expect(page.locator('#cart-drawer')).toHaveAttribute('aria-hidden','true');
+ expect(state.reads).toBe(1);
+ await page.setViewportSize({width:390,height:844});await page.screenshot({path:info.outputPath('initial-badge-mobile.png')});
+ await page.setViewportSize({width:1366,height:900});await page.screenshot({path:info.outputPath('initial-badge-desktop.png')});
+});
+
+test('expired access waits for existing refresh and drawer reuses initial request', async ({page}) => {
+ const state=await fixture(page,2);state.signedIn=true;state.accessExpired=true;
+ let release;state.refreshGate=new Promise(resolve=>release=resolve);
+ await page.goto('/');await expect.poll(()=>state.refreshes).toBe(1);
+ await page.locator('#cart-icon-btn').click();
+ await expect(page.locator('#cart-drawer .cart-status')).toContainText('Cargando');
+ expect(state.reads).toBe(0);
+ release();await expect(page.locator('.cart-count').first()).toHaveText('2');
+ expect(state.reads).toBe(1);expect(state.refreshes).toBe(1);
+ await expect(page.locator('.cart-line')).toHaveCount(2);
+});
+
+test('session transport failure stays unknown and focus recovers without reload', async ({page}) => {
+ const state=await fixture(page,2);state.signedIn=true;state.meFailure=true;
+ await page.goto('/');await expect.poll(()=>page.evaluate(()=>window.CRONOX_CART.state.status)).toBe('error');
+ expect(state.reads).toBe(0);
+ await page.locator('#cart-icon-btn').click();await expect(page.locator('#cart-drawer .cart-status')).toContainText('No se pudo cargar');
+ await expect(page.locator('#cart-empty-state')).toHaveCount(0);
+ state.meFailure=false;await page.evaluate(()=>window.dispatchEvent(new Event('focus')));
+ await expect(page.locator('.cart-count').first()).toHaveText('2');expect(state.reads).toBe(1);
+});
+
+test('refresh failure is retryable and never publishes an empty guest snapshot', async ({ page }) => {
+  const state = await fixture(page, 2);
+  state.signedIn = true;
+  state.accessExpired = true;
+  state.refreshFailure = true;
+  await page.goto('/');
+  await expect.poll(() => page.evaluate(() => window.CRONOX_CART.state.status)).toBe('error');
+  expect(state.reads).toBe(0);
+  expect(await page.evaluate(() => window.CRONOX_CART.state.data)).toBeNull();
+  state.refreshFailure = false;
+  await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+  await expect(page.locator('.cart-count').first()).toHaveText('2');
+  expect(state.reads).toBe(1);
+});
+
+test('old account response is ignored after account change during an initial read', async ({page}) => {
+ const state=await fixture(page,2);state.signedIn=true;
+ let release;state.cartGate=new Promise(resolve=>release=resolve);
+ await page.goto('/');await expect.poll(()=>state.reads).toBe(1);
+ state.cart=cartWith(1);state.userId=2;
+ await page.evaluate(()=>window.dispatchEvent(new CustomEvent('cronox:userChanged',{detail:{id:2}})));
+ await expect(page.locator('.cart-count').first()).toBeHidden();
+ state.cartGate=null;release();
+ await expect(page.locator('.cart-count').first()).toHaveText('1');expect(state.reads).toBe(2);
+ expect(await page.evaluate(()=>window.CRONOX_CART.state.data.items.length)).toBe(1);
+});
+
+test('session end clears known cart and ignores an outstanding read', async ({page}) => {
+ const state=await fixture(page,2);state.signedIn=true;
+ await page.goto('/');await expect(page.locator('.cart-count').first()).toHaveText('2');
+ let release;state.cartGate=new Promise(resolve=>release=resolve);
+ await page.evaluate(()=>{void window.CRONOX_CART.fetchCart();});await expect.poll(()=>state.reads).toBe(2);
+ state.signedIn=false;state.cart=cartWith(0);
+ await page.evaluate(()=>window.dispatchEvent(new CustomEvent('cronox:session-ended')));
+ await expect(page.locator('.cart-count').first()).toHaveText('');
+ state.cartGate=null;release();await expect.poll(()=>page.evaluate(()=>window.CRONOX_CART.state.status)).toBe('empty');
+ await expect(page.locator('.cart-count').first()).toBeHidden();expect(state.reads).toBe(3);
+});
+
+test('bfcache restore revalidates ownership; fresh focus/visibility events do not duplicate reads', async ({page}) => {
+ const state=await fixture(page,2);await page.goto('/');await expect(page.locator('.cart-count').first()).toHaveText('2');
+ await page.evaluate(()=>{window.dispatchEvent(new Event('focus'));document.dispatchEvent(new Event('visibilitychange'));});
+ expect(state.reads).toBe(1);
+ state.cart=cartWith(1);
+ await page.evaluate(()=>{window.dispatchEvent(new PageTransitionEvent('pagehide',{persisted:true}));window.dispatchEvent(new PageTransitionEvent('pageshow',{persisted:true}));window.dispatchEvent(new Event('focus'));});
+ await expect(page.locator('.cart-count').first()).toHaveText('1');expect(state.reads).toBe(2);
+ await page.goto('/cart');await expect(page.locator('#cartItems .cart-item')).toHaveCount(1);expect(state.reads).toBe(3);
+ await page.goBack();await expect(page.locator('.cart-count').first()).toHaveText('1');
+});

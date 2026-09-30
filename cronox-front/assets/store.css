@@ -752,6 +752,12 @@ button.product-cta--disabled:disabled { opacity:.5; cursor:not-allowed; filter:n
 /* ===== MENÚ DESPLEGABLE NEGRO ===== */
 .black-menu{position:fixed;top:0;left:0;height:100vh;height:100dvh;width:min(82vw,340px);max-width:100%;overflow-y:auto;background:#000;color:#fff;z-index:1600;transform:translateX(-102%);transition:transform 0.3s cubic-bezier(.2,.8,.2,1);display:flex;flex-direction:column;padding:max(24px,env(safe-area-inset-top)) max(20px,env(safe-area-inset-right)) max(24px,env(safe-area-inset-bottom)) max(20px,env(safe-area-inset-left));box-shadow:6px 0 24px rgba(0,0,0,.6);border-right:1px solid rgba(255,255,255,.1);}
 .black-menu.is-open{transform:translateX(0);}
+.black-menu__discover{display:block;flex:none;margin-top:auto;padding:24px 0 8px;border-top:1px solid #444;color:#fff;font:800 16px/1.5 system-ui;letter-spacing:.05em;text-decoration:underline;text-underline-offset:6px;min-height:44px;}
+.black-menu:has(.black-menu__discover){row-gap:32px;}
+.black-menu:has(.black-menu__discover) .black-menu__brand{margin-bottom:0;}
+.black-menu:has(.black-menu__discover) .black-menu__list{flex-shrink:0;}
+.black-menu__discover:hover{color:#ccc;}
+.black-menu__discover:focus-visible{outline:2px solid #fff;outline-offset:4px;}
 /* White variant of the exact favicon: filter preserves every alpha pixel. */
 .black-menu__brand{display:block;flex:none;align-self:center;width:clamp(64px,20vw,80px);height:auto;aspect-ratio:1;object-fit:contain;margin:0 auto 28px;filter:brightness(0) invert(1);pointer-events:none;}
 .filters-close{position:absolute;top:max(12px,env(safe-area-inset-top));right:max(12px,env(safe-area-inset-right));display:grid;place-items:center;width:44px;height:44px;padding:0;background:none;border:none;color:#fff;font-size:20px;line-height:1;cursor:pointer;transition:opacity .2s ease;}
@@ -1668,9 +1674,6 @@ button.product-cta--disabled:disabled { opacity:.5; cursor:not-allowed; filter:n
   flex-shrink: 0;
   gap: clamp(8px, 2vw, 12px);
 }
-.accreditation-page-right-content .accreditation-right-section:last-of-type {
-  transform: translateY(-20px);
-}
 
 .accreditation-right-title {
   margin: 0;
@@ -1918,10 +1921,6 @@ button.product-cta--disabled:disabled { opacity:.5; cursor:not-allowed; filter:n
   .accreditation-right-section {
     width: 100%;
     gap: clamp(2px, 1.09cqw, 4px);
-  }
-
-  .accreditation-page-right-content .accreditation-right-section:last-of-type {
-    transform: none;
   }
 
   .accreditation-right-title {
