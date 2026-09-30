@@ -1,0 +1,42 @@
+name: Check CRONOX SSH (read only)
+on:
+  workflow_dispatch:
+  push:
+    branches: [fix/actions-ssh]
+permissions:
+  contents: read
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v5
+      - name: Compare configured destination and test TCP without exposing secrets
+        env:
+          SSH_HOST: ${{ secrets.CRONOX_VPS_HOST }}
+          SSH_PORT: ${{ secrets.CRONOX_VPS_PORT }}
+          SSH_USER: ${{ secrets.CRONOX_VPS_USER }}
+        run: |
+          python3 - <<'PY'
+          import os, socket, json
+          host, port, user = (os.environ[k] for k in ('SSH_HOST', 'SSH_PORT', 'SSH_USER'))
+          print(json.dumps({'host_present':bool(host), 'port_present':bool(port), 'user_present':bool(user), 'host_matches_verified_ipv4':host=='69.62.109.75', 'port_matches_verified_port':port=='22', 'user_matches_deploy':user=='deploy'}))
+          for label, target, number in [('configured', host, port), ('verified', '69.62.109.75', '22')]:
+              try:
+                  addresses=socket.getaddrinfo(target,int(number),type=socket.SOCK_STREAM)
+                  print(json.dumps({'target':label,'dns':'ok','resolves_to_verified_ipv4':any(a[4][0]=='69.62.109.75' for a in addresses),'has_ipv6':any(a[0]==socket.AF_INET6 for a in addresses)}))
+                  with socket.create_connection((target,int(number)),timeout=10):
+                      print(json.dumps({'target':label,'tcp':'ok'}))
+              except Exception as e:
+                  print(json.dumps({'target':label,'error_type':type(e).__name__,'errno':getattr(e,'errno',None)}))
+          PY
+      - name: Read-only SSH to verified VPS with pinned server identity
+        env:
+          SSH_KEY: ${{ secrets.CRONOX_VPS_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          key="$RUNNER_TEMP/cronox-ssh-key"
+          trap 'rm -f "$key"' EXIT
+          umask 077
+          printf '%s\n' "$SSH_KEY" > "$key"
+          ssh -i "$key" -p 22 -o BatchMode=yes -o IdentitiesOnly=yes -o ConnectTimeout=15 -o ConnectionAttempts=1 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$GITHUB_WORKSPACE/.github/ssh/known_hosts" deploy@69.62.109.75 'test "$(id -un)" = deploy && test -x /var/www/cronox/deploy.sh && printf "SSH identity, authentication and deploy-script access verified\n" && git -C /var/www/cronox/Web_Cronox rev-parse HEAD'
