@@ -1,8 +1,6 @@
 name: Check CRONOX SSH (read only)
 on:
   workflow_dispatch:
-  push:
-    branches: [fix/actions-ssh]
 permissions:
   contents: read
 jobs:

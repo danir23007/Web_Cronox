@@ -1,5 +1,8 @@
 name: Deploy CRONOX
 
+permissions:
+  contents: read
+
 on:
   push:
     branches:
@@ -62,21 +65,13 @@ jobs:
   deploy:
     needs: verify-release
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
-      - name: Deploy to VPS
-        uses: appleboy/ssh-action@v1.2.0
-        with:
-          host: ${{ secrets.CRONOX_VPS_HOST }}
-          username: ${{ secrets.CRONOX_VPS_USER }}
-          key: ${{ secrets.CRONOX_VPS_SSH_KEY }}
-          port: ${{ secrets.CRONOX_VPS_PORT }}
-          script_stop: true
-          script: |
-            set -euo pipefail
-            /var/www/cronox/deploy.sh
-            status="$(curl --silent --show-error --output /tmp/cronox-export-smoke.json --write-out '%{http_code}' 'http://127.0.0.1:3000/api/admin/exports/users?scope=all')"
-            if [ "$status" != "401" ] && [ "$status" != "429" ]; then
-              echo "Admin export route smoke failed with HTTP $status"
-              sed -n '1,5p' /tmp/cronox-export-smoke.json
-              exit 1
-            fi
+      - uses: actions/checkout@v5
+      - name: Verify SSH identity and deploy the current main commit
+        env:
+          SSH_HOST: ${{ secrets.CRONOX_VPS_HOST }}
+          SSH_PORT: ${{ secrets.CRONOX_VPS_PORT }}
+          SSH_USER: ${{ secrets.CRONOX_VPS_USER }}
+          SSH_KEY: ${{ secrets.CRONOX_VPS_SSH_KEY }}
+        run: bash .github/scripts/deploy-production.sh
