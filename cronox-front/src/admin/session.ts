@@ -255,6 +255,7 @@ export function installSessionTransport(
       location.href,
     );
     const eligible =
+      url.pathname !== '/api/live-stats/presence' &&
       url.origin === origin &&
       url.pathname.startsWith("/api/") &&
       init?.credentials !== "omit";

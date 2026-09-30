@@ -2532,8 +2532,11 @@
       .join('');
   };
 
+  let usersLoadVersion = 0;
   const fetchUsers = async () => {
     if (!usersBody) return;
+    const loadVersion = ++usersLoadVersion;
+    window.CRONOX_BULK?.beforeLoad('users');
     if (!canAccess('users')) {
       showModuleError({
         container: usersMessage || statusArea,
@@ -2559,7 +2562,9 @@
         throw new Error('API no disponible');
       }
       const data = await listFn(buildUsersQuery(usersState));
+      if (loadVersion !== usersLoadVersion) return;
       const normalized = normalizeUsersResponse(data);
+      if (normalized.meta.page > normalized.meta.totalPages) { usersState.page = normalized.meta.totalPages; return fetchUsers(); }
       usersState.page = normalized.meta.page;
       usersState.pageSize = ADMIN_PAGE_SIZES.users;
       usersState.total = normalized.meta.total;
@@ -2576,8 +2581,10 @@
       }
       updateUsersHashState();
       updateUsersPagination();
+      window.CRONOX_BULK?.page('users', normalized.items || []);
     } catch (error) {
       console.error('[ADMIN] Error cargando usuarios', error);
+      if (loadVersion !== usersLoadVersion) return;
       showModuleError({
         container: usersMessage || statusArea,
         error,
@@ -2679,8 +2686,8 @@
   const compareAssignableCategories = (a, b) => String(a.name || a.slug).localeCompare(String(b.name || b.slug), 'es');
   const loadAssignableCategories = async () => {
     const api = window.CRONOX_API?.admin;
-    if (typeof api?.listAdminCategories !== 'function') throw new Error('La API de categorías no está disponible.');
-    return (await loadAllAdminPages(query => api.listAdminCategories(query))).sort(compareAssignableCategories);
+    if (typeof api?.listAllAdminCategories !== 'function') throw new Error('La API de categorías no está disponible.');
+    return (await api.listAllAdminCategories()).sort(compareAssignableCategories);
   };
   const renderCreationCategoryNames = () => {
     const names = [...creationCategories.selected].map(id => creationCategories.names.get(id) || `Categoría ${id}`).sort((a, b) => a.localeCompare(b, 'es'));
@@ -2761,11 +2768,18 @@
     }
   };
 
+  let productCategoriesLoading = false;
+  const categoryLoadStatus = document.getElementById('productCategoryStatus');
+  const categoryLoadRetry = document.getElementById('productCategoryRetry');
   const loadProductCategories = async () => {
-    if (!productCategory || !window.CRONOX_API?.getCategories) return;
+    if (!productCategory || productCategoriesLoading) return;
+    productCategoriesLoading = true;
+    productCategory.disabled = true;
+    productCategory.setAttribute('aria-busy', 'true');
+    categoryLoadStatus.textContent = 'Cargando categorías…';
+    categoryLoadRetry.hidden = true;
     try {
-      const categories = await window.CRONOX_API.getCategories({ page: 1, limit: 200 });
-      const options = Array.isArray(categories) ? categories : [];
+      const options = await window.CRONOX_API.getAllCategories();
       const currentValue = productCategory.value;
       productCategory.innerHTML = '<option value="">Todas</option>';
       options.forEach((category) => {
@@ -2777,13 +2791,24 @@
       if (currentValue) {
         productCategory.value = currentValue;
       }
+      productCategory.disabled = false;
+      categoryLoadStatus.textContent = options.length ? '' : 'No hay categorías activas.';
     } catch (error) {
       console.warn('[ADMIN] No se pudieron cargar categorías', error);
+      categoryLoadStatus.textContent = 'No se pudieron cargar todas las categorías. Reintenta la carga.';
+      categoryLoadRetry.hidden = false;
+    } finally {
+      productCategoriesLoading = false;
+      productCategory.setAttribute('aria-busy', 'false');
     }
   };
+  categoryLoadRetry?.addEventListener('click', loadProductCategories);
 
+  let productsLoadVersion = 0;
   const fetchProducts = async () => {
     if (!productsBody) return;
+    const loadVersion = ++productsLoadVersion;
+    window.CRONOX_BULK?.beforeLoad('products');
     if (!canAccess('products')) {
       showModuleError({
         container: productsMessage || statusArea,
@@ -2805,6 +2830,8 @@
         buildProductQuery(productsState),
       );
       const meta = normalizePaginated(data, productsState);
+      if (loadVersion !== productsLoadVersion) return;
+      if (meta.page > meta.totalPages) { productsState.page = meta.totalPages; return fetchProducts(); }
       productsState.page = meta.page;
       productsState.pageSize = ADMIN_PAGE_SIZES.products;
       productsState.totalPages = meta.totalPages;
@@ -2823,8 +2850,10 @@
         prev: productsPrev,
         next: productsNext,
       });
+      window.CRONOX_BULK?.page('products', meta.items || []);
     } catch (error) {
       console.error('[ADMIN] Error cargando productos', error);
+      if (loadVersion !== productsLoadVersion) return;
       showModuleError({
         container: productsMessage || statusArea,
         error,
@@ -3031,7 +3060,7 @@
     try {
       const adminApi = window.CRONOX_API?.admin;
       if (
-        typeof adminApi?.listAdminCategories !== 'function' ||
+        typeof adminApi?.listAllAdminCategories !== 'function' ||
         typeof adminApi?.listAdminProducts !== 'function'
       ) {
         throw new Error('La API de clasificación de productos no está disponible.');
@@ -4779,8 +4808,11 @@
     revealAdmin();
     setScopedMessage(apiUnavailable, '');
     applyRoleVisibility();
+    window.CRONOX_BULK?.mount({kind:'users',body:usersBody,query:()=>buildUsersQuery(usersState),reload:fetchUsers,role:currentAdminRole});
+    window.CRONOX_BULK?.mount({kind:'products',body:productsBody,query:()=>buildProductQuery(productsState),reload:fetchProducts,role:currentAdminRole});
     setupExcelExports();
     ensureSectionBackButtons();
+    window.CRONOX_ADMIN_HEADERS?.arrange();
     bindEvents();
     syncRequestsStateFromInputs();
     syncRequests23StateFromInputs();

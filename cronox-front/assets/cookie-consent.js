@@ -510,6 +510,11 @@
   });
 
   window.CRONOX_COOKIE_CONSENT = api;
+  if (!/^\/admin(?:[/.\-]|$)/i.test(window.location.pathname)) {
+    const presence = document.createElement('script');
+    presence.src = '/assets/live-presence.js?v=1';
+    document.head.append(presence);
+  }
   if (document.readyState === "loading")
     document.addEventListener("DOMContentLoaded", initialize);
   else initialize();

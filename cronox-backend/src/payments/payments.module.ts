@@ -11,9 +11,10 @@ import { StripeService } from './stripe.service';
 import { AnalyticsModule } from '../analytics/analytics.module';
 import { AccessAuthModule } from '../auth/access-auth.module';
 import { AuthModule } from '../auth/auth.module';
+import { LiveStatsModule } from '../live-stats/live-stats.module';
 
 @Module({
-  imports: [OrdersModule, CartModule, EmailModule, AnalyticsModule, AccessAuthModule, AuthModule],
+  imports: [OrdersModule, CartModule, EmailModule, AnalyticsModule, AccessAuthModule, AuthModule, LiveStatsModule],
   controllers: [PaymentsController, PaymentsApiController, StripeWebhookController],
   providers: [
     StripeService,

@@ -69,6 +69,10 @@ export class AdminUsersService {
     };
   }
 
+  selectBulkIds(query: AdminUserQueryDto, tx: Prisma.TransactionClient) {
+    return tx.user.findMany({ where: this.buildWhere(query), select: { id: true }, orderBy: { id: 'asc' }, take: 101 });
+  }
+
   async listUsers(query: AdminUserQueryDto) {
     const page = query.page ?? 1;
     const pageSize = Math.min(
@@ -239,11 +243,11 @@ export class AdminUsersService {
     dto: UpdateAdminUserDto,
     performedById: number,
     requestMetadata: AdminUserUpdateRequestMetadata = {},
+    transaction?: Prisma.TransactionClient,
   ) {
     for (let attempt = 0; attempt < SERIALIZABLE_RETRY_LIMIT; attempt += 1) {
       try {
-        return await this.prisma.$transaction(
-          async (tx) => {
+        const operation = async (tx: Prisma.TransactionClient) => {
             const existing = await tx.user.findUnique({
               where: { id },
             });
@@ -407,12 +411,12 @@ export class AdminUsersService {
             if (!updated) throw new NotFoundException('Usuario no encontrado');
 
             return this.mapUser(updated);
-          },
-          { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
-        );
+          };
+        return await (transaction ? operation(transaction) : this.prisma.$transaction(operation,
+          { isolationLevel: Prisma.TransactionIsolationLevel.Serializable }));
       } catch (error) {
         if (
-          this.isSerializationFailure(error) &&
+          !transaction && this.isSerializationFailure(error) &&
           attempt + 1 < SERIALIZABLE_RETRY_LIMIT
         ) {
           continue;

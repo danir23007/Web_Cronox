@@ -6,6 +6,7 @@ import {
   HttpCode,
   Logger,
   NotFoundException,
+  Optional,
   Param,
   ParseIntPipe,
   Post,
@@ -31,6 +32,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { StripeService } from './stripe.service';
 import { isProductionEnvironment } from '../common/config/environment';
 import { AuthService } from '../auth/auth.service';
+import { LivePaymentObservation } from '../live-stats/live-payment-observation';
 
 @ApiTags('Payments / Stripe')
 @Controller()
@@ -44,6 +46,7 @@ export class StripeWebhookController {
     private readonly prisma: PrismaService,
     private readonly orderConfirmationEmailMapper: OrderConfirmationEmailMapper,
     private readonly authService: AuthService,
+    @Optional() private readonly livePayment?: LivePaymentObservation,
   ) {}
 
   @Post('admin/orders/:id/confirmation-email')
@@ -137,7 +140,12 @@ export class StripeWebhookController {
 
     try {
       let response: Record<string, unknown>;
+      await this.livePayment?.record(event);
       switch (event.type) {
+        case 'payment_intent.processing':
+        case 'payment_intent.requires_action':
+          response = { received: true, observed: true };
+          break;
         case 'checkout.session.completed':
           response = await this.handleCheckoutSessionCompleted(event);
           break;

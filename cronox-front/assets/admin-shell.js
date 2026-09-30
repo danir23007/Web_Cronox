@@ -137,11 +137,17 @@
   }, true));
   const select = destination => {
     current = destination;
-    const alias = { 'section-product-categories':'section-products', 'section-products-menu':'section-products', 'section-23':'section-circles-menu', 'section-34':'section-circles-menu', 'section-user':'section-users' };
+    const alias = { 'section-products-menu':'section-products', 'section-23':'section-circles-menu', 'section-34':'section-circles-menu', 'section-user':'section-users' };
     sidebar.querySelectorAll('[data-nav-target]').forEach(button => {
       if (button.dataset.navTarget === (alias[destination] || destination)) button.setAttribute('aria-current', 'page'); else button.removeAttribute('aria-current');
     });
     const active = sidebar.querySelector('[aria-current="page"]');
+    let group = active?.closest('.sidebar-children');
+    while (group) {
+      group.hidden = false;
+      sidebar.querySelector(`[aria-controls="${group.id}"]`)?.setAttribute('aria-expanded', 'true');
+      group = group.parentElement.closest('.sidebar-children');
+    }
     document.getElementById('adminBreadcrumb').textContent = active?.textContent.trim() || 'Administración';
     closeDrawer();
   };

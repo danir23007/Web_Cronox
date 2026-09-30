@@ -22,7 +22,7 @@
   <link id="cronox-main-style" rel="stylesheet" href="assets/store.css?v=100">
   <link rel="stylesheet" href="assets/quick-add.css?v=6">
   <!-- PDP oscuro total -->
-  <link rel="stylesheet" href="assets/product-page.css?v=8" />
+  <link rel="stylesheet" href="assets/product-page.css?v=9" />
   <link rel="stylesheet" href="assets/waitlist.css?v=1" />
 
   <style>
@@ -533,6 +533,10 @@
             <div id="pSizeGroup" class="pdp__size-buttons" role="radiogroup" aria-label="Selecciona una talla"></div>
           </div>
 
+          <p class="pdp__delivery" data-delivery-notice hidden aria-live="polite">
+            <span class="pdp__delivery-dot" aria-hidden="true"></span>
+            <span>Compra ahora y recíbelo antes del <strong data-delivery-date></strong></span>
+          </p>
           <button id="pAdd" class="btn-primary" type="button" disabled aria-disabled="true">Añadir al carrito</button>
         </div>
 
@@ -620,6 +624,7 @@
   <script src="assets/products.js?v=63" defer></script>
   <script src="assets/waitlist.js?v=1" defer></script>
   <script src="assets/product-page.js?v=44" defer></script>
+  <script src="assets/product-delivery.js?v=1" defer></script>
   <script src="assets/favorites-toggle.js?v=3" defer></script>
 </body>
 </html>

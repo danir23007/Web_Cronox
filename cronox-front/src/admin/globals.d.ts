@@ -84,6 +84,7 @@ declare global {
   }
 
   interface CronoxAdminApi {
+    listAllAdminCategories?: () => Promise<Record<string, unknown>[]>;
     getDashboard?: () => Promise<unknown>;
     mailRequest?: (path: string, method?: string, body?: Record<string, unknown> | FormData) => Promise<unknown>;
     downloadExcel?: (module: string, query?: QueryRecord) => Promise<{ blob: Blob; filename: string }>;

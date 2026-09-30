@@ -4,6 +4,7 @@ import {
   classifyVariantStock,
 } from '../../../cronox-backend/src/common/stock-status';
 import { installSessionTransport } from './session';
+import { loadCategoryPages } from './category-pagination';
 
 (() => {
   type UnknownRecord = Record<string, unknown>;
@@ -1673,6 +1674,9 @@ import { installSessionTransport } from './session';
       ? (data as { items: unknown[] }).items
       : [];
   };
+
+  api.getAllCategories = () => loadCategoryPages(query => request('/api/categories', { query }));
+  adminApi.listAllAdminCategories = () => loadCategoryPages(query => request('/api/admin/categories', { query }));
 
   api.getCategoryProducts = async (slug: string, query: QueryRecord = {}) => {
     const data = (await request(

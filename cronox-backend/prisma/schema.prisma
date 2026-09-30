@@ -188,6 +188,16 @@ model AdminProductCreateRequest {
   @@index([createdAt])
 }
 
+model AdminBulkOperation {
+  id          String   @id @db.Uuid
+  actorId     Int
+  requestHash String   @db.VarChar(64)
+  result      Json
+  createdAt   DateTime @default(now())
+
+  @@index([actorId, createdAt])
+}
+
 model Category {
   id          Int               @id @default(autoincrement())
   name        String
@@ -765,6 +775,18 @@ model Cart {
   items       CartItem[]
 }
 
+// Short-lived, consented presence only. No navigation history or contact data.
+model LivePresence {
+  visitorHash String   @id @db.VarChar(64)
+  userId      Int?
+  sessionId   String?
+  anonymousId String?
+  section     String   @db.VarChar(12)
+  productId   Int?
+  seenAt      DateTime @default(now()) @db.Timestamptz(3)
+  @@index([seenAt])
+}
+
 model CartItem {
   id         Int            @id @default(autoincrement())
   cartId     Int
@@ -783,6 +805,9 @@ model CartItem {
 // A checkout snapshot is created before a Stripe PaymentIntent is created.
 // Order creation must use these frozen values rather than a mutable cart.
 model CheckoutSnapshot {
+  paymentStatus              String?
+  paymentStatusAt            DateTime?                  @db.Timestamptz(3)
+  paymentLiveMode            Boolean?
   id                         String                     @id @default(cuid())
   userId                     Int?
   anonymousId                String?

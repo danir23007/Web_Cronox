@@ -1,7 +1,7 @@
 /* All redesign rules are confined to the administration document. */
 body.cronox-admin { --admin-line:var(--admin-c-e5e8ee); --admin-muted:var(--admin-c-687386); --admin-ink:var(--admin-c-19202c); background:var(--admin-c-f2f4f8); color:var(--admin-ink); font-family:Inter,Arial,sans-serif; font-size:14px; }
 .cronox-admin-user { color-scheme:light; }
-.cronox-admin-user .topbar { position:static; background:var(--admin-c-fff); color:var(--admin-c-19202c); border:1px solid var(--admin-c-e5e8ee); border-radius:8px; box-shadow:none; margin-bottom:20px; }
+.cronox-admin-user .topbar { position:static; height:auto; min-height:64px; flex-wrap:wrap; background:var(--admin-c-fff); color:var(--admin-c-19202c); border:1px solid var(--admin-c-e5e8ee); border-radius:8px; box-shadow:none; margin-bottom:20px; }
 .cronox-admin-user .page { max-width:none; }
 .cronox-admin-user .pill,.cronox-admin-user .tab,.cronox-admin-user .panel { background:var(--admin-c-fff); color:var(--admin-c-394252); border-color:var(--admin-c-e5e8ee); }
 .cronox-admin-user .kv-list dt,.cronox-admin-user .breadcrumb { color:var(--admin-c-687386); }
@@ -24,7 +24,28 @@ body.cronox-admin { --admin-line:var(--admin-c-e5e8ee); --admin-muted:var(--admi
 .cronox-admin .sidebar-group[aria-expanded="true"]>.sidebar-chevron { transform:rotate(180deg); }
 .cronox-admin .sidebar-children { padding-left:19px; }
 .cronox-admin .sidebar-children .sidebar-children { padding-left:12px; }
-.cronox-admin .sidebar-account { border-top:1px solid var(--admin-line); margin-top:auto; padding-top:14px; }
+.cronox-admin .sidebar-live { margin-top:auto; padding:14px 0; flex-shrink:0; }
+.cronox-admin .admin-section > .admin-view-back,
+.cronox-admin .admin-heading-copy > .admin-view-back { display:flex; width:max-content; max-width:100%; min-width:44px; min-height:44px; align-items:center; margin:0 0 16px; }
+.cronox-admin .admin-section-heading { display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:start; gap:20px; height:auto; margin-bottom:20px; }
+.cronox-admin .admin-heading-copy,.cronox-admin .admin-heading-title { min-width:0; }
+.cronox-admin .admin-heading-title h2 { margin:0 0 8px; }
+.cronox-admin .admin-section > .admin-view-back + * { margin-top:0; }
+.cronox-admin .admin-section > .admin-view-back + * h2 { margin-top:0; margin-bottom:8px; }
+.cronox-admin .admin-heading-title p,.cronox-admin .admin-heading-title small { margin:0; line-height:1.5; overflow-wrap:anywhere; }
+.cronox-admin .admin-heading-actions { display:flex; flex-direction:column; align-items:flex-end; gap:12px; min-width:0; }
+.cronox-admin .admin-heading-primary,.cronox-admin .admin-heading-actions .excel-export-actions { display:flex; flex-wrap:wrap; justify-content:flex-end; gap:8px; margin:0; }
+.cronox-admin .admin-section-heading .btn { min-height:44px; white-space:normal; }
+@media(max-width:800px) {
+  .cronox-admin .admin-section-heading { grid-template-columns:minmax(0,1fr); }
+  .cronox-admin .admin-heading-actions { width:100%; }
+}
+.cronox-admin .sidebar-account { border-top:1px solid var(--admin-line); padding-top:14px; flex-shrink:0; }
+.cronox-admin .live-activity-dot { width:8px; height:8px; flex:0 0 8px; border-radius:50%; background:#dc2626; visibility:hidden; }
+.cronox-admin .sidebar-live[data-activity=active] .live-activity-dot { visibility:visible; animation:live-activity-pulse 1.2s ease-in-out infinite; }
+.cronox-admin .live-activity-description { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip-path:inset(50%); white-space:nowrap; }
+@keyframes live-activity-pulse { 0%,100% { opacity:1; } 50% { opacity:.4; } }
+@media(prefers-reduced-motion:reduce) { .cronox-admin .sidebar-live[data-activity=active] .live-activity-dot { animation:none; } }
 .cronox-admin .admin-header { min-height:66px; margin:0; padding:15px 30px; display:flex; flex-wrap:nowrap; gap:15px; background:var(--admin-c-fff); border-bottom:1px solid var(--admin-line); color:var(--admin-muted); font-size:12px; }
 .cronox-admin .admin-header-mark { margin-left:auto; display:grid; place-items:center; width:29px; height:29px; background:var(--admin-c-edf5ee); color:var(--admin-c-285e3b); border-radius:50%; font-weight:700; }
 .cronox-admin #sidebarToggle { display:none; border:0; background:transparent; color:var(--admin-c-111); font-size:22px; cursor:pointer; }
@@ -228,3 +249,23 @@ body.cronox-admin { --admin-line:var(--admin-c-e5e8ee); --admin-muted:var(--admi
   .cronox-admin .form-grid { grid-template-columns:minmax(0,1fr); }
 }
 @media(prefers-reduced-motion:reduce) { .cronox-admin .admin-sidebar { transition:none; } }
+
+/* Content headers must not inherit the storefront's fixed-height navigation. */
+.cronox-admin-user :is(.topbar-left,.topbar-right) { min-width:0; max-width:100%; }
+.cronox-admin-user .topbar-right { flex:1 1 320px; justify-content:flex-end; }
+.cronox-admin-user #apiBaseBadge { overflow-wrap:anywhere; white-space:normal; }
+.cronox-admin :is(.card,.panel,.layout > *,.form-grid > *,.user-edit-field,.manual-purchase-field) { min-width:0; }
+.cronox-admin :is(.panel-head,.admin-actions,.status-banner__actions) { flex-wrap:wrap; }
+.cronox-admin :is(.card,.panel,.status-banner,.badge,.pill) { overflow-wrap:anywhere; }
+.cronox-admin-user .kv-row { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,2fr); }
+.cronox-admin-user .kv-row > * { min-width:0; overflow-wrap:anywhere; }
+.cronox-admin-user :is(.user-edit-field,.manual-purchase-field,.notes-form) :is(input,select,textarea) { min-width:0; max-width:100%; }
+.cronox-admin .btn { display:inline-flex; align-items:center; justify-content:center; min-width:44px; min-height:44px; max-width:100%; white-space:normal; overflow-wrap:anywhere; }
+.cronox-admin .admin-header { flex-wrap:wrap; height:auto; }
+.cronox-admin .admin-header #adminBreadcrumb { flex:1 1 100px; }
+@media(max-width:800px) {
+  .cronox-admin-user .topbar { align-items:flex-start; flex-direction:column; }
+  .cronox-admin-user .topbar-right { flex:auto; width:100%; justify-content:flex-start; }
+  .cronox-admin-user #apiBaseBadge { flex-basis:100%; }
+  .cronox-admin-user :is(.tab,.panel-head button) { min-width:44px; min-height:44px; }
+}

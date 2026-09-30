@@ -356,7 +356,7 @@ describe('CRONOX responsive design system', () => {
       'assets/checkout-success.css?v=1',
     );
     expect(readFrontend('producto.html')).toContain(
-      'assets/product-page.css?v=8',
+      'assets/product-page.css?v=9',
     );
   });
 });

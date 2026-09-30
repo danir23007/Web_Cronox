@@ -33,6 +33,7 @@ import { KeyScreenModule } from './key-screen/key-screen.module';
 import { ImagesModule } from './images/images.module';
 import { FooterModule } from './footer/footer.module';
 import { WaitlistModule } from './waitlist/waitlist.module';
+import { LiveStatsModule } from './live-stats/live-stats.module';
 import {
   getRateLimitMax,
   getRateLimitTtlMs,
@@ -73,6 +74,7 @@ import {
     ImagesModule,
     FooterModule,
     WaitlistModule,
+    LiveStatsModule,
     EmailModule,
     AuthModule,
     CartModule,

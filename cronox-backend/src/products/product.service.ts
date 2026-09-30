@@ -394,6 +394,7 @@ export class ProductService {
   private async getProductIdsByStockState(
     stockState: AdminProductQueryDto['stockState'],
     lowStockThreshold: number,
+    client: Prisma.TransactionClient = this.prisma,
   ): Promise<number[]> {
     if (!stockState) return [];
 
@@ -408,7 +409,7 @@ export class ProductService {
       condition = Prisma.sql`${totalStockExpr} <= 0`;
     }
 
-    const rows = await this.prisma.$queryRaw<{ product_id: number }[]>(
+    const rows = await client.$queryRaw<{ product_id: number }[]>(
       Prisma.sql`
         SELECT p.id as product_id
         FROM "Product" p
@@ -588,17 +589,8 @@ export class ProductService {
     };
   }
 
-  async listAdminProducts(query: AdminProductQueryDto) {
-    const LOW_STOCK_THRESHOLD = 5;
-    const page = Math.max(query.page ?? 1, 1);
-    const pageSize = Math.min(
-      query.pageSize ?? query.limit ?? ADMIN_PAGE_SIZES.PRODUCTS,
-      100,
-    );
+  private buildAdminProductFilters(query: AdminProductQueryDto): Prisma.ProductWhereInput {
     const searchTerm = (query.q ?? query.search)?.trim();
-    const sortBy = query.sortBy ?? 'createdAt';
-    const sortDir = query.sortDir ?? 'desc';
-    const isStockSort = sortBy === 'stock';
     const createdAtFilter: Prisma.DateTimeFilter = {};
     const andFilters: Prisma.ProductWhereInput[] = [];
     const where: Prisma.ProductWhereInput = {};
@@ -671,6 +663,22 @@ export class ProductService {
     } else if (query.isActive === 'false') {
       where.isActive = false;
     }
+
+    return where;
+  }
+
+  async listAdminProducts(query: AdminProductQueryDto) {
+    const LOW_STOCK_THRESHOLD = 5;
+    const page = Math.max(query.page ?? 1, 1);
+    const pageSize = Math.min(
+      query.pageSize ?? query.limit ?? ADMIN_PAGE_SIZES.PRODUCTS,
+      100,
+    );
+    const searchTerm = (query.q ?? query.search)?.trim();
+    const sortBy = query.sortBy ?? 'createdAt';
+    const sortDir = query.sortDir ?? 'desc';
+    const isStockSort = sortBy === 'stock';
+    const where = this.buildAdminProductFilters(query);
 
     if (query.stockState && !isStockSort) {
       const stockProductIds = await this.getProductIdsByStockState(
@@ -878,6 +886,20 @@ export class ProductService {
     };
   }
 
+  async selectBulkIds(query: AdminProductQueryDto, tx: Prisma.TransactionClient) {
+    if (query.sortBy !== 'stock') {
+      const where = this.buildAdminProductFilters(query);
+      if (query.stockState) where.id = { in: await this.getProductIdsByStockState(query.stockState, 5, tx) };
+      return tx.product.findMany({ where, select: { id: true }, orderBy: { id: 'asc' }, take: 101 });
+    }
+    const { whereClause, havingClause } = this.buildStockSortSqlFilters({
+      searchTerm: (query.q ?? query.search)?.trim(), query, lowStockThreshold: 5,
+    });
+    return tx.$queryRaw<{ id: number }[]>(Prisma.sql`
+      SELECT p.id FROM "Product" p LEFT JOIN "ProductVariant" v ON v."productId"=p.id
+      ${whereClause} GROUP BY p.id ${havingClause} ORDER BY p.id LIMIT 101`);
+  }
+
   async getProductOrder() {
     const items = await this.prisma.product.findMany({
       orderBy: [{ displayOrder: 'asc' }, { id: 'asc' }],
@@ -967,6 +989,7 @@ export class ProductService {
     productId: number,
     categoryIds: number[],
     adminId?: number,
+    transaction?: Prisma.TransactionClient,
   ) {
     if (!Number.isInteger(productId) || productId < 1) {
       throw new BadRequestException('PRODUCT_ID_MUST_BE_A_POSITIVE_INTEGER');
@@ -983,7 +1006,7 @@ export class ProductService {
       throw new BadRequestException('CATEGORY_IDS_MUST_BE_UNIQUE');
     }
 
-    return this.prisma.$transaction(async (tx) => {
+    const operation = async (tx: Prisma.TransactionClient) => {
       const product = await tx.product.findUnique({
         where: { id: productId },
         select: { id: true },
@@ -1054,7 +1077,8 @@ export class ProductService {
       }
 
       return this.addEffectiveVariantPrices(updatedProduct);
-    });
+    };
+    return transaction ? operation(transaction) : this.prisma.$transaction(operation);
   }
 
   async getAllProducts(query: QueryProductsDto) {

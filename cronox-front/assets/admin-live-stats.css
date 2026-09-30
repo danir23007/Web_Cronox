@@ -1,0 +1,15 @@
+.cronox-admin .live-heading { display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:16px; margin-bottom:20px; }
+.cronox-admin .live-heading h1 { margin:0 0 8px; }
+.cronox-admin .live-status { color:var(--admin-muted); line-height:1.6; }
+.cronox-admin [data-state=error] .live-status { color:var(--admin-c-a32c2c); }
+.cronox-admin .live-cards { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:16px; }
+.cronox-admin .live-stat { min-width:0; }
+.cronox-admin .live-stat h2 { font-size:14px; line-height:1.5; color:var(--admin-muted); }
+.cronox-admin .live-stat strong { display:block; margin-top:14px; font-size:32px; }
+.cronox-admin .live-lists { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:16px; margin-top:20px; }
+.cronox-admin .live-lists ul { padding:0; list-style:none; }
+.cronox-admin .live-lists li { display:flex; justify-content:space-between; gap:16px; padding:12px 0; border-bottom:1px solid var(--admin-line); }
+.cronox-admin .live-lists li span { min-width:0; overflow-wrap:anywhere; }
+.cronox-admin .live-help { color:var(--admin-muted); line-height:1.7; font-size:13px; }
+@media(max-width:800px) { .cronox-admin .live-cards { grid-template-columns:repeat(2,minmax(0,1fr)); } .cronox-admin .live-lists { grid-template-columns:minmax(0,1fr); } }
+@media(max-width:430px) { .cronox-admin .live-cards { grid-template-columns:minmax(0,1fr); } }

@@ -265,7 +265,8 @@
   <link rel="shortcut icon" type="image/png" href="/favicon.png?v=4">
   <link rel="apple-touch-icon" href="/favicon.png?v=4">
   <meta name="theme-color" content="#000000">
-  <link rel="stylesheet" href="assets/admin-shell.css?v=1">
+  <link rel="stylesheet" href="assets/admin-shell.css?v=2">
+  <link rel="stylesheet" href="assets/admin-live-stats.css?v=1">
   <link rel="stylesheet" href="/assets/admin-theme.css?v=1">
 </head>
 <body class="bw-theme cronox-admin">
@@ -277,6 +278,7 @@
         <button class="sidebar-group" aria-expanded="false" aria-controls="navProducto"><span aria-hidden="true">▧</span>Producto<span class="sidebar-chevron">⌄</span></button>
         <div id="navProducto" class="sidebar-children" hidden>
           <button data-nav-target="section-products">Productos</button>
+          <button data-nav-target="section-product-categories">Categorías</button>
           <button data-nav-target="section-inventory">Stock</button>
           <button data-nav-target="section-waitlist">Waitlist</button>
           <button data-nav-target="section-codes">Códigos</button>
@@ -307,6 +309,10 @@
           <button data-nav-target="section-footer">Footer</button>
         </div>
       </nav>
+      <div class="sidebar-live">
+        <button data-nav-target="section-live-stats" type="button" aria-describedby="liveActivityDescription">Live stats<span class="live-activity-dot" aria-hidden="true"></span></button>
+        <span id="liveActivityDescription" class="live-activity-description">Estado de actividad no disponible.</span>
+      </div>
       <div class="sidebar-account">
         <button id="backBtn" type="button">↗ Volver a CRONOX</button>
         <button id="logoutBtn" type="button">Cerrar sesión</button>
@@ -315,6 +321,22 @@
     <button class="sidebar-backdrop" id="sidebarBackdrop" aria-label="Cerrar menú" hidden></button>
     <header class="admin-header"><button id="sidebarToggle" type="button" aria-controls="adminSidebar" aria-expanded="false" aria-label="Abrir menú">☰</button><span id="adminBreadcrumb">Admin / Resumen</span><span class="admin-header-mark">CR</span></header>
     <main id="adminMain" class="admin-main">
+      <section id="section-live-stats" class="admin-section" hidden aria-labelledby="liveStatsTitle">
+        <header class="live-heading">
+          <div><h1 id="liveStatsTitle">Live stats</h1><p class="live-help">Visitantes con actividad en los últimos 2 minutos</p></div>
+          <button class="btn" type="button" data-live-refresh>Actualizar</button>
+        </header>
+        <p class="live-status" role="status" data-live-status>Cargando estadísticas…</p>
+        <p class="live-help" data-live-updated>Aún no hay una actualización correcta.</p>
+        <div class="live-cards" data-live-cards></div>
+        <p class="live-help">Solo visitantes con consentimiento analítico; se excluyen administradores. Las cestas se consultan en tiempo real, sin duplicar unidades de una misma cesta. Un checkout activo requiere una cesta con unidades y una página de checkout visible comunicada recientemente.</p>
+        <p class="live-help">Pagos en proceso: Stripe ha comunicado «processing» o «requires_action» mediante un webhook firmado. Pueden continuar sin una pestaña abierta. Crear un intento no equivale a procesar un pago.</p>
+        <p class="live-help">Compras: pedidos online confirmados en los últimos 30 minutos, según su fecha de pago, con modo real verificado. Se cuentan una sola vez aunque después se reembolsen. Se excluyen pruebas y pagos antiguos cuyo modo real no consta.</p>
+        <div class="live-lists">
+          <article class="card"><h2>Dónde están los visitantes</h2><ul data-live-locations></ul></article>
+          <article class="card"><h2>Productos más vistos ahora</h2><ul data-live-products></ul></article>
+        </div>
+      </section>
     <div id="statusArea" class="status-area" aria-live="polite"></div>
     <section id="section-circles-menu" class="card admin-section" aria-labelledby="title-circles-menu" hidden>
       <button class="btn admin-view-back" type="button" data-back-target="section-menu">← Atrás</button>
@@ -998,7 +1020,7 @@
       <div id="mailWorkspace"></div>
     </section>
     <section id="section-waitlist" class="card admin-section" aria-labelledby="title-waitlist" hidden>
-      <button class="btn" data-back-target="section-menu" type="button">Volver</button>
+      <button class="btn admin-view-back" data-back-target="section-menu" type="button">← Atrás</button>
       <h2 id="title-waitlist">Waitlist</h2>
       <p>Demanda por talla. Las solicitudes activas incluyen las que están en espera, en cola, en proceso, fallidas o con entrega incierta. Los estados de envío se muestran por separado.</p>
       <form id="waitlistFilters" class="waitlist-filters">
@@ -1059,7 +1081,7 @@
       <button class="btn admin-view-back" type="button" data-back-target="section-products-menu">← Atrás</button>
       <div style="display:flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap;">
         <div>
-          <button class="btn" data-nav-target="section-product-categories" type="button">Categorías de productos</button><h2 id="title-products">Productos</h2>
+          <h2 id="title-products">Productos</h2>
           <small>CRUD básico con sincronización al catálogo.</small>
         </div>
         <button class="btn primary" type="button" id="createProductBtn">Crear producto</button>
@@ -1102,6 +1124,8 @@
             <select id="productCategory" class="input">
               <option value="">Todas</option>
             </select>
+            <small id="productCategoryStatus" role="status" aria-live="polite"></small>
+            <button id="productCategoryRetry" class="btn" type="button" hidden>Reintentar categorías</button>
           </div>
           <div class="form-group">
             <label for="productStatusFilter">Estado</label>
@@ -1932,6 +1956,10 @@
   <script src="assets/admin-pagination.js?v=1"></script>
   <script src="assets/admin-shell.js?v=1"></script>
   <script src="assets/admin-finance.js?v=1"></script>
+  <script src="assets/admin-live-stats.js?v=2"></script>
+  <link rel="stylesheet" href="assets/admin-bulk.css?v=1">
+  <script src="assets/admin-bulk.js?v=1"></script>
+  <script src="assets/admin-section-headers.js?v=1"></script>
   <script src="assets/admin.js"></script>
   <script src="assets/admin-inventory.js?v=1"></script>
   <script src="assets/admin-waitlist.js?v=1"></script>

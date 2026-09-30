@@ -65,7 +65,8 @@ const createConsentRuntime = (initialConsent?: Record<string, unknown>) => {
     readyState: 'loading',
     addEventListener: jest.fn(),
     querySelectorAll: jest.fn(() => []),
-    createElement: jest.fn(),
+    createElement: jest.fn(() => ({})),
+    head: { append: jest.fn() },
   };
   Object.defineProperty(documentMock, 'cookie', {
     get: () =>
@@ -249,6 +250,7 @@ describe('cookie consent frontend', () => {
       'admin.html',
       'admin-login.html',
       'admin-user.html',
+      'admin-launch.html',
       'auth-modal.html',
     ]);
     const publicPages = readdirSync(frontendRoot).filter(
@@ -259,9 +261,13 @@ describe('cookie consent frontend', () => {
       const html = readFileSync(path.join(frontendRoot, page), 'utf8');
       expect(html).toContain('assets/cookie-consent.css?v=2');
       expect(html).toContain('assets/cookie-consent.js?v=4');
-      expect(html).toContain('assets/customer-analytics.js?v=1');
+      // Secure access/launch pages use only aggregate presence, never historical URLs.
+      if (!['newsletter-access.html', 'launch.html'].includes(page)) {
+        expect(html).toContain('assets/customer-analytics.js?v=1');
+      }
     }
     expect(consentSource).toContain('if (!current) showBanner();');
+    expect(consentSource).toContain('/assets/live-presence.js?v=1');
   });
 
   it('keeps Stripe on checkout but does not reload it on the success page', () => {

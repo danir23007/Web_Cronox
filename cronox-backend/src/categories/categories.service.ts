@@ -41,7 +41,7 @@ export class CategoriesService {
         where,
         skip,
         take: limit,
-        orderBy,
+        orderBy: orderByField === 'id' ? orderBy : [orderBy, { id: 'asc' }],
       }),
       this.prisma.category.count({ where }),
     ]);

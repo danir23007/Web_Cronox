@@ -60,11 +60,12 @@ describe('product category frontend contracts', () => {
     expect(products).toContain('/producto/${encodeURIComponent(key)}');
   });
 
-  it('keeps category management reachable from Products in the redesigned sidebar', () => {
+  it('keeps category management in the Product sidebar and removes the old header action', () => {
     const dom = new JSDOM(readFrontend('admin.html'));
     const document = dom.window.document;
     expect(document.querySelector('#navProducto [data-nav-target="section-products"]')?.textContent).toBe('Productos');
-    expect(document.querySelector('#section-products [data-nav-target="section-product-categories"]')?.textContent).toBe('Categorías de productos');
+    expect(document.querySelector('#navProducto [data-nav-target="section-product-categories"]')?.textContent).toBe('Categorías');
+    expect(document.querySelector('#section-products [data-nav-target="section-product-categories"]')).toBeNull();
     expect(document.querySelector('#section-product-categories')).not.toBeNull();
     expect(document.querySelector('#section-product-categories [data-back-target]')?.getAttribute('data-back-target')).toBe('section-products-menu');
     dom.window.close();

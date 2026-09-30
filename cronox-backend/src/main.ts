@@ -92,6 +92,7 @@ async function bootstrap() {
    * RESTO DE LA API
    */
   app.use('/api/admin/mail-templates', express.json({ limit: '256kb' }));
+  app.use('/api/live-stats/presence', express.json({ limit: '1kb' }));
   app.use(express.json({ limit: '100kb' }));
   app.use(express.urlencoded({ extended: true, limit: '100kb' }));
   app.use(cookieParser());
