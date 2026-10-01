@@ -3,6 +3,11 @@
   if (window.CRONOX_BULK) return;
   const lists = new Map();
   const LIMIT = 100;
+  const stateLabel = (value) => ({
+    ACTIVE: "Activa",
+    PENDING_PASSWORD: "Pendiente de contraseña",
+    PRE_REGISTERED: "Prerregistrado",
+  })[value] || value || "—";
   const element = (tag, text, cls) => {
     const node = document.createElement(tag);
     if (text) node.textContent = text;
@@ -288,10 +293,16 @@
         unchanged,
         ...[1, 2, 3, 4, 5].map((v) => [String(v), `Círculo ${v}`]),
       ]);
+      select("accountState", "Estado", [
+        unchanged,
+        ["ACTIVE", "Activa"],
+        ["PENDING_PASSWORD", "Pendiente de contraseña"],
+        ["PRE_REGISTERED", "Prerregistrado"],
+      ]);
       fields.append(
         element(
           "p",
-          "El círculo es obligatorio. Las cuentas SUPERADMIN quedan excluidas; no puedes modificar tu propio rol. No se editan estados de registro ni credenciales.",
+          "El círculo es obligatorio. Las cuentas SUPERADMIN quedan excluidas; no puedes modificar tu propio rol ni estado. Activa requiere una contraseña existente; Pendiente de contraseña requiere no tenerla; Prerregistrado requiere además un prerregistro existente. Esta edición no crea contraseñas ni envía correos.",
         ),
       );
     } else {
@@ -417,6 +428,8 @@
         lines.push(
           `Asignar el círculo ${c.circleLevel} a ${count("circleLevel")} usuarios.`,
         );
+      if (c.accountState)
+        lines.push(`Cambiar el estado a ${stateLabel(c.accountState)} de ${count("accountState")} usuarios. Las sesiones se actualizarán.`);
       if (c.isActive !== undefined)
         lines.push(
           `${c.isActive ? "Activar" : "Desactivar"} ${count("isActive")} productos.`,
@@ -459,7 +472,7 @@
             ul.append(
               element(
                 "li",
-                `${r.name} (#${r.id})${r.reason ? " — " + r.reason : ""}`,
+                `${r.name} (#${r.id})${s.kind === "users" ? ` · Estado: ${stateLabel(r.before.accountState)} → ${stateLabel(r.after.accountState)}` : ""}${r.reason ? " — " + r.reason : ""}`,
               ),
             ),
           );
@@ -587,10 +600,11 @@
           const labels = {
             role: "Rol",
             circleLevel: "Círculo",
+            accountState: "Estado",
             isActive: "Estado",
             categoryIds: "Categorías",
           };
-          return `${labels[key]}: ${different ? "Valores distintos" : key === "categoryIds" ? "Mismas categorías" : String(initial.rows[0].before[key])}`;
+          return `${labels[key]}: ${different ? "Valores distintos" : key === "categoryIds" ? "Mismas categorías" : key === "accountState" ? stateLabel(initial.rows[0].before[key]) : String(initial.rows[0].before[key])}`;
         })
         .join(" · ");
       fields.prepend(values);

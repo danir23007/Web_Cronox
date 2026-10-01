@@ -5,7 +5,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import { Prisma, UserAccountState } from '@prisma/client';
 import { JwtService } from '@nestjs/jwt';
 import { createHash } from 'node:crypto';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -72,7 +72,7 @@ export class AdminBulkService {
       throw new BadRequestException('No se admiten valores nulos.');
     const allowed =
       dto.kind === 'users'
-        ? ['role', 'circleLevel']
+        ? ['role', 'circleLevel', 'accountState']
         : ['isActive', 'categoryMode', 'categoryIds'];
     if (
       Object.entries(c).some(
@@ -125,6 +125,8 @@ export class AdminBulkService {
               role: true,
               circleLevel: true,
               accountState: true,
+              password: true,
+              preRegistration: { select: { userId: true } },
               sessionVersion: true,
               updatedAt: true,
             },
@@ -151,7 +153,11 @@ export class AdminBulkService {
     const rows = records.map((r: any) => {
       const before =
         dto.kind === 'users'
-          ? { role: r.role, circleLevel: r.circleLevel }
+          ? {
+              role: r.role,
+              circleLevel: r.circleLevel,
+              accountState: r.accountState,
+            }
           : {
               isActive: r.isActive,
               categoryIds: r.categories.map((a: any) => a.categoryId),
@@ -160,10 +166,33 @@ export class AdminBulkService {
       let reason = '';
       if (dto.kind === 'users') {
         if (r.role === 'SUPERADMIN') reason = 'Cuenta SUPERADMIN protegida.';
-        if (c.role && r.id === actorId)
-          reason = 'No puedes cambiar tu propio rol.';
+        if ((c.role || c.accountState) && r.id === actorId)
+          reason = 'No puedes cambiar tu propio rol ni estado.';
         if (c.role !== undefined) after.role = c.role;
         if (c.circleLevel !== undefined) after.circleLevel = c.circleLevel;
+        if (c.accountState !== undefined) {
+          after.accountState = c.accountState;
+          if (!reason && c.accountState !== r.accountState) {
+            if (c.accountState === UserAccountState.ACTIVE && !r.password)
+              throw new BadRequestException(
+                `Usuario #${r.id}: para activar la cuenta debe establecer primero una contraseña.`,
+              );
+            if (
+              c.accountState === UserAccountState.PENDING_PASSWORD &&
+              r.password
+            )
+              throw new BadRequestException(
+                `Usuario #${r.id}: Pendiente de contraseña requiere una cuenta sin contraseña.`,
+              );
+            if (
+              c.accountState === UserAccountState.PRE_REGISTERED &&
+              (!r.preRegistration || r.password)
+            )
+              throw new BadRequestException(
+                `Usuario #${r.id}: Prerregistrado requiere un prerregistro existente y una cuenta sin contraseña.`,
+              );
+          }
+        }
       } else {
         if (c.isActive !== undefined) after.isActive = c.isActive;
         if (c.categoryMode === 'clear') after.categoryIds = [];

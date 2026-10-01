@@ -21,28 +21,59 @@ const flush = async () => {
 
 describe('admin Bulk Edit mode', () => {
   const setup = () => {
-    const dom = new JSDOM(
-      makeTable('users', 9) + makeTable('products', 7),
-      { runScripts: 'outside-only', url: 'https://example.test/admin.html' },
-    );
+    const dom = new JSDOM(makeTable('users', 9) + makeTable('products', 7), {
+      runScripts: 'outside-only',
+      url: 'https://example.test/admin.html',
+    });
     const w = dom.window as any;
     w.AbortSignal = AbortSignal;
-    w.CRONOX_API = { API_BASE: '', getCsrfHeaders: jest.fn().mockResolvedValue({}) };
+    w.CRONOX_API = {
+      API_BASE: '',
+      getCsrfHeaders: jest.fn().mockResolvedValue({}),
+    };
     const fetch = jest.fn().mockResolvedValue({
-      ok: true, json: async () => ({ ids: [1, 2, 3] }),
+      ok: true,
+      json: async () => ({ ids: [1, 2, 3] }),
     });
     w.fetch = fetch;
     w.eval(bulkScript);
     const query = { page: 1, pageSize: 2, q: '' };
     const body = w.document.querySelector('#usersBody');
+    const reload = jest.fn().mockResolvedValue(undefined);
     const render = (ids: number[]) => {
-      body.innerHTML = ids.map((id) => '<tr>' + Array.from({ length: 9 }, (_, i) => '<td>' + (i === 0 ? id : 'Valor') + '</td>').join('') + '</tr>').join('');
-      w.CRONOX_BULK.page('users', ids.map((id) => ({ id, email: id + '@example.test' })), 3);
+      body.innerHTML = ids
+        .map(
+          (id) =>
+            '<tr>' +
+            Array.from(
+              { length: 9 },
+              (_, i) => '<td>' + (i === 0 ? id : 'Valor') + '</td>',
+            ).join('') +
+            '</tr>',
+        )
+        .join('');
+      w.CRONOX_BULK.page(
+        'users',
+        ids.map((id) => ({ id, email: id + '@example.test' })),
+        3,
+      );
     };
-    w.CRONOX_BULK.mount({ kind: 'users', body, query: () => ({ ...query }), reload: jest.fn(), role: 'SUPERADMIN' });
-    w.CRONOX_BULK.mount({ kind: 'products', body: w.document.querySelector('#productsBody'), query: () => ({}), reload: jest.fn(), role: 'SUPERADMIN' });
+    w.CRONOX_BULK.mount({
+      kind: 'users',
+      body,
+      query: () => ({ ...query }),
+      reload,
+      role: 'SUPERADMIN',
+    });
+    w.CRONOX_BULK.mount({
+      kind: 'products',
+      body: w.document.querySelector('#productsBody'),
+      query: () => ({}),
+      reload: jest.fn(),
+      role: 'SUPERADMIN',
+    });
     render([1, 2]);
-    return { dom, w, fetch, query, render, body };
+    return { dom, w, fetch, query, render, body, reload };
   };
 
   it('starts clean, selects across pages, reflects partial/full/empty states and cancels cleanly', async () => {
@@ -87,9 +118,13 @@ describe('admin Bulk Edit mode', () => {
       expect(body.querySelector('[data-bulk-id="3"]').checked).toBe(false);
 
       body.querySelector('[data-bulk-id="3"]').checked = true;
-      body.querySelector('[data-bulk-id="3"]').dispatchEvent(new w.Event('change', { bubbles: true }));
+      body
+        .querySelector('[data-bulk-id="3"]')
+        .dispatchEvent(new w.Event('change', { bubbles: true }));
       query.q = 'nuevo';
-      section.querySelector('.filter').dispatchEvent(new w.Event('input', { bubbles: true }));
+      section
+        .querySelector('.filter')
+        .dispatchEvent(new w.Event('input', { bubbles: true }));
       expect(bar.querySelector('strong').textContent).toBe('0 seleccionados');
       toggle.click();
       expect(toggle.textContent).toBe('Bulk Edit');
@@ -110,7 +145,8 @@ describe('admin Bulk Edit mode', () => {
       const products = w.document.querySelector('#section-products');
       users.querySelector('.bulk-mode-toggle').click();
       const productBody = products.querySelector('tbody');
-      productBody.innerHTML = '<tr>' + '<td>Producto largo</td>'.repeat(7) + '</tr>';
+      productBody.innerHTML =
+        '<tr>' + '<td>Producto largo</td>'.repeat(7) + '</tr>';
       w.CRONOX_BULK.page('products', [{ id: 10, name: 'Producto largo' }], 1);
       expect(productBody.rows[0].cells).toHaveLength(7);
       products.querySelector('.bulk-mode-toggle').click();
@@ -145,10 +181,137 @@ describe('admin Bulk Edit mode', () => {
       second.dispatchEvent(new w.Event('change', { bubbles: true }));
       section.querySelector('.bulk-actions button').click();
       await flush();
-      const preview = fetch.mock.calls.find(([url]: [string]) => String(url).endsWith('/api/admin/bulk/preview'));
+      const preview = fetch.mock.calls.find(([url]: [string]) =>
+        String(url).endsWith('/api/admin/bulk/preview'),
+      );
       expect(preview).toBeDefined();
-      expect(JSON.parse(preview[1].body)).toMatchObject({ kind: 'users', ids: [2], changes: {} });
-      expect(fetch.mock.calls.some(([url]: [string]) => String(url).endsWith('/api/admin/bulk/execute'))).toBe(false);
+      expect(JSON.parse(preview[1].body)).toMatchObject({
+        kind: 'users',
+        ids: [2],
+        changes: {},
+      });
+      expect(
+        fetch.mock.calls.some(([url]: [string]) =>
+          String(url).endsWith('/api/admin/bulk/execute'),
+        ),
+      ).toBe(false);
+    } finally {
+      dom.window.close();
+    }
+  });
+
+  it('shows current and new states, sends a state-only change and reloads after saving', async () => {
+    const { dom, w, fetch, body, reload } = setup();
+    try {
+      w.HTMLDialogElement.prototype.showModal = jest.fn();
+      w.HTMLDialogElement.prototype.close = jest.fn();
+      w.crypto.randomUUID = () => '00000000-0000-4000-8000-000000000002';
+      fetch.mockImplementation(async (url: string, options: any) => {
+        const payload = JSON.parse(options.body);
+        if (url.endsWith('/execute'))
+          return {
+            ok: true,
+            json: async () => ({
+              counts: { changed: 1, unchanged: 0, excluded: 0 },
+            }),
+          };
+        const next = payload.changes.accountState || 'PENDING_PASSWORD';
+        return {
+          ok: true,
+          json: async () => ({
+            rows: [
+              {
+                id: 2,
+                name: 'Prueba',
+                state: next === 'PENDING_PASSWORD' ? 'unchanged' : 'changed',
+                before: {
+                  role: 'USER',
+                  circleLevel: 1,
+                  accountState: 'PENDING_PASSWORD',
+                },
+                after: { role: 'USER', circleLevel: 1, accountState: next },
+              },
+            ],
+            counts: {
+              changed: next === 'PENDING_PASSWORD' ? 0 : 1,
+              unchanged: next === 'PENDING_PASSWORD' ? 1 : 0,
+              excluded: 0,
+            },
+            reviewToken: 'review',
+          }),
+        };
+      });
+      const section = w.document.querySelector('#section-users');
+      section.querySelector('.bulk-mode-toggle').click();
+      const selected = body.querySelector('[data-bulk-id="2"]');
+      selected.checked = true;
+      selected.dispatchEvent(new w.Event('change', { bubbles: true }));
+      section.querySelector('.bulk-actions button').click();
+      await flush();
+      const dialog = w.document.querySelector('.admin-bulk-dialog');
+      expect(dialog.textContent).toContain('Estado: Pendiente de contraseña');
+      const state = dialog.querySelector('[data-bulk-field="accountState"]');
+      expect(state.value).toBe('');
+      state.value = 'PRE_REGISTERED';
+      state.dispatchEvent(new w.Event('change', { bubbles: true }));
+      [...dialog.querySelectorAll('button')]
+        .find((button: any) => button.textContent === 'Revisar cambios')
+        .click();
+      await flush();
+      expect(dialog.textContent).toContain(
+        'Pendiente de contraseña → Prerregistrado',
+      );
+      const apply = [...dialog.querySelectorAll('button')].find((button: any) =>
+        button.textContent.startsWith('Aplicar cambios'),
+      );
+      apply.click();
+      await flush();
+      expect(
+        JSON.parse(
+          fetch.mock.calls.find(([url]: [string]) =>
+            url.endsWith('/execute'),
+          )[1].body,
+        ).changes,
+      ).toEqual({ accountState: 'PRE_REGISTERED' });
+      expect(reload).toHaveBeenCalledTimes(1);
+    } finally {
+      dom.window.close();
+    }
+  });
+
+  it('marks mixed current states in the modal', async () => {
+    const { dom, w, fetch, body } = setup();
+    try {
+      w.HTMLDialogElement.prototype.showModal = jest.fn();
+      fetch.mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          rows: [
+            {
+              before: { role: 'USER', circleLevel: 1, accountState: 'ACTIVE' },
+            },
+            {
+              before: {
+                role: 'USER',
+                circleLevel: 1,
+                accountState: 'PRE_REGISTERED',
+              },
+            },
+          ],
+          counts: { changed: 0, unchanged: 2, excluded: 0 },
+        }),
+      });
+      const section = w.document.querySelector('#section-users');
+      section.querySelector('.bulk-mode-toggle').click();
+      body.querySelectorAll('[data-bulk-id]').forEach((input: any) => {
+        input.checked = true;
+        input.dispatchEvent(new w.Event('change', { bubbles: true }));
+      });
+      section.querySelector('.bulk-actions button').click();
+      await flush();
+      expect(
+        w.document.querySelector('.admin-bulk-dialog fieldset').textContent,
+      ).toContain('Estado: Valores distintos');
     } finally {
       dom.window.close();
     }
@@ -165,8 +328,12 @@ describe('admin Bulk Edit mode', () => {
       all.dispatchEvent(new w.Event('change', { bubbles: true }));
       expect(fetch).not.toHaveBeenCalled();
       expect(all.checked).toBe(false);
-      expect(section.querySelector('.bulk-notice').textContent).toContain('101 resultados');
-      expect(section.querySelector('.bulk-notice').textContent).toContain('No se ha seleccionado ninguno');
+      expect(section.querySelector('.bulk-notice').textContent).toContain(
+        '101 resultados',
+      );
+      expect(section.querySelector('.bulk-notice').textContent).toContain(
+        'No se ha seleccionado ninguno',
+      );
       expect(section.querySelector('.bulk-actions').hidden).toBe(true);
       expect(body.querySelectorAll('[data-bulk-id]:checked')).toHaveLength(0);
     } finally {
@@ -178,8 +345,12 @@ describe('admin Bulk Edit mode', () => {
     const { dom, w, fetch } = setup();
     try {
       fetch.mockResolvedValueOnce({
-        ok: false, status: 400,
-        json: async () => ({ message: 'Hay más de 100 resultados. Acota los filtros; no se ha seleccionado un subconjunto.' }),
+        ok: false,
+        status: 400,
+        json: async () => ({
+          message:
+            'Hay más de 100 resultados. Acota los filtros; no se ha seleccionado un subconjunto.',
+        }),
       });
       const section = w.document.querySelector('#section-users');
       section.querySelector('.bulk-mode-toggle').click();
@@ -190,8 +361,12 @@ describe('admin Bulk Edit mode', () => {
       await flush();
       expect(fetch).toHaveBeenCalledTimes(1);
       expect(all.checked).toBe(false);
-      expect(section.querySelector('strong').textContent).toBe('0 seleccionados');
-      expect(section.querySelector('.bulk-notice').textContent).toContain('más de 100 resultados');
+      expect(section.querySelector('strong').textContent).toBe(
+        '0 seleccionados',
+      );
+      expect(section.querySelector('.bulk-notice').textContent).toContain(
+        'más de 100 resultados',
+      );
       expect(section.querySelector('.bulk-actions').hidden).toBe(true);
     } finally {
       dom.window.close();

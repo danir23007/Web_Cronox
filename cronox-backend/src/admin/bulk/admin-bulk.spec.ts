@@ -18,7 +18,7 @@ describe('bulk contract security', () => {
     { kind: 'users', ids: [1], changes: { role: 'SUPERADMIN' } },
     { kind: 'users', ids: [1], changes: { password: 'forbidden' } },
     { kind: 'users', ids: [1], changes: { circleLevel: 0 } },
-    { kind: 'users', ids: [1], changes: { accountState: 'ACTIVE' } },
+    { kind: 'users', ids: [1], changes: { accountState: 'UNKNOWN' } },
     { kind: 'products', ids: [1], changes: { price: 10 } },
     { kind: 'products', ids: [2147483648], changes: { isActive: true } },
     { kind: 'products', ids: [], changes: { isActive: true } },
@@ -33,4 +33,15 @@ describe('bulk contract security', () => {
       pipe.transform(payload, { type: 'body', metatype: BulkPreviewDto }),
     ).rejects.toThrow();
   });
+  it.each(['ACTIVE', 'PENDING_PASSWORD', 'PRE_REGISTERED'])(
+    'accepts the real account state %s',
+    async (accountState) => {
+      await expect(
+        pipe.transform(
+          { kind: 'users', ids: [1], changes: { accountState } },
+          { type: 'body', metatype: BulkPreviewDto },
+        ),
+      ).resolves.toMatchObject({ changes: { accountState } });
+    },
+  );
 });

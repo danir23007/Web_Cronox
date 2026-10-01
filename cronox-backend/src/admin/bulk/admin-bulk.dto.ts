@@ -1,4 +1,5 @@
 import { Type } from 'class-transformer';
+import { UserAccountState } from '@prisma/client';
 import {
   ArrayMaxSize,
   ArrayMinSize,
@@ -20,6 +21,9 @@ export class BulkChangesDto {
     | 'FRIEND'
     | 'ADMIN';
   @IsOptional() @IsInt() @Min(1) @Max(5) circleLevel?: number;
+  @IsOptional()
+  @IsIn(Object.values(UserAccountState))
+  accountState?: UserAccountState;
   @IsOptional() @IsBoolean() isActive?: boolean;
   @IsOptional() @IsIn(['add', 'remove', 'replace', 'clear']) categoryMode?:
     | 'add'
