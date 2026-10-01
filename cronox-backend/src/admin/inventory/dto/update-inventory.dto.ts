@@ -1,4 +1,4 @@
-import { Type } from 'class-transformer';
+import { Transform, TransformFnParams, Type } from 'class-transformer';
 import {
   ArrayMaxSize,
   ArrayMinSize,
@@ -40,6 +40,14 @@ export class UpdateInventoryDto {
   @ValidateNested({ each: true })
   @Type(() => InventoryVariantUpdateDto)
   updates: InventoryVariantUpdateDto[];
+
+  @IsOptional()
+  @Transform(({ value }: TransformFnParams): unknown =>
+    typeof value === 'string' ? value.trim() || undefined : value,
+  )
+  @IsString()
+  @MaxLength(500)
+  note?: string;
 
   @IsOptional()
   @IsString()

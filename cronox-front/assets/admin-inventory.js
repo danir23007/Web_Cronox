@@ -69,8 +69,12 @@
         <div><strong>${escapeHtml(formatDate(item.createdAt))}</strong><br><small>${escapeHtml(admin)}</small></div>
         <div><strong>${delta > 0 ? '+' : ''}${delta}</strong><br><small>${escapeHtml(window.CRONOX_SIZES?.label?.(item.size) || item.size || item.sku || `Variante ${item.variantId}`)}</small></div>
         <div><strong>${formatNumber(item.previousStock)} &rarr; ${formatNumber(item.newStock)}</strong><br><small>${escapeHtml(item.reason || 'Ajuste manual')}</small></div>
+        <div class="inventory-history-note"></div>
       </div>`;
     }).join('');
+    container.querySelectorAll('.inventory-history-note').forEach((node, index) => {
+      node.textContent = history[index].note || 'Sin nota';
+    });
   };
 
   const renderDetail = (product) => {
@@ -161,30 +165,92 @@
     } finally { list?.setAttribute('aria-busy', 'false'); }
   };
 
-  const save = async (productId) => {
+  const persist = async (productId, changes, note) => {
     if (state.saving.has(productId)) return;
-    const edits = productEdits(productId);
-    const changes = Array.from(edits.entries()).filter(([, edit]) => edit.value !== edit.expectedStock).map(([variantId, edit]) => ({ variantId, stock: edit.value, expectedStock: edit.expectedStock }));
-    if (!changes.length) return;
-    if (changes.some((change) => !Number.isInteger(change.stock) || change.stock < 0 || change.stock > 2147483647)) {
-      setMessage('Introduce números enteros entre 0 y 2.147.483.647.', 'error'); return;
-    }
     state.saving.add(productId); render();
     try {
-      const updated = await window.CRONOX_API.admin.updateInventory(productId, { updates: changes });
+      const updated = await window.CRONOX_API.admin.updateInventory(productId, { updates: changes, ...(note ? { note } : {}) });
       const index = state.items.findIndex((product) => product.id === productId);
       if (index >= 0) state.items[index] = updated;
       state.edits.delete(productId); state.history.delete(productId);
       window.CRONOX_ADMIN_SHELL?.clear(list);
       setMessage('Inventario actualizado correctamente.', 'success');
-      await window.CRONOX_API.admin.getInventorySummary().then(renderSummary);
+      window.CRONOX_API.admin.getInventorySummary().then(renderSummary).catch(() => {});
+      return true;
     } catch (error) {
       console.error('[INVENTARIO] Error al guardar', error);
       setMessage(error?.message || 'No se ha podido actualizar el inventario. Revisa los valores e inténtalo de nuevo.', 'error');
+      return false;
     } finally {
       state.saving.delete(productId); render();
-      list?.querySelector(`[data-inventory-product="${productId}"]`)?.scrollIntoView({ block: 'nearest' });
+      list?.querySelector(`[data-inventory-product="${productId}"]`)?.scrollIntoView?.({ block: 'nearest' });
     }
+  };
+
+  const save = (productId) => {
+    if (state.saving.has(productId) || document.querySelector('.inventory-note-dialog')) return;
+    const product = state.items.find((item) => item.id === productId);
+    if (!product) return;
+    const changes = Array.from(productEdits(productId).entries())
+      .filter(([, edit]) => edit.value !== edit.expectedStock)
+      .map(([variantId, edit]) => ({ variantId, stock: edit.value, expectedStock: edit.expectedStock }));
+    if (!changes.length) return;
+    if (changes.some((change) => !Number.isInteger(change.stock) || change.stock < 0 || change.stock > 2147483647)) {
+      setMessage('Introduce números enteros entre 0 y 2.147.483.647.', 'error');
+      return;
+    }
+    const dialog = document.createElement('dialog');
+    dialog.className = 'inventory-note-dialog';
+    dialog.setAttribute('aria-labelledby', 'inventory-note-title');
+    const title = document.createElement('h2');
+    title.id = 'inventory-note-title'; title.textContent = 'Confirmar cambios de stock';
+    const summary = document.createElement('ul');
+    summary.className = 'inventory-note-summary';
+    changes.forEach((change) => {
+      const variant = product.variants.find((item) => item.id === change.variantId);
+      const row = document.createElement('li');
+      row.textContent = `${window.CRONOX_SIZES?.label?.(variant?.size) || variant?.size || variant?.sku || `Variante ${change.variantId}`}: ${formatNumber(change.expectedStock)} → ${formatNumber(change.stock)}`;
+      summary.append(row);
+    });
+    const label = document.createElement('label');
+    label.textContent = 'Nota del movimiento';
+    const note = document.createElement('textarea');
+    note.className = 'input'; note.rows = 3; note.maxLength = 500;
+    note.placeholder = 'Ej.: Restock de chaquetas';
+    label.append(note);
+    const errorMessage = document.createElement('p');
+    errorMessage.className = 'inventory-note-error';
+    errorMessage.setAttribute('role', 'alert');
+    const actions = document.createElement('div');
+    actions.className = 'inventory-note-actions';
+    const cancel = document.createElement('button');
+    cancel.type = 'button'; cancel.className = 'btn'; cancel.textContent = 'Cancelar';
+    const confirm = document.createElement('button');
+    confirm.type = 'button'; confirm.className = 'btn primary'; confirm.textContent = 'Guardar cambios';
+    actions.append(cancel, confirm);
+    dialog.append(title, summary, label, errorMessage, actions);
+    document.body.append(dialog);
+    dialog.showModal?.();
+    if (!dialog.open) dialog.setAttribute('open', '');
+    note.focus();
+    let submitting = false;
+    const close = () => { if (submitting) return; dialog.close?.(); dialog.remove(); };
+    cancel.addEventListener('click', close);
+    dialog.addEventListener('cancel', (event) => { event.preventDefault(); close(); });
+    confirm.addEventListener('click', async () => {
+      if (submitting) return;
+      const trimmed = note.value.trim();
+      if (trimmed.length > 500) { errorMessage.textContent = 'La nota no puede superar 500 caracteres.'; return; }
+      submitting = true;
+      confirm.disabled = true; cancel.disabled = true; note.disabled = true;
+      confirm.textContent = 'Guardando…'; errorMessage.textContent = '';
+      const saved = await persist(productId, changes, trimmed);
+      submitting = false;
+      if (saved) close();
+      else errorMessage.textContent = message?.textContent || 'No se ha podido guardar. Reinténtalo.';
+      confirm.disabled = false; cancel.disabled = false; note.disabled = false;
+      confirm.textContent = 'Guardar cambios';
+    });
   };
 
   const loadHistory = async (productId) => {

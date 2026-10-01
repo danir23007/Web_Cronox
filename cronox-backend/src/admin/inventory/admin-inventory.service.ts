@@ -6,7 +6,12 @@ import {
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
-import { availableStock, classifyStock, classifyVariantStock, VARIANT_LOW_STOCK_MAX } from '../../common/stock-status';
+import {
+  availableStock,
+  classifyStock,
+  classifyVariantStock,
+  VARIANT_LOW_STOCK_MAX,
+} from '../../common/stock-status';
 import {
   INVENTORY_AUDIT_ACTION,
   INVENTORY_AUDIT_TARGET,
@@ -137,6 +142,11 @@ export class AdminInventoryService {
       (left, right) => left.variantId - right.variantId,
     );
     const reason = dto.reason?.trim() || INVENTORY_MANUAL_REASON;
+    const note = dto.note?.trim() || null;
+    if (note && note.length > 500)
+      throw new BadRequestException(
+        'La nota del movimiento no puede superar 500 caracteres.',
+      );
 
     await this.prisma.$transaction(async (tx) => {
       const product = await tx.product.findUnique({
@@ -181,6 +191,7 @@ export class AdminInventoryService {
             variantId: update.variantId,
             delta,
             reason,
+            note,
             userId: adminId,
           },
           select: { id: true },
@@ -244,12 +255,27 @@ export class AdminInventoryService {
       this.prisma.auditLog.count({ where }),
     ]);
 
+    const movementIds = logs
+      .map((log) => this.asMetadata(log.metadata)?.movementId)
+      .filter((id): id is string => typeof id === 'string');
+    const movements = movementIds.length
+      ? await this.prisma.stockMovement.findMany({
+          where: { id: { in: movementIds } },
+          select: { id: true, note: true },
+        })
+      : [];
+    const notes = new Map(
+      movements.map((movement) => [movement.id, movement.note]),
+    );
+
     return {
       items: logs.map((log) => ({
         id: log.id,
         createdAt: log.createdAt.toISOString(),
         reason: log.reason,
         ...(this.asMetadata(log.metadata) ?? {}),
+        note:
+          notes.get(String(this.asMetadata(log.metadata)?.movementId)) ?? null,
         admin: log.actor,
       })),
       meta: {

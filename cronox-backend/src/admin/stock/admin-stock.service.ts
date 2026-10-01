@@ -120,7 +120,8 @@ export class AdminStockService {
     sort: AdminStockMovementsQueryDto['sort'],
     direction: AdminStockMovementsQueryDto['order'],
   ): Prisma.StockMovementOrderByWithRelationInput {
-    const order: Prisma.SortOrder = (direction ?? 'desc') === 'asc' ? 'asc' : 'desc';
+    const order: Prisma.SortOrder =
+      (direction ?? 'desc') === 'asc' ? 'asc' : 'desc';
 
     switch (sort) {
       case 'delta':
@@ -137,6 +138,7 @@ export class AdminStockService {
       variantId: movement.variantId,
       delta: movement.delta,
       reason: movement.reason,
+      note: movement.note,
       createdAt: movement.createdAt.toISOString(),
       product: movement.variant.product
         ? {

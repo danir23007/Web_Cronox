@@ -32,8 +32,18 @@
 .inventory-detail-actions { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-top: 12px; }
 .inventory-history { margin-top: 14px; border-top: 1px solid #252532; padding-top: 12px; }
 .inventory-history-list { display: grid; gap: 8px; margin-top: 10px; }
-.inventory-history-item { display: grid; grid-template-columns: minmax(120px, .8fr) minmax(120px, .7fr) minmax(180px, 1.4fr); gap: 10px; padding: 10px; border: 1px solid #20202b; border-radius: 9px; }
+.inventory-history-item { display: grid; grid-template-columns: minmax(120px, .8fr) minmax(120px, .7fr) minmax(180px, 1.4fr) minmax(180px, 1.7fr); gap: 10px; padding: 10px; border: 1px solid #20202b; border-radius: 9px; align-items: start; }
 .inventory-history-item small { color: #aaaaba; }
+.inventory-history-note { min-width: 0; color: #dddde5; white-space: pre-wrap; overflow-wrap: anywhere; }
+.inventory-note-dialog { box-sizing: border-box; width: min(520px, calc(100vw - 32px)); max-height: calc(100dvh - 32px); overflow-y: auto; border: 1px solid #3a3a48; border-radius: 12px; background: #111118; color: #fff; padding: 24px; }
+.inventory-note-dialog::backdrop { background: rgba(0, 0, 0, .7); }
+.inventory-note-dialog h2 { margin: 0 0 16px; font-size: 1.25rem; }
+.inventory-note-summary { margin: 0 0 20px; padding-left: 22px; }
+.inventory-note-summary li { margin: 4px 0; }
+.inventory-note-dialog label { display: grid; gap: 8px; }
+.inventory-note-dialog textarea { box-sizing: border-box; display: block; width: 100%; min-height: 80px; resize: vertical; }
+.inventory-note-error { color: #ffb2b2; min-height: 1.3em; margin: 10px 0; }
+.inventory-note-actions { display: flex; justify-content: flex-end; gap: 10px; flex-wrap: wrap; }
 .inventory-empty-variants { color: #aaaaba; padding: 14px 0 2px; }
 .inventory-page-size { max-width: 90px; }
 .inventory-visually-hidden { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
@@ -51,4 +61,6 @@
   .inventory-product__identity { grid-column: 1 / -1; }
   .inventory-product__overview .inventory-expand { width: 100%; }
   .inventory-history-item { grid-template-columns: 1fr; }
+  .inventory-history-note { border-top: 1px solid #252532; padding-top: 8px; }
+  .inventory-note-actions .btn { flex: 1 1 120px; }
 }

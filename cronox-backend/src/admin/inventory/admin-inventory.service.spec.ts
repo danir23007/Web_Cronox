@@ -48,7 +48,7 @@ describe('AdminInventoryService', () => {
         findMany: jest.fn(),
         updateMany: jest.fn(),
       },
-      stockMovement: { create: jest.fn() },
+      stockMovement: { create: jest.fn(), findMany: jest.fn() },
       auditLog: { create: jest.fn(), findMany: jest.fn(), count: jest.fn() },
       $queryRaw: jest.fn(),
       $transaction: jest.fn(async (input: unknown) => {
@@ -123,6 +123,30 @@ describe('AdminInventoryService', () => {
     expect(await validate(dto)).not.toHaveLength(0);
   });
 
+  it('trims optional notes and rejects more than 500 characters', async () => {
+    const update = [{ variantId: 10, stock: 3, expectedStock: 0 }];
+    const trimmed = plainToInstance(UpdateInventoryDto, {
+      updates: update,
+      note: '  Recuento  ',
+    });
+    expect(await validate(trimmed)).toHaveLength(0);
+    expect(trimmed.note).toBe('Recuento');
+    const empty = plainToInstance(UpdateInventoryDto, {
+      updates: update,
+      note: '   ',
+    });
+    expect(await validate(empty)).toHaveLength(0);
+    expect(empty.note).toBeUndefined();
+    expect(
+      await validate(
+        plainToInstance(UpdateInventoryDto, {
+          updates: update,
+          note: 'x'.repeat(501),
+        }),
+      ),
+    ).not.toHaveLength(0);
+  });
+
   it('updates multiple variants atomically and records traceable manual history', async () => {
     prisma.product.findUnique
       .mockResolvedValueOnce({ id: 1 })
@@ -173,6 +197,88 @@ describe('AdminInventoryService', () => {
       }),
     });
     expect(result.variants[0].stockQty).toBe(3);
+  });
+
+  it('assigns the same trimmed note to every changed size and preserves the technical reason', async () => {
+    prisma.product.findUnique
+      .mockResolvedValueOnce({ id: 1 })
+      .mockResolvedValueOnce(makeProduct());
+    prisma.productVariant.findMany.mockResolvedValue([
+      { id: 10, size: 'S', sku: 'CORE-S', stockQty: 0 },
+      { id: 11, size: 'M', sku: 'CORE-M', stockQty: 8 },
+    ]);
+    prisma.productVariant.updateMany.mockResolvedValue({ count: 1 });
+    prisma.stockMovement.create.mockResolvedValue({ id: 'movement' });
+    await service.update(
+      1,
+      {
+        updates: [
+          { variantId: 10, stock: 3, expectedStock: 0 },
+          { variantId: 11, stock: 6, expectedStock: 8 },
+        ],
+        note: '  Restock de chaquetas  ',
+      },
+      7,
+    );
+    expect(prisma.stockMovement.create).toHaveBeenCalledTimes(2);
+    for (const [call] of prisma.stockMovement.create.mock.calls) {
+      expect(call.data).toMatchObject({
+        reason: 'inventory_manual',
+        note: 'Restock de chaquetas',
+        userId: 7,
+      });
+    }
+  });
+
+  it('stores null for an omitted note and creates no movement for an unchanged size', async () => {
+    prisma.product.findUnique
+      .mockResolvedValueOnce({ id: 1 })
+      .mockResolvedValueOnce(makeProduct());
+    prisma.productVariant.findMany.mockResolvedValue([
+      { id: 10, size: 'S', sku: 'CORE-S', stockQty: 0 },
+      { id: 11, size: 'M', sku: 'CORE-M', stockQty: 8 },
+    ]);
+    prisma.productVariant.updateMany.mockResolvedValue({ count: 1 });
+    prisma.stockMovement.create.mockResolvedValue({ id: 'movement' });
+    await service.update(
+      1,
+      {
+        updates: [
+          { variantId: 10, stock: 3, expectedStock: 0 },
+          { variantId: 11, stock: 8, expectedStock: 8 },
+        ],
+      },
+      7,
+    );
+    expect(prisma.stockMovement.create).toHaveBeenCalledTimes(1);
+    expect(prisma.stockMovement.create.mock.calls[0][0].data.note).toBeNull();
+  });
+
+  it('returns persisted notes and null for old history entries', async () => {
+    const old = {
+      id: 1,
+      createdAt: new Date(),
+      reason: 'inventory_manual',
+      metadata: { movementId: 'old', previousStock: 1, newStock: 2 },
+      actor: { id: 7 },
+    };
+    const current = {
+      ...old,
+      id: 2,
+      metadata: { movementId: 'new', previousStock: 2, newStock: 4 },
+    };
+    prisma.product.findUnique.mockResolvedValue({
+      id: 1,
+      variants: [{ id: 10 }],
+    });
+    prisma.auditLog.findMany.mockResolvedValue([current, old]);
+    prisma.auditLog.count.mockResolvedValue(2);
+    prisma.stockMovement.findMany.mockResolvedValue([
+      { id: 'new', note: 'Restock' },
+      { id: 'old', note: null },
+    ]);
+    const history = await service.history(1, { page: 1, pageSize: 10 });
+    expect(history.items.map((item) => item.note)).toEqual(['Restock', null]);
   });
 
   it('rejects a variant submitted through the wrong product without writing history', async () => {

@@ -1025,6 +1025,7 @@ model StockMovement {
   variantId          Int
   delta              Int
   reason             String?
+  note               String?           @db.VarChar(500)
   createdAt          DateTime          @default(now())
   orderId            Int?
   userId             Int?
