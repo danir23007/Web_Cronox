@@ -67,6 +67,7 @@ body.page-checkout summary:focus-visible {
 }
 
 .checkout-flow-inner {
+  position: relative;
   width: min(100%, 690px);
   margin: 0 0 0 auto;
   padding: 28px clamp(28px, 4.2vw, 70px) 44px;
@@ -78,7 +79,7 @@ body.page-checkout summary:focus-visible {
   align-items: center;
   justify-content: flex-end;
   min-height: 52px;
-  margin-bottom: clamp(20px, 3vh, 36px);
+  margin-bottom: 88px;
 }
 
 .checkout-brand {
@@ -135,10 +136,14 @@ body.page-checkout summary:focus-visible {
   min-height: 112px;
 }
 
-/* Keep the wallet slot stable while its availability is discovered. */
 .express-checkout[hidden] {
   display: block !important;
+  position: absolute;
+  left: clamp(28px, 4.2vw, 70px);
+  right: clamp(28px, 4.2vw, 70px);
   visibility: hidden;
+  pointer-events: none;
+  margin: 0;
 }
 
 .express-checkout .checkout-kicker {
@@ -1341,7 +1346,12 @@ body.checkout-modal-open {
   }
 
   .checkout-brandbar {
-    margin-bottom: 34px;
+    margin-bottom: 82px;
+  }
+
+  .express-checkout[hidden] {
+    left: clamp(20px, 6vw, 44px);
+    right: clamp(20px, 6vw, 44px);
   }
 
   .checkout-summary-pane {

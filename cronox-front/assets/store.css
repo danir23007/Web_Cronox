@@ -1029,6 +1029,7 @@ button.product-cta--disabled:disabled { opacity:.5; cursor:not-allowed; filter:n
   overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior: contain;
+  overflow-anchor: none;
   scroll-padding-block: 60px 80px;
 }
 
@@ -1246,6 +1247,15 @@ button.product-cta--disabled:disabled { opacity:.5; cursor:not-allowed; filter:n
 }
 
 .cart-line__remove:hover { color: #ffb9b9; transform: translateY(-1px); }
+
+.cart-line__error {
+  grid-column: 1 / -1;
+  width: 100%;
+  margin: 0;
+  color: #ffb9b9;
+  font-size: 13px;
+  line-height: 1.4;
+}
 
 .cart-upsell {
   border: none;

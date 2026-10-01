@@ -55,127 +55,155 @@
         .sort(([a], [b]) => a.localeCompare(b)),
     );
   function updateSelection(s) {
-    s.count.textContent = `${s.ids.size} seleccionados`;
+    s.count.textContent = s.ids.size + " seleccionados";
     s.actions.hidden = !s.ids.size;
-    const visible = [...s.body.querySelectorAll("[data-bulk-id]")];
-    visible.forEach((input) => {
+    s.body.querySelectorAll("[data-bulk-id]").forEach((input) => {
       input.checked = s.ids.has(Number(input.dataset.bulkId));
     });
-    const checked = visible.filter((input) => input.checked).length;
-    s.all.checked = !!visible.length && checked === visible.length;
-    s.all.indeterminate = checked > 0 && checked < visible.length;
-    s.all.disabled = !visible.length;
+    s.all.checked = s.total > 0 && s.ids.size === s.total;
+    s.all.indeterminate = s.ids.size > 0 && !s.all.checked;
+    s.all.disabled = s.busy || s.total === 0;
+  }
+  function clearSelection(s, message = "") {
+    s.ids.clear();
+    s.notice.textContent = message;
+    updateSelection(s);
+  }
+  function addPageCells(s) {
+    const rows = [...s.body.querySelectorAll("tr")];
+    s.items.forEach((item, index) => {
+      const row = rows[index];
+      if (!row || row.querySelector("[data-bulk-id]")) return;
+      const td = element("td", null, "bulk-select-cell");
+      const input = element("input");
+      input.type = "checkbox";
+      input.dataset.bulkId = item.id;
+      input.setAttribute("aria-label", "Seleccionar " + (item.name || item.email || "#" + item.id));
+      td.append(input);
+      row.prepend(td);
+    });
+    if (!s.items.length) {
+      s.body.querySelectorAll("td[colspan]").forEach((cell) => {
+        cell.colSpan = s.table.tHead.rows[0].cells.length;
+      });
+    }
+  }
+  function setMode(s, active) {
+    if (s.active === active) return;
+    s.active = active;
+    s.requestVersion += 1;
+    clearSelection(s);
+    s.toggle.textContent = active ? "Cancelar Bulk Edit" : "Bulk Edit";
+    s.toggle.setAttribute("aria-expanded", String(active));
+    s.bar.hidden = !active;
+    s.table.classList.toggle("bulk-edit-active", active);
+    if (active) {
+      s.table.tHead.rows[0].prepend(s.header);
+      addPageCells(s);
+    } else {
+      s.header.remove();
+      s.body.querySelectorAll(".bulk-select-cell").forEach((cell) => cell.remove());
+      s.body.querySelectorAll("td[colspan]").forEach((cell) => {
+        cell.colSpan = s.table.tHead.rows[0].cells.length;
+      });
+    }
+    updateSelection(s);
   }
   function mount({ kind, body, query, reload, role }) {
     if (role !== "SUPERADMIN" || !body || lists.has(kind)) return;
-    const table = body.closest("table"),
-      header = element("th"),
-      all = element("input");
+    const table = body.closest("table");
+    const header = element("th", null, "bulk-select-cell");
+    header.setAttribute("scope", "col");
+    header.setAttribute("aria-label", "Selección");
+    const all = element("input");
     all.type = "checkbox";
-    all.setAttribute("aria-label", "Seleccionar esta página");
-    header.append(all);
-    table.tHead.rows[0].prepend(header);
-    const bar = element("div", null, "bulk-selection"),
-      selectAll = button("Seleccionar todos los resultados filtrados");
-    const limit = element("small", `Máximo ${LIMIT} registros por operación.`),
-      actions = element("div", null, "bulk-actions"),
-      count = element("strong");
-    const edit = button("Editar seleccionados"),
-      clear = button("Limpiar selección"),
-      notice = element("p", null, "bulk-notice");
+    all.setAttribute("aria-label", "Seleccionar todos");
+    const selectAll = element("label", null, "bulk-select-all");
+    selectAll.append(all, document.createTextNode("Seleccionar todos"));
+    const bar = element("div", null, "bulk-selection");
+    const toggle = button("Bulk Edit");
+    toggle.classList.add("bulk-mode-toggle");
+    toggle.setAttribute("aria-expanded", "false");
+    const limit = element("small", "Máximo " + LIMIT + " registros por operación.");
+    const actions = element("div", null, "bulk-actions");
+    const count = element("strong");
+    const edit = button("Editar seleccionados");
+    const clear = button("Limpiar selección");
+    const notice = element("p", null, "bulk-notice");
     notice.setAttribute("role", "status");
-    actions.append(count, edit, clear);
-    bar.append(selectAll, limit, actions, notice);
+    actions.append(edit, clear);
+    bar.append(selectAll, count, limit, actions, notice);
+    bar.hidden = true;
     const wrapper = table.closest(".admin-table-scroll") || table;
-    wrapper.before(bar);
+    wrapper.before(toggle, bar);
+    table.classList.add("bulk-table", "bulk-table--" + kind);
     const s = {
-      kind,
-      body,
-      query,
-      reload,
-      ids: new Set(),
-      all,
-      count,
-      actions,
-      notice,
-      key: filterKey(query()),
-      busy: false,
+      kind, body, table, header, toggle, bar, query, reload,
+      ids: new Set(), items: [], total: 0, active: false, requestVersion: 0,
+      all, count, actions, notice, key: filterKey(query()), busy: false,
     };
     lists.set(kind, s);
+    toggle.addEventListener("click", () => setMode(s, !s.active));
     const filterEdited = (event) => {
-      if (
-        event.target.matches("input,select") &&
-        !event.target.closest("table,.bulk-selection") &&
-        s.ids.size
-      ) {
-        s.ids.clear();
-        notice.textContent =
-          "Selección limpiada porque han cambiado los filtros o la búsqueda.";
-        updateSelection(s);
+      if (event.target.matches("input,select") &&
+          !event.target.closest("table,.bulk-selection")) {
+        s.requestVersion += 1;
+        s.key = filterKey(query());
+        if (s.ids.size) clearSelection(s, "Selección limpiada porque han cambiado los filtros o la búsqueda.");
       }
     };
     body.closest("section").addEventListener("input", filterEdited);
     body.closest("section").addEventListener("change", filterEdited);
-    clear.addEventListener("click", () => {
-      s.ids.clear();
-      updateSelection(s);
-    });
-    all.addEventListener("change", () => {
-      const ids = [...body.querySelectorAll("[data-bulk-id]")].map((i) =>
-        Number(i.dataset.bulkId),
-      );
-      if (all.checked && new Set([...s.ids, ...ids]).size > LIMIT) {
-        notice.textContent = `No se pueden seleccionar más de ${LIMIT} registros.`;
-        updateSelection(s);
-        return;
-      }
-      ids.forEach((id) => (all.checked ? s.ids.add(id) : s.ids.delete(id)));
-      updateSelection(s);
-    });
-    body.addEventListener(
-      "click",
-      (event) => {
-        if (event.target.closest("[data-bulk-id]")) event.stopPropagation();
-      },
-      true,
-    );
+    clear.addEventListener("click", () => clearSelection(s));
+    body.addEventListener("click", (event) => {
+      if (event.target.closest("[data-bulk-id]")) event.stopPropagation();
+    }, true);
     body.addEventListener("change", (event) => {
       const input = event.target.closest("[data-bulk-id]");
-      if (!input) return;
+      if (!input || !s.active) return;
       const id = Number(input.dataset.bulkId);
       if (input.checked && s.ids.size >= LIMIT) {
         input.checked = false;
-        notice.textContent = `Límite de ${LIMIT} registros.`;
+        notice.textContent = "Límite de " + LIMIT + " registros.";
         return;
       }
       input.checked ? s.ids.add(id) : s.ids.delete(id);
       updateSelection(s);
     });
-    selectAll.addEventListener("click", async () => {
-      if (s.busy) return;
+    all.addEventListener("change", async () => {
+      if (!s.active || s.busy) return;
+      if (!all.checked) {
+        clearSelection(s);
+        return;
+      }
+      if (s.total > LIMIT) {
+        clearSelection(s, "Hay " + s.total + " resultados y el límite es " + LIMIT + ". No se ha seleccionado ninguno. Acota los filtros o selecciona manualmente hasta " + LIMIT + ".");
+        return;
+      }
       s.busy = true;
-      selectAll.disabled = true;
-      const key = filterKey(query()),
-        params = new URLSearchParams(
-          Object.entries(query()).filter(([, v]) => v !== undefined),
-        );
+      updateSelection(s);
+      const version = ++s.requestVersion;
+      const key = filterKey(query());
+      const params = new URLSearchParams(
+        Object.entries(query()).filter(([k, v]) =>
+          !["page", "pageSize", "limit"].includes(k) && v !== undefined),
+      );
       notice.textContent = "Consultando todos los resultados del backend…";
       try {
-        const result = await api(`${kind}/selection?${params}`);
-        if (filterKey(query()) !== key) {
-          notice.textContent = "Los filtros han cambiado. Repite la selección.";
-          return;
-        }
+        const result = await api(kind + "/selection?" + params);
+        if (!s.active || s.requestVersion !== version || filterKey(query()) !== key) return;
         if (!Array.isArray(result.ids) || result.ids.length > LIMIT)
           throw new Error("Selección incompleta o inválida.");
-        s.ids = new Set(result.ids);
-        notice.textContent = `Selección capturada: ${s.ids.size} registros. Los nuevos registros no se añadirán automáticamente.`;
-        updateSelection(s);
-      } catch (e) {
-        notice.textContent = e.message;
+        s.ids = new Set(result.ids.map(Number));
+        notice.textContent = "Selección capturada: " + s.ids.size + " registros. Los nuevos registros no se añadirán automáticamente.";
+      } catch (error) {
+        if (s.active && s.requestVersion === version) {
+          if (error.status === 400) clearSelection(s);
+          notice.textContent = error.message;
+        }
       } finally {
         s.busy = false;
-        selectAll.disabled = false;
+        updateSelection(s);
       }
     });
     edit.addEventListener("click", () => openEditor(s, edit));
@@ -188,37 +216,24 @@
     if (key !== s.key) {
       const had = s.ids.size;
       s.ids.clear();
+      s.requestVersion += 1;
       s.key = key;
-      if (had)
-        s.notice.textContent =
-          "Selección limpiada porque han cambiado los filtros o la búsqueda.";
+      if (had) s.notice.textContent = "Selección limpiada porque han cambiado los filtros o la búsqueda.";
     }
     updateSelection(s);
-    s.all.disabled = true;
-    s.all.checked = false;
-    s.all.indeterminate = false;
   }
-  function page(kind, items) {
+  function page(kind, items, total = items.length) {
     const s = lists.get(kind);
     if (!s) return;
-    const rows = [...s.body.querySelectorAll("tr")];
-    items.forEach((item, index) => {
-      const row = rows[index];
-      if (!row || row.querySelector("[data-bulk-id]")) return;
-      const td = element("td"),
-        input = element("input");
-      input.type = "checkbox";
-      input.dataset.bulkId = item.id;
-      input.setAttribute(
-        "aria-label",
-        `Seleccionar ${item.name || item.email || "#" + item.id}`,
-      );
-      td.append(input);
-      row.prepend(td);
-    });
-    if (!items.length)
-      s.body.querySelectorAll("[colspan]").forEach((td) => (td.colSpan += 1));
+    s.items = items;
+    s.total = Number(total) || 0;
+    if (s.active) addPageCells(s);
     updateSelection(s);
+  }
+  function leave(sectionId) {
+    lists.forEach((s) => {
+      if (s.body.closest("section")?.id !== sectionId) setMode(s, false);
+    });
   }
   async function openEditor(s, opener) {
     if (document.querySelector(".admin-bulk-dialog")) return;
@@ -586,5 +601,5 @@
       busy(false);
     }
   }
-  window.CRONOX_BULK = { mount, beforeLoad, page };
+  window.CRONOX_BULK = { mount, beforeLoad, page, leave, isActive: (kind) => lists.get(kind)?.active || false };
 })();

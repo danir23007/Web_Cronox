@@ -965,6 +965,7 @@
     const destination = sectionId === 'section-gallery' ? (window.location.hash.includes('carousel') ? 'section-gallery-carousel' : 'section-gallery-mosaic') : sectionId;
     if (window.CRONOX_ADMIN_SHELL && !window.CRONOX_ADMIN_SHELL.canLeave(destination)) return false;
     const allowed = applySectionAccess(sectionId);
+    window.CRONOX_BULK?.leave(sectionId);
     document.querySelectorAll('.admin-section').forEach((section) => {
       section.hidden = section.id !== sectionId;
     });
@@ -2470,7 +2471,7 @@
     if (controls) controls.hidden = totalPages <= 1;
   };
 
-  const getUsersColumnCount = () => 9;
+  const getUsersColumnCount = () => 9 + Number(window.CRONOX_BULK?.isActive('users'));
 
   const formatUserRole = (role) => {
     if (role === 'FRIEND') return 'Friend';
@@ -2581,7 +2582,7 @@
       }
       updateUsersHashState();
       updateUsersPagination();
-      window.CRONOX_BULK?.page('users', normalized.items || []);
+      window.CRONOX_BULK?.page('users', normalized.items || [], normalized.meta.total);
     } catch (error) {
       console.error('[ADMIN] Error cargando usuarios', error);
       if (loadVersion !== usersLoadVersion) return;
@@ -2804,6 +2805,7 @@
   };
   categoryLoadRetry?.addEventListener('click', loadProductCategories);
 
+  const getProductsColumnCount = () => 7 + Number(window.CRONOX_BULK?.isActive('products'));
   let productsLoadVersion = 0;
   const fetchProducts = async () => {
     if (!productsBody) return;
@@ -2819,11 +2821,11 @@
       showEmptyTable(productsBody, {
         title: 'No autorizado',
         message: 'No tienes permisos para ver productos.',
-        colSpan: 7,
+        colSpan: getProductsColumnCount(),
       });
       return;
     }
-    if (setUiLoading) setUiLoading(productsBody, true, { title: 'Cargando productos…', colSpan: 7 });
+    if (setUiLoading) setUiLoading(productsBody, true, { title: 'Cargando productos…', colSpan: getProductsColumnCount() });
     if (productsMessage) productsMessage.innerHTML = '';
     try {
       const data = await window.CRONOX_API?.admin?.listAdminProducts(
@@ -2840,7 +2842,7 @@
           title: 'No hay resultados con estos filtros',
           message: 'Prueba limpiando los filtros o ajustando la búsqueda.',
           actions: [{ label: 'Limpiar filtros', onClick: resetProductsFilters, variant: 'primary' }],
-          colSpan: 7,
+          colSpan: getProductsColumnCount(),
         });
       } else {
         renderProducts(meta.items || []);
@@ -2850,7 +2852,7 @@
         prev: productsPrev,
         next: productsNext,
       });
-      window.CRONOX_BULK?.page('products', meta.items || []);
+      window.CRONOX_BULK?.page('products', meta.items || [], meta.totalItems);
     } catch (error) {
       console.error('[ADMIN] Error cargando productos', error);
       if (loadVersion !== productsLoadVersion) return;
@@ -2865,7 +2867,7 @@
         title: 'No se pudieron cargar los productos',
         message: 'Intenta nuevamente en unos segundos.',
         actions: [{ label: 'Reintentar', onClick: fetchProducts, variant: 'primary' }],
-        colSpan: 7,
+        colSpan: getProductsColumnCount(),
       });
     }
   };
@@ -3143,7 +3145,7 @@
         title: 'No hay resultados con estos filtros',
         message: 'Prueba limpiando los filtros o ajustando la búsqueda.',
         actions: [{ label: 'Limpiar filtros', onClick: resetProductsFilters, variant: 'primary' }],
-        colSpan: 7,
+        colSpan: getProductsColumnCount(),
       });
       return;
     }

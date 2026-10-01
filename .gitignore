@@ -3,6 +3,7 @@
 node_modules/
 test-results/
 playwright-report/
+.playwright-cli/
 
 # All dotenv files are local-only. Safe examples remain trackable.
 **/.env

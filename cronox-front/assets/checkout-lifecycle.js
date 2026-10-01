@@ -55,16 +55,22 @@
   const confirmMountedPayment = async ({
     stripe,
     elements,
+    clientSecret,
     paymentElementMounted,
     confirmParams,
     onFailure = () => undefined,
   }) => {
-    if (!stripe || !elements || !paymentElementMounted) {
+    if (!stripe || !elements || !clientSecret || !paymentElementMounted) {
       return { attempted: false, error: null };
     }
 
     try {
-      const result = await stripe.confirmPayment({ elements, confirmParams });
+      const submission = await elements.submit();
+      if (submission?.error) {
+        await onFailure(submission.error);
+        return { attempted: true, error: submission.error };
+      }
+      const result = await stripe.confirmPayment({ elements, clientSecret, confirmParams });
       const error = result?.error ?? null;
       if (error) await onFailure(error);
       return { attempted: true, error };
@@ -77,16 +83,17 @@
   const confirmExpressPayment = async ({
     stripe,
     elements,
+    clientSecret,
     expressCheckoutMounted,
     confirmParams,
     onFailure = () => undefined,
   }) => {
-    if (!stripe || !elements || !expressCheckoutMounted) {
+    if (!stripe || !elements || !clientSecret || !expressCheckoutMounted) {
       return { attempted: false, error: null };
     }
 
     try {
-      const result = await stripe.confirmPayment({ elements, confirmParams });
+      const result = await stripe.confirmPayment({ elements, clientSecret, confirmParams });
       const error = result?.error ?? null;
       if (error) await onFailure(error);
       return { attempted: true, error };
@@ -225,20 +232,13 @@
     clientSecret,
     paymentElementMounted,
   }) => {
-    const canPreparePayment = checkoutReady && hasItems && Boolean(shippingMethod);
-    const waitingForPaymentElement = Boolean(clientSecret) && !paymentElementMounted;
+    const canPay = checkoutReady && hasItems && Boolean(shippingMethod) && Boolean(clientSecret) && paymentElementMounted;
     if (!checkoutReady) {
       return { disabled: true, label: 'Completa tus datos' };
     }
     return {
-      disabled: loading || !canPreparePayment || waitingForPaymentElement,
-      label: !checkoutReady
-        ? 'Inicia sesión para pagar'
-        : loading || waitingForPaymentElement
-          ? 'Procesando…'
-          : !clientSecret && canPreparePayment
-            ? 'Reintentar pago'
-            : 'Pagar ahora',
+      disabled: loading || !canPay,
+      label: 'Pagar ahora',
     };
   };
 

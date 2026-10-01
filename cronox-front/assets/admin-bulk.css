@@ -8,6 +8,23 @@
   border: 1px solid var(--admin-line);
   border-radius: 8px;
 }
+.cronox-admin .bulk-selection[hidden] { display: none !important; }
+.cronox-admin .bulk-mode-toggle { margin: 16px 0 0; }
+.cronox-admin .bulk-select-all { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; cursor: pointer; white-space: nowrap; }
+.cronox-admin .bulk-select-all input { flex: none; width: 22px; height: 22px; margin: 0; cursor: pointer; }
+.cronox-admin .bulk-selection strong { white-space: nowrap; }
+.cronox-admin .bulk-table { table-layout: auto; }
+.cronox-admin .bulk-table--users { min-width: 1060px; }
+.cronox-admin .bulk-table--products { min-width: 910px; }
+.cronox-admin .bulk-table.bulk-edit-active { min-width: max(100%, 1110px); }
+.cronox-admin .bulk-table--products.bulk-edit-active { min-width: max(100%, 960px); }
+.cronox-admin .bulk-table th, .cronox-admin .bulk-table td { overflow-wrap: normal; word-break: normal; vertical-align: middle; }
+.cronox-admin .bulk-table th { white-space: nowrap; }
+.cronox-admin .bulk-table .bulk-select-cell { box-sizing: border-box; width: 52px; min-width: 52px; max-width: 52px; padding: 10px; text-align: center; }
+.cronox-admin .bulk-table .bulk-select-cell input { display: block; width: 22px; height: 22px; margin: 0 auto; cursor: pointer; }
+.cronox-admin .bulk-table--users:not(.bulk-edit-active) td:nth-child(2), .cronox-admin .bulk-table--users:not(.bulk-edit-active) td:nth-child(4), .cronox-admin .bulk-table--products:not(.bulk-edit-active) td:first-child { min-width: 210px; overflow-wrap: anywhere; }
+.cronox-admin .bulk-table--users.bulk-edit-active td:nth-child(3), .cronox-admin .bulk-table--users.bulk-edit-active td:nth-child(5), .cronox-admin .bulk-table--products.bulk-edit-active td:nth-child(2) { min-width: 210px; overflow-wrap: anywhere; }
+.cronox-admin .bulk-table--users td:last-child, .cronox-admin .bulk-table--products td:last-child { min-width: 112px; }
 .cronox-admin .bulk-actions {
   display: flex;
   flex-wrap: wrap;
@@ -21,13 +38,6 @@
   width: 100%;
   margin: 0;
   overflow-wrap: anywhere;
-}
-.cronox-admin input[data-bulk-id],
-.cronox-admin input[aria-label="Seleccionar esta página"] {
-  width: 22px;
-  height: 22px;
-  margin: 11px;
-  cursor: pointer;
 }
 .cronox-admin .admin-bulk-dialog {
   box-sizing: border-box;

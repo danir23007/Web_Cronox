@@ -80,7 +80,13 @@ async function fixture(page, count = 2) {
         const existing = state.cart.items.find(i => i.variantId === body.variantId);
         if (existing) existing.qty += body.qty;
         else state.cart.items.push({ id: product.id, variantId: body.variantId, qty: body.qty, priceAtAdd: product.price, variant: { ...product.variants[0], product } });
-      } else if (request.method() === 'PATCH') state.cart.items.find(i => i.id === id).qty = body.qty;
+      } else if (request.method() === 'PATCH') {
+        const item = state.cart.items.find(i => i.id === id);
+        if (state.enforceStock && body.qty > item.variant.stock) {
+          return route.fulfill({ status: 409, json: { message: 'INSUFFICIENT_STOCK' } });
+        }
+        item.qty = body.qty;
+      }
       else state.cart.items = Number.isFinite(id) ? state.cart.items.filter(i => i.id !== id) : [];
       data = totals(state.cart);
     }
@@ -95,6 +101,120 @@ async function open(page) {
   await expect(page.locator('#cart-items-container .cart-line').first()).toBeVisible();
   await page.waitForTimeout(350); // Drawer's CSS transition only.
 }
+
+test('large mobile basket keeps its scroll and reaches content above the fixed checkout', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 700 });
+  const state = await fixture(page, 9);
+  state.cart.items.forEach(item => { item.qty = 12; });
+  await page.goto('/');
+  await open(page);
+  const panel = page.locator('.cart-drawer__panel');
+  const initial = await panel.evaluate(el => {
+    el.scrollTop = 600;
+    return { top: el.scrollTop };
+  });
+  expect(initial.top).toBeGreaterThan(0);
+  const stable = await panel.evaluate(el => {
+    const first = document.querySelector('.cart-line');
+    window.CRONOX_CART.renderCartDrawer(window.CRONOX_CART.state.data);
+    return { sameNode: first === document.querySelector('.cart-line'), top: el.scrollTop };
+  });
+  expect(stable.sameNode).toBe(true);
+  expect(stable.top).toBeCloseTo(initial.top, 0);
+
+  await page.evaluate(() => { void window.CRONOX_CART.fetchCart(); });
+  await expect.poll(() => state.reads).toBe(2);
+  await expect.poll(() => panel.evaluate(el => el.scrollTop)).toBeCloseTo(initial.top, 0);
+  await panel.evaluate(el => { el.scrollTop = el.scrollHeight; });
+  const bottom = await panel.evaluate(el => {
+    const footer = el.querySelector('.cart-drawer__footer').getBoundingClientRect();
+    const last = el.querySelector('.cart-line:last-child').getBoundingClientRect();
+    return { remaining: el.scrollHeight - el.clientHeight - el.scrollTop, lastBottom: last.bottom, footerTop: footer.top,
+      innerScroller: getComputedStyle(document.querySelector('#cart-items-container')).overflowY,
+      locked: document.documentElement.classList.contains('has-scroll-lock') };
+  });
+  expect(bottom.remaining).toBeLessThanOrEqual(1);
+  expect(bottom.lastBottom).toBeLessThanOrEqual(bottom.footerTop + 1);
+  expect(bottom.innerScroller).toBe('visible');
+  expect(bottom.locked).toBe(true);
+  await expect(page.locator('#cart-checkout-btn')).toBeInViewport();
+  for (const height of [600, 844]) {
+    await page.setViewportSize({ width: 390, height });
+    await panel.evaluate(el => { el.scrollTop = el.scrollHeight; });
+    await expect(page.locator('.cart-line').last()).toBeInViewport();
+    await expect(page.locator('#cart-checkout-btn')).toBeInViewport();
+    expect(await panel.evaluate(el => el.scrollHeight - el.clientHeight - el.scrollTop)).toBeLessThanOrEqual(1);
+  }
+});
+
+test('stock warning uses the row width and quantity edits retain the visible line', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 700 });
+  const state = await fixture(page, 9);
+  state.enforceStock = true;
+  await page.goto('/');
+  await page.evaluate(() => window.scrollTo(0, 800));
+  const backgroundY = await page.evaluate(() => window.scrollY);
+  expect(backgroundY).toBeGreaterThan(0);
+  await open(page);
+  expect(await page.evaluate(() => window.scrollY)).toBe(backgroundY);
+  const line = page.locator('.cart-line[data-cart-line="5"]');
+  await line.scrollIntoViewIfNeeded();
+  const topBefore = await line.evaluate(el => el.getBoundingClientRect().top);
+  await line.locator('.cart-qty__input').fill('99');
+  await line.locator('.cart-qty__input').press('Enter');
+  await expect(line.locator('.cart-line__error')).toHaveText('No hay stock suficiente para esta cantidad.');
+  await expect(line.locator('.cart-qty__input')).toHaveValue('1');
+  expect(Math.abs((await line.evaluate(el => el.getBoundingClientRect().top)) - topBefore)).toBeLessThanOrEqual(2);
+  const warning = await line.locator('.cart-line__error').evaluate(el => ({
+    width: el.getBoundingClientRect().width,
+    rowWidth: el.closest('.cart-line').getBoundingClientRect().width,
+    top: el.getBoundingClientRect().top,
+  }));
+  expect(warning.width).toBeGreaterThan(warning.rowWidth - 10);
+  expect(Math.abs(warning.top - topBefore)).toBeLessThan(250);
+  await line.locator('.cart-qty__input').fill('4');
+  await line.locator('.cart-qty__input').press('Enter');
+  await expect(line.locator('.cart-qty__input')).toHaveValue('4');
+  await expect(line.locator('.cart-line__error')).toHaveCount(0);
+  expect(Math.abs((await line.evaluate(el => el.getBoundingClientRect().top)) - topBefore)).toBeLessThanOrEqual(2);
+  await line.locator('[data-remove]').click();
+  await expect(page.locator('.cart-line')).toHaveCount(8);
+  await page.locator('#cart-close-btn').click();
+  await expect(page.locator('#cart-drawer')).toHaveAttribute('aria-hidden', 'true');
+  expect(await page.evaluate(() => document.documentElement.classList.contains('has-scroll-lock'))).toBe(false);
+  expect(await page.evaluate(() => window.scrollY)).toBe(backgroundY);
+  await open(page);
+  expect(await page.locator('.cart-drawer__panel').evaluate(el => el.scrollTop)).toBe(0);
+});
+
+test('touch swipes progress through a large basket to its final line', async ({ browser, browserName }) => {
+  test.skip(browserName !== 'chromium', 'Touch gesture dispatch uses Chromium CDP');
+  const context = await browser.newContext({ viewport: { width: 390, height: 700 }, isMobile: true, hasTouch: true });
+  const page = await context.newPage();
+  await fixture(page, 9);
+  await page.goto('http://127.0.0.1:4173/');
+  await open(page);
+  const client = await context.newCDPSession(page);
+  let previous = 0;
+  for (let swipe = 0; swipe < 12; swipe++) {
+    await client.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: 200, y: 510 }] });
+    for (const y of [440, 370, 300, 230, 160]) {
+      await client.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: 200, y }] });
+      await page.waitForTimeout(16);
+    }
+    await client.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+    await page.waitForTimeout(150);
+    const current = await page.locator('.cart-drawer__panel').evaluate(el => el.scrollTop);
+    expect(current).toBeGreaterThanOrEqual(previous);
+    previous = current;
+    if (await page.locator('.cart-drawer__panel').evaluate(el => el.scrollHeight - el.clientHeight - el.scrollTop <= 2)) break;
+  }
+  expect(previous).toBeGreaterThan(0);
+  expect(await page.locator('.cart-drawer__panel').evaluate(el => el.scrollHeight - el.clientHeight - el.scrollTop)).toBeLessThanOrEqual(2);
+  await expect(page.locator('.cart-line').last()).toBeInViewport();
+  await expect(page.locator('#cart-checkout-btn')).toBeInViewport();
+  await context.close();
+});
 
 test('first opening keeps purchased rows visible with six recommendations on a short desktop', async ({ page }) => {
   await page.setViewportSize({ width: 1366, height: 600 });
@@ -359,9 +479,11 @@ test('login refreshes the server merged cart and logout keeps the transferred gu
   await expect(page.locator('.cart-line')).toHaveCount(3);
   await page.locator('#cart-close-btn').click();
   await page.locator('#profileBtn').click();
-  await page.locator('[data-user-action=logout]').click();
+  await Promise.all([
+    page.waitForEvent('load'),
+    page.locator('[data-user-action=logout]').click(),
+  ]);
   await expect.poll(() => state.signedIn).toBe(false);
-  await page.waitForLoadState('domcontentloaded');
   await open(page);
   await expect(page.locator('.cart-line')).toHaveCount(3);
 });

@@ -42,6 +42,16 @@ export class PaymentIntentFactory {
     const normalizedShippingAddress = this.normalizeShippingAddress(
       dto.shippingAddress,
     );
+    if (
+      !normalizedShippingAddress?.firstName ||
+      !normalizedShippingAddress.lastName ||
+      !normalizedShippingAddress.line1 ||
+      !normalizedShippingAddress.city ||
+      !normalizedShippingAddress.country ||
+      !/^[0-9]{5}$/.test(normalizedShippingAddress.postalCode || '')
+    ) {
+      throw new BadRequestException('CHECKOUT_SHIPPING_ADDRESS_REQUIRED');
+    }
     const checkoutParams = {
       shippingMethod: dto.shippingMethod,
       promoCode: dto.promoCode,

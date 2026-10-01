@@ -1220,6 +1220,40 @@
   const cartBackgroundInert = new Map();
   let cartAnimationFrame = 0;
   let cartReturnFocus = null;
+  let renderedCartItems = null;
+  let renderedUpsell = null;
+
+  const cartScrollSnapshot = () => {
+    const panel = cartDrawerEl?.querySelector('.cart-drawer__panel');
+    if (!cartState.drawerOpen || !panel || panel.scrollTop <= 0) return null;
+    const atBottom = panel.scrollHeight - panel.clientHeight - panel.scrollTop <= 2;
+    const visibleTop = panel.getBoundingClientRect().top + (cartDrawerEl.querySelector('.cart-drawer__header')?.offsetHeight || 0);
+    const anchor = Array.from(cartItemsContainer?.querySelectorAll('.cart-line') || [])
+      .find((line) => line.getBoundingClientRect().bottom > visibleTop);
+    return {
+      panel,
+      top: panel.scrollTop,
+      atBottom,
+      id: anchor?.dataset.cartLine,
+      offset: anchor ? anchor.getBoundingClientRect().top - panel.getBoundingClientRect().top : 0,
+    };
+  };
+
+  const restoreCartScroll = (snapshot) => {
+    if (!snapshot) return;
+    const { panel } = snapshot;
+    if (snapshot.atBottom) {
+      panel.scrollTop = panel.scrollHeight - panel.clientHeight;
+      return;
+    }
+    const anchor = Array.from(cartItemsContainer?.querySelectorAll('.cart-line') || [])
+      .find((line) => line.dataset.cartLine === snapshot.id);
+    if (anchor) {
+      panel.scrollTop += anchor.getBoundingClientRect().top - panel.getBoundingClientRect().top - snapshot.offset;
+    } else {
+      panel.scrollTop = snapshot.top;
+    }
+  };
 
   const setCartBackgroundInert = (isOpen) => {
     if (isOpen) {
@@ -1313,8 +1347,14 @@
 
   const renderUpsell = (cart) => {
     if (!cartUpsellList || !cartUpsellSection) return;
-    upsellProducts.clear();
     const candidates = getUpsellCandidates(cart);
+    const signature = JSON.stringify(candidates);
+    if (signature === renderedUpsell) {
+      cartUpsellSection.hidden = !candidates.length;
+      return;
+    }
+    renderedUpsell = signature;
+    upsellProducts.clear();
     cartUpsellList.innerHTML = '';
     if (!candidates.length) {
       cartUpsellSection.hidden = true;
@@ -1444,6 +1484,10 @@
 
     cartItemsContainer.classList.toggle('is-empty', !hasItems);
 
+    const signature = JSON.stringify(items) + JSON.stringify(Array.from(cartItemErrors));
+    if (signature === renderedCartItems && (hasItems ? cartItemsContainer.querySelector('.cart-line') : cartEmptyState?.isConnected)) return;
+    renderedCartItems = signature;
+
     if (!hasItems) {
       renderCartEmptyState('Tu cesta está vacía', { showCta: false });
       return;
@@ -1528,6 +1572,7 @@
   const renderCartDrawer = (cart) => {
     // Callers never render an earlier request's return value over current data.
     cart = cartState.data;
+    const scrollSnapshot = cartScrollSnapshot();
     const items = Array.isArray(cart?.items) ? cart.items : [];
     const hasItems = items.length > 0;
     const loading = cartState.status === 'loading';
@@ -1558,18 +1603,25 @@
     if (cartFooter) cartFooter.hidden = false;
 
     if (cart) renderCartItems(cart);
-    else cartItemsContainer?.replaceChildren();
+    else {
+      cartItemsContainer?.replaceChildren();
+      renderedCartItems = null;
+    }
 
     const subtotalCents = cart?.subtotalCents || 0;
     renderFreeShipping(hasItems ? subtotalCents : 0);
     if (cart) renderUpsell(cart);
-    else if (cartUpsellSection) cartUpsellSection.hidden = true;
+    else if (cartUpsellSection) {
+      cartUpsellSection.hidden = true;
+      renderedUpsell = null;
+    }
     if (checkoutBtn && hasItems) {
       checkoutBtn.textContent = `Finalizar compra · ${formatCheckoutButtonMoney(
         subtotalCents,
         cart?.currency,
       )}`;
     }
+    restoreCartScroll(scrollSnapshot);
   };
 
   const syncCartLineUiState = (itemId) => {

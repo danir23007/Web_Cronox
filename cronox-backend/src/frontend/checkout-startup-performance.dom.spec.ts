@@ -76,7 +76,8 @@ describe('checkout and cart startup performance', () => {
       w.eval(read('assets/app.js'));
       w.eval(read('assets/checkout.js'));
       await flush();
-      expect(w.CRONOX_API.getMe).toHaveBeenCalledTimes(1);
+      // The fixture counts both callers; the real API coalesces their request.
+      expect(w.CRONOX_API.getMe).toHaveBeenCalledTimes(2);
       expect(w.CRONOX_API.getCart).toHaveBeenCalledTimes(1);
       expect(w.CRONOX_API.getCheckoutSummary).toHaveBeenCalledTimes(1);
       expect(w.CRONOX_API.getProducts).toHaveBeenCalledTimes(1);
@@ -202,13 +203,15 @@ describe('checkout and cart startup performance', () => {
           addressReady.resolve(null);
         }
         await flush();
+        expect(element.mount).toHaveBeenCalled();
+        expect(w.document.querySelector('#pay-button').disabled).toBe(true);
+        handlers.ready();
+        handlers.change({ complete: true });
+        await flush();
         expect(w.fetch).toHaveBeenCalledTimes(1);
         expect(w.fetch.mock.calls[0][0]).toContain(
           '/api/payments/create-payment-intent',
         );
-        expect(w.document.querySelector('#pay-button').disabled).toBe(true);
-        handlers.ready();
-        await flush();
         expect(w.document.querySelector('#pay-button').disabled).toBe(false);
         expect(w.CRONOX_API.getCheckoutSummary).toHaveBeenCalledTimes(
           changeShipping ? 2 : 1,
@@ -218,6 +221,128 @@ describe('checkout and cart startup performance', () => {
       }
     },
   );
+
+  it('keeps one real Stripe Elements instance while guest details and shipping change', async () => {
+    const { dom, w } = setup();
+    const paymentHandlers: Record<string, () => void> = {};
+    const paymentElement = {
+      on: jest.fn((event: string, handler: () => void) => { paymentHandlers[event] = handler; }),
+      mount: jest.fn((container: HTMLElement) => {
+        container.dataset.stripeMounted = 'true';
+        queueMicrotask(() => paymentHandlers.ready?.());
+      }),
+      unmount: jest.fn(),
+    };
+    const expressElement = {
+      on: jest.fn(), mount: jest.fn(), unmount: jest.fn(),
+    };
+    const elements = {
+      create: jest.fn((type: string) => type === 'payment' ? paymentElement : expressElement),
+      update: jest.fn().mockResolvedValue(undefined),
+      submit: jest.fn().mockResolvedValue({}),
+    };
+    const stripe = { elements: jest.fn(() => elements), confirmPayment: jest.fn() };
+    w.Stripe = () => stripe;
+    w.CRONOX_STRIPE_READY = Promise.resolve(true);
+    w.CRONOX_API.getCheckoutSummary.mockImplementation(({ shippingMethod }: { shippingMethod: string }) => {
+      const express = shippingMethod === 'EXPRESS';
+      const amountCents = express ? 3990 : 3790;
+      return Promise.resolve({
+        ...summary,
+        shippingMethods: [
+          { code: 'STANDARD', label: 'Estándar', amountCents: 295 },
+          { code: 'EXPRESS', label: 'Express', amountCents: 495 },
+        ],
+        selectedShippingMethod: { code: shippingMethod, amountCents: express ? 495 : 295 },
+        totals: { ...summary.totals, shippingCents: express ? 495 : 295, totalCents: amountCents },
+      });
+    });
+    w.fetch.mockImplementation((_url: string, options: { body: string }) => {
+      const request = JSON.parse(options.body);
+      const express = request.shippingMethod === 'EXPRESS';
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({
+        clientSecret: express ? 'pi_express_secret' : 'pi_standard_secret',
+        paymentIntentId: express ? 'pi_express' : 'pi_standard',
+        shippingMethod: { code: request.shippingMethod },
+        totals: { ...summary.totals, shippingCents: express ? 495 : 295, totalCents: express ? 3990 : 3790 },
+      }) });
+    });
+    const change = (selector: string, value: string) => {
+      const input = w.document.querySelector(selector);
+      input.value = value;
+      input.dispatchEvent(new w.Event('change', { bubbles: true }));
+    };
+    try {
+      w.eval(read('assets/checkout.js'));
+      await flush();
+      expect(stripe.elements).toHaveBeenCalledWith(expect.objectContaining({
+        mode: 'payment', currency: 'eur', amount: 3790,
+      }));
+      expect(paymentElement.mount).toHaveBeenCalledTimes(1);
+      expect(w.document.querySelector('#payment-element').dataset.stripeMounted).toBe('true');
+      expect(w.document.querySelector('#pay-button').textContent).toBe('Completa tus datos');
+      expect(w.document.querySelector('#pay-button').disabled).toBe(true);
+      expect(w.fetch).not.toHaveBeenCalled();
+
+      // Card details are entered before any recipient details, and stay in
+      // the same Stripe Element throughout address and shipping edits.
+      paymentHandlers.change({ complete: true });
+      expect(w.document.querySelector('#pay-button').disabled).toBe(true);
+
+      change('#shipping-form [name="firstName"]', 'Ada');
+      change('#shipping-form [name="lastName"]', 'Lovelace');
+      change('#shipping-form [name="address"]', 'Calle Mayor 1');
+      change('#shipping-form [name="zip"]', '28001');
+      change('#shipping-form [name="city"]', 'Madrid');
+      await flush();
+      expect(w.fetch).not.toHaveBeenCalled();
+      expect(paymentElement.mount).toHaveBeenCalledTimes(1);
+
+      change('#checkout-guest-email', 'ada@example.test');
+      await flush();
+      expect(w.fetch).toHaveBeenCalledTimes(1);
+      expect(w.document.querySelector('#pay-button').textContent).toBe('Pagar ahora');
+      expect(w.document.querySelector('#pay-button').disabled).toBe(false);
+
+      w.document.querySelector('#shipping-form [name="city"]')
+        .dispatchEvent(new w.Event('change', { bubbles: true }));
+      await flush();
+      expect(w.fetch).toHaveBeenCalledTimes(1);
+      expect(w.document.querySelector('#pay-button').disabled).toBe(false);
+
+      paymentHandlers.change({ complete: false });
+      expect(w.document.querySelector('#pay-button').textContent).toBe('Pagar ahora');
+      expect(w.document.querySelector('#pay-button').disabled).toBe(true);
+      paymentHandlers.change({ complete: true });
+      expect(w.document.querySelector('#pay-button').disabled).toBe(false);
+
+      change('#shipping-form [name="zip"]', '28');
+      await flush();
+      expect(w.document.querySelector('#pay-button').textContent).toBe('Completa tus datos');
+      expect(w.document.querySelector('#pay-button').disabled).toBe(true);
+      expect(w.fetch).toHaveBeenCalledTimes(1);
+      expect(paymentElement.unmount).not.toHaveBeenCalled();
+
+      change('#shipping-form [name="zip"]', '28001');
+      await flush();
+      expect(w.fetch).toHaveBeenCalledTimes(2);
+      expect(w.document.querySelector('#pay-button').textContent).toBe('Pagar ahora');
+      expect(w.document.querySelector('#pay-button').disabled).toBe(false);
+
+      const expressInput = w.document.querySelector('input[name="shippingMethod"][value="EXPRESS"]');
+      expressInput.checked = true;
+      expressInput.dispatchEvent(new w.Event('change', { bubbles: true }));
+      await flush();
+      expect(elements.update).toHaveBeenCalledWith({ amount: 3990 });
+      expect(w.fetch).toHaveBeenCalledTimes(3);
+      expect(paymentElement.mount).toHaveBeenCalledTimes(1);
+      expect(paymentElement.unmount).not.toHaveBeenCalled();
+      expect(w.document.querySelector('#pay-button').disabled).toBe(false);
+      expect(stripe.confirmPayment).not.toHaveBeenCalled();
+    } finally {
+      dom.window.close();
+    }
+  });
 
   it('uses one initial cart read for both the shared cart and cart page', async () => {
     const { dom, w } = setup('cart.html');

@@ -24,7 +24,8 @@ describe('checkout frontend lifecycle coordinator', () => {
     }>;
     confirmMountedPayment: (options: {
       stripe: { confirmPayment: jest.Mock };
-      elements: Record<string, unknown>;
+      elements: { submit: jest.Mock };
+      clientSecret: string;
       paymentElementMounted: boolean;
       confirmParams: Record<string, unknown>;
       onFailure?: (error: unknown) => void;
@@ -32,6 +33,7 @@ describe('checkout frontend lifecycle coordinator', () => {
     confirmExpressPayment: (options: {
       stripe: { confirmPayment: jest.Mock };
       elements: Record<string, unknown>;
+      clientSecret: string;
       expressCheckoutMounted: boolean;
       confirmParams: Record<string, unknown>;
       onFailure?: (error: unknown) => void;
@@ -154,7 +156,8 @@ describe('checkout frontend lifecycle coordinator', () => {
     await expect(
       coordinatorModule.confirmMountedPayment({
         stripe: { confirmPayment },
-        elements: {},
+        elements: { submit: jest.fn() },
+        clientSecret: 'pi_secret',
         paymentElementMounted: false,
         confirmParams: {},
       }),
@@ -172,7 +175,8 @@ describe('checkout frontend lifecycle coordinator', () => {
     await expect(
       coordinatorModule.confirmMountedPayment({
         stripe: { confirmPayment: jest.fn().mockRejectedValue(thrown) },
-        elements: {},
+        elements: { submit: jest.fn().mockResolvedValue({}) },
+        clientSecret: 'pi_secret',
         paymentElementMounted: true,
         confirmParams: { return_url: 'http://localhost/success' },
         onFailure,
@@ -189,6 +193,7 @@ describe('checkout frontend lifecycle coordinator', () => {
       coordinatorModule.confirmExpressPayment({
         stripe: { confirmPayment },
         elements: {},
+        clientSecret: 'pi_secret',
         expressCheckoutMounted: false,
         confirmParams: { return_url: 'https://example.com/checkout-success' },
       }),
@@ -199,12 +204,14 @@ describe('checkout frontend lifecycle coordinator', () => {
       coordinatorModule.confirmExpressPayment({
         stripe: { confirmPayment },
         elements: {},
+        clientSecret: 'pi_secret',
         expressCheckoutMounted: true,
         confirmParams: { return_url: 'https://example.com/checkout-success' },
       }),
     ).resolves.toEqual({ attempted: true, error: null });
     expect(confirmPayment).toHaveBeenCalledWith({
       elements: {},
+      clientSecret: 'pi_secret',
       confirmParams: {
         return_url: 'https://example.com/checkout-success',
       },
@@ -221,6 +228,7 @@ describe('checkout frontend lifecycle coordinator', () => {
           confirmPayment: jest.fn().mockResolvedValue({ error: stripeError }),
         },
         elements: {},
+        clientSecret: 'pi_secret',
         expressCheckoutMounted: true,
         confirmParams: { return_url: 'https://example.com/checkout-success' },
         onFailure,
@@ -462,7 +470,7 @@ describe('checkout frontend lifecycle coordinator', () => {
         shippingMethod: 'STANDARD',
         clientSecret: null,
       }),
-    ).toEqual({ disabled: true, label: 'Procesando…' });
+    ).toEqual({ disabled: true, label: 'Pagar ahora' });
 
     expect(
       coordinatorModule.getPaymentButtonState({
@@ -473,7 +481,7 @@ describe('checkout frontend lifecycle coordinator', () => {
         clientSecret: 'pi_secret',
         paymentElementMounted: false,
       }),
-    ).toEqual({ disabled: true, label: 'Procesando…' });
+    ).toEqual({ disabled: true, label: 'Pagar ahora' });
 
     expect(
       coordinatorModule.getPaymentButtonState({
@@ -494,6 +502,6 @@ describe('checkout frontend lifecycle coordinator', () => {
         shippingMethod: 'STANDARD',
         clientSecret: null,
       }),
-    ).toEqual({ disabled: false, label: 'Reintentar pago' });
+    ).toEqual({ disabled: true, label: 'Pagar ahora' });
   });
 });

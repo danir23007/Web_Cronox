@@ -5,6 +5,10 @@ import {
 } from './stripe.service';
 
 describe('PaymentIntentFactory', () => {
+  const completeAddress = {
+    firstName: 'Test', lastName: 'Customer', line1: 'Calle Mayor 1',
+    city: 'Madrid', postalCode: '28001', country: 'España',
+  };
   const baseSnapshot = {
     checkoutSnapshotId: 'snap_1',
     cartId: 10,
@@ -38,7 +42,7 @@ describe('PaymentIntentFactory', () => {
       }),
     };
     const factory = new PaymentIntentFactory(ordersService as any, stripeService as any);
-    const dto = { shippingMethod: 'STANDARD' } as any;
+    const dto = { shippingMethod: 'STANDARD', shippingAddress: completeAddress } as any;
     await expect(factory.createPaymentIntentForUser(1, dto)).rejects.toBe(rejection);
     expect(ordersService.resetCheckoutPaymentIntentCreation).toHaveBeenCalledWith('snap_1');
     expect(ordersService.bindStripePaymentIntent).not.toHaveBeenCalled();
@@ -74,9 +78,11 @@ describe('PaymentIntentFactory', () => {
     const result = await factory.createPaymentIntentForUser(1, {
       shippingMethod: 'EXPRESS',
       paymentIntentId: 'pi_client_supplied',
+      shippingAddress: completeAddress,
     } as any);
     const browserRetry = await factory.createPaymentIntentForUser(1, {
       shippingMethod: 'EXPRESS',
+      shippingAddress: completeAddress,
     } as any);
 
     expect(result).toMatchObject({
@@ -119,17 +125,18 @@ describe('PaymentIntentFactory', () => {
 
       const result = await factory.createPaymentIntentForUser(1, {
         shippingMethod,
+        shippingAddress: completeAddress,
       } as any);
 
       expect(
         ordersService.claimCheckoutPaymentIntentCreation,
       ).toHaveBeenCalledWith('snap_1');
       expect(stripeService.createPaymentIntentForCheckout).toHaveBeenCalledWith(
-        {
+        expect.objectContaining({
           checkoutSnapshotId: 'snap_1',
           amount: 10495,
           currency: 'EUR',
-        },
+        }),
       );
       expect(ordersService.bindStripePaymentIntent).toHaveBeenCalledWith(
         'snap_1',
@@ -161,7 +168,7 @@ describe('PaymentIntentFactory', () => {
     await factory.createPaymentIntentForUser(1, {
       shippingMethod: 'STANDARD',
       shippingAddress: {
-        name: 'Daniel Rivas',
+        firstName: 'Daniel', lastName: 'Rivas', name: 'Daniel Rivas',
         line1: 'Calle Mayor 1',
         city: 'Madrid',
         postalCode: '28001',
@@ -208,7 +215,7 @@ describe('PaymentIntentFactory', () => {
     await factory.createPaymentIntentForOwner(owner, {
       shippingMethod: 'STANDARD',
       shippingAddress: {
-        name: 'Guest Customer',
+        firstName: 'Guest', lastName: 'Customer', name: 'Guest Customer',
         line1: 'Calle Uno 1',
         city: 'Madrid',
         postalCode: '28001',
@@ -238,6 +245,21 @@ describe('PaymentIntentFactory', () => {
     expect(ordersService.createCheckoutSnapshot).not.toHaveBeenCalled();
   });
 
+  it.each([
+    undefined,
+    { ...completeAddress, line1: '' },
+    { ...completeAddress, postalCode: '28' },
+  ])('rejects an incomplete recipient before reserving stock or creating an intent', async (shippingAddress) => {
+    const ordersService = { createCheckoutSnapshot: jest.fn() };
+    const stripeService = { createPaymentIntentForCheckout: jest.fn() };
+    const factory = new PaymentIntentFactory(ordersService as any, stripeService as any);
+    await expect(factory.createPaymentIntentForUser(1, {
+      shippingMethod: 'STANDARD', shippingAddress,
+    } as any)).rejects.toThrow('CHECKOUT_SHIPPING_ADDRESS_REQUIRED');
+    expect(ordersService.createCheckoutSnapshot).not.toHaveBeenCalled();
+    expect(stripeService.createPaymentIntentForCheckout).not.toHaveBeenCalled();
+  });
+
   it('recovers a stale creation-in-progress snapshot with Stripe idempotency', async () => {
     const ordersService = {
       createCheckoutSnapshot: jest.fn().mockResolvedValue({
@@ -261,16 +283,17 @@ describe('PaymentIntentFactory', () => {
 
     const result = await factory.createPaymentIntentForUser(1, {
       shippingMethod: 'EXPRESS',
+      shippingAddress: completeAddress,
     } as any);
 
     expect(
       ordersService.claimCheckoutPaymentIntentCreation,
     ).toHaveBeenCalledWith('snap_1');
-    expect(stripeService.createPaymentIntentForCheckout).toHaveBeenCalledWith({
+    expect(stripeService.createPaymentIntentForCheckout).toHaveBeenCalledWith(expect.objectContaining({
       checkoutSnapshotId: 'snap_1',
       amount: 10495,
       currency: 'EUR',
-    });
+    }));
     expect(ordersService.bindStripePaymentIntent).toHaveBeenCalledWith(
       'snap_1',
       'pi_recovered',
@@ -325,6 +348,7 @@ describe('PaymentIntentFactory', () => {
         {
           shippingMethod,
           paymentIntentId: 'pi_attacker_supplied',
+          shippingAddress: completeAddress,
         } as any,
         { id: 10 } as any,
       );
@@ -376,7 +400,7 @@ describe('PaymentIntentFactory', () => {
       await expect(
         factory.createPaymentIntentForUser(
           1,
-          { shippingMethod: 'EXPRESS' } as any,
+          { shippingMethod: 'EXPRESS', shippingAddress: completeAddress } as any,
           { id: 10 } as any,
         ),
       ).rejects.toThrow(`STRIPE_${status.toUpperCase()}`);
@@ -410,7 +434,7 @@ describe('PaymentIntentFactory', () => {
     await expect(
       factory.createPaymentIntentForUser(
         99,
-        { shippingMethod: 'STANDARD' } as any,
+        { shippingMethod: 'STANDARD', shippingAddress: completeAddress } as any,
         { id: 999 } as any,
       ),
     ).rejects.toThrow('CHECKOUT_REPLACEMENT_IN_PROGRESS');
@@ -442,7 +466,7 @@ describe('PaymentIntentFactory', () => {
     await expect(
       factory.createPaymentIntentForUser(
         1,
-        { shippingMethod: 'EXPRESS' } as any,
+        { shippingMethod: 'EXPRESS', shippingAddress: completeAddress } as any,
         { id: 10 } as any,
       ),
     ).rejects.toThrow('CHECKOUT_PAYMENT_CONFIRMATION_PENDING');
@@ -502,7 +526,7 @@ describe('PaymentIntentFactory', () => {
     await expect(
       factory.createPaymentIntentForUser(
         1,
-        { shippingMethod: 'STANDARD' } as any,
+        { shippingMethod: 'STANDARD', shippingAddress: completeAddress } as any,
         { id: 10, updatedAt: new Date() } as any,
       ),
     ).resolves.toMatchObject({
@@ -564,7 +588,7 @@ describe('PaymentIntentFactory', () => {
     await expect(
       factory.createPaymentIntentForUser(
         1,
-        { shippingMethod: 'STANDARD' } as any,
+        { shippingMethod: 'STANDARD', shippingAddress: completeAddress } as any,
         { id: 10, updatedAt: new Date() } as any,
       ),
     ).resolves.toMatchObject({ paymentIntentId: 'pi_after_cancel' });
@@ -616,7 +640,7 @@ describe('PaymentIntentFactory', () => {
     await expect(
       factory.createPaymentIntentForUser(
         1,
-        { shippingMethod: 'STANDARD' } as any,
+        { shippingMethod: 'STANDARD', shippingAddress: completeAddress } as any,
         { id: 10, updatedAt: new Date() } as any,
       ),
     ).resolves.toMatchObject({ paymentIntentId: 'pi_current_methods' });
@@ -670,10 +694,12 @@ describe('PaymentIntentFactory', () => {
 
     const first = factory.createPaymentIntentForUser(1, {
       shippingMethod: 'STANDARD',
+      shippingAddress: completeAddress,
     } as any);
     await Promise.resolve();
     const second = factory.createPaymentIntentForUser(1, {
       shippingMethod: 'STANDARD',
+      shippingAddress: completeAddress,
     } as any);
 
     await expect(second).rejects.toThrow('CHECKOUT_PAYMENT_INTENT_IN_PROGRESS');

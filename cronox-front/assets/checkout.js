@@ -241,9 +241,9 @@
       cleanText(shippingFields.firstName?.value) &&
         cleanText(shippingFields.lastName?.value) &&
         cleanText(shippingFields.address?.value) &&
-        cleanText(shippingFields.zip?.value) &&
+        /^[0-9]{5}$/.test(cleanText(shippingFields.zip?.value)) &&
         cleanText(shippingFields.city?.value) &&
-        cleanText(shippingFields.country?.value),
+        normalizeCountry(cleanText(shippingFields.country?.value)),
     );
 
   const isCheckoutContactAndShippingReady = () =>
@@ -412,12 +412,13 @@
   let shippingIntentRefreshTimer = null;
   const schedulePaymentIntentRefreshFromShipping = (delayMs = 450) => {
     const revision = invalidateCheckoutPayment();
+    if (shippingIntentRefreshTimer) {
+      window.clearTimeout(shippingIntentRefreshTimer);
+      shippingIntentRefreshTimer = null;
+    }
     if (!isCheckoutContactAndShippingReady()) {
       setPayButtonState(false);
       return;
-    }
-    if (shippingIntentRefreshTimer) {
-      window.clearTimeout(shippingIntentRefreshTimer);
     }
     shippingIntentRefreshTimer = window.setTimeout(async () => {
       shippingIntentRefreshTimer = null;
@@ -471,14 +472,18 @@
     return Object.fromEntries(Object.entries(payload).filter(([, value]) => cleanText(value)));
   };
 
+  const lastInputValue = new WeakMap();
   Object.values(shippingFields).forEach((input) => {
     if (!input) return;
     input.addEventListener('input', () => {
+      lastInputValue.set(input, input.value);
       markShippingFieldEdited(input);
       updateAddressSummary();
       schedulePaymentIntentRefreshFromShipping();
     });
     input.addEventListener('change', () => {
+      if (lastInputValue.get(input) === input.value) return;
+      lastInputValue.set(input, input.value);
       markShippingFieldEdited(input);
       updateAddressSummary();
       schedulePaymentIntentRefreshFromShipping(0);
@@ -587,9 +592,13 @@
   let currentClientSecret = null;
   let currentPaymentIntentId = null;
   let paymentElementMounted = false;
+  let paymentMethodComplete = false;
+  let mountedAmountCents = null;
+  let availableExpressMethods = null;
   let expressCheckoutMounted = false;
   let expressPaymentInFlight = false;
   let pendingPaymentElementLoadResolver = null;
+  let pendingPaymentElementLoadPromise = null;
   let hasClearedPromoOnLoad = false;
   const checkoutCoordinator = window.CRONOX_CHECKOUT_LIFECYCLE?.createCoordinator();
   let checkoutRevision = checkoutCoordinator?.current() ?? 0;
@@ -694,8 +703,8 @@
       clientSecret: currentClientSecret,
       paymentElementMounted,
     });
-    payButton.disabled = buttonState?.disabled ?? true;
-    if (forcedLabel) {
+    payButton.disabled = (buttonState?.disabled ?? true) || !paymentMethodComplete || mountedAmountCents !== state.totals.totalCents;
+    if (forcedLabel && isCheckoutContactAndShippingReady()) {
       payButton.textContent = forcedLabel;
       return;
     }
@@ -708,14 +717,15 @@
     setPayButtonState(loading);
   };
 
-  const setExpressCheckoutVisibility = (availablePaymentMethods) => {
+  const setExpressCheckoutVisibility = (availablePaymentMethods = availableExpressMethods) => {
     if (!expressCheckoutRegion) return;
+    availableExpressMethods = availablePaymentMethods;
     const hasWallet = Boolean(
       window.CRONOX_CHECKOUT_LIFECYCLE?.hasAvailableExpressWallet?.(
         availablePaymentMethods,
       ),
     );
-    expressCheckoutRegion.hidden = !hasWallet;
+    expressCheckoutRegion.hidden = !hasWallet || !isCheckoutContactAndShippingReady() || !currentClientSecret || mountedAmountCents !== state.totals.totalCents;
   };
 
   const resetExpressCheckoutElement = () => {
@@ -737,9 +747,12 @@
       pendingPaymentElementLoadResolver(false);
       pendingPaymentElementLoadResolver = null;
     }
+    pendingPaymentElementLoadPromise = null;
     currentClientSecret = null;
     currentPaymentIntentId = null;
     paymentElementMounted = false;
+    paymentMethodComplete = false;
+    mountedAmountCents = null;
     resetExpressCheckoutElement();
     if (paymentElement) {
       try {
@@ -1502,7 +1515,7 @@
     setGuestUiState(true);
     const loaded = await refreshCheckoutSummary(state.shippingMethod, checkoutRevision);
     if (loaded) {
-      void Promise.resolve(window.CRONOX_STRIPE_READY).then(() => ensureStripeReady());
+      void queueCheckoutUpdate({ revision: checkoutRevision, refreshSummary: false });
     }
     if (helpText) helpText.textContent = 'Stripe procesa tus datos de pago de forma cifrada.';
     return loaded;
@@ -1656,6 +1669,7 @@
       expressCheckoutElement !== expectedElement ||
       !currentClientSecret ||
       !isCheckoutContactAndShippingReady() ||
+      mountedAmountCents !== state.totals.totalCents ||
       expressPaymentInFlight
     ) {
       event?.paymentFailed?.({ reason: 'fail' });
@@ -1671,12 +1685,21 @@
     }
 
     expressPaymentInFlight = true;
+    const confirmationRevision = checkoutRevision;
+    const clientSecret = currentClientSecret;
     setPayButtonState(true);
     errorDiv.textContent = '';
     await subscribeNewsletterIfRequested();
+    if (confirmationRevision !== checkoutRevision || clientSecret !== currentClientSecret || !isCheckoutContactAndShippingReady()) {
+      event?.paymentFailed?.({ reason: 'fail' });
+      expressPaymentInFlight = false;
+      setPayButtonState(false);
+      return;
+    }
     const result = await confirmExpressPayment({
       stripe,
       elements,
+      clientSecret,
       expressCheckoutMounted,
       confirmParams: { return_url: buildPaymentReturnUrl() },
       onFailure: (error) => {
@@ -1752,12 +1775,10 @@
     }
   };
 
-  const ensurePaymentElement = async (clientSecret) => {
-    if (!clientSecret || !stripe) return false;
-
-    if (currentClientSecret === clientSecret && paymentElementMounted) {
-      return true;
-    }
+  const ensurePaymentElement = async () => {
+    if (!stripe || !Number.isSafeInteger(state.totals.totalCents) || state.totals.totalCents <= 0) return false;
+    if (paymentElementMounted) return true;
+    if (pendingPaymentElementLoadPromise) return pendingPaymentElementLoadPromise;
 
     if (pendingPaymentElementLoadResolver) {
       pendingPaymentElementLoadResolver(false);
@@ -1771,12 +1792,13 @@
       }
     }
     paymentElementMounted = false;
+    paymentMethodComplete = false;
 
-    elements = stripe.elements({ clientSecret, appearance });
+    mountedAmountCents = state.totals.totalCents;
+    elements = stripe.elements({ mode: 'payment', currency: 'eur', amount: mountedAmountCents, appearance });
     mountExpressCheckoutElement();
     const nextPaymentElement = elements.create('payment', paymentElementOptions);
     paymentElement = nextPaymentElement;
-    currentClientSecret = clientSecret;
     let loadSettled = false;
     let loadTimeoutId = null;
     let settleElementLoad;
@@ -1786,11 +1808,13 @@
         loadSettled = true;
         if (pendingPaymentElementLoadResolver === settleElementLoad) {
           pendingPaymentElementLoadResolver = null;
+          pendingPaymentElementLoadPromise = null;
         }
         resolve(Boolean(ready));
       };
       pendingPaymentElementLoadResolver = settleElementLoad;
     });
+    pendingPaymentElementLoadPromise = elementLoadPromise;
     const clearLoadTimeout = () => {
       if (loadTimeoutId !== null) {
         window.clearTimeout(loadTimeoutId);
@@ -1809,6 +1833,7 @@
       clearLoadTimeout();
       settleElementLoad(false);
       paymentElementMounted = false;
+      paymentMethodComplete = false;
       try {
         nextPaymentElement.unmount();
       } catch {
@@ -1816,6 +1841,7 @@
       }
       currentClientSecret = null;
       currentPaymentIntentId = null;
+      mountedAmountCents = null;
       resetExpressCheckoutElement();
       paymentElement = null;
       elements = null;
@@ -1833,6 +1859,11 @@
         onReady: handleReady,
         onLoadError: handleLoadError,
       }) ?? false;
+    nextPaymentElement.on('change', (event) => {
+      if (paymentElement !== nextPaymentElement) return;
+      paymentMethodComplete = Boolean(event?.complete);
+      setPayButtonState(false);
+    });
     const container = document.getElementById('payment-element');
     if (!container) {
       resetPaymentElement();
@@ -1852,6 +1883,17 @@
       resetPaymentElement();
       throw new Error('PAYMENT_ELEMENT_MOUNT_FAILED');
     }
+  };
+
+  const synchronizePaymentAmount = async (revision) => {
+    if (!elements || !paymentElementMounted) return false;
+    const amount = Number(state.totals.totalCents);
+    if (!Number.isSafeInteger(amount) || amount <= 0) return false;
+    if (mountedAmountCents === amount) return true;
+    await Promise.resolve(elements.update({ amount }));
+    if (revision !== checkoutRevision) return false;
+    mountedAmountCents = amount;
+    return true;
   };
 
   const getPaymentPreparationMessage = (details) => {
@@ -1984,20 +2026,21 @@
         return;
       }
 
-      // Shipping can be changed while saved defaults are still loading.
-      // Let that latest queued revision use the defaults when they arrive.
-      if (shippingDefaultsPromise) await shippingDefaultsPromise;
-      if (revision !== checkoutRevision) return false;
       await window.CRONOX_STRIPE_READY;
       if (revision !== checkoutRevision) return false;
       if (!ensureStripeReady()) {
         return false;
       }
 
+      const paymentReady = await ensurePaymentElement();
+      if (!paymentReady || revision !== checkoutRevision) return false;
+
+      // Saved defaults may arrive after the payment form; use them only for
+      // the server-owned intent, without remounting the customer's fields.
+      if (shippingDefaultsPromise) await shippingDefaultsPromise;
+      if (revision !== checkoutRevision) return false;
+
       if (!isCheckoutContactAndShippingReady()) {
-        errorDiv.textContent = state.isAuthenticated
-          ? 'Completa la direccion de envio.'
-          : 'Introduce un email valido y completa la direccion de envio.';
         return false;
       }
 
@@ -2042,16 +2085,17 @@
       }
       if (revision !== checkoutRevision) return false;
 
-      currentPaymentIntentId = nextPaymentIntentId;
       state.shippingMethod = requestedShippingMethod;
       state.totals = data.totals || state.totals;
-      const paymentReady = await ensurePaymentElement(nextClientSecret);
-      if (!paymentReady || revision !== checkoutRevision) return false;
+      if (!await synchronizePaymentAmount(revision)) return false;
+      currentClientSecret = nextClientSecret;
+      currentPaymentIntentId = nextPaymentIntentId;
       renderSummary(
         state.totals,
         findShippingMethod(state.shippingMethod) || data.shippingMethod,
         data.summary,
       );
+      setExpressCheckoutVisibility();
       errorDiv.textContent = '';
       return true;
     } catch (error) {
@@ -2063,7 +2107,9 @@
         shippingMethod: state.shippingMethod,
         ...details,
       });
-      resetPaymentElement();
+      currentClientSecret = null;
+      currentPaymentIntentId = null;
+      setExpressCheckoutVisibility();
       if (details.code === 'PROMO_ALREADY_REDEEMED') {
         setPromoState(null);
         setPromoStatus('');
@@ -2082,7 +2128,10 @@
 
   const invalidateCheckoutPayment = () => {
     checkoutRevision = checkoutCoordinator?.invalidate() ?? checkoutRevision + 1;
-    resetPaymentElement();
+    currentClientSecret = null;
+    currentPaymentIntentId = null;
+    setExpressCheckoutVisibility();
+    setPayButtonState(false);
     errorDiv.textContent = '';
     return checkoutRevision;
   };
@@ -2116,6 +2165,7 @@
       return;
     }
     setPromoControlsLoading(true);
+    invalidateCheckoutPayment();
     setPromoMessage('');
 
     try {
@@ -2163,6 +2213,7 @@
   };
 
   const removePromoCode = async () => {
+    invalidateCheckoutPayment();
     if (promoInput) promoInput.value = '';
     setPromoState(null);
     setPromoStatus('');
@@ -2196,7 +2247,7 @@
       if (payButton) {
         payButton.disabled = true;
         payButton.dataset.forcedLabel = 'Pago no disponible';
-        payButton.textContent = 'Pago no disponible';
+        setPayButtonState(false);
       }
       return false;
     }
@@ -2352,10 +2403,13 @@
     loginHeaderLink?.addEventListener('click', openLogin);
 
     guestEmailInput?.addEventListener('input', () => {
+      lastInputValue.set(guestEmailInput, guestEmailInput.value);
       newsletterSubmittedFor = '';
       schedulePaymentIntentRefreshFromShipping();
     });
     guestEmailInput?.addEventListener('change', () => {
+      if (lastInputValue.get(guestEmailInput) === guestEmailInput.value) return;
+      lastInputValue.set(guestEmailInput, guestEmailInput.value);
       schedulePaymentIntentRefreshFromShipping(0);
     });
 
@@ -2460,14 +2514,20 @@
         }
         return;
       }
-      if (!stripe || !elements || !paymentElement || !paymentElementMounted || !currentClientSecret) {
+      if (!stripe || !elements || !paymentElement || !paymentElementMounted || !currentClientSecret || mountedAmountCents !== state.totals.totalCents) {
         errorDiv.textContent = 'No hemos podido preparar el pago. Inténtalo de nuevo.';
         await queueCheckoutUpdate();
         return;
       }
       setPayButtonState(true);
+      const confirmationRevision = checkoutRevision;
+      const clientSecret = currentClientSecret;
       errorDiv.textContent = '';
       await subscribeNewsletterIfRequested();
+      if (confirmationRevision !== checkoutRevision || clientSecret !== currentClientSecret || !isCheckoutContactAndShippingReady()) {
+        setPayButtonState(false);
+        return;
+      }
 
       const confirmMountedPayment = window.CRONOX_CHECKOUT_LIFECYCLE?.confirmMountedPayment;
       if (typeof confirmMountedPayment !== 'function') {
@@ -2479,6 +2539,7 @@
       await confirmMountedPayment({
         stripe,
         elements,
+        clientSecret,
         paymentElementMounted,
         confirmParams: {
           return_url: buildPaymentReturnUrl(),
@@ -2551,9 +2612,6 @@
       setGuestUiState(false);
       await window.CRONOX_STRIPE_READY;
       const stripeReady = ensureStripeReady();
-      if (stripeReady && currentClientSecret && !paymentElementMounted) {
-        await ensurePaymentElement(currentClientSecret);
-      }
       if (stripeReady) await queueCheckoutUpdate();
       await loadRecommendations();
     } else {
