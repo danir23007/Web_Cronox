@@ -505,6 +505,7 @@ model NewsletterSettings {
 }
 
 model User {
+  dailyVisits         DailyVisitor[]
   restockRequests           RestockRequest[]
   newsletterMailJobs        NewsletterMailJob[]
   id                        Int                     @id @default(autoincrement())
@@ -557,6 +558,71 @@ model User {
 
   // ✅ FIX: relación correcta y naming consistente
   historial Historial?
+}
+
+// Aggregate history is independent of short-lived customer activity/session logs.
+model VisitorHistoryConfig {
+  id        Int      @id
+  startedAt DateTime @db.Timestamptz(3)
+}
+
+model DailyVisitor {
+  id       String   @id
+  day      DateTime @db.Date
+  category String
+  identity String
+  userId   Int?
+  user     User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  firstAt  DateTime @db.Timestamptz(3)
+  lastAt   DateTime @db.Timestamptz(3)
+
+  @@unique([day, category, identity])
+  @@index([day, category, firstAt, id])
+  @@index([day, firstAt, id])
+  @@index([userId])
+}
+
+// No FK to live business entities; payloads deliberately exclude personal fields.
+model FinanceArchive {
+  orderId    Int      @id
+  currency   String
+  paidDate   DateTime @db.Date
+  lastDate   DateTime @db.Date
+  uncertain  Boolean  @default(false)
+  providerRef String? @unique
+  snapshot   Json
+  revision   Int      @default(1)
+
+  @@index([currency, paidDate, orderId])
+  @@index([currency, lastDate, orderId])
+  @@index([currency, orderId])
+}
+
+model FinanceArchiveRevision {
+  orderId    Int
+  revision   Int
+  snapshot   Json
+  recordedAt DateTime @default(now()) @db.Timestamptz(3)
+
+  @@id([orderId, revision])
+}
+
+model FinanceEventArchive {
+  id              String   @id
+  paymentIntentId String?
+  occurredAt      DateTime  @db.Timestamp(3)
+  snapshot        Json
+
+  @@index([paymentIntentId, occurredAt])
+}
+
+model FinanceStockArchive {
+  id        String   @id
+  orderId   Int
+  createdAt DateTime @db.Timestamp(3)
+  snapshot  Json
+
+  @@index([orderId, createdAt])
 }
 
 model AuthSession {

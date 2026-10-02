@@ -50,6 +50,7 @@ export type FinanceLine = {
   financialSnapshot?: { unitCostCents: number | null; productName: string; imageUrl: string | null } | null;
 };
 export type FinanceOrder = {
+  historicalQualified?: boolean;
   id: number; status: string; currency: string; providerRef: string | null; source: string;
   paidAt: Date | null; purchasedAt: Date | null; createdAt: Date; voidedAt: Date | null;
   total: Prisma.Decimal | string; shippingCost: number; discountCents: number; disputeLostCents: number;
@@ -101,7 +102,7 @@ export function calculateFinance(orders: FinanceOrder[], events: FinanceEvent[],
     const ledger = [...(byPayment.get(order.providerRef ?? '') ?? [])].sort((a, b) => a.occurredAt.getTime() - b.occurredAt.getTime() || (a.refundCumulativeCents ?? 0) - (b.refundCumulativeCents ?? 0) || a.id.localeCompare(b.id));
     const success = ledger.find(e => e.type === 'payment_intent.succeeded');
     const paidStatuses = ['PAID', 'PROCESSING', 'SHIPPED', 'DELIVERED', 'REFUNDED', 'DISPUTED'];
-    const qualifying = !!success || !!order.paidAt || (order.source === 'IN_PERSON_ADMIN' && !!order.purchasedAt) || paidStatuses.includes(order.status);
+    const qualifying = order.historicalQualified === true || !!success || !!order.paidAt || (order.source === 'IN_PERSON_ADMIN' && !!order.purchasedAt) || paidStatuses.includes(order.status);
     if (!qualifying) continue;
     const paidAt = order.paidAt ?? success?.occurredAt ?? order.purchasedAt ?? order.createdAt;
     if (!order.paidAt && !success && !order.purchasedAt && madridDate(paidAt) >= from && madridDate(paidAt) <= to) warnings.add('Ventas antiguas sin fecha de cobro registrada: se usa la fecha de creación del pedido confirmado.');

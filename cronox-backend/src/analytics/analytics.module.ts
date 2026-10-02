@@ -7,11 +7,13 @@ import { AdminCustomerAnalyticsService } from './admin-customer-analytics.servic
 import { AnalyticsController } from './analytics.controller';
 import { AnalyticsMaintenanceService } from './analytics-maintenance.service';
 import { AnalyticsService } from './analytics.service';
+import { AdminVisitorController, PublicVisitorController } from './visitor-history.controller';
+import { VisitorHistoryService } from './visitor-history.service';
 
 @Module({
   imports: [PrismaModule, AccessAuthModule],
-  controllers: [AnalyticsController, AdminCustomerAnalyticsController],
-  providers: [AnalyticsService, AdminCustomerAnalyticsService, AnalyticsMaintenanceService, AdminGuard],
+  controllers: [AnalyticsController, AdminCustomerAnalyticsController, AdminVisitorController, PublicVisitorController],
+  providers: [AnalyticsService, AdminCustomerAnalyticsService, AnalyticsMaintenanceService, AdminGuard, VisitorHistoryService],
   exports: [AnalyticsService],
 })
 export class AnalyticsModule {}

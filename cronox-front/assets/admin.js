@@ -1633,7 +1633,7 @@
   };
 
   const loadSection = (sectionId) => {
-    if (sectionId === 'section-dashboard') { fetchDashboard(); window.CRONOX_FINANCE?.load('dashboard'); }
+    if (sectionId === 'section-dashboard') { fetchDashboard(); window.CRONOX_FINANCE?.load('dashboard'); window.CRONOX_VISITORS?.load(); }
     if (sectionId === 'section-money') window.CRONOX_FINANCE?.load('money');
     if (sectionId === 'section-34') { syncRequestsStateFromInputs(); fetchRequests(); markRequestsSeen(); }
     if (sectionId === 'section-23') { syncRequests23StateFromInputs(); fetchRequests23(); markRequestsSeen(); }

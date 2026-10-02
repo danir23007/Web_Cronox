@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import type { FinanceQuery } from './admin-finance.controller';
-import { calculateFinance, madridMidnight, nextDate, sortProducts, validateRange } from './financial-calculations';
+import { calculateFinance, FinanceEvent, FinanceOrder, sortProducts, validateRange } from './financial-calculations';
 
 @Injectable()
 export class AdminFinanceService {
@@ -10,28 +10,54 @@ export class AdminFinanceService {
 
   async getReport(query: FinanceQuery) {
     validateRange(query.from, query.to);
-    const end = madridMidnight(nextDate(query.to));
-    // One consistent database snapshot; never aggregate a page of the Orders UI.
-    // Read historical events too, to calculate deltas of cumulative refunds.
-    const { orders, events, currencies } = await this.prisma.$transaction(async tx => {
-      const orders = await tx.order.findMany({
-        where: { currency: query.currency, OR: [{ createdAt: { lt: end } }, { purchasedAt: { lt: end } }, { paidAt: { lt: end } }] },
-        select: {
-          id: true, status: true, currency: true, providerRef: true, source: true,
-          paidAt: true, purchasedAt: true, createdAt: true, voidedAt: true,
-          total: true, shippingCost: true, discountCents: true, disputeLostCents: true,
-          items: { select: { id: true, productId: true, variantId: true, title: true, quantity: true, lineTotal: true, financialSnapshot: true } },
-          stockMovements: { where: { delta: { gt: 0 }, reason: { in: ['refund', 'manual_sale_void'] }, createdAt: { lt: end } }, select: { variantId: true, delta: true, reason: true, createdAt: true } },
-        },
-      });
-      const events = await tx.stripeWebhookEvent.findMany({
-        where: { status: 'PROCESSED', occurredAt: { lt: end }, type: { in: ['payment_intent.succeeded', 'charge.refunded', 'charge.dispute.closed'] } },
-        select: { id: true, type: true, paymentIntentId: true, occurredAt: true, lifecycleStatus: true, refundCumulativeCents: true, amountCents: true },
-      });
-      const currencies = await tx.order.findMany({ distinct: ['currency'], select: { currency: true } });
-      return { orders, events, currencies };
-    }, { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead, timeout: 30000 });
-    const result = calculateFinance(orders, events, query.from, query.to, query.aggregation);
+    // Independent archives survive operational deletes. Keyset batches bound raw
+    // memory; only period buckets and product aggregates are retained in memory.
+    const { result, currencies } = await this.prisma.$transaction(async tx => {
+      const result = calculateFinance([], [], query.from, query.to, query.aggregation);
+      const products = new Map<number, typeof result.products[number]>();
+      const warnings = new Set<string>();
+      const merge = (target: typeof result.totals, value: typeof result.totals) => {
+        for (const field of ['revenueCents', 'costCents', 'profitCents'] as const) {
+          target[field] = target[field] === null || value[field] === null ? null : target[field]! + value[field]!;
+        }
+        target.unitsSold += value.unitsSold; target.unitsReturned += value.unitsReturned;
+        if (Object.values(target).some(v => typeof v === 'number' && !Number.isSafeInteger(v))) throw new Error('El total supera la precisión admitida.');
+      };
+      let cursor = 0;
+      while (true) {
+        const batch = await tx.financeArchive.findMany({
+          where: { currency: query.currency, orderId: { gt: cursor }, paidDate: { lte: new Date(query.to) },
+            OR: [{ lastDate: { gte: new Date(query.from) } }, { uncertain: true }] },
+          orderBy: { orderId: 'asc' }, take: 200,
+        });
+        if (!batch.length) break;
+        cursor = batch[batch.length - 1].orderId;
+        const eventRows = await tx.financeEventArchive.findMany({ where: { paymentIntentId: { in: batch.flatMap(row => row.providerRef ? [row.providerRef] : []) } } });
+        const stockRows = await tx.financeStockArchive.findMany({ where: { orderId: { in: batch.map(row => row.orderId) } } });
+        const orders = batch.map(row => {
+          const order = row.snapshot as unknown as FinanceOrder;
+          for (const field of ['paidAt', 'purchasedAt', 'createdAt', 'voidedAt'] as const) if (order[field]) order[field] = new Date(order[field]!);
+          order.stockMovements = stockRows.filter(stock => stock.orderId === row.orderId).map(stock => {
+            const value = stock.snapshot as unknown as FinanceOrder['stockMovements'][number];
+            return { ...value, createdAt: new Date(value.createdAt) };
+          });
+          return order;
+        });
+        const events = eventRows.map(row => ({ ...(row.snapshot as unknown as FinanceEvent), occurredAt: row.occurredAt }));
+        const partial = calculateFinance(orders, events, query.from, query.to, query.aggregation);
+        merge(result.totals, partial.totals);
+        partial.buckets.forEach((bucket, i) => merge(result.buckets[i], bucket));
+        for (const product of partial.products) {
+          if (products.has(product.productId)) merge(products.get(product.productId)!, product);
+          else products.set(product.productId, product);
+        }
+        partial.warnings.forEach(warning => warnings.add(warning));
+        result.recentOrders = [...result.recentOrders, ...partial.recentOrders].sort((a, b) => b.paidAt.getTime() - a.paidAt.getTime() || b.id - a.id).slice(0, 5);
+      }
+      result.products = [...products.values()]; result.warnings = [...warnings];
+      const currencies = await tx.financeArchive.findMany({ distinct: ['currency'], select: { currency: true } });
+      return { result, currencies };
+    }, { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead, timeout: 60000 });
     const search = query.search.trim().toLocaleLowerCase('es');
     const filtered = result.products.filter(product => !search || product.name.toLocaleLowerCase('es').includes(search) || String(product.productId) === search);
     const sorted = sortProducts(filtered, query.sort, query.direction);

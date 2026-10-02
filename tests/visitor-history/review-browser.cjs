@@ -1,0 +1,106 @@
+/* Real Nest/PostgreSQL browser checks; run review-permanent-history.cjs --serve first. */
+'use strict';
+const { chromium, expect } = require('@playwright/test');
+const fs = require('node:fs/promises');
+const path = require('node:path');
+(async () => {
+  const base = 'http://127.0.0.1:43120', browser = await chromium.launch({headless:true});
+  const context = await browser.newContext({viewport:{width:1440,height:1000}});
+  await context.addInitScript(() => { window.__CRONOX_API_BASE__ = location.origin; });
+  const page = await context.newPage(), errors = [], visits = [];
+  page.on('pageerror', error => errors.push(error.message));
+  context.on('request', request => { if (new URL(request.url()).pathname === '/api/analytics/visits' && request.method() === 'POST') visits.push(request.postDataJSON()); });
+  const out = path.resolve('output/playwright'); await fs.mkdir(out,{recursive:true});
+  const report = () => page.evaluate(async () => {
+    const day = new Intl.DateTimeFormat('en-CA',{timeZone:'Europe/Madrid',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
+    return (await fetch(`/api/admin/visitors?from=${day}&to=${day}`,{credentials:'include'})).json();
+  });
+  try {
+    await page.goto(base+'/__review/admin');
+    await expect(page.locator('.visitor-chart')).toBeVisible();
+    const baseline = await report();
+    const hadAdmin = await page.evaluate(async () => (await (await fetch('/api/admin/visitors/day?day='+new Intl.DateTimeFormat('en-CA',{timeZone:'Europe/Madrid',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date())+'&search=admin-finance')).json()).pagination.total > 0);
+    await page.reload(); await expect(page.locator('.visitor-chart')).toBeVisible();
+    expect((await report()).buckets).toEqual(baseline.buckets);
+    expect(visits).toHaveLength(0); // Panel-only navigation never generates facts.
+    const root = page.locator('#dashboardVisitors');
+    await expect(root.getByText('Sin datos',{exact:true}).first()).toBeVisible();
+    await root.locator('[data-day]').last().click();
+    await expect(root.locator('.visitor-results tbody tr')).toHaveCount(25);
+    await root.locator('[data-category]').selectOption('anonymous');
+    await expect(root.locator('.visitor-results')).toContainText(`${baseline.buckets[0].anonymous} registros`);
+    await root.locator('[data-page="2"]').click();
+    await expect(root.locator('.visitor-results tbody tr')).toHaveCount(Math.min(25,baseline.buckets[0].anonymous-25));
+    await root.locator('[data-category]').selectOption('all');
+    await root.locator('[data-search]').fill('customer-finance');
+    await expect(root.locator('.visitor-results tbody tr')).toHaveCount(1);
+    await expect(root.locator('[data-search]')).toBeFocused();
+    await root.locator('[data-search]').fill('');
+    await expect(root.locator('.visitor-results tbody tr')).toHaveCount(25);
+    await page.screenshot({path:path.join(out,'visitors-desktop.png'),fullPage:true});
+    await page.setViewportSize({width:390,height:844});
+    await page.reload(); await expect(root.locator('.visitor-chart')).toBeVisible();
+    await root.locator('[data-day]').last().click();
+    await expect(root.locator('.visitor-results tbody tr')).toHaveCount(25);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    await page.screenshot({path:path.join(out,'visitors-mobile.png'),fullPage:true});
+    await root.locator('[data-close]').click();
+    await expect(root.locator('[data-day]').last()).toBeFocused();
+    await root.locator('[data-previous]').click();
+    await expect(root.locator('.visitor-content')).toContainText('Sin datos');
+    await root.locator('[data-today]').click();
+    await expect(root.locator('.visitor-chart')).toBeVisible();
+    // Persistent existing session + consent: no new login required.
+    await page.goto(base+'/index.html');
+    await page.waitForFunction(() => Boolean(window.CRONOX_COOKIE_CONSENT && window.CRONOX_API));
+    await page.evaluate(() => window.CRONOX_COOKIE_CONSENT.acceptAll());
+    await expect.poll(() => visits.length).toBe(1);
+    const publicBody = visits[0];
+    expect(publicBody.expectedCategory).toBe('authenticated'); expect(publicBody.userId).toBeUndefined();
+    await page.reload();
+    await expect.poll(() => visits.length).toBe(2);
+    const second = await context.newPage();
+    await second.goto(base+'/index.html');
+    await expect.poll(() => visits.length).toBe(3);
+    expect(visits.every(body => body.browserId === publicBody.browserId)).toBe(true);
+    await page.goto(base+'/admin.html'); await expect(root.locator('.visitor-chart')).toBeVisible();
+    expect((await report()).buckets[0].authenticated).toBe(baseline.buckets[0].authenticated+(hadAdmin ? 0 : 1));
+    await second.close();
+    // Guest consenting browser: reloads/tabs share ID and daily row.
+    const guest = await browser.newContext({viewport:{width:390,height:844}});
+    await guest.addInitScript(() => { window.__CRONOX_API_BASE__ = location.origin; });
+    const guestPage = await guest.newPage();
+    let guestPosts = 0; const guestBodies = [];
+    guest.on('request', request => { if (request.method() === 'POST' && new URL(request.url()).pathname === '/api/analytics/visits') { guestPosts++; guestBodies.push(request.postDataJSON()); } });
+    await guest.addCookies([{name:'cronox_cookie_consent',value:encodeURIComponent(JSON.stringify({consentVersion:'2',analytics:true,necessary:true,preferences:false,marketing:false,timestamp:new Date().toISOString()})),url:base}]);
+    const guestTab = await guest.newPage();
+    await Promise.all([guestPage.goto(base+'/index.html'),guestTab.goto(base+'/index.html')]);
+    await expect.poll(() => guestPosts).toBe(2);
+    expect(guestBodies[0].browserId).toBe(guestBodies[1].browserId);
+    await guestTab.close();
+    await guestPage.reload(); await expect.poll(() => guestPosts).toBe(3);
+    expect((await report()).buckets[0].anonymous).toBe(baseline.buckets[0].anonymous+1);
+    const noWrapperVisit = guestPage.waitForResponse(response => new URL(response.url()).pathname === '/api/analytics/visits' && response.request().method() === 'POST');
+    await guestPage.goto(base+'/newsletter-access.html');
+    expect((await noWrapperVisit).status()).toBe(202);
+    expect(await guestPage.evaluate(() => typeof window.CRONOX_API)).toBe('undefined');
+    expect(guestPosts).toBe(4);
+    await guestPage.evaluate(() => window.CRONOX_COOKIE_CONSENT.rejectAll());
+    expect(await guestPage.evaluate(() => localStorage.getItem('cronox_visitor_browser'))).toBeNull();
+    await guestPage.reload(); expect(guestPosts).toBe(4);
+    await guest.close();
+    const failed = await browser.newContext();
+    await failed.addCookies([{name:'cronox_cookie_consent',value:encodeURIComponent(JSON.stringify({consentVersion:'2',analytics:true,necessary:true,timestamp:new Date().toISOString()})),url:base}]);
+    await failed.route('**/api/analytics/visits/session',route => route.fulfill({status:503,contentType:'application/json',body:'{}'}));
+    let failedPosts = 0;
+    failed.on('request',request => { if (new URL(request.url()).pathname === '/api/analytics/visits') failedPosts++; });
+    const failedPage = await failed.newPage();
+    const unresolved = failedPage.waitForResponse(response => new URL(response.url()).pathname === '/api/analytics/visits/session');
+    await failedPage.goto(base+'/index.html'); await unresolved;
+    await expect(failedPage.locator('body')).toBeVisible();
+    expect(failedPosts).toBe(0); // A failed auth resolution cannot manufacture an anonymous visit.
+    await failed.close();
+    expect(errors).toEqual([]);
+    console.log('PASS: real desktop/mobile visitor bars/detail/pagination/search/focus/date navigation; no panel-only visits; persistent public session/guest reloads and tabs; consent withdrawal; no page errors.');
+  } finally { await browser.close(); }
+})().catch(error => { console.error(error); process.exitCode = 1; });
