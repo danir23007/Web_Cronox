@@ -91,8 +91,9 @@ class DraftDto {
   @IsUUID() mailboxId: string;
   @IsOptional() @IsUUID() messageId?: string;
   @IsOptional()
-  @IsIn(['reply', 'replyAll', 'forward', 'circles'])
+  @IsIn(['reply', 'forward', 'circles'])
   mode?: string;
+  @IsOptional() @IsString() @MaxLength(254) replyRecipient?: string;
 }
 class SaveDraftDto {
   @IsOptional() @IsUUID() mailboxId?: string;

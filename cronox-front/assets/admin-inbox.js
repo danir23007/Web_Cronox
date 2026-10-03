@@ -60,7 +60,13 @@
     MAILBOX_WORKER_DISABLED:
       "La sincronización está desactivada en este entorno.",
     MAILBOX_SENDING_DISABLED: "Los envíos están desactivados en este entorno.",
-    MAILBOX_BUSY: "El buzón está ocupado. Reintenta dentro de unos segundos.",
+    MAILBOX_BUSY: "No se ha liberado el buzón en 30 segundos. Puedes reintentar.",
+    MAILBOX_CONTENT_DOWNLOAD_FAILED: "El proveedor no devolvió el contenido solicitado.",
+    MAILBOX_CACHED_CONTENT_UNAVAILABLE: "No se pudo leer la copia privada del contenido.",
+    MAILBOX_READ_STATE_NOT_CONFIRMED: "El proveedor no confirmó el cambio de leído.",
+    MAILBOX_REPLY_CHOOSE_ONE: "Elige una única dirección para responder.",
+    MAILBOX_REPLY_SINGLE_RECIPIENT_REQUIRED: "Una respuesta admite solo un destinatario y no permite CC ni CCO.",
+    MAILBOX_REPLY_ADDRESS_UNAVAILABLE: "No hay una dirección válida para responder.",
     MAILBOX_ACCESS_DENIED: "No tienes permiso para este buzón.",
     MAILBOX_DRAFT_CHANGED_OR_QUEUED:
       "El borrador cambió o ya está en la bandeja de salida. Recarga antes de continuar.",
@@ -111,12 +117,14 @@
     saveTimer,
     savePromise = null,
     listSeq = 0,
+    readSeq = 0,
+    readController = null,
     noticeCursor = new Date().toISOString(),
     timer = null,
     initialized = false,
     loading = null;
   const seenNotices = new Set();
-  async function api(path, method = "GET", data) {
+  async function api(path, method = "GET", data, signal) {
     const headers = {};
     let body;
     if (data instanceof FormData) body = data;
@@ -128,14 +136,14 @@
       Object.assign(headers, await window.CRONOX_API.getCsrfHeaders());
     const response = await fetch(
       (window.CRONOX_API?.API_BASE || "") + "/api/admin/mailbox" + path,
-      { method, headers, body, credentials: "include", cache: "no-store" },
+      { method, headers, body, signal, credentials: "include", cache: "no-store" },
     );
     const result = await response.json().catch(() => ({}));
-    if (!response.ok)
-      throw new Error(
-        codes[result.message] ||
-          `${result.message || "No se pudo completar la operación"} (${response.status})`,
-      );
+    if (!response.ok) {
+      const error = new Error(codes[result.message] || `${result.message || "No se pudo completar la operación"} (${response.status})`);
+      error.code = result.message;
+      throw error;
+    }
     return result;
   }
   const feedback = (text, error = false) => {
@@ -154,6 +162,7 @@
   };
   const box = () => overview?.boxes.find((b) => b.id === boxId);
   const leave = async () => {
+    invalidateReader();
     if (dirty) {
       await save();
       if (dirty)
@@ -239,6 +248,13 @@
       !overview.workerEnabled || !overview.boxes.some((b) => b.active);
   }
   const displayName = b => ({ 'info@cronox.es':'Información', 'no-reply@cronox.es':'No reply', 'orders@cronox.es':'Pedidos', 'support@cronox.es':'Soporte' }[b.address.toLowerCase()] || b.name);
+  function folderLabel(f) {
+    const special = {"\\Inbox":"Bandeja de entrada", "\\Sent":"Enviados", "\\Drafts":"Borradores", "\\Trash":"Papelera", "\\Junk":"Correo no deseado"};
+    if (special[f.specialUse]) return special[f.specialUse];
+    if (f.specialUse) return f.path;
+    const name = String(f.path).replace(/^INBOX[./]/i, "").toLowerCase();
+    return ({inbox:"Bandeja de entrada",sent:"Enviados","sent items":"Enviados","sent messages":"Enviados",drafts:"Borradores",trash:"Papelera","deleted items":"Papelera","deleted messages":"Papelera",junk:"Correo no deseado",spam:"Correo no deseado","junk e-mail":"Correo no deseado"})[name] || f.path;
+  }
   function availableFolders() {
     return overview.boxes.filter(b => !boxId || b.id === boxId).flatMap(b => b.folders.map(f => ({...f, mailbox:displayName(b)})));
   }
@@ -246,7 +262,7 @@
     const folders = availableFolders();
     if (selectedFolders === null) selectedFolders = new Set(overview.boxes.flatMap(b => b.folders.filter(f => f.path === 'INBOX' || f.specialUse === '\\Inbox').map(f => f.id)));
     const host=root.querySelector('[data-folders]');
-    host.innerHTML=folders.map(f=>`<label><span><input type="checkbox" data-folder-id="${esc(f.id)}" ${selectedFolders.has(f.id)?'checked':''}> ${esc(!boxId ? f.mailbox+' · '+f.path : f.path)}${f.importBefore?' · importando':''}</span></label>`).join('') || '<p>No hay carpetas importadas.</p>';
+    host.innerHTML=folders.map(f=>`<label><span><input type="checkbox" data-folder-id="${esc(f.id)}" ${selectedFolders.has(f.id)?'checked':''}> ${esc(!boxId ? f.mailbox+' · '+folderLabel(f) : folderLabel(f))}${f.importBefore?' · importando':''}</span></label>`).join('') || '<p>No hay carpetas importadas.</p>';
     host.querySelectorAll('input').forEach(input=>input.onchange=guard(async()=>{if(input.checked)selectedFolders.add(input.dataset.folderId);else selectedFolders.delete(input.dataset.folderId);page=1;await list();}));
   }
   async function load() {
@@ -277,7 +293,12 @@
     })();
     return loading;
   }
+  function invalidateReader() {
+    readSeq++; readController?.abort(); readController = null;
+    selected = null; selectedMailboxId = null; feedback("");
+  }
   function show(view) {
+    if (view !== "read") invalidateReader();
     root.dataset.view = view;
     for (const v of ["reader", "editor", "settings", "devices"])
       root.querySelector(".mail-" + v).hidden = !(
@@ -312,7 +333,7 @@
         ? data.messages
             .map(
               (m) =>
-                `<button class="mail-message ${m.seen ? "" : "unread"}" data-message="${esc(m.id)}" ${selected === m.id ? 'aria-current="true"' : ""}><span>${esc(m.sender || "Sin remitente")}</span><strong>${esc(m.subject)}</strong><small>${esc(m.preview || "Contenido pendiente de descargar")}${m.hasAttachments ? " · Adjuntos" : ""}</small><small>${esc(overview.boxes.find((b) => b.id === m.mailboxId)?.name || "Buzón")}</small><time>${esc(date(m.date))}</time></button>`,
+                `<button class="mail-message ${m.seen ? "" : "unread"}" data-message="${esc(m.id)}" ${selected === m.id ? 'aria-current="true"' : ""}><span>${esc(m.sender || "Sin remitente")}</span><strong>${esc(m.subject)}</strong><small>${esc(m.preview || (m.bodyState === "LOADED" ? "Sin texto de vista previa" : m.bodyState === "FAILED" ? "Ha fallado la descarga. Abre el mensaje para reintentar." : "Contenido pendiente de descargar"))}${m.hasAttachments ? " · Adjuntos" : ""}</small><small>${esc(overview.boxes.find((b) => b.id === m.mailboxId)?.name || "Buzón")}</small><time>${esc(date(m.date))}</time></button>`,
             )
             .join("")
         : "<p>No hay mensajes sincronizados para estos filtros. Revisa el estado de conexión y el progreso del buzón.</p>";
@@ -353,10 +374,17 @@
     await leave();
     show("read");
     selected = id;
+    selectedMailboxId = null;
+    const seq = ++readSeq;
+    readController = new AbortController();
+    const current = () => seq === readSeq && selected === id && root.dataset.view === "read";
+    feedback("");
     const host = root.querySelector(".mail-reader");
-    host.innerHTML = "<p>Cargando contenido sin imágenes externas…</p>";
+    host.innerHTML = '<button class="btn" data-back>← Volver</button><p role="status" aria-busy="true">Descargando contenido sin imágenes externas… Si el buzón está sincronizando, esperamos un turno disponible (hasta 30 segundos).</p>';
+    host.querySelector('[data-back]').onclick = () => show('list');
     try {
-      const m = await api("/messages/" + id);
+      const m = await api("/messages/" + id, "GET", undefined, readController.signal);
+      if (!current()) return;
       selectedMailboxId = m.mailboxId;
       const b = overview.boxes.find((b) => b.id === m.mailboxId),
         env = m.envelope || {};
@@ -367,7 +395,7 @@
               (x.name ? x.name + " <" : "") + x.address + (x.name ? ">" : ""),
           )
           .join(", ");
-      host.innerHTML = `<button class="btn mail-back" data-back>← Volver a la lista</button><h3>${esc(m.subject)}</h3><dl><dt>Buzón</dt><dd>${esc(b?.address)}</dd><dt>De</dt><dd>${esc(joined(env.from))}</dd><dt>Para</dt><dd>${esc(joined(env.to))}</dd><dt>CC</dt><dd>${esc(joined(env.cc) || "—")}</dd>${env.replyTo?.length ? `<dt>Responder a (Reply-To)</dt><dd>${esc(joined(env.replyTo))}</dd>` : ""}<dt>Fecha</dt><dd>${esc(date(m.date))}</dd></dl><div class="mail-actions">${b?.canSend ? '<button class="btn" data-reply="reply">Responder</button><button class="btn" data-reply="replyAll">Responder a todos</button><button class="btn" data-reply="forward">Reenviar</button>' : ""}<button class="btn" data-unread>Marcar no leído</button>${b?.canSend ? '<button class="btn" data-trash>Mover a papelera</button><button class="btn" data-restore>Restaurar a Entrada</button>' : ""}</div><p class="mail-muted">Imágenes remotas bloqueadas. Cargarlas puede revelar tu IP y la apertura al remitente.</p><button class="btn" data-images>Cargar imágenes externas</button><iframe title="Contenido aislado del mensaje" sandbox="allow-popups allow-popups-to-escape-sandbox" referrerpolicy="no-referrer"></iframe><div class="mail-files">${m.files.map((f) => `<a data-file="${esc(f.id)}" href="#">Descargar ${esc(f.name)} (${Math.ceil(f.size / 1024)} KB)</a>`).join("")}</div><p><a target="_blank" rel="noopener noreferrer" href="${b?.provider === "titan" ? "https://app.titan.email" : "https://mail.hostinger.com"}">Abrir el buzón original en Hostinger</a></p>`;
+      host.innerHTML = `<button class="btn mail-back" data-back>← Volver a la lista</button><h3>${esc(m.subject)}</h3><dl><dt>Buzón</dt><dd>${esc(b?.address)}</dd><dt>De</dt><dd>${esc(joined(env.from))}</dd><dt>Para</dt><dd>${esc(joined(env.to))}</dd><dt>CC</dt><dd>${esc(joined(env.cc) || "—")}</dd>${env.replyTo?.length ? `<dt>Responder a (Reply-To)</dt><dd>${esc(joined(env.replyTo))}</dd>` : ""}<dt>Fecha</dt><dd>${esc(date(m.date))}</dd></dl><div class="mail-actions">${b?.canSend ? '<button class="btn" data-reply="reply">Responder</button><button class="btn" data-reply="forward">Reenviar</button>' : ""}<button class="btn" data-unread>Marcar como no leído</button>${b?.canSend ? '<button class="btn" data-trash>Mover a papelera</button>' : ""}</div>${m.replyChoices?.length > 1 ? `<label>Elige una única dirección para responder<select data-reply-choice><option value="">Selecciona una dirección</option>${m.replyChoices.map(address=>`<option value="${esc(address)}">${esc(address)}</option>`).join("")}</select></label>` : ""}<p data-read-state role="status"></p><p class="mail-muted">Imágenes remotas bloqueadas. Cargarlas puede revelar tu IP y la apertura al remitente.</p><button class="btn" data-images>Cargar imágenes externas</button><iframe title="Contenido aislado del mensaje" sandbox="allow-popups allow-popups-to-escape-sandbox" referrerpolicy="no-referrer"></iframe><div class="mail-files">${m.files.map((f) => `<a data-file="${esc(f.id)}" href="#">Descargar ${esc(f.name)} (${Math.ceil(f.size / 1024)} KB)</a>`).join("")}</div><p><a target="_blank" rel="noopener noreferrer" href="${b?.provider === "titan" ? "https://app.titan.email" : "https://mail.hostinger.com"}">Abrir el buzón original en Hostinger</a></p>`;
       const doc = (remote) =>
         `<!doctype html><html><head><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src ${remote ? "https:" : "'none'"}; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'"><meta name="referrer" content="no-referrer"><style>body{font:16px/1.5 system-ui;overflow-wrap:anywhere;margin:12px}img{max-width:100%;height:auto}pre{white-space:pre-wrap}table{max-width:100%}</style></head><body>${m.body.html || "<pre>" + esc(m.body.text) + "</pre>"}</body></html>`;
       host.querySelector("iframe").srcdoc = doc(false);
@@ -387,59 +415,63 @@
         .querySelectorAll("[data-reply]")
         .forEach(
           (button) =>
-            (button.onclick = guard(() =>
-              compose(m.mailboxId, m.id, button.dataset.reply),
-            )),
+            (button.onclick = guard(() => {
+              if (!current()) return;
+              const chosen = host.querySelector('[data-reply-choice]')?.value;
+              if (button.dataset.reply === 'reply' && m.replyChoices?.length > 1 && !chosen)
+                throw Error("Elige una única dirección para responder.");
+              return compose(m.mailboxId, m.id, button.dataset.reply, chosen);
+            })),
         );
-      host.querySelector("[data-unread]").onclick = guard(async () => {
-        await api("/messages/" + id + "/action", "POST", {
-          operation: "unread",
-        });
-        feedback("Marcado no leído y sincronizado con el proveedor.");
-        await list();
-      });
-      for (const operation of ["trash", "restore"])
-        host.querySelector("[data-" + operation + "]")?.addEventListener(
-          "click",
-          guard(async () => {
-            await api("/messages/" + id + "/action", "POST", { operation });
-            show("list");
-            selected = null;
-            await list();
-            feedback(
-              operation === "trash"
-                ? "Movido a papelera."
-                : "Restaurado a Entrada.",
-            );
-          }),
-        );
+      const readerNotice = (text, failure = false) => {
+        if (!current()) return;
+        const notice = host.querySelector('[data-read-state]');
+        notice.className = failure ? 'mail-error' : 'mail-muted'; notice.textContent = text;
+      };
+      let actionPending = false;
+      const change = async operation => {
+        if (!current() || actionPending) return;
+        actionPending = true;
+        host.querySelectorAll('[data-unread],[data-trash]').forEach(button => button.disabled = true);
+        readerNotice(operation === 'read' ? 'Contenido disponible. Actualizando el estado de leído…' : 'Esperando al buzón y actualizando el mensaje…');
+        try {
+          await api('/messages/' + id + '/action', 'POST', {operation});
+          if (!current()) return;
+          readerNotice(operation === 'read' ? 'Estado de leído confirmado por el proveedor.' : 'Marcado como no leído y confirmado por el proveedor.');
+          host.querySelector('[data-retry-read]')?.remove();
+          if (operation === 'trash') { show('list'); await list(); feedback('Movido a papelera.'); }
+          else await list();
+        } catch (error) {
+          if (!current()) return;
+          readerNotice((operation === 'read' ? 'Contenido disponible. No se ha confirmado el estado de leído: ' : 'No se ha confirmado la acción: ') + error.message, true);
+          if (operation === 'read' && !host.querySelector('[data-retry-read]')) {
+            const retry = document.createElement('button'); retry.className = 'btn'; retry.dataset.retryRead = ''; retry.textContent = 'Reintentar marcar leído';
+            host.querySelector('[data-read-state]').after(retry); retry.onclick = () => void change('read');
+          }
+          await list();
+        } finally {
+          actionPending = false;
+          if (current()) host.querySelectorAll('[data-unread],[data-trash]').forEach(button => button.disabled = !b?.active);
+        }
+      };
+      host.querySelector('[data-unread]').onclick = () => void change('unread');
+      host.querySelector('[data-trash]')?.addEventListener('click', () => void change('trash'));
       host.querySelectorAll("[data-file]").forEach(
         (link) =>
-          (link.onclick = guard(async (e) => {
+          (link.onclick = async (e) => {
             e.preventDefault();
-            await download(link.dataset.file);
-          })),
+            try { await download(link.dataset.file); }
+            catch (error) { if (current()) readerNotice(error.message, true); }
+          }),
       );
-      if (!m.seen && b?.active) {
-        try {
-          await api("/messages/" + id + "/action", "POST", {
-            operation: "read",
-          });
-        } catch (error) {
-          if (/permiso|sesión|ya no está disponible/.test(error.message))
-            throw error;
-          feedback(
-            "Contenido disponible. No se pudo marcar leído en el proveedor: " +
-              error.message,
-            true,
-          );
-        }
-      }
-      await list();
+      if (!m.seen && b?.active) await change('read');
+      else await list();
     } catch (e) {
-      host.innerHTML = `<button class="btn" data-back>← Volver</button><p class="mail-error">${esc(e.message)}</p><button class="btn" data-retry-body>Reintentar</button><p><a href="https://mail.hostinger.com" target="_blank" rel="noopener noreferrer">Consultar original en Hostinger</a></p>`;
-      host.querySelector("[data-back]").onclick = () => show("list");
-      host.querySelector("[data-retry-body]").onclick = guard(() => read(id));
+      if (!current() || e.name === 'AbortError') return;
+      const gone = ['MAILBOX_MESSAGE_UNAVAILABLE','MAILBOX_MESSAGE_NOT_FOUND','MAILBOX_UIDVALIDITY_CHANGED'].includes(e.code);
+      host.innerHTML = `<button class="btn" data-back>← Volver</button><p class="mail-error">${gone ? 'El mensaje ya no está disponible en su ubicación original.' : 'Ha fallado la descarga del contenido: ' + esc(e.message)}</p>${gone ? '' : '<button class="btn" data-retry-body>Reintentar descarga</button>'}<p><a href="https://mail.hostinger.com" target="_blank" rel="noopener noreferrer">Consultar original en Hostinger</a></p>`;
+      host.querySelector('[data-back]').onclick = () => show('list');
+      host.querySelector('[data-retry-body]')?.addEventListener('click', guard(() => read(id)));
     }
   }
   async function download(id) {
@@ -462,14 +494,17 @@
     a.click();
     setTimeout(() => URL.revokeObjectURL(url), 30000);
   }
-  async function compose(id = boxId, messageId, mode) {
+  async function compose(id = boxId, messageId, mode, replyRecipient) {
     await leave();
+    const seq = readSeq;
     const chosen = id || overview.boxes.find((b) => b.canSend)?.id;
     if (!chosen) throw Error("No tienes permiso de envío en ningún buzón.");
-    draft = await api("/drafts", "POST", {
+    const created = await api("/drafts", "POST", {
       mailboxId: chosen,
-      ...(messageId ? { messageId, mode } : { mode:"circles" }),
+      ...(messageId ? { messageId, mode, ...(replyRecipient ? {replyRecipient} : {}) } : { mode:"circles" }),
     });
+    if (seq !== readSeq) return;
+    draft = created;
     await renderComposer();
   }
   const recoveryKey = () => `cronox-mail-draft:${draft?.id}`;
@@ -496,13 +531,14 @@
     dirty = false;
     editVersion = 0;
     const composerDraftId=draft.id;
+    host.innerHTML = '<p role="status" aria-busy="true">Cargando borrador…</p>';
     const templates = await api('/boxes/'+draft.mailboxId+'/templates');
     if(draft?.id!==composerDraftId)return;
     const campaign = draft.campaigns?.[0];
     host.innerHTML = `<button class="btn mail-back" data-back>← Volver</button><h3>${locked ? "Bandeja de salida" : "Borrador"}</h3>
       <label>Plantilla<select name="templateId" form="mailComposerForm" ${locked?'disabled':''}><option value="">Sin plantilla</option>${templates.map(t=>`<option value="${esc(t.id)}" ${draft.templateId===t.id?'selected':''}>${esc(t.folder.name+' · '+t.name)}</option>`).join('')}</select></label>
       <form id="mailComposerForm"><label>Remitente${draft.mode==='circles'?`<select name="mailboxId" ${locked || draft.files.length?'disabled':''} title="Retira los adjuntos antes de cambiar el remitente">${overview.boxes.filter(x=>x.canSend).map(x=>`<option value="${esc(x.id)}" ${x.id===draft.mailboxId?'selected':''}>${esc(displayName(x)+' · '+x.address)}</option>`).join('')}</select>`:`<strong>${esc(b?.fromName)} &lt;${esc(b?.address)}&gt;</strong>`}</label>
-      ${draft.mode==='circles'?`<fieldset><legend>Círculos · comunicación a suscriptores</legend>${[1,2,3,4,5].map(c=>`<label><span><input type="checkbox" data-circle value="${c}" ${draft.circles?.includes(c)?'checked':''} ${locked?'disabled':''}> Círculo ${c}</span></label>`).join('')}<p>Solo destinatarios únicos con suscripción activa. La pertenencia a un círculo no concede permiso publicitario. Exclusivamente CCO.</p><button class="btn" type="button" data-recipient-preview>Revisar destinatarios</button><p data-recipient-summary role="status"></p></fieldset>`:`<div class="mail-addresses"><label>Para<input name="to" value="${esc(draft.to)}" ${locked?'disabled':''}></label><label>CC<input name="cc" value="${esc(draft.cc)}" ${locked?'disabled':''}></label></div><label>CCO<input name="bcc" value="${esc(draft.bcc)}" ${locked?'disabled':''}></label>`}
+      ${draft.mode==='circles'?`<fieldset><legend>Círculos · comunicación a suscriptores</legend>${[1,2,3,4,5].map(c=>`<label><span><input type="checkbox" data-circle value="${c}" ${draft.circles?.includes(c)?'checked':''} ${locked?'disabled':''}> Círculo ${c}</span></label>`).join('')}<p>Solo destinatarios únicos con suscripción activa. La pertenencia a un círculo no concede permiso publicitario. Exclusivamente CCO.</p><button class="btn" type="button" data-recipient-preview>Revisar destinatarios</button><p data-recipient-summary role="status"></p></fieldset>`:`<div class="mail-addresses"><label>Para${draft.singleReply ? " · una única dirección" : ""}<input name="to" value="${esc(draft.to)}" ${locked?'disabled':''}></label>${draft.singleReply ? "" : `<label>CC<input name="cc" value="${esc(draft.cc)}" ${locked?'disabled':''}></label>`}</div>${draft.singleReply ? "" : `<label>CCO<input name="bcc" value="${esc(draft.bcc)}" ${locked?'disabled':''}></label>`}` }
       <label>Asunto<input name="subject" value="${esc(draft.subject)}" maxlength="500" ${locked?'disabled':''}></label>
       <label>Versión de texto del mensaje<textarea name="text" ${locked?'disabled':''}>${esc(draft.text)}</textarea></label>
       <p>Puedes editar el diseño del mensaje y revisar su versión de texto. Los cambios se guardan en este borrador.</p>${!locked?'<button class="btn" type="button" data-edit-design>Editar diseño</button><iframe data-design-editor title="Editar diseño del borrador" sandbox="allow-same-origin" referrerpolicy="no-referrer" hidden></iframe>':''}<details><summary>Edición avanzada del HTML</summary><label>HTML<textarea name="html" ${locked?'disabled':''}>${esc(draft.html||'')}</textarea></label><p>El texto y HTML son versiones independientes. Si editas una, revisa también la otra.</p></details>
@@ -899,7 +935,7 @@
           "Comprobando conexión, TLS y autenticación…";
         const result = await api("/boxes/" + b.id + "/test", "POST");
         host.querySelector("[data-test-result]").textContent =
-          `IMAP: ${result.imap === "TLS_AUTH_OK" ? "TLS y autenticación correctos" : codes[result.imap] || result.imap}. SMTP: ${result.smtp === "TLS_AUTH_OK" ? "TLS y autenticación correctos" : codes[result.smtp] || result.smtp}.${result.errorCode ? " " + (codes[result.errorCode] || result.errorCode) : ""}${result.folders ? " Carpetas: " + result.folders.map((f) => f.path).join(", ") : ""}`;
+          `IMAP: ${result.imap === "TLS_AUTH_OK" ? "TLS y autenticación correctos" : codes[result.imap] || result.imap}. SMTP: ${result.smtp === "TLS_AUTH_OK" ? "TLS y autenticación correctos" : codes[result.smtp] || result.smtp}.${result.errorCode ? " " + (codes[result.errorCode] || result.errorCode) : ""}${result.folders ? " Carpetas: " + result.folders.map(folderLabel).join(", ") : ""}`;
       }),
     );
     host.querySelector("[data-back]").onclick = () => show("list");
@@ -940,6 +976,7 @@
     await window.CRONOX_PUSH?.load();
   }
   async function pulse() {
+    const pulseSeq = readSeq;
     if (!initialized || !overview || document.visibilityState !== "visible")
       return;
     try {
@@ -998,7 +1035,8 @@
       }
       if (seenNotices.size > 200) seenNotices.clear();
     } catch (e) {
-      if (/permiso|sesión|ya no está disponible/.test(e.message)) {
+      if (pulseSeq !== readSeq) return;
+      if (/permiso|sesión/.test(e.message)) {
         root.querySelector(".mail-reader")?.replaceChildren();
         root.querySelector(".mail-editor")?.replaceChildren();
         dirty = false;

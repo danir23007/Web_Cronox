@@ -167,26 +167,49 @@ export function addresses(value: string, allowEmpty = true): string[] {
     throw new BadRequestException('INVALID_RECIPIENT');
   return [...new Set(entries.map((v) => v.toLowerCase()))];
 }
+// A reply is deliberately independent of campaign recipients and original To/CC.
+export function replyChoices(envelope: any): string[] {
+  const valid = (items: any) => [
+    ...new Set<string>(
+      (Array.isArray(items) ? items : []).flatMap((x) => {
+        try {
+          const values = addresses(x?.address || '', false);
+          return values.length === 1 ? values : [];
+        } catch {
+          return [];
+        }
+      }),
+    ),
+  ];
+  const replyTo = valid(envelope?.replyTo);
+  return replyTo.length ? replyTo : valid(envelope?.from);
+}
 export function replyRecipients(
   envelope: any,
-  ownAddress: string,
-  all: boolean,
+  _ownAddress: string,
+  all = false,
+  chosen?: string,
 ) {
-  const normalize = (list: any[]) =>
-    (list || []).map((x) => x.address?.toLowerCase()).filter(Boolean);
-  const to = normalize(
-      envelope.replyTo?.length ? envelope.replyTo : envelope.from,
-    ),
-    self = ownAddress.toLowerCase();
-  const recipients = [
-    ...new Set([...to, ...(all ? normalize(envelope.to) : [])]),
-  ].filter((x) => x !== self);
-  const cc = all
-    ? [...new Set(normalize(envelope.cc))].filter(
-        (x) => x !== self && !recipients.includes(x),
-      )
-    : [];
-  return { to: recipients.join(', '), cc: cc.join(', ') };
+  if (all)
+    throw new BadRequestException('MAILBOX_REPLY_SINGLE_RECIPIENT_REQUIRED');
+  const choices = replyChoices(envelope);
+  const selection =
+    chosen === undefined
+      ? choices.length === 1
+        ? choices[0]
+        : undefined
+      : addresses(chosen, false)[0];
+  if (
+    !selection ||
+    (chosen !== undefined && addresses(chosen, false).length !== 1) ||
+    !choices.includes(selection)
+  )
+    throw new BadRequestException(
+      choices.length > 1
+        ? 'MAILBOX_REPLY_CHOOSE_ONE'
+        : 'MAILBOX_REPLY_ADDRESS_UNAVAILABLE',
+    );
+  return { to: selection, cc: '', bcc: '' };
 }
 export function safeHtml(html: string, remote = false) {
   return sanitizeHtml(html, {

@@ -9,6 +9,7 @@ import { MailboxCampaignService } from './mailbox-campaign.service';
 import { AdminEventPushService } from './admin-event-push.service';
 @Injectable()
 export class MailboxWorkerService implements OnModuleInit, OnModuleDestroy {
+  private readonly cacheRetry = new Map<string, number>();
   private timer?: ReturnType<typeof setInterval>;
   private running = false;
   private stopped = false;
@@ -68,12 +69,15 @@ export class MailboxWorkerService implements OnModuleInit, OnModuleDestroy {
         canCache = true;
       } catch {}
       if (canCache) {
+        for (const [id, until] of this.cacheRetry)
+          if (until <= Date.now()) this.cacheRetry.delete(id);
         for (const box of boxes) {
           const message = await this.db.mailboxMessage.findFirst({
             where: {
               mailboxId: box.id,
               alive: true,
-              bodyState: 'NOT_LOADED',
+              bodyState: { in: ['NOT_LOADED', 'FAILED'] },
+              id: { notIn: [...this.cacheRetry.keys()] },
               size: { lt: 1024 * 1024 },
               folder: { available: true },
             },
@@ -81,7 +85,9 @@ export class MailboxWorkerService implements OnModuleInit, OnModuleDestroy {
             select: { id: true },
           });
           if (message)
-            await this.reader.cacheSystem(message.id).catch(() => {});
+            await this.reader.cacheSystem(message.id).catch(() => {
+              this.cacheRetry.set(message.id, Date.now() + 15 * 60000);
+            });
         }
       }
       if (this.push.config().configured) {

@@ -12,6 +12,8 @@ import {
   maxAttachmentBytes,
   safeFilename,
   safeHtml,
+  replyChoices,
+  safeError,
 } from './mailbox-security';
 
 @Injectable()
@@ -25,174 +27,242 @@ export class MailboxReaderService {
   ) {}
   // Internal worker cache only: no user/session is created, no seen flag is changed.
   cacheSystem(id: string) {
-    return this.body({ id: 0, role: 'SUPERADMIN' }, id);
+    return this.body({ id: 0, role: 'SUPERADMIN' }, id, false);
   }
-  async body(actor: MailActor, id: string) {
+  async body(actor: MailActor, id: string, interactive = true, repair = true) {
     const msg = await this.access.message(actor, id);
     if (!msg.bodyKey && !msg.mailbox.active)
       throw new BadRequestException('MAILBOX_INACTIVE_CACHED_ONLY');
-    if (!msg.bodyKey)
-      await this.leases.run(msg.mailboxId, async (token, assert) => {
-        const current = await this.access.message(actor, id);
-        if (current.bodyKey) return;
-        const client = await this.provider.imap(current.mailbox);
-        const created: {
-          key: string;
-          size: number;
-          name: string;
-          mimeType: string;
-        }[] = [];
-        let bodyKey: string | undefined;
-        try {
-          await assert();
-          await this.access.box(actor, current.mailboxId);
-          const lock = await client.getMailboxLock(current.folder.path, {
-            readOnly: true,
-          });
-          try {
-            if (
-              String((client.mailbox as any).uidValidity) !==
-              current.uidValidity
-            )
-              throw new BadRequestException('MAILBOX_UIDVALIDITY_CHANGED');
-            const metadata = await client.fetchOne(
-              String(current.uid),
-              { headers: true, bodyStructure: true },
-              { uid: true },
-            );
-            if (!metadata)
-              throw new BadRequestException('MAILBOX_MESSAGE_UNAVAILABLE');
-            if ((metadata.headers?.length || 0) > 256000)
-              throw new BadRequestException('MAILBOX_HEADERS_TOO_LARGE');
-            const headers = await simpleParser(
-              metadata.headers || Buffer.alloc(0),
-            );
-            const parts: any[] = [];
-            const walk = (node: any) => {
-              if (!node) return;
-              if (
-                node.disposition === 'attachment' ||
-                node.type === 'message/rfc822'
-              ) {
-                parts.push(node);
-                return;
-              }
-              if (node.childNodes?.length) node.childNodes.forEach(walk);
-              else parts.push(node);
-            };
-            walk(metadata.bodyStructure);
-            const parsed = {
-              text: '',
-              html: '',
-              references: (Array.isArray(headers.references)
-                ? headers.references
-                : headers.references
-                  ? [headers.references]
-                  : []
-              )
-                .filter((r) => /^<[^<>\r\n]{1,200}>$/.test(r))
-                .slice(-50),
-              inReplyTo: headers.inReplyTo,
-            };
-            for (const kind of ['text/plain', 'text/html']) {
-              const part = parts.find(
-                (p) => p.type === kind && p.disposition !== 'attachment',
-              );
-              if (!part) continue;
-              const maximum = Math.min(maxMessageBytes(), 2000000);
-              if (part.size > maximum)
-                throw new BadRequestException(
-                  'MAILBOX_CONTENT_TOO_LARGE_USE_WEBMAIL',
-                );
-              const downloaded = await client.download(
-                String(current.uid),
-                part.part || '1',
-                { uid: true, maxBytes: maximum + 1 },
-              );
-              if (!downloaded.content) continue;
-              const buffer = await this.buffer(downloaded.content, maximum);
-              const charset = String(
-                part.parameters?.charset || 'utf-8',
-              ).replace(/[^\w-]/g, '');
-              const mime = await simpleParser(
-                Buffer.concat([
-                  Buffer.from(
-                    `Content-Type: ${kind}; charset=${charset}\r\n\r\n`,
-                  ),
-                  buffer,
-                ]),
-                { skipHtmlToText: true, skipTextToHtml: true },
-              );
-              if (kind === 'text/plain') parsed.text = mime.text || '';
-              else parsed.html = safeHtml(String(mime.html || ''), true);
-            }
-            const attachments = parts
-              .filter(
-                (p) =>
-                  p.disposition === 'attachment' ||
-                  !['text/plain', 'text/html'].includes(p.type),
-              )
-              .slice(0, 100)
-              .map((p) => ({
-                mailboxId: current.mailboxId,
-                messageId: id,
-                imapPart: p.part || '1',
-                name: safeFilename(
-                  p.dispositionParameters?.filename ||
-                    p.parameters?.name ||
-                    'attachment',
-                ),
-                mimeType: String(p.type || 'application/octet-stream').slice(
-                  0,
-                  100,
-                ),
-                size: Math.min(Number(p.size) || 0, 2147483647),
-              }));
-            bodyKey = (
-              await this.files.write(
-                Readable.from(JSON.stringify(parsed)),
-                maxMessageBytes(),
-              )
-            ).key;
-            await assert();
-            await this.access.box(actor, current.mailboxId);
-            await this.leases.commit(current.mailboxId, token, async (tx) => {
-              await tx.mailboxMessage.update({
-                where: { id },
-                data: {
-                  bodyKey,
-                  bodyState: 'LOADED',
-                  preview: parsed.text.replace(/\s+/g, ' ').slice(0, 180),
-                  hasAttachments: attachments.length > 0,
-                },
+    if (!msg.bodyKey) {
+      try {
+        await this.leases.run(
+          msg.mailboxId,
+          async (token, assert) => {
+            const current = await this.access.message(actor, id);
+            if (current.bodyKey) return;
+            if (!current.mailbox.active)
+              throw new BadRequestException('MAILBOX_INACTIVE_CACHED_ONLY');
+            let client:
+              | Awaited<ReturnType<MailboxProviderService['imap']>>
+              | undefined;
+            const created: {
+              key: string;
+              size: number;
+              name: string;
+              mimeType: string;
+            }[] = [];
+            let bodyKey: string | undefined;
+            try {
+              client = await this.provider.imap(current.mailbox);
+              await assert();
+              await this.access.box(actor, current.mailboxId);
+              const lock = await client.getMailboxLock(current.folder.path, {
+                readOnly: true,
               });
-              for (const file of attachments)
-                await tx.mailboxFile.create({ data: file });
-            });
-          } finally {
-            lock.release();
-          }
-        } catch (e) {
-          await Promise.all(created.map((f) => this.files.remove(f.key)));
-          if (bodyKey) await this.files.remove(bodyKey);
-          throw e;
-        } finally {
-          await client.logout().catch(() => client.close());
+              try {
+                if (
+                  String((client.mailbox as any).uidValidity) !==
+                  current.uidValidity
+                )
+                  throw new BadRequestException('MAILBOX_UIDVALIDITY_CHANGED');
+                const metadata = await client.fetchOne(
+                  String(current.uid),
+                  { headers: true, bodyStructure: true },
+                  { uid: true },
+                );
+                if (!metadata) {
+                  await this.leases.commit(current.mailboxId, token, (tx) =>
+                    tx.mailboxMessage.update({
+                      where: { id },
+                      data: { alive: false },
+                    }),
+                  );
+                  throw new BadRequestException('MAILBOX_MESSAGE_UNAVAILABLE');
+                }
+                if ((metadata.headers?.length || 0) > 256000)
+                  throw new BadRequestException('MAILBOX_HEADERS_TOO_LARGE');
+                const headers = await simpleParser(
+                  metadata.headers || Buffer.alloc(0),
+                );
+                const parts: any[] = [];
+                const walk = (node: any) => {
+                  if (!node) return;
+                  if (
+                    node.disposition === 'attachment' ||
+                    node.type === 'message/rfc822'
+                  ) {
+                    parts.push(node);
+                    return;
+                  }
+                  if (node.childNodes?.length) node.childNodes.forEach(walk);
+                  else parts.push(node);
+                };
+                walk(metadata.bodyStructure);
+                const parsed = {
+                  text: '',
+                  html: '',
+                  references: (Array.isArray(headers.references)
+                    ? headers.references
+                    : headers.references
+                      ? [headers.references]
+                      : []
+                  )
+                    .filter((r) => /^<[^<>\r\n]{1,200}>$/.test(r))
+                    .slice(-50),
+                  inReplyTo: headers.inReplyTo,
+                };
+                for (const kind of ['text/plain', 'text/html']) {
+                  const part = parts.find(
+                    (p) => p.type === kind && p.disposition !== 'attachment',
+                  );
+                  if (!part) continue;
+                  const maximum = Math.min(maxMessageBytes(), 2000000);
+                  if (part.size > maximum)
+                    throw new BadRequestException(
+                      'MAILBOX_CONTENT_TOO_LARGE_USE_WEBMAIL',
+                    );
+                  const downloaded = await client.download(
+                    String(current.uid),
+                    part.part || '1',
+                    { uid: true, maxBytes: maximum + 1 },
+                  );
+                  if (!downloaded.content)
+                    throw new BadRequestException(
+                      'MAILBOX_CONTENT_DOWNLOAD_FAILED',
+                    );
+                  const buffer = await this.buffer(downloaded.content, maximum);
+                  const charset = String(
+                    downloaded.meta?.charset || 'utf-8',
+                  ).replace(/[^\w-]/g, '');
+                  const mime = await simpleParser(
+                    Buffer.concat([
+                      Buffer.from(
+                        `Content-Type: ${kind}; charset=${charset}\r\n\r\n`,
+                      ),
+                      buffer,
+                    ]),
+                    { skipHtmlToText: true, skipTextToHtml: true },
+                  );
+                  if (kind === 'text/plain') parsed.text = mime.text || '';
+                  else parsed.html = safeHtml(String(mime.html || ''), true);
+                }
+                const attachments = parts
+                  .filter(
+                    (p) =>
+                      p.disposition === 'attachment' ||
+                      !['text/plain', 'text/html'].includes(p.type),
+                  )
+                  .slice(0, 100)
+                  .map((p) => ({
+                    mailboxId: current.mailboxId,
+                    messageId: id,
+                    imapPart: p.part || '1',
+                    name: safeFilename(
+                      p.dispositionParameters?.filename ||
+                        p.parameters?.name ||
+                        'attachment',
+                    ),
+                    mimeType: String(
+                      p.type || 'application/octet-stream',
+                    ).slice(0, 100),
+                    size: Math.min(Number(p.size) || 0, 2147483647),
+                  }));
+                bodyKey = (
+                  await this.files.write(
+                    Readable.from(JSON.stringify(parsed)),
+                    maxMessageBytes(),
+                  )
+                ).key;
+                await assert();
+                await this.access.box(actor, current.mailboxId);
+                await this.leases.commit(
+                  current.mailboxId,
+                  token,
+                  async (tx) => {
+                    await tx.mailboxMessage.update({
+                      where: { id },
+                      data: {
+                        bodyKey,
+                        bodyState: 'LOADED',
+                        preview: parsed.text.replace(/\s+/g, ' ').slice(0, 180),
+                        hasAttachments: attachments.length > 0,
+                      },
+                    });
+                    for (const file of attachments) {
+                      const existing = await tx.mailboxFile.findFirst({
+                        where: { messageId: id, imapPart: file.imapPart },
+                      });
+                      if (existing)
+                        await tx.mailboxFile.update({
+                          where: { id: existing.id },
+                          data: file,
+                        });
+                      else await tx.mailboxFile.create({ data: file });
+                    }
+                  },
+                );
+              } finally {
+                lock.release();
+              }
+            } catch (e) {
+              await Promise.all(created.map((f) => this.files.remove(f.key)));
+              if (bodyKey) await this.files.remove(bodyKey);
+              throw e;
+            } finally {
+              if (client) await client.logout().catch(() => client!.close());
+            }
+          },
+          { waitMs: interactive ? 30000 : 0 },
+        );
+      } catch (error) {
+        const code = safeError(error);
+        if (!['MAILBOX_BUSY', 'MAILBOX_LEASE_LOST'].includes(code)) {
+          await this.db.mailboxMessage.updateMany({
+            where: { id, bodyKey: null, alive: true },
+            data: { bodyState: 'FAILED' },
+          });
+          await this.access.audit(
+            actor.id ? actor : null,
+            msg.mailboxId,
+            'body-download',
+            id,
+            code,
+          );
         }
-      });
+        throw error;
+      }
+    }
     const current = await this.access.message(actor, id);
     const chunks: Buffer[] = [];
     let size = 0;
-    for await (const chunk of await this.files.read(current.bodyKey!)) {
-      size += chunk.length;
-      if (size > maxMessageBytes())
-        throw new BadRequestException('MAILBOX_CONTENT_TOO_LARGE_USE_WEBMAIL');
-      chunks.push(chunk as Buffer);
+    let body: any;
+    try {
+      for await (const chunk of await this.files.read(current.bodyKey!)) {
+        size += chunk.length;
+        if (size > maxMessageBytes())
+          throw new BadRequestException(
+            'MAILBOX_CONTENT_TOO_LARGE_USE_WEBMAIL',
+          );
+        chunks.push(chunk as Buffer);
+      }
+      body = JSON.parse(Buffer.concat(chunks).toString('utf8'));
+      if (typeof body?.text !== 'string' || typeof body?.html !== 'string')
+        throw new BadRequestException('MAILBOX_CACHED_CONTENT_UNAVAILABLE');
+    } catch (error) {
+      if (repair && (error as NodeJS.ErrnoException).code === 'ENOENT') {
+        await this.db.mailboxMessage.updateMany({
+          where: { id, bodyKey: current.bodyKey },
+          data: { bodyKey: null, bodyState: 'NOT_LOADED' },
+        });
+        return this.body(actor, id, interactive, false);
+      }
+      if (error instanceof BadRequestException) throw error;
+      throw new BadRequestException('MAILBOX_CACHED_CONTENT_UNAVAILABLE');
     }
     await this.access.box(actor, current.mailboxId);
     return {
       ...this.view(current),
-      body: JSON.parse(Buffer.concat(chunks).toString('utf8')),
+      body,
     };
   }
   async buffer(source: Readable, maximum: number) {
@@ -222,7 +292,10 @@ export class MailboxReaderService {
         throw new BadRequestException(
           'MAILBOX_ATTACHMENT_TOO_LARGE_USE_WEBMAIL',
         );
-      await this.leases.run(file.mailboxId, async (token, assert) => {
+      await this.leases.interactive(file.mailboxId, async (token, assert) => {
+        const msg = await this.access.message(actor, file.messageId!);
+        if (!msg.mailbox.active)
+          throw new BadRequestException('MAILBOX_INACTIVE_CACHED_ONLY');
         const current = await this.db.mailboxFile.findUniqueOrThrow({
           where: { id },
         });
@@ -366,6 +439,7 @@ export class MailboxReaderService {
       sender: msg.sender,
       recipients: msg.recipients,
       envelope: msg.envelope,
+      replyChoices: replyChoices(msg.envelope),
       date: msg.date,
       size: msg.size,
       seen: msg.seen,
@@ -386,11 +460,15 @@ export class MailboxReaderService {
     operation: string,
     destination?: string,
   ) {
-    const msg = await this.access.message(actor, id);
-    if (!msg.mailbox.active) throw new BadRequestException('MAILBOX_INACTIVE');
+    const initial = await this.access.message(actor, id);
+    if (!initial.mailbox.active)
+      throw new BadRequestException('MAILBOX_INACTIVE');
     if (operation === 'trash' || operation === 'restore')
-      await this.access.box(actor, msg.mailboxId, true);
-    return this.leases.run(msg.mailboxId, async (token, assert) => {
+      await this.access.box(actor, initial.mailboxId, true);
+    return this.leases.interactive(initial.mailboxId, async (token, assert) => {
+      const msg = await this.access.message(actor, id);
+      if (!msg.mailbox.active)
+        throw new BadRequestException('MAILBOX_INACTIVE');
       const client = await this.provider.imap(msg.mailbox);
       try {
         await assert();
@@ -403,6 +481,13 @@ export class MailboxReaderService {
         try {
           if (String((client.mailbox as any).uidValidity) !== msg.uidValidity)
             throw new BadRequestException('MAILBOX_UIDVALIDITY_CHANGED');
+          const before = await client.fetchOne(
+            String(msg.uid),
+            { flags: true },
+            { uid: true },
+          );
+          if (!before)
+            throw new BadRequestException('MAILBOX_MESSAGE_UNAVAILABLE');
           if (operation === 'read' || operation === 'unread') {
             const ok = await (operation === 'read'
               ? client.messageFlagsAdd(String(msg.uid), ['\\Seen'], {
@@ -413,32 +498,45 @@ export class MailboxReaderService {
                 }));
             if (!ok)
               throw new BadRequestException('MAILBOX_OPERATION_NOT_SUPPORTED');
+            const confirmed = await client.fetchOne(
+              String(msg.uid),
+              { flags: true },
+              { uid: true },
+            );
+            if (!confirmed)
+              throw new BadRequestException('MAILBOX_MESSAGE_UNAVAILABLE');
+            const flags = confirmed.flags;
+            if (!flags || flags.has('\\Seen') !== (operation === 'read'))
+              throw new BadRequestException('MAILBOX_READ_STATE_NOT_CONFIRMED');
             await this.leases.commit(msg.mailboxId, token, (tx) =>
               tx.mailboxMessage.update({
                 where: { id },
                 data: {
                   seen: operation === 'read',
-                  flags:
-                    operation === 'read'
-                      ? [...new Set([...msg.flags, '\\Seen'])]
-                      : msg.flags.filter((f) => f !== '\\Seen'),
+                  flags: [...flags],
                 },
               }),
             );
           } else if (operation === 'trash' || operation === 'restore') {
             if (!client.capabilities.has('MOVE'))
               throw new BadRequestException('MAILBOX_MOVE_NOT_SUPPORTED');
-            const target = await this.db.mailboxFolder.findFirst({
-              where: {
-                mailboxId: msg.mailboxId,
-                available: true,
-                ...(operation === 'trash'
-                  ? { specialUse: '\\Trash' }
-                  : destination
-                    ? { id: destination }
-                    : { OR: [{ specialUse: '\\Inbox' }, { path: 'INBOX' }] }),
-              },
+            const folders = await this.db.mailboxFolder.findMany({
+              where: { mailboxId: msg.mailboxId, available: true },
             });
+            const target =
+              operation === 'trash'
+                ? folders.find((f) => f.specialUse === '\\Trash') ||
+                  folders.find(
+                    (f) =>
+                      !f.specialUse &&
+                      /^(?:INBOX[./])?(?:Trash|Deleted Items|Deleted Messages)$/i.test(
+                        f.path,
+                      ),
+                  )
+                : destination
+                  ? folders.find((f) => f.id === destination)
+                  : folders.find((f) => f.specialUse === '\\Inbox') ||
+                    folders.find((f) => f.path.toUpperCase() === 'INBOX');
             if (!target || target.id === msg.folderId)
               throw new BadRequestException(
                 'MAILBOX_DESTINATION_NOT_AVAILABLE',

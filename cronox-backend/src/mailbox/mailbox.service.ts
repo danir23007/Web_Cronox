@@ -416,7 +416,9 @@ export class MailboxService {
       mailboxId: box.id,
       userId: actor.id,
       mode: input.messageId
-        ? 'individual'
+        ? input.mode === 'forward'
+          ? 'individual'
+          : 'reply'
         : input.mode === 'circles'
           ? 'circles'
           : 'individual',
@@ -427,11 +429,15 @@ export class MailboxService {
         throw new BadRequestException('MAILBOX_REPLY_MUST_USE_ORIGINAL_BOX');
       const loaded = await this.reader.body(actor, source.id);
       const mode = input.mode;
-      const recipients = replyRecipients(
-        source.envelope,
-        box.address,
-        mode === 'replyAll',
-      );
+      const recipients =
+        mode === 'forward'
+          ? {}
+          : replyRecipients(
+              source.envelope,
+              box.address,
+              mode === 'replyAll',
+              input.replyRecipient,
+            );
       data = {
         ...data,
         ...(mode === 'forward' ? { to: '', cc: '' } : recipients),
@@ -489,6 +495,7 @@ export class MailboxService {
       text: d.text,
       html: d.html,
       mode: d.mode,
+      singleReply: d.mode === 'reply' || !!d.inReplyTo,
       circles: d.circles,
       templateId: d.templateId,
       campaigns: (d.campaigns || []).map((c) => ({
@@ -527,6 +534,13 @@ export class MailboxService {
       if (!list?.some((t) => t.id === input.templateId))
         throw new BadRequestException('MAILBOX_TEMPLATE_NOT_AVAILABLE');
     }
+    if (
+      (draft.mode === 'reply' || draft.inReplyTo) &&
+      (addresses(input.to, false).length !== 1 ||
+        addresses(input.cc).length ||
+        addresses(input.bcc).length)
+    )
+      throw new BadRequestException('MAILBOX_REPLY_SINGLE_RECIPIENT_REQUIRED');
     for (const key of ['to', 'cc', 'bcc']) header(input[key], 15000);
     header(input.subject);
     if (typeof input.text !== 'string' || input.text.length > 1000000)
@@ -631,6 +645,11 @@ export class MailboxService {
     const to = addresses(draft.to, false),
       cc = addresses(draft.cc),
       bcc = addresses(draft.bcc);
+    if (
+      (draft.mode === 'reply' || draft.inReplyTo) &&
+      (to.length !== 1 || cc.length || bcc.length)
+    )
+      throw new BadRequestException('MAILBOX_REPLY_SINGLE_RECIPIENT_REQUIRED');
     if (new Set([...to, ...cc, ...bcc]).size > maxRecipients())
       throw new BadRequestException('MAILBOX_RECIPIENT_LIMIT');
     header(draft.subject);
@@ -678,7 +697,8 @@ export class MailboxService {
   }
   async clone(actor: MailActor, id: string, acknowledge: boolean) {
     const source = await this.access.draft(actor, id);
-    if(source.mode==='circles') throw new BadRequestException('MAILBOX_CAMPAIGN_CLONE_NOT_SUPPORTED');
+    if (source.mode === 'circles')
+      throw new BadRequestException('MAILBOX_CAMPAIGN_CLONE_NOT_SUPPORTED');
     if (
       source.sends.some(
         (s) => s.status === 'PROCESSING' || s.status === 'PENDING',

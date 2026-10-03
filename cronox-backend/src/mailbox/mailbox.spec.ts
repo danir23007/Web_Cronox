@@ -207,30 +207,57 @@ describe('Private mailbox security and delivery policy', () => {
       'a@example.test',
     ]);
   });
-  it('reply-all uses Reply-To, excludes own address/duplicates and never exposes bcc', () => {
+  it('replies only to the unique valid Reply-To, never original To/CC/BCC', () => {
+    const envelope = {
+      from: [{ address: 'from@example.test' }],
+      replyTo: [
+        { address: 'REPLY@example.test' },
+        { address: 'reply@example.test' },
+      ],
+      to: [{ address: 'other@example.test' }],
+      cc: [{ address: 'cc@example.test' }],
+    };
+    expect(replyRecipients(envelope, 'own@example.test', false)).toEqual({
+      to: 'reply@example.test',
+      cc: '',
+      bcc: '',
+    });
+    expect(() => replyRecipients(envelope, 'own@example.test', true)).toThrow(
+      'MAILBOX_REPLY_SINGLE_RECIPIENT_REQUIRED',
+    );
     expect(
       replyRecipients(
-        {
-          from: [{ address: 'from@example.test' }],
-          replyTo: [{ address: 'reply@example.test' }],
-          to: [
-            { address: 'own@example.test' },
-            { address: 'reply@example.test' },
-            { address: 'other@example.test' },
-          ],
-          cc: [
-            { address: 'other@example.test' },
-            { address: 'third@example.test' },
-          ],
-          bcc: [{ address: 'secret@example.test' }],
-        },
+        { ...envelope, replyTo: [{ address: 'invalid' }] },
         'own@example.test',
-        true,
+        false,
+      ).to,
+    ).toBe('from@example.test');
+    const multiple = {
+      ...envelope,
+      replyTo: [{ address: 'a@example.test' }, { address: 'b@example.test' }],
+    };
+    expect(() => replyRecipients(multiple, 'own@example.test', false)).toThrow(
+      'MAILBOX_REPLY_CHOOSE_ONE',
+    );
+    expect(
+      replyRecipients(multiple, 'own@example.test', false, 'b@example.test').to,
+    ).toBe('b@example.test');
+    expect(() =>
+      replyRecipients(
+        multiple,
+        'own@example.test',
+        false,
+        'other@example.test',
       ),
-    ).toEqual({
-      to: 'reply@example.test, other@example.test',
-      cc: 'third@example.test',
-    });
+    ).toThrow();
+    expect(() =>
+      replyRecipients(
+        multiple,
+        'own@example.test',
+        false,
+        'a@example.test,b@example.test',
+      ),
+    ).toThrow();
   });
   it('removes active HTML, forms, CSS tracking and dangerous links', () => {
     const html =

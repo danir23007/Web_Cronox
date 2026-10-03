@@ -65,6 +65,9 @@ export class MailboxSyncService {
           take: 5,
         });
         for (const cached of selected) {
+          // Yield only between folders: every cursor/flag commit for the current
+          // folder completes before an interactive operation can take the lease.
+          if (this.leases.hasWaiting(id)) break;
           await assert();
           const lock = await client.getMailboxLock(cached.path, {
             readOnly: true,
@@ -326,18 +329,24 @@ export class MailboxSyncService {
         }
         if (
           idle &&
+          !this.leases.hasWaiting(id) &&
           folders.some((f) => f.path.toUpperCase() === 'INBOX') &&
           client.capabilities.has('IDLE')
         ) {
           const lock = await client.getMailboxLock('INBOX', { readOnly: true });
-          let timer: ReturnType<typeof setTimeout> | undefined;
+          let timer: ReturnType<typeof setInterval> | undefined;
           try {
-            timer = setTimeout(() => {
-              void client.noop().catch(() => client.close());
-            }, 10000);
+            const until = Date.now() + 10000;
+            timer = setInterval(() => {
+              if (Date.now() >= until || this.leases.hasWaiting(id)) {
+                if (timer) clearInterval(timer);
+                // NOOP ends IDLE using ImapFlow's own command coordination.
+                void client.noop().catch(() => client.close());
+              }
+            }, 200);
             await client.idle();
           } finally {
-            if (timer) clearTimeout(timer);
+            if (timer) clearInterval(timer);
             lock.release();
           }
         }
@@ -349,7 +358,9 @@ export class MailboxSyncService {
               errorCode: null,
               failures: 0,
               lastSyncAt: new Date(),
-              nextSyncAt: new Date(Date.now() + 30000),
+              nextSyncAt: new Date(
+                Date.now() + (this.leases.hasWaiting(id) ? 0 : 30000),
+              ),
             },
           }),
         );

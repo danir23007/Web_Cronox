@@ -552,12 +552,12 @@ async function main() {
       await request(
         '/drafts',
         'POST',
-        { mailboxId: boxId, messageId: newMessage.id, mode: 'replyAll' },
+        { mailboxId: boxId, messageId: newMessage.id, mode: 'reply' },
         'writer',
       )
     ).body;
-    assert.equal(draft.to, 'reply@example.test, other@example.test');
-    assert.equal(draft.cc, 'third@example.test');
+    assert.equal(draft.to, 'reply@example.test');
+    assert.equal(draft.cc, '');
     assert(!draft.bcc);
     assert.equal(
       (await request('/drafts', 'POST', { mailboxId: boxId }, 'reader')).status,
@@ -610,7 +610,7 @@ async function main() {
       409,
     );
     pass(
-      'Reply-To/reply-all, private persistent drafts and optimistic conflict protection',
+      'Single Reply-To, private persistent drafts and optimistic conflict protection',
     );
     result = await request('/boxes/' + boxId + '/test', 'POST');
     assert.equal(result.body.imap, 'TLS_AUTH_OK');
@@ -1214,6 +1214,7 @@ async function main() {
     await db.mailboxPermission.create({
       data: { mailboxId: boxId, userId: users.writer.id, access: 'send' },
     });
+    await require('./review-mailbox-reading.cjs')({db,service,users,reader,leases,sync,provider,stores,pass});
     await require('./review-mailbox-campaigns.cjs')({app,db,backend,request,boxId,users,provider,smtpMessages,pass});
     assert.equal(await db.financeArchive.count(), 0);
     assert.equal(await db.dailyVisitor.count(), 0);
