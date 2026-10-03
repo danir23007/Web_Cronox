@@ -8,6 +8,219 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// Private IMAP cache and mailbox client. Independent of transactional mail and permanent statistics.
+model Mailbox {
+  id            String              @id @default(uuid())
+  name          String
+  address       String              @unique
+  fromName      String
+  provider      String
+  imapHost      String
+  imapPort      Int                 @default(993)
+  smtpHost      String
+  smtpPort      Int                 @default(465)
+  username      String
+  imapSecretRef String?
+  smtpSecretRef String?
+  imapSecret    String?             @db.Text
+  smtpSecret    String?             @db.Text
+  active        Boolean             @default(false)
+  notify        Boolean             @default(true)
+  sentCopy      String              @default("append")
+  status        String              @default("PENDING_CONFIG")
+  errorCode     String?
+  activatedAt   DateTime?
+  lastSyncAt    DateTime?
+  nextSyncAt    DateTime            @default(now())
+  failures      Int                 @default(0)
+  leaseToken    String?
+  leaseUntil    DateTime?
+  revision      Int                 @default(1)
+  createdAt     DateTime            @default(now())
+  updatedAt     DateTime            @updatedAt
+  folders       MailboxFolder[]
+  messages      MailboxMessage[]
+  permissions   MailboxPermission[]
+  drafts        MailboxDraft[]
+  files         MailboxFile[]
+  notices       MailboxNotice[]
+
+  @@index([active, nextSyncAt])
+}
+
+model MailboxPermission {
+  mailboxId String
+  mailbox   Mailbox @relation(fields: [mailboxId], references: [id], onDelete: Cascade)
+  userId    Int
+  access    String  @default("read")
+  notify    Boolean @default(true)
+  details   Boolean @default(false)
+
+  @@id([mailboxId, userId])
+  @@index([userId])
+}
+
+model MailboxFolder {
+  notificationSince DateTime?
+  id            String           @id @default(uuid())
+  mailboxId     String
+  mailbox       Mailbox          @relation(fields: [mailboxId], references: [id], onDelete: Cascade)
+  path          String
+  specialUse    String?
+  available     Boolean          @default(true)
+  uidValidity   String           @default("")
+  lastUid       BigInt              @default(0)
+  importBefore  BigInt              @default(0)
+  reconcileUid  BigInt              @default(0)
+  messagesCount Int              @default(0)
+  unseenCount   Int              @default(0)
+  updatedAt     DateTime         @updatedAt
+  messages      MailboxMessage[]
+
+  @@unique([mailboxId, path])
+}
+
+model MailboxMessage {
+  id             String          @id @default(uuid())
+  mailboxId      String
+  mailbox        Mailbox         @relation(fields: [mailboxId], references: [id], onDelete: Cascade)
+  folderId       String
+  folder         MailboxFolder   @relation(fields: [folderId], references: [id], onDelete: Cascade)
+  uidValidity    String
+  uid            BigInt
+  messageId      String?
+  subject        String
+  sender         String
+  recipients     String
+  envelope       Json
+  preview        String          @default("")
+  date           DateTime
+  size           Int
+  flags          String[]        @default([])
+  seen           Boolean         @default(false)
+  hasAttachments Boolean         @default(false)
+  alive          Boolean         @default(true)
+  bodyKey        String?
+  bodyState      String          @default("NOT_LOADED")
+  createdAt      DateTime        @default(now())
+  files          MailboxFile[]
+  notices        MailboxNotice[]
+
+  @@unique([folderId, uidValidity, uid])
+  @@index([mailboxId, alive, date, id])
+  @@index([folderId, alive, seen, date, id])
+  @@index([folderId, uidValidity, uid])
+}
+
+model MailboxDraft {
+  id         String        @id @default(uuid())
+  mailboxId  String
+  mailbox    Mailbox       @relation(fields: [mailboxId], references: [id], onDelete: Cascade)
+  userId     Int
+  to         String        @default("")
+  cc         String        @default("")
+  bcc        String        @default("")
+  subject    String        @default("")
+  text       String        @default("") @db.Text
+  inReplyTo  String?
+  references String[]      @default([])
+  revision   Int           @default(1)
+  status     String        @default("DRAFT")
+  createdAt  DateTime      @default(now())
+  updatedAt  DateTime      @updatedAt
+  files      MailboxFile[]
+  sends      MailboxSend[]
+
+  @@index([userId, mailboxId, updatedAt])
+}
+
+model MailboxSend {
+  id             String       @id @default(uuid())
+  draftId        String
+  draft          MailboxDraft @relation(fields: [draftId], references: [id], onDelete: Restrict)
+  draftRevision  Int
+  userId         Int
+  sessionId      String
+  sessionVersion Int
+  status         String       @default("PENDING")
+  messageId      String       @unique
+  requestKey     String       @unique
+  errorCode      String?
+  sentCopyStatus String       @default("NOT_ATTEMPTED")
+  accepted       String[]     @default([])
+  rejected       String[]     @default([])
+  startedAt      DateTime?
+  completedAt    DateTime?
+  createdAt      DateTime     @default(now())
+
+  @@unique([draftId, draftRevision])
+  @@index([status, createdAt])
+}
+
+model MailboxFile {
+  id        String          @id @default(uuid())
+  mailboxId String
+  mailbox   Mailbox         @relation(fields: [mailboxId], references: [id], onDelete: Cascade)
+  messageId String?
+  message   MailboxMessage? @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  draftId   String?
+  draft     MailboxDraft?   @relation(fields: [draftId], references: [id], onDelete: Cascade)
+  name      String
+  mimeType  String
+  size      Int
+  key       String? @unique
+  imapPart String?
+  createdAt DateTime        @default(now())
+
+  @@index([messageId])
+  @@index([draftId])
+}
+
+model MailboxNotice {
+  id        String         @id @default(uuid())
+  mailboxId String
+  mailbox   Mailbox        @relation(fields: [mailboxId], references: [id], onDelete: Cascade)
+  messageId String         @unique
+  message   MailboxMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  createdAt DateTime       @default(now())
+
+  @@index([createdAt, id])
+}
+
+model MailboxPushDevice {
+  id             String    @id @default(uuid())
+  userId         Int
+  sessionId      String
+  sessionVersion Int
+  endpointHash   String    @unique
+  subscription   String    @db.Text
+  name           String
+  active         Boolean   @default(true)
+  mailboxIds     String[]  @default([])
+  details        Boolean   @default(false)
+  cursorAt       DateTime  @default(now())
+  nextPushAt     DateTime  @default(now())
+  failures       Int       @default(0)
+  leaseUntil     DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@index([active, nextPushAt])
+  @@index([userId, sessionId])
+}
+
+model MailboxAudit {
+  id        String   @id @default(uuid())
+  userId    Int?
+  mailboxId String?
+  action    String
+  objectId  String?
+  outcome   String
+  createdAt DateTime @default(now())
+
+  @@index([mailboxId, createdAt])
+}
+
 model EmailSenderProfile {
   key                String                 @id
   initializedAt      DateTime?
@@ -564,9 +777,13 @@ model User {
 model VisitorHistoryConfig {
   id        Int      @id
   startedAt DateTime @db.Timestamptz(3)
+  deduplicationStartedAt DateTime? @default(now()) @db.Timestamptz(3)
 }
 
 model DailyVisitor {
+  browserLinks DailyVisitorLink[]
+  disposition String @default("independent")
+  observedRole String?
   id       String   @id
   day      DateTime @db.Date
   category String
@@ -580,6 +797,25 @@ model DailyVisitor {
   @@index([day, category, firstAt, id])
   @@index([day, firstAt, id])
   @@index([userId])
+}
+
+model DailyVisitorBrowser {
+  links DailyVisitorLink[]
+  id String @id
+  day DateTime @db.Date
+  proofHash String
+  visited Boolean @default(false)
+  linked Boolean @default(false)
+  adminExcluded Boolean @default(false)
+  @@unique([day, proofHash])
+}
+
+model DailyVisitorLink {
+  browser DailyVisitorBrowser @relation(fields: [browserId], references: [id], onDelete: Restrict)
+  visitor DailyVisitor @relation(fields: [visitorId], references: [id], onDelete: Restrict)
+  browserId String
+  visitorId String
+  @@id([browserId, visitorId])
 }
 
 // No FK to live business entities; payloads deliberately exclude personal fields.

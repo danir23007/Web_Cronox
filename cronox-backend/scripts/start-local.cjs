@@ -9,9 +9,18 @@ function loadLocalEnvironment() {
   if (!fs.existsSync(configPath)) throw new Error('Falta cronox-backend/.env.local. Consulta docs/local-development.md.');
   const dotenv = require('dotenv');
   const local = dotenv.parse(fs.readFileSync(configPath));
-  const deploymentKeys = fs.existsSync(path.join(backend, '.env'))
-    ? Object.keys(dotenv.parse(fs.readFileSync(path.join(backend, '.env')))) : [];
-  return buildLocalEnvironment(local, process.env, deploymentKeys);
+  const deployment = fs.existsSync(path.join(backend, '.env'))
+    ? dotenv.parse(fs.readFileSync(path.join(backend, '.env'))) : {};
+  const env = buildLocalEnvironment(local, process.env, Object.keys(deployment));
+  // Explicit mailbox-only opt-in: resolve current references at every startup,
+  // without persisting a second copy of the operator's SMTP passwords.
+  if (local.MAILBOX_LOCAL_SMTP_REFERENCES === 'true') {
+    for (const key of ['SMTP_HOST', ...['SUPPORT', 'ORDERS', 'NOREPLY', 'INFO']
+      .flatMap(name => [`SMTP_${name}_USER`, `SMTP_${name}_PASS`])]) {
+      env[key] = deployment[key] || '';
+    }
+  }
+  return env;
 }
 
 function buildLocalEnvironment(local, inherited, deploymentKeys = []) {
@@ -26,6 +35,7 @@ function buildLocalEnvironment(local, inherited, deploymentKeys = []) {
   if (!loopback(local.FRONTEND_URL) || !loopback(local.API_PUBLIC_URL) ||
       local.EMAIL_ENABLED !== 'false' || local.BACKGROUND_JOBS_ENABLED !== 'false' ||
       local.WAITLIST_EMAIL_WORKER_ENABLED !== 'false' || local.SUPABASE_URL || local.SUPABASE_SERVICE_ROLE_KEY ||
+      local.MAILBOX_WORKER_ENABLED === 'true' || local.MAILBOX_SEND_ENABLED === 'true' ||
       !local.STRIPE_SECRET_KEY?.startsWith('sk_test_')) {
     throw new Error('La configuración local debe desactivar correo, trabajos y almacenamiento externo, y usar claves Stripe de prueba.');
   }
@@ -34,7 +44,7 @@ function buildLocalEnvironment(local, inherited, deploymentKeys = []) {
   for (const key of new Set([...Object.keys(env), ...deploymentKeys])) {
     // Explicit empty values also prevent Prisma's automatic .env expansion from
     // repopulating deployment credentials that are absent in the local file.
-    if (deploymentKeys.includes(key) || /^(?:SMTP_|EMAIL_|SUPABASE_|STRIPE_|JWT_|DATABASE_URL$|DIRECT_URL$|DOTENV_|CRONOX_ROUTE_SMOKE_MODE$)/.test(key)) env[key] = '';
+    if (deploymentKeys.includes(key) || /^(?:MAILBOX_|SMTP_|EMAIL_|SUPABASE_|STRIPE_|JWT_|DATABASE_URL$|DIRECT_URL$|DOTENV_|CRONOX_ROUTE_SMOKE_MODE$)/.test(key)) env[key] = '';
   }
   return { ...env, ...local, DOTENV_CONFIG_PATH: configPath, CRONOX_ENV_FILE: configPath, CRONOX_LOCAL_DEV: 'true', HOST: '127.0.0.1' };
 }

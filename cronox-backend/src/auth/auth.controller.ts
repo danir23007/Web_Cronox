@@ -7,6 +7,8 @@ import {
   HttpCode,
   HttpStatus,
   Post,
+  Optional,
+  Logger,
   Req,
   Res,
   UnauthorizedException,
@@ -16,6 +18,7 @@ import type { Request, Response } from 'express';
 import { Throttle } from '@nestjs/throttler';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import type { CsrfTokenRequest } from '../common/guards/csrf-protection.guard';
+import { VisitorHistoryService } from '../analytics/visitor-history.service';
 import { AuthService } from './auth.service';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { RefreshJwtGuard } from './guards/refresh-jwt.guard';
@@ -33,7 +36,22 @@ import {
 
 @Controller('auth')
 export class AuthController {
-  constructor(private readonly authService: AuthService) {}
+  constructor(
+    private readonly authService: AuthService,
+    @Optional() private readonly visitors?: VisitorHistoryService,
+  ) {}
+  private async linkVisitor(
+    req: Request,
+    user: { id: number; role?: string | null },
+  ) {
+    try {
+      await this.visitors?.bridge(req, user);
+    } catch {
+      new Logger('VisitorHistory').warn(
+        'Visitor reconciliation unavailable; public tracker will retry with verified session.',
+      );
+    }
+  }
 
   @Post('register')
   @HttpCode(HttpStatus.CREATED)
@@ -67,6 +85,7 @@ export class AuthController {
     }
 
     this.authService.setAuthCookies(res, result.tokens);
+    await this.linkVisitor(req, result.user);
 
     return { user: { ...result.user, cartMerge }, cartMerge };
   }
@@ -75,12 +94,14 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   @Throttle({ default: { limit: 5, ttl: 60_000 } })
   async launchLogin(
+    @Req() req: Request,
     @Res({ passthrough: true }) res: Response,
     @Body() dto: LaunchLoginDto,
   ) {
     const result = await this.authService.consumeLaunchLink(dto.token);
     res.setHeader('Cache-Control', 'no-store');
     this.authService.setAuthCookies(res, result.tokens);
+    await this.linkVisitor(req, result.user);
     return { user: result.user };
   }
 
@@ -88,12 +109,14 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   @Throttle({ default: { limit: 5, ttl: 60_000 } })
   async newsletterLogin(
+    @Req() req: Request,
     @Res({ passthrough: true }) res: Response,
     @Body() dto: LaunchLoginDto,
   ) {
     const result = await this.authService.consumeNewsletterLink(dto.token);
     res.setHeader('Cache-Control', 'no-store');
     this.authService.setAuthCookies(res, result.tokens);
+    await this.linkVisitor(req, result.user);
     return { user: result.user };
   }
 
@@ -130,6 +153,7 @@ export class AuthController {
     }
 
     this.authService.setAuthCookies(res, result.tokens);
+    await this.linkVisitor(req, result.user);
 
     return { user: { ...result.user, cartMerge }, cartMerge };
   }
@@ -202,6 +226,7 @@ export class AuthController {
         (req as Request & { refreshToken: string }).refreshToken,
       );
       this.authService.setAuthCookies(res, result.tokens);
+      await this.linkVisitor(req, result.user);
       return { user: result.user };
     } catch (error) {
       if (error instanceof UnauthorizedException)

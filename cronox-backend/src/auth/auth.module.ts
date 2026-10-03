@@ -1,5 +1,6 @@
 import { LaunchCampaignController } from './launch-campaign.controller';
 import { LaunchCampaignService } from './launch-campaign.service';
+import { AnalyticsModule } from '../analytics/analytics.module';
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { PassportModule } from '@nestjs/passport';
@@ -15,6 +16,7 @@ import { AccessAuthModule } from './access-auth.module';
 @Module({
   imports: [
     ConfigModule,
+    AnalyticsModule,
     PassportModule,
     AccessAuthModule,
     UsersModule,

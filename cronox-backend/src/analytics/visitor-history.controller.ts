@@ -1,17 +1,56 @@
-import { BadRequestException, Body, Controller, Get, HttpCode, Post, Query, Req, UnauthorizedException, UseGuards } from '@nestjs/common';
+import {
+  BadRequestException,
+  Body,
+  CanActivate,
+  Controller,
+  ExecutionContext,
+  Get,
+  HttpCode,
+  Post,
+  Query,
+  Req,
+  Res,
+  UnauthorizedException,
+  UseGuards,
+} from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import { Type } from 'class-transformer';
-import { IsIn, IsInt, IsOptional, IsString, IsUUID, Matches, Max, MaxLength, Min } from 'class-validator';
-import type { Request } from 'express';
+import {
+  IsIn,
+  IsInt,
+  IsOptional,
+  IsString,
+  IsUUID,
+  Matches,
+  Max,
+  MaxLength,
+  Min,
+} from 'class-validator';
+import type { Request, Response } from 'express';
 import { OptionalJwtAuthGuard } from '../auth/guards/optional-jwt-auth.guard';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { AdminGuard } from '../common/guards/admin.guard';
-import { isPublicVisitPath, VisitorHistoryService } from './visitor-history.service';
+import {
+  isPublicVisitPath,
+  VisitorHistoryService,
+} from './visitor-history.service';
 
 export class RecordVisitDto {
   @IsString() @MaxLength(250) path: string;
-  @IsOptional() @IsUUID('4') browserId?: string;
   @IsIn(['authenticated', 'anonymous']) expectedCategory: string;
+}
+export class VisitorPayloadGuard implements CanActivate {
+  canActivate(context: ExecutionContext) {
+    const body = context.switchToHttp().getRequest().body;
+    if (
+      body &&
+      Object.keys(body).some(
+        (key) => !['path', 'expectedCategory'].includes(key),
+      )
+    )
+      throw new BadRequestException('UNEXPECTED_VISIT_FIELDS');
+    return true;
+  }
 }
 export class VisitorRangeDto {
   @Matches(/^\d{4}-\d{2}-\d{2}$/) from: string;
@@ -27,31 +66,60 @@ export class VisitorDetailDto {
 @Controller('analytics/visits')
 export class PublicVisitorController {
   constructor(private readonly history: VisitorHistoryService) {}
-  @Get('session') @UseGuards(OptionalJwtAuthGuard)
-  session(@Req() req: Request) {
-    if (!req.user && req.cookies?.refresh_token) throw new UnauthorizedException('SESSION_RESOLUTION_REQUIRED');
-    return { category: req.user ? 'authenticated' : 'anonymous', userId: req.user?.id ?? null };
+
+  @Post('consent-revoked')
+  @HttpCode(204)
+  @Throttle({ default: { limit: 30, ttl: 60_000 } })
+  revokeConsent(
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    // The global CSRF/origin guard protects this action; it never resolves a session or records a visit.
+    this.history.revokeConsent(req, res);
   }
-  @Post() @HttpCode(202)
+  @Get('session')
   @UseGuards(OptionalJwtAuthGuard)
+  session(
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+    @Query('prepare') prepare?: string,
+  ) {
+    if (!req.user && req.cookies?.refresh_token)
+      throw new UnauthorizedException('SESSION_RESOLUTION_REQUIRED');
+    return this.history.session(req, res, new Date(), prepare !== 'false');
+  }
+  @Post()
+  @HttpCode(202)
+  @UseGuards(OptionalJwtAuthGuard, VisitorPayloadGuard)
   @Throttle({ default: { limit: 30, ttl: 60_000 } })
   record(@Req() req: Request, @Body() dto: RecordVisitDto) {
     // Global validation strips unknown keys; explicitly reject identity injection before it can be hidden.
-    if (req.body && Object.keys(req.body).some(key => !['path', 'browserId', 'expectedCategory'].includes(key))) {
+    if (
+      req.body &&
+      Object.keys(req.body).some(
+        (key) => !['path', 'expectedCategory'].includes(key),
+      )
+    ) {
       throw new BadRequestException('UNEXPECTED_VISIT_FIELDS');
     }
     // An unresolved refresh-only session must never be classified as anonymous.
-    if (!req.user && req.cookies?.refresh_token) throw new UnauthorizedException('SESSION_RESOLUTION_REQUIRED');
-    if (dto.expectedCategory !== (req.user ? 'authenticated' : 'anonymous')) throw new BadRequestException('SESSION_CHANGED_RETRY');
-    if (!req.user && !dto.browserId) throw new BadRequestException('BROWSER_ID_REQUIRED');
+    if (!req.user && req.cookies?.refresh_token)
+      throw new UnauthorizedException('SESSION_RESOLUTION_REQUIRED');
+    if (dto.expectedCategory !== (req.user ? 'authenticated' : 'anonymous'))
+      throw new BadRequestException('SESSION_CHANGED_RETRY');
     // Reject a public-path payload originating from exclusive panel/API navigation.
     const referer = req.get('referer');
     if (referer) {
       let source: string;
-      try { source = new URL(referer).pathname; } catch { throw new BadRequestException('PUBLIC_PAGE_REQUIRED'); }
-      if (!isPublicVisitPath(source)) throw new BadRequestException('PUBLIC_PAGE_REQUIRED');
+      try {
+        source = new URL(referer).pathname;
+      } catch {
+        throw new BadRequestException('PUBLIC_PAGE_REQUIRED');
+      }
+      if (!isPublicVisitPath(source))
+        throw new BadRequestException('PUBLIC_PAGE_REQUIRED');
     }
-    return this.history.record(req, dto.path, dto.browserId);
+    return this.history.record(req, dto.path);
   }
 }
 
@@ -59,8 +127,15 @@ export class PublicVisitorController {
 @UseGuards(JwtAuthGuard, AdminGuard)
 export class AdminVisitorController {
   constructor(private readonly history: VisitorHistoryService) {}
-  @Get() report(@Query() query: VisitorRangeDto) { return this.history.report(query.from, query.to); }
+  @Get() report(@Query() query: VisitorRangeDto) {
+    return this.history.report(query.from, query.to);
+  }
   @Get('day') detail(@Query() query: VisitorDetailDto) {
-    return this.history.detail(query.day, query.category, query.search, query.page);
+    return this.history.detail(
+      query.day,
+      query.category,
+      query.search,
+      query.page,
+    );
   }
 }

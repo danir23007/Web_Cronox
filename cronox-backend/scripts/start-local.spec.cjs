@@ -17,7 +17,7 @@ test('local profile wins over inherited deployment environment and blanks creden
   assert.equal(result.DOTENV_CONFIG_PATH,result.CRONOX_ENV_FILE);
 });
 test('rejects a remote database, differing migration target, live key, outgoing email and enabled jobs', () => {
-  for (const patch of [{DATABASE_URL:'postgresql://remote.example/live'},{DIRECT_URL:'postgresql://local@127.0.0.1:5433/other'},{STRIPE_SECRET_KEY:'sk_live_sensitive'},{EMAIL_ENABLED:'true'},{BACKGROUND_JOBS_ENABLED:'true'},{SUPABASE_URL:'https://project.supabase.co'}]) {
+  for (const patch of [{DATABASE_URL:'postgresql://remote.example/live'},{DIRECT_URL:'postgresql://local@127.0.0.1:5433/other'},{STRIPE_SECRET_KEY:'sk_live_sensitive'},{EMAIL_ENABLED:'true'},{BACKGROUND_JOBS_ENABLED:'true'},{SUPABASE_URL:'https://project.supabase.co'},{MAILBOX_WORKER_ENABLED:'true'},{MAILBOX_SEND_ENABLED:'true'}]) {
     assert.throws(()=>buildLocalEnvironment({...local,...patch},{}));
   }
 });

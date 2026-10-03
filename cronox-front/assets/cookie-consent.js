@@ -17,7 +17,7 @@
       /^cronox_circle_request_modal_seen_/,
       /^cronox_circle4_request_success_/,
     ],
-    analytics: ["cronox_analytics_session", "cronox_visitor_browser"],
+    analytics: ["cronox_analytics_session", "cronox_visitor_browser", "cronox_daily_visitor"],
     marketing: [],
   });
   const OPTIONAL_COOKIES = Object.freeze({
@@ -515,7 +515,7 @@
     presence.src = '/assets/live-presence.js?v=1';
     document.head.append(presence);
     const visitors = document.createElement('script');
-    visitors.src = '/assets/visitor-history.js?v=1';
+    visitors.src = '/assets/visitor-history.js?v=2';
     document.head.append(visitors);
   }
   if (document.readyState === "loading")

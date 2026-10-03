@@ -34,6 +34,7 @@ import { ImagesModule } from './images/images.module';
 import { FooterModule } from './footer/footer.module';
 import { WaitlistModule } from './waitlist/waitlist.module';
 import { LiveStatsModule } from './live-stats/live-stats.module';
+import { MailboxModule } from './mailbox/mailbox.module';
 import {
   getRateLimitMax,
   getRateLimitTtlMs,
@@ -75,6 +76,7 @@ import {
     FooterModule,
     WaitlistModule,
     LiveStatsModule,
+    MailboxModule,
     EmailModule,
     AuthModule,
     CartModule,

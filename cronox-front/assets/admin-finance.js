@@ -166,7 +166,7 @@
     clearTimeout(instance.searchTimer);
     instance.picker?.destroy(); instance.observer?.disconnect();
     const { root, page } = instance;
-    root.innerHTML = `<div class="finance-heading"><div><h1 id="${page === 'money' ? 'title-money' : 'finance-summary-title'}">${page === 'money' ? 'Dinero' : 'Resumen'}</h1><p>${page === 'money' ? 'Resultados por producto, con los importes de cada venta.' : 'Así evoluciona tu tienda.'}</p></div><div class="finance-controls"><select class="select finance-currency" aria-label="Moneda" style="width:80px"><option>${esc(state.currency)}</option></select><div class="finance-range"></div></div></div><div class="finance-content" aria-live="polite" aria-busy="true"><div class="finance-card finance-empty">Cargando datos financieros…</div></div>`;
+    root.innerHTML = `<div class="finance-heading"><div><h1 id="${page === 'money' ? 'title-money' : 'finance-summary-title'}">${page === 'money' ? 'Dinero' : 'Home'}</h1><p>${page === 'money' ? 'Resultados por producto, con los importes de cada venta.' : 'Así evoluciona tu tienda.'}</p></div><div class="finance-controls"><select class="select finance-currency" aria-label="Moneda" style="width:80px"><option>${esc(state.currency)}</option></select><div class="finance-range"></div></div></div><div class="finance-content" aria-live="polite" aria-busy="true"><div class="finance-card finance-empty">Cargando datos financieros…</div></div>`;
     instance.picker = new DatePicker(root.querySelector('.finance-range'), state, range => navigate(page, { ...range, page:1 }));
   }
   function render(instance, report, state) {

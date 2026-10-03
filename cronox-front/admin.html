@@ -25,6 +25,9 @@
   <link rel="stylesheet" href="assets/admin-inventory.css?v=2">
   <link rel="stylesheet" href="assets/waitlist.css?v=1">
   <link rel="stylesheet" href="assets/admin-mails.css?v=1">
+  <link rel="stylesheet" href="assets/admin-inbox.css?v=1">
+  <link rel="manifest" href="/mailbox.webmanifest">
+  <link rel="apple-touch-icon" href="/favicon.png">
   <link rel="stylesheet" href="assets/admin-key-screen.css?v=3">
   <link rel="stylesheet" href="assets/key-screen-composition.css?v=2">
   <link rel="stylesheet" href="assets/newsletter-popup.css?v=6">
@@ -275,6 +278,7 @@
     <aside class="admin-sidebar" id="adminSidebar" aria-label="Administración">
       <a class="admin-brand" href="#section-dashboard">CRONOX<span>ADMINISTRACIÓN</span></a>
       <nav aria-label="Navegación principal">
+        <button class="sidebar-destination" data-nav-target="section-dashboard">Home</button>
         <button class="sidebar-group" aria-expanded="false" aria-controls="navProducto"><span aria-hidden="true">▧</span>Producto<span class="sidebar-chevron">⌄</span></button>
         <div id="navProducto" class="sidebar-children" hidden>
           <button data-nav-target="section-products">Productos</button>
@@ -301,10 +305,10 @@
           <button data-nav-target="section-circles-menu">Círculos</button>
           <button data-nav-target="section-orders">Pedidos</button>
           <button data-nav-target="section-mails">Plantillas Mail</button>
+          <button data-nav-target="section-inbox">Correo <span data-mailbox-count aria-label="No leídos"></span></button>
         </div>
         <button class="sidebar-group" aria-expanded="false" aria-controls="navAdmin"><span aria-hidden="true">⚙</span>Admin<span class="sidebar-chevron">⌄</span></button>
         <div id="navAdmin" class="sidebar-children" hidden>
-          <button data-nav-target="section-dashboard">Resumen</button>
           <button data-nav-target="section-activity">Actividad</button>
           <button data-nav-target="section-footer">Footer</button>
         </div>
@@ -319,7 +323,7 @@
       </div>
     </aside>
     <button class="sidebar-backdrop" id="sidebarBackdrop" aria-label="Cerrar menú" hidden></button>
-    <header class="admin-header"><button id="sidebarToggle" type="button" aria-controls="adminSidebar" aria-expanded="false" aria-label="Abrir menú">☰</button><span id="adminBreadcrumb">Admin / Resumen</span><span class="admin-header-mark">CR</span></header>
+    <header class="admin-header"><button id="sidebarToggle" type="button" aria-controls="adminSidebar" aria-expanded="false" aria-label="Abrir menú">☰</button><span id="adminBreadcrumb">Home</span><span class="admin-header-mark">CR</span></header>
     <main id="adminMain" class="admin-main">
       <section id="section-live-stats" class="admin-section" hidden aria-labelledby="liveStatsTitle">
         <header class="live-heading">
@@ -670,10 +674,10 @@
     <section id="section-dashboard" class="card admin-section" aria-labelledby="title-dashboard" hidden>
       <div id="dashboardFinance" class="finance-root" data-finance-page="dashboard"></div>
       <div id="dashboardVisitors" class="finance-root visitor-root"></div>
-      <div class="legacy-summary-heading"><span>VISTA GENERAL</span><h2>Actividad de la tienda</h2><p>Información general y alertas del resumen existente. Estos indicadores conservan sus periodos propios.</p></div>
+      <div class="legacy-summary-heading"><span>VISTA GENERAL</span><h2>Actividad de la tienda</h2><p>Información general y alertas de Home. Estos indicadores conservan sus periodos propios.</p></div>
       <div style="display:flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap;">
         <div>
-          <h3 id="title-dashboard">Resumen general</h3>
+          <h3 id="title-dashboard">Estadísticas generales</h3>
           <small>Indicadores clave del panel administrativo.</small>
         </div>
         <button class="btn" type="button" id="refreshDashboardBtn">Actualizar</button>
@@ -1013,6 +1017,10 @@
         </div>
       </div>
     </div>
+    <section id="section-inbox" class="card admin-section" aria-labelledby="title-inbox" hidden>
+      <h2 id="title-inbox" class="sr-only">Correo</h2>
+      <div id="mailboxWorkspace" class="inbox-root"></div>
+    </section>
     <section id="section-mails" class="card admin-section" aria-labelledby="title-mails" hidden>
       <button class="btn" data-back-target="section-menu" type="button">← Atrás</button>
       <h2 id="title-mails">PLANTILLAS MAILS</h2>
@@ -1955,15 +1963,16 @@
   <script src="assets/product-card-framing.js?v=1"></script>
   <script src="assets/admin-product-gallery.js?v=1"></script>
   <script src="assets/admin-pagination.js?v=1"></script>
-  <script src="assets/admin-shell.js?v=1"></script>
-  <script src="assets/admin-finance.js?v=1"></script>
+  <script src="assets/admin-shell.js?v=2"></script>
+  <script src="assets/admin-finance.js?v=2"></script>
   <link rel="stylesheet" href="assets/admin-visitors.css?v=1">
-  <script src="assets/admin-visitors.js?v=1"></script>
+  <script src="assets/admin-visitors.js?v=2"></script>
   <script src="assets/admin-live-stats.js?v=2"></script>
   <link rel="stylesheet" href="assets/admin-bulk.css?v=2">
   <script src="assets/admin-bulk.js?v=4"></script>
   <script src="assets/admin-section-headers.js?v=1"></script>
-  <script src="assets/admin.js?v=3"></script>
+  <script src="assets/admin-inbox.js?v=2"></script>
+  <script src="assets/admin.js?v=5"></script>
   <script src="assets/admin-inventory.js?v=2"></script>
   <script src="assets/admin-waitlist.js?v=1"></script>
   <script src="assets/responsive-images.js?v=4"></script>

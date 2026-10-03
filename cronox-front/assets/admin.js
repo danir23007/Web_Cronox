@@ -975,7 +975,7 @@
   };
 
   const ensureSectionBackButtons = () => {
-    const sectionsToMain = ['section-dashboard', 'section-activity', 'section-users', 'section-orders', 'section-codes'];
+    const sectionsToMain = ['section-activity', 'section-users', 'section-orders', 'section-codes'];
     sectionsToMain.forEach((sectionId) => {
       const section = document.getElementById(sectionId);
       if (!section || section.querySelector('[data-back-target]')) return;
@@ -1644,6 +1644,7 @@
     if (sectionId === 'section-inventory') window.CRONOX_INVENTORY?.load?.();
     if (sectionId === 'section-waitlist') window.CRONOX_WAITLIST_ADMIN?.load?.();
     if (sectionId === 'section-mails') window.CRONOX_MAILS?.load?.();
+    if (sectionId === 'section-inbox') window.CRONOX_INBOX?.load?.();
     if (sectionId === 'section-key-screen') window.CRONOX_KEY_SCREEN?.load?.();
     if (sectionId === 'section-newsletter') window.CRONOX_NEWSLETTER_ADMIN?.load?.();
     if (sectionId === 'section-footer') window.CRONOX_ADMIN_FOOTER?.load?.();
@@ -2297,20 +2298,20 @@
   const fetchDashboard = async () => {
     if (dashboardMessage) dashboardMessage.innerHTML = '';
     if (setUiLoading && dashboardMessage) {
-      setUiLoading(dashboardMessage, true, { title: 'Cargando resumen…' });
+      setUiLoading(dashboardMessage, true, { title: 'Cargando Home…' });
     }
     markDashboardUnavailable(true);
     try {
       const data = await window.CRONOX_API?.admin?.getDashboard?.();
       const metrics = [data?.users?.total, data?.requests?.pendingTotal, data?.orders?.total, data?.orders?.today, data?.orders?.week, data?.revenue?.today, data?.revenue?.month, data?.alerts?.lowStock, data?.alerts?.oldPendingRequests];
-      if (metrics.some(value => typeof value !== 'number' || !Number.isFinite(value))) throw new Error('La respuesta del resumen está incompleta. Inténtalo de nuevo.');
+      if (metrics.some(value => typeof value !== 'number' || !Number.isFinite(value))) throw new Error('La respuesta de Home está incompleta. Inténtalo de nuevo.');
       renderDashboard(data);
     } catch (error) {
       markDashboardUnavailable();
       showModuleError({
         container: dashboardMessage || statusArea,
         error,
-        title: 'No se pudieron cargar los datos del resumen',
+        title: 'No se pudieron cargar los datos de Home',
         isCritical: true,
         retry: fetchDashboard,
       });
