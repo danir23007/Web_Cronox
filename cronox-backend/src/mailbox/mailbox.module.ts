@@ -1,4 +1,8 @@
 import { Module } from '@nestjs/common';
+import { AdminEventPushService } from './admin-event-push.service';
+import { EmailModule } from '../email/email.module';
+import { MailboxCampaignService } from './mailbox-campaign.service';
+import { MailboxUnsubscribeController } from './mailbox-unsubscribe.controller';
 import { AccessAuthModule } from '../auth/access-auth.module';
 import {
   MailboxController,
@@ -16,9 +20,11 @@ import { MailboxPushService } from './mailbox-push.service';
 import { MailboxService } from './mailbox.service';
 import { MailboxWorkerService } from './mailbox-worker.service';
 @Module({
-  imports: [AccessAuthModule],
-  controllers: [MailboxController],
+  imports: [AccessAuthModule, EmailModule],
+  controllers: [MailboxController, MailboxUnsubscribeController],
   providers: [
+    AdminEventPushService,
+    MailboxCampaignService,
     MailboxDraftUploadGuard,
     MailboxUploadInterceptor,
     MailboxAccessService,

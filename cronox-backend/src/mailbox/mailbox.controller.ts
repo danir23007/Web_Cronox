@@ -53,6 +53,8 @@ import { MailboxService } from './mailbox.service';
 import { MailboxReaderService } from './mailbox-reader.service';
 import { MailboxPushService } from './mailbox-push.service';
 import { MailboxAccessService } from './mailbox-access.service';
+import { MailboxCampaignService } from './mailbox-campaign.service';
+import { madridInstant } from './mailbox-campaign-policy';
 import { maxAttachmentBytes, safeFilename } from './mailbox-security';
 
 class GrantDto {
@@ -88,9 +90,19 @@ class ConfigureDto {
 class DraftDto {
   @IsUUID() mailboxId: string;
   @IsOptional() @IsUUID() messageId?: string;
-  @IsOptional() @IsIn(['reply', 'replyAll', 'forward']) mode?: string;
+  @IsOptional()
+  @IsIn(['reply', 'replyAll', 'forward', 'circles'])
+  mode?: string;
 }
 class SaveDraftDto {
+  @IsOptional() @IsUUID() mailboxId?: string;
+  @IsOptional() @IsString() @MaxLength(100) templateId?: string;
+  @IsOptional() @IsString() @MaxLength(200000) html?: string;
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(5)
+  @IsInt({ each: true })
+  circles?: number[];
   @IsString() @MaxLength(15000) to: string;
   @IsString() @MaxLength(15000) cc: string;
   @IsString() @MaxLength(15000) bcc: string;
@@ -101,6 +113,19 @@ class SaveDraftDto {
 class SendDto {
   @IsUUID() requestKey: string;
   @IsInt() @Min(1) revision: number;
+}
+class CampaignDto extends SendDto {
+  @IsString() @MaxLength(64) previewHash: string;
+  @IsOptional() @IsString() @MaxLength(16) localDate?: string;
+  @IsOptional() @IsIn(['+01:00', '+02:00']) offset?: string;
+}
+class TemplateDto {
+  @IsString() @MaxLength(100) templateId: string;
+  @IsOptional() variables?: Record<string, unknown>;
+}
+class SuppressionDto {
+  @IsString() @MaxLength(254) email: string;
+  @IsIn(['UNSUBSCRIBED', 'CONFIRMED_HARD_BOUNCE']) reason: string;
 }
 class ActionDto {
   @IsIn(['read', 'unread', 'trash', 'restore']) operation: string;
@@ -210,9 +235,16 @@ export class MailboxController {
     readonly push: MailboxPushService,
     readonly access: MailboxAccessService,
     readonly sessions: AuthSessionsService,
+    readonly campaigns: MailboxCampaignService,
   ) {}
   @Get('overview') overview(@Req() r: Request) {
     return this.service.overview(r.user!);
+  }
+  @Get('schedule-preview') schedulePreview(
+    @Query('localDate') localDate: string,
+    @Query('offset') offset?: string,
+  ) {
+    return { scheduledAt: madridInstant(localDate, offset) };
   }
   @Get('administrators') administrators(@Req() r: Request) {
     this.access.superadmin(r.user!);
@@ -222,6 +254,12 @@ export class MailboxController {
       orderBy: { id: 'asc' },
       take: 100,
     });
+  }
+  @Post('suppressions') suppress(
+    @Req() r: Request,
+    @Body() body: SuppressionDto,
+  ) {
+    return this.campaigns.suppress(r.user!, body.email, body.reason);
   }
   @Get('messages') messages(@Req() r: Request, @Query() q: any) {
     return this.service.messages(r.user!, q);
@@ -267,6 +305,54 @@ export class MailboxController {
   }
   @Get('drafts') drafts(@Req() r: Request) {
     return this.service.drafts(r.user!);
+  }
+  @Get('boxes/:id/templates') templates(
+    @Req() r: Request,
+    @Param('id') id: string,
+  ) {
+    return this.campaigns.templateList(r.user!, id);
+  }
+  @Post('boxes/:id/template') template(
+    @Req() r: Request,
+    @Param('id') id: string,
+    @Body() body: TemplateDto,
+  ) {
+    return this.campaigns.template(
+      r.user!,
+      id,
+      body.templateId,
+      body.variables,
+    );
+  }
+  @Get('drafts/:id/recipients') recipients(
+    @Req() r: Request,
+    @Param('id') id: string,
+  ) {
+    return this.campaigns.summary(r.user!, id);
+  }
+  @Post('drafts/:id/campaign')
+  @Throttle({ default: { limit: 3, ttl: 60000 } })
+  campaign(
+    @Req() r: Request,
+    @Param('id') id: string,
+    @Body() body: CampaignDto,
+  ) {
+    return this.campaigns.enqueue(r.user!, id, body);
+  }
+  @Get('campaigns/:id') campaignView(
+    @Req() r: Request,
+    @Param('id') id: string,
+  ) {
+    return this.campaigns.view(r.user!, id);
+  }
+  @Post('campaigns/:id/cancel') cancel(
+    @Req() r: Request,
+    @Param('id') id: string,
+  ) {
+    return this.campaigns.cancel(r.user!, id);
+  }
+  @Post('campaigns/:id/edit') edit(@Req() r: Request, @Param('id') id: string) {
+    return this.campaigns.cancel(r.user!, id, true);
   }
   @Post('drafts') newDraft(@Req() r: Request, @Body() body: DraftDto) {
     return this.service.createDraft(r.user!, body);
@@ -371,6 +457,13 @@ export class MailboxController {
     @Param('id') id: string,
   ) {
     return this.push.disable(r.user!, id);
+  }
+  @Patch('push/devices/:id') preferences(
+    @Req() r: Request,
+    @Param('id') id: string,
+    @Body() body: any,
+  ) {
+    return this.push.preferences(r.user!, id, body);
   }
   @Post('push/logout') disableSession(@Req() r: Request) {
     return this.push.disable(r.user!, undefined, (r as any).authSession.sid);

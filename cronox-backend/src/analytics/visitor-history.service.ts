@@ -24,6 +24,12 @@ export const isPublicVisitPath = (path: string) =>
     UNGATED_PUBLIC_PATHS.has(path) ||
     ['/launch.html', '/producto.html'].includes(path));
 
+// Notification exclusion only; never changes the historical counting rules.
+export const isAutomatedPushVisit = (req: Request) =>
+  /bot\b|crawler|spider|headlesschrome|playwright|selenium|uptimerobot|monitoring/i.test(
+    req.get?.('user-agent') || '',
+  );
+
 type VerifiedVisitorUser = { id: number; role?: string | null };
 type BrowserDay = {
   id: string;
@@ -171,13 +177,29 @@ export class VisitorHistoryService {
       const identity = this.hash(
         legitimate ? 'account:' + user.id : 'browser-proof:' + browser!.id,
       );
-      const rows = await tx.$queryRaw<{ id: string }[]>`
+      const rows = await tx.$queryRaw<{ id: string; inserted: boolean }[]>`
         INSERT INTO "DailyVisitor" (id, day, category, identity, "userId", "firstAt", "lastAt", "observedRole")
         VALUES (${randomUUID()}, ${day}::date, ${category}, ${identity}, ${legitimate ? user.id : null}, ${now}, ${now}, ${legitimate ? user.role : null})
-        ON CONFLICT (day, category, identity) DO UPDATE SET "firstAt" = LEAST("DailyVisitor"."firstAt", EXCLUDED."firstAt"), "lastAt" = GREATEST("DailyVisitor"."lastAt", EXCLUDED."lastAt") RETURNING id
+        ON CONFLICT (day, category, identity) DO UPDATE SET "firstAt" = LEAST("DailyVisitor"."firstAt", EXCLUDED."firstAt"), "lastAt" = GREATEST("DailyVisitor"."lastAt", EXCLUDED."lastAt") RETURNING id, (xmax = 0) AS inserted
       `;
       if (legitimate && browser)
         await tx.$executeRaw`INSERT INTO "DailyVisitorLink" ("browserId", "visitorId") VALUES (${browser.id}, ${rows[0].id}) ON CONFLICT DO NOTHING`;
+      // Notify only the original public visit, never login reconciliation or a
+      // second authenticated identity for an already visited browser-day.
+      if (
+        rows[0].inserted &&
+        publicVisit &&
+        !isAutomatedPushVisit(req) &&
+        (!legitimate || !browser?.visited)
+      ) {
+        await tx.$executeRawUnsafe('SAVEPOINT admin_push_visit');
+        try {
+          await tx.$queryRaw`SELECT cronox_enqueue_admin_push('visits', ${rows[0].id}, jsonb_build_object('visitorId', ${rows[0].id}), ${now}::timestamptz)`;
+        } catch {
+          await tx.$executeRawUnsafe('ROLLBACK TO SAVEPOINT admin_push_visit');
+        }
+        await tx.$executeRawUnsafe('RELEASE SAVEPOINT admin_push_visit');
+      }
       return { accepted: true, day, category };
     });
   }

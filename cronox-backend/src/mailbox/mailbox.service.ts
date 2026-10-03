@@ -12,6 +12,9 @@ import { MailboxFilesService } from './mailbox-files.service';
 import { MailboxReaderService } from './mailbox-reader.service';
 import { MailboxProviderService } from './mailbox-provider.service';
 import { MailboxLeasesService } from './mailbox-leases.service';
+import { MailboxCampaignService } from './mailbox-campaign.service';
+import { circles, assertResolved } from './mailbox-campaign-policy';
+import { effectiveMailHtml } from '../email/managed/mail-renderer';
 import {
   addresses,
   credential,
@@ -35,6 +38,7 @@ export class MailboxService {
     readonly reader: MailboxReaderService,
     readonly provider: MailboxProviderService,
     readonly leases: MailboxLeasesService,
+    readonly campaigns?: MailboxCampaignService,
   ) {}
   async overview(actor: MailActor) {
     const ids = await this.access.allowedIds(actor);
@@ -321,6 +325,29 @@ export class MailboxService {
           }
         : {}),
     };
+    if (Object.prototype.hasOwnProperty.call(query, 'folderIds')) {
+      if (typeof query.folderIds !== 'string' || query.folderIds.length > 15000)
+        throw new BadRequestException('MAILBOX_INVALID_FOLDERS');
+      const selected = [
+        ...new Set<string>(
+          (query.folderIds as string).split(',').filter(Boolean),
+        ),
+      ];
+      if (selected.length > 200)
+        throw new BadRequestException('MAILBOX_INVALID_FOLDERS');
+      const allowed = await this.db.mailboxFolder.findMany({
+        where: {
+          id: { in: selected },
+          mailboxId: where.mailboxId,
+          available: true,
+        },
+        select: { id: true },
+      });
+      if (allowed.length !== selected.length)
+        throw new BadRequestException('MAILBOX_INVALID_FOLDERS');
+      where.folderId = { in: selected };
+      where.folder = { available: true };
+    }
     const [total, rows] = await this.db.$transaction([
       this.db.mailboxMessage.count({ where }),
       this.db.mailboxMessage.findMany({
@@ -368,6 +395,16 @@ export class MailboxService {
           orderBy: { createdAt: 'desc' },
           take: 1,
         },
+        campaigns: {
+          select: {
+            id: true,
+            status: true,
+            scheduledAt: true,
+            startedAt: true,
+          },
+          orderBy: { createdAt: 'desc' },
+          take: 1,
+        },
       },
       orderBy: { updatedAt: 'desc' },
       take: 100,
@@ -375,7 +412,15 @@ export class MailboxService {
   }
   async createDraft(actor: MailActor, input: any) {
     const box = await this.access.box(actor, input.mailboxId, true);
-    let data: any = { mailboxId: box.id, userId: actor.id };
+    let data: any = {
+      mailboxId: box.id,
+      userId: actor.id,
+      mode: input.messageId
+        ? 'individual'
+        : input.mode === 'circles'
+          ? 'circles'
+          : 'individual',
+    };
     if (input.messageId) {
       const source = await this.access.message(actor, input.messageId);
       if (source.mailboxId !== box.id)
@@ -442,6 +487,16 @@ export class MailboxService {
       bcc: d.bcc,
       subject: d.subject,
       text: d.text,
+      html: d.html,
+      mode: d.mode,
+      circles: d.circles,
+      templateId: d.templateId,
+      campaigns: (d.campaigns || []).map((c) => ({
+        id: c.id,
+        status: c.status,
+        scheduledAt: c.scheduledAt,
+        startedAt: c.startedAt,
+      })),
       revision: d.revision,
       status: d.status,
       files: d.files.map((f) => ({ id: f.id, name: f.name, size: f.size })),
@@ -456,7 +511,22 @@ export class MailboxService {
     };
   }
   async saveDraft(actor: MailActor, id: string, input: any) {
-    await this.access.draft(actor, id);
+    const draft = await this.access.draft(actor, id);
+    const mailboxId = input.mailboxId || draft.mailboxId;
+    if (mailboxId !== draft.mailboxId) {
+      await this.access.box(actor, mailboxId, true);
+      if (draft.mode !== 'circles' || draft.files.length)
+        throw new BadRequestException(
+          'MAILBOX_SENDER_CHANGE_REQUIRES_EMPTY_ATTACHMENTS',
+        );
+    }
+    if (draft.mode === 'circles' && (input.to || input.cc || input.bcc))
+      throw new BadRequestException('MAILBOX_CIRCLES_BCC_ONLY');
+    if (input.templateId) {
+      const list = await this.campaigns?.templateList(actor, mailboxId);
+      if (!list?.some((t) => t.id === input.templateId))
+        throw new BadRequestException('MAILBOX_TEMPLATE_NOT_AVAILABLE');
+    }
     for (const key of ['to', 'cc', 'bcc']) header(input[key], 15000);
     header(input.subject);
     if (typeof input.text !== 'string' || input.text.length > 1000000)
@@ -469,6 +539,10 @@ export class MailboxService {
         revision: input.revision,
       },
       data: {
+        mailboxId,
+        templateId: input.templateId || null,
+        circles: draft.mode === 'circles' ? circles(input.circles || []) : [],
+        html: input.html ? effectiveMailHtml(input.html, true) : '',
         to: input.to,
         cc: input.cc,
         bcc: input.bcc,
@@ -542,6 +616,8 @@ export class MailboxService {
     )
       throw new ServiceUnavailableException('MAILBOX_SENDING_DISABLED');
     const draft = await this.access.draft(actor, id);
+    if (draft.mode === 'circles')
+      throw new BadRequestException('MAILBOX_USE_CAMPAIGN_CONFIRMATION');
     if (!draft.mailbox.active)
       throw new BadRequestException('MAILBOX_INACTIVE');
     const prior = await this.db.mailboxSend.findUnique({
@@ -558,6 +634,7 @@ export class MailboxService {
     if (new Set([...to, ...cc, ...bcc]).size > maxRecipients())
       throw new BadRequestException('MAILBOX_RECIPIENT_LIMIT');
     header(draft.subject);
+    assertResolved(draft.subject, draft.text, draft.html);
     header(draft.mailbox.fromName);
     if (draft.files.reduce((a, f) => a + f.size, 0) > maxMessageBytes())
       throw new BadRequestException('MAILBOX_ATTACHMENTS_LIMIT');
@@ -601,6 +678,7 @@ export class MailboxService {
   }
   async clone(actor: MailActor, id: string, acknowledge: boolean) {
     const source = await this.access.draft(actor, id);
+    if(source.mode==='circles') throw new BadRequestException('MAILBOX_CAMPAIGN_CLONE_NOT_SUPPORTED');
     if (
       source.sends.some(
         (s) => s.status === 'PROCESSING' || s.status === 'PENDING',
@@ -625,6 +703,10 @@ export class MailboxService {
         bcc: source.bcc,
         subject: source.subject,
         text: source.text,
+        html: source.html,
+        mode: source.mode,
+        circles: source.circles,
+        templateId: source.templateId,
         inReplyTo: source.inReplyTo,
         references: source.references,
       },

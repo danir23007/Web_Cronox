@@ -1,4 +1,4 @@
-# Revisiones de navegador de Home y visitantes
+# Revisiones de navegador de Home, visitantes y Correo
 
 Estas funciones Playwright conservan las comprobaciones útiles de las revisiones anteriores. Utilizan exclusivamente el servidor sintético `http://127.0.0.1:43123` de `cronox-backend/scripts/review-visitors.cjs --serve`, con PostgreSQL efímero, roles y datos de prueba. No sirven para revisar producción ni leen sus credenciales.
 
@@ -28,3 +28,22 @@ npx --yes --package @playwright/cli playwright-cli -s=visitor-consent close
 Al terminar, detén el servidor de revisión con Ctrl+C; su manejador cierra Nest y PostgreSQL y retira el directorio temporal. Las capturas se generan bajo `test-results/admin-review/`, que ya está fuera de Git.
 
 Home comprueba posición y entrada predeterminada, compatibilidad del enlace anterior, ausencia exclusiva de Atrás, otros destinos y permisos en escritorio y móvil. El panel comprueba gráfica, filtros, búsqueda y disposición móvil. Consentimiento comprueba pestañas concurrentes, conciliación tras login/logout, prueba HttpOnly, revocación, ausencia de Web Locks y errores de autenticación sin visitas invitadas.
+
+## Correo y campañas
+
+Usa otro servidor aislado, en el puerto **43121**, sin configuración privada ni conexión al proveedor. Ejecuta primero `npm run build` dentro de `cronox-backend`, sin otro proceso Nest que bloquee la generación de Prisma en Windows. Desde la raíz:
+
+```powershell
+node cronox-backend/scripts/review-mailbox.cjs --serve
+```
+
+En otra terminal:
+
+```powershell
+npx --yes --package @playwright/cli playwright-cli -s=mail-review open http://127.0.0.1:43121/__mailreview/superadmin
+npx --yes --package @playwright/cli playwright-cli -s=mail-review run-code --filename tests/admin-review/mailbox-campaigns.browser.js
+npx --yes --package @playwright/cli playwright-cli -s=mail-review run-code --filename tests/admin-review/admin-push.browser.js
+npx --yes --package @playwright/cli playwright-cli -s=mail-review close
+```
+
+La función comprueba escritorio y móvil, carpetas, plantillas y variables, edición visual, círculos y bloqueo del proveedor, y conservación de valores técnicos con Configuración avanzada cerrada. Intercepta las imágenes sintéticas. La integración del servidor prueba la cola usando SMTP/TLS solo en loopback y proveedores IMAP/push simulados; no acredita entrega con Hostinger ni push físico. Para cerrar el servidor escribe `stop` y pulsa Intro. Las capturas también quedan en el directorio de pruebas ignorado. Véase [la documentación de campañas](../../docs/admin-mailbox-campaigns.md).

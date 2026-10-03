@@ -80,7 +80,8 @@ async function main() {
   try {
     const schema = (
       await fs.readFile(path.join(backend, 'prisma/schema.prisma'), 'utf8')
-    ).replace(/model Mailbox\w* \{[\s\S]*?\n\}/g, '');
+    ).replace(/model (?:Mailbox\w*|DailyVisitorBrowser|DailyVisitorLink) \{[\s\S]*?\n\}/g, '')
+      .replace(/^.*(?:deduplicationStartedAt|browserLinks DailyVisitorLink|disposition String|observedRole String).*\r?\n/gm,'');
     const schemaFile = path.join(dir, 'before.prisma');
     await fs.writeFile(schemaFile, schema);
     const base = run(
@@ -117,6 +118,11 @@ async function main() {
         'prisma/migrations/20261002160000_admin_mailboxes/migration.sql',
       ),
     );
+    sql(path.join(backend,'prisma/migrations/20261003100000_mailbox_circle_campaigns/migration.sql'));
+    sql(path.join(backend,'prisma/migrations/20261003120000_admin_push_events/migration.sql'));
+    sql(path.join(backend,'prisma/migrations/20261003123000_admin_push_payment_utc/migration.sql'));
+    sql(path.join(backend,'prisma/migrations/20261003130000_admin_push_manual_paid/migration.sql'));
+    sql(path.join(backend,'prisma/migrations/20261002200000_visitor_daily_reconciliation/migration.sql'));
     await fs.writeFile(path.join(dir, 'empty.env'), '');
     process.env.CRONOX_ENV_FILE = path.join(dir, 'empty.env');
     process.chdir(dir);
@@ -1208,6 +1214,10 @@ async function main() {
     await db.mailboxPermission.create({
       data: { mailboxId: boxId, userId: users.writer.id, access: 'send' },
     });
+    await require('./review-mailbox-campaigns.cjs')({app,db,backend,request,boxId,users,provider,smtpMessages,pass});
+    assert.equal(await db.financeArchive.count(), 0);
+    assert.equal(await db.dailyVisitor.count(), 0);
+    await require('./review-admin-push.cjs')({app,db,backend,request,boxId,users,sessions,push,security,webpush,pass});
     tokens.writer = await sessions.create(users.writer);
     await db.mailboxSend.updateMany({
       where: { status: 'PENDING' },
@@ -1223,8 +1233,6 @@ async function main() {
       role: 'SUPERADMIN',
     });
     assert(!JSON.stringify(overview).includes('synthetic-password-only'));
-    assert.equal(await db.financeArchive.count(), 0);
-    assert.equal(await db.dailyVisitor.count(), 0);
     await fs.mkdir(path.join(root, 'output/mailbox-review'), {
       recursive: true,
     });

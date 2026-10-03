@@ -18,6 +18,6 @@ import { OrderConfirmationEmailMapper } from './order-confirmation-email.mapper'
     SupabaseStorageService,
     AdminGuard,
   ],
-  exports: [EmailService, OrderConfirmationEmailMapper],
+  exports: [EmailService, OrderConfirmationEmailMapper, ManagedMailService],
 })
 export class EmailModule {}

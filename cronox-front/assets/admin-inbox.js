@@ -20,6 +20,17 @@
       ? new Date(v).toLocaleString("es-ES", { timeZone: "Europe/Madrid" })
       : "Nunca";
   const codes = {
+    MAILBOX_MADRID_TIME_AMBIGUOUS: "Esta hora ocurre dos veces en Madrid. Elige UTC+02:00 o UTC+01:00.",
+    MAILBOX_MADRID_TIME_DOES_NOT_EXIST: "Esta fecha u hora no existe en Madrid. Elige otra.",
+    MAILBOX_SCHEDULE_IN_PAST: "La fecha de programación debe ser futura.",
+    MAILBOX_TEMPLATE_VARIABLES_UNRESOLVED: "Faltan variables de la plantilla. Resuélvelas antes de enviar o programar.",
+    MAILBOX_CAMPAIGN_PROVIDER_NOT_READY: "Campañas bloqueadas: confirma los límites del plan y la configuración del servidor.",
+    MAILBOX_RECIPIENT_PREVIEW_CHANGED: "La selección o el borrador han cambiado. Revisa de nuevo el resumen.",
+    MAILBOX_SENDER_CHANGE_REQUIRES_EMPTY_ATTACHMENTS: "Retira los adjuntos antes de cambiar el remitente y vuelve a añadirlos al buzón correcto.",
+    MAILBOX_CAMPAIGN_CAPACITY_RESERVED_WAITING: "En espera de capacidad disponible; se conserva la reserva para correos transaccionales.",
+    MAILBOX_CAMPAIGN_OWNER_OR_BOX_INACTIVE: "En espera: el administrador o el buzón está inactivo.",
+    MAILBOX_CAMPAIGN_SEND_PERMISSION_REVOKED: "En espera: el administrador ya no tiene permiso de envío.",
+    MAILBOX_CUSTOMER_ADDRESSES_IN_CONTENT: "El contenido o un adjunto incluye direcciones de clientes. Retíralas antes de enviar una comunicación común por círculos.",
     MAILBOX_OPERATION_FAILED:
       "No se pudo completar la operación. Reintenta o revisa el diagnóstico del buzón.",
     MAILBOX_MESSAGE_UNAVAILABLE:
@@ -82,11 +93,13 @@
     SMTP_ACCEPTED: "Aceptado por SMTP",
     FAILED: "Fallido",
     UNKNOWN: "Resultado incierto",
+    SCHEDULED: "Programado",
+    COMPLETED: "Completado",
+    CANCELLED: "Cancelado",
   };
   let overview = null,
     boxId = "",
-    folderId = "",
-    folderKind = "\\Inbox",
+    selectedFolders = null,
     state = "all",
     search = "",
     page = 1,
@@ -150,7 +163,7 @@
   };
   function shell() {
     root.dataset.view = "list";
-    root.innerHTML = `<div class="mail-toolbar"><h2>Correo</h2><button class="btn" data-compose>Nuevo mensaje</button><button class="btn" data-refresh>Actualizar</button><button class="btn" data-drafts>Borradores y salida</button><button class="btn" data-devices>Notificaciones</button>${overview.superadmin ? '<button class="btn" data-settings>Configuración</button>' : ""}</div><div data-feedback role="status" aria-live="polite"></div><div class="mail-notice" data-setup></div><div class="mail-layout"><aside class="mail-boxes" aria-label="Buzones"><div class="mail-box-links" data-boxes></div><hr><label>Carpeta<select data-folder></select></label><p class="mail-muted" data-box-status></p></aside><div class="mail-list"><form class="mail-filters"><label>Buscar<input data-search type="search" placeholder="Remitente, destinatario o asunto" maxlength="120"></label><label>Estado<select data-state><option value="all">Todos</option><option value="unread">No leídos</option><option value="read">Leídos</option></select></label><button class="btn" type="submit">Buscar</button></form><p class="mail-muted">Búsqueda solo sobre mensajes sincronizados. Los contadores reflejan la caché importada.</p><div data-messages aria-live="polite"></div><div data-pagination class="mail-pager"></div></div><div class="mail-reader" hidden></div><div class="mail-editor" hidden></div><div class="mail-settings" hidden></div><div class="mail-devices" hidden></div></div>`;
+    root.innerHTML = `<div class="mail-toolbar"><h2>Correo</h2><button class="btn" data-compose>Nuevo mensaje</button><button class="btn" data-refresh>Actualizar</button><button class="btn" data-drafts>Borradores y salida</button><button class="btn" data-devices>Notificaciones</button>${overview.superadmin ? '<button class="btn" data-settings>Configuración</button>' : ""}</div><div data-feedback role="status" aria-live="polite"></div><div class="mail-notice" data-setup></div><div class="mail-layout"><aside class="mail-boxes" aria-label="Buzones"><div class="mail-box-links" data-boxes></div><hr><fieldset class="mail-folder-filter"><legend>Carpetas</legend><div class="mail-actions"><button class="btn" type="button" data-folders-all>Todas</button><button class="btn" type="button" data-folders-clear>Limpiar</button></div><div data-folders></div></fieldset><p class="mail-muted" data-box-status></p></aside><div class="mail-list"><form class="mail-filters"><label>Buscar<input data-search type="search" placeholder="Remitente, destinatario o asunto" maxlength="120"></label><label>Estado<select data-state><option value="all">Todos</option><option value="unread">No leídos</option><option value="read">Leídos</option></select></label><button class="btn" type="submit">Buscar</button></form><p class="mail-muted">Búsqueda solo sobre mensajes sincronizados. Los contadores reflejan la caché importada.</p><div data-messages aria-live="polite"></div><div data-pagination class="mail-pager"></div></div><div class="mail-reader" hidden></div><div class="mail-editor" hidden></div><div class="mail-settings" hidden></div><div class="mail-devices" hidden></div></div>`;
     root.querySelector("[data-compose]").onclick = guard(() => compose());
     root.querySelector("[data-refresh]").onclick = guard(refresh);
     root.querySelector("[data-drafts]").onclick = guard(showDrafts);
@@ -166,11 +179,11 @@
       page = 1;
       await list();
     });
-    root.querySelector("[data-folder]").onchange = guard(async (e) => {
-      folderId = boxId ? e.target.value : "";
-      folderKind = boxId ? "" : e.target.value;
-      page = 1;
-      await list();
+    root.querySelector('[data-folders-all]').onclick = guard(async () => {
+      selectedFolders = new Set(availableFolders().map(f => f.id)); page = 1; renderFolders(); await list();
+    });
+    root.querySelector('[data-folders-clear]').onclick = guard(async () => {
+      selectedFolders = new Set(); page = 1; renderFolders(); await list();
     });
     renderOverview();
   }
@@ -188,19 +201,19 @@
             ? "Sincronización en segundo plano desactivada."
             : "",
           !overview.sendEnabled ? "Envíos desactivados." : "",
-          overview.encryptionConfigured ? "Cifrado configurado." : "Clave de cifrado pendiente.",
-          overview.storageConfigured ? "Ruta privada configurada." : "Almacenamiento privado pendiente.",
+          overview.encryptionConfigured ? "" : "Clave de cifrado pendiente.",
+          overview.storageConfigured ? "" : "Almacenamiento privado pendiente.",
         ]
           .filter(Boolean)
           .join(" ") ||
         "Los buzones originales siguen en Hostinger. Abrir un mensaje lo marca leído; las importaciones no lo hacen.";
     const host = root.querySelector("[data-boxes]");
     host.innerHTML =
-      `<button class="btn" data-box="" ${!boxId ? 'aria-current="true"' : ""}>Todos los buzones <small>${total} no leídos</small></button>` +
+      `<button class="btn" data-box="" ${!boxId ? 'aria-current="true"' : ""}>Todos los buzones <small class="mail-unread ${total > 0 ? "has-unread" : ""}">${total} no leídos</small></button>` +
       overview.boxes
         .map(
           (b) =>
-            `<button class="btn" data-box="${esc(b.id)}" ${boxId === b.id ? 'aria-current="true"' : ""}>${esc(b.name)} <small>${esc(b.address)} · ${b.unread} no leídos</small></button>`,
+            `<button class="btn" data-box="${esc(b.id)}" ${boxId === b.id ? 'aria-current="true"' : ""}><strong>${esc(displayName(b))}</strong><small class="mail-address">${esc(b.address)}</small><small class="mail-unread ${b.unread > 0 ? "has-unread" : ""}">${b.unread} no leídos</small></button>`,
         )
         .join("");
     host.querySelectorAll("[data-box]").forEach(
@@ -208,37 +221,14 @@
         (b.onclick = guard(async () => {
           await leave();
           boxId = b.dataset.box;
-          folderId = "";
-          folderKind = boxId ? "" : "\\Inbox";
+
           page = 1;
           show("list");
           renderOverview();
           await list();
         })),
     );
-    const folders = root.querySelector("[data-folder]");
-    folders.innerHTML = boxId
-      ? `<option value="">Todas las carpetas</option>` +
-        (box()?.folders || [])
-          .map(
-            (f) =>
-              `<option value="${esc(f.id)}">${esc(f.path)}${f.importBefore ? ` · importando ${f.importedCount ?? 0} de ${f.remoteCount}` : ""}</option>`,
-          )
-          .join("")
-      : [
-          ["\\Inbox", "Entrada"],
-          ["\\Sent", "Enviados"],
-          ["\\Drafts", "Borradores del proveedor"],
-          ["\\Junk", "Spam"],
-          ["\\Trash", "Papelera"],
-          ["", "Todas las carpetas"],
-        ]
-          .map(
-            ([value, label]) =>
-              `<option value="${esc(value)}">${label}</option>`,
-          )
-          .join("");
-    folders.value = boxId ? folderId : folderKind;
+    renderFolders();
     root.querySelector("[data-box-status]").textContent = box()
       ? `${status[box().status] || box().status}${!box().active ? " · Inactivo" : ""} · Última sincronización: ${date(box().lastSyncAt)}${box().errorCode ? " · " + (codes[box().errorCode] || box().errorCode) : ""}`
       : "Selecciona un buzón para ver su conexión y carpetas.";
@@ -247,6 +237,17 @@
     );
     root.querySelector("[data-refresh]").disabled =
       !overview.workerEnabled || !overview.boxes.some((b) => b.active);
+  }
+  const displayName = b => ({ 'info@cronox.es':'Información', 'no-reply@cronox.es':'No reply', 'orders@cronox.es':'Pedidos', 'support@cronox.es':'Soporte' }[b.address.toLowerCase()] || b.name);
+  function availableFolders() {
+    return overview.boxes.filter(b => !boxId || b.id === boxId).flatMap(b => b.folders.map(f => ({...f, mailbox:displayName(b)})));
+  }
+  function renderFolders() {
+    const folders = availableFolders();
+    if (selectedFolders === null) selectedFolders = new Set(overview.boxes.flatMap(b => b.folders.filter(f => f.path === 'INBOX' || f.specialUse === '\\Inbox').map(f => f.id)));
+    const host=root.querySelector('[data-folders]');
+    host.innerHTML=folders.map(f=>`<label><span><input type="checkbox" data-folder-id="${esc(f.id)}" ${selectedFolders.has(f.id)?'checked':''}> ${esc(!boxId ? f.mailbox+' · '+f.path : f.path)}${f.importBefore?' · importando':''}</span></label>`).join('') || '<p>No hay carpetas importadas.</p>';
+    host.querySelectorAll('input').forEach(input=>input.onchange=guard(async()=>{if(input.checked)selectedFolders.add(input.dataset.folderId);else selectedFolders.delete(input.dataset.folderId);page=1;await list();}));
   }
   async function load() {
     if (loading) return loading;
@@ -292,11 +293,14 @@
     const seq = ++listSeq,
       host = root.querySelector("[data-messages]");
     if (!host) return;
+    if (!availableFolders().some(f=>selectedFolders?.has(f.id))) {
+      host.textContent='No hay carpetas seleccionadas. Marca una o varias para consultar mensajes.';
+      root.querySelector('[data-pagination]').replaceChildren();return;
+    }
     host.textContent = "Cargando mensajes…";
     const q = new URLSearchParams({
       mailboxId: boxId,
-      folderId,
-      folderKind,
+      folderIds: availableFolders().filter(f => selectedFolders?.has(f.id)).map(f => f.id).join(","),
       state,
       search,
       page: String(page),
@@ -464,30 +468,90 @@
     if (!chosen) throw Error("No tienes permiso de envío en ningún buzón.");
     draft = await api("/drafts", "POST", {
       mailboxId: chosen,
-      ...(messageId ? { messageId, mode } : {}),
+      ...(messageId ? { messageId, mode } : { mode:"circles" }),
     });
-    renderComposer();
+    await renderComposer();
   }
   const recoveryKey = () => `cronox-mail-draft:${draft?.id}`;
   function values() {
     const form = root.querySelector(".mail-editor form");
     return {
-      to: form.elements.to.value,
-      cc: form.elements.cc.value,
-      bcc: form.elements.bcc.value,
+      to: form.elements.to?.value || "",
+      cc: form.elements.cc?.value || "",
+      bcc: form.elements.bcc?.value || "",
+      mailboxId: form.elements.mailboxId?.value || draft.mailboxId,
+      templateId: form.elements.templateId?.value || "",
+      html: form.elements.html?.value || "",
+      circles: [...form.querySelectorAll('[data-circle]:checked')].map(i=>Number(i.value)),
       subject: form.elements.subject.value,
       text: form.elements.text.value,
       revision: draft.revision,
     };
   }
-  function renderComposer() {
+  async function renderComposer() {
     show("compose");
     const host = root.querySelector(".mail-editor"),
       b = overview.boxes.find((b) => b.id === draft.mailboxId),
       locked = draft.status !== "DRAFT";
     dirty = false;
     editVersion = 0;
-    host.innerHTML = `<button class="btn mail-back" data-back>← Volver</button><h3>${locked ? "Bandeja de salida" : "Redactar"}</h3><p>Remitente: <strong>${esc(b?.fromName)} &lt;${esc(b?.address)}&gt;</strong></p><form><div class="mail-addresses"><label>Para<input name="to" value="${esc(draft.to)}" ${locked ? "disabled" : ""}></label><label>CC<input name="cc" value="${esc(draft.cc)}" ${locked ? "disabled" : ""}></label></div><label>CCO (no visible para los demás destinatarios)<input name="bcc" value="${esc(draft.bcc)}" ${locked ? "disabled" : ""}></label><label>Asunto<input name="subject" value="${esc(draft.subject)}" maxlength="500" ${locked ? "disabled" : ""}></label><label>Mensaje (texto)<textarea name="text" ${locked ? "disabled" : ""}>${esc(draft.text)}</textarea></label><p class="mail-muted">Direcciones separadas por comas. El envío usa siempre el buzón mostrado.</p><div data-draft-files class="mail-files"></div>${locked ? "" : '<label>Añadir adjuntos<input data-upload type="file" multiple></label>'}<p class="mail-saved" data-save-state role="status">${esc(status[draft.status] || draft.status)}</p><div class="mail-actions">${locked ? '<button class="btn" type="button" data-clone>Crear nuevo borrador para revisar o reenviar</button>' : '<button class="btn" type="button" data-save>Guardar borrador</button><button class="btn" type="submit" data-send>Enviar ahora</button>'}<button class="btn" type="button" data-close-editor>Volver a la lista</button></div></form><div data-send-result></div><button class="btn" data-recover hidden>Recuperar texto no guardado de esta pestaña</button>`;
+    const composerDraftId=draft.id;
+    const templates = await api('/boxes/'+draft.mailboxId+'/templates');
+    if(draft?.id!==composerDraftId)return;
+    const campaign = draft.campaigns?.[0];
+    host.innerHTML = `<button class="btn mail-back" data-back>← Volver</button><h3>${locked ? "Bandeja de salida" : "Borrador"}</h3>
+      <label>Plantilla<select name="templateId" form="mailComposerForm" ${locked?'disabled':''}><option value="">Sin plantilla</option>${templates.map(t=>`<option value="${esc(t.id)}" ${draft.templateId===t.id?'selected':''}>${esc(t.folder.name+' · '+t.name)}</option>`).join('')}</select></label>
+      <form id="mailComposerForm"><label>Remitente${draft.mode==='circles'?`<select name="mailboxId" ${locked || draft.files.length?'disabled':''} title="Retira los adjuntos antes de cambiar el remitente">${overview.boxes.filter(x=>x.canSend).map(x=>`<option value="${esc(x.id)}" ${x.id===draft.mailboxId?'selected':''}>${esc(displayName(x)+' · '+x.address)}</option>`).join('')}</select>`:`<strong>${esc(b?.fromName)} &lt;${esc(b?.address)}&gt;</strong>`}</label>
+      ${draft.mode==='circles'?`<fieldset><legend>Círculos · comunicación a suscriptores</legend>${[1,2,3,4,5].map(c=>`<label><span><input type="checkbox" data-circle value="${c}" ${draft.circles?.includes(c)?'checked':''} ${locked?'disabled':''}> Círculo ${c}</span></label>`).join('')}<p>Solo destinatarios únicos con suscripción activa. La pertenencia a un círculo no concede permiso publicitario. Exclusivamente CCO.</p><button class="btn" type="button" data-recipient-preview>Revisar destinatarios</button><p data-recipient-summary role="status"></p></fieldset>`:`<div class="mail-addresses"><label>Para<input name="to" value="${esc(draft.to)}" ${locked?'disabled':''}></label><label>CC<input name="cc" value="${esc(draft.cc)}" ${locked?'disabled':''}></label></div><label>CCO<input name="bcc" value="${esc(draft.bcc)}" ${locked?'disabled':''}></label>`}
+      <label>Asunto<input name="subject" value="${esc(draft.subject)}" maxlength="500" ${locked?'disabled':''}></label>
+      <label>Versión de texto del mensaje<textarea name="text" ${locked?'disabled':''}>${esc(draft.text)}</textarea></label>
+      <p>Puedes editar el diseño del mensaje y revisar su versión de texto. Los cambios se guardan en este borrador.</p>${!locked?'<button class="btn" type="button" data-edit-design>Editar diseño</button><iframe data-design-editor title="Editar diseño del borrador" sandbox="allow-same-origin" referrerpolicy="no-referrer" hidden></iframe>':''}<details><summary>Edición avanzada del HTML</summary><label>HTML<textarea name="html" ${locked?'disabled':''}>${esc(draft.html||'')}</textarea></label><p>El texto y HTML son versiones independientes. Si editas una, revisa también la otra.</p></details>
+      <button class="btn" type="button" data-preview>Previsualizar mensaje</button><iframe data-compose-preview title="Vista previa aislada" sandbox="" referrerpolicy="no-referrer" hidden></iframe>
+      <div data-draft-files class="mail-files"></div>${locked?'':'<label>Añadir adjuntos<input data-upload type="file" multiple></label>'}
+      ${!locked && draft.mode==='circles'?'<label>Fecha y hora · Europe/Madrid<input type="datetime-local" data-schedule></label><label>Hora repetida al cambiar al horario de invierno<select data-offset><option value="">Automática (hora única)</option><option value="+02:00">Primera ocurrencia · UTC+02:00</option><option value="+01:00">Segunda ocurrencia · UTC+01:00</option></select></label><p>Al confirmar se fija la lista prevista y el contenido, incluidos los adjuntos. Antes de cada entrega se comprueban de nuevo las bajas. Revisa que el contenido y los archivos no incluyan direcciones de otros clientes.</p>':''}
+      <p class="mail-saved" data-save-state role="status">${esc(status[draft.status]||draft.status)}</p><div class="mail-actions">
+      ${locked?(campaign?`<button class="btn" type="button" data-campaign-edit ${campaign.startedAt || campaign.status!=='SCHEDULED'?'disabled':''}>Editar programación</button><button class="btn" type="button" data-campaign-cancel ${!['SCHEDULED','PROCESSING'].includes(campaign.status)?'disabled':''}>Cancelar envío</button>`:'<button class="btn" type="button" data-clone>Crear nuevo borrador para revisar o reenviar</button>'):'<button class="btn" type="button" data-save>Guardar borrador</button><button class="btn" type="submit" data-send>Enviar ahora</button>'+(draft.mode==='circles'?'<button class="btn" type="button" data-schedule-send>Programar envío</button>':'')}
+      <button class="btn" type="button" data-close-editor>Volver a la lista</button></div></form><div data-send-result></div><button class="btn" data-recover hidden>Recuperar texto no guardado de esta pestaña</button>`;
+    host.querySelector('[data-edit-design]')?.addEventListener('click',()=>{
+      const editor=host.querySelector('[data-design-editor]');editor.hidden=false;
+      editor.onload=()=>{
+        const doc=editor.contentDocument;if(!doc)return;doc.body.contentEditable='true';
+        doc.addEventListener('click',event=>{if(event.target.closest('a'))event.preventDefault();});
+        doc.addEventListener('paste',event=>{event.preventDefault();doc.execCommand('insertText',false,event.clipboardData.getData('text/plain'));});
+        doc.addEventListener('input',()=>{
+          const form=host.querySelector('form');form.elements.html.value=doc.documentElement.outerHTML;
+          const urls=[...new Set([...doc.body.querySelectorAll('a[href]')].map(a=>a.getAttribute('href')).filter(Boolean))];
+          form.elements.text.value=doc.body.innerText+(urls.length?'\n\n'+urls.join('\n'):'');
+          form.dispatchEvent(new Event('input',{bubbles:true}));
+        });
+      };
+      editor.srcdoc=`<!doctype html><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src https:; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'"><meta name="referrer" content="no-referrer"><style>body{overflow-wrap:anywhere;min-height:200px}img{max-width:100%}table{max-width:100%}</style>${values().html||'<p>'+esc(values().text).replace(/\n/g,'<br>')+'</p>'}`;
+    });
+    host.querySelector('[data-preview]').onclick=()=>{
+      const f=host.querySelector('[data-compose-preview]');f.hidden=false;f.srcdoc=`<!doctype html><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src https:; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'"><meta name="referrer" content="no-referrer"><style>body{overflow-wrap:anywhere}img{max-width:100%}table{max-width:100%}</style>${values().html||'<pre>'+esc(values().text)+'</pre>'}`;
+    };
+    host.querySelector('[data-recipient-preview]')?.addEventListener('click',guard(async()=>{await save();const summary=await api('/drafts/'+draft.id+'/recipients');host.querySelector('[data-recipient-summary]').textContent=`Círculos ${summary.circles.join(', ')||'ninguno'} · ${summary.count} destinatarios válidos y únicos. ${summary.policy.reasons.join(' ')}`;}));
+    host.querySelector('[name=templateId]').onchange=guard(async event=>{
+      if(locked)return;clearTimeout(saveTimer);if(savePromise)await savePromise;const id=event.target.value;
+      if(id && (values().subject || values().text || values().html) && !confirm('Aplicar esta plantilla sustituirá el asunto, texto y HTML editados. ¿Continuar?')){event.target.value=draft.templateId||'';return;}
+      let applied=false;try {
+      if(id){let result=await api('/boxes/'+draft.mailboxId+'/template','POST',{templateId:id});
+        if(result.variables.length){const variables=await templateVariables(result.variables);if(!variables){event.target.value=draft.templateId||'';return;}result=await api('/boxes/'+draft.mailboxId+'/template','POST',{templateId:id,variables});}
+        const form=host.querySelector('form');form.elements.subject.value=result.subject;form.elements.text.value=result.text;form.elements.html.value=result.html;}
+      applied=true;dirty=true;editVersion++;await save();host.querySelector('[data-preview]').click();
+      }catch(error){if(!applied)event.target.value=draft.templateId||'';throw error;}
+    });
+    host.querySelector('[name=mailboxId]')?.addEventListener('change',guard(async event=>{
+      clearTimeout(saveTimer);if(savePromise)await savePromise;
+      if(draft.files.length){event.target.value=draft.mailboxId;throw Error(codes.MAILBOX_SENDER_CHANGE_REQUIRES_EMPTY_ATTACHMENTS);}
+      if(!confirm('Cambiar el remitente actualizará las plantillas y quitará la selección actual. El contenido se conserva para revisarlo.')){event.target.value=draft.mailboxId;return;}
+      host.querySelector('[name=templateId]').value='';dirty=true;editVersion++;await save();await renderComposer();
+    }));
+    for(const action of ['edit','cancel'])host.querySelector('[data-campaign-'+action+']')?.addEventListener('click',guard(async()=>{
+      if(!confirm(action==='edit'?'Volver a borrador y cancelar esta programación para editarla y confirmar de nuevo.':'Cancelar entregas pendientes. Las ya aceptadas o en curso no se pueden retirar. ¿Continuar?'))return;
+      await api('/campaigns/'+campaign.id+'/'+action,'POST');draft=await api('/drafts/'+draft.id);await renderComposer();
+    }));
+    host.querySelector('[data-schedule-send]')?.addEventListener('click',guard(()=>confirmCampaign(true)));
     renderFiles();
     renderSend();
     if (host.querySelector("[data-send]"))
@@ -521,6 +585,7 @@
     host.querySelector("form").onsubmit = guard(async (e) => {
       e.preventDefault();
       if (locked) return;
+      if (draft.mode === "circles") return confirmCampaign(false);
       const send = host.querySelector("[data-send]");
       send.disabled = true;
       try {
@@ -535,7 +600,7 @@
           revision: draft.revision,
           requestKey: key,
         });
-        renderComposer();
+        await renderComposer();
         feedback(
           "Envío solicitado. La aceptación SMTP no garantiza la entrega final.",
         );
@@ -559,7 +624,7 @@
         draft = await api("/drafts/" + draft.id + "/clone", "POST", {
           acknowledge: risk,
         });
-        renderComposer();
+        await renderComposer();
       }),
     );
     host.querySelector("[data-upload]")?.addEventListener(
@@ -585,14 +650,18 @@
     if (
       recover &&
       !locked &&
-      ["to", "cc", "bcc", "subject", "text"].some(
+      ["to", "cc", "bcc", "subject", "text", "html"].some(
         (k) => recover[k] !== draft[k],
       )
     ) {
       host.querySelector("[data-recover]").hidden = false;
       host.querySelector("[data-recover]").onclick = () => {
-        for (const k of ["to", "cc", "bcc", "subject", "text"])
-          host.querySelector("form").elements[k].value = recover[k] || "";
+        for (const k of ["to", "cc", "bcc", "subject", "text", "html"])
+          if(host.querySelector("form").elements[k]) host.querySelector("form").elements[k].value = recover[k] || "";
+        const f=host.querySelector('form');
+        if(f.elements.mailboxId && recover.mailboxId===draft.mailboxId)f.elements.mailboxId.value=recover.mailboxId;
+        if(f.elements.templateId && [...f.elements.templateId.options].some(o=>o.value===recover.templateId))f.elements.templateId.value=recover.templateId;
+        f.querySelectorAll('[data-circle]').forEach(i=>i.checked=(recover.circles||draft.circles||[]).includes(Number(i.value)));
         dirty = true;
         editVersion++;
         host.querySelector("[data-save-state]").textContent =
@@ -601,9 +670,50 @@
       };
     }
   }
+  function templateVariables(paths) {
+    return new Promise(resolve=>{
+      const dialog=document.createElement('dialog');dialog.className='mail-variable-dialog';
+      const itemFields=['name','quantity','variantName','imageUrl','lineTotalFormatted'];
+      const hasItems=paths.includes('items'),localFields=hasItems?paths.filter(p=>itemFields.includes(p)):[];
+      const fields=paths.filter(p=>p!=='items'&&!localFields.includes(p));
+      const labels={subject:'Asunto',title:'Título',message:'Mensaje',actionUrl:'Enlace de la acción',actionLabel:'Texto de la acción',customerEmail:'Correo del cliente',customerFullName:'Nombre del cliente',orderId:'Número de pedido',orderUrl:'Enlace del pedido',storeUrl:'Enlace de la tienda',supportCaseId:'Referencia de soporte',trackingNumber:'Seguimiento',shippingCarrier:'Transportista'};
+      dialog.innerHTML=`<form method="dialog"><h3>Completar datos de la plantilla</h3><p>Estos valores solo componen el mensaje. No ejecutan acciones ni generan accesos o credenciales. Revisa el resultado antes de enviarlo.</p>${fields.map(p=>`<label>${esc(labels[p]||p)}<textarea data-variable="${esc(p)}"></textarea></label>`).join('')}${hasItems?'<fieldset><legend>Artículos</legend><div data-items></div><button class="btn" type="button" data-add-item>Añadir artículo</button></fieldset>':''}<button class="btn" value="cancel">Cancelar</button><button class="btn" value="apply">Aplicar valores y previsualizar</button></form>`;
+      root.append(dialog);
+      dialog.querySelector('[data-add-item]')?.addEventListener('click',()=>{
+        const row=document.createElement('fieldset');row.dataset.item='';row.innerHTML=localFields.map(p=>`<label>${esc(({name:'Nombre',quantity:'Cantidad',variantName:'Variante',imageUrl:'Imagen HTTPS',lineTotalFormatted:'Importe de la línea'})[p]||p)}<input data-item-field="${esc(p)}" ${p==='quantity'?'type="number" min="1" value="1"':''}></label>`).join('')+'<button class="btn" type="button" data-remove-item>Quitar artículo</button>';dialog.querySelector('[data-items]').append(row);row.querySelector('[data-remove-item]').onclick=()=>row.remove();
+      });
+      dialog.addEventListener('close',()=>{
+        if(dialog.returnValue!=='apply'){dialog.remove();resolve(null);return;}
+        const data={};for(const input of dialog.querySelectorAll('[data-variable]')){
+          const parts=input.dataset.variable.split('.');let target=data;
+          parts.slice(0,-1).forEach(p=>{target[p]||={};target=target[p];});target[parts.at(-1)]=input.value;
+        }
+        if(hasItems)data.items=[...dialog.querySelectorAll('[data-item]')].map(row=>Object.fromEntries([...row.querySelectorAll('[data-item-field]')].map(i=>[i.dataset.itemField,i.dataset.itemField==='quantity'?Number(i.value):i.value])));
+        dialog.remove();resolve(data);
+      },{once:true});dialog.showModal();
+    });
+  }
+  async function confirmCampaign(scheduled) {
+    await save();if(dirty)throw Error('Guarda primero el borrador.');
+    const host=root.querySelector('.mail-editor'),summary=await api('/drafts/'+draft.id+'/recipients');
+    if(!summary.policy.ready)throw Error(summary.policy.reasons.join(' '));
+    const localDate=scheduled?host.querySelector('[data-schedule]').value:undefined;
+    if(scheduled&&!localDate)throw Error('Elige una fecha y hora de Europe/Madrid.');
+    if(!summary.count)throw Error('No hay destinatarios elegibles para los círculos seleccionados.');
+    const offset=host.querySelector('[data-offset]')?.value||undefined;
+    const scheduledAt=scheduled?(await api('/schedule-preview?'+new URLSearchParams({localDate,...(offset?{offset}:{})}))).scheduledAt:undefined;
+    const template=host.querySelector('[name=templateId] option:checked')?.textContent||'Sin plantilla';
+    if(!confirm(`Confirmar ${scheduled?'programación':'envío'}\nRemitente: ${summary.sender}\nPlantilla: ${template}\nAsunto: ${summary.subject}\nCírculos: ${summary.circles.join(', ')}\nDestinatarios únicos: ${summary.count}\nFecha: ${scheduled?date(scheduledAt):'Ahora'} · Europe/Madrid${offset?' · UTC'+offset:''}\nSe usará esta lista prevista, excluyendo nuevas bajas antes de cada entrega.`))return;
+    const revision=draft.revision,keyName=recoveryKey()+':campaign:'+revision;let requestKey=sessionStorage.getItem(keyName);
+    if(!requestKey){requestKey=crypto.randomUUID();sessionStorage.setItem(keyName,requestKey);}
+    const result=await api('/drafts/'+draft.id+'/campaign','POST',{requestKey,revision,previewHash:summary.previewHash,...(scheduled?{localDate,offset}:{})});
+    draft=await api('/drafts/'+result.draftId);await renderComposer();feedback('Confirmado. La aceptación SMTP no garantiza la entrega final.');
+  }
   function renderFiles() {
     const host = root.querySelector("[data-draft-files]");
     if (!host) return;
+    const sender=root.querySelector('.mail-editor [name=mailboxId]');
+    if(sender)sender.disabled=draft.status!=='DRAFT'||!!draft.files.length;
     host.innerHTML = draft.files
       .map(
         (f) =>
@@ -625,6 +735,12 @@
   function renderSend() {
     const host = root.querySelector("[data-send-result]");
     if (!host) return;
+    const campaign=draft.campaigns?.[0];
+    if(campaign) {
+      void api('/campaigns/'+campaign.id).then(c=>{if(draft?.campaigns?.[0]?.id!==c.id)return;
+        host.innerHTML=`<div class="mail-notice"><strong>${esc(status[c.status]||c.status)}</strong><p>${esc(date(c.scheduledAt))} · Europe/Madrid · ${c.count} previstos</p>${c.errorCode?`<p>${esc(codes[c.errorCode]||c.errorCode)}</p>`:""}${!c.policy.ready?`<p>${esc(c.policy.reasons.join(" "))}</p>`:""}<p>${c.progress.map(g=>esc((status[g.status]||({EXCLUDED:'Excluidos por bajas o restricciones'}[g.status])||g.status)+': '+g.count)).join(' · ')}</p><p>SMTP aceptado no confirma entrega final. Los resultados inciertos no se reenvían. Cancelar detiene los pendientes; las entregas en curso podrían ser aceptadas.</p></div>`;
+      }).catch(e=>feedback(e.message,true));return;
+    }
     host.innerHTML = draft.sends
       .map(
         (s) =>
@@ -681,7 +797,7 @@
         ? rows
             .map(
               (d) =>
-                `<button class="mail-message" data-draft="${esc(d.id)}"><strong>${esc(d.subject || "(Sin asunto)")}</strong><small>${esc(overview.boxes.find((b) => b.id === d.mailboxId)?.address)} · ${esc(status[d.sends[0]?.status || d.status] || d.status)} · ${esc(date(d.updatedAt))}</small></button>`,
+                `<button class="mail-message" data-draft="${esc(d.id)}"><strong>${esc(d.subject || "(Sin asunto)")}</strong><small>${esc(overview.boxes.find((b) => b.id === d.mailboxId)?.address)} · ${esc(status[d.campaigns?.[0]?.status || d.sends[0]?.status || d.status] || d.status)} · ${esc(date(d.campaigns?.[0]?.scheduledAt || d.updatedAt))}${d.campaigns?.length ? " · Europe/Madrid" : ""}</small></button>`,
             )
             .join("")
         : "<p>No tienes borradores.</p>");
@@ -690,7 +806,7 @@
       (button) =>
         (button.onclick = guard(async () => {
           draft = await api("/drafts/" + button.dataset.draft);
-          renderComposer();
+          await renderComposer();
         })),
     );
   }
@@ -700,7 +816,13 @@
     const host = root.querySelector(".mail-settings"),
       b = overview.boxes.find((b) => b.id === id),
       admins = await api("/administrators");
-    host.innerHTML = `<button class="btn mail-back" data-back>← Volver</button><h3>Configuración de buzones</h3><p>Conecta direcciones ya existentes. No se crean cuentas ni se cambian DNS. Los campos de contraseña vacíos conservan la credencial guardada.</p><div class="mail-actions">${overview.boxes.map((b) => `<button class="btn" data-edit-box="${esc(b.id)}">${esc(b.name)}</button>`).join("")}<button class="btn" data-add-box>Añadir buzón</button></div><form><div class="mail-addresses"><label>Nombre visible<input name="name" value="${esc(b?.name || "")}" required maxlength="100"></label><label>Dirección<input name="address" type="email" value="${esc(b?.address || "")}" ${b ? "readonly" : ""} required></label><label>Nombre del remitente<input name="fromName" value="${esc(b?.fromName || "CRONOX")}" required maxlength="100"></label><label>Producto<select name="provider"><option value="hostinger">Hostinger Email</option><option value="titan">Titan Email contratado en Hostinger</option></select></label></div><p class="mail-muted">Comprueba el producto en hPanel → Emails → Conectar aplicaciones y dispositivos. Solo se admiten los servidores oficiales permitidos.</p><div class="mail-addresses"><label>IMAP<input name="imapHost" readonly></label><label>Puerto IMAP<input name="imapPort" type="number" value="993" readonly></label><label>SMTP<input name="smtpHost" readonly></label><label>Puerto SMTP<select name="smtpPort"><option value="465">465 · TLS directo</option><option value="587">587 · STARTTLS obligatorio</option></select></label><label>Variable privada IMAP<input name="imapSecretRef" value="${esc(b?.imapSecretRef || "")}" list="mailCredentialRefs" placeholder="SMTP_SUPPORT_PASS"></label><label>Variable privada SMTP<input name="smtpSecretRef" value="${esc(b?.smtpSecretRef || "")}" list="mailCredentialRefs" placeholder="SMTP_SUPPORT_PASS"></label><label>Contraseña IMAP nueva<input name="imapPassword" type="password" autocomplete="new-password" placeholder="${b?.imapCredentialSaved ? "Guardada; vacío conserva" : "Opcional si usas una variable"}"></label><label>Contraseña SMTP nueva<input name="smtpPassword" type="password" autocomplete="new-password" placeholder="${b?.smtpCredentialSaved ? "Guardada; vacío conserva" : "Opcional si usas una variable"}"></label></div><datalist id="mailCredentialRefs">${overview.credentialRefs.map((ref) => `<option value="${esc(ref)}">`).join("")}</datalist><label>Copia en Enviados<select name="sentCopy"><option value="append">Guardar con IMAP (comprobar copia antes de añadir)</option><option value="provider">El proveedor ya guarda una copia automáticamente</option></select></label><label><span><input type="checkbox" name="active" ${b?.active ? "checked" : ""}> Activar este buzón</span></label><label><span><input type="checkbox" name="notify" ${b?.notify !== false ? "checked" : ""}> Avisos de nuevos mensajes de Entrada</span></label><div class="mail-grants"><h4>Permisos explícitos para ADMIN</h4><p>SUPERADMIN tiene acceso. ADMIN necesita una concesión por buzón. USER y FRIEND no pueden acceder.</p><div data-grants></div><button class="btn" type="button" data-grant-add>Añadir permiso</button></div><button class="btn" type="submit">Guardar configuración</button>${b ? '<button class="btn" type="button" data-test>Probar IMAP y SMTP sin enviar correo</button>' : ""}</form><div data-test-result role="status"></div><div data-suggestions></div>`;
+    host.innerHTML = `<button class="btn mail-back" data-back>← Volver</button><h3>Configuración de buzones</h3><p>Selecciona un buzón y gestiona sus avisos y permisos.</p><div class="mail-actions">${overview.boxes.map((b) => `<button class="btn" data-edit-box="${esc(b.id)}">${esc(b.name)}</button>`).join("")}<button class="btn" data-add-box>Añadir buzón</button></div><form><div class="mail-addresses"><label>Nombre visible<input name="name" value="${esc(b?.name || "")}" required maxlength="100"></label><label>Dirección<input name="address" type="email" value="${esc(b?.address || "")}" ${b ? "readonly" : ""} required></label><label>Nombre del remitente<input name="fromName" value="${esc(b?.fromName || "CRONOX")}" required maxlength="100"></label></div><details class="mail-advanced"><summary>Configuración avanzada</summary><p>Las credenciales vacías conservan los valores guardados. Revisa el producto contratado antes de realizar cambios de mantenimiento.</p><label>Producto<select name="provider"><option value="hostinger">Hostinger Email</option><option value="titan">Titan Email contratado en Hostinger</option></select></label><p class="mail-muted">Comprueba el producto en hPanel → Emails → Conectar aplicaciones y dispositivos. Solo se admiten los servidores oficiales permitidos.</p><div class="mail-addresses"><label>IMAP<input name="imapHost" readonly></label><label>Puerto IMAP<input name="imapPort" type="number" value="993" readonly></label><label>SMTP<input name="smtpHost" readonly></label><label>Puerto SMTP<select name="smtpPort"><option value="465">465 · TLS directo</option><option value="587">587 · STARTTLS obligatorio</option></select></label><label>Variable privada IMAP<input name="imapSecretRef" value="${esc(b?.imapSecretRef || "")}" list="mailCredentialRefs" placeholder="SMTP_SUPPORT_PASS"></label><label>Variable privada SMTP<input name="smtpSecretRef" value="${esc(b?.smtpSecretRef || "")}" list="mailCredentialRefs" placeholder="SMTP_SUPPORT_PASS"></label><label>Contraseña IMAP nueva<input name="imapPassword" type="password" autocomplete="new-password" placeholder="${b?.imapCredentialSaved ? "Guardada; vacío conserva" : "Opcional si usas una variable"}"></label><label>Contraseña SMTP nueva<input name="smtpPassword" type="password" autocomplete="new-password" placeholder="${b?.smtpCredentialSaved ? "Guardada; vacío conserva" : "Opcional si usas una variable"}"></label></div><datalist id="mailCredentialRefs">${overview.credentialRefs.map((ref) => `<option value="${esc(ref)}">`).join("")}</datalist><label>Copia en Enviados<select name="sentCopy"><option value="append">Guardar con IMAP (comprobar copia antes de añadir)</option><option value="provider">El proveedor ya guarda una copia automáticamente</option></select></label>${b ? '<button class="btn" type="button" data-test>Probar IMAP y SMTP sin enviar correo</button>' : ""}<div data-test-result role="status"></div><fieldset><legend>Bajas y rebotes confirmados de campañas</legend><label>Dirección a excluir<input type="email" data-suppression-email></label><label>Motivo<select data-suppression-reason><option value="UNSUBSCRIBED">Baja solicitada</option><option value="CONFIRMED_HARD_BOUNCE">Rebote permanente confirmado</option></select></label><button class="btn" type="button" data-suppress>Excluir de futuras campañas</button><p>No se deben registrar como rebotes los avisos temporales. Esta exclusión se conserva aunque otro flujo marque una suscripción.</p></fieldset></details><label><span><input type="checkbox" name="active" ${b?.active ? "checked" : ""}> Activar este buzón</span></label><label><span><input type="checkbox" name="notify" ${b?.notify !== false ? "checked" : ""}> Avisos de nuevos mensajes de Entrada</span></label><div class="mail-grants"><h4>Permisos explícitos para ADMIN</h4><p>SUPERADMIN tiene acceso. ADMIN necesita una concesión por buzón. USER y FRIEND no pueden acceder.</p><div data-grants></div><button class="btn" type="button" data-grant-add>Añadir permiso</button></div><button class="btn" type="submit">Guardar configuración</button></form><div data-suggestions></div>`;
+    host.querySelector('[data-suppress]').onclick=guard(async()=>{
+      const email=host.querySelector('[data-suppression-email]').value;
+      if(!confirm('Excluir '+email+' de futuras campañas y registrar su preferencia de baja. ¿Continuar?'))return;
+      await api('/suppressions','POST',{email,reason:host.querySelector('[data-suppression-reason]').value});
+      host.querySelector('[data-suppression-email]').value='';feedback('Exclusión registrada.');
+    });
     const form = host.querySelector("form");
     form.elements.provider.value = b?.provider || "hostinger";
     form.elements.smtpPort.value = String(b?.smtpPort || 465);
@@ -812,85 +934,10 @@
       );
     }
   }
-  function b64(value) {
-    const padding = "=".repeat((4 - (value.length % 4)) % 4);
-    return Uint8Array.from(
-      atob((value + padding).replace(/-/g, "+").replace(/_/g, "/")),
-      (c) => c.charCodeAt(0),
-    );
-  }
   async function showDevices() {
     await leave();
-    show("devices");
-    const host = root.querySelector(".mail-devices"),
-      config = await api("/push/config"),
-      devices = await api("/push/devices");
-    host.innerHTML = `<button class="btn mail-back" data-back>← Volver</button><h3>Notificaciones en este dispositivo</h3><p>Los avisos son genéricos por defecto. Dependen del navegador, la conexión, el ahorro de batería y el sistema; no son inmediatos ni universales.</p><p>Android: utiliza un navegador compatible, permite notificaciones y revisa el ahorro de batería. iPhone/iPad: iOS/iPadOS 16.4 o posterior; abre en Safari, Compartir → Añadir a pantalla de inicio, abre el icono y pulsa Activar. Se necesita HTTPS.</p>${!config.configured ? '<p class="mail-notice">Pendiente de configuración Web Push en el servidor.</p>' : ""}<label>Nombre del dispositivo<input data-device-name value="Este dispositivo" maxlength="80"></label><div data-device-boxes>${overview.boxes.map((b) => `<label><span><input type="checkbox" value="${esc(b.id)}" checked> ${esc(b.name)} · ${esc(b.address)}</span></label>`).join("")}</div><label><span><input type="checkbox" data-push-details> Mostrar remitente y asunto en la pantalla bloqueada, si tengo permiso</span></label><button class="btn" data-enable ${!config.configured ? "disabled" : ""}>Activar o actualizar notificaciones</button><button class="btn" data-disable-local>Desactivar en este navegador</button><h4>Dispositivos de tu cuenta</h4>${devices.map((d) => `<div class="mail-notice">${esc(d.name)} · ${d.active ? "Activo" : "Desactivado"} ${d.active ? `<button class="btn" data-disable-device="${esc(d.id)}">Desactivar</button>` : ""}</div>`).join("")}<p data-push-result role="status"></p>`;
-    const current = devices.find(
-      (d) => d.id === sessionStorage.getItem("cronox-mail-device"),
-    );
-    if (current) {
-      host.querySelector("[data-device-name]").value = current.name;
-      host.querySelector("[data-push-details]").checked = current.details;
-      host
-        .querySelectorAll("[data-device-boxes] input")
-        .forEach(
-          (input) => (input.checked = current.mailboxIds.includes(input.value)),
-        );
-    }
-    host.querySelector("[data-back]").onclick = () => show("list");
-    host.querySelector("[data-enable]").onclick = guard(async () => {
-      if (
-        !("serviceWorker" in navigator) ||
-        !("PushManager" in window) ||
-        !("Notification" in window)
-      )
-        throw Error(
-          "Este navegador no admite Web Push. En iPhone abre el icono añadido a la pantalla de inicio.",
-        );
-      if ((await Notification.requestPermission()) !== "granted")
-        throw Error(
-          "No se ha concedido permiso. Revisa los ajustes del navegador.",
-        );
-      const registration = await navigator.serviceWorker.register(
-        "/mailbox-sw.js",
-        { scope: "/" },
-      );
-      await navigator.serviceWorker.ready;
-      let subscription = await registration.pushManager.getSubscription();
-      if (!subscription)
-        subscription = await registration.pushManager.subscribe({
-          userVisibleOnly: true,
-          applicationServerKey: b64(config.publicKey),
-        });
-      const result = await api("/push/devices", "POST", {
-        subscription: subscription.toJSON(),
-        name: host.querySelector("[data-device-name]").value,
-        mailboxIds: [
-          ...host.querySelectorAll("[data-device-boxes] input:checked"),
-        ].map((i) => i.value),
-        details: host.querySelector("[data-push-details]").checked,
-      });
-      sessionStorage.setItem("cronox-mail-device", result.id);
-      host.querySelector("[data-push-result]").textContent =
-        "Notificaciones activadas para los buzones seleccionados. No se ha enviado ningún correo.";
-    });
-    host.querySelector("[data-disable-local]").onclick = guard(async () => {
-      const id = sessionStorage.getItem("cronox-mail-device");
-      if (id) await api("/push/devices/" + id, "DELETE");
-      const registration = await navigator.serviceWorker.getRegistration("/");
-      const sub = await registration?.pushManager.getSubscription();
-      if (sub) await sub.unsubscribe();
-      sessionStorage.removeItem("cronox-mail-device");
-      await showDevices();
-    });
-    host.querySelectorAll("[data-disable-device]").forEach(
-      (button) =>
-        (button.onclick = guard(async () => {
-          await api("/push/devices/" + button.dataset.disableDevice, "DELETE");
-          await showDevices();
-        })),
-    );
+    location.hash = '#section-push';
+    await window.CRONOX_PUSH?.load();
   }
   async function pulse() {
     if (!initialized || !overview || document.visibilityState !== "visible")

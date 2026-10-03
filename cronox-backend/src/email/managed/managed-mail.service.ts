@@ -444,7 +444,7 @@ export class ManagedMailService {
       throw new BadRequestException('Firma no disponible en esta cuenta.');
     return signature.document;
   }
-  private async render(
+  async render(
     key: string,
     t: Pick<
       ManagedEmailTemplate,

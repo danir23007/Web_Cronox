@@ -1,6 +1,7 @@
 import {
   VisitorHistoryService,
   isPublicVisitPath,
+  isAutomatedPushVisit,
 } from './visitor-history.service';
 import {
   PublicVisitorController,
@@ -11,6 +12,20 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { AdminGuard } from '../common/guards/admin.guard';
 
 describe('Visitor history boundaries', () => {
+  it('excludes identified bots and browser automation from push without altering public path rules', () => {
+    for (const ua of [
+      'Googlebot/2.1',
+      'HeadlessChrome/145',
+      'UptimeRobot/2.0',
+      'Playwright',
+    ])
+      expect(isAutomatedPushVisit({ get: () => ua } as never)).toBe(true);
+    expect(
+      isAutomatedPushVisit({
+        get: () => 'Mozilla/5.0 iPhone Safari/605',
+      } as never),
+    ).toBe(false);
+  });
   it('only accepts known public pages without query/fragment data', () => {
     for (const path of [
       '/',

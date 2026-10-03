@@ -8,6 +8,8 @@ import { MailboxReaderService } from './mailbox-reader.service';
 import { MailboxProviderService } from './mailbox-provider.service';
 import { MailboxLeasesService } from './mailbox-leases.service';
 import { addresses, maxMessageBytes, safeError } from './mailbox-security';
+import { assertResolved } from './mailbox-campaign-policy';
+import { effectiveMailHtml } from '../email/managed/mail-renderer';
 
 export function smtpOutcome(error: any, attempted = true) {
   if (
@@ -87,6 +89,8 @@ export class MailboxSenderService {
             (v) => !to.includes(v) && !cc.includes(v),
           );
         const attachments: any[] = [];
+        if (d.mode === 'circles') throw Error('USE_CAMPAIGN_QUEUE');
+        assertResolved(d.subject, d.text, d.html || '');
         for (const f of d.files) {
           if (!f.key) throw Error('ATTACHMENT_UNAVAILABLE');
           attachments.push({
@@ -102,6 +106,7 @@ export class MailboxSenderService {
           bcc,
           subject: d.subject,
           text: d.text,
+          html: d.html ? effectiveMailHtml(d.html) : undefined,
           messageId: pending.messageId,
           inReplyTo: d.inReplyTo || undefined,
           references: d.references,

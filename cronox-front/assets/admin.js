@@ -318,6 +318,7 @@
     notes: ['ADMIN', 'SUPERADMIN'],
   };
   const SECTION_PERMISSIONS = {
+    'section-push': 'mails',
     'section-23': 'requests',
     'section-34': 'requests',
     'section-activity': 'auditLog',
@@ -394,6 +395,7 @@
   };
 
   const applyRoleVisibility = () => {
+    setNavVisibility('section-push', canAccess('mails'));
     setNavVisibility('section-23', canAccess('requests'));
     setNavVisibility('section-34', canAccess('requests'));
     setNavVisibility('section-activity', canAccess('auditLog'));
@@ -1645,6 +1647,7 @@
     if (sectionId === 'section-waitlist') window.CRONOX_WAITLIST_ADMIN?.load?.();
     if (sectionId === 'section-mails') window.CRONOX_MAILS?.load?.();
     if (sectionId === 'section-inbox') window.CRONOX_INBOX?.load?.();
+    if (sectionId === 'section-push') window.CRONOX_PUSH?.load?.();
     if (sectionId === 'section-key-screen') window.CRONOX_KEY_SCREEN?.load?.();
     if (sectionId === 'section-newsletter') window.CRONOX_NEWSLETTER_ADMIN?.load?.();
     if (sectionId === 'section-footer') window.CRONOX_ADMIN_FOOTER?.load?.();

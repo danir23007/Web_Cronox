@@ -113,6 +113,11 @@ model MailboxMessage {
 }
 
 model MailboxDraft {
+  mode       String        @default("individual")
+  html       String        @default("") @db.Text
+  templateId String?
+  circles    Int[]         @default([])
+  campaigns  MailboxCampaign[]
   id         String        @id @default(uuid())
   mailboxId  String
   mailbox    Mailbox       @relation(fields: [mailboxId], references: [id], onDelete: Cascade)
@@ -132,6 +137,54 @@ model MailboxDraft {
   sends      MailboxSend[]
 
   @@index([userId, mailboxId, updatedAt])
+}
+
+// Explicit, consent-filtered campaigns. Recipient snapshots are private API data.
+model MailboxCampaign {
+  errorCode String?
+  id             String   @id @default(uuid())
+  draftId        String
+  draft          MailboxDraft @relation(fields: [draftId], references: [id], onDelete: Restrict)
+  draftRevision  Int
+  requestKey     String   @unique
+  status         String   @default("SCHEDULED")
+  scheduledAt    DateTime @db.Timestamptz(3)
+  startedAt      DateTime? @db.Timestamptz(3)
+  completedAt    DateTime? @db.Timestamptz(3)
+  cancelledAt    DateTime? @db.Timestamptz(3)
+  snapshot       Json
+  deliveries     MailboxCampaignDelivery[]
+  createdAt      DateTime @default(now())
+  @@unique([draftId, draftRevision])
+  @@index([status, scheduledAt])
+}
+
+model MailboxCampaignDelivery {
+  id           String   @id @default(uuid())
+  campaignId   String
+  campaign     MailboxCampaign @relation(fields: [campaignId], references: [id], onDelete: Restrict)
+  email        String
+  status       String   @default("PENDING")
+  messageId    String   @unique
+  attempts     Int      @default(0)
+  readyAt      DateTime @default(now()) @db.Timestamptz(3)
+  startedAt    DateTime? @db.Timestamptz(3)
+  completedAt  DateTime? @db.Timestamptz(3)
+  errorCode    String?
+  sentCopyStatus String @default("NOT_ATTEMPTED")
+  @@unique([campaignId, email])
+  @@index([status, readyAt])
+}
+
+model MailboxCampaignClock {
+  id        String @id
+  nextAt    DateTime @db.Timestamptz(3)
+}
+
+model MailboxSuppression {
+  email     String @id
+  reason    String
+  createdAt DateTime @default(now())
 }
 
 model MailboxSend {
@@ -188,6 +241,11 @@ model MailboxNotice {
 }
 
 model MailboxPushDevice {
+  mailEnabled Boolean @default(true)
+  paidOrdersSince DateTime? @db.Timestamptz(3)
+  visitsSince DateTime? @db.Timestamptz(3)
+  waitlistSince DateTime? @db.Timestamptz(3)
+  preferenceRevision Int @default(1)
   id             String    @id @default(uuid())
   userId         Int
   sessionId      String
@@ -207,6 +265,28 @@ model MailboxPushDevice {
 
   @@index([active, nextPushAt])
   @@index([userId, sessionId])
+}
+
+model MailboxPushEvent {
+  id String @id
+  kind String
+  payload Json
+  occurredAt DateTime @db.Timestamptz(3)
+  deliveries MailboxPushDelivery[]
+}
+
+model MailboxPushDelivery {
+  eventId String
+  event MailboxPushEvent @relation(fields: [eventId], references: [id], onDelete: Restrict)
+  deviceId String
+  enabledSince DateTime @db.Timestamptz(3)
+  status String @default("PENDING")
+  attempts Int @default(0)
+  readyAt DateTime @default(now()) @db.Timestamptz(3)
+  startedAt DateTime? @db.Timestamptz(3)
+  errorCode String?
+  @@id([eventId, deviceId])
+  @@index([deviceId, status, readyAt])
 }
 
 model MailboxAudit {

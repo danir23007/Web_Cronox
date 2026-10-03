@@ -141,6 +141,12 @@ export function cleanMailHtml(html: string, placeholders = false) {
   });
 }
 
+// Keep the same responsive email shell when editing the effective HTML in Correo.
+// Only the existing body sanitizer accepts user markup; head CSS is fixed code.
+export function effectiveMailHtml(html: string, placeholders = false) {
+  return `<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>@media(max-width:480px){.mail-column{display:block!important;width:100%!important}}</style></head><body style="margin:0;background:#111111;color:#eeeeee;">${cleanMailHtml(html, placeholders)}</body></html>`;
+}
+
 function validateExpressions(source: string, purpose?: string | null) {
   if (/\{\{\{|\}\}\}|\{\{[>&!]/.test(source))
     throw new BadRequestException(

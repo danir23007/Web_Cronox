@@ -25,7 +25,7 @@
   <link rel="stylesheet" href="assets/admin-inventory.css?v=2">
   <link rel="stylesheet" href="assets/waitlist.css?v=1">
   <link rel="stylesheet" href="assets/admin-mails.css?v=1">
-  <link rel="stylesheet" href="assets/admin-inbox.css?v=1">
+  <link rel="stylesheet" href="assets/admin-inbox.css?v=3">
   <link rel="manifest" href="/mailbox.webmanifest">
   <link rel="apple-touch-icon" href="/favicon.png">
   <link rel="stylesheet" href="assets/admin-key-screen.css?v=3">
@@ -309,6 +309,7 @@
         </div>
         <button class="sidebar-group" aria-expanded="false" aria-controls="navAdmin"><span aria-hidden="true">⚙</span>Admin<span class="sidebar-chevron">⌄</span></button>
         <div id="navAdmin" class="sidebar-children" hidden>
+          <button data-nav-target="section-push">Notificaciones push</button>
           <button data-nav-target="section-activity">Actividad</button>
           <button data-nav-target="section-footer">Footer</button>
         </div>
@@ -1017,6 +1018,11 @@
         </div>
       </div>
     </div>
+    <section id="section-push" class="card admin-section" aria-labelledby="title-push" hidden>
+      <button class="btn admin-view-back" data-back-target="section-dashboard" type="button">← Atrás</button>
+      <h2 id="title-push">Notificaciones push</h2>
+      <div id="pushWorkspace" class="mail-workspace"></div>
+    </section>
     <section id="section-inbox" class="card admin-section" aria-labelledby="title-inbox" hidden>
       <h2 id="title-inbox" class="sr-only">Correo</h2>
       <div id="mailboxWorkspace" class="inbox-root"></div>
@@ -1971,7 +1977,8 @@
   <link rel="stylesheet" href="assets/admin-bulk.css?v=2">
   <script src="assets/admin-bulk.js?v=4"></script>
   <script src="assets/admin-section-headers.js?v=1"></script>
-  <script src="assets/admin-inbox.js?v=2"></script>
+  <script src="assets/admin-push.js?v=1"></script>
+  <script src="assets/admin-inbox.js?v=4"></script>
   <script src="assets/admin.js?v=5"></script>
   <script src="assets/admin-inventory.js?v=2"></script>
   <script src="assets/admin-waitlist.js?v=1"></script>

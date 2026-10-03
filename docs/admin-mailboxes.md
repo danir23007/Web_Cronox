@@ -1,5 +1,9 @@
 # Correo de buzones en CRONOX
 
+Las preferencias y dispositivos se gestionan ahora en [Notificaciones push](admin-push-notifications.md), también desde el botón Notificaciones de Correo. Esta ampliación está comiteada en local y pendiente de publicación.
+
+La ampliación local de carpetas múltiples, plantillas por remitente y campañas programadas por círculos se describe en [Correo: campañas y validación](admin-mailbox-campaigns.md). Incluye configuración técnica plegada y edición HTML; todavía no está publicada. Las instrucciones de conexión siguientes siguen siendo válidas.
+
 El módulo está en **Administrador → Correo**. Es un cliente IMAP/SMTP de los buzones existentes, separado de **Plantillas / Mail** y del correo transaccional. No crea cuentas, cambia DNS ni sustituye Hostinger. La publicación y activación autorizadas del 3 de octubre de 2026 están documentadas en [el registro de validación de producción](admin-publication-2026-10-03.md); allí se distingue lo comprobado de la prueba automática física de push todavía pendiente.
 
 ## Conectar cada buzón existente
@@ -20,7 +24,7 @@ Selecciona un buzón o **Todos los buzones**. Filtra por sus carpetas reales, le
 
 Abrir un mensaje descarga sus partes de texto/HTML y después lo marca leído intencionalmente en IMAP. La importación y la preparación de vistas previas no lo marcan leído. El HTML se sanitiza y muestra en un iframe aislado, sin scripts, formularios, estilos del remitente ni acceso al panel. Las imágenes remotas están bloqueadas. **Cargar imágenes externas** permite HTTPS y puede revelar IP y apertura al remitente. Los adjuntos se descargan tras autorización; no se ejecutan ni previsualizan automáticamente. Los límites muestran la alternativa de consultar el original en el webmail.
 
-**Responder** respeta Reply-To y el buzón original. **Responder a todos** elimina duplicados y la dirección propia, conserva CC y no reconstruye CCO. **Reenviar** copia los adjuntos permitidos bajo los límites locales. Escribe destinatarios como direcciones ASCII separadas por comas, sin nombres de presentación, comentarios ni direcciones entre comillas; los dominios internacionales deben estar en punycode. El cuerpo del compositor es texto plano. El remitente permanece ligado al buzón elegido, con cabeceras de hilo derivadas del original.
+**Responder** respeta Reply-To y el buzón original. **Responder a todos** elimina duplicados y la dirección propia, conserva CC y no reconstruye CCO. **Reenviar** copia los adjuntos permitidos bajo los límites locales. En estos mensajes individuales escribe destinatarios como direcciones ASCII separadas por comas, sin nombres de presentación, comentarios ni direcciones entre comillas; los dominios internacionales deben estar en punycode. El remitente permanece ligado al buzón elegido, con cabeceras de hilo derivadas del original. La ampliación local admite HTML y mantiene estos modos individuales separados de los envíos por círculos.
 
 Los borradores son personales y persistentes, incluso para SUPERADMIN. El guardado muestra su estado y detecta cambios desde otra pestaña. Si falla la conexión, el texto pendiente se conserva en `sessionStorage` de esa pestaña y se ofrece recuperarlo al reabrir el borrador. La navegación avisa o exige guardar; no cierres el navegador sin revisar un error de guardado. El cierre de sesión limpia esta recuperación local. Los adjuntos se guardan en el servidor; no se recuperan archivos cuya subida no terminó.
 

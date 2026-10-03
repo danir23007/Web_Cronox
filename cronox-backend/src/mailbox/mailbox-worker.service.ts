@@ -5,6 +5,8 @@ import { MailboxSenderService } from './mailbox-sender.service';
 import { MailboxPushService } from './mailbox-push.service';
 import { MailboxReaderService } from './mailbox-reader.service';
 import { keyring } from './mailbox-security';
+import { MailboxCampaignService } from './mailbox-campaign.service';
+import { AdminEventPushService } from './admin-event-push.service';
 @Injectable()
 export class MailboxWorkerService implements OnModuleInit, OnModuleDestroy {
   private timer?: ReturnType<typeof setInterval>;
@@ -16,6 +18,8 @@ export class MailboxWorkerService implements OnModuleInit, OnModuleDestroy {
     readonly sender: MailboxSenderService,
     readonly push: MailboxPushService,
     readonly reader: MailboxReaderService,
+    readonly campaigns?: MailboxCampaignService,
+    readonly events?: AdminEventPushService,
   ) {}
   onModuleInit() {
     if (
@@ -39,6 +43,7 @@ export class MailboxWorkerService implements OnModuleInit, OnModuleDestroy {
     this.running = true;
     try {
       await this.sender.recover();
+      await this.campaigns?.recover();
       if (process.env.MAILBOX_SEND_ENABLED === 'true') {
         const queued = await this.db.mailboxSend.findMany({
           where: { status: 'PENDING' },
@@ -47,6 +52,7 @@ export class MailboxWorkerService implements OnModuleInit, OnModuleDestroy {
           take: 2,
         });
         await Promise.allSettled(queued.map((s) => this.sender.process(s.id)));
+        await this.campaigns?.tick();
       }
       const boxes = await this.db.mailbox.findMany({
         where: { active: true, nextSyncAt: { lte: new Date() } },
@@ -86,6 +92,20 @@ export class MailboxWorkerService implements OnModuleInit, OnModuleDestroy {
           orderBy: { nextPushAt: 'asc' },
         });
         for (const d of devices) await this.push.deliver(d.id);
+        const eventDevices = await this.db.mailboxPushDevice.findMany({
+          where: {
+            active: true,
+            OR: [
+              { paidOrdersSince: { not: null } },
+              { visitsSince: { not: null } },
+              { waitlistSince: { not: null } },
+            ],
+          },
+          select: { id: true },
+          take: 100,
+          orderBy: { updatedAt: 'asc' },
+        });
+        for (const d of eventDevices) await this.events?.deliver(d.id);
       }
     } finally {
       this.running = false;

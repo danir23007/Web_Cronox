@@ -311,6 +311,26 @@
   width: 100%;
   text-align: left;
 }
+.inbox-root .mail-boxes button strong { display:block; width:100%; font-weight:800; }
+.inbox-root .mail-boxes .mail-unread.has-unread { color:var(--admin-c-a32c2c, #ad2430); font-weight:700; }
+.inbox-root fieldset { min-width:0; border:1px solid var(--mail-border); border-radius:8px; margin:12px 0; }
+.inbox-root .mail-folder-filter label { overflow-wrap:anywhere; font-size:13px; }
+.inbox-root .mail-advanced { border:1px solid var(--mail-border); border-radius:8px; padding:12px; margin:12px 0; }
+.inbox-root summary { cursor:pointer; font-weight:700; margin-bottom:10px; }
+.inbox-root .mail-editor iframe { width:100%; height:500px; box-sizing:border-box; border:1px solid var(--mail-border); background:white; }
+.inbox-root .mail-variable-dialog { color:inherit; background:var(--admin-surface,#fff); border:1px solid var(--mail-border); border-radius:12px; width:min(600px,calc(100vw - 60px)); max-height:80vh; overflow:auto; }
+.inbox-root .mail-variable-dialog::backdrop { background:#0006; }
 .inbox-root[data-view="list"] .mail-list {
   grid-column: 2 / -1;
 }
+#pushWorkspace { max-width:760px; overflow-wrap:anywhere; }
+#pushWorkspace label { display:block; margin:14px 0; }
+#pushWorkspace label > span { display:flex; align-items:flex-start; gap:8px; }
+#pushWorkspace input:not([type="checkbox"]), #pushWorkspace select { display:block; width:100%; box-sizing:border-box; margin-top:7px; padding:10px; border:1px solid var(--admin-border,#dfe4ed); border-radius:8px; color:inherit; background:var(--admin-surface,#fff); }
+#pushWorkspace input[type="checkbox"] { flex:none; margin-top:3px; }
+#pushWorkspace fieldset { min-width:0; padding:8px 16px; border:1px solid var(--admin-border,#dfe4ed); border-radius:10px; }
+#pushWorkspace [data-device-boxes] { padding-left:24px; }
+#pushWorkspace .btn { margin:4px 6px 4px 0; max-width:100%; white-space:normal; }
+#pushWorkspace details { margin-top:20px; padding:16px; border:1px solid var(--admin-border,#dfe4ed); border-radius:10px; }
+#pushWorkspace summary { cursor:pointer; }
+#pushWorkspace .mail-error { color:var(--admin-c-a32c2c,#ad2430); }

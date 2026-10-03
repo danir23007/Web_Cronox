@@ -2,6 +2,8 @@ import {
   BadRequestException,
   Injectable,
   ServiceUnavailableException,
+  NotFoundException,
+  ConflictException,
 } from '@nestjs/common';
 import { createHash } from 'node:crypto';
 import { Agent } from 'node:https';
@@ -82,6 +84,9 @@ export class MailboxPushService {
     const endpointHash = createHash('sha256')
       .update(sub.endpoint)
       .digest('hex');
+    const existing = await this.db.mailboxPushDevice.findUnique({
+      where: { endpointHash },
+    });
     const device = await this.db.mailboxPushDevice.upsert({
       where: { endpointHash },
       create: {
@@ -100,12 +105,21 @@ export class MailboxPushService {
         sessionVersion: session.sv,
         subscription: encrypt(JSON.stringify(sub), `push:${endpointHash}`),
         active: true,
-        name: String(input.name || 'Este dispositivo').slice(0, 80),
-        mailboxIds: input.mailboxIds,
-        details: input.details === true,
         cursorAt: new Date(),
         failures: 0,
         nextPushAt: new Date(),
+        ...(existing?.userId !== actor.id
+          ? {
+              name: String(input.name || 'Este dispositivo').slice(0, 80),
+              mailboxIds: input.mailboxIds,
+              details: input.details === true,
+              mailEnabled: true,
+              paidOrdersSince: null,
+              visitsSince: null,
+              waitlistSince: null,
+              preferenceRevision: { increment: 1 },
+            }
+          : {}),
       },
     });
     return { id: device.id, active: true };
@@ -121,10 +135,116 @@ export class MailboxPushService {
         mailboxIds: true,
         details: true,
         createdAt: true,
+        mailEnabled: true,
+        paidOrdersSince: true,
+        visitsSince: true,
+        waitlistSince: true,
+        preferenceRevision: true,
       },
       orderBy: { createdAt: 'desc' },
       take: 100,
     });
+  }
+  async preferences(actor: MailActor, id: string, input: any) {
+    await this.access.allowedIds(actor);
+    if (
+      !input ||
+      typeof input !== 'object' ||
+      !Number.isInteger(input.revision) ||
+      typeof input.name !== 'string' ||
+      !input.name.trim() ||
+      input.name.length > 80 ||
+      !['mailEnabled', 'paidOrders', 'visits', 'waitlist', 'details'].every(
+        (k) => typeof input[k] === 'boolean',
+      ) ||
+      !Array.isArray(input.mailboxIds) ||
+      input.mailboxIds.length > 100 ||
+      Object.keys(input).some(
+        (k) =>
+          ![
+            'revision',
+            'name',
+            'mailEnabled',
+            'paidOrders',
+            'visits',
+            'waitlist',
+            'details',
+            'mailboxIds',
+          ].includes(k),
+      )
+    )
+      throw new BadRequestException('PUSH_PREFERENCES_INVALID');
+    if (input.paidOrders && actor.role !== 'SUPERADMIN')
+      throw new BadRequestException('PUSH_ORDERS_SUPERADMIN_REQUIRED');
+    const allowed = await this.access.allowedIds(actor);
+    if (
+      input.mailboxIds.some(
+        (id: any) => typeof id !== 'string' || !allowed.includes(id),
+      )
+    )
+      throw new BadRequestException('MAILBOX_PUSH_ACCESS_DENIED');
+    return this.db.$transaction(async (tx) => {
+      const old = await tx.mailboxPushDevice.findFirst({
+        where: { id, userId: actor.id },
+      });
+      if (!old) throw new NotFoundException('PUSH_DEVICE_NOT_FOUND');
+      const now = new Date(),
+        data: any = {
+          name: input.name.trim(),
+          mailEnabled: input.mailEnabled,
+          mailboxIds: [...new Set(input.mailboxIds)],
+          details: input.details,
+          preferenceRevision: { increment: 1 },
+          nextPushAt: now,
+        };
+      for (const [key, column] of Object.entries({
+        paidOrders: 'paidOrdersSince',
+        visits: 'visitsSince',
+        waitlist: 'waitlistSince',
+      }))
+        data[column] = input[key] ? old[column] || now : null;
+      if (
+        (input.mailEnabled && !old.mailEnabled) ||
+        input.mailboxIds.some((id: string) => !old.mailboxIds.includes(id))
+      )
+        data.cursorAt = now;
+      const result = await tx.mailboxPushDevice.updateMany({
+        where: { id, userId: actor.id, preferenceRevision: input.revision },
+        data,
+      });
+      if (!result.count)
+        throw new ConflictException('PUSH_PREFERENCES_CHANGED_RELOAD');
+      return { ok: true };
+    });
+  }
+  async sendPayload(
+    device: any,
+    payload: any,
+    beforeSend?: () => Promise<void>,
+  ) {
+    const sub = JSON.parse(
+      decrypt(device.subscription, `push:${device.endpointHash}`),
+    );
+    const agent = pinnedPushAgent(await resolvePublic(pushHost(sub.endpoint)));
+    try {
+      await beforeSend?.();
+      return await webpush.sendNotification(sub, JSON.stringify(payload), {
+        TTL: 86400,
+        topic: createHash('sha256')
+          .update(payload.tag)
+          .digest('base64url')
+          .slice(0, 32),
+        timeout: 15000,
+        agent,
+        vapidDetails: {
+          subject: process.env.MAILBOX_VAPID_SUBJECT!,
+          publicKey: process.env.MAILBOX_VAPID_PUBLIC_KEY!,
+          privateKey: process.env.MAILBOX_VAPID_PRIVATE_KEY!,
+        },
+      });
+    } finally {
+      agent.destroy();
+    }
   }
   async disable(actor: MailActor, id?: string, sessionId?: string) {
     await this.access.allowedIds(actor);
@@ -221,7 +341,9 @@ export class MailboxPushService {
       }
       const actor = { id: session.userId, role: session.user.role },
         allowed = await this.access.allowedIds(actor);
-      const ids = allowed.filter((id) => device.mailboxIds.includes(id));
+      const ids = device.mailEnabled
+        ? allowed.filter((id) => device.mailboxIds.includes(id))
+        : [];
       const result = await this.notices(actor, device.cursorAt.toISOString());
       const notices = result.notices.filter((n) => ids.includes(n.mailboxId));
       if (!notices.length) {
@@ -266,6 +388,7 @@ export class MailboxPushService {
             currentNotices.some((fresh) => fresh.id === n.id),
         ) ||
         !currentDevice.active ||
+        !currentDevice.mailEnabled ||
         currentDevice.userId !== device.userId ||
         currentDevice.sessionId !== device.sessionId ||
         currentDevice.sessionVersion !== device.sessionVersion

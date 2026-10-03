@@ -61,6 +61,7 @@ export class MailboxAccessService {
         files: true,
         mailbox: true,
         sends: { orderBy: { createdAt: 'desc' } },
+        campaigns: { orderBy: { createdAt: 'desc' }, take: 1 },
       },
     });
     if (!draft) throw new NotFoundException('MAILBOX_DRAFT_NOT_FOUND');
