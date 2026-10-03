@@ -49,6 +49,7 @@
     signatureMode: state.current.signatureMode || "none",
     signatureId: state.current.signatureId || undefined,
     revision: state.current.revision || undefined,
+    ...(state.current.familyId ? {textOverride:state.current.textOverride ?? state.current.text} : {}),
   });
   function checkpoint() {
     state.history.push(D.clone(state.current));
@@ -104,12 +105,134 @@
       '<header class="mail-view-heading"><div><span class="mail-eyebrow">' +
       esc(state.account.email || state.key) + '</span><h3>Elige un círculo</h3>' +
       '<p>Cada círculo conserva sus propias plantillas y borradores.</p></div>' +
-      button("signatures", "Firmas", "", "btn mail-secondary") + '</header><div class="mail-circles">' +
+      (state.key === "INFO" ? button("families", "Familias de campa\u00f1as", "", "btn mail-secondary") : "") + button("signatures", "Firmas", "", "btn mail-secondary") + '</header><div class="mail-circles">' +
       state.folders.map((f, index) => navCard(
         f.name, f._count.templates + (f._count.templates === 1 ? " plantilla" : " plantillas"),
         "", "circle", f.id, String(index + 1).padStart(2, "0"),
       )).join("") + "</div>";
     message("Selecciona un círculo.");
+  }
+  async function renderFamilies() {
+    if (!canLeave()) return;
+    state.current = null;
+    state.dirty = false;
+    const data = await api(pathFor("/families"));
+    root.innerHTML =
+      breadcrumb("circles", "Información", "Familias de campañas") +
+      "<h3>Familias de campañas</h3><p>Cada familia conserva una identidad estable y una versión independiente por círculo. Las plantillas transaccionales permanecen separadas.</p>" +
+      '<form data-family-create><label>Nombre general<input name="name" maxlength="120" required></label><label>Evento<select name="eventKind"><option value="GENERAL">Comunicación general</option><option value="RESTOCK">Reposición de talla</option><option value="LAUNCH">Lanzamiento</option></select></label><button class="btn">Crear familia</button></form>' +
+      data.families
+        .map(
+          (f) =>
+            `<section class="mail-notice"><form data-family-rename="${esc(f.id)}"><label>Nombre general<input name="name" value="${esc(f.name)}" maxlength="120" required></label><button class="btn">Guardar nombre</button></form><p>Evento: ${esc(f.eventKind)}</p>${[
+              1, 2, 3, 4, 5,
+            ]
+              .map((c) => {
+                const v = f.versions.find((v) => v.campaignCircle === c);
+                return `<article><h4>Círculo ${c}</h4>${
+                  v
+                    ? `<p>${esc(v.name)} · ${esc(v.subject)}${v.archivedAt ? " · Archivada: restaura la versión para utilizarla" : ""}</p><button class="btn" type="button" data-version-edit="${esc(v.id)}">Editar esta versión</button>`
+                    : `<form data-version-link="${esc(f.id)}" data-circle="${c}"><label>Relacionar plantilla existente<select name="templateId" required><option value="">Selecciona una versión disponible</option>${data.available
+                        .filter(
+                          (t) =>
+                            !t.purpose ||
+                            t.purpose ===
+                              (f.eventKind === "GENERAL"
+                                ? "GENERIC"
+                                : f.eventKind),
+                        )
+                        .map(
+                          (t) =>
+                            `<option value="${esc(t.id)}">${esc(t.name)}</option>`,
+                        )
+                        .join(
+                          "",
+                        )}</select></label><button class="btn">Relacionar con círculo ${c}</button></form>`
+                }</article>`;
+              })
+              .join("")}</section>`,
+        )
+        .join("");
+    root.querySelector("[data-family-create]").onsubmit = async (e) => {
+      e.preventDefault();
+      try {
+        await api(pathFor("/families"), "POST", {
+          name: e.target.elements.name.value,
+          eventKind: e.target.elements.eventKind.value,
+        });
+        await renderFamilies();
+      } catch (e) {
+        message(e.message);
+      }
+    };
+    root.querySelectorAll("[data-family-rename]").forEach(
+      (form) =>
+        (form.onsubmit = async (e) => {
+          e.preventDefault();
+          try {
+            const f = data.families.find(
+              (f) => f.id === form.dataset.familyRename,
+            );
+            await api(
+              pathFor("/families/" + encodeURIComponent(f.id)),
+              "PATCH",
+              {
+                name: form.elements.name.value,
+                eventKind: f.eventKind,
+                revision: f.revision,
+              },
+            );
+            await renderFamilies();
+          } catch (e) {
+            message(e.message);
+          }
+        }),
+    );
+    root.querySelectorAll("[data-version-link]").forEach(
+      (form) =>
+        (form.onsubmit = async (e) => {
+          e.preventDefault();
+          try {
+            const t = data.available.find(
+              (t) => t.id === form.elements.templateId.value,
+            );
+            if (!t) return;
+            await api(
+              pathFor(
+                "/families/" +
+                  encodeURIComponent(form.dataset.versionLink) +
+                  "/versions/" +
+                  form.dataset.circle,
+              ),
+              "PATCH",
+              { templateId: t.id, revision: t.revision },
+            );
+            await renderFamilies();
+          } catch (e) {
+            message(e.message);
+          }
+        }),
+    );
+    root.querySelectorAll("[data-version-edit]").forEach(
+      (b) =>
+        (b.onclick = async () => {
+          try {
+            state.current = await api(
+              pathFor(
+                "/templates/" + encodeURIComponent(b.dataset.versionEdit),
+              ),
+            );
+            state.folderId = state.current.folderId;
+            state.signatureEditor = false;
+            state.history = [];
+            state.future = [];
+            state.selected = [];
+            editor();
+          } catch (e) {
+            message(e.message);
+          }
+        }),
+    );
   }
   async function openCircle(id) {
     state.folderId = id; state.page = 1;
@@ -300,7 +423,7 @@
           '" maxlength="200" placeholder="Asunto del correo"></label><label><span>Texto previo</span>' +
           '<input data-field="preheader" value="' + esc(current.preheader || "") +
           '" maxlength="300" placeholder="Texto que se ve junto al asunto"></label>'
-        : "") + '</section><div class="mail-builder"><aside class="mail-add-panel"><h4>Añadir</h4>' +
+        : "") + (current.familyId ? '<p>Versi\u00f3n independiente de campa\u00f1a \u00b7 C\u00edrculo ' + esc(current.campaignCircle) + '</p><label>Texto plano alternativo<textarea data-field="textOverride">' + esc(current.textOverride == null ? current.text : current.textOverride) + '</textarea></label>' : '') + '</section><div class="mail-builder"><aside class="mail-add-panel"><h4>Añadir</h4>' +
       "<p>Arrastra un bloque al correo</p>" + blockChoices() +
       button("assets", "Biblioteca de imágenes", "", "mail-library-button") +
       '</aside><main class="mail-workbench"><div class="mail-preview-bar"><div class="mail-device-switch">' +
@@ -469,7 +592,7 @@
         state.current.id ? "PATCH" : "POST",
         { name: state.current.name, document: state.current.document, revision: state.current.revision });
     } else {
-      if (state.current.id && !targets) {
+      if (state.current.id && !state.current.familyId && !targets) {
         const available = await api(pathFor("/templates/" + state.current.id + "/draft-targets"));
         if (available.purpose === state.current.purpose &&
           state.current.folderId === state.folderId && available.targets.length > 1) {
@@ -604,6 +727,7 @@
       return;
     }
     if (name === "account") return openAccount(element.dataset.key);
+    if (name === "families") { await renderFamilies(); return; }
     if (name === "circles") { if (canLeave()) renderCircles(); return; }
     if (name === "circle") return openCircle(element.dataset.id);
     if (name === "templates") { if (canLeave()) return renderTemplates(); return; }

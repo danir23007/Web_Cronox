@@ -65,7 +65,7 @@ export function campaignPolicy() {
   };
   const daily = integer('MAILBOX_CAMPAIGN_DAILY_LIMIT', 0, 3000);
   const hourly = integer('MAILBOX_CAMPAIGN_HOURLY_LIMIT', 0, 3000);
-  const reserve = integer('MAILBOX_CAMPAIGN_TRANSACTIONAL_RESERVE', 0, 3000);
+  const reserve = 0; // Capacity belongs to Information; no reservation for other mailboxes.
   const interval = integer('MAILBOX_CAMPAIGN_INTERVAL_SECONDS', 30, 86400);
   const enabled = process.env.MAILBOX_CAMPAIGN_ENABLED === 'true';
   const verified = process.env.MAILBOX_CAMPAIGN_PROVIDER_VERIFIED === 'true';
@@ -73,13 +73,8 @@ export function campaignPolicy() {
   const reasons = [
     !enabled && 'Campañas desactivadas en el servidor.',
     !verified && 'Pendiente confirmar plan, límites y alineación en Hostinger.',
-    (!daily ||
-      !hourly ||
-      !reserve ||
-      reserve >= daily ||
-      !interval ||
-      interval < 30) &&
-      'Faltan límites y reserva transaccional válidos (pausa mínima: 30 segundos).',
+    (!daily || !hourly || !interval || interval < 30) &&
+      'Faltan límites válidos (pausa mínima: 30 segundos).',
     !/^https:\/\//.test(origin) && 'Falta URL HTTPS pública para la baja.',
   ].filter(Boolean) as string[];
   return {

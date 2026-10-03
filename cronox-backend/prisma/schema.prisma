@@ -113,6 +113,9 @@ model MailboxMessage {
 }
 
 model MailboxDraft {
+  familyId String?
+  campaignEvent Json @default("{}")
+  family CampaignTemplateFamily? @relation(fields: [familyId], references: [id], onDelete: Restrict)
   mode       String        @default("individual")
   html       String        @default("") @db.Text
   templateId String?
@@ -160,6 +163,8 @@ model MailboxCampaign {
 }
 
 model MailboxCampaignDelivery {
+  circleLevel Int?
+  content Json?
   id           String   @id @default(uuid())
   campaignId   String
   campaign     MailboxCampaign @relation(fields: [campaignId], references: [id], onDelete: Restrict)
@@ -330,7 +335,21 @@ model EmailTemplateFolder {
   @@index([senderKey, position])
 }
 
+model CampaignTemplateFamily {
+  id String @id @default(cuid())
+  name String
+  eventKind String
+  revision Int @default(1)
+  versions ManagedEmailTemplate[]
+  drafts MailboxDraft[]
+}
+
 model ManagedEmailTemplate {
+  familyId String?
+  campaignCircle Int?
+  textOverride String? @db.Text
+  family CampaignTemplateFamily? @relation(fields: [familyId], references: [id], onDelete: Restrict)
+  @@unique([familyId, campaignCircle])
   id            String                 @id @default(cuid())
   senderKey     String
   sender        EmailSenderProfile     @relation(fields: [senderKey], references: [key], onDelete: Restrict)

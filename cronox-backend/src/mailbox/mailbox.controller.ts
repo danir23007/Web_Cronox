@@ -91,11 +91,13 @@ class DraftDto {
   @IsUUID() mailboxId: string;
   @IsOptional() @IsUUID() messageId?: string;
   @IsOptional()
-  @IsIn(['reply', 'forward', 'circles'])
+  @IsIn(['reply', 'forward', 'campaign'])
   mode?: string;
   @IsOptional() @IsString() @MaxLength(254) replyRecipient?: string;
 }
 class SaveDraftDto {
+  @IsOptional() @IsString() @MaxLength(100) familyId?: string;
+  @IsOptional() @IsInt() @Min(1) variantId?: number;
   @IsOptional() @IsUUID() mailboxId?: string;
   @IsOptional() @IsString() @MaxLength(100) templateId?: string;
   @IsOptional() @IsString() @MaxLength(200000) html?: string;
@@ -104,11 +106,11 @@ class SaveDraftDto {
   @ArrayMaxSize(5)
   @IsInt({ each: true })
   circles?: number[];
-  @IsString() @MaxLength(15000) to: string;
-  @IsString() @MaxLength(15000) cc: string;
-  @IsString() @MaxLength(15000) bcc: string;
-  @IsString() @MaxLength(500) subject: string;
-  @IsString() @MaxLength(1000000) text: string;
+  @IsOptional() @IsString() @MaxLength(15000) to?: string;
+  @IsOptional() @IsString() @MaxLength(15000) cc?: string;
+  @IsOptional() @IsString() @MaxLength(15000) bcc?: string;
+  @IsOptional() @IsString() @MaxLength(500) subject?: string;
+  @IsOptional() @IsString() @MaxLength(1000000) text?: string;
   @IsInt() @Min(1) revision: number;
 }
 class SendDto {
@@ -209,6 +211,10 @@ export class MailboxErrorFilter implements ExceptionFilter {
     const code = typeof raw === 'object' ? (raw as any).message : raw;
     res.status(status).json({
       statusCode: status,
+      ...(code === 'MAILBOX_CAMPAIGN_BLOCKED' &&
+      Array.isArray((raw as any)?.details)
+        ? { details: (raw as any).details }
+        : {}),
       message:
         typeof code === 'string' &&
         /^(MAILBOX_|INVALID_|CREDENTIAL_|RECIPIENT_)[A-Z0-9_]+$/.test(code)
@@ -306,6 +312,10 @@ export class MailboxController {
   }
   @Get('drafts') drafts(@Req() r: Request) {
     return this.service.drafts(r.user!);
+  }
+  @Get('boxes/:id/campaign-options')
+  campaignOptions(@Req() req: Request, @Param('id') id: string) {
+    return this.campaigns.options(req.user!, id);
   }
   @Get('boxes/:id/templates') templates(
     @Req() r: Request,

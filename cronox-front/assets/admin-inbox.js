@@ -20,6 +20,11 @@
       ? new Date(v).toLocaleString("es-ES", { timeZone: "Europe/Madrid" })
       : "Nunca";
   const codes = {
+    MAILBOX_NEW_MESSAGE_REQUIRES_CAMPAIGN:'Los nuevos mensajes se organizan como campañas. Para responder o reenviar, abre un mensaje recibido.',
+    MAILBOX_CAMPAIGN_CAPACITY_WAITING:'En espera de capacidad de Información. Los destinatarios pendientes se conservan y continuarán después.',
+    MAILBOX_CAMPAIGN_LEGACY_REVIEW_REQUIRED:'Campaña anterior bloqueada. Crea una nueva con familia y versiones por círculo; el original se conserva.',
+    MAILBOX_LEGACY_CAMPAIGN_READ_ONLY:'El borrador anterior se conserva para consulta. Crea una nueva campaña con familia y círculos.',
+    MAILBOX_CAMPAIGN_TEMPLATE_CONTENT_ONLY:'Una campaña usa solo su familia y evento: no admite redacción, destinatarios manuales ni cambios de remitente.',
     MAILBOX_MADRID_TIME_AMBIGUOUS: "Esta hora ocurre dos veces en Madrid. Elige UTC+02:00 o UTC+01:00.",
     MAILBOX_MADRID_TIME_DOES_NOT_EXIST: "Esta fecha u hora no existe en Madrid. Elige otra.",
     MAILBOX_SCHEDULE_IN_PAST: "La fecha de programación debe ser futura.",
@@ -140,7 +145,7 @@
     );
     const result = await response.json().catch(() => ({}));
     if (!response.ok) {
-      const error = new Error(codes[result.message] || `${result.message || "No se pudo completar la operación"} (${response.status})`);
+      const error = new Error(result.details?.join(' ') || codes[result.message] || `${result.message || "No se pudo completar la operación"} (${response.status})`);
       error.code = result.message;
       throw error;
     }
@@ -172,7 +177,7 @@
   };
   function shell() {
     root.dataset.view = "list";
-    root.innerHTML = `<div class="mail-toolbar"><h2>Correo</h2><button class="btn" data-compose>Nuevo mensaje</button><button class="btn" data-refresh>Actualizar</button><button class="btn" data-drafts>Borradores y salida</button><button class="btn" data-devices>Notificaciones</button>${overview.superadmin ? '<button class="btn" data-settings>Configuración</button>' : ""}</div><div data-feedback role="status" aria-live="polite"></div><div class="mail-notice" data-setup></div><div class="mail-layout"><aside class="mail-boxes" aria-label="Buzones"><div class="mail-box-links" data-boxes></div><hr><fieldset class="mail-folder-filter"><legend>Carpetas</legend><div class="mail-actions"><button class="btn" type="button" data-folders-all>Todas</button><button class="btn" type="button" data-folders-clear>Limpiar</button></div><div data-folders></div></fieldset><p class="mail-muted" data-box-status></p></aside><div class="mail-list"><form class="mail-filters"><label>Buscar<input data-search type="search" placeholder="Remitente, destinatario o asunto" maxlength="120"></label><label>Estado<select data-state><option value="all">Todos</option><option value="unread">No leídos</option><option value="read">Leídos</option></select></label><button class="btn" type="submit">Buscar</button></form><p class="mail-muted">Búsqueda solo sobre mensajes sincronizados. Los contadores reflejan la caché importada.</p><div data-messages aria-live="polite"></div><div data-pagination class="mail-pager"></div></div><div class="mail-reader" hidden></div><div class="mail-editor" hidden></div><div class="mail-settings" hidden></div><div class="mail-devices" hidden></div></div>`;
+    root.innerHTML = `<div class="mail-toolbar"><h2>Correo</h2><button class="btn" data-compose>Nueva campaña</button><button class="btn" data-refresh>Actualizar</button><button class="btn" data-drafts>Borradores y salida</button><button class="btn" data-devices>Notificaciones</button>${overview.superadmin ? '<button class="btn" data-settings>Configuración</button>' : ""}</div><div data-feedback role="status" aria-live="polite"></div><div class="mail-notice" data-setup></div><div class="mail-layout"><aside class="mail-boxes" aria-label="Buzones"><div class="mail-box-links" data-boxes></div><hr><fieldset class="mail-folder-filter"><legend>Carpetas</legend><div class="mail-actions"><button class="btn" type="button" data-folders-all>Todas</button><button class="btn" type="button" data-folders-clear>Limpiar</button></div><div data-folders></div></fieldset><p class="mail-muted" data-box-status></p></aside><div class="mail-list"><form class="mail-filters"><label>Buscar<input data-search type="search" placeholder="Remitente, destinatario o asunto" maxlength="120"></label><label>Estado<select data-state><option value="all">Todos</option><option value="unread">No leídos</option><option value="read">Leídos</option></select></label><button class="btn" type="submit">Buscar</button></form><p class="mail-muted">Búsqueda solo sobre mensajes sincronizados. Los contadores reflejan la caché importada.</p><div data-messages aria-live="polite"></div><div data-pagination class="mail-pager"></div></div><div class="mail-reader" hidden></div><div class="mail-editor" hidden></div><div class="mail-settings" hidden></div><div class="mail-devices" hidden></div></div>`;
     root.querySelector("[data-compose]").onclick = guard(() => compose());
     root.querySelector("[data-refresh]").onclick = guard(refresh);
     root.querySelector("[data-drafts]").onclick = guard(showDrafts);
@@ -497,11 +502,11 @@
   async function compose(id = boxId, messageId, mode, replyRecipient) {
     await leave();
     const seq = readSeq;
-    const chosen = id || overview.boxes.find((b) => b.canSend)?.id;
+    const chosen = messageId ? id : overview.boxes.find(b=>b.canSend && b.address.toLowerCase()==='info@cronox.es')?.id;
     if (!chosen) throw Error("No tienes permiso de envío en ningún buzón.");
     const created = await api("/drafts", "POST", {
       mailboxId: chosen,
-      ...(messageId ? { messageId, mode, ...(replyRecipient ? {replyRecipient} : {}) } : { mode:"circles" }),
+      ...(messageId ? { messageId, mode, ...(replyRecipient ? {replyRecipient} : {}) } : { mode:"campaign" }),
     });
     if (seq !== readSeq) return;
     draft = created;
@@ -510,6 +515,12 @@
   const recoveryKey = () => `cronox-mail-draft:${draft?.id}`;
   function values() {
     const form = root.querySelector(".mail-editor form");
+    if (draft.mode === 'campaign') return {
+      familyId:form.elements.familyId.value || undefined,
+      circles:[...form.querySelectorAll('[data-circle]:checked')].map(i=>Number(i.value)),
+      variantId:Number(form.elements.variantId?.value) || undefined,
+      revision:draft.revision,
+    };
     return {
       to: form.elements.to?.value || "",
       cc: form.elements.cc?.value || "",
@@ -523,7 +534,198 @@
       revision: draft.revision,
     };
   }
+  async function renderCampaign() {
+    show("compose");
+    dirty = false;
+    editVersion = 0;
+    const host = root.querySelector(".mail-editor"),
+      id = draft.id,
+      seq = readSeq;
+    host.innerHTML = '<p role="status">Cargando campaña…</p>';
+    const legacy = draft.mode === "circles",
+      locked = draft.status !== "DRAFT";
+    const options = legacy
+      ? { families: [], variants: [] }
+      : await api("/boxes/" + draft.mailboxId + "/campaign-options");
+    if (draft?.id !== id || readSeq !== seq) return;
+    const campaign =
+      draft.campaigns?.find((c) => c.status !== "CANCELLED") ||
+      (locked ? draft.campaigns?.[0] : null);
+    host.innerHTML = `<button class="btn" data-back>← Volver</button><h3>${legacy ? "Campaña anterior" : "Nueva campaña"}</h3><p>${legacy ? "Remitente anterior" : "Remitente fijo"}: <strong>${legacy ? esc(overview.boxes.find(b=>b.id===draft.mailboxId)?.address) : "info@cronox.es"}</strong></p>
+      ${
+        legacy
+          ? '<p class="mail-notice">Este borrador conserva su contenido anterior, pero necesita una nueva campaña con familia y versiones por círculo. No se enviará automáticamente.</p>'
+          : `<form id="mailCampaignForm"><label>Familia de plantillas<select name="familyId" ${locked ? "disabled" : ""}><option value="">Selecciona una familia</option>${options.families.map((f) => `<option value="${esc(f.id)}" ${f.id === draft.familyId ? "selected" : ""}>${esc(f.name)}</option>`).join("")}</select></label>
+      <fieldset><legend>Círculos destinatarios</legend>${[1, 2, 3, 4, 5].map((c) => `<label><span><input type="checkbox" data-circle value="${c}" ${draft.circles?.includes(c) ? "checked" : ""} ${locked ? "disabled" : ""}> Círculo ${c}</span></label>`).join("")}</fieldset>
+      <label data-event hidden>Producto y talla repuestos<select name="variantId" ${locked ? "disabled" : ""}><option value="">Selecciona una talla disponible</option>${options.variants.map((v) => `<option value="${v.id}" ${v.id === draft.campaignEvent?.variantId ? "selected" : ""}>${esc(v.name + " · " + v.size)}</option>`).join("")}</select></label>
+      <p>Contenido procedente de Plantillas Mail. Entregas individuales; bajas y círculo se revisan antes de cada envío.</p><p data-save-state role="status">Guardado</p>
+      ${!locked ? '<button class="btn" type="button" data-save>Guardar borrador</button><button class="btn" type="button" data-review>Revisar campaña</button><label>Fecha y hora · Europe/Madrid<input type="datetime-local" data-schedule></label><label>Hora repetida en invierno<select data-offset><option value="">Automática (hora única)</option><option value="+02:00">Primera ocurrencia · UTC+02:00</option><option value="+01:00">Segunda ocurrencia · UTC+01:00</option></select></label><button class="btn" type="button" data-send disabled>Enviar ahora</button><button class="btn" type="button" data-schedule-send disabled>Programar envío</button>' : ""}</form>`
+      }
+      <div data-campaign-review role="status"></div><div data-send-result></div>
+      ${campaign ? `<div class="mail-actions">${!legacy ? `<button class="btn" data-campaign-edit ${campaign.startedAt || campaign.status !== "SCHEDULED" ? "disabled" : ""}>Editar programación</button>` : ""}<button class="btn" data-campaign-cancel ${!["SCHEDULED", "PROCESSING"].includes(campaign.status) ? "disabled" : ""}>Cancelar campaña</button></div>` : ""}`;
+    let reviewed = null,
+      reviewSeq = 0,
+      sending = false;
+    const form = host.querySelector("form");
+    const disableSend = () =>
+      host
+        .querySelectorAll("[data-send],[data-schedule-send]")
+        .forEach((b) => (b.disabled = true));
+    const eventVisibility = () => {
+      if (form)
+        host.querySelector("[data-event]").hidden =
+          options.families.find((f) => f.id === form.elements.familyId.value)
+            ?.eventKind !== "RESTOCK";
+    };
+    eventVisibility();
+    host.querySelector("[data-back]").onclick = guard(async () => {
+      await leave();
+      show("list");
+      await list();
+    });
+    if (legacy) {
+      const content = document.createElement("details");
+      content.innerHTML =
+        "<summary>Consultar contenido anterior</summary><strong>" +
+        esc(draft.subject) +
+        '</strong><pre style="white-space:pre-wrap">' +
+        esc(draft.text) +
+        "</pre><p>Adjuntos conservados: " + esc(draft.files.map(f=>f.name).join(', ') || 'Ninguno') + "</p>";
+      host.querySelector("[data-campaign-review]").append(content);
+    }
+    if (campaign && !legacy) {
+      const saved = await api("/campaigns/" + campaign.id);
+      if (draft?.id !== id) return;
+      const target = host.querySelector("[data-campaign-review]");
+      target.innerHTML =
+        "<h4>Contenido aprobado · " +
+        esc(saved.familyName) +
+        "</h4>" +
+        saved.previews
+          .map(
+            (p) =>
+              `<article><h4>Círculo ${p.circle} · ${esc(p.subject)}</h4><iframe data-frozen-circle="${p.circle}" sandbox="" referrerpolicy="no-referrer" title="Contenido aprobado de círculo ${p.circle}" style="width:100%;height:360px;border:0"></iframe></article>`,
+          )
+          .join("");
+      saved.previews.forEach(
+        (p) =>
+          (target.querySelector(`[data-frozen-circle="${p.circle}"]`).srcdoc =
+            p.html || ""),
+      );
+    }
+    if (form && !locked) {
+      form.addEventListener("submit", (event) => event.preventDefault());
+      form.addEventListener("change", (event) => {
+        if(event.target.matches('[data-schedule],[data-offset]')) return;
+        dirty = true;
+        editVersion++;
+        reviewSeq++;
+        reviewed = null;
+        disableSend();
+        host.querySelector("[data-campaign-review]").replaceChildren();
+        eventVisibility();
+        host.querySelector("[data-save-state]").textContent =
+          "Cambios sin guardar";
+      });
+      host.querySelector("[data-save]").onclick = () =>
+        void save().catch((e) => feedback(e.message, true));
+      host.querySelector("[data-review]").onclick = async () => {
+        try {
+          await save();
+          const seq = ++reviewSeq,
+            revision = draft.revision;
+          const plan = await api("/drafts/" + id + "/recipients");
+          if (
+            draft?.id !== id ||
+            root.dataset.view !== "compose" ||
+            seq !== reviewSeq ||
+            draft.revision !== revision ||
+            dirty
+          )
+            return;
+          reviewed = plan;
+          const target = host.querySelector("[data-campaign-review]");
+          target.innerHTML = `<h4>Resumen antes de confirmar</h4><p>${plan.count} destinatarios únicos · ${esc(plan.family?.name || "Sin familia")} · info@cronox.es</p>${plan.blocked.map((x) => `<p class="mail-notice">${esc(x)}</p>`).join("")}${plan.previews.map((p) => `<article><h4>Círculo ${p.circle} · ${p.count} destinatarios</h4>${p.missing ? "<p>Falta la versión.</p>" : `<p>Asunto: ${esc(p.subject)}</p><iframe data-preview-circle="${p.circle}" sandbox="" referrerpolicy="no-referrer" title="Vista previa de círculo ${p.circle}" style="width:100%;height:360px;border:0"></iframe><details><summary>Texto plano · solo lectura</summary><pre style="white-space:pre-wrap">${esc(p.text)}</pre></details>`}</article>`).join("")}<p>${esc(plan.policy.reasons.join(" "))}</p>`;
+          plan.previews.forEach((p) => {
+            const frame = target.querySelector(
+              `[data-preview-circle="${p.circle}"]`,
+            );
+            if (frame) frame.srcdoc = p.html || "";
+          });
+          host
+            .querySelectorAll("[data-send],[data-schedule-send]")
+            .forEach(
+              (b) => (b.disabled = !!plan.blocked.length || !plan.policy.ready),
+            );
+        } catch (e) {
+          feedback(e.message, true);
+        }
+      };
+      const confirm = async (scheduled) => {
+        if (sending || !reviewed || dirty) return;
+        try {
+          const localDate = scheduled
+            ? host.querySelector("[data-schedule]").value
+            : undefined;
+          if (scheduled && !localDate)
+            throw Error("Selecciona fecha y hora en Europe/Madrid.");
+          if (
+            !window.confirm(
+              `${scheduled ? "Programar" : "Enviar"} ${reviewed.family.name} a ${reviewed.count} destinatarios únicos desde info@cronox.es. ${scheduled ? localDate + " · Europe/Madrid" : "Envío inmediato"}. Se fijará la versión revisada de cada círculo. ¿Confirmas?`,
+            )
+          )
+            return;
+          sending = true;
+          disableSend();
+          const result = await api("/drafts/" + id + "/campaign", "POST", {
+            requestKey: crypto.randomUUID(),
+            revision: draft.revision,
+            previewHash: reviewed.previewHash,
+            ...(scheduled
+              ? {
+                  localDate,
+                  offset:
+                    host.querySelector("[data-offset]").value || undefined,
+                }
+              : {}),
+          });
+          if (draft?.id !== id) return;
+          draft = await api("/drafts/" + result.draftId);
+          await renderComposer();
+          feedback("Campaña confirmada. El progreso se guarda en el servidor.");
+        } catch (e) {
+          feedback(e.message, true);
+          sending = false;
+          reviewed = null;
+        }
+      };
+      host.querySelector("[data-send]").onclick = () => confirm(false);
+      host.querySelector("[data-schedule-send]").onclick = () => confirm(true);
+    }
+    for (const action of ["edit", "cancel"])
+      host
+        .querySelector("[data-campaign-" + action + "]")
+        ?.addEventListener("click", async () => {
+          try {
+            if (
+              !window.confirm(
+                action === "edit"
+                  ? "Cancelar la programación para editar el borrador y revisarlo de nuevo. ¿Continuar?"
+                  : "¿Cancelar los destinatarios pendientes?",
+              )
+            )
+              return;
+            await api("/campaigns/" + campaign.id + "/" + action, "POST");
+            draft = await api("/drafts/" + id);
+            await renderComposer();
+          } catch (e) {
+            feedback(e.message, true);
+          }
+        });
+    renderSend();
+  }
   async function renderComposer() {
+    if (draft.mode === 'campaign' || draft.mode === 'circles') return renderCampaign();
     show("compose");
     const host = root.querySelector(".mail-editor"),
       b = overview.boxes.find((b) => b.id === draft.mailboxId),
@@ -532,11 +734,11 @@
     editVersion = 0;
     const composerDraftId=draft.id;
     host.innerHTML = '<p role="status" aria-busy="true">Cargando borrador…</p>';
-    const templates = await api('/boxes/'+draft.mailboxId+'/templates');
+    const templates = []; // Replies and forwards do not use campaign templates.
     if(draft?.id!==composerDraftId)return;
     const campaign = draft.campaigns?.[0];
     host.innerHTML = `<button class="btn mail-back" data-back>← Volver</button><h3>${locked ? "Bandeja de salida" : "Borrador"}</h3>
-      <label>Plantilla<select name="templateId" form="mailComposerForm" ${locked?'disabled':''}><option value="">Sin plantilla</option>${templates.map(t=>`<option value="${esc(t.id)}" ${draft.templateId===t.id?'selected':''}>${esc(t.folder.name+' · '+t.name)}</option>`).join('')}</select></label>
+      <label hidden>Plantilla<select name="templateId" form="mailComposerForm" ${locked?'disabled':''}><option value="">Sin plantilla</option>${templates.map(t=>`<option value="${esc(t.id)}" ${draft.templateId===t.id?'selected':''}>${esc(t.folder.name+' · '+t.name)}</option>`).join('')}</select></label>
       <form id="mailComposerForm"><label>Remitente${draft.mode==='circles'?`<select name="mailboxId" ${locked || draft.files.length?'disabled':''} title="Retira los adjuntos antes de cambiar el remitente">${overview.boxes.filter(x=>x.canSend).map(x=>`<option value="${esc(x.id)}" ${x.id===draft.mailboxId?'selected':''}>${esc(displayName(x)+' · '+x.address)}</option>`).join('')}</select>`:`<strong>${esc(b?.fromName)} &lt;${esc(b?.address)}&gt;</strong>`}</label>
       ${draft.mode==='circles'?`<fieldset><legend>Círculos · comunicación a suscriptores</legend>${[1,2,3,4,5].map(c=>`<label><span><input type="checkbox" data-circle value="${c}" ${draft.circles?.includes(c)?'checked':''} ${locked?'disabled':''}> Círculo ${c}</span></label>`).join('')}<p>Solo destinatarios únicos con suscripción activa. La pertenencia a un círculo no concede permiso publicitario. Exclusivamente CCO.</p><button class="btn" type="button" data-recipient-preview>Revisar destinatarios</button><p data-recipient-summary role="status"></p></fieldset>`:`<div class="mail-addresses"><label>Para${draft.singleReply ? " · una única dirección" : ""}<input name="to" value="${esc(draft.to)}" ${locked?'disabled':''}></label>${draft.singleReply ? "" : `<label>CC<input name="cc" value="${esc(draft.cc)}" ${locked?'disabled':''}></label>`}</div>${draft.singleReply ? "" : `<label>CCO<input name="bcc" value="${esc(draft.bcc)}" ${locked?'disabled':''}></label>`}` }
       <label>Asunto<input name="subject" value="${esc(draft.subject)}" maxlength="500" ${locked?'disabled':''}></label>
@@ -771,10 +973,10 @@
   function renderSend() {
     const host = root.querySelector("[data-send-result]");
     if (!host) return;
-    const campaign=draft.campaigns?.[0];
+    const campaign=draft.campaigns?.find(c=>c.status!=='CANCELLED') || (draft.status!=='DRAFT'?draft.campaigns?.[0]:null);
     if(campaign) {
-      void api('/campaigns/'+campaign.id).then(c=>{if(draft?.campaigns?.[0]?.id!==c.id)return;
-        host.innerHTML=`<div class="mail-notice"><strong>${esc(status[c.status]||c.status)}</strong><p>${esc(date(c.scheduledAt))} · Europe/Madrid · ${c.count} previstos</p>${c.errorCode?`<p>${esc(codes[c.errorCode]||c.errorCode)}</p>`:""}${!c.policy.ready?`<p>${esc(c.policy.reasons.join(" "))}</p>`:""}<p>${c.progress.map(g=>esc((status[g.status]||({EXCLUDED:'Excluidos por bajas o restricciones'}[g.status])||g.status)+': '+g.count)).join(' · ')}</p><p>SMTP aceptado no confirma entrega final. Los resultados inciertos no se reenvían. Cancelar detiene los pendientes; las entregas en curso podrían ser aceptadas.</p></div>`;
+      void api('/campaigns/'+campaign.id).then(c=>{if(!draft?.campaigns?.some(x=>x.id===c.id))return;
+        host.innerHTML=`<div class="mail-notice"><strong>${esc(status[c.status]||c.status)}</strong><p>${esc(date(c.scheduledAt))} · Europe/Madrid · ${c.count} previstos</p>${c.errorCode?`<p>${esc(codes[c.errorCode]||c.errorCode)}</p>`:""}${!c.policy.ready?`<p>${esc(c.policy.reasons.join(" "))}</p>`:""}<p>${c.progress.map(g=>esc(((g.circle?'C\u00edrculo '+g.circle+' \u00b7 ':'')+ (status[g.status]||({EXCLUDED:'Excluidos por bajas o restricciones'}[g.status])||g.status))+': '+g.count)).join(' · ')}</p><p>SMTP aceptado no confirma entrega final. Los resultados inciertos no se reenvían. Cancelar detiene los pendientes; las entregas en curso podrían ser aceptadas.</p></div>`;
       }).catch(e=>feedback(e.message,true));return;
     }
     host.innerHTML = draft.sends
@@ -833,7 +1035,7 @@
         ? rows
             .map(
               (d) =>
-                `<button class="mail-message" data-draft="${esc(d.id)}"><strong>${esc(d.subject || "(Sin asunto)")}</strong><small>${esc(overview.boxes.find((b) => b.id === d.mailboxId)?.address)} · ${esc(status[d.campaigns?.[0]?.status || d.sends[0]?.status || d.status] || d.status)} · ${esc(date(d.campaigns?.[0]?.scheduledAt || d.updatedAt))}${d.campaigns?.length ? " · Europe/Madrid" : ""}</small></button>`,
+                `<button class="mail-message" data-draft="${esc(d.id)}"><strong>${esc(d.subject || "(Sin asunto)")}</strong>${d.mode==='circles'?'<span>Campa?a anterior ? requiere revisi?n</span>':''}<small>${esc(overview.boxes.find((b) => b.id === d.mailboxId)?.address)} · ${esc(status[d.status === "DRAFT" ? d.status : d.campaigns?.[0]?.status || d.sends[0]?.status || d.status] || d.status)} · ${esc(date(d.status === "DRAFT" ? d.updatedAt : d.campaigns?.[0]?.scheduledAt || d.updatedAt))}${d.campaigns?.length ? " · Europe/Madrid" : ""}</small></button>`,
             )
             .join("")
         : "<p>No tienes borradores.</p>");

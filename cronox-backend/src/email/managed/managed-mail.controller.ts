@@ -40,6 +40,8 @@ import {
   MailSaveDto,
   SignatureDto,
   TestMailDto,
+  CampaignFamilyDto,
+  CampaignFamilyVersionDto,
 } from './mail.dto';
 
 @Controller('admin/mail-templates')
@@ -47,6 +49,30 @@ import {
 @Roles(Role.SUPERADMIN)
 @UseFilters(MailExceptionFilter)
 export class ManagedMailController {
+  @Get(':key/families') campaignFamilies(@Param('key') key: string) {
+    return this.service.campaignFamilies(key);
+  }
+  @Post(':key/families') createCampaignFamily(
+    @Param('key') key: string,
+    @Body() dto: CampaignFamilyDto,
+  ) {
+    return this.service.saveCampaignFamily(key, dto);
+  }
+  @Patch(':key/families/:id') saveCampaignFamily(
+    @Param('key') key: string,
+    @Param('id') id: string,
+    @Body() dto: CampaignFamilyDto,
+  ) {
+    return this.service.saveCampaignFamily(key, dto, id);
+  }
+  @Patch(':key/families/:id/versions/:circle') linkCampaignVersion(
+    @Param('key') key: string,
+    @Param('id') id: string,
+    @Param('circle') circle: string,
+    @Body() dto: CampaignFamilyVersionDto,
+  ) {
+    return this.service.linkCampaignVersion(key, id, Number(circle), dto);
+  }
   @Post(':key/signatures/preview')
   previewSignature(
     @Param('key', new ParseEnumPipe(EmailSenderKey)) key: EmailSenderKey,
@@ -70,13 +96,21 @@ export class ManagedMailController {
   }
   @Get('deliveries') async deliveries(@Query() dto: MailListDto) {
     const search = dto.search?.trim();
-    const where = search ? { OR: [
-      { recipient: { contains: search, mode: 'insensitive' as const } },
-      { subject: { contains: search, mode: 'insensitive' as const } },
-    ] } : {};
+    const where = search
+      ? {
+          OR: [
+            { recipient: { contains: search, mode: 'insensitive' as const } },
+            { subject: { contains: search, mode: 'insensitive' as const } },
+          ],
+        }
+      : {};
     const [items, total] = await Promise.all([
-      this.db.emailDelivery.findMany({ where, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
-        skip: (dto.page - 1) * dto.limit, take: dto.limit }),
+      this.db.emailDelivery.findMany({
+        where,
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        skip: (dto.page - 1) * dto.limit,
+        take: dto.limit,
+      }),
       this.db.emailDelivery.count({ where }),
     ]);
     return { items, total, page: dto.page, limit: dto.limit };

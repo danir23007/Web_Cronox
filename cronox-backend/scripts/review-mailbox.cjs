@@ -80,7 +80,8 @@ async function main() {
   try {
     const schema = (
       await fs.readFile(path.join(backend, 'prisma/schema.prisma'), 'utf8')
-    ).replace(/model (?:Mailbox\w*|DailyVisitorBrowser|DailyVisitorLink) \{[\s\S]*?\n\}/g, '')
+    ).replace(/model (?:Mailbox\w*|CampaignTemplateFamily|DailyVisitorBrowser|DailyVisitorLink) \{[\s\S]*?\n\}/g, '')
+      .replace(/^.*(?:familyId String\?|campaignCircle Int\?|textOverride String\?|family CampaignTemplateFamily\?|@@unique\(\[familyId, campaignCircle\]\)).*\r?\n/gm,'')
       .replace(/^.*(?:deduplicationStartedAt|browserLinks DailyVisitorLink|disposition String|observedRole String).*\r?\n/gm,'');
     const schemaFile = path.join(dir, 'before.prisma');
     await fs.writeFile(schemaFile, schema);
@@ -123,6 +124,17 @@ async function main() {
     sql(path.join(backend,'prisma/migrations/20261003123000_admin_push_payment_utc/migration.sql'));
     sql(path.join(backend,'prisma/migrations/20261003130000_admin_push_manual_paid/migration.sql'));
     sql(path.join(backend,'prisma/migrations/20261002200000_visitor_daily_reconciliation/migration.sql'));
+    const familyBefore = path.join(dir,'family-before.sql');
+    await fs.writeFile(familyBefore, `
+      INSERT INTO "EmailSenderProfile" (key,"updatedAt") VALUES ('INFO',now());
+      INSERT INTO "EmailTemplateFolder" (id,"senderKey",name,"updatedAt") VALUES ('before-family-folder','INFO','Renamed private fixture folder',now());
+      INSERT INTO "ManagedEmailTemplate" (id,"senderKey","folderId","importKey",name,purpose,subject,document,html,text,revision,"updatedAt")
+      VALUES ('before-family-template','INFO','before-family-folder','INFO:3:RESTOCK','Renamed independent version','RESTOCK','Original subject','{"blocks":[{"type":"text","text":"Original content"}]}','<p>Original HTML</p>','Original plain text',7,now());
+      INSERT INTO "ManagedEmailTemplate" (id,"senderKey","folderId","importKey",name,purpose,subject,document,html,text,revision,"updatedAt")
+      VALUES ('before-transactional-template','INFO','before-family-folder','INFO:3:NEWSLETTER_WELCOME','Renamed independent version','NEWSLETTER_WELCOME','Transactional subject','{"blocks":[]}','<p>Transactional HTML</p>','Transactional plain text',4,now());
+    `);
+    sql(familyBefore);
+    sql(path.join(backend,'prisma/migrations/20261003170000_mailbox_template_families/migration.sql'));
     await fs.writeFile(path.join(dir, 'empty.env'), '');
     process.env.CRONOX_ENV_FILE = path.join(dir, 'empty.env');
     process.chdir(dir);
@@ -622,9 +634,8 @@ async function main() {
     process.env.MAILBOX_WORKER_ENABLED = 'true';
     process.env.MAILBOX_SEND_ENABLED = 'true';
     const makeDraft = async (subject) => {
-      const d = (
-        await request('/drafts', 'POST', { mailboxId: boxId }, 'writer')
-      ).body;
+      // Historical manual drafts are preserved; new free messages are no longer created by the API.
+      const d = await db.mailboxDraft.create({data:{mailboxId:boxId,userId:users.writer.id}});
       return (
         await request(
           '/drafts/' + d.id,
@@ -1091,9 +1102,7 @@ async function main() {
       'Configuration change fences existing operation and preserves lease cooldown to prevent overlapping connections',
     );
 
-    const uploadDraft = await service.createDraft(superActor, {
-      mailboxId: boxId,
-    });
+    const uploadDraft = await db.mailboxDraft.create({data:{mailboxId:boxId,userId:superActor.id}});
     const multipart = new FormData();
     multipart.append('file', new Blob(['isolated upload only']), 'review.txt');
     const upload = await fetch(

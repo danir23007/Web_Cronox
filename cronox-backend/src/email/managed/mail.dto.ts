@@ -29,6 +29,7 @@ export class MailListDto {
   @Type(() => Number) @IsInt() @Min(1) @Max(100) limit = 30;
 }
 export class MailSaveDto {
+  @IsOptional() @IsString() @MaxLength(1000000) textOverride?: string;
   @IsString() @MaxLength(120) name!: string;
   @IsString() @MaxLength(100) folderId!: string;
   @IsString() @MaxLength(200) subject!: string;
@@ -41,6 +42,15 @@ export class MailSaveDto {
     | 'selected' = 'none';
   @IsOptional() @IsString() @MaxLength(100) signatureId?: string;
   @IsOptional() @IsInt() @Min(1) revision?: number;
+}
+export class CampaignFamilyDto {
+  @IsString() @MaxLength(120) name!: string;
+  @IsIn(['LAUNCH', 'RESTOCK', 'GENERAL']) eventKind!: string;
+  @IsOptional() @IsInt() @Min(1) revision?: number;
+}
+export class CampaignFamilyVersionDto {
+  @IsString() @MaxLength(100) templateId!: string;
+  @IsInt() @Min(1) revision!: number;
 }
 export class MailDraftTargetDto {
   @IsString() @MaxLength(100) id!: string;

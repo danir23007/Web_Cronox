@@ -379,6 +379,7 @@ export class MailboxService {
       select: {
         id: true,
         mailboxId: true,
+        mode: true,
         subject: true,
         status: true,
         revision: true,
@@ -412,6 +413,13 @@ export class MailboxService {
   }
   async createDraft(actor: MailActor, input: any) {
     const box = await this.access.box(actor, input.mailboxId, true);
+    if (!input.messageId && input.mode !== 'campaign')
+      throw new BadRequestException('MAILBOX_NEW_MESSAGE_REQUIRES_CAMPAIGN');
+    if (input.messageId && input.mode === 'campaign')
+      throw new BadRequestException('MAILBOX_INVALID_CAMPAIGN');
+    if (input.mode === 'circles')
+      throw new BadRequestException('MAILBOX_LEGACY_CAMPAIGN_READ_ONLY');
+    if (input.mode === 'campaign') this.campaigns!.assertInfo(box);
     let data: any = {
       mailboxId: box.id,
       userId: actor.id,
@@ -419,8 +427,8 @@ export class MailboxService {
         ? input.mode === 'forward'
           ? 'individual'
           : 'reply'
-        : input.mode === 'circles'
-          ? 'circles'
+        : input.mode === 'campaign'
+          ? 'campaign'
           : 'individual',
     };
     if (input.messageId) {
@@ -498,6 +506,9 @@ export class MailboxService {
       singleReply: d.mode === 'reply' || !!d.inReplyTo,
       circles: d.circles,
       templateId: d.templateId,
+      familyId: d.familyId,
+      campaignEvent: d.campaignEvent,
+      legacyCampaign: d.mode === 'circles',
       campaigns: (d.campaigns || []).map((c) => ({
         id: c.id,
         status: c.status,
@@ -519,6 +530,46 @@ export class MailboxService {
   }
   async saveDraft(actor: MailActor, id: string, input: any) {
     const draft = await this.access.draft(actor, id);
+    if (draft.mode === 'circles')
+      throw new BadRequestException('MAILBOX_LEGACY_CAMPAIGN_READ_ONLY');
+    if (draft.mode === 'campaign') {
+      this.campaigns!.assertInfo(draft.mailbox);
+      if (
+        (input.mailboxId && input.mailboxId !== draft.mailboxId) ||
+        input.templateId ||
+        ['to', 'cc', 'bcc', 'subject', 'text', 'html'].some((k) => input[k])
+      )
+        throw new BadRequestException('MAILBOX_CAMPAIGN_TEMPLATE_CONTENT_ONLY');
+      const family = input.familyId
+        ? await this.db.campaignTemplateFamily.findUnique({
+            where: { id: input.familyId },
+          })
+        : null;
+      if (input.familyId && !family)
+        throw new BadRequestException('MAILBOX_TEMPLATE_NOT_AVAILABLE');
+      const event =
+        family?.eventKind === 'RESTOCK' && input.variantId
+          ? { variantId: input.variantId }
+          : {};
+      const changed = await this.db.mailboxDraft.updateMany({
+        where: {
+          id,
+          userId: actor.id,
+          status: 'DRAFT',
+          revision: input.revision,
+        },
+        data: {
+          familyId: family?.id || null,
+          campaignEvent: event,
+          circles: circles(input.circles || []),
+          subject: family?.name || '',
+          revision: { increment: 1 },
+        },
+      });
+      if (!changed.count)
+        throw new ConflictException('MAILBOX_DRAFT_CHANGED_OR_QUEUED');
+      return this.draftView(await this.access.draft(actor, id));
+    }
     const mailboxId = input.mailboxId || draft.mailboxId;
     if (mailboxId !== draft.mailboxId) {
       await this.access.box(actor, mailboxId, true);
@@ -577,6 +628,8 @@ export class MailboxService {
     mimeType: string,
   ) {
     const draft = await this.access.draft(actor, id);
+    if (['campaign', 'circles'].includes(draft.mode))
+      throw new BadRequestException('MAILBOX_CAMPAIGN_TEMPLATE_CONTENT_ONLY');
     if (draft.status !== 'DRAFT')
       throw new ConflictException('MAILBOX_DRAFT_QUEUED');
     if (
@@ -630,7 +683,7 @@ export class MailboxService {
     )
       throw new ServiceUnavailableException('MAILBOX_SENDING_DISABLED');
     const draft = await this.access.draft(actor, id);
-    if (draft.mode === 'circles')
+    if (['circles', 'campaign'].includes(draft.mode))
       throw new BadRequestException('MAILBOX_USE_CAMPAIGN_CONFIRMATION');
     if (!draft.mailbox.active)
       throw new BadRequestException('MAILBOX_INACTIVE');
@@ -697,7 +750,7 @@ export class MailboxService {
   }
   async clone(actor: MailActor, id: string, acknowledge: boolean) {
     const source = await this.access.draft(actor, id);
-    if (source.mode === 'circles')
+    if (['circles', 'campaign'].includes(source.mode))
       throw new BadRequestException('MAILBOX_CAMPAIGN_CLONE_NOT_SUPPORTED');
     if (
       source.sends.some(

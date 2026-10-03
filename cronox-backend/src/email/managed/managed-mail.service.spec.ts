@@ -31,6 +31,33 @@ const transport = () => ({
   getFrom: jest.fn().mockReturnValue('CRONOX <test@example.test>'),
 });
 describe('managed email safety and import', () => {
+  it('renders an independent plain-text version and validates its variables', async () => {
+    const service = new ManagedMailService(
+      {} as PrismaService,
+      transport() as unknown as MailTransportFactory,
+    );
+    const template = {
+      subject: 'Saved subject',
+      preheader: '',
+      purpose: 'GENERIC',
+      signatureMode: 'none',
+      signatureId: null,
+      document: { blocks: [{ type: 'text', text: 'HTML {{message}}' }] },
+      textOverride: 'Plain {{message}}',
+    };
+    expect(
+      (await service.render('INFO', template, { message: 'Actual data' })).text,
+    ).toBe('Plain Actual data');
+    expect((await service.render('INFO', template)).text).toBe(
+      'Plain {{message}}',
+    );
+    await expect(
+      service.render('INFO', {
+        ...template,
+        textOverride: '{{unsupportedPrivateValue}}',
+      }),
+    ).rejects.toThrow();
+  });
   beforeEach(() =>
     jest.spyOn(config, 'loadEmailConfig').mockReturnValue(emailConfig),
   );
@@ -267,10 +294,17 @@ describe('managed email safety and import', () => {
     ).rejects.toBeInstanceOf(ConflictException);
   });
   it('falls back before SMTP on database/render failure, and never retries an SMTP failure', async () => {
-    const sendMail = jest.fn().mockResolvedValue({ messageId: 'mock-1', accepted: ['test@example.test'] });
+    const sendMail = jest
+      .fn()
+      .mockResolvedValue({
+        messageId: 'mock-1',
+        accepted: ['test@example.test'],
+      });
     const factory = transport();
     factory.getTransport.mockReturnValue({ sendMail });
-    factory.sendMail.mockImplementation((_key: string, options: any) => sendMail(options));
+    factory.sendMail.mockImplementation((_key: string, options: any) =>
+      sendMail(options),
+    );
     const managed = {
       published: jest.fn().mockRejectedValue(new Error('DB unavailable')),
     };

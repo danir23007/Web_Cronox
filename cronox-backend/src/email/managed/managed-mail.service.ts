@@ -8,6 +8,7 @@ import {
 } from '@nestjs/common';
 import { Prisma, ManagedEmailTemplate } from '@prisma/client';
 import { readFile } from 'node:fs/promises';
+import Handlebars from 'handlebars';
 import { join } from 'node:path';
 import { PrismaService } from '../../prisma/prisma.service';
 import { MailTransportFactory } from '../mail-transport.factory';
@@ -73,7 +74,12 @@ export class ManagedMailService {
       key: String(key),
       email: config.accounts[key].user,
       name: config.accounts[key].fromName,
-      label: ({ INFO: 'Información y novedades', ORDERS: 'Pedidos', NOREPLY: 'Acceso y seguridad', SUPPORT: 'Soporte' })[key],
+      label: {
+        INFO: 'Información y novedades',
+        ORDERS: 'Pedidos',
+        NOREPLY: 'Acceso y seguridad',
+        SUPPORT: 'Soporte',
+      }[key],
       localOnly: process.env.CRONOX_LOCAL_DEV === 'true',
       configured: Boolean(
         config.enabled &&
@@ -351,6 +357,108 @@ export class ManagedMailService {
       limit: query.limit,
     };
   }
+  async campaignFamilies(key: string) {
+    if (key !== 'INFO')
+      throw new BadRequestException(
+        'Las familias de campaña pertenecen a Información.',
+      );
+    const families = await this.db.campaignTemplateFamily.findMany({
+      include: {
+        versions: {
+          select: {
+            id: true,
+            name: true,
+            campaignCircle: true,
+            subject: true,
+            revision: true,
+            archivedAt: true,
+          },
+        },
+      },
+      orderBy: { name: 'asc' },
+    });
+    const available = await this.db.managedEmailTemplate.findMany({
+      where: {
+        senderKey: 'INFO',
+        archivedAt: null,
+        familyId: null,
+        OR: [
+          { purpose: null },
+          { purpose: { in: ['LAUNCH', 'RESTOCK', 'GENERIC'] } },
+        ],
+      },
+      select: { id: true, name: true, purpose: true, revision: true },
+      orderBy: { name: 'asc' },
+    });
+    return { families, available };
+  }
+  async saveCampaignFamily(
+    key: string,
+    dto: { name: string; eventKind: string; revision?: number },
+    id?: string,
+  ) {
+    if (key !== 'INFO' || !dto.name.trim())
+      throw new BadRequestException('Familia de campaña no válida.');
+    if (!id)
+      return this.db.campaignTemplateFamily.create({
+        data: { name: dto.name.trim(), eventKind: dto.eventKind },
+      });
+    if (!Number.isInteger(dto.revision)) failConflict();
+    const changed = await this.db.campaignTemplateFamily.updateMany({
+      where: { id, revision: dto.revision, eventKind: dto.eventKind },
+      data: { name: dto.name.trim(), revision: { increment: 1 } },
+    });
+    if (!changed.count) failConflict();
+    return this.db.campaignTemplateFamily.findUniqueOrThrow({ where: { id } });
+  }
+  async linkCampaignVersion(
+    key: string,
+    id: string,
+    circle: number,
+    dto: { templateId: string; revision: number },
+  ) {
+    if (key !== 'INFO' || !Number.isInteger(circle) || circle < 1 || circle > 5)
+      throw new BadRequestException('Identidad de círculo no válida.');
+    return this.db.$transaction(async (tx) => {
+      const family = await tx.campaignTemplateFamily.findUniqueOrThrow({
+        where: { id },
+      });
+      const t = await this.template(key, dto.templateId, tx);
+      const purpose =
+        family.eventKind === 'GENERAL' ? 'GENERIC' : family.eventKind;
+      if (
+        t.archivedAt ||
+        (t.purpose && t.purpose !== purpose) ||
+        t.familyId ||
+        t.revision !== dto.revision
+      )
+        throw new BadRequestException(
+          'Selecciona una plantilla disponible del mismo evento, sin otra identidad de campaña.',
+        );
+      if (
+        await tx.managedEmailTemplate.findFirst({
+          where: { familyId: id, campaignCircle: circle },
+        })
+      )
+        throw new ConflictException(
+          'El círculo ya tiene una versión. Edita su contenido sin sustituir su identidad.',
+        );
+      const linked = await tx.managedEmailTemplate.updateMany({
+        where: { id: t.id, revision: dto.revision, familyId: null },
+        data: {
+          familyId: id,
+          campaignCircle: circle,
+          revision: { increment: 1 },
+        },
+      });
+      if (!linked.count) failConflict();
+      await tx.campaignTemplateFamily.update({
+        where: { id },
+        data: { revision: { increment: 1 } },
+      });
+      return this.template(key, t.id, tx);
+    });
+  }
   async template(key: string, id: string, tx: Tx = this.db) {
     const result = await tx.managedEmailTemplate.findFirst({
       where: { id, senderKey: key },
@@ -449,7 +557,7 @@ export class ManagedMailService {
     t: Pick<
       ManagedEmailTemplate,
       'subject' | 'preheader' | 'purpose' | 'signatureMode' | 'signatureId'
-    > & { document: unknown },
+    > & { document: unknown; textOverride?: string | null },
     data?: Record<string, unknown>,
     publishing = false,
     tx: Tx = this.db,
@@ -460,7 +568,7 @@ export class ManagedMailService {
       t.signatureId,
       tx,
     );
-    return renderMail(
+    const result = renderMail(
       t.document,
       t.subject,
       t.preheader,
@@ -469,6 +577,19 @@ export class ManagedMailService {
       signature,
       publishing,
     );
+    if (t.textOverride != null) {
+      // Validate the same variable vocabulary and syntax as the HTML editor.
+      renderMail(
+        { blocks: [{ type: 'text', text: t.textOverride }] },
+        t.subject,
+        '',
+        t.purpose,
+      );
+      result.text = data
+        ? Handlebars.compile(t.textOverride, { noEscape: true })(data)
+        : t.textOverride;
+    }
+    return result;
   }
   async save(
     key: EmailSenderKey,
@@ -485,9 +606,13 @@ export class ManagedMailService {
       throw new BadRequestException('Propósito incompatible con el remitente.');
     return this.db.$transaction(async (tx) => {
       await this.folder(tx, key, dto.folderId);
-      if (id) {
-        const existing = await this.template(key, id, tx);
+      const existing = id ? await this.template(key, id, tx) : null;
+      if (existing) {
         if (existing.revision !== dto.revision) failConflict();
+        if (existing.familyId && existing.purpose !== (dto.purpose || null))
+          throw new BadRequestException(
+            'La versión de campaña conserva su uso; no puede convertirse en transaccional.',
+          );
       }
       const input = {
         name: dto.name.trim(),
@@ -500,6 +625,11 @@ export class ManagedMailService {
         signatureId:
           dto.signatureMode === 'selected' ? dto.signatureId || null : null,
         updatedBy: actorId,
+        ...(dto.textOverride !== undefined
+          ? { textOverride: dto.textOverride }
+          : existing?.textOverride != null
+            ? { textOverride: existing.textOverride }
+            : {}),
       };
       const rendered = await this.render(key, input, undefined, false, tx);
       if (id) {
@@ -542,6 +672,10 @@ export class ManagedMailService {
       throw new BadRequestException('Selección de círculos no válida.');
     return this.db.$transaction(async (tx) => {
       const source = await this.template(key, id, tx);
+      if (source.familyId)
+        throw new BadRequestException(
+          'Edita cada versión de la familia por separado.',
+        );
       if (
         !source.purpose ||
         !MAIL_PURPOSES.some(
@@ -563,6 +697,7 @@ export class ManagedMailService {
         where: { id: { in: targetIds } },
         select: {
           id: true,
+          familyId: true,
           senderKey: true,
           purpose: true,
           folderId: true,
@@ -579,6 +714,10 @@ export class ManagedMailService {
         dto.targets.map((target) => [target.id, target.revision]),
       );
       for (const target of targets) {
+        if (target.familyId)
+          throw new BadRequestException(
+            'Edita cada versión de campaña por separado.',
+          );
         if (target.senderKey !== String(key))
           throw new BadRequestException(
             'No se pueden guardar borradores en otra cuenta remitente.',
@@ -684,6 +823,7 @@ export class ManagedMailService {
               signatureId: t.signatureId,
               html: t.html,
               text: t.text,
+              textOverride: t.textOverride,
               document: json(t.document),
               folderId: dto.folderId || t.folderId,
               name: dto.name?.trim() || `${t.name} (copia)`,
@@ -771,6 +911,7 @@ export class ManagedMailService {
               subject: snapshot.subject,
               preheader: snapshot.preheader,
               purpose: snapshot.purpose,
+              textOverride: snapshot.textOverride || null,
               signatureMode: snapshot.signatureMode,
               signatureId: snapshot.signatureId,
               html: rendered.html,
@@ -890,8 +1031,14 @@ export class ManagedMailService {
     if (process.env.CRONOX_LOCAL_DEV === 'true') {
       const template = await this.template(key, id);
       const rendered = await this.render(key, template, SAMPLE_DATA);
-      return { localOnly: true, html: rendered.html, text: rendered.text, subject: rendered.subject,
-        message: 'Prueba local con variables de ejemplo. No se ha enviado ningún correo.' };
+      return {
+        localOnly: true,
+        html: rendered.html,
+        text: rendered.text,
+        subject: rendered.subject,
+        message:
+          'Prueba local con variables de ejemplo. No se ha enviado ningún correo.',
+      };
     }
     if (
       !confirmed ||
@@ -919,12 +1066,16 @@ export class ManagedMailService {
       await this.audit(tx, actorId, 'EMAIL_TEST_ATTEMPT', id);
     });
     try {
-      const info = (await this.transport.sendMail(key, {
-        to,
-        subject: `[PRUEBA] ${rendered.subject}`,
-        html: rendered.html,
-        text: rendered.text,
-      }, 'ADMIN_TEST')) as { messageId: string; accepted?: unknown[] };
+      const info = (await this.transport.sendMail(
+        key,
+        {
+          to,
+          subject: `[PRUEBA] ${rendered.subject}`,
+          html: rendered.html,
+          text: rendered.text,
+        },
+        'ADMIN_TEST',
+      )) as { messageId: string; accepted?: unknown[] };
       if (info.accepted && !info.accepted.length)
         throw new Error('No aceptado');
       // The attempt is already durable. An audit failure after SMTP acceptance

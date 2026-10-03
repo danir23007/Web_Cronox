@@ -21,6 +21,7 @@ import {
   madridInstant,
 } from './mailbox-campaign-policy';
 import { decrypt, encrypt, header, maxMessageBytes } from './mailbox-security';
+import { campaignAudience, missingCampaignVariables } from './campaign-plan';
 import { effectiveMailHtml } from '../email/managed/mail-renderer';
 
 @Injectable()
@@ -155,18 +156,22 @@ export class MailboxCampaignService {
     const suppressed = new Set(excluded.map((s) => s.email));
     return emails.filter((e) => !suppressed.has(e));
   }
-  async eligible(email: string) {
-    return (
-      !(await this.db.mailboxSuppression.findUnique({ where: { email } })) &&
-      !!(await this.db.user.findFirst({
-        where: {
-          email: { equals: email, mode: 'insensitive' },
-          accountState: 'ACTIVE',
-          role: { in: ['USER', 'FRIEND'] },
-          newsletterSubscribed: true,
-        },
-      }))
-    );
+  async eligible(email: string, circle?: number) {
+    if (
+      !circle ||
+      (await this.db.mailboxSuppression.findUnique({ where: { email } }))
+    )
+      return false;
+    const users = await this.db.user.findMany({
+      where: {
+        email: { equals: email, mode: 'insensitive' },
+        accountState: 'ACTIVE',
+        role: { in: ['USER', 'FRIEND'] },
+        newsletterSubscribed: true,
+      },
+      select: { circleLevel: true },
+    });
+    return users.length > 0 && users.every((u) => u.circleLevel === circle);
   }
   async assertPrivateContent(d: any) {
     // A circle message has one shared body: recipient variables/lists must never
@@ -222,32 +227,226 @@ export class MailboxCampaignService {
     )
       throw new BadRequestException('MAILBOX_CUSTOMER_ADDRESSES_IN_CONTENT');
   }
-  async summary(actor: MailActor, id: string) {
-    const d = await this.access.draft(actor, id);
-    if (d.mode !== 'circles')
-      throw new BadRequestException('MAILBOX_NOT_A_CIRCLE_DRAFT');
-    const emails = await this.recipients(d.circles);
-    const digest = createHash('sha256')
+  assertInfo(box: { address: string }) {
+    if (box.address.toLowerCase() !== 'info@cronox.es')
+      throw new BadRequestException(
+        'Las campa\u00f1as solo pueden salir desde info@cronox.es.',
+      );
+  }
+  async options(actor: MailActor, mailboxId: string) {
+    this.assertInfo(await this.access.box(actor, mailboxId, true));
+    const families = await this.db.campaignTemplateFamily.findMany({
+      orderBy: { name: 'asc' },
+    });
+    const variants = await this.db.productVariant.findMany({
+      where: {
+        isActive: true,
+        stockQty: { gt: 0 },
+        product: { isActive: true },
+      },
+      include: { product: true },
+      orderBy: { id: 'asc' },
+    });
+    return {
+      families,
+      variants: variants.map((v) => ({
+        id: v.id,
+        name: v.product.name,
+        size: v.size,
+      })),
+    };
+  }
+  async plan(d: any, tx: any = this.db) {
+    this.assertInfo(d.mailbox);
+    if (d.mode !== 'campaign')
+      throw new BadRequestException(
+        'Campaña anterior: crea una nueva con familia y círculos. Se conserva el original.',
+      );
+    const selected = circles(d.circles),
+      blocked: string[] = [],
+      previews: any[] = [],
+      deliveries: any[] = [];
+    const family = d.familyId
+      ? await tx.campaignTemplateFamily.findUnique({
+          where: { id: d.familyId },
+          include: { versions: true },
+        })
+      : null;
+    if (!family) blocked.push('Selecciona una familia de plantillas.');
+    if (!selected.length) blocked.push('Selecciona al menos un círculo.');
+    const users = await tx.user.findMany({
+      where: {
+        circleLevel: { in: [1, 2, 3, 4, 5] },
+        accountState: 'ACTIVE',
+        role: { in: ['USER', 'FRIEND'] },
+        newsletterSubscribed: true,
+      },
+      select: { email: true, name: true, circleLevel: true },
+    });
+    const suppressions = await tx.mailboxSuppression.findMany({
+      select: { email: true },
+    });
+    const audience = campaignAudience(
+      users,
+      suppressions.map((v: any) => v.email),
+      selected,
+    );
+    blocked.push(...audience.blocked);
+    const origin = (process.env.FRONTEND_URL || 'https://cronox.es').replace(
+      /\/$/,
+      '',
+    );
+    const event: Record<string, unknown> = { storeUrl: origin };
+    if (family?.eventKind === 'LAUNCH') event.actionUrl = origin;
+    if (family?.eventKind === 'RESTOCK') {
+      const variant = Number.isInteger(d.campaignEvent?.variantId)
+        ? await tx.productVariant.findUnique({
+            where: { id: d.campaignEvent.variantId },
+            include: { product: true },
+          })
+        : null;
+      if (
+        !variant?.isActive ||
+        !variant.product.isActive ||
+        variant.stockQty <= 0
+      )
+        blocked.push('Selecciona una talla disponible de un producto activo.');
+      else
+        Object.assign(event, {
+          product: variant.product.name,
+          productName: variant.product.name,
+          size: variant.size,
+          productSlug: variant.product.slug,
+          productImage: variant.product.imageUrl,
+          imageUrl: variant.product.imageUrl,
+          actionUrl:
+            origin +
+            '/producto/' +
+            encodeURIComponent(variant.product.slug) +
+            '?size=' +
+            encodeURIComponent(variant.size),
+        });
+    }
+    for (const circle of selected) {
+      const t = family?.versions.find(
+        (v: any) =>
+          v.campaignCircle === circle &&
+          v.senderKey === 'INFO' &&
+          !v.archivedAt &&
+          (v.purpose === null ||
+            v.purpose ===
+              (family.eventKind === 'GENERAL' ? 'GENERIC' : family.eventKind)),
+      );
+      const members = audience.recipients.filter((r) => r.circle === circle);
+      if (!t) {
+        blocked.push(
+          'Falta una versión válida para el círculo ' + circle + '.',
+        );
+        previews.push({ circle, count: members.length, missing: true });
+        continue;
+      }
+      const source = await this.templates.render(
+        'INFO',
+        t,
+        undefined,
+        false,
+        tx,
+      );
+      await this.assertPrivateContent({ ...source, files: [] });
+      const renderOne = async (r: any) => {
+        const data = {
+          ...event,
+          customerFullName: r?.name,
+          customerEmail: r?.email,
+          email: r?.email,
+        };
+        const missing = missingCampaignVariables(source, data);
+        if (missing.length) {
+          blocked.push(
+            'Círculo ' +
+              circle +
+              ': faltan ' +
+              missing.join(', ') +
+              '. Revisa la versión en Plantillas Mail o los datos del evento.',
+          );
+          return null;
+        }
+        const content = await this.templates.render('INFO', t, data, false, tx);
+        assertResolved(content.subject, content.html, content.text);
+        header(content.subject);
+        if (!content.subject.trim() || !content.text.trim()) {
+          blocked.push('Círculo ' + circle + ': asunto o contenido vacío.');
+          return null;
+        }
+        return {
+          subject: content.subject,
+          html: content.html,
+          text: content.text,
+          templateId: t.id,
+          templateRevision: t.revision,
+          familyId: family.id,
+          circle,
+        };
+      };
+      let preview: any;
+      for (const r of members) {
+        const content = await renderOne(r);
+        if (content) {
+          preview ||= content;
+          deliveries.push({ email: r.email, circleLevel: circle, content });
+        }
+      }
+      // Empty circles still need a structurally valid version; never invent customer data.
+      if (!members.length) {
+        await renderOne(null);
+        preview = source;
+      }
+      previews.push({
+        circle,
+        count: members.length,
+        templateId: t.id,
+        templateRevision: t.revision,
+        ...(preview || source),
+      });
+    }
+    if (!audience.recipients.length)
+      blocked.push('No hay destinatarios elegibles.');
+    const uniqueBlocked = [...new Set(blocked)];
+    const hash = createHash('sha256')
       .update(
         JSON.stringify({
           revision: d.revision,
-          emails,
-          files: d.files.map((f) => f.id).sort(),
+          family: family && { id: family.id, revision: family.revision },
+          event,
+          selected,
+          deliveries,
+          previews,
         }),
       )
       .digest('hex');
     return {
-      circles: d.circles,
-      count: emails.length,
-      previewHash: digest,
+      family,
+      previews,
+      deliveries,
+      blocked: uniqueBlocked,
+      previewHash: hash,
+      count: audience.recipients.length,
+      circles: selected,
+    };
+  }
+  async summary(actor: MailActor, id: string) {
+    const d = await this.access.draft(actor, id);
+    const { deliveries, family, ...plan } = await this.plan(d);
+    return {
+      ...plan,
+      family: family && { id: family.id, name: family.name },
+      sender: 'info@cronox.es',
       policy: campaignPolicy(),
-      sender: d.mailbox.address,
-      templateId: d.templateId,
-      subject: d.subject,
     };
   }
   async enqueue(actor: MailActor, id: string, input: any) {
     const d = await this.access.draft(actor, id);
+    this.assertInfo(d.mailbox);
     const prior = await this.db.mailboxCampaign.findUnique({
       where: { requestKey: input.requestKey },
     });
@@ -256,88 +455,92 @@ export class MailboxCampaignService {
         throw new ConflictException('MAILBOX_IDEMPOTENCY_KEY_USED');
       return this.view(actor, prior.id);
     }
-    const policy = campaignPolicy();
     if (
-      !policy.ready ||
+      !campaignPolicy().ready ||
       process.env.MAILBOX_SEND_ENABLED !== 'true' ||
       process.env.MAILBOX_WORKER_ENABLED !== 'true'
     )
       throw new ServiceUnavailableException(
         'MAILBOX_CAMPAIGN_PROVIDER_NOT_READY',
       );
-    if (d.mode !== 'circles' || !d.mailbox.active)
+    if (
+      !d.mailbox.active ||
+      d.mode !== 'campaign' ||
+      d.files.length ||
+      d.to ||
+      d.cc ||
+      d.bcc
+    )
       throw new BadRequestException('MAILBOX_INVALID_CAMPAIGN');
-    if (d.to || d.cc || d.bcc)
-      throw new BadRequestException('MAILBOX_CIRCLES_BCC_ONLY');
-    assertResolved(d.subject, d.html, d.text);
-    if (!d.subject.trim() || !d.text.trim())
-      throw new BadRequestException('MAILBOX_CAMPAIGN_CONTENT_REQUIRED');
-    await this.assertPrivateContent(d);
-    if (d.files.reduce((n, f) => n + f.size, 0) > maxMessageBytes())
-      throw new BadRequestException('MAILBOX_ATTACHMENTS_LIMIT');
     const scheduledAt = input.localDate
       ? madridInstant(input.localDate, input.offset)
       : new Date();
-    const summary = await this.summary(actor, id);
-    if (
-      input.previewHash !== summary.previewHash ||
-      d.revision !== input.revision
-    )
-      throw new ConflictException('MAILBOX_RECIPIENT_PREVIEW_CHANGED');
-    const emails = await this.recipients(d.circles);
-    const digest = createHash('sha256')
-      .update(
-        JSON.stringify({
-          revision: d.revision,
-          emails,
-          files: d.files.map((f) => f.id).sort(),
-        }),
-      )
-      .digest('hex');
-    if (digest !== summary.previewHash || !emails.length)
-      throw new ConflictException('MAILBOX_RECIPIENT_PREVIEW_CHANGED');
-    const snapshot = {
-      mailboxId: d.mailboxId,
-      userId: actor.id,
-      from: d.mailbox.address,
-      fromName: d.mailbox.fromName,
-      senderKey: this.senderKey(d.mailbox.address),
-      templateId: d.templateId,
-      subject: d.subject,
-      text: d.text,
-      html: d.html,
-      circles: d.circles,
-      files: d.files.map((f) => ({ key: f.key, name: f.name, size: f.size })),
-      count: emails.length,
-    };
-    const campaign = await this.db.$transaction(async (tx) => {
-      const lock = await tx.mailboxDraft.updateMany({
-        where: {
-          id,
-          userId: actor.id,
-          status: 'DRAFT',
-          revision: input.revision,
-        },
-        data: { status: 'SCHEDULED' },
-      });
-      if (!lock.count)
-        throw new ConflictException('MAILBOX_DRAFT_CHANGED_OR_QUEUED');
-      return tx.mailboxCampaign.create({
-        data: {
-          draftId: id,
-          draftRevision: d.revision,
-          requestKey: input.requestKey,
-          scheduledAt,
-          snapshot,
-          deliveries: {
-            create: emails.map((email) => ({
-              email,
-              messageId: `<${randomUUID()}@${d.mailbox.address.split('@')[1]}>`,
-            })),
+    const campaign = await this.db.$transaction(
+      async (tx) => {
+        const fresh = await tx.mailboxDraft.findUniqueOrThrow({
+          where: { id },
+          include: { mailbox: true },
+        });
+        const plan = await this.plan(fresh, tx);
+        if (plan.blocked.length)
+          throw new BadRequestException({
+            message: 'MAILBOX_CAMPAIGN_BLOCKED',
+            details: plan.blocked,
+          });
+        if (
+          input.previewHash !== plan.previewHash ||
+          fresh.revision !== input.revision
+        )
+          throw new ConflictException('MAILBOX_RECIPIENT_PREVIEW_CHANGED');
+        const lock = await tx.mailboxDraft.updateMany({
+          where: {
+            id,
+            userId: actor.id,
+            status: 'DRAFT',
+            revision: input.revision,
           },
-        },
-      });
-    });
+          data: { status: 'SCHEDULED' },
+        });
+        if (!lock.count)
+          throw new ConflictException('MAILBOX_DRAFT_CHANGED_OR_QUEUED');
+        return tx.mailboxCampaign.create({
+          data: {
+            draftId: id,
+            draftRevision: fresh.revision,
+            requestKey: input.requestKey,
+            scheduledAt,
+            snapshot: {
+              modelVersion: 2,
+              mailboxId: d.mailboxId,
+              userId: actor.id,
+              from: 'info@cronox.es',
+              fromName: d.mailbox.fromName,
+              senderKey: 'INFO',
+              familyId: plan.family.id,
+              familyName: plan.family.name,
+              circles: plan.circles,
+              versions: plan.previews.map((p) => ({
+                circle: p.circle,
+                templateId: p.templateId,
+                templateRevision: p.templateRevision,
+                subject: p.subject,
+                html: p.html,
+                text: p.text,
+              })),
+              files: [],
+              count: plan.count,
+            },
+            deliveries: {
+              create: plan.deliveries.map((r) => ({
+                ...r,
+                messageId: `<${randomUUID()}@cronox.es>`,
+              })),
+            },
+          },
+        });
+      },
+      { isolationLevel: 'RepeatableRead', timeout: 60000 },
+    );
     await this.access.audit(
       actor,
       d.mailboxId,
@@ -353,7 +556,7 @@ export class MailboxCampaignService {
     });
     await this.access.draft(actor, c.draftId);
     const progress = await this.db.mailboxCampaignDelivery.groupBy({
-      by: ['status'],
+      by: ['status', 'circleLevel'],
       where: { campaignId: id },
       _count: { _all: true },
     });
@@ -365,12 +568,18 @@ export class MailboxCampaignService {
       startedAt: c.startedAt,
       completedAt: c.completedAt,
       cancelledAt: c.cancelledAt,
-      errorCode: c.errorCode,
+      errorCode:
+        (c.snapshot as any).modelVersion === 2
+          ? c.errorCode
+          : 'MAILBOX_CAMPAIGN_LEGACY_REVIEW_REQUIRED',
       policy: campaignPolicy(),
       count: (c.snapshot as any).count,
       circles: (c.snapshot as any).circles,
+      familyName: (c.snapshot as any).familyName,
+      previews: (c.snapshot as any).versions || [],
       progress: progress.map((p) => ({
         status: p.status,
+        circle: p.circleLevel,
         count: p._count._all,
       })),
     };
@@ -520,6 +729,10 @@ export class MailboxCampaignService {
     const due = await this.db.mailboxCampaign.findMany({
       where: {
         status: { in: ['SCHEDULED', 'PROCESSING'] },
+        OR: [
+          { errorCode: null },
+          { errorCode: { not: 'MAILBOX_CAMPAIGN_LEGACY_REVIEW_REQUIRED' } },
+        ],
         scheduledAt: { lte: new Date() },
       },
       orderBy: { scheduledAt: 'asc' },
@@ -527,6 +740,16 @@ export class MailboxCampaignService {
       take: 20,
     });
     for (const c of due) {
+      if (
+        (c.snapshot as any).modelVersion !== 2 ||
+        c.draft.mailbox.address.toLowerCase() !== 'info@cronox.es'
+      ) {
+        await this.db.mailboxCampaign.update({
+          where: { id: c.id },
+          data: { errorCode: 'MAILBOX_CAMPAIGN_LEGACY_REVIEW_REQUIRED' },
+        });
+        continue;
+      }
       // One campaign delivery per tick; existing manual mail and IMAP retain priority.
       const worked = await this.leases
         .run(c.draft.mailboxId, async (token, assert) => {
@@ -608,14 +831,38 @@ export class MailboxCampaignService {
                 0,
               );
               if (
-                campaignCount + manualCount + transactional >=
-                  policy.daily - policy.reserve ||
-                hourly >= policy.hourly
+                campaignCount + manualCount + transactional >= policy.daily ||
+                hourly +
+                  manual
+                    .filter((s) => s.startedAt && s.startedAt >= hour)
+                    .reduce(
+                      (n, s) =>
+                        n +
+                        Math.max(
+                          1,
+                          new Set(
+                            [s.draft.to, s.draft.cc, s.draft.bcc]
+                              .join(',')
+                              .split(',')
+                              .filter(Boolean),
+                          ).size,
+                        ),
+                      0,
+                    ) +
+                  (snapshot.senderKey
+                    ? await tx.emailDelivery.count({
+                        where: {
+                          senderKey: snapshot.senderKey,
+                          createdAt: { gte: hour },
+                        },
+                      })
+                    : 0) >=
+                  policy.hourly
               ) {
                 await tx.mailboxCampaign.update({
                   where: { id: c.id },
                   data: {
-                    errorCode: 'MAILBOX_CAMPAIGN_CAPACITY_RESERVED_WAITING',
+                    errorCode: 'MAILBOX_CAMPAIGN_CAPACITY_WAITING',
                   },
                 });
                 return null;
@@ -667,21 +914,39 @@ export class MailboxCampaignService {
             accepted = false,
             rawKey: string | undefined;
           try {
-            if (!(await this.eligible(delivery.email))) {
+            if (
+              !(await this.eligible(
+                delivery.email,
+                delivery.circleLevel ?? undefined,
+              ))
+            ) {
               await this.db.mailboxCampaignDelivery.update({
                 where: { id: delivery.id },
                 data: { status: 'EXCLUDED', completedAt: new Date() },
               });
               return true;
             }
+            const content = delivery.content as any;
+            if (
+              !content ||
+              content.circle !== delivery.circleLevel ||
+              content.familyId !== snapshot.familyId ||
+              !snapshot.versions.some(
+                (v: any) =>
+                  v.circle === delivery.circleLevel &&
+                  v.templateId === content.templateId &&
+                  v.templateRevision === content.templateRevision,
+              )
+            )
+              throw Error('CAMPAIGN_VERSION_MISMATCH');
             const link =
               policy.origin.replace(/\/$/, '') +
               '/api/mailbox-unsubscribe/' +
               this.unsubscribeToken(delivery.email);
             const footer = `\n\nRecibes esta comunicación por tu suscripción a CRONOX. Darme de baja: ${link}`;
-            const html = snapshot.html
+            const html = content.html
               ? effectiveMailHtml(
-                  snapshot.html +
+                  content.html +
                     `<p>Recibes esta comunicación por tu suscripción a CRONOX. <a href="${link}">Darme de baja</a></p>`,
                 )
               : undefined;
@@ -694,13 +959,13 @@ export class MailboxCampaignService {
                 contentType: 'application/octet-stream',
               });
             }
-            header(snapshot.subject);
-            assertResolved(snapshot.subject, snapshot.text, snapshot.html);
+            header(content.subject);
+            assertResolved(content.subject, content.text, content.html);
             const composer = new MailComposer({
               from: { name: snapshot.fromName, address: box.address },
               bcc: [delivery.email],
-              subject: snapshot.subject,
-              text: snapshot.text + footer,
+              subject: content.subject,
+              text: content.text + footer,
               html,
               messageId: delivery.messageId,
               attachments,
@@ -734,7 +999,9 @@ export class MailboxCampaignService {
                     where: { id: box.id },
                   })
                 ).active ||
-                !campaignPolicy().ready
+                !campaignPolicy().ready ||
+                process.env.MAILBOX_SEND_ENABLED !== 'true' ||
+                process.env.MAILBOX_WORKER_ENABLED !== 'true'
               )
                 throw Error('SENDING_DISABLED');
               if (
@@ -743,7 +1010,10 @@ export class MailboxCampaignService {
                     where: { id: c.id },
                   })
                 ).cancelledAt ||
-                !(await this.eligible(delivery.email))
+                !(await this.eligible(
+                  delivery.email,
+                  delivery.circleLevel ?? undefined,
+                ))
               ) {
                 await this.db.mailboxCampaignDelivery.update({
                   where: { id: delivery.id },
