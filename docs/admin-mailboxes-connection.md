@@ -1,6 +1,8 @@
 # Preparación y conexión de los buzones
 
-Actualización del 03/10/2026: el operador confirma TLS y autenticación IMAP/SMTP de los cuatro buzones en local y autoriza publicar correo, conciliación de visitantes y Home. La primera fase de producción mantiene envíos y avisos desactivados; solo Soporte podrá sincronizar cuando los cuatro diagnósticos desde el VPS sean correctos. Esta autorización sustituye las restricciones de publicación de la preparación anterior. Las comprobaciones locales no acreditan todavía la conexión desde el VPS.
+Estado de producción del 03/10/2026: los cuatro buzones pasaron IMAP/SMTP desde el VPS y quedaron activos para sincronización, envío manual y avisos nuevos. El operador confirmó la recepción de las cuatro pruebas SMTP. Se corrigió y publicó el transporte push para Node 22; la identificación inequívoca del aviso automático en el iPhone sigue pendiente. Véanse [la evidencia y la prueba controlada](admin-publication-2026-10-03.md).
+
+Las instrucciones de preparación y primera fase que siguen describen una instalación nueva y su revisión histórica. No hay que repetirlas sobre producción ya activada: el preparador conserva claves, pero vuelve a dejar las flags de sincronización y envío en false. Los registros existentes y sus permisos se conservan.
 
 Estado del 02/10/2026: preparación local terminada; ninguna conexión real comprobada, ningún correo enviado y ningún mensaje del proveedor modificado. Se conserva el trabajo anterior de visitantes, finanzas, correo y Home. No hay commit, push, despliegue ni migración de producción en esta preparación.
 

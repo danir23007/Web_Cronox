@@ -1,6 +1,6 @@
 # Reconciliación diaria de visitantes
 
-Implementada y probada en local el 2 de octubre de 2026. Sin commit, push, despliegue ni migración compartida. Los cambios locales de correo se conservan; no se modifica el histórico financiero.
+Implementada y probada en local el 2 de octubre de 2026 y publicada el 3 en `2c508b7`, con la migración aplicada mediante el despliegue existente. El histórico financiero se conserva. Fechas de activación y evidencia de producción en [el registro de publicación](admin-publication-2026-10-03.md).
 
 ## Recuento y evidencia
 
@@ -48,7 +48,7 @@ Resultados:
 - 92 tests Jest aprobados en 15 suites: visitantes, métodos de acceso, autenticación, analítica, finanzas y correo.
 - 30 grupos de integración aprobados con PostgreSQL 17 efímero y Nest/Passport reales: los 16 casos solicitados, roles posteriores, credenciales inválidas, outage 503, revocación de consentimiento, estado tras reiniciar, filtros y permisos administrativos. Tres procesos independientes ejecutan 45 solicitudes contra el mismo navegador, sin duplicados.
 - Chromium: dos pestañas iniciales producen un anónimo; login lo convierte sin sumar otra cuenta; logout conserva el total; retirada elimina la cookie HttpOnly; outage 503 no envía un registro anónimo. La cuenta también se cuenta sin Web Locks.
-- Panel a 1440×1000 y 390×844: gráfica/detalle coherentes, dos cuentas en navegador compartido, categoría anónima vacía, búsqueda por cuenta y ausencia de desbordamiento de página. Capturas en `output/visitors/desktop.png` y `mobile.png`.
+- Panel a 1440×1000 y 390×844: gráfica/detalle coherentes, dos cuentas en navegador compartido, categoría anónima vacía, búsqueda por cuenta y ausencia de desbordamiento de página. Las capturas temporales no se incorporan a Git; las pruebas reutilizables están en [tests/admin-review](../tests/admin-review/README.md).
 
 Las pruebas solo crean usuarios y visitas sintéticos en bases nuevas ligadas a 127.0.0.1. No ejecutan compras/cobros/reembolsos ni contactan proveedores. La migración de correo pendiente, si existe en el checkout, se aplica solamente a esa base temporal para que su indicador del panel pueda cargar; no se alteran sus archivos ni se ejecutan acciones sobre buzones. Los servidores de prueba se detienen al terminar.
 

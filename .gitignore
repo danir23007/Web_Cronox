@@ -9,3 +9,11 @@ playwright-report/
 **/.env
 **/.env.*
 !**/.env.example
+
+# Private browser state from reviews; do not hide source scripts under output.
+/output/**/session-private.json
+/output/**/mobile-private.json
+/output/**/release-browser.json
+
+# Reproducible integration report, not source or fixtures.
+/output/mailbox-review/integration-results.json

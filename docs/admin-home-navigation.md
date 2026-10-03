@@ -1,6 +1,6 @@
 # Home del administrador
 
-Cambio local del 2 de octubre de 2026. Sin commit, push ni despliegue. Conserva las funcionalidades locales anteriores de visitantes y correo. No necesita migraciones ni modificaciones del backend.
+Implementado en local el 2 de octubre de 2026 y publicado el 3 en `2c508b7`. Conserva visitantes y correo. Home no necesita migraciones ni modificaciones del backend. El resultado de producción queda en [el registro de publicación](admin-publication-2026-10-03.md).
 
 - `admin.html`: Home pasa a ser la primera entrada principal del menú, antes de Producto y fuera del grupo Admin. Se actualizan el encabezado inicial y las referencias visibles del antiguo Resumen; el bloque secundario se llama «Estadísticas generales».
 - `assets/admin.js`: Home deja de recibir el botón Atrás creado por la configuración de secciones. El botón y su navegación en las demás secciones se conservan. Se actualizan los mensajes de carga/error de Home.
@@ -23,10 +23,10 @@ Playwright/Chromium con Nest y PostgreSQL efímero en loopback, en 1440×1000 y 
 - Agrupación financiera por meses, barras de visitantes, detalle diario y filtro de anónimos siguen funcionando. Se mantienen estadísticas generales y alertas.
 - ADMIN conserva Home y Usuarios; USER y visitantes sin sesión son redirigidos al login y no obtienen acceso al panel. El entorno aislado también confirma 401/403 de los endpoints administrativos mediante sus 30 grupos de integración existentes.
 
-Capturas y función de revisión: `output/admin-home/`. Son artefactos de validación, no archivos para publicar. No se crearon visitas reales, compras ni operaciones sobre buzones. Se cierran el navegador y los servicios de prueba al terminar.
+La función de revisión reutilizable se conserva en `tests/admin-review/home.browser.js`; [estas instrucciones](../tests/admin-review/README.md) describen el entorno aislado. Las capturas de `output/admin-home/` son resultados temporales y no se incorporan a Git. No se crearon visitas reales, compras ni operaciones sobre buzones en esa revisión local.
 
-## Publicación pendiente
+## Publicación comprobada
 
-Revisar estos cambios sobre los trabajos anteriores, preparar el commit autorizado y publicar mediante el despliegue existente; después comprobar los recursos v5/v2 y la navegación en producción. Home por sí solo no requiere una migración. Las migraciones pendientes de otras funcionalidades conservan su alcance y autorización separados.
+El despliegue de `2c508b7` terminó correctamente. Se comprobaron Home predeterminado y primero, ausencia de Atrás, recursos nuevos, gráficas, detalle y filtros en producción a 1440×1000 y 390×844. Las migraciones de correo y visitantes se aplicaron mediante el despliegue existente; no son necesarias por Home.
 
 Para revisar el panel en local, ejecutar `npm run admin:watch`.

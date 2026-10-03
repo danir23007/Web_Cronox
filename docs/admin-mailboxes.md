@@ -1,6 +1,6 @@
 # Correo de buzones en CRONOX
 
-El módulo está en **Administrador → Correo**. Es un cliente IMAP/SMTP de los buzones existentes, separado de **Plantillas / Mail** y del correo transaccional. No crea cuentas, cambia DNS ni sustituye Hostinger. Esta entrega permanece local: no autoriza publicar, aplicar migraciones en producción ni conectar cuentas reales durante las pruebas.
+El módulo está en **Administrador → Correo**. Es un cliente IMAP/SMTP de los buzones existentes, separado de **Plantillas / Mail** y del correo transaccional. No crea cuentas, cambia DNS ni sustituye Hostinger. La publicación y activación autorizadas del 3 de octubre de 2026 están documentadas en [el registro de validación de producción](admin-publication-2026-10-03.md); allí se distingue lo comprobado de la prueba automática física de push todavía pendiente.
 
 ## Conectar cada buzón existente
 

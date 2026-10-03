@@ -1,5 +1,7 @@
 # Entrega local y validación de Correo
 
+Estado posterior: publicación y conexiones reales completadas el 03/10/2026; véase [el registro de producción](admin-publication-2026-10-03.md). La prueba automática física de push sigue pendiente. Los resultados locales siguientes se conservan como evidencia histórica; las capturas y resultados brutos de `output/` son artefactos prescindibles y no se incorporan a Git. El preparador, las pruebas y los simuladores permanentes permanecen versionados.
+
 Revisión: 2 de octubre de 2026. Base conservada: `main`, commit `f1669f2bc320ec7a4421bff30044df4424fbad3e`, publicación anterior del histórico de visitantes y finanzas. Esta funcionalidad no tiene commit, push, despliegue ni migraciones en producción. Los trabajadores nuevos nacen desactivados.
 
 ## Resultado de las comprobaciones
