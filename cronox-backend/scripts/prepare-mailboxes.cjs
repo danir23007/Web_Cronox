@@ -146,7 +146,7 @@ async function run() {
   if (options.registerLocal && !local) throw Error('REGISTRATION_ONLY_ALLOWED_IN_LOCAL_PROFILE');
   if (!fs.existsSync(envFile)) throw Error('PRIVATE_ENVIRONMENT_FILE_MUST_ALREADY_EXIST');
   if (fs.lstatSync(envFile).isSymbolicLink()) throw Error('USE_REAL_PRIVATE_ENVIRONMENT_FILE_PATH');
-  const ignored = spawnSync('git', ['check-ignore', '--quiet', envFile], { cwd: repository, stdio: 'ignore' });
+  const ignored = spawnSync('git', ['-c', `safe.directory=${repository}`, 'check-ignore', '--quiet', envFile], { cwd: repository, stdio: 'ignore' });
   if (envFile.startsWith(repository + path.sep) && ignored.status !== 0)
     throw Error('ENVIRONMENT_FILE_MUST_BE_EXCLUDED_FROM_GIT');
   const text = fs.readFileSync(envFile, 'utf8');
@@ -218,7 +218,7 @@ async function run() {
 }
 if (require.main === module) {
   run().catch(error => {
-    const code = /^[A-Z][A-Z_]+$/.test(error.message) ? error.message : 'CHECK_PRIVATE_CONFIGURATION_PATHS_PERMISSIONS_AND_LOCAL_MIGRATION';
+    const code = /^[A-Z][A-Z0-9_]+$/.test(error.message) ? error.message : 'CHECK_PRIVATE_CONFIGURATION_PATHS_PERMISSIONS_AND_LOCAL_MIGRATION';
     console.error(`MAILBOX_PREPARATION_FAILED: ${code}. No secrets were logged.`);
     process.exitCode = 1;
   });
