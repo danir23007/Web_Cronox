@@ -33,6 +33,16 @@ export function pushHost(endpoint: string) {
     throw new BadRequestException('MAILBOX_PUSH_PROVIDER_NOT_ALLOWED');
   return u.hostname;
 }
+export function pinnedPushAgent(resolved: { address: string; family: number }) {
+  return new Agent({
+    // Node's automatic family selection requests lookup({ all: true }). Keep
+    // DNS pinned to the vetted address while honouring both callback contracts.
+    lookup: ((_hostname: any, options: any, done: any) =>
+      options?.all
+        ? done(null, [{ address: resolved.address, family: resolved.family }])
+        : done(null, resolved.address, resolved.family)) as any,
+  });
+}
 @Injectable()
 export class MailboxPushService {
   constructor(
@@ -270,10 +280,7 @@ export class MailboxPushService {
         return;
       const first = currentNotices.find((n) => n.id === notices[0].id)!,
         details = currentDevice.details && !!(first as any).sender;
-      const agent = new Agent({
-        lookup: ((_hostname: any, _opts: any, done: any) =>
-          done(null, resolved.address, resolved.family)) as any,
-      });
+      const agent = pinnedPushAgent(resolved);
       try {
         await webpush.sendNotification(
           sub,

@@ -16,11 +16,55 @@ import { mailboxPrivateRoot } from './mailbox-files.service';
 import { resolve } from 'node:path';
 import { ServiceUnavailableException } from '@nestjs/common';
 import { smtpOutcome } from './mailbox-sender.service';
-import { pushHost } from './mailbox-push.service';
+import { pinnedPushAgent, pushHost } from './mailbox-push.service';
+import { createServer, connect } from 'node:net';
 import { MailboxAccessService } from './mailbox-access.service';
 import { MailboxWorkerService } from './mailbox-worker.service';
 
 describe('Private mailbox security and delivery policy', () => {
+  it('connects with Node automatic family selection using only the pinned address', async () => {
+    const server = createServer((socket) => socket.end());
+    const agent = pinnedPushAgent({ address: '127.0.0.1', family: 4 });
+    try {
+      await new Promise<void>((done) => server.listen(0, '127.0.0.1', done));
+      const address = server.address() as { port: number };
+      await new Promise<void>((done, reject) => {
+        const socket = connect({
+          host: 'unresolvable-push.example.invalid',
+          port: address.port,
+          autoSelectFamily: true,
+          lookup: agent.options.lookup,
+        });
+        socket.setTimeout(2000, () =>
+          socket.destroy(new Error('PINNED_LOOKUP_TIMEOUT')),
+        );
+        socket.once('error', reject);
+        socket.once('connect', () => {
+          socket.destroy();
+          done();
+        });
+      });
+    } finally {
+      agent.destroy();
+      await new Promise<void>((done) => server.close(() => done()));
+    }
+  });
+  it('returns a single pinned IPv6 answer for both DNS lookup contracts', () => {
+    const agent = pinnedPushAgent({
+      address: '2001:4860:4860::8888',
+      family: 6,
+    });
+    const lookup = agent.options.lookup as any;
+    const all = jest.fn(),
+      single = jest.fn();
+    lookup('ignored.example', { all: true }, all);
+    lookup('ignored.example', {}, single);
+    expect(all).toHaveBeenCalledWith(null, [
+      { address: '2001:4860:4860::8888', family: 6 },
+    ]);
+    expect(single).toHaveBeenCalledWith(null, '2001:4860:4860::8888', 6);
+    agent.destroy();
+  });
   it('rejects relative and public storage paths, including Windows case variants', () => {
     const previous = process.env.MAILBOX_PRIVATE_DIR;
     try {
