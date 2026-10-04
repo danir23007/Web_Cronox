@@ -25,16 +25,6 @@ body.cronox-admin { --admin-line:var(--admin-c-e5e8ee); --admin-muted:var(--admi
 .cronox-admin .sidebar-children { padding-left:19px; }
 .cronox-admin .sidebar-children .sidebar-children { padding-left:12px; }
 .cronox-admin .sidebar-children[hidden] { display:none !important; }
-/* Fixed flyouts keep every principal header stationary during mouse traversal.
-   They remain descendants of the same interaction zone; touch uses inline panels. */
-@media(min-width:801px) {
-  .cronox-admin .sidebar-group-zone > .sidebar-children {
-    position:fixed; left:192px; width:232px; max-height:calc(100dvh - 16px);
-    overflow-y:auto; padding:8px 12px; background:var(--admin-c-fff);
-    border:1px solid var(--admin-line); border-radius:6px;
-    box-shadow:0 5px 16px #0002; z-index:31;
-  }
-}
 .cronox-admin .sidebar-live { margin-top:auto; padding:14px 0; flex-shrink:0; }
 .cronox-admin .admin-section > .admin-view-back,
 .cronox-admin .admin-heading-copy > .admin-view-back { display:flex; width:max-content; max-width:100%; min-width:44px; min-height:44px; align-items:center; margin:0 0 16px; }

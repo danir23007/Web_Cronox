@@ -68,17 +68,18 @@
       if (cancel && !cancel.disabled) { event.preventDefault(); cancel.click(); }
     }
   });
-  // A single visible group. Desktop panels leave header geometry unchanged.
+  // Inline panels move headers. Only real pointer movement changes hover intent.
   // There is no stored menu state; only route selection initializes the pinned group.
   const hover = window.matchMedia('(hover: hover) and (pointer: fine)');
   let pinned = null, temporary = null;
+  let pointer = null, intentRect = null, suppressed = null;
   const groups = [...sidebar.querySelectorAll('.sidebar-group')].map(button => {
     const panel = document.getElementById(button.getAttribute('aria-controls'));
     const zone = document.createElement('div');
     zone.className = 'sidebar-group-zone';
     button.before(zone); zone.append(button, panel);
     button.type = 'button';
-    return { button, panel, zone, suppressed: false };
+    return { button, panel, zone };
   });
   // Nested disclosures belong to their principal zone and never compete with it.
   const subgroups = [...sidebar.querySelectorAll('.sidebar-subgroup')].map(button => {
@@ -95,11 +96,6 @@
     });
     return { button, panel, setOpen };
   });
-  const placePanel = group => {
-    if (mobile.matches) { group.panel.style.removeProperty('top'); return; }
-    const top = Math.max(8, Math.min(group.button.getBoundingClientRect().top, innerHeight - group.panel.offsetHeight - 8));
-    group.panel.style.top = top + 'px';
-  };
   const renderGroups = () => {
     const visible = temporary || pinned;
     const setOpen = (group, open) => {
@@ -107,24 +103,45 @@
       if (group.panel.hidden === open) group.panel.hidden = !open;
     };
     groups.filter(group => group !== visible).forEach(group => setOpen(group, false));
-    if (visible) { setOpen(visible, true); placePanel(visible); }
+    if (visible) setOpen(visible, true);
   };
+  const containsPoint = (rect, point) => rect && point.x >= rect.left && point.x < rect.right && point.y >= rect.top && point.y < rect.bottom;
+  document.addEventListener('pointermove', event => {
+    if (!hover.matches || event.pointerType !== 'mouse') return;
+    const next = { x: event.clientX, y: event.clientY };
+    if (pointer && next.x === pointer.x && next.y === pointer.y) return;
+    pointer = next;
+    // The pre-layout hit region and the live zone belong to the same intent.
+    // A header moving under a stationary pointer cannot start a hover cascade.
+    const owner = suppressed || temporary;
+    if (owner) {
+      const live = owner.zone.getBoundingClientRect();
+      if (containsPoint(live, next)) { if (!suppressed) intentRect = null; return; }
+      // Keep the transit corridor until the pointer reaches the displaced zone.
+      const transit = !suppressed && intentRect ? {
+        left: Math.min(intentRect.left, live.left), right: Math.max(intentRect.right, live.right),
+        top: Math.min(intentRect.top, live.top), bottom: Math.max(intentRect.bottom, live.bottom),
+      } : intentRect;
+      if (containsPoint(transit, next)) return;
+    }
+    suppressed = null; intentRect = null;
+    const target = document.elementFromPoint(next.x, next.y);
+    const group = groups.find(item => item.zone.contains(target)) || null;
+    if (temporary === group) return;
+    intentRect = group?.zone.getBoundingClientRect() || null;
+    temporary = group;
+    renderGroups();
+  });
+  const leavePointer = () => { pointer = null; intentRect = null; suppressed = null; temporary = null; renderGroups(); };
+  document.addEventListener('pointerout', event => { if (!event.relatedTarget) leavePointer(); });
+  window.addEventListener('blur', leavePointer);
   groups.forEach(group => {
     group.button.addEventListener('click', () => {
+      intentRect = group.button.getBoundingClientRect();
       pinned = pinned === group ? null : group;
       temporary = null;
       // A click closing the pinned group wins over hover until the pointer leaves.
-      group.suppressed = !pinned;
-      renderGroups();
-    });
-    group.zone.addEventListener('pointerenter', event => {
-      if (!hover.matches || event.pointerType !== 'mouse' || group.suppressed) return;
-      temporary = group;
-      renderGroups();
-    });
-    group.zone.addEventListener('pointerleave', () => {
-      group.suppressed = false;
-      if (temporary === group) temporary = null;
+      suppressed = pinned ? null : group;
       renderGroups();
     });
     group.zone.addEventListener('focusin', event => {
@@ -137,17 +154,15 @@
       if (event.key !== 'Escape') return;
       event.preventDefault(); event.stopPropagation();
       temporary = null; if (pinned === group) pinned = null;
-      group.suppressed = true; group.button.focus(); renderGroups();
+      suppressed = group; intentRect = group.button.getBoundingClientRect(); group.button.focus(); renderGroups();
     });
     group.panel.addEventListener('click', event => {
       if (!event.target.closest('[data-nav-target],a[href]')) return;
-      pinned = group; temporary = null; group.suppressed = false;
+      pinned = group; temporary = null; suppressed = null; intentRect = null;
       renderGroups();
     }, true);
   });
-  hover.addEventListener('change', () => { temporary = null; renderGroups(); });
-  sidebar.addEventListener('scroll', () => { const visible = temporary || pinned; if (visible) placePanel(visible); });
-  window.addEventListener('resize', renderGroups);
+  hover.addEventListener('change', leavePointer);
   renderGroups();
   document.addEventListener('keydown', event => {
     if (event.key === 'Escape' && document.body.classList.contains('sidebar-open')) { closeDrawer(); toggle.focus(); }
@@ -227,6 +242,7 @@
     if (group) pinned = group;
     subgroups.forEach(item => { if (item.panel.contains(active)) item.setOpen(true); });
     temporary = null;
+    intentRect = null; suppressed = null;
     renderGroups();
     document.getElementById('adminBreadcrumb').textContent = active?.textContent.trim() || 'Administración';
     closeDrawer();

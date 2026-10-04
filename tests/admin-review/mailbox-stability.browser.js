@@ -113,11 +113,11 @@ async (page) => {
       assert((await openIds()).length === 0, 'Main group closes with keyboard');
       await target.keyboard.press('Enter'); assert(JSON.stringify(await openIds()) === '["navProducto"]', 'Main group opens with keyboard');
       if (!mobile) {
-        const positions = await target.locator('.sidebar-group').evaluateAll(ns => ns.map(n => n.getBoundingClientRect().top));
+
         for (const steps of [12, 1]) for (const id of ['navMultimedia', 'navAdmin', 'navCliente', 'navMultimedia']) {
-          const rect = await group(id).boundingBox(); await target.mouse.move(rect.x + 30, rect.y + rect.height / 2, { steps });
+          await target.mouse.move(700, 100); const rect = await group(id).boundingBox(); await target.mouse.move(700, rect.y + rect.height / 2); await target.mouse.move(rect.x + 30, rect.y + rect.height / 2, { steps });
           assert(JSON.stringify(await openIds()) === JSON.stringify([id]), 'Exactly one temporary principal group');
-          assert(await target.locator('.sidebar-group').evaluateAll((ns, previous) => ns.every((n, i) => n.getBoundingClientRect().top === previous[i]), positions), 'Header geometry unchanged');
+          assert(await target.locator('#' + id).evaluate(n => getComputedStyle(n).position === 'static'), 'Principal panels stay inline');
         }
         await target.mouse.move(700, 100); assert(JSON.stringify(await openIds()) === '["navProducto"]', 'Pinned group restored');
         await group('navMultimedia').hover(); await group('navMultimedia').click(); await target.mouse.move(700, 100); assert(JSON.stringify(await openIds()) === '["navMultimedia"]', 'Temporary click becomes pinned');

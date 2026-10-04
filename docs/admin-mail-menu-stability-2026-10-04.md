@@ -1,5 +1,7 @@
 # CRONOX: estabilidad de Correo y menú lateral
 
+La solución de paneles flotantes descrita aquí fue sustituida por la [restauración del menú vertical](admin-sidebar-inline-2026-10-04.md). Las correcciones de Correo permanecen vigentes.
+
 Se revisó el código final de `096dc11`, conservando la eliminación de borradores, la política de enviados, el historial y la atribución de campañas. No hay AGENTS.md en el repositorio ni sus directorios ascendentes; se leyeron las referencias del administrador y las instrucciones de revisión local.
 
 ## Causas y correcciones
