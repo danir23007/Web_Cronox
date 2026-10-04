@@ -1,5 +1,7 @@
 # CRONOX: estado publicado y preparación pendiente
 
+**Continuación verificada:** el backup `mail-Glyc9k` ya se restauró aislado correctamente y el entorno efectivo de PM2 se inspeccionó. La corrección de cuotas y la preparación del destino se documentan en [mail-account-quota-production-2026-10-04.md](mail-account-quota-production-2026-10-04.md). Las secciones siguientes conservan el estado histórico anterior a esas operaciones.
+
 Comprobación del 4/10/2026, aproximadamente 20:03–20:16 Europe/Madrid. Se leyeron las guías del administrador, estabilidad, revisión conjunta, retención y seguimiento y el procedimiento de despliegue. No se encontraron instrucciones `AGENTS.md` adicionales. Se conserva todo el trabajo anterior.
 
 ## Publicación y base de datos

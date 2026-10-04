@@ -1,7 +1,17 @@
 import { WaitlistService, waitlistWorkerEnabled } from './waitlist.service';
 import { RestockDeliveryError } from '../email/restock-delivery.error';
+import { EmailQuotaWaitError } from '../email/mail-account-quota';
 
 describe('Waitlist dispatch safeguards', () => {
+  it('waits for quota without exhausting SMTP retries', async () => {
+    const h = fixture(); h.row.attempts = 10;
+    const retryAt = new Date(Date.now()+86400000);
+    h.mail.sendRestock.mockRejectedValue(new EmailQuotaWaitError(retryAt));
+    await h.service.dispatch('r','claim');
+    expect(h.prisma.restockRequest.updateMany).toHaveBeenCalledWith(expect.objectContaining({data:expect.objectContaining({
+      status:'QUEUED', readyAt:retryAt, attempts:{decrement:1}, errorCode:'EMAIL_QUOTA_WAITING',
+    })}));
+  });
   const fixture = () => {
     const row = {
       id: 'r',

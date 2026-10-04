@@ -9,11 +9,12 @@ import { MailboxFilesService } from './mailbox-files.service';
 import { MailboxReaderService } from './mailbox-reader.service';
 import { MailboxProviderService } from './mailbox-provider.service';
 import { MailboxLeasesService } from './mailbox-leases.service';
-import { addresses, maxMessageBytes, safeError } from './mailbox-security';
+import { addresses, maxAttachmentBytes, maxMessageBytes, safeError } from './mailbox-security';
 import { assertResolved } from './mailbox-campaign-policy';
 import { effectiveMailHtml } from '../email/managed/mail-renderer';
 import { appendSent, mailboxSenderKey } from './mailbox-sent-policy';
 import { MailboxRetentionService } from './mailbox-retention.service';
+import { quotaWaiting, recipientUnits, reserveAccountQuota } from '../email/mail-account-quota';
 
 export function smtpOutcome(error: any, attempted = true) {
   if (
@@ -59,17 +60,28 @@ export class MailboxSenderService {
       where: { id },
       include: { draft: { include: { mailbox: true, files: true } } },
     });
-    if (!pending || pending.status !== 'PENDING') return;
+    if (!pending || pending.status !== 'PENDING' || (pending.readyAt && pending.readyAt > new Date())) return;
     return this.leases.run(pending.draft.mailboxId, async (token, assert) => {
-      const claim = await this.leases.commit(
+      let claim;
+      try { claim = await this.leases.commit(
         pending.draft.mailboxId,
         token,
-        (tx) =>
-          tx.mailboxSend.updateMany({
+        async (tx) => {
+          if (process.env.MAILBOX_SEND_ENABLED !== 'true') return { count: 0 };
+          const { units } = recipientUnits(pending.draft);
+          await reserveAccountQuota(tx, pending.draft.mailbox.username, 'MANUAL:' + id, units);
+          return tx.mailboxSend.updateMany({
             where: { id, status: 'PENDING' },
-            data: { status: 'PROCESSING', startedAt: new Date() },
-          }),
-      );
+            data: { status: 'PROCESSING', startedAt: new Date(), quotaUnits: units, readyAt: null, errorCode: null },
+          });
+        },
+      ); } catch (error) {
+        if (!quotaWaiting(error)) throw error;
+        await this.db.mailboxSend.updateMany({ where: { id, status: 'PENDING' }, data: {
+          readyAt: error.retryAt, errorCode: 'EMAIL_QUOTA_WAITING',
+        } });
+        return;
+      }
       if (!(claim as any).count) return;
       const d = pending.draft,
         b = d.mailbox;
@@ -96,6 +108,7 @@ export class MailboxSenderService {
         const attachments: any[] = [];
         if (d.mode === 'circles') throw Error('USE_CAMPAIGN_QUEUE');
         assertResolved(d.subject, d.text, d.html || '');
+        if (d.files.reduce((sum, file) => sum + file.size, 0) > maxAttachmentBytes()) throw Error('EMAIL_ATTACHMENT_LIMIT');
         for (const f of d.files) {
           if (!f.key) throw Error('ATTACHMENT_UNAVAILABLE');
           attachments.push({

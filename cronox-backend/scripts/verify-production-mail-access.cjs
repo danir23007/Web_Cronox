@@ -49,7 +49,10 @@ function state() {
  fs.accessSync(privateRoot,fs.constants.R_OK|fs.constants.W_OK);
  return { app,env,envFile,privateRoot,apps,report:{
   host:require('node:os').hostname(),commit:run('git',['-C',root,'rev-parse','HEAD']).toString().trim(),
-  pm2:{name:app.name,status:app.pm2_env.status,pid:app.pid,restarts:app.pm2_env.restart_time,startedAt:new Date(app.pm2_env.pm_uptime)},
+  pm2:{name:app.name,status:app.pm2_env.status,pid:app.pid,restarts:app.pm2_env.restart_time,
+   unstableRestarts:app.pm2_env.unstable_restarts,exitCode:app.pm2_env.exit_code,
+   startedAt:new Date(app.pm2_env.pm_uptime),errorLogLastModified:
+    app.pm2_env.pm_err_log_path&&fs.existsSync(app.pm2_env.pm_err_log_path)?fs.statSync(app.pm2_env.pm_err_log_path).mtime:null},
   filePredatesStart,configEvidence:filePredatesStart?'START_ENV_PLUS_UNCHANGED_DOTENV':'DOTENV_CHANGED_REQUIRES_RUNTIME_CHECK',
   flags:Object.fromEntries(flags.map(k=>[k,env[k]??'UNSET'])),
   privateStorage:{readWrite:true,mode:(stat.mode&0o777).toString(8),owner:stat.uid},
@@ -121,7 +124,14 @@ async function verify(dir) {
   run('/usr/bin/psql',['-X','-v','ON_ERROR_STOP=1','-c','CREATE ROLE anon; CREATE ROLE authenticated; CREATE ROLE service_role;'],{env:localEnv});
   // Managed provider schemas remain in the full dump. Restore CRONOX's entire
   // application schema; provider-managed extensions/roles require its restore tool.
-  run('/usr/bin/pg_restore',['--clean','--if-exists','--exit-on-error','--no-owner','--no-acl','--schema=public','--dbname=postgres',dir+'/database.dump'],{env:localEnv});
+  const restoreArgs=['--exit-on-error','--no-owner','--no-acl','--schema=public','--dbname=postgres',dir+'/database.dump'];
+  // --schema does not select dependent EXTENSION objects. CRONOX's text GIN
+  // indexes require pg_trgm, which is public in the production catalog. Restore
+  // definitions, create that dependency, then restore data and all constraints.
+  run('/usr/bin/pg_restore',['--section=pre-data',...restoreArgs],{env:localEnv});
+  run('/usr/bin/psql',['-X','-v','ON_ERROR_STOP=1','-c','CREATE EXTENSION IF NOT EXISTS pg_trgm WITH SCHEMA public;'],{env:localEnv});
+  run('/usr/bin/pg_restore',['--section=data',...restoreArgs],{env:localEnv});
+  run('/usr/bin/pg_restore',['--section=post-data',...restoreArgs],{env:localEnv});
   const query=sql=>run('/usr/bin/psql',['-X','-A','-t','-v','ON_ERROR_STOP=1','-c',sql],{env:localEnv}).toString().trim();
   const keys = JSON.parse(query(`SELECT COALESCE(json_agg(key),'[]') FROM (SELECT key FROM "MailboxFile" WHERE key IS NOT NULL UNION SELECT "bodyKey" FROM "MailboxMessage" WHERE "bodyKey" IS NOT NULL) refs`));
   const frozen=JSON.parse(query(`SELECT COALESCE(json_agg(content),'[]') FROM (SELECT content FROM "MailboxCampaignVersion" UNION ALL SELECT snapshot FROM "MailboxCampaign" WHERE snapshot IS NOT NULL) versions`));
@@ -143,7 +153,7 @@ async function verify(dir) {
   const migrations=JSON.parse(query(`SELECT COALESCE(json_agg(migration_name),'[]') FROM _prisma_migrations WHERE finished_at IS NOT NULL AND rolled_back_at IS NULL`));
   const report={checkedAt:new Date(),backup:dir,hashesVerified:true,applicationSchemaRestored:true,
    providerManagedSchemasRestored:false,referencedPrivateFilesDecrypted:allKeys.size,mailboxCredentialsRecovered:boxes.length,
-   migrationCount:migrations.length,network:'PRIVATE_UNIX_SOCKET_NO_TCP',workersStarted:false};
+   migrationCount:migrations.length,requiredExtensions:['pg_trgm'],network:'PRIVATE_UNIX_SOCKET_NO_TCP',workersStarted:false};
   privateWrite(dir+'/recovery-verified-'+Date.now()+'.json',JSON.stringify(report,null,2));
   console.log(JSON.stringify(report));
  } finally {
@@ -164,7 +174,11 @@ async function verify(dir) {
  if(mode==='backup')backup(s);
 })().catch(error=>{
  // Captured subprocess output can contain sensitive provider details. Do not print it.
- console.error('CRONOX_OPERATOR_CHECK_FAILED:'+String(error.code||(/^[A-Z_]+$/.test(error.message)?error.message:error.constructor.name)));
+ const stderr=String(error.stderr||'');
+ const cause=/operator class.*does not exist/.test(stderr)?'PG_RESTORE_REQUIRED_EXTENSION_MISSING':
+  /error while loading shared libraries/.test(stderr)?'POSTGRES_LIBRARY_MISSING':
+  /pg_restore: error/.test(stderr)?'PG_RESTORE_FAILED':null;
+ console.error('CRONOX_OPERATOR_CHECK_FAILED:'+String(cause||error.code||(/^[A-Z_]+$/.test(error.message)?error.message:error.constructor.name)));
  if(process.platform==='linux'&&process.getuid()===0){
   try{
    const base='/root/cronox-backups';fs.mkdirSync(base,{recursive:true,mode:0o700});

@@ -2,8 +2,15 @@ import { MailTransportFactory } from './mail-transport.factory';
 import { EmailSenderKey } from './email.types';
 
 describe('durable email delivery history', () => {
+  const originalUser = process.env.SMTP_INFO_USER;
+  beforeAll(() => { process.env.SMTP_INFO_USER = 'info@example.test'; });
+  afterAll(() => { if (originalUser === undefined) delete process.env.SMTP_INFO_USER; else process.env.SMTP_INFO_USER = originalUser; });
   const setup = () => {
     const db: any = { emailDelivery: { create: jest.fn().mockResolvedValue({ id: 'attempt' }), update: jest.fn() } };
+    db.$transaction = jest.fn(async fn => fn({ ...db,
+      $executeRaw: jest.fn(), $queryRaw: jest.fn().mockResolvedValue([{ now: new Date() }]),
+      mailAccountQuota: { findUnique: jest.fn().mockResolvedValue(null), findMany: jest.fn().mockResolvedValue([]), create: jest.fn() },
+    }));
     const factory = new MailTransportFactory(db);
     const sendMail = jest.fn().mockResolvedValue({ messageId: 'id', accepted: ['test@example.test'] });
     jest.spyOn(factory, 'getTransport').mockReturnValue({ sendMail } as any);
@@ -15,7 +22,9 @@ describe('durable email delivery history', () => {
     await factory.sendMail(EmailSenderKey.INFO, { to: 'test@example.test', subject: 'Bienvenida', html: 'private-token-and-code' }, 'NEWSLETTER_WELCOME');
     expect(db.emailDelivery.create.mock.invocationCallOrder[0]).toBeLessThan(sendMail.mock.invocationCallOrder[0]);
     expect(JSON.stringify(db.emailDelivery.create.mock.calls)).not.toContain('private-token-and-code');
-    expect(db.emailDelivery.update).toHaveBeenCalledWith(expect.objectContaining({ data: { status: 'SMTP_ACCEPTED', providerMessageId: 'id' } }));
+    expect(db.emailDelivery.update).toHaveBeenCalledWith(expect.objectContaining({ data: {
+      status: 'SMTP_ACCEPTED', providerMessageId: 'id', pendingPayload: null, readyAt: null,
+    } }));
   });
   it('sends nothing if recording the attempt fails', async () => {
     const { db, factory, sendMail } = setup(); db.emailDelivery.create.mockRejectedValue(new Error('db'));

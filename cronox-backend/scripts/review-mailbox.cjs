@@ -80,7 +80,8 @@ async function main() {
   try {
     const schema = (
       await fs.readFile(path.join(backend, 'prisma/schema.prisma'), 'utf8')
-    ).replace(/model (?:Mailbox\w*|CampaignTemplateFamily|DailyVisitorBrowser|DailyVisitorLink) \{[\s\S]*?\n\}/g, '')
+    ).replace(/model (?:Mailbox\w*|MailAccountQuota|CampaignTemplateFamily|DailyVisitorBrowser|DailyVisitorLink) \{[\s\S]*?\n\}/g, '')
+      .replace(/model EmailDelivery \{[\s\S]*?\n\}/, block => block.replace(/^.*(?:quotaUnits|pendingPayload|readyAt).*\r?\n/gm, ''))
       .replace(/^.*(?:familyId String\?|campaignCircle Int\?|textOverride String\?|family CampaignTemplateFamily\?|@@unique\(\[familyId, campaignCircle\]\)).*\r?\n/gm,'')
       .replace(/^.*(?:deduplicationStartedAt|browserLinks DailyVisitorLink|disposition String|observedRole String).*\r?\n/gm,'');
     const schemaFile = path.join(dir, 'before.prisma');
@@ -141,21 +142,34 @@ async function main() {
       VALUES ('name-migration-box','Synthetic legacy','name-migration@example.test','CRONOX','hostinger','imap.hostinger.com','smtp.hostinger.com','name-migration@example.test',now());
       INSERT INTO "MailboxDraft" (id,"mailboxId","userId",mode,subject,text,revision,status,"updatedAt")
       VALUES ('name-migration-draft','name-migration-box',1,'campaign','Existing customer subject','Existing content',7,'DRAFT',now());
+      INSERT INTO "MailboxSend" (id,"draftId","draftRevision","userId","sessionId","sessionVersion",status,"messageId","requestKey",accepted,"startedAt")
+      VALUES ('quota-legacy-manual','name-migration-draft',7,1,'synthetic-session',1,'SMTP_ACCEPTED','<quota-legacy@example.test>','quota-legacy-request',ARRAY['a@example.test','b@example.test'],now());
+      INSERT INTO "EmailDelivery" (id,"senderKey",recipient,subject,status,"updatedAt")
+      VALUES ('quota-legacy-auto','ORDERS','[multiple recipients]','Synthetic historical message','UNKNOWN',now());
     `);
     sql(nameBefore);
     sql(path.join(backend,'prisma/migrations/20261004130000_campaign_internal_name/migration.sql'));
     sql(path.join(backend,'prisma/migrations/20261004150000_mailbox_sent_policy_tracking/migration.sql'));
+    sql(path.join(backend,'prisma/migrations/20261004190000_mail_account_quota/migration.sql'));
     const nameAfter = path.join(dir,'campaign-name-after.sql');
     await fs.writeFile(nameAfter, `
       DO $$ BEGIN
+        IF NOT EXISTS (SELECT 1 FROM "MailAccountQuota" WHERE id='MANUAL:quota-legacy-manual' AND units=2)
+          OR NOT EXISTS (SELECT 1 FROM "MailAccountQuota" WHERE id='AUTO:quota-legacy-auto' AND units=100)
+          OR NOT EXISTS (SELECT 1 FROM "EmailDelivery" WHERE id='quota-legacy-auto' AND status='UNKNOWN')
+        THEN RAISE EXCEPTION 'Shared quota migration lost historical units or requeued uncertainty'; END IF;
         IF NOT EXISTS (SELECT 1 FROM "MailboxDraft" WHERE id='name-migration-draft' AND "campaignName" IS NULL
           AND subject='Existing customer subject' AND text='Existing content' AND revision=7 AND status='DRAFT')
         THEN RAISE EXCEPTION 'Campaign name migration changed legacy data'; END IF;
       END $$;
+      DELETE FROM "MailAccountQuota" WHERE id IN ('MANUAL:quota-legacy-manual','AUTO:quota-legacy-auto');
+      DELETE FROM "MailboxSend" WHERE id='quota-legacy-manual';
+      DELETE FROM "EmailDelivery" WHERE id='quota-legacy-auto';
       DELETE FROM "Mailbox" WHERE id='name-migration-box';
     `);
     sql(nameAfter);
     pass('Optional campaign name migration preserves existing subject, content, revision and state without backfilling');
+    pass('Additive shared quota migration conserves historical recipient units and never requeues uncertain mail');
     await fs.writeFile(path.join(dir, 'empty.env'), '');
     process.env.CRONOX_ENV_FILE = path.join(dir, 'empty.env');
     process.chdir(dir);
@@ -1248,6 +1262,7 @@ async function main() {
     await require('./review-mailbox-campaigns.cjs')({app,db,backend,request,boxId,users,provider,smtpMessages,pass});
     await require('./review-mailbox-inbox-campaign-controls.cjs')({app,db,backend,request,boxId,users,smtpMessages,pass});
     await require('./review-mailbox-sent-policy.cjs')({app,db,backend,users,provider,stores,sender,sync,service,smtpMessages,pass,request});
+    await require('./review-mail-account-quota.cjs')({db,backend,pass});
     assert.equal(await db.financeArchive.count(), 0);
     assert.equal(await db.dailyVisitor.count(), 0);
     await require('./review-admin-push.cjs')({app,db,backend,request,boxId,users,sessions,push,security,webpush,pass});

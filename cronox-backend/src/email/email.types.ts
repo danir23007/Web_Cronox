@@ -75,6 +75,7 @@ export type OrderConfirmationEmailTemplateData = {
 
 export interface EmailSendResult {
   messageId: string;
+  queued?: boolean;
 }
 
 export interface EmailAccountConfig {

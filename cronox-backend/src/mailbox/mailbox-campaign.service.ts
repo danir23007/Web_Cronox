@@ -1,3 +1,4 @@
+import { quotaWaiting, reserveAccountQuota } from '../email/mail-account-quota';
 import {
   BadRequestException,
   ConflictException,
@@ -863,86 +864,6 @@ export class MailboxCampaignService {
                 where: { id: 'global' },
               });
               if (clock && clock.nextAt > new Date()) return null;
-              const start = new Date(Date.now() - 86400000),
-                hour = new Date(Date.now() - 3600000);
-              const campaignCount = await tx.mailboxCampaignDelivery.count({
-                where: {
-                  startedAt: { gte: start },
-                  campaign: { draft: { mailboxId: box.id } },
-                },
-              });
-              const hourly = await tx.mailboxCampaignDelivery.count({
-                where: {
-                  startedAt: { gte: hour },
-                  campaign: { draft: { mailboxId: box.id } },
-                },
-              });
-              const manual = await tx.mailboxSend.findMany({
-                where: {
-                  startedAt: { gte: start },
-                  draft: { mailboxId: box.id },
-                },
-                include: { draft: true },
-              });
-              const transactional = snapshot.senderKey
-                ? await tx.emailDelivery.count({
-                    where: {
-                      senderKey: snapshot.senderKey,
-                      createdAt: { gte: start },
-                    },
-                  })
-                : 0;
-              const manualCount = manual.reduce(
-                (n, s) =>
-                  n +
-                  Math.max(
-                    1,
-                    new Set(
-                      [s.draft.to, s.draft.cc, s.draft.bcc]
-                        .join(',')
-                        .split(',')
-                        .filter(Boolean),
-                    ).size,
-                  ),
-                0,
-              );
-              if (
-                campaignCount + manualCount + transactional >= policy.daily ||
-                hourly +
-                  manual
-                    .filter((s) => s.startedAt && s.startedAt >= hour)
-                    .reduce(
-                      (n, s) =>
-                        n +
-                        Math.max(
-                          1,
-                          new Set(
-                            [s.draft.to, s.draft.cc, s.draft.bcc]
-                              .join(',')
-                              .split(',')
-                              .filter(Boolean),
-                          ).size,
-                        ),
-                      0,
-                    ) +
-                  (snapshot.senderKey
-                    ? await tx.emailDelivery.count({
-                        where: {
-                          senderKey: snapshot.senderKey,
-                          createdAt: { gte: hour },
-                        },
-                      })
-                    : 0) >=
-                  policy.hourly
-              ) {
-                await tx.mailboxCampaign.update({
-                  where: { id: c.id },
-                  data: {
-                    errorCode: 'MAILBOX_CAMPAIGN_CAPACITY_WAITING',
-                  },
-                });
-                return null;
-              }
               // Do not claim until a real delivery is ready; scheduled jobs remain editable.
               const d = await tx.mailboxCampaignDelivery.findFirst({
                 where: {
@@ -954,6 +875,14 @@ export class MailboxCampaignService {
                 include: { version: true },
               });
               if (!d) return null;
+              try {
+                await reserveAccountQuota(tx, box.username, 'CAMPAIGN:' + d.id + (d.attempts ? ':attempt' + (d.attempts+1) : ''), 1, policy);
+              } catch (error) {
+                if (!quotaWaiting(error)) throw error;
+                await tx.mailboxCampaignDelivery.update({ where: { id: d.id }, data: { readyAt: error.retryAt } });
+                await tx.mailboxCampaign.update({ where: { id: c.id }, data: { errorCode: 'MAILBOX_CAMPAIGN_CAPACITY_WAITING' } });
+                return null;
+              }
               await tx.mailboxCampaign.update({
                 where: { id: c.id },
                 data: {

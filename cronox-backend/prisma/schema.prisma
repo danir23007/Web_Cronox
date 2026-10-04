@@ -220,6 +220,8 @@ model MailboxSuppression {
 }
 
 model MailboxSend {
+  quotaUnits Int @default(1)
+  readyAt DateTime? @db.Timestamptz(3)
   id             String       @id @default(uuid())
   draftId        String
   draft          MailboxDraft @relation(fields: [draftId], references: [id], onDelete: Restrict)
@@ -240,6 +242,7 @@ model MailboxSend {
 
   @@unique([draftId, draftRevision])
   @@index([status, createdAt])
+  @@index([status, readyAt])
 }
 
 model MailboxFile {
@@ -466,6 +469,9 @@ model EmailAsset {
 }
 
 model EmailDelivery {
+  quotaUnits        Int      @default(1)
+  pendingPayload    String?  @db.Text
+  readyAt           DateTime? @db.Timestamptz(3)
   id                String   @id @default(cuid())
   senderKey         String
   recipient         String
@@ -479,6 +485,17 @@ model EmailDelivery {
 
   @@index([createdAt, id])
   @@index([senderKey, createdAt])
+  @@index([status, readyAt])
+}
+
+/// Minimal durable SMTP account reservations, independent of message retention.
+model MailAccountQuota {
+  id         String   @id
+  account    String
+  units      Int
+  reservedAt DateTime @default(now()) @db.Timestamptz(3)
+
+  @@index([account, reservedAt])
 }
 
 model Product {

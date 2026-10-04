@@ -1,5 +1,6 @@
 import { generateInitialPassword, hashNewPassword } from '../common/password-policy';
 import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
+import { quotaWaiting } from '../email/mail-account-quota';
 import { createHash, randomBytes, randomUUID } from 'crypto';
 import { getFrontendUrl } from '../common/config/environment';
 import { EmailService } from '../email/email.service';
@@ -142,11 +143,13 @@ export class NewsletterDeliveryService implements OnModuleInit, OnModuleDestroy 
         await this.prisma.user.updateMany({ where: { id: initialUserId, password: initialHash }, data: { password: null } });
       }
       initialPassword = undefined;
-      const retry = !uncertain && job.attempts < MAX_ATTEMPTS;
+      const waiting = quotaWaiting(error);
+      const retry = waiting || (!uncertain && job.attempts < MAX_ATTEMPTS);
       await this.prisma.newsletterMailJob.updateMany({ where, data: {
         status: retry ? 'QUEUED' : uncertain ? 'UNCERTAIN' : 'FAILED',
-        errorCode: retry ? 'RETRY_SAFE' : uncertain ? 'SMTP_OUTCOME_UNKNOWN' : 'SMTP_REJECTED',
-        readyAt: retry ? new Date(Date.now() + job.attempts * 5 * 60_000) : job.readyAt,
+        errorCode: waiting ? 'EMAIL_QUOTA_WAITING' : retry ? 'RETRY_SAFE' : uncertain ? 'SMTP_OUTCOME_UNKNOWN' : 'SMTP_REJECTED',
+        readyAt: waiting ? error.retryAt : retry ? new Date(Date.now() + job.attempts * 5 * 60_000) : job.readyAt,
+        ...(waiting ? { attempts: { decrement: 1 } } : {}),
         claimToken: null, claimedAt: null,
         ...(!uncertain ? { tokenHash: null, tokenExpiresAt: null, userId: null } : {}),
       } });

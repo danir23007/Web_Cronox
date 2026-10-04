@@ -51,7 +51,7 @@ export class MailboxWorkerService implements OnModuleInit, OnModuleDestroy {
       await this.retention?.tick().catch(() => this.logger.warn('MAILBOX_RETENTION_FAILED_RETRY_PENDING'));
       if (process.env.MAILBOX_SEND_ENABLED === 'true') {
         const queued = await this.db.mailboxSend.findMany({
-          where: { status: 'PENDING' },
+          where: { status: 'PENDING', OR: [{ readyAt: null }, { readyAt: { lte: new Date() } }] },
           select: { id: true },
           orderBy: { createdAt: 'asc' },
           take: 2,

@@ -11,6 +11,7 @@ import { loadEmailConfig } from './email.config';
 import { MailTransportFactory } from './mail-transport.factory';
 import { ManagedMailService } from './managed/managed-mail.service';
 import { RestockDeliveryError, restockDeliveryOutcome } from './restock-delivery.error';
+import { quotaWaiting } from './mail-account-quota';
 import {
   EMAIL_TEMPLATE_FILE,
   EMAIL_TYPE_TO_SENDER,
@@ -73,7 +74,7 @@ export class EmailService {
         html,
         text: publication?.text || `Ya está disponible\nNos pediste que te avisáramos: ${data.product}, en la talla ${data.size}, vuelve a estar disponible en CRONOX.\nVER PRODUCTO: ${data.actionUrl}\nDisponibilidad sujeta a existencias. Este aviso no reserva la prenda.`,
       }, 'RESTOCK');
-    } catch (error) { throw new RestockDeliveryError(restockDeliveryOutcome(error)); }
+    } catch (error) { if (quotaWaiting(error)) throw error; throw new RestockDeliveryError(restockDeliveryOutcome(error)); }
     if (!info.accepted?.length) throw new RestockDeliveryError('FAILED');
   }
 
@@ -134,7 +135,9 @@ export class EmailService {
           subject: options.purpose === 'NEWSLETTER_ACCESS' ? options.subject : custom?.subject || options.subject,
           html,
           ...(custom ? { text: custom.text } : {}),
-        }, options.purpose || options.type)) as { messageId: string; accepted?: unknown[] };
+        }, options.purpose || options.type)) as { messageId: string; accepted?: unknown[]; queued?: boolean };
+
+      if (info.queued) return { messageId: info.messageId, queued: true };
 
       if (!Array.isArray(info.accepted) || info.accepted.length === 0) {
         throw new Error('SMTP_RECIPIENT_NOT_ACCEPTED');
@@ -142,6 +145,7 @@ export class EmailService {
 
       return { messageId: info.messageId };
     } catch (error) {
+      if (quotaWaiting(error)) throw error;
       this.logger.error(
         `Fallo enviando email. type=${options.type} sender=${senderKey}`,
       );

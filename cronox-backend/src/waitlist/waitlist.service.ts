@@ -13,6 +13,7 @@ import { isEmail } from 'class-validator';
 import { PrismaService } from '../prisma/prisma.service';
 import { EmailService } from '../email/email.service';
 import { RestockDeliveryError } from '../email/restock-delivery.error';
+import { quotaWaiting } from '../email/mail-account-quota';
 import { getFrontendUrl } from '../common/config/environment';
 
 export const ACTIVE_RESTOCK = [
@@ -277,6 +278,11 @@ export class WaitlistService implements OnModuleInit, OnModuleDestroy {
         imageUrl,
       });
     } catch (error) {
+      if (quotaWaiting(error)) {
+        await update({ status: 'QUEUED', readyAt: error.retryAt,
+          attempts: { decrement: 1 }, errorCode: 'EMAIL_QUOTA_WAITING' });
+        return;
+      }
       const outcome =
         error instanceof RestockDeliveryError ? error.outcome : 'UNCERTAIN';
       const retry = outcome === 'RETRY' && row.attempts < 3;

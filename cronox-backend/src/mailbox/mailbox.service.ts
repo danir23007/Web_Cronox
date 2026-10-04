@@ -697,11 +697,13 @@ export class MailboxService {
       throw new ConflictException('MAILBOX_DRAFT_QUEUED');
     if (
       draft.files.length >= 10 ||
-      draft.files.reduce((a, f) => a + f.size, 0) >= maxMessageBytes()
+      draft.files.reduce((a, f) => a + f.size, 0) >= maxAttachmentBytes()
     )
       throw new BadRequestException('MAILBOX_ATTACHMENTS_LIMIT');
     const file = await this.files.write(source, maxAttachmentBytes());
     try {
+      if (draft.files.reduce((a, f) => a + f.size, 0) + file.size > maxAttachmentBytes())
+        throw new BadRequestException('MAILBOX_ATTACHMENTS_LIMIT');
       return await this.db.$transaction(async (tx) => {
         const locked = await tx.mailboxDraft.updateMany({
           where: { id, status: 'DRAFT', revision: draft.revision },
@@ -771,7 +773,7 @@ export class MailboxService {
     header(draft.subject);
     assertResolved(draft.subject, draft.text, draft.html);
     header(draft.mailbox.fromName);
-    if (draft.files.reduce((a, f) => a + f.size, 0) > maxMessageBytes())
+    if (draft.files.reduce((a, f) => a + f.size, 0) > maxAttachmentBytes())
       throw new BadRequestException('MAILBOX_ATTACHMENTS_LIMIT');
     credential(
       draft.mailbox.smtpSecretRef,
