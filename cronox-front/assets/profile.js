@@ -1136,6 +1136,7 @@
       const normalizedUser = { ...user, circleLevel: normalizedUserCircle };
       window.CRONOX_USER = normalizedUser;
       fillAccount(normalizedUser);
+      refreshPasswordState(normalizedUser);
       fillAccreditation(normalizedUser);
       renderAccreditationPrivileges(normalizedUserCircle);
       await Promise.all([loadAddress(), loadOrders()]);
@@ -1144,6 +1145,57 @@
       console.warn('[PROFILE] No se pudo cargar el perfil', err);
       showProfileMessage('No se pudo cargar tu perfil. Inténtalo de nuevo más tarde.', 'error');
     }
+  };
+
+  let hasPassword = false;
+  const refreshPasswordState = (user) => {
+    hasPassword = Boolean(user.hasPassword);
+    if (!$('passwordStatus')) return;
+    $('passwordStatus').textContent = hasPassword ? 'Contrase\u00f1a establecida' : 'Sin contrase\u00f1a establecida';
+    $('passwordAction').textContent = hasPassword ? 'Cambiar contrase\u00f1a' : 'Establecer contrase\u00f1a';
+    $('passwordAction').disabled = false;
+    $('currentPasswordLabel').hidden = !hasPassword;
+    $('currentPassword').required = hasPassword;
+  };
+  const bindPasswordForm = () => {
+    const form = $('passwordForm');
+    if (!form) return;
+    let saving = false;
+    $('passwordAction').addEventListener('click', () => {
+      form.hidden = !form.hidden;
+      if (!form.hidden) $('newPassword').focus();
+    });
+    form.addEventListener('submit', async event => {
+      event.preventDefault();
+      if (saving) return;
+      const newPassword = $('newPassword').value;
+      const message = $('passwordMessage');
+      if (Array.from(newPassword).length < 7 || new TextEncoder().encode(newPassword).length > 72) {
+        message.textContent = 'La contrase\u00f1a debe tener al menos 7 caracteres y no superar 72 bytes UTF-8.';
+        return;
+      }
+      if (newPassword !== $('confirmPassword').value) {
+        message.textContent = 'Las contrase\u00f1as no coinciden.';
+        return;
+      }
+      saving = true;
+      $('savePassword').disabled = true;
+      $('passwordAction').disabled = true;
+      try {
+        await api.changePassword({ newPassword, ...(hasPassword ? { currentPassword: $('currentPassword').value } : {}) });
+        window.CRONOX_USER.hasPassword = true;
+        refreshPasswordState(window.CRONOX_USER);
+        form.reset();
+        form.hidden = true;
+        message.textContent = 'Contrase\u00f1a guardada correctamente.';
+      } catch (err) {
+        message.textContent = err?.payload?.message || err?.message || 'No se pudo guardar la contrase\u00f1a. Int\u00e9ntalo de nuevo.';
+      } finally {
+        saving = false;
+        $('savePassword').disabled = false;
+        $('passwordAction').disabled = false;
+      }
+    });
   };
 
   const bindAccountForm = () => {
@@ -1175,6 +1227,7 @@
         const normalizedUpdated = { ...updated, circleLevel: normalizedUserCircle };
         window.CRONOX_USER = normalizedUpdated;
         fillAccount(normalizedUpdated);
+        refreshPasswordState(normalizedUpdated);
         fillAccreditation(normalizedUpdated);
         renderAccreditationPrivileges(normalizedUserCircle);
         showProfileMessage('Datos actualizados correctamente.', 'success');
@@ -1496,6 +1549,7 @@
 
   document.addEventListener('DOMContentLoaded', () => {
     bindAccountForm();
+    bindPasswordForm();
     bindAddressForm();
     bindCircleUpgrade();
     bindCirclePromotion();

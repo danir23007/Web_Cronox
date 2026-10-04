@@ -46,34 +46,45 @@ export class EmailService {
   }
 
   isRestockSenderConfigured(): boolean {
-    return this.isLaunchSenderConfigured();
+    return this.isNewsletterSenderConfigured();
+  }
+
+  isNewsletterSenderConfigured(): boolean {
+    const account = this.config.accounts[EmailSenderKey.NOREPLY];
+    return Boolean(this.config.enabled && account?.user && account.pass);
   }
 
   // Dedicated opt-in availability notice, independent from launch publications.
   async sendRestock(to: string, data: { product: string; size: string; actionUrl: string; imageUrl?: string }) {
     let html: string;
+    let publication: { html: string; text: string; subject: string } | null = null;
     try {
       html = await this.renderTemplate(EmailTemplate.RESTOCK, data);
       try {
-        const custom = await this.managed?.published(EmailSenderKey.INFO, 'RESTOCK', data);
+        const custom = await this.managed?.published(EmailSenderKey.NOREPLY, 'RESTOCK', data);
         const link = Handlebars.escapeExpression(data.actionUrl);
-        if (custom && (custom.html.includes(`href="${link}"`) || custom.html.includes(`href='${link}'`))) html = custom.html;
+        if (custom && (custom.html.includes(`href="${link}"`) || custom.html.includes(`href='${link}'`))) { html = custom.html; publication = custom; }
       } catch { /* Preserve the working first-party template. */ }
     } catch { throw new RestockDeliveryError('RETRY'); }
     let info: { accepted?: unknown[] };
     try {
-      info = await this.transportFactory.sendMail(EmailSenderKey.INFO, {
-        to, subject: `Tu talla ha vuelto: ${data.product} · ${data.size}`,
+      info = await this.transportFactory.sendMail(EmailSenderKey.NOREPLY, {
+        to, subject: publication?.subject || `Tu talla ha vuelto: ${data.product} · ${data.size}`,
         html,
-        text: `Ya está disponible\nNos pediste que te avisáramos: ${data.product}, en la talla ${data.size}, vuelve a estar disponible en CRONOX.\nVER PRODUCTO: ${data.actionUrl}\nDisponibilidad sujeta a existencias. Este aviso no reserva la prenda.`,
+        text: publication?.text || `Ya está disponible\nNos pediste que te avisáramos: ${data.product}, en la talla ${data.size}, vuelve a estar disponible en CRONOX.\nVER PRODUCTO: ${data.actionUrl}\nDisponibilidad sujeta a existencias. Este aviso no reserva la prenda.`,
       }, 'RESTOCK');
     } catch (error) { throw new RestockDeliveryError(restockDeliveryOutcome(error)); }
     if (!info.accepted?.length) throw new RestockDeliveryError('FAILED');
   }
 
   async send(options: EmailSendOptions): Promise<EmailSendResult> {
-    const senderKey = EMAIL_TYPE_TO_SENDER[options.type];
-    const template = EMAIL_TYPE_TO_TEMPLATE[options.type];
+    const purpose = options.purpose || options.type;
+    if (['LAUNCH', 'PRE_REGISTRATION_CONFIRMATION', 'NEWSLETTER_CONFIRMATION', 'FIRST_ORDER_DISCOUNT', 'GENERIC', 'TEST'].includes(purpose)) {
+      throw new InternalServerErrorException('Finalidad de correo retirada.');
+    }
+    const senderKey = ['NEWSLETTER_ACCESS', 'NEWSLETTER_WELCOME'].includes(purpose)
+      ? EmailSenderKey.NOREPLY : EMAIL_TYPE_TO_SENDER[options.type];
+    const template = options.purpose === 'NEWSLETTER_ACCESS' ? EmailTemplate.NEWSLETTER_ACCESS : EMAIL_TYPE_TO_TEMPLATE[options.type];
 
     try {
       const data: Record<string, unknown> = {
@@ -99,8 +110,7 @@ export class EmailService {
           !custom.html.includes(Handlebars.escapeExpression(String(data.discountCode)))) custom = null;
       if (options.purpose === 'NEWSLETTER_ACCESS' && custom) {
         const link = Handlebars.escapeExpression(String(data.actionUrl || ''));
-        if (!link || !(custom.html.includes(`href="${link}"`) || custom.html.includes(`href='${link}'`)) ||
-            !custom.html.includes('Entrar en Cronox')) custom = null;
+        if (!link || !(custom.html.includes(`href="${link}"`) || custom.html.includes(`href='${link}'`))) custom = null;
       }
       if (options.type === EmailType.NEWSLETTER_CONFIRMATION && custom) {
         const link = Handlebars.escapeExpression(String(data.actionUrl || ''));
@@ -108,12 +118,20 @@ export class EmailService {
           custom = null;
         }
       }
-      const html = custom?.html || (await this.renderTemplate(template, data));
+      let html = custom?.html || (await this.renderTemplate(template, data));
+      if (options.purpose === 'NEWSLETTER_ACCESS' && data.initialPassword &&
+          !html.includes(Handlebars.escapeExpression(String(data.passwordMessage)))) {
+        const block = `<p style="max-width:640px;margin:16px auto;padding:16px;background:#f7f7f5;color:#111;font-family:Arial,sans-serif;line-height:1.5;">${Handlebars.escapeExpression(String(data.passwordMessage))}</p>`;
+        html = html.includes('</body>') ? html.replace('</body>', `${block}</body>`) : html + block;
+      }
+      if (custom && options.purpose === 'NEWSLETTER_ACCESS' && data.initialPassword && !custom.text.includes(String(data.passwordMessage))) {
+        custom.text += `\n${data.passwordMessage}`;
+      }
 
       const info = (await this.transportFactory
         .sendMail(senderKey, {
           to: options.to,
-          subject: custom?.subject || options.subject,
+          subject: options.purpose === 'NEWSLETTER_ACCESS' ? options.subject : custom?.subject || options.subject,
           html,
           ...(custom ? { text: custom.text } : {}),
         }, options.purpose || options.type)) as { messageId: string; accepted?: unknown[] };
@@ -167,50 +185,6 @@ export class EmailService {
     });
   }
 
-  async sendNewsletterConfirmation(email: string, link: string) {
-    return this.send({
-      type: EmailType.NEWSLETTER_CONFIRMATION,
-      to: email,
-      subject: 'CRONOX · Confirma tu suscripción',
-      templateData: {
-        title: 'Confirma tu suscripción',
-        message:
-          'Confirma tu dirección para activar la newsletter y, si corresponde, tu descuento de bienvenida. El enlace caduca en 24 horas. Si has repetido la solicitud, utiliza el correo más reciente.',
-        actionUrl: link,
-        actionLabel: 'Confirmar suscripción',
-      },
-    });
-  }
-
-  async sendPreRegistrationConfirmation(email: string, registeredAt: Date) {
-    return this.send({
-      type: EmailType.PRE_REGISTRATION_CONFIRMATION,
-      to: email,
-      subject: 'CRONOX · Prerregistro confirmado',
-      templateData: {
-        title: 'Ya formas parte.',
-        message:
-          'Hemos recibido tu preregistro para el próximo lanzamiento de CRONOX.',
-        email,
-        preRegistrationDate: registeredAt.toISOString(),
-      },
-    });
-  }
-
-  async sendFirstOrderDiscount(email: string, code: string) {
-    const subject = 'CRONOX · Tu descuento de bienvenida';
-    return this.send({
-      purpose: 'FIRST_ORDER_DISCOUNT',
-      type: EmailType.GENERIC,
-      to: email,
-      subject,
-      templateData: {
-        title: 'Descuento de primera compra',
-        message: `Tu código de descuento es: ${code}`,
-      },
-    });
-  }
-
   async sendNewsletterWelcome(email: string, code?: string) {
     return this.send({
       purpose: 'NEWSLETTER_WELCOME', type: EmailType.GENERIC, to: email,
@@ -225,17 +199,19 @@ export class EmailService {
     });
   }
 
-  async sendNewsletterAccess(email: string, link: string, accountEligible: boolean) {
+  async sendNewsletterAccess(email: string, link: string, accountEligible: boolean, initialPassword?: string) {
     return this.send({
       purpose: 'NEWSLETTER_ACCESS', type: EmailType.GENERIC, to: email,
       subject: 'CRONOX · Accede a tu cuenta',
       templateData: {
-        title: 'Tu acceso a Cronox',
+        title: 'Tu acceso a CRONOX',
+        initialPassword: initialPassword || '',
+        passwordMessage: initialPassword ? `Tu contrase\u00f1a es: "${initialPassword}". Introd\u00facela sin las comillas.` : '',
         message: accountEligible
           ? 'Solicitaste un enlace de acceso. Pulsa el botón para entrar; caduca en 20 minutos y solo funciona una vez. Si no lo solicitaste, ignora este correo.'
-          : 'Para acceder a Cronox, continúa con el registro o inicia sesión con tu contraseña. Esta solicitud no ha creado ninguna cuenta.',
+          : 'Para acceder a CRONOX, continúa con el registro o inicia sesión con tu contraseña. Esta solicitud no ha creado ninguna cuenta.',
         actionUrl: link,
-        actionLabel: 'Entrar en Cronox',
+        actionLabel: 'Entrar en CRONOX',
       },
     });
   }

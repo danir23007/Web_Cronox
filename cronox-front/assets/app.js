@@ -2243,6 +2243,9 @@ window.CRONOX_AUTH_STATE = window.CRONOX_USER ? 'authenticated' : 'unknown';
     try {
       registerErrorMessage = '';
       setAuthMessage('Creando cuenta...');
+      if (Array.from(password).length < 7 || new TextEncoder().encode(password).length > 72) {
+        throw new Error('La contrase\u00f1a debe tener al menos 7 caracteres y no superar 72 bytes UTF-8.');
+      }
       const user = await window.CRONOX_API.register({ firstName, lastName, email, password });
       publishAuthState(user);
       await refreshUserDependentUI();

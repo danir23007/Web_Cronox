@@ -18,9 +18,27 @@ export class MailTransportFactory {
     // No message is sent unless the attempt is durably recorded first.
     // Do not persist HTML, credentials, verification links or discount codes.
     const recipient = typeof options.to === 'string' ? options.to : '[multiple recipients]';
-    const attempt = await this.db.emailDelivery.create({ data: {
+    const data = {
       senderKey, recipient, subject: String(options.subject || ''), purpose,
-    } });
+    };
+    const attempt = senderKey === EmailSenderKey.NOREPLY
+      ? await this.db.$transaction(async tx => {
+          // All automatic No-reply purposes share one atomic account budget.
+          await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext('smtp-budget:NOREPLY'))`;
+          const limit = (name: string, fallback: number) => {
+            const value = Number(process.env[name] || fallback);
+            if (!Number.isSafeInteger(value) || value < 1) throw new Error('EMAIL_CONFIG');
+            return value;
+          };
+          const now = Date.now();
+          const hourly = await tx.emailDelivery.count({ where: { senderKey, createdAt: { gte: new Date(now - 3600_000) } } });
+          const daily = await tx.emailDelivery.count({ where: { senderKey, createdAt: { gte: new Date(now - 86400_000) } } });
+          if (hourly >= limit('SMTP_NOREPLY_HOURLY_LIMIT', 100) || daily >= limit('SMTP_NOREPLY_DAILY_LIMIT', 1000)) {
+            throw new Error('EMAIL_RATE_LIMIT');
+          }
+          return tx.emailDelivery.create({ data });
+        })
+      : await this.db.emailDelivery.create({ data });
     let info: { messageId: string; accepted?: unknown[] };
     try {
       let transport: Transporter;
@@ -38,7 +56,7 @@ export class MailTransportFactory {
           status: known ? 'FAILED' : 'UNKNOWN', errorCode: known ? (safeCodes.includes(code) ? code : 'SMTP_REJECTED') : 'SMTP_OUTCOME_UNKNOWN',
         } });
       } catch { this.logger.error('Delivery outcome audit pending'); }
-      if (!known && error instanceof Error) Object.assign(error, { deliveryUnknown: true });
+      if (!known) throw Object.assign(new Error('SMTP_OUTCOME_UNKNOWN'), { deliveryUnknown: true });
       throw error;
     }
     try {

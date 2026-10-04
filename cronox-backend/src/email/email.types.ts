@@ -6,6 +6,7 @@ export enum EmailSenderKey {
 }
 
 export enum EmailTemplate {
+  NEWSLETTER_ACCESS = 'NEWSLETTER_ACCESS',
   RESTOCK = 'RESTOCK',
   TEST = 'TEST',
   ORDER_CONFIRMATION = 'ORDER_CONFIRMATION',
@@ -92,7 +93,7 @@ export interface EmailConfig {
 }
 
 export const EMAIL_TYPE_TO_SENDER: Record<EmailType, EmailSenderKey> = {
-  [EmailType.RESTOCK]: EmailSenderKey.INFO,
+  [EmailType.RESTOCK]: EmailSenderKey.NOREPLY,
   [EmailType.TEST]: EmailSenderKey.NOREPLY,
   [EmailType.ORDER_CONFIRMATION]: EmailSenderKey.ORDERS,
   [EmailType.ORDER_SHIPPED]: EmailSenderKey.ORDERS,
@@ -119,6 +120,7 @@ export const EMAIL_TYPE_TO_TEMPLATE: Record<EmailType, EmailTemplate> = {
 };
 
 export const EMAIL_TEMPLATE_FILE: Record<EmailTemplate, string> = {
+  [EmailTemplate.NEWSLETTER_ACCESS]: 'newsletter-access.hbs',
   [EmailTemplate.RESTOCK]: 'restock.hbs',
   [EmailTemplate.TEST]: 'test.hbs',
   [EmailTemplate.ORDER_CONFIRMATION]: 'order-confirmation.hbs',

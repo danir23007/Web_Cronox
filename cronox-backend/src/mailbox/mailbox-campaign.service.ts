@@ -46,7 +46,7 @@ export class MailboxCampaignService {
     if (!key) return [];
     // Read the existing catalog only: no import, publication, transactional flow or SMTP.
     return this.db.managedEmailTemplate.findMany({
-      where: { senderKey: key, archivedAt: null },
+      where: { senderKey: key, archivedAt: null, OR: [{ purpose: null }, { purpose: { in: MAIL_PURPOSES.filter(p => p.senderKey === key).map(p => p.key) } }] },
       select: {
         id: true,
         name: true,
@@ -67,7 +67,7 @@ export class MailboxCampaignService {
       key = this.senderKey(box.address);
     const t = key
       ? await this.db.managedEmailTemplate.findFirst({
-          where: { id, senderKey: key, archivedAt: null },
+          where: { id, senderKey: key, archivedAt: null, OR: [{ purpose: null }, { purpose: { in: MAIL_PURPOSES.filter(p => p.senderKey === key).map(p => p.key) } }] },
         })
       : null;
     if (!t) throw new BadRequestException('MAILBOX_TEMPLATE_NOT_AVAILABLE');
@@ -333,9 +333,7 @@ export class MailboxCampaignService {
           v.campaignCircle === circle &&
           v.senderKey === 'INFO' &&
           !v.archivedAt &&
-          (v.purpose === null ||
-            v.purpose ===
-              (family.eventKind === 'GENERAL' ? 'GENERIC' : family.eventKind)),
+          v.purpose === null,
       );
       const members = audience.recipients.filter((r) => r.circle === circle);
       if (!t) {

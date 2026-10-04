@@ -314,7 +314,7 @@ describe('managed email safety and import', () => {
     );
     await expect(
       service.send({
-        type: EmailType.TEST,
+        type: EmailType.PASSWORD_RESET,
         to: 'test@example.test',
         subject: 'Prueba',
         templateData: { message: 'Hola' },
@@ -334,7 +334,7 @@ describe('managed email safety and import', () => {
     sendMail.mockRejectedValue(new Error('SMTP failure'));
     await expect(
       service.send({
-        type: EmailType.TEST,
+        type: EmailType.PASSWORD_RESET,
         to: 'test@example.test',
         subject: 'Prueba',
       }),

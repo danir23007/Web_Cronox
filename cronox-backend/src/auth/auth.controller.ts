@@ -1,3 +1,4 @@
+import { ChangePasswordDto } from './dto/change-password.dto';
 // src/auth/auth.controller.ts
 import {
   BadRequestException,
@@ -243,6 +244,16 @@ export class AuthController {
     return this.authService.reportActivity(
       (req as Request & { authSession: SessionClaims }).authSession,
     );
+  }
+
+  @Post('change-password')
+  @UseGuards(JwtAuthGuard)
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
+  async changePassword(@CurrentUser('id') userId: number, @Body() dto: ChangePasswordDto,
+    @Res({ passthrough: true }) res: Response) {
+    const result = await this.authService.changePassword(userId, dto);
+    this.authService.setAuthCookies(res, result.tokens);
+    return { ok: true, hasPassword: result.hasPassword };
   }
 
   @Post('forgot-password')

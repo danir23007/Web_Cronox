@@ -987,6 +987,8 @@ import { loadCategoryPages } from './category-pagination';
     return data || null;
   };
 
+  api.changePassword = (payload: UnknownRecord) => request('/api/auth/change-password', { method: 'POST', body: payload });
+
   api.updateMe = async (payload: UnknownRecord) => {
     const data = await request('/api/me', {
       method: 'PUT',

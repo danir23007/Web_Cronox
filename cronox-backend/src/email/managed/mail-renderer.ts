@@ -178,6 +178,9 @@ export function renderMail(
   signature?: unknown,
   publishing = false,
 ) {
+  if (purpose === 'NEWSLETTER_ACCESS' && /\{\{\s*(?:initialPassword|passwordMessage)\s*\}\}/.test(subject + preheader)) {
+    throw new BadRequestException('La contraseña solo puede aparecer en el cuerpo del correo.');
+  }
   if (!document || JSON.stringify(document).length > 200000)
     throw new BadRequestException('Documento demasiado grande o vacío.');
   let count = 0;

@@ -1,3 +1,5 @@
+import { hashNewPassword } from '../common/password-policy';
+import { ChangePasswordDto } from './dto/change-password.dto';
 import {
   BadRequestException,
   ConflictException,
@@ -490,6 +492,25 @@ export class AuthService {
     });
   }
 
+  async changePassword(userId: number, dto: ChangePasswordDto) {
+    const user = await this.usersService.findById(userId);
+    if (!user || user.accountState !== UserAccountState.ACTIVE) throw new UnauthorizedException();
+    if (user.password && (!dto.currentPassword || !await bcrypt.compare(dto.currentPassword, user.password))) {
+      throw new BadRequestException('La contrase\u00f1a actual no es correcta.');
+    }
+    const password = await this.hashPassword(dto.newPassword);
+    const updated = await this.prisma.$transaction(async tx => {
+      const changed = await tx.user.updateMany({
+        where: { id: userId, password: user.password, sessionVersion: user.sessionVersion, accountState: UserAccountState.ACTIVE },
+        data: { password, sessionVersion: { increment: 1 }, passwordSetupClaimedAt: null },
+      });
+      if (changed.count !== 1) throw new ConflictException('La cuenta cambi\u00f3. Recarga e int\u00e9ntalo de nuevo.');
+      await tx.passwordResetToken.updateMany({ where: { userId, usedAt: null }, data: { usedAt: new Date() } });
+      return tx.user.findUniqueOrThrow({ where: { id: userId } });
+    });
+    return { hasPassword: true, tokens: await this.generateTokens(this.omitPassword(updated)) };
+  }
+
   async resetPassword(token: string, newPassword: string) {
     const tokenHash = this.hashResetToken(token);
     const passwordResetToken = await this.prisma.passwordResetToken.findUnique({
@@ -608,7 +629,7 @@ export class AuthService {
   }
 
   private hashPassword(data: string) {
-    return bcrypt.hash(data, this.bcryptSaltRounds);
+    return hashNewPassword(data);
   }
 
   private hashResetToken(token: string): string {

@@ -1,3 +1,4 @@
+import { generateInitialPassword, hashNewPassword } from '../common/password-policy';
 import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { createHash, randomBytes, randomUUID } from 'crypto';
 import { getFrontendUrl } from '../common/config/environment';
@@ -39,7 +40,7 @@ export class NewsletterDeliveryService implements OnModuleInit, OnModuleDestroy 
         where: { status: 'PROCESSING', claimedAt: { lt: new Date(Date.now() - STALE_MS) } },
         data: { status: 'UNCERTAIN', errorCode: 'WORKER_INTERRUPTED' },
       });
-      if (!this.email.isLaunchSenderConfigured()) return;
+      if (!this.email.isNewsletterSenderConfigured()) return;
       for (let index = 0; index < 10; index++) {
         const claim = randomUUID();
         const rows = await this.prisma.$queryRaw<{ id: string }[]>`
@@ -63,6 +64,9 @@ export class NewsletterDeliveryService implements OnModuleInit, OnModuleDestroy 
     });
     if (!job) return;
     const where = { id, status: 'PROCESSING', claimToken: claim };
+    let initialPassword: string | undefined;
+    let initialHash: string | undefined;
+    let initialUserId: number | undefined;
     let rawToken: string | undefined;
     let actionUrl: string | undefined;
     let welcomeCode: string | undefined;
@@ -83,7 +87,7 @@ export class NewsletterDeliveryService implements OnModuleInit, OnModuleDestroy 
     } else if (job.kind === 'ACCESS') {
       const matches = await this.prisma.user.findMany({
         where: { email: { equals: job.email, mode: 'insensitive' } },
-        select: { id: true, email: true, role: true, accountState: true },
+        select: { id: true, email: true, role: true, accountState: true, password: true },
         take: 2,
       });
       const user = matches.length === 1 ? matches[0] : null;
@@ -91,11 +95,35 @@ export class NewsletterDeliveryService implements OnModuleInit, OnModuleDestroy 
         user.email.toLowerCase() === job.email;
       if (eligible) {
         rawToken = randomBytes(32).toString('hex');
-        const saved = await this.prisma.newsletterMailJob.updateMany({ where, data: {
-          userId: user.id, tokenHash: createHash('sha256').update(rawToken).digest('hex'),
-          tokenExpiresAt: new Date(Date.now() + TOKEN_MS),
-        } });
-        if (saved.count !== 1) return;
+        const saved = await this.prisma.$transaction(async tx => {
+          // Claim the token once, including duplicate dispatch calls with the same lease.
+          const claimed = await tx.newsletterMailJob.updateMany({ where: { ...where, tokenHash: null }, data: {
+            userId: user.id, tokenHash: createHash('sha256').update(rawToken!).digest('hex'),
+            tokenExpiresAt: new Date(Date.now() + TOKEN_MS),
+          } });
+          if (claimed.count !== 1) return false;
+          // Serialize generation across different jobs for this account, then re-read.
+          await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`newsletter-password:${user.id}`}))`;
+          const current = await tx.user.findUnique({ where: { id: user.id },
+            select: { password: true, email: true, accountState: true, role: true } });
+          if (!current || current.email.toLowerCase() !== job.email || current.accountState !== 'ACTIVE' || !['USER', 'FRIEND'].includes(current.role)) {
+            await tx.newsletterMailJob.updateMany({ where, data: { status: 'FAILED', errorCode: 'RECIPIENT_UNAVAILABLE', tokenHash: null, tokenExpiresAt: null, userId: null } });
+            return false;
+          }
+          if (current.password === null) {
+            const candidate = generateInitialPassword();
+            const hash = await hashNewPassword(candidate);
+            const changed = await tx.user.updateMany({
+              where: { id: user.id, password: null, email: user.email, accountState: 'ACTIVE', role: { in: ['USER', 'FRIEND'] } },
+              data: { password: hash },
+            });
+            if (changed.count === 1) {
+              initialPassword = candidate; initialHash = hash; initialUserId = user.id;
+            }
+          }
+          return true;
+        });
+        if (!saved) return;
         actionUrl = new URL(`/newsletter-access.html#${rawToken}`, getFrontendUrl()).href;
       } else {
         actionUrl = new URL(matches.length ? '/index.html?login=1' : '/index.html?register=1', getFrontendUrl()).href;
@@ -106,9 +134,14 @@ export class NewsletterDeliveryService implements OnModuleInit, OnModuleDestroy 
     }
     try {
       if (job.kind === 'WELCOME') await this.email.sendNewsletterWelcome(job.email, welcomeCode);
-      else await this.email.sendNewsletterAccess(job.email, actionUrl!, Boolean(rawToken));
+      else await this.email.sendNewsletterAccess(job.email, actionUrl!, Boolean(rawToken), initialPassword);
     } catch (error) {
       const uncertain = Boolean((error as { deliveryUnknown?: boolean }).deliveryUnknown);
+      if (!uncertain && initialHash && initialUserId) {
+        // Only a definite rejection permits rollback; never overwrite a later password change.
+        await this.prisma.user.updateMany({ where: { id: initialUserId, password: initialHash }, data: { password: null } });
+      }
+      initialPassword = undefined;
       const retry = !uncertain && job.attempts < MAX_ATTEMPTS;
       await this.prisma.newsletterMailJob.updateMany({ where, data: {
         status: retry ? 'QUEUED' : uncertain ? 'UNCERTAIN' : 'FAILED',

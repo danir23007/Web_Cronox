@@ -17,6 +17,7 @@ import { UpdateMeDto } from './dto/update-me.dto';
 import { UpsertAddressDto } from './dto/upsert-address.dto';
 
 export type MeProfile = {
+  hasPassword: boolean;
   id: number;
   email: string;
   firstName: string | null;
@@ -256,6 +257,7 @@ export class MeService {
   }
 
   private toProfile(user: {
+    password?: string | null;
     id: number;
     email: string;
     firstName: string | null;
@@ -269,6 +271,7 @@ export class MeService {
       email: user.email,
       firstName: user.firstName ?? null,
       lastName: user.lastName ?? null,
+      hasPassword: Boolean(user.password),
       memberCode: user.memberCode ?? '',
       circleLevel: Number(user.circleLevel ?? 1),
       createdAt: user.createdAt,

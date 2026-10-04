@@ -17,3 +17,6 @@ playwright-report/
 
 # Reproducible integration report, not source or fixtures.
 /output/mailbox-review/integration-results.json
+
+# Generated local browser verification artifacts.
+/output/playwright/

@@ -1,15 +1,13 @@
-import { IsString, Matches } from 'class-validator';
+import { PasswordPolicy } from '../../common/password-policy';
+import { IsString, IsOptional } from 'class-validator';
 
-const PASSWORD_REGEX = /^(?=.*[A-Z])(?=.*\d).{8,}$/;
 
 export class ChangePasswordDto {
+  @IsOptional()
   @IsString()
-  currentPassword!: string;
+  currentPassword?: string;
 
   @IsString()
-  @Matches(PASSWORD_REGEX, {
-    message:
-      'La contraseña debe tener al menos 8 caracteres, una mayúscula y un número',
-  })
+  @PasswordPolicy()
   newPassword!: string;
 }

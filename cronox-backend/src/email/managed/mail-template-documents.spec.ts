@@ -26,11 +26,11 @@ describe('first-party managed mail documents', () => {
     const rendered = renderMail(
       structuredDocumentForPurpose('NEWSLETTER_ACCESS'),
       'CRONOX · Accede a tu cuenta', '', 'NEWSLETTER_ACCESS',
-      { ...SAMPLE_DATA, actionLabel: 'Entrar en Cronox',
+      { ...SAMPLE_DATA, actionLabel: 'Entrar en CRONOX',
         actionUrl: 'https://cronox.es/newsletter-access.html#local-preview-token' },
       undefined, true,
     );
-    expect(rendered.html).toContain('Entrar en Cronox');
+    expect(rendered.html).toContain('Entrar en CRONOX');
     expect(rendered.html).toContain('https://cronox.es/newsletter-access.html#local-preview-token');
   });
   it.each(MAIL_PURPOSES)(
@@ -59,7 +59,7 @@ describe('first-party managed mail documents', () => {
       expect.arrayContaining([
         expect.objectContaining({
           type: 'heading',
-          text: 'Gracias por visitar Cronox',
+          text: 'Gracias por visitar CRONOX',
         }),
         expect.objectContaining({
           type: 'text',

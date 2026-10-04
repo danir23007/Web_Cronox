@@ -21,12 +21,12 @@ import {
 
 const template = {
   id: 't',
-  senderKey: 'INFO',
+  senderKey: 'NOREPLY',
   folderId: 'f',
   name: 'Genérico',
   subject: '{{subject}}',
   preheader: 'Avance',
-  purpose: 'GENERIC',
+  purpose: 'NEWSLETTER_WELCOME',
   document: { blocks: [{ type: 'text', text: 'Original {{message}}' }] },
   signatureMode: 'none',
   signatureId: null,
@@ -133,21 +133,21 @@ describe('email permissions, publication and controlled tests', () => {
       {} as MailTransportFactory,
     );
     await service.action(
-      EmailSenderKey.INFO,
+      EmailSenderKey.NOREPLY,
       't',
       { action: 'publish', revision: 1, confirmed: true },
       1,
     );
     expect(db.emailPublication.upsert).toHaveBeenCalledWith({
-      where: { senderKey_purpose: { senderKey: 'INFO', purpose: 'GENERIC' } },
+      where: { senderKey_purpose: { senderKey: 'NOREPLY', purpose: 'NEWSLETTER_WELCOME' } },
       update: { versionId: 'v1' },
-      create: { senderKey: 'INFO', purpose: 'GENERIC', versionId: 'v1' },
+      create: { senderKey: 'NOREPLY', purpose: 'NEWSLETTER_WELCOME', versionId: 'v1' },
     });
     db.managedEmailTemplate.findFirst.mockResolvedValue({
       ...template,
       document: { blocks: [{ type: 'text', text: 'Borrador diferente' }] },
     });
-    const published = await service.published(EmailSenderKey.INFO, 'GENERIC', {
+    const published = await service.published(EmailSenderKey.NOREPLY, 'NEWSLETTER_WELCOME', {
       subject: 'Asunto',
       message: 'Hola',
     });
@@ -157,14 +157,14 @@ describe('email permissions, publication and controlled tests', () => {
     signatureText = 'Firma actualizada';
     expect(
       (
-        await service.published(EmailSenderKey.INFO, 'GENERIC', {
+        await service.published(EmailSenderKey.NOREPLY, 'NEWSLETTER_WELCOME', {
           subject: 'Asunto',
           message: 'Hola',
         })
       )?.text,
     ).toContain('Firma actualizada');
     expect(db.emailSignature.findFirst).toHaveBeenCalledWith({
-      where: { id: 's1', senderKey: 'INFO', archivedAt: null },
+      where: { id: 's1', senderKey: 'NOREPLY', archivedAt: null },
     });
   });
   it('rejects publication without confirmation or from the wrong sender', async () => {
@@ -173,7 +173,7 @@ describe('email permissions, publication and controlled tests', () => {
       managedEmailTemplate: {
         findFirst: jest
           .fn()
-          .mockResolvedValue({ ...template, purpose: 'PASSWORD_RESET' }),
+          .mockResolvedValue({ ...template, purpose: 'ORDER_DELIVERED' }),
         updateMany: jest.fn().mockResolvedValue({ count: 1 }),
       },
     };
@@ -186,16 +186,16 @@ describe('email permissions, publication and controlled tests', () => {
     );
     await expect(
       service.action(
-        EmailSenderKey.INFO,
+        EmailSenderKey.NOREPLY,
         't',
         { action: 'publish', revision: 1, confirmed: true },
         1,
       ),
-    ).rejects.toThrow('Confirma');
+    ).rejects.toThrow('Plantilla no encontrada');
     db.managedEmailTemplate.findFirst.mockResolvedValue(template);
     await expect(
       service.action(
-        EmailSenderKey.INFO,
+        EmailSenderKey.NOREPLY,
         't',
         { action: 'publish', revision: 1, confirmed: false },
         1,
@@ -209,7 +209,7 @@ describe('email permissions, publication and controlled tests', () => {
     });
     const transport = {
       sendMail: jest.fn((_key: string, options: any) => sendMail(options)),
-      getFrom: jest.fn().mockReturnValue('info@example.test'),
+      getFrom: jest.fn().mockReturnValue('noreply@example.test'),
     };
     const db = {
       $transaction: jest.fn(),
@@ -228,32 +228,32 @@ describe('email permissions, publication and controlled tests', () => {
     );
     jest.spyOn(service, 'metadata').mockReturnValue([
       {
-        key: 'INFO',
-        email: 'info@example.test',
+        key: 'NOREPLY',
+        email: 'noreply@example.test',
         name: 'CRONOX',
         configured: true,
       },
     ]);
     await expect(
-      service.test(EmailSenderKey.INFO, 't', 'alex@example.test', false, 1),
+      service.test(EmailSenderKey.NOREPLY, 't', 'alex@example.test', false, 1),
     ).rejects.toThrow('Confirma');
     expect(sendMail).not.toHaveBeenCalled();
     const result = await service.test(
-      EmailSenderKey.INFO,
+      EmailSenderKey.NOREPLY,
       't',
       'alex@example.test',
       true,
       1,
     );
     expect(result.messageId).toBe('mock');
-    expect(transport.sendMail).toHaveBeenCalledWith(EmailSenderKey.INFO, expect.any(Object), 'ADMIN_TEST');
+    expect(transport.sendMail).toHaveBeenCalledWith(EmailSenderKey.NOREPLY, expect.any(Object), 'ADMIN_TEST');
     expect(sendMail).toHaveBeenCalledTimes(1);
     expect(JSON.stringify(db.auditLog.create.mock.calls)).not.toContain(
       'alex@example.test',
     );
     db.auditLog.count.mockResolvedValue(3);
     await expect(
-      service.test(EmailSenderKey.INFO, 't', 'alex@example.test', true, 1),
+      service.test(EmailSenderKey.NOREPLY, 't', 'alex@example.test', true, 1),
     ).rejects.toThrow('Espera');
     expect(sendMail).toHaveBeenCalledTimes(1);
     db.auditLog.count.mockResolvedValue(0);
@@ -261,7 +261,7 @@ describe('email permissions, publication and controlled tests', () => {
       .mockResolvedValueOnce(undefined)
       .mockRejectedValueOnce(new Error('Audit unavailable'));
     await expect(
-      service.test(EmailSenderKey.INFO, 't', 'alex@example.test', true, 1),
+      service.test(EmailSenderKey.NOREPLY, 't', 'alex@example.test', true, 1),
     ).resolves.toMatchObject({ messageId: 'mock' });
     expect(sendMail).toHaveBeenCalledTimes(2);
   });

@@ -27,12 +27,12 @@ async function main() {
   const sent = [];
   let rejectWelcomeOnce = false;
   const fakeEmail = {
-    isLaunchSenderConfigured: () => true,
+    isNewsletterSenderConfigured: () => true,
     sendNewsletterWelcome: async (email, code) => {
       if (rejectWelcomeOnce) { rejectWelcomeOnce = false; throw new Error('controlled pre-SMTP rejection'); }
       sent.push({ kind: 'WELCOME', email, code });
     },
-    sendNewsletterAccess: async (email, url, account) => sent.push({ kind: 'ACCESS', email, url, account }),
+    sendNewsletterAccess: async (email, url, account, initialPassword) => sent.push({ kind: 'ACCESS', email, url, account, initialPassword }),
   };
   const service = new NewsletterService(db, fakeEmail);
   const worker = new NewsletterDeliveryService(db, fakeEmail);
@@ -64,6 +64,11 @@ async function main() {
     const access = sent.find(x => x.kind === 'ACCESS' && x.email === newEmail);
     assert(access?.account);
     assert.equal(new URL(access.url).origin, new URL(process.env.FRONTEND_URL).origin);
+    const bcrypt = require('bcrypt');
+    assert.match(access.initialPassword, /^[a-z]{7,8}$/);
+    const passwordUser = await db.user.findUnique({ where: { id: account.id } });
+    assert(await bcrypt.compare(access.initialPassword, passwordUser.password));
+    assert(!JSON.stringify(passwordUser).includes(access.initialPassword));
     const token = new URL(access.url).hash.slice(1);
     const job = await db.newsletterMailJob.findFirst({ where: { email: newEmail, kind: 'ACCESS' } });
     assert.equal(job.tokenHash, createHash('sha256').update(token).digest('hex'));
@@ -71,7 +76,70 @@ async function main() {
 
     const { AuthSessionsService } = require('../dist/auth/auth-sessions.service');
     const sessions = new AuthSessionsService(db);
-    const auth = new AuthService({ toSafeUser: user => user }, {}, db, fakeEmail, service, sessions);
+    const auth = new AuthService({ toSafeUser: user => user, findByEmail: email => db.user.findUnique({ where: { email } }), findById: id => db.user.findUnique({ where: { id } }) }, {}, db, fakeEmail, service, sessions);
+    assert.equal((await auth.login({ email: newEmail, password: access.initialPassword })).user.id, account.id);
+    const persistedHash = passwordUser.password;
+    const existingPasswordJob = await db.newsletterMailJob.create({ data: {
+      email: newEmail, kind: 'ACCESS', status: 'PROCESSING', claimToken: 'existing-password', attempts: 1,
+    } });
+    await worker.dispatch(existingPasswordJob.id, 'existing-password');
+    assert.equal(sent.at(-1).initialPassword, undefined);
+    assert.equal((await db.user.findUnique({ where: { id: account.id } })).password, persistedHash);
+
+    // Concurrent workers for distinct jobs must establish only one password.
+    for (const outcome of ['concurrent', 'safe-retry', 'uncertain', 'pending']) {
+      const address = `newsletter-${outcome}-${suffix}@example.test`;
+      emails.push(address);
+      const testUser = await db.user.create({ data: { email: address, role: 'USER', accountState: outcome === 'pending' ? 'PENDING_PASSWORD' : 'ACTIVE' } });
+      const job = await db.newsletterMailJob.create({ data: { email: address, kind: 'ACCESS', status: 'PROCESSING', claimToken: outcome, attempts: 1 } });
+      if (outcome === 'concurrent') {
+        const second = await db.newsletterMailJob.create({ data: { email: address, kind: 'ACCESS', status: 'PROCESSING', claimToken: 'second', attempts: 1 } });
+        await Promise.all([worker.dispatch(job.id, outcome), worker.dispatch(job.id, outcome), worker.dispatch(second.id, 'second')]);
+        const messages = sent.filter(item => item.email === address);
+        assert.equal(messages.length, 2);
+        assert.equal(messages.filter(item => item.initialPassword).length, 1);
+        assert(await bcrypt.compare(messages.find(item => item.initialPassword).initialPassword, (await db.user.findUnique({ where: { id: testUser.id } })).password));
+      } else if (outcome === 'pending') {
+        await worker.dispatch(job.id, outcome);
+        const unchanged = await db.user.findUnique({ where: { id: testUser.id } });
+        assert.equal(unchanged.password, null);
+        assert.equal(unchanged.accountState, 'PENDING_PASSWORD');
+        assert.equal(sent.at(-1).account, false);
+      } else {
+        const original = fakeEmail.sendNewsletterAccess;
+        fakeEmail.sendNewsletterAccess = async () => { throw Object.assign(new Error('Local controlled SMTP failure'), { deliveryUnknown: outcome === 'uncertain' }); };
+        await worker.dispatch(job.id, outcome);
+        fakeEmail.sendNewsletterAccess = original;
+        const after = await db.newsletterMailJob.findUnique({ where: { id: job.id } });
+        const changed = await db.user.findUnique({ where: { id: testUser.id } });
+        if (outcome === 'safe-retry') {
+          assert.equal(after.status, 'QUEUED');
+          assert.equal(changed.password, null);
+          await db.newsletterMailJob.update({ where: { id: job.id }, data: { status: 'PROCESSING', claimToken: 'retry', attempts: 2 } });
+          await worker.dispatch(job.id, 'retry');
+          assert.match(sent.at(-1).initialPassword, /^[a-z]{7,8}$/);
+          assert(await bcrypt.compare(sent.at(-1).initialPassword, (await db.user.findUnique({ where: { id: testUser.id } })).password));
+        } else {
+          assert.equal(after.status, 'UNCERTAIN');
+          assert(changed.password);
+          assert(after.tokenHash);
+          await worker.dispatch(job.id, outcome);
+          assert.equal(sent.filter(item => item.email === address).length, 0);
+        }
+      }
+    }
+    const beforeChange = await db.user.findUnique({ where: { id: account.id } });
+    await assert.rejects(auth.changePassword(account.id, { currentPassword: 'wrong', newPassword: 'abcdefg' }));
+    await assert.rejects(auth.changePassword(account.id, { currentPassword: access.initialPassword, newPassword: 'abcdef' }));
+    const changedPassword = await auth.changePassword(account.id, { currentPassword: access.initialPassword, newPassword: ' a b c ' });
+    assert.equal(changedPassword.hasPassword, true);
+    assert(await bcrypt.compare(' a b c ', (await db.user.findUnique({ where: { id: account.id } })).password));
+    assert.equal((await db.user.findUnique({ where: { id: account.id } })).sessionVersion, beforeChange.sessionVersion + 1);
+    const passwordless = await db.user.create({ data: { email: `newsletter-profile-${suffix}@example.test`, accountState: 'ACTIVE' } });
+    emails.push(passwordless.email);
+    await auth.changePassword(passwordless.id, { newPassword: '1234567' });
+    assert.equal((await auth.login({ email: passwordless.email, password: '1234567' })).user.id, passwordless.id);
+
     await assert.rejects(auth.consumeNewsletterLink(token.slice(0, -1) + (token.endsWith('0') ? '1' : '0')));
     const signedIn = await auth.consumeNewsletterLink(token);
     assert.equal(signedIn.user.id, account.id);
@@ -97,7 +165,7 @@ async function main() {
     app.get('/api/auth/csrf', (_req, res) => res.json({ csrfToken: 'local-test-csrf' }));
     app.post('/api/auth/newsletter-login', async (req, res) => {
       if (req.headers['x-csrf-token'] !== 'local-test-csrf') return res.sendStatus(403);
-      try { res.json(await controller.newsletterLogin(res, req.body)); }
+      try { res.json(await controller.newsletterLogin(req, res, req.body)); }
       catch { res.status(401).json({ message: 'Invalid link' }); }
     });
     app.get('/', async (req, res) => {
@@ -112,7 +180,7 @@ async function main() {
       const origin = `http://127.0.0.1:${server.address().port}`;
       await page.goto(origin + new URL(browserLink).pathname + new URL(browserLink).hash);
       assert.equal((await page.context().cookies()).filter(c => c.name === 'jwt').length, 0);
-      await page.getByRole('button', { name: 'Entrar en Cronox' }).click();
+      await page.getByRole('button', { name: 'Entrar en CRONOX' }).click();
       await page.waitForURL(origin + '/');
       assert.equal(await page.locator('body').textContent(), `Account ${account.id}`);
       const cookies = await page.context().cookies();
@@ -163,7 +231,7 @@ async function main() {
     assert.equal((await db.newsletterMailJob.findUnique({ where: { id: stale.id } })).status, 'UNCERTAIN');
 
     const previewTransport = { sendMail: async (_sender, options) => {
-      assert.match(options.html, />Entrar en Cronox<\/a>/);
+      assert.match(options.html, />Entrar en CRONOX<\/a>/);
       const directory = path.resolve(__dirname, '../../test-results/newsletter-mail');
       await mkdir(directory, { recursive: true });
       await writeFile(path.join(directory, 'access.html'), options.html, 'utf8');

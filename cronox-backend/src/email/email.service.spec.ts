@@ -2,16 +2,6 @@ import { EmailService } from './email.service';
 import { EmailType } from './email.types';
 
 describe('EmailService account setup', () => {
-  it('falls back to the first-party template if a newsletter publication loses its confirmation link', async () => {
-    const sendMail = jest.fn().mockResolvedValue({ messageId: 'confirmation', accepted: ['test@example.test'] });
-    const service = new EmailService({ sendMail: (_key: string, options: any) => sendMail(options) } as any,
-      { published: jest.fn().mockResolvedValue({ html: '<p>No action</p>', text: 'No action', subject: 'Custom' }) } as any);
-    (service as any).config.enabled = true;
-    jest.spyOn(service as any, 'renderTemplate').mockResolvedValue('<a href="https://example.test/confirm?token=test-only">Confirmar</a>');
-    await service.sendNewsletterConfirmation('test@example.test', 'https://example.test/confirm?token=test-only');
-    expect(sendMail.mock.calls[0][0].html).toContain('token=test-only');
-    expect(sendMail.mock.calls[0][0].subject).toContain('Confirma tu suscripción');
-  });
   it.each([{ accepted: [] }, { accepted: ['buyer@example.test'] }])('requires SMTP recipient acceptance (%j)', async ({ accepted }) => {
     const transport = { sendMail: jest.fn().mockResolvedValue({ messageId: 'mail-1', accepted }) };
     const service = new EmailService({ sendMail: (_key: string, options: any) => transport.sendMail(options) } as any);
@@ -21,25 +11,6 @@ describe('EmailService account setup', () => {
     if (accepted.length) await expect(result).resolves.toEqual({ messageId: 'mail-1' });
     else await expect(result).rejects.toThrow('No se pudo enviar el email');
   });
-  it('routes preregistration confirmation through its managed purpose', async () => {
-    const service = new EmailService({} as any);
-    const send = jest
-      .spyOn(service, 'send')
-      .mockResolvedValue({ messageId: 'pre-1' });
-    const date = new Date('2026-09-10T12:00:00.000Z');
-    await service.sendPreRegistrationConfirmation('lead@example.test', date);
-    expect(send).toHaveBeenCalledWith(
-      expect.objectContaining({
-        type: EmailType.PRE_REGISTRATION_CONFIRMATION,
-        to: 'lead@example.test',
-        templateData: expect.objectContaining({
-          email: 'lead@example.test',
-          preRegistrationDate: date.toISOString(),
-        }),
-      }),
-    );
-  });
-
   it('reuses the CRONOX generic email system with initial-account copy and no password', async () => {
     const service = new EmailService({} as any);
     const send = jest

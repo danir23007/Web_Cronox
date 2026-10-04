@@ -1,3 +1,5 @@
+import { MAIL_PURPOSES } from '../email/managed/mail-catalog';
+import { loadEmailConfig } from '../email/email.config';
 import { Injectable } from '@nestjs/common';
 import MailComposer from 'mailbox-nodemailer/lib/mail-composer';
 import { PrismaService } from '../prisma/prisma.service';
@@ -98,6 +100,15 @@ export class MailboxSenderService {
             content: await this.files.read(f.key),
             contentType: 'application/octet-stream',
           });
+        }
+        if (d.templateId) {
+          const template = await this.db.managedEmailTemplate.findUnique({ where: { id: d.templateId } });
+          const purpose = MAIL_PURPOSES.find(p => p.key === template?.purpose);
+          if (!template || template.archivedAt || (template.purpose && !purpose) ||
+              (purpose && (template.senderKey !== purpose.senderKey ||
+                loadEmailConfig().accounts[purpose.senderKey].user.toLowerCase() !== b.address.toLowerCase()))) {
+            throw Error('MAILBOX_TEMPLATE_NOT_AVAILABLE');
+          }
         }
         const composer = new MailComposer({
           from: { name: b.fromName, address: b.address },

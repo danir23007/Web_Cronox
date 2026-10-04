@@ -214,6 +214,7 @@ describe('KeyScreenService', () => {
   });
 
   it('normalizes and creates one passwordless preregistered User without a session', async () => {
+    email.isEnabled.mockReturnValue(true);
     prisma.keyScreenSettings.findUnique.mockResolvedValue({
       enabled: true,
       activeScreenId: 'screen-1',
@@ -233,6 +234,7 @@ describe('KeyScreenService', () => {
       select: { id: true },
     });
     expect(prisma.preRegistration.create).toHaveBeenCalledTimes(1);
+    expect(email.sendPreRegistrationConfirmation).not.toHaveBeenCalled();
     expect(prisma.auditLog.create).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({ action: 'PRE_REGISTRATION_CREATED' }),
@@ -275,31 +277,6 @@ describe('KeyScreenService', () => {
     expect(prisma.user.updateMany).not.toHaveBeenCalled();
     expect(prisma.preRegistration.create).not.toHaveBeenCalled();
     expect(email.sendPreRegistrationConfirmation).not.toHaveBeenCalled();
-  });
-
-  it('claims confirmation delivery so concurrent retries cannot send twice', async () => {
-    email.isEnabled.mockReturnValue(true);
-    prisma.preRegistration.updateMany
-      .mockResolvedValueOnce({ count: 1 })
-      .mockResolvedValueOnce({ count: 1 })
-      .mockResolvedValueOnce({ count: 0 });
-    prisma.preRegistration.findUnique.mockResolvedValue({
-      userId: 1,
-      submittedAt: new Date('2026-09-10T12:00:00Z'),
-      user: { email: 'test@example.com' },
-    });
-    email.sendPreRegistrationConfirmation.mockResolvedValue({
-      messageId: 'one',
-    });
-    await (service as any).sendConfirmationOnce(1);
-    await (service as any).sendConfirmationOnce(1);
-    expect(email.sendPreRegistrationConfirmation).toHaveBeenCalledTimes(1);
-    expect(prisma.preRegistration.updateMany).toHaveBeenNthCalledWith(
-      1,
-      expect.objectContaining({
-        where: expect.objectContaining({ confirmationSentAt: null }),
-      }),
-    );
   });
 
   it('publishes independent content layouts and falls back to legacy values', () => {

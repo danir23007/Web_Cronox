@@ -102,7 +102,7 @@ function confirmation(): MailBlock[] {
             ],
           ],
         },
-        heading('Gracias por visitar Cronox', {
+        heading('Gracias por visitar CRONOX', {
           ...light,
           size: 17,
           weight: 400,
@@ -344,12 +344,14 @@ export function structuredDocumentForPurpose(
     case 'TEST':
       blocks = testMail();
       break;
+    case 'NEWSLETTER_ACCESS':
+      blocks = [...generic(), text('{{passwordMessage}}')];
+      break;
     case 'PASSWORD_RESET':
     case 'INITIAL_PASSWORD_SETUP':
     case 'NEWSLETTER_CONFIRMATION':
     case 'FIRST_ORDER_DISCOUNT':
     case 'NEWSLETTER_WELCOME':
-    case 'NEWSLETTER_ACCESS':
     case 'LAUNCH':
     case 'GENERIC':
       blocks = generic();

@@ -21,13 +21,16 @@
   <link id="cronox-main-style" rel="stylesheet" href="assets/store.css?v=104">
   <link rel="stylesheet" href="assets/quick-add.css?v=6">
   <style>
+    .profile-account-stack { min-width: 0; }
+    #passwordForm { margin-top: 16px; }
+    .profile-form[hidden], #currentPasswordLabel[hidden] { display: none; }
     .profile-wrapper { padding: 0 0 60px; }
-    .profile-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 20px; }
+    .profile-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(320px, 100%), 1fr)); gap: 20px; }
     .profile-card { background: transparent; border: none; border-radius: 12px; padding: 20px; box-shadow: none; }
     .profile-card h2 { font-size: 1.25rem; margin: 0 0 12px; }
     .profile-card p.section-desc { margin: 0 0 16px; color: #9ea0a6; }
     .profile-form { display: grid; gap: 12px; }
-    .profile-form .form-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; }
+    .profile-form .form-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(200px, 100%), 1fr)); gap: 12px; }
     .profile-form label { display: flex; flex-direction: column; gap: 6px; font-size: 0.95rem; color: #dfe1e6; }
     .profile-form input, .profile-form select { background: #141419; border: 1px solid #2a2a33; border-radius: 8px; color: #fff; padding: 10px 12px; }
     .profile-form input:focus, .profile-form select:focus { border-color: #ffffff !important; outline: 2px solid #ffffff !important; }
@@ -274,6 +277,7 @@
 
       <section class="profile-section" data-profile-section="account" aria-labelledby="account-title">
         <div class="profile-grid">
+          <div class="profile-account-stack">
           <div class="profile-card">
             <h2 id="account-title">Datos de la cuenta</h2>
             <p class="section-desc">Gestiona tu nombre y email.</p>
@@ -295,6 +299,27 @@
             </form>
           </div>
 
+          <div class="profile-card" aria-labelledby="password-title">
+            <h2 id="password-title">Contraseña</h2>
+            <p id="passwordStatus" class="section-desc" aria-live="polite">Cargando estado...</p>
+            <div class="profile-actions"><button id="passwordAction" type="button" class="btn-primary profile-save-btn" disabled>Contraseña</button></div>
+            <form id="passwordForm" class="profile-form" hidden>
+              <label id="currentPasswordLabel">Contraseña actual
+                <input id="currentPassword" type="password" autocomplete="current-password">
+              </label>
+              <label>Nueva contraseña
+                <input id="newPassword" type="password" autocomplete="new-password" required>
+              </label>
+              <label>Confirmar nueva contraseña
+                <input id="confirmPassword" type="password" autocomplete="new-password" required>
+              </label>
+              <p class="section-desc">Mínimo 7 caracteres. Sin requisitos de composición. Máximo 72 bytes UTF-8.</p>
+              <div class="profile-actions"><button id="savePassword" type="submit" class="btn-primary profile-save-btn">Guardar contraseña</button></div>
+            </form>
+            <p id="passwordMessage" role="status" aria-live="polite"></p>
+          </div>
+
+          </div>
           <div class="profile-card" aria-labelledby="address-title">
             <h2 id="address-title">Dirección principal</h2>
             <p class="section-desc">Se usará como dirección por defecto para tus pedidos.</p>
@@ -440,14 +465,14 @@
 
   <script src="assets/country.js?v=1"></script>
   <script src="assets/size-systems.js?v=1"></script>
-  <script src="assets/api.js?v=9"></script>
+  <script src="assets/api.js?v=10"></script>
   <script src="assets/responsive-images.js?v=4"></script>
   <script src="assets/app.js?v=77" defer></script>
   <script src="assets/media-framing-geometry.js?v=6" defer></script>
   <script src="assets/product-card-framing.js?v=1" defer></script>
   <script src="assets/products.js?v=63" defer></script>
   <script src="assets/favorites-toggle.js?v=3" defer></script>
-  <script src="assets/profile.js?v=14" defer></script>
+  <script src="assets/profile.js?v=15" defer></script>
 
   <style>
     /* Profile overrides */

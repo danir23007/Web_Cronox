@@ -311,6 +311,7 @@ export class ManagedMailService {
   async list(key: EmailSenderKey, query: MailListDto) {
     const where: Prisma.ManagedEmailTemplateWhereInput = {
       senderKey: key,
+      AND: [{ OR: [{ purpose: null }, { purpose: { in: MAIL_PURPOSES.filter(p => p.senderKey === key).map(p => p.key) } }] }],
       ...(query.folderId ? { folderId: query.folderId } : {}),
       archivedAt: query.archived === 'true' ? { not: null } : null,
       ...(query.search
@@ -363,6 +364,7 @@ export class ManagedMailService {
         'Las familias de campaña pertenecen a Información.',
       );
     const families = await this.db.campaignTemplateFamily.findMany({
+      where: { id: { notIn: ['campaign:INFO:LAUNCH', 'campaign:INFO:RESTOCK', 'campaign:INFO:GENERIC'] } },
       include: {
         versions: {
           select: {
@@ -382,10 +384,7 @@ export class ManagedMailService {
         senderKey: 'INFO',
         archivedAt: null,
         familyId: null,
-        OR: [
-          { purpose: null },
-          { purpose: { in: ['LAUNCH', 'RESTOCK', 'GENERIC'] } },
-        ],
+        purpose: null,
       },
       select: { id: true, name: true, purpose: true, revision: true },
       orderBy: { name: 'asc' },
@@ -463,7 +462,7 @@ export class ManagedMailService {
     const result = await tx.managedEmailTemplate.findFirst({
       where: { id, senderKey: key },
     });
-    if (!result)
+    if (!result || (result.purpose && !MAIL_PURPOSES.some(p => p.key === result.purpose && p.senderKey === key)))
       throw new NotFoundException('Plantilla no encontrada en esta cuenta.');
     return {
       ...result,

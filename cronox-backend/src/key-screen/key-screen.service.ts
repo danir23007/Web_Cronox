@@ -375,52 +375,10 @@ export class KeyScreenService {
         throw error;
       } else throw error;
     }
-    void this.sendConfirmationOnce(userId).catch(() =>
-      this.logger.error('Falló la confirmación de un preregistro'),
-    );
     return { ok: true };
   }
 
-  private async sendConfirmationOnce(userId: number) {
-    if (!this.email.isEnabled()) return;
-    const claim = await this.prisma.preRegistration.updateMany({
-      where: {
-        userId,
-        confirmationSentAt: null,
-        OR: [
-          { confirmationClaimedAt: null },
-          {
-            confirmationClaimedAt: {
-              lt: new Date(Date.now() - CONFIRMATION_CLAIM_STALE_MS),
-            },
-          },
-        ],
-      },
-      data: { confirmationClaimedAt: new Date() },
-    });
-    if (claim.count !== 1) return;
-    const registration = await this.prisma.preRegistration.findUnique({
-      where: { userId },
-      include: { user: { select: { email: true } } },
-    });
-    if (!registration) return;
-    try {
-      await this.email.sendPreRegistrationConfirmation(
-        registration.user.email,
-        registration.submittedAt,
-      );
-      await this.prisma.preRegistration.updateMany({
-        where: { userId, confirmationSentAt: null },
-        data: { confirmationSentAt: new Date(), confirmationClaimedAt: null },
-      });
-    } catch (error) {
-      await this.prisma.preRegistration.updateMany({
-        where: { userId, confirmationSentAt: null },
-        data: { confirmationClaimedAt: null },
-      });
-      throw error;
-    }
-  }
+
 
   private ensureSettings() {
     return this.prisma.keyScreenSettings.upsert({

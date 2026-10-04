@@ -19,10 +19,12 @@ for (const width of [1366, 390]) {
       return route.fulfill({ status: 202, json: { status: 'accepted', httpStatus: 202 } });
     });
     await page.goto(`/newsletter-access.html#${token}`);
+    const consent = page.getByRole('button', { name: 'RECHAZAR', exact: true });
+    if (await consent.isVisible()) await consent.click();
     await expect(page).toHaveURL(/newsletter-access\.html$/);
-    await expect(page.getByRole('button', { name: 'Entrar en Cronox' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Entrar en CRONOX' })).toBeVisible();
     expect(loginRequests).toBe(0);
-    await page.getByRole('button', { name: 'Entrar en Cronox' }).click();
+    await page.getByRole('button', { name: 'Entrar en CRONOX' }).click();
     await expect(page.getByRole('status')).toContainText('ya se ha utilizado');
     await page.getByRole('textbox', { name: 'Solicitar otro enlace' }).fill('visitor@example.test');
     await page.getByRole('button', { name: 'Solicitar enlace' }).click();
@@ -31,7 +33,7 @@ for (const width of [1366, 390]) {
     expect(replacementRequests).toBe(1);
     await page.goto(`/newsletter-access.html#${'b'.repeat(64)}`);
     await expect(page).toHaveURL(/newsletter-access\.html$/);
-    await expect(page.getByRole('button', { name: 'Entrar en Cronox' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Entrar en CRONOX' })).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   });
 }

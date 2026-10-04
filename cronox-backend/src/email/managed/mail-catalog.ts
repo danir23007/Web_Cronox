@@ -2,12 +2,12 @@ import {
   EMAIL_TYPE_TO_SENDER,
   EMAIL_TYPE_TO_TEMPLATE,
   EmailType,
+  EmailSenderKey,
+  EmailTemplate,
 } from '../email.types';
 
 // Distinct purposes preserve the existing sender/transport types.
 export const MAIL_PURPOSES = [
-  { key: 'LAUNCH', name: 'Lanzamiento de la tienda', type: EmailType.GENERIC,
-    subject: 'CRONOX · La espera ha terminado', required: ['message', 'actionUrl'] },
   { key: 'RESTOCK', name: 'Aviso de reposición de talla', type: EmailType.RESTOCK,
     subject: 'Tu talla ha vuelto: {{product}} · {{size}}', required: ['product', 'size', 'actionUrl'] },
   {
@@ -18,20 +18,6 @@ export const MAIL_PURPOSES = [
   { key: 'NEWSLETTER_ACCESS', name: 'Acceso solicitado desde newsletter',
     type: EmailType.GENERIC, subject: 'CRONOX · Accede a tu cuenta',
     required: ['message', 'actionUrl'] },
-  {
-    key: 'PRE_REGISTRATION_CONFIRMATION',
-    name: 'Confirmación de prerregistro',
-    type: EmailType.PRE_REGISTRATION_CONFIRMATION,
-    subject: 'CRONOX · Prerregistro confirmado',
-    required: ['email', 'preRegistrationDate'],
-  },
-  {
-    key: 'TEST',
-    name: 'Correo de prueba',
-    type: EmailType.TEST,
-    subject: '[CRONOX] Test email (TEST)',
-    required: ['message'],
-  },
   {
     key: 'ORDER_CONFIRMATION',
     name: 'Confirmación de pedido',
@@ -74,31 +60,10 @@ export const MAIL_PURPOSES = [
     subject: 'CRONOX · Tu cuenta ha sido creada',
     required: ['actionUrl'],
   },
-  {
-    key: 'NEWSLETTER_CONFIRMATION',
-    name: 'Confirmación de newsletter',
-    type: EmailType.NEWSLETTER_CONFIRMATION,
-    subject: 'CRONOX newsletter confirmation',
-    required: ['actionUrl'],
-  },
-  {
-    key: 'FIRST_ORDER_DISCOUNT',
-    name: 'Descuento de bienvenida',
-    type: EmailType.GENERIC,
-    subject: 'CRONOX · Tu descuento de bienvenida',
-    required: ['message'],
-  },
-  {
-    key: 'GENERIC',
-    name: 'Correo genérico',
-    type: EmailType.GENERIC,
-    subject: '{{subject}}',
-    required: ['message'],
-  },
 ].map((p) => ({
   ...p,
-  senderKey: EMAIL_TYPE_TO_SENDER[p.type],
-  template: EMAIL_TYPE_TO_TEMPLATE[p.type],
+  senderKey: ['NEWSLETTER_ACCESS', 'NEWSLETTER_WELCOME'].includes(p.key) ? EmailSenderKey.NOREPLY : EMAIL_TYPE_TO_SENDER[p.type],
+  template: p.key === 'NEWSLETTER_ACCESS' ? EmailTemplate.NEWSLETTER_ACCESS : EMAIL_TYPE_TO_TEMPLATE[p.type],
 }));
 
 export const SAMPLE_DATA: Record<string, unknown> = {
@@ -155,6 +120,8 @@ export const VARIABLE_DESCRIPTIONS: Record<string, string> = {
   subject: 'Asunto del correo',
   title: 'Título del mensaje',
   message: 'Contenido del mensaje',
+  initialPassword: 'Contrase\u00f1a inicial (solo cuando se genera)',
+  passwordMessage: 'Contrase\u00f1a entre comillas e instrucciones, o vac\u00edo',
   customerEmail: 'Correo del cliente',
   email: 'Correo prerregistrado',
   preRegistrationDate: 'Fecha del prerregistro',
@@ -195,6 +162,7 @@ export const VARIABLE_DESCRIPTIONS: Record<string, string> = {
 
 export function variablesFor(purpose?: string | null) {
   const base = ['subject', 'title', 'message'];
+  if (purpose === 'NEWSLETTER_ACCESS') return [...base, 'actionUrl', 'actionLabel', 'initialPassword', 'passwordMessage'];
   const order = [
     'orderId',
     'orderUrl',
