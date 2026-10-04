@@ -90,7 +90,7 @@ async (page) => {
       assert(await target.locator('[data-message]').count() === 1 && await target.locator('[data-message=during-read]').count() === 1, 'Late response discarded');
       failList = true; await cycle(); failList = false;
       assert(await target.locator('[data-message=during-read]').count() === 1 && (await target.locator('[data-feedback]').innerText()).includes('proveedor'), 'Polling error visible without destroying list');
-      await target.locator('[data-compose]').click(); await target.locator('[name=campaignName]').fill('Edición conservada');
+      await target.evaluate(()=>window.CRONOX_ADMIN_NAV.navigate('section-mail-campaign')); await target.locator('[name=campaignName]').fill('Edición conservada');
       const beforeEdit = listRequests;
       await target.evaluate(() => { window.campaignNode = document.querySelector('[name=campaignName]'); window.mailPoll(); }); await target.waitForTimeout(150);
       assert(listRequests === beforeEdit && await target.evaluate(() => window.campaignNode === document.querySelector('[name=campaignName]') && window.campaignNode.value === 'Edición conservada' && document.activeElement === window.campaignNode), 'Campaign editing preserved');

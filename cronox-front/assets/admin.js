@@ -962,9 +962,9 @@
     userDetailMessage.className = `message show ${type === 'error' ? 'error' : 'success'}`;
   };
 
-  const showSection = (sectionId) => {
+  const showSection = (sectionId, route = sectionId) => {
     if (currentSectionId === 'section-mails' && sectionId !== currentSectionId && window.CRONOX_MAILS && !window.CRONOX_MAILS.canLeave()) return false;
-    const destination = sectionId === 'section-gallery' ? (window.location.hash.includes('carousel') ? 'section-gallery-carousel' : 'section-gallery-mosaic') : sectionId;
+    const destination = sectionId === 'section-gallery' ? (window.location.hash.includes('carousel') ? 'section-gallery-carousel' : 'section-gallery-mosaic') : route === 'section-mail-campaign' ? route : sectionId;
     if (window.CRONOX_ADMIN_SHELL && !window.CRONOX_ADMIN_SHELL.canLeave(destination)) return false;
     const allowed = applySectionAccess(sectionId);
     window.CRONOX_BULK?.leave(sectionId);
@@ -1646,7 +1646,10 @@
     if (sectionId === 'section-inventory') window.CRONOX_INVENTORY?.load?.();
     if (sectionId === 'section-waitlist') window.CRONOX_WAITLIST_ADMIN?.load?.();
     if (sectionId === 'section-mails') window.CRONOX_MAILS?.load?.();
-    if (sectionId === 'section-inbox') window.CRONOX_INBOX?.load?.();
+    if (sectionId === 'section-inbox') {
+      if (window.location.hash.split('?')[0] === '#section-mail-campaign') window.CRONOX_INBOX?.openCampaign?.();
+      else window.CRONOX_INBOX?.load?.('list');
+    }
     if (sectionId === 'section-push') window.CRONOX_PUSH?.load?.();
     if (sectionId === 'section-key-screen') window.CRONOX_KEY_SCREEN?.load?.();
     if (sectionId === 'section-newsletter') window.CRONOX_NEWSLETTER_ADMIN?.load?.();
@@ -1674,22 +1677,31 @@
       return;
     }
     let sectionId = hash.startsWith(USERS_HASH_PREFIX) ? 'section-users' : hash.match(/^#(section-[\w-]+)/)?.[1] || 'section-dashboard';
+    const route = sectionId;
+    if (sectionId === 'section-mail-campaign') sectionId = 'section-inbox';
     if (sectionId === 'section-menu') sectionId = 'section-dashboard';
     if (sectionId.startsWith('section-gallery-')) sectionId = 'section-gallery';
     if (!document.getElementById(sectionId)?.classList.contains('admin-section')) sectionId = 'section-dashboard';
-    if (!showSection(sectionId)) { history.replaceState(null, '', activeRouteHash); return; }
+    if (!showSection(sectionId, route)) { history.replaceState(null, '', activeRouteHash); return; }
     activeRouteHash = hash;
     loadSection(sectionId);
   };
   const navigate = (destination) => {
     const hash = destination.startsWith('#') ? destination : '#' + destination;
-    if (hash === window.location.hash) { handleHashChange(); return; }
+    if (hash === window.location.hash) {
+      if (hash === '#section-mail-campaign') return;
+      handleHashChange(); return;
+    }
     const section = hash.split('?')[0].replace('#', '');
     if (window.CRONOX_ADMIN_SHELL && !window.CRONOX_ADMIN_SHELL.canLeave(section)) return;
     history.pushState(null, '', hash);
     handleHashChange();
   };
-  window.CRONOX_ADMIN_NAV = { navigate };
+  window.CRONOX_ADMIN_NAV = { navigate, mailboxView: () => {
+    activeRouteHash = '#section-inbox';
+    history.replaceState(null, '', activeRouteHash);
+    window.CRONOX_ADMIN_SHELL?.select?.('section-inbox');
+  } };
 
   const setLoading = (isLoading) => {
     if (!requestsBody) return;

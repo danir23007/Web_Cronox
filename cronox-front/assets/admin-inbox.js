@@ -215,8 +215,9 @@
   };
   function shell() {
     root.dataset.view = "list";
-    root.innerHTML = `<div class="mail-toolbar"><h2>Correo</h2><button class="btn" data-compose>Nueva campaña</button><button class="btn" data-drafts>Borradores y salida</button>${overview.superadmin ? '<button class="btn" data-settings>Configuración</button>' : ""}</div><div data-feedback role="status" aria-live="polite"></div><div class="mail-notice" data-setup></div><div class="mail-layout"><aside class="mail-boxes" aria-label="Buzones"><div class="mail-box-links" data-boxes></div><hr><details class="mail-folder-filter"><summary>Carpetas <span class="mail-folder-arrow" aria-hidden="true">⌄</span></summary><div class="mail-folder-options"><div class="mail-actions"><button class="btn" type="button" data-folders-all>Recibidas</button><button class="btn" type="button" data-folders-clear>Limpiar</button></div><div data-folders></div></div></details><p class="mail-muted" data-box-status></p></aside><div class="mail-list"><form class="mail-filters"><label>Buscar<input data-search type="search" placeholder="Remitente, destinatario o asunto" maxlength="120"></label><label>Estado<select data-state><option value="all">Todos</option><option value="unread">No leídos</option><option value="read">Leídos</option></select></label></form><p class="mail-muted">Búsqueda solo sobre mensajes sincronizados. Los contadores reflejan la caché importada.</p><div data-messages aria-live="polite"></div><div data-pagination class="mail-pager"></div></div><div class="mail-reader" hidden></div><div class="mail-editor" hidden></div><div class="mail-settings" hidden></div></div>`;
-    root.querySelector("[data-compose]").onclick = guard(() => compose());
+    const title = document.getElementById('title-inbox');
+    if (title) title.textContent = 'Buzones';
+    root.innerHTML = `<div class="mail-toolbar"><h2>Buzones</h2><button class="btn" data-drafts>Borradores y salida</button>${overview.superadmin ? '<button class="btn" data-settings>Configuración</button>' : ""}</div><div data-feedback role="status" aria-live="polite"></div><div class="mail-notice" data-setup></div><div class="mail-layout"><aside class="mail-boxes" aria-label="Buzones"><div class="mail-box-links" data-boxes></div><hr><details class="mail-folder-filter"><summary>Carpetas <span class="mail-folder-arrow" aria-hidden="true">⌄</span></summary><div class="mail-folder-options"><div class="mail-actions"><button class="btn" type="button" data-folders-all>Recibidas</button><button class="btn" type="button" data-folders-clear>Limpiar</button></div><div data-folders></div></div></details><p class="mail-muted" data-box-status></p></aside><div class="mail-list"><form class="mail-filters"><label>Buscar<input data-search type="search" placeholder="Remitente, destinatario o asunto" maxlength="120"></label><label>Estado<select data-state><option value="all">Todos</option><option value="unread">No leídos</option><option value="read">Leídos</option></select></label></form><p class="mail-muted">Búsqueda solo sobre mensajes sincronizados. Los contadores reflejan la caché importada.</p><div data-messages aria-live="polite"></div><div data-pagination class="mail-pager"></div></div><div class="mail-reader" hidden></div><div class="mail-editor" hidden></div><div class="mail-settings" hidden></div></div>`;
     root.querySelector("[data-drafts]").onclick = guard(() => showDrafts());
     root.querySelector("[data-settings]")?.addEventListener(
       "click",
@@ -294,10 +295,10 @@
       ? `${status[box().status] || box().status}${!box().active ? " · Inactivo" : ""} · Última sincronización: ${date(box().lastSyncAt)}${box().errorCode ? " · " + (codes[box().errorCode] || box().errorCode) : ""}`
       : "Selecciona un buzón para ver su conexión y carpetas.");
     const disabled = !overview.boxes.some(
-      (b) => b.canSend,
+      (b) => b.canSend && b.address.toLowerCase() === 'info@cronox.es',
     );
-    const composeButton = root.querySelector('[data-compose]');
-    if (composeButton.disabled !== disabled) composeButton.disabled = disabled;
+    const composeButton = document.querySelector('[data-nav-target=section-mail-campaign]');
+    if (composeButton && composeButton.disabled !== disabled) composeButton.disabled = disabled;
   }
   const mailboxLabel = name => /^no[ -]?reply$/i.test(name?.trim() || '') ? 'No-reply' : name;
   const displayName = b => {
@@ -331,8 +332,19 @@
     patchMarkup(host, folders.map(f=>`<label><span><input type="checkbox" data-folder-id="${esc(f.id)}" ${selectedFolders.has(f.id)?'checked':''}> ${esc(!boxId ? f.mailbox+' · '+folderLabel(f) : folderLabel(f))}${f.importBefore?' · importando':''}</span></label>`).join('') || '<p>No hay carpetas importadas.</p>');
     host.querySelectorAll('input').forEach(input=>input.onchange=guard(async()=>{if(input.checked)selectedFolders.add(input.dataset.folderId);else selectedFolders.delete(input.dataset.folderId);page=1;await list();}));
   }
-  async function load() {
-    if (loading) return loading;
+  let requestedView = 'list';
+  let renderedView = null;
+  async function load(view = location.hash.split('?')[0] === '#section-mail-campaign' ? 'campaign' : 'list') {
+    if (loading) {
+      if (requestedView !== view) {
+        invalidateReader(); listSeq++; listController?.abort();
+      }
+      requestedView = view;
+      return loading.then(() => {
+        if (renderedView !== requestedView) return load(requestedView);
+      });
+    }
+    requestedView = view;
     loading = (async () => {
       try {
         stateEpoch++; listSeq++; listController?.abort();
@@ -340,6 +352,14 @@
         overview = await api("/overview");
         if (boxId && !overview.boxes.some((b) => b.id === boxId)) boxId = "";
         shell();
+        renderedView = requestedView;
+        if (renderedView === 'campaign') {
+          root.querySelector('.mail-toolbar h2').textContent = 'Nueva campaña';
+          const title = document.getElementById('title-inbox');
+          if (title) title.textContent = 'Nueva campaña';
+          await compose();
+          return;
+        }
         await list();
         const message = new URLSearchParams(location.search).get("mail");
         if (message && /^[\da-f-]{36}$/i.test(message)) {
@@ -347,6 +367,7 @@
           await read(message);
         }
       } catch (e) {
+        renderedView = requestedView;
         if (!root.querySelector("[data-feedback]"))
           root.innerHTML =
             '<div data-feedback role="status"></div><button class="btn" data-retry>Reintentar</button>';
@@ -365,6 +386,7 @@
     selected = null; selectedMailboxId = null; feedback("");
   }
   function show(view) {
+    if (view !== 'compose') selectMailboxView();
     if (view !== "read") invalidateReader();
     root.dataset.view = view;
     for (const v of ["reader", "editor", "settings"])
@@ -709,7 +731,7 @@
       eventVisibility();
       form.onsubmit = event => event.preventDefault();
       const changed = event => {
-        if (sending) return;
+        if (sending || !current()) return;
         if (event.target.matches('[data-schedule],[data-offset]')) { void validateDate(); return; }
         dirty = true; editVersion++;
         host.querySelector('[data-save-state]').textContent = 'Cambios sin guardar';
@@ -1081,6 +1103,7 @@
   }
   async function showDrafts(view = 'drafts') {
     await leave();
+    selectMailboxView();
     draft = null; dirty = false;
     show('compose');
     const host = root.querySelector('.mail-editor'), seq = readSeq;
@@ -1382,7 +1405,17 @@
     if (timer) clearInterval(timer);
     document.querySelector(".mail-toast-host")?.remove();
   });
-  window.CRONOX_INBOX = { load, hasUnsavedChanges: () => dirty, discard: () => {
+  async function openCampaign() {
+    return load('campaign');
+  }
+  function selectMailboxView() {
+    if (location.hash.split('?')[0] !== '#section-mail-campaign') return;
+    window.CRONOX_ADMIN_NAV?.mailboxView?.();
+    root.querySelector('.mail-toolbar h2').textContent = 'Buzones';
+    const title = document.getElementById('title-inbox');
+    if (title) title.textContent = 'Buzones';
+  }
+  window.CRONOX_INBOX = { load, openCampaign, hasUnsavedChanges: () => dirty, discard: () => {
       if (draft?.mode !== 'campaign') return;
       draft = null; dirty = false; invalidateReader(); show('list');
     } };

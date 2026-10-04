@@ -4,10 +4,10 @@ async (page) => {
   for(const width of [1440,390]) {
     await page.setViewportSize({width,height:1000});
     await page.goto('http://127.0.0.1:43121/__mailreview/superadmin');
-    await page.locator('[data-compose]').waitFor();
-    assert(await page.locator('[data-compose]').textContent()==='Nueva campaña','New campaign label');
+    await page.locator('[data-nav-target=section-mail-campaign]').waitFor({state:'attached'});
+    assert(await page.locator('[data-nav-target=section-mail-campaign]').textContent()==='Nueva campaña','New campaign label');
     await page.locator('[data-box]').filter({hasText:'Soporte'}).first().click();
-    await page.locator('[data-compose]').click();
+    await page.evaluate(()=>window.CRONOX_ADMIN_NAV.navigate('section-mail-campaign'));
     await page.locator('#mailCampaignForm').waitFor();
     assert((await page.locator('.mail-editor').textContent()).includes('info@cronox.es'),'Fixed Info sender from any selected mailbox');
     assert(await page.locator('#mailCampaignForm [name=to],#mailCampaignForm [name=cc],#mailCampaignForm [name=bcc],#mailCampaignForm [name=subject],#mailCampaignForm [name=text],#mailCampaignForm [name=html],#mailCampaignForm [name=mailboxId],#mailCampaignForm [name=templateId],#mailCampaignForm textarea').count()===0,'No drafting, recipients or sender selector');

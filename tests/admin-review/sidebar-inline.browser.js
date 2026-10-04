@@ -26,7 +26,7 @@ async (page) => {
         });
       }), 'All panels inline within sidebar');
       if (mobile) await target.locator('#sidebarToggle').tap();
-      await group('navCliente').click();
+      await group('navMails').click();
       if (!mobile) await target.mouse.move(600, 100);
       await expectGroup(null);
       const previous = await group('navMultimedia').boundingBox();

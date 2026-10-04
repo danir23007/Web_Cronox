@@ -299,13 +299,17 @@
           <button data-nav-target="section-key-screen">Pantalla Clave</button>
           <button data-nav-target="section-newsletter">Newsletter</button>
         </div>
-        <button class="sidebar-group" aria-expanded="false" aria-controls="navCliente"><span aria-hidden="true">♙</span>Cliente<span class="sidebar-chevron">⌄</span></button>
+        <button class="sidebar-group" aria-expanded="false" aria-controls="navCliente"><span aria-hidden="true">♙</span>Clientes<span class="sidebar-chevron">⌄</span></button>
         <div id="navCliente" class="sidebar-children" hidden>
           <button data-nav-target="section-users">Usuarios</button>
           <button data-nav-target="section-circles-menu">Círculos</button>
           <button data-nav-target="section-orders">Pedidos</button>
-          <button data-nav-target="section-mails">Plantillas Mail</button>
-          <button data-nav-target="section-inbox">Correo <span data-mailbox-count aria-label="No leídos"></span></button>
+        </div>
+        <button class="sidebar-group" aria-expanded="false" aria-controls="navMails"><span aria-hidden="true">✉</span>Mails<span class="sidebar-chevron">⌄</span></button>
+        <div id="navMails" class="sidebar-children" hidden>
+          <button data-nav-target="section-mails">Plantillas mails</button>
+          <button data-nav-target="section-inbox">Buzones <span data-mailbox-count aria-label="No leídos"></span></button>
+          <button data-nav-target="section-mail-campaign">Nueva campaña</button>
         </div>
         <button class="sidebar-group" aria-expanded="false" aria-controls="navAdmin"><span aria-hidden="true">⚙</span>Admin<span class="sidebar-chevron">⌄</span></button>
         <div id="navAdmin" class="sidebar-children" hidden>
@@ -1024,7 +1028,7 @@
       <div id="pushWorkspace" class="mail-workspace"></div>
     </section>
     <section id="section-inbox" class="card admin-section" aria-labelledby="title-inbox" hidden>
-      <h2 id="title-inbox" class="sr-only">Correo</h2>
+      <h2 id="title-inbox" class="sr-only">Buzones</h2>
       <div id="mailboxWorkspace" class="inbox-root"></div>
     </section>
     <section id="section-mails" class="card admin-section" aria-labelledby="title-mails" hidden>
@@ -1969,7 +1973,7 @@
   <script src="assets/product-card-framing.js?v=1"></script>
   <script src="assets/admin-product-gallery.js?v=1"></script>
   <script src="assets/admin-pagination.js?v=1"></script>
-  <script src="assets/admin-shell.js?v=7"></script>
+  <script src="assets/admin-shell.js?v=8"></script>
   <script src="assets/admin-finance.js?v=2"></script>
   <link rel="stylesheet" href="assets/admin-visitors.css?v=1">
   <script src="assets/admin-visitors.js?v=2"></script>
@@ -1978,8 +1982,8 @@
   <script src="assets/admin-bulk.js?v=4"></script>
   <script src="assets/admin-section-headers.js?v=1"></script>
   <script src="assets/admin-push.js?v=1"></script>
-  <script src="assets/admin-inbox.js?v=11"></script>
-  <script src="assets/admin.js?v=5"></script>
+  <script src="assets/admin-inbox.js?v=12"></script>
+  <script src="assets/admin.js?v=6"></script>
   <script src="assets/admin-inventory.js?v=2"></script>
   <script src="assets/admin-waitlist.js?v=1"></script>
   <script src="assets/responsive-images.js?v=4"></script>

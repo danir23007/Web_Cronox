@@ -84,17 +84,35 @@
   // Nested disclosures belong to their principal zone and never compete with it.
   const subgroups = [...sidebar.querySelectorAll('.sidebar-subgroup')].map(button => {
     const panel = document.getElementById(button.getAttribute('aria-controls'));
+    const zone = document.createElement('div');
+    zone.className = 'sidebar-subgroup-zone';
+    button.before(zone); zone.append(button, panel);
+    const state = { pinned: false, temporary: false, suppressed: false, intentRect: null };
     const setOpen = open => {
-      button.setAttribute('aria-expanded', String(open));
-      panel.hidden = !open;
+      state.pinned = open; state.temporary = false; state.suppressed = !open;
+      render();
     };
-    button.addEventListener('click', () => { setOpen(panel.hidden); renderGroups(); });
+    const render = () => {
+      const open = state.pinned || state.temporary;
+      if (button.getAttribute('aria-expanded') !== String(open)) button.setAttribute('aria-expanded', String(open));
+      if (panel.hidden === open) panel.hidden = !open;
+    };
+    button.addEventListener('click', () => {
+      state.intentRect = zone.getBoundingClientRect();
+      setOpen(!state.pinned); renderGroups();
+    });
+    zone.addEventListener('focusin', event => {
+      if (panel.contains(event.target)) { state.temporary = true; render(); }
+    });
+    zone.addEventListener('focusout', () => queueMicrotask(() => {
+      if (!zone.contains(document.activeElement) && !zone.matches(':hover')) { state.temporary = false; render(); }
+    }));
     panel.addEventListener('keydown', event => {
       if (event.key !== 'Escape') return;
       event.preventDefault(); event.stopPropagation();
       button.focus(); setOpen(false);
     });
-    return { button, panel, setOpen };
+    return { button, panel, zone, state, render, setOpen };
   });
   const renderGroups = () => {
     const visible = temporary || pinned;
@@ -111,6 +129,22 @@
     const next = { x: event.clientX, y: event.clientY };
     if (pointer && next.x === pointer.x && next.y === pointer.y) return;
     pointer = next;
+    // Process nested intent even while the pointer remains in its parent zone.
+    subgroups.forEach(subgroup => {
+      const { zone, state, render } = subgroup;
+      const live = zone.getBoundingClientRect();
+      const inside = zone.getClientRects().length && containsPoint(live, next);
+      const transit = state.intentRect && {
+        left: Math.min(state.intentRect.left, live.left), right: Math.max(state.intentRect.right, live.right),
+        top: Math.min(state.intentRect.top, live.top), bottom: Math.max(state.intentRect.bottom, live.bottom),
+      };
+      if (inside) {
+        if (!state.suppressed) { state.temporary = true; state.intentRect = null; }
+      } else if (!containsPoint(transit, next)) {
+        state.temporary = false; state.suppressed = false; state.intentRect = null;
+      }
+      render();
+    });
     // The pre-layout hit region and the live zone belong to the same intent.
     // A header moving under a stationary pointer cannot start a hover cascade.
     const owner = suppressed || temporary;
@@ -132,7 +166,11 @@
     temporary = group;
     renderGroups();
   });
-  const leavePointer = () => { pointer = null; intentRect = null; suppressed = null; temporary = null; renderGroups(); };
+  const leavePointer = () => {
+    pointer = null; intentRect = null; suppressed = null; temporary = null;
+    subgroups.forEach(({ state, render }) => { state.temporary = false; state.suppressed = false; state.intentRect = null; render(); });
+    renderGroups();
+  };
   document.addEventListener('pointerout', event => { if (!event.relatedTarget) leavePointer(); });
   window.addEventListener('blur', leavePointer);
   groups.forEach(group => {

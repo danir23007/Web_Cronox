@@ -482,12 +482,17 @@
           <button data-nav-target="section-key-screen">Pantalla Clave</button>
           <button data-nav-target="section-newsletter">Newsletter</button>
         </div>
-        <button class="sidebar-group" aria-expanded="false" aria-controls="navCliente"><span aria-hidden="true">♙</span>Cliente<span class="sidebar-chevron">⌄</span></button>
+        <button class="sidebar-group" aria-expanded="false" aria-controls="navCliente"><span aria-hidden="true">♙</span>Clientes<span class="sidebar-chevron">⌄</span></button>
         <div id="navCliente" class="sidebar-children" hidden>
           <button data-nav-target="section-users">Usuarios</button>
           <button data-nav-target="section-circles-menu">Círculos</button>
           <button data-nav-target="section-orders">Pedidos</button>
-          <button data-nav-target="section-mails">Plantillas Mail</button>
+        </div>
+        <button class="sidebar-group" aria-expanded="false" aria-controls="navMails"><span aria-hidden="true">✉</span>Mails<span class="sidebar-chevron">⌄</span></button>
+        <div id="navMails" class="sidebar-children" hidden>
+          <button data-nav-target="section-mails">Plantillas mails</button>
+          <button data-nav-target="section-inbox">Buzones <span data-mailbox-count aria-label="No leídos"></span></button>
+          <button data-nav-target="section-mail-campaign">Nueva campaña</button>
         </div>
         <button class="sidebar-group" aria-expanded="false" aria-controls="navAdmin"><span aria-hidden="true">⚙</span>Admin<span class="sidebar-chevron">⌄</span></button>
         <div id="navAdmin" class="sidebar-children" hidden>
@@ -752,7 +757,7 @@
   <script src="assets/api.js?v=10"></script>
   <script src="assets/admin-auth-routing.js?v=1"></script>
   <script src="assets/ui-status.js"></script>
-  <script src="assets/admin-shell.js?v=7"></script>
+  <script src="assets/admin-shell.js?v=8"></script>
   <script src="assets/admin-user-shell.js?v=1"></script>
   <script src="assets/admin-live-stats.js?v=2"></script>
   <script src="assets/admin-user.js?v=2"></script>

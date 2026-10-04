@@ -1,15 +1,12 @@
 async (initialPage) => {
-  let page = initialPage, touchContext;
+  let page;
   const origin = 'http://127.0.0.1:4173';
   const assert = (ok, message) => { if (!ok) throw Error(message); };
   const results = [];
-  page.removeAllListeners('dialog'); page.on('dialog', dialog => dialog.accept());
   for (const width of [1366,390]) for (const theme of ['light','dark']) {
-    if (width === 390 && !touchContext) {
-      touchContext = await initialPage.context().browser().newContext({hasTouch:true,isMobile:true,viewport:{width:390,height:900}});
-      page = await touchContext.newPage(); page.on('dialog', dialog => dialog.accept());
-    }
-    await page.unrouteAll({behavior:'wait'});
+    const variantContext = await initialPage.context().browser().newContext({hasTouch:width===390,isMobile:width===390,viewport:{width,height:900}});
+    page = await variantContext.newPage(); page.on('dialog',dialog=>dialog.accept());
+    const errors=[],expectedErrors=new Set();page.on('pageerror',e=>errors.push({message:e.message,url:''}));page.on('console',m=>{if(m.type()==='error')errors.push({message:m.text(),url:m.location().url});});
     const boxId = '00000000-0000-4000-8000-000000000001';
     const folders = [{id:'inbox',path:'INBOX',specialUse:'\\Inbox'}, {id:'sent',path:'Provider Outgoing',specialUse:'\\Sent'}, {id:'draft',path:'Provider Work',specialUse:'\\Drafts'}, {id:'custom',path:'Customers',specialUse:null}];
     const rows = Array.from({length:30},(_,i)=>({id:'message-'+i,mailboxId:boxId,folderId:'inbox',sender:'sender@example.test',recipients:'target@example.test',subject:i===0?'Alpha result':'Message '+i,seen:i!==0,bodyState:'LOADED',preview:'Synthetic message',date:'2026-10-04T10:00:00Z'}));
@@ -28,6 +25,7 @@ async (initialPage) => {
         const response = await route.fetch();
         return route.fulfill({response,body:(await response.text()).replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi,'')});
       }
+      if (url.pathname.includes('favicon')) return route.fulfill({status:204});
       if (!url.pathname.startsWith('/api/')) return route.continue();
       const path = url.pathname.replace('/api/admin/mailbox',''), method = req.method();
       requests.push({path,method,query:Object.fromEntries(url.searchParams)});
@@ -49,7 +47,7 @@ async (initialPage) => {
       } else if(path.endsWith('/campaign-options')) data={families:[{id:'family',name:'Familia de prueba',eventKind:'GENERAL'}],variants:[]};
       else if(path.endsWith('/campaign-audience')) {
         audienceCalls++;
-        if (audienceFail) { audienceFail=false; return route.fulfill({status:503,json:{message:'MAILBOX_OPERATION_FAILED'}}); }
+        if (audienceFail) { expectedErrors.add(req.url()); audienceFail=false; return route.fulfill({status:503,json:{message:'MAILBOX_OPERATION_FAILED'}}); }
         const circles=(url.searchParams.get('circles')||'').split(',').filter(Boolean).map(Number), total=count(circles);
         const selection={familyId:url.searchParams.get('familyId'),circles,revision:Number(url.searchParams.get('revision'))};
         data={count:total,circles,family:{id:'family',name:'Familia de prueba'},blocked:total?[]:['No hay destinatarios elegibles.'],previewHash:hash(selection),policy:{ready:true,reasons:[]},previews:circles.map(circle=>({circle,count:count([circle]),subject:'Asunto del cliente '+circle,html:'<p>Contenido por círculo '+circle+'</p>'}))};
@@ -57,7 +55,7 @@ async (initialPage) => {
         exportCalls++;
         return route.fulfill({contentType:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',headers:{'Content-Disposition':'attachment; filename="CRONOX-destinatarios.xlsx"'},body:'Simulated download; real XLSX is checked in isolated Nest integration'});
       } else if(path==='/schedule-preview') {
-        if(url.searchParams.get('localDate').startsWith('2020')) return route.fulfill({status:400,json:{message:'MAILBOX_SCHEDULE_IN_PAST'}});
+        if(url.searchParams.get('localDate').startsWith('2020')) {expectedErrors.add(req.url());return route.fulfill({status:400,json:{message:'MAILBOX_SCHEDULE_IN_PAST'}});}
         data={scheduledAt:'2028-05-12T13:00:00.000Z'};
       } else if(path.endsWith('/campaign-draft')) {
         saves++; const input=req.postDataJSON(), id=input.draftId||'draft-'+(++serial);
@@ -72,7 +70,7 @@ async (initialPage) => {
           drafts.set(id,saved); sends.set(input.requestKey,{id:campaignId,draftId:id,status:'SCHEDULED'});
         }
         await new Promise(resolve=>setTimeout(resolve,200)); data=sends.get(input.requestKey);
-        if (loseNextSend) { loseNextSend=false; return route.abort('failed'); }
+        if (loseNextSend) { expectedErrors.add(req.url()); loseNextSend=false; return route.abort('failed'); }
       } else if(path==='/drafts') {
         const view=url.searchParams.get('view');
         data=[...drafts.values()].filter(d=>view==='drafts'?d.status==='DRAFT':view==='outbox'?d.status==='SCHEDULED':d.status==='COMPLETED');
@@ -81,18 +79,19 @@ async (initialPage) => {
       else throw Error('Unexpected fixture API '+method+' '+path);
       await route.fulfill({json:data}).catch(()=>{});
     });
-    await page.setViewportSize({width,height:900}); await page.goto(origin+'/admin.html');
+    await page.setViewportSize({width,height:900}); await page.goto('about:blank'); await page.goto(origin+'/admin.html#section-inbox');
     await page.evaluate(theme=>{
       document.documentElement.dataset.adminTheme=theme;
       document.querySelector('#adminShell').hidden=false; document.querySelector('#adminAuthCheck').remove();
       document.querySelectorAll('.admin-section').forEach(el=>{el.hidden=el.id!=='section-inbox';});
-      window.CRONOX_API={API_BASE:'',getCsrfHeaders:async()=>({'x-csrf-token':'local-fixture'})};
+      window.CRONOX_API={API_BASE:'',getCsrfHeaders:async()=>({'x-csrf-token':'local-fixture'}), getMe:async()=>({id:1,role:'SUPERADMIN'}), admin:{getDashboard:async()=>({})}};
       const nativeFetch=window.fetch; window.fetch=(url,options)=>nativeFetch(url,{...options,signal:undefined});
-      window.setInterval=fn=>{window.testPulse=fn;return 1;};
+      window.setInterval=(fn,ms)=>{if(ms===30000)window.testPulse=fn;return 1;};
     },theme);
     await page.addScriptTag({url:origin+'/assets/admin-shell.js'});
     await page.addScriptTag({url:origin+'/assets/admin-inbox.js'});
-    await page.evaluate(()=>{document.documentElement.dataset.adminAuthState='authorized';});
+    await page.addScriptTag({url:origin+'/assets/admin.js'});
+    await page.evaluate(()=>document.dispatchEvent(new Event('DOMContentLoaded')));
     await page.locator('[data-message="message-0"]').waitFor({state:'attached'});
     const folderBlock=page.locator('.mail-folder-filter');
     assert(!await folderBlock.evaluate(el=>el.open),'Folders closed initially');
@@ -112,11 +111,11 @@ async (initialPage) => {
     assert(await page.locator('[data-message]').count()===1,'Explicit Sent only');
     await page.locator('[data-folder-id="sent"]').uncheck(); await page.locator('[data-folder-id="inbox"]').check();
     await folderBlock.locator('summary').click();
-    await page.locator('[data-state]').selectOption('read');
+    await page.locator('select[data-state]').selectOption('read');
     await page.waitForFunction(()=>document.querySelector('[data-pagination]').textContent.includes('29 mensajes'));
     await page.locator('[data-next]').click();
     await page.waitForFunction(()=>document.querySelector('[data-pagination]').textContent.includes('2 / 2'));
-    await page.locator('[data-state]').selectOption('unread');
+    await page.locator('select[data-state]').selectOption('unread');
     await page.waitForFunction(()=>document.querySelectorAll('[data-message]').length===1);
     await page.locator('[data-message="message-0"]').click();
     await page.locator('[data-read-state]').filter({hasText:'confirmado'}).waitFor();
@@ -130,7 +129,7 @@ async (initialPage) => {
     await page.locator('.mail-reader [data-back]').click();
     rows[0].seen=true; await page.evaluate(()=>window.testPulse());
     await page.waitForFunction(()=>document.querySelectorAll('[data-message]').length===0);
-    await page.locator('[data-state]').selectOption('all');
+    await page.locator('select[data-state]').selectOption('all');
     await page.locator('[data-search]').fill('slow'); await page.waitForTimeout(280);
     await page.locator('[data-search]').fill('Alpha');
     await page.locator('[data-message="message-0"]').waitFor({state:'attached'}); await page.waitForTimeout(400);
@@ -141,7 +140,7 @@ async (initialPage) => {
     await page.evaluate(()=>scrollTo(0,0));
     await page.screenshot({path:`output/playwright/inbox-controls-${width}-${theme}.png`,fullPage:true});
 
-    await page.locator('[data-compose]').click(); await page.locator('#mailCampaignForm').waitFor();
+    await page.evaluate(()=>window.CRONOX_ADMIN_NAV.navigate('section-mail-campaign'));  await page.locator('#mailCampaignForm').waitFor();
     assert(saves===0&&drafts.size===0,'Opening campaign is not a saved draft');
     assert(await page.locator('[data-review]').count()===0,'Independent review removed');
     await page.locator('[name="campaignName"]').fill('Revisión interna CRONOX');
@@ -193,7 +192,7 @@ async (initialPage) => {
     assert((await page.locator('[data-draft]').innerText()).includes('Revisión interna CRONOX'),'Outbox name visible');
     await page.locator('[data-campaign-list="drafts"]').click();
     await page.getByText('No hay borradores para mostrar.',{exact:true}).waitFor();
-    await page.locator('[data-compose]').click(); await page.locator('[name="campaignName"]').fill('Borrador incompleto');
+    await page.evaluate(()=>window.CRONOX_ADMIN_NAV.navigate('section-mail-campaign')); await page.locator('[name="campaignName"]').fill('Borrador incompleto');
     await page.locator('[data-save]').click(); await page.locator('[data-save-state]').filter({hasText:'Borrador guardado'}).waitFor();
     await page.locator('[data-drafts]').click(); await page.locator('[data-draft]').filter({hasText:'Borrador incompleto'}).waitFor();
     await page.locator('[data-draft]').click(); await page.locator('[name="campaignName"]').waitFor();
@@ -213,8 +212,9 @@ async (initialPage) => {
     assert(sends.size===2&&drafts.size===2,'Retry after lost response and edit does not create another campaign');
     assert(await page.locator('[name="campaignName"]').inputValue()==='Borrador incompleto','Recovery retains originally confirmed name');
     assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),'No horizontal overflow');
+    assert(errors.filter(e=>!expectedErrors.has(e.url)).length===0,'No unexpected console/runtime errors: '+JSON.stringify(errors.filter(e=>!expectedErrors.has(e.url))));
     results.push({width,theme,touch:width===390,saves,enqueues,exportCalls,audienceCalls,result:'PASS'});
+    await variantContext.close();
   }
-  if (touchContext) await touchContext.close();
   return results;
 }
