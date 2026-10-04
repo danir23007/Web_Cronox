@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { createHash, randomUUID } from 'node:crypto';
 import MailComposer from 'mailbox-nodemailer/lib/mail-composer';
+import ExcelJS from 'exceljs';
 import { PrismaService } from '../prisma/prisma.service';
 import { ManagedMailService } from '../email/managed/managed-mail.service';
 import { MAIL_PURPOSES } from '../email/managed/mail-catalog';
@@ -132,29 +133,17 @@ export class MailboxCampaignService {
     assertResolved(result.subject, result.html, result.text);
     return { ...result, templateId: t.id, variables: [] };
   }
+  async resolveRecipients(selected: number[], tx: any = this.db) {
+    const users = await tx.user.findMany({
+      where: { circleLevel: { in: [1, 2, 3, 4, 5] }, accountState: 'ACTIVE',
+        role: { in: ['USER', 'FRIEND'] }, newsletterSubscribed: true },
+      select: { email: true, name: true, circleLevel: true },
+    });
+    const suppressed = await tx.mailboxSuppression.findMany({ select: { email: true } });
+    return campaignAudience(users, suppressed.map((v: any) => v.email), selected);
+  }
   async recipients(selected: number[]) {
-    const users = await this.db.user.findMany({
-      where: {
-        circleLevel: { in: circles(selected) },
-        accountState: 'ACTIVE',
-        role: { in: ['USER', 'FRIEND'] },
-        newsletterSubscribed: true,
-      },
-      select: { email: true },
-    });
-    const emails = [
-      ...new Set(
-        users
-          .map((u) => canonicalRecipient(u.email))
-          .filter((v): v is string => !!v),
-      ),
-    ].sort();
-    const excluded = await this.db.mailboxSuppression.findMany({
-      where: { email: { in: emails } },
-      select: { email: true },
-    });
-    const suppressed = new Set(excluded.map((s) => s.email));
-    return emails.filter((e) => !suppressed.has(e));
+    return (await this.resolveRecipients(circles(selected))).recipients.map(r => r.email);
   }
   async eligible(email: string, circle?: number) {
     if (
@@ -236,6 +225,7 @@ export class MailboxCampaignService {
   async options(actor: MailActor, mailboxId: string) {
     this.assertInfo(await this.access.box(actor, mailboxId, true));
     const families = await this.db.campaignTemplateFamily.findMany({
+      where: { id: { notIn: ['campaign:INFO:LAUNCH', 'campaign:INFO:RESTOCK', 'campaign:INFO:GENERIC'] } },
       orderBy: { name: 'asc' },
     });
     const variants = await this.db.productVariant.findMany({
@@ -274,23 +264,7 @@ export class MailboxCampaignService {
       : null;
     if (!family) blocked.push('Selecciona una familia de plantillas.');
     if (!selected.length) blocked.push('Selecciona al menos un círculo.');
-    const users = await tx.user.findMany({
-      where: {
-        circleLevel: { in: [1, 2, 3, 4, 5] },
-        accountState: 'ACTIVE',
-        role: { in: ['USER', 'FRIEND'] },
-        newsletterSubscribed: true,
-      },
-      select: { email: true, name: true, circleLevel: true },
-    });
-    const suppressions = await tx.mailboxSuppression.findMany({
-      select: { email: true },
-    });
-    const audience = campaignAudience(
-      users,
-      suppressions.map((v: any) => v.email),
-      selected,
-    );
+    const audience = await this.resolveRecipients(selected, tx);
     blocked.push(...audience.blocked);
     const origin = (process.env.FRONTEND_URL || 'https://cronox.es').replace(
       /\/$/,
@@ -426,6 +400,9 @@ export class MailboxCampaignService {
       family,
       previews,
       deliveries,
+      recipients: audience.recipients.map(r => ({ ...r,
+        templateName: family?.versions.find((v: any) => v.campaignCircle === r.circle && v.senderKey === 'INFO' && !v.archivedAt && v.purpose === null)?.name || '',
+      })),
       blocked: uniqueBlocked,
       previewHash: hash,
       count: audience.recipients.length,
@@ -434,7 +411,7 @@ export class MailboxCampaignService {
   }
   async summary(actor: MailActor, id: string) {
     const d = await this.access.draft(actor, id);
-    const { deliveries, family, ...plan } = await this.plan(d);
+    const { deliveries, recipients, family, ...plan } = await this.plan(d);
     return {
       ...plan,
       family: family && { id: family.id, name: family.name },
@@ -442,14 +419,75 @@ export class MailboxCampaignService {
       policy: campaignPolicy(),
     };
   }
-  async enqueue(actor: MailActor, id: string, input: any) {
-    const d = await this.access.draft(actor, id);
+  async selection(actor: MailActor, mailboxId: string, input: any) {
+    if ((input.familyId !== undefined && (typeof input.familyId !== 'string' || input.familyId.length > 100)) ||
+      (input.campaignName !== undefined && (typeof input.campaignName !== 'string' || input.campaignName.length > 160)) ||
+      (input.variantId !== undefined && (!Number.isInteger(input.variantId) || input.variantId < 1)) ||
+      (input.revision !== undefined && (!Number.isInteger(input.revision) || input.revision < 1)))
+      throw new BadRequestException('MAILBOX_INVALID_CAMPAIGN');
+    const mailbox = await this.access.box(actor, mailboxId, true);
+    this.assertInfo(mailbox);
+    return { mailbox, mailboxId, mode: 'campaign', revision: input.revision || 1,
+      campaignName: input.campaignName?.trim() || null,
+      familyId: input.familyId || null, circles: circles(input.circles || []),
+      campaignEvent: input.variantId ? { variantId: input.variantId } : {},
+      files: [], to: '', cc: '', bcc: '',
+    };
+  }
+  async audience(actor: MailActor, mailboxId: string, input: any) {
+    const d = await this.selection(actor, mailboxId, input);
+    const { deliveries, recipients, family, ...plan } = await this.plan(d);
+    return { ...plan, family: family && { id: family.id, name: family.name },
+      sender: 'info@cronox.es', policy: campaignPolicy() };
+  }
+  async exportAudience(actor: MailActor, mailboxId: string, input: any) {
+    const d = await this.selection(actor, mailboxId, input);
+    const plan = await this.plan(d);
+    const workbook = new ExcelJS.Workbook();
+    const sheet = workbook.addWorksheet('Destinatarios');
+    sheet.columns = [{ header: 'Nombre', key: 'name', width: 32 },
+      { header: 'Correo electrónico', key: 'email', width: 40 },
+      { header: 'Círculo', key: 'circle', width: 12 },
+      { header: 'Versión de plantilla', key: 'templateName', width: 40 }];
+    // Plain strings are data, never ExcelJS formula objects.
+    plan.recipients.forEach(r => sheet.addRow(r));
+    await this.access.box(actor, mailboxId, true);
+    return workbook.xlsx.writeBuffer();
+  }
+  async saveSelection(actor: MailActor, mailboxId: string, input: any) {
+    const d = await this.selection(actor, mailboxId, input);
+    if (d.familyId && !await this.db.campaignTemplateFamily.findUnique({ where: { id: d.familyId } }))
+      throw new BadRequestException('MAILBOX_TEMPLATE_NOT_AVAILABLE');
+    // The only creation endpoint for the new campaign editor's explicit save.
+    if (input.draftId) {
+      const existing = await this.access.draft(actor, input.draftId);
+      if (existing.mailboxId !== mailboxId || existing.mode !== 'campaign')
+        throw new BadRequestException('MAILBOX_INVALID_CAMPAIGN');
+      const changed = await this.db.mailboxDraft.updateMany({
+        where: { id: input.draftId, userId: actor.id, status: 'DRAFT', revision: input.revision },
+        data: { campaignName: input.campaignName === undefined ? existing.campaignName : d.campaignName, familyId: d.familyId,
+          campaignEvent: d.campaignEvent, circles: d.circles, revision: { increment: 1 } },
+      });
+      if (!changed.count) throw new ConflictException('MAILBOX_DRAFT_CHANGED_OR_QUEUED');
+      return { id: existing.id };
+    }
+    const saved = await this.db.mailboxDraft.create({ data: {
+      mailboxId, userId: actor.id, mode: 'campaign', campaignName: d.campaignName,
+      familyId: d.familyId, campaignEvent: d.campaignEvent, circles: d.circles,
+    } });
+    return { id: saved.id };
+  }
+  async enqueue(actor: MailActor, id: string | null, input: any, mailboxId?: string) {
+    const d = id ? await this.access.draft(actor, id) : await this.selection(actor, mailboxId!, input);
     this.assertInfo(d.mailbox);
     const prior = await this.db.mailboxCampaign.findUnique({
       where: { requestKey: input.requestKey },
     });
     if (prior) {
-      if (prior.draftId !== id)
+      const existing = await this.access.draft(actor, prior.draftId);
+      if (existing.mailboxId !== d.mailboxId)
+        throw new ConflictException('MAILBOX_IDEMPOTENCY_KEY_USED');
+      if (id && prior.draftId !== id)
         throw new ConflictException('MAILBOX_IDEMPOTENCY_KEY_USED');
       return this.view(actor, prior.id);
     }
@@ -473,12 +511,15 @@ export class MailboxCampaignService {
     const scheduledAt = input.localDate
       ? madridInstant(input.localDate, input.offset)
       : new Date();
-    const campaign = await this.db.$transaction(
+    let campaign;
+    try { campaign = await this.db.$transaction(
       async (tx) => {
-        const fresh = await tx.mailboxDraft.findUniqueOrThrow({
+        const stored = id ? await tx.mailboxDraft.findUniqueOrThrow({
           where: { id },
           include: { mailbox: true },
-        });
+        }) : d;
+        const fresh: any = input.selection ? { ...stored, ...await this.selection(actor, stored.mailboxId, input), revision: stored.revision,
+          campaignName: input.campaignName === undefined ? stored.campaignName : input.campaignName.trim() || null } : stored;
         const plan = await this.plan(fresh, tx);
         if (plan.blocked.length)
           throw new BadRequestException({
@@ -490,25 +531,36 @@ export class MailboxCampaignService {
           fresh.revision !== input.revision
         )
           throw new ConflictException('MAILBOX_RECIPIENT_PREVIEW_CHANGED');
-        const lock = await tx.mailboxDraft.updateMany({
+        let draftId = id;
+        if (!id) {
+          const created = await tx.mailboxDraft.create({ data: {
+            mailboxId: d.mailboxId, userId: actor.id, mode: 'campaign', status: 'SCHEDULED',
+            campaignName: fresh.campaignName, familyId: fresh.familyId,
+            campaignEvent: fresh.campaignEvent, circles: fresh.circles,
+          } });
+          draftId = created.id;
+        }
+        const lock = id ? await tx.mailboxDraft.updateMany({
           where: {
             id,
             userId: actor.id,
             status: 'DRAFT',
             revision: input.revision,
           },
-          data: { status: 'SCHEDULED' },
-        });
+          data: { status: 'SCHEDULED', campaignName: fresh.campaignName,
+            familyId: fresh.familyId, campaignEvent: fresh.campaignEvent, circles: fresh.circles },
+        }) : { count: 1 };
         if (!lock.count)
           throw new ConflictException('MAILBOX_DRAFT_CHANGED_OR_QUEUED');
         return tx.mailboxCampaign.create({
           data: {
-            draftId: id,
+            draftId: draftId!,
             draftRevision: fresh.revision,
             requestKey: input.requestKey,
             scheduledAt,
             snapshot: {
               modelVersion: 2,
+              campaignName: fresh.campaignName,
               mailboxId: d.mailboxId,
               userId: actor.id,
               from: 'info@cronox.es',
@@ -538,7 +590,12 @@ export class MailboxCampaignService {
         });
       },
       { isolationLevel: 'RepeatableRead', timeout: 60000 },
-    );
+    ); } catch (error) {
+      // A repeated/concurrent request rolls back its provisional draft too.
+      const prior = await this.db.mailboxCampaign.findUnique({ where: { requestKey: input.requestKey } });
+      if (prior && (!id || prior.draftId === id)) return this.view(actor, prior.id);
+      throw error;
+    }
     await this.access.audit(
       actor,
       d.mailboxId,
@@ -561,6 +618,7 @@ export class MailboxCampaignService {
     return {
       id: c.id,
       draftId: c.draftId,
+      campaignName: c.draft.campaignName || (c.snapshot as any).campaignName || null,
       status: c.status,
       scheduledAt: c.scheduledAt,
       startedAt: c.startedAt,

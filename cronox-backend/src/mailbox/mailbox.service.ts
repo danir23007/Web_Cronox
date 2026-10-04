@@ -5,6 +5,7 @@ import {
   ServiceUnavailableException,
 } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
+import { mailboxFolderKind } from './mailbox-folder-kind';
 import { Readable } from 'node:stream';
 import { PrismaService } from '../prisma/prisma.service';
 import { MailboxAccessService, MailActor } from './mailbox-access.service';
@@ -57,6 +58,7 @@ export class MailboxService {
         mailboxId: { in: ids },
         alive: true,
         seen: false,
+        NOT: { flags: { hasSome: ['\\Draft', '\\Sent', '$Sent'] } },
         folder: {
           available: true,
           OR: [{ specialUse: '\\Inbox' }, { path: 'INBOX' }],
@@ -286,11 +288,13 @@ export class MailboxService {
     return { queued: true };
   }
   async messages(actor: MailActor, query: any) {
+    if (query.state && !['all', 'read', 'unread'].includes(query.state))
+      throw new BadRequestException('MAILBOX_INVALID_INPUT');
     const ids = await this.access.allowedIds(actor);
     if (query.mailboxId && !ids.includes(query.mailboxId))
       await this.access.box(actor, query.mailboxId);
     const search = String(query.search || '').slice(0, 120),
-      page = Math.max(1, Math.min(100000, Number(query.page) || 1));
+      page = Math.max(1, Math.min(100000, Math.trunc(Number(query.page) || 1)));
     const where: any = {
       mailboxId: { in: query.mailboxId ? [query.mailboxId] : ids },
       alive: true,
@@ -325,6 +329,7 @@ export class MailboxService {
           }
         : {}),
     };
+    let selectedFolders: any[] = [];
     if (Object.prototype.hasOwnProperty.call(query, 'folderIds')) {
       if (typeof query.folderIds !== 'string' || query.folderIds.length > 15000)
         throw new BadRequestException('MAILBOX_INVALID_FOLDERS');
@@ -341,13 +346,31 @@ export class MailboxService {
           mailboxId: where.mailboxId,
           available: true,
         },
-        select: { id: true },
+        select: { id: true, path: true, specialUse: true },
       });
       if (allowed.length !== selected.length)
         throw new BadRequestException('MAILBOX_INVALID_FOLDERS');
       where.folderId = { in: selected };
       where.folder = { available: true };
+      selectedFolders = allowed;
+    } else if (query.folderId) {
+      selectedFolders = await this.db.mailboxFolder.findMany({
+        where: { id: query.folderId, mailboxId: where.mailboxId, available: true },
+      });
+    } else if (!query.folderKind) {
+      where.folder = { available: true, OR: [{ specialUse: '\\Inbox' }, { path: 'INBOX', specialUse: null }] };
     }
+    // Draft/send indicators never leak into received or custom folders. Selecting
+    // a system folder explicitly only opts in for messages in that folder.
+    where.AND = ['\\Drafts', '\\Sent'].map(kind => {
+      const explicit = selectedFolders.filter(f => mailboxFolderKind(f) === kind).map(f => f.id);
+      const flags = kind === '\\Drafts' ? ['\\Draft'] : ['\\Sent', '$Sent'];
+      if (query.folderKind === kind) return {};
+      return { OR: [{ folderId: { in: explicit } }, { AND: [
+        { NOT: { flags: { hasSome: flags } } },
+        { folder: { OR: [{ specialUse: null }, { NOT: { specialUse: kind } }] } },
+      ] }] };
+    });
     const [total, rows] = await this.db.$transaction([
       this.db.mailboxMessage.count({ where }),
       this.db.mailboxMessage.findMany({
@@ -372,15 +395,25 @@ export class MailboxService {
         'Solo metadatos de mensajes sincronizados. Los cuerpos se descargan al abrir.',
     };
   }
-  async drafts(actor: MailActor) {
+  async drafts(actor: MailActor, view?: string) {
+    if (view && !['drafts', 'outbox', 'history'].includes(view))
+      throw new BadRequestException('MAILBOX_INVALID_INPUT');
     const ids = await this.access.allowedIds(actor, true);
     return this.db.mailboxDraft.findMany({
-      where: { userId: actor.id, mailboxId: { in: ids } },
+      where: { userId: actor.id, mailboxId: { in: ids }, ...(view ? {
+        ...(view === 'drafts' ? { status: 'DRAFT' } : {}),
+        [view === 'outbox' ? 'OR' : 'AND']: [
+          { campaigns: { [view === 'outbox' ? 'some' : 'none']: { status: { in: ['SCHEDULED', 'PROCESSING'] } } } },
+          { sends: { [view === 'outbox' ? 'some' : 'none']: { status: { in: ['PENDING', 'PROCESSING'] } } } },
+        ],
+        ...(view === 'history' ? { status: { not: 'DRAFT' } } : {}),
+      } : {}) },
       select: {
         id: true,
         mailboxId: true,
         mode: true,
         subject: true,
+        campaignName: true,
         status: true,
         revision: true,
         updatedAt: true,
@@ -500,6 +533,7 @@ export class MailboxService {
       cc: d.cc,
       bcc: d.bcc,
       subject: d.subject,
+      campaignName: d.campaignName,
       text: d.text,
       html: d.html,
       mode: d.mode,
@@ -563,6 +597,7 @@ export class MailboxService {
           campaignEvent: event,
           circles: circles(input.circles || []),
           subject: family?.name || '',
+          campaignName: input.campaignName === undefined ? draft.campaignName : input.campaignName.trim() || null,
           revision: { increment: 1 },
         },
       });

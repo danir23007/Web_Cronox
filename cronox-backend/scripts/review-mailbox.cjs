@@ -135,6 +135,26 @@ async function main() {
     `);
     sql(familyBefore);
     sql(path.join(backend,'prisma/migrations/20261003170000_mailbox_template_families/migration.sql'));
+    const nameBefore = path.join(dir,'campaign-name-before.sql');
+    await fs.writeFile(nameBefore, `
+      INSERT INTO "Mailbox" (id,name,address,"fromName",provider,"imapHost","smtpHost",username,"updatedAt")
+      VALUES ('name-migration-box','Synthetic legacy','name-migration@example.test','CRONOX','hostinger','imap.hostinger.com','smtp.hostinger.com','name-migration@example.test',now());
+      INSERT INTO "MailboxDraft" (id,"mailboxId","userId",mode,subject,text,revision,status,"updatedAt")
+      VALUES ('name-migration-draft','name-migration-box',1,'campaign','Existing customer subject','Existing content',7,'DRAFT',now());
+    `);
+    sql(nameBefore);
+    sql(path.join(backend,'prisma/migrations/20261004130000_campaign_internal_name/migration.sql'));
+    const nameAfter = path.join(dir,'campaign-name-after.sql');
+    await fs.writeFile(nameAfter, `
+      DO $$ BEGIN
+        IF NOT EXISTS (SELECT 1 FROM "MailboxDraft" WHERE id='name-migration-draft' AND "campaignName" IS NULL
+          AND subject='Existing customer subject' AND text='Existing content' AND revision=7 AND status='DRAFT')
+        THEN RAISE EXCEPTION 'Campaign name migration changed legacy data'; END IF;
+      END $$;
+      DELETE FROM "Mailbox" WHERE id='name-migration-box';
+    `);
+    sql(nameAfter);
+    pass('Optional campaign name migration preserves existing subject, content, revision and state without backfilling');
     await fs.writeFile(path.join(dir, 'empty.env'), '');
     process.env.CRONOX_ENV_FILE = path.join(dir, 'empty.env');
     process.chdir(dir);
@@ -1021,7 +1041,7 @@ async function main() {
     assert.equal(
       (await request('/messages')).body.pagination.total,
       await db.mailboxMessage.count({
-        where: { alive: true, folder: { available: true } },
+        where: { alive: true, NOT: { flags: { hasSome: ['\\Draft', '\\Sent', '$Sent'] } }, folder: { available: true, OR: [{ specialUse: '\\Inbox' }, { path: 'INBOX', specialUse: null }] } },
       }),
     );
     assert.equal(
@@ -1225,6 +1245,7 @@ async function main() {
     });
     await require('./review-mailbox-reading.cjs')({db,service,users,reader,leases,sync,provider,stores,pass});
     await require('./review-mailbox-campaigns.cjs')({app,db,backend,request,boxId,users,provider,smtpMessages,pass});
+    await require('./review-mailbox-inbox-campaign-controls.cjs')({app,db,backend,request,boxId,users,smtpMessages,pass});
     assert.equal(await db.financeArchive.count(), 0);
     assert.equal(await db.dailyVisitor.count(), 0);
     await require('./review-admin-push.cjs')({app,db,backend,request,boxId,users,sessions,push,security,webpush,pass});

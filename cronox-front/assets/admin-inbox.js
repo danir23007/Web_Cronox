@@ -122,6 +122,9 @@
     saveTimer,
     savePromise = null,
     listSeq = 0,
+    listController = null,
+    filterTimer = null,
+    stateEpoch = 0,
     readSeq = 0,
     readController = null,
     noticeCursor = new Date().toISOString(),
@@ -168,33 +171,49 @@
   const box = () => overview?.boxes.find((b) => b.id === boxId);
   const leave = async () => {
     invalidateReader();
+    if (dirty && draft?.mode === 'campaign') {
+      if (!window.confirm('Hay cambios de campaña sin guardar. ¿Quieres descartarlos?')) throw Error('Los cambios siguen en esta pestaña.');
+      dirty = false;
+    }
     if (dirty) {
       await save();
       if (dirty)
         throw Error("El texto no se ha guardado. Reintenta antes de salir.");
     }
     clearTimeout(saveTimer);
+    window.CRONOX_ADMIN_SHELL?.release?.(root.querySelector('.mail-editor'));
   };
   function shell() {
     root.dataset.view = "list";
-    root.innerHTML = `<div class="mail-toolbar"><h2>Correo</h2><button class="btn" data-compose>Nueva campaña</button><button class="btn" data-refresh>Actualizar</button><button class="btn" data-drafts>Borradores y salida</button><button class="btn" data-devices>Notificaciones</button>${overview.superadmin ? '<button class="btn" data-settings>Configuración</button>' : ""}</div><div data-feedback role="status" aria-live="polite"></div><div class="mail-notice" data-setup></div><div class="mail-layout"><aside class="mail-boxes" aria-label="Buzones"><div class="mail-box-links" data-boxes></div><hr><fieldset class="mail-folder-filter"><legend>Carpetas</legend><div class="mail-actions"><button class="btn" type="button" data-folders-all>Todas</button><button class="btn" type="button" data-folders-clear>Limpiar</button></div><div data-folders></div></fieldset><p class="mail-muted" data-box-status></p></aside><div class="mail-list"><form class="mail-filters"><label>Buscar<input data-search type="search" placeholder="Remitente, destinatario o asunto" maxlength="120"></label><label>Estado<select data-state><option value="all">Todos</option><option value="unread">No leídos</option><option value="read">Leídos</option></select></label><button class="btn" type="submit">Buscar</button></form><p class="mail-muted">Búsqueda solo sobre mensajes sincronizados. Los contadores reflejan la caché importada.</p><div data-messages aria-live="polite"></div><div data-pagination class="mail-pager"></div></div><div class="mail-reader" hidden></div><div class="mail-editor" hidden></div><div class="mail-settings" hidden></div><div class="mail-devices" hidden></div></div>`;
+    root.innerHTML = `<div class="mail-toolbar"><h2>Correo</h2><button class="btn" data-compose>Nueva campaña</button><button class="btn" data-refresh>Actualizar</button><button class="btn" data-drafts>Borradores y salida</button><button class="btn" data-devices>Notificaciones</button>${overview.superadmin ? '<button class="btn" data-settings>Configuración</button>' : ""}</div><div data-feedback role="status" aria-live="polite"></div><div class="mail-notice" data-setup></div><div class="mail-layout"><aside class="mail-boxes" aria-label="Buzones"><div class="mail-box-links" data-boxes></div><hr><details class="mail-folder-filter"><summary>Carpetas <span class="mail-folder-arrow" aria-hidden="true">⌄</span></summary><div class="mail-folder-options"><div class="mail-actions"><button class="btn" type="button" data-folders-all>Recibidas</button><button class="btn" type="button" data-folders-clear>Limpiar</button></div><div data-folders></div></div></details><p class="mail-muted" data-box-status></p></aside><div class="mail-list"><form class="mail-filters"><label>Buscar<input data-search type="search" placeholder="Remitente, destinatario o asunto" maxlength="120"></label><label>Estado<select data-state><option value="all">Todos</option><option value="unread">No leídos</option><option value="read">Leídos</option></select></label></form><p class="mail-muted">Búsqueda solo sobre mensajes sincronizados. Los contadores reflejan la caché importada.</p><div data-messages aria-live="polite"></div><div data-pagination class="mail-pager"></div></div><div class="mail-reader" hidden></div><div class="mail-editor" hidden></div><div class="mail-settings" hidden></div><div class="mail-devices" hidden></div></div>`;
     root.querySelector("[data-compose]").onclick = guard(() => compose());
     root.querySelector("[data-refresh]").onclick = guard(refresh);
-    root.querySelector("[data-drafts]").onclick = guard(showDrafts);
+    root.querySelector("[data-drafts]").onclick = guard(() => showDrafts());
     root.querySelector("[data-devices]").onclick = guard(showDevices);
     root.querySelector("[data-settings]")?.addEventListener(
       "click",
       guard(() => settings(boxId || undefined)),
     );
-    root.querySelector(".mail-filters").onsubmit = guard(async (e) => {
-      e.preventDefault();
-      search = root.querySelector("[data-search]").value;
-      state = root.querySelector("[data-state]").value;
+    const applyFilters = () => {
+      clearTimeout(filterTimer);
+      filterTimer = null;
+      search = root.querySelector('[data-search]').value;
+      state = root.querySelector('[data-state]').value;
       page = 1;
-      await list();
-    });
+      return list();
+    };
+    root.querySelector('[data-search]').value = search;
+    root.querySelector('[data-state]').value = state;
+    root.querySelector('.mail-filters').onsubmit = guard(async event => { event.preventDefault(); await applyFilters(); });
+    root.querySelector('[data-search]').oninput = () => {
+      search = root.querySelector('[data-search]').value; page = 1;
+      stateEpoch++; listSeq++; listController?.abort();
+      clearTimeout(filterTimer);
+      filterTimer = setTimeout(() => void applyFilters(), 250);
+    };
+    root.querySelector('[data-state]').onchange = guard(applyFilters);
     root.querySelector('[data-folders-all]').onclick = guard(async () => {
-      selectedFolders = new Set(availableFolders().map(f => f.id)); page = 1; renderFolders(); await list();
+      selectedFolders = new Set(availableFolders().filter(f => !['\\Sent','\\Drafts'].includes(folderKind(f))).map(f => f.id)); page = 1; renderFolders(); await list();
     });
     root.querySelector('[data-folders-clear]').onclick = guard(async () => {
       selectedFolders = new Set(); page = 1; renderFolders(); await list();
@@ -259,6 +278,14 @@
     if (b.address.toLowerCase() === 'no-reply@cronox.es' && b.name) return b.name;
     return { 'info@cronox.es':'Información', 'no-reply@cronox.es':'No-reply', 'orders@cronox.es':'Pedidos', 'support@cronox.es':'Soporte' }[b.address.toLowerCase()] || b.name;
   };
+  function folderKind(f) {
+    if (f.specialUse) return f.specialUse;
+    const path = String(f.path).replace(/^INBOX[./]/i, '');
+    if (/^INBOX$/i.test(path)) return '\\Inbox';
+    if (/^(Sent|Sent Items|Sent Messages)$/i.test(path)) return '\\Sent';
+    if (/^(Drafts|Draft)$/i.test(path)) return '\\Drafts';
+    return null;
+  }
   function folderLabel(f) {
     const special = {"\\Inbox":"Bandeja de entrada", "\\Sent":"Enviados", "\\Drafts":"Borradores", "\\Trash":"Papelera", "\\Junk":"Correo no deseado"};
     if (special[f.specialUse]) return special[f.specialUse];
@@ -271,7 +298,7 @@
   }
   function renderFolders() {
     const folders = availableFolders();
-    if (selectedFolders === null) selectedFolders = new Set(overview.boxes.flatMap(b => b.folders.filter(f => f.path === 'INBOX' || f.specialUse === '\\Inbox').map(f => f.id)));
+    if (selectedFolders === null) selectedFolders = new Set(overview.boxes.flatMap(b => b.folders.filter(f => f.specialUse === '\\Inbox' || (!f.specialUse && f.path.toUpperCase() === 'INBOX')).map(f => f.id)));
     const host=root.querySelector('[data-folders]');
     host.innerHTML=folders.map(f=>`<label><span><input type="checkbox" data-folder-id="${esc(f.id)}" ${selectedFolders.has(f.id)?'checked':''}> ${esc(!boxId ? f.mailbox+' · '+folderLabel(f) : folderLabel(f))}${f.importBefore?' · importando':''}</span></label>`).join('') || '<p>No hay carpetas importadas.</p>';
     host.querySelectorAll('input').forEach(input=>input.onchange=guard(async()=>{if(input.checked)selectedFolders.add(input.dataset.folderId);else selectedFolders.delete(input.dataset.folderId);page=1;await list();}));
@@ -322,6 +349,9 @@
       );
   }
   async function list() {
+    stateEpoch++;
+    listController?.abort();
+    listController = new AbortController();
     const seq = ++listSeq,
       host = root.querySelector("[data-messages]");
     if (!host) return;
@@ -338,16 +368,17 @@
       page: String(page),
     });
     try {
-      const data = await api("/messages?" + q);
+      const data = await api("/messages?" + q, "GET", undefined, listController.signal);
       if (seq !== listSeq) return;
+      if (page > data.pagination.pages) { page = data.pagination.pages; return list(); }
       host.innerHTML = data.messages.length
         ? data.messages
             .map(
               (m) =>
-                `<button class="mail-message ${m.seen ? "" : "unread"}" data-message="${esc(m.id)}" ${selected === m.id ? 'aria-current="true"' : ""}><span>${esc(m.sender || "Sin remitente")}</span><strong>${esc(m.subject)}</strong><small>${esc(m.preview || (m.bodyState === "LOADED" ? "Sin texto de vista previa" : m.bodyState === "FAILED" ? "Ha fallado la descarga. Abre el mensaje para reintentar." : "Contenido pendiente de descargar"))}${m.hasAttachments ? " · Adjuntos" : ""}</small><small>${esc(overview.boxes.find((b) => b.id === m.mailboxId)?.name || "Buzón")}</small><time>${esc(date(m.date))}</time></button>`,
+                `<button class="mail-message ${m.seen === true ? "" : "unread"}" data-message="${esc(m.id)}" ${selected === m.id ? 'aria-current="true"' : ""}><span>${esc(m.sender || "Sin remitente")}</span><strong>${esc(m.subject)}</strong><small>${esc(m.preview || (m.bodyState === "LOADED" ? "Sin texto de vista previa" : m.bodyState === "FAILED" ? "Ha fallado la descarga. Abre el mensaje para reintentar." : "Contenido pendiente de descargar"))}${m.hasAttachments ? " · Adjuntos" : ""}</small><small>${esc(overview.boxes.find((b) => b.id === m.mailboxId)?.name || "Buzón")}</small><time>${esc(date(m.date))}</time></button>`,
             )
             .join("")
-        : "<p>No hay mensajes sincronizados para estos filtros. Revisa el estado de conexión y el progreso del buzón.</p>";
+        : `<p>${state === 'unread' ? 'No hay correos no leídos para estos filtros.' : state === 'read' ? 'No hay correos leídos para estos filtros.' : 'No hay mensajes sincronizados para estos filtros.'}</p>`;
       host
         .querySelectorAll("[data-message]")
         .forEach((b) => (b.onclick = guard(() => read(b.dataset.message))));
@@ -363,7 +394,7 @@
         await list();
       });
     } catch (e) {
-      if (seq === listSeq) {
+      if (seq === listSeq && e.name !== 'AbortError') {
         host.innerHTML =
           '<p class="mail-error">' +
           esc(e.message) +
@@ -443,11 +474,16 @@
       const change = async operation => {
         if (!current() || actionPending) return;
         actionPending = true;
+        stateEpoch++; listSeq++; listController?.abort();
         host.querySelectorAll('[data-unread],[data-trash]').forEach(button => button.disabled = true);
         readerNotice(operation === 'read' ? 'Contenido disponible. Actualizando el estado de leído…' : 'Esperando al buzón y actualizando el mensaje…');
         try {
           await api('/messages/' + id + '/action', 'POST', {operation});
           if (!current()) return;
+          stateEpoch++; listSeq++; listController?.abort();
+          const next = await api('/overview');
+          if (!current()) return;
+          overview = next; renderOverview();
           readerNotice(operation === 'read' ? 'Estado de leído confirmado por el proveedor.' : 'Marcado como no leído y confirmado por el proveedor.');
           host.querySelector('[data-retry-read]')?.remove();
           if (operation === 'trash') { show('list'); await list(); feedback('Movido a papelera.'); }
@@ -510,10 +546,10 @@
     const seq = readSeq;
     const chosen = messageId ? id : overview.boxes.find(b=>b.canSend && b.address.toLowerCase()==='info@cronox.es')?.id;
     if (!chosen) throw Error("No tienes permiso de envío en ningún buzón.");
-    const created = await api("/drafts", "POST", {
-      mailboxId: chosen,
-      ...(messageId ? { messageId, mode, ...(replyRecipient ? {replyRecipient} : {}) } : { mode:"campaign" }),
-    });
+    const created = messageId ? await api('/drafts', 'POST', {
+      mailboxId: chosen, messageId, mode, ...(replyRecipient ? { replyRecipient } : {}),
+    }) : { id: null, mailboxId: chosen, mode: 'campaign', revision: 1, status: 'DRAFT',
+      campaignName: '', familyId: null, circles: [], campaignEvent: {}, files: [], campaigns: [], sends: [] };
     if (seq !== readSeq) return;
     draft = created;
     await renderComposer();
@@ -521,7 +557,9 @@
   const recoveryKey = () => `cronox-mail-draft:${draft?.id}`;
   function values() {
     const form = root.querySelector(".mail-editor form");
+    if (!draft || !form) return {};
     if (draft.mode === 'campaign') return {
+      campaignName: form.elements.campaignName.value,
       familyId:form.elements.familyId.value || undefined,
       circles:[...form.querySelectorAll('[data-circle]:checked')].map(i=>Number(i.value)),
       variantId:Number(form.elements.variantId?.value) || undefined,
@@ -541,194 +579,174 @@
     };
   }
   async function renderCampaign() {
-    show("compose");
-    dirty = false;
-    editVersion = 0;
-    const host = root.querySelector(".mail-editor"),
-      id = draft.id,
-      seq = readSeq;
+    show('compose');
+    dirty = false; editVersion = 0;
+    const host = root.querySelector('.mail-editor'), currentDraft = draft, seq = readSeq;
     host.innerHTML = '<p role="status">Cargando campaña…</p>';
-    const legacy = draft.mode === "circles",
-      locked = draft.status !== "DRAFT";
-    const options = legacy
-      ? { families: [], variants: [] }
-      : await api("/boxes/" + draft.mailboxId + "/campaign-options");
-    if (draft?.id !== id || readSeq !== seq) return;
-    const campaign =
-      draft.campaigns?.find((c) => c.status !== "CANCELLED") ||
-      (locked ? draft.campaigns?.[0] : null);
-    host.innerHTML = `<button class="btn" data-back>← Volver</button><h3>${legacy ? "Campaña anterior" : "Nueva campaña"}</h3><p>${legacy ? "Remitente anterior" : "Remitente fijo"}: <strong>${legacy ? esc(overview.boxes.find(b=>b.id===draft.mailboxId)?.address) : "info@cronox.es"}</strong></p>
-      ${
-        legacy
-          ? '<p class="mail-notice">Este borrador conserva su contenido anterior, pero necesita una nueva campaña con familia y versiones por círculo. No se enviará automáticamente.</p>'
-          : `<form id="mailCampaignForm"><label>Familia de plantillas<select name="familyId" ${locked ? "disabled" : ""}><option value="">Selecciona una familia</option>${options.families.map((f) => `<option value="${esc(f.id)}" ${f.id === draft.familyId ? "selected" : ""}>${esc(f.name)}</option>`).join("")}</select></label>
-      <fieldset><legend>Círculos destinatarios</legend>${[1, 2, 3, 4, 5].map((c) => `<label><span><input type="checkbox" data-circle value="${c}" ${draft.circles?.includes(c) ? "checked" : ""} ${locked ? "disabled" : ""}> Círculo ${c}</span></label>`).join("")}</fieldset>
-      <label data-event hidden>Producto y talla repuestos<select name="variantId" ${locked ? "disabled" : ""}><option value="">Selecciona una talla disponible</option>${options.variants.map((v) => `<option value="${v.id}" ${v.id === draft.campaignEvent?.variantId ? "selected" : ""}>${esc(v.name + " · " + v.size)}</option>`).join("")}</select></label>
-      <p>Contenido procedente de Plantillas Mail. Entregas individuales; bajas y círculo se revisan antes de cada envío.</p><p data-save-state role="status">Guardado</p>
-      ${!locked ? '<button class="btn" type="button" data-save>Guardar borrador</button><button class="btn" type="button" data-review>Revisar campaña</button><label>Fecha y hora · Europe/Madrid<input type="datetime-local" data-schedule></label><label>Hora repetida en invierno<select data-offset><option value="">Automática (hora única)</option><option value="+02:00">Primera ocurrencia · UTC+02:00</option><option value="+01:00">Segunda ocurrencia · UTC+01:00</option></select></label><button class="btn" type="button" data-send disabled>Enviar ahora</button><button class="btn" type="button" data-schedule-send disabled>Programar envío</button>' : ""}</form>`
-      }
-      <div data-campaign-review role="status"></div><div data-send-result></div>
-      ${campaign ? `<div class="mail-actions">${!legacy ? `<button class="btn" data-campaign-edit ${campaign.startedAt || campaign.status !== "SCHEDULED" ? "disabled" : ""}>Editar programación</button>` : ""}<button class="btn" data-campaign-cancel ${!["SCHEDULED", "PROCESSING"].includes(campaign.status) ? "disabled" : ""}>Cancelar campaña</button></div>` : ""}`;
-    let reviewed = null,
-      reviewSeq = 0,
-      sending = false;
-    const form = host.querySelector("form");
-    const disableSend = () =>
-      host
-        .querySelectorAll("[data-send],[data-schedule-send]")
-        .forEach((b) => (b.disabled = true));
-    const eventVisibility = () => {
-      if (form)
-        host.querySelector("[data-event]").hidden =
-          options.families.find((f) => f.id === form.elements.familyId.value)
-            ?.eventKind !== "RESTOCK";
+    const legacy = draft.mode === 'circles', locked = draft.status !== 'DRAFT';
+    const options = legacy ? { families: [], variants: [] } : await api('/boxes/' + draft.mailboxId + '/campaign-options');
+    if (draft !== currentDraft || readSeq !== seq) return;
+    const campaign = draft.campaigns?.find(c => c.status !== 'CANCELLED') || (locked ? draft.campaigns?.[0] : null);
+    host.innerHTML = `<button class="btn" data-back>← Volver</button><h3>${legacy ? 'Campaña anterior' : locked ? 'Salida de campaña' : 'Campaña'}</h3><p>Remitente fijo: <strong>info@cronox.es</strong></p>
+      ${legacy ? '<p class="mail-notice">El contenido anterior se conserva para consulta. Crea una campaña con familia y versiones por círculo.</p>' : `<form id="mailCampaignForm">
+      <label>Nombre de la campaña<input name="campaignName" maxlength="160" value="${esc(draft.campaignName || '')}" ${locked ? 'readonly' : ''}><small>Identificación interna; no se incluye en el correo del cliente.</small></label>
+      <label>Familia de plantillas<select name="familyId" ${locked ? 'disabled' : ''}><option value="">Selecciona una familia</option>${options.families.map(f => `<option value="${esc(f.id)}" ${f.id === draft.familyId ? 'selected' : ''}>${esc(f.name)}</option>`).join('')}</select></label>
+      <fieldset><legend>Círculos destinatarios</legend>${[1,2,3,4,5].map(c => `<label><span><input type="checkbox" data-circle value="${c}" ${draft.circles?.includes(c) ? 'checked' : ''} ${locked ? 'disabled' : ''}> Círculo ${c}</span></label>`).join('')}</fieldset>
+      <label data-event hidden>Producto y talla repuestos<select name="variantId" ${locked ? 'disabled' : ''}><option value="">Selecciona una talla disponible</option>${options.variants.map(v => `<option value="${v.id}" ${v.id === draft.campaignEvent?.variantId ? 'selected' : ''}>${esc(v.name + ' · ' + v.size)}</option>`).join('')}</select></label>
+      <p>Contenido procedente de Plantillas Mail. Se revisan las bajas y el círculo antes de cada entrega.</p>
+      <p data-save-state role="status">${draft.id ? 'Borrador guardado' : 'Campaña sin guardar'}</p>
+      ${locked ? '' : `<div class="mail-actions"><button class="btn" type="button" data-save>Guardar borrador</button><button class="btn" type="button" data-export-recipients disabled>Exportar destinatarios a Excel</button></div>
+      <label>Fecha y hora · Europe/Madrid<input type="datetime-local" data-schedule></label>
+      <label>Hora repetida en invierno<select data-offset><option value="">Automática (hora única)</option><option value="+02:00">Primera ocurrencia · UTC+02:00</option><option value="+01:00">Segunda ocurrencia · UTC+01:00</option></select></label><p data-date-state role="status"></p>
+      <div class="mail-actions"><button class="btn" type="button" data-send disabled>Enviar ahora</button><button class="btn" type="button" data-schedule-send disabled>Programar envío</button></div>`}</form>`}
+      <p data-audience-count role="status"></p><div data-campaign-review></div><div data-send-result></div>
+      ${campaign ? `<div class="mail-actions">${!legacy ? `<button class="btn" data-campaign-edit ${campaign.startedAt || campaign.status !== 'SCHEDULED' ? 'disabled' : ''}>Editar programación</button>` : ''}<button class="btn" data-campaign-cancel ${!['SCHEDULED','PROCESSING'].includes(campaign.status) ? 'disabled' : ''}>Cancelar campaña</button></div>` : ''}`;
+    const form = host.querySelector('form');
+    let plan = null, audienceSeq = 0, dateSeq = 0, dateValid = false, sending = false, audienceController, audienceTimer;
+    // Stable even after edits following a lost response: retries recover the
+    // original requested campaign instead of enqueueing a second one.
+    const requestKey = crypto.randomUUID();
+    const current = () => draft === currentDraft && root.dataset.view === 'compose' && readSeq === seq;
+    const selectionQuery = () => {
+      const data = values();
+      return new URLSearchParams({ familyId: data.familyId || '', circles: data.circles.join(','), revision: String(draft.revision), ...(data.variantId ? { variantId: String(data.variantId) } : {}) });
     };
-    eventVisibility();
-    host.querySelector("[data-back]").onclick = guard(async () => {
-      await leave();
-      show("list");
-      await list();
-    });
+    const updateButtons = () => {
+      const valid = !sending && !!plan && plan.count > 0 && !plan.blocked.length && plan.policy.ready && overview.sendEnabled && overview.workerEnabled && overview.boxes.find(b => b.id === draft.mailboxId)?.active;
+      const send = host.querySelector('[data-send]'), schedule = host.querySelector('[data-schedule-send]');
+      if (send) send.disabled = !valid;
+      if (schedule) schedule.disabled = !valid || !dateValid;
+      const exp = host.querySelector('[data-export-recipients]');
+      if (exp) exp.disabled = sending || !plan || !form.elements.familyId.value || !values().circles.length;
+    };
+    const renderPlan = result => {
+      host.querySelector('[data-audience-count]').textContent = `${result.count} destinatarios válidos y únicos`;
+      const target = host.querySelector('[data-campaign-review]');
+      target.innerHTML = `${result.blocked.map(x => `<p class="mail-notice">${esc(x)}</p>`).join('')}${result.previews.map(p => `<details><summary>Círculo ${p.circle} · ${p.count} destinatarios${p.missing ? ' · Falta la versión' : ''}</summary>${p.missing ? '' : `<p>Asunto: ${esc(p.subject)}</p><iframe data-preview-circle="${p.circle}" sandbox="" referrerpolicy="no-referrer" title="Vista previa de círculo ${p.circle}" style="width:100%;height:360px;border:0"></iframe>`}</details>`).join('')}<p class="mail-muted">${esc(result.policy.reasons.join(' '))}</p>`;
+      result.previews.forEach(p => { const frame = target.querySelector(`[data-preview-circle="${p.circle}"]`); if (frame) frame.srcdoc = p.html || ''; });
+    };
+    const refreshAudience = async () => {
+      if (!current()) return;
+      clearTimeout(audienceTimer); audienceController?.abort(); audienceController = new AbortController();
+      const token = ++audienceSeq; plan = null; updateButtons();
+      if (!form.elements.familyId.value || !values().circles.length) {
+        host.querySelector('[data-audience-count]').textContent = 'Selecciona una familia y al menos un círculo para calcular destinatarios.';
+        host.querySelector('[data-campaign-review]').replaceChildren(); return;
+      }
+      host.querySelector('[data-audience-count]').textContent = 'Calculando destinatarios…';
+      try {
+        const result = await api('/boxes/' + draft.mailboxId + '/campaign-audience?' + selectionQuery(), 'GET', undefined, audienceController.signal);
+        if (!current() || token !== audienceSeq) return;
+        plan = result; renderPlan(result); updateButtons();
+      } catch (error) {
+        if (!current() || token !== audienceSeq || error.name === 'AbortError') return;
+        host.querySelector('[data-audience-count]').textContent = 'No se ha podido calcular los destinatarios. ' + error.message;
+        const retry = document.createElement('button'); retry.type = 'button'; retry.className = 'btn'; retry.textContent = 'Reintentar cálculo';
+        retry.onclick = () => void refreshAudience(); host.querySelector('[data-campaign-review]').replaceChildren(retry);
+      }
+    };
+    const validateDate = async () => {
+      if (!current()) return;
+      const token = ++dateSeq; dateValid = false; updateButtons();
+      const localDate = host.querySelector('[data-schedule]').value, offset = host.querySelector('[data-offset]').value;
+      if (!localDate) { host.querySelector('[data-date-state]').textContent = ''; return; }
+      try {
+        const result = await api('/schedule-preview?' + new URLSearchParams({ localDate, ...(offset ? { offset } : {}) }));
+        if (!current() || token !== dateSeq) return;
+        dateValid = new Date(result.scheduledAt) > new Date();
+        host.querySelector('[data-date-state]').textContent = dateValid ? 'Envío: ' + date(result.scheduledAt) + ' · Europe/Madrid' : 'La fecha debe ser futura.';
+      } catch (error) {
+        if (!current() || token !== dateSeq) return;
+        host.querySelector('[data-date-state]').textContent = error.message;
+      }
+      updateButtons();
+    };
+    host.querySelector('[data-back]').onclick = guard(async () => { await leave(); show('list'); await list(); });
     if (legacy) {
-      const content = document.createElement("details");
-      content.innerHTML =
-        "<summary>Consultar contenido anterior</summary><strong>" +
-        esc(draft.subject) +
-        '</strong><pre style="white-space:pre-wrap">' +
-        esc(draft.text) +
-        "</pre><p>Adjuntos conservados: " + esc(draft.files.map(f=>f.name).join(', ') || 'Ninguno') + "</p>";
-      host.querySelector("[data-campaign-review]").append(content);
-    }
-    if (campaign && !legacy) {
-      const saved = await api("/campaigns/" + campaign.id);
-      if (draft?.id !== id) return;
-      const target = host.querySelector("[data-campaign-review]");
-      target.innerHTML =
-        "<h4>Contenido aprobado · " +
-        esc(saved.familyName) +
-        "</h4>" +
-        saved.previews
-          .map(
-            (p) =>
-              `<article><h4>Círculo ${p.circle} · ${esc(p.subject)}</h4><iframe data-frozen-circle="${p.circle}" sandbox="" referrerpolicy="no-referrer" title="Contenido aprobado de círculo ${p.circle}" style="width:100%;height:360px;border:0"></iframe></article>`,
-          )
-          .join("");
-      saved.previews.forEach(
-        (p) =>
-          (target.querySelector(`[data-frozen-circle="${p.circle}"]`).srcdoc =
-            p.html || ""),
-      );
+      host.querySelector('[data-campaign-review]').innerHTML = `<details><summary>Consultar contenido anterior</summary><strong>${esc(draft.subject)}</strong><pre style="white-space:pre-wrap">${esc(draft.text)}</pre><p>Adjuntos conservados: ${esc(draft.files.map(f => f.name).join(', ') || 'Ninguno')}</p></details>`;
+    } else if (locked && campaign) {
+      const saved = await api('/campaigns/' + campaign.id);
+      if (!current()) return;
+      host.querySelector('[data-audience-count]').textContent = `${status[saved.status] || saved.status} · ${saved.count} destinatarios · ${date(saved.scheduledAt)} · Europe/Madrid`;
+      host.querySelector('[data-campaign-review]').innerHTML = `<h4>${esc(saved.familyName)}</h4>${saved.previews.map(p => `<details><summary>Círculo ${p.circle} · ${esc(p.subject)}</summary><iframe data-frozen-circle="${p.circle}" sandbox="" referrerpolicy="no-referrer" title="Contenido aprobado de círculo ${p.circle}" style="width:100%;height:360px;border:0"></iframe></details>`).join('')}`;
+      saved.previews.forEach(p => { host.querySelector(`[data-frozen-circle="${p.circle}"]`).srcdoc = p.html || ''; });
     }
     if (form && !locked) {
-      form.addEventListener("submit", (event) => event.preventDefault());
-      form.addEventListener("change", (event) => {
-        if(event.target.matches('[data-schedule],[data-offset]')) return;
-        dirty = true;
-        editVersion++;
-        reviewSeq++;
-        reviewed = null;
-        disableSend();
-        host.querySelector("[data-campaign-review]").replaceChildren();
-        eventVisibility();
-        host.querySelector("[data-save-state]").textContent =
-          "Cambios sin guardar";
+      const eventVisibility = () => { host.querySelector('[data-event]').hidden = options.families.find(f => f.id === form.elements.familyId.value)?.eventKind !== 'RESTOCK'; };
+      eventVisibility();
+      form.onsubmit = event => event.preventDefault();
+      const changed = event => {
+        if (sending) return;
+        if (event.target.matches('[data-schedule],[data-offset]')) { void validateDate(); return; }
+        dirty = true; editVersion++;
+        host.querySelector('[data-save-state]').textContent = 'Cambios sin guardar';
+        if (event.target.name === 'campaignName') return;
+        eventVisibility(); plan = null; audienceSeq++; audienceController?.abort(); updateButtons();
+        host.querySelector('[data-campaign-review]').replaceChildren();
+        host.querySelector('[data-audience-count]').textContent = 'Calculando destinatarios…';
+        clearTimeout(audienceTimer); audienceTimer = setTimeout(() => void refreshAudience(), 180);
+      };
+      form.addEventListener('input', changed);
+      // Select changes are also emitted on older touch browsers without input.
+      form.addEventListener('change', changed);
+      host.querySelector('[data-save]').onclick = guard(async () => {
+        if (sending || savePromise) return;
+        const button = host.querySelector('[data-save]'); button.disabled = true;
+        try { await save(); await refreshAudience(); } finally { if (button.isConnected) button.disabled = false; }
       });
-      host.querySelector("[data-save]").onclick = () =>
-        void save().catch((e) => feedback(e.message, true));
-      host.querySelector("[data-review]").onclick = async () => {
+      host.querySelector('[data-export-recipients]').onclick = guard(async () => {
+        const query = selectionQuery();
+        const response = await fetch((window.CRONOX_API?.API_BASE || '') + '/api/admin/mailbox/boxes/' + draft.mailboxId + '/campaign-recipients.xlsx?' + query, { credentials: 'include', cache: 'no-store' });
+        if (!response.ok) throw Error('No se pudo exportar los destinatarios.');
+        const url = URL.createObjectURL(await response.blob()), a = document.createElement('a');
+        a.href = url; a.download = 'CRONOX-destinatarios.xlsx'; a.click(); setTimeout(() => URL.revokeObjectURL(url), 30000);
+        // The audience can change after export; it never grants sending permission.
+        await refreshAudience();
+      });
+      const send = async scheduled => {
+        if (sending || savePromise || !plan || plan.blocked.length || !plan.count) return;
+        if (scheduled) { await validateDate(); if (!dateValid || sending) return; }
+        sending = true; updateButtons();
+        const data = values(), approved = plan, key = requestKey;
+        const localDate = host.querySelector('[data-schedule]').value, offset = host.querySelector('[data-offset]').value;
+        const freeze = disabled => { form.querySelectorAll('input,select,[data-save],[data-export-recipients]').forEach(el => { el.disabled = disabled; }); };
+        freeze(true);
         try {
-          await save();
-          const seq = ++reviewSeq,
-            revision = draft.revision;
-          const plan = await api("/drafts/" + id + "/recipients");
-          if (
-            draft?.id !== id ||
-            root.dataset.view !== "compose" ||
-            seq !== reviewSeq ||
-            draft.revision !== revision ||
-            dirty
-          )
-            return;
-          reviewed = plan;
-          const target = host.querySelector("[data-campaign-review]");
-          target.innerHTML = `<h4>Resumen antes de confirmar</h4><p>${plan.count} destinatarios únicos · ${esc(plan.family?.name || "Sin familia")} · info@cronox.es</p>${plan.blocked.map((x) => `<p class="mail-notice">${esc(x)}</p>`).join("")}${plan.previews.map((p) => `<article><h4>Círculo ${p.circle} · ${p.count} destinatarios</h4>${p.missing ? "<p>Falta la versión.</p>" : `<p>Asunto: ${esc(p.subject)}</p><iframe data-preview-circle="${p.circle}" sandbox="" referrerpolicy="no-referrer" title="Vista previa de círculo ${p.circle}" style="width:100%;height:360px;border:0"></iframe><details><summary>Texto plano · solo lectura</summary><pre style="white-space:pre-wrap">${esc(p.text)}</pre></details>`}</article>`).join("")}<p>${esc(plan.policy.reasons.join(" "))}</p>`;
-          plan.previews.forEach((p) => {
-            const frame = target.querySelector(
-              `[data-preview-circle="${p.circle}"]`,
-            );
-            if (frame) frame.srcdoc = p.html || "";
+          const confirmed = await new Promise(resolve => {
+            const modal = document.createElement('dialog'); modal.className = 'mail-campaign-confirm';
+            modal.innerHTML = `<h3>${scheduled ? '¿Seguro que quieres programar esta campaña?' : '¿Seguro que quieres enviar esta campaña ahora?'}</h3><p>Nombre: <strong>${esc(data.campaignName || 'Campaña sin nombre')}</strong></p><p>Familia: ${esc(approved.family.name)}</p><p>Círculos: ${data.circles.join(', ')}</p><p>${approved.count} destinatarios válidos y únicos</p>${scheduled ? `<p>${esc(localDate)} · Europe/Madrid</p>` : ''}<p data-confirm-error role="alert"></p><div class="mail-actions"><button class="btn" type="button" data-confirm>Confirmar envío</button><button class="btn" type="button" data-cancel>Cancelar</button></div>`;
+            document.body.append(modal); modal.showModal(); modal.querySelector('[data-cancel]').focus();
+            const finish = value => { modal.close(); modal.remove(); resolve(value); };
+            modal.addEventListener('cancel', event => { event.preventDefault(); finish(false); });
+            modal.querySelector('[data-cancel]').onclick = () => finish(false);
+            modal.querySelector('[data-confirm]').onclick = () => finish(true);
           });
-          host
-            .querySelectorAll("[data-send],[data-schedule-send]")
-            .forEach(
-              (b) => (b.disabled = !!plan.blocked.length || !plan.policy.ready),
-            );
-        } catch (e) {
-          feedback(e.message, true);
-        }
-      };
-      const confirm = async (scheduled) => {
-        if (sending || !reviewed || dirty) return;
-        try {
-          const localDate = scheduled
-            ? host.querySelector("[data-schedule]").value
-            : undefined;
-          if (scheduled && !localDate)
-            throw Error("Selecciona fecha y hora en Europe/Madrid.");
-          if (
-            !window.confirm(
-              `${scheduled ? "Programar" : "Enviar"} ${reviewed.family.name} a ${reviewed.count} destinatarios únicos desde info@cronox.es. ${scheduled ? localDate + " · Europe/Madrid" : "Envío inmediato"}. Se fijará la versión revisada de cada círculo. ¿Confirmas?`,
-            )
-          )
-            return;
-          sending = true;
-          disableSend();
-          const result = await api("/drafts/" + id + "/campaign", "POST", {
-            requestKey: crypto.randomUUID(),
-            revision: draft.revision,
-            previewHash: reviewed.previewHash,
-            ...(scheduled
-              ? {
-                  localDate,
-                  offset:
-                    host.querySelector("[data-offset]").value || undefined,
-                }
-              : {}),
+          if (!confirmed || !current()) return;
+          const result = await api('/boxes/' + draft.mailboxId + '/campaign', 'POST', {
+            ...data, ...(draft.id ? { draftId: draft.id } : {}), requestKey: key, previewHash: approved.previewHash,
+            ...(scheduled ? { localDate, ...(offset ? { offset } : {}) } : {}),
           });
-          if (draft?.id !== id) return;
-          draft = await api("/drafts/" + result.draftId);
-          await renderComposer();
-          feedback("Campaña confirmada. El progreso se guarda en el servidor.");
-        } catch (e) {
-          feedback(e.message, true);
+          if (!current()) return;
+          dirty = false;
+          draft = await api('/drafts/' + result.draftId);
+          document.dispatchEvent(new CustomEvent('cronox:admin-saved', { detail: { container: host } }));
+          await renderComposer(); feedback('Campaña confirmada. El progreso se guarda en el servidor.');
+        } catch (error) { feedback(error.message, true); }
+        finally {
           sending = false;
-          reviewed = null;
+          if (current()) { freeze(false); await refreshAudience(); await validateDate(); }
         }
       };
-      host.querySelector("[data-send]").onclick = () => confirm(false);
-      host.querySelector("[data-schedule-send]").onclick = () => confirm(true);
+      host.querySelector('[data-send]').onclick = () => void send(false);
+      host.querySelector('[data-schedule-send]').onclick = () => void send(true);
+      await refreshAudience();
     }
-    for (const action of ["edit", "cancel"])
-      host
-        .querySelector("[data-campaign-" + action + "]")
-        ?.addEventListener("click", async () => {
-          try {
-            if (
-              !window.confirm(
-                action === "edit"
-                  ? "Cancelar la programación para editar el borrador y revisarlo de nuevo. ¿Continuar?"
-                  : "¿Cancelar los destinatarios pendientes?",
-              )
-            )
-              return;
-            await api("/campaigns/" + campaign.id + "/" + action, "POST");
-            draft = await api("/drafts/" + id);
-            await renderComposer();
-          } catch (e) {
-            feedback(e.message, true);
-          }
-        });
-    renderSend();
+    for (const action of ['edit','cancel']) host.querySelector('[data-campaign-' + action + ']')?.addEventListener('click', guard(async () => {
+      if (!window.confirm(action === 'edit' ? 'Cancelar la programación y volver al borrador. ¿Continuar?' : 'Cancelar las entregas pendientes. ¿Continuar?')) return;
+      await api('/campaigns/' + campaign.id + '/' + action, 'POST');
+      draft = await api('/drafts/' + draft.id); await renderComposer();
+    }));
+    if (form) window.CRONOX_ADMIN_SHELL?.capture?.(host);
   }
   async function renderComposer() {
     if (draft.mode === 'campaign' || draft.mode === 'circles') return renderCampaign();
@@ -795,7 +813,6 @@
       if(!confirm(action==='edit'?'Volver a borrador y cancelar esta programación para editarla y confirmar de nuevo.':'Cancelar entregas pendientes. Las ya aceptadas o en curso no se pueden retirar. ¿Continuar?'))return;
       await api('/campaigns/'+campaign.id+'/'+action,'POST');draft=await api('/drafts/'+draft.id);await renderComposer();
     }));
-    host.querySelector('[data-schedule-send]')?.addEventListener('click',guard(()=>confirmCampaign(true)));
     renderFiles();
     renderSend();
     if (host.querySelector("[data-send]"))
@@ -829,7 +846,6 @@
     host.querySelector("form").onsubmit = guard(async (e) => {
       e.preventDefault();
       if (locked) return;
-      if (draft.mode === "circles") return confirmCampaign(false);
       const send = host.querySelector("[data-send]");
       send.disabled = true;
       try {
@@ -937,22 +953,6 @@
       },{once:true});dialog.showModal();
     });
   }
-  async function confirmCampaign(scheduled) {
-    await save();if(dirty)throw Error('Guarda primero el borrador.');
-    const host=root.querySelector('.mail-editor'),summary=await api('/drafts/'+draft.id+'/recipients');
-    if(!summary.policy.ready)throw Error(summary.policy.reasons.join(' '));
-    const localDate=scheduled?host.querySelector('[data-schedule]').value:undefined;
-    if(scheduled&&!localDate)throw Error('Elige una fecha y hora de Europe/Madrid.');
-    if(!summary.count)throw Error('No hay destinatarios elegibles para los círculos seleccionados.');
-    const offset=host.querySelector('[data-offset]')?.value||undefined;
-    const scheduledAt=scheduled?(await api('/schedule-preview?'+new URLSearchParams({localDate,...(offset?{offset}:{})}))).scheduledAt:undefined;
-    const template=host.querySelector('[name=templateId] option:checked')?.textContent||'Sin plantilla';
-    if(!confirm(`Confirmar ${scheduled?'programación':'envío'}\nRemitente: ${summary.sender}\nPlantilla: ${template}\nAsunto: ${summary.subject}\nCírculos: ${summary.circles.join(', ')}\nDestinatarios únicos: ${summary.count}\nFecha: ${scheduled?date(scheduledAt):'Ahora'} · Europe/Madrid${offset?' · UTC'+offset:''}\nSe usará esta lista prevista, excluyendo nuevas bajas antes de cada entrega.`))return;
-    const revision=draft.revision,keyName=recoveryKey()+':campaign:'+revision;let requestKey=sessionStorage.getItem(keyName);
-    if(!requestKey){requestKey=crypto.randomUUID();sessionStorage.setItem(keyName,requestKey);}
-    const result=await api('/drafts/'+draft.id+'/campaign','POST',{requestKey,revision,previewHash:summary.previewHash,...(scheduled?{localDate,offset}:{})});
-    draft=await api('/drafts/'+result.draftId);await renderComposer();feedback('Confirmado. La aceptación SMTP no garantiza la entrega final.');
-  }
   function renderFiles() {
     const host = root.querySelector("[data-draft-files]");
     if (!host) return;
@@ -995,7 +995,24 @@
   async function save() {
     clearTimeout(saveTimer);
     if (savePromise) return savePromise;
-    if (!draft || draft.status !== "DRAFT" || !dirty) return;
+    if (!draft || draft.status !== "DRAFT") return;
+    if (draft.mode === 'campaign') {
+      if (savePromise) return savePromise;
+      const version = editVersion, data = values();
+      savePromise = (async () => {
+        const result = await api('/boxes/' + draft.mailboxId + '/campaign-draft', 'POST', {
+          ...data, ...(draft.id ? { draftId: draft.id } : {}),
+        });
+        Object.assign(draft, result);
+        if (version === editVersion) {
+          dirty = false;
+          root.querySelector('[data-save-state]').textContent = 'Borrador guardado';
+          document.dispatchEvent(new CustomEvent('cronox:admin-saved', { detail: { container: root.querySelector('.mail-editor') } }));
+        }
+      })().finally(() => { savePromise = null; });
+      return savePromise;
+    }
+    if (!dirty) return;
     savePromise = (async () => {
       while (dirty) {
         const version = editVersion,
@@ -1029,30 +1046,28 @@
     });
     return savePromise;
   }
-  async function showDrafts() {
+  async function showDrafts(view = 'drafts') {
     await leave();
-    show("compose");
-    const host = root.querySelector(".mail-editor");
-    host.textContent = "Cargando borradores y bandeja de salida…";
-    const rows = await api("/drafts");
-    host.innerHTML =
-      '<button class="btn" data-back>← Volver</button><h3>Borradores y bandeja de salida</h3><p class="mail-muted">Tus últimos 100 borradores y envíos. Borradores del cliente CRONOX; no se suben a Borradores de Hostinger.</p>' +
-      (rows.length
-        ? rows
-            .map(
-              (d) =>
-                `<button class="mail-message" data-draft="${esc(d.id)}"><strong>${esc(d.subject || "(Sin asunto)")}</strong>${d.mode==='circles'?'<span>Campa?a anterior ? requiere revisi?n</span>':''}<small>${esc(overview.boxes.find((b) => b.id === d.mailboxId)?.address)} · ${esc(status[d.status === "DRAFT" ? d.status : d.campaigns?.[0]?.status || d.sends[0]?.status || d.status] || d.status)} · ${esc(date(d.status === "DRAFT" ? d.updatedAt : d.campaigns?.[0]?.scheduledAt || d.updatedAt))}${d.campaigns?.length ? " · Europe/Madrid" : ""}</small></button>`,
-            )
-            .join("")
-        : "<p>No tienes borradores.</p>");
-    host.querySelector("[data-back]").onclick = () => show("list");
-    host.querySelectorAll("[data-draft]").forEach(
-      (button) =>
-        (button.onclick = guard(async () => {
-          draft = await api("/drafts/" + button.dataset.draft);
-          await renderComposer();
-        })),
-    );
+    draft = null; dirty = false;
+    show('compose');
+    const host = root.querySelector('.mail-editor'), seq = readSeq;
+    host.textContent = 'Cargando campañas…';
+    const rows = await api('/drafts?view=' + view);
+    if (readSeq !== seq || root.dataset.view !== 'compose') return;
+    const title = { drafts: 'Borradores', outbox: 'Salidas', history: 'Historial' }[view];
+    host.innerHTML = `<button class="btn" data-back>← Volver</button><h3>${title}</h3><div class="mail-actions" aria-label="Listas de campañas">${[['drafts','Borradores'],['outbox','Salidas'],['history','Historial']].map(([key,label]) => `<button class="btn" type="button" data-campaign-list="${key}" aria-pressed="${key === view}">${label}</button>`).join('')}</div><p class="mail-muted">${view === 'drafts' ? 'Campañas guardadas, sin envío solicitado ni programación activa. Los borradores anteriores se conservan.' : view === 'outbox' ? 'Envíos confirmados, programados o pendientes de su turno.' : 'Envíos completados, cancelados o con incidencias; se conserva el historial.'}</p>` +
+      (rows.length ? rows.map(d => {
+        const campaign = d.campaigns?.[0], send = d.sends?.[0];
+        const name = d.campaignName || (['campaign','circles'].includes(d.mode) ? (d.mode === 'circles' ? 'Campaña anterior · ' : 'Campaña sin nombre · ') + d.id.slice(0,8) + (d.subject ? ' · ' + d.subject : '') : d.subject || 'Mensaje sin asunto');
+        return `<button class="mail-message" data-draft="${esc(d.id)}"><strong>${esc(name)}</strong>${d.mode === 'circles' ? '<span>Campaña anterior · solo consulta</span>' : ''}<small>${esc(overview.boxes.find(b => b.id === d.mailboxId)?.address)} · ${esc(status[view === 'drafts' ? 'DRAFT' : campaign?.status || send?.status || d.status] || d.status)}</small><time>${esc(date(view === 'outbox' ? campaign?.scheduledAt || d.updatedAt : d.updatedAt))}${campaign ? ' · Europe/Madrid' : ''}</time></button>`;
+      }).join('') : `<p>No hay ${title.toLowerCase()} para mostrar.</p>`);
+    host.querySelector('[data-back]').onclick = () => show('list');
+    host.querySelectorAll('[data-campaign-list]').forEach(button => { button.onclick = guard(() => showDrafts(button.dataset.campaignList)); });
+    host.querySelectorAll('[data-draft]').forEach(button => { button.onclick = guard(async () => {
+      const current = await api('/drafts/' + button.dataset.draft);
+      if (readSeq !== seq) return;
+      draft = current; await renderComposer();
+    }); });
   }
   async function settings(id) {
     await leave();
@@ -1184,11 +1199,12 @@
     await window.CRONOX_PUSH?.load();
   }
   async function pulse() {
-    const pulseSeq = readSeq;
+    const pulseSeq = readSeq, epoch = stateEpoch;
     if (!initialized || !overview || document.visibilityState !== "visible")
       return;
     try {
       const next = await api("/overview");
+      if (pulseSeq !== readSeq || epoch !== stateEpoch) return;
       overview = next;
       const allowed = new Set(next.boxes.map((b) => b.id));
       if (
@@ -1206,6 +1222,7 @@
         await list();
       } else {
         renderOverview();
+        if (['list', 'read'].includes(root.dataset.view)) await list();
         if (selected && root.dataset.view === "read") {
           await api("/messages/" + selected + "/status");
         }
@@ -1290,5 +1307,8 @@
     if (timer) clearInterval(timer);
     document.querySelector(".mail-toast-host")?.remove();
   });
-  window.CRONOX_INBOX = { load, hasUnsavedChanges: () => dirty };
+  window.CRONOX_INBOX = { load, hasUnsavedChanges: () => dirty, discard: () => {
+      if (draft?.mode !== 'campaign') return;
+      draft = null; dirty = false; invalidateReader(); show('list');
+    } };
 })();

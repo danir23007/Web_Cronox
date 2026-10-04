@@ -17,8 +17,8 @@ async (page) => {
     await page.locator('[name=familyId]').selectOption(family);
     await page.locator('[data-circle][value="1"]').check();
     await page.locator('[data-circle][value="2"]').check();
-    await page.locator('[data-review]').click();
-    await page.getByRole('heading',{name:'Resumen antes de confirmar'}).waitFor();
+    assert(await page.locator('[data-review]').count()===0,'No independent review step');
+    await page.locator('[data-audience-count]').filter({hasText:'destinatarios válidos'}).waitFor();
     assert((await page.locator('[data-campaign-review]').textContent()).includes('Circle 1'),'Circle 1 readonly subject');
     assert((await page.locator('[data-campaign-review]').textContent()).includes('Circle 2'),'Circle 2 readonly subject');
     assert((await page.locator('[data-preview-circle="1"]').getAttribute('srcdoc')).includes('Synthetic body circle 1'),'Circle 1 own body');
@@ -27,7 +27,7 @@ async (page) => {
     await page.locator('[data-circle][value="3"]').check();
     assert(await page.locator('[data-campaign-review]').textContent()==='','Changed selection invalidates old review');
     await page.locator('[data-save]').click();
-    await page.locator('[data-save-state]').filter({hasText:'Guardado'}).waitFor();
+    await page.locator('[data-save-state]').filter({hasText:'Borrador guardado'}).waitFor();
     assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),'No horizontal overflow');
     await page.screenshot({path:`test-results/admin-review/campaign-families-${width}.png`,fullPage:true});
     await page.locator('.mail-editor [data-back]').click();

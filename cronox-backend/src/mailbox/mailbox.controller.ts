@@ -96,6 +96,7 @@ class DraftDto {
   @IsOptional() @IsString() @MaxLength(254) replyRecipient?: string;
 }
 class SaveDraftDto {
+  @IsOptional() @IsString() @MaxLength(160) campaignName?: string;
   @IsOptional() @IsString() @MaxLength(100) familyId?: string;
   @IsOptional() @IsInt() @Min(1) variantId?: number;
   @IsOptional() @IsUUID() mailboxId?: string;
@@ -121,6 +122,16 @@ class CampaignDto extends SendDto {
   @IsString() @MaxLength(64) previewHash: string;
   @IsOptional() @IsString() @MaxLength(16) localDate?: string;
   @IsOptional() @IsIn(['+01:00', '+02:00']) offset?: string;
+}
+class SaveCampaignSelectionDto extends SaveDraftDto {
+  @IsOptional() @IsUUID() draftId?: string;
+}
+class SendCampaignSelectionDto extends CampaignDto {
+  @IsOptional() @IsUUID() draftId?: string;
+  @IsOptional() @IsString() @MaxLength(160) campaignName?: string;
+  @IsOptional() @IsString() @MaxLength(100) familyId?: string;
+  @IsOptional() @IsInt() @Min(1) variantId?: number;
+  @IsArray() @ArrayMaxSize(5) @IsInt({ each: true }) circles: number[];
 }
 class TemplateDto {
   @IsString() @MaxLength(100) templateId: string;
@@ -208,7 +219,7 @@ export class MailboxErrorFilter implements ExceptionFilter {
             ? 409
             : 503;
     const raw = error instanceof HttpException ? error.getResponse() : null;
-    const code = typeof raw === 'object' ? (raw as any).message : raw;
+    const code = raw && typeof raw === 'object' ? (raw as any).message : raw;
     res.status(status).json({
       statusCode: status,
       ...(code === 'MAILBOX_CAMPAIGN_BLOCKED' &&
@@ -310,8 +321,34 @@ export class MailboxController {
   refresh(@Req() r: Request, @Param('id') id: string) {
     return this.service.refresh(r.user!, id);
   }
-  @Get('drafts') drafts(@Req() r: Request) {
-    return this.service.drafts(r.user!);
+  @Get('drafts') drafts(@Req() r: Request, @Query('view') view?: string) {
+    return this.service.drafts(r.user!, view);
+  }
+  private campaignSelection(q: any) {
+    if (q.circles !== undefined && typeof q.circles !== 'string')
+      throw new BadRequestException('MAILBOX_INVALID_CIRCLES');
+    return { familyId: q.familyId, circles: q.circles ? q.circles.split(',').map(Number) : [],
+      variantId: q.variantId ? Number(q.variantId) : undefined, revision: q.revision ? Number(q.revision) : 1 };
+  }
+  @Get('boxes/:id/campaign-audience') campaignAudience(@Req() r: Request, @Param('id') id: string, @Query() q: any) {
+    return this.campaigns.audience(r.user!, id, this.campaignSelection(q));
+  }
+  @Get('boxes/:id/campaign-recipients.xlsx') async exportCampaignAudience(@Req() r: Request, @Param('id') id: string, @Query() q: any, @Res() res: Response) {
+    const buffer = await this.campaigns.exportAudience(r.user!, id, this.campaignSelection(q));
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', 'attachment; filename="CRONOX-destinatarios.xlsx"');
+    res.send(Buffer.from(buffer));
+  }
+  @Post('boxes/:id/campaign-draft') async saveCampaignSelection(@Req() r: Request, @Param('id') id: string, @Body() body: SaveCampaignSelectionDto) {
+    const saved = await this.campaigns.saveSelection(r.user!, id, body);
+    return this.service.draftView(await this.access.draft(r.user!, saved.id));
+  }
+  @Post('boxes/:id/campaign')
+  @Throttle({ default: { limit: 3, ttl: 60000 } })
+  async sendCampaignSelection(@Req() r: Request, @Param('id') id: string, @Body() body: SendCampaignSelectionDto) {
+    if (body.draftId && (await this.access.draft(r.user!, body.draftId)).mailboxId !== id)
+      throw new BadRequestException('MAILBOX_INVALID_CAMPAIGN');
+    return this.campaigns.enqueue(r.user!, body.draftId || null, { ...body, selection: true }, id);
   }
   @Get('boxes/:id/campaign-options')
   campaignOptions(@Req() req: Request, @Param('id') id: string) {

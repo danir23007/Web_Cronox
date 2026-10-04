@@ -129,7 +129,7 @@
   });
   const valueOf = el => el.type === 'checkbox' || el.type === 'radio' ? el.checked : el.isContentEditable ? el.innerHTML : el.value;
   const editContainer = el => {
-    if (el.closest('.finance-root,.filters-panel,.filter-bar,.pagination')) return null;
+    if (el.closest('.finance-root,.filters-panel,.filter-bar,.pagination,.mail-filters,.mail-folder-filter')) return null;
     return el.closest('form,.modal,#section-inventory,#section-product-categories,#section-key-screen,#section-newsletter,#section-footer');
   };
   document.addEventListener('focusin', event => {
@@ -159,6 +159,10 @@
     if (read) snapshots.set(container, { read, initial: read() });
   };
   // Modules emit this only after a successful save (never on submit or upload).
+  const release = container => {
+    for (const root of snapshots.keys()) if (root === container || container?.contains(root)) snapshots.delete(root);
+    for (const root of dirty.keys()) if (root === container || container?.contains(root)) dirty.delete(root);
+  };
   document.addEventListener('cronox:admin-saved', event => clear(event.detail?.container || null));
   document.addEventListener('reset', event => clear(event.target));
   const hasDirty = () => hasSnapshotChanges() || [...dirty].some(([container, fields]) => container.getClientRects().length && [...fields].some(el => el.isConnected && (!el.dataset.adminInitialSet || valueOf(el) !== el._adminInitial)) && (container.closest('.modal') ? container.closest('.modal').classList.contains('show') : !container.closest('.admin-section')?.hidden)) || !!window.CRONOX_ADMIN_MEDIA?.hasUnsavedChanges?.() || !!window.CRONOX_ADMIN_GALLERY?.hasUnsavedChanges?.() || !!window.CRONOX_NEWSLETTER_ADMIN?.hasUnsavedChanges?.() || !!window.CRONOX_INVENTORY?.hasUnsavedChanges?.() || !!window.CRONOX_INBOX?.hasUnsavedChanges?.();
@@ -170,6 +174,7 @@
     window.CRONOX_ADMIN_MEDIA?.discard?.();
     window.CRONOX_ADMIN_GALLERY?.discard?.();
     window.CRONOX_NEWSLETTER_ADMIN?.discard?.();
+    window.CRONOX_INBOX?.discard?.();
     window.CRONOX_INVENTORY?.discard?.();
     document.querySelectorAll('.modal.show').forEach(modal => { modal.classList.remove('show'); modal.setAttribute('aria-hidden', 'true'); });
     document.body.style.overflow = '';
@@ -194,5 +199,5 @@
     closeDrawer();
   };
   const hasSnapshotChanges = () => [...snapshots].some(([container, snapshot]) => container.isConnected && container.getClientRects().length && snapshot.read() !== snapshot.initial);
-  window.CRONOX_ADMIN_SHELL = { canLeave, select, clear, capture, hasDirty };
+  window.CRONOX_ADMIN_SHELL = { canLeave, select, clear, capture, release, hasDirty };
 })();

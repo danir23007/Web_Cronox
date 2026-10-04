@@ -69,8 +69,9 @@ module.exports=async function review({app,db,backend,request,boxId,users,provide
   pass('No free drafting, manual recipients, cross-circle template IDs or attachments; all-or-nothing missing versions and variables');
   const product=await db.product.create({data:{slug:'campaign-product-fixture',name:'Actual fixture product',price:25,imageUrl:'https://example.test/product.png'}});
   const variant=await db.productVariant.create({data:{productId:product.id,size:'M',sku:'CAMPAIGN-FIXTURE-M',stockQty:2}});
-  const restock=await db.managedEmailTemplate.create({data:{senderKey:'INFO',folderId:folder.id,importKey:'INFO:1:RESTOCK',purpose:'RESTOCK',name:'Different visible title',subject:'Restock {{product}} {{size}}',document:{blocks:[{type:'text',text:'{{product}} {{size}} {{actionUrl}}'}]},html:'Preserve import HTML',text:'Preserve import text'}});
-  assert.equal(restock.familyId,'campaign:INFO:RESTOCK');assert.equal(restock.campaignCircle,1);
+  const restockFamily=await db.campaignTemplateFamily.create({data:{name:'Custom restock campaign fixture',eventKind:'RESTOCK'}});
+  const restock=await db.managedEmailTemplate.create({data:{senderKey:'INFO',folderId:folder.id,familyId:restockFamily.id,campaignCircle:1,purpose:null,name:'Different visible title',subject:'Restock {{product}} {{size}}',document:{blocks:[{type:'text',text:'{{product}} {{size}} {{actionUrl}}'}]},html:'Preserve import HTML',text:'Preserve import text'}});
+  assert.equal(restock.familyId,restockFamily.id);assert.equal(restock.campaignCircle,1);
   let eventDraft=await service.createDraft(actor,{mailboxId:boxId,mode:'campaign'});
   eventDraft=await service.saveDraft(actor,eventDraft.id,{familyId:restock.familyId,circles:[1],revision:eventDraft.revision});
   assert((await campaigns.summary(actor,eventDraft.id)).blocked.some(x=>x.includes('talla')));
@@ -86,7 +87,7 @@ module.exports=async function review({app,db,backend,request,boxId,users,provide
   const preservePlain=await managed.save('INFO',{name:restock.name,folderId:restock.folderId,subject:restock.subject,preheader:'',purpose:restock.purpose,document:restock.document,signatureMode:'none',revision:restock.revision},actor.id,restock.id);
   assert.equal(preservePlain.text,'Separate {{product}} {{size}}','Omitted plain-text override preserves the independent version text');
   await assert.rejects(()=>managed.linkCampaignVersion('INFO',family.id,2,{templateId:restock.id,revision:restock.revision}),/misma|Selecciona/);
-  pass('Future imports use stable purpose identities; RESTOCK variables come from active real product/size data; family rename preserves version content');
+  pass('Custom Info campaign families keep separate versions; RESTOCK event variables use active product/size data; family rename preserves content');
   const requestKey=randomUUID(),input={revision:d.revision,requestKey,previewHash:summary.previewHash};
   const c=await campaigns.enqueue(actor,d.id,input);
   await db.managedEmailTemplate.update({where:{id:versions[0].id},data:{subject:'Edited after approval',document:{blocks:[{type:'text',text:'Changed after approval'}]},revision:{increment:1}}});

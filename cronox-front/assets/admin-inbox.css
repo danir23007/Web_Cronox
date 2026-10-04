@@ -3,6 +3,15 @@
   --mail-muted: var(--admin-c-5f6a7b, #66758b);
   color: var(--admin-text, #17202c);
 }
+.inbox-root .mail-folder-filter > summary { display:flex; align-items:center; justify-content:space-between; min-height:44px; margin:0; cursor:pointer; font-weight:700; list-style:none; }
+.mail-folder-filter > summary::-webkit-details-marker { display:none; }
+.mail-folder-arrow { transition:transform .15s; }
+.mail-folder-filter[open] > summary .mail-folder-arrow { transform:rotate(180deg); }
+.mail-folder-options { padding-top:12px; }
+.cronox-admin .mail-campaign-confirm { width:min(520px,calc(100% - 32px)); max-height:calc(100dvh - 32px); overflow:auto; padding:24px; border:1px solid var(--admin-border); border-radius:10px; background:var(--admin-surface); color:var(--admin-text); }
+.mail-campaign-confirm::backdrop { background:#0008; }
+.mail-campaign-confirm p { overflow-wrap:anywhere; }
+.mail-campaign-confirm .mail-actions { display:flex; gap:12px; flex-wrap:wrap; }
 .inbox-root .mail-toolbar,
 .inbox-root .mail-actions,
 .inbox-root .mail-filters {

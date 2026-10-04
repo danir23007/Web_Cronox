@@ -113,6 +113,7 @@ model MailboxMessage {
 }
 
 model MailboxDraft {
+  campaignName String?
   familyId String?
   campaignEvent Json @default("{}")
   family CampaignTemplateFamily? @relation(fields: [familyId], references: [id], onDelete: Restrict)

@@ -162,6 +162,11 @@ export const VARIABLE_DESCRIPTIONS: Record<string, string> = {
 
 export function variablesFor(purpose?: string | null) {
   const base = ['subject', 'title', 'message'];
+  // Content-only campaign versions have no transactional purpose. Preserve
+  // their event/customer vocabulary without exposing password or token fields.
+  if (!purpose) return [...base, 'actionUrl', 'actionLabel', 'storeUrl', 'product',
+    'productName', 'productSlug', 'size', 'imageUrl', 'productImage',
+    'customerFullName', 'customerEmail', 'email'];
   if (purpose === 'NEWSLETTER_ACCESS') return [...base, 'actionUrl', 'actionLabel', 'initialPassword', 'passwordMessage'];
   const order = [
     'orderId',
