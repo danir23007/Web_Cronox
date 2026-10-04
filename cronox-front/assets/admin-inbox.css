@@ -34,8 +34,7 @@
 .inbox-root .mail-list,
 .inbox-root .mail-reader,
 .inbox-root .mail-editor,
-.inbox-root .mail-settings,
-.inbox-root .mail-devices {
+.inbox-root .mail-settings {
   min-width: 0;
   border: 1px solid var(--mail-border);
   border-radius: 12px;
@@ -83,8 +82,7 @@
   margin: 4px 0;
 }
 .inbox-root .mail-editor,
-.inbox-root .mail-settings,
-.inbox-root .mail-devices {
+.inbox-root .mail-settings {
   grid-column: 2 / -1;
 }
 .inbox-root label {
@@ -234,8 +232,7 @@
     grid-column: 2;
   }
   .inbox-root .mail-editor,
-  .inbox-root .mail-settings,
-  .inbox-root .mail-devices {
+  .inbox-root .mail-settings {
     grid-column: 2;
   }
 }
@@ -258,7 +255,6 @@
   .inbox-root .mail-reader,
   .inbox-root .mail-editor,
   .inbox-root .mail-settings,
-  .inbox-root .mail-devices,
   .inbox-root .mail-list {
     margin-top: 12px;
   }
@@ -270,9 +266,7 @@
   .inbox-root[data-view="compose"] .mail-list,
   .inbox-root[data-view="compose"] .mail-boxes,
   .inbox-root[data-view="settings"] .mail-list,
-  .inbox-root[data-view="settings"] .mail-boxes,
-  .inbox-root[data-view="devices"] .mail-list,
-  .inbox-root[data-view="devices"] .mail-boxes {
+  .inbox-root[data-view="settings"] .mail-boxes {
     display: none;
   }
   .inbox-root .mail-addresses {
@@ -299,8 +293,7 @@
 }
 
 .inbox-root[data-view="compose"] .mail-list,
-.inbox-root[data-view="settings"] .mail-list,
-.inbox-root[data-view="devices"] .mail-list {
+.inbox-root[data-view="settings"] .mail-list {
   display: none;
 }
 @media (min-width: 801px) {

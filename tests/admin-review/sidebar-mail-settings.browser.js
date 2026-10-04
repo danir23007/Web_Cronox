@@ -4,16 +4,23 @@ async (page) => {
   const boxes = ['Información', 'No reply', 'Pedidos', 'Soporte', 'Equipo personalizado'].map((name, i) => ({
     id: String(i + 1), name, address: ['info@cronox.es', 'no-reply@cronox.es', 'orders@cronox.es', 'support@cronox.es', 'team@example.test'][i],
     fromName: 'CRONOX', active: false, notify: false, unread: 0, status: 'PENDING_CONFIG',
-    provider: 'hostinger', smtpPort: 465, sentCopy: 'append', permissions: [], folders: [], canSend: false,
+    provider: 'hostinger', smtpPort: 465, sentCopy: 'append', permissions: [], folders: [{ id: 'inbox-' + i, path: 'INBOX', specialUse: '\\Inbox' }], canSend: false,
   }));
   let mutations = 0;
+  let polling = false;
+  let overviewError = false;
+  const requests = [];
   const setup = async (target, width, theme, documentName = 'admin.html') => {
     await target.route('**/*', async route => {
       const url = new URL(route.request().url());
       if (url.origin !== origin) return route.abort();
       if (url.pathname.startsWith('/api/')) {
+        requests.push(url.pathname);
         if (route.request().method() !== 'GET') { mutations++; return route.abort(); }
+        if (overviewError && url.pathname.endsWith('/overview')) return route.fulfill({ status: 503, json: { message: 'Fallo real de prueba' } });
         let json = {};
+        if (url.pathname.endsWith('/messages')) json = { messages: [], pagination: { pages: 1, total: 0 } };
+        if (url.pathname.endsWith('/notices')) json = { cursor: 'fixture', notices: polling ? [{ id: 'fixture', mailbox: 'Soporte', subject: 'Aviso automático', messageId: 'fixture' }] : [] };
         if (url.pathname.endsWith('/overview')) json = { boxes, superadmin: true, workerEnabled: false, sendEnabled: false, credentialRefs: [], suggestions: [{ name: 'NOREPLY', address: 'no-reply@cronox.es' }] };
         if (url.pathname.endsWith('/administrators')) json = [];
         return route.fulfill({ json });
@@ -32,6 +39,12 @@ async (page) => {
       document.querySelector('#adminAuthCheck')?.remove();
       document.querySelectorAll('.admin-section').forEach(el => { el.hidden = el.id !== 'section-inbox'; });
       window.CRONOX_API = { API_BASE: '', getCsrfHeaders: async () => ({}) };
+      document.documentElement.dataset.adminAuthState = 'authorized';
+      const originalInterval = window.setInterval;
+      window.setInterval = (callback, delay, ...args) => {
+        if (delay === 30000) window.reviewMailPulse = callback;
+        return originalInterval(callback, delay, ...args);
+      };
     }, theme);
     await target.addScriptTag({ url: origin + '/assets/admin-shell.js' });
     await target.evaluate(() => {
@@ -76,11 +89,28 @@ async (page) => {
     await outside(page); await b.hover(); await expectOpen(page, 'navMultimedia');
     await outside(page); await expectOpen(page, null);
     await a.hover(); await b.hover(); await expectOpen(page, 'navMultimedia');
+    await page.locator('[aria-controls="navGaleria"]').click();
+    const gallery = page.locator('[aria-controls="navGaleria"]');
+    assert(await gallery.getAttribute('aria-expanded') === 'true', 'Gallery opens inside Multimedia');
+    await gallery.press('Space');
+    assert(await gallery.getAttribute('aria-expanded') === 'false', 'Space closes Gallery');
+    await expectOpen(page, 'navMultimedia');
+    await gallery.press('Enter'); await gallery.press('Tab');
+    assert(await page.locator('#navGaleria button').first().evaluate(el => el === document.activeElement), 'Tab reaches Mosaic');
+    await page.keyboard.press('Escape');
+    assert(await gallery.getAttribute('aria-expanded') === 'false', 'Escape closes nested panel');
+    await gallery.press('Enter');
     await page.locator('#navMultimedia [data-nav-target="section-gallery-mosaic"]').hover();
     await expectOpen(page, 'navMultimedia');
     await page.locator('#navMultimedia [data-nav-target="section-gallery-mosaic"]').click();
     assert(new URL(page.url()).hash === '#section-gallery-mosaic', 'Submenu navigation');
     await outside(page); await expectOpen(page, 'navMultimedia');
+    await page.locator('#navGaleria [data-nav-target="section-gallery-carousel"]').click();
+    assert(new URL(page.url()).hash === '#section-gallery-carousel', 'Carousel navigation');
+    assert(await page.locator('#navGaleria [aria-current="page"]').getAttribute('data-nav-target') === 'section-gallery-carousel', 'Carousel highlight');
+    await page.evaluate(() => window.CRONOX_ADMIN_SHELL.select('section-gallery-mosaic'));
+    assert(await gallery.getAttribute('aria-expanded') === 'true', 'Route opens Gallery');
+    await page.screenshot({ path: `output/playwright/admin-gallery-${theme}-1366.png` });
     await a.hover(); // A focused submenu link must remain usable even when hovering elsewhere.
     await expectOpen(page, 'navMultimedia');
     await a.focus(); await a.press('Enter'); await expectOpen(page, 'navProducto');
@@ -88,6 +118,25 @@ async (page) => {
     await a.press('Enter'); await a.press('Tab');
     assert(await page.locator('#navProducto button').first().evaluate(el => el === document.activeElement), 'Tab reaches submenu');
     await outside(page); await expectOpen(page, 'navProducto');
+    assert(await page.locator('.mail-toolbar [data-refresh],.mail-toolbar [data-devices]').count() === 0, 'Duplicate actions removed');
+    assert(await page.locator('#adminSidebar [data-nav-target="section-push"]').count() === 1, 'Push entry retained');
+    const initial = requests.length;
+    polling = true; boxes[0].unread = 3;
+    await page.evaluate(() => window.reviewMailPulse());
+    await page.waitForFunction(() => document.querySelector('[data-mailbox-count]').textContent === '3' && document.querySelector('.mail-toast-host')?.textContent.includes('Aviso automático'));
+    assert(requests.slice(initial).some(path => path.endsWith('/messages')), 'Automatic list refresh');
+    overviewError = true;
+    await page.evaluate(() => window.reviewMailPulse());
+    await page.waitForFunction(() => document.querySelector('[data-feedback]').textContent.includes('Fallo real de prueba'));
+    overviewError = false; polling = false; boxes[0].unread = 0;
+    for (const width of [320, 390, 1366]) {
+      await page.setViewportSize({ width, height: 900 });
+      if (width <= 800) await page.waitForFunction(() => document.querySelector('#adminSidebar').getBoundingClientRect().right <= 0);
+      assert(await page.locator('.mail-toolbar').evaluate(el => [...el.children].every(child => child.getBoundingClientRect().right <= innerWidth)), 'Toolbar fits viewport');
+      assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'No overflow');
+      await page.screenshot({ path: `output/playwright/admin-mail-toolbar-${theme}-${width}.png` });
+    }
+    await page.setViewportSize({ width: 1366, height: 900 });
     await page.locator('[data-settings]').click();
     const settings = page.locator('.mail-settings');
     await settings.locator('[data-edit-box="2"]').click();
@@ -110,6 +159,10 @@ async (page) => {
     assert(await settings.locator('[name="address"]').getAttribute('readonly') === null, 'Creation address editable');
     assert(await settings.locator('[name="name"]').inputValue() === '', 'Creation name empty');
     await page.locator('h3').filter({ hasText: 'Configuración de buzones' }).click();
+    await page.waitForFunction(() => {
+      const s = getComputedStyle(document.querySelector('[data-add-box]'));
+      return s.backgroundColor === 'rgb(255, 255, 255)' && s.color === 'rgb(0, 0, 0)';
+    });
     const colors = await settings.locator('[data-add-box]').evaluate(el => {
       const s = getComputedStyle(el); return [s.backgroundColor, s.color];
     });
@@ -144,7 +197,25 @@ async (page) => {
       const a = mobile.locator('[aria-controls="navProducto"]'), b = mobile.locator('[aria-controls="navMultimedia"]');
       await a.tap(); await expectOpen(mobile, 'navProducto');
       await b.tap(); await expectOpen(mobile, 'navMultimedia');
+      const gallery = mobile.locator('[aria-controls="navGaleria"]');
+      await gallery.tap();
+      assert(await gallery.getAttribute('aria-expanded') === 'true', 'Touch opens Gallery');
+      await expectOpen(mobile, 'navMultimedia');
+      await gallery.tap();
+      assert(await gallery.getAttribute('aria-expanded') === 'false', 'Touch closes Gallery');
+      await gallery.tap();
+      await mobile.screenshot({ path: `output/playwright/admin-gallery-${doc}-${theme}-touch.png` });
+      await mobile.locator('#navGaleria [data-nav-target="section-gallery-carousel"]').tap();
+      assert(new URL(mobile.url()).hash === '#section-gallery-carousel', 'Touch carousel navigation');
+      await mobile.locator('#sidebarToggle').tap();
+      await expectOpen(mobile, 'navMultimedia');
       await b.tap(); await expectOpen(mobile, null);
+      if (doc === 'admin.html') {
+        await mobile.locator('[aria-controls="navAdmin"]').tap();
+        await mobile.locator('[data-nav-target="section-push"]').tap();
+        assert(new URL(mobile.url()).hash === '#section-push', 'Push entry navigates');
+        await mobile.locator('#sidebarToggle').tap();
+      }
       await a.tap();
       await mobile.locator('#navProducto [data-nav-target="section-products"]').tap();
       assert(await mobile.locator('#sidebarToggle').getAttribute('aria-expanded') === 'false', 'Mobile drawer closes on navigation');

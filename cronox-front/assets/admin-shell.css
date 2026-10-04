@@ -21,7 +21,7 @@ body.cronox-admin { --admin-line:var(--admin-c-e5e8ee); --admin-muted:var(--admi
 .cronox-admin .admin-sidebar button:hover { background:var(--admin-c-f4f6f9); }
 .cronox-admin .admin-sidebar button[aria-current="page"] { background:var(--admin-c-edf2fa); color:var(--admin-c-13274a); font-weight:700; box-shadow:inset 3px 0 var(--admin-c-111); }
 .cronox-admin .sidebar-chevron { margin-left:auto; font-size:15px; transition:transform .15s; }
-.cronox-admin .sidebar-group[aria-expanded="true"]>.sidebar-chevron { transform:rotate(180deg); }
+.cronox-admin :is(.sidebar-group,.sidebar-subgroup)[aria-expanded="true"]>.sidebar-chevron { transform:rotate(180deg); }
 .cronox-admin .sidebar-children { padding-left:19px; }
 .cronox-admin .sidebar-children .sidebar-children { padding-left:12px; }
 .cronox-admin .sidebar-live { margin-top:auto; padding:14px 0; flex-shrink:0; }
@@ -270,7 +270,6 @@ body.cronox-admin { --admin-line:var(--admin-c-e5e8ee); --admin-muted:var(--admi
   .cronox-admin-user :is(.tab,.panel-head button) { min-width:44px; min-height:44px; }
 }
 
-.cronox-admin .sidebar-subheading { display:block; padding:10px 11px 4px; color:var(--admin-muted); font-size:12px; }
 /* Literal colors keep the creation action white with black text in both themes. */
 .cronox-admin .inbox-root .mail-settings .btn[data-edit-box] { background:#202026; color:#fff; border-color:#41414c; }
 .cronox-admin .inbox-root .mail-settings .btn[data-edit-box]:hover { background:#363640; }

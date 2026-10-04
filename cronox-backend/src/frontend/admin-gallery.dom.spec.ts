@@ -469,7 +469,7 @@ describe('CRONOX admin gallery', () => {
     const document = new JSDOM(adminHtml).window.document;
 
     expect(
-      document.querySelector('#navMultimedia .sidebar-subheading')
+      document.querySelector('#navMultimedia .sidebar-subgroup')
         ?.textContent,
     ).toContain('Galería');
     expect(document.getElementById('section-gallery')).not.toBeNull();

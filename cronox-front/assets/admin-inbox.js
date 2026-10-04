@@ -185,11 +185,9 @@
   };
   function shell() {
     root.dataset.view = "list";
-    root.innerHTML = `<div class="mail-toolbar"><h2>Correo</h2><button class="btn" data-compose>Nueva campaña</button><button class="btn" data-refresh>Actualizar</button><button class="btn" data-drafts>Borradores y salida</button><button class="btn" data-devices>Notificaciones</button>${overview.superadmin ? '<button class="btn" data-settings>Configuración</button>' : ""}</div><div data-feedback role="status" aria-live="polite"></div><div class="mail-notice" data-setup></div><div class="mail-layout"><aside class="mail-boxes" aria-label="Buzones"><div class="mail-box-links" data-boxes></div><hr><details class="mail-folder-filter"><summary>Carpetas <span class="mail-folder-arrow" aria-hidden="true">⌄</span></summary><div class="mail-folder-options"><div class="mail-actions"><button class="btn" type="button" data-folders-all>Recibidas</button><button class="btn" type="button" data-folders-clear>Limpiar</button></div><div data-folders></div></div></details><p class="mail-muted" data-box-status></p></aside><div class="mail-list"><form class="mail-filters"><label>Buscar<input data-search type="search" placeholder="Remitente, destinatario o asunto" maxlength="120"></label><label>Estado<select data-state><option value="all">Todos</option><option value="unread">No leídos</option><option value="read">Leídos</option></select></label></form><p class="mail-muted">Búsqueda solo sobre mensajes sincronizados. Los contadores reflejan la caché importada.</p><div data-messages aria-live="polite"></div><div data-pagination class="mail-pager"></div></div><div class="mail-reader" hidden></div><div class="mail-editor" hidden></div><div class="mail-settings" hidden></div><div class="mail-devices" hidden></div></div>`;
+    root.innerHTML = `<div class="mail-toolbar"><h2>Correo</h2><button class="btn" data-compose>Nueva campaña</button><button class="btn" data-drafts>Borradores y salida</button>${overview.superadmin ? '<button class="btn" data-settings>Configuración</button>' : ""}</div><div data-feedback role="status" aria-live="polite"></div><div class="mail-notice" data-setup></div><div class="mail-layout"><aside class="mail-boxes" aria-label="Buzones"><div class="mail-box-links" data-boxes></div><hr><details class="mail-folder-filter"><summary>Carpetas <span class="mail-folder-arrow" aria-hidden="true">⌄</span></summary><div class="mail-folder-options"><div class="mail-actions"><button class="btn" type="button" data-folders-all>Recibidas</button><button class="btn" type="button" data-folders-clear>Limpiar</button></div><div data-folders></div></div></details><p class="mail-muted" data-box-status></p></aside><div class="mail-list"><form class="mail-filters"><label>Buscar<input data-search type="search" placeholder="Remitente, destinatario o asunto" maxlength="120"></label><label>Estado<select data-state><option value="all">Todos</option><option value="unread">No leídos</option><option value="read">Leídos</option></select></label></form><p class="mail-muted">Búsqueda solo sobre mensajes sincronizados. Los contadores reflejan la caché importada.</p><div data-messages aria-live="polite"></div><div data-pagination class="mail-pager"></div></div><div class="mail-reader" hidden></div><div class="mail-editor" hidden></div><div class="mail-settings" hidden></div></div>`;
     root.querySelector("[data-compose]").onclick = guard(() => compose());
-    root.querySelector("[data-refresh]").onclick = guard(refresh);
     root.querySelector("[data-drafts]").onclick = guard(() => showDrafts());
-    root.querySelector("[data-devices]").onclick = guard(showDevices);
     root.querySelector("[data-settings]")?.addEventListener(
       "click",
       guard(() => settings(boxId || undefined)),
@@ -268,8 +266,6 @@
     root.querySelector("[data-compose]").disabled = !overview.boxes.some(
       (b) => b.canSend,
     );
-    root.querySelector("[data-refresh]").disabled =
-      !overview.workerEnabled || !overview.boxes.some((b) => b.active);
   }
   const mailboxLabel = name => /^no[ -]?reply$/i.test(name?.trim() || '') ? 'No-reply' : name;
   const displayName = b => {
@@ -338,13 +334,12 @@
   function show(view) {
     if (view !== "read") invalidateReader();
     root.dataset.view = view;
-    for (const v of ["reader", "editor", "settings", "devices"])
+    for (const v of ["reader", "editor", "settings"])
       root.querySelector(".mail-" + v).hidden = !(
         {
           read: "reader",
           compose: "editor",
           settings: "settings",
-          devices: "devices",
         }[view] === v
       );
   }
@@ -402,15 +397,6 @@
         host.querySelector("[data-retry-list]").onclick = guard(list);
       }
     }
-  }
-  async function refresh() {
-    await leave();
-    const boxes = boxId ? [box()] : overview.boxes.filter((b) => b.active);
-    for (const b of boxes) await api("/boxes/" + b.id + "/refresh", "POST");
-    feedback(
-      "Actualización solicitada al trabajador existente. Puede tardar unos segundos.",
-    );
-    await list();
   }
   async function read(id) {
     await leave();
@@ -1192,11 +1178,6 @@
           }),
       );
     }
-  }
-  async function showDevices() {
-    await leave();
-    location.hash = '#section-push';
-    await window.CRONOX_PUSH?.load();
   }
   async function pulse() {
     const pulseSeq = readSeq, epoch = stateEpoch;

@@ -68,7 +68,7 @@
       if (cancel && !cancel.disabled) { event.preventDefault(); cancel.click(); }
     }
   });
-  // One visible group: keyboard focus in links, then temporary hover, then pinned.
+  // One visible principal group: focus in descendants, temporary hover, then pinned.
   // There is no stored menu state; only route selection initializes the pinned group.
   const hover = window.matchMedia('(hover: hover) and (pointer: fine)');
   let pinned = null, temporary = null;
@@ -79,6 +79,21 @@
     button.before(zone); zone.append(button, panel);
     button.type = 'button';
     return { button, panel, zone, suppressed: false };
+  });
+  // Nested disclosures belong to their principal zone and never compete with it.
+  const subgroups = [...sidebar.querySelectorAll('.sidebar-subgroup')].map(button => {
+    const panel = document.getElementById(button.getAttribute('aria-controls'));
+    const setOpen = open => {
+      button.setAttribute('aria-expanded', String(open));
+      panel.hidden = !open;
+    };
+    button.addEventListener('click', () => setOpen(panel.hidden));
+    panel.addEventListener('keydown', event => {
+      if (event.key !== 'Escape') return;
+      event.preventDefault(); event.stopPropagation();
+      button.focus(); setOpen(false);
+    });
+    return { button, panel, setOpen };
   });
   const focusedGroup = () => groups.find(group => group.panel.contains(document.activeElement));
   const renderGroups = () => {
@@ -193,6 +208,7 @@
     const active = sidebar.querySelector('[aria-current="page"]');
     const group = groups.find(item => item.panel.contains(active));
     if (group) pinned = group;
+    subgroups.forEach(item => { if (item.panel.contains(active)) item.setOpen(true); });
     temporary = null;
     renderGroups();
     document.getElementById('adminBreadcrumb').textContent = active?.textContent.trim() || 'Administración';
