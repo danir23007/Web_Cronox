@@ -131,6 +131,36 @@
     timer = null,
     initialized = false,
     loading = null;
+  let pulseRunning = false, listPending = 0;
+  // Reconcile server metadata without replacing unchanged nodes or their focus.
+  function patchMarkup(host, html) {
+    const focus = host.contains(document.activeElement) ? document.activeElement : null;
+    const template = document.createElement('template'); template.innerHTML = html;
+    const key = node => node.nodeType === 1 ? ['data-message', 'data-box', 'data-folder-id'].map(attr => {
+      const el = node.hasAttribute(attr) ? node : node.querySelector('[' + attr + ']');
+      return el ? attr + ':' + el.getAttribute(attr) : '';
+    }).find(Boolean) : null;
+    const compatible = (a, b) => a && a.nodeType === b.nodeType && a.nodeName === b.nodeName && key(a) === key(b);
+    const reconcile = (parent, desired) => {
+      const previous = [...parent.childNodes], used = new Set();
+      [...desired.childNodes].forEach((next, index) => {
+        const identity = key(next);
+        let node = identity ? previous.find(n => !used.has(n) && key(n) === identity) : previous[index];
+        if (!compatible(node, next) || used.has(node)) node = next.cloneNode(true);
+        else if (node.nodeType === 1) {
+          [...node.attributes].forEach(a => { if (!next.hasAttribute(a.name)) node.removeAttribute(a.name); });
+          [...next.attributes].forEach(a => { if (node.getAttribute(a.name) !== a.value) node.setAttribute(a.name, a.value); });
+          reconcile(node, next);
+        } else if (node.nodeValue !== next.nodeValue) node.nodeValue = next.nodeValue;
+        used.add(node);
+        if (parent.childNodes[index] !== node) parent.insertBefore(node, parent.childNodes[index] || null);
+      });
+      previous.forEach(node => { if (!used.has(node)) node.remove(); });
+    };
+    reconcile(host, template.content);
+    if (focus?.isConnected && document.activeElement !== focus) focus.focus({ preventScroll: true });
+  }
+  const textIfChanged = (node, text) => { if (node && node.textContent !== text) node.textContent = text; };
   const seenNotices = new Set();
   async function api(path, method = "GET", data, signal) {
     const headers = {};
@@ -222,8 +252,8 @@
     if (!overview) return;
     const total = overview.boxes.reduce((n, b) => n + b.unread, 0);
     const badge = document.querySelector("[data-mailbox-count]");
-    if (badge) badge.textContent = total ? String(total) : "";
-    root.querySelector("[data-setup]").textContent = !overview.boxes.length
+    textIfChanged(badge, total ? String(total) : "");
+    textIfChanged(root.querySelector("[data-setup]"), !overview.boxes.length
       ? overview.superadmin
         ? "Pendiente de configuración. Añade tus buzones existentes en Configuración."
         : "No tienes buzones asignados. Un SUPERADMIN puede concederte acceso."
@@ -237,16 +267,16 @@
         ]
           .filter(Boolean)
           .join(" ") ||
-        "Los buzones originales siguen en Hostinger. Abrir un mensaje lo marca leído; las importaciones no lo hacen.";
+        "Los buzones originales siguen en Hostinger. Abrir un mensaje lo marca leído; las importaciones no lo hacen.");
     const host = root.querySelector("[data-boxes]");
-    host.innerHTML =
+    patchMarkup(host,
       `<button class="btn" data-box="" ${!boxId ? 'aria-current="true"' : ""}>Todos los buzones <small class="mail-unread ${total > 0 ? "has-unread" : ""}">${total} no leídos</small></button>` +
       overview.boxes
         .map(
           (b) =>
             `<button class="btn" data-box="${esc(b.id)}" ${boxId === b.id ? 'aria-current="true"' : ""}><strong>${esc(displayName(b))}</strong><small class="mail-address">${esc(b.address)}</small><small class="mail-unread ${b.unread > 0 ? "has-unread" : ""}">${b.unread} no leídos</small></button>`,
         )
-        .join("");
+        .join(""));
     host.querySelectorAll("[data-box]").forEach(
       (b) =>
         (b.onclick = guard(async () => {
@@ -260,12 +290,14 @@
         })),
     );
     renderFolders();
-    root.querySelector("[data-box-status]").textContent = box()
+    textIfChanged(root.querySelector("[data-box-status]"), box()
       ? `${status[box().status] || box().status}${!box().active ? " · Inactivo" : ""} · Última sincronización: ${date(box().lastSyncAt)}${box().errorCode ? " · " + (codes[box().errorCode] || box().errorCode) : ""}`
-      : "Selecciona un buzón para ver su conexión y carpetas.";
-    root.querySelector("[data-compose]").disabled = !overview.boxes.some(
+      : "Selecciona un buzón para ver su conexión y carpetas.");
+    const disabled = !overview.boxes.some(
       (b) => b.canSend,
     );
+    const composeButton = root.querySelector('[data-compose]');
+    if (composeButton.disabled !== disabled) composeButton.disabled = disabled;
   }
   const mailboxLabel = name => /^no[ -]?reply$/i.test(name?.trim() || '') ? 'No-reply' : name;
   const displayName = b => {
@@ -296,13 +328,14 @@
     const folders = availableFolders();
     if (selectedFolders === null) selectedFolders = new Set(overview.boxes.flatMap(b => b.folders.filter(f => f.specialUse === '\\Inbox' || (!f.specialUse && f.path.toUpperCase() === 'INBOX')).map(f => f.id)));
     const host=root.querySelector('[data-folders]');
-    host.innerHTML=folders.map(f=>`<label><span><input type="checkbox" data-folder-id="${esc(f.id)}" ${selectedFolders.has(f.id)?'checked':''}> ${esc(!boxId ? f.mailbox+' · '+folderLabel(f) : folderLabel(f))}${f.importBefore?' · importando':''}</span></label>`).join('') || '<p>No hay carpetas importadas.</p>';
+    patchMarkup(host, folders.map(f=>`<label><span><input type="checkbox" data-folder-id="${esc(f.id)}" ${selectedFolders.has(f.id)?'checked':''}> ${esc(!boxId ? f.mailbox+' · '+folderLabel(f) : folderLabel(f))}${f.importBefore?' · importando':''}</span></label>`).join('') || '<p>No hay carpetas importadas.</p>');
     host.querySelectorAll('input').forEach(input=>input.onchange=guard(async()=>{if(input.checked)selectedFolders.add(input.dataset.folderId);else selectedFolders.delete(input.dataset.folderId);page=1;await list();}));
   }
   async function load() {
     if (loading) return loading;
     loading = (async () => {
       try {
+        stateEpoch++; listSeq++; listController?.abort();
         await leave();
         overview = await api("/overview");
         if (boxId && !overview.boxes.some((b) => b.id === boxId)) boxId = "";
@@ -343,18 +376,21 @@
         }[view] === v
       );
   }
-  async function list() {
-    stateEpoch++;
+  async function list({ background = false } = {}) {
+    if (background && listPending) return;
+    if (!background) stateEpoch++;
     listController?.abort();
     listController = new AbortController();
     const seq = ++listSeq,
       host = root.querySelector("[data-messages]");
     if (!host) return;
     if (!availableFolders().some(f=>selectedFolders?.has(f.id))) {
-      host.textContent='No hay carpetas seleccionadas. Marca una o varias para consultar mensajes.';
-      root.querySelector('[data-pagination]').replaceChildren();return;
+      textIfChanged(host, 'No hay carpetas seleccionadas. Marca una o varias para consultar mensajes.');
+      const pager = root.querySelector('[data-pagination]');
+      if (pager.childNodes.length) pager.replaceChildren(); return;
     }
-    host.textContent = "Cargando mensajes…";
+    listPending = seq;
+    if (!host.childNodes.length && !background) host.textContent = "Cargando mensajes…";
     const q = new URLSearchParams({
       mailboxId: boxId,
       folderIds: availableFolders().filter(f => selectedFolders?.has(f.id)).map(f => f.id).join(","),
@@ -365,21 +401,31 @@
     try {
       const data = await api("/messages?" + q, "GET", undefined, listController.signal);
       if (seq !== listSeq) return;
-      if (page > data.pagination.pages) { page = data.pagination.pages; return list(); }
-      host.innerHTML = data.messages.length
+      if (!background && page > data.pagination.pages) { page = data.pagination.pages; return list(); }
+      const scrollHost = host.closest('.mail-list') || host;
+      const internalScroll = /auto|scroll/.test(getComputedStyle(scrollHost).overflowY) && scrollHost.scrollHeight > scrollHost.clientHeight;
+      const top = internalScroll ? Math.max(0, scrollHost.getBoundingClientRect().top) : 0;
+      const anchor = background && (internalScroll ? scrollHost.scrollTop > 0 : window.scrollY > 0)
+        ? [...host.querySelectorAll('[data-message]')].find(node => node.getBoundingClientRect().bottom > top) : null;
+      const anchorTop = anchor?.getBoundingClientRect().top;
+      patchMarkup(host, data.messages.length
         ? data.messages
             .map(
               (m) =>
                 `<button class="mail-message ${m.seen === true ? "" : "unread"}" data-message="${esc(m.id)}" ${selected === m.id ? 'aria-current="true"' : ""}><span>${esc(m.sender || "Sin remitente")}</span><strong>${esc(m.subject)}</strong><small>${esc(m.preview || (m.bodyState === "LOADED" ? "Sin texto de vista previa" : m.bodyState === "FAILED" ? "Ha fallado la descarga. Abre el mensaje para reintentar." : "Contenido pendiente de descargar"))}${m.hasAttachments ? " · Adjuntos" : ""}</small><small>${esc(overview.boxes.find((b) => b.id === m.mailboxId)?.name || "Buzón")}</small><time>${esc(date(m.date))}</time></button>`,
             )
             .join("")
-        : `<p>${state === 'unread' ? 'No hay correos no leídos para estos filtros.' : state === 'read' ? 'No hay correos leídos para estos filtros.' : 'No hay mensajes sincronizados para estos filtros.'}</p>`;
+        : `<p>${state === 'unread' ? 'No hay correos no leídos para estos filtros.' : state === 'read' ? 'No hay correos leídos para estos filtros.' : 'No hay mensajes sincronizados para estos filtros.'}</p>`);
+      if (anchor?.isConnected) {
+        const delta = anchor.getBoundingClientRect().top - anchorTop;
+        if (delta) { if (internalScroll) scrollHost.scrollTop += delta; else window.scrollBy(0, delta); }
+      }
       host
         .querySelectorAll("[data-message]")
         .forEach((b) => (b.onclick = guard(() => read(b.dataset.message))));
       const p = data.pagination;
-      root.querySelector("[data-pagination]").innerHTML =
-        `<button class="btn" data-prev ${page <= 1 ? "disabled" : ""}>Anterior</button><span>${p.total} mensajes · ${page} / ${p.pages}</span><button class="btn" data-next ${page >= p.pages ? "disabled" : ""}>Siguiente</button>`;
+      patchMarkup(root.querySelector("[data-pagination]"),
+        `<button class="btn" data-prev ${page <= 1 ? "disabled" : ""}>Anterior</button><span>${p.total} mensajes · ${page} / ${p.pages}</span><button class="btn" data-next ${page >= p.pages ? "disabled" : ""}>Siguiente</button>`);
       root.querySelector("[data-prev]").onclick = guard(async () => {
         page--;
         await list();
@@ -390,13 +436,14 @@
       });
     } catch (e) {
       if (seq === listSeq && e.name !== 'AbortError') {
+        if (background) { feedback(e.message, true); return; }
         host.innerHTML =
           '<p class="mail-error">' +
           esc(e.message) +
           '</p><button class="btn" data-retry-list>Reintentar</button>';
         host.querySelector("[data-retry-list]").onclick = guard(list);
       }
-    }
+    } finally { if (listPending === seq) listPending = 0; }
   }
   async function read(id) {
     await leave();
@@ -1217,8 +1264,9 @@
   }
   async function pulse() {
     const pulseSeq = readSeq, epoch = stateEpoch;
-    if (!initialized || !overview || document.visibilityState !== "visible")
+    if (pulseRunning || !initialized || !overview || document.visibilityState !== "visible")
       return;
+    pulseRunning = true;
     try {
       const next = await api("/overview");
       if (pulseSeq !== readSeq || epoch !== stateEpoch) return;
@@ -1239,19 +1287,22 @@
         await list();
       } else {
         renderOverview();
-        if (['list', 'read'].includes(root.dataset.view)) await list();
-        if (selected && root.dataset.view === "read") {
+        const visible = !root.closest('.admin-section')?.hidden;
+        if (visible && ['list', 'read'].includes(root.dataset.view)) await list({ background: true });
+        if (pulseSeq !== readSeq || epoch !== stateEpoch) return;
+        if (visible && selected && root.dataset.view === "read") {
           await api("/messages/" + selected + "/status");
         }
         if (draft && draft.status !== "DRAFT") {
           const current = await api("/drafts/" + draft.id);
-          draft = current;
-          renderSend();
+          if (pulseSeq !== readSeq || epoch !== stateEpoch) return;
+          if (JSON.stringify(current) !== JSON.stringify(draft)) { draft = current; renderSend(); }
         }
       }
       const notices = await api(
         "/notices?after=" + encodeURIComponent(noticeCursor),
       );
+      if (pulseSeq !== readSeq || epoch !== stateEpoch) return;
       noticeCursor = notices.cursor;
       for (const n of notices.notices) {
         if (seenNotices.has(n.id)) continue;
@@ -1277,7 +1328,7 @@
       }
       if (seenNotices.size > 200) seenNotices.clear();
     } catch (e) {
-      if (pulseSeq !== readSeq) return;
+      if (pulseSeq !== readSeq || epoch !== stateEpoch) return;
       if (/permiso|sesión/.test(e.message)) {
         root.querySelector(".mail-reader")?.replaceChildren();
         root.querySelector(".mail-editor")?.replaceChildren();
@@ -1288,7 +1339,7 @@
         show("list");
       }
       feedback(e.message, true);
-    }
+    } finally { pulseRunning = false; }
   }
   async function initialize() {
     if (
@@ -1305,6 +1356,13 @@
     { attributes: true, attributeFilter: ["data-admin-auth-state"] },
   );
   void initialize();
+  const section = root.closest('.admin-section');
+  if (section) new MutationObserver(() => {
+    if (!section.hidden) return;
+    stateEpoch++; listSeq++; readSeq++;
+    listController?.abort(); readController?.abort();
+    clearTimeout(filterTimer); filterTimer = null;
+  }).observe(section, { attributes: true, attributeFilter: ['hidden'] });
   window.addEventListener("beforeunload", (event) => {
     if (dirty) {
       event.preventDefault();

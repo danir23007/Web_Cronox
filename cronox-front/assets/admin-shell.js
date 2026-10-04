@@ -68,7 +68,7 @@
       if (cancel && !cancel.disabled) { event.preventDefault(); cancel.click(); }
     }
   });
-  // One visible principal group: focus in descendants, temporary hover, then pinned.
+  // A single visible group. Desktop panels leave header geometry unchanged.
   // There is no stored menu state; only route selection initializes the pinned group.
   const hover = window.matchMedia('(hover: hover) and (pointer: fine)');
   let pinned = null, temporary = null;
@@ -87,7 +87,7 @@
       button.setAttribute('aria-expanded', String(open));
       panel.hidden = !open;
     };
-    button.addEventListener('click', () => setOpen(panel.hidden));
+    button.addEventListener('click', () => { setOpen(panel.hidden); renderGroups(); });
     panel.addEventListener('keydown', event => {
       if (event.key !== 'Escape') return;
       event.preventDefault(); event.stopPropagation();
@@ -95,14 +95,19 @@
     });
     return { button, panel, setOpen };
   });
-  const focusedGroup = () => groups.find(group => group.panel.contains(document.activeElement));
+  const placePanel = group => {
+    if (mobile.matches) { group.panel.style.removeProperty('top'); return; }
+    const top = Math.max(8, Math.min(group.button.getBoundingClientRect().top, innerHeight - group.panel.offsetHeight - 8));
+    group.panel.style.top = top + 'px';
+  };
   const renderGroups = () => {
-    const visible = focusedGroup() || temporary || pinned;
-    groups.forEach(group => {
-      const open = group === visible;
-      group.button.setAttribute('aria-expanded', String(open));
-      group.panel.hidden = !open;
-    });
+    const visible = temporary || pinned;
+    const setOpen = (group, open) => {
+      if (group.button.getAttribute('aria-expanded') !== String(open)) group.button.setAttribute('aria-expanded', String(open));
+      if (group.panel.hidden === open) group.panel.hidden = !open;
+    };
+    groups.filter(group => group !== visible).forEach(group => setOpen(group, false));
+    if (visible) { setOpen(visible, true); placePanel(visible); }
   };
   groups.forEach(group => {
     group.button.addEventListener('click', () => {
@@ -122,8 +127,18 @@
       if (temporary === group) temporary = null;
       renderGroups();
     });
-    group.zone.addEventListener('focusin', renderGroups);
-    group.zone.addEventListener('focusout', () => queueMicrotask(renderGroups));
+    group.zone.addEventListener('focusin', event => {
+      if (group.panel.contains(event.target)) { temporary = group; renderGroups(); }
+    });
+    group.zone.addEventListener('focusout', () => queueMicrotask(() => {
+      if (!group.zone.contains(document.activeElement) && !group.zone.matches(':hover') && temporary === group) { temporary = null; renderGroups(); }
+    }));
+    group.panel.addEventListener('keydown', event => {
+      if (event.key !== 'Escape') return;
+      event.preventDefault(); event.stopPropagation();
+      temporary = null; if (pinned === group) pinned = null;
+      group.suppressed = true; group.button.focus(); renderGroups();
+    });
     group.panel.addEventListener('click', event => {
       if (!event.target.closest('[data-nav-target],a[href]')) return;
       pinned = group; temporary = null; group.suppressed = false;
@@ -131,6 +146,8 @@
     }, true);
   });
   hover.addEventListener('change', () => { temporary = null; renderGroups(); });
+  sidebar.addEventListener('scroll', () => { const visible = temporary || pinned; if (visible) placePanel(visible); });
+  window.addEventListener('resize', renderGroups);
   renderGroups();
   document.addEventListener('keydown', event => {
     if (event.key === 'Escape' && document.body.classList.contains('sidebar-open')) { closeDrawer(); toggle.focus(); }
