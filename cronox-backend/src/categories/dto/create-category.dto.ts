@@ -22,6 +22,11 @@ export class CreateCategoryDto {
   @IsIn(['GARMENT', 'DROP'])
   group: 'GARMENT' | 'DROP';
 
+  @ApiPropertyOptional({ default: true })
+  @IsOptional()
+  @IsBoolean()
+  showInStoreFilters?: boolean;
+
   @ApiPropertyOptional({ example: 'coleccion-essentials' })
   @IsString()
   @IsOptional()

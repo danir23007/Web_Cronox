@@ -2735,8 +2735,6 @@ button.product-cta--disabled:disabled { opacity:.5; cursor:not-allowed; filter:n
     padding: 0 !important;
   }
 }
-.store-category-filters { margin: 16px 0 24px; }
-.store-category-filters form { display: flex; flex-wrap: wrap; gap: 16px; align-items: center; }
-.store-category-filters label { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; min-width: 0; }
-.store-category-filters select { max-width: 100%; min-height: 40px; border: 1px solid currentColor; border-radius: 6px; padding: 6px 10px; font: inherit; color: inherit; background: var(--card, #fff); }
-@media (max-width: 720px) { .store-category-filters label { width: 100%; } }
+.black-menu__category-row { display:flex; align-items:center; gap:12px; padding:9px 0; }
+.black-menu__category-row .black-menu__link { min-width:0; overflow-wrap:anywhere; }
+.black-menu__category-row input { width:20px; height:20px; flex:0 0 20px; accent-color:#fff; }

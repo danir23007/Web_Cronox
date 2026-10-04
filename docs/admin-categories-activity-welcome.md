@@ -1,5 +1,7 @@
 # CRONOX: categorías, Actividad y bienvenida
 
+La revisión posterior de categorías y filtros públicos se documenta en [Categorías y visibilidad pública](admin-category-filter-visibility.md); sustituye el selector sobre el catálogo y la cuarta columna descritos en esta entrega inicial.
+
 ## Comportamiento
 
 Actividad permite borrar todo `AuditLog`, independientemente de sus filtros, tras una confirmación explícita. El botón solo aparece para SUPERADMIN. El endpoint `DELETE /api/admin/audit-logs` exige `{ "confirmation": "DELETE_ALL_ACTIVITY" }` y el guard estricto `SuperAdminGuard`: el guard genérico de roles acepta otros roles administrativos incluso ante una restricción declarada con `@Roles`. No se han cambiado los permisos globales. La operación no borra pedidos, stock, estadísticas, usuarios, campañas ni registros de cuotas. Comparte la operación concurrente, muestra errores y permite reintentar; las respuestas antiguas del listado se descartan y un fallo de recarga no se sustituye por un aviso de éxito.

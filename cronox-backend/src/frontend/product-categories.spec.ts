@@ -87,7 +87,7 @@ describe('product category frontend contracts', () => {
 
     expect(html).toContain('class="category-section-header"');
     expect(html).toContain(
-      'id="categoryAssignmentsMessage" class="message category-screen-status" role="status" aria-live="polite"',
+      'id="categoryAssignmentsMessage" class="message" role="status" aria-live="polite"',
     );
     expect(html).toContain('.category-screen-status {');
     expect(html).toContain('margin: 0 0 0 auto');
@@ -118,7 +118,7 @@ describe('product category frontend contracts', () => {
     expect(admin).toContain('!categoryFilterDropdown.contains(event.target)');
     expect(admin).toContain("categoryFilterOptions?.addEventListener('change'");
     expect(admin).toContain(
-      "card.querySelectorAll('.category-checkbox input:checked')",
+      'categoryAssignmentsState.drafts.get(productId)',
     );
   });
 

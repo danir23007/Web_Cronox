@@ -67,7 +67,7 @@ export class QueryProductsDto {
   @ApiPropertyOptional({ description: 'Filtra por slug de categoría' })
   @IsOptional()
   @IsString()
-  @Matches(/^[a-z0-9-]+$/)
+  @Matches(/^[a-z0-9#-]+$/)
   @Transform(({ value }: TransformFnParams) => normalizeQueryText(value, true))
   categorySlug?: string;
 

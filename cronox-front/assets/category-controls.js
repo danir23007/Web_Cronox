@@ -1,14 +1,12 @@
 (() => {
-  const labels = { NEW: 'Novedades', GARMENT: 'Tipo de prenda', DROP: 'Drop/conjunto', UNCLASSIFIED: 'Sin clasificar (asociaciones conservadas)' };
+  const labels = { NEW: 'Novedades', GARMENT: 'Tipo de prenda', DROP: 'Drop/colección' };
   const groupOf = category => Object.hasOwn(labels, category.group) ? category.group : 'UNCLASSIFIED';
   function render(categories, selectedIds, changed = () => {}, disabled = false) {
     const root = document.createElement('div'); root.className = 'category-control-columns';
     const selected = new Set([...selectedIds].map(Number));
-    for (const group of ['NEW', 'GARMENT', 'DROP', 'UNCLASSIFIED']) {
+    for (const group of ['NEW', 'GARMENT', 'DROP']) {
       const entries = categories.filter(category => groupOf(category) === group);
-      if (group === 'UNCLASSIFIED' && !entries.length) continue;
       const column = document.createElement('div'); column.className = 'category-control-column';
-      if (group === 'UNCLASSIFIED') column.classList.add('category-control-legacy');
       const title = document.createElement('strong'); title.textContent = labels[group]; column.append(title);
       const choices = document.createElement(group === 'NEW' ? 'div' : 'details');
       if (group !== 'NEW') {

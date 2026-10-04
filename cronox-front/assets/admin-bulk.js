@@ -349,7 +349,7 @@
       fields.append(
         element(
           "p",
-          "Sustituir elimina las asociaciones anteriores. Dejar sin categorías requiere elegir esa acción explícita. Añadir y quitar conservan las demás asociaciones.",
+          "Sustituir conserva las categorías pendientes de clasificación. Dejar sin categorías requiere elegir esa acción explícita. Añadir y quitar conservan las demás asociaciones.",
         ),
       );
     }

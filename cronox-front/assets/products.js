@@ -7,7 +7,7 @@
 (function () {
   const productsGrid = document.getElementById("productsGrid");
   const productsFallback = document.getElementById("productsFallback");
-  let filtersForm = document.getElementById("filtersForm");
+  let filtersForm = document.getElementById("filtersForm") || document.getElementById('storeCategoryFilters');
   const btnClearFilters = document.getElementById("btnClearFilters");
   const searchForm = document.getElementById("searchForm");
   const searchInput = document.getElementById("searchInput");
@@ -175,8 +175,8 @@
     .trim()
     .replace(/\s+/g, " ")
     .slice(0, 100);
-  const categorySlugRaw = (url.searchParams.get("categorySlug") || "").trim().toLowerCase();
-  const initialCategorySlug = /^[a-z0-9-]+$/.test(categorySlugRaw) ? categorySlugRaw : "";
+  let categorySlugRaw = (url.searchParams.get("categorySlug") || "").trim().toLowerCase();
+  let initialCategorySlug = /^[a-z0-9#-]+$/.test(categorySlugRaw) ? categorySlugRaw : "";
   let activeSearchQuery = initialQueryRaw;
   if (searchInput && initialQueryRaw) searchInput.value = initialQueryRaw;
   if (initialCategorySlug) {
@@ -845,7 +845,9 @@
     f.cat = Array.from(filtersForm.querySelectorAll('input[name="cat"]:checked')).map(el => norm(el.value));
     f.size = Array.from(filtersForm.querySelectorAll('input[name="size"]:checked')).map(el => norm(el.value));
     f.color= Array.from(filtersForm.querySelectorAll('input[name="color"]:checked')).map(el => norm(el.value));
-    f.groups = Array.from(filtersForm.querySelectorAll('[data-public-category-group]')).map(select => Array.from(select.selectedOptions).map(option => norm(option.value)).filter(Boolean)).filter(values => values.length);
+    const groups = new Map();
+    filtersForm.querySelectorAll('[data-store-category]:checked').forEach(input => { const group = input.dataset.publicCategoryGroup; if (!groups.has(group)) groups.set(group, []); groups.get(group).push(norm(input.value)); });
+    f.groups = [...groups.values()];
     return f;
   }
 
@@ -856,38 +858,6 @@
     if (f.color.length){ if (!f.color || !f.color.includes(norm(p.color))) return false; }
     if (f.groups.some(group => !(p.categories || []).some(category => group.includes(norm(category))))) return false;
     return true;
-  }
-
-  async function loadCategoryFilters() {
-    if (!productsGrid || typeof API.getAllCategories !== 'function') return;
-    let host = document.getElementById('publicCategoryFilters');
-    if (!host) {
-      host = document.createElement('div'); host.id = 'publicCategoryFilters'; host.className = 'store-category-filters';
-      productsGrid.before(host);
-    }
-    try {
-      const categories = await API.getAllCategories();
-      if (!filtersForm) { filtersForm = document.createElement('form'); filtersForm.id = 'filtersForm'; host.append(filtersForm); filtersForm.addEventListener('submit', event => { event.preventDefault(); applyAll(); }); }
-      const groups = { NEW: 'Novedades', GARMENT: 'Tipo de prenda', DROP: 'Drop/conjunto', UNCLASSIFIED: 'Otras categorías' };
-      for (const [group, title] of Object.entries(groups)) {
-        const entries = categories.filter(category => category.isActive !== false && (category.group || 'UNCLASSIFIED') === group);
-        if (!entries.length) continue;
-        const label = document.createElement('label'); label.textContent = title;
-        if (group === 'NEW') {
-          const input = document.createElement('input'); input.type = 'checkbox'; input.name = 'cat'; input.value = entries[0].slug; label.prepend(input);
-        } else {
-          const select = document.createElement('select'); select.dataset.publicCategoryGroup = group;
-          select.setAttribute('aria-label', title);
-          const empty = document.createElement('option'); empty.value = ''; empty.textContent = 'Todos'; select.append(empty);
-          entries.forEach(category => { const option = document.createElement('option'); option.value = category.slug; option.textContent = category.name; select.append(option); }); label.append(select);
-        }
-        label.addEventListener('change', applyAll); filtersForm.append(label);
-      }
-    } catch (error) {
-      const status = document.createElement('p'); status.setAttribute('role', 'status'); status.textContent = 'No se pudieron cargar los filtros de categorías.';
-      const retry = document.createElement('button'); retry.type = 'button'; retry.textContent = 'Reintentar'; retry.onclick = () => { status.remove(); retry.remove(); void loadCategoryFilters(); };
-      host.append(status, retry);
-    }
   }
 
   function applyAll() {
@@ -1106,6 +1076,7 @@
     const query = String(rawQuery || '').trim().replace(/\s+/g, ' ').slice(0, 100);
     if (!query || !productsGrid) return;
     activeSearchQuery = query;
+    initialCategorySlug = ''; categorySlugRaw = '';
     const requestId = ++catalogRequestId;
 
     const nextUrl = new URL(window.location.href);
@@ -1150,7 +1121,24 @@
   };
 
   if (productsGrid) window.CRONOX_handleStoreSearch = performFullSearch;
-  if (productsGrid) void loadCategoryFilters();
+  const clearInitialCategory = () => {
+    initialCategorySlug = ''; categorySlugRaw = ''; catalogRequestId++;
+    const next = new URL(location.href); next.searchParams.delete('categorySlug'); history.replaceState(null,'',next);
+    if (storeHeading) storeHeading.textContent = 'NOVEDADES';
+    const pending = catalogInFlight;
+    if (pending) void pending.finally(() => initCatalog()); else void initCatalog();
+  };
+  document.getElementById('filtersPanel')?.addEventListener('change', () => {
+    filtersForm = document.getElementById('storeCategoryFilters') || filtersForm;
+    if (initialCategorySlug && ![...filtersForm.querySelectorAll('[data-store-category]:checked')].some(input => input.value === initialCategorySlug)) clearInitialCategory();
+    else applyAll();
+  });
+  window.addEventListener('cronox:store-categories', event => {
+    filtersForm = document.getElementById('storeCategoryFilters');
+    if (event.detail?.clearInitialSlug && initialCategorySlug) {
+      clearInitialCategory();
+    } else applyAll();
+  });
 
   // ---- Eventos búsqueda/filtros ----
   if (filtersForm) {

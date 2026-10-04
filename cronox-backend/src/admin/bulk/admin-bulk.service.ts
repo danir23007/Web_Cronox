@@ -140,7 +140,7 @@ export class AdminBulkService {
               isActive: true,
               updatedAt: true,
               categories: {
-                select: { categoryId: true },
+                select: { categoryId: true, category: { select: { group: true } } },
                 orderBy: { categoryId: 'asc' },
               },
             },
@@ -197,7 +197,7 @@ export class AdminBulkService {
         if (c.isActive !== undefined) after.isActive = c.isActive;
         if (c.categoryMode === 'clear') after.categoryIds = [];
         if (c.categoryMode === 'replace')
-          after.categoryIds = sorted(c.categoryIds!);
+          after.categoryIds = sorted([...c.categoryIds!, ...r.categories.filter((a: any) => a.category?.group === 'UNCLASSIFIED').map((a: any) => a.categoryId)]);
         if (c.categoryMode === 'add')
           after.categoryIds = sorted([
             ...before.categoryIds!,

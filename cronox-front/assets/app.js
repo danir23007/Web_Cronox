@@ -227,6 +227,7 @@
 
   function openFilters(){
     if (!filtersPanel) return;
+    void window.CRONOX_STORE_CATEGORIES?.refresh?.();
     filtersPanel.hidden = false;
     requestAnimationFrame(() => {
       filtersPanel?.classList.add('is-open');
@@ -251,6 +252,58 @@
   }
 
   if (filtersPanel) {
+    const categoryList = filtersPanel.querySelector('.black-menu__list');
+    let categoryRequest = 0;
+    let categorySignature = '';
+    const refreshCategories = async () => {
+      if (!categoryList || typeof API.getAllCategories !== 'function') return;
+      const version = ++categoryRequest;
+      const selected = new Set([...categoryList.querySelectorAll('[data-store-category]:checked')].map(input => input.value));
+      const requestedSlug = new URL(location.href).searchParams.get('categorySlug');
+      if (requestedSlug) selected.add(requestedSlug);
+      try {
+        const categories = await API.getAllCategories();
+        if (version !== categoryRequest) return;
+        const visible = categories.filter(category => category.isActive !== false && category.showInStoreFilters !== false);
+        categoryList.querySelector('[data-category-error]')?.remove();
+        const signature = JSON.stringify(visible);
+        if (signature === categorySignature && categoryList.querySelector('#storeCategoryFilters') && (!requestedSlug || visible.some(category => category.slug === requestedSlug))) return;
+        categorySignature = signature;
+        if (categoryList.querySelector('#storeCategoryFilters')) {
+          selected.clear(); categoryList.querySelectorAll('[data-store-category]:checked').forEach(input => selected.add(input.value));
+        }
+        const form = document.createElement('form'); form.id = 'storeCategoryFilters';
+        form.addEventListener('submit', event => event.preventDefault());
+        for (const category of visible) {
+          const row = document.createElement('div'); row.className = 'black-menu__category-row';
+          const link = document.createElement('a'); link.className = 'black-menu__link'; link.textContent = category.name;
+          link.href = '/tienda?categorySlug=' + encodeURIComponent(category.slug) + '#store';
+          if (requestedSlug === category.slug) link.setAttribute('aria-current','page');
+          if (document.getElementById('productsGrid')) {
+            const input = document.createElement('input'); input.type = 'checkbox'; input.value = category.slug;
+            input.dataset.storeCategory = ''; input.dataset.publicCategoryGroup = category.group || 'UNCLASSIFIED';
+            input.checked = selected.has(category.slug); input.setAttribute('aria-label', `Filtrar por ${category.name}`); row.append(input);
+          }
+          row.append(link); form.append(row);
+        }
+        categoryList.removeAttribute('role'); categoryList.replaceChildren(form);
+        const clearInitialSlug = !!requestedSlug && !visible.some(category => category.slug === requestedSlug);
+        if (clearInitialSlug) { const next = new URL(location.href); next.searchParams.delete('categorySlug'); history.replaceState(null,'',next); }
+        window.dispatchEvent(new CustomEvent('cronox:store-categories',{detail:{clearInitialSlug}}));
+      } catch {
+        if (version !== categoryRequest) return;
+        const status = document.createElement('p'); status.setAttribute('role','status'); status.textContent = 'No se pudieron cargar las categorías.';
+        const retry = document.createElement('button'); retry.type = 'button'; retry.className = 'black-menu__link'; retry.textContent = 'Reintentar'; retry.addEventListener('click', refreshCategories);
+        categoryList.querySelector('[data-category-error]')?.remove();
+        const error = document.createElement('div'); error.dataset.categoryError = ''; error.append(status,retry);
+        if (!categoryList.querySelector('#storeCategoryFilters')) categoryList.replaceChildren(error); else categoryList.append(error);
+      }
+    };
+    if (typeof API.getAllCategories === 'function') {
+      categoryList?.replaceChildren();
+      window.CRONOX_STORE_CATEGORIES = {refresh:refreshCategories};
+      window.CRONOX_STORE_CATEGORIES.ready = refreshCategories();
+    }
     // Independent navigation, outside the category list and its filter handlers.
     if (!filtersPanel.querySelector('.black-menu__discover')) {
       const discover = document.createElement('a');

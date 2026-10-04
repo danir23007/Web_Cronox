@@ -2718,24 +2718,62 @@
     return (await api.listAllAdminCategories()).sort(compareAssignableCategories);
   };
   const createCategoryForm = document.getElementById('createCategoryForm');
+  const categoryDialog = document.getElementById('categoryEditorDialog');
+  let editingCategory = null;
   let creatingCategory = false;
+  const openCategoryEditor = category => {
+    createCategoryForm.reset(); editingCategory = category || null;
+    createCategoryForm.elements.name.value = category?.name || '';
+    createCategoryForm.elements.group.value = category?.group === 'UNCLASSIFIED' ? '' : category?.group || '';
+    createCategoryForm.elements.group.disabled = category?.group === 'NEW';
+    createCategoryForm.elements.showInStoreFilters.checked = category?.showInStoreFilters !== false;
+    createCategoryForm.querySelector('[data-category-create-status]').textContent = '';
+    document.getElementById('categoryEditorTitle').textContent = category ? 'Editar categoría' : 'Crear categoría';
+    categoryDialog.showModal(); window.CRONOX_ADMIN_SHELL?.capture?.(createCategoryForm);
+    createCategoryForm.elements.name.focus();
+  };
+  document.getElementById('createCategoryBtn')?.addEventListener('click', () => openCategoryEditor(null));
+  document.getElementById('cancelCategoryBtn')?.addEventListener('click', () => { if (!creatingCategory) categoryDialog.close(); });
+  categoryDialog?.addEventListener('cancel', event => { if (creatingCategory) event.preventDefault(); });
+  categoryDialog?.addEventListener('close', () => {
+    createCategoryForm.reset(); window.CRONOX_ADMIN_SHELL?.clear?.(createCategoryForm);
+    const opener = editingCategory ? document.querySelector(`[data-edit-category="${editingCategory.id}"]`) : document.getElementById('createCategoryBtn');
+    if (opener?.getClientRects().length) opener.focus();
+  });
+  const renderCategoryManagement = () => {
+    const list = document.getElementById('categoryManagementList'); if (!list) return;
+    list.replaceChildren();
+    for (const category of categoryAssignmentsState.categories) {
+      const row = document.createElement('div'); row.className = 'category-management-row';
+      const name = document.createElement('strong'); name.textContent = category.name;
+      const group = document.createElement('span'); group.textContent = ({NEW:'Novedades',GARMENT:'Tipo de prenda',DROP:'Drop/colección'})[category.group] || 'Pendiente de clasificación';
+      const visibility = document.createElement('span'); visibility.textContent = category.showInStoreFilters === false ? 'No se muestra en filtros' : 'Se muestra en filtros';
+      const edit = document.createElement('button'); edit.type = 'button'; edit.className = 'btn'; edit.textContent = 'Editar'; edit.dataset.editCategory = category.id; edit.setAttribute('aria-label', `Editar categoría ${category.name}`); edit.addEventListener('click', () => openCategoryEditor(category));
+      row.append(name,group,visibility,edit); list.append(row);
+    }
+  };
   createCategoryForm?.addEventListener('submit', async event => {
     event.preventDefault();
     if (creatingCategory || !canAccess('products') || !createCategoryForm.reportValidity()) return;
     const name = createCategoryForm.elements.name.value.trim().replace(/\s+/g, ' ');
     const group = createCategoryForm.elements.group.value;
     const status = createCategoryForm.querySelector('[data-category-create-status]');
-    if (!name || name.length > 120 || !['GARMENT', 'DROP'].includes(group)) { status.textContent = 'Introduce un nombre y selecciona un grupo válido.'; return; }
+    if (!name || name.length > 120 || (!['GARMENT', 'DROP'].includes(group) && editingCategory?.group !== 'NEW')) { status.textContent = 'Introduce un nombre y selecciona un grupo válido.'; return; }
     creatingCategory = true;
-    const button = createCategoryForm.querySelector('button'); button.disabled = true;
-    status.textContent = 'Creando categoría…';
+    const button = createCategoryForm.querySelector('[type=submit]'); button.disabled = true;
+    document.getElementById('cancelCategoryBtn').disabled = true;
+    status.textContent = 'Guardando categoría…';
     try {
-      await window.CRONOX_API.admin.createAdminCategory({ name, group });
+      const payload = { name, showInStoreFilters: createCategoryForm.elements.showInStoreFilters.checked };
+      if (editingCategory?.group !== 'NEW') payload.group = group;
+      if (editingCategory) await window.CRONOX_API.admin.updateAdminCategory(editingCategory.id,payload);
+      else await window.CRONOX_API.admin.createAdminCategory(payload);
       createCategoryForm.reset(); window.CRONOX_ADMIN_SHELL?.clear?.(createCategoryForm);
       await loadCategoryAssignments({ preserveDrafts: true }); await loadProductCategories();
-      status.textContent = 'Categoría creada.';
+      categoryDialog.close();
+      setCategoryAssignmentsMessage('Categoría guardada.', 'success');
     } catch (error) { status.textContent = error.message || 'No se pudo crear la categoría.'; }
-    finally { creatingCategory = false; button.disabled = false; }
+    finally { creatingCategory = false; button.disabled = false; document.getElementById('cancelCategoryBtn').disabled = false; }
   });
   const renderCreationCategoryNames = () => {
     const names = [...creationCategories.selected].map(id => creationCategories.names.get(id) || `Categoría ${id}`).sort((a, b) => a.localeCompare(b, 'es'));
@@ -3088,7 +3126,7 @@
 
   window.CRONOX_CATEGORY_ASSIGNMENTS = {
     hasUnsavedChanges: () => [...categoryAssignmentsState.drafts].some(([id, selected]) => JSON.stringify([...selected].sort((a,b)=>a-b)) !== JSON.stringify(assignedCategoryIds(categoryAssignmentsState.products.find(p=>Number(p.id)===id)).sort((a,b)=>a-b))),
-    discard: () => { categoryAssignmentsState.drafts.clear(); renderCategoryAssignments(); },
+    discard: () => { categoryDialog?.close(); categoryAssignmentsState.drafts.clear(); renderCategoryAssignments(); },
   };
   const loadCategoryAssignments = async ({ preserveDrafts = false } = {}) => {
     if (!preserveDrafts) categoryAssignmentsState.drafts.clear();
@@ -3110,6 +3148,7 @@
       categoryAssignmentsState.categories = categories;
       categoryAssignmentsState.products = products;
       categoryAssignmentsState.loaded = true;
+      renderCategoryManagement();
       populateCategoryAssignmentFilter();
       setCategoryAssignmentsMessage('Clasificación cargada.', 'success', true);
       renderCategoryAssignments();
@@ -3137,11 +3176,8 @@
     const product = categoryAssignmentsState.products.find((item) => Number(item.id) === productId);
     if (!product) return;
     const previousIds = assignedCategoryIds(product);
-    const selectedIds = Array.from(card.querySelectorAll('.category-checkbox input:checked'))
-      .map((input) => Number(input.value))
-      .filter((id) => Number.isInteger(id) && id > 0);
-    // Preserve associations not represented by a loaded control.
-    previousIds.filter(id => !categoryAssignmentsState.categories.some(category => Number(category.id) === id)).forEach(id => selectedIds.push(id));
+    // Includes unclassified associations even though they have no fourth column.
+    const selectedIds = [...(categoryAssignmentsState.drafts.get(productId) || new Set(previousIds))];
 
     categoryAssignmentsState.saving.add(productId);
     renderCategoryAssignments();

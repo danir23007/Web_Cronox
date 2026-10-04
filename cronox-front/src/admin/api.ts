@@ -1680,8 +1680,8 @@ import { loadCategoryPages } from './category-pagination';
       : [];
   };
 
-  api.getAllCategories = () => loadCategoryPages(query => request('/api/categories', { query }));
-  adminApi.listAllAdminCategories = () => loadCategoryPages(query => request('/api/admin/categories', { query }));
+  api.getAllCategories = () => loadCategoryPages(query => request('/api/categories', { query, cache: 'no-store' }));
+  adminApi.listAllAdminCategories = () => loadCategoryPages(query => request('/api/admin/categories', { query, cache: 'no-store' }));
 
   api.getCategoryProducts = async (slug: string, query: QueryRecord = {}) => {
     const data = (await request(

@@ -3,9 +3,7 @@
     var categorySlug = (new URL(window.location.href).searchParams.get('categorySlug') || '')
       .trim()
       .toLowerCase();
-    var recognizedCategories = ['novedades', 'camisetas', 'chaquetas', 'pantalones', 'complementos'];
-
-    if (recognizedCategories.indexOf(categorySlug) !== -1) {
+    if (categorySlug && categorySlug.length <= 140 && /^[a-z0-9#-]+$/.test(categorySlug)) {
       document.documentElement.classList.add('category-page');
     }
   } catch {}

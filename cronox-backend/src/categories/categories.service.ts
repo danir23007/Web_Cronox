@@ -15,7 +15,7 @@ export class CategoriesService {
   constructor(private readonly prisma: PrismaService) {}
 
   async listActive(query: QueryCategoriesDto) {
-    return this.list(query, { isActive: true });
+    return this.list(query, { isActive: true, showInStoreFilters: true });
   }
 
   async listAll(query: QueryCategoriesDto) {
@@ -60,9 +60,10 @@ export class CategoriesService {
   }
 
   async getActiveBySlugOrThrow(slug: string) {
-    const normalizedSlug = this.normalizeSlug(slug);
-    const category = await this.prisma.category.findFirst({
-      where: { slug: normalizedSlug, isActive: true },
+    // Preserve exact historical slugs (including d#01); normalization is fallback.
+    const exact = await this.prisma.category.findFirst({ where: { slug, isActive: true } });
+    const category = exact ?? await this.prisma.category.findFirst({
+      where: { slug: this.normalizeSlug(slug), isActive: true },
     });
 
     if (!category) {
@@ -82,6 +83,7 @@ export class CategoriesService {
   }
 
   async create(dto: CreateCategoryDto) {
+    if (dto.showInStoreFilters !== undefined && typeof dto.showInStoreFilters !== 'boolean') throw new BadRequestException('INVALID_CATEGORY_FILTER_VISIBILITY');
     if (!['GARMENT', 'DROP'].includes(dto.group)) throw new BadRequestException('INVALID_CATEGORY_GROUP');
     const key = this.validateName(dto.name), slug = this.normalizeSlug(dto.slug ?? dto.name);
     try {
@@ -89,12 +91,13 @@ export class CategoriesService {
         await tx.$executeRaw`SELECT pg_advisory_xact_lock(435276902)`;
         const existing = await tx.category.findMany({ select: { name: true } });
         if (existing.some(c => this.nameKey(c.name) === key)) throw new ConflictException('CATEGORY_NAME_ALREADY_EXISTS');
-        return tx.category.create({ data: { name: dto.name.trim().replace(/\s+/g, ' '), slug, group: dto.group, description: dto.description, isActive: dto.isActive ?? true } });
+        return tx.category.create({ data: { name: dto.name.trim().replace(/\s+/g, ' '), slug, group: dto.group, showInStoreFilters: dto.showInStoreFilters ?? true, description: dto.description, isActive: dto.isActive ?? true } });
       });
     } catch (error) { this.handlePrismaError(error); }
   }
 
   async update(id: number, dto: UpdateCategoryDto) {
+    if (dto.showInStoreFilters !== undefined && typeof dto.showInStoreFilters !== 'boolean') throw new BadRequestException('INVALID_CATEGORY_FILTER_VISIBILITY');
     if (dto.group !== undefined && !['GARMENT', 'DROP'].includes(dto.group)) throw new BadRequestException('INVALID_CATEGORY_GROUP');
     try {
       return await this.prisma.$transaction(async tx => {
@@ -113,6 +116,7 @@ export class CategoriesService {
         if (dto.group !== undefined) data.group = dto.group;
         if (dto.description !== undefined) data.description = dto.description;
         if (dto.isActive !== undefined) data.isActive = dto.isActive;
+        if (dto.showInStoreFilters !== undefined) data.showInStoreFilters = dto.showInStoreFilters;
         return tx.category.update({ where: { id }, data });
       });
     } catch (error) { this.handlePrismaError(error); }
