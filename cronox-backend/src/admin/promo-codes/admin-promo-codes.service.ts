@@ -11,6 +11,7 @@ import {
   AdminUpdatePromoCodeDto,
 } from './dto/admin-promo-code.dto';
 import { ADMIN_PAGE_SIZES } from '../admin-pagination.constants';
+import { welcomeCodeOrigin } from '../../newsletter/welcome-code-origin';
 
 @Injectable()
 export class AdminPromoCodesService {
@@ -24,7 +25,8 @@ export class AdminPromoCodesService {
     );
     const skip = (page - 1) * limit;
 
-    const where: Prisma.PromoCodeWhereInput = {};
+    // Origin is the persisted welcome-code relation, never a code pattern/value.
+    const where: Prisma.PromoCodeWhereInput = { NOT: welcomeCodeOrigin };
 
     if (query.search?.trim()) {
       const term = query.search.trim();

@@ -1463,6 +1463,10 @@ export class ProductService {
           throw new NotFoundException('Product not found');
         }
 
+        if (dto.categoryIds !== undefined) {
+          await this.replaceProductCategories(id, dto.categoryIds, adminId, tx);
+        }
+
         const currentSizeSystem =
           existing.sizeSystem ?? DEFAULT_PRODUCT_SIZE_SYSTEM;
         const nextSizeSystem = dto.sizeSystem ?? currentSizeSystem;

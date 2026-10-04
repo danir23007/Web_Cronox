@@ -2,6 +2,31 @@ import { AdminUsersService } from '../users/admin-users.service';
 import { AdminAuditLogsService } from './admin-audit-logs.service';
 import { auditLogRetentionCutoff } from './audit-log-retention';
 
+describe('clear all Activity', () => {
+  it('requires confirmation and shares concurrent deletion without filters', async () => {
+    let finish!: (result: { count: number }) => void;
+    const deleteMany = jest.fn(() => new Promise<{ count: number }>(resolve => { finish = resolve; }));
+    const service = new AdminAuditLogsService({ auditLog: { deleteMany } } as any);
+    expect(() => service.clear('')).toThrow('ACTIVITY_CONFIRMATION_REQUIRED');
+    expect(deleteMany).not.toHaveBeenCalled();
+    const first = service.clear('DELETE_ALL_ACTIVITY');
+    const second = service.clear('DELETE_ALL_ACTIVITY');
+    expect(second).toBe(first);
+    expect(deleteMany).toHaveBeenCalledTimes(1);
+    expect(deleteMany).toHaveBeenCalledWith({});
+    finish({ count: 12 });
+    await expect(first).resolves.toEqual({ deleted: 12 });
+  });
+
+  it('propagates database failures and permits a deliberate retry', async () => {
+    const deleteMany = jest.fn().mockRejectedValueOnce(new Error('local failure')).mockResolvedValueOnce({ count: 2 });
+    const service = new AdminAuditLogsService({ auditLog: { deleteMany } } as any);
+    await expect(service.clear('DELETE_ALL_ACTIVITY')).rejects.toThrow('local failure');
+    await expect(service.clear('DELETE_ALL_ACTIVITY')).resolves.toEqual({ deleted: 2 });
+    expect(deleteMany).toHaveBeenCalledTimes(2);
+  });
+});
+
 describe('retained Admin AuditLog queries', () => {
   const now = new Date('2026-09-20T12:00:00.000Z');
   let prisma: any;

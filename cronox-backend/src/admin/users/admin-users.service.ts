@@ -14,6 +14,7 @@ import {
   UserAccountState,
 } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
+import { welcomeCodeOrigin } from '../../newsletter/welcome-code-origin';
 import { normalizeCountry } from '../../common/country';
 import { AdminUserQueryDto } from './dto/admin-user-query.dto';
 import { AdminUserOrdersQueryDto } from './dto/admin-user-orders-query.dto';
@@ -206,10 +207,29 @@ export class AdminUsersService {
       [user.firstName, user.lastName].filter(Boolean).join(' ') ||
       user.email;
 
+    const [legacyWelcome, newsletterWelcome] = await Promise.all([
+      this.prisma.discountCode.findFirst({
+        where: { userId: id, type: 'FIRST_ORDER' },
+        orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+        select: { code: true, createdAt: true },
+      }),
+      this.prisma.promoCode.findFirst({
+        where: { AND: [welcomeCodeOrigin, { OR: [
+          { ownerUserId: id },
+          { ownerEmail: { equals: user.email, mode: 'insensitive' } },
+          { newsletterSubscription: { is: { email: { equals: user.email, mode: 'insensitive' } } } },
+        ] }] },
+        orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+        select: { code: true, createdAt: true },
+      }),
+    ]);
+    const originalWelcome = [legacyWelcome, newsletterWelcome].filter(Boolean).sort((a, b) => a!.createdAt.getTime() - b!.createdAt.getTime())[0];
+
     return {
       user: {
         id: user.id,
         email: user.email,
+        welcomeCode: originalWelcome?.code ?? null,
         username,
         avatarUrl: null,
         circle: user.circleLevel ?? 1,

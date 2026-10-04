@@ -7,7 +7,7 @@
 (function () {
   const productsGrid = document.getElementById("productsGrid");
   const productsFallback = document.getElementById("productsFallback");
-  const filtersForm = document.getElementById("filtersForm");
+  let filtersForm = document.getElementById("filtersForm");
   const btnClearFilters = document.getElementById("btnClearFilters");
   const searchForm = document.getElementById("searchForm");
   const searchInput = document.getElementById("searchInput");
@@ -839,20 +839,55 @@
 
   // ---- Filtros + Búsqueda ----
   function getActiveFilters() {
-    const f = { cat: [], size: [], color: [] };
+    const f = { cat: [], size: [], color: [], groups: [] };
     if (!filtersForm) return f;
 
     f.cat = Array.from(filtersForm.querySelectorAll('input[name="cat"]:checked')).map(el => norm(el.value));
     f.size = Array.from(filtersForm.querySelectorAll('input[name="size"]:checked')).map(el => norm(el.value));
     f.color= Array.from(filtersForm.querySelectorAll('input[name="color"]:checked')).map(el => norm(el.value));
+    f.groups = Array.from(filtersForm.querySelectorAll('[data-public-category-group]')).map(select => Array.from(select.selectedOptions).map(option => norm(option.value)).filter(Boolean)).filter(values => values.length);
     return f;
   }
 
   function matchesFilters(p, f) {
+    if (p.isActive === false) return false;
     if (f.cat.length)  { if (!(p.categories||[]).some(c=>f.cat.includes(norm(c)))) return false; }
     if (f.size.length) { if (!(p.sizes||[]).some(s=>f.size.includes(norm(s)))) return false; }
     if (f.color.length){ if (!f.color || !f.color.includes(norm(p.color))) return false; }
+    if (f.groups.some(group => !(p.categories || []).some(category => group.includes(norm(category))))) return false;
     return true;
+  }
+
+  async function loadCategoryFilters() {
+    if (!productsGrid || typeof API.getAllCategories !== 'function') return;
+    let host = document.getElementById('publicCategoryFilters');
+    if (!host) {
+      host = document.createElement('div'); host.id = 'publicCategoryFilters'; host.className = 'store-category-filters';
+      productsGrid.before(host);
+    }
+    try {
+      const categories = await API.getAllCategories();
+      if (!filtersForm) { filtersForm = document.createElement('form'); filtersForm.id = 'filtersForm'; host.append(filtersForm); filtersForm.addEventListener('submit', event => { event.preventDefault(); applyAll(); }); }
+      const groups = { NEW: 'Novedades', GARMENT: 'Tipo de prenda', DROP: 'Drop/conjunto', UNCLASSIFIED: 'Otras categorías' };
+      for (const [group, title] of Object.entries(groups)) {
+        const entries = categories.filter(category => category.isActive !== false && (category.group || 'UNCLASSIFIED') === group);
+        if (!entries.length) continue;
+        const label = document.createElement('label'); label.textContent = title;
+        if (group === 'NEW') {
+          const input = document.createElement('input'); input.type = 'checkbox'; input.name = 'cat'; input.value = entries[0].slug; label.prepend(input);
+        } else {
+          const select = document.createElement('select'); select.dataset.publicCategoryGroup = group;
+          select.setAttribute('aria-label', title);
+          const empty = document.createElement('option'); empty.value = ''; empty.textContent = 'Todos'; select.append(empty);
+          entries.forEach(category => { const option = document.createElement('option'); option.value = category.slug; option.textContent = category.name; select.append(option); }); label.append(select);
+        }
+        label.addEventListener('change', applyAll); filtersForm.append(label);
+      }
+    } catch (error) {
+      const status = document.createElement('p'); status.setAttribute('role', 'status'); status.textContent = 'No se pudieron cargar los filtros de categorías.';
+      const retry = document.createElement('button'); retry.type = 'button'; retry.textContent = 'Reintentar'; retry.onclick = () => { status.remove(); retry.remove(); void loadCategoryFilters(); };
+      host.append(status, retry);
+    }
   }
 
   function applyAll() {
@@ -1115,6 +1150,7 @@
   };
 
   if (productsGrid) window.CRONOX_handleStoreSearch = performFullSearch;
+  if (productsGrid) void loadCategoryFilters();
 
   // ---- Eventos búsqueda/filtros ----
   if (filtersForm) {

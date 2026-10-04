@@ -18,7 +18,7 @@
       }
     })();
   </script>
-  <link id="cronox-admin-style" rel="stylesheet" href="assets/store.css?v=106">
+  <link id="cronox-admin-style" rel="stylesheet" href="assets/store.css?v=107">
   <link rel="stylesheet" href="assets/gallery.css?v=19">
   <link rel="stylesheet" href="assets/admin-gallery.css?v=6">
   <link rel="stylesheet" href="assets/admin-media.css?v=4">
@@ -271,6 +271,7 @@
   <link rel="stylesheet" href="assets/admin-shell.css?v=6">
   <link rel="stylesheet" href="assets/admin-live-stats.css?v=1">
   <link rel="stylesheet" href="/assets/admin-theme.css?v=1">
+  <link rel="stylesheet" href="assets/category-controls.css?v=1">
 </head>
 <body class="bw-theme cronox-admin">
   <div id="adminAuthCheck" class="admin-auth-check" role="status">Verificando acceso…</div>
@@ -377,6 +378,7 @@
             <h2 id="title-user">Usuario</h2>
             <div class="user-name" id="userName">—</div>
             <div class="user-email" id="userEmail">—</div>
+            <p>Código de bienvenida: <span id="userWelcomeCode">Sin código asignado</span></p>
             <div class="user-badges" id="userBadges"></div>
           </div>
         </div>
@@ -509,6 +511,7 @@
           <h2 id="title-activity">Actividad</h2>
           <small>Historial de acciones administrativas recientes.</small>
         </div>
+        <button id="clearActivityBtn" class="btn" type="button" hidden>Borrar historial</button>
       </div>
       <details class="filters-panel" style="margin-top:10px;" open>
         <summary>Filtros</summary>
@@ -1097,7 +1100,7 @@
     </section>
 
     <section id="section-products" class="card admin-section" aria-labelledby="title-products" hidden>
-      <button class="btn admin-view-back" type="button" data-back-target="section-products-menu">← Atrás</button>
+      <button class="btn admin-view-back" type="button" data-back-target="section-dashboard">← Atrás</button>
       <div style="display:flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap;">
         <div>
           <h2 id="title-products">Productos</h2>
@@ -1202,7 +1205,7 @@
     </section>
 
     <section id="section-product-categories" class="card admin-section" aria-labelledby="title-product-categories" hidden>
-      <button class="btn admin-view-back" type="button" data-back-target="section-products-menu">← Atrás</button>
+      <button class="btn admin-view-back" type="button" data-back-target="section-dashboard">← Atrás</button>
       <div class="category-section-header">
         <div class="category-section-heading">
           <h2 id="title-product-categories">Categorías de productos</h2>
@@ -1210,6 +1213,15 @@
         </div>
         <div id="categoryAssignmentsMessage" class="message category-screen-status" role="status" aria-live="polite"></div>
       </div>
+      <details id="createCategoryDetails">
+        <summary>Crear categoría</summary>
+        <form id="createCategoryForm" class="category-create-form">
+          <label>Nombre<input class="input" name="name" required maxlength="120" autocomplete="off"></label>
+          <label>Grupo<select class="input" name="group" required><option value="">Selecciona un grupo</option><option value="GARMENT">Tipo de prenda</option><option value="DROP">Drop/conjunto</option></select></label>
+          <button class="btn primary" type="submit">Crear categoría</button>
+          <p data-category-create-status role="status" aria-live="polite"></p>
+        </form>
+      </details>
       <div class="filter-bar category-classification-filters" aria-label="Filtros de clasificación">
         <input id="categoryProductSearch" class="input" type="search" placeholder="Buscar por nombre, slug, SKU o ID" autocomplete="off">
         <div id="categoryFilterDropdown" class="category-filter-dropdown">
@@ -1965,7 +1977,7 @@
   <div class="toast-container" id="toastContainer" aria-live="polite" aria-atomic="true"></div>
 
   <script src="assets/size-systems.js?v=1"></script>
-  <script src="assets/api.js?v=9"></script>
+  <script src="assets/api.js?v=11"></script>
   <script src="assets/admin-auth-routing.js?v=1"></script>
   <script src="assets/ui-status.js"></script>
   <script src="assets/media-framing-geometry.js?v=6"></script>
@@ -1973,17 +1985,18 @@
   <script src="assets/product-card-framing.js?v=1"></script>
   <script src="assets/admin-product-gallery.js?v=1"></script>
   <script src="assets/admin-pagination.js?v=1"></script>
-  <script src="assets/admin-shell.js?v=8"></script>
+  <script src="assets/category-controls.js?v=1"></script>
+  <script src="assets/admin-shell.js?v=9"></script>
   <script src="assets/admin-finance.js?v=2"></script>
   <link rel="stylesheet" href="assets/admin-visitors.css?v=1">
   <script src="assets/admin-visitors.js?v=2"></script>
   <script src="assets/admin-live-stats.js?v=2"></script>
   <link rel="stylesheet" href="assets/admin-bulk.css?v=2">
-  <script src="assets/admin-bulk.js?v=4"></script>
+  <script src="assets/admin-bulk.js?v=5"></script>
   <script src="assets/admin-section-headers.js?v=1"></script>
   <script src="assets/admin-push.js?v=1"></script>
   <script src="assets/admin-inbox.js?v=12"></script>
-  <script src="assets/admin.js?v=6"></script>
+  <script src="assets/admin.js?v=7"></script>
   <script src="assets/admin-inventory.js?v=2"></script>
   <script src="assets/admin-waitlist.js?v=1"></script>
   <script src="assets/responsive-images.js?v=4"></script>

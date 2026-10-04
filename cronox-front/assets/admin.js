@@ -209,6 +209,7 @@
     products: [],
     categories: [],
     selectedFilterCategoryIds: new Set(),
+    drafts: new Map(),
     saving: new Set(),
     loaded: false,
   };
@@ -395,6 +396,8 @@
   };
 
   const applyRoleVisibility = () => {
+    const clearActivityButton = document.getElementById('clearActivityBtn');
+    if (clearActivityButton) clearActivityButton.hidden = currentAdminRole !== 'SUPERADMIN';
     setNavVisibility('section-push', canAccess('mails'));
     setNavVisibility('section-23', canAccess('requests'));
     setNavVisibility('section-34', canAccess('requests'));
@@ -1004,7 +1007,7 @@
       const btn = document.createElement('button');
       btn.type = 'button';
       btn.className = 'btn admin-view-back';
-      btn.setAttribute('data-back-target', 'section-products-menu');
+      btn.setAttribute('data-back-target', 'section-dashboard');
       btn.textContent = '← Atrás';
       section.prepend(btn);
     });
@@ -1514,6 +1517,8 @@
 
     if (userName) userName.textContent = displayName;
     if (userEmail) userEmail.textContent = email;
+    const welcomeCode = document.getElementById('userWelcomeCode');
+    if (welcomeCode) welcomeCode.textContent = user.welcomeCode || 'Sin c\u00f3digo asignado';
     setUserAvatar(user.avatarUrl, displayName);
 
     if (userBadges) {
@@ -2342,7 +2347,9 @@
     }
   };
 
+  let activityLoadVersion = 0;
   const fetchActivity = async () => {
+    const loadVersion = ++activityLoadVersion;
     if (!activityBody) return;
     if (!canAccess('auditLog')) {
       showModuleError({
@@ -2364,6 +2371,7 @@
       const data = await window.CRONOX_API?.admin?.getAuditLogs(
         buildActivityQuery(activityState),
       );
+      if (loadVersion !== activityLoadVersion) return false;
       const meta = normalizePaginated(data, activityState);
       activityState.page = meta.page;
       activityState.pageSize = ADMIN_PAGE_SIZES.activity;
@@ -2383,7 +2391,9 @@
         prev: activityPrev,
         next: activityNext,
       });
+      return true;
     } catch (error) {
+      if (loadVersion !== activityLoadVersion) return false;
       console.error('[ADMIN] Error cargando actividad', error);
       showModuleError({
         container: activityMessage || statusArea,
@@ -2399,6 +2409,7 @@
         colSpan: 5,
       });
       renderActivity([], { error: true });
+      return false;
     }
   };
 
@@ -2706,6 +2717,26 @@
     if (typeof api?.listAllAdminCategories !== 'function') throw new Error('La API de categorías no está disponible.');
     return (await api.listAllAdminCategories()).sort(compareAssignableCategories);
   };
+  const createCategoryForm = document.getElementById('createCategoryForm');
+  let creatingCategory = false;
+  createCategoryForm?.addEventListener('submit', async event => {
+    event.preventDefault();
+    if (creatingCategory || !canAccess('products') || !createCategoryForm.reportValidity()) return;
+    const name = createCategoryForm.elements.name.value.trim().replace(/\s+/g, ' ');
+    const group = createCategoryForm.elements.group.value;
+    const status = createCategoryForm.querySelector('[data-category-create-status]');
+    if (!name || name.length > 120 || !['GARMENT', 'DROP'].includes(group)) { status.textContent = 'Introduce un nombre y selecciona un grupo válido.'; return; }
+    creatingCategory = true;
+    const button = createCategoryForm.querySelector('button'); button.disabled = true;
+    status.textContent = 'Creando categoría…';
+    try {
+      await window.CRONOX_API.admin.createAdminCategory({ name, group });
+      createCategoryForm.reset(); window.CRONOX_ADMIN_SHELL?.clear?.(createCategoryForm);
+      await loadCategoryAssignments({ preserveDrafts: true }); await loadProductCategories();
+      status.textContent = 'Categoría creada.';
+    } catch (error) { status.textContent = error.message || 'No se pudo crear la categoría.'; }
+    finally { creatingCategory = false; button.disabled = false; }
+  });
   const renderCreationCategoryNames = () => {
     const names = [...creationCategories.selected].map(id => creationCategories.names.get(id) || `Categoría ${id}`).sort((a, b) => a.localeCompare(b, 'es'));
     const summary = document.getElementById('productCreationCategoryNames');
@@ -2721,21 +2752,10 @@
       const categories = await loadAssignableCategories();
       if (request !== creationCategories.request) return;
       creationCategoryOptions.replaceChildren();
-      categories.forEach(category => {
-        const id = Number(category.id);
-        const name = String(category.name || category.slug) + (category.isActive ? '' : ' (inactiva)');
-        creationCategories.names.set(id, name);
-        const label = document.createElement('label');
-        const checkbox = document.createElement('input');
-        checkbox.type = 'checkbox'; checkbox.value = String(id); checkbox.checked = creationCategories.selected.has(id);
-        checkbox.name = 'creationCategoryIds';
-        checkbox.addEventListener('change', () => {
-          if (checkbox.checked) creationCategories.selected.add(id); else creationCategories.selected.delete(id);
-          renderCreationCategoryNames();
-        });
-        const text = document.createElement('span'); text.textContent = name;
-        label.append(checkbox, text); creationCategoryOptions.append(label);
-      });
+      categories.forEach(category => creationCategories.names.set(Number(category.id), String(category.name || category.slug)));
+      creationCategoryOptions.append(window.CRONOX_CATEGORY_CONTROLS.render(categories, creationCategories.selected, selected => {
+        creationCategories.selected = selected; renderCreationCategoryNames();
+      }));
       creationCategoryStatus.textContent = categories.length ? '' : 'No hay categorías disponibles. Puedes crear el producto sin categorías.';
       renderCreationCategoryNames();
     } catch {
@@ -3026,16 +3046,7 @@
           .filter((category) => selectedIds.has(Number(category.id)))
           .map((category) => `<span class="chip">${safeText(category.name || category.slug)}</span>`)
           .join('');
-        const checkboxes = categoryAssignmentsState.categories
-          .map((category) => {
-            const categoryId = Number(category.id);
-            return `
-              <label class="category-checkbox">
-                <input type="checkbox" value="${categoryId}" ${selectedIds.has(categoryId) ? 'checked' : ''} ${isSaving ? 'disabled' : ''}>
-                <span>${safeText(category.name || category.slug)}${category.isActive ? '' : ' (inactiva)'}</span>
-              </label>`;
-          })
-          .join('');
+        const checkboxes = categoryAssignmentsState.categories.length > 0;
 
         return `
           <article class="category-assignment-card" data-category-product-id="${productId}">
@@ -3057,7 +3068,7 @@
                 <div class="category-current">${assignedLabels || '<span class="category-current__empty">Sin categorías</span>'}</div>
               </div>
               <div class="category-checkboxes" role="group" aria-label="Categorías del producto ${safeText(product.name)}">
-                ${checkboxes || '<span class="category-current__empty">No hay categorías disponibles.</span>'}
+                <div data-category-controls></div>
               </div>
               <div class="category-assignment-actions">
                 <span class="category-save-status" aria-live="polite">${isSaving ? 'Guardando cambios…' : ''}</span>
@@ -3069,9 +3080,18 @@
           </article>`;
       })
       .join('');
+    categoryAssignmentList.querySelectorAll('[data-category-product-id]').forEach(card => {
+      const product = categoryAssignmentsState.products.find(p => Number(p.id) === Number(card.dataset.categoryProductId));
+      card.querySelector('[data-category-controls]').append(window.CRONOX_CATEGORY_CONTROLS.render(categoryAssignmentsState.categories, categoryAssignmentsState.drafts.get(Number(product.id)) || assignedCategoryIds(product), selected => categoryAssignmentsState.drafts.set(Number(product.id), selected), categoryAssignmentsState.saving.has(Number(product.id))));
+    });
   };
 
-  const loadCategoryAssignments = async () => {
+  window.CRONOX_CATEGORY_ASSIGNMENTS = {
+    hasUnsavedChanges: () => [...categoryAssignmentsState.drafts].some(([id, selected]) => JSON.stringify([...selected].sort((a,b)=>a-b)) !== JSON.stringify(assignedCategoryIds(categoryAssignmentsState.products.find(p=>Number(p.id)===id)).sort((a,b)=>a-b))),
+    discard: () => { categoryAssignmentsState.drafts.clear(); renderCategoryAssignments(); },
+  };
+  const loadCategoryAssignments = async ({ preserveDrafts = false } = {}) => {
+    if (!preserveDrafts) categoryAssignmentsState.drafts.clear();
     if (!categoryAssignmentList || !canAccess('products')) return;
     categoryAssignmentList.innerHTML = '<div class="empty-state"><strong>Cargando productos y categorías…</strong></div>';
     setCategoryAssignmentsMessage('Cargando clasificación de productos…');
@@ -3120,6 +3140,8 @@
     const selectedIds = Array.from(card.querySelectorAll('.category-checkbox input:checked'))
       .map((input) => Number(input.value))
       .filter((id) => Number.isInteger(id) && id > 0);
+    // Preserve associations not represented by a loaded control.
+    previousIds.filter(id => !categoryAssignmentsState.categories.some(category => Number(category.id) === id)).forEach(id => selectedIds.push(id));
 
     categoryAssignmentsState.saving.add(productId);
     renderCategoryAssignments();
@@ -3140,12 +3162,13 @@
         'success',
         true,
       );
+      categoryAssignmentsState.drafts.delete(productId);
       showToast('Categorías actualizadas correctamente.');
     } catch (error) {
       product.categories = previousIds.map((categoryId) => ({ categoryId }));
       console.error('[ADMIN] Error guardando categorías', error);
       setCategoryAssignmentsMessage(
-        `No se pudieron guardar las categorías de “${product.name || product.slug}”. Se ha restaurado la asignación anterior.`,
+        `No se pudieron guardar las categorías de “${product.name || product.slug}”. Las selecciones siguen disponibles para reintentar.`,
         'error',
       );
     } finally {
@@ -3234,7 +3257,7 @@
     resetProductForm();
     editingProductId = productId;
     if (!productModal) return;
-    if (creationCategoryField) creationCategoryField.hidden = Boolean(productId);
+    if (creationCategoryField) creationCategoryField.hidden = false;
     if (!productId) void loadCreationCategories();
 
     if (productId) {
@@ -3243,6 +3266,8 @@
       try {
         const product = await window.CRONOX_API?.admin?.getAdminProduct(productId);
         if (product) {
+          creationCategories.selected = new Set(assignedCategoryIds(product));
+          await loadCreationCategories();
           const priceInput = document.getElementById('productPrice');
           const nameInput = document.getElementById('productName');
           const descInput = document.getElementById('productDescription');
@@ -3369,7 +3394,7 @@
       .filter(Boolean);
     const payload = {
       name: formData.get('name') || '',
-      ...(!editingProductId ? { categoryIds: [...creationCategories.selected] } : {}),
+      categoryIds: [...creationCategories.selected],
       description: formData.get('description') || '',
       collection: formData.get('collection') || '',
       searchKeywords: [...new Set(searchKeywords)],
@@ -3931,6 +3956,21 @@
   };
 
   const bindEvents = () => {
+    const clearActivityButton = document.getElementById('clearActivityBtn');
+    let clearingActivity = false;
+    clearActivityButton?.addEventListener('click', async () => {
+      if (clearingActivity || currentAdminRole !== 'SUPERADMIN') return;
+      if (!window.confirm('Se eliminará todo el historial de Actividad, aunque haya filtros aplicados. Esta acción no se puede deshacer. ¿Borrar todo el historial?')) return;
+      clearingActivity = true; clearActivityButton.disabled = true; clearActivityButton.textContent = 'Borrando…';
+      activityLoadVersion++;
+      setScopedMessage(activityMessage, 'Borrando el historial…');
+      try {
+        const result = await window.CRONOX_API.admin.clearActivity();
+        activityState.page = 1;
+        if (await fetchActivity()) setScopedMessage(activityMessage, `Historial borrado: ${result.deleted} registros.`, 'success');
+      } catch (error) { setScopedMessage(activityMessage, error.message || 'No se pudo borrar el historial.', 'error'); }
+      finally { clearingActivity = false; clearActivityButton.disabled = false; clearActivityButton.textContent = 'Borrar historial'; }
+    });
     if (filterStatus) {
       filterStatus.addEventListener('change', () => {
         syncRequestsStateFromInputs();

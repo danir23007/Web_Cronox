@@ -1352,6 +1352,8 @@ import { loadCategoryPages } from './category-pagination';
   adminApi.listAdminCategories = async (query: QueryRecord = {}) => {
     return request('/api/admin/categories', { query });
   };
+  adminApi.createAdminCategory = (payload: UnknownRecord) => request('/api/admin/categories', { method: 'POST', body: payload });
+  adminApi.updateAdminCategory = (id: number, payload: UnknownRecord) => request(`/api/admin/categories/${id}`, { method: 'PATCH', body: payload });
 
   adminApi.uploadProductImages = async (files: File[] = []) => {
     const images: UnknownRecord[] = [];
@@ -1386,6 +1388,7 @@ import { loadCategoryPages } from './category-pagination';
   adminApi.getAuditLogs = async (query: QueryRecord = {}) => {
     return request('/api/admin/audit-logs', { query });
   };
+  adminApi.clearActivity = () => request('/api/admin/audit-logs', { method: 'DELETE', body: { confirmation: 'DELETE_ALL_ACTIVITY' } });
 
   adminApi.getUserDetail = async (id: number | string) => {
     return request(`/api/admin/users/${encodeURIComponent(id)}`);

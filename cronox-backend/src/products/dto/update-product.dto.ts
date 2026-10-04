@@ -1,4 +1,4 @@
-import { OmitType, PartialType } from '@nestjs/swagger';
+import { PartialType } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import {
   IsArray,
@@ -21,7 +21,7 @@ import { CreateProductImageDto } from './create-product-image.dto';
 import { CreateVariantDto } from './create-variant.dto';
 import { UpdateVariantDto } from './update-variant.dto';
 
-export class UpdateProductDto extends PartialType(OmitType(CreateProductDto, ['categoryIds'] as const)) {
+export class UpdateProductDto extends PartialType(CreateProductDto) {
   @IsOptional()
   @IsDateString()
   expectedUpdatedAt?: string;

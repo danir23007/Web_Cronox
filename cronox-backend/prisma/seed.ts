@@ -1,14 +1,14 @@
-import { PrismaClient } from '@prisma/client';
+import { CategoryGroup, PrismaClient } from '@prisma/client';
 
 const prisma = new PrismaClient();
 
 async function main() {
   const requiredCategories = [
-    { name: 'Novedades', slug: 'novedades' },
-    { name: 'Camisetas', slug: 'camisetas' },
-    { name: 'Chaquetas', slug: 'chaquetas' },
-    { name: 'Pantalones', slug: 'pantalones' },
-    { name: 'Complementos', slug: 'complementos' },
+    { name: 'Novedades', slug: 'novedades', group: CategoryGroup.NEW },
+    { name: 'Camisetas', slug: 'camisetas', group: CategoryGroup.GARMENT },
+    { name: 'Chaquetas', slug: 'chaquetas', group: CategoryGroup.GARMENT },
+    { name: 'Pantalones', slug: 'pantalones', group: CategoryGroup.GARMENT },
+    { name: 'Complementos', slug: 'complementos', group: CategoryGroup.GARMENT },
   ];
 
   for (const category of requiredCategories) {

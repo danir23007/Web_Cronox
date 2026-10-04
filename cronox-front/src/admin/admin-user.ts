@@ -374,6 +374,7 @@
     }> = [
       { label: 'ID', value: user.id },
       { label: 'Email', value: user.email },
+      { label: 'Código de bienvenida', value: user.welcomeCode || 'Sin código asignado' },
       { label: 'Nombre', value: user.name || user.firstName },
       { label: 'Apellidos', value: user.lastName },
       { label: 'Role', value: roleLabel(user.role) },

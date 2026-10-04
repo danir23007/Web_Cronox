@@ -1,0 +1,70 @@
+// CRONOX: temporary local PostgreSQL, no AppModule, mail workers or provider calls.
+const fs=require('node:fs/promises'),path=require('node:path'),os=require('node:os'),net=require('node:net'),assert=require('node:assert/strict');
+const {execFileSync}=require('node:child_process');
+const backend=path.resolve(__dirname,'..');
+const bin=process.env.CRONOX_REVIEW_PG_BIN||'C:/Program Files/PostgreSQL/17/bin';
+const exe=n=>path.join(bin,n+(process.platform==='win32'?'.exe':''));
+const run=(cmd,args,options={})=>execFileSync(cmd,args,{windowsHide:true,stdio:'pipe',...options});
+async function main(){
+ const dir=await fs.mkdtemp(path.join(os.tmpdir(),'cronox-admin-categories-')),data=path.join(dir,'pg');
+ const probe=net.createServer();await new Promise(r=>probe.listen(0,'127.0.0.1',r));const port=probe.address().port;await new Promise(r=>probe.close(r));
+ const url=`postgresql://cronox_review@127.0.0.1:${port}/postgres`;assert.equal(new URL(url).hostname,'127.0.0.1');
+ run(exe('initdb'),['-D',data,'-U','cronox_review','-A','trust','--encoding=UTF8','--locale=C']);
+ run(exe('pg_ctl'),['-D',data,'-l',path.join(dir,'postgres.log'),'-o',`-h 127.0.0.1 -p ${port}`,'-w','start'],{stdio:'ignore'});
+ let db,app;
+ const sql=async(text,name)=>{const file=path.join(dir,name);await fs.writeFile(file,text);run(exe('psql'),[url,'-v','ON_ERROR_STOP=1','-f',file]);};
+ try {
+  const schema=(await fs.readFile(path.join(backend,'prisma/schema.prisma'),'utf8')).replace(/enum CategoryGroup \{[\s\S]*?\n\}/,'').replace(/^.*group\s+CategoryGroup.*\r?\n/gm,'');
+  const before=path.join(dir,'before.prisma');await fs.writeFile(before,schema);
+  const base=run(process.execPath,[require.resolve('prisma/build/index.js'),'migrate','diff','--from-empty','--to-schema-datamodel',before,'--script'],{cwd:dir,env:{...process.env,DATABASE_URL:url,DIRECT_URL:url}});
+  await sql('CREATE EXTENSION IF NOT EXISTS pg_trgm;\n'+base,'base.sql');
+  await sql(`INSERT INTO "Category" (name,slug,"updatedAt") VALUES ('Novedades','novedades',now()),('Camisetas','camisetas',now()),('Nombre ambiguo','original-custom',now());
+   INSERT INTO "Product" (name,slug,price,"updatedAt") VALUES ('Prenda local','local-product',2500,now());
+   INSERT INTO "ProductCategory" ("productId","categoryId") VALUES (1,1),(1,2),(1,3);`,'legacy.sql');
+  await sql(await fs.readFile(path.join(backend,'prisma/migrations/20261004220000_category_groups/migration.sql'),'utf8'),'migration.sql');
+  process.env.DATABASE_URL=url;process.env.DIRECT_URL=url;
+  const {PrismaClient}=require('@prisma/client');db=new PrismaClient({datasources:{db:{url}}});
+  const {CategoriesService}=require('../dist/categories/categories.service');const categories=new CategoriesService(db);
+  const {ProductService}=require('../dist/products/product.service');const products=new ProductService(db);
+  assert.deepEqual((await db.category.findMany({orderBy:{id:'asc'}})).map(c=>[c.id,c.group]),[[1,'NEW'],[2,'GARMENT'],[3,'UNCLASSIFIED']]);
+  assert.deepEqual((await db.productCategory.findMany({orderBy:{categoryId:'asc'}})).map(c=>c.categoryId),[1,2,3]);
+  const drop=await categories.create({name:'Drop 02',group:'DROP'});assert.equal(drop.slug,'drop-02');
+  await assert.rejects(()=>categories.create({name:' drop 02 ',group:'GARMENT'}));
+  await assert.rejects(()=>categories.create({name:'Otra',group:'NEW'}));
+  await assert.rejects(()=>categories.create({name:'   ',group:'DROP'}));
+  await assert.rejects(()=>categories.create({name:'Sin grupo'}));
+  const racing=await Promise.allSettled([categories.create({name:'Concurrente',group:'DROP'}),categories.create({name:'concurrente',group:'GARMENT'})]);assert.equal(racing.filter(r=>r.status==='fulfilled').length,1);
+  await assert.rejects(()=>categories.update(1,{group:'DROP'}));
+  await products.replaceProductCategories(1,[1,2,3,drop.id]);
+  await products.updateProduct(1,{name:'Prenda local',categoryIds:[1,2,3,drop.id]});
+  assert.equal(await db.productCategory.count({where:{productId:1}}),4);
+  await db.product.create({data:{name:'Oculto',slug:'inactive-local',price:2500,isActive:false,categories:{create:{categoryId:drop.id}},privateCost:{create:{unitCostCents:999}}}});
+  const publicRows=await products.getAllProducts({categorySlug:drop.slug,search:'prenda',page:1,limit:100});assert.equal(publicRows.items.length,1);assert(!JSON.stringify(publicRows).includes('unitCostCents'));assert(publicRows.items.every(p=>p.isActive));
+  const user=await db.user.create({data:{email:'local@example.test',role:'USER'}});
+  const normal=await db.promoCode.create({data:{code:'NORMAL',type:'PERCENT',value:37}});
+  const personal=await db.promoCode.create({data:{code:'PERSONAL',type:'PERCENT',value:37,ownerEmail:user.email,firstOrderOnly:true,singleUsePerUser:true,usageLimit:1}});
+  await db.newsletterSubscription.create({data:{email:user.email,welcomePromoCodeId:personal.id}});
+  await db.discountCode.create({data:{code:'ORIGINAL',type:'FIRST_ORDER',percent:17,userId:user.id,createdAt:new Date('2020-01-01')}});
+  await db.discountCode.create({data:{code:'LATER',type:'FIRST_ORDER',percent:23,userId:user.id}});
+  const {AdminPromoCodesService}=require('../dist/admin/promo-codes/admin-promo-codes.service');const codes=new AdminPromoCodesService(db);
+  const listing=await codes.list({limit:1});assert.equal(listing.meta.total,1);assert.equal(listing.items[0].id,normal.id);assert.equal((await codes.list({search:'PERSONAL'})).meta.total,0);
+  const {AdminUsersService}=require('../dist/admin/users/admin-users.service');const detail=await new AdminUsersService(db).getUserById(user.id);assert.equal(detail.user.welcomeCode,'ORIGINAL');
+  assert.equal((await db.promoCode.findUnique({where:{id:personal.id}})).value,37);assert.equal(await db.discountCode.count(),2);
+  const {AdminAuditLogsService}=require('../dist/admin/audit-logs/admin-audit-logs.service');const audit=new AdminAuditLogsService(db);
+  await db.auditLog.create({data:{action:'synthetic.activity'}});const count=await db.auditLog.count();assert(count>0);await audit.clear('DELETE_ALL_ACTIVITY');assert.equal(await db.auditLog.count(),0);assert.equal(await db.productCategory.count(),5);assert.equal(await db.promoCode.count(),2);
+  await db.auditLog.create({data:{action:'future.activity'}});assert.equal((await audit.list({})).totalItems,1);
+  // Exercise real role guards and validation on a local HTTP endpoint only.
+  const {Test}=require('@nestjs/testing'),{Reflector}=require('@nestjs/core'),{ValidationPipe}=require('@nestjs/common');
+  const {AdminAuditLogsController}=require('../dist/admin/audit-logs/admin-audit-logs.controller');
+  const {JwtAuthGuard}=require('../dist/auth/guards/jwt-auth.guard');const {AdminGuard}=require('../dist/common/guards/admin.guard');const {RolesGuard}=require('../dist/common/guards/roles.guard');
+  const module=await Test.createTestingModule({controllers:[AdminAuditLogsController],providers:[Reflector,AdminGuard,RolesGuard,{provide:AdminAuditLogsService,useValue:audit}]}).overrideGuard(JwtAuthGuard).useValue({canActivate:c=>{const req=c.switchToHttp().getRequest();req.user={role:req.headers['x-local-role']};return true;}}).compile();
+  app=module.createNestApplication({logger:false});app.useGlobalPipes(new ValidationPipe({transform:true,whitelist:true,forbidNonWhitelisted:true}));await app.listen(0,'127.0.0.1');
+  const endpoint=await app.getUrl();
+  for(const role of ['ADMIN','USER','FRIEND'])assert.equal((await fetch(endpoint+'/admin/audit-logs',{method:'DELETE',headers:{'content-type':'application/json','x-local-role':role},body:JSON.stringify({confirmation:'DELETE_ALL_ACTIVITY'})})).status,403);
+  assert.equal(await db.auditLog.count(),1);
+  assert.equal((await fetch(endpoint+'/admin/audit-logs',{method:'DELETE',headers:{'content-type':'application/json','x-local-role':'SUPERADMIN'},body:'{}'})).status,400);
+  assert.equal((await fetch(endpoint+'/admin/audit-logs',{method:'DELETE',headers:{'content-type':'application/json','x-local-role':'SUPERADMIN'},body:JSON.stringify({confirmation:'DELETE_ALL_ACTIVITY'})})).status,200);
+  console.log('PASS: isolated migration, associations, category creation, public filters, welcome codes, Activity scope and HTTP permissions');
+ } finally {if(app)await app.close();if(db)await db.$disconnect();run(exe('pg_ctl'),['-D',data,'-m','fast','-w','stop']);}
+}
+main().catch(error=>{console.error(error.message);process.exitCode=1;});

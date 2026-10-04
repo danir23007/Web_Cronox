@@ -554,10 +554,18 @@ model AdminBulkOperation {
   @@index([actorId, createdAt])
 }
 
+enum CategoryGroup {
+  NEW
+  GARMENT
+  DROP
+  UNCLASSIFIED
+}
+
 model Category {
   id          Int               @id @default(autoincrement())
   name        String
   slug        String            @unique
+  group       CategoryGroup     @default(UNCLASSIFIED)
   description String?
   isActive    Boolean           @default(true)
   createdAt   DateTime          @default(now())

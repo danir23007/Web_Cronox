@@ -67,7 +67,7 @@ describe('product category frontend contracts', () => {
     expect(document.querySelector('#navProducto [data-nav-target="section-product-categories"]')?.textContent).toBe('Categorías');
     expect(document.querySelector('#section-products [data-nav-target="section-product-categories"]')).toBeNull();
     expect(document.querySelector('#section-product-categories')).not.toBeNull();
-    expect(document.querySelector('#section-product-categories [data-back-target]')?.getAttribute('data-back-target')).toBe('section-products-menu');
+    expect(document.querySelector('#section-product-categories [data-back-target]')?.getAttribute('data-back-target')).toBe('section-dashboard');
     dom.window.close();
   });
 
@@ -75,7 +75,7 @@ describe('product category frontend contracts', () => {
     const admin = readFrontend('assets/admin.js');
     expect(admin).toContain('assignedCategoryIds(product)');
     expect(admin).toContain('updateAssignments(productId, selectedIds)');
-    expect(admin).toContain('Se ha restaurado la asignación anterior.');
+    expect(admin).toContain('Las selecciones siguen disponibles para reintentar.');
     expect(admin).toContain('variant?.sku');
     expect(admin).toContain("assignmentState === 'unassigned'");
     expect(admin).toContain("activeState === 'inactive'");

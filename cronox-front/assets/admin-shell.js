@@ -250,7 +250,7 @@
   };
   document.addEventListener('cronox:admin-saved', event => clear(event.detail?.container || null));
   document.addEventListener('reset', event => clear(event.target));
-  const hasDirty = () => hasSnapshotChanges() || [...dirty].some(([container, fields]) => container.getClientRects().length && [...fields].some(el => el.isConnected && (!el.dataset.adminInitialSet || valueOf(el) !== el._adminInitial)) && (container.closest('.modal') ? container.closest('.modal').classList.contains('show') : !container.closest('.admin-section')?.hidden)) || !!window.CRONOX_ADMIN_MEDIA?.hasUnsavedChanges?.() || !!window.CRONOX_ADMIN_GALLERY?.hasUnsavedChanges?.() || !!window.CRONOX_NEWSLETTER_ADMIN?.hasUnsavedChanges?.() || !!window.CRONOX_INVENTORY?.hasUnsavedChanges?.() || !!window.CRONOX_INBOX?.hasUnsavedChanges?.();
+  const hasDirty = () => hasSnapshotChanges() || [...dirty].some(([container, fields]) => container.getClientRects().length && [...fields].some(el => el.isConnected && (!el.dataset.adminInitialSet || valueOf(el) !== el._adminInitial)) && (container.closest('.modal') ? container.closest('.modal').classList.contains('show') : !container.closest('.admin-section')?.hidden)) || !!window.CRONOX_ADMIN_MEDIA?.hasUnsavedChanges?.() || !!window.CRONOX_ADMIN_GALLERY?.hasUnsavedChanges?.() || !!window.CRONOX_NEWSLETTER_ADMIN?.hasUnsavedChanges?.() || !!window.CRONOX_INVENTORY?.hasUnsavedChanges?.() || !!window.CRONOX_INBOX?.hasUnsavedChanges?.() || !!window.CRONOX_CATEGORY_ASSIGNMENTS?.hasUnsavedChanges?.();
   const canLeave = (destination) => {
     if (destination === 'section-gallery') destination = 'section-gallery-mosaic';
     if (destination === current) return true;
@@ -260,6 +260,7 @@
     window.CRONOX_ADMIN_GALLERY?.discard?.();
     window.CRONOX_NEWSLETTER_ADMIN?.discard?.();
     window.CRONOX_INBOX?.discard?.();
+    window.CRONOX_CATEGORY_ASSIGNMENTS?.discard?.();
     window.CRONOX_INVENTORY?.discard?.();
     document.querySelectorAll('.modal.show').forEach(modal => { modal.classList.remove('show'); modal.setAttribute('aria-hidden', 'true'); });
     document.body.style.overflow = '';

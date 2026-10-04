@@ -72,47 +72,50 @@ export class CategoriesService {
     return category;
   }
 
-  async create(dto: CreateCategoryDto) {
-    const slug = this.normalizeSlug(dto.slug);
+  private nameKey(name: string) {
+    return name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim().replace(/\s+/g, ' ');
+  }
 
+  private validateName(name: string) {
+    if (typeof name !== 'string' || !name.trim() || name.trim().length > 120) throw new BadRequestException('INVALID_CATEGORY_NAME');
+    return this.nameKey(name);
+  }
+
+  async create(dto: CreateCategoryDto) {
+    if (!['GARMENT', 'DROP'].includes(dto.group)) throw new BadRequestException('INVALID_CATEGORY_GROUP');
+    const key = this.validateName(dto.name), slug = this.normalizeSlug(dto.slug ?? dto.name);
     try {
-      return await this.prisma.category.create({
-        data: {
-          name: dto.name,
-          slug,
-          description: dto.description,
-          isActive: dto.isActive ?? true,
-        },
+      return await this.prisma.$transaction(async tx => {
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(435276902)`;
+        const existing = await tx.category.findMany({ select: { name: true } });
+        if (existing.some(c => this.nameKey(c.name) === key)) throw new ConflictException('CATEGORY_NAME_ALREADY_EXISTS');
+        return tx.category.create({ data: { name: dto.name.trim().replace(/\s+/g, ' '), slug, group: dto.group, description: dto.description, isActive: dto.isActive ?? true } });
       });
-    } catch (error) {
-      this.handlePrismaError(error);
-    }
+    } catch (error) { this.handlePrismaError(error); }
   }
 
   async update(id: number, dto: UpdateCategoryDto) {
-    const data: Prisma.CategoryUpdateInput = {};
-
-    if (dto.name !== undefined) {
-      data.name = dto.name;
-    }
-    if (dto.slug !== undefined) {
-      data.slug = this.normalizeSlug(dto.slug);
-    }
-    if (dto.description !== undefined) {
-      data.description = dto.description;
-    }
-    if (dto.isActive !== undefined) {
-      data.isActive = dto.isActive;
-    }
-
+    if (dto.group !== undefined && !['GARMENT', 'DROP'].includes(dto.group)) throw new BadRequestException('INVALID_CATEGORY_GROUP');
     try {
-      return await this.prisma.category.update({
-        where: { id },
-        data,
+      return await this.prisma.$transaction(async tx => {
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(435276902)`;
+        const current = await tx.category.findUnique({ where: { id } });
+        if (!current) throw new NotFoundException('CATEGORY_NOT_FOUND');
+        if (current.group === 'NEW' && (dto.group !== undefined || (dto.slug !== undefined && dto.slug !== current.slug))) throw new BadRequestException('NEW_CATEGORY_IS_RESERVED');
+        const data: Prisma.CategoryUpdateInput = {};
+        if (dto.name !== undefined) {
+          const key = this.validateName(dto.name);
+          const others = await tx.category.findMany({ where: { id: { not: id } }, select: { name: true } });
+          if (others.some(c => this.nameKey(c.name) === key)) throw new ConflictException('CATEGORY_NAME_ALREADY_EXISTS');
+          data.name = dto.name.trim().replace(/\s+/g, ' ');
+        }
+        if (dto.slug !== undefined) data.slug = this.normalizeSlug(dto.slug);
+        if (dto.group !== undefined) data.group = dto.group;
+        if (dto.description !== undefined) data.description = dto.description;
+        if (dto.isActive !== undefined) data.isActive = dto.isActive;
+        return tx.category.update({ where: { id }, data });
       });
-    } catch (error) {
-      this.handlePrismaError(error);
-    }
+    } catch (error) { this.handlePrismaError(error); }
   }
 
   async remove(id: number) {
@@ -130,6 +133,8 @@ export class CategoriesService {
     }
 
     const normalized = slug
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
       .trim()
       .toLowerCase()
       .replace(/\s+/g, '-')

@@ -331,20 +331,8 @@
         try {
           categories = await window.CRONOX_API.admin.listAllAdminCategories();
           categoryBox.replaceChildren();
-          categories.forEach((c) => {
-            const label = element("label"),
-              input = element("input");
-            input.type = "checkbox";
-            input.value = c.id;
-            input.dataset.bulkCategory = "";
-            label.append(
-              input,
-              document.createTextNode(
-                c.name + (c.isActive === false ? " (inactiva)" : ""),
-              ),
-            );
-            categoryBox.append(label);
-          });
+          categoryBox.append(window.CRONOX_CATEGORY_CONTROLS.render(categories, [], () => updateValidity()));
+          categoryBox.querySelectorAll('[data-category-choice]').forEach(input => { input.dataset.bulkCategory = ''; });
           categoryReady = true;
           categoryStatus.textContent = categories.length
             ? ""

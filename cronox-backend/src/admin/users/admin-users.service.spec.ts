@@ -292,6 +292,8 @@ describe('AdminUsersService protected user updates', () => {
         findMany: jest.fn().mockResolvedValue([]),
       },
       promoCodeRedemption: { findMany: jest.fn().mockResolvedValue([]) },
+      discountCode: { findFirst: jest.fn().mockResolvedValue(null) },
+      promoCode: { findFirst: jest.fn().mockResolvedValue(null) },
       $transaction: jest.fn((operations) => Promise.all(operations)),
     };
     const readService = new AdminUsersService(readPrisma as any);

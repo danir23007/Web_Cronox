@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AdminAuditLogQueryDto } from './dto/admin-audit-log-query.dto';
@@ -8,6 +8,15 @@ import { retainedAuditLogDateFilter } from './audit-log-retention';
 @Injectable()
 export class AdminAuditLogsService {
   constructor(private readonly prisma: PrismaService) {}
+
+  private clearing: Promise<{ deleted: number }> | null = null;
+
+  clear(confirmation: string) {
+    if (confirmation !== 'DELETE_ALL_ACTIVITY') throw new BadRequestException('ACTIVITY_CONFIRMATION_REQUIRED');
+    if (this.clearing) return this.clearing;
+    this.clearing = this.prisma.auditLog.deleteMany({}).then(result => ({ deleted: result.count })).finally(() => { this.clearing = null; });
+    return this.clearing;
+  }
 
   async list(query: AdminAuditLogQueryDto) {
     const page = query.page ?? 1;
