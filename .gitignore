@@ -18,5 +18,12 @@ playwright-report/
 # Reproducible integration report, not source or fixtures.
 /output/mailbox-review/integration-results.json
 
+# One-off mail intervention helpers, retained locally for reference.
+# Reusable diagnostics are tracked under cronox-backend/scripts.
+/output/mailbox-review/edit-campaign-quota.cjs
+/output/mailbox-review/production-extensions.cjs
+/output/mailbox-review/restore-extension-probe.cjs
+/output/mailbox-review/retention-readonly.cjs
+
 # Generated local browser verification artifacts.
 /output/playwright/
