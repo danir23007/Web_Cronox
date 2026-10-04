@@ -28,4 +28,21 @@ describe('durable email delivery history', () => {
     expect(db.emailDelivery.update.mock.calls[0][0].data.status).toBe(status);
     expect(JSON.stringify(db.emailDelivery.update.mock.calls)).not.toContain('secret SMTP data');
   });
+  it.each([
+    // Nodemailer also reports CONN on a socket close after transmitting DATA.
+    [{ code: 'ECONNECTION', command: 'CONN' }, 'UNKNOWN'],
+    [{ code: 'ECONNECTION', command: 'CONN', responseCode: 421 }, 'UNKNOWN'],
+    [{ code: 'ECONNECTION', command: 'DATA' }, 'UNKNOWN'],
+    [{ code: 'ECONNECTION', command: 'QUIT', responseCode: 421 }, 'UNKNOWN'],
+    [{ code: 'ECONNECTION' }, 'UNKNOWN'],
+    [{ code: 'EAUTH', accepted: ['test@example.test'] }, 'UNKNOWN'],
+    [{ code: 'EMESSAGE', command: 'DATA', responseCode: 451 }, 'FAILED'],
+  ])('uses SMTP phase and acceptance for %j, preserving uncertain passwords', async (details, status) => {
+    const { db, factory, sendMail } = setup();
+    sendMail.mockRejectedValue(Object.assign(new Error('private server response'), details));
+    const failure = await factory.sendMail(EmailSenderKey.INFO, { to: 'test@example.test' }).catch(error => error);
+    expect(db.emailDelivery.update.mock.calls[0][0].data.status).toBe(status);
+    expect(failure.deliveryUnknown === true).toBe(status === 'UNKNOWN');
+    expect(JSON.stringify(db.emailDelivery.update.mock.calls)).not.toContain('private server response');
+  });
 });

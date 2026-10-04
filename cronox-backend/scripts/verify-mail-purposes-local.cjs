@@ -15,6 +15,7 @@ const { PrismaClient } = require('@prisma/client');
 const db = new PrismaClient();
 const recipient = `mail-policy-${randomUUID()}@example.test`;
 const messages = [], authentications = [];
+let dropDataResponse = false;
 const smtp = new SMTPServer({ secure: false, disabledCommands: ['STARTTLS'], allowInsecureAuth: true,
   onAuth(auth, session, callback) {
     authentications.push(auth.username);
@@ -23,7 +24,16 @@ const smtp = new SMTPServer({ secure: false, disabledCommands: ['STARTTLS'], all
   onData(stream, session, callback) {
     let raw = '';
     stream.on('data', data => { raw += data.toString(); });
-    stream.on('end', () => { messages.push({ from: session.envelope.mailFrom.address, raw }); callback(); });
+    stream.on('end', () => {
+      messages.push({ from: session.envelope.mailFrom.address, raw });
+      if (dropDataResponse) {
+        dropDataResponse = false;
+        // The server received DATA but its final acceptance response is lost.
+        for (const connection of smtp.connections) connection._socket.destroy();
+        return;
+      }
+      callback();
+    });
   },
 });
 async function main() {
@@ -71,8 +81,16 @@ async function main() {
     factory.getTransport(sender).close();
   }
   assert.deepEqual(messages.slice(-3).map(message => message.from), ['campaign-info@example.test', 'orders@example.test', 'support@example.test']);
+  process.env.SMTP_NOREPLY_HOURLY_LIMIT = '100000';
+  dropDataResponse = true;
+  const uncertain = await email.sendNewsletterAccess(recipient, 'http://localhost/access#synthetic-lost-response', true, 'bavolima').catch(error => error);
+  assert.equal(uncertain.deliveryUnknown, true, 'Lost DATA response must not allow password rollback/retry');
+  const unknownHistory = await db.emailDelivery.findMany({ where: { recipient, status: 'UNKNOWN' } });
+  assert.equal(unknownHistory.length, 1);
+  assert(!JSON.stringify(unknownHistory).includes('bavolima'));
+  assert(!JSON.stringify(unknownHistory).includes('synthetic-lost-response'));
   factory.getTransport(EmailSenderKey.NOREPLY).close();
-  console.log(JSON.stringify({ localSMTP: true, realEnvelopeAndAuthentication: 'NOREPLY', purposes: ['NEWSLETTER_ACCESS','NEWSLETTER_WELCOME','RESTOCK'], noSecretInHistory: true, sharedQuotaVerified: true, verifySendsNoEmail: true, externalEmailSent: false }));
+  console.log(JSON.stringify({ localSMTP: true, realEnvelopeAndAuthentication: 'NOREPLY', purposes: ['NEWSLETTER_ACCESS','NEWSLETTER_WELCOME','RESTOCK'], noSecretInHistory: true, sharedQuotaVerified: true, lostDataResponseUncertain: true, verifySendsNoEmail: true, externalEmailSent: false }));
 }
 main().catch(error => { console.error(error.message); process.exitCode = 1; }).finally(async () => {
   messages.length = 0;

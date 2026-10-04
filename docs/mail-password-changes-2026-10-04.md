@@ -1,5 +1,9 @@
 # CRONOX: plantillas, No-reply y contraseñas
 
+La revisión conjunta posterior, la corrección de incertidumbre SMTP y el
+procedimiento de publicación están en [la revisión integrada](mail-admin-joint-release-review-2026-10-04.md).
+Los resultados siguientes corresponden a la entrega original.
+
 Se retiran del catálogo, importación, panel y selectores las finalidades
 `PRE_REGISTRATION_CONFIRMATION`, `LAUNCH`, `NEWSLETTER_CONFIRMATION`,
 `FIRST_ORDER_DISCOUNT`, `GENERIC` y `TEST`. El servicio rechaza su envío,

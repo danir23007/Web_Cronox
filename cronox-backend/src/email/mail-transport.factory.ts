@@ -50,7 +50,16 @@ export class MailTransportFactory {
     } catch (error) {
       const code = String((error as { code?: string }).code || 'SMTP_OUTCOME_UNKNOWN');
       const safeCodes = ['EAUTH', 'EENVELOPE', 'ECONNECTION', 'EDNS', 'ECONNREFUSED', 'EMAIL_CONFIG'];
-      const known = restockDeliveryOutcome(error) !== 'UNCERTAIN' || safeCodes.includes(code);
+      const smtp = error as { command?: string; accepted?: unknown[] };
+      // A connection loss during DATA/QUIT does not prove rejection. Never undo
+      // an initial password or retry when the server may have accepted the mail.
+      const beforeDelivery = code === 'EMAIL_CONFIG' ||
+        (['EAUTH', 'EENVELOPE'].includes(code) &&
+          (!smtp.command || /^(API|AUTH(?: .*?)?|MAIL FROM|RCPT TO)$/.test(smtp.command)));
+      const ambiguousConnection = code === 'ECONNECTION' &&
+        (!smtp.command || ['CONN', 'API', 'QUIT'].includes(smtp.command));
+      const known = !smtp.accepted?.length && !ambiguousConnection &&
+        (restockDeliveryOutcome(error) !== 'UNCERTAIN' || beforeDelivery);
       try {
         await this.db.emailDelivery.update({ where: { id: attempt.id }, data: {
           status: known ? 'FAILED' : 'UNKNOWN', errorCode: known ? (safeCodes.includes(code) ? code : 'SMTP_REJECTED') : 'SMTP_OUTCOME_UNKNOWN',

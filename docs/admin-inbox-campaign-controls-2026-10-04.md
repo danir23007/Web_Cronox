@@ -1,5 +1,8 @@
 # CRONOX: bandeja y campañas
 
+La revisión de los tres trabajos y el procedimiento detallado de publicación
+están en [la revisión integrada](mail-admin-joint-release-review-2026-10-04.md).
+
 ## Cambios
 
 - Carpetas plegadas inicialmente mediante `details/summary`, con teclado y selección conservada. La entrada habitual utiliza INBOX; las carpetas especiales y las banderas IMAP separan recibidos, enviados y borradores. Se mantienen las carpetas personalizadas y la selección múltiple.

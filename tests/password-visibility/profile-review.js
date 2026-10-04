@@ -1,6 +1,9 @@
 async (page) => {
   const assert = (value, message) => { if (!value) throw new Error(message); };
-  for (const width of [1366, 390]) for (const hasPassword of [false, true]) {
+  page.removeAllListeners('dialog');
+  page.on('dialog', dialog => dialog.accept());
+  for (const width of [1366, 390]) for (const theme of ['light', 'dark']) for (const hasPassword of [false, true]) {
+    await page.emulateMedia({ colorScheme: theme });
     let requests = 0, fail = true;
     await page.unrouteAll({ behavior: 'wait' });
     await page.route('**/*', async route => {
@@ -49,7 +52,7 @@ async (page) => {
     assert(await page.locator('#newPassword').inputValue() === 'abcdefg', 'recoverable error discarded input');
     assert(await page.locator('#confirmPassword').inputValue() === 'abcdefg', 'recoverable error discarded confirmation');
     assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'horizontal overflow');
-    await page.screenshot({ path: `output/playwright/profile-password-${width}-${hasPassword ? 'change' : 'setup'}.png`, fullPage: true });
+    await page.screenshot({ path: `output/playwright/profile-password-${width}-${theme}-${hasPassword ? 'change' : 'setup'}.png`, fullPage: true });
     fail = false;
     await page.locator('#passwordForm').evaluate(form => { form.requestSubmit(); form.requestSubmit(); });
     await page.waitForFunction(() => document.getElementById('passwordMessage').textContent === 'Contraseña guardada correctamente.');
