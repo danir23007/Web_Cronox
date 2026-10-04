@@ -113,7 +113,7 @@ async function registerDisabledLocal() {
   const { PrismaClient } = require('@prisma/client');
   const db = new PrismaClient({ datasourceUrl: env.DATABASE_URL });
   try {
-    const names = { SUPPORT: 'Soporte', ORDERS: 'Pedidos', NOREPLY: 'No reply', INFO: 'Información' };
+    const names = { SUPPORT: 'Soporte', ORDERS: 'Pedidos', NOREPLY: 'No-reply', INFO: 'Información' };
     for (const [name, label] of Object.entries(names)) {
       const address = env[`SMTP_${name}_USER`]?.trim().toLowerCase();
       const reference = `SMTP_${name}_PASS`;

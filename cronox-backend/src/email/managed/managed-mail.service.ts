@@ -77,7 +77,7 @@ export class ManagedMailService {
       label: {
         INFO: 'Información y novedades',
         ORDERS: 'Pedidos',
-        NOREPLY: 'Acceso y seguridad',
+        NOREPLY: 'No-reply',
         SUPPORT: 'Soporte',
       }[key],
       localOnly: process.env.CRONOX_LOCAL_DEV === 'true',

@@ -453,7 +453,7 @@
   <link rel="shortcut icon" type="image/png" href="/favicon.png?v=4">
   <link rel="apple-touch-icon" href="/favicon.png?v=4">
   <meta name="theme-color" content="#000000">
-  <link rel="stylesheet" href="assets/admin-shell.css?v=2">
+  <link rel="stylesheet" href="assets/admin-shell.css?v=3">
   <link rel="stylesheet" href="/assets/admin-theme.css?v=1">
 </head>
 <body class="cronox-admin cronox-admin-user">
@@ -473,8 +473,8 @@
         <button class="sidebar-destination" data-nav-target="section-money"><span aria-hidden="true">€</span>Dinero</button>
         <button class="sidebar-group" aria-expanded="false" aria-controls="navMultimedia"><span aria-hidden="true">▣</span>Multimedia<span class="sidebar-chevron">⌄</span></button>
         <div id="navMultimedia" class="sidebar-children" hidden>
-          <button class="sidebar-group" aria-expanded="false" aria-controls="navGaleria">Galería<span class="sidebar-chevron">⌄</span></button>
-          <div id="navGaleria" class="sidebar-children" hidden>
+          <span class="sidebar-subheading">Galería</span>
+          <div id="navGaleria" class="sidebar-gallery-links">
             <button data-nav-target="section-gallery-mosaic">Mosaico</button>
             <button data-nav-target="section-gallery-carousel">Carrusel</button>
           </div>
@@ -752,7 +752,7 @@
   <script src="assets/api.js?v=10"></script>
   <script src="assets/admin-auth-routing.js?v=1"></script>
   <script src="assets/ui-status.js"></script>
-  <script src="assets/admin-shell.js?v=1"></script>
+  <script src="assets/admin-shell.js?v=3"></script>
   <script src="assets/admin-user-shell.js?v=1"></script>
   <script src="assets/admin-live-stats.js?v=2"></script>
   <script src="assets/admin-user.js?v=2"></script>

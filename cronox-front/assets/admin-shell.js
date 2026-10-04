@@ -68,11 +68,55 @@
       if (cancel && !cancel.disabled) { event.preventDefault(); cancel.click(); }
     }
   });
-  sidebar.querySelectorAll('.sidebar-group').forEach(button => button.addEventListener('click', () => {
-    const expanded = button.getAttribute('aria-expanded') !== 'true';
-    button.setAttribute('aria-expanded', String(expanded));
-    document.getElementById(button.getAttribute('aria-controls')).hidden = !expanded;
-  }));
+  // One visible group: keyboard focus in links, then temporary hover, then pinned.
+  // There is no stored menu state; only route selection initializes the pinned group.
+  const hover = window.matchMedia('(hover: hover) and (pointer: fine)');
+  let pinned = null, temporary = null;
+  const groups = [...sidebar.querySelectorAll('.sidebar-group')].map(button => {
+    const panel = document.getElementById(button.getAttribute('aria-controls'));
+    const zone = document.createElement('div');
+    zone.className = 'sidebar-group-zone';
+    button.before(zone); zone.append(button, panel);
+    button.type = 'button';
+    return { button, panel, zone, suppressed: false };
+  });
+  const focusedGroup = () => groups.find(group => group.panel.contains(document.activeElement));
+  const renderGroups = () => {
+    const visible = focusedGroup() || temporary || pinned;
+    groups.forEach(group => {
+      const open = group === visible;
+      group.button.setAttribute('aria-expanded', String(open));
+      group.panel.hidden = !open;
+    });
+  };
+  groups.forEach(group => {
+    group.button.addEventListener('click', () => {
+      pinned = pinned === group ? null : group;
+      temporary = null;
+      // A click closing the pinned group wins over hover until the pointer leaves.
+      group.suppressed = !pinned;
+      renderGroups();
+    });
+    group.zone.addEventListener('pointerenter', event => {
+      if (!hover.matches || event.pointerType !== 'mouse' || group.suppressed) return;
+      temporary = group;
+      renderGroups();
+    });
+    group.zone.addEventListener('pointerleave', () => {
+      group.suppressed = false;
+      if (temporary === group) temporary = null;
+      renderGroups();
+    });
+    group.zone.addEventListener('focusin', renderGroups);
+    group.zone.addEventListener('focusout', () => queueMicrotask(renderGroups));
+    group.panel.addEventListener('click', event => {
+      if (!event.target.closest('[data-nav-target],a[href]')) return;
+      pinned = group; temporary = null; group.suppressed = false;
+      renderGroups();
+    }, true);
+  });
+  hover.addEventListener('change', () => { temporary = null; renderGroups(); });
+  renderGroups();
   document.addEventListener('keydown', event => {
     if (event.key === 'Escape' && document.body.classList.contains('sidebar-open')) { closeDrawer(); toggle.focus(); }
     if (event.key === 'Tab' && document.body.classList.contains('sidebar-open')) {
@@ -142,12 +186,10 @@
       if (button.dataset.navTarget === (alias[destination] || destination)) button.setAttribute('aria-current', 'page'); else button.removeAttribute('aria-current');
     });
     const active = sidebar.querySelector('[aria-current="page"]');
-    let group = active?.closest('.sidebar-children');
-    while (group) {
-      group.hidden = false;
-      sidebar.querySelector(`[aria-controls="${group.id}"]`)?.setAttribute('aria-expanded', 'true');
-      group = group.parentElement.closest('.sidebar-children');
-    }
+    const group = groups.find(item => item.panel.contains(active));
+    if (group) pinned = group;
+    temporary = null;
+    renderGroups();
     document.getElementById('adminBreadcrumb').textContent = active?.textContent.trim() || 'Administración';
     closeDrawer();
   };

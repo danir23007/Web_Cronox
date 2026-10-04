@@ -269,3 +269,12 @@ body.cronox-admin { --admin-line:var(--admin-c-e5e8ee); --admin-muted:var(--admi
   .cronox-admin-user #apiBaseBadge { flex-basis:100%; }
   .cronox-admin-user :is(.tab,.panel-head button) { min-width:44px; min-height:44px; }
 }
+
+.cronox-admin .sidebar-subheading { display:block; padding:10px 11px 4px; color:var(--admin-muted); font-size:12px; }
+/* Literal colors keep the creation action white with black text in both themes. */
+.cronox-admin .inbox-root .mail-settings .btn[data-edit-box] { background:#202026; color:#fff; border-color:#41414c; }
+.cronox-admin .inbox-root .mail-settings .btn[data-edit-box]:hover { background:#363640; }
+.cronox-admin .inbox-root .mail-settings .btn.mail-add-box { background:#fff; color:#000; border:2px solid #737373; font-weight:700; }
+.cronox-admin .inbox-root .mail-settings .btn.mail-add-box:hover { background:#f1f1f1; border-color:#000; }
+.cronox-admin .inbox-root .mail-settings .btn.mail-add-box:active { background:#ddd; box-shadow:inset 0 2px 3px #0003; }
+.cronox-admin .inbox-root .mail-settings .btn.mail-add-box:focus-visible { outline:3px solid #4b7ce7; outline-offset:3px; }
