@@ -57,6 +57,9 @@ import { MailboxCampaignService } from './mailbox-campaign.service';
 import { madridInstant } from './mailbox-campaign-policy';
 import { maxAttachmentBytes, safeFilename } from './mailbox-security';
 
+class DeleteDraftDto {
+  @IsInt() @Min(1) revision: number;
+}
 class GrantDto {
   @IsInt() @Min(1) userId: number;
   @IsIn(['read', 'send']) access: string;
@@ -323,6 +326,9 @@ export class MailboxController {
   }
   @Get('drafts') drafts(@Req() r: Request, @Query('view') view?: string) {
     return this.service.drafts(r.user!, view);
+  }
+  @Delete('drafts/:id') deleteDraft(@Req() r: Request, @Param('id') id: string, @Body() body: DeleteDraftDto) {
+    return this.service.deleteDraft(r.user!, id, body.revision);
   }
   private campaignSelection(q: any) {
     if (q.circles !== undefined && typeof q.circles !== 'string')

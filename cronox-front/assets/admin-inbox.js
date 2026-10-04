@@ -1037,23 +1037,59 @@
     draft = null; dirty = false;
     show('compose');
     const host = root.querySelector('.mail-editor'), seq = readSeq;
-    host.textContent = 'Cargando campañas…';
-    const rows = await api('/drafts?view=' + view);
+    host.setAttribute('aria-busy', 'true');
+    let rows;
+    try { rows = await api('/drafts?view=' + view); }
+    finally { host.removeAttribute('aria-busy'); }
     if (readSeq !== seq || root.dataset.view !== 'compose') return;
     const title = { drafts: 'Borradores', outbox: 'Salidas', history: 'Historial' }[view];
     host.innerHTML = `<button class="btn" data-back>← Volver</button><h3>${title}</h3><div class="mail-actions" aria-label="Listas de campañas">${[['drafts','Borradores'],['outbox','Salidas'],['history','Historial']].map(([key,label]) => `<button class="btn" type="button" data-campaign-list="${key}" aria-pressed="${key === view}">${label}</button>`).join('')}</div><p class="mail-muted">${view === 'drafts' ? 'Campañas guardadas, sin envío solicitado ni programación activa. Los borradores anteriores se conservan.' : view === 'outbox' ? 'Envíos confirmados, programados o pendientes de su turno.' : 'Envíos completados, cancelados o con incidencias; se conserva el historial.'}</p>` +
       (rows.length ? rows.map(d => {
         const campaign = d.campaigns?.[0], send = d.sends?.[0];
         const name = d.campaignName || (['campaign','circles'].includes(d.mode) ? (d.mode === 'circles' ? 'Campaña anterior · ' : 'Campaña sin nombre · ') + d.id.slice(0,8) + (d.subject ? ' · ' + d.subject : '') : d.subject || 'Mensaje sin asunto');
-        return `<button class="mail-message" data-draft="${esc(d.id)}"><strong>${esc(name)}</strong>${d.mode === 'circles' ? '<span>Campaña anterior · solo consulta</span>' : ''}<small>${esc(overview.boxes.find(b => b.id === d.mailboxId)?.address)} · ${esc(status[view === 'drafts' ? 'DRAFT' : campaign?.status || send?.status || d.status] || d.status)}</small><time>${esc(date(view === 'outbox' ? campaign?.scheduledAt || d.updatedAt : d.updatedAt))}${campaign ? ' · Europe/Madrid' : ''}</time></button>`;
+        return `<div class="mail-draft-row"><button class="mail-message" data-draft="${esc(d.id)}" ${view === 'history' && campaign ? `data-history-campaign="${esc(campaign.id)}"` : ''}><strong>${esc(name)}</strong>${d.mode === 'circles' ? '<span>Campaña anterior · solo consulta</span>' : ''}<small>${esc(overview.boxes.find(b => b.id === d.mailboxId)?.address)} · ${esc(status[view === 'drafts' ? 'DRAFT' : campaign?.status || send?.status || d.status] || d.status)}</small><time>${esc(date(view === 'outbox' ? campaign?.scheduledAt || d.updatedAt : d.updatedAt))}${campaign ? ' · Europe/Madrid' : ''}</time></button>${view === 'drafts' && d.status === 'DRAFT' ? `<button class="btn mail-draft-delete" type="button" data-delete-draft="${esc(d.id)}" aria-label="Eliminar borrador: ${esc(name)}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M3 6h18M9 6V3h6v3M5 6l1 15h12l1-15M10 10v7M14 10v7"/></svg></button>` : ''}</div>`;
       }).join('') : `<p>No hay ${title.toLowerCase()} para mostrar.</p>`);
     host.querySelector('[data-back]').onclick = () => show('list');
     host.querySelectorAll('[data-campaign-list]').forEach(button => { button.onclick = guard(() => showDrafts(button.dataset.campaignList)); });
     host.querySelectorAll('[data-draft]').forEach(button => { button.onclick = guard(async () => {
+      if (button.dataset.historyCampaign) return showCampaignHistory(button.dataset.historyCampaign);
       const current = await api('/drafts/' + button.dataset.draft);
       if (readSeq !== seq) return;
       draft = current; await renderComposer();
     }); });
+    host.querySelectorAll('[data-delete-draft]').forEach(button => { button.onclick = guard(async () => {
+      const row = rows.find(d => d.id === button.dataset.deleteDraft);
+      const confirmed = await new Promise(resolve => {
+        const modal = document.createElement('dialog'); modal.className = 'mail-campaign-confirm';
+        modal.setAttribute('aria-labelledby', 'deleteDraftTitle');
+        modal.innerHTML = `<h3 id="deleteDraftTitle">Eliminar borrador</h3><p>¿Eliminar este borrador? Esta acción no se puede deshacer.</p><div class="mail-actions"><button class="btn" type="button" data-confirm>Eliminar borrador</button><button class="btn" type="button" data-cancel>Cancelar</button></div>`;
+        const finish = result => { modal.close(); modal.remove(); if (button.isConnected) button.focus(); resolve(result); };
+        modal.addEventListener('cancel', event => { event.preventDefault(); finish(false); });
+        modal.querySelector('[data-confirm]').onclick = () => finish(true);
+        modal.querySelector('[data-cancel]').onclick = () => finish(false);
+        document.body.append(modal); modal.showModal(); modal.querySelector('[data-cancel]').focus();
+      });
+      if (!confirmed) return;
+      button.disabled = true;
+      try {
+        await api('/drafts/' + row.id, 'DELETE', { revision: row.revision });
+        button.closest('.mail-draft-row').remove();
+        await showDrafts(view);
+        (host.querySelector('[data-delete-draft]') || host.querySelector('[data-back]'))?.focus();
+      }
+      finally { if (button.isConnected) button.disabled = false; }
+    }); });
+  }
+  async function showCampaignHistory(id) {
+    const seq = readSeq;
+    const c = await api('/campaigns/' + id);
+    if (readSeq !== seq) return;
+    const host = root.querySelector('.mail-editor');
+    host.innerHTML = `<button class="btn" data-history-back>← Historial</button><h3>${esc(c.campaignName || 'Campaña sin nombre')}</h3><p>Fecha de envío: ${c.sentAt || c.startedAt ? esc(date(c.sentAt || c.startedAt)) : 'Sin fecha confirmada'} · Europe/Madrid</p><p>${esc(status[c.status] || c.status)}</p><p>${c.accepted || 0} aceptados por SMTP · ${c.failed || 0} fallidos · ${c.uncertain || 0} inciertos · ${c.bounced || 0} rebotes confirmados</p><p data-effectiveness>Efectividad: ${c.effectiveness === null || c.effectiveness === undefined ? 'Sin datos' : `${c.effectiveness} % · ${c.attributed} de ${c.accepted} destinatarios`}</p><p>${c.attributed || 0} destinatarios únicos con acceso atribuido.</p><p class="mail-muted">Estimación de accesos con consentimiento e interacción en la web. No mide aperturas. SMTP aceptado no confirma recepción. ${c.trackingAvailable ? '' : 'Esta campaña no tiene seguimiento; no se atribuyen visitas retrospectivas.'}</p><h4>Contenido enviado</h4>${(c.previews || []).map((v, i) => `<details><summary>Círculo ${v.circle} · ${esc(v.subject)}</summary><iframe data-history-version="${i}" sandbox="" referrerpolicy="no-referrer" title="Contenido enviado del círculo ${v.circle}" style="width:100%;height:360px;border:0"></iframe><pre class="mail-history-content">${esc(v.sentText || v.text)}</pre></details>`).join('') || '<p>No hay contenido histórico asociado de forma fiable.</p>'}<p class="mail-muted">Las URLs de baja y seguimiento se individualizan al enviar; el contenido compartido se conserva una sola vez por versión.</p><h4>Destinatarios y resultados</h4>${(c.recipients || []).map(r => `<div class="mail-history-recipient"><strong>${esc(r.email)}</strong><br>Círculo ${r.circleLevel || '—'} · ${esc(status[r.status] || r.status)} · Versión ${esc(r.versionId || 'anterior')}<br>${r.visitedAt ? 'Acceso atribuido: ' + esc(date(r.visitedAt)) : 'Sin acceso atribuido'}${r.bouncedAt ? '<br>Rebote confirmado: ' + esc(date(r.bouncedAt)) : ''}</div>`).join('')}`;
+    host.querySelector('[data-history-back]').onclick = guard(() => showDrafts('history'));
+    (c.previews || []).forEach((v, i) => {
+      host.querySelector(`[data-history-version="${i}"]`).srcdoc = '<meta http-equiv="Content-Security-Policy" content="default-src &#39;none&#39;; style-src &#39;unsafe-inline&#39;">' + (v.sentHtml || v.html || `<pre>${esc(v.text)}</pre>`);
+    });
   }
   async function settings(id) {
     await leave();

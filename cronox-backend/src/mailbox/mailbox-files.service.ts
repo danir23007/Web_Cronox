@@ -119,4 +119,11 @@ export class MailboxFilesService {
       unlink(join(this.root(), key + '.meta')).catch(() => {}),
     ]);
   }
+  async removeStrict(key: string) {
+    if (!/^[\da-f-]{36}$/.test(key)) throw Error('MAILBOX_INVALID_STORAGE_KEY');
+    for (const suffix of ['', '.meta']) {
+      try { await unlink(join(this.root(), key + suffix)); }
+      catch (error: any) { if (error.code !== 'ENOENT') throw error; }
+    }
+  }
 }

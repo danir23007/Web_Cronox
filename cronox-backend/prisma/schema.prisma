@@ -61,6 +61,7 @@ model MailboxPermission {
 }
 
 model MailboxFolder {
+  retentionUid BigInt @default(0)
   notificationSince DateTime?
   id            String           @id @default(uuid())
   mailboxId     String
@@ -158,12 +159,18 @@ model MailboxCampaign {
   cancelledAt    DateTime? @db.Timestamptz(3)
   snapshot       Json
   deliveries     MailboxCampaignDelivery[]
+  versions       MailboxCampaignVersion[]
   createdAt      DateTime @default(now())
   @@unique([draftId, draftRevision])
   @@index([status, scheduledAt])
 }
 
 model MailboxCampaignDelivery {
+  versionId String?
+  version MailboxCampaignVersion? @relation(fields: [versionId], references: [id], onDelete: Restrict)
+  trackingToken String? @unique
+  visitedAt DateTime? @db.Timestamptz(3)
+  bouncedAt DateTime? @db.Timestamptz(3)
   circleLevel Int?
   content Json?
   id           String   @id @default(uuid())
@@ -180,6 +187,25 @@ model MailboxCampaignDelivery {
   sentCopyStatus String @default("NOT_ATTEMPTED")
   @@unique([campaignId, email])
   @@index([status, readyAt])
+  @@index([versionId])
+}
+
+// Immutable shared render; recipient records never repeat the campaign body.
+model MailboxCampaignVersion {
+  id String @id @default(uuid())
+  campaignId String
+  campaign MailboxCampaign @relation(fields: [campaignId], references: [id], onDelete: Restrict)
+  fingerprint String
+  content Json
+  deliveries MailboxCampaignDelivery[]
+  @@unique([campaignId, fingerprint])
+}
+
+// Durable private-file deletion queue. Every deletion rechecks all references.
+model MailboxStorageGarbage {
+  key String @id
+  createdAt DateTime @default(now())
+  @@index([createdAt])
 }
 
 model MailboxCampaignClock {

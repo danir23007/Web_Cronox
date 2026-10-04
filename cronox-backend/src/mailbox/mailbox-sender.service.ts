@@ -12,6 +12,8 @@ import { MailboxLeasesService } from './mailbox-leases.service';
 import { addresses, maxMessageBytes, safeError } from './mailbox-security';
 import { assertResolved } from './mailbox-campaign-policy';
 import { effectiveMailHtml } from '../email/managed/mail-renderer';
+import { appendSent, mailboxSenderKey } from './mailbox-sent-policy';
+import { MailboxRetentionService } from './mailbox-retention.service';
 
 export function smtpOutcome(error: any, attempted = true) {
   if (
@@ -32,6 +34,7 @@ export class MailboxSenderService {
     readonly reader: MailboxReaderService,
     readonly provider: MailboxProviderService,
     readonly leases: MailboxLeasesService,
+    readonly retention?: MailboxRetentionService,
   ) {}
   async recover() {
     await this.db.mailboxSend.updateMany({
@@ -130,6 +133,7 @@ export class MailboxSenderService {
           maxMessageBytes(),
         );
         rawKey = raw.key;
+        await this.db.mailboxStorageGarbage.create({ data: { key: rawKey, createdAt: new Date(Date.now() + 600000) } });
         const smtp = await this.provider.smtp(b);
         try {
           await assert();
@@ -165,7 +169,7 @@ export class MailboxSenderService {
               rejected: (info.rejected || []).map(String),
               completedAt: new Date(),
               sentCopyStatus:
-                b.sentCopy === 'provider' ? 'PROVIDER_MANAGED' : 'PENDING',
+                ['NOREPLY', 'ORDERS', 'INFO'].includes(mailboxSenderKey(b) || '') ? 'NOT_RETAINED' : b.sentCopy === 'provider' ? 'PROVIDER_MANAGED' : 'PENDING',
             },
           });
           await this.db.mailboxDraft.update({
@@ -176,7 +180,7 @@ export class MailboxSenderService {
         } finally {
           smtp.close();
         }
-        if (b.sentCopy !== 'provider') {
+        if (appendSent(b)) {
           try {
             const client = await this.provider.imap(b);
             try {
@@ -241,6 +245,7 @@ export class MailboxSenderService {
         }
       } finally {
         if (rawKey) await this.files.remove(rawKey);
+        if (accepted) await this.retention?.eraseAcceptedDraft(d.id);
       }
     });
   }

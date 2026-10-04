@@ -1,4 +1,4 @@
-import { Injectable, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { MailboxSyncService } from './mailbox-sync.service';
 import { MailboxSenderService } from './mailbox-sender.service';
@@ -7,8 +7,10 @@ import { MailboxReaderService } from './mailbox-reader.service';
 import { keyring } from './mailbox-security';
 import { MailboxCampaignService } from './mailbox-campaign.service';
 import { AdminEventPushService } from './admin-event-push.service';
+import { MailboxRetentionService } from './mailbox-retention.service';
 @Injectable()
 export class MailboxWorkerService implements OnModuleInit, OnModuleDestroy {
+  private readonly logger = new Logger(MailboxWorkerService.name);
   private readonly cacheRetry = new Map<string, number>();
   private timer?: ReturnType<typeof setInterval>;
   private running = false;
@@ -21,6 +23,7 @@ export class MailboxWorkerService implements OnModuleInit, OnModuleDestroy {
     readonly reader: MailboxReaderService,
     readonly campaigns?: MailboxCampaignService,
     readonly events?: AdminEventPushService,
+    readonly retention?: MailboxRetentionService,
   ) {}
   onModuleInit() {
     if (
@@ -45,6 +48,7 @@ export class MailboxWorkerService implements OnModuleInit, OnModuleDestroy {
     try {
       await this.sender.recover();
       await this.campaigns?.recover();
+      await this.retention?.tick().catch(() => this.logger.warn('MAILBOX_RETENTION_FAILED_RETRY_PENDING'));
       if (process.env.MAILBOX_SEND_ENABLED === 'true') {
         const queued = await this.db.mailboxSend.findMany({
           where: { status: 'PENDING' },

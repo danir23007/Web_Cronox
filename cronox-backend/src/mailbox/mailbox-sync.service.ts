@@ -3,6 +3,8 @@ import { PrismaService } from '../prisma/prisma.service';
 import { MailboxProviderService } from './mailbox-provider.service';
 import { MailboxLeasesService } from './mailbox-leases.service';
 import { credential, safeError } from './mailbox-security';
+import { skipSentImport, mailboxSenderKey, sentCutoff } from './mailbox-sent-policy';
+import { mailboxFolderKind } from './mailbox-folder-kind';
 
 const SPAN = 200;
 const attachment = (node: any): boolean =>
@@ -65,6 +67,10 @@ export class MailboxSyncService {
           take: 5,
         });
         for (const cached of selected) {
+          if (skipSentImport(box, cached)) {
+            await this.db.mailboxFolder.update({ where: { id: cached.id }, data: { messagesCount: 0, unseenCount: 0 } });
+            continue;
+          }
           // Yield only between folders: every cursor/flag commit for the current
           // folder completes before an interactive operation can take the lease.
           if (this.leases.hasWaiting(id)) break;
@@ -90,6 +96,7 @@ export class MailboxSyncService {
                     lastUid: max,
                     importBefore: max,
                     reconcileUid: 0,
+                    retentionUid: 0,
                     notificationSince: cached.uidValidity
                       ? new Date()
                       : box.activatedAt,
@@ -180,10 +187,10 @@ export class MailboxSyncService {
                   select: { uid: true },
                 });
                 const knownUids = new Set(existing.map((m) => String(m.uid)));
-                const dataRows = eligible.map((row) => {
+                const dataRows = eligible.filter(row => !(mailboxSenderKey(box) === 'SUPPORT' && mailboxFolderKind(folder) === '\\Sent' && new Date(row.envelope?.date || row.internalDate || 0) <= sentCutoff())).map((row) => {
                   const env = row.envelope || {},
                     flags = [...row.flags] as string[],
-                    parsedDate = new Date(row.internalDate || env.date || 0),
+                    parsedDate = new Date(mailboxFolderKind(folder) === '\\Sent' ? env.date || row.internalDate || 0 : row.internalDate || env.date || 0),
                     date = Number.isNaN(parsedDate.getTime())
                       ? new Date(0)
                       : parsedDate;

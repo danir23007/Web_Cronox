@@ -19,10 +19,15 @@ import { MailboxSenderService } from './mailbox-sender.service';
 import { MailboxPushService } from './mailbox-push.service';
 import { MailboxService } from './mailbox.service';
 import { MailboxWorkerService } from './mailbox-worker.service';
+import { MailboxRetentionService } from './mailbox-retention.service';
+import { MailboxTrackingService } from './mailbox-tracking.service';
+import { MailboxTrackingController } from './mailbox-tracking.controller';
 @Module({
   imports: [AccessAuthModule, EmailModule],
-  controllers: [MailboxController, MailboxUnsubscribeController],
+  controllers: [MailboxController, MailboxUnsubscribeController, MailboxTrackingController],
   providers: [
+    MailboxTrackingService,
+    MailboxRetentionService,
     AdminEventPushService,
     MailboxCampaignService,
     MailboxDraftUploadGuard,

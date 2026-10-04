@@ -91,7 +91,7 @@ class MockImapStore {
       );
     };
     return {
-      capabilities: new Set(["IDLE", "MOVE"]),
+      capabilities: new Set(["IDLE", "MOVE", "UIDPLUS"]),
       get mailbox() {
         const folder = store.folders.get(path),
           all = rows();
@@ -165,9 +165,17 @@ class MockImapStore {
         };
       },
       async search(query) {
+        if (query.all) return rows().map(r => r.uid);
         return rows()
           .filter((r) => r.envelope.messageId === query.header["Message-ID"])
           .map((r) => r.uid);
+      },
+      async messageDelete(range, options) {
+        if (!options?.uid) throw Error('Test requires exact UIDs');
+        const ids = range.split(',').map(Number);
+        const folder = store.folders.get(path);
+        folder.rows = folder.rows.filter(row => !ids.includes(row.uid));
+        return true;
       },
       async append(destination, raw) {
         if (store.appendFail) throw Error("synthetic append failure");

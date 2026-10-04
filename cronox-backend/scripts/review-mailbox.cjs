@@ -144,6 +144,7 @@ async function main() {
     `);
     sql(nameBefore);
     sql(path.join(backend,'prisma/migrations/20261004130000_campaign_internal_name/migration.sql'));
+    sql(path.join(backend,'prisma/migrations/20261004150000_mailbox_sent_policy_tracking/migration.sql'));
     const nameAfter = path.join(dir,'campaign-name-after.sql');
     await fs.writeFile(nameAfter, `
       DO $$ BEGIN
@@ -1246,6 +1247,7 @@ async function main() {
     await require('./review-mailbox-reading.cjs')({db,service,users,reader,leases,sync,provider,stores,pass});
     await require('./review-mailbox-campaigns.cjs')({app,db,backend,request,boxId,users,provider,smtpMessages,pass});
     await require('./review-mailbox-inbox-campaign-controls.cjs')({app,db,backend,request,boxId,users,smtpMessages,pass});
+    await require('./review-mailbox-sent-policy.cjs')({app,db,backend,users,provider,stores,sender,sync,service,smtpMessages,pass,request});
     assert.equal(await db.financeArchive.count(), 0);
     assert.equal(await db.dailyVisitor.count(), 0);
     await require('./review-admin-push.cjs')({app,db,backend,request,boxId,users,sessions,push,security,webpush,pass});

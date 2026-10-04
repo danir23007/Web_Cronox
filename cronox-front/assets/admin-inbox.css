@@ -3,6 +3,12 @@
   --mail-muted: var(--admin-c-5f6a7b, #66758b);
   color: var(--admin-text, #17202c);
 }
+.inbox-root .mail-draft-row { display:flex; align-items:stretch; gap:8px; margin-bottom:8px; }
+.inbox-root .mail-draft-row .mail-message { margin:0; flex:1; min-width:0; }
+.inbox-root .mail-draft-delete { flex:0 0 44px; width:44px; min-height:44px; align-self:center; display:grid; place-items:center; }
+.inbox-root .mail-draft-delete svg { width:20px; height:20px; }
+.inbox-root .mail-history-recipient { padding:8px 0; border-bottom:1px solid var(--mail-border); overflow-wrap:anywhere; }
+.inbox-root .mail-history-content { white-space:pre-wrap; overflow-wrap:anywhere; }
 .inbox-root .mail-folder-filter > summary { display:flex; align-items:center; justify-content:space-between; min-height:44px; margin:0; cursor:pointer; font-weight:700; list-style:none; }
 .mail-folder-filter > summary::-webkit-details-marker { display:none; }
 .mail-folder-arrow { transition:transform .15s; }

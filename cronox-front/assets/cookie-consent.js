@@ -517,6 +517,9 @@
     const visitors = document.createElement('script');
     visitors.src = '/assets/visitor-history.js?v=2';
     document.head.append(visitors);
+    const campaign = document.createElement('script');
+    campaign.src = '/assets/campaign-arrival.js?v=1';
+    document.head.append(campaign);
   }
   if (document.readyState === "loading")
     document.addEventListener("DOMContentLoaded", initialize);

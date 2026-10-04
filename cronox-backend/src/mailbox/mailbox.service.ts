@@ -1,4 +1,5 @@
 import {
+  ForbiddenException,
   BadRequestException,
   ConflictException,
   Injectable,
@@ -14,6 +15,7 @@ import { MailboxReaderService } from './mailbox-reader.service';
 import { MailboxProviderService } from './mailbox-provider.service';
 import { MailboxLeasesService } from './mailbox-leases.service';
 import { MailboxCampaignService } from './mailbox-campaign.service';
+import { queuePrivateKeys } from './mailbox-retention.service';
 import { circles, assertResolved } from './mailbox-campaign-policy';
 import { effectiveMailHtml } from '../email/managed/mail-renderer';
 import {
@@ -524,6 +526,32 @@ export class MailboxService {
       }
     }
     return this.draftView(await this.access.draft(actor, draft.id));
+  }
+  async deleteDraft(actor: MailActor, id: string, revision: number) {
+    const draft = await this.access.draft(actor, id);
+    await this.db.$transaction(async tx => {
+      // Same row as both enqueue paths: a concurrent send wins or deletion wins.
+      const locked = await tx.mailboxDraft.updateMany({
+        where: { id, userId: actor.id, revision, status: 'DRAFT', sends: { none: {} },
+          campaigns: { none: { OR: [{ status: { not: 'CANCELLED' } }, { startedAt: { not: null } }] } } },
+        data: { revision: { increment: 1 } },
+      });
+      if (!locked.count) throw new ConflictException('MAILBOX_DRAFT_CHANGED_OR_QUEUED');
+      if (actor.role !== 'SUPERADMIN' && !await tx.mailboxPermission.findFirst({ where: { mailboxId: draft.mailboxId, userId: actor.id, access: 'send' } }))
+        throw new ForbiddenException('MAILBOX_ACCESS_DENIED');
+      const files = await tx.mailboxFile.findMany({ where: { draftId: id } });
+      await queuePrivateKeys(tx, files.filter(f => !f.messageId).map(f => f.key));
+      await tx.mailboxFile.updateMany({ where: { draftId: id, messageId: { not: null } }, data: { draftId: null } });
+      const campaigns = await tx.mailboxCampaign.findMany({ where: { draftId: id }, select: { id: true, snapshot: true } });
+      await queuePrivateKeys(tx, campaigns.flatMap(c => ((c.snapshot as any).files || []).map((f: any) => f.key)));
+      const ids = campaigns.map(c => c.id);
+      await tx.mailboxCampaignDelivery.deleteMany({ where: { campaignId: { in: ids } } });
+      await tx.mailboxCampaignVersion.deleteMany({ where: { campaignId: { in: ids } } });
+      await tx.mailboxCampaign.deleteMany({ where: { id: { in: ids } } });
+      await tx.mailboxDraft.delete({ where: { id } });
+      await tx.mailboxAudit.create({ data: { userId: actor.id, mailboxId: draft.mailboxId, action: 'DRAFT_DELETED', objectId: id, outcome: 'OK' } });
+    });
+    return { ok: true };
   }
   draftView(d: any) {
     return {

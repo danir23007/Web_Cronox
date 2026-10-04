@@ -24,6 +24,8 @@ import {
 import { decrypt, encrypt, header, maxMessageBytes } from './mailbox-security';
 import { campaignAudience, missingCampaignVariables } from './campaign-plan';
 import { effectiveMailHtml } from '../email/managed/mail-renderer';
+import { versionFingerprint } from './mailbox-retention.service';
+import { MailboxTrackingService } from './mailbox-tracking.service';
 
 @Injectable()
 export class MailboxCampaignService {
@@ -34,6 +36,7 @@ export class MailboxCampaignService {
     readonly files: MailboxFilesService,
     readonly provider: MailboxProviderService,
     readonly leases: MailboxLeasesService,
+    readonly tracking?: MailboxTrackingService,
   ) {}
 
   senderKey(address: string) {
@@ -552,8 +555,22 @@ export class MailboxCampaignService {
         }) : { count: 1 };
         if (!lock.count)
           throw new ConflictException('MAILBOX_DRAFT_CHANGED_OR_QUEUED');
+        const campaignId = randomUUID();
+        const versions = new Map<string, { id: string; fingerprint: string; content: any }>();
+        const deliveries = plan.deliveries.map((r: any) => {
+          const footer = '\n\nRecibes esta comunicación por tu suscripción a CRONOX. Darme de baja: __CRONOX_UNSUBSCRIBE_URL__';
+          const content = { ...r.content, wireFrozen: true, text: r.content.text + footer,
+            html: r.content.html ? effectiveMailHtml(r.content.html + '<p>Recibes esta comunicación por tu suscripción a CRONOX. <a href="__CRONOX_UNSUBSCRIBE_URL__">Darme de baja</a></p>') : '' };
+          const fingerprint = versionFingerprint(content);
+          if (!versions.has(fingerprint)) versions.set(fingerprint, { id: randomUUID(), fingerprint, content });
+          return { email: r.email, circleLevel: r.circleLevel, versionId: versions.get(fingerprint)!.id,
+            trackingToken: process.env.MAILBOX_CAMPAIGN_TRACKING_ENABLED === 'true' ? randomUUID() : null,
+            messageId: `<${randomUUID()}@cronox.es>` };
+        });
         return tx.mailboxCampaign.create({
           data: {
+            id: campaignId,
+            versions: { create: [...versions.values()] },
             draftId: draftId!,
             draftRevision: fresh.revision,
             requestKey: input.requestKey,
@@ -573,18 +590,13 @@ export class MailboxCampaignService {
                 circle: p.circle,
                 templateId: p.templateId,
                 templateRevision: p.templateRevision,
-                subject: p.subject,
-                html: p.html,
-                text: p.text,
+
               })),
               files: [],
               count: plan.count,
             },
             deliveries: {
-              create: plan.deliveries.map((r) => ({
-                ...r,
-                messageId: `<${randomUUID()}@cronox.es>`,
-              })),
+              create: deliveries,
             },
           },
         });
@@ -615,6 +627,10 @@ export class MailboxCampaignService {
       where: { campaignId: id },
       _count: { _all: true },
     });
+    const firstAccepted = await this.db.mailboxCampaignDelivery.aggregate({ where: { campaignId: id, status: 'SMTP_ACCEPTED' }, _min: { completedAt: true } });
+    const versions = await this.db.mailboxCampaignVersion.findMany({ where: { campaignId: id } });
+    const legacy = versions.length ? [] : await this.db.mailboxCampaignDelivery.findMany({ where: { campaignId: id }, select: { content: true } });
+    const legacyVersions = [...new Map(legacy.filter(d => d.content).map(d => [versionFingerprint(d.content), d.content])).values()];
     return {
       id: c.id,
       draftId: c.draftId,
@@ -622,6 +638,7 @@ export class MailboxCampaignService {
       status: c.status,
       scheduledAt: c.scheduledAt,
       startedAt: c.startedAt,
+      sentAt: firstAccepted._min.completedAt,
       completedAt: c.completedAt,
       cancelledAt: c.cancelledAt,
       errorCode:
@@ -632,7 +649,10 @@ export class MailboxCampaignService {
       count: (c.snapshot as any).count,
       circles: (c.snapshot as any).circles,
       familyName: (c.snapshot as any).familyName,
-      previews: (c.snapshot as any).versions || [],
+      previews: versions.length ? versions.map(v => ({ id: v.id, ...v.content as any })) : legacyVersions.length ? legacyVersions : (c.snapshot as any).versions || [],
+      ...await this.tracking?.metrics(id),
+      recipients: await this.db.mailboxCampaignDelivery.findMany({ where: { campaignId: id },
+        select: { email: true, status: true, circleLevel: true, versionId: true, completedAt: true, visitedAt: true, bouncedAt: true, errorCode: true }, orderBy: { email: 'asc' } }),
       progress: progress.map((p) => ({
         status: p.status,
         circle: p.circleLevel,
@@ -931,6 +951,7 @@ export class MailboxCampaignService {
                   readyAt: { lte: new Date() },
                 },
                 orderBy: { id: 'asc' },
+                include: { version: true },
               });
               if (!d) return null;
               await tx.mailboxCampaign.update({
@@ -982,7 +1003,7 @@ export class MailboxCampaignService {
               });
               return true;
             }
-            const content = delivery.content as any;
+            const content = (delivery.version?.content || delivery.content) as any;
             if (
               !content ||
               content.circle !== delivery.circleLevel ||
@@ -1000,7 +1021,7 @@ export class MailboxCampaignService {
               '/api/mailbox-unsubscribe/' +
               this.unsubscribeToken(delivery.email);
             const footer = `\n\nRecibes esta comunicación por tu suscripción a CRONOX. Darme de baja: ${link}`;
-            const html = content.html
+            const html = content.wireFrozen ? content.html.replaceAll('__CRONOX_UNSUBSCRIBE_URL__', link) : content.html
               ? effectiveMailHtml(
                   content.html +
                     `<p>Recibes esta comunicación por tu suscripción a CRONOX. <a href="${link}">Darme de baja</a></p>`,
@@ -1017,12 +1038,13 @@ export class MailboxCampaignService {
             }
             header(content.subject);
             assertResolved(content.subject, content.text, content.html);
+            const text = content.wireFrozen ? content.text.replaceAll('__CRONOX_UNSUBSCRIBE_URL__', link) : content.text + footer;
             const composer = new MailComposer({
               from: { name: snapshot.fromName, address: box.address },
               bcc: [delivery.email],
               subject: content.subject,
-              text: content.text + footer,
-              html,
+              text: this.tracking?.instrumentText(text, delivery.trackingToken) || text,
+              html: html ? this.tracking?.instrumentHtml(html, delivery.trackingToken) || html : undefined,
               messageId: delivery.messageId,
               attachments,
               headers: { 'List-Unsubscribe': `<${link}>` },
@@ -1035,6 +1057,7 @@ export class MailboxCampaignService {
                 maxMessageBytes(),
               )
             ).key;
+            await this.db.mailboxStorageGarbage.create({ data: { key: rawKey, createdAt: new Date(Date.now() + 600000) } });
             const smtp = await this.provider.smtp(box);
             try {
               await assert();
@@ -1092,57 +1115,10 @@ export class MailboxCampaignService {
                 data: {
                   status: 'SMTP_ACCEPTED',
                   completedAt: new Date(),
-                  sentCopyStatus:
-                    box.sentCopy === 'provider'
-                      ? 'PROVIDER_MANAGED'
-                      : 'PENDING',
+                  sentCopyStatus: 'SHARED_CAMPAIGN_VERSION',
+                  trackingToken: process.env.MAILBOX_CAMPAIGN_TRACKING_ENABLED === 'true' ? delivery.trackingToken : null,
                 },
               });
-              if (box.sentCopy !== 'provider') {
-                try {
-                  const client = await this.provider.imap(box);
-                  try {
-                    await assert();
-                    const sent = (await client.list()).find(
-                      (f) => f.specialUse === '\\Sent',
-                    );
-                    if (!sent) throw Error();
-                    const lock = await client.getMailboxLock(sent.path);
-                    try {
-                      const match = await client.search(
-                        { header: { 'Message-ID': delivery.messageId } },
-                        { uid: true },
-                      );
-                      if (!match || !match.length) {
-                        const chunks: Buffer[] = [];
-                        for await (const chunk of await this.files.read(rawKey))
-                          chunks.push(Buffer.from(chunk));
-                        if (
-                          !(await client.append(
-                            sent.path,
-                            Buffer.concat(chunks),
-                            ['\\Seen'],
-                          ))
-                        )
-                          throw Error();
-                      }
-                    } finally {
-                      lock.release();
-                    }
-                  } finally {
-                    await client.logout().catch(() => client.close());
-                  }
-                  await this.db.mailboxCampaignDelivery.update({
-                    where: { id: delivery.id },
-                    data: { sentCopyStatus: 'SAVED' },
-                  });
-                } catch {
-                  await this.db.mailboxCampaignDelivery.update({
-                    where: { id: delivery.id },
-                    data: { sentCopyStatus: 'FAILED_OR_UNCERTAIN' },
-                  });
-                }
-              }
             } finally {
               smtp.close();
             }

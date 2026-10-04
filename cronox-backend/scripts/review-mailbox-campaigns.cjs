@@ -91,10 +91,13 @@ module.exports=async function review({app,db,backend,request,boxId,users,provide
   const requestKey=randomUUID(),input={revision:d.revision,requestKey,previewHash:summary.previewHash};
   const c=await campaigns.enqueue(actor,d.id,input);
   await db.managedEmailTemplate.update({where:{id:versions[0].id},data:{subject:'Edited after approval',document:{blocks:[{type:'text',text:'Changed after approval'}]},revision:{increment:1}}});
-  const frozen=await db.mailboxCampaignDelivery.findMany({where:{campaignId:c.id}});
+  const frozen=await db.mailboxCampaignDelivery.findMany({where:{campaignId:c.id},include:{version:true}});
+  assert(frozen.every(r=>r.content===null&&r.versionId));
+  assert.equal(await db.mailboxCampaignVersion.count({where:{campaignId:c.id}}),2);
+  assert((await db.mailboxCampaign.findUniqueOrThrow({where:{id:c.id}})).snapshot.versions.every(v=>!('html' in v)&&!('text' in v)));
   assert((await campaigns.view(actor,c.id)).previews.some(p=>p.circle===1&&p.subject==='Circle 1'&&p.text.includes('circle 1')),'Approved preview remains frozen');
-  assert(frozen.some(r=>r.circleLevel===1&&r.content.subject==='Circle 1'&&r.content.text.includes('circle 1')));
-  assert(frozen.some(r=>r.circleLevel===2&&r.content.subject==='Circle 2'&&r.content.text.includes('circle 2')));
+  assert(frozen.some(r=>r.circleLevel===1&&r.version.content.subject==='Circle 1'&&r.version.content.text.includes('circle 1')));
+  assert(frozen.some(r=>r.circleLevel===2&&r.version.content.subject==='Circle 2'&&r.version.content.text.includes('circle 2')));
   const recipient=await db.user.findUniqueOrThrow({where:{id:u1.id}});
   await db.user.update({where:{id:u1.id},data:{circleLevel:5}});
   assert.equal(await campaigns.eligible(u1.email,1),false,'circle changes never select another version');
