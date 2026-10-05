@@ -35,11 +35,13 @@ async page => {
     assert(await notice.locator('[data-delivery-date]').textContent() === expected, 'Same calendar as PDP');
     assert(await notice.count() === 1, 'Only one order estimate');
     const borders = await page.evaluate(() => ({
-      last: getComputedStyle(document.querySelector('#cart-items-container .cart-line:last-child')).borderBottomWidth,
+      last: getComputedStyle(document.querySelector('#cart-items-container .cart-line:last-of-type')).borderBottomWidth,
+      items: getComputedStyle(document.querySelector('#cart-items-container')).borderBottomWidth,
+      noticeInsideLast: document.querySelector('#cart-items-container').lastElementChild.matches('[data-cart-delivery]'),
       upsell: getComputedStyle(document.querySelector('#cart-upsell-section')).borderTopWidth,
       dot: getComputedStyle(document.querySelector('[data-cart-delivery] .pdp__delivery-dot')).backgroundColor,
     }));
-    assert(borders.last === '1px' && borders.upsell === '0px', 'Exactly one separator: ' + JSON.stringify(borders));
+    assert(borders.last === '0px' && borders.items === '1px' && borders.noticeInsideLast && borders.upsell === '0px', 'Delivery inside items, followed by exactly one separator: ' + JSON.stringify(borders));
     assert(borders.dot === 'rgb(105, 189, 145)', 'Shared green dot');
     await page.evaluate(async variantId => window.CRONOX_CART.addCartItem({ variantId, qty: 1 }), selected[1].variant.id);
     await page.evaluate(async () => {

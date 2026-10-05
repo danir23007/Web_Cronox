@@ -91,10 +91,11 @@ async page => {
     assert(await cartNotice.locator('[data-delivery-date]').textContent() === '14 de octubre', 'Quantity uses shared forecast');
     assert(await cartNotice.count() === 1, 'One order forecast');
     const borders = await page.evaluate(() => [
-      getComputedStyle(document.querySelector('#cart-items-container .cart-line:last-child')).borderBottomWidth,
+      getComputedStyle(document.querySelector('#cart-items-container .cart-line:last-of-type')).borderBottomWidth,
       getComputedStyle(document.querySelector('#cart-upsell-section')).borderTopWidth,
+      getComputedStyle(document.querySelector('#cart-items-container')).borderBottomWidth,
     ]);
-    assert(borders.join('|') === '1px|0px', 'Single separator');
+    assert(borders.join('|') === '0px|0px|1px', 'Single separator');
     await page.screenshot({ path: `output/playwright/delivery-release-2026-10-05/${new URL(origin).hostname}-cart-${width}.png` });
     await page.locator('#cart-close-btn').click(); await page.locator('#cart-icon-btn').click();
     assert(await cartNotice.count() === 1, 'Reopen does not duplicate forecast');

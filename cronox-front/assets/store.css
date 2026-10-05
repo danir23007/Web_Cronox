@@ -1283,8 +1283,13 @@ button.product-cta--disabled:disabled { opacity:.5; cursor:not-allowed; filter:n
   background: #69bd91;
 }
 .pdp__delivery strong { font-weight: 700; }
-.cart-delivery { flex: none; }
-.cart-delivery:not([hidden]) + .cart-upsell { padding-top: 0; }
+.cart-delivery { flex: none; margin-top: 2px; }
+.cart-drawer__items > .cart-line:last-of-type { border-bottom: none; }
+.cart-drawer__items:has(> .cart-line) {
+  padding-bottom: 14px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.15);
+}
+.cart-drawer__items:has(> .cart-line) + .cart-upsell { padding-top: 0; }
 
 .cart-upsell__head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
 .cart-upsell__head h3 { margin: 0; font-size: 14px; letter-spacing: 0.08em; text-transform: uppercase; }

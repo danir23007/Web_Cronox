@@ -1276,7 +1276,7 @@
     cartDelivery.hidden = true;
     cartDelivery.setAttribute('aria-live', 'polite');
     cartDelivery.innerHTML = '<span class="pdp__delivery-dot" aria-hidden="true"></span><span>Entrega estimada del pedido antes del <strong data-delivery-date></strong></span>';
-    cartItemsContainer.after(cartDelivery);
+    cartItemsContainer.appendChild(cartDelivery);
   }
   const checkoutBtn = $('#cart-checkout-btn');
   const cartCloseBtn = $('#cart-close-btn');
@@ -1637,6 +1637,7 @@
     });
     cartItemsContainer.innerHTML = '';
     cartItemsContainer.appendChild(frag);
+    if (cartDelivery) cartItemsContainer.appendChild(cartDelivery);
   };
 
   const renderCartDrawer = (cart) => {
