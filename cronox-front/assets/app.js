@@ -264,7 +264,11 @@
       try {
         const categories = await API.getAllCategories();
         if (version !== categoryRequest) return;
-        const visible = categories.filter(category => category.isActive !== false && category.showInStoreFilters !== false);
+        const groupOrder = { NEW: 0, DROP: 1, GARMENT: 2 };
+        const alphabet = new Intl.Collator('es', { sensitivity: 'base', usage: 'sort' });
+        const visible = categories.filter(category => category.isActive !== false && category.showInStoreFilters !== false)
+          .sort((left, right) => (groupOrder[left.group] ?? 3) - (groupOrder[right.group] ?? 3) ||
+            alphabet.compare(left.name, right.name));
         categoryList.querySelector('[data-category-error]')?.remove();
         const signature = JSON.stringify(visible);
         if (signature === categorySignature && categoryList.querySelector('#storeCategoryFilters') && (!requestedSlug || visible.some(category => category.slug === requestedSlug))) return;
@@ -1264,6 +1268,16 @@
   const freeShippingBarFill = $('#free-shipping-bar-fill');
   const cartUpsellList = $('#cart-upsell-list');
   const cartUpsellSection = $('#cart-upsell-section');
+  const cartDelivery = cartDrawerEl ? document.createElement('p') : null;
+  if (cartDelivery && cartItemsContainer) {
+    cartDelivery.className = 'pdp__delivery cart-delivery';
+    cartDelivery.dataset.deliveryNotice = '';
+    cartDelivery.dataset.cartDelivery = '';
+    cartDelivery.hidden = true;
+    cartDelivery.setAttribute('aria-live', 'polite');
+    cartDelivery.innerHTML = '<span class="pdp__delivery-dot" aria-hidden="true"></span><span>Entrega estimada del pedido antes del <strong data-delivery-date></strong></span>';
+    cartItemsContainer.after(cartDelivery);
+  }
   const checkoutBtn = $('#cart-checkout-btn');
   const cartCloseBtn = $('#cart-close-btn');
   const cartFooter = cartDrawerEl ? $('.cart-drawer__footer', cartDrawerEl) : null;
@@ -1633,6 +1647,8 @@
     const hasItems = items.length > 0;
     const loading = cartState.status === 'loading';
     const failed = cartState.status === 'error';
+    window.CRONOX_DELIVERY?.render(cartDelivery,
+      !loading && !failed ? window.CRONOX_DELIVERY.estimateCart(cart) : null);
     cartDrawerEl?.setAttribute('aria-busy', String(loading));
     cartStatus.hidden = !loading && !failed;
     cartStatus.replaceChildren();

@@ -54,25 +54,6 @@
   align-items:flex-start;
   width:100%;
 }
-.pdp__delivery {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-  margin: 0;
-  max-width: 100%;
-  font-size: 12px;
-  line-height: 1.5;
-  color: inherit;
-}
-.pdp__delivery[hidden] { display: none; }
-.pdp__delivery-dot {
-  flex: 0 0 6px;
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: #69bd91;
-}
-.pdp__delivery strong { font-weight: 700; }
 .pdp__size-buttons{
   display:inline-flex;
   flex-wrap:wrap;

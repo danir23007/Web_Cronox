@@ -68,7 +68,7 @@ describe('responsive storefront image delivery', () => {
     expect(read('assets/products.js')).toContain(
       'CRONOX_IMAGES.apply(im, record, "card")',
     );
-    expect(read('assets/products.js')).toContain('"quick")');
+    expect(read('assets/products.js')).toContain('"quick", { loading: \'eager\' }');
     expect(read('assets/product-page.js')).toContain('resolve(item, "pdp")');
     expect(read('assets/product-page.js')).toContain('resolve(item, "small")');
     expect(read('assets/app.js')).toContain('applyProduct(');

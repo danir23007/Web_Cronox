@@ -69,6 +69,8 @@
   border-radius:0;
   display:block;
 }
+.qa-media img.qa-image-loading{ opacity:0; }
+.qa-media[aria-busy="true"]{ background:rgba(255,255,255,.025); }
 
 /* ===== Info del producto ===== */
 .qa-info{

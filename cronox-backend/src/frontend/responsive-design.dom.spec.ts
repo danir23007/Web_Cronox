@@ -345,7 +345,7 @@ describe('CRONOX responsive design system', () => {
   it('loads each modified stylesheet through its exact incremented cache version', () => {
     expect(readFrontend('assets/version.js')).toContain("VERSION = '98'");
     expect(readFrontend('index.html')).toContain('assets/gallery.css?v=19');
-    expect(readFrontend('index.html')).toContain('assets/quick-add.css?v=6');
+    expect(readFrontend('index.html')).toContain('assets/quick-add.css?v=7');
     expect(readFrontend('index.html')).toContain(
       'assets/product-detail.css?v=2',
     );
@@ -356,7 +356,7 @@ describe('CRONOX responsive design system', () => {
       'assets/checkout-success.css?v=1',
     );
     expect(readFrontend('producto.html')).toContain(
-      'assets/product-page.css?v=9',
+      'assets/product-page.css?v=10',
     );
   });
 });

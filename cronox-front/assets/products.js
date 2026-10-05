@@ -196,6 +196,7 @@
   let qaSuspendedCart = null;
   let qaCurrentProduct = null;
   let qaSelectedSize = "";
+  let qaOpening = 0;
 
   const findVariantForSize = (product, size) => {
     if (!product || !size) return null;
@@ -298,6 +299,7 @@
       }
 
       const productAtRequest = qaCurrentProduct;
+      const openingAtRequest = qaOpening;
       qaAdd.disabled = true;
       qaAdd.textContent = 'Añadiendo…';
       const feedback = qaOverlay.querySelector('#qaCartStatus');
@@ -305,7 +307,7 @@
       const ev = new CustomEvent("cronox:addToCart", {
         detail: {
           onComplete: (success) => {
-            if (qaCurrentProduct !== productAtRequest) return;
+            if (qaOpening !== openingAtRequest || qaCurrentProduct !== productAtRequest) return;
             qaAdd.textContent = success ? 'Añadido ✓' : 'Reintentar';
             feedback.textContent = success ? 'Artículo añadido a tu cesta.' : 'No se pudo añadir. Vuelve a intentarlo.';
             qaAdd.disabled = false;
@@ -435,6 +437,7 @@
 
   function openQuickAdd(product) {
     ensureQuickAddDOM();
+    const opening = ++qaOpening;
     qaOverlay.querySelector('#qaCartStatus').textContent = '';
     qaAdd.textContent = 'Añadir al carrito';
     qaReturnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
@@ -447,12 +450,42 @@
     }
     qaCurrentProduct = product;
 
+    // Fresh nodes cannot retain a previously decoded bitmap, srcset or fallback
+    // handler. Late events belong to detached nodes, never to the next opening.
+    const media = qaOverlay.querySelector('.qa-media');
+    const images = [1, 2].map(number => {
+      const image = document.createElement('img');
+      image.id = `qaImg${number}`;
+      image.alt = product.name || 'Producto';
+      image.className = 'qa-image-loading';
+      image.loading = 'eager';
+      image.decoding = 'async';
+      image.referrerPolicy = 'no-referrer';
+      return image;
+    });
+    media.replaceChildren(...images);
+    [qaImg1, qaImg2] = images;
+    media.setAttribute('aria-busy', 'true');
+    const settled = new Set();
+    images.forEach(image => {
+      const finish = () => {
+        if (opening !== qaOpening || qaCurrentProduct !== product) return;
+        if (image.naturalWidth > 0) image.classList.remove('qa-image-loading');
+        settled.add(image);
+        if (settled.size === images.length) media.setAttribute('aria-busy', 'false');
+      };
+      image.addEventListener('load', finish);
+      image.addEventListener('error', () => {
+        // applyProduct may synchronously install the next fallback URL.
+        queueMicrotask(() => { if (!image.onerror && image.complete) finish(); });
+      });
+    });
     const records = window.CRONOX_IMAGES?.productRecords?.(product) || (Array.isArray(product.images) ? product.images : [product.image]).filter(Boolean).map((image) => typeof image === 'string' ? { url: image } : image);
-    window.CRONOX_IMAGES?.applyProduct(qaImg1, product, "quick");
+    window.CRONOX_IMAGES?.applyProduct(qaImg1, product, "quick", { loading: 'eager' });
     if (!qaImg1.src) qaImg1.src = safeProductImage(product.image);
     qaImg1.alt = product.name || "Producto";
     qaImg1.referrerPolicy = "no-referrer";
-    window.CRONOX_IMAGES?.apply(qaImg2, records[1] || records[0], "quick");
+    window.CRONOX_IMAGES?.applyProduct(qaImg2, records[1] || records[0], "quick", { loading: 'eager' });
     if (!qaImg2.src) qaImg2.src = qaImg1.src;
     qaImg2.alt = product.name || "Producto";
     qaImg2.referrerPolicy = "no-referrer";
@@ -480,6 +513,8 @@
 
   function closeQuickAdd() {
     if (!qaOverlay || qaOverlay.getAttribute("aria-hidden") === "true") return;
+    ++qaOpening;
+    qaOverlay.querySelector('.qa-media').replaceChildren();
     qaOverlay.setAttribute("aria-hidden","true");
     qaOverlay.inert = document.body.classList.contains('cart-open');
     if (qaSuspendedCart) {
