@@ -11,6 +11,30 @@ describe('browser sliding-session transport', () => {
   );
   const bundle = readFileSync(path.join(frontendRoot, 'assets/api.js'), 'utf8');
 
+  it.each(['anonymous', 'dependency failure'])(
+    'does not amplify %s into refresh attempts or logout', async scenario => {
+      const dom = new JSDOM('<!doctype html><body></body>', { runScripts: 'outside-only', url: 'https://cronox.test/tienda' });
+      const calls: string[] = [];
+      const ended = jest.fn();
+      dom.window.addEventListener('cronox:session-ended', ended);
+      const rawFetch = jest.fn(async input => {
+        const route = new URL(String(input), dom.window.location.href).pathname;
+        calls.push(route);
+        return new Response(JSON.stringify(scenario === 'anonymous' ? { code: 'AUTH_REQUIRED' } : {}), {
+          status: scenario === 'dependency failure' && route === '/api/me' ? 503 : 401,
+        });
+      });
+      Object.assign(dom.window, { fetch: rawFetch, Response, Request, Headers, URL, BroadcastChannel: undefined });
+      dom.window.eval(bundle);
+      if (scenario === 'anonymous') expect((await dom.window.fetch('/api/me')).status).toBe(401);
+      else await expect(dom.window.fetch('/api/orders')).rejects.toThrow();
+      expect(calls).not.toContain('/api/auth/refresh');
+      expect(calls).toHaveLength(scenario === 'anonymous' ? 1 : 2);
+      expect(ended).not.toHaveBeenCalled();
+      dom.window.close();
+    },
+  );
+
   it('ships the exact idle message, genuine-event gate and multi-tab channels', () => {
     expect(source).toContain('Tu sesión se ha cerrado por inactividad.');
     expect(source).toContain('event.isTrusted');

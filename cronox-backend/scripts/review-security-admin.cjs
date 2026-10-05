@@ -1,0 +1,35 @@
+'use strict';
+const assert = require('node:assert/strict'), { randomUUID } = require('node:crypto');
+// Only synthetic data in review-security.cjs's disposable PostgreSQL.
+module.exports = async ({ db }) => {
+  assert.equal(new URL(process.env.DATABASE_URL).hostname, '127.0.0.1');
+  const { AdminBulkService } = require('../dist/admin/bulk/admin-bulk.service');
+  const { AdminUsersService } = require('../dist/admin/users/admin-users.service');
+  const { ProductService } = require('../dist/products/product.service');
+  const { AdminInventoryService } = require('../dist/admin/inventory/admin-inventory.service');
+  const bulk = new AdminBulkService(db, new AdminUsersService(db), new ProductService(db)), inventory = new AdminInventoryService(db);
+  const actor = await db.user.create({ data: { email: 'bulk-audit@example.test', role: 'SUPERADMIN' } });
+  const admin = await db.user.create({ data: { email: 'bulk-admin@example.test', role: 'ADMIN' } });
+  const product = await db.product.create({ data: { name: 'Bulk fixture', slug: 'audit-bulk-fixture', price: 2500, variants: { create: { sku: 'AUDIT-BULK', size: 'M', stockQty: 10 } } }, include: { variants: true } });
+  const change = { kind: 'products', ids: [product.id], changes: { isActive: false } };
+  await assert.rejects(() => bulk.preview(change, admin.id), error => error.getStatus() === 403);
+  const plan = await bulk.preview(change, actor.id), operationId = randomUUID();
+  const execute = { ...change, reviewToken: plan.reviewToken, operationId };
+  const results = await Promise.all([bulk.execute(execute, actor.id), bulk.execute(execute, actor.id)]);
+  assert.deepEqual(results[0], results[1]);
+  assert.equal(await db.auditLog.count({ where: { targetId: operationId, actionType: 'admin.bulk.update' } }), 1);
+  await assert.rejects(() => bulk.execute({ ...execute, changes: { isActive: true } }, actor.id), error => error.getStatus() === 409);
+  const activate = { ...change, changes: { isActive: true } }, stale = await bulk.preview(activate, actor.id);
+  await db.product.update({ where: { id: product.id }, data: { name: 'Edited concurrently' } });
+  await assert.rejects(() => bulk.execute({ ...activate, reviewToken: stale.reviewToken, operationId: randomUUID() }, actor.id), error => error.getStatus() === 409);
+  assert.equal((await db.product.findUnique({ where: { id: product.id } })).isActive, false);
+  const fresh = await bulk.preview(activate, actor.id);
+  await db.user.update({ where: { id: actor.id }, data: { role: 'ADMIN' } });
+  await assert.rejects(() => bulk.execute({ ...activate, reviewToken: fresh.reviewToken, operationId: randomUUID() }, actor.id), error => error.getStatus() === 403);
+  const variantId = product.variants[0].id;
+  const stock = await Promise.allSettled([11, 12].map(value => inventory.update(product.id, { updates: [{ variantId, expectedStock: 10, stock: value }] }, admin.id)));
+  assert.equal(stock.filter(result => result.status === 'fulfilled').length, 1);
+  assert.equal(stock.find(result => result.status === 'rejected').reason.getStatus(), 409);
+  assert.equal(await db.stockMovement.count({ where: { variantId } }), 1);
+  console.log('PASS: bulk repeat/replay/stale preview/revoked actor and concurrent inventory compare-and-set on real PostgreSQL');
+};

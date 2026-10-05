@@ -283,6 +283,57 @@
     image.style.transform = `scale(${item.galleryZoom})`;
   }
 
+  // The API product used to paint the page also owns its offers after hydration.
+  // Keep the server's identity/relations and update its single existing block;
+  // selecting a size does not remove the other variants from the ProductGroup.
+  function syncProductSchema(product) {
+    const node = document.getElementById('cronox-seo');
+    if (!node) return;
+    if (!product) { node.remove(); return; }
+    try {
+      const group = JSON.parse(node.textContent);
+      if (group['@type'] !== 'ProductGroup') return;
+      const description = String(product.description ?? product.desc ?? '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+      const image = [...new Set((product.images || []).map(item => {
+        const url = new URL(item.url || item, 'https://cronox.es/');
+        if (url.origin === location.origin) return new URL(url.pathname, 'https://cronox.es/').href;
+        return url.protocol === 'https:' ? url.href : '';
+      }).filter(Boolean))];
+      const variants = (product.variants || []).filter(v => v.isActive !== false);
+      if (!image.length || !variants.length) { node.remove(); return; }
+      if (group.name !== product.name || group.description !== (description || product.name)) {
+        document.title = `${product.name} | CRONOX`;
+        for (const selector of ['meta[name="description"]', 'meta[property="og:description"]'])
+          document.querySelector(selector)?.setAttribute('content', description || product.name);
+        document.querySelector('meta[property="og:title"]')?.setAttribute('content', document.title);
+      }
+      document.querySelector('meta[property="og:image"]')?.setAttribute('content', image[0]);
+      group.name = product.name;
+      group.description = description || product.name;
+      group.image = image;
+      group.hasVariant = variants.map(v => {
+        const size = v.sizeCode || v.sizeKey || v.size;
+        const label = window.CRONOX_SIZES?.label?.(size) || v.size;
+        const url = `${group.url}?size=${encodeURIComponent(size)}`;
+        return {
+          '@type': 'Product', '@id': `${group.url}#variant-${v.id}`,
+          name: `${product.name} — ${label}`, description: group.description,
+          image, brand: group.brand, sku: v.sku, size: label, url,
+          offers: {
+            '@type': 'Offer', url, priceCurrency: product.currency,
+            price: (v.priceCents / 100).toFixed(2),
+            availability: `https://schema.org/${isVariantAvailable(v) ? 'InStock' : 'OutOfStock'}`,
+            seller: { '@id': 'https://cronox.es/#organization' },
+          },
+        };
+      });
+      node.textContent = JSON.stringify(group).replace(/</g, '\\u003c').replace(/>/g, '\\u003e').replace(/&/g, '\\u0026');
+    } catch {
+      // A malformed update must not leave offers that disagree with the page.
+      node.remove();
+    }
+  }
+
   function installImageFallback(image, item) {
     if (!image) return;
     let triedOriginal = false;
@@ -595,6 +646,7 @@
   // Render PDP + back suave
   // ==========================
   function render(product) {
+    syncProductSchema(product);
     if (!product) {
       if (pName) pName.textContent = "Producto no disponible";
       if (pDesc) pDesc.textContent = "Este producto ya no está activo en la colección.";

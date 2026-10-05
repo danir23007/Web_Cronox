@@ -3,6 +3,14 @@ import { PayloadTooLargeException } from '@nestjs/common';
 import { Role, UserAccountState } from '@prisma/client';
 import { AdminExportsService } from './admin-exports.service';
 
+function transactional<T>(prisma: T): T {
+  Object.assign(prisma as object, {
+    $executeRaw: jest.fn().mockResolvedValue(1),
+    $transaction: jest.fn(async (operation) => operation(prisma)),
+  });
+  return prisma;
+}
+
 describe('AdminExportsService', () => {
   const user = {
     id: 7,
@@ -30,7 +38,7 @@ describe('AdminExportsService', () => {
     return {
       prisma,
       excel,
-      service: new AdminExportsService(prisma as never, excel as never),
+      service: new AdminExportsService(transactional(prisma) as never, excel as never),
     };
   };
 
@@ -132,7 +140,7 @@ describe('AdminExportsService', () => {
       build: jest.fn().mockResolvedValue(Buffer.from('PK')),
       timestampedFilename: jest.fn().mockReturnValue('inventory.xlsx'),
     };
-    const service = new AdminExportsService(prisma as never, excel as never);
+    const service = new AdminExportsService(transactional(prisma) as never, excel as never);
 
     await service.export('inventario', { scope: 'all' }, 99, {});
 
@@ -144,7 +152,7 @@ describe('AdminExportsService', () => {
     expect(sheets[0].rows[0]).toMatchObject({ stock: 4, sku: 'SKU-M' });
     expect(sheets[1].rows[0]).toMatchObject({ delta: -1, orderId: 10 });
     expect(prisma.$transaction).toHaveBeenCalledWith(
-      expect.any(Array),
+      expect.any(Function),
       expect.objectContaining({ isolationLevel: 'RepeatableRead' }),
     );
   });
@@ -177,7 +185,7 @@ describe('AdminExportsService', () => {
       build: jest.fn().mockResolvedValue(Buffer.from('PK')),
       timestampedFilename: jest.fn().mockReturnValue('orders.xlsx'),
     };
-    const service = new AdminExportsService(prisma as never, excel as never);
+    const service = new AdminExportsService(transactional(prisma) as never, excel as never);
 
     await service.export('pedidos', { scope: 'all' }, 99, {});
 

@@ -83,7 +83,7 @@ async function main() {
       await fs.readFile(path.join(backend, 'prisma/schema.prisma'), 'utf8')
     )
       .replace(
-        /model (?:Mailbox\w*|DailyVisitorBrowser|DailyVisitorLink) \{[\s\S]*?\n\}/g,
+        /model (?:DailyVisitorBrowser|DailyVisitorLink) \{[\s\S]*?\n\}/g,
         '',
       )
       .replace(
@@ -132,17 +132,8 @@ async function main() {
         'prisma/migrations/20261002200000_visitor_daily_reconciliation/migration.sql',
       ),
     );
-    // Only in this newly initialized loopback database: keep the unrelated pending mail UI operational.
-    const pendingMailMigration = path.join(
-      backend,
-      'prisma/migrations/20261002160000_admin_mailboxes/migration.sql',
-    );
-    try {
-      await fs.access(pendingMailMigration);
-      sql(pendingMailMigration);
-    } catch (error) {
-      if (error.code !== 'ENOENT') throw error;
-    }
+    // Unrelated mailbox models stay at the current schema, including their
+    // template-family relations; only visitor history is migrated in this test.
     await fs.writeFile(path.join(dir, 'empty.env'), '');
     process.env.CRONOX_ENV_FILE = path.join(dir, 'empty.env');
     process.chdir(dir);
@@ -565,14 +556,11 @@ async function main() {
       401,
     );
     pass('invalid and unresolved authentication never becomes guest');
-    const { UsersService } = require(
-      path.join(backend, 'dist/users/users.service'),
-    );
-    const lookup = app.get(UsersService),
-      originalLookup = lookup.findById;
+    const lookup = sessions,
+      originalLookup = lookup.validate;
     const beforeFailure = await db.dailyVisitor.count();
     try {
-      lookup.findById = async () => {
+      lookup.validate = async () => {
         throw new (require('@nestjs/common').ServiceUnavailableException)(
           'Synthetic lookup outage',
         );
@@ -588,7 +576,7 @@ async function main() {
       );
       assert.equal(await db.dailyVisitor.count(), beforeFailure);
     } finally {
-      lookup.findById = originalLookup;
+      lookup.validate = originalLookup;
     }
     pass(
       'temporary authentication outage returns 503 without anonymous fallback',

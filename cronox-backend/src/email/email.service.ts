@@ -157,6 +157,26 @@ export class EmailService {
     }
   }
 
+  // Security actions always retain the first-party authorization/cancellation content.
+  async sendEmailChange(to: string, data: { authorize: boolean; newEmail: string; actionUrl: string; cancelUrl: string }) {
+    const title = data.authorize ? 'Autoriza el cambio de email' : 'Verifica tu nuevo email';
+    const html = await this.renderTemplate(EmailTemplate.EMAIL_CHANGE, {
+      ...data, title, actionLabel: data.authorize ? 'Autorizar cambio' : 'Verificar nuevo email',
+    });
+    try {
+      const info = await this.transportFactory.sendMail(EmailSenderKey.NOREPLY, {
+        to, subject: `CRONOX · ${title}`, html,
+        text: `${title}\nNueva dirección solicitada: ${data.newEmail}\n${data.actionUrl}\nEl email actual permanece vigente hasta confirmar ambos buzones. La solicitud caduca una hora después de iniciarla.\nSi no reconoces el cambio, cancela la solicitud: ${data.cancelUrl}\nSi ya no tienes acceso a este correo electrónico, ponte en contacto con support@cronox.es (mailto:support@cronox.es) para solicitar ayuda con el cambio de email.`,
+      }, data.authorize ? 'EMAIL_CHANGE_AUTHORIZE' : 'EMAIL_CHANGE_VERIFY');
+      if (!info.accepted?.length || info.queued) throw new Error('SMTP_RECIPIENT_NOT_ACCEPTED');
+      return { messageId: info.messageId };
+    } catch (error) {
+      const failure = new InternalServerErrorException('No se pudo confirmar el envío del correo.');
+      if ((error as { deliveryUnknown?: boolean }).deliveryUnknown) Object.assign(failure, { deliveryUnknown: true });
+      throw failure;
+    }
+  }
+
   async sendPasswordReset(email: string, link: string) {
     const subject = 'CRONOX · Restablece tu contraseña';
     return this.send({

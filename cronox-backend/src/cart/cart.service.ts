@@ -4,6 +4,7 @@ import type { Request } from 'express';
 import { randomUUID } from 'node:crypto';
 import { AddItemDto } from './dto/add-item.dto';
 import { UpdateItemDto } from './dto/update-item.dto';
+import { serializableTransaction } from '../prisma/serializable-transaction';
 
 export const cartInclude = {
   items: {
@@ -137,11 +138,11 @@ export class CartService {
 
   async getOrCreateCart(context: CartContext): Promise<CartWithItems> {
     const where = this.buildUniqueWhere(context);
-    return this.findOrCreate(where);
+    return serializableTransaction(this.prisma, tx => this.findOrCreate(where, tx), true);
   }
 
   async addItem(context: CartContext, dto: AddItemDto): Promise<CartWithItems> {
-    return this.prisma.$transaction(async (tx) => {
+    return serializableTransaction(this.prisma, async (tx) => {
       const client = this.getClient(tx);
       const where = this.buildUniqueWhere(context);
       const cart = await this.findOrCreate(where, tx);
@@ -182,7 +183,7 @@ export class CartService {
 
       await this.recalcTotals(client, cart.id);
       return this.getCartByIdOrThrow(client, cart.id);
-    });
+    }, true);
   }
 
   async updateItem(
@@ -190,7 +191,7 @@ export class CartService {
     itemId: number,
     dto: UpdateItemDto,
   ): Promise<CartWithItems> {
-    return this.prisma.$transaction(async (tx) => {
+    return serializableTransaction(this.prisma, async (tx) => {
       const client = this.getClient(tx);
       const cart = await this.getCartForContext(context, client);
 
@@ -214,7 +215,7 @@ export class CartService {
   }
 
   async removeItem(context: CartContext, itemId: number): Promise<CartWithItems> {
-    return this.prisma.$transaction(async (tx) => {
+    return serializableTransaction(this.prisma, async (tx) => {
       const client = this.getClient(tx);
       const cart = await this.getCartForContext(context, client);
 
@@ -230,7 +231,7 @@ export class CartService {
   }
 
   async clearCart(context: CartContext): Promise<CartWithItems> {
-    return this.prisma.$transaction(async (tx) => {
+    return serializableTransaction(this.prisma, async (tx) => {
       const client = this.getClient(tx);
       const where = this.buildUniqueWhere(context);
       const cart = await this.findOrCreate(where, tx);
@@ -238,7 +239,7 @@ export class CartService {
       await client.cartItem.deleteMany({ where: { cartId: cart.id } });
       await this.recalcTotals(client, cart.id);
       return this.getCartByIdOrThrow(client, cart.id);
-    });
+    }, true);
   }
 
   async mergeOnLogin(userId: number, anonymousId?: string): Promise<MergeOnLoginResult> {
@@ -246,7 +247,7 @@ export class CartService {
       return { merged: false, incidents: [] };
     }
 
-    return this.prisma.$transaction(async (tx) => {
+    return serializableTransaction(this.prisma, async (tx) => {
       const client = this.getClient(tx);
 
       const [anonCart, userCart] = await Promise.all([

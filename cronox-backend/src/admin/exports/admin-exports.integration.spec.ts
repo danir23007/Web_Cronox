@@ -63,9 +63,8 @@ describe('Admin Excel exports through the real AdminModule', () => {
     promoCodeRedemption: delegate(),
     auditLog: delegate(),
     $queryRaw: jest.fn().mockResolvedValue([]),
-    $transaction: jest.fn(async (operations: Array<Promise<unknown>>) =>
-      Promise.all(operations),
-    ),
+    $executeRaw: jest.fn().mockResolvedValue(1),
+    $transaction: jest.fn(async (operation: (tx: unknown) => Promise<unknown>) => operation(prisma)),
   };
 
   const routes = [

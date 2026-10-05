@@ -283,7 +283,7 @@ export class OrdersService {
       });
     }
 
-    this.assertCartEligibleForCheckout(cart);
+    this.assertCartEligibleForCheckout(cart, await this.reservedStockForCart(cart));
 
     const itemsTotalCents = hasItems ? this.computeItemsTotalCents(cart) : 0;
     let methods =
@@ -429,7 +429,7 @@ export class OrdersService {
       });
     }
 
-    this.assertCartEligibleForCheckout(cart);
+    this.assertCartEligibleForCheckout(cart, await this.reservedStockForCart(cart));
 
     const itemsTotalCents = this.computeItemsTotalCents(cart);
     const normalizedPromo = this.normalizePromoCode(params.promoCode);
@@ -2887,7 +2887,32 @@ export class OrdersService {
     );
   }
 
-  private assertCartEligibleForCheckout(cart: CartSnapshot | null): void {
+  private async reservedStockForCart(cart: CartSnapshot | null): Promise<Map<number, number>> {
+    const reserved = new Map<number, number>();
+    if (!cart?.id || !cart.items.some(item => item.variant && item.qty > item.variant.stockQty)) return reserved;
+    if (cart.userId == null && !cart.anonymousId) return reserved;
+    // Available inventory already excludes reservations. Only this cart's
+    // still-reserved units may be credited during preview/retry; another
+    // shopper's stock and consumed/released reservations never qualify.
+    const rows = await this.prisma.checkoutStockReservation.findMany({
+      where: {
+        status: 'RESERVED',
+        checkoutSnapshot: {
+          cartId: cart.id,
+          ...(cart.userId != null
+            ? { userId: cart.userId }
+            : { userId: null, anonymousId: cart.anonymousId }),
+          orderId: null,
+          status: { in: ACTIVE_CHECKOUT_SNAPSHOT_STATUSES },
+        },
+      },
+      select: { variantId: true, quantity: true },
+    });
+    for (const row of rows) reserved.set(row.variantId, (reserved.get(row.variantId) ?? 0) + row.quantity);
+    return reserved;
+  }
+
+  private assertCartEligibleForCheckout(cart: CartSnapshot | null, reserved = new Map<number, number>()): void {
     if (!cart?.items?.length) return;
 
     for (const item of cart.items) {
@@ -2902,7 +2927,7 @@ export class OrdersService {
       if (!Number.isInteger(item.qty) || item.qty <= 0) {
         throw new BadRequestException('INVALID_CART_ITEM_QUANTITY');
       }
-      if (item.qty > variant.stockQty) {
+      if (item.qty > variant.stockQty + (reserved.get(item.variantId) ?? 0)) {
         throw new BadRequestException('INSUFFICIENT_STOCK_AT_CHECKOUT');
       }
       this.getCheckoutUnitPriceCents(item);

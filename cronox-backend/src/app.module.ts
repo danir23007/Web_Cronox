@@ -1,13 +1,16 @@
 // src/app.module.ts
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config'; // [STRIPE]
-import { APP_GUARD } from '@nestjs/core';
+import { APP_FILTER, APP_GUARD } from '@nestjs/core';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { ServeStaticModule } from '@nestjs/serve-static';
 import { join } from 'path';
 
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
+import { ReadinessService } from './readiness.service';
+import { DatabaseAvailabilityFilter } from './common/filters/database-availability.filter';
+import { ExpiringThrottlerStorage } from './common/guards/expiring-throttler.storage';
 import { AuthModule } from './auth/auth.module';
 import { CartModule } from './cart/cart.module';
 import { EmailModule } from './email/email.module';
@@ -48,12 +51,12 @@ import {
       envFilePath: process.env.CRONOX_ENV_FILE || '.env',
       validate: validateEnvironment,
     }),
-    ThrottlerModule.forRoot([
-      {
-        ttl: getRateLimitTtlMs(),
-        limit: getRateLimitMax(),
-      },
-    ]),
+    ThrottlerModule.forRootAsync({
+      useFactory: () => ({
+        throttlers: [{ ttl: getRateLimitTtlMs(), limit: getRateLimitMax() }],
+        storage: new ExpiringThrottlerStorage(),
+      }),
+    }),
     ServeStaticModule.forRoot(
       {
         // Archivos estáticos globales (favicon, etc.) en cronox-front/public
@@ -100,6 +103,8 @@ import {
   controllers: [AppController],
   providers: [
     AppService,
+    ReadinessService,
+    { provide: APP_FILTER, useClass: DatabaseAvailabilityFilter },
     { provide: APP_GUARD, useClass: AppThrottlerGuard },
     { provide: APP_GUARD, useClass: CsrfProtectionGuard },
   ],

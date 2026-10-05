@@ -11,8 +11,9 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateAddressDto } from './dto/create-address.dto';
 import { UpdateAddressDto } from './dto/update-address.dto';
+import { serializableTransaction } from '../prisma/serializable-transaction';
 
-const ADDRESS_LIMIT = 10;
+export const ADDRESS_LIMIT = 10;
 
 export type SafeAddress = {
   id: number;
@@ -49,12 +50,6 @@ export class AddressesService {
   async create(userId: number, dto: CreateAddressDto): Promise<SafeAddress> {
     const country = this.requireSupportedCountry(dto.country);
 
-    const count = await this.prisma.address.count({ where: { userId } });
-
-    if (count >= ADDRESS_LIMIT) {
-      throw new BadRequestException('Address limit reached');
-    }
-
     const data: Prisma.AddressUncheckedCreateInput = {
       userId,
       name: dto.name,
@@ -68,20 +63,17 @@ export class AddressesService {
       isDefault: dto.isDefault ?? false,
     };
 
-    if (dto.isDefault === true) {
-      const created = await this.prisma.$transaction(async (tx) => {
+    const created = await serializableTransaction(this.prisma, async (tx) => {
+      const count = await tx.address.count({ where: { userId } });
+      if (count >= ADDRESS_LIMIT) throw new BadRequestException('Address limit reached');
+      if (dto.isDefault === true) {
         await tx.address.updateMany({
           where: { userId },
           data: { isDefault: false },
         });
-
-        return tx.address.create({ data: { ...data, isDefault: true } });
-      });
-
-      return this.toSafeAddress(created);
-    }
-
-    const created = await this.prisma.address.create({ data });
+      }
+      return tx.address.create({ data });
+    });
 
     return this.toSafeAddress(created);
   }
@@ -91,8 +83,6 @@ export class AddressesService {
     id: number,
     dto: UpdateAddressDto,
   ): Promise<SafeAddress> {
-    await this.getOwned(userId, id);
-
     if (dto.country !== undefined) {
       this.requireSupportedCountry(dto.country);
     }
@@ -111,55 +101,45 @@ export class AddressesService {
     }
     if (dto.isDefault !== undefined) data.isDefault = dto.isDefault;
 
-    if (dto.isDefault === true) {
-      const updated = await this.prisma.$transaction(async (tx) => {
+    const updated = await serializableTransaction(this.prisma, async (tx) => {
+      await this.getOwned(userId, id, tx);
+      if (dto.isDefault === true) {
         await tx.address.updateMany({
           where: { userId },
           data: { isDefault: false },
         });
-
-        return tx.address.update({
-          where: { id },
-          data: { ...data, isDefault: true },
-        });
-      });
-
-      return this.toSafeAddress(updated);
-    }
-
-    const updated = await this.prisma.address.update({
-      where: { id },
-      data,
+      }
+      return tx.address.update({ where: { id }, data });
     });
 
     return this.toSafeAddress(updated);
   }
 
   async remove(userId: number, id: number): Promise<void> {
-    await this.getOwned(userId, id);
-
-    await this.prisma.address.delete({ where: { id } });
+    await serializableTransaction(this.prisma, async tx => {
+      await this.getOwned(userId, id, tx);
+      await tx.address.delete({ where: { id } });
+    });
   }
 
   async setDefault(userId: number, id: number): Promise<SafeAddress> {
-    await this.getOwned(userId, id);
-
-    const [, updated] = await this.prisma.$transaction([
-      this.prisma.address.updateMany({
+    const updated = await serializableTransaction(this.prisma, async tx => {
+      await this.getOwned(userId, id, tx);
+      await tx.address.updateMany({
         where: { userId },
         data: { isDefault: false },
-      }),
-      this.prisma.address.update({
+      });
+      return tx.address.update({
         where: { id },
         data: { isDefault: true },
-      }),
-    ]);
+      });
+    });
 
     return this.toSafeAddress(updated);
   }
 
-  async getOwned(userId: number, id: number): Promise<Address> {
-    const address = await this.prisma.address.findFirst({
+  async getOwned(userId: number, id: number, client: Pick<Prisma.TransactionClient, 'address'> = this.prisma): Promise<Address> {
+    const address = await client.address.findFirst({
       where: { id, userId },
     });
 

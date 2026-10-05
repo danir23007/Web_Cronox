@@ -90,7 +90,7 @@ describe('storefront initial rendering and shared reads', () => {
     const getCart = jest.fn();
     Object.assign(dom.window, {
       CRONOX_API: { getCart },
-      CRONOX_CART_READY: Promise.resolve({ itemsCount: 3 }),
+      CRONOX_CART_READY: Promise.resolve({ itemsCount: 3, items: [{ qty: 3 }] }),
     });
     dom.window.eval(read('assets/cart-badge.js'));
     dom.window.document.dispatchEvent(new dom.window.Event('DOMContentLoaded'));

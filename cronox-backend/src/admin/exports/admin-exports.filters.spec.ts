@@ -27,9 +27,8 @@ const setup = () => {
       create: jest.fn().mockResolvedValue({ id: 1 }),
     },
     $queryRaw: jest.fn().mockResolvedValue([{ id: 7 }]),
-    $transaction: jest.fn(async (operations: Array<Promise<unknown>>) =>
-      Promise.all(operations),
-    ),
+    $executeRaw: jest.fn().mockResolvedValue(1),
+    $transaction: jest.fn(async (operation: (tx: unknown) => Promise<unknown>) => operation(prisma)),
   };
   const excel = {
     build: jest.fn().mockResolvedValue(Buffer.from('PK')),

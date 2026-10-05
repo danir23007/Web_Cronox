@@ -35,6 +35,8 @@
     .profile-form input, .profile-form select { background: #141419; border: 1px solid #2a2a33; border-radius: 8px; color: #fff; padding: 10px 12px; }
     .profile-form input:focus, .profile-form select:focus { border-color: #ffffff !important; outline: 2px solid #ffffff !important; }
     .profile-actions { display: flex; gap: 10px; margin-top: 8px; flex-wrap: wrap; }
+    #emailChangeActions[hidden] { display: none; }
+    #emailChangeActions button:focus-visible, #emailChangeForm button:focus-visible { outline: 2px solid #fff; outline-offset: 4px; }
     .btn-primary { background: linear-gradient(135deg, #7b3fe4, #6130c5); border: none; color: #fff; padding: 10px 16px; border-radius: 10px; cursor: pointer; font-weight: 600; letter-spacing: 0.3px; }
     .btn-primary:hover { background: linear-gradient(135deg, #8c52f5, #6d3ad7); }
     .btn-ghost { background: transparent; border: 1px solid #2e2e35; color: #fff; padding: 10px 16px; border-radius: 10px; cursor: pointer; font-weight: 600; }
@@ -291,12 +293,29 @@
                 </label>
               </div>
               <label>Email
-                <input id="email" name="email" type="email" autocomplete="email" placeholder="tu@email.com">
+                <input id="email" name="email" type="email" readonly autocomplete="email" placeholder="tu@email.com">
               </label>
               <div class="profile-actions">
                 <button type="submit" class="btn-primary profile-save-btn">Guardar cambios</button>
               </div>
             </form>
+          </div>
+
+          <div class="profile-card" aria-labelledby="email-change-title">
+            <h2 id="email-change-title">Cambiar email</h2>
+            <p class="section-desc">La solicitud caduca en una hora. Una nueva solicitud sustituye a la anterior.</p>
+            <p class="section-desc">Primero autoriza el cambio desde tu email actual y después verifica el nuevo. No necesitas introducir tu contraseña. Tu email actual seguirá vigente hasta completar ambos pasos. Al finalizar tendrás que iniciar sesión de nuevo.</p>
+            <p class="section-desc">Si ya no tienes acceso a este correo electrónico, ponte en contacto con <a href="mailto:support@cronox.es">support@cronox.es</a> para solicitar ayuda con el cambio de email.</p>
+            <form id="emailChangeForm" class="profile-form">
+              <label>Nuevo email <input id="emailChangeAddress" type="email" autocomplete="email" maxlength="254" required></label>
+              <div class="profile-actions"><button type="submit" class="btn-primary profile-save-btn">Solicitar cambio</button></div>
+            </form>
+            <p id="emailChangeStatus" role="status" aria-live="polite"></p>
+            <div class="profile-actions" id="emailChangeActions" hidden>
+              <button id="emailChangeRefresh" type="button" class="btn-primary profile-save-btn">Actualizar estado</button>
+              <button id="emailChangeResend" type="button" class="btn-primary profile-save-btn">Reenviar correo pendiente</button>
+              <button id="emailChangeCancel" type="button" class="btn-primary profile-save-btn">Cancelar solicitud</button>
+            </div>
           </div>
 
           <div class="profile-card" aria-labelledby="password-title">
@@ -465,14 +484,14 @@
 
   <script src="assets/country.js?v=1"></script>
   <script src="assets/size-systems.js?v=1"></script>
-  <script src="assets/api.js?v=12"></script>
+  <script src="assets/api.js?v=13"></script>
   <script src="assets/responsive-images.js?v=4"></script>
   <script src="assets/app.js?v=82" defer></script>
   <script src="assets/media-framing-geometry.js?v=6" defer></script>
   <script src="assets/product-card-framing.js?v=1" defer></script>
   <script src="assets/products.js?v=65" defer></script>
   <script src="assets/favorites-toggle.js?v=3" defer></script>
-  <script src="assets/profile.js?v=15" defer></script>
+  <script src="assets/profile.js?v=17" defer></script>
 
   <style>
     /* Profile overrides */

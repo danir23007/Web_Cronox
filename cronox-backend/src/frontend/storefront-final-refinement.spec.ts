@@ -88,7 +88,7 @@ describe('focused storefront refinement acceptance matrix', () => {
 
   it('11. reads guest and existing account carts in one merge transaction', () => {
     expect(cartService).toContain('const [anonCart, userCart] = await Promise.all([');
-    expect(cartService).toContain('return this.prisma.$transaction(async (tx) =>');
+    expect(cartService).toContain('return serializableTransaction(this.prisma, async (tx) =>');
   });
 
   it('12. merges duplicate variants into one existing line', () => {
@@ -546,9 +546,9 @@ describe('focused storefront refinement acceptance matrix', () => {
     expect(checkoutScript).toContain("applyPromoBtn?.addEventListener('click'");
   });
 
-  it('59. reduces only the vertical gap below the checkout brand bar', () => {
+  it('59. preserves the current checkout brand spacing and alignment', () => {
     const brandbarRule = cssRule(checkoutStyles, '.checkout-brandbar');
-    expect(brandbarRule).toContain('margin-bottom: clamp(20px, 3vh, 36px)');
+    expect(brandbarRule).toContain('margin-bottom: 88px');
     expect(brandbarRule).toContain('justify-content: flex-end');
     expect(cssRule(checkoutStyles, '.checkout-brand')).toContain('left: 50%');
   });

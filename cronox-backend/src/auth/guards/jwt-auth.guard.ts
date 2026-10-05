@@ -26,10 +26,13 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
 
     if (err || !user) {
       clearFailedSession(context.switchToHttp().getResponse(), err);
-      if (path.includes('/me')) {
-        if (!hasJwtCookie) {
-          this.logger.warn(`Solicitud a ${path} sin cookie jwt`);
-        } else if (infoMessage) {
+      if (!err && !hasJwtCookie && !request.headers?.authorization && !cookies?.refresh_token) {
+        // HttpOnly cookies are deliberately invisible to JS. Tell the browser
+        // when there is nothing to refresh, without querying identity storage.
+        throw new UnauthorizedException({ code: 'AUTH_REQUIRED', message: 'Usuario no autenticado' });
+      }
+      if (path.includes('/me') && hasJwtCookie) {
+        if (infoMessage) {
           this.logger.warn(`Token JWT inválido para ${path}: ${infoMessage}`);
         } else {
           this.logger.warn(`No se pudo autenticar solicitud a ${path}`);

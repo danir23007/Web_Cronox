@@ -1,7 +1,6 @@
 import {
   Injectable,
   PayloadTooLargeException,
-  RequestTimeoutException,
 } from '@nestjs/common';
 import {
   CircleUpgradeRequestStatus,
@@ -19,10 +18,10 @@ import {
 import { AdminExportQueryDto } from './dto/admin-export-query.dto';
 import { variantSizeLabel } from '../../products/product-size-system';
 import { retainedAuditLogDateFilter } from '../audit-logs/audit-log-retention';
+import { withExportSqlDeadline } from './export-sql-deadline';
 
 const MAX_EXPORT_ROWS = 5000;
 const TAKE_WITH_LIMIT_SENTINEL = MAX_EXPORT_ROWS + 1;
-const EXPORT_TIMEOUT_MS = 30_000;
 
 export type ExportModule =
   | 'usuarios'
@@ -64,7 +63,9 @@ export class AdminExportsService {
   ) {
     const effective =
       query.scope === 'all' ? ({ scope: 'all' } as AdminExportQueryDto) : query;
-    const sheets = await this.withTimeout(this.loadSheets(module, effective));
+    const sheets = await withExportSqlDeadline(this.prisma, client =>
+      new AdminExportsService(client as PrismaService, this.excel).loadSheets(module, effective),
+    );
     sheets.forEach((sheet) => this.assertSize(sheet.name, sheet.rows.length));
     const rowCount = sheets.reduce(
       (total, sheet) => total + sheet.rows.length,
@@ -503,7 +504,7 @@ export class AdminExportsService {
     const variantWhere: Prisma.ProductVariantWhereInput = {
       product: productWhere,
     };
-    const [variants, movements] = await this.prisma.$transaction(
+    const [variants, movements] = await Promise.all(
       [
         this.prisma.productVariant.findMany({
           where: variantWhere,
@@ -520,7 +521,6 @@ export class AdminExportsService {
           },
         }),
       ],
-      { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead },
     );
     return [
       {
@@ -658,7 +658,7 @@ export class AdminExportsService {
       ...(query.requestType === '3-4' ? { fromCircle: 3, toCircle: 4 } : {}),
     };
     const includeLegacyPromotions = !query.requestType;
-    const [users, upgrades, promotions] = await this.prisma.$transaction(
+    const [users, upgrades, promotions] = await Promise.all(
       [
         this.prisma.user.findMany({
           where: {
@@ -701,7 +701,6 @@ export class AdminExportsService {
           include: { user: { select: { email: true } } },
         }),
       ],
-      { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead },
     );
     return [
       {
@@ -1007,26 +1006,6 @@ export class AdminExportsService {
       where.id = { in: rows.map((row) => row.id) };
     }
     return where;
-  }
-
-  private async withTimeout<T>(operation: Promise<T>): Promise<T> {
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    const timeout = new Promise<never>((_, reject) => {
-      timer = setTimeout(
-        () =>
-          reject(
-            new RequestTimeoutException(
-              'La exportación superó el tiempo máximo de 30 segundos. Aplica filtros y vuelve a intentarlo.',
-            ),
-          ),
-        EXPORT_TIMEOUT_MS,
-      );
-    });
-    try {
-      return await Promise.race([operation, timeout]);
-    } finally {
-      if (timer) clearTimeout(timer);
-    }
   }
 
   private dateFilter(

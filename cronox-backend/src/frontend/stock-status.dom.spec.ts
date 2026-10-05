@@ -133,6 +133,7 @@ describe('stock status presentation', () => {
       (
         win.document.querySelector('[data-save-inventory]') as HTMLElement
       ).click();
+      (win.document.querySelector('.inventory-note-dialog .inventory-note-actions .primary') as HTMLButtonElement).click();
       await new Promise((resolve) => setTimeout(resolve, 0));
       expect(card().className).toContain(`inventory-product--${status}`);
     }
@@ -145,6 +146,7 @@ describe('stock status presentation', () => {
     (
       win.document.querySelector('[data-save-inventory]') as HTMLElement
     ).click();
+    (win.document.querySelector('.inventory-note-dialog .inventory-note-actions .primary') as HTMLButtonElement).click();
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(card().className).toContain('inventory-product--in-stock');
     expect(

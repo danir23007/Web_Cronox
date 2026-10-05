@@ -870,6 +870,7 @@ model NewsletterSettings {
 }
 
 model User {
+  emailChangeRequest EmailChangeRequest?
   dailyVisits         DailyVisitor[]
   restockRequests           RestockRequest[]
   newsletterMailJobs        NewsletterMailJob[]
@@ -1895,4 +1896,24 @@ model RestockRequest {
   @@index([variantId, status])
   @@index([userId, variantId, requestedAt])
   @@index([status, readyAt])
+}
+
+// Mailbox authorization and verification belong to the same replaceable request.
+model EmailChangeRequest {
+  userId Int @id
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id String @unique
+  oldEmail String
+  newEmail String
+  sessionVersion Int
+  stage String
+  tokenHash String @unique
+  cancelHash String @unique
+  expiresAt DateTime
+  lastSentAt DateTime
+  sendCount Int @default(1)
+  delivery String @default("SENDING")
+  windowAt DateTime
+  starts Int @default(1)
+  createdAt DateTime @default(now())
 }

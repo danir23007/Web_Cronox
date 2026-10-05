@@ -7,6 +7,8 @@ export function clearFailedSession(
   error: unknown,
   refresh = false,
 ) {
+  // Database/network failures do not prove that refresh credentials are invalid.
+  if (error && !(error instanceof UnauthorizedException)) return;
   const body =
     error instanceof UnauthorizedException ? error.getResponse() : null;
   const code =

@@ -31,6 +31,15 @@ describe('public HTML Key Screen gate', () => {
     return app;
   };
 
+  it('returns temporary unavailability without redirecting when admin authorization cannot be checked', async () => {
+    const response = await request(createApp(false, async () => { throw new Error('database unavailable'); }))
+      .get('/admin.html').set('Cookie', 'jwt=valid-session');
+    expect(response.status).toBe(503);
+    expect(response.headers.location).toBeUndefined();
+    expect(response.headers['set-cookie']).toBeUndefined();
+    expect(response.text).not.toContain('PUBLIC:');
+  });
+
   it('renders the Key Screen at / for an anonymous visitor while enabled', async () => {
     const response = await request(createApp(true)).get('/');
 
@@ -109,15 +118,15 @@ describe('public HTML Key Screen gate', () => {
     expect(response.text).toBe(`PUBLIC:${path}`);
   });
 
-  it('fails closed when access-token validation raises an error', async () => {
+  it('fails closed with a temporary response when validation is unavailable', async () => {
     const response = await request(
-      createApp(true, () => Promise.reject(new Error('invalid token'))),
+      createApp(true, () => Promise.reject(new Error('database unavailable'))),
     )
       .get('/tienda')
       .set('Cookie', 'jwt=invalid-token');
 
-    expect(response.status).toBe(307);
-    expect(response.headers.location).toBe('/');
+    expect(response.status).toBe(503);
+    expect(response.headers.location).toBeUndefined();
   });
 
   it('restores the Key Screen on the next request after logout', async () => {

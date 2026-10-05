@@ -1219,7 +1219,6 @@
       const payload = {
         firstName,
         lastName,
-        email: optionalValue('email'),
       };
       try {
         const updated = await api.updateMe(payload);
@@ -1238,6 +1237,49 @@
         showProfileMessage(msg, 'error');
       }
     });
+  };
+
+  const bindEmailChange = () => {
+    const form = $('emailChangeForm');
+    if (!form || !api.emailChangeStatus) return;
+    const status = $('emailChangeStatus');
+    let pending = false;
+    const render = (data) => {
+      const messages = {
+        NONE: 'No hay un cambio pendiente.',
+        PENDING_CURRENT: 'Falta autorizar el cambio desde tu email actual.',
+        PENDING_NEW: 'Cambio autorizado. Falta verificar el nuevo email.',
+        CANCELLED: 'Solicitud cancelada. Tu email actual se conserva.',
+        EXPIRED: 'Solicitud caducada. Puedes iniciar una nueva.',
+        COMPLETE: 'Email cambiado. Inicia sesión de nuevo con tu nuevo email.',
+      };
+      status.textContent = (messages[data.stage] || 'Consulta el estado de tu solicitud.') +
+        (['PENDING_CURRENT', 'PENDING_NEW'].includes(data.stage) ? ` Nueva dirección: ${data.newEmail}.` : '') +
+        (['FAILED', 'UNKNOWN', 'SENDING'].includes(data.delivery) && ['PENDING_CURRENT', 'PENDING_NEW'].includes(data.stage)
+          ? ' No se ha confirmado la entrega; revisa el buzón y puedes reenviar el correo después de un minuto.' : '');
+      $('emailChangeActions').hidden = !['PENDING_CURRENT', 'PENDING_NEW'].includes(data.stage);
+      $('emailChangeResend').disabled = !data.canResend || Date.now() < new Date(data.resendAt).getTime();
+    };
+    const run = async (action) => {
+      if (pending) return;
+      pending = true;
+      form.querySelector('button').disabled = true;
+      try { render(await action()); }
+      catch (error) {
+        if (handleAuthRedirect(error)) return;
+        status.textContent = error?.payload?.message || 'No hemos podido completar la operación. Actualiza el estado y vuelve a intentarlo.';
+        $('emailChangeActions').hidden = false;
+        $('emailChangeResend').disabled = false;
+      } finally { pending = false; form.querySelector('button').disabled = false; }
+    };
+    form.addEventListener('submit', (event) => {
+      event.preventDefault();
+      run(() => api.requestEmailChange($('emailChangeAddress').value.trim()));
+    });
+    $('emailChangeRefresh').addEventListener('click', () => run(() => api.emailChangeStatus()));
+    $('emailChangeResend').addEventListener('click', () => run(() => api.resendEmailChange()));
+    $('emailChangeCancel').addEventListener('click', () => run(() => api.cancelEmailChange()));
+    run(() => api.emailChangeStatus());
   };
 
   const bindAddressForm = () => {
@@ -1549,6 +1591,7 @@
 
   document.addEventListener('DOMContentLoaded', () => {
     bindAccountForm();
+    bindEmailChange();
     bindPasswordForm();
     bindAddressForm();
     bindCircleUpgrade();

@@ -140,6 +140,11 @@ test('large mobile basket keeps its scroll and reaches content above the fixed c
   await expect(page.locator('#cart-checkout-btn')).toBeInViewport();
   for (const height of [600, 844]) {
     await page.setViewportSize({ width: 390, height });
+    // setViewportSize resolves before the visualViewport resize handler. Wait
+    // for the drawer's real height before scrolling to its new bottom.
+    await expect.poll(() => page.locator('#cart-drawer').evaluate(el =>
+      Number.parseFloat(el.style.getPropertyValue('--cart-viewport-height')),
+    )).toBe(height);
     await panel.evaluate(el => { el.scrollTop = el.scrollHeight; });
     await expect(page.locator('.cart-line').last()).toBeInViewport();
     await expect(page.locator('#cart-checkout-btn')).toBeInViewport();

@@ -20,9 +20,9 @@ describe('live stats security and observation', () => {
     const db={ $executeRaw:jest.fn() }, service=new LiveStatsService(db as any);
     await service.signal({user:{id:1,role},cookies:{cronox_cookie_consent:JSON.stringify({version:'2',analytics:true})}} as any,{clearCookie:jest.fn()} as any,{section:'home'});
     expect(db.$executeRaw).not.toHaveBeenCalled();
-    const sessions={validate:jest.fn().mockResolvedValue({lastActivityAt:new Date()}),touch:jest.fn()};
     process.env.JWT_ACCESS_SECRET ||= 'local-test-only-secret-at-least-32-characters';
     const user={id:1,role,accountState:'ACTIVE',sessionVersion:1};
+    const sessions={validate:jest.fn().mockResolvedValue({lastActivityAt:new Date(),user}),touch:jest.fn()};
     const strategy=new JwtAccessStrategy({findById:async()=>user,toSafeUser:(v:any)=>v} as any,sessions as any);
     await strategy.validate({res:{setHeader:jest.fn()}} as any,{sub:1,sv:1,sid:'s',type:'access'});
     expect(sessions.touch).not.toHaveBeenCalled();

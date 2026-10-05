@@ -29,6 +29,7 @@ const expectedDrawerPages = [
   'profile.html',
   'returns-exchanges.html',
   'shipping-policy.html',
+  'sobre-cronox.html',
   'terms-of-service.html',
 ];
 
@@ -85,11 +86,11 @@ const galleryProduct = (overrides: Record<string, unknown> = {}) => ({
 });
 
 describe('CRONOX gallery page', () => {
-  it('keeps category filters without a gallery entry on every shared drawer page', () => {
+  it('keeps category filters without a gallery entry on every shared drawer page', async () => {
     const drawerPages = getDrawerPages();
     expect(drawerPages).toEqual(expectedDrawerPages);
 
-    drawerPages.forEach((page) => {
+    for (const page of drawerPages) {
       const html = readFrontend(page);
       const dom = new JSDOM(html, {
         runScripts: 'outside-only',
@@ -113,11 +114,12 @@ describe('CRONOX gallery page', () => {
       expect(galleryLinks).toHaveLength(0);
       expect(links).toHaveLength(5);
       expect(links.every((link) => link.href.includes('categorySlug='))).toBe(true);
+      await new Promise(resolve => setTimeout(resolve, 0));
       dom.window.close();
-    });
+    }
   });
 
-  it('renders the opaque production topbar and loading state until the mode is known', () => {
+  it('renders the opaque production topbar and loading state until the mode is known', async () => {
     const dom = new JSDOM(galleryHtml, {
       runScripts: 'outside-only',
       url: 'http://localhost:3000/gallery.html',
@@ -188,6 +190,7 @@ describe('CRONOX gallery page', () => {
       (element) => element.id,
     );
     expect(new Set(ids).size).toBe(ids.length);
+    await new Promise(resolve => setTimeout(resolve, 0));
     dom.window.close();
   });
 

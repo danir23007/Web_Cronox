@@ -1,0 +1,23 @@
+<html lang='es'>
+  <body
+    style='margin:0;background:#0b0b0d;color:#f5f5f5;font-family:Arial,sans-serif;'
+  >
+    <div
+      style='max-width:640px;margin:24px auto;padding:24px;border:1px solid #24242a;border-radius:12px;background:#121218;'
+    >
+      <h1 style='margin:0 0 12px;color:#ffffff;font-size:22px;'>{{title}}</h1>
+      <p style='margin:0;color:#c7c7cf;line-height:1.5;'>Se ha solicitado cambiar el email de tu cuenta CRONOX. Nueva dirección solicitada: <strong>{{newEmail}}</strong>. Tu email actual permanece vigente hasta autorizar el cambio y verificar el nuevo buzón. La solicitud caduca una hora después de iniciarla.</p>
+      {{#if actionUrl}}
+        <p style='margin:20px 0 0;'>
+          <a
+            href='{{actionUrl}}'
+            style='display:inline-block;padding:12px 18px;background:#ffffff;color:#111111;text-decoration:none;font-weight:700;border-radius:6px;'
+          >{{actionLabel}}</a>
+        </p>
+      {{/if}}
+      <p style='line-height:1.5;'>Si no reconoces este cambio, <a href='{{cancelUrl}}' style='color:#fff;'>cancela la solicitud</a>. Abre el enlace y pulsa el botón de cancelación. No autorices un cambio que no hayas solicitado.</p>
+      <p style='line-height:1.5;'>Si ya no tienes acceso a este correo electrónico, ponte en contacto con <a href='mailto:support@cronox.es' style='color:#fff;'>support@cronox.es</a> para solicitar ayuda con el cambio de email.</p>
+      <p style='margin:16px 0 0;color:#6f6f7c;font-size:12px;'>CRONOX</p>
+    </div>
+  </body>
+</html>

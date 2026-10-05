@@ -6,6 +6,7 @@ export enum EmailSenderKey {
 }
 
 export enum EmailTemplate {
+  EMAIL_CHANGE = 'EMAIL_CHANGE',
   NEWSLETTER_ACCESS = 'NEWSLETTER_ACCESS',
   RESTOCK = 'RESTOCK',
   TEST = 'TEST',
@@ -121,6 +122,7 @@ export const EMAIL_TYPE_TO_TEMPLATE: Record<EmailType, EmailTemplate> = {
 };
 
 export const EMAIL_TEMPLATE_FILE: Record<EmailTemplate, string> = {
+  [EmailTemplate.EMAIL_CHANGE]: 'email-change.hbs',
   [EmailTemplate.NEWSLETTER_ACCESS]: 'newsletter-access.hbs',
   [EmailTemplate.RESTOCK]: 'restock.hbs',
   [EmailTemplate.TEST]: 'test.hbs',

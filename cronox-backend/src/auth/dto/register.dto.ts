@@ -25,7 +25,7 @@ export class RegisterDto {
   @Matches(NAME_REGEX, { message: 'El apellido solo puede contener letras y espacios' })
   lastName!: string;
 
-  @Transform(({ value }) => value?.trim())
+  @Transform(({ value }) => typeof value === 'string' ? value.trim() : value)
   @IsEmail()
   email!: string;
 

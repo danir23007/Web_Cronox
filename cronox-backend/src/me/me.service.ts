@@ -15,6 +15,8 @@ import { UsersService } from '../users/users.service';
 import { normalizeEmail } from '../common/email';
 import { UpdateMeDto } from './dto/update-me.dto';
 import { UpsertAddressDto } from './dto/upsert-address.dto';
+import { serializableTransaction } from '../prisma/serializable-transaction';
+import { ADDRESS_LIMIT } from '../addresses/addresses.service';
 
 export type MeProfile = {
   hasPassword: boolean;
@@ -109,20 +111,8 @@ export class MeService {
       data.name = fullName || null;
     }
 
-    if (dto.email !== undefined) {
-      const email = normalizeEmail(dto.email);
-      const existing = await this.prisma.user.findFirst({
-        where: {
-          email: { equals: email, mode: 'insensitive' },
-          NOT: { id: userId },
-        },
-      });
-
-      if (existing) {
-        throw new ConflictException('El email ya está en uso');
-      }
-
-      data.email = email;
+    if (dto.email !== undefined && normalizeEmail(dto.email) !== user.email) {
+      throw new BadRequestException('Solicita el cambio de email y confirma ambos buzones.');
     }
 
     if (Object.keys(data).length === 0) {
@@ -130,9 +120,17 @@ export class MeService {
     }
 
     try {
-      const updated = await this.prisma.user.update({
-        where: { id: userId },
-        data,
+      const updated = await serializableTransaction(this.prisma, async tx => {
+        const current = await tx.user.findUniqueOrThrow({ where: { id: userId } });
+        const changed = await tx.user.update({ where: { id: userId }, data });
+        if (changed.email !== current.email) {
+          // Old mailbox links must not retain authority over the renamed account.
+          const now = new Date();
+          await tx.passwordResetToken.updateMany({ where: { userId, usedAt: null }, data: { usedAt: now } });
+          await tx.preRegistration.updateMany({ where: { userId, launchTokenUsedAt: null }, data: { launchTokenUsedAt: now } });
+          await tx.newsletterMailJob.updateMany({ where: { userId, kind: 'ACCESS', tokenUsedAt: null }, data: { tokenUsedAt: now } });
+        }
+        return changed;
       });
 
       return this.toProfile({ ...updated, memberCode });
@@ -154,10 +152,6 @@ export class MeService {
   }
 
   async upsertDefaultAddress(userId: number, dto: UpsertAddressDto): Promise<MeAddress> {
-    const existingDefault = await this.prisma.address.findFirst({
-      where: { userId, isDefault: true },
-    });
-
     let phone = dto.phone;
 
     if (phone) {
@@ -190,16 +184,14 @@ export class MeService {
       isDefault: true,
     };
 
-    if (!existingDefault) {
-      const created = await this.prisma.$transaction(async (tx) => {
-        await tx.address.updateMany({ where: { userId }, data: { isDefault: false } });
+    const updated = await serializableTransaction(this.prisma, async (tx) => {
+      const existingDefault = await tx.address.findFirst({ where: { userId, isDefault: true } });
+      if (!existingDefault) {
+        if (await tx.address.count({ where: { userId } }) >= ADDRESS_LIMIT) {
+          throw new BadRequestException('Address limit reached');
+        }
         return tx.address.create({ data });
-      });
-
-      return this.toAddress(created);
-    }
-
-    const updated = await this.prisma.$transaction(async (tx) => {
+      }
       await tx.address.updateMany({
         where: { userId, NOT: { id: existingDefault.id } },
         data: { isDefault: false },

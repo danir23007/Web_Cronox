@@ -39,15 +39,7 @@ const hasAdminPreviewSession = async (
     typeof cookies?.refresh_token === 'string'
       ? cookies.refresh_token
       : undefined;
-  try {
-    return await authService.hasValidAdminSession(
-      accessToken,
-      refreshToken,
-      res,
-    );
-  } catch {
-    return false;
-  }
+  return authService.hasValidAdminSession(accessToken, refreshToken, res);
 };
 
 export const createPublicHtmlGateMiddleware =
@@ -57,50 +49,60 @@ export const createPublicHtmlGateMiddleware =
     frontendRoot,
   }: PublicHtmlGateDependencies): RequestHandler =>
   async (req: Request, res: Response, next: NextFunction) => {
-    if (req.method !== 'GET' && req.method !== 'HEAD') return next();
+    try {
+      if (req.method !== 'GET' && req.method !== 'HEAD') return next();
 
-    const pathname = normalizePublicPath(req.path);
-    if (PROTECTED_ADMIN_PATHS.has(pathname)) {
-      res.setHeader('Cache-Control', 'private, no-store');
-      res.vary('Cookie');
-      if (await hasAdminPreviewSession(req, authService, res)) return next();
-      return res.redirect(
-        307,
-        `/admin-login.html?returnTo=${encodeURIComponent(req.originalUrl)}`,
-      );
-    }
-    if (isExcludedPath(pathname)) return next();
-
-    const acceptsHtml = req.accepts(['html', 'json']) === 'html';
-    if (!acceptsHtml) return next();
-
-    const keyScreenEnabled = await keyScreen.shouldGatePublicHtml();
-    if (UNGATED_PUBLIC_PATHS.has(pathname)) {
-      if (keyScreenEnabled) {
-        res.setHeader('X-Robots-Tag', 'noindex, follow');
+      const pathname = normalizePublicPath(req.path);
+      if (PROTECTED_ADMIN_PATHS.has(pathname)) {
+        res.setHeader('Cache-Control', 'private, no-store');
+        res.vary('Cookie');
+        if (await hasAdminPreviewSession(req, authService, res)) return next();
+        return res.redirect(
+          307,
+          `/admin-login.html?returnTo=${encodeURIComponent(req.originalUrl)}`,
+        );
       }
-      return next();
-    }
+      if (isExcludedPath(pathname)) return next();
 
-    const adminPreviewAllowed =
-      keyScreenEnabled && (await hasAdminPreviewSession(req, authService, res));
-    if (adminPreviewAllowed) {
-      res.setHeader('Cache-Control', 'private, no-store');
-      res.vary('Cookie');
-    }
+      const acceptsHtml = req.accepts(['html', 'json']) === 'html';
+      if (!acceptsHtml) return next();
 
-    const gate = publicGateDecision(
-      keyScreenEnabled && !adminPreviewAllowed,
-      pathname,
-      req.originalUrl,
-    );
-    if (gate.kind === 'continue') return next();
+      const keyScreenEnabled = await keyScreen.shouldGatePublicHtml();
+      if (UNGATED_PUBLIC_PATHS.has(pathname)) {
+        if (keyScreenEnabled) {
+          res.setHeader('X-Robots-Tag', 'noindex, follow');
+        }
+        return next();
+      }
 
-    res.setHeader('Cache-Control', 'no-store, max-age=0');
-    res.setHeader('Link', `<${PUBLIC_SITE_URL}>; rel="canonical"`);
-    if (gate.kind === 'render-key-screen') {
-      return res.sendFile(join(frontendRoot, 'key-screen.html'));
+      const adminPreviewAllowed =
+        keyScreenEnabled &&
+        (await hasAdminPreviewSession(req, authService, res));
+      if (adminPreviewAllowed) {
+        res.setHeader('Cache-Control', 'private, no-store');
+        res.vary('Cookie');
+      }
+
+      const gate = publicGateDecision(
+        keyScreenEnabled && !adminPreviewAllowed,
+        pathname,
+        req.originalUrl,
+      );
+      if (gate.kind === 'continue') return next();
+
+      res.setHeader('Cache-Control', 'no-store, max-age=0');
+      res.setHeader('Link', `<${PUBLIC_SITE_URL}>; rel="canonical"`);
+      if (gate.kind === 'render-key-screen') {
+        return res.sendFile(join(frontendRoot, 'key-screen.html'));
+      }
+      res.setHeader('X-Robots-Tag', 'noindex, follow');
+      return res.redirect(307, gate.location);
+    } catch {
+      // Fail closed without converting a temporary authorization outage into logout.
+      return res
+        .status(503)
+        .set('Retry-After', '5')
+        .set('Cache-Control', 'private, no-store')
+        .send('Temporalmente no disponible');
     }
-    res.setHeader('X-Robots-Tag', 'noindex, follow');
-    return res.redirect(307, gate.location);
   };

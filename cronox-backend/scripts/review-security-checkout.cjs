@@ -1,0 +1,71 @@
+// Invoked only by review-security.cjs against its disposable loopback database.
+'use strict';
+const assert = require('node:assert/strict');
+module.exports = async ({ db }) => {
+  assert.equal(new URL(process.env.DATABASE_URL).hostname, '127.0.0.1');
+  const { CartService } = require('../dist/cart/cart.service');
+  const { OrdersService } = require('../dist/orders/orders.service');
+  const { TaxConfigService } = require('../dist/common/tax/tax-config.service');
+  const { ShippingMethodsService } = require('../dist/shipping-methods/shipping-methods.service');
+  const { HistorialService } = require('../dist/historial/historial.service');
+  const { GuestOrderAccountService } = require('../dist/orders/guest-order-account.service');
+  const carts = new CartService(db);
+  const orders = new OrdersService(db, carts, new TaxConfigService(), new ShippingMethodsService(db), new HistorialService(db), new GuestOrderAccountService());
+  await db.shippingMethod.create({ data: { id: 1, name: 'STANDARD', price: 500, isActive: true } });
+  const users = await Promise.all(['one', 'two'].map(name => db.user.create({ data: { email: `checkout-${name}@example.test` } })));
+  const product = await db.product.create({ data: { name: 'Last unit', slug: 'audit-last-unit', price: 2500, variants: { create: { sku: 'AUDIT-LAST', size: 'M', stockQty: 1 } } }, include: { variants: true } });
+  const variantId = product.variants[0].id;
+  await Promise.all(users.map(user => carts.addItem({ userId: user.id }, { variantId, qty: 1 })));
+  const params = { shippingMethod: 'STANDARD', shippingAddress: { firstName: 'Audit', lastName: 'Test', line1: 'Test Street 1', city: 'Madrid', postalCode: '28001', country: 'ES' } };
+  const racing = await Promise.allSettled(users.map(user => orders.createCheckoutSnapshot(user.id, params)));
+  assert.equal(racing.filter(r => r.status === 'fulfilled').length, 1, 'only one reservation for the last unit');
+  assert.equal((await db.productVariant.findUnique({ where: { id: variantId } })).stockQty, 0);
+  const winner = racing.findIndex(r => r.status === 'fulfilled'), snapshot = racing[winner].value;
+  assert.equal(snapshot.amountCents, 3000, 'server catalog price plus server shipping');
+  assert.equal(await db.order.count(), 0, 'checkout return/reservation cannot mark paid');
+  try {
+    const repeated = await orders.createCheckoutSnapshot(users[winner].id, params);
+    assert.equal(repeated.checkoutSnapshotId, snapshot.checkoutSnapshotId);
+  } catch (error) {
+    if (!process.argv.includes('--diagnose')) throw error;
+    console.log(JSON.stringify({ check: 'Retry own last-unit reservation', error: error.message, expected: 'reuse reserved snapshot' }));
+  }
+  assert.equal(await db.checkoutSnapshot.count(), 1);
+  await orders.claimCheckoutPaymentIntentCreation(snapshot.checkoutSnapshotId);
+  await orders.bindStripePaymentIntent(snapshot.checkoutSnapshotId, 'pi_isolated_audit', 'acct_isolated_audit');
+  const payment = { checkoutSnapshotId: snapshot.checkoutSnapshotId, paymentIntentId: 'pi_isolated_audit', amountCents: 3000, currency: 'EUR', occurredAt: new Date() };
+  await assert.rejects(() => orders.createOrderFromVerifiedStripePayment({ ...payment, amountCents: 1 }));
+  await assert.rejects(() => orders.createOrderFromVerifiedStripePayment({ ...payment, paymentIntentId: 'pi_wrong' }));
+  await assert.rejects(() => orders.createOrderFromVerifiedStripePayment({ ...payment, currency: 'USD' }));
+  const fulfilled = await Promise.all([orders.createOrderFromVerifiedStripePayment(payment), orders.createOrderFromVerifiedStripePayment(payment)]);
+  assert.equal(new Set(fulfilled.map(r => r.orderId)).size, 1);
+  assert.equal(await db.order.count(), 1); assert.equal(await db.orderItem.count(), 1);
+  assert.equal((await db.productVariant.findUnique({ where: { id: variantId } })).stockQty, 0);
+  await assert.rejects(() => orders.getOrderById({ id: users[1 - winner].id, role: 'USER' }, fulfilled[0].orderId), /ACCESS_DENIED/);
+  // Refund/cancellation are provider simulation at the service boundary; no Stripe API called.
+  const event = { id: 'evt_isolated_refund', type: 'charge.refunded', paymentIntentId: payment.paymentIntentId, occurredAt: new Date(), lifecycleStatus: 'REFUNDED', amountCents: 3000, refundCumulativeCents: 3000 };
+  await orders.claimStripeWebhookEvent(event);
+  await Promise.all([orders.applyStripePaymentLifecycle(payment.paymentIntentId, 'REFUNDED'), orders.applyStripePaymentLifecycle(payment.paymentIntentId, 'REFUNDED')]);
+  assert.equal((await db.productVariant.findUnique({ where: { id: variantId } })).stockQty, 1);
+  assert.equal((await db.order.findFirst()).status, 'REFUNDED');
+  const later = await orders.createOrderFromVerifiedStripePayment(payment);
+  assert.equal(later.status, 'REFUNDED'); assert.equal(await db.order.count(), 1);
+  const other = await orders.createCheckoutSnapshot(users[1 - winner].id, params);
+  await Promise.all([orders.releaseCheckoutSnapshot(other.checkoutSnapshotId, 'PAYMENT_CANCELLED'), orders.releaseCheckoutSnapshot(other.checkoutSnapshotId, 'PAYMENT_CANCELLED')]);
+  assert.equal((await db.productVariant.findUnique({ where: { id: variantId } })).stockQty, 1);
+  const personal = await db.promoCode.create({ data: { code: 'AUDIT-PERSONAL', type: 'PERCENT', value: 10, ownerEmail: users[winner].email, firstOrderOnly: true, singleUsePerUser: true, usageLimit: 1 } });
+  await assert.rejects(() => orders.createCheckoutSnapshot(users[1 - winner].id, { ...params, promoCode: personal.code }));
+  await db.product.update({ where: { id: product.id }, data: { isActive: false } });
+  await assert.rejects(() => orders.createCheckoutSnapshot(users[1 - winner].id, params));
+  const guestProduct = await db.product.create({ data: { name: 'Guest last unit', slug: 'audit-guest-last', price: 1500, variants: { create: { sku: 'AUDIT-GUEST', size: 'M', stockQty: 1 } } }, include: { variants: true } });
+  const guest = { anonymousId: 'audit-guest-owner', customerEmail: 'guest@example.test' };
+  const otherGuest = { anonymousId: 'audit-guest-other', customerEmail: 'other-guest@example.test' };
+  for (const owner of [guest, otherGuest]) await carts.addItem(owner, { variantId: guestProduct.variants[0].id, qty: 1 });
+  const guestSnapshot = await orders.createCheckoutSnapshotForOwner(guest, params);
+  assert.equal((await orders.createCheckoutSnapshotForOwner(guest, params)).checkoutSnapshotId, guestSnapshot.checkoutSnapshotId);
+  await assert.rejects(() => orders.createCheckoutSnapshotForOwner(otherGuest, params), /INSUFFICIENT_STOCK/);
+  await orders.releaseCheckoutSnapshot(guestSnapshot.checkoutSnapshotId, 'PAYMENT_CANCELLED');
+  assert.equal((await db.productVariant.findUnique({ where: { id: guestProduct.variants[0].id } })).stockQty, 1);
+  console.log('PASS: guest checkout retries credit only their own reservation; other guest denied; cancellation restores stock');
+  console.log('PASS: real PostgreSQL checkout: last-unit concurrency, server totals, reuse, payment mismatch, duplicate fulfillment, ownership, refund ordering, one-time stock release, personal coupon and inactive product');
+};

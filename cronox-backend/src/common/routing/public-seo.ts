@@ -4,7 +4,8 @@ import { join } from 'path';
 import { createHash } from 'crypto';
 import type { PrismaService } from '../../prisma/prisma.service';
 import { Prisma } from '@prisma/client';
-import { variantSizeLabel } from '../../products/product-size-system';
+import { sizeOrder, variantSizeLabel } from '../../products/product-size-system';
+import type { ImageVariants } from '../../images/image-presets';
 import {
   canonicalPathForRequest,
   cleanPageForPath,
@@ -15,9 +16,19 @@ import {
   prelaunchSitemapXml,
 } from './public-pages';
 
-export const HOME_TITLE = 'Cronox — Ropa y tienda oficial';
+export const BRAND_NAME = 'CRONOX';
+const ORGANIZATION_ID = `${PUBLIC_SITE_URL}#organization`;
+const WEBSITE_ID = `${PUBLIC_SITE_URL}#website`;
+const BRAND_ID = `${PUBLIC_SITE_URL}#brand`;
+const LOGO_URL = `${PUBLIC_SITE_URL}assets/logo_banner.png`;
+// Verified against the public story, footer and /api/footer on 2026-10-05.
+// Only equivalent official profiles belong here, never distributors/placeholders.
+const OFFICIAL_PROFILES = ['https://www.instagram.com/cronox.es/'];
+const BRAND_DESCRIPTION =
+  'CRONOX es una marca de streetwear creada en Madrid por Daniel Rivas. Su ropa da expresión a la cara B del ser humano.';
+export const HOME_TITLE = 'CRONOX | Streetwear y tienda oficial';
 export const HOME_DESCRIPTION =
-  'Descubre la ropa de Cronox en su tienda oficial. Explora las prendas de la colección, consulta las tallas disponibles y compra online.';
+  'Tienda oficial de CRONOX, marca de streetwear creada en Madrid. Ropa que expresa la cara B del ser humano. Descubre las prendas y sus tallas disponibles.';
 // A single inventory controls metadata and sitemap eligibility. Utility pages
 // deliberately remain crawlable so crawlers can read their noindex response.
 export const PUBLIC_METADATA: Record<string, [string, string]> = {
@@ -27,40 +38,40 @@ export const PUBLIC_METADATA: Record<string, [string, string]> = {
     'Conoce CRONOX, la marca de streetwear creada en Madrid por Daniel Rivas. Su origen, sus diseños y una visión: dar expresión a la cara B del ser humano.',
   ],
   '/galeria': [
-    'Galería de la comunidad | Cronox',
-    'Explora la galería visual de Cronox: prendas, imágenes y comunidad.',
+    'Galería de la comunidad | CRONOX',
+    'Explora la galería visual de CRONOX: prendas, imágenes y comunidad.',
   ],
   '/privacidad': [
-    'Política de privacidad | Cronox',
-    'Consulta cómo Cronox trata tus datos personales y cómo ejercer tus derechos de privacidad.',
+    'Política de privacidad | CRONOX',
+    'Consulta cómo CRONOX trata tus datos personales y cómo ejercer tus derechos de privacidad.',
   ],
   '/aviso-legal': [
-    'Aviso legal | Cronox',
-    'Información legal y condiciones de uso de la tienda online de Cronox.',
+    'Aviso legal | CRONOX',
+    'Información legal y condiciones de uso de la tienda online de CRONOX.',
   ],
   '/cookies': [
-    'Política de cookies | Cronox',
-    'Información sobre las cookies utilizadas en la web de Cronox y tus opciones de consentimiento.',
+    'Política de cookies | CRONOX',
+    'Información sobre las cookies utilizadas en la web de CRONOX y tus opciones de consentimiento.',
   ],
   '/terminos': [
-    'Condiciones de compra | Cronox',
-    'Consulta las condiciones de compra de la tienda online de Cronox.',
+    'Condiciones de compra | CRONOX',
+    'Consulta las condiciones de compra de la tienda online de CRONOX.',
   ],
   '/envios': [
-    'Envíos | Cronox',
-    'Consulta las condiciones y la información sobre los envíos de tus compras en Cronox.',
+    'Envíos | CRONOX',
+    'Consulta las condiciones y la información sobre los envíos de tus compras en CRONOX.',
   ],
   '/devoluciones': [
-    'Cambios y devoluciones | Cronox',
-    'Consulta las condiciones y los pasos para gestionar cambios y devoluciones de tus compras en Cronox.',
+    'Cambios y devoluciones | CRONOX',
+    'Consulta las condiciones y los pasos para gestionar cambios y devoluciones de tus compras en CRONOX.',
   ],
   '/faqs': [
-    'Preguntas frecuentes | Cronox',
-    'Resuelve tus dudas sobre compras, tallas, envíos y devoluciones en la tienda de Cronox.',
+    'Preguntas frecuentes | CRONOX',
+    'Resuelve tus dudas sobre compras, tallas, envíos y devoluciones en la tienda de CRONOX.',
   ],
   '/desarrolla': [
-    'Colabora con Cronox',
-    'Contacta con Cronox para proponer colaboraciones, proyectos y nuevas ideas.',
+    'Colabora con CRONOX',
+    'Contacta con CRONOX para proponer colaboraciones, proyectos y nuevas ideas.',
   ],
 };
 
@@ -76,7 +87,7 @@ const productSelect = {
   images: {
     where: { isActive: true },
     orderBy: [{ isPrimary: 'desc' }, { sortOrder: 'asc' }, { id: 'asc' }],
-    select: { url: true, alt: true },
+    select: { url: true, alt: true, variants: true, width: true, height: true },
   },
   variants: {
     where: { isActive: true },
@@ -93,29 +104,36 @@ export interface SeoCatalog {
   links(): Promise<CatalogLink[]>;
 }
 export function createSeoCatalog(prisma: PrismaService): SeoCatalog {
+  let pendingLinks: Promise<CatalogLink[]> | undefined;
   return {
     product: (key) =>
       prisma.product.findUnique({
         where: { ...key, isActive: true },
         select: productSelect,
       }),
-    async links() {
-      const links: CatalogLink[] = [];
-      let cursor = 0;
-      for (;;) {
-        const batch = await prisma.product.findMany({
-          where: { isActive: true, id: { gt: cursor } },
-          orderBy: { id: 'asc' },
-          take: 500,
-          select: { id: true, slug: true, name: true },
-        });
-        links.push(...batch);
-        // Do not silently truncate a sitemap if the catalogue outgrows one file.
-        if (links.length > 49000)
-          throw new Error('Sitemap requires partitioning');
-        if (batch.length < 500) return links;
-        cursor = batch[batch.length - 1].id;
-      }
+    links() {
+      if (pendingLinks) return pendingLinks;
+      pendingLinks = (async () => {
+        const links: CatalogLink[] = [];
+        let cursor = 0;
+        for (;;) {
+          const batch = await prisma.product.findMany({
+            where: { isActive: true, id: { gt: cursor } },
+            orderBy: { id: 'asc' },
+            take: 500,
+            select: { id: true, slug: true, name: true },
+          });
+          links.push(...batch);
+          // Do not silently truncate a sitemap if the catalogue outgrows one file.
+          if (links.length > 49000)
+            throw new Error('Sitemap requires partitioning');
+          if (batch.length < 500) return links;
+          cursor = batch[batch.length - 1].id;
+        }
+      })().finally(() => {
+        pendingLinks = undefined;
+      });
+      return pendingLinks;
     },
   };
 }
@@ -141,8 +159,38 @@ const plain = (value: string): string =>
     .replace(/<[^>]*>/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
-const imageUrl = (value: string | null): string | undefined => {
-  if (!value) return undefined;
+export function productDescription(name: string, description: string | null): string {
+  const text = plain(description || `Consulta las tallas y disponibilidad de ${name} en la tienda oficial de CRONOX.`);
+  if (text.length <= 165) return text;
+  const excerpt = text.slice(0, 166);
+  const sentenceEnd = [...excerpt.matchAll(/[.!?](?=\s)/g)].pop()?.index;
+  if (sentenceEnd !== undefined && sentenceEnd >= 80)
+    return excerpt.slice(0, sentenceEnd + 1);
+  const boundary = excerpt.lastIndexOf(' ', 163);
+  // An unusually long indivisible identifier is preferable to a broken word.
+  if (boundary < 0) return text.split(' ')[0];
+  return `${excerpt.slice(0, boundary).trimEnd()}…`;
+}
+function identityGraph() {
+  return [
+    {
+      '@type': 'WebSite', '@id': WEBSITE_ID, name: BRAND_NAME,
+      url: PUBLIC_SITE_URL, inLanguage: 'es',
+      publisher: { '@id': ORGANIZATION_ID },
+    },
+    {
+      '@type': 'Organization', '@id': ORGANIZATION_ID, name: BRAND_NAME,
+      url: PUBLIC_SITE_URL, logo: LOGO_URL, description: BRAND_DESCRIPTION,
+      sameAs: OFFICIAL_PROFILES, brand: { '@id': BRAND_ID },
+    },
+    {
+      '@type': 'Brand', '@id': BRAND_ID, name: BRAND_NAME,
+      url: PUBLIC_SITE_URL, logo: LOGO_URL,
+    },
+  ];
+}
+const imageUrl = (value: unknown): string | undefined => {
+  if (typeof value !== 'string' || !value.trim()) return undefined;
   try {
     const url = new URL(value, PUBLIC_SITE_URL);
     return url.protocol === 'https:' ? url.href : undefined;
@@ -161,7 +209,7 @@ export function productSchema(product: SeoProduct) {
     name: product.name,
     description: plain(product.description || product.name),
     image: images,
-    brand: { '@type': 'Brand', name: 'Cronox' },
+    brand: { '@type': 'Brand', '@id': BRAND_ID, name: BRAND_NAME },
   };
   // No ratings, review counts, sale prices or business details are invented.
   // Without a real image or active variant, omit rich-result markup entirely.
@@ -173,11 +221,16 @@ export function productSchema(product: SeoProduct) {
     url,
     ...common,
     productGroupID: String(product.id),
+    mainEntityOfPage: {
+      '@type': 'ItemPage', '@id': `${url}#webpage`, url,
+      isPartOf: { '@id': WEBSITE_ID },
+    },
     variesBy: ['https://schema.org/size'],
     hasVariant: product.variants.map((variant) => {
       const variantUrl = `${url}?size=${encodeURIComponent(variant.size)}`;
       return {
         '@type': 'Product',
+        '@id': `${url}#variant-${variant.id}`,
         ...common,
         name: `${product.name} — ${variantSizeLabel(variant.size)}`,
         sku: variant.sku,
@@ -189,6 +242,7 @@ export function productSchema(product: SeoProduct) {
           priceCurrency: product.currency,
           price: ((variant.price ?? product.price) / 100).toFixed(2),
           availability: `https://schema.org/${variant.stockQty > 0 ? 'InStock' : 'OutOfStock'}`,
+          seller: { '@id': ORGANIZATION_ID },
         },
       };
     }),
@@ -302,7 +356,7 @@ export function renderSeoHead(
 <meta name="description" content="${e(metadata.description)}">
 <meta name="robots" content="${metadata.noindex ? 'noindex, follow' : 'index, follow, max-image-preview:large'}">
 <link rel="canonical" href="${e(metadata.canonical)}">
-<meta property="og:site_name" content="Cronox">
+<meta property="og:site_name" content="${BRAND_NAME}">
 <meta property="og:locale" content="es_ES">
 <meta property="og:type" content="website">
 <meta property="og:title" content="${e(metadata.title)}">
@@ -354,8 +408,8 @@ export function createSeoPages(
           'login',
         ].some((key) => query.has(key));
       const metadata: Metadata = {
-        title: details?.[0] || 'Cronox',
-        description: details?.[1] || 'Tienda oficial de Cronox.',
+        title: details?.[0] || 'CRONOX',
+        description: details?.[1] || 'Tienda oficial de CRONOX.',
         canonical,
         noindex:
           !details ||
@@ -364,30 +418,31 @@ export function createSeoPages(
       };
       if (!details) {
         metadata.title =
-          html.match(/<title>([\s\S]*?)<\/title>/i)?.[1] || 'Cronox';
+          html.match(/<title>([\s\S]*?)<\/title>/i)?.[1] || 'CRONOX';
         metadata.description =
-          'Página de servicio de la tienda oficial de Cronox.';
+          'Página de servicio de la tienda oficial de CRONOX.';
       }
-      if (path === '/sobre-cronox') metadata.image = absolute('/assets/logo_banner.png');
-      if (path === '/' || path === '/tienda') {
+      if (details) {
         metadata.schema = {
           '@context': 'https://schema.org',
           '@graph': [
+            ...identityGraph(),
             {
-              '@type': 'WebSite',
-              '@id': `${PUBLIC_SITE_URL}#website`,
-              name: 'Cronox',
-              url: PUBLIC_SITE_URL,
-              inLanguage: 'es',
-            },
-            {
-              '@type': 'Organization',
-              '@id': `${PUBLIC_SITE_URL}#organization`,
-              name: 'Cronox',
-              url: PUBLIC_SITE_URL,
+              '@type': path === '/sobre-cronox' ? 'AboutPage' : 'WebPage',
+              '@id': `${canonical}#webpage`, url: canonical,
+              name: metadata.title, description: metadata.description,
+              inLanguage: 'es', isPartOf: { '@id': WEBSITE_ID },
+              publisher: { '@id': ORGANIZATION_ID },
+              ...(path === '/sobre-cronox'
+                ? { mainEntity: { '@id': ORGANIZATION_ID }, about: { '@id': BRAND_ID } }
+                : {}),
             },
           ],
         };
+      }
+      if (path === '/sobre-cronox' || path === '/' || path === '/tienda')
+        metadata.image = LOGO_URL;
+      if (path === '/' || path === '/tienda') {
         // Real links in initial HTML, progressively replaced by the existing card renderer.
         if (!filtered) {
           const links = await catalog.links();
@@ -416,8 +471,8 @@ export function createSeoPages(
         if (!product || !product.isActive) {
           status = 404;
           metadata.noindex = true;
-          metadata.title = 'Producto no disponible | Cronox';
-          metadata.description = 'Este producto no está disponible en Cronox.';
+          metadata.title = 'Producto no disponible | CRONOX';
+          metadata.description = 'Este producto no está disponible en CRONOX.';
           html = html.replace(
             '<h1 id="pName" class="pdp__name"></h1>',
             '<h1 id="pName" class="pdp__name">Producto no disponible</h1>',
@@ -433,18 +488,16 @@ export function createSeoPages(
             );
           }
           metadata.canonical = absolute(target);
-          metadata.noindex = false;
-          metadata.title = `${product.name} | Cronox`;
-          metadata.description =
-            `${product.name}. ${plain(product.description || 'Consulta esta prenda, sus tallas y disponibilidad en la tienda oficial de Cronox.')}`.slice(
-              0,
-              165,
-            );
+          // Keep a noindex instruction set by an outer preview/environment layer.
+          metadata.noindex = String(res.getHeader('X-Robots-Tag') || '').includes('noindex');
+          metadata.title = `${product.name} | ${BRAND_NAME}`;
+          metadata.description = productDescription(product.name, product.description);
           metadata.schema = productSchema(product);
           metadata.image = imageUrl(product.images[0]?.url || product.imageUrl);
-          const selected = product.variants.find(
+          const variants = [...product.variants].sort((a, b) => sizeOrder(a.size) - sizeOrder(b.size));
+          const selected = variants.find(
             (v) => v.size === query.get('size')?.toUpperCase(),
-          );
+          ) || variants.find((v) => v.stockQty > 0);
           const price = (
             (selected?.price ?? product.price) / 100
           ).toLocaleString('es-ES', {
@@ -462,18 +515,45 @@ export function createSeoPages(
             )
             .replace(
               '<p id="pDesc" class="pdp__desc"></p>',
-              `<p id="pDesc" class="pdp__desc">${escapeHtml(product.description)}</p>`,
+              '<p id="pDesc" class="pdp__desc" hidden></p>',
+            )
+            .replace(
+              '<ul id="pDetails" class="pdp__details-list"></ul>',
+              `<ul id="pDetails" class="pdp__details-list">${String(product.description || '').split(/\r\n|\n|\r/).map(line => line.trim()).filter(Boolean).map(line => `<li>${escapeHtml(line)}</li>`).join('')}</ul>`,
+            )
+            .replace(
+              '<div id="pSizeGroup" class="pdp__size-buttons" role="radiogroup" aria-label="Selecciona una talla"></div>',
+              `<div id="pSizeGroup" class="pdp__size-buttons" role="radiogroup" aria-label="Selecciona una talla">${variants.map(v => {
+                const unavailable = v.stockQty <= 0;
+                const active = v.id === selected?.id;
+                const size = variantSizeLabel(v.size);
+                return `<button type="button" class="size-btn${unavailable ? ' is-unavailable' : ''}${active ? ' is-active' : ''}" data-size="${escapeHtml(v.size)}" role="radio" aria-label="${escapeHtml(unavailable ? `${size}, no disponible` : size)}" aria-checked="${active}" aria-disabled="${unavailable}" ${unavailable ? 'disabled' : ''}>${escapeHtml(size)}</button>`;
+              }).join('')}</div>`,
             );
-          if (metadata.image)
+          if (metadata.image) {
+            // Reuse the stored PDP preset selected by responsive-images.js.
+            // Starting the original multi-MB PNG here would cause a second
+            // request when the browser paints the existing optimized gallery.
+            const primary = product.images[0];
+            const variants = primary?.variants as ImageVariants | null;
+            const pdp = variants?.pdp;
+            const source = imageUrl(pdp?.url) || metadata.image;
+            const width = Number(imageUrl(pdp?.url) ? pdp?.width : primary?.width);
+            const height = Number(imageUrl(pdp?.url) ? pdp?.height : primary?.height);
+            const dimensions = Number.isSafeInteger(width) && width > 0 && Number.isSafeInteger(height) && height > 0
+              ? ` width="${width}" height="${height}"` : '';
+            const responsive = imageUrl(pdp?.url) && Number.isSafeInteger(width) && width > 0
+              ? ` srcset="${escapeHtml(source)} ${width}w" sizes="(max-width: 900px) 100vw, 62vw"` : '';
             html = html
               .replace(
                 'id="pImage"',
-                `id="pImage" src="${escapeHtml(metadata.image)}"`,
+                `id="pImage" src="${escapeHtml(source)}"${responsive}${dimensions}`,
               )
               .replace(
                 'class="pdp__media-img is-active" alt=""',
                 `class="pdp__media-img is-active" alt="${escapeHtml(product.images[0]?.alt || product.name)}"`,
               );
+          }
         }
       }
       const rendered = renderSeoHead(html, metadata);

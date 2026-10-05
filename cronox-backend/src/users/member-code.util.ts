@@ -30,12 +30,6 @@ const parseMemberCodeToIndex = (code: string): bigint | null => {
   return prefix * MEMBER_CODE_BLOCK_SIZE + within;
 };
 
-const isMissingSequenceError = (error: unknown) =>
-  typeof error === 'object' &&
-  error !== null &&
-  'code' in error &&
-  (error as { code?: string }).code === '42P01';
-
 const queryNextSequenceValue = async (
   tx: Prisma.TransactionClient,
 ): Promise<bigint> => {
@@ -126,19 +120,22 @@ const syncSequenceWithMax = async (tx: Prisma.TransactionClient) => {
 const getNextSequenceValue = async (
   tx: Prisma.TransactionClient,
 ): Promise<bigint> => {
-  try {
-    return await queryNextSequenceValue(tx);
-  } catch (error) {
-    if (!isMissingSequenceError(error)) throw error;
+  // Detect absence without issuing nextval against a missing relation: that
+  // error aborts PostgreSQL's transaction (and Prisma wraps it as P2010).
+  const rows = await tx.$queryRaw<{ present: boolean }[]>(
+    Prisma.sql`SELECT to_regclass(${MEMBER_CODE_SEQUENCE}) IS NOT NULL AS present`,
+  );
+  if (!rows[0]?.present) {
+    await syncSequenceWithMax(tx);
   }
-
-  await syncSequenceWithMax(tx);
   return queryNextSequenceValue(tx);
 };
 
 export const getNextSequentialMemberCode = async (
   tx: Prisma.TransactionClient,
 ): Promise<string> => {
+  // Also serialize first-use creation/resynchronization across registrations.
+  await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext('cronox:member-code'))`;
   let attempt = 0;
 
   while (attempt < MAX_RETRIES) {

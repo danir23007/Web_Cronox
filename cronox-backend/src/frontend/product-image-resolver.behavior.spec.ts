@@ -46,7 +46,7 @@ describe('canonical product image resolver', () => {
       'https://cdn.test/card-a.webp',
       'https://cdn.test/original-a.jpg',
       'https://cdn.test/original-b.jpg',
-      'assets/logo_browser.png',
+      'assets/product-image-unavailable.svg',
     ]);
   });
 
@@ -87,7 +87,7 @@ describe('canonical product image resolver', () => {
     );
   });
 
-  it('rotates through every real candidate before the logo on load errors', () => {
+  it('rotates through every real candidate before the unavailable-image placeholder on load errors', () => {
     const dom = createRuntime();
     const images = (dom.window as any).CRONOX_IMAGES;
     const element = dom.window.document.querySelector(
@@ -113,7 +113,7 @@ describe('canonical product image resolver', () => {
     element.onerror?.(new dom.window.Event('error') as any);
     expect(element.src).toBe('https://cdn.test/secondary.jpg');
     element.onerror?.(new dom.window.Event('error') as any);
-    expect(element.src).toBe('https://cronox.test/assets/logo_browser.png');
+    expect(element.src).toBe('https://cronox.test/assets/product-image-unavailable.svg');
     expect(element.onerror).toBeNull();
   });
 });

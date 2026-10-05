@@ -275,11 +275,14 @@
         const form = document.createElement('form'); form.id = 'storeCategoryFilters';
         form.addEventListener('submit', event => event.preventDefault());
         for (const category of visible) {
-          const row = document.createElement('div'); row.className = 'black-menu__category-row';
-          const link = document.createElement('a'); link.className = 'black-menu__link'; link.textContent = category.name;
-          link.href = '/tienda?categorySlug=' + encodeURIComponent(category.slug) + '#store';
-          if (requestedSlug === category.slug) link.setAttribute('aria-current','page');
-          if (document.getElementById('productsGrid')) {
+          const isStoreFilter = !!document.getElementById('productsGrid');
+          const row = document.createElement(isStoreFilter ? 'label' : 'div'); row.className = 'black-menu__category-row';
+          const link = document.createElement(isStoreFilter ? 'span' : 'a'); link.className = 'black-menu__link'; link.textContent = category.name;
+          if (!isStoreFilter) {
+            link.href = '/tienda?categorySlug=' + encodeURIComponent(category.slug) + '#store';
+            if (requestedSlug === category.slug) link.setAttribute('aria-current','page');
+          }
+          if (isStoreFilter) {
             const input = document.createElement('input'); input.type = 'checkbox'; input.value = category.slug;
             input.dataset.storeCategory = ''; input.dataset.publicCategoryGroup = category.group || 'UNCLASSIFIED';
             input.checked = selected.has(category.slug); input.setAttribute('aria-label', `Filtrar por ${category.name}`); row.append(input);

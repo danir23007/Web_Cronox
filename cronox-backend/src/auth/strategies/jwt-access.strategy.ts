@@ -4,7 +4,7 @@ import { ExtractJwt, Strategy } from 'passport-jwt';
 import type { Request } from 'express';
 import { getRequiredJwtSecret } from '../../common/config/environment';
 import { UsersService } from '../../users/users.service';
-import { Role, UserAccountState } from '@prisma/client';
+import { Role } from '@prisma/client';
 import { AuthSessionsService, SessionClaims } from '../auth-sessions.service';
 import { ADMIN_IDLE_MS } from '../session-policy';
 
@@ -46,20 +46,12 @@ export class JwtAccessStrategy extends PassportStrategy(Strategy, 'jwt') {
       throw new UnauthorizedException();
     }
 
-    const user = await this.usersService.findById(userId);
-
-    if (
-      !user ||
-      user.accountState !== UserAccountState.ACTIVE ||
-      !Number.isInteger(payload.sv) ||
-      payload.sv !== user.sessionVersion
-    ) {
-      throw new UnauthorizedException();
-    }
-
     if (payload.type !== 'access' && payload.sid)
       throw new UnauthorizedException();
     const session = await this.sessions.validate(payload as SessionClaims);
+    // validate reads the current user with the session and checks revocation,
+    // account state, version, role and expiry. Do not read that user twice.
+    const user = session.user;
     (req as Request & { authSession?: SessionClaims }).authSession =
       payload as SessionClaims;
     if (user.role === Role.ADMIN)

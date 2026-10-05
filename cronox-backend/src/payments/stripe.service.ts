@@ -370,11 +370,10 @@ export class StripeService {
         `Stripe signature validada para event=${event.id} type=${event.type}`,
       );
       return event;
-    } catch (error) {
-      this.logger.error(
-        'Stripe webhook signature verification failed',
-        error as Error,
-      );
+    } catch {
+      // Stripe's error carries the raw body and signature. Never log them:
+      // payloads can contain customer data, and a bad signature is untrusted.
+      this.logger.warn('Stripe webhook signature verification failed');
       throw new BadRequestException('STRIPE_SIGNATURE_VERIFICATION_FAILED');
     }
   }

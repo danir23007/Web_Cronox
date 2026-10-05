@@ -989,6 +989,13 @@ import { loadCategoryPages } from './category-pagination';
 
   api.changePassword = (payload: UnknownRecord) => request('/api/auth/change-password', { method: 'POST', body: payload });
 
+  api.emailChangeStatus = () => request('/api/me/email-change');
+  api.requestEmailChange = (newEmail: string) => request('/api/me/email-change', { method: 'POST', body: { newEmail } });
+  api.resendEmailChange = () => request('/api/me/email-change/resend', { method: 'POST' });
+  api.cancelEmailChange = () => request('/api/me/email-change/cancel', { method: 'POST' });
+  api.inspectEmailChange = (payload: UnknownRecord) => request('/api/email-change/inspect', { method: 'POST', body: payload });
+  api.confirmEmailChange = (payload: UnknownRecord) => request('/api/email-change/confirm', { method: 'POST', body: payload });
+
   api.updateMe = async (payload: UnknownRecord) => {
     const data = await request('/api/me', {
       method: 'PUT',

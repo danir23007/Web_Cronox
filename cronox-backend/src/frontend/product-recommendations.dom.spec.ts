@@ -98,6 +98,10 @@ describe('PDP recommended-product cards', () => {
     expect(favorite).not.toBeNull();
     expect(images[0].classList.contains('active')).toBe(true);
     next.click();
+    // JSDOM does not download images. The carousel retains the previous frame
+    // until the next real image loads, so exercise that event explicitly.
+    expect(images[0].classList.contains('active')).toBe(true);
+    images[1].dispatchEvent(new dom.window.Event('load'));
     expect(images[0].classList.contains('active')).toBe(false);
     expect(images[1].classList.contains('active')).toBe(true);
     dom.window.close();

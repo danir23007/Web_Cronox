@@ -166,7 +166,7 @@ describe('cart identity request flow', () => {
         {
           provide: AuthSessionsService,
           useValue: {
-            validate: jest.fn().mockResolvedValue({ lastActivityAt: new Date() }),
+            validate: jest.fn(async payload => ({ lastActivityAt: new Date(), user: await usersService.findById(payload.sub) })),
           },
         },
         { provide: UsersService, useValue: usersService },

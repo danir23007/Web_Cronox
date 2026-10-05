@@ -54,6 +54,16 @@ describe('StripeService', () => {
     expect(result).toBe(mockEvent);
   });
 
+  it('rejects an invalid signature without logging the payload or signature', () => {
+    const logger = (service as any).logger;
+    const warn = jest.spyOn(logger, 'warn').mockImplementation(() => undefined);
+    const error = jest.spyOn(logger, 'error').mockImplementation(() => undefined);
+    expect(() => service.constructEventFromPayload('invalid-signature', Buffer.from('{"email":"fixture@example.test"}')))
+      .toThrow('STRIPE_SIGNATURE_VERIFICATION_FAILED');
+    expect(warn).toHaveBeenCalledWith('Stripe webhook signature verification failed');
+    expect(error).not.toHaveBeenCalled();
+  });
+
   it('cancels only an unconfirmed PaymentIntent bound to the expected snapshot', async () => {
     const stripeInstance = (service as any).stripe as any;
     jest.spyOn(stripeInstance.paymentIntents, 'retrieve').mockResolvedValue({

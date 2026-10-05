@@ -1,6 +1,7 @@
 import { createHash } from 'crypto';
 import { Role, UserAccountState } from '@prisma/client';
 import { AuthService } from './auth.service';
+import { UnauthorizedException } from '@nestjs/common';
 
 describe('AuthService password reset security', () => {
   const originalEnvironment = { ...process.env };
@@ -50,6 +51,7 @@ describe('AuthService password reset security', () => {
         create: jest.fn().mockResolvedValue({ id: 1 }),
       },
       user: {
+        findUnique: jest.fn().mockResolvedValue({ email: 'member@example.test' }),
         update: jest.fn().mockResolvedValue({ id: 42 }),
         updateMany: jest.fn().mockResolvedValue({ count: 1 }),
       },
@@ -175,6 +177,16 @@ describe('AuthService password reset security', () => {
     expect(emailService.sendPasswordReset).not.toHaveBeenCalled();
   });
 
+  it('does not issue a queued reset link to a mailbox changed before token persistence', async () => {
+    usersService.findByEmail.mockResolvedValue({ id: 42, email: 'old@example.test' });
+    tx.user.findUnique.mockResolvedValue({ email: 'new@example.test' });
+    emailService.isEnabled.mockReturnValue(true);
+    await service.requestPasswordReset('old@example.test');
+    await new Promise<void>(resolve => setImmediate(resolve));
+    expect(tx.passwordResetToken.create).not.toHaveBeenCalled();
+    expect(emailService.sendPasswordReset).not.toHaveBeenCalled();
+  });
+
   it('returns the same generic response without awaiting reset persistence or SMTP work', async () => {
     usersService.findByEmail.mockResolvedValue({
       id: 42,
@@ -222,6 +234,7 @@ describe('AuthService password reset security', () => {
   });
 
   it('claims and sends one secure initial-password link for a passwordless account', async () => {
+    tx.user.findUnique.mockResolvedValue({ email: 'new@example.test' });
     emailService.isEnabled.mockReturnValue(true);
     prisma.user.updateMany
       .mockResolvedValueOnce({ count: 1 })
@@ -263,6 +276,7 @@ describe('AuthService password reset security', () => {
   });
 
   it('releases the setup-email claim without invalidating the account when delivery fails', async () => {
+    tx.user.findUnique.mockResolvedValue({ email: 'new@example.test' });
     emailService.isEnabled.mockReturnValue(true);
     emailService.sendInitialPasswordSetup.mockRejectedValue(new Error('SMTP'));
     prisma.user.updateMany.mockResolvedValue({ count: 1 });
@@ -368,9 +382,18 @@ describe('AuthService password reset security', () => {
     expect(usersService.findById).toHaveBeenCalledWith(42);
   });
 
+  it('preserves cookies and avoids a second identity attempt when the dependency fails', async () => {
+    sessions.verify.mockRejectedValue(new Error('database unavailable'));
+    const response = { clearCookie: jest.fn() };
+    await expect(service.hasValidAdminSession('access', 'refresh', response as never))
+      .rejects.toThrow('database unavailable');
+    expect(sessions.verify).toHaveBeenCalledTimes(1);
+    expect(response.clearCookie).not.toHaveBeenCalled();
+  });
+
   it('accepts an expired access cookie through a valid current administrator refresh session', async () => {
     sessions.verify
-      .mockRejectedValueOnce(new Error('access expired'))
+      .mockRejectedValueOnce(new UnauthorizedException('access expired'))
       .mockResolvedValueOnce({
         id: 'session-1',
         userId: 42,
@@ -476,7 +499,7 @@ describe('AuthService password reset security', () => {
   it.each(['forged', 'expired', 'invalid'])(
     'fails closed for a %s access cookie without raising an application error',
     async () => {
-      sessions.verify.mockRejectedValue(new Error('invalid token'));
+      sessions.verify.mockRejectedValue(new UnauthorizedException('invalid token'));
 
       await expect(
         service.hasValidAdminSession('untrusted-token'),
@@ -486,7 +509,7 @@ describe('AuthService password reset security', () => {
   );
 
   it('rejects a refresh cookie signed with the wrong secret without raising an application error', async () => {
-    sessions.verify.mockRejectedValue(new Error('invalid signature'));
+    sessions.verify.mockRejectedValue(new UnauthorizedException('invalid signature'));
     refreshJwt.verifyAsync.mockRejectedValue(new Error('invalid signature'));
 
     await expect(
@@ -496,7 +519,7 @@ describe('AuthService password reset security', () => {
   });
 
   it('never treats a refresh token as an access token', async () => {
-    sessions.verify.mockRejectedValue(new Error('wrong type'));
+    sessions.verify.mockRejectedValue(new UnauthorizedException('wrong type'));
     jwtService.verifyAsync.mockResolvedValue({
       sub: 42,
       sv: 3,
@@ -511,7 +534,7 @@ describe('AuthService password reset security', () => {
   });
 
   it('never treats an access token as a refresh token', async () => {
-    sessions.verify.mockRejectedValue(new Error('wrong type'));
+    sessions.verify.mockRejectedValue(new UnauthorizedException('wrong type'));
     refreshJwt.verifyAsync.mockResolvedValue({ sub: 42, sv: 3 });
 
     await expect(
@@ -538,7 +561,7 @@ describe('AuthService password reset security', () => {
     await service.logout('old-access', 'old-refresh');
 
     expect(sessions.revoke).toHaveBeenCalledWith('session-1');
-    sessions.verify.mockRejectedValue(new Error('revoked'));
+    sessions.verify.mockRejectedValue(new UnauthorizedException('revoked'));
 
     usersService.findById.mockResolvedValue({
       id: 42,

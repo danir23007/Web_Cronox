@@ -63,7 +63,7 @@
     "mailbox-multer": "npm:multer@2.4.0",
     "mailbox-nodemailer": "npm:nodemailer@10.0.13",
     "mailparser": "3.9.33",
-    "nodemailer": "^9.0.5",
+    "nodemailer": "10.0.13",
     "passport": "^0.7.0",
     "passport-jwt": "^4.0.1",
     "qrcode": "^1.5.4",
@@ -71,7 +71,7 @@
     "rxjs": "^7.8.1",
     "sanitize-html": "2.17.7",
     "serve-static": "^2.2.0",
-    "sharp": "^0.34.5",
+    "sharp": "0.35.5",
     "stripe": "^16.12.0",
     "swagger-ui-express": "^5.0.1",
     "web-push": "3.6.7"
@@ -113,10 +113,17 @@
     "typescript-eslint": "^8.20.0"
   },
   "overrides": {
+    "multer": "2.4.0",
     "@nestjs/swagger": {
-      "js-yaml": "5.2.3"
+      "js-yaml": "5.4.1"
     },
-    "uuid": "11.1.1"
+    "uuid": "11.1.1",
+    "qs": "6.16.0",
+    "js-yaml@>=3 <4": "3.15.2",
+    "js-yaml@>=4 <5": "4.3.2",
+    "brace-expansion@>=1 <2": "1.1.21",
+    "brace-expansion@>=2 <3": "2.1.7",
+    "brace-expansion@>=5 <6": "5.0.12"
   },
   "jest": {
     "setupFiles": [

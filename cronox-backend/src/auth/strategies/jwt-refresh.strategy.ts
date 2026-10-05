@@ -4,7 +4,6 @@ import { ExtractJwt, Strategy } from 'passport-jwt';
 import type { Request } from 'express';
 import { getRequiredJwtSecret } from '../../common/config/environment';
 import { UsersService } from '../../users/users.service';
-import { UserAccountState } from '@prisma/client';
 import { AuthSessionsService } from '../auth-sessions.service';
 
 const extractRefreshToken = (req: Request): string | null => {
@@ -56,18 +55,7 @@ export class JwtRefreshStrategy extends PassportStrategy(
       throw new UnauthorizedException('Refresh token inválido');
     }
 
-    const user = await this.usersService.findById(userId);
-
-    if (
-      !user ||
-      user.accountState !== UserAccountState.ACTIVE ||
-      !Number.isInteger(payload.sv) ||
-      payload.sv !== user.sessionVersion
-    ) {
-      throw new UnauthorizedException('Refresh token inválido');
-    }
-
-    await this.sessions.verify(refreshToken, 'refresh');
-    return this.usersService.toSafeUser(user);
+    const session = await this.sessions.verify(refreshToken, 'refresh');
+    return this.usersService.toSafeUser(session.user);
   }
 }

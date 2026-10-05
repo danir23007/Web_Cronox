@@ -33,6 +33,7 @@ import { normalizeEmail } from '../common/email';
 import { isAdminPanelRole } from '../common/roles.utils';
 import { AuthSessionsService, SessionClaims } from './auth-sessions.service';
 import { ACCESS_TOKEN_SECONDS } from './session-policy';
+import { serializableTransaction } from '../prisma/serializable-transaction';
 
 const PASSWORD_SETUP_CLAIM_STALE_MS = 10 * 60 * 1000;
 
@@ -246,9 +247,9 @@ export class AuthService {
         this.setAuthCookies(res, await this.sessions.rotate(refreshToken));
       }
       return allowed;
-    } catch {
-      // Public navigation must fall back to the Key Screen for any invalid,
-      // expired or unverifiable authentication cookie.
+    } catch (error) {
+      if (!(error instanceof UnauthorizedException)) throw error;
+      // Invalid credentials are terminal; unavailable authorization is not logout.
       if (res) this.clearAuthCookies(res);
       return false;
     }
@@ -448,7 +449,11 @@ export class AuthService {
     const now = new Date();
     const expiresAt = new Date(now.getTime() + 60 * 60 * 1000);
 
-    await this.prisma.$transaction(async (tx) => {
+    const persisted = await serializableTransaction(this.prisma, async (tx) => {
+      const current = await tx.user.findUnique({ where: { id: user.id }, select: { email: true } });
+      // A reset request can be queued before an email change and persisted after
+      // it. Serialize the check with profile changes, without sending inside a retry.
+      if (!current || normalizeEmail(current.email) !== normalizeEmail(user.email)) return false;
       await tx.passwordResetToken.updateMany({
         where: { userId: user.id, usedAt: null },
         data: { usedAt: now },
@@ -460,7 +465,9 @@ export class AuthService {
           expiresAt,
         },
       });
+      return true;
     });
+    if (!persisted) return false;
 
     const resetUrl = `${getFrontendUrl()}/reset-password?token=${encodeURIComponent(token)}`;
     try {
@@ -617,7 +624,7 @@ export class AuthService {
 
   private omitPassword(user: User): AuthUser {
     const { password: _password, ...rest } = user;
-    return rest;
+    return { ...rest, hasPassword: Boolean(_password) };
   }
 
   private async generateTokens(user: AuthUser): Promise<Tokens> {
@@ -646,6 +653,7 @@ export class AuthService {
       try {
         return await this.sessions.verify(accessToken, 'access');
       } catch (error) {
+        if (!(error instanceof UnauthorizedException)) throw error;
         validationError = error;
         // A missing, expired, or invalid cookie is intentionally idempotent.
       }
@@ -655,6 +663,7 @@ export class AuthService {
       try {
         return await this.sessions.verify(refreshToken, 'refresh');
       } catch (error) {
+        if (!(error instanceof UnauthorizedException)) throw error;
         validationError = error;
         // A missing, expired, or invalid cookie is intentionally idempotent.
       }

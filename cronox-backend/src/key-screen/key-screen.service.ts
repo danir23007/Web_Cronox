@@ -28,6 +28,8 @@ export class KeyScreenService {
     expirationMs: number | null;
     validUntilMs: number;
   } | null = null;
+  private gateRead?: Promise<boolean>;
+  private gateGeneration = 0;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -37,6 +39,8 @@ export class KeyScreenService {
 
   invalidateGateCache() {
     this.cachedGate = null;
+    this.gateRead = undefined;
+    this.gateGeneration++;
   }
 
   async shouldGatePublicHtml(): Promise<boolean> {
@@ -44,6 +48,15 @@ export class KeyScreenService {
     if (this.cachedGate && this.cachedGate.validUntilMs > now) {
       return this.cachedGate.enabled;
     }
+    if (this.gateRead) return this.gateRead;
+    const reading = this.readGate(this.gateGeneration).finally(() => {
+      if (this.gateRead === reading) this.gateRead = undefined;
+    });
+    this.gateRead = reading;
+    return reading;
+  }
+
+  private async readGate(generation: number): Promise<boolean> {
     try {
       const settings = await this.prisma.keyScreenSettings.findUnique({
         where: { id: GLOBAL_ID },
@@ -51,6 +64,8 @@ export class KeyScreenService {
           activeScreen: { select: { mode: true, mediaAssetId: true } },
         },
       });
+      if (generation !== this.gateGeneration) return this.shouldGatePublicHtml();
+      const now = Date.now();
       const expirationMs = settings?.expiresAt?.getTime() ?? null;
       const enabled = Boolean(
         settings?.enabled &&
@@ -68,13 +83,25 @@ export class KeyScreenService {
       };
       return enabled;
     } catch {
+      if (generation !== this.gateGeneration) return this.shouldGatePublicHtml();
       this.logger.error('No se pudo comprobar el estado de Pantalla Clave');
-      if (!this.cachedGate) return true;
-      return Boolean(
-        this.cachedGate.enabled &&
-          (this.cachedGate.expirationMs === null ||
-            now < this.cachedGate.expirationMs),
+      const now = Date.now();
+      const previous = this.cachedGate;
+      const enabled = !previous || Boolean(
+        previous.enabled &&
+          (previous.expirationMs === null || now < previous.expirationMs),
       );
+      // Keep the existing fail-closed/last-known policy, but don't issue a
+      // fresh failing query for every visit during the same one-second window.
+      const expirationMs = previous?.expirationMs ?? null;
+      this.cachedGate = {
+        enabled,
+        expirationMs,
+        validUntilMs: expirationMs !== null && expirationMs > now
+          ? Math.min(now + 1000, expirationMs)
+          : now + 1000,
+      };
+      return enabled;
     }
   }
 

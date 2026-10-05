@@ -5,10 +5,11 @@ import { PrismaService } from '../prisma/prisma.service';
 import { getNextSequentialMemberCode } from './member-code.util';
 import { normalizeEmail } from '../common/email';
 
-export type AuthUser = Omit<User, 'password'>;
+export type AuthUser = Omit<User, 'password'> & { hasPassword: boolean };
 export type AuthUserWithPassword = User;
 
 export type SafeUser = {
+  hasPassword: boolean;
   id: number;
   email: string;
   name?: string | null;
@@ -107,6 +108,7 @@ export class UsersService {
 
   toSafeUser(user: AuthUser | AuthUserWithPassword): SafeUser {
     return {
+      hasPassword: 'password' in user ? Boolean(user.password) : user.hasPassword,
       id: user.id,
       email: user.email,
       name: user.name,

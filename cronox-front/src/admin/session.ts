@@ -169,6 +169,9 @@ export function installSessionTransport(
       true,
     );
     if (probe.ok) return true;
+    if (probe.status !== 401) {
+      throw new Error("No se pudo comprobar la sesión. Inténtalo de nuevo.");
+    }
     const response = observe(
       await rawFetch(endpoint("/api/auth/refresh"), {
         method: "POST",
@@ -271,6 +274,10 @@ export function installSessionTransport(
     let response = observe(await rawFetch(input, init), authResponse);
     if (response.status === 401 && !noRetry.test(url.pathname)) {
       const code = await errorCode(response);
+      if (code === 'AUTH_REQUIRED') {
+        if (authenticated || deadline) terminate(false);
+        return response;
+      }
       if (code?.startsWith("SESSION_")) {
         terminate(code === "SESSION_IDLE");
         return response;

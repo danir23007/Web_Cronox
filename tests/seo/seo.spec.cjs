@@ -8,17 +8,30 @@ for (const width of [1366, 390]) {
       window.__seoViolations = [];
       document.addEventListener('securitypolicyviolation', e => window.__seoViolations.push(e.violatedDirective));
     });
-    await page.goto('/');
+    const home = await page.goto('/');
+    expect(home.status()).toBe(200);
     await expect(page.locator('.product-card')).toHaveCount(1);
-    await expect(page).toHaveTitle('Cronox — Ropa y tienda oficial');
+    await expect(page).toHaveTitle('CRONOX | Streetwear y tienda oficial');
     expect(await page.locator('script[type="application/ld+json"]').count()).toBe(1);
-    await expect(page.locator('meta[property="og:site_name"]')).toHaveAttribute('content', 'Cronox');
+    await expect(page.locator('meta[property="og:site_name"]')).toHaveAttribute('content', 'CRONOX');
     expect(await page.locator('a[href*="@tu_cuenta"]').count()).toBe(0);
+    await expect(page.locator('#productsFallback')).toBeHidden();
+    await page.getByRole('button', { name: 'Abrir menú', exact: true }).click();
+    await expect(page.locator('.black-menu__discover')).toHaveCount(1);
+    await expect(page.locator('.black-menu__discover')).toHaveAttribute('href', '/sobre-cronox');
+    await expect(page.locator('[data-store-category][value="camisetas"]')).toBeVisible();
+    await expect(page.locator('[data-store-category][value="interna-prueba"]')).toHaveCount(0);
+    await page.goto('/sobre-cronox');
+    await expect(page.locator('main section p')).toHaveCount(13);
+    expect(JSON.parse(await page.locator('#cronox-seo').textContent())['@graph'].some(n => n['@type'] === 'AboutPage')).toBe(true);
     await page.goto('/producto/seo-test-shirt?size=M');
     await expect(page.locator('.size-btn.is-active')).toHaveAttribute('data-size', 'M');
     await expect(page.locator('#pAdd')).toBeDisabled();
     await expect(page.locator('#pPrice')).toContainText('45,00');
-    await expect(page).toHaveTitle('Camiseta de prueba SEO | Cronox');
+    await page.getByText('Detalles del producto', { exact: true }).click();
+    await expect(page.locator('#pDetails')).toContainText('algodón');
+    await expect(page.locator('#pDesc')).toBeHidden();
+    await expect(page).toHaveTitle('Camiseta de prueba SEO | CRONOX');
     await expect(page.locator('link[rel=canonical]')).toHaveAttribute('href', 'https://cronox.es/producto/seo-test-shirt');
     const group = JSON.parse(await page.locator('#cronox-seo').textContent());
     expect(group.hasVariant[1].offers.price).toBe('45.00');
@@ -47,7 +60,8 @@ test('initial HTML remains useful without JavaScript', async ({ browser }) => {
   await expect(page.locator('#preloader')).toBeHidden();
   await page.locator('#productsGrid a').click();
   await expect(page.locator('#pName')).toHaveText('Camiseta de prueba SEO');
-  await expect(page.locator('#pDesc')).toContainText('algodón');
+  await page.getByText('Detalles del producto', { exact: true }).click();
+  await expect(page.locator('#pDetails')).toContainText('algodón');
   await context.close();
 });
 
@@ -58,4 +72,40 @@ test('direct product survives omission from the first catalogue page', async ({ 
   await expect(page.locator('.size-btn.is-active')).toHaveAttribute('data-size', 'S');
   await expect(page.locator('#pName')).toHaveText('Camiseta de prueba SEO');
   await expect(page.locator('#pAdd')).toBeEnabled();
+});
+
+test('the API data that updates the page also updates its single ProductGroup', async ({ page }) => {
+  await page.route('**/api/products', async route => {
+    const response = await route.fetch();
+    const body = await response.json();
+    body.items[0].description = 'Descripción actualizada desde la API local.';
+    body.items[0].variants[0].price = 4700;
+    body.items[0].variants[0].effectivePrice = 4700;
+    body.items[0].variants[0].stockQty = 0;
+    body.items[0].variants[1].stockQty = 3;
+    await route.fulfill({ json: body });
+  });
+  await page.goto('/producto/seo-test-shirt?size=S');
+  await expect(page.locator('#pPrice')).toContainText('47,00');
+  await expect(page.locator('#pAdd')).toBeDisabled();
+  await expect(page.locator('script[type="application/ld+json"]')).toHaveCount(1);
+  const group = JSON.parse(await page.locator('#cronox-seo').textContent());
+  expect(group.description).toBe('Descripción actualizada desde la API local.');
+  await expect(page.locator('meta[name=description]')).toHaveAttribute('content', group.description);
+  await expect(page.locator('meta[property="og:description"]')).toHaveAttribute('content', group.description);
+  expect(group.hasVariant[0].offers).toMatchObject({ price: '47.00', availability: 'https://schema.org/OutOfStock' });
+  expect(group.hasVariant[1].offers.availability).toBe('https://schema.org/InStock');
+});
+
+test('SSR and browser share the default size, price and description', async ({ page, request }) => {
+  const response = await request.get('/producto/seo-test-shirt');
+  const html = await response.text();
+  expect(html).toContain('Camiseta de algodón.</li>');
+  expect(html).toContain('priceCurrency');
+  expect(html).not.toMatch(/searchKeywords|costPrice|passwordHash/);
+  await page.goto('/producto/seo-test-shirt');
+  await expect(page.locator('.size-btn.is-active')).toHaveAttribute('data-size', 'S');
+  await expect(page.locator('#pPrice')).toContainText('40,00');
+  await expect(page.locator('#pDetails li')).toHaveCount(2);
+  await expect(page.locator('#pSizeGroup button')).toHaveCount(2);
 });

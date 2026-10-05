@@ -20,7 +20,7 @@ describe('AddressesService country normalization', () => {
   };
 
   const createService = () => {
-    const prisma = {
+    const prisma: any = {
       address: {
         count: jest.fn().mockResolvedValue(0),
         create: jest.fn().mockImplementation(({ data }) => ({
@@ -31,6 +31,7 @@ describe('AddressesService country normalization', () => {
         findMany: jest.fn().mockResolvedValue([baseAddress]),
       },
     };
+    prisma.$transaction = jest.fn(operation => operation(prisma));
     return { prisma, service: new AddressesService(prisma as any) };
   };
 
