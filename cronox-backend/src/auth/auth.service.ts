@@ -616,7 +616,7 @@ export class AuthService {
       password,
       user?.password ?? this.dummyPasswordHash,
     );
-    if (!user || !isValid || user.accountState !== UserAccountState.ACTIVE)
+    if (!user || !user.password || !password || !isValid || user.accountState !== UserAccountState.ACTIVE)
       return null;
 
     return this.omitPassword(user);

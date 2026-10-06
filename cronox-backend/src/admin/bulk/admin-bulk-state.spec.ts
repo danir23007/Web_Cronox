@@ -144,10 +144,10 @@ describe('bulk user account state', () => {
     expect(users.updateAdminUser).not.toHaveBeenCalled();
   });
 
-  it('requires a password for ACTIVE and a pre-registration for PRE_REGISTERED', async () => {
-    await expect(
-      service.preview(dto({ accountState: 'ACTIVE' }) as any, 1),
-    ).rejects.toThrow('contraseña');
+  it('allows ACTIVE without a password and still requires a pre-registration for PRE_REGISTERED', async () => {
+    const { result } = await apply({ accountState: 'ACTIVE' });
+    expect(result.counts.changed).toBe(1);
+    expect(rows[0]).toMatchObject({ accountState: 'ACTIVE', password: null, role: 'USER', circleLevel: 1 });
     rows[0].preRegistration = null;
     rows[0].accountState = 'PENDING_PASSWORD';
     await expect(

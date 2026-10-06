@@ -173,10 +173,6 @@ export class AdminBulkService {
         if (c.accountState !== undefined) {
           after.accountState = c.accountState;
           if (!reason && c.accountState !== r.accountState) {
-            if (c.accountState === UserAccountState.ACTIVE && !r.password)
-              throw new BadRequestException(
-                `Usuario #${r.id}: para activar la cuenta debe establecer primero una contraseña.`,
-              );
             if (
               c.accountState === UserAccountState.PENDING_PASSWORD &&
               r.password

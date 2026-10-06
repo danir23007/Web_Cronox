@@ -279,6 +279,65 @@ describe('admin Bulk Edit mode', () => {
     }
   });
 
+  it.each([false, true])('preserves error details/selection, retries the same operation, and distinguishes failed refresh: %s', async (failedRefresh) => {
+    const { dom, w, fetch, body, reload } = setup();
+    try {
+      w.HTMLDialogElement.prototype.showModal = jest.fn();
+      w.HTMLDialogElement.prototype.close = jest.fn();
+      w.crypto.randomUUID = () => '00000000-0000-4000-8000-000000000002';
+      let failReview = true;
+      let executeCalls = 0;
+      const executions: any[] = [];
+      fetch.mockImplementation(async (url: string, options: any) => {
+        const payload = options?.body ? JSON.parse(options.body) : {};
+        if (url.includes('/operations/')) return { ok: false, status: 404, json: async () => ({ message: 'Resultado aún no confirmado' }) };
+        if (url.endsWith('/execute')) {
+          executions.push(payload); executeCalls++;
+          return executeCalls === 1
+            ? { ok: false, status: 503, json: async () => ({ message: 'Base de datos temporalmente no disponible' }) }
+            : { ok: true, json: async () => ({ counts: { changed: 1, unchanged: 0, excluded: 0 } }) };
+        }
+        if (payload.changes.accountState && failReview)
+          return { ok: false, status: 409, json: async () => ({ message: 'El usuario ha cambiado. Revisa de nuevo.' }) };
+        return { ok: true, json: async () => ({ reviewToken: 'review',
+          counts: { changed: payload.changes.accountState ? 1 : 0, unchanged: payload.changes.accountState ? 0 : 1, excluded: 0 },
+          rows: [{ id: 2, name: 'Prueba', state: payload.changes.accountState ? 'changed' : 'unchanged',
+            before: { role: 'USER', circleLevel: 1, accountState: 'PRE_REGISTERED' },
+            after: { role: 'USER', circleLevel: 1, accountState: payload.changes.accountState || 'PRE_REGISTERED' } }],
+        }) };
+      });
+      if (failedRefresh) reload.mockRejectedValue(new Error('Table unavailable'));
+      const section = w.document.querySelector('#section-users');
+      section.querySelector('.bulk-mode-toggle').click();
+      const selected = body.querySelector('[data-bulk-id="2"]');
+      selected.checked = true; selected.dispatchEvent(new w.Event('change', { bubbles: true }));
+      section.querySelector('.bulk-actions button').click(); await flush();
+      const dialog = w.document.querySelector('.admin-bulk-dialog');
+      expect(dialog.textContent).toContain('Activa admite cuentas con o sin contraseña');
+      const state = dialog.querySelector('[data-bulk-field="accountState"]');
+      state.value = 'ACTIVE'; state.dispatchEvent(new w.Event('change', { bubbles: true }));
+      const find = (name: string) => [...dialog.querySelectorAll('button')].find((b: any) => b.textContent.startsWith(name));
+      find('Revisar cambios').click(); await flush();
+      expect(dialog.textContent).toContain('El usuario ha cambiado');
+      expect(selected.checked).toBe(true); expect(state.value).toBe('ACTIVE');
+      expect(executeCalls).toBe(0);
+      failReview = false; find('Revisar cambios').click(); await flush();
+      find('Aplicar cambios').click(); find('Aplicar cambios').click();
+      expect(dialog.textContent).not.toContain('Completado:'); await flush();
+      expect(executeCalls).toBe(1);
+      expect(dialog.textContent).toContain('Base de datos temporalmente no disponible (HTTP 503)');
+      expect(selected.checked).toBe(true); expect(state.value).toBe('ACTIVE');
+      find('Consultar resultado').click(); await flush();
+      find('Reintentar la misma operación').click(); await flush();
+      expect(executions[1]).toEqual(executions[0]);
+      expect(executions[1].changes).toEqual({ accountState: 'ACTIVE' });
+      expect(dialog.textContent).toContain('Completado: 1 modificados');
+      expect(dialog.textContent.includes('No se pudo actualizar el listado')).toBe(failedRefresh);
+      expect(reload).toHaveBeenCalledTimes(1);
+      expect(selected.checked).toBe(false);
+    } finally { dom.window.close(); }
+  });
+
   it('marks mixed current states in the modal', async () => {
     const { dom, w, fetch, body } = setup();
     try {

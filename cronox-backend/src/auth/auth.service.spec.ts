@@ -301,15 +301,16 @@ describe('AuthService password reset security', () => {
     });
   });
 
-  it('does not grant login to an automatically-created account before a password is set', async () => {
+  it.each(['', 'any-password'])('does not grant password login to ACTIVE without a password: %s', async (attempt) => {
     prisma.user.findFirst.mockResolvedValue({
       id: 42,
       email: 'new@example.test',
       password: null,
+      accountState: UserAccountState.ACTIVE,
     });
 
     await expect(
-      service.validateUser(' NEW@example.test ', 'any-password'),
+      service.validateUser(' NEW@example.test ', attempt),
     ).resolves.toBeNull();
   });
 

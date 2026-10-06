@@ -59,7 +59,7 @@ async function run(withBrowser) {
     for (let i = 0; i < 3; i++)
       categories.push(
         await db.category.create({
-          data: { name: tag + " cat " + i, slug: tag + "-" + i },
+          data: { name: tag + " cat " + i, slug: tag + "-" + i, group: "GARMENT" },
         }),
       );
     for (let i = 0; i < 3; i++)

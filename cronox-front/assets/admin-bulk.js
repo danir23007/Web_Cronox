@@ -40,11 +40,11 @@
     if (!response.ok)
       throw Object.assign(
         new Error(
-          response.status >= 500
-            ? "El servidor no pudo completar la operación."
-            : Array.isArray(data?.message)
+          Array.isArray(data?.message)
               ? data.message.join(" ")
-              : data?.message || "No se pudo completar la operación.",
+              : data?.message || (response.status >= 500
+                ? "El servidor no pudo completar la operación."
+                : "No se pudo completar la operación."),
         ),
         { status: response.status },
       );
@@ -302,7 +302,7 @@
       fields.append(
         element(
           "p",
-          "El círculo es obligatorio. Las cuentas SUPERADMIN quedan excluidas; no puedes modificar tu propio rol ni estado. Activa requiere una contraseña existente; Pendiente de contraseña requiere no tenerla; Prerregistrado requiere además un prerregistro existente. Esta edición no crea contraseñas ni envía correos.",
+          "El círculo es obligatorio. Las cuentas SUPERADMIN quedan excluidas; no puedes modificar tu propio rol ni estado. Activa admite cuentas con o sin contraseña; no habilita el acceso sin verificar la identidad. Pendiente de contraseña requiere no tenerla; Prerregistrado requiere además un prerregistro existente. Esta edición no crea contraseñas, inicia sesiones ni envía correos.",
         ),
       );
     } else {
@@ -500,7 +500,13 @@
       check.hidden = true;
       retry.hidden = true;
       close.disabled = false;
-      await s.reload();
+      // A failed table refresh does not undo the confirmed transaction, nor
+      // turn it into an uncertain operation whose ID has already been cleared.
+      try {
+        await s.reload();
+      } catch {
+        status.textContent += " No se pudo actualizar el listado. Recarga la página para ver los cambios guardados.";
+      }
       window.dispatchEvent(new CustomEvent("cronox:productsChanged"));
       opener.focus();
     }
@@ -530,7 +536,7 @@
           retry.hidden = true;
         } else {
           uncertain = true;
-          status.textContent = `Resultado no confirmado. Consulta la operación ${operation.operationId} antes de repetirla.`;
+          status.textContent = `${e.message}${e.status ? ` (HTTP ${e.status}).` : ''} Resultado no confirmado. Consulta la operación ${operation.operationId} antes de repetirla.`;
           check.hidden = false;
           retry.hidden = true;
         }
