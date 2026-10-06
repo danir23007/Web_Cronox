@@ -40,7 +40,7 @@ async function run() {
     await page.locator('#adminLoginSubmit').click();
     await expect(page.locator('#adminLoginSubmit')).toBeHidden();
     await page.goto('http://localhost:3000/admin.html#section-users');
-    assert((await page.content()).includes('admin-bulk.js?v=7'), 'Admin must serve the current bulk script');
+    assert((await page.content()).includes('admin-bulk.js?v=8'), 'Admin must serve the current bulk script');
     const section = page.locator('#section-users');
     await section.locator('details.filters-panel').evaluate(el => { el.open = true; });
     await page.locator('#usersSearch').fill(tag + ' target');
@@ -52,7 +52,12 @@ async function run() {
     const dialog = page.locator('.admin-bulk-dialog');
     const state = dialog.locator('[data-bulk-field="accountState"]');
     await expect(state).toBeEnabled(); await state.selectOption('ACTIVE');
-    await dialog.getByRole('button', { name: 'Revisar cambios', exact: true }).click();
+    await expect(dialog).toContainText('Cambios pendientes de revisión');
+    await page.screenshot({ path: 'output/playwright/bulk-active-2026-10-06/pending-desktop.png' });
+    await page.setViewportSize({ width: 390, height: 844 });
+    await dialog.getByRole('button', { name: 'Aplicar cambios', exact: true }).scrollIntoViewIfNeeded();
+    await page.screenshot({ path: 'output/playwright/bulk-active-2026-10-06/pending-mobile.png' });
+    await dialog.getByRole('button', { name: 'Aplicar cambios', exact: true }).click();
     if (process.argv.includes('--reproduce')) {
       await expect(dialog).toContainText('para activar la cuenta debe establecer primero una contraseña');
       assert(http.some(r => r.status === 400));
@@ -60,8 +65,11 @@ async function run() {
       await page.screenshot({ path: 'output/playwright/bulk-active-2026-10-06/before.png' });
       console.log(JSON.stringify({ reproduced: true, http, rowsUnchanged: 13, executeSent: false })); return;
     }
-    const apply = dialog.getByRole('button', { name: 'Aplicar cambios a 13 usuarios', exact: true });
+    const apply = dialog.getByRole('button', { name: 'Confirmar cambios a 13 usuarios', exact: true });
     await expect(apply).toBeEnabled();
+    await expect(dialog).toContainText('Todavía no se ha modificado ningún registro');
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await page.screenshot({ path: 'output/playwright/bulk-active-2026-10-06/review-desktop.png' });
     assert.equal(await db.user.count({ where: { id: { in: ids.slice(1) }, accountState: 'ACTIVE' } }), 0);
     await apply.evaluate(el => { el.click(); el.click(); }); // Second click must not execute twice.
     await expect(dialog).toContainText('Completado: 13 modificados');

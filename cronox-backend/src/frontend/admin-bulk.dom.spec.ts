@@ -252,18 +252,37 @@ describe('admin Bulk Edit mode', () => {
       expect(dialog.textContent).toContain('Estado: Pendiente de contraseña');
       const state = dialog.querySelector('[data-bulk-field="accountState"]');
       expect(state.value).toBe('');
+      const apply = [...dialog.querySelectorAll('button')].find((button: any) =>
+        button.textContent === 'Aplicar cambios',
+      );
+      expect(apply.disabled).toBe(true);
+      state.value = 'PENDING_PASSWORD';
+      state.dispatchEvent(new w.Event('change', { bubbles: true }));
+      apply.click(); await flush();
+      expect(apply.disabled).toBe(true);
+      expect(dialog.textContent).toContain('No hay cambios que aplicar');
       state.value = 'PRE_REGISTERED';
       state.dispatchEvent(new w.Event('change', { bubbles: true }));
-      [...dialog.querySelectorAll('button')]
-        .find((button: any) => button.textContent === 'Revisar cambios')
-        .click();
+      expect(apply.disabled).toBe(false);
+      expect(dialog.textContent).toContain('Cambios pendientes de revisión');
+      apply.click(); apply.click(); // Review only; no duplicate request or write.
       await flush();
       expect(dialog.textContent).toContain(
         'Pendiente de contraseña → Prerregistrado',
       );
-      const apply = [...dialog.querySelectorAll('button')].find((button: any) =>
-        button.textContent.startsWith('Aplicar cambios'),
-      );
+      expect(apply.textContent).toBe('Confirmar cambios a 1 usuarios');
+      expect(fetch.mock.calls.filter(([url]: [string]) => url.endsWith('/preview'))).toHaveLength(3);
+      apply.dispatchEvent(new w.MouseEvent('click', { bubbles: true, detail: 2 }));
+      await flush();
+      expect(fetch.mock.calls.some(([url]: [string]) => url.endsWith('/execute'))).toBe(false);
+      // Editing a reviewed value invalidates its token and restores the first step.
+      state.value = '';
+      state.dispatchEvent(new w.Event('change', { bubbles: true }));
+      expect(apply.disabled).toBe(true);
+      expect(apply.textContent).toBe('Aplicar cambios');
+      state.value = 'PRE_REGISTERED';
+      state.dispatchEvent(new w.Event('change', { bubbles: true }));
+      apply.click(); await flush();
       apply.click();
       await flush();
       expect(
@@ -277,6 +296,47 @@ describe('admin Bulk Edit mode', () => {
     } finally {
       dom.window.close();
     }
+  });
+
+  it('reviews and confirms a product deactivation directly from Apply without losing false values', async () => {
+    const { dom, w, fetch } = setup();
+    try {
+      w.HTMLDialogElement.prototype.showModal = jest.fn();
+      w.HTMLDialogElement.prototype.close = jest.fn();
+      w.crypto.randomUUID = () => '00000000-0000-4000-8000-000000000010';
+      w.CRONOX_API.admin = { listAllAdminCategories: async () => [] };
+      w.CRONOX_CATEGORY_CONTROLS = { render: () => w.document.createElement('div') };
+      fetch.mockImplementation(async (url: string, options: any) => {
+        const payload = JSON.parse(options.body);
+        const changed = payload.changes.isActive === false ? 1 : 0;
+        return { ok: true, json: async () => url.endsWith('/execute')
+          ? { counts: { changed: 1, unchanged: 0, excluded: 0 } }
+          : { reviewToken: 'product-review', counts: { changed, unchanged: 1 - changed, excluded: 0 },
+            rows: [{ id: 10, name: 'Producto', state: changed ? 'changed' : 'unchanged',
+              before: { isActive: true, categoryIds: [] },
+              after: { isActive: !changed, categoryIds: [] } }] } };
+      });
+      const section = w.document.querySelector('#section-products');
+      section.querySelector('tbody').innerHTML = '<tr>' + '<td>Producto</td>'.repeat(7) + '</tr>';
+      w.CRONOX_BULK.page('products', [{ id: 10, name: 'Producto' }], 1);
+      section.querySelector('.bulk-mode-toggle').click();
+      const selected = section.querySelector('[data-bulk-id="10"]');
+      selected.checked = true;
+      selected.dispatchEvent(new w.Event('change', { bubbles: true }));
+      section.querySelector('.bulk-actions button').click(); await flush();
+      const dialog = w.document.querySelector('.admin-bulk-dialog');
+      const active = dialog.querySelector('[data-bulk-field="isActive"]');
+      active.value = 'false'; active.dispatchEvent(new w.Event('change', { bubbles: true }));
+      const apply = [...dialog.querySelectorAll('button')].find((b: any) => b.textContent === 'Aplicar cambios');
+      expect(apply.disabled).toBe(false);
+      apply.click(); await flush();
+      expect(apply.textContent).toBe('Confirmar cambios a 1 productos');
+      expect(fetch.mock.calls.some(([url]: [string]) => url.endsWith('/execute'))).toBe(false);
+      apply.click(); await flush();
+      const execution = fetch.mock.calls.find(([url]: [string]) => url.endsWith('/execute'));
+      expect(JSON.parse(execution[1].body)).toMatchObject({ kind: 'products', ids: [10], changes: { isActive: false }, reviewToken: 'product-review' });
+      expect(dialog.textContent).toContain('Completado: 1 modificados');
+    } finally { dom.window.close(); }
   });
 
   it.each([false, true])('preserves error details/selection, retries the same operation, and distinguishes failed refresh: %s', async (failedRefresh) => {
@@ -322,7 +382,7 @@ describe('admin Bulk Edit mode', () => {
       expect(selected.checked).toBe(true); expect(state.value).toBe('ACTIVE');
       expect(executeCalls).toBe(0);
       failReview = false; find('Revisar cambios').click(); await flush();
-      find('Aplicar cambios').click(); find('Aplicar cambios').click();
+      find('Confirmar cambios').click(); find('Confirmar cambios').click();
       expect(dialog.textContent).not.toContain('Completado:'); await flush();
       expect(executeCalls).toBe(1);
       expect(dialog.textContent).toContain('Base de datos temporalmente no disponible (HTTP 503)');

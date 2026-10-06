@@ -125,3 +125,38 @@ ausencia de la restricción retirada en el backend compilado y salud HTTP 200.
 Se verificará sin ejecutar Bulk Edit sobre usuarios de producción. El resultado
 de Actions y esas comprobaciones se entregan en el cierre de publicación; esta
 preparación por sí sola no acredita que esté publicado.
+
+## Corrección adicional del flujo del modal — 2026-10-06
+
+Tras publicar `dc22004`, la captura del propietario mostró un problema distinto:
+al seleccionar Activa, Aplicar cambios permanecía deshabilitado hasta pulsar
+Revisar cambios. El texto inicial no se actualizaba ni explicaba ese requisito.
+Ese clic no enviaba execute; no era otro rechazo de contraseña del backend.
+
+Aplicar cambios se habilita ahora al elegir cambios válidos. Su primer clic
+obtiene la revisión y muestra el resumen, sin escribir. El botón pasa a Confirmar
+cambios a N usuarios/productos y solo esa confirmación ejecuta la operación.
+Revisar cambios sigue disponible. El mensaje se actualiza al editar los campos;
+No modificar conserva sus valores, incluido el círculo. Cambiar una revisión
+invalida su token; una revisión sin cambios deja la confirmación deshabilitada
+y muestra el motivo. Un doble clic de ratón no confirma accidentalmente el
+resumen que acaba de aparecer. Se conservan errores, selección, UUID de reintento,
+protecciones de roles y actualización de tabla. No cambia código del backend,
+schema, dependencias ni reglas de autenticación. El recurso pasa a v=8.
+
+Verificaciones repetidas: diez pruebas DOM, incluyendo acceso directo desde
+Aplicar cambios, ausencia de escrituras antes de confirmar, invalidación de la
+revisión, selección sin cambios, doble clic, edición de productos y errores/reintentos. Navegador y API
+reales locales con trece cuentas desechables: preview 201, execute 201, persistencia
+y recarga; pruebas combinadas, concurrencia, error 503 aislado, edición individual
+y login conservadas. Se revisaron capturas en escritorio y móvil. Compilaciones
+Vite y Nest y revisión de diff; se reutilizan las comprobaciones anteriores de
+autenticación no modificada. La publicación adicional usa la autorización del
+propietario para la corrección de Bulk Edit; su resultado se confirma al terminar
+Actions y comprobar los recursos online. Ninguna cuenta real se activa para QA.
+
+Preflight adicional: el despliegue anterior terminó correctamente; destino
+`aws-1-eu-west-1.pooler.supabase.com:5432/postgres`, 78/78 migraciones aplicadas,
+cero pendientes y cero fallidas. Nueva copia privada validada con pg_restore:
+`/home/deploy/cronox-backups/bulk-flow-2026-10-06-KY3TfT/before-release.dump`
+(914.304 bytes; directorio 700, archivo 600). No se incluye en Git.

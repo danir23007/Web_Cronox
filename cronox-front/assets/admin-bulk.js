@@ -302,7 +302,7 @@
       fields.append(
         element(
           "p",
-          "El círculo es obligatorio. Las cuentas SUPERADMIN quedan excluidas; no puedes modificar tu propio rol ni estado. Activa admite cuentas con o sin contraseña; no habilita el acceso sin verificar la identidad. Pendiente de contraseña requiere no tenerla; Prerregistrado requiere además un prerregistro existente. Esta edición no crea contraseñas, inicia sesiones ni envía correos.",
+          "No modificar conserva el valor actual, incluido el círculo. Las cuentas SUPERADMIN quedan excluidas; no puedes modificar tu propio rol ni estado. Activa admite cuentas con o sin contraseña; no habilita el acceso sin verificar la identidad. Pendiente de contraseña requiere no tenerla; Prerregistrado requiere además un prerregistro existente. Esta edición no crea contraseñas, inicia sesiones ni envía correos.",
         ),
       );
     } else {
@@ -383,13 +383,20 @@
           c.categoryMode !== "clear" &&
           (!categoryReady || !c.categoryIds.length)
         );
+      apply.disabled = review.disabled || (preview !== null && !preview.counts.changed);
+      if (!preview && !operation) apply.textContent = "Aplicar cambios";
     }
     fields.addEventListener("change", () => {
       preview = null;
       operation = null;
-      apply.disabled = true;
+      apply.textContent = "Aplicar cambios";
       summary.replaceChildren();
       updateValidity();
+      status.textContent = !Object.keys(changes()).length
+        ? "Elige al menos un cambio. «No modificar» conserva el valor actual."
+        : review.disabled
+          ? "Selecciona las categorías para poder revisar los cambios."
+          : "Cambios pendientes de revisión. Pulsa «Aplicar cambios» o «Revisar cambios» para ver el resumen; después confirma para guardar.";
     });
     function busy(value) {
       processing = value;
@@ -467,10 +474,11 @@
         detail.append(heading, ul);
         summary.append(detail);
       }
-      apply.textContent = `Aplicar cambios a ${plan.counts.changed} ${noun}`;
+      apply.textContent = `Confirmar cambios a ${plan.counts.changed} ${noun}`;
       apply.disabled = !plan.counts.changed;
     }
-    review.addEventListener("click", async () => {
+    async function prepareReview() {
+      if (processing || uncertain || review.disabled) return;
       busy(true);
       status.textContent = "Validando y preparando el resumen…";
       try {
@@ -478,14 +486,17 @@
         preview = await api("preview", { kind: s.kind, ids, changes: c });
         operation = null;
         renderPlan(preview, c);
-        status.textContent = "Revisa el resumen antes de aplicar.";
+        status.textContent = preview.counts.changed
+          ? "Revisa el resumen y pulsa «Confirmar cambios» para guardar. Todavía no se ha modificado ningún registro."
+          : "No hay cambios que aplicar. Revisa los valores y los registros excluidos del resumen.";
       } catch (e) {
         preview = null;
         status.textContent = e.message;
       } finally {
         busy(false);
       }
-    });
+    }
+    review.addEventListener("click", prepareReview);
     async function completed(result) {
       uncertain = false;
       preview = null;
@@ -545,7 +556,11 @@
         if (!operation && review.hidden) fields.disabled = true;
       }
     }
-    apply.addEventListener("click", execute);
+    apply.addEventListener("click", (event) => {
+      if (processing || uncertain || apply.disabled || event.detail > 1) return;
+      if (!preview) void prepareReview();
+      else void execute();
+    });
     retry.addEventListener("click", execute);
     check.addEventListener("click", async () => {
       if (!operation || processing) return;
@@ -602,7 +617,7 @@
         })
         .join(" · ");
       fields.prepend(values);
-      status.textContent = "Todos los campos comienzan en «No modificar».";
+      status.textContent = "Elige al menos un cambio. «No modificar» conserva el valor actual.";
     } catch (e) {
       status.textContent = e.message;
     } finally {
