@@ -124,8 +124,14 @@
 .qa-btn:hover{ filter:brightness(.92); }
 .qa-notify { display:flex; align-items:center; justify-content:center; box-sizing:border-box; text-decoration:none; }
 .qa-notify[hidden] { display:none; }
-.qa-footer { display:flex; flex-direction:column; gap:10px; }
-.qa-delivery--corner { align-self:flex-end; text-align:right; }
+.qa-btn[hidden] { display:none; }
+.qa-btn:disabled { background:#777; color:#ccc; cursor:not-allowed; box-shadow:none; filter:none; opacity:1; }
+.qa-footer { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:10px 16px; }
+.qa-footer > .qa-muted-link { flex:1 1 110px; min-width:0; overflow-wrap:anywhere; }
+.qa-footer > .qa-delivery--corner { flex:1 1 140px; min-width:0; margin:0; margin-left:auto; text-align:right; justify-content:flex-end; }
+.qa-delivery[hidden] { display:none; }
+.qa-size-btn.is-unavailable { cursor:pointer; }
+.qa-size-btn.is-unavailable:focus-visible { outline:2px solid #fff; outline-offset:2px; }
 #qaCartStatus:empty { display:none; }
 
 .qa-muted-link{

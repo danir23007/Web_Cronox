@@ -73,27 +73,33 @@ async page => {
   const badge = label => page.locator('.product-card[data-slug="' + fixture.products.find(p => p.label === label).slug + '"] .product-last-units');
   const verifyQuickAdd = async surface => {
     for (const item of fixture.products) {
-      const out = ['empty', 'disabled-empty', 'zero-empty', 'short-out'].includes(item.label);
-      const low = ['five', 'one', 'inactive', 'one-out', 'two-out', 'three-out', 'four-out'].includes(item.label);
+      const status = await page.evaluate(slug => {
+        const p = window.CRONOX_PRODUCTS.find(p => p.slug === slug);
+        return window.CRONOX_STOCK.productStockStatus(p.variants, p.lastUnitsThreshold);
+      }, item.slug);
+      const out = status === 'out_of_stock', low = status === 'low';
       const expected = out ? 'Agotado' : low ? 'Últimas unidades' : '';
       const card = page.locator('#productsGrid .product-card[data-slug="' + item.slug + '"]');
       await card.locator('.fav-add').click();
       await wait(() => document.getElementById('quickAdd').getAttribute('aria-hidden') === 'false');
       const warning = page.locator('#qaPrice').locator('..').locator('.stock-status');
       assert((await warning.count() ? await warning.textContent() : '') === expected, surface + ' Quick Add warning: ' + item.label);
-      assert(await page.locator('#qaAdd').isDisabled() === out, surface + ' purchase restriction: ' + item.label);
+      assert(await page.locator('#qaSizes [aria-checked="true"]').count() === 1, surface + ' initial selected size: ' + item.label);
+      assert(await page.locator('#qaAdd').isDisabled() === out && await page.locator('#qaAdd').isVisible() === !out && await page.locator('#qaNotify').isDisabled() === !out, surface + ' initial actions: ' + item.label);
       const variants = await page.evaluate(slug => window.CRONOX_PRODUCTS.find(p => p.slug === slug).variants, item.slug);
       const sizes = [...new Set(variants.filter(v => v.isActive !== false).map(v => v.size.toUpperCase()))];
       const exhausted = sizes.filter(size => !variants.some(v => v.size.toUpperCase() === size && v.isActive !== false && v.isAvailable !== false && (v.stockQty ?? v.stock) > 0)).length;
-      assert(await page.locator('#qaNotify').isVisible() === (out || exhausted >= 3), surface + ' AVÍSAME rule: ' + item.label);
-      assert(await page.locator('#qaLink').textContent() === (!out && exhausted > 0 && exhausted < 3 ? '¿Tu talla está agotada? Activa un aviso en el producto' : 'Ver detalles del producto'), surface + ' footer message: ' + item.label);
+      await page.locator(out ? '#qaSizes .qa-size-btn' : '#qaSizes .qa-size-btn:not(.is-unavailable)').first().click();
+      assert(await page.locator('#qaAdd').isDisabled() === out && await page.locator('#qaNotify').isDisabled() === !out, surface + ' selected-size action: ' + item.label);
+      assert(await page.locator('#qaNotify').isVisible() === (exhausted > 0 || out), surface + ' AVÍSAME visibility: ' + item.label);
+      assert(await page.locator('#qaLink').textContent() === 'Ver detalles del producto', surface + ' footer message: ' + item.label);
       const date = await page.locator('#qaDelivery').evaluate(notice => ({
         hidden: notice.hidden, text: notice.querySelector('strong').textContent,
         expected: window.CRONOX_DELIVERY.estimateCart({ items: [{ qty: 1 }] }),
         corner: notice.classList.contains('qa-delivery--corner'), parent: notice.parentElement.className,
       }));
       assert(date.hidden === out && (out || date.text === date.expected), surface + ' shared estimate: ' + item.label);
-      assert(date.corner === (exhausted > 0 || out), surface + ' delivery position: ' + item.label);
+      assert(date.corner && date.parent === 'qa-footer', surface + ' delivery position: ' + item.label);
       if (!out) {
         await page.locator('#qaDelivery').scrollIntoViewIfNeeded();
         const overlap = await page.locator('#qaDelivery').evaluate(notice => {
@@ -119,7 +125,7 @@ async page => {
         assert(out || (result.dotColor === 'rgb(255, 100, 100)' && result.animation === 'none'), 'Fixed red low-stock dot: ' + item.label);
       }
       if (item.label === 'one') {
-        await page.locator('#qaSizes .qa-size-btn:not([disabled])').first().click();
+        await page.locator('#qaSizes .qa-size-btn:not(.is-unavailable)').first().click();
         assert(await page.locator('#qaAdd').isEnabled(), 'One sellable size cannot exhaust the product');
       }
       if (['five', 'empty'].includes(item.label)) await page.screenshot({ path: 'output/playwright/last-units/' + surface + '-quick-add-' + (out ? 'out' : 'low') + '.png' });

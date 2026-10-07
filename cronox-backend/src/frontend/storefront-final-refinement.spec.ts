@@ -115,13 +115,13 @@ describe('focused storefront refinement acceptance matrix', () => {
   });
 
   it('17. keeps an available Quick Add size selectable', () => {
-    expect(products).toContain('const availableButtons = buttons.filter((btn) => !btn.disabled)');
+    expect(products).toContain('const buttons = Array.from(qaSizeGroup.querySelectorAll(".qa-size-btn"))');
     expect(products).toContain('activate(firstButton)');
   });
 
-  it('18. disables a zero-stock Quick Add size semantically', () => {
-    expect(products).toContain("aria-disabled=\"${unavailable ? 'true' : 'false'}\"");
-    expect(products).toContain("${unavailable ? 'disabled' : ''}");
+  it('18. disables actions rather than sold-out size selection', () => {
+    expect(products).toContain("qaAdd.disabled = qaBusy || status !== 'in_stock'");
+    expect(products).toContain("qaNotify.disabled = qaBusy || status !== 'out_of_stock'");
   });
 
   it('19. gives sold-out Quick Add sizes a dedicated visual state', () => {
@@ -134,8 +134,9 @@ describe('focused storefront refinement acceptance matrix', () => {
     expect(products).toContain('if (!btn || btn.disabled) return');
   });
 
-  it('21. never defaults Quick Add to an unavailable size', () => {
-    expect(products).toContain('const firstButton = availableButtons[0]');
+  it('21. initializes each opening and preserves its chosen Quick Add size on updates', () => {
+    expect(products).toContain("setupQuickAddSizes(product, '', true)");
+    expect(products).toContain('initialize ? initialSize : previousSize');
     expect(products).not.toContain('|| buttons[0]');
   });
 

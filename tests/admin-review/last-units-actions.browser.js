@@ -6,7 +6,9 @@ async page => {
   assert(new URL(page.url()).hostname === '127.0.0.1', 'Local browser only');
   const item = label => fixture.products.find(p => p.label === label);
   const store = async () => {
-    await page.goto(origin + '/?search=' + fixture.tag + '#store');
+    // Re-enter through a document navigation, even after a failed CLI run;
+    // a same-URL hash navigation would retain an open drawer or modal.
+    await page.goto(origin + '/?search=' + fixture.tag + '&qa-actions=' + Date.now() + '#store');
     await page.waitForFunction(count => document.querySelectorAll('#productsGrid .product-card').length === count, fixture.products.length);
     await page.waitForFunction(() => !document.getElementById('preloader') || getComputedStyle(document.getElementById('preloader')).opacity === '0');
   };
@@ -18,16 +20,16 @@ async page => {
   page.on('request', r => { if (new URL(r.url()).pathname.startsWith('/api/waitlist/')) waitlistRequests.push(r.method()); });
   await page.setViewportSize({ width: 1365, height: 900 });
   await store();
-  // Native navigation to the existing details/alerts section, without a selected size.
+  // Native navigation to the existing alerts section, keeping the explicit size.
   await open('three-out');
+  const choice = item('three-out').variants.find(v => v.stockQty === 0);
+  await page.locator('#qaSizes [data-size="' + choice.size + '"]').click();
   await page.locator('#qaNotify').click();
-  await page.waitForURL('**/producto/' + item('three-out').slug + '#productWaitlist');
+  await page.waitForURL(url => url.pathname === '/producto/' + item('three-out').slug && url.hash === '#productWaitlist');
   await page.locator('#restockSize').waitFor();
   await page.waitForFunction(() => document.activeElement.id === 'restockSize');
-  assert(await page.locator('#restockSize').inputValue() === '', 'AVÍSAME selected a size');
-  assert(waitlistRequests.length === 0, 'AVÍSAME requested an alert before size choice');
-  assert(await page.locator('#productWaitlist button').isDisabled(), 'No-size alert can be submitted');
-  const choice = item('three-out').variants.find(v => v.stockQty === 0);
+  assert(await page.locator('#restockSize').inputValue() === String(choice.id), 'AVÍSAME changed the chosen size');
+  assert(waitlistRequests.every(method => method === 'GET'), 'AVÍSAME subscribed without confirmation');
   await page.locator('#restockSize').selectOption(String(choice.id));
   await page.waitForFunction(() => document.querySelector('#productWaitlist .restock-status').textContent.includes('Confirma tu aviso'));
   const join = page.waitForResponse(r => new URL(r.url()).pathname === '/api/waitlist/' + choice.id && r.request().method() === 'POST');
@@ -48,7 +50,7 @@ async page => {
     const p = window.CRONOX_PRODUCTS.find(p => p.slug === slug);
     const copy = { ...p, variants: [...p.variants, { ...p.variants[0] }, { ...p.variants[1] }], sizes: [...p.sizes, 'XXL'] };
     window.CRONOX_openQuickAdd(copy);
-    return { count: window.CRONOX_STOCK.soldOutSizeCount(copy.variants), notify: document.getElementById('qaNotify').hidden,
+    return { count: window.CRONOX_STOCK.soldOutSizeCount(copy.variants), notify: document.getElementById('qaNotify').disabled,
       sizes: [...document.querySelectorAll('#qaSizes [data-size]')].map(el => el.dataset.size) };
   }, item('two-out').slug);
   assert(duplicate.count === 2 && duplicate.notify && !duplicate.sizes.includes('XXL'), 'Duplicate or foreign sizes changed the decision');
@@ -60,6 +62,7 @@ async page => {
     const cart = await page.evaluate(() => window.CRONOX_CART.fetchCart());
     if (!cart.items.length) {
       await open('five');
+      await page.locator('#qaSizes .qa-size-btn:not(.is-unavailable)').first().click();
       const add = page.waitForResponse(r => new URL(r.url()).pathname === '/api/cart/items' && r.request().method() === 'POST');
       await page.locator('#qaAdd').click();
       assert((await add).ok(), 'Scarce fixture could not be added to the cart');
@@ -68,6 +71,8 @@ async page => {
     }
     await page.locator('#cart-icon-btn').click();
     await page.waitForFunction(() => document.querySelectorAll('.cart-line').length === 1);
+    await page.waitForFunction(() => window.CRONOX_CART.state.status === 'populated' &&
+      document.querySelector('[data-cart-delivery] strong').textContent === window.CRONOX_DELIVERY.estimateCart(window.CRONOX_CART.state.data));
     const result = await page.evaluate(() => {
       const warnings = [...document.querySelectorAll('.cart-upsell__last-units')];
       const recommendations = [...document.querySelectorAll('.cart-upsell__item')];
@@ -88,6 +93,7 @@ async page => {
     const lowRecommendation = page.locator('.cart-upsell__item').filter({ has: page.locator('.cart-upsell__last-units') }).first();
     await lowRecommendation.locator('.cart-upsell__add').click();
     await page.waitForFunction(() => document.getElementById('quickAdd').getAttribute('aria-hidden') === 'false');
+    await page.locator('#qaSizes .qa-size-btn:not(.is-unavailable)').first().click();
     assert(await page.locator('#qaAdd').isEnabled(), surface + ' scarce recommendation purchase disabled');
     const add = page.waitForResponse(r => new URL(r.url()).pathname === '/api/cart/items' && r.request().method() === 'POST');
     await page.locator('#qaAdd').click();
@@ -100,9 +106,10 @@ async page => {
     await page.waitForFunction(() => document.querySelectorAll('.cart-line').length === 1);
     await page.locator('#cart-close-btn').click();
     await open('three-out');
+    await page.locator('#qaSizes [data-size="' + choice.size + '"]').click();
     await page.locator('#qaNotify').click();
     await page.locator('#restockSize').waitFor();
-    assert(await page.locator('#restockSize').inputValue() === '', surface + ' alert entry chose a size');
+    assert(await page.locator('#restockSize').inputValue() === String(choice.id), surface + ' alert entry changed the chosen size');
     await page.locator('#productWaitlist').screenshot({ path: 'output/playwright/last-units/' + surface + '-alert-entry.png' });
   }
   // Existing identity checks still apply: guest must authenticate and then confirm.
@@ -112,5 +119,5 @@ async page => {
   await page.waitForFunction(() => document.querySelector('#productWaitlist button').textContent === 'Iniciar sesión o registrarme');
   await page.locator('#productWaitlist button').click();
   await page.waitForFunction(() => document.querySelector('.cronox-auth.is-open'));
-  return { alertEntry: 'passed; explicit confirmation deliberately blocked by existing local safety middleware (HTTP 403)', noAutomaticSize: 'passed', guestAuth: 'passed', duplicateSizes: 'passed', cartAndRecommendations: 'desktop/mobile passed' };
+  return { alertEntry: 'passed; explicit confirmation deliberately blocked by existing local safety middleware (HTTP 403)', explicitSize: 'passed', guestAuth: 'passed', duplicateSizes: 'passed', cartAndRecommendations: 'desktop/mobile passed' };
 }

@@ -57,24 +57,28 @@ const { loadLocalEnvironment } = require('../../cronox-backend/scripts/start-loc
     const fixture = { tag, actor: { id: actor.id, email: actor.email, password }, products: [] };
     const persist = () => fs.writeFileSync(manifest, JSON.stringify(fixture));
     persist();
-    for (const [label, threshold, sizes] of [
+    for (const [label, threshold, sizes, sizeSystem = 'APPAREL'] of [
       ['six', 5, [3, 3]], ['five', 5, [2, 3]], ['one', 5, [1, 0]], ['empty', 5, [0, 0]],
       ['disabled', null, [2, 3]], ['zero', 0, [2, 3]], ['inactive', 5, [2, 3]],
       ['disabled-empty', null, [0, 0]], ['zero-empty', 0, [0, 0]],
       ['one-out', 5, [0, 1, 1, 1, 1]], ['two-out', 5, [0, 0, 1, 1, 1]],
       ['three-out', 5, [0, 0, 0, 1, 1]], ['four-out', 5, [0, 0, 0, 0, 1]],
       ['short-out', 5, [0]],
+      ['priority-m', 5, [1, 1, 1, 1, 1, 1]], ['priority-s', 5, [1, 1, 0, 1, 1, 1]],
+      ['priority-l', 5, [1, 0, 0, 1, 1, 1]], ['priority-xs', 5, [1, 0, 0, 0, 1, 1]],
+      ['priority-xl', 5, [0, 0, 0, 0, 1, 1]], ['priority-xxl', 5, [0, 0, 0, 0, 0, 1]],
+      ['ring', 5, [0, 1, 2], 'US_RING'], ['ring-empty', 5, [0, 0, 0], 'US_RING'],
     ]) {
       const product = await db.product.create({ data: {
         slug: tag + '-' + label, name: tag + ' ' + label, searchText: tag + ' ' + label,
-        price: 4200, lastUnitsThreshold: threshold,
+        price: 4200, lastUnitsThreshold: threshold, sizeSystem,
         privateCost: { create: { unitCostCents: 1700 } },
         images: { create: [
           { url: 'http://127.0.0.1:3000/assets/logo-topbar.webp', isPrimary: true, sortOrder: 0 },
           { url: 'http://127.0.0.1:3000/assets/CRONOX-preloader.webp', sortOrder: 1 },
         ] },
         variants: { create: [
-          ...sizes.map((stockQty, index) => ({ size: sizes.length > 2 ? ['XS', 'S', 'M', 'L', 'XL'][index] : index ? 'M' : 'S', stockQty, sku: tag + '-' + label + '-' + index })),
+          ...sizes.map((stockQty, index) => ({ size: sizeSystem === 'US_RING' ? ['US_6', 'US_7', 'US_8'][index] : sizes.length > 2 ? ['XS', 'S', 'M', 'L', 'XL', 'XXL'][index] : index ? 'M' : 'S', stockQty, sku: tag + '-' + label + '-' + index })),
           ...(label === 'inactive' ? [{ size: 'L', stockQty: 100, sku: tag + '-inactive-L', isActive: false }] : []),
         ] },
       }, include: { variants: true } });
@@ -82,7 +86,7 @@ const { loadLocalEnvironment } = require('../../cronox-backend/scripts/start-loc
       persist();
     }
     await db.favorite.create({ data: { userId: actor.id, productId: fixture.products.find(p => p.label === 'five').id } });
-    for (const [template, output] of [['last-units.browser.js', 'browser-private.js'], ['last-units-actions.browser.js', 'actions-private.js']]) {
+    for (const [template, output] of [['last-units.browser.js', 'browser-private.js'], ['last-units-actions.browser.js', 'actions-private.js'], ['quick-add-selection.browser.js', 'selection-private.js']]) {
       const source = fs.readFileSync(path.join(__dirname, template), 'utf8').replace('__FIXTURE__', JSON.stringify(fixture));
       fs.writeFileSync(path.join(directory, output), source);
     }

@@ -13,17 +13,22 @@ async page => {
   await page.setViewportSize({ width: 1365, height: 900 });
   const writes = [];
   page.on('request', r => { if (new URL(r.url()).pathname.startsWith('/api/waitlist/') && ['POST', 'DELETE'].includes(r.method())) writes.push({ url: r.url(), method: r.method() }); });
-  await page.goto(fixture.origin + '/#store');
+  // Force a document navigation even when the CLI starts on the same URL:
+  // the supported test API-base override must run before the API bundle.
+  await page.goto(fixture.origin + '/?qa-alert-test=' + Date.now() + '#store');
   await page.waitForFunction(() => document.querySelectorAll('#productsGrid .product-card').length === 2);
   await page.waitForFunction(() => !document.getElementById('preloader'));
   const cookies = page.getByRole('button', { name: /^rechazar$/i });
   if (await cookies.isVisible()) await cookies.click();
   await page.locator('[data-slug="' + chosen.slug + '"] .fav-add').click();
-  assert(await page.locator('#qaNotify').isVisible(), 'AVÍSAME missing for three exhausted sizes');
+  assert(await page.locator('#qaSizes [data-size="L"]').getAttribute('aria-checked') === 'true', 'Initial available size was not marked');
+  assert(await page.locator('#qaNotify').isDisabled(), 'Available size enabled an alert');
+  await page.locator('#qaSizes [data-size="S"]').click();
+  assert(await page.locator('#qaNotify').isEnabled(), 'Chosen exhausted size cannot open alerts');
   await page.locator('#qaNotify').click();
-  await page.waitForURL('**/producto/' + chosen.slug + '#productWaitlist');
+  await page.waitForURL(url => url.pathname === '/producto/' + chosen.slug && url.hash === '#productWaitlist');
   await page.locator('#restockSize').waitFor();
-  assert(await page.locator('#restockSize').inputValue() === '', 'A size was selected automatically');
+  assert(await page.locator('#restockSize').inputValue() === String(size.id), 'The explicitly chosen size was lost');
   assert(writes.length === 0, 'An alert was subscribed automatically');
   const guest = await page.evaluate(async id => {
     const r = await fetch('/api/waitlist/' + id, { method: 'POST', headers: await window.CRONOX_API.getCsrfHeaders(), credentials: 'include' });

@@ -60,19 +60,35 @@ describe('Quick Add size messages and shared delivery', () => {
     expect(document.querySelectorAll('.cart-line')).toHaveLength(1);
     dom.window.close();
   });
-  it.each([0, 1, 2, 3, 4])('%s exhausted sizes uses the correct action and footer', exhausted => {
+  it.each([0, 1, 2, 3, 4])('%s exhausted sizes uses selected-size actions and shared delivery', exhausted => {
     const { dom, app, document } = setup();
     app.CRONOX_openQuickAdd(product(exhausted));
-    expect(document.querySelector<HTMLElement>('#qaNotify')!.hidden).toBe(exhausted < 3);
-    expect(document.querySelector('#qaLink')!.textContent).toBe(exhausted > 0 && exhausted < 3
-      ? '¿Tu talla está agotada? Activa un aviso en el producto' : 'Ver detalles del producto');
-    expect(document.querySelector<HTMLButtonElement>('#qaAdd')!.disabled).toBe(false);
+    const add = document.querySelector<HTMLButtonElement>('#qaAdd')!;
+    const notify = document.querySelector<HTMLButtonElement>('#qaNotify')!;
+    expect(notify.hidden).toBe(exhausted === 0);
+    expect(notify.tagName).toBe('BUTTON');
+    expect(notify.disabled).toBe(true);
+    expect(add.disabled).toBe(false);
+    expect(add.hidden).toBe(false);
+    expect(document.querySelector('#qaLink')!.textContent).toBe('Ver detalles del producto');
     const delivery = document.querySelector<HTMLElement>('#qaDelivery')!;
     expect(delivery.hidden).toBe(false);
+    document.querySelectorAll<HTMLButtonElement>('#qaSizes .qa-size-btn')[exhausted].click();
+    expect(add.disabled).toBe(false);
+    expect(notify.disabled).toBe(true);
+    expect(delivery.hidden).toBe(false);
     expect(delivery.querySelector('strong')!.textContent).toBe(app.CRONOX_DELIVERY.estimateCart({ items: [{ qty: 1 }] }));
-    expect(delivery.parentElement!.className).toBe(exhausted ? 'qa-footer' : 'qa-row qa-actions');
-    expect(delivery.classList.contains('qa-delivery--corner')).toBe(exhausted > 0);
-    expect(document.querySelector('#qaNotify')!.getAttribute('href')).toBe('/producto/local-fixture#productWaitlist');
+    expect(delivery.parentElement!.className).toBe('qa-footer');
+    expect(delivery.classList.contains('qa-delivery--corner')).toBe(true);
+    if (exhausted) {
+      const size = document.querySelector<HTMLButtonElement>('#qaSizes .qa-size-btn')!;
+      expect(size.disabled).toBe(false);
+      expect(size.classList.contains('is-unavailable')).toBe(true);
+      size.click();
+      expect(add.disabled).toBe(true);
+      expect(notify.disabled).toBe(false);
+      expect(delivery.hidden).toBe(true);
+    }
     document.querySelector<HTMLButtonElement>('.qa-close')!.click();
     app.dispatchEvent(new app.Event('focus'));
     expect(delivery.hidden).toBe(true);
@@ -82,11 +98,18 @@ describe('Quick Add size messages and shared delivery', () => {
     const { dom, app, document } = setup();
     app.CRONOX_openQuickAdd(product(count, count));
     expect(document.querySelector<HTMLElement>('#qaNotify')!.hidden).toBe(false);
+    expect(document.querySelector<HTMLButtonElement>('#qaNotify')!.disabled).toBe(false);
+    expect(document.querySelector<HTMLButtonElement>('#qaAdd')!.hidden).toBe(true);
+    const size = document.querySelector<HTMLButtonElement>('#qaSizes .qa-size-btn')!;
+    expect(size.disabled).toBe(false);
+    size.click();
+    expect(document.querySelector<HTMLButtonElement>('#qaNotify')!.disabled).toBe(false);
     expect(document.querySelector<HTMLButtonElement>('#qaAdd')!.disabled).toBe(true);
     expect(document.querySelector<HTMLElement>('#qaDelivery')!.hidden).toBe(true);
     expect(document.querySelector('#qaLink')!.textContent).toBe('Ver detalles del producto');
     app.CRONOX_openQuickAdd(product(0));
-    expect(document.querySelector<HTMLElement>('#qaNotify')!.hidden).toBe(true);
+    document.querySelector<HTMLButtonElement>('#qaSizes .qa-size-btn')!.click();
+    expect(document.querySelector<HTMLButtonElement>('#qaNotify')!.disabled).toBe(true);
     expect(document.querySelector<HTMLElement>('#qaDelivery')!.hidden).toBe(false);
     dom.window.close();
   });
@@ -104,6 +127,7 @@ describe('Quick Add size messages and shared delivery', () => {
     app.addEventListener('cronox:addToCart', (e: any) => { added = e.detail.variantId; });
     app.CRONOX_openQuickAdd(data);
     expect(document.querySelectorAll('#qaSizes .qa-size-btn')).toHaveLength(2);
+    document.querySelector<HTMLButtonElement>('#qaSizes [data-size="M"]')!.click();
     document.querySelector<HTMLButtonElement>('#qaAdd')!.click();
     expect(added).toBe(1);
     dom.window.close();

@@ -2,6 +2,7 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { JSDOM } from 'jsdom';
+import { productStockStatus, soldOutSizeCount } from '../common/stock-status';
 
 const read = (file: string) => readFileSync(path.resolve(__dirname, '../../../cronox-front', file), 'utf8');
 const create = (html = '') => {
@@ -13,6 +14,7 @@ const create = (html = '') => {
   app.requestAnimationFrame = (callback: FrameRequestCallback) => callback(0);
   app.CRONOX_SECURITY = { productImageUrl: (url: string, fallback: string) => url || fallback };
   app.CRONOX_API = { getProducts: async () => [], adaptProducts: (rows: unknown[]) => rows };
+  app.CRONOX_STOCK = { productStockStatus, soldOutSizeCount, decoratePurchase() {}, decorateCard() {} };
   return { dom, app, document: dom.window.document };
 };
 const product = (id: number) => ({
@@ -42,6 +44,7 @@ describe('Quick Add opening isolation', () => {
     expect(next.classList.contains('qa-image-loading')).toBe(true);
     let addedVariant: number | undefined;
     app.addEventListener('cronox:addToCart', (event: any) => { addedVariant = event.detail.variantId; });
+    document.querySelector<HTMLButtonElement>('#qaSizes .qa-size-btn')!.click();
     document.querySelector<HTMLButtonElement>('#qaAdd')!.click();
     expect(addedVariant).toBe(200);
     expect(document.querySelector('#qaName')!.textContent).toBe('Product 2');
@@ -74,6 +77,7 @@ describe('Quick Add opening isolation', () => {
     app.addEventListener('cronox:addToCart', (event: any) => { callback = event.detail.onComplete; });
     app.CRONOX_openQuickAdd(selected);
     const old = document.querySelector<HTMLImageElement>('#qaImg1')!;
+    document.querySelector<HTMLButtonElement>('#qaSizes .qa-size-btn')!.click();
     document.querySelector<HTMLButtonElement>('#qaAdd')!.click();
     document.querySelector<HTMLButtonElement>('.qa-close')!.click();
     app.CRONOX_openQuickAdd(selected);

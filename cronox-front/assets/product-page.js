@@ -19,6 +19,10 @@
   const pFavoriteToggle = document.getElementById("pFavoriteToggle");
   const toast  = document.getElementById("toast");
   const relatedGrid = document.getElementById("relatedGrid");
+  const pDelivery = document.querySelector('[data-product-delivery]');
+  let currentProduct = null;
+  let availabilityRequest = 0;
+  let availabilityStamp = 0;
 
   let selectedSize = "";
   let galleryImages = [];
@@ -546,7 +550,7 @@
       .sort((left, right) => (window.CRONOX_SIZES?.order?.(left) ?? 0) - (window.CRONOX_SIZES?.order?.(right) ?? 0));
   }
 
-  function setupSizeButtons(product) {
+  function setupSizeButtons(product, previousSize = '') {
     if (!pSizeGroup) return;
     selectedSize = "";
     const normalized = normalizeSizes(product?.sizes);
@@ -588,7 +592,7 @@
     };
 
     const requestedSize = new URLSearchParams(location.search).get('size')?.toUpperCase();
-    const firstButton = buttons.find(btn => String(btn.dataset.size).toUpperCase() === requestedSize) || buttons.find((btn) => !btn.disabled);
+    const firstButton = buttons.find(btn => btn.dataset.size === previousSize) || buttons.find(btn => String(btn.dataset.size).toUpperCase() === requestedSize) || buttons.find((btn) => !btn.disabled);
     if (firstButton) activate(firstButton);
     else selectedSize = "";
 
@@ -646,6 +650,10 @@
   // Render PDP + back suave
   // ==========================
   function render(product) {
+    currentProduct = product;
+    availabilityStamp = performance.now();
+    availabilityRequest++;
+    window.CRONOX_DELIVERY?.setProduct(pDelivery, product);
     syncProductSchema(product);
     if (!product) {
       if (pName) pName.textContent = "Producto no disponible";
@@ -703,6 +711,39 @@
 
     window.scrollTo({ top: 0, left: 0, behavior: "instant" });
   }
+
+  const sameProduct = product => product && currentProduct &&
+    String(product.backendId ?? product.slug ?? product.id) === String(currentProduct.backendId ?? currentProduct.slug ?? currentProduct.id);
+  function updateAvailability(product, requestedAt = performance.now()) {
+    if (!sameProduct(product) || requestedAt < availabilityStamp) return;
+    availabilityStamp = requestedAt;
+    availabilityRequest++;
+    currentProduct = product;
+    const previous = selectedSize;
+    window.CRONOX_DELIVERY?.setProduct(pDelivery, product);
+    if (pPrice && pAdd) window.CRONOX_STOCK?.decoratePurchase(pPrice, pAdd, product);
+    setupSizeButtons(product, previous);
+  }
+  async function refreshAvailability() {
+    if (!currentProduct?.slug || !API.getProductBySlug) return;
+    const request = ++availabilityRequest;
+    const requestedAt = performance.now();
+    availabilityStamp = requestedAt;
+    const slug = currentProduct.slug;
+    window.CRONOX_DELIVERY?.setProduct(pDelivery, null);
+    try {
+      const latest = await API.getProductBySlug(slug, { cache: 'no-store' });
+      if (request !== availabilityRequest || !sameProduct(latest)) return;
+      updateAvailability(latest, requestedAt);
+    } catch { /* Keep the estimate hidden when availability cannot be confirmed. */ }
+  }
+  window.addEventListener('cronox:productsLoaded', event => {
+    const latest = event.detail?.products?.find(sameProduct);
+    if (latest) updateAvailability(latest, event.detail?.requestedAt);
+  });
+  window.addEventListener('cronox:productAvailability', event => updateAvailability(event.detail?.product, event.detail?.requestedAt));
+  window.addEventListener('focus', () => void refreshAvailability());
+  window.addEventListener('pageshow', event => { if (event.persisted) void refreshAvailability(); });
 
   function setupBackLinks(currentId) {
     const links = document.querySelectorAll('a.js-back[href^="/tienda#store"]');
@@ -769,6 +810,8 @@
     // botón añadir al carrito
     if (target && pAdd) {
       pAdd.addEventListener("click", async () => {
+        const target = currentProduct;
+        if (!target) return;
         if (pAdd.disabled || window.CRONOX_STOCK?.classifyStock(window.CRONOX_STOCK.availableStock(target.variants)) === 'out_of_stock') return;
         const size = window.CRONOX_SIZES?.label?.(selectedSize) || selectedSize.toUpperCase();
         const variant = findVariantForSize(target, size);
@@ -796,8 +839,10 @@
           qty: 1,
           variantId: variant.id,
         });
-        pAdd.disabled = false;
+        if (!sameProduct(target)) return;
         pAdd.textContent = previousLabel;
+        window.CRONOX_STOCK?.decoratePurchase(pPrice, pAdd, currentProduct);
+        setupSizeButtons(currentProduct, selectedSize);
         showToast(added ? 'Añadido al carrito ✓' : 'No se pudo añadir. Vuelve a intentarlo.');
       });
     }

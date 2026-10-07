@@ -1,0 +1,214 @@
+/* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access */
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { JSDOM } from 'jsdom';
+const read = (file: string) => readFileSync(join(__dirname, '../../../cronox-front/assets', file), 'utf8');
+const data = (qty = 2, slug = 'chosen') => {
+  const variants = [{ id: 10, size: 'M', stockQty: qty }, { id: 11, size: 'S', stockQty: 0 }];
+  return { id: slug, backendId: slug, slug, name: slug, price: 20, lastUnitsThreshold: 5,
+    variants, variantMap: Object.fromEntries(variants.map(v => [v.size, v])), sizes: ['M', 'S'] };
+};
+const setup = (pdp = false, initial = data()) => {
+  const dom = new JSDOM(pdp ? '<p id="pPrice"></p><div id="pSizeGroup"></div><button id="pAdd"></button><p data-delivery-notice data-product-delivery hidden><strong data-delivery-date></strong></p>' : '',
+    { runScripts: 'outside-only', pretendToBeVisual: true, url: 'http://localhost:3000/producto/chosen' });
+  const app = dom.window as any;
+  app.scrollTo = () => {};
+  app.HTMLElement.prototype.scrollIntoView = () => {};
+  app.matchMedia = () => ({ matches: false, addEventListener() {} });
+  app.eval(read('api.js'));
+  app.CRONOX_API.getProducts = async () => [];
+  app.CRONOX_PRODUCTS = [initial];
+  app.eval(read('product-delivery.js'));
+  app.eval(read(pdp ? 'product-page.js' : 'products.js'));
+  return { dom, app, document: dom.window.document };
+};
+const tick = () => new Promise(resolve => setTimeout(resolve, 0));
+describe('initial Quick Add size and current availability', () => {
+  it('marks an available size on opening and enables exactly its action, including keyboard navigation', () => {
+    const { dom, app, document } = setup();
+    app.CRONOX_openQuickAdd(data());
+    const add = document.querySelector<HTMLButtonElement>('#qaAdd')!, notify = document.querySelector<HTMLButtonElement>('#qaNotify')!;
+    const m = document.querySelector<HTMLButtonElement>('[data-size="M"]')!, s = document.querySelector<HTMLButtonElement>('[data-size="S"]')!;
+    expect(add.disabled).toBe(false); expect(notify.disabled).toBe(true);
+    expect(m.getAttribute('aria-checked')).toBe('true');
+    expect(s.disabled).toBe(false);
+    m.click();
+    expect([add.disabled, notify.disabled]).toEqual([false, true]);
+    m.dispatchEvent(new app.KeyboardEvent('keydown', { key: 'ArrowRight' }));
+    expect([add.disabled, notify.disabled]).toEqual([true, false]);
+    expect(s.getAttribute('aria-checked')).toBe('true');
+    s.dispatchEvent(new app.KeyboardEvent('keydown', { key: 'ArrowLeft' }));
+    expect([add.disabled, notify.disabled]).toEqual([false, true]);
+    dom.window.close();
+  });
+  it('blocks native and synthetic disabled actions and treats unknown stock as unconfirmed', () => {
+    const { dom, app, document } = setup();
+    const product: any = data(); product.variants[0].stockQty = undefined;
+    let added = 0; app.addEventListener('cronox:addToCart', () => added++);
+    app.CRONOX_openQuickAdd(product);
+    document.querySelector<HTMLButtonElement>('[data-size="M"]')!.click();
+    for (const id of ['qaAdd', 'qaNotify']) {
+      const button = document.getElementById(id) as HTMLButtonElement;
+      expect(button.disabled).toBe(true);
+      button.click(); button.dispatchEvent(new app.MouseEvent('click', { bubbles: true }));
+      button.dispatchEvent(new app.KeyboardEvent('keydown', { key: 'Enter' }));
+    }
+    expect(added).toBe(0);
+    expect(document.querySelector<HTMLElement>('#qaDelivery')!.hidden).toBe(true);
+    dom.window.close();
+  });
+  it('updates hidden actions and delivery placement across full, partial and zero availability without losing the choice', () => {
+    const { dom, app, document } = setup();
+    const all = data(); all.variants[1].stockQty = 2;
+    const add = () => document.querySelector<HTMLButtonElement>('#qaAdd')!;
+    const notify = () => document.querySelector<HTMLButtonElement>('#qaNotify')!;
+    const delivery = () => document.querySelector<HTMLElement>('#qaDelivery')!;
+    app.CRONOX_openQuickAdd(all);
+    expect(notify().hidden).toBe(true); expect(add().hidden).toBe(false);
+    expect(delivery().parentElement!.className).toBe('qa-footer');
+    expect(delivery().classList.contains('qa-delivery--corner')).toBe(true);
+    document.querySelector<HTMLButtonElement>('[data-size="S"]')!.click();
+    app.dispatchEvent(new app.CustomEvent('cronox:productAvailability', { detail: { product: data() } }));
+    expect(document.querySelector('[aria-checked="true"]')!.getAttribute('data-size')).toBe('S');
+    expect([add().hidden, add().disabled, notify().hidden, notify().disabled]).toEqual([false, true, false, false]);
+    expect(delivery().parentElement!.className).toBe('qa-footer'); expect(delivery().hidden).toBe(true);
+    app.dispatchEvent(new app.CustomEvent('cronox:productAvailability', { detail: { product: data(0) } }));
+    expect(add().hidden).toBe(true); expect(notify().hidden).toBe(false);
+    app.dispatchEvent(new app.CustomEvent('cronox:productAvailability', { detail: { product: all } }));
+    expect(document.querySelector('[aria-checked="true"]')!.getAttribute('data-size')).toBe('S');
+    expect([add().hidden, add().disabled, notify().hidden, notify().disabled]).toEqual([false, false, true, true]);
+    expect(delivery().hidden).toBe(false); expect(delivery().parentElement!.className).toBe('qa-footer');
+    expect(delivery().classList.contains('qa-delivery--corner')).toBe(true);
+    app.CRONOX_openQuickAdd(data()); expect(notify().hidden).toBe(false);
+    app.CRONOX_openQuickAdd(all); expect(notify().hidden).toBe(true);
+    dom.window.close();
+  });
+  it('preserves the selected size on stock updates and never reenables a stale cart action', () => {
+    const { dom, app, document } = setup(); let complete: (ok: boolean) => void = () => {};
+    app.addEventListener('cronox:addToCart', (e: any) => { complete = e.detail.onComplete; });
+    app.CRONOX_openQuickAdd(data());
+    document.querySelector<HTMLButtonElement>('[data-size="M"]')!.click();
+    document.querySelector<HTMLButtonElement>('#qaAdd')!.click();
+    app.dispatchEvent(new app.CustomEvent('cronox:productAvailability', { detail: { product: data(0) } }));
+    complete(true);
+    expect(document.querySelector('[aria-checked="true"]')!.getAttribute('data-size')).toBe('M');
+    expect(document.querySelector<HTMLButtonElement>('#qaAdd')!.disabled).toBe(true);
+    expect(document.querySelector<HTMLButtonElement>('#qaNotify')!.disabled).toBe(false);
+    app.CRONOX_DELIVERY.refresh();
+    expect(document.querySelector<HTMLElement>('#qaDelivery')!.hidden).toBe(true);
+    app.CRONOX_openQuickAdd(data(2, 'other'));
+    complete(true);
+    expect(document.querySelector<HTMLButtonElement>('#qaAdd')!.disabled).toBe(false);
+    dom.window.close();
+  });
+  it.each(['M', 'S', 'L', 'XS', 'XL', 'XXL'])('uses apparel priority to initially choose %s without changing the visual order', chosen => {
+    const { dom, app, document } = setup();
+    const priority = ['M', 'S', 'L', 'XS', 'XL', 'XXL'];
+    const visual = ['XS', 'S', 'M', 'L', 'XL', 'XXL'];
+    const variants = visual.map((size, i) => ({ id: i + 1, size, stockQty: priority.indexOf(size) >= priority.indexOf(chosen) ? 1 : 0 }));
+    const product = { ...data(), sizeSystem: 'APPAREL', sizes: visual, variants, variantMap: Object.fromEntries(variants.map(v => [v.size, v])) };
+    app.CRONOX_openQuickAdd(product);
+    expect(document.querySelector('#qaSizes [aria-checked="true"]')!.getAttribute('data-size')).toBe(chosen);
+    expect([...document.querySelectorAll<HTMLElement>('#qaSizes [data-size]')].map(el => el.dataset.size)).toEqual(visual);
+    expect(document.querySelector<HTMLButtonElement>('#qaAdd')!.disabled).toBe(false);
+    dom.window.close();
+  });
+  it('picks existing active sizes only and enables an alert immediately when all are exhausted', () => {
+    const { dom, app, document } = setup();
+    const variants = [{ id: 1, size: 'M', stockQty: 5, isActive: false }, { id: 2, size: 'S', stockQty: 0 }];
+    app.CRONOX_openQuickAdd({ ...data(), variants, variantMap: Object.fromEntries(variants.map(v => [v.size, v])), sizes: ['M', 'S', 'L'] });
+    expect(document.querySelectorAll('#qaSizes [data-size]')).toHaveLength(1);
+    expect(document.querySelector('#qaSizes [aria-checked="true"]')!.getAttribute('data-size')).toBe('S');
+    expect(document.querySelector<HTMLButtonElement>('#qaAdd')!.hidden).toBe(true);
+    expect(document.querySelector<HTMLButtonElement>('#qaNotify')!.disabled).toBe(false);
+    expect(document.querySelector<HTMLElement>('#qaDelivery')!.hidden).toBe(true);
+    dom.window.close();
+  });
+  it('chooses another size system randomly once per opening, preserving updates and manual choices', () => {
+    const { dom, app, document } = setup();
+    const variants = ['US_6', 'US_7', 'US_8'].map((size, i) => ({ id: i + 1, size, stockQty: i }));
+    const ring = { ...data(), sizeSystem: 'US_RING', variants, sizes: variants.map(v => v.size), variantMap: Object.fromEntries(variants.map(v => [v.size, v])) };
+    const random = jest.spyOn(app.Math, 'random').mockReturnValueOnce(.9).mockReturnValueOnce(.1).mockReturnValueOnce(.99);
+    const selected = () => document.querySelector('#qaSizes [aria-checked="true"]')!.getAttribute('data-size');
+    app.CRONOX_openQuickAdd(ring); expect(selected()).toBe('US_8');
+    app.dispatchEvent(new app.CustomEvent('cronox:productAvailability', { detail: { product: ring } }));
+    document.getElementById('qaImg1')!.dispatchEvent(new app.Event('load'));
+    expect(selected()).toBe('US_8'); expect(random).toHaveBeenCalledTimes(1);
+    document.querySelector<HTMLButtonElement>('[data-size="US_6"]')!.click();
+    app.dispatchEvent(new app.CustomEvent('cronox:productAvailability', { detail: { product: ring } }));
+    expect(selected()).toBe('US_6'); expect(random).toHaveBeenCalledTimes(1);
+    app.CRONOX_openQuickAdd(ring); expect(selected()).toBe('US_7');
+    const out = variants.map(v => ({ ...v, stockQty: 0 }));
+    app.CRONOX_openQuickAdd({ ...ring, variants: out, variantMap: Object.fromEntries(out.map(v => [v.size, v])) });
+    expect(selected()).toBe('US_8'); expect(document.querySelector<HTMLButtonElement>('#qaNotify')!.disabled).toBe(false);
+    expect(random).toHaveBeenCalledTimes(3); random.mockRestore(); dom.window.close();
+  });
+  it('discards out-of-order reads, older catalog snapshots and responses after closing/reopening', async () => {
+    const { dom, app, document } = setup(); const reads: Array<(p: unknown) => void> = [];
+    app.CRONOX_API.getProductBySlug = () => new Promise(resolve => reads.push(resolve));
+    app.CRONOX_openQuickAdd(data());
+    document.querySelector<HTMLButtonElement>('[data-size="M"]')!.click();
+    app.dispatchEvent(new app.Event('focus')); app.dispatchEvent(new app.Event('focus'));
+    expect(document.querySelector<HTMLButtonElement>('#qaAdd')!.disabled).toBe(true);
+    reads[1](data(0)); await tick(); reads[0](data()); await tick();
+    app.dispatchEvent(new app.CustomEvent('cronox:productsLoaded', { detail: { products: [data()], requestedAt: -1 } }));
+    expect(document.querySelector<HTMLButtonElement>('#qaAdd')!.disabled).toBe(true);
+    expect(document.querySelector<HTMLButtonElement>('#qaNotify')!.disabled).toBe(false);
+    expect(document.querySelector<HTMLElement>('#qaDelivery')!.hidden).toBe(true);
+    app.dispatchEvent(new app.Event('focus'));
+    document.querySelector<HTMLButtonElement>('.qa-close')!.click();
+    app.CRONOX_openQuickAdd(data(0, 'other'));
+    reads[2](data()); await tick();
+    expect(document.getElementById('qaName')!.textContent).toBe('other');
+    expect(document.querySelector<HTMLElement>('#qaDelivery')!.hidden).toBe(true);
+    dom.window.close();
+  });
+  it.each([0, 2])('PDP starts without a promise and gates delivery on confirmed product stock %s', async qty => {
+    const { dom, app, document } = setup(true, data(qty));
+    const notice = document.querySelector<HTMLElement>('[data-product-delivery]')!;
+    expect(notice.hidden).toBe(true);
+    await tick(); expect(notice.hidden).toBe(qty === 0);
+    app.dispatchEvent(new app.CustomEvent('cronox:productAvailability', { detail: { product: data(0) } }));
+    app.CRONOX_DELIVERY.refresh(); expect(notice.hidden).toBe(true);
+    expect(notice.querySelector('strong')!.textContent).toBe('');
+    dom.window.close();
+  });
+  it('PDP ignores stale availability responses and cannot restore a delivery promise after exhaustion', async () => {
+    const { dom, app, document } = setup(true); await tick();
+    const reads: Array<(p: unknown) => void> = [];
+    app.CRONOX_API.getProductBySlug = () => new Promise(resolve => reads.push(resolve));
+    app.dispatchEvent(new app.Event('focus')); app.dispatchEvent(new app.Event('focus'));
+    reads[1](data(0)); await tick(); reads[0](data()); await tick();
+    app.dispatchEvent(new app.CustomEvent('cronox:productsLoaded', { detail: { products: [data()], requestedAt: -1 } }));
+    app.CRONOX_DELIVERY.refresh();
+    expect(document.querySelector<HTMLElement>('[data-product-delivery]')!.hidden).toBe(true);
+    dom.window.close();
+  });
+  it('alert entry retains the explicit exhausted size and focuses it after the authenticated read', async () => {
+    const { dom, app, document } = setup();
+    app.history.replaceState(null, '', '/producto/chosen?waitlist=11&size=S#productWaitlist');
+    app.CRONOX_USER = { id: 1 }; app.CRONOX_AUTH_READY = Promise.resolve();
+    let resolveRead: (result: unknown) => void = () => {};
+    app.fetch = () => new Promise(resolve => { resolveRead = resolve; });
+    app.eval(read('waitlist.js'));
+    const anchor = document.createElement('div'); document.body.appendChild(anchor);
+    app.CRONOX_WAITLIST.mount(data(), anchor);
+    const select = document.getElementById('restockSize') as HTMLSelectElement;
+    expect(select.value).toBe('11'); expect(select.disabled).toBe(true);
+    await tick(); resolveRead({ ok: true, json: async () => ({ subscription: null }) }); await tick();
+    await new Promise(resolve => app.requestAnimationFrame(resolve));
+    expect(select.disabled).toBe(false); expect(document.activeElement).toBe(select);
+    expect(select.value).toBe('11');
+    dom.window.close();
+  });
+  it('an alert entry that is no longer exhausted never substitutes a different size', () => {
+    const { dom, app, document } = setup();
+    app.history.replaceState(null, '', '/producto/chosen?waitlist=10&size=M#productWaitlist');
+    app.eval(read('waitlist.js'));
+    const anchor = document.createElement('div'); document.body.appendChild(anchor);
+    app.CRONOX_WAITLIST.mount(data(), anchor);
+    expect((document.getElementById('restockSize') as HTMLSelectElement).value).toBe('');
+    expect(document.querySelector<HTMLButtonElement>('#productWaitlist button')!.disabled).toBe(true);
+    dom.window.close();
+  });
+});

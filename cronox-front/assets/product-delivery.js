@@ -65,7 +65,13 @@
     if (target.textContent !== (date || '')) target.textContent = date || '';
     notice.hidden = !date;
   };
-  window.CRONOX_DELIVERY = { estimateProduct, estimateCart, render, refresh: update };
+  const products = new WeakMap();
+  const setProduct = (notice, product) => {
+    if (!notice) return;
+    products.set(notice, product);
+    update();
+  };
+  window.CRONOX_DELIVERY = { estimateProduct, estimateCart, render, setProduct, refresh: update };
   let timer;
   function update() {
     clearTimeout(timer);
@@ -74,10 +80,13 @@
     // month/year/leap-day rollover without treating three days as 72 elapsed hours.
     document.querySelectorAll('[data-delivery-notice]').forEach(notice => {
       const state = window.CRONOX_CART?.state;
+      const status = window.CRONOX_STOCK?.productStockStatus(products.get(notice)?.variants, null);
+      const purchasable = status === 'in_stock';
       render(notice, notice.hasAttribute('data-quick-delivery')
-        ? (notice.dataset.deliveryAvailable === 'true' ? estimateProduct(now) : null)
+        ? (purchasable && notice.dataset.deliveryAvailable === 'true' ? estimateProduct(now) : null)
         : notice.hasAttribute('data-cart-delivery')
-        ? estimateCart(['loading', 'error'].includes(state?.status) ? null : state?.data, now) : estimateProduct(now));
+        ? estimateCart(['loading', 'error'].includes(state?.status) ? null : state?.data, now)
+        : notice.hasAttribute('data-product-delivery') ? (purchasable ? estimateProduct(now) : null) : estimateProduct(now));
     });
     // Find the next Madrid date boundary, including 23/25-hour DST days.
     const today = dayKey(now);

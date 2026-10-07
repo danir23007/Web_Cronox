@@ -78,6 +78,7 @@ describe('PDP and quick-add stock presentation', () => {
           const card = app.CRONOX_createProductCard(data);
           win.document.body.appendChild(card);
           (card.querySelector('.fav-add') as HTMLElement).click();
+          win.document.querySelector<HTMLButtonElement>('#qaSizes .qa-size-btn')!.click();
         } else {
           app.CRONOX_PRODUCTS = [data];
           app.CRONOX_API.getProducts = () => Promise.resolve([data]);
@@ -111,7 +112,7 @@ describe('PDP and quick-add stock presentation', () => {
         expect(button.disabled).toBe(stock === 0);
         expect(button.getAttribute('aria-disabled')).toBe(String(stock === 0));
         if (stock === 0) {
-          expect(button.textContent).toBe('AGOTADO');
+          expect(button.textContent).toBe(surface === 'quick-add' ? 'Añadir al carrito' : 'AGOTADO');
           const before = additions;
           button.click();
           button.dispatchEvent(
@@ -119,7 +120,7 @@ describe('PDP and quick-add stock presentation', () => {
           );
           button.dispatchEvent(new win.MouseEvent('click', { bubbles: true }));
           expect(additions).toBe(before);
-          expect(button.textContent).toBe('AGOTADO');
+          expect(button.textContent).toBe(surface === 'quick-add' ? 'Añadir al carrito' : 'AGOTADO');
         } else {
           const before = additions;
           button.click();

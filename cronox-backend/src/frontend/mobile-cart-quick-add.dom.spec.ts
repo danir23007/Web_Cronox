@@ -2,6 +2,7 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { JSDOM } from 'jsdom';
+import { productStockStatus, soldOutSizeCount, hasLastUnits } from '../common/stock-status';
 
 const root = path.resolve(__dirname, '../../../cronox-front');
 const read = (file: string) => readFileSync(path.join(root, file), 'utf8');
@@ -196,6 +197,7 @@ describe('mobile cart and Quick Add layers', () => {
         image.src = record.url;
       },
     };
+    app.CRONOX_STOCK = { productStockStatus, soldOutSizeCount, hasLastUnits, decoratePurchase() {}, decorateCard() {} };
     app.CRONOX_API = {
       API_BASE: 'http://localhost:3000',
       getMe: async () => null,

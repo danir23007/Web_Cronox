@@ -197,6 +197,11 @@
   let qaCurrentProduct = null;
   let qaSelectedSize = "";
   let qaOpening = 0;
+  let qaBusy = false;
+  let qaAvailabilityRequest = 0;
+  let qaAvailabilityPending = false;
+  let qaAvailabilityFailed = false;
+  let qaAvailabilityStamp = 0;
 
   const findVariantForSize = (product, size) => {
     if (!product || !size) return null;
@@ -211,9 +216,77 @@
   const isVariantAvailable = (variant) => {
     if (!variant || variant.id == null || variant.id === "") return false;
     if (variant.isActive === false || variant.isAvailable === false) return false;
-    const stock = variant.stockQty ?? variant.stock;
-    return stock == null || (Number.isFinite(Number(stock)) && Number(stock) > 0);
+    return window.CRONOX_STOCK?.productStockStatus([variant], null) === 'in_stock';
   };
+
+  const quickSizeStatus = () => {
+    const variant = findVariantForSize(qaCurrentProduct, qaSelectedSize);
+    if (!variant || variant.id == null || variant.id === '' || variant.isActive === false || qaAvailabilityPending || qaAvailabilityFailed) return 'unknown';
+    return window.CRONOX_STOCK?.productStockStatus([variant], null) || 'unknown';
+  };
+
+  function updateQuickAddControls() {
+    if (!qaCurrentProduct) return;
+    const status = quickSizeStatus();
+    const productStatus = window.CRONOX_STOCK?.productStockStatus(qaCurrentProduct.variants, null);
+    const exhaustedSizes = window.CRONOX_STOCK?.soldOutSizeCount(qaCurrentProduct.variants) || 0;
+    const variant = findVariantForSize(qaCurrentProduct, qaSelectedSize);
+    qaPrice.textContent = variant?.priceLabel || (variant?.price != null ? euros(variant.price) : qaCurrentProduct.priceLabel || euros(qaCurrentProduct.price));
+    window.CRONOX_STOCK?.decoratePurchase(qaPrice, qaAdd, qaCurrentProduct);
+    qaAdd.hidden = productStatus === 'out_of_stock';
+    qaAdd.disabled = qaBusy || status !== 'in_stock';
+    qaAdd.textContent = qaBusy ? 'Añadiendo…' : 'Añadir al carrito';
+    qaAdd.setAttribute('aria-disabled', String(qaAdd.disabled));
+    qaAdd.classList.toggle('product-cta--disabled', qaAdd.disabled);
+    qaNotify.disabled = qaBusy || status !== 'out_of_stock';
+    qaNotify.hidden = productStatus === 'in_stock' && exhaustedSizes === 0;
+    qaNotify.setAttribute('aria-disabled', String(qaNotify.disabled));
+    qaDelivery.classList.add('qa-delivery--corner');
+    qaOverlay.querySelector('.qa-footer').appendChild(qaDelivery);
+    qaDelivery.dataset.deliveryAvailable = String(status === 'in_stock' && !qaAvailabilityPending && !qaAvailabilityFailed);
+    window.CRONOX_DELIVERY?.setProduct(qaDelivery, qaCurrentProduct);
+  }
+
+  const sameQuickProduct = product => product && qaCurrentProduct &&
+    String(product.backendId ?? product.slug ?? product.id) === String(qaCurrentProduct.backendId ?? qaCurrentProduct.slug ?? qaCurrentProduct.id);
+  function updateQuickAddAvailability(product, requestedAt = performance.now()) {
+    if (!sameQuickProduct(product) || requestedAt < qaAvailabilityStamp) return;
+    qaAvailabilityStamp = requestedAt;
+    qaAvailabilityRequest++;
+    qaAvailabilityPending = false;
+    qaAvailabilityFailed = false;
+    const selected = qaSelectedSize;
+    qaCurrentProduct = product;
+    qaName.textContent = product.name || '';
+    setupQuickAddSizes(product, selected);
+  }
+  async function refreshQuickAddAvailability() {
+    if (!qaCurrentProduct?.slug || qaOverlay?.getAttribute('aria-hidden') !== 'false' || !API.getProductBySlug) return;
+    const opening = qaOpening, request = ++qaAvailabilityRequest, slug = qaCurrentProduct.slug;
+    const requestedAt = performance.now();
+    qaAvailabilityStamp = requestedAt;
+    qaAvailabilityPending = true;
+    updateQuickAddControls();
+    try {
+      const latest = await API.getProductBySlug(slug, { cache: 'no-store' });
+      if (opening !== qaOpening || request !== qaAvailabilityRequest) return;
+      if (!sameQuickProduct(latest)) throw new Error('Disponibilidad no confirmada');
+      updateQuickAddAvailability(latest, requestedAt);
+    } catch {
+      if (opening !== qaOpening || request !== qaAvailabilityRequest) return;
+      qaAvailabilityPending = false;
+      qaAvailabilityFailed = true;
+      qaOverlay.querySelector('#qaCartStatus').textContent = 'No se pudo confirmar la disponibilidad. Vuelve a abrir el producto para reintentar.';
+      updateQuickAddControls();
+    }
+  }
+  window.addEventListener('cronox:productsLoaded', event => {
+    const latest = event.detail?.products?.find(sameQuickProduct);
+    if (latest) updateQuickAddAvailability(latest, event.detail?.requestedAt);
+  });
+  window.addEventListener('cronox:productAvailability', event => updateQuickAddAvailability(event.detail?.product, event.detail?.requestedAt));
+  window.addEventListener('focus', () => void refreshQuickAddAvailability());
+  window.addEventListener('pageshow', event => { if (event.persisted) void refreshQuickAddAvailability(); });
 
   function ensureQuickAddDOM() {
     if (qaOverlay) return;
@@ -242,7 +315,7 @@
 
           <div class="qa-row qa-actions">
             <button id="qaAdd" class="qa-btn">Añadir al carrito</button>
-            <a id="qaNotify" class="qa-btn qa-notify" href="#" hidden>AVÍSAME</a>
+            <button id="qaNotify" type="button" class="qa-btn qa-notify" disabled>AVÍSAME</button>
             <p id="qaDelivery" class="pdp__delivery qa-delivery" data-delivery-notice data-quick-delivery hidden aria-live="polite"><span class="pdp__delivery-dot" aria-hidden="true"></span><span>Entrega estimada antes del <strong data-delivery-date></strong></span></p>
           </div>
           <p id="qaCartStatus" role="status"></p>
@@ -294,9 +367,8 @@
 
     // Añadir al carrito
     qaAdd.addEventListener("click", () => {
-      if (!qaCurrentProduct || qaAdd.disabled || window.CRONOX_STOCK?.classifyStock(window.CRONOX_STOCK.availableStock(qaCurrentProduct.variants)) === 'out_of_stock') return;
-      const fallbackSize = qaCurrentProduct.sizes?.[0] || "M";
-      const size = window.CRONOX_SIZES?.label?.(qaSelectedSize || fallbackSize) || String(qaSelectedSize || fallbackSize).toUpperCase();
+      if (!qaCurrentProduct || qaAdd.disabled || quickSizeStatus() !== 'in_stock') return;
+      const size = window.CRONOX_SIZES?.label?.(qaSelectedSize) || String(qaSelectedSize).toUpperCase();
       const color = qaCurrentProduct.color || (qaCurrentProduct.colors?.[0]) || "Único";
       const variant = findVariantForSize(qaCurrentProduct, size);
 
@@ -305,19 +377,18 @@
         return;
       }
 
-      const productAtRequest = qaCurrentProduct;
       const openingAtRequest = qaOpening;
-      qaAdd.disabled = true;
-      qaAdd.textContent = 'Añadiendo…';
+      qaBusy = true;
+      updateQuickAddControls();
       const feedback = qaOverlay.querySelector('#qaCartStatus');
       feedback.textContent = '';
       const ev = new CustomEvent("cronox:addToCart", {
         detail: {
           onComplete: (success) => {
-            if (qaOpening !== openingAtRequest || qaCurrentProduct !== productAtRequest) return;
-            qaAdd.textContent = success ? 'Añadido ✓' : 'Reintentar';
+            if (qaOpening !== openingAtRequest || !qaCurrentProduct) return;
+            qaBusy = false;
             feedback.textContent = success ? 'Artículo añadido a tu cesta.' : 'No se pudo añadir. Vuelve a intentarlo.';
-            qaAdd.disabled = false;
+            updateQuickAddControls();
           },
           id: qaCurrentProduct.id,
           productId: qaCurrentProduct.backendId || qaCurrentProduct.id,
@@ -336,11 +407,18 @@
       window.dispatchEvent(ev);
     });
 
-    // Both links use the current product URL. AVÍSAME only opens the existing
-    // size-alert section; no request, subscription or size choice happens here.
+    qaNotify.addEventListener('click', () => {
+      if (qaNotify.disabled || quickSizeStatus() !== 'out_of_stock') return;
+      const variant = findVariantForSize(qaCurrentProduct, qaSelectedSize);
+      const url = new URL(qaLink.href, location.origin);
+      url.searchParams.set('waitlist', String(variant.id));
+      url.searchParams.set('size', qaSelectedSize);
+      url.hash = 'productWaitlist';
+      window.location.assign(url.href);
+    });
   }
 
-  function setupQuickAddSizes(product) {
+  function setupQuickAddSizes(product, previousSize = '', initialize = false) {
     if (!qaSizeGroup) return;
 
     const rawSizeSystem = String(product?.sizeSystem || "APPAREL").trim().toUpperCase();
@@ -356,30 +434,31 @@
         .map((size) => window.CRONOX_SIZES?.key?.(size) || String(size || "").trim().toUpperCase())
         .filter(Boolean),
     )];
-    const normalized = window.CRONOX_SIZES?.sort?.(normalizedSizes) || normalizedSizes;
+    const normalized = (window.CRONOX_SIZES?.sort?.(normalizedSizes) || normalizedSizes).filter(size => {
+      const variant = findVariantForSize(product, size);
+      return variant && variant.id != null && variant.id !== '' && variant.isActive !== false;
+    });
     qaSelectedSize = "";
 
     qaSizeGroup.innerHTML = normalized
       .map((size) => {
         const variant = findVariantForSize(product, size);
-        const unavailable = window.CRONOX_STOCK?.classifyStock(window.CRONOX_STOCK.availableStock(product.variants)) === 'out_of_stock' || !isVariantAvailable(variant);
+        const unavailable = !isVariantAvailable(variant);
         const displaySize = window.CRONOX_SIZES?.label?.(size) || size;
         const label = unavailable ? `${displaySize}, no disponible` : displaySize;
-        return `<button type="button" class="qa-size-btn${unavailable ? ' is-unavailable' : ''}" data-size="${escapeHtml(size)}" role="radio" aria-label="${escapeHtml(label)}" aria-checked="false" aria-disabled="${unavailable ? 'true' : 'false'}" ${unavailable ? 'disabled' : ''}>${escapeHtml(displaySize)}</button>`;
+        return `<button type="button" class="qa-size-btn${unavailable ? ' is-unavailable' : ''}" data-size="${escapeHtml(size)}" role="radio" aria-label="${escapeHtml(label)}" aria-checked="false">${escapeHtml(displaySize)}</button>`;
       })
       .join("");
 
     const buttons = Array.from(qaSizeGroup.querySelectorAll(".qa-size-btn"));
-    const availableButtons = buttons.filter((btn) => !btn.disabled);
     if (!buttons.length) {
-      qaAdd.disabled = true;
-      qaAdd.setAttribute("aria-disabled", "true");
+      updateQuickAddControls();
       return;
     }
 
     const updateTabIndexes = () => {
       buttons.forEach((btn) => {
-        btn.tabIndex = !btn.disabled && btn.classList.contains("is-active") ? 0 : -1;
+        btn.tabIndex = btn.classList.contains('is-active') || (!qaSelectedSize && btn === buttons[0]) ? 0 : -1;
       });
     };
 
@@ -392,16 +471,25 @@
       });
       qaSelectedSize = btn?.dataset.size || (normalized[0] || "");
       updateTabIndexes();
+      updateQuickAddControls();
     };
 
-    const firstButton = availableButtons[0];
+    // The initial preference is separate from the visual size order. Pick only
+    // once per opening; availability and image updates preserve the user's choice.
+    const available = normalized.filter(size => isVariantAvailable(findVariantForSize(product, size)));
+    const candidates = available.length ? available : normalized;
+    const apparelPriority = ['M', 'S', 'L', 'XS', 'XL', 'XXL'];
+    const initialSize = initialize ? (normalizedSizeSystem === 'APPAREL'
+      ? apparelPriority.find(size => candidates.includes(size)) || candidates[Math.floor(Math.random() * candidates.length)]
+      : candidates[Math.floor(Math.random() * candidates.length)]) : '';
+    const firstButton = buttons.find(btn => btn.dataset.size === (initialize ? initialSize : previousSize));
     if (firstButton) {
       activate(firstButton);
     } else {
       qaSelectedSize = "";
     }
-    qaAdd.disabled = !firstButton;
-    qaAdd.setAttribute("aria-disabled", firstButton ? "false" : "true");
+    updateTabIndexes();
+    updateQuickAddControls();
 
     buttons.forEach((btn) => {
       btn.addEventListener("click", () => activate(btn));
@@ -415,8 +503,8 @@
 
         if (event.key === "ArrowRight" || event.key === "ArrowDown") {
           event.preventDefault();
-          const index = availableButtons.indexOf(btn);
-          const next = availableButtons[(index + 1) % availableButtons.length];
+          const index = buttons.indexOf(btn);
+          const next = buttons[(index + 1) % buttons.length];
           next?.focus();
           activate(next);
           return;
@@ -424,8 +512,8 @@
 
         if (event.key === "ArrowLeft" || event.key === "ArrowUp") {
           event.preventDefault();
-          const index = availableButtons.indexOf(btn);
-          const previous = availableButtons[(index - 1 + availableButtons.length) % availableButtons.length];
+          const index = buttons.indexOf(btn);
+          const previous = buttons[(index - 1 + buttons.length) % buttons.length];
           previous?.focus();
           activate(previous);
         }
@@ -436,6 +524,11 @@
   function openQuickAdd(product) {
     ensureQuickAddDOM();
     const opening = ++qaOpening;
+    qaBusy = false;
+    qaAvailabilityStamp = performance.now();
+    qaAvailabilityRequest++;
+    qaAvailabilityPending = false;
+    qaAvailabilityFailed = false;
     qaOverlay.querySelector('#qaCartStatus').textContent = '';
     qaAdd.textContent = 'Añadir al carrito';
     qaReturnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
@@ -491,19 +584,8 @@
     qaName.textContent  = product.name || "";
     qaPrice.textContent = product.priceLabel || euros(product.price);
 
-    setupQuickAddSizes(product);
-    const exhaustedSizes = window.CRONOX_STOCK?.soldOutSizeCount(product.variants) || 0;
-    const status = window.CRONOX_STOCK?.productStockStatus(product.variants, product.lastUnitsThreshold);
-    const totallyOut = status === 'out_of_stock';
-    qaNotify.hidden = !totallyOut && exhaustedSizes < 3;
-    qaLink.textContent = !totallyOut && exhaustedSizes > 0 && exhaustedSizes < 3
-      ? '¿Tu talla está agotada? Activa un aviso en el producto' : 'Ver detalles del producto';
-    window.CRONOX_STOCK?.decoratePurchase(qaPrice, qaAdd, product);
-    const cornerDelivery = exhaustedSizes > 0 || totallyOut;
-    qaDelivery.classList.toggle('qa-delivery--corner', cornerDelivery);
-    (cornerDelivery ? qaOverlay.querySelector('.qa-footer') : qaOverlay.querySelector('.qa-actions')).appendChild(qaDelivery);
-    qaDelivery.dataset.deliveryAvailable = String(['low', 'in_stock'].includes(status) && !qaAdd.disabled);
-    window.CRONOX_DELIVERY?.refresh();
+    qaLink.textContent = 'Ver detalles del producto';
+    setupQuickAddSizes(product, '', true);
 
     const key = product.slug || product.id;
     if (product.slug) {
@@ -511,7 +593,6 @@
     } else {
       qaLink.href = `/producto?id=${encodeURIComponent(key)}`;
     }
-    qaNotify.href = `${qaLink.getAttribute('href')}#productWaitlist`;
 
     qaOverlay.setAttribute("aria-hidden","false");
     if (typeof window.CRONOX_lockScroll === "function") window.CRONOX_lockScroll("quick-add");
@@ -522,6 +603,8 @@
   function closeQuickAdd() {
     if (!qaOverlay || qaOverlay.getAttribute("aria-hidden") === "true") return;
     ++qaOpening;
+    qaAvailabilityRequest++;
+    qaBusy = false;
     qaDelivery.dataset.deliveryAvailable = 'false';
     window.CRONOX_DELIVERY?.render(qaDelivery, null);
     qaOverlay.querySelector('.qa-media').replaceChildren();
@@ -1069,14 +1152,15 @@
     }
   }
 
-  const notifyCatalogReady = (source) => {
+  const notifyCatalogReady = (source, requestedAt) => {
     try {
-      const detail = { products: cloneProducts(PRODUCTS), source };
+      const detail = { products: cloneProducts(PRODUCTS), source, requestedAt };
       window.dispatchEvent(new CustomEvent("cronox:productsLoaded", { detail }));
     } catch {}
   };
 
   async function runCatalogLoad(requestId) {
+    const requestedAt = performance.now();
     if (productsFallback && !PRODUCTS.length) {
       productsFallback.hidden = false;
       productsFallback.textContent = "Cargando productos…";
@@ -1108,7 +1192,7 @@
     }
     if (!error || !PRODUCTS.length) setProducts(products);
     applyAll();
-    if (!error) notifyCatalogReady(source);
+    if (!error) notifyCatalogReady(source, requestedAt);
   }
 
   function initCatalog() {
@@ -1130,6 +1214,7 @@
     const requestId = ++catalogRequestId;
 
     const nextUrl = new URL(window.location.href);
+    const requestedAt = performance.now();
     nextUrl.searchParams.delete('q');
     nextUrl.searchParams.delete('categorySlug');
     nextUrl.searchParams.set('search', query);
@@ -1157,7 +1242,7 @@
         input.checked = false;
       });
       applyAll();
-      notifyCatalogReady('search-api');
+      notifyCatalogReady('search-api', requestedAt);
     } catch (error) {
       if (requestId !== catalogRequestId) return;
       console.warn('[CRONOX] No se pudo completar la búsqueda.', error);

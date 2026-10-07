@@ -32,9 +32,9 @@
     if (!anchor || !variants.length) return;
 
     const params = new URLSearchParams(location.search);
-    const chooseSize = location.hash === '#productWaitlist' && !params.has('waitlist') && !params.has('size');
+    const chooseSize = location.hash === '#productWaitlist' || params.has('waitlist') || params.has('size');
     const initial = variants.find(v => String(v.id) === params.get('waitlist')) ||
-      variants.find(v => String(v.sizeCode || v.size).toUpperCase().replace(/\s+/g, '_') === params.get('size')?.toUpperCase()) || variants[0];
+      variants.find(v => String(v.sizeCode || v.size).toUpperCase().replace(/\s+/g, '_') === params.get('size')?.toUpperCase()) || (chooseSize ? null : variants[0]);
     const root = document.createElement('details');
     root.id = 'productWaitlist'; root.className = 'restock-panel'; root.open = true;
     // Only static markup; product-controlled values are assigned as text below.
@@ -46,13 +46,15 @@
     const button = root.querySelector('button');
     if (chooseSize) select.add(new Option('Selecciona tu talla', ''));
     variants.forEach(v => select.add(new Option(label(v.size), String(v.id))));
-    select.value = chooseSize ? '' : String(initial.id);
-    if (chooseSize) requestAnimationFrame(() => {
-      if (!root.isConnected) return;
+    select.value = initial ? String(initial.id) : '';
+    let subscription = null, generation = 0, busy = false, readFailed = false;
+    let entryFocusPending = chooseSize;
+    const focusEntry = () => {
+      if (!entryFocusPending || busy || !root.isConnected) return;
+      entryFocusPending = false;
       root.scrollIntoView({ block: 'center' });
       select.focus({ preventScroll: true });
-    });
-    let subscription = null, generation = 0, busy = false, readFailed = false;
+    };
     const selected = () => variants.find(v => String(v.id) === select.value);
     const remember = () => {
       const url = new URL(location.href);
@@ -69,6 +71,7 @@
         button.disabled = true;
         select.disabled = false;
         root.setAttribute('aria-busy', 'false');
+        requestAnimationFrame(focusEntry);
         return;
       }
       choice.textContent = `${product.name} · Talla ${label(variant.size)}`;
@@ -76,6 +79,7 @@
       button.disabled = busy || subscription?.status === 'PROCESSING';
       select.disabled = busy;
       root.setAttribute('aria-busy', String(busy));
+      if (!busy) requestAnimationFrame(focusEntry);
     };
     const showState = () => {
       if (subscription) {
@@ -132,9 +136,11 @@
       try {
         if (!cancelling) {
           if (!window.CRONOX_API?.getProductBySlug) throw new Error('No pudimos comprobar la disponibilidad. Vuelve a intentarlo.');
+          const requestedAt = performance.now();
           const latest = await window.CRONOX_API.getProductBySlug(product.slug, { cache: 'no-store' });
           if (current !== generation || !root.isConnected) return;
           if (!latest) throw new Error('No pudimos comprobar la disponibilidad. Vuelve a intentarlo.');
+          window.dispatchEvent(new CustomEvent('cronox:productAvailability', { detail: { product: latest, requestedAt } }));
           if (!updateAvailability(latest)) {
             status.textContent = 'Esta talla ya está disponible. Actualiza la página para comprarla.';
             return;
