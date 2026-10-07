@@ -12,6 +12,10 @@ import {
 
 export class AdminProductQueryDto {
   @IsOptional()
+  @IsIn(['summary'])
+  view?: 'summary';
+
+  @IsOptional()
   @IsString()
   search?: string;
 

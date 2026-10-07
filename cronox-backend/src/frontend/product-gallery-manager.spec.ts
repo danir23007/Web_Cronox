@@ -7,6 +7,40 @@ const root = path.resolve(__dirname, '../../../cronox-front');
 const read = (file: string) => readFileSync(path.join(root, file), 'utf8');
 
 describe('product image gallery manager integration', () => {
+  it('does not reload preview resources on load/input, defers archived images and binds once', () => {
+    const dom = new JSDOM(read('admin.html'), { runScripts: 'outside-only', url: 'http://localhost/admin.html' });
+    const app = dom.window as any;
+    app.CRONOX_SECURITY = { productImageUrl: (value: string) => value };
+    app.eval(read('assets/responsive-images.js'));
+    app.eval(read('assets/admin-product-gallery.js'));
+    dom.window.document.dispatchEvent(new dom.window.Event('DOMContentLoaded'));
+    const preview = dom.window.document.getElementById('productGalleryPreviewImage') as HTMLImageElement;
+    const src = jest.spyOn(preview, 'src', 'set');
+    app.CRONOX_PRODUCT_GALLERY.bind();
+    app.CRONOX_PRODUCT_GALLERY.load({ id: 1, images: [
+      { id: 1, url: '/original.jpg', isPrimary: true, variants: {
+        quick: { url: '/preview.webp', width: 720, height: 960 },
+        small: { url: '/small.webp', width: 180, height: 240 },
+      } },
+      { id: 2, url: '/archive.jpg', isActive: false },
+    ] });
+    expect(preview.getAttribute('src')).toBe('/preview.webp');
+    const assignments = src.mock.calls.length;
+    for (let i = 0; i < 20; i++) preview.dispatchEvent(new dom.window.Event('load'));
+    const alt = dom.window.document.getElementById('productGalleryAlt') as HTMLInputElement;
+    alt.value = 'Draft'; alt.dispatchEvent(new dom.window.Event('input'));
+    expect(src).toHaveBeenCalledTimes(assignments);
+    expect(app.CRONOX_PRODUCT_GALLERY.serialize()[0].alt).toBe('Draft');
+    expect(dom.window.document.querySelector('#productGalleryThumbnails img')?.getAttribute('src')).toBe('/small.webp');
+    expect(dom.window.document.querySelector('#productGalleryHistoryGrid img')).toBeNull();
+    const history = dom.window.document.getElementById('productGalleryHistory') as HTMLDetailsElement;
+    history.open = true; history.dispatchEvent(new dom.window.Event('toggle'));
+    expect(dom.window.document.querySelector('#productGalleryHistoryGrid img')?.getAttribute('src')).toBe('/archive.jpg');
+    app.CRONOX_PRODUCT_GALLERY.reset();
+    expect(preview.hasAttribute('src')).toBe(false);
+    dom.window.close();
+  });
+
   it('selects each thumbnail and keeps framing independent while reordering', () => {
     const html = read('admin.html');
     const dom = new JSDOM(html, {
@@ -92,6 +126,10 @@ describe('product image gallery manager integration', () => {
       isPrimary: true,
       isActive: true,
     });
+    expect(dom.window.document.querySelector('#productGalleryHistoryGrid img')).toBeNull();
+    const history = dom.window.document.getElementById('productGalleryHistory') as HTMLDetailsElement;
+    history.open = true;
+    history.dispatchEvent(new dom.window.Event('toggle'));
     const restore = Array.from(
       dom.window.document.querySelectorAll<HTMLButtonElement>(
         '#productGalleryHistoryGrid button',
@@ -129,7 +167,7 @@ describe('product image gallery manager integration', () => {
       'Eliminar definitivamente',
     );
     expect(html).toContain('id="productCardFramingEditor"');
-    expect(html).toContain('assets/admin-product-gallery.js?v=1');
+    expect(html).toContain('assets/admin-product-gallery.js?v=2');
   });
 
   it('implements deterministic primary replacement, restore and duplicate prevention', () => {

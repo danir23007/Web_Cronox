@@ -1640,6 +1640,7 @@
   };
 
   const loadSection = (sectionId) => {
+    if (sectionId !== 'section-products') productOpenVersion++;
     if (sectionId === 'section-dashboard') { fetchDashboard(); window.CRONOX_FINANCE?.load('dashboard'); window.CRONOX_VISITORS?.load(); }
     if (sectionId === 'section-money') window.CRONOX_FINANCE?.load('money');
     if (sectionId === 'section-34') { syncRequestsStateFromInputs(); fetchRequests(); markRequestsSeen(); }
@@ -1728,6 +1729,7 @@
       modalEl.classList.add('show');
       modalEl.setAttribute('aria-hidden', 'false');
     } else {
+      if (modalEl === productModal) productOpenVersion++;
       modalEl.classList.remove('show');
       modalEl.setAttribute('aria-hidden', 'true');
     }
@@ -2782,14 +2784,14 @@
     const summary = document.getElementById('productCreationCategoryNames');
     if (summary) summary.textContent = names.join(', ') || 'Sin categorías';
   };
-  const loadCreationCategories = async () => {
+  const loadCreationCategories = async (pending = null) => {
     const request = ++creationCategories.request;
     creationCategoryStatus.textContent = 'Cargando categorías…';
     if (!creationCategories.selected.size) document.getElementById('productCreationCategoryNames').textContent = 'Cargando categorías…';
     creationCategoryRetry.hidden = true;
     creationCategoryOptions.setAttribute('aria-busy', 'true');
     try {
-      const categories = await loadAssignableCategories();
+      const categories = pending && typeof pending.then === 'function' ? await pending : await loadAssignableCategories();
       if (request !== creationCategories.request) return;
       creationCategoryOptions.replaceChildren();
       categories.forEach(category => creationCategories.names.set(Number(category.id), String(category.name || category.slug)));
@@ -2905,7 +2907,7 @@
     if (productsMessage) productsMessage.innerHTML = '';
     try {
       const data = await window.CRONOX_API?.admin?.listAdminProducts(
-        buildProductQuery(productsState),
+        { ...buildProductQuery(productsState), view: 'summary' },
       );
       const meta = normalizePaginated(data, productsState);
       if (loadVersion !== productsLoadVersion) return;
@@ -3253,7 +3255,7 @@
               <div style="display:flex; align-items:center; gap:10px;">
                 <span class="product-editor-thumbnail">
                   ${safePrimaryImage
-                    ? `<img class="product-editor-thumbnail__image" src="${escapeHtml(safePrimaryImage)}" alt="${productName}" referrerpolicy="no-referrer" />`
+                    ? `<img class="product-editor-thumbnail__image" data-product-thumbnail="${productId}" alt="${productName}" loading="lazy" decoding="async" referrerpolicy="no-referrer" />`
                     : '<span class="product-editor-thumbnail__fallback">Sin imagen</span>'}
                 </span>
                 <div>
@@ -3281,6 +3283,11 @@
         `;
       })
       .join('');
+    productsBody.querySelectorAll('[data-product-thumbnail]').forEach(image => {
+      const product = renderedProducts.get(Number(image.dataset.productThumbnail));
+      if (window.CRONOX_IMAGES) window.CRONOX_IMAGES.applyProduct(image, product, 'small');
+      else image.src = safeImageUrl(product?.imageUrl || product?.images?.[0]?.url);
+    });
   };
 
   const onProductThumbnailError = (event) => {
@@ -3291,7 +3298,11 @@
     frame.innerHTML = '<span class="product-editor-thumbnail__fallback">Sin imagen</span>';
   };
 
+  let productOpenVersion = 0;
   const openProductModal = async (productId = null) => {
+    const request = ++productOpenVersion;
+    const section = currentSectionId;
+    const current = () => request === productOpenVersion && section === currentSectionId;
     resetProductForm();
     editingProductId = productId;
     if (!productModal) return;
@@ -3302,10 +3313,14 @@
       if (productModalTitle) productModalTitle.textContent = 'Editar producto';
       if (productSubmitBtn) productSubmitBtn.textContent = 'Guardar cambios';
       try {
+        const pendingCategories = loadAssignableCategories();
+        pendingCategories.catch(() => {}); // loadCreationCategories presents the retry on failure.
         const product = await window.CRONOX_API?.admin?.getAdminProduct(productId);
+        if (!current()) return;
         if (product) {
           creationCategories.selected = new Set(assignedCategoryIds(product));
-          await loadCreationCategories();
+          await loadCreationCategories(pendingCategories);
+          if (!current()) return;
           const priceInput = document.getElementById('productPrice');
           const nameInput = document.getElementById('productName');
           const descInput = document.getElementById('productDescription');
@@ -3335,7 +3350,8 @@
             ? product.images.filter((img) => img?.isActive !== false).map((img) => safeImageUrl(img?.url)).filter(Boolean)
             : [];
           window.CRONOX_PRODUCT_GALLERY?.load?.(product);
-          renderProductImagesPreview([window.CRONOX_PRODUCT_GALLERY?.primaryUrl?.()].filter(Boolean));
+          const primary = window.CRONOX_IMAGES?.resolveProduct(product, 'quick')?.src || window.CRONOX_PRODUCT_GALLERY?.primaryUrl?.();
+          renderProductImagesPreview([primary].filter(Boolean));
 
           const sizeSystemInput = document.getElementById('productSizeSystem');
           if (sizeSystemInput) sizeSystemInput.value = product.sizeSystem || 'APPAREL';
@@ -3347,6 +3363,7 @@
           renderVariantStockFields();
         }
       } catch (error) {
+        if (!current()) return;
         console.error('[ADMIN] Error obteniendo producto', error);
         setScopedMessage(productsMessage, 'No se pudo cargar el producto.', 'error');
         return;
@@ -4603,7 +4620,7 @@
 
     document.addEventListener('cronox:primary-image-changed', (event) => {
       setProductCardFraming();
-      const url = safeImageUrl(event.detail?.url);
+      const url = safeImageUrl(event.detail?.previewUrl || event.detail?.url);
       if (productCardFramingImage) {
         if (url) {
           productCardFramingImage.src = url;

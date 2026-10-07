@@ -15,6 +15,8 @@
   let productId = null;
   let busy = false;
   let drag = null;
+  let previewKey = null;
+  let bound = false;
 
   const elements = {};
   const keyOf = (image) => image.id ? `id:${image.id}` : image.clientId;
@@ -62,7 +64,14 @@
   const applyPreview = () => {
     const image = selected();
     if (!image || !elements.previewImage || !elements.preview) return;
-    elements.previewImage.src = image.url;
+    // Assign a resource once per selection, not again from its own load event.
+    // Keep the key independent of src so a derivative fallback is not retried forever.
+    const nextKey = `${keyOf(image)}:${image.url}`;
+    if (previewKey !== nextKey) {
+      previewKey = nextKey;
+      if (globalScope.CRONOX_IMAGES) globalScope.CRONOX_IMAGES.applyProduct(elements.previewImage, image, 'quick', { loading: 'eager' });
+      else elements.previewImage.src = image.url;
+    }
     elements.previewImage.alt = image.alt || "Vista previa de la imagen seleccionada";
     elements.x.value = String(image.galleryPositionX);
     elements.y.value = String(image.galleryPositionY);
@@ -103,7 +112,8 @@
       button.setAttribute("aria-pressed", String(keyOf(image) === selectedKey));
       button.setAttribute("aria-label", `Seleccionar imagen ${index + 1}${image.isPrimary ? ", principal" : ""}`);
       const thumb = document.createElement("img");
-      thumb.src = image.url;
+      if (globalScope.CRONOX_IMAGES) globalScope.CRONOX_IMAGES.applyProduct(thumb, image, 'small');
+      else { thumb.src = image.url; thumb.loading = 'lazy'; thumb.decoding = 'async'; }
       thumb.alt = "";
       button.appendChild(thumb);
       if (image.isPrimary) {
@@ -126,6 +136,7 @@
 
   const renderHistory = () => {
     elements.history.innerHTML = "";
+    if (!elements.history.closest('details')?.open) return;
     const entries = archived();
     if (!entries.length) {
       elements.history.textContent = "No hay imágenes en el historial.";
@@ -135,7 +146,8 @@
       const item = document.createElement("div");
       item.className = "product-gallery-history-item";
       const preview = document.createElement("img");
-      preview.src = image.url;
+      if (globalScope.CRONOX_IMAGES) globalScope.CRONOX_IMAGES.applyProduct(preview, image, 'small');
+      else { preview.src = image.url; preview.loading = 'lazy'; preview.decoding = 'async'; }
       preview.alt = image.alt || "Imagen archivada";
       const restore = document.createElement("button");
       restore.type = "button";
@@ -187,9 +199,12 @@
     applyPreview();
   };
 
-  const dispatchPrimaryChanged = (image) => document.dispatchEvent(new CustomEvent("cronox:primary-image-changed", { detail: { url: image?.url || "" } }));
+  const dispatchPrimaryChanged = (image) => document.dispatchEvent(new CustomEvent("cronox:primary-image-changed", {
+    detail: { url: image?.url || "", previewUrl: globalScope.CRONOX_IMAGES?.resolveProduct(image, 'quick')?.src || image?.url || "" },
+  }));
 
   const bind = () => {
+    if (bound) return;
     Object.assign(elements, {
       status: byId("productGalleryStatus"), thumbnails: byId("productGalleryThumbnails"), editor: byId("productGalleryEditor"),
       preview: byId("productGalleryPreview"), previewImage: byId("productGalleryPreviewImage"),
@@ -199,6 +214,8 @@
       history: byId("productGalleryHistoryGrid"), cardEditor: byId("productCardFramingEditor"),
     });
     if (!elements.thumbnails) return;
+    bound = true;
+    elements.history?.closest('details')?.addEventListener('toggle', renderHistory);
     [elements.x, elements.y, elements.zoom, elements.fit, elements.alt].forEach((input) => input?.addEventListener("input", updateSelected));
     elements.previewImage?.addEventListener("load", applyPreview);
     elements.reset?.addEventListener("click", () => { Object.assign(selected() || {}, defaults()); render(); });
@@ -259,7 +276,12 @@
 
   const manager = {
     bind,
-    reset() { images=[]; selectedKey=null; expectedUpdatedAt=null; productId=null; busy=false; render(); },
+    reset() {
+      images=[]; selectedKey=null; previewKey=null; expectedUpdatedAt=null; productId=null; busy=false; drag=null;
+      elements.previewImage?.removeAttribute('src'); elements.previewImage?.removeAttribute('srcset');
+      if (elements.history?.closest('details')) elements.history.closest('details').open = false;
+      render();
+    },
     load(product) {
       productId = Number(product?.id) || null;
       expectedUpdatedAt = product?.updatedAt || null;

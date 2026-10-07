@@ -668,6 +668,7 @@ export class ProductService {
   }
 
   async listAdminProducts(query: AdminProductQueryDto) {
+    const summary = query.view === 'summary';
     const LOW_STOCK_THRESHOLD = 5;
     const page = Math.max(query.page ?? 1, 1);
     const pageSize = Math.min(
@@ -714,18 +715,19 @@ export class ProductService {
       id: true,
       name: true,
       slug: true,
-      description: true,
+      description: !summary,
       price: true,
       currency: true,
       imageUrl: true,
       isActive: true,
       displayOrder: true,
       collection: true,
-      searchKeywords: true,
+      searchKeywords: !summary,
       createdAt: true,
       updatedAt: true,
       images: {
         where: { isActive: true },
+        take: summary ? 1 : undefined,
         select: {
           id: true,
           url: true,
