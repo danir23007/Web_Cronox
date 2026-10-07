@@ -2462,6 +2462,7 @@
       source.name || [firstName, lastName].filter(Boolean).join(' ') || source.fullName || '';
     return {
       id,
+      registrationNumber: source.registrationNumber,
       email,
       phone,
       displayName,
@@ -2517,7 +2518,8 @@
     usersBody.innerHTML = items
       .map((item) => {
         const user = mapUserRecord(item);
-        const idLabel = user.id != null && user.id !== '' ? escapeHtml(String(user.id)) : '—';
+        const numberLabel = Number.isSafeInteger(user.registrationNumber) && user.registrationNumber > 0
+          ? String(user.registrationNumber) : '—';
         const emailLabel = user.email ? escapeHtml(user.email) : '—';
         const phoneLabel = user.phone ? escapeHtml(user.phone) : '—';
         const emailCopyButton = user.email
@@ -2545,7 +2547,7 @@
             : '<button class="btn" type="button" disabled>Ver</button>';
         return `
           <tr>
-            <td>${idLabel}</td>
+            <td>${numberLabel}</td>
             <td>${emailCell}</td>
             <td>${phoneCell}</td>
             <td>${nameLabel}</td>

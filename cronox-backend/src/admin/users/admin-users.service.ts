@@ -85,18 +85,39 @@ export class AdminUsersService {
     const where = this.buildWhere(query);
     const orderBy = this.buildOrderBy(query.sort, query.order);
 
-    const [items, total] = await this.prisma.$transaction([
-      this.prisma.user.findMany({
-        where,
-        skip,
-        take: pageSize,
-        orderBy,
-      }),
-      this.prisma.user.count({ where }),
-    ]);
+    const { items, total, numbers } = await this.prisma.$transaction(async (tx) => {
+      const [items, total] = await Promise.all([
+        tx.user.findMany({
+          where,
+          skip,
+          take: pageSize,
+          orderBy,
+        }),
+        tx.user.count({ where }),
+      ]);
+      // Rank the complete view before filtering by the page's internal IDs.
+      // One batch query; no per-user counts and no persisted renumbering.
+      const ranks = items.length
+        ? await tx.$queryRaw<{ id: number; registrationNumber: bigint }[]>(Prisma.sql`
+            SELECT id, "registrationNumber" FROM (
+              SELECT id, ROW_NUMBER() OVER (ORDER BY "createdAt" ASC, id ASC) AS "registrationNumber"
+              FROM "User"
+            ) ranked
+            WHERE id IN (${Prisma.join(items.map((user) => user.id))})
+          `)
+        : [];
+      return {
+        items,
+        total,
+        numbers: new Map(ranks.map((row) => [row.id, Number(row.registrationNumber)])),
+      };
+    }, { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead });
 
     return {
-      data: items.map((user) => this.mapUser(user)),
+      data: items.map((user) => ({
+        ...this.mapUser(user),
+        registrationNumber: numbers.get(user.id),
+      })),
       meta: {
         page,
         pageSize,
@@ -702,18 +723,17 @@ export class AdminUsersService {
   private buildOrderBy(
     sort: AdminUserQueryDto['sort'],
     direction: AdminUserQueryDto['order'],
-  ): Prisma.UserOrderByWithRelationInput {
+  ): Prisma.UserOrderByWithRelationInput[] {
     const order: Prisma.SortOrder =
       (direction ?? 'desc') === 'asc' ? 'asc' : 'desc';
 
     switch (sort) {
       case 'email':
-        return { email: order };
+        return [{ email: order }, { id: order }];
       case 'id':
-        return { id: order };
       case 'createdAt':
       default:
-        return { createdAt: order };
+        return [{ createdAt: order }, { id: order }];
     }
   }
 
