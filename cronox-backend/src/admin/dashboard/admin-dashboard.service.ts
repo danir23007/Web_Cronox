@@ -15,6 +15,25 @@ const OLD_REQUEST_DAYS = 7;
 export class AdminDashboardService {
   constructor(private readonly prisma: PrismaService) {}
 
+  async getPendingCounts() {
+    // Sidebar badges do not need the eleven queries of the full dashboard.
+    const groups = await this.prisma.circleUpgradeRequest.groupBy({
+      by: ['fromCircle', 'toCircle'],
+      where: { status: 'PENDING', OR: [
+        { fromCircle: 2, toCircle: 3 },
+        { fromCircle: 3, toCircle: 4 },
+      ] },
+      _count: { _all: true },
+      orderBy: [{ fromCircle: 'asc' }, { toCircle: 'asc' }],
+    });
+    const byType = { '2-3': 0, '3-4': 0 };
+    for (const group of groups) {
+      const key = `${group.fromCircle}-${group.toCircle}` as keyof typeof byType;
+      if (key in byType) byType[key] = group._count._all;
+    }
+    return { requests: { pendingTotal: byType['2-3'] + byType['3-4'], byType } };
+  }
+
   async getOverview() {
     const now = new Date();
     const startOfToday = new Date(now);

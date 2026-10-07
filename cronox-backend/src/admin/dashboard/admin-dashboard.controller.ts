@@ -8,6 +8,11 @@ import { AdminDashboardService } from './admin-dashboard.service';
 export class AdminDashboardController {
   constructor(private readonly dashboardService: AdminDashboardService) {}
 
+  @Get('pending-counts')
+  getPendingCounts() {
+    return this.dashboardService.getPendingCounts();
+  }
+
   @Get()
   getOverview() {
     return this.dashboardService.getOverview();

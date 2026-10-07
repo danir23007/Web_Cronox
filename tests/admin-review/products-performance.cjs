@@ -80,6 +80,11 @@ const { loadLocalEnvironment } = require('../../cronox-backend/scripts/start-loc
       await page.goto('http://127.0.0.1:3000/admin.html#section-products');
       await expect(page.locator('#productsBody [data-edit-product]').first()).toBeVisible();
     });
+    if (label !== 'before') {
+      const startupApi = results.stages.find(s => s.name === 'list-first').api;
+      assert(startupApi.some(r => r.path === '/api/admin/dashboard/pending-counts'));
+      assert(!startupApi.some(r => r.path === '/api/admin/dashboard'), 'Products must not load the full hidden dashboard');
+    }
     await stage('scroll', async()=>{ for(let i=0;i<6;i++){await page.mouse.wheel(0,650);await page.waitForTimeout(100);} });
     const edit = async id => { await page.locator('[data-edit-product="'+id+'"]').click(); await expect(page.locator('#productModal')).toHaveClass(/show/); };
     const close = async()=> { await page.locator('#productCancelBtn').click(); await expect(page.locator('#productModal')).not.toHaveClass(/show/); };

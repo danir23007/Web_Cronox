@@ -1192,6 +1192,10 @@ import { loadCategoryPages } from './category-pagination';
     return request('/api/admin/dashboard');
   };
 
+  adminApi.getPendingCounts = async () => {
+    return request('/api/admin/dashboard/pending-counts');
+  };
+
   adminApi.listCircleUpgradeRequests = async (
     queryOrStatus: string | QueryRecord = 'PENDING',
     queryOverride: QueryRecord = {},

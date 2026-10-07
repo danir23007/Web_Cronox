@@ -2342,7 +2342,7 @@
 
   const refreshPendingCounts = async () => {
     try {
-      const data = await window.CRONOX_API?.admin?.getDashboard?.();
+      const data = await window.CRONOX_API?.admin?.getPendingCounts?.();
       updateRequestBadges(extractPendingCounts(data));
     } catch (error) {
       console.warn('[ADMIN] No se pudieron actualizar los badges de solicitudes', error);

@@ -141,3 +141,103 @@ tengan derivados usan el original como reserva; no se han transformado en masa.
 Las pruebas locales no representan latencias WAN, dispositivos móviles lentos ni
 catálogos de decenas de miles de productos. El coste principal reproducido sí queda
 corregido y comprobado con imágenes reales servidas por el backend local.
+
+## Publicación y diagnóstico real posterior — 7 de octubre
+
+El propietario ya había hecho commit y push de los ocho archivos de esta tarea:
+`586d7362aee530064d9d92ad589870f2538c966d`. No se creó otro commit ni se repitió
+el despliegue. [GitHub Actions 37558311875](https://github.com/danir23007/Web_Cronox/actions/runs/37558311875)
+terminó correctamente a las 01:45:44 UTC. Sus logs confirman `npm ci`, generación
+Prisma 6.19.3, compilaciones, reinicio y el commit esperado. Las 78 migraciones
+estaban aplicadas: **ninguna migración nueva**, ninguna modificación manual de la
+base de producción. El checkout del servidor coincide con ese SHA.
+
+Se observó un HTTP 503 inicial en `/api/ready`, seguido de HTTP 200 estable en
+`ready`, `health` y productos. Coincidió temporalmente con la publicación, pero
+no hay evidencia suficiente para atribuir todos los errores anteriores al
+reinicio. El propietario confirmó después que los productos ya cargaban.
+No faltaba ejecutar otra migración o generación una vez terminado Actions.
+
+En una sesión SUPERADMIN iniciada por el propietario se abrieron el listado
+(7 productos) y varios editores, sin guardar, cambiar inventario ni enviar correo.
+Los scripts de medición bloquearon métodos distintos de GET/HEAD/OPTIONS.
+Producción sirve `admin.js?v=10`, `admin-product-gallery.js?v=2`, `api.js?v=12`;
+los dos recursos modificados coinciden con el commit, normalizando CRLF/LF.
+
+### Demora pendiente: separar API, imágenes y renderizado
+
+Chromium de escritorio desde el equipo local hacia **producción**, sin limitación
+artificial de red/CPU. La interceptación de seguridad desactiva la caché HTTP del
+navegador; la segunda recarga no representa una caché HTTP caliente. Muestra corta,
+no percentiles ni prueba de carga.
+
+| Operación | Espera a primeros bytes | Descarga JSON |
+| --- | ---: | ---: |
+| Listado administrador, dos recargas | 1.712 / 3.287 ms | 0–1 ms |
+| Detalle, tres productos | 940–1.150 ms | 1 ms |
+| Categorías del editor | 554–1.315 ms | 0–1 ms |
+| Dashboard solicitado para badges | 2.172–2.708 ms | 0–1 ms |
+
+La recarga completa hasta ver filas tardó 4,93 y 5,82 s, incluyendo HTML, scripts,
+identidad y API. En una segunda medición con marcas de clic y MutationObserver,
+dos editores se mostraron a los 949 y 940 ms: **solo 8 y 7 ms después de la última
+respuesta necesaria**. Por tanto no se declara resuelta la demora inicial por la
+reducción de imágenes. Las categorías aún pueden condicionar la apertura.
+
+Las miniaturas solicitadas fueron `small.webp` y las previsualizaciones
+`quick.webp`, con duraciones observadas de 29–94 ms. Resource Timing no expone
+bytes fiables para estos recursos de otro origen; sus ceros no significan que
+las imágenes pesen cero. Cada apertura produjo un solo evento `load`; en reposo
+y tras cerrar hubo cero. Reposo: 1–4 ms de trabajo principal durante 1,2 s.
+Desplazamiento: 9 ms, ninguna tarea de más de 50 ms. El historial cerrado tenía
+cero imágenes. El producto inspeccionado no tenía imágenes archivadas; el
+despliegue de historial con archivos archivados se acredita con fixtures locales.
+
+### Causa adicional y corrección preparada exclusivamente en local
+
+La configuración del servidor tiene `connection_limit=1` y `pgbouncer=true`.
+Las operaciones comparten una conexión y pueden esperar turno. Las lecturas
+aisladas desde el VPS, en una conexión con `default_transaction_read_only=on`,
+mostraron siete SELECT para el listado (327–328 ms en muestras posteriores) y seis
+para el detalle (288 ms). Incluso `SELECT 1` tardó 96–99 ms contando BEGIN,
+DEALLOCATE, SELECT y COMMIT. Son tiempos de cliente, no tiempos exclusivos de
+ejecución SQL. No justifican añadir índices ni afirmar que falta CPU en PostgreSQL.
+La diferencia respecto al HTTP completo incluye autenticación, espera y otro
+trabajo concurrente; no se atribuye íntegramente a una sola consulta.
+
+`refreshPendingCounts` pedía el dashboard completo al arrancar cualquier sección
+y cada minuto. Sus once SELECT de usuarios, pedidos, ingresos, stock y solicitudes
+eran innecesarios para dos contadores. Se prepara:
+
+- `GET /api/admin/dashboard/pending-counts`, con los mismos guards de sesión y
+  administración, una agrupación de solicitudes PENDING 2→3 y 3→4 y ceros cuando
+  no hay resultados. Los errores se propagan.
+- El cliente de badges utiliza esa ruta. Home conserva su dashboard completo.
+- API generada y referencias locales actualizadas a `api.js?v=13` / `admin.js?v=11`.
+  No se cambió pool, esquema, permisos, caché ni datos.
+
+Comparación **de lecturas aisladas en el VPS**, no del nuevo endpoint desplegado:
+dashboard 469–547 ms / once SELECT; agrupación propuesta 94–95 ms / un SELECT,
+con totales coincidentes. Una muestra concurrente de listado+dashboard frente a
+listado+agrupación dio 364 frente a 327 ms: no permite prometer una reducción
+equivalente de la latencia HTTP completa. El cuello de botella restante requiere
+medición después de publicar esta corrección local y perfilar la cola y las
+consultas por petición. No se aumentó la conexión máxima sin evaluar su impacto.
+
+### Verificación del ajuste local
+
+- Compilaciones Nest y Vite correctas; 21 suites / 127 pruebas aprobadas.
+- Benchmark `after-badges`: confirma que Productos pide `pending-counts` y no el
+  dashboard completo. Guardado, variantes, stock, precio/coste, categorías,
+  activación, orden/restauración de imágenes, paginación, Bulk Edit y respuestas
+  tardías correctos con datos desechables. Fixtures retirados al terminar.
+- Backend local reiniciado únicamente tras identificar su PID y ruta de CRONOX;
+  `/api/ready` responde 200. No se hizo otro commit/push/despliegue.
+- Este ajuste adicional queda **sin publicar**, para revisión local. Requiere
+  compilar backend y administrador juntos mediante el flujo habitual, sin nueva
+  migración. No confundirlo con `586d736`, ya publicado.
+
+Evidencia privada ignorada en `output/playwright/products-performance/`:
+`production-readonly.json`, `production-render.log`, `production-db.log`,
+`production-queue.log`, `production-editor.png`, `after-badges.json`.
+Diagnóstico guiado por [Supabase: rendimiento](https://supabase.com/docs/guides/database/debugging-performance).
