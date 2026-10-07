@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Optional, Param, Post, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Header, Optional, Param, Post, Req, UseGuards } from '@nestjs/common';
 import type { Request } from 'express';
 import { CustomerActivityEventType } from '@prisma/client';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
@@ -16,11 +16,13 @@ export class FavoritesController {
   ) {}
 
   @Get()
+  @Header('Cache-Control', 'private, no-store')
   async list(@CurrentUser('id') userId: number) {
     return this.favoritesService.list(userId);
   }
 
   @Get('products')
+  @Header('Cache-Control', 'private, no-store')
   async listProducts(@CurrentUser('id') userId: number) {
     return this.favoritesService.listProducts(userId);
   }

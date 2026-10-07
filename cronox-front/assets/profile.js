@@ -1042,6 +1042,7 @@
       id: product.id ?? favorite?.id ?? favorite?.productId,
       backendId: product.backendId ?? product.id ?? favorite?.productId,
       variants: product.variants,
+      lastUnitsThreshold: product.lastUnitsThreshold ?? null,
       slug: product.slug,
       name: product.name || 'Producto',
       priceInCents,

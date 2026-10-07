@@ -4,6 +4,7 @@ import {
   Delete,
   Get,
   Headers,
+  Header,
   Param,
   Patch,
   Post,
@@ -33,6 +34,7 @@ export class ProductController {
   constructor(private readonly productService: ProductService) {}
 
   @Get()
+  @Header('Cache-Control', 'no-store')
   @ApiOperation({ summary: 'Listar productos con paginación y ordenación' })
   @ApiResponse({ status: 200, description: 'Lista paginada.' })
   getAll(@Query() query: QueryProductsDto) {
@@ -52,6 +54,7 @@ export class ProductController {
   }
 
   @Get(':slug')
+  @Header('Cache-Control', 'no-store')
   @ApiOperation({ summary: 'Obtener un producto por slug con sus imágenes' })
   @ApiResponse({ status: 200, description: 'Producto encontrado.' })
   @ApiResponse({ status: 404, description: 'Producto no encontrado.' })

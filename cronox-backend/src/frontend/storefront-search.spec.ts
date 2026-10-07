@@ -84,7 +84,7 @@ describe('storefront search contracts', () => {
     );
     expect(products).toContain('async function loadSearchResults(search)');
     expect(products).toContain("nextUrl.searchParams.delete('categorySlug')");
-    expect(products).toContain('loadSearchResults(initialQueryRaw)');
+    expect(products).toContain('loadSearchResults(activeSearchQuery)');
     expect(products).toContain('loadSearchResults(query)');
     expect(products).toContain(
       'currentApi.getCategoryProducts(initialCategorySlug, {',

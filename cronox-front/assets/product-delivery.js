@@ -65,7 +65,7 @@
     if (target.textContent !== (date || '')) target.textContent = date || '';
     notice.hidden = !date;
   };
-  window.CRONOX_DELIVERY = { estimateProduct, estimateCart, render };
+  window.CRONOX_DELIVERY = { estimateProduct, estimateCart, render, refresh: update };
   let timer;
   function update() {
     clearTimeout(timer);
@@ -74,7 +74,9 @@
     // month/year/leap-day rollover without treating three days as 72 elapsed hours.
     document.querySelectorAll('[data-delivery-notice]').forEach(notice => {
       const state = window.CRONOX_CART?.state;
-      render(notice, notice.hasAttribute('data-cart-delivery')
+      render(notice, notice.hasAttribute('data-quick-delivery')
+        ? (notice.dataset.deliveryAvailable === 'true' ? estimateProduct(now) : null)
+        : notice.hasAttribute('data-cart-delivery')
         ? estimateCart(['loading', 'error'].includes(state?.status) ? null : state?.data, now) : estimateProduct(now));
     });
     // Find the next Madrid date boundary, including 23/25-hour DST days.

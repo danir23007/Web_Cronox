@@ -1,5 +1,8 @@
 import {
   availableStock,
+  hasLastUnits,
+  productStockStatus,
+  soldOutSizeCount,
   classifyStock,
   classifyVariantStock,
 } from '../../../cronox-backend/src/common/stock-status';
@@ -495,6 +498,7 @@ import { loadCategoryPages } from './category-pagination';
       priceLabel: formatCents(product.price as number),
       currency: product.currency || 'EUR',
       sizeSystem: product.sizeSystem || 'APPAREL',
+      lastUnitsThreshold: product.lastUnitsThreshold ?? null,
       desc: product.description || product.desc || '',
       image: primaryImage,
       images: images.length ? images : primaryImage ? [primaryImage] : [],
@@ -1109,6 +1113,22 @@ import { loadCategoryPages } from './category-pagination';
   };
 
   g.CRONOX_STOCK = {
+    hasLastUnits,
+    productStockStatus,
+    soldOutSizeCount,
+    decorateLastUnits(card: HTMLElement, product: UnknownRecord) {
+      card.querySelectorAll('.product-last-units').forEach(badge => badge.remove());
+      const media = card.querySelector('.product-media, .cart-upsell__media');
+      const status = productStockStatus(product.variants, product.lastUnitsThreshold);
+      if (!media || (status !== 'low' && status !== 'out_of_stock')) return;
+      const badge = document.createElement('span');
+      badge.className = `product-last-units${status === 'out_of_stock' ? ' product-last-units--out' : ''}`;
+      const dot = document.createElement('span');
+      dot.className = 'product-last-units__dot';
+      dot.setAttribute('aria-hidden', 'true');
+      badge.append(dot, document.createTextNode(status === 'out_of_stock' ? 'AGOTADO' : 'ÚLTIMAS UNIDADES'));
+      media.appendChild(badge);
+    },
     classifyVariantStock,
     availableStock,
     classifyStock,
@@ -1117,16 +1137,7 @@ import { loadCategoryPages } from './category-pagination';
       button: HTMLButtonElement,
       product: UnknownRecord,
     ) {
-      const hasStockData = Array.isArray(product.variants) &&
-        product.variants.length > 0 &&
-        product.variants.every((variant: unknown) =>
-          variant && typeof variant === 'object' &&
-          ((variant as UnknownRecord).stockQty ?? (variant as UnknownRecord).stock) != null &&
-          Number.isFinite(Number((variant as UnknownRecord).stockQty ?? (variant as UnknownRecord).stock))
-        );
-      const status = hasStockData
-        ? classifyStock(availableStock(product.variants))
-        : 'unknown';
+      const status = productStockStatus(product.variants, product.lastUnitsThreshold);
       let row = price.parentElement;
       if (!row?.classList.contains('stock-price-row')) {
         row = document.createElement('div');
@@ -1139,7 +1150,10 @@ import { loadCategoryPages } from './category-pagination';
       if (status === 'low' || status === 'out_of_stock') {
         const label = document.createElement('span');
         label.className = `stock-status stock-status--${status === 'low' ? 'low' : 'out'}`;
-        label.textContent = status === 'low' ? 'ÚLTIMAS TALLAS' : 'AGOTADO';
+        const dot = document.createElement('span');
+        dot.className = 'product-last-units__dot';
+        dot.setAttribute('aria-hidden', 'true');
+        label.append(dot, document.createTextNode(status === 'low' ? 'Últimas unidades' : 'Agotado'));
         row.appendChild(label);
       }
       button.textContent =
@@ -1156,16 +1170,8 @@ import { loadCategoryPages } from './category-pagination';
       price: HTMLElement,
       product: UnknownRecord,
     ) {
-      const hasStockData = Array.isArray(product.variants) &&
-        product.variants.length > 0 &&
-        product.variants.every((variant: unknown) =>
-          variant && typeof variant === 'object' &&
-          ((variant as UnknownRecord).stockQty ?? (variant as UnknownRecord).stock) != null &&
-          Number.isFinite(Number((variant as UnknownRecord).stockQty ?? (variant as UnknownRecord).stock))
-        );
-      const status = hasStockData
-        ? classifyStock(availableStock(product.variants))
-        : 'unknown';
+      g.CRONOX_STOCK.decorateLastUnits(card, product);
+      const status = productStockStatus(product.variants, product.lastUnitsThreshold);
       card.classList.remove(
         'product-card--out-of-stock',
         'product-card--low-stock',
@@ -1174,17 +1180,14 @@ import { loadCategoryPages } from './category-pagination';
       if (status !== 'unknown') card.classList.add(
         `product-card--${status === 'low' ? 'low-stock' : status.replace(/_/g, '-')}`,
       );
-      const row = document.createElement('div');
-      row.className = 'product-card__price-row';
-      price.replaceWith(row);
-      row.appendChild(price);
-      if (status === 'low' || status === 'out_of_stock') {
-        const label = document.createElement('span');
-        label.className = 'product-card__stock-label';
-        label.textContent =
-          status === 'out_of_stock' ? 'AGOTADO' : 'ÚLTIMAS TALLAS';
-        row.appendChild(label);
+      let row = price.parentElement;
+      if (!row?.classList.contains('product-card__price-row')) {
+        row = document.createElement('div');
+        row.className = 'product-card__price-row';
+        price.replaceWith(row);
+        row.appendChild(price);
       }
+      card.querySelectorAll('.product-card__stock-label, .stock-status').forEach(label => label.remove());
     },
   };
 
@@ -1679,7 +1682,7 @@ import { loadCategoryPages } from './category-pagination';
   ) => {
     if (!slug) return null;
     const data = await request(`/api/products/${encodeURIComponent(slug)}`, {
-      cache: options.cache,
+      cache: options.cache ?? 'no-store',
     });
     return mapProduct(data as UnknownRecord);
   };
@@ -1699,6 +1702,7 @@ import { loadCategoryPages } from './category-pagination';
       `/api/categories/${encodeURIComponent(slug)}/products`,
       {
         query,
+        cache: 'no-store',
       },
     )) as {
       category?: UnknownRecord;

@@ -172,6 +172,10 @@ declare global {
       safeReturnTo: (candidate?: string | null) => string;
     };
     CRONOX_STOCK?: {
+      hasLastUnits: (variants: unknown, threshold: unknown) => boolean;
+      productStockStatus: (variants: unknown, threshold: unknown) => string;
+      soldOutSizeCount: (variants: unknown) => number;
+      decorateLastUnits: (card: HTMLElement, product: Record<string, unknown>) => void;
       decoratePurchase: (price: HTMLElement, button: HTMLButtonElement, product: Record<string, unknown>) => void;
       availableStock: (variants: unknown) => number;
       classifyStock: (total: number) => string;

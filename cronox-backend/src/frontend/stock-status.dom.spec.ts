@@ -25,18 +25,17 @@ describe('stock status presentation', () => {
       /\.product-card--out-of-stock \.product-price\s*\{[^}]*text-decoration:line-through;[^}]*opacity:\.55/,
     );
     expect(css).toMatch(
-      /\.product-card__stock-label\s*\{[^}]*text-decoration:none/,
-    );
-    expect(css).toMatch(
       /\.product-card__price-row\s*\{[^}]*display:flex;[^}]*flex-direction:column;[^}]*align-items:center;[^}]*text-align:center;[^}]*gap:4px/,
     );
     expect(css).toMatch(/--stock-low-warning:#D9A21B/);
     expect(css).toMatch(
-      /\.product-card--low-stock \.product-card__stock-label\s*\{[^}]*color:var\(--stock-low-warning\)/,
+      /\.product-last-units\s*\{[^}]*color:var\(--stock-low-warning\)/,
     );
     expect(css).toMatch(
-      /\.product-card__stock-label\s*\{[^}]*max-width:100%;[^}]*overflow-wrap:anywhere;[^}]*color:#ff6464/,
+      /\.product-last-units--out\s*\{[^}]*color:var\(--stock-out-warning\)/,
     );
+    expect(css).toContain('--stock-out-warning:#ff6464');
+    expect(css).not.toContain('.product-card__stock-label {');
   });
   const setup = () => {
     const dom = new JSDOM(read('admin.html'), {
@@ -53,6 +52,9 @@ describe('stock status presentation', () => {
       const { document } = dom.window;
       const card = document.createElement('a');
       card.href = '/producto.html?slug=core';
+      const media = document.createElement('div');
+      media.className = 'product-media';
+      card.append(media);
       const price = document.createElement('p');
       price.className = 'product-price';
       price.textContent = '34,95 €';
@@ -64,13 +66,15 @@ describe('stock status presentation', () => {
           };
         }
       ).CRONOX_STOCK.decorateCard(card, price, {
+        lastUnitsThreshold: 14,
         variants: [{ stockQty: stock, isActive: true }],
       });
       expect(
-        card.querySelector('.product-card__stock-label')?.textContent ?? '',
-      ).toBe(stock === 0 ? 'AGOTADO' : stock < 15 ? 'ÚLTIMAS TALLAS' : '');
+        media.querySelector('.product-last-units')?.textContent ?? '',
+      ).toBe(stock === 0 ? 'AGOTADO' : stock < 15 ? 'ÚLTIMAS UNIDADES' : '');
+      expect(card.querySelector('.product-card__stock-label')).toBeNull();
       expect(card.textContent).not.toContain('SIN STOCK');
-      expect(price.parentElement?.children.length).toBe(stock < 15 ? 2 : 1);
+      expect(price.parentElement?.children.length).toBe(1);
       expect(price.textContent).toBe('34,95 €');
       expect(card.classList.contains('product-card--out-of-stock')).toBe(
         stock === 0,

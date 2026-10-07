@@ -2824,6 +2824,7 @@
     editingProductId = null;
     cachedProductImages = [];
     productForm?.reset();
+    document.getElementById('productLastUnits')?.setCustomValidity('');
     const formMessage = document.getElementById('productFormMessage');
     if (formMessage) { formMessage.textContent = ''; formMessage.hidden = true; }
     creationCategories.request++;
@@ -3337,6 +3338,8 @@
               : '';
           }
           if (priceInput) priceInput.value = Number(product.price || 0) / 100;
+          const lastUnitsInput = document.getElementById('productLastUnits');
+          if (lastUnitsInput) lastUnitsInput.value = product.lastUnitsThreshold ?? '';
           const costInput = document.getElementById('productCost');
           if (costInput) costInput.value = product.privateCost?.unitCostCents == null ? '' : (product.privateCost.unitCostCents / 100).toFixed(2);
           if (isActiveInput) isActiveInput.checked = Boolean(product.isActive);
@@ -3425,6 +3428,14 @@
     const formMessage = document.getElementById('productFormMessage');
     if (formMessage) { formMessage.textContent = ''; formMessage.hidden = true; }
     const costText = String(new FormData(productForm).get('unitCost') || '').trim();
+    const lastUnitsText = String(new FormData(productForm).get('lastUnitsThreshold') ?? '').trim();
+    if (document.getElementById('productLastUnits')?.validity.badInput || (lastUnitsText && (!/^\d+$/.test(lastUnitsText) || Number(lastUnitsText) > 2147483647))) {
+      const input = document.getElementById('productLastUnits');
+      input?.setCustomValidity('Introduce un número entero entre 0 y 2147483647, o deja el campo vacío.');
+      input?.reportValidity();
+      input?.addEventListener('input', () => input.setCustomValidity(''), { once: true });
+      return;
+    }
     if (costText && !/^\d+(?:\.\d{1,2})?$/.test(costText)) {
       const input = document.getElementById('productCost');
       input?.setCustomValidity('Introduce un coste válido con un máximo de dos decimales.');
@@ -3455,6 +3466,7 @@
       searchKeywords: [...new Set(searchKeywords)],
       price: priceCents,
       unitCostCents,
+      lastUnitsThreshold: lastUnitsText ? Number(lastUnitsText) : null,
       isActive: productForm.querySelector('#productIsActive')?.checked ?? true,
       sizeSystem: selectedSizeSystem(),
       variants: collectVariantPayload(),

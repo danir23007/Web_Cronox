@@ -32,6 +32,7 @@
     if (!anchor || !variants.length) return;
 
     const params = new URLSearchParams(location.search);
+    const chooseSize = location.hash === '#productWaitlist' && !params.has('waitlist') && !params.has('size');
     const initial = variants.find(v => String(v.id) === params.get('waitlist')) ||
       variants.find(v => String(v.sizeCode || v.size).toUpperCase().replace(/\s+/g, '_') === params.get('size')?.toUpperCase()) || variants[0];
     const root = document.createElement('details');
@@ -43,18 +44,33 @@
     const status = root.querySelector('.restock-status');
     const choice = root.querySelector('.restock-choice');
     const button = root.querySelector('button');
+    if (chooseSize) select.add(new Option('Selecciona tu talla', ''));
     variants.forEach(v => select.add(new Option(label(v.size), String(v.id))));
-    select.value = String(initial.id);
+    select.value = chooseSize ? '' : String(initial.id);
+    if (chooseSize) requestAnimationFrame(() => {
+      if (!root.isConnected) return;
+      root.scrollIntoView({ block: 'center' });
+      select.focus({ preventScroll: true });
+    });
     let subscription = null, generation = 0, busy = false, readFailed = false;
     const selected = () => variants.find(v => String(v.id) === select.value);
     const remember = () => {
       const url = new URL(location.href);
-      url.searchParams.set('waitlist', select.value);
+      if (select.value) url.searchParams.set('waitlist', select.value);
+      else url.searchParams.delete('waitlist');
       history.replaceState(history.state, '', url);
     };
     const render = () => {
       const variant = selected();
-      if (!variant || !root.isConnected) return;
+      if (!root.isConnected) return;
+      if (!variant) {
+        choice.textContent = 'Selecciona la talla agotada para consultar y confirmar tu aviso.';
+        button.textContent = 'Elige una talla';
+        button.disabled = true;
+        select.disabled = false;
+        root.setAttribute('aria-busy', 'false');
+        return;
+      }
       choice.textContent = `${product.name} · Talla ${label(variant.size)}`;
       button.textContent = busy ? 'Un momento…' : readFailed ? 'Volver a comprobar' : subscription ? 'Cancelar aviso' : window.CRONOX_USER ? 'Avísame cuando vuelva' : 'Iniciar sesión o registrarme';
       button.disabled = busy || subscription?.status === 'PROCESSING';
@@ -78,12 +94,14 @@
       const previousId = select.value;
       variants = next;
       select.replaceChildren(...next.map(v => new Option(label(v.size), String(v.id))));
+      if (chooseSize) select.prepend(new Option('Selecciona tu talla', ''));
       const stillEligible = next.some(v => String(v.id) === previousId);
-      select.value = stillEligible ? previousId : String(next[0].id);
+      select.value = stillEligible ? previousId : chooseSize ? '' : String(next[0].id);
       if (!stillEligible) { subscription = null; remember(); }
       return stillEligible;
     };
     refresh = async () => {
+      if (!selected()) { generation++; subscription = null; busy = false; status.textContent = ''; render(); return; }
       const current = ++generation;
       subscription = null; readFailed = false; busy = true; status.textContent = 'Comprobando tu aviso…'; render();
       try {
@@ -99,7 +117,7 @@
     };
     select.addEventListener('change', () => { remember(); void refresh(); });
     button.addEventListener('click', async () => {
-      if (busy) return;
+      if (busy || !selected()) return;
       remember();
       if (!window.CRONOX_USER) {
         try { await window.CRONOX_openAuthModal?.('login'); }

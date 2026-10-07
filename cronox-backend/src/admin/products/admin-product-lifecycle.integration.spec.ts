@@ -193,13 +193,14 @@ describe('Admin product creation and permanent deletion (HTTP integration)', () 
     await app.close();
   });
 
-  const createProduct = (name: string, key: string) =>
+  const createProduct = (name: string, key: string, lastUnitsThreshold?: number | null) =>
     request(app.getHttpServer())
       .post('/api/admin/products')
       .set('Idempotency-Key', key)
       .send({
         name,
         price: 3495,
+        lastUnitsThreshold,
         imageUrls: [`https://storage.example.test/${name}.png`],
         variants: [
           { size: 'S', stockQty: 8 },
@@ -207,12 +208,19 @@ describe('Admin product creation and permanent deletion (HTTP integration)', () 
         ],
       });
 
+  it.each([null, 0, 5])('persists last units threshold %s on creation', async threshold => {
+    const created = await createProduct('Últimas unidades QA', 'cccccccc-cccc-4ccc-8ccc-cccccccccccc', threshold).expect(201);
+    expect(created.body.lastUnitsThreshold).toBe(threshold);
+    expect(products.get(created.body.id).lastUnitsThreshold).toBe(threshold);
+  });
+
   it('deletes a mistakenly created product with variants, images and initial stock', async () => {
     const created = await createProduct(
       'Producto duplicado integral',
       'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
     ).expect(201);
     const productId = created.body.id as number;
+    expect(created.body.lastUnitsThreshold).toBeNull();
     const createdVariants = [...variants.values()].filter(
       (variant) => variant.productId === productId,
     );

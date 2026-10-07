@@ -1411,8 +1411,9 @@
   const getUpsellCandidates = (cart) => {
     const catalog = Array.isArray(window.CRONOX_PRODUCTS) ? window.CRONOX_PRODUCTS : [];
     if (!catalog.length) return [];
-    const cartIds = new Set((cart?.items || []).map((it) => it.product?.id));
-    return catalog.filter((p) => !cartIds.has(p.backendId || p.id)).slice(0, 6);
+    const cartIds = new Set((cart?.items || []).map((it) => String(it.product?.id)));
+    return catalog.filter((p) => !cartIds.has(String(p.backendId || p.id)) &&
+      window.CRONOX_STOCK?.productStockStatus(p.variants, p.lastUnitsThreshold) !== 'out_of_stock').slice(0, 6);
   };
 
   const renderUpsell = (cart) => {
@@ -1462,6 +1463,12 @@
         product,
         'recommendation',
       );
+      if (window.CRONOX_STOCK?.hasLastUnits(product.variants, product.lastUnitsThreshold)) {
+        const warning = document.createElement('span');
+        warning.className = 'cart-upsell__last-units';
+        warning.textContent = ' · Últimas unidades';
+        card.querySelector('.cart-upsell__price').appendChild(warning);
+      }
       frag.appendChild(card);
     });
     cartUpsellList.appendChild(frag);

@@ -122,6 +122,11 @@
   margin-top:8px;
 }
 .qa-btn:hover{ filter:brightness(.92); }
+.qa-notify { display:flex; align-items:center; justify-content:center; box-sizing:border-box; text-decoration:none; }
+.qa-notify[hidden] { display:none; }
+.qa-footer { display:flex; flex-direction:column; gap:10px; }
+.qa-delivery--corner { align-self:flex-end; text-align:right; }
+#qaCartStatus:empty { display:none; }
 
 .qa-muted-link{
   margin-top:6px;

@@ -18,7 +18,7 @@
       }
     })();
   </script>
-  <link id="cronox-admin-style" rel="stylesheet" href="assets/store.css?v=110">
+  <link id="cronox-admin-style" rel="stylesheet" href="assets/store.css?v=113">
   <link rel="stylesheet" href="assets/gallery.css?v=19">
   <link rel="stylesheet" href="assets/admin-gallery.css?v=6">
   <link rel="stylesheet" href="assets/admin-media.css?v=4">
@@ -1597,6 +1597,11 @@
             <input id="productCost" name="unitCost" class="input" type="number" min="0" max="21474836.47" step="0.01" aria-describedby="productCostHelp">
             <small id="productCostHelp">Privado. Coste por unidad para todas las variantes. Vacío = desconocido; 0 = coste cero.</small>
           </div>
+          <div class="form-group">
+            <label for="productLastUnits">Últimas unidades</label>
+            <input id="productLastUnits" name="lastUnitsThreshold" class="input" type="number" min="0" max="2147483647" step="1" aria-describedby="productLastUnitsHelp">
+            <small id="productLastUnitsHelp">Aviso cuando el stock disponible total esté entre 1 y este umbral. Vacío o 0 desactiva el aviso; AGOTADO depende del stock real.</small>
+          </div>
           <div class="form-group" style="align-items:flex-start; justify-content:flex-end;">
             <label style="display:flex; gap:8px; align-items:center; margin-top:26px;">
               <input type="checkbox" id="productIsActive" name="isActive" checked>
@@ -1981,7 +1986,7 @@
   <div class="toast-container" id="toastContainer" aria-live="polite" aria-atomic="true"></div>
 
   <script src="assets/size-systems.js?v=1"></script>
-  <script src="assets/api.js?v=13"></script>
+  <script src="assets/api.js?v=16"></script>
   <script src="assets/admin-auth-routing.js?v=1"></script>
   <script src="assets/ui-status.js"></script>
   <script src="assets/media-framing-geometry.js?v=6"></script>
@@ -2000,9 +2005,9 @@
   <script src="assets/admin-section-headers.js?v=1"></script>
   <script src="assets/admin-push.js?v=1"></script>
   <script src="assets/admin-inbox.js?v=12"></script>
-  <script src="assets/admin.js?v=11"></script>
+  <script src="assets/admin.js?v=12"></script>
   <script src="assets/admin-inventory.js?v=2"></script>
-  <script src="assets/admin-waitlist.js?v=1"></script>
+  <script src="assets/admin-waitlist.js?v=2"></script>
   <script src="assets/responsive-images.js?v=4"></script>
   <script src="assets/admin-mail-document.js?v=2"></script>
   <script src="assets/admin-mails.js?v=4"></script>

@@ -178,6 +178,7 @@ export class FavoritesService {
       priceInCents: product.price,
       currency: product.currency,
       sizeSystem: product.sizeSystem,
+      lastUnitsThreshold: product.lastUnitsThreshold ?? null,
       variants: product.variants
         .map(({ id, size, sku, price, stockQty, isActive }) => ({
           id,

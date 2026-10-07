@@ -24,6 +24,13 @@ import {
 } from '../product-size-system';
 
 export class CreateProductDto {
+  @ApiPropertyOptional({ description: 'Umbral de últimas unidades. null o 0 desactiva el aviso.', nullable: true, minimum: 0, maximum: 2147483647 })
+  @IsOptional()
+  @IsInt({ message: 'Últimas unidades debe ser un número entero.' })
+  @Min(0, { message: 'Últimas unidades no puede ser negativo.' })
+  @Max(2147483647, { message: 'Últimas unidades supera el máximo permitido.' })
+  lastUnitsThreshold?: number | null;
+
   @ApiPropertyOptional({ type: [Number], description: 'Categorías existentes. Omitir o enviar [] conserva el alta sin categorías.' })
   @IsOptional()
   @IsArray()

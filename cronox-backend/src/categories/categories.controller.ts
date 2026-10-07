@@ -1,4 +1,4 @@
-import { Controller, Get, Param, Query } from '@nestjs/common';
+import { Controller, Get, Header, Param, Query } from '@nestjs/common';
 import { ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { CategoriesService } from './categories.service';
 import { QueryCategoriesDto } from './dto/query-categories.dto';
@@ -21,6 +21,7 @@ export class CategoriesController {
   }
 
   @Get(':slug/products')
+  @Header('Cache-Control', 'no-store')
   @ApiOperation({ summary: 'Productos pertenecientes a una categoría por slug' })
   @ApiOkResponse({ description: 'Listado de productos para la categoría' })
   async listProducts(

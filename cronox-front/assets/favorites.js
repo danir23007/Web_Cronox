@@ -132,6 +132,7 @@
         : (product.image ? [safeProductImage(product.image, '')].filter(Boolean) : []),
       backendId: product.backendId ?? product.id ?? item?.productId,
       variants: product.variants,
+      lastUnitsThreshold: product.lastUnitsThreshold ?? null,
       imageRecords: product.imageRecords || product.galleryImages || (Array.isArray(product.images) ? product.images : []),
     };
   }
@@ -219,7 +220,7 @@
     const frag = document.createDocumentFragment();
     favorites.forEach((fav) => {
       const catalogProduct = findCatalogProduct(fav);
-      const cardData = catalogProduct ? { ...catalogProduct, variants: fav.variants } : {
+      const cardData = catalogProduct ? { ...catalogProduct, variants: fav.variants, lastUnitsThreshold: fav.lastUnitsThreshold } : {
         ...fav,
         id: String(fav.id || fav.backendId || ''),
         backendId: fav.backendId,
@@ -315,6 +316,7 @@
 
   document.addEventListener('DOMContentLoaded', loadFavoritesFlow);
   window.addEventListener('cronox:favsChanged', handleFavsChanged);
+  window.addEventListener('pageshow', event => { if (event.persisted) void loadFavoritesFlow({ force: true }); });
   const handleSessionChange = event => {
     if (event.initial && event.detail) return;
     favoriteFlowId += 1;

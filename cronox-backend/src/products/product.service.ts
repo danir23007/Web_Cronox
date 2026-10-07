@@ -1338,6 +1338,7 @@ export class ProductService {
             slug,
             description: dto.description,
             price: dto.price,
+            lastUnitsThreshold: dto.lastUnitsThreshold ?? null,
             privateCost: dto.unitCostCents !== undefined ? { create: { unitCostCents: dto.unitCostCents } } : undefined,
             currency,
             isActive: dto.isActive ?? true,
@@ -1444,6 +1445,7 @@ export class ProductService {
 
     if (dto.name !== undefined) data.name = dto.name;
     if (dto.price !== undefined) data.price = dto.price;
+    if (dto.lastUnitsThreshold !== undefined) data.lastUnitsThreshold = dto.lastUnitsThreshold;
     if (dto.currency !== undefined) data.currency = dto.currency;
     if (dto.description !== undefined) data.description = dto.description;
     if (dto.isActive !== undefined) data.isActive = dto.isActive;

@@ -77,7 +77,9 @@ const { loadLocalEnvironment } = require('../../cronox-backend/scripts/start-loc
     await page.locator('#adminLoginEmail').fill(actor.email); await page.locator('#adminLoginPassword').fill(password);
     await page.locator('#adminLoginSubmit').click(); await expect(page.locator('#adminLoginSubmit')).toBeHidden();
     await stage('list-first', async()=>{
-      await page.goto('http://127.0.0.1:3000/admin.html#section-products');
+      // Force a document load: a hash-only transition can reuse the page and
+      // its already-loaded counters, invalidating this cold-start measurement.
+      await page.goto('http://127.0.0.1:3000/admin.html?perf='+label+'#section-products');
       await expect(page.locator('#productsBody [data-edit-product]').first()).toBeVisible();
     });
     if (label !== 'before') {

@@ -12,7 +12,7 @@ type SurfaceWindow = {
 
 describe('PDP and quick-add stock presentation', () => {
   it('does not call incomplete stock data AGOTADO, but labels a confirmed zero', () => {
-    const dom = new JSDOM('<a id="card"><p id="price">40 €</p></a>', {
+    const dom = new JSDOM('<a id="card"><div class="product-media"></div><p id="price">40 €</p></a>', {
       url: 'http://localhost/',
       runScripts: 'outside-only',
     });
@@ -60,6 +60,7 @@ describe('PDP and quick-add stock presentation', () => {
           id: 'core',
           slug: 'core',
           name: 'Core',
+          lastUnitsThreshold: 14,
           price: 34.95,
           sizes: ['M'],
           variants: [variant],
@@ -95,7 +96,7 @@ describe('PDP and quick-add stock presentation', () => {
         const label = price.parentElement!.querySelector('.stock-status');
         expect(price.parentElement!.className).toBe('stock-price-row');
         expect(label?.textContent ?? '').toBe(
-          stock === 0 ? 'AGOTADO' : stock < 15 ? 'ÚLTIMAS TALLAS' : '',
+          stock === 0 ? 'Agotado' : stock < 15 ? 'Últimas unidades' : '',
         );
         expect(label?.className ?? '').toBe(
           stock === 0
@@ -136,7 +137,8 @@ describe('PDP and quick-add stock presentation', () => {
     expect(css).toContain(
       '.stock-status--low { color:var(--stock-low-warning); }',
     );
-    expect(css).toContain('.stock-status--out { color:#ff6464; }');
+    expect(css).toContain('.stock-status--out { color:var(--stock-out-warning); }');
+    expect(css).toContain('--stock-out-warning:#ff6464');
     expect(css).toContain(
       '.price--out-of-stock { text-decoration:line-through; opacity:.55; }',
     );

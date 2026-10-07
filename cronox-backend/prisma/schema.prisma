@@ -509,6 +509,7 @@ model Product {
   imageUrl           String?
   isActive           Boolean                    @default(true)
   displayOrder       Int                        @default(0)
+  lastUnitsThreshold Int?
   collection         String?
   searchKeywords     String[]                   @default([])
   searchText         String                     @default("")

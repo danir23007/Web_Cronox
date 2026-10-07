@@ -191,7 +191,7 @@
   // ======================================================
   // Quick-Add DOM (panel negro, sin color)
   // ======================================================
-  let qaOverlay, qaPanel, qaClose, qaImg1, qaImg2, qaName, qaPrice, /* qaColor, */ qaSizeGroup, qaAdd, qaLink;
+  let qaOverlay, qaPanel, qaClose, qaImg1, qaImg2, qaName, qaPrice, /* qaColor, */ qaSizeGroup, qaAdd, qaLink, qaNotify, qaDelivery;
   let qaReturnFocus = null;
   let qaSuspendedCart = null;
   let qaCurrentProduct = null;
@@ -202,7 +202,10 @@
     if (!product || !size) return null;
     const map = product.variantMap || {};
     const key = window.CRONOX_SIZES?.key?.(size) || String(size).toUpperCase();
-    return map[key] || map[key.toLowerCase()] || null;
+    const matching = (product.variants || []).filter(v =>
+      (window.CRONOX_SIZES?.key?.(v.sizeKey || v.sizeCode || v.size) || String(v.size || '').toUpperCase()) === key);
+    const mapped = map[key] || map[key.toLowerCase()] || null;
+    return (matching.length > 1 ? matching.find(isVariantAvailable) : null) || mapped || matching[0] || null;
   };
 
   const isVariantAvailable = (variant) => {
@@ -237,12 +240,14 @@
             <div id="qaSizes" class="qa-sizes" role="radiogroup" aria-label="Selecciona una talla"></div>
           </div>
 
-          <div class="qa-row">
+          <div class="qa-row qa-actions">
             <button id="qaAdd" class="qa-btn">Añadir al carrito</button>
+            <a id="qaNotify" class="qa-btn qa-notify" href="#" hidden>AVÍSAME</a>
+            <p id="qaDelivery" class="pdp__delivery qa-delivery" data-delivery-notice data-quick-delivery hidden aria-live="polite"><span class="pdp__delivery-dot" aria-hidden="true"></span><span>Entrega estimada antes del <strong data-delivery-date></strong></span></p>
           </div>
           <p id="qaCartStatus" role="status"></p>
 
-          <a id="qaLink" class="qa-muted-link" href="#" rel="nofollow">Ver detalles del producto</a>
+          <div class="qa-footer"><a id="qaLink" class="qa-muted-link" href="#" rel="nofollow">Ver detalles del producto</a></div>
         </div>
       </div>
     `;
@@ -257,6 +262,8 @@
     qaSizeGroup = qaOverlay.querySelector("#qaSizes");
     qaAdd   = qaOverlay.querySelector("#qaAdd");
     qaLink  = qaOverlay.querySelector("#qaLink");
+    qaNotify = qaOverlay.querySelector('#qaNotify');
+    qaDelivery = qaOverlay.querySelector('#qaDelivery');
 
     // Cerrar
     qaClose.addEventListener("click", closeQuickAdd);
@@ -329,17 +336,8 @@
       window.dispatchEvent(ev);
     });
 
-    // Ver detalles
-    qaLink.addEventListener("click", (e) => {
-      e.preventDefault();
-      if (!qaCurrentProduct) return;
-      const key = qaCurrentProduct.slug || qaCurrentProduct.id;
-      if (qaCurrentProduct.slug) {
-        window.location.href = `/producto/${encodeURIComponent(key)}`;
-      } else {
-        window.location.href = `/producto?id=${encodeURIComponent(key)}`;
-      }
-    });
+    // Both links use the current product URL. AVÍSAME only opens the existing
+    // size-alert section; no request, subscription or size choice happens here.
   }
 
   function setupQuickAddSizes(product) {
@@ -494,9 +492,18 @@
     qaPrice.textContent = product.priceLabel || euros(product.price);
 
     setupQuickAddSizes(product);
-    qaLink.textContent = (product.variants || []).some(v => v.isActive !== false && Number(v.stockQty ?? v.stock ?? 0) <= 0)
+    const exhaustedSizes = window.CRONOX_STOCK?.soldOutSizeCount(product.variants) || 0;
+    const status = window.CRONOX_STOCK?.productStockStatus(product.variants, product.lastUnitsThreshold);
+    const totallyOut = status === 'out_of_stock';
+    qaNotify.hidden = !totallyOut && exhaustedSizes < 3;
+    qaLink.textContent = !totallyOut && exhaustedSizes > 0 && exhaustedSizes < 3
       ? '¿Tu talla está agotada? Activa un aviso en el producto' : 'Ver detalles del producto';
     window.CRONOX_STOCK?.decoratePurchase(qaPrice, qaAdd, product);
+    const cornerDelivery = exhaustedSizes > 0 || totallyOut;
+    qaDelivery.classList.toggle('qa-delivery--corner', cornerDelivery);
+    (cornerDelivery ? qaOverlay.querySelector('.qa-footer') : qaOverlay.querySelector('.qa-actions')).appendChild(qaDelivery);
+    qaDelivery.dataset.deliveryAvailable = String(['low', 'in_stock'].includes(status) && !qaAdd.disabled);
+    window.CRONOX_DELIVERY?.refresh();
 
     const key = product.slug || product.id;
     if (product.slug) {
@@ -504,6 +511,7 @@
     } else {
       qaLink.href = `/producto?id=${encodeURIComponent(key)}`;
     }
+    qaNotify.href = `${qaLink.getAttribute('href')}#productWaitlist`;
 
     qaOverlay.setAttribute("aria-hidden","false");
     if (typeof window.CRONOX_lockScroll === "function") window.CRONOX_lockScroll("quick-add");
@@ -514,6 +522,8 @@
   function closeQuickAdd() {
     if (!qaOverlay || qaOverlay.getAttribute("aria-hidden") === "true") return;
     ++qaOpening;
+    qaDelivery.dataset.deliveryAvailable = 'false';
+    window.CRONOX_DELIVERY?.render(qaDelivery, null);
     qaOverlay.querySelector('.qa-media').replaceChildren();
     qaOverlay.setAttribute("aria-hidden","true");
     qaOverlay.inert = document.body.classList.contains('cart-open');
@@ -951,7 +961,12 @@
     });
   }
 
-  window.addEventListener("pageshow", (e) => { if (e.persisted) restoreScrollOrFocus(); });
+  window.addEventListener("pageshow", (e) => {
+    if (e.persisted) {
+      restoreScrollOrFocus();
+      if (productsGrid) void initCatalog();
+    }
+  });
 
   async function loadSearchResults(search) {
     const products = [];
@@ -979,9 +994,9 @@
       error.status = 400;
       return { products: [], source: "category-error", category: null, error };
     }
-    if (initialQueryRaw) {
+    if (activeSearchQuery) {
       try {
-        const result = await loadSearchResults(initialQueryRaw);
+        const result = await loadSearchResults(activeSearchQuery);
         return {
           products: result.products,
           source: "search-api",
@@ -1069,11 +1084,11 @@
     const { products, source, category, error } = await loadCatalog();
     if (requestId !== catalogRequestId) return;
     catalogLoadError = error || null;
-    if (initialQueryRaw) {
+    if (activeSearchQuery) {
       if (storeHeading) {
         storeHeading.textContent = category?.name
           ? `Resultados en ${category.name}`
-          : `Resultados para “${initialQueryRaw}”`;
+          : `Resultados para “${activeSearchQuery}”`;
       }
       catalogEmptyMessage = error
         ? "No se pudo completar la búsqueda. Inténtalo de nuevo."
