@@ -108,13 +108,15 @@ async page => {
       if (expected) {
         const result = await warning.evaluate(element => ({
           color: getComputedStyle(element).color,
-          dotColor: getComputedStyle(element.firstElementChild).backgroundColor,
-          animation: getComputedStyle(element.firstElementChild).animationName,
+          font: getComputedStyle(element).fontSize,
+          dotColor: element.firstElementChild ? getComputedStyle(element.firstElementChild).backgroundColor : null,
+          animation: element.firstElementChild ? getComputedStyle(element.firstElementChild).animationName : null,
           inline: element.parentElement.contains(document.getElementById('qaPrice')) && element.parentElement.classList.contains('stock-price-row'),
           dots: element.querySelectorAll('.product-last-units__dot').length,
         }));
-        assert(result.color === (out ? 'rgb(255, 100, 100)' : 'rgb(217, 162, 27)') && result.dotColor === 'rgb(255, 100, 100)', 'Exact original Quick Add colours: ' + item.label);
-        assert(result.inline && result.dots === 1 && result.animation === 'none', 'Inline dot: ' + item.label);
+        assert(result.color === (out ? 'rgb(255, 100, 100)' : 'rgb(217, 162, 27)'), 'Exact original Quick Add colours: ' + item.label);
+        assert(result.inline && result.font === '12px' && result.dots === (out ? 0 : 1), 'Inline size/dot: ' + item.label);
+        assert(out || (result.dotColor === 'rgb(255, 100, 100)' && result.animation === 'none'), 'Fixed red low-stock dot: ' + item.label);
       }
       if (item.label === 'one') {
         await page.locator('#qaSizes .qa-size-btn:not([disabled])').first().click();
@@ -138,16 +140,18 @@ async page => {
   for (const label of ['empty', 'disabled-empty', 'zero-empty']) assert(await badge(label).textContent() === 'AGOTADO', 'Missing real-stock exhaustion: ' + label);
   for (const label of ['empty', 'disabled-empty', 'zero-empty']) {
     assert(await badge(label).evaluate(element => getComputedStyle(element).color) === 'rgb(255, 100, 100)', 'Original card exhausted red: ' + label);
+    assert(await badge(label).locator('.product-last-units__dot').count() === 0, 'Exhausted card has a dot: ' + label);
   }
   assert(await page.locator('#productsGrid .product-card__price-row .product-last-units, #productsGrid .product-card__stock-label, #productsGrid .product-card__price-row .stock-status').count() === 0, 'Warning remains below card price');
   const fiveCard = page.locator('.product-card[data-slug="' + product.slug + '"]');
   await fiveCard.scrollIntoViewIfNeeded();
   const styles = await badge('five').evaluate(element => {
     const css = getComputedStyle(element), dot = getComputedStyle(element.firstElementChild);
-    return { color: css.color, pointerEvents: css.pointerEvents, dotColor: dot.backgroundColor, dotAnimation: dot.animationName,
+    return { color: css.color, font: css.fontSize, pointerEvents: css.pointerEvents, dotColor: dot.backgroundColor, dotAnimation: dot.animationName,
       background: css.backgroundColor, border: css.borderTopWidth, shadow: css.boxShadow };
   });
   assert(styles.pointerEvents === 'none' && styles.dotAnimation === 'none', 'Badge intercepts interactions or blinks');
+  assert(styles.font === '11px', 'Card warning size');
   assert(styles.color === 'rgb(217, 162, 27)' && styles.dotColor === 'rgb(255, 100, 100)', 'Original warning colours changed');
   assert(styles.background === 'rgba(0, 0, 0, 0)' && styles.border === '0px' && styles.shadow === 'none', 'Card warning has a box');
   await verifyQuickAdd('desktop');

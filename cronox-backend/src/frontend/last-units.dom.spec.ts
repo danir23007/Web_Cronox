@@ -40,7 +40,8 @@ describe('product last units', () => {
       expect(card.getAttribute('href')).toBe('/producto/qa');
       if (visible) {
         expect(card.querySelector('.product-last-units')?.textContent).toBe(qty === 0 ? 'AGOTADO' : 'ÚLTIMAS UNIDADES');
-        expect(card.querySelector('.product-last-units__dot')?.getAttribute('aria-hidden')).toBe('true');
+        expect(card.querySelectorAll('.product-last-units__dot')).toHaveLength(qty === 0 ? 0 : 1);
+        if (qty !== 0) expect(card.querySelector('.product-last-units__dot')?.getAttribute('aria-hidden')).toBe('true');
       }
     }
     dom.window.close();
@@ -57,7 +58,7 @@ describe('product last units', () => {
     stock.decoratePurchase(price, button, { lastUnitsThreshold: threshold, variants: [{ stockQty: qty }, { stockQty: 0 }] });
     const label = price.parentElement?.querySelector('.stock-status');
     expect(label?.textContent ?? '').toBe(text);
-    expect(label?.querySelectorAll('.product-last-units__dot').length ?? 0).toBe(text ? 1 : 0);
+    expect(label?.querySelectorAll('.product-last-units__dot').length ?? 0).toBe(text && qty > 0 ? 1 : 0);
     expect(button.disabled).toBe(qty === 0);
     expect(price.parentElement?.className).toBe('stock-price-row');
     dom.window.close();
