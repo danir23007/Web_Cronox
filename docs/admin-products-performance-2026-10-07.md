@@ -241,3 +241,76 @@ Evidencia privada ignorada en `output/playwright/products-performance/`:
 `production-readonly.json`, `production-render.log`, `production-db.log`,
 `production-queue.log`, `production-editor.png`, `after-badges.json`.
 Diagnóstico guiado por [Supabase: rendimiento](https://supabase.com/docs/guides/database/debugging-performance).
+
+## Continuación autorizada: contadores publicados y modo de sesión
+
+El ajuste de contadores se publicó en `4172eb2d87e7ec3307c04f03157b7827e62da8c9`.
+[Actions 37560623864](https://github.com/danir23007/Web_Cronox/actions/runs/37560623864)
+terminó correctamente. SHA del servidor y `admin.js?v=11` / `api.js?v=13`
+verificados, backend listo y 78 migraciones aplicadas, ninguna nueva.
+
+Repetición bajo la misma interceptación de solo lectura (caché HTTP desactivada):
+tres recargas y seis aperturas de tres productos, sin guardados reales. API listado:
+1.250 / 1.166 / 1.240 ms; detalle: 913 / 1.303 / 814 / 924 / 762 / 1.521 ms.
+Descarga JSON: 0–3 ms. Recarga completa hasta filas: 2.799 / 2.859 / 3.935 ms.
+No se extrapola el ahorro de los contadores al tiempo completo del editor.
+
+### Desglose en el VPS: conexión de diagnóstico aislada, solo lectura
+
+Se generó un cliente temporal con métricas, fuera del cliente de la aplicación;
+se cerraron conexiones y retiraron los archivos temporales. Se usaron los mismos
+servicios compilados y datos existentes sin escrituras, con
+`default_transaction_read_only=on`, límite 1 y sin iniciar Nest ni trabajadores.
+La validación medida lee una sesión activa existente; no crea sesiones ni tokens.
+No incluye la verificación criptográfica del JWT ni toda la cadena HTTP.
+
+Configuración comprobada: Supavisor compartido **session mode, puerto 5432**,
+`pgbouncer=true`, `connection_limit=1`. PostgreSQL informa máximo 60 conexiones,
+17 observadas; esto **no acredita el cupo contratado del pooler** ni justifica
+aumentarlo. Se conserva el límite y el endpoint.
+
+| Servicio aislado, muestras posteriores | Compatibilidad antigua | Modo sesión |
+| --- | ---: | ---: |
+| Validación de sesión | 130 ms | 50 ms |
+| Listado | 317–322 ms | 221–223 ms |
+| Detalle | 276–279 ms | 147–149 ms |
+| SELECT 1, incluido protocolo | 92–93 ms | 24–25 ms |
+
+Métricas del motor: espera para adquirir conexión ≈0 ms en lecturas aisladas;
+validación antigua 128 ms de tiempo de datasource y ~2 ms restante; listado
+312–318 ms de datasource y ~4–5 ms restante; detalle 272–276 ms y ~3–4 ms restante.
+Datasource incluye red y protocolo, no solo ejecución PostgreSQL. EXPLAIN ANALYZE
+de los siete SELECT del listado sumó 1,142 ms de ejecución y 6,941 ms de
+planificación en la muestra antigua. No hay evidencia para añadir índices.
+
+Dos recorridos concurrentes de autenticación+listado/detalle, en ese cliente
+aislado: 732 ms de pared / 279 ms de espera acumulada de conexión con el modo
+antiguo, frente a 453 / 147 ms en modo sesión. La espera es una suma de
+operaciones y se solapa con ejecución: **no sumar las columnas como si fueran
+fases secuenciales de una petición HTTP real**. Una repetición dio 726 / 276
+frente a 437 / 144 ms. La primera preparación en modo sesión puede costar más:
+listado frío 433 ms frente a 394 ms; el beneficio no es uniforme en primera carga.
+
+### Corrección adicional de código
+
+`runtime-database-url.ts` retira únicamente `pgbouncer=true` para el endpoint
+Supavisor AWS de sesión explícito en 5432. Conserva URL privada, credenciales,
+SSL, servidor, puerto y todos los límites. No toca modo transacción 6543,
+proveedores diferentes, localhost ni archivos `.env`. Prisma Migrate continúa
+usando su configuración original. La aplicación sigue con una sola conexión.
+
+Motivo: ese flag añade BEGIN / DEALLOCATE / COMMIT y desactiva la reutilización
+de sentencias preparadas. El modo sesión admite dichas sentencias según
+[Supabase](https://supabase.com/docs/guides/troubleshooting/disabling-prepared-statements-qL8lEL).
+Se verificó con lecturas repetidas y concurrentes reales desde el VPS, sin errores
+de sentencias preparadas. Las métricas usan la
+[definición oficial de Prisma](https://www.prisma.io/docs/orm/v6/prisma-client/observability-and-logging/metrics).
+
+Antes de publicar esta segunda corrección: compilación correcta; 28 suites / 197
+pruebas aprobadas, incluidas autenticación y exclusiones del normalizador;
+`session-pool-compatibility.cjs` compara ambos modos en PostgreSQL local con datos
+desechables (listado, detalle, orden por stock, coste privado, sesión válida y
+versión de sesión inválida), tres repeticiones concurrentes, resultados idénticos.
+Benchmark `after-session-mode`: guardado, categorías, stock, precios, imágenes,
+Bulk Edit, paginación y respuestas tardías correctos. Esta sección no acredita
+todavía los tiempos HTTP del segundo ajuste: deben medirse tras su despliegue.

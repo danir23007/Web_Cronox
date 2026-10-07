@@ -6,6 +6,7 @@ import {
   OnModuleInit,
 } from '@nestjs/common';
 import { PrismaClient } from '@prisma/client';
+import { runtimeDatabaseUrl } from './runtime-database-url';
 
 @Injectable()
 export class PrismaService
@@ -18,7 +19,7 @@ export class PrismaService
     super({
       datasources: {
         db: {
-          url: process.env.DATABASE_URL,
+          url: runtimeDatabaseUrl(process.env.DATABASE_URL),
         },
       },
     });
