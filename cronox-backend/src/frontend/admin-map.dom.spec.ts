@@ -74,6 +74,63 @@ function setup() {
   return { dom, w, requests, $: (s: string) => w.document.querySelector(s) };
 }
 describe('Map frontend synchronization and accessible states', () => {
+  it.each(['communities', 'provinces'])('sorts all %s numerically with Spanish ties, zeros and unavailable amounts', async (division) => {
+    const { dom, w, requests, $ } = setup();
+    w.location.hash += '&division=' + division;
+    w.CRONOX_MAP.load();
+    const data = report();
+    const rows = division === 'provinces' ? data.provinces : data.regions;
+    rows.forEach((r, i) => Object.assign(r, { orders: i % 3 === 0 ? 10 : i % 3 === 1 ? 2 : 0, units: i % 3 === 0 ? 2 : i % 3 === 1 ? 10 : 0, revenueCents: i % 3 === 0 ? 1000 : i % 3 === 1 ? 200 : 0 }));
+    rows[0].name = 'Álava'; rows[1].name = 'Zaragoza'; rows[2].name = 'Ñora'; rows[3].name = 'Navarra';
+    rows[4].revenueCents = null as never; rows[5].revenueCents = null as never;
+    data.groups = [{ id: 'unknown', name: 'Desconocida', orders: 999, units: 999, revenueCents: 999 }] as never;
+    requests[0].resolve({ ok: true, json: async () => data });
+    await flush(); await flush();
+    const ids = () => [...w.document.querySelectorAll('.map-regions-table [data-select]')].map((n: any) => n.dataset.select);
+    const byName = (a: any, b: any) => a.name.localeCompare(b.name, 'es') || a.id.localeCompare(b.id);
+    expect(ids()).toEqual([...rows].sort(byName).map(r => r.id));
+    expect($('[data-column="name"]').getAttribute('aria-sort')).toBe('ascending');
+    expect($('[data-sort="percent"]')).toBeNull();
+    for (const key of ['orders', 'units', 'revenueCents', 'name']) {
+      for (const direction of key === 'name' ? [1, -1] : [-1, 1]) {
+        $(`[data-sort="${key}"]`).click();
+        const expected = [...rows].sort((a: any, b: any) => {
+          if (a[key] === null || b[key] === null) return a[key] === b[key] ? byName(a, b) : a[key] === null ? 1 : -1;
+          return direction * (key === 'name' ? a.name.localeCompare(b.name, 'es') : a[key] - b[key]) || byName(a, b);
+        });
+        expect(ids()).toEqual(expected.map(r => r.id));
+        expect(ids()).toHaveLength(division === 'provinces' ? 52 : 19);
+        expect($(`[data-column="${key}"]`).getAttribute('aria-sort')).toBe(direction === 1 ? 'ascending' : 'descending');
+        expect($(`[data-sort="${key}"] .map-sort-indicator`).textContent).toBe(direction === 1 ? '↑' : '↓');
+        expect($('.map-exceptions-list').textContent).toContain('Desconocida');
+      }
+    }
+    const selected = ids()[3];
+    $(`.map-regions-table [data-select="${selected}"]`).click();
+    expect(requests[1].url).toContain('region=' + selected);
+    requests[1].resolve({ ok: true, json: async () => data }); await flush();
+    expect($('.map-detail h2').textContent).toBe(rows.find(r => r.id === selected)!.name);
+    dom.window.close();
+  });
+  it('retains table sorting across metric, dates and division changes', async () => {
+    const { dom, w, requests, $ } = setup();
+    w.CRONOX_MAP.load(); requests[0].resolve({ ok: true, json: async () => report() }); await flush();
+    $('[data-sort="orders"]').click(); $('[data-sort="orders"]').click();
+    for (const metric of ['units', 'revenueCents']) {
+      $('[name="metric"]').value = metric; $('[name="metric"]').dispatchEvent(new w.Event('change'));
+      expect($('[data-column="orders"]').getAttribute('aria-sort')).toBe('ascending');
+    }
+    $('[name="from"]').value = '2026-10-02';
+    $('.map-filters').dispatchEvent(new w.Event('submit', { cancelable: true }));
+    expect(requests[1].url).toContain('from=2026-10-02');
+    requests[1].resolve({ ok: true, json: async () => report() }); await flush();
+    $('[name="division"]').value = 'provinces'; $('[name="division"]').dispatchEvent(new w.Event('change'));
+    requests[2].resolve({ ok: true, json: async () => report() }); await flush();
+    expect($('[data-column="orders"]').getAttribute('aria-sort')).toBe('ascending');
+    expect($('[data-sort="name"] [data-sort-label]').textContent).toBe('Provincia · Comunidad');
+    expect(w.document.querySelectorAll('.map-regions-table tbody tr')).toHaveLength(52);
+    dom.window.close();
+  });
   it('switches divisions, keeps filters, clears detail and ignores obsolete sales', async () => {
     const { dom, w, requests, $ } = setup();
     w.CRONOX_MAP.load();

@@ -50,6 +50,10 @@
 .map-root th,.map-root td { text-align: right; padding: 12px 10px; border-bottom: 1px solid #35353d; white-space: nowrap; }
 .map-root th:first-child,.map-root td:first-child { text-align: left; }
 .map-root th button { padding: 4px 8px; border: 0; background: transparent; }
+.map-regions-table th button { display: inline-flex; align-items: center; gap: 8px; }
+.map-sort-indicator { color: var(--map-muted); min-width: 1em; }
+.map-regions-table th[aria-sort="ascending"] button,.map-regions-table th[aria-sort="descending"] button { color: #ffb8cb; background: #30212a; }
+.map-regions-table th[aria-sort="ascending"] .map-sort-indicator,.map-regions-table th[aria-sort="descending"] .map-sort-indicator { color: inherit; }
 .map-root td button { border: 0; background: transparent; text-align: left; padding: 4px; }
 .map-root caption { text-align: left; color: var(--map-muted); margin-bottom: 10px; }
 .map-table-panel,.map-detail,.map-exceptions { margin-top: 20px; }

@@ -13,7 +13,8 @@
   const today = () => new Intl.DateTimeFormat('en-CA', { timeZone:'Europe/Madrid', year:'numeric', month:'2-digit', day:'2-digit' }).format(new Date());
   const metricNames = { orders:'Pedidos', units:'Unidades vendidas netas', revenueCents:'Facturación' };
   let state = { from:today().slice(0,7) + '-01', to:today(), metric:'orders', division:'communities', preset:'month', region:'', page:1 };
-  let data, abort, version = 0, svgPromise, svgReady = false, sort = 'orders', direction = -1;
+  let data, abort, version = 0, svgPromise, svgReady = false, sort = 'name', direction = 1;
+  const nameOrder = new Intl.Collator('es');
   let salesState = 'loading', exploredRegion = '';
   const regionNames = new Map();
   let zoom = 1;
@@ -31,7 +32,7 @@
     <div class="map-panel map-cartography"><h2>España por comunidades autónomas</h2><div class="map-layout"><div><div class="map-cartography-status" role="status">Cargando cartografía…</div><button type="button" data-map-retry hidden>Reintentar cartografía</button><div class="map-zoom" aria-label="Ampliación del mapa"><button type="button" data-zoom="1" aria-label="Ampliar mapa">+</button><button type="button" data-zoom="-1" aria-label="Reducir mapa" disabled>−</button><button type="button" data-zoom="0">Restablecer mapa</button></div><div class="map-viewport" tabindex="0" aria-label="Mapa desplazable al ampliar"><div class="map-graphic"></div></div><div class="map-legend" aria-label="Escala de valores"></div></div><aside><h2>Explora una comunidad</h2><p class="map-note">Pasa el cursor, enfoca con el teclado o toca una región. Pulsa para ver sus provincias y pedidos.</p><div class="map-tooltip" role="status" aria-live="polite">Selecciona una comunidad.</div></aside></div>
     <p class="map-note map-projection-note"></p><p class="map-note">Cartografía: IGN (comunidades) · INE (provincias) / <a href="https://www.geoboundaries.org/" target="_blank" rel="noopener">geoBoundaries</a> · <a href="assets/maps/README.md" target="_blank" rel="noopener">Licencias y procedencia</a>.</p></div>
     <div class="map-results" hidden><div class="map-cards"></div><div class="map-panel map-detail" hidden></div>
-    <div class="map-panel map-table-panel"><h2>Comunidades y ciudades autónomas</h2><div class="map-scroll"><table class="map-regions-table"><caption>España identificada · tabla equivalente al mapa</caption><thead><tr>${[['name','Comunidad'],['orders','Pedidos'],['units','Unidades netas'],['revenueCents','Facturación'],['percent','Porcentaje']].map(([key,label]) => `<th scope="col" data-column="${key}"><button type="button" data-sort="${key}">${label}</button></th>`).join('')}</tr></thead><tbody></tbody></table></div></div>
+    <div class="map-panel map-table-panel"><h2>Comunidades y ciudades autónomas</h2><div class="map-scroll"><table class="map-regions-table"><caption>España identificada · tabla equivalente al mapa</caption><thead><tr>${[['name','Comunidad'],['orders','Pedidos'],['units','Unidades netas'],['revenueCents','Facturación']].map(([key,label]) => `<th scope="col" data-column="${key}"><button type="button" data-sort="${key}"><span data-sort-label>${label}</span><span class="map-sort-indicator" aria-hidden="true">↕</span></button></th>`).join('')}<th scope="col">Porcentaje</th></tr></thead><tbody></tbody></table></div></div>
     <div class="map-panel map-exceptions"><h2>Otros destinos y provincias sin identificar</h2><p class="map-note">Los destinos desconocidos y extranjeros están excluidos del denominador. Las comunidades identificadas sin provincia conservan sus ventas en España identificada y se desglosan aquí en modo Provincias.</p><div class="map-exceptions-list"></div></div>
     <div class="map-panel map-table-panel"><h2>Criterios y conciliación</h2><p class="map-basis map-note"></p><p class="map-reconciliation map-note"></p><p class="map-exclusions map-note"></p><ul class="map-warnings map-note"></ul></div></div>`;
 
@@ -99,7 +100,7 @@
     $('.map-layout aside h2').textContent = 'Explora una ' + territoryLabel();
     $('.map-layout aside .map-note').textContent = 'Pasa el cursor, enfoca con el teclado o toca un territorio. Pulsa para ver sus pedidos. También puedes seleccionarlo en la tabla.';
     $('.map-regions-table').closest('.map-table-panel').querySelector('h2').textContent = provinces ? 'Provincias y ciudades autónomas' : 'Comunidades y ciudades autónomas';
-    $('[data-sort="name"]').textContent = provinces ? 'Provincia · Comunidad' : 'Comunidad';
+    $('[data-sort="name"] [data-sort-label]').textContent = provinces ? 'Provincia · Comunidad' : 'Comunidad';
     $('.map-projection-note').textContent = 'Porcentajes sobre el total de España con ubicación identificada en la métrica activa. Canarias, Ceuta y Melilla se muestran en recuadros; Ceuta y Melilla están ampliadas.' + (provinces ? ' Las islas de cada provincia comparten color, datos y selección.' : ' En Melilla, la ciudad ocupa la parte superior y los islotes de la fuente se muestran debajo, a otra escala.');
   }
   function paintUnavailable() {
@@ -126,12 +127,19 @@
     state.region = id; state.page = 1; showTooltip(id); saveHash(); request();
   }
   function renderTable() {
-    const key = sort === 'percent' ? state.metric : sort;
+    const key = sort;
+    const byName = (a,b) => nameOrder.compare(a.name,b.name) || a.id.localeCompare(b.id);
     const rows = [...territories()].sort((a,b) => {
-      if (a[key] === null || b[key] === null) return a[key] === b[key] ? a.id.localeCompare(b.id) : a[key] === null ? 1 : -1;
-      return direction * (key === 'name' ? a.name.localeCompare(b.name, 'es') : a[key] - b[key]) || a.name.localeCompare(b.name,'es');
+      if (a[key] === null || b[key] === null) return a[key] === b[key] ? byName(a,b) : a[key] === null ? 1 : -1;
+      return direction * (key === 'name' ? nameOrder.compare(a.name,b.name) : a[key] - b[key]) || byName(a,b);
     });
-    root.querySelectorAll('[data-column]').forEach(th => th.setAttribute('aria-sort', th.dataset.column === sort ? direction === 1 ? 'ascending' : 'descending' : 'none'));
+    root.querySelectorAll('[data-column]').forEach(th => {
+      const active = th.dataset.column === sort, button = th.querySelector('button');
+      th.setAttribute('aria-sort', active ? direction === 1 ? 'ascending' : 'descending' : 'none');
+      button.querySelector('.map-sort-indicator').textContent = active ? direction === 1 ? '↑' : '↓' : '↕';
+      const next = active ? -direction : th.dataset.column === 'name' ? 1 : -1;
+      button.setAttribute('aria-label', button.querySelector('[data-sort-label]').textContent + ': ordenar ' + (th.dataset.column === 'name' ? next === 1 ? 'de A a Z' : 'de Z a A' : next === 1 ? 'de menor a mayor' : 'de mayor a menor'));
+    });
     $('.map-regions-table tbody').innerHTML = rows.map(r => `<tr><td><button type="button" data-select="${r.id}" aria-pressed="${state.region === r.id}">${esc(r.name)}</button>${r.regionName ? `<small class="map-region-name">${esc(r.regionName)}</small>` : ''}</td><td>${number(r.orders)}</td><td>${number(r.units)}</td><td>${money(r.revenueCents)}</td><td>${percent(r)}</td></tr>`).join('');
   }
   function renderDetail() {
@@ -227,7 +235,7 @@
       $('[data-zoom="-1"]').disabled = zoom === 1;
       if (zoom === 1) $('.map-viewport').scrollTo?.(0,0);
     }
-    if (target.dataset.sort) { direction = sort === target.dataset.sort ? -direction : -1; sort = target.dataset.sort; renderTable(); }
+    if (target.dataset.sort && data) { direction = sort === target.dataset.sort ? -direction : target.dataset.sort === 'name' ? 1 : -1; sort = target.dataset.sort; renderTable(); }
     if (target.dataset.page) { state.page += Number(target.dataset.page); saveHash(); request(); }
     if (target.dataset.order) window.CRONOX_ADMIN_ORDERS?.open(Number(target.dataset.order));
   });
