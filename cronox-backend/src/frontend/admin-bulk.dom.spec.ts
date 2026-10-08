@@ -36,6 +36,7 @@ describe('admin Bulk Edit mode', () => {
       json: async () => ({ ids: [1, 2, 3] }),
     });
     w.fetch = fetch;
+    w.eval(readFileSync(path.resolve(__dirname, '../../../cronox-front/assets/user-identity.js'), 'utf8'));
     w.eval(bulkScript);
     const query = { page: 1, pageSize: 2, q: '' };
     const body = w.document.querySelector('#usersBody');

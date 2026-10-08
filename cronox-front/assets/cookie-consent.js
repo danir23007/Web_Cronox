@@ -512,7 +512,7 @@
   window.CRONOX_COOKIE_CONSENT = api;
   if (!/^\/admin(?:[/.\-]|$)/i.test(window.location.pathname)) {
     const presence = document.createElement('script');
-    presence.src = '/assets/live-presence.js?v=1';
+    presence.src = '/assets/live-presence.js?v=2';
     document.head.append(presence);
     const visitors = document.createElement('script');
     visitors.src = '/assets/visitor-history.js?v=2';

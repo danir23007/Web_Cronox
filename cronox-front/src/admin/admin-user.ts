@@ -326,7 +326,7 @@
       (user.sessionStatus as string) ||
       (user.lastLoginAt ? 'Activa' : '—');
     setBadgeText(summarySession, 'Session', sessionStatus);
-    if (summaryId) summaryId.textContent = formatText(user.id);
+    if (summaryId) summaryId.textContent = window.CRONOX_USER_IDENTITY.format(user);
     if (summaryEmail) summaryEmail.textContent = formatText(user.email);
     const fullName = [user.firstName, user.lastName].filter(Boolean).join(' ');
     if (summaryName) summaryName.textContent = formatText(user.name || fullName || user.username);
@@ -372,7 +372,8 @@
       value: unknown;
       format?: (value: unknown) => string;
     }> = [
-      { label: 'ID', value: user.id },
+      { label: 'ID de usuario', value: window.CRONOX_USER_IDENTITY.format(user) },
+      { label: 'ID interno', value: user.id },
       { label: 'Email', value: user.email },
       { label: 'Código de bienvenida', value: user.welcomeCode || 'Sin código asignado' },
       { label: 'Nombre', value: user.name || user.firstName },

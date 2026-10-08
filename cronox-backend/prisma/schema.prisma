@@ -875,6 +875,7 @@ model User {
   dailyVisits         DailyVisitor[]
   restockRequests           RestockRequest[]
   newsletterMailJobs        NewsletterMailJob[]
+  newsletterSubscriptions   NewsletterSubscription[]
   id                        Int                     @id @default(autoincrement())
   email                     String                  @unique
   password                  String?                 @map("passwordHash")
@@ -1231,7 +1232,7 @@ model Cart {
   items       CartItem[]
 }
 
-// Short-lived, consented presence only. No navigation history or contact data.
+// Short-lived operational presence. Daily analytics has separate consent.
 model LivePresence {
   visitorHash String   @id @db.VarChar(64)
   userId      Int?
@@ -1519,9 +1520,19 @@ model PasswordResetToken {
   usedAt    DateTime?
 }
 
+/// Reservations outlive deletion. Intentionally no foreign key to User.
+model UserIdentityReservation {
+  userId            Int      @id
+  memberCode        String?  @unique
+  publicMemberToken String?  @unique
+  reservedAt        DateTime @default(now()) @db.Timestamptz(6)
+}
+
 model NewsletterSubscription {
   id                    String    @id @default(cuid())
   email                 String    @unique
+  userId                Int?
+  user                  User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
   verificationTokenHash String?   @unique
   verificationExpiresAt DateTime?
   verifiedAt            DateTime?
@@ -1534,6 +1545,7 @@ model NewsletterSubscription {
   updatedAt             DateTime  @updatedAt
 
   @@index([verifiedAt])
+  @@index([userId])
 }
 
 /// Durable newsletter delivery and single-use access-link record. Public clients

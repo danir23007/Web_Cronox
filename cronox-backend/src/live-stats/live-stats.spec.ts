@@ -6,6 +6,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { AdminGuard } from '../common/guards/admin.guard';
 import { OptionalJwtAuthGuard } from '../auth/guards/optional-jwt-auth.guard';
 import { JwtAccessStrategy } from '../auth/strategies/jwt-access.strategy';
+import { JwtService } from '@nestjs/jwt';
 
 describe('live stats security and observation', () => {
   const pipe = new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true });
@@ -27,10 +28,22 @@ describe('live stats security and observation', () => {
     await strategy.validate({res:{setHeader:jest.fn()}} as any,{sub:1,sv:1,sid:'s',type:'access'});
     expect(sessions.touch).not.toHaveBeenCalled();
   });
-  it('does not record a visitor without consent',async()=>{
+  it.each([undefined, false, true])('records temporary guests independently of analytics choice %s',async analytics=>{
     const db={$executeRaw:jest.fn()};
-    await new LiveStatsService(db as any).signal({cookies:{}} as any,{clearCookie:jest.fn()} as any,{section:'home'});
-    expect(db.$executeRaw).not.toHaveBeenCalled();
+    process.env.JWT_ACCESS_SECRET ||= 'local-test-only-secret-at-least-32-characters';
+    const cookies=analytics===undefined?{}:{cronox_cookie_consent:JSON.stringify({version:'2',analytics})};
+    const response={cookie:jest.fn(),clearCookie:jest.fn()};
+    await new LiveStatsService(db as any).signal({cookies} as any,response as any,{section:'home'});
+    expect(response.cookie).toHaveBeenCalledWith('cronox_live_visitor',expect.any(String),expect.objectContaining({httpOnly:true}));
+    expect(db.$executeRaw).toHaveBeenCalled();
+    expect(response.clearCookie).not.toHaveBeenCalled();
+  });
+  it('removes admin presence but preserves the existing browser proof for logout',async()=>{
+    const token=new JwtService().sign({vid:'previous-guest'},{secret:process.env.JWT_ACCESS_SECRET,algorithm:'HS256',audience:'live-presence',expiresIn:'24h'});
+    const db={$executeRaw:jest.fn()},response={cookie:jest.fn(),clearCookie:jest.fn()};
+    await new LiveStatsService(db as any).signal({user:{id:7,role:'ADMIN'},cookies:{cronox_live_visitor:token}} as any,response as any,{section:'home'});
+    expect(db.$executeRaw).toHaveBeenCalledTimes(1);
+    expect(response.clearCookie).not.toHaveBeenCalled();expect(response.cookie).not.toHaveBeenCalled();
   });
   it('projects only provider PaymentIntent observations, with timestamp and terminal-state guards',async()=>{
     const updateMany=jest.fn().mockResolvedValue({count:1});

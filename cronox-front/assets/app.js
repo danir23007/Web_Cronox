@@ -2092,7 +2092,9 @@ window.CRONOX_AUTH_STATE = window.CRONOX_USER ? 'authenticated' : 'unknown';
   let loginErrorMessage = '';
   let registerErrorMessage = '';
 
+  let authStateRevision = 0;
   const publishAuthState = (user, { initial = false } = {}) => {
+    authStateRevision++;
     window.CRONOX_USER = user || null;
     window.CRONOX_AUTH_STATE = user ? 'authenticated' : 'anonymous';
     updateProfileIconUI();
@@ -2353,7 +2355,12 @@ window.CRONOX_AUTH_STATE = window.CRONOX_USER ? 'authenticated' : 'unknown';
   };
 
   const clearWebStorage = () => {
-    try { sessionStorage.clear(); } catch (err) { console.warn('[AUTH] No se pudo limpiar sessionStorage', err); }
+    try {
+      const key = window.CRONOX_NEWSLETTER_VISIT?.SESSION_KEY || 'cronoxNewsletterShown';
+      const shown = sessionStorage.getItem(key) === 'true';
+      sessionStorage.clear();
+      if (shown) sessionStorage.setItem(key, 'true');
+    } catch (err) { console.warn('[AUTH] No se pudo limpiar sessionStorage', err); }
     try { localStorage.clear(); } catch (err) { console.warn('[AUTH] No se pudo limpiar localStorage', err); }
   };
 
@@ -2377,6 +2384,7 @@ window.CRONOX_AUTH_STATE = window.CRONOX_USER ? 'authenticated' : 'unknown';
   };
 
   const resetClientSessionState = () => {
+    authStateRevision++;
     window.CRONOX_AUTH_STATE = 'anonymous';
     window.CRONOX_USER = null;
     if (window.CRONOX_FAVORITES && typeof window.CRONOX_FAVORITES.setIdsFromServer === 'function') {
@@ -2547,20 +2555,23 @@ window.CRONOX_AUTH_STATE = window.CRONOX_USER ? 'authenticated' : 'unknown';
 
   const initAuthState = async () => {
     if (!window.CRONOX_API?.getMe) return;
+    const attempt = authStateRevision;
     try {
       const user = await window.CRONOX_API.getMe();
+      if (attempt !== authStateRevision) return window.CRONOX_USER;
       // Initial reads already use the same session cookies. Only an actual
       // login/logout needs to reload the cart and checkout a second time.
       return publishAuthState(user, { initial: true });
     } catch (err) {
       // A transport/session recovery error is not proof of anonymity. Keep
       // the state unknown so authenticated visitors never see a popup flash.
-      window.CRONOX_AUTH_STATE = 'unknown';
+      if (attempt === authStateRevision) window.CRONOX_AUTH_STATE = 'unknown';
       console.warn('[AUTH] No se pudo obtener el usuario actual', err);
     }
   };
 
   // Exponer funciones globales por compatibilidad
+  window.CRONOX_refreshAuthState = initAuthState;
   window.CRONOX_openAuthModal = openAuthModal;
   window.CRONOX_closeAuthModal = closeAuthModal;
   window.CRONOX_redirectHome = redirectToHomeAndReload;

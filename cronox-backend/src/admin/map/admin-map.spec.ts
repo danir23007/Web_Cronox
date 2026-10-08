@@ -74,6 +74,22 @@ const amounts = (o = order(), events: FinanceEvent[] = []) =>
   mapOrderAmounts(o, events, '2026-03-01', '2026-03-31');
 
 describe('Map geography', () => {
+  it('keeps a reliable community without inventing a province and rejects conflicting community evidence', () => {
+    expect(
+      classifyShipping({ country: 'ES', state: 'Andalucía' }),
+    ).toMatchObject({ group: 'identified', regionId: '01' });
+    expect(
+      classifyShipping({ country: 'ES', region: 'Canarias' }).provinceId,
+    ).toBeUndefined();
+    expect(
+      classifyShipping({ country: 'ES', state: 'Canarias', zip: '35001' }),
+    ).toMatchObject({ provinceId: '35', regionId: '05' });
+    expect(
+      classifyShipping({ country: 'ES', community: 'Andalucía', zip: '28001' })
+        .group,
+    ).toBe('unknownSpain');
+    expect(classifyShipping({ state: 'Andalucía' }).group).toBe('unresolved');
+  });
   it('covers all 52 prefixes and 19 regions with a unique province assignment', () => {
     expect(PROVINCES).toHaveLength(52);
     expect(REGIONS).toHaveLength(19);
@@ -293,6 +309,56 @@ describe('Map aggregation, validation and permissions', () => {
       db: { $transaction: (work: (t: typeof tx) => unknown) => work(tx) },
     };
   }
+  it('preserves totals across divisions, reconciles every community and separately paginates community-only sales', async () => {
+    const { rows, tx, db } = fixture();
+    tx.order.findMany.mockImplementation(
+      async ({ where }: any) =>
+        rows
+          .filter((r) => where.id.in.includes(r.orderId))
+          .map((r) => ({
+            id: r.orderId,
+            shippingAddr:
+              r.orderId === 405
+                ? { country: 'ES', state: 'Canarias' }
+                : {
+                    country: 'ES',
+                    zip: PROVINCES[(r.orderId - 1) % 52].id + '001',
+                  },
+          })) as any,
+    );
+    const service = new AdminMapService(db as never);
+    const communities = await service.getReport(query());
+    const provinces = await service.getReport(
+      query({ division: 'provinces', region: '35' }),
+    );
+    expect(provinces.total).toEqual(communities.total);
+    expect(provinces.identified).toEqual(communities.identified);
+    expect(provinces.provinces).toHaveLength(52);
+    for (const r of provinces.regions)
+      for (const metric of ['orders', 'units', 'revenueCents'] as const)
+        expect(
+          r.provinces.reduce((n, p) => n + p[metric]!, 0) +
+            r.unassignedProvince[metric]!,
+        ).toBe(r[metric]);
+    expect(provinces.orders.every((o) => o.province === 'Las Palmas')).toBe(
+      true,
+    );
+    for (const id of ['07', '35', '38', '51', '52'])
+      expect(
+        provinces.provinces.find((p) => p.id === id)!.orders,
+      ).toBeGreaterThan(0);
+    const only = await service.getReport(
+      query({ division: 'provinces', region: 'communityOnly:05' }),
+    );
+    expect(only.pagination.total).toBe(1);
+    expect(only.orders[0]).toMatchObject({ id: 405, province: null });
+    expect(
+      only.communityOnly.find((r) => r.id === 'communityOnly:05')!.orders,
+    ).toBe(1);
+    await expect(service.getReport(query({ region: '35' }))).rejects.toThrow(
+      'división',
+    );
+  });
   it('reconciles 3 batches, all destinations, page boundaries and the Finance endpoint', async () => {
     const { tx, db } = fixture();
     const service = new AdminMapService(db as never);

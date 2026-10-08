@@ -22,6 +22,7 @@ const manifest = JSON.parse(
 const approvedImageChanges = new Set([
   'cronox-front/assets/CRONOX-preloader.webp',
   'cronox-front/assets/logo-topbar.webp',
+  'cronox-front/assets/maps/spain-provinces.svg',
   'docs/original-assets/ui-media/cronox-front/assets/CRONOX-GIF.gif',
   'docs/original-assets/ui-media/cronox-front/assets/logo_banner.png',
 ]);
@@ -92,7 +93,7 @@ async function main() {
   assert.match(index, /class="footer-logo"/);
   assert.match(checkout, /src="assets\/CRONOX-preloader\.webp"/);
   assert.match(profile, /img\.src = 'assets\/CRONOX-preloader\.webp'/);
-  assert.match(profileHtml, /assets\/profile\.js\?v=18/);
+  assert.match(profileHtml, /assets\/profile\.js\?v=20/);
   assert.match(keyScreen, /src="assets\/CRONOX-GIF\.gif"/);
   assert.match(newsletter, /supabase\.co\/storage\/v1\/object\/public\/newsletter\/chains-newsletter\.jpg/);
   assert.ok(!index.includes('assets/CRONOX-GIF.gif'));

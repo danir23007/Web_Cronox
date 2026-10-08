@@ -2,20 +2,26 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const dir = path.resolve(__dirname, '../../cronox-front/assets/maps');
-const geo = JSON.parse(fs.readFileSync(path.join(dir, 'spain-communities.geojson'), 'utf8'));
+// Load the shared INE names from repository source, without requiring a previous
+// backend build. This module has no I/O or runtime services.
+const geography = {};
+require('node:vm').runInNewContext(require('typescript').transpileModule(fs.readFileSync(path.resolve(__dirname, '../src/admin/map/spain-geography.ts'), 'utf8'), {compilerOptions:{module:require('typescript').ModuleKind.CommonJS}}).outputText, {exports:geography,Intl});
+function build(province = false) {
+const geo = JSON.parse(fs.readFileSync(path.join(dir, province ? 'spain-provinces.geojson' : 'spain-communities.geojson'), 'utf8'));
 const names = ['Andalucía','Aragón','Principado de Asturias','Illes Balears','Canarias','Cantabria','Castilla y León','Castilla-La Mancha','Cataluña/Catalunya','Comunitat Valenciana','Extremadura','Galicia','Comunidad de Madrid','Región de Murcia','Comunidad Foral de Navarra','País Vasco/Euskadi','La Rioja','Ciudad Autónoma de Ceuta','Ciudad Autónoma de Melilla'];
+if (province) names.splice(0, names.length, ...'Alava|Albacete|Alicante|Almeria|Avila|Badajoz|Balears, Illes|Barcelona|Burgos|Caceres|Cadiz|Castellon|Ciudad Real|Cordoba|Coruna|Cuenca|Girona|Granada|Guadalajara|Gipuzkoa|Huelva|Huesca|Jaen|Leon|Lleida|Rioja, La|Lugo|Madrid|Malaga|Murcia|Navarra|Ourense|Asturias|Palencia|Palmas, Las|Pontevedra|Salamanca|Santa Cruz de Tenerife|Cantabria|Segovia|Sevilla|Soria|Tarragona|Teruel|Toledo|Valencia|Valladolid|Bizkaia|Zamora|Zaragoza|Ceuta|Melilla'.split('|'));
 for (const f of geo.features) {
   const index = names.indexOf(f.properties.shapeName);
   if (index < 0) throw Error('Unrecognized INE region: ' + f.properties.shapeName);
-  f.properties = { ...f.properties, cod_ccaa: String(index + 1).padStart(2,'0'), name: f.properties.shapeName };
+  f.properties = { ...f.properties, cod_ccaa: String(index + 1).padStart(2,'0'), name: province ? geography.PROVINCES[index].name : f.properties.shapeName };
 }
 const ids = geo.features.map(f => f.properties.cod_ccaa);
-if (new Set(ids).size !== 19 || ids.some(id => !/^(0[1-9]|1[0-9])$/.test(id))) throw Error('Expected all 19 communities/cities');
+if (geo.features.length !== names.length || new Set(ids).size !== names.length) throw Error('Expected every unique INE territory');
 const panels = [
-  { ids: ids.filter(id => !['05', '18', '19'].includes(id)), box: [20, 20, 820, 425] },
-  { ids: ['05'], box: [30, 480, 350, 115], label: 'Canarias' },
-  { ids: ['18'], box: [430, 480, 155, 115], label: 'Ceuta' },
-  { ids: ['19'], box: [650, 480, 155, 115], label: 'Melilla' },
+  { ids: ids.filter(id => !(province ? ['35','38','51','52'] : ['05', '18', '19']).includes(id)), box: [20, 20, 820, 425] },
+  { ids: province ? ['35','38'] : ['05'], box: [30, 480, 350, 115], label: 'Canarias' },
+  { ids: [province ? '51' : '18'], box: [430, 480, 155, 115], label: 'Ceuta' },
+  { ids: [province ? '52' : '19'], box: [650, 480, 155, 115], label: 'Melilla' },
 ];
 const project = ([x, y]) => [x * Math.cos(40 * Math.PI / 180), -y];
 const polygons = feature => feature.geometry.type === 'Polygon' ? [feature.geometry.coordinates] : feature.geometry.coordinates;
@@ -27,7 +33,7 @@ function fittedPath(parts, box) {
   const xy = p => { const [px,py] = project(p); return `${(x+(w-width*scale)/2+(px-minX)*scale).toFixed(2)},${(y+(h-height*scale)/2+(py-minY)*scale).toFixed(2)}`; };
   return parts.map(poly => poly.map(ring => 'M'+ring.map(xy).join('L')+'Z').join('')).join('');
 }
-let svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 860 625" role="group" aria-label="Distribución de ventas por comunidades autónomas"><title>España: comunidades y ciudades autónomas</title><desc>geoBoundaries / IGN, ESP-ADM1-25490228, CC BY 4.0. Proyección local y recuadros por CRONOX. Ver README.md.</desc>';
+let svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 860 625" role="group" aria-label="Distribución de ventas por ${province ? 'provincias' : 'comunidades autónomas'}"><title>España: ${province ? 'provincias' : 'comunidades'} y ciudades autónomas</title><desc>${province ? 'Elaboración propia con datos del INE / geoBoundaries, ESP-ADM2-93216281, datos 2018, actualización 19/01/2023, licencia de reutilización INE' : 'geoBoundaries / IGN, ESP-ADM1-25490228, CC BY 4.0'}. Proyección local y recuadros por CRONOX. Ver README.md.</desc>`;
 for (const panel of panels) {
   const features = geo.features.filter(f => panel.ids.includes(f.properties.cod_ccaa));
   const points = features.flatMap(f => polygons(f).flat(2)).map(project);
@@ -38,7 +44,7 @@ for (const panel of panels) {
   if (panel.label) svg += `<rect x="${x - 15}" y="${y - 25}" width="${w + 30}" height="${h + 48}" rx="10" class="map-inset"/><text x="${x}" y="${y - 8}" class="map-inset-label">${panel.label}</text>`;
   for (const f of features) {
     let d = polygons(f).map(poly => poly.map(ring => 'M' + ring.map(xy).join('L') + 'Z').join('')).join('');
-    if (f.properties.cod_ccaa === '19') {
+    if (f.properties.cod_ccaa === (province ? '52' : '19') && polygons(f).length > 1) {
       // Source also groups distant Spanish islets with Melilla. Keep every polygon,
       // but fit the actual city separately so its outline remains readable.
       const parts = polygons(f);
@@ -47,9 +53,12 @@ for (const panel of panels) {
       d = fittedPath(city,[x,y,w,h-36]) + fittedPath(parts.filter(p=>!city.includes(p)),[x,y+h-14,w,14]);
       svg += `<text x="${x}" y="${y+h-18}" class="map-islets-label">Islotes · otra escala</text>`;
     }
-    svg += `<g data-region="${f.properties.cod_ccaa}" tabindex="0" role="button" aria-label="${f.properties.name}" aria-pressed="false">${panel.label ? `<rect x="${x-10}" y="${y-20}" width="${w+20}" height="${h+40}" class="map-hit"/>` : ''}<path d="${d}" fill-rule="evenodd"/></g>`;
+    svg += `<g data-region="${f.properties.cod_ccaa}" tabindex="0" role="button" aria-label="${f.properties.name}" aria-pressed="false">${panel.label && features.length === 1 ? `<rect x="${x-10}" y="${y-20}" width="${w+20}" height="${h+40}" class="map-hit"/>` : ''}<path d="${d}" fill-rule="evenodd"/></g>`;
   }
 }
 svg += '<text x="680" y="290" class="map-inset-label">Illes Balears</text></svg>';
-fs.writeFileSync(path.join(dir, 'spain-communities.svg'), svg);
+fs.writeFileSync(path.join(dir, province ? 'spain-provinces.svg' : 'spain-communities.svg'), svg);
 console.log(`Generated ${ids.length} regions (${Buffer.byteLength(svg)} bytes)`);
+}
+build();
+build(true);

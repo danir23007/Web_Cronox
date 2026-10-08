@@ -98,12 +98,24 @@ export class AdminMapService {
 
   async getReport(query: MapQuery) {
     validateRange(query.from, query.to);
+    const division = query.division ?? 'communities';
+    if (
+      query.region &&
+      /^\d+$/.test(query.region) &&
+      !(division === 'provinces' ? PROVINCES : REGIONS).some(
+        (r) => r.id === query.region,
+      )
+    )
+      throw new BadRequestException(
+        'El territorio no pertenece a la división seleccionada.',
+      );
     const pageSize = 25;
     return this.prisma.$transaction(
       async (tx) => {
         const regions = REGIONS.map((r) => ({
           ...r,
           ...empty(),
+          unassignedProvince: empty(),
           provinces: PROVINCES.filter((p) => p.regionId === r.id).map((p) => ({
             id: p.id,
             name: p.name,
@@ -246,7 +258,9 @@ export class AdminMapService {
               const region = regions.find((r) => r.id === location.regionId)!;
               addAmounts(region, value.amount);
               addAmounts(
-                region.provinces.find((p) => p.id === location.provinceId)!,
+                location.provinceId
+                  ? region.provinces.find((p) => p.id === location.provinceId)!
+                  : region.unassignedProvince,
                 value.amount,
               );
             } else
@@ -256,7 +270,13 @@ export class AdminMapService {
               );
             if (
               query.region &&
-              query.region === (location.regionId ?? location.group)
+              (query.region ===
+                (division === 'provinces'
+                  ? (location.provinceId ?? location.group)
+                  : (location.regionId ?? location.group)) ||
+                (location.regionId &&
+                  !location.provinceId &&
+                  query.region === `communityOnly:${location.regionId}`))
             ) {
               if (
                 detailCount >= (query.page - 1) * pageSize &&
@@ -290,6 +310,20 @@ export class AdminMapService {
         )
           throw new Error('El total supera la precisión admitida.');
         return {
+          division,
+          provinces: regions.flatMap((r) =>
+            r.provinces.map((p) => ({
+              ...p,
+              regionId: r.id,
+              regionName: r.name,
+            })),
+          ),
+          communityOnly: regions.map((r) => ({
+            id: `communityOnly:${r.id}`,
+            regionId: r.id,
+            name: `${r.name} · provincia sin identificar`,
+            ...r.unassignedProvince,
+          })),
           regions,
           groups,
           identified,

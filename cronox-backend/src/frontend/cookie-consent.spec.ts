@@ -260,14 +260,14 @@ describe('cookie consent frontend', () => {
     for (const page of publicPages) {
       const html = readFileSync(path.join(frontendRoot, page), 'utf8');
       expect(html).toContain('assets/cookie-consent.css?v=2');
-      expect(html).toContain('assets/cookie-consent.js?v=8');
+      expect(html).toContain('assets/cookie-consent.js?v=9');
       // Secure access/launch pages use only aggregate presence, never historical URLs.
       if (!['newsletter-access.html', 'launch.html', 'email-change.html'].includes(page)) {
         expect(html).toContain('assets/customer-analytics.js?v=1');
       }
     }
     expect(consentSource).toContain('if (!current) showBanner();');
-    expect(consentSource).toContain('/assets/live-presence.js?v=1');
+    expect(consentSource).toContain('/assets/live-presence.js?v=2');
   });
 
   it('keeps Stripe on checkout but does not reload it on the success page', () => {

@@ -262,7 +262,7 @@ export class VisitorHistoryService {
     const filter = Prisma.sql`v."day" = ${day}::date
       AND (${category} = 'all' OR v."category" = ${category})
       AND (${search} = '' OR v."id" ILIKE ${term} OR v."userId"::text = ${search}
-        OR u."name" ILIKE ${term} OR u."email" ILIKE ${term})`;
+        OR u."name" ILIKE ${term} OR u."email" ILIKE ${term} OR u."memberCode" ILIKE ${term})`;
     return this.db.$transaction(
       async (tx) => {
         const totals = await tx.$queryRaw<
@@ -278,7 +278,7 @@ export class VisitorHistoryService {
           pages = Math.max(1, Math.ceil(total / pageSize));
         page = Math.min(page, pages);
         const visitors = await tx.$queryRaw`
-        SELECT v."id", v."category", v."userId", u."name", u."email", v."firstAt", v."lastAt"
+        SELECT v."id", v."category", v."userId", u."name", u."email", u."memberCode", v."firstAt", v."lastAt"
         FROM "CountedDailyVisitor" v LEFT JOIN "User" u ON u.id = v."userId" WHERE ${filter}
         ORDER BY v."firstAt", v."id" LIMIT ${pageSize} OFFSET ${(page - 1) * pageSize}
       `;

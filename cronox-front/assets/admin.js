@@ -330,6 +330,7 @@
     'section-products': 'products',
     'section-inventory': 'inventory',
     'section-waitlist': 'waitlist',
+    'section-favorites': 'products',
     'section-mails': 'mails',
     'section-key-screen': 'keyScreen',
     'section-newsletter': 'newsletter',
@@ -410,6 +411,7 @@
     setNavVisibility('section-products', canAccess('products'));
     setNavVisibility('section-inventory', canAccess('inventory'));
     setNavVisibility('section-waitlist', canAccess('waitlist'));
+    setNavVisibility('section-favorites', canAccess('products'));
     setNavVisibility('section-mails', canAccess('mails'));
     setNavVisibility('section-key-screen', canAccess('keyScreen'));
     setNavVisibility('section-newsletter', canAccess('newsletter'));
@@ -1515,7 +1517,8 @@
     if (!payload) return;
     const user = payload.user || {};
     const stats = payload.stats || {};
-    const displayName = user.username || user.email || `Usuario ${user.id || ''}`.trim();
+    const publicId = window.CRONOX_USER_IDENTITY.format(user);
+    const displayName = user.username || user.email || `Usuario ${publicId}`;
     const email = user.email || '—';
 
     if (userName) userName.textContent = displayName;
@@ -1529,6 +1532,7 @@
       user.circle = safeText(user.circle);
       const safeRole = safeText(displayRole, '');
       const badges = [
+        `<span class="badge">ID de usuario: ${escapeHtml(publicId)}</span>`,
         `<span class="badge">Círculo ${user.circle ?? '—'}</span>`,
         displayRole ? `<span class="badge">${safeRole}</span>` : '',
       ].filter(Boolean);
@@ -1655,6 +1659,7 @@
     if (sectionId === 'section-product-categories') loadCategoryAssignments();
     if (sectionId === 'section-inventory') window.CRONOX_INVENTORY?.load?.();
     if (sectionId === 'section-waitlist') window.CRONOX_WAITLIST_ADMIN?.load?.();
+    if (sectionId === 'section-favorites') window.CRONOX_FAVORITES_ADMIN?.load?.();
     if (sectionId === 'section-mails') window.CRONOX_MAILS?.load?.();
     if (sectionId === 'section-inbox') {
       if (window.location.hash.split('?')[0] === '#section-mail-campaign') window.CRONOX_INBOX?.openCampaign?.();
@@ -2064,7 +2069,7 @@
         const userLabel = userName || '—';
         const rawUserId = req.userId;
         const safeUserLabel = safeText(userLabel);
-        const safeUserId = safeText(rawUserId);
+        const safeUserId = safeText(window.CRONOX_USER_IDENTITY.format(req.user));
         const safeSocialNetwork = safeText(req.socialNetwork);
         const safeUsername = safeText(req.username);
         const safeRequestId = escapeHtml(req.id);
@@ -2139,7 +2144,7 @@
         const userLabel = userName || '—';
         const rawUserId = req.userId;
         const safeUserLabel = safeText(userLabel);
-        const safeUserId = safeText(rawUserId);
+        const safeUserId = safeText(window.CRONOX_USER_IDENTITY.format(req.user));
         const safeRequestId = escapeHtml(req.id);
         const userCell = rawUserId
           ? `<a class="link-btn" href="admin-user.html?id=${encodeURIComponent(rawUserId)}">${safeUserLabel}</a>`
@@ -2469,6 +2474,7 @@
     return {
       id,
       registrationNumber: source.registrationNumber,
+      memberCode: source.memberCode,
       email,
       phone,
       displayName,
@@ -2505,7 +2511,7 @@
     if (controls) controls.hidden = totalPages <= 1;
   };
 
-  const getUsersColumnCount = () => 9 + Number(window.CRONOX_BULK?.isActive('users'));
+  const getUsersColumnCount = () => 10 + Number(window.CRONOX_BULK?.isActive('users'));
 
   const formatUserRole = (role) => {
     if (role === 'FRIEND') return 'Friend';
@@ -2554,6 +2560,7 @@
         return `
           <tr>
             <td>${numberLabel}</td>
+            <td>${escapeHtml(window.CRONOX_USER_IDENTITY.format(user))}</td>
             <td>${emailCell}</td>
             <td>${phoneCell}</td>
             <td>${nameLabel}</td>
@@ -3304,6 +3311,9 @@
   };
 
   let productOpenVersion = 0;
+  window.addEventListener('cronox:admin-edit-product', event => {
+    if (canAccess('products') && currentSectionId === 'section-favorites' && Number.isInteger(event.detail?.id) && event.detail.id > 0) void openProductModal(event.detail.id);
+  });
   const openProductModal = async (productId = null) => {
     const request = ++productOpenVersion;
     const section = currentSectionId;

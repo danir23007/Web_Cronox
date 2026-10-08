@@ -17,6 +17,7 @@ function createFixture() {
   const live = rows.map((r,i) => {
     const province = i < 36 ? PROVINCES[27] : PROVINCES[(i-36)%52];
     let shippingAddr = {country:'ES',zip:province.id+'001',state:province.name};
+    if (i===89) shippingAddr = {country:'ES',state:'Andalucía'};
     if (i===90) shippingAddr = {country:'ES',zip:'28001',state:'Barcelona'};
     if (i===91) shippingAddr = {country:'France',zip:'75001'};
     if (i===92) shippingAddr = {};
@@ -36,7 +37,7 @@ function start(port=43127) {
   app.use((req,res,next)=> { if (req.method!=='GET') return res.status(405).json({message:'Read-only review'}); next(); });
   app.get('/api/me',(req,res)=>res.json({id:1,role:'ADMIN',email:'review@example.test',name:'Revisión local'}));
   app.get('/api/admin/map',async(req,res)=> {
-    try { res.json(await service.getReport({from:req.query.from,to:req.query.to,region:req.query.region,page:Number(req.query.page)||1})); }
+    try { res.json(await service.getReport({from:req.query.from,to:req.query.to,division:req.query.division,region:req.query.region,page:Number(req.query.page)||1})); }
     catch(e) { res.status(400).json({message:e.message}); }
   });
   app.get('/api/admin/orders/:id',(req,res)=>res.json({id:Number(req.params.id),status:'DELIVERED',paymentStatus:'PAID',fulfillmentStatus:'DELIVERED',customer:{name:'Cliente simulado',email:'review@example.test'},shippingAddress:{province:'Madrid',country:'España'},items:[],total:'48.00'}));

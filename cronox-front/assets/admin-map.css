@@ -19,6 +19,8 @@
 .map-card:last-child strong { font-size: 17px; line-height: 1.4; }
 .map-layout { display: grid; grid-template-columns: minmax(0, 1fr) 270px; gap: 20px; }
 .map-graphic { min-width: 0; width: 100%; aspect-ratio: 860 / 625; }
+.map-viewport { width: 100%; aspect-ratio: 860 / 625; overflow: auto; }
+.map-zoom { display: flex; gap: 8px; margin-bottom: 10px; }
 .map-graphic svg { width: 100%; height: auto; aspect-ratio: 860 / 625; display: block; }
 .map-cartography-status:empty { display: none; }
 .map-cartography-status { margin-bottom: 12px; color: #edbac7; }
@@ -37,6 +39,8 @@
 .map-tooltip dl { margin: 0; display: grid; grid-template-columns: 1fr auto; gap: 10px; font-size: 13px; }
 .map-tooltip dd { margin: 0; text-align: right; }
 .map-tooltip dt { color: var(--map-muted); }
+.map-region-name { display: block; color: var(--map-muted); padding-left: 4px; }
+.map-graphic[inert] { opacity: .65; }
 .map-legend { display: flex; flex-wrap: wrap; gap: 12px; font-size: 12px; margin: 12px 0; }
 .map-legend span { display: inline-flex; align-items: center; gap: 7px; }
 .map-legend i { width: 18px; height: 18px; display: inline-block; border-radius: 4px; }

@@ -1,4 +1,5 @@
 import { NewsletterService } from './newsletter.service';
+jest.mock('../users/member-code.util', () => ({ getNextSequentialMemberCode: jest.fn().mockResolvedValue('CRX-000123') }));
 
 describe('Newsletter durable single opt-in', () => {
   let row: any, promo: any, user: any, jobs: any[], db: any, mail: any, service: NewsletterService;
@@ -6,6 +7,7 @@ describe('Newsletter durable single opt-in', () => {
     row = null; promo = null; user = null; jobs = [];
     db = {
       $executeRaw: jest.fn(),
+      $queryRaw: jest.fn(async () => user ? [user] : []),
       newsletterSubscription: {
         findUnique: jest.fn(async () => row),
         upsert: jest.fn(async ({ create }: any) => { row ||= { id: 'sub', ...create, verifiedAt: null }; return { ...row, welcomePromoCode: promo }; }),
@@ -15,7 +17,7 @@ describe('Newsletter durable single opt-in', () => {
         findFirst: jest.fn(async ({ where }: any) => jobs.find(job => job.email === where.email && job.kind === where.kind && (!where.createdAt || job.createdAt >= where.createdAt.gte)) || null),
         create: jest.fn(async ({ data }: any) => { const job = { id: `job-${jobs.length}`, createdAt: new Date(), ...data }; jobs.push(job); return job; }),
       },
-      user: { findMany: jest.fn(async () => user ? [user] : []), findUnique: jest.fn(async () => user), update: jest.fn(async ({ data }: any) => Object.assign(user, data)), create: jest.fn() },
+      user: { findMany: jest.fn(async () => user ? [user] : []), findUnique: jest.fn(async () => user), update: jest.fn(async ({ data }: any) => Object.assign(user, data)), create: jest.fn(async ({ data }: any) => user = { id: 1, role: 'USER', ...data }) },
       order: { findFirst: jest.fn().mockResolvedValue(null) },
       discountCode: { findFirst: jest.fn().mockResolvedValue(null), findUnique: jest.fn().mockResolvedValue(null) },
       promoCode: { findUnique: jest.fn().mockResolvedValue(null), upsert: jest.fn(async ({ create }: any) => {
@@ -36,7 +38,9 @@ describe('Newsletter durable single opt-in', () => {
     expect(promo).toMatchObject({ type: 'PERCENT', value: 10, firstOrderOnly: true, ownerEmail: 'new@example.test', usageLimit: 1 });
     expect(jobs).toMatchObject([{ email: 'new@example.test', kind: 'WELCOME' }]);
     expect(mail.sendNewsletterWelcome).not.toHaveBeenCalled();
-    expect(db.user.create).not.toHaveBeenCalled();
+    expect(db.user.create).toHaveBeenCalledTimes(1);
+    expect(user).toMatchObject({ password: null, accountState: 'PRE_REGISTERED', memberCode: 'CRX-000123', newsletterSubscribed: true });
+    expect(row.userId).toBe(user.id);
   });
 
   it('keeps the public response identical and never duplicates a pending welcome', async () => {
@@ -51,7 +55,7 @@ describe('Newsletter durable single opt-in', () => {
   it('queues one access message for an existing subscriber, with or without an account', async () => {
     row = { id: 'sub', email: 'known@example.test', subscribedAt: new Date(), welcomeSentAt: new Date() };
     const first = await service.subscribe('known@example.test');
-    user = { id: 7, email: row.email, newsletterSubscribed: true, role: 'USER', accountState: 'ACTIVE' };
+    user = { id: 1, email: row.email, newsletterSubscribed: true, role: 'USER', accountState: 'ACTIVE' };
     const second = await service.subscribe('KNOWN@example.test');
     expect(first.confirmation).toBe('subscribed');
     expect(second.confirmation).toBe('existing_account');

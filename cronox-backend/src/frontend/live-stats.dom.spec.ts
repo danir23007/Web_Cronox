@@ -5,21 +5,75 @@ const source=(file:string)=>readFileSync(join(__dirname,'../../../cronox-front/a
 const flush=()=>new Promise(resolve=>setTimeout(resolve,0));
 
 describe('live stats browser scheduling',()=>{
-  it('starts only after consent, pauses hidden tabs, coalesces events and removes consented presence',async()=>{
-    const dom=new JSDOM('',{url:'http://localhost/tienda?token=never-send',runScripts:'outside-only'});
-    const w=dom.window; let registration:any, hidden=false, callback:any;
+  const visitor = (state='anonymous', role?:string) => {
+    jest.useFakeTimers();
+    const dom=new JSDOM('',{url:'http://localhost/tienda?token=never-send',runScripts:'outside-only'}),w=dom.window as any;
+    let hidden=false;
     Object.defineProperty(w.document,'hidden',{get:()=>hidden});
-    Object.defineProperty(w.navigator,'locks',{value:{request:async(_:string,fn:any)=>fn()}});
-    w.setTimeout=((fn:any)=>{callback=fn;return 1;}) as any;w.clearTimeout=jest.fn();
+    Object.defineProperty(w.navigator,'locks',{configurable:true,value:{request:async(_:string,fn:any)=>fn()}});
     const fetch=jest.fn().mockResolvedValue({ok:true});
-    Object.assign(w,{fetch,CRONOX_API:{getCsrfHeaders:async()=>({'x-csrf-token':'local'})},CRONOX_COOKIE_CONSENT:{registerService:(s:any)=>registration=s}});
-    w.eval(source('live-presence.js'));expect(fetch).not.toHaveBeenCalled();
-    registration.load();await callback();await flush();expect(fetch).toHaveBeenCalledTimes(1);
-    expect(JSON.parse(fetch.mock.calls[0][1].body)).toEqual({section:'store',enabled:true});
-    hidden=true;w.document.dispatchEvent(new w.Event('visibilitychange'));await callback();expect(fetch).toHaveBeenCalledTimes(1);
-    hidden=false;w.document.dispatchEvent(new w.Event('visibilitychange'));await callback();await flush();expect(fetch).toHaveBeenCalledTimes(2);
-    registration.disable();await flush();expect(JSON.parse(fetch.mock.calls.at(-1)![1].body).enabled).toBe(false);
-    dom.window.close();
+    Object.assign(w,{Date,fetch,CRONOX_AUTH_STATE:state,CRONOX_USER:role?{id:7,role}:null,CRONOX_API:{getCsrfHeaders:async()=>({'x-csrf-token':'local'})}});
+    return {w,fetch,start:()=>w.eval(source('live-presence.js')),hide:(value:boolean)=>{hidden=value;w.document.dispatchEvent(new w.Event('visibilitychange'));},close:()=>{w.dispatchEvent(new w.Event('pagehide'));dom.window.close();jest.clearAllTimers();jest.useRealTimers();}};
+  };
+  it('starts without consent, coalesces events and resumes after visibility changes',async()=>{
+    const v=visitor();try {
+      v.start();await jest.advanceTimersByTimeAsync(0);expect(v.fetch).toHaveBeenCalledTimes(1);
+      expect(JSON.parse(v.fetch.mock.calls[0][1].body)).toEqual({section:'store',enabled:true});
+      v.start();for(let i=0;i<8;i++)v.w.dispatchEvent(new v.w.Event('hashchange'));
+      await jest.advanceTimersByTimeAsync(5100);expect(v.fetch).toHaveBeenCalledTimes(2);
+      v.hide(true);await jest.advanceTimersByTimeAsync(60000);expect(v.fetch).toHaveBeenCalledTimes(2);
+      v.hide(false);await jest.advanceTimersByTimeAsync(0);expect(v.fetch).toHaveBeenCalledTimes(3);
+    }finally{v.close();}
+  });
+  it.each(['anonymous','ADMIN','SUPERADMIN'])('waits for unknown authentication and then resolves %s',async role=>{
+    const v=visitor('unknown');let resolve:any;
+    v.w.CRONOX_AUTH_READY=new Promise(r=>resolve=r);
+    try {
+      v.start();await jest.advanceTimersByTimeAsync(0);expect(v.fetch).not.toHaveBeenCalled();
+      v.w.CRONOX_AUTH_STATE=role==='anonymous'?'anonymous':'authenticated';v.w.CRONOX_USER=role==='anonymous'?null:{id:7,role};resolve();
+      await jest.advanceTimersByTimeAsync(0);expect(v.fetch).toHaveBeenCalledTimes(1);
+      expect(JSON.parse(v.fetch.mock.calls[0][1].body).enabled).toBe(role==='anonymous');
+    }finally{v.close();}
+  });
+  it('checks identity again after CSRF awaits and never posts a stale guest signal',async()=>{
+    const v=visitor();let resolve:any;
+    v.w.CRONOX_API.getCsrfHeaders=()=>new Promise(r=>resolve=r);
+    try {
+      v.start();await jest.advanceTimersByTimeAsync(0);
+      v.w.CRONOX_AUTH_STATE='authenticated';v.w.CRONOX_USER={id:7,role:'ADMIN'};
+      v.w.dispatchEvent(new v.w.Event('cronox:userChanged'));resolve({'x-csrf-token':'local'});
+      await jest.advanceTimersByTimeAsync(0);expect(v.fetch).not.toHaveBeenCalled();
+      v.w.CRONOX_API.getCsrfHeaders=async()=>({'x-csrf-token':'local'});resolve({'x-csrf-token':'local'});
+      await jest.advanceTimersByTimeAsync(5000);
+      expect(v.fetch.mock.calls.every((call:any)=>JSON.parse(call[1].body).enabled===false)).toBe(true);
+    }finally{v.close();}
+  });
+  it('retries HTTP failures and unresolved authentication without navigation',async()=>{
+    const v=visitor('unknown');
+    v.w.CRONOX_refreshAuthState=jest.fn(async()=>{});
+    try {
+      v.start();await jest.advanceTimersByTimeAsync(0);expect(v.fetch).not.toHaveBeenCalled();
+      v.w.CRONOX_AUTH_STATE='anonymous';v.fetch.mockResolvedValueOnce({ok:false,status:503});
+      await jest.advanceTimersByTimeAsync(5000);expect(v.fetch).toHaveBeenCalledTimes(1);
+      await jest.advanceTimersByTimeAsync(5000);expect(v.fetch).toHaveBeenCalledTimes(2);
+    }finally{v.close();}
+  });
+  it('does not remain permanently pending if the initial auth promise stalls',async()=>{
+    const v=visitor('unknown');v.w.CRONOX_AUTH_READY=new Promise(()=>{});
+    try {
+      v.start();await jest.advanceTimersByTimeAsync(10000);expect(v.fetch).not.toHaveBeenCalled();
+      v.w.CRONOX_AUTH_STATE='anonymous';await jest.advanceTimersByTimeAsync(5000);
+      expect(v.fetch).toHaveBeenCalledTimes(1);
+    }finally{v.close();}
+  });
+  it('retries a failed leased heartbeat on browsers without Web Locks',async()=>{
+    const v=visitor();Object.defineProperty(v.w.navigator,'locks',{value:undefined});
+    try {
+      v.fetch.mockResolvedValueOnce({ok:false,status:503});v.start();
+      await jest.advanceTimersByTimeAsync(60);expect(v.fetch).toHaveBeenCalledTimes(1);
+      expect(v.w.localStorage.getItem('cronox_live_lease')).toBeNull();
+      await jest.advanceTimersByTimeAsync(5060);expect(v.fetch).toHaveBeenCalledTimes(2);
+    }finally{v.close();}
   });
   it('excludes administrative pages',()=>{
     const dom=new JSDOM('',{url:'http://localhost/admin-user.html?id=1',runScripts:'outside-only'});

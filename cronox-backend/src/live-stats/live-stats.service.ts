@@ -4,7 +4,6 @@ import { createHash, randomUUID } from 'node:crypto';
 import type { Request, Response } from 'express';
 import { PrismaService } from '../prisma/prisma.service';
 import { getRequiredJwtSecret, isProductionEnvironment } from '../common/config/environment';
-import { hasAnalyticsConsent } from '../analytics/analytics-consent';
 import { CART_COOKIE_NAME } from '../common/cookies/cart-cookie';
 import type { PresenceDto } from './live-stats.controller';
 import { LIVE_STATS_SQL } from './live-stats.sql';
@@ -41,9 +40,10 @@ export class LiveStatsService implements OnModuleInit, OnModuleDestroy {
     const visitor = this.visitor(req);
     let visitorHash = visitor?.hash || null;
     const user = req.user as { id: number; role: string } | undefined;
-    if (!hasAnalyticsConsent(req) || body.enabled === false || ['ADMIN', 'SUPERADMIN'].includes(user?.role || '')) {
+    // Ephemeral live presence is separate from consented daily analytics.
+    if (body.enabled === false || ['ADMIN', 'SUPERADMIN'].includes(user?.role || '')) {
       if (visitorHash) await this.prisma.$executeRaw`DELETE FROM "LivePresence" WHERE "visitorHash" = ${visitorHash}`;
-      res.clearCookie(COOKIE, { path: '/api', httpOnly: true, sameSite: 'lax', secure: isProductionEnvironment() });
+      // Retain the proof across logout/role changes without counting admins.
       return;
     }
     // Rotate before cookie expiry while we can still remove the old row. A

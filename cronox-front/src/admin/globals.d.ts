@@ -163,6 +163,7 @@ declare global {
   }
 
   interface Window {
+    CRONOX_USER_IDENTITY: { format(user: { memberCode?: string | null }): string };
     CRONOX_ADMIN_AUTH?: {
       currentReturnTo: () => string;
       isAdmin: (user: { role?: string } | null | undefined) => boolean;

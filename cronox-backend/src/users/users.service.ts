@@ -127,6 +127,7 @@ export class UsersService {
 
   async ensureMemberCode(userId: number): Promise<string> {
     return this.prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${'cronox:user-identity:' + userId}))`;
       const user = await tx.user.findUnique({ where: { id: userId } });
       if (!user) throw new NotFoundException('User not found');
 
@@ -154,7 +155,10 @@ export class UsersService {
     },
   ) {
     return this.prisma.$transaction(async (tx) => {
-      const memberCode = await getNextSequentialMemberCode(tx);
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${'cronox:user-identity:' + id}))`;
+      const existing = await tx.user.findUnique({ where: { id } });
+      if (!existing) return null;
+      const memberCode = existing.memberCode ?? await getNextSequentialMemberCode(tx);
       const updated = await tx.user.updateMany({
         where: {
           id,
@@ -170,6 +174,7 @@ export class UsersService {
 
   async ensurePublicMemberToken(userId: number): Promise<string> {
     return this.prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${'cronox:user-identity:' + userId}))`;
       const user = await tx.user.findUnique({
         where: { id: userId },
         select: { publicMemberToken: true },

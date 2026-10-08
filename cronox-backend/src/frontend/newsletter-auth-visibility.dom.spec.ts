@@ -81,6 +81,22 @@ const setup = () => {
 };
 
 describe('public newsletter authoritative authentication gate', () => {
+  it('preserves the consumed automatic appearance across logout and the next page controller', async () => {
+    const context = setup();
+    context.window.console.error = jest.fn();
+    try {
+      await flush(); context.auth.resolve(null); await flush();
+      const win = context.window;
+      win.sessionStorage.setItem('cronoxNewsletterShown', 'true');
+      win.sessionStorage.setItem('account-private-cache', 'old');
+      await win.CRONOX_logout();
+      expect(win.sessionStorage.getItem('cronoxNewsletterShown')).toBe('true');
+      expect(win.sessionStorage.getItem('account-private-cache')).toBeNull();
+      delete win.CRONOX_NEWSLETTER_VISIT;
+      win.eval(read('assets/newsletter-visit.js'));
+      expect(win.CRONOX_NEWSLETTER_VISIT.create().eligible()).toBe(false);
+    } finally { context.dom.window.close(); }
+  });
   it('keeps voluntary subscription working and suppresses automatic prompts after success', async () => {
     const context = setup();
     try {

@@ -145,6 +145,7 @@ export class AdminUsersService {
         updatedAt: true,
         lastLoginAt: true,
         accountState: true,
+        memberCode: true,
       },
     });
 
@@ -249,6 +250,7 @@ export class AdminUsersService {
     return {
       user: {
         id: user.id,
+        memberCode: user.memberCode,
         email: user.email,
         welcomeCode: originalWelcome?.code ?? null,
         username,
@@ -683,6 +685,8 @@ export class AdminUsersService {
 
     if (search) {
       where.OR = [
+        { memberCode: { contains: search, mode: 'insensitive' } },
+        ...(Number.isSafeInteger(Number(search)) && Number(search) > 0 ? [{ id: Number(search) }] : []),
         { email: { contains: search, mode: 'insensitive' } },
         { name: { contains: search, mode: 'insensitive' } },
         { firstName: { contains: search, mode: 'insensitive' } },
@@ -731,6 +735,7 @@ export class AdminUsersService {
       case 'email':
         return [{ email: order }, { id: order }];
       case 'id':
+        return [{ id: order }];
       case 'createdAt':
       default:
         return [{ createdAt: order }, { id: order }];
@@ -740,6 +745,7 @@ export class AdminUsersService {
   private mapUser(user: User) {
     return {
       id: user.id,
+      memberCode: user.memberCode,
       email: user.email,
       name: user.name,
       firstName: user.firstName,

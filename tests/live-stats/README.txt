@@ -1,5 +1,11 @@
 LIVE STATS - revisión local, 30/09/2026
 
+Actualización 08/10/2026: las reglas de consentimiento y deduplicación de este
+informe antiguo han sido sustituidas por docs/live-stats-2026-10-08.md.
+La presencia temporal funciona con cualquier elección de cookies; el histórico
+diario conserva el consentimiento. Para la revisión actual usa review.cli.js,
+capture.cli.js y cronox-backend/scripts/review-live-stats-sql.cjs.
+
 URL: http://localhost:3000/admin.html#section-live-stats
 
 Definiciones

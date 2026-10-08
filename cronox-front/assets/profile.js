@@ -469,7 +469,7 @@
     const normalizedCircle = applyCircleLevel(user?.circleLevel);
     if (accreditationName) accreditationName.textContent = formatAccreditationName(fullName);
     if (accreditationCircle) accreditationCircle.textContent = `Círculo ${toRomanNumeral(normalizedCircle)}`;
-    if (accreditationCode) accreditationCode.textContent = user?.memberCode ? `ID: ${user.memberCode}` : 'ID: —';
+    if (accreditationCode) accreditationCode.textContent = `ID: ${window.CRONOX_USER_IDENTITY.format(user)}`;
   };
 
   const renderAccreditationPrivileges = (circleLevel) => {
@@ -1364,7 +1364,10 @@
       console.warn('[PROFILE] logout error', err);
     }
     try {
+      const key = window.CRONOX_NEWSLETTER_VISIT?.SESSION_KEY || 'cronoxNewsletterShown';
+      const shown = sessionStorage.getItem(key) === 'true';
       sessionStorage.clear();
+      if (shown) sessionStorage.setItem(key, 'true');
     } catch {}
     try {
       localStorage.clear();

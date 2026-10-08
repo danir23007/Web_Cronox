@@ -4,6 +4,8 @@ import { generateDiscountCode } from '../common/discount-code';
 import { EmailService } from '../email/email.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { NewsletterSettingsService } from './newsletter-settings.service';
+import { normalizeEmail } from '../common/email';
+import { linkNewsletterUser } from './newsletter-user';
 
 export type SubscriptionResult = { status: 'accepted'; httpStatus: number; confirmation?: 'welcome' | 'existing_account' | 'subscribed' };
 export type ExistingSubscriptionClaimResult = { status: 'claimed'; code?: string } | { status: 'not_subscribed' };
@@ -46,14 +48,14 @@ export class NewsletterService {
 
   /** Single opt-in: persist consent and email work atomically before accepting. */
   async subscribe(email: string): Promise<SubscriptionResult> {
-    const normalized = email.trim().toLowerCase();
+    const normalized = normalizeEmail(email);
     const confirmation = await this.scheduleSubscription(normalized);
     return { status: 'accepted', httpStatus: 202, confirmation };
   }
 
   /** Replacement requests never create consent or reveal whether an account exists. */
   async requestAccess(email: string): Promise<SubscriptionResult> {
-    const normalized = email.trim().toLowerCase();
+    const normalized = normalizeEmail(email);
     await this.prisma.$transaction(async tx => {
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${'newsletter:' + normalized}))`;
       const subscription = await tx.newsletterSubscription.findUnique({ where: { email: normalized } });
@@ -86,11 +88,9 @@ export class NewsletterService {
             subscribedAt: now, verificationTokenHash: null, verificationExpiresAt: null,
           } });
         }
-        const matches = await tx.user.findMany({ where: { email: { equals: email, mode: 'insensitive' } }, take: 2 });
-        const user = matches.length === 1 ? matches[0] : null;
-        if (user && !user.newsletterSubscribed) {
-          await tx.user.update({ where: { id: user.id }, data: { newsletterSubscribed: true } });
-        }
+        const user = await linkNewsletterUser(tx, email, true);
+        if (subscription.userId && subscription.userId !== user.id) throw new Error('Newsletter account link conflict: manual review required');
+        await tx.newsletterSubscription.update({ where: { id: subscription.id }, data: { userId: user.id } });
         const welcomeJob = await tx.newsletterMailJob.findFirst({
           where: { email, kind: 'WELCOME' }, select: { id: true },
         });

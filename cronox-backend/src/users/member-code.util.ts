@@ -58,7 +58,7 @@ const getMaxMemberCodeIndex = async (
       ) AS max_n
       FROM (
         SELECT regexp_matches("memberCode", '^CRX(\\d*)-(\\d{6})$') AS matches
-        FROM "User"
+        FROM "UserIdentityReservation"
         WHERE "memberCode" IS NOT NULL
       ) AS sub
       WHERE matches IS NOT NULL;
@@ -142,12 +142,10 @@ export const getNextSequentialMemberCode = async (
     const nextValue = await getNextSequenceValue(tx);
     const memberCode = formatMemberCodeFromIndex(nextValue);
 
-    const existing = await tx.user.findUnique({
-      where: { memberCode },
-      select: { id: true },
-    });
+    const existing = await tx.$queryRaw<{ userId: number }[]>`
+      SELECT "userId" FROM "UserIdentityReservation" WHERE lower(btrim("memberCode")) = lower(${memberCode}) LIMIT 1`;
 
-    if (!existing) return memberCode;
+    if (!existing.length) return memberCode;
 
     await syncSequenceWithMax(tx);
     attempt += 1;

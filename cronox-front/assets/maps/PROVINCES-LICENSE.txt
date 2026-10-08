@@ -1,0 +1,21 @@
+Recurso: spain-provinces.geojson / spain-provinces.svg
+Fuente: Instituto Nacional de Estadística (INE), vía geoBoundaries gbOpen ESP ADM2.
+Identificador: ESP-ADM2-93216281. Datos: 2018. Actualización: 19/01/2023.
+Licencia declarada por el distribuidor: National Institute of Statistics (INE) Data License.
+Condiciones oficiales: https://www.ine.es/ss/Satellite?L=0&c=Page&cid=1254735849170&p=1254735849170&pagename=Ayuda%2FINELayout
+Consulta: 08/10/2026.
+
+Resumen informativo de las condiciones de reutilización: se admite uso comercial
+o no comercial de información cuya fuente original sea el INE. Es necesario
+atribuir la fuente y las transformaciones, conservar el significado y señalar
+la fecha de actualización disponible. La reutilización no puede sugerir respaldo
+o participación del INE, que no asume responsabilidad por el uso. Rigen las leyes
+y los tribunales españoles. El enlace anterior contiene los términos completos.
+
+Atribución CRONOX: Elaboración propia con datos del Instituto Nacional de
+Estadística (INE), distribuidos por geoBoundaries; datos 2018, actualización
+19/01/2023. Proyección, recuadros, redondeo SVG y asociación INE por CRONOX.
+No existe patrocinio ni aprobación del INE.
+
+La licencia CC BY 4.0 de LICENSE.txt se refiere a la cartografía de comunidades
+de IGN / geoBoundaries ADM1 y no sustituye la licencia provincial.

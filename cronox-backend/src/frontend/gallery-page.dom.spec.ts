@@ -147,8 +147,8 @@ describe('CRONOX gallery page', () => {
       document.querySelectorAll<HTMLElement>('#galleryGrid .gallery__tile'),
     );
     expect(galleryHtml).toContain('<title>Galer&iacute;a | CRONOX</title>');
-    expect(galleryHtml).toContain('href="assets/gallery.css?v=19"');
-    expect(galleryHtml).toContain('src="assets/gallery.js?v=16"');
+    expect(galleryHtml).toContain('href="assets/gallery.css?v=20"');
+    expect(galleryHtml).toContain('src="assets/gallery.js?v=17"');
     expect(document.title).toBe('Galer\u00eda | CRONOX');
     expect(galleryHtml).toMatch(
       /<body class="page-info page-gallery">\s*<script src="assets\/info-shell\.js\?v=4"><\/script>/,
@@ -241,8 +241,8 @@ describe('CRONOX gallery page', () => {
       homepageGallerySection.compareDocumentPosition(footer) &
         dom.window.Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
-    expect(homepageHtml).toContain('href="assets/gallery.css?v=19"');
-    expect(homepageHtml).toContain('src="assets/gallery.js?v=16"');
+    expect(homepageHtml).toContain('href="assets/gallery.css?v=20"');
+    expect(homepageHtml).toContain('src="assets/gallery.js?v=17"');
     expect(document.querySelectorAll('#galleryLightbox')).toHaveLength(1);
     expect(document.querySelectorAll<HTMLElement>('[id]').length).toBe(
       new Set(

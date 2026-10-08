@@ -67,16 +67,29 @@ describe('Map HTTP authorization and validation', () => {
       expect(response.body.range).toMatchObject({ region: '18', page: 2 });
     },
   );
-  it.each(['page=-1', 'page=1.5', 'region=99', 'from=wrong', 'extra=value'])(
-    'rejects invalid %s',
-    async (parameter) => {
-      const params = new URLSearchParams('from=2026-10-01&to=2026-10-07');
-      const [key, value] = parameter.split('=');
-      params.set(key, value);
-      await request(app.getHttpServer())
-        .get('/admin/map?' + params)
+  it('accepts province and community-only detail with the same permissions', async () => {
+    for (const region of ['35', '38', '51', '52', 'communityOnly:05']) {
+      const r = await request(app.getHttpServer())
+        .get(url + '&division=provinces&region=' + encodeURIComponent(region))
         .set('x-test-role', 'ADMIN')
-        .expect(400);
-    },
-  );
+        .expect(200);
+      expect(r.body.range).toMatchObject({ division: 'provinces', region });
+    }
+  });
+  it.each([
+    'division=districts',
+    'page=-1',
+    'page=1.5',
+    'region=99',
+    'from=wrong',
+    'extra=value',
+  ])('rejects invalid %s', async (parameter) => {
+    const params = new URLSearchParams('from=2026-10-01&to=2026-10-07');
+    const [key, value] = parameter.split('=');
+    params.set(key, value);
+    await request(app.getHttpServer())
+      .get('/admin/map?' + params)
+      .set('x-test-role', 'ADMIN')
+      .expect(400);
+  });
 });

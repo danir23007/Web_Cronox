@@ -63,9 +63,10 @@ export class AdminExportsService {
   ) {
     const effective =
       query.scope === 'all' ? ({ scope: 'all' } as AdminExportQueryDto) : query;
-    const sheets = await withExportSqlDeadline(this.prisma, client =>
-      new AdminExportsService(client as PrismaService, this.excel).loadSheets(module, effective),
-    );
+    const sheets = await withExportSqlDeadline(this.prisma, async client => {
+      const service = new AdminExportsService(client as PrismaService, this.excel);
+      return service.withUserIdentities(await service.loadSheets(module, effective));
+    });
     sheets.forEach((sheet) => this.assertSize(sheet.name, sheet.rows.length));
     const rowCount = sheets.reduce(
       (total, sheet) => total + sheet.rows.length,
@@ -133,6 +134,20 @@ export class AdminExportsService {
     }
   }
 
+  private async withUserIdentities(sheets: ExcelSheetDefinition[]) {
+    const columns = sheets.flatMap(sheet => sheet.columns.filter(column => column.header === 'ID usuario').map(column => ({ sheet, column })));
+    const ids = [...new Set(columns.flatMap(({ sheet, column }) => sheet.rows.map(row => Number(row[column.key]))).filter(id => Number.isSafeInteger(id) && id > 0))];
+    const users = ids.length ? await this.prisma.user.findMany({ where: { id: { in: ids } }, select: { id: true, memberCode: true } }) : [];
+    const codes = new Map(users.map(user => [user.id, user.memberCode]));
+    for (const { sheet, column } of columns) {
+      column.header = 'ID interno de usuario';
+      const key = `public_${column.key}`;
+      sheet.columns.splice(sheet.columns.indexOf(column) + 1, 0, { header: 'ID de usuario', key, width: 24 });
+      for (const row of sheet.rows) row[key] = codes.get(Number(row[column.key])) ?? null;
+    }
+    return sheets;
+  }
+
   private async users(
     query: AdminExportQueryDto,
   ): Promise<ExcelSheetDefinition[]> {
@@ -140,7 +155,7 @@ export class AdminExportsService {
     const search = query.q || query.search;
     if (search) {
       where.OR = [
-        ...['email', 'name', 'firstName', 'lastName', 'phone'].map((field) => ({
+        ...['email', 'name', 'firstName', 'lastName', 'phone', 'memberCode'].map((field) => ({
           [field]: { contains: search, mode: 'insensitive' },
         })),
         ...(Number.isSafeInteger(Number(search))
@@ -604,7 +619,8 @@ export class AdminExportsService {
             {
               email: { contains: query.q, mode: Prisma.QueryMode.insensitive },
             },
-            { name: { contains: query.q, mode: Prisma.QueryMode.insensitive } },
+              { name: { contains: query.q, mode: Prisma.QueryMode.insensitive } },
+              { memberCode: { contains: query.q, mode: Prisma.QueryMode.insensitive } },
           ],
         }
       : {};

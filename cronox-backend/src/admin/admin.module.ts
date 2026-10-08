@@ -1,4 +1,6 @@
 import { Module } from '@nestjs/common';
+import { AdminFavoritesController } from './favorites/admin-favorites.controller';
+import { AdminFavoritesService } from './favorites/admin-favorites.service';
 import { AdminMapController } from './map/admin-map.controller';
 import { AdminMapService } from './map/admin-map.service';
 import { AdminBulkController } from './bulk/admin-bulk.controller';
@@ -54,6 +56,7 @@ import { AdminManualPurchaseCorrectionsController, AdminManualPurchasesControlle
     OrdersModule,
   ],
   controllers: [
+    AdminFavoritesController,
     AdminMapController,
     AdminBulkController,
     AdminFinanceController,
@@ -74,6 +77,7 @@ import { AdminManualPurchaseCorrectionsController, AdminManualPurchasesControlle
     AdminManualPurchaseCorrectionsController,
   ],
   providers: [
+    AdminFavoritesService,
     AdminMapService,
     AdminBulkService,
     AdminFinanceService,

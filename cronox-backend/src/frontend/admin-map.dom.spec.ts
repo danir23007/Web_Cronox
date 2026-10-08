@@ -1,7 +1,7 @@
 import { readFileSync } from 'fs';
 import { join } from 'path';
 import { JSDOM } from 'jsdom';
-import { REGIONS } from '../admin/map/spain-geography';
+import { PROVINCES, REGIONS } from '../admin/map/spain-geography';
 
 const frontend = join(__dirname, '../../../cronox-front');
 const source = readFileSync(join(frontend, 'assets/admin-map.js'), 'utf8');
@@ -10,7 +10,19 @@ const svg = readFileSync(
   'utf8',
 );
 const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
+const provinceSvg = readFileSync(
+  join(frontend, 'assets/maps/spain-provinces.svg'),
+  'utf8',
+);
 const report = (from = '2026-10-01', to = '2026-10-07', orders = 1) => ({
+  provinces: PROVINCES.map((p) => ({
+    ...p,
+    regionName: REGIONS.find((r) => r.id === p.regionId)!.name,
+    orders,
+    units: orders * 2,
+    revenueCents: orders * 100,
+  })),
+  communityOnly: [],
   regions: REGIONS.map((r) => ({
     ...r,
     orders,
@@ -51,13 +63,104 @@ function setup() {
   const requests: { url: string; resolve: (v: unknown) => void }[] = [];
   w.fetch = jest.fn((url: string) =>
     url.includes('/assets/maps/')
-      ? Promise.resolve({ ok: true, text: async () => svg })
+      ? Promise.resolve({
+          ok: true,
+          text: async () =>
+            url.includes('spain-provinces') ? provinceSvg : svg,
+        })
       : new Promise((resolve) => requests.push({ url, resolve })),
   );
   w.eval(source);
   return { dom, w, requests, $: (s: string) => w.document.querySelector(s) };
 }
 describe('Map frontend synchronization and accessible states', () => {
+  it('switches divisions, keeps filters, clears detail and ignores obsolete sales', async () => {
+    const { dom, w, requests, $ } = setup();
+    w.CRONOX_MAP.load();
+    requests[0].resolve({ ok: true, json: async () => report() });
+    await flush();
+    await flush();
+    $('.map-graphic [data-region="13"]').dispatchEvent(
+      new w.MouseEvent('click', { bubbles: true }),
+    );
+    $('[name="metric"]').value = 'units';
+    $('[name="metric"]').dispatchEvent(new w.Event('change'));
+    $('[name="division"]').value = 'provinces';
+    $('[name="division"]').dispatchEvent(new w.Event('change'));
+    expect(requests[2].url).toContain('division=provinces');
+    expect(requests[2].url).not.toContain('region=');
+    requests[2].resolve({ ok: true, json: async () => report() });
+    await flush();
+    await flush();
+    expect(
+      w.document.querySelectorAll('.map-graphic [data-region]'),
+    ).toHaveLength(52);
+    expect(
+      w.document.querySelectorAll('.map-regions-table tbody tr'),
+    ).toHaveLength(52);
+    expect($('[name="from"]').value).toBe('2026-10-01');
+    expect($('[name="metric"]').value).toBe('units');
+    requests[1].resolve({
+      ok: true,
+      json: async () => report(undefined, undefined, 99),
+    });
+    await flush();
+    expect($('.map-detail').hidden).toBe(true);
+    for (const [id, name, region] of [
+      ['07', 'Illes Balears', 'Illes Balears'],
+      ['35', 'Las Palmas', 'Canarias'],
+      ['38', 'Santa Cruz de Tenerife', 'Canarias'],
+      ['51', 'Ceuta', 'Ceuta'],
+      ['52', 'Melilla', 'Melilla'],
+    ]) {
+      $(`.map-graphic [data-region="${id}"]`).focus();
+      expect($('.map-tooltip').textContent).toContain(name);
+      expect($('.map-tooltip').textContent).toContain(region);
+    }
+    $('.map-graphic [data-region="35"]').dispatchEvent(
+      new w.KeyboardEvent('keydown', { key: 'Enter', bubbles: true }),
+    );
+    expect(requests[3].url).toContain('region=35');
+    requests[3].resolve({ ok: true, json: async () => report() });
+    await flush();
+    expect($('.map-detail h2').textContent).toBe('Las Palmas');
+    dom.window.close();
+  });
+  it('ignores delayed obsolete cartography and keeps 52 gray provinces with no sales', async () => {
+    const { dom, w, requests, $ } = setup();
+    const original = w.fetch.getMockImplementation();
+    let release: (v: unknown) => void = () => {};
+    w.fetch.mockImplementation((url: string) =>
+      url.includes('spain-communities')
+        ? new Promise((resolve) => {
+            release = resolve;
+          })
+        : original(url),
+    );
+    w.CRONOX_MAP.load();
+    $('[name="division"]').value = 'provinces';
+    $('[name="division"]').dispatchEvent(new w.Event('change'));
+    requests[1].resolve({
+      ok: true,
+      json: async () => report(undefined, undefined, 0),
+    });
+    await flush();
+    await flush();
+    release({ ok: true, text: async () => svg });
+    requests[0].resolve({ ok: true, json: async () => report() });
+    await flush();
+    await flush();
+    expect(
+      w.document.querySelectorAll('.map-graphic [data-region]'),
+    ).toHaveLength(52);
+    expect(
+      [...w.document.querySelectorAll('.map-graphic [data-region]')].every(
+        (n: any) => n.style.fill === '#44444d',
+      ),
+    ).toBe(true);
+    expect($('.map-status').textContent).toContain('No hay pedidos');
+    dom.window.close();
+  });
   it('ignores an older response even when transport ignores abort; reuses the SVG', async () => {
     const { dom, w, requests, $ } = setup();
     w.CRONOX_MAP.load();
@@ -74,7 +177,9 @@ describe('Map frontend synchronization and accessible states', () => {
     await flush();
     expect($('.map-cards').textContent).toContain('38');
     expect(
-      w.fetch.mock.calls.filter(([url]: string[]) => url.includes('/assets/maps/')),
+      w.fetch.mock.calls.filter(([url]: string[]) =>
+        url.includes('/assets/maps/'),
+      ),
     ).toHaveLength(1);
     dom.window.close();
   });
@@ -138,8 +243,11 @@ describe('Map frontend synchronization and accessible states', () => {
   it('loads all geographic regions while the sales request is still pending', async () => {
     const { dom, w, $ } = setup();
     w.CRONOX_MAP.load();
-    await flush(); await flush();
-    expect(w.document.querySelectorAll('.map-graphic [data-region]')).toHaveLength(19);
+    await flush();
+    await flush();
+    expect(
+      w.document.querySelectorAll('.map-graphic [data-region]'),
+    ).toHaveLength(19);
     expect($('.map-results').hidden).toBe(true);
     expect($('.map-cartography').closest('[hidden]')).toBeNull();
     expect($('.map-legend').textContent).toContain('Cargando ventas');
@@ -151,17 +259,24 @@ describe('Map frontend synchronization and accessible states', () => {
     const { dom, w, requests, $ } = setup();
     const originalFetch = w.fetch.getMockImplementation();
     let attempts = 0;
-    w.fetch.mockImplementation((url: string) => url.includes('/assets/maps/') && attempts++ === 0
-      ? Promise.resolve({ ok: false, status: 404 }) : originalFetch(url));
+    w.fetch.mockImplementation((url: string) =>
+      url.includes('/assets/maps/') && attempts++ === 0
+        ? Promise.resolve({ ok: false, status: 404 })
+        : originalFetch(url),
+    );
     w.CRONOX_MAP.load();
     requests[0].resolve({ ok: true, json: async () => report() });
-    await flush(); await flush();
+    await flush();
+    await flush();
     expect($('.map-results').hidden).toBe(false);
     expect($('.map-cartography-status').textContent).toContain('cartografía');
     expect($('[data-map-retry]').hidden).toBe(false);
     $('[data-map-retry]').click();
-    await flush(); await flush();
-    expect(w.document.querySelectorAll('.map-graphic [data-region]')).toHaveLength(19);
+    await flush();
+    await flush();
+    expect(
+      w.document.querySelectorAll('.map-graphic [data-region]'),
+    ).toHaveLength(19);
     expect($('.map-graphic [data-region]').style.fill).not.toBe('#44444d');
     expect(requests).toHaveLength(1);
     dom.window.close();
@@ -169,11 +284,18 @@ describe('Map frontend synchronization and accessible states', () => {
   it('does not replace cartography with an HTML fallback from a bad resource route', async () => {
     const { dom, w, $ } = setup();
     const originalFetch = w.fetch.getMockImplementation();
-    w.fetch.mockImplementation((url: string) => url.includes('/assets/maps/')
-      ? Promise.resolve({ ok: true, text: async () => '<html><body>Fallback</body></html>' }) : originalFetch(url));
+    w.fetch.mockImplementation((url: string) =>
+      url.includes('/assets/maps/')
+        ? Promise.resolve({
+            ok: true,
+            text: async () => '<html><body>Fallback</body></html>',
+          })
+        : originalFetch(url),
+    );
     w.CRONOX_MAP.load();
-    await flush(); await flush();
-    expect($('.map-cartography-status').textContent).toContain('19 comunidades');
+    await flush();
+    await flush();
+    expect($('.map-cartography-status').textContent).toContain('19 unidades');
     expect($('[data-map-retry]').hidden).toBe(false);
     expect($('.map-graphic').textContent).not.toContain('Fallback');
     dom.window.close();

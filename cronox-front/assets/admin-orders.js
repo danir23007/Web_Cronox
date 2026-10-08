@@ -249,7 +249,7 @@
       statusCell.appendChild(createStatusChip(order?.status));
       row.appendChild(statusCell);
       createCell(row, money(order?.total));
-      createCell(row, order?.userEmail || order?.user?.email || order?.email);
+      createCell(row, [window.CRONOX_USER_IDENTITY.format({ memberCode: order?.userMemberCode || order?.user?.memberCode }), order?.userEmail || order?.user?.email || order?.email].filter(Boolean).join(" · "));
       createCell(row, order?.shippingCarrier);
       createCell(row, order?.trackingNumber || 'Sin tracking');
       createCell(row, order?.shippedAt ? formatDate(order.shippedAt) : 'No enviado todavia');

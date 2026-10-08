@@ -122,6 +122,7 @@ export class AdminBulkService {
             select: {
               id: true,
               name: true,
+              memberCode: true,
               role: true,
               circleLevel: true,
               accountState: true,
@@ -211,6 +212,7 @@ export class AdminBulkService {
           : 'changed';
       return {
         id: r.id,
+        memberCode: dto.kind === 'users' ? r.memberCode : undefined,
         name: r.name || `Usuario #${r.id}`,
         state,
         reason,

@@ -467,6 +467,12 @@ body.page-gallery {
   background: #fff;
 }
 
+@media (min-width: 768px) {
+  .gallery-lightbox--carousel .gallery-lightbox__info {
+    padding-top: 20px;
+  }
+}
+
 .gallery-lightbox__product-media img {
   position: absolute;
   inset: 8%;

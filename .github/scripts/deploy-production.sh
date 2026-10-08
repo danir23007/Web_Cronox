@@ -35,7 +35,10 @@ if [ "$latest" != "$expected" ]; then
   echo 'Refusing stale workflow: this commit is no longer main.'
   exit 1
 fi
-/var/www/cronox/deploy.sh
+git fetch origin main
+# Keep unrelated working files intact; conflicts abort rather than discard them.
+git merge --ff-only origin/main
+bash .github/scripts/deploy-vps-release.sh
 actual="$(git rev-parse HEAD)"
 if [ "$actual" != "$expected" ]; then
   echo 'Deployment revision differs from the verified workflow commit.'

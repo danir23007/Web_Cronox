@@ -62,7 +62,7 @@ export class CircleUpgradeService {
         user: {
           select: {
             id: true,
-            email: true,
+            email: true, memberCode: true,
             firstName: true,
             lastName: true,
             circleLevel: true,
@@ -447,7 +447,7 @@ export class CircleUpgradeService {
       user: {
         select: {
           id: true,
-          email: true,
+          email: true, memberCode: true,
           firstName: true,
           lastName: true,
           circleLevel: true,
@@ -577,7 +577,7 @@ export class CircleUpgradeService {
           user: {
             select: {
               id: true,
-              email: true,
+              email: true, memberCode: true,
               firstName: true,
               lastName: true,
               circleLevel: true,
@@ -621,7 +621,7 @@ export class CircleUpgradeService {
           user: {
             select: {
               id: true,
-              email: true,
+              email: true, memberCode: true,
               firstName: true,
               lastName: true,
               circleLevel: true,

@@ -467,7 +467,7 @@
             ul.append(
               element(
                 "li",
-                `${r.name} (#${r.id})${s.kind === "users" ? ` · Estado: ${stateLabel(r.before.accountState)} → ${stateLabel(r.after.accountState)}` : ""}${r.reason ? " — " + r.reason : ""}`,
+                `${r.name} (${s.kind === "users" ? window.CRONOX_USER_IDENTITY.format(r) + ` · ID interno ${r.id}` : `#${r.id}`})${s.kind === "users" ? ` · Estado: ${stateLabel(r.before.accountState)} → ${stateLabel(r.after.accountState)}` : ""}${r.reason ? " — " + r.reason : ""}`,
               ),
             ),
           );

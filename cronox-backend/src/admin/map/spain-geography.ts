@@ -92,6 +92,14 @@ const fold = (value: unknown) =>
 const names = new Map(
   PROVINCES.flatMap((p) => p.aliases.map((alias) => [fold(alias), p] as const)),
 );
+const regionNames = new Map(REGIONS.map((r) => [fold(r.name), r]));
+for (const [alias, id] of [
+  ['Catalunya', '09'],
+  ['Euskadi', '16'],
+  ['Comunidad Valenciana', '10'],
+  ['Islas Canarias', '05'],
+])
+  regionNames.set(fold(alias), REGIONS.find((r) => r.id === id)!);
 // ICU's country names are local data; this performs no network lookup. Unknown
 // free text is not evidence of a foreign country (e.g. "N/A" or "desconocido").
 const countryNames = new Map<string, string>();
@@ -151,6 +159,18 @@ export function classifyShipping(value: unknown): Location {
   const foreign = normalizedCountries.some((c) => c && c !== 'ES');
   const provinces = [a.state, a.province].map(fold).filter(Boolean);
   const recognized = provinces.map((p) => names.get(p));
+  const communities = [
+    a.community,
+    a.autonomousCommunity,
+    a.region,
+    a.state,
+    a.province,
+  ]
+    .map(fold)
+    .filter(Boolean)
+    .map((v) => regionNames.get(v))
+    .filter(Boolean);
+  const community = communities[0];
   // Postal codes remain strings. Numeric legacy values are not padded or guessed.
   const zips = [a.zip, a.postalCode, a.postal_code]
     .filter((v) => v !== undefined && v !== null && v !== '')
@@ -164,7 +184,7 @@ export function classifyShipping(value: unknown): Location {
   const province = recognized.find(Boolean);
   const conflict =
     new Set(zips).size > 1 ||
-    (recognized.some((p) => !p) && provinces.length > 0 && !!postal) ||
+    (provinces.some((p) => !names.has(p) && !regionNames.has(p)) && !!postal) ||
     recognized.some((p) => p && p.id !== (postal ?? province)?.id);
   const uncertain = (reason: string): Location => ({
     group: spanish && !foreign ? 'unknownSpain' : 'unresolved',
@@ -184,12 +204,26 @@ export function classifyShipping(value: unknown): Location {
           }
         : {}),
     };
-  if (conflict)
+  if (
+    conflict ||
+    new Set(communities.map((r) => r!.id)).size > 1 ||
+    (community &&
+      (postal ?? province) &&
+      community.id !== (postal ?? province)!.regionId)
+  )
     return uncertain('Código postal y provincia contradictorios o ambiguos');
   if (!spanish && !(postal && province && postal.id === province.id))
     return uncertain('País ausente; no hay evidencia inequívoca de España');
   const resolved = postal ?? province;
-  if (!resolved) return uncertain('Sin código postal o provincia reconocibles');
+  if (!resolved) {
+    if (spanish && community)
+      return {
+        group: 'identified',
+        regionId: community.id,
+        reason: 'Comunidad identificada; provincia sin identificar',
+      };
+    return uncertain('Sin código postal o provincia reconocibles');
+  }
   return {
     group: 'identified',
     provinceId: resolved.id,

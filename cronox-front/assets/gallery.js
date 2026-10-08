@@ -501,6 +501,10 @@
     lightboxState.items = occupied;
     lightboxState.index = index;
     lightboxState.trigger = trigger;
+    lightboxElements.root.classList.toggle(
+      "gallery-lightbox--carousel",
+      Boolean(trigger?.closest(".gallery-carousel")),
+    );
     lockBackground();
     lightboxElements.root.hidden = false;
     lightboxElements.root.setAttribute("aria-hidden", "false");

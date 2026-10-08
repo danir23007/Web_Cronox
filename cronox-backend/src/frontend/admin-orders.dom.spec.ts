@@ -61,6 +61,7 @@ describe('admin order fulfillment detail', () => {
         ),
     }));
 
+    window.eval(read('assets/user-identity.js'));
     window.eval(read('assets/admin-orders.js'));
     await window.fetchOrders();
     window.document.querySelector('button[data-order-id="42"]')?.click();

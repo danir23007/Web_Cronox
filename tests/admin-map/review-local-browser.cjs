@@ -44,8 +44,23 @@ const { loadLocalEnvironment } = require('../../cronox-backend/scripts/start-loc
     await expect(page.locator('.map-tooltip')).toContainText('Ceuta');
     await expect(page.locator('.map-detail')).toContainText('No hay pedidos pagados');
     await page.locator('.map-cartography').screenshot({ path: path.join(out, 'mobile-local-empty.png') });
+    for (const mobile of [false,true]) {
+      await page.setViewportSize(mobile ? {width:390,height:844} : {width:1440,height:1100});
+      for (const division of ['communities','provinces']) {
+        await page.locator('[name="division"]').selectOption(division);
+        const count=division==='provinces'?52:19;
+        await expect(page.locator('.map-graphic [data-region]')).toHaveCount(count);
+        await expect(page.locator('.map-regions-table tbody tr')).toHaveCount(count);
+        await expect(page.locator('.map-status')).toHaveText('No hay pedidos pagados en este período');
+        const result=await page.evaluate(async division => (await fetch('/api/admin/map?from=2000-01-01&to=2000-01-02&division='+division)).json(),division);
+        expect(result.division).toBe(division);
+        expect(result.total.orders).toBe(0);
+        expect(result.provinces).toHaveLength(52);
+        await page.locator('.map-cartography').screenshot({path:path.join(out,`${mobile?'mobile':'desktop'}-${division}-local-empty-map.png`)});
+      }
+    }
     expect(errors).toEqual([]);
     await fs.writeFile(path.join(out, 'local-report.json'), JSON.stringify({ responses, errors, base: await page.evaluate(() => window.CRONOX_API.API_BASE) }, null, 2));
-    console.log('PASS: normal localhost app, authenticated API 200, local empty map visible, desktop/mobile.');
+    console.log('PASS: normal localhost app, authenticated API 200, both divisions and 19/52 visible units, empty map, desktop/mobile.');
   } finally { await browser.close(); }
 })().catch(error => { console.error(error); process.exitCode = 1; });

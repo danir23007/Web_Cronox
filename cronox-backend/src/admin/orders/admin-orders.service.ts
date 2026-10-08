@@ -24,6 +24,7 @@ type OrderWithCount = Prisma.OrderGetPayload<{
     user: {
       select: {
         email: true;
+        memberCode: true;
       };
     };
     _count: { select: { items: true } };
@@ -35,6 +36,7 @@ type OrderWithItems = Prisma.OrderGetPayload<{
     user: {
       select: {
         email: true;
+        memberCode: true;
       };
     };
     items: {
@@ -83,7 +85,7 @@ export class AdminOrdersService {
         skip,
         take: pageSize,
         include: {
-          user: { select: { email: true } },
+          user: { select: { email: true, memberCode: true } },
           _count: { select: { items: true } },
         },
       }),
@@ -107,7 +109,7 @@ export class AdminOrdersService {
     const order = await this.prisma.order.findUnique({
       where: { id },
       include: {
-        user: { select: { email: true } },
+        user: { select: { email: true, memberCode: true } },
         checkoutSnapshot: {
           select: {
             shippingMethodCode: true,
@@ -135,7 +137,7 @@ export class AdminOrdersService {
 
   async updateOrderFulfillment(id: number, dto: UpdateOrderFulfillmentDto) {
     const include = {
-      user: { select: { email: true } },
+      user: { select: { email: true, memberCode: true } },
       checkoutSnapshot: {
         select: {
           shippingMethodCode: true,
@@ -246,7 +248,7 @@ export class AdminOrdersService {
 
   async refundOrder(id: number) {
     const include = {
-      user: { select: { email: true } },
+      user: { select: { email: true, memberCode: true } },
       checkoutSnapshot: {
         select: {
           shippingMethodCode: true,
@@ -462,6 +464,7 @@ export class AdminOrdersService {
     return {
       id: order.id,
       userId: order.userId,
+      userMemberCode: order.user?.memberCode ?? null,
       userEmail: order.user?.email ?? null,
       status: order.status,
       trackingNumber: order.trackingNumber,
@@ -496,6 +499,7 @@ export class AdminOrdersService {
     return {
       id: order.id,
       userId: order.userId,
+      userMemberCode: order.user?.memberCode ?? null,
       userEmail: order.customerEmail || order.user?.email || null,
       customer: {
         name: shippingAddress.recipient,

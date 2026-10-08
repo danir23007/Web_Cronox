@@ -178,6 +178,7 @@ describe('AdminExportsService', () => {
     };
     const prisma = {
       order: { findMany: jest.fn().mockResolvedValue([order]) },
+      user: { findMany: jest.fn().mockResolvedValue([{ id: order.userId, memberCode: 'CRX-000001' }]) },
       orderItem: { findMany: jest.fn().mockResolvedValue([]) },
       auditLog: { create: jest.fn().mockResolvedValue({ id: 1 }) },
     };

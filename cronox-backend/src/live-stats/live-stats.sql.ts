@@ -1,6 +1,6 @@
 // A single statement provides one MVCC snapshot and one database clock.
 export const LIVE_STATS_SQL = `
-WITH active AS (
+WITH eligible AS (
   SELECT p.*, c.id AS "cartId"
   FROM "LivePresence" p
   LEFT JOIN "User" u ON u.id=p."userId"
@@ -11,6 +11,11 @@ WITH active AS (
     AND (p."userId" IS NULL OR (u.role NOT IN ('ADMIN','SUPERADMIN') AND u."accountState"='ACTIVE'
       AND s."revokedAt" IS NULL AND s.id IS NOT NULL AND s."sessionVersion"=u."sessionVersion"
       AND to_timestamp(s."refreshIssuedAt") + INTERVAL '500 days' > CURRENT_TIMESTAMP))
+), active AS (
+  SELECT DISTINCT ON (CASE WHEN "userId" IS NULL THEN 'browser:' || "visitorHash" ELSE 'user:' || "userId"::text END) *
+  FROM eligible
+  ORDER BY CASE WHEN "userId" IS NULL THEN 'browser:' || "visitorHash" ELSE 'user:' || "userId"::text END,
+    "seenAt" DESC, "visitorHash"
 ), carts AS (
   SELECT DISTINCT "cartId" FROM active WHERE "cartId" IS NOT NULL
 ), lines AS (
