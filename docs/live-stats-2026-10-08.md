@@ -1,4 +1,5 @@
 # Live stats — revisión y corrección local, 8 de octubre de 2026
+> Actualización del 8 de octubre: esta mejora está publicada en producción con `4ecb273`; el ajuste posterior del visor táctil se incluye en `c2488d4`. Los apartados de implementación local describen la fase previa. Commits, migraciones, reparaciones y límites de verificación publicados: [informe de publicación](session-release-2026-10-08.md).
 
 Corrección completada en local, conservando los cambios anteriores de identidad, newsletter y Mapa. Sin commit, push, despliegue ni modificaciones en producción. No se encontró `AGENTS.md` en el repositorio ni en sus directorios ascendentes.
 
@@ -88,3 +89,7 @@ npx --yes --package @playwright/cli playwright-cli -s=live run-code --filename t
 La revisión requiere que no haya otros visitantes locales activos. La prueba completa espera el heartbeat y la caducidad reales, por lo que tarda varios minutos. El helper acepta únicamente el entorno local protegido, escucha en loopback y usa cuentas ficticias; no imprime credenciales. La reproducción anterior `reproduce.cli.js` se conserva como evidencia del caso previo, no como aserción de bloqueo después de corregirlo.
 
 Evidencias en `output/playwright/live-stats/`: `reproduction.txt`, `production-readonly.json`, `sql-report.json`, `browser-report.txt`, `captures-report.txt`, `before-desktop.png`, `after-desktop.png`, `after-mobile.png`, `menu-mobile.png`, `visitor-mobile.png` y `expired-mobile.png`.
+
+## Producción tras el despliegue
+
+Los recursos publicados coinciden con la corrección. Se observó una navegación anónima real de revisión con analítica rechazada: el servidor pasó de cero activos a un invitado y posteriormente volvió a cero por caducidad normal, sin alterar timestamps ni el histórico. El total de filas diarias permaneció en 40. La lectura utilizó la consulta desplegada dentro de una transacción READ ONLY, sin ejecutar limpieza manual. La observación visual del panel/punto rojo y los casos con cuenta real autenticada siguen pendientes por no haber una sesión administrativa de navegador disponible; sus pruebas locales se conservan. Heartbeat 30 s, caducidad 120 s, panel 15 s.

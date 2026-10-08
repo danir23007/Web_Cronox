@@ -1,4 +1,5 @@
 # Identidad de usuarios y altas de newsletter — 8 de octubre de 2026
+> Actualización del 8 de octubre: esta mejora está publicada en producción con `4ecb273`; el ajuste posterior del visor táctil se incluye en `c2488d4`. Los apartados de implementación local describen la fase previa. Commits, migraciones, reparaciones y límites de verificación publicados: [informe de publicación](session-release-2026-10-08.md).
 
 Corrección realizada en local. No se han hecho commit, push, despliegue, envíos de correo ni modificaciones en producción. No se encontró `AGENTS.md` en el repositorio ni en sus directorios ascendentes. Se han seguido los patrones NestJS/Prisma, el entorno local protegido y la compilación existente del administrador.
 
@@ -35,7 +36,7 @@ Consulta autorizada, exclusivamente `SELECT`, realizada mediante la conexión Su
 | 1 — eva…@gmail.com | No existe | Sí, una | Enviada; trabajo SENT, sin error | Requiere reparación de datos |
 | 2 — naki…@gmail.com | No existe | Sí, una | Enviada; trabajo SENT, sin error | Requiere reparación de datos |
 
-Ambos casos siguen pendientes en producción. La corrección del código está verificada en local, pero no puede crear retrospectivamente esas cuentas sin ejecutar la reparación autorizada después de aplicar las migraciones.
+En esta lectura previa ambos casos estaban pendientes en producción; ya están reparados según el cierre del 8 de octubre indicado más abajo. La corrección del código está verificada en local, pero no puede crear retrospectivamente esas cuentas sin ejecutar la reparación autorizada después de aplicar las migraciones.
 
 Auditoría agregada: 40 usuarios, 5 suscripciones confirmadas, 2 suscripciones confirmadas sin usuario, 0 sin confirmar, 0 duplicados de correo normalizado en ambas tablas, 0 colisiones actuales de código público, 0 colisiones actuales de token QR y 31 usuarios sin `memberCode`. No hay usuarios `PRE_REGISTERED` actualmente ni cuentas con consentimiento confirmado y bandera de newsletter ausente. Tras reparar únicamente esos dos huérfanos, sin otras altas intermedias, se esperan 42 usuarios y las mismas 5 suscripciones.
 
@@ -91,3 +92,9 @@ npx --yes --package @playwright/cli playwright-cli -s=users run-code --filename 
 El servidor de revisión escucha solo en loopback y carece de conexión a base de datos o correo. Los datos ficticios se generan en una instancia temporal aislada que se detiene al finalizar. El backend habitual queda disponible en `http://localhost:3000/` mediante su lanzador protegido, con correo y trabajos desactivados.
 
 Evidencias en `output/playwright/user-identity/`: `database-report.json`, `browser-report.txt`, `examples-local.json`, `users-desktop.png`, `detail-desktop.png`, `edit-desktop.png`, `accreditation-desktop.png`, `accreditation-mobile.png`, `accreditation-print.png` y `qr-fixture.png`.
+
+## Reparación aplicada en producción
+
+El workflow 37788342263 aplicó las dos migraciones preparadas mediante `prisma migrate deploy`; hay 81 migraciones y el esquema está al día. Tras el dry-run (dos huérfanos confirmados y tres vínculos ausentes), se repararon los cinco registros afectados. Ahora hay 42 usuarios y las mismas cinco suscripciones; cero huérfanos, vínculos pendientes o colisiones. No se cambiaron contraseñas, estados de cuentas existentes ni trabajos de correo.
+
+El caso eva… tiene ID interno 44 / ID público `CRX-000042`; el caso naki… tiene ID interno 43 / ID público `CRX-000041`. Ambos son `PRE_REGISTERED`, tienen consentimiento conservado y vínculo correcto. La consulta real del servicio de Usuarios incluye ambos y devuelve el mismo código en su ficha; contador global 42. Se verificó en transacción READ ONLY. La comprobación visual de tabla/ficha/acreditación con sesión real sigue pendiente por ausencia de sesión autorizada de navegador; no se crearon sesiones ni se cambiaron credenciales para probar. La nueva auditoría idempotente devuelve cero pendientes.

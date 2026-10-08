@@ -1,4 +1,5 @@
 # Carrusel: alineación superior de productos — 08/10/2026
+> Actualización del 8 de octubre: esta mejora está publicada en producción con `4ecb273`; el ajuste posterior del visor táctil se incluye en `c2488d4`. Los apartados de implementación local describen la fase previa. Commits, migraciones, reparaciones y límites de verificación publicados: [informe de publicación](session-release-2026-10-08.md).
 
 Corrección local terminada. Sin commit, push, despliegue ni modificaciones en producción. Se conservaron los cambios anteriores. No hay `AGENTS.md` en el repositorio ni en sus ascendientes; el archivo global disponible no contiene instrucciones. En este turno no había capturas adjuntas accesibles, por lo que la reproducción utilizó la vista real y recursos fotográficos locales.
 

@@ -1,4 +1,5 @@
 # Correo de contacto — 8 de octubre de 2026
+> Actualización del 8 de octubre: esta mejora está publicada en producción con `4ecb273`; el ajuste posterior del visor táctil se incluye en `c2488d4`. Los apartados de implementación local describen la fase previa. Commits, migraciones, reparaciones y límites de verificación publicados: [informe de publicación](session-release-2026-10-08.md).
 
 El correo de contacto de las páginas informativas pasa a `support@cronox.es`. Se conservan el diseño, los elementos HTML y los demás buzones.
 
@@ -21,7 +22,7 @@ La búsqueda sin distinguir mayúsculas/minúsculas, incluyendo archivos ignorad
 
 La consulta a la base local protegida no encontró coincidencias en `FooterPageContent`, `FooterSettings` ni `ManagedEmailTemplate`. La reparación local se ejecutó dos veces: ambas actualizaron cero registros. No se consultó ni modificó producción en esta tarea.
 
-## Procedimiento pendiente en producción
+## Procedimiento de reparación de contenido persistido
 
 Antes de publicar esta corrección, un operador debe revisar y respaldar los registros editables de producción. Consultar las coincidencias con el mismo `WHERE` del SQL y ejecutar, si existen, `cronox-backend/scripts/replace-obsolete-contact-email.sql` mediante una conexión autorizada. Por ejemplo, con la conexión ya configurada en el entorno de PostgreSQL:
 
@@ -48,4 +49,8 @@ node scripts/replace-obsolete-contact-email-local.cjs --apply
 - `npm run admin:build` correcto.
 - No se modificaron JavaScript ni CSS en esta tarea, por lo que no hay referencias de versión de recursos que actualizar. El HTML nuevo se entregará con la publicación futura; la consulta editable ya evita caché.
 
-Cambios conservados en local, sin commit, push ni despliegue. Pendiente únicamente revisar y reparar, si corresponde, el contenido persistido de producción durante una actuación autorizada posterior.
+Cambios conservados en local, sin commit, push ni despliegue. La ejecución autorizada posterior se registra en el cierre de producción siguiente.
+
+## Cierre de producción
+
+Se publicaron los cinco HTML corregidos. La auditoría autorizada encontró cero coincidencias en `FooterPageContent.html`; la sustitución idempotente se ejecutó y devolvió cero filas, conservando todos los contenidos y revisiones. No queda una reparación de estos datos pendiente. Las páginas públicas se comprobaron por GET durante la revisión de navegador: contienen `support@cronox.es` y no contienen la dirección antigua. Las reparaciones de código/usuarios y el despliegue se detallan en el informe conjunto.

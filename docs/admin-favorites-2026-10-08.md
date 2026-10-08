@@ -1,4 +1,5 @@
 # Favoritos del administrador — 08/10/2026
+> Actualización del 8 de octubre: esta mejora está publicada en producción con `4ecb273`; el ajuste posterior del visor táctil se incluye en `c2488d4`. Los apartados de implementación local describen la fase previa. Commits, migraciones, reparaciones y límites de verificación publicados: [informe de publicación](session-release-2026-10-08.md).
 
 Implementado en local, sin commit, push, despliegue ni modificaciones en producción. Cambios anteriores conservados. No hay `AGENTS.md` en el repositorio ni en sus ascendientes; el archivo global revisado no contiene instrucciones.
 
@@ -51,3 +52,7 @@ npx --yes --package @playwright/cli playwright-cli -s=favorites run-code --filen
 ```
 
 Backend `npm run build:compiled --prefix cronox-backend`, administrador `npm run admin:build`, sintaxis de JavaScript y ESLint de controlador/servicio nuevos: correctos. No se ha realizado una prueba de carga ni consultado o modificado favoritos de producción. La consulta global debe recorrer las relaciones actuales para contar usuarios distintos; no se introducen índices/migraciones sin evidencia de necesidad.
+
+## Producción tras el despliegue
+
+El servicio desplegado, consultado en READ ONLY contra los datos reales, devuelve siete productos, tres favoritos actuales y tres usuarios únicos. Los recursos públicos coinciden con la versión revisada y el endpoint exige autenticación (401 sin sesión). No se añadieron ni quitaron favoritos reales. La pantalla administrativa autenticada permanece pendiente de comprobación visual por ausencia de sesión autorizada disponible.
