@@ -2595,10 +2595,7 @@ window.CRONOX_AUTH_STATE = window.CRONOX_USER ? 'authenticated' : 'unknown';
     storefrontReady: false,
   };
 
-  const hasPreferenceConsent = () =>
-    window.CRONOX_COOKIE_CONSENT?.hasConsent('preferences') === true;
-
-  const newsletterVisit = window.CRONOX_NEWSLETTER_VISIT?.create({ hasConsent: hasPreferenceConsent });
+  const newsletterVisit = window.CRONOX_NEWSLETTER_VISIT?.create();
 
   const markNewsletterShown = () => {
     newsletterState.shownInMemory = true;
@@ -2697,11 +2694,14 @@ window.CRONOX_AUTH_STATE = window.CRONOX_USER ? 'authenticated' : 'unknown';
   const openNewsletterModal = ({ manual = false } = {}) => {
     if (
       !newsletterState.overlay ||
-      (!manual && newsletterState.shownInMemory) ||
-      (!manual && window.CRONOX_AUTH_STATE !== 'anonymous')
-    ) return false;
+      (!manual && !shouldShowNewsletter())
+    ) {
+      if (!manual) clearNewsletterTimers();
+      return false;
+    }
+    if (newsletterState.overlay.classList.contains('newsletter-modal-overlay--visible')) return false;
     if (hasBlockingModal()) {
-      if (!newsletterState.retryTimer) {
+      if (!manual && !newsletterState.retryTimer) {
         newsletterState.retryTimer = setTimeout(() => {
           newsletterState.retryTimer = 0;
           openNewsletterModal();
@@ -2712,7 +2712,8 @@ window.CRONOX_AUTH_STATE = window.CRONOX_USER ? 'authenticated' : 'unknown';
     newsletterState.previousFocus = document.activeElement instanceof HTMLElement
       ? document.activeElement
       : null;
-    markNewsletterShown();
+    clearNewsletterTimers();
+    if (!manual) markNewsletterShown();
     newsletterState.overlay.classList.add('newsletter-modal-overlay--visible');
     newsletterState.overlay.setAttribute('aria-hidden', 'false');
     if (typeof window.CRONOX_lockScroll === 'function') window.CRONOX_lockScroll('newsletter');
@@ -2723,10 +2724,10 @@ window.CRONOX_AUTH_STATE = window.CRONOX_USER ? 'authenticated' : 'unknown';
     return true;
   };
 
-  const shouldShowNewsletter = (now = Date.now()) => {
+  const shouldShowNewsletter = () => {
     if (newsletterState.shownInMemory || newsletterVisit?.wasShown()) return false;
     if (window.CRONOX_AUTH_STATE !== 'anonymous' || window.CRONOX_USER) return false;
-    return newsletterVisit?.eligible(now) ?? true;
+    return newsletterVisit?.eligible() ?? false;
   };
 
   const suppressNewsletterForAuthentication = () => {
@@ -2780,6 +2781,10 @@ window.CRONOX_AUTH_STATE = window.CRONOX_USER ? 'authenticated' : 'unknown';
 
       const result = await res.json().catch(() => null);
       if (res.status === 202 && result?.status === 'accepted') {
+        // A voluntary successful subscription also suppresses automatic prompts
+        // for the remainder of this session, without a persistent cooldown.
+        markNewsletterShown();
+        clearNewsletterTimers();
         showNewsletterResult(result.confirmation);
         persistNewsletterDismiss();
         return;
@@ -2880,7 +2885,10 @@ window.CRONOX_AUTH_STATE = window.CRONOX_USER ? 'authenticated' : 'unknown';
 
     const schedule = () => {
       if (!newsletterState.storefrontReady) return;
-      if (newsletterState.shownInMemory || !shouldShowNewsletter()) return;
+      if (!shouldShowNewsletter()) {
+        clearNewsletterTimers();
+        return;
+      }
       newsletterVisit?.schedule(() => {
         if (shouldShowNewsletter()) openNewsletterModal();
       });
@@ -2890,7 +2898,7 @@ window.CRONOX_AUTH_STATE = window.CRONOX_USER ? 'authenticated' : 'unknown';
       schedule();
     }, { once: true });
     window.addEventListener('cronox:authResolved', (event) => {
-      if (event.detail?.state === 'authenticated') suppressNewsletterForAuthentication();
+      if (event.detail?.state !== 'anonymous') suppressNewsletterForAuthentication();
       else if (event.detail?.state === 'anonymous') schedule();
     });
     window.addEventListener('cronox:userChanged', (event) => {

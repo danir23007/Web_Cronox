@@ -73,11 +73,11 @@ function add(target: Amounts, revenue: number | null, cost: number | null, sold:
   for (const value of Object.values(target)) if (typeof value === 'number' && !Number.isSafeInteger(value)) throw new Error('El total supera la precisión monetaria admitida.');
 }
 
-export function calculateFinance(orders: FinanceOrder[], events: FinanceEvent[], from: string, to: string, aggregation: 'days' | 'months') {
+export function calculateFinance(orders: FinanceOrder[], events: FinanceEvent[], from: string, to: string, aggregation: 'days' | 'months', collectBuckets = true) {
   validateRange(from, to);
   const buckets = new Map<string, Amounts>();
   const key = (date: string) => aggregation === 'months' ? date.slice(0, 7) : date;
-  for (let date = from; date <= to; date = nextDate(date)) if (!buckets.has(key(date))) buckets.set(key(date), empty());
+  if (collectBuckets) for (let date = from; date <= to; date = nextDate(date)) if (!buckets.has(key(date))) buckets.set(key(date), empty());
   const totals = empty();
   const products = new Map<number, Product>();
   const warnings = new Set<string>();
@@ -93,7 +93,7 @@ export function calculateFinance(orders: FinanceOrder[], events: FinanceEvent[],
     if (day < from || day > to) return;
     if (!products.has(line.productId)) products.set(line.productId, { ...empty(), productId: line.productId, name: line.financialSnapshot?.productName ?? line.title.replace(/ \([^)]*\)$/, ''), imageUrl: line.financialSnapshot?.imageUrl ?? null });
     add(products.get(line.productId)!, revenue, cost, sold, returned);
-    add(buckets.get(key(day))!, revenue, cost, sold, returned);
+    if (collectBuckets) add(buckets.get(key(day))!, revenue, cost, sold, returned);
     add(totals, revenue, cost, sold, returned);
     if (cost === null) warnings.add('Faltan costes históricos: el beneficio afectado no está disponible.');
     if (revenue === null) warnings.add('Hay reembolsos sin importe o reparto fiable entre productos y envío. La facturación y el beneficio afectados no están disponibles.');
@@ -129,6 +129,7 @@ export function calculateFinance(orders: FinanceOrder[], events: FinanceEvent[],
       warnings.add(`Pedido #${order.id}: falta el evento fechado del reembolso; los periodos posteriores al cobro están incompletos.`);
       if (madridDate(paidAt) <= to) {
         const start = from > madridDate(paidAt) ? from : madridDate(paidAt);
+        if (!collectBuckets) lines.forEach(line => post(line, madridMidnight(start), null, 0));
         // The date is unknown, so every potentially affected bucket is unknown;
         // marking just one day would incorrectly label the others as known zero.
         for (const bucket of buckets.keys()) {

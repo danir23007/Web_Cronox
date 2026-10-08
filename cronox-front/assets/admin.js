@@ -304,6 +304,7 @@
   const PENDING_STORAGE_KEY = 'cronox.admin.pendingCounts';
   const ADMIN_ROLES = new Set(['ADMIN', 'SUPERADMIN']);
   const PERMISSIONS = {
+    finance: ['ADMIN', 'SUPERADMIN'],
     requests: ['ADMIN', 'SUPERADMIN'],
     users: ['ADMIN', 'SUPERADMIN'],
     userDetail: ['ADMIN', 'SUPERADMIN'],
@@ -319,6 +320,7 @@
     notes: ['ADMIN', 'SUPERADMIN'],
   };
   const SECTION_PERMISSIONS = {
+    'section-map': 'finance',
     'section-push': 'mails',
     'section-23': 'requests',
     'section-34': 'requests',
@@ -396,6 +398,7 @@
   };
 
   const applyRoleVisibility = () => {
+    setNavVisibility('section-map', canAccess('finance'));
     const clearActivityButton = document.getElementById('clearActivityBtn');
     if (clearActivityButton) clearActivityButton.hidden = currentAdminRole !== 'SUPERADMIN';
     setNavVisibility('section-push', canAccess('mails'));
@@ -1643,6 +1646,7 @@
     if (sectionId !== 'section-products') productOpenVersion++;
     if (sectionId === 'section-dashboard') { fetchDashboard(); window.CRONOX_FINANCE?.load('dashboard'); window.CRONOX_VISITORS?.load(); }
     if (sectionId === 'section-money') window.CRONOX_FINANCE?.load('money');
+    if (sectionId === 'section-map' && canAccess('finance')) window.CRONOX_MAP?.load();
     if (sectionId === 'section-34') { syncRequestsStateFromInputs(); fetchRequests(); markRequestsSeen(); }
     if (sectionId === 'section-23') { syncRequests23StateFromInputs(); fetchRequests23(); markRequestsSeen(); }
     if (sectionId === 'section-activity') { syncActivityStateFromInputs(); fetchActivity(); }

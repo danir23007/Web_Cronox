@@ -81,6 +81,68 @@ const setup = () => {
 };
 
 describe('public newsletter authoritative authentication gate', () => {
+  it('keeps voluntary subscription working and suppresses automatic prompts after success', async () => {
+    const context = setup();
+    try {
+      await flush(); context.auth.resolve(null); await flush();
+      const win = context.window;
+      const original = win.fetch;
+      win.fetch = jest.fn((url: string) => String(url).includes('/api/newsletter/subscribe')
+        ? Promise.resolve({ status: 202, ok: true, json: async () => ({ status: 'accepted', confirmation: 'welcome' }) }) : original(url));
+      const footer = win.document.querySelector('.footer-newsletter-form');
+      footer.querySelector('input').value = 'controlled@example.test';
+      footer.dispatchEvent(new win.Event('submit', { cancelable: true }));
+      await flush();
+      expect(context.visit.markShown).toHaveBeenCalledTimes(1);
+      expect(win.document.querySelector('.newsletter-modal-title').textContent).toBe('Bienvenido a Cronox');
+      win.document.querySelector('.newsletter-modal-done').click();
+      context.openScheduled();
+      expect(win.document.querySelector('.newsletter-modal-overlay').classList).not.toContain('newsletter-modal-overlay--visible');
+    } finally { context.dom.window.close(); }
+  });
+
+  it('rechecks the session guard when retrying behind another modal', async () => {
+    const context = setup();
+    try {
+      await flush(); context.auth.resolve(null); await flush();
+      const blocker = context.window.document.createElement('div');
+      blocker.id = 'authOverlay'; blocker.className = 'is-open';
+      context.window.document.body.append(blocker);
+      context.openScheduled();
+      context.visit.eligible.mockReturnValue(false);
+      blocker.remove();
+      await new Promise(resolve => setTimeout(resolve, 550));
+      expect(context.visit.markShown).not.toHaveBeenCalled();
+      expect(context.window.document.querySelector('.newsletter-modal-overlay').classList).not.toContain('newsletter-modal-overlay--visible');
+      expect(context.visit.cancel).toHaveBeenCalled();
+    } finally { context.dom.window.close(); }
+  });
+
+  it.each([true, false])('blocks subscribed=%s authenticated visitors', async subscribed => {
+    const context = setup();
+    try {
+      await flush();
+      context.auth.resolve({ id: 1, role: 'USER', newsletterSubscribed: subscribed });
+      await flush();
+      expect(context.visit.schedule).not.toHaveBeenCalled();
+      expect(context.window.document.querySelector('.newsletter-modal-overlay').classList).not.toContain('newsletter-modal-overlay--visible');
+    } finally { context.dom.window.close(); }
+  });
+
+  it('rejects a stale timer callback after login before its deadline', async () => {
+    const context = setup();
+    try {
+      await flush(); context.auth.resolve(null); await flush();
+      context.window.CRONOX_AUTH_STATE = 'authenticated';
+      context.window.CRONOX_USER = { role: 'USER' };
+      context.window.dispatchEvent(new context.window.CustomEvent('cronox:userChanged', { detail: context.window.CRONOX_USER }));
+      context.openScheduled();
+      expect(context.visit.cancel).toHaveBeenCalled();
+      expect(context.visit.markShown).not.toHaveBeenCalled();
+      expect(context.window.document.querySelector('.newsletter-modal-overlay').classList).not.toContain('newsletter-modal-overlay--visible');
+    } finally { context.dom.window.close(); }
+  });
+
   it('shows SMTP failure truthfully, allows retry and prevents duplicate in-flight submissions', async () => {
     const context = setup();
     try {

@@ -197,7 +197,7 @@ describe('cookie consent frontend', () => {
     expect(
       runtime.localStorage.getItem('cronox_circle_request_modal_seen_42'),
     ).toBeNull();
-    expect(runtime.sessionStorage.getItem('cronoxNewsletterShown')).toBeNull();
+    expect(runtime.sessionStorage.getItem('cronoxNewsletterShown')).toBe('true');
     expect(
       runtime.localStorage.getItem('cronoxNewsletterDismissedAt'),
     ).toBeNull();
@@ -260,7 +260,7 @@ describe('cookie consent frontend', () => {
     for (const page of publicPages) {
       const html = readFileSync(path.join(frontendRoot, page), 'utf8');
       expect(html).toContain('assets/cookie-consent.css?v=2');
-      expect(html).toContain('assets/cookie-consent.js?v=7');
+      expect(html).toContain('assets/cookie-consent.js?v=8');
       // Secure access/launch pages use only aggregate presence, never historical URLs.
       if (!['newsletter-access.html', 'launch.html', 'email-change.html'].includes(page)) {
         expect(html).toContain('assets/customer-analytics.js?v=1');

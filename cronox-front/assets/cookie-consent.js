@@ -12,7 +12,7 @@
   });
   const OPTIONAL_STORAGE = Object.freeze({
     preferences: [
-      "cronoxNewsletterShown",
+      // The newsletter session display guard is required UI state, not a preference.
       "cronoxNewsletterDismissedAt",
       /^cronox_circle_request_modal_seen_/,
       /^cronox_circle4_request_success_/,

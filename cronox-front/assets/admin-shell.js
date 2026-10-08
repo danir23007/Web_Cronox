@@ -214,7 +214,7 @@
   });
   const valueOf = el => el.type === 'checkbox' || el.type === 'radio' ? el.checked : el.isContentEditable ? el.innerHTML : el.value;
   const editContainer = el => {
-    if (el.closest('.finance-root,.filters-panel,.filter-bar,.pagination,.mail-filters,.mail-folder-filter')) return null;
+    if (el.closest('.finance-root,.map-filters,.filters-panel,.filter-bar,.pagination,.mail-filters,.mail-folder-filter')) return null;
     return el.closest('form,.modal,#section-inventory,#section-product-categories,#section-key-screen,#section-newsletter,#section-footer');
   };
   document.addEventListener('focusin', event => {

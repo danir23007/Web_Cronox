@@ -269,6 +269,7 @@
   <link rel="apple-touch-icon" href="/favicon.png?v=4">
   <meta name="theme-color" content="#000000">
   <link rel="stylesheet" href="assets/admin-shell.css?v=6">
+  <link rel="stylesheet" href="assets/admin-map.css?v=2">
   <link rel="stylesheet" href="assets/admin-live-stats.css?v=1">
   <link rel="stylesheet" href="/assets/admin-theme.css?v=1">
   <link rel="stylesheet" href="assets/category-controls.css?v=2">
@@ -289,6 +290,7 @@
           <button data-nav-target="section-codes">Códigos</button>
         </div>
         <button class="sidebar-destination" data-nav-target="section-money"><span aria-hidden="true">€</span>Dinero</button>
+        <button class="sidebar-destination" data-nav-target="section-map">Mapa</button>
         <button class="sidebar-group" aria-expanded="false" aria-controls="navMultimedia"><span aria-hidden="true">▣</span>Multimedia<span class="sidebar-chevron">⌄</span></button>
         <div id="navMultimedia" class="sidebar-children" hidden>
           <button class="sidebar-subgroup" type="button" aria-expanded="false" aria-controls="navGaleria">Galería<span class="sidebar-chevron">⌄</span></button>
@@ -676,6 +678,9 @@
       </div>
     </section>
 
+    <section id="section-map" class="admin-section" aria-labelledby="title-map" hidden>
+      <div id="adminMap" class="map-root"></div>
+    </section>
     <section id="section-money" class="admin-section" aria-labelledby="title-money" hidden>
       <div id="moneyFinance" class="finance-root" data-finance-page="money"></div>
     </section>
@@ -1995,8 +2000,9 @@
   <script src="assets/admin-product-gallery.js?v=2"></script>
   <script src="assets/admin-pagination.js?v=1"></script>
   <script src="assets/category-controls.js?v=2"></script>
-  <script src="assets/admin-shell.js?v=9"></script>
+  <script src="assets/admin-shell.js?v=10"></script>
   <script src="assets/admin-finance.js?v=2"></script>
+  <script src="assets/admin-map.js?v=2"></script>
   <link rel="stylesheet" href="assets/admin-visitors.css?v=1">
   <script src="assets/admin-visitors.js?v=2"></script>
   <script src="assets/admin-live-stats.js?v=2"></script>
@@ -2005,7 +2011,7 @@
   <script src="assets/admin-section-headers.js?v=1"></script>
   <script src="assets/admin-push.js?v=1"></script>
   <script src="assets/admin-inbox.js?v=12"></script>
-  <script src="assets/admin.js?v=12"></script>
+  <script src="assets/admin.js?v=13"></script>
   <script src="assets/admin-inventory.js?v=2"></script>
   <script src="assets/admin-waitlist.js?v=2"></script>
   <script src="assets/responsive-images.js?v=4"></script>
