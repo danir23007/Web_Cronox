@@ -54,10 +54,10 @@ const createRuntime = () => {
     location,
     localStorage,
     crypto: { randomUUID: () => '00000000-0000-4000-8000-000000000001' },
-    CRONOX_USER: { id: 42 },
+    CRONOX_USER: { id: 42, identityUid: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' },
     CRONOX_API: {
       API_BASE: '',
-      getMe: async () => ({ id: 42 }),
+      getMe: async () => window.CRONOX_USER,
       getCsrfHeaders: async () => ({}),
     },
     CRONOX_COOKIE_CONSENT: {
@@ -93,10 +93,24 @@ const createRuntime = () => {
   );
 
   if (!service) throw new Error('Analytics consent service was not registered');
-  return { service, listeners, localStorage, cookies, fetch };
+  return { service, listeners, localStorage, cookies, fetch, window };
 };
 
 describe('customer analytics browser lifecycle', () => {
+  it('does not reuse a numeric account cache for another identity and clears on session revocation', async () => {
+    const runtime = createRuntime();
+    runtime.localStorage.setItem('cronox_analytics_session', JSON.stringify({ id:'old-session',userId:42,lastActivityAt:Date.now() }));
+    await runtime.service.load();
+    const first = JSON.parse(runtime.localStorage.getItem('cronox_analytics_session')!);
+    expect(first.id).not.toBe('old-session');
+    expect(first.identityUid).toBe(runtime.window.CRONOX_USER.identityUid);
+    const next = { id:42,identityUid:'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb' };
+    runtime.window.CRONOX_USER = next;
+    await runtime.listeners.get('cronox:userChanged')?.({ detail:next });
+    expect(JSON.parse(runtime.localStorage.getItem('cronox_analytics_session')!).identityUid).toBe(next.identityUid);
+    runtime.listeners.get('cronox:session-ended')?.({});
+    expect(runtime.localStorage.getItem('cronox_analytics_session')).toBeNull();
+  });
   it('creates no identifier or request before the consent service is activated', () => {
     const runtime = createRuntime();
     expect(runtime.localStorage.getItem('cronox_analytics_session')).toBeNull();

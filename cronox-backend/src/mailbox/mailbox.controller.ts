@@ -23,6 +23,7 @@ import {
   ExecutionContext,
   CallHandler,
   CanActivate,
+  Optional,
 } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import multer, { diskStorage } from 'mailbox-multer';
@@ -56,12 +57,14 @@ import { MailboxAccessService } from './mailbox-access.service';
 import { MailboxCampaignService } from './mailbox-campaign.service';
 import { madridInstant } from './mailbox-campaign-policy';
 import { maxAttachmentBytes, safeFilename } from './mailbox-security';
+import { UserNumberingGate } from '../users/user-numbering-gate.module';
 
 class DeleteDraftDto {
   @IsInt() @Min(1) revision: number;
 }
 class GrantDto {
   @IsInt() @Min(1) userId: number;
+  @IsOptional() @IsUUID() identityUid?: string;
   @IsIn(['read', 'send']) access: string;
   @IsOptional() @IsBoolean() notify?: boolean;
   @IsOptional() @IsBoolean() details?: boolean;
@@ -257,6 +260,7 @@ export class MailboxController {
     readonly access: MailboxAccessService,
     readonly sessions: AuthSessionsService,
     readonly campaigns: MailboxCampaignService,
+    @Optional() readonly numbering?: UserNumberingGate,
   ) {}
   @Get('overview') overview(@Req() r: Request) {
     return this.service.overview(r.user!);
@@ -271,7 +275,7 @@ export class MailboxController {
     this.access.superadmin(r.user!);
     return this.access.db.user.findMany({
       where: { role: 'ADMIN', accountState: 'ACTIVE' },
-      select: { id: true, name: true, email: true },
+      select: { id: true, identityUid: true, name: true, email: true },
       orderBy: { id: 'asc' },
       take: 100,
     });
@@ -473,20 +477,25 @@ export class MailboxController {
       'Content-Disposition',
       `attachment; filename="attachment"; filename*=UTF-8''${encodeURIComponent(safeFilename(file.name)).replace(/'/g, '%27')}`,
     );
+    let checking = false;
     const timer = setInterval(() => {
-      void (async () => {
-        await this.access.box(r.user!, file.mailboxId);
+      if (checking || res.destroyed) return;
+      checking = true;
+      const check = async () => {
+        if (res.destroyed) return;
         const claim = (r as any).authSession;
-        await this.sessions.validate({
+        const session = await this.sessions.validate({
           sub: r.user!.id,
           sid: claim.sid,
           sv: claim.sv,
           type: 'access',
         });
-      })().catch(() => {
+        await this.access.box(session.user, file.mailboxId);
+      };
+      void (this.numbering ? this.numbering.shared(check) : check()).catch(() => {
         file.stream.destroy();
         res.destroy();
-      });
+      }).finally(() => { checking = false; });
     }, 3000);
     timer.unref();
     res.on('close', () => {

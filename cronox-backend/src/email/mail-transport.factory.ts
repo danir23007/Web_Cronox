@@ -1,3 +1,4 @@
+import { UserNumberingGate } from '../users/user-numbering-gate.module';
 import { Injectable, Logger, Optional, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
 import MailComposer from 'nodemailer/lib/mail-composer';
 import { createTransport, Transporter, SendMailOptions } from 'nodemailer';
@@ -13,9 +14,10 @@ import { decrypt, encrypt, maxMessageBytes, maxAttachmentBytes } from '../mailbo
 export class MailTransportFactory implements OnModuleInit, OnModuleDestroy {
   private timer?: ReturnType<typeof setInterval>;
   private running = false;
+  private gatePending = false;
   private stopped = false;
   private readonly logger = new Logger(MailTransportFactory.name);
-  constructor(@Optional() private readonly db?: PrismaService) {}
+  constructor(@Optional() private readonly db?: PrismaService, @Optional() private readonly numbering?: UserNumberingGate) {}
   private readonly config = loadEmailConfig();
   private readonly transports = new Map<EmailSenderKey, Transporter>();
 
@@ -113,6 +115,12 @@ export class MailTransportFactory implements OnModuleInit, OnModuleDestroy {
     for (const transport of this.transports.values()) transport.close();
   }
   async tickDeferred() {
+    if (this.gatePending) return;
+    this.gatePending = true;
+    try { return await (this.numbering ? this.numbering.shared(() => this.tickDeferredLocked()) : this.tickDeferredLocked()); }
+    finally { this.gatePending = false; }
+  }
+  async tickDeferredLocked() {
     if (!this.db || this.running || this.stopped || process.env.EMAIL_SMTP_PAUSED === 'true') return;
     this.running = true;
     try {

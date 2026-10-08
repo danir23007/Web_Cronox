@@ -12,6 +12,7 @@ describe('bulk user account state', () => {
   const dto = (changes: Record<string, unknown>, ids = [2]) => ({
     kind: 'users' as const,
     ids,
+    userIdentities: Object.fromEntries(ids.map(id => [id, `00000000-0000-4000-8000-${String(id).padStart(12, '0')}`])),
     changes,
   });
 
@@ -42,7 +43,7 @@ describe('bulk user account state', () => {
             : rows.find((r) => r.id === where.id),
         ),
         findMany: jest.fn(async ({ where }) =>
-          rows.filter((r) => where.id.in.includes(r.id)),
+          rows.filter((r) => where.id.in.includes(r.id)).map(r => ({ ...r, identityUid: r.identityUid || `00000000-0000-4000-8000-${String(r.id).padStart(12, '0')}` })),
         ),
       },
       category: { findMany: jest.fn().mockResolvedValue([]) },
@@ -191,5 +192,10 @@ describe('bulk user account state', () => {
     await expect(
       service.preview(dto({ accountState: 'PENDING_PASSWORD' }) as any, 1),
     ).rejects.toThrow('sin contraseña');
+  });
+  it('rejects a reused numeric ID with a different immutable identity', async () => {
+    rows[0].identityUid = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+    await expect(service.preview(dto({ circleLevel:2 }) as any,1)).rejects.toThrow('identidad');
+    expect(users.updateAdminUser).not.toHaveBeenCalled();
   });
 });

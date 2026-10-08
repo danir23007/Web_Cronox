@@ -9,6 +9,14 @@ const bin = process.env.CRONOX_REVIEW_PG_BIN || 'C:/Program Files/PostgreSQL/17/
 const exe = n => path.join(bin, n + (process.platform === 'win32' ? '.exe' : ''));
 const run = (command, args, options = {}) => execFileSync(command, args, { windowsHide: true, stdio: 'pipe', ...options });
 async function main() {
+  // This entry point also follows the new numbering policy. Keep the historical
+  // stable-number scenario below for old schemas; never reapply its old triggers
+  // or deletion assumptions against a consecutively numbered application.
+  const currentSchema = await fs.readFile(path.join(backend, 'prisma/schema.prisma'), 'utf8');
+  if (currentSchema.includes('model UserNumberingState')) {
+    run(process.execPath, [path.join(__dirname, 'review-user-numbering-local.cjs')], { cwd: backend, stdio: 'inherit' });
+    return;
+  }
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'cronox-identity-'));
   const data = path.join(dir, 'pg');
   const probe = net.createServer(); await new Promise(resolve => probe.listen(0, '127.0.0.1', resolve));

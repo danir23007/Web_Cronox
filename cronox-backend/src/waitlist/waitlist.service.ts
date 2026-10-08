@@ -1,7 +1,8 @@
+import { UserNumberingGate } from '../users/user-numbering-gate.module';
 import {
   BadRequestException,
   ConflictException,
-  Injectable,
+  Injectable, Optional,
   Logger,
   NotFoundException,
   OnModuleDestroy,
@@ -55,10 +56,12 @@ export const purchasable = (
 export class WaitlistService implements OnModuleInit, OnModuleDestroy {
   private timer?: ReturnType<typeof setInterval>;
   private running = false;
+  private gatePending = false;
   private readonly logger = new Logger(WaitlistService.name);
   constructor(
     private readonly prisma: PrismaService,
     private readonly email: EmailService,
+    @Optional() private readonly numbering?: UserNumberingGate,
   ) {}
 
   onModuleInit() {
@@ -170,6 +173,12 @@ export class WaitlistService implements OnModuleInit, OnModuleDestroy {
   }
 
   async tick() {
+    if (this.gatePending) return;
+    this.gatePending = true;
+    try { return await (this.numbering ? this.numbering.shared(() => this.tickLocked()) : this.tickLocked()); }
+    finally { this.gatePending = false; }
+  }
+  async tickLocked() {
     if (this.running || !waitlistWorkerEnabled()) return;
     this.running = true;
     try {

@@ -1,7 +1,9 @@
 // src/app.module.ts
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config'; // [STRIPE]
-import { APP_FILTER, APP_GUARD } from '@nestjs/core';
+import { APP_FILTER, APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
+import { UserNumberingGateModule } from './users/user-numbering-gate.module';
+import { UserNumberingCompletion } from './users/user-numbering.middleware';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { ServeStaticModule } from '@nestjs/serve-static';
 import { join } from 'path';
@@ -75,6 +77,7 @@ import {
       },
     ),
     PrismaModule,
+    UserNumberingGateModule,
     ImagesModule,
     FooterModule,
     WaitlistModule,
@@ -103,6 +106,7 @@ import {
   controllers: [AppController],
   providers: [
     AppService,
+    { provide: APP_INTERCEPTOR, useClass: UserNumberingCompletion },
     ReadinessService,
     { provide: APP_FILTER, useClass: DatabaseAvailabilityFilter },
     { provide: APP_GUARD, useClass: AppThrottlerGuard },

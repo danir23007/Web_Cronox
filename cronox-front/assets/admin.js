@@ -261,7 +261,7 @@
     circle: '',
     accountState: '',
     sort: 'createdAt',
-    order: 'desc',
+    order: 'asc',
   };
   const userDetailState = {
     userId: null,
@@ -1470,8 +1470,8 @@
           : '—';
         const safeTargetLabel = safeText(targetLabel);
         const targetCell =
-          entry.targetType === 'user' && entry.targetId
-            ? `<a class="link-btn" href="admin-user.html?id=${encodeURIComponent(entry.targetId)}">${safeTargetLabel}</a>`
+          entry.targetType === 'user' && entry.targetId && entry.targetIdentityUid
+            ? `<a class="link-btn" href="admin-user.html?id=${encodeURIComponent(entry.targetId)}&uid=${encodeURIComponent(entry.targetIdentityUid)}">${safeTargetLabel}</a>`
             : safeTargetLabel;
         return `<tr>
           <td>
@@ -2073,8 +2073,8 @@
         const safeSocialNetwork = safeText(req.socialNetwork);
         const safeUsername = safeText(req.username);
         const safeRequestId = escapeHtml(req.id);
-        const userCell = rawUserId
-          ? `<a class="link-btn" href="admin-user.html?id=${encodeURIComponent(rawUserId)}">${safeUserLabel}</a>`
+        const userCell = rawUserId && req.user?.identityUid
+          ? `<a class="link-btn" href="admin-user.html?id=${encodeURIComponent(rawUserId)}&uid=${encodeURIComponent(req.user.identityUid)}">${safeUserLabel}</a>`
           : safeUserLabel;
         const created = formatRelativeTime(req.createdAt);
         created.label = safeText(created.label);
@@ -2146,8 +2146,8 @@
         const safeUserLabel = safeText(userLabel);
         const safeUserId = safeText(window.CRONOX_USER_IDENTITY.format(req.user));
         const safeRequestId = escapeHtml(req.id);
-        const userCell = rawUserId
-          ? `<a class="link-btn" href="admin-user.html?id=${encodeURIComponent(rawUserId)}">${safeUserLabel}</a>`
+        const userCell = rawUserId && req.user?.identityUid
+          ? `<a class="link-btn" href="admin-user.html?id=${encodeURIComponent(rawUserId)}&uid=${encodeURIComponent(req.user.identityUid)}">${safeUserLabel}</a>`
           : safeUserLabel;
         const created = formatRelativeTime(req.createdAt);
         created.label = safeText(created.label);
@@ -2474,6 +2474,7 @@
     return {
       id,
       registrationNumber: source.registrationNumber,
+      identityUid: source.identityUid,
       memberCode: source.memberCode,
       email,
       phone,
@@ -2555,7 +2556,7 @@
         const usersHash = buildUsersHash(usersState);
         const actionLabel =
           user.id != null && user.id !== ''
-            ? `<a class="btn" href="admin-user.html?id=${encodeURIComponent(user.id)}${usersHash}">Ver</a>`
+            ? `<a class="btn" href="admin-user.html?id=${encodeURIComponent(user.id)}&uid=${encodeURIComponent(user.identityUid || '')}${usersHash}">Ver</a>`
             : '<button class="btn" type="button" disabled>Ver</button>';
         return `
           <tr>

@@ -144,7 +144,7 @@
     table.classList.add("bulk-table", "bulk-table--" + kind);
     const s = {
       kind, body, table, header, toggle, bar, query, reload,
-      ids: new Set(), items: [], total: 0, active: false, requestVersion: 0,
+      userIdentities: {}, ids: new Set(), items: [], total: 0, active: false, requestVersion: 0,
       all, count, actions, notice, key: filterKey(query()), busy: false,
     };
     lists.set(kind, s);
@@ -200,6 +200,7 @@
         if (!Array.isArray(result.ids) || result.ids.length > LIMIT)
           throw new Error("Selección incompleta o inválida.");
         s.ids = new Set(result.ids.map(Number));
+        if (kind === "users") Object.assign(s.userIdentities, result.userIdentities || {});
         notice.textContent = "Selección capturada: " + s.ids.size + " registros. Los nuevos registros no se añadirán automáticamente.";
       } catch (error) {
         if (s.active && s.requestVersion === version) {
@@ -231,6 +232,7 @@
     const s = lists.get(kind);
     if (!s) return;
     s.items = items;
+    if (kind === "users") items.forEach(item => { if (item.identityUid) s.userIdentities[item.id] = item.identityUid; });
     s.total = Number(total) || 0;
     if (s.active) addPageCells(s);
     updateSelection(s);
@@ -244,6 +246,7 @@
     if (document.querySelector(".admin-bulk-dialog")) return;
     const noun = s.kind === "users" ? "usuarios" : "productos",
       ids = [...s.ids];
+    const userIdentities = s.kind === "users" ? Object.fromEntries(ids.map(id => [id, s.userIdentities[id]])) : undefined;
     const dialog = element("dialog", null, "admin-bulk-dialog"),
       title = element("h2", `Editar ${ids.length} ${noun}`);
     title.id = "bulkTitle";
@@ -483,7 +486,7 @@
       status.textContent = "Validando y preparando el resumen…";
       try {
         const c = changes();
-        preview = await api("preview", { kind: s.kind, ids, changes: c });
+        preview = await api("preview", { kind: s.kind, ids, userIdentities, changes: c });
         operation = null;
         renderPlan(preview, c);
         status.textContent = preview.counts.changed
@@ -528,6 +531,7 @@
         operation = {
           kind: s.kind,
           ids,
+          userIdentities,
           changes: changes(),
           reviewToken: preview.reviewToken,
           operationId: crypto.randomUUID(),
@@ -599,7 +603,7 @@
     busy(true);
     status.textContent = "Consultando los valores actuales…";
     try {
-      const initial = await api("preview", { kind: s.kind, ids, changes: {} });
+      const initial = await api("preview", { kind: s.kind, ids, userIdentities, changes: {} });
       const values = element("p");
       values.textContent = Object.keys(initial.rows[0]?.before || {})
         .map((key) => {

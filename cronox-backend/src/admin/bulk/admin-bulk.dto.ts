@@ -8,6 +8,7 @@ import {
   IsIn,
   IsInt,
   IsOptional,
+  IsObject,
   IsString,
   IsUUID,
   Max,
@@ -47,6 +48,7 @@ export class BulkPreviewDto {
   @Min(1, { each: true })
   @Max(2147483647, { each: true })
   ids: number[];
+  @IsOptional() @IsObject() userIdentities?: Record<string, string>;
   @ValidateNested() @Type(() => BulkChangesDto) changes: BulkChangesDto;
 }
 export class BulkExecuteDto extends BulkPreviewDto {

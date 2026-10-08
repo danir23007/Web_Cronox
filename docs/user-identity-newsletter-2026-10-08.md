@@ -1,4 +1,6 @@
 # Identidad de usuarios y altas de newsletter — 8 de octubre de 2026
+> Solicitud posterior, preparada únicamente en local el 8–9/10: [numeración consecutiva real](user-numbering-2026-10-08.md). Ese informe sustituye, en la implementación local nueva, la regla de números inmutables/no reutilizables descrita aquí; conserva la identidad estable por UUID y los QR originales, con renumeración controlada y revocación de sesiones. Este documento conserva la descripción histórica de la versión publicada anterior. Para aplicar la nueva numeración, usar exclusivamente el procedimiento del informe nuevo; no reinstalar los triggers anteriores.
+
 > Actualización del 8 de octubre: esta mejora está publicada en producción con `4ecb273`; el ajuste posterior del visor táctil se incluye en `c2488d4`. Los apartados de implementación local describen la fase previa. Commits, migraciones, reparaciones y límites de verificación publicados: [informe de publicación](session-release-2026-10-08.md).
 
 Corrección realizada en local. No se han hecho commit, push, despliegue, envíos de correo ni modificaciones en producción. No se encontró `AGENTS.md` en el repositorio ni en sus directorios ascendentes. Se han seguido los patrones NestJS/Prisma, el entorno local protegido y la compilación existente del administrador.

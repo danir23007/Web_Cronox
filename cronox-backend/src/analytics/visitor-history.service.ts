@@ -174,9 +174,16 @@ export class VisitorHistoryService {
       if (!user && (browser!.linked || browser!.adminExcluded))
         return { accepted: true, day, suppressed: true };
       const category = legitimate ? 'authenticated' : 'anonymous';
-      const identity = this.hash(
-        legitimate ? 'account:' + user.id : 'browser-proof:' + browser!.id,
-      );
+      const account = legitimate ? await tx.$queryRaw<{ identityUid: string; identity: string | null }[]>`
+        SELECT u."identityUid", d.identity FROM "User" u LEFT JOIN "DailyVisitor" d
+        ON d."userId"=u.id AND d.day=${day}::date AND d.category='authenticated'
+        WHERE u.id=${user.id} LIMIT 1` : [];
+      if (legitimate && !account[0]?.identityUid) return { accepted:false,day };
+      // Retain each recorded day verbatim; newly observed days use immutable
+      // account UUIDs so deleting/reusing a number never merges two people.
+      const identity = legitimate
+        ? account[0].identity || this.hash('account-uid:' + account[0].identityUid)
+        : this.hash('browser-proof:' + browser!.id);
       const rows = await tx.$queryRaw<{ id: string; inserted: boolean }[]>`
         INSERT INTO "DailyVisitor" (id, day, category, identity, "userId", "firstAt", "lastAt", "observedRole")
         VALUES (${randomUUID()}, ${day}::date, ${category}, ${identity}, ${legitimate ? user.id : null}, ${now}, ${now}, ${legitimate ? user.role : null})

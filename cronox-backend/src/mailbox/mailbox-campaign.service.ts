@@ -832,10 +832,12 @@ export class MailboxCampaignService {
         .run(c.draft.mailboxId, async (token, assert) => {
           const snapshot = c.snapshot as any,
             box = c.draft.mailbox;
-          const actor = await this.db.user.findUnique({
-            where: { id: snapshot.userId },
-            select: { id: true, role: true, accountState: true },
-          });
+          const actor = Number.isSafeInteger(snapshot.userId) && snapshot.userId > 0
+            ? await this.db.user.findUnique({
+                where: { id: snapshot.userId },
+                select: { id: true, role: true, accountState: true },
+              })
+            : null;
           if (!actor || actor.accountState !== 'ACTIVE' || !box.active) {
             await this.db.mailboxCampaign.update({
               where: { id: c.id },

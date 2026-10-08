@@ -263,7 +263,7 @@ describe('cookie consent frontend', () => {
       expect(html).toContain('assets/cookie-consent.js?v=9');
       // Secure access/launch pages use only aggregate presence, never historical URLs.
       if (!['newsletter-access.html', 'launch.html', 'email-change.html'].includes(page)) {
-        expect(html).toContain('assets/customer-analytics.js?v=1');
+        expect(html).toContain('assets/customer-analytics.js?v=2');
       }
     }
     expect(consentSource).toContain('if (!current) showBanner();');

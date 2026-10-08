@@ -421,8 +421,8 @@ async function main() {
       imapSecretRef: 'MAILBOX_TEST_PASS',
       smtpSecretRef: 'MAILBOX_TEST_PASS',
       permissions: [
-        { userId: users.reader.id, access: 'read' },
-        { userId: users.writer.id, access: 'send' },
+        { userId: users.reader.id, identityUid: users.reader.identityUid, access: 'read' },
+        { userId: users.writer.id, identityUid: users.writer.identityUid, access: 'send' },
       ],
     };
     let result = await request('/boxes', 'POST', config);

@@ -54,6 +54,12 @@ export class MailboxService {
       },
       orderBy: { name: 'asc' },
     });
+    const permissionUsers = actor.role === 'SUPERADMIN' && boxes.some(box => box.permissions.length)
+      ? await this.db.user.findMany({
+          where: { id: { in: [...new Set(boxes.flatMap(box => box.permissions.map(permission => permission.userId)))] } },
+          select: { id: true, identityUid: true },
+        })
+      : [];
     const counts = await this.db.mailboxMessage.groupBy({
       by: ['mailboxId'],
       where: {
@@ -158,6 +164,7 @@ export class MailboxService {
               sentCopy: b.sentCopy,
               permissions: b.permissions.map((p) => ({
                 userId: p.userId,
+                identityUid: permissionUsers.find(user => user.id === p.userId)?.identityUid,
                 access: p.access,
                 notify: p.notify,
                 details: p.details,
@@ -222,16 +229,17 @@ export class MailboxService {
     const permissions = input.permissions || [];
     if (permissions.length > 50)
       throw new BadRequestException('MAILBOX_TOO_MANY_PERMISSIONS');
-    const adminIds = (
+    const admins = (
       await this.db.user.findMany({
         where: {
           id: { in: permissions.map((p) => p.userId) },
           role: 'ADMIN',
           accountState: 'ACTIVE',
         },
-        select: { id: true },
+        select: { id: true, identityUid: true },
       })
-    ).map((u) => u.id);
+    );
+    const adminIds = admins.map((u) => u.id);
     if (
       permissions.some(
         (p) =>
@@ -239,6 +247,8 @@ export class MailboxService {
       )
     )
       throw new BadRequestException('MAILBOX_PERMISSION_REQUIRES_ACTIVE_ADMIN');
+    if (permissions.some(p => !p.identityUid || admins.find(u => u.id === p.userId)?.identityUid !== p.identityUid))
+      throw new ConflictException('MAILBOX_PERMISSION_USER_CHANGED');
     await this.db.$transaction(async (tx) => {
       if (existing) {
         const result = await tx.mailbox.updateMany({

@@ -100,6 +100,9 @@ export class AdminAuditLogsService {
     ]);
 
     const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
+    const targetIds = [...new Set(items.filter(item => item.targetType === 'user' && /^\d+$/.test(item.targetId ?? '')).map(item => Number(item.targetId)))];
+    const targets = targetIds.length ? await this.prisma.user.findMany({ where: { id: { in: targetIds } }, select: { id: true, identityUid: true } }) : [];
+    const targetIdentities = new Map(targets.map(user => [user.id, user.identityUid]));
 
     return {
       items: items.map((item) => ({
@@ -109,6 +112,7 @@ export class AdminAuditLogsService {
         actionType: item.actionType ?? item.action ?? 'UNKNOWN',
         targetType: item.targetType ?? 'unknown',
         targetId: item.targetId ?? '',
+        targetIdentityUid: item.targetType === 'user' ? targetIdentities.get(Number(item.targetId)) ?? null : null,
         fromCircle: item.fromCircle,
         toCircle: item.toCircle,
         reason: item.reason,

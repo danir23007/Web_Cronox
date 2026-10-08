@@ -53,6 +53,7 @@ describe('Visitor history boundaries', () => {
         .mockResolvedValueOnce([
           { id: 'server-browser', linked: false, adminExcluded: false },
         ])
+        .mockResolvedValueOnce([{ identityUid:'c01e9d8a-835c-4a64-864a-53e8da6dc1ed',identity:null }])
         .mockResolvedValueOnce([{ id: 'visit' }]),
     };
     const db = {
@@ -84,7 +85,7 @@ describe('Visitor history boundaries', () => {
         new Date('2026-03-29T22:00:00Z'),
       ),
     ).toMatchObject({ day: '2026-03-30', category: 'authenticated' });
-    const values = tx.$queryRaw.mock.calls[1].slice(1);
+    const values = tx.$queryRaw.mock.calls[2].slice(1);
     expect(values).toContain(8);
     expect(values).not.toContain(browser);
     expect(values).not.toContain(req.ip);

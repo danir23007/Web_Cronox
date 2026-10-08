@@ -10,6 +10,11 @@ const name = '20261008120000_stable_user_identity_newsletter_link';
 const pgEnv = { ...env, PGHOST: url.hostname, PGPORT: url.port || '5432', PGDATABASE: url.pathname.slice(1), PGUSER: decodeURIComponent(url.username), PGPASSWORD: decodeURIComponent(url.password) };
 const psql = path.join(env.LOCAL_PG_BIN || 'C:/Program Files/PostgreSQL/17/bin', process.platform === 'win32' ? 'psql.exe' : 'psql');
 const options = { env: pgEnv, windowsHide: true, encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] };
+const numbered = execFileSync(psql, ['-X', '-At', '-c', 'SELECT to_regclass(\'public."UserNumberingState"\') IS NOT NULL'], options).trim();
+if (numbered === 't') {
+  console.log('Consecutive numbering is installed. Use user-numbering.cjs; old identity triggers must not be reinstalled.');
+  process.exit(0);
+}
 const migrated = execFileSync(psql, ['-X', '-At', '-c', 'SELECT EXISTS(SELECT 1 FROM information_schema.columns WHERE table_schema=\'public\' AND table_name=\'NewsletterSubscription\' AND column_name=\'userId\')'], options).trim();
 const guard = execFileSync(psql, ['-X', '-At', '-c', 'SELECT EXISTS(SELECT 1 FROM pg_trigger WHERE tgname=\'User_check_reserved_id\')'], options).trim();
 for (const migrationName of [ ...(migrated === 't' ? [] : [name]), ...(guard === 't' ? [] : ['20261008121000_prevent_deleted_user_id_reuse']) ]) {

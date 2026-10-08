@@ -1,3 +1,4 @@
+import { UserIdentityGuard } from '../../users/user-identity.guard';
 import { CanActivate, ExecutionContext, INestApplication, UnauthorizedException, ValidationPipe } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { Role } from '@prisma/client';
@@ -29,7 +30,7 @@ describe('manual purchase permissions (HTTP)', () => {
     const module = await Test.createTestingModule({
       controllers: [AdminManualPurchasesController, AdminManualPurchaseCorrectionsController],
       providers: [AdminGuard, RolesGuard, SuperAdminGuard, { provide: AdminManualPurchasesService, useValue: service }],
-    }).overrideGuard(JwtAuthGuard).useClass(HeaderAuthGuard).compile();
+    }).overrideGuard(JwtAuthGuard).useClass(HeaderAuthGuard).overrideGuard(UserIdentityGuard).useValue({ canActivate: () => true }).compile();
     app = module.createNestApplication();
     app.setGlobalPrefix('api');
     app.useGlobalPipes(new ValidationPipe({ transform: true, whitelist: true, forbidNonWhitelisted: true }));

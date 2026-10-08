@@ -871,6 +871,7 @@ model NewsletterSettings {
 }
 
 model User {
+  identityUid               String                  @unique @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   emailChangeRequest EmailChangeRequest?
   dailyVisits         DailyVisitor[]
   restockRequests           RestockRequest[]
@@ -1193,7 +1194,7 @@ model DiscountCode {
   type      String
   percent   Int
   used      Boolean   @default(false)
-  user      User      @relation(fields: [userId], references: [id])
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   userId    Int
   createdAt DateTime  @default(now())
   usedAt    DateTime?
@@ -1301,7 +1302,7 @@ model CheckoutSnapshot {
   expiresAt                  DateTime
   createdAt                  DateTime                   @default(now())
   updatedAt                  DateTime                   @updatedAt
-  user                       User?                      @relation(fields: [userId], references: [id])
+  user                       User?                      @relation(fields: [userId], references: [id], onDelete: SetNull)
   order                      Order?                     @relation("CheckoutSnapshotOrder", fields: [orderId], references: [id], onDelete: SetNull)
   items                      CheckoutSnapshotItem[]
   stockReservations          CheckoutStockReservation[]
@@ -1420,7 +1421,7 @@ model Order {
   billingAddr          Json?
   customerEmail        String
   userId               Int?
-  user                 User?                   @relation(fields: [userId], references: [id])
+  user                 User?                   @relation(fields: [userId], references: [id], onDelete: SetNull)
   items                OrderItem[]
   stockMovements       StockMovement[]
   promoCode            PromoCode?              @relation(fields: [promoCodeId], references: [id])
@@ -1505,7 +1506,7 @@ model Favorite {
   productId Int
   createdAt DateTime @default(now())
   product   Product  @relation(fields: [productId], references: [id])
-  user      User     @relation(fields: [userId], references: [id])
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, productId])
 }
@@ -1526,6 +1527,42 @@ model UserIdentityReservation {
   memberCode        String?  @unique
   publicMemberToken String?  @unique
   reservedAt        DateTime @default(now()) @db.Timestamptz(6)
+}
+
+// Private numbering coordinator and immutable account/QR identity. Numeric IDs
+// are positions; UUIDs are never reassigned, including after account deletion.
+model UserNumberingState {
+  id Int @id
+  nextId Int
+  revision Int @default(0)
+  ready Boolean @default(false)
+}
+
+model UserIdentityRegistry {
+  identityUid String @id @db.Uuid
+  publicMemberToken String? @unique
+}
+
+/// Private attribution of historical non-FK references whose account was deleted.
+/// A retired number is never interpreted as the owner of a current account.
+model UserRetiredReference {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  retiredAt      DateTime @default(now()) @db.Timestamptz(6)
+  tableName      String
+  columnName     String
+  recordKey      Json
+  previousNumber Int
+  identityUid    String?  @db.Uuid
+
+  @@index([identityUid])
+}
+
+model UserNumberingRun {
+  id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  mapping Json
+  total Int
+  reason String
 }
 
 model NewsletterSubscription {
@@ -1654,13 +1691,14 @@ model AdminNote {
   id            String   @id @default(cuid())
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
-  authorAdminId Int
+  authorAdminId Int?
+  authorIdentityUid String? @db.Uuid
   targetType    String
   targetId      String
   content       String   @db.Text
   isDeleted     Boolean  @default(false)
 
-  author User @relation(fields: [authorAdminId], references: [id])
+  author User? @relation(fields: [authorAdminId], references: [id], onDelete: SetNull)
 
   @@index([authorAdminId])
   @@index([targetType, targetId])

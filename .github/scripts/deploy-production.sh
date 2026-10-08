@@ -36,6 +36,19 @@ if [ "$latest" != "$expected" ]; then
   exit 1
 fi
 git fetch origin main
+# Check the incoming release BEFORE merging public HTML or rebuilding assets.
+# This is read-only and deliberately fails if the old installation lacks pg:
+# first-time numbering requires the documented manual maintenance operation.
+cd cronox-backend
+git show origin/main:cronox-backend/scripts/check-user-numbering-release.cjs | node -e '
+const Module=require("node:module"),fs=require("node:fs");
+const filename=process.cwd()+"/scripts/check-user-numbering-release.cjs";
+const check=new Module(filename,module);check.filename=filename;
+check.paths=Module._nodeModulePaths(process.cwd());
+check._compile(fs.readFileSync(0,"utf8"),filename);
+check.exports.main().catch(error=>{console.error(error.message.replace(/postgres(?:ql)?:\/\/\S+/gi,"[redacted connection]"));process.exitCode=1;});
+' -- --deployment-check
+cd ..
 # Keep unrelated working files intact; conflicts abort rather than discard them.
 git merge --ff-only origin/main
 bash .github/scripts/deploy-vps-release.sh

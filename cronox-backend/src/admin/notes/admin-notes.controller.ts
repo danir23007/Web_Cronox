@@ -1,3 +1,4 @@
+import { UserIdentityGuard } from '../../users/user-identity.guard';
 import { Body, Controller, Delete, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
@@ -11,7 +12,7 @@ import { UpdateAdminNoteDto } from './dto/update-admin-note.dto';
 import { Role } from '@prisma/client';
 
 @Controller('admin/notes')
-@UseGuards(JwtAuthGuard, AdminGuard, RolesGuard)
+@UseGuards(JwtAuthGuard, AdminGuard, RolesGuard, UserIdentityGuard)
 @Roles(Role.SUPERADMIN)
 export class AdminNotesController {
   constructor(private readonly notes: AdminNotesService) {}

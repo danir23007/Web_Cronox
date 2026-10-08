@@ -11,6 +11,7 @@ export type AuthUserWithPassword = User;
 export type SafeUser = {
   hasPassword: boolean;
   id: number;
+  identityUid: string;
   email: string;
   name?: string | null;
   firstName?: string | null;
@@ -110,6 +111,7 @@ export class UsersService {
     return {
       hasPassword: 'password' in user ? Boolean(user.password) : user.hasPassword,
       id: user.id,
+      identityUid: user.identityUid,
       email: user.email,
       name: user.name,
       firstName: user.firstName,

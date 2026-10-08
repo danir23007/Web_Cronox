@@ -27,3 +27,5 @@ playwright-report/
 
 # Generated local browser verification artifacts.
 /output/playwright/
+# Private recoverable backups and reviewed account maps must never enter Git.
+output/private-user-numbering/

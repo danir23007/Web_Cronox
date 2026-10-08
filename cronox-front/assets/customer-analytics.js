@@ -9,6 +9,8 @@
   const FLUSH_MS = 5 * 1000;
   let enabled = false;
   let userId = null;
+  let identityUid = null;
+  let identityRevision = 0;
   let session = null;
   let queue = [];
   let flushTimer = null;
@@ -42,11 +44,11 @@
     try {
       const parsed = JSON.parse(localStorage.getItem(SESSION_KEY) || "null");
       if (
-        parsed && parsed.userId === userId && typeof parsed.id === "string" &&
+        parsed && parsed.identityUid === identityUid && typeof parsed.id === "string" &&
         typeof parsed.lastActivityAt === "number" && now - parsed.lastActivityAt < sessionTimeoutMs
       ) session = parsed;
     } catch (_) {}
-    if (!session) session = { id: uuid(), userId, lastActivityAt: now };
+    if (!session) session = { id: uuid(), identityUid, lastActivityAt: now };
     session.lastActivityAt = now;
     try { localStorage.setItem(SESSION_KEY, JSON.stringify(session)); } catch (_) {}
     setSessionCookie(session.id);
@@ -86,6 +88,7 @@
 
   const flush = async (keepalive) => {
     if (!enabled || !userId || queue.length === 0) return;
+    const revision = identityRevision;
     const batch = queue.splice(0, 20);
     touchSession();
     try {
@@ -93,6 +96,7 @@
         sessionId: resolveSession().id,
         events: batch,
       }, keepalive);
+      if (revision !== identityRevision || !enabled) return;
       if (!response.ok && response.status !== 401 && response.status !== 403) {
         queue = batch.concat(queue).slice(0, 40);
       }
@@ -102,6 +106,7 @@
         touchSession();
       }
     } catch (_) {
+      if (revision !== identityRevision || !enabled) return;
       queue = batch.concat(queue).slice(0, 40);
     }
   };
@@ -155,9 +160,13 @@
 
   const start = async () => {
     if (enabled) return;
+    const startRevision = identityRevision;
     const user = window.CRONOX_USER || await window.CRONOX_API?.getMe?.().catch(() => null);
+    if (startRevision !== identityRevision) return;
     userId = Number(user?.id) || null;
-    if (!userId) return;
+    identityUid = user?.identityUid || null;
+    if (!userId || !identityUid) return;
+    const revision = identityRevision;
     try {
       const configResponse = await fetch(endpoint("/api/analytics/config"), {
         credentials: "include",
@@ -172,6 +181,7 @@
         heartbeatMs = heartbeatSeconds * 1000;
       }
     } catch (_) { return; }
+    if (revision !== identityRevision || !userId || !identityUid || enabled) return;
     enabled = true;
     resolveSession();
     lastVisibleAt = document.visibilityState === "visible" ? Date.now() : null;
@@ -184,6 +194,7 @@
   };
 
   const stop = () => {
+    identityRevision += 1;
     enabled = false;
     queue = [];
     if (flushTimer) clearTimeout(flushTimer);
@@ -191,6 +202,7 @@
     flushTimer = heartbeatTimer = null;
     lastVisibleAt = null;
     clearSession();
+    emittedPageEvents.clear();
   };
 
   window.addEventListener("cronox:productViewed", (event) => {
@@ -201,11 +213,16 @@
   window.addEventListener("cronox:productsLoaded", (event) => captureCatalogContext(event.detail));
   window.addEventListener("cronox:userChanged", async (event) => {
     const nextUserId = Number(event.detail?.id) || null;
-    if (userId && nextUserId !== userId) stop();
+    const nextIdentityUid = event.detail?.identityUid || null;
+    if (userId && (nextUserId !== userId || nextIdentityUid !== identityUid)) stop();
     userId = nextUserId;
+    identityUid = nextIdentityUid;
     const consent = window.CRONOX_COOKIE_CONSENT?.getConsent?.();
     if (consent) await syncConsent(consent);
     if (consent?.analytics) await start();
+  });
+  window.addEventListener("cronox:session-ended", () => {
+    stop(); userId = null; identityUid = null;
   });
   window.addEventListener("cronox:consentchange", async (event) => {
     const user = window.CRONOX_USER;

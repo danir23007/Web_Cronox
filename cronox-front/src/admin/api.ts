@@ -739,9 +739,18 @@ import { loadCategoryPages } from './category-pagination';
   };
 
   let pendingMe: Promise<UnknownRecord | null> | null = null;
+  const userIdentities = new Map<string,string>();
+  const rememberIdentities = (value: unknown): void => {
+    if (!value || typeof value !== 'object') return;
+    if (Array.isArray(value)) { value.forEach(rememberIdentities); return; }
+    const record = value as UnknownRecord;
+    if (typeof record.identityUid === 'string' && record.id != null) userIdentities.set(String(record.id),record.identityUid);
+    Object.values(record).forEach(rememberIdentities);
+  };
   if (typeof window !== 'undefined') {
     window.addEventListener('cronox:session-ended', () => {
       pendingMe = null;
+      userIdentities.clear();
     });
     window.addEventListener('cronox:userChanged', () => {
       pendingMe = null;
@@ -754,6 +763,17 @@ import { loadCategoryPages } from './category-pagination';
   ): Promise<T> => {
     const url = buildUrl(path, options.query);
     const headers = buildRequestHeaders(options.headers);
+    const requestUrl = new URL(url);
+    const body = options.body as UnknownRecord | undefined;
+    const target = requestUrl.pathname.match(/^\/api\/admin\/users\/(\d+)(?:\/|$)/)?.[1] ||
+      (requestUrl.pathname.startsWith('/api/admin/') ? requestUrl.searchParams.get('userId') ||
+      (requestUrl.searchParams.get('targetType') === 'user' ? requestUrl.searchParams.get('targetId') : null) ||
+      (body?.targetType === 'user' ? String(body.targetId) : null) : null);
+    if (target) {
+      const params = new URLSearchParams(g.location.search);
+      const uid = params.get('id') === target ? params.get('uid') : userIdentities.get(target);
+      if (uid) headers['X-Cronox-User-Identity'] = uid;
+    }
     const isFormData =
       typeof FormData !== 'undefined' && options.body instanceof FormData;
     const method = options.method || 'GET';
@@ -802,6 +822,7 @@ import { loadCategoryPages } from './category-pagination';
         throw error;
       }
 
+      rememberIdentities(data);
       return data as T;
     } catch (error) {
       const err = error as CronoxApiError;

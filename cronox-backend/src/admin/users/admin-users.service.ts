@@ -71,7 +71,7 @@ export class AdminUsersService {
   }
 
   selectBulkIds(query: AdminUserQueryDto, tx: Prisma.TransactionClient) {
-    return tx.user.findMany({ where: this.buildWhere(query), select: { id: true }, orderBy: { id: 'asc' }, take: 101 });
+    return tx.user.findMany({ where: this.buildWhere(query), select: { id: true, identityUid: true }, orderBy: { id: 'asc' }, take: 101 });
   }
 
   async listUsers(query: AdminUserQueryDto) {
@@ -85,7 +85,7 @@ export class AdminUsersService {
     const where = this.buildWhere(query);
     const orderBy = this.buildOrderBy(query.sort, query.order);
 
-    const { items, total, numbers } = await this.prisma.$transaction(async (tx) => {
+    const { items, total } = await this.prisma.$transaction(async (tx) => {
       const [items, total] = await Promise.all([
         tx.user.findMany({
           where,
@@ -95,28 +95,16 @@ export class AdminUsersService {
         }),
         tx.user.count({ where }),
       ]);
-      // Rank the complete view before filtering by the page's internal IDs.
-      // One batch query; no per-user counts and no persisted renumbering.
-      const ranks = items.length
-        ? await tx.$queryRaw<{ id: number; registrationNumber: bigint }[]>(Prisma.sql`
-            SELECT id, "registrationNumber" FROM (
-              SELECT id, ROW_NUMBER() OVER (ORDER BY "createdAt" ASC, id ASC) AS "registrationNumber"
-              FROM "User"
-            ) ranked
-            WHERE id IN (${Prisma.join(items.map((user) => user.id))})
-          `)
-        : [];
       return {
         items,
         total,
-        numbers: new Map(ranks.map((row) => [row.id, Number(row.registrationNumber)])),
       };
     }, { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead });
 
     return {
       data: items.map((user) => ({
         ...this.mapUser(user),
-        registrationNumber: numbers.get(user.id),
+        registrationNumber: user.id,
       })),
       meta: {
         page,
@@ -124,7 +112,7 @@ export class AdminUsersService {
         total,
         totalPages: Math.ceil(total / pageSize) || 1,
         sort: query.sort ?? 'createdAt',
-        order: query.order ?? 'desc',
+        order: query.order ?? 'asc',
       },
     };
   }
@@ -134,6 +122,7 @@ export class AdminUsersService {
       where: { id },
       select: {
         id: true,
+        identityUid: true,
         email: true,
         name: true,
         phone: true,
@@ -250,6 +239,7 @@ export class AdminUsersService {
     return {
       user: {
         id: user.id,
+        identityUid: user.identityUid,
         memberCode: user.memberCode,
         email: user.email,
         welcomeCode: originalWelcome?.code ?? null,
@@ -729,7 +719,7 @@ export class AdminUsersService {
     direction: AdminUserQueryDto['order'],
   ): Prisma.UserOrderByWithRelationInput[] {
     const order: Prisma.SortOrder =
-      (direction ?? 'desc') === 'asc' ? 'asc' : 'desc';
+      (direction ?? 'asc') === 'asc' ? 'asc' : 'desc';
 
     switch (sort) {
       case 'email':
@@ -745,6 +735,7 @@ export class AdminUsersService {
   private mapUser(user: User) {
     return {
       id: user.id,
+      identityUid: user.identityUid,
       memberCode: user.memberCode,
       email: user.email,
       name: user.name,

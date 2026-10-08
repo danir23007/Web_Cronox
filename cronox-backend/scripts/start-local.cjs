@@ -46,7 +46,7 @@ function buildLocalEnvironment(local, inherited, deploymentKeys = []) {
     // repopulating deployment credentials that are absent in the local file.
     if (deploymentKeys.includes(key) || /^(?:MAILBOX_|SMTP_|EMAIL_|SUPABASE_|STRIPE_|JWT_|DATABASE_URL$|DIRECT_URL$|DOTENV_|CRONOX_ROUTE_SMOKE_MODE$)/.test(key)) env[key] = '';
   }
-  return { ...env, ...local, DOTENV_CONFIG_PATH: configPath, CRONOX_ENV_FILE: configPath, CRONOX_LOCAL_DEV: 'true', HOST: '127.0.0.1' };
+  return { ...env, ...local, USER_NUMBERING_DATABASE_URL: local.DATABASE_URL, DOTENV_CONFIG_PATH: configPath, CRONOX_ENV_FILE: configPath, CRONOX_LOCAL_DEV: 'true', HOST: '127.0.0.1' };
 }
 
 function ensureLocalPostgres(env) {

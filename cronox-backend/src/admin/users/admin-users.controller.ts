@@ -23,9 +23,10 @@ import { UpdateUserRoleDto } from './dto/update-user-role.dto';
 import { Role } from '@prisma/client';
 import { SuperAdminGuard } from '../../common/guards/super-admin.guard';
 import { UpdateAdminUserDto } from './dto/update-admin-user.dto';
+import { UserIdentityGuard } from '../../users/user-identity.guard';
 
 @Controller('admin/users')
-@UseGuards(JwtAuthGuard, AdminGuard, RolesGuard)
+@UseGuards(JwtAuthGuard, AdminGuard, RolesGuard, UserIdentityGuard)
 export class AdminUsersController {
   constructor(private readonly usersService: AdminUsersService) {}
 

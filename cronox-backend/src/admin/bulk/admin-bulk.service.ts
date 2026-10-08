@@ -59,7 +59,8 @@ export class AdminBulkService {
           throw new BadRequestException(
             'Hay más de 100 resultados. Acota los filtros; no se ha seleccionado un subconjunto.',
           );
-        return { ids: rows.map((r) => r.id), limit: 100 };
+        const identities = kind === 'users' ? rows as { id: number; identityUid: string }[] : [];
+        return { ids: rows.map((r) => r.id), userIdentities: Object.fromEntries(identities.map(user => [user.id, user.identityUid])), limit: 100 };
       },
       { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead },
     );
@@ -96,7 +97,7 @@ export class AdminBulkService {
         .sort(([a], [b]) => a.localeCompare(b))
         .map(([k, v]) => [k, k === 'categoryIds' ? sorted(v as number[]) : v]),
     );
-    return { kind: dto.kind, ids: sorted(dto.ids), changes };
+    return { kind: dto.kind, ids: sorted(dto.ids), ...(dto.kind === 'users' ? { userIdentities: dto.userIdentities } : {}), changes };
   }
   private async plan(
     tx: Prisma.TransactionClient,
@@ -121,6 +122,7 @@ export class AdminBulkService {
             where: { id: { in: normalized.ids } },
             select: {
               id: true,
+              identityUid: true,
               name: true,
               memberCode: true,
               role: true,
@@ -151,6 +153,9 @@ export class AdminBulkService {
       throw new ConflictException(
         'Hay registros eliminados o inexistentes. Actualiza el listado y revisa la selección.',
       );
+    if (dto.kind === 'users' && records.some((record: any) => !record.identityUid || dto.userIdentities?.[String(record.id)] !== record.identityUid)) {
+      throw new ConflictException('La identidad de la selección ha cambiado. Actualiza el listado y selecciona de nuevo.');
+    }
     const rows = records.map((r: any) => {
       const before =
         dto.kind === 'users'

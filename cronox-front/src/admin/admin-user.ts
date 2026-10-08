@@ -6,6 +6,7 @@
     Country?.toCountryDisplayName?.(value) ?? value;
   const qs = new URLSearchParams(window.location.search);
   const userId = qs.get('id');
+  const identityUid = qs.get('uid');
   const apiBaseBadge = document.getElementById('apiBaseBadge');
   const adminAuthCheck = document.getElementById('adminAuthCheck');
   const adminUserPage = document.getElementById('adminUserPage');
@@ -742,7 +743,7 @@
   };
 
   const loadUserDetail = async () => {
-    if (!userId) return;
+    if (!userId || !identityUid) return;
     if (!window.CRONOX_API?.admin?.getUserDetail) {
       showModuleError({
         container: profileStatus || statusArea,
@@ -1308,7 +1309,7 @@
 
   const handleNoteSubmit = async (event: SubmitEvent) => {
     event.preventDefault();
-    if (!userId) return;
+    if (!userId || !identityUid) return;
     if (!notesAvailable) {
       setNotesAvailability(false, 'Notas no disponibles en este entorno.');
       return;
@@ -1380,15 +1381,15 @@
     }
   };
 
-  if (!userId) {
+  if (!userId || !identityUid) {
     showGlobalBanner({
       type: 'error',
-      title: 'Usuario no seleccionado',
-      message: 'Falta el parámetro ?id=123 en la URL. Ejemplo: admin-user.html?id=123',
+      title: 'Enlace de usuario no válido',
+      message: 'Selecciona la cuenta desde el listado actualizado. Los enlaces antiguos sin identidad de cuenta ya no son válidos.',
       details: {
-        status: 400,
+        status: 409,
         endpoint: window.location.href,
-        message: 'Parámetro id faltante',
+        message: 'Referencia estable de cuenta faltante',
       },
       actions: [
         {
@@ -1451,10 +1452,10 @@
 
   void ensureAdminAccess().then((currentUser) => {
     if (!currentUser) return;
-    canEditProtectedUserFields = currentUser.role === 'SUPERADMIN';
+    canEditProtectedUserFields = currentUser.role === 'SUPERADMIN' && Boolean(userId && identityUid);
     if (editUserBtn) editUserBtn.hidden = !canEditProtectedUserFields;
     if (manualPurchaseSection) manualPurchaseSection.hidden = !canEditProtectedUserFields;
     configureAnalyticsAccess(currentUser);
-    if (userId) loadAll();
+    if (userId && identityUid) loadAll();
   });
 })();

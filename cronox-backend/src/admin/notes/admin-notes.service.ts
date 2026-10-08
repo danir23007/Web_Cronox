@@ -21,7 +21,7 @@ export class AdminNotesService {
     updatedAt: Date;
     targetType: string;
     targetId: string;
-    authorAdminId: number;
+    authorAdminId: number | null;
     author: {
       id: number;
       email: string | null;
@@ -29,7 +29,7 @@ export class AdminNotesService {
       firstName: string | null;
       lastName: string | null;
       role: Role | null;
-    };
+    } | null;
   }) {
     return {
       id: note.id,
@@ -39,14 +39,14 @@ export class AdminNotesService {
       targetType: note.targetType,
       targetId: note.targetId,
       authorAdminId: note.authorAdminId,
-      author: {
+      author: note.author ? {
         id: note.author.id,
         email: note.author.email,
         name: note.author.name,
         firstName: note.author.firstName,
         lastName: note.author.lastName,
         role: note.author.role,
-      },
+      } : null,
     };
   }
 

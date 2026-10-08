@@ -5,6 +5,7 @@ import {
   ConflictException,
   Injectable,
   Logger,
+  Optional,
   UnauthorizedException,
 } from '@nestjs/common';
 import { User, UserAccountState } from '@prisma/client';
@@ -34,6 +35,7 @@ import { isAdminPanelRole } from '../common/roles.utils';
 import { AuthSessionsService, SessionClaims } from './auth-sessions.service';
 import { ACCESS_TOKEN_SECONDS } from './session-policy';
 import { serializableTransaction } from '../prisma/serializable-transaction';
+import { UserNumberingGate } from '../users/user-numbering-gate.module';
 
 const PASSWORD_SETUP_CLAIM_STALE_MS = 10 * 60 * 1000;
 
@@ -70,6 +72,7 @@ export class AuthService {
     private readonly emailService: EmailService,
     private readonly newsletterService: NewsletterService,
     private readonly sessions: AuthSessionsService,
+    @Optional() private readonly numbering?: UserNumberingGate,
   ) {}
 
   async register(dto: RegisterDto) {
@@ -381,7 +384,11 @@ export class AuthService {
       user.accountState !== UserAccountState.PRE_REGISTERED &&
       this.emailService.isEnabled()
     ) {
-      void this.createAndSendPasswordReset(user).catch(() => {
+      const deliver = async () => {
+        const current = this.numbering ? await this.prisma.user.findUnique({ where: { identityUid: user.identityUid } }) : user;
+        if (current && current.email === user.email && current.accountState !== UserAccountState.PRE_REGISTERED) await this.createAndSendPasswordReset(current);
+      };
+      void (this.numbering ? this.numbering.shared(deliver) : deliver()).catch(() => {
         this.logger.error('Password reset delivery task failed');
       });
     }

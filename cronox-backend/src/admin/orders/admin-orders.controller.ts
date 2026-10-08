@@ -1,3 +1,4 @@
+import { UserIdentityGuard } from '../../users/user-identity.guard';
 import {
   Body,
   Controller,
@@ -22,7 +23,7 @@ import { UpdateOrderStatusDto } from './dto/update-order-status.dto';
 import { UpdateOrderFulfillmentDto } from './dto/update-order-fulfillment.dto';
 
 @Controller('admin/orders')
-@UseGuards(JwtAuthGuard, AdminGuard, RolesGuard)
+@UseGuards(JwtAuthGuard, AdminGuard, RolesGuard, UserIdentityGuard)
 @Roles(Role.SUPERADMIN)
 export class AdminOrdersController {
   constructor(private readonly ordersService: AdminOrdersService) {}

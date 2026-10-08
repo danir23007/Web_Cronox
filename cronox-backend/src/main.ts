@@ -23,6 +23,8 @@ import {
   type CsrfTokenRequest,
 } from './common/guards/csrf-protection.guard';
 import { PrismaService } from './prisma/prisma.service';
+import { UserNumberingGate } from './users/user-numbering-gate.module';
+import { userNumberingMiddleware } from './users/user-numbering.middleware';
 import { KeyScreenService } from './key-screen/key-screen.service';
 import { AuthService } from './auth/auth.service';
 import { createPublicHtmlGateMiddleware } from './common/routing/public-html-gate.middleware';
@@ -96,6 +98,9 @@ async function bootstrap() {
   app.use(express.json({ limit: '100kb' }));
   app.use(express.urlencoded({ extended: true, limit: '100kb' }));
   app.use(cookieParser());
+  if (process.env.CRONOX_ROUTE_SMOKE_MODE !== 'true') {
+    app.use(userNumberingMiddleware(app.get(UserNumberingGate).pool));
+  }
   app.use((req, res, next) => {
     const csrfRequest = req as CsrfTokenRequest;
     const existingToken = req.cookies?.[CSRF_COOKIE_NAME];
@@ -173,6 +178,7 @@ async function bootstrap() {
       'Content-Type',
       CSRF_HEADER_NAME,
       'Idempotency-Key',
+      'X-Cronox-User-Identity',
     ],
     maxAge: 600,
   });

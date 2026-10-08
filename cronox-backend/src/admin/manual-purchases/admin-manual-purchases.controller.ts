@@ -1,3 +1,4 @@
+import { UserIdentityGuard } from '../../users/user-identity.guard';
 import { Body, Controller, Get, Headers, Param, ParseIntPipe, Post, UseGuards } from '@nestjs/common';
 import { Role } from '@prisma/client';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
@@ -11,7 +12,7 @@ import { CreateManualPurchaseDto } from './dto/create-manual-purchase.dto';
 import { VoidManualPurchaseDto } from './dto/void-manual-purchase.dto';
 
 @Controller('admin/users')
-@UseGuards(JwtAuthGuard, AdminGuard, RolesGuard, SuperAdminGuard)
+@UseGuards(JwtAuthGuard, AdminGuard, RolesGuard, SuperAdminGuard, UserIdentityGuard)
 @Roles(Role.SUPERADMIN)
 export class AdminManualPurchasesController {
   constructor(private readonly service: AdminManualPurchasesService) {}
@@ -33,7 +34,7 @@ export class AdminManualPurchasesController {
 }
 
 @Controller('admin/orders')
-@UseGuards(JwtAuthGuard, AdminGuard, RolesGuard, SuperAdminGuard)
+@UseGuards(JwtAuthGuard, AdminGuard, RolesGuard, SuperAdminGuard, UserIdentityGuard)
 @Roles(Role.SUPERADMIN)
 export class AdminManualPurchaseCorrectionsController {
   constructor(private readonly service: AdminManualPurchasesService) {}

@@ -1,3 +1,4 @@
+import { UserIdentityGuard } from '../../users/user-identity.guard';
 import {
   BadRequestException,
   Controller,
@@ -22,7 +23,7 @@ import { AdminExportQueryDto } from './dto/admin-export-query.dto';
 import { EXCEL_MIME } from './excel-workbook.service';
 
 @Controller('admin/exports')
-@UseGuards(JwtAuthGuard, AdminGuard, RolesGuard, SuperAdminGuard)
+@UseGuards(JwtAuthGuard, AdminGuard, RolesGuard, SuperAdminGuard, UserIdentityGuard)
 @Roles(Role.SUPERADMIN)
 @Throttle({ default: { limit: 5, ttl: 60_000 } })
 export class AdminExportsController {

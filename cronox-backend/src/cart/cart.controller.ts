@@ -71,7 +71,7 @@ export class CartController {
     this.persistAnonymousCookie(req, res, context, { refreshExisting: true });
     if (context.userId) {
       const item = cart.items.find((entry) => entry.variantId === dto.variantId);
-      void this.analytics?.recordServerEvent(req, context.userId, CustomerActivityEventType.PRODUCT_ADDED_TO_CART, {
+      await this.analytics?.recordServerEvent(req, context.userId, CustomerActivityEventType.PRODUCT_ADDED_TO_CART, {
         productId: item?.variant.productId,
         variantId: dto.variantId,
         quantity: dto.qty,
@@ -94,7 +94,7 @@ export class CartController {
     const cart = await this.cartService.updateItem(context, id, dto);
     this.persistAnonymousCookie(req, res, context, { refreshExisting: true });
     if (context.userId && before && before.qty !== dto.qty) {
-      void this.analytics?.recordServerEvent(req, context.userId, CustomerActivityEventType.CART_QUANTITY_CHANGED, {
+      await this.analytics?.recordServerEvent(req, context.userId, CustomerActivityEventType.CART_QUANTITY_CHANGED, {
         productId: before.variant.productId,
         variantId: before.variantId,
         previousQuantity: before.qty,
@@ -117,7 +117,7 @@ export class CartController {
     const cart = await this.cartService.removeItem(context, id);
     this.persistAnonymousCookie(req, res, context, { refreshExisting: true });
     if (context.userId && before) {
-      void this.analytics?.recordServerEvent(req, context.userId, CustomerActivityEventType.PRODUCT_REMOVED_FROM_CART, {
+      await this.analytics?.recordServerEvent(req, context.userId, CustomerActivityEventType.PRODUCT_REMOVED_FROM_CART, {
         productId: before.variant.productId,
         variantId: before.variantId,
         quantity: before.qty,
@@ -139,7 +139,7 @@ export class CartController {
     this.persistAnonymousCookie(req, res, context, { refreshExisting: true });
     if (context.userId) {
       for (const item of before) {
-        void this.analytics?.recordServerEvent(req, context.userId, CustomerActivityEventType.PRODUCT_REMOVED_FROM_CART, {
+        await this.analytics?.recordServerEvent(req, context.userId, CustomerActivityEventType.PRODUCT_REMOVED_FROM_CART, {
           productId: item.variant.productId,
           variantId: item.variantId,
           quantity: item.qty,

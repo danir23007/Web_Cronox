@@ -1,5 +1,6 @@
+import { UserNumberingGate } from '../users/user-numbering-gate.module';
 import { generateInitialPassword, hashNewPassword } from '../common/password-policy';
-import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
+import { Injectable, Optional, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { quotaWaiting } from '../email/mail-account-quota';
 import { createHash, randomBytes, randomUUID } from 'crypto';
 import { getFrontendUrl } from '../common/config/environment';
@@ -20,8 +21,9 @@ export class NewsletterDeliveryService implements OnModuleInit, OnModuleDestroy 
   private readonly logger = new Logger(NewsletterDeliveryService.name);
   private timer?: ReturnType<typeof setInterval>;
   private running = false;
+  private gatePending = false;
 
-  constructor(private readonly prisma: PrismaService, private readonly email: EmailService) {}
+  constructor(private readonly prisma: PrismaService, private readonly email: EmailService, @Optional() private readonly numbering?: UserNumberingGate) {}
 
   onModuleInit() {
     if (!newsletterWorkerEnabled()) return;
@@ -33,6 +35,12 @@ export class NewsletterDeliveryService implements OnModuleInit, OnModuleDestroy 
   onModuleDestroy() { if (this.timer) clearInterval(this.timer); }
 
   async tick() {
+    if (this.gatePending) return;
+    this.gatePending = true;
+    try { return await (this.numbering ? this.numbering.shared(() => this.tickLocked()) : this.tickLocked()); }
+    finally { this.gatePending = false; }
+  }
+  async tickLocked() {
     if (this.running || !newsletterWorkerEnabled()) return;
     this.running = true;
     try {

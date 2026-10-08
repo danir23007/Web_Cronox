@@ -123,12 +123,7 @@
   };
 
   const getCircleRequestModalStorageKey = () => {
-    const userId =
-      window.CRONOX_USER?.id ||
-      window.CRONOX_USER?._id ||
-      window.CRONOX_USER?.userId ||
-      window.CRONOX_USER?.uid ||
-      window.CRONOX_USER?.memberCode;
+    const userId = window.CRONOX_USER?.identityUid;
     if (!userId) return null;
     return `cronox_circle_request_modal_seen_${userId}`;
   };
@@ -145,12 +140,7 @@
   };
 
   const getCircleUpgradeSuccessStorageKey = () => {
-    const userId =
-      window.CRONOX_USER?.id ||
-      window.CRONOX_USER?._id ||
-      window.CRONOX_USER?.userId ||
-      window.CRONOX_USER?.uid ||
-      window.CRONOX_USER?.memberCode;
+    const userId = window.CRONOX_USER?.identityUid;
     if (!userId) return null;
     return `cronox_circle4_request_success_${userId}`;
   };

@@ -1,5 +1,6 @@
+import { UserNumberingGate } from '../users/user-numbering-gate.module';
 import {
-  Injectable,
+  Injectable, Optional,
   Logger,
   OnModuleDestroy,
   OnModuleInit,
@@ -21,8 +22,9 @@ export class AnalyticsMaintenanceService
   private readonly logger = new Logger(AnalyticsMaintenanceService.name);
   private interval?: ReturnType<typeof setInterval>;
   private running = false;
+  private gatePending = false;
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService, @Optional() private readonly numbering?: UserNumberingGate) {}
 
   onModuleInit(): void {
     if (process.env.BACKGROUND_JOBS_ENABLED === 'false') return;
@@ -37,6 +39,12 @@ export class AnalyticsMaintenanceService
   }
 
   private async run(): Promise<void> {
+    if (this.gatePending) return;
+    this.gatePending = true;
+    try { return await (this.numbering ? this.numbering.shared(() => this.runLocked()) : this.runLocked()); }
+    finally { this.gatePending = false; }
+  }
+  private async runLocked(): Promise<void> {
     if (this.running) return;
     this.running = true;
     try {

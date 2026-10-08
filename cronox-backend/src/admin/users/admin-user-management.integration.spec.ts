@@ -1,3 +1,4 @@
+import { UserIdentityGuard } from '../../users/user-identity.guard';
 /* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-argument */
 import {
   CanActivate,
@@ -69,7 +70,7 @@ describe('Super Admin user management (HTTP integration)', () => {
     })
       .overrideGuard(JwtAuthGuard)
       .useClass(HeaderAuthenticationGuard)
-      .compile();
+      .overrideGuard(UserIdentityGuard).useValue({ canActivate: () => true }).compile();
 
     app = module.createNestApplication();
     app.setGlobalPrefix('api');

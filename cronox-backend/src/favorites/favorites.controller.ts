@@ -31,7 +31,7 @@ export class FavoritesController {
   async add(@CurrentUser('id') userId: number, @Req() req: Request, @Body() dto: AddFavoriteDto) {
     const result = await this.favoritesService.add(userId, dto);
     if (result.created) {
-      void this.analytics?.recordServerEvent(req, userId, CustomerActivityEventType.FAVOURITE_ADDED, { productId: result.productId }).catch(() => undefined);
+      await this.analytics?.recordServerEvent(req, userId, CustomerActivityEventType.FAVOURITE_ADDED, { productId: result.productId }).catch(() => undefined);
     }
     return result;
   }
@@ -39,7 +39,7 @@ export class FavoritesController {
   @Post('toggle')
   async toggle(@CurrentUser('id') userId: number, @Req() req: Request, @Body() dto: AddFavoriteDto) {
     const result = await this.favoritesService.toggle(userId, dto);
-    void this.analytics?.recordServerEvent(
+    await this.analytics?.recordServerEvent(
       req,
       userId,
       result.isFavorite ? CustomerActivityEventType.FAVOURITE_ADDED : CustomerActivityEventType.FAVOURITE_REMOVED,
@@ -56,7 +56,7 @@ export class FavoritesController {
   ) {
     const removedProductId = await this.favoritesService.remove(userId, productIdOrSlug);
     if (removedProductId) {
-      void this.analytics?.recordServerEvent(req, userId, CustomerActivityEventType.FAVOURITE_REMOVED, { productId: removedProductId }).catch(() => undefined);
+      await this.analytics?.recordServerEvent(req, userId, CustomerActivityEventType.FAVOURITE_REMOVED, { productId: removedProductId }).catch(() => undefined);
     }
     return { ok: true, productId: productIdOrSlug };
   }

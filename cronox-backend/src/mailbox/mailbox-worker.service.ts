@@ -1,4 +1,5 @@
-import { Injectable, Logger, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
+import { UserNumberingGate } from '../users/user-numbering-gate.module';
+import { Injectable, Optional, Logger, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { MailboxSyncService } from './mailbox-sync.service';
 import { MailboxSenderService } from './mailbox-sender.service';
@@ -14,6 +15,7 @@ export class MailboxWorkerService implements OnModuleInit, OnModuleDestroy {
   private readonly cacheRetry = new Map<string, number>();
   private timer?: ReturnType<typeof setInterval>;
   private running = false;
+  private gatePending = false;
   private stopped = false;
   constructor(
     readonly db: PrismaService,
@@ -24,6 +26,7 @@ export class MailboxWorkerService implements OnModuleInit, OnModuleDestroy {
     readonly campaigns?: MailboxCampaignService,
     readonly events?: AdminEventPushService,
     readonly retention?: MailboxRetentionService,
+    @Optional() private readonly numbering?: UserNumberingGate,
   ) {}
   onModuleInit() {
     if (
@@ -43,6 +46,12 @@ export class MailboxWorkerService implements OnModuleInit, OnModuleDestroy {
     while (this.running) await new Promise((r) => setTimeout(r, 100));
   }
   async tick() {
+    if (this.gatePending) return;
+    this.gatePending = true;
+    try { return await (this.numbering ? this.numbering.shared(() => this.tickLocked()) : this.tickLocked()); }
+    finally { this.gatePending = false; }
+  }
+  async tickLocked() {
     if (this.running || this.stopped) return;
     this.running = true;
     try {
