@@ -148,7 +148,7 @@ describe('CRONOX gallery page', () => {
     );
     expect(galleryHtml).toContain('<title>Galer&iacute;a | CRONOX</title>');
     expect(galleryHtml).toContain('href="assets/gallery.css?v=20"');
-    expect(galleryHtml).toContain('src="assets/gallery.js?v=17"');
+    expect(galleryHtml).toContain('src="assets/gallery.js?v=18"');
     expect(document.title).toBe('Galer\u00eda | CRONOX');
     expect(galleryHtml).toMatch(
       /<body class="page-info page-gallery">\s*<script src="assets\/info-shell\.js\?v=4"><\/script>/,
@@ -242,7 +242,7 @@ describe('CRONOX gallery page', () => {
         dom.window.Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
     expect(homepageHtml).toContain('href="assets/gallery.css?v=20"');
-    expect(homepageHtml).toContain('src="assets/gallery.js?v=17"');
+    expect(homepageHtml).toContain('src="assets/gallery.js?v=18"');
     expect(document.querySelectorAll('#galleryLightbox')).toHaveLength(1);
     expect(document.querySelectorAll<HTMLElement>('[id]').length).toBe(
       new Set(
@@ -690,6 +690,21 @@ describe('CRONOX gallery page', () => {
       /\.gallery-lightbox__image\s*\{[^}]*transform:\s*none;[^}]*transform-origin:\s*center;/s,
     );
     (document.getElementById('galleryLightboxStage') as HTMLElement).click();
+    expect(lightbox.hidden).toBe(true);
+    dom.window.close();
+  });
+
+  it('ignores the retargeted opening touch click but allows a new press on the viewer backdrop', () => {
+    const dom = makeGalleryDom();
+    const document = dom.window.document;
+    (dom.window as any).CRONOX_GALLERY.render([{ key: 'touch', imageSrc: 'https://storage.example.test/touch.jpg' }]);
+    document.querySelector<HTMLButtonElement>('[data-gallery-slot="touch"]')!.click();
+    const lightbox = document.getElementById('galleryLightbox') as HTMLElement;
+    const stage = document.getElementById('galleryLightboxStage') as HTMLElement;
+    stage.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true, detail: 1 }));
+    expect(lightbox.hidden).toBe(false);
+    stage.dispatchEvent(new dom.window.Event('pointerdown', { bubbles: true }));
+    stage.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true, detail: 1 }));
     expect(lightbox.hidden).toBe(true);
     dom.window.close();
   });

@@ -38,3 +38,9 @@ npx --yes --package @playwright/cli playwright-cli -s=gallery run-code --filenam
 npx --yes --package @playwright/cli playwright-cli -s=gallery goto about:blank#after
 npx --yes --package @playwright/cli playwright-cli -s=gallery run-code --filename=tests/gallery/spacing.cli.js
 ```
+
+## Publicación y toque móvil
+
+El espaciado se desplegó con `4ecb273` y el workflow 37788342263 terminó correctamente. Durante la revisión real en Chromium móvil, después de visitar la portada y cerrar la newsletter, se reprodujo otro fallo previo de interacción: `pointerup` abría el visor y el click táctil posterior se redirigía a `.gallery-lightbox__stage`, cuyo listener lo cerraba inmediatamente. La traza registra apertura y cierre en el mismo gesto; no era un fallo de cartografía ni carga de imagen.
+
+Se exige ahora que la pulsación de fondo comience dentro del propio visor para poder cerrarlo. Se conservan Escape, botones, navegación, teclado y cierre voluntario del fondo. No se introduce otro plazo arbitrario. `gallery.js` pasa a v18 en portada, galería y administrador. La regresión DOM comprueba click residual y nuevo toque voluntario; 107 pruebas en tres suites pasan, así como ambos builds. Una repetición con el HTML y las fotografías reales publicados, sustituyendo únicamente el JavaScript por la corrección local, confirma que el click residual sigue llegando al stage pero ya no cierra el visor. La verificación posterior sin sustituciones se recoge en el informe de publicación.

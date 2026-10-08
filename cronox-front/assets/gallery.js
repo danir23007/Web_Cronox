@@ -59,6 +59,7 @@
     bodyStyles: null,
     background: [],
     imageRequest: 0,
+    backdropPress: null,
   };
 
   const getInstagramPostUrl = (value) => {
@@ -501,6 +502,7 @@
     lightboxState.items = occupied;
     lightboxState.index = index;
     lightboxState.trigger = trigger;
+    lightboxState.backdropPress = null;
     lightboxElements.root.classList.toggle(
       "gallery-lightbox--carousel",
       Boolean(trigger?.closest(".gallery-carousel")),
@@ -527,6 +529,7 @@
     lightboxState.items = [];
     lightboxState.index = -1;
     lightboxState.trigger = null;
+    lightboxState.backdropPress = null;
     if (trigger?.isConnected && typeof trigger.focus === "function") {
       trigger.focus();
     }
@@ -1076,11 +1079,25 @@
     navigateLightbox(-1),
   );
   lightboxElements.next?.addEventListener("click", () => navigateLightbox(1));
+  lightboxElements.root?.addEventListener("pointerdown", (event) => {
+    lightboxState.backdropPress = event.target;
+  });
+  lightboxElements.root?.addEventListener("pointercancel", () => {
+    lightboxState.backdropPress = null;
+  });
+  const closeFromBackdrop = (event, target) => {
+    if (event.target !== target) return;
+    // Opening on pointerup can retarget that gesture's delayed touch click to
+    // the new stage. Only a press begun inside the viewer may dismiss it.
+    const pressedInside = lightboxState.backdropPress === target;
+    lightboxState.backdropPress = null;
+    if (pressedInside || event.detail === 0) closeLightbox();
+  };
   lightboxElements.root?.addEventListener("click", (event) => {
-    if (event.target === lightboxElements.root) closeLightbox();
+    closeFromBackdrop(event, lightboxElements.root);
   });
   lightboxElements.stage?.addEventListener("click", (event) => {
-    if (event.target === lightboxElements.stage) closeLightbox();
+    closeFromBackdrop(event, lightboxElements.stage);
   });
   window.addEventListener("resize", () => {
     if (!lightboxElements.root || lightboxElements.root.hidden) return;
