@@ -50,4 +50,17 @@ describe('manual purchase permissions (HTTP)', () => {
     }).expect(201);
     expect(service.create).toHaveBeenCalledWith(7, 99, 'manual-purchase-123456', expect.objectContaining({ items: [{ variantId: 4, quantity: 3 }] }));
   });
+  it.each([null, -1, 1.5, '0', '', 'NaN', 1000000000000])('rejects present invalid cents through HTTP: %s', async (price) => {
+    await request(app.getHttpServer()).post('/api/admin/users/7/in-person-purchases').set('x-test-role', Role.SUPERADMIN).send({
+      items: [{ variantId: 4, quantity: 2, unitPriceCents: price }], paymentMethod: 'CASH', stockHandling: 'ALREADY_ADJUSTED',
+    }).expect(400);
+    expect(service.create).not.toHaveBeenCalled();
+  });
+  it('accepts explicit zero cents', async () => {
+    await request(app.getHttpServer()).post('/api/admin/users/7/in-person-purchases').set('x-test-role', Role.SUPERADMIN).send({
+      items: [{ variantId: 4, quantity: 2, unitPriceCents: 0 }], paymentMethod: 'CASH', stockHandling: 'ALREADY_ADJUSTED',
+    }).expect(201);
+    expect(service.create.mock.calls[0][3].items[0].unitPriceCents).toBe(0);
+  });
+
 });

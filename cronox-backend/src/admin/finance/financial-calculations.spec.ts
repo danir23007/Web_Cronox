@@ -26,6 +26,13 @@ describe('Private financial calculations', () => {
     expect(result.products[0].name).toBe('Producto original');
     expect(result.recentOrders[0].totalCents).toBe(2200);
   });
+  it('uses the paid historical amounts for manually entered purchases', () => {
+    const saved = order({ source: 'IN_PERSON_ADMIN', providerRef: null, paidAt: null,
+      purchasedAt: new Date('2026-03-28T12:00:00Z'), total: '51.00' });
+    saved.items[0].lineTotal = '51.00';
+    expect(report([saved]).totals.revenueCents).toBe(5100);
+    expect(report([saved]).recentOrders[0].totalCents).toBe(5100);
+  });
   it('distinguishes unknown costs, deliberate zero, and losses', () => {
     const base = order();
     for (const [cost,expected] of [[null,null],[0,2000],[1500,-1000]] as const) {

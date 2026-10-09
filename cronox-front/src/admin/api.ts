@@ -1281,7 +1281,7 @@ import { loadCategoryPages } from './category-pagination';
     request(`/api/admin/users/${encodeURIComponent(userId)}/in-person-purchase-options`, { cache: 'no-store' });
   adminApi.createInPersonPurchase = async (
     userId: number | string,
-    payload: UnknownRecord,
+    payload: ManualPurchasePayload,
     idempotencyKey: string,
   ) => request(`/api/admin/users/${encodeURIComponent(userId)}/in-person-purchases`, {
     method: 'POST',

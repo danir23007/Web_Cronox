@@ -1,3 +1,5 @@
+import { MAX_MANUAL_CENTS, parseManualPrice, manualPriceText } from './manual-purchase-money';
+
 (() => {
   const Country = (window as Window & {
     CRONOX_COUNTRY?: { toCountryDisplayName?: (value: unknown) => string | null };
@@ -87,6 +89,8 @@
   let authenticatedAdminId: string | null = null;
   let manualPurchaseOptions: Array<Record<string, unknown>> = [];
   let manualPurchaseIdempotencyKey: string | null = null;
+  let manualPurchaseReviewedPayload: string | null = null;
+  let manualPurchaseSubmitting = false;
   const kpiState: {
     ordersCount: number | null;
     totalSpent: number | null;
@@ -447,6 +451,7 @@
 
   const invalidateManualPurchaseReview = () => {
     manualPurchaseIdempotencyKey = null;
+    manualPurchaseReviewedPayload = null;
     if (manualPurchaseReview) manualPurchaseReview.hidden = true;
     if (manualPurchaseConfirmActions) manualPurchaseConfirmActions.hidden = true;
   };
@@ -457,12 +462,18 @@
     const row = document.createElement('div');
     row.className = 'manual-purchase-item';
     row.innerHTML = `
-      <label class="manual-purchase-field">Producto y variante<select data-manual-variant required>
+      <label class="manual-purchase-field">Artículo y talla<select data-manual-variant required>
         <option value="">Selecciona…</option>
         ${options.map((option) => `<option value="${option.id}">${escapeHtml(option.label)}</option>`).join('')}
       </select></label>
+      <label class="manual-purchase-field">Precio pagado por unidad (€)<input data-manual-price type="text" inputmode="decimal" required autocomplete="off"></label>
       <label class="manual-purchase-field">Cantidad<input data-manual-quantity type="number" min="1" max="100" value="1" required></label>
-      <button class="btn" type="button" data-remove-manual-item>Quitar</button>`;
+      <button class="btn" type="button" data-remove-manual-item>Eliminar</button>`;
+    row.querySelector<HTMLSelectElement>('[data-manual-variant]')?.addEventListener('change', (event) => {
+      const option = options.find(candidate => candidate.id === Number((event.target as HTMLSelectElement).value));
+      row.querySelector<HTMLInputElement>('[data-manual-price]')!.value = option ? manualPriceText(option.priceCents) : '';
+      invalidateManualPurchaseReview();
+    });
     row.addEventListener('input', invalidateManualPurchaseReview);
     row.querySelector('[data-remove-manual-item]')?.addEventListener('click', () => {
       row.remove();
@@ -477,11 +488,11 @@
     const items = rows.map((row) => ({
       variantId: Number(row.querySelector<HTMLSelectElement>('[data-manual-variant]')?.value),
       quantity: Number(row.querySelector<HTMLInputElement>('[data-manual-quantity]')?.value),
+      unitPriceCents: parseManualPrice(row.querySelector<HTMLInputElement>('[data-manual-price]')?.value ?? ''),
     }));
-    if (!items.length || items.some((item) => !Number.isInteger(item.variantId) || item.variantId < 1 || !Number.isInteger(item.quantity) || item.quantity < 1)) {
+    if (!items.length || items.length > 50 || items.some((item) => !Number.isInteger(item.variantId) || item.variantId < 1 || !Number.isInteger(item.quantity) || item.quantity < 1 || item.quantity > 100)) {
       throw new Error('Selecciona al menos un producto y una cantidad válida.');
     }
-    if (new Set(items.map((item) => item.variantId)).size !== items.length) throw new Error('No repitas una variante; aumenta su cantidad en una sola línea.');
     const purchasedAtValue = manualPurchasedAt?.value;
     if (!purchasedAtValue) throw new Error('Indica la fecha de la compra.');
     return {
@@ -498,27 +509,38 @@
       const payload = readManualPurchase();
       const options = manualVariantOptions();
       const lines = payload.items.map((item) => {
-        const option = options.find((candidate) => candidate.id === item.variantId)!;
-        return { ...item, ...option, lineCents: option.priceCents * item.quantity };
+        const option = options.find((candidate) => candidate.id === item.variantId);
+        if (!option) throw new Error('Selecciona un art\u00edculo disponible.');
+        return { ...item, ...option, lineCents: item.unitPriceCents * item.quantity };
       });
       const totalCents = lines.reduce((sum, line) => sum + line.lineCents, 0);
-      manualPurchaseIdempotencyKey = crypto.randomUUID();
+      if (!Number.isSafeInteger(totalCents) || totalCents > MAX_MANUAL_CENTS) throw new Error('El total es demasiado alto.');
+      const serialized = JSON.stringify(payload);
+      if (manualPurchaseReviewedPayload !== serialized) manualPurchaseIdempotencyKey = crypto.randomUUID();
+      manualPurchaseReviewedPayload = serialized;
       if (manualPurchaseReview) {
-        manualPurchaseReview.innerHTML = `<strong>Revisión final</strong><ul>${lines.map((line) => `<li>${escapeHtml(line.productName)} · ${escapeHtml(line.size)} × ${line.quantity} — ${escapeHtml(formatCurrency(line.lineCents / 100))}</li>`).join('')}</ul><p><strong>Total:</strong> ${escapeHtml(formatCurrency(totalCents / 100))}</p><p><strong>Pago:</strong> ${escapeHtml(payload.paymentMethod)}<br><strong>Stock:</strong> ${payload.stockHandling === 'DEDUCT_NOW' ? 'se descontará al guardar' : 'ya estaba ajustado; no se modificará'}</p>`;
+        manualPurchaseReview.innerHTML = `<strong>Revisión final</strong><ul>${lines.map((line) => `<li>${escapeHtml(line.productName)} · ${escapeHtml(line.size)} · ${escapeHtml(formatCurrency(line.unitPriceCents / 100))} por unidad × ${line.quantity} — Subtotal: ${escapeHtml(formatCurrency(line.lineCents / 100))}</li>`).join('')}</ul><p><strong>Total:</strong> ${escapeHtml(formatCurrency(totalCents / 100))}</p><p><strong>Pago:</strong> ${escapeHtml(payload.paymentMethod)}<br><strong>Stock:</strong> ${payload.stockHandling === 'DEDUCT_NOW' ? 'se descontará al guardar' : 'ya estaba ajustado; no se modificará'}</p>`;
         manualPurchaseReview.hidden = false;
       }
       if (manualPurchaseConfirmActions) manualPurchaseConfirmActions.hidden = false;
     } catch (error) {
+      invalidateManualPurchaseReview();
       showModuleError({ container: ordersStatus || statusArea, error: error as CronoxApiError, title: 'Revisa los datos de la compra' });
     }
   };
 
   const submitManualPurchase = async (event: Event) => {
     event.preventDefault();
-    if (!userId || !manualPurchaseIdempotencyKey || !window.CRONOX_API?.admin?.createInPersonPurchase) return;
+    if (manualPurchaseSubmitting || !userId || !manualPurchaseIdempotencyKey || !window.CRONOX_API?.admin?.createInPersonPurchase) return;
+    manualPurchaseSubmitting = true;
     confirmManualPurchaseBtn && (confirmManualPurchaseBtn.disabled = true);
     try {
-      await window.CRONOX_API.admin.createInPersonPurchase(userId, readManualPurchase(), manualPurchaseIdempotencyKey);
+      const payload = readManualPurchase();
+      if (JSON.stringify(payload) !== manualPurchaseReviewedPayload) {
+        invalidateManualPurchaseReview();
+        throw new Error('La compra ha cambiado. Revisa los datos de nuevo.');
+      }
+      await window.CRONOX_API.admin.createInPersonPurchase(userId, payload, manualPurchaseIdempotencyKey);
       if (ordersStatus && renderBanner) renderBanner(ordersStatus, { type: 'success', title: 'Compra presencial registrada', message: 'El pedido, el stock y la acreditación se han actualizado de forma atómica.' });
       manualPurchaseForm?.reset();
       manualPurchaseItems?.replaceChildren();
@@ -528,6 +550,7 @@
     } catch (error) {
       showModuleError({ container: ordersStatus || statusArea, error: error as CronoxApiError, title: 'No se pudo registrar la compra' });
     } finally {
+      manualPurchaseSubmitting = false;
       confirmManualPurchaseBtn && (confirmManualPurchaseBtn.disabled = false);
     }
   };
@@ -1435,6 +1458,7 @@
   reviewManualPurchaseBtn?.addEventListener('click', reviewManualPurchase);
   editManualPurchaseBtn?.addEventListener('click', invalidateManualPurchaseReview);
   manualPurchaseForm?.addEventListener('input', invalidateManualPurchaseReview);
+  manualPurchaseForm?.addEventListener('change', invalidateManualPurchaseReview);
   manualPurchaseForm?.addEventListener('submit', submitManualPurchase);
   ordersBody?.addEventListener('click', (event) => {
     const button = (event.target as Element | null)?.closest<HTMLElement>('[data-void-manual-order]');

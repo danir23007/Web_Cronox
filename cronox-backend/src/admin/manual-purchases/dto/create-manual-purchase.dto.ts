@@ -12,10 +12,18 @@ import {
   MaxLength,
   Min,
   ValidateNested,
+  ValidateIf,
 } from 'class-validator';
 import { ManualStockHandling, OrderPaymentMethod } from '@prisma/client';
 
 export class ManualPurchaseItemDto {
+  // Integer cents, VAT included. Only omission enables the legacy catalog price.
+  @ValidateIf((_object, value) => value !== undefined)
+  @IsInt()
+  @Min(0)
+  @Max(999_999_999_999)
+  unitPriceCents?: number;
+
   @Type(() => Number)
   @IsInt()
   @Min(1)

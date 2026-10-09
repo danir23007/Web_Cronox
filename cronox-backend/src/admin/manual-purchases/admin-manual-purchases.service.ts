@@ -67,14 +67,19 @@ export class AdminManualPurchasesService {
     }
     const quantities = new Map<number, number>();
     for (const item of dto.items) {
-      if (quantities.has(item.variantId)) {
-        throw new BadRequestException('DUPLICATE_VARIANT');
+      if (!Number.isInteger(item.quantity) || item.quantity < 1 || item.quantity > 100 ||
+          !Number.isInteger(item.variantId) || item.variantId < 1 ||
+          (item.unitPriceCents !== undefined && (!Number.isSafeInteger(item.unitPriceCents) || item.unitPriceCents < 0 || item.unitPriceCents > 999_999_999_999))) {
+        throw new BadRequestException('INVALID_MANUAL_PURCHASE_ITEM');
       }
-      quantities.set(item.variantId, item.quantity);
+      quantities.set(item.variantId, (quantities.get(item.variantId) ?? 0) + item.quantity);
     }
     const normalized = {
       userId,
-      items: [...quantities.entries()].sort(([a], [b]) => a - b),
+      // Keep the legacy hash for omitted prices, including existing persisted requests.
+      items: dto.items.every(item => item.unitPriceCents === undefined)
+        ? [...quantities.entries()].sort(([a], [b]) => a - b)
+        : dto.items.map(item => [item.variantId, item.quantity, item.unitPriceCents ?? null]),
       paymentMethod: dto.paymentMethod,
       stockHandling: dto.stockHandling,
       purchasedAt: dto.purchasedAt || null,
@@ -97,19 +102,23 @@ export class AdminManualPurchasesService {
           const currencies = new Set(variants.map((variant) => variant.product.currency));
           if (currencies.size !== 1) throw new BadRequestException('MIXED_CURRENCIES');
           let totalCents = 0;
-          const lines = variants.map((variant) => {
-            const quantity = quantities.get(variant.id)!;
-            const unitPriceCents = variant.price ?? variant.product.price;
+          const lines = dto.items.map((item) => {
+            const variant = variants.find(candidate => candidate.id === item.variantId)!;
+            const quantity = item.quantity;
+            const unitPriceCents = item.unitPriceCents ?? variant.price ?? variant.product.price;
+            if (!Number.isSafeInteger(unitPriceCents) || unitPriceCents < 0) throw new BadRequestException('INVALID_MANUAL_PURCHASE_PRICE');
             totalCents += unitPriceCents * quantity;
+            if (!Number.isSafeInteger(totalCents) || totalCents > 999_999_999_999) throw new BadRequestException('MANUAL_PURCHASE_TOTAL_OVERFLOW');
             return { variant, quantity, unitPriceCents };
           });
           if (dto.stockHandling === ManualStockHandling.DEDUCT_NOW) {
-            for (const line of lines) {
+            for (const variant of variants) {
+              const quantity = quantities.get(variant.id)!;
               const result = await tx.productVariant.updateMany({
-                where: { id: line.variant.id, stockQty: { gte: line.quantity } },
-                data: { stockQty: { decrement: line.quantity } },
+                where: { id: variant.id, stockQty: { gte: quantity } },
+                data: { stockQty: { decrement: quantity } },
               });
-              if (result.count !== 1) throw new ConflictException(`INSUFFICIENT_STOCK:${line.variant.sku}`);
+              if (result.count !== 1) throw new ConflictException(`INSUFFICIENT_STOCK:${variant.sku}`);
             }
           }
           const toDecimal = (cents: number) => new Decimal(cents).div(100);
@@ -158,9 +167,9 @@ export class AdminManualPurchasesService {
           });
           if (dto.stockHandling === ManualStockHandling.DEDUCT_NOW) {
             await tx.stockMovement.createMany({
-              data: lines.map((line) => ({
-                variantId: line.variant.id,
-                delta: -line.quantity,
+              data: variants.map((variant) => ({
+                variantId: variant.id,
+                delta: -quantities.get(variant.id)!,
                 reason: 'manual_sale',
                 orderId: order.id,
                 userId,
@@ -175,7 +184,7 @@ export class AdminManualPurchasesService {
               actionType: 'admin.manual_purchase.create',
               targetType: 'order',
               targetId: String(order.id),
-              metadata: { userId, paymentMethod: dto.paymentMethod, stockHandling: dto.stockHandling, purchasedAt: order.purchasedAt, items: lines.map((line) => ({ variantId: line.variant.id, quantity: line.quantity })) },
+              metadata: { userId, paymentMethod: dto.paymentMethod, stockHandling: dto.stockHandling, purchasedAt: order.purchasedAt, items: lines.map((line) => ({ variantId: line.variant.id, quantity: line.quantity, unitPriceCents: line.unitPriceCents })) },
             },
           });
           return { created: true, order };

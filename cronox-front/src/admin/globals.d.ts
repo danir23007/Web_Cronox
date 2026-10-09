@@ -1,6 +1,14 @@
 export {};
 
 declare global {
+  interface ManualPurchasePayload {
+    items: Array<{ variantId: number; quantity: number; unitPriceCents?: number }>;
+    paymentMethod: string;
+    stockHandling: string;
+    purchasedAt?: string;
+    note?: string;
+  }
+
   type QueryValue = string | number | boolean;
   type QueryParam = QueryValue | null | undefined;
   type QueryRecord = Record<string, QueryParam | QueryParam[]>;
@@ -94,7 +102,7 @@ declare global {
     listAutoCircleRequests?: (queryOrStatus?: string | QueryRecord, queryOverride?: QueryRecord) => Promise<unknown>;
     listAdminProducts?: (query?: QueryRecord) => Promise<unknown>;
     getInPersonPurchaseOptions?: (userId: number | string) => Promise<unknown>;
-    createInPersonPurchase?: (userId: number | string, payload: Record<string, unknown>, idempotencyKey: string) => Promise<unknown>;
+    createInPersonPurchase?: (userId: number | string, payload: ManualPurchasePayload, idempotencyKey: string) => Promise<unknown>;
     voidInPersonPurchase?: (orderId: number | string, reason: string) => Promise<unknown>;
     getProductOrder?: () => Promise<unknown>;
     saveProductOrder?: (productIds: number[]) => Promise<unknown>;

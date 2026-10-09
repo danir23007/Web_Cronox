@@ -420,10 +420,10 @@
     .user-edit-actions { display: flex; justify-content: flex-end; gap: 10px; }
     .manual-purchase { margin-bottom: 20px; padding: 16px; border: 1px solid rgba(255,255,255,.12); border-radius: 14px; background: rgba(12,12,18,.72); }
     .manual-purchase-grid { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 12px; }
-    .manual-purchase-field { display: grid; gap: 6px; color: #cfcfdb; font-size: .86rem; }
-    .manual-purchase-field input, .manual-purchase-field select, .manual-purchase-field textarea { width: 100%; border: 1px solid rgba(255,255,255,.16); border-radius: 9px; background: #0b0b10; color: #fff; padding: 9px 10px; }
+    .manual-purchase-field { min-width: 0; display: grid; gap: 6px; color: #cfcfdb; font-size: .86rem; }
+    .manual-purchase-field input, .manual-purchase-field select, .manual-purchase-field textarea { width: 100%; box-sizing: border-box; min-width: 0; border: 1px solid rgba(255,255,255,.16); border-radius: 9px; background: #0b0b10; color: #fff; padding: 9px 10px; }
     .manual-purchase-items { display: grid; gap: 8px; margin: 14px 0; }
-    .manual-purchase-item { display: grid; grid-template-columns: minmax(0,1fr) 90px auto; gap: 8px; align-items: end; }
+    .manual-purchase-item { display: grid; grid-template-columns: minmax(0,1fr) minmax(150px,190px) 90px auto; gap: 8px; align-items: end; }
     .manual-purchase-review { margin-top: 14px; padding: 12px; border: 1px solid rgba(255,255,255,.18); background: #08080c; line-height: 1.55; }
     .manual-order-action { white-space: nowrap; }
     @media (max-width: 640px) { .user-edit-grid { grid-template-columns: 1fr; } }
@@ -761,6 +761,6 @@
   <script src="assets/admin-user-shell.js?v=1"></script>
   <script src="assets/admin-live-stats.js?v=2"></script>
   <script src="assets/user-identity.js?v=1"></script>
-  <script src="assets/admin-user.js?v=5"></script>
+  <script src="assets/admin-user.js?v=6"></script>
 </body>
 </html>
