@@ -42,12 +42,16 @@ jobs:
           cache-dependency-path: |
             package-lock.json
             cronox-backend/package-lock.json
+            .github/preflight/package-lock.json
 
       - name: Install frontend build dependencies exactly
         run: npm ci
 
       - name: Install backend dependencies, including ExcelJS, exactly
         run: npm ci --prefix cronox-backend
+
+      - name: Verify isolated preflight dependencies and fail-closed deployment ordering
+        run: node --test .github/scripts/run-release-preflight.spec.cjs cronox-backend/scripts/check-user-numbering-release.spec.cjs
 
       - name: Generate the Prisma client
         run: npm run prisma:generate --prefix cronox-backend

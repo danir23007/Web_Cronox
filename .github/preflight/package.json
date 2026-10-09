@@ -1,0 +1,13 @@
+{
+  "name": "cronox-release-preflight",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Isolated read-only release preflight; never installs into the running application",
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "dependencies": {
+    "pg": "8.23.1",
+    "dotenv": "16.6.1"
+  }
+}

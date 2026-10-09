@@ -36,19 +36,17 @@ if [ "$latest" != "$expected" ]; then
   exit 1
 fi
 git fetch origin main
-# Check the incoming release BEFORE merging public HTML or rebuilding assets.
-# This is read-only and deliberately fails if the old installation lacks pg:
-# first-time numbering requires the documented manual maintenance operation.
-cd cronox-backend
-git show origin/main:cronox-backend/scripts/check-user-numbering-release.cjs | node -e '
+# Install the exact incoming preflight dependencies outside the running application.
+# The database readiness guard still runs BEFORE merging HTML or touching app dependencies.
+git show "$expected:.github/scripts/run-release-preflight.cjs" | node -e '
 const Module=require("node:module"),fs=require("node:fs");
-const filename=process.cwd()+"/scripts/check-user-numbering-release.cjs";
-const check=new Module(filename,module);check.filename=filename;
-check.paths=Module._nodeModulePaths(process.cwd());
-check._compile(fs.readFileSync(0,"utf8"),filename);
-check.exports.main().catch(error=>{console.error(error.message.replace(/postgres(?:ql)?:\/\/\S+/gi,"[redacted connection]"));process.exitCode=1;});
-' -- --deployment-check
-cd ..
+const filename=process.cwd()+"/.github/scripts/run-release-preflight.cjs";
+const runner=new Module(filename,module);runner.filename=filename;
+runner.paths=Module._nodeModulePaths(process.cwd());
+runner._compile(fs.readFileSync(0,"utf8"),filename);
+try { process.exitCode=runner.exports.main(process.argv.slice(1)); }
+catch(error) { console.error(error.message.replace(/postgres(?:ql)?:\/\/\S+/gi,"[redacted connection]"));process.exitCode=1; }
+' -- --repo="$PWD" --revision="$expected" --env-file="$PWD/cronox-backend/.env"
 # Keep unrelated working files intact; conflicts abort rather than discard them.
 git merge --ff-only origin/main
 bash .github/scripts/deploy-vps-release.sh
