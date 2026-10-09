@@ -27,7 +27,7 @@ Esta prueba verifica servicios, transacciones y persistencia con el esquema fina
 ## Auditoría de los cinco errores TypeScript
 
 Comando actual: `npx tsc --noEmit -p tsconfig.admin.json`.
-Se repitió con una copia de los archivos originales obtenidos de `git show HEAD:<archivo>` y se confirmó su igualdad byte a byte con HEAD. El resultado es idéntico: los cinco errores ya existen antes del cambio.
+Se repitió con una copia de los archivos originales obtenidos de `git show 2555490:<archivo>` y se confirmó su igualdad byte a byte con ese commit base. El resultado es idéntico: los cinco errores ya existen antes del cambio.
 
 Todos están en `cronox-front/src/admin/api.ts`:
 
@@ -51,4 +51,20 @@ Los workflows previos `37862768150` y `37868079760` aprobaron `verify-release` p
 Una transacción PostgreSQL `BEGIN READ ONLY` confirmó que `UserNumberingState` no existe y que ninguna de las cinco migraciones de numeración pendientes está aplicada.
 El SSH disponible solo permite `pm2 restart cronox` y `pm2 save`; no permite detener escritores ni administrar el proxy para la operación controlada de `docs/user-numbering-2026-10-08.md`.
 
-Por tanto, esa operación ajena al precio editable sigue bloqueando el despliegue normal del conjunto de `main`. No se omite el guard, no se aplica una renumeración con escritores activos y no se ejecuta un reset. El resultado del workflow de esta publicación y las comprobaciones finales se comunicarán al terminar.
+Por tanto, esa operación ajena al precio editable sigue bloqueando el despliegue normal del conjunto de `main`. No se omite el guard, no se aplica una renumeración con escritores activos y no se ejecuta un reset. El resultado final es el siguiente.
+
+## Resultado de publicación
+
+- Commit del cambio: [`6f76870467434baac749935bbe015d7c604793ff`](https://github.com/danir23007/Web_Cronox/commit/6f76870467434baac749935bbe015d7c604793ff), publicado en `main`. Incluye exclusivamente los 18 archivos de código, bundle generado, pruebas e informe relacionados con esta tarea.
+- [Deploy CRONOX 38003020828](https://github.com/danir23007/Web_Cronox/actions/runs/38003020828): terminado con `failure`. `verify-release` terminó con `success`: instalación exacta, generación Prisma, builds frontend/backend y comprobaciones de exportaciones/artefactos/rutas compiladas. `deploy` falló antes de actualizar el checkout por `Cannot find module 'pg'` en `check-user-numbering-release.cjs`.
+- [Pages 38003020031](https://github.com/danir23007/Web_Cronox/actions/runs/38003020031): terminado con `success`. Este resultado del workflow secundario no significa que se haya desplegado la aplicación de `cronox.es`.
+- VPS después del workflow: sigue en `b5a2b66bebc40e95661e5f486d45271bad21bc3f`. El archivo ajeno se conserva. No se ejecutaron migraciones ni reinicios en este intento.
+- Comprobaciones HTTP de producción antes y después: `/api/health`, `/api/ready` y `/api/products` devuelven 200; health/ready indican `ok: true`. `/api/admin/users/1/in-person-purchase-options` devuelve 401 sin sesión.
+- `/admin-user.html` y `/assets/admin-user.js?v=6` devuelven 200, pero el HTML no referencia v6 y el contenido del JS no contiene `data-manual-price` ni coincide con el bundle del cambio. El formulario nuevo **no está publicado** en producción.
+- No se crearon pedidos, cobraron importes ni modificó stock real. La comprobación de numeración en la base fue READ ONLY.
+
+El chequeo TypeScript global sigue fallando por los cinco errores preexistentes descritos arriba; no se declara aprobado. La integración local real y las pruebas del cambio mantienen sus resultados anteriores.
+
+Para completar el despliegue normal hace falta resolver primero la operación controlada de numeración pendiente, con el operador que pueda activar mantenimiento, detener todos los escritores y verificar/restaurar respaldos según `docs/user-numbering-2026-10-08.md`. Instalar `pg` y omitir esa comprobación no resuelve la precondición de integridad. No se ha aplicado una renumeración ajena a esta tarea ni eludido el guard.
+
+Evidencias HTTP locales: `test-results/manual-purchases-release/production-before.json` y `production-after.json`.
