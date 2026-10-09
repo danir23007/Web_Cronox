@@ -370,6 +370,20 @@
   const searchInput = $('#searchInput');
   const searchForm = searchBar ? $('#searchForm', searchBar) : null;
   const searchCloseBtn = searchBar ? $('.searchbar__close', searchBar) : null;
+  // Text inputs match :focus-visible even after touch in Safari. Track keyboard
+  // navigation for this input only, without changing other focus indicators.
+  if (searchInput) {
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'Tab' || (event.target === btnSearch && ['Enter', ' '].includes(event.key))) {
+        searchInput.dataset.keyboardFocus = 'true';
+      }
+    }, true);
+    for (const target of [btnSearch, searchInput]) {
+      target?.addEventListener('pointerdown', () => {
+        delete searchInput.dataset.keyboardFocus;
+      });
+    }
+  }
   let searchActive = false;
   let searchPrevTopbarState = '';
   let searchLockedTopbar = false;

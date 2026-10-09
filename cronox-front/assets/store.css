@@ -197,6 +197,19 @@ body.is-loaded #preloader{opacity:0;transform:scale(1.02);pointer-events:none}
   font:400 14px/1 system-ui;
 }
 .searchbar__input::placeholder{color:#aaa}
+@media (max-width: 900px) {
+  .searchbar__input {
+    -webkit-tap-highlight-color: transparent;
+  }
+  .searchbar__input:focus {
+    outline: none;
+    box-shadow: none;
+  }
+  .searchbar__input[data-keyboard-focus="true"]:focus {
+    outline: 2px solid var(--text);
+    outline-offset: 2px;
+  }
+}
 
 .searchbar__submit{
   height:34px;
