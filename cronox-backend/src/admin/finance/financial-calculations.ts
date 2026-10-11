@@ -95,16 +95,17 @@ export function calculateFinance(orders: FinanceOrder[], events: FinanceEvent[],
     add(products.get(line.productId)!, revenue, cost, sold, returned);
     if (collectBuckets) add(buckets.get(key(day))!, revenue, cost, sold, returned);
     add(totals, revenue, cost, sold, returned);
-    if (cost === null) warnings.add('Faltan costes históricos: el beneficio afectado no está disponible.');
+    if (cost === null) warnings.add(`Faltan costes históricos: línea #${line.id}, producto #${line.productId}. El beneficio afectado no está disponible.`);
     if (revenue === null) warnings.add('Hay reembolsos sin importe o reparto fiable entre productos y envío. La facturación y el beneficio afectados no están disponibles.');
   };
   for (const order of orders) {
+    const manual = order.source === 'IN_PERSON_ADMIN';
     const ledger = [...(byPayment.get(order.providerRef ?? '') ?? [])].sort((a, b) => a.occurredAt.getTime() - b.occurredAt.getTime() || (a.refundCumulativeCents ?? 0) - (b.refundCumulativeCents ?? 0) || a.id.localeCompare(b.id));
     const success = ledger.find(e => e.type === 'payment_intent.succeeded');
     const paidStatuses = ['PAID', 'PROCESSING', 'SHIPPED', 'DELIVERED', 'REFUNDED', 'DISPUTED'];
     const qualifying = order.historicalQualified === true || !!success || !!order.paidAt || (order.source === 'IN_PERSON_ADMIN' && !!order.purchasedAt) || paidStatuses.includes(order.status);
     if (!qualifying) continue;
-    const paidAt = order.paidAt ?? success?.occurredAt ?? order.purchasedAt ?? order.createdAt;
+    const paidAt = manual ? order.purchasedAt ?? order.createdAt : order.paidAt ?? success?.occurredAt ?? order.purchasedAt ?? order.createdAt;
     if (!order.paidAt && !success && !order.purchasedAt && madridDate(paidAt) >= from && madridDate(paidAt) <= to) warnings.add('Ventas antiguas sin fecha de cobro registrada: se usa la fecha de creación del pedido confirmado.');
     const lines = [...order.items].sort((a, b) => a.id - b.id);
     const gross = lines.map(line => cents(line.lineTotal));

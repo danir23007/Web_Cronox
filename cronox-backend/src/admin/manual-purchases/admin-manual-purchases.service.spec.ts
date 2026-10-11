@@ -1,4 +1,5 @@
 import { ManualStockHandling, OrderPaymentMethod, OrderSource, OrderStatus, Prisma } from '@prisma/client';
+import { createHash } from 'node:crypto';
 import { AdminManualPurchasesService } from './admin-manual-purchases.service';
 
 describe('AdminManualPurchasesService', () => {
@@ -17,7 +18,7 @@ describe('AdminManualPurchasesService', () => {
   const taxConfig = { getDefaultVat: jest.fn().mockReturnValue(0.21) };
   const service = new AdminManualPurchasesService(prisma, historial as any, taxConfig as any);
   const dto = {
-    items: [{ variantId: 5, quantity: 3 }],
+    items: [{ variantId: 5, quantity: 3, unitPriceCents: 2500 }],
     paymentMethod: OrderPaymentMethod.CASH,
     stockHandling: ManualStockHandling.DEDUCT_NOW,
     purchasedAt: '2026-09-25T10:00:00.000Z',
@@ -55,6 +56,42 @@ describe('AdminManualPurchasesService', () => {
     await service.create(7, 99, 'manual-purchase-654321', { ...dto, stockHandling: ManualStockHandling.ALREADY_ADJUSTED });
     expect(tx.productVariant.updateMany).not.toHaveBeenCalled();
     expect(tx.stockMovement.createMany).not.toHaveBeenCalled();
+  });
+  it('rejects a new purchase without a paid unit price instead of using catalog price', async () => {
+    await expect(service.create(7, 99, 'manual-no-price-123456', { ...dto, items: [{ variantId: 5, quantity: 2 }] })).rejects.toThrow('MANUAL_PURCHASE_PAID_PRICE_REQUIRED');
+    expect(tx.order.create).not.toHaveBeenCalled();
+    expect(tx.productVariant.updateMany).not.toHaveBeenCalled();
+  });
+  it('preserves replay of already saved legacy requests without an explicit paid price', async () => {
+    const old = { ...dto, items: [{ variantId: 5, quantity: 2 }] };
+    const hash = createHash('sha256').update(JSON.stringify({ userId: 7, items: [[5, 2]],
+      paymentMethod: old.paymentMethod, stockHandling: old.stockHandling, purchasedAt: old.purchasedAt, note: null })).digest('hex');
+    prisma.order.findUnique.mockResolvedValue({ id: 41, manualRequestHash: hash });
+    await expect(service.create(7, 99, 'manual-old-replay-123456', old)).resolves.toMatchObject({ created: false, order: { id: 41 } });
+    expect(tx.order.create).not.toHaveBeenCalled();
+    expect(tx.productVariant.updateMany).not.toHaveBeenCalled();
+  });
+
+  it.each([0, 1500, null])('freezes cost %s recorded before an explicitly dated purchase', async cost => {
+    const variant = { id: 5, size: 'M', sku: 'TEE-M', price: 9900, product: { id: 2, name: 'Camiseta', price: 9900,
+      currency: 'EUR', imageUrl: null, privateCost: { unitCostCents: cost, updatedAt: new Date('2026-09-01T00:00:00Z') } } };
+    tx.productVariant.findMany.mockResolvedValue([variant]);
+    await service.create(7, 99, 'manual-cost-123456', { ...dto, items: [{ variantId: 5, quantity: 2, unitPriceCents: 2550 }] });
+    const data = tx.order.create.mock.calls[0][0].data;
+    expect(data.items.create[0].financialSnapshot.create.unitCostCents).toBe(cost);
+    expect(data.items.create[0].lineTotal.toString()).toBe('51');
+    expect(tx.auditLog.create.mock.calls[0][0].data.metadata.items[0]).toMatchObject({ unitCostCents: cost, costSource: 'ProductCost' });
+  });
+
+  it('freezes the configured cost even when it was updated after the manual sale date', async () => {
+    tx.productVariant.findMany.mockResolvedValue([{ id: 5, size: 'M', sku: 'TEE-M', price: 2550, product: {
+      id: 2, name: 'Camiseta', price: 9900, currency: 'EUR',
+      privateCost: { unitCostCents: 1500, updatedAt: new Date('2026-10-07T00:00:00Z') },
+    } }]);
+    await service.create(7, 99, 'manual-cost-later-123456', { ...dto, items: [{ variantId: 5, quantity: 2, unitPriceCents: 2550 }] });
+    const saved = tx.order.create.mock.calls[0][0].data;
+    expect(saved.items.create[0].financialSnapshot.create.unitCostCents).toBe(1500);
+    expect(saved.items.create[0].lineTotal.toString()).toBe('51');
   });
 
   it('replays an identical submission without creating a second order', async () => {

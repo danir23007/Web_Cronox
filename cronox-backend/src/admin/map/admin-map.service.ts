@@ -12,6 +12,7 @@ import {
   validateRange,
 } from '../finance/financial-calculations';
 import type { MapQuery } from './admin-map.controller';
+import { archiveUtcDate } from '../finance/historical-cost';
 import { classifyShipping, PROVINCES, REGIONS } from './spain-geography';
 
 export type MapAmounts = {
@@ -218,7 +219,7 @@ export class AdminMapService {
               'createdAt',
               'voidedAt',
             ] as const)
-              if (order[key]) order[key] = new Date(order[key]);
+              if (order[key]) order[key] = archiveUtcDate(order[key]);
             order.stockMovements = movements.get(row.orderId) ?? [];
             const ledger = events.get(row.providerRef ?? '') ?? [];
             const financial = calculateFinance(

@@ -17,7 +17,8 @@ import {
 import { ManualStockHandling, OrderPaymentMethod } from '@prisma/client';
 
 export class ManualPurchaseItemDto {
-  // Integer cents, VAT included. Only omission enables the legacy catalog price.
+  // Integer cents, VAT included. Omission is accepted only for legacy replay;
+  // the service requires the paid price for every newly registered purchase.
   @ValidateIf((_object, value) => value !== undefined)
   @IsInt()
   @Min(0)

@@ -30,8 +30,46 @@ describe('Private financial calculations', () => {
     const saved = order({ source: 'IN_PERSON_ADMIN', providerRef: null, paidAt: null,
       purchasedAt: new Date('2026-03-28T12:00:00Z'), total: '51.00' });
     saved.items[0].lineTotal = '51.00';
+    saved.items[0].financialSnapshot!.unitCostCents = 1500;
     expect(report([saved]).totals.revenueCents).toBe(5100);
+    expect(report([saved]).totals).toMatchObject({ costCents: 3000, profitCents: 2100 });
+    expect(report([saved]).buckets[0].profitCents).toBe(2100);
+    expect(report([saved]).products[0].profitCents).toBe(2100);
     expect(report([saved]).recentOrders[0].totalCents).toBe(5100);
+  });
+  it('reconciles manual and web products, discounts and documented partial returns', () => {
+    const manual = order({ source: 'IN_PERSON_ADMIN', providerRef: 'manual-reference', paidAt: null,
+      purchasedAt: new Date('2026-03-28T12:00:00Z'), total: '51.00' });
+    manual.items[0].lineTotal = '51.00'; manual.items[0].financialSnapshot!.unitCostCents = 1500;
+    manual.stockMovements = [{ variantId: 1, delta: 1, reason: 'refund', createdAt: new Date('2026-03-29T12:00:00Z') }];
+    const returned = { ...refund('manual-return', 2550), paymentIntentId: 'manual-reference' };
+    const mixed = report([manual, order({ id: 2, total: '25.00', shippingCost: 500 })], [returned]);
+    expect(mixed.totals).toMatchObject({ revenueCents: 4550, costCents: 2700, profitCents: 1850 });
+    expect(mixed.buckets.reduce((sum, bucket) => sum + bucket.profitCents!, 0)).toBe(1850);
+    expect(mixed.products.reduce((sum, product) => sum + product.profitCents!, 0)).toBe(1850);
+  });
+  it('uses the manual purchase date and paid lines rather than a Stripe success amount/date', () => {
+    const manual = order({ source: 'IN_PERSON_ADMIN', providerRef: 'manual-reference',
+      paidAt: new Date('2026-04-01T12:00:00Z'), purchasedAt: new Date('2026-03-28T12:00:00Z'), total: '51.00' });
+    manual.items[0].lineTotal = '51.00'; manual.items[0].financialSnapshot!.unitCostCents = 1500;
+    const event: FinanceEvent = { id: 'unrelated-success', type: 'payment_intent.succeeded', paymentIntentId: 'manual-reference',
+      occurredAt: new Date('2026-04-01T12:00:00Z'), amountCents: 99000, refundCumulativeCents: null, lifecycleStatus: 'PAID' };
+    expect(report([manual], [event]).totals).toMatchObject({ revenueCents: 5100, costCents: 3000, profitCents: 2100 });
+  });
+  it('uses different costs per manual product and exact order discounts without delivery revenue', () => {
+    const manual = order({ source: 'IN_PERSON_ADMIN', total: '72.00', shippingCost: 500, discountCents: 400 });
+    manual.items = [
+      { ...manual.items[0], lineTotal: '51.00', financialSnapshot: { unitCostCents: 1500, productName: 'Tees', imageUrl: null } },
+      { id: 2, productId: 2, variantId: 2, title: 'Other', quantity: 1, lineTotal: '20.00', financialSnapshot: { unitCostCents: 800, productName: 'Other', imageUrl: null } },
+    ];
+    expect(report([manual]).totals).toMatchObject({ revenueCents: 6700, costCents: 3800, profitCents: 2900 });
+  });
+  it('reverses cancelled manual sales on the void date, with cost only for documented restocking', () => {
+    const manual = order({ source: 'IN_PERSON_ADMIN', providerRef: null, paidAt: null,
+      purchasedAt: new Date('2026-03-28T12:00:00Z'), status: 'CANCELLED', voidedAt: new Date('2026-03-29T12:00:00Z'),
+      stockMovements: [{ variantId: 1, delta: 2, reason: 'manual_sale_void', createdAt: new Date('2026-03-29T12:00:00Z') }] });
+    expect(report([manual]).totals).toMatchObject({ revenueCents: 0, costCents: 0, profitCents: 0, unitsReturned: 2 });
+    expect(report([{ ...manual, stockMovements: [] }]).totals.profitCents).toBe(-1200);
   });
   it('distinguishes unknown costs, deliberate zero, and losses', () => {
     const base = order();

@@ -41,6 +41,11 @@ async function run() {
     const setup = spawnSync(process.execPath, [require.resolve('prisma/build/index.js'), 'db', 'push', '--skip-generate'],
       { cwd: backend, env, windowsHide: true, encoding: 'utf8', timeout: 60000 });
     assert.equal(setup.status, 0, 'Prisma schema initialization failed: ' + (setup.stderr || '').replace(/postgres(?:ql)?:\/\/\S+/g, '[redacted]'));
+    const archiveSetup = new Client({ connectionString: setupUrl.href });
+    try {
+      await archiveSetup.connect();
+      await archiveSetup.query(fs.readFileSync(path.join(backend, 'prisma/migrations/20261002120000_permanent_visitor_finance_history/migration.sql'), 'utf8'));
+    } finally { await archiveSetup.end(); }
     Object.assign(process.env, env);
     require('ts-node').register({ project: path.join(backend, 'tsconfig.json'), transpileOnly: true });
     const { PrismaService } = require('../src/prisma/prisma.service');
@@ -55,7 +60,7 @@ async function run() {
     const admin = await prisma.user.create({ data: { email: 'admin@manual-purchase.test', role: 'SUPERADMIN' } });
     const buyer = await prisma.user.create({ data: { email: 'buyer@manual-purchase.test' } });
     const product = await prisma.product.create({ data: { slug: 'disposable-manual-test', name: 'Disposable integration article', price: 4000,
-      privateCost: { create: { unitCostCents: 1000 } }, variants: { create: { size: 'M', sku: 'DISPOSABLE-M', price: 3000, stockQty: 10 } } }, include: { variants: true } });
+      privateCost: { create: { unitCostCents: null } }, variants: { create: { size: 'M', sku: 'DISPOSABLE-M', price: 3000, stockQty: 10 } } }, include: { variants: true } });
     const variantId = product.variants[0].id;
     const stock = async () => (await prisma.productVariant.findUniqueOrThrow({ where: { id: variantId } })).stockQty;
     const statistics = async (orders, units, spent) => {
@@ -103,9 +108,10 @@ async function run() {
     assert.equal(historical.total.toFixed(2), '82.00'); assert.equal(historical.taxAmount.toFixed(2), '14.23');
     await statistics(2, 6, 102);
     assert.equal((await service.create(buyer.id, admin.id, 'manual-db-deduct-123456', paid)).order.id, saved.id);
-    const legacy = await service.create(buyer.id, admin.id, 'manual-db-legacy-123456', { ...paid, stockHandling: 'ALREADY_ADJUSTED', items: [{ variantId, quantity: 1 }] });
+    await assert.rejects(service.create(buyer.id, admin.id, 'manual-db-legacy-123456', { ...paid, stockHandling: 'ALREADY_ADJUSTED', items: [{ variantId, quantity: 1 }] }), /MANUAL_PURCHASE_PAID_PRICE_REQUIRED/);
+    const legacy = await service.create(buyer.id, admin.id, 'manual-db-legacy-123456', { ...paid, stockHandling: 'ALREADY_ADJUSTED', items: [{ variantId, quantity: 1, unitPriceCents: 7000 }] });
     assert.equal((await read(legacy.order.id)).items[0].unitPrice.toFixed(2), '70.00'); await statistics(3, 7, 172);
-    report.checks.push('Catalog changes do not alter historical paid prices/VAT/spending or replay; omitted price uses current variant catalog');
+    report.checks.push('Catalog changes do not alter historical paid prices/VAT/spending or replay; omitted paid price rejects new purchase without writes');
     assert.equal((await service.void(saved.id, admin.id, 'Disposable test cancellation')).changed, true);
     assert.equal(await stock(), 10); await statistics(2, 4, 90);
     assert.equal((await service.void(saved.id, admin.id, 'Repeated cancellation')).changed, false);
@@ -117,6 +123,68 @@ async function run() {
     await service.void(second.order.id, admin.id, 'Repeated adjusted cancellation');
     assert.equal(await stock(), 10); assert.equal(await prisma.stockMovement.count({ where: { orderId: second.order.id } }), 0); await statistics(1, 1, 70);
     report.checks.push('Both cancellation modes update spending/history; deducted quantities restore only once; adjusted stock never restores; historical lines remain saved');
+    const { AdminFinanceService } = require('../src/admin/finance/admin-finance.service');
+    const { madridDate } = require('../src/admin/finance/financial-calculations');
+    const { Decimal } = require('@prisma/client/runtime/library');
+    await prisma.productCost.update({ where: { productId: product.id }, data: { unitCostCents: 1500 } });
+    // A separate simulated day excludes the cancellation events tested above.
+    const now = new Date(Date.now() - 3 * 86400000), day = madridDate(now);
+    const dated = await service.create(buyer.id, admin.id, 'manual-db-profit-123456', {
+      paymentMethod: 'CASH', stockHandling: 'ALREADY_ADJUSTED', purchasedAt: now.toISOString(),
+      items: [{ variantId, quantity: 2, unitPriceCents: 2550 }],
+    });
+    const frozen = await read(dated.order.id);
+    assert.equal(frozen.items[0].financialSnapshot.unitCostCents, 1500);
+    assert.equal(frozen.items[0].lineTotal.toFixed(2), '51.00');
+    assert.equal(await stock(), 10);
+    const query = { from: day, to: day, aggregation: 'days', currency: 'EUR', search: '', sort: 'revenue', direction: 'desc', page: 1 };
+    const finance = new AdminFinanceService(prisma);
+    const first = await finance.getReport(query);
+    assert.equal(first.totals.revenueCents, 5100); assert.equal(first.totals.costCents, 3000); assert.equal(first.totals.profitCents, 2100);
+    assert.equal(first.buckets[0].profitCents, 2100); assert.equal(first.products[0].profitCents, 2100);
+    await prisma.productCost.update({ where: { productId: product.id }, data: { unitCostCents: 9999 } });
+    assert.deepEqual((await finance.getReport(query)).totals, first.totals);
+    assert.equal((await read(dated.order.id)).items[0].financialSnapshot.unitCostCents, 1500);
+    report.checks.push('Backdated manual sale predating cost update freezes configured €15 cost and paid €25.50 x 2; archive, totals, chart and breakdown give €51/€21 after current cost/catalog changes and reload');
+    await prisma.order.create({ data: { userId: buyer.id, customerEmail: buyer.email, status: 'PAID', source: 'ONLINE', paidAt: now, currency: 'EUR',
+      subtotal: new Decimal(20), total: new Decimal(25), shippingCost: 500, taxRate: new Decimal('0.21'), taxAmount: new Decimal('3.47'),
+      items: { create: { productId: product.id, variantId, title: 'Web fixture', unitPrice: new Decimal(20), quantity: 1, lineTotal: new Decimal(20),
+        financialSnapshot: { create: { unitCostCents: 700, productName: 'Web fixture', imageUrl: null } } } } } });
+    const mixed = await finance.getReport(query);
+    assert.equal(mixed.totals.revenueCents, 7100); assert.equal(mixed.totals.costCents, 3700); assert.equal(mixed.totals.profitCents, 3400);
+    assert.equal(mixed.buckets[0].profitCents, 3400);
+    report.checks.push('Mixed web/manual archived report excludes shipping, counts both historical costs and reconciles totals with chart and product breakdown');
+    const { prepare } = require('./prepare-manual-finance-recovery.cjs');
+    const archive = await prisma.financeArchive.findUniqueOrThrow({ where: { orderId: saved.id } });
+    const review = { rows: saved.items.map(item => ({ orderId: saved.id, itemId: item.id, productId: item.productId,
+      expectedRevision: archive.revision, status: 'needs_evidence' })) };
+    const evidence = saved.items.map(item => ({ orderId: saved.id, itemId: item.id, unitCostCents: 1000,
+      approved: true, source: "Simulated supplier invoice from before sale; fixture only, buyer's copy" }));
+    const sql = prepare(review, evidence, 'SESSION_ADMIN');
+    const recovery = new Client({ connectionString: setupUrl.href });
+    try {
+      await recovery.connect();
+      await assert.rejects(recovery.query(sql), /Invalid administrator/);
+      await recovery.query('ROLLBACK');
+      await recovery.query(`SET cronox.recovery_actor_id = '${admin.id}'`);
+      await recovery.query(sql);
+      const recovered = await prisma.financeArchive.findUniqueOrThrow({ where: { orderId: saved.id } });
+      assert.equal(recovered.revision, archive.revision + 1);
+      assert.ok(recovered.snapshot.items.every(item => item.financialSnapshot.unitCostCents === 1000));
+      assert.deepEqual(recovered.snapshot.items.map(item => [item.lineTotal, item.quantity]), archive.snapshot.items.map(item => [item.lineTotal, item.quantity]));
+      const previous = await prisma.financeArchiveRevision.findUniqueOrThrow({ where: { orderId_revision: { orderId: saved.id, revision: archive.revision } } });
+      assert.ok(previous.snapshot.items.every(item => item.financialSnapshot.unitCostCents === null));
+      assert.ok((await read(saved.id)).items.every(item => item.financialSnapshot.unitCostCents === 1000));
+      assert.equal(await prisma.auditLog.count({ where: { action: 'admin.manual_finance.recover', targetId: String(saved.id) } }), 1);
+      assert.equal(await stock(), 10);
+      const historicalReport = await finance.getReport({ ...query, from: '2026-10-01', to: '2026-10-01' });
+      // Other historical fixtures still have unknown costs: the overall benefit must remain unavailable.
+      assert.equal(historicalReport.totals.profitCents, null);
+      await assert.rejects(recovery.query(sql), /Archive changed/);
+      await recovery.query('ROLLBACK');
+      assert.equal((await prisma.financeArchive.findUniqueOrThrow({ where: { orderId: saved.id } })).revision, recovered.revision);
+    } finally { await recovery.end(); }
+    report.checks.push('Reviewed recovery SQL rehearsed only in disposable DB: costs and audited archive revision restored; original revisions/prices/stock preserved; stale replay rejected and incomplete totals remain unknown');
     report.passed = true;
   } finally {
     if (prisma) await prisma.$disconnect();

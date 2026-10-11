@@ -3,6 +3,7 @@ import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import type { FinanceQuery } from './admin-finance.controller';
 import { calculateFinance, FinanceEvent, FinanceOrder, sortProducts, validateRange } from './financial-calculations';
+import { archiveUtcDate } from './historical-cost';
 
 @Injectable()
 export class AdminFinanceService {
@@ -36,10 +37,10 @@ export class AdminFinanceService {
         const stockRows = await tx.financeStockArchive.findMany({ where: { orderId: { in: batch.map(row => row.orderId) } } });
         const orders = batch.map(row => {
           const order = row.snapshot as unknown as FinanceOrder;
-          for (const field of ['paidAt', 'purchasedAt', 'createdAt', 'voidedAt'] as const) if (order[field]) order[field] = new Date(order[field]!);
+          for (const field of ['paidAt', 'purchasedAt', 'createdAt', 'voidedAt'] as const) if (order[field]) order[field] = archiveUtcDate(order[field]!);
           order.stockMovements = stockRows.filter(stock => stock.orderId === row.orderId).map(stock => {
             const value = stock.snapshot as unknown as FinanceOrder['stockMovements'][number];
-            return { ...value, createdAt: new Date(value.createdAt) };
+            return { ...value, createdAt: archiveUtcDate(value.createdAt) };
           });
           return order;
         });

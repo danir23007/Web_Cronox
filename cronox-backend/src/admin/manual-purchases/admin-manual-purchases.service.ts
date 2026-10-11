@@ -17,6 +17,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { HistorialService } from '../../historial/historial.service';
 import { TaxConfigService } from '../../common/tax/tax-config.service';
 import { CreateManualPurchaseDto } from './dto/create-manual-purchase.dto';
+import { configuredManualCost } from '../finance/historical-cost';
 
 @Injectable()
 export class AdminManualPurchasesService {
@@ -88,6 +89,9 @@ export class AdminManualPurchasesService {
     const requestHash = createHash('sha256').update(JSON.stringify(normalized)).digest('hex');
     const existing = await this.prisma.order.findUnique({ where: { manualIdempotencyKey: key } });
     if (existing) return this.resolveReplay(existing, requestHash);
+    if (dto.items.some(item => item.unitPriceCents === undefined)) {
+      throw new BadRequestException('MANUAL_PURCHASE_PAID_PRICE_REQUIRED');
+    }
 
     try {
       return await this.prisma.$transaction(
@@ -105,7 +109,7 @@ export class AdminManualPurchasesService {
           const lines = dto.items.map((item) => {
             const variant = variants.find(candidate => candidate.id === item.variantId)!;
             const quantity = item.quantity;
-            const unitPriceCents = item.unitPriceCents ?? variant.price ?? variant.product.price;
+            const unitPriceCents = item.unitPriceCents!;
             if (!Number.isSafeInteger(unitPriceCents) || unitPriceCents < 0) throw new BadRequestException('INVALID_MANUAL_PURCHASE_PRICE');
             totalCents += unitPriceCents * quantity;
             if (!Number.isSafeInteger(totalCents) || totalCents > 999_999_999_999) throw new BadRequestException('MANUAL_PURCHASE_TOTAL_OVERFLOW');
@@ -123,6 +127,7 @@ export class AdminManualPurchasesService {
           }
           const toDecimal = (cents: number) => new Decimal(cents).div(100);
           const subtotal = toDecimal(totalCents);
+          const purchasedAt = dto.purchasedAt ? new Date(dto.purchasedAt) : new Date();
           const taxRate = new Decimal(this.taxConfig.getDefaultVat());
           const taxAmount = totalCents > 0
             ? subtotal.minus(subtotal.div(taxRate.add(1)).toDecimalPlaces(2)).toDecimalPlaces(2)
@@ -134,7 +139,7 @@ export class AdminManualPurchasesService {
               status: OrderStatus.PAID,
               source: OrderSource.IN_PERSON_ADMIN,
               paymentMethod: dto.paymentMethod,
-              purchasedAt: dto.purchasedAt ? new Date(dto.purchasedAt) : new Date(),
+              purchasedAt,
               recordedById: adminId,
               manualStockHandling: dto.stockHandling,
               manualIdempotencyKey: key,
@@ -156,8 +161,7 @@ export class AdminManualPurchasesService {
                   quantity,
                   lineTotal: toDecimal(unitPriceCents * quantity),
                   financialSnapshot: { create: {
-                    // A backdated sale has no reliable historical cost evidence.
-                    unitCostCents: dto.purchasedAt ? null : variant.product.privateCost?.unitCostCents ?? null,
+                    unitCostCents: configuredManualCost(variant.product.privateCost),
                     productName: variant.product.name, imageUrl: variant.product.imageUrl,
                   } },
                 })),
@@ -184,7 +188,14 @@ export class AdminManualPurchasesService {
               actionType: 'admin.manual_purchase.create',
               targetType: 'order',
               targetId: String(order.id),
-              metadata: { userId, paymentMethod: dto.paymentMethod, stockHandling: dto.stockHandling, purchasedAt: order.purchasedAt, items: lines.map((line) => ({ variantId: line.variant.id, quantity: line.quantity, unitPriceCents: line.unitPriceCents })) },
+              metadata: {
+                userId, paymentMethod: dto.paymentMethod, stockHandling: dto.stockHandling, purchasedAt: order.purchasedAt,
+                items: lines.map((line) => ({
+                  variantId: line.variant.id, quantity: line.quantity, unitPriceCents: line.unitPriceCents,
+                  unitCostCents: configuredManualCost(line.variant.product.privateCost),
+                  costSource: 'ProductCost', costRecordedAt: line.variant.product.privateCost?.updatedAt ?? null,
+                })),
+              },
             },
           });
           return { created: true, order };
