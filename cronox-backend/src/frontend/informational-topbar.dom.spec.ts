@@ -111,7 +111,7 @@ describe('informational footer destinations use the shared CRONOX topbar', () =>
       expect(document.getElementById('searchBar')).not.toBeNull();
       expect(
         document.querySelectorAll('#filtersPanel .black-menu__link'),
-      ).toHaveLength(5);
+      ).toHaveLength(0); // Shared app.js mounts the sole menu after the shell.
       expect(document.getElementById('profileBtn')).not.toBeNull();
       expect(document.querySelector('.favorites-count')).not.toBeNull();
       expect(document.querySelector('.cart-count')).not.toBeNull();
@@ -217,6 +217,8 @@ describe('informational footer destinations use the shared CRONOX topbar', () =>
     expect(
       document.getElementById('filtersPanel')?.classList.contains('is-open'),
     ).toBe(true);
+    (document.querySelector('.filters-close') as HTMLButtonElement).click();
+    await new Promise(resolve => setTimeout(resolve, 320));
 
     (document.getElementById('profileBtn') as HTMLAnchorElement).click();
     await waitFor(() => {

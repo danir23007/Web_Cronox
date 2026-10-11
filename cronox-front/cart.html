@@ -33,15 +33,6 @@
 
   <header class="topbar topbar--page" id="topbar" role="banner">
     <div class="topbar__left">
-      <!-- Botón hamburguesa -->
-      <button id="btnMenu" class="icon-btn" aria-label="Abrir menú" aria-expanded="false" aria-controls="filtersPanel">
-        <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-             stroke-linecap="round" stroke-linejoin="round" class="icon" aria-hidden="true" focusable="false">
-          <line x1="3" y1="6" x2="21" y2="6"></line>
-          <line x1="3" y1="12" x2="21" y2="12"></line>
-          <line x1="3" y1="18" x2="21" y2="18"></line>
-        </svg>
-      </button>
 
       <!-- Lupa -->
       <button id="btnSearch" class="icon-btn" aria-label="Buscar productos" aria-expanded="false" aria-controls="searchBar">
@@ -102,18 +93,6 @@
     </div>
   </div>
 
-  <!-- Menú lateral reutilizado (igual que en index/producto) -->
-  <aside id="filtersPanel" class="black-menu" hidden aria-label="Navegación de categorías" role="dialog" aria-modal="true">
-    <button class="filters-close" aria-label="Cerrar menú">✕</button>
-    <nav class="black-menu__list" role="menu">
-      <a class="black-menu__link" role="menuitem" href="/tienda?categorySlug=novedades#store">Novedades</a>
-      <a class="black-menu__link" role="menuitem" href="/tienda?categorySlug=camisetas#store">Camisetas</a>
-      <a class="black-menu__link" role="menuitem" href="/tienda?categorySlug=chaquetas#store">Chaquetas</a>
-      <a class="black-menu__link" role="menuitem" href="/tienda?categorySlug=pantalones#store">Pantalones</a>
-      <a class="black-menu__link" role="menuitem" href="/tienda?categorySlug=complementos#store">Complementos</a>
-    </nav>
-  </aside>
-
   <!-- CONTENIDO DEL CARRITO -->
   <main id="cartMain" class="cart container" aria-live="polite">
     <h1 class="cart__title">Tu cesta</h1>
@@ -162,6 +141,10 @@
         </div>
       </aside>
     </div>
+    <section class="cart-upsell cart-page-upsell" data-cart-recommendations hidden aria-label="Completa tu outfit">
+      <div class="cart-upsell__head"><h3>Completa tu outfit</h3></div>
+      <div class="cart-upsell__list" data-cart-recommendation-list></div>
+    </section>
   </main>
 
   <footer class="footer">

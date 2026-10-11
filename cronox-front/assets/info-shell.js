@@ -69,17 +69,6 @@
       </div>
     </div>
 
-    <aside id="filtersPanel" class="black-menu" hidden aria-label="Navegación de categorías" role="dialog" aria-modal="true">
-      <button class="filters-close" type="button" aria-label="Cerrar menú">✕</button>
-      <nav class="black-menu__list" role="menu">
-        <a class="black-menu__link" role="menuitem" href="/tienda?categorySlug=novedades#store">Novedades</a>
-        <a class="black-menu__link" role="menuitem" href="/tienda?categorySlug=camisetas#store">Camisetas</a>
-        <a class="black-menu__link" role="menuitem" href="/tienda?categorySlug=chaquetas#store">Chaquetas</a>
-        <a class="black-menu__link" role="menuitem" href="/tienda?categorySlug=pantalones#store">Pantalones</a>
-        <a class="black-menu__link" role="menuitem" href="/tienda?categorySlug=complementos#store">Complementos</a>
-      </nav>
-    </aside>
-
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
     <div id="cart-overlay" class="cart-overlay" hidden></div>
     <aside id="cart-drawer" class="cart-drawer" aria-hidden="true" aria-label="Carrito">

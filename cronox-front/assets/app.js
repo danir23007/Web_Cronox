@@ -9,6 +9,39 @@
   const $$ = (s, el = document) => Array.from(el.querySelectorAll(s));
   const clamp = (n, min, max) => Math.max(min, Math.min(max, n));
   const API = window.CRONOX_API || {};
+  // The full catalogue is independent of the store's current category/search results.
+  let fullCatalogPromise = null;
+  let fullCatalogProducts = [];
+  window.CRONOX_FULL_CATALOG = {
+    get products() { return fullCatalogProducts; },
+    load() {
+      if (fullCatalogPromise) return fullCatalogPromise;
+      fullCatalogPromise = (async () => {
+        const client = window.CRONOX_API || API;
+        const products = [];
+        if (typeof client.getProductsPage === 'function') {
+          let page = 1, pageCount = 1;
+          do {
+            const response = await client.getProductsPage({ page, limit: 48 });
+            if (!Array.isArray(response?.products)) throw new Error('CATALOG_MALFORMED');
+            products.push(...response.products);
+            pageCount = Math.max(1, Number(response.meta?.pageCount || 1));
+            if (!Number.isSafeInteger(pageCount) || pageCount > 1000) throw new Error('CATALOG_MALFORMED');
+            page++;
+          } while (page <= pageCount);
+        } else {
+          if (typeof client.getProducts !== 'function') throw new Error('CATALOG_API_UNAVAILABLE');
+          const response = await client.getProducts({ limit: 48 });
+          if (!Array.isArray(response)) throw new Error('CATALOG_MALFORMED');
+          products.push(...response);
+        }
+        fullCatalogProducts = Object.freeze(products.slice());
+        window.dispatchEvent(new CustomEvent('cronox:fullCatalogLoaded'));
+        return fullCatalogProducts;
+      })().catch(error => { fullCatalogPromise = null; throw error; });
+      return fullCatalogPromise;
+    },
+  };
   const STAR_ICON = '<span class="icon-star"></span>';
   window.CRONOX_STAR_ICON = STAR_ICON;
   const getCsrfHeaders = async () => {
@@ -181,11 +214,13 @@
 
   const scrollLocks = new Set();
   let scrollLockStyles = null;
+  let scrollLockPosition = null;
   let scrollLockHadNoScroll = false;
   function lockScroll(key = 'default') {
     const body = document.body;
     if (!body) return;
     if (!scrollLocks.size) {
+      scrollLockPosition = { left: window.scrollX, top: window.scrollY };
       scrollLockHadNoScroll = body.classList.contains('no-scroll');
       const root = document.documentElement;
       const gap = Math.max(0, window.innerWidth - root.getBoundingClientRect().width);
@@ -212,55 +247,112 @@
         else root.style.removeProperty(name);
       });
       scrollLockStyles = null;
+      // Changing root/body overflow can shift scroll anchoring near a footer.
+      // Restore only after the last panel releases its lock.
+      if (scrollLockPosition) window.scrollTo({ ...scrollLockPosition, behavior: 'instant' });
+      scrollLockPosition = null;
     }
   }
   window.CRONOX_lockScroll = lockScroll;
   window.CRONOX_unlockScroll = unlockScroll;
 
-  const filtersPanel = $('#filtersPanel');
   const menuBtn = $('#btnMenu');
+  // One public navigation surface, mounted directly on body on every route.
+  // Templates supply only the trigger; the logo, close control and list live here.
+  let filtersPanel = $('#filtersPanel');
+  if (menuBtn) {
+    document.querySelectorAll('#filtersPanel').forEach(panel => panel.remove());
+    filtersPanel = document.createElement('aside');
+    filtersPanel.id = 'filtersPanel'; filtersPanel.className = 'black-menu';
+    filtersPanel.hidden = true; filtersPanel.inert = true;
+    filtersPanel.setAttribute('aria-label', 'Navegación de categorías');
+    filtersPanel.setAttribute('role', 'dialog'); filtersPanel.setAttribute('aria-modal', 'true');
+    filtersPanel.innerHTML = `
+      <button class="filters-close" type="button" aria-label="Cerrar menú">✕</button>
+      <div class="black-menu__header"><img class="black-menu__brand" src="/favicon.png?v=4" width="372" height="372" alt="CRONOX" draggable="false"></div>
+      <nav class="black-menu__list" aria-label="Categorías y colecciones">
+        <a class="black-menu__link" href="/tienda#store">Todos</a>
+        <a class="black-menu__link" href="/tienda?categorySlug=novedades#store">Novedades</a>
+        <a class="black-menu__link" href="/tienda?categorySlug=camisetas#store">Camisetas</a>
+        <a class="black-menu__link" href="/tienda?categorySlug=chaquetas#store">Chaquetas</a>
+        <a class="black-menu__link" href="/tienda?categorySlug=pantalones#store">Pantalones</a>
+        <a class="black-menu__link" href="/tienda?categorySlug=complementos#store">Complementos</a>
+      </nav>`;
+    document.body.append(filtersPanel);
+  }
   const filtersCloseBtn = filtersPanel ? $('.filters-close', filtersPanel) : null;
   const FILTERS_KEY = 'filters';
-  const FILTERS_TRANSITION_MS = 220;
+  const FILTERS_TRANSITION_MS = 300;
+  let filtersCloseTimer = 0;
+  let filtersReturnFocus = null;
+  const setMenuCartSuspended = (suspended) => {
+    const drawer = $('#cart-drawer');
+    if (drawer?.getAttribute('aria-hidden') !== 'false') return;
+    drawer.inert = suspended;
+    if (suspended) drawer.removeAttribute('aria-modal');
+    else drawer.setAttribute('aria-modal', 'true');
+  };
+  const updateMenuViewport = () => {
+    if (!filtersPanel) return;
+    const viewport = window.visualViewport;
+    filtersPanel.style.setProperty('--menu-viewport-top', `${viewport?.offsetTop || 0}px`);
+    filtersPanel.style.setProperty('--menu-viewport-height', `${viewport?.height || window.innerHeight}px`);
+  };
 
   const isFiltersOpen = () => Boolean(filtersPanel?.classList.contains('is-open'));
 
-  function openFilters(){
+  function openFilters(trigger = document.activeElement){
     if (!filtersPanel) return;
+    clearTimeout(filtersCloseTimer);
+    if (!isFiltersOpen()) filtersReturnFocus = trigger;
     void window.CRONOX_STORE_CATEGORIES?.refresh?.();
+    updateMenuViewport();
     filtersPanel.hidden = false;
-    requestAnimationFrame(() => {
-      filtersPanel?.classList.add('is-open');
-    });
+    filtersPanel.inert = false;
+    // Flush the closed position before animating; no queued open can undo a close.
+    filtersPanel.getBoundingClientRect();
+    filtersPanel.classList.add('is-open');
+    document.body.classList.add('filters-open');
+    setMenuCartSuspended(true);
     showOverlay('overlay--page', FILTERS_KEY);
     lockScroll(FILTERS_KEY);
     menuBtn?.setAttribute('aria-expanded', 'true');
+    filtersCloseBtn?.focus({ preventScroll: true });
   }
 
   function closeFilters(){
     if (!filtersPanel) return;
+    clearTimeout(filtersCloseTimer);
     filtersPanel.classList.remove('is-open');
+    filtersPanel.inert = true;
     menuBtn?.setAttribute('aria-expanded', 'false');
-    window.setTimeout(() => {
+    filtersCloseTimer = window.setTimeout(() => {
       if (!filtersPanel) return;
       if (!isFiltersOpen()) {
         filtersPanel.hidden = true;
+        document.body.classList.remove('filters-open');
+        setMenuCartSuspended(false);
         hideOverlay(FILTERS_KEY);
         unlockScroll(FILTERS_KEY);
+        const target = filtersReturnFocus?.isConnected && !filtersReturnFocus.closest('[inert]')
+          ? filtersReturnFocus : $('#cart-drawer[aria-hidden="false"] #cart-close-btn') || menuBtn;
+        target?.focus({ preventScroll: true });
+        filtersReturnFocus = null;
       }
     }, FILTERS_TRANSITION_MS);
   }
 
   if (filtersPanel) {
+    window.addEventListener('resize', updateMenuViewport);
+    window.visualViewport?.addEventListener('resize', updateMenuViewport);
+    window.visualViewport?.addEventListener('scroll', updateMenuViewport);
     const categoryList = filtersPanel.querySelector('.black-menu__list');
     let categoryRequest = 0;
     let categorySignature = '';
     const refreshCategories = async () => {
       if (!categoryList || typeof API.getAllCategories !== 'function') return;
       const version = ++categoryRequest;
-      const selected = new Set([...categoryList.querySelectorAll('[data-store-category]:checked')].map(input => input.value));
       const requestedSlug = new URL(location.href).searchParams.get('categorySlug');
-      if (requestedSlug) selected.add(requestedSlug);
       try {
         const categories = await API.getAllCategories();
         if (version !== categoryRequest) return;
@@ -273,23 +365,22 @@
         const signature = JSON.stringify(visible);
         if (signature === categorySignature && categoryList.querySelector('#storeCategoryFilters') && (!requestedSlug || visible.some(category => category.slug === requestedSlug))) return;
         categorySignature = signature;
-        if (categoryList.querySelector('#storeCategoryFilters')) {
-          selected.clear(); categoryList.querySelectorAll('[data-store-category]:checked').forEach(input => selected.add(input.value));
-        }
+        const selectedSlug = categoryList.querySelector('[data-store-category]:checked')?.value ?? requestedSlug ?? '';
+        const activeSlug = visible.some(category => category.slug === selectedSlug) ? selectedSlug : '';
         const form = document.createElement('form'); form.id = 'storeCategoryFilters';
         form.addEventListener('submit', event => event.preventDefault());
-        for (const category of visible) {
+        for (const category of [{ name: 'Todos', slug: '' }, ...visible]) {
           const isStoreFilter = !!document.getElementById('productsGrid');
           const row = document.createElement(isStoreFilter ? 'label' : 'div'); row.className = 'black-menu__category-row';
           const link = document.createElement(isStoreFilter ? 'span' : 'a'); link.className = 'black-menu__link'; link.textContent = category.name;
           if (!isStoreFilter) {
-            link.href = '/tienda?categorySlug=' + encodeURIComponent(category.slug) + '#store';
+            link.href = category.slug ? '/tienda?categorySlug=' + encodeURIComponent(category.slug) + '#store' : '/tienda#store';
             if (requestedSlug === category.slug) link.setAttribute('aria-current','page');
           }
           if (isStoreFilter) {
-            const input = document.createElement('input'); input.type = 'checkbox'; input.value = category.slug;
+            const input = document.createElement('input'); input.type = 'radio'; input.name = 'store-category'; input.value = category.slug;
             input.dataset.storeCategory = ''; input.dataset.publicCategoryGroup = category.group || 'UNCLASSIFIED';
-            input.checked = selected.has(category.slug); input.setAttribute('aria-label', `Filtrar por ${category.name}`); row.append(input);
+            input.checked = activeSlug === category.slug; input.setAttribute('aria-label', `Filtrar por ${category.name}`); row.append(input);
           }
           row.append(link); form.append(row);
         }
@@ -319,17 +410,10 @@
       discover.textContent = 'DESCUBRE CRONOX';
       discover.addEventListener('click', () => {
         closeFilters();
-        filtersPanel.hidden = true;
-        hideOverlay(FILTERS_KEY);
-        unlockScroll(FILTERS_KEY);
       });
       filtersPanel.append(discover);
     }
     document.addEventListener('click', (e) => {
-      if (e.target.closest('[data-open-filters]')) {
-        e.preventDefault();
-        openFilters();
-      }
       if (e.target.closest('[data-close-filters]')) {
         e.preventDefault();
         closeFilters();
@@ -337,16 +421,27 @@
     });
 
     document.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape' && isFiltersOpen()) closeFilters();
+      if (!isFiltersOpen()) return;
+      if (e.key === 'Escape') { e.preventDefault(); e.stopImmediatePropagation(); closeFilters(); return; }
+      if (e.key !== 'Tab') return;
+      const focusable = $$('a[href], button:not([disabled]), input:not([disabled])', filtersPanel)
+        .filter(element => !element.hidden && element.getClientRects().length);
+      const first = focusable[0], last = focusable[focusable.length - 1];
+      if (e.shiftKey && (document.activeElement === first || !filtersPanel.contains(document.activeElement))) {
+        e.preventDefault(); last?.focus();
+      } else if (!e.shiftKey && (document.activeElement === last || !filtersPanel.contains(document.activeElement))) {
+        e.preventDefault(); first?.focus();
+      }
     });
 
     menuBtn?.addEventListener('click', (e) => {
       e.preventDefault();
-      isFiltersOpen() ? closeFilters() : openFilters();
+      isFiltersOpen() ? closeFilters() : openFilters(menuBtn);
     });
 
     filtersCloseBtn?.addEventListener('click', (e) => {
       e.preventDefault();
+      e.stopPropagation();
       closeFilters();
     });
 
@@ -357,9 +452,6 @@
       if (link) {
         closeFilters();
         return;
-      }
-      if (!list.contains(e.target) && !e.target.closest('.filters-close')) {
-        closeFilters();
       }
     });
   }
@@ -1282,6 +1374,10 @@
   const freeShippingBarFill = $('#free-shipping-bar-fill');
   const cartUpsellList = $('#cart-upsell-list');
   const cartUpsellSection = $('#cart-upsell-section');
+  const cartUpsellViews = [
+    ...(cartUpsellList && cartUpsellSection ? [{ list: cartUpsellList, section: cartUpsellSection }] : []),
+    ...$$('[data-cart-recommendations]').map(section => ({ section, list: section.querySelector('[data-cart-recommendation-list]') })).filter(view => view.list),
+  ];
   const cartDelivery = cartDrawerEl ? document.createElement('p') : null;
   if (cartDelivery && cartItemsContainer) {
     cartDelivery.className = 'pdp__delivery cart-delivery';
@@ -1342,7 +1438,7 @@
   const setCartBackgroundInert = (isOpen) => {
     if (isOpen) {
       for (const element of document.body.children) {
-        if (element === cartOverlayEl || element === cartDrawerEl || cartBackgroundInert.has(element)) continue;
+        if (element === cartOverlayEl || element === cartDrawerEl || element === filtersPanel || element === overlay || cartBackgroundInert.has(element)) continue;
         cartBackgroundInert.set(element, element.inert);
         element.inert = true;
       }
@@ -1378,7 +1474,8 @@
         cartDrawerEl.classList.add('is-visible');
       });
       lockScroll(CART_LOCK_KEY);
-      cartCloseBtn?.focus({ preventScroll: true });
+      if (isFiltersOpen()) { setMenuCartSuspended(true); filtersCloseBtn?.focus({ preventScroll: true }); }
+      else cartCloseBtn?.focus({ preventScroll: true });
     } else {
       cartOverlayEl.classList.remove('is-visible');
       cartDrawerEl.classList.remove('is-visible');
@@ -1399,11 +1496,42 @@
     toggleDrawer(false);
   };
 
+  let cartCatalogLoad = null;
+  const ensureCartCatalog = () => {
+    if (cartCatalogLoad) return cartCatalogLoad;
+    const loadScript = (src) => new Promise((resolve, reject) => {
+      let script = Array.from(document.scripts).find(node => new URL(node.src, location.href).pathname === new URL(src, location.href).pathname);
+      const existing = Boolean(script);
+      if (!script) { script = document.createElement('script'); script.src = src; }
+      script.addEventListener('load', resolve, { once: true });
+      script.addEventListener('error', () => {
+        if (!existing) script.remove();
+        reject(new Error('No se pudo cargar el catálogo de recomendaciones'));
+      }, { once: true });
+      if (!existing) document.head.append(script);
+    });
+    cartCatalogLoad = (async () => {
+      if (typeof window.CRONOX_openQuickAdd !== 'function') {
+        for (const href of ['/assets/quick-add.css?v=11']) {
+          if (!Array.from(document.querySelectorAll('link[rel="stylesheet"]')).some(link => new URL(link.href).pathname === new URL(href, location.href).pathname)) {
+            const style = document.createElement('link'); style.rel = 'stylesheet'; style.href = href; document.head.append(style);
+          }
+        }
+        if (!window.CRONOX_IMAGES) await loadScript('/assets/responsive-images.js?v=4');
+        await loadScript('/assets/products.js?v=72');
+      }
+      await window.CRONOX_FULL_CATALOG.load();
+      renderUpsell(cartState.data);
+    })().finally(() => { cartCatalogLoad = null; });
+    return cartCatalogLoad;
+  };
+
   const openCartDrawer = async () => {
     toggleDrawer(true);
     const panel = cartDrawerEl?.querySelector('.cart-drawer__panel');
     if (panel) panel.scrollTop = 0;
     renderCartDrawer(cartState.data);
+    ensureCartCatalog().catch(() => { /* Reopening retries unavailable recommendation assets. */ });
     try { await fetchCart(); } catch { /* The shared error state provides retry. */ }
   };
 
@@ -1423,7 +1551,7 @@
   };
 
   const getUpsellCandidates = (cart) => {
-    const catalog = Array.isArray(window.CRONOX_PRODUCTS) ? window.CRONOX_PRODUCTS : [];
+    const catalog = window.CRONOX_FULL_CATALOG.products;
     if (!catalog.length) return [];
     const cartIds = new Set((cart?.items || []).map((it) => String(it.product?.id)));
     return catalog.filter((p) => !cartIds.has(String(p.backendId || p.id)) &&
@@ -1431,21 +1559,21 @@
   };
 
   const renderUpsell = (cart) => {
-    if (!cartUpsellList || !cartUpsellSection) return;
+    if (!cartUpsellViews.length) return;
     const candidates = getUpsellCandidates(cart);
     const signature = JSON.stringify(candidates);
     if (signature === renderedUpsell) {
-      cartUpsellSection.hidden = !candidates.length;
+      cartUpsellViews.forEach(view => { view.section.hidden = !candidates.length; });
       return;
     }
     renderedUpsell = signature;
     upsellProducts.clear();
-    cartUpsellList.innerHTML = '';
+    cartUpsellViews.forEach(view => { view.list.replaceChildren(); });
     if (!candidates.length) {
-      cartUpsellSection.hidden = true;
+      cartUpsellViews.forEach(view => { view.section.hidden = true; });
       return;
     }
-    cartUpsellSection.hidden = false;
+    cartUpsellViews.forEach(view => { view.section.hidden = false; });
     const frag = document.createDocumentFragment();
     candidates.forEach((product) => {
       const productKey = String(product.slug || product.backendId || product.id || '');
@@ -1472,11 +1600,6 @@
           <span class="cart-upsell__add-icon" aria-hidden="true">+</span>
         </button>
       `;
-      window.CRONOX_IMAGES?.applyProduct(
-        card.querySelector('.cart-upsell__image-frame img'),
-        product,
-        'recommendation',
-      );
       if (window.CRONOX_STOCK?.hasLastUnits(product.variants, product.lastUnitsThreshold)) {
         const warning = document.createElement('span');
         warning.className = 'cart-upsell__last-units';
@@ -1485,8 +1608,14 @@
       }
       frag.appendChild(card);
     });
-    cartUpsellList.appendChild(frag);
+    cartUpsellViews.forEach(view => {
+      view.list.appendChild(frag.cloneNode(true));
+      view.list.querySelectorAll('.cart-upsell__item').forEach(card => {
+        window.CRONOX_IMAGES?.applyProduct(card.querySelector('img'), upsellProducts.get(card.dataset.upsellProduct), 'recommendation');
+      });
+    });
   };
+  window.addEventListener('cronox:fullCatalogLoaded', () => renderUpsell(cartState.data));
 
   const getCartItemImage = (item) => {
     const canonical = window.CRONOX_IMAGES?.resolveProduct(item, 'cart');
@@ -1889,7 +2018,7 @@
       qtyInput.dispatchEvent(new Event('change', { bubbles: true }));
     });
 
-    cartUpsellList?.addEventListener('click', (ev) => {
+    cartUpsellViews.forEach(view => view.list.addEventListener('click', (ev) => {
       const addButton = ev.target.closest('.cart-upsell__add');
       if (!addButton) return;
       ev.preventDefault();
@@ -1900,7 +2029,7 @@
       if (product && typeof window.CRONOX_openQuickAdd === 'function') {
         window.CRONOX_openQuickAdd(product);
       }
-    });
+    }));
 
     const cartIcon = cartTopbarIcon || document.getElementById('cart-icon-btn');
     if (cartIcon) {
@@ -1911,7 +2040,7 @@
     }
 
     document.addEventListener('keydown', (ev) => {
-      if (!cartState.drawerOpen) return;
+      if (!cartState.drawerOpen || isFiltersOpen()) return;
       if (document.getElementById('quickAdd')?.getAttribute('aria-hidden') === 'false') return;
       if (ev.key === 'Escape') {
         ev.preventDefault();
@@ -1937,6 +2066,7 @@
       }
     }, true);
     document.addEventListener('focusin', (ev) => {
+      if (isFiltersOpen()) return;
       if (document.getElementById('quickAdd')?.getAttribute('aria-hidden') === 'false') return;
       if (cartState.drawerOpen && !cartDrawerEl.contains(ev.target)) {
         cartCloseBtn?.focus({ preventScroll: true });
@@ -2004,6 +2134,7 @@
       window.CRONOX_CART_READY.catch(() => undefined);
     }
     initCartDrawer();
+    if (document.getElementById('cartMain')) ensureCartCatalog().catch(() => undefined);
   };
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', startCart, { once: true });
   else startCart();
@@ -2713,7 +2844,7 @@ window.CRONOX_AUTH_STATE = window.CRONOX_USER ? 'authenticated' : 'unknown';
 
   const hasBlockingModal = () => Boolean(
     document.querySelector('#authOverlay.is-open, .cronox-consent:not([hidden]), .cronox-consent-panel:not([hidden])') ||
-    document.body?.classList.contains('cart-open')
+    document.body?.classList.contains('cart-open') || document.body?.classList.contains('filters-open')
   );
 
   const openNewsletterModal = ({ manual = false } = {}) => {

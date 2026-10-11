@@ -16,7 +16,7 @@ const appScript = readFrontend('assets/app.js');
 
 const expectedDrawerPages = [
   'aviso-legal.html',
-  'cart.html',
+  'checkout.html',
   'cookie-policy.html',
   'develop.html',
   'events.html',
@@ -39,7 +39,7 @@ const getDrawerPages = () =>
     .filter((file) => {
       const html = readFrontend(file);
       return (
-        html.includes('id="filtersPanel"') ||
+        html.includes('id="btnMenu"') ||
         html.includes('assets/info-shell.js')
       );
     })
@@ -112,8 +112,9 @@ describe('CRONOX gallery page', () => {
         (link) => link.getAttribute('href') === '/galeria',
       );
       expect(galleryLinks).toHaveLength(0);
-      expect(links).toHaveLength(5);
-      expect(links.every((link) => link.href.includes('categorySlug='))).toBe(true);
+      expect(links).toHaveLength(6);
+      expect(links[0].getAttribute('href')).toBe('/tienda#store');
+      expect(links.slice(1).every((link) => link.href.includes('categorySlug='))).toBe(true);
       await new Promise(resolve => setTimeout(resolve, 0));
       dom.window.close();
     }

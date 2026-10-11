@@ -37,12 +37,14 @@ describe('Quick Add size messages and shared delivery', () => {
     const normal = { ...product(0), id: 11, backendId: 11, slug: 'normal', lastUnitsThreshold: 0 };
     const out = { ...product(2, 2), id: 12, backendId: 12, slug: 'out', lastUnitsThreshold: null };
     app.CRONOX_PRODUCTS = [out, low, normal];
+    app.CRONOX_API.getProductsPage = async () => ({ products: [out, low, normal], meta: { pageCount: 1 } });
     const cart = { items: [{ id: 1, variantId: 5, qty: 1, product: { id: 9, name: 'Cart low', lastUnitsThreshold: 5 }, priceCents: 2000 }], subtotalCents: 2000, itemsCount: 1 };
     app.CRONOX_API.getCart = async () => cart;
     app.CRONOX_API.getMe = async () => null;
     app.CRONOX_API.getFavorites = async () => [];
     app.fetch = async () => ({ ok: true, json: async () => [], text: async () => read('auth-modal.html') });
     app.eval(read('assets/app.js'));
+    await app.CRONOX_FULL_CATALOG.load();
     await app.CRONOX_CART.fetchCart();
     const document = dom.window.document;
     expect(document.querySelectorAll('.cart-line')).toHaveLength(1);

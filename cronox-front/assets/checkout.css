@@ -90,6 +90,7 @@ body.page-checkout summary:focus-visible {
   width: clamp(136px, 13vw, 180px);
   transform: translateX(-50%);
 }
+.checkout-brandbar .checkout-menu{position:fixed;top:max(10px,env(safe-area-inset-top));left:max(14px,env(safe-area-inset-left));z-index:1001;}
 
 .checkout-brand img {
   display: block;

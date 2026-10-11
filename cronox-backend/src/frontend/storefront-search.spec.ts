@@ -87,7 +87,7 @@ describe('storefront search contracts', () => {
     expect(products).toContain('loadSearchResults(activeSearchQuery)');
     expect(products).toContain('loadSearchResults(query)');
     expect(products).toContain(
-      'currentApi.getCategoryProducts(initialCategorySlug, {',
+      'currentApi.getCategoryProducts(requestedCategorySlug, {',
     );
     expect(products).toContain('setProducts(result.products)');
     expect(products).toContain('applyAll()');

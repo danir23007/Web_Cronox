@@ -42,7 +42,7 @@ describe('storefront image, cart and footer corrections', () => {
     expect(read('assets/checkout.js')).toContain('CRONOX_IMAGES?.applyProduct');
   });
 
-  it('layers the full-viewport cart above topbar, search and filters without changing topbar state', () => {
+  it('layers cart above topbar and search while allowing navigation above cart', () => {
     expect(rule(storeCss, '.cart-overlay')).toMatch(
       /position:\s*fixed;[\s\S]*inset:\s*0;/,
     );
@@ -51,6 +51,7 @@ describe('storefront image, cart and footer corrections', () => {
       /top:\s*var\(--cart-viewport-top,\s*0px\);[\s\S]*height:\s*100dvh;/,
     );
     expect(rule(storeCss, '.cart-drawer')).toMatch(/z-index:\s*1901;/);
+    expect(rule(storeCss, '.black-menu')).toMatch(/z-index:\s*2101;/);
     expect(storeCss).not.toContain('.topbar--cart-open');
     expect(storeCss).not.toContain('.cart-open .topbar');
     expect(storeCss).toContain(

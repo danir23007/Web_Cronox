@@ -109,14 +109,17 @@ describe('dynamic category group ordering', () => {
     app.eval(read('assets/app.js'));
     await app.CRONOX_STORE_CATEGORIES.ready;
     const names = () => [...document.querySelectorAll('#storeCategoryFilters .black-menu__link')].map(node => node.textContent);
-    expect(names()).toEqual(['Estrenos renombrados', 'Álbum', 'Colección verano', 'camisetas', 'zapatos', 'D sin clasificar']);
+    expect(names()).toEqual(['Todos', 'Estrenos renombrados', 'Álbum', 'Colección verano', 'camisetas', 'zapatos', 'D sin clasificar']);
+    expect(document.querySelectorAll('[data-store-category]:checked')).toHaveLength(1);
     const selected = document.querySelector<HTMLInputElement>('[value="camisetas"]')!;
     selected.checked = true;
     categories = categories.map(c => c.group === 'NEW' ? { ...c, showInStoreFilters: false } : c)
       .concat({ name: 'abrigo', slug: 'abrigo', group: 'GARMENT' });
     await app.CRONOX_STORE_CATEGORIES.refresh();
-    expect(names()).toEqual(['Álbum', 'Colección verano', 'abrigo', 'camisetas', 'zapatos', 'D sin clasificar']);
+    expect(names()).toEqual(['Todos', 'Álbum', 'Colección verano', 'abrigo', 'camisetas', 'zapatos', 'D sin clasificar']);
     expect(document.querySelector<HTMLInputElement>('[value="camisetas"]')!.checked).toBe(true);
+    expect(document.querySelectorAll('[data-store-category]:checked')).toHaveLength(1);
+    expect(document.querySelector<HTMLInputElement>('[value="camisetas"]')!.type).toBe('radio');
     expect(document.querySelector('[value="camisetas"]')!.parentElement!.tagName).toBe('LABEL');
     dom.window.close();
   });

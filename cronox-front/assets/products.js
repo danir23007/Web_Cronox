@@ -175,10 +175,17 @@
     .trim()
     .replace(/\s+/g, " ")
     .slice(0, 100);
-  let categorySlugRaw = (url.searchParams.get("categorySlug") || "").trim().toLowerCase();
+  let categorySlugRaw = productsGrid ? (url.searchParams.get("categorySlug") || "").trim().toLowerCase() : "";
   let initialCategorySlug = /^[a-z0-9#-]+$/.test(categorySlugRaw) ? categorySlugRaw : "";
-  let activeSearchQuery = initialQueryRaw;
-  if (searchInput && initialQueryRaw) searchInput.value = initialQueryRaw;
+  let activeSearchQuery = productsGrid ? initialQueryRaw : "";
+  // A category URL represents one navigation choice, even with repeated parameters.
+  if (categorySlugRaw) {
+    url.searchParams.set('categorySlug', categorySlugRaw);
+    url.searchParams.delete('search'); url.searchParams.delete('q');
+    activeSearchQuery = '';
+    history.replaceState(null, '', url);
+  }
+  if (searchInput) searchInput.value = activeSearchQuery;
   if (initialCategorySlug) {
     document.querySelectorAll(".black-menu__link").forEach((link) => {
       try {
@@ -967,15 +974,13 @@
 
   // ---- Filtros + Búsqueda ----
   function getActiveFilters() {
-    const f = { cat: [], size: [], color: [], groups: [] };
+    const f = { cat: [], size: [], color: [], category: '' };
     if (!filtersForm) return f;
 
     f.cat = Array.from(filtersForm.querySelectorAll('input[name="cat"]:checked')).map(el => norm(el.value));
     f.size = Array.from(filtersForm.querySelectorAll('input[name="size"]:checked')).map(el => norm(el.value));
     f.color= Array.from(filtersForm.querySelectorAll('input[name="color"]:checked')).map(el => norm(el.value));
-    const groups = new Map();
-    filtersForm.querySelectorAll('[data-store-category]:checked').forEach(input => { const group = input.dataset.publicCategoryGroup; if (!groups.has(group)) groups.set(group, []); groups.get(group).push(norm(input.value)); });
-    f.groups = [...groups.values()];
+    f.category = norm(filtersForm.querySelector('[data-store-category]:checked')?.value);
     return f;
   }
 
@@ -984,7 +989,9 @@
     if (f.cat.length)  { if (!(p.categories||[]).some(c=>f.cat.includes(norm(c)))) return false; }
     if (f.size.length) { if (!(p.sizes||[]).some(s=>f.size.includes(norm(s)))) return false; }
     if (f.color.length){ if (!f.color || !f.color.includes(norm(p.color))) return false; }
-    if (f.groups.some(group => !(p.categories || []).some(category => group.includes(norm(category))))) return false;
+    // Category API is authoritative (including its product order and membership).
+    if (f.category && f.category !== initialCategorySlug &&
+        !(p.categories || []).some(category => norm(category) === f.category)) return false;
     return true;
   }
 
@@ -1072,6 +1079,7 @@
 
   async function loadCatalog() {
     const currentApi = window.CRONOX_API || API;
+    const requestedCategorySlug = initialCategorySlug;
     if (categorySlugRaw && !initialCategorySlug) {
       const error = new Error("El identificador de categoría no es válido");
       error.status = 400;
@@ -1101,7 +1109,7 @@
         let response = null;
         const categoryProducts = [];
         do {
-          response = await loadWithRetry(() => currentApi.getCategoryProducts(initialCategorySlug, {
+          response = await loadWithRetry(() => currentApi.getCategoryProducts(requestedCategorySlug, {
             page,
             limit: 100,
           }));
@@ -1133,7 +1141,9 @@
 
     try {
       const query = { limit: 48 };
-      const raw = await loadWithRetry(() => currentApi.getProducts(query));
+      const raw = await loadWithRetry(() => window.CRONOX_FULL_CATALOG
+        ? window.CRONOX_FULL_CATALOG.load()
+        : currentApi.getProducts(query));
       if (!Array.isArray(raw)) throw new Error("CATALOG_MALFORMED");
       if (raw.some((item) => !item || typeof item !== "object" ||
         (item.backendId == null && item.id == null) ||
@@ -1186,6 +1196,7 @@
         ? "Esta categoría no existe o no está disponible."
         : "No se pudo cargar esta categoría. Comprueba tu conexión e inténtalo de nuevo.";
     } else {
+      if (productsGrid && storeHeading) storeHeading.textContent = 'NOVEDADES';
       catalogEmptyMessage = error
         ? "No hemos podido cargar los productos. Inténtalo de nuevo."
         : "No hay productos que mostrar.";
@@ -1211,6 +1222,7 @@
     if (!query || !productsGrid) return;
     activeSearchQuery = query;
     initialCategorySlug = ''; categorySlugRaw = '';
+    syncCategorySelection('');
     const requestId = ++catalogRequestId;
 
     const nextUrl = new URL(window.location.href);
@@ -1238,9 +1250,10 @@
           : `Resultados para “${query}”`;
       }
       setProducts(result.products);
-      filtersForm?.querySelectorAll('input[type="checkbox"]:checked').forEach((input) => {
+      filtersForm?.querySelectorAll('input[type="checkbox"]:checked, [data-store-category]:checked').forEach((input) => {
         input.checked = false;
       });
+      syncCategorySelection('');
       applyAll();
       notifyCatalogReady('search-api', requestedAt);
     } catch (error) {
@@ -1256,23 +1269,40 @@
   };
 
   if (productsGrid) window.CRONOX_handleStoreSearch = performFullSearch;
-  const clearInitialCategory = () => {
-    initialCategorySlug = ''; categorySlugRaw = ''; catalogRequestId++;
-    const next = new URL(location.href); next.searchParams.delete('categorySlug'); history.replaceState(null,'',next);
-    if (storeHeading) storeHeading.textContent = 'NOVEDADES';
-    const pending = catalogInFlight;
-    if (pending) void pending.finally(() => initCatalog()); else void initCatalog();
+  function syncCategorySelection(slug) {
+    filtersForm?.querySelectorAll('[data-store-category]').forEach(input => {
+      input.checked = input.value === slug;
+    });
+  }
+  const selectStoreCategory = (slug) => {
+    initialCategorySlug = slug; categorySlugRaw = slug; activeSearchQuery = '';
+    if (searchInput) searchInput.value = '';
+    syncCategorySelection(slug);
+    const next = new URL(location.href);
+    next.searchParams.delete('search'); next.searchParams.delete('q');
+    if (slug) next.searchParams.set('categorySlug', slug); else next.searchParams.delete('categorySlug');
+    history.replaceState(null, '', next);
+    // Invalidate earlier responses immediately when navigating rapidly.
+    productsGrid?.replaceChildren();
+    setProducts([]);
+    window.CRONOX_catalogReady = runCatalogLoad(++catalogRequestId);
   };
-  document.getElementById('filtersPanel')?.addEventListener('change', () => {
+  document.getElementById('filtersPanel')?.addEventListener('change', event => {
     filtersForm = document.getElementById('storeCategoryFilters') || filtersForm;
-    if (initialCategorySlug && ![...filtersForm.querySelectorAll('[data-store-category]:checked')].some(input => input.value === initialCategorySlug)) clearInitialCategory();
+    if (event.target.matches('[data-store-category]')) selectStoreCategory(event.target.value);
     else applyAll();
+  });
+  document.getElementById('filtersPanel')?.addEventListener('click', event => {
+    // Todos also exits a search even though its radio is already checked.
+    if (activeSearchQuery && event.target.matches('[data-store-category]') && !event.target.value) {
+      selectStoreCategory('');
+    }
   });
   window.addEventListener('cronox:store-categories', event => {
     filtersForm = document.getElementById('storeCategoryFilters');
     if (event.detail?.clearInitialSlug && initialCategorySlug) {
-      clearInitialCategory();
-    } else applyAll();
+      selectStoreCategory('');
+    } else { syncCategorySelection(initialCategorySlug); applyAll(); }
   });
 
   // ---- Eventos búsqueda/filtros ----
@@ -1282,7 +1312,7 @@
   if (btnClearFilters && filtersForm) {
     btnClearFilters.addEventListener("click", () => {
       filtersForm.querySelectorAll('input[type="checkbox"]').forEach(chk => (chk.checked = false));
-      applyAll();
+      selectStoreCategory('');
     });
   }
 })();

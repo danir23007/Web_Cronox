@@ -193,7 +193,7 @@
       if (!API || typeof API.getProducts !== "function") {
         throw new Error("Cliente API no disponible");
       }
-      const raw = await API.getProducts();
+      const raw = await (window.CRONOX_FULL_CATALOG ? window.CRONOX_FULL_CATALOG.load() : API.getProducts());
       const adapted = adaptCatalog(raw);
       setProducts(adapted);
       return PRODUCTS;

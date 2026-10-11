@@ -59,11 +59,11 @@ describe('Stripe frontend runtime configuration', () => {
     expect(checkoutHtml).not.toContain('checkout__head');
     expect(checkoutHtml).not.toContain('checkout-step__number');
     expect(checkoutHtml).not.toContain('class="topbar');
-    expect(checkoutHtml).not.toContain('id="btnMenu"');
+    expect(checkoutHtml).toContain('id="btnMenu"');
     expect(checkoutHtml).not.toContain('id="btnSearch"');
   });
 
-  it('uses the existing linked logo and an unbadged cart icon as the only top navigation', () => {
+  it('uses the existing linked logo and an unbadged cart icon beside the shared menu opener', () => {
     expect(checkoutHtml).toMatch(
       /<a href="\/" class="checkout-brand"[\s\S]*?<img src="assets\/logo_banner\.png"/,
     );

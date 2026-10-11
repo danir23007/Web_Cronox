@@ -162,8 +162,9 @@ describe('CRONOX responsive design system', () => {
       /@media \(max-width:520px\)[\s\S]*?\.topbar\{[^}]*grid-template-columns:minmax\(0,1fr\) auto minmax\(0,1fr\);[^}]*padding-right:max\(12px,env\(safe-area-inset-right\)\);[^}]*padding-left:max\(12px,env\(safe-area-inset-left\)\);/,
     );
     expect(storeStyles).toMatch(
-      /\.black-menu\{[^}]*height:100vh;[^}]*height:100dvh;[^}]*max-width:100%;[^}]*overflow-y:auto;/,
+      /\.black-menu\{[^}]*height:100vh;[^}]*height:100dvh;[^}]*max-width:100%;[^}]*overflow:hidden;/,
     );
+    expect(storeStyles).toMatch(/\.black-menu \.black-menu__list\{[^}]*min-height:0;[^}]*overflow-y:auto;[^}]*overflow-x:hidden;/);
     expect(storeStyles).toMatch(
       /\.search-suggestions\{right:auto;width:min\(100%,calc\(100vw - 24px\)\);[^}]*max-height:65dvh/,
     );

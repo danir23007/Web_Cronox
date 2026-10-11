@@ -10,13 +10,16 @@ describe('product category frontend contracts', () => {
   const storefrontPages = [
     'index.html',
     'producto.html',
-    'cart.html',
+    'checkout.html',
     'favorites.html',
     'profile.html',
   ];
 
-  it.each(storefrontPages)('%s has all five real category links', (file) => {
+  it.each(storefrontPages)('%s uses the shared category navigation', (file) => {
     const html = readFrontend(file);
+    expect(html).toContain('id="btnMenu"');
+    expect(html).not.toContain('<aside id="filtersPanel"');
+    const shared = readFrontend('assets/app.js');
     for (const slug of [
       'novedades',
       'camisetas',
@@ -24,14 +27,17 @@ describe('product category frontend contracts', () => {
       'pantalones',
       'complementos',
     ]) {
-      expect(html).toContain(`/tienda?categorySlug=${slug}#store`);
+      expect(shared).toContain(`/tienda?categorySlug=${slug}#store`);
     }
   });
 
-  it('keeps category navigation out of the focused checkout header', () => {
+  it('keeps category navigation out of the cart page while preserving the shared checkout opener', () => {
+    const cart = readFrontend('cart.html');
+    expect(cart).not.toContain('id="btnMenu"');
+    expect(cart).not.toContain('id="filtersPanel"');
     const html = readFrontend('checkout.html');
     expect(html).not.toContain('categorySlug=');
-    expect(html).not.toContain('id="btnMenu"');
+    expect(html).toContain('id="btnMenu"');
     expect(html).toContain('class="checkout-brand"');
     expect(html).toContain('id="cart-icon-btn"');
   });
@@ -41,7 +47,7 @@ describe('product category frontend contracts', () => {
     const apiSource = readFrontend('src/admin/api.ts');
 
     expect(products).toContain(
-      'currentApi.getCategoryProducts(initialCategorySlug',
+      'currentApi.getCategoryProducts(requestedCategorySlug',
     );
     expect(products).toContain('currentApi.getProducts(query)');
     expect(products).toContain(

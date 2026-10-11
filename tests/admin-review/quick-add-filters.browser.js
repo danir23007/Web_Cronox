@@ -16,13 +16,16 @@ async page => {
     const reject = page.getByRole('button', { name: 'RECHAZAR', exact: true });
     if (await reject.isVisible()) await reject.click();
     await page.locator('#btnMenu').click();
-    await page.waitForFunction(() => document.querySelectorAll('[data-store-category]').length === 6);
+    await page.waitForFunction(() => document.querySelectorAll('[data-store-category]').length === 7);
     const labels = await page.locator('#storeCategoryFilters .black-menu__link').allTextContents();
-    assert(labels.join('|') === 'Novedades|D#01|Camisetas|Chaquetas|Complementos|Pantalones', 'Group order: ' + labels);
+    assert(labels.join('|') === 'Todos|Novedades|D#01|Camisetas|Chaquetas|Complementos|Pantalones', 'Group order: ' + labels);
     const row = page.locator('label.black-menu__category-row').filter({ has: page.locator('[value="camisetas"]') });
     await row.click();
     await page.waitForFunction(() => document.querySelectorAll('#productsGrid .product-card').length === 4);
     await row.locator('input').focus(); await page.keyboard.press('Space');
+    assert(await row.locator('input').isChecked(), 'Active category remains selected');
+    assert(await page.locator('#productsGrid .product-card').count() === 4, 'Active category keeps its products');
+    await page.locator('label.black-menu__category-row').filter({ has: page.locator('[data-store-category][value=""]') }).click();
     await page.waitForFunction(() => document.querySelectorAll('#productsGrid .product-card').length === 7);
     await page.keyboard.press('Escape');
 
