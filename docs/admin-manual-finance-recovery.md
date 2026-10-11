@@ -14,22 +14,24 @@ Un reembolso monetario no devuelve por sí solo el coste. Se devuelve el coste d
 
 ## Compras existentes examinadas
 
-Inspección de la fuente configurada realizada el 11 de octubre de 2026, mediante una transacción explícitamente de solo lectura. No se cambiaron datos, stock, pedidos ni cobros.
+Inspección previa de la fuente configurada realizada el 11 de octubre de 2026, mediante una transacción explícitamente de solo lectura. Después, con autorización expresa para publicar y recuperar, se aplicó la recuperación descrita en [el resultado de producción](admin-manual-finance-production-release.md).
 
 | Pedido | Líneas | Productos | Fecha de compra |
 | --- | --- | --- | --- |
 | 19 | 24, 25, 26, 27, 28, 29, 30 | 2, 1, 5, 3, 4, 10001, 10002 | 23/09/2026 |
 | 20 | 31 | 10002 | 23/09/2026 |
 
-Las ocho líneas (nueve unidades) tienen coste desconocido en `FinanceArchive`, `OrderItemFinancial` y las revisiones guardadas. Todas tienen coste configurado en `ProductCost`, actualizado el **07/10/2026**. Según la regla manual autorizada, se han preparado las ocho recuperaciones usando esos valores, aunque las compras fueran del 23/09. **No falta ningún coste.** La línea con precio pagado cero conserva su coste y produce una pérdida, como corresponde.
+Antes de recuperar, las ocho líneas (nueve unidades) tenían coste desconocido en `FinanceArchive`, `OrderItemFinancial` y las revisiones guardadas. Todas tenían coste configurado en `ProductCost`, actualizado el **07/10/2026**. Según la regla manual autorizada, se recuperaron las ocho usando esos valores, aunque las compras fueran del 23/09. **No falta ningún coste.** La línea con precio pagado cero conserva su coste y produce una pérdida, como corresponde.
 
 Informe privado por línea, con fechas, revisión esperada y procedencia de cada valor: `test-results/manual-finance/source-review.json` (ignorado por Git). La base local no contiene estas compras. El informe no contiene datos personales de compradores ni credenciales.
 
-Plan privado preparado: `test-results/manual-finance/configured-cost-plan-19-20.json`. SQL preparado, **sin ejecutar**: `test-results/manual-finance/recovery-19-20.sql`. Desglose legible de precio pagado, cantidad, coste unitario, ingresos y beneficio por línea: `test-results/manual-finance/recovery-19-20.md`. Los archivos incluyen procedencia, fecha de inspección y revisión esperada. No contienen costes inventados ni necesitan evidencia de antigüedad.
+Plan privado revisado: `test-results/manual-finance/configured-cost-plan-19-20.json`. SQL original de referencia: `test-results/manual-finance/recovery-19-20.sql`. Desglose legible: `test-results/manual-finance/recovery-19-20.md`. La ejecución autorizada usó el mismo generador dentro de una transacción externa, con verificaciones previas y posteriores antes de confirmar. Los archivos incluyen procedencia, fecha de inspección y revisión esperada. **No repetir este plan: #19 y #20 ya están recuperados y su revisión ahora es 2.**
 
-Resultado previsto al recuperar: pedido #19, facturación de productos **215,00 €**, costes **100,25 €**, beneficio **114,75 €**; pedido #20, facturación **25,00 €**, costes **10,60 €**, beneficio **14,40 €**. Ambos siguen pagados. Estos importes son la propuesta local y todavía no están aplicados a producción.
+Resultado confirmado en producción: pedido #19, facturación de productos **215,00 €**, costes **100,25 €**, beneficio **114,75 €**; pedido #20, facturación **25,00 €**, costes **10,60 €**, beneficio **14,40 €**. Ambos siguen pagados. La copia previa está en `test-results/manual-finance/production-before-2026-10-11T20-34-53-200Z.json`; el recibo de ejecución, en `production-recovery-receipt.json` de esa misma carpeta privada.
 
 ## Procedimiento revisable, sin ejecución automática
+
+Este procedimiento sigue disponible para preparar planes nuevos. Los comandos de #19 y #20 son referencias de la preparación original; no se deben volver a aplicar. Un informe nuevo muestra las ocho líneas como `preserve`.
 
 1. Obtener un informe fresco. El comando local usa exclusivamente la configuración local validada; la variante de fuente se limita al host configurado y ejecuta la inspección en solo lectura:
 
