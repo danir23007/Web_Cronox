@@ -90,6 +90,9 @@ export class AdminManualPurchasesService {
     idempotencyKey: string | undefined,
     dto: CreateManualPurchaseDto,
   ) {
+    if (dto.stockHandling !== ManualStockHandling.DEDUCT_NOW && dto.stockHandling !== ManualStockHandling.ALREADY_ADJUSTED) {
+      throw new BadRequestException('Selecciona cómo se debe tratar el stock');
+    }
     if (dto.excludedFromStatistics !== undefined && typeof dto.excludedFromStatistics !== 'boolean') throw new BadRequestException('INVALID_STATISTICS_CHOICE');
     const key = String(idempotencyKey || '').trim();
     if (!/^[A-Za-z0-9._:-]{16,100}$/.test(key)) {

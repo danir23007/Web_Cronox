@@ -45,6 +45,8 @@ async function run() {
     try {
       await archiveSetup.connect();
       await archiveSetup.query(fs.readFileSync(path.join(backend, 'prisma/migrations/20261002120000_permanent_visitor_finance_history/migration.sql'), 'utf8'));
+      const exclusionMigration = fs.readFileSync(path.join(backend, 'prisma/migrations/20261012140000_manual_statistics_exclusion/migration.sql'), 'utf8');
+      await archiveSetup.query(exclusionMigration.slice(exclusionMigration.indexOf('CREATE OR REPLACE FUNCTION')));
     } finally { await archiveSetup.end(); }
     Object.assign(process.env, env);
     require('ts-node').register({ project: path.join(backend, 'tsconfig.json'), transpileOnly: true });
@@ -70,6 +72,12 @@ async function run() {
     };
     const paid = { paymentMethod: 'CASH', stockHandling: 'DEDUCT_NOW', purchasedAt: '2026-10-01T12:00:00.000Z',
       items: [{ variantId, quantity: 2, unitPriceCents: 2550 }, { variantId, quantity: 1, unitPriceCents: 3100 }] };
+    for (const stockHandling of [undefined, null, '', 'INVALID']) {
+      await assert.rejects(service.create(buyer.id, admin.id, 'manual-db-invalid-stock', { ...paid, stockHandling }), /Selecciona c\u00f3mo se debe tratar el stock/);
+      assert.equal(await stock(), 10); assert.equal(await prisma.order.count(), 0);
+      assert.equal(await prisma.stockMovement.count(), 0);
+    }
+    report.checks.push('Missing/invalid stock handling rejects before order or stock writes');
     const result = await service.create(buyer.id, admin.id, 'manual-db-deduct-123456', paid);
     const read = async id => prisma.order.findUniqueOrThrow({ where: { id }, include: { items: { orderBy: { id: 'asc' }, include: { financialSnapshot: true } } } });
     const saved = await read(result.order.id);
@@ -146,7 +154,7 @@ async function run() {
     assert.deepEqual((await finance.getReport(query)).totals, first.totals);
     assert.equal((await read(dated.order.id)).items[0].financialSnapshot.unitCostCents, 1500);
     report.checks.push('Backdated manual sale predating cost update freezes configured €15 cost and paid €25.50 x 2; archive, totals, chart and breakdown give €51/€21 after current cost/catalog changes and reload');
-    await prisma.order.create({ data: { userId: buyer.id, customerEmail: buyer.email, status: 'PAID', source: 'ONLINE', paidAt: now, currency: 'EUR',
+    const web = await prisma.order.create({ data: { userId: buyer.id, customerEmail: buyer.email, providerRef: 'pi_disposable_refund', status: 'PAID', source: 'ONLINE', paidAt: now, currency: 'EUR',
       subtotal: new Decimal(20), total: new Decimal(25), shippingCost: 500, taxRate: new Decimal('0.21'), taxAmount: new Decimal('3.47'),
       items: { create: { productId: product.id, variantId, title: 'Web fixture', unitPrice: new Decimal(20), quantity: 1, lineTotal: new Decimal(20),
         financialSnapshot: { create: { unitCostCents: 700, productName: 'Web fixture', imageUrl: null } } } } } });
@@ -154,6 +162,29 @@ async function run() {
     assert.equal(mixed.totals.revenueCents, 7100); assert.equal(mixed.totals.costCents, 3700); assert.equal(mixed.totals.profitCents, 3400);
     assert.equal(mixed.buckets[0].profitCents, 3400);
     report.checks.push('Mixed web/manual archived report excludes shipping, counts both historical costs and reconciles totals with chart and product breakdown');
+    const customerSpent = async expected => {
+      const detail = await new AdminUsersService(prisma).getUserById(buyer.id);
+      const list = await new AdminUsersService(prisma).listUsers({});
+      assert.equal(detail.stats.totalSpent, expected);
+      assert.equal(list.data.find(user => user.id === buyer.id).revenueCents, expected * 100);
+    };
+    await customerSpent(146); // 70 + 51 + 25, including delivery paid by the buyer.
+    for (const excluded of [true, false, true]) {
+      await service.setStatisticsExclusion(dated.order.id, admin.id, `db-exclusion-${randomUUID()}`, excluded);
+      await customerSpent(146);
+      const totals = (await finance.getReport(query)).totals;
+      assert.equal(totals.revenueCents, excluded ? 2000 : 7100);
+      assert.equal(totals.profitCents, excluded ? 1300 : 3400);
+    }
+    await service.void(dated.order.id, admin.id, 'Void excluded disposable purchase');
+    await customerSpent(95);
+    assert.equal(await stock(), 10);
+    await prisma.order.update({ where: { id: web.id }, data: { status: 'REFUNDED' } });
+    await prisma.financeEventArchive.create({ data: { id: 'disposable-full-refund', paymentIntentId: 'pi_disposable_refund', occurredAt: now,
+      snapshot: { id: 'disposable-full-refund', paymentIntentId: 'pi_disposable_refund', type: 'charge.refunded', refundCumulativeCents: 2500 } } });
+    await prisma.order.update({ where: { id: legacy.order.id }, data: { excludedFromStatistics: true } });
+    await customerSpent(70);
+    report.checks.push('Persisted list/detail spending survives exclusion toggles/reloads; general revenue/profit stays excluded; excluded cancellation and full refund net correctly');
     const { prepare } = require('./prepare-manual-finance-recovery.cjs');
     const archive = await prisma.financeArchive.findUniqueOrThrow({ where: { orderId: saved.id } });
     const review = { rows: saved.items.map(item => ({ orderId: saved.id, itemId: item.id, productId: item.productId,

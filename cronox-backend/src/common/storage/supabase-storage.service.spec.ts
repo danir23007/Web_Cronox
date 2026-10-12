@@ -57,6 +57,8 @@ describe('SupabaseStorageService', () => {
       .mockImplementation((buffer) =>
         Promise.resolve({
           format: 'png',
+          space: 'srgb', channels: 4, depth: 'uchar',
+          isProgressive: false, isPalette: false, hasProfile: false, hasAlpha: true,
           width: buffer.length >= 24 ? buffer.readUInt32BE(16) || 1 : 1,
           height: buffer.length >= 24 ? buffer.readUInt32BE(20) || 1 : 1,
           autoOrient: {
@@ -73,6 +75,8 @@ describe('SupabaseStorageService', () => {
       .mockImplementation((buffer) =>
         Promise.resolve({
           format: 'png',
+          space: 'srgb', channels: 4, depth: 'uchar',
+          isProgressive: false, isPalette: false, hasProfile: false, hasAlpha: true,
           width: buffer.length >= 24 ? buffer.readUInt32BE(16) || 1 : 1,
           height: buffer.length >= 24 ? buffer.readUInt32BE(20) || 1 : 1,
           autoOrient: {
@@ -570,11 +574,7 @@ describe('SupabaseStorageService', () => {
         const url = typeof input === 'string' ? input : input.toString();
         calls.push({ url, init });
         if (!init) {
-          return Promise.resolve({
-            ok: true,
-            status: 200,
-            arrayBuffer: async () => buffer,
-          } as Response);
+          return Promise.resolve(new Response(Uint8Array.from(buffer).buffer, { status: 200 }));
         }
         const uploads = calls.filter((call) => call.init?.method === 'POST');
         return Promise.resolve({

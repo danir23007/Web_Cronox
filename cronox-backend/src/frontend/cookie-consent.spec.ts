@@ -55,7 +55,7 @@ class StorageMock {
   }
 }
 
-const createConsentRuntime = (initialConsent?: Record<string, unknown>) => {
+const createConsentRuntime = (initialConsent?: Partial<ConsentRecord>) => {
   const cookies = new Map<string, string>();
   if (initialConsent) {
     cookies.set('cronox_cookie_consent', JSON.stringify(initialConsent));

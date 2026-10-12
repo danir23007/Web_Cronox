@@ -12,6 +12,7 @@ describe('public HTML Key Screen gate', () => {
     validateToken: (
       accessToken?: string,
       refreshToken?: string,
+      res?: express.Response,
     ) => boolean | Promise<boolean> = () => false,
   ) => {
     const app = express();
@@ -23,7 +24,11 @@ describe('public HTML Key Screen gate', () => {
           shouldGatePublicHtml: jest.fn().mockResolvedValue(gateEnabled),
         },
         authService: {
-          hasValidAdminSession: jest.fn(validateToken),
+          hasValidAdminSession: jest.fn(async (
+            accessToken?: string,
+            refreshToken?: string,
+            res?: express.Response,
+          ) => validateToken(accessToken, refreshToken, res)),
         },
       }),
     );

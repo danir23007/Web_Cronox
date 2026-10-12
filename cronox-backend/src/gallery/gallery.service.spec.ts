@@ -521,7 +521,7 @@ describe('GalleryService', () => {
     expect(assets[0].products.map((item: any) => item.productId)).toEqual([
       2, 1,
     ]);
-    expect(result.slot.asset.products).toEqual([
+    expect(result.slot.asset?.products).toEqual([
       expect.objectContaining({ id: 2, available: false }),
       expect.objectContaining({ id: 1, available: true }),
     ]);
@@ -599,9 +599,9 @@ describe('GalleryService', () => {
 
     const beforeMove = await service.getAdminSlots();
     expect(
-      beforeMove.slots[4].asset.products.map((item: any) => item.id),
+      beforeMove.slots[4].asset?.products.map((item: any) => item.id),
     ).toEqual([1, 2]);
-    expect(beforeMove.slots[5].asset.description).toBe('Contenido compartido');
+    expect(beforeMove.slots[5].asset?.description).toBe('Contenido compartido');
 
     await service.reorderSlots({ sourceKey: 'slot-04', targetKey: 'slot-06' });
     const afterMove = await service.getAdminSlots();

@@ -62,7 +62,7 @@ async function main() {
     const normal = (await manual.create(customer.id, admin.id, randomUUID(), payload)).order;
     const excluded = (await manual.create(customer.id, admin.id, randomUUID(), { ...payload, excludedFromStatistics: true })).order;
     const query = { from: day, to: day, aggregation: 'days', currency: 'EUR', search: '', sort: 'revenue', direction: 'desc', page: 1, source: 'all' };
-    async function assertTotals(multiplier) {
+    async function assertTotals(multiplier, expectedSpent = 102) {
       const expected = { revenueCents: 5100 * multiplier, costCents: 3000 * multiplier, profitCents: 2100 * multiplier, unitsSold: 2 * multiplier, unitsReturned: 0 };
       for (const source of ['all', 'manual']) {
         const report = await finance.getReport({ ...query, source });
@@ -77,7 +77,9 @@ async function main() {
       assert.equal(map.total.orders, multiplier); assert.equal(map.total.units, 2 * multiplier); assert.equal(map.total.revenueCents, 5100 * multiplier);
       const overview = await new AdminDashboardService(db).getOverview();
       assert.equal(overview.orders.total, multiplier); assert.equal(overview.revenue.today, 51 * multiplier);
-      assert.equal((await users.getUserById(customer.id)).stats.totalSpent, 51 * multiplier);
+      assert.equal((await users.getUserById(customer.id)).stats.totalSpent, expectedSpent);
+      const customerList = await users.listUsers({});
+      assert.equal(customerList.data.find(user => user.id === customer.id).revenueCents, expectedSpent * 100);
       assert.equal((await history.calculatePurchaseStats(customer.id)).pedidosRealizados, multiplier);
       assert.equal((await analytics.summary(customer.id)).analytics.purchasedUnits, 2 * multiplier);
       assert.equal((await analytics.products(customer.id)).items.reduce((n, p) => n + p.purchasedUnits, 0), 2 * multiplier);
@@ -110,7 +112,7 @@ async function main() {
     // Refund/correction of an excluded order never leaks amounts/units, including
     // periods containing only the return rather than the original sale.
     await manual.void(excluded.id, admin.id, 'Local exclusion cancellation test');
-    await assertTotals(1);
+    await assertTotals(1, 51);
     const future = madridDate(new Date(now.getTime() + 86400000));
     assert.equal((await finance.getReport({ ...query, from: future, to: future })).totals.revenueCents, 0);
     const web = await db.order.create({ data: { userId: customer.id, customerEmail: customer.email, source: 'ONLINE', status: 'PAID', paidAt: now,

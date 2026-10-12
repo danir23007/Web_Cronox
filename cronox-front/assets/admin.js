@@ -1541,7 +1541,7 @@
     }
 
     if (userOrdersCount) userOrdersCount.textContent = stats.ordersCount ?? 0;
-    if (userTotalSpent) userTotalSpent.textContent = formatCurrency(stats.totalSpent ?? 0);
+    if (userTotalSpent) userTotalSpent.textContent = stats.totalSpent == null ? 'No disponible' : formatCurrency(stats.totalSpent);
     if (userRequestsCount) userRequestsCount.textContent = stats.requestsCount ?? 0;
 
     const lastActivityDate = user.lastLoginAt || user.updatedAt || user.createdAt;

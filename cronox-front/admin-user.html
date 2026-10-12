@@ -639,10 +639,12 @@
                   </select>
                 </label>
                 <label class="manual-purchase-field">Tratamiento de stock
-                  <select id="manualStockHandling" required>
+                  <select id="manualStockHandling" required aria-describedby="manualStockHandlingError">
+                    <option value="" selected disabled>Selecciona…</option>
                     <option value="DEDUCT_NOW">Todavía no ajustado: descontar ahora</option>
                     <option value="ALREADY_ADJUSTED">Ya ajustado físicamente: no volver a descontar</option>
                   </select>
+                  <span id="manualStockHandlingError" role="alert" hidden>Selecciona cómo se debe tratar el stock</span>
                 </label>
                 <label class="manual-purchase-field">Nota interna<textarea id="manualPurchaseNote" rows="2" maxlength="500"></textarea></label>
               </div>
@@ -722,7 +724,7 @@
   </div>
 
   <script src="assets/country.js?v=1"></script>
-  <script src="assets/api.js?v=20"></script>
+  <script src="assets/api.js?v=21"></script>
   <script src="assets/admin-auth-routing.js?v=1"></script>
   <script src="assets/ui-status.js"></script>
   <script src="assets/admin-navigation.js?v=1"></script>
@@ -730,6 +732,6 @@
   <script src="assets/admin-user-shell.js?v=2"></script>
   <script src="assets/admin-live-stats.js?v=2"></script>
   <script src="assets/user-identity.js?v=1"></script>
-  <script src="assets/admin-user.js?v=8"></script>
+  <script src="assets/admin-user.js?v=9"></script>
 </body>
 </html>

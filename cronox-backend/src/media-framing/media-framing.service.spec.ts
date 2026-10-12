@@ -215,6 +215,7 @@ describe('MediaFramingService', () => {
       heroTextMobileX: 75,
     });
 
+    if (!first.placement.heroText) throw new Error('Expected saved hero text');
     const disabled = await service.updatePlacement(
       'home.hero.video',
       {
@@ -224,6 +225,7 @@ describe('MediaFramingService', () => {
       },
       8,
     );
+    if (!disabled.placement.heroText) throw new Error('Expected disabled hero text');
     expect(disabled.placement.heroText.enabled).toBe(false);
 
     const removed = await service.updatePlacement(
@@ -235,7 +237,7 @@ describe('MediaFramingService', () => {
       },
       8,
     );
-    expect(removed.placement.heroText.content).toBe('');
+    expect(removed.placement.heroText?.content).toBe('');
     expect(websiteRecords[0].heroText).toBeNull();
   });
 

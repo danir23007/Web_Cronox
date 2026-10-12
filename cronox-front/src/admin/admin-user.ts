@@ -52,6 +52,7 @@ import { MAX_MANUAL_CENTS, parseManualPrice, manualPriceText } from './manual-pu
   const manualPurchasedAt = document.getElementById('manualPurchasedAt') as HTMLInputElement | null;
   const manualPaymentMethod = document.getElementById('manualPaymentMethod') as HTMLSelectElement | null;
   const manualStockHandling = document.getElementById('manualStockHandling') as HTMLSelectElement | null;
+  const manualStockHandlingError = document.getElementById('manualStockHandlingError');
   const manualExcludeStatistics = document.getElementById('manualExcludeStatistics') as HTMLInputElement | null;
   const manualPurchaseNote = document.getElementById('manualPurchaseNote') as HTMLTextAreaElement | null;
   const manualPurchaseItems = document.getElementById('manualPurchaseItems');
@@ -484,7 +485,20 @@ import { MAX_MANUAL_CENTS, parseManualPrice, manualPriceText } from './manual-pu
     invalidateManualPurchaseReview();
   };
 
+  const validateManualStockHandling = () => {
+    const value = manualStockHandling?.value;
+    const valid = value === 'DEDUCT_NOW' || value === 'ALREADY_ADJUSTED';
+    if (manualStockHandlingError) manualStockHandlingError.hidden = valid;
+    manualStockHandling?.setAttribute('aria-invalid', String(!valid));
+    if (!valid) {
+      invalidateManualPurchaseReview();
+      throw new Error('Selecciona cómo se debe tratar el stock');
+    }
+    return value;
+  };
+
   const readManualPurchase = () => {
+    const stockHandling = validateManualStockHandling();
     const rows = [...(manualPurchaseItems?.querySelectorAll<HTMLElement>('.manual-purchase-item') || [])];
     const items = rows.map((row) => ({
       variantId: Number(row.querySelector<HTMLSelectElement>('[data-manual-variant]')?.value),
@@ -499,7 +513,7 @@ import { MAX_MANUAL_CENTS, parseManualPrice, manualPriceText } from './manual-pu
     return {
       items,
       paymentMethod: manualPaymentMethod?.value || 'CASH',
-      stockHandling: manualStockHandling?.value || 'DEDUCT_NOW',
+      stockHandling,
       excludedFromStatistics: manualExcludeStatistics?.checked ?? false,
       purchasedAt: new Date(purchasedAtValue).toISOString(),
       note: manualPurchaseNote?.value.trim() || undefined,
@@ -528,12 +542,14 @@ import { MAX_MANUAL_CENTS, parseManualPrice, manualPriceText } from './manual-pu
       if (manualPurchaseConfirmActions) manualPurchaseConfirmActions.hidden = false;
     } catch (error) {
       invalidateManualPurchaseReview();
+      if (manualStockHandling?.getAttribute('aria-invalid') === 'true') return;
       showModuleError({ container: ordersStatus || statusArea, error: error as CronoxApiError, title: 'Revisa los datos de la compra' });
     }
   };
 
   const submitManualPurchase = async (event: Event) => {
     event.preventDefault();
+    try { validateManualStockHandling(); } catch { return; }
     if (manualPurchaseSubmitting || !userId || !manualPurchaseIdempotencyKey || !window.CRONOX_API?.admin?.createInPersonPurchase) return;
     manualPurchaseSubmitting = true;
     confirmManualPurchaseBtn && (confirmManualPurchaseBtn.disabled = true);
@@ -1105,6 +1121,12 @@ import { MAX_MANUAL_CENTS, parseManualPrice, manualPriceText } from './manual-pu
         manualPurchaseOptions = Array.isArray(response?.products) ? response.products : [];
       }
       manualPurchaseForm.hidden = !manualPurchaseForm.hidden;
+      if (!manualPurchaseForm.hidden) {
+        if (manualStockHandling) manualStockHandling.value = '';
+        manualStockHandling?.removeAttribute('aria-invalid');
+        if (manualStockHandlingError) manualStockHandlingError.hidden = true;
+        invalidateManualPurchaseReview();
+      }
       if (!manualPurchaseForm.hidden && manualPurchaseItems && !manualPurchaseItems.children.length) addManualPurchaseRow();
       if (!manualPurchaseForm.hidden && manualPurchasedAt && !manualPurchasedAt.value) {
         const now = new Date(Date.now() - new Date().getTimezoneOffset() * 60_000);
@@ -1448,6 +1470,9 @@ import { MAX_MANUAL_CENTS, parseManualPrice, manualPriceText } from './manual-pu
   editManualPurchaseBtn?.addEventListener('click', invalidateManualPurchaseReview);
   manualPurchaseForm?.addEventListener('input', invalidateManualPurchaseReview);
   manualPurchaseForm?.addEventListener('change', invalidateManualPurchaseReview);
+  manualStockHandling?.addEventListener('change', () => {
+    try { validateManualStockHandling(); } catch { /* The inline error explains the missing choice. */ }
+  });
   manualPurchaseForm?.addEventListener('submit', submitManualPurchase);
   const statisticsRequests = new Map<string, { excluded: boolean; key: string }>();
   let statisticsSubmitting = false;
@@ -1489,7 +1514,7 @@ import { MAX_MANUAL_CENTS, parseManualPrice, manualPriceText } from './manual-pu
 
   void ensureAdminAccess().then((currentUser) => {
     if (!currentUser) return;
-    window.CRONOX_ADMIN_NAVIGATION?.applyRole(currentUser.role);
+    window.CRONOX_ADMIN_NAVIGATION?.applyRole(currentUser.role ?? '');
     canEditProtectedUserFields = currentUser.role === 'SUPERADMIN' && Boolean(userId && identityUid);
     if (editUserBtn) editUserBtn.hidden = !canEditProtectedUserFields;
     if (manualPurchaseSection) manualPurchaseSection.hidden = !canEditProtectedUserFields;

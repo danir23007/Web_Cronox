@@ -1,5 +1,4 @@
 import { loadUserPurchaseMetrics, sortUsersByMetrics } from './user-purchase-metrics';
-import { statisticsOrderWhere } from '../../common/statistics-eligibility';
 import {
   BadRequestException,
   ConflictException,
@@ -9,7 +8,6 @@ import {
 } from '@nestjs/common';
 import {
   CircleUpgradeRequestStatus,
-  OrderStatus,
   Prisma,
   Role,
   UserAccountState,
@@ -33,12 +31,6 @@ const USER_LIST_SELECT = { id: true, identityUid: true, memberCode: true, email:
   firstName: true, lastName: true, role: true, circleLevel: true, phone: true,
   createdAt: true, updatedAt: true, accountState: true } as const satisfies Prisma.UserSelect;
 type ListedUser = Prisma.UserGetPayload<{ select: typeof USER_LIST_SELECT }>;
-const PAID_STATUSES: OrderStatus[] = [
-  OrderStatus.PAID,
-  OrderStatus.PROCESSING,
-  OrderStatus.SHIPPED,
-  OrderStatus.DELIVERED,
-];
 
 type UserWithAddresses = Prisma.UserGetPayload<{
   include: { addresses: true };
@@ -124,20 +116,15 @@ export class AdminUsersService {
     }
 
     const [
-      ordersCount,
-      totalSpent,
+      purchaseMetrics,
       requestsCount,
       recentRequests,
       recentOrders,
       codesUsed,
-    ] = await this.prisma.$transaction([
-      this.prisma.order.count({ where: { ...statisticsOrderWhere, userId: id } }),
-      this.prisma.order.aggregate({
-        where: { ...statisticsOrderWhere, userId: id, status: { in: PAID_STATUSES } },
-        _sum: { total: true },
-      }),
-      this.prisma.circleUpgradeRequest.count({ where: { userId: id } }),
-      this.prisma.circleUpgradeRequest.findMany({
+    ] = await this.prisma.$transaction(async tx => Promise.all([
+      loadUserPurchaseMetrics(tx, [id]),
+      tx.circleUpgradeRequest.count({ where: { userId: id } }),
+      tx.circleUpgradeRequest.findMany({
         where: { userId: id },
         orderBy: { createdAt: 'desc' },
         take: RECENT_ITEMS_LIMIT,
@@ -156,7 +143,7 @@ export class AdminUsersService {
           processedAt: true,
         },
       }),
-      this.prisma.order.findMany({
+      tx.order.findMany({
         where: { userId: id },
         orderBy: { createdAt: 'desc' },
         take: RECENT_ITEMS_LIMIT,
@@ -179,7 +166,7 @@ export class AdminUsersService {
           updatedAt: true,
         },
       }),
-      this.prisma.promoCodeRedemption.findMany({
+      tx.promoCodeRedemption.findMany({
         where: { userId: id },
         orderBy: { redeemedAt: 'desc' },
         take: RECENT_ITEMS_LIMIT,
@@ -195,7 +182,7 @@ export class AdminUsersService {
           },
         },
       }),
-    ]);
+    ]), { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead, timeout: 60000 });
 
     const username =
       user.name ||
@@ -241,8 +228,8 @@ export class AdminUsersService {
         lastLoginAt: user.lastLoginAt,
       },
       stats: {
-        ordersCount,
-        totalSpent: Number(totalSpent._sum.total ?? 0),
+        ordersCount: purchaseMetrics.get(id)!.ordersCount,
+        totalSpent: purchaseMetrics.get(id)!.revenueCents === null ? null : purchaseMetrics.get(id)!.revenueCents! / 100,
         requestsCount,
       },
       requests: recentRequests,

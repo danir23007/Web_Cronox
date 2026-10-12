@@ -172,7 +172,9 @@ describe('Newsletter popup and Admin management', () => {
   });
 
   it('provides the complete first-class Admin editor', () => {
-    const document = new JSDOM(read('admin.html')).window.document;
+    const dom = new JSDOM(read('admin.html'), { runScripts: 'outside-only' });
+    dom.window.eval(read('assets/admin-navigation.js'));
+    const document = dom.window.document;
     expect(
       document.querySelector('[data-nav-target="section-newsletter"]'),
     ).not.toBeNull();

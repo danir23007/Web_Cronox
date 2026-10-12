@@ -95,7 +95,7 @@ describe('Quick Add opening isolation', () => {
 describe('dynamic category group ordering', () => {
   it('uses reserved NEW and Spanish alphabet, preserves selection, and never promotes hidden categories', async () => {
     const { dom, app, document } = create(read('index.html'));
-    let categories = [
+    let categories: Array<{ name: string; slug: string; group: string; showInStoreFilters?: boolean; isActive?: boolean }> = [
       { name: 'zapatos', slug: 'zapatos', group: 'GARMENT' },
       { name: 'D sin clasificar', slug: 'unknown', group: 'UNCLASSIFIED' },
       { name: 'Colección verano', slug: 'summer', group: 'DROP' },

@@ -145,6 +145,7 @@ describe('Footer settings public and Admin UI', () => {
       API_BASE: '',
       getCsrfHeaders: jest.fn().mockResolvedValue({ 'X-CSRF-Token': 'token' }),
     };
+    dom.window.eval(read('assets/admin-navigation.js'));
     dom.window.eval(adminScript);
     await (dom.window as any).CRONOX_ADMIN_FOOTER.load(true);
     expect(

@@ -129,7 +129,7 @@ describe('product-card framing integration', () => {
   it('builds one isolated frame/footer card and frames only its primary image', async () => {
     const { dom, app } = loadWindow();
     await app.CRONOX_catalogReady;
-    const card = app.CRONOX_createProductCard({
+    const card: HTMLElement = app.CRONOX_createProductCard({
       id: 8,
       slug: 'framed-product',
       name: 'FRAMED PRODUCT',

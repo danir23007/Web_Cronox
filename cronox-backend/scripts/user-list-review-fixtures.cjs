@@ -32,7 +32,7 @@ module.exports = async function review(db, manual, admin, users, product, varian
   const metric = id => all.find(u => u.id === id);
   assert.equal(metric(fixtures[0].id).revenueCents, 15000); assert.equal(metric(fixtures[0].id).ordersCount, 2); assert.equal(metric(fixtures[0].id).distinctProducts, 2);
   assert.equal(metric(fixtures[2].id).distinctProducts, 1);
-  assert.equal(metric(fixtures[3].id).revenueCents, 0); assert.equal(metric(fixtures[3].id).ordersCount, 0);
+  assert.equal(metric(fixtures[3].id).revenueCents, 999999); assert.equal(metric(fixtures[3].id).ordersCount, 1);
   assert.equal(metric(fixtures[4].id).revenueCents, 0); assert.equal(metric(fixtures[4].id).ordersCount, 1); assert.equal(metric(fixtures[4].id).distinctProducts, 0);
   for (const sort of ['id', 'revenue', 'orders', 'distinctProducts']) for (const order of ['asc', 'desc']) {
     const field = { id: 'id', revenue: 'revenueCents', orders: 'ordersCount', distinctProducts: 'distinctProducts' }[sort];
@@ -47,5 +47,5 @@ module.exports = async function review(db, manual, admin, users, product, varian
   assert.equal((await users.listUsers({ q: 'LIST local', sort: 'revenue', order: 'desc' })).data[0].id, fixtures[3].id);
   await manual.setStatisticsExclusion(exception.id, admin.id, randomUUID(), true);
   assert.equal((await db.productVariant.findUnique({ where: { id: variantId } })).stockQty, stock);
-  return { ids: fixtures.map(u => u.id), zeroId: fixtures.at(-1).id, topRevenueId: fixtures[0].id, total: 106 };
+  return { ids: fixtures.map(u => u.id), zeroId: fixtures.at(-1).id, topRevenueId: fixtures[3].id, total: 106 };
 };

@@ -164,9 +164,9 @@ describe('checkout and cart startup performance', () => {
       const addressReady = pending();
       if (changeShipping)
         w.CRONOX_API.getDefaultAddress.mockReturnValue(addressReady.promise);
-      const handlers: Record<string, () => void> = {};
+      const handlers: Record<string, (event?: { complete: boolean }) => void> = {};
       const element = {
-        on: jest.fn((name: string, handler: () => void) => {
+        on: jest.fn((name: string, handler: (event?: { complete: boolean }) => void) => {
           handlers[name] = handler;
         }),
         mount: jest.fn(),
@@ -224,9 +224,9 @@ describe('checkout and cart startup performance', () => {
 
   it('keeps one real Stripe Elements instance while guest details and shipping change', async () => {
     const { dom, w } = setup();
-    const paymentHandlers: Record<string, () => void> = {};
+    const paymentHandlers: Record<string, (event?: { complete: boolean }) => void> = {};
     const paymentElement = {
-      on: jest.fn((event: string, handler: () => void) => { paymentHandlers[event] = handler; }),
+      on: jest.fn((event: string, handler: (event?: { complete: boolean }) => void) => { paymentHandlers[event] = handler; }),
       mount: jest.fn((container: HTMLElement) => {
         container.dataset.stripeMounted = 'true';
         queueMicrotask(() => paymentHandlers.ready?.());

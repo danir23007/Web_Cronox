@@ -2,6 +2,7 @@
   "scripts": {
     "test:accreditation:browser": "playwright test --config playwright.accreditation.config.cjs",
     "test:cart:browser": "playwright test --config playwright.cart.config.cjs",
+    "admin:typecheck": "tsc --noEmit -p tsconfig.admin.json",
     "admin:map": "node cronox-backend/scripts/build-admin-map.cjs",
     "admin:build": "npm run admin:map && vite build -c vite.admin.config.ts",
     "admin:watch": "vite build -c vite.admin.config.ts --watch"

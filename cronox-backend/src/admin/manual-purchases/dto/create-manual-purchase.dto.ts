@@ -53,7 +53,7 @@ export class CreateManualPurchaseDto {
   @IsEnum(OrderPaymentMethod)
   paymentMethod!: OrderPaymentMethod;
 
-  @IsEnum(ManualStockHandling)
+  @IsEnum(ManualStockHandling, { message: 'Selecciona cómo se debe tratar el stock' })
   stockHandling!: ManualStockHandling;
 
   @IsOptional()

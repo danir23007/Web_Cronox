@@ -69,7 +69,7 @@ const activeIndex = (card: Element) =>
 describe('premium product-card hover gallery', () => {
   it('uses one index for enter, relative arrows, leave reset and re-entry', async () => {
     const { dom, app } = await createHarness();
-    const card = app.CRONOX_createProductCard(
+    const card: HTMLElement = app.CRONOX_createProductCard(
       product(1, ['/one.webp', '/two.webp', '/three.webp', '/four.webp']),
     );
     app.document.body.appendChild(card);
@@ -94,14 +94,14 @@ describe('premium product-card hover gallery', () => {
 
   it('ignores touch hover events and keeps independent state for dynamic cards', async () => {
     const { dom, app } = await createHarness();
-    const cardA = app.CRONOX_createProductCard(
+    const cardA: HTMLElement = app.CRONOX_createProductCard(
       product(1, ['/a1.webp', '/a2.webp', '/a3.webp']),
     );
     app.document.body.appendChild(cardA);
     cardA.dispatchEvent(pointer(dom.window, 'pointerenter', 'touch'));
     expect(activeIndex(cardA)).toBe(0);
 
-    const cardB = app.CRONOX_createProductCard(
+    const cardB: HTMLElement = app.CRONOX_createProductCard(
       product(2, ['/b1.webp', '/b2.webp', '/b3.webp']),
     );
     app.document.body.appendChild(cardB);
@@ -118,14 +118,14 @@ describe('premium product-card hover gallery', () => {
 
   it('does nothing for one image and keeps arrow clicks inside the card', async () => {
     const { dom, app } = await createHarness();
-    const single = app.CRONOX_createProductCard(product(1, ['/only.webp']));
+    const single: HTMLElement = app.CRONOX_createProductCard(product(1, ['/only.webp']));
     app.document.body.appendChild(single);
     single.dispatchEvent(pointer(dom.window, 'pointerenter', 'mouse'));
     single.dispatchEvent(pointer(dom.window, 'pointerleave', 'mouse'));
     expect(activeIndex(single)).toBe(0);
     expect(single.querySelectorAll('.product-arrow')).toHaveLength(0);
 
-    const multi = app.CRONOX_createProductCard(
+    const multi: HTMLElement = app.CRONOX_createProductCard(
       product(2, ['/one.webp', '/two.webp', '/three.webp']),
     );
     app.document.body.appendChild(multi);
@@ -139,7 +139,7 @@ describe('premium product-card hover gallery', () => {
 
   it('tries the secondary optimized and original candidates, then disables broken hover', async () => {
     const { dom, app } = await createHarness();
-    const card = app.CRONOX_createProductCard(
+    const card: HTMLElement = app.CRONOX_createProductCard(
       product(1, ['/first.webp', '/broken.webp', '/third.webp']),
     );
     app.document.body.appendChild(card);

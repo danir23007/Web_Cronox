@@ -1,4 +1,5 @@
 // [STRIPE] Pruebas unitarias para el wrapper de Stripe
+import type Stripe from 'stripe';
 import { BadRequestException } from '@nestjs/common';
 import {
   CheckoutPaymentIntentConfigurationException,
@@ -36,7 +37,7 @@ describe('StripeService', () => {
 
   it('usa el SDK de Stripe para validar la firma', () => {
     const mockEvent = { type: 'test.event' } as any;
-    const stripeInstance = (service as any).stripe as import('stripe');
+    const stripeInstance = Reflect.get(service, 'stripe') as Stripe;
     const spy = jest
       .spyOn(stripeInstance.webhooks, 'constructEvent')
       .mockReturnValue(mockEvent);
@@ -236,9 +237,9 @@ describe('StripeService', () => {
       key === 'STRIPE_SECRET_KEY' ? 'sk_live_dummy' : undefined,
     );
     const liveService = new StripeService(config as any);
-    const stripe = (liveService as any).stripe as import('stripe');
+    const stripe = Reflect.get(liveService, 'stripe') as Stripe;
     jest.spyOn(stripe.accounts, 'retrieve').mockResolvedValue({ id: 'acct_live' } as any);
-    const create = jest.spyOn(stripe.paymentIntents, 'create').mockImplementation((async (params: import('stripe').PaymentIntentCreateParams) => {
+    const create = jest.spyOn(stripe.paymentIntents, 'create').mockImplementation((async (params: Stripe.PaymentIntentCreateParams) => {
       if (params.payment_method_types?.includes('paypal')) {
         throw Object.assign(new Error('The payment method type "paypal" is invalid.'), { statusCode: 400 });
       }
@@ -288,10 +289,10 @@ describe('StripeService', () => {
     });
     expect(create.mock.calls[1][1]).toEqual(create.mock.calls[0][1]);
     expect(create.mock.calls[1][0]).toEqual(create.mock.calls[0][0]);
-    expect(create.mock.calls[0][1].idempotencyKey).not.toBe(
+    expect(create.mock.calls[0][1]).not.toHaveProperty('idempotencyKey',
       `checkout:${args.checkoutSnapshotId}`,
     );
-    expect(create.mock.calls[0][1].idempotencyKey).not.toBe(
+    expect(create.mock.calls[0][1]).not.toHaveProperty('idempotencyKey',
       `checkout:cronox_checkout_v3:${args.checkoutSnapshotId}`,
     );
 
@@ -338,7 +339,7 @@ describe('StripeService', () => {
       }),
       expect.any(Object),
     );
-    expect(create.mock.calls[0][0].shipping?.address?.country).not.toBe(
+    expect(create.mock.calls[0][0]).not.toHaveProperty('shipping.address.country',
       'España',
     );
   });

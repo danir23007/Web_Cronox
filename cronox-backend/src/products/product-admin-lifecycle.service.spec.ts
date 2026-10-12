@@ -247,7 +247,6 @@ describe('ProductService administrative lifecycle', () => {
         cardImagePositionX: 18,
         cardImagePositionY: 82,
         cardImageZoom: 0.75,
-        displayOrder: 7,
       },
       1,
       'framing-test-1234567890',

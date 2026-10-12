@@ -1133,7 +1133,7 @@ import { loadCategoryPages } from './category-pagination';
     };
   };
 
-  g.CRONOX_STOCK = {
+  const stockApi: NonNullable<Window['CRONOX_STOCK']> = {
     hasLastUnits,
     productStockStatus,
     soldOutSizeCount,
@@ -1185,7 +1185,7 @@ import { loadCategoryPages } from './category-pagination';
       price: HTMLElement,
       product: UnknownRecord,
     ) {
-      g.CRONOX_STOCK.decorateLastUnits(card, product);
+      stockApi.decorateLastUnits(card, product);
       const status = productStockStatus(product.variants, product.lastUnitsThreshold);
       card.classList.remove(
         'product-card--out-of-stock',
@@ -1205,6 +1205,8 @@ import { loadCategoryPages } from './category-pagination';
       card.querySelectorAll('.product-card__stock-label, .stock-status').forEach(label => label.remove());
     },
   };
+
+  g.CRONOX_STOCK = stockApi;
 
   adminApi.getDashboard = async () => {
     return request('/api/admin/dashboard');

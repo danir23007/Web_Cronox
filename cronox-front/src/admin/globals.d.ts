@@ -96,6 +96,7 @@ declare global {
   interface CronoxAdminApi {
     listAllAdminCategories?: () => Promise<Record<string, unknown>[]>;
     getDashboard?: () => Promise<unknown>;
+    getPendingCounts?: () => Promise<unknown>;
     mailRequest?: (path: string, method?: string, body?: Record<string, unknown> | FormData) => Promise<unknown>;
     downloadExcel?: (module: string, query?: QueryRecord) => Promise<{ blob: Blob; filename: string }>;
     listCircleUpgradeRequests?: (queryOrStatus?: string | QueryRecord, queryOverride?: QueryRecord) => Promise<unknown>;
@@ -121,9 +122,12 @@ declare global {
     deleteProductImage?: (productId: number | string, imageId: number | string, expectedUpdatedAt: string) => Promise<unknown>;
     updateProductCategories?: (id: number | string, categoryIds: number[]) => Promise<unknown>;
     listAdminCategories?: (query?: QueryRecord) => Promise<unknown>;
+    createAdminCategory?: (payload: Record<string, unknown>) => Promise<unknown>;
+    updateAdminCategory?: (id: number, payload: Record<string, unknown>) => Promise<unknown>;
     uploadProductImages?: (files?: File[]) => Promise<unknown>;
     listPromoCodes?: (query?: QueryRecord) => Promise<unknown>;
     getAuditLogs?: (query?: QueryRecord) => Promise<unknown>;
+    clearActivity?: () => Promise<unknown>;
     getUserDetail?: (id: number | string) => Promise<unknown>;
     getUserEditOptions?: () => Promise<unknown>;
     updateAdminUser?: (id: number | string, payload: Record<string, unknown>) => Promise<unknown>;

@@ -44,7 +44,7 @@ describe('responsive storefront image delivery', () => {
         CRONOX_IMAGES: {
           apply: (
             image: HTMLImageElement,
-            record: typeof record,
+            imageRecord: typeof record,
             context: string,
           ) => unknown;
         };

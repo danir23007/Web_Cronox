@@ -22,8 +22,7 @@ describe('validateEnvironment', () => {
   });
 
   it('fails closed when a JWT secret is absent', () => {
-    const config = validEnvironment();
-    delete config.JWT_ACCESS_SECRET;
+    const { JWT_ACCESS_SECRET: omittedSecret, ...config } = validEnvironment();
 
     expect(() => validateEnvironment(config)).toThrow('JWT_ACCESS_SECRET');
   });

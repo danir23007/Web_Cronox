@@ -16,7 +16,8 @@ describe('Admin inventory UI', () => {
   );
 
   it('exposes the Spanish inventory navigation and accessible controls', () => {
-    const dom = new JSDOM(html);
+    const dom = new JSDOM(html, { runScripts: 'outside-only' });
+    dom.window.eval(readFileSync(join(frontendRoot, 'assets', 'admin-navigation.js'), 'utf8'));
     const document = dom.window.document;
 
     expect(

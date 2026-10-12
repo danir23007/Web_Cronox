@@ -65,6 +65,14 @@ describe('manual purchase permissions (HTTP)', () => {
     }).expect(400);
     expect(service.create).not.toHaveBeenCalled();
   });
+  it.each([undefined, null, '', 'INVALID'])('rejects missing or invalid stock handling through HTTP: %s', async stockHandling => {
+    const response = await request(app.getHttpServer()).post('/api/admin/users/7/in-person-purchases').set('x-test-role', Role.SUPERADMIN).send({
+      items: [{ variantId: 4, quantity: 2, unitPriceCents: 1000 }], paymentMethod: 'CASH', stockHandling,
+    }).expect(400);
+    expect(response.body.message).toContain('Selecciona cómo se debe tratar el stock');
+    expect(service.create).not.toHaveBeenCalled();
+  });
+
   it('accepts explicit zero cents', async () => {
     await request(app.getHttpServer()).post('/api/admin/users/7/in-person-purchases').set('x-test-role', Role.SUPERADMIN).send({
       items: [{ variantId: 4, quantity: 2, unitPriceCents: 0 }], paymentMethod: 'CASH', stockHandling: 'ALREADY_ADJUSTED',

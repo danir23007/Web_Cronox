@@ -101,7 +101,7 @@ const makeAdminDom = () => {
     runScripts: 'outside-only',
     pretendToBeVisual: true,
   });
-  let placement = structuredClone(initialPlacement);
+  let placement: Omit<typeof initialPlacement, 'poster'> & { poster: string | null; activeAssetId?: string | null } = structuredClone(initialPlacement);
   const writes: Array<{ url: string; method: string; body: any }> = [];
   const fetchMock = jest.fn(async (url: string, options: any = {}) => {
     const method = options.method || 'GET';
@@ -276,7 +276,8 @@ const pointerEvent = (
 
 describe('Multimedia Web admin manager', () => {
   it('uses the corrected visible name, hero viewport UI, and shared engine', () => {
-    const dom = new JSDOM(adminHtml);
+    const dom = new JSDOM(adminHtml, { runScripts: 'outside-only' });
+    dom.window.eval(readFrontend('assets/admin-navigation.js'));
     const document = dom.window.document;
     expect(
       document.querySelector('[data-nav-target="section-media"]')?.textContent,

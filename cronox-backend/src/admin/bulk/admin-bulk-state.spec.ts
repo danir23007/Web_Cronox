@@ -99,7 +99,7 @@ describe('bulk user account state', () => {
     const { result } = await apply({
       accountState: UserAccountState.PRE_REGISTERED,
     });
-    expect(result.counts).toEqual({ changed: 1, unchanged: 0, excluded: 0 });
+    expect(result).toMatchObject({ counts: { changed: 1, unchanged: 0, excluded: 0 } });
     expect(users.updateAdminUser).toHaveBeenCalledWith(
       2,
       expect.objectContaining({ accountState: 'PRE_REGISTERED' }),
@@ -147,7 +147,7 @@ describe('bulk user account state', () => {
 
   it('allows ACTIVE without a password and still requires a pre-registration for PRE_REGISTERED', async () => {
     const { result } = await apply({ accountState: 'ACTIVE' });
-    expect(result.counts.changed).toBe(1);
+    expect(result).toMatchObject({ counts: { changed: 1 } });
     expect(rows[0]).toMatchObject({ accountState: 'ACTIVE', password: null, role: 'USER', circleLevel: 1 });
     rows[0].preRegistration = null;
     rows[0].accountState = 'PENDING_PASSWORD';

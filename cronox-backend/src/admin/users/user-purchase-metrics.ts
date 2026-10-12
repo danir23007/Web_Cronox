@@ -1,5 +1,4 @@
 import { Prisma } from '@prisma/client';
-import { countsInStatistics } from '../../common/statistics-eligibility';
 import { archiveUtcDate } from '../finance/historical-cost';
 import { calculateFinance, FinanceEvent, FinanceOrder, madridDate } from '../finance/financial-calculations';
 
@@ -7,7 +6,7 @@ export type UserSort = 'id' | 'revenue' | 'orders' | 'distinctProducts';
 export type UserPurchaseMetrics = { revenueCents: number | null; ordersCount: number; distinctProducts: number };
 const empty = (): UserPurchaseMetrics => ({ revenueCents: 0, ordersCount: 0, distinctProducts: 0 });
 
-// Reuses archived paid prices, discounts, refunds and exclusion rules. Batch
+// Reuses archived paid prices, discounts and refunds for personal spending. Batch
 // queries serve the entire result set; no per-customer database requests.
 export async function loadUserPurchaseMetrics(tx: Prisma.TransactionClient, userIds: number[], now = new Date()) {
   const metrics = new Map(userIds.map(id => [id, empty()]));
@@ -38,18 +37,25 @@ export async function loadUserPurchaseMetrics(tx: Prisma.TransactionClient, user
     }
     for (const archive of archives) {
       const order = { ...(archive.snapshot as unknown as FinanceOrder) };
-      if (!countsInStatistics(order) || order.status === 'CANCELLED') continue;
+      if (['PENDING', 'CANCELLED'].includes(order.status)) continue;
+      // General-statistics exclusion never changes the customer's own spending.
+      // Override only this local copy; the financial archive remains unchanged.
+      order.excludedFromStatistics = false;
       for (const field of ['paidAt', 'purchasedAt', 'createdAt', 'voidedAt'] as const) if (order[field]) order[field] = archiveUtcDate(order[field]!);
       order.stockMovements = stockByOrder.get(order.id) ?? [];
       const report = calculateFinance([order], eventsByPayment.get(order.providerRef ?? '') ?? [], '2000-01-01', to, 'months', false);
       const userId = userByOrder.get(order.id)!;
       const metric = metrics.get(userId)!;
-      metric.revenueCents = metric.revenueCents === null || report.totals.revenueCents === null || order.currency !== 'EUR' ? null : metric.revenueCents + report.totals.revenueCents;
+      const paid = report.recentOrders[0];
+      // Personal spending is the actual paid total (including delivery), less
+      // cumulative refunds. Product revenue allocation belongs to general finance.
+      const spentCents = !paid ? 0 : paid.refundedCents === null || order.currency !== 'EUR' || order.disputeLostCents > 0
+        ? null : paid.totalCents - paid.refundedCents;
+      metric.revenueCents = metric.revenueCents === null || spentCents === null ? null : metric.revenueCents + spentCents;
       // Match finance's paid-sales count: a refund adjusts money/units, it does
       // not create/delete the original paid order. Cancelled orders are omitted.
       metric.ordersCount += report.recentOrders.length;
       if (metric.revenueCents !== null && !Number.isSafeInteger(metric.revenueCents)) throw new Error('La facturación supera la precisión monetaria admitida.');
-      const paid = report.recentOrders[0];
       const fullyReturned = order.status === 'REFUNDED' || (paid && paid.refundedCents !== null && paid.totalCents > 0 && paid.refundedCents === paid.totalCents);
       const products = productsByUser.get(userId) ?? new Map<number, number>();
       for (const product of report.products) {

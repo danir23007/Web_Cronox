@@ -80,7 +80,7 @@ const makeSlots = () =>
     zoom: 1,
     altText: '',
     instagramUrl: null,
-    asset: null,
+    asset: null as typeof oldAsset | null,
   }));
 
 const makeCarouselSlots = () =>
@@ -95,7 +95,7 @@ const makeCarouselSlots = () =>
     zoom: 1,
     altText: '',
     instagramUrl: null,
-    asset: null,
+    asset: null as typeof oldAsset | null,
   }));
 
 const jsonResponse = (payload: unknown, status = 200) => ({
@@ -1480,7 +1480,7 @@ describe('CRONOX admin gallery', () => {
     alt.dispatchEvent(new dom.window.Event('input'));
     (document.getElementById('galleryEditorSave') as HTMLButtonElement).click();
     await flushAsync();
-    expect(carouselSlots[0].asset.id).toBe('asset-B');
+    expect(carouselSlots[0].asset?.id).toBe('asset-B');
     expect(
       fetchMock.mock.calls.some(
         ([url, init]) =>

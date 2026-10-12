@@ -103,6 +103,7 @@ describe('OrdersService checkout reservations', () => {
 
   const makeSnapshot = (overrides: Record<string, unknown> = {}) => ({
     id: 'snap_new',
+    anonymousId: null,
     userId: 1,
     cartId: 10,
     orderId: null,
@@ -293,7 +294,7 @@ describe('OrdersService checkout reservations', () => {
 
   it('atomically reserves each active variant before returning a new snapshot', async () => {
     prisma.checkoutSnapshot.findFirst.mockResolvedValue(null);
-    prisma.cart.findUnique.mockResolvedValue({ userId: 1, updatedAt });
+    prisma.cart.findUnique.mockResolvedValue({ userId: 1, anonymousId: null, updatedAt });
     prisma.checkoutSnapshot.create.mockResolvedValue(makeSnapshot());
     prisma.productVariant.updateMany.mockResolvedValue({ count: 1 });
     prisma.checkoutStockReservation.create.mockResolvedValue({});
@@ -470,6 +471,7 @@ describe('OrdersService checkout reservations', () => {
 
   const recoveryInput = {
     checkoutSnapshotId: 'snap_recovery',
+    anonymousId: null,
     paymentIntentId: 'pi_missing_live',
     stripeAccountId: 'acct_live',
     allowStripeAccountBackfill: false,
@@ -498,7 +500,7 @@ describe('OrdersService checkout reservations', () => {
       });
       return Promise.resolve(args?.include ? snapshot : snapshot);
     });
-    prisma.cart.findUnique.mockResolvedValue({ userId: 1, updatedAt });
+    prisma.cart.findUnique.mockResolvedValue({ userId: 1, anonymousId: null, updatedAt });
     prisma.order.findFirst.mockResolvedValue(null);
     prisma.stripeWebhookEvent.findFirst.mockResolvedValue(null);
     prisma.checkoutStockReservation.findMany.mockResolvedValue([

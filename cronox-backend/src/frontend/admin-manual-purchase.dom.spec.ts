@@ -14,7 +14,9 @@ describe('admin in-person purchase workflow', () => {
     const stock = document.querySelector<HTMLSelectElement>('#manualStockHandling');
 
     expect(stock?.required).toBe(true);
+    expect(stock?.value).toBe('');
     expect([...stock!.options].map((option) => option.value)).toEqual([
+      '',
       'DEDUCT_NOW',
       'ALREADY_ADJUSTED',
     ]);
@@ -36,6 +38,7 @@ const flush = () => new Promise(resolve => setTimeout(resolve, 0));
 async function setupPurchase(extraApi: Record<string, unknown> = {}) {
   const dom = new JSDOM(readFileSync(path.join(frontendRoot, 'admin-user.html'), 'utf8'), { runScripts: 'outside-only', url: 'https://local.test/admin-user.html?id=7&uid=test-user' });
   const w = dom.window as any;
+  w.CRONOX_USER_IDENTITY = { format: (user: any) => String(user.id) };
   w.CRONOX_ADMIN_AUTH = { isAdmin: () => true };
   const create = jest.fn().mockRejectedValue(new Error('Connection lost'));
   w.CRONOX_API = { formatPrice: (value: number) => value.toFixed(2).replace('.', ',') + ' EUR', getMe: async () => ({ id: 99, role: 'SUPERADMIN' }), admin: {
@@ -50,21 +53,66 @@ async function setupPurchase(extraApi: Record<string, unknown> = {}) {
     const field = d.querySelector(selector); field.value = value; field.dispatchEvent(new w.Event(event, { bubbles: true }));
   };
   change('[data-manual-variant]', '5', 'change');
+  change('#manualStockHandling', 'DEDUCT_NOW', 'change');
   const review = () => d.querySelector('#reviewManualPurchase').click();
   const submit = () => d.querySelector('#manualPurchaseForm').dispatchEvent(new w.Event('submit', { bubbles: true, cancelable: true }));
   return { dom, w, d, create, change, review, submit };
 }
+describe('required stock handling', () => {
+  it('blocks review and direct submission with an inline error and clears it after selection', async () => {
+    const { d, change, review, submit, create } = await setupPurchase();
+    change('#manualStockHandling', '', 'change');
+    review(); submit(); await flush();
+    expect(d.querySelector('#manualStockHandlingError').hidden).toBe(false);
+    expect(d.querySelector('#manualStockHandlingError').textContent).toBe('Selecciona cómo se debe tratar el stock');
+    expect(d.querySelector('#manualPurchaseReview').hidden).toBe(true);
+    expect(d.querySelector('#manualPurchaseConfirmActions').hidden).toBe(true);
+    expect(create).not.toHaveBeenCalled();
+    change('#manualStockHandling', 'ALREADY_ADJUSTED', 'change'); review();
+    expect(d.querySelector('#manualStockHandlingError').hidden).toBe(true);
+    expect(d.querySelector('#manualPurchaseReview').hidden).toBe(false);
+  });
+  it.each(['DEDUCT_NOW', 'ALREADY_ADJUSTED'])('preserves %s on returning from review and clears it for a new purchase', async choice => {
+    const { d, change, review, submit, create } = await setupPurchase();
+    change('#manualStockHandling', choice, 'change'); review();
+    d.querySelector('#editManualPurchase').click();
+    expect(d.querySelector('#manualStockHandling').value).toBe(choice);
+    review(); submit(); await flush();
+    expect(create.mock.calls[0][1].stockHandling).toBe(choice);
+    d.querySelector('#toggleManualPurchase').click();
+    d.querySelector('#toggleManualPurchase').click(); await flush();
+    expect(d.querySelector('#manualStockHandling').value).toBe('');
+    expect(d.querySelector('#manualPurchaseReview').hidden).toBe(true);
+    submit(); expect(create).toHaveBeenCalledTimes(1);
+  });
+  it('starts without a choice after a successful purchase and reopening', async () => {
+    const { d, create, review, submit } = await setupPurchase();
+    create.mockResolvedValueOnce({ created: true });
+    review(); submit(); await flush();
+    d.querySelector('#toggleManualPurchase').click(); await flush();
+    expect(d.querySelector('#manualStockHandling').value).toBe('');
+    expect(d.querySelector('#manualPurchaseConfirmActions').hidden).toBe(true);
+  });
+  it('detects a missing decision at confirmation even without a change event', async () => {
+    const { d, review, submit, create } = await setupPurchase();
+    review(); d.querySelector('#manualStockHandling').value = ''; submit(); await flush();
+    expect(create).not.toHaveBeenCalled();
+    expect(d.querySelector('#manualStockHandlingError').hidden).toBe(false);
+    expect(d.querySelector('#manualPurchaseConfirmActions').hidden).toBe(true);
+  });
+});
+
 describe('paid unit price interactions', () => {
   it('uses server KPIs while retaining excluded purchases in the operational history', async () => {
     const { d } = await setupPurchase({
-      getUserDetail: async () => ({ user: { id: 7, email: 'test@example.test' }, stats: { ordersCount: 1, totalSpent: 51 } }),
+      getUserDetail: async () => ({ user: { id: 7, email: 'test@example.test' }, stats: { ordersCount: 2, totalSpent: 102 } }),
       listAdminOrders: async () => ({ items: [
         { id: 1, source: 'IN_PERSON_ADMIN', status: 'PAID', total: 51, excludedFromStatistics: false },
         { id: 2, source: 'IN_PERSON_ADMIN', status: 'PAID', total: 51, excludedFromStatistics: true },
       ] }),
     });
-    expect(d.querySelector('#summaryOrdersCount').textContent).toBe('1');
-    expect(d.querySelector('#summaryTotalSpent').textContent).toContain('51,00');
+    expect(d.querySelector('#summaryOrdersCount').textContent).toBe('2');
+    expect(d.querySelector('#summaryTotalSpent').textContent).toContain('102,00');
     expect(d.querySelector('#ordersBody').textContent).toContain('Excluida de estadísticas');
     expect(d.querySelectorAll('#ordersBody tr')).toHaveLength(2);
   });

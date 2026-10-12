@@ -56,6 +56,15 @@ jobs:
       - name: Generate the Prisma client
         run: npm run prisma:generate --prefix cronox-backend
 
+      - name: Check all frontend and backend TypeScript
+        run: |
+          set -euo pipefail
+          npm run admin:typecheck
+          npm run typecheck --prefix cronox-backend
+
+      - name: Verify the complete local test suite
+        run: npm test --prefix cronox-backend -- --runInBand --silent
+
       - name: Build matching frontend and backend artifacts
         run: |
           set -euo pipefail

@@ -52,6 +52,15 @@ describe('AdminManualPurchasesService', () => {
     expect(tx.stockMovement.createMany).toHaveBeenCalledWith({ data: [expect.objectContaining({ variantId: 5, delta: -3, reason: 'manual_sale' })] });
   });
 
+  it.each([undefined, null, '', 'INVALID'])('rejects stock handling %s before any database operation', async stockHandling => {
+    await expect(service.create(7, 99, 'manual-invalid-stock-123456', { ...dto, stockHandling } as any)).rejects.toThrow('Selecciona cómo se debe tratar el stock');
+    expect(prisma.order.findUnique).not.toHaveBeenCalled();
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+    expect(tx.order.create).not.toHaveBeenCalled();
+    expect(tx.productVariant.updateMany).not.toHaveBeenCalled();
+    expect(tx.stockMovement.createMany).not.toHaveBeenCalled();
+  });
+
   it('does not touch stock when the administrator says it was already adjusted', async () => {
     await service.create(7, 99, 'manual-purchase-654321', { ...dto, stockHandling: ManualStockHandling.ALREADY_ADJUSTED });
     expect(tx.productVariant.updateMany).not.toHaveBeenCalled();

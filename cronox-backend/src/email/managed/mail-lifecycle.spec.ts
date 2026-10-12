@@ -231,6 +231,7 @@ describe('email permissions, publication and controlled tests', () => {
         key: 'NOREPLY',
         email: 'noreply@example.test',
         name: 'CRONOX',
+        label: 'No reply', localOnly: false,
         configured: true,
       },
     ]);

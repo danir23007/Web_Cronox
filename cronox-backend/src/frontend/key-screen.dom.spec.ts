@@ -38,7 +38,9 @@ describe('Pantalla Clave frontend integration', () => {
   );
 
   it('adds the main Admin section with separate save, preview, activate and master controls', () => {
-    const document = new JSDOM(adminHtml).window.document;
+    const dom = new JSDOM(adminHtml, { runScripts: 'outside-only' });
+    dom.window.eval(readFileSync(join(frontend, 'assets', 'admin-navigation.js'), 'utf8'));
+    const document = dom.window.document;
     expect(
       document.querySelector('[data-nav-target="section-key-screen"]'),
     ).not.toBeNull();

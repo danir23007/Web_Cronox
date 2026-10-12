@@ -217,7 +217,7 @@ describe('mobile storefront refinement', () => {
 
   it('shares one index for arrows, desktop hover, and discriminated swipe', async () => {
     const { dom, app } = await createHarness();
-    const card = app.CRONOX_createProductCard(product());
+    const card: HTMLElement = app.CRONOX_createProductCard(product());
     app.document.getElementById('productsGrid').appendChild(card);
     const gallery = card.querySelector('.product-images')!;
     const activeIndex = () => Number(gallery.getAttribute('data-active-index'));
@@ -313,7 +313,7 @@ describe('mobile storefront refinement', () => {
       .dispatchEvent(new dom.window.Event('error'));
     expect(
       brokenFirst
-        .querySelector('.product-images')
+        .querySelector('.product-images')!
         .getAttribute('data-active-index'),
     ).toBe('1');
     expect(
@@ -337,7 +337,7 @@ describe('mobile storefront refinement', () => {
 
   it('marks Quick Add from product size-system metadata', async () => {
     const { dom, app } = await createHarness();
-    const apparelCard = app.CRONOX_createProductCard(product());
+    const apparelCard: HTMLElement = app.CRONOX_createProductCard(product());
     app.document.body.appendChild(apparelCard);
     const quickAdd = apparelCard.querySelector<HTMLButtonElement>('.fav-add')!;
     expect(
@@ -347,10 +347,10 @@ describe('mobile storefront refinement', () => {
     ).toBe(false);
     expect(
       apparelCard
-        .querySelector('.product-images')
+        .querySelector('.product-images')!
         .getAttribute('data-active-index'),
     ).toBe('0');
-    const sizes = app.document.querySelector('.qa-sizes');
+    const sizes: HTMLElement = app.document.querySelector('.qa-sizes');
     expect(sizes.dataset.sizeSystem).toBe('APPAREL');
     expect(sizes.querySelectorAll('.qa-size-btn')).toHaveLength(6);
     sizes.querySelectorAll<HTMLButtonElement>('.qa-size-btn')[1].click();
@@ -369,7 +369,7 @@ describe('mobile storefront refinement', () => {
     ring.variantMap = Object.fromEntries(
       ring.variants.map((variant) => [variant.size, variant]),
     );
-    const ringCard = app.CRONOX_createProductCard(ring);
+    const ringCard: HTMLElement = app.CRONOX_createProductCard(ring);
     app.document.body.appendChild(ringCard);
     ringCard.querySelector<HTMLButtonElement>('.fav-add')!.click();
     expect(sizes.dataset.sizeSystem).toBe('US_RING');

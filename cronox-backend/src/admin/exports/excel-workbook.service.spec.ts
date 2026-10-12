@@ -55,7 +55,7 @@ describe('ExcelWorkbookService', () => {
 
     expect(buffer.subarray(0, 2).toString()).toBe('PK');
     const workbook = new ExcelJS.Workbook();
-    await workbook.xlsx.load(buffer);
+    await workbook.xlsx.load(Uint8Array.from(buffer).buffer);
     const sheet = workbook.getWorksheet('Datos')!;
     expect(sheet.views[0]).toMatchObject({ state: 'frozen', ySplit: 3 });
     expect(sheet.getCell('A3').value).toBe('Texto');
@@ -73,7 +73,7 @@ describe('ExcelWorkbookService', () => {
       false,
     );
     const workbook = new ExcelJS.Workbook();
-    await workbook.xlsx.load(buffer);
+    await workbook.xlsx.load(Uint8Array.from(buffer).buffer);
     expect(workbook.getWorksheet('Vacío')?.getCell('A3').value).toBe('ID');
     expect(workbook.getWorksheet('Vacío')?.rowCount).toBe(3);
   });

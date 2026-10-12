@@ -1,6 +1,7 @@
 import { GUARDS_METADATA } from '@nestjs/common/constants';
-import { ExecutionContext, ValidationPipe } from '@nestjs/common';
+import { ValidationPipe } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
+import { ExecutionContextHost } from '@nestjs/core/helpers/execution-context-host';
 import { AdminGuard } from '../../common/guards/admin.guard';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import {
@@ -460,13 +461,11 @@ describe('Map aggregation, validation and permissions', () => {
     );
     const guard = new AdminGuard(new Reflector());
     const context = (role: string | undefined) =>
-      ({
-        switchToHttp: () => ({
-          getRequest: () => ({ user: role ? { role } : undefined }),
-        }),
-        getHandler: () => AdminMapController.prototype.get,
-        getClass: () => AdminMapController,
-      }) as ExecutionContext;
+      new ExecutionContextHost(
+        [{ user: role ? { role } : undefined }],
+        AdminMapController,
+        AdminMapController.prototype.get,
+      );
     for (const role of [undefined, 'USER', 'FRIEND'])
       expect(() => guard.canActivate(context(role))).toThrow();
     for (const role of ['ADMIN', 'SUPERADMIN'])
