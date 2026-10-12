@@ -5,6 +5,28 @@ import { JSDOM } from 'jsdom';
 const frontendRoot = path.resolve(__dirname, '../../../cronox-front');
 
 describe('browser sliding-session transport', () => {
+  const windows = new Set<JSDOM>();
+  let fakeClock = false;
+  const createDom = (...args: ConstructorParameters<typeof JSDOM>) => {
+    const dom = new JSDOM(...args);
+    windows.add(dom);
+    return dom;
+  };
+  afterEach(() => {
+    try {
+      // Cleanup also runs when a fetch/assertion fails. Closing JSDOM cancels
+      // the transport's window timers before restoring Node's timer APIs.
+      for (const dom of windows) dom.window.close();
+      if (fakeClock) expect(jest.getTimerCount()).toBe(0);
+    } finally {
+      windows.clear();
+      if (fakeClock) {
+        jest.clearAllTimers();
+        jest.useRealTimers();
+        fakeClock = false;
+      }
+    }
+  });
   const source = readFileSync(
     path.join(frontendRoot, 'src/admin/session.ts'),
     'utf8',
@@ -14,7 +36,7 @@ describe('browser sliding-session transport', () => {
   it.each(['USER', 'FRIEND', 'ADMIN', 'SUPERADMIN'])(
     'renews visible visits only for %s client policy',
     async (role) => {
-      const dom = new JSDOM('<!doctype html><body></body>', {
+      const dom = createDom('<!doctype html><body></body>', {
         runScripts: 'outside-only',
         pretendToBeVisual: true,
         url: 'https://cronox.test/profile.html',
@@ -57,14 +79,13 @@ describe('browser sliding-session transport', () => {
       expect(calls.filter((c) => c === '/api/auth/visit')).toHaveLength(
         ['USER', 'FRIEND'].includes(role) ? 1 : 0,
       );
-      dom.window.close();
     },
   );
 
   it.each([409, 429, 503])(
     'retains authentication when visit fails and refresh returns %s',
     async (status) => {
-      const dom = new JSDOM('<!doctype html><body></body>', {
+      const dom = createDom('<!doctype html><body></body>', {
         runScripts: 'outside-only',
         pretendToBeVisual: true,
         url: 'https://cronox.test/profile.html',
@@ -102,14 +123,13 @@ describe('browser sliding-session transport', () => {
       failure = false;
       expect((await dom.window.fetch('/api/me')).ok).toBe(true);
       expect(ended).not.toHaveBeenCalled();
-      dom.window.close();
     },
   );
 
   it.each(['anonymous', 'dependency failure'])(
     'does not amplify %s into refresh attempts or logout',
     async (scenario) => {
-      const dom = new JSDOM('<!doctype html><body></body>', {
+      const dom = createDom('<!doctype html><body></body>', {
         runScripts: 'outside-only',
         url: 'https://cronox.test/tienda',
       });
@@ -146,7 +166,6 @@ describe('browser sliding-session transport', () => {
       expect(calls).not.toContain('/api/auth/refresh');
       expect(calls).toHaveLength(scenario === 'anonymous' ? 1 : 2);
       expect(ended).not.toHaveBeenCalled();
-      dom.window.close();
     },
   );
 
@@ -172,7 +191,7 @@ describe('browser sliding-session transport', () => {
   });
 
   it('coalesces simultaneous access failures into one refresh and retries each request once', async () => {
-    const dom = new JSDOM('<!doctype html><body></body>', {
+    const dom = createDom('<!doctype html><body></body>', {
       runScripts: 'outside-only',
       url: 'https://cronox.test/profile.html',
     });
@@ -229,15 +248,26 @@ describe('browser sliding-session transport', () => {
     );
     expect(calls.filter((entry) => entry === '/api/orders')).toHaveLength(2);
     expect(calls.filter((entry) => entry === '/api/favorites')).toHaveLength(2);
-    dom.window.close();
   });
 
   it('does not report activity from a hidden tab or a background timer', async () => {
-    jest.useFakeTimers().setSystemTime(Date.parse('2026-09-17T08:00:00Z'));
-    const dom = new JSDOM('<!doctype html><body></body>', {
+    const dom = createDom('<!doctype html><body></body>', {
       runScripts: 'outside-only',
+      pretendToBeVisual: true,
       url: 'https://cronox.test/profile.html',
     });
+    // JSDOM's lifecycle and Node Response streams use these real task queues.
+    // Only the application clock/timeouts should be simulated.
+    fakeClock = true;
+    jest
+      .useFakeTimers({
+        doNotFake: ['nextTick', 'queueMicrotask', 'setImmediate'],
+      })
+      .setSystemTime(Date.parse('2026-09-17T08:00:00Z'));
+    // outside-only creates a separate Date realm. Without sharing the clock,
+    // the header is in simulated September while the browser sees wall time:
+    // it immediately reschedules expiry reads throughout the timer advance.
+    dom.window.Date = Date;
     const calls: string[] = [];
     const rawFetch = jest.fn(async (input: RequestInfo | URL) => {
       const url = new URL(
@@ -249,7 +279,7 @@ describe('browser sliding-session transport', () => {
         dom.window.location.href,
       );
       calls.push(url.pathname);
-      return new Response(JSON.stringify({ user: { id: 7 } }), {
+      return new Response(JSON.stringify({ user: { id: 7, role: 'ADMIN' } }), {
         status: 200,
         headers: {
           'X-Session-Idle-Expires': String(Date.now() + 90 * 60_000),
@@ -264,19 +294,74 @@ describe('browser sliding-session transport', () => {
       URL,
       BroadcastChannel: undefined,
     });
+    const listeners = jest.spyOn(dom.window, 'addEventListener');
     dom.window.eval(bundle);
-    await dom.window.fetch('/api/auth/login', { method: 'POST' });
+    const login = await dom.window.fetch('/api/auth/login', { method: 'POST' });
+    // Consume the caller's branch too, just as api.login does. Drain the
+    // zero-delay stream cleanup before counting only application timers.
+    await login.json();
+    await jest.advanceTimersByTimeAsync(0);
+    expect(dom.window.Date.now()).toBe(Date.now());
+    expect(jest.getTimerCount()).toBe(1); // the legitimate 90-minute idle check
     Object.defineProperty(dom.window.document, 'visibilityState', {
       configurable: true,
       value: 'hidden',
     });
     dom.window.dispatchEvent(new dom.window.Event('pointerdown'));
+    const pointerHandler = listeners.mock.calls.find(
+      ([name]) => name === 'pointerdown',
+    )?.[1];
+    expect(typeof pointerHandler).toBe('function');
+    if (typeof pointerHandler === 'function') {
+      // Exercise the hidden-tab guard independently of the synthetic-event
+      // guard: JSDOM dispatchEvent cannot produce trusted browser input.
+      const trustedInput = new Proxy(new dom.window.Event('pointerdown'), {
+        get: (target, key) =>
+          key === 'isTrusted' ? true : Reflect.get(target, key, target),
+      });
+      pointerHandler.call(dom.window, trustedInput);
+    }
     await jest.advanceTimersByTimeAsync(30 * 60_000);
-
-    expect(
-      calls.filter((entry) => entry === '/api/auth/activity'),
-    ).toHaveLength(0);
-    dom.window.close();
-    jest.useRealTimers();
+    expect(calls).toEqual(['/api/auth/login']);
+    expect(jest.getTimerCount()).toBe(1);
   });
+
+  it.each(['USER', 'FRIEND'])(
+    'does not renew a hidden %s session on reads or background timers',
+    async (role) => {
+      const dom = createDom('<!doctype html><body></body>', {
+        runScripts: 'outside-only',
+        url: 'https://cronox.test/profile.html',
+      });
+      fakeClock = true;
+      jest
+        .useFakeTimers({
+          doNotFake: ['nextTick', 'queueMicrotask', 'setImmediate'],
+        })
+        .setSystemTime(Date.parse('2026-09-17T08:00:00Z'));
+      dom.window.Date = Date;
+      const calls: string[] = [];
+      Object.assign(dom.window, {
+        Response,
+        Request,
+        Headers,
+        URL,
+        BroadcastChannel: undefined,
+        fetch: async (input: RequestInfo | URL) => {
+          calls.push(new URL(String(input), dom.window.location.href).pathname);
+          return new Response(JSON.stringify({ user: { id: 7, role } }));
+        },
+      });
+      dom.window.eval(bundle);
+      await dom.window.fetch('/api/me');
+      dom.window.dispatchEvent(new dom.window.Event('pointerdown'));
+      dom.window.document.dispatchEvent(
+        new dom.window.Event('visibilitychange'),
+      );
+      await jest.advanceTimersByTimeAsync(30 * 60_000);
+      await dom.window.fetch('/api/me');
+      expect(calls).toEqual(['/api/me', '/api/me']);
+      expect(jest.getTimerCount()).toBe(0);
+    },
+  );
 });
