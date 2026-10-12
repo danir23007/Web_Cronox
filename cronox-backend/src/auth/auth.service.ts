@@ -479,7 +479,7 @@ export class AuthService {
     });
     if (!persisted) return false;
 
-    const resetUrl = `${getFrontendUrl()}/reset-password?token=${encodeURIComponent(token)}`;
+    const resetUrl = `${getFrontendUrl()}/restablecer-contrasena#token=${encodeURIComponent(token)}`;
     try {
       if (purpose === 'initial-setup') {
         await this.emailService.sendInitialPasswordSetup(user.email, resetUrl);
@@ -534,13 +534,9 @@ export class AuthService {
       where: { token: tokenHash },
     });
 
-    if (
-      !passwordResetToken ||
-      passwordResetToken.usedAt ||
-      passwordResetToken.expiresAt <= new Date()
-    ) {
-      throw new BadRequestException('Token invalido o caducado');
-    }
+    if (!passwordResetToken) throw new BadRequestException({ code: 'PASSWORD_RESET_INVALID', message: 'El enlace de recuperación no es válido. Solicita uno nuevo.' });
+    if (passwordResetToken.usedAt) throw new BadRequestException({ code: 'PASSWORD_RESET_USED', message: 'Este enlace de recuperación ya se ha utilizado. Solicita uno nuevo.' });
+    if (passwordResetToken.expiresAt <= new Date()) throw new BadRequestException({ code: 'PASSWORD_RESET_EXPIRED', message: 'El enlace de recuperación ha caducado. Solicita uno nuevo.' });
 
     const hashedPassword = await this.hashPassword(newPassword);
     const now = new Date();
@@ -557,10 +553,16 @@ export class AuthService {
       });
 
       if (consumed.count !== 1) {
-        throw new BadRequestException('Token invalido o caducado');
+        throw new BadRequestException({ code: 'PASSWORD_RESET_UNAVAILABLE', message: 'El enlace ya se ha utilizado o ha caducado. Solicita uno nuevo.' });
       }
 
       await ensureAccountWelcome(tx, passwordResetToken.userId);
+      // A valid email setup/reset token completes a pending password account.
+      // Preregistrations still require their independent launch activation.
+      await tx.user.updateMany({
+        where: { id: passwordResetToken.userId, accountState: UserAccountState.PENDING_PASSWORD },
+        data: { accountState: UserAccountState.ACTIVE },
+      });
       await tx.user.update({
         where: { id: passwordResetToken.userId },
         data: {
@@ -644,6 +646,10 @@ export class AuthService {
 
   reportActivity(payload: SessionClaims) {
     return this.sessions.touch(payload);
+  }
+
+  reportClientVisit(payload: SessionClaims) {
+    return this.sessions.visit(payload);
   }
 
   private hashPassword(data: string) {

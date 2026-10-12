@@ -2572,7 +2572,13 @@ window.CRONOX_AUTH_STATE = window.CRONOX_USER ? 'authenticated' : 'unknown';
     hideUserMenu();
     if (window.CRONOX_API?.logout) {
       try { await window.CRONOX_API.logout(); }
-      catch (err) { console.warn('[AUTH] logout error', err); }
+      catch {
+        window.alert('No se ha podido cerrar la sesión. Inténtalo de nuevo.');
+        return;
+      }
+    } else {
+      window.alert('No se ha podido cerrar la sesión. Inténtalo de nuevo.');
+      return;
     }
     resetClientSessionState();
     clearWebStorage();

@@ -1343,15 +1343,15 @@
         await window.CRONOX_logout();
         return;
       } catch (err) {
-        console.warn('[PROFILE] logout error', err);
-        forceHome();
+        showProfileMessage('No se ha podido cerrar la sesión. Inténtalo de nuevo.', 'error');
         return;
       }
     }
     try {
       if (api.logout) await api.logout();
     } catch (err) {
-      console.warn('[PROFILE] logout error', err);
+      showProfileMessage('No se ha podido cerrar la sesión. Inténtalo de nuevo.', 'error');
+      return;
     }
     try {
       const key = window.CRONOX_NEWSLETTER_VISIT?.SESSION_KEY || 'cronoxNewsletterShown';

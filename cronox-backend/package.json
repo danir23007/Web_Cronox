@@ -27,6 +27,8 @@
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
     "test:manual-purchases:db": "node scripts/test-manual-purchases-db.cjs",
     "test:account-welcome:db": "node scripts/test-account-welcome-db.cjs",
+    "test:password-flows:serve": "node scripts/review-password-flows.cjs",
+    "test:client-sessions:serve": "node scripts/review-password-flows.cjs --sessions",
     "test:e2e": "jest --config ./test/jest-e2e.json",
     "prisma:generate": "prisma generate",
     "prisma:migrate:dev": "prisma migrate dev",

@@ -1,4 +1,8 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import {
+  ConflictException,
+  Injectable,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { AuthSession, Role, User, UserAccountState } from '@prisma/client';
 import { createHash, randomUUID, timingSafeEqual } from 'node:crypto';
@@ -177,8 +181,17 @@ export class AuthSessionsService {
       refreshExpiresAt(session.refreshIssuedAt, session.user.role).getTime() <=
       Date.now()
     ) {
-      await this.revoke(session.id);
-      this.denied('SESSION_EXPIRED');
+      const expired = await this.prisma.authSession.updateMany({
+        where: {
+          id: session.id,
+          generation: session.generation,
+          revokedAt: null,
+          refreshIssuedAt: session.refreshIssuedAt,
+        },
+        data: { revokedAt: new Date() },
+      });
+      if (expired.count) this.denied('SESSION_EXPIRED');
+      return this.validate(payload);
     }
     if (
       session.user.role === Role.ADMIN &&
@@ -230,6 +243,20 @@ export class AuthSessionsService {
           session.previousValidUntil.getTime() > Date.now()
         )
       ) {
+        // A delayed, authentic predecessor cannot authenticate, but must not
+        // revoke a newer customer session or clear its shared browser cookies.
+        if (
+          (session.user.role === Role.USER ||
+            session.user.role === Role.FRIEND) &&
+          typeof payload.generation === 'number' &&
+          Number.isInteger(payload.generation) &&
+          payload.generation < session.generation
+        )
+          throw new ConflictException({
+            code: 'REFRESH_RETRY',
+            message:
+              'La sesión se ha renovado en otra petición. Inténtalo de nuevo.',
+          });
         await this.revoke(session.id);
         this.denied();
       }
@@ -246,7 +273,12 @@ export class AuthSessionsService {
     const next = {
       ...session,
       generation: session.generation + 1,
-      refreshIssuedAt: Math.floor(now.getTime() / 1000),
+      // Background refresh only replaces credentials. Customer visits renew
+      // inactivity separately; existing administrator policies are unchanged.
+      refreshIssuedAt:
+        session.user.role === Role.USER || session.user.role === Role.FRIEND
+          ? session.refreshIssuedAt
+          : Math.floor(now.getTime() / 1000),
     };
     const changed = await this.prisma.authSession.updateMany({
       where: {
@@ -278,6 +310,50 @@ export class AuthSessionsService {
     });
     if (!changed.count) {
       const winner = await this.verify(token, 'refresh');
+      return this.tokens(winner, winner.user.role);
+    }
+    return this.tokens(next, session.user.role);
+  }
+
+  async visit(payload: SessionClaims): Promise<SessionTokens | null> {
+    const session = await this.validate(payload);
+    if (session.user.role !== Role.USER && session.user.role !== Role.FRIEND)
+      return null;
+    const now = new Date();
+    const issued = Math.floor(now.getTime() / 1000);
+    if (issued <= session.refreshIssuedAt)
+      return this.tokens(session, session.user.role);
+    const next = {
+      ...session,
+      generation: session.generation + 1,
+      refreshIssuedAt: issued,
+      lastActivityAt: now,
+    };
+    const changed = await this.prisma.authSession.updateMany({
+      where: {
+        id: session.id,
+        generation: session.generation,
+        revokedAt: null,
+        refreshIssuedAt: { gt: issued - PERSISTENT_SESSION_SECONDS },
+        user: {
+          sessionVersion: payload.sv,
+          accountState: UserAccountState.ACTIVE,
+        },
+      },
+      data: {
+        generation: next.generation,
+        refreshIssuedAt: issued,
+        lastActivityAt: now,
+        refreshHash: this.hash(this.refreshToken(next, session.user.role)),
+        previousRefreshHash:
+          session.previousValidUntil && session.previousValidUntil > now
+            ? session.previousRefreshHash
+            : session.refreshHash,
+        previousValidUntil: new Date(now.getTime() + REFRESH_RACE_MS),
+      },
+    });
+    if (!changed.count) {
+      const winner = await this.validate(payload);
       return this.tokens(winner, winner.user.role);
     }
     return this.tokens(next, session.user.role);

@@ -22,6 +22,9 @@ export function installSessionTransport(
   let dirty = false;
   let ended = false;
   let authenticated = false;
+  let client = false;
+  let visitDue = true;
+  let visitPromise: Promise<void> | null = null;
   let refreshPromise: Promise<boolean> | null = null;
   let activityPromise: Promise<void> | null = null;
   let idleTimer: ReturnType<typeof setTimeout> | undefined;
@@ -62,6 +65,7 @@ export function installSessionTransport(
     if (ended) return;
     ended = true;
     authenticated = false;
+    client = false;
     deadline = 0;
     clearTimeout(idleTimer);
     clearTimeout(activityTimer);
@@ -151,8 +155,12 @@ export function installSessionTransport(
         code?: string;
         message?: { code?: string } | string;
       };
-      return payload.code ??
-        (typeof payload.message === "object" ? payload.message?.code : undefined);
+      return (
+        payload.code ??
+        (typeof payload.message === "object"
+          ? payload.message?.code
+          : undefined)
+      );
     } catch {
       return undefined;
     }
@@ -190,7 +198,9 @@ export function installSessionTransport(
       const code = await errorCode(response);
       // Anonymous visits do not redirect. Previously authenticated pages do.
       const known =
-        authenticated || Boolean(deadline) || Boolean(code?.startsWith("SESSION_"));
+        authenticated ||
+        Boolean(deadline) ||
+        Boolean(code?.startsWith("SESSION_"));
       terminate(code === "SESSION_IDLE", true, known);
       return false;
     }
@@ -198,11 +208,9 @@ export function installSessionTransport(
     throw new Error("No se pudo renovar la sesión. Inténtalo de nuevo.");
   }
 
-  async function withRefreshLock(started: number) {
+  async function withCookieLock<T>(run: () => Promise<T>): Promise<T> {
     if (navigator.locks?.request)
-      return navigator.locks.request("cronox-session-refresh", () =>
-        doRefresh(started),
-      );
+      return navigator.locks.request("cronox-session-refresh", () => run());
     // Bounded best-effort storage lease for browsers without Web Locks.
     // The server's atomic rotation/grace remains authoritative if tabs race.
     for (let attempt = 0; attempt < 40; attempt++) {
@@ -217,11 +225,10 @@ export function installSessionTransport(
       }
       if (!lease || lease.until <= Date.now() || lease.tab === tab) break;
       await new Promise((resolve) => setTimeout(resolve, 100));
-      if (refreshedAt >= started) return true;
     }
     write(LOCK, JSON.stringify({ tab, until: Date.now() + 5000 }));
     try {
-      return await doRefresh(started);
+      return await run();
     } finally {
       try {
         if (
@@ -237,14 +244,51 @@ export function installSessionTransport(
 
   function refresh() {
     if (!refreshPromise)
-      refreshPromise = withRefreshLock(Date.now()).finally(() => {
-        refreshPromise = null;
-      });
+      refreshPromise = withCookieLock(() => doRefresh(Date.now())).finally(
+        () => {
+          refreshPromise = null;
+        },
+      );
     return refreshPromise;
   }
 
   const noRetry =
-    /^\/api\/auth\/(?:login|register|logout|refresh|csrf|forgot-password|reset-password)$/;
+    /^\/api\/auth\/(?:login|register|launch-login|newsletter-login|logout|refresh|csrf|forgot-password|reset-password)$/;
+
+  async function reportClientVisit() {
+    if (
+      !visitDue ||
+      visitPromise ||
+      ended ||
+      !authenticated ||
+      !client ||
+      document.visibilityState !== "visible"
+    )
+      return;
+    const send = async () => {
+      if (ended || document.visibilityState !== "visible") return;
+      const response = await rawFetch(endpoint("/api/auth/visit"), {
+        method: "POST",
+        credentials: "include",
+        cache: "no-store",
+        headers: {
+          ...(await csrfHeaders()),
+          "X-Cronox-Client-Visit": "visible",
+        },
+      });
+      if (response.ok) visitDue = false;
+      // Failure does not prove logout. Retry after another visible visit or
+      // genuine interaction; never renew through a background timer.
+    };
+    visitPromise = withCookieLock(send)
+      .catch(() => {
+        /* retain the existing session */
+      })
+      .finally(() => {
+        visitPromise = null;
+      });
+    await visitPromise;
+  }
   async function sessionFetch(
     input: RequestInfo | URL,
     init?: RequestInit,
@@ -258,7 +302,7 @@ export function installSessionTransport(
       location.href,
     );
     const eligible =
-      url.pathname !== '/api/live-stats/presence' &&
+      url.pathname !== "/api/live-stats/presence" &&
       url.origin === origin &&
       url.pathname.startsWith("/api/") &&
       init?.credentials !== "omit";
@@ -270,11 +314,23 @@ export function installSessionTransport(
         : input;
     const authResponse =
       url.pathname === "/api/me" ||
-      /^\/api\/auth\/(?:login|register|refresh)$/.test(url.pathname);
+      /^\/api\/auth\/(?:login|register|launch-login|newsletter-login|refresh)$/.test(
+        url.pathname,
+      );
+    // Serialize logout after in-flight cookie writers. Otherwise a late refresh
+    // response can put credentials back into the browser after explicit logout.
+    if (url.pathname === "/api/auth/logout") {
+      await visitPromise;
+      await refreshPromise;
+      const sendLogout = () => rawFetch(input, init);
+      const result = await withCookieLock(sendLogout);
+      if (result.ok) terminate(false, true, false);
+      return result;
+    }
     let response = observe(await rawFetch(input, init), authResponse);
     if (response.status === 401 && !noRetry.test(url.pathname)) {
       const code = await errorCode(response);
-      if (code === 'AUTH_REQUIRED') {
+      if (code === "AUTH_REQUIRED") {
         if (authenticated || deadline) terminate(false);
         return response;
       }
@@ -287,9 +343,28 @@ export function installSessionTransport(
       if (response.status === 401 && deadline)
         terminate((await errorCode(response)) === "SESSION_IDLE");
     }
-    if (response.ok && /\/auth\/(login|register)$/.test(url.pathname)) {
+    if (
+      response.ok &&
+      /\/auth\/(login|register|launch-login|newsletter-login)$/.test(
+        url.pathname,
+      )
+    ) {
       ended = false;
+      visitDue = true;
       announce("activity");
+    }
+    if (response.ok && authResponse && !ended) {
+      try {
+        const data = (await response.clone().json()) as {
+          user?: { role?: string };
+          role?: string;
+        };
+        const role = data.user?.role ?? data.role;
+        client = role === "USER" || role === "FRIEND";
+        await reportClientVisit();
+      } catch {
+        /* non-JSON responses cannot establish a client visit */
+      }
     }
     if (response.ok && url.pathname === "/api/auth/logout")
       terminate(false, true, false);
@@ -331,6 +406,13 @@ export function installSessionTransport(
 
   function activity(event: Event) {
     if (
+      event.isTrusted &&
+      document.visibilityState === "visible" &&
+      !ended &&
+      client
+    )
+      void reportClientVisit();
+    if (
       !event.isTrusted ||
       document.visibilityState !== "visible" ||
       ended ||
@@ -344,12 +426,25 @@ export function installSessionTransport(
       void report();
     }, wait);
   }
-  for (const name of [
-    "pointerdown",
-    "keydown",
-    "touchstart",
-    "scroll",
-  ]) {
+  const visibleVisit = () => {
+    if (document.visibilityState !== "visible" || ended) return;
+    visitDue = true;
+    // A successful authenticated response is required before renewal.
+    if (client && authenticated)
+      void sessionFetch(endpoint("/api/me"), {
+        credentials: "include",
+        cache: "no-store",
+      }).catch(() => {
+        /* temporary outage is not logout */
+      });
+  };
+  document.addEventListener("visibilitychange", (event) => {
+    if (event.isTrusted) visibleVisit();
+  });
+  window.addEventListener("pageshow", (event) => {
+    if (event.isTrusted && event.persisted) visibleVisit();
+  });
+  for (const name of ["pointerdown", "keydown", "touchstart", "scroll"]) {
     window.addEventListener(name, activity, { passive: true, capture: true });
   }
 

@@ -51,6 +51,11 @@ describe('server-authoritative sliding auth sessions', () => {
         row.refreshIssuedAt <= where.refreshIssuedAt.gt
       )
         return false;
+      if (
+        typeof where.refreshIssuedAt === 'number' &&
+        row.refreshIssuedAt !== where.refreshIssuedAt
+      )
+        return false;
       if (where.revokedAt === null && row.revokedAt !== null) return false;
       if (
         where.lastActivityAt?.gt &&
@@ -141,7 +146,18 @@ describe('server-authoritative sliding auth sessions', () => {
       await expect(
         service.verify(first.refreshToken, 'refresh'),
       ).resolves.toBeTruthy();
-      const renewed = await service.rotate(first.refreshToken);
+      const passive = await service.rotate(first.refreshToken);
+      if (role !== Role.SUPERADMIN)
+        expect(passive.refreshExpiresAt).toEqual(first.refreshExpiresAt);
+      const renewed =
+        role === Role.SUPERADMIN
+          ? passive
+          : (await service.visit({
+              sub: user.id,
+              sv: user.sessionVersion,
+              sid: session.id,
+              type: 'access',
+            }))!;
       expect(renewed.refreshExpiresAt.getTime()).toBe(
         (session.refreshIssuedAt + PERSISTENT_SESSION_SECONDS) * 1000,
       );
@@ -265,17 +281,79 @@ describe('server-authoritative sliding auth sessions', () => {
     expect(user.sessionVersion).toBe(3);
   });
 
-  it('returns one rotation result during a tab race and revokes replay outside grace', async () => {
-    const original = await service.create(user);
-    const winner = await service.rotate(original.refreshToken);
-    const racing = await service.rotate(original.refreshToken);
-    expect(racing.refreshToken).toBe(winner.refreshToken);
-    jest.advanceTimersByTime(REFRESH_RACE_MS + 1);
-    await expect(service.rotate(original.refreshToken)).rejects.toBeInstanceOf(
-      UnauthorizedException,
-    );
-    expect([...records.values()][0].revokedAt).toBeInstanceOf(Date);
-  });
+  it.each([Role.USER, Role.FRIEND, Role.ADMIN, Role.SUPERADMIN])(
+    'handles %s refresh races without authenticating stale credentials',
+    async (role) => {
+      user.role = role;
+      const original = await service.create(user);
+      const winner = await service.rotate(original.refreshToken);
+      const racing = await service.rotate(original.refreshToken);
+      expect(racing.refreshToken).toBe(winner.refreshToken);
+      jest.advanceTimersByTime(REFRESH_RACE_MS + 1);
+      if (role === Role.USER || role === Role.FRIEND) {
+        await expect(
+          service.rotate(original.refreshToken),
+        ).rejects.toMatchObject({
+          response: { code: 'REFRESH_RETRY' },
+        });
+        expect([...records.values()][0].revokedAt).toBeNull();
+        await expect(service.rotate(winner.refreshToken)).resolves.toBeTruthy();
+      } else {
+        await expect(
+          service.rotate(original.refreshToken),
+        ).rejects.toBeInstanceOf(UnauthorizedException);
+        expect([...records.values()][0].revokedAt).toBeInstanceOf(Date);
+      }
+    },
+  );
+
+  it.each([Role.USER, Role.FRIEND])(
+    'renews only the visited %s device, persists, and expires after 500 inactive days',
+    async (role) => {
+      user.role = role;
+      await service.create(user);
+      const id = [...records.keys()][0];
+      const other = await service.create(user);
+      jest.setSystemTime(now + 400 * 86400_000);
+      const [one, two] = await Promise.all([
+        service.visit({ sub: 7, sv: 3, sid: id }),
+        service.visit({ sub: 7, sv: 3, sid: id }),
+      ]);
+      expect(one!.refreshToken).toBe(two!.refreshToken);
+      expect(one!.refreshExpiresAt.getTime()).toBe(
+        Date.now() + PERSISTENT_SESSION_SECONDS * 1000,
+      );
+      const reloaded = new AuthSessionsService(prisma);
+      await expect(
+        reloaded.verify(one!.refreshToken, 'refresh'),
+      ).resolves.toBeTruthy();
+      expect(records.get(id).lastActivityAt.getTime()).toBe(Date.now());
+      jest.advanceTimersByTime(101 * 86400_000);
+      await expect(
+        reloaded.verify(other.refreshToken, 'refresh'),
+      ).rejects.toBeInstanceOf(UnauthorizedException);
+      await expect(
+        reloaded.verify(one!.refreshToken, 'refresh'),
+      ).resolves.toBeTruthy();
+      jest.advanceTimersByTime(399 * 86400_000);
+      await expect(
+        reloaded.verify(one!.refreshToken, 'refresh'),
+      ).rejects.toBeInstanceOf(UnauthorizedException);
+    },
+  );
+
+  it.each([Role.ADMIN, Role.SUPERADMIN])(
+    'does not change %s policies through customer visits',
+    async (role) => {
+      user.role = role;
+      await service.create(user);
+      jest.advanceTimersByTime(1000);
+      await expect(
+        service.visit({ sub: 7, sv: 3, sid: [...records.keys()][0] }),
+      ).resolves.toBeNull();
+      expect(writes).toBe(0);
+    },
+  );
 
   it('invalidates a session after password/version changes or account disablement', async () => {
     const first = await service.create(user);
@@ -304,5 +382,31 @@ describe('server-authoritative sliding auth sessions', () => {
     expect(row.refreshHash).toMatch(/^[a-f0-9]{64}$/);
     expect(JSON.stringify(row)).not.toContain(tokens.refreshToken);
     expect(prisma.authSession.deleteMany).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not revoke a customer renewed while an expiry check was reading its old generation', async () => {
+    await service.create(user);
+    const row = [...records.values()][0];
+    row.refreshIssuedAt -= PERSISTENT_SESSION_SECONDS + 1;
+    const update = prisma.authSession.updateMany.getMockImplementation();
+    prisma.authSession.updateMany.mockImplementationOnce(async (args: any) => {
+      row.generation++;
+      row.refreshIssuedAt = Math.floor(Date.now() / 1000);
+      return update(args);
+    });
+    await expect(
+      service.validate({ sub: 7, sv: 3, sid: row.id }),
+    ).resolves.toMatchObject({ revokedAt: null });
+    expect(row.revokedAt).toBeNull();
+  });
+
+  it('uses one replacement family for genuinely parallel refresh requests', async () => {
+    const original = await service.create(user);
+    const replies = await Promise.all(
+      Array.from({ length: 8 }, () => service.rotate(original.refreshToken)),
+    );
+    expect(new Set(replies.map((r) => r.refreshToken)).size).toBe(1);
+    expect([...records.values()][0].generation).toBe(1);
+    expect([...records.values()][0].revokedAt).toBeNull();
   });
 });

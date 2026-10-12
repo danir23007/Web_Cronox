@@ -20,9 +20,70 @@ describe('AuthController cart merge cookie lifecycle', () => {
       clearMergedAnonymousCartCookie: jest.fn(),
       recordSuccessfulLogin: jest.fn().mockResolvedValue(undefined),
       refresh: jest.fn().mockResolvedValue(loginResult),
+      reportClientVisit: jest.fn().mockResolvedValue(null),
+      logoutToAnonymousCart: jest.fn().mockResolvedValue({ cartMoved: false }),
+      clearAuthCookies: jest.fn(),
     };
     controller = new AuthController(authService);
     response = {};
+  });
+
+  it.each(['internal', 'bot', 'missing marker'])(
+    'does not renew %s traffic',
+    async (kind) => {
+      const headers: Record<string, string> = {
+        'X-Cronox-Client-Visit': 'visible',
+        'Sec-Fetch-Site': 'same-origin',
+        'Sec-Fetch-Mode': 'cors',
+        'User-Agent': 'Mozilla/5.0',
+      };
+      if (kind === 'internal') delete headers['Sec-Fetch-Site'];
+      if (kind === 'bot') headers['User-Agent'] = 'Mozilla/5.0 Googlebot';
+      if (kind === 'missing marker') delete headers['X-Cronox-Client-Visit'];
+      expect(
+        await controller.visit(
+          { get: (key: string) => headers[key] } as any,
+          response,
+        ),
+      ).toEqual({ renewed: false });
+      expect(authService.reportClientVisit).not.toHaveBeenCalled();
+    },
+  );
+
+  it('returns success and persistent cookies only after an authenticated browser visit is persisted', async () => {
+    const tokens = {
+      ...loginResult.tokens,
+      refreshExpiresAt: new Date('2028-01-01'),
+    };
+    authService.reportClientVisit.mockResolvedValue(tokens);
+    const headers: Record<string, string> = {
+      'X-Cronox-Client-Visit': 'visible',
+      'Sec-Fetch-Site': 'same-origin',
+      'Sec-Fetch-Mode': 'cors',
+      'User-Agent': 'Mozilla/5.0',
+    };
+    const claims = { sid: 'session', sub: 42, sv: 1 };
+    expect(
+      await controller.visit(
+        { get: (key: string) => headers[key], authSession: claims } as any,
+        response,
+      ),
+    ).toEqual({
+      renewed: true,
+      expiresAt: tokens.refreshExpiresAt.toISOString(),
+    });
+    expect(authService.reportClientVisit).toHaveBeenCalledWith(claims);
+    expect(authService.setAuthCookies).toHaveBeenCalledWith(response, tokens);
+  });
+
+  it('preserves cookies when logout cannot confirm database revocation', async () => {
+    authService.logoutToAnonymousCart.mockRejectedValue(
+      new Error('database unavailable'),
+    );
+    await expect(
+      controller.logout({ cookies: {} } as any, response),
+    ).rejects.toThrow('database unavailable');
+    expect(authService.clearAuthCookies).not.toHaveBeenCalled();
   });
 
   it('clears cartId only after the guest cart merge succeeds', async () => {
@@ -91,10 +152,12 @@ describe('AuthController cart merge cookie lifecycle', () => {
 
   it('does not record failed authentication or refresh as a successful login', async () => {
     authService.login.mockRejectedValueOnce(new Error('invalid credentials'));
-    await expect(controller.login({ cookies: {} } as any, response, {
-      email: 'member@example.test',
-      password: 'wrong-password',
-    })).rejects.toThrow('invalid credentials');
+    await expect(
+      controller.login({ cookies: {} } as any, response, {
+        email: 'member@example.test',
+        password: 'wrong-password',
+      }),
+    ).rejects.toThrow('invalid credentials');
     await controller.refresh({ user: { id: 42 } } as any, response);
 
     expect(authService.recordSuccessfulLogin).not.toHaveBeenCalled();

@@ -167,18 +167,16 @@ export class AuthController {
     ).cookies;
 
     const anonymousId = randomUUID();
-    try {
-      const result = await this.authService.logoutToAnonymousCart(
-        anonymousId,
-        cookies?.jwt,
-        cookies?.refresh_token,
-      );
-      if (result.cartMoved) {
-        res.cookie(CART_COOKIE_NAME, anonymousId, getCartCookieOptions());
-      }
-    } finally {
-      this.authService.clearAuthCookies(res);
+    const result = await this.authService.logoutToAnonymousCart(
+      anonymousId,
+      cookies?.jwt,
+      cookies?.refresh_token,
+    );
+    if (result.cartMoved) {
+      res.cookie(CART_COOKIE_NAME, anonymousId, getCartCookieOptions());
     }
+    // A failed database write is not a confirmed revocation.
+    this.authService.clearAuthCookies(res);
   }
 
   @Get('csrf')
@@ -244,6 +242,32 @@ export class AuthController {
     return this.authService.reportActivity(
       (req as Request & { authSession: SessionClaims }).authSession,
     );
+  }
+
+  @Post('visit')
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.OK)
+  @Throttle({ default: { limit: 30, ttl: 60_000 } })
+  async visit(@Req() req: Request, @Res({ passthrough: true }) res: Response) {
+    // Only the visible storefront sends this explicit visit marker. Generic
+    // authenticated reads, refresh, workers and known crawlers never renew.
+    const browserVisit =
+      req.get('X-Cronox-Client-Visit') === 'visible' &&
+      ['same-origin', 'same-site', 'cross-site'].includes(
+        req.get('Sec-Fetch-Site') || '',
+      ) &&
+      ['cors', 'same-origin'].includes(req.get('Sec-Fetch-Mode') || '') &&
+      /^Mozilla\//.test(req.get('User-Agent') || '') &&
+      !/bot|crawler|spider|headless|lighthouse|monitor/i.test(
+        req.get('User-Agent') || '',
+      );
+    if (!browserVisit) return { renewed: false };
+    const tokens = await this.authService.reportClientVisit(
+      (req as Request & { authSession: SessionClaims }).authSession,
+    );
+    if (!tokens) return { renewed: false };
+    this.authService.setAuthCookies(res, tokens);
+    return { renewed: true, expiresAt: tokens.refreshExpiresAt.toISOString() };
   }
 
   @Post('change-password')

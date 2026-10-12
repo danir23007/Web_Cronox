@@ -57,6 +57,7 @@ const setup = () => {
     getCsrfHeaders: jest.fn().mockResolvedValue({ 'x-csrf-token': 'fixture-only' }),
     getMe: jest.fn(() => auth.promise),
     getCart: jest.fn().mockResolvedValue({ items: [], itemsCount: 0 }),
+    logout: jest.fn().mockResolvedValue(undefined),
   };
   window.fetch = jest.fn(async (input: string) => {
     const url = String(input);
@@ -81,6 +82,21 @@ const setup = () => {
 };
 
 describe('public newsletter authoritative authentication gate', () => {
+  it.each(['unavailable', 'failed'])('preserves identity and private state after %s logout', async kind => {
+    const context = setup();
+    try {
+      await flush(); context.auth.resolve({ id: 7 }); await flush();
+      const win = context.window;
+      win.alert = jest.fn();
+      win.sessionStorage.setItem('account-private-cache', 'retained');
+      if (kind === 'unavailable') delete win.CRONOX_API.logout;
+      else win.CRONOX_API.logout.mockRejectedValue(new Error('temporary outage'));
+      await win.CRONOX_logout();
+      expect(win.CRONOX_USER.id).toBe(7);
+      expect(win.sessionStorage.getItem('account-private-cache')).toBe('retained');
+      expect(win.alert).toHaveBeenCalledWith(expect.stringContaining('Inténtalo de nuevo'));
+    } finally { context.dom.window.close(); }
+  });
   it('preserves the consumed automatic appearance across logout and the next page controller', async () => {
     const context = setup();
     context.window.console.error = jest.fn();

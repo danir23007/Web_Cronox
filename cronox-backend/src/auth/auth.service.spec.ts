@@ -145,9 +145,11 @@ describe('AuthService password reset security', () => {
     ).resolves.toEqual({ ok: true });
     await new Promise<void>((resolve) => setImmediate(resolve));
 
-    const rawToken = new URL(
+    const resetLink = new URL(
       emailService.sendPasswordReset.mock.calls[0][1],
-    ).searchParams.get('token');
+    );
+    expect(resetLink.searchParams.has('token')).toBe(false);
+    const rawToken = new URLSearchParams(resetLink.hash.slice(1)).get('token');
     const storedToken =
       tx.passwordResetToken.create.mock.calls[0][0].data.token;
 
@@ -252,7 +254,7 @@ describe('AuthService password reset security', () => {
 
     expect(emailService.sendInitialPasswordSetup).toHaveBeenCalledTimes(1);
     const setupUrl = emailService.sendInitialPasswordSetup.mock.calls[0][1];
-    const rawToken = new URL(setupUrl).searchParams.get('token');
+    const rawToken = new URLSearchParams(new URL(setupUrl).hash.slice(1)).get('token');
     const storedToken =
       tx.passwordResetToken.create.mock.calls[0][0].data.token;
     expect(storedToken).toBe(
@@ -337,19 +339,25 @@ describe('AuthService password reset security', () => {
       expiresAt: new Date(Date.now() + 60_000),
     });
     let persistedHash: string | null = null;
+    let accountState: UserAccountState = UserAccountState.PENDING_PASSWORD;
+    tx.user.updateMany.mockImplementation(async ({ where, data }: { where: { accountState?: UserAccountState }; data: { accountState?: UserAccountState } }) => {
+      if (where.accountState === accountState && data.accountState) accountState = data.accountState;
+      return { count: 1 };
+    });
     tx.user.update.mockImplementation(({ data }: any) => {
       persistedHash = data.password;
       return { id: 42 };
     });
 
     await service.resetPassword(rawToken, 'ValidPassword1');
+    expect(accountState).toBe(UserAccountState.ACTIVE);
     prisma.user.findFirst.mockImplementation(() =>
       Promise.resolve({
         id: 42,
         email: 'new@example.test',
         password: persistedHash,
         role: 'USER',
-        accountState: UserAccountState.ACTIVE,
+        accountState,
         sessionVersion: 1,
       }),
     );
@@ -357,6 +365,16 @@ describe('AuthService password reset security', () => {
     await expect(
       service.validateUser('NEW@example.test', 'ValidPassword1'),
     ).resolves.toMatchObject({ id: 42, email: 'new@example.test' });
+  });
+  it.each([
+    [null, 'PASSWORD_RESET_INVALID'],
+    [{ id: 11, userId: 42, usedAt: new Date(), expiresAt: new Date(Date.now() + 60000) }, 'PASSWORD_RESET_USED'],
+    [{ id: 11, userId: 42, usedAt: null, expiresAt: new Date(0) }, 'PASSWORD_RESET_EXPIRED'],
+  ])('rejects unavailable reset links with an actionable error and no writes', async (row, code) => {
+    prisma.passwordResetToken.findUnique.mockResolvedValue(row);
+    await expect(service.resetPassword('local-reset-token', 'ValidPassword1')).rejects.toMatchObject({ response: { code } });
+    expect(tx.user.update).not.toHaveBeenCalled();
+    expect(tx.passwordResetToken.updateMany).not.toHaveBeenCalled();
   });
 
   it('revokes a validated access session during idempotent logout', async () => {

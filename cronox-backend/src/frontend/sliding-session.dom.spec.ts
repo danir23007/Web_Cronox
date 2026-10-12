@@ -11,22 +11,137 @@ describe('browser sliding-session transport', () => {
   );
   const bundle = readFileSync(path.join(frontendRoot, 'assets/api.js'), 'utf8');
 
+  it.each(['USER', 'FRIEND', 'ADMIN', 'SUPERADMIN'])(
+    'renews visible visits only for %s client policy',
+    async (role) => {
+      const dom = new JSDOM('<!doctype html><body></body>', {
+        runScripts: 'outside-only',
+        pretendToBeVisual: true,
+        url: 'https://cronox.test/profile.html',
+      });
+      const calls: string[] = [];
+      const rawFetch = jest.fn(async (input: RequestInfo | URL) => {
+        const route = new URL(String(input), dom.window.location.href).pathname;
+        calls.push(route);
+        return new Response(
+          JSON.stringify(
+            route.endsWith('/csrf')
+              ? { csrfToken: 'csrf' }
+              : { user: { role } },
+          ),
+          { status: 200 },
+        );
+      });
+      Object.assign(dom.window, {
+        fetch: rawFetch,
+        Response,
+        Request,
+        Headers,
+        URL,
+        BroadcastChannel: undefined,
+      });
+      dom.window.eval(bundle);
+      await dom.window.fetch('/api/me');
+      await dom.window.fetch('/api/me');
+      expect(calls.filter((c) => c === '/api/auth/visit')).toHaveLength(
+        ['USER', 'FRIEND'].includes(role) ? 1 : 0,
+      );
+      Object.defineProperty(dom.window.document, 'visibilityState', {
+        configurable: true,
+        value: 'hidden',
+      });
+      dom.window.document.dispatchEvent(
+        new dom.window.Event('visibilitychange'),
+      );
+      await dom.window.fetch('/api/me');
+      expect(calls.filter((c) => c === '/api/auth/visit')).toHaveLength(
+        ['USER', 'FRIEND'].includes(role) ? 1 : 0,
+      );
+      dom.window.close();
+    },
+  );
+
+  it.each([409, 429, 503])(
+    'retains authentication when visit fails and refresh returns %s',
+    async (status) => {
+      const dom = new JSDOM('<!doctype html><body></body>', {
+        runScripts: 'outside-only',
+        pretendToBeVisual: true,
+        url: 'https://cronox.test/profile.html',
+      });
+      const ended = jest.fn();
+      dom.window.addEventListener('cronox:session-ended', ended);
+      let failure = false;
+      const refreshes = jest.fn();
+      Object.assign(dom.window, {
+        Response,
+        Request,
+        Headers,
+        URL,
+        BroadcastChannel: undefined,
+        fetch: async (input: RequestInfo | URL) => {
+          const route = new URL(String(input), dom.window.location.href)
+            .pathname;
+          if (route.endsWith('/visit')) throw new Error('network unavailable');
+          if (route.endsWith('/refresh')) {
+            refreshes();
+            return new Response('{}', { status });
+          }
+          if (route.endsWith('/csrf'))
+            return new Response('{"csrfToken":"csrf"}');
+          if (route === '/api/me' && !failure)
+            return new Response('{"user":{"role":"USER"}}');
+          return new Response('{}', { status: 401 });
+        },
+      });
+      dom.window.eval(bundle);
+      expect((await dom.window.fetch('/api/me')).ok).toBe(true);
+      failure = true;
+      await expect(dom.window.fetch('/api/orders')).rejects.toThrow('renovar');
+      expect(refreshes).toHaveBeenCalledTimes(1);
+      failure = false;
+      expect((await dom.window.fetch('/api/me')).ok).toBe(true);
+      expect(ended).not.toHaveBeenCalled();
+      dom.window.close();
+    },
+  );
+
   it.each(['anonymous', 'dependency failure'])(
-    'does not amplify %s into refresh attempts or logout', async scenario => {
-      const dom = new JSDOM('<!doctype html><body></body>', { runScripts: 'outside-only', url: 'https://cronox.test/tienda' });
+    'does not amplify %s into refresh attempts or logout',
+    async (scenario) => {
+      const dom = new JSDOM('<!doctype html><body></body>', {
+        runScripts: 'outside-only',
+        url: 'https://cronox.test/tienda',
+      });
       const calls: string[] = [];
       const ended = jest.fn();
       dom.window.addEventListener('cronox:session-ended', ended);
-      const rawFetch = jest.fn(async input => {
+      const rawFetch = jest.fn(async (input) => {
         const route = new URL(String(input), dom.window.location.href).pathname;
         calls.push(route);
-        return new Response(JSON.stringify(scenario === 'anonymous' ? { code: 'AUTH_REQUIRED' } : {}), {
-          status: scenario === 'dependency failure' && route === '/api/me' ? 503 : 401,
-        });
+        return new Response(
+          JSON.stringify(
+            scenario === 'anonymous' ? { code: 'AUTH_REQUIRED' } : {},
+          ),
+          {
+            status:
+              scenario === 'dependency failure' && route === '/api/me'
+                ? 503
+                : 401,
+          },
+        );
       });
-      Object.assign(dom.window, { fetch: rawFetch, Response, Request, Headers, URL, BroadcastChannel: undefined });
+      Object.assign(dom.window, {
+        fetch: rawFetch,
+        Response,
+        Request,
+        Headers,
+        URL,
+        BroadcastChannel: undefined,
+      });
       dom.window.eval(bundle);
-      if (scenario === 'anonymous') expect((await dom.window.fetch('/api/me')).status).toBe(401);
+      if (scenario === 'anonymous')
+        expect((await dom.window.fetch('/api/me')).status).toBe(401);
       else await expect(dom.window.fetch('/api/orders')).rejects.toThrow();
       expect(calls).not.toContain('/api/auth/refresh');
       expect(calls).toHaveLength(scenario === 'anonymous' ? 1 : 2);
