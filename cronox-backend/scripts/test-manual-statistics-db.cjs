@@ -34,7 +34,7 @@ async function main() {
       await sql.query(reconciliation.slice(reconciliation.indexOf('CREATE VIEW'), reconciliation.indexOf('-- Local PostgreSQL')));
     } finally { await sql.end(); }
     require('../test/test-environment.cjs').installTestEnvironment({ overrides: { DATABASE_URL: target.href, DIRECT_URL: target.href, USER_NUMBERING_DATABASE_URL: target.href,
-      EMAIL_ENABLED: 'false', BACKGROUND_JOBS_ENABLED: 'false', CRONOX_ROUTE_SMOKE_MODE: 'true', SUPABASE_URL: '', SUPABASE_SERVICE_ROLE_KEY: '',
+      EMAIL_ENABLED: 'false', BACKGROUND_JOBS_ENABLED: 'false', CRONOX_ROUTE_SMOKE_MODE: 'true', CRONOX_LOCAL_DEV: 'true', SUPABASE_URL: '', SUPABASE_SERVICE_ROLE_KEY: '',
       PORT: '43122', FRONTEND_URL: 'http://127.0.0.1:43122', API_PUBLIC_URL: 'http://127.0.0.1:43122', CORS_ORIGINS: 'http://127.0.0.1:43122',
       // Only this uniquely created disposable server: intensive UI sort matrix.
       RATE_LIMIT_TTL_MS: '1000', RATE_LIMIT_MAX: '100' } });
@@ -56,7 +56,7 @@ async function main() {
     const admin = await db.user.create({ data: { email: 'admin@statistics.test', role: 'SUPERADMIN' } });
     const customer = await db.user.create({ data: { email: 'buyer@statistics.test', name: 'TEST local estadísticas', analyticsConsentStatus: 'ACTIVE' } });
     const product = await db.product.create({ data: { name: 'TEST Camiseta estadísticas', slug: 'statistics-shirt', price: 9999,
-      privateCost: { create: { unitCostCents: 1500 } }, variants: { create: { size: 'M', sku: 'STAT-M', stockQty: 100 } } }, include: { variants: true } });
+      privateCost: { create: { unitCostCents: 1500 } }, variants: { create: [{ size: 'M', sku: 'STAT-M', stockQty: 100 }, { size: 'L', sku: 'STAT-L', stockQty: 0 }] } }, include: { variants: { orderBy: { id: 'asc' } } } });
     const variantId = product.variants[0].id, now = new Date(), day = madridDate(now);
     const payload = { paymentMethod: 'CASH', stockHandling: 'DEDUCT_NOW', purchasedAt: now.toISOString(), items: [{ variantId, quantity: 2, unitPriceCents: 2550 }] };
     const normal = (await manual.create(customer.id, admin.id, randomUUID(), payload)).order;
@@ -139,6 +139,7 @@ async function main() {
     const { NestFactory } = require('@nestjs/core'), { ValidationPipe } = require('@nestjs/common');
     const { AppModule } = require('../dist/app.module');
     app = await NestFactory.create(AppModule, { logger: ['error'] }); app.setGlobalPrefix('api'); app.use(require('cookie-parser')());
+    app.use(require('../dist/common/config/local-review-safety').localReviewSafety);
     // Match the existing redirects installed by the normal main.ts bootstrap.
     app.use(['/admin', '/admin/'], (req, res, next) => {
       if (req.method === 'GET' && (req.path === '/' || req.path === '')) return res.redirect(307, '/admin.html');
@@ -164,6 +165,20 @@ async function main() {
     await app.listen(43122, '127.0.0.1');
     const csrf = 'local-statistics-test-csrf';
     const headers = { Origin: 'http://127.0.0.1:43122', Cookie: 'cronox_csrf_token=' + csrf, 'x-csrf-token': csrf, Authorization: 'Bearer ' + token.accessToken, 'Content-Type': 'application/json', 'Idempotency-Key': randomUUID() };
+    headers['x-cronox-user-identity'] = customer.identityUid;
+    const editUrl = `http://127.0.0.1:43122/api/admin/users/${customer.id}/in-person-purchases/${normal.id}`;
+    const readReply = await fetch(editUrl, { headers });
+    const beforeEdit = await readReply.json();
+    assert.equal(readReply.status, 200, JSON.stringify(beforeEdit));
+    const editReply = await fetch(editUrl, { method: 'PATCH', headers, body: JSON.stringify({
+      expectedVersion: beforeEdit.expectedVersion, items: beforeEdit.order.items.map(({ itemId, variantId, quantity, unitPriceCents }) => ({ itemId, variantId, quantity, unitPriceCents })), paymentMethod: beforeEdit.order.paymentMethod,
+      purchasedAt: beforeEdit.order.purchasedAt, excludedFromStatistics: beforeEdit.order.excludedFromStatistics, note: 'HTTP persistence regression',
+    }) });
+    assert.equal(editReply.status, 200, 'Edit rejected by local bootstrap: ' + await editReply.text());
+    const afterEdit = await (await fetch(editUrl, { headers })).json();
+    assert.equal(afterEdit.order.id, normal.id); assert.equal(afterEdit.order.note, 'HTTP persistence regression');
+    assert.equal((await db.order.findUniqueOrThrow({ where: { id: normal.id } })).internalNote, 'HTTP persistence regression');
+    checks.push('Local bootstrap PATCH persists same purchase; subsequent GET and database agree');
     assert.equal((await fetch(`http://127.0.0.1:43122/api/admin/orders/${web.id}/statistics-exclusion`, { method: 'POST', headers, body: JSON.stringify({ excludedFromStatistics: true }) })).status, 400);
     assert.equal((await fetch('http://127.0.0.1:43122/api/admin/sale-points/1/sales', { method: 'POST', headers, body: JSON.stringify({ excludedFromStatistics: true }) })).status, 400);
     assert.equal((await fetch('http://127.0.0.1:43122/api/admin/sale-points')).status, 401);

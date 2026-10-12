@@ -71,6 +71,8 @@ async page => {
   await page.locator('#saveManualPurchaseEdit').click(); check((await conflict).status() === 409, 'Concurrent edit was overwritten');
   await page.locator('#manualPurchaseEditError').waitFor();
   check((await page.locator('#manualPurchaseEditError').textContent()).includes('ha cambiado'), 'Conflict explanation missing');
+  check(await page.locator('#manualPurchaseNote').inputValue() === 'Concurrent browser draft', 'Error discarded draft');
+  check(await page.locator('#manualPurchaseForm').isVisible(), 'Error closed form');
   await page.screenshot({ path: 'output/playwright/edit-purchase-desktop-conflict.png', fullPage: true });
   await page.locator('#cancelManualPurchaseEdit').click();
   await page.setViewportSize({ width: 390, height: 844 });
@@ -104,12 +106,11 @@ async page => {
   check(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'Horizontal overflow');
   await page.locator('#cancelManualPurchaseEdit').click();
   const voided = page.waitForResponse(r => r.url().endsWith('/void-manual') && r.request().method() === 'POST');
-  await page.locator(`[data-void-manual-order="${id}"]`).click(); check((await voided).ok(), 'Original cancellation broken');
-  await page.locator(`[data-edit-manual-order="${id}"]`).waitFor({ state: 'detached' });
+  await page.locator(`[data-void-manual-order="${id}"]`).click(); check((await voided).status() === 403, 'Local lifecycle protection bypassed');
   const afterVoid = await read();
-  check(afterVoid.stock.find(v => v[0] === originalVariant)[1] === baseline.stock.find(v => v[0] === originalVariant)[1] + 2, 'Voiding did not restore edited quantities');
+  check(JSON.stringify(afterVoid.stock) === JSON.stringify(afterAdjusted.stock), 'Blocked local void changed stock');
   check(dialogs.some(message => message.startsWith('Motivo de la corrección')), 'Original void confirmation changed');
-  check((await page.locator('#ordersBody').textContent()).includes('Edición no disponible'), 'Cancelled restriction missing');
+  check(await page.locator(`[data-edit-manual-order="${id}"]`).isVisible(), 'Blocked local void changed purchase');
   check(errors.length === 0, errors.join('; '));
   const result = { desktop: { prefilled: true, cancelNoWrites: true, netStock: true, persisted: true, conflictBlocked: true },
     mobile: { sizeEdited: true, originalStockReadOnly: true, stockUnchanged: true, persisted: true, noOverflow: true },
