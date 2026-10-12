@@ -2755,6 +2755,7 @@ export class OrdersService {
   private async validatePromoAvailability(
     promo: {
       id: number;
+      code?: string;
       startsAt: Date | null;
       expiresAt: Date | null;
       isActive: boolean;
@@ -2777,20 +2778,24 @@ export class OrdersService {
     if (promo.firstOrderOnly) {
       const client = options.client ?? this.prisma;
       const user = options.userId != null
-        ? await client.user.findUnique({ where: { id: options.userId }, select: { id: true, email: true } })
+        ? await client.user.findUnique({ where: { id: options.userId }, select: { id: true, email: true, firstOrderDiscountUsed: true } })
         : null;
       const email = normalizeEmail(user?.email || options.customerEmail);
       if (!email || email !== normalizeEmail(promo.ownerEmail)) {
         return { valid: false, message: 'Utiliza el correo que recibió este código de bienvenida.' };
       }
       const userId = user?.id ?? await this.resolvePromoRedemptionUserId(client, { customerEmail: email });
+      const owner = user ?? (userId ? await client.user.findUnique({ where: { id: userId }, select: { firstOrderDiscountUsed: true } }) : null);
+      const legacy = promo.code ? await client.discountCode.findUnique({ where: { code: promo.code }, select: { used: true, usedAt: true } }) : null;
+      if (owner?.firstOrderDiscountUsed || legacy?.used || legacy?.usedAt) return { valid: false, message: PROMO_ALREADY_REDEEMED_MESSAGE };
       {
         const previous = await client.order.findFirst({ where: {
           OR: [{ customerEmail: { equals: email, mode: 'insensitive' } }, ...(userId ? [{ userId }] : [])],
           status: { notIn: [OrderStatus.PENDING, OrderStatus.CANCELLED] },
+          source: 'ONLINE',
           ...(options.excludeOrderId ? { id: { not: options.excludeOrderId } } : {}),
         }, select: { id: true } });
-        if (previous) return { valid: false, message: 'El descuento de bienvenida es solo para la primera compra.' };
+        if (previous) return { valid: false, message: 'El descuento de bienvenida es solo para el primer pedido online.' };
       }
     }
 

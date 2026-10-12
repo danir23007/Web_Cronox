@@ -1,6 +1,5 @@
 import { Injectable, Logger, ServiceUnavailableException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
-import { generateDiscountCode } from '../common/discount-code';
 import { EmailService } from '../email/email.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { NewsletterSettingsService } from './newsletter-settings.service';
@@ -88,12 +87,10 @@ export class NewsletterService {
             subscribedAt: now, verificationTokenHash: null, verificationExpiresAt: null,
           } });
         }
-        const user = await linkNewsletterUser(tx, email, true);
+        const welcomeJob = await tx.newsletterMailJob.findFirst({ where: { email, kind: 'WELCOME' }, select: { id: true } });
+        const { user, created } = await linkNewsletterUser(tx, email, true, !previous?.subscribedAt);
         if (subscription.userId && subscription.userId !== user.id) throw new Error('Newsletter account link conflict: manual review required');
         await tx.newsletterSubscription.update({ where: { id: subscription.id }, data: { userId: user.id } });
-        const welcomeJob = await tx.newsletterMailJob.findFirst({
-          where: { email, kind: 'WELCOME' }, select: { id: true },
-        });
         const eligible = user?.accountState === 'ACTIVE' && ['USER', 'FRIEND'].includes(user.role);
         if (eligible) {
           await this.scheduleAccess(tx, email, now);
@@ -106,29 +103,7 @@ export class NewsletterService {
           return 'subscribed';
         }
         if (subscription.welcomeClaimedAt) throw new ServiceUnavailableException({ code: 'NEWSLETTER_UNAVAILABLE' });
-        let promo = subscription.welcomePromoCode;
-        const previousPurchase = await tx.order.findFirst({
-          where: { OR: [{ customerEmail: { equals: email, mode: 'insensitive' } }, ...(user ? [{ userId: user.id }] : [])],
-            status: { notIn: ['PENDING', 'CANCELLED'] } }, select: { id: true },
-        });
-        if (!promo && !previousPurchase && !user?.firstOrderDiscountUsed) {
-          const legacy = user && await tx.discountCode.findFirst({
-            where: { userId: user.id, type: 'FIRST_ORDER' }, orderBy: { createdAt: 'desc' },
-          });
-          if (!legacy?.used) {
-            const code = legacy?.code ?? await generateDiscountCode(tx);
-            promo = await tx.promoCode.upsert({
-              where: { code }, update: {}, create: {
-                code, type: 'PERCENT', value: 10, ownerEmail: email,
-                usageLimit: 1, singleUsePerUser: true, firstOrderOnly: true,
-              },
-            });
-            if (promo.ownerEmail !== email || !promo.firstOrderOnly) throw new ServiceUnavailableException({ code: 'NEWSLETTER_UNAVAILABLE' });
-            await tx.newsletterSubscription.update({ where: { id: subscription.id }, data: { welcomePromoCodeId: promo.id } });
-          }
-        }
-        await tx.newsletterMailJob.create({ data: { email, kind: 'WELCOME' } });
-        return eligible ? 'existing_account' : 'welcome';
+        return eligible ? 'existing_account' : created ? 'welcome' : 'subscribed';
       });
     } catch (error) {
       if (retries && error instanceof Prisma.PrismaClientKnownRequestError && ['P2002', 'P2034'].includes(error.code)) {

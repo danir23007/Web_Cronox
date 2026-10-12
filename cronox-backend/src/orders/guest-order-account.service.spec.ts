@@ -1,4 +1,5 @@
 import { Role } from '@prisma/client';
+jest.mock('../users/account-welcome', () => ({ ensureAccountWelcome: jest.fn() }));
 import { GuestOrderAccountService } from './guest-order-account.service';
 
 describe('GuestOrderAccountService', () => {
@@ -8,6 +9,7 @@ describe('GuestOrderAccountService', () => {
   beforeEach(() => {
     service = new GuestOrderAccountService();
     tx = {
+      $executeRaw: jest.fn(),
       user: {
         findUnique: jest.fn(),
         findFirst: jest.fn(),

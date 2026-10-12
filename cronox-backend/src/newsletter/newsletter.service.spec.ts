@@ -2,9 +2,9 @@ import { NewsletterService } from './newsletter.service';
 jest.mock('../users/member-code.util', () => ({ getNextSequentialMemberCode: jest.fn().mockResolvedValue('CRX-000123') }));
 
 describe('Newsletter durable single opt-in', () => {
-  let row: any, promo: any, user: any, jobs: any[], db: any, mail: any, service: NewsletterService;
+  let row: any, promo: any, legacy: any, user: any, jobs: any[], db: any, mail: any, service: NewsletterService;
   beforeEach(() => {
-    row = null; promo = null; user = null; jobs = [];
+    row = null; promo = null; legacy = null; user = null; jobs = [];
     db = {
       $executeRaw: jest.fn(),
       $queryRaw: jest.fn(async () => user ? [user] : []),
@@ -14,14 +14,15 @@ describe('Newsletter durable single opt-in', () => {
         update: jest.fn(async ({ data }: any) => Object.assign(row, data)),
       },
       newsletterMailJob: {
-        findFirst: jest.fn(async ({ where }: any) => jobs.find(job => job.email === where.email && job.kind === where.kind && (!where.createdAt || job.createdAt >= where.createdAt.gte)) || null),
+        findFirst: jest.fn(async ({ where }: any) => jobs.find(job => (where.OR ? where.OR.some((match: any) => match.userId ? job.userId === match.userId : job.email === match.email) : job.email === where.email) && job.kind === where.kind && (!where.createdAt || job.createdAt >= where.createdAt.gte)) || null),
         create: jest.fn(async ({ data }: any) => { const job = { id: `job-${jobs.length}`, createdAt: new Date(), ...data }; jobs.push(job); return job; }),
       },
-      user: { findMany: jest.fn(async () => user ? [user] : []), findUnique: jest.fn(async () => user), update: jest.fn(async ({ data }: any) => Object.assign(user, data)), create: jest.fn(async ({ data }: any) => user = { id: 1, role: 'USER', ...data }) },
+      user: { findMany: jest.fn(async () => user ? [user] : []), findUnique: jest.fn(async () => user), findUniqueOrThrow: jest.fn(async () => user), update: jest.fn(async ({ data }: any) => Object.assign(user, data)), create: jest.fn(async ({ data }: any) => user = { id: 1, role: 'USER', ...data }) },
       order: { findFirst: jest.fn().mockResolvedValue(null) },
-      discountCode: { findFirst: jest.fn().mockResolvedValue(null), findUnique: jest.fn().mockResolvedValue(null) },
-      promoCode: { findUnique: jest.fn().mockResolvedValue(null), upsert: jest.fn(async ({ create }: any) => {
-        promo = { id: 1, isActive: true, usageCount: 0, ...create }; return promo;
+      discountCode: { findFirst: jest.fn(async () => legacy), findUnique: jest.fn(async () => legacy), create: jest.fn(async ({ data }: any) => legacy = { ...data }) },
+      promoCodeRedemption: { findFirst: jest.fn().mockResolvedValue(null) },
+      promoCode: { findFirst: jest.fn(async () => promo), findUnique: jest.fn(async ({ where }: any) => promo?.code === where.code ? promo : null), create: jest.fn(async ({ data }: any) => {
+        promo = { id: 1, isActive: true, usageCount: 0, ...data }; return promo;
       }) },
     };
     db.$transaction = jest.fn(async (fn: any) => fn(db));
@@ -49,7 +50,7 @@ describe('Newsletter durable single opt-in', () => {
     expect(first.confirmation).toBe('welcome');
     expect(repeated.confirmation).toBe('subscribed');
     expect(jobs).toHaveLength(1);
-    expect(db.promoCode.upsert).toHaveBeenCalledTimes(1);
+    expect(db.promoCode.create).toHaveBeenCalledTimes(1);
   });
 
   it('queues one access message for an existing subscriber, with or without an account', async () => {
@@ -60,7 +61,7 @@ describe('Newsletter durable single opt-in', () => {
     expect(first.confirmation).toBe('subscribed');
     expect(second.confirmation).toBe('existing_account');
     expect(jobs).toMatchObject([{ email: row.email, kind: 'ACCESS' }]);
-    expect(db.promoCode.upsert).not.toHaveBeenCalled();
+    expect(db.newsletterMailJob.create).toHaveBeenCalledTimes(1);
   });
 
   it('does not report accepted when durable scheduling fails', async () => {
@@ -72,10 +73,10 @@ describe('Newsletter durable single opt-in', () => {
   it('uses account records before a first subscription and preserves its one welcome benefit', async () => {
     user = { id: 7, email: 'known@example.test', role: 'USER', accountState: 'ACTIVE', newsletterSubscribed: false };
     expect((await service.subscribe(user.email)).confirmation).toBe('existing_account');
-    expect(jobs.map(job => job.kind)).toEqual(['ACCESS', 'WELCOME']);
+    expect(jobs.map(job => job.kind)).toEqual(['ACCESS']);
     await service.subscribe(user.email);
-    expect(jobs).toHaveLength(2);
-    expect(db.promoCode.upsert).toHaveBeenCalledTimes(1);
+    expect(jobs).toHaveLength(1);
+    expect(db.promoCode.create).toHaveBeenCalledTimes(1);
   });
 
   it.each(['ADMIN', 'SUPERADMIN'])('does not advertise passwordless access for %s', async role => {
@@ -95,10 +96,10 @@ describe('Newsletter durable single opt-in', () => {
 
   it('inherits consent on account creation without another welcome or code', async () => {
     await service.subscribe('new@example.test');
-    user = { id: 1, newsletterSubscribed: false };
+    user = { ...user, newsletterSubscribed: false };
     expect(await service.subscribeIfNeeded('new@example.test')).toEqual({ status: 'claimed' });
     expect(user.newsletterSubscribed).toBe(true);
-    expect(db.user.update.mock.calls[0][0].data).toEqual({ newsletterSubscribed: true });
+    expect(db.user.update).toHaveBeenLastCalledWith(expect.objectContaining({ data: { newsletterSubscribed: true } }));
   });
 
   it('does not enroll someone just because they register an account', async () => {
@@ -107,15 +108,13 @@ describe('Newsletter durable single opt-in', () => {
     expect(db.user.update).not.toHaveBeenCalled();
   });
 
-  it('preserves legacy welcome codes and avoids benefits for previous buyers', async () => {
-    user = { id: 1, newsletterSubscribed: false };
-    db.discountCode.findFirst.mockResolvedValue({ code: 'CRX10-ABC234', used: false });
+  it('preserves legacy welcome codes without queuing retroactive welcomes', async () => {
+    user = { id: 1, email: 'new@example.test', newsletterSubscribed: false };
+    legacy = { code: 'CRX10-ABC234', used: false, userId: 1, type: 'FIRST_ORDER', percent: 10 };
     await service.subscribe('new@example.test');
     expect(promo.code).toBe('CRX10-ABC234');
-    row = null; promo = null; jobs = [];
-    db.order.findFirst.mockResolvedValue({ id: 2 });
-    await service.subscribe('buyer@example.test');
-    expect(jobs).toMatchObject([{ email: 'buyer@example.test', kind: 'WELCOME' }]);
-    expect(db.promoCode.upsert).toHaveBeenCalledTimes(1);
+    expect(user.firstOrderDiscountCode).toBe('CRX10-ABC234');
+    expect(jobs).toHaveLength(0);
+    expect(db.promoCode.create).toHaveBeenCalledTimes(1);
   });
 });

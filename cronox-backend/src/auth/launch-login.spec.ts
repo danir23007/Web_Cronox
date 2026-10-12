@@ -1,4 +1,5 @@
 import { AuthService } from './auth.service';
+jest.mock('../users/account-welcome', () => ({ ensureAccountWelcome: jest.fn() }));
 
 describe('Launch login token', () => {
   let db: any;

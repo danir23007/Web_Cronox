@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-call, @typescript-eslint/require-await */
 import { BadRequestException, ConflictException } from '@nestjs/common';
+jest.mock('../users/account-welcome', () => ({ ensureAccountWelcome: jest.fn() }));
 import { KeyScreenMode, UserAccountState } from '@prisma/client';
 import { KeyScreenService } from './key-screen.service';
 
@@ -10,6 +11,7 @@ describe('KeyScreenService', () => {
 
   beforeEach(() => {
     prisma = {
+      $executeRaw: jest.fn(),
       keyScreenSettings: {
         findUnique: jest.fn(),
         upsert: jest.fn(async () => ({

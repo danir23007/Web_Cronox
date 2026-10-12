@@ -2,6 +2,7 @@ import { BadRequestException, Injectable } from '@nestjs/common';
 import { Prisma, Role, UserAccountState } from '@prisma/client';
 import { normalizeCountry } from '../common/country';
 import { normalizeEmail } from '../common/email';
+import { ensureAccountWelcome } from '../users/account-welcome';
 
 type CompletedCheckoutIdentity = {
   userId: number | null;
@@ -34,6 +35,7 @@ export class GuestOrderAccountService {
     if (!email) {
       throw new BadRequestException('CHECKOUT_CUSTOMER_EMAIL_REQUIRED');
     }
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${'newsletter:' + email}))`;
 
     const existing = await tx.user.findFirst({
       where: { email: { equals: email, mode: 'insensitive' } },
@@ -68,6 +70,7 @@ export class GuestOrderAccountService {
     });
 
     const address = this.toSavedAddress(shipping ?? billing);
+    await ensureAccountWelcome(tx, user.id, true);
     if (address) {
       await tx.address.create({
         data: {

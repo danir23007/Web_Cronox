@@ -41,7 +41,7 @@ export async function repairNewsletterUsers(db: PrismaClient, apply = false) {
           await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${'newsletter:' + email}))`;
           const subscription = await tx.newsletterSubscription.findUnique({ where: { id } });
           if (!subscription?.subscribedAt) return;
-          const user = await linkNewsletterUser(tx, email, true);
+          const { user } = await linkNewsletterUser(tx, email, true, false);
           if (subscription.userId && subscription.userId !== user.id) throw new Error('Historical account link conflict: manual review required');
           await tx.newsletterSubscription.update({ where: { id }, data: { userId: user.id } });
         });

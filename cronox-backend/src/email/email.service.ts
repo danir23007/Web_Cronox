@@ -216,8 +216,8 @@ export class EmailService {
       templateData: {
         title: 'Bienvenido a CRONOX',
         message: code
-          ? `Ya formas parte de nuestra newsletter. Tu código de bienvenida es ${code}: 10% de descuento en tu primera compra, de un solo uso y asociado a este correo. Utiliza esta misma dirección al comprar. ¡Gracias por unirte!`
-          : 'Ya formas parte de nuestra newsletter. Recibirás nuestras novedades y próximos drops. ¡Gracias por unirte a CRONOX!',
+          ? `Tu cuenta CRONOX está lista. Tu código de bienvenida es ${code}: 10% de descuento en tu primer pedido online, de un solo uso y asociado a este correo. Utiliza esta misma dirección al comprar. ¡Gracias por unirte!`
+          : 'Tu cuenta CRONOX está lista. ¡Gracias por unirte a CRONOX!',
         discountCode: code || '',
       },
     });

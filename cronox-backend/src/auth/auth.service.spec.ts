@@ -1,4 +1,5 @@
 import { createHash } from 'crypto';
+jest.mock('../users/account-welcome', () => ({ ensureAccountWelcome: jest.fn() }));
 import { Role, UserAccountState } from '@prisma/client';
 import { AuthService } from './auth.service';
 import { UnauthorizedException } from '@nestjs/common';

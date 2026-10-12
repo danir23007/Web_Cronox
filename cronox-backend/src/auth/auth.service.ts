@@ -36,6 +36,7 @@ import { AuthSessionsService, SessionClaims } from './auth-sessions.service';
 import { ACCESS_TOKEN_SECONDS } from './session-policy';
 import { serializableTransaction } from '../prisma/serializable-transaction';
 import { UserNumberingGate } from '../users/user-numbering-gate.module';
+import { ensureAccountWelcome } from '../users/account-welcome';
 
 const PASSWORD_SETUP_CLAIM_STALE_MS = 10 * 60 * 1000;
 
@@ -135,8 +136,10 @@ export class AuthService {
         data: { launchTokenUsedAt: now },
       });
       if (claimed.count !== 1) throw new UnauthorizedException('Enlace ya utilizado');
-      return tx.user.update({ where: { id: registration.userId },
+      await ensureAccountWelcome(tx, registration.userId);
+      const activated = await tx.user.update({ where: { id: registration.userId },
         data: { accountState: UserAccountState.ACTIVE } });
+      return activated;
     });
     const authUser = this.omitPassword(user);
     return { user: this.formatAuthUser(authUser), tokens: await this.generateTokens(authUser) };
@@ -557,6 +560,7 @@ export class AuthService {
         throw new BadRequestException('Token invalido o caducado');
       }
 
+      await ensureAccountWelcome(tx, passwordResetToken.userId);
       await tx.user.update({
         where: { id: passwordResetToken.userId },
         data: {

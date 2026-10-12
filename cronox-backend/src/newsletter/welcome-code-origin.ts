@@ -1,7 +1,7 @@
 import { Prisma } from '@prisma/client';
 
-// The newsletter producer persists personal ownership + firstOrderOnly and the
-// subscription relation. Ownership also survives older/replaced relations.
+// Account welcomes persist personal ownership + firstOrderOnly. The optional
+// newsletter relation is independent consent; ownership survives its absence.
 export const welcomeCodeOrigin: Prisma.PromoCodeWhereInput = {
   OR: [
     { newsletterSubscription: { isNot: null } },

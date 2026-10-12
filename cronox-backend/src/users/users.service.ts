@@ -1,9 +1,10 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma, Role, User, UserAccountState } from '@prisma/client';
 import { randomBytes } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { getNextSequentialMemberCode } from './member-code.util';
 import { normalizeEmail } from '../common/email';
+import { ensureAccountWelcome } from './account-welcome';
 
 export type AuthUser = Omit<User, 'password'> & { hasPassword: boolean };
 export type AuthUserWithPassword = User;
@@ -43,16 +44,26 @@ export class UsersService {
     firstOrderDiscountUsed?: boolean;
   }) {
     return this.prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${'newsletter:' + normalizeEmail(data.email)}))`;
+      // Opt-in may have created a preregistration after register's initial read.
+      const existing = await tx.user.findFirst({ where: { email: { equals: normalizeEmail(data.email), mode: 'insensitive' } } });
+      if (existing) {
+        if (existing.accountState !== UserAccountState.PRE_REGISTERED || existing.password !== null) throw new ConflictException('El email ya esta registrado');
+        await tx.user.update({ where: { id: existing.id }, data: { password: data.password, name: data.name,
+          firstName: data.firstName, lastName: data.lastName, accountState: UserAccountState.ACTIVE } });
+        return ensureAccountWelcome(tx, existing.id);
+      }
       const { memberCode, ...userData } = data;
       const ensuredCode = memberCode ?? (await getNextSequentialMemberCode(tx));
 
-      return tx.user.create({
+      const user = await tx.user.create({
         data: {
           ...userData,
           email: normalizeEmail(userData.email),
           memberCode: ensuredCode,
         },
       });
+      return ensureAccountWelcome(tx, user.id, true);
     });
   }
 
@@ -160,6 +171,7 @@ export class UsersService {
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${'cronox:user-identity:' + id}))`;
       const existing = await tx.user.findUnique({ where: { id } });
       if (!existing) return null;
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${'newsletter:' + normalizeEmail(existing.email)}))`;
       const memberCode = existing.memberCode ?? await getNextSequentialMemberCode(tx);
       const updated = await tx.user.updateMany({
         where: {
@@ -170,7 +182,7 @@ export class UsersService {
         data: { ...data, memberCode, accountState: UserAccountState.ACTIVE },
       });
       if (updated.count !== 1) return null;
-      return tx.user.findUnique({ where: { id } });
+      return ensureAccountWelcome(tx, id);
     });
   }
 

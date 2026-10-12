@@ -1,4 +1,5 @@
 import { loadUserPurchaseMetrics, sortUsersByMetrics } from './user-purchase-metrics';
+import { ensureAccountWelcome } from '../../users/account-welcome';
 import {
   BadRequestException,
   ConflictException,
@@ -108,6 +109,7 @@ export class AdminUsersService {
         lastLoginAt: true,
         accountState: true,
         memberCode: true,
+        firstOrderDiscountCode: true,
       },
     });
 
@@ -213,7 +215,7 @@ export class AdminUsersService {
         identityUid: user.identityUid,
         memberCode: user.memberCode,
         email: user.email,
-        welcomeCode: originalWelcome?.code ?? null,
+        welcomeCode: user.firstOrderDiscountCode ?? originalWelcome?.code ?? null,
         username,
         avatarUrl: null,
         circle: user.circleLevel ?? 1,
@@ -352,6 +354,9 @@ export class AdminUsersService {
             const permissionsChanged =
               before.role !== after.role ||
               before.accountState !== after.accountState;
+            if (before.accountState !== after.accountState && after.accountState === UserAccountState.ACTIVE) {
+              await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${'newsletter:' + existing.email.trim().toLowerCase()}))`;
+            }
             const updateResult = await tx.user.updateMany({
               where: { id, updatedAt: existing.updatedAt },
               data: {
@@ -409,6 +414,7 @@ export class AdminUsersService {
               },
             });
 
+            if (before.accountState !== after.accountState && after.accountState === UserAccountState.ACTIVE) await ensureAccountWelcome(tx, id);
             const updated = await tx.user.findUnique({
               where: { id },
             });

@@ -29,7 +29,17 @@ describe('CRONOX mail purposes', () => {
     expect(sendMail.mock.calls[0][1].html).toContain('sin las comillas');
     expect(sendMail.mock.calls[1][1].html).toContain('ABC234');
     expect(sendMail.mock.calls[1][1].html).toContain('10%');
+    expect(sendMail.mock.calls[1][1].html).toContain('primer pedido online');
+    expect(sendMail.mock.calls[1][1].html).not.toContain('formas parte de nuestra newsletter');
     expect(sendMail.mock.calls[0][1].subject).not.toContain('bavolima');
+  });
+  it('keeps the current published welcome design and configured sender for an account welcome', async () => {
+    const custom = { subject: 'Bienvenida publicada', html: '<p>Diseño actual: ABC234</p>', text: 'Diseño actual: ABC234' };
+    const { service, sendMail, published } = setup(custom);
+    await service.sendNewsletterWelcome('local@example.test', 'ABC234');
+    expect(sendMail.mock.calls[0][0]).toBe(EmailSenderKey.NOREPLY);
+    expect(sendMail.mock.calls[0][1]).toMatchObject(custom);
+    expect(published.mock.calls[0][1]).toBe('NEWSLETTER_WELCOME');
   });
   it('keeps custom designs and supplements an old publication with the mandatory password instructions', async () => {
     const { service, sendMail } = setup({ html: '<body><p>Custom design</p><a href="https://example.test/access">Entrar en CRONOX</a></body>', text: 'Custom design', subject: 'Custom' });

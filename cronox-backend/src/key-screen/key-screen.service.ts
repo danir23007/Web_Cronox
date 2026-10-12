@@ -1,3 +1,4 @@
+import { ensureAccountWelcome } from '../users/account-welcome';
 import {
   BadRequestException,
   ConflictException,
@@ -349,6 +350,7 @@ export class KeyScreenService {
     let userId: number;
     try {
       userId = await this.prisma.$transaction(async (tx) => {
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${'newsletter:' + email}))`;
         const active = await tx.keyScreenSettings.findUnique({
           where: { id: GLOBAL_ID },
           include: { activeScreen: true },
@@ -378,6 +380,7 @@ export class KeyScreenService {
         await tx.preRegistration.create({
           data: { userId: user.id, screenId: active.activeScreenId },
         });
+        await ensureAccountWelcome(tx, user.id, true);
         await tx.auditLog.create({
           data: {
             action: 'PRE_REGISTRATION_CREATED',

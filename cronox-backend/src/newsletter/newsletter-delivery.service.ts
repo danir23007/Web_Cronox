@@ -80,19 +80,34 @@ export class NewsletterDeliveryService implements OnModuleInit, OnModuleDestroy 
     let actionUrl: string | undefined;
     let welcomeCode: string | undefined;
     if (job.kind === 'WELCOME') {
-      const subscription = await this.prisma.newsletterSubscription.findUnique({
-        where: { email: job.email }, include: { welcomePromoCode: true },
-      });
-      if (!subscription?.subscribedAt) {
-        await this.prisma.newsletterMailJob.updateMany({ where, data: { status: 'FAILED', errorCode: 'CONSENT_MISSING' } });
-        return;
+      // Consume the dispatch lease once, even if dispatch is called concurrently.
+      const dispatchClaim = randomUUID();
+      const claimed = await this.prisma.newsletterMailJob.updateMany({ where, data: { claimToken: dispatchClaim } });
+      if (claimed.count !== 1) return;
+      where.claimToken = dispatchClaim;
+      if (job.userId) {
+        const user = await this.prisma.user.findUnique({ where: { id: job.userId } });
+        if (!user || user.email.toLowerCase() !== job.email) {
+          await this.prisma.newsletterMailJob.updateMany({ where, data: { status: 'FAILED', errorCode: 'RECIPIENT_UNAVAILABLE' } });
+          return;
+        }
+        const promo = user.firstOrderDiscountCode ? await this.prisma.promoCode.findUnique({ where: { code: user.firstOrderDiscountCode } }) : null;
+        welcomeCode = !user.firstOrderDiscountUsed && promo?.isActive && promo.usageCount === 0 ? promo.code : undefined;
+      } else {
+        const subscription = await this.prisma.newsletterSubscription.findUnique({
+          where: { email: job.email }, include: { welcomePromoCode: true },
+        });
+        if (!subscription?.subscribedAt) {
+          await this.prisma.newsletterMailJob.updateMany({ where, data: { status: 'FAILED', errorCode: 'CONSENT_MISSING' } });
+          return;
+        }
+        if (subscription.welcomeSentAt) {
+          await this.prisma.newsletterMailJob.updateMany({ where, data: { status: 'SENT', sentAt: subscription.welcomeSentAt } });
+          return;
+        }
+        const promo = subscription.welcomePromoCode;
+        welcomeCode = promo?.isActive && promo.usageCount === 0 ? promo.code : undefined;
       }
-      if (subscription.welcomeSentAt) {
-        await this.prisma.newsletterMailJob.updateMany({ where, data: { status: 'SENT', sentAt: subscription.welcomeSentAt } });
-        return;
-      }
-      const promo = subscription.welcomePromoCode;
-      welcomeCode = promo?.isActive && promo.usageCount === 0 ? promo.code : undefined;
     } else if (job.kind === 'ACCESS') {
       const matches = await this.prisma.user.findMany({
         where: { email: { equals: job.email, mode: 'insensitive' } },
@@ -159,7 +174,7 @@ export class NewsletterDeliveryService implements OnModuleInit, OnModuleDestroy 
         readyAt: waiting ? error.retryAt : retry ? new Date(Date.now() + job.attempts * 5 * 60_000) : job.readyAt,
         ...(waiting ? { attempts: { decrement: 1 } } : {}),
         claimToken: null, claimedAt: null,
-        ...(!uncertain ? { tokenHash: null, tokenExpiresAt: null, userId: null } : {}),
+        ...(!uncertain ? { tokenHash: null, tokenExpiresAt: null, ...(job.kind === 'ACCESS' ? { userId: null } : {}) } : {}),
       } });
       this.logger.warn(`NEWSLETTER_DELIVERY_${retry ? 'RETRY' : uncertain ? 'UNCERTAIN' : 'FAILED'}`);
       return;
