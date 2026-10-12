@@ -11,6 +11,22 @@ declare global {
     excludedFromStatistics?: boolean;
   }
 
+  interface ManualPurchaseEditPayload {
+    expectedVersion: string;
+    items: Array<{ itemId?: number; variantId: number; quantity: number; unitPriceCents: number }>;
+    paymentMethod: string;
+    purchasedAt: string;
+    note: string;
+    excludedFromStatistics: boolean;
+  }
+  interface ManualPurchaseEditResponse {
+    expectedVersion: string;
+    editable: boolean;
+    limitation: string | null;
+    order: { id: number; paymentMethod: string; purchasedAt: string; note: string; excludedFromStatistics: boolean; stockHandling: string | null;
+      items: Array<{ itemId: number; variantId: number | null; productId: number; productName: string; size: string; sku: string; quantity: number; unitPriceCents: number }> };
+  }
+
   type QueryValue = string | number | boolean;
   type QueryParam = QueryValue | null | undefined;
   type QueryRecord = Record<string, QueryParam | QueryParam[]>;
@@ -107,6 +123,8 @@ declare global {
     getInPersonPurchaseOptions?: (userId: number | string) => Promise<unknown>;
     createInPersonPurchase?: (userId: number | string, payload: ManualPurchasePayload, idempotencyKey: string) => Promise<unknown>;
     setManualStatisticsExclusion?: (orderId: number | string, excluded: boolean, key: string) => Promise<unknown>;
+    getInPersonPurchaseForEdit?: (userId: number | string, orderId: number | string) => Promise<ManualPurchaseEditResponse>;
+    editInPersonPurchase?: (userId: number | string, orderId: number | string, payload: ManualPurchaseEditPayload, key: string) => Promise<unknown>;
     voidInPersonPurchase?: (orderId: number | string, reason: string) => Promise<unknown>;
     getProductOrder?: () => Promise<unknown>;
     saveProductOrder?: (productIds: number[]) => Promise<unknown>;

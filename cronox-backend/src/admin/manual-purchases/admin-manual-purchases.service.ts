@@ -16,6 +16,8 @@ import { Decimal } from '@prisma/client/runtime/library';
 import { PrismaService } from '../../prisma/prisma.service';
 import { HistorialService } from '../../historial/historial.service';
 import { TaxConfigService } from '../../common/tax/tax-config.service';
+import { ManualPurchaseEditor } from './manual-purchase-editor';
+import { EditManualPurchaseDto } from './dto/edit-manual-purchase.dto';
 import { CreateManualPurchaseDto } from './dto/create-manual-purchase.dto';
 import { configuredManualCost } from '../finance/historical-cost';
 
@@ -26,6 +28,14 @@ export class AdminManualPurchasesService {
     private readonly historialService: HistorialService,
     private readonly taxConfig: TaxConfigService,
   ) {}
+
+  getForEdit(userId: number, orderId: number) {
+    return new ManualPurchaseEditor(this.prisma, this.historialService).read(userId, orderId);
+  }
+
+  edit(userId: number, orderId: number, adminId: number, key: string | undefined, dto: EditManualPurchaseDto) {
+    return new ManualPurchaseEditor(this.prisma, this.historialService).edit(userId, orderId, adminId, key, dto);
+  }
 
   async setStatisticsExclusion(orderId: number, adminId: number, requestKey: string | undefined, excluded: boolean) {
     if (typeof excluded !== 'boolean') throw new BadRequestException('INVALID_STATISTICS_CHOICE');

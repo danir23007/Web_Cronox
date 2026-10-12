@@ -1,5 +1,5 @@
 import { UserIdentityGuard } from '../../users/user-identity.guard';
-import { Body, Controller, Get, Headers, Param, ParseIntPipe, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Headers, Param, ParseIntPipe, Patch, Post, UseGuards } from '@nestjs/common';
 import { Role } from '@prisma/client';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
@@ -8,6 +8,7 @@ import { RolesGuard } from '../../common/guards/roles.guard';
 import { SuperAdminGuard } from '../../common/guards/super-admin.guard';
 import { Roles } from '../../common/roles.decorator';
 import { AdminManualPurchasesService } from './admin-manual-purchases.service';
+import { EditManualPurchaseDto } from './dto/edit-manual-purchase.dto';
 import { CreateManualPurchaseDto } from './dto/create-manual-purchase.dto';
 import { ManualStatisticsDto } from './dto/manual-statistics.dto';
 import { VoidManualPurchaseDto } from './dto/void-manual-purchase.dto';
@@ -22,6 +23,20 @@ export class AdminManualPurchasesController {
   getOptions(@Param('id', ParseIntPipe) id: number) {
     return this.service.getOptions(id);
   }
+
+  @Get(':id/in-person-purchases/:orderId')
+  getForEdit(@Param('id', ParseIntPipe) userId: number, @Param('orderId', ParseIntPipe) orderId: number) {
+    return this.service.getForEdit(userId, orderId);
+  }
+
+  @Patch(':id/in-person-purchases/:orderId')
+  edit(
+    @Param('id', ParseIntPipe) userId: number,
+    @Param('orderId', ParseIntPipe) orderId: number,
+    @CurrentUser('id') adminId: number,
+    @Headers('idempotency-key') key: string | undefined,
+    @Body() dto: EditManualPurchaseDto,
+  ) { return this.service.edit(userId, orderId, adminId, key, dto); }
 
   @Post(':id/in-person-purchases')
   create(

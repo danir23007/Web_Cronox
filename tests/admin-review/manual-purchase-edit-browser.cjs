@@ -1,0 +1,119 @@
+async page => {
+  if (new URL(page.url()).origin !== 'http://127.0.0.1:43122') throw new Error('Disposable local server required');
+  const check = (value, message) => { if (!value) throw new Error(message); };
+  const errors = [], patches = [], dialogs = [];
+  page.on('pageerror', error => errors.push(error.message));
+  page.on('request', request => { if (request.method() === 'PATCH' && request.url().includes('/in-person-purchases/')) patches.push(request.url()); });
+  page.removeAllListeners('dialog');
+  page.on('dialog', dialog => { dialogs.push(dialog.message()); return dialog.accept(dialog.type() === 'prompt' ? 'Cancel edited browser fixture' : undefined); });
+  await page.addInitScript(() => { window.__CRONOX_API_BASE__ = location.origin; });
+  const purchaseUrl = page.url();
+  const read = () => page.evaluate(async () => {
+    const api = window.CRONOX_API.admin, id = new URLSearchParams(location.search).get('id');
+    const to = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Madrid', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+    const [detail, list, options, orders, finance] = await Promise.all([api.getUserDetail(id), api.listUsers({ q: 'buyer@statistics.test' }),
+      api.getInPersonPurchaseOptions(id), api.listAdminOrders({ userId: id }), fetch(`/api/admin/finance?from=2026-01-01&to=${to}&source=manual&aggregation=months`).then(r => r.json())]);
+    return { spent: detail.stats.totalSpent, listedSpent: list.data[0].revenueCents / 100, options, orders: orders.data || orders.items || orders,
+      finance: finance.totals, stock: options.products.flatMap(p => p.variants.map(v => [v.id, v.stockQty])) };
+  });
+  const getEditor = id => page.evaluate(id => window.CRONOX_API.admin.getInPersonPurchaseForEdit(new URLSearchParams(location.search).get('id'), id), id);
+  const open = async id => { await page.locator(`[data-edit-manual-order="${id}"]`).click(); await page.locator('#saveManualPurchaseEdit').waitFor(); };
+  const save = async id => {
+    const pending = page.waitForResponse(r => r.request().method() === 'PATCH' && r.url().endsWith('/in-person-purchases/' + id));
+    await page.locator('#saveManualPurchaseEdit').click();
+    const reply = await pending; check(reply.ok(), 'Save failed: ' + await reply.text());
+    await page.locator('#saveManualPurchaseEdit').waitFor({ state: 'hidden' });
+  };
+  await page.reload();
+  await page.getByRole('tablist').getByRole('button', { name: 'Pedidos', exact: true }).click();
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  const baseline = await read();
+  const id = baseline.orders.find(o => o.status === 'PAID' && o.source === 'IN_PERSON_ADMIN').id;
+  const original = await getEditor(id), originalVariant = original.order.items[0].variantId;
+  check((await page.locator(`[data-void-manual-order="${id}"]`).textContent()) === 'Anular', 'Wrong void button text');
+  await open(id);
+  check(await page.locator('[data-manual-variant]').inputValue() === String(originalVariant), 'Article/size not preloaded');
+  check(await page.locator('[data-manual-quantity]').inputValue() === String(original.order.items[0].quantity), 'Quantity not preloaded');
+  check(await page.locator('[data-manual-price]').inputValue() === (original.order.items[0].unitPriceCents / 100).toFixed(2), 'Paid price not preloaded');
+  check(await page.locator('#manualStockHandling').isDisabled(), 'Original stock decision is editable');
+  await page.screenshot({ path: 'output/playwright/edit-purchase-desktop-prefilled.png', fullPage: true });
+  const patchCount = patches.length;
+  await page.locator('[data-manual-price]').fill('99');
+  await page.locator('#manualPurchaseNote').fill('Discard me');
+  await page.locator('#cancelManualPurchaseEdit').click();
+  check(patches.length === patchCount && (await getEditor(id)).expectedVersion === original.expectedVersion, 'Cancel wrote data');
+  check(JSON.stringify((await read()).stock) === JSON.stringify(baseline.stock), 'Cancel changed stock');
+  await open(id);
+  await page.locator('[data-manual-quantity]').fill('3');
+  await page.locator('[data-manual-price]').fill('30');
+  await page.locator('#manualPurchasedAt').fill('2026-10-01T12:34');
+  await page.locator('#manualPaymentMethod').selectOption('OTHER');
+  await page.locator('#manualPurchaseNote').fill('Edited desktop');
+  await page.locator('#manualExcludeStatistics').check();
+  await save(id);
+  const deducted = await read();
+  check(deducted.stock.find(v => v[0] === originalVariant)[1] === baseline.stock.find(v => v[0] === originalVariant)[1] - 1, 'Stock was rededucted instead of adjusted');
+  check(deducted.spent === baseline.spent - 51 + 90 && deducted.listedSpent === deducted.spent, 'Spending mismatch');
+  check(deducted.finance.revenueCents === baseline.finance.revenueCents - 5100, 'Excluded edit leaked into general statistics');
+  check(deducted.orders.length === baseline.orders.length, 'Edit duplicated the order');
+  await page.reload(); await page.getByRole('tablist').getByRole('button', { name: 'Pedidos', exact: true }).click();
+  const persisted = await getEditor(id);
+  check(persisted.order.id === id && persisted.order.items[0].quantity === 3 && persisted.order.items[0].unitPriceCents === 3000 && persisted.order.note === 'Edited desktop' && persisted.order.paymentMethod === 'OTHER' && persisted.order.excludedFromStatistics, 'Edit did not persist');
+  await open(id);
+  await page.locator('#manualPurchaseNote').fill('Concurrent browser draft');
+  await page.evaluate(async ({ id, editor }) => {
+    const { items, paymentMethod, purchasedAt, excludedFromStatistics } = editor.order;
+    await window.CRONOX_API.admin.editInPersonPurchase(new URLSearchParams(location.search).get('id'), id,
+      { expectedVersion: editor.expectedVersion, items: items.map(({ itemId, variantId, quantity, unitPriceCents }) => ({ itemId, variantId, quantity, unitPriceCents })),
+        paymentMethod, purchasedAt, excludedFromStatistics, note: 'Concurrent server change' }, crypto.randomUUID());
+  }, { id, editor: persisted });
+  const conflict = page.waitForResponse(r => r.request().method() === 'PATCH' && r.url().endsWith('/in-person-purchases/' + id));
+  await page.locator('#saveManualPurchaseEdit').click(); check((await conflict).status() === 409, 'Concurrent edit was overwritten');
+  await page.locator('#manualPurchaseEditError').waitFor();
+  check((await page.locator('#manualPurchaseEditError').textContent()).includes('ha cambiado'), 'Conflict explanation missing');
+  await page.screenshot({ path: 'output/playwright/edit-purchase-desktop-conflict.png', fullPage: true });
+  await page.locator('#cancelManualPurchaseEdit').click();
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.locator('#toggleManualPurchase').click();
+  await page.locator('[data-manual-variant]').selectOption(String(originalVariant));
+  await page.locator('[data-manual-price]').fill('10'); await page.locator('[data-manual-quantity]').fill('2');
+  await page.locator('#manualStockHandling').selectOption('ALREADY_ADJUSTED');
+  await page.locator('#reviewManualPurchase').click();
+  const created = page.waitForResponse(r => r.request().method() === 'POST' && r.url().endsWith('/in-person-purchases'));
+  await page.locator('#confirmManualPurchase').click();
+  const added = await (await created).json(), adjustedId = added.order.id;
+  await page.locator(`[data-edit-manual-order="${adjustedId}"]`).waitFor();
+  const beforeAdjusted = await read();
+  await open(adjustedId);
+  check(await page.locator('#manualStockHandling').inputValue() === 'ALREADY_ADJUSTED' && await page.locator('#manualStockHandling').isDisabled(), 'Already-adjusted treatment not preserved');
+  const otherSize = beforeAdjusted.options.products.flatMap(p => p.variants).find(v => v.id !== originalVariant && v.size === 'L');
+  check(otherSize, 'Size fixture missing');
+  await page.locator('[data-manual-variant]').selectOption(String(otherSize.id));
+  await page.locator('[data-manual-price]').fill('10'); await page.locator('[data-manual-quantity]').fill('4');
+  await page.locator('#manualPurchaseNote').fill('Edited mobile'); await page.locator('#manualExcludeStatistics').check();
+  await page.screenshot({ path: 'output/playwright/edit-purchase-mobile-form.png', fullPage: true });
+  await save(adjustedId);
+  const afterAdjusted = await read();
+  check(JSON.stringify(afterAdjusted.stock) === JSON.stringify(beforeAdjusted.stock), 'Already-adjusted edit changed stock');
+  check(afterAdjusted.spent === beforeAdjusted.spent + 20 && afterAdjusted.spent === afterAdjusted.listedSpent, 'Adjusted spending mismatch');
+  check(afterAdjusted.finance.revenueCents === beforeAdjusted.finance.revenueCents - 2000, 'Adjusted exclusion leaked');
+  await page.reload(); await page.getByRole('tablist').getByRole('button', { name: 'Pedidos', exact: true }).click();
+  await open(adjustedId);
+  check(await page.locator('[data-manual-variant]').inputValue() === String(otherSize.id) && await page.locator('[data-manual-quantity]').inputValue() === '4', 'Edited size/quantity lost after reload');
+  await page.screenshot({ path: 'output/playwright/edit-purchase-mobile-reloaded.png', fullPage: true });
+  check(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'Horizontal overflow');
+  await page.locator('#cancelManualPurchaseEdit').click();
+  const voided = page.waitForResponse(r => r.url().endsWith('/void-manual') && r.request().method() === 'POST');
+  await page.locator(`[data-void-manual-order="${id}"]`).click(); check((await voided).ok(), 'Original cancellation broken');
+  await page.locator(`[data-edit-manual-order="${id}"]`).waitFor({ state: 'detached' });
+  const afterVoid = await read();
+  check(afterVoid.stock.find(v => v[0] === originalVariant)[1] === baseline.stock.find(v => v[0] === originalVariant)[1] + 2, 'Voiding did not restore edited quantities');
+  check(dialogs.some(message => message.startsWith('Motivo de la corrección')), 'Original void confirmation changed');
+  check((await page.locator('#ordersBody').textContent()).includes('Edición no disponible'), 'Cancelled restriction missing');
+  check(errors.length === 0, errors.join('; '));
+  const result = { desktop: { prefilled: true, cancelNoWrites: true, netStock: true, persisted: true, conflictBlocked: true },
+    mobile: { sizeEdited: true, originalStockReadOnly: true, stockUnchanged: true, persisted: true, noOverflow: true },
+    sameOrderId: true, userSpendingAndExclusionsCorrect: true, originalVoidConfirmation: true, pageErrors: errors };
+  await page.evaluate(result => { window.__CRONOX_PURCHASE_EDIT_RESULT__ = result; }, result);
+  return result;
+}

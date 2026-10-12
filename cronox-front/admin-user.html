@@ -418,6 +418,8 @@
     .user-edit-field { display: grid; gap: 7px; color: #cfcfdb; font-size: .88rem; }
     .user-edit-field input, .user-edit-field select { width: 100%; border: 1px solid rgba(255,255,255,.16); border-radius: 10px; background: #0b0b10; color: #fff; padding: 10px 12px; }
     .user-edit-actions { display: flex; justify-content: flex-end; gap: 10px; }
+    .manual-purchase .user-edit-actions { flex-wrap: wrap; }
+    .manual-purchase .user-edit-actions .btn { flex-shrink: 0; white-space: nowrap; }
     .manual-purchase { margin-bottom: 20px; padding: 16px; border: 1px solid rgba(255,255,255,.12); border-radius: 14px; background: rgba(12,12,18,.72); }
     .manual-purchase-grid { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 12px; }
     .manual-purchase-field { min-width: 0; display: grid; gap: 6px; color: #cfcfdb; font-size: .86rem; }
@@ -425,7 +427,7 @@
     .manual-purchase-items { display: grid; gap: 8px; margin: 14px 0; }
     .manual-purchase-item { display: grid; grid-template-columns: minmax(0,1fr) minmax(150px,190px) 90px auto; gap: 8px; align-items: end; }
     .manual-purchase-review { margin-top: 14px; padding: 12px; border: 1px solid rgba(255,255,255,.18); background: #08080c; line-height: 1.55; }
-    .manual-order-action { white-space: normal; margin: 3px; }
+    .manual-order-action { white-space: nowrap; margin: 3px; }
     .manual-statistics-choice { margin: 14px 0; line-height: 1.5; }
     .manual-statistics-choice input { width: auto; }
     .manual-statistics-choice p { color: inherit; font-size: .85rem; }
@@ -622,12 +624,13 @@
           <section class="manual-purchase" id="manualPurchaseSection" hidden>
             <div class="panel-head">
               <div>
-                <strong>Registrar compra presencial</strong>
-                <div class="note-meta">No crea pagos de Stripe ni datos de envío. Revisa el resumen antes de guardar.</div>
+                <strong id="manualPurchaseTitle">Registrar compra presencial</strong>
+                <div class="note-meta" id="manualPurchaseExplanation">No crea pagos de Stripe ni datos de envío. Revisa el resumen antes de guardar.</div>
               </div>
               <button class="btn" type="button" id="toggleManualPurchase">Nueva compra</button>
             </div>
             <form id="manualPurchaseForm" hidden>
+              <p id="manualPurchaseEditError" role="alert" hidden></p>
               <div class="manual-purchase-grid">
                 <label class="manual-purchase-field">Fecha de compra<input id="manualPurchasedAt" type="datetime-local" required></label>
                 <label class="manual-purchase-field">Método de pago
@@ -644,6 +647,7 @@
                     <option value="DEDUCT_NOW">Todavía no ajustado: descontar ahora</option>
                     <option value="ALREADY_ADJUSTED">Ya ajustado físicamente: no volver a descontar</option>
                   </select>
+                  <span id="manualStockHandlingHelp" hidden></span>
                   <span id="manualStockHandlingError" role="alert" hidden>Selecciona cómo se debe tratar el stock</span>
                 </label>
                 <label class="manual-purchase-field">Nota interna<textarea id="manualPurchaseNote" rows="2" maxlength="500"></textarea></label>
@@ -656,6 +660,8 @@
               <div class="user-edit-actions">
                 <button class="btn" type="button" id="addManualPurchaseItem">Añadir producto</button>
                 <button class="btn" type="button" id="reviewManualPurchase">Revisar compra</button>
+                <button class="btn" type="submit" id="saveManualPurchaseEdit" hidden>Guardar cambios</button>
+                <button class="btn" type="button" id="cancelManualPurchaseEdit" hidden>Cancelar</button>
               </div>
               <div id="manualPurchaseReview" class="manual-purchase-review" hidden></div>
               <div class="user-edit-actions" id="manualPurchaseConfirmActions" hidden>
@@ -724,7 +730,7 @@
   </div>
 
   <script src="assets/country.js?v=1"></script>
-  <script src="assets/api.js?v=21"></script>
+  <script src="assets/api.js?v=22"></script>
   <script src="assets/admin-auth-routing.js?v=1"></script>
   <script src="assets/ui-status.js"></script>
   <script src="assets/admin-navigation.js?v=1"></script>
@@ -732,6 +738,6 @@
   <script src="assets/admin-user-shell.js?v=2"></script>
   <script src="assets/admin-live-stats.js?v=2"></script>
   <script src="assets/user-identity.js?v=1"></script>
-  <script src="assets/admin-user.js?v=9"></script>
+  <script src="assets/admin-user.js?v=10"></script>
 </body>
 </html>

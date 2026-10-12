@@ -102,6 +102,92 @@ describe('required stock handling', () => {
   });
 });
 
+const editablePurchase = (stockHandling = 'DEDUCT_NOW') => ({ editable: true, limitation: null, expectedVersion: 'a'.repeat(64), order: {
+  id: 11, paymentMethod: 'BANK_TRANSFER', purchasedAt: '2026-10-01T12:00:33.123Z', note: 'Original note', excludedFromStatistics: true, stockHandling,
+  items: [{ itemId: 101, variantId: 5, productId: 1, productName: 'Camiseta', size: 'M', sku: 'TEST-M', quantity: 2, unitPriceCents: 2550 }],
+} });
+async function setupEdit(stockHandling = 'DEDUCT_NOW', override: Record<string, unknown> = {}) {
+  const edit = jest.fn().mockResolvedValue({ changed: true, orderId: 11 });
+  const getEditor = jest.fn().mockResolvedValue(editablePurchase(stockHandling));
+  const result = await setupPurchase({
+    listAdminOrders: async () => ({ items: [{ id: 11, source: 'IN_PERSON_ADMIN', status: 'PAID', total: 51, excludedFromStatistics: true, provider: 'manual' }] }),
+    getInPersonPurchaseForEdit: getEditor, editInPersonPurchase: edit, ...override,
+  });
+  result.d.querySelector('[data-edit-manual-order="11"]').click(); await flush();
+  return { ...result, edit, getEditor };
+}
+describe('editing existing purchases', () => {
+  it.each(['DEDUCT_NOW', 'ALREADY_ADJUSTED'])('preloads all business fields and locks original stock treatment %s; cancellation does not write', async stockHandling => {
+    const { d, edit, create } = await setupEdit(stockHandling);
+    expect(d.querySelector('[data-void-manual-order="11"]').textContent).toBe('Anular');
+    expect(d.querySelector('#manualPurchaseTitle').textContent).toBe('Editar compra #11');
+    expect(d.querySelector('[data-manual-variant]').value).toBe('5');
+    expect(d.querySelector('[data-manual-price]').value).toBe('25.50');
+    expect(d.querySelector('[data-manual-quantity]').value).toBe('2');
+    expect(d.querySelector('#manualPaymentMethod').value).toBe('BANK_TRANSFER');
+    expect(d.querySelector('#manualPurchaseNote').value).toBe('Original note');
+    expect(d.querySelector('#manualExcludeStatistics').checked).toBe(true);
+    expect(d.querySelector('#manualStockHandling').value).toBe(stockHandling);
+    expect(d.querySelector('#manualStockHandling').disabled).toBe(true);
+    expect(d.querySelector('#saveManualPurchaseEdit').hidden).toBe(false);
+    expect(d.querySelector('#manualPurchaseConfirmActions').hidden).toBe(true);
+    d.querySelector('#manualPurchaseNote').value = 'Uncommitted draft';
+    d.querySelector('#cancelManualPurchaseEdit').click();
+    expect(edit).not.toHaveBeenCalled(); expect(create).not.toHaveBeenCalled();
+    expect(d.querySelector('#manualPurchaseForm').hidden).toBe(true);
+    d.querySelector('#toggleManualPurchase').click(); await flush();
+    expect(d.querySelector('#manualStockHandling').disabled).toBe(false);
+    expect(d.querySelector('#manualStockHandling').value).toBe('');
+  });
+  it('updates the same purchase, preserves the original seconds and submits line IDs/version without stock changes in the payload', async () => {
+    const { d, change, submit, edit, create } = await setupEdit();
+    change('[data-manual-price]', '30,25'); change('[data-manual-quantity]', '3');
+    change('#manualPurchaseNote', '');
+    d.querySelector('#manualExcludeStatistics').checked = false;
+    submit(); submit(); await flush();
+    expect(edit).toHaveBeenCalledTimes(1);
+    expect(edit.mock.calls[0].slice(0, 2)).toEqual(['7', '11']);
+    expect(edit.mock.calls[0][2]).toEqual({ expectedVersion: 'a'.repeat(64), items: [{ itemId: 101, variantId: 5, quantity: 3, unitPriceCents: 3025 }],
+      paymentMethod: 'BANK_TRANSFER', purchasedAt: '2026-10-01T12:00:33.123Z', note: '', excludedFromStatistics: false });
+    expect(create).not.toHaveBeenCalled();
+    expect(d.querySelector('#manualPurchaseForm').hidden).toBe(true);
+    expect(d.querySelector('#manualStockHandling').disabled).toBe(false);
+  });
+  it('keeps failed edits and retry keys; changed drafts use a new key and conflicts remain visible', async () => {
+    const { d, submit, edit, change } = await setupEdit();
+    edit.mockRejectedValue(new Error('La compra ha cambiado desde que la abriste.'));
+    submit(); await flush();
+    expect(d.querySelector('#manualPurchaseEditError').textContent).toContain('ha cambiado');
+    expect(d.querySelector('#manualPurchaseForm').hidden).toBe(false);
+    expect(d.querySelector('#manualStockHandling').disabled).toBe(true);
+    submit(); await flush();
+    expect(edit.mock.calls[0][3]).toBe(edit.mock.calls[1][3]);
+    change('#manualPurchaseNote', 'Changed draft'); submit(); await flush();
+    expect(edit.mock.calls[2][3]).not.toBe(edit.mock.calls[1][3]);
+    d.querySelector('#cancelManualPurchaseEdit').click();
+  });
+  it('allows keeping retired variants, removes deleted rows and sends new rows without an old item ID', async () => {
+    const original = editablePurchase();
+    original.order.items[0].variantId = 99; original.order.items[0].sku = 'RETIRED-M';
+    const { d, submit, edit, change } = await setupEdit('DEDUCT_NOW', { getInPersonPurchaseForEdit: async () => original });
+    expect(d.querySelector('[data-manual-variant]').value).toBe('99');
+    d.querySelector('[data-remove-manual-item]').click();
+    d.querySelector('#addManualPurchaseItem').click();
+    change('[data-manual-variant]', '6', 'change');
+    submit(); await flush();
+    expect(edit.mock.calls[0][2].items).toEqual([{ variantId: 6, quantity: 1, unitPriceCents: 3000 }]);
+  });
+  it('explains restrictions for cancelled, refunded and externally linked purchases', async () => {
+    const { d } = await setupPurchase({ listAdminOrders: async () => ({ items: [
+      { id: 21, source: 'IN_PERSON_ADMIN', status: 'CANCELLED' }, { id: 22, source: 'IN_PERSON_ADMIN', status: 'REFUNDED' },
+      { id: 23, source: 'IN_PERSON_ADMIN', status: 'PAID', provider: 'stripe', providerRef: 'pi_external' },
+    ] }) });
+    expect(d.querySelectorAll('[data-edit-manual-order]')).toHaveLength(0);
+    expect(d.querySelector('#ordersBody').textContent).toContain('Edición no disponible');
+    expect(d.querySelector('#ordersBody').textContent).toContain('pago integrado');
+  });
+});
+
 describe('paid unit price interactions', () => {
   it('uses server KPIs while retaining excluded purchases in the operational history', async () => {
     const { d } = await setupPurchase({

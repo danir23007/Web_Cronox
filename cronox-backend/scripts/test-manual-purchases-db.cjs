@@ -216,6 +216,7 @@ async function run() {
       assert.equal((await prisma.financeArchive.findUniqueOrThrow({ where: { orderId: saved.id } })).revision, recovered.revision);
     } finally { await recovery.end(); }
     report.checks.push('Reviewed recovery SQL rehearsed only in disposable DB: costs and audited archive revision restored; original revisions/prices/stock preserved; stale replay rejected and incomplete totals remain unknown');
+    await require('./verify-manual-purchase-edits.cjs')({ db: prisma, service, users, adminId: admin.id, checks: report.checks });
     report.passed = true;
   } finally {
     if (prisma) await prisma.$disconnect();

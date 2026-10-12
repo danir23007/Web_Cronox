@@ -21,7 +21,7 @@ class HeaderAuthGuard implements CanActivate {
 
 describe('manual purchase permissions (HTTP)', () => {
   let app: INestApplication;
-  const service = { getOptions: jest.fn(), create: jest.fn(), void: jest.fn(), setStatisticsExclusion: jest.fn() };
+  const service = { getOptions: jest.fn(), create: jest.fn(), void: jest.fn(), setStatisticsExclusion: jest.fn(), getForEdit: jest.fn(), edit: jest.fn() };
 
   beforeEach(async () => {
     jest.clearAllMocks();
@@ -78,6 +78,28 @@ describe('manual purchase permissions (HTTP)', () => {
       items: [{ variantId: 4, quantity: 2, unitPriceCents: 0 }], paymentMethod: 'CASH', stockHandling: 'ALREADY_ADJUSTED',
     }).expect(201);
     expect(service.create.mock.calls[0][3].items[0].unitPriceCents).toBe(0);
+  });
+
+  const editPayload = { expectedVersion: 'a'.repeat(64), items: [{ itemId: 10, variantId: 4, quantity: 2, unitPriceCents: 2550 }],
+    paymentMethod: 'CASH', purchasedAt: '2026-10-01T12:00:33.000Z', excludedFromStatistics: true, note: 'Edición' };
+  const editRoute = '/api/admin/users/7/in-person-purchases/41';
+  it('protects editing and reading with the same superadmin guards and forwards owner/version/retry key', async () => {
+    await request(app.getHttpServer()).get(editRoute).expect(401);
+    await request(app.getHttpServer()).get(editRoute).set('x-test-role', Role.ADMIN).expect(403);
+    await request(app.getHttpServer()).patch(editRoute).set('x-test-role', Role.ADMIN).send(editPayload).expect(403);
+    await request(app.getHttpServer()).get(editRoute).set('x-test-role', Role.SUPERADMIN).expect(200);
+    expect(service.getForEdit).toHaveBeenCalledWith(7, 41);
+    await request(app.getHttpServer()).patch(editRoute).set('x-test-role', Role.SUPERADMIN).set('Idempotency-Key', 'edit-purchase-key-123456').send(editPayload).expect(200);
+    expect(service.edit).toHaveBeenCalledWith(7, 41, 99, 'edit-purchase-key-123456', expect.objectContaining(editPayload));
+  });
+  it.each([
+    { stockHandling: 'ALREADY_ADJUSTED' }, { expectedVersion: '' }, { items: [] }, { purchasedAt: 'invalid' },
+    { paymentMethod: 'STRIPE' }, { excludedFromStatistics: 'true' }, { items: [{ variantId: 4, quantity: 1 }] },
+    { items: [{ itemId: null, variantId: 4, quantity: 1, unitPriceCents: 1 }] },
+    { items: [{ variantId: 4, quantity: 0, unitPriceCents: 1 }] },
+  ])('rejects invalid edit fields and changing the stock treatment: %s', async override => {
+    await request(app.getHttpServer()).patch(editRoute).set('x-test-role', Role.SUPERADMIN).send({ ...editPayload, ...override }).expect(400);
+    expect(service.edit).not.toHaveBeenCalled();
   });
 
 });

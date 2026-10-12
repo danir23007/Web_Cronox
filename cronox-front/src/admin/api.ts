@@ -1278,6 +1278,10 @@ import { loadCategoryPages } from './category-pagination';
     body: payload,
     headers: { 'Idempotency-Key': idempotencyKey },
   });
+  adminApi.getInPersonPurchaseForEdit = (userId: number | string, orderId: number | string) =>
+    request(`/api/admin/users/${encodeURIComponent(userId)}/in-person-purchases/${encodeURIComponent(orderId)}`, { cache: 'no-store' }) as Promise<ManualPurchaseEditResponse>;
+  adminApi.editInPersonPurchase = (userId: number | string, orderId: number | string, payload: ManualPurchaseEditPayload, key: string) =>
+    request(`/api/admin/users/${encodeURIComponent(userId)}/in-person-purchases/${encodeURIComponent(orderId)}`, { method: 'PATCH', body: payload, headers: { 'Idempotency-Key': key } });
   adminApi.setManualStatisticsExclusion = async (orderId: number | string, excluded: boolean, key: string) =>
     request(`/api/admin/orders/${encodeURIComponent(orderId)}/statistics-exclusion`, {
       method: 'POST', body: { excludedFromStatistics: excluded }, headers: { 'Idempotency-Key': key },

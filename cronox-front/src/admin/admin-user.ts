@@ -62,6 +62,14 @@ import { MAX_MANUAL_CENTS, parseManualPrice, manualPriceText } from './manual-pu
   const manualPurchaseConfirmActions = document.getElementById('manualPurchaseConfirmActions');
   const editManualPurchaseBtn = document.getElementById('editManualPurchase') as HTMLButtonElement | null;
   const confirmManualPurchaseBtn = document.getElementById('confirmManualPurchase') as HTMLButtonElement | null;
+  const manualPurchaseTitle = document.getElementById('manualPurchaseTitle');
+  const manualPurchaseExplanation = document.getElementById('manualPurchaseExplanation');
+  const manualStockHandlingHelp = document.getElementById('manualStockHandlingHelp');
+  const manualPurchaseEditError = document.getElementById('manualPurchaseEditError');
+  const saveManualPurchaseEditBtn = document.getElementById('saveManualPurchaseEdit') as HTMLButtonElement | null;
+  const cancelManualPurchaseEditBtn = document.getElementById('cancelManualPurchaseEdit') as HTMLButtonElement | null;
+  let manualEditing: { orderId: string; expectedVersion: string; originalDate: string; localDate: string } | null = null;
+  let manualEditAttempt: { payload: string; key: string } | null = null;
   const notesList = document.getElementById('notesList');
   const noteForm = document.getElementById('noteForm') as HTMLFormElement | null;
   const noteTitle = document.getElementById('noteTitle') as HTMLInputElement | null;
@@ -458,7 +466,7 @@ import { MAX_MANUAL_CENTS, parseManualPrice, manualPriceText } from './manual-pu
     if (manualPurchaseConfirmActions) manualPurchaseConfirmActions.hidden = true;
   };
 
-  const addManualPurchaseRow = () => {
+  const addManualPurchaseRow = (seed?: ManualPurchaseEditResponse['order']['items'][number]) => {
     if (!manualPurchaseItems) return;
     const options = manualVariantOptions();
     const row = document.createElement('div');
@@ -481,6 +489,12 @@ import { MAX_MANUAL_CENTS, parseManualPrice, manualPriceText } from './manual-pu
       row.remove();
       invalidateManualPurchaseReview();
     });
+    if (seed) {
+      row.dataset.itemId = String(seed.itemId);
+      row.querySelector<HTMLSelectElement>('[data-manual-variant]')!.value = String(seed.variantId ?? '');
+      row.querySelector<HTMLInputElement>('[data-manual-price]')!.value = manualPriceText(seed.unitPriceCents);
+      row.querySelector<HTMLInputElement>('[data-manual-quantity]')!.value = String(seed.quantity);
+    }
     manualPurchaseItems.appendChild(row);
     invalidateManualPurchaseReview();
   };
@@ -501,6 +515,7 @@ import { MAX_MANUAL_CENTS, parseManualPrice, manualPriceText } from './manual-pu
     const stockHandling = validateManualStockHandling();
     const rows = [...(manualPurchaseItems?.querySelectorAll<HTMLElement>('.manual-purchase-item') || [])];
     const items = rows.map((row) => ({
+      ...(manualEditing && row.dataset.itemId ? { itemId: Number(row.dataset.itemId) } : {}),
       variantId: Number(row.querySelector<HTMLSelectElement>('[data-manual-variant]')?.value),
       quantity: Number(row.querySelector<HTMLInputElement>('[data-manual-quantity]')?.value),
       unitPriceCents: parseManualPrice(row.querySelector<HTMLInputElement>('[data-manual-price]')?.value ?? ''),
@@ -515,7 +530,7 @@ import { MAX_MANUAL_CENTS, parseManualPrice, manualPriceText } from './manual-pu
       paymentMethod: manualPaymentMethod?.value || 'CASH',
       stockHandling,
       excludedFromStatistics: manualExcludeStatistics?.checked ?? false,
-      purchasedAt: new Date(purchasedAtValue).toISOString(),
+      purchasedAt: manualEditing && purchasedAtValue === manualEditing.localDate ? manualEditing.originalDate : new Date(purchasedAtValue).toISOString(),
       note: manualPurchaseNote?.value.trim() || undefined,
     };
   };
@@ -549,6 +564,7 @@ import { MAX_MANUAL_CENTS, parseManualPrice, manualPriceText } from './manual-pu
 
   const submitManualPurchase = async (event: Event) => {
     event.preventDefault();
+    if (manualEditing) { await saveManualPurchaseEdit(); return; }
     try { validateManualStockHandling(); } catch { return; }
     if (manualPurchaseSubmitting || !userId || !manualPurchaseIdempotencyKey || !window.CRONOX_API?.admin?.createInPersonPurchase) return;
     manualPurchaseSubmitting = true;
@@ -571,6 +587,116 @@ import { MAX_MANUAL_CENTS, parseManualPrice, manualPriceText } from './manual-pu
     } finally {
       manualPurchaseSubmitting = false;
       confirmManualPurchaseBtn && (confirmManualPurchaseBtn.disabled = false);
+    }
+  };
+
+  const setManualStockLabels = (editing: boolean) => {
+    const deduct = manualStockHandling?.querySelector<HTMLOptionElement>('option[value="DEDUCT_NOW"]');
+    const adjusted = manualStockHandling?.querySelector<HTMLOptionElement>('option[value="ALREADY_ADJUSTED"]');
+    if (deduct) deduct.textContent = editing ? 'Stock descontado al registrar' : 'Todavía no ajustado: descontar ahora';
+    if (adjusted) adjusted.textContent = editing ? 'Stock ya ajustado físicamente' : 'Ya ajustado físicamente: no volver a descontar';
+  };
+
+  const finishManualPurchaseEdit = () => {
+    manualEditing = null;
+    manualEditAttempt = null;
+    manualPurchaseForm?.reset();
+    manualPurchaseItems?.replaceChildren();
+    manualPurchaseOptions = [];
+    invalidateManualPurchaseReview();
+    if (manualPurchaseForm) manualPurchaseForm.hidden = true;
+    if (manualStockHandling) manualStockHandling.disabled = false;
+    setManualStockLabels(false);
+    if (manualStockHandlingHelp) manualStockHandlingHelp.hidden = true;
+    if (manualPurchaseEditError) manualPurchaseEditError.hidden = true;
+    if (saveManualPurchaseEditBtn) saveManualPurchaseEditBtn.hidden = true;
+    if (cancelManualPurchaseEditBtn) cancelManualPurchaseEditBtn.hidden = true;
+    if (reviewManualPurchaseBtn) reviewManualPurchaseBtn.hidden = false;
+    if (toggleManualPurchaseBtn) toggleManualPurchaseBtn.hidden = false;
+    if (manualPurchaseTitle) manualPurchaseTitle.textContent = 'Registrar compra presencial';
+    if (manualPurchaseExplanation) manualPurchaseExplanation.textContent = 'No crea pagos de Stripe ni datos de envío. Revisa el resumen antes de guardar.';
+  };
+
+  let manualEditorOpening = false;
+  const openManualPurchaseEditor = async (orderId: string) => {
+    const api = window.CRONOX_API?.admin;
+    if (!canEditProtectedUserFields || !userId || manualPurchaseSubmitting || manualEditorOpening || !api?.getInPersonPurchaseForEdit || !api.getInPersonPurchaseOptions) return;
+    if (manualEditing) {
+      if (manualPurchaseEditError) { manualPurchaseEditError.textContent = 'Guarda o cancela la edición actual antes de abrir otra compra.'; manualPurchaseEditError.hidden = false; }
+      return;
+    }
+    manualEditorOpening = true;
+    try {
+      const [editor, options] = await Promise.all([api.getInPersonPurchaseForEdit(userId, orderId), api.getInPersonPurchaseOptions(userId) as Promise<{ products?: Array<Record<string, unknown>> }>]);
+      if (!editor.editable) {
+        if (ordersStatus && renderBanner) renderBanner(ordersStatus, { type: 'warning', title: 'Edición no disponible', message: editor.limitation || 'No se puede editar esta compra.' });
+        return;
+      }
+      manualPurchaseForm?.reset();
+      manualPurchaseItems?.replaceChildren();
+      manualPurchaseOptions = options.products || [];
+      for (const item of editor.order.items) {
+        if (!manualVariantOptions().some(variant => variant.id === item.variantId)) {
+          manualPurchaseOptions.push({ id: item.productId, name: item.productName, price: item.unitPriceCents,
+            variants: [{ id: item.variantId, size: item.size, sku: item.sku, stockQty: 'Talla original', price: item.unitPriceCents }] });
+        }
+      }
+      const date = new Date(editor.order.purchasedAt);
+      const localDate = new Date(date.getTime() - date.getTimezoneOffset() * 60_000).toISOString().slice(0, 16);
+      manualEditing = { orderId, expectedVersion: editor.expectedVersion, originalDate: editor.order.purchasedAt, localDate };
+      manualEditAttempt = null;
+      if (manualPurchasedAt) manualPurchasedAt.value = localDate;
+      if (manualPaymentMethod) manualPaymentMethod.value = editor.order.paymentMethod;
+      if (manualStockHandling) { manualStockHandling.value = editor.order.stockHandling || ''; manualStockHandling.disabled = true; manualStockHandling.removeAttribute('aria-invalid'); }
+      setManualStockLabels(true);
+      if (manualStockHandlingError) manualStockHandlingError.hidden = true;
+      if (manualStockHandlingHelp) {
+        manualStockHandlingHelp.textContent = editor.order.stockHandling === 'DEDUCT_NOW'
+          ? 'Stock descontado: se ajustará únicamente la diferencia de artículos y cantidades. Este tratamiento no se puede cambiar.'
+          : 'El stock ya estaba ajustado: esta edición no modificará el stock. Este tratamiento no se puede cambiar.';
+        manualStockHandlingHelp.hidden = false;
+      }
+      if (manualExcludeStatistics) manualExcludeStatistics.checked = editor.order.excludedFromStatistics;
+      if (manualPurchaseNote) manualPurchaseNote.value = editor.order.note;
+      if (manualPurchaseTitle) manualPurchaseTitle.textContent = `Editar compra #${orderId}`;
+      if (manualPurchaseExplanation) manualPurchaseExplanation.textContent = 'Edita el registro sin realizar cobros ni reembolsos. Se conservan los costes históricos de las líneas cuya talla no cambia; las líneas nuevas o con otra talla usan el coste configurado. Las tallas inactivas solo pueden conservarse o reducirse.';
+      if (manualPurchaseEditError) manualPurchaseEditError.hidden = true;
+      if (toggleManualPurchaseBtn) toggleManualPurchaseBtn.hidden = true;
+      if (reviewManualPurchaseBtn) reviewManualPurchaseBtn.hidden = true;
+      if (saveManualPurchaseEditBtn) saveManualPurchaseEditBtn.hidden = false;
+      if (cancelManualPurchaseEditBtn) cancelManualPurchaseEditBtn.hidden = false;
+      editor.order.items.forEach(addManualPurchaseRow);
+      if (manualPurchaseSection) manualPurchaseSection.hidden = false;
+      if (manualPurchaseForm) { manualPurchaseForm.hidden = false; manualPurchaseForm.scrollIntoView?.({ block: 'start', behavior: 'smooth' }); }
+    } catch (error) {
+      showModuleError({ container: ordersStatus || statusArea, error: error as CronoxApiError, title: 'No se pudo abrir la compra' });
+    } finally { manualEditorOpening = false; }
+  };
+
+  const saveManualPurchaseEdit = async () => {
+    if (!manualEditing || manualPurchaseSubmitting || !userId || !window.CRONOX_API?.admin?.editInPersonPurchase) return;
+    const editing = manualEditing;
+    try {
+      const values = readManualPurchase();
+      const payload: ManualPurchaseEditPayload = { expectedVersion: editing.expectedVersion, items: values.items,
+        paymentMethod: values.paymentMethod, purchasedAt: values.purchasedAt, note: values.note || '', excludedFromStatistics: values.excludedFromStatistics };
+      const total = payload.items.reduce((sum, item) => sum + item.unitPriceCents * item.quantity, 0);
+      if (!Number.isSafeInteger(total) || total > MAX_MANUAL_CENTS) throw new Error('El total es demasiado alto.');
+      const serialized = JSON.stringify(payload);
+      if (manualEditAttempt?.payload !== serialized) manualEditAttempt = { payload: serialized, key: crypto.randomUUID() };
+      manualPurchaseSubmitting = true;
+      if (manualPurchaseEditError) manualPurchaseEditError.hidden = true;
+      manualPurchaseForm?.querySelectorAll<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement | HTMLButtonElement>('input, select, textarea, button').forEach(field => { field.disabled = true; });
+      await window.CRONOX_API.admin.editInPersonPurchase(userId, editing.orderId, payload, manualEditAttempt!.key);
+      finishManualPurchaseEdit();
+      await Promise.all([loadOrders(), loadUserDetail(), loadAuditLogs()]);
+      if (ordersStatus && renderBanner) renderBanner(ordersStatus, { type: 'success', title: 'Compra actualizada', message: `Los cambios se han guardado en la compra #${editing.orderId}.` });
+    } catch (error) {
+      if (manualPurchaseEditError) { manualPurchaseEditError.textContent = (error as Error).message || 'No se pudieron guardar los cambios. Revisa los datos e inténtalo de nuevo.'; manualPurchaseEditError.hidden = false; }
+    } finally {
+      manualPurchaseSubmitting = false;
+      manualPurchaseForm?.querySelectorAll<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement | HTMLButtonElement>('input, select, textarea, button').forEach(field => { field.disabled = false; });
+      if (manualEditing && manualStockHandling) manualStockHandling.disabled = true;
     }
   };
 
@@ -600,13 +726,17 @@ import { MAX_MANUAL_CENTS, parseManualPrice, manualPriceText } from './manual-pu
         order.total ?? order.totalAmount ?? order.totalPaid ?? order.amount ?? order.amountTotal ?? order.grandTotal;
       const totalLabel = totalValue !== undefined && totalValue !== null ? formatCurrency(totalValue) : '—';
       const canVoid = order.source === 'IN_PERSON_ADMIN' && order.status === 'PAID';
+      const externalPayment = Boolean(order.providerRef || order.paymentMethod === 'STRIPE' || (order.provider && order.provider !== 'manual'));
+      const editAction = order.source === 'IN_PERSON_ADMIN' && canEditProtectedUserFields
+        ? (order.status === 'PAID' && !externalPayment ? `<button class="btn manual-order-action" type="button" data-edit-manual-order="${escapeHtml(String(id))}">Editar compra</button>`
+          : `<span class="note-meta">Edición no disponible: ${externalPayment ? 'compra vinculada a un pago integrado' : 'compra anulada, devuelta o no pagada'}.</span>`) : '';
       return `
         <tr>
           <td>${escapeHtml(formatText(id))}</td>
           <td>${escapeHtml(formatDate(dateValue))}</td>
           <td>${escapeHtml(formatText(status))}${order.excludedFromStatistics === true ? '<br><strong>Excluida de estadísticas</strong>' : ''}</td>
           <td>${escapeHtml(totalLabel)}</td>
-          <td>${order.source === 'IN_PERSON_ADMIN' && canEditProtectedUserFields ? `<button class="btn manual-order-action" type="button" data-statistics-order="${escapeHtml(String(id))}" data-excluded="${order.excludedFromStatistics === true}">${order.excludedFromStatistics ? 'Incluir en estadísticas' : 'Excluir de las estadísticas'}</button>` : ''}${canVoid ? `<button class="btn manual-order-action" type="button" data-void-manual-order="${escapeHtml(String(id))}">Anular/corregir</button>` : '—'}</td>
+          <td>${order.source === 'IN_PERSON_ADMIN' && canEditProtectedUserFields ? `<button class="btn manual-order-action" type="button" data-statistics-order="${escapeHtml(String(id))}" data-excluded="${order.excludedFromStatistics === true}">${order.excludedFromStatistics ? 'Incluir en estadísticas' : 'Excluir de las estadísticas'}</button>` : ''}${editAction}${canVoid ? `<button class="btn manual-order-action" type="button" data-void-manual-order="${escapeHtml(String(id))}">Anular</button>` : '—'}</td>
         </tr>
       `;
     });
@@ -1114,6 +1244,7 @@ import { MAX_MANUAL_CENTS, parseManualPrice, manualPriceText } from './manual-pu
   };
 
   const openManualPurchase = async () => {
+    if (manualEditing || manualPurchaseSubmitting || manualEditorOpening) return;
     if (!userId || !manualPurchaseForm || !window.CRONOX_API?.admin?.getInPersonPurchaseOptions) return;
     try {
       if (!manualPurchaseOptions.length) {
@@ -1465,7 +1596,8 @@ import { MAX_MANUAL_CENTS, parseManualPrice, manualPriceText } from './manual-pu
   userEditForm?.addEventListener('submit', saveUserEdit);
   notesList?.addEventListener('click', handleNoteDelete);
   toggleManualPurchaseBtn?.addEventListener('click', () => void openManualPurchase());
-  addManualPurchaseItemBtn?.addEventListener('click', addManualPurchaseRow);
+  addManualPurchaseItemBtn?.addEventListener('click', () => addManualPurchaseRow());
+  cancelManualPurchaseEditBtn?.addEventListener('click', () => { if (!manualPurchaseSubmitting) finishManualPurchaseEdit(); });
   reviewManualPurchaseBtn?.addEventListener('click', reviewManualPurchase);
   editManualPurchaseBtn?.addEventListener('click', invalidateManualPurchaseReview);
   manualPurchaseForm?.addEventListener('input', invalidateManualPurchaseReview);
@@ -1497,6 +1629,8 @@ import { MAX_MANUAL_CENTS, parseManualPrice, manualPriceText } from './manual-pu
     } finally { statisticsSubmitting = false; button.disabled = false; }
   };
   ordersBody?.addEventListener('click', (event) => {
+    const edit = (event.target as Element | null)?.closest<HTMLButtonElement>('[data-edit-manual-order]');
+    if (edit?.dataset.editManualOrder) { void openManualPurchaseEditor(edit.dataset.editManualOrder); return; }
     const choice = (event.target as Element | null)?.closest<HTMLButtonElement>('[data-statistics-order]');
     if (choice) { void changeManualStatistics(choice); return; }
     const button = (event.target as Element | null)?.closest<HTMLElement>('[data-void-manual-order]');
