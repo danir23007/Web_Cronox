@@ -153,7 +153,7 @@ export class AdminExportQueryDto {
   targetType?: string;
 
   @IsOptional()
-  @IsIn(['createdAt', 'updatedAt', 'email', 'id', 'total', 'status', 'name'])
+  @IsIn(['createdAt', 'updatedAt', 'email', 'id', 'total', 'status', 'name', 'revenue', 'orders', 'distinctProducts'])
   sort?: string;
 
   @IsOptional()

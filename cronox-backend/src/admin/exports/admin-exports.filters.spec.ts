@@ -41,7 +41,7 @@ const setup = () => {
 };
 
 describe('Admin export filter mapping', () => {
-  it('maps user search, FRIEND role, circle, account state and sort', async () => {
+  it('maps user search, FRIEND role, circle and sort, ignoring retired account-state filters', async () => {
     const { prisma, service } = setup();
     await service.export(
       'usuarios',
@@ -62,13 +62,13 @@ describe('Admin export filter mapping', () => {
         where: expect.objectContaining({
           role: Role.FRIEND,
           circleLevel: 2,
-          accountState: UserAccountState.ACTIVE,
           OR: expect.any(Array),
         }),
         orderBy: [{ email: 'asc' }, { id: 'asc' }],
         take: 5001,
       }),
     );
+    expect(prisma.user.findMany.mock.calls[0][0].where).not.toHaveProperty('accountState');
   });
 
   it('maps the order UI identity search and supports validated status/date/sort', async () => {

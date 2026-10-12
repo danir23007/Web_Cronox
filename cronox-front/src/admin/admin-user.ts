@@ -52,6 +52,7 @@ import { MAX_MANUAL_CENTS, parseManualPrice, manualPriceText } from './manual-pu
   const manualPurchasedAt = document.getElementById('manualPurchasedAt') as HTMLInputElement | null;
   const manualPaymentMethod = document.getElementById('manualPaymentMethod') as HTMLSelectElement | null;
   const manualStockHandling = document.getElementById('manualStockHandling') as HTMLSelectElement | null;
+  const manualExcludeStatistics = document.getElementById('manualExcludeStatistics') as HTMLInputElement | null;
   const manualPurchaseNote = document.getElementById('manualPurchaseNote') as HTMLTextAreaElement | null;
   const manualPurchaseItems = document.getElementById('manualPurchaseItems');
   const addManualPurchaseItemBtn = document.getElementById('addManualPurchaseItem') as HTMLButtonElement | null;
@@ -499,6 +500,7 @@ import { MAX_MANUAL_CENTS, parseManualPrice, manualPriceText } from './manual-pu
       items,
       paymentMethod: manualPaymentMethod?.value || 'CASH',
       stockHandling: manualStockHandling?.value || 'DEDUCT_NOW',
+      excludedFromStatistics: manualExcludeStatistics?.checked ?? false,
       purchasedAt: new Date(purchasedAtValue).toISOString(),
       note: manualPurchaseNote?.value.trim() || undefined,
     };
@@ -520,6 +522,7 @@ import { MAX_MANUAL_CENTS, parseManualPrice, manualPriceText } from './manual-pu
       manualPurchaseReviewedPayload = serialized;
       if (manualPurchaseReview) {
         manualPurchaseReview.innerHTML = `<strong>Revisión final</strong><ul>${lines.map((line) => `<li>${escapeHtml(line.productName)} · ${escapeHtml(line.size)} · ${escapeHtml(formatCurrency(line.unitPriceCents / 100))} por unidad × ${line.quantity} — Subtotal: ${escapeHtml(formatCurrency(line.lineCents / 100))}</li>`).join('')}</ul><p><strong>Total:</strong> ${escapeHtml(formatCurrency(totalCents / 100))}</p><p><strong>Pago:</strong> ${escapeHtml(payload.paymentMethod)}<br><strong>Stock:</strong> ${payload.stockHandling === 'DEDUCT_NOW' ? 'se descontará al guardar' : 'ya estaba ajustado; no se modificará'}</p>`;
+        manualPurchaseReview.innerHTML += `<p><strong>Estadísticas:</strong> ${payload.excludedFromStatistics ? 'Excluida de estadísticas' : 'Incluida en las estadísticas generales'}</p>`;
         manualPurchaseReview.hidden = false;
       }
       if (manualPurchaseConfirmActions) manualPurchaseConfirmActions.hidden = false;
@@ -585,9 +588,9 @@ import { MAX_MANUAL_CENTS, parseManualPrice, manualPriceText } from './manual-pu
         <tr>
           <td>${escapeHtml(formatText(id))}</td>
           <td>${escapeHtml(formatDate(dateValue))}</td>
-          <td>${escapeHtml(formatText(status))}</td>
+          <td>${escapeHtml(formatText(status))}${order.excludedFromStatistics === true ? '<br><strong>Excluida de estadísticas</strong>' : ''}</td>
           <td>${escapeHtml(totalLabel)}</td>
-          <td>${canVoid ? `<button class="btn manual-order-action" type="button" data-void-manual-order="${escapeHtml(String(id))}">Anular/corregir</button>` : '—'}</td>
+          <td>${order.source === 'IN_PERSON_ADMIN' && canEditProtectedUserFields ? `<button class="btn manual-order-action" type="button" data-statistics-order="${escapeHtml(String(id))}" data-excluded="${order.excludedFromStatistics === true}">${order.excludedFromStatistics ? 'Incluir en estadísticas' : 'Excluir de las estadísticas'}</button>` : ''}${canVoid ? `<button class="btn manual-order-action" type="button" data-void-manual-order="${escapeHtml(String(id))}">Anular/corregir</button>` : '—'}</td>
         </tr>
       `;
     });
@@ -1008,23 +1011,9 @@ import { MAX_MANUAL_CENTS, parseManualPrice, manualPriceText } from './manual-pu
         .map((value) => new Date(value as string))
         .filter((date) => !Number.isNaN(date.getTime()))
         .sort((a, b) => b.getTime() - a.getTime())[0];
-      const totals = orders
-        .map((order) => {
-          const payload = order as Record<string, unknown>;
-          return (
-            payload.total ??
-            payload.totalAmount ??
-            payload.totalPaid ??
-            payload.amount ??
-            payload.amountTotal ??
-            payload.grandTotal
-          );
-        })
-        .map((value) => Number(value))
-        .filter((value) => Number.isFinite(value));
+      // Count/spend KPIs come from server aggregates, not the paginated
+      // operational history, which deliberately retains excluded purchases.
       updateOrderKpis({
-        ordersCount: orders.length,
-        totalSpent: totals.length ? totals.reduce((acc, value) => acc + value, 0) : undefined,
         lastOrderAt: latest ? latest.toISOString() : undefined,
       });
     } catch (error) {
@@ -1460,7 +1449,31 @@ import { MAX_MANUAL_CENTS, parseManualPrice, manualPriceText } from './manual-pu
   manualPurchaseForm?.addEventListener('input', invalidateManualPurchaseReview);
   manualPurchaseForm?.addEventListener('change', invalidateManualPurchaseReview);
   manualPurchaseForm?.addEventListener('submit', submitManualPurchase);
+  const statisticsRequests = new Map<string, { excluded: boolean; key: string }>();
+  let statisticsSubmitting = false;
+  const changeManualStatistics = async (button: HTMLButtonElement) => {
+    if (statisticsSubmitting || !window.CRONOX_API?.admin?.setManualStatisticsExclusion) return;
+    const id = button.dataset.statisticsOrder!;
+    const excluded = button.dataset.excluded !== 'true';
+    if (!window.confirm(excluded
+      ? '¿Excluir esta compra de todas las estadísticas? La compra permanecerá en la cuenta del cliente. No se modificará el stock ni sus importes.'
+      : '¿Volver a incluir esta compra en todas las estadísticas? No se modificará el stock ni sus importes.')) return;
+    const prior = statisticsRequests.get(id);
+    const request = prior?.excluded === excluded ? prior : { excluded, key: crypto.randomUUID() };
+    statisticsRequests.set(id, request);
+    statisticsSubmitting = true;
+    button.disabled = true;
+    try {
+      await window.CRONOX_API.admin.setManualStatisticsExclusion(id, excluded, request.key);
+      statisticsRequests.delete(id);
+      await Promise.all([loadOrders(), loadUserDetail(), loadAuditLogs()]);
+    } catch (error) {
+      showModuleError({ container: ordersStatus || statusArea, error: error as CronoxApiError, title: 'No se pudo cambiar la exclusión' });
+    } finally { statisticsSubmitting = false; button.disabled = false; }
+  };
   ordersBody?.addEventListener('click', (event) => {
+    const choice = (event.target as Element | null)?.closest<HTMLButtonElement>('[data-statistics-order]');
+    if (choice) { void changeManualStatistics(choice); return; }
     const button = (event.target as Element | null)?.closest<HTMLElement>('[data-void-manual-order]');
     if (button?.dataset.voidManualOrder) void voidManualPurchase(button.dataset.voidManualOrder);
   });
@@ -1476,6 +1489,7 @@ import { MAX_MANUAL_CENTS, parseManualPrice, manualPriceText } from './manual-pu
 
   void ensureAdminAccess().then((currentUser) => {
     if (!currentUser) return;
+    window.CRONOX_ADMIN_NAVIGATION?.applyRole(currentUser.role);
     canEditProtectedUserFields = currentUser.role === 'SUPERADMIN' && Boolean(userId && identityUid);
     if (editUserBtn) editUserBtn.hidden = !canEditProtectedUserFields;
     if (manualPurchaseSection) manualPurchaseSection.hidden = !canEditProtectedUserFields;

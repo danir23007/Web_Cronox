@@ -9,6 +9,7 @@ import { SuperAdminGuard } from '../../common/guards/super-admin.guard';
 import { Roles } from '../../common/roles.decorator';
 import { AdminManualPurchasesService } from './admin-manual-purchases.service';
 import { CreateManualPurchaseDto } from './dto/create-manual-purchase.dto';
+import { ManualStatisticsDto } from './dto/manual-statistics.dto';
 import { VoidManualPurchaseDto } from './dto/void-manual-purchase.dto';
 
 @Controller('admin/users')
@@ -38,6 +39,16 @@ export class AdminManualPurchasesController {
 @Roles(Role.SUPERADMIN)
 export class AdminManualPurchaseCorrectionsController {
   constructor(private readonly service: AdminManualPurchasesService) {}
+
+  @Post(':id/statistics-exclusion')
+  statistics(
+    @Param('id', ParseIntPipe) id: number,
+    @CurrentUser('id') adminId: number,
+    @Headers('idempotency-key') key: string | undefined,
+    @Body() dto: ManualStatisticsDto,
+  ) {
+    return this.service.setStatisticsExclusion(id, adminId, key, dto.excludedFromStatistics);
+  }
 
   @Post(':id/void-manual')
   void(

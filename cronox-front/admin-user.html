@@ -425,7 +425,10 @@
     .manual-purchase-items { display: grid; gap: 8px; margin: 14px 0; }
     .manual-purchase-item { display: grid; grid-template-columns: minmax(0,1fr) minmax(150px,190px) 90px auto; gap: 8px; align-items: end; }
     .manual-purchase-review { margin-top: 14px; padding: 12px; border: 1px solid rgba(255,255,255,.18); background: #08080c; line-height: 1.55; }
-    .manual-order-action { white-space: nowrap; }
+    .manual-order-action { white-space: normal; margin: 3px; }
+    .manual-statistics-choice { margin: 14px 0; line-height: 1.5; }
+    .manual-statistics-choice input { width: auto; }
+    .manual-statistics-choice p { color: inherit; font-size: .85rem; }
     @media (max-width: 640px) { .user-edit-grid { grid-template-columns: 1fr; } }
     @media (max-width: 640px) { .manual-purchase-grid, .manual-purchase-item { grid-template-columns: 1fr; } }
 
@@ -453,7 +456,7 @@
   <link rel="shortcut icon" type="image/png" href="/favicon.png?v=4">
   <link rel="apple-touch-icon" href="/favicon.png?v=4">
   <meta name="theme-color" content="#000000">
-  <link rel="stylesheet" href="assets/admin-shell.css?v=6">
+  <link rel="stylesheet" href="assets/admin-shell.css?v=11">
   <link rel="stylesheet" href="/assets/admin-theme.css?v=1">
 </head>
 <body class="cronox-admin cronox-admin-user">
@@ -461,46 +464,7 @@
   <div id="adminUserPage" class="page admin-shell" hidden>
     <aside class="admin-sidebar" id="adminSidebar" aria-label="Administración">
       <a class="admin-brand" href="#section-dashboard">CRONOX<span>ADMINISTRACIÓN</span></a>
-      <nav aria-label="Navegación principal">
-        <button class="sidebar-group" aria-expanded="false" aria-controls="navProducto"><span aria-hidden="true">▧</span>Producto<span class="sidebar-chevron">⌄</span></button>
-        <div id="navProducto" class="sidebar-children" hidden>
-          <button data-nav-target="section-products">Productos</button>
-          <button data-nav-target="section-product-categories">Categorías</button>
-          <button data-nav-target="section-inventory">Stock</button>
-          <button data-nav-target="section-waitlist">Waitlist</button>
-          <button data-nav-target="section-codes">Códigos</button>
-        </div>
-        <button class="sidebar-destination" data-nav-target="section-money"><span aria-hidden="true">€</span>Dinero</button>
-        <button class="sidebar-group" aria-expanded="false" aria-controls="navMultimedia"><span aria-hidden="true">▣</span>Multimedia<span class="sidebar-chevron">⌄</span></button>
-        <div id="navMultimedia" class="sidebar-children" hidden>
-          <button class="sidebar-subgroup" type="button" aria-expanded="false" aria-controls="navGaleria">Galería<span class="sidebar-chevron">⌄</span></button>
-          <div id="navGaleria" class="sidebar-children" hidden>
-            <button data-nav-target="section-gallery-mosaic">Mosaico</button>
-            <button data-nav-target="section-gallery-carousel">Carrusel</button>
-          </div>
-          <button data-nav-target="section-media">Tienda</button>
-          <button data-nav-target="section-key-screen">Pantalla Clave</button>
-          <button data-nav-target="section-newsletter">Newsletter</button>
-        </div>
-        <button class="sidebar-group" aria-expanded="false" aria-controls="navCliente"><span aria-hidden="true">♙</span>Clientes<span class="sidebar-chevron">⌄</span></button>
-        <div id="navCliente" class="sidebar-children" hidden>
-          <button data-nav-target="section-users">Usuarios</button>
-          <button data-nav-target="section-circles-menu">Círculos</button>
-          <button data-nav-target="section-orders">Pedidos</button>
-        </div>
-        <button class="sidebar-group" aria-expanded="false" aria-controls="navMails"><span aria-hidden="true">✉</span>Mails<span class="sidebar-chevron">⌄</span></button>
-        <div id="navMails" class="sidebar-children" hidden>
-          <button data-nav-target="section-mails">Plantillas mails</button>
-          <button data-nav-target="section-inbox">Buzones <span data-mailbox-count aria-label="No leídos"></span></button>
-          <button data-nav-target="section-mail-campaign">Nueva campaña</button>
-        </div>
-        <button class="sidebar-group" aria-expanded="false" aria-controls="navAdmin"><span aria-hidden="true">⚙</span>Admin<span class="sidebar-chevron">⌄</span></button>
-        <div id="navAdmin" class="sidebar-children" hidden>
-          <button data-nav-target="section-dashboard">Resumen</button>
-          <button data-nav-target="section-activity">Actividad</button>
-          <button data-nav-target="section-footer">Footer</button>
-        </div>
-      </nav>
+      <nav aria-label="Navegación principal" data-admin-navigation></nav>
       <div class="sidebar-live">
         <button data-nav-target="section-live-stats" type="button" aria-describedby="liveActivityDescription">Live stats<span class="live-activity-dot" aria-hidden="true"></span></button>
         <span id="liveActivityDescription" class="live-activity-description">Estado de actividad no disponible.</span>
@@ -682,6 +646,10 @@
                 </label>
                 <label class="manual-purchase-field">Nota interna<textarea id="manualPurchaseNote" rows="2" maxlength="500"></textarea></label>
               </div>
+              <div class="manual-statistics-choice">
+                <label><input id="manualExcludeStatistics" type="checkbox" aria-describedby="manualStatisticsExplanation"> Excluir de las estadísticas</label>
+                <p id="manualStatisticsExplanation">La compra permanecerá en la cuenta del cliente, pero no contará en las estadísticas generales</p>
+              </div>
               <div id="manualPurchaseItems" class="manual-purchase-items"></div>
               <div class="user-edit-actions">
                 <button class="btn" type="button" id="addManualPurchaseItem">Añadir producto</button>
@@ -754,13 +722,14 @@
   </div>
 
   <script src="assets/country.js?v=1"></script>
-  <script src="assets/api.js?v=18"></script>
+  <script src="assets/api.js?v=19"></script>
   <script src="assets/admin-auth-routing.js?v=1"></script>
   <script src="assets/ui-status.js"></script>
-  <script src="assets/admin-shell.js?v=9"></script>
-  <script src="assets/admin-user-shell.js?v=1"></script>
+  <script src="assets/admin-navigation.js?v=1"></script>
+  <script src="assets/admin-shell.js?v=11"></script>
+  <script src="assets/admin-user-shell.js?v=2"></script>
   <script src="assets/admin-live-stats.js?v=2"></script>
   <script src="assets/user-identity.js?v=1"></script>
-  <script src="assets/admin-user.js?v=6"></script>
+  <script src="assets/admin-user.js?v=8"></script>
 </body>
 </html>

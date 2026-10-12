@@ -27,6 +27,37 @@ export class AdminManualPurchasesService {
     private readonly taxConfig: TaxConfigService,
   ) {}
 
+  async setStatisticsExclusion(orderId: number, adminId: number, requestKey: string | undefined, excluded: boolean) {
+    if (typeof excluded !== 'boolean') throw new BadRequestException('INVALID_STATISTICS_CHOICE');
+    const key = String(requestKey || '').trim();
+    if (!/^[A-Za-z0-9._:-]{16,100}$/.test(key)) throw new BadRequestException('IDEMPOTENCY_KEY_REQUIRED');
+    return this.prisma.$transaction(async tx => {
+      // Serialize both retries and simultaneous edits of the same purchase.
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${key}))`;
+      await tx.$queryRaw`SELECT id FROM "Order" WHERE id = ${orderId} FOR UPDATE`;
+      const order = await tx.order.findUnique({ where: { id: orderId } });
+      if (!order) throw new NotFoundException('Compra no encontrada');
+      if (order.source !== OrderSource.IN_PERSON_ADMIN) throw new BadRequestException('NOT_MANUAL_PURCHASE');
+      const replay = await tx.auditLog.findUnique({ where: { requestKey: key } });
+      if (replay) {
+        const metadata = replay.metadata as { excludedFromStatistics?: boolean } | null;
+        if (replay.actorId !== adminId || replay.targetId !== String(orderId) || replay.actionType !== 'admin.manual_purchase.statistics' || metadata?.excludedFromStatistics !== excluded) {
+          throw new ConflictException('IDEMPOTENCY_KEY_REUSED_WITH_DIFFERENT_PAYLOAD');
+        }
+        return { changed: false, order };
+      }
+      const changed = order.excludedFromStatistics !== excluded;
+      const saved = changed ? await tx.order.update({ where: { id: orderId }, data: { excludedFromStatistics: excluded } }) : order;
+      if (changed && order.userId) await this.historialService.syncFromOrders(order.userId, tx);
+      await tx.auditLog.create({ data: {
+        requestKey: key, actorId: adminId, action: 'admin.manual_purchase.statistics', actionType: 'admin.manual_purchase.statistics',
+        targetType: 'order', targetId: String(orderId),
+        metadata: { userId: order.userId, previousExcludedFromStatistics: order.excludedFromStatistics, excludedFromStatistics: excluded, changed },
+      } });
+      return { changed, order: saved };
+    });
+  }
+
   async getOptions(userId: number) {
     const [user, products] = await Promise.all([
       this.prisma.user.findUnique({
@@ -59,6 +90,7 @@ export class AdminManualPurchasesService {
     idempotencyKey: string | undefined,
     dto: CreateManualPurchaseDto,
   ) {
+    if (dto.excludedFromStatistics !== undefined && typeof dto.excludedFromStatistics !== 'boolean') throw new BadRequestException('INVALID_STATISTICS_CHOICE');
     const key = String(idempotencyKey || '').trim();
     if (!/^[A-Za-z0-9._:-]{16,100}$/.test(key)) {
       throw new BadRequestException('IDEMPOTENCY_KEY_REQUIRED');
@@ -138,6 +170,7 @@ export class AdminManualPurchasesService {
               customerEmail: user.email,
               status: OrderStatus.PAID,
               source: OrderSource.IN_PERSON_ADMIN,
+              excludedFromStatistics: dto.excludedFromStatistics ?? false,
               paymentMethod: dto.paymentMethod,
               purchasedAt,
               recordedById: adminId,
@@ -189,7 +222,7 @@ export class AdminManualPurchasesService {
               targetType: 'order',
               targetId: String(order.id),
               metadata: {
-                userId, paymentMethod: dto.paymentMethod, stockHandling: dto.stockHandling, purchasedAt: order.purchasedAt,
+                userId, excludedFromStatistics: dto.excludedFromStatistics ?? false, paymentMethod: dto.paymentMethod, stockHandling: dto.stockHandling, purchasedAt: order.purchasedAt,
                 items: lines.map((line) => ({
                   variantId: line.variant.id, quantity: line.quantity, unitPriceCents: line.unitPriceCents,
                   unitCostCents: configuredManualCost(line.variant.product.privateCost),

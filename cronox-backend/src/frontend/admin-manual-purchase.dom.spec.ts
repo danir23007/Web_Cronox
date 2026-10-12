@@ -33,13 +33,14 @@ describe('admin in-person purchase workflow', () => {
 });
 
 const flush = () => new Promise(resolve => setTimeout(resolve, 0));
-async function setupPurchase() {
+async function setupPurchase(extraApi: Record<string, unknown> = {}) {
   const dom = new JSDOM(readFileSync(path.join(frontendRoot, 'admin-user.html'), 'utf8'), { runScripts: 'outside-only', url: 'https://local.test/admin-user.html?id=7&uid=test-user' });
   const w = dom.window as any;
   w.CRONOX_ADMIN_AUTH = { isAdmin: () => true };
   const create = jest.fn().mockRejectedValue(new Error('Connection lost'));
   w.CRONOX_API = { formatPrice: (value: number) => value.toFixed(2).replace('.', ',') + ' EUR', getMe: async () => ({ id: 99, role: 'SUPERADMIN' }), admin: {
     getInPersonPurchaseOptions: async () => ({ products: [{ name: 'Camiseta', price: 2500, variants: [{ id: 5, size: 'M', price: null }, { id: 6, size: 'L', price: 3000 }] }] }), createInPersonPurchase: create,
+    ...extraApi,
   } };
   w.eval(readFileSync(path.join(frontendRoot, 'assets/admin-user.js'), 'utf8'));
   await flush();
@@ -54,6 +55,32 @@ async function setupPurchase() {
   return { dom, w, d, create, change, review, submit };
 }
 describe('paid unit price interactions', () => {
+  it('uses server KPIs while retaining excluded purchases in the operational history', async () => {
+    const { d } = await setupPurchase({
+      getUserDetail: async () => ({ user: { id: 7, email: 'test@example.test' }, stats: { ordersCount: 1, totalSpent: 51 } }),
+      listAdminOrders: async () => ({ items: [
+        { id: 1, source: 'IN_PERSON_ADMIN', status: 'PAID', total: 51, excludedFromStatistics: false },
+        { id: 2, source: 'IN_PERSON_ADMIN', status: 'PAID', total: 51, excludedFromStatistics: true },
+      ] }),
+    });
+    expect(d.querySelector('#summaryOrdersCount').textContent).toBe('1');
+    expect(d.querySelector('#summaryTotalSpent').textContent).toContain('51,00');
+    expect(d.querySelector('#ordersBody').textContent).toContain('Excluida de estadísticas');
+    expect(d.querySelectorAll('#ordersBody tr')).toHaveLength(2);
+  });
+  it('defaults to inclusion, reviews the choice and invalidates confirmation when it changes', async () => {
+    const { d, create, review, submit, w } = await setupPurchase();
+    const choice = d.querySelector('#manualExcludeStatistics');
+    expect(choice.checked).toBe(false);
+    review();
+    expect(d.querySelector('#manualPurchaseReview').textContent).toContain('Incluida en las estadísticas generales');
+    choice.checked = true; choice.dispatchEvent(new w.Event('change', { bubbles: true }));
+    expect(d.querySelector('#manualPurchaseReview').hidden).toBe(true);
+    review();
+    expect(d.querySelector('#manualPurchaseReview').textContent).toContain('Excluida de estadísticas');
+    submit(); await flush();
+    expect(create.mock.calls[0][1].excludedFromStatistics).toBe(true);
+  });
   it('defaults on article changes and preserves edits on quantity changes', async () => {
     const { d, change, review } = await setupPurchase();
     expect(d.querySelector('[data-manual-price]').value).toBe('25.00');

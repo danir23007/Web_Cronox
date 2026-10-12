@@ -413,7 +413,7 @@
       const trackingUrl = safeExternalUrl(order.trackingUrl);
       const orderId = escapeHtml(order.id);
       const createdAt = escapeHtml(formatDate(order.purchasedAt || order.createdAt));
-      const orderStatus = escapeHtml(statusLabel(order.status));
+      const orderStatus = escapeHtml(statusLabel(order.status)) + (order.excludedFromStatistics ? '<br><strong>Excluida de estadísticas</strong>' : '');
       const total = escapeHtml(order.total ?? '');
       const currency = escapeHtml(order.currency || '');
       if (order.shippingCarrier) {

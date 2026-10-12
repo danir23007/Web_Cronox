@@ -3350,6 +3350,7 @@ export class OrdersService {
       provider: order.provider,
       providerRef: order.providerRef,
       source: order.source,
+      excludedFromStatistics: order.excludedFromStatistics,
       paymentMethod: order.paymentMethod,
       purchasedAt: order.purchasedAt,
       promoCode: order.promoCodeCode,

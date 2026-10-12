@@ -1,3 +1,4 @@
+import { Equals } from 'class-validator';
 import { Type } from 'class-transformer';
 import {
   ArrayMaxSize,
@@ -37,6 +38,8 @@ export class SaleLineDto {
   @IsInt() @Min(0) @Max(10000) commissionBp: number;
 }
 export class SaleDto {
+  @Equals(undefined, { message: "Statistics exclusion is only available for customer manual purchases" })
+  excludedFromStatistics?: never;
   @IsOptional() @IsIn(['DEDUCT_NOW', 'ALREADY_ADJUSTED'])
   stockHandling?: 'DEDUCT_NOW' | 'ALREADY_ADJUSTED';
   @IsString() occurredAt: string;

@@ -1,9 +1,12 @@
+import { Equals } from 'class-validator';
 // [ORDERS] Datos necesarios para preparar un checkout sin confirmar pago
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { IsEnum, IsNotEmpty, IsObject, IsOptional, IsString } from 'class-validator';
 import { ShippingMethodCode } from '../../common/enums/shipping-method-code.enum';
 
 export class CreateCheckoutSessionDto {
+  @Equals(undefined, { message: "Statistics exclusion is only available for customer manual purchases" })
+  excludedFromStatistics?: never;
   @ApiProperty({
     description: 'Método de envío elegido',
     enum: ShippingMethodCode,

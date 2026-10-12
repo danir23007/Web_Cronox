@@ -34,6 +34,13 @@
   <link rel="stylesheet" href="assets/admin-newsletter.css?v=5">
   <link rel="stylesheet" href="assets/admin-footer.css?v=2">
   <style>
+    .users-sort-toolbar { display: flex; gap: 12px; flex-wrap: wrap; margin: 16px 0; }
+    .users-sort-toolbar .form-group { flex: 1; min-width: 150px; max-width: 320px; }
+    .users-sort-toolbar .form-group:last-child { max-width: 220px; }
+    .users-sort-toolbar select { width: 100%; min-width: 0; }
+    @media (max-width: 640px) {
+      .users-sort-toolbar .form-group, .users-sort-toolbar .form-group:last-child { flex-basis: 100%; min-width: 0; max-width: none; }
+    }
     [hidden] { display: none !important; }
     .admin-auth-check { min-height: 100vh; display: grid; place-items: center; color: rgba(255,255,255,0.72); letter-spacing: 0.04em; }
     body { font-family: 'Inter', system-ui, -apple-system, sans-serif; background: #050505; color: #fff; margin: 0; min-height: 100vh; }
@@ -268,7 +275,7 @@
   <link rel="shortcut icon" type="image/png" href="/favicon.png?v=4">
   <link rel="apple-touch-icon" href="/favicon.png?v=4">
   <meta name="theme-color" content="#000000">
-  <link rel="stylesheet" href="assets/admin-shell.css?v=10">
+  <link rel="stylesheet" href="assets/admin-shell.css?v=11">
   <link rel="stylesheet" href="assets/admin-map.css?v=4">
   <link rel="stylesheet" href="assets/admin-live-stats.css?v=1">
   <link rel="stylesheet" href="/assets/admin-theme.css?v=1">
@@ -279,50 +286,7 @@
   <div id="adminShell" class="admin-shell" hidden>
     <aside class="admin-sidebar" id="adminSidebar" aria-label="Administración">
       <a class="admin-brand" href="#section-dashboard">CRONOX<span>ADMINISTRACIÓN</span></a>
-      <nav aria-label="Navegación principal">
-        <button class="sidebar-destination" data-nav-target="section-dashboard">Home</button>
-        <button class="sidebar-group" aria-expanded="false" aria-controls="navProducto"><span aria-hidden="true">▧</span>Producto<span class="sidebar-chevron">⌄</span></button>
-        <div id="navProducto" class="sidebar-children" hidden>
-          <button data-nav-target="section-products">Productos</button>
-          <button data-nav-target="section-product-categories">Categorías</button>
-          <button data-nav-target="section-inventory">Stock</button>
-          <button data-nav-target="section-waitlist">Waitlist</button>
-          <button data-nav-target="section-favorites">Favoritos</button>
-          <button data-nav-target="section-codes">Códigos</button>
-        </div>
-        <button class="sidebar-destination" data-nav-target="section-money"><span aria-hidden="true">€</span>Dinero</button>
-        <button class="sidebar-destination" data-nav-target="section-map">Mapa</button>
-        <button class="sidebar-group" aria-expanded="false" aria-controls="navMultimedia"><span aria-hidden="true">▣</span>Multimedia<span class="sidebar-chevron">⌄</span></button>
-        <div id="navMultimedia" class="sidebar-children" hidden>
-          <button class="sidebar-subgroup" type="button" aria-expanded="false" aria-controls="navGaleria">Galería<span class="sidebar-chevron">⌄</span></button>
-          <div id="navGaleria" class="sidebar-children" hidden>
-            <button data-nav-target="section-gallery-mosaic">Mosaico</button>
-            <button data-nav-target="section-gallery-carousel">Carrusel</button>
-          </div>
-          <button data-nav-target="section-media">Tienda</button>
-          <button data-nav-target="section-key-screen">Pantalla Clave</button>
-          <button data-nav-target="section-newsletter">Newsletter</button>
-        </div>
-        <button class="sidebar-group" aria-expanded="false" aria-controls="navCliente"><span aria-hidden="true">♙</span>Clientes<span class="sidebar-chevron">⌄</span></button>
-        <div id="navCliente" class="sidebar-children" hidden>
-          <button data-nav-target="section-sale-points">Puntos de venta</button>
-          <button data-nav-target="section-users">Usuarios</button>
-          <button data-nav-target="section-circles-menu">Círculos</button>
-          <button data-nav-target="section-orders">Pedidos</button>
-        </div>
-        <button class="sidebar-group" aria-expanded="false" aria-controls="navMails"><span aria-hidden="true">✉</span>Mails<span class="sidebar-chevron">⌄</span></button>
-        <div id="navMails" class="sidebar-children" hidden>
-          <button data-nav-target="section-mails">Plantillas mails</button>
-          <button data-nav-target="section-inbox">Buzones <span data-mailbox-count aria-label="No leídos"></span></button>
-          <button data-nav-target="section-mail-campaign">Nueva campaña</button>
-        </div>
-        <button class="sidebar-group" aria-expanded="false" aria-controls="navAdmin"><span aria-hidden="true">⚙</span>Admin<span class="sidebar-chevron">⌄</span></button>
-        <div id="navAdmin" class="sidebar-children" hidden>
-          <button data-nav-target="section-push">Notificaciones push</button>
-          <button data-nav-target="section-activity">Actividad</button>
-          <button data-nav-target="section-footer">Footer</button>
-        </div>
-      </nav>
+      <nav aria-label="Navegación principal" data-admin-navigation></nav>
       <div class="sidebar-live">
         <button data-nav-target="section-live-stats" type="button" aria-describedby="liveActivityDescription">Live stats<span class="live-activity-dot" aria-hidden="true"></span></button>
         <span id="liveActivityDescription" class="live-activity-description">Estado de actividad no disponible.</span>
@@ -595,6 +559,22 @@
         </div>
       </div>
       <div id="usersMessage" class="message" role="status" aria-live="polite"></div>
+      <div class="users-sort-toolbar" role="group" aria-label="Ordenación de usuarios">
+        <label class="form-group">
+          <span>Ordenar por</span>
+          <select id="usersSort" class="select">
+            <option value="id">ID</option>
+            <option value="revenue">Facturación</option>
+            <option value="orders">Número de pedidos</option>
+            <option value="distinctProducts">Prendas diferentes adquiridas</option>
+          </select>
+        </label>
+        <label class="form-group">
+          <span>Dirección</span>
+          <select id="usersOrder" class="select"><option value="desc">Descendente</option><option value="asc">Ascendente</option></select>
+        </label>
+      </div>
+
       <details class="filters-panel" open>
         <summary>Filtros y búsqueda</summary>
         <div class="filters-grid">
@@ -623,30 +603,9 @@
               <option value="5">5</option>
             </select>
           </label>
-          <label class="form-group">
-            <span>Estado de cuenta</span>
-            <select id="usersAccountState" class="select">
-              <option value="">Todos</option>
-              <option value="ACTIVE">Activa</option>
-              <option value="PENDING_PASSWORD">Pendiente de contrase&ntilde;a</option>
-              <option value="PRE_REGISTERED">Prerregistrado</option>
-            </select>
-          </label>
-          <label class="form-group">
-            <span>Ordenar por</span>
-            <select id="usersSort" class="select">
-              <option value="createdAt">Alta</option>
-              <option value="email">Email</option>
-              <option value="id">N.º</option>
-            </select>
-          </label>
-          <label class="form-group">
-            <span>Orden</span>
-            <select id="usersOrder" class="select">
-              <option value="desc">Descendente</option>
-              <option value="asc">Ascendente</option>
-            </select>
-          </label>
+
+
+
         </div>
         <div class="filters-actions" style="margin-top:10px;">
           <button class="btn" type="button" id="usersFiltersReset">Limpiar filtros</button>
@@ -661,6 +620,7 @@
               <th>Email</th>
               <th id="usersPhoneHeader">Teléfono</th>
               <th>Nombre</th>
+              <th>Facturación</th>
               <th>Rol</th>
               <th>Estado</th>
               <th>Círculo</th>
@@ -669,7 +629,7 @@
             </tr>
           </thead>
           <tbody id="usersBody">
-            <tr><td colspan="10" class="empty">Cargando usuarios…</td></tr>
+            <tr><td colspan="11" class="empty">Cargando usuarios…</td></tr>
           </tbody>
         </table>
       </div>
@@ -2009,7 +1969,7 @@
   <div class="toast-container" id="toastContainer" aria-live="polite" aria-atomic="true"></div>
 
   <script src="assets/size-systems.js?v=1"></script>
-  <script src="assets/api.js?v=18"></script>
+  <script src="assets/api.js?v=19"></script>
   <script src="assets/admin-auth-routing.js?v=1"></script>
   <script src="assets/ui-status.js"></script>
   <script src="assets/media-framing-geometry.js?v=6"></script>
@@ -2019,7 +1979,8 @@
   <script src="assets/admin-pagination.js?v=1"></script>
   <script src="assets/category-controls.js?v=2"></script>
   <script src="assets/user-identity.js?v=1"></script>
-  <script src="assets/admin-shell.js?v=10"></script>
+  <script src="assets/admin-navigation.js?v=1"></script>
+  <script src="assets/admin-shell.js?v=11"></script>
   <script src="assets/admin-finance.js?v=3"></script>
   <script src="assets/admin-points.js?v=5"></script>
   <script src="assets/admin-map.js?v=4"></script>
@@ -2031,14 +1992,14 @@
   <script src="assets/admin-section-headers.js?v=1"></script>
   <script src="assets/admin-push.js?v=1"></script>
   <script src="assets/admin-inbox.js?v=13"></script>
-  <script src="assets/admin.js?v=17"></script>
+  <script src="assets/admin.js?v=19"></script>
   <script src="assets/admin-inventory.js?v=2"></script>
   <script src="assets/admin-waitlist.js?v=2"></script>
   <script src="assets/admin-favorites.js?v=1"></script>
   <script src="assets/responsive-images.js?v=4"></script>
   <script src="assets/admin-mail-document.js?v=2"></script>
   <script src="assets/admin-mails.js?v=4"></script>
-  <script src="assets/admin-orders.js?v=2"></script>
+  <script src="assets/admin-orders.js?v=3"></script>
   <script src="assets/gallery.js?v=18"></script>
   <script src="assets/admin-gallery.js?v=7"></script>
   <script src="assets/key-screen-renderer.js?v=2"></script>

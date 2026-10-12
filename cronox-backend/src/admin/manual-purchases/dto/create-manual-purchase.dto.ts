@@ -3,6 +3,7 @@ import {
   ArrayMaxSize,
   ArrayMinSize,
   IsArray,
+  IsBoolean,
   IsEnum,
   IsISO8601,
   IsInt,
@@ -38,6 +39,10 @@ export class ManualPurchaseItemDto {
 }
 
 export class CreateManualPurchaseDto {
+  @ValidateIf((_object, value) => value !== undefined)
+  @IsBoolean()
+  excludedFromStatistics?: boolean;
+
   @IsArray()
   @ArrayMinSize(1)
   @ArrayMaxSize(50)

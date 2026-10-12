@@ -82,7 +82,6 @@
   const usersSearch = $('#usersSearch');
   const usersRole = $('#usersRole');
   const usersCircle = $('#usersCircle');
-  const usersAccountState = $('#usersAccountState');
   const usersSort = $('#usersSort');
   const usersOrder = $('#usersOrder');
   const usersFiltersReset = $('#usersFiltersReset');
@@ -259,9 +258,8 @@
     q: '',
     role: '',
     circle: '',
-    accountState: '',
-    sort: 'createdAt',
-    order: 'asc',
+    sort: 'id',
+    order: 'desc',
   };
   const userDetailState = {
     userId: null,
@@ -400,6 +398,8 @@
   };
 
   const applyRoleVisibility = () => {
+    window.CRONOX_ADMIN_NAVIGATION?.applyRole(currentAdminRole);
+    setNavVisibility('section-sale-points', canAccess('finance'));
     setNavVisibility('section-map', canAccess('finance'));
     const clearActivityButton = document.getElementById('clearActivityBtn');
     if (clearActivityButton) clearActivityButton.hidden = currentAdminRole !== 'SUPERADMIN';
@@ -1656,7 +1656,7 @@
     if (sectionId === 'section-34') { syncRequestsStateFromInputs(); fetchRequests(); markRequestsSeen(); }
     if (sectionId === 'section-23') { syncRequests23StateFromInputs(); fetchRequests23(); markRequestsSeen(); }
     if (sectionId === 'section-activity') { syncActivityStateFromInputs(); fetchActivity(); }
-    if (sectionId === 'section-users') { readUsersStateFromHash(); applyUsersStateToInputs(); syncUsersStateFromInputs(); fetchUsers(); }
+    if (sectionId === 'section-users') { readUsersStateFromHash(true); applyUsersStateToInputs(); syncUsersStateFromInputs(); fetchUsers(); }
     if (sectionId === 'section-products') { syncProductsStateFromInputs(); loadProductCategories(); fetchProducts(); }
     if (sectionId === 'section-product-categories') loadCategoryAssignments();
     if (sectionId === 'section-inventory') window.CRONOX_INVENTORY?.load?.();
@@ -1815,7 +1815,6 @@
       q: state.q || undefined,
       role: state.role || undefined,
       circle: parseNumberOrNull(state.circle) ?? undefined,
-      accountState: state.accountState || undefined,
       sort: state.sort || undefined,
       order: state.order || undefined,
     };
@@ -1912,8 +1911,7 @@
     if (usersSearch) usersState.q = usersSearch.value.trim();
     if (usersRole) usersState.role = usersRole.value;
     if (usersCircle) usersState.circle = usersCircle.value;
-    if (usersAccountState) usersState.accountState = usersAccountState.value;
-    if (usersSort) usersState.sort = usersSort.value || 'createdAt';
+    if (usersSort) usersState.sort = usersSort.value || 'id';
     if (usersOrder) usersState.order = usersOrder.value || 'desc';
   };
 
@@ -1921,8 +1919,7 @@
     if (usersSearch) usersSearch.value = usersState.q || '';
     if (usersRole) usersRole.value = usersState.role || '';
     if (usersCircle) usersCircle.value = usersState.circle || '';
-    if (usersAccountState) usersAccountState.value = usersState.accountState || '';
-    if (usersSort) usersSort.value = usersState.sort || 'createdAt';
+    if (usersSort) usersSort.value = usersState.sort || 'id';
     if (usersOrder) usersOrder.value = usersState.order || 'desc';
   };
 
@@ -1937,19 +1934,18 @@
     return new URLSearchParams(query);
   };
 
-  const readUsersStateFromHash = () => {
+  const readUsersStateFromHash = (enteringUsers = false) => {
     const params = getUsersHashParams();
-    if (!params) return;
-    const page = Number(params.get('page'));
-    const sortValue = params.get('sort') || '';
-    const [sortField, sortOrder] = sortValue.split(':');
-    usersState.page = Number.isFinite(page) && page > 0 ? page : usersState.page;
-    usersState.q = params.get('q') ?? usersState.q;
-    usersState.role = params.get('role') ?? usersState.role;
-    usersState.circle = params.get('circle') ?? usersState.circle;
-    usersState.accountState = params.get('accountState') ?? usersState.accountState;
-    if (sortField) usersState.sort = sortField;
-    if (sortOrder) usersState.order = sortOrder;
+    if (!params && !enteringUsers) return;
+    usersState.q = params?.get('q') ?? usersState.q;
+    usersState.role = params?.get('role') ?? usersState.role;
+    usersState.circle = params?.get('circle') ?? usersState.circle;
+    // Every new entry starts with latest registrations, ignoring legacy sort/state.
+    usersState.sort = 'id'; usersState.order = 'desc'; usersState.page = 1;
+    const clean = new URL(window.location.href);
+    clean.searchParams.delete('accountState');
+    clean.hash = buildUsersHash(usersState);
+    window.history.replaceState({}, '', clean);
   };
 
   const buildUsersHash = (state) => {
@@ -1959,7 +1955,6 @@
     params.set('q', state.q || '');
     params.set('role', state.role || '');
     params.set('circle', state.circle || '');
-    params.set('accountState', state.accountState || '');
     params.set('page', String(state.page || 1));
     params.set('sort', sortValue);
     return `${USERS_HASH_PREFIX}&${params.toString()}`;
@@ -2000,9 +1995,6 @@
     if (usersSearch) usersSearch.value = '';
     if (usersRole) usersRole.value = '';
     if (usersCircle) usersCircle.value = '';
-    if (usersAccountState) usersAccountState.value = '';
-    if (usersSort) usersSort.value = 'createdAt';
-    if (usersOrder) usersOrder.value = 'desc';
     usersState.page = 1;
     syncUsersStateFromInputs();
     fetchUsers();
@@ -2476,6 +2468,9 @@
     return {
       id,
       registrationNumber: source.registrationNumber,
+      revenueCents: source.revenueCents,
+      ordersCount: source.ordersCount,
+      distinctProducts: source.distinctProducts,
       identityUid: source.identityUid,
       memberCode: source.memberCode,
       email,
@@ -2514,7 +2509,7 @@
     if (controls) controls.hidden = totalPages <= 1;
   };
 
-  const getUsersColumnCount = () => 10 + Number(window.CRONOX_BULK?.isActive('users'));
+  const getUsersColumnCount = () => 11 + Number(window.CRONOX_BULK?.isActive('users'));
 
   const formatUserRole = (role) => {
     if (role === 'FRIEND') return 'Friend';
@@ -2567,6 +2562,7 @@
             <td>${emailCell}</td>
             <td>${phoneCell}</td>
             <td>${nameLabel}</td>
+            <td>${user.revenueCents == null ? '<span title="Faltan datos financieros fiables o un cambio de moneda histórico">No disponible</span>' : escapeHtml(new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR' }).format(user.revenueCents / 100))}</td>
             <td>${roleLabel}</td>
             <td><span class="badge">${escapeHtml(accountStateLabel)}</span></td>
             <td>${circleLabel}</td>
@@ -4709,14 +4705,6 @@
         first.focus();
       }
     });
-
-    if (usersAccountState) {
-      usersAccountState.addEventListener('change', () => {
-        syncUsersStateFromInputs();
-        usersState.page = 1;
-        fetchUsers();
-      });
-    }
 
     if (usersBody) {
       usersBody.addEventListener('click', onUsersTableClick);

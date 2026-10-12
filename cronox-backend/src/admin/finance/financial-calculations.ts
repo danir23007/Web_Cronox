@@ -1,3 +1,4 @@
+import { countsInStatistics } from '../../common/statistics-eligibility';
 import { BadRequestException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 
@@ -50,6 +51,7 @@ export type FinanceLine = {
   financialSnapshot?: { unitCostCents: number | null; productName: string; imageUrl: string | null } | null;
 };
 export type FinanceOrder = {
+  excludedFromStatistics?: boolean;
   historicalQualified?: boolean;
   id: number; status: string; currency: string; providerRef: string | null; source: string;
   paidAt: Date | null; purchasedAt: Date | null; createdAt: Date; voidedAt: Date | null;
@@ -99,6 +101,7 @@ export function calculateFinance(orders: FinanceOrder[], events: FinanceEvent[],
     if (revenue === null) warnings.add('Hay reembolsos sin importe o reparto fiable entre productos y envío. La facturación y el beneficio afectados no están disponibles.');
   };
   for (const order of orders) {
+    if (!countsInStatistics(order)) continue;
     const manual = order.source === 'IN_PERSON_ADMIN';
     const ledger = [...(byPayment.get(order.providerRef ?? '') ?? [])].sort((a, b) => a.occurredAt.getTime() - b.occurredAt.getTime() || (a.refundCumulativeCents ?? 0) - (b.refundCumulativeCents ?? 0) || a.id.localeCompare(b.id));
     const success = ledger.find(e => e.type === 'payment_intent.succeeded');

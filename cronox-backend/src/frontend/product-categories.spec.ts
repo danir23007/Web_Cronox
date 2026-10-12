@@ -67,7 +67,8 @@ describe('product category frontend contracts', () => {
   });
 
   it('keeps category management in the Product sidebar and removes the old header action', () => {
-    const dom = new JSDOM(readFrontend('admin.html'));
+    const dom = new JSDOM(readFrontend('admin.html'), { runScripts: 'outside-only' });
+    dom.window.eval(readFrontend('assets/admin-navigation.js'));
     const document = dom.window.document;
     expect(document.querySelector('#navProducto [data-nav-target="section-products"]')?.textContent).toBe('Productos');
     expect(document.querySelector('#navProducto [data-nav-target="section-product-categories"]')?.textContent).toBe('Categorías');

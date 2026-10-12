@@ -8,5 +8,5 @@
     try { await window.CRONOX_API?.logout?.(); location.href = 'admin-login.html'; }
     catch { window.alert('No se pudo cerrar la sesión. Inténtalo de nuevo.'); }
   });
-  window.CRONOX_ADMIN_SHELL?.select('section-users');
+  window.CRONOX_ADMIN_SHELL?.select(document.body.dataset.adminDestination || 'section-users');
 })();

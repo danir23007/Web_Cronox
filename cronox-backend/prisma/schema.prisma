@@ -1463,6 +1463,7 @@ model Order {
   recordedBy           User?                   @relation("OrderRecordedBy", fields: [recordedById], references: [id], onDelete: SetNull)
   manualStockHandling  ManualStockHandling?
   manualIdempotencyKey String?                 @unique @db.VarChar(100)
+  excludedFromStatistics Boolean                 @default(false)
   manualRequestHash    String?                 @db.VarChar(64)
   voidedAt             DateTime?
   voidedById           Int?
@@ -1687,6 +1688,7 @@ model PromoCode {
 }
 
 model AuditLog {
+  requestKey String? @unique @db.VarChar(100)
   id         Int      @id @default(autoincrement())
   actorId    Int?
   action     String?

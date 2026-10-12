@@ -1,12 +1,14 @@
 export {};
 
 declare global {
+  interface Window { CRONOX_ADMIN_NAVIGATION?: { render: () => void; applyRole: (role: string) => void } }
   interface ManualPurchasePayload {
     items: Array<{ variantId: number; quantity: number; unitPriceCents?: number }>;
     paymentMethod: string;
     stockHandling: string;
     purchasedAt?: string;
     note?: string;
+    excludedFromStatistics?: boolean;
   }
 
   type QueryValue = string | number | boolean;
@@ -103,6 +105,7 @@ declare global {
     listAdminProducts?: (query?: QueryRecord) => Promise<unknown>;
     getInPersonPurchaseOptions?: (userId: number | string) => Promise<unknown>;
     createInPersonPurchase?: (userId: number | string, payload: ManualPurchasePayload, idempotencyKey: string) => Promise<unknown>;
+    setManualStatisticsExclusion?: (orderId: number | string, excluded: boolean, key: string) => Promise<unknown>;
     voidInPersonPurchase?: (orderId: number | string, reason: string) => Promise<unknown>;
     getProductOrder?: () => Promise<unknown>;
     saveProductOrder?: (productIds: number[]) => Promise<unknown>;

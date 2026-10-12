@@ -1288,6 +1288,10 @@ import { loadCategoryPages } from './category-pagination';
     body: payload,
     headers: { 'Idempotency-Key': idempotencyKey },
   });
+  adminApi.setManualStatisticsExclusion = async (orderId: number | string, excluded: boolean, key: string) =>
+    request(`/api/admin/orders/${encodeURIComponent(orderId)}/statistics-exclusion`, {
+      method: 'POST', body: { excludedFromStatistics: excluded }, headers: { 'Idempotency-Key': key },
+    });
   adminApi.voidInPersonPurchase = async (orderId: number | string, reason: string) =>
     request(`/api/admin/orders/${encodeURIComponent(orderId)}/void-manual`, {
       method: 'POST',

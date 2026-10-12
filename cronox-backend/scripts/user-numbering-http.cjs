@@ -33,8 +33,8 @@ async function verify(origin,identities,oldAccess) {
  const admin=browser(origin);assert.equal((await admin('/api/auth/csrf')).status,200);
  const login=await admin('/api/auth/login','POST',{email:'fixture-18@example.test',password:'Local-Numbering-Test!23'});assert.equal(login.status,200);assert.equal(login.json.user.id,1);assert.equal(login.json.user.identityUid,identities.admin);
  assert.equal((await admin('/api/me')).json.identityUid,identities.admin);
- const list=await admin('/api/admin/users?pageSize=2');assert.equal(list.status,200);assert.deepEqual(list.json.data.map(u=>u.registrationNumber),[1,2]);
- const second=await admin('/api/admin/users?page=2&pageSize=2');assert.deepEqual(second.json.data.map(u=>u.registrationNumber),[3,4]);
+ const list=await admin('/api/admin/users?pageSize=2&sort=id&order=asc');assert.equal(list.status,200);assert.deepEqual(list.json.data.map(u=>u.registrationNumber),[1,2]);
+ const second=await admin('/api/admin/users?page=2&pageSize=2&sort=id&order=asc');assert.deepEqual(second.json.data.map(u=>u.registrationNumber),[3,4]);
  const current=await admin('/api/admin/users/2','GET',null,{'X-Cronox-User-Identity':identities.second});assert.equal(current.status,200);assert.equal(current.json.user.email,'fixture-10@example.test');
  assert.equal((await admin('/api/admin/users/2','GET',null,{'X-Cronox-User-Identity':identities.deleted})).status,409);
  assert.equal((await admin('/api/admin/users/2')).status,409);

@@ -152,7 +152,8 @@ async function main() {
   const next=await users.createUser({email:'after-delete@example.test',password});assert.equal(next.id,10);assert.equal(next.memberCode,'CRX-000010');
   await assert.rejects(()=>db.user.create({data:{email:'reuse-qr@example.test',publicMemberToken:'deleted-qr'}}));
   const {AdminUsersService}=require('../dist/admin/users/admin-users.service'),admin=new AdminUsersService(db);
-  const listing=await admin.listUsers({page:1,pageSize:3});assert.deepEqual(listing.data.map(x=>x.registrationNumber),[1,2,3]);
+  const listing=await admin.listUsers({page:1,pageSize:3,sort:'id',order:'asc'});assert.deepEqual(listing.data.map(x=>x.registrationNumber),[1,2,3]);
+  const latest=await admin.listUsers({page:1,pageSize:3});assert.deepEqual(latest.data.map(x=>x.registrationNumber),[10,9,8]);
   const filtered=await admin.listUsers({email:'after-delete@example.test'});assert.equal(filtered.data[0].registrationNumber,10);
   await db.user.update({where:{id:1},data:{role:'SUPERADMIN'}});
   await db.user.update({where:{id:2},data:{role:'ADMIN'}});

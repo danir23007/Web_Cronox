@@ -1,3 +1,4 @@
+import { countsInStatistics } from '../../common/statistics-eligibility';
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -46,7 +47,7 @@ export class AdminFinanceService {
             return { ...value, createdAt: archiveUtcDate(value.createdAt) };
           });
           return order;
-        }).filter(order => !query.source || query.source === 'all' || (query.source === 'manual' ? order.source === 'IN_PERSON_ADMIN' : order.source === 'ONLINE'));
+        }).filter(countsInStatistics).filter(order => !query.source || query.source === 'all' || (query.source === 'manual' ? order.source === 'IN_PERSON_ADMIN' : order.source === 'ONLINE'));
         salesCount += orders.filter(order => {
           const success = eventRows.find(event => event.paymentIntentId === order.providerRef && (event.snapshot as unknown as FinanceEvent).type === 'payment_intent.succeeded');
           const date = madridDate(order.source === 'IN_PERSON_ADMIN' ? order.purchasedAt ?? order.createdAt : order.paidAt ?? success?.occurredAt ?? order.purchasedAt ?? order.createdAt);

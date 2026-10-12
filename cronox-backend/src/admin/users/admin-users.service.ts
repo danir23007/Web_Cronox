@@ -1,3 +1,5 @@
+import { loadUserPurchaseMetrics, sortUsersByMetrics } from './user-purchase-metrics';
+import { statisticsOrderWhere } from '../../common/statistics-eligibility';
 import {
   BadRequestException,
   ConflictException,
@@ -10,7 +12,6 @@ import {
   OrderStatus,
   Prisma,
   Role,
-  User,
   UserAccountState,
 } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -28,6 +29,10 @@ const DEFAULT_PAGE_SIZE = ADMIN_PAGE_SIZES.USERS;
 const MAX_PAGE_SIZE = ADMIN_PAGE_SIZES.USERS;
 const RECENT_ITEMS_LIMIT = 20;
 const SERIALIZABLE_RETRY_LIMIT = 3;
+const USER_LIST_SELECT = { id: true, identityUid: true, memberCode: true, email: true, name: true,
+  firstName: true, lastName: true, role: true, circleLevel: true, phone: true,
+  createdAt: true, updatedAt: true, accountState: true } as const satisfies Prisma.UserSelect;
+type ListedUser = Prisma.UserGetPayload<{ select: typeof USER_LIST_SELECT }>;
 const PAID_STATUSES: OrderStatus[] = [
   OrderStatus.PAID,
   OrderStatus.PROCESSING,
@@ -83,38 +88,14 @@ export class AdminUsersService {
     const skip = (page - 1) * pageSize;
 
     const where = this.buildWhere(query);
-    const orderBy = this.buildOrderBy(query.sort, query.order);
-
-    const { items, total } = await this.prisma.$transaction(async (tx) => {
-      const [items, total] = await Promise.all([
-        tx.user.findMany({
-          where,
-          skip,
-          take: pageSize,
-          orderBy,
-        }),
-        tx.user.count({ where }),
-      ]);
-      return {
-        items,
-        total,
-      };
-    }, { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead });
-
-    return {
-      data: items.map((user) => ({
-        ...this.mapUser(user),
-        registrationNumber: user.id,
-      })),
-      meta: {
-        page,
-        pageSize,
-        total,
-        totalPages: Math.ceil(total / pageSize) || 1,
-        sort: query.sort ?? 'createdAt',
-        order: query.order ?? 'asc',
-      },
-    };
+    const sort = query.sort ?? 'id', order = query.order ?? 'desc';
+    const { data, total } = await this.prisma.$transaction(async tx => {
+      const users = await tx.user.findMany({ where, orderBy: { id: 'desc' }, select: USER_LIST_SELECT });
+      const metrics = await loadUserPurchaseMetrics(tx, users.map(user => user.id));
+      const sorted = sortUsersByMetrics(users, metrics, sort, order);
+      return { data: sorted.slice(skip, skip + pageSize).map(user => ({ ...this.mapUser(user), registrationNumber: user.id, ...metrics.get(user.id)! })), total: users.length };
+    }, { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead, timeout: 60000 });
+    return { data, meta: { page, pageSize, total, totalPages: Math.ceil(total / pageSize) || 1, sort, order } };
   }
 
   async getUserById(id: number) {
@@ -150,9 +131,9 @@ export class AdminUsersService {
       recentOrders,
       codesUsed,
     ] = await this.prisma.$transaction([
-      this.prisma.order.count({ where: { userId: id } }),
+      this.prisma.order.count({ where: { ...statisticsOrderWhere, userId: id } }),
       this.prisma.order.aggregate({
-        where: { userId: id, status: { in: PAID_STATUSES } },
+        where: { ...statisticsOrderWhere, userId: id, status: { in: PAID_STATUSES } },
         _sum: { total: true },
       }),
       this.prisma.circleUpgradeRequest.count({ where: { userId: id } }),
@@ -184,6 +165,9 @@ export class AdminUsersService {
           status: true,
           total: true,
           currency: true,
+          source: true,
+          excludedFromStatistics: true,
+          purchasedAt: true,
           discountCents: true,
           promoCodeCode: true,
           trackingNumber: true,
@@ -654,6 +638,9 @@ export class AdminUsersService {
     return {
       items: items.map((order) => ({
         id: order.id,
+        source: order.source,
+        excludedFromStatistics: order.excludedFromStatistics,
+        purchasedAt: order.purchasedAt,
         status: order.status,
         totalCents: Math.round(order.total.toNumber() * 100),
         currency: order.currency,
@@ -696,10 +683,6 @@ export class AdminUsersService {
       where.role = query.role;
     }
 
-    if (query.accountState) {
-      where.accountState = query.accountState;
-    }
-
     if (typeof query.circle === 'number' && Number.isFinite(query.circle)) {
       where.circleLevel = query.circle;
     }
@@ -714,25 +697,7 @@ export class AdminUsersService {
     );
   }
 
-  private buildOrderBy(
-    sort: AdminUserQueryDto['sort'],
-    direction: AdminUserQueryDto['order'],
-  ): Prisma.UserOrderByWithRelationInput[] {
-    const order: Prisma.SortOrder =
-      (direction ?? 'asc') === 'asc' ? 'asc' : 'desc';
-
-    switch (sort) {
-      case 'email':
-        return [{ email: order }, { id: order }];
-      case 'id':
-        return [{ id: order }];
-      case 'createdAt':
-      default:
-        return [{ createdAt: order }, { id: order }];
-    }
-  }
-
-  private mapUser(user: User) {
+  private mapUser(user: ListedUser) {
     return {
       id: user.id,
       identityUid: user.identityUid,

@@ -11,6 +11,19 @@ const refund = (id: string, value: number | null, date = '2026-03-29T12:00:00Z')
 const report = (orders = [order()], events: FinanceEvent[] = [], aggregation: 'days' | 'months' = 'days') => calculateFinance(orders, events, '2026-03-28', '2026-03-30', aggregation);
 
 describe('Private financial calculations', () => {
+  it('excludes the entire manual lifecycle, including partial refunds and cost restocks in later periods', () => {
+    const excluded = order({ source: 'IN_PERSON_ADMIN', excludedFromStatistics: true,
+      stockMovements: [{ variantId: 1, delta: 1, reason: 'refund', createdAt: new Date('2026-03-29T12:00:00Z') }] });
+    const events = [refund('partial', 1000)];
+    const empty = report([], []);
+    expect(report([excluded], events)).toEqual(empty);
+    expect(calculateFinance([excluded], events, '2026-03-29', '2026-03-30', 'days')).toEqual(calculateFinance([], [], '2026-03-29', '2026-03-30', 'days'));
+    expect(report([order({ id: 2, providerRef: 'pi_2' }), excluded], events)).toEqual(report([order({ id: 2, providerRef: 'pi_2' })]));
+  });
+  it('includes legacy manual snapshots by default and never excludes a web order', () => {
+    expect(report([order({ source: 'IN_PERSON_ADMIN' })]).totals.revenueCents).toBe(2000);
+    expect(report([order({ source: 'ONLINE', excludedFromStatistics: true })]).totals.revenueCents).toBe(2000);
+  });
   it('allocates discounts exactly with stable largest-remainder rounding', () => {
     expect(allocate(2, [100,100,100])).toEqual([1,1,0]);
     expect(allocate(1, [333,667])).toEqual([0,1]);

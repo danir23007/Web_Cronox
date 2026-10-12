@@ -1,3 +1,4 @@
+import { statisticsOrderWhere } from '../../common/statistics-eligibility';
 import { Injectable } from '@nestjs/common';
 import { OrderStatus } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -68,19 +69,19 @@ export class AdminDashboardService {
         _count: { _all: true },
         orderBy: { circleLevel: 'asc' },
       }),
-      this.prisma.order.count(),
-      this.prisma.order.count({ where: { createdAt: { gte: startOfToday } } }),
-      this.prisma.order.count({ where: { createdAt: { gte: startOfWeek } } }),
+      this.prisma.order.count({ where: statisticsOrderWhere }),
+      this.prisma.order.count({ where: { ...statisticsOrderWhere, createdAt: { gte: startOfToday } } }),
+      this.prisma.order.count({ where: { ...statisticsOrderWhere, createdAt: { gte: startOfWeek } } }),
       this.prisma.order.aggregate({
         where: {
-          status: { in: PAID_STATUSES },
+          ...statisticsOrderWhere, status: { in: PAID_STATUSES },
           createdAt: { gte: startOfToday },
         },
         _sum: { total: true },
       }),
       this.prisma.order.aggregate({
         where: {
-          status: { in: PAID_STATUSES },
+          ...statisticsOrderWhere, status: { in: PAID_STATUSES },
           createdAt: { gte: startOfMonth },
         },
         _sum: { total: true },

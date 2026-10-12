@@ -29,6 +29,7 @@ describe('AdminExportsService', () => {
   const setup = () => {
     const prisma = {
       user: { findMany: jest.fn().mockResolvedValue([user]) },
+      order: { findMany: jest.fn().mockResolvedValue([]) },
       auditLog: { create: jest.fn().mockResolvedValue({ id: 1 }) },
     };
     const excel = {

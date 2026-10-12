@@ -21,7 +21,7 @@ class HeaderAuthGuard implements CanActivate {
 
 describe('manual purchase permissions (HTTP)', () => {
   let app: INestApplication;
-  const service = { getOptions: jest.fn(), create: jest.fn(), void: jest.fn() };
+  const service = { getOptions: jest.fn(), create: jest.fn(), void: jest.fn(), setStatisticsExclusion: jest.fn() };
 
   beforeEach(async () => {
     jest.clearAllMocks();
@@ -42,6 +42,15 @@ describe('manual purchase permissions (HTTP)', () => {
   it('allows SUPERADMIN and rejects ADMIN', async () => {
     await request(app.getHttpServer()).get('/api/admin/users/7/in-person-purchase-options').set('x-test-role', Role.SUPERADMIN).expect(200);
     await request(app.getHttpServer()).get('/api/admin/users/7/in-person-purchase-options').set('x-test-role', Role.ADMIN).expect(403);
+  });
+
+  it('requires superadmin for a strict boolean exclusion and forwards the retry key', async () => {
+    const route = '/api/admin/orders/7/statistics-exclusion';
+    await request(app.getHttpServer()).post(route).send({ excludedFromStatistics: true }).expect(401);
+    await request(app.getHttpServer()).post(route).set('x-test-role', Role.ADMIN).send({ excludedFromStatistics: true }).expect(403);
+    for (const value of [null, 'true', 1]) await request(app.getHttpServer()).post(route).set('x-test-role', Role.SUPERADMIN).send({ excludedFromStatistics: value }).expect(400);
+    await request(app.getHttpServer()).post(route).set('x-test-role', Role.SUPERADMIN).set('Idempotency-Key', 'statistics-choice-123456').send({ excludedFromStatistics: false }).expect(201);
+    expect(service.setStatisticsExclusion).toHaveBeenCalledWith(7, 99, 'statistics-choice-123456', false);
   });
 
   it('validates input and forwards the idempotency key', async () => {

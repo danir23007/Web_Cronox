@@ -1,7 +1,9 @@
+import { loadUserPurchaseMetrics, sortUsersByMetrics, UserSort } from '../users/user-purchase-metrics';
 import {
   Injectable,
   PayloadTooLargeException,
 } from '@nestjs/common';
+import { countsInStatistics } from '../../common/statistics-eligibility';
 import {
   CircleUpgradeRequestStatus,
   CircleUpgradeSocialNetwork,
@@ -168,12 +170,11 @@ export class AdminExportsService {
     if (query.phone)
       where.phone = { contains: query.phone, mode: 'insensitive' };
     if (query.role) where.role = query.role;
-    if (query.accountState) where.accountState = query.accountState;
     if (query.circle) where.circleLevel = query.circle;
     const sort = ['createdAt', 'email', 'id'].includes(query.sort ?? '')
       ? query.sort!
       : 'createdAt';
-    const rows = await this.prisma.user.findMany({
+    const users = await this.prisma.user.findMany({
       where,
       orderBy: [{ [sort]: query.order ?? 'desc' }, { id: 'asc' }],
       take: TAKE_WITH_LIMIT_SENTINEL,
@@ -191,12 +192,19 @@ export class AdminExportsService {
         updatedAt: true,
       },
     });
+    this.assertSize('Usuarios', users.length);
+    const metrics = await loadUserPurchaseMetrics(this.prisma, users.map(user => user.id));
+    const rows = ['id', 'revenue', 'orders', 'distinctProducts'].includes(query.sort ?? 'id')
+      ? sortUsersByMetrics(users, metrics, (query.sort ?? 'id') as UserSort, query.order ?? 'desc') : users;
     return [
       {
         name: 'Usuarios',
         columns: [
           { header: 'ID usuario', key: 'id', width: 12 },
           { header: 'Nombre', key: 'name', width: 28 },
+          { header: 'Facturación', key: 'revenue', width: 18, numberFormat: '#,##0.00' },
+          { header: 'Pedidos', key: 'ordersCount', width: 12 },
+          { header: 'Prendas diferentes', key: 'distinctProducts', width: 20 },
           { header: 'Email', key: 'email', width: 34 },
           { header: 'Teléfono de cuenta', key: 'phone', width: 22 },
           { header: 'Rol', key: 'role', width: 16 },
@@ -216,6 +224,8 @@ export class AdminExportsService {
           },
         ],
         rows: rows.map((user) => ({
+          revenue: metrics.get(user.id)!.revenueCents === null ? null : metrics.get(user.id)!.revenueCents! / 100,
+          ordersCount: metrics.get(user.id)!.ordersCount, distinctProducts: metrics.get(user.id)!.distinctProducts,
           id: user.id,
           name:
             user.name ||
@@ -266,7 +276,9 @@ export class AdminExportsService {
       orderBy: [{ orderId: 'asc' }, { id: 'asc' }],
       take: TAKE_WITH_LIMIT_SENTINEL,
     });
+    const excludedIds = new Set(orders.filter(order => !countsInStatistics(order)).map(order => order.id));
     const itemRows = orderItems.map((item) => ({
+      excluded: excludedIds.has(item.orderId) ? 'Sí' : 'No',
       orderId: item.orderId,
       itemId: item.id,
       productId: item.productId,
@@ -280,6 +292,7 @@ export class AdminExportsService {
         name: 'Pedidos',
         columns: [
           { header: 'ID pedido', key: 'id', width: 12 },
+          { header: 'Excluida de estadísticas', key: 'excluded', width: 24 },
           { header: 'ID usuario', key: 'userId', width: 12 },
           { header: 'Email cliente', key: 'email', width: 34 },
           { header: 'Estado', key: 'status', width: 18 },
@@ -336,6 +349,7 @@ export class AdminExportsService {
           },
         ],
         rows: orders.map((order) => ({
+          excluded: countsInStatistics(order) ? 'No' : 'Sí',
           id: order.id,
           userId: order.userId,
           email: order.customerEmail,
@@ -356,6 +370,7 @@ export class AdminExportsService {
       {
         name: 'Artículos',
         columns: [
+          { header: 'Excluida de estadísticas', key: 'excluded', width: 24 },
           { header: 'ID pedido', key: 'orderId', width: 12 },
           { header: 'ID línea', key: 'itemId', width: 12 },
           { header: 'ID producto', key: 'productId', width: 12 },

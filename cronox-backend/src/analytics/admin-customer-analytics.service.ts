@@ -1,3 +1,4 @@
+import { statisticsOrderWhere } from '../common/statistics-eligibility';
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { CustomerActivityEventType } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
@@ -34,7 +35,7 @@ export class AdminCustomerAnalyticsService {
           _count: { _all: true },
         }),
         this.prisma.orderItem.aggregate({
-          where: { order: { userId, status: { in: ['PAID', 'PROCESSING', 'SHIPPED', 'DELIVERED'] } } },
+          where: { order: { ...statisticsOrderWhere, userId, status: { in: ['PAID', 'PROCESSING', 'SHIPPED', 'DELIVERED'] } } },
           _sum: { quantity: true },
         }),
       ]);
@@ -81,6 +82,7 @@ export class AdminCustomerAnalyticsService {
       by: ['productId'],
       where: {
         order: {
+          ...statisticsOrderWhere,
           userId,
           status: { in: ['PAID', 'PROCESSING', 'SHIPPED', 'DELIVERED'] },
         },
@@ -153,7 +155,7 @@ export class AdminCustomerAnalyticsService {
         include: { product: { select: { id: true, name: true, slug: true } } },
       }),
       this.prisma.userLoginEvent.findMany({ where: { userId }, orderBy: { createdAt: 'desc' }, take }),
-      this.prisma.order.findMany({ where: { userId }, orderBy: { createdAt: 'desc' }, take, select: { id: true, status: true, total: true, currency: true, createdAt: true } }),
+      this.prisma.order.findMany({ where: { userId }, orderBy: { createdAt: 'desc' }, take, select: { id: true, source: true, excludedFromStatistics: true, status: true, total: true, currency: true, createdAt: true } }),
       this.prisma.customerActivityEvent.count({ where: { userId } }),
       this.prisma.userLoginEvent.count({ where: { userId } }),
       this.prisma.order.count({ where: { userId } }),

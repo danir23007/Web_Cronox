@@ -45,6 +45,7 @@ export type MeAddress = {
 };
 
 export type MeOrder = {
+  excludedFromStatistics: boolean;
   id: number;
   createdAt: Date;
   status: OrderStatus;
@@ -226,6 +227,7 @@ export class MeService {
         status: true,
         total: true,
         currency: true,
+        excludedFromStatistics: true,
         trackingNumber: true,
         trackingUrl: true,
         shippingCarrier: true,
@@ -240,6 +242,7 @@ export class MeService {
       status: order.status,
       total: order.total instanceof Decimal ? Number(order.total.toString()) : Number(order.total),
       currency: order.currency,
+      excludedFromStatistics: order.excludedFromStatistics,
       trackingNumber: order.trackingNumber,
       trackingUrl: order.trackingUrl,
       shippingCarrier: order.shippingCarrier,

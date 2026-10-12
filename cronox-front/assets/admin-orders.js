@@ -171,7 +171,10 @@
   const fill = (order) => {
     currentOrder = order || null;
     if (title) title.textContent = 'Pedido #' + text(order?.id);
-    if (statusElement) statusElement.replaceChildren(createStatusChip(order?.status));
+    if (statusElement) {
+      statusElement.replaceChildren(createStatusChip(order?.status));
+      if (order?.excludedFromStatistics) statusElement.append(' · Excluida de estadísticas');
+    }
     setText(orderNumber, order?.id);
     setText(paymentStatus, statusLabel(order?.paymentStatus));
     setText(fulfillmentStatus, statusLabel(order?.fulfillmentStatus));
@@ -247,6 +250,7 @@
       createCell(row, formatDate(order?.createdAt));
       const statusCell = document.createElement('td');
       statusCell.appendChild(createStatusChip(order?.status));
+      if (order?.excludedFromStatistics) statusCell.append(' · Excluida de estadísticas');
       row.appendChild(statusCell);
       createCell(row, money(order?.total));
       createCell(row, [window.CRONOX_USER_IDENTITY.format({ memberCode: order?.userMemberCode || order?.user?.memberCode }), order?.userEmail || order?.user?.email || order?.email].filter(Boolean).join(" · "));

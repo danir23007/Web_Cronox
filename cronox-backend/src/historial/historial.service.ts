@@ -1,3 +1,4 @@
+import { statisticsOrderWhere } from '../common/statistics-eligibility';
 import { Injectable } from '@nestjs/common';
 import { OrderStatus, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
@@ -26,9 +27,10 @@ export class HistorialService {
   async calculatePurchaseStats(
     userId: number,
     client: Prisma.TransactionClient | PrismaService = this.prisma,
+    analytics = true,
   ) {
     const orders = await client.order.findMany({
-      where: { userId, status: { in: this.recordedPurchaseStatuses } },
+      where: { ...(analytics ? statisticsOrderWhere : {}), userId, status: { in: this.recordedPurchaseStatuses } },
       select: {
         status: true,
         items: { select: { productId: true, quantity: true } },

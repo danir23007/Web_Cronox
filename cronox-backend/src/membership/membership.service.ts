@@ -65,7 +65,7 @@ export class MembershipService {
     }
 
     const [purchaseStats, netSpent, promotionRequestStatus] = await Promise.all([
-      this.historialService.calculatePurchaseStats(userId),
+      this.historialService.calculatePurchaseStats(userId, this.prisma, false),
       this.circleService.getNetSpent(userId),
       this.circleService.getPromotionStatus(userId),
     ]);

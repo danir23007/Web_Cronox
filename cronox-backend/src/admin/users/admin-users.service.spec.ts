@@ -308,6 +308,7 @@ describe('AdminUsersService protected user updates', () => {
     expect(list.data[0].registrationNumber).toBe(accountUser.id);
     expect(readPrisma.$transaction).toHaveBeenCalledWith(expect.any(Function), {
       isolationLevel: 'RepeatableRead',
+      timeout: 60000,
     });
     expect(detail.user.phone).toBe('+12025550184');
     expect(readPrisma.user.findMany).toHaveBeenCalledWith(

@@ -1,3 +1,4 @@
+import { countsInStatistics } from '../../common/statistics-eligibility';
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -42,6 +43,7 @@ export function mapOrderAmounts(
   from: string,
   to: string,
 ) {
+  if (!countsInStatistics(order)) return { excluded: 'outside' as const };
   const end = madridMidnight(nextDate(to));
   const ledger = events.filter(
     (e) => e.paymentIntentId === order.providerRef && e.occurredAt < end,
@@ -213,6 +215,7 @@ export class AdminMapService {
           }
           for (const row of batch) {
             const order = { ...(row.snapshot as unknown as FinanceOrder) };
+            if (!countsInStatistics(order)) continue;
             for (const key of [
               'paidAt',
               'purchasedAt',

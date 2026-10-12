@@ -8,7 +8,7 @@ import {
   Max,
   Min,
 } from 'class-validator';
-import { Role, UserAccountState } from '@prisma/client';
+import { Role } from '@prisma/client';
 
 export class AdminUserQueryDto {
   @IsOptional()
@@ -45,8 +45,9 @@ export class AdminUserQueryDto {
   role?: Role;
 
   @IsOptional()
-  @IsEnum(UserAccountState)
-  accountState?: UserAccountState;
+  @IsString()
+  // Legacy clients may send this field; listing/bulk selection ignore it.
+  accountState?: string;
 
   @IsOptional()
   @Type(() => Number)
@@ -55,8 +56,8 @@ export class AdminUserQueryDto {
   circle?: number;
 
   @IsOptional()
-  @IsIn(['createdAt', 'email', 'id'])
-  sort?: 'createdAt' | 'email' | 'id';
+  @IsIn(['id', 'revenue', 'orders', 'distinctProducts'])
+  sort?: 'id' | 'revenue' | 'orders' | 'distinctProducts';
 
   @IsOptional()
   @IsIn(['asc', 'desc'])

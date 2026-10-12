@@ -466,7 +466,9 @@ const makeDom = (
 
 describe('CRONOX admin gallery', () => {
   it('adds the module, editor labels, and exact responsive 13-slot composition', () => {
-    const document = new JSDOM(adminHtml).window.document;
+    const dom = new JSDOM(adminHtml, { runScripts: 'outside-only' });
+    dom.window.eval(readFrontend('assets/admin-navigation.js'));
+    const document = dom.window.document;
 
     expect(
       document.querySelector('#navMultimedia .sidebar-subgroup')
