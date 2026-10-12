@@ -12,5 +12,4 @@ npx prisma migrate deploy
 npm run build:compiled
 sudo /usr/bin/pm2 restart cronox
 sudo /usr/bin/pm2 save
-sleep 3
-curl --fail --silent --show-error http://127.0.0.1:3000/api/health
+node ../.github/scripts/wait-for-backend.cjs

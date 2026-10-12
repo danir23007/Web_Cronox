@@ -51,7 +51,7 @@ jobs:
         run: npm ci --prefix cronox-backend
 
       - name: Verify isolated preflight dependencies and fail-closed deployment ordering
-        run: node --test .github/scripts/run-release-preflight.spec.cjs cronox-backend/scripts/check-user-numbering-release.spec.cjs
+        run: node --test .github/scripts/run-release-preflight.spec.cjs .github/scripts/wait-for-backend.spec.cjs cronox-backend/scripts/check-user-numbering-release.spec.cjs
 
       - name: Generate the Prisma client
         run: npm run prisma:generate --prefix cronox-backend
