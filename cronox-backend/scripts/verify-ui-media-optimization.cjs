@@ -27,6 +27,16 @@ const approvedImageChanges = new Set([
   'docs/original-assets/ui-media/cronox-front/assets/logo_banner.png',
 ]);
 
+function unapprovedImageChanges(porcelain) {
+  return porcelain.split(/\r?\n/).filter(Boolean)
+    .map(line => line.slice(3).replace(/\\/g, '/'))
+    // npm ci replaces dependency assets, including historically tracked ones.
+    // They are not application UI media; keep all project image checks intact.
+    .filter(file => !file.split('/').includes('node_modules'))
+    .filter(file => /\.(?:avif|gif|jpe?g|png|svg|webp)$/i.test(file))
+    .filter(file => !approvedImageChanges.has(file));
+}
+
 async function main() {
   assert.deepEqual(
     manifest.assets.map((asset) => asset.purpose),
@@ -100,18 +110,11 @@ async function main() {
   assert.ok(!index.includes('src="assets/logo_banner.png"\n           alt="CRONOX" class="topbar__logo-img"'));
   for (const asset of manifest.assets) assert.ok(!index.includes(asset.archivePath));
 
-  const changed = execFileSync('git', ['status', '--porcelain', '-uall'], {
+  const status = execFileSync('git', ['status', '--porcelain', '-uall'], {
     cwd: repositoryRoot,
     encoding: 'utf8',
-  })
-    .split(/\r?\n/)
-    .filter(Boolean)
-    .map((line) => line.slice(3).replace(/\\/g, '/'))
-    .filter((file) => /\.(?:avif|gif|jpe?g|png|svg|webp)$/i.test(file));
-  const outsideAllowlist = changed.filter(
-    (file) => !approvedImageChanges.has(file),
-  );
-  assert.deepEqual(outsideAllowlist, []);
+  });
+  assert.deepEqual(unapprovedImageChanges(status), []);
 
   const appModule = read('cronox-backend/src/app.module.ts');
   assert.ok(!frontendRoot.startsWith(path.join(repositoryRoot, 'docs')));
@@ -121,7 +124,8 @@ async function main() {
   console.log('UI media allowlist, archive, metadata and runtime references verified.');
 }
 
-main().catch((error) => {
+module.exports = { unapprovedImageChanges };
+if (require.main === module) main().catch((error) => {
   console.error(error);
   process.exitCode = 1;
 });
