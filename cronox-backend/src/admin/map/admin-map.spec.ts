@@ -278,6 +278,7 @@ describe('Map aggregation, validation and permissions', () => {
       snapshot: order({ id: index + 1, providerRef: `pi_${index + 1}` }),
     }));
     const tx = {
+      pointEntry: { findMany: jest.fn().mockResolvedValue([]) }, salePoint: { findMany: jest.fn().mockResolvedValue([]) },
       financeArchive: {
         findMany: jest.fn(async ({ where, select }: any) =>
           select

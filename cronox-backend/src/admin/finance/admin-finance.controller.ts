@@ -1,11 +1,13 @@
 import { Controller, Get, Query, UseGuards } from '@nestjs/common';
 import { Type } from 'class-transformer';
-import { IsIn, IsInt, IsOptional, IsString, Matches, Max, MaxLength, Min } from 'class-validator';
+import { IsIn, IsInt, IsOptional, IsString, IsUUID, Matches, Max, MaxLength, Min } from 'class-validator';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { AdminGuard } from '../../common/guards/admin.guard';
 import { AdminFinanceService } from './admin-finance.service';
 
 export class FinanceQuery {
+  @IsOptional() @IsIn(['all', 'web', 'manual', 'points']) source: 'all' | 'web' | 'manual' | 'points' = 'all';
+  @IsOptional() @IsUUID() pointId?: string;
   @IsString() @Matches(/^\d{4}-\d{2}-\d{2}$/) from: string;
   @IsString() @Matches(/^\d{4}-\d{2}-\d{2}$/) to: string;
   @IsOptional() @IsIn(['days', 'months']) aggregation: 'days' | 'months' = 'days';

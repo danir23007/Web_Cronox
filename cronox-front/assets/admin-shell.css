@@ -278,3 +278,35 @@ body.cronox-admin { --admin-line:var(--admin-c-e5e8ee); --admin-muted:var(--admi
 .cronox-admin .inbox-root .mail-settings .btn.mail-add-box:hover { background:#f1f1f1; border-color:#000; }
 .cronox-admin .inbox-root .mail-settings .btn.mail-add-box:active { background:#ddd; box-shadow:inset 0 2px 3px #0003; }
 .cronox-admin .inbox-root .mail-settings .btn.mail-add-box:focus-visible { outline:3px solid #4b7ce7; outline-offset:3px; }
+/* External sales forms share the finance shell; cards wrap at narrow widths. */
+.pos-root { min-width:0; }
+.pos-fields,.pos-line { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(220px,100%),1fr)); gap:16px; }
+.pos-fields label,.pos-line label { display:flex; flex-direction:column; gap:6px; min-width:0; }
+.pos-fields input,.pos-fields select { width:100%; min-width:0; box-sizing:border-box; }
+.pos-fields input[type=checkbox] { width:auto; align-self:flex-start; }
+.pos-lines,.pos-fields>p,.pos-fields>fieldset { grid-column:1/-1; }
+.pos-line { border:1px solid #deded8; border-radius:12px; padding:16px; margin:12px 0; min-width:0; }
+.pos-line select { max-width:100%; }
+.cronox-admin .pos-line [data-action=remove-line] { align-self:end; justify-self:start; width:auto; min-height:38px; padding:8px 14px; }
+.pos-actions { display:flex; flex-wrap:wrap; gap:10px; }
+.pos-metrics { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(160px,100%),1fr)); gap:20px; }
+.pos-metrics dt { color:#65675e; font-size:13px; }
+.pos-metrics dd { margin:8px 0; font-size:24px; font-weight:600; }
+.pos-list { display:grid; gap:20px; margin-top:20px; }
+.pos-editor { margin:20px 0; }
+.pos-snapshot { max-width:360px; white-space:pre-wrap; overflow-wrap:anywhere; font-size:12px; }
+.pos-root [role=alert] { color:#a42020; }
+.pos-root .btn:disabled { opacity:.45; cursor:not-allowed; box-shadow:none; }
+.pos-archive-status { border:1px solid var(--admin-line); border-radius:12px; padding:18px; margin:18px 0; background:var(--admin-c-f4f6f9); }
+.pos-archive-status strong { font-size:18px; }
+.pos-archive-status p,.pos-archive-explanation { line-height:1.5; }
+.pos-root .finance-card { margin-top:20px; }
+.pos-history-filter { position:relative; min-width:0; width:360px; max-width:100%; }
+.pos-history-filter label { display:block; }
+.pos-history-filter input { width:100%; box-sizing:border-box; }
+.pos-history-options { position:absolute; left:0; right:0; top:100%; z-index:12; margin-top:5px; max-height:320px; overflow-y:auto; border:1px solid var(--admin-line); border-radius:8px; background:var(--admin-c-fff); box-shadow:0 8px 24px #0002; }
+.pos-history-options[hidden] { display:none; }
+.pos-history-options [role=option] { display:flex; flex-direction:column; gap:4px; width:100%; padding:10px 12px; text-align:left; border:0; background:transparent; color:inherit; cursor:pointer; overflow-wrap:anywhere; }
+.pos-history-options [role=option]:hover,.pos-history-options [aria-selected=true] { background:var(--admin-c-edf2fa); }
+.pos-history-options small,.pos-history-hint { color:var(--admin-muted); font-size:12px; }
+.pos-history-hint { margin:0; padding:10px 12px; }

@@ -39,7 +39,7 @@ describe('Finance UI with saved manual purchase amounts', () => {
         expect(profitPath.trim().length > 0).toBe(cost !== null);
         if (cost === null) expect(dom.window.document.querySelector('.finance-warning')!.textContent).toContain('línea #24');
         await api.load('money');
-        const row = dom.window.document.querySelector('.finance-table tbody tr')!;
+        const row = dom.window.document.querySelector('[data-finance-page="money"] .finance-table tbody tr')!;
         expect(row.children[3].textContent).toContain('51,00');
         expect(row.children[5].textContent).toContain(expected);
         expect(dom.window.document.querySelector('[data-finance-page="money"] .profit strong')!.textContent).toContain(expected);

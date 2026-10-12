@@ -268,7 +268,7 @@
   <link rel="shortcut icon" type="image/png" href="/favicon.png?v=4">
   <link rel="apple-touch-icon" href="/favicon.png?v=4">
   <meta name="theme-color" content="#000000">
-  <link rel="stylesheet" href="assets/admin-shell.css?v=6">
+  <link rel="stylesheet" href="assets/admin-shell.css?v=10">
   <link rel="stylesheet" href="assets/admin-map.css?v=4">
   <link rel="stylesheet" href="assets/admin-live-stats.css?v=1">
   <link rel="stylesheet" href="/assets/admin-theme.css?v=1">
@@ -305,6 +305,7 @@
         </div>
         <button class="sidebar-group" aria-expanded="false" aria-controls="navCliente"><span aria-hidden="true">♙</span>Clientes<span class="sidebar-chevron">⌄</span></button>
         <div id="navCliente" class="sidebar-children" hidden>
+          <button data-nav-target="section-sale-points">Puntos de venta</button>
           <button data-nav-target="section-users">Usuarios</button>
           <button data-nav-target="section-circles-menu">Círculos</button>
           <button data-nav-target="section-orders">Pedidos</button>
@@ -334,6 +335,7 @@
     <button class="sidebar-backdrop" id="sidebarBackdrop" aria-label="Cerrar menú" hidden></button>
     <header class="admin-header"><button id="sidebarToggle" type="button" aria-controls="adminSidebar" aria-expanded="false" aria-label="Abrir menú">☰</button><span id="adminBreadcrumb">Home</span><span class="admin-header-mark">CR</span></header>
     <main id="adminMain" class="admin-main">
+      <section id="section-sale-points" class="admin-section" hidden aria-label="Puntos de venta"><div id="salePointsRoot" class="finance-root pos-root"></div></section>
       <section id="section-live-stats" class="admin-section" hidden aria-labelledby="liveStatsTitle">
         <header class="live-heading">
           <div><h1 id="liveStatsTitle">Live stats</h1><p class="live-help">Visitantes con actividad en los últimos 2 minutos</p></div>
@@ -712,7 +714,7 @@
           <div class="dashboard-list" id="pendingRequestsByType"></div>
         </div>
         <div class="card dashboard-card">
-          <h3>Pedidos</h3>
+          <h3>Pedidos y ventas externas</h3>
           <div class="dashboard-value" id="ordersTotal">—</div>
           <div class="dashboard-sub" id="ordersBreakdown">Hoy: — · Semana: —</div>
         </div>
@@ -2018,7 +2020,8 @@
   <script src="assets/category-controls.js?v=2"></script>
   <script src="assets/user-identity.js?v=1"></script>
   <script src="assets/admin-shell.js?v=10"></script>
-  <script src="assets/admin-finance.js?v=2"></script>
+  <script src="assets/admin-finance.js?v=3"></script>
+  <script src="assets/admin-points.js?v=5"></script>
   <script src="assets/admin-map.js?v=4"></script>
   <link rel="stylesheet" href="assets/admin-visitors.css?v=1">
   <script src="assets/admin-visitors.js?v=3"></script>
@@ -2028,7 +2031,7 @@
   <script src="assets/admin-section-headers.js?v=1"></script>
   <script src="assets/admin-push.js?v=1"></script>
   <script src="assets/admin-inbox.js?v=13"></script>
-  <script src="assets/admin.js?v=16"></script>
+  <script src="assets/admin.js?v=17"></script>
   <script src="assets/admin-inventory.js?v=2"></script>
   <script src="assets/admin-waitlist.js?v=2"></script>
   <script src="assets/admin-favorites.js?v=1"></script>

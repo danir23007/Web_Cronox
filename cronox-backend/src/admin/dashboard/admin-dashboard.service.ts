@@ -1,6 +1,8 @@
 import { Injectable } from '@nestjs/common';
 import { OrderStatus } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
+import { madridDate, madridMidnight, nextDate } from '../finance/financial-calculations';
+import { calculatePoints } from '../points/point-calculations';
 
 const PAID_STATUSES: OrderStatus[] = [
   OrderStatus.PAID,
@@ -36,16 +38,11 @@ export class AdminDashboardService {
 
   async getOverview() {
     const now = new Date();
-    const startOfToday = new Date(now);
-    startOfToday.setHours(0, 0, 0, 0);
-
-    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-
-    const startOfWeek = new Date(now);
-    const day = startOfWeek.getDay();
-    const diff = (day + 6) % 7; // Monday as start of week
-    startOfWeek.setDate(startOfWeek.getDate() - diff);
-    startOfWeek.setHours(0, 0, 0, 0);
+    const today = madridDate(now), month = today.slice(0, 8) + '01';
+    const startOfToday = madridMidnight(today), startOfMonth = madridMidnight(month);
+    const week = new Date(today + 'T12:00:00Z');
+    week.setUTCDate(week.getUTCDate() - (week.getUTCDay() + 6) % 7);
+    const startOfWeek = madridMidnight(week.toISOString().slice(0, 10));
 
     const oldPendingCutoff = new Date(now);
     oldPendingCutoff.setDate(oldPendingCutoff.getDate() - OLD_REQUEST_DAYS);
@@ -63,6 +60,7 @@ export class AdminDashboardService {
       pendingRequests34,
       lowStockVariants,
       oldPendingRequests,
+      pointSales, pointSalesToday, pointSalesWeek, pointEntries,
     ] = await this.prisma.$transaction([
       this.prisma.user.count(),
       this.prisma.user.groupBy({
@@ -118,6 +116,10 @@ export class AdminDashboardService {
           createdAt: { lte: oldPendingCutoff },
         },
       }),
+      this.prisma.pointSale.count(),
+      this.prisma.pointSale.count({ where: { soldAt: { gte: startOfToday, lt: madridMidnight(nextDate(today)) } } }),
+      this.prisma.pointSale.count({ where: { soldAt: { gte: startOfWeek, lt: madridMidnight(nextDate(today)) } } }),
+      this.prisma.pointEntry.findMany({ where: { occurredAt: { gte: startOfMonth, lt: madridMidnight(nextDate(today)) } } }),
     ]);
 
     // Prisma groupBy _count typing can be a union; extract _all safely.
@@ -140,8 +142,8 @@ export class AdminDashboardService {
 
     const totalPendingRequests = pendingRequests23 + pendingRequests34;
 
-    const paidTodayValue = Number(paidToday._sum.total ?? 0);
-    const paidMonthValue = Number(paidMonth._sum.total ?? 0);
+    const paidTodayValue = Number(paidToday._sum.total ?? 0) + calculatePoints(pointEntries, today, today).totals.revenueCents! / 100;
+    const paidMonthValue = Number(paidMonth._sum.total ?? 0) + calculatePoints(pointEntries, month, today).totals.revenueCents! / 100;
 
     // lowStockVariants is grouped by productId => number of products with low-stock variants
     const lowStockProducts = lowStockVariants.length;
@@ -159,9 +161,9 @@ export class AdminDashboardService {
         },
       },
       orders: {
-        total: totalOrders,
-        today: ordersToday,
-        week: ordersThisWeek,
+        total: totalOrders + pointSales,
+        today: ordersToday + pointSalesToday,
+        week: ordersThisWeek + pointSalesWeek,
       },
       revenue: {
         today: paidTodayValue,

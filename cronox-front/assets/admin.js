@@ -320,6 +320,7 @@
     notes: ['ADMIN', 'SUPERADMIN'],
   };
   const SECTION_PERMISSIONS = {
+    'section-sale-points': 'finance',
     'section-map': 'finance',
     'section-push': 'mails',
     'section-23': 'requests',
@@ -1650,6 +1651,7 @@
     if (sectionId !== 'section-products') productOpenVersion++;
     if (sectionId === 'section-dashboard') { fetchDashboard(); window.CRONOX_FINANCE?.load('dashboard'); window.CRONOX_VISITORS?.load(); }
     if (sectionId === 'section-money') window.CRONOX_FINANCE?.load('money');
+    if (sectionId === 'section-sale-points') window.CRONOX_POINTS?.load();
     if (sectionId === 'section-map' && canAccess('finance')) window.CRONOX_MAP?.load();
     if (sectionId === 'section-34') { syncRequestsStateFromInputs(); fetchRequests(); markRequestsSeen(); }
     if (sectionId === 'section-23') { syncRequests23StateFromInputs(); fetchRequests23(); markRequestsSeen(); }

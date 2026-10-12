@@ -3,6 +3,59 @@ generator client {
   binaryTargets = ["native", "debian-openssl-3.0.x", "debian-openssl-1.1.x", "linux-musl"]
 }
 
+// Private external sales ledger. No Order, customer, Stripe or shipping lifecycle.
+model SalePoint {
+  id String @id @default(uuid())
+  name String @db.VarChar(160)
+  type String
+  city String @default("")
+  venue String @default("")
+  startsOn String?
+  endsOn String?
+  notes String @default("")
+  commissionBp Int @default(0)
+  archived Boolean @default(false)
+  revision Int @default(1)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  sales PointSale[]
+  entries PointEntry[]
+}
+
+model PointSale {
+  id String @id @default(uuid())
+  pointId String
+  point SalePoint @relation(fields: [pointId], references: [id], onDelete: Restrict)
+  soldAt DateTime @db.Timestamptz(3)
+  revision Int @default(1)
+  state Json
+  entries PointEntry[]
+  @@index([pointId, soldAt])
+}
+
+// Append-only finance deltas, frozen before/after snapshots and stock evidence.
+model PointEntry {
+  id String @id @default(uuid())
+  pointId String
+  point SalePoint @relation(fields: [pointId], references: [id], onDelete: Restrict)
+  saleId String?
+  sale PointSale? @relation(fields: [saleId], references: [id], onDelete: Restrict)
+  requestKey String @unique
+  requestHash String
+  kind String
+  occurredAt DateTime @db.Timestamptz(3)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  actorId Int
+  description String
+  before Json?
+  after Json?
+  lines Json
+  expenseCents Int @default(0)
+  reversesId String? @unique
+  @@index([pointId, occurredAt])
+  @@index([occurredAt])
+  @@index([saleId, createdAt])
+}
+
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
