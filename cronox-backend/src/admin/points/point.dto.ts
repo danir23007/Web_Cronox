@@ -56,6 +56,11 @@ export class SaleDto {
   @IsOptional() @IsInt() @Min(1) revision?: number;
   @IsOptional() @IsString() @MaxLength(1000) reason?: string;
 }
+export class SaleDateDto {
+  @IsString() occurredAt: string;
+  @IsInt() @Min(1) revision: number;
+  @IsString() @MaxLength(1000) reason: string;
+}
 export class ReturnLineDto {
   @IsUUID() id: string;
   @IsInt() @Min(1) @Max(1000) quantity: number;

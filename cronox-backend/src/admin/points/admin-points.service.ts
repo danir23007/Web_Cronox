@@ -13,7 +13,7 @@ import {
   nextDate,
   validateRange,
 } from '../finance/financial-calculations';
-import { ExpenseDto, PointDto, ReturnDto, SaleDto } from './point.dto';
+import { ExpenseDto, PointDto, ReturnDto, SaleDto, SaleDateDto } from './point.dto';
 import {
   calculatePoints,
   commission,
@@ -122,6 +122,7 @@ export class AdminPointsService {
         occurredAt: true,
         lines: true,
         expenseCents: true,
+        after: true,
       },
     });
     return points.map((point) => ({
@@ -326,10 +327,7 @@ export class AdminPointsService {
             'La corrección no puede preceder a la venta.',
           );
         if (previous) {
-          const last = await tx.pointEntry.findFirst({
-            where: { saleId },
-            orderBy: { occurredAt: 'desc' },
-          });
+          const last = await this.lastSaleAdjustment(tx, saleId!);
           if (last && occurredAt < last.occurredAt)
             throw new BadRequestException(
               'La corrección no puede preceder al último movimiento.',
@@ -391,6 +389,48 @@ export class AdminPointsService {
       },
     );
   }
+  private async lastSaleAdjustment(tx: Tx, saleId: string) {
+    const entries = await tx.pointEntry.findMany({
+      where: { saleId, kind: { in: ['CORRECTION', 'RETURN'] } }, orderBy: { occurredAt: 'desc' },
+    });
+    return entries.find(entry => !(entry.after as { dateTransfer?: boolean } | null)?.dateTransfer);
+  }
+  async changeSaleDate(pointId: string, saleId: string, actor: number, key: string, dto: SaleDateDto) {
+    const soldAt = pointDate(dto.occurredAt);
+    return this.operation(actor, key, { action: 'sale-date', pointId, saleId, dto }, async (tx, hash) => {
+      await this.point(tx, pointId, true);
+      const sale = await tx.pointSale.findUnique({ where: { id: saleId } });
+      if (!sale || sale.pointId !== pointId) throw new NotFoundException('Venta no encontrada.');
+      if (sale.revision !== dto.revision || !dto.reason?.trim())
+        throw new ConflictException('Indica el motivo y utiliza la revisión actual de la venta.');
+      const entries = await tx.pointEntry.findMany({ where: { saleId }, orderBy: { occurredAt: 'asc' } });
+      const original = entries.find(entry => entry.kind === 'SALE');
+      if (!original) throw new ConflictException('No se encuentra el registro original de la venta.');
+      const movement = entries.find(entry => entry.kind !== 'SALE' && !(entry.after as { dateTransfer?: boolean } | null)?.dateTransfer && Array.isArray(entry.lines) && entry.lines.length > 0);
+      if (movement && soldAt > movement.occurredAt)
+        throw new BadRequestException('La fecha de venta no puede ser posterior a una corrección o devolución existente.');
+      const before = { soldAt: sale.soldAt.toISOString() }, after = { soldAt: soldAt.toISOString() };
+      await tx.pointSale.update({ where: { id: saleId }, data: { soldAt, revision: { increment: 1 } } });
+      // The ledger is append-only. Transfer the original sale through two
+      // compensating entries, including its count, without changing stock.
+      const lines = original.lines as unknown as PointDelta[];
+      const entry = await tx.pointEntry.create({ data: {
+        pointId, saleId, actorId: actor, requestKey: key, requestHash: hash,
+        kind: 'CORRECTION', occurredAt: soldAt, description: `Cambio de fecha: ${dto.reason.trim()}`,
+        before, after: { ...after, dateTransfer: true, salesCountDelta: 1 }, lines: json(lines),
+      } });
+      await tx.pointEntry.create({ data: {
+        pointId, saleId, actorId: actor, requestKey: randomUUID(), requestHash: hash,
+        kind: 'CORRECTION', occurredAt: sale.soldAt, description: `Traslado de la fecha anterior: ${dto.reason.trim()}`,
+        before, after: { ...after, dateTransfer: true, salesCountDelta: -1 },
+        lines: json(lines.map(line => ({ ...line, revenueCents: -line.revenueCents,
+          costCents: -line.costCents, commissionCents: -line.commissionCents,
+          unitsSold: -line.unitsSold, unitsReturned: -line.unitsReturned }))),
+      } });
+      await this.audit(tx, actor, pointId, 'SALE_DATE_CHANGE', { saleId, entryId: entry.id, before, after });
+      return entry;
+    });
+  }
   async refund(
     pointId: string,
     saleId: string,
@@ -419,10 +459,7 @@ export class AdminPointsService {
           throw new ConflictException(
             'La venta ha cambiado. Recarga antes de devolver.',
           );
-        const last = await tx.pointEntry.findFirst({
-          where: { saleId },
-          orderBy: { occurredAt: 'desc' },
-        });
+        const last = await this.lastSaleAdjustment(tx, saleId);
         if (occurredAt < sale.soldAt || (last && occurredAt < last.occurredAt))
           throw new BadRequestException(
             'La devolución no puede preceder al último movimiento.',

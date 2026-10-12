@@ -1603,7 +1603,7 @@
       if (window.CRONOX_STOCK?.hasLastUnits(product.variants, product.lastUnitsThreshold)) {
         const warning = document.createElement('span');
         warning.className = 'cart-upsell__last-units';
-        warning.textContent = ' · Últimas unidades';
+        warning.textContent = ' Últimas unidades';
         card.querySelector('.cart-upsell__price').appendChild(warning);
       }
       frag.appendChild(card);

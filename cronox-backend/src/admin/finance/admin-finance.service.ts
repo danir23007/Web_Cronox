@@ -65,7 +65,7 @@ export class AdminFinanceService {
         result.recentOrders = [...result.recentOrders, ...partial.recentOrders].sort((a, b) => b.paidAt.getTime() - a.paidAt.getTime() || b.id - a.id).slice(0, 5);
       }
       const entries = query.currency === 'EUR' && (!query.source || ['all', 'points'].includes(query.source)) ? await tx.pointEntry.findMany({ where: { pointId: query.pointId,
-        occurredAt: { gte: madridMidnight(query.from), lt: madridMidnight(nextDate(query.to)) } }, select: { kind: true, occurredAt: true, lines: true, expenseCents: true } }) : [];
+        occurredAt: { gte: madridMidnight(query.from), lt: madridMidnight(nextDate(query.to)) } }, select: { kind: true, occurredAt: true, lines: true, expenseCents: true, after: true } }) : [];
       const external = calculatePoints(entries, query.from, query.to, query.aggregation);
       merge(result.totals, external.totals); external.buckets.forEach((bucket, i) => merge(result.buckets[i], bucket));
       for (const product of external.products) {

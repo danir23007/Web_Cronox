@@ -14,7 +14,7 @@ import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { AdminGuard } from '../../common/guards/admin.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { AdminPointsService } from './admin-points.service';
-import { ExpenseDto, PointDto, ReturnDto, SaleDto } from './point.dto';
+import { ExpenseDto, PointDto, ReturnDto, SaleDto, SaleDateDto } from './point.dto';
 
 @Controller('admin/sale-points')
 @UseGuards(JwtAuthGuard, AdminGuard)
@@ -75,6 +75,15 @@ export class AdminPointsController {
     @Body() dto: ReturnDto,
   ) {
     return this.service.refund(id, saleId, actor, key, dto);
+  }
+  @Post(':id/sales/:saleId/date') saleDate(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('saleId', ParseUUIDPipe) saleId: string,
+    @CurrentUser('id') actor: number,
+    @Headers('idempotency-key') key: string,
+    @Body() dto: SaleDateDto,
+  ) {
+    return this.service.changeSaleDate(id, saleId, actor, key, dto);
   }
   @Post(':id/expenses') expense(
     @Param('id', ParseUUIDPipe) id: string,

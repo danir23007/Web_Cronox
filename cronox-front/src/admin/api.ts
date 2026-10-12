@@ -1144,12 +1144,6 @@ import { loadCategoryPages } from './category-pagination';
       if (!media || (status !== 'low' && status !== 'out_of_stock')) return;
       const badge = document.createElement('span');
       badge.className = `product-last-units${status === 'out_of_stock' ? ' product-last-units--out' : ''}`;
-      if (status === 'low') {
-        const dot = document.createElement('span');
-        dot.className = 'product-last-units__dot';
-        dot.setAttribute('aria-hidden', 'true');
-        badge.appendChild(dot);
-      }
       badge.appendChild(document.createTextNode(status === 'out_of_stock' ? 'AGOTADO' : 'ÚLTIMAS UNIDADES'));
       media.appendChild(badge);
     },
@@ -1174,12 +1168,6 @@ import { loadCategoryPages } from './category-pagination';
       if (status === 'low' || status === 'out_of_stock') {
         const label = document.createElement('span');
         label.className = `stock-status stock-status--${status === 'low' ? 'low' : 'out'}`;
-        if (status === 'low') {
-          const dot = document.createElement('span');
-          dot.className = 'product-last-units__dot';
-          dot.setAttribute('aria-hidden', 'true');
-          label.appendChild(dot);
-        }
         label.appendChild(document.createTextNode(status === 'low' ? 'Últimas unidades' : 'Agotado'));
         row.appendChild(label);
       }

@@ -92,6 +92,7 @@ export type LedgerEntry = {
   occurredAt: Date;
   lines: unknown;
   expenseCents: number;
+  after?: unknown;
 };
 export function calculatePoints(
   entries: LedgerEntry[],
@@ -144,6 +145,9 @@ export function calculatePoints(
       target.fixedExpenseCents += entry.expenseCents;
       target.profitCents! -= entry.expenseCents;
       if (entry.kind === 'SALE') target.salesCount++;
+      const transfer = entry.after as { dateTransfer?: boolean; salesCountDelta?: number } | null;
+      if (entry.kind === 'CORRECTION' && transfer?.dateTransfer === true && [1, -1].includes(transfer.salesCountDelta!))
+        target.salesCount += transfer.salesCountDelta!;
     }
     for (const d of entry.lines as PointDelta[]) {
       if (!products.has(d.productId))

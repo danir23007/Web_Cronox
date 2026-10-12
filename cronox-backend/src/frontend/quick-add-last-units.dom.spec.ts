@@ -52,7 +52,7 @@ describe('Quick Add size messages and shared delivery', () => {
     expect(document.querySelectorAll('.cart-upsell__item')).toHaveLength(2);
     expect(document.querySelector('[data-upsell-product="out"]')).toBeNull();
     const warning = document.querySelector('.cart-upsell__last-units')!;
-    expect(warning.textContent).toBe(' · Últimas unidades');
+    expect(warning.textContent).toBe(' Últimas unidades');
     expect(warning.parentElement!.className).toBe('cart-upsell__price');
     expect(document.querySelectorAll('.cart-upsell__media .product-last-units, .cart-upsell__last-units .product-last-units__dot')).toHaveLength(0);
     // A newly received exhausted snapshot invalidates the recommendation render.

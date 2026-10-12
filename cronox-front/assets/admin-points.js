@@ -21,7 +21,7 @@
           style: "currency",
           currency: "EUR",
         }).format(value / 100);
-  const localNow = () =>
+  const localDateTime = (value) =>
     new Intl.DateTimeFormat("sv-SE", {
       timeZone: "Europe/Madrid",
       year: "numeric",
@@ -31,8 +31,9 @@
       minute: "2-digit",
       hourCycle: "h23",
     })
-      .format(new Date())
+      .format(new Date(value))
       .replace(" ", "T");
+  const localNow = () => localDateTime(new Date());
   const dateLabel = (value) =>
     new Date(value).toLocaleString("es-ES", { timeZone: "Europe/Madrid" });
   const numeric = (value) => {
@@ -269,6 +270,15 @@
       },
     );
     return form;
+  }
+  function editSaleDate(sale) {
+    editor('Editar fecha de venta',
+      input('occurredAt', 'Fecha de venta · Madrid', localDateTime(sale.soldAt), 'datetime-local', 'required') +
+      input('reason', 'Motivo del cambio de fecha', '', 'text', 'required maxlength="1000"') +
+      '<p>La venta se imputará a esta fecha en las estadísticas. Se conservarán sus importes, costes, comisiones y stock. Las correcciones y devoluciones conservarán sus fechas.</p>', {
+        path: `/${detail.point.id}/sales/${sale.id}/date`,
+        read: form => { const f = new FormData(form); return { occurredAt: f.get('occurredAt'), reason: f.get('reason'), revision: sale.revision }; },
+      });
   }
   function registerSale(sale) {
     const point = detail.point;
@@ -559,7 +569,7 @@
             money(l.commissionCents),
           ]),
         )}<p>${esc(s.state.note)} · ${esc(s.state.paymentMethod)} · Revisión ${s.revision}</p></details>`,
-        `${action("correct", "Corregir", `data-sale="${s.id}"`)} ${action("return", "Devolver", `data-sale="${s.id}" ${s.state.lines.some((l) => l.quantity > 0) ? "" : "disabled"}`)}`,
+        `${action("date", "Editar fecha", `data-sale="${s.id}"`)} ${action("correct", "Corregir", `data-sale="${s.id}"`)} ${action("return", "Devolver", `data-sale="${s.id}" ${s.state.lines.some((l) => l.quantity > 0) ? "" : "disabled"}`)}`,
       ]),
     )}</article><article class="finance-card"><h2>Historial de ventas, ajustes y gastos</h2>${table(
       ["Fecha efectiva · Madrid", "Concepto", "Importe / cambios", "Registro"],
@@ -588,7 +598,9 @@
         `<small>Admin #${e.actorId}<br>${esc(dateLabel(e.createdAt))}</small>${
           e.before
             ? `<details><summary>Valores anteriores</summary>${
-                e.before.lines
+                e.before.soldAt
+                  ? `<p>Fecha anterior: ${esc(dateLabel(e.before.soldAt))}<br>Fecha nueva: ${esc(dateLabel(e.after.soldAt))}</p>`
+                  : e.before.lines
                   ? table(
                       [
                         "Prenda",
@@ -705,6 +717,9 @@
         catch (e) { error.textContent = e.message; reactivate.disabled = false; reactivate.textContent = 'Reactivar'; }
       };
     }
+    root.querySelectorAll('[data-action=date]').forEach(b => {
+      b.onclick = () => editSaleDate(sales.find(s => s.id === b.dataset.sale));
+    });
     root
       .querySelectorAll("[data-action=correct]")
       .forEach(
