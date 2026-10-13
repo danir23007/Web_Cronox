@@ -5,6 +5,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { getNextSequentialMemberCode } from './member-code.util';
 import { normalizeEmail } from '../common/email';
 import { ensureAccountWelcome } from './account-welcome';
+import { validateAccountName } from '../common/account-name-policy';
 
 export type AuthUser = Omit<User, 'password'> & { hasPassword: boolean };
 export type AuthUserWithPassword = User;
@@ -43,6 +44,8 @@ export class UsersService {
     firstOrderDiscountCode?: string;
     firstOrderDiscountUsed?: boolean;
   }) {
+    validateAccountName(data.firstName, 'firstName');
+    validateAccountName(data.lastName, 'lastName');
     return this.prisma.$transaction(async (tx) => {
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${'newsletter:' + normalizeEmail(data.email)}))`;
       // Opt-in may have created a preregistration after register's initial read.
@@ -83,6 +86,10 @@ export class UsersService {
     id: number,
     update: { name?: string; firstName?: string; lastName?: string },
   ): Promise<SafeUser> {
+    const current = await this.findById(id);
+    if (!current) throw new NotFoundException('User not found');
+    validateAccountName(update.firstName, 'firstName', current.firstName);
+    validateAccountName(update.lastName, 'lastName', current.lastName);
     const data: Prisma.UserUpdateInput = {};
 
     // Nos aseguramos de que el usuario tenga memberCode
@@ -167,6 +174,8 @@ export class UsersService {
       lastName: string;
     },
   ) {
+    validateAccountName(data.firstName, 'firstName');
+    validateAccountName(data.lastName, 'lastName');
     return this.prisma.$transaction(async (tx) => {
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${'cronox:user-identity:' + id}))`;
       const existing = await tx.user.findUnique({ where: { id } });

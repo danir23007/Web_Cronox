@@ -18,7 +18,7 @@
     .topbar svg { width: 24px; height: 24px; }
   </style>
   <link rel="preload" as="image" href="https://frqlgocxnyppzdgxxjuq.supabase.co/storage/v1/object/public/Acreditation/Libro-antiguo.png" fetchpriority="high">
-  <link id="cronox-main-style" rel="stylesheet" href="assets/store.css?v=116">
+  <link id="cronox-main-style" rel="stylesheet" href="assets/store.css?v=117">
   <link rel="stylesheet" href="assets/quick-add.css?v=11">
   <style>
     .profile-account-stack { min-width: 0; }
@@ -29,6 +29,8 @@
     .profile-card { background: transparent; border: none; border-radius: 12px; padding: 20px; box-shadow: none; }
     .profile-card h2 { font-size: 1.25rem; margin: 0 0 12px; }
     .profile-card p.section-desc { margin: 0 0 16px; color: #9ea0a6; }
+    .profile-card .email-support-link { color: #fff; font-weight: 800; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+    .profile-card .email-support-link:focus-visible { outline: 2px solid #fff; outline-offset: 4px; border-radius: 2px; }
     .profile-form { display: grid; gap: 12px; }
     .profile-form .form-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(200px, 100%), 1fr)); gap: 12px; }
     .profile-form label { display: flex; flex-direction: column; gap: 6px; font-size: 0.95rem; color: #dfe1e6; }
@@ -182,6 +184,7 @@
       <section class="profile-section" data-profile-section="accreditation" aria-label="Acreditación">
         <div class="profile-card account-section--accreditation">
           <section class="crx-accreditation-stage accreditation-stage" aria-label="Escenario de acreditación CRONOX">
+            <div class="accreditation-book-frame">
             <div class="crx-accreditation-book accreditation-book">
               <img
                 class="accreditation-book-art"
@@ -195,6 +198,7 @@
                 <div class="accreditation-page page-left">
                   <div class="accreditation-page-content">
                     <div class="accreditation-top">
+                    <div class="accreditation-identity">
                     <div class="accreditation-top__left">
                       <div class="accreditation-symbol-wrap">
                         <div class="accreditation-symbol" data-accreditation-rings></div>
@@ -205,6 +209,7 @@
                       <p class="accreditation-name">—</p>
                       <p class="accreditation-id accreditation-id--code">ID: —</p>
                     </div>
+                  </div>
                   </div>
                   <div class="accreditation-promo">
                     <div class="accreditation-upgrade" data-circle4-cta hidden>
@@ -259,6 +264,7 @@
                 </div>
               </div>
             </div>
+            </div>
           </section>
         </div>
         <div class="profile-back-wrapper">
@@ -275,10 +281,10 @@
             <form id="accountForm" class="profile-form">
               <div class="form-row">
                 <label>Nombre
-                  <input id="firstName" name="firstName" type="text" autocomplete="given-name" placeholder="Tu nombre">
+                  <input id="firstName" maxlength="25" name="firstName" type="text" autocomplete="given-name" placeholder="Tu nombre">
                 </label>
                 <label>Apellido
-                  <input id="lastName" name="lastName" type="text" autocomplete="family-name" placeholder="Tu apellido">
+                  <input id="lastName" maxlength="30" name="lastName" type="text" autocomplete="family-name" placeholder="Tu apellido">
                 </label>
               </div>
               <label>Email
@@ -294,7 +300,7 @@
             <h2 id="email-change-title">Cambiar email</h2>
             <p class="section-desc">La solicitud caduca en una hora. Una nueva solicitud sustituye a la anterior.</p>
             <p class="section-desc">Primero autoriza el cambio desde tu email actual y después verifica el nuevo. No necesitas introducir tu contraseña. Tu email actual seguirá vigente hasta completar ambos pasos. Al finalizar tendrás que iniciar sesión de nuevo.</p>
-            <p class="section-desc">Si ya no tienes acceso a este correo electrónico, ponte en contacto con <a href="mailto:support@cronox.es">support@cronox.es</a> para solicitar ayuda con el cambio de email.</p>
+            <p class="section-desc">Si ya no tienes acceso a este correo electrónico, ponte en contacto con <a class="email-support-link" href="https://mail.google.com/mail/?view=cm&amp;fs=1&amp;to=support%40cronox.es" target="_blank" rel="noopener noreferrer">support@cronox.es</a> para solicitar ayuda con el cambio de email.</p>
             <form id="emailChangeForm" class="profile-form">
               <label>Nuevo email <input id="emailChangeAddress" type="email" autocomplete="email" maxlength="254" required></label>
               <div class="profile-actions"><button type="submit" class="btn-primary profile-save-btn">Solicitar cambio</button></div>
@@ -476,13 +482,14 @@
   <script src="assets/api.js?v=20"></script>
   <script src="assets/responsive-images.js?v=4"></script>
   <script src="/assets/product-delivery.js?v=5" defer></script>
-  <script src="assets/app.js?v=92" defer></script>
+  <script src="assets/app.js?v=93" defer></script>
   <script src="assets/media-framing-geometry.js?v=6" defer></script>
   <script src="assets/product-card-framing.js?v=1" defer></script>
   <script src="assets/products.js?v=72" defer></script>
   <script src="assets/favorites-toggle.js?v=3" defer></script>
   <script src="assets/user-identity.js?v=1" defer></script>
-  <script src="assets/profile.js?v=22" defer></script>
+  <script src="assets/accreditation-layout.js?v=1" defer></script>
+  <script src="assets/profile.js?v=23" defer></script>
 
   <style>
     /* Profile overrides */
@@ -700,7 +707,7 @@
     }
 
     @media (max-width: 640px) {
-      .accreditation-circle-btn {
+      .circle-upgrade-submit {
         width: 100%;
       }
 

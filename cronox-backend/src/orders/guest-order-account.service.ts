@@ -3,6 +3,7 @@ import { Prisma, Role, UserAccountState } from '@prisma/client';
 import { normalizeCountry } from '../common/country';
 import { normalizeEmail } from '../common/email';
 import { ensureAccountWelcome } from '../users/account-welcome';
+import { ACCOUNT_FIRST_NAME_MAX, ACCOUNT_LAST_NAME_MAX } from '../common/account-name-policy';
 
 type CompletedCheckoutIdentity = {
   userId: number | null;
@@ -52,6 +53,11 @@ export class GuestOrderAccountService {
       .filter(Boolean)
       .join(' ')
       .trim();
+    // A postal addressee may be longer than an account name. Preserve that full
+    // name and the address; do not truncate it or fail an already paid order.
+    // These optional account fields can be set later within the new limits.
+    const accountNamesFit = (names?.firstName?.length ?? 0) <= ACCOUNT_FIRST_NAME_MAX &&
+      (names?.lastName?.length ?? 0) <= ACCOUNT_LAST_NAME_MAX;
 
     // User.email is unique. If another paid checkout creates the same account
     // concurrently, Prisma raises P2002 and OrdersService retries the complete
@@ -63,8 +69,8 @@ export class GuestOrderAccountService {
         role: Role.USER,
         accountState: UserAccountState.PENDING_PASSWORD,
         name: fullName || null,
-        firstName: names?.firstName ?? null,
-        lastName: names?.lastName ?? null,
+        firstName: accountNamesFit ? names?.firstName ?? null : null,
+        lastName: accountNamesFit ? names?.lastName ?? null : null,
       },
       select: { id: true },
     });

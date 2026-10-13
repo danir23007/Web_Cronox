@@ -116,15 +116,16 @@ test('keeps the complete book, page content and retried QR inside narrow viewpor
   expect(layout.art.right).toBeLessThanOrEqual(layout.viewportWidth);
   expect(layout.book.width / (layout.book.bottom - layout.book.top)).toBeCloseTo(1.36, 1);
   const [leftPage, rightPage] = layout.pages;
-  expect(layout.leftTop.top - leftPage.rect.top).toBeGreaterThanOrEqual(5);
-  expect(layout.qr.left - leftPage.rect.left).toBeGreaterThanOrEqual(4);
-  expect(leftPage.rect.right - layout.qr.right).toBeGreaterThanOrEqual(4);
-  expect(leftPage.rect.bottom - layout.qr.bottom).toBeGreaterThanOrEqual(5);
-  expect(layout.qr.width).toBeGreaterThanOrEqual(testInfo.project.name === 'chromium-desktop' ? 105 : 66);
+  const scale = layout.book.width / 1100;
+  expect(layout.leftTop.top - leftPage.rect.top).toBeGreaterThanOrEqual(27 * scale);
+  expect(layout.qr.left - leftPage.rect.left).toBeGreaterThanOrEqual(27 * scale);
+  expect(leftPage.rect.right - layout.qr.right).toBeGreaterThanOrEqual(27 * scale);
+  expect(leftPage.rect.bottom - layout.qr.bottom).toBeGreaterThanOrEqual(27 * scale);
+  expect(layout.qr.width).toBeCloseTo(170 * scale, 0);
   const rightTopMargin = layout.rightSections.top - rightPage.rect.top;
   const rightBottomMargin = rightPage.rect.bottom - layout.rightSections.bottom;
-  expect(rightTopMargin).toBeGreaterThanOrEqual(4);
-  expect(rightBottomMargin).toBeGreaterThanOrEqual(4);
+  expect(rightTopMargin).toBeGreaterThanOrEqual(27 * scale);
+  expect(rightBottomMargin).toBeGreaterThanOrEqual(27 * scale);
   if (testInfo.project.name !== 'chromium-desktop') {
     expect(Math.abs(rightTopMargin - (layout.leftTop.top - leftPage.rect.top))).toBeLessThanOrEqual(3);
   }
@@ -141,4 +142,30 @@ test('keeps the complete book, page content and retried QR inside narrow viewpor
   await expect(page.locator('.accreditation-book-art')).toBeVisible();
   await expect(page.locator('#cronox-member-qr')).toBeVisible();
   await expect(page.locator('#cronox-member-qr')).toHaveJSProperty('naturalWidth', 1);
+
+  // Historical accounts are read-only data: render the complete identity as
+  // one fitted group, then keep that base composition across viewport changes.
+  await page.locator('.accreditation-name').evaluate(element => {
+    element.textContent = 'W'.repeat(120) + '\n' + 'W'.repeat(120);
+  });
+  await expect.poll(() => page.locator('.accreditation-identity').evaluate(element =>
+    Number(element.style.getPropertyValue('--accreditation-identity-scale')))).toBeLessThan(1);
+  const baseIdentity = await page.locator('.accreditation-identity').evaluate(element =>
+    element.style.getPropertyValue('--accreditation-identity-scale'));
+  for (const viewport of [{ width: 561, height: 400 }, { width: 820, height: 320 }, { width: 390, height: 844 }]) {
+    await page.setViewportSize(viewport);
+    await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+    expect(await page.locator('.accreditation-identity').evaluate(element =>
+      element.style.getPropertyValue('--accreditation-identity-scale'))).toBe(baseIdentity);
+    await expect(page.locator('.accreditation-name')).toHaveText('W'.repeat(120) + '\n' + 'W'.repeat(120));
+    const bounds = await page.evaluate(() => {
+      const left = document.querySelector('.page-left'), p = left.getBoundingClientRect();
+      const name = left.querySelector('.accreditation-name').getBoundingClientRect();
+      const qr = left.querySelector('#cronox-member-qr').getBoundingClientRect();
+      return { contained: name.top >= p.top && name.bottom <= qr.top && qr.bottom <= p.bottom,
+        height: left.clientHeight, scroll: left.scrollHeight };
+    });
+    expect(bounds.contained).toBe(true);
+    expect(bounds.scroll).toBeLessThanOrEqual(bounds.height + 1);
+  }
 });

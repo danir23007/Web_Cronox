@@ -8,6 +8,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { createHash, randomUUID } from 'crypto';
+import { ACCOUNT_FIRST_NAME_MAX, ACCOUNT_LAST_NAME_MAX } from '../common/account-name-policy';
 import {
   CustomerActivityEventType,
   OrderStatus,
@@ -3181,6 +3182,10 @@ export class OrdersService {
 
     const firstName = primary?.firstName ?? fallback?.firstName;
     const lastName = primary?.lastName ?? fallback?.lastName;
+    // Postal names remain on the order/address. Do not silently truncate them
+    // into new account fields, or repopulate fields above the account limits.
+    if ((firstName?.length ?? 0) > ACCOUNT_FIRST_NAME_MAX ||
+      (lastName?.length ?? 0) > ACCOUNT_LAST_NAME_MAX) return;
 
     const data: Prisma.UserUpdateInput = {};
 

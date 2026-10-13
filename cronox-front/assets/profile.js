@@ -451,6 +451,10 @@
     const { firstName, lastName, email } = user;
     if ($('firstName')) $('firstName').value = firstName || '';
     if ($('lastName')) $('lastName').value = lastName || '';
+    // Keep historical names intact. Changes still use 25/30 in the submit
+    // validation; maxlength must not prevent retaining an existing long value.
+    if ($('firstName')) $('firstName').maxLength = Math.max(25, (firstName || '').length);
+    if ($('lastName')) $('lastName').maxLength = Math.max(30, (lastName || '').length);
     if ($('email')) $('email').value = email || '';
   };
 
@@ -1197,6 +1201,13 @@
       if (!api.updateMe) return;
       const firstName = optionalValue('firstName');
       const lastName = optionalValue('lastName');
+      const previousFirst = window.CRONOX_USER?.firstName || undefined;
+      const previousLast = window.CRONOX_USER?.lastName || undefined;
+      if ((firstName !== previousFirst && firstName?.length > 25) ||
+        (lastName !== previousLast && lastName?.length > 30)) {
+        showProfileMessage('El nombre admite como máximo 25 caracteres y el apellido 30.', 'error');
+        return;
+      }
 
       const invalidName =
         (firstName && (!NAME_REGEX.test(firstName) || /\d/.test(firstName))) ||
@@ -1208,8 +1219,8 @@
       }
 
       const payload = {
-        firstName,
-        lastName,
+        ...(firstName !== previousFirst ? { firstName } : {}),
+        ...(lastName !== previousLast ? { lastName } : {}),
       };
       try {
         const updated = await api.updateMe(payload);

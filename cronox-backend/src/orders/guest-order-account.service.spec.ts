@@ -19,6 +19,18 @@ describe('GuestOrderAccountService', () => {
     };
   });
 
+  it('preserves a long postal addressee without storing over-limit new account fields or touching existing accounts', async () => {
+    tx.user.findFirst.mockResolvedValue(null);
+    tx.user.create.mockResolvedValue({ id: 72 });
+    const firstName = 'A'.repeat(26), lastName = 'B'.repeat(31);
+    await service.resolveUserForCompletedOrder(tx, { userId: null, customerEmail: 'long@local.test',
+      shippingAddr: { firstName, lastName, name: `${firstName} ${lastName}`, line1: 'Calle 1', city: 'Madrid', zip: '28001', country: 'ES' }, billingAddr: null });
+    expect(tx.user.create).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({
+      firstName: null, lastName: null, name: `${firstName} ${lastName}`,
+    }) }));
+    expect(tx.address.create).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ name: `${firstName} ${lastName}` }) }));
+  });
+
   it('links a mixed-case guest email to the existing User without changing profile or addresses', async () => {
     tx.user.findFirst.mockResolvedValue({ id: 41 });
 

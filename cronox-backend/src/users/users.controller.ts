@@ -8,7 +8,7 @@ import {
 } from '@nestjs/common';
 import { Role } from '@prisma/client';
 import { Transform, TransformFnParams } from 'class-transformer';
-import { IsOptional, IsString, Length } from 'class-validator';
+import { IsOptional, IsString, Length, MinLength } from 'class-validator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { Roles } from '../common/roles.decorator';
 import { RolesGuard } from '../common/guards/roles.guard';
@@ -27,13 +27,13 @@ class UpdateMeDto {
 
   @IsOptional()
   @IsString()
-  @Length(2, 80)
+  @MinLength(2)
   @Transform(trim)
   firstName?: string;
 
   @IsOptional()
   @IsString()
-  @Length(2, 80)
+  @MinLength(2)
   @Transform(trim)
   lastName?: string;
 }

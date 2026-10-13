@@ -9,7 +9,8 @@ const { spawnSync } = require('node:child_process'),
 const backend = path.resolve(__dirname, '..'),
   root = path.resolve(backend, '..'),
   sessionReview = process.argv.includes('--sessions'),
-  port = sessionReview ? 43126 : 43125;
+  bookReview = process.argv.includes('--book'),
+  port = bookReview ? 43127 : sessionReview ? 43126 : 43125;
 const name = 'cronox_password_test_' + randomUUID().replace(/-/g, '');
 (async () => {
   const env = require('./start-local.cjs').loadLocalEnvironment(),
@@ -211,6 +212,10 @@ const name = 'cronox_password_test_' + randomUUID().replace(/-/g, '');
           billingAddr: null,
         }),
     );
+    if (bookReview) await db.user.update({
+      where: { email: 'normal@password.test' },
+      data: { firstName: 'W'.repeat(120), lastName: 'W'.repeat(120), circleLevel: 3 },
+    }); // Historical fixture in this disposable database only; never a repair.
     for (const kind of ['normal', 'newsletter', 'preregister', 'pending'])
       fixtures.set(
         kind,

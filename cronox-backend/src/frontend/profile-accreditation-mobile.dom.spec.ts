@@ -3,7 +3,8 @@ import path from 'node:path';
 import { JSDOM } from 'jsdom';
 
 const frontendRoot = path.resolve(__dirname, '../../../cronox-front');
-const readFrontend = (file: string) => readFileSync(path.join(frontendRoot, file), 'utf8');
+const readFrontend = (file: string) =>
+  readFileSync(path.join(frontendRoot, file), 'utf8');
 
 describe('profile accreditation image and mobile layout', () => {
   const html = readFrontend('profile.html');
@@ -12,7 +13,9 @@ describe('profile accreditation image and mobile layout', () => {
 
   it('loads the book as a real eager image that participates in readiness', () => {
     const document = new JSDOM(html).window.document;
-    const art = document.querySelector<HTMLImageElement>('.accreditation-book-art');
+    const art = document.querySelector<HTMLImageElement>(
+      '.accreditation-book-art',
+    );
 
     expect(art?.src).toContain('/Acreditation/Libro-antiguo.png');
     expect(art?.getAttribute('fetchpriority')).toBe('high');
@@ -23,14 +26,96 @@ describe('profile accreditation image and mobile layout', () => {
     expect(css).not.toMatch(/\.accreditation-book::before\s*\{/);
   });
 
-  it('uses centered, container-relative pages and valid responsive QR bounds', () => {
+  it('uses a fixed design plane with proportionally scaled artwork, text and hit areas', () => {
     const document = new JSDOM(html).window.document;
     expect(document.querySelector('[data-acc-stat="products"]')).not.toBeNull();
     expect(script).toContain('stats.productosDiferentes');
-    expect(css).toMatch(/\.accreditation-pages\s*\{[^}]*left:\s*50%;[^}]*width:\s*100%;/s);
-    expect(css).toContain('width: clamp(105px, 14vw, 170px);');
-    expect(css).toMatch(/@media \(max-width: 560px\)[\s\S]*?#cronox-member-qr\s*\{[^}]*width:\s*max\(66px, 15\.45cqw\);/);
+    expect(css).toMatch(
+      /\.accreditation-pages\s*\{[^}]*left:\s*50%;[^}]*width:\s*100%;/s,
+    );
+    expect(
+      document.querySelector('.accreditation-book-frame > .accreditation-book'),
+    ).not.toBeNull();
+    const bookRules = css.slice(
+      css.indexOf('.account-section--accreditation {'),
+      css.indexOf('/* ===== Newsletter Modal ===== */'),
+    );
+    expect(bookRules).toContain('--accreditation-design-width: 1100;');
+    expect(bookRules).toContain(
+      'transform: scale(var(--accreditation-scale, 1));',
+    );
+    expect(bookRules).toContain('width: 170px;');
+    expect(bookRules).not.toMatch(
+      /(?:font-size|gap|padding|width):\s*(?:clamp\(|max\(66px|[^;]*cqw)/,
+    );
+    expect(bookRules).not.toContain('overflow: hidden;');
     expect(css).not.toContain('clamp(170px, 34vw, 105px)');
     expect(css).not.toContain('clamp(15px, 3vw, 10px)');
+  });
+
+  it('reserves the scaled dimensions and refits after resize, visibility, fonts and images without cancelling pinch zoom', () => {
+    const layout = readFrontend('assets/accreditation-layout.js');
+    const dom = new JSDOM(
+      '<div class="topbar"></div><div class="accreditation-stage"><div class="accreditation-book-frame"><div class="accreditation-book" style="--accreditation-design-width:1100;--accreditation-design-ratio:1.36"><img></div></div></div>',
+      { runScripts: 'outside-only' },
+    );
+    try {
+      const win = dom.window;
+      const stage = win.document.querySelector<HTMLElement>(
+        '.accreditation-stage',
+      )!;
+      const frame = win.document.querySelector<HTMLElement>(
+        '.accreditation-book-frame',
+      )!;
+      const book = win.document.querySelector<HTMLElement>(
+        '.accreditation-book',
+      )!;
+      stage.style.padding = '28px 0';
+      let available = 550;
+      Object.defineProperty(stage, 'clientWidth', { get: () => available });
+      Object.defineProperty(win, 'innerHeight', {
+        writable: true,
+        value: 2000,
+      });
+      const jobs: FrameRequestCallback[] = [];
+      win.requestAnimationFrame = (callback) => {
+        jobs.push(callback);
+        return jobs.length;
+      };
+      let observeResize: ResizeObserverCallback | undefined;
+      Object.assign(win, {
+        ResizeObserver: class {
+          constructor(callback: ResizeObserverCallback) {
+            observeResize = callback;
+          }
+          observe() {}
+        },
+      });
+      win.eval(layout);
+      jobs.shift()!(0);
+      expect(Number(book.style.getPropertyValue('--accreditation-scale'))).toBe(
+        0.5,
+      );
+      expect(parseFloat(frame.style.width)).toBeCloseTo(550);
+      expect(parseFloat(frame.style.height)).toBeCloseTo(550 / 1.36);
+      available = 0;
+      observeResize!([], {} as ResizeObserver);
+      jobs.shift()!(0);
+      expect(parseFloat(frame.style.width)).toBe(550);
+      available = 1100;
+      Object.defineProperty(win, 'innerHeight', { value: 400 });
+      win.dispatchEvent(new win.Event('resize'));
+      win.document.querySelector('img')!.dispatchEvent(new win.Event('load'));
+      expect(jobs).toHaveLength(1); // all resize/load signals coalesce
+      jobs.shift()!(0);
+      expect(parseFloat(frame.style.height)).toBeCloseTo(320);
+      expect(
+        parseFloat(frame.style.width) / parseFloat(frame.style.height),
+      ).toBeCloseTo(1.36);
+      expect(jobs).toHaveLength(0);
+      expect(layout).not.toContain('visualViewport.');
+    } finally {
+      dom.window.close();
+    }
   });
 });

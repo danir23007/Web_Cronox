@@ -1,5 +1,5 @@
 import { Transform, TransformFnParams } from 'class-transformer';
-import { IsEmail, IsOptional, IsString, Length, Matches } from 'class-validator';
+import { IsEmail, IsOptional, IsString, MinLength, Matches } from 'class-validator';
 
 const trim = ({ value }: TransformFnParams) =>
   typeof value === 'string' ? value.trim() : value;
@@ -9,14 +9,15 @@ const PHONE_REGEX = /^[\d+\s-]+$/;
 export class UpdateMeDto {
   @IsOptional()
   @IsString()
-  @Length(1, 80)
+  // Maximum is state-aware in MeService, so unchanged legacy names survive.
+  @MinLength(1)
   @Matches(NAME_REGEX, { message: 'El nombre solo puede contener letras y espacios' })
   @Transform(trim)
   firstName?: string;
 
   @IsOptional()
   @IsString()
-  @Length(1, 80)
+  @MinLength(1)
   @Matches(NAME_REGEX, { message: 'El apellido solo puede contener letras y espacios' })
   @Transform(trim)
   lastName?: string;

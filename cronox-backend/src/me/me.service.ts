@@ -16,6 +16,7 @@ import { normalizeEmail } from '../common/email';
 import { UpdateMeDto } from './dto/update-me.dto';
 import { UpsertAddressDto } from './dto/upsert-address.dto';
 import { serializableTransaction } from '../prisma/serializable-transaction';
+import { validateAccountName } from '../common/account-name-policy';
 import { ADDRESS_LIMIT } from '../addresses/addresses.service';
 
 export type MeProfile = {
@@ -84,6 +85,9 @@ export class MeService {
       throw new NotFoundException('User not found');
     }
 
+    validateAccountName(dto.firstName, 'firstName', user.firstName);
+    validateAccountName(dto.lastName, 'lastName', user.lastName);
+
     const ensureValidName = (value?: string | null) => {
       if (value == null || value === '') return;
       if (!NAME_REGEX.test(value)) {
@@ -123,6 +127,8 @@ export class MeService {
     try {
       const updated = await serializableTransaction(this.prisma, async tx => {
         const current = await tx.user.findUniqueOrThrow({ where: { id: userId } });
+        validateAccountName(dto.firstName, 'firstName', current.firstName);
+        validateAccountName(dto.lastName, 'lastName', current.lastName);
         const changed = await tx.user.update({ where: { id: userId }, data });
         if (changed.email !== current.email) {
           // Old mailbox links must not retain authority over the renamed account.

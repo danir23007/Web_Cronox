@@ -2467,6 +2467,12 @@ window.CRONOX_AUTH_STATE = window.CRONOX_USER ? 'authenticated' : 'unknown';
       return;
     }
 
+    if (firstName.length > 25 || lastName.length > 30) {
+      registerErrorMessage = 'El nombre admite como máximo 25 caracteres y el apellido 30.';
+      setAuthMessage(registerErrorMessage, 'error');
+      return;
+    }
+
     try {
       registerErrorMessage = '';
       setAuthMessage('Creando cuenta...');
