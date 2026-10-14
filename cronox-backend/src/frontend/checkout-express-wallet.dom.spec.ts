@@ -28,7 +28,9 @@ async function setup() {
   const elements = { create: jest.fn((type: string, _options?: unknown) => type === 'payment' ? payment : express),
     submit: jest.fn().mockResolvedValue({}), update: jest.fn((_options: { amount: number }) => queueMicrotask(() => updateDone?.())),
     on: (name: string, fn: () => void) => { if (name === 'update-end') updateDone = fn; }, off: jest.fn() };
-  const stripe = { elements: jest.fn(() => elements), confirmPayment: jest.fn().mockResolvedValue({ error: { type: 'card_error', message: 'Declined' } }) };
+  const stripe = { elements: jest.fn(() => elements), confirmPayment: jest.fn().mockResolvedValue({ error: { type: 'card_error', message: 'Declined' } }),
+    retrievePaymentIntent: jest.fn().mockResolvedValue({ paymentIntent: { id: 'pi_test', amount: 1295, currency: 'eur', status: 'requires_payment_method', payment_method_types: ['card','paypal'] } }),
+    confirmPayPalPayment: jest.fn().mockResolvedValue({ error: { type: 'invalid_request_error', message: 'Autorización cancelada' } }) };
   w.Stripe = () => stripe;
   w.fetch = jest.fn(async (url: string, options?: any) => {
     const rate = options?.body ? JSON.parse(options.body).shippingMethod : new URL(url, 'https://example.test').searchParams.get('shippingMethod');
@@ -44,7 +46,120 @@ async function setup() {
 const address = { country: 'ES', postal_code: '28001', city: 'Madrid', state: 'Madrid', line1: 'Calle ficticia 1', line2: '' };
 const details = (name = 'Prueba Sandbox') => ({ billingDetails: { email: 'wallet@example.test' }, shippingAddress: { name, address }, shippingRate: { id: 'STANDARD' }, paymentFailed: jest.fn() });
 
+async function fillForm(w: any) {
+  const fields = { firstName:'Prueba', lastName:'Sandbox', address:'Calle ficticia 1', city:'Madrid', state:'Madrid', zip:'28001', country:'España' };
+  for (const [name,value] of Object.entries(fields)) w.document.querySelector(`#shipping-form [name="${name}"]`).value=value;
+  const email=w.document.querySelector('#checkout-guest-email');
+  email.value='form@example.test'; email.dispatchEvent(new w.Event('change',{bubbles:true}));
+  await flush(); await flush();
+}
+
+describe('PayPal form channel', () => {
+  it('blocks the lower form while express confirmation is pending and restores controls after failure', async () => {
+    const {dom,w,stripe,handlers}=await setup();
+    try {
+      let complete!: (result:any)=>void;
+      stripe.confirmPayment.mockImplementationOnce(()=>new Promise(resolve=>{complete=resolve;}));
+      handlers.click({resolve:jest.fn()}); handlers.confirm(details()); await flush();
+      expect(stripe.confirmPayment).toHaveBeenCalledTimes(1);
+      const radio=w.document.querySelector('input[value="paypal"][name="payment-channel"]');
+      expect(radio.disabled).toBe(true);
+      radio.checked=true; radio.dispatchEvent(new w.Event('change',{bubbles:true}));
+      expect(radio.checked).toBe(false);
+      w.document.querySelector('#pay-button').dispatchEvent(new w.Event('click'));
+      expect(stripe.confirmPayPalPayment).not.toHaveBeenCalled();
+      complete({error:{type:'card_error',message:'Cancelled'}}); await flush();
+      expect(radio.disabled).toBe(false);
+    } finally {dom.window.close();}
+  });
+
+  it('removes the external PayPal choice when Stripe withdraws availability, preserving the mounted card form', async () => {
+    const {dom,w,handlers,payment}=await setup();
+    try {
+      w.document.querySelector('input[value="paypal"][name="payment-channel"]').click();
+      handlers.availablepaymentmethodschange({paymentMethods:{googlePay:true,paypal:false}});
+      expect(w.document.querySelector('#payment-paypal-choice').hidden).toBe(true);
+      expect(w.document.querySelector('#payment-element').hidden).toBe(false);
+      expect(payment.mount).toHaveBeenCalledTimes(1);
+    } finally {dom.window.close();}
+  });
+
+  it('selects PayPal without validating card fields, retries cancellation on the same intent, and shares the express lock', async () => {
+    const {dom,w,stripe,elements,handlers,express,payment}=await setup();
+    try {
+      const radio=w.document.querySelector('input[value="paypal"][name="payment-channel"]');
+      radio.click();
+      expect(w.document.querySelector('#pay-button').disabled).toBe(true);
+      expect(w.fetch).not.toHaveBeenCalled();
+      await fillForm(w);
+      expect(w.document.querySelector('#pay-button').disabled).toBe(false);
+      let complete!: (result:any)=>void;
+      stripe.confirmPayPalPayment.mockImplementationOnce(()=>new Promise(resolve=>{complete=resolve;}));
+      w.document.querySelector('#pay-button').click(); await flush();
+      expect(stripe.confirmPayPalPayment).toHaveBeenCalledTimes(1);
+      expect(stripe.confirmPayPalPayment).toHaveBeenLastCalledWith('pi_test_secret',expect.objectContaining({payment_method:{billing_details:{name:'Prueba Sandbox',email:'form@example.test'}}}));
+      expect(elements.submit).not.toHaveBeenCalled(); expect(stripe.confirmPayment).not.toHaveBeenCalled();
+      w.document.querySelector('#pay-button').dispatchEvent(new w.Event('click'));
+      const resolve=jest.fn(),reject=jest.fn(); handlers.click({resolve,reject});
+      expect(reject).toHaveBeenCalled(); expect(resolve).not.toHaveBeenCalled();
+      expect(w.document.querySelector('#checkout-guest-email').disabled).toBe(true);
+      complete({error:{message:'Autorización cancelada'}}); await flush();
+      expect(w.document.querySelector('#checkout-guest-email').disabled).toBe(false);
+      expect(w.document.querySelector('#pay-button').disabled).toBe(false);
+      w.document.querySelector('#pay-button').click(); await flush();
+      expect(stripe.confirmPayPalPayment).toHaveBeenCalledTimes(2);
+      expect(stripe.confirmPayPalPayment.mock.calls.every(call=>call[0]==='pi_test_secret')).toBe(true);
+      w.document.querySelector('input[value="elements"][name="payment-channel"]').click();
+      expect(w.document.querySelector('#payment-element').hidden).toBe(false);
+      expect(payment.mount).toHaveBeenCalledTimes(1); expect(express.mount).toHaveBeenCalledTimes(1);
+    } finally {dom.window.close();}
+  });
+
+  it.each(['amount','method','processing','stock','stale'])('does not confirm a %s mismatch', async reason => {
+    const {dom,w,stripe}=await setup();
+    try {
+      w.document.querySelector('input[value="paypal"][name="payment-channel"]').click();
+      await fillForm(w);
+      if(reason==='stock') w.fetch.mockResolvedValue({ok:false,status:409,json:async()=>({message:'INSUFFICIENT_STOCK'})});
+      else stripe.retrievePaymentIntent.mockImplementation(async()=>{
+        if(reason==='stale') {
+          const email=w.document.querySelector('#checkout-guest-email'); email.value='changed@example.test'; email.dispatchEvent(new w.Event('input',{bubbles:true}));
+        }
+        return {paymentIntent:{id:'pi_test',amount:reason==='amount'?1495:1295,currency:'eur',status:reason==='processing'?'processing':'requires_payment_method',payment_method_types:reason==='method'?['card']:['card','paypal']}};
+      });
+      w.document.querySelector('#pay-button').click(); await flush();
+      expect(stripe.confirmPayPalPayment).not.toHaveBeenCalled();
+      expect(w.document.querySelector('#payment-error').textContent).not.toBe('');
+    } finally {dom.window.close();}
+  });
+});
+
 describe('Express wallets with an initially empty form', () => {
+  it.each([
+    { applePay: false, googlePay: true, paypal: true },
+    { applePay: true, googlePay: true, paypal: true },
+  ])('keeps one mounted element when availability changes: %j', async availablePaymentMethods => {
+    const { dom, w, elements, handlers, express } = await setup();
+    try {
+      const region = w.document.querySelector('#express-checkout-region');
+      handlers.ready({ availablePaymentMethods });
+      expect(region.hidden).toBe(false);
+      expect(JSON.parse(region.dataset.availablePaymentMethods)).toEqual(availablePaymentMethods);
+      expect(elements.create.mock.calls.filter(([type]) => type === 'expressCheckout')).toHaveLength(1);
+      expect(express.mount).toHaveBeenCalledTimes(1);
+      expect(elements.create.mock.calls.find(([type]) => type === 'expressCheckout')?.[1]).toEqual(expect.objectContaining({
+        paymentMethodOrder: ['apple_pay', 'google_pay', 'paypal'],
+        buttonType: { applePay: 'plain', googlePay: 'plain', paypal: 'paypal' },
+        layout: { maxColumns: 2, maxRows: 0, overflow: 'never' },
+      }));
+      handlers.availablepaymentmethodschange({ paymentMethods: {} });
+      expect(region.hidden).toBe(true);
+      handlers.availablepaymentmethodschange({ paymentMethods: availablePaymentMethods });
+      expect(region.hidden).toBe(false);
+      expect(express.mount).toHaveBeenCalledTimes(1);
+    } finally { dom.window.close(); }
+  });
+
   it.each(['paypal', 'google_pay'])('opens %s, cancels and retries without creating an intent; collects complete wallet details before server preparation', async method => {
     const { dom, w, stripe, elements, handlers, express, payment } = await setup();
     try {

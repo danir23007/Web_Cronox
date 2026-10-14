@@ -549,7 +549,7 @@ describe('focused storefront refinement acceptance matrix', () => {
 
   it('59. preserves the current checkout brand spacing and alignment', () => {
     const brandbarRule = cssRule(checkoutStyles, '.checkout-brandbar');
-    expect(brandbarRule).toContain('margin-bottom: 88px');
+    expect(brandbarRule).toContain('margin-bottom: 20px');
     expect(brandbarRule).toContain('justify-content: flex-end');
     expect(cssRule(checkoutStyles, '.checkout-brand')).toContain('left: 50%');
   });
@@ -753,12 +753,12 @@ describe('focused storefront refinement acceptance matrix', () => {
   });
 
   it('71. blocks duplicate Express Checkout confirmation attempts', () => {
-    expect(checkoutScript).toContain('let expressPaymentInFlight = false');
+    expect(checkoutScript).toContain('let paymentInFlight = false');
     expect(checkoutScript).toMatch(
-      /confirmExpressCheckoutPayment[\s\S]*expressPaymentInFlight[\s\S]*expressPaymentInFlight = true;[\s\S]*confirmExpressPayment/,
+      /confirmExpressCheckoutPayment[\s\S]*paymentInFlight[\s\S]*setConfirmationInFlight\(true\);[\s\S]*confirmExpressPayment/,
     );
     expect(checkoutScript).toContain(
-      'if (!result.attempted || result.error) expressPaymentInFlight = false',
+      'if (!result.attempted || result.error) setConfirmationInFlight(false)',
     );
   });
 

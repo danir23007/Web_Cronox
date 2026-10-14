@@ -54,7 +54,7 @@
     .checkout-brandbar svg { width: 24px; height: 24px; }
   </style>
   <link id="cronox-main-style" rel="stylesheet" href="assets/store.css?v=116">
-  <link rel="stylesheet" href="assets/checkout.css?v=26" />
+  <link rel="stylesheet" href="assets/checkout.css?v=28" />
   <noscript><style>#preloader{display:none!important}.checkout-shell{visibility:visible!important}body.page-checkout{overflow:auto!important}</style></noscript>
   <link rel="icon" type="image/png" href="/favicon.png?v=4">
   <link rel="shortcut icon" type="image/png" href="/favicon.png?v=4">
@@ -235,7 +235,19 @@
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><rect x="5" y="10" width="14" height="11" rx="2"></rect><path d="M8 10V7a4 4 0 0 1 8 0v3"></path></svg>
             Todas las transacciones son seguras y están encriptadas.
           </p>
-          <div id="payment-element" class="payment-element"></div>
+          <fieldset class="checkout-payment-choices">
+            <legend class="checkout-visually-hidden">Selecciona cómo pagar</legend>
+            <label id="payment-elements-choice" class="checkout-payment-choice" hidden>
+              <input type="radio" name="payment-channel" value="elements" checked aria-controls="payment-element">
+              <span>Tarjeta y otros métodos</span>
+            </label>
+            <div id="payment-element" class="payment-element"></div>
+            <label id="payment-paypal-choice" class="checkout-payment-choice" hidden>
+              <input type="radio" name="payment-channel" value="paypal" aria-controls="payment-paypal-description">
+              <span>PayPal</span>
+            </label>
+            <p id="payment-paypal-description" class="checkout-paypal-description" hidden>Continuarás en PayPal para autorizar el importe indicado. Utilizaremos los datos de contacto y envío de este formulario.</p>
+          </fieldset>
           <details id="bank-transfer-option" class="checkout-bank-transfer" hidden>
             <summary>Transferencia bancaria</summary>
             <p>Recibirás un IBAN y una referencia de Stripe. Reservaremos tus productos durante 72 horas. El pedido se confirmará cuando llegue el importe completo.</p>
@@ -338,7 +350,7 @@
   <script src="/assets/product-delivery.js?v=5" defer></script>
   <script src="assets/app.js?v=92"></script>
   <script src="assets/checkout-lifecycle.js?v=9"></script>
-  <script src="assets/checkout.js?v=28"></script>
+  <script src="assets/checkout.js?v=30"></script>
   <script src="assets/checkout-bank-transfer.js?v=1"></script>
 </body>
 </html>

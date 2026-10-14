@@ -66,6 +66,7 @@
   const setUiState = ({ eyebrow, title, message }) => {
     if (eyebrowEl && typeof eyebrow === 'string') eyebrowEl.textContent = eyebrow;
     if (titleEl && typeof title === 'string') titleEl.textContent = title;
+    if (typeof title === 'string') document.title = `${title} — CRONOX`;
     if (messageEl && typeof message === 'string') messageEl.textContent = message;
   };
 
@@ -188,7 +189,26 @@
 
   const initConfirmedCartCleanup = async () => {
     const redirectStatus = (params.get('redirect_status') || '').toLowerCase();
-    if (redirectStatus && redirectStatus !== 'succeeded') return;
+    if (redirectStatus && redirectStatus !== 'succeeded') {
+      // A cancelled provider redirect is not proof of payment or of failure.
+      // Prefer the verified backend if a webhook won the race with the redirect.
+      const status = rawRef ? await fetchPaymentStatus(rawRef).catch(() => null) : null;
+      if (status?.isProcessed) {
+        renderConfirmedState(status);
+        await syncCartUiWithBackend();
+      } else {
+        setUiState({
+          eyebrow: 'Pago no confirmado',
+          title: 'No se ha completado la autorización',
+          message: 'Puedes volver al checkout para revisar el pedido y reintentarlo. Comprobaremos el estado del pago antes de permitir otro intento.',
+        });
+        if (returnLink) {
+          returnLink.href = '/checkout';
+          returnLink.textContent = 'Volver al checkout';
+        }
+      }
+      return;
+    }
 
     if (!rawRef) {
       setUiState({

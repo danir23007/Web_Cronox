@@ -160,8 +160,9 @@
     allowedShippingCountries: ['ES'],
     buttonHeight: 48,
     buttonType: {
-      applePay: 'check-out',
+      applePay: 'plain',
       paypal: 'paypal',
+      // Google can still personalize a plain button with a saved card.
       googlePay: 'plain',
     },
     buttonTheme: {
@@ -170,11 +171,12 @@
       googlePay: 'white',
     },
     layout: {
-      maxColumns: 3,
+      // Stripe handles wrapping/centering; narrow containers may use one column.
+      maxColumns: 2,
       maxRows: 0,
       overflow: 'never',
     },
-    paymentMethodOrder: ['paypal', 'google_pay', 'apple_pay'],
+    paymentMethodOrder: ['apple_pay', 'google_pay', 'paypal'],
     paymentMethods: {
       applePay: 'auto',
       googlePay: 'always',
@@ -599,12 +601,45 @@
   let mountedAmountCents = null;
   let availableExpressMethods = null;
   let expressCheckoutMounted = false;
-  let expressPaymentInFlight = false;
   let expressCheckoutRevision = null;
   let expressSession = null;
   let expressDetailsFingerprint = null;
   let expressSupplements = null;
   let paymentInFlight = false;
+  let paymentChannel = 'elements';
+  const paymentChannelInputs = [...document.querySelectorAll('input[name="payment-channel"]')];
+  const confirmationFrozenControls = new Map();
+  const isFormPayPalAvailable = () => availableExpressMethods?.paypal === true || availableExpressMethods?.paypal?.available === true;
+  const renderPaymentChannel = () => {
+    const available = isFormPayPalAvailable();
+    if (!available && !paymentInFlight) paymentChannel = 'elements';
+    for (const id of ['payment-elements-choice', 'payment-paypal-choice']) {
+      const label = document.getElementById(id);
+      if (label) label.hidden = !available;
+    }
+    paymentChannelInputs.forEach(input => {
+      input.checked = input.value === paymentChannel;
+      input.disabled = bankTransferPending || paymentInFlight || expressCheckoutRevision !== null;
+    });
+    const panel = document.getElementById('payment-element');
+    if (panel) panel.hidden = paymentChannel === 'paypal';
+    const description = document.getElementById('payment-paypal-description');
+    if (description) description.hidden = paymentChannel !== 'paypal';
+  };
+  // One synchronous confirmation lock shared by the form and every express wallet.
+  const setConfirmationInFlight = locked => {
+    paymentInFlight = locked;
+    if (locked) {
+      document.querySelectorAll('#shipping-form input, #shipping-form select, #shipping-options input, #checkout-guest-email, #checkout-newsletter-consent, .checkout-promo input, .checkout-promo button').forEach(control => {
+        if (!confirmationFrozenControls.has(control)) confirmationFrozenControls.set(control, control.disabled);
+        control.disabled = true;
+      });
+    } else {
+      confirmationFrozenControls.forEach((disabled, control) => { control.disabled = disabled; });
+      confirmationFrozenControls.clear();
+    }
+    setPayButtonState(locked);
+  };
   let bankTransferPending = false;
   let pendingPaymentElementLoadResolver = null;
   let pendingPaymentElementLoadPromise = null;
@@ -701,6 +736,7 @@
 
   const setPayButtonState = (loading) => {
     if (!payButton) return;
+    renderPaymentChannel();
     const guestMode = !state.isAuthenticated;
     const forcedLabel = payButton.dataset.forcedLabel;
     const buttonState = window.CRONOX_CHECKOUT_LIFECYCLE?.getPaymentButtonState?.({
@@ -712,12 +748,14 @@
       clientSecret: currentClientSecret,
       paymentElementMounted,
     });
-    payButton.disabled = bankTransferPending || paymentInFlight || expressPaymentInFlight || expressCheckoutRevision !== null || (buttonState?.disabled ?? true) || !paymentMethodComplete || mountedAmountCents !== state.totals.totalCents;
+    const methodReady = paymentChannel === 'paypal' ? isFormPayPalAvailable() : paymentMethodComplete;
+    payButton.disabled = bankTransferPending || paymentInFlight || expressCheckoutRevision !== null || (buttonState?.disabled ?? true) || !methodReady || mountedAmountCents !== state.totals.totalCents;
     if (forcedLabel && isCheckoutContactAndShippingReady()) {
       payButton.textContent = forcedLabel;
       return;
     }
     payButton.textContent = buttonState?.label ?? (guestMode ? 'Inicia sesión para pagar' : 'Pago no disponible');
+    if (paymentChannel === 'paypal' && isCheckoutContactAndShippingReady()) payButton.textContent = paymentInFlight ? 'Procesando pago…' : 'Continuar con PayPal';
   };
 
   const setLoadingState = (loading) => {
@@ -738,12 +776,12 @@
     // Keep official buttons visible; validate before opening their interface.
     expressCheckoutRegion.dataset.availablePaymentMethods = JSON.stringify(availablePaymentMethods || null);
     expressCheckoutRegion.hidden = !hasWallet || bankTransferPending;
+    renderPaymentChannel();
   };
 
   const resetExpressCheckoutElement = () => {
     expressSession = null;
     expressCheckoutMounted = false;
-    expressPaymentInFlight = false;
     expressCheckoutRevision = null;
     setExpressCheckoutVisibility(null);
     if (expressCheckoutElement) {
@@ -1696,7 +1734,7 @@
     expressCheckoutElement === session.element;
 
   const updateExpressShipping = async (event, session, rateId = session.rate) => {
-    if (!isCurrentExpressSession(session) || expressPaymentInFlight) return event.reject();
+    if (!isCurrentExpressSession(session) || paymentInFlight) return event.reject();
     const sequence = ++session.sequence;
     session.shippingStatus = 'pending';
     // Keep the latest selected address even when rejected. A subsequent rate
@@ -1858,7 +1896,7 @@
     if (
       expressCheckoutElement !== expectedElement ||
       !isCurrentExpressSession(session) ||
-      expressPaymentInFlight || paymentInFlight ||
+      paymentInFlight ||
       (expressCheckoutRevision !== null && expressCheckoutRevision !== checkoutRevision)
     ) {
       event?.paymentFailed?.({ reason: 'fail' });
@@ -1868,7 +1906,7 @@
     }
 
     if (session.pending) await session.pending;
-    if (expressPaymentInFlight || paymentInFlight) return event?.paymentFailed?.({ reason: 'fail' });
+    if (paymentInFlight) return event?.paymentFailed?.({ reason: 'fail' });
     if (!isCurrentExpressSession(session)) return event?.paymentFailed?.({ reason: 'fail' });
     if (session.shippingStatus === 'pending' || session.shippingStatus === 'rejected' ||
       (event.shippingAddress?.address?.country && !normalizeCountry(event.shippingAddress.address.country))) {
@@ -1904,7 +1942,7 @@
       return;
     }
 
-    expressPaymentInFlight = true;
+    setConfirmationInFlight(true);
     const confirmationRevision = checkoutRevision;
     let clientSecret;
     setPayButtonState(true);
@@ -1912,7 +1950,7 @@
     await subscribeNewsletterIfRequested();
     if (confirmationRevision !== checkoutRevision || !isCheckoutContactAndShippingReady()) {
       event?.paymentFailed?.({ reason: 'fail' });
-      expressPaymentInFlight = false;
+      setConfirmationInFlight(false);
       expressCheckoutRevision = null;
       setPayButtonState(false);
       return;
@@ -1950,7 +1988,7 @@
       errorDiv.textContent = 'No hemos podido iniciar el pago rápido. Utiliza otro método de pago.';
       setPayButtonState(false);
     }
-    if (!result.attempted || result.error) expressPaymentInFlight = false;
+    if (!result.attempted || result.error) setConfirmationInFlight(false);
     if (!result.attempted || result.error) {
       expressCheckoutRevision = null;
       setPayButtonState(false);
@@ -1971,7 +2009,7 @@
       nextExpressCheckoutElement.on('click', (event) => {
         if (expressCheckoutElement !== nextExpressCheckoutElement) return;
         if (mountedAmountCents !== state.totals.totalCents || bankTransferPending ||
-          paymentInFlight || expressPaymentInFlight || expressCheckoutRevision !== null) {
+          paymentInFlight || expressCheckoutRevision !== null) {
           event.reject?.();
           errorDiv.textContent = 'Espera a que se actualice el pedido antes de pagar.';
           return;
@@ -1998,15 +2036,15 @@
       nextExpressCheckoutElement.on('cancel', () => {
         if (expressCheckoutElement !== nextExpressCheckoutElement) return;
         const session = expressSession;
-        if (!expressPaymentInFlight && isCurrentExpressSession(session) &&
+        if (!paymentInFlight && isCurrentExpressSession(session) &&
           session.previous?.amount === state.totals.totalCents && session.previous?.rate === state.shippingMethod) {
           currentClientSecret = session.previous.secret;
           currentPaymentIntentId = session.previous.id;
         }
-        if (!expressPaymentInFlight) expressSession = null;
+        if (!paymentInFlight) expressSession = null;
         expressCheckoutRevision = null;
-        if (!expressPaymentInFlight) setPayButtonState(false);
-        if (!expressPaymentInFlight && session && isCheckoutContactAndShippingReady() &&
+        if (!paymentInFlight) setPayButtonState(false);
+        if (!paymentInFlight && session && isCheckoutContactAndShippingReady() &&
           (session.previous?.amount !== state.totals.totalCents || session.previous?.rate !== state.shippingMethod)) {
           void queueCheckoutUpdate({ revision: checkoutRevision, refreshSummary: false });
         }
@@ -2829,8 +2867,20 @@
       await queueCheckoutUpdate();
     });
 
+    paymentChannelInputs.forEach(input => input.addEventListener('change', () => {
+      if (bankTransferPending || paymentInFlight || expressCheckoutRevision !== null) {
+        renderPaymentChannel();
+        return;
+      }
+      if (input.checked && (input.value === 'elements' || isFormPayPalAvailable())) {
+        paymentChannel = input.value;
+        errorDiv.textContent = '';
+        setPayButtonState(false);
+      }
+    }));
+
     payButton?.addEventListener('click', async () => {
-      if (bankTransferPending || paymentInFlight || expressPaymentInFlight || expressCheckoutRevision !== null) return;
+      if (bankTransferPending || paymentInFlight || expressCheckoutRevision !== null) return;
       if (!isCheckoutContactAndShippingReady()) {
         errorDiv.textContent = state.isAuthenticated
           ? 'Completa la direccion de envio.'
@@ -2840,26 +2890,71 @@
         }
         return;
       }
+      if (paymentChannel === 'paypal') {
+        if (!isFormPayPalAvailable()) return;
+        const revision = checkoutRevision;
+        const expectedAmount = state.totals.totalCents;
+        const expectedShipping = state.shippingMethod;
+        setConfirmationInFlight(true);
+        errorDiv.textContent = '';
+        try {
+          const prepared = await queueCheckoutUpdate({ revision, refreshSummary: false });
+          const secret = currentClientSecret;
+          const unchanged = () => revision === checkoutRevision && secret === currentClientSecret &&
+            isCheckoutContactAndShippingReady() && paymentChannel === 'paypal' && isFormPayPalAvailable() &&
+            mountedAmountCents === expectedAmount && state.totals.totalCents === expectedAmount && state.shippingMethod === expectedShipping;
+          if (!prepared || !secret) throw new Error(errorDiv.textContent || 'No se pudo validar el pedido. Revisa tus datos e inténtalo de nuevo.');
+          if (!unchanged()) throw new Error('El pedido ha cambiado. Revisa el importe y vuelve a intentarlo.');
+          const retrieved = await stripe.retrievePaymentIntent(secret);
+          if (retrieved.error) throw retrieved.error;
+          const intent = retrieved.paymentIntent;
+          if (!unchanged() || intent?.id !== currentPaymentIntentId || intent?.amount !== expectedAmount || intent?.currency !== 'eur') {
+            throw new Error('El importe del pago no coincide con el pedido. Actualiza el checkout antes de continuar.');
+          }
+          if (!intent.payment_method_types?.includes('paypal')) throw new Error('PayPal no está disponible para este pedido. Selecciona otro método.');
+          if (!['requires_payment_method', 'requires_confirmation'].includes(intent.status)) throw new Error('Este pago ya está en curso. Comprueba su estado antes de volver a pagar.');
+          await subscribeNewsletterIfRequested();
+          if (!unchanged()) throw new Error('Los datos han cambiado. Revisa el pedido antes de continuar.');
+          const address = buildShippingAddressPayload();
+          const returnUrl = buildPaymentReturnUrl();
+          // This official direct PayPal flow must not submit the unselected card form.
+          const result = await stripe.confirmPayPalPayment(secret, {
+            payment_method: { billing_details: {
+              name: [address.firstName, address.lastName].filter(Boolean).join(' '),
+              email: getCheckoutEmail(),
+              ...(address.phone ? { phone: address.phone } : {}),
+            } },
+            return_url: returnUrl,
+          });
+          if (result?.error) throw result.error;
+          if (result?.paymentIntent) window.location.assign(returnUrl);
+          // Keep the shared lock until navigation; only verified webhooks fulfill.
+        } catch (error) {
+          errorDiv.textContent = error?.message || 'No se pudo completar PayPal. Revisa el pedido e inténtalo de nuevo.';
+          setConfirmationInFlight(false);
+        }
+        return;
+      }
       if (!stripe || !elements || !paymentElement || !paymentElementMounted || !currentClientSecret || mountedAmountCents !== state.totals.totalCents) {
         errorDiv.textContent = 'No hemos podido preparar el pago. Inténtalo de nuevo.';
         await queueCheckoutUpdate();
         return;
       }
       setPayButtonState(true);
-      paymentInFlight = true;
+      setConfirmationInFlight(true);
       const confirmationRevision = checkoutRevision;
       const clientSecret = currentClientSecret;
       errorDiv.textContent = '';
       await subscribeNewsletterIfRequested();
       if (confirmationRevision !== checkoutRevision || clientSecret !== currentClientSecret || !isCheckoutContactAndShippingReady()) {
-        paymentInFlight = false;
+        setConfirmationInFlight(false);
         setPayButtonState(false);
         return;
       }
 
       const confirmMountedPayment = window.CRONOX_CHECKOUT_LIFECYCLE?.confirmMountedPayment;
       if (typeof confirmMountedPayment !== 'function') {
-        paymentInFlight = false;
+        setConfirmationInFlight(false);
         errorDiv.textContent = 'No se pudo iniciar el pago. Refresca la página e inténtalo de nuevo.';
         setPayButtonState(false);
         return;
@@ -2883,12 +2978,12 @@
             typeof error?.type === 'string' && error?.message
               ? error.message
               : 'No se pudo completar el pago. Inténtalo de nuevo.';
-          paymentInFlight = false;
+          setConfirmationInFlight(false);
           setPayButtonState(false);
         },
       });
       if (!result.attempted || result.error) {
-        paymentInFlight = false;
+        setConfirmationInFlight(false);
         setPayButtonState(false);
       }
     });
@@ -2934,6 +3029,12 @@
     });
   };
 
+  window.addEventListener('pageshow', event => {
+    // Browser Back can restore a frozen form after a provider redirect. Start a
+    // fresh page and let the server recover/check the same checkout attempt.
+    if (event.persisted && paymentInFlight) window.location.reload();
+  });
+
   window.addEventListener('cronox:userChanged', async (ev) => {
     if (ev.initial) return;
     const user = ev?.detail;
@@ -2976,7 +3077,7 @@
   });
 
   window.addEventListener('cronox:bank-transfer-lock', (event) => {
-    if (event.detail?.locked && (paymentInFlight || expressPaymentInFlight || expressCheckoutRevision !== null)) {
+    if (event.detail?.locked && (paymentInFlight || expressCheckoutRevision !== null)) {
       event.preventDefault();
       return;
     }

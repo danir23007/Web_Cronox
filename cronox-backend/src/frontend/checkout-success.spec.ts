@@ -3,6 +3,23 @@ import path from 'node:path';
 import vm from 'node:vm';
 
 describe('checkout success cart synchronization', () => {
+  it.each([false, true])('checks the backend on cancelled redirects, even when already processed=%s', async processed => {
+    const source = readFileSync(path.resolve(__dirname, '../../../cronox-front/assets/checkout-success.js'), 'utf8');
+    const nodes = new Map<string, any>();
+    const getCart = jest.fn().mockResolvedValue({items:[]});
+    const fetch = jest.fn().mockResolvedValue({ok:true,status:200,json:async()=>({found:true,isProcessed:processed,orderStatus:processed?'PAID':null,orderId:processed?1:null})});
+    const document = {title:'',getElementById:(id:string)=>{if(!nodes.has(id))nodes.set(id,{});return nodes.get(id);}};
+    vm.runInNewContext(source, {
+      window:{location:{search:'?ref=pi_fixture&redirect_status=failed'},CRONOX_API:{getCart},dispatchEvent:jest.fn()},
+      document,fetch,URLSearchParams,console:{warn:jest.fn()},Date,Promise,encodeURIComponent,CustomEvent:class {},
+      setTimeout:(callback:()=>void)=>callback(),
+    });
+    await new Promise<void>(resolve=>setImmediate(resolve));
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(getCart).toHaveBeenCalledTimes(processed?1:0);
+    expect(document.title).toContain(processed?'Pedido confirmado':'No se ha completado');
+    if(!processed) expect(nodes.get('checkout-success-cta').href).toBe('/checkout');
+  });
   it('removes the redirect client secret while preserving the payment reference and backend check', async () => {
     const source = readFileSync(path.resolve(__dirname, '../../../cronox-front/assets/checkout-success.js'), 'utf8');
     const replaceState = jest.fn();

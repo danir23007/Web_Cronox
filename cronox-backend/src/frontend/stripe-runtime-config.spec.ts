@@ -81,7 +81,7 @@ describe('Stripe frontend runtime configuration', () => {
       /elements\.create\(\s*['"]expressCheckout['"]\s*,\s*expressCheckoutOptions\s*,?\s*\)/,
     );
     expect(checkoutScript).toContain(
-      "paymentMethodOrder: ['paypal', 'google_pay', 'apple_pay']",
+      "paymentMethodOrder: ['apple_pay', 'google_pay', 'paypal']",
     );
     expect(checkoutScript).toMatch(
       /paymentMethods:\s*\{[\s\S]*?applePay:\s*'auto'[\s\S]*?googlePay:\s*'always'[\s\S]*?amazonPay:\s*'never'[\s\S]*?klarna:\s*'never'[\s\S]*?link:\s*'never'[\s\S]*?paypal:\s*'auto'/,

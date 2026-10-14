@@ -239,3 +239,129 @@ La [guía final](pruebas-fisicas-stripe-sandbox.md) recoge validaciones reales f
 Resultado final: 2.281 pruebas Jest en 230 suites y nueve comprobaciones Node aprobadas; typecheck, compilación, sintaxis y control de artefactos correctos. Reconsulta del pago PayPal original de 12,95 EUR aprobada, sin cobro nuevo; Google Pay/Apple Pay físicos continúan `NOT_EXECUTED`. La configuración LIVE remota no se inspeccionó ni modificó. Detalle y pasos previos a publicar en la última sección de la guía.
 
 Publicación autorizada y completada posteriormente: código `aeb3e38a679a2d69236bd0c09e650beaa4c62140`, CI y despliegue existentes aprobados. La [acta de publicación](checkout-production-release-2026-10-14.md) documenta respaldo restaurado, ensayo/aplicación de migraciones, configuración LIVE, comprobaciones públicas, reenvío original deduplicado y cierre del sandbox. Esta publicación sustituye las indicaciones históricas «sin commit/push/despliegue» de las fases anteriores; conserva expresamente sus pendientes físicos y de devolución.
+
+## Ajuste posterior de presentación — 14 de octubre de 2026, solo local
+
+La nueva petición sustituye el orden anterior por **Apple Pay → Google Pay → PayPal**. Continúa un único Express Checkout y un único grupo Elements. `maxColumns: 2`, `maxRows: 0`, `overflow: 'never'` dejan a Stripe ajustar las filas sin menú de desbordamiento. Apple Pay y Google Pay usan `plain`; se mantienen temas, compatibilidad (`applePay: auto`, `googlePay: always`) y exclusiones superiores de Link, Amazon Pay y Klarna. No hay opciones distintas por tamaño de pantalla. El margen bajo la cabecera baja de 88 px en escritorio / 82 px en móvil a **20 px**; la cabecera sigue en el flujo normal, sin nueva compensación fija. Se actualizan las versiones de los recursos CSS/JS para evitar caché antigua.
+
+### Verificación visual y alcance
+
+Se sirvieron los archivos locales a Chromium con carrito y API de tienda ficticios, solo lectura, sin base de datos ni claves LIVE. El navegador interceptó la antigua URL del sandbox únicamente en esa sesión; **no se reabrió un túnel público**. Stripe.js y los botones proceden de Stripe real con la clave pública del sandbox. La prueba no autoriza pagos y la interceptación HTTPS produce restricciones de seguridad para carteras nativas: no acredita apertura ni pago físico. Las advertencias de métodos elegibles en modo test tampoco acreditan su aprobación LIVE.
+
+| Ancho | Dos carteras, disponibilidad devuelta por Stripe | Tres botones oficiales, previsualización controlada | Distancia cabecera/contenido |
+| --- | --- | --- | --- |
+| 320 px | Google Pay / PayPal en una columna | Apple Pay / Google Pay / PayPal en una columna | 20 px |
+| 390 px | Google Pay izquierda, PayPal derecha | Apple Pay izquierda y Google Pay derecha; PayPal centrado debajo | 20 px |
+| 768 px | Google Pay izquierda, PayPal derecha | Apple Pay izquierda y Google Pay derecha; PayPal centrado debajo | 20 px |
+| 1440 px | Google Pay izquierda, PayPal derecha | Apple Pay izquierda y Google Pay derecha; PayPal centrado debajo | 20 px |
+
+Para observar tres botones se recreó únicamente el componente de la **página de pruebas** con la opción oficial `applePay: always`, que habilita su presentación en Chrome de escritorio. No se falsificó la respuesta de Stripe, ni se dibujaron botones sustitutivos; **el código de la aplicación conserva `auto`**. Este ensayo controlado acredita la geometría observada del componente, no la disponibilidad real de tres carteras con la configuración final en un iPhone/Mac. El centrado se midió en los botones y se inspeccionaron las capturas; no se deduce solo de `maxColumns`. No existe una opción pública para fijar la alineación de una celda concreta, de modo que sigue sujeto al renderer de Stripe. No se observaron botones recortados ni desbordamiento horizontal; la cabecera permanece en flujo al desplazar 400 px.
+
+Evidencias locales ignoradas por Git: `output/playwright/checkout-express/layout-{two,three}-{320,390,768,1440}.png` y `test-results/stripe-sandbox/layout-*-report.txt`. Los auxiliares de presentación quedan fuera del producto. El servidor auxiliar y navegador se cierran al terminar.
+
+### Google Pay: límite del requisito de logo exclusivo
+
+`plain` está aplicado a todos los tamaños. No garantiza ocultar tarjetas, separador ni «+». Google documenta que `plain` también admite personalización con la tarjeta guardada. La referencia pública de Express Checkout revisada no ofrece un interruptor para desactivarla. El logo aislado observado en esta sesión no se presenta como resultado universal. Se conserva el tema blanco de CRONOX, sin recortes, superposiciones, manipulación del iframe ni integración nueva.
+
+Fuentes: [opciones oficiales de Express Checkout](https://docs.stripe.com/js/elements_object/create_express_checkout_element), [guía de Express Checkout](https://docs.stripe.com/elements/express-checkout-element), [Google ButtonOptions](https://developers.google.com/pay/api/web/reference/request-objects#ButtonOptions) y [personalización de Google Pay](https://developers.google.com/pay/api/web/guides/brand-guidelines#personalization). Documentación Stripe consultada con CLI 1.53.1; se conserva el SDK/API de la aplicación.
+
+### PayPal simultáneo: pendiente de decisión de integración
+
+El formulario ya pide `paymentMethodOrder: ['card', 'paypal', 'bizum', 'klarna']`; no hay una regla CSS ni una opción CRONOX que oculte PayPal abajo. En la prueba con ambos componentes, Stripe mostró PayPal arriba y cero opciones PayPal en Payment Element. En una carga nueva del mismo checkout, con la misma clave, importe y opciones pero **sin crear Express Checkout solo en el banco de pruebas**, PayPal sí apareció seleccionable en Payment Element. Desmontar después Express Checkout no bastó para resetear esa decisión en la instancia existente. No se ha eliminado el botón exprés del producto.
+
+Esto confirma deduplicación en la combinación actual; no una prohibición universal de PayPal en otros productos Stripe. La [documentación de Payment Element](https://docs.stripe.com/payments/payment-element) explica la deduplicación de carteras al combinar ambos componentes, aunque no enumera explícitamente PayPal en ese párrafo. La [referencia de sus opciones](https://docs.stripe.com/js/elements_object/create_payment_element) no ofrece `wallets.paypal` ni un control documentado para forzar este duplicado. Cambiar el orden no resuelve la coexistencia.
+
+**Propuesta mínima, no implementada:** añadir una selección PayPal externa al iframe dentro de «Pago», coordinada con Payment Element, usando la API oficial [stripe.confirmPayPalPayment](https://docs.stripe.com/js/payment_intents/confirm_paypal_payment). Reutilizaría el formulario, cotización del servidor, snapshot/reserva y PaymentIntent existentes, más los bloqueos de confirmación, validación de importe/revisión y webhook idempotente. No necesita otro grupo Elements ni SDK directo de PayPal. No permite insertar una fila dentro del acordeón privado inmediatamente debajo de tarjeta: habría que adaptar el selector exterior. Requiere diseñar esa selección y probar la nueva rama de redirección, cancelación, cambio de método y reintento para evitar duplicados. Se plantea antes de introducir cambios de arquitectura, como solicita el usuario. **PayPal seleccionable simultáneamente abajo continúa sin implementar.**
+
+### Regresión y pendientes
+
+93 pruebas en nueve suites aprobadas: disponibilidad simulada de dos/tres carteras sin remontajes, ocultación sin métodos, apertura desde formulario vacío, datos faltantes, cancelación/reintento, envío 12,95 → 14,95 → 12,95, rechazo territorial/tarifa obsoleta/stock y bloqueo de confirmaciones duplicadas; además inicio del checkout, recomendaciones, transferencia, retorno y configuración Stripe. Son pruebas automatizadas simuladas, no nuevos cobros. Sintaxis JS y `git diff --check` correctos.
+
+Los callbacks de pago, cálculos, descuentos, validaciones, reservas, stock y webhooks no se modifican. No se tocan métodos del Dashboard; se respeta la indicación actual del usuario de transferencias deshabilitadas y Bizum pendiente, sin convertir su presentación test en aprobación LIVE. Se conservan los tres archivos locales previos del aislamiento del sandbox. No hay commit, push ni despliegue de este ajuste.
+
+Siguen pendientes: disponibilidad y aspecto en dispositivo Apple compatible; secuencia española nativa y pago completo de Google Pay; Apple Pay físico; devolución bancaria efectiva. La prueba PayPal Sandbox anterior conserva su alcance histórico y no acredita estos flujos ni la nueva entrada PayPal propuesta. No se vuelve a pedir una cuenta Google.
+
+## PayPal seleccionable en el formulario — implementación local posterior
+
+El usuario autoriza la alternativa anterior. Ya está implementada una selección nativa de radio **Tarjeta y otros métodos / PayPal**, fuera del iframe y dentro de «Pago». PayPal queda después del bloque de tarjeta y demás métodos; no se inserta una fila en el acordeón privado de Stripe. Al seleccionarlo se oculta el panel completo de Payment Element sin desmontarlo, se muestra una explicación de la redirección y el botón cambia a «Continuar con PayPal». Al volver a tarjeta se conserva la misma instancia. Radios con leyenda, foco visible y control mediante flechas; áreas de al menos 52 px. PayPal exprés permanece arriba en el único Express Checkout existente.
+
+La opción externa se presenta cuando Stripe comunica disponibilidad de PayPal en Express Checkout; si desaparece, se vuelve al formulario conservando su instancia. No se fuerzan métodos del Dashboard. Antes de confirmar, además se comprueba que el PaymentIntent del intento vigente incluye PayPal.
+
+La nueva ruta usa el método oficial [stripe.confirmPayPalPayment](https://docs.stripe.com/js/payment_intents/confirm_paypal_payment), compatible y probado con nuestra API/SDK actuales. Reutiliza contacto y dirección del formulario y vuelve a llamar al endpoint existente de preparación, que valida propietario, dirección, precios, descuentos, envío y stock. Se verifica que revisión, tarifa e importe no hayan cambiado, y que el PaymentIntent recuperado tenga el mismo ID, importe y moneda y admita PayPal. No se llama a `elements.submit()` sobre campos de tarjeta no seleccionados. La dirección de cumplimiento sigue siendo el snapshot validado por el servidor.
+
+Se sustituye el bloqueo separado de exprés por **un solo `paymentInFlight`** para tarjeta, PayPal inferior y carteras exprés. Se adquiere antes del primer `await` de confirmación, bloquea el selector y los datos editables, y se conserva hasta la redirección o se libera ante error. La revisión vigente se comprueba de nuevo después de las operaciones asíncronas. Si el navegador restaura desde su caché una página congelada durante la redirección, se recarga para que el servidor vuelva a comprobar el intento. Reservas, stock, SDK/API, preparación del servidor y webhooks conservan su implementación; no se añaden grupos Elements ni SDK de PayPal.
+
+El retorno cancelado consulta el backend: si el webhook ya confirmó, muestra ese estado; en otro caso indica «No se ha completado la autorización» y ofrece volver al checkout. También actualiza el título de la pestaña. No limpia el carrito ni marca pago por el estado de la URL. Después de un retorno que carga una página nueva, el comprador puede tener que volver a introducir sus datos; no se añade persistencia de datos personales en almacenamiento del navegador.
+
+### Pruebas del sandbox separado
+
+Se arrancaron temporalmente servidor local, listener y túnel protegido, con claves test, base local separada, correo y trabajos externos desactivados. Se registró únicamente el nuevo dominio temporal en el sandbox. No se modificó LIVE ni se desplegó código. Al finalizar se detuvieron navegador, túnel, listener y servidor; puertos 3000/3001 sin escucha.
+
+Esta ruta directa presenta **la página de autorización de pruebas de Stripe**. La confirmación del proveedor PayPal es simulada por esa página; PaymentIntents, estados, redirecciones, webhooks originales y base de la aplicación sí se verifican contra Stripe sandbox real. No se utiliza el login del comprador PayPal Sandbox en esta ruta y no se presenta como una prueba nueva del portal PayPal real. Los reportes están en `test-results/stripe-sandbox/paypal-form-{completed,cancelled,retry-completed}.json`, excluidos de Git.
+
+| Escenario | Evidencia |
+| --- | --- |
+| Selección con campos vacíos | Radio PayPal seleccionable con flechas; pago deshabilitado hasta completar los datos. Tarjeta permanece vacía. |
+| Cambio de envío | Web, servidor y Stripe: estándar 1295 → exprés 1495 → estándar 1295 céntimos. Dos intentos sustituidos cancelados y sus reservas liberadas, sin pedidos ni movimientos definitivos. |
+| Primera compra ficticia | `pi_3UQH4xFk1nGlnJwa1kowGser`, 1295 céntimos, `succeeded`, `livemode=false`, método PayPal. Pedido 23 PAID, una reserva CONSUMED y un movimiento −1. Webhook original `evt_3UQH4xFk1nGlnJwa1sFXtaXC`. |
+| Cancelación de otra compra | Página Stripe «Fail Test Payment» → retorno `failed`, mensaje sin confirmación de compra. `pi_3UQH7CFk1nGlnJwa0M6pThcQ` queda `requires_payment_method`; cero pedidos y cero consumos definitivos. Su única reserva continúa vigente para reintentar, conforme al comportamiento existente. |
+| Reintento de esa compra | Mismo `pi_3UQH7CFk1nGlnJwa0M6pThcQ`, misma reserva, 1295 céntimos. «Authorize Test Payment» → webhook original `evt_3UQH7CFk1nGlnJwa0nq6xq9G`, pedido 24 PAID y exactamente un movimiento −1. |
+
+Son **dos compras ficticias independientes**, no dos cobros del mismo intento: stock 18 → 17 → 16, una unidad por pedido. Ambos eventos originales se recuperaron también de la API de Stripe y coinciden con la recepción 200 del listener y el registro PROCESSED. `confirmationEmailSentAt` vacío en ambos. No se enviaron comunicaciones ni se hicieron cobros LIVE.
+
+Revisión en Chromium a 320, 390, 768 y 1440 px: selección por teclado, foco visible, sin desbordamiento horizontal, una sola instancia de Payment Element y PayPal exprés visible. Capturas `output/playwright/checkout-express/paypal-form-{ancho}.png`, ignoradas por Git. Son tamaños de navegador de escritorio; no equivalen a una prueba física de iPhone.
+
+La regresión añade simulaciones de cancelación/reintento con el mismo intento, bloqueo cruzado exprés/formulario, errores de stock, método retirado, importe discrepante y revisión obsoleta; además del retorno cancelado con webhook ya procesado. Se mantienen las comprobaciones anteriores de envío, campos faltantes y deduplicación. Las pruebas de aceptación antiguas del margen de 88 px y bloqueo exprés separado se actualizan a los requisitos vigentes de 20 px y bloqueo único.
+
+Resultado final: **2.298 pruebas aprobadas en 230 suites** (`paypal-form-jest-final.log`), typecheck y compilación backend correctos, sintaxis de ambos scripts y `git diff --check` correctos. Control de entrega `CHECKOUT_RELEASE_SAFETY_OK`: secretos, archivos privados y auxiliares de pruebas siguen fuera del contenido versionado/desplegable.
+
+Se conservan Apple Pay → Google Pay → PayPal, máximo dos columnas, Apple Pay `plain`, separación de 20 px y Google Pay `plain` con su personalización ahora aceptada por el usuario. Continúan pendientes Google Pay completo y su secuencia española nativa, Apple Pay físico y devolución bancaria efectiva. Los tres archivos previos de aislamiento del sandbox se conservan. Estos cambios siguen **sin commit, push ni despliegue**.
+## Revisión histórica: opción inferior y comprador Personal de PayPal Sandbox (2026-10-14)
+
+Se volvió a intentar exclusivamente la opción inferior mediante `stripe.confirmPayPalPayment`, sin cambiar el checkout ni sustituirla por el botón exprés. Las credenciales privadas del comprador Personal siguen disponibles, pero este recorrido no presenta un inicio de sesión en PayPal donde utilizarlas.
+
+- Entorno: claves `sk_test`/`pk_test`, una base local nueva vacía con el esquema actual y producto ficticio de 10 €, correo y trabajos desactivados. Se conserva intacto el perfil `.env.stripe-sandbox` y su base anterior. Perfil adicional y herramientas de revisión excluidos de Git.
+- Dominio temporal registrado y habilitado en el mismo sandbox, PayPal `active`, `livemode=false`. No se modificó la selección de métodos del Dashboard.
+- Selección inferior comprobada mediante teclado. Con campos vacíos permanece bloqueado el botón de confirmar del formulario; con contacto y dirección ficticia española válidos permite continuar. Suscripción comercial desmarcada.
+- CRONOX, snapshot del servidor y PaymentIntent coinciden: producto 1.000 céntimos + envío 295 = total 1.295 EUR.
+- Intento `pi_3UQHqvFk1nGlnJwa1BlTkVPX`: redirección de Stripe a `payments.stripe.com/payment_methods/test_payment`, título «Paypal test payment page», acciones «Authorize Test Payment» y «Fail Test Payment». **No se pulsó ninguna de ellas**. No se inició sesión ni autorizó en `www.sandbox.paypal.com`.
+- La documentación oficial consultada ese día describe precisamente esa página simulada para la integración API: [probar PayPal con la API de Stripe](https://docs.stripe.com/payments/paypal/accept-a-payment?payment-ui=direct-api#test-paypal-integration). No se encontró una opción oficial en este flujo que permita sustituirla por la cuenta Personal de PayPal Sandbox. La existencia de las credenciales no resuelve este impedimento.
+- El webhook original `payment_intent.requires_action` (`evt_3UQHqvFk1nGlnJwa1r02amKi`) fue recibido y procesado. Al abandonar el intento se canceló **por la API de Stripe del sandbox**, como limpieza; el evento original `payment_intent.canceled` (`evt_3UQHqvFk1nGlnJwa1rXol01p`) se recibió, verificó y procesó. Ambos comprobados contra la API de eventos y la recepción HTTP 200 del listener. No son eventos generados con `stripe trigger`.
+- Resultado de limpieza: una reserva `RELEASED`, cero pedidos, cero movimientos de consumo por venta; stock disponible 10 → 9 durante la reserva → 10 al liberarla. Sin email de confirmación. Esta cancelación administrativa **no valida cancelar dentro de PayPal**.
+- El regreso con el botón Atrás al checkout permitió seleccionar y completar de nuevo el formulario; no se realizó un segundo pago ni una autorización simulada en esa revisión. Esa sesión no verificó el login del comprador Personal. **El usuario ha aceptado posteriormente el simulador oficial para la opción inferior**: dicho login deja de ser un requisito o bloqueo, y las compras 23/24 conservan su validez para autorización simulada, retorno y confirmación por webhook. Véase el cierre siguiente; no confundir esta sesión abandonada con las dos compras completadas.
+
+Capturas actuales del navegador automatizado (Stripe real en sandbox, sin mock de botones):
+
+- `output/playwright/checkout-express/paypal-final-desktop.png`: escritorio, 1.440 px de ancho; ambos PayPal visibles. Se tomó con viewport alto para incluir todo el formulario, porque la captura extendida del navegador omitía el dibujo del iframe superior pese a ser visible en pantalla.
+- `output/playwright/checkout-express/paypal-final-mobile.png`: ancho móvil 390 px, captura de página completa; ambos PayPal visibles. Es una revisión responsive en navegador automatizado, no una prueba en un teléfono físico.
+- Sin desbordamiento horizontal a 390 px. No se cambió la distribución, las opciones `plain`, el margen de 20 px ni el bloqueo compartido para preparar las imágenes. El proxy privado deniega rutas auxiliares de favoritos, presencia y autenticación; esas respuestas de consola no se presentan como una revisión libre de errores de toda la tienda.
+
+Evidencia privada: `test-results/stripe-sandbox/paypal-personal-review-result.json`, `paypal-personal-review-before-cleanup.json` y `paypal-personal-destination.txt`. Las capturas y herramientas son artefactos locales excluidos de Git. No se realizaron cobros LIVE, commits, push ni despliegues; se conservan los cambios anteriores de checkout y cuentas. Google Pay completo, Apple Pay físico y devolución bancaria efectiva mantienen su estado pendiente.
+
+## Cierre vigente: PayPal inferior validado con el simulador oficial aceptado
+
+El 14/10/2026 el usuario acepta expresamente el simulador oficial de Stripe como procedimiento para `stripe.confirmPayPalPayment`. Se conservan las compras 23 y 24 como **validadas en Stripe Sandbox con autorización simulada**. No son pagos LIVE ni autorizaciones del comprador Personal en el portal PayPal; no se volverá a forzar ese acceso. La falta de ese login no constituye un fallo de esta integración ni un pendiente de publicación.
+
+Revisión de evidencia y reconsulta de solo lectura a Stripe y a la base local original:
+
+| Comprobación | Pedido 23 | Pedido 24 |
+| --- | --- | --- |
+| Autorización oficial simulada | `Authorize Test Payment`, tras cambios de envío | `Authorize Test Payment`, tras `Fail Test Payment` y reintento del mismo intento |
+| Importe servidor / Stripe | 12,95 EUR, envío 2,95 | 12,95 EUR, envío 2,95 |
+| Stripe | PayPal, `succeeded`, `livemode=false`, un cargo exitoso | PayPal, `succeeded`, `livemode=false`, un cargo exitoso |
+| Pedido | Uno, n.º 23 `PAID` | Uno, n.º 24 `PAID` |
+| Stock | Una reserva `CONSUMED`, un movimiento −1 | Una reserva `CONSUMED`, un movimiento −1 |
+| Webhook original | `evt_3UQH4xFk1nGlnJwa1sFXtaXC` | `evt_3UQH7CFk1nGlnJwa0nq6xq9G` |
+| Comunicación de confirmación | No enviada | No enviada |
+
+Los eventos se recuperaron nuevamente de Stripe: tipo `payment_intent.succeeded`, identificador de PaymentIntent correcto, `livemode=false`, registro local `PROCESSED` y recepción original HTTP 200 del listener. No se reenviaron eventos ni se generaron nuevos pagos. El historial de fallo del 24 acredita cero pedidos/consumos definitivos antes del reintento; este acaba en el mismo PaymentIntent, sin duplicación.
+
+Retorno y página de confirmación:
+
+- Pedido 23: snapshot histórico guardado en `paypal-form-cancel.txt` —el nombre del archivo es engañoso— contiene el retorno HTTPS a CRONOX para su PaymentIntent, título **Pedido confirmado** y **Pedido: 000023**.
+- Pedido 24: el flujo histórico documentado y `paypal-form-authorize.js` incluyen autorización, espera del retorno a CRONOX y comprobación de «Pedido confirmado». Faltaba un artefacto persistente específico de la página 24. Se completó esa evidencia reabriendo **el pedido ya existente**, con la identidad invitada ficticia restaurada, en el servidor local real y la base original. Sin mocks de respuesta: `/api/orders/payment-status` devolvió HTTP 200, `orderId:24`, `orderStatus:PAID`, `isProcessed:true`; la página mostró **Pedido confirmado / Pedido: 000024**.
+- Esta reapertura es una comprobación adicional de lectura/presentación, no una segunda redirección del proveedor ni otro pago. La reconsulta posterior confirma que sigue habiendo exactamente un pedido, un cargo exitoso y un consumo por compra. No se presenta un script sin ejecución como evidencia nueva de un recorrido completo.
+
+Artefactos privados nuevos: `test-results/stripe-sandbox/paypal-orders-23-24-reviewed.json`, `paypal-order-24-confirmation.txt`, `paypal-order-24-status.txt` y `output/playwright/checkout-express/paypal-order-24-confirmation.png`. Se reutilizan los informes y pruebas de validaciones, envío, cancelación/reintento, bloqueo compartido y responsive anteriores; no se repitieron cobros ni suites sin cambios de código que lo justificasen. Solo se arrancó temporalmente servidor/navegador locales para la confirmación; sin túnel ni listener nuevos.
+
+**Estado de publicación de estos ajustes:** no hay un fallo concreto identificado en PayPal inferior que los bloquee con el procedimiento de pruebas ahora aceptado. Se conservan PayPal arriba/abajo, orden visual actual, `plain` y separación de 20 px. Continúan los pendientes aceptados de Google Pay completo/secuencia española nativa, Apple Pay físico y devolución bancaria efectiva; no son pruebas LIVE superadas. Los cambios de estados de clientes son una tarea separada, conservada: una publicación conjunta sigue sujeta a su mantenimiento/migración y guard preventivo, que no se elimina. Sin commit, push ni despliegue.
