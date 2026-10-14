@@ -1,5 +1,7 @@
 # Procedimiento root para preparar el mantenimiento de estados de clientes
 
+La ventana autorizada ya se ejecutó y cerró el 14/10/2026. Ver [informe de publicación conjunta](joint-checkout-account-release-2026-10-14.md). Los bloques de este documento son el registro del procedimiento preparado, no pasos pendientes para volver a ejecutarlos.
+
 Preparación del 14/10/2026. **Ejecutar ahora únicamente la inspección de solo lectura.** Los bloques de interrupción y recuperación son para la futura ventana coordinada, todavía no autorizada. No se ha parado ningún servicio, cambiado cortafuegos, migrado, hecho commit/push ni desplegado. Se conserva el trabajo de checkout y estados.
 
 ## Acceso y hechos comprobados

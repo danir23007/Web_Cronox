@@ -1,5 +1,11 @@
 # Estados de clientes: Activo / Inactivo
 
+Publicado en producción el 14/10/2026 mediante la entrega conjunta `91d41e1`: 49 cuentas activas, cliente n.º 49 activo y cero estados antiguos. Ver [resultado de publicación, comprobaciones y recuperación](joint-checkout-account-release-2026-10-14.md).
+
+## Registro histórico de preparación
+
+Los apartados siguientes conservan las fases previas y sus pendientes de entonces; el estado actual es el informe enlazado arriba.
+
 Implementación local del 14/10/2026. Sin commit, push, despliegue ni cambios de datos en producción. Se conserva el trabajo previo del checkout; este documento no lo publica ni cambia sus pruebas pendientes.
 
 ## Actualización: preparación con auditoría real y ensayo de recuperación

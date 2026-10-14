@@ -1,5 +1,7 @@
 ﻿# Checkout CRONOX · preparación de publicación del 14 de octubre de 2026
 
+Este informe corresponde a la publicación anterior `aeb3e38`. La entrega posterior `91d41e1` incorpora PayPal inferior y los estados Activo/Inactivo; la transferencia bancaria propia está actualmente deshabilitada por Dashboard. Ver [informe vigente de publicación conjunta](joint-checkout-account-release-2026-10-14.md).
+
 Publicación autorizada por el usuario. Se mantienen un solo Express Checkout oficial, PayPal → Google Pay → Apple Pay según disponibilidad, layout adaptable y personalización de Google `plain` aceptados. La secuencia española de envío y el pago completo de Google Pay, Apple Pay físico y devolución bancaria efectiva permanecen pendientes aceptados; no se presentan como validados.
 
 ## Alcance seleccionado
