@@ -88,7 +88,7 @@ jobs:
           npm run smoke:exports:compiled --prefix cronox-backend
 
   deploy:
-    if: github.event_name == 'push' || inputs.publish
+    if: github.event_name == 'workflow_dispatch' && inputs.publish
     needs: verify-release
     runs-on: ubuntu-latest
     timeout-minutes: 15

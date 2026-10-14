@@ -7,8 +7,8 @@ test('maintenance installs artifacts without restarting writers or performing an
  assert.ok(driver.indexOf('MAINTENANCE_ACTIVE_ROOT_START_REQUIRED')<driver.indexOf('cronox-export-smoke.json'));
  assert.match(driver,/MAINTENANCE_ACTIVE_ROOT_START_REQUIRED'[\s\S]*?exit 0/);
 });
-test('manual verification can skip publishing while push behavior remains supported',()=>{
+test('push verifies only and publishing requires an explicit dispatch',()=>{
  const workflow=fs.readFileSync(path.join(root,'.github/workflows/deploy.yml'),'utf8');
  assert.match(workflow,/publish:[\s\S]*?type: boolean/);
- assert.match(workflow,/deploy:\s*\n\s*if: github\.event_name == 'push' \|\| inputs\.publish/);
+ assert.match(workflow,/deploy:\s*\n\s*if: github\.event_name == 'workflow_dispatch' && inputs\.publish/);
 });
