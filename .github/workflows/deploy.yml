@@ -5,6 +5,12 @@ permissions:
 
 on:
   workflow_dispatch:
+    inputs:
+      publish:
+        description: 'Publish after verification (false runs CI only)'
+        type: boolean
+        required: false
+        default: true
   push:
     branches:
       - main
@@ -51,7 +57,7 @@ jobs:
         run: npm ci --prefix cronox-backend
 
       - name: Verify isolated preflight dependencies and fail-closed deployment ordering
-        run: node --test .github/scripts/run-release-preflight.spec.cjs .github/scripts/wait-for-backend.spec.cjs .github/scripts/check-checkout-release-safety.spec.cjs cronox-backend/scripts/check-user-numbering-release.spec.cjs
+        run: node --test .github/scripts/run-release-preflight.spec.cjs .github/scripts/wait-for-backend.spec.cjs .github/scripts/check-checkout-release-safety.spec.cjs .github/scripts/coordinated-maintenance.spec.cjs cronox-backend/scripts/check-user-numbering-release.spec.cjs cronox-backend/scripts/check-account-state-release.spec.cjs
 
       - name: Generate the Prisma client
         run: npm run prisma:generate --prefix cronox-backend
@@ -82,6 +88,7 @@ jobs:
           npm run smoke:exports:compiled --prefix cronox-backend
 
   deploy:
+    if: github.event_name == 'push' || inputs.publish
     needs: verify-release
     runs-on: ubuntu-latest
     timeout-minutes: 15

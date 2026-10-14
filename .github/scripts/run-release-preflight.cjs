@@ -19,6 +19,8 @@ function main(args = process.argv.slice(2)) {
   const manifest = read('.github/preflight/package.json');
   const lockfile = read('.github/preflight/package-lock.json');
   const check = read('cronox-backend/scripts/check-user-numbering-release.cjs');
+  const accountCheck = read('cronox-backend/scripts/check-account-state-release.cjs');
+  const accountMigration = read('cronox-backend/prisma/migrations/20261015120000_customer_account_enablement/migration.sql');
   const backendLock = JSON.parse(read('cronox-backend/package-lock.json'));
   const dependencies = JSON.parse(manifest).dependencies;
   for (const name of ['pg', 'dotenv']) {
@@ -31,6 +33,9 @@ function main(args = process.argv.slice(2)) {
     fs.writeFileSync(path.join(isolated, 'package.json'), manifest, { mode: 0o600 });
     fs.writeFileSync(path.join(isolated, 'package-lock.json'), lockfile, { mode: 0o600 });
     fs.writeFileSync(path.join(isolated, 'check-user-numbering-release.cjs'), check, { mode: 0o600 });
+    fs.writeFileSync(path.join(isolated, 'check-account-state-release.cjs'), accountCheck, { mode: 0o600 });
+    const accountMigrationFile = path.join(isolated, 'account-state-migration.sql');
+    fs.writeFileSync(accountMigrationFile, accountMigration, { mode: 0o600 });
     const options = { cwd: isolated, stdio: 'inherit', windowsHide: true, env: { ...process.env, NODE_PATH: '' } };
     const npmArgs = ['ci', '--ignore-scripts', '--no-audit', '--no-fund'];
     const install = process.platform === 'win32'
@@ -38,10 +43,13 @@ function main(args = process.argv.slice(2)) {
       : spawnSync('npm', npmArgs, options);
     if (install.status !== 0) throw Error('ISOLATED_PREFLIGHT_INSTALL_FAILED');
     console.log(`PREFLIGHT_DEPENDENCIES_READY pg=${dependencies.pg} dotenv=${dependencies.dotenv}`);
-    const result = spawnSync(process.execPath, [path.join(isolated, 'check-user-numbering-release.cjs'), '--deployment-check'], {
-      ...options, env: { ...options.env, CRONOX_ENV_FILE: environmentFile },
-    });
-    return result.status ?? 1;
+    for (const script of ['check-user-numbering-release.cjs', 'check-account-state-release.cjs']) {
+      const result = spawnSync(process.execPath, [path.join(isolated, script), '--deployment-check'], {
+        ...options, env: { ...options.env, CRONOX_ENV_FILE: environmentFile, CRONOX_ACCOUNT_STATE_MIGRATION_FILE: accountMigrationFile },
+      });
+      if (result.status !== 0) return result.status ?? 1;
+    }
+    return 0;
   } finally {
     // Remove only this invocation's mkdtemp directory, never application files.
     if (path.dirname(isolated) !== parent || !path.basename(isolated).startsWith('cronox-preflight-')) throw Error('UNSAFE_PREFLIGHT_CLEANUP_PATH');

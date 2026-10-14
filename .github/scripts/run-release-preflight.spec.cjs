@@ -7,7 +7,7 @@ const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 const root = path.resolve(__dirname, '../..');
 const runner = path.join(__dirname, 'run-release-preflight.cjs');
-function fixture(invalidLock = false) {
+function fixture(invalidLock = false, accountCheck = false) {
   const parent = fs.realpathSync(os.tmpdir());
   const directory = fs.mkdtempSync(path.join(parent, 'cronox-preflight-test-'));
   const write = (file, value) => { const target = path.join(directory, file); fs.mkdirSync(path.dirname(target), { recursive: true }); fs.writeFileSync(target, value); };
@@ -18,6 +18,7 @@ function fixture(invalidLock = false) {
   write('.github/preflight/package-lock.json', JSON.stringify(lock));
   write('cronox-backend/package-lock.json', fs.readFileSync(path.join(root, 'cronox-backend/package-lock.json')));
   write('cronox-backend/.env', 'ISOLATION_SENTINEL=runtime-config\n');
+  write('cronox-backend/prisma/migrations/20261015120000_customer_account_enablement/migration.sql','-- reviewed incoming migration\n');
   write('cronox-backend/node_modules/pg/package.json', '{"name":"pg","version":"0.0.0"}');
   write('cronox-backend/scripts/check-user-numbering-release.cjs', `
     const assert=require('node:assert/strict'),fs=require('node:fs');
@@ -25,10 +26,16 @@ function fixture(invalidLock = false) {
     assert.equal(require('dotenv/package.json').version,'16.6.1');
     assert.equal(typeof require('pg').Client,'function');
     assert.equal(require('dotenv').parse(fs.readFileSync(process.env.CRONOX_ENV_FILE)).ISOLATION_SENTINEL,'runtime-config');
+    assert.equal(fs.readFileSync(process.env.CRONOX_ACCOUNT_STATE_MIGRATION_FILE,'utf8'),'-- reviewed incoming migration\\n');
     assert.ok(process.argv.includes('--deployment-check'));
     assert.ok(require.resolve('pg').startsWith(process.cwd()));
     console.log('ISOLATED_READ_ONLY_PREFLIGHT_LOADED');
-    process.exitCode=23; // A readiness failure must propagate, never be ignored.
+    process.exitCode=${accountCheck ? 0 : 23}; // A readiness failure must propagate, never be ignored.
+  `);
+  write('cronox-backend/scripts/check-account-state-release.cjs', `
+    const assert=require('node:assert/strict'),fs=require('node:fs');
+    assert.equal(require('dotenv').parse(fs.readFileSync(process.env.CRONOX_ENV_FILE)).ISOLATION_SENTINEL,'runtime-config');
+    console.log('ACCOUNT_STATE_PREFLIGHT_LOADED'); process.exitCode=24;
   `);
   const git = args => { const r=spawnSync('git',args,{cwd:directory,encoding:'utf8'}); assert.equal(r.status,0,r.stderr); return r.stdout.trim(); };
   git(['init','--quiet']);git(['add','.']);git(['-c','user.name=Preflight Test','-c','user.email=preflight@example.test','commit','--quiet','-m','fixture']);
@@ -37,6 +44,13 @@ function fixture(invalidLock = false) {
     fs.rmSync(directory,{recursive:true,force:true,maxRetries:3});
   } };
 }
+test('account-state maintenance failure propagates after numbering succeeds',()=>{
+  const f=fixture(false,true);
+  try {
+    const r=spawnSync(process.execPath,[runner,'--repo='+f.directory,'--revision='+f.revision],{encoding:'utf8',timeout:60000});
+    assert.equal(r.status,24,r.stderr); assert.match(r.stdout,/ACCOUNT_STATE_PREFLIGHT_LOADED/);
+  } finally {f.cleanup();}
+});
 for (const invalidLock of [false,true]) {
   test(invalidLock ? 'installation failure aborts before executing the database preflight' : 'exact release dependencies load in isolation and a failed readiness guard propagates', () => {
     const f=fixture(invalidLock);

@@ -55,6 +55,11 @@ if [ "$actual" != "$expected" ]; then
   echo 'Deployment revision differs from the verified workflow commit.'
   exit 1
 fi
+if [ -f /var/lib/cronox/maintenance.flag ]; then
+  printf 'DEPLOYED_COMMIT=%s\n' "$actual"
+  echo 'MAINTENANCE_ACTIVE_ROOT_START_REQUIRED'
+  exit 0
+fi
 status="$(curl --silent --show-error --output /tmp/cronox-export-smoke.json --write-out '%{http_code}' 'http://127.0.0.1:3000/api/admin/exports/users?scope=all')"
 if [ "$status" != 401 ] && [ "$status" != 429 ]; then
   echo "Admin export route smoke failed with HTTP $status"
