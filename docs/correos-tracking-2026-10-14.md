@@ -54,7 +54,7 @@ Nombres y valores de ejemplo en [cronox-backend/.env.example](../cronox-backend/
 | `CORREOS_DEVELOPERS_CLIENT_SECRET` | Secreto concedido para Trackpub en Developers |
 | `CORREOS_TRACKING_ENABLED` | `false` hasta preparar migración y verificar el acceso real |
 | `CORREOS_EMAIL_ENABLED` | `false` durante pruebas y primera revisión de la integración |
-| `CORREOS_LABEL_PRIVATE_DIR` | Directorio absoluto persistente, fuera del repositorio y raíces HTTP, accesible solo por el usuario del backend |
+| `CORREOS_LABEL_PRIVATE_DIR` | Directorio absoluto persistente, fuera del repositorio y raíces HTTP, privado para el backend y el operador autorizado |
 | `CORREOS_SYNC_INTERVAL_SECONDS` | `1800` |
 | `CORREOS_MANUAL_COOLDOWN_SECONDS` | `60` |
 | `CORREOS_SYNC_CONCURRENCY` | `2` |
@@ -64,7 +64,7 @@ Nombres y valores de ejemplo en [cronox-backend/.env.example](../cronox-backend/
 
 Guardar credenciales únicamente en el entorno privado del backend. Usar `cronox-backend/.env.local` también para el comprobador local; está excluido de Git por la regla `.env.*`. No pegar secretos en el chat. `start:local` y `start:dev` seleccionan expresamente ese archivo: el cargador limpia los valores heredados y aplica después los locales, incluidos los vacíos. No se debe dejar una asignación vacía posterior que oculte una credencial. `start:prod` directo conserva otra prioridad: entorno del proceso por encima del archivo `CRONOX_ENV_FILE` o `.env`; no carga automáticamente `.env.local`. Correo, seguimiento y trabajos locales permanecen desactivados.
 
-## Migración y futura publicación — solo documentado
+## Migración y publicación
 
 Migración aditiva: `20261016120000_correos_tracking`. Añade revisión, datos de sincronización y cinco tablas privadas con RLS y revocación de acceso público. Se ejecuta en una transacción con `lock_timeout=5s` y `statement_timeout=60s`; un fallo revierte los cambios de esa transacción. No reescribe estados de pago ni modifica stock. Conserva los números ya guardados; su primera consulta no envía historial antiguo.
 
@@ -77,23 +77,35 @@ npm run prisma:generate
 npm run build:compiled
 ```
 
-Preparar el directorio privado con propietario del backend y permisos 0700/directorio, 0600/archivos (ACL equivalente en Windows); incluirlo en backups. Revisar salud, permisos y UI antes de habilitar consultas. Confirmar cuota, primer resultado real y clasificación; habilitar avisos únicamente después de revisar esos datos y la plantilla de ORDERS.
+Preparar el directorio privado con permisos 0700/directorio, 0600/archivos (ACL equivalente en Windows), accesible para el backend; incluirlo en backups. Revisar salud, permisos y UI antes de habilitar consultas. Confirmar cuota, primer resultado real y clasificación; habilitar avisos únicamente después de revisar esos datos y la plantilla de ORDERS.
 
-Recuperación: primero desactivar worker y avisos, detener sus procesos y comprobar que no queda SMTP en vuelo. La migración es aditiva: puede volver al código anterior conservando las columnas/tablas y sus datos. No eliminar tablas del outbox ni restaurar una base antigua sobre pedidos posteriores para resolver un fallo de seguimiento. Los `SENDING` interrumpidos pasan a `UNKNOWN` al recuperar, no a envío automático. No se ha ejecutado ninguno de estos pasos en producción.
+Recuperación: primero desactivar worker y avisos, detener sus procesos y comprobar que no queda SMTP en vuelo. La migración es aditiva: puede volver al código anterior conservando las columnas/tablas y sus datos. No eliminar tablas del outbox ni restaurar una base antigua sobre pedidos posteriores para resolver un fallo de seguimiento. Los `SENDING` interrumpidos pasan a `UNKNOWN` al recuperar, no a envío automático. Para una reversión inmediata, se han conservado configuración y runtime anteriores (incluidos Prisma y frontend), con hashes y comprobación del contenido del archivo; la espera de salud tras el reinicio es acotada. No se ha necesitado ejecutar la recuperación. Una restauración de configuración posterior a esta ventana requiere revisar antes cualquier cambio nuevo; no sobrescribirlo con una copia antigua.
+
+### Publicación realizada el 14/10/2026
+
+- Código publicado: `458c9153b954a0fdd5b952704074a3fcb12edbc5`. [CI y despliegue](https://github.com/danir23007/Web_Cronox/actions/runs/38606163958) correctos: **2.448 pruebas en 240 suites**, además de 59 comprobaciones HTTP/Excel en seis suites, typecheck, compilaciones y controles de exclusión de secretos/contenido privado. El push inicial ejecutó solo CI; la publicación se inició expresamente después de preparar el respaldo y la configuración.
+- Respaldo consistente de las 100 tablas públicas de la aplicación, configuración privada y runtime anteriores. Restauración real en PostgreSQL aislado mediante socket Unix: coinciden contenido, propietarios, permisos y RLS; sin workers ni escrituras en la base de producción. Los archivos de respaldo y los operadores están fuera del repositorio, bajo directorios privados del usuario de despliegue. No incluye una copia nueva del entorno del PM2 root: no se modificó su configuración ni se utilizó `--update-env`.
+- Migración `20261016120000_correos_tracking` aplicada a las **17:26:48 UTC**, antes de arrancar el código nuevo. Checksum verificado; cinco tablas nuevas con RLS y sin acceso de `PUBLIC`, `anon` o `authenticated`. La migración aditiva permite conservar el servicio anterior durante la instalación; no se necesitó una ventana de mantenimiento.
+- Se trasladaron exclusivamente las cuatro credenciales de `.env.local` a `cronox-backend/.env` del servidor mediante SSH con identidad y host comprobados. El archivo privado conserva sus demás variables, incluidas las de correo general y trabajos; permisos 0600. El reinicio existente preserva el entorno PM2. No se copiaron los perfiles locales completos, evidencias ni herramientas privadas de pruebas.
+- Etiquetas: `/home/deploy/cronox-private/shipping-labels`, persistente y fuera de repositorio, releases y raíces públicas; propietario `deploy`, modo 0700. Lectura/escritura/borrado comprobados como `deploy`; el backend existente corre como root y tiene acceso por permisos Unix. Esto no equivale a haber iniciado un proceso de prueba root ni a haber leído su entorno privado. El directorio inicial vacío también se respaldó. Incluir este directorio junto con la base en los respaldos futuros.
+- `CORREOS_TRACKING_ENABLED=false` y `CORREOS_EMAIL_ENABLED=false` conservados. Cero consultas registradas, eventos, etiquetas y avisos de Correos tras publicar. Salud y disponibilidad HTTP 200 en `cronox.es` y `www.cronox.es`; recursos JS publicados con hashes idénticos a los archivos desplegados. Los cuerpos de `/cuenta` y `/checkout` corresponden a las plantillas nuevas; sus cabeceras son las generadas por el middleware SEO existente. El administrador anónimo sigue siendo redirigido al inicio de sesión.
+- Auditoría real de solo lectura con servicios compilados sobre los **22 pedidos existentes y 22 cuentas vinculadas**: identificadores y datos corresponden al pedido correcto, aislamiento exacto por comprador, sin campos privados de etiquetas/auditoría en la respuesta del cliente. Ningún pedido tiene seguimiento ni hay un caso existente adecuado para mostrar «Pendiente de enviar»; esos estados y el enlace están comprobados en pruebas locales, no mediante un envío ficticio en producción. Cuatro rutas privadas reales devuelven HTTP 401 sin sesión. Metadata y 25 decisiones de roles comprobadas sobre los guards compilados con contextos en memoria; esto no es navegación autenticada real en producción.
+- Identidad desde el VPS: **una única petición real**, scope `TPB`, **HTTP 200** y JWT obtenido a las **17:30:11 UTC**. Token solo en memoria, sin mostrarlo ni guardarlo. **Cero consultas Trackpub y cero correos de prueba**. Esto no valida todavía la autorización Developers ni la respuesta de un envío real.
+- El checkout local quedó limpio. Perfiles privados, respaldos y evidencias permanecen excluidos de Git. Se conservaron sin publicar la copia antigua remota `main.ts.cronox-before-stripe` y el respaldo de las diferencias generadas de dependencias que ya existían en el servidor.
 
 ## Primer envío real — procedimiento preparado, pendiente
 
-1. Crear el envío y la etiqueta en el portal de Correos, como hasta ahora. Guardar el número y PDF en el pedido correcto de CRONOX, manteniendo correo Correos desactivado.
-2. Con los cuatro secretos en el archivo privado local, ejecutar desde `cronox-backend`:
+1. Crear el primer envío real en el portal de Correos, como hasta ahora. Guardar su número en el pedido correcto de CRONOX; **el PDF es opcional**. Mantener ambos flags Correos desactivados durante esta preparación.
+2. Con autorización para consultar ese envío real, ejecutar desde `cronox-backend` del servidor, utilizando exclusivamente su archivo privado existente:
 
    ```bash
-   node scripts/verify-correos-trackpub.cjs --env .env.local --tracking NUMERO_REAL_DE_CORREOS
+   node scripts/verify-correos-trackpub.cjs --env .env --tracking NUMERO_REAL_DE_CORREOS
    ```
 
    El comprobador solicita JWT y consulta Trackpub; no inicia la aplicación ni conecta a base o SMTP. Muestra únicamente resultado agregado, sin secretos, identificadores ni respuesta cruda. Una referencia sin trazabilidad puede devolver un error documentado: no sustituirla por un envío ficticio para declarar acceso validado.
 3. Revisar privadamente la respuesta real en un entorno controlado: `code` debe corresponder al envío, fechas/campos y códigos únicos deben concordar con el contrato y la matriz. Obtener de Correos zona horaria y cuota si siguen sin documentarse. No guardar respuestas con datos personales en Git ni en informes públicos.
-4. Tras la futura publicación autorizada, usar una actualización manual con avisos desactivados; comprobar historial, enlace público, última sincronización y errores separados. El primer historial es la referencia, no una novedad masiva.
-5. Contrastar hitos posteriores y el outbox antes de habilitar correo real. La prueba de SMTP en loopback no valida la recepción en un buzón real ni la configuración de Correos Developers.
+4. Tras validar Developers, cuota, contrato y que los números existentes sean envíos reales, cambiar privadamente **solo** `CORREOS_TRACKING_ENABLED=true`, conservar `CORREOS_EMAIL_ENABLED=false` y reiniciar mediante el procedimiento de PM2 existente. Este cambio habilita tanto consultas manuales como automáticas para todos los pedidos elegibles; no es una activación limitada a un solo pedido. Comprobar el primer historial, enlace público, última sincronización y errores separados en administración y en la sesión del comprador correspondiente. El primer historial es la referencia, no una novedad masiva.
+5. Contrastar hitos posteriores y el outbox, revisar la plantilla y el buzón ORDERS antes de autorizar `CORREOS_EMAIL_ENABLED=true` y reiniciar. Comprobar con ese primer envío real la recepción del aviso, su pedido/revisión y su único registro `SENT`; investigar `UNKNOWN` según el procedimiento anterior. La prueba de SMTP en loopback no valida la recepción en un buzón real ni la configuración de Correos Developers. No alterar los flags generales de correo o trabajos para activar Correos.
 
 ## Evidencias locales
 
