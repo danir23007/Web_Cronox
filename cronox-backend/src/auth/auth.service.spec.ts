@@ -137,6 +137,7 @@ describe('AuthService password reset security', () => {
     usersService.findByEmail.mockResolvedValue({
       id: 42,
       email: 'member@example.test',
+      accountState: UserAccountState.ACTIVE,
     });
     emailService.isEnabled.mockReturnValue(true);
 
@@ -169,6 +170,7 @@ describe('AuthService password reset security', () => {
     usersService.findByEmail.mockResolvedValue({
       id: 42,
       email: 'member@example.test',
+      accountState: UserAccountState.ACTIVE,
     });
     emailService.isEnabled.mockReturnValue(false);
 
@@ -181,7 +183,7 @@ describe('AuthService password reset security', () => {
   });
 
   it('does not issue a queued reset link to a mailbox changed before token persistence', async () => {
-    usersService.findByEmail.mockResolvedValue({ id: 42, email: 'old@example.test' });
+    usersService.findByEmail.mockResolvedValue({ id: 42, email: 'old@example.test', accountState: UserAccountState.ACTIVE });
     tx.user.findUnique.mockResolvedValue({ email: 'new@example.test' });
     emailService.isEnabled.mockReturnValue(true);
     await service.requestPasswordReset('old@example.test');
@@ -194,6 +196,7 @@ describe('AuthService password reset security', () => {
     usersService.findByEmail.mockResolvedValue({
       id: 42,
       email: 'member@example.test',
+      accountState: UserAccountState.ACTIVE,
     });
     emailService.isEnabled.mockReturnValue(true);
     prisma.$transaction.mockImplementation(() => new Promise(() => undefined));
@@ -339,7 +342,7 @@ describe('AuthService password reset security', () => {
       expiresAt: new Date(Date.now() + 60_000),
     });
     let persistedHash: string | null = null;
-    let accountState: UserAccountState = UserAccountState.PENDING_PASSWORD;
+    let accountState: UserAccountState = UserAccountState.ACTIVE;
     tx.user.updateMany.mockImplementation(async ({ where, data }: { where: { accountState?: UserAccountState }; data: { accountState?: UserAccountState } }) => {
       if (where.accountState === accountState && data.accountState) accountState = data.accountState;
       return { count: 1 };

@@ -65,7 +65,7 @@ describe('Waitlist dispatch safeguards', () => {
     async (kind) => {
       const h = fixture();
       if (kind === 'bad-email') h.row.user.email = 'not-an-email';
-      if (kind === 'inactive') h.row.user.accountState = 'PRE_REGISTERED';
+      if (kind === 'inactive') h.row.user.accountState = 'INACTIVE';
       if (kind === 'deleted')
         h.prisma.restockRequest.findFirst.mockResolvedValue(null);
       await h.service.dispatch('r', 'claim');

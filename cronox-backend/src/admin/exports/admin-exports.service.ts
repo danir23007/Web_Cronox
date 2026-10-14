@@ -1,4 +1,5 @@
 import { loadUserPurchaseMetrics, sortUsersByMetrics, UserSort } from '../users/user-purchase-metrics';
+import { ACCOUNT_STATE_LABELS } from '../../users/account-state';
 import {
   Injectable,
   PayloadTooLargeException,
@@ -170,6 +171,7 @@ export class AdminExportsService {
     if (query.phone)
       where.phone = { contains: query.phone, mode: 'insensitive' };
     if (query.role) where.role = query.role;
+    if (query.accountState) where.accountState = query.accountState;
     if (query.circle) where.circleLevel = query.circle;
     const sort = ['createdAt', 'email', 'id'].includes(query.sort ?? '')
       ? query.sort!
@@ -1084,7 +1086,7 @@ export class AdminExportsService {
     )[role];
   }
   private accountStateLabel(state: UserAccountState) {
-    return state;
+    return ACCOUNT_STATE_LABELS[state];
   }
   private orderStatusLabel(status: OrderStatus) {
     return (

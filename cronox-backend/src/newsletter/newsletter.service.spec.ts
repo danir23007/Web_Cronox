@@ -40,7 +40,7 @@ describe('Newsletter durable single opt-in', () => {
     expect(jobs).toMatchObject([{ email: 'new@example.test', kind: 'WELCOME' }]);
     expect(mail.sendNewsletterWelcome).not.toHaveBeenCalled();
     expect(db.user.create).toHaveBeenCalledTimes(1);
-    expect(user).toMatchObject({ password: null, accountState: 'PRE_REGISTERED', memberCode: 'CRX-000123', newsletterSubscribed: true });
+    expect(user).toMatchObject({ password: null, accountState: 'ACTIVE', memberCode: 'CRX-000123', newsletterSubscribed: true });
     expect(row.userId).toBe(user.id);
   });
 

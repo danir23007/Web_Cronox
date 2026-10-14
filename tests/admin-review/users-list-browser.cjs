@@ -7,7 +7,7 @@ async (page) => {
   await page.locator('#usersSort').waitFor();
   check(await page.locator('#usersSort').inputValue() === 'id' && await page.locator('#usersOrder').inputValue() === 'desc', 'Initial ordering must be ID descending');
   check(!page.url().includes('accountState'), 'Retired URL filter remains');
-  check(await page.locator('#usersAccountState').count() === 0, 'Account state filter still exists');
+  check(await page.locator('#usersAccountState option').count() === 3, 'Expected all/active/inactive filter');
   const headers = await page.locator('#section-users th').allTextContents();
   check(headers.indexOf('Facturación') === headers.indexOf('Nombre') + 1 && headers.indexOf('Rol') === headers.indexOf('Facturación') + 1, 'Revenue column is misplaced');
   const matches = response => new URL(response.url()).pathname === '/api/admin/users';

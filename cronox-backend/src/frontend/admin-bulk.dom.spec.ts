@@ -37,6 +37,7 @@ describe('admin Bulk Edit mode', () => {
     });
     w.fetch = fetch;
     w.eval(readFileSync(path.resolve(__dirname, '../../../cronox-front/assets/user-identity.js'), 'utf8'));
+    w.eval(readFileSync(path.resolve(__dirname, '../../../cronox-front/assets/account-state.js'), 'utf8'));
     w.eval(bulkScript);
     const query = { page: 1, pageSize: 2, q: '' };
     const body = w.document.querySelector('#usersBody');
@@ -216,7 +217,7 @@ describe('admin Bulk Edit mode', () => {
               counts: { changed: 1, unchanged: 0, excluded: 0 },
             }),
           };
-        const next = payload.changes.accountState || 'PENDING_PASSWORD';
+        const next = payload.changes.accountState || 'ACTIVE';
         return {
           ok: true,
           json: async () => ({
@@ -224,18 +225,18 @@ describe('admin Bulk Edit mode', () => {
               {
                 id: 2,
                 name: 'Prueba',
-                state: next === 'PENDING_PASSWORD' ? 'unchanged' : 'changed',
+                state: next === 'ACTIVE' ? 'unchanged' : 'changed',
                 before: {
                   role: 'USER',
                   circleLevel: 1,
-                  accountState: 'PENDING_PASSWORD',
+                  accountState: 'ACTIVE',
                 },
                 after: { role: 'USER', circleLevel: 1, accountState: next },
               },
             ],
             counts: {
-              changed: next === 'PENDING_PASSWORD' ? 0 : 1,
-              unchanged: next === 'PENDING_PASSWORD' ? 1 : 0,
+              changed: next === 'ACTIVE' ? 0 : 1,
+              unchanged: next === 'ACTIVE' ? 1 : 0,
               excluded: 0,
             },
             reviewToken: 'review',
@@ -250,26 +251,26 @@ describe('admin Bulk Edit mode', () => {
       section.querySelector('.bulk-actions button').click();
       await flush();
       const dialog = w.document.querySelector('.admin-bulk-dialog');
-      expect(dialog.textContent).toContain('Estado: Pendiente de contraseña');
+      expect(dialog.textContent).toContain('Estado: Activo');
       const state = dialog.querySelector('[data-bulk-field="accountState"]');
       expect(state.value).toBe('');
       const apply = [...dialog.querySelectorAll('button')].find((button: any) =>
         button.textContent === 'Aplicar cambios',
       );
       expect(apply.disabled).toBe(true);
-      state.value = 'PENDING_PASSWORD';
+      state.value = 'ACTIVE';
       state.dispatchEvent(new w.Event('change', { bubbles: true }));
       apply.click(); await flush();
       expect(apply.disabled).toBe(true);
       expect(dialog.textContent).toContain('No hay cambios que aplicar');
-      state.value = 'PRE_REGISTERED';
+      state.value = 'INACTIVE';
       state.dispatchEvent(new w.Event('change', { bubbles: true }));
       expect(apply.disabled).toBe(false);
       expect(dialog.textContent).toContain('Cambios pendientes de revisión');
       apply.click(); apply.click(); // Review only; no duplicate request or write.
       await flush();
       expect(dialog.textContent).toContain(
-        'Pendiente de contraseña → Prerregistrado',
+        'Activo → Inactivo',
       );
       expect(apply.textContent).toBe('Confirmar cambios a 1 usuarios');
       expect(fetch.mock.calls.filter(([url]: [string]) => url.endsWith('/preview'))).toHaveLength(3);
@@ -281,7 +282,7 @@ describe('admin Bulk Edit mode', () => {
       state.dispatchEvent(new w.Event('change', { bubbles: true }));
       expect(apply.disabled).toBe(true);
       expect(apply.textContent).toBe('Aplicar cambios');
-      state.value = 'PRE_REGISTERED';
+      state.value = 'INACTIVE';
       state.dispatchEvent(new w.Event('change', { bubbles: true }));
       apply.click(); await flush();
       apply.click();
@@ -292,7 +293,7 @@ describe('admin Bulk Edit mode', () => {
             url.endsWith('/execute'),
           )[1].body,
         ).changes,
-      ).toEqual({ accountState: 'PRE_REGISTERED' });
+      ).toEqual({ accountState: 'INACTIVE' });
       expect(reload).toHaveBeenCalledTimes(1);
     } finally {
       dom.window.close();
@@ -363,8 +364,8 @@ describe('admin Bulk Edit mode', () => {
         return { ok: true, json: async () => ({ reviewToken: 'review',
           counts: { changed: payload.changes.accountState ? 1 : 0, unchanged: payload.changes.accountState ? 0 : 1, excluded: 0 },
           rows: [{ id: 2, name: 'Prueba', state: payload.changes.accountState ? 'changed' : 'unchanged',
-            before: { role: 'USER', circleLevel: 1, accountState: 'PRE_REGISTERED' },
-            after: { role: 'USER', circleLevel: 1, accountState: payload.changes.accountState || 'PRE_REGISTERED' } }],
+            before: { role: 'USER', circleLevel: 1, accountState: 'INACTIVE' },
+            after: { role: 'USER', circleLevel: 1, accountState: payload.changes.accountState || 'INACTIVE' } }],
         }) };
       });
       if (failedRefresh) reload.mockRejectedValue(new Error('Table unavailable'));
@@ -374,7 +375,7 @@ describe('admin Bulk Edit mode', () => {
       selected.checked = true; selected.dispatchEvent(new w.Event('change', { bubbles: true }));
       section.querySelector('.bulk-actions button').click(); await flush();
       const dialog = w.document.querySelector('.admin-bulk-dialog');
-      expect(dialog.textContent).toContain('Activa admite cuentas con o sin contraseña');
+      expect(dialog.textContent).toContain('Activo admite cuentas con o sin contraseña');
       const state = dialog.querySelector('[data-bulk-field="accountState"]');
       state.value = 'ACTIVE'; state.dispatchEvent(new w.Event('change', { bubbles: true }));
       const find = (name: string) => [...dialog.querySelectorAll('button')].find((b: any) => b.textContent.startsWith(name));
@@ -414,7 +415,7 @@ describe('admin Bulk Edit mode', () => {
               before: {
                 role: 'USER',
                 circleLevel: 1,
-                accountState: 'PRE_REGISTERED',
+                accountState: 'INACTIVE',
               },
             },
           ],

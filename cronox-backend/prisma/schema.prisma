@@ -933,6 +933,8 @@ model User {
   id                        Int                     @id @default(autoincrement())
   email                     String                  @unique
   password                  String?                 @map("passwordHash")
+  /// Technical eligibility inherited from newsletter/key-screen signup; never an account state.
+  registrationClaimable     Boolean                 @default(false)
   passwordSetupEmailSentAt  DateTime?
   passwordSetupClaimedAt    DateTime?
   role                      Role                    @default(USER)
@@ -1960,8 +1962,7 @@ enum KeyScreenVerticalAlign {
 
 enum UserAccountState {
   ACTIVE
-  PENDING_PASSWORD
-  PRE_REGISTERED
+  INACTIVE
 }
 
 // Tombstones prevent historical Stripe retries from recreating deleted test orders.

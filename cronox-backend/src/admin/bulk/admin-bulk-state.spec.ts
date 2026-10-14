@@ -23,7 +23,7 @@ describe('bulk user account state', () => {
         name: 'Prueba',
         role: 'USER',
         circleLevel: 1,
-        accountState: UserAccountState.PRE_REGISTERED,
+        accountState: UserAccountState.INACTIVE,
         password: null,
         preRegistration: { userId: 2 },
         sessionVersion: 0,
@@ -95,31 +95,31 @@ describe('bulk user account state', () => {
   }
 
   it('changes only state and persists it when queried again', async () => {
-    rows[0].accountState = UserAccountState.PENDING_PASSWORD;
+    rows[0].accountState = UserAccountState.ACTIVE;
     const { result } = await apply({
-      accountState: UserAccountState.PRE_REGISTERED,
+      accountState: UserAccountState.INACTIVE,
     });
     expect(result).toMatchObject({ counts: { changed: 1, unchanged: 0, excluded: 0 } });
     expect(users.updateAdminUser).toHaveBeenCalledWith(
       2,
-      expect.objectContaining({ accountState: 'PRE_REGISTERED' }),
+      expect.objectContaining({ accountState: 'INACTIVE' }),
       1,
       {},
       tx,
     );
     expect(
       (await service.preview(dto({}) as any, 1)).rows[0].before.accountState,
-    ).toBe('PRE_REGISTERED');
+    ).toBe('INACTIVE');
   });
 
   it('combines state, role and circle in one update', async () => {
     const { preview } = await apply({
-      accountState: 'PENDING_PASSWORD',
+      accountState: 'ACTIVE',
       role: 'FRIEND',
       circleLevel: 3,
     });
     expect(preview.rows[0].after).toMatchObject({
-      accountState: 'PENDING_PASSWORD',
+      accountState: 'ACTIVE',
       role: 'FRIEND',
       circleLevel: 3,
     });
@@ -131,29 +131,21 @@ describe('bulk user account state', () => {
     expect(users.updateAdminUser.mock.calls[0][1]).not.toHaveProperty(
       'accountState',
     );
-    expect(rows[0].accountState).toBe('PRE_REGISTERED');
+    expect(rows[0].accountState).toBe('INACTIVE');
   });
 
-  it('rejects an incompatible selection before writing any user', async () => {
-    rows.push({ ...rows[0], id: 3, password: 'hash', accountState: 'ACTIVE' });
-    await expect(
-      service.preview(
-        dto({ accountState: 'PRE_REGISTERED' }, [2, 3]) as any,
-        1,
-      ),
-    ).rejects.toThrow(BadRequestException);
+  it.each(['PRE_REGISTERED', 'PENDING_PASSWORD', 'UNKNOWN'])('rejects obsolete/unknown state %s before writes', async accountState => {
+    await expect(service.preview(dto({ accountState }) as any, 1)).rejects.toThrow(BadRequestException);
     expect(users.updateAdminUser).not.toHaveBeenCalled();
   });
 
-  it('allows ACTIVE without a password and still requires a pre-registration for PRE_REGISTERED', async () => {
+  it('allows ACTIVE with or without a password and without preregistration', async () => {
+    rows[0].preRegistration = null;
     const { result } = await apply({ accountState: 'ACTIVE' });
     expect(result).toMatchObject({ counts: { changed: 1 } });
     expect(rows[0]).toMatchObject({ accountState: 'ACTIVE', password: null, role: 'USER', circleLevel: 1 });
-    rows[0].preRegistration = null;
-    rows[0].accountState = 'PENDING_PASSWORD';
-    await expect(
-      service.preview(dto({ accountState: 'PRE_REGISTERED' }) as any, 1),
-    ).rejects.toThrow('prerregistro existente');
+    rows[0].accountState = 'INACTIVE'; rows[0].password = 'hash';
+    expect((await service.preview(dto({ accountState: 'ACTIVE' }) as any, 1)).counts.changed).toBe(1);
   });
 
   it('checks the actor on the server and excludes SUPERADMIN accounts', async () => {
@@ -163,11 +155,11 @@ describe('bulk user account state', () => {
       accountState: 'ACTIVE',
     });
     await expect(
-      service.preview(dto({ accountState: 'PENDING_PASSWORD' }) as any, 1),
+      service.preview(dto({ accountState: 'ACTIVE' }) as any, 1),
     ).rejects.toThrow(ForbiddenException);
     rows[0].role = 'SUPERADMIN';
     const result = await service.preview(
-      dto({ accountState: 'PENDING_PASSWORD' }) as any,
+      dto({ accountState: 'ACTIVE' }) as any,
       1,
     );
     expect(result.counts.excluded).toBe(1);
@@ -181,17 +173,16 @@ describe('bulk user account state', () => {
       accountState: 'ACTIVE',
     });
     const result = await service.preview(
-      dto({ accountState: 'PENDING_PASSWORD' }, [1, 2]) as any,
+      dto({ accountState: 'ACTIVE' }, [1, 2]) as any,
       1,
     );
     expect(result.counts).toEqual({ changed: 1, unchanged: 0, excluded: 1 });
   });
 
-  it('rejects PENDING_PASSWORD when a password already exists', async () => {
-    rows[0].password = 'hash';
-    await expect(
-      service.preview(dto({ accountState: 'PENDING_PASSWORD' }) as any, 1),
-    ).rejects.toThrow('sin contraseña');
+  it('allows explicit deactivation regardless of password', async () => {
+    rows[0].accountState = 'ACTIVE'; rows[0].password = 'hash';
+    const { result } = await apply({ accountState: 'INACTIVE' });
+    expect(result).toMatchObject({counts:{changed:1}});
   });
   it('rejects a reused numeric ID with a different immutable identity', async () => {
     rows[0].identityUid = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';

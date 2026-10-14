@@ -90,7 +90,7 @@ async function main() {
     for (const outcome of ['concurrent', 'safe-retry', 'uncertain', 'pending']) {
       const address = `newsletter-${outcome}-${suffix}@example.test`;
       emails.push(address);
-      const testUser = await db.user.create({ data: { email: address, role: 'USER', accountState: outcome === 'pending' ? 'PENDING_PASSWORD' : 'ACTIVE' } });
+      const testUser = await db.user.create({ data: { email: address, role: 'USER', accountState: outcome === 'pending' ? 'INACTIVE' : 'ACTIVE' } });
       const job = await db.newsletterMailJob.create({ data: { email: address, kind: 'ACCESS', status: 'PROCESSING', claimToken: outcome, attempts: 1 } });
       if (outcome === 'concurrent') {
         const second = await db.newsletterMailJob.create({ data: { email: address, kind: 'ACCESS', status: 'PROCESSING', claimToken: 'second', attempts: 1 } });
@@ -103,7 +103,7 @@ async function main() {
         await worker.dispatch(job.id, outcome);
         const unchanged = await db.user.findUnique({ where: { id: testUser.id } });
         assert.equal(unchanged.password, null);
-        assert.equal(unchanged.accountState, 'PENDING_PASSWORD');
+        assert.equal(unchanged.accountState, 'INACTIVE');
         assert.equal(sent.at(-1).account, false);
       } else {
         const original = fakeEmail.sendNewsletterAccess;

@@ -64,6 +64,7 @@ describe('AdminExportsService', () => {
     );
     const sheets = excel.build.mock.calls[0][1];
     expect(sheets[0].rows[0].phone).toBe('+34 600 111 222');
+    expect(sheets[0].rows[0].state).toBe('Activo');
     expect(prisma.auditLog.create).toHaveBeenCalledWith({
       data: expect.objectContaining({
         actorId: 99,

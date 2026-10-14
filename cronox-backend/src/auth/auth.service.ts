@@ -37,6 +37,7 @@ import { ACCESS_TOKEN_SECONDS } from './session-policy';
 import { serializableTransaction } from '../prisma/serializable-transaction';
 import { UserNumberingGate } from '../users/user-numbering-gate.module';
 import { ensureAccountWelcome } from '../users/account-welcome';
+import { canCompletePublicRegistration } from '../users/account-state';
 
 const PASSWORD_SETUP_CLAIM_STALE_MS = 10 * 60 * 1000;
 
@@ -80,7 +81,7 @@ export class AuthService {
     const email = normalizeEmail(dto.email);
     const existing = await this.usersService.findByEmail(email);
 
-    if (existing && existing.accountState !== UserAccountState.PRE_REGISTERED) {
+    if (existing && !canCompletePublicRegistration(existing)) {
       throw new ConflictException('El email ya esta registrado');
     }
 
@@ -90,7 +91,7 @@ export class AuthService {
       .join(' ')
       .trim();
     const user = existing
-      ? await this.usersService.activatePreRegisteredUser(existing.id, {
+      ? await this.usersService.completePasswordlessRegistration(existing.id, {
           password: hashedPassword,
           name: fullName || undefined,
           firstName: dto.firstName,
@@ -127,6 +128,7 @@ export class AuthService {
       const now = new Date();
       if (!registration || registration.launchTokenUsedAt ||
           !registration.launchTokenExpiresAt || registration.launchTokenExpiresAt <= now ||
+          registration.user.accountState !== UserAccountState.ACTIVE ||
           !['USER', 'FRIEND'].includes(registration.user.role)) {
         throw new UnauthorizedException('El enlace ha caducado o ya se ha utilizado. Inicia sesión o restablece tu contraseña.');
       }
@@ -137,9 +139,7 @@ export class AuthService {
       });
       if (claimed.count !== 1) throw new UnauthorizedException('Enlace ya utilizado');
       await ensureAccountWelcome(tx, registration.userId);
-      const activated = await tx.user.update({ where: { id: registration.userId },
-        data: { accountState: UserAccountState.ACTIVE } });
-      return activated;
+      return registration.user;
     });
     const authUser = this.omitPassword(user);
     return { user: this.formatAuthUser(authUser), tokens: await this.generateTokens(authUser) };
@@ -384,12 +384,12 @@ export class AuthService {
     // the externally observable response independent of account existence.
     if (
       user &&
-      user.accountState !== UserAccountState.PRE_REGISTERED &&
+      user.accountState === UserAccountState.ACTIVE &&
       this.emailService.isEnabled()
     ) {
       const deliver = async () => {
         const current = this.numbering ? await this.prisma.user.findUnique({ where: { identityUid: user.identityUid } }) : user;
-        if (current && current.email === user.email && current.accountState !== UserAccountState.PRE_REGISTERED) await this.createAndSendPasswordReset(current);
+        if (current && current.email === user.email && current.accountState === UserAccountState.ACTIVE) await this.createAndSendPasswordReset(current);
       };
       void (this.numbering ? this.numbering.shared(deliver) : deliver()).catch(() => {
         this.logger.error('Password reset delivery task failed');
@@ -519,7 +519,7 @@ export class AuthService {
     const updated = await this.prisma.$transaction(async tx => {
       const changed = await tx.user.updateMany({
         where: { id: userId, password: user.password, sessionVersion: user.sessionVersion, accountState: UserAccountState.ACTIVE },
-        data: { password, sessionVersion: { increment: 1 }, passwordSetupClaimedAt: null },
+        data: { password, registrationClaimable: false, sessionVersion: { increment: 1 }, passwordSetupClaimedAt: null },
       });
       if (changed.count !== 1) throw new ConflictException('La cuenta cambi\u00f3. Recarga e int\u00e9ntalo de nuevo.');
       await tx.passwordResetToken.updateMany({ where: { userId, usedAt: null }, data: { usedAt: new Date() } });
@@ -557,16 +557,13 @@ export class AuthService {
       }
 
       await ensureAccountWelcome(tx, passwordResetToken.userId);
-      // A valid email setup/reset token completes a pending password account.
-      // Preregistrations still require their independent launch activation.
-      await tx.user.updateMany({
-        where: { id: passwordResetToken.userId, accountState: UserAccountState.PENDING_PASSWORD },
-        data: { accountState: UserAccountState.ACTIVE },
-      });
+      // Password possession and administrative enablement are independent.
+      // A token issued before deactivation must never reactivate the account.
       await tx.user.update({
         where: { id: passwordResetToken.userId },
         data: {
           password: hashedPassword,
+          registrationClaimable: false,
           passwordSetupClaimedAt: null,
           sessionVersion: { increment: 1 },
         },

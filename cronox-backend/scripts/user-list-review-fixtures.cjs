@@ -4,7 +4,7 @@ const { randomUUID } = require('node:crypto');
 module.exports = async function review(db, manual, admin, users, product, variantId, now) {
   const fixtures = [];
   for (let i = 0; i < 106; i++) fixtures.push(await db.user.create({ data: { email: `users-list-${i}@example.test`, name: `LIST local ${String(i).padStart(3, '0')}`,
-    accountState: ['ACTIVE', 'PRE_REGISTERED', 'PENDING_PASSWORD'][i % 3], createdAt: new Date(now.getTime() + i) } }));
+    accountState: ['ACTIVE', 'INACTIVE'][i % 2], createdAt: new Date(now.getTime() + i) } }));
   const secondProduct = await db.product.create({ data: { name: product.name, slug: 'list-different-identity', price: 99999,
     privateCost: { create: { unitCostCents: 1000 } }, variants: { create: { sku: 'LIST-SECOND', size: 'M', stockQty: 100 } } }, include: { variants: true } });
   const otherSize = await db.productVariant.create({ data: { productId: product.id, sku: 'LIST-SIZE-L', size: 'L', stockQty: 100 } });
@@ -40,8 +40,8 @@ module.exports = async function review(db, manual, admin, users, product, varian
     const pages = [...(await users.listUsers({ q: 'LIST local', sort, order, pageSize: 100 })).data, ...(await users.listUsers({ q: 'LIST local', sort, order, pageSize: 100, page: 2 })).data];
     assert.deepEqual(pages.map(u => u.id), expected.map(u => u.id));
   }
-  assert.equal((await users.listUsers({ q: 'LIST local', accountState: 'ACTIVE' })).meta.total, 106);
-  const pending = await users.listUsers({ q: 'users-list-1@example.test' }); assert.equal(pending.meta.total, 1); assert.equal(pending.data[0].accountState, 'PRE_REGISTERED');
+  assert.equal((await users.listUsers({ q: 'LIST local', accountState: 'ACTIVE' })).meta.total, 53);
+  const pending = await users.listUsers({ q: 'users-list-1@example.test' }); assert.equal(pending.meta.total, 1); assert.equal(pending.data[0].accountState, 'INACTIVE');
   const stock = (await db.productVariant.findUnique({ where: { id: variantId } })).stockQty;
   await manual.setStatisticsExclusion(exception.id, admin.id, randomUUID(), false);
   assert.equal((await users.listUsers({ q: 'LIST local', sort: 'revenue', order: 'desc' })).data[0].id, fixtures[3].id);

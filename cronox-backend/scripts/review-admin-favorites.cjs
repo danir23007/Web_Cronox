@@ -23,7 +23,7 @@ const run=(cmd,args,opts={})=>execFileSync(cmd,args,{windowsHide:true,stdio:'pip
     const {AdminFavoritesService}=require('../dist/admin/favorites/admin-favorites.service'),reporter=new AdminFavoritesService(db);
     const {FavoritesService}=require('../dist/favorites/favorites.service'),favorites=new FavoritesService(db);
     const users=[];
-    for(let i=0;i<3;i++)users.push(await db.user.create({data:{email:`favorites-${i}@example.test`,accountState:i===2?'PRE_REGISTERED':'ACTIVE',password:null}}));
+    for(let i=0;i<3;i++)users.push(await db.user.create({data:{email:`favorites-${i}@example.test`,accountState:i===2?'INACTIVE':'ACTIVE',password:null}}));
     const products=[];
     for(let i=0;i<28;i++)products.push(await db.product.create({data:{name:'Producto '+i,slug:'favorite-product-'+i,price:3500,imageUrl:'/assets/products/camiseta_washed_gris.png',variants:{create:{sku:'FAV-'+i,size:'M',stockQty:i===2?0:3}}}}));
     const get=patch=>reporter.report({page:1,sort:'desc',...patch});

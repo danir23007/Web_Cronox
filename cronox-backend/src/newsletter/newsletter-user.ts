@@ -12,7 +12,8 @@ export async function linkNewsletterUser(tx: Prisma.TransactionClient, email: st
   const newlyCreated = !user;
   if (!user) {
     user = await tx.user.create({ data: {
-      email: normalized, password: null, accountState: UserAccountState.PRE_REGISTERED,
+      email: normalized, password: null, accountState: UserAccountState.ACTIVE,
+      registrationClaimable: true,
       memberCode: await getNextSequentialMemberCode(tx), newsletterSubscribed: consent,
     } });
   } else if (consent && !user.newsletterSubscribed) {

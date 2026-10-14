@@ -91,12 +91,15 @@ export class NewsletterService {
         const { user, created } = await linkNewsletterUser(tx, email, true, !previous?.subscribedAt);
         if (subscription.userId && subscription.userId !== user.id) throw new Error('Newsletter account link conflict: manual review required');
         await tx.newsletterSubscription.update({ where: { id: subscription.id }, data: { userId: user.id } });
+        // Welcome delivery is independent of enablement. Becoming ACTIVE must
+        // not enqueue a second access message alongside a new/pending welcome.
+        if (created && !previous?.subscribedAt) return 'welcome';
+        if (welcomeJob && !subscription.welcomeSentAt) return 'subscribed';
         const eligible = user?.accountState === 'ACTIVE' && ['USER', 'FRIEND'].includes(user.role);
         if (eligible) {
           await this.scheduleAccess(tx, email, now);
-          if (previous?.subscribedAt || welcomeJob) return 'existing_account';
+          if (previous?.subscribedAt || welcomeJob) return created ? 'subscribed' : 'existing_account';
         }
-        if (welcomeJob && !subscription.welcomeSentAt) return 'subscribed';
         // Historical subscribers keep their existing consent and discounts.
         if (previous?.subscribedAt) {
           await this.scheduleAccess(tx, email, now);

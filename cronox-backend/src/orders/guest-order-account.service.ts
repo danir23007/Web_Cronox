@@ -67,7 +67,7 @@ export class GuestOrderAccountService {
         email,
         password: null,
         role: Role.USER,
-        accountState: UserAccountState.PENDING_PASSWORD,
+        accountState: UserAccountState.ACTIVE,
         name: fullName || null,
         firstName: accountNamesFit ? names?.firstName ?? null : null,
         lastName: accountNamesFit ? names?.lastName ?? null : null,

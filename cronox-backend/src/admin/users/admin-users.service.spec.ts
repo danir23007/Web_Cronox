@@ -114,11 +114,11 @@ describe('AdminUsersService protected user updates', () => {
   });
 
   it('changes account status and invalidates existing sessions', async () => {
-    await update({ accountState: UserAccountState.PENDING_PASSWORD });
+    await update({ accountState: UserAccountState.INACTIVE });
     expect(tx.user.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
-          accountState: UserAccountState.PENDING_PASSWORD,
+          accountState: UserAccountState.INACTIVE,
           sessionVersion: { increment: 1 },
         }),
       }),

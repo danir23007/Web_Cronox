@@ -139,7 +139,7 @@ export class NewsletterDeliveryService implements OnModuleInit, OnModuleDestroy 
             const hash = await hashNewPassword(candidate);
             const changed = await tx.user.updateMany({
               where: { id: user.id, password: null, email: user.email, accountState: 'ACTIVE', role: { in: ['USER', 'FRIEND'] } },
-              data: { password: hash },
+              data: { password: hash, registrationClaimable: false },
             });
             if (changed.count === 1) {
               initialPassword = candidate; initialHash = hash; initialUserId = user.id;

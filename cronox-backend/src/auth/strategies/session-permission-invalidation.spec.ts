@@ -57,7 +57,7 @@ describe('role/status session invalidation with the authoritative session read',
     async (reason) => {
       if (reason === 'version') current.sessionVersion = 4;
       if (reason === 'inactive')
-        current.accountState = UserAccountState.PENDING_PASSWORD;
+        current.accountState = UserAccountState.INACTIVE;
       if (reason === 'revoked') revoked = new Date();
       await expect(
         access.validate({} as Request, claims),

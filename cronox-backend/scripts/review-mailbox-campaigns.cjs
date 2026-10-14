@@ -35,7 +35,7 @@ module.exports=async function review({app,db,backend,request,boxId,users,provide
 
   const makeUser=async(email,circle,subscribed=true,state='ACTIVE')=>db.user.create({data:{email,role:'USER',circleLevel:circle,newsletterSubscribed:subscribed,accountState:state}});
   const u1=await makeUser('campaign-one@example.test',1),u2=await makeUser('campaign-two@example.test',2);
-  await makeUser('not-subscribed@example.test',1,false);await makeUser('inactive@example.test',1,true,'PENDING_PASSWORD');
+  await makeUser('not-subscribed@example.test',1,false);await makeUser('inactive@example.test',1,true,'INACTIVE');
   await makeUser('invalid-address',1);await makeUser('suppressed@example.test',2);
   await db.mailboxSuppression.create({data:{email:'suppressed@example.test',reason:'UNSUBSCRIBED'}});
   assert.deepEqual(await campaigns.recipients([1,2,1]),[u1.email,u2.email]);

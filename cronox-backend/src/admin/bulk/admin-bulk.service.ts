@@ -5,7 +5,8 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { Prisma, UserAccountState } from '@prisma/client';
+import { Prisma } from '@prisma/client';
+import { assertAccountState } from '../../users/account-state';
 import { JwtService } from '@nestjs/jwt';
 import { createHash } from 'node:crypto';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -69,6 +70,7 @@ export class AdminBulkService {
     if (!dto.changes || typeof dto.changes !== 'object')
       throw new BadRequestException('Indica los cambios.');
     const c = dto.changes;
+    if (c.accountState !== undefined) assertAccountState(c.accountState);
     if (Object.values(c).some((v) => v === null))
       throw new BadRequestException('No se admiten valores nulos.');
     const allowed =
@@ -128,8 +130,6 @@ export class AdminBulkService {
               role: true,
               circleLevel: true,
               accountState: true,
-              password: true,
-              preRegistration: { select: { userId: true } },
               sessionVersion: true,
               updatedAt: true,
             },
@@ -178,22 +178,6 @@ export class AdminBulkService {
         if (c.circleLevel !== undefined) after.circleLevel = c.circleLevel;
         if (c.accountState !== undefined) {
           after.accountState = c.accountState;
-          if (!reason && c.accountState !== r.accountState) {
-            if (
-              c.accountState === UserAccountState.PENDING_PASSWORD &&
-              r.password
-            )
-              throw new BadRequestException(
-                `Usuario #${r.id}: Pendiente de contraseña requiere una cuenta sin contraseña.`,
-              );
-            if (
-              c.accountState === UserAccountState.PRE_REGISTERED &&
-              (!r.preRegistration || r.password)
-            )
-              throw new BadRequestException(
-                `Usuario #${r.id}: Prerregistrado requiere un prerregistro existente y una cuenta sin contraseña.`,
-              );
-          }
         }
       } else {
         if (c.isActive !== undefined) after.isActive = c.isActive;

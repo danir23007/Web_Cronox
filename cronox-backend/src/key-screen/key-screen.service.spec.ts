@@ -231,7 +231,8 @@ describe('KeyScreenService', () => {
       data: {
         email: 'test@example.com',
         password: null,
-        accountState: UserAccountState.PRE_REGISTERED,
+        accountState: UserAccountState.ACTIVE,
+        registrationClaimable: true,
       },
       select: { id: true },
     });

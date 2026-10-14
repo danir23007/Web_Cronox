@@ -68,7 +68,7 @@ describe('Admin export filter mapping', () => {
         take: 5001,
       }),
     );
-    expect(prisma.user.findMany.mock.calls[0][0].where).not.toHaveProperty('accountState');
+    expect(prisma.user.findMany.mock.calls[0][0].where).toHaveProperty('accountState', 'ACTIVE');
   });
 
   it('maps the order UI identity search and supports validated status/date/sort', async () => {

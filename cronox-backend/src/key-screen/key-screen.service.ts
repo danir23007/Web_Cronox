@@ -373,7 +373,8 @@ export class KeyScreenService {
           data: {
             email,
             password: null,
-            accountState: UserAccountState.PRE_REGISTERED,
+            accountState: UserAccountState.ACTIVE,
+            registrationClaimable: true,
           },
           select: { id: true },
         });

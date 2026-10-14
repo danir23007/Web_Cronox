@@ -33,7 +33,7 @@ describe('bulk contract security', () => {
       pipe.transform(payload, { type: 'body', metatype: BulkPreviewDto }),
     ).rejects.toThrow();
   });
-  it.each(['ACTIVE', 'PENDING_PASSWORD', 'PRE_REGISTERED'])(
+  it.each(['ACTIVE', 'INACTIVE'])(
     'accepts the real account state %s',
     async (accountState) => {
       await expect(

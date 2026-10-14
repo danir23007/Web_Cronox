@@ -43,7 +43,7 @@ async function main() {
     } });
     const { PrismaClient } = require('@prisma/client'); db = new PrismaClient({ datasources: { db: { url } } });
     const old = await db.user.create({ data: { email: '  OLD@Example.test ', memberCode: 'CRX-000050', publicMemberToken: 'previous-issued-token' } });
-    const other = await db.user.create({ data: { email: 'other@example.test', memberCode: '000007', accountState: 'PENDING_PASSWORD' } });
+    const other = await db.user.create({ data: { email: 'other@example.test', memberCode: '000007', accountState: 'INACTIVE' } });
     await db.$executeRaw`INSERT INTO "NewsletterSubscription" (id,email,"subscribedAt","updatedAt") VALUES ('orphan','orphan@example.test',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP),('existing','old@example.test',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP),('pending','pending@example.test',NULL,CURRENT_TIMESTAMP)`;
     const { auditNewsletterUsers, repairNewsletterUsers } = require('../dist/newsletter/newsletter-user-repair');
     const before = await auditNewsletterUsers(db);
@@ -73,17 +73,17 @@ async function main() {
     assert.equal((await repairNewsletterUsers(db, true)).processed, 0);
     assert.equal(await db.newsletterMailJob.count(), 0);
     const orphan = await db.user.findUnique({ where: { email: 'orphan@example.test' } });
-    assert.equal(orphan.accountState, 'PRE_REGISTERED'); assert.equal(orphan.password, null);
+    assert.equal(orphan.accountState, 'ACTIVE'); assert.equal(orphan.password, null);
     assert.equal((await db.user.findUnique({ where: { id: old.id } })).accountState, 'ACTIVE');
-    assert.equal((await db.user.findUnique({ where: { id: other.id } })).accountState, 'PENDING_PASSWORD');
+    assert.equal((await db.user.findUnique({ where: { id: other.id } })).accountState, 'INACTIVE');
     await Promise.all(Array.from({ length: 6 }, (_, i) => service.subscribe(i % 2 ? '  NEW@Example.test ' : 'new@example.test')));
     const fresh = await db.user.findUnique({ where: { email: 'new@example.test' } });
-    assert(fresh && fresh.memberCode); assert.equal(fresh.password, null); assert.equal(fresh.accountState, 'PRE_REGISTERED');
+    assert(fresh && fresh.memberCode); assert.equal(fresh.password, null); assert.equal(fresh.accountState, 'ACTIVE');
     assert.equal(await db.user.count({ where: { email: 'new@example.test' } }), 1);
     assert.equal(await db.newsletterMailJob.count({ where: { email: 'new@example.test', kind: 'WELCOME' } }), 1);
     assert.equal((await db.newsletterSubscription.findUnique({ where: { email: fresh.email } })).userId, fresh.id);
     const beforeActivation = await admin.listUsers({ page: 1, pageSize: 20 });
-    assert.equal(beforeActivation.data.find(row => row.id === fresh.id).accountState, 'PRE_REGISTERED');
+    assert.equal(beforeActivation.data.find(row => row.id === fresh.id).accountState, 'ACTIVE');
     await service.subscribe(' OLD@example.test ');
     assert.equal(await db.user.count({ where: { email: 'old@example.test' } }), 1);
     assert.equal((await db.user.findUnique({ where: { id: old.id } })).password, old.password);
@@ -94,7 +94,7 @@ async function main() {
     const qrTokens = await Promise.all([users.ensurePublicMemberToken(fresh.id), users.ensurePublicMemberToken(fresh.id)]);
     assert.deepEqual(qrTokens, [token, token]);
     const stable = fresh.memberCode;
-    const activated = await users.activatePreRegisteredUser(fresh.id, { password: 'synthetic-hash', firstName: 'Fixture', lastName: 'User' });
+    const activated = await users.completePasswordlessRegistration(fresh.id, { password: 'synthetic-hash', firstName: 'Fixture', lastName: 'User' });
     assert.equal(activated.memberCode, stable);
     const listed = await admin.listUsers({ page: 1, pageSize: 20 });
     const detail = await admin.getUserById(fresh.id);
@@ -102,7 +102,7 @@ async function main() {
     assert.equal(detail.user.memberCode, stable);
     assert.equal(listed.meta.total, await db.user.count());
     const filtered = await admin.listUsers({ q: stable }); assert.equal(filtered.meta.total, 1);
-    const pendingList = await admin.listUsers({ accountState: 'PRE_REGISTERED' }); assert.equal(pendingList.meta.total, 1);
+    const pendingList = await admin.listUsers({ accountState: 'INACTIVE' }); assert.equal(pendingList.meta.total, 1);
     const page = await admin.listUsers({ page: 2, pageSize: 2 }); assert.equal(page.meta.total, listed.meta.total);
     await db.user.delete({ where: { id: other.id } });
     await assert.rejects(() => db.user.create({ data: { id: other.id, email: 'recreated@example.test', memberCode: other.memberCode } }));

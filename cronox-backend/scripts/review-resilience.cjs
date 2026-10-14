@@ -201,7 +201,7 @@ exports.review = async ({ db, dir, stop, start }) => {
       const actor = await db.user.create({ data: { email: `resilience-${reason}@example.test` } });
       const pair = await sessions.create(actor);
       if (reason === 'revoked') await db.authSession.updateMany({ where: { userId: actor.id }, data: { revokedAt: new Date() } });
-      if (reason === 'disabled') await db.user.update({ where: { id: actor.id }, data: { accountState: 'PENDING_PASSWORD' } });
+      if (reason === 'disabled') await db.user.update({ where: { id: actor.id }, data: { accountState: 'INACTIVE' } });
       if (reason === 'version') await db.user.update({ where: { id: actor.id }, data: { sessionVersion: { increment: 1 } } });
       const [denied] = await sample('valid signature but ' + reason, '/api/me', { cookie: cookie(pair) }, 1);
       assert.equal(denied.status, 401);

@@ -6,7 +6,7 @@ describe('Launch login token', () => {
   let sessions: any;
   let service: AuthService;
   beforeEach(() => {
-    const user = { id: 1, email: 'user@example.test', role: 'USER', accountState: 'PRE_REGISTERED' };
+    const user = { id: 1, email: 'user@example.test', role: 'USER', accountState: 'ACTIVE' };
     db = {
       preRegistration: {
         findUnique: jest.fn().mockResolvedValue({ userId: 1, user, launchTokenUsedAt: null,
@@ -19,9 +19,10 @@ describe('Launch login token', () => {
     sessions = { create: jest.fn().mockResolvedValue({ accessToken: 'token' }) };
     service = new AuthService({ toSafeUser: u => u } as any, {} as any, db, {} as any, {} as any, sessions);
   });
-  it('activates the account and issues the usual session after atomic token consumption', async () => {
+  it('keeps the active account state and issues the usual session after atomic token consumption', async () => {
     expect(await service.consumeLaunchLink('a'.repeat(64))).toHaveProperty('tokens');
     expect(sessions.create).toHaveBeenCalledTimes(1);
+    expect(db.user.update).not.toHaveBeenCalled();
     expect(db.preRegistration.updateMany).toHaveBeenCalledWith(expect.objectContaining({
       where: expect.objectContaining({ launchTokenUsedAt: null }),
     }));
@@ -31,11 +32,12 @@ describe('Launch login token', () => {
     await expect(service.consumeLaunchLink('a'.repeat(64))).rejects.toThrow();
     expect(sessions.create).not.toHaveBeenCalled();
   });
-  it.each(['expired', 'used', 'admin'])('rejects %s links', async reason => {
+  it.each(['expired', 'used', 'admin', 'inactive'])('rejects %s links', async reason => {
     const r = await db.preRegistration.findUnique();
     if (reason === 'expired') r.launchTokenExpiresAt = new Date(0);
     if (reason === 'used') r.launchTokenUsedAt = new Date();
     if (reason === 'admin') r.user.role = 'SUPERADMIN';
+    if (reason === 'inactive') r.user.accountState = 'INACTIVE';
     await expect(service.consumeLaunchLink('a'.repeat(64))).rejects.toThrow();
     expect(sessions.create).not.toHaveBeenCalled();
   });

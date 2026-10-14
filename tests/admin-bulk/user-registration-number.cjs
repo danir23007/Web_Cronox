@@ -41,7 +41,7 @@ async function run() {
     // Two equal registration dates deliberately exercise the internal-ID tie break.
     await db.user.createMany({ data: Array.from({ length: 105 }, (_, i) => ({
       name: 'Usuario Temporal', email: search + String(i).padStart(3, '0') + '@example.test',
-      accountState: 'PRE_REGISTERED', createdAt: new Date(oldest + Math.floor(i / 2) * 1000),
+      accountState: 'INACTIVE', createdAt: new Date(oldest + Math.floor(i / 2) * 1000),
     })) });
     const fixtures = await db.user.findMany({ where: { email: { startsWith: search } }, orderBy: { id: 'asc' } });
     ids.push(...fixtures.map(u => u.id));
@@ -58,7 +58,7 @@ async function run() {
     }
     assert.deepEqual(all.map(u => u.registrationNumber), reference.rows.map((_, i) => i + 1));
     for (const query of [{ q: search, page: 2 }, { q: search, sort: 'email', order: 'asc' },
-      { email: fixtures[51].email, circle: 1, accountState: 'PRE_REGISTERED' }, { sort: 'id', order: 'desc' }])
+      { email: fixtures[51].email, circle: 1, accountState: 'INACTIVE' }, { sort: 'id', order: 'desc' }])
       verify(await list(query), reference);
     await page.goto('http://localhost:3000/admin.html#section-users');
     const section = page.locator('#section-users');
@@ -83,7 +83,7 @@ async function run() {
     await page.reload(); await expect(page.locator('#usersPageInfo')).toContainText('104 resultados');
     await expect(page.locator('#usersBody tr')).toHaveCount(4);
     const latest = await db.user.create({ data: { name: 'Usuario Nuevo', email: search + 'new@example.test',
-      accountState: 'PRE_REGISTERED', createdAt: new Date(reference.rows.at(-1).createdAt.getTime() + 1000) } }); ids.push(latest.id);
+      accountState: 'INACTIVE', createdAt: new Date(reference.rows.at(-1).createdAt.getTime() + 1000) } }); ids.push(latest.id);
     reference = await snapshot();
     const newest = await list({ email: latest.email }); verify(newest, reference);
     assert.equal(newest.data[0].registrationNumber, reference.rows.length);

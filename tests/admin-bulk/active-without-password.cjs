@@ -27,7 +27,7 @@ async function run() {
       password: hash, role: 'SUPERADMIN', accountState: 'ACTIVE' } }); ids.push(actor.id);
     for (let i = 0; i < 13; i++) {
       const user = await db.user.create({ data: { name: tag + ' target ' + i,
-        email: tag + '-' + i + '@example.test', accountState: 'PRE_REGISTERED',
+        email: tag + '-' + i + '@example.test', accountState: 'INACTIVE',
         preRegistration: { create: {} } } }); ids.push(user.id);
     }
     page.on('response', async r => {
@@ -61,7 +61,7 @@ async function run() {
     if (process.argv.includes('--reproduce')) {
       await expect(dialog).toContainText('para activar la cuenta debe establecer primero una contraseña');
       assert(http.some(r => r.status === 400));
-      assert.equal(await db.user.count({ where: { id: { in: ids.slice(1) }, accountState: 'PRE_REGISTERED', password: null } }), 13);
+      assert.equal(await db.user.count({ where: { id: { in: ids.slice(1) }, accountState: 'INACTIVE', password: null } }), 13);
       await page.screenshot({ path: 'output/playwright/bulk-active-2026-10-06/before.png' });
       console.log(JSON.stringify({ reproduced: true, http, rowsUnchanged: 13, executeSent: false })); return;
     }
@@ -119,7 +119,7 @@ async function run() {
 
     // Mixed password presence, combined changes, durable retries and concurrency.
     await db.user.update({ where: { id: ids[2] }, data: { password: hash } });
-    await db.user.update({ where: { id: ids[1] }, data: { accountState: 'PRE_REGISTERED' } });
+    await db.user.update({ where: { id: ids[1] }, data: { accountState: 'INACTIVE' } });
     const payload = { kind: 'users', ids: ids.slice(1, 3), changes: { accountState: 'ACTIVE', role: 'FRIEND', circleLevel: 3 } };
     const preview = await post('/api/admin/bulk/preview', payload); assert.equal(preview.status(), 201);
     const plan = await preview.json(), operationId = randomUUID();
@@ -138,7 +138,7 @@ async function run() {
     assert.equal((await db.user.findUnique({ where: { id: ids[2] } })).circleLevel, 3);
     // Individual state editing was already password-independent.
     const user = await db.user.update({ where: { id: ids[3] }, data: { name: 'Usuario Temporal' } });
-    assert.equal((await post('/api/admin/users/' + user.id, { expectedUpdatedAt: user.updatedAt.toISOString(), accountState: 'PENDING_PASSWORD' }, 'patch')).status(), 200);
+    assert.equal((await post('/api/admin/users/' + user.id, { expectedUpdatedAt: user.updatedAt.toISOString(), accountState: 'INACTIVE' }, 'patch')).status(), 200);
     const pending = await db.user.findUnique({ where: { id: user.id } });
     assert.equal((await post('/api/admin/users/' + user.id, { expectedUpdatedAt: pending.updatedAt.toISOString(), accountState: 'ACTIVE' }, 'patch')).status(), 200);
     assert.equal((await db.user.findUnique({ where: { id: user.id } })).password, null);
@@ -147,7 +147,7 @@ async function run() {
     await page.locator('#editUser').click();
     const optionsHttp = await optionsResponse; assert.equal(optionsHttp.status(), 200);
     await expect(page.locator('#userEditForm')).toBeVisible();
-    await page.locator('#editUserStatus').selectOption('PENDING_PASSWORD');
+    await page.locator('#editUserStatus').selectOption('INACTIVE');
     await page.locator('#saveUserEdit').click();
     await expect(page.locator('#userEditForm')).toBeHidden();
     await page.locator('#editUser').click();

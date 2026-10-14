@@ -394,7 +394,7 @@ import { MAX_MANUAL_CENTS, parseManualPrice, manualPriceText } from './manual-pu
       { label: 'Nombre', value: user.name || user.firstName },
       { label: 'Apellidos', value: user.lastName },
       { label: 'Role', value: roleLabel(user.role) },
-      { label: 'Estado', value: user.accountState },
+      { label: 'Estado', value: window.CRONOX_ACCOUNT_STATE.label(user.accountState) },
       { label: 'Circle', value: user.circle },
       { label: 'Teléfono', value: user.phone },
       { label: 'País', value: displayCountry(user.country) },
@@ -840,7 +840,7 @@ import { MAX_MANUAL_CENTS, parseManualPrice, manualPriceText } from './manual-pu
       if (editUserName) editUserName.value = String(currentUserDetail.name || '');
       if (editUserPhone) editUserPhone.value = String(currentUserDetail.phone || '');
       selectOptions(editUserRole, roles, currentUserDetail.role, roleLabel);
-      selectOptions(editUserStatus, statuses, currentUserDetail.accountState);
+      selectOptions(editUserStatus, statuses, currentUserDetail.accountState, window.CRONOX_ACCOUNT_STATE.label);
       selectOptions(editUserCircle, circles, currentUserDetail.circle);
       editUserBtn && (editUserBtn.hidden = true);
       userEditForm.hidden = false;

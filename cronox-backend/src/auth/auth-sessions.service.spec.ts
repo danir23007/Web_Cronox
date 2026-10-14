@@ -362,7 +362,7 @@ describe('server-authoritative sliding auth sessions', () => {
       service.verify(first.refreshToken, 'refresh'),
     ).rejects.toBeInstanceOf(UnauthorizedException);
     user.sessionVersion--;
-    user.accountState = UserAccountState.PENDING_PASSWORD;
+    user.accountState = UserAccountState.INACTIVE;
     await expect(
       service.verify(first.refreshToken, 'refresh'),
     ).rejects.toBeInstanceOf(UnauthorizedException);

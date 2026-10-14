@@ -1,4 +1,5 @@
 import { loadUserPurchaseMetrics, sortUsersByMetrics } from './user-purchase-metrics';
+import { assertAccountState } from '../../users/account-state';
 import { ensureAccountWelcome } from '../../users/account-welcome';
 import {
   BadRequestException,
@@ -273,6 +274,7 @@ export class AdminUsersService {
 
             const targetRole = dto.role ?? existing.role;
             const targetState = dto.accountState ?? existing.accountState;
+            assertAccountState(targetState);
             if (
               id === performedById &&
               (!isAdminPanelRole(targetRole) ||
@@ -675,6 +677,7 @@ export class AdminUsersService {
     if (query.role) {
       where.role = query.role;
     }
+    if (query.accountState) where.accountState = query.accountState;
 
     if (typeof query.circle === 'number' && Number.isFinite(query.circle)) {
       where.circleLevel = query.circle;

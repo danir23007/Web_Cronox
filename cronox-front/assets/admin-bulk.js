@@ -3,11 +3,7 @@
   if (window.CRONOX_BULK) return;
   const lists = new Map();
   const LIMIT = 100;
-  const stateLabel = (value) => ({
-    ACTIVE: "Activa",
-    PENDING_PASSWORD: "Pendiente de contraseña",
-    PRE_REGISTERED: "Prerregistrado",
-  })[value] || value || "—";
+  const stateLabel = (value) => window.CRONOX_ACCOUNT_STATE.label(value);
   const element = (tag, text, cls) => {
     const node = document.createElement(tag);
     if (text) node.textContent = text;
@@ -298,14 +294,12 @@
       ]);
       select("accountState", "Estado", [
         unchanged,
-        ["ACTIVE", "Activa"],
-        ["PENDING_PASSWORD", "Pendiente de contraseña"],
-        ["PRE_REGISTERED", "Prerregistrado"],
+        ...Object.entries(window.CRONOX_ACCOUNT_STATE.labels),
       ]);
       fields.append(
         element(
           "p",
-          "No modificar conserva el valor actual, incluido el círculo. Las cuentas SUPERADMIN quedan excluidas; no puedes modificar tu propio rol ni estado. Activa admite cuentas con o sin contraseña; no habilita el acceso sin verificar la identidad. Pendiente de contraseña requiere no tenerla; Prerregistrado requiere además un prerregistro existente. Esta edición no crea contraseñas, inicia sesiones ni envía correos.",
+          "No modificar conserva el valor actual, incluido el círculo. Las cuentas SUPERADMIN quedan excluidas; no puedes modificar tu propio rol ni estado. Activo admite cuentas con o sin contraseña; la identidad debe verificarse para acceder. Inactivo impide el acceso y solo se cambia desde administración. Esta edición no crea contraseñas, inicia sesiones ni envía correos.",
         ),
       );
     } else {

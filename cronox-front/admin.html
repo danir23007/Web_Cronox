@@ -135,6 +135,7 @@
     .image-thumb { width: 74px; height: 74px; border: 1px solid #1f1f2b; border-radius: 10px; overflow: hidden; background: #0d0d15; display: flex; align-items: center; justify-content: center; }
     .image-thumb img { width: 100%; height: 100%; object-fit: cover; }
     .badge { display: inline-block; padding: 6px 10px; border-radius: 999px; background: #1c1c26; color: #b3b3c2; font-size: 0.85rem; }
+    #section-users .account-state-badge { white-space: nowrap; overflow-wrap: normal; }
     .table-actions { display: flex; gap: 8px; flex-wrap: wrap; }
     .dashboard-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; }
     .dashboard-card h3 { margin: 0 0 6px; font-size: 1rem; }
@@ -590,6 +591,14 @@
               <option value="FRIEND">Friend</option>
               <option value="ADMIN">Admin</option>
               <option value="SUPERADMIN">Super Admin</option>
+            </select>
+          </label>
+          <label class="form-group">
+            <span>Estado</span>
+            <select id="usersAccountState" class="select">
+              <option value="">Todos</option>
+              <option value="ACTIVE">Activo</option>
+              <option value="INACTIVE">Inactivo</option>
             </select>
           </label>
           <label class="form-group">
@@ -1979,6 +1988,7 @@
   <script src="assets/admin-pagination.js?v=1"></script>
   <script src="assets/category-controls.js?v=2"></script>
   <script src="assets/user-identity.js?v=1"></script>
+  <script src="assets/account-state.js?v=1"></script>
   <script src="assets/admin-navigation.js?v=1"></script>
   <script src="assets/admin-shell.js?v=11"></script>
   <script src="assets/admin-finance.js?v=3"></script>
@@ -1988,11 +1998,11 @@
   <script src="assets/admin-visitors.js?v=3"></script>
   <script src="assets/admin-live-stats.js?v=2"></script>
   <link rel="stylesheet" href="assets/admin-bulk.css?v=2">
-  <script src="assets/admin-bulk.js?v=10"></script>
+  <script src="assets/admin-bulk.js?v=11"></script>
   <script src="assets/admin-section-headers.js?v=1"></script>
   <script src="assets/admin-push.js?v=1"></script>
   <script src="assets/admin-inbox.js?v=13"></script>
-  <script src="assets/admin.js?v=20"></script>
+  <script src="assets/admin.js?v=21"></script>
   <script src="assets/admin-inventory.js?v=2"></script>
   <script src="assets/admin-waitlist.js?v=2"></script>
   <script src="assets/admin-favorites.js?v=1"></script>

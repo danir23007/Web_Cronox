@@ -81,6 +81,7 @@
   const usersNext = $('#usersNext');
   const usersSearch = $('#usersSearch');
   const usersRole = $('#usersRole');
+  const usersAccountState = $('#usersAccountState');
   const usersCircle = $('#usersCircle');
   const usersSort = $('#usersSort');
   const usersOrder = $('#usersOrder');
@@ -1814,6 +1815,7 @@
       pageSize: state.pageSize,
       q: state.q || undefined,
       role: state.role || undefined,
+      accountState: state.accountState || undefined,
       circle: parseNumberOrNull(state.circle) ?? undefined,
       sort: state.sort || undefined,
       order: state.order || undefined,
@@ -1910,6 +1912,7 @@
   const syncUsersStateFromInputs = () => {
     if (usersSearch) usersState.q = usersSearch.value.trim();
     if (usersRole) usersState.role = usersRole.value;
+    if (usersAccountState) usersState.accountState = usersAccountState.value;
     if (usersCircle) usersState.circle = usersCircle.value;
     if (usersSort) usersState.sort = usersSort.value || 'id';
     if (usersOrder) usersState.order = usersOrder.value || 'desc';
@@ -1918,6 +1921,7 @@
   const applyUsersStateToInputs = () => {
     if (usersSearch) usersSearch.value = usersState.q || '';
     if (usersRole) usersRole.value = usersState.role || '';
+    if (usersAccountState) usersAccountState.value = usersState.accountState || '';
     if (usersCircle) usersCircle.value = usersState.circle || '';
     if (usersSort) usersSort.value = usersState.sort || 'id';
     if (usersOrder) usersOrder.value = usersState.order || 'desc';
@@ -1940,6 +1944,7 @@
     usersState.q = params?.get('q') ?? usersState.q;
     usersState.role = params?.get('role') ?? usersState.role;
     usersState.circle = params?.get('circle') ?? usersState.circle;
+    usersState.accountState = ['ACTIVE', 'INACTIVE'].includes(params?.get('accountState')) ? params.get('accountState') : '';
     // Every new entry starts with latest registrations, ignoring legacy sort/state.
     usersState.sort = 'id'; usersState.order = 'desc'; usersState.page = 1;
     const clean = new URL(window.location.href);
@@ -1955,6 +1960,7 @@
     params.set('q', state.q || '');
     params.set('role', state.role || '');
     params.set('circle', state.circle || '');
+    if (state.accountState) params.set('accountState', state.accountState);
     params.set('page', String(state.page || 1));
     params.set('sort', sortValue);
     return `${USERS_HASH_PREFIX}&${params.toString()}`;
@@ -1994,6 +2000,7 @@
   const resetUsersFilters = () => {
     if (usersSearch) usersSearch.value = '';
     if (usersRole) usersRole.value = '';
+    if (usersAccountState) usersAccountState.value = '';
     if (usersCircle) usersCircle.value = '';
     usersState.page = 1;
     syncUsersStateFromInputs();
@@ -2477,7 +2484,7 @@
       phone,
       displayName,
       role: source.role ?? source.userRole ?? source.type ?? '',
-      accountState: source.accountState || 'ACTIVE',
+      accountState: source.accountState,
       circle:
         source.circle ?? source.circleLevel ?? source.userCircle ?? source.level ?? source.membershipCircle ?? '',
       createdAt: source.createdAt ?? source.created_at ?? source.created ?? source.createdOn ?? '',
@@ -2546,7 +2553,7 @@
           : phoneLabel;
         const nameLabel = user.displayName ? escapeHtml(user.displayName) : '—';
         const roleLabel = escapeHtml(formatUserRole(user.role));
-        const accountStateLabel = { ACTIVE: 'Activa', PENDING_PASSWORD: 'Pendiente de contraseña', PRE_REGISTERED: 'Prerregistrado' }[user.accountState] || '—';
+        const accountStateLabel = window.CRONOX_ACCOUNT_STATE.label(user.accountState);
         const circleLabel =
           user.circle != null && user.circle !== '' ? escapeHtml(String(user.circle)) : '—';
         const createdLabel = user.createdAt ? formatDateShort(user.createdAt) : '—';
@@ -2564,7 +2571,7 @@
             <td>${nameLabel}</td>
             <td>${user.revenueCents == null ? '<span title="Faltan datos financieros fiables o un cambio de moneda histórico">No disponible</span>' : escapeHtml(new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR' }).format(user.revenueCents / 100))}</td>
             <td>${roleLabel}</td>
-            <td><span class="badge">${escapeHtml(accountStateLabel)}</span></td>
+            <td><span class="badge account-state-badge">${escapeHtml(accountStateLabel)}</span></td>
             <td>${circleLabel}</td>
             <td>${escapeHtml(createdLabel)}</td>
             <td>${actionLabel}</td>
@@ -4511,6 +4518,9 @@
       });
     }
 
+    usersAccountState?.addEventListener('change', () => {
+      syncUsersStateFromInputs(); usersState.page = 1; fetchUsers();
+    });
     if (usersCircle) {
       usersCircle.addEventListener('change', () => {
         syncUsersStateFromInputs();
