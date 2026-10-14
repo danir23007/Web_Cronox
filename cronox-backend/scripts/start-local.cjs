@@ -44,7 +44,7 @@ function buildLocalEnvironment(local, inherited, deploymentKeys = []) {
   for (const key of new Set([...Object.keys(env), ...deploymentKeys])) {
     // Explicit empty values also prevent Prisma's automatic .env expansion from
     // repopulating deployment credentials that are absent in the local file.
-    if (deploymentKeys.includes(key) || /^(?:MAILBOX_|SMTP_|EMAIL_|SUPABASE_|STRIPE_|JWT_|DATABASE_URL$|DIRECT_URL$|DOTENV_|CRONOX_ROUTE_SMOKE_MODE$)/.test(key)) env[key] = '';
+    if (deploymentKeys.includes(key) || /^(?:CORREOS_|MAILBOX_|SMTP_|EMAIL_|SUPABASE_|STRIPE_|JWT_|DATABASE_URL$|DIRECT_URL$|DOTENV_|CRONOX_ROUTE_SMOKE_MODE$)/.test(key)) env[key] = '';
   }
   return { ...env, ...local, USER_NUMBERING_DATABASE_URL: local.DATABASE_URL, DOTENV_CONFIG_PATH: configPath, CRONOX_ENV_FILE: configPath, CRONOX_LOCAL_DEV: 'true', HOST: '127.0.0.1' };
 }

@@ -1445,6 +1445,22 @@ model Order {
   preDisputeStatus     OrderStatus?
   trackingNumber       String?
   trackingUrl          String?
+  trackingRevision     Int                     @default(0)
+  trackingLastSuccessAt DateTime?
+  trackingLastErrorCode String?
+  trackingLastErrorAt   DateTime?
+  trackingNextSyncAt    DateTime?
+  trackingLeaseUntil    DateTime?
+  trackingLeaseToken    String?
+  trackingFailures      Int                     @default(0)
+  trackingState         String?
+  trackingStateCode     String?
+  trackingTerminalAt    DateTime?
+  trackingBaselineEstablished Boolean           @default(false)
+  trackingEvents       OrderTrackingEvent[]
+  trackingAudits       OrderTrackingAudit[]
+  trackingNotifications OrderTrackingNotification[]
+  shippingLabel        OrderShippingLabel?
   shippingCarrier      String?
   shippedAt            DateTime?
   deliveredAt          DateTime?
@@ -1496,6 +1512,82 @@ model Order {
   @@index([status])
   @@index([source, createdAt])
   @@index([recordedById, createdAt])
+  @@index([trackingNextSyncAt, trackingLeaseUntil])
+}
+
+// Carrier events never drive payment, refund or Order.status transitions.
+model OrderTrackingEvent {
+  id          String   @id @default(cuid())
+  orderId     Int
+  order       Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  revision    Int
+  fingerprint String
+  eventTime   DateTime? @db.Timestamptz(3)
+  eventLocalDate String?
+  eventSortKey String?
+  code        String?
+  label       String?
+  category    String?
+  createdAt   DateTime @default(now()) @db.Timestamptz(3)
+
+  @@unique([orderId, revision, fingerprint])
+  @@index([orderId, revision, eventTime])
+  @@index([orderId, revision, eventSortKey])
+}
+
+// Preserve actor number even if that account is later deleted.
+model OrderTrackingAudit {
+  id         String   @id @default(cuid())
+  orderId    Int
+  order      Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  actorId    Int?
+  actorIdentityUid String? @db.Uuid
+  previousNumber String?
+  nextNumber String?
+  revision   Int
+  createdAt  DateTime @default(now()) @db.Timestamptz(3)
+
+  @@index([orderId, createdAt])
+}
+
+model OrderTrackingNotification {
+  id            String   @id @default(cuid())
+  orderId       Int
+  order         Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  revision      Int
+  eventId       String   @unique
+  category      String
+  status        String   @default("PENDING")
+  attempts      Int      @default(0)
+  nextAttemptAt DateTime @default(now()) @db.Timestamptz(3)
+  leaseToken    String?
+  leaseUntil    DateTime?
+  messageId     String?
+  createdAt     DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt     DateTime @updatedAt @db.Timestamptz(3)
+
+  @@index([status, nextAttemptAt])
+  @@index([orderId, revision])
+}
+
+// Files live outside every publicly served tree; only authenticated Admin downloads.
+model OrderShippingLabel {
+  orderId      Int      @id
+  trackingRevision Int  @default(0)
+  order        Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  storageKey   String   @unique
+  originalName String
+  mimeType     String
+  size         Int
+  sha256       String
+  uploadedBy   Int?
+  createdAt    DateTime @default(now()) @db.Timestamptz(3)
+}
+
+// Shared provider pacing across workers, manual requests and PM2 processes.
+model CorreosTrackingGate {
+  key       String   @id
+  notBefore DateTime @db.Timestamptz(3)
 }
 
 model OrderItem {

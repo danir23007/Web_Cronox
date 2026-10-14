@@ -21,3 +21,9 @@ test('rejects a remote database, differing migration target, live key, outgoing 
     assert.throws(()=>buildLocalEnvironment({...local,...patch},{}));
   }
 });
+
+test('never inherits Correos credentials or enables carrier jobs from a parent deployment session', () => {
+  const result = buildLocalEnvironment(local, { CORREOS_TRACKING_ENABLED:'true', CORREOS_EMAIL_ENABLED:'true', CORREOS_IDENTITY_CLIENT_SECRET:'inert-fixture', CORREOS_DEVELOPERS_CLIENT_SECRET:'inert-fixture' });
+  assert.equal(result.CORREOS_TRACKING_ENABLED, ''); assert.equal(result.CORREOS_EMAIL_ENABLED, '');
+  assert.equal(result.CORREOS_IDENTITY_CLIENT_SECRET, ''); assert.equal(result.CORREOS_DEVELOPERS_CLIENT_SECRET, '');
+});

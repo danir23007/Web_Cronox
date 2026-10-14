@@ -1,0 +1,19 @@
+{
+  "code": "PQ1X2X1234567890123456X",
+  "has_incidence": "N",
+  "eventResume": "ENTREGADO",
+  "eventUniqueCode": "A012345X",
+  "events": [
+    {
+      "eventCode": "A012345X",
+      "eventDate": "25/03/2022",
+      "eventDes": "PRE-ADMISION",
+      "eventHours": "12:09:16",
+      "expandedText": "Prerregistrado pendiente de depósito en Correos",
+      "phase": "1",
+      "phaseDes": "ENTREGADO",
+      "summaryText": "Prerregistrado",
+      "uniqueCode": "A01B234C"
+    }
+  ]
+}

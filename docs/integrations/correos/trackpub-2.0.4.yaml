@@ -1,0 +1,1334 @@
+openapi: "3.0.0"
+info:
+  version: 2.0.1
+  title: trackpubV2
+  description: Api de Matrix que permite consultar la información referente a la trazabilidad de un envío o una expedición.
+components:
+  schemas:
+    SearchResponseDTO:
+      type: object
+      example:
+        $ref: "#/components/examples/SearchResponseDTOexample"
+      properties:
+        code:
+          type: string
+          description: Código del envío
+          example: PQ1X2X1234567890123456X
+        clientCode:
+          type: string
+          description: Código detallable de cliente
+          example: "12345678"
+        clientName:
+          type: string
+          description: Nombre del cliente
+          example: Nombre Apellido
+        relationshipCode:
+          type: string
+          description: Código asociado al envío original
+          example: Por definir
+        serviceCode:
+          type: string
+          description: Código de servicio de recogida
+          example: SRXXXX12345678XX
+        serviceTypeCode:
+          type: string
+          description: Código del tipo de servicio de recogida
+          example: "12"
+        serviceDate:
+          type: string
+          description: Fecha del servicio de recogida
+          example: "14/02/2024 00:00:00"
+        asterisk:
+          type: string
+          description: Información guardada con asteriscos
+          example: "**1***2345678901234567*"
+        shipments_ids:
+          type: array
+          items:
+            type: object
+            description: Lista de envíos pertenecientes a esa búsqueda
+            properties:
+              value:
+                type: string
+                description: Código del envío
+                example: "PK1234567890123XXX"
+        codOr:
+          type: string
+          description: Código para envíos ordinarios de determinadas mercancías
+          example: OR12345678901234X
+        indOrType:
+          type: string
+          description: Indicador del tipo de mercancía, p. ej. libros
+          example: "12"
+        reference1:
+          type: string
+          description: Código de referencia 1 del envío
+          example: ABcdFG1hY_1
+        reference2:
+          type: string
+          description: Código de referencia 2 del envío
+          example: ABcdFG1hY_2
+        reference3:
+          type: string
+          description: Código de referencia 3 del envío
+          example: ABcdFG1hY_3
+        refClient:
+          type: string
+          description: Código de referencia del cliente
+          example: ABcdFG12H3
+        codProduct:
+          type: string
+          description: Código del producto contratado. Entrega domicilio, CityPaq, etc
+          example: PQDOM
+        codTypeModif:
+          type: string
+          description: Código del tipo de modificación si este existe
+          example: "0"
+        remitPhone:
+          type: string
+          description: Teléfono del remitente
+          example: "123456789"
+        remitEmail:
+          type: string
+          description: Correo electrónico del remitente
+          example: random@email.com
+        remitName:
+          type: string
+          description: Nombre completo del remitente
+          example: Nombre Apellido
+        remitNameLane:
+          type: string
+          description: Dirección del remitente
+          example: Calle Prueba 1
+        remitPostalCode:
+          type: string
+          description: Código Postal del remitente
+          example: "12345"
+        remitNameLocation:
+          type: string
+          description: Localidad del remitente
+          example: Sevilla
+        remitNameProvince:
+          type: string
+          description: Provincia del remitente
+          example: Sevilla
+        remitDoi:
+          type: string
+          description: Documento oficial de identidad del remitente
+          example: 12345678X
+        destiPhone:
+          type: string
+          description: Teléfono del destinatario
+          example: "12356789"
+        destiEmail:
+          type: string
+          description: Correo electrónico del destinatario
+          example: random@email.com
+        destiName:
+          type: string
+          description: Nombre completo del destinatario
+          example: Nombre Apellido
+        destiNameLane:
+          type: string
+          description: Dirección del destinatario
+          example: Plaza Prueba 1
+        destiPostalCode:
+          type: string
+          description: Código Postal del destinatario
+          example: "12345"
+        destiNameLocation:
+          type: string
+          description: Localidad del destinatario
+          example: Madrid
+        destiNameProvince:
+          type: string
+          description: Provincia del destinatario
+          example: Madrid
+        receiverPhone:
+          type: string
+          description: Teléfono del receptor
+          example: "123456789"
+        receiverEmail:
+          type: string
+          description: Correo electrónico del receptor
+          example: test@email.com
+        receiverName:
+          type: string
+          description: Nombre completo del receptor
+          example: Nombre Apellido
+        receiverNameLane:
+          type: string
+          description: Dirección del receptor
+          example: Calle Prueba s/n
+        receiverPostalCode:
+          type: string
+          description: Código Postal del receptor
+          example: "12345"
+        receiverNameLocation:
+          type: string
+          description: Localidad del receptor
+          example: Madrid
+        receiverNameProvince:
+          type: string
+          description: Provincia del receptor
+          example: Madrid
+        receiverBusinessName:
+          type: string
+          description: Razón social del receptor
+          example: Company SL
+        receiverRelationship:
+          type: string
+          description: Relación con el receptor
+          example: Por definir
+        shipmentType:
+          type: string
+          description: Código de tipo de envío
+          example: A1BCDE
+        data_customs:
+          type: array
+          items:
+            type: object
+            description: Datos aduaneros
+            properties:
+              cod_color:
+                type: string
+                description: Código del canal de color aduanero
+                example: X01_2
+              color:
+                type: string
+                description: Canal de color aduanero
+                example: Color
+        has_incidence:
+          type: string
+          description: Indica si ha habido incidencia
+          example: N
+        doi:
+          type: string
+          description: Documento oficial de identidad
+          example: "123456789"
+        deliveryDate:
+          type: string
+          description: Fecha de entrega
+          example: "03/02/2024"
+        deliveryHours:
+          type: string
+          description: Hora estimada de entrega
+          example: "10:00-14:00"
+        eurRefund:
+          type: string
+          description: Cantidad de reembolso
+          example: "23.4"
+        eurInsured:
+          type: string
+          description: Cantidad asegurada
+          example: "12.4"
+        noticeReceipt:
+          type: string
+          description: Indicador de aviso de recibo
+          example: N
+        numOrder:
+          type: string
+          description: Número de Giro Postal
+          example: 123456789X
+        eurAmountTotal:
+          type: string
+          description: Importe total
+          example: "11.7"
+        eurAmountIva:
+          type: string
+          description: Importe del IVA
+          example: "2.41"
+        eurAmountGiro:
+          type: string
+          description: Importe girado
+          example: "8.10"
+        recipientDelivery:
+          type: string
+          description: Indicador de entrega en destino
+          example: "0"
+        declaredAmount:
+          type: string
+          description: Importe declarado
+          example: "18.8"
+        pickUpDelivery:
+          type: string
+          description: Indicador de entrega con recogida
+          example: "0"
+        compensation:
+          type: string
+          description: Indemnización
+          example: "3"
+        ics2Status:
+          type: string
+          description: Estado Sistema Control Importación
+          example: 123456 Algodon 1234
+        ics2Color:
+          type: string
+          description: Código Color Sistema Control Importación
+          example: V
+        events:
+          type: array
+          items:
+            type: object
+            description: Listado de los eventos del envío
+            properties:
+              desNipAgent:
+                type: string
+                description: Número identificación personal del agente del evento
+                example: "123456"
+              turn:
+                type: string
+                description: Indicador Turno del evento
+                example: M
+              eventDate:
+                type: string
+                description: Fecha del evento
+                example: "25/03/2022"
+              eventHours:
+                type: string
+                description: Horas del evento
+                example: "12:09:16"
+              eventCode:
+                type: string
+                description: Código del evento
+                example: A012345X
+              eventDes:
+                type: string
+                description: Descripción del evento
+                example: PRE-ADMISION
+              phase:
+                type: string
+                description: Código de la fase de evento
+                example: "1"
+              phaseDes:
+                type: string
+                description: Descripción del código de la fase de evento
+                example: "ENTREGADO"
+              color:
+                type: string
+                description: Código de color del evento
+                example: V
+              summaryText:
+                type: string
+                description: Descripción del texto- Resumen
+                example: Prerregistrado
+              expandedText:
+                type: string
+                description: Descripción del texto- Ampliado
+                example: Prerregistrado pendiente de depósito en Correos
+              webaction:
+                type: string
+                description: Accion en la Web
+                example: EG
+              paramWebAction:
+                type: string
+                description: Atributo interno de gestión del comportamiento del evento en NEO
+                example: "1234567890123"
+              codired:
+                type: string
+                description: Código que identifica la unidad/oficina de Correos
+                example: "1234567"
+              unit:
+                type: string
+                description: Unidad de reparto de Correos
+                example: SUCURSAL 1
+              location:
+                type: string
+                description: Ubicación unidad/sucursal de Correos
+                example: MADRID
+              coordinateX:
+                type: string
+                description: Coordenada cartesiana abscisa de la unidad
+                example: "-1.2345678"
+              coordinateY:
+                type: string
+                description: Coordenada cartesiana ordenada de la unidad
+                example: "12.345678"
+              sectionCode:
+                type: string
+                description: Código de Sección del Evento
+                example: XX01
+              razonCode:
+                type: string
+                description: Código razón del Evento
+                example: "8"
+              razonDes:
+                type: string
+                description: Descripción de la razón del Evento
+                example: Por definir
+              unitCode:
+                type: string
+                description: Código de Unidad de reparto
+                example: "1234567"
+              province:
+                type: string
+                description: Provincia de la unidad de reparto
+                example: Madrid
+              country:
+                type: string
+                description: Región de la unidad de reparto
+                example: Madrid
+              uniqueCode:
+                type: string
+                description: Código evento único
+                example: A01B234C
+              motiveCode:
+                type: string
+                description: Código motivo
+                example: XX
+              situationCode:
+                type: string
+                description: Código situación
+                example: SR123ABC
+        error:
+          type: array
+          items:
+            type: object
+            description: Listado de errores producidos
+            properties:
+              codError:
+                type: string
+                description: Código de error
+                example: "3"
+              desError:
+                type: string
+                description: Descripción del error
+                example: Sin Trazabilidad en Minerva
+        associatedShipments:
+          type: array
+          items:
+            type: object
+            description: Listado de envíos asociados a eventos de esa búsqueda
+            properties:
+              shippingCode:
+                type: string
+                description: Código de un envío asociado a un Evento
+                example: PKABCD0123456789012345A
+              eventDate:
+                type: string
+                description: Fecha del evento
+                example: "01/02/2024"
+              eventHour:
+                type: string
+                description: Hora del evento
+                example: "12:09:16"
+              eventCode:
+                type: string
+                description: Código del evento
+                example: A123456X
+              desSummary:
+                type: string
+                description: Descripción del evento- Resumen
+                example: Admitido
+              desExtended:
+                type: string
+                description: Descripción del evento- Extendido
+                example: Admitido en origen
+        long:
+          type: string
+          description: Longitud en centímetros
+          example: "80"
+        hight:
+          type: string
+          description: Altura en centímetros
+          example: "35"
+        width:
+          type: string
+          description: Anchura en centímetros
+          example: "45"
+        weight:
+          type: string
+          description: Peso en gramos
+          example: "185"
+        applianceRange:
+          type: string
+          description: Gama de electrodoméstico
+          example: "B"
+        extravolumetry:
+          type: string
+          description: Indicador de volumetría extra
+          example: "1"
+        raee:
+          type: string
+          description: Indicador de la recogida del artículo usado (Residuos de aparatos eléctricos y electrónicos)
+          example: "S"
+        pae:
+          type: string
+          description: Indicador de PAE
+          example: "N"
+        modality:
+          type: string
+          description: Codigo de modalidad
+          example: "03"
+        dateDeliverySuplied:
+          type: string
+          description: Fecha entrega suministrada
+          example: "19/02/2024 16:00:00"
+        dateExpiration:
+          type: string
+          description: Fecha de caducidad
+          example: "28/02/2024 22:00:00"
+        dateCalculated:
+          type: string
+          description: Fecha calculada
+          example: "14/02/2024 00:00:00"
+        dateShow:
+          type: string
+          description: Fecha a mostrar
+          example: "19/02/2024 16:00:00"
+        phoneDNotif:
+          type: string
+          description: Teléfono Destinatario para Notificaciones
+          example: "123456789"
+        emailDNotif:
+          type: string
+          description: Correo electrónico Destinatario para Notificaciones
+          example: random@email.com
+        phoneRNotif:
+          type: string
+          description: Teléfono Receptor para Notificaciones
+          example: "123456789"
+        emailRNotif:
+          type: string
+          description: Correo electrónico Receptor para Notificaciones
+          example: random@email.com
+        idContainer:
+          type: string
+          description: Identificador del recipiente
+          example: ABCEDFGHIJKLMNO12345678901234
+        dateDispatch:
+          type: string
+          description: Fecha de despacho
+          example: "06/02/2024"
+        listNumber:
+          type: string
+          description: Número de lista
+          example: "1"
+        orderNumber:
+          type: string
+          description: Número de orden
+          example: "6"
+        expeditionCode:
+          type: string
+          description: Código de Expedición
+          example: PK1XXX123456789X
+        totalPackage:
+          type: string
+          description: Total de bultos/paquetes
+          example: "3"
+        numberPackage:
+          type: string
+          description: Número de bulto/paquete
+          example: "1"
+        numberRefExpedition:
+          type: string
+          description: Referencia de expedición
+          example: "123456789"
+        wareCode:
+          type: string
+          description: Código de Mercancía que identifica el tipo de mercancía que es, por ejemplo 322/bisutería
+          example: "30"
+        flatRateShipping:
+          type: string
+          description: Indicador de envío tarifa plana
+          example: N
+        flatRateEmail:
+          type: string
+          description: Correo electrónico tarifa plana
+          example: random@email.com
+        shipmentRefundCode:
+          type: string
+          description: Código de reembolso del envío
+          example: AB12345678901234567890X
+        contents:
+          type: array
+          items:
+            type: object
+            description: Listado de datos referentes a la mercancía
+            properties:
+              tarifario:
+                type: string
+                description: Código arancelario
+                example: "12345678"
+              shipmentNature:
+                type: string
+                description: Naturaleza del envío
+                example: shaft
+              netWeight:
+                type: string
+                description: Peso neto en gramos
+                example: "106"
+              netWorth:
+                type: string
+                description: Valor neto
+                example: "16.52"
+              manufactureCountry:
+                type: string
+                description: Código del país de fabricación
+                example: US
+              merchandiseCode:
+                type: string
+                description: Código de Mercancía que identifica el tipo de mercancía que es, por ejemplo 322/bisutería
+                example: "30"
+              amount:
+                type: string
+                description: Cantidad
+                example: "1"
+              merchandise:
+                type: string
+                description: Mercancía
+                example: ABCDE
+              merchandiseType:
+                type: string
+                description: Código del tipo de mercancía
+                example: "0"
+              iieepen:
+                type: string
+                description: Indicador arancel IIEEPEN
+                example: N
+              iieecan:
+                type: string
+                description: Indicador arancel IIEECAN
+                example: N
+              aiemcan:
+                type: string
+                description: Indicador arancel AIEM
+                example: N
+        nrotaric:
+          type: string
+          description: Referencia del contenedor
+          example: ABC1234567XX
+        itmattDate:
+          type: string
+          description: Fecha de documentación datos envío vía LINCE
+          example: "23/02/2024"
+        senderCountryLit:
+          type: string
+          description: Literal país emisor
+          example: China
+        destinationCountryLit:
+          type: string
+          description: Literal país destinatario
+          example: España
+        senderCountryIsoCode:
+          type: string
+          description: Código ISO del país emisor
+          example: CN
+        destinationCountryIsoCode:
+          type: string
+          description: Código ISO del país destinatario
+          example: ES
+        amountgirorefund:
+          type: string
+          description: Reembolso giro
+          example: "23.5"
+        barcode:
+          type: string
+          description: Código de barras
+          example: 123456789012X
+        XLtimeSlot:
+          type: string
+          description: Franja horaria XL
+          example: "1"
+        admissionDate:
+          type: string
+          description: Fecha de admisión
+          example: 28/02/2024 22:00:00
+        messagingDate:
+          type: string
+          description: Fecha de mensajería
+          example: 28/02/2024 22:00:00
+        eventUniqueCode:
+          type: string
+          description: Código de evento único
+          example: A012345X
+        eventResume:
+          type: string
+          description: descripción del evento
+          example: ENTREGADO
+        daysInList:
+          type: string
+          description: número de días en lista
+          example: "5"
+        observations:
+          type: string
+          description: Comentario adicional sobre el envío
+          example: Consola
+        imei_IsothermalBox:
+          type: string
+          description: Código IMEI de caja la isoterma
+          example: "12345678901234"
+        traceability_temperature:
+          type: string
+          description: Tipo de trazabilidad de la temperatura
+          example: "1"
+        temperature_range:
+          type: string
+          description: Rango de Temperatura del envío
+          example: "1"
+        datalogger_code:
+          type: string
+          description: Código de Datalogger
+          example: "123456789"
+        isothermal_box_type:
+          type: string
+          description: Tipo de caja isoterma
+          example: "PA"
+    ExpeditionResponseDTO:
+      type: object
+      example:
+        $ref: "#/components/examples/ExpeditionResponseDTOexample"
+      properties:
+        refExpedition:
+          type: string
+          description: Referencia de expedición
+          example: PQ1006076594918J
+        numReferencia:
+          type: string
+          description: Número de referencia
+          example: "1"
+        numPackage:
+          type: string
+          description: Número del bulto/paquete
+          example: "1"
+        lastEventCode:
+          type: string
+          description: Código del ultimo evento
+          example: I-E-001
+        lastEventCause:
+          type: string
+          description: Descripción de la razón del ultimo evento
+          example: "1"
+        dateLastEvent:
+          type: string
+          description: Fecha del último evento
+          example: "03/02/2023"
+        deliveryType:
+          type: string
+          description: Indicador de tipo de entrega
+          example: T
+        associatedExpedicion:
+          type: string
+          description: Indicador de expedición (conjuntos de envíos) asociada
+          example: N
+        serviceCode:
+          type: string
+          description: Código de Servicio de recogida
+          example: SR3006202200002ER
+        dateCreation:
+          type: string
+          description: Fecha de creación
+          example: "30/01/2024"
+        dateModification:
+          type: string
+          description: Fecha de modificación
+          example: "04/02/2024"
+        userCreate:
+          type: string
+          description: Usuario de creación
+          example: MERCURIO
+        userModification:
+          type: string
+          description: Usuario modificado
+          example: MERCURIO
+        eurInsured:
+          type: string
+          description: Euros asegurados
+          example: "23.3"
+        noticeReceipt:
+          type: string
+          description: Indicador de aviso de recibo
+          example: N
+        eurRefund:
+          type: string
+          description: Reembolso en euros
+          example: "1.5"
+        numAccount:
+          type: string
+          description: Número de cuenta
+          example: "ES123456789012123456789"
+        numSection:
+          type: string
+          description: Número de apartado
+          example: "734"
+        officeCode:
+          type: string
+          description: Código de oficina
+          example: "4119494"
+        declaredAmount:
+          type: string
+          description: Importe declarado
+          example: "14.7"
+        numTurn:
+          type: string
+          description: Número de Giro
+          example: PQ6FMD0200098330128840G
+        groupTurnCode:
+          type: string
+          description: Código de agrupación de giro
+          example: "20"
+        amountTurn:
+          type: string
+          description: Importe euros girados
+          example: "7.2"
+        dateTransfer:
+          type: string
+          description: Fecha de transferencia
+          example: "23/04/2022"
+        pee:
+          type: string
+          description: Indicador Prueba Electrónica Entrega
+          example: N
+        ear:
+          type: string
+          description: Indicador de Acuse de Recibo Electronico
+          example: N
+        eed:
+          type: string
+          description: Indicador de Entrega Exclusiva a Destinatario
+          example: N
+        refund:
+          type: string
+          description: Indicador de Reembolso
+          example: N
+        assured:
+          type: string
+          description: Indicador de Seguro
+          example: N
+        desLastEvent:
+          type: string
+          description: Descripción del último Evento
+          example: Entregado
+        lastEventCauseCode:
+          type: string
+          description: Código del motivo del último Evento
+          example: "HUB02"
+        desLastEventCause:
+          type: string
+          description: Descripción del motivo del último Evento
+          example: "1"
+        clients:
+          type: object
+          properties:
+            client:
+              type: array
+              items:
+                $ref: '#/components/schemas/ClientDTO'
+        packages:
+          type: object
+          properties:
+            package:
+              type: array
+              items:
+                $ref: '#/components/schemas/PackageDTO'
+    ClientDTO:
+      type: object
+      example:
+        $ref: "#/components/examples/ClientDTOexample"
+      properties:
+        clientCode:
+          type: string
+          description: Código de cliente
+          example: "12345"
+        businessName:
+          type: string
+          description: Razón social
+          example: "Empresa"
+        typeClient:
+          type: string
+          description: Tipo de cliente (remitente o destinatario)
+          example: "Empresa"
+        provinceCode:
+          type: string
+          description: Código de la provincia
+          example: "12"
+        locationCode:
+          type: string
+          description: Código de la localidad
+          example: "12"
+        address:
+          type: string
+          description: Dirección
+          example: "Calle Prueba 1"
+        postalCode:
+          type: string
+          description: Código postal
+          example: "12345"
+        locationName:
+          type: string
+          description: Nombre de la localidad
+          example: "Localidad"
+        provinceName:
+          type: string
+          description: Nombre de la provincia
+          example: "Provincia"
+        nifCif:
+          type: string
+          description: Documento de identidad
+          example: "12345678X"
+    PackageDTO:
+      type: object
+      example:
+        $ref: "#/components/examples/PackageDTOexample"
+      properties:
+        shippingCode:
+          type: string
+          description: Código de envío
+          example: "PX1X2X34567890X"
+        number:
+          type: string
+          description: Número de bulto/paquete
+          example: "1"
+  examples:
+    ClientDTOexample:
+      value:
+        address: Calle Prueba 1
+        businessName: Empresa
+        clientCode: "12345"
+        locationCode: "12"
+        locationName: Localidad
+        nifCif: 12345678X
+        postalCode: "12345"
+        provinceCode: "12"
+        provinceName: Provincia
+        typeClient: Empresa
+    ExpeditionResponseDTOexample:
+      value:
+        amountTurn: "7.2"
+        associatedExpedicion: N
+        assured: N
+        clients:
+          client:
+            -
+              address: Calle Prueba 1
+              businessName: Empresa
+              clientCode: "12345"
+              locationCode: "12"
+              locationName: Localidad
+              nifCif: 12345678X
+              postalCode: "12345"
+              provinceCode: "12"
+              provinceName: Provincia
+              typeClient: Empresa
+        dateCreation: 30/01/2024
+        dateLastEvent: 03/02/2023
+        dateModification: 04/02/2024
+        dateTransfer: 23/04/2022
+        declaredAmount: "14.7"
+        deliveryType: T
+        desLastEvent: Entregado
+        desLastEventCause: "1"
+        ear: N
+        eed: N
+        eurInsured: "23.3"
+        eurRefund: "1.5"
+        groupTurnCode: "20"
+        lastEventCause: "1"
+        lastEventCauseCode: HUB02
+        lastEventCode: I-E-001
+        noticeReceipt: N
+        numAccount: ES123456789012123456789
+        numPackage: "1"
+        numReferencia: "1"
+        numSection: "734"
+        numTurn: PQ6FMD0200098330128840G
+        officeCode: "4119494"
+        packages:
+          package:
+            -
+              number: "1"
+              shippingCode: PX1X2X34567890X
+        pee: N
+        refExpedition: PQ1006076594918J
+        refund: N
+        serviceCode: SR3006202200002ER
+        userCreate: MERCURIO
+        userModification: MERCURIO
+    SearchResponseDTOexample:
+      value:
+        admissionDate: 28/02/2024 22:00:00
+        amountgirorefund: "23.5"
+        applianceRange: B
+        associatedShipments:
+          -
+            desExtended: Admitido en origen
+            desSummary: Admitido
+            eventCode: A123456X
+            eventDate: 01/02/2024
+            eventHour: 12:09:16
+            shippingCode: AB1234CDEFG
+        asterisk: "**1***2345678901234567*"
+        barcode: 123456789012X
+        clientCode: "12345678"
+        clientName: Nombre Apellido
+        code: PQ1X2X1234567890123456X
+        codOr: OR12345678901234X
+        codProduct: PQDOM
+        codTypeModif: "0"
+        compensation: "3"
+        contents:
+          -
+            aiemcan: N
+            amount: "1"
+            iieecan: N
+            iieepen: N
+            manufactureCountry: US
+            merchandise: ABCDE
+            merchandiseCode: "30"
+            merchandiseType: "0"
+            netWeight: "106"
+            netWorth: "16.52"
+            shipmentNature: shaft
+            tarifario: "12345678"
+        data_customs:
+          -
+            cod_color: X01_2
+            color: Color
+        datalogger_code: "123456789"
+        isothermal_box_type: "PA"
+        dateCalculated: 14/02/2024 00:00:00
+        dateDeliverySuplied: 19/02/2024 16:00:00
+        dateDispatch: 06/02/2024
+        dateExpiration: 28/02/2024 22:00:00
+        dateShow: 19/02/2024 16:00:00
+        daysInList: "5"
+        declaredAmount: "18.8"
+        deliveryDate: 03/02/2024
+        deliveryHours: 10:00-14:00
+        destiEmail: random@email.com
+        destiName: Nombre Apellido
+        destiNameLane: Plaza Prueba 1
+        destiNameLocation: Madrid
+        destiNameProvince: Madrid
+        destinationCountryIsoCode: ES
+        destinationCountryLit: España
+        destiPhone: "12356789"
+        destiPostalCode: "12345"
+        doi: "123456789"
+        emailDNotif: random@email.com
+        emailRNotif: random@email.com
+        error:
+          -
+            codError: "3"
+            desError: Sin Trazabilidad en Minerva
+        eurAmountGiro: "8.10"
+        eurAmountIva: "2.41"
+        eurAmountTotal: "11.7"
+        eurInsured: "12.4"
+        eurRefund: "23.4"
+        eventResume: ENTREGADO
+        events:
+          -
+            codired: "1234567"
+            color: V
+            coordinateX: "-1.2345678"
+            coordinateY: "12.345678"
+            country: Madrid
+            desNipAgent: "123456"
+            eventCode: A012345X
+            eventDate: 25/03/2022
+            eventDes: PRE-ADMISION
+            eventHours: 12:09:16
+            expandedText: Prerregistrado pendiente de depósito en Correos
+            location: MADRID
+            motiveCode: XX
+            paramWebAction: "1234567890123"
+            phase: "1"
+            phaseDes: ENTREGADO
+            province: Madrid
+            razonCode: "8"
+            razonDes: Por definir
+            sectionCode: XX01
+            situationCode: SR123ABC
+            summaryText: Prerregistrado
+            turn: M
+            uniqueCode: A01B234C
+            unit: SUCURSAL 1
+            unitCode: "1234567"
+            webaction: EG
+        eventUniqueCode: A012345X
+        expeditionCode: PK1XXX123456789X
+        extravolumetry: "1"
+        flatRateEmail: random@email.com
+        flatRateShipping: N
+        has_incidence: N
+        hight: "35"
+        ics2Color: V
+        ics2Status: 123456 Algodon 1234
+        idContainer: ABCEDFGHIJKLMNO12345678901234
+        imei_IsothermalBox: "12345678901234"
+        indOrType: "12"
+        itmattDate: 23/02/2024
+        listNumber: "1"
+        long: "80"
+        messagingDate: 28/02/2024 22:00:00
+        modality: "03"
+        noticeReceipt: N
+        nrotaric: ABC1234567XX
+        numberPackage: "1"
+        numberRefExpedition: "123456789"
+        numOrder: 123456789X
+        observations: Consola
+        orderNumber: "6"
+        pae: N
+        phoneDNotif: "123456789"
+        phoneRNotif: "123456789"
+        pickUpDelivery: "0"
+        raee: S
+        receiverBusinessName: Company SL
+        receiverEmail: test@email.com
+        receiverName: Nombre Apellido
+        receiverNameLane: Calle Prueba s/n
+        receiverNameLocation: Madrid
+        receiverNameProvince: Madrid
+        receiverPhone: "123456789"
+        receiverPostalCode: "12345"
+        receiverRelationship: Por definir
+        recipientDelivery: "0"
+        refClient: ABcdFG12H3
+        reference1: ABcdFG1hY_1
+        reference2: ABcdFG1hY_2
+        reference3: ABcdFG1hY_2
+        relationshipCode: Por definir
+        remitDoi: 12345678X
+        remitEmail: random@email.com
+        remitName: Nombre Apellido
+        remitNameLane: Calle Prueba 1
+        remitNameLocation: Sevilla
+        remitNameProvince: Sevilla
+        remitPhone: "123456789"
+        remitPostalCode: "12345"
+        senderCountryIsoCode: CN
+        senderCountryLit: China
+        serviceCode: SRXXXX12345678XX
+        serviceDate: 14/02/2024 00:00:00
+        serviceTypeCode: "12"
+        shipmentRefundCode: AB12345678901234567890X
+        shipments_ids:
+          -
+            value: PK1234567890123XXX
+        shipmentType: A1BCDE
+        temperature_range: "1"
+        totalPackage: "3"
+        traceability_temperature: "1"
+        wareCode: "30"
+        weight: "185"
+        width: "45"
+        XLtimeSlot: "1"
+    PackageDTOexample:
+      value:
+        shippingCode: PX1X2X34567890X
+        number: "1"
+servers:
+    - url: https://api1.correos.es/support/trackpub/api/v2
+      description: Entorno de producción
+paths:
+ '/search/{shippingCode}':
+    get:
+      operationId: searchShipping
+      summary: "Recupera información sobre un envío específico."
+      description: "Este recurso permite obtener la información canónica de un envío mediante un código de envío específico. Se permite consultar un máximo de 100 envíos por petición."
+      parameters:
+        - name: client_id
+          in: header
+          description: Client Id del API. Este valor será proporcionado al registrarse en el API.
+          required: true
+          schema:
+            type: string
+          example: "<DEVELOPERS_CLIENT_ID>"
+        - name: client_secret
+          in: header
+          description: Client Secret del API. Este valor será proporcionado al registrarse en el API.
+          required: true
+          schema:
+            type: string
+          example: "<DEVELOPERS_CLIENT_SECRET>"
+        - name: Authorization
+          in: header
+          description: Este método requiere de autorización JWT.
+          required: true
+          schema:
+            type: string
+          example: "Bearer <SERVER_SIDE_ID_TOKEN>"
+        - in: path
+          name: shippingCode
+          description: Código de envío
+          required: true
+          schema:
+            type: string
+          example: "X12X3X456789012345678X"
+        - name: languageCode
+          in: query
+          description: Idioma de la respuesta (ES, ES_CA, ES_EU, ES_GL, EN, PT, ZH, FR)
+          required: false
+          schema:
+            type: string
+          example: "ES"
+      responses:
+        '200':
+          description: Respuesta exitosa
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SearchResponseDTO'
+        '400':
+          description: Petición incorrecta
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  title:
+                    type: string
+                    description: Indicador del error
+                    example: "Error"
+                  body:
+                    type: string
+                    description: Descripción del error
+                    example: "La petición no se pudo procesar debido a un error de sintaxis."
+        '401':
+          description: Acceso no autorizado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  title:
+                    type: string
+                    description: Indicador del error
+                    example: "Error"
+                  body:
+                    type: string
+                    description: Descripción del error
+                    example: "No tiene autorización para acceder a este recurso."
+        '404':
+          description: No encontrado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  title:
+                    type: string
+                    description: Indicador del error
+                    example: "Error"
+                  body:
+                    type: string
+                    description: Descripción del error
+                    example: "El recurso solicitado no fue encontrado."
+        '500':
+          description: Error interno del servidor
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  title:
+                    type: string
+                    description: Indicador del error
+                    example: "Error"
+                  body:
+                    type: string
+                    description: Descripción del error
+                    example: "Ha ocurrido un error interno en el servidor."
+ '/expedition/{expedition}':
+    get:
+      operationId: getExpedition
+      summary: "Recupera datos de una expedición solicitada."
+      description: "Este recurso permite la recuperación de los datos de una expedición mediante un código expedición."
+      parameters:
+        - name: client_id
+          in: header
+          description: Client Id del API. Este valor será proporcionado al registrarse en el API.
+          required: true
+          schema:
+            type: string
+          example: "<DEVELOPERS_CLIENT_ID>"
+        - name: client_secret
+          in: header
+          description: Client Secret del API. Este valor será proporcionado al registrarse en el API.
+          required: true
+          schema:
+            type: string
+          example: "<DEVELOPERS_CLIENT_SECRET>"
+        - name: Authorization
+          in: header
+          description: Este método requiere de autorización JWT.
+          required: true
+          schema:
+            type: string
+          example: "Bearer <SERVER_SIDE_ID_TOKEN>"
+        - in: path
+          name: expedition
+          required: true
+          description: Código de Expedición a buscar
+          schema:
+            type: string
+          example: "PX12XX3456789X"
+      responses:
+        '200':
+          description: Respuesta exitosa
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExpeditionResponseDTO"
+        '400':
+          description: Petición incorrecta
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  title:
+                    type: string
+                    description: Indicador del error
+                    example: "Error"
+                  body:
+                    type: string
+                    description: Descripción del error
+                    example: "La petición no se pudo procesar debido a un error de sintaxis."
+        '401':
+          description: Acceso no autorizado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  title:
+                    type: string
+                    description: Indicador del error
+                    example: "Error"
+                  body:
+                    type: string
+                    description: Descripción del error
+                    example: "No tiene autorización para acceder a este recurso."
+        '404':
+          description: No encontrado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  title:
+                    type: string
+                    description: Indicador del error
+                    example: "Error"
+                  body:
+                    type: string
+                    description: Descripción del error
+                    example: "El recurso solicitado no fue encontrado."
+        '500':
+          description: Error interno del servidor
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  title:
+                    type: string
+                    description: Indicador del error
+                    example: "Error"
+                  body:
+                    type: string
+                    description: Descripción del error
+                    example: "Ha ocurrido un error interno en el servidor."

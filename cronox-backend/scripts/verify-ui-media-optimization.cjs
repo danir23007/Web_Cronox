@@ -103,7 +103,7 @@ async function main() {
   assert.match(index, /class="footer-logo"/);
   assert.match(checkout, /src="assets\/CRONOX-preloader\.webp"/);
   assert.match(profile, /img\.src = 'assets\/CRONOX-preloader\.webp'/);
-  assert.match(profileHtml, /assets\/profile\.js\?v=23/);
+  assert.match(profileHtml, /assets\/profile\.js\?v=24/);
   assert.match(profileHtml, /assets\/accreditation-layout\.js\?v=1/);
   assert.match(keyScreen, /src="assets\/CRONOX-GIF\.gif"/);
   assert.match(newsletter, /supabase\.co\/storage\/v1\/object\/public\/newsletter\/chains-newsletter\.jpg/);

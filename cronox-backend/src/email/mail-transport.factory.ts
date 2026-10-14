@@ -9,6 +9,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { restockDeliveryOutcome } from './restock-delivery.error';
 import { EmailQuotaWaitError, quotaAttemptId, quotaWaiting, recipientUnits, reserveAccountQuota } from './mail-account-quota';
 import { decrypt, encrypt, maxMessageBytes, maxAttachmentBytes } from '../mailbox/mailbox-security';
+import { boundedSmtpTransport } from './bounded-smtp-transport';
 
 @Injectable()
 export class MailTransportFactory implements OnModuleInit, OnModuleDestroy {
@@ -21,7 +22,7 @@ export class MailTransportFactory implements OnModuleInit, OnModuleDestroy {
   private readonly config = loadEmailConfig();
   private readonly transports = new Map<EmailSenderKey, Transporter>();
 
-  async sendMail(senderKey: EmailSenderKey, options: SendMailOptions, purpose?: string): Promise<{ messageId: string; accepted?: unknown[]; queued?: boolean }> {
+  async sendMail(senderKey: EmailSenderKey, options: SendMailOptions, purpose?: string, deadline?: number): Promise<{ messageId: string; accepted?: unknown[]; queued?: boolean }> {
     if (!this.db) throw new Error('EMAIL_AUDIT_UNAVAILABLE');
     if (options.raw || options.envelope) throw Error('EMAIL_RAW_INPUT_UNSUPPORTED');
     // No message is sent unless the attempt is durably recorded first.
@@ -56,15 +57,26 @@ export class MailTransportFactory implements OnModuleInit, OnModuleDestroy {
       await this.db.emailDelivery.create({ data: { ...data, status: 'WAITING_QUOTA', pendingPayload: payload, readyAt: error.retryAt } });
       return { messageId: data.id, queued: true }; // not an SMTP acceptance
     }
-    return this.deliverAttempt(attempt.id, senderKey, prepared);
+    return this.deliverAttempt(attempt.id, senderKey, prepared, deadline);
   }
-  private async deliverAttempt(id: string, senderKey: EmailSenderKey, options: SendMailOptions) {
+  private async deliverAttempt(id: string, senderKey: EmailSenderKey, options: SendMailOptions, deadline?: number) {
     if (!this.db) throw Error('EMAIL_AUDIT_UNAVAILABLE');
     let info: { messageId: string; accepted?: unknown[] };
+    let dispose: (() => void) | undefined;
     try {
       let transport: Transporter;
       let from: string;
-      try { transport = this.getTransport(senderKey); from = this.getFrom(senderKey); }
+      try {
+        from = this.getFrom(senderKey);
+        if (deadline !== undefined) {
+          if (!Number.isFinite(deadline) || deadline <= Date.now()) throw Object.assign(Error('SMTP_TRACKING_DEADLINE'), { code: 'EMAIL_CONFIG' });
+          const account = this.config.accounts[senderKey];
+          if (!account?.user || !account.pass) throw Error('EMAIL_CONFIG');
+          const bounded = boundedSmtpTransport({ host: this.config.smtpHost, port: this.config.smtpPort, secure: this.config.smtpSecure,
+            auth: { user: account.user, pass: account.pass } }, deadline);
+          transport = bounded.transport; dispose = bounded.dispose;
+        } else transport = this.getTransport(senderKey);
+      }
       catch (error) { throw Object.assign(error as Error, { code: 'EMAIL_CONFIG' }); }
       info = await transport.sendMail({ ...options, from });
       if (!info.accepted?.length) throw Object.assign(new Error('SMTP_RECIPIENT_NOT_ACCEPTED'), { code: 'EENVELOPE' });
@@ -89,7 +101,7 @@ export class MailTransportFactory implements OnModuleInit, OnModuleDestroy {
       } catch { this.logger.error('Delivery outcome audit pending'); }
       if (!known) throw Object.assign(new Error('SMTP_OUTCOME_UNKNOWN'), { deliveryUnknown: true });
       throw error;
-    }
+    } finally { dispose?.(); }
     try {
       await this.db.emailDelivery.update({ where: { id }, data: {
         status: 'SMTP_ACCEPTED', providerMessageId: info.messageId,

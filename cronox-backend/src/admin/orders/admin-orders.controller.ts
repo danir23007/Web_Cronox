@@ -1,6 +1,7 @@
 import { UserIdentityGuard } from '../../users/user-identity.guard';
 import {
   Body,
+  BadRequestException,
   Controller,
   Get,
   Param,
@@ -10,6 +11,8 @@ import {
   Query,
   Res,
   UseGuards,
+  UploadedFile,
+  UseInterceptors,
 } from '@nestjs/common';
 import type { Response } from 'express';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
@@ -21,12 +24,19 @@ import { AdminOrdersService } from './admin-orders.service';
 import { AdminOrdersQueryDto } from './dto/admin-order-query.dto';
 import { UpdateOrderStatusDto } from './dto/update-order-status.dto';
 import { UpdateOrderFulfillmentDto } from './dto/update-order-fulfillment.dto';
+import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { ShippingLabelsService } from '../../shipping-tracking/labels.service';
+import { ShippingLabelUploadInterceptor } from '../../shipping-tracking/labels-upload.interceptor';
+import { SuperAdminGuard } from '../../common/guards/super-admin.guard';
 
 @Controller('admin/orders')
 @UseGuards(JwtAuthGuard, AdminGuard, RolesGuard, UserIdentityGuard)
 @Roles(Role.SUPERADMIN)
 export class AdminOrdersController {
-  constructor(private readonly ordersService: AdminOrdersService) {}
+  constructor(
+    private readonly ordersService: AdminOrdersService,
+    private readonly shippingLabels: ShippingLabelsService,
+  ) {}
 
   @Get()
   listOrders(@Query() query: AdminOrdersQueryDto) {
@@ -66,8 +76,40 @@ export class AdminOrdersController {
   updateOrderFulfillment(
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: UpdateOrderFulfillmentDto,
+    @CurrentUser('id') actorId: number,
   ) {
-    return this.ordersService.updateOrderFulfillment(id, dto);
+    return this.ordersService.updateOrderFulfillment(id, dto, actorId);
+  }
+
+  @Post(':id/label')
+  @UseGuards(SuperAdminGuard)
+  @UseInterceptors(ShippingLabelUploadInterceptor)
+  uploadShippingLabel(
+    @Param('id', ParseIntPipe) id: number,
+    @UploadedFile() file: Express.Multer.File,
+    @Body('revision') revision: string,
+    @CurrentUser('id') actorId: number,
+  ) {
+    if (typeof revision !== 'string' || !/^\d{1,10}$/.test(revision)) {
+      throw new BadRequestException('La revision del seguimiento es obligatoria');
+    }
+    return this.shippingLabels.upload(id, Number(revision), actorId, file);
+  }
+
+  @Get(':id/label')
+  @UseGuards(SuperAdminGuard)
+  async downloadShippingLabel(
+    @Param('id', ParseIntPipe) id: number,
+    @Res() res: Response,
+  ) {
+    const label = await this.shippingLabels.download(id);
+    res.setHeader('Cache-Control', 'private, no-store');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('Content-Security-Policy', "default-src 'none'; sandbox");
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="pedido-${id}-etiqueta.pdf"`);
+    return res.send(label.buffer);
   }
 
   @Post(':id/mark-shipped')

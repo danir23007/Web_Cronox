@@ -18,6 +18,7 @@ import { UpsertAddressDto } from './dto/upsert-address.dto';
 import { serializableTransaction } from '../prisma/serializable-transaction';
 import { validateAccountName } from '../common/account-name-policy';
 import { ADDRESS_LIMIT } from '../addresses/addresses.service';
+import { buildCorreosTrackingUrl } from '../shipping-tracking/tracking-links';
 
 export type MeProfile = {
   hasPassword: boolean;
@@ -55,6 +56,9 @@ export type MeOrder = {
   trackingNumber: string | null;
   trackingUrl: string | null;
   shippingCarrier: string | null;
+  shippingMethodCode?: string | null;
+  source?: string;
+  shippingRequired?: boolean;
   shippedAt: Date | null;
   deliveredAt: Date | null;
 };
@@ -237,6 +241,8 @@ export class MeService {
         trackingNumber: true,
         trackingUrl: true,
         shippingCarrier: true,
+        shippingMethodCode: true,
+        source: true,
         shippedAt: true,
         deliveredAt: true,
       },
@@ -250,8 +256,12 @@ export class MeService {
       currency: order.currency,
       excludedFromStatistics: order.excludedFromStatistics,
       trackingNumber: order.trackingNumber,
-      trackingUrl: order.trackingUrl,
+      trackingUrl: /^correos$/i.test(order.shippingCarrier?.trim() || '')
+        ? buildCorreosTrackingUrl(order.trackingNumber) : order.trackingUrl,
       shippingCarrier: order.shippingCarrier,
+      shippingMethodCode: order.shippingMethodCode,
+      source: order.source,
+      shippingRequired: order.source !== 'IN_PERSON_ADMIN' && !['LOCAL_PICKUP', 'PICKUP'].includes(order.shippingMethodCode || ''),
       shippedAt: order.shippedAt,
       deliveredAt: order.deliveredAt,
     }));

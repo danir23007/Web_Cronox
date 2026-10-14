@@ -322,6 +322,15 @@ export function structuredDocumentForPurpose(
 ): VisualDocument | null {
   let blocks: MailBlock[];
   switch (purpose) {
+    case 'ORDER_TRACKING':
+      blocks = [section([
+        heading('Seguimiento del pedido #{{orderId}}'),
+        text('Correos informa: {{statusLabel}}.'),
+        text('Número de seguimiento: {{trackingNumber}}'),
+        button('Ver seguimiento en Correos', '{{trackingUrl}}'),
+        text('CRONOX', { size: 12, color: '#8a8a8a' }),
+      ])];
+      break;
     case 'RESTOCK':
       blocks = [section([
         heading('Ya está disponible'), text('{{product}} · Talla {{size}}'),

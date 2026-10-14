@@ -1,0 +1,133 @@
+{
+  "source": "https://www.correos.es/content/dam/correos/documentos/herramientas/m%C3%B3dulos/integracion-por-ficheros/integraci%C3%B3n-api/Matriz_eventos_20251009.xlsx",
+  "retrievedOn": "2026-10-14",
+  "sourceSha256": "1006b40afd62e0465d0f4c2470b73770e85c773093f6dfac26d25ac724b2c974",
+  "sheet": "Sheet1",
+  "headers": {
+    "A": "cod_razón",
+    "B": "Ciclo",
+    "C": "cod_unico",
+    "D": "des_fase",
+    "E": "fase",
+    "F": "des_visible03",
+    "G": "des_resumenes",
+    "H": "des_es03",
+    "I": "des_resumenca",
+    "J": "des_ca03",
+    "K": "des_resumenen",
+    "L": "des_en03",
+    "M": "des_resumeneu",
+    "N": "des_eu03",
+    "O": "des_resumenfr",
+    "P": "des_fr03",
+    "Q": "des_resumengl",
+    "R": "des_gl03",
+    "S": "des_resumenpt",
+    "T": "des_pt03",
+    "U": "des_resumenzh",
+    "V": "des_zh03",
+    "W": "cod_evento2",
+    "X": "pk_id"
+  },
+  "sourceEventRows": 781,
+  "rows": [
+    {
+      "cod_unico": "A010000V",
+      "des_fase": "2",
+      "fase": "2EN CAMINO / IN TRANSIT",
+      "des_visible03": "S",
+      "des_resumenes": "Admitido",
+      "des_es03": "El envío ha tenido admisión en origen",
+      "cod_evento2": "A-E-001"
+    },
+    {
+      "cod_unico": "H020000V",
+      "des_fase": "3",
+      "fase": "3EN ENTREGA / IN DELIVERY",
+      "des_visible03": "S",
+      "des_resumenes": "En reparto",
+      "des_es03": "Envío en reparto para su entrega",
+      "cod_evento2": "H-E-002"
+    },
+    {
+      "cod_unico": "H250000V",
+      "des_fase": "3",
+      "fase": "3EN ENTREGA / IN DELIVERY",
+      "des_visible03": "S",
+      "des_resumenes": "En reparto",
+      "des_es03": "En reparto para su entrega al destinatario",
+      "cod_evento2": "D-D-025"
+    },
+    {
+      "cod_unico": "I010000V",
+      "des_fase": "4",
+      "fase": "4ENTREGADO / DELIVERED",
+      "des_visible03": "S",
+      "des_resumenes": "Entregado",
+      "des_es03": "Envío entregado al destinatario o autorizado",
+      "cod_evento2": "I-E-001"
+    },
+    {
+      "cod_unico": "I01E410V",
+      "des_fase": "4",
+      "fase": "4ENTREGADO / DELIVERED",
+      "des_visible03": "S",
+      "des_resumenes": "Entregado",
+      "des_es03": "Se ha entregado el envío a un intermediario",
+      "cod_evento2": "I-E-001"
+    },
+    {
+      "cod_unico": "I01H230V",
+      "des_fase": "4",
+      "fase": "4ENTREGADO / DELIVERED",
+      "des_visible03": "S",
+      "des_resumenes": "Devuelto al remitente en oficina",
+      "des_es03": "Envío devuelto al remitente en oficina",
+      "cod_evento2": "I-E-001"
+    },
+    {
+      "cod_unico": "I020000V",
+      "des_fase": "4",
+      "fase": "4ENTREGADO / DELIVERED",
+      "des_visible03": "S",
+      "des_resumenes": "Entregado al remitente",
+      "des_es03": "Se ha entregado el envío al remitente",
+      "cod_evento2": "I-E-002"
+    },
+    {
+      "cod_unico": "O07A010R",
+      "des_fase": "0",
+      "fase": "0SIN FASE / NO PHASE",
+      "des_visible03": "S",
+      "des_resumenes": "Incidencia",
+      "des_es03": "Envío no localizado",
+      "cod_evento2": "L-E-007"
+    },
+    {
+      "cod_unico": "O07A030R",
+      "des_fase": "0",
+      "fase": "0SIN FASE / NO PHASE",
+      "des_visible03": "S",
+      "des_resumenes": "Incidencia",
+      "des_es03": "Envío sustraído",
+      "cod_evento2": "L-E-007"
+    },
+    {
+      "cod_unico": "O200000R",
+      "des_fase": "0",
+      "fase": "0SIN FASE / NO PHASE",
+      "des_visible03": "S",
+      "des_resumenes": "Incidencia de fuerza mayor",
+      "des_es03": "Envío con posible demora en la entrega por problemas climatológicos",
+      "cod_evento2": "O200000R"
+    },
+    {
+      "cod_unico": "X400000R",
+      "des_fase": "4",
+      "fase": "4ENTREGADO / DELIVERED",
+      "des_visible03": "S",
+      "des_resumenes": "Tiempo de recogida finalizado en PUDO",
+      "des_es03": "El periodo de recogida del envío en el punto de conveniencia seleccionado ha finalizado y se procederá a su devolución a origen."
+    }
+  ]
+}

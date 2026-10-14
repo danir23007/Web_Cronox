@@ -46,6 +46,7 @@ import { AdminExportsService } from './exports/admin-exports.service';
 import { ExcelWorkbookService } from './exports/excel-workbook.service';
 import { AdminManualPurchasesService } from './manual-purchases/admin-manual-purchases.service';
 import { AdminManualPurchaseCorrectionsController, AdminManualPurchasesController } from './manual-purchases/admin-manual-purchases.controller';
+import { ShippingTrackingModule } from '../shipping-tracking/shipping-tracking.module';
 
 @Module({
   imports: [
@@ -56,6 +57,7 @@ import { AdminManualPurchaseCorrectionsController, AdminManualPurchasesControlle
     EmailModule,
     PaymentsModule,
     OrdersModule,
+    ShippingTrackingModule,
   ],
   controllers: [
     AdminPointsController,

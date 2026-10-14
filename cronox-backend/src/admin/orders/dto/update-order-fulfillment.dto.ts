@@ -4,6 +4,8 @@ import {
   IsOptional,
   IsString,
   IsUrl,
+  IsInt,
+  Min,
   MaxLength,
   ValidateIf,
 } from 'class-validator';
@@ -24,11 +26,16 @@ export class UpdateOrderFulfillmentDto {
   status?: OrderStatus;
 
   @IsOptional()
-  @Transform(trimOrUndefined)
+  @Transform(({ value }) => typeof value === 'string' ? value.trim() || null : value)
   @ValidateIf((_, value) => value !== undefined)
   @IsString()
   @MaxLength(80)
-  trackingNumber?: string;
+  trackingNumber?: string | null;
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  trackingRevision?: number;
 
   @IsOptional()
   @Transform(trimOrUndefined)

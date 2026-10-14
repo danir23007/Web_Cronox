@@ -47,6 +47,16 @@
     .profile-table th { color: #b5b7bd; font-weight: 600; }
     .profile-table td { color: #e6e7eb; }
     .profile-table tr:last-child td { border-bottom: none; }
+    .profile-table td[data-label="Seguimiento"] { overflow-wrap:anywhere; }
+    .profile-table td[data-label="Seguimiento"] a { display:inline-block; min-height:44px; box-sizing:border-box; padding:10px 0; color:inherit; text-underline-offset:3px; }
+    .profile-table a:focus-visible { outline:2px solid #fff; outline-offset:3px; }
+    @media (max-width:640px) {
+      .profile-table thead { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip-path:inset(50%); white-space:nowrap; }
+      .profile-table, .profile-table tbody, .profile-table tr { display:block; width:100%; }
+      .profile-table tr { padding:10px 0; border-bottom:1px solid #34343b; }
+      .profile-table td { display:block; padding:7px 0; border:0; }
+      .profile-table td::before { content:attr(data-label); display:block; color:#b5b7bd; font-weight:600; margin-bottom:4px; }
+    }
     .profile-fallback { color: #a9abb1; margin: 8px 0 0; }
     #profileMessage { margin-bottom: 16px; padding: 12px 14px; border-radius: 10px; background: #111118; border: 1px solid #1f1f24; color: #e5e7eb; }
     #profileMessage.is-error { border-color: #ff5f5f; color: #ffd9d9; }
@@ -489,7 +499,7 @@
   <script src="assets/favorites-toggle.js?v=3" defer></script>
   <script src="assets/user-identity.js?v=1" defer></script>
   <script src="assets/accreditation-layout.js?v=1" defer></script>
-  <script src="assets/profile.js?v=23" defer></script>
+  <script src="assets/profile.js?v=24" defer></script>
 
   <style>
     /* Profile overrides */

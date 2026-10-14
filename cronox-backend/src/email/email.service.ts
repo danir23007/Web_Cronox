@@ -135,7 +135,7 @@ export class EmailService {
           subject: options.purpose === 'NEWSLETTER_ACCESS' ? options.subject : custom?.subject || options.subject,
           html,
           ...(custom ? { text: custom.text } : {}),
-        }, options.purpose || options.type)) as { messageId: string; accepted?: unknown[]; queued?: boolean };
+        }, options.purpose || options.type, ...(options.type === EmailType.ORDER_TRACKING ? [options.deliveryDeadline ?? Date.now() + 20000] : []))) as { messageId: string; accepted?: unknown[]; queued?: boolean };
 
       if (info.queued) return { messageId: info.messageId, queued: true };
 

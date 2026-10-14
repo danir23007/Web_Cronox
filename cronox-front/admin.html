@@ -103,6 +103,14 @@
     .order-detail__fact dt { color:#aaa; font-size:12px; margin-bottom:3px; }
     .order-detail__fact dd { margin:0; overflow-wrap:anywhere; white-space:pre-wrap; }
     .order-detail__items { overflow-x:auto; }
+    .order-tracking__actions { display:flex; flex-wrap:wrap; align-items:center; gap:10px; margin:12px 0; }
+    .order-tracking__actions .btn:disabled { opacity:.55; cursor:not-allowed; }
+    .order-tracking__events { padding-left:22px; max-height:260px; overflow-y:auto; overflow-wrap:anywhere; }
+    .order-tracking__events li { margin:10px 0; }
+    .order-tracking__date { display:block; color:#aaa; font-size:12px; }
+    .order-tracking__note { color:#aaa; font-size:13px; line-height:1.5; }
+    #orderLabelFile { width:100%; min-width:0; }
+    @media (max-width:600px) { .order-tracking__actions .btn { min-height:44px; flex:1 1 160px; } }
     .form-group { display: flex; flex-direction: column; gap: 6px; }
     .image-preview { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 8px; }
     .product-card-framing-editor { margin: 14px 0; padding: 14px; border: 1px solid #2a2a36; border-radius: 12px; background: #0b0b11; }
@@ -994,6 +1002,38 @@
           <label class="form-group"><span>Enlace de seguimiento</span><input id="orderTrackingUrl" class="input" type="url" placeholder="https://..."></label>
           <label class="form-group" style="grid-column:1/-1;"><span>Nota interna</span><textarea id="orderInternalNote" class="textarea" placeholder="Nota interna logística"></textarea></label>
         </div>
+        <p class="order-tracking__note">El número de seguimiento es distinto del número de pedido. Guardarlo o adjuntar una etiqueta no confirma la admisión física en Correos.</p>
+        </section>
+        <section class="order-detail__section" aria-labelledby="orderCorreosHeading">
+          <h4 id="orderCorreosHeading">Seguimiento de Correos</h4>
+          <div id="orderTrackingMessage" class="message" role="status" aria-live="polite"></div>
+          <dl class="order-detail__facts">
+            <div class="order-detail__fact"><dt>Estado del transporte</dt><dd id="orderTrackingState">Sin consultar</dd></div>
+            <div class="order-detail__fact"><dt>Última sincronización correcta</dt><dd id="orderTrackingLastSuccess">—</dd></div>
+            <div class="order-detail__fact"><dt>Error de sincronización</dt><dd id="orderTrackingError">Ninguno</dd></div>
+            <div class="order-detail__fact"><dt>Próxima consulta automática</dt><dd id="orderTrackingNextSync">—</dd></div>
+            <div class="order-detail__fact"><dt>Próxima consulta manual permitida</dt><dd id="orderTrackingNextManual">—</dd></div>
+          </dl>
+          <div class="order-tracking__actions">
+            <a id="orderTrackingPublicLink" class="btn" target="_blank" rel="noopener noreferrer" referrerpolicy="no-referrer" hidden>Ver seguimiento en Correos</a>
+            <button id="orderTrackingSyncBtn" class="btn" type="button" disabled>Actualizar seguimiento</button>
+          </div>
+          <p id="orderTrackingContract" class="order-tracking__note" hidden>La interpretación automática de hitos está pendiente de confirmar. El historial conserva los códigos y las fechas originales de Correos; un error de consulta no es una incidencia de transporte.</p>
+          <p id="orderTrackingApi" class="order-tracking__note" hidden>Las consultas a Correos están desactivadas. El enlace público y la etiqueta siguen disponibles.</p>
+          <h5>Historial de transporte e incidencias</h5>
+          <ol id="orderTrackingEvents" class="order-tracking__events"><li>Sin eventos confirmados por Correos.</li></ol>
+          <details><summary>Cambios del número de seguimiento</summary><ol id="orderTrackingAudit" class="order-tracking__events"></ol></details>
+        </section>
+        <section class="order-detail__section" aria-labelledby="orderLabelHeading">
+          <h4 id="orderLabelHeading">Etiqueta privada del pedido</h4>
+          <p id="orderLabelMetadata" class="order-tracking__note">Sin etiqueta guardada.</p>
+          <p id="orderLabelStale" class="order-tracking__note" hidden>La etiqueta pertenece a un seguimiento anterior; revísala y vuelve a subirla antes de utilizarla.</p>
+          <label class="form-group"><span>Adjuntar etiqueta creada en Correos (PDF, hasta 10 MiB)</span><input id="orderLabelFile" type="file" accept="application/pdf,.pdf"></label>
+          <div class="order-tracking__actions">
+            <button id="orderLabelUploadBtn" class="btn" type="button" disabled>Guardar etiqueta</button>
+            <button id="orderLabelDownloadBtn" class="btn" type="button" disabled>Descargar etiqueta</button>
+          </div>
+          <p class="order-tracking__note">La etiqueta se almacena de forma privada. Esta acción no crea un envío en Correos.</p>
         </section>
         <div class="modal-actions">
           <button class="btn primary" id="orderSaveBtn" type="button">Guardar tracking</button>
@@ -2009,7 +2049,7 @@
   <script src="assets/responsive-images.js?v=4"></script>
   <script src="assets/admin-mail-document.js?v=2"></script>
   <script src="assets/admin-mails.js?v=4"></script>
-  <script src="assets/admin-orders.js?v=3"></script>
+  <script src="assets/admin-orders.js?v=4"></script>
   <script src="assets/gallery.js?v=18"></script>
   <script src="assets/admin-gallery.js?v=7"></script>
   <script src="assets/key-screen-renderer.js?v=2"></script>

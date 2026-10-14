@@ -410,7 +410,13 @@
     ordersEmpty.hidden = true;
     orders.forEach((order) => {
       const trackingBits = [];
-      const trackingUrl = safeExternalUrl(order.trackingUrl);
+      let trackingUrl = safeExternalUrl(order.trackingUrl);
+      if (trackingUrl && /^correos$/i.test(String(order.shippingCarrier || '').trim())) {
+        try {
+          const url = new URL(trackingUrl);
+          if (url.protocol !== 'https:' || !['correos.es', 'www.correos.es'].includes(url.hostname)) trackingUrl = '';
+        } catch { trackingUrl = ''; }
+      }
       const orderId = escapeHtml(order.id);
       const createdAt = escapeHtml(formatDate(order.purchasedAt || order.createdAt));
       const orderStatus = escapeHtml(statusLabel(order.status)) + (order.excludedFromStatistics ? '<br><strong>Excluida de estadísticas</strong>' : '');
@@ -422,9 +428,9 @@
       if (order.trackingNumber) {
         trackingBits.push(`Seguimiento: ${escapeHtml(order.trackingNumber)}`);
       }
-      if (trackingUrl) {
+      if (order.trackingNumber && trackingUrl) {
         trackingBits.push(
-          `<a href=\"${escapeHtml(trackingUrl)}\" target=\"_blank\" rel=\"noopener noreferrer\" referrerpolicy=\"no-referrer\">Seguir pedido</a>`,
+          `<a href=\"${escapeHtml(trackingUrl)}\" target=\"_blank\" rel=\"noopener noreferrer\" referrerpolicy=\"no-referrer\">Ver seguimiento</a>`,
         );
       }
       if (order.shippedAt) {
@@ -433,14 +439,25 @@
       if (order.deliveredAt) {
         trackingBits.push(`Entregado el: ${escapeHtml(formatDate(order.deliveredAt))}`);
       }
+      if (!order.trackingNumber) {
+        const method = String(order.shippingMethodCode || '').toUpperCase();
+        const fallback = order.status === 'CANCELLED' ? 'Pedido cancelado'
+          : order.status === 'REFUNDED' ? 'Pedido reembolsado'
+          : ['LOCAL_PICKUP', 'PICKUP'].includes(method) ? 'Recogida local'
+          : order.shippingRequired === false ? 'Sin envío'
+          : order.status === 'DELIVERED' ? 'Entregado; sin número de seguimiento'
+          : order.status === 'SHIPPED' ? 'Enviado; seguimiento no disponible'
+          : 'Pendiente de enviar';
+        trackingBits.unshift(escapeHtml(fallback));
+      }
 
       const tr = document.createElement('tr');
       tr.innerHTML = `
-        <td>#${orderId}</td>
-        <td>${createdAt}</td>
-        <td>${orderStatus}</td>
-        <td>${trackingBits.length ? trackingBits.join('<br>') : '—'}</td>
-        <td>${total} ${currency}</td>
+        <td data-label="Pedido">#${orderId}</td>
+        <td data-label="Fecha">${createdAt}</td>
+        <td data-label="Estado">${orderStatus}</td>
+        <td data-label="Seguimiento">${trackingBits.join('<br>')}</td>
+        <td data-label="Total">${total} ${currency}</td>
       `;
       ordersBody.appendChild(tr);
     });

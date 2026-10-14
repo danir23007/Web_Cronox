@@ -8,6 +8,9 @@ import {
 
 // Distinct purposes preserve the existing sender/transport types.
 export const MAIL_PURPOSES = [
+  { key: 'ORDER_TRACKING', name: 'Actualización de seguimiento de Correos',
+    type: EmailType.ORDER_TRACKING, subject: 'CRONOX · Seguimiento del pedido #{{orderId}}',
+    required: ['orderId', 'trackingNumber', 'trackingUrl', 'statusLabel'] },
   { key: 'RESTOCK', name: 'Aviso de reposición de talla', type: EmailType.RESTOCK,
     subject: 'Tu talla ha vuelto: {{product}} · {{size}}', required: ['product', 'size', 'actionUrl'] },
   {
@@ -87,6 +90,7 @@ export const SAMPLE_DATA: Record<string, unknown> = {
   statusLabel: 'En camino',
   shippingCarrier: 'Transportista de ejemplo',
   trackingNumber: 'PRUEBA123',
+  trackingUrl: 'https://www.correos.es/es/es/herramientas/localizador/envios/detalle?tracking-number=PRUEBA123',
   subtotalFormatted: '69,90 €',
   discountFormatted: '5,00 €',
   shippingFormatted: '4,90 €',
@@ -136,6 +140,7 @@ export const VARIABLE_DESCRIPTIONS: Record<string, string> = {
   statusLabel: 'Estado del pedido',
   shippingCarrier: 'Empresa de transporte',
   trackingNumber: 'Número de seguimiento',
+  trackingUrl: 'Enlace público de seguimiento',
   subtotalFormatted: 'Subtotal con moneda',
   discountFormatted: 'Descuento con moneda',
   shippingFormatted: 'Gastos de envío con moneda',
@@ -181,6 +186,8 @@ export function variablesFor(purpose?: string | null) {
     'lineTotalFormatted',
   ];
   switch (MAIL_PURPOSES.find((x) => x.key === purpose)?.type) {
+    case EmailType.ORDER_TRACKING:
+      return [...base, ...order, 'trackingNumber', 'trackingUrl', 'shippingCarrier', 'statusLabel'];
     case EmailType.RESTOCK:
       return [...base, 'product', 'size', 'imageUrl', 'actionUrl'];
     case EmailType.ORDER_CONFIRMATION:

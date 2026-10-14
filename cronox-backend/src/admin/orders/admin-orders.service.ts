@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   Injectable,
   Logger,
   NotFoundException,
@@ -15,6 +16,7 @@ import { EmailType } from '../../email/email.types';
 import { StripeService } from '../../payments/stripe.service';
 import { OrdersService } from '../../orders/orders.service';
 import { toCountryDisplayName } from '../../common/country';
+import { buildCorreosTrackingUrl, normalizeCorreosTrackingNumber } from '../../shipping-tracking/tracking-links';
 
 const DEFAULT_PAGE_SIZE = 20;
 const MAX_EXPORT_ROWS = 5000;
@@ -135,7 +137,7 @@ export class AdminOrdersService {
     return this.updateOrderFulfillment(id, { status });
   }
 
-  async updateOrderFulfillment(id: number, dto: UpdateOrderFulfillmentDto) {
+  async updateOrderFulfillment(id: number, dto: UpdateOrderFulfillmentDto, actorId?: number) {
     const include = {
       user: { select: { email: true, memberCode: true } },
       checkoutSnapshot: {
@@ -154,6 +156,11 @@ export class AdminOrdersService {
     const hadExplicitStatus = typeof dto.status !== 'undefined';
 
     const { updated, previous } = await this.prisma.$transaction(async (tx) => {
+      const trackingEdit = dto.trackingNumber !== undefined || dto.shippingCarrier !== undefined;
+      if (trackingEdit) {
+        // Serialize corrections with synchronizers and label uploads on this Order.
+        await tx.$queryRaw`SELECT "id" FROM "Order" WHERE "id" = ${id} FOR UPDATE`;
+      }
       const existing = await tx.order.findUnique({ where: { id }, include });
       if (!existing) {
         throw new NotFoundException('Order not found');
@@ -194,12 +201,63 @@ export class AdminOrdersService {
       if (hadExplicitStatus) {
         data.status = targetStatus;
       }
-      if (dto.trackingNumber !== undefined)
-        data.trackingNumber = dto.trackingNumber ?? null;
+      if (trackingEdit) {
+        if (dto.trackingRevision !== undefined && dto.trackingRevision !== existing.trackingRevision) {
+          throw new ConflictException('El seguimiento ha cambiado. Recarga el pedido antes de guardarlo');
+        }
+        const carrier = dto.shippingCarrier?.trim() ?? existing.shippingCarrier?.trim() ?? 'Correos';
+        const isCorreos = !carrier || carrier.trim().toLowerCase() === 'correos';
+        const rawNumber = dto.trackingNumber === undefined ? existing.trackingNumber : dto.trackingNumber;
+        const nextNumber = isCorreos ? normalizeCorreosTrackingNumber(rawNumber) : rawNumber?.trim() || null;
+        const carrierChanged = (carrier.toLowerCase() || 'correos') !== ((existing.shippingCarrier ?? 'Correos').trim().toLowerCase() || 'correos');
+        const numberChanged = nextNumber !== existing.trackingNumber;
+        if (dto.trackingNumber !== undefined || nextNumber !== existing.trackingNumber) data.trackingNumber = nextNumber;
+        if (isCorreos && nextNumber) data.shippingCarrier = 'Correos';
+        if (numberChanged || carrierChanged) {
+          const revision = (existing.trackingRevision ?? 0) + 1;
+          const actor = actorId === undefined ? null : await tx.user.findUnique({
+            where: { id: actorId }, select: { identityUid: true },
+          });
+          Object.assign(data, {
+            trackingRevision: revision,
+            trackingLastSuccessAt: null,
+            trackingLastErrorCode: null,
+            trackingLastErrorAt: null,
+            trackingNextSyncAt: isCorreos && nextNumber ? new Date() : null,
+            trackingLeaseUntil: null,
+            trackingLeaseToken: null,
+            trackingFailures: 0,
+            trackingState: null,
+            trackingStateCode: null,
+            trackingTerminalAt: null,
+            trackingBaselineEstablished: false,
+          });
+          await tx.orderTrackingAudit.create({ data: {
+            orderId: id,
+            actorId: actorId ?? null,
+            actorIdentityUid: actor?.identityUid ?? null,
+            previousNumber: existing.trackingNumber,
+            nextNumber,
+            revision,
+          } });
+          await tx.orderTrackingNotification.updateMany({
+            where: { orderId: id, revision: { lt: revision }, status: { in: ['PENDING', 'SENDING', 'RETRY'] } },
+            data: { status: 'CANCELLED', leaseToken: null, leaseUntil: null },
+          });
+        }
+        if (isCorreos) data.trackingUrl = buildCorreosTrackingUrl(nextNumber);
+      }
       if (dto.trackingUrl !== undefined)
         data.trackingUrl = dto.trackingUrl ?? null;
       if (dto.shippingCarrier !== undefined)
         data.shippingCarrier = dto.shippingCarrier ?? null;
+      const targetCarrier = (dto.shippingCarrier ?? existing.shippingCarrier ?? 'Correos').trim();
+      if (targetCarrier.trim().toLowerCase() === 'correos' || !targetCarrier) {
+        const number = typeof data.trackingNumber === 'string' || data.trackingNumber === null
+          ? data.trackingNumber : existing.trackingNumber;
+        data.trackingUrl = buildCorreosTrackingUrl(number);
+        if (number) data.shippingCarrier = 'Correos';
+      }
       if (dto.internalNote !== undefined)
         data.internalNote = dto.internalNote ?? null;
 
@@ -469,6 +527,7 @@ export class AdminOrdersService {
       status: order.status,
       trackingNumber: order.trackingNumber,
       trackingUrl: order.trackingUrl,
+      trackingRevision: order.trackingRevision,
       shippingCarrier: order.shippingCarrier,
       shippedAt: order.shippedAt?.toISOString() ?? null,
       deliveredAt: order.deliveredAt?.toISOString() ?? null,
@@ -520,6 +579,7 @@ export class AdminOrdersService {
       fulfillmentStatus: this.getFulfillmentStatus(order),
       trackingNumber: order.trackingNumber,
       trackingUrl: order.trackingUrl,
+      trackingRevision: order.trackingRevision,
       shippingCarrier: order.shippingCarrier,
       shippedAt: order.shippedAt?.toISOString() ?? null,
       deliveredAt: order.deliveredAt?.toISOString() ?? null,

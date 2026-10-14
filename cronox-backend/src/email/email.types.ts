@@ -6,6 +6,7 @@ export enum EmailSenderKey {
 }
 
 export enum EmailTemplate {
+  ORDER_TRACKING = 'ORDER_TRACKING',
   EMAIL_CHANGE = 'EMAIL_CHANGE',
   NEWSLETTER_ACCESS = 'NEWSLETTER_ACCESS',
   RESTOCK = 'RESTOCK',
@@ -19,6 +20,7 @@ export enum EmailTemplate {
 }
 
 export enum EmailType {
+  ORDER_TRACKING = 'ORDER_TRACKING',
   RESTOCK = 'RESTOCK',
   TEST = 'TEST',
   ORDER_CONFIRMATION = 'ORDER_CONFIRMATION',
@@ -32,6 +34,8 @@ export enum EmailType {
 }
 
 export interface EmailSendOptions {
+  // Internal absolute deadline; tracking SMTP must finish before releasing Order lock.
+  deliveryDeadline?: number;
   purpose?: 'INITIAL_PASSWORD_SETUP' | 'FIRST_ORDER_DISCOUNT' | 'NEWSLETTER_WELCOME' | 'NEWSLETTER_ACCESS' | 'LAUNCH';
   type: EmailType;
   to: string;
@@ -95,6 +99,7 @@ export interface EmailConfig {
 }
 
 export const EMAIL_TYPE_TO_SENDER: Record<EmailType, EmailSenderKey> = {
+  [EmailType.ORDER_TRACKING]: EmailSenderKey.ORDERS,
   [EmailType.RESTOCK]: EmailSenderKey.NOREPLY,
   [EmailType.TEST]: EmailSenderKey.NOREPLY,
   [EmailType.ORDER_CONFIRMATION]: EmailSenderKey.ORDERS,
@@ -108,6 +113,7 @@ export const EMAIL_TYPE_TO_SENDER: Record<EmailType, EmailSenderKey> = {
 };
 
 export const EMAIL_TYPE_TO_TEMPLATE: Record<EmailType, EmailTemplate> = {
+  [EmailType.ORDER_TRACKING]: EmailTemplate.ORDER_TRACKING,
   [EmailType.RESTOCK]: EmailTemplate.RESTOCK,
   [EmailType.TEST]: EmailTemplate.TEST,
   [EmailType.ORDER_CONFIRMATION]: EmailTemplate.ORDER_CONFIRMATION,
@@ -122,6 +128,7 @@ export const EMAIL_TYPE_TO_TEMPLATE: Record<EmailType, EmailTemplate> = {
 };
 
 export const EMAIL_TEMPLATE_FILE: Record<EmailTemplate, string> = {
+  [EmailTemplate.ORDER_TRACKING]: 'order-tracking.hbs',
   [EmailTemplate.EMAIL_CHANGE]: 'email-change.hbs',
   [EmailTemplate.NEWSLETTER_ACCESS]: 'newsletter-access.hbs',
   [EmailTemplate.RESTOCK]: 'restock.hbs',
