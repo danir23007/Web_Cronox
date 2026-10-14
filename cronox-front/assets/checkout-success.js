@@ -3,8 +3,17 @@
   const eyebrowEl = document.getElementById('checkout-success-eyebrow');
   const titleEl = document.getElementById('checkout-success-title');
   const messageEl = document.getElementById('checkout-success-message');
+  const returnLink = document.getElementById('checkout-success-cta');
 
   const params = new URLSearchParams(window.location.search);
+  // This page uses the owner-authorized backend, never the client secret Stripe
+  // may append on redirect. Remove it before subsequent links/captures.
+  if (params.has('payment_intent_client_secret') && window.history?.replaceState) {
+    const cleanParams = new URLSearchParams(params);
+    cleanParams.delete('payment_intent_client_secret');
+    const query = cleanParams.toString();
+    window.history.replaceState(null, '', `${window.location.pathname}${query ? `?${query}` : ''}${window.location.hash || ''}`);
+  }
   const API_BASE = window.CRONOX_API?.API_BASE || window.CRONOX_API_BASE || '';
 
   const POLL_INTERVAL_MS = 1500;
@@ -126,6 +135,7 @@
       if (status?.found && status?.isProcessed) {
         return status;
       }
+      if (status?.found && ['PENDING', 'CANCELLED'].includes(status.orderStatus)) return status;
 
       await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
     }
@@ -161,7 +171,7 @@
 
   const renderPendingState = () => {
     setUiState({
-      eyebrow: 'Pago recibido',
+      eyebrow: 'Confirmación pendiente',
       title: 'Validando pedido…',
       message: 'Estamos confirmando tu compra con nuestro sistema. Esto puede tardar unos segundos.',
     });
@@ -172,7 +182,7 @@
       eyebrow: 'Pago en revisión',
       title: 'Estamos procesando tu pedido',
       message:
-        'Stripe confirmó el pago, pero la confirmación del pedido aún no terminó. Recarga esta página en unos segundos o revisa “Mi cuenta”.',
+        'Todavía no hemos confirmado el pago del pedido. Recarga esta página en unos segundos o revisa “Mi cuenta”.',
     });
   };
 
@@ -182,7 +192,7 @@
 
     if (!rawRef) {
       setUiState({
-        eyebrow: 'Pago recibido',
+        eyebrow: 'Confirmación pendiente',
         title: 'Procesando pedido',
         message: 'Falta la referencia del pago en la URL. Puedes revisar el estado desde tu cuenta.',
       });
@@ -197,6 +207,18 @@
       if (status?.isProcessed) {
         renderConfirmedState(status);
         await syncCartUiWithBackend();
+      } else if (status?.orderStatus === 'PENDING' || status?.orderStatus === 'CANCELLED') {
+        if (returnLink) {
+          returnLink.href = status.orderStatus === 'PENDING' ? '/checkout' : '/cesta';
+          returnLink.textContent = status.orderStatus === 'PENDING' ? 'Volver a las instrucciones de pago' : 'Volver al carrito';
+        }
+        setUiState({
+          eyebrow: 'Estado del pedido',
+          title: status.orderStatus === 'PENDING' ? 'Pedido pendiente de pago' : 'Pedido cancelado',
+          message: status.orderStatus === 'PENDING'
+            ? 'El pago aún no está confirmado. Vuelve al checkout para consultar las instrucciones de transferencia y el plazo de reserva.'
+            : 'El pedido está cancelado. No envíes una transferencia con las instrucciones anteriores.',
+        });
       } else {
         renderFallbackState();
         console.warn('[CRONOX] Timeout esperando confirmación del pedido. Reintentará al refrescar.');

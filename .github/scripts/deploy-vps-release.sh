@@ -10,6 +10,7 @@ node scripts/check-user-numbering-release.cjs --deployment-check
 npx prisma generate
 npx prisma migrate deploy
 npm run build:compiled
+node ../.github/scripts/check-checkout-release-safety.cjs
 sudo /usr/bin/pm2 restart cronox
 sudo /usr/bin/pm2 save
 node ../.github/scripts/wait-for-backend.cjs

@@ -1,4 +1,6 @@
 import { Module } from '@nestjs/common';
+import { BankTransferService } from './bank-transfer.service';
+import { BankTransferController } from './bank-transfer.controller';
 import { CartModule } from '../cart/cart.module';
 import { EmailModule } from '../email/email.module';
 import { OrdersModule } from '../orders/orders.module';
@@ -15,9 +17,10 @@ import { LiveStatsModule } from '../live-stats/live-stats.module';
 
 @Module({
   imports: [OrdersModule, CartModule, EmailModule, AnalyticsModule, AccessAuthModule, AuthModule, LiveStatsModule],
-  controllers: [PaymentsController, PaymentsApiController, StripeWebhookController],
+  controllers: [PaymentsController, PaymentsApiController, StripeWebhookController, BankTransferController],
   providers: [
     StripeService,
+    BankTransferService,
     PaymentIntentFactory,
     CheckoutReservationCleanupService,
   ],

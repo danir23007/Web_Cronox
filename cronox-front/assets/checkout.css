@@ -134,10 +134,31 @@ body.page-checkout summary:focus-visible {
 
 .express-checkout {
   margin-bottom: 30px;
-  min-height: 112px;
 }
+.express-shipping-error { color: #ffb3b3; font-size: 14px; line-height: 1.5; margin: 12px 0; }
+
+.express-missing-details {
+  color: #fff;
+  background: #090909;
+  border: 1px solid #555;
+  width: min(440px, calc(100vw - 32px));
+  max-height: calc(100dvh - 48px);
+  overflow: auto;
+  padding: 24px;
+}
+.express-missing-details::backdrop { background: rgb(0 0 0 / 75%); }
+.express-missing-details h2 { font-size: 18px; }
+.express-missing-details p { color: #bbb; line-height: 1.5; }
+.express-missing-details form, .express-missing-details label { display: grid; gap: 12px; }
+.express-missing-details label { margin-bottom: 8px; }
+.express-missing-details input, .express-missing-details select, .express-missing-details button {
+  background: #111; color: #fff; border: 1px solid #777; padding: 12px; width: 100%;
+}
+.express-missing-details button { cursor: pointer; }
 
 .express-checkout[hidden] {
+  /* Keep Stripe measurable while it discovers wallets, outside document flow.
+     The entire region (including its separator) remains invisible. */
   display: block !important;
   position: absolute;
   left: clamp(28px, 4.2vw, 70px);
@@ -696,8 +717,8 @@ body.page-checkout summary:focus-visible {
 }
 
 .payment-element {
-  /* Reserve room for the card form and optional billing fields. */
-  min-height: 900px;
+  /* Stripe sizes its iframe for the eligible methods and billing fields. */
+  min-height: 0;
 }
 
 .checkout-pay-button {
@@ -716,6 +737,18 @@ body.page-checkout summary:focus-visible {
   text-transform: uppercase;
   transition: color 160ms ease, background-color 160ms ease;
 }
+
+.checkout-bank-transfer {
+  border: 1px solid #303030;
+  padding: 16px;
+  margin-top: 16px;
+  color: #f5f5f3;
+  font-size: 13px;
+}
+.checkout-bank-transfer[hidden], .checkout-bank-transfer [hidden] { display: none !important; }
+.checkout-bank-transfer summary { cursor: pointer; font-weight: 600; }
+.checkout-bank-transfer p { line-height: 1.6; overflow-wrap: anywhere; }
+.checkout-bank-transfer .checkout-text-button { margin: 12px 16px 0 0; }
 
 .checkout-pay-button:hover:not(:disabled) {
   color: #fff;

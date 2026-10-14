@@ -51,7 +51,7 @@ jobs:
         run: npm ci --prefix cronox-backend
 
       - name: Verify isolated preflight dependencies and fail-closed deployment ordering
-        run: node --test .github/scripts/run-release-preflight.spec.cjs .github/scripts/wait-for-backend.spec.cjs cronox-backend/scripts/check-user-numbering-release.spec.cjs
+        run: node --test .github/scripts/run-release-preflight.spec.cjs .github/scripts/wait-for-backend.spec.cjs .github/scripts/check-checkout-release-safety.spec.cjs cronox-backend/scripts/check-user-numbering-release.spec.cjs
 
       - name: Generate the Prisma client
         run: npm run prisma:generate --prefix cronox-backend
@@ -70,6 +70,9 @@ jobs:
           set -euo pipefail
           npm run admin:build
           npm run build:compiled --prefix cronox-backend
+
+      - name: Reject private credentials and sandbox-only release content
+        run: node .github/scripts/check-checkout-release-safety.cjs
 
       - name: Verify Excel HTTP routes, filters, workbooks and artifacts
         run: |

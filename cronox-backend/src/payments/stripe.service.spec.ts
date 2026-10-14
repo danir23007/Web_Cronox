@@ -11,6 +11,7 @@ describe('StripeService', () => {
   let config: { get: jest.Mock };
 
   beforeEach(() => {
+    jest.restoreAllMocks();
     config = {
       get: jest.fn((key: string) => {
         switch (key) {
@@ -240,7 +241,7 @@ describe('StripeService', () => {
     const stripe = Reflect.get(liveService, 'stripe') as Stripe;
     jest.spyOn(stripe.accounts, 'retrieve').mockResolvedValue({ id: 'acct_live' } as any);
     const create = jest.spyOn(stripe.paymentIntents, 'create').mockImplementation((async (params: Stripe.PaymentIntentCreateParams) => {
-      if (params.payment_method_types?.includes('paypal')) {
+      if ('payment_method_types' in params) {
         throw Object.assign(new Error('The payment method type "paypal" is invalid.'), { statusCode: 400 });
       }
       return { id: 'pi_live_mock', client_secret: 'mock_secret', automatic_payment_methods: { enabled: true }, payment_method_types: ['card'] };
@@ -375,6 +376,23 @@ describe('StripeService', () => {
       clientSecret: 'secret_current',
       stripeAccountId: 'acct_test',
     });
+  });
+
+  it('clears only an owned, unconfirmed intent shipping field for wallet collection', async () => {
+    const stripe = (service as any).stripe as any;
+    jest.spyOn(stripe.accounts, 'retrieve').mockResolvedValue({ id: 'acct_test' });
+    jest.spyOn(stripe.paymentIntents, 'retrieve').mockResolvedValue({
+      id: 'pi_wallet', status: 'requires_payment_method', amount: 1295, currency: 'eur', client_secret: 'secret_test',
+      shipping: { name: 'Ficticio', address: { country: 'ES' } },
+      metadata: { checkoutSnapshotId: 'snap_wallet', checkoutPaymentConfiguration: 'cronox_checkout_v4_dynamic' },
+      automatic_payment_methods: { enabled: true }, payment_method_types: ['card', 'paypal'],
+    });
+    const update = jest.spyOn(stripe.paymentIntents, 'update').mockResolvedValue({});
+    await service.getReusableCheckoutPaymentIntent({ paymentIntentId: 'pi_wallet', checkoutSnapshotId: 'snap_wallet', amount: 1295, currency: 'eur', collectShippingInWallet: true });
+    expect(update).toHaveBeenCalledWith('pi_wallet', { shipping: '' });
+    update.mockClear();
+    await expect(service.getReusableCheckoutPaymentIntent({ paymentIntentId: 'pi_wallet', checkoutSnapshotId: 'another', amount: 1295, currency: 'eur', collectShippingInWallet: true })).rejects.toThrow();
+    expect(update).not.toHaveBeenCalled();
   });
 
   it.each([

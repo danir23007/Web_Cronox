@@ -145,36 +145,39 @@
     layout: {
       type: 'accordion',
       defaultCollapsed: false,
-      radios: true,
+      radios: 'always',
       spacedAccordionItems: false,
-      visibleAccordionItemsCount: 3,
+      visibleAccordionItemsCount: 0,
     },
-    paymentMethodOrder: ['card', 'klarna', 'amazon_pay', 'paypal'],
-    wallets: {
-      applePay: 'auto',
-      googlePay: 'never',
-    },
+    // Ordering is a preference, not an allowlist. Stripe ignores unavailable
+    // methods and appends the other eligible Dashboard methods automatically.
+    paymentMethodOrder: ['card', 'paypal', 'bizum', 'klarna'],
   };
 
   const expressCheckoutOptions = {
+    emailRequired: true,
+    shippingAddressRequired: true,
+    allowedShippingCountries: ['ES'],
     buttonHeight: 48,
     buttonType: {
+      applePay: 'check-out',
       paypal: 'paypal',
-      googlePay: 'checkout',
+      googlePay: 'plain',
     },
     buttonTheme: {
+      applePay: 'white',
       paypal: 'gold',
       googlePay: 'white',
     },
     layout: {
-      maxColumns: 2,
-      maxRows: 1,
-      overflow: 'auto',
+      maxColumns: 3,
+      maxRows: 0,
+      overflow: 'never',
     },
-    paymentMethodOrder: ['paypal', 'google_pay'],
+    paymentMethodOrder: ['paypal', 'google_pay', 'apple_pay'],
     paymentMethods: {
-      applePay: 'never',
-      googlePay: 'auto',
+      applePay: 'auto',
+      googlePay: 'always',
       amazonPay: 'never',
       klarna: 'never',
       link: 'never',
@@ -597,6 +600,12 @@
   let availableExpressMethods = null;
   let expressCheckoutMounted = false;
   let expressPaymentInFlight = false;
+  let expressCheckoutRevision = null;
+  let expressSession = null;
+  let expressDetailsFingerprint = null;
+  let expressSupplements = null;
+  let paymentInFlight = false;
+  let bankTransferPending = false;
   let pendingPaymentElementLoadResolver = null;
   let pendingPaymentElementLoadPromise = null;
   let hasClearedPromoOnLoad = false;
@@ -703,7 +712,7 @@
       clientSecret: currentClientSecret,
       paymentElementMounted,
     });
-    payButton.disabled = (buttonState?.disabled ?? true) || !paymentMethodComplete || mountedAmountCents !== state.totals.totalCents;
+    payButton.disabled = bankTransferPending || paymentInFlight || expressPaymentInFlight || expressCheckoutRevision !== null || (buttonState?.disabled ?? true) || !paymentMethodComplete || mountedAmountCents !== state.totals.totalCents;
     if (forcedLabel && isCheckoutContactAndShippingReady()) {
       payButton.textContent = forcedLabel;
       return;
@@ -725,12 +734,17 @@
         availablePaymentMethods,
       ),
     );
-    expressCheckoutRegion.hidden = !hasWallet || !isCheckoutContactAndShippingReady() || !currentClientSecret || mountedAmountCents !== state.totals.totalCents;
+    // Wallet availability is independent of completing the contact/address.
+    // Keep official buttons visible; validate before opening their interface.
+    expressCheckoutRegion.dataset.availablePaymentMethods = JSON.stringify(availablePaymentMethods || null);
+    expressCheckoutRegion.hidden = !hasWallet || bankTransferPending;
   };
 
   const resetExpressCheckoutElement = () => {
+    expressSession = null;
     expressCheckoutMounted = false;
     expressPaymentInFlight = false;
+    expressCheckoutRevision = null;
     setExpressCheckoutVisibility(null);
     if (expressCheckoutElement) {
       try {
@@ -1664,15 +1678,221 @@
     }
   };
 
+  const expressRates = () => state.shippingMethods.map(method => ({
+    id: method.code,
+    displayName: method.label || method.code,
+    amount: method.amountCents ?? method.priceCents,
+  })).filter(rate => Number.isSafeInteger(rate.amount) && rate.amount >= 0)
+    .sort((a, b) => Number(b.id === state.shippingMethod) - Number(a.id === state.shippingMethod));
+
+  const expressShippingMessage = (message = '') => {
+    const notice = document.getElementById('express-shipping-error');
+    if (notice) { notice.textContent = message; notice.hidden = !message; }
+    errorDiv.textContent = message;
+  };
+
+  const isCurrentExpressSession = (session) =>
+    session && expressSession === session && session.revision === checkoutRevision &&
+    expressCheckoutElement === session.element;
+
+  const updateExpressShipping = async (event, session, rateId = session.rate) => {
+    if (!isCurrentExpressSession(session) || expressPaymentInFlight) return event.reject();
+    const sequence = ++session.sequence;
+    session.shippingStatus = 'pending';
+    // Keep the latest selected address even when rejected. A subsequent rate
+    // must never be quoted using an earlier accepted Spanish address.
+    if (event.address) session.address = event.address;
+    const address = session.address;
+    const reject = async (message) => {
+      event.reject();
+      if (!isCurrentExpressSession(session) || sequence !== session.sequence) return;
+      session.shippingStatus = 'rejected';
+      Object.assign(state, session.accepted);
+      renderShippingOptions();
+      renderSummary(state.totals, findShippingMethod(state.shippingMethod));
+      expressShippingMessage(message);
+      await synchronizePaymentAmount(session.revision).catch(() => false);
+    };
+    if (!address || !normalizeCountry(address.country)) {
+      return reject('Solo enviamos a España. Selecciona una dirección española en la cartera para continuar.');
+    }
+    if (!state.shippingMethods.some(method => method.code === rateId)) {
+      return reject('La opción de envío no está disponible. Selecciona de nuevo un envío en la cartera.');
+    }
+    const query = new URLSearchParams({ country: address.country, shippingMethod: rateId });
+    if (/^[0-9]{5}$/.test(address.postal_code || '')) query.set('postalCode', address.postal_code);
+    if (state.promo?.code) query.set('promoCode', state.promo.code);
+    if (!state.isAuthenticated && isValidEmail(getCheckoutEmail())) query.set('guestEmail', getCheckoutEmail());
+    let settled = false;
+    try {
+      const response = await fetch(`${API_BASE}/api/checkout/express-quote?${query}`, { credentials: 'include' });
+      const data = await response.json();
+      if (!response.ok || !isCurrentExpressSession(session) || sequence !== session.sequence ||
+        data.selectedShippingMethod?.code !== rateId) throw new Error('EXPRESS_QUOTE_REJECTED');
+      state.shippingMethods = data.shippingMethods;
+      state.shippingMethod = data.selectedShippingMethod.code;
+      state.totals = data.totals;
+      state.cart = data.cart;
+      const rates = expressRates();
+      // Stripe requires resolving the shipping callback after update() is
+      // issued, without waiting for update-end (which can depend on resolve).
+      const updated = await synchronizePaymentAmount(session.revision, true, () => {
+        if (isCurrentExpressSession(session) && sequence === session.sequence) {
+          event.resolve(event.address ? { shippingRates: rates } : {});
+        } else event.reject();
+        settled = true;
+      });
+      if (!updated || !isCurrentExpressSession(session) || sequence !== session.sequence) {
+        throw new Error('EXPRESS_QUOTE_STALE');
+      }
+      session.amount = state.totals.totalCents;
+      session.rate = state.shippingMethod;
+      session.shippingStatus = 'accepted';
+      session.acceptedAddress = address;
+      session.accepted = { totals: state.totals, shippingMethods: state.shippingMethods, shippingMethod: state.shippingMethod, cart: state.cart };
+      renderShippingOptions();
+      renderSummary(state.totals, data.selectedShippingMethod);
+      expressShippingMessage();
+    } catch {
+      if (!settled) await reject('No se ha aceptado el cambio de envío. Revisa la dirección y selecciona de nuevo la tarifa; todavía no se puede pagar.');
+      else if (isCurrentExpressSession(session) && sequence === session.sequence) {
+        session.shippingStatus = 'rejected';
+        Object.assign(state, session.accepted);
+        renderShippingOptions();
+        renderSummary(state.totals, findShippingMethod(state.shippingMethod));
+        expressShippingMessage('No se pudo sincronizar el importe. Cierra la cartera y vuelve a intentarlo antes de pagar.');
+        await synchronizePaymentAmount(session.revision).catch(() => false);
+      }
+    }
+  };
+
+  const collectExpressDetails = (event) => {
+    expressDetailsFingerprint = JSON.stringify({ shipping: event.shippingAddress || null, email: event.billingDetails?.email || '' });
+    const supplements = expressSupplements?.fingerprint === expressDetailsFingerprint ? expressSupplements.values : {};
+    if (!state.isAuthenticated && event.billingDetails?.email) {
+      guestEmailInput.value = isValidEmail(event.billingDetails.email) ? cleanText(event.billingDetails.email)
+        : supplements.guestEmail || cleanText(event.billingDetails.email);
+    }
+    const shipping = event.shippingAddress;
+    if (!shipping) return;
+    const [firstName = '', ...lastName] = cleanText(shipping.name).split(/\s+/);
+    const address = shipping.address || {};
+    const values = {
+      firstName, lastName: lastName.join(' '), address: address.line1 || '',
+      addressLine2: address.line2 || '', city: address.city || '', state: address.state || '',
+      zip: address.postal_code || '', country: normalizeCountry(address.country) || '',
+    };
+    Object.entries(values).forEach(([key, value]) => {
+      if (shippingFields[key]) {
+        shippingFields[key].value = value || supplements[key] || '';
+        markShippingFieldEdited(shippingFields[key]);
+      }
+    });
+    if (event.billingDetails?.phone && shippingFields.phone) shippingFields.phone.value = event.billingDetails.phone;
+    if (shippingForm) shippingForm.hidden = false;
+    if (defaultAddressCard) defaultAddressCard.hidden = true;
+  };
+
+  const requestMissingExpressDetails = () => {
+    const fields = [
+      ...(!state.isAuthenticated ? [[guestEmailInput, 'Correo electrónico', isValidEmail(getCheckoutEmail())]] : []),
+      [shippingFields.firstName, 'Nombre', Boolean(cleanText(shippingFields.firstName?.value))],
+      [shippingFields.lastName, 'Apellidos', Boolean(cleanText(shippingFields.lastName?.value))],
+      [shippingFields.address, 'Dirección', Boolean(cleanText(shippingFields.address?.value))],
+      [shippingFields.zip, 'Código postal', /^[0-9]{5}$/.test(cleanText(shippingFields.zip?.value))],
+      [shippingFields.city, 'Ciudad', Boolean(cleanText(shippingFields.city?.value))],
+      [shippingFields.country, 'País / Región', Boolean(normalizeCountry(shippingFields.country?.value))],
+    ].filter(([, , complete]) => !complete);
+    if (!fields.length) return;
+    document.getElementById('express-missing-details')?.remove();
+    const dialog = document.createElement('dialog');
+    dialog.id = 'express-missing-details';
+    dialog.className = 'express-missing-details';
+    dialog.setAttribute('aria-label', 'Completar datos del pago exprés');
+    const title = document.createElement('h2');
+    title.textContent = 'Solo falta completar estos datos';
+    const hint = document.createElement('p');
+    hint.textContent = 'La cartera no los ha proporcionado. Guarda y vuelve a pulsar tu cartera para autorizar el pago.';
+    const form = document.createElement('form');
+    const copies = fields.map(([original, label]) => {
+      const wrapper = document.createElement('label');
+      wrapper.textContent = label;
+      const input = original.cloneNode(true);
+      input.removeAttribute('id');
+      input.value = original.value;
+      input.required = true;
+      input.disabled = false;
+      if (original === shippingFields.zip) input.pattern = '[0-9]{5}';
+      wrapper.append(input);
+      form.append(wrapper);
+      return { original, input };
+    });
+    const save = document.createElement('button');
+    save.type = 'submit'; save.textContent = 'Guardar y volver al pago exprés';
+    const cancel = document.createElement('button');
+    cancel.type = 'button'; cancel.textContent = 'Cancelar';
+    cancel.onclick = () => dialog.close();
+    form.append(save, cancel);
+    form.onsubmit = (submitEvent) => {
+      submitEvent.preventDefault();
+      if (!form.reportValidity()) return;
+      copies.forEach(({ original, input }) => { original.value = input.value; });
+      if (!isCheckoutContactAndShippingReady()) return;
+      const values = {};
+      copies.forEach(({ original, input }) => {
+        const key = original === guestEmailInput ? 'guestEmail' : Object.keys(shippingFields).find(key => shippingFields[key] === original);
+        if (key) values[key] = input.value;
+      });
+      expressSupplements = { fingerprint: expressDetailsFingerprint, values };
+      dialog.close();
+      void queueCheckoutUpdate();
+    };
+    dialog.addEventListener('close', () => dialog.remove(), { once: true });
+    dialog.append(title, hint, form);
+    document.body.append(dialog);
+    dialog.showModal();
+  };
+
   const confirmExpressCheckoutPayment = async (event, expectedElement) => {
+    const session = expressSession;
     if (
       expressCheckoutElement !== expectedElement ||
-      !currentClientSecret ||
-      !isCheckoutContactAndShippingReady() ||
-      mountedAmountCents !== state.totals.totalCents ||
-      expressPaymentInFlight
+      !isCurrentExpressSession(session) ||
+      expressPaymentInFlight || paymentInFlight ||
+      (expressCheckoutRevision !== null && expressCheckoutRevision !== checkoutRevision)
     ) {
       event?.paymentFailed?.({ reason: 'fail' });
+      expressCheckoutRevision = null;
+      setPayButtonState(false);
+      return;
+    }
+
+    if (session.pending) await session.pending;
+    if (expressPaymentInFlight || paymentInFlight) return event?.paymentFailed?.({ reason: 'fail' });
+    if (!isCurrentExpressSession(session)) return event?.paymentFailed?.({ reason: 'fail' });
+    if (session.shippingStatus === 'pending' || session.shippingStatus === 'rejected' ||
+      (event.shippingAddress?.address?.country && !normalizeCountry(event.shippingAddress.address.country))) {
+      event?.paymentFailed?.({ reason: 'invalid_shipping_address' });
+      expressShippingMessage(session.shippingStatus === 'rejected' && !normalizeCountry(session.address?.country)
+        ? 'Solo enviamos a España. Selecciona una dirección española en la cartera para continuar.'
+        : 'El envío no está validado. Revisa la dirección y selecciona de nuevo la tarifa en la cartera.');
+      return;
+    }
+    collectExpressDetails(event);
+    if (!isCheckoutContactAndShippingReady()) {
+      event?.paymentFailed?.({ reason: 'invalid_shipping_address' });
+      expressSession = null;
+      expressCheckoutRevision = null;
+      setPayButtonState(false);
+      requestMissingExpressDetails();
+      return;
+    }
+    if (event.shippingRate?.id && event.shippingRate.id !== session.rate) {
+      event?.paymentFailed?.({ reason: 'fail' });
+      expressSession = null;
+      expressCheckoutRevision = null;
+      setPayButtonState(false);
+      errorDiv.textContent = 'El envío ha cambiado. Vuelve a abrir tu cartera para revisar el importe.';
       return;
     }
 
@@ -1686,13 +1906,14 @@
 
     expressPaymentInFlight = true;
     const confirmationRevision = checkoutRevision;
-    const clientSecret = currentClientSecret;
+    let clientSecret;
     setPayButtonState(true);
     errorDiv.textContent = '';
     await subscribeNewsletterIfRequested();
-    if (confirmationRevision !== checkoutRevision || clientSecret !== currentClientSecret || !isCheckoutContactAndShippingReady()) {
+    if (confirmationRevision !== checkoutRevision || !isCheckoutContactAndShippingReady()) {
       event?.paymentFailed?.({ reason: 'fail' });
       expressPaymentInFlight = false;
+      expressCheckoutRevision = null;
       setPayButtonState(false);
       return;
     }
@@ -1700,7 +1921,15 @@
       stripe,
       elements,
       clientSecret,
+      prepareAfterSubmit: async () => {
+        const prepared = await queueCheckoutUpdate({ revision: confirmationRevision, refreshSummary: false, expressCheckout: true });
+        if (!prepared || !isCurrentExpressSession(session)) throw { type: 'validation_error', message: errorDiv.textContent || 'No se pudo validar el pedido.' };
+        if (state.totals.totalCents !== session.amount) throw { type: 'validation_error', message: 'El importe ha cambiado. Vuelve a abrir tu cartera para autorizar el total actualizado.' };
+        clientSecret = currentClientSecret;
+        return clientSecret;
+      },
       expressCheckoutMounted,
+      shouldConfirm: () => confirmationRevision === checkoutRevision && clientSecret === currentClientSecret && isCheckoutContactAndShippingReady() && mountedAmountCents === state.totals.totalCents,
       confirmParams: { return_url: buildPaymentReturnUrl() },
       onFailure: (error) => {
         event?.paymentFailed?.({ reason: 'fail' });
@@ -1722,11 +1951,16 @@
       setPayButtonState(false);
     }
     if (!result.attempted || result.error) expressPaymentInFlight = false;
+    if (!result.attempted || result.error) {
+      expressCheckoutRevision = null;
+      setPayButtonState(false);
+    }
   };
 
   const mountExpressCheckoutElement = () => {
     resetExpressCheckoutElement();
     if (!elements || !expressCheckoutContainer) return;
+    expressCheckoutOptions.shippingRates = expressRates();
 
     try {
       const nextExpressCheckoutElement = elements.create(
@@ -1734,6 +1968,49 @@
         expressCheckoutOptions,
       );
       expressCheckoutElement = nextExpressCheckoutElement;
+      nextExpressCheckoutElement.on('click', (event) => {
+        if (expressCheckoutElement !== nextExpressCheckoutElement) return;
+        if (mountedAmountCents !== state.totals.totalCents || bankTransferPending ||
+          paymentInFlight || expressPaymentInFlight || expressCheckoutRevision !== null) {
+          event.reject?.();
+          errorDiv.textContent = 'Espera a que se actualice el pedido antes de pagar.';
+          return;
+        }
+        const previous = { secret: currentClientSecret, id: currentPaymentIntentId,
+          amount: mountedAmountCents, rate: state.shippingMethod };
+        const revision = invalidateCheckoutPayment();
+        expressSession = { element: nextExpressCheckoutElement, revision, sequence: 0,
+          amount: state.totals.totalCents, rate: state.shippingMethod, address: null, previous,
+          shippingStatus: 'unverified', accepted: { totals: state.totals, shippingMethods: state.shippingMethods, shippingMethod: state.shippingMethod, cart: state.cart } };
+        expressShippingMessage();
+        expressCheckoutRevision = revision;
+        setPayButtonState(false);
+        event.resolve({ shippingRates: expressRates() });
+      });
+      nextExpressCheckoutElement.on('shippingaddresschange', (event) => {
+        if (expressSession?.element !== nextExpressCheckoutElement) return event.reject();
+        expressSession.pending = updateExpressShipping(event, expressSession);
+      });
+      nextExpressCheckoutElement.on('shippingratechange', (event) => {
+        if (expressSession?.element !== nextExpressCheckoutElement) return event.reject();
+        expressSession.pending = updateExpressShipping(event, expressSession, event.shippingRate?.id || '');
+      });
+      nextExpressCheckoutElement.on('cancel', () => {
+        if (expressCheckoutElement !== nextExpressCheckoutElement) return;
+        const session = expressSession;
+        if (!expressPaymentInFlight && isCurrentExpressSession(session) &&
+          session.previous?.amount === state.totals.totalCents && session.previous?.rate === state.shippingMethod) {
+          currentClientSecret = session.previous.secret;
+          currentPaymentIntentId = session.previous.id;
+        }
+        if (!expressPaymentInFlight) expressSession = null;
+        expressCheckoutRevision = null;
+        if (!expressPaymentInFlight) setPayButtonState(false);
+        if (!expressPaymentInFlight && session && isCheckoutContactAndShippingReady() &&
+          (session.previous?.amount !== state.totals.totalCents || session.previous?.rate !== state.shippingMethod)) {
+          void queueCheckoutUpdate({ revision: checkoutRevision, refreshSummary: false });
+        }
+      });
       nextExpressCheckoutElement.on('ready', (event) => {
         if (expressCheckoutElement !== nextExpressCheckoutElement) return;
         expressCheckoutMounted = true;
@@ -1765,7 +2042,6 @@
         void confirmExpressCheckoutPayment(event, nextExpressCheckoutElement);
       });
       nextExpressCheckoutElement.mount(expressCheckoutContainer);
-      expressCheckoutMounted = true;
     } catch (error) {
       resetExpressCheckoutElement();
       console.warn('[CRONOX checkout Express Checkout Element]', {
@@ -1885,15 +2161,51 @@
     }
   };
 
-  const synchronizePaymentAmount = async (revision) => {
-    if (!elements || !paymentElementMounted) return false;
+  let amountUpdateQueue = Promise.resolve();
+  const synchronizePaymentAmount = (revision, force = false, onUpdateIssued = () => {}) => {
+    const expectedElements = elements;
     const amount = Number(state.totals.totalCents);
-    if (!Number.isSafeInteger(amount) || amount <= 0) return false;
-    if (mountedAmountCents === amount) return true;
-    await Promise.resolve(elements.update({ amount }));
-    if (revision !== checkoutRevision) return false;
-    mountedAmountCents = amount;
-    return true;
+    const run = async () => {
+      if (expectedElements !== elements || revision !== checkoutRevision) return false;
+      if (!elements || !paymentElementMounted) return false;
+      if (!Number.isSafeInteger(amount) || amount <= 0) return false;
+      // A wallet can apply a rate locally even when the server's final total is
+      // unchanged. Shipping callbacks still need an explicit amount update.
+      if (mountedAmountCents === amount && !force) { onUpdateIssued(); return true; }
+      const updatingElements = elements;
+      // update() returns void. Wait for Stripe to finish recalculating eligibility
+      // and the wallet amount before allowing confirmation of the new snapshot.
+      await new Promise((resolve, reject) => {
+        if (typeof updatingElements.on !== 'function') {
+          Promise.resolve(updatingElements.update({ amount })).then(resolve, reject);
+          onUpdateIssued();
+          return;
+        }
+        const finish = () => {
+          window.clearTimeout(timeout);
+          updatingElements.off('update-end', finish);
+          resolve();
+        };
+        const timeout = window.setTimeout(() => {
+          updatingElements.off('update-end', finish);
+          reject(new Error('STRIPE_AMOUNT_UPDATE_TIMEOUT'));
+        }, 15000);
+        updatingElements.on('update-end', finish);
+        try {
+          updatingElements.update({ amount });
+          onUpdateIssued();
+        } catch (error) {
+          window.clearTimeout(timeout);
+          updatingElements.off('update-end', finish);
+          reject(error);
+        }
+      });
+      if (updatingElements === elements) mountedAmountCents = amount;
+      return revision === checkoutRevision && updatingElements === elements;
+    };
+    const pending = amountUpdateQueue.then(run, run);
+    amountUpdateQueue = pending.catch(() => false);
+    return pending;
   };
 
   const getPaymentPreparationMessage = (details) => {
@@ -2009,7 +2321,7 @@
     }
   };
 
-  const preparePaymentIntent = async (revision = checkoutRevision) => {
+  const preparePaymentIntent = async (revision = checkoutRevision, expressCheckout = false) => {
     if (revision !== checkoutRevision) return false;
     setLoadingState(true);
     errorDiv.textContent = '';
@@ -2060,6 +2372,7 @@
           promoCode: requestedPromoCode,
           guestEmail: state.isAuthenticated ? undefined : getCheckoutEmail(),
           shippingAddress: requestedShippingAddress,
+          ...(expressCheckout ? { expressCheckout: true } : {}),
         }),
       });
 
@@ -2097,6 +2410,11 @@
       );
       setExpressCheckoutVisibility();
       errorDiv.textContent = '';
+      window.dispatchEvent(new CustomEvent('cronox:checkout-payment-ready', { detail: {
+        paymentIntentId: nextPaymentIntentId,
+        payload: { shippingMethod: requestedShippingMethod, promoCode: requestedPromoCode,
+          guestEmail: state.isAuthenticated ? undefined : getCheckoutEmail(), shippingAddress: requestedShippingAddress },
+      } }));
       return true;
     } catch (error) {
       if (revision !== checkoutRevision) return false;
@@ -2110,6 +2428,11 @@
       currentClientSecret = null;
       currentPaymentIntentId = null;
       setExpressCheckoutVisibility();
+      if (error?.payload?.code === 'CHECKOUT_BANK_TRANSFER_PENDING' && error.payload.paymentIntentId) {
+        bankTransferPending = true;
+        window.dispatchEvent(new CustomEvent('cronox:bank-transfer-pending', { detail: { paymentIntentId: error.payload.paymentIntentId } }));
+        return false;
+      }
       if (details.code === 'PROMO_ALREADY_REDEEMED') {
         setPromoState(null);
         setPromoStatus('');
@@ -2127,6 +2450,7 @@
   };
 
   const invalidateCheckoutPayment = () => {
+    window.dispatchEvent(new CustomEvent('cronox:checkout-payment-unready'));
     checkoutRevision = checkoutCoordinator?.invalidate() ?? checkoutRevision + 1;
     currentClientSecret = null;
     currentPaymentIntentId = null;
@@ -2139,6 +2463,7 @@
   const queueCheckoutUpdate = ({
     revision = invalidateCheckoutPayment(),
     refreshSummary = true,
+    expressCheckout = false,
   } = {}) => {
     const requestedShippingMethod = state.shippingMethod;
     const run = async () => {
@@ -2150,7 +2475,7 @@
         );
         if (!loaded || revision !== checkoutRevision) return false;
       }
-      return preparePaymentIntent(revision);
+      return preparePaymentIntent(revision, expressCheckout);
     };
 
     return checkoutCoordinator?.enqueue(revision, run) ?? run();
@@ -2505,6 +2830,7 @@
     });
 
     payButton?.addEventListener('click', async () => {
+      if (bankTransferPending || paymentInFlight || expressPaymentInFlight || expressCheckoutRevision !== null) return;
       if (!isCheckoutContactAndShippingReady()) {
         errorDiv.textContent = state.isAuthenticated
           ? 'Completa la direccion de envio.'
@@ -2520,27 +2846,31 @@
         return;
       }
       setPayButtonState(true);
+      paymentInFlight = true;
       const confirmationRevision = checkoutRevision;
       const clientSecret = currentClientSecret;
       errorDiv.textContent = '';
       await subscribeNewsletterIfRequested();
       if (confirmationRevision !== checkoutRevision || clientSecret !== currentClientSecret || !isCheckoutContactAndShippingReady()) {
+        paymentInFlight = false;
         setPayButtonState(false);
         return;
       }
 
       const confirmMountedPayment = window.CRONOX_CHECKOUT_LIFECYCLE?.confirmMountedPayment;
       if (typeof confirmMountedPayment !== 'function') {
+        paymentInFlight = false;
         errorDiv.textContent = 'No se pudo iniciar el pago. Refresca la página e inténtalo de nuevo.';
         setPayButtonState(false);
         return;
       }
 
-      await confirmMountedPayment({
+      const result = await confirmMountedPayment({
         stripe,
         elements,
         clientSecret,
         paymentElementMounted,
+        shouldConfirm: () => confirmationRevision === checkoutRevision && clientSecret === currentClientSecret && isCheckoutContactAndShippingReady() && mountedAmountCents === state.totals.totalCents,
         confirmParams: {
           return_url: buildPaymentReturnUrl(),
         },
@@ -2553,9 +2883,14 @@
             typeof error?.type === 'string' && error?.message
               ? error.message
               : 'No se pudo completar el pago. Inténtalo de nuevo.';
+          paymentInFlight = false;
           setPayButtonState(false);
         },
       });
+      if (!result.attempted || result.error) {
+        paymentInFlight = false;
+        setPayButtonState(false);
+      }
     });
 
     applyPromoBtn?.addEventListener('click', async (event) => {
@@ -2637,6 +2972,21 @@
     commitAuthoritativeRecommendationCart(cart);
     if (!reconcileRecommendationsWithCart()) {
       void loadRecommendations();
+    }
+  });
+
+  window.addEventListener('cronox:bank-transfer-lock', (event) => {
+    if (event.detail?.locked && (paymentInFlight || expressPaymentInFlight || expressCheckoutRevision !== null)) {
+      event.preventDefault();
+      return;
+    }
+    bankTransferPending = Boolean(event.detail?.locked);
+    if (bankTransferPending) {
+      currentClientSecret = null;
+      setExpressCheckoutVisibility();
+      setPayButtonState(false);
+    } else {
+      void queueCheckoutUpdate();
     }
   });
 

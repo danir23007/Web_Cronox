@@ -88,6 +88,9 @@ export class PaymentIntentFactory {
             snapshot.checkoutSnapshotId,
           );
     let snapshot = await createSnapshot();
+    if (snapshot.status === 'BANK_TRANSFER_PENDING') {
+      throw new ConflictException({ code: 'CHECKOUT_BANK_TRANSFER_PENDING', paymentIntentId: snapshot.paymentIntentId });
+    }
 
     // Changed mutable checkout data and expiry use the same server-owned
     // replacement lifecycle. The ownership claim remains under the active-cart
@@ -165,6 +168,7 @@ export class PaymentIntentFactory {
             checkoutSnapshotId: snapshot.checkoutSnapshotId,
             amount: snapshot.amountCents,
             currency: snapshot.currency,
+            ...(dto.expressCheckout ? { collectShippingInWallet: true } : {}),
           });
         await this.ordersService.recordCheckoutStripeAccount(
           snapshot.checkoutSnapshotId,
@@ -200,6 +204,7 @@ export class PaymentIntentFactory {
             checkoutSnapshotId: concurrent.checkoutSnapshotId,
             amount: concurrent.amountCents,
             currency: concurrent.currency,
+            ...(dto.expressCheckout ? { collectShippingInWallet: true } : {}),
           });
         await this.ordersService.recordCheckoutStripeAccount(
           concurrent.checkoutSnapshotId,
@@ -225,7 +230,7 @@ export class PaymentIntentFactory {
         checkoutSnapshotId: snapshot.checkoutSnapshotId,
         amount: snapshot.amountCents,
         currency: snapshot.currency,
-        ...(normalizedShippingAddress
+        ...(normalizedShippingAddress && !dto.expressCheckout
           ? { shippingAddress: normalizedShippingAddress }
           : {}),
       });

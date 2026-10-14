@@ -22,6 +22,7 @@ import {
   PROMO_ALREADY_REDEEMED_MESSAGE,
 } from './orders.service';
 import { ApplyPromoDto } from './dto/apply-promo.dto';
+import { normalizeCountry, UNSUPPORTED_COUNTRY_MESSAGE } from '../common/country';
 
 @ApiTags('Checkout')
 @Controller('checkout')
@@ -31,6 +32,29 @@ export class CheckoutSummaryController {
     private readonly ordersService: OrdersService,
     private readonly cartService: CartService,
   ) {}
+
+  @Get('express-quote')
+  async getExpressQuote(
+    @Req() req: Request,
+    @Query('country') country: string,
+    @Query('postalCode') postalCode?: string,
+    @Query('shippingMethod') shippingMethod?: string,
+    @Query('promoCode') promoCode?: string,
+    @Query('guestEmail') guestEmail?: string,
+  ) {
+    // Wallets redact street/name until confirm. Quote only supported regions;
+    // the complete address and stock are validated again by PaymentIntentFactory.
+    if (!normalizeCountry(country)) throw new BadRequestException(UNSUPPORTED_COUNTRY_MESSAGE);
+    if (postalCode && !/^[0-9]{5}$/.test(postalCode)) throw new BadRequestException('CHECKOUT_POSTAL_CODE_INVALID');
+    if (!Object.values(ShippingMethodCode).includes(shippingMethod as ShippingMethodCode)) {
+      throw new BadRequestException('CHECKOUT_SHIPPING_METHOD_UNAVAILABLE');
+    }
+    const summary = await this.getSummary(req, shippingMethod, promoCode, guestEmail);
+    if (summary.selectedShippingMethod?.code !== shippingMethod) {
+      throw new BadRequestException('CHECKOUT_SHIPPING_METHOD_UNAVAILABLE');
+    }
+    return summary;
+  }
 
   @Get('summary')
   @ApiOperation({

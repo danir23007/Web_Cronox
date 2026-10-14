@@ -187,6 +187,52 @@ export class StripeService {
     };
   }
 
+  async isBankTransferAvailable(): Promise<boolean> {
+    const configurations = await this.stripe.paymentMethodConfigurations.list({ limit: 100 });
+    return configurations.data.some(configuration => configuration.is_default && configuration.active && configuration.customer_balance?.available === true);
+  }
+
+  async prepareBankTransfer(args: { paymentIntentId: string; checkoutSnapshotId: string; amount: number; currency: string; email: string }) {
+    let intent = await this.stripe.paymentIntents.retrieve(args.paymentIntentId);
+    this.assertCheckoutPaymentIntentBinding(intent, args);
+    if (intent.currency !== 'eur') throw new BadRequestException('BANK_TRANSFER_EUR_REQUIRED');
+    if (intent.status === 'canceled' || intent.status === 'processing' || intent.status === 'succeeded') throw new ConflictException('CHECKOUT_PAYMENT_CONFIRMATION_PENDING');
+    if (intent.next_action?.type === 'display_bank_transfer_instructions') return intent;
+    if (!await this.isBankTransferAvailable()) throw new BadRequestException('BANK_TRANSFER_NOT_AVAILABLE');
+    const customerId = typeof intent.customer === 'string' ? intent.customer : intent.customer?.id;
+    const customer = customerId || (await this.stripe.customers.create({
+      email: args.email, metadata: { checkoutSnapshotId: args.checkoutSnapshotId },
+      cash_balance: { settings: { reconciliation_mode: 'automatic' } },
+    }, { idempotencyKey: `checkout-bank-customer:${args.checkoutSnapshotId}` })).id;
+    intent = await this.stripe.paymentIntents.update(intent.id, {
+      customer,
+      // This selects the virtual receiving account's country, not the buyer's
+      // shipping country. Stripe supports DE/FR/IE/NL for EUR instructions.
+      payment_method_options: { customer_balance: { funding_type: 'bank_transfer', bank_transfer: { type: 'eu_bank_transfer', eu_bank_transfer: { country: 'DE' } } } },
+    });
+    // The Dashboard remains authoritative; assigning a Customer makes the
+    // dynamic bank method eligible but must never force a disabled method.
+    if (!intent.payment_method_types.includes('customer_balance')) throw new BadRequestException('BANK_TRANSFER_NOT_AVAILABLE');
+    return intent;
+  }
+
+  async confirmBankTransfer(paymentIntentId: string, checkoutSnapshotId: string) {
+    const intent = await this.stripe.paymentIntents.retrieve(paymentIntentId);
+    if (intent.metadata.checkoutSnapshotId !== checkoutSnapshotId) throw new ConflictException('STRIPE_PAYMENT_SNAPSHOT_MISMATCH');
+    if (intent.next_action?.type === 'display_bank_transfer_instructions' || intent.status === 'succeeded' || intent.status === 'processing' || intent.status === 'canceled') return intent;
+    if (!await this.isBankTransferAvailable() || !intent.payment_method_types.includes('customer_balance')) throw new BadRequestException('BANK_TRANSFER_NOT_AVAILABLE');
+    return this.stripe.paymentIntents.confirm(intent.id, {
+      payment_method_data: { type: 'customer_balance' },
+      return_url: new URL(`/checkout/exito?ref=${encodeURIComponent(intent.id)}`, this.configService.get<string>('FRONTEND_URL') || 'http://localhost:3000').toString(),
+    }, { idempotencyKey: `checkout-bank-confirm:${checkoutSnapshotId}` });
+  }
+
+  async retrieveBankTransfer(paymentIntentId: string, checkoutSnapshotId: string) {
+    const intent = await this.stripe.paymentIntents.retrieve(paymentIntentId);
+    if (intent.metadata.checkoutSnapshotId !== checkoutSnapshotId) throw new ConflictException('STRIPE_PAYMENT_SNAPSHOT_MISMATCH');
+    return intent;
+  }
+
   private toStripeShippingAddress(
     address: Record<string, string>,
   ): Stripe.PaymentIntentCreateParams.Shipping {
@@ -219,6 +265,7 @@ export class StripeService {
     checkoutSnapshotId: string;
     amount: number;
     currency: string;
+    collectShippingInWallet?: boolean;
   }): Promise<CheckoutPaymentIntentResult> {
     const stripeAccountId = await this.getCurrentStripeAccountId();
     const paymentIntent = await this.stripe.paymentIntents.retrieve(
@@ -240,6 +287,12 @@ export class StripeService {
     }
     if (!paymentIntent.client_secret) {
       throw new BadRequestException('STRIPE_PAYMENT_INTENT_NO_CLIENT_SECRET');
+    }
+
+    if (args.collectShippingInWallet && paymentIntent.shipping) {
+      // Elements cannot write shipping over a value set with the secret key.
+      // Fulfilment continues to use the complete, validated server snapshot.
+      await this.stripe.paymentIntents.update(paymentIntent.id, { shipping: '' });
     }
     return {
       id: paymentIntent.id,

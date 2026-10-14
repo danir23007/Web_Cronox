@@ -190,7 +190,7 @@ describe('PaymentIntentFactory', () => {
     );
   });
 
-  it('uses the same canonical country for guest checkout snapshots', async () => {
+  it.each([false, true])('validates and saves a guest address with wallet shipping collection = %s', async (expressCheckout) => {
     const ordersService = {
       createCheckoutSnapshotForOwner: jest.fn().mockResolvedValue(baseSnapshot),
       claimCheckoutPaymentIntentCreation: jest.fn().mockResolvedValue(true),
@@ -213,6 +213,7 @@ describe('PaymentIntentFactory', () => {
     };
 
     await factory.createPaymentIntentForOwner(owner, {
+      expressCheckout,
       shippingMethod: 'STANDARD',
       shippingAddress: {
         firstName: 'Guest', lastName: 'Customer', name: 'Guest Customer',
@@ -230,6 +231,8 @@ describe('PaymentIntentFactory', () => {
       }),
       expect.any(Object),
     );
+    const stripeArgs = stripeService.createPaymentIntentForCheckout.mock.calls[0][0];
+    expect(Boolean(stripeArgs.shippingAddress)).toBe(!expressCheckout);
   });
 
   it('rejects an unsupported checkout country before snapshot persistence', async () => {

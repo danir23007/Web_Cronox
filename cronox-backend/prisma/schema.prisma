@@ -1316,6 +1316,9 @@ model CartItem {
 // A checkout snapshot is created before a Stripe PaymentIntent is created.
 // Order creation must use these frozen values rather than a mutable cart.
 model CheckoutSnapshot {
+  bankNetworkHash            String?
+  bankAddressHash            String?
+  bankRequestedAt            DateTime?                  @db.Timestamptz(3)
   paymentStatus              String?
   paymentStatusAt            DateTime?                  @db.Timestamptz(3)
   paymentLiveMode            Boolean?
@@ -1363,6 +1366,9 @@ model CheckoutSnapshot {
   activityEvents             CustomerActivityEvent[]
 
   @@index([userId, status])
+  @@index([bankNetworkHash, bankRequestedAt])
+  @@index([bankAddressHash, bankRequestedAt])
+  @@index([customerEmail, bankRequestedAt])
   @@index([anonymousId, status])
   @@index([cartId])
   @@index([expiresAt])

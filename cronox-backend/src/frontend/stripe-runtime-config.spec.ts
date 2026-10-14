@@ -75,28 +75,28 @@ describe('Stripe frontend runtime configuration', () => {
     expect(cartLink).not.toContain('badge');
   });
 
-  it('uses a genuine Stripe Express Checkout Element for PayPal and Google Pay only', () => {
+  it('prioritizes supported express wallets without overriding Dashboard selection', () => {
     expect(checkoutHtml).toContain('id="express-checkout-element"');
     expect(checkoutScript).toMatch(
       /elements\.create\(\s*['"]expressCheckout['"]\s*,\s*expressCheckoutOptions\s*,?\s*\)/,
     );
     expect(checkoutScript).toContain(
-      "paymentMethodOrder: ['paypal', 'google_pay']",
+      "paymentMethodOrder: ['paypal', 'google_pay', 'apple_pay']",
     );
     expect(checkoutScript).toMatch(
-      /paymentMethods:\s*\{[\s\S]*?applePay:\s*'never'[\s\S]*?googlePay:\s*'auto'[\s\S]*?amazonPay:\s*'never'[\s\S]*?klarna:\s*'never'[\s\S]*?link:\s*'never'[\s\S]*?paypal:\s*'auto'/,
+      /paymentMethods:\s*\{[\s\S]*?applePay:\s*'auto'[\s\S]*?googlePay:\s*'always'[\s\S]*?amazonPay:\s*'never'[\s\S]*?klarna:\s*'never'[\s\S]*?link:\s*'never'[\s\S]*?paypal:\s*'auto'/,
     );
     expect(checkoutScript).toContain("paypal: 'paypal'");
-    expect(checkoutScript).toContain("googlePay: 'checkout'");
+    expect(checkoutScript).toContain("googlePay: 'plain'");
   });
 
-  it('keeps Apple Pay in Stripe conventional wallet capability and Amazon Pay in Payment Element', () => {
-    expect(checkoutScript).toMatch(
-      /wallets:\s*\{[\s\S]*?applePay:\s*'auto'[\s\S]*?googlePay:\s*'never'/,
-    );
+  it('lets Stripe deduplicate wallets and shows all eligible conventional methods', () => {
+    expect(checkoutScript).not.toContain('wallets:');
     expect(checkoutScript).toContain(
-      "paymentMethodOrder: ['card', 'klarna', 'amazon_pay', 'paypal']",
+      "paymentMethodOrder: ['card', 'paypal', 'bizum', 'klarna']",
     );
+    expect(checkoutScript).toContain('visibleAccordionItemsCount: 0');
+    expect(checkoutScript).toContain("radios: 'always'");
   });
 
   it('includes the uppercase express separator and CONTACTO account row', () => {

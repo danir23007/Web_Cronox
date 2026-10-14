@@ -144,6 +144,8 @@ export class StripeWebhookController {
       switch (event.type) {
         case 'payment_intent.processing':
         case 'payment_intent.requires_action':
+        case 'payment_intent.partially_funded':
+        case 'cash_balance.funds_available':
           response = { received: true, observed: true };
           break;
         case 'checkout.session.completed':

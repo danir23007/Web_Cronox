@@ -58,6 +58,7 @@
     clientSecret,
     paymentElementMounted,
     confirmParams,
+    shouldConfirm = () => true,
     onFailure = () => undefined,
   }) => {
     if (!stripe || !elements || !clientSecret || !paymentElementMounted) {
@@ -69,6 +70,11 @@
       if (submission?.error) {
         await onFailure(submission.error);
         return { attempted: true, error: submission.error };
+      }
+      if (!shouldConfirm()) {
+        const error = { type: 'validation_error', message: 'Los datos del pedido han cambiado. Revisa el importe y vuelve a intentarlo.' };
+        await onFailure(error);
+        return { attempted: true, error };
       }
       const result = await stripe.confirmPayment({ elements, clientSecret, confirmParams });
       const error = result?.error ?? null;
@@ -84,15 +90,29 @@
     stripe,
     elements,
     clientSecret,
+    prepareAfterSubmit,
     expressCheckoutMounted,
     confirmParams,
+    shouldConfirm = () => true,
     onFailure = () => undefined,
   }) => {
-    if (!stripe || !elements || !clientSecret || !expressCheckoutMounted) {
+    if (!stripe || !elements || (!clientSecret && !prepareAfterSubmit) || !expressCheckoutMounted) {
       return { attempted: false, error: null };
     }
 
     try {
+      const submission = await elements.submit();
+      if (submission?.error) {
+        await onFailure(submission.error);
+        return { attempted: true, error: submission.error };
+      }
+        if (prepareAfterSubmit) clientSecret = await prepareAfterSubmit();
+        if (!clientSecret) throw { type: 'validation_error', message: 'No se pudo validar el pedido. Vuelve a intentarlo.' };
+      if (!shouldConfirm()) {
+        const error = { type: 'validation_error', message: 'Los datos del pedido han cambiado. Revisa el importe y vuelve a intentarlo.' };
+        await onFailure(error);
+        return { attempted: true, error };
+      }
       const result = await stripe.confirmPayment({ elements, clientSecret, confirmParams });
       const error = result?.error ?? null;
       if (error) await onFailure(error);
@@ -148,11 +168,7 @@
     }
     const isAvailable = (method) =>
       method === true || method?.available === true;
-    return Boolean(
-      isAvailable(availablePaymentMethods.paypal) ||
-        isAvailable(availablePaymentMethods.googlePay) ||
-        isAvailable(availablePaymentMethods.google_pay),
-    );
+    return Object.values(availablePaymentMethods).some(isAvailable);
   };
 
   const getProductVariants = (product = {}) => {

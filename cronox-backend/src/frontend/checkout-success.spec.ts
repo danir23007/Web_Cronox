@@ -3,6 +3,36 @@ import path from 'node:path';
 import vm from 'node:vm';
 
 describe('checkout success cart synchronization', () => {
+  it('removes the redirect client secret while preserving the payment reference and backend check', async () => {
+    const source = readFileSync(path.resolve(__dirname, '../../../cronox-front/assets/checkout-success.js'), 'utf8');
+    const replaceState = jest.fn();
+    const fetch = jest.fn().mockResolvedValue({ok:true,status:200,json:async()=>({found:true,isProcessed:false,orderStatus:'PENDING',orderId:1})});
+    vm.runInNewContext(source, {
+      window:{location:{pathname:'/checkout/exito',hash:'',search:'?ref=pi_fixture&payment_intent_client_secret=fixture_secret&redirect_status=succeeded'},history:{replaceState}},
+      document:{getElementById:()=>({})}, fetch, URLSearchParams, console:{warn:jest.fn()}, Date, Promise, encodeURIComponent,
+      setTimeout:(callback:()=>void)=>callback(),
+    });
+    await new Promise<void>(resolve=>setImmediate(resolve));
+    expect(replaceState).toHaveBeenCalledWith(null, '', '/checkout/exito?ref=pi_fixture&redirect_status=succeeded');
+    expect(fetch.mock.calls[0][0]).toContain('providerRef=pi_fixture');
+  });
+  it.each(['PENDING', 'CANCELLED'])('never treats an unpaid %s order as paid or clears its cart', async (orderStatus) => {
+    const source = readFileSync(path.resolve(__dirname, '../../../cronox-front/assets/checkout-success.js'), 'utf8');
+    const elements = new Map<string, any>();
+    const getCart = jest.fn();
+    const fetch = jest.fn().mockResolvedValue({ok:true,status:200,json:async()=>({found:true,isProcessed:false,orderStatus,orderId:1})});
+    vm.runInNewContext(source, {
+      window:{location:{search:'?ref=pi_fixture'},CRONOX_API:{getCart}},
+      document:{getElementById:(id:string)=>{if(!elements.has(id))elements.set(id,{textContent:'',hidden:false});return elements.get(id);}},
+      fetch,URLSearchParams,console:{warn:jest.fn()},Date,Promise,encodeURIComponent,
+      setTimeout:(callback:()=>void)=>callback(),
+    });
+    await new Promise<void>(resolve=>setImmediate(resolve));
+    expect(getCart).not.toHaveBeenCalled();
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(elements.get('checkout-success-title').textContent).toBe(orderStatus==='PENDING'?'Pedido pendiente de pago':'Pedido cancelado');
+    expect(elements.get('checkout-success-cta').href).toBe(orderStatus==='PENDING'?'/checkout':'/cesta');
+  });
   it.each(['PAID', 'REFUNDED'])('waits for processed backend status and renders %s correctly', async (orderStatus) => {
     const source = readFileSync(
       path.resolve(

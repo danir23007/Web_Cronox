@@ -7,7 +7,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style>html { background: #000; }</style>
   <script src="assets/runtime-config.js"></script>
-  <script src="assets/checkout-stripe.js?v=1"></script>
+  <script src="assets/checkout-stripe.js?v=2"></script>
   <link rel="stylesheet" href="assets/cookie-consent.css?v=2" />
   <script src="assets/cookie-consent.js?v=9" defer></script>
   <script src="assets/customer-analytics.js?v=2" defer></script>
@@ -54,7 +54,7 @@
     .checkout-brandbar svg { width: 24px; height: 24px; }
   </style>
   <link id="cronox-main-style" rel="stylesheet" href="assets/store.css?v=116">
-  <link rel="stylesheet" href="assets/checkout.css?v=23" />
+  <link rel="stylesheet" href="assets/checkout.css?v=26" />
   <noscript><style>#preloader{display:none!important}.checkout-shell{visibility:visible!important}body.page-checkout{overflow:auto!important}</style></noscript>
   <link rel="icon" type="image/png" href="/favicon.png?v=4">
   <link rel="shortcut icon" type="image/png" href="/favicon.png?v=4">
@@ -114,6 +114,7 @@
         <section id="express-checkout-region" class="express-checkout" aria-labelledby="express-title" hidden>
           <h1 id="express-title" class="checkout-kicker">Pago exprés</h1>
           <div id="express-checkout-element" class="express-checkout__element"></div>
+          <p id="express-shipping-error" class="express-shipping-error" role="alert" hidden></p>
           <div class="payment-divider" aria-hidden="true"><span>O</span></div>
         </section>
 
@@ -235,6 +236,15 @@
             Todas las transacciones son seguras y están encriptadas.
           </p>
           <div id="payment-element" class="payment-element"></div>
+          <details id="bank-transfer-option" class="checkout-bank-transfer" hidden>
+            <summary>Transferencia bancaria</summary>
+            <p>Recibirás un IBAN y una referencia de Stripe. Reservaremos tus productos durante 72 horas. El pedido se confirmará cuando llegue el importe completo.</p>
+            <button id="bank-transfer-start" class="checkout-pay-button" type="button" disabled>Obtener instrucciones de transferencia</button>
+            <div id="bank-transfer-instructions" aria-live="polite" hidden></div>
+            <button id="bank-transfer-refresh" class="checkout-text-button" type="button" hidden>Actualizar estado</button>
+            <button id="bank-transfer-cancel" class="checkout-text-button" type="button" hidden>Cancelar transferencia pendiente</button>
+            <p id="bank-transfer-error" class="checkout-error" role="alert"></p>
+          </details>
           <button id="pay-button" class="checkout-pay-button" type="button" disabled>Completa tus datos</button>
           <div id="payment-error" class="checkout-error" role="alert" aria-live="assertive"></div>
           <p id="checkout-help" class="checkout-help">Stripe procesa tus datos de pago de forma cifrada.</p>
@@ -327,7 +337,8 @@
   <script src="assets/responsive-images.js?v=4"></script>
   <script src="/assets/product-delivery.js?v=5" defer></script>
   <script src="assets/app.js?v=92"></script>
-  <script src="assets/checkout-lifecycle.js?v=7"></script>
-  <script src="assets/checkout.js?v=24"></script>
+  <script src="assets/checkout-lifecycle.js?v=9"></script>
+  <script src="assets/checkout.js?v=28"></script>
+  <script src="assets/checkout-bank-transfer.js?v=1"></script>
 </body>
 </html>

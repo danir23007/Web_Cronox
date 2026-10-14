@@ -41,6 +41,7 @@ import {
 } from '../common/country';
 import { GuestOrderAccountService } from './guest-order-account.service';
 import { normalizeEmail } from '../common/email';
+import { admitBankReservation } from './bank-transfer-policy';
 import { variantSizeLabel } from '../products/product-size-system';
 
 const DEFAULT_CURRENCY = 'EUR';
@@ -54,6 +55,7 @@ const ACTIVE_CHECKOUT_SNAPSHOT_STATUSES = [
   'REPLACEMENT_PENDING',
   'MISSING_RECOVERY_PENDING',
   'DISPUTED',
+  'BANK_TRANSFER_PENDING',
 ];
 const EXPIRABLE_CHECKOUT_SNAPSHOT_STATUSES = [
   'RESERVED',
@@ -61,6 +63,7 @@ const EXPIRABLE_CHECKOUT_SNAPSHOT_STATUSES = [
   'PAYMENT_BOUND',
   'REPLACEMENT_PENDING',
   'MISSING_RECOVERY_PENDING',
+  'BANK_TRANSFER_PENDING',
 ];
 const PAYMENT_RECOVERY_CLAIM_STALE_MS = 60 * 1000;
 const PAYMENT_INTENT_CREATION_CLAIM_STALE_MS = 30 * 1000;
@@ -664,7 +667,7 @@ export class OrdersService {
           where: {
             ...this.snapshotOwnerWhere(resolvedOwner),
             cartId: preview.cart.id,
-            orderId: null,
+            OR: [{ orderId: null }, { status: 'BANK_TRANSFER_PENDING' }],
             status: { in: ACTIVE_CHECKOUT_SNAPSHOT_STATUSES },
           },
           orderBy: { createdAt: 'desc' },
@@ -1009,6 +1012,51 @@ export class OrdersService {
     }
   }
 
+  async getOwnedBankTransferSnapshot(owner: CheckoutOwner, paymentIntentId: string) {
+    const snapshot = await this.prisma.checkoutSnapshot.findFirst({
+      where: { ...this.snapshotOwnerWhere(owner), stripePaymentIntentId: paymentIntentId },
+      include: { items: true, order: true },
+    });
+    if (!snapshot) throw new NotFoundException('BANK_TRANSFER_NOT_FOUND');
+    return snapshot;
+  }
+
+  async reserveBankTransfer(checkoutSnapshotId: string, paymentIntentId: string, network = 'internal') {
+    return this.prisma.$transaction(async tx => {
+      await tx.checkoutSnapshot.update({ where: { id: checkoutSnapshotId }, data: { updatedAt: new Date() } });
+      const snapshot = await tx.checkoutSnapshot.findUnique({ where: { id: checkoutSnapshotId }, include: { items: true } });
+      if (!snapshot || snapshot.stripePaymentIntentId !== paymentIntentId) throw new ConflictException('STRIPE_PAYMENT_SNAPSHOT_MISMATCH');
+      if (snapshot.status === 'BANK_TRANSFER_PENDING') return snapshot;
+      if (snapshot.status !== 'PAYMENT_BOUND' || snapshot.orderId || snapshot.expiresAt <= new Date()) throw new ConflictException('CHECKOUT_NOT_AVAILABLE_FOR_BANK_TRANSFER');
+      const admission = await admitBankReservation(tx, snapshot, network);
+      // Pending orders retain RESERVED inventory. No history, promo redemption,
+      // paidAt, account creation or confirmation email occurs here.
+      const order = await tx.order.create({ data: {
+        userId: snapshot.userId, customerEmail: snapshot.customerEmail,
+        status: OrderStatus.PENDING, provider: 'stripe', providerRef: paymentIntentId,
+        currency: snapshot.currency, total: this.centsToDecimal(snapshot.totalCents),
+        subtotal: this.centsToDecimal(snapshot.subtotalCents), taxRate: snapshot.taxRate,
+        taxAmount: this.centsToDecimal(snapshot.taxAmountCents), shippingCost: snapshot.shippingCostCents,
+        shippingMethodId: snapshot.shippingMethodId, shippingMethodCode: snapshot.shippingMethodCode,
+        discountCents: snapshot.discountCents, promoCodeId: snapshot.promoCodeId, promoCodeCode: snapshot.promoCodeCode,
+        shippingAddr: this.toInputJsonValue(snapshot.shippingAddr), billingAddr: this.toInputJsonValue(snapshot.billingAddr),
+        items: { create: snapshot.items.map(item => ({ productId: item.productId, variantId: item.variantId,
+          title: item.title, quantity: item.quantity, unitPrice: this.centsToDecimal(item.unitPriceCents), lineTotal: this.centsToDecimal(item.lineTotalCents) })) },
+      }, include: { items: true } });
+      const financial = await tx.checkoutItemFinancial.findMany({ where: { itemId: { in: snapshot.items.map(item => item.id) } } });
+      await tx.orderItemFinancial.createMany({ data: order.items.map(item => {
+        const source = snapshot.items.find(line => line.variantId === item.variantId);
+        const cost = financial.find(line => line.itemId === source?.id);
+        return { itemId: item.id, unitCostCents: cost?.unitCostCents ?? null, productName: cost?.productName ?? item.title, imageUrl: cost?.imageUrl ?? null };
+      }) });
+      return tx.checkoutSnapshot.update({ where: { id: snapshot.id }, data: {
+        status: 'BANK_TRANSFER_PENDING', orderId: order.id,
+        ...admission,
+        expiresAt: new Date(Date.now() + 72 * 60 * 60 * 1000),
+      }, include: { items: true } });
+    });
+  }
+
   async releaseCheckoutSnapshot(
     checkoutSnapshotId: string,
     terminalStatus:
@@ -1019,11 +1067,13 @@ export class OrdersService {
     expectedPaymentIntentId?: string,
   ): Promise<void> {
     await this.prisma.$transaction(async (tx) => {
+      // Serialize cancellation with signed fulfillment before reading state.
+      await tx.checkoutSnapshot.updateMany({ where: { id: checkoutSnapshotId }, data: { updatedAt: new Date() } });
       const snapshot = await tx.checkoutSnapshot.findUnique({
         where: { id: checkoutSnapshotId },
         include: { items: true },
       });
-      if (!snapshot || snapshot.orderId) return;
+      if (!snapshot || (snapshot.orderId && snapshot.status !== 'BANK_TRANSFER_PENDING')) return;
       if (
         expectedPaymentIntentId !== undefined &&
         snapshot.stripePaymentIntentId !== expectedPaymentIntentId
@@ -1034,7 +1084,15 @@ export class OrdersService {
         return;
       }
 
+      if (snapshot.orderId) {
+        const order = await tx.order.findUnique({ where: { id: snapshot.orderId }, select: { status: true } });
+        if (!order || order.status !== OrderStatus.PENDING) throw new ConflictException('BANK_TRANSFER_ORDER_NOT_PENDING');
+      }
+
       await this.releaseStockReservationsForCheckoutSnapshot(tx, snapshot);
+      if (snapshot.status === 'BANK_TRANSFER_PENDING' && snapshot.orderId) {
+        await tx.order.updateMany({ where: { id: snapshot.orderId, status: OrderStatus.PENDING }, data: { status: OrderStatus.CANCELLED } });
+      }
       await tx.checkoutSnapshot.update({
         where: { id: snapshot.id },
         data: { status: terminalStatus },
@@ -1062,7 +1120,7 @@ export class OrdersService {
   ): Promise<Array<{ id: string; stripePaymentIntentId: string | null }>> {
     return this.prisma.checkoutSnapshot.findMany({
       where: {
-        orderId: null,
+        OR: [{ orderId: null }, { status: 'BANK_TRANSFER_PENDING' }],
         expiresAt: { lte: new Date() },
         status: { in: EXPIRABLE_CHECKOUT_SNAPSHOT_STATUSES },
       },
@@ -1193,7 +1251,7 @@ export class OrdersService {
         ) {
           throw new ConflictException('CHECKOUT_SNAPSHOT_ALREADY_RELEASED');
         }
-        if (input.occurredAt > snapshot.expiresAt) {
+        if (input.occurredAt > snapshot.expiresAt && snapshot.status !== 'BANK_TRANSFER_PENDING') {
           throw new BadRequestException('STRIPE_PAYMENT_AFTER_CHECKOUT_EXPIRY');
         }
 
@@ -1201,7 +1259,9 @@ export class OrdersService {
           where: { providerRef: input.paymentIntentId },
           include: { items: true },
         });
-        if (existing) {
+        const completingBankTransfer = existing?.status === OrderStatus.PENDING && snapshot.status === 'BANK_TRANSFER_PENDING';
+        if (snapshot.status === 'BANK_TRANSFER_PENDING' && existing?.status === OrderStatus.CANCELLED) throw new ConflictException('BANK_TRANSFER_ORDER_CANCELLED');
+        if (existing && !completingBankTransfer) {
           return {
             orderId: existing.id,
             userId: existing.userId,
@@ -1234,7 +1294,9 @@ export class OrdersService {
                 accountCreated: false,
               };
 
-        const order = await tx.order.create({
+        const order = completingBankTransfer
+          ? await tx.order.update({ where: { id: existing!.id }, data: { status: lifecycleStatus, paidAt: input.occurredAt, userId: resolvedAccount.userId } })
+          : await tx.order.create({
           data: {
             userId: resolvedAccount.userId,
             customerEmail: snapshot.customerEmail,
@@ -1259,7 +1321,7 @@ export class OrdersService {
           },
         });
 
-        await tx.orderItem.createMany({
+        if (!completingBankTransfer) await tx.orderItem.createMany({
           data: snapshot.items.map((item) => ({
             orderId: order.id,
             productId: item.productId,
@@ -1279,7 +1341,7 @@ export class OrdersService {
         const financialSnapshots = await tx.checkoutItemFinancial.findMany({
           where: { itemId: { in: snapshot.items.map(item => item.id) } },
         });
-        await tx.orderItemFinancial.createMany({ data: created.items.map(item => {
+        if (!completingBankTransfer) await tx.orderItemFinancial.createMany({ data: created.items.map(item => {
           const source = snapshot.items.find(line => line.variantId === item.variantId);
           const financial = financialSnapshots.find(line => line.itemId === source?.id);
           return { itemId: item.id, unitCostCents: financial?.unitCostCents ?? null,
@@ -2065,7 +2127,7 @@ export class OrdersService {
       where: {
         ...this.snapshotOwnerWhere(owner),
         cartId,
-        orderId: null,
+        OR: [{ orderId: null }, { status: 'BANK_TRANSFER_PENDING' }],
         status: { in: ACTIVE_CHECKOUT_SNAPSHOT_STATUSES },
       },
       orderBy: { createdAt: 'desc' },
@@ -2908,7 +2970,7 @@ export class OrdersService {
           ...(cart.userId != null
             ? { userId: cart.userId }
             : { userId: null, anonymousId: cart.anonymousId }),
-          orderId: null,
+          OR: [{ orderId: null }, { status: 'BANK_TRANSFER_PENDING' }],
           status: { in: ACTIVE_CHECKOUT_SNAPSHOT_STATUSES },
         },
       },

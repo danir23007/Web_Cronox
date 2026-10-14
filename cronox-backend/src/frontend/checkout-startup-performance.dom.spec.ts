@@ -233,28 +233,35 @@ describe('checkout and cart startup performance', () => {
       }),
       unmount: jest.fn(),
     };
+    const expressHandlers: Record<string, (event?: any) => void> = {};
     const expressElement = {
-      on: jest.fn(), mount: jest.fn(), unmount: jest.fn(),
+      on: jest.fn((name: string, handler: (event?: any) => void) => { expressHandlers[name] = handler; }),
+      mount: jest.fn(() => queueMicrotask(() => expressHandlers.ready?.({ availablePaymentMethods: { applePay: true } }))),
+      unmount: jest.fn(),
     };
     const elements = {
       create: jest.fn((type: string) => type === 'payment' ? paymentElement : expressElement),
-      update: jest.fn().mockResolvedValue(undefined),
+      on: jest.fn((name: string, handler: () => void) => { if (name === 'update-end') updateDone = handler; }),
+      off: jest.fn(),
+      update: jest.fn(() => queueMicrotask(() => updateDone?.())),
       submit: jest.fn().mockResolvedValue({}),
     };
+    let updateDone: (() => void) | undefined;
     const stripe = { elements: jest.fn(() => elements), confirmPayment: jest.fn() };
     w.Stripe = () => stripe;
     w.CRONOX_STRIPE_READY = Promise.resolve(true);
-    w.CRONOX_API.getCheckoutSummary.mockImplementation(({ shippingMethod }: { shippingMethod: string }) => {
+    w.CRONOX_API.getCheckoutSummary.mockImplementation(({ shippingMethod, promoCode }: { shippingMethod: string; promoCode?: string }) => {
       const express = shippingMethod === 'EXPRESS';
       const amountCents = express ? 3990 : 3790;
       return Promise.resolve({
         ...summary,
+        appliedPromo: promoCode ? { valid: true, code: promoCode, discountCents: 1000 } : null,
         shippingMethods: [
           { code: 'STANDARD', label: 'Estándar', amountCents: 295 },
           { code: 'EXPRESS', label: 'Express', amountCents: 495 },
         ],
         selectedShippingMethod: { code: shippingMethod, amountCents: express ? 495 : 295 },
-        totals: { ...summary.totals, shippingCents: express ? 495 : 295, totalCents: amountCents },
+        totals: { ...summary.totals, shippingCents: express ? 495 : 295, discountCents: promoCode ? 1000 : 0, totalCents: amountCents - (promoCode ? 1000 : 0) },
       });
     });
     w.fetch.mockImplementation((_url: string, options: { body: string }) => {
@@ -264,7 +271,7 @@ describe('checkout and cart startup performance', () => {
         clientSecret: express ? 'pi_express_secret' : 'pi_standard_secret',
         paymentIntentId: express ? 'pi_express' : 'pi_standard',
         shippingMethod: { code: request.shippingMethod },
-        totals: { ...summary.totals, shippingCents: express ? 495 : 295, totalCents: express ? 3990 : 3790 },
+        totals: { ...summary.totals, shippingCents: express ? 495 : 295, discountCents: request.promoCode ? 1000 : 0, totalCents: (express ? 3990 : 3790) - (request.promoCode ? 1000 : 0) },
       }) });
     });
     const change = (selector: string, value: string) => {
@@ -283,6 +290,15 @@ describe('checkout and cart startup performance', () => {
       expect(w.document.querySelector('#pay-button').textContent).toBe('Completa tus datos');
       expect(w.document.querySelector('#pay-button').disabled).toBe(true);
       expect(w.fetch).not.toHaveBeenCalled();
+      expect(w.document.querySelector('#express-checkout-region').hidden).toBe(false);
+      const rejectIncomplete = jest.fn();
+      const resolveIncomplete = jest.fn();
+      expressHandlers.click({ reject: rejectIncomplete, resolve: resolveIncomplete });
+      expect(rejectIncomplete).not.toHaveBeenCalled();
+      expect(resolveIncomplete).toHaveBeenCalledWith(expect.objectContaining({ shippingRates: expect.any(Array) }));
+      expect(w.fetch).not.toHaveBeenCalled();
+      expect(stripe.confirmPayment).not.toHaveBeenCalled();
+      expressHandlers.cancel();
 
       // Card details are entered before any recipient details, and stay in
       // the same Stripe Element throughout address and shipping edits.
@@ -302,6 +318,15 @@ describe('checkout and cart startup performance', () => {
       await flush();
       expect(w.fetch).toHaveBeenCalledTimes(1);
       expect(w.document.querySelector('#pay-button').textContent).toBe('Pagar ahora');
+      expect(w.document.querySelector('#pay-button').disabled).toBe(false);
+      expect(w.document.querySelector('#express-checkout-region').hidden).toBe(false);
+      expressHandlers.availablepaymentmethodschange({ paymentMethods: {} });
+      expect(w.document.querySelector('#express-checkout-region').hidden).toBe(true);
+      expressHandlers.availablepaymentmethodschange({ paymentMethods: { link: true } });
+      expect(w.document.querySelector('#express-checkout-region').hidden).toBe(false);
+      expressHandlers.click({ resolve: jest.fn() });
+      expect(w.document.querySelector('#pay-button').disabled).toBe(true);
+      expressHandlers.cancel();
       expect(w.document.querySelector('#pay-button').disabled).toBe(false);
 
       w.document.querySelector('#shipping-form [name="city"]')
@@ -339,6 +364,49 @@ describe('checkout and cart startup performance', () => {
       expect(paymentElement.unmount).not.toHaveBeenCalled();
       expect(w.document.querySelector('#pay-button').disabled).toBe(false);
       expect(stripe.confirmPayment).not.toHaveBeenCalled();
+
+      // An open wallet must not authorize a different checkout revision.
+      expressHandlers.click({ resolve: jest.fn() });
+      change('#shipping-form [name="city"]', 'Alcala');
+      await flush();
+      const paymentFailed = jest.fn();
+      expressHandlers.confirm({ paymentFailed });
+      await flush();
+      expect(paymentFailed).toHaveBeenCalled();
+      expect(stripe.confirmPayment).not.toHaveBeenCalled();
+
+      // Wallet failures preserve the intent and the mounted card form for retry.
+      stripe.confirmPayment.mockResolvedValue({ error: { type: 'card_error', message: 'Wallet declined' } });
+      expressHandlers.click({ resolve: jest.fn() });
+      expressHandlers.confirm({ paymentFailed });
+      await flush();
+      expect(elements.submit).toHaveBeenCalledTimes(1);
+      expect(w.document.querySelector('#payment-error').textContent).toBe('Wallet declined');
+      expect(w.document.querySelector('#pay-button').disabled).toBe(false);
+      const confirmation = pending();
+      stripe.confirmPayment.mockReturnValue(confirmation.promise);
+      expressHandlers.click({ resolve: jest.fn() });
+      expressHandlers.confirm({ paymentFailed });
+      expressHandlers.confirm({ paymentFailed });
+      w.document.querySelector('#pay-button').dispatchEvent(new w.Event('click'));
+      await flush();
+      expect(stripe.confirmPayment).toHaveBeenCalledTimes(2);
+      confirmation.resolve({ error: { type: 'card_error', message: 'Retry' } });
+      await flush();
+      expect(w.document.querySelector('#pay-button').disabled).toBe(false);
+      expect(paymentElement.mount).toHaveBeenCalledTimes(1);
+      expect(expressElement.mount).toHaveBeenCalledTimes(1);
+      expect(expressElement.unmount).not.toHaveBeenCalled();
+
+      // A server-approved discount updates both Elements without remounting.
+      w.CRONOX_API.applyPromoCode = jest.fn().mockResolvedValue({valid:true,code:'TEST',discountAmount:1000,totals:{...summary.totals,shippingCents:495,discountCents:1000,totalCents:2990}});
+      const promoInput = w.document.querySelector('#promo-code-input');
+      promoInput.value = 'TEST';
+      w.document.querySelector('#apply-promo-button').click();
+      await flush();
+      expect(elements.update).toHaveBeenLastCalledWith({amount:2990});
+      expect(w.document.querySelector('#summary-total').textContent).toContain('29,90');
+      expect(paymentElement.mount).toHaveBeenCalledTimes(1);
     } finally {
       dom.window.close();
     }

@@ -280,7 +280,7 @@ describe('cookie consent frontend', () => {
       'utf8',
     );
 
-    expect(checkout).toContain('assets/checkout-stripe.js?v=1');
+    expect(checkout).toContain('assets/checkout-stripe.js?v=2');
     expect(
       readFileSync(
         path.join(frontendRoot, 'assets/checkout-stripe.js'),

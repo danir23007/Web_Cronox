@@ -2,6 +2,7 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import {
   IsEnum,
+  IsBoolean,
   IsEmail,
   IsInt,
   IsObject,
@@ -13,6 +14,9 @@ import {
 import { ShippingMethodCode } from '../../common/enums/shipping-method-code.enum';
 
 export class CreatePaymentIntentDto {
+  @IsOptional()
+  @IsBoolean()
+  expressCheckout?: boolean;
   @ApiProperty({
     description: 'Método de envío elegido',
     enum: ShippingMethodCode,

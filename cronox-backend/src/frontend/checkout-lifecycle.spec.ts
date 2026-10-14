@@ -28,14 +28,17 @@ describe('checkout frontend lifecycle coordinator', () => {
       clientSecret: string;
       paymentElementMounted: boolean;
       confirmParams: Record<string, unknown>;
+      shouldConfirm?: () => boolean;
       onFailure?: (error: unknown) => void;
     }) => Promise<{ attempted: boolean; error: unknown }>;
     confirmExpressPayment: (options: {
       stripe: { confirmPayment: jest.Mock };
       elements: Record<string, unknown>;
-      clientSecret: string;
+      clientSecret?: string;
+      prepareAfterSubmit?: () => Promise<string>;
       expressCheckoutMounted: boolean;
       confirmParams: Record<string, unknown>;
+      shouldConfirm?: () => boolean;
       onFailure?: (error: unknown) => void;
     }) => Promise<{ attempted: boolean; error: unknown }>;
     observePaymentElementLoad: (options: {
@@ -192,7 +195,7 @@ describe('checkout frontend lifecycle coordinator', () => {
     await expect(
       coordinatorModule.confirmExpressPayment({
         stripe: { confirmPayment },
-        elements: {},
+        elements: { submit: jest.fn().mockResolvedValue({}) },
         clientSecret: 'pi_secret',
         expressCheckoutMounted: false,
         confirmParams: { return_url: 'https://example.com/checkout-success' },
@@ -203,14 +206,14 @@ describe('checkout frontend lifecycle coordinator', () => {
     await expect(
       coordinatorModule.confirmExpressPayment({
         stripe: { confirmPayment },
-        elements: {},
+        elements: { submit: jest.fn().mockResolvedValue({}) },
         clientSecret: 'pi_secret',
         expressCheckoutMounted: true,
         confirmParams: { return_url: 'https://example.com/checkout-success' },
       }),
     ).resolves.toEqual({ attempted: true, error: null });
     expect(confirmPayment).toHaveBeenCalledWith({
-      elements: {},
+      elements: expect.objectContaining({ submit: expect.any(Function) }),
       clientSecret: 'pi_secret',
       confirmParams: {
         return_url: 'https://example.com/checkout-success',
@@ -227,7 +230,7 @@ describe('checkout frontend lifecycle coordinator', () => {
         stripe: {
           confirmPayment: jest.fn().mockResolvedValue({ error: stripeError }),
         },
-        elements: {},
+        elements: { submit: jest.fn().mockResolvedValue({}) },
         clientSecret: 'pi_secret',
         expressCheckoutMounted: true,
         confirmParams: { return_url: 'https://example.com/checkout-success' },
@@ -239,6 +242,9 @@ describe('checkout frontend lifecycle coordinator', () => {
 
   it('keeps accelerated checkout hidden when no real wallet is available', () => {
     expect(coordinatorModule.hasAvailableExpressWallet()).toBe(false);
+    for (const method of ['applePay', 'googlePay', 'paypal', 'amazonPay', 'link']) {
+      expect(coordinatorModule.hasAvailableExpressWallet({ [method]: true })).toBe(true);
+    }
     expect(
       coordinatorModule.hasAvailableExpressWallet({
         paypal: { available: false },
@@ -257,6 +263,44 @@ describe('checkout frontend lifecycle coordinator', () => {
         googlePay: { available: false },
       }),
     ).toBe(true);
+  });
+
+  it.each(['validation', 'stale', 'exception'])('never confirms an express payment after %s submission failure', async (scenario) => {
+    const confirmPayment = jest.fn();
+    const onFailure = jest.fn();
+    const submit = scenario === 'exception'
+      ? jest.fn().mockRejectedValue(new Error('Network failure'))
+      : jest.fn().mockResolvedValue(scenario === 'validation' ? { error: { type: 'validation_error' } } : {});
+    const result = await coordinatorModule.confirmExpressPayment({
+      stripe: { confirmPayment }, elements: { submit }, clientSecret: 'pi_secret',
+      expressCheckoutMounted: true, confirmParams: {},
+      shouldConfirm: () => scenario !== 'stale', onFailure,
+    });
+    expect(result.error).toBeTruthy();
+    expect(confirmPayment).not.toHaveBeenCalled();
+    expect(onFailure).toHaveBeenCalledTimes(1);
+  });
+
+  it('submits wallet data before preparing the server intent and confirming', async () => {
+    const steps: string[] = [];
+    await coordinatorModule.confirmExpressPayment({
+      stripe: { confirmPayment: jest.fn(async () => { steps.push('confirm'); return {}; }) },
+      elements: { submit: jest.fn(async () => { steps.push('submit'); return {}; }) },
+      prepareAfterSubmit: async () => { steps.push('server'); return 'pi_validated'; },
+      expressCheckoutMounted: true, confirmParams: {},
+    });
+    expect(steps).toEqual(['submit', 'server', 'confirm']);
+  });
+
+  it('never confirms when server preparation rejects stock or address', async () => {
+    const confirmPayment = jest.fn();
+    const result = await coordinatorModule.confirmExpressPayment({
+      stripe: { confirmPayment }, elements: { submit: jest.fn().mockResolvedValue({}) },
+      prepareAfterSubmit: async () => { throw new Error('INSUFFICIENT_STOCK'); },
+      expressCheckoutMounted: true, confirmParams: {},
+    });
+    expect(result.error).toBeTruthy();
+    expect(confirmPayment).not.toHaveBeenCalled();
   });
 
   it('recommends only active in-stock products outside the current cart', () => {

@@ -29,3 +29,13 @@ playwright-report/
 /output/playwright/
 # Private recoverable backups and reviewed account maps must never enter Git.
 output/private-user-numbering/
+
+# Stripe sandbox tooling is local-only; production deploys the Git revision.
+/cronox-backend/scripts/checkout-sandbox*.cjs
+/cronox-backend/scripts/init-checkout-sandbox-db.cjs
+/cronox-backend/scripts/playwright-sandbox.cjs
+/cronox-backend/scripts/test-bank-abuse-sandbox.cjs
+/cronox-backend/scripts/test-bank-transfer-local.cjs
+/cronox-backend/scripts/test-checkout-stripe-sandbox.cjs
+/cronox-backend/scripts/verify-express-paypal-sandbox.cjs
+/cronox-backend/scripts/verify-physical-wallets.cjs
