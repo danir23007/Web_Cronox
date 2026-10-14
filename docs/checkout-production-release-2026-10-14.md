@@ -29,3 +29,19 @@ Recuperación: preferir corrección hacia delante; las columnas e índices nuevo
 La entrega se ensaya en un worktree separado con solo los archivos seleccionados, sin `.env` local y sin las modificaciones exclusivas del sandbox. Los resultados definitivos y el despliegue se documentarán tras terminar CI y verificar producción. No se harán cobros reales ni comunicaciones de prueba.
 
 Prepublicación: worktree aislado aprobado con 2.266 pruebas en 230 suites, ocho controles Node, typecheck de admin/backend, builds de admin/backend, control de artefactos y smoke de rutas compiladas. No se usaron claves ni base del sandbox en esa entrega. La diferencia con el recuento local anterior corresponde a las pruebas de habilitación del sandbox que se conservan fuera de la publicación.
+
+## Resultado de publicación
+
+Código publicado en `aeb3e38a679a2d69236bd0c09e650beaa4c62140` mediante el flujo existente de `main`. [GitHub Actions 38489754886](https://github.com/danir23007/Web_Cronox/actions/runs/38489754886): `verify-release` y `deploy` concluyen success. El VPS confirma ese mismo commit; no se ejecutó un segundo despliegue manual. Se aplicaron ambas migraciones y no quedan migraciones fallidas.
+
+Verificaciones posteriores:
+
+- `/api/health` y `/api/ready`: HTTP 200. Catálogo público: siete productos. Checkout apex y dominio www disponibles. Los cinco JS/CSS de checkout revisados coinciden con el commit; el cuerpo HTML coincide y la cabecera recibe únicamente la transformación SEO existente.
+- Navegador Chromium anónimo, 390 y 1440 px: un único Express Checkout, PayPal y Google Pay visibles, Apple Pay no disponible en ese navegador; ningún desbordamiento horizontal. Link, Amazon Pay, Klarna y Revolut Pay elegibles en Payment Element; transferencia propia visible y endpoint de disponibilidad true. No se tocó el Dashboard para alterar esas elegibilidades.
+- Carrito anónimo temporal de una unidad del producto público, sin datos de comprador ni dirección. Total del servidor 4295 céntimos y visible 42,95 EUR. Cero solicitudes de crear PaymentIntent o iniciar transferencia, ninguna apertura de carteras LIVE ni confirmación de pago. Se vació el carrito al terminar. Stock de la variante: 12 antes y 12 después.
+- Endpoint webhook rechaza una petición sin firma con HTTP 400. Stripe reenvió el evento LIVE original `evt_3UQ5mZCGnUu9AYNr0SkZI1rQ` (`payment_intent.canceled`), previamente PROCESSED, al único endpoint habilitado suscrito a ese tipo. Comando de reenvío aceptado y `pending_webhooks=0`, sin entregas pendientes. El registro PROCESSED y sus fechas permanecen idénticos; cero pedidos asociados y los mismos dos movimientos históricos de reserva/liberación, sin nuevos movimientos ni emails. Es un reenvío original firmado de Stripe, no una firma fabricada localmente y tampoco un pago nuevo. Informe privado `webhook-resend-verified.json` junto al respaldo.
+- Capturas privadas en `output/playwright/checkout-express/production-express-{390,1440}.png` y `production-payment-visible-mobile.png`; no se versionan. El renderizado no acredita pagos físicos de carteras.
+
+El túnel Cloudflare, los listeners Stripe y el servidor/gateway del sandbox se detuvieron; puertos locales 3000/3001 sin escucha y sin proceso cloudflared. El worktree temporal se eliminó verificando antes su ruta y desvinculando la junction de dependencias, sin borrar las dependencias originales. Las tres modificaciones locales de habilitación del sandbox, su `.env`, herramientas y evidencias permanecen conservadas y no publicadas. El archivo ajeno `main.ts.cronox-before-stripe` del VPS se preservó; no se descartaron cambios preexistentes de dependencias en ese servidor.
+
+Pendientes aceptados tras publicar: secuencia de envío española y pago completo de Google Pay; Apple Pay físico; devolución bancaria efectiva. No se consideran aprobados por estas comprobaciones. No se hicieron cobros reales ni comunicaciones de prueba a clientes.
