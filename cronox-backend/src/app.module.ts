@@ -37,6 +37,7 @@ import { MediaFramingModule } from './media-framing/media-framing.module';
 import { KeyScreenModule } from './key-screen/key-screen.module';
 import { ImagesModule } from './images/images.module';
 import { FooterModule } from './footer/footer.module';
+import { AccreditationsModule } from './accreditations/accreditations.module';
 import { WaitlistModule } from './waitlist/waitlist.module';
 import { LiveStatsModule } from './live-stats/live-stats.module';
 import { MailboxModule } from './mailbox/mailbox.module';
@@ -80,6 +81,7 @@ import {
     UserNumberingGateModule,
     ImagesModule,
     FooterModule,
+    AccreditationsModule,
     WaitlistModule,
     LiveStatsModule,
     MailboxModule,

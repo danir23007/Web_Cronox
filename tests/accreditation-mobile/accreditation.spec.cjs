@@ -23,6 +23,10 @@ test.beforeEach(async ({ page }) => {
 
   await page.route('**/api/**', (route) => {
     const pathname = new URL(route.request().url()).pathname;
+    if (pathname === '/api/accreditations/active') return json(route, {
+      id: 'original', renderer: 'original-v1', config: { version: 1,
+        artworkUrl: 'https://frqlgocxnyppzdgxxjuq.supabase.co/storage/v1/object/public/Acreditation/Libro-antiguo.png' },
+    });
     if (pathname === '/api/membership/me/qr') {
       qrAttempts += 1;
       if (qrAttempts === 1) return route.abort('failed');

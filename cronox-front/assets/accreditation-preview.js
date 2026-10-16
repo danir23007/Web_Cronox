@@ -1,0 +1,58 @@
+(async () => {
+  'use strict';
+  const report = status => parent.postMessage({ type: 'cronox:accreditation-preview',
+    token: new URLSearchParams(location.search).get('previewRequest'), status }, location.origin);
+  const imageReady = image => new Promise((resolve, reject) => {
+    if (!image) return reject(new Error('Falta una imagen de la acreditación'));
+    const timer = setTimeout(() => finish(false), 10000);
+    const finish = ok => {
+      clearTimeout(timer); image.onload = null; image.onerror = null;
+      if (ok) resolve(); else reject(new Error('No se pudo cargar una imagen de la acreditación'));
+    };
+    image.onload = () => finish(image.naturalWidth > 0);
+    image.onerror = () => finish(false);
+    if (image.complete) finish(image.naturalWidth > 0);
+  });
+  try {
+    const response = await fetch(location.pathname + '-data', { credentials: 'include', cache: 'no-store' });
+    if (!response.ok) throw new Error('Vista previa reservada a administradores. Vuelve a iniciar sesión.');
+    const design = await response.json();
+    const section = document.querySelector('[data-profile-section="accreditation"]');
+    window.CRONOX_ACCREDITATION_DESIGNS.apply(section, design);
+    // Keep only the actual accreditation and existing styles, without account UI.
+    document.querySelectorAll('body style').forEach(style => document.head.append(style));
+    document.body.replaceChildren(section);
+    section.classList.add('is-active');
+    section.querySelector('.accreditation-name').textContent = 'Andrea Ejemplo';
+    section.querySelector('.accreditation-id').textContent = 'ID: MUESTRA';
+    section.querySelector('.accreditation-circle').textContent = 'Círculo I';
+    const values = { circle: 'I', createdAt: '16/10/2026', orders: '3', items: '5', products: '4' };
+    section.querySelectorAll('[data-acc-stat]').forEach(el => { el.textContent = values[el.dataset.accStat] || '—'; });
+    const privileges = section.querySelector('[data-acc-privileges-list]');
+    const item = document.createElement('li');
+    item.className = 'accreditation-privileges__item';
+    item.textContent = 'Acreditación negra, miembro oficial de CRONOX. (sirve para eventos).';
+    privileges?.replaceChildren(item);
+    const rings = section.querySelector('[data-accreditation-rings]');
+    if (rings) rings.innerHTML = '<svg viewBox="0 0 100 100" aria-hidden="true"><circle cx="50" cy="50" r="40" fill="none" stroke="currentColor" stroke-width="4"/></svg>';
+    const qr = section.querySelector('#cronox-member-qr');
+    if (qr) { qr.src = design.sampleQr; qr.alt = 'QR de muestra (sin identidad real)'; }
+    section.querySelectorAll('button, input, select, a').forEach(el => {
+      if (el.tagName === 'A') el.removeAttribute('href'); else el.disabled = true;
+    });
+    const label = document.createElement('p');
+    label.textContent = `Vista previa · ${design.name} · Datos ficticios · No activa el diseño`;
+    label.style.cssText = 'text-align:center;padding:12px;color:white';
+    document.body.prepend(label);
+    const layout = document.createElement('script');
+    layout.src = '/assets/accreditation-layout.js?v=1';
+    document.body.append(layout);
+    await Promise.all([imageReady(section.querySelector('.accreditation-book-art')), imageReady(qr)]);
+    report('ready');
+  } catch (error) {
+    document.body.textContent = error.message || 'No se pudo cargar la vista previa.';
+    report('error');
+  } finally {
+    document.body.style.visibility = 'visible';
+  }
+})();

@@ -3,6 +3,24 @@ generator client {
   binaryTargets = ["native", "debian-openssl-3.0.x", "debian-openssl-1.1.x", "linux-musl"]
 }
 
+model AccreditationDesign {
+  id String @id
+  name String @db.VarChar(100)
+  renderer String
+  config Json
+  revision Int @default(0)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+  selections AccreditationSelection[]
+}
+
+model AccreditationSelection {
+  id String @id @default("global")
+  activeDesignId String
+  activeDesign AccreditationDesign @relation(fields: [activeDesignId], references: [id], onDelete: Restrict)
+  revision Int @default(0)
+}
+
 // Private external sales ledger. No Order, customer, Stripe or shipping lifecycle.
 model SalePoint {
   id String @id @default(uuid())

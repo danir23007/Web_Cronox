@@ -649,6 +649,14 @@
 
   const loadAccreditationData = async () => {
     setAccreditationLoading(true);
+    try {
+      await window.CRONOX_ACCREDITATION_DESIGNS.loadActive(accreditationSection);
+    } catch (error) {
+      setAccreditationLoading(false);
+      if (accreditationBook) accreditationBook.hidden = true;
+      showProfileMessage(error.message, 'error');
+      return;
+    }
     window.CRONOX_PROMOTION_STATUS = 'loading';
     circleUpgradeStatusLoaded = false;
     circleUpgradeStatusLoading = true;

@@ -1,0 +1,21 @@
+#section-accreditations [data-design-cards] { display:flex; flex-wrap:wrap; gap:16px; }
+#section-accreditations [data-design-cards] .card { margin:0; min-width:220px; }
+#section-accreditations [data-design-cards] button + button { margin-left:8px; }
+#section-accreditations [aria-pressed="true"] { outline:2px solid currentColor; outline-offset:2px; }
+#section-accreditations form:not([hidden]) { display:grid; gap:14px; margin-top:24px; }
+#section-accreditations form label { display:grid; gap:6px; }
+#section-accreditations form button { justify-self:start; }
+#section-accreditations iframe { display:block; width:100%; max-width:100%; height:800px; margin-top:20px; border:1px solid #444; }
+#section-accreditations iframe[hidden] { display:none; }
+#section-accreditations [data-preview-controls]:not([hidden]) { display:grid; gap:6px; margin-top:20px; }
+#section-accreditations[aria-busy="true"] { cursor:progress; }
+#section-accreditations [data-design-panel] { margin-top:24px; padding-top:20px; border-top:1px solid #888; min-width:0; }
+#section-accreditations [data-design-panel][hidden] { display:none; }
+#section-accreditations .accreditation-panel-header { display:flex; gap:16px; align-items:center; justify-content:space-between; flex-wrap:wrap; }
+#section-accreditations [data-design-panel-status][data-state="error"] { color:#b42318; font-weight:600; }
+@media(max-width:600px) {
+  #section-accreditations [data-design-cards] .card { min-width:0; width:100%; }
+  #section-accreditations .accreditation-panel-header button { width:100%; }
+  #section-accreditations input { min-width:0; width:100%; box-sizing:border-box; }
+  #section-accreditations iframe { height:600px; }
+}

@@ -313,6 +313,7 @@
     mails: ['ADMIN', 'SUPERADMIN'],
     keyScreen: ['ADMIN', 'SUPERADMIN'],
     newsletter: ['ADMIN', 'SUPERADMIN'],
+    accreditations: ['ADMIN', 'SUPERADMIN'],
     orders: ['ADMIN', 'SUPERADMIN'],
     promoCodes: ['ADMIN', 'SUPERADMIN'],
     auditLog: ['ADMIN', 'SUPERADMIN'],
@@ -334,6 +335,7 @@
     'section-mails': 'mails',
     'section-key-screen': 'keyScreen',
     'section-newsletter': 'newsletter',
+    'section-accreditations': 'accreditations',
     'section-product-categories': 'products',
     'section-codes': 'promoCodes',
     'section-user': 'userDetail',
@@ -417,6 +419,7 @@
     setNavVisibility('section-mails', canAccess('mails'));
     setNavVisibility('section-key-screen', canAccess('keyScreen'));
     setNavVisibility('section-newsletter', canAccess('newsletter'));
+    setNavVisibility('section-accreditations', canAccess('accreditations'));
     setNavVisibility('section-product-categories', canAccess('products'));
     setNavVisibility('section-codes', canAccess('promoCodes'));
     setUserTabVisibility('notes', canAccess('notes'));
@@ -1671,6 +1674,7 @@
     if (sectionId === 'section-push') window.CRONOX_PUSH?.load?.();
     if (sectionId === 'section-key-screen') window.CRONOX_KEY_SCREEN?.load?.();
     if (sectionId === 'section-newsletter') window.CRONOX_NEWSLETTER_ADMIN?.load?.();
+    if (sectionId === 'section-accreditations') window.CRONOX_ADMIN_ACCREDITATIONS?.load?.();
     if (sectionId === 'section-footer') window.CRONOX_ADMIN_FOOTER?.load?.();
     if (sectionId === 'section-media') window.CRONOX_ADMIN_MEDIA?.load?.();
     if (sectionId === 'section-orders') {

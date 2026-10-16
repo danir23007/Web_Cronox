@@ -33,6 +33,7 @@
   <link rel="stylesheet" href="assets/newsletter-popup.css?v=6">
   <link rel="stylesheet" href="assets/admin-newsletter.css?v=5">
   <link rel="stylesheet" href="assets/admin-footer.css?v=2">
+  <link rel="stylesheet" href="assets/admin-accreditations.css?v=2">
   <style>
     .users-sort-toolbar { display: flex; gap: 12px; flex-wrap: wrap; margin: 16px 0; }
     .users-sort-toolbar .form-group { flex: 1; min-width: 150px; max-width: 320px; }
@@ -1363,6 +1364,31 @@
       </div>
     </section>
 
+    <section id="section-accreditations" class="card admin-section" aria-labelledby="title-accreditations" hidden>
+      <h2 id="title-accreditations">Acreditaciones</h2>
+      <p>Revisa cada diseño sin activarlo. Solo el botón Activar cambia la acreditación pública.</p>
+      <button class="btn" type="button" data-design-reload>Recargar</button>
+      <p role="status" aria-live="polite">Abre el apartado para cargar las acreditaciones.</p>
+      <div data-design-cards></div>
+      <section id="accreditationDesignPanel" data-design-panel hidden aria-labelledby="accreditationDesignTitle">
+      <div class="accreditation-panel-header"><h3 id="accreditationDesignTitle" data-design-selected tabindex="-1">Configuración y vista previa</h3><button class="btn" type="button" data-design-close>Cerrar configuración y vista previa</button></div>
+      <p data-design-panel-status role="status" aria-live="polite"></p>
+      <button class="btn" type="button" data-design-retry hidden>Reintentar carga</button>
+      <form hidden>
+        <label>Nombre identificativo <input class="input" name="name" maxlength="100" required></label>
+        <div data-config-renderer="original-v1">
+          <label>Imagen del libro <input class="input" name="artworkUrl" required></label>
+          <small>Usa una ruta /assets/ o una imagen del almacén de acreditaciones existente. El original conserva su composición, QR, estadísticas y funciones.</small>
+        </div>
+        <p data-active-warning>Este diseño está activo: guardar su configuración modifica su presentación pública.</p>
+        <button class="btn primary" type="submit">Guardar configuración</button>
+        <button class="btn" type="button" data-design-preview>Vista previa guardada</button>
+      </form>
+      <label data-preview-controls hidden>Anchura de vista previa <select class="input" data-preview-size><option value="100%">Escritorio</option><option value="375px">Móvil (375 px)</option></select></label>
+      <iframe title="Vista previa protegida de acreditación" hidden sandbox="allow-scripts allow-same-origin"></iframe>
+      </section>
+    </section>
+
     <section id="section-newsletter" class="card admin-section newsletter-admin" aria-labelledby="title-newsletter" hidden>
       <button class="btn admin-view-back" type="button" data-back-target="section-menu">&larr; Atr&aacute;s</button>
       <div class="newsletter-admin__header">
@@ -2042,7 +2068,7 @@
   <script src="assets/admin-section-headers.js?v=1"></script>
   <script src="assets/admin-push.js?v=1"></script>
   <script src="assets/admin-inbox.js?v=13"></script>
-  <script src="assets/admin.js?v=21"></script>
+  <script src="assets/admin.js?v=22"></script>
   <script src="assets/admin-inventory.js?v=2"></script>
   <script src="assets/admin-waitlist.js?v=2"></script>
   <script src="assets/admin-favorites.js?v=1"></script>
@@ -2058,6 +2084,7 @@
   <script src="assets/admin-media.js?v=5"></script>
   <script src="assets/admin-newsletter.js?v=5"></script>
   <script src="assets/admin-footer.js?v=2"></script>
+  <script src="assets/admin-accreditations.js?v=4"></script>
   <script src="assets/admin-product-order.js?v=1"></script>
 </body>
 </html>
