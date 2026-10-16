@@ -1,0 +1,358 @@
+/* Shared client/sample composition; the renderer owns the approved 3D. */
+.metacrilatos-member { display: none; }
+[data-metacrilatos-fit] { display: contents; }
+
+.metacrilatos-presentation[data-profile-section="accreditation"][data-accreditation-renderer="metacrilatos-v1"].is-active {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-areas: "card" "member" "back";
+  max-width: 640px;
+  margin-inline: auto;
+  align-items: start;
+}
+
+.metacrilatos-presentation[data-accreditation-renderer="metacrilatos-v1"] > .profile-card {
+  grid-area: card;
+  min-width: 0;
+}
+
+.metacrilatos-presentation[data-accreditation-renderer="metacrilatos-v1"] > .profile-back-wrapper {
+  grid-area: back;
+  margin-top: 32px;
+}
+
+.metacrilatos-presentation[data-accreditation-renderer="metacrilatos-v1"] > .metacrilatos-member:not([hidden]) {
+  display: block;
+  grid-area: member;
+  min-width: 0;
+  margin-top: 32px;
+  padding-inline: 20px;
+  width: 100%;
+  max-width: 354px;
+  justify-self: center;
+  color: #eee;
+  font-family: Arial, Helvetica, sans-serif;
+  --member-accent: #4b4d51;
+  --member-accent-edge: #696b70;
+}
+
+.metacrilatos-presentation[data-accreditation-renderer="metacrilatos-v1"] .metacrilatos-member[data-circle-level="3"] {
+  --member-accent: #878f94;
+  --member-accent-edge: #878f94;
+}
+
+.metacrilatos-presentation[data-accreditation-renderer="metacrilatos-v1"] .metacrilatos-member[data-circle-level="4"] {
+  --member-accent: #fff;
+  --member-accent-edge: #fff;
+}
+
+.metacrilatos-presentation[data-accreditation-renderer="metacrilatos-v1"] .metacrilatos-member[data-circle-level="5"] {
+  --member-accent: #9a1c36;
+  --member-accent-edge: #a93e54;
+}
+
+.metacrilatos-presentation[data-accreditation-renderer="metacrilatos-v1"] .metacrilatos-member__eyebrow {
+  margin: 0 0 14px;
+  color: #bbb;
+  font-size: 10px;
+  line-height: 1.5;
+  letter-spacing: 0.22em;
+}
+
+.metacrilatos-presentation[data-accreditation-renderer="metacrilatos-v1"] .metacrilatos-member__title {
+  margin: 0;
+  color: #f3f0ec;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 36px;
+  line-height: 1.15;
+  font-weight: 400;
+  letter-spacing: 0.025em;
+}
+
+.metacrilatos-presentation[data-accreditation-renderer="metacrilatos-v1"] .metacrilatos-member__circles {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 38px;
+  padding: 0;
+  margin: 22px 0 30px;
+  list-style: none;
+}
+
+.metacrilatos-presentation[data-accreditation-renderer="metacrilatos-v1"] .metacrilatos-member__circles li {
+  display: grid;
+  place-items: center;
+  flex: 0 0 28px;
+  height: 28px;
+  box-sizing: border-box;
+  border: 1px solid #696b70;
+  border-radius: 50%;
+  background: #000;
+  color: #d8dadd;
+  font: 11px/1 Georgia, "Times New Roman", serif;
+}
+
+.metacrilatos-presentation[data-accreditation-renderer="metacrilatos-v1"] .metacrilatos-member__circles li[data-meta-circle-marker="3"] {
+  background: #878f94;
+  color: #111518;
+  border-color: #878f94;
+}
+
+.metacrilatos-presentation[data-accreditation-renderer="metacrilatos-v1"] .metacrilatos-member__circles li[data-meta-circle-marker="4"] {
+  background: #fff;
+  color: #3f4548;
+  border-color: #fff;
+}
+
+.metacrilatos-presentation[data-accreditation-renderer="metacrilatos-v1"] .metacrilatos-member__circles li[data-meta-circle-marker="5"] {
+  background: #9a1c36;
+  color: #f0dfcb;
+  border-color: #a93e54;
+}
+
+.metacrilatos-presentation[data-accreditation-renderer="metacrilatos-v1"] .metacrilatos-member__circles li[aria-current="true"] {
+  flex-basis: 36px;
+  height: 36px;
+  outline: 1px solid #b9b4b0;
+  outline-offset: 3px;
+  font-size: 14px;
+}
+
+.metacrilatos-presentation[data-accreditation-renderer="metacrilatos-v1"] .metacrilatos-member__section + .metacrilatos-member__section {
+  margin-top: 30px;
+}
+
+.metacrilatos-presentation[data-accreditation-renderer="metacrilatos-v1"] .metacrilatos-member__section-title {
+  margin: 0 0 16px;
+  color: #bbb;
+  font: 400 10px/1.5 Arial, Helvetica, sans-serif;
+  letter-spacing: 0.19em;
+}
+
+.metacrilatos-presentation[data-accreditation-renderer="metacrilatos-v1"] .metacrilatos-member__privileges {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.metacrilatos-presentation[data-accreditation-renderer="metacrilatos-v1"] .metacrilatos-member__privileges li {
+  position: relative;
+  margin: 0;
+  padding: 11px 0 11px 17px;
+  border-bottom: 1px solid #242424;
+  color: #ddd;
+  font-size: 13px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+
+.metacrilatos-presentation[data-accreditation-renderer="metacrilatos-v1"] .metacrilatos-member__privileges li::before {
+  content: "";
+  position: absolute;
+  top: 19px;
+  left: 0;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--member-accent-edge);
+}
+
+.metacrilatos-presentation[data-accreditation-renderer="metacrilatos-v1"] .metacrilatos-member__history {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+  margin: 0;
+}
+
+.metacrilatos-presentation[data-accreditation-renderer="metacrilatos-v1"] .metacrilatos-member__history > div {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.metacrilatos-presentation[data-accreditation-renderer="metacrilatos-v1"] .metacrilatos-member__history dt {
+  margin: 8px 0 0;
+  max-width: 76px;
+  color: #bbb;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.metacrilatos-presentation[data-accreditation-renderer="metacrilatos-v1"] .metacrilatos-member__history dd {
+  order: -1;
+  margin: 0;
+  color: #efefef;
+  font: 400 24px/1.1 Georgia, "Times New Roman", serif;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+.metacrilatos-presentation[data-accreditation-renderer="metacrilatos-v1"] .metacrilatos-member__status {
+  margin: 16px 0 0;
+  color: #aaa;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.metacrilatos-presentation[data-accreditation-renderer="metacrilatos-v1"] .metacrilatos-member__retry {
+  min-height: 44px;
+  padding: 8px 0;
+  border: 0;
+  background: transparent;
+  color: #ddd;
+  font: 12px/1.5 Arial, Helvetica, sans-serif;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+.metacrilatos-presentation[data-accreditation-renderer="metacrilatos-v1"] .metacrilatos-member__retry:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 4px;
+}
+
+@media (min-width: 760px) {
+  /* Only the active personal METACRILATOS view uses the viewport footer.
+     The header/title/tabs keep their existing containing block and geometry. */
+  body.metacrilatos-profile-desktop {
+    display: flex;
+    flex-direction: column;
+    min-height: 100dvh;
+  }
+
+  body.metacrilatos-profile-desktop > .profile-wrapper {
+    flex: 1 0 auto;
+    width: 100%;
+    padding-bottom: 0;
+  }
+
+  body.metacrilatos-profile-desktop .profile-page {
+    margin-bottom: 0;
+  }
+
+  body.metacrilatos-profile-desktop > .footer {
+    flex: none;
+    margin-top: auto;
+    padding: 0 10px 10px;
+  }
+
+  body.metacrilatos-profile-desktop > .footer > p {
+    margin: 0;
+  }
+
+  body.metacrilatos-profile-desktop [data-metacrilatos-fit] {
+    display: grid;
+    justify-items: center;
+    align-items: start;
+    width: var(--meta-fit-width);
+    height: var(--meta-fit-height);
+    margin-inline: calc((100% - var(--meta-fit-width)) / 2);
+    margin-bottom: 12px;
+  }
+
+  body.metacrilatos-profile-desktop [data-metacrilatos-fit] > [data-profile-section="accreditation"] {
+    /* Zoom reserves real layout space and rasterizes text at its display size.
+       The renderer's own 3D transforms remain untouched. */
+    width: 690px;
+    max-width: none;
+    margin: 0;
+    zoom: var(--meta-fit-scale, 1);
+  }
+
+  .metacrilatos-presentation[data-profile-section="accreditation"][data-accreditation-renderer="metacrilatos-v1"].is-active {
+    /* Store navigation is a separate full-width row below both columns. */
+    grid-template-columns: 336px minmax(0, 314px);
+    grid-template-rows: max-content max-content;
+    grid-template-areas: "card member" "back back";
+    column-gap: 40px;
+    max-width: 690px;
+    padding-top: 8px;
+  }
+
+  .metacrilatos-presentation[data-accreditation-renderer="metacrilatos-v1"] > .metacrilatos-member:not([hidden]) {
+    margin-top: 0;
+    padding: 40px 0 0;
+  }
+
+  .metacrilatos-presentation[data-accreditation-renderer="metacrilatos-v1"] .metacrilatos-member__title {
+    font-size: 42px;
+  }
+
+  .metacrilatos-presentation[data-accreditation-renderer="metacrilatos-v1"] > .profile-back-wrapper {
+    margin-top: 16px;
+  }
+}
+
+@media (max-width: 390px) {
+  .metacrilatos-presentation[data-accreditation-renderer="metacrilatos-v1"] .metacrilatos-member__history {
+    gap: 10px;
+  }
+}
+
+/* The control offset and return link are shared by profile and preview. */
+.metacrilatos-presentation[data-accreditation-renderer="metacrilatos-v1"] .crx-actions {
+  position: relative;
+  top: 24px;
+}
+.metacrilatos-presentation[data-accreditation-renderer="metacrilatos-v1"] > .profile-card {
+  background: transparent;
+  border: none;
+  border-radius: 12px;
+  padding: 20px;
+  box-shadow: none;
+}
+.metacrilatos-presentation[data-accreditation-renderer="metacrilatos-v1"] > .profile-back-wrapper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.metacrilatos-presentation[data-accreditation-renderer="metacrilatos-v1"] .profile-back-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 10px 12px;
+  font: 10.5px/1.5 Arial, Helvetica, sans-serif;
+}
+.metacrilatos-presentation[data-accreditation-renderer="metacrilatos-v1"] .profile-back-link:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 3px;
+}
+/* This isolated document's viewport IS the preview area, never the parent
+   administrator viewport. Its footer remains outside the scaled section. */
+body.metacrilatos-preview {
+  display: flex;
+  flex-direction: column;
+  min-height: 100dvh;
+  margin: 0;
+  background: #000;
+  color: #fff;
+}
+.metacrilatos-preview__controls {
+  flex: none;
+  padding: 12px 16px;
+  text-align: center;
+  font: 12px/1.5 Arial, Helvetica, sans-serif;
+  color: #bbb;
+}
+.metacrilatos-preview__controls p { margin: 0 0 8px; }
+.metacrilatos-preview__controls select { min-height: 36px; margin-left: 8px; }
+.metacrilatos-preview__main { width: 100%; padding: 0 24px; flex: 1 0 auto; }
+.metacrilatos-preview > .footer { flex: none; margin-top: auto; padding: 12px 10px 10px; }
+.metacrilatos-preview > .footer p { margin: 0; }
+@media (min-width: 760px) {
+  .metacrilatos-preview [data-metacrilatos-fit] {
+    display: grid;
+    justify-items: center;
+    align-items: start;
+    width: 100%;
+    height: var(--meta-fit-height, auto);
+    margin-bottom: 12px;
+  }
+  .metacrilatos-preview [data-metacrilatos-fit] > .metacrilatos-presentation {
+    width: 690px;
+    max-width: none;
+    margin: 0;
+    zoom: var(--meta-fit-scale, 1);
+  }
+}

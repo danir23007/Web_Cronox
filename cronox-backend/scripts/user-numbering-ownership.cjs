@@ -16,7 +16,9 @@ async function inventory(client) {
 }
 async function ownership(client) {
  const inv=await inventory(client),users=(await client.query('SELECT id,"identityUid" FROM "User"')).rows;
- const identities=new Map(users.map(u=>[String(u.id),u.identityUid]));
+ // Event accreditation relations use immutable UUIDs directly; inventory and
+ // verify their ownership with the same guarantees as numeric foreign keys.
+ const identities=new Map(users.flatMap(u=>[[String(u.id),u.identityUid],[u.identityUid,u.identityUid]]));
  const columns=[...inv.foreignKeys,...inv.nonForeignKeys],records=[];
  const tables=new Set([...columns.map(c=>c.table),...inv.json.map(c=>c.table),...inv.targets]);
  function jsonRefs(value,path,emit,parent='') {

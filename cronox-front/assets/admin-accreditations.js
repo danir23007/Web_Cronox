@@ -18,6 +18,7 @@
       fill: config => { editor.elements.artworkUrl.value = config.artworkUrl; },
       read: config => ({ ...config, artworkUrl: editor.elements.artworkUrl.value.trim() }),
     },
+    'metacrilatos-v1': { fill: () => {}, read: config => ({ ...config }) },
   });
   let state, selectedId, busy = false;
   const base = () => String(window.CRONOX_API?.API_BASE || '').replace(/\/$/, '');
@@ -108,6 +109,7 @@
     preview.removeAttribute('src');
     if (editor.hidden) throw new Error('Configuración del diseño no disponible');
     editor.elements.name.value = design.name;
+    editor.elements.name.readOnly = design.renderer === 'metacrilatos-v1';
     editor.querySelectorAll('[data-config-renderer]').forEach(panel => {
       panel.hidden = panel.dataset.configRenderer !== design.renderer;
       panel.querySelectorAll('input, select, textarea').forEach(field => { field.disabled = panel.hidden; });

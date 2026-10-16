@@ -4,13 +4,17 @@
     "test:cart:browser": "playwright test --config playwright.cart.config.cjs",
     "admin:typecheck": "tsc --noEmit -p tsconfig.admin.json",
     "admin:map": "node cronox-backend/scripts/build-admin-map.cjs",
-    "admin:build": "npm run admin:map && vite build -c vite.admin.config.ts",
-    "admin:watch": "vite build -c vite.admin.config.ts --watch"
+    "admin:build": "npm run admin:map && npm run admin:qr-scanner && vite build -c vite.admin.config.ts",
+    "admin:watch": "vite build -c vite.admin.config.ts --watch",
+    "admin:qr-scanner": "vite build -c vite.qr-scanner.config.ts"
   },
   "devDependencies": {
     "@playwright/test": "^1.63.0",
     "@types/node": "^25.2.1",
     "typescript": "^5.9.3",
     "vite": "^7.3.1"
+  },
+  "dependencies": {
+    "zxing-wasm": "3.1.5"
   }
 }

@@ -8,7 +8,7 @@ import express from 'express';
 import type { CookieOptions } from 'express';
 import { join } from 'path';
 import { AppModule } from './app.module';
-import { createContentSecurityPolicy } from './common/config/content-security-policy';
+import { createContentSecurityPolicy, documentSecurityHeaders } from './common/config/content-security-policy';
 import { localReviewSafety } from './common/config/local-review-safety';
 import { localLoginDiagnostics } from './common/config/local-login-diagnostics';
 import {
@@ -60,14 +60,15 @@ async function bootstrap() {
     expressApp.set('trust proxy', trustedProxyHops);
   }
 
-  app.use((_req, res, next) => {
-    res.setHeader('Content-Security-Policy', contentSecurityPolicy);
+  app.use((req, res, next) => {
+    const documentPolicy = documentSecurityHeaders(contentSecurityPolicy, req.path);
+    res.setHeader('Content-Security-Policy', documentPolicy.contentSecurityPolicy);
     res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
     res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('X-Frame-Options', 'DENY');
     res.setHeader(
       'Permissions-Policy',
-      'camera=(), geolocation=(), microphone=()',
+      documentPolicy.permissionsPolicy,
     );
 
     if (isProduction) {

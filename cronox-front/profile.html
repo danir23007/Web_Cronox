@@ -62,6 +62,7 @@
     #profileMessage.is-error { border-color: #ff5f5f; color: #ffd9d9; }
     #profileMessage.is-success { border-color: #4ade80; color: #e6ffed; }
   </style>
+  <link rel="stylesheet" href="assets/metacrilatos-profile.css?v=4">
   <link rel="icon" type="image/png" href="/favicon.png?v=4">
   <link rel="shortcut icon" type="image/png" href="/favicon.png?v=4">
   <link rel="apple-touch-icon" href="/favicon.png?v=4">
@@ -191,6 +192,7 @@
         </div>
       </section>
 
+      <div data-metacrilatos-fit>
       <section class="profile-section" data-profile-section="accreditation" aria-label="Acreditación">
         <div class="profile-card account-section--accreditation">
           <section class="crx-accreditation-stage accreditation-stage" aria-label="Escenario de acreditación CRONOX">
@@ -277,11 +279,13 @@
             </div>
           </section>
         </div>
+        <aside class="metacrilatos-member" data-metacrilatos-member hidden></aside>
         <div class="profile-back-wrapper">
           <button type="button" class="profile-back-link" data-profile-back="store">Volver a la tienda</button>
         </div>
       </section>
 
+      </div>
       <section class="profile-section" data-profile-section="account" aria-labelledby="account-title">
         <div class="profile-grid">
           <div class="profile-account-stack">
@@ -499,8 +503,11 @@
   <script src="assets/favorites-toggle.js?v=3" defer></script>
   <script src="assets/user-identity.js?v=1" defer></script>
   <script src="assets/accreditation-layout.js?v=1" defer></script>
-  <script src="assets/accreditation-designs.js?v=1" defer></script>
-  <script src="assets/profile.js?v=25" defer></script>
+  <script src="assets/metacrilatos.js?v=3" defer></script>
+  <script src="assets/accreditation-designs.js?v=2" defer></script>
+  <script src="assets/metacrilatos-presentation.js?v=1" defer></script>
+  <script src="assets/profile.js?v=28" defer></script>
+  <script src="assets/metacrilatos-profile.js?v=2" defer></script>
 
   <style>
     /* Profile overrides */

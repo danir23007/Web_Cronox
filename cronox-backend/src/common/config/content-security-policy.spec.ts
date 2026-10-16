@@ -4,6 +4,7 @@ import { tmpdir } from 'os';
 import { join } from 'path';
 import {
   createContentSecurityPolicy,
+  documentSecurityHeaders,
   getInlineScriptHashes,
   normalizeInlineScriptForCsp,
 } from './content-security-policy';
@@ -53,5 +54,35 @@ describe('content security policy helpers', () => {
     expect(scriptSource).toBeDefined();
     expect(scriptSource).not.toContain("'unsafe-inline'");
     expect(scriptSource).toContain("'sha256-");
+  });
+
+  it('allows same-origin camera and WebAssembly only on the administrator document', () => {
+    const base = createContentSecurityPolicy(frontendRoot);
+    for (const path of ['/admin.html', '/admin.html?qr-event=example']) {
+      const policy = documentSecurityHeaders(base, path);
+      expect(policy.permissionsPolicy).toBe(
+        'camera=(self), geolocation=(), microphone=()',
+      );
+      expect(policy.contentSecurityPolicy).toContain(
+        "script-src 'self' 'wasm-unsafe-eval'",
+      );
+      expect(policy.contentSecurityPolicy).not.toContain("'unsafe-eval'");
+      expect(policy.contentSecurityPolicy).toContain("frame-ancestors 'none'");
+    }
+    for (const path of [
+      '/',
+      '/profile.html',
+      '/admin-login.html',
+      '/api/admin/qr-events',
+      '/api/admin/accreditations/metacrilatos/preview',
+      '/admin.html/other',
+      '/assets/qr-reader.js',
+    ]) {
+      const policy = documentSecurityHeaders(base, path);
+      expect(policy.permissionsPolicy).toBe(
+        'camera=(), geolocation=(), microphone=()',
+      );
+      expect(policy.contentSecurityPolicy).toBe(base);
+    }
   });
 });

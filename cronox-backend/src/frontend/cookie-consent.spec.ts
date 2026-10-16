@@ -252,6 +252,9 @@ describe('cookie consent frontend', () => {
       'admin-user.html',
       'admin-launch.html',
       'auth-modal.html',
+      // Isolated administrator sample document: no optional storage, account
+      // scripts or analytics run in this iframe. Its data route is guarded.
+      'metacrilatos-preview.html',
     ]);
     const publicPages = readdirSync(frontendRoot).filter(
       (file) => file.endsWith('.html') && !excluded.has(file),
@@ -268,6 +271,12 @@ describe('cookie consent frontend', () => {
     }
     expect(consentSource).toContain('if (!current) showBanner();');
     expect(consentSource).toContain('/assets/live-presence.js?v=2');
+  });
+
+  it('keeps the isolated accreditation sample free of consent and customer analytics scripts', () => {
+    const html = readFileSync(path.join(frontendRoot, 'metacrilatos-preview.html'), 'utf8');
+    expect(html).toContain('Datos ficticios');
+    expect(html).not.toMatch(/cookie-consent|customer-analytics|live-presence|assets\/profile\.js/);
   });
 
   it('keeps Stripe on checkout but does not reload it on the success page', () => {

@@ -23,6 +23,11 @@ const approvedImageChanges = new Set([
   'cronox-front/assets/CRONOX-preloader.webp',
   'cronox-front/assets/logo-topbar.webp',
   'cronox-front/assets/maps/spain-provinces.svg',
+  // Byte-exact extractions from the five approved METACRILATOS references;
+  // extract-assets.cjs --check verifies their content during release checks.
+  'cronox-front/assets/metacrilatos/eye.png',
+  'cronox-front/assets/metacrilatos/symbol.png',
+  'cronox-front/assets/metacrilatos/wordmark.png',
   'docs/original-assets/ui-media/cronox-front/assets/CRONOX-GIF.gif',
   'docs/original-assets/ui-media/cronox-front/assets/logo_banner.png',
 ]);
@@ -103,7 +108,9 @@ async function main() {
   assert.match(index, /class="footer-logo"/);
   assert.match(checkout, /src="assets\/CRONOX-preloader\.webp"/);
   assert.match(profile, /img\.src = 'assets\/CRONOX-preloader\.webp'/);
-  assert.match(profileHtml, /assets\/profile\.js\?v=24/);
+  const profileVersion = /assets\/profile\.js\?v=(\d+)/.exec(profileHtml);
+  assert.ok(profileVersion && Number(profileVersion[1]) >= 24,
+    'Profile must retain the media optimization cache version or a newer release');
   assert.match(profileHtml, /assets\/accreditation-layout\.js\?v=1/);
   assert.match(keyScreen, /src="assets\/CRONOX-GIF\.gif"/);
   assert.match(newsletter, /supabase\.co\/storage\/v1\/object\/public\/newsletter\/chains-newsletter\.jpg/);

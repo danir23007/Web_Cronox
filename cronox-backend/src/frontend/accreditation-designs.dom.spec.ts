@@ -156,7 +156,7 @@ describe('accreditation design selection', () => {
       const api = (win as unknown as { CRONOX_ACCREDITATION_DESIGNS: { loadActive(root: Element): Promise<void> } }).CRONOX_ACCREDITATION_DESIGNS;
       await api.loadActive(section); await api.loadActive(section);
       expect(fetch).toHaveBeenCalledTimes(2);
-      expect(fetch).toHaveBeenCalledWith('/api/accreditations/active', { cache: 'no-store' });
+      expect(fetch).toHaveBeenCalledWith('/api/accreditations/active', { cache: 'no-store', signal: expect.anything() });
       expect(section.querySelector('.accreditation-id')).toBe(identity);
       expect(identity.textContent).toBe('ID: EXISTING');
       fetch.mockResolvedValue({ ok: true, json: async () => ({ renderer: 'missing' }) });

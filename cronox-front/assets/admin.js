@@ -314,6 +314,7 @@
     keyScreen: ['ADMIN', 'SUPERADMIN'],
     newsletter: ['ADMIN', 'SUPERADMIN'],
     accreditations: ['ADMIN', 'SUPERADMIN'],
+    qrEvents: ['ADMIN', 'SUPERADMIN'],
     orders: ['ADMIN', 'SUPERADMIN'],
     promoCodes: ['ADMIN', 'SUPERADMIN'],
     auditLog: ['ADMIN', 'SUPERADMIN'],
@@ -336,6 +337,7 @@
     'section-key-screen': 'keyScreen',
     'section-newsletter': 'newsletter',
     'section-accreditations': 'accreditations',
+    'section-qr-events': 'qrEvents',
     'section-product-categories': 'products',
     'section-codes': 'promoCodes',
     'section-user': 'userDetail',
@@ -420,6 +422,7 @@
     setNavVisibility('section-key-screen', canAccess('keyScreen'));
     setNavVisibility('section-newsletter', canAccess('newsletter'));
     setNavVisibility('section-accreditations', canAccess('accreditations'));
+    setNavVisibility('section-qr-events', canAccess('qrEvents'));
     setNavVisibility('section-product-categories', canAccess('products'));
     setNavVisibility('section-codes', canAccess('promoCodes'));
     setUserTabVisibility('notes', canAccess('notes'));
@@ -981,6 +984,7 @@
     if (window.CRONOX_ADMIN_SHELL && !window.CRONOX_ADMIN_SHELL.canLeave(destination)) return false;
     const allowed = applySectionAccess(sectionId);
     window.CRONOX_BULK?.leave(sectionId);
+    if (sectionId !== 'section-qr-events') window.CRONOX_QR_EVENTS?.leave();
     document.querySelectorAll('.admin-section').forEach((section) => {
       section.hidden = section.id !== sectionId;
     });
@@ -1675,6 +1679,7 @@
     if (sectionId === 'section-key-screen') window.CRONOX_KEY_SCREEN?.load?.();
     if (sectionId === 'section-newsletter') window.CRONOX_NEWSLETTER_ADMIN?.load?.();
     if (sectionId === 'section-accreditations') window.CRONOX_ADMIN_ACCREDITATIONS?.load?.();
+    if (sectionId === 'section-qr-events') window.CRONOX_QR_EVENTS?.load?.();
     if (sectionId === 'section-footer') window.CRONOX_ADMIN_FOOTER?.load?.();
     if (sectionId === 'section-media') window.CRONOX_ADMIN_MEDIA?.load?.();
     if (sectionId === 'section-orders') {
@@ -4928,6 +4933,7 @@
     }
 
     logoutBtn?.addEventListener('click', async () => {
+      window.CRONOX_QR_EVENTS?.leave();
       try {
         await window.CRONOX_API?.logout?.();
         redirectToHome();

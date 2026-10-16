@@ -203,39 +203,28 @@ export class UsersService {
   }
 
   async ensurePublicMemberToken(userId: number): Promise<string> {
-    return this.prisma.$transaction(async (tx) => {
-      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${'cronox:user-identity:' + userId}))`;
-      const user = await tx.user.findUnique({
-        where: { id: userId },
-        select: { publicMemberToken: true },
-      });
-
-      if (!user) throw new NotFoundException('User not found');
-      if (user.publicMemberToken) return user.publicMemberToken;
-
-      for (let attempt = 0; attempt < 5; attempt += 1) {
-        const token = randomBytes(24).toString('base64url');
-
-        try {
+    // A unique collision aborts a PostgreSQL transaction. Retry a fresh one,
+    // retaining the per-user lock so concurrent first reads share one token.
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      try {
+        return await this.prisma.$transaction(async (tx) => {
+          await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${'cronox:user-identity:' + userId}))`;
+          const user = await tx.user.findUnique({ where: { id: userId }, select: { publicMemberToken: true } });
+          if (!user) throw new NotFoundException('User not found');
+          if (user.publicMemberToken) return user.publicMemberToken;
+          const token = randomBytes(24).toString('base64url');
           const updated = await tx.user.update({
             where: { id: userId },
             data: { publicMemberToken: token },
             select: { publicMemberToken: true },
           });
-
           return updated.publicMemberToken ?? token;
-        } catch (error) {
-          if (
-            error instanceof Prisma.PrismaClientKnownRequestError &&
-            error.code === 'P2002'
-          ) {
-            continue;
-          }
-          throw error;
-        }
+        });
+      } catch (error) {
+        if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') continue;
+        throw error;
       }
-
-      throw new Error('Could not allocate a unique public membership token');
-    });
+    }
+    throw new Error('Could not allocate a unique public membership token');
   }
 }

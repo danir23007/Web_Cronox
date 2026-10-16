@@ -26,6 +26,10 @@
   const accreditationStatItems = document.querySelector('[data-acc-stat="items"]');
   const accreditationStatProducts = document.querySelector('[data-acc-stat="products"]');
   const accreditationPrivilegesList = document.querySelector('[data-acc-privileges-list]');
+  const presentation = window.CRONOX_METACRILATOS_PRESENTATION;
+  const metacrilatosMember = presentation?.ensure(accreditationSection);
+  const metacrilatosHistory = metacrilatosMember?.querySelector('[data-meta-history]');
+  const metacrilatosRetry = metacrilatosMember?.querySelector('[data-meta-retry]');
   const getCircleUpgradeCta = () => document.querySelector('[data-circle4-cta]');
   const getCircleUpgradeBtn = () => document.querySelector('[data-circle4-request-btn]');
   const getCircleUpgradeStatusEl = () => document.querySelector('[data-circle4-status]');
@@ -33,6 +37,37 @@
 
   let favoritesLoaded = false;
   let accreditationQrLoaded = false;
+  let accreditationLoadSequence = 0;
+  let accreditationStatsSequence = 0;
+  const stopAccreditation = () => {
+    accreditationLoadSequence++;
+    resetMetacrilatosMember();
+    window.CRONOX_ACCREDITATION_DESIGNS?.destroy(accreditationSection);
+    setAccreditationLoading(false);
+  };
+  const accreditationContext = () => {
+    const sequence = accreditationLoadSequence;
+    const identity = window.CRONOX_USER?.identityUid ?? window.CRONOX_USER?.id;
+    return () => sequence === accreditationLoadSequence && identity === (window.CRONOX_USER?.identityUid ?? window.CRONOX_USER?.id);
+  };
+  const resetAccreditationIdentity = () => {
+    stopAccreditation();
+    accreditationQrLoaded = false;
+    accreditationStatsLoaded = false;
+    circleUpgradeStatusLoaded = false;
+    circleUpgradeStatusLoading = false;
+    circleUpgradeStatus = null;
+    lastCircleUpgradeRequestId = null;
+    window.CRONOX_ACCREDITATION_STATS = null;
+    window.CRONOX_PROMOTION_STATUS = null;
+    accreditationQr?.removeAttribute('src');
+    for (const field of [accreditationName, accreditationCode, accreditationCircle]) if (field) field.textContent = '';
+    accreditationSymbol?.replaceChildren();
+    if (accreditationBook) accreditationBook.hidden = true;
+  };
+  window.addEventListener('pagehide', stopAccreditation);
+  window.addEventListener('cronox:session-ended', resetAccreditationIdentity);
+  window.addEventListener('cronox:userChanged', resetAccreditationIdentity);
   let accreditationStatsLoaded = false;
   let globalLoader = null;
 
@@ -60,28 +95,7 @@
     IV: 4,
     V: 5,
   };
-  const ACCREDITATION_PRIVILEGES = {
-    1: ['Acreditación negra, miembro oficial de CRONOX. (sirve para eventos).'],
-    2: ['Acreditación negra', 'Participación sorteo mensual de 2 códigos de descuento acumulables.'],
-    3: ['Acreditación gris', 'Acceso anticipado en drops', 'Acceso a piezas especiales y exclusivas.'],
-    4: [
-      'Acreditación blanca',
-      'Acceso anticipado en drops',
-      'Acceso a piezas especiales y exclusivas',
-      '10% de descuento permanente',
-      'Acceso a entradas para eventos privados',
-      'Posibilidad de salir en nuestra galería.',
-    ],
-    5: [
-      'Acreditación roja',
-      'Acceso anticipado en drops',
-      'Acceso a piezas especiales y exclusivas',
-      '25% de descuento permanente',
-      'Entradas gratis a eventos privados',
-      'Posibilidad de recibir piezas especiales o regalos',
-      'Posibilidad de salir en nuestra galería',
-    ],
-  };
+  const ACCREDITATION_PRIVILEGES = presentation?.privileges || {};
   const IS_DEV_ENV =
     (typeof process !== 'undefined' && process?.env?.NODE_ENV === 'development') ||
     (typeof window !== 'undefined' && window?.location?.hostname === 'localhost');
@@ -483,8 +497,8 @@
     if (accreditationCode) accreditationCode.textContent = `ID: ${window.CRONOX_USER_IDENTITY.format(user)}`;
   };
 
-  const renderAccreditationPrivileges = (circleLevel) => {
-    if (!accreditationPrivilegesList) return;
+  const renderAccreditationPrivileges = (circleLevel, list = accreditationPrivilegesList) => {
+    if (!list) return;
     const normalized = getNormalizedCircleLevel(circleLevel, NaN);
     const privileges =
       Number.isInteger(normalized) && normalized >= 1 && normalized <= 5
@@ -492,28 +506,53 @@
         : null;
     const items = Array.isArray(privileges) && privileges.length ? privileges : ['Privilegios no disponibles.'];
 
-    accreditationPrivilegesList.innerHTML = '';
+    list.replaceChildren();
     items.forEach((text) => {
       const li = document.createElement('li');
       li.className = 'accreditation-privileges__item';
       li.textContent = text;
-      accreditationPrivilegesList.appendChild(li);
+      list.appendChild(li);
     });
+  };
+
+  // Both presentations consume the book's complete, authenticated stats response.
+  const getAccreditationCounts = (stats) => ({
+    orders: typeof stats?.pedidosRealizados === 'number' ? stats.pedidosRealizados : stats?.ordersCount,
+    items: typeof stats?.articulosAdquiridos === 'number' ? stats.articulosAdquiridos : stats?.itemsNetCount,
+    products: typeof stats?.productosDiferentes === 'number' ? stats.productosDiferentes : stats?.distinctProductsCount,
+  });
+
+  const isMetacrilatos = () => accreditationSection?.dataset.accreditationRenderer === 'metacrilatos-v1';
+
+  const setMetacrilatosHistory = (state, counts) => presentation?.history(metacrilatosMember, state, counts);
+
+  const resetMetacrilatosMember = () => {
+    accreditationStatsSequence++;
+    if (!metacrilatosMember) return;
+    metacrilatosMember.hidden = true;
+    delete metacrilatosMember.dataset.circleLevel;
+    metacrilatosMember.querySelector('[data-meta-circle]').textContent = '';
+    metacrilatosMember.querySelector('[data-meta-privileges]').replaceChildren();
+    metacrilatosMember.querySelectorAll('[data-meta-circle-marker]').forEach(marker => marker.removeAttribute('aria-current'));
+    setMetacrilatosHistory('loading');
+  };
+
+  const showMetacrilatosMember = () => {
+    if (!metacrilatosMember) return;
+    // This is the validated /me/accreditation circle used by the mounted renderer,
+    // never a cached profile or a possibly older statistics response.
+    const circle = Number(accreditationSection.querySelector('.metacrilatos-host')?.dataset.crxLevel);
+    if (!Number.isInteger(circle) || circle < 1 || circle > 5) return;
+    presentation.circle(metacrilatosMember, circle);
+    setMetacrilatosHistory('loading');
+    metacrilatosMember.hidden = false;
   };
 
   const fillAccreditationStats = (stats) => {
     const circleLevelRaw = stats?.circleLevel ?? window.CRONOX_USER?.circleLevel;
     const circleLevel = getNormalizedCircleLevel(circleLevelRaw, 1);
     const createdAt = stats?.createdAt ?? window.CRONOX_USER?.createdAt;
-    const ordersCount = typeof stats?.pedidosRealizados === 'number' ? stats.pedidosRealizados : stats?.ordersCount;
-    const itemsNetCount =
-      typeof stats?.articulosAdquiridos === 'number'
-        ? stats.articulosAdquiridos
-        : stats?.itemsNetCount;
-    const distinctProductsCount =
-      typeof stats?.productosDiferentes === 'number'
-        ? stats.productosDiferentes
-        : stats?.distinctProductsCount;
+    const { orders: ordersCount, items: itemsNetCount, products: distinctProductsCount } = getAccreditationCounts(stats);
 
     if (accreditationStatCircle) {
       const normalized = applyCircleLevel(circleLevel);
@@ -602,7 +641,7 @@
       accreditationSection.classList.toggle('is-loading', !!isLoading);
     }
     if (accreditationBook) {
-      accreditationBook.hidden = !!isLoading;
+      accreditationBook.hidden = !!isLoading || accreditationSection?.dataset.accreditationRenderer === 'metacrilatos-v1';
     }
     setGlobalLoaderVisible(!!isLoading);
   };
@@ -636,22 +675,38 @@
   };
 
   const ensureAccreditationQr = async () => {
+    const current = accreditationContext();
     if (!accreditationQr) return false;
     if (!accreditationQrLoaded || accreditationQr.naturalWidth === 0) {
       const base = typeof window.CRONOX_API_BASE === 'string' ? window.CRONOX_API_BASE : '';
       accreditationQr.src = `${base}/api/membership/me/qr`;
     }
     let loaded = await waitForImageLoad(accreditationQr);
+    if (!current()) return false;
     if (!loaded) loaded = await retryImage(accreditationQr);
+    if (!current()) return false;
     accreditationQrLoaded = loaded;
     return loaded;
   };
 
   const loadAccreditationData = async () => {
+    const attempt = ++accreditationLoadSequence;
+    resetMetacrilatosMember();
     setAccreditationLoading(true);
     try {
-      await window.CRONOX_ACCREDITATION_DESIGNS.loadActive(accreditationSection);
+      const design = await window.CRONOX_ACCREDITATION_DESIGNS.loadActive(accreditationSection);
+      if (attempt !== accreditationLoadSequence || !design) return;
+      if (design.renderer === 'metacrilatos-v1') {
+        showMetacrilatosMember();
+        // The existing instance becomes visible immediately; history can load or
+        // retry independently without touching its orientation or motion timers.
+        setAccreditationLoading(false);
+        await Promise.all([loadAccreditationStats({ force: true }), loadCircleUpgradeStatus({ skipLoader: true })]);
+        return;
+      }
     } catch (error) {
+      if (attempt !== accreditationLoadSequence) return;
+      window.CRONOX_ACCREDITATION_DESIGNS.destroy(accreditationSection);
       setAccreditationLoading(false);
       if (accreditationBook) accreditationBook.hidden = true;
       showProfileMessage(error.message, 'error');
@@ -679,7 +734,7 @@
         loadCircleUpgradeStatus({ skipLoader: true }),
       ]);
     } finally {
-      setAccreditationLoading(false);
+      if (attempt === accreditationLoadSequence) setAccreditationLoading(false);
     }
   };
 
@@ -858,6 +913,7 @@
   };
 
   const loadCircleUpgradeStatus = async ({ skipLoader = false } = {}) => {
+    const current = accreditationContext();
     if (!api.getCircleUpgradeStatus) {
       circleUpgradeStatusLoading = false;
       renderCircleUpgradeUi(circleUpgradeStatus);
@@ -868,10 +924,12 @@
       renderCircleUpgradeUi(circleUpgradeStatus);
       if (!skipLoader) setAccreditationLoading(true);
       const status = await api.getCircleUpgradeStatus();
+      if (!current()) return null;
       circleUpgradeStatusLoaded = true;
       setCircleUpgradeState(status);
       return status;
     } catch (err) {
+      if (!current()) return null;
       if (handleAuthRedirect(err)) return null;
       console.warn('[PROFILE] No se pudo cargar el estado de ascenso 3→4', err);
       circleUpgradeStatusLoaded = false;
@@ -891,9 +949,11 @@
       showProfileMessage('No se pudo cargar el estado de tu solicitud de Círculo 4.', 'error');
       return null;
     } finally {
-      circleUpgradeStatusLoading = false;
-      renderCircleUpgradeUi(circleUpgradeStatus);
-      if (!skipLoader) setAccreditationLoading(false);
+      if (current()) {
+        circleUpgradeStatusLoading = false;
+        renderCircleUpgradeUi(circleUpgradeStatus);
+        if (!skipLoader) setAccreditationLoading(false);
+      }
     }
   };
 
@@ -991,16 +1051,22 @@
     markCircleUpgradeModalSeen(requestId);
   };
 
-  const loadAccreditationStats = async () => {
+  const loadAccreditationStats = async ({ force = false } = {}) => {
+    const context = accreditationContext();
+    const attempt = ++accreditationStatsSequence;
+    const current = () => context() && attempt === accreditationStatsSequence;
+    const memberHistory = isMetacrilatos();
+    if (memberHistory) setMetacrilatosHistory('loading');
     if (!api.getAccreditationStats) {
       const normalizedCircle = getNormalizedCircleLevel(window.CRONOX_USER?.circleLevel, window.CRONOX_USER?.circleLevel);
       fillAccreditationStats({ circleLevel: normalizedCircle });
       updatePromotionUi({ circleLevel: normalizedCircle });
       renderCircleUpgradeUi(circleUpgradeStatus || { circleLevel: normalizedCircle });
+      if (memberHistory) setMetacrilatosHistory('error');
       return;
     }
 
-    if (accreditationStatsLoaded && window.CRONOX_ACCREDITATION_STATS) {
+    if (!force && !memberHistory && accreditationStatsLoaded && window.CRONOX_ACCREDITATION_STATS) {
       const normalizedCircle = getNormalizedCircleLevel(
         window.CRONOX_ACCREDITATION_STATS?.circleLevel ?? window.CRONOX_USER?.circleLevel,
         window.CRONOX_USER?.circleLevel,
@@ -1017,6 +1083,14 @@
 
     try {
       const stats = await api.getAccreditationStats();
+      if (!current()) return;
+      if (memberHistory) {
+        const counts = getAccreditationCounts(stats);
+        if (!Object.values(counts).every(value => Number.isSafeInteger(value) && value >= 0)) {
+          throw new Error('Respuesta de historial incompleta');
+        }
+        setMetacrilatosHistory('ready', counts);
+      }
       window.CRONOX_ACCREDITATION_STATS = stats;
       accreditationStatsLoaded = true;
       const normalizedStatsCircle = getNormalizedCircleLevel(stats?.circleLevel, stats?.circleLevel);
@@ -1031,10 +1105,12 @@
       });
       renderCircleUpgradeUi(circleUpgradeStatus || { circleLevel: normalizedStatsCircle });
     } catch (err) {
+      if (!current()) return;
       if (handleAuthRedirect(err)) return;
       console.warn('[PROFILE] No se pudieron cargar las estadísticas de acreditación', err);
       accreditationStatsLoaded = false;
-      showProfileMessage('No se pudieron cargar tus datos de acreditación.', 'error');
+      if (memberHistory) setMetacrilatosHistory('error');
+      else showProfileMessage('No se pudieron cargar tus datos de acreditación.', 'error');
     }
   };
 
@@ -1356,6 +1432,7 @@
   };
 
   const handleLogout = async () => {
+    stopAccreditation();
     const forceHome = () => {
       if (typeof window.CRONOX_redirectHome === 'function') {
         window.CRONOX_redirectHome();
@@ -1410,6 +1487,10 @@
     const sections = Array.from(document.querySelectorAll('.profile-section'));
 
     const activate = async (target) => {
+      if (target !== 'accreditation') {
+        stopAccreditation();
+        setAccreditationLoading(false);
+      }
       tabs.forEach((tab) => tab.classList.toggle('is-active', tab.dataset.profileTab === target));
       sections.forEach((section) =>
         section.classList.toggle('is-active', section.dataset.profileSection === target)
@@ -1626,6 +1707,11 @@
     bindAddressForm();
     bindCircleUpgrade();
     bindCirclePromotion();
+    metacrilatosRetry?.addEventListener('click', () => {
+      if (isMetacrilatos() && !metacrilatosMember.hidden && metacrilatosHistory?.dataset.state === 'error') {
+        loadAccreditationStats({ force: true });
+      }
+    });
     bindTabs();
     bindBackLinks();
     loadProfile();

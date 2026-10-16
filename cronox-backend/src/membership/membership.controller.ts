@@ -1,4 +1,4 @@
-import { Controller, Get, Param, Res, UseGuards } from '@nestjs/common';
+import { Controller, Get, Header, Param, Res, UseGuards } from '@nestjs/common';
 import type { Response } from 'express';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
@@ -7,6 +7,13 @@ import { MembershipService } from './membership.service';
 @Controller('membership')
 export class MembershipController {
   constructor(private readonly membershipService: MembershipService) {}
+
+  @Get('me/accreditation')
+  @UseGuards(JwtAuthGuard)
+  @Header('Cache-Control', 'private, no-store')
+  getMyAccreditation(@CurrentUser('id') userId: number) {
+    return this.membershipService.getMyAccreditation(userId);
+  }
 
   @Get('me/qr')
   @UseGuards(JwtAuthGuard)

@@ -12,6 +12,23 @@ export interface DesignDefinition {
 // Only implemented, reviewed renderers belong here. Database rows alone cannot
 // enable arbitrary templates, scripts or unfinished designs.
 export const DESIGN_REGISTRY: Readonly<Record<string, DesignDefinition>> = Object.freeze({
+  metacrilatos: {
+    renderer: 'metacrilatos-v1',
+    validate(config) {
+      if (!config || typeof config !== 'object' || Array.isArray(config) ||
+        Object.keys(config).some(key => key !== 'version') || config.version !== 1) {
+        throw new BadRequestException('Configuración de METACRILATOS no válida');
+      }
+      return { version: 1 };
+    },
+    async checkResources() {
+      for (const resource of ['assets/metacrilatos.js', 'assets/metacrilatos.css',
+        'assets/metacrilatos/wordmark.png', 'assets/metacrilatos/symbol.png', 'assets/metacrilatos/eye.png']) {
+        try { if (!(await stat(join(__dirname, '../../../cronox-front', resource))).isFile()) throw new Error(); }
+        catch { throw new BadRequestException('Faltan recursos de METACRILATOS. La acreditación anterior se conserva.'); }
+      }
+    },
+  },
   original: {
     renderer: 'original-v1',
     async checkResources(config) {

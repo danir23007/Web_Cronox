@@ -80,6 +80,9 @@ jobs:
       - name: Reject private credentials and sandbox-only release content
         run: node .github/scripts/check-checkout-release-safety.cjs
 
+      - name: Verify approved accreditation references and extracted assets
+        run: node metacrilatos-codex/extract-assets.cjs --check
+
       - name: Verify Excel HTTP routes, filters, workbooks and artifacts
         run: |
           set -euo pipefail

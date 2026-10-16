@@ -57,3 +57,21 @@ export const createContentSecurityPolicy = (frontendRoot: string): string => {
     "frame-src 'self' https://js.stripe.com https://*.stripe.com",
   ].join('; ');
 };
+
+// Only the existing authenticated administrator document uses a camera and
+// the bundled QR WebAssembly decoder. This does not permit JavaScript eval.
+export function documentSecurityHeaders(
+  basePolicy: string,
+  requestPath: string,
+) {
+  const qrAdmin = requestPath.split('?')[0] === '/admin.html';
+  return {
+    contentSecurityPolicy: qrAdmin
+      ? basePolicy.replace(
+          "script-src 'self'",
+          "script-src 'self' 'wasm-unsafe-eval'",
+        )
+      : basePolicy,
+    permissionsPolicy: `camera=${qrAdmin ? '(self)' : '()'}, geolocation=(), microphone=()`,
+  };
+}

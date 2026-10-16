@@ -5,6 +5,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { UsersService } from '../users/users.service';
 import { HistorialService } from '../historial/historial.service';
 import { getPublicApiUrl } from '../common/config/environment';
+import { accreditationName, accreditationPayload, assertUsableAccreditation, renderAccreditationQr } from './accreditation-identity';
 
 @Injectable()
 export class MembershipService {
@@ -34,6 +35,21 @@ export class MembershipService {
     });
 
     return buffer;
+  }
+
+  async getMyAccreditation(userId: number) {
+    await this.circleService.ensureCircleByNetSpent(userId);
+    await this.circleService.maybePromoteRequestedCircle(userId);
+    const token = await this.usersService.ensurePublicMemberToken(userId);
+    const user = await this.prisma.user.findUnique({ where: { id: userId },
+      select: { identityUid: true, firstName: true, createdAt: true, circleLevel: true,
+        accountState: true, publicMemberToken: true } });
+    if (!user) throw new NotFoundException('User not found');
+    assertUsableAccreditation(user);
+    const qrPayload = accreditationPayload(user.publicMemberToken ?? token);
+    return { circleLevel: user.circleLevel, name: accreditationName(user.firstName),
+      createdAt: user.createdAt, visibleId: user.identityUid, qrPayload,
+      qrDataUrl: await renderAccreditationQr(qrPayload) };
   }
 
   async getMemberInfo(publicMemberToken: string) {

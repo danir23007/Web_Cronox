@@ -21,6 +21,37 @@ model AccreditationSelection {
   revision Int @default(0)
 }
 
+// Event history survives account deletion without retaining names or QR tokens.
+// Immutable UUID FKs avoid all renumbered administrative user numbers.
+model QrEventGroup {
+  id String @id @default(uuid()) @db.Uuid
+  name String @db.VarChar(160)
+  description String @default("") @db.VarChar(1000)
+  archived Boolean @default(false)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  createdByIdentityUid String? @db.Uuid
+  createdBy User? @relation("QrEventCreator", fields: [createdByIdentityUid], references: [identityUid], onDelete: SetNull, onUpdate: Cascade)
+  participants QrEventParticipant[]
+  @@index([createdAt, id])
+  @@index([createdByIdentityUid])
+}
+
+model QrEventParticipant {
+  id String @id @default(uuid()) @db.Uuid
+  groupId String @db.Uuid
+  group QrEventGroup @relation(fields: [groupId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  userIdentityUid String? @db.Uuid
+  user User? @relation("QrEventMember", fields: [userIdentityUid], references: [identityUid], onDelete: SetNull, onUpdate: Cascade)
+  circleAtRegistration Int
+  registeredAt DateTime @default(now()) @db.Timestamptz(3)
+  registeredByIdentityUid String? @db.Uuid
+  registeredBy User? @relation("QrEventRecorder", fields: [registeredByIdentityUid], references: [identityUid], onDelete: SetNull, onUpdate: Cascade)
+  @@unique([groupId, userIdentityUid])
+  @@index([groupId, registeredAt, id])
+  @@index([userIdentityUid])
+  @@index([registeredByIdentityUid])
+}
+
 // Private external sales ledger. No Order, customer, Stripe or shipping lifecycle.
 model SalePoint {
   id String @id @default(uuid())
@@ -942,6 +973,9 @@ model NewsletterSettings {
 }
 
 model User {
+  qrEventGroups QrEventGroup[] @relation("QrEventCreator")
+  qrEventParticipants QrEventParticipant[] @relation("QrEventMember")
+  qrEventRegistrations QrEventParticipant[] @relation("QrEventRecorder")
   identityUid               String                  @unique @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   emailChangeRequest EmailChangeRequest?
   dailyVisits         DailyVisitor[]
@@ -961,7 +995,7 @@ model User {
   firstName                 String?
   lastName                  String?
   memberCode                String?                 @unique
-  publicMemberToken         String?                 @unique
+  publicMemberToken         String?                 @unique @default(dbgenerated("replace((gen_random_uuid())::text, '-'::text, ''::text)"))
   sessionVersion            Int                     @default(0)
   authSessions              AuthSession[]
   newsletterSubscribed      Boolean                 @default(false)

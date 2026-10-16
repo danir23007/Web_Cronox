@@ -1,0 +1,42 @@
+{
+  "nombre": "METACRILATOS",
+  "fecha": "2026-10-16",
+  "tipo": "referencias exactas aprobadas, no integración de producción",
+  "disenos": [
+    {
+      "circulo": 1,
+      "archivo": "disenos/circulo-1.html",
+      "referencia_original": "cronox-acreditacion-circulo-i.html",
+      "sha256": "767601fd950b36ef12bf655c9ef1780ef2ab973b1f1557f9a0910e57c03b6ba7",
+      "bytes": 644241
+    },
+    {
+      "circulo": 2,
+      "archivo": "disenos/circulo-2.html",
+      "referencia_original": "cronox-acreditacion-circulo-ii-v2.html",
+      "sha256": "6a369a30a63aef7aa27cf04a23db5d788c5506319d18829fef6420135e8f867b",
+      "bytes": 644490
+    },
+    {
+      "circulo": 3,
+      "archivo": "disenos/circulo-3.html",
+      "referencia_original": "cronox-acreditacion-circulo-iii-v2.html",
+      "sha256": "70160c6e2a854a1a6f95c42a305441e0eb513b2b95cfc0ec56abc7b7d0085789",
+      "bytes": 644561
+    },
+    {
+      "circulo": 4,
+      "archivo": "disenos/circulo-4.html",
+      "referencia_original": "cronox-acreditacion-circulo-iv-v3.html",
+      "sha256": "2b51444198b62b540563e86fa8e9faa57508120914c365a7e997a77a5c625746",
+      "bytes": 644538
+    },
+    {
+      "circulo": 5,
+      "archivo": "disenos/circulo-5.html",
+      "referencia_original": "cronox-acreditacion-encapsulada-v4.html",
+      "sha256": "ac196eb669334905dedffd179256294959ffc446dae754526c7461b057117725",
+      "bytes": 643795
+    }
+  ]
+}

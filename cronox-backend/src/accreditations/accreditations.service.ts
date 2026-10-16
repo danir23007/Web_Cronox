@@ -67,6 +67,7 @@ export class AccreditationsService {
   async update(id: string, dto: UpdateAccreditationDto, actorId?: number) {
     const name = dto.name.trim();
     if (!name) throw new BadRequestException('El nombre es obligatorio');
+    if (id === 'metacrilatos' && name !== 'METACRILATOS') throw new BadRequestException('El nombre de esta familia es METACRILATOS');
     await this.prisma.$transaction(async tx => {
       await tx.$queryRaw`SELECT "id" FROM "AccreditationSelection" WHERE "id" = 'global' FOR UPDATE`;
       const current = await tx.accreditationDesign.findUnique({ where: { id } });

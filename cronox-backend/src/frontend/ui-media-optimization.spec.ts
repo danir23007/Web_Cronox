@@ -11,10 +11,13 @@ describe('static UI media optimization', () => {
       ' D node_modules/passport/sponsors/fusionauth.png',
       ' M cronox-backend/node_modules/swagger-ui-dist/favicon-16x16.png',
       ' M cronox-front/assets/logo-topbar.webp',
+      '?? cronox-front/assets/metacrilatos/wordmark.png',
       ' M cronox-front/assets/product-photo.jpg',
       '?? docs/unreviewed-banner.svg',
+      '?? cronox-front/assets/metacrilatos/unapproved.png',
     ].join('\n'))).toEqual([
       'cronox-front/assets/product-photo.jpg', 'docs/unreviewed-banner.svg',
+      'cronox-front/assets/metacrilatos/unapproved.png',
     ]);
   });
   it('passes the explicit media allowlist and runtime verification', () => {
