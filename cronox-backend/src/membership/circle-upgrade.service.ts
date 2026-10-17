@@ -57,6 +57,9 @@ export class CircleUpgradeService {
     id: string,
     options: { fromCircle?: number; toCircle?: number } = {},
   ) {
+    // Reviewers must re-read after the previous decision commits. Keep the
+    // request lock before social-identity and user changes in every review path.
+    await tx.$queryRaw`SELECT id FROM "CircleUpgradeRequest" WHERE id=${id} FOR UPDATE`;
     const request = await tx.circleUpgradeRequest.findUnique({
       where: { id },
       include: {
@@ -238,21 +241,9 @@ export class CircleUpgradeService {
   }
 
   async ensureAutoRequestForCircle2To3(userId: number, autoProcessAt?: Date, tx: Prisma.TransactionClient = this.prisma) {
-    const pending = await tx.circleUpgradeRequest.findFirst({
-      where: { userId, fromCircle: 2, toCircle: 3, status: CircleUpgradeRequestStatus.PENDING },
-      orderBy: { createdAt: 'desc' },
-    });
-
-    if (pending) {
-      if (autoProcessAt && !pending.autoProcessAt) {
-        await tx.circleUpgradeRequest.update({
-          where: { id: pending.id },
-          data: { autoProcessAt },
-        });
-      }
-      return pending;
-    }
-
+    // Called only after eligibility rejects an existing pending promotion, with
+    // the user locked. A new cycle gets a new record; never adopt a legacy row
+    // just because it has the same user or a nearby timestamp.
     const requestNumber = await this.getNextRequestNumber(userId, tx);
     const created = await tx.circleUpgradeRequest.create({
       data: {
@@ -531,6 +522,8 @@ export class CircleUpgradeService {
 
       const normalizedUsername = request.usernameNormalized || this.normalizeUsername(request.username);
 
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${JSON.stringify(['circle-review-social', request.socialNetwork, normalizedUsername])}, 0))`;
+
       const duplicateApproved = await tx.circleUpgradeRequest.findFirst({
         where: {
           id: { not: id },
@@ -560,12 +553,10 @@ export class CircleUpgradeService {
         },
       });
 
-      if (request.user.circleLevel < 4) {
-        await tx.user.update({
-          where: { id: request.userId },
-          data: { circleLevel: 4 },
-        });
-      }
+      await tx.user.updateMany({
+        where: { id: request.userId, circleLevel: { lt: 4 } },
+        data: { circleLevel: 4 },
+      });
 
       if (typeof adminId === 'number') {
         await tx.auditLog.create({

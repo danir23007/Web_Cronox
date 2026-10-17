@@ -22,6 +22,9 @@ const WEBHOOK_PATHS = new Set([
 const getPath = (request: Request): string =>
   (request.originalUrl ?? request.url ?? '')
     .split('?')[0]
+    // Express routing is case-insensitive; equivalent routes need identical
+    // protection, including the two exact signed-webhook exceptions.
+    .toLowerCase()
     .replace(/\/+$/, '') || '/';
 
 const getRefererOrigin = (referer: string | undefined): string | null => {

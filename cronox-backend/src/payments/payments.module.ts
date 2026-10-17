@@ -14,6 +14,7 @@ import { AnalyticsModule } from '../analytics/analytics.module';
 import { AccessAuthModule } from '../auth/access-auth.module';
 import { AuthModule } from '../auth/auth.module';
 import { LiveStatsModule } from '../live-stats/live-stats.module';
+import { StripeWebhookRecoveryService } from './stripe-webhook-recovery.service';
 
 @Module({
   imports: [OrdersModule, CartModule, EmailModule, AnalyticsModule, AccessAuthModule, AuthModule, LiveStatsModule],
@@ -23,6 +24,7 @@ import { LiveStatsModule } from '../live-stats/live-stats.module';
     BankTransferService,
     PaymentIntentFactory,
     CheckoutReservationCleanupService,
+    StripeWebhookRecoveryService,
   ],
   exports: [StripeService],
 })

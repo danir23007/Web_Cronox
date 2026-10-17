@@ -21,6 +21,11 @@ body { padding-top: calc(var(--topbar-h) + env(safe-area-inset-top)); }
   letter-spacing:.02em;
 }
 
+/* Before the first response the item area is empty. Keep its visible status
+   there without moving the summary; errors and later refreshes stay in flow. */
+.cart-status--initial-loading{position:relative;height:0;padding:0;z-index:1;}
+.cart-status--initial-loading > p{position:absolute;top:8px;left:0;margin:0;}
+
 /* Grid del carrito: 2 columnas en desktop; 1 columna en móvil */
 .cart-grid{
   display:grid;

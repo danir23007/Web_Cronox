@@ -58,9 +58,22 @@ async function fixture(page, count = 2) {
       data = { user: { id: 1, email: 'fixture@example.test', role: 'USER' } };
     }
     else if (url.pathname === '/api/auth/logout') { state.signedIn = false; data = { ok: true }; }
+    else if (url.pathname === '/api/auth/register' && state.registerChallenge) {
+      state.registrations = (state.registrations || 0) + 1;
+      return route.fulfill({status: 201, json: {verificationRequired: true, message: 'Comprueba tu correo para verificar la cuenta y establecer tu contraseña.'}});
+    }
     else if (url.pathname === '/api/products') data = { items: products, meta: { total: products.length } };
     else if (url.pathname.startsWith('/api/products/')) data = products.find(p => url.pathname.endsWith(p.slug)) || products[0];
     else if (url.pathname === '/api/favorites') data = [];
+    else if (url.pathname === '/api/checkout/summary') {
+      const cart = totals(state.cart);
+      const shippingMethods = [
+        { id: 1, code: 'STANDARD', label: 'Envío estándar', priceCents: 490, amountCents: cart.subtotal >= 6500 ? 0 : 490 },
+        { id: 2, code: 'EXPRESS', label: 'Envío express', priceCents: 790, amountCents: 790 },
+      ];
+      const selectedShippingMethod = shippingMethods.find(method => method.code === url.searchParams.get('shippingMethod')) || shippingMethods[0];
+      data = {cart, shippingMethods, selectedShippingMethod, totals: {subtotalCents: cart.subtotal, shippingCents: selectedShippingMethod.amountCents, discountCents: 0, totalCents: cart.subtotal + selectedShippingMethod.amountCents}};
+    }
     else if (url.pathname.startsWith('/api/cart')) {
       if (request.method() === 'GET') {
         state.reads++;
@@ -101,6 +114,22 @@ async function open(page) {
   await expect(page.locator('#cart-items-container .cart-line').first()).toBeVisible();
   await page.waitForTimeout(350); // Drawer's CSS transition only.
 }
+
+test('existing-account registration waits for mailbox proof without losing the anonymous basket', async ({ page }) => {
+  const state = await fixture(page, 1);
+  state.registerChallenge = true;
+  await page.goto('/');
+  await page.waitForFunction(() => typeof window.CRONOX_openAuthModal === 'function');
+  await page.evaluate(() => window.CRONOX_openAuthModal('register'));
+  for (const [id, value] of Object.entries({authRegisterFirstName:'Persona',authRegisterLastName:'Ficticia',authRegisterEmail:'fixture@example.test',authRegisterPassword:'ValidPassword1'})) await page.locator('#' + id).fill(value);
+  await page.locator('#authRegisterForm button[type="submit"]').click();
+  await expect(page.locator('#authMessage')).toContainText('Comprueba tu correo');
+  await expect(page.locator('#authOverlay')).toHaveClass(/is-open/);
+  expect(await page.evaluate(() => ({state: window.CRONOX_AUTH_STATE, user: Boolean(window.CRONOX_USER)}))).toEqual({state:'anonymous',user:false});
+  await expect(page.locator('.cart-count').first()).toHaveText('1');
+  expect(state.registrations).toBe(1);
+  expect(state.writes).toBe(0);
+});
 
 test('large mobile basket keeps its scroll and reaches content above the fixed checkout', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 700 });

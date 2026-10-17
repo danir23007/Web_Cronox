@@ -6,7 +6,6 @@ import { getNextSequentialMemberCode } from './member-code.util';
 import { normalizeEmail } from '../common/email';
 import { ensureAccountWelcome } from './account-welcome';
 import { validateAccountName } from '../common/account-name-policy';
-import { canCompletePublicRegistration } from './account-state';
 
 export type AuthUser = Omit<User, 'password'> & { hasPassword: boolean };
 export type AuthUserWithPassword = User;
@@ -52,12 +51,7 @@ export class UsersService {
       // Opt-in may have created a passwordless account after register's initial read.
       const existing = await tx.user.findFirst({ where: { email: { equals: normalizeEmail(data.email), mode: 'insensitive' } } });
       if (existing) {
-        if (!canCompletePublicRegistration(existing)) throw new ConflictException('El email ya esta registrado');
-        const claimed = await tx.user.updateMany({ where: { id: existing.id, accountState: UserAccountState.ACTIVE,
-          password: null, registrationClaimable: true, role: { in: [Role.USER, Role.FRIEND] } }, data: { password: data.password, name: data.name,
-          firstName: data.firstName, lastName: data.lastName, registrationClaimable: false } });
-        if (claimed.count !== 1) throw new ConflictException('El email ya esta registrado');
-        return ensureAccountWelcome(tx, existing.id);
+        throw new ConflictException('El email ya esta registrado');
       }
       const { memberCode, ...userData } = data;
       const ensuredCode = memberCode ?? (await getNextSequentialMemberCode(tx));
@@ -167,38 +161,6 @@ export class UsersService {
       });
 
       return updated.memberCode ?? newCode;
-    });
-  }
-
-  async completePasswordlessRegistration(
-    id: number,
-    data: {
-      password: string;
-      name?: string;
-      firstName: string;
-      lastName: string;
-    },
-  ) {
-    validateAccountName(data.firstName, 'firstName');
-    validateAccountName(data.lastName, 'lastName');
-    return this.prisma.$transaction(async (tx) => {
-      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${'cronox:user-identity:' + id}))`;
-      const existing = await tx.user.findUnique({ where: { id } });
-      if (!existing) return null;
-      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${'newsletter:' + normalizeEmail(existing.email)}))`;
-      const memberCode = existing.memberCode ?? await getNextSequentialMemberCode(tx);
-      const updated = await tx.user.updateMany({
-        where: {
-          id,
-          accountState: UserAccountState.ACTIVE,
-          registrationClaimable: true,
-          role: { in: [Role.USER, Role.FRIEND] },
-          password: null,
-        },
-        data: { password: data.password, name: data.name, firstName: data.firstName, lastName: data.lastName, memberCode, registrationClaimable: false },
-      });
-      if (updated.count !== 1) return null;
-      return ensureAccountWelcome(tx, id);
     });
   }
 

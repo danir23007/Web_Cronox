@@ -4,6 +4,7 @@ import { join } from 'path';
 import { createHash } from 'crypto';
 import type { PrismaService } from '../../prisma/prisma.service';
 import { Prisma } from '@prisma/client';
+import { renderCartShipping } from './cart-shipping';
 import { sizeOrder, variantSizeLabel } from '../../products/product-size-system';
 import type { ImageVariants } from '../../images/image-presets';
 import {
@@ -87,7 +88,7 @@ const productSelect = {
   images: {
     where: { isActive: true },
     orderBy: [{ isPrimary: 'desc' }, { sortOrder: 'asc' }, { id: 'asc' }],
-    select: { url: true, alt: true, variants: true, width: true, height: true },
+    select: { url: true, alt: true, variants: true, width: true, height: true, galleryZoom: true },
   },
   variants: {
     where: { isActive: true },
@@ -373,6 +374,7 @@ ${schemaText ? `<script id="cronox-seo" type="application/ld+json">${schemaText}
 export function createSeoPages(
   frontendRoot: string,
   catalog: SeoCatalog,
+  shipping?: () => Promise<import('../../shipping-methods/shipping-methods.service').ShippingMethodOption[]>,
 ): RequestHandler {
   const templates = new Map<string, string>();
   const template = (file: string) => {
@@ -390,6 +392,16 @@ export function createSeoPages(
       return res.redirect(308, `${path}${query.size ? `?${query}` : ''}`);
     try {
       let html = template(file);
+      if (file === 'cart.html' && shipping) {
+        try {
+          html = renderCartShipping(html, await shipping());
+        } catch {
+          // Keep the cart shell available during a transient configuration read
+          // failure. Its authorized quote provides explicit error/retry UI.
+          // Never substitute seed prices or invent unavailable shipping rows.
+          console.warn('[CRONOX] Cart shipping configuration unavailable; awaiting client quote.');
+        }
+      }
       let status = 200;
       const canonical = absolute(canonicalPathForRequest(path));
       const details = PUBLIC_METADATA[canonicalPathForRequest(path)];
@@ -443,12 +455,24 @@ export function createSeoPages(
       if (path === '/sobre-cronox' || path === '/' || path === '/tienda')
         metadata.image = LOGO_URL;
       if (path === '/' || path === '/tienda') {
-        // Real links in initial HTML, progressively replaced by the existing card renderer.
+        // Match category-page.js before the preload scanner sees the hidden
+        // home hero. The gallery and catalogue keep their existing markup.
+        const categorySlug = (query.get('categorySlug') || '').trim().toLowerCase();
+        if (path === '/tienda' || (categorySlug && categorySlug.length <= 140 && /^[a-z0-9#-]+$/.test(categorySlug))) {
+          html = html.replace('<html lang="es">', '<html lang="es" class="category-page">')
+            .replace(/<img\b[^>]*\bdata-media-placement="home\.hero\.video"[^>]*>/i,
+              (tag) => tag.replace(/\s(?:src|srcset|fetchpriority)="[^"]*"/gi, ''));
+        }
+        // Keep real catalogue links crawlable. On the shop, use the same media
+        // frame and information row as the client cards so hydration does not
+        // push the gallery/footer down. No speculative products or image requests.
         if (!filtered) {
           const links = await catalog.links();
           html = html.replace(
             '<div id="productsGrid" class="products-grid"></div>',
-            `<div id="productsGrid" class="products-grid">${links.map((p) => `<a href="${escapeHtml(productPath(p.slug))}">${escapeHtml(p.name)}</a>`).join('\n')}</div>`,
+            `<div id="productsGrid" class="products-grid">${links.map((p) => path === '/tienda'
+              ? `<a class="product-card" href="${escapeHtml(productPath(p.slug))}"><div class="product-media" aria-hidden="true"></div><div class="product-card__info"><h3 class="product-name">${escapeHtml(p.name)}</h3></div></a>`
+              : `<a href="${escapeHtml(productPath(p.slug))}">${escapeHtml(p.name)}</a>`).join('\n')}</div>`,
           );
         }
       }
@@ -531,19 +555,29 @@ export function createSeoPages(
               }).join('')}</div>`,
             );
           if (metadata.image) {
-            // Reuse the stored PDP preset selected by responsive-images.js.
-            // Starting the original multi-MB PNG here would cause a second
-            // request when the browser paints the existing optimized gallery.
+            // Match responsive-images.js so the initial HTML and hydrated
+            // gallery choose the same derivative, including saved crop zoom.
             const primary = product.images[0];
             const variants = primary?.variants as ImageVariants | null;
-            const pdp = variants?.pdp;
-            const source = imageUrl(pdp?.url) || metadata.image;
-            const width = Number(imageUrl(pdp?.url) ? pdp?.width : primary?.width);
-            const height = Number(imageUrl(pdp?.url) ? pdp?.height : primary?.height);
+            const candidates = ['card', 'quick', 'pdp'].map((role) => {
+              const variant = variants?.[role];
+              const url = imageUrl(variant?.url);
+              return url ? { url, width: Number(variant?.width), height: Number(variant?.height) } : null;
+            }).filter((candidate) => candidate !== null);
+            const preferred = candidates[candidates.length - 1];
+            const source = preferred?.url || metadata.image;
+            const width = Number(preferred?.width || primary?.width);
+            const height = Number(preferred?.height || primary?.height);
             const dimensions = Number.isSafeInteger(width) && width > 0 && Number.isSafeInteger(height) && height > 0
               ? ` width="${width}" height="${height}"` : '';
-            const responsive = imageUrl(pdp?.url) && Number.isSafeInteger(width) && width > 0
-              ? ` srcset="${escapeHtml(source)} ${width}w" sizes="(max-width: 900px) 100vw, 62vw"` : '';
+            const responsiveCandidates = [...new Map(candidates
+              .filter((candidate) => Number.isSafeInteger(candidate.width) && candidate.width > 0)
+              .map((candidate) => [candidate.width, candidate])).values()]
+              .sort((left, right) => left.width - right.width);
+            const zoom = Math.min(3, Math.max(1, Number(primary?.galleryZoom) || 1));
+            const sizes = `(max-width: 900px) ${100 * zoom}vw, ${62 * zoom}vw`;
+            const responsive = responsiveCandidates.length
+              ? ` srcset="${escapeHtml(responsiveCandidates.map((candidate) => `${candidate.url} ${candidate.width}w`).join(', '))}" sizes="${sizes}"` : '';
             html = html
               .replace(
                 'id="pImage"',

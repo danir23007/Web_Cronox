@@ -12,7 +12,8 @@ describe('responsive storefront image delivery', () => {
     const source = read('assets/responsive-images.js');
     expect(source).toContain('card: { roles: ["card"]');
     expect(source).toContain('quick: { roles: ["quick"]');
-    expect(source).toContain('pdp: { roles: ["pdp"]');
+    expect(source).toContain('pdp: { roles: ["card", "quick", "pdp"]');
+    expect(source).toContain('pdpZoom: { roles: ["pdp"]');
     expect(source).toContain('small: { roles: ["small"]');
     expect(source).toContain('galleryGrid: { roles: ["grid"]');
     expect(source).toContain('galleryLarge: { roles: ["large"]');
@@ -61,6 +62,97 @@ describe('responsive storefront image delivery', () => {
 
     expect(observer.takeRecords()).toEqual([]);
     observer.disconnect();
+    dom.window.close();
+  });
+
+  it('keeps gallery slides lazy until selected and preserves zoom while its detailed image loads', async () => {
+    const dom = new JSDOM(`
+      <div id="pMedia"><div id="pMediaViewport"></div>
+        <button id="pMediaPrev"></button><button id="pMediaNext"></button></div>
+      <div id="pThumbs"></div>`, {
+      url: 'https://cronox.test/producto/core', runScripts: 'outside-only', pretendToBeVisual: true,
+    });
+    const record = (name: string) => ({
+      url: `https://storage.test/${name}.png`,
+      variants: Object.fromEntries([
+        ['card', 975, 1300], ['quick', 1350, 1800], ['pdp', 2550, 3400],
+      ].map(([role, width, height]) => [role, { url: `https://storage.test/${name}-${role}.webp`, width, height }])),
+    });
+    Object.assign(dom.window, {
+      scrollTo: () => {},
+      matchMedia: (query: string) => ({ matches: query === '(pointer: fine)', addEventListener() {} }),
+      CRONOX_SECURITY: { productImageUrl: (value: string) => value },
+      CRONOX_PRODUCTS: [{ id: 'core', backendId: 1, slug: 'core', name: 'Core', images: [record('front'), record('back')] }],
+    });
+    dom.window.eval(read('assets/responsive-images.js'));
+    dom.window.eval(read('assets/product-page.js'));
+    await new Promise(resolve => setTimeout(resolve, 0));
+    const document = dom.window.document;
+    const images = [...document.querySelectorAll<HTMLImageElement>('.pdp__media-img')];
+    expect(images).toHaveLength(2);
+    expect(images.map(image => image.loading)).toEqual(['eager', 'lazy']);
+    expect(images[0].srcset).toContain('front-card.webp 975w');
+    expect(images[0].srcset).toContain('front-quick.webp 1350w');
+    expect(images[0].srcset).toContain('front-pdp.webp 2550w');
+    document.getElementById('pMediaNext')!.click();
+    expect(images[1].loading).toBe('eager');
+    expect(images[1].hidden).toBe(false);
+    expect(images[0].hidden).toBe(true);
+    document.getElementById('pMedia')!.click();
+    expect(images[1].srcset).toBe('https://storage.test/back-pdp.webp 2550w');
+    expect(images[1].style.transform).toBe('scale(2)');
+    const origin = images[1].style.transformOrigin;
+    images[1].dispatchEvent(new dom.window.Event('load'));
+    expect(images[1].style.transform).toBe('scale(2)');
+    expect(images[1].style.transformOrigin).toBe(origin);
+    document.getElementById('pMedia')!.click();
+    expect(images[1].style.transform).toBe('scale(4)');
+    document.getElementById('pMedia')!.dispatchEvent(new dom.window.MouseEvent('mouseleave'));
+    expect(images[1].style.transform).toBe('scale(1)');
+    expect(images[1].srcset).toBe('https://storage.test/back-pdp.webp 2550w');
+    images[1].dispatchEvent(new dom.window.Event('error'));
+    expect(images[1].src).toBe('https://storage.test/back.png');
+    document.getElementById('pMedia')!.click();
+    expect(images[1].srcset).toBe('https://storage.test/back-pdp.webp 2550w');
+    images[1].dispatchEvent(new dom.window.Event('error'));
+    expect(images[1].src).toBe('https://storage.test/back.png');
+    expect(images[1].srcset).toBe('');
+    images[1].dispatchEvent(new dom.window.Event('error'));
+    expect(images[1].src).toContain('product-image-unavailable.svg');
+    const placeholder = images[1].src;
+    images[1].dispatchEvent(new dom.window.Event('error'));
+    expect(images[1].src).toBe(placeholder);
+    expect(images[1].srcset).toBe('');
+    dom.window.close();
+  });
+
+  it('emits one candidate per width when small originals produce equal-sized derivatives', () => {
+    const dom = new JSDOM('<img>', { url: 'https://cronox.test/', runScripts: 'outside-only' });
+    Object.assign(dom.window, { CRONOX_SECURITY: { productImageUrl: (value: string) => value } });
+    dom.window.eval(read('assets/responsive-images.js'));
+    dom.window.eval(`CRONOX_IMAGES.apply(document.querySelector('img'), {
+      url: '/original.png', galleryZoom: 2, variants: {
+        card: { url: '/card.webp', width: 600, height: 800 },
+        quick: { url: '/quick.webp', width: 600, height: 800 },
+        pdp: { url: '/pdp.webp', width: 600, height: 800 }
+      }
+    }, 'pdp')`);
+    expect(dom.window.document.querySelector('img')!.srcset).toBe('/pdp.webp 600w');
+    expect(dom.window.document.querySelector('img')!.sizes).toBe('(max-width: 900px) 200vw, 124vw');
+    dom.window.close();
+  });
+
+  it('does not initialize hidden catalogue hero media, observers or requests', () => {
+    const dom = new JSDOM('<html class="category-page"><body><section id="hero"><img data-media-placement="home.hero.video"></section></body></html>', {
+      url: 'https://cronox.test/tienda', runScripts: 'outside-only',
+    });
+    const fetch = jest.fn();
+    const ResizeObserver = jest.fn();
+    Object.assign(dom.window, { fetch, ResizeObserver });
+    dom.window.eval(read('assets/media-framing.js'));
+    expect(fetch).not.toHaveBeenCalled();
+    expect(ResizeObserver).not.toHaveBeenCalled();
+    expect(dom.window.document.querySelector('#hero img')!.hasAttribute('src')).toBe(false);
     dom.window.close();
   });
 

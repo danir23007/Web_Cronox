@@ -143,6 +143,7 @@ describe('OrdersService checkout reservations', () => {
     prisma = {
       product: { findMany: jest.fn().mockResolvedValue([{ id: 7, name: 'Camiseta', imageUrl: null, privateCost: { unitCostCents: 1000 } }]) },
       checkoutItemFinancial: { findMany: jest.fn().mockResolvedValue([]) },
+      checkoutEffect: { createMany: jest.fn().mockResolvedValue({ count: 3 }) },
       orderItemFinancial: { createMany: jest.fn().mockResolvedValue({ count: 1 }) },
       checkoutSnapshot: {
         findFirst: jest.fn(),
@@ -232,6 +233,16 @@ describe('OrdersService checkout reservations', () => {
     jest
       .spyOn(service as any, 'buildCheckoutRequestFingerprint')
       .mockReturnValue('fingerprint_1');
+  });
+
+  it('rejects mixed currencies at the authoritative summary before quoting shipping or reserving stock', async () => {
+    const cart = { id: 10, userId: 1, items: ['EUR', 'USD'].map((currency, i) => ({
+      variantId: i + 1, qty: 1, variant: { isActive: true, stockQty: 4, price: 1000,
+        product: { id: i + 1, isActive: true, currency, price: 1000 } },
+    })) };
+    await expect(service.getCheckoutSummary(cart as any, {})).rejects.toThrow('MIXED_CART_CURRENCIES');
+    expect(shippingMethods.listAvailableMethods).not.toHaveBeenCalled();
+    expect(prisma.checkoutSnapshot.create).not.toHaveBeenCalled();
   });
 
   it('reuses an active snapshot for an identical checkout request', async () => {
@@ -1709,18 +1720,5 @@ describe('Personal launch code ownership', () => {
   });
   it('accepts only the authenticated recipient', async () => {
     expect(await validate(7)).toMatchObject({ valid: true });
-  });
-});
-
-
-describe('Archived test payment retries', () => {
-  it('does not claim a new event for a deleted test payment', async () => {
-    const create = jest.fn();
-    const result = await OrdersService.prototype.claimStripeWebhookEvent.call({
-      prisma: { archivedCheckoutPayment: { findUnique: async () => ({ paymentIntentId: 'pi_old' }) },
-        stripeWebhookEvent: { create } },
-    } as any, { id: 'evt_new', type: 'payment_intent.succeeded', paymentIntentId: 'pi_old', occurredAt: new Date() });
-    expect(result).toBe(false);
-    expect(create).not.toHaveBeenCalled();
   });
 });

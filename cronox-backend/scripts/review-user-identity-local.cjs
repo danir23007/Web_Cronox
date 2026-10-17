@@ -94,8 +94,8 @@ async function main() {
     const qrTokens = await Promise.all([users.ensurePublicMemberToken(fresh.id), users.ensurePublicMemberToken(fresh.id)]);
     assert.deepEqual(qrTokens, [token, token]);
     const stable = fresh.memberCode;
-    const activated = await users.completePasswordlessRegistration(fresh.id, { password: 'synthetic-hash', firstName: 'Fixture', lastName: 'User' });
-    assert.equal(activated.memberCode, stable);
+    await assert.rejects(() => users.createUser({ email: fresh.email, password: 'synthetic-hash', firstName: 'Fixture', lastName: 'User' }));
+    assert.equal((await db.user.findUnique({ where: { id: fresh.id } })).memberCode, stable);
     const listed = await admin.listUsers({ page: 1, pageSize: 20 });
     const detail = await admin.getUserById(fresh.id);
     assert.equal(listed.data.find(row => row.id === fresh.id).memberCode, detail.user.memberCode);

@@ -11,11 +11,8 @@ import { MeService } from './me.service';
 export class MeController {
   constructor(private readonly meService: MeService) {}
 
-  @Get()
-  getMe(@CurrentUser('id') userId: number) {
-    return this.meService.getProfile(userId);
-  }
-
+  // GET /me is registered once by UsersController and returns SafeUser.
+  // Keep the profile mutations and address/order routes here.
   @Put()
   updateMe(@CurrentUser('id') userId: number, @Body() dto: UpdateMeDto) {
     return this.meService.updateProfile(userId, dto);

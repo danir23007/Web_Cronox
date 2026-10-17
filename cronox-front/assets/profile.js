@@ -244,7 +244,7 @@
   };
   // Only server timestamps define eligibility. A monotonic clock advances the
   // display between responses; changing the device date cannot unlock a CTA.
-  const clockedPromotionStatus = status => status && ({ ...status, receivedAt: performance.now() });
+  const clockedPromotionStatus = (status, receivedAt = performance.now()) => status && ({ ...status, receivedAt });
   const promotionRemaining = status => {
     const eligible = Date.parse(status?.eligibleAt);
     const server = Date.parse(status?.serverTime);
@@ -264,7 +264,9 @@
     return isMetacrilatos() && mounted >= 1 && mounted <= 5 ? mounted
       : getNormalizedCircleLevel(fallback ?? window.CRONOX_USER?.circleLevel, 1);
   };
-  const NAME_REGEX = /^[A-Za-zÁÉÍÓÚÜÑáéíóúüñ\s'-]+$/;
+  // Match the existing registration/profile DTO policy for changed values.
+  // Historical names are retained unchanged, including unsupported punctuation.
+  const NAME_REGEX = /^[A-Za-zÁÉÍÓÚÜÑáéíóúüñ\s]+$/;
   const LETTERS_REGEX = /[A-Za-zÁÉÍÓÚÜÑáéíóúüñ]/;
   const optionalValue = (id) => {
     const v = safeTrim($(id)?.value || '');
@@ -637,7 +639,9 @@
     inner.className = 'preloader-inner';
 
     const img = document.createElement('img');
-    img.src = 'assets/CRONOX-preloader.webp';
+    img.sizes = '196px';
+    img.srcset = 'assets/CRONOX-preloader-320.webp 320w, assets/CRONOX-preloader-640.webp 640w';
+    img.src = 'assets/CRONOX-preloader-640.webp';
     img.alt = 'CRONOX';
     img.className = 'preloader__logo';
     img.decoding = 'async';
@@ -650,11 +654,14 @@
   };
 
   const setGlobalLoaderVisible = (isVisible) => {
-    const loader = ensureGlobalLoader();
-    if (!loader) return;
-
-    loader.hidden = !isVisible;
-    loader.style.display = isVisible ? 'flex' : 'none';
+    // Selecting the initial Orders tab hides the loader. Do not download its
+    // animation until an operation actually needs to display it.
+    const loader = isVisible ? ensureGlobalLoader()
+      : (globalLoader?.isConnected ? globalLoader : document.getElementById('preloader'));
+    if (loader) {
+      loader.hidden = !isVisible;
+      loader.style.display = isVisible ? 'flex' : 'none';
+    }
     if (isVisible) {
       document.body.classList.add('is-loading');
       document.body.classList.remove('is-loaded');
@@ -724,6 +731,12 @@
     return loaded;
   };
 
+  const readAccreditationData = read => typeof read !== 'function' ? null
+    : Promise.resolve().then(() => read({ signal: AbortSignal.timeout(15000) })).then(
+      data => ({ ok: true, data, receivedAt: performance.now() }),
+      error => ({ ok: false, error }),
+    );
+
   const loadAccreditationData = async () => {
     const attempt = ++accreditationLoadSequence;
     const promotionReference = document.querySelector('[data-promotion-size-reference]');
@@ -733,19 +746,38 @@
     }
     resetMetacrilatosMember();
     setAccreditationLoading(true);
+    // These are fresh authorized reads for this opening, never a persistent
+    // cache. Settle them while the design, identity and artwork are loading.
+    let pendingStats = readAccreditationData(api.getAccreditationStats);
+    // Stats applies any due requested promotion before reading its circle.
+    // The III status must follow that result, or it could still observe II.
+    // If stats fails, the existing loader reads III status after the design.
+    let pendingUpgrade = pendingStats?.then(result => result.ok && attempt === accreditationLoadSequence
+      ? readAccreditationData(api.getCircleUpgradeStatus) : null);
     try {
       const design = await window.CRONOX_ACCREDITATION_DESIGNS.loadActive(accreditationSection);
       if (attempt !== accreditationLoadSequence || !design) return;
       if (design.renderer === 'metacrilatos-v1') {
         showMetacrilatosMember();
+        // The personal-card read can cross a scheduled promotion after the
+        // early reads completed. Revalidate that exceptional mismatch before
+        // exposing controls; retain the parallel results for the usual case.
+        const mountedCircle = Number(accreditationSection.querySelector('.metacrilatos-host')?.dataset.crxLevel);
+        const earlyResults = await Promise.all([pendingStats, pendingUpgrade]);
+        if (attempt !== accreditationLoadSequence) return;
+        if (mountedCircle >= 1 && mountedCircle <= 5 && earlyResults.some(result =>
+          result?.ok && Number.isInteger(result.data?.circleLevel) && result.data.circleLevel !== mountedCircle)) {
+          pendingStats = readAccreditationData(api.getAccreditationStats);
+          pendingUpgrade = pendingStats?.then(result => result.ok && attempt === accreditationLoadSequence
+            ? readAccreditationData(api.getCircleUpgradeStatus) : null);
+        }
         // History's loading message and the promotion controls change the
         // composition height used by the viewport fit. Settle their first
         // presentation before revealing the card, without a timed delay.
         // Later history retries still leave the existing instance interactive.
-        const signal = AbortSignal.timeout(15000);
         await Promise.all([
-          loadAccreditationStats({ force: true, signal }),
-          loadCircleUpgradeStatus({ skipLoader: true, signal }),
+          loadAccreditationStats({ force: true, pending: pendingStats }),
+          loadCircleUpgradeStatus({ skipLoader: true, pending: pendingUpgrade, signal: AbortSignal.timeout(15000) }),
         ]);
         if (attempt === accreditationLoadSequence) setAccreditationLoading(false);
         return;
@@ -774,11 +806,11 @@
 
     try {
       await Promise.all([
-        loadAccreditationStats({ force: true, signal: AbortSignal.timeout(15000) }),
+        loadAccreditationStats({ force: true, pending: pendingStats }),
         ensureAccreditationBook(),
         ensureAccreditationQr(),
         document.fonts?.ready,
-        loadCircleUpgradeStatus({ skipLoader: true, signal: AbortSignal.timeout(15000) }),
+        loadCircleUpgradeStatus({ skipLoader: true, pending: pendingUpgrade, signal: AbortSignal.timeout(15000) }),
       ]);
     } finally {
       if (attempt === accreditationLoadSequence) setAccreditationLoading(false);
@@ -948,13 +980,13 @@
     return refresh;
   };
 
-  const setCircleUpgradeState = (status) => {
-    circleUpgradeStatus = clockedPromotionStatus(status) || null;
+  const setCircleUpgradeState = (status, receivedAt) => {
+    circleUpgradeStatus = clockedPromotionStatus(status, receivedAt) || null;
     lastCircleUpgradeRequestId = status?.latestRequest?.id || null;
     renderCircleUpgradeUi(circleUpgradeStatus);
   };
 
-  const loadCircleUpgradeStatus = async ({ skipLoader = false, signal } = {}) => {
+  const loadCircleUpgradeStatus = async ({ skipLoader = false, signal, pending } = {}) => {
     const current = accreditationContext();
     if (!api.getCircleUpgradeStatus) {
       circleUpgradeStatusLoading = false;
@@ -965,10 +997,13 @@
       circleUpgradeStatusLoading = true;
       renderCircleUpgradeUi(circleUpgradeStatus);
       if (!skipLoader) setAccreditationLoading(true);
-      const status = await api.getCircleUpgradeStatus({ signal });
+      const early = pending ? await pending : null;
+      if (!current()) return null;
+      if (early && !early.ok) throw early.error;
+      const status = early ? early.data : await api.getCircleUpgradeStatus({ signal });
       if (!current()) return null;
       circleUpgradeStatusLoaded = true;
-      setCircleUpgradeState(status);
+      setCircleUpgradeState(status, early?.receivedAt);
       return status;
     } catch (err) {
       if (!current()) return null;
@@ -1092,7 +1127,7 @@
     markCircleUpgradeModalSeen(requestId);
   };
 
-  const loadAccreditationStats = async ({ force = false, signal, preserveHistory = false } = {}) => {
+  const loadAccreditationStats = async ({ force = false, signal, preserveHistory = false, pending } = {}) => {
     const context = accreditationContext();
     const attempt = ++accreditationStatsSequence;
     const current = () => context() && attempt === accreditationStatsSequence;
@@ -1132,9 +1167,11 @@
     }
 
     try {
-      const stats = await api.getAccreditationStats({ signal });
+      const early = pending ? await pending : null;
+      if (early && !early.ok) throw early.error;
+      const stats = early ? early.data : await api.getAccreditationStats({ signal });
       if (!current()) return;
-      circlePromotionStatus = clockedPromotionStatus(stats?.promotion) || { canRequest: false, error: true };
+      circlePromotionStatus = clockedPromotionStatus(stats?.promotion, early?.receivedAt) || { canRequest: false, error: true };
       if (memberHistory) {
         const counts = getAccreditationCounts(stats);
         if (!Object.values(counts).every(value => Number.isSafeInteger(value) && value >= 0)) {
@@ -1369,11 +1406,11 @@
       }
 
       const invalidName =
-        (firstName && (!NAME_REGEX.test(firstName) || /\d/.test(firstName))) ||
-        (lastName && (!NAME_REGEX.test(lastName) || /\d/.test(lastName)));
+        (firstName !== previousFirst && firstName && !NAME_REGEX.test(firstName)) ||
+        (lastName !== previousLast && lastName && !NAME_REGEX.test(lastName));
 
       if (invalidName) {
-        showProfileMessage('El nombre y el apellido no pueden contener números.', 'error');
+        showProfileMessage('El nombre y el apellido solo pueden contener letras y espacios.', 'error');
         return;
       }
 

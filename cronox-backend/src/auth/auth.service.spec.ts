@@ -47,6 +47,9 @@ describe('AuthService password reset security', () => {
     sessions.revoke.mockResolvedValue(undefined);
 
     tx = {
+      $executeRaw: jest.fn(),
+      newsletterMailJob: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
+      preRegistration: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
       passwordResetToken: {
         updateMany: jest.fn().mockResolvedValue({ count: 1 }),
         create: jest.fn().mockResolvedValue({ id: 1 }),
@@ -131,6 +134,49 @@ describe('AuthService password reset security', () => {
     expect(prisma.user.update).toHaveBeenCalledWith(
       expect.objectContaining({ where: { id: 42 } }),
     );
+  });
+
+  it.each([true, false])('requires mailbox verification for an existing passwordless account (legacy claim=%s)', async registrationClaimable => {
+    usersService.findByEmail.mockResolvedValue({ id: 42, email: 'member@example.test', password: null, accountState: 'ACTIVE', role: 'USER', registrationClaimable });
+    emailService.isEnabled.mockReturnValue(false);
+    const result = await service.register({ email: 'member@example.test', firstName: 'New', lastName: 'Person', password: 'ValidPassword1' });
+    expect(result).toMatchObject({ verificationRequired: true });
+    expect(result).not.toHaveProperty('user');
+    expect(result).not.toHaveProperty('tokens');
+    expect(usersService.createUser).not.toHaveBeenCalled();
+    expect(sessions.create).not.toHaveBeenCalled();
+  });
+
+  it.each(['ADMIN', 'SUPERADMIN', 'INACTIVE', 'password'])('does not offer email-only completion for %s accounts', async kind => {
+    usersService.findByEmail.mockResolvedValue({ id: 42, email: 'member@example.test', password: kind === 'password' ? 'hash' : null, accountState: kind === 'INACTIVE' ? 'INACTIVE' : 'ACTIVE', role: ['ADMIN', 'SUPERADMIN'].includes(kind) ? kind : 'USER' });
+    await expect(service.register({ email: 'member@example.test', firstName: 'New', lastName: 'Person', password: 'ValidPassword1' })).rejects.toThrow('registrado');
+    expect(sessions.create).not.toHaveBeenCalled();
+  });
+
+  it('refuses a delayed password link issued against an old credential version', async () => {
+    tx.user.findUnique.mockResolvedValue({ email: 'member@example.test', sessionVersion: 2 });
+    await expect((service as any).createAndSendPasswordLink({ id: 42, email: 'member@example.test', sessionVersion: 1 }, 'reset')).resolves.toBe('retry_required');
+    expect(tx.passwordResetToken.create).not.toHaveBeenCalled();
+    expect(emailService.sendPasswordReset).not.toHaveBeenCalled();
+  });
+
+  it('preserves a setup token after ambiguous SMTP and suppresses automatic repeat delivery', async () => {
+    emailService.isEnabled.mockReturnValue(true);
+    emailService.sendInitialPasswordSetup.mockRejectedValue(Object.assign(new Error('unknown SMTP outcome'), { deliveryUnknown: true }));
+    prisma.user.findUnique.mockResolvedValue({ id: 42, email: 'member@example.test', password: null });
+    await expect(service.sendInitialPasswordSetupIfNeeded(42)).resolves.toBe('uncertain');
+    expect(prisma.passwordResetToken.updateMany).not.toHaveBeenCalled();
+    expect(prisma.user.updateMany).toHaveBeenLastCalledWith(expect.objectContaining({ data: expect.objectContaining({ passwordSetupEmailSentAt: expect.any(Date) }) }));
+  });
+
+  it('atomically revokes reset, ACCESS (including not-yet-issued jobs), and legacy launch links on credential change', async () => {
+    usersService.findById.mockResolvedValue({ id: 42, email: 'member@example.test', password: null, sessionVersion: 3, accountState: 'ACTIVE' });
+    tx.user.findUniqueOrThrow = jest.fn().mockResolvedValue({ id: 42, password: 'new-hash', sessionVersion: 4 });
+    await service.changePassword(42, { newPassword: 'ValidPassword1' });
+    expect(tx.passwordResetToken.updateMany).toHaveBeenCalledWith(expect.objectContaining({ where: { userId: 42, usedAt: null } }));
+    expect(tx.newsletterMailJob.updateMany).toHaveBeenCalledWith(expect.objectContaining({ where: { userId: 42, kind: 'ACCESS', tokenUsedAt: null } }));
+    expect(tx.newsletterMailJob.updateMany).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ email: 'member@example.test', userId: null }), data: expect.objectContaining({ status: 'FAILED', errorCode: 'CREDENTIALS_CHANGED' }) }));
+    expect(tx.preRegistration.updateMany).toHaveBeenCalledWith(expect.objectContaining({ where: { userId: 42, launchTokenUsedAt: null } }));
   });
 
   it('stores only a hash and sends the raw token exclusively in the reset link', async () => {
@@ -294,7 +340,7 @@ describe('AuthService password reset security', () => {
 
     await expect(
       service.sendInitialPasswordSetupIfNeeded(42),
-    ).resolves.toBeUndefined();
+    ).resolves.toBe('retry_required');
 
     expect(prisma.passwordResetToken.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -326,7 +372,7 @@ describe('AuthService password reset security', () => {
 
     await service.sendInitialPasswordSetupIfNeeded(42);
 
-    expect(prisma.user.findUnique).not.toHaveBeenCalled();
+    expect(prisma.user.findUnique).toHaveBeenCalled();
     expect(emailService.sendInitialPasswordSetup).not.toHaveBeenCalled();
     expect(emailService.sendPasswordReset).not.toHaveBeenCalled();
   });

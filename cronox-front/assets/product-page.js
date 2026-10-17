@@ -340,11 +340,12 @@
 
   function installImageFallback(image, item) {
     if (!image) return;
-    let triedOriginal = false;
     image.addEventListener("error", () => {
-      if (!triedOriginal && item.url && item.url !== PRODUCT_PLACEHOLDER &&
+      if (!image.hasAttribute("srcset") && image.getAttribute("src") === PRODUCT_PLACEHOLDER) return;
+      // A later zoom can select another derivative. Retry its original even
+      // if an earlier derivative failed; a failed original still falls through.
+      if (item.url && item.url !== PRODUCT_PLACEHOLDER &&
           (image.hasAttribute("srcset") || image.getAttribute("src") !== item.url)) {
-        triedOriginal = true;
         image.removeAttribute("srcset"); image.removeAttribute("sizes");
         image.src = item.url;
       } else if (image.getAttribute("src") !== PRODUCT_PLACEHOLDER) {
@@ -384,6 +385,7 @@
       const isActive = idx === normalized;
       img.classList.toggle("is-active", isActive);
       if (isActive) {
+        img.loading = "eager";
         img.removeAttribute("hidden");
         img.setAttribute("aria-hidden", "false");
       } else {
@@ -430,12 +432,21 @@
         const resolved = window.CRONOX_IMAGES?.resolve(item, "pdp") || { src: item.url, srcset: "", sizes: "" };
         const responsive = resolved.srcset ? ` srcset="${escapeHtml(resolved.srcset)}" sizes="${escapeHtml(resolved.sizes)}"` : "";
         const dimensions = resolved.width && resolved.height ? ` width="${resolved.width}" height="${resolved.height}"` : "";
-        return `<img${idAttr} class="pdp__media-img${activeClass}" src="${escapeHtml(resolved.src)}"${responsive}${dimensions} alt="${escapeHtml(alt)}" loading="${loading}" decoding="async"${hiddenAttr} aria-hidden="${idx === 0 ? "false" : "true"}">`;
+        return `<img${idAttr} class="pdp__media-img${activeClass}" src="${escapeHtml(resolved.src)}"${responsive}${dimensions} alt="${escapeHtml(alt)}" loading="${loading}" fetchpriority="${idx === 0 ? "high" : "auto"}" decoding="async"${hiddenAttr} aria-hidden="${idx === 0 ? "false" : "true"}">`;
       }).join("");
       pMediaViewport.querySelectorAll(".pdp__media-img").forEach((image, idx) => {
-        window.CRONOX_IMAGES?.apply(image, images[idx], "pdp");
+        window.CRONOX_IMAGES?.apply(image, images[idx], "pdp", {
+          loading: idx === 0 ? "eager" : "lazy",
+          fetchPriority: idx === 0 ? "high" : "auto",
+        });
         installImageFallback(image, images[idx]);
-        image.addEventListener("load", () => applyGalleryFraming(image, images[idx]));
+        image.addEventListener("load", () => {
+          // A detailed derivative may finish while the user is zooming. Keep
+          // the current zoom and pointer origin instead of resetting them.
+          if (image !== getActiveImage() || zoomLevel === 0) {
+            applyGalleryFraming(image, images[idx]);
+          }
+        });
         applyGalleryFraming(image, images[idx]);
       });
     }
@@ -515,6 +526,10 @@
         return;
       }
 
+      // Request full detail on demand and retain it after zooming out.
+      window.CRONOX_IMAGES?.apply(img, galleryImages[currentImageIndex], "pdpZoom", {
+        loading: "eager", fetchPriority: "high",
+      });
       const savedZoom = Number(galleryImages[currentImageIndex]?.galleryZoom || 1);
       const scale = savedZoom * (zoomLevel === 1 ? 2 : 4);
       updateOrigin(event);

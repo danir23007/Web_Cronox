@@ -11,19 +11,29 @@ describe('profile accreditation image and mobile layout', () => {
   const css = readFrontend('assets/store.css');
   const script = readFrontend('assets/profile.js');
 
-  it('loads the book as a real eager image that participates in readiness', () => {
-    const document = new JSDOM(html).window.document;
+  it('loads the selected book as a real eager image that participates in readiness, without an inactive download', async () => {
+    const dom = new JSDOM(html, { url: 'http://localhost/profile.html', runScripts: 'outside-only' });
+    const document = dom.window.document;
     const art = document.querySelector<HTMLImageElement>(
       '.accreditation-book-art',
     );
 
-    expect(art?.src).toContain('/Acreditation/Libro-antiguo.png');
+    expect(art?.hasAttribute('src')).toBe(false);
+    expect(document.querySelector('link[rel="preload"][href*="Libro-antiguo"]')).toBeNull();
+    dom.window.eval(readFrontend('assets/accreditation-designs.js'));
+    const api = (dom.window as any).CRONOX_ACCREDITATION_DESIGNS;
+    await api.apply(document.querySelector('[data-profile-section="accreditation"]'), {
+      id: 'original', renderer: 'original-v1', config: { version: 1, artworkUrl: '/assets/configured-book.png' },
+    });
+    expect(art?.getAttribute('src')).toBe('/assets/configured-book.png');
+    expect(art?.getAttribute('loading')).not.toBe('lazy');
     expect(art?.getAttribute('fetchpriority')).toBe('high');
     expect(script).toContain('ensureAccreditationBook()');
     expect(script).toContain('accreditationQrLoaded = loaded');
     expect(script).toContain('resolve(img.naturalWidth > 0)');
     expect(script).toContain("retryUrl.searchParams.set('crx_retry'");
     expect(css).not.toMatch(/\.accreditation-book::before\s*\{/);
+    dom.window.close();
   });
 
   it('uses a fixed design plane with proportionally scaled artwork, text and hit areas', () => {

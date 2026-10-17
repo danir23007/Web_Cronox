@@ -83,7 +83,7 @@ describe('canonical product image resolver', () => {
     expect(element.src).toBe('https://cdn.test/pdp.webp');
     expect(element.src).not.toContain('logo_browser.png');
     expect(readFileSync(path.join(frontendRoot, 'assets/product-page.js'), 'utf8')).toContain(
-      'CRONOX_IMAGES?.apply(image, images[idx], "pdp")',
+      'CRONOX_IMAGES?.apply(image, images[idx], "pdp", {',
     );
   });
 

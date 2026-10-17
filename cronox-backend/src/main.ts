@@ -27,6 +27,7 @@ import { UserNumberingGate } from './users/user-numbering-gate.module';
 import { userNumberingMiddleware } from './users/user-numbering.middleware';
 import { KeyScreenService } from './key-screen/key-screen.service';
 import { AuthService } from './auth/auth.service';
+import { ShippingMethodsService } from './shipping-methods/shipping-methods.service';
 import { createPublicHtmlGateMiddleware } from './common/routing/public-html-gate.middleware';
 import { legacyRedirectTarget } from './common/routing/public-pages';
 import {
@@ -146,7 +147,7 @@ async function bootstrap() {
 
   // Clean public routes internally reuse the existing HTML entry points, so a
   // direct request or refresh never depends on an Nginx rewrite or SPA fallback.
-  app.use(createSeoPages(frontendRoot, seoCatalog));
+  app.use(createSeoPages(frontendRoot, seoCatalog, () => app.get(ShippingMethodsService).listAvailableMethods(0)));
 
   // Keep the extensionless Admin entry point independent from the public SPA.
   // The protected Admin shell resolves its existing cookie session next.

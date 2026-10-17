@@ -27,7 +27,7 @@ function fixture(orders: FinanceOrder[], events: any[] = []) {
     $queryRaw: jest.fn(async () => [{ id: 7 }]),
   };
   tx.$transaction = jest.fn(async fn => fn(tx));
-  const upgrades = { ensureAutoRequestForCircle2To3: jest.fn() };
+  const upgrades = { ensureAutoRequestForCircle2To3: jest.fn().mockResolvedValue({ id: 'review-current-cycle' }) };
   return { tx, user, upgrades, service: new CircleService(tx, upgrades as any) };
 }
 
@@ -102,6 +102,7 @@ describe('server-authoritative 30 complete days and request guards', () => {
     expect(request.promoteAt.getTime()).toBeLessThan(now.getTime() + 72 * 3600000);
     expect(tx.$transaction).toHaveBeenCalledWith(expect.any(Function), { isolationLevel: 'Serializable' });
     expect(upgrades.ensureAutoRequestForCircle2To3).toHaveBeenCalledWith(7, request.promoteAt, tx);
+    expect(request.upgradeRequestId).toBe('review-current-cycle');
     expect(user.circleLevel).toBe(2);
   });
   it('blocks an already pending request even when the timer has expired', async () => {
@@ -126,5 +127,38 @@ describe('server-authoritative 30 complete days and request guards', () => {
       if (previousJobs === undefined) delete process.env.BACKGROUND_JOBS_ENABLED; else process.env.BACKGROUND_JOBS_ENABLED = previousJobs;
       if (previousSmoke === undefined) delete process.env.CRONOX_ROUTE_SMOKE_MODE; else process.env.CRONOX_ROUTE_SMOKE_MODE = previousSmoke;
     }
+  });
+});
+
+describe('linked automatic promotion review', () => {
+  function promotionFixture() {
+    const { tx, user, service } = fixture([]);
+    Object.assign(user, { circleLevel: 2 });
+    tx.circlePromotionRequest.findFirst = jest.fn().mockResolvedValue({ id: 1, userId: 7, upgradeRequestId: 'current-cycle' });
+    tx.circlePromotionRequest.update = jest.fn();
+    tx.circleUpgradeRequest.updateMany = jest.fn().mockResolvedValue({ count: 1 });
+    return { tx, user, service };
+  }
+  it('completes only the linked review in the same transaction', async () => {
+    const { tx, service } = promotionFixture();
+    await service.maybePromoteRequestedCircle(7);
+    expect(tx.circleUpgradeRequest.updateMany).toHaveBeenCalledWith({ where: {
+      id: 'current-cycle', userId: 7, fromCircle: 2, toCircle: 3, status: { in: ['PENDING', 'EXPIRED'] },
+    }, data: { status: 'APPROVED', approvedAt: expect.any(Date), processedAt: expect.any(Date) } });
+    expect(tx.circlePromotionRequest.update).toHaveBeenCalledWith({ where: { userId: 7 }, data: { status: 'completed' } });
+    expect(tx.user.updateMany).toHaveBeenCalledWith({ where: { id: 7, circleLevel: 2 }, data: { circleLevel: 3 } });
+  });
+  it('fails atomically if the linked review has changed instead of updating another cycle', async () => {
+    const { tx, service } = promotionFixture();
+    tx.circleUpgradeRequest.updateMany.mockResolvedValue({ count: 0 });
+    await expect(service.maybePromoteRequestedCircle(7)).rejects.toThrow('PROMOTION_REVIEW_LINK_CHANGED');
+    expect(tx.circlePromotionRequest.update).not.toHaveBeenCalled();
+  });
+  it('does not guess a historical unlinked mirror by user or date', async () => {
+    const { tx, service } = promotionFixture();
+    tx.circlePromotionRequest.findFirst.mockResolvedValue({ id: 1, userId: 7, upgradeRequestId: null });
+    await service.maybePromoteRequestedCircle(7);
+    expect(tx.circleUpgradeRequest.updateMany).not.toHaveBeenCalled();
+    expect(tx.circlePromotionRequest.update).toHaveBeenCalledTimes(1);
   });
 });

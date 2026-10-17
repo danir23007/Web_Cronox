@@ -4,14 +4,14 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { Prisma, OrderStatus } from '@prisma/client';
+import { Prisma, OrderStatus, User } from '@prisma/client';
 import { Decimal } from '@prisma/client/runtime/library';
 import { PrismaService } from '../prisma/prisma.service';
 import {
   normalizeCountry,
   UNSUPPORTED_COUNTRY_MESSAGE,
 } from '../common/country';
-import { UsersService } from '../users/users.service';
+import { SafeUser, UsersService } from '../users/users.service';
 import { normalizeEmail } from '../common/email';
 import { UpdateMeDto } from './dto/update-me.dto';
 import { UpsertAddressDto } from './dto/upsert-address.dto';
@@ -20,7 +20,7 @@ import { validateAccountName } from '../common/account-name-policy';
 import { ADDRESS_LIMIT } from '../addresses/addresses.service';
 import { buildCorreosTrackingUrl } from '../shipping-tracking/tracking-links';
 
-export type MeProfile = {
+export type MeProfile = SafeUser & {
   hasPassword: boolean;
   id: number;
   email: string;
@@ -267,26 +267,15 @@ export class MeService {
     }));
   }
 
-  private toProfile(user: {
-    password?: string | null;
-    id: number;
-    email: string;
-    firstName: string | null;
-    lastName: string | null;
-    memberCode: string | null;
-    circleLevel: number | null;
-    createdAt: Date;
-  }) {
+  private toProfile(user: User): MeProfile {
     return {
-      id: user.id,
-      email: user.email,
+      // GET /me and PUT /me replace the same browser account context. Return
+      // the current safe identity/role, never merge potentially stale roles.
+      ...this.usersService.toSafeUser(user),
       firstName: user.firstName ?? null,
       lastName: user.lastName ?? null,
-      hasPassword: Boolean(user.password),
       memberCode: user.memberCode ?? '',
-      circleLevel: Number(user.circleLevel ?? 1),
-      createdAt: user.createdAt,
-    } as MeProfile;
+    };
   }
 
   private toAddress(address: {

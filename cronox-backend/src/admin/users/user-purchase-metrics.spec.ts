@@ -54,7 +54,7 @@ describe('customer list purchase metrics', () => {
     const orders = [sale(1), sale(2, { excludedFromStatistics: true })];
     const tx: any = fixture(orders, orders.map(o => ({ id: o.id, userId: 1 })));
     const user = { id: 1, email: 'buyer@example.test', createdAt: now };
-    tx.user = { findMany: jest.fn().mockResolvedValue([user]), findUnique: jest.fn().mockResolvedValue(user) };
+    tx.user = { findMany: jest.fn().mockResolvedValue([user]), count: jest.fn().mockResolvedValue(1), findUnique: jest.fn().mockResolvedValue(user) };
     tx.circleUpgradeRequest = { count: jest.fn().mockResolvedValue(0), findMany: jest.fn().mockResolvedValue([]) };
     tx.promoCodeRedemption = { findMany: jest.fn().mockResolvedValue([]) };
     tx.discountCode = tx.promoCode = { findFirst: jest.fn().mockResolvedValue(null) };

@@ -50,10 +50,10 @@ describe('account enablement contract', () => {
     const created=await service.createUser({email:'fixture@example.test',password:'hash',accountState:'INACTIVE'} as any);
     expect(created.accountState).toBe('ACTIVE');
   });
-  it('completion checks ACTIVE at the atomic write and never writes account state', async () => {
-    const tx:any={$executeRaw:jest.fn(),user:{findUnique:jest.fn(async()=>({id:1,email:'fixture@example.test',memberCode:'CRX-000001',accountState:'INACTIVE'})),updateMany:jest.fn(async()=>({count:0}))}};
+  it.each(['ACTIVE', 'INACTIVE'])('registration never claims an existing %s account even after an initial lookup race', async accountState => {
+    const tx:any={$executeRaw:jest.fn(),user:{findFirst:jest.fn(async()=>({id:1,email:'fixture@example.test',accountState,password:null,registrationClaimable:true,role:'USER'})),updateMany:jest.fn()}};
     const service=new UsersService({$transaction:fn=>fn(tx)} as any);
-    expect(await service.completePasswordlessRegistration(1,{password:'hash',firstName:'Local',lastName:'Fixture'})).toBeNull();
-    expect(tx.user.updateMany).toHaveBeenCalledWith({where:{id:1,password:null,accountState:'ACTIVE',registrationClaimable:true,role:{in:['USER','FRIEND']}},data:expect.not.objectContaining({accountState:expect.anything()})});
+    await expect(service.createUser({email:'fixture@example.test',password:'hash',firstName:'Local',lastName:'Fixture'})).rejects.toThrow('registrado');
+    expect(tx.user.updateMany).not.toHaveBeenCalled();
   });
 });

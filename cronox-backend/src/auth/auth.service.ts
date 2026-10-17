@@ -37,9 +37,10 @@ import { ACCESS_TOKEN_SECONDS } from './session-policy';
 import { serializableTransaction } from '../prisma/serializable-transaction';
 import { UserNumberingGate } from '../users/user-numbering-gate.module';
 import { ensureAccountWelcome } from '../users/account-welcome';
-import { canCompletePublicRegistration } from '../users/account-state';
+import { lockAccountCredentials, revokeAccountLinks } from './account-credentials';
 
 const PASSWORD_SETUP_CLAIM_STALE_MS = 10 * 60 * 1000;
+export type PasswordSetupDelivery = 'accepted' | 'not_needed' | 'busy' | 'retry_required' | 'uncertain';
 
 type Tokens = {
   idleExpiresAt?: number;
@@ -81,33 +82,32 @@ export class AuthService {
     const email = normalizeEmail(dto.email);
     const existing = await this.usersService.findByEmail(email);
 
-    if (existing && !canCompletePublicRegistration(existing)) {
-      throw new ConflictException('El email ya esta registrado');
-    }
+    if (existing) return this.requireRegistrationVerification(existing);
 
     const hashedPassword = await this.hashPassword(dto.password);
     const fullName = [dto.firstName, dto.lastName]
       .filter(Boolean)
       .join(' ')
       .trim();
-    const user = existing
-      ? await this.usersService.completePasswordlessRegistration(existing.id, {
-          password: hashedPassword,
-          name: fullName || undefined,
-          firstName: dto.firstName,
-          lastName: dto.lastName,
-        })
-      : await this.usersService.createUser({
+    let user: User;
+    try {
+      user = await this.usersService.createUser({
           email,
           password: hashedPassword,
           name: fullName || undefined,
           firstName: dto.firstName,
           lastName: dto.lastName,
         });
-    if (!user) throw new ConflictException('El email ya esta registrado');
+    } catch (error) {
+      // Opt-in may create the account after the first lookup. Never claim it.
+      if (!(error instanceof ConflictException)) throw error;
+      const current = await this.usersService.findByEmail(email);
+      if (!current) throw error;
+      return this.requireRegistrationVerification(current);
+    }
     const authUser = this.omitPassword(user);
 
-      // Inherit existing newsletter consent; this does not verify account identity.
+    // Inherit existing newsletter consent; this does not verify account identity.
     await this.newsletterService.subscribeIfNeeded(user.email);
 
     const tokens = await this.generateTokens(authUser);
@@ -119,9 +119,23 @@ export class AuthService {
     };
   }
 
+  private async requireRegistrationVerification(user: User) {
+    if (user.password !== null || user.accountState !== UserAccountState.ACTIVE || !['USER', 'FRIEND'].includes(user.role)) {
+      throw new ConflictException('El email ya esta registrado');
+    }
+    // No registration fields, session or cart ownership are changed. The reset
+    // capability authorizes only setting credentials for its persisted user.
+    await this.requestPasswordReset(user.email);
+    return { verificationRequired: true as const,
+      message: 'Comprueba tu correo para verificar la cuenta y establecer tu contraseña. Si no recibes el enlace, utiliza Recuperar contraseña.' };
+  }
+
   async consumeLaunchLink(token: string) {
     const tokenHash = createHash('sha256').update(token).digest('hex');
+    const candidate = await this.prisma.preRegistration.findUnique({ where: { launchTokenHash: tokenHash }, select: { userId: true } });
+    if (!candidate) throw new UnauthorizedException('Enlace no válido');
     const user = await this.prisma.$transaction(async (tx) => {
+      await lockAccountCredentials(tx, candidate.userId);
       const registration = await tx.preRegistration.findUnique({
         where: { launchTokenHash: tokenHash }, include: { user: true },
       });
@@ -149,7 +163,10 @@ export class AuthService {
     const invalid = () => new UnauthorizedException('El enlace ha caducado o ya se ha utilizado. Solicita otro enlace o inicia sesión.');
     if (!/^[a-f0-9]{64}$/.test(token)) throw invalid();
     const tokenHash = createHash('sha256').update(token).digest('hex');
+    const candidate = await this.prisma.newsletterMailJob.findUnique({ where: { tokenHash }, select: { userId: true } });
+    if (!candidate?.userId) throw invalid();
     const user = await this.prisma.$transaction(async tx => {
+      await lockAccountCredentials(tx, candidate.userId!);
       const job = await tx.newsletterMailJob.findUnique({
         where: { tokenHash }, include: { user: true },
       });
@@ -389,7 +406,7 @@ export class AuthService {
     ) {
       const deliver = async () => {
         const current = this.numbering ? await this.prisma.user.findUnique({ where: { identityUid: user.identityUid } }) : user;
-        if (current && current.email === user.email && current.accountState === UserAccountState.ACTIVE) await this.createAndSendPasswordReset(current);
+        if (current && current.email === user.email && current.sessionVersion === user.sessionVersion && current.accountState === UserAccountState.ACTIVE) await this.createAndSendPasswordReset(current);
       };
       void (this.numbering ? this.numbering.shared(deliver) : deliver()).catch(() => {
         this.logger.error('Password reset delivery task failed');
@@ -400,13 +417,13 @@ export class AuthService {
   }
 
   private async createAndSendPasswordReset(
-    user: Pick<User, 'id' | 'email'>,
+    user: Pick<User, 'id' | 'email' | 'sessionVersion'>,
   ): Promise<void> {
     await this.createAndSendPasswordLink(user, 'reset');
   }
 
-  async sendInitialPasswordSetupIfNeeded(userId: number): Promise<void> {
-    if (!this.emailService.isEnabled()) return;
+  async sendInitialPasswordSetupIfNeeded(userId: number): Promise<PasswordSetupDelivery> {
+    if (!this.emailService.isEnabled()) return 'retry_required';
 
     const claimed = await this.prisma.user.updateMany({
       where: {
@@ -424,19 +441,22 @@ export class AuthService {
       },
       data: { passwordSetupClaimedAt: new Date() },
     });
-    if (claimed.count !== 1) return;
+    if (claimed.count !== 1) {
+      const current = await this.prisma.user.findUnique({ where: { id: userId }, select: { password: true, passwordSetupEmailSentAt: true } });
+      return !current || current.password !== null || current.passwordSetupEmailSentAt ? 'not_needed' : 'busy';
+    }
 
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
-      select: { id: true, email: true, password: true },
+      select: { id: true, email: true, password: true, sessionVersion: true },
     });
     if (!user || user.password !== null) {
       await this.releasePasswordSetupEmailClaim(userId);
-      return;
+      return 'not_needed';
     }
 
     const sent = await this.createAndSendPasswordLink(user, 'initial-setup');
-    if (sent) {
+    if (sent === 'accepted' || sent === 'uncertain') {
       await this.prisma.user.updateMany({
         where: { id: userId, password: null, passwordSetupEmailSentAt: null },
         data: {
@@ -444,26 +464,28 @@ export class AuthService {
           passwordSetupClaimedAt: null,
         },
       });
-      return;
+      return sent;
     }
 
     await this.releasePasswordSetupEmailClaim(userId);
+    return sent;
   }
 
   private async createAndSendPasswordLink(
-    user: Pick<User, 'id' | 'email'>,
+    user: Pick<User, 'id' | 'email' | 'sessionVersion'>,
     purpose: 'reset' | 'initial-setup',
-  ): Promise<boolean> {
+  ): Promise<'accepted' | 'retry_required' | 'uncertain'> {
     const token = randomBytes(32).toString('base64url');
     const tokenHash = this.hashResetToken(token);
     const now = new Date();
     const expiresAt = new Date(now.getTime() + 60 * 60 * 1000);
 
     const persisted = await serializableTransaction(this.prisma, async (tx) => {
-      const current = await tx.user.findUnique({ where: { id: user.id }, select: { email: true } });
+      await lockAccountCredentials(tx, user.id);
+      const current = await tx.user.findUnique({ where: { id: user.id }, select: { email: true, sessionVersion: true } });
       // A reset request can be queued before an email change and persisted after
       // it. Serialize the check with profile changes, without sending inside a retry.
-      if (!current || normalizeEmail(current.email) !== normalizeEmail(user.email)) return false;
+      if (!current || normalizeEmail(current.email) !== normalizeEmail(user.email) || current.sessionVersion !== user.sessionVersion) return false;
       await tx.passwordResetToken.updateMany({
         where: { userId: user.id, usedAt: null },
         data: { usedAt: now },
@@ -477,7 +499,7 @@ export class AuthService {
       });
       return true;
     });
-    if (!persisted) return false;
+    if (!persisted) return 'retry_required';
 
     const resetUrl = `${getFrontendUrl()}/restablecer-contrasena#token=${encodeURIComponent(token)}`;
     try {
@@ -486,8 +508,10 @@ export class AuthService {
       } else {
         await this.emailService.sendPasswordReset(user.email, resetUrl);
       }
-      return true;
-    } catch {
+      return 'accepted';
+    } catch (error) {
+      // SMTP may have accepted the link. Preserve it and suppress blind retries.
+      if ((error as { deliveryUnknown?: boolean })?.deliveryUnknown) return 'uncertain';
       // Do not leave an actionable token if it could not be delivered.
       await this.prisma.passwordResetToken.updateMany({
         where: { userId: user.id, token: tokenHash, usedAt: null },
@@ -498,7 +522,7 @@ export class AuthService {
           ? 'Initial password setup email delivery failed'
           : 'Password reset email delivery failed',
       );
-      return false;
+      return 'retry_required';
     }
   }
 
@@ -517,12 +541,13 @@ export class AuthService {
     }
     const password = await this.hashPassword(dto.newPassword);
     const updated = await this.prisma.$transaction(async tx => {
+      await lockAccountCredentials(tx, userId);
       const changed = await tx.user.updateMany({
         where: { id: userId, password: user.password, sessionVersion: user.sessionVersion, accountState: UserAccountState.ACTIVE },
         data: { password, registrationClaimable: false, sessionVersion: { increment: 1 }, passwordSetupClaimedAt: null },
       });
       if (changed.count !== 1) throw new ConflictException('La cuenta cambi\u00f3. Recarga e int\u00e9ntalo de nuevo.');
-      await tx.passwordResetToken.updateMany({ where: { userId, usedAt: null }, data: { usedAt: new Date() } });
+      await revokeAccountLinks(tx, userId, user.email);
       return tx.user.findUniqueOrThrow({ where: { id: userId } });
     });
     return { hasPassword: true, tokens: await this.generateTokens(this.omitPassword(updated)) };
@@ -539,9 +564,9 @@ export class AuthService {
     if (passwordResetToken.expiresAt <= new Date()) throw new BadRequestException({ code: 'PASSWORD_RESET_EXPIRED', message: 'El enlace de recuperación ha caducado. Solicita uno nuevo.' });
 
     const hashedPassword = await this.hashPassword(newPassword);
-    const now = new Date();
-
     await this.prisma.$transaction(async (tx) => {
+      await lockAccountCredentials(tx, passwordResetToken.userId);
+      const now = new Date();
       const consumed = await tx.passwordResetToken.updateMany({
         where: {
           id: passwordResetToken.id,
@@ -559,7 +584,7 @@ export class AuthService {
       await ensureAccountWelcome(tx, passwordResetToken.userId);
       // Password possession and administrative enablement are independent.
       // A token issued before deactivation must never reactivate the account.
-      await tx.user.update({
+      const updated = await tx.user.update({
         where: { id: passwordResetToken.userId },
         data: {
           password: hashedPassword,
@@ -569,14 +594,7 @@ export class AuthService {
         },
       });
 
-      await tx.passwordResetToken.updateMany({
-        where: {
-          userId: passwordResetToken.userId,
-          id: { not: passwordResetToken.id },
-          usedAt: null,
-        },
-        data: { usedAt: now },
-      });
+      await revokeAccountLinks(tx, passwordResetToken.userId, updated.email, now);
     });
 
     return { ok: true };

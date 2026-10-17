@@ -2,7 +2,57 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { JSDOM } from 'jsdom';
+import { renderCartShipping } from '../common/routing/cart-shipping';
+import { ShippingMethodCode } from '../common/enums/shipping-method-code.enum';
 const read = (file: string) => readFileSync(path.resolve(__dirname, '../../../cronox-front', file), 'utf8');
+const methods = [
+  { id: 1, code: ShippingMethodCode.STANDARD, label: 'Envío estándar', priceCents: 490, amountCents: 490 },
+  { id: 2, code: ShippingMethodCode.EXPRESS, label: 'Envío express', priceCents: 790, amountCents: 790 },
+];
+
+it('keeps initial shipping controls and distinguishes initial loading from updates and errors', async () => {
+  const dom = new JSDOM(renderCartShipping(read('cart.html'), methods), { url: 'http://localhost:3000/cesta', runScripts: 'outside-only' });
+  const app = dom.window as any;
+  const document = dom.window.document;
+  const radios = Array.from(document.querySelectorAll<HTMLInputElement>('#shippingOptions input'));
+  expect(radios.map(input => input.value)).toEqual(['STANDARD', 'EXPRESS']);
+  expect(radios[0].checked).toBe(true);
+  // A selection made before deferred scripts run remains the selected method.
+  radios[1].checked = true;
+  const cartState = { data: null as any, status: 'loading', error: null as string | null };
+  app.CRONOX_CART = { state: cartState };
+  app.CRONOX_API = { getCheckoutSummary: async ({ shippingMethod }: { shippingMethod: string }) => {
+    const selectedShippingMethod = methods.find(method => method.code === shippingMethod);
+    return { shippingMethods: methods, selectedShippingMethod, totals: { shippingCents: selectedShippingMethod!.amountCents, totalCents: 4000 + selectedShippingMethod!.amountCents } };
+  } };
+  app.CRONOX_CART_READY = new Promise(() => {});
+  app.eval(read('assets/cart.js'));
+  await new Promise(resolve => setTimeout(resolve, 0));
+  const status = document.querySelector<HTMLElement>('.cart-status')!;
+  expect(status.classList.contains('cart-status--initial-loading')).toBe(true);
+  expect(status.hidden).toBe(false);
+  expect(status.textContent).toBe('Cargando cesta…');
+  expect(Array.from(document.querySelectorAll('#shippingOptions input'))).toEqual(radios);
+  cartState.data = { items: [{ id: 1, qty: 1, priceCents: 4000, product: { name: 'Test' } }], subtotalCents: 4000 };
+  cartState.status = 'populated';
+  app.dispatchEvent(new app.Event('cart:state'));
+  await new Promise(resolve => setTimeout(resolve, 0));
+  expect(status.hidden).toBe(true);
+  expect(document.getElementById('sumShipping')?.textContent).toContain('Envío express');
+  expect(document.getElementById('sumTotal')?.textContent).toContain('47,90');
+  cartState.status = 'loading';
+  app.dispatchEvent(new app.Event('cart:state'));
+  expect(status.classList.contains('cart-status--initial-loading')).toBe(false);
+  expect(status.textContent).toBe('Actualizando cesta…');
+  cartState.data = null;
+  cartState.status = 'error';
+  cartState.error = 'Error de prueba';
+  app.dispatchEvent(new app.Event('cart:state'));
+  expect(status.classList.contains('cart-status--initial-loading')).toBe(false);
+  expect(status.textContent).toContain('Error de prueba');
+  expect(status.querySelector('button')?.textContent).toBe('Reintentar');
+  dom.window.close();
+});
 
 it('renders one shared order estimate between items and recommendations and hides it after the last removal', async () => {
   const dom = new JSDOM(read('index.html'), { url: 'http://localhost:3000/', runScripts: 'outside-only' });

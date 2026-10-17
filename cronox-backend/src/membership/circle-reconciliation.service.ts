@@ -20,10 +20,13 @@ export class CircleReconciliationService implements OnModuleInit, OnModuleDestro
   onModuleDestroy() { if (this.timer) clearInterval(this.timer); }
 
   async drainQueue(limit = 50) {
-    if (this.running) return 0;
+    if (this.running || limit <= 0) return 0;
     this.running = true;
     let processed = 0;
     try {
+      // An empty queue needs one read instead of an idle serializable
+      // transaction. Work arriving just after this probe runs on the next tick.
+      if (!await this.prisma.circleReconciliationQueue.findFirst({ select: { userId: true } })) return 0;
       while (processed < limit) {
         const changed = await serializableTransaction(this.prisma, async tx => {
           const [work] = await tx.$queryRaw<Array<{ userId: number; version: number }>>`

@@ -150,6 +150,16 @@ describe('AuthController cart merge cookie lifecycle', () => {
     expect(authService.recordSuccessfulLogin).not.toHaveBeenCalled();
   });
 
+  it('returns a verification challenge without cookies, cart merge or visitor identity', async () => {
+    const challenge = { verificationRequired: true, message: 'Verifica tu correo' };
+    authService.register.mockResolvedValue(challenge);
+    response.setHeader = jest.fn();
+    expect(await controller.register({ cookies: { cartId: 'guest' } } as any, response, { email: 'existing@example.test', firstName: 'New', lastName: 'Person', password: 'ValidPassword1' })).toEqual(challenge);
+    expect(authService.setAuthCookies).not.toHaveBeenCalled();
+    expect(authService.mergeCartOnLogin).not.toHaveBeenCalled();
+    expect(response.setHeader).toHaveBeenCalledWith('Cache-Control', 'no-store');
+  });
+
   it('does not record failed authentication or refresh as a successful login', async () => {
     authService.login.mockRejectedValueOnce(new Error('invalid credentials'));
     await expect(

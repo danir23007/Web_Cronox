@@ -63,6 +63,10 @@ export class AuthController {
     @Body() dto: RegisterDto,
   ) {
     const result = await this.authService.register(dto);
+    if ('verificationRequired' in result) {
+      res.setHeader('Cache-Control', 'no-store');
+      return result;
+    }
 
     const cookies = (
       req as Request & { cookies?: Record<string, string | undefined> }

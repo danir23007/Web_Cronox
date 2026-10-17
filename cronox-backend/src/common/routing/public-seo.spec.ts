@@ -45,7 +45,7 @@ const product: SeoProduct = {
   currency: 'EUR',
   isActive: true,
   imageUrl: null,
-  images: [{ url: 'https://cronox.es/photo.png', alt: 'Camiseta', variants: null, width: null, height: null }],
+  images: [{ url: 'https://cronox.es/photo.png', alt: 'Camiseta', variants: null, width: null, height: null, galleryZoom: 1 }],
   variants: [
     { id: 1, size: 'S', sku: 'TEST-S', price: null, stockQty: 2 },
     { id: 2, size: 'M', sku: 'TEST-M', price: 4500, stockQty: 0 },
@@ -58,7 +58,7 @@ const catalog: SeoCatalog = {
       : null,
   links: async () => [product],
 };
-function app(source = catalog, gated = false) {
+function app(source = catalog, gated = false, shipping?: Parameters<typeof createSeoPages>[2]) {
   const app = express();
   app.set('trust proxy', 1);
   app.use((_req, res, next) => {
@@ -71,12 +71,47 @@ function app(source = catalog, gated = false) {
     const target = legacyRedirectTarget(req.path, req.originalUrl);
     return target ? res.redirect(308, target) : next();
   });
-  app.use(createSeoPages(root, source));
+  app.use(createSeoPages(root, source, shipping));
   app.use((_req, res) => res.status(404).send('Not found'));
   return app;
 }
 const doc = (html: string) => new JSDOM(html).window.document;
 describe('public SEO server HTML (no database connection)', () => {
+  it('retains the cart shell and client retry when the initial shipping read fails, without caching failure or inventing prices', async () => {
+    const warning = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const shipping = jest.fn().mockRejectedValueOnce(new Error('temporary')).mockResolvedValueOnce([
+        {id: 1, code: 'STANDARD', label: 'Configurado', amountCents: 590, priceCents: 590},
+      ]);
+      const server = app(catalog, false, shipping);
+      const failed = await request(server).get('/cesta');
+      expect(failed.status).toBe(200);
+      const first = doc(failed.text);
+      expect(first.querySelector('#cartMain')).not.toBeNull();
+      expect(first.querySelector('#shippingOptions')?.textContent).toContain('Cargando métodos');
+      expect(first.querySelectorAll('#shippingOptions input')).toHaveLength(0);
+      expect(warning).toHaveBeenCalledTimes(1);
+      const recovered = await request(server).get('/cesta');
+      expect(recovered.status).toBe(200);
+      expect(doc(recovered.text).querySelector('.shipping-option__price')?.textContent).toContain('5,90');
+      expect(shipping).toHaveBeenCalledTimes(2);
+    } finally { warning.mockRestore(); }
+  });
+  it('renders only current shipping configuration in the initial cart, retaining the existing row structure', async () => {
+    const shipping = jest.fn().mockResolvedValue([{ id: 1, code: 'STANDARD', label: 'Envío <seguro>', amountCents: 490, priceCents: 490 }]);
+    const first = doc((await request(app(catalog, false, shipping)).get('/cesta')).text);
+    expect(first.querySelectorAll('#shippingOptions .shipping-option')).toHaveLength(1);
+    expect(first.querySelector('#shippingOptions input')?.getAttribute('value')).toBe('STANDARD');
+    expect(first.querySelector('.shipping-option__label')?.textContent).toBe('Envío <seguro>');
+    expect(first.querySelector('.shipping-option__price')?.textContent).toContain('4,90');
+    expect(first.querySelector('.shipping-option__helper')?.textContent).toContain('65,00');
+    expect(first.querySelector('#shippingOptions seguro')).toBeNull();
+    shipping.mockResolvedValue([]);
+    const empty = doc((await request(app(catalog, false, shipping)).get('/cesta')).text);
+    expect(empty.querySelectorAll('#shippingOptions input')).toHaveLength(0);
+    expect(empty.querySelector('#shippingOptions')?.textContent).toContain('No hay métodos');
+    expect(empty.querySelector('#shippingOptions')?.textContent).not.toContain('2,95');
+  });
   it('serves the complete brand article and its metadata without JavaScript', async () => {
     const response = await request(app()).get('/sobre-cronox');
     expect(response.status).toBe(200);
@@ -411,7 +446,7 @@ describe('public SEO server HTML (no database connection)', () => {
   it('escapes editable product content in actual HTML, attributes and structured data', async () => {
     const hostile = '</script><img src=x onerror="alert(1)"> & "test"';
     const source = { ...catalog, product: async () => ({ ...product, name: hostile, description: hostile,
-      images: [{ url: 'javascript:alert(1)', alt: hostile, variants: null, width: null, height: null }, { url: '/safe.png', alt: hostile, variants: null, width: null, height: null }] }) };
+      images: [{ url: 'javascript:alert(1)', alt: hostile, variants: null, width: null, height: null, galleryZoom: 1 }, { url: '/safe.png', alt: hostile, variants: null, width: null, height: null, galleryZoom: 1 }] }) };
     const response = await request(app(source)).get('/producto/camiseta-prueba');
     const document = doc(response.text);
     expect(document.querySelectorAll('img[onerror],script:not([src]):not([type])').length).toBe(doc(readFileSync(join(root, 'producto.html'), 'utf8')).querySelectorAll('script:not([src]):not([type])').length);
@@ -436,4 +471,66 @@ describe('public SEO server HTML (no database connection)', () => {
     expect(fallback.querySelector('#pImage')?.getAttribute('src')).toBe('https://cronox.es/photo.png');
     expect(fallback.querySelector('#pImage')?.getAttribute('srcset')).toBeNull();
   });
+
+  it('offers the same responsive product candidates before and after client hydration', async () => {
+    const primary = { ...product.images[0], variants: {
+      card: { url: 'https://cronox.es/card.webp', width: 975, height: 1300 },
+      quick: { url: 'https://cronox.es/quick.webp', width: 1350, height: 1800 },
+      pdp: { url: 'https://cronox.es/pdp.webp', width: 2550, height: 3400 },
+    } };
+    const source = { ...catalog, product: async () => ({ ...product, images: [primary] }) };
+    const response = await request(app(source)).get('/producto/camiseta-prueba');
+    const serverImage = doc(response.text).querySelector('#pImage')!;
+    const dom = new JSDOM('<img>', { url: 'https://cronox.es/', runScripts: 'outside-only' });
+    Object.assign(dom.window, { CRONOX_SECURITY: { productImageUrl: (value: string) => value } });
+    dom.window.eval(readFileSync(join(root, 'assets/responsive-images.js'), 'utf8'));
+    dom.window.eval(`CRONOX_IMAGES.apply(document.querySelector('img'), ${JSON.stringify(primary)}, 'pdp')`);
+    const clientImage = dom.window.document.querySelector('img')!;
+    expect(serverImage.getAttribute('srcset')).toBe('https://cronox.es/card.webp 975w, https://cronox.es/quick.webp 1350w, https://cronox.es/pdp.webp 2550w');
+    for (const attribute of ['src', 'srcset', 'sizes', 'width', 'height']) {
+      expect(clientImage.getAttribute(attribute)).toBe(serverImage.getAttribute(attribute));
+    }
+    primary.galleryZoom = 2;
+    const zoomed = doc((await request(app(source)).get('/producto/camiseta-prueba')).text).querySelector('#pImage')!;
+    dom.window.eval(`CRONOX_IMAGES.apply(document.querySelector('img'), ${JSON.stringify(primary)}, 'pdp')`);
+    expect(zoomed.getAttribute('sizes')).toBe('(max-width: 900px) 200vw, 124vw');
+    expect(clientImage.sizes).toBe(zoomed.getAttribute('sizes'));
+    dom.window.close();
+  });
+
+  it.each(['/tienda', '/tienda?categorySlug=camisetas', '/?categorySlug=camisetas'])(
+    'omits hidden hero downloads from initial catalogue HTML at %s', async (route) => {
+      const document = doc((await request(app()).get(route)).text);
+      expect(document.documentElement.classList.contains('category-page')).toBe(true);
+      const hero = document.querySelector('[data-media-placement="home.hero.video"]')!;
+      expect(hero.hasAttribute('src')).toBe(false);
+      expect(hero.hasAttribute('srcset')).toBe(false);
+      expect(document.querySelector('[data-gallery-homepage]')).not.toBeNull();
+    },
+  );
+
+  it('uses only actual catalogue links in shop card frames without speculative images', async () => {
+    const document = doc((await request(app()).get('/tienda')).text);
+    const cards = document.querySelectorAll('#productsGrid > .product-card');
+    expect(cards).toHaveLength(1);
+    expect(cards[0].getAttribute('href')).toBe('/producto/camiseta-prueba');
+    expect(cards[0].querySelector('.product-name')?.textContent).toBe(product.name);
+    expect(cards[0].querySelector('.product-media')).not.toBeNull();
+    expect(cards[0].querySelector('img')).toBeNull();
+    expect(cards[0].querySelector('.product-price')).toBeNull();
+    const empty = { ...catalog, links: async () => [] };
+    expect(doc((await request(app(empty)).get('/tienda')).text).querySelectorAll('#productsGrid > *')).toHaveLength(0);
+    expect(doc((await request(app()).get('/tienda?categorySlug=empty')).text).querySelectorAll('#productsGrid > *')).toHaveLength(0);
+  });
+
+  it.each(['/', '/?categorySlug=invalid%20category'])(
+    'preserves the discoverable high priority hero on the home page at %s', async (route) => {
+      const document = doc((await request(app()).get(route)).text);
+      expect(document.documentElement.classList.contains('category-page')).toBe(false);
+      const hero = document.querySelector('[data-media-placement="home.hero.video"]')!;
+      expect(hero.getAttribute('srcset')).toContain('1600w');
+      expect(hero.getAttribute('fetchpriority')).toBe('high');
+      expect(hero.getAttribute('loading')).toBe('eager');
+    },
+  );
 });

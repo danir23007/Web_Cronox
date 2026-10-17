@@ -1,5 +1,6 @@
 import { MailTransportFactory } from './mail-transport.factory';
 import { EmailSenderKey } from './email.types';
+import * as security from '../mailbox/mailbox-security';
 
 describe('durable email delivery history', () => {
   const originalUser = process.env.SMTP_INFO_USER;
@@ -53,5 +54,29 @@ describe('durable email delivery history', () => {
     expect(db.emailDelivery.update.mock.calls[0][0].data.status).toBe(status);
     expect(failure.deliveryUnknown === true).toBe(status === 'UNKNOWN');
     expect(JSON.stringify(db.emailDelivery.update.mock.calls)).not.toContain('private server response');
+  });
+});
+
+describe('deferred mail requiring operator review', () => {
+  afterEach(() => jest.restoreAllMocks());
+  it.each([
+    ['unknown sender', { senderKey: 'INVALID' }, undefined, 'EMAIL_DEFERRED_INVALID_JOB'],
+    ['missing payload', { pendingPayload: null }, undefined, 'EMAIL_DEFERRED_INVALID_JOB'],
+    ['unavailable key', {}, new Error('private key detail'), 'EMAIL_DEFERRED_KEY_UNAVAILABLE'],
+    ['invalid recipients', {}, { raw: 'YQ==', envelope: { from: 'current@example.test', to: [] } }, 'EMAIL_DEFERRED_LIMIT_REVIEW'],
+    ['changed account', {}, { raw: 'YQ==', envelope: { from: 'old@example.test', to: ['recipient@example.test'] } }, 'EMAIL_ACCOUNT_CHANGED_REVIEW'],
+  ])('moves %s outside the due batch, retaining encrypted evidence and version guard', async (_name, extra, decoded, errorCode) => {
+    const job = { id: 'job', senderKey: 'INFO', pendingPayload: 'encrypted', quotaUnits: 1, updatedAt: new Date('2026-10-17T12:00:00Z'), ...extra };
+    jest.spyOn(security, 'decrypt').mockImplementation(() => { if (decoded instanceof Error) throw decoded; return JSON.stringify(decoded); });
+    const db: any = { emailDelivery: { updateMany: jest.fn(), findMany: jest.fn().mockResolvedValue([job]) } };
+    const worker = new MailTransportFactory(db);
+    (worker as any).config.accounts.INFO.user = 'current@example.test';
+    const transport = jest.spyOn(worker, 'getTransport');
+    await worker.tickDeferred();
+    expect(db.emailDelivery.updateMany).toHaveBeenLastCalledWith({
+      where: { id: job.id, status: 'WAITING_QUOTA', updatedAt: job.updatedAt },
+      data: { status: 'REVIEW_REQUIRED', readyAt: null, errorCode },
+    });
+    expect(transport).not.toHaveBeenCalled();
   });
 });

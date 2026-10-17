@@ -299,9 +299,11 @@
         slab.style.transform = `rotateX(${x}deg) rotateY(${y}deg)`;
         updateLighting();
         const onFront = Math.cos(y * Math.PI / 180) >= 0;
-        front.setAttribute('aria-hidden', String(!onFront));
-        back.setAttribute('aria-hidden', String(onFront));
-        flip.textContent = onFront ? 'Ver reverso' : 'Ver anverso';
+        const frontHidden = String(!onFront), backHidden = String(onFront);
+        if (front.getAttribute('aria-hidden') !== frontHidden) front.setAttribute('aria-hidden', frontHidden);
+        if (back.getAttribute('aria-hidden') !== backHidden) back.setAttribute('aria-hidden', backHidden);
+        const flipLabel = onFront ? 'Ver reverso' : 'Ver anverso';
+        if (flip.textContent !== flipLabel) flip.textContent = flipLabel;
       }
       function cancelFrame() {
         cancelAnimationFrame(frame);

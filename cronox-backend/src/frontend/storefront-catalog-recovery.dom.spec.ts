@@ -20,9 +20,9 @@ const item = (name: string, id: number) => ({
   images: ['/product.jpg'],
   variants: [{ id, stock: 2, isActive: true }],
 });
-function open(getProducts?: jest.Mock) {
+function open(getProducts?: jest.Mock, initialCards = '') {
   const dom = new JSDOM(
-    '<h2 class="store-heading">NOVEDADES</h2><div id="productsGrid"></div><div id="productsFallback" hidden></div>',
+    `<h2 class="store-heading">NOVEDADES</h2><div id="productsGrid">${initialCards}</div><div id="productsFallback" hidden></div>`,
     {
       url: 'http://localhost:3000/',
       runScripts: 'outside-only',
@@ -86,6 +86,29 @@ describe('storefront catalog recovery', () => {
     expect(names()).toEqual(['First', 'Second', 'Third']);
     dom.window.close();
   });
+
+  it.each(['ready', 'empty', 'error'])(
+    'keeps server cards during category setup, then replaces them with the %s result',
+    async (outcome) => {
+      let settle!: (value: unknown) => void;
+      const pending = new Promise(resolve => { settle = resolve; });
+      const { app, dom, names } = open(jest.fn().mockReturnValue(pending),
+        '<a class="product-card" href="/producto/from-server"><div class="product-media"></div><div class="product-card__info"><h3 class="product-name">From server</h3></div></a>');
+      const initialCard = dom.window.document.querySelector('.product-card');
+      app.dispatchEvent(new app.CustomEvent('cronox:store-categories', { detail: {} }));
+      expect(dom.window.document.querySelector('.product-card')).toBe(initialCard);
+      expect(names()).toEqual(['From server']);
+      expect(dom.window.document.getElementById('productsFallback')?.textContent).toContain('Cargando');
+      settle(outcome === 'ready' ? [item('From API', 1)] : outcome === 'empty' ? [] : { malformed: true });
+      await app.CRONOX_catalogReady;
+      expect(dom.window.document.contains(initialCard)).toBe(false);
+      expect(names()).toEqual(outcome === 'ready' ? ['From API'] : []);
+      const fallback = dom.window.document.getElementById('productsFallback')!;
+      expect(fallback.hidden).toBe(outcome === 'ready');
+      expect(fallback.querySelector('button') !== null).toBe(outcome === 'error');
+      dom.window.close();
+    },
+  );
 
   it.each([
     ['network rejection', () => Promise.reject(new Error('offline'))],

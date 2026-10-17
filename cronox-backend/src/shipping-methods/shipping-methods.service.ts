@@ -35,9 +35,6 @@ type ShippingRow = {
 export class ShippingMethodsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  // Caché opcional en memoria (puedes borrarlo si no lo quieres)
-  private cache: Map<ShippingMethodCode, ShippingRow> | null = null;
-
   /**
    * Cargamos los métodos de envío desde la BD y los mapeamos
    * a STANDARD / EXPRESS usando el ID de la fila:
@@ -50,8 +47,6 @@ export class ShippingMethodsService {
   private async loadMethodsFromDb(): Promise<
     Map<ShippingMethodCode, ShippingRow>
   > {
-    if (this.cache) return this.cache;
-
     const rows = await this.prisma.shippingMethod.findMany({
       where: { isActive: true },
       orderBy: { id: 'asc' },
@@ -80,7 +75,6 @@ export class ShippingMethodsService {
       });
     }
 
-    this.cache = map;
     return map;
   }
 
@@ -149,7 +143,7 @@ export class ShippingMethodsService {
   }
 
   clearCache() {
-    this.cache = null;
+    // Kept for existing callers. Quotes now always read the active configuration.
   }
 
   private assertSupportedCountry(country: string): void {

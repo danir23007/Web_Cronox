@@ -59,15 +59,17 @@ describe('fixed Admin backend pagination defaults', () => {
 
     const usersPrisma = {
       user: {
-        findMany: jest.fn().mockResolvedValue(Array.from({ length: 101 }, (_, i) => ({ id: i + 1 }))),
-        count: jest.fn().mockResolvedValue(0),
+        findMany: jest.fn(({ skip, take }) => Promise.resolve(
+          Array.from({ length: 101 }, (_, i) => ({ id: 101 - i })).slice(skip, skip + take),
+        )),
+        count: jest.fn().mockResolvedValue(101),
       },
       order: { findMany: jest.fn().mockResolvedValue([]) },
       $transaction: jest.fn((work) => work(usersPrisma)),
     };
     const users = await new AdminUsersService(usersPrisma as never).listUsers({});
     expect(usersPrisma.user.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({ orderBy: { id: 'desc' } }),
+      expect.objectContaining({ orderBy: { id: 'desc' }, skip: 0, take: 100 }),
     );
     expect(users.data).toHaveLength(100);
     expect(users.meta).toMatchObject({ pageSize: 100, total: 101, totalPages: 2 });

@@ -21,6 +21,9 @@ const manifest = JSON.parse(
 );
 const approvedImageChanges = new Set([
   'cronox-front/assets/CRONOX-preloader.webp',
+  // Responsive derivatives requested by the performance review; original retained.
+  'cronox-front/assets/CRONOX-preloader-320.webp',
+  'cronox-front/assets/CRONOX-preloader-640.webp',
   'cronox-front/assets/logo-topbar.webp',
   'cronox-front/assets/maps/spain-provinces.svg',
   // Official PayPal artwork requested for the checkout payment selector.
@@ -88,6 +91,19 @@ async function main() {
     },
   );
 
+  for (const width of [320, 640]) {
+    const derivative = path.join(frontendRoot, `assets/CRONOX-preloader-${width}.webp`);
+    const responsive = await sharp(derivative, { animated: true }).metadata();
+    assert.equal(responsive.format, animation.format);
+    assert.equal(responsive.width, width);
+    assert.equal(responsive.pageHeight, width * 9 / 16);
+    assert.equal(responsive.pages, animation.pages);
+    assert.equal(responsive.loop, animation.loop);
+    assert.equal(responsive.hasAlpha, animation.hasAlpha);
+    assert.deepEqual(responsive.delay, animation.delay);
+    assert.ok(fs.statSync(derivative).size < fs.statSync(path.join(frontendRoot, 'assets/CRONOX-preloader.webp')).size);
+  }
+
   const originalLogo = await sharp(
     path.join(frontendRoot, 'assets/logo_banner.png'),
   ).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
@@ -103,13 +119,20 @@ async function main() {
   const profileHtml = read('cronox-front/profile.html');
   const keyScreen = read('cronox-front/key-screen.html');
   const newsletter = read('cronox-front/assets/newsletter-renderer.js');
-  assert.match(index, /class="preloader__logo"[^>]*src=|src="assets\/CRONOX-preloader\.webp"[\s\S]*?class="preloader__logo"/);
+  for (const html of [index, checkout]) {
+    const preloader = html.match(/<img\b[^>]*class="preloader__logo"[^>]*>/)?.[0];
+    assert.ok(preloader, 'The visible animated preloader must remain present');
+    assert.match(preloader, /src="assets\/CRONOX-preloader-640\.webp"/);
+    assert.match(preloader, /srcset="assets\/CRONOX-preloader-320\.webp 320w, assets\/CRONOX-preloader-640\.webp 640w"/);
+    assert.match(preloader, /sizes="196px"/);
+  }
   assert.match(index, /class="topbar__logo"[\s\S]*?src="assets\/logo-topbar\.webp"/);
   assert.match(index, /<img class="hero-video"[^>]*data-media-placement="home\.hero\.video"/);
   assert.doesNotMatch(index, /<video class="hero-video"/);
   assert.match(index, /class="footer-logo"/);
-  assert.match(checkout, /src="assets\/CRONOX-preloader\.webp"/);
-  assert.match(profile, /img\.src = 'assets\/CRONOX-preloader\.webp'/);
+  assert.match(profile, /img\.src = 'assets\/CRONOX-preloader-640\.webp'/);
+  assert.match(profile, /img\.srcset = 'assets\/CRONOX-preloader-320\.webp 320w, assets\/CRONOX-preloader-640\.webp 640w'/);
+  assert.match(profile, /img\.sizes = '196px'/);
   const profileVersion = /assets\/profile\.js\?v=(\d+)/.exec(profileHtml);
   assert.ok(profileVersion && Number(profileVersion[1]) >= 24,
     'Profile must retain the media optimization cache version or a newer release');

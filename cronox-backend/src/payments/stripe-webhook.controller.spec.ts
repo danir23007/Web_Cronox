@@ -46,22 +46,13 @@ describe('StripeWebhookController lifecycle safety', () => {
     ).not.toHaveBeenCalled();
   });
 
-  it('keeps failed event processing retryable and deduplicates completed delivery', async () => {
-    const event = { id: 'evt_refund_retry', type: 'charge.refunded', created: 1790194651, livemode: true,
+  it('persists only a signature-verified event through the recovery queue', async () => {
+    const event = { id: 'evt_refund', type: 'charge.refunded', created: 1790194651, livemode: false,
       data: { object: { payment_intent: 'pi_retry', refunded: true, amount: 320, amount_refunded: 320 } } };
-    const webhook = new StripeWebhookController({ constructEventFromPayload: () => event } as any, ordersService, {} as any, {} as any, {} as any, authService);
-    ordersService.claimStripeWebhookEvent = jest.fn().mockResolvedValueOnce(true).mockResolvedValueOnce(true).mockResolvedValueOnce(false);
-    ordersService.failStripeWebhookEvent = jest.fn().mockResolvedValue(undefined);
-    ordersService.completeStripeWebhookEvent = jest.fn().mockResolvedValue(undefined);
-    ordersService.reconcileStripePaymentLifecycle.mockRejectedValueOnce(new Error('temporary database failure')).mockResolvedValue(undefined);
-    const req = { body: Buffer.from('{}') } as any;
-    await expect(webhook.handleStripeWebhook(req, undefined, 'mock-signature')).rejects.toThrow('temporary database failure');
-    expect(ordersService.failStripeWebhookEvent).toHaveBeenCalledWith(event.id, expect.any(Error));
-    expect(ordersService.completeStripeWebhookEvent).not.toHaveBeenCalled();
-    await expect(webhook.handleStripeWebhook(req, undefined, 'mock-signature')).resolves.toEqual({ received: true });
-    await expect(webhook.handleStripeWebhook(req, undefined, 'mock-signature')).resolves.toEqual({ received: true, duplicate: true });
-    expect(ordersService.reconcileStripePaymentLifecycle).toHaveBeenCalledTimes(2);
-    expect(ordersService.completeStripeWebhookEvent).toHaveBeenCalledTimes(1);
+    const recovery = { register: jest.fn(), accept: jest.fn().mockResolvedValue({ received: true, queued: true }) };
+    const webhook = new StripeWebhookController({ constructEventFromPayload: () => event } as any, ordersService, {} as any, {} as any, {} as any, authService, undefined, recovery as any);
+    await expect(webhook.handleStripeWebhook({ body: Buffer.from('{}') } as any, undefined, 'signature')).resolves.toEqual({ received: true, queued: true });
+    expect(recovery.accept).toHaveBeenCalledWith(event, expect.objectContaining({ paymentIntentId: 'pi_retry', lifecycleStatus: 'REFUNDED', refundCumulativeCents: 320 }));
   });
 
   it('reconciles a full charge refund from the persisted event timeline', async () => {
@@ -192,7 +183,7 @@ describe('StripeWebhookController lifecycle safety', () => {
     expect(authService.sendInitialPasswordSetupIfNeeded).not.toHaveBeenCalled();
   });
 
-  it('requests password setup only after the authoritative paid-order result', async () => {
+  it('defers password setup to the durable auxiliary worker', async () => {
     ordersService.createOrderFromVerifiedStripePayment.mockResolvedValue({
       orderId: 322,
       userId: 77,
@@ -214,9 +205,7 @@ describe('StripeWebhookController lifecycle safety', () => {
       new Date('2026-08-08T10:00:00.000Z'),
     );
 
-    expect(authService.sendInitialPasswordSetupIfNeeded).toHaveBeenCalledWith(
-      77,
-    );
+    expect(authService.sendInitialPasswordSetupIfNeeded).not.toHaveBeenCalled();
   });
 
   it('keeps the reservation and cart intact after a retryable payment failure', async () => {
@@ -278,39 +267,30 @@ describe('StripeWebhookController lifecycle safety', () => {
     ).not.toHaveBeenCalled();
   });
 
-  it('retries a failed confirmation independently of webhook deduplication and marks only accepted mail', async () => {
-    const prisma = {
-      checkoutSnapshot: { findUnique: jest.fn().mockResolvedValue({ id: 'snap_mail', order: { status: 'PAID' } }) },
-      order: { findUnique: jest.fn().mockResolvedValue({ status: 'PAID', customerEmail: 'buyer@example.test' }) },
-    };
-    const email = { send: jest.fn().mockRejectedValueOnce(new Error('SMTP unavailable')).mockResolvedValueOnce({ messageId: 'accepted' }) };
-    const mapper = { map: jest.fn().mockReturnValue({}) };
-    const retryController = new StripeWebhookController({} as any, ordersService, email as any, prisma as any, mapper as any, authService);
-    ordersService.claimOrderConfirmationEmail.mockResolvedValue(true);
-    await expect(retryController.retryOrderConfirmationEmail(18)).resolves.toEqual({ outcome: 'retry_required' });
-    expect(ordersService.markOrderConfirmationEmailSent).not.toHaveBeenCalled();
-    expect(ordersService.releaseOrderConfirmationEmailClaim).toHaveBeenCalledWith('snap_mail');
-    await expect(retryController.retryOrderConfirmationEmail(18)).resolves.toEqual({ outcome: 'accepted' });
-    expect(ordersService.markOrderConfirmationEmailSent).toHaveBeenCalledTimes(1);
-    ordersService.claimOrderConfirmationEmail.mockResolvedValue(false);
-    await expect(retryController.retryOrderConfirmationEmail(18)).resolves.toEqual({ outcome: 'already_sent_or_claimed' });
-    expect(email.send).toHaveBeenCalledTimes(2);
+  it('keeps uncertain confirmation under explicit review instead of sending again', async () => {
+    const prisma = { checkoutSnapshot: { findUnique: jest.fn().mockResolvedValue({ id: 'snap_mail', order: { status: 'PAID' } }) },
+      checkoutEffect: { findUnique: jest.fn().mockResolvedValue({ id: 'effect' }), findUniqueOrThrow: jest.fn().mockResolvedValue({ status: 'REVIEW' }) } };
+    const email = { send: jest.fn() };
+    const recovery = { register: jest.fn(), processEffects: jest.fn() };
+    const retryController = new StripeWebhookController({} as any, ordersService, email as any, prisma as any, {} as any, authService, undefined, recovery as any);
+    await expect(retryController.retryOrderConfirmationEmail(18)).resolves.toEqual({ outcome: 'REVIEW' });
+    expect(email.send).not.toHaveBeenCalled();
   });
 
-  it('refuses a paid confirmation after a refund, including a refund between claim and read', async () => {
-    const prisma = {
-      checkoutSnapshot: { findUnique: jest.fn().mockResolvedValue({ id: 'snap_refunded', order: { status: 'REFUNDED' } }) },
-      order: { findUnique: jest.fn().mockResolvedValue({ status: 'REFUNDED', customerEmail: 'buyer@example.test' }) },
-    };
+  it('does not deliver confirmation for a refunded order', async () => {
     const email = { send: jest.fn() };
-    const retryController = new StripeWebhookController({} as any, ordersService, email as any, prisma as any, {} as any, authService);
-    await expect(retryController.retryOrderConfirmationEmail(18)).resolves.toEqual({ outcome: 'not_paid' });
-    expect(ordersService.claimOrderConfirmationEmail).not.toHaveBeenCalled();
-    prisma.checkoutSnapshot.findUnique.mockResolvedValue({ id: 'snap_refunded', order: { status: 'PAID' } });
-    ordersService.claimOrderConfirmationEmail.mockResolvedValue(true);
-    await expect(retryController.retryOrderConfirmationEmail(18)).resolves.toEqual({ outcome: 'unavailable' });
+    const retryController = new StripeWebhookController({} as any, ordersService, email as any,
+      { order: { findUnique: jest.fn().mockResolvedValue({ status: 'REFUNDED' }) } } as any, {} as any, authService);
+    await expect((retryController as any).deliverEffect({ kind: 'ORDER_CONFIRMATION', orderId: 18 })).resolves.toBe('not_needed');
     expect(email.send).not.toHaveBeenCalled();
-    expect(ordersService.markOrderConfirmationEmailSent).not.toHaveBeenCalled();
+  });
+
+  it('never refunds a transient failure or an uncertain committed result', async () => {
+    const stripe = { refundPaymentIntent: jest.fn() };
+    const c = new StripeWebhookController(stripe as any, ordersService, {} as any, {} as any, {} as any, authService);
+    ordersService.createOrderFromVerifiedStripePayment.mockRejectedValue(new Error('connection lost after commit'));
+    await expect((c as any).handleVerifiedPaymentIntentSucceeded({ id: 'pi_paid', status: 'succeeded', amount: 100, currency: 'eur', metadata: { checkoutSnapshotId: 'snap' } }, new Date())).rejects.toThrow('connection lost');
+    expect(stripe.refundPaymentIntent).not.toHaveBeenCalled();
   });
 
   it('does not fail persisted order confirmation when claiming email fails', async () => {

@@ -30,15 +30,6 @@
     return typeof helper === 'function' ? helper(value, fallback) : fallback;
   };
 
-  const FREE_SHIPPING_THRESHOLD = 6500;
-  const STANDARD_SHIPPING = 295;
-  const EXPRESS_SHIPPING = 495;
-
-  const SHIPPING_OPTIONS = [
-    { code: 'STANDARD', label: 'Envío estándar (2,95€)', helper: 'Gratis a partir de 65€' },
-    { code: 'EXPRESS', label: 'Envío express (4,95€)' },
-  ];
-
   const Cart = window.CRONOX_CART || null;
 
   const state = {
@@ -46,72 +37,87 @@
     shippingMethod: 'STANDARD',
     status: 'loading',
     error: null,
+    quote: null,
+    quoteKey: '',
+    quoteRevision: 0,
+    quoteLoading: false,
+    quoteError: null,
   };
   const statusEl = document.createElement('div');
   statusEl.className = 'cart-status';
   statusEl.setAttribute('role', 'status');
   listEl?.parentElement.before(statusEl);
 
-  const calculateShipping = (itemsTotal, method) => {
-    if (method === 'EXPRESS') return EXPRESS_SHIPPING;
-    if (itemsTotal >= FREE_SHIPPING_THRESHOLD) return 0;
-    return STANDARD_SHIPPING;
-  };
-
-
-  const renderShippingOptions = () => {
+  const quoteStatus = document.createElement('p');
+  quoteStatus.setAttribute('role', 'status');
+  quoteStatus.hidden = true;
+  shippingOptionsEl?.after(quoteStatus);
+  const renderShipping = (methods) => {
     if (!shippingOptionsEl) return;
-    shippingOptionsEl.innerHTML = '';
-
-    SHIPPING_OPTIONS.forEach((option) => {
-      const wrapper = document.createElement('label');
-      wrapper.className = 'shipping-option';
-      wrapper.innerHTML = `
-        <input type="radio" name="shippingMethod" value="${option.code}" ${
-          option.code === state.shippingMethod ? 'checked' : ''
-        }>
-        <div class="shipping-option__info">
-          <span class="shipping-option__label">${option.label}</span>
-          ${option.helper ? `<small class="shipping-option__helper">${option.helper}</small>` : ''}
-        </div>
-        <span class="shipping-option__price" data-code="${option.code}"></span>
-      `;
-      shippingOptionsEl.appendChild(wrapper);
-    });
+    const current = Array.from(shippingOptionsEl.querySelectorAll('input')).map(input => input.value);
+    if (JSON.stringify(current) !== JSON.stringify(methods.map(method => method.code))) {
+      shippingOptionsEl.innerHTML = methods.map(method => `<label class="shipping-option">
+        <input type="radio" name="shippingMethod" value="${escapeHtml(method.code)}">
+        <div class="shipping-option__info"><span class="shipping-option__label"></span>${method.code === 'STANDARD' ? '<small class="shipping-option__helper">Gratis a partir de 65,00 €</small>' : ''}</div>
+        <span class="shipping-option__price" data-code="${escapeHtml(method.code)}"></span>
+      </label>`).join('');
+    }
+    for (const method of methods) {
+      const input = Array.from(shippingOptionsEl.querySelectorAll('input')).find(input => input.value === method.code);
+      if (!input) continue;
+      input.checked = method.code === state.shippingMethod;
+      const row = input.closest('label');
+      row.querySelector('.shipping-option__label').textContent = method.label;
+      const price = row.querySelector('.shipping-option__price');
+      price.textContent = money(method.amountCents);
+      price.classList.toggle('is-free', method.amountCents === 0);
+    }
   };
-
+  const refreshQuote = async () => {
+    if (!state.cart?.items?.length || state.status === 'loading' || state.status === 'error' || Cart?.state.pending) return;
+    const key = JSON.stringify([state.shippingMethod, state.cart.subtotalCents, state.cart.items.map(item => [item.id, item.qty, item.priceCents])]);
+    if (key === state.quoteKey) return;
+    state.quoteKey = key;
+    const revision = ++state.quoteRevision;
+    state.quoteLoading = true;
+    state.quoteError = null;
+    renderSummary();
+    try {
+      const quote = await API.getCheckoutSummary({ shippingMethod: state.shippingMethod });
+      if (revision !== state.quoteRevision) return;
+      state.quote = quote;
+      state.shippingMethod = quote.selectedShippingMethod?.code || '';
+      state.quoteKey = JSON.stringify([state.shippingMethod, state.cart.subtotalCents, state.cart.items.map(item => [item.id, item.qty, item.priceCents])]);
+      renderShipping(quote.shippingMethods || []);
+      if (!state.shippingMethod) state.quoteError = 'No hay métodos de envío disponibles.';
+    } catch (error) {
+      if (revision !== state.quoteRevision) return;
+      console.warn('[CRONOX] No se pudo calcular el envío', error);
+      state.quote = null;
+      state.quoteError = 'No se pudo calcular el envío. Vuelve a intentarlo.';
+    } finally {
+      if (revision === state.quoteRevision) { state.quoteLoading = false; renderSummary(); }
+    }
+  };
   const renderSummary = () => {
     const subtotalCents = state.cart?.subtotalCents || 0;
     const hasItems = Boolean(state.cart?.items?.length);
-    const shippingCents = hasItems
-      ? calculateShipping(subtotalCents, state.shippingMethod)
-      : 0;
-    const isFree = shippingCents === 0 && state.shippingMethod === 'STANDARD';
-    const shippingLabel = isFree
-      ? 'Gratis (envío estándar)'
-      : `${state.shippingMethod === 'EXPRESS' ? 'Envío express' : 'Envío estándar'} · ${money(
-          shippingCents,
-        )}`;
-
+    const verified = hasItems && state.quote && !state.quoteLoading && !state.quoteError;
+    const method = state.quote?.selectedShippingMethod;
     subtotalEl && (subtotalEl.textContent = money(subtotalCents));
-    shippingLabelEl && (shippingLabelEl.textContent = hasItems ? shippingLabel : '—');
-    totalEl && (totalEl.textContent = money((state.cart ? subtotalCents : 0) + shippingCents));
-    const unavailable = !hasItems || state.status === 'loading' || state.status === 'error' || Boolean(Cart?.state.pending);
+    shippingLabelEl && (shippingLabelEl.textContent = verified ? `${method.label} · ${money(state.quote.totals.shippingCents)}` : '—');
+    totalEl && (totalEl.textContent = verified ? money(state.quote.totals.totalCents) : hasItems ? '—' : money(0));
+    const unavailable = !verified || state.status === 'loading' || state.status === 'error' || Boolean(Cart?.state.pending);
     if (btnCheckout) btnCheckout.disabled = unavailable;
-    if (btnClear) btnClear.disabled = unavailable;
-
-    if (shippingOptionsEl) {
-      shippingOptionsEl.querySelectorAll('.shipping-option__price').forEach((priceEl) => {
-        const code = priceEl.getAttribute('data-code');
-        if (code === 'STANDARD') {
-          const cost = calculateShipping(subtotalCents, 'STANDARD');
-          priceEl.textContent = money(cost);
-          priceEl.classList.toggle('is-free', cost === 0);
-        } else if (code === 'EXPRESS') {
-          priceEl.textContent = money(EXPRESS_SHIPPING);
-          priceEl.classList.remove('is-free');
-        }
-      });
+    if (btnClear) btnClear.disabled = !hasItems || state.status === 'loading' || Boolean(Cart?.state.pending);
+    quoteStatus.replaceChildren();
+    quoteStatus.hidden = !hasItems || !state.quoteError;
+    if (!quoteStatus.hidden) {
+      quoteStatus.append(state.quoteError + ' ');
+      const retry = document.createElement('button');
+      retry.type = 'button'; retry.textContent = 'Reintentar';
+      retry.addEventListener('click', () => { state.quoteKey = ''; refreshQuote(); });
+      quoteStatus.append(retry);
     }
   };
 
@@ -132,7 +138,15 @@
       state.status = Cart.state.status;
       state.error = Cart.state.error;
     }
+    if (!state.cart?.items?.length || state.status === 'loading' || Boolean(Cart?.state.pending)) {
+      ++state.quoteRevision;
+      state.quoteKey = '';
+      state.quote = null;
+      state.quoteLoading = false;
+    }
+    void refreshQuote();
     listEl.setAttribute('aria-busy', String(state.status === 'loading'));
+    statusEl.classList.toggle('cart-status--initial-loading', state.status === 'loading' && !state.cart);
     statusEl.replaceChildren();
     statusEl.hidden = state.status !== 'loading' && state.status !== 'error';
     if (!statusEl.hidden) {
@@ -295,7 +309,7 @@
     const input = event.target.closest('input[name="shippingMethod"]');
     if (!input) return;
     state.shippingMethod = input.value === 'EXPRESS' ? 'EXPRESS' : 'STANDARD';
-    renderSummary();
+    void refreshQuote();
   });
 
   btnCheckout?.addEventListener('click', () => {
@@ -308,7 +322,8 @@
     if (yearEl) {
       yearEl.textContent = new Date().getFullYear();
     }
-    renderShippingOptions();
+    state.shippingMethod = shippingOptionsEl?.querySelector('input:checked')?.value === 'EXPRESS'
+      ? 'EXPRESS' : 'STANDARD';
     syncCart({ initial: true });
   };
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init, { once: true });

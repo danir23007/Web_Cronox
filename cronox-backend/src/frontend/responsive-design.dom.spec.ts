@@ -86,7 +86,7 @@ describe('CRONOX responsive design system', () => {
     ];
 
     optimizedLoadingSurfaces.forEach((surface) => {
-      expect(surface).toContain('assets/CRONOX-preloader.webp');
+      expect(surface).toContain('assets/CRONOX-preloader-640.webp');
       expect(surface).not.toContain('assets/CRONOX-GIF.gif');
     });
     expect(readFrontend('key-screen.html')).toContain('assets/CRONOX-GIF.gif');

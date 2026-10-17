@@ -82,6 +82,24 @@ const setup = () => {
 };
 
 describe('public newsletter authoritative authentication gate', () => {
+  it('keeps registration open and anonymous while mailbox verification is required', async () => {
+    const context = setup();
+    try {
+      await flush(); context.auth.resolve(null); await flush();
+      const win = context.window;
+      win.TextEncoder = TextEncoder;
+      win.CRONOX_API.register = jest.fn().mockResolvedValue({ verificationRequired: true, message: 'Comprueba tu correo para verificar la cuenta.' });
+      await win.CRONOX_openAuthModal('register');
+      for (const [id, value] of Object.entries({ authRegisterFirstName: 'Persona', authRegisterLastName: 'Ficticia', authRegisterEmail: 'member@example.test', authRegisterPassword: 'ValidPassword1' })) win.document.getElementById(id).value = value;
+      win.document.getElementById('authRegisterForm').dispatchEvent(new win.Event('submit', { cancelable: true }));
+      await flush();
+      expect(win.CRONOX_API.register).toHaveBeenCalledTimes(1);
+      expect(win.CRONOX_AUTH_STATE).toBe('anonymous');
+      expect(win.CRONOX_USER).toBeFalsy();
+      expect(win.document.getElementById('authOverlay').classList.contains('is-open')).toBe(true);
+      expect(win.document.getElementById('authMessage').textContent).toContain('Comprueba tu correo');
+    } finally { context.dom.window.close(); }
+  });
   it.each(['unavailable', 'failed'])('preserves identity and private state after %s logout', async kind => {
     const context = setup();
     try {

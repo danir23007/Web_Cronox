@@ -28,6 +28,8 @@ describe('METACRILATOS integration and privacy boundaries', () => {
     try {
       const image = section.querySelector('.accreditation-book-art');
       const originalSrc = image.getAttribute('src');
+      const configuredArtwork = '/assets/logo_banner.png';
+      expect(originalSrc).toBeNull();
       const promotion = section.querySelector('[data-accreditation-promotions]');
       const parent = promotion.parentNode;
       win.CRONOX_USER = { id: 999, registrationNumber: 999, circleLevel: 5, name: 'Untrusted browser', publicMemberToken: 'fake' };
@@ -40,12 +42,12 @@ describe('METACRILATOS integration and privacy boundaries', () => {
       // renderer needs to move them or alter the identity/QR composition.
       expect(promotion.parentNode).toBe(parent);
       expect(image.getAttribute('src')).toBe(originalSrc);
-      await api.apply(section, { id: 'original', renderer: 'original-v1', config: { version: 1, artworkUrl: originalSrc } });
+      await api.apply(section, { id: 'original', renderer: 'original-v1', config: { version: 1, artworkUrl: configuredArtwork } });
       expect(destroy).toHaveBeenCalledTimes(1);
       expect(section.querySelector('.metacrilatos-host')).toBeNull();
       expect(section.querySelector('.accreditation-stage').hidden).toBe(false);
       expect(promotion.parentNode).toBe(parent);
-      expect(image.getAttribute('src')).toBe(originalSrc);
+      expect(image.getAttribute('src')).toBe(configuredArtwork);
     } finally { dom.window.close(); }
   });
 

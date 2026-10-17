@@ -963,6 +963,7 @@ import { loadCategoryPages } from './category-pagination';
       method: 'POST',
       body: payload,
     });
+    if (data?.verificationRequired === true) return data;
     return (data as { user?: UnknownRecord })?.user || null;
   };
 

@@ -103,6 +103,102 @@ describe('METACRILATOS member composition data and instance lifecycle', () => {
     expect(destroys[0]).not.toHaveBeenCalled();
   });
 
+  it('starts fresh totals before design resources and leaves artwork and loader unloaded on the Orders tab', async () => {
+    const designReply = deferred();
+    const { win, section, mount, getStats, open } = await setup();
+    expect(section.querySelector('.accreditation-book-art').hasAttribute('src')).toBe(false);
+    expect(win.document.querySelector('link[rel="preload"][href*="Libro-antiguo"]')).toBeNull();
+    expect(win.document.getElementById('preloader')).toBeNull();
+    const originalFetch = win.fetch;
+    win.fetch = jest.fn((url: string) => url.endsWith('/active') ? designReply.promise : originalFetch(url));
+    await open();
+    expect(getStats).toHaveBeenCalledTimes(1);
+    expect(getStats.mock.calls[0][0].signal).toBeDefined();
+    expect(mount).not.toHaveBeenCalled();
+    expect(section.classList.contains('is-loading')).toBe(true);
+    expect(win.document.getElementById('preloader').hidden).toBe(false);
+    designReply.resolve({ ok: true, json: async () => design });
+    await tick(); await tick();
+    expect(mount).toHaveBeenCalledTimes(1);
+    expect(section.classList.contains('is-loading')).toBe(false);
+    expect(getStats).toHaveBeenCalledTimes(1);
+    expect(section.querySelector('.accreditation-book-art').hasAttribute('src')).toBe(false);
+  });
+
+  it('reads III eligibility after authoritative totals finish a due promotion, then reveals both results together', async () => {
+    const totals = deferred();
+    const { win, section, open } = await setup(3, jest.fn(() => totals.promise));
+    const upgrade = jest.fn(async () => ({ circleLevel: 3, canRequest: true, hasPending: false, hasApproved: false }));
+    win.CRONOX_API.getCircleUpgradeStatus = upgrade;
+    await open();
+    expect(upgrade).not.toHaveBeenCalled();
+    expect(section.classList.contains('is-loading')).toBe(true);
+    totals.resolve({ ...stats, circleLevel: 3 });
+    await tick(); await tick();
+    expect(upgrade).toHaveBeenCalledTimes(1);
+    expect(win.CRONOX_USER.circleLevel).toBe(3);
+    expect(section.classList.contains('is-loading')).toBe(false);
+    expect(win.document.querySelector('[data-circle4-request-btn]').disabled).toBe(false);
+  });
+
+  it('revalidates early circle II responses when the personal read crosses promotion time and mounts circle III', async () => {
+    const designReply = deferred();
+    const getStats = jest.fn().mockResolvedValueOnce({ ...stats, circleLevel: 2 })
+      .mockResolvedValueOnce({ ...stats, circleLevel: 3 });
+    const { win, section, mount, open } = await setup(3, getStats);
+    const upgrade = jest.fn().mockResolvedValueOnce({ circleLevel: 2, canRequest: false, eligibleAt: null })
+      .mockResolvedValueOnce({ circleLevel: 3, canRequest: true, hasPending: false, hasApproved: false });
+    win.CRONOX_API.getCircleUpgradeStatus = upgrade;
+    const originalFetch = win.fetch;
+    win.fetch = jest.fn((url: string) => url.endsWith('/active') ? designReply.promise : originalFetch(url));
+    await open();
+    expect(getStats).toHaveBeenCalledTimes(1);
+    expect(upgrade).toHaveBeenCalledTimes(1);
+    expect(section.classList.contains('is-loading')).toBe(true);
+    designReply.resolve({ ok: true, json: async () => design });
+    await tick(); await tick();
+    expect(getStats).toHaveBeenCalledTimes(2);
+    expect(upgrade).toHaveBeenCalledTimes(2);
+    expect(mount).toHaveBeenCalledTimes(1);
+    expect(mount.mock.calls[0][1].circleLevel).toBe(3);
+    expect(win.CRONOX_ACCREDITATION_STATS.circleLevel).toBe(3);
+    expect(win.CRONOX_USER.circleLevel).toBe(3);
+    expect(win.document.querySelector('[data-circle4-request-btn]').disabled).toBe(false);
+    expect(section.classList.contains('is-loading')).toBe(false);
+  });
+
+  it('advances the server countdown from response receipt while artwork is still loading', async () => {
+    const ready = deferred();
+    const server = Date.parse('2026-10-17T12:00:00Z');
+    const { win, mount, section, open } = await setup(2, jest.fn().mockResolvedValue({ ...stats, circleLevel: 2,
+      promotion: { canRequest: false, hasPending: false, eligibleAt: new Date(server + 300000).toISOString(), serverTime: new Date(server).toISOString() } }));
+    let now = 0;
+    win.performance.now = () => now;
+    const originalMount = mount.getMockImplementation()!;
+    mount.mockImplementation((host, data) => ({ ...originalMount(host, data), ready: ready.promise.then(() => undefined) }));
+    await open();
+    expect(section.classList.contains('is-loading')).toBe(true);
+    now = 120000;
+    ready.resolve(undefined);
+    await tick(); await tick();
+    expect(section.classList.contains('is-loading')).toBe(false);
+    expect(win.document.querySelector('[data-circle-request-cooldown]').textContent).toContain('3 minutos');
+    expect(win.document.querySelector('[data-circle-request-btn]').disabled).toBe(true);
+  });
+
+  it('does not start another eligibility request after leaving during the prefetched totals', async () => {
+    const pending = deferred();
+    const { win, section, open } = await setup(3, jest.fn(() => pending.promise));
+    const upgrade = jest.fn();
+    win.CRONOX_API.getCircleUpgradeStatus = upgrade;
+    await open();
+    win.document.querySelector('[data-profile-tab="account"]').click();
+    pending.resolve({ ...stats, circleLevel: 3 });
+    await tick(); await tick();
+    expect(upgrade).not.toHaveBeenCalled();
+    expect(section.classList.contains('is-active')).toBe(false);
+  });
+
   it('offers retry on history failure and updates only totals, preserving the card orientation and instance', async () => {
     const second = deferred();
     const getStats = jest.fn().mockRejectedValueOnce(new Error('Offline')).mockImplementationOnce(() => second.promise);
@@ -141,7 +237,7 @@ describe('METACRILATOS member composition data and instance lifecycle', () => {
 
   it('ignores late history after closing and mounts one new instance on reopening', async () => {
     const first = deferred();
-    const getStats = jest.fn().mockImplementationOnce(() => first.promise).mockResolvedValueOnce(stats);
+    const getStats = jest.fn().mockImplementationOnce(() => first.promise).mockResolvedValueOnce({ ...stats, circleLevel: 3 });
     const { win, panel, destroys, mount, open, numbers } = await setup(3, getStats);
     await open();
     win.document.querySelector('[data-profile-tab="account"]').click();
@@ -174,7 +270,7 @@ describe('METACRILATOS member composition data and instance lifecycle', () => {
   it('keeps the original book and its existing figures and privileges when that design is active', async () => {
     const { win, panel, section, mount, open } = await setup(5);
     const artwork = section.querySelector('.accreditation-book-art');
-    const originalUrl = artwork.getAttribute('src');
+    const originalUrl = '/assets/logo_banner.png';
     const original = { id: 'original', renderer: 'original-v1', config: { version: 1, artworkUrl: originalUrl } };
     win.fetch = jest.fn(async () => ({ ok: true, json: async () => original }));
     for (const image of section.querySelectorAll('img')) {

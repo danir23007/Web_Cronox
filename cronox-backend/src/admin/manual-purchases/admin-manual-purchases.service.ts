@@ -20,6 +20,7 @@ import { ManualPurchaseEditor } from './manual-purchase-editor';
 import { EditManualPurchaseDto } from './dto/edit-manual-purchase.dto';
 import { CreateManualPurchaseDto } from './dto/create-manual-purchase.dto';
 import { configuredManualCost } from '../finance/historical-cost';
+import { isRetryableTransactionConflict, serializableTransaction } from '../../prisma/serializable-transaction';
 
 @Injectable()
 export class AdminManualPurchasesService {
@@ -122,7 +123,7 @@ export class AdminManualPurchasesService {
     }
     const normalized = {
       userId,
-      // Keep the legacy hash for omitted prices, including existing persisted requests.
+      // Reconstruct legacy receipts separately; new receipts include the initial statistics choice.
       items: dto.items.every(item => item.unitPriceCents === undefined)
         ? [...quantities.entries()].sort(([a], [b]) => a - b)
         : dto.items.map(item => [item.variantId, item.quantity, item.unitPriceCents ?? null]),
@@ -131,20 +132,27 @@ export class AdminManualPurchasesService {
       purchasedAt: dto.purchasedAt || null,
       note: dto.note?.trim() || null,
     };
-    const requestHash = createHash('sha256').update(JSON.stringify(normalized)).digest('hex');
+    const legacyHash = createHash('sha256').update(JSON.stringify(normalized)).digest('hex');
+    const excludedFromStatistics = dto.excludedFromStatistics ?? false;
+    const requestHash = createHash('sha256').update(JSON.stringify({ version: 2, ...normalized, excludedFromStatistics })).digest('hex');
     const existing = await this.prisma.order.findUnique({ where: { manualIdempotencyKey: key } });
-    if (existing) return this.resolveReplay(existing, requestHash);
+    if (existing) return this.resolveReplay(this.prisma, existing, requestHash, legacyHash, excludedFromStatistics);
     if (dto.items.some(item => item.unitPriceCents === undefined)) {
       throw new BadRequestException('MANUAL_PURCHASE_PAID_PRICE_REQUIRED');
     }
 
     try {
-      return await this.prisma.$transaction(
+      return await serializableTransaction(this.prisma,
         async (tx) => {
+          // A serializable conflict retries the whole database operation. Re-read
+          // the receipt first so a committed peer becomes an ordinary replay.
+          const replay = await tx.order.findUnique({ where: { manualIdempotencyKey: key } });
+          if (replay) return this.resolveReplay(tx, replay, requestHash, legacyHash, excludedFromStatistics);
           const user = await tx.user.findUnique({ where: { id: userId }, select: { id: true, email: true } });
           if (!user) throw new NotFoundException('Usuario no encontrado');
           const variants = await tx.productVariant.findMany({
             where: { id: { in: [...quantities.keys()] }, isActive: true, product: { isActive: true } },
+            orderBy: { id: 'asc' },
             include: { product: { select: { id: true, name: true, price: true, currency: true, imageUrl: true, privateCost: true } } },
           });
           if (variants.length !== quantities.size) throw new BadRequestException('VARIANT_NOT_AVAILABLE');
@@ -246,13 +254,13 @@ export class AdminManualPurchasesService {
           });
           return { created: true, order };
         },
-        { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
       );
     } catch (error) {
-      if (!(error instanceof Prisma.PrismaClientKnownRequestError) || error.code !== 'P2002') throw error;
+      if (!(error instanceof Prisma.PrismaClientKnownRequestError) || (error.code !== 'P2002' && !isRetryableTransactionConflict(error))) throw error;
       const replay = await this.prisma.order.findUnique({ where: { manualIdempotencyKey: key } });
-      if (!replay) throw error;
-      return this.resolveReplay(replay, requestHash);
+      if (replay) return this.resolveReplay(this.prisma, replay, requestHash, legacyHash, excludedFromStatistics);
+      if (isRetryableTransactionConflict(error)) throw new ConflictException('MANUAL_PURCHASE_RETRY_REQUIRED');
+      throw error;
     }
   }
 
@@ -286,8 +294,17 @@ export class AdminManualPurchasesService {
     }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
   }
 
-  private resolveReplay(order: { id: number; manualRequestHash: string | null }, requestHash: string) {
-    if (order.manualRequestHash !== requestHash) throw new ConflictException('IDEMPOTENCY_KEY_REUSED_WITH_DIFFERENT_PAYLOAD');
+  private async resolveReplay(db: Pick<Prisma.TransactionClient, 'auditLog'>,
+    order: { id: number; manualRequestHash: string | null }, requestHash: string, legacyHash: string, excludedFromStatistics: boolean) {
+    if (order.manualRequestHash === requestHash) return { created: false, order };
+    if (order.manualRequestHash !== legacyHash) throw new ConflictException('IDEMPOTENCY_KEY_REUSED_WITH_DIFFERENT_PAYLOAD');
+    // The flag is editable after creation. Only the original creation audit can
+    // disambiguate a historical hash which did not include it.
+    const audits = await db.auditLog.findMany({ where: { actionType: 'admin.manual_purchase.create', targetType: 'order', targetId: String(order.id) },
+      select: { metadata: true }, take: 2 });
+    const originalFlag = audits.length === 1 ? (audits[0].metadata as { excludedFromStatistics?: unknown } | null)?.excludedFromStatistics : undefined;
+    if (typeof originalFlag !== 'boolean') throw new ConflictException('IDEMPOTENCY_LEGACY_RECEIPT_REQUIRES_REVIEW');
+    if (originalFlag !== excludedFromStatistics) throw new ConflictException('IDEMPOTENCY_KEY_REUSED_WITH_DIFFERENT_PAYLOAD');
     return { created: false, order };
   }
 }

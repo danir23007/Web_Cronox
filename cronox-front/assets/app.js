@@ -1547,8 +1547,8 @@
             const style = document.createElement('link'); style.rel = 'stylesheet'; style.href = href; document.head.append(style);
           }
         }
-        if (!window.CRONOX_IMAGES) await loadScript('/assets/responsive-images.js?v=4');
-        await loadScript('/assets/products.js?v=72');
+        if (!window.CRONOX_IMAGES) await loadScript('/assets/responsive-images.js?v=5');
+        await loadScript('/assets/products.js?v=74');
       }
       await window.CRONOX_FULL_CATALOG.load();
       renderUpsell(cartState.data);
@@ -2511,6 +2511,12 @@ window.CRONOX_AUTH_STATE = window.CRONOX_USER ? 'authenticated' : 'unknown';
         throw new Error('La contrase\u00f1a debe tener al menos 7 caracteres y no superar 72 bytes UTF-8.');
       }
       const user = await window.CRONOX_API.register({ firstName, lastName, email, password });
+      if (user?.verificationRequired === true) {
+        registerErrorMessage = '';
+        setAuthMessage(user.message || 'Comprueba tu correo para verificar la cuenta y establecer tu contraseña.');
+        return;
+      }
+      if (!user) throw new Error('No se ha podido crear la cuenta.');
       publishAuthState(user);
       await refreshUserDependentUI();
       closeAuthModal();

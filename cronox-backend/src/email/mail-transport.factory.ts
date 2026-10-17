@@ -1,5 +1,6 @@
 import { UserNumberingGate } from '../users/user-numbering-gate.module';
-import { Injectable, Logger, Optional, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
+import { ConflictException, ForbiddenException, Injectable, Logger, Optional, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
+import { EmailDelivery } from '@prisma/client';
 import MailComposer from 'nodemailer/lib/mail-composer';
 import { createTransport, Transporter, SendMailOptions } from 'nodemailer';
 import SMTPTransport from 'nodemailer/lib/smtp-transport';
@@ -141,19 +142,15 @@ export class MailTransportFactory implements OnModuleInit, OnModuleDestroy {
       const jobs = await this.db.emailDelivery.findMany({ where: { status: 'WAITING_QUOTA', readyAt: { lte: new Date() } }, orderBy: { createdAt: 'asc' }, take: 2 });
       for (const job of jobs) {
         const key = job.senderKey as EmailSenderKey;
-        if (!Object.values(EmailSenderKey).includes(key) || !job.pendingPayload) throw Error('EMAIL_DEFERRED_INVALID_JOB');
-        let payload;
-        try { payload = JSON.parse(decrypt(job.pendingPayload, job.id + ':queued-email')); }
-        catch { this.logger.error('EMAIL_DEFERRED_KEY_UNAVAILABLE'); continue; }
-        if (Buffer.from(payload.raw || '', 'base64').length > maxMessageBytes() ||
-            recipientUnits({ to: payload.envelope?.to }).units !== job.quotaUnits) {
-          await this.db.emailDelivery.updateMany({ where: { id: job.id, status: 'WAITING_QUOTA' }, data: { errorCode: 'EMAIL_DEFERRED_LIMIT_REVIEW' } });
+        const checked = this.checkDeferredPayload(job);
+        if ('errorCode' in checked) {
+          // Keep the encrypted message for explicit review, outside the due queue.
+          // CAS prevents an old worker snapshot from overwriting a later decision.
+          await this.db.emailDelivery.updateMany({ where: { id: job.id, status: 'WAITING_QUOTA', updatedAt: job.updatedAt },
+            data: { status: 'REVIEW_REQUIRED', readyAt: null, errorCode: checked.errorCode } });
           continue;
         }
-        if (String(payload.envelope?.from).toLowerCase() !== this.config.accounts[key].user.toLowerCase()) {
-          await this.db.emailDelivery.updateMany({ where: { id: job.id, status: 'WAITING_QUOTA' }, data: { errorCode: 'EMAIL_ACCOUNT_CHANGED_REVIEW' } });
-          continue;
-        }
+        const payload = checked.payload;
         let claimed;
         try {
           claimed = await this.db.$transaction(async tx => {
@@ -171,6 +168,59 @@ export class MailTransportFactory implements OnModuleInit, OnModuleDestroy {
         if (claimed) await this.deliverAttempt(job.id, key, { raw: Buffer.from(payload.raw,'base64'), envelope: payload.envelope }).catch(() => this.logger.warn('EMAIL_DEFERRED_DELIVERY_RECORDED'));
       }
     } finally { this.running = false; }
+  }
+
+  private checkDeferredPayload(job: Pick<EmailDelivery, 'id' | 'senderKey' | 'pendingPayload' | 'quotaUnits'>):
+    { payload: { raw: string; envelope: { from: string; to: string[] } } } | { errorCode: string } {
+    const key = job.senderKey as EmailSenderKey;
+    if (!Object.values(EmailSenderKey).includes(key) || !job.pendingPayload) return { errorCode: 'EMAIL_DEFERRED_INVALID_JOB' };
+    let payload;
+    try { payload = JSON.parse(decrypt(job.pendingPayload, job.id + ':queued-email')); }
+    catch { return { errorCode: 'EMAIL_DEFERRED_KEY_UNAVAILABLE' }; }
+    try {
+      if (!payload || typeof payload.raw !== 'string' || !payload.raw.length ||
+          !/^[A-Za-z0-9+/]+={0,2}$/.test(payload.raw) ||
+          !payload.envelope || typeof payload.envelope.from !== 'string' ||
+          !Array.isArray(payload.envelope.to) || payload.envelope.to.some((to: unknown) => typeof to !== 'string') ||
+          Buffer.from(payload.raw, 'base64').length > maxMessageBytes() ||
+          recipientUnits({ to: payload.envelope.to }).units !== job.quotaUnits) {
+        return { errorCode: 'EMAIL_DEFERRED_LIMIT_REVIEW' };
+      }
+    } catch { return { errorCode: 'EMAIL_DEFERRED_LIMIT_REVIEW' }; }
+    if (!this.config.accounts[key]?.user ||
+        payload.envelope.from.toLowerCase() !== this.config.accounts[key].user.toLowerCase()) {
+      return { errorCode: 'EMAIL_ACCOUNT_CHANGED_REVIEW' };
+    }
+    return { payload };
+  }
+
+  /** Explicit operator recovery only; never retries UNKNOWN or sends SMTP here. */
+  async requeueDeferredAfterReview(id: string, expectedUpdatedAt: Date, actorId: number) {
+    if (!this.db) throw Error('EMAIL_AUDIT_UNAVAILABLE');
+    if (!Number.isFinite(expectedUpdatedAt.getTime())) throw new ConflictException('EMAIL_REVIEW_VERSION_REQUIRED');
+    const requestKey = `deferred-review:${id}:${expectedUpdatedAt.toISOString()}`;
+    return this.db.$transaction(async tx => {
+      const actor = await tx.user.findUnique({ where: { id: actorId }, select: { role: true } });
+      if (actor?.role !== 'SUPERADMIN') throw new ForbiddenException('EMAIL_REVIEW_SUPERADMIN_REQUIRED');
+      await tx.$queryRaw`SELECT id FROM "EmailDelivery" WHERE id=${id} FOR UPDATE`;
+      const replay = await tx.auditLog.findUnique({ where: { requestKey } });
+      if (replay) {
+        if (replay.actorId !== actorId || replay.targetId !== id || replay.actionType !== 'email.deferred.requeue') {
+          throw new ConflictException('EMAIL_REVIEW_REPLAY_MISMATCH');
+        }
+        return { changed: false, id };
+      }
+      const job = await tx.emailDelivery.findUnique({ where: { id } });
+      if (!job || job.status !== 'REVIEW_REQUIRED' || job.updatedAt.getTime() !== expectedUpdatedAt.getTime()) {
+        throw new ConflictException('EMAIL_REVIEW_CHANGED');
+      }
+      const checked = this.checkDeferredPayload(job);
+      if ('errorCode' in checked) throw new ConflictException(checked.errorCode);
+      await tx.emailDelivery.update({ where: { id }, data: { status: 'WAITING_QUOTA', readyAt: new Date(), errorCode: null } });
+      await tx.auditLog.create({ data: { requestKey, actorId, action: 'email.deferred.requeue', actionType: 'email.deferred.requeue',
+        targetType: 'emailDelivery', targetId: id, metadata: { previousErrorCode: job.errorCode, reviewedVersion: expectedUpdatedAt.toISOString() } } });
+      return { changed: true, id };
+    });
   }
 
   getTransport(senderKey: EmailSenderKey): Transporter {

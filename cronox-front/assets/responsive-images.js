@@ -4,7 +4,8 @@
   const CONTEXTS = Object.freeze({
     card: { roles: ["card"], sizes: "(max-width: 640px) 50vw, 33vw", loading: "lazy" },
     quick: { roles: ["quick"], sizes: "(max-width: 640px) 100vw, 720px", loading: "lazy" },
-    pdp: { roles: ["pdp"], sizes: "(max-width: 900px) 100vw, 62vw", loading: "eager" },
+    pdp: { roles: ["card", "quick", "pdp"], sizes: "(max-width: 900px) 100vw, 62vw", loading: "eager" },
+    pdpZoom: { roles: ["pdp"], sizes: "(max-width: 900px) 100vw, 62vw", loading: "eager" },
     small: { roles: ["small"], sizes: "600px", loading: "lazy" },
     cart: { roles: ["small"], sizes: "600px", loading: "lazy" },
     checkout: { roles: ["small"], sizes: "600px", loading: "lazy" },
@@ -87,10 +88,17 @@
     const candidates = config.roles.map((role) => candidate(image, role)).filter(Boolean);
     const preferred = candidates[candidates.length - 1];
     const fallback = originalUrl(image);
+    // Small originals can produce equally wide presets. Duplicate width
+    // descriptors invalidate srcset; retain the most detailed preset per width.
+    const responsive = [...new Map(candidates
+      .filter((item) => Number.isSafeInteger(item.width) && item.width > 0)
+      .map((item) => [item.width, item])).values()]
+      .sort((left, right) => left.width - right.width);
+    const zoom = context === "pdp" ? Math.min(3, Math.max(1, Number(image?.galleryZoom) || 1)) : 1;
     return {
       src: preferred?.url || fallback,
-      srcset: candidates.filter((item) => item.width > 0).sort((left, right) => left.width - right.width).map((item) => `${item.url} ${item.width}w`).join(", "),
-      sizes: config.sizes,
+      srcset: responsive.map((item) => `${item.url} ${item.width}w`).join(", "),
+      sizes: zoom === 1 ? config.sizes : `(max-width: 900px) ${100 * zoom}vw, ${62 * zoom}vw`,
       width: preferred?.width || Number(image?.width) || null,
       height: preferred?.height || Number(image?.height) || null,
       loading: config.loading,

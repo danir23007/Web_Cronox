@@ -1326,7 +1326,12 @@
     filtersForm = document.getElementById('storeCategoryFilters');
     if (event.detail?.clearInitialSlug && initialCategorySlug) {
       selectStoreCategory('');
-    } else { syncCategorySelection(initialCategorySlug); applyAll(); }
+    } else {
+      syncCategorySelection(initialCategorySlug);
+      // The first catalogue request applies the filters when it settles. Keep
+      // the server's real product links/frames until then, including slow loads.
+      if (!catalogInFlight) applyAll();
+    }
   });
 
   // ---- Eventos búsqueda/filtros ----

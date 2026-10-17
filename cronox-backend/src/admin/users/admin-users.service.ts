@@ -84,10 +84,20 @@ export class AdminUsersService {
     const where = this.buildWhere(query);
     const sort = query.sort ?? 'id', order = query.order ?? 'desc';
     const { data, total } = await this.prisma.$transaction(async tx => {
-      const users = await tx.user.findMany({ where, orderBy: { id: 'desc' }, select: USER_LIST_SELECT });
+      let users: ListedUser[], total: number;
+      if (sort === 'id') {
+        // ID order is known before calculating spending. Read only the visible
+        // page's history, keeping its count in the same consistent snapshot.
+        users = await tx.user.findMany({ where, orderBy: { id: order }, skip, take: pageSize, select: USER_LIST_SELECT });
+        total = skip === 0 && users.length < pageSize ? users.length : await tx.user.count({ where });
+      } else {
+        // Metric-based ordering still needs the complete matching cohort.
+        users = await tx.user.findMany({ where, orderBy: { id: 'desc' }, select: USER_LIST_SELECT });
+        total = users.length;
+      }
       const metrics = await loadUserPurchaseMetrics(tx, users.map(user => user.id));
-      const sorted = sortUsersByMetrics(users, metrics, sort, order);
-      return { data: sorted.slice(skip, skip + pageSize).map(user => ({ ...this.mapUser(user), registrationNumber: user.id, ...metrics.get(user.id)! })), total: users.length };
+      const pageUsers = sort === 'id' ? users : sortUsersByMetrics(users, metrics, sort, order).slice(skip, skip + pageSize);
+      return { data: pageUsers.map(user => ({ ...this.mapUser(user), registrationNumber: user.id, ...metrics.get(user.id)! })), total };
     }, { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead, timeout: 60000 });
     return { data, meta: { page, pageSize, total, totalPages: Math.ceil(total / pageSize) || 1, sort, order } };
   }

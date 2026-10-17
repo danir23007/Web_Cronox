@@ -147,4 +147,26 @@ describe('CsrfProtectionGuard', () => {
       'Origen',
     );
   });
+
+  it.each(['/api/auth/login', '/API/auth/login', '/Api/Auth/Login/', '/API/me?x=1'])(
+    'protects the router-equivalent unsafe path %s', (originalUrl) => {
+      expect(() => guard.canActivate(contextFor({ originalUrl, headers: {} }))).toThrow('Origen');
+      expect(() => guard.canActivate(contextFor({ originalUrl, headers: { origin: 'https://cronox.es' } }))).toThrow('CSRF');
+      expect(guard.canActivate(contextFor({ originalUrl, headers: {
+        origin: 'https://cronox.es', 'x-csrf-token': 'a-token-with-sufficient-length-to-compare',
+      } }))).toBe(true);
+    },
+  );
+
+  it.each(['/API/WEBHOOKS/STRIPE/', '/Api/Payments/Webhook?source=test'])(
+    'preserves the signed webhook exemption for exactly %s', (originalUrl) => {
+      expect(guard.canActivate(contextFor({ originalUrl, headers: {} }))).toBe(true);
+    },
+  );
+
+  it.each(['/API/webhooks/stripe/extra', '/API/payments/webhook-other'])(
+    'does not extend the webhook exemption to %s', (originalUrl) => {
+      expect(() => guard.canActivate(contextFor({ originalUrl, headers: {} }))).toThrow('Origen');
+    },
+  );
 });

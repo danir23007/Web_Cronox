@@ -2,6 +2,9 @@
   "use strict";
 
   if (window.CRONOX_MEDIA_FRAMING?.initialized) return;
+  // Catalogue navigation never displays the home hero. Its initial HTML
+  // omits the sources; do not restore them or start its observers/API read.
+  if (document.documentElement.classList.contains("category-page")) return;
 
   const CACHE_KEY = "cronox.mediaFraming.web.v5";
   const HERO_KEY = "home.hero.video";

@@ -10,7 +10,7 @@ export function localReviewSafety(req: Request, res: Response, next: NextFunctio
   // Manual edits have no external effects and use the original stock policy.
   // Keep all other lifecycle/payment routes blocked in the local review.
   if (req.method === 'PATCH' && /^\/api\/admin\/users\/\d+\/in-person-purchases\/\d+$/.test(req.path)) return next();
-  if (/^\/api\/(?:checkout|payments|webhooks|orders|shipping|admin\/(?:orders|manual-purchases|shipping)|newsletter|waitlist)(?:\/|$)/i.test(req.path)
+  if (/^\/api\/(?:checkout|payments|webhooks|orders|shipping|admin\/(?:orders|payments|manual-purchases|shipping)|newsletter|waitlist)(?:\/|$)/i.test(req.path)
     || /^\/api\/admin\/users\/[^/]+\/in-person-purchases(?:\/|$)/i.test(req.path)) {
     return res.status(403).json({ statusCode: 403, message: 'Operación deshabilitada en la revisión local de datos históricos.' });
   }

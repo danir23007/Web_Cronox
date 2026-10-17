@@ -2,6 +2,7 @@ import {
   BadRequestException,
   Body,
   Controller,
+  Get,
   Headers,
   HttpCode,
   Logger,
@@ -33,6 +34,9 @@ import { StripeService } from './stripe.service';
 import { isProductionEnvironment } from '../common/config/environment';
 import { AuthService } from '../auth/auth.service';
 import { LivePaymentObservation } from '../live-stats/live-payment-observation';
+import { StripeWebhookRecoveryService, EffectOutcome } from './stripe-webhook-recovery.service';
+import { SuperAdminGuard } from '../common/guards/super-admin.guard';
+import type { CheckoutEffect } from '@prisma/client';
 
 @ApiTags('Payments / Stripe')
 @Controller()
@@ -47,7 +51,32 @@ export class StripeWebhookController {
     private readonly orderConfirmationEmailMapper: OrderConfirmationEmailMapper,
     private readonly authService: AuthService,
     @Optional() private readonly livePayment?: LivePaymentObservation,
-  ) {}
+    @Optional() private readonly recovery?: StripeWebhookRecoveryService,
+  ) {
+    this.recovery?.register(event => this.dispatchEvent(event), effect => this.deliverEffect(effect));
+  }
+
+  @Get('admin/payments/recovery')
+  @UseGuards(JwtAuthGuard, SuperAdminGuard)
+  async recoveryIncidents() { return this.requireRecovery().incidents(); }
+
+  @Post('admin/payments/recovery/:kind/:id/retry')
+  @UseGuards(JwtAuthGuard, SuperAdminGuard)
+  async retryRecovery(@Param('kind') kind: string, @Param('id') id: string, @Req() req: Request, @Body() body: { acknowledgeUncertainDelivery?: boolean }) {
+    if (!['event', 'effect'].includes(kind)) throw new BadRequestException('INVALID_RECOVERY_KIND');
+    return this.requireRecovery().retry(kind as 'event' | 'effect', id, Number(req.user?.id), body?.acknowledgeUncertainDelivery === true);
+  }
+
+  private requireRecovery() {
+    if (!this.recovery) throw new Error('STRIPE_RECOVERY_NOT_CONFIGURED');
+    return this.recovery;
+  }
+
+  @Post('admin/payments/recovery/event/:id/resolve-refunded')
+  @UseGuards(JwtAuthGuard, SuperAdminGuard)
+  async resolveRefundedRecovery(@Param('id') id: string, @Req() req: Request) {
+    return this.requireRecovery().resolveRefunded(id, Number(req.user?.id));
+  }
 
   @Post('admin/orders/:id/confirmation-email')
   @UseGuards(JwtAuthGuard, AdminGuard, RolesGuard)
@@ -58,13 +87,16 @@ export class StripeWebhookController {
       select: { id: true, order: { select: { status: true } } },
     });
     if (!snapshot?.order) throw new NotFoundException('ORDER_CHECKOUT_NOT_FOUND');
-    return {
-      outcome: await this.sendConfirmationEmailOnce({
-        orderId: id,
-        checkoutSnapshotId: snapshot.id,
-        status: snapshot.order.status,
-      }),
-    };
+    // Manual delivery must also use the durable receipt. Ambiguous attempts
+    // are retried only via the explicit, audited recovery endpoint.
+    const effect = await this.prisma.checkoutEffect.findUnique({ where: { checkoutSnapshotId_kind: { checkoutSnapshotId: snapshot.id, kind: 'ORDER_CONFIRMATION' } } });
+    if (effect) {
+      await this.requireRecovery().processEffects();
+      return { outcome: (await this.prisma.checkoutEffect.findUniqueOrThrow({ where: { id: effect.id } })).status };
+    }
+    // Historical confirmations without a receipt must be inspected before a
+    // new external send; this route cannot silently bypass delivery history.
+    return { outcome: 'review_required' };
   }
 
   @Post('webhooks/stripe')
@@ -123,22 +155,19 @@ export class StripeWebhookController {
     const lifecycleStatus = this.getLifecycleStatus(event);
     const closedLostDisputeAmountCents =
       this.getClosedLostDisputeAmountCents(event);
-    const claimed = await this.ordersService.claimStripeWebhookEvent({
-      id: event.id,
-      type: event.type,
+    return this.requireRecovery().accept(event, {
       paymentIntentId,
-      occurredAt: new Date(event.created * 1000),
       lifecycleStatus,
       amountCents: closedLostDisputeAmountCents,
       ...(event.type === 'charge.refunded' && Number.isSafeInteger((event.data.object as Stripe.Charge).amount_refunded)
         ? { refundCumulativeCents: (event.data.object as Stripe.Charge).amount_refunded } : {}),
     });
 
-    if (!claimed) {
-      return { received: true, duplicate: true };
-    }
+  }
 
-    try {
+  private async dispatchEvent(event: Stripe.Event): Promise<Record<string, unknown>> {
+      const lifecycleStatus = this.getLifecycleStatus(event);
+      const closedLostDisputeAmountCents = this.getClosedLostDisputeAmountCents(event);
       let response: Record<string, unknown>;
       await this.livePayment?.record(event);
       switch (event.type) {
@@ -181,12 +210,7 @@ export class StripeWebhookController {
           response = { received: true, ignored: true };
       }
 
-      await this.ordersService.completeStripeWebhookEvent(event.id);
       return response;
-    } catch (error) {
-      await this.ordersService.failStripeWebhookEvent(event.id, error);
-      throw error;
-    }
   }
 
   private async handleCheckoutSessionCompleted(event: Stripe.Event) {
@@ -231,37 +255,16 @@ export class StripeWebhookController {
       throw new BadRequestException('STRIPE_PAYMENT_AMOUNT_REQUIRED');
     }
 
-    let result;
-    try {
-      result = await this.ordersService.createOrderFromVerifiedStripePayment({
+    // Persistence may have committed before a connection failed. Retrying the
+    // same immutable snapshot is safe; refunding an uncertain result is not.
+    const result = await this.ordersService.createOrderFromVerifiedStripePayment({
         checkoutSnapshotId,
         paymentIntentId: paymentIntent.id,
         amountCents,
         currency: (paymentIntent.currency ?? '').toUpperCase(),
         occurredAt,
       });
-    } catch (error) {
-      // A signed successful charge must not be left unfulfilled if persistence
-      // or a reservation invariant fails. The deterministic refund key makes
-      // webhook retries safe until Stripe confirms the compensating refund.
-      await this.stripeService.refundPaymentIntent(
-        paymentIntent.id,
-        `checkout-compensation:${paymentIntent.id}`,
-      );
-      await this.ordersService.applyStripePaymentLifecycle(
-        paymentIntent.id,
-        OrderStatus.REFUNDED,
-      );
-      this.logger.error(
-        `Compensated checkout fulfillment failure for PaymentIntent ${paymentIntent.id}`,
-      );
-      return { received: true, refunded: true };
-    }
-
-    if (result.status === OrderStatus.PAID) {
-      await this.sendInitialPasswordSetupSafely(result.userId);
-      await this.sendConfirmationEmailOnce(result);
-    }
+    await this.ordersService.reconcileStripePaymentLifecycle(paymentIntent.id);
 
     return {
       received: true,
@@ -270,87 +273,29 @@ export class StripeWebhookController {
     };
   }
 
-  private async sendInitialPasswordSetupSafely(
-    userId: number | null,
-  ): Promise<void> {
-    if (userId == null) return;
-    try {
-      await this.authService.sendInitialPasswordSetupIfNeeded(userId);
-    } catch (error) {
-      // A paid order remains authoritative even if token persistence or email
-      // delivery is temporarily unavailable. Normal forgot-password remains a
-      // recovery path for passwordless automatically-created accounts.
-      this.logger.error(
-        `No se pudo solicitar el email de configuración inicial para userId=${userId}`,
-        error instanceof Error ? error.stack : String(error),
-      );
-    }
-  }
-
-  private async sendConfirmationEmailOnce(result: {
-    orderId: number;
-    checkoutSnapshotId: string;
-    status: OrderStatus;
-  }): Promise<
-    'accepted' | 'not_paid' | 'already_sent_or_claimed' | 'unavailable' | 'retry_required'
-  > {
-    if (result.status !== OrderStatus.PAID) return 'not_paid';
-    let claimed = false;
-    try {
-      claimed = await this.ordersService.claimOrderConfirmationEmail(
-        result.checkoutSnapshotId,
-      );
-      if (!claimed) return 'already_sent_or_claimed';
-      const orderForEmail = await this.prisma.order.findUnique({
-        where: { id: result.orderId },
-        ...orderForConfirmationEmailInclude,
-      });
-      if (!orderForEmail || orderForEmail.status !== OrderStatus.PAID) {
-        await this.ordersService.releaseOrderConfirmationEmailClaim(
-          result.checkoutSnapshotId,
-        );
-        this.logger.warn(
-          `No se pudo resolver el pedido o email de confirmación para checkout ${result.checkoutSnapshotId}`,
-        );
-        return 'unavailable';
-      }
-
-      const customerEmail =
-        orderForEmail.customerEmail?.trim() || orderForEmail.user?.email?.trim();
-      if (!customerEmail) {
-        await this.ordersService.releaseOrderConfirmationEmailClaim(
-          result.checkoutSnapshotId,
-        );
-        this.logger.warn(
-          `No se pudo resolver el email de confirmaciÃ³n para checkout ${result.checkoutSnapshotId}`,
-        );
-        return 'unavailable';
-      }
-
-      const templateData = this.orderConfirmationEmailMapper.map(orderForEmail);
-      templateData.customerEmail = customerEmail;
-      await this.emailService.send({
-        type: EmailType.ORDER_CONFIRMATION,
-        to: customerEmail,
-        subject: 'CRONOX · Confirmación de pedido',
-        templateData,
-      });
-      await this.ordersService.markOrderConfirmationEmailSent(
-        result.checkoutSnapshotId,
-      );
+  private async deliverEffect(effect: CheckoutEffect): Promise<EffectOutcome> {
+    if (effect.kind === 'ANALYTICS') {
+      await this.ordersService.recordCompletedCheckoutAnalytics(effect.checkoutSnapshotId, effect.orderId);
       return 'accepted';
-    } catch (error) {
-      if (claimed) {
-        await this.ordersService.releaseOrderConfirmationEmailClaim(
-          result.checkoutSnapshotId,
-        ).catch(() => undefined);
-      }
-      this.logger.error(
-        `Error enviando email de confirmación para checkout ${result.checkoutSnapshotId}`,
-        error instanceof Error ? error.stack : String(error),
-      );
-      return 'retry_required';
     }
+    const order = await this.prisma.order.findUnique({ where: { id: effect.orderId }, ...orderForConfirmationEmailInclude });
+    if (!order || ![OrderStatus.PAID, OrderStatus.PROCESSING, OrderStatus.SHIPPED, OrderStatus.DELIVERED].includes(order.status as any)) return 'not_needed';
+    if (effect.kind === 'INITIAL_SETUP') {
+      return effect.userId == null ? 'not_needed' : this.authService.sendInitialPasswordSetupIfNeeded(effect.userId);
+    }
+    if (effect.kind !== 'ORDER_CONFIRMATION') throw new Error('UNKNOWN_CHECKOUT_EFFECT');
+    const snapshot = await this.prisma.checkoutSnapshot.findUniqueOrThrow({ where: { id: effect.checkoutSnapshotId } });
+    if (snapshot.confirmationEmailSentAt) return 'not_needed';
+    if (snapshot.confirmationEmailClaimedAt) return 'uncertain';
+    if (!this.emailService.isEnabled()) return 'retry_required';
+    const customerEmail = order.customerEmail?.trim() || order.user?.email?.trim();
+    if (!customerEmail) throw new Error('ORDER_CONFIRMATION_EMAIL_MISSING');
+    const templateData = this.orderConfirmationEmailMapper.map(order);
+    templateData.customerEmail = customerEmail;
+    const sent = await this.emailService.send({ type: EmailType.ORDER_CONFIRMATION, to: customerEmail, subject: 'CRONOX · Confirmación de pedido', templateData });
+    if (sent.queued) return 'queued'; // Durable mail quota queue owns this delivery.
+    await this.ordersService.markOrderConfirmationEmailSent(effect.checkoutSnapshotId);
+    return 'accepted';
   }
 
   private extractPaymentIntentId(event: Stripe.Event): string | undefined {

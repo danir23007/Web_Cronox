@@ -23,6 +23,7 @@ export class CircleService {
 
   async maybePromoteRequestedCircle(userId: number): Promise<void> {
     await serializableTransaction(this.prisma, async tx => {
+      await tx.$queryRaw`SELECT id FROM "User" WHERE id=${userId} FOR UPDATE`;
       const request = await tx.circlePromotionRequest.findFirst({
         where: { userId, status: 'pending', promoteAt: { lte: new Date() } },
       });
@@ -32,6 +33,14 @@ export class CircleService {
       // Retain the existing requested-promotion processor without downgrading
       // a member who has since been promoted manually to a higher circle.
       await tx.user.updateMany({ where: { id: userId, circleLevel: 2 }, data: { circleLevel: 3 } });
+      if (request.upgradeRequestId) {
+        const changed = await tx.circleUpgradeRequest.updateMany({
+          where: { id: request.upgradeRequestId, userId, fromCircle: 2, toCircle: 3,
+            status: { in: ['PENDING', 'EXPIRED'] } },
+          data: { status: 'APPROVED', approvedAt: new Date(), processedAt: new Date() },
+        });
+        if (changed.count !== 1) throw new ConflictException('PROMOTION_REVIEW_LINK_CHANGED');
+      }
       await tx.circlePromotionRequest.update({ where: { userId }, data: { status: 'completed' } });
     });
   }
@@ -74,11 +83,11 @@ export class CircleService {
       const requestedAt = new Date();
       const promoteAt = new Date(requestedAt.getTime() + Math.floor(Math.random() * 72 * 60) * 60_000);
       const existing = await tx.circlePromotionRequest.findUnique({ where: { userId }, select: { id: true } });
-      const data = { status: 'pending', requestedAt, promoteAt };
+      const mirror = await this.circleUpgradeService.ensureAutoRequestForCircle2To3(userId, promoteAt, tx);
+      const data = { status: 'pending', requestedAt, promoteAt, upgradeRequestId: mirror.id };
       const request = existing
         ? await tx.circlePromotionRequest.update({ where: { userId }, data })
         : await tx.circlePromotionRequest.create({ data: { userId, ...data } });
-      await this.circleUpgradeService.ensureAutoRequestForCircle2To3(userId, promoteAt, tx);
       return request;
     }, true);
   }

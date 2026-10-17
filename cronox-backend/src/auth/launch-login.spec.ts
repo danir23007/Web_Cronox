@@ -8,6 +8,7 @@ describe('Launch login token', () => {
   beforeEach(() => {
     const user = { id: 1, email: 'user@example.test', role: 'USER', accountState: 'ACTIVE' };
     db = {
+      $executeRaw: jest.fn(),
       preRegistration: {
         findUnique: jest.fn().mockResolvedValue({ userId: 1, user, launchTokenUsedAt: null,
           launchTokenExpiresAt: new Date(Date.now() + 60000) }),

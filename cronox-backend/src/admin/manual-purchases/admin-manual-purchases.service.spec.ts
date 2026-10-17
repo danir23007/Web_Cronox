@@ -8,10 +8,11 @@ describe('AdminManualPurchasesService', () => {
     productVariant: { findMany: jest.fn(), updateMany: jest.fn(), update: jest.fn() },
     order: { create: jest.fn(), findUnique: jest.fn(), updateMany: jest.fn() },
     stockMovement: { createMany: jest.fn() },
-    auditLog: { create: jest.fn() },
+    auditLog: { create: jest.fn(), findMany: jest.fn() },
   };
   const prisma: any = {
     order: { findUnique: jest.fn() },
+    auditLog: tx.auditLog,
     $transaction: jest.fn((callback: (client: any) => unknown) => callback(tx)),
   };
   const historial = { syncFromOrders: jest.fn() };
@@ -27,6 +28,8 @@ describe('AdminManualPurchasesService', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     prisma.order.findUnique.mockResolvedValue(null);
+    tx.order.findUnique.mockResolvedValue(null);
+    tx.auditLog.findMany.mockResolvedValue([{ metadata: { excludedFromStatistics: false } }]);
     tx.user.findUnique.mockResolvedValue({ id: 7, email: 'buyer@example.test' });
     tx.productVariant.findMany.mockResolvedValue([{ id: 5, size: 'M', sku: 'TEE-M', price: null, stockQty: 10, product: { id: 2, name: 'Camiseta', price: 2500, currency: 'EUR' } }]);
     tx.productVariant.updateMany.mockResolvedValue({ count: 1 });
@@ -196,6 +199,36 @@ describe('AdminManualPurchasesService', () => {
     tx.order.create.mockRejectedValueOnce(new Prisma.PrismaClientKnownRequestError('Concurrent duplicate', { code: 'P2002', clientVersion: '6' }));
     prisma.order.findUnique.mockResolvedValueOnce(null).mockResolvedValueOnce({ id: 41, manualRequestHash: hash });
     await expect(service.create(7, 99, 'manual-concurrent-123456', paid)).resolves.toMatchObject({ created: false, order: { id: 41 } });
+  });
+
+  it('retries a serialization conflict and reads the committed receipt before further stock writes', async () => {
+    await service.create(7, 99, 'manual-serialization-123456', dto);
+    const hash = tx.order.create.mock.calls[0][0].data.manualRequestHash;
+    tx.order.findUnique.mockResolvedValueOnce(null).mockResolvedValueOnce({ id: 41, manualRequestHash: hash });
+    tx.productVariant.updateMany.mockRejectedValueOnce(new Prisma.PrismaClientKnownRequestError('Conflict', { code: 'P2034', clientVersion: '6' }));
+    await expect(service.create(7, 99, 'manual-serialization-123456', dto)).resolves.toMatchObject({ created: false, order: { id: 41 } });
+    expect(tx.order.create).toHaveBeenCalledTimes(1);
+    expect(tx.auditLog.create).toHaveBeenCalledTimes(1);
+  });
+
+  it('includes the initial statistics flag and treats omitted as false', async () => {
+    await service.create(7, 99, 'manual-statistics-123456', dto);
+    const hash = tx.order.create.mock.calls[0][0].data.manualRequestHash;
+    expect(hash).toHaveLength(64);
+    prisma.order.findUnique.mockResolvedValue({ id: 41, manualRequestHash: hash, excludedFromStatistics: true });
+    await expect(service.create(7, 99, 'manual-statistics-123456', { ...dto, excludedFromStatistics: false })).resolves.toMatchObject({ created: false });
+    await expect(service.create(7, 99, 'manual-statistics-123456', { ...dto, excludedFromStatistics: true })).rejects.toThrow('DIFFERENT_PAYLOAD');
+  });
+
+  it('uses immutable creation evidence for legacy receipts and rejects missing evidence', async () => {
+    const hash = createHash('sha256').update(JSON.stringify({ userId: 7, items: [[5, 3, 2500]], paymentMethod: dto.paymentMethod,
+      stockHandling: dto.stockHandling, purchasedAt: dto.purchasedAt, note: null })).digest('hex');
+    prisma.order.findUnique.mockResolvedValue({ id: 41, manualRequestHash: hash, excludedFromStatistics: true });
+    await expect(service.create(7, 99, 'manual-legacy-123456', dto)).resolves.toMatchObject({ created: false });
+    await expect(service.create(7, 99, 'manual-legacy-123456', { ...dto, excludedFromStatistics: true })).rejects.toThrow('DIFFERENT_PAYLOAD');
+    tx.auditLog.findMany.mockResolvedValue([]);
+    await expect(service.create(7, 99, 'manual-legacy-123456', dto)).rejects.toThrow('LEGACY_RECEIPT_REQUIRES_REVIEW');
+    expect(tx.order.create).not.toHaveBeenCalled();
   });
 
   it('restores all quantities of separately priced repeated variants only once', async () => {

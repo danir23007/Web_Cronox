@@ -1551,9 +1551,8 @@
       promoInput.disabled = hasPromo;
     }
     setPromoStatus(hasPromo ? 'Código aplicado' : '');
-    if (!hasPromo && !state.promo) {
-      setPromoMessage('');
-    }
+    // A rejected code is not an applied promo. Summary rerenders must retain
+    // its feedback; editing, retrying and removing already clear it explicitly.
   };
 
   const renderGuestCheckout = async () => {

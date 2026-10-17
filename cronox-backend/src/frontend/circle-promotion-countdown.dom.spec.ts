@@ -60,7 +60,7 @@ describe('Accreditation promotion availability and server clock', () => {
       return { destroy: jest.fn(), ready: Promise.resolve() };
     });
     win.CRONOX_METACRILATOS = { mount };
-    const artworkUrl = win.document.querySelector('.accreditation-book-art').src;
+    const artworkUrl = '/assets/logo_banner.png';
     win.fetch = jest.fn(async (url: string) => ({ ok: true, json: async () => url.endsWith('/active')
       ? { id: renderer, renderer, config: { version: 1, artworkUrl } }
       : { circleLevel: circle, name: 'Miembro Prueba', visibleId: 'stable-member', createdAt: '2020-01-01', qrDataUrl: 'data:image/png;base64,AA==' } }));

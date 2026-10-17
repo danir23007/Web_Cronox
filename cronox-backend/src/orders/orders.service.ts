@@ -43,10 +43,10 @@ import { GuestOrderAccountService } from './guest-order-account.service';
 import { normalizeEmail } from '../common/email';
 import { admitBankReservation } from './bank-transfer-policy';
 import { variantSizeLabel } from '../products/product-size-system';
+import { assertStripeWebhookFence } from '../payments/stripe-webhook-fence';
 
 const DEFAULT_CURRENCY = 'EUR';
 const CHECKOUT_SNAPSHOT_TTL_MS = 30 * 60 * 1000;
-const WEBHOOK_EVENT_STALE_MS = 5 * 60 * 1000;
 const CONFIRMATION_EMAIL_CLAIM_STALE_MS = 10 * 60 * 1000;
 const ACTIVE_CHECKOUT_SNAPSHOT_STATUSES = [
   'RESERVED',
@@ -95,16 +95,6 @@ type StripeLifecycleStatus =
   | typeof OrderStatus.REFUNDED
   | typeof OrderStatus.DISPUTED
   | typeof OrderStatus.PAID;
-
-type StripeWebhookEventInput = {
-  id: string;
-  type: string;
-  paymentIntentId?: string;
-  occurredAt: Date;
-  lifecycleStatus?: OrderStatus;
-  amountCents?: number;
-  refundCumulativeCents?: number;
-};
 
 type CheckoutSnapshotResponse = {
   checkoutSnapshotId: string;
@@ -1067,6 +1057,7 @@ export class OrdersService {
     expectedPaymentIntentId?: string,
   ): Promise<void> {
     await this.prisma.$transaction(async (tx) => {
+        await assertStripeWebhookFence(tx);
       // Serialize cancellation with signed fulfillment before reading state.
       await tx.checkoutSnapshot.updateMany({ where: { id: checkoutSnapshotId }, data: { updatedAt: new Date() } });
       const snapshot = await tx.checkoutSnapshot.findUnique({
@@ -1130,73 +1121,6 @@ export class OrdersService {
     });
   }
 
-  async claimStripeWebhookEvent(
-    input: StripeWebhookEventInput,
-  ): Promise<boolean> {
-    if (input.paymentIntentId && await this.prisma.archivedCheckoutPayment.findUnique({
-      where: { paymentIntentId: input.paymentIntentId }, select: { paymentIntentId: true },
-    })) return false;
-    try {
-      await this.prisma.stripeWebhookEvent.create({
-        data: {
-          id: input.id,
-          type: input.type,
-          paymentIntentId: input.paymentIntentId ?? null,
-          lifecycleStatus: input.lifecycleStatus ?? null,
-          amountCents: input.amountCents ?? null,
-          refundCumulativeCents: input.refundCumulativeCents ?? null,
-          status: 'PROCESSING',
-          occurredAt: input.occurredAt,
-        },
-      });
-      return true;
-    } catch (error) {
-      if (
-        !(error instanceof Prisma.PrismaClientKnownRequestError) ||
-        error.code !== 'P2002'
-      ) {
-        throw error;
-      }
-    }
-
-    const reclaimed = await this.prisma.stripeWebhookEvent.updateMany({
-      where: {
-        id: input.id,
-        OR: [
-          { status: 'FAILED' },
-          {
-            status: 'PROCESSING',
-            updatedAt: { lt: new Date(Date.now() - WEBHOOK_EVENT_STALE_MS) },
-          },
-        ],
-      },
-      data: {
-        status: 'PROCESSING',
-        error: null,
-        lifecycleStatus: input.lifecycleStatus ?? null,
-        amountCents: input.amountCents ?? null,
-          refundCumulativeCents: input.refundCumulativeCents ?? null,
-        occurredAt: input.occurredAt,
-      },
-    });
-    return reclaimed.count === 1;
-  }
-
-  async completeStripeWebhookEvent(eventId: string): Promise<void> {
-    await this.prisma.stripeWebhookEvent.update({
-      where: { id: eventId },
-      data: { status: 'PROCESSED', processedAt: new Date(), error: null },
-    });
-  }
-
-  async failStripeWebhookEvent(eventId: string, error: unknown): Promise<void> {
-    const reason = error instanceof Error ? error.message : String(error);
-    await this.prisma.stripeWebhookEvent.update({
-      where: { id: eventId },
-      data: { status: 'FAILED', error: reason.slice(0, 1000) },
-    });
-  }
-
   /**
    * This method has no HTTP controller. It is invoked only after the Stripe
    * webhook signature and PaymentIntent/snapshot binding have been checked.
@@ -1213,6 +1137,7 @@ export class OrdersService {
     let result: VerifiedStripeOrderResult;
     try {
       result = await this.prisma.$transaction(async (tx) => {
+        await assertStripeWebhookFence(tx);
         const snapshotRef = await tx.checkoutSnapshot.findUnique({
           where: { id: input.checkoutSnapshotId },
           select: { id: true },
@@ -1390,6 +1315,13 @@ export class OrdersService {
           },
         });
 
+        // Persist auxiliary obligations in the same commit as the order.
+        if (created.status === OrderStatus.PAID) await tx.checkoutEffect.createMany({
+          data: ['ANALYTICS', 'INITIAL_SETUP', 'ORDER_CONFIRMATION'].map(kind => ({
+            checkoutSnapshotId: snapshot.id, orderId: created.id, userId: resolvedAccount.userId, kind,
+          })), skipDuplicates: true,
+        });
+
         return {
           orderId: created.id,
           userId: resolvedAccount.userId,
@@ -1431,32 +1363,13 @@ export class OrdersService {
       };
     }
 
-    // A refund/dispute can be claimed after the transaction resolved its event
-    // ledger but before the paid order commit became visible. Reconcile again
-    // after commit so a signed concurrent lifecycle event cannot be stranded.
-    await this.reconcileStripePaymentLifecycle(input.paymentIntentId);
-    const reconciled = await this.prisma.order.findUnique({
-      where: { id: result.orderId },
-      select: { status: true },
-    });
-    const finalStatus = reconciled?.status ?? result.status;
-    if (finalStatus === OrderStatus.PAID) {
-      await this.recordCompletedCheckoutAnalytics(
-        result.checkoutSnapshotId,
-        result.orderId,
-      );
-    }
-    return {
-      ...result,
-      status: finalStatus,
-    };
+    return result;
   }
 
-  private async recordCompletedCheckoutAnalytics(
+  async recordCompletedCheckoutAnalytics(
     checkoutSnapshotId: string,
     orderId: number,
   ): Promise<void> {
-    try {
       await this.prisma.$transaction(async (tx) => {
         const started = await tx.customerActivityEvent.findUnique({
           where: {
@@ -1491,11 +1404,6 @@ export class OrdersService {
           },
         });
       });
-    } catch {
-      // Order fulfillment is authoritative and must never be rolled back by
-      // optional analytics persistence.
-      this.logger.warn('Checkout completed but analytics finalization failed');
-    }
   }
 
   async applyStripePaymentLifecycle(
@@ -1503,6 +1411,7 @@ export class OrdersService {
     targetStatus: StripeLifecycleStatus,
   ): Promise<void> {
     await this.prisma.$transaction(async (tx) => {
+        await assertStripeWebhookFence(tx);
       await this.applyStripePaymentLifecycleInTransaction(
         tx,
         paymentIntentId,
@@ -1520,6 +1429,7 @@ export class OrdersService {
     paymentIntentId: string,
   ): Promise<void> {
     await this.prisma.$transaction(async (tx) => {
+        await assertStripeWebhookFence(tx);
       const targetStatus = await this.resolvePersistedPaymentLifecycle(
         tx,
         paymentIntentId,
@@ -1548,6 +1458,7 @@ export class OrdersService {
     }
 
     return this.prisma.$transaction(async (tx) => {
+        await assertStripeWebhookFence(tx);
       const snapshotRef = await tx.checkoutSnapshot.findUnique({
         where: { stripePaymentIntentId: input.paymentIntentId },
         select: { id: true },
@@ -1754,6 +1665,11 @@ export class OrdersService {
         );
       }
       await this.handlePromoUsageOnPaid(tx, restored, OrderStatus.DISPUTED);
+      if (restoredStatus === OrderStatus.PAID) await tx.checkoutEffect.createMany({
+        data: ['ANALYTICS', 'INITIAL_SETUP', 'ORDER_CONFIRMATION'].map(kind => ({
+          checkoutSnapshotId: snapshot.id, orderId: restored.id, userId: restored.userId, kind,
+        })), skipDuplicates: true,
+      });
     }
     await tx.checkoutSnapshot.update({
       where: { id: snapshot.id },
@@ -2982,6 +2898,9 @@ export class OrdersService {
 
   private assertCartEligibleForCheckout(cart: CartSnapshot | null, reserved = new Map<number, number>()): void {
     if (!cart?.items?.length) return;
+
+    const currencies = new Set(cart.items.map(item => (item.variant?.product?.currency ?? DEFAULT_CURRENCY).trim().toUpperCase()));
+    if (currencies.size > 1) throw new BadRequestException('MIXED_CART_CURRENCIES');
 
     for (const item of cart.items) {
       const variant = item.variant;

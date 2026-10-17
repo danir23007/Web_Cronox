@@ -166,6 +166,30 @@ describe('METACRILATOS shared motion lifecycle', () => {
     } finally { f.close(); }
   });
 
+  it('retains the face button text node between frames and updates accessible faces when the card turns', async () => {
+    const f = await fixture();
+    try {
+      const button = f.host.querySelector('[data-crx-flip]');
+      const initialLabel = button.firstChild;
+      const changes: MutationRecord[] = [];
+      const observer = new f.win.MutationObserver((records: MutationRecord[]) => changes.push(...records));
+      for (const face of f.host.querySelectorAll('.crx-face')) {
+        observer.observe(face, { attributes: true, attributeFilter: ['aria-hidden'] });
+      }
+      f.clock.advance(1016);
+      await Promise.resolve();
+      expect(button.firstChild).toBe(initialLabel);
+      expect(changes).toHaveLength(0);
+      f.clock.advance(6000);
+      await Promise.resolve();
+      expect(button.textContent).toBe('Ver anverso');
+      expect(f.host.querySelector('.crx-front').getAttribute('aria-hidden')).toBe('true');
+      expect(f.host.querySelector('.crx-back').getAttribute('aria-hidden')).toBe('false');
+      expect(changes).toHaveLength(2);
+      observer.disconnect();
+    } finally { f.close(); }
+  });
+
   it('starts only when visible and resets its frame baseline after visibility suspension', async () => {
     const f = await fixture({ hidden: true });
     try {
