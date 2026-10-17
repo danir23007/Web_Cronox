@@ -79,11 +79,12 @@ describe('Member composition: existing purchase-statistics contract', () => {
 describe('Member composition: existing authenticated statistics route', () => {
   let app: INestApplication;
   const getMyStats = jest.fn();
+  const getMyAccreditation = jest.fn();
 
   beforeAll(async () => {
     const module = await Test.createTestingModule({
       controllers: [MembershipController],
-      providers: [{ provide: MembershipService, useValue: { getMyStats } }],
+      providers: [{ provide: MembershipService, useValue: { getMyStats, getMyAccreditation } }],
     }).overrideGuard(JwtAuthGuard).useValue({
       // Authentication is simulated here; the real route and CurrentUser
       // decorator must still choose the authenticated identity over input.
@@ -101,6 +102,8 @@ describe('Member composition: existing authenticated statistics route', () => {
   beforeEach(() => {
     getMyStats.mockReset();
     getMyStats.mockResolvedValue({ pedidosRealizados: 0, articulosAdquiridos: 0, productosDiferentes: 0 });
+    getMyAccreditation.mockReset();
+    getMyAccreditation.mockResolvedValue({ registrationNumber: 7, visibleId: 'immutable-identity', qrPayload: 'CRX:1:unchanged' });
   });
   afterAll(async () => { await app?.close(); });
 
@@ -114,5 +117,18 @@ describe('Member composition: existing authenticated statistics route', () => {
   it('does not provide statistics when the route guard rejects the session', async () => {
     await request(app.getHttpServer()).get('/api/membership/me/stats?userId=7').expect(401);
     expect(getMyStats).not.toHaveBeenCalled();
+  });
+
+  it('returns only the authenticated member number, ignoring forged identity and number parameters', async () => {
+    await request(app.getHttpServer()).get('/api/membership/me/accreditation?userId=999&registrationNumber=999&identityUid=other')
+      .set('Authorization', 'Test member-session').expect(200)
+      .expect('Cache-Control', 'private, no-store')
+      .expect({ registrationNumber: 7, visibleId: 'immutable-identity', qrPayload: 'CRX:1:unchanged' });
+    expect(getMyAccreditation).toHaveBeenCalledWith(7);
+  });
+
+  it('does not expose the display number or QR without an accepted session', async () => {
+    await request(app.getHttpServer()).get('/api/membership/me/accreditation?userId=7').expect(401);
+    expect(getMyAccreditation).not.toHaveBeenCalled();
   });
 });

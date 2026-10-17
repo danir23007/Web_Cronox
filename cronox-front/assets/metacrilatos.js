@@ -48,6 +48,9 @@
   }
 
   const normalizeName = value => typeof value === 'string' ? value.trim().split(/\s+/u).slice(0, 2).join(' ') : '';
+  // Match the N.º column in Clients → Users. Identity UUIDs, member codes and
+  // QR tokens are separate values and must never substitute this display ID.
+  const formatRegistrationNumber = value => Number.isSafeInteger(value) && value > 0 ? String(value) : '—';
   function formatRegistrationDate(value) {
     if (typeof value !== 'string' || !value.trim()) return '';
     const day = /^(\d{4})-(\d{2})-(\d{2})(?:T|$)/.exec(value);
@@ -179,7 +182,7 @@
       name.textContent = normalizeName(data.name);
       name.title = name.textContent;
       root.querySelector('[data-crx-date]').textContent = formatRegistrationDate(data.createdAt);
-      visibleId.textContent = typeof data.visibleId === 'string' ? data.visibleId : '';
+      visibleId.textContent = formatRegistrationNumber(data.registrationNumber);
       visibleId.title = visibleId.textContent;
       emblem.setAttribute('aria-label', `Círculo ${roman[level - 1]}: ${level === 1 ? 'un círculo' : `${level} círculos concéntricos`}`);
       for (let i = 0; i < level; i++) {
@@ -211,8 +214,7 @@
         const tracking = parseFloat(computed.letterSpacing) || 0;
         if (!available || !Number.isFinite(normal)) return;
         let size = normal;
-        // Remove only the decorative tracking on a long identifier before
-        // reducing its letters, so a full UUID stays as legible as possible.
+        // Remove only decorative tracking before shrinking long text.
         if (tracking > 0 && element.scrollWidth > available + .5) element.style.letterSpacing = '0px';
         while (element.scrollWidth > available + .5 && size > 1) {
           size -= .25;
@@ -500,5 +502,5 @@
     update(initialData);
     return api;
   }
-  window.CRONOX_METACRILATOS = Object.freeze({ mount, normalizeName, formatRegistrationDate });
+  window.CRONOX_METACRILATOS = Object.freeze({ mount, normalizeName, formatRegistrationNumber, formatRegistrationDate });
 })();

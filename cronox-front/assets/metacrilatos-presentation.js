@@ -50,7 +50,7 @@
     }
     const id = `metacrilatos-member-${++nextId}`;
     member.setAttribute('aria-labelledby', `${id}-title`);
-    member.innerHTML = `<p class="metacrilatos-member__eyebrow">TU LUGAR EN CRONOX</p>
+    member.innerHTML = `<p class="metacrilatos-member__eyebrow">TU STATUS EN CRONOX</p>
       <h2 id="${id}-title" class="metacrilatos-member__title">CÍRCULO <span data-meta-circle></span></h2>
       <ol class="metacrilatos-member__circles" aria-label="Círculos de CRONOX">${romans.map((roman, index) =>
         `<li data-meta-circle-marker="${index + 1}" aria-label="Círculo ${roman}">${roman}</li>`).join('')}</ol>
@@ -112,12 +112,37 @@
     const member = section.querySelector('[data-metacrilatos-member]');
     const back = section.querySelector(':scope > .profile-back-wrapper');
     const cardHeight = card?.getBoundingClientRect().height / zoom;
-    const memberHeight = member?.getBoundingClientRect().height / zoom;
+    let memberHeight = member?.getBoundingClientRect().height / zoom;
     if (!cardHeight || !memberHeight || !back) return fallback;
+    if (getComputedStyle(member).getPropertyValue('--meta-information-compact').trim() === '1') {
+      // Measure the same live information at its former spacing before paint,
+      // then restore compaction synchronously. No duplicate template, rounding
+      // estimate or renderer mutation: the approved outer scale stays exact.
+      const property = '--meta-information-compact';
+      const previous = member.style.getPropertyValue(property);
+      member.style.setProperty(property, '0');
+      memberHeight = member.getBoundingClientRect().height / zoom;
+      if (previous) member.style.setProperty(property, previous);
+      else member.style.removeProperty(property);
+    }
     const lineHeight = Number.parseFloat(getComputedStyle(back).lineHeight) || 18;
     return (Number.parseFloat(getComputedStyle(section).paddingTop) || 0)
       + Math.max(cardHeight + 16 + lineHeight, memberHeight);
   }
-  window.CRONOX_METACRILATOS_PRESENTATION = Object.freeze({ ensure, circle, history, privileges, scaleReferenceHeight });
+  function bottomSpacing(section, zoom) {
+    const card = section.querySelector(':scope > .profile-card');
+    const member = section.querySelector('[data-metacrilatos-member]');
+    const button = section.querySelector('[data-crx-flip]');
+    if (!card || !member || !button) return null;
+    const cardBox = card.getBoundingClientRect();
+    const memberBox = member.getBoundingClientRect();
+    const buttonBox = button.getBoundingClientRect();
+    if (!buttonBox.height) return null;
+    const promotion = section.querySelector('.metacrilatos-promotion')?.getBoundingClientRect();
+    const lastVisibleBottom = Math.max(buttonBox.bottom, memberBox.bottom,
+      promotion?.height ? promotion.bottom : 0);
+    return 5 + (lastVisibleBottom - Math.max(cardBox.bottom, memberBox.bottom)) / zoom;
+  }
+  window.CRONOX_METACRILATOS_PRESENTATION = Object.freeze({ ensure, circle, history, privileges, scaleReferenceHeight, bottomSpacing });
   document.querySelectorAll('[data-profile-section="accreditation"]').forEach(ensure);
 })();

@@ -3,7 +3,7 @@ import path from 'node:path';
 import { JSDOM } from 'jsdom';
 
 const renderer = readFileSync(path.resolve(__dirname, '../../../cronox-front/assets/metacrilatos.js'), 'utf8');
-const person = { circleLevel: 1, name: 'Daniel Rivas', createdAt: '2020-01-01T00:00:00Z', visibleId: 'stable-identity' };
+const person = { circleLevel: 1, name: 'Daniel Rivas', createdAt: '2020-01-01T00:00:00Z', registrationNumber: 23, visibleId: 'stable-identity' };
 
 // This browser clock drives actual event listeners and rendered transforms. It
 // deliberately does not expose or depend on the renderer's private state.
@@ -125,6 +125,23 @@ async function fixture(options: { level?: number; hidden?: boolean; containerHid
 }
 
 describe('METACRILATOS shared motion lifecycle', () => {
+  it('prints only the current admin number, preserving QR and avoiding identity/token fallbacks', async () => {
+    const f = await fixture({ reduced: true });
+    const qrDataUrl = 'data:image/png;base64,AA==';
+    try {
+      for (const registrationNumber of [1, 23, 1042, 22, undefined, null, '23', 0, -1, 2.5, Number.MAX_SAFE_INTEGER + 1]) {
+        await f.instance.update({ ...person, registrationNumber, qrDataUrl,
+          id: 999, memberCode: 'CRX-999999', publicMemberToken: 'not-a-display-number' });
+        const expected = Number.isSafeInteger(registrationNumber) && Number(registrationNumber) > 0 ? String(registrationNumber) : '—';
+        const label = f.host.querySelector('[data-crx-id]');
+        expect(label.textContent).toBe(expected);
+        expect(label.title).toBe(expected);
+        expect(f.host.querySelector('.crx-qr img').getAttribute('src')).toBe(qrDataUrl);
+        expect(f.host.textContent).not.toContain(person.visibleId);
+        expect(f.host.textContent).not.toContain('CRX-999999');
+      }
+    } finally { f.close(); }
+  });
   it.each([1, 2, 3, 4, 5])('starts automatic motion for visible circle %i with one native face button and matching label', async level => {
     const f = await fixture({ level });
     try {

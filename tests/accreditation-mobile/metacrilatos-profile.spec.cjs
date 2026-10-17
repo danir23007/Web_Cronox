@@ -12,6 +12,7 @@ test('integrates the authorized card, cleans up on navigation, and preserves the
   let active = 'metacrilatos';
   let name = 'Daniel Rivas';
   let circleLevel = 3;
+  let registrationNumber = 23;
   let credentialRequests = 0;
   const writes = [];
   const errors = [];
@@ -27,7 +28,7 @@ test('integrates the authorized card, cleans up on navigation, and preserves the
     if (pathname === '/api/membership/me/accreditation') {
       credentialRequests++;
       return json(route, { circleLevel, name, createdAt: '2020-01-01T23:30:00Z',
-        visibleId: '11111111-2222-4333-8444-555555555555', qrDataUrl });
+        visibleId: '11111111-2222-4333-8444-555555555555', registrationNumber, qrDataUrl });
     }
     if (pathname === '/api/me') return json(route, { id: 7, firstName: 'Wrong cached name', lastName: 'Never use',
       memberCode: 'CRX-000007', circleLevel: 1, createdAt: '2026-01-01T00:00:00Z' });
@@ -47,17 +48,20 @@ test('integrates the authorized card, cleans up on navigation, and preserves the
   await expect(card).toBeVisible();
   await expect(card.locator('[data-crx-name]')).toHaveText('Daniel Rivas');
   await expect(card.locator('[data-crx-date]')).toHaveText('02/01/2020');
-  await expect(card.locator('[data-crx-id]')).toContainText('11111111-2222-4333-8444-555555555555');
+  await expect(card.locator('[data-crx-id]')).toHaveText('23');
+  await expect(card.locator('.crx-qr img')).toHaveAttribute('src', qrDataUrl);
   await expect(card.locator('[data-crx-roman]').first()).toHaveText('III');
   await expect(page.locator('.accreditation-stage')).toBeHidden();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.locator('[data-profile-tab="orders"]').click();
   await expect(card).toHaveCount(0);
-  name = ''; circleLevel = 4;
+  name = ''; circleLevel = 4; registrationNumber = 101;
   await tab.click();
   await expect(card.locator('[data-crx-name]')).toHaveText('');
   await expect(card.locator('[data-crx-roman]').first()).toHaveText('IV');
   await expect(card.locator('[data-crx-date]')).toHaveText('02/01/2020');
+  await expect(card.locator('[data-crx-id]')).toHaveText('101');
+  await expect(card.locator('.crx-qr img')).toHaveAttribute('src', qrDataUrl);
   expect(credentialRequests).toBe(2);
   await page.locator('[data-profile-tab="orders"]').click();
   active = 'original';

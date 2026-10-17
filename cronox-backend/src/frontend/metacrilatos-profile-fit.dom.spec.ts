@@ -5,7 +5,7 @@ import { JSDOM, VirtualConsole } from 'jsdom';
 const frontend = path.resolve(__dirname, '../../../cronox-front');
 const source = readFileSync(path.join(frontend, 'assets/metacrilatos-profile.js'), 'utf8');
 const html = readFileSync(path.join(frontend, 'profile.html'), 'utf8');
-const properties = ['--meta-fit-width', '--meta-fit-height', '--meta-fit-scale'];
+const properties = ['--meta-fit-width', '--meta-fit-height', '--meta-fit-scale', '--meta-back-margin'];
 const layoutClass = 'metacrilatos-profile-desktop';
 
 describe('METACRILATOS personal composition viewport fit', () => {

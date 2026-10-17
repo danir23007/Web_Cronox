@@ -25,6 +25,7 @@ describe('shared personal and sample METACRILATOS presentation', () => {
     const personal = setup();
     const preview = setup(true);
     expect(personal.member.innerHTML).toBe(preview.member.innerHTML);
+    expect(personal.member.querySelector('.metacrilatos-member__eyebrow').textContent).toBe('TU STATUS EN CRONOX');
     expect(preview.win.document.querySelector('.topbar, .profile-tabs, #passwordForm')).toBeNull();
     expect(preview.win.document.querySelector('script[src^="assets/profile.js"]')).toBeNull();
     expect(preview.win.document.querySelector('body > .footer').textContent).toBe('© CRONOX');
@@ -65,6 +66,41 @@ describe('shared personal and sample METACRILATOS presentation', () => {
     expect(host.style.transform).toBe('rotateY(73deg)');
   });
 
+  it('measures the same information at the former spacing and restores compaction without changing the card', () => {
+    const { win, section, member, api } = setup();
+    const card = section.querySelector('.profile-card');
+    card.getBoundingClientRect = () => ({ height: 597 * 1.2 });
+    member.style.setProperty('--meta-information-compact', '1');
+    member.getBoundingClientRect = () => ({ height: (member.style.getPropertyValue('--meta-information-compact') === '0' ? 673 : 564) * 1.2 });
+    section.style.paddingTop = '8px';
+    const markup = section.innerHTML;
+    expect(api.scaleReferenceHeight(section, 1.2, 638)).toBeCloseTo(681);
+    expect(member.style.getPropertyValue('--meta-information-compact')).toBe('1');
+    expect(section.innerHTML).toBe(markup);
+    expect(section.querySelector('.profile-card')).toBe(card);
+  });
+
+  it('reclaims empty card padding while keeping navigation below history, controls and any promotion', () => {
+    const { win, section, member, api } = setup();
+    const card = section.querySelector('.profile-card');
+    const button = win.document.createElement('button');
+    button.dataset.crxFlip = '';
+    card.append(button);
+    card.getBoundingClientRect = () => ({ bottom: 697 });
+    button.getBoundingClientRect = () => ({ bottom: 680, height: 44 });
+    member.getBoundingClientRect = () => ({ bottom: 664 });
+    expect(api.bottomSpacing(section, 1)).toBe(-12);
+    // A history error/retry or longer text must never collide with the link.
+    member.getBoundingClientRect = () => ({ bottom: 750 });
+    expect(api.bottomSpacing(section, 1)).toBe(5);
+    const promotion = win.document.createElement('div');
+    promotion.className = 'metacrilatos-promotion';
+    card.append(promotion);
+    promotion.getBoundingClientRect = () => ({ bottom: 850, height: 44 });
+    card.getBoundingClientRect = () => ({ bottom: 870 });
+    expect(api.bottomSpacing(section, 1)).toBe(-15);
+  });
+
   it('preview fetches sample data only; circle/width controls never save or activate and pagehide disposes the scene', async () => {
     const { win, section, member } = setup(true);
     const design = { renderer: 'metacrilatos-v1', sampleQr: 'data:image/png;base64,INVALID_PREVIEW' };
@@ -83,6 +119,7 @@ describe('shared personal and sample METACRILATOS presentation', () => {
       expect(sample.circleLevel).toBe(circle);
       expect(sample.name).toBe('Andrea Ejemplo');
       expect(sample.visibleId).toBe('00000000-0000-4000-8000-000000000000');
+      expect(sample.registrationNumber).toBe(23);
       expect(sample.qrDataUrl).toBe(design.sampleQr);
       expect(member.dataset.circleLevel).toBe(String(circle));
       expect(member.querySelector('[data-meta-history]').dataset.state).toBe('ready');

@@ -11,7 +11,7 @@
   const desktop = window.matchMedia('(min-width: 760px)');
   const layoutClass = document.body.classList.contains('metacrilatos-preview')
     ? 'metacrilatos-preview-desktop' : 'metacrilatos-profile-desktop';
-  const properties = ['--meta-fit-width', '--meta-fit-height', '--meta-fit-scale'];
+  const properties = ['--meta-fit-width', '--meta-fit-height', '--meta-fit-scale', '--meta-back-margin'];
   const baseWidth = 690;
   const horizontalMargin = 24;
   const bottomGap = 12;
@@ -61,6 +61,8 @@
     // displayed size. Divide its measured height by the current exterior zoom;
     // no internal renderer transform or its responsive scale is overwritten.
     const zoom = Number.parseFloat(getComputedStyle(section).zoom) || 1;
+    const bottomSpacing = window.CRONOX_METACRILATOS_PRESENTATION?.bottomSpacing(section, zoom);
+    if (Number.isFinite(bottomSpacing)) setNumber('--meta-back-margin', bottomSpacing, 'px');
     const naturalHeight = section.getBoundingClientRect().height / zoom;
     if (!Number.isFinite(naturalHeight) || naturalHeight <= 0) return;
     const viewportWidth = document.documentElement.clientWidth;

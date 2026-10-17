@@ -11,6 +11,7 @@ const longToken = `CRX:1:${crypto.createHash('sha256').update('existing persiste
 const baseData = {
   name: 'Daniel Rivas Cruz', createdAt: '2025-11-17T23:30:00.000Z',
   visibleId: '76ddc205-e68d-4f01-b2d1-dd6ac050f481',
+  registrationNumber: 23,
 };
 let qrDataUrl;
 let longQrDataUrl;
@@ -103,7 +104,7 @@ test('all approved hashes, 68 edge panels, exact circle colors/contours, readabl
     await page.locator('.crx-stage').screenshot({ path: path.resolve(__dirname, `../../output/playwright/metacrilatos-${entry.circulo}-${testInfo.project.name}-back.png`) });
     await testInfo.attach(`circle-${entry.circulo}-reverse-${testInfo.project.name}`, { body: await page.locator('.crx-stage').screenshot(), contentType: 'image/png' });
     const fullId = await page.locator('[data-crx-id]').evaluate(element => ({ text: element.textContent, width: element.scrollWidth, available: element.clientWidth }));
-    expect(fullId.text).toBe(baseData.visibleId);
+    expect(fullId.text).toBe(String(baseData.registrationNumber));
     expect(fullId.width).toBeLessThanOrEqual(fullId.available + 1);
     await render(page, entry.circulo, { qrDataUrl: longQrDataUrl });
     await page.locator('[data-crx-flip]').click();

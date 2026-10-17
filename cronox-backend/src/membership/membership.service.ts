@@ -42,13 +42,16 @@ export class MembershipService {
     await this.circleService.maybePromoteRequestedCircle(userId);
     const token = await this.usersService.ensurePublicMemberToken(userId);
     const user = await this.prisma.user.findUnique({ where: { id: userId },
-      select: { identityUid: true, firstName: true, createdAt: true, circleLevel: true,
+      select: { id: true, identityUid: true, firstName: true, createdAt: true, circleLevel: true,
         accountState: true, publicMemberToken: true } });
     if (!user) throw new NotFoundException('User not found');
     assertUsableAccreditation(user);
     const qrPayload = accreditationPayload(user.publicMemberToken ?? token);
     return { circleLevel: user.circleLevel, name: accreditationName(user.firstName),
-      createdAt: user.createdAt, visibleId: user.identityUid, qrPayload,
+      // Same current User.id exposed as N.º / registrationNumber in Users.
+      // Keep the existing identity field and personal QR independent of this
+      // display number: controlled renumbering must not change either of them.
+      createdAt: user.createdAt, registrationNumber: user.id, visibleId: user.identityUid, qrPayload,
       qrDataUrl: await renderAccreditationQr(qrPayload) };
   }
 

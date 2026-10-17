@@ -31,7 +31,7 @@ async function setup(page, target, simulatedClock = true) {
     if (pathname === '/api/accreditations/active') return json(design);
     if (pathname === '/api/membership/me/accreditation') return json({ circleLevel: state.level,
       name: 'Daniel Rivas', createdAt: '2020-01-01T23:30:00Z',
-      visibleId: '11111111-2222-4333-8444-555555555555', qrDataUrl });
+      visibleId: '11111111-2222-4333-8444-555555555555', registrationNumber: 23, qrDataUrl });
     if (pathname === '/api/me') return json({ id: 7, firstName: 'Daniel', memberCode: 'CRX-000007', circleLevel: state.level });
     if (pathname === '/api/membership/me/qr') return route.fulfill({ contentType: 'image/png', body: Buffer.from(qrDataUrl.split(',')[1], 'base64') });
     if (pathname === '/api/membership/me/stats') return json({ circleLevel: state.level, createdAt: '2020-01-01T23:30:00Z' });

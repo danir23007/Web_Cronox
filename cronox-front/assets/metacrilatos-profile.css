@@ -271,7 +271,14 @@
 
   .metacrilatos-presentation[data-accreditation-renderer="metacrilatos-v1"] > .metacrilatos-member:not([hidden]) {
     margin-top: 0;
-    padding: 40px 0 0;
+    /* Only the information column is compacted. Keep its original design
+       width so every privilege retains the same wrapping and complete text. */
+    --meta-information-compact: 1;
+    zoom: calc(1 - 0.1 * var(--meta-information-compact));
+    width: 314px;
+    max-width: 314px;
+    justify-self: start;
+    padding: calc(40px / (1 - 0.1 * var(--meta-information-compact))) 0 0;
   }
 
   .metacrilatos-presentation[data-accreditation-renderer="metacrilatos-v1"] .metacrilatos-member__title {
@@ -279,7 +286,29 @@
   }
 
   .metacrilatos-presentation[data-accreditation-renderer="metacrilatos-v1"] > .profile-back-wrapper {
-    margin-top: 16px;
+    /* Reuse the card's empty bottom padding, never the visible control. The
+       fitter leaves 5px after whichever visible column actually ends last. */
+    margin-top: var(--meta-back-margin, -12px);
+  }
+
+  .metacrilatos-presentation[data-accreditation-renderer="metacrilatos-v1"] .metacrilatos-member__circles {
+    margin: calc(22px - 6px * var(--meta-information-compact)) 0 calc(30px - 8px * var(--meta-information-compact));
+  }
+
+  .metacrilatos-presentation[data-accreditation-renderer="metacrilatos-v1"] .metacrilatos-member__section + .metacrilatos-member__section {
+    margin-top: calc(30px - 6px * var(--meta-information-compact));
+  }
+
+  .metacrilatos-presentation[data-accreditation-renderer="metacrilatos-v1"] .metacrilatos-member__section-title {
+    margin-bottom: calc(16px - 2px * var(--meta-information-compact));
+  }
+
+  .metacrilatos-presentation[data-accreditation-renderer="metacrilatos-v1"] .metacrilatos-member__privileges li {
+    padding-block: calc(11px - 2px * var(--meta-information-compact));
+  }
+
+  .metacrilatos-presentation[data-accreditation-renderer="metacrilatos-v1"] .metacrilatos-member__privileges li::before {
+    top: calc(19px - 2px * var(--meta-information-compact));
   }
 }
 

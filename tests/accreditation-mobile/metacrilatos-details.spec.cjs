@@ -35,7 +35,7 @@ async function setup(page, { heldStats = false, clock = false } = {}) {
     if (pathname === '/api/accreditations/active') return json(design);
     if (pathname === '/api/membership/me/accreditation') {
       state.credentialRequests++;
-      return json({ circleLevel: state.level, name: 'Daniel Rivas', createdAt: '2020-01-01T23:30:00Z',
+      return json({ circleLevel: state.level, registrationNumber: 23, name: 'Daniel Rivas', createdAt: '2020-01-01T23:30:00Z',
         visibleId: '11111111-2222-4333-8444-555555555555', qrDataUrl });
     }
     // Deliberately stale cached profile and statistics circle: the authorized
@@ -133,6 +133,7 @@ test('five circles retain their real privileges and geometry in the desktop/mobi
     const member = page.locator('[data-metacrilatos-member]');
     await expect(member).toHaveAttribute('data-circle-level', String(level));
     await expect(page.locator('[data-meta-circle]')).toHaveText(romans[level - 1]);
+    await expect(page.locator('.metacrilatos-member__eyebrow')).toHaveText('TU STATUS EN CRONOX');
     await expect(page.locator('[data-meta-circle-marker][aria-current="true"]')).toHaveCount(1);
     await expect(page.locator(`[data-meta-circle-marker="${level}"]`)).toHaveAttribute('aria-current', 'true');
     await expect(member.locator('[data-meta-circle-marker] button, [data-meta-circle-marker] a')).toHaveCount(0);
@@ -153,6 +154,7 @@ test('five circles retain their real privileges and geometry in the desktop/mobi
       expect(layout.member.left).toBeGreaterThan(layout.stage.right);
       expect(Math.abs(layout.member.top - layout.slab.top)).toBeLessThan(80);
       expect(layout.store.left + layout.store.width / 2).toBeCloseTo(layout.contentWidth / 2, 0);
+      expect(layout.history.bottom).toBeLessThanOrEqual(layout.button.bottom);
     } else {
       expect(layout.member.top).toBeGreaterThan(layout.button.bottom + 20);
       expect(layout.store.top).toBeGreaterThan(layout.history.bottom + 20);

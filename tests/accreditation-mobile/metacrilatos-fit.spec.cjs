@@ -23,7 +23,7 @@ async function openProfile(page, { clock = false } = {}) {
     if (pathname === '/api/accreditations/active') return json({ id: 'metacrilatos', renderer: 'metacrilatos-v1', config: { version: 1 } });
     if (pathname === '/api/membership/me/accreditation') {
       state.credentials++;
-      return json({ circleLevel: state.level, name: 'Daniel Rivas', createdAt: '2020-01-01T23:30:00Z',
+      return json({ circleLevel: state.level, registrationNumber: 23, name: 'Daniel Rivas', createdAt: '2020-01-01T23:30:00Z',
         visibleId: '11111111-2222-4333-8444-555555555555', qrDataUrl });
     }
     if (pathname === '/api/me') return json({ id: 7, firstName: 'Daniel', memberCode: 'CRX-000007', circleLevel: state.level });
