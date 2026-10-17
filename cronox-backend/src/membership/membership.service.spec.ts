@@ -38,7 +38,7 @@ describe('MembershipService public validation', () => {
 
 describe('MembershipService accreditation statistics', () => {
   it('returns all three authoritative purchase figures', async () => {
-    const prisma = { user: { findUnique: jest.fn().mockResolvedValue({ id: 7, circleLevel: 2, createdAt: new Date('2026-01-01') }) } };
+    const prisma = { user: { findUnique: jest.fn().mockResolvedValue({ id: 7, circleLevel: 2, circle2PromotedAt: null, createdAt: new Date('2026-01-01') }) } };
     const historial = { calculatePurchaseStats: jest.fn().mockResolvedValue({ pedidosRealizados: 3, articulosAdquiridos: 7, productosDiferentes: 2 }) };
     const circle = {
       ensureCircleByNetSpent: jest.fn(),
@@ -52,7 +52,27 @@ describe('MembershipService accreditation statistics', () => {
       pedidosRealizados: 3,
       articulosAdquiridos: 7,
       productosDiferentes: 2,
+      autoPromotionThresholdCents: 8500,
+      promotion: { canRequest: false, eligibleAt: null, blockedReason: 'promotion_date_unknown' },
     });
+    expect(circle.ensureCircleByNetSpent).not.toHaveBeenCalled();
+  });
+  it('derives circle and eligibility from one user read while a worker promotes concurrently', async () => {
+    const createdAt = new Date('2026-01-01');
+    const prisma = { user: { findUnique: jest.fn()
+      .mockResolvedValueOnce({ id: 7, circleLevel: 1, circle2PromotedAt: null, createdAt })
+      .mockResolvedValue({ id: 7, circleLevel: 2, circle2PromotedAt: new Date(), createdAt }) } };
+    const historial = { calculatePurchaseStats: jest.fn().mockResolvedValue({ pedidosRealizados: 1, articulosAdquiridos: 1, productosDiferentes: 1 }) };
+    const circle = {
+      maybePromoteRequestedCircle: jest.fn(),
+      getNetSpent: jest.fn().mockResolvedValue({ toString: () => '85' }),
+      getPromotionStatus: jest.fn().mockResolvedValue('none'),
+    };
+    const service = new MembershipService(prisma as any, {} as any, historial as any, circle as any);
+    await expect(service.getMyStats(7)).resolves.toMatchObject({ circleLevel: 1, promotionRequestStatus: 'none',
+      promotion: { canRequest: false, blockedReason: 'circle', circle2PromotedAt: null, eligibleAt: null } });
+    expect(prisma.user.findUnique).toHaveBeenCalledTimes(1);
+    expect(circle.getPromotionStatus).toHaveBeenCalledTimes(1);
   });
 });
 

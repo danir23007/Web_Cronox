@@ -4,6 +4,11 @@ import { join } from 'node:path';
 
 const read = (file: string) =>
   readFileSync(join(__dirname, '../../../cronox-front', file), 'utf8');
+const openDoms = new Set<JSDOM>();
+afterEach(() => {
+  for (const dom of openDoms) dom.window.close();
+  openDoms.clear();
+});
 type SurfaceWindow = {
   CRONOX_API: Record<string, unknown>;
   CRONOX_PRODUCTS: unknown[];
@@ -16,6 +21,7 @@ describe('PDP and quick-add stock presentation', () => {
       url: 'http://localhost/',
       runScripts: 'outside-only',
     });
+    openDoms.add(dom);
     dom.window.eval(read('assets/api.js'));
     const stock = (
       dom.window as unknown as {
@@ -36,7 +42,6 @@ describe('PDP and quick-add stock presentation', () => {
       variants: [{ id: 1, stockQty: 0, isActive: true }],
     });
     expect(card.textContent).toContain('AGOTADO');
-    dom.window.close();
   });
 
   it.each(['pdp', 'quick-add'])(
@@ -50,6 +55,7 @@ describe('PDP and quick-add stock presentation', () => {
           pretendToBeVisual: true,
         },
       );
+      openDoms.add(dom);
       const win = dom.window;
       win.scrollTo = () => {};
       win.eval(read('assets/api.js'));
@@ -74,10 +80,14 @@ describe('PDP and quick-add stock presentation', () => {
       if (surface === 'quick-add') win.eval(read('assets/products.js'));
       for (const stock of [14, 0, 15]) {
         const data = product(stock);
+        app.CRONOX_API.getProductBySlug = jest.fn(async () => data);
         if (surface === 'quick-add') {
           const card = app.CRONOX_createProductCard(data);
           win.document.body.appendChild(card);
           (card.querySelector('.fav-add') as HTMLElement).click();
+          expect(win.document.querySelector<HTMLButtonElement>('#qaAdd')!.disabled).toBe(true);
+          await new Promise((resolve) => setTimeout(resolve, 0));
+          expect(app.CRONOX_API.getProductBySlug).toHaveBeenCalledWith(data.slug, { cache: 'no-store' });
           win.document.querySelector<HTMLButtonElement>('#qaSizes .qa-size-btn')!.click();
         } else {
           app.CRONOX_PRODUCTS = [data];
@@ -127,7 +137,6 @@ describe('PDP and quick-add stock presentation', () => {
           expect(additions).toBe(before + 1);
         }
       }
-      win.close();
     },
   );
   it('shares amber and wrapping inline styles without changing vertical cards', () => {

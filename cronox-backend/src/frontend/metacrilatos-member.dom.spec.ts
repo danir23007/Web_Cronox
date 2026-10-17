@@ -82,18 +82,19 @@ describe('METACRILATOS member composition data and instance lifecycle', () => {
     expect(getMyOrders).not.toHaveBeenCalled();
   });
 
-  it('shows the card and privileges while totals load, then shows real zeroes without remounting', async () => {
+  it('keeps the first presentation loading until totals settle, then reveals real zeroes without remounting', async () => {
     const pending = deferred();
     const { panel, history, section, mount, destroys, open, numbers } = await setup(5, jest.fn(() => pending.promise));
     await open();
     const card = section.querySelector('.crx-object');
-    expect(section.classList.contains('is-loading')).toBe(false);
+    expect(section.classList.contains('is-loading')).toBe(true);
     expect(panel.hidden).toBe(false);
     expect(history.getAttribute('aria-busy')).toBe('true');
     expect(numbers()).toEqual(['—', '—', '—']);
     expect(panel.querySelectorAll('[data-meta-privileges] li')).toHaveLength(7);
     pending.resolve({ circleLevel: 5, pedidosRealizados: 0, articulosAdquiridos: 0, productosDiferentes: 0 });
     await tick();
+    expect(section.classList.contains('is-loading')).toBe(false);
     expect(numbers()).toEqual(['0', '0', '0']);
     expect(history.getAttribute('aria-busy')).toBe('false');
     expect(section.querySelector('.crx-object')).toBe(card);
@@ -108,6 +109,7 @@ describe('METACRILATOS member composition data and instance lifecycle', () => {
     const { section, panel, retry, mount, destroys, open, numbers } = await setup(4, getStats);
     await open();
     const card = section.querySelector('.crx-object');
+    expect(section.classList.contains('is-loading')).toBe(false);
     expect(panel.hidden).toBe(false);
     expect(retry.hidden).toBe(false);
     expect(numbers()).toEqual(['—', '—', '—']);

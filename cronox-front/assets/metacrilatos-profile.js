@@ -38,7 +38,8 @@
     // one follow-up measurement instead of keeping a frame loop alive.
     const rounded = Math.round(value * 10000) / 10000;
     const previous = Number.parseFloat(shell.style.getPropertyValue(property));
-    if (!Number.isFinite(previous) || Math.abs(previous - rounded) > 0.0001) {
+    const tolerance = property === '--meta-fit-scale' ? 0.0003 : 0.25;
+    if (!Number.isFinite(previous) || Math.abs(previous - rounded) > tolerance) {
       shell.style.setProperty(property, `${rounded}${unit}`);
     }
   }
@@ -58,8 +59,8 @@
     }
 
     // CSS zoom participates in layout and keeps text/QR rasterisation at the
-    // displayed size. Divide its measured height by the current exterior zoom;
-    // no internal renderer transform or its responsive scale is overwritten.
+    // displayed size. Divide by the current exterior zoom; the renderer's own
+    // scale, 3D pose and interaction remain untouched.
     const zoom = Number.parseFloat(getComputedStyle(section).zoom) || 1;
     const bottomSpacing = window.CRONOX_METACRILATOS_PRESENTATION?.bottomSpacing(section, zoom);
     if (Number.isFinite(bottomSpacing)) setNumber('--meta-back-margin', bottomSpacing, 'px');
@@ -86,6 +87,18 @@
 
   function schedule() {
     if (listening && !frame) frame = window.requestAnimationFrame(fit);
+  }
+
+  function refresh() {
+    window.cancelAnimationFrame(frame);
+    // The first zoom can change text rounding and therefore the reference
+    // height. Resolve those dependent measurements synchronously, while still
+    // in the reveal task, rather than displaying each provisional frame.
+    for (let pass = 0; pass < 8; pass++) {
+      const previous = shell.style.getPropertyValue('--meta-fit-scale');
+      fit();
+      if (previous === shell.style.getPropertyValue('--meta-fit-scale')) break;
+    }
   }
 
   function start() {
@@ -130,5 +143,6 @@
 
   window.addEventListener('pagehide', stop);
   window.addEventListener('pageshow', start);
+  window.CRONOX_METACRILATOS_FIT = Object.freeze({ refresh });
   start();
 })();

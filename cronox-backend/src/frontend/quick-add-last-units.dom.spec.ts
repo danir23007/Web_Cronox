@@ -5,8 +5,14 @@ import { JSDOM } from 'jsdom';
 import { soldOutSizeCount } from '../common/stock-status';
 
 const read = (file: string) => readFileSync(path.resolve(__dirname, '../../../cronox-front', file), 'utf8');
+const openDoms = new Set<JSDOM>();
+afterEach(() => {
+  for (const dom of openDoms) dom.window.close();
+  openDoms.clear();
+});
 const setup = (url = 'http://localhost:3000/') => {
   const dom = new JSDOM('', { url, runScripts: 'outside-only', pretendToBeVisual: true });
+  openDoms.add(dom);
   const app = dom.window as any;
   app.Date.now = () => Date.parse('2026-10-09T12:00:00Z');
   app.scrollTo = () => {};
@@ -16,7 +22,14 @@ const setup = (url = 'http://localhost:3000/') => {
   app.CRONOX_API.getProducts = async () => [];
   app.eval(read('assets/product-delivery.js'));
   app.eval(read('assets/products.js'));
-  return { dom, app, document: dom.window.document };
+  const openConfirmed = async (data: ReturnType<typeof product>) => {
+    app.CRONOX_API.getProductBySlug = jest.fn(async () => data);
+    app.CRONOX_openQuickAdd(data);
+    expect(dom.window.document.querySelector<HTMLButtonElement>('#qaAdd')!.disabled).toBe(true);
+    await new Promise(resolve => setTimeout(resolve, 0));
+    expect(app.CRONOX_API.getProductBySlug).toHaveBeenCalledWith(data.slug, { cache: 'no-store' });
+  };
+  return { dom, app, document: dom.window.document, openConfirmed };
 };
 const product = (zeroSizes: number, sizeCount = 5) => {
   const variants = ['XS', 'S', 'M', 'L', 'XL'].slice(0, sizeCount)
@@ -28,6 +41,7 @@ const product = (zeroSizes: number, sizeCount = 5) => {
 describe('Quick Add size messages and shared delivery', () => {
   it('keeps scarce items in the cart, decorates recommendation prices and excludes exhausted recommendations', async () => {
     const dom = new JSDOM(read('index.html'), { url: 'http://localhost:3000/', runScripts: 'outside-only' });
+    openDoms.add(dom);
     const app = dom.window as any;
     app.scrollTo = () => {};
     app.matchMedia = () => ({ matches: false, addEventListener() {}, removeEventListener() {} });
@@ -60,11 +74,10 @@ describe('Quick Add size messages and shared delivery', () => {
     await app.CRONOX_CART.fetchCart();
     expect(document.querySelector('[data-upsell-product="low"]')).toBeNull();
     expect(document.querySelectorAll('.cart-line')).toHaveLength(1);
-    dom.window.close();
   });
-  it.each([0, 1, 2, 3, 4])('%s exhausted sizes uses selected-size actions and shared delivery', exhausted => {
-    const { dom, app, document } = setup();
-    app.CRONOX_openQuickAdd(product(exhausted));
+  it.each([0, 1, 2, 3, 4])('%s exhausted sizes uses selected-size actions and shared delivery', async exhausted => {
+    const { app, document, openConfirmed } = setup();
+    await openConfirmed(product(exhausted));
     const add = document.querySelector<HTMLButtonElement>('#qaAdd')!;
     const notify = document.querySelector<HTMLButtonElement>('#qaNotify')!;
     expect(notify.hidden).toBe(exhausted === 0);
@@ -94,11 +107,10 @@ describe('Quick Add size messages and shared delivery', () => {
     document.querySelector<HTMLButtonElement>('.qa-close')!.click();
     app.dispatchEvent(new app.Event('focus'));
     expect(delivery.hidden).toBe(true);
-    dom.window.close();
   });
-  it.each([1, 2, 5])('fully exhausted product with %s sizes offers alerts without a delivery promise', count => {
-    const { dom, app, document } = setup();
-    app.CRONOX_openQuickAdd(product(count, count));
+  it.each([1, 2, 5])('fully exhausted product with %s sizes offers alerts without a delivery promise', async count => {
+    const { document, openConfirmed } = setup();
+    await openConfirmed(product(count, count));
     expect(document.querySelector<HTMLElement>('#qaNotify')!.hidden).toBe(false);
     expect(document.querySelector<HTMLButtonElement>('#qaNotify')!.disabled).toBe(false);
     expect(document.querySelector<HTMLButtonElement>('#qaAdd')!.hidden).toBe(true);
@@ -109,33 +121,31 @@ describe('Quick Add size messages and shared delivery', () => {
     expect(document.querySelector<HTMLButtonElement>('#qaAdd')!.disabled).toBe(true);
     expect(document.querySelector<HTMLElement>('#qaDelivery')!.hidden).toBe(true);
     expect(document.querySelector('#qaLink')!.textContent).toBe('Ver detalles del producto');
-    app.CRONOX_openQuickAdd(product(0));
+    await openConfirmed(product(0));
     document.querySelector<HTMLButtonElement>('#qaSizes .qa-size-btn')!.click();
     expect(document.querySelector<HTMLButtonElement>('#qaNotify')!.disabled).toBe(true);
     expect(document.querySelector<HTMLElement>('#qaDelivery')!.hidden).toBe(false);
-    dom.window.close();
   });
-  it('counts duplicate sizes once, skips inactive/unknown sizes and selects a purchasable variant', () => {
+  it('counts duplicate sizes once, skips inactive/unknown sizes and selects a purchasable variant', async () => {
     const variants = [{ id: 1, size: 'M', stockQty: 2 }, { id: 2, size: 'm', stockQty: 0 },
       { id: 3, size: 'S', stockQty: 0 }, { id: 4, size: 's', stockQty: 0 },
       { id: 5, size: 'XL', stockQty: 0, isActive: false }, { id: 6, size: 'L' }];
     expect(soldOutSizeCount(variants)).toBe(1);
     expect(soldOutSizeCount([{ size: 'US 6', stockQty: 0 }, { size: 'US_6', stockQty: 0 }])).toBe(1);
-    const { dom, app, document } = setup();
+    const { app, document, openConfirmed } = setup();
     const data = product(0);
     data.variants = variants.slice(0, 4) as any;
     data.variantMap = { M: variants[1], S: variants[2] } as any;
     let added: number | null = null;
     app.addEventListener('cronox:addToCart', (e: any) => { added = e.detail.variantId; });
-    app.CRONOX_openQuickAdd(data);
+    await openConfirmed(data);
     expect(document.querySelectorAll('#qaSizes .qa-size-btn')).toHaveLength(2);
     document.querySelector<HTMLButtonElement>('#qaSizes [data-size="M"]')!.click();
     document.querySelector<HTMLButtonElement>('#qaAdd')!.click();
     expect(added).toBe(1);
-    dom.window.close();
   });
   it('opens the existing alert section without choosing a size or requesting a subscription', async () => {
-    const { dom, app, document } = setup('http://localhost:3000/producto/local-fixture#productWaitlist');
+    const { app, document } = setup('http://localhost:3000/producto/local-fixture#productWaitlist');
     document.body.innerHTML += '<div id="anchor"></div>';
     app.HTMLElement.prototype.scrollIntoView = () => {};
     const requests: string[] = [];
@@ -163,6 +173,5 @@ describe('Quick Add size messages and shared delivery', () => {
     expect(document.querySelector<HTMLButtonElement>('#productWaitlist button')!.disabled).toBe(true);
     expect(new URL(app.location.href).searchParams.has('waitlist')).toBe(false);
     expect(requests).toHaveLength(1); // Only the initial GET, never an automatic POST.
-    dom.window.close();
   });
 });

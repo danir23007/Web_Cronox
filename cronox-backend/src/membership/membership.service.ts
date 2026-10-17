@@ -6,6 +6,7 @@ import { UsersService } from '../users/users.service';
 import { HistorialService } from '../historial/historial.service';
 import { getPublicApiUrl } from '../common/config/environment';
 import { accreditationName, accreditationPayload, assertUsableAccreditation, renderAccreditationQr } from './accreditation-identity';
+import { circle2Eligibility, CIRCLE_II_THRESHOLD_CENTS } from './circle-policy';
 
 @Injectable()
 export class MembershipService {
@@ -38,7 +39,6 @@ export class MembershipService {
   }
 
   async getMyAccreditation(userId: number) {
-    await this.circleService.ensureCircleByNetSpent(userId);
     await this.circleService.maybePromoteRequestedCircle(userId);
     const token = await this.usersService.ensurePublicMemberToken(userId);
     const user = await this.prisma.user.findUnique({ where: { id: userId },
@@ -68,7 +68,6 @@ export class MembershipService {
   }
 
   async getMyStats(userId: number) {
-    await this.circleService.ensureCircleByNetSpent(userId);
     await this.circleService.maybePromoteRequestedCircle(userId);
 
     const user = await this.prisma.user.findUnique({
@@ -76,6 +75,7 @@ export class MembershipService {
       select: {
         id: true,
         circleLevel: true,
+        circle2PromotedAt: true,
         createdAt: true,
       },
     });
@@ -89,6 +89,9 @@ export class MembershipService {
       this.circleService.getNetSpent(userId),
       this.circleService.getPromotionStatus(userId),
     ]);
+    // Derive eligibility from the same user and request state returned here.
+    // A worker promotion between independent reads must not mix circle I/II.
+    const promotion = circle2Eligibility(user, promotionRequestStatus === 'pending');
 
     return {
       circleLevel: user.circleLevel,
@@ -96,8 +99,10 @@ export class MembershipService {
       pedidosRealizados: purchaseStats.pedidosRealizados,
       articulosAdquiridos: purchaseStats.articulosAdquiridos,
       productosDiferentes: purchaseStats.productosDiferentes,
-      netSpent: Number(netSpent.toString()),
+      netSpent: netSpent === null ? null : Number(netSpent.toString()),
       promotionRequestStatus,
+      promotion,
+      autoPromotionThresholdCents: CIRCLE_II_THRESHOLD_CENTS,
     };
   }
 }

@@ -1,146 +1,85 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
-import { OrderStatus } from '@prisma/client';
 import { Decimal } from '@prisma/client/runtime/library';
+import type { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { serializableTransaction } from '../prisma/serializable-transaction';
 import { CircleUpgradeService } from './circle-upgrade.service';
-
-const HUNDRED_EUR = new Decimal(100);
+import { circle2Eligibility, getNetSpendCents, reconcileCircle2 } from './circle-policy';
 
 @Injectable()
 export class CircleService {
-  constructor(
-    private readonly prisma: PrismaService,
-    private readonly circleUpgradeService: CircleUpgradeService,
-  ) {}
+  constructor(private readonly prisma: PrismaService, private readonly circleUpgradeService: CircleUpgradeService) {}
 
-  async getNetSpent(userId: number): Promise<Decimal> {
-    const purchases = await this.prisma.order.aggregate({
-      where: {
-        userId,
-        status: {
-          in: [
-            OrderStatus.PAID,
-            OrderStatus.PROCESSING,
-            OrderStatus.SHIPPED,
-            OrderStatus.DELIVERED,
-          ],
-        },
-      },
-      _sum: { total: true },
-    });
-
-    return purchases._sum.total ?? new Decimal(0);
+  async getNetSpent(userId: number): Promise<Decimal | null> {
+    const cents = await getNetSpendCents(this.prisma, userId);
+    return cents === null ? null : new Decimal(cents).div(100);
   }
 
+  // Explicit reconciliation API for jobs/repairs. Reads of an accreditation do
+  // not invoke this: paid/refund facts enqueue the persistent background job.
   async ensureCircleByNetSpent(userId: number): Promise<void> {
-    const user = await this.prisma.user.findUnique({
-      where: { id: userId },
-      select: { id: true, circleLevel: true },
-    });
-
-    if (!user) {
-      throw new NotFoundException('User not found');
-    }
-
-    if (user.circleLevel >= 3) {
-      return;
-    }
-
-    const netSpent = await this.getNetSpent(userId);
-
-    if (netSpent.gt(HUNDRED_EUR) && user.circleLevel === 1) {
-      await this.prisma.user.update({
-        where: { id: userId },
-        data: { circleLevel: 2 },
-      });
-      return;
-    }
-
-    if (netSpent.lte(HUNDRED_EUR) && user.circleLevel === 2) {
-      await this.prisma.user.update({
-        where: { id: userId },
-        data: { circleLevel: 1 },
-      });
-    }
+    await serializableTransaction(this.prisma, tx => reconcileCircle2(tx, userId));
   }
 
   async maybePromoteRequestedCircle(userId: number): Promise<void> {
-    const request = await this.prisma.circlePromotionRequest.findFirst({
-      where: { userId, status: 'pending', promoteAt: { lte: new Date() } },
+    await serializableTransaction(this.prisma, async tx => {
+      const request = await tx.circlePromotionRequest.findFirst({
+        where: { userId, status: 'pending', promoteAt: { lte: new Date() } },
+      });
+      if (!request) return;
+      const user = await tx.user.findUnique({ where: { id: userId }, select: { circleLevel: true } });
+      if (!user || user.circleLevel < 2) return;
+      // Retain the existing requested-promotion processor without downgrading
+      // a member who has since been promoted manually to a higher circle.
+      await tx.user.updateMany({ where: { id: userId, circleLevel: 2 }, data: { circleLevel: 3 } });
+      await tx.circlePromotionRequest.update({ where: { userId }, data: { status: 'completed' } });
     });
-
-    if (!request) {
-      return;
-    }
-
-    await this.prisma.$transaction([
-      this.prisma.user.update({
-        where: { id: userId },
-        data: { circleLevel: 3 },
-      }),
-      this.prisma.circlePromotionRequest.update({
-        where: { userId },
-        data: { status: 'completed' },
-      }),
-    ]);
   }
 
-  async getPromotionStatus(userId: number): Promise<'pending' | 'completed' | 'none'> {
-    const request = await this.prisma.circlePromotionRequest.findUnique({
-      where: { userId },
-      select: { status: true },
-    });
+  private async promotionStatus(userId: number, tx: Prisma.TransactionClient) {
+    const [request, pending] = await Promise.all([
+      tx.circlePromotionRequest.findUnique({ where: { userId }, select: { status: true } }),
+      tx.circleUpgradeRequest.findFirst({ where: { userId, fromCircle: 2, toCircle: 3, status: 'PENDING' }, select: { id: true } }),
+    ]);
+    if (request?.status === 'pending' || (!request && pending)) return 'pending' as const;
+    return request ? 'completed' as const : 'none' as const;
+  }
 
-    if (!request) return 'none';
-    if (request.status === 'pending') return 'pending';
-    return 'completed';
+  async getPromotionStatus(userId: number) { return this.promotionStatus(userId, this.prisma); }
+
+  async getPromotionEligibility(userId: number) {
+    const user = await this.prisma.user.findUnique({ where: { id: userId }, select: { circleLevel: true, circle2PromotedAt: true } });
+    if (!user) throw new NotFoundException('User not found');
+    const status = await this.getPromotionStatus(userId);
+    return circle2Eligibility(user, status === 'pending');
   }
 
   async requestPromotion(userId: number) {
-    await this.ensureCircleByNetSpent(userId);
-
-    const user = await this.prisma.user.findUnique({
-      where: { id: userId },
-      select: { circleLevel: true },
-    });
-
-    if (!user) {
-      throw new NotFoundException('User not found');
-    }
-
-    if (user.circleLevel >= 3) {
-      throw new BadRequestException('El usuario ya está en un círculo superior');
-    }
-
-    if (user.circleLevel !== 2) {
-      throw new BadRequestException('Solo los usuarios en Círculo II pueden solicitar ascenso');
-    }
-
-    const existing = await this.prisma.circlePromotionRequest.findUnique({
-      where: { userId },
-      select: { status: true },
-    });
-
-    if (existing?.status === 'pending') {
-      throw new ConflictException('Ya existe una solicitud pendiente');
-    }
-
-    const minutesToPromote = Math.floor(Math.random() * 72 * 60);
-    const promoteAt = new Date(Date.now() + minutesToPromote * 60_000);
-    const requestedAt = new Date();
-
-    const request =
-      existing && existing.status === 'completed'
-        ? await this.prisma.circlePromotionRequest.update({
-            where: { userId },
-            data: { status: 'pending', requestedAt, promoteAt },
-          })
-        : await this.prisma.circlePromotionRequest.create({
-            data: { userId, status: 'pending', requestedAt, promoteAt },
-          });
-
-    await this.circleUpgradeService.ensureAutoRequestForCircle2To3(userId, promoteAt);
-
-    return request;
+    return serializableTransaction(this.prisma, async tx => {
+      await tx.$queryRaw`SELECT id FROM "User" WHERE id=${userId} FOR UPDATE`;
+      const user = await tx.user.findUnique({ where: { id: userId }, select: { circleLevel: true, circle2PromotedAt: true } });
+      if (!user) throw new NotFoundException('User not found');
+      const status = await this.promotionStatus(userId, tx);
+      const eligibility = circle2Eligibility(user, status === 'pending');
+      if (eligibility.hasPending) throw new ConflictException('Ya existe una solicitud pendiente');
+      if (!eligibility.canRequest) {
+        const message = eligibility.blockedReason === 'cooldown'
+          ? 'Debes esperar 30 días completos desde tu ascenso al círculo II.'
+          : eligibility.blockedReason === 'promotion_date_unknown'
+            ? 'La fecha de ascenso debe verificarse antes de solicitar el círculo III.'
+            : 'Solo los usuarios en Círculo II pueden solicitar ascenso';
+        throw new BadRequestException({ message, code: eligibility.blockedReason, ...eligibility });
+      }
+      // Preserve the established 0–72h processing window after an eligible request.
+      const requestedAt = new Date();
+      const promoteAt = new Date(requestedAt.getTime() + Math.floor(Math.random() * 72 * 60) * 60_000);
+      const existing = await tx.circlePromotionRequest.findUnique({ where: { userId }, select: { id: true } });
+      const data = { status: 'pending', requestedAt, promoteAt };
+      const request = existing
+        ? await tx.circlePromotionRequest.update({ where: { userId }, data })
+        : await tx.circlePromotionRequest.create({ data: { userId, ...data } });
+      await this.circleUpgradeService.ensureAutoRequestForCircle2To3(userId, promoteAt, tx);
+      return request;
+    }, true);
   }
 }

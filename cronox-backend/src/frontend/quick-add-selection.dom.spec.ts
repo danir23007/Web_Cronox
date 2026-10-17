@@ -17,16 +17,40 @@ const setup = (pdp = false, initial = data()) => {
   app.matchMedia = () => ({ matches: false, addEventListener() {} });
   app.eval(read('api.js'));
   app.CRONOX_API.getProducts = async () => [];
+  app.CRONOX_API.getProductBySlug = async () => initial;
   app.CRONOX_PRODUCTS = [initial];
   app.eval(read('product-delivery.js'));
   app.eval(read(pdp ? 'product-page.js' : 'products.js'));
+  app.openConfirmed = async (product: unknown) => {
+    app.CRONOX_API.getProductBySlug = jest.fn(async () => product);
+    app.CRONOX_openQuickAdd(product);
+    await new Promise(resolve => setTimeout(resolve, 0));
+  };
   return { dom, app, document: dom.window.document };
 };
 const tick = () => new Promise(resolve => setTimeout(resolve, 0));
 describe('initial Quick Add size and current availability', () => {
-  it('marks an available size on opening and enables exactly its action, including keyboard navigation', () => {
+  it('requires a fresh read on each opening and genuinely retries after an availability failure', async () => {
     const { dom, app, document } = setup();
+    let resolve: (product: unknown) => void = () => {};
+    const get = jest.fn().mockRejectedValueOnce(new Error('offline'))
+      .mockImplementationOnce(() => new Promise(done => { resolve = done; }));
+    app.CRONOX_API.getProductBySlug = get;
     app.CRONOX_openQuickAdd(data());
+    expect(document.querySelector<HTMLButtonElement>('#qaAdd')!.disabled).toBe(true);
+    await tick();
+    expect(document.querySelector('#qaCartStatus')!.textContent).toContain('No se pudo confirmar');
+    document.querySelector<HTMLButtonElement>('.qa-close')!.click();
+    app.CRONOX_openQuickAdd(data());
+    expect(get).toHaveBeenCalledTimes(2);
+    expect(document.querySelector<HTMLButtonElement>('#qaAdd')!.disabled).toBe(true);
+    resolve(data()); await tick();
+    expect(document.querySelector<HTMLButtonElement>('#qaAdd')!.disabled).toBe(false);
+    dom.window.close();
+  });
+  it('marks an available size on opening and enables exactly its action, including keyboard navigation', async () => {
+    const { dom, app, document } = setup();
+    await app.openConfirmed(data());
     const add = document.querySelector<HTMLButtonElement>('#qaAdd')!, notify = document.querySelector<HTMLButtonElement>('#qaNotify')!;
     const m = document.querySelector<HTMLButtonElement>('[data-size="M"]')!, s = document.querySelector<HTMLButtonElement>('[data-size="S"]')!;
     expect(add.disabled).toBe(false); expect(notify.disabled).toBe(true);
@@ -41,11 +65,11 @@ describe('initial Quick Add size and current availability', () => {
     expect([add.disabled, notify.disabled]).toEqual([false, true]);
     dom.window.close();
   });
-  it('blocks native and synthetic disabled actions and treats unknown stock as unconfirmed', () => {
+  it('blocks native and synthetic disabled actions and treats unknown stock as unconfirmed', async () => {
     const { dom, app, document } = setup();
     const product: any = data(); product.variants[0].stockQty = undefined;
     let added = 0; app.addEventListener('cronox:addToCart', () => added++);
-    app.CRONOX_openQuickAdd(product);
+    await app.openConfirmed(product);
     document.querySelector<HTMLButtonElement>('[data-size="M"]')!.click();
     for (const id of ['qaAdd', 'qaNotify']) {
       const button = document.getElementById(id) as HTMLButtonElement;
@@ -57,13 +81,13 @@ describe('initial Quick Add size and current availability', () => {
     expect(document.querySelector<HTMLElement>('#qaDelivery')!.hidden).toBe(true);
     dom.window.close();
   });
-  it('updates hidden actions and delivery placement across full, partial and zero availability without losing the choice', () => {
+  it('updates hidden actions and delivery placement across full, partial and zero availability without losing the choice', async () => {
     const { dom, app, document } = setup();
     const all = data(); all.variants[1].stockQty = 2;
     const add = () => document.querySelector<HTMLButtonElement>('#qaAdd')!;
     const notify = () => document.querySelector<HTMLButtonElement>('#qaNotify')!;
     const delivery = () => document.querySelector<HTMLElement>('#qaDelivery')!;
-    app.CRONOX_openQuickAdd(all);
+    await app.openConfirmed(all);
     expect(notify().hidden).toBe(true); expect(add().hidden).toBe(false);
     expect(delivery().parentElement!.className).toBe('qa-footer');
     expect(delivery().classList.contains('qa-delivery--corner')).toBe(true);
@@ -79,44 +103,45 @@ describe('initial Quick Add size and current availability', () => {
     expect([add().hidden, add().disabled, notify().hidden, notify().disabled]).toEqual([false, false, true, true]);
     expect(delivery().hidden).toBe(false); expect(delivery().parentElement!.className).toBe('qa-footer');
     expect(delivery().classList.contains('qa-delivery--corner')).toBe(true);
-    app.CRONOX_openQuickAdd(data()); expect(notify().hidden).toBe(false);
-    app.CRONOX_openQuickAdd(all); expect(notify().hidden).toBe(true);
+    await app.openConfirmed(data()); expect(notify().hidden).toBe(false);
+    await app.openConfirmed(all); expect(notify().hidden).toBe(true);
     dom.window.close();
   });
-  it('preserves the selected size on stock updates and never reenables a stale cart action', () => {
+  it('preserves the selected size on stock updates and never reenables a stale cart action', async () => {
     const { dom, app, document } = setup(); let complete: (ok: boolean) => void = () => {};
     app.addEventListener('cronox:addToCart', (e: any) => { complete = e.detail.onComplete; });
-    app.CRONOX_openQuickAdd(data());
+    await app.openConfirmed(data());
     document.querySelector<HTMLButtonElement>('[data-size="M"]')!.click();
     document.querySelector<HTMLButtonElement>('#qaAdd')!.click();
     app.dispatchEvent(new app.CustomEvent('cronox:productAvailability', { detail: { product: data(0) } }));
-    complete(true);
+    complete(false);
     expect(document.querySelector('[aria-checked="true"]')!.getAttribute('data-size')).toBe('M');
     expect(document.querySelector<HTMLButtonElement>('#qaAdd')!.disabled).toBe(true);
     expect(document.querySelector<HTMLButtonElement>('#qaNotify')!.disabled).toBe(false);
     app.CRONOX_DELIVERY.refresh();
     expect(document.querySelector<HTMLElement>('#qaDelivery')!.hidden).toBe(true);
-    app.CRONOX_openQuickAdd(data(2, 'other'));
+    await app.openConfirmed(data(2, 'other'));
     complete(true);
     expect(document.querySelector<HTMLButtonElement>('#qaAdd')!.disabled).toBe(false);
+    expect(document.querySelector('#quickAdd')!.getAttribute('aria-hidden')).toBe('false');
     dom.window.close();
   });
-  it.each(['M', 'S', 'L', 'XS', 'XL', 'XXL'])('uses apparel priority to initially choose %s without changing the visual order', chosen => {
+  it.each(['M', 'S', 'L', 'XS', 'XL', 'XXL'])('uses apparel priority to initially choose %s without changing the visual order', async chosen => {
     const { dom, app, document } = setup();
     const priority = ['M', 'S', 'L', 'XS', 'XL', 'XXL'];
     const visual = ['XS', 'S', 'M', 'L', 'XL', 'XXL'];
     const variants = visual.map((size, i) => ({ id: i + 1, size, stockQty: priority.indexOf(size) >= priority.indexOf(chosen) ? 1 : 0 }));
     const product = { ...data(), sizeSystem: 'APPAREL', sizes: visual, variants, variantMap: Object.fromEntries(variants.map(v => [v.size, v])) };
-    app.CRONOX_openQuickAdd(product);
+    await app.openConfirmed(product);
     expect(document.querySelector('#qaSizes [aria-checked="true"]')!.getAttribute('data-size')).toBe(chosen);
     expect([...document.querySelectorAll<HTMLElement>('#qaSizes [data-size]')].map(el => el.dataset.size)).toEqual(visual);
     expect(document.querySelector<HTMLButtonElement>('#qaAdd')!.disabled).toBe(false);
     dom.window.close();
   });
-  it('picks existing active sizes only and enables an alert immediately when all are exhausted', () => {
+  it('picks existing active sizes only and enables an alert immediately when all are exhausted', async () => {
     const { dom, app, document } = setup();
     const variants = [{ id: 1, size: 'M', stockQty: 5, isActive: false }, { id: 2, size: 'S', stockQty: 0 }];
-    app.CRONOX_openQuickAdd({ ...data(), variants, variantMap: Object.fromEntries(variants.map(v => [v.size, v])), sizes: ['M', 'S', 'L'] });
+    await app.openConfirmed({ ...data(), variants, variantMap: Object.fromEntries(variants.map(v => [v.size, v])), sizes: ['M', 'S', 'L'] });
     expect(document.querySelectorAll('#qaSizes [data-size]')).toHaveLength(1);
     expect(document.querySelector('#qaSizes [aria-checked="true"]')!.getAttribute('data-size')).toBe('S');
     expect(document.querySelector<HTMLButtonElement>('#qaAdd')!.hidden).toBe(true);
@@ -124,22 +149,22 @@ describe('initial Quick Add size and current availability', () => {
     expect(document.querySelector<HTMLElement>('#qaDelivery')!.hidden).toBe(true);
     dom.window.close();
   });
-  it('chooses another size system randomly once per opening, preserving updates and manual choices', () => {
+  it('chooses another size system randomly once per opening, preserving updates and manual choices', async () => {
     const { dom, app, document } = setup();
     const variants = ['US_6', 'US_7', 'US_8'].map((size, i) => ({ id: i + 1, size, stockQty: i }));
     const ring = { ...data(), sizeSystem: 'US_RING', variants, sizes: variants.map(v => v.size), variantMap: Object.fromEntries(variants.map(v => [v.size, v])) };
     const random = jest.spyOn(app.Math, 'random').mockReturnValueOnce(.9).mockReturnValueOnce(.1).mockReturnValueOnce(.99);
     const selected = () => document.querySelector('#qaSizes [aria-checked="true"]')!.getAttribute('data-size');
-    app.CRONOX_openQuickAdd(ring); expect(selected()).toBe('US_8');
+    await app.openConfirmed(ring); expect(selected()).toBe('US_8');
     app.dispatchEvent(new app.CustomEvent('cronox:productAvailability', { detail: { product: ring } }));
     document.getElementById('qaImg1')!.dispatchEvent(new app.Event('load'));
     expect(selected()).toBe('US_8'); expect(random).toHaveBeenCalledTimes(1);
     document.querySelector<HTMLButtonElement>('[data-size="US_6"]')!.click();
     app.dispatchEvent(new app.CustomEvent('cronox:productAvailability', { detail: { product: ring } }));
     expect(selected()).toBe('US_6'); expect(random).toHaveBeenCalledTimes(1);
-    app.CRONOX_openQuickAdd(ring); expect(selected()).toBe('US_7');
+    await app.openConfirmed(ring); expect(selected()).toBe('US_7');
     const out = variants.map(v => ({ ...v, stockQty: 0 }));
-    app.CRONOX_openQuickAdd({ ...ring, variants: out, variantMap: Object.fromEntries(out.map(v => [v.size, v])) });
+    await app.openConfirmed({ ...ring, variants: out, variantMap: Object.fromEntries(out.map(v => [v.size, v])) });
     expect(selected()).toBe('US_8'); expect(document.querySelector<HTMLButtonElement>('#qaNotify')!.disabled).toBe(false);
     expect(random).toHaveBeenCalledTimes(3); random.mockRestore(); dom.window.close();
   });
@@ -150,7 +175,7 @@ describe('initial Quick Add size and current availability', () => {
     document.querySelector<HTMLButtonElement>('[data-size="M"]')!.click();
     app.dispatchEvent(new app.Event('focus')); app.dispatchEvent(new app.Event('focus'));
     expect(document.querySelector<HTMLButtonElement>('#qaAdd')!.disabled).toBe(true);
-    reads[1](data(0)); await tick(); reads[0](data()); await tick();
+    reads[2](data(0)); await tick(); reads[1](data()); reads[0](data()); await tick();
     app.dispatchEvent(new app.CustomEvent('cronox:productsLoaded', { detail: { products: [data()], requestedAt: -1 } }));
     expect(document.querySelector<HTMLButtonElement>('#qaAdd')!.disabled).toBe(true);
     expect(document.querySelector<HTMLButtonElement>('#qaNotify')!.disabled).toBe(false);
@@ -158,7 +183,7 @@ describe('initial Quick Add size and current availability', () => {
     app.dispatchEvent(new app.Event('focus'));
     document.querySelector<HTMLButtonElement>('.qa-close')!.click();
     app.CRONOX_openQuickAdd(data(0, 'other'));
-    reads[2](data()); await tick();
+    reads[3](data()); reads[4](data(0, 'other')); await tick();
     expect(document.getElementById('qaName')!.textContent).toBe('other');
     expect(document.querySelector<HTMLElement>('#qaDelivery')!.hidden).toBe(true);
     dom.window.close();

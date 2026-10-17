@@ -11,6 +11,7 @@ import {
   Prisma,
 } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { serializableTransaction } from '../prisma/serializable-transaction';
 import { CreateCircleUpgradeDto, UpdateCircleUpgradeStatusDto } from './dto/circle-upgrade.dto';
 import type { AdminCircleUpgradeQueryDto } from '../admin/circle-upgrades/dto/admin-circle-upgrade-query.dto';
 
@@ -114,8 +115,8 @@ export class CircleUpgradeService {
     return Math.max(0, COOLDOWN_MS - elapsed);
   }
 
-  private async getNextRequestNumber(userId: number) {
-    const aggregate = await this.prisma.circleUpgradeRequest.aggregate({
+  private async getNextRequestNumber(userId: number, tx: Prisma.TransactionClient = this.prisma) {
+    const aggregate = await tx.circleUpgradeRequest.aggregate({
       where: { userId },
       _max: { requestNumber: true },
     });
@@ -152,11 +153,22 @@ export class CircleUpgradeService {
       hasApproved,
       canRequest,
       cooldownDaysRemaining,
+      cooldownMs,
+      eligibleAt: latest && latest.status !== CircleUpgradeRequestStatus.APPROVED
+        ? new Date(latest.createdAt.getTime() + COOLDOWN_MS) : null,
+      serverTime: new Date(),
     };
   }
 
   async createRequest(userId: number, dto: CreateCircleUpgradeDto) {
-    const user = await this.prisma.user.findUnique({
+    return serializableTransaction(this.prisma, async tx => {
+      await tx.$queryRaw`SELECT id FROM "User" WHERE id=${userId} FOR UPDATE`;
+      return this.createRequestInTransaction(tx, userId, dto);
+    }, true);
+  }
+
+  private async createRequestInTransaction(tx: Prisma.TransactionClient, userId: number, dto: CreateCircleUpgradeDto) {
+    const user = await tx.user.findUnique({
       where: { id: userId },
       select: { circleLevel: true },
     });
@@ -173,7 +185,7 @@ export class CircleUpgradeService {
       throw new BadRequestException('Solo los usuarios en Círculo III pueden solicitar ascenso');
     }
 
-    const latest = await this.prisma.circleUpgradeRequest.findFirst({
+    const latest = await tx.circleUpgradeRequest.findFirst({
       where: { userId, fromCircle: 3, toCircle: 4 },
       orderBy: { createdAt: 'desc' },
     });
@@ -192,7 +204,7 @@ export class CircleUpgradeService {
 
     const usernameNormalized = this.normalizeUsername(dto.username);
 
-    const duplicateApproved = await this.prisma.circleUpgradeRequest.findFirst({
+    const duplicateApproved = await tx.circleUpgradeRequest.findFirst({
       where: {
         userId: { not: userId },
         status: CircleUpgradeRequestStatus.APPROVED,
@@ -208,10 +220,10 @@ export class CircleUpgradeService {
       );
     }
 
-    const requestNumber = await this.getNextRequestNumber(userId);
+    const requestNumber = await this.getNextRequestNumber(userId, tx);
     const username = dto.username.trim();
 
-    return this.prisma.circleUpgradeRequest.create({
+    return tx.circleUpgradeRequest.create({
       data: {
         userId,
         fromCircle: 3,
@@ -225,15 +237,15 @@ export class CircleUpgradeService {
     });
   }
 
-  async ensureAutoRequestForCircle2To3(userId: number, autoProcessAt?: Date) {
-    const pending = await this.prisma.circleUpgradeRequest.findFirst({
+  async ensureAutoRequestForCircle2To3(userId: number, autoProcessAt?: Date, tx: Prisma.TransactionClient = this.prisma) {
+    const pending = await tx.circleUpgradeRequest.findFirst({
       where: { userId, fromCircle: 2, toCircle: 3, status: CircleUpgradeRequestStatus.PENDING },
       orderBy: { createdAt: 'desc' },
     });
 
     if (pending) {
       if (autoProcessAt && !pending.autoProcessAt) {
-        await this.prisma.circleUpgradeRequest.update({
+        await tx.circleUpgradeRequest.update({
           where: { id: pending.id },
           data: { autoProcessAt },
         });
@@ -241,8 +253,8 @@ export class CircleUpgradeService {
       return pending;
     }
 
-    const requestNumber = await this.getNextRequestNumber(userId);
-    const created = await this.prisma.circleUpgradeRequest.create({
+    const requestNumber = await this.getNextRequestNumber(userId, tx);
+    const created = await tx.circleUpgradeRequest.create({
       data: {
         userId,
         fromCircle: 2,

@@ -18,6 +18,7 @@ import { loadCategoryPages } from './category-pagination';
     body?: unknown;
     query?: QueryRecord;
     cache?: RequestCache;
+    signal?: AbortSignal;
   }
 
   const g =
@@ -565,6 +566,13 @@ import { loadCategoryPages } from './category-pagination';
     return {
       id: item.id,
       variantId: item.variantId,
+      // Keep the authoritative selected variant's availability for cart warnings.
+      variant: {
+        id: variant.id,
+        stock: variant.stockQty ?? variant.stock ?? null,
+        isActive: variant.isActive ?? true,
+        isAvailable: variant.isAvailable ?? true,
+      },
       qty: Number(item.qty) || 0,
       priceCents,
       price: centsToUnits(priceCents),
@@ -580,6 +588,7 @@ import { loadCategoryPages } from './category-pagination';
         name: product.name,
         currency: product.currency || 'EUR',
         sizeSystem: product.sizeSystem || 'APPAREL',
+        lastUnitsThreshold: product.lastUnitsThreshold ?? null,
         image: productImage,
         imageUrl: productImage || productImageUrl(product.imageUrl),
         images: productImages,
@@ -783,6 +792,7 @@ import { loadCategoryPages } from './category-pagination';
       method,
       headers,
       credentials: 'include',
+      signal: options.signal,
     };
 
     if (options.cache) {
@@ -987,13 +997,13 @@ import { loadCategoryPages } from './category-pagination';
     }
   };
 
-  api.getAccreditationStats = async () => {
-    const data = await request('/api/membership/me/stats');
+  api.getAccreditationStats = async (options: Pick<RequestOptions, 'signal'> = {}) => {
+    const data = await request('/api/membership/me/stats', { ...options, cache: 'no-store' });
     return data || null;
   };
 
-  api.getCircleUpgradeStatus = async () => {
-    const data = await request('/api/upgrade/3-4/status');
+  api.getCircleUpgradeStatus = async (options: Pick<RequestOptions, 'signal'> = {}) => {
+    const data = await request('/api/upgrade/3-4/status', { ...options, cache: 'no-store' });
     return data || null;
   };
 

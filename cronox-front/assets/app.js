@@ -370,7 +370,10 @@
         const form = document.createElement('form'); form.id = 'storeCategoryFilters';
         form.addEventListener('submit', event => event.preventDefault());
         for (const category of [{ name: 'Todos', slug: '' }, ...visible]) {
-          const isStoreFilter = !!document.getElementById('productsGrid');
+          // The home shares the grid, but category navigation must enter the
+          // same catalogue route used by every other page before filtering.
+          const isStoreFilter = !!document.getElementById('productsGrid') &&
+            document.documentElement.classList.contains('category-page');
           const row = document.createElement(isStoreFilter ? 'label' : 'div'); row.className = 'black-menu__category-row';
           const link = document.createElement(isStoreFilter ? 'span' : 'a'); link.className = 'black-menu__link'; link.textContent = category.name;
           if (!isStoreFilter) {
@@ -1249,8 +1252,16 @@
   };
 
   const notifyCartState = () => {
-    renderCartDrawer(cartState.data);
+    let rendered = true;
+    try { renderCartDrawer(cartState.data); }
+    catch (error) {
+      rendered = false;
+      renderedCartItems = null;
+      renderedUpsell = null;
+      console.error('[CRONOX] Error mostrando la cesta confirmada', error);
+    }
     window.dispatchEvent(new CustomEvent('cart:state', { detail: cartState }));
+    return rendered;
   };
 
   const publishCart = (cart) => {
@@ -1260,13 +1271,15 @@
     cartState.error = null;
     cartSyncedAt = Date.now();
     updateBadge(cart);
-    notifyCartState();
+    const rendered = notifyCartState();
     window.dispatchEvent(Object.assign(new CustomEvent('cart:updated', { detail: cart }), { cartSource: true }));
+    if (!rendered) throw new Error('CART_RENDER_FAILED');
     return cart;
   };
 
   const requestCart = (operation, mutation = false) => {
     const owner = cartOwner;
+    let recoverConfirmedMutation = false;
     if (mutation) cartRead = null;
     cartState.pending += 1;
     const task = cartQueue.then(async () => {
@@ -1291,8 +1304,21 @@
           cartIdentity = identity;
         }
         const cart = await operation();
-        if (owner === cartOwner && version === cartVersion) publishCart(cart);
-        return cartState.data;
+        if (owner === cartOwner && version === cartVersion) {
+          try { publishCart(cart); }
+          catch (error) {
+            // The server operation has already succeeded. Recover display with
+            // a GET after this queued task; never invite a second mutation.
+            console.error('[CRONOX] Recuperando la vista de la cesta', error);
+            cartState.status = 'error';
+            cartState.error = mutation
+              ? 'Cambio confirmado. No se pudo actualizar la vista de la cesta. Reintenta la carga.'
+              : 'No se pudo mostrar la cesta. Vuelve a intentar cargarla.';
+            recoverConfirmedMutation = mutation;
+            notifyCartState();
+          }
+        }
+        return cart;
       } catch (error) {
         if (owner === cartOwner && version === cartVersion) {
           cartState.status = 'error';
@@ -1308,6 +1334,9 @@
       notifyCartState();
     });
     cartQueue = task.catch(() => undefined);
+    task.then(() => {
+      if (recoverConfirmedMutation && owner === cartOwner) fetchCart().catch(() => undefined);
+    }).catch(() => undefined);
     return task;
   };
 
@@ -1353,16 +1382,17 @@
       console.error('[CRONOX] Falta variantId para añadir al carrito');
       return;
     }
-    try {
-      const cart = await addCartItem({ variantId: item.variantId, qty });
-      showToast('Añadido al carrito ✓');
-      if (cartState.drawerOpen) renderCartDrawer(cart);
-      return cart;
-    } catch (error) {
+    let cart;
+    try { cart = await addCartItem({ variantId: item.variantId, qty }); }
+    catch (error) {
       console.error('[CRONOX] Error añadiendo al carrito', error);
       showToast('No se pudo añadir al carrito');
       return null;
     }
+    if (!cart) return null;
+    try { showToast('Añadido al carrito ✓'); }
+    catch (error) { console.warn('[CRONOX] Artículo confirmado; aviso visual no disponible', error); }
+    return cart;
   }
 
   const cartOverlayEl = $('#cart-overlay');
@@ -1602,7 +1632,7 @@
       `;
       if (window.CRONOX_STOCK?.hasLastUnits(product.variants, product.lastUnitsThreshold)) {
         const warning = document.createElement('span');
-        warning.className = 'cart-upsell__last-units';
+        warning.className = 'cart-upsell__last-units cart-low-stock';
         warning.textContent = ' Últimas unidades';
         card.querySelector('.cart-upsell__price').appendChild(warning);
       }
@@ -1732,6 +1762,7 @@
       const isPending = pendingItemUpdates.has(item.id);
       if (isPending) article.classList.add('is-updating');
       const itemError = cartItemErrors.get(item.id);
+      const hasLastUnits = window.CRONOX_STOCK?.hasLastUnits([item.variant], item.product?.lastUnitsThreshold);
       const display = {
         id: escapeHtml(item.id ?? ''),
         qty,
@@ -1749,7 +1780,7 @@
           <div class="cart-line__title">
             <p class="cart-line__name">${display.productName}</p>
             <p class="cart-line__price">${formatMoney(lineTotal)}</p>
-            ${display.size ? `<span class="cart-line__meta">Talla: ${display.size}</span>` : ''}
+            <div class="cart-line__meta">${display.size ? `<span>Talla: ${display.size}</span>` : ''}${hasLastUnits ? '<span class="cart-low-stock">Últimas unidades</span>' : ''}</div>
           </div>
           <div class="cart-line__actions">
             <div class="cart-qty" data-id="${display.id}">

@@ -23,6 +23,8 @@ const approvedImageChanges = new Set([
   'cronox-front/assets/CRONOX-preloader.webp',
   'cronox-front/assets/logo-topbar.webp',
   'cronox-front/assets/maps/spain-provinces.svg',
+  // Official PayPal artwork requested for the checkout payment selector.
+  'cronox-front/assets/paypal-logo-white.png',
   // Byte-exact extractions from the five approved METACRILATOS references;
   // extract-assets.cjs --check verifies their content during release checks.
   'cronox-front/assets/metacrilatos/eye.png',
@@ -111,7 +113,7 @@ async function main() {
   const profileVersion = /assets\/profile\.js\?v=(\d+)/.exec(profileHtml);
   assert.ok(profileVersion && Number(profileVersion[1]) >= 24,
     'Profile must retain the media optimization cache version or a newer release');
-  assert.match(profileHtml, /assets\/accreditation-layout\.js\?v=1/);
+  assert.match(profileHtml, /assets\/accreditation-layout\.js\?v=2/);
   assert.match(keyScreen, /src="assets\/CRONOX-GIF\.gif"/);
   assert.match(newsletter, /supabase\.co\/storage\/v1\/object\/public\/newsletter\/chains-newsletter\.jpg/);
   assert.ok(!index.includes('assets/CRONOX-GIF.gif'));

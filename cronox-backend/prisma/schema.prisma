@@ -1002,6 +1002,8 @@ model User {
   firstOrderDiscountCode    String?
   firstOrderDiscountUsed    Boolean                 @default(false)
   circleLevel               Int                     @default(1)
+  circle2PromotedAt          DateTime?
+  circleReconciliation      CircleReconciliationQueue?
   circlePromotionRequest    CirclePromotionRequest?
   createdAt                 DateTime                @default(now())
   updatedAt                 DateTime                @updatedAt
@@ -1250,6 +1252,14 @@ model CirclePromotionRequest {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([status, promoteAt])
+}
+
+// Durable work produced by purchase/refund facts, independent of customer visits.
+model CircleReconciliationQueue {
+  userId   Int      @id
+  version  Int      @default(1)
+  queuedAt DateTime @default(now())
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model CircleUpgradeRequest {

@@ -198,7 +198,7 @@
   // ======================================================
   // Quick-Add DOM (panel negro, sin color)
   // ======================================================
-  let qaOverlay, qaPanel, qaClose, qaImg1, qaImg2, qaName, qaPrice, /* qaColor, */ qaSizeGroup, qaAdd, qaLink, qaNotify, qaDelivery;
+  let qaOverlay, qaPanel, qaClose, qaImg1, qaImg2, qaName, qaPrice, /* qaColor, */ qaSizeGroup, qaQty, qaAdd, qaLink, qaNotify, qaDelivery;
   let qaReturnFocus = null;
   let qaSuspendedCart = null;
   let qaCurrentProduct = null;
@@ -248,6 +248,12 @@
     qaNotify.disabled = qaBusy || status !== 'out_of_stock';
     qaNotify.hidden = productStatus === 'in_stock' && exhaustedSizes === 0;
     qaNotify.setAttribute('aria-disabled', String(qaNotify.disabled));
+    qaQty.disabled = qaBusy;
+    const availableQty = variant?.stockQty ?? variant?.stock;
+    qaQty.max = String(Number.isSafeInteger(availableQty) && availableQty > 0 ? Math.min(999, availableQty) : 999);
+    if (!qaSelectedSize && !qaAvailabilityPending && !qaAvailabilityFailed) {
+      qaOverlay.querySelector('#qaCartStatus').textContent = 'Selecciona una talla para añadir el artículo.';
+    }
     qaDelivery.classList.add('qa-delivery--corner');
     qaOverlay.querySelector('.qa-footer').appendChild(qaDelivery);
     qaDelivery.dataset.deliveryAvailable = String(status === 'in_stock' && !qaAvailabilityPending && !qaAvailabilityFailed);
@@ -320,6 +326,11 @@
             <div id="qaSizes" class="qa-sizes" role="radiogroup" aria-label="Selecciona una talla"></div>
           </div>
 
+          <div class="qa-row">
+            <label class="qa-label" for="qaQty">Cantidad</label>
+            <input id="qaQty" class="qa-qty" type="number" min="1" max="999" step="1" value="1" inputmode="numeric" required>
+          </div>
+
           <div class="qa-row qa-actions">
             <button id="qaAdd" class="qa-btn">Añadir al carrito</button>
             <button id="qaNotify" type="button" class="qa-btn qa-notify" disabled>AVÍSAME</button>
@@ -340,6 +351,7 @@
     qaName  = qaOverlay.querySelector("#qaName");
     qaPrice = qaOverlay.querySelector("#qaPrice");
     qaSizeGroup = qaOverlay.querySelector("#qaSizes");
+    qaQty = qaOverlay.querySelector('#qaQty');
     qaAdd   = qaOverlay.querySelector("#qaAdd");
     qaLink  = qaOverlay.querySelector("#qaLink");
     qaNotify = qaOverlay.querySelector('#qaNotify');
@@ -374,7 +386,9 @@
 
     // Añadir al carrito
     qaAdd.addEventListener("click", () => {
-      if (!qaCurrentProduct || qaAdd.disabled || quickSizeStatus() !== 'in_stock') return;
+      if (!qaCurrentProduct || qaBusy || qaAdd.disabled || quickSizeStatus() !== 'in_stock') return;
+      if (!qaQty.reportValidity()) return;
+      const qty = Number(qaQty.value);
       const size = window.CRONOX_SIZES?.label?.(qaSelectedSize) || String(qaSelectedSize).toUpperCase();
       const color = qaCurrentProduct.color || (qaCurrentProduct.colors?.[0]) || "Único";
       const variant = findVariantForSize(qaCurrentProduct, size);
@@ -394,7 +408,11 @@
           onComplete: (success) => {
             if (qaOpening !== openingAtRequest || !qaCurrentProduct) return;
             qaBusy = false;
-            feedback.textContent = success ? 'Artículo añadido a tu cesta.' : 'No se pudo añadir. Vuelve a intentarlo.';
+            if (success) {
+              closeQuickAdd();
+              return;
+            }
+            feedback.textContent = 'No se pudo añadir. Vuelve a intentarlo.';
             updateQuickAddControls();
           },
           id: qaCurrentProduct.id,
@@ -407,7 +425,7 @@
           image: (qaCurrentProduct.images?.[0]) || qaCurrentProduct.image,
           size,
           color,
-          qty: 1,
+          qty,
           variantId: variant.id,
         }
       });
@@ -477,6 +495,7 @@
         button.setAttribute("aria-checked", isActive ? "true" : "false");
       });
       qaSelectedSize = btn?.dataset.size || (normalized[0] || "");
+      qaOverlay.querySelector('#qaCartStatus').textContent = '';
       updateTabIndexes();
       updateQuickAddControls();
     };
@@ -532,6 +551,7 @@
     ensureQuickAddDOM();
     const opening = ++qaOpening;
     qaBusy = false;
+    qaQty.value = '1';
     qaAvailabilityStamp = performance.now();
     qaAvailabilityRequest++;
     qaAvailabilityPending = false;
@@ -605,6 +625,9 @@
     if (typeof window.CRONOX_lockScroll === "function") window.CRONOX_lockScroll("quick-add");
     else document.body.classList.add("no-scroll");
     qaClose.focus();
+    // Every opening confirms variants against the server, including reopening
+    // after a failed refresh. A cached recommendation is not current stock.
+    void refreshQuickAddAvailability();
   }
 
   function closeQuickAdd() {
@@ -1279,6 +1302,7 @@
     if (searchInput) searchInput.value = '';
     syncCategorySelection(slug);
     const next = new URL(location.href);
+    next.pathname = '/tienda';
     next.searchParams.delete('search'); next.searchParams.delete('q');
     if (slug) next.searchParams.set('categorySlug', slug); else next.searchParams.delete('categorySlug');
     history.replaceState(null, '', next);

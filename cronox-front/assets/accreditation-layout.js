@@ -103,5 +103,17 @@
   document.fonts?.addEventListener("loadingdone", schedule);
   // Use the layout viewport, not visualViewport: native pinch zoom remains free
   // to magnify the entire composition without this fitter cancelling the zoom.
+  window.CRONOX_ACCREDITATION_LAYOUT = Object.freeze({
+    refresh() {
+      if (scheduled) cancelAnimationFrame(scheduled);
+      // Revealing the base plane can temporarily create a page scrollbar.
+      // Resolve that width change before the first paint using the same fit.
+      for (let pass = 0; pass < 4; pass++) {
+        const available = stage.clientWidth;
+        layout();
+        if (available === stage.clientWidth) break;
+      }
+    },
+  });
   schedule();
 })();

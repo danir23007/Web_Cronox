@@ -128,7 +128,7 @@ test('large mobile basket keeps its scroll and reaches content above the fixed c
   await panel.evaluate(el => { el.scrollTop = el.scrollHeight; });
   const bottom = await panel.evaluate(el => {
     const footer = el.querySelector('.cart-drawer__footer').getBoundingClientRect();
-    const last = el.querySelector('.cart-line:last-child').getBoundingClientRect();
+    const last = Array.from(el.querySelectorAll('.cart-line')).at(-1).getBoundingClientRect();
     return { remaining: el.scrollHeight - el.clientHeight - el.scrollTop, lastBottom: last.bottom, footerTop: footer.top,
       innerScroller: getComputedStyle(document.querySelector('#cart-items-container')).overflowY,
       locked: document.documentElement.classList.contains('has-scroll-lock') };
@@ -384,8 +384,7 @@ test('all entry points share rows, quantities, shipping, subtotal and badge', as
   await expect(page.locator('#free-shipping-text')).toContainText('Te faltan');
   await page.locator('.cart-upsell__add').first().click();
   await page.locator('#qaAdd').click();
-  await expect(page.locator('#qaCartStatus')).toContainText('Artículo añadido');
-  await page.locator('.qa-close').click();
+  await expect(page.locator('#quickAdd')).toHaveAttribute('aria-hidden', 'true');
   await expect(page.locator('.cart-line')).toHaveCount(2);
   await expect(page.locator('#free-shipping-text')).toContainText('¡Envío gratuito conseguido!');
   await expect(page.locator('#cart-checkout-btn')).toContainText('70,00');
@@ -393,8 +392,7 @@ test('all entry points share rows, quantities, shipping, subtotal and badge', as
   await page.goto('/tienda#store');
   await page.locator('.product-card .fav-add').first().click();
   await page.locator('#qaAdd').click();
-  await expect(page.locator('#qaCartStatus')).toContainText('Artículo añadido');
-  await page.locator('.qa-close').click();
+  await expect(page.locator('#quickAdd')).toHaveAttribute('aria-hidden', 'true');
   await open(page);
   await expect(page.locator('.cart-count').first()).toHaveText('3');
   await page.locator('[data-cart-line="1"] [data-action="inc"]').click();
@@ -506,12 +504,12 @@ test('malformed responses are errors and a failed add never claims success', asy
   await page.locator('.cart-upsell__add').first().click();
   await page.locator('#qaAdd').click();
   await expect(page.locator('#qaCartStatus')).toContainText('No se pudo añadir');
-  await expect(page.locator('#qaAdd')).toHaveText('Reintentar');
+  await expect(page.locator('#quickAdd')).toHaveAttribute('aria-hidden', 'false');
+  await expect(page.locator('#qaAdd')).toBeEnabled();
   await expect(page.locator('.cart-count').first()).toHaveText('1');
   state.failWrite = false;
   await page.locator('#qaAdd').click();
-  await expect(page.locator('#qaCartStatus')).toContainText('Artículo añadido');
-  await page.locator('.qa-close').click();
+  await expect(page.locator('#quickAdd')).toHaveAttribute('aria-hidden', 'true');
   await expect(page.locator('.cart-line')).toHaveCount(2);
 });
 

@@ -9,6 +9,24 @@ const read = (file: string) =>
 describe('category storefront chrome', () => {
   const categorySource = read('assets/category-page.js');
 
+  it.each(['/tienda', '/tienda/', '/tienda#store'])('keeps Todos in the catalogue view at %s', (route) => {
+    const dom = new JSDOM('<!doctype html><html></html>', {
+      url: `https://cronox.test${route}`, runScripts: 'outside-only',
+    });
+    dom.window.eval(categorySource);
+    expect(dom.window.document.documentElement.classList.contains('category-page')).toBe(true);
+    dom.window.close();
+  });
+
+  it.each(['/', '/index.html'])('preserves the normal home at %s', (route) => {
+    const dom = new JSDOM('<!doctype html><html></html>', {
+      url: `https://cronox.test${route}`, runScripts: 'outside-only',
+    });
+    dom.window.eval(categorySource);
+    expect(dom.window.document.documentElement.classList.contains('category-page')).toBe(false);
+    dom.window.close();
+  });
+
   it.each([
     'novedades',
     'camisetas',

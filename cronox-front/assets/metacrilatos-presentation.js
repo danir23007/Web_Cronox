@@ -130,6 +130,8 @@
       + Math.max(cardHeight + 16 + lineHeight, memberHeight);
   }
   function bottomSpacing(section, zoom) {
+    const externalPromotion = section.querySelector(':scope > [data-accreditation-promotions]');
+    if (externalPromotion && !externalPromotion.hidden) return 12;
     const card = section.querySelector(':scope > .profile-card');
     const member = section.querySelector('[data-metacrilatos-member]');
     const button = section.querySelector('[data-crx-flip]');

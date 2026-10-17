@@ -162,6 +162,7 @@
     items.forEach((item) => {
       const itemId = String(item.id ?? '');
       const qty = Math.max(1, Math.min(999, Number(item.qty) || 1));
+      const hasLastUnits = window.CRONOX_STOCK?.hasLastUnits([item.variant], item.product?.lastUnitsThreshold);
       const imageUrl = window.CRONOX_IMAGES?.resolveProduct(item, 'cart')?.src || safeProductImage(item.product?.image || item.product?.imageUrl);
       const display = {
         id: escapeHtml(itemId),
@@ -183,6 +184,7 @@
           <h3 class="ci-name">${display.product.name}</h3>
           <p class="ci-meta">
             ${display.size ? `<span>Talla: ${display.size}</span>` : ''}
+            ${hasLastUnits ? '<span class="cart-low-stock">Últimas unidades</span>' : ''}
           </p>
           <div class="ci-controls">
             <label>Cant.

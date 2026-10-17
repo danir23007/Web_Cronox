@@ -352,12 +352,12 @@ describe('CRONOX responsive design system', () => {
     );
     expect(readFrontend('gallery.html')).toContain('assets/info-page.css?v=3');
     expect(readFrontend('cart.html')).toMatch(/assets\/cart\.css\?v=\d+/);
-    expect(readFrontend('checkout.html')).toContain('assets/checkout.css?v=28');
+    expect(readFrontend('checkout.html')).toContain('assets/checkout.css?v=30');
     expect(readFrontend('checkout-success.html')).toContain(
       'assets/checkout-success.css?v=1',
     );
     expect(readFrontend('producto.html')).toContain(
-      'assets/product-page.css?v=10',
+      'assets/product-page.css?v=11',
     );
   });
 });

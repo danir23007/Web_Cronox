@@ -73,7 +73,7 @@ describe('mobile cart and Quick Add layers', () => {
     );
   });
 
-  it('shows cart rows, layers Quick Add, restores focus and updates the open cart', async () => {
+  it.each([false, true])('shows confirmed cart rows and closes Quick Add even after a recoverable render failure: %s', async failRender => {
     const dom = new JSDOM(html, {
       runScripts: 'outside-only',
       url: 'http://localhost:3000/',
@@ -139,6 +139,13 @@ describe('mobile cart and Quick Add layers', () => {
         itemsCount: 3,
         subtotalCents: 7500,
       };
+      if (failRender) {
+        const apply = app.CRONOX_IMAGES.applyProduct;
+        app.CRONOX_IMAGES.applyProduct = () => {
+          app.CRONOX_IMAGES.applyProduct = apply;
+          throw new Error('simulated post-confirmation render failure');
+        };
+      }
       return cart;
     });
     const updateCartItem = jest.fn(async (id: number, qty: number) => {
@@ -202,8 +209,9 @@ describe('mobile cart and Quick Add layers', () => {
       API_BASE: 'http://localhost:3000',
       getMe: async () => null,
       getFavorites: async () => [],
-      getCart: async () => cart,
+      getCart: jest.fn(async () => cart),
       getProducts: async () => [recommendation],
+      getProductBySlug: async () => recommendation,
       getFallbackProducts: () => [],
       addCartItem,
       updateCartItem,
@@ -279,6 +287,7 @@ describe('mobile cart and Quick Add layers', () => {
     (
       document.querySelector('#qaSizes .qa-size-btn') as HTMLButtonElement
     ).click();
+    await waitFor(() => expect((document.getElementById('qaAdd') as HTMLButtonElement).disabled).toBe(false));
     (document.getElementById('qaAdd') as HTMLButtonElement).click();
     await waitFor(() =>
       expect(
@@ -286,6 +295,8 @@ describe('mobile cart and Quick Add layers', () => {
       ).toHaveLength(3),
     );
     expect(addCartItem).toHaveBeenCalledWith({ variantId: 303, qty: 1 });
+    expect(addCartItem).toHaveBeenCalledTimes(1);
+    if (failRender) await waitFor(() => expect(app.CRONOX_API.getCart.mock.calls.length).toBeGreaterThanOrEqual(3));
     expect(
       document.querySelector('#cart-items-container')?.textContent,
     ).toContain('THIRD TEE');
@@ -298,10 +309,10 @@ describe('mobile cart and Quick Add layers', () => {
     expect(
       (document.getElementById('cart-upsell-section') as HTMLElement).hidden,
     ).toBe(true);
+    expect(overlay.getAttribute('aria-hidden')).toBe('true');
     expect(
       document.getElementById('cart-drawer')?.getAttribute('aria-hidden'),
-    ).toBe('true');
-    (document.querySelector('.qa-close') as HTMLButtonElement).click();
+    ).toBe('false');
     expect(document.activeElement?.id).toBe('cart-close-btn');
     expect(
       document.getElementById('cart-drawer')?.getAttribute('aria-hidden'),

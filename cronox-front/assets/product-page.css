@@ -113,6 +113,18 @@
 .pdp-related { margin-top:42px; }
 .pdp-related__title { font-size: clamp(18px, 2.6vw, 22px); margin: 0 0 24px; letter-spacing:.06em; }
 
+@media (min-width: 900px) {
+  /* Reserve normal document flow for the first-screen heading: header, main
+     inset, gallery clearance, existing 32px title and 12px bottom breathing
+     room. Shorter windows keep the gallery's natural height and scroll. */
+  .page-product .pdp__grid {
+    min-height: calc(100svh - var(--topbar-h) - 32px - 36px - 32px - 12px);
+    align-items: start;
+  }
+  .page-product .pdp-related { margin-top: 0; padding-top: 36px; }
+  .page-product .pdp-related > .store-headline { margin-top: 0; }
+}
+
 .product-name{
   margin:0;
   font-weight:700;

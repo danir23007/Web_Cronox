@@ -8,6 +8,7 @@ import { CircleUpgradeController, AdminCircleUpgradeController } from './circle-
 import { CircleUpgradeService } from './circle-upgrade.service';
 import { CircleService } from './circle.service';
 import { MembershipService } from './membership.service';
+import { CircleReconciliationService } from './circle-reconciliation.service';
 
 @Module({
   imports: [PrismaModule, UsersModule, HistorialModule],
@@ -18,7 +19,7 @@ import { MembershipService } from './membership.service';
     CircleUpgradeController,
     AdminCircleUpgradeController,
   ],
-  providers: [MembershipService, CircleService, CircleUpgradeService],
-  exports: [CircleUpgradeService, CircleService],
+  providers: [MembershipService, CircleService, CircleUpgradeService, CircleReconciliationService],
+  exports: [CircleUpgradeService, CircleService, CircleReconciliationService],
 })
 export class MembershipModule {}

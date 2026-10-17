@@ -12,7 +12,7 @@ import { MembershipService } from './membership.service';
 describe('Member composition: existing purchase-statistics contract', () => {
   function setup() {
     const prisma = {
-      user: { findUnique: jest.fn().mockResolvedValue({ id: 7, circleLevel: 5, createdAt: new Date('2020-01-01') }) },
+      user: { findUnique: jest.fn().mockResolvedValue({ id: 7, circleLevel: 5, circle2PromotedAt: null, createdAt: new Date('2020-01-01') }) },
       order: { findMany: jest.fn().mockResolvedValue([]) },
     };
     const circle = {
@@ -70,7 +70,7 @@ describe('Member composition: existing purchase-statistics contract', () => {
     prisma.user.findUnique.mockResolvedValue(null);
     await expect(service.getMyStats(7)).rejects.toBeInstanceOf(NotFoundException);
     expect(prisma.user.findUnique).toHaveBeenCalledWith({
-      where: { id: 7 }, select: { id: true, circleLevel: true, createdAt: true },
+      where: { id: 7 }, select: { id: true, circleLevel: true, circle2PromotedAt: true, createdAt: true },
     });
     expect(prisma.order.findMany).not.toHaveBeenCalled();
   });

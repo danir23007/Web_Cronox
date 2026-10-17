@@ -108,7 +108,14 @@ test('desktop fitting grows proportionally, reserves its space and resizes witho
   const held = await pose(page);
   const layouts = [];
   for (const size of [{ width: 2560, height: 1440 }, { width: 1366, height: 768 }, { width: 1366, height: 480 }]) {
+    await page.evaluate(() => {
+      window.fitResizeDelivered = false;
+      window.addEventListener('resize', () => { window.fitResizeDelivered = true; }, { once: true });
+    });
     await page.setViewportSize(size);
+    // Native resize delivery uses the browser's event loop, not the simulated
+    // motion clock. Advance layout frames only after the event has arrived.
+    await expect.poll(() => page.evaluate(() => window.fitResizeDelivered)).toBe(true);
     await page.clock.runFor(96);
     const current = await page.evaluate(geometry);
     layouts.push(current);

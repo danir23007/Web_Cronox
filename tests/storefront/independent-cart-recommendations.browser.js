@@ -82,11 +82,10 @@ async page => {
     }
     await page.locator('#cart-icon-btn').click();
     await page.locator('[data-upsell-product="review-902"] .cart-upsell__add').click();
-    await page.locator('#qaAdd').click();
-    await page.waitForFunction(() => document.querySelector('.cart-qty__input')?.value === '1');
+    await page.locator('#qaQty').fill('2');
     await page.locator('#qaAdd').click();
     await page.waitForFunction(() => document.querySelector('.cart-qty__input')?.value === '2');
-    await page.locator('.qa-close').click();
+    await page.waitForFunction(() => document.querySelector('#quickAdd')?.getAttribute('aria-hidden') === 'true');
     assert((await page.locator('#cart-checkout-btn').textContent()).includes('70,00'), 'Other-category add updates quantities and total');
     assert(new URL(page.url()).searchParams.get('categorySlug') === 'chaquetas', 'Adding never changes navigation URL');
     await page.screenshot({ path: `output/playwright/independent-recommendations-${width}.png` });
@@ -104,7 +103,7 @@ async page => {
     await page.locator('#cartMain [data-upsell-product="review-902"] .cart-upsell__add').click();
     await page.locator('#qaAdd').click();
     await page.waitForFunction(() => document.querySelector('#sumSubtotal')?.textContent.includes('35,00'));
-    await page.locator('.qa-close').click();
+    await page.waitForFunction(() => document.querySelector('#quickAdd')?.getAttribute('aria-hidden') === 'true');
     assert(await page.locator('#cartMain .ci-qty').inputValue() === '1', 'Page recommendation updates page basket');
     await page.screenshot({ path: `output/playwright/cart-page-recommendations-${width}.png` });
     for (const route of ['/faqs', '/envios', '/devoluciones', '/desarrolla', '/eventos', '/privacidad', '/cookies', '/terminos', '/aviso-legal']) {

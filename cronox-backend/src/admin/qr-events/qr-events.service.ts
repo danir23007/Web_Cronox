@@ -187,7 +187,6 @@ export class QrEventsService {
     if (!initial) throw invalidQr();
     // Same authoritative circle rules as the profile; no circle or user ID is
     // accepted from a camera/client. Invalid circles remain invalid.
-    await this.circles.ensureCircleByNetSpent(initial.id);
     await this.circles.maybePromoteRequestedCircle(initial.id);
     return this.prisma.$transaction(
       async (tx) => {

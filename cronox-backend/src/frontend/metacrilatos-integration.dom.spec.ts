@@ -28,7 +28,7 @@ describe('METACRILATOS integration and privacy boundaries', () => {
     try {
       const image = section.querySelector('.accreditation-book-art');
       const originalSrc = image.getAttribute('src');
-      const promotion = section.querySelector('.accreditation-upgrade');
+      const promotion = section.querySelector('[data-accreditation-promotions]');
       const parent = promotion.parentNode;
       win.CRONOX_USER = { id: 999, registrationNumber: 999, circleLevel: 5, name: 'Untrusted browser', publicMemberToken: 'fake' };
       win.fetch = jest.fn(async (url: string) => ({ ok: true, json: async () => url.endsWith('/active') ? design : person }));
@@ -36,7 +36,9 @@ describe('METACRILATOS integration and privacy boundaries', () => {
       expect(win.fetch.mock.calls.map(([url]) => url)).toEqual(['/api/accreditations/active', '/api/membership/me/accreditation']);
       expect(mount.mock.calls[0][1]).toEqual(person);
       expect(section.querySelector('.accreditation-stage').hidden).toBe(true);
-      expect(promotion.parentNode).not.toBe(parent);
+      // Shared promotion controls live outside both artwork planes, so neither
+      // renderer needs to move them or alter the identity/QR composition.
+      expect(promotion.parentNode).toBe(parent);
       expect(image.getAttribute('src')).toBe(originalSrc);
       await api.apply(section, { id: 'original', renderer: 'original-v1', config: { version: 1, artworkUrl: originalSrc } });
       expect(destroy).toHaveBeenCalledTimes(1);
@@ -114,7 +116,7 @@ describe('METACRILATOS integration and privacy boundaries', () => {
       win.document.querySelector('[data-profile-tab="accreditation"]').click();
       await tick();
       expect(getStats).toHaveBeenCalledTimes(1);
-      expect(section.classList.contains('is-loading')).toBe(false);
+      expect(section.classList.contains('is-loading')).toBe(true);
       win.CRONOX_USER = { id: 2, identityUid: 'two', circleLevel: 4 };
       win.dispatchEvent(new win.CustomEvent('cronox:userChanged', { detail: win.CRONOX_USER }));
       finishStats({ circleLevel: 1, createdAt: '2000-01-01T00:00:00Z' });

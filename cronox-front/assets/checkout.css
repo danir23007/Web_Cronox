@@ -145,7 +145,12 @@ body.page-checkout summary:focus-visible {
 }
 .checkout-payment-choice[hidden], #payment-element[hidden], .checkout-paypal-description[hidden] { display: none; }
 .checkout-payment-choice:has(input:checked) { border-color: #fff; }
-.checkout-payment-choice input { width: 18px; height: 18px; margin: 0; accent-color: #fff; }
+.checkout-payment-choice input[type="radio"] {
+  flex: 0 0 18px; width: 18px; height: 18px; margin: 0;
+  appearance: auto; color-scheme: dark; accent-color: #fff; cursor: inherit;
+}
+.checkout-payment-choice:has(input:focus-visible) { outline: 2px solid #fff; outline-offset: 3px; }
+.checkout-payment-logo { display: block; width: 72px; height: auto; margin-left: auto; flex: 0 0 auto; }
 .checkout-payment-choice:has(input:disabled) { cursor: default; }
 .checkout-paypal-description { margin: 0; padding: 16px; border: 1px solid var(--checkout-line); color: var(--checkout-muted); font-size: 13px; line-height: 1.5; }
 

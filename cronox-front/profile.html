@@ -18,7 +18,7 @@
     .topbar svg { width: 24px; height: 24px; }
   </style>
   <link rel="preload" as="image" href="https://frqlgocxnyppzdgxxjuq.supabase.co/storage/v1/object/public/Acreditation/Libro-antiguo.png" fetchpriority="high">
-  <link id="cronox-main-style" rel="stylesheet" href="assets/store.css?v=117">
+  <link id="cronox-main-style" rel="stylesheet" href="assets/store.css?v=118">
   <link rel="stylesheet" href="assets/quick-add.css?v=11">
   <style>
     .profile-account-stack { min-width: 0; }
@@ -224,12 +224,10 @@
                   </div>
                   </div>
                   <div class="accreditation-promo">
-                    <div class="accreditation-upgrade" data-circle4-cta hidden>
-                      <button type="button" class="accreditation-circle-btn" data-circle4-request-btn hidden>
-                        SOLICITAR ASCENSO DE CÍRCULO
-                      </button>
-                      <p class="accreditation-circle-status" data-circle4-status hidden>La solicitud de ascenso ha sido enviada.</p>
-                      <p class="accreditation-circle-status accreditation-circle-status--muted" data-circle4-cooldown hidden></p>
+                    <div class="accreditation-upgrade" data-promotion-size-reference aria-hidden="true" inert hidden>
+                      <button type="button" class="accreditation-circle-btn" tabindex="-1" disabled hidden>SOLICITAR ASCENSO DE CÍRCULO</button>
+                      <p class="accreditation-circle-status" data-size-reference-pending hidden>La solicitud de ascenso ha sido enviada.</p>
+                      <p class="accreditation-circle-status accreditation-circle-status--muted" data-size-reference-cooldown hidden></p>
                     </div>
                   </div>
                     <div class="accreditation-qr">
@@ -280,6 +278,23 @@
           </section>
         </div>
         <aside class="metacrilatos-member" data-metacrilatos-member hidden></aside>
+        <div class="accreditation-upgrade" data-accreditation-promotions hidden>
+          <div class="accreditation-promotion-flow" data-circle-request-cta hidden>
+            <button type="button" class="accreditation-circle-btn" data-circle-request-btn disabled aria-describedby="circlePromotionFeedback">Solicitar ascenso al círculo III</button>
+            <div class="accreditation-promotion-feedback" id="circlePromotionFeedback">
+              <p class="accreditation-circle-status" data-circle-request-status role="status" hidden></p>
+              <p class="accreditation-circle-status accreditation-circle-status--muted" data-circle-request-cooldown hidden></p>
+            </div>
+          </div>
+          <div class="accreditation-promotion-flow" data-circle4-cta hidden>
+            <button type="button" class="accreditation-circle-btn" data-circle4-request-btn disabled aria-describedby="circleUpgradeFeedback">Solicitar ascenso al círculo IV</button>
+            <div class="accreditation-promotion-feedback" id="circleUpgradeFeedback">
+              <p class="accreditation-circle-status" data-circle4-status role="status" hidden></p>
+              <p class="accreditation-circle-status accreditation-circle-status--muted" data-circle4-cooldown hidden></p>
+            </div>
+          </div>
+          <button class="accreditation-promotion-retry" data-promotion-retry type="button" hidden>Reintentar</button>
+        </div>
         <div class="profile-back-wrapper">
           <button type="button" class="profile-back-link" data-profile-back="store">Volver a la tienda</button>
         </div>
@@ -493,21 +508,21 @@
 
   <script src="assets/country.js?v=1"></script>
   <script src="assets/size-systems.js?v=1"></script>
-  <script src="assets/api.js?v=20"></script>
+  <script src="assets/api.js?v=23"></script>
   <script src="assets/responsive-images.js?v=4"></script>
   <script src="/assets/product-delivery.js?v=5" defer></script>
-  <script src="assets/app.js?v=93" defer></script>
+  <script src="assets/app.js?v=94" defer></script>
   <script src="assets/media-framing-geometry.js?v=6" defer></script>
   <script src="assets/product-card-framing.js?v=1" defer></script>
-  <script src="assets/products.js?v=72" defer></script>
+  <script src="assets/products.js?v=73" defer></script>
   <script src="assets/favorites-toggle.js?v=3" defer></script>
   <script src="assets/user-identity.js?v=1" defer></script>
-  <script src="assets/accreditation-layout.js?v=1" defer></script>
+  <script src="assets/accreditation-layout.js?v=2" defer></script>
   <script src="assets/metacrilatos.js?v=5" defer></script>
   <script src="assets/accreditation-designs.js?v=2" defer></script>
-  <script src="assets/metacrilatos-presentation.js?v=2" defer></script>
-  <script src="assets/profile.js?v=28" defer></script>
-  <script src="assets/metacrilatos-profile.js?v=3" defer></script>
+  <script src="assets/metacrilatos-presentation.js?v=3" defer></script>
+  <script src="assets/profile.js?v=30" defer></script>
+  <script src="assets/metacrilatos-profile.js?v=4" defer></script>
 
   <style>
     /* Profile overrides */
@@ -551,7 +566,9 @@
       text-transform: uppercase;
       cursor: pointer;
       transition: transform 0.12s ease, box-shadow 0.12s ease;
-      min-width: 240px;
+      min-width: min(240px, 100%);
+      min-height: 44px;
+      max-width: 100%;
       display: inline-flex;
       align-items: center;
       justify-content: center;
@@ -564,6 +581,19 @@
     .accreditation-circle-btn:hover {
       transform: translateY(-1px);
       box-shadow: 0 6px 14px rgba(0, 0, 0, 0.2);
+    }
+
+    .accreditation-circle-btn:disabled {
+      opacity: .45;
+      cursor: default;
+      transform: none;
+      box-shadow: none;
+    }
+
+    .accreditation-circle-btn:focus-visible,
+    .accreditation-promotion-retry:focus-visible {
+      outline: 2px solid currentColor;
+      outline-offset: 4px;
     }
 
     .accreditation-circle-btn:active {
@@ -590,6 +620,37 @@
       gap: 8px;
       margin-top: 12px;
       width: 100%;
+    }
+
+    [data-accreditation-promotions] {
+      grid-area: promotion;
+      max-width: 640px;
+      margin: 24px auto 0;
+      padding-inline: 20px;
+      text-align: center;
+      box-sizing: border-box;
+    }
+    /* Keep the former III action's layout contribution without putting the
+       interactive countdown into either artwork plane. This reference is
+       inaccessible and remains fixed during the current presentation. */
+    [data-promotion-size-reference] { visibility: hidden; pointer-events: none; }
+    [data-promotion-size-reference] .accreditation-circle-btn { min-width: 240px; min-height: 0; max-width: none; }
+    [data-promotion-size-reference][hidden], [data-promotion-size-reference] [hidden] { display: none; }
+    [data-accreditation-promotions] .accreditation-circle-status { color: #ccc; line-height: 1.5; }
+    [data-accreditation-promotions] .accreditation-circle-btn { border-color: #777; }
+    .accreditation-promotion-flow { width: 100%; }
+    .accreditation-promotion-feedback { display: grid; place-items: center; min-height: 3em; margin-top: 8px; }
+    .accreditation-promotion-retry { min-height: 44px; padding: 8px 16px; background: transparent; border: 0; color: #fff; text-decoration: underline; cursor: pointer; }
+    [data-accreditation-promotions][hidden], .accreditation-promotion-flow[hidden],
+    [data-accreditation-promotions] [hidden] { display: none; }
+    .metacrilatos-presentation[data-profile-section="accreditation"][data-accreditation-renderer="metacrilatos-v1"].is-active.has-accreditation-promotion {
+      grid-template-areas: "card" "member" "promotion" "back";
+    }
+    @media (min-width: 760px) {
+      .metacrilatos-presentation[data-profile-section="accreditation"][data-accreditation-renderer="metacrilatos-v1"].is-active.has-accreditation-promotion {
+        grid-template-areas: "card member" "promotion promotion" "back back";
+        grid-template-rows: max-content max-content max-content;
+      }
     }
 
     .circle-modal-overlay {

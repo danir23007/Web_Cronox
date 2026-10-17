@@ -106,6 +106,7 @@ describe('dynamic category group ordering', () => {
       { name: 'Inactiva', slug: 'inactive', group: 'DROP', isActive: false },
     ];
     app.CRONOX_API = { getAllCategories: async () => categories };
+    app.eval(read('assets/category-page.js'));
     app.eval(read('assets/app.js'));
     await app.CRONOX_STORE_CATEGORIES.ready;
     const names = () => [...document.querySelectorAll('#storeCategoryFilters .black-menu__link')].map(node => node.textContent);
@@ -122,5 +123,25 @@ describe('dynamic category group ordering', () => {
     expect(document.querySelector<HTMLInputElement>('[value="camisetas"]')!.type).toBe('radio');
     expect(document.querySelector('[value="camisetas"]')!.parentElement!.tagName).toBe('LABEL');
     dom.window.close();
+  });
+
+  it('uses the same category destinations on the home and on other pages', async () => {
+    for (const pathname of ['/index.html', '/producto/example']) {
+      const { dom, app, document } = create(read('index.html'));
+      dom.reconfigure({ url: `http://localhost:3000${pathname}` });
+      app.fetch = async () => ({ ok: true, json: async () => [] });
+      app.CRONOX_API = { getAllCategories: async () => [
+        { name: 'Camisetas', slug: 'camisetas', group: 'GARMENT' },
+        { name: 'Drop', slug: 'd#01', group: 'DROP' },
+      ] };
+      app.eval(read('assets/category-page.js'));
+      app.eval(read('assets/app.js'));
+      await app.CRONOX_STORE_CATEGORIES.ready;
+      expect([...document.querySelectorAll('#storeCategoryFilters a')].map(link => link.getAttribute('href')))
+        .toEqual(['/tienda#store', '/tienda?categorySlug=d%2301#store', '/tienda?categorySlug=camisetas#store']);
+      expect(document.documentElement.classList.contains('category-page')).toBe(false);
+      await new Promise(resolve => setImmediate(resolve));
+      dom.window.close();
+    }
   });
 });

@@ -41,6 +41,11 @@
   let accreditationStatsSequence = 0;
   const stopAccreditation = () => {
     accreditationLoadSequence++;
+    window.clearTimeout(promotionTimer);
+    promotionTimer = 0;
+    circlePromotionStatus = null;
+    circlePromotionLoading = true;
+    promotionRefreshPromise = null;
     resetMetacrilatosMember();
     window.CRONOX_ACCREDITATION_DESIGNS?.destroy(accreditationSection);
     setAccreditationLoading(false);
@@ -80,6 +85,12 @@
   let circleUpgradeStatusLoading = false;
   let circleUpgradeStatus = null;
   let lastCircleUpgradeRequestId = null;
+  let circlePromotionStatus = null;
+  let circlePromotionLoading = true;
+  let circlePromotionSubmitting = false;
+  let circleUpgradeSubmitting = false;
+  let promotionTimer = 0;
+  let promotionRefreshPromise = null;
 
   const RING_COLORS = {
     1: ['#000000'],
@@ -231,10 +242,27 @@
     const { normalized } = normalizeCircleLevelValue(value);
     return Number.isFinite(normalized) ? normalized : fallback;
   };
-  const formatCooldownMessage = (days) => {
-    const remaining = Number(days) || 0;
-    if (remaining <= 0) return '';
-    return `Ya has enviado una solicitud recientemente. Podrás volver a solicitar el ascenso en ${remaining} día${remaining === 1 ? '' : 's'}.`;
+  // Only server timestamps define eligibility. A monotonic clock advances the
+  // display between responses; changing the device date cannot unlock a CTA.
+  const clockedPromotionStatus = status => status && ({ ...status, receivedAt: performance.now() });
+  const promotionRemaining = status => {
+    const eligible = Date.parse(status?.eligibleAt);
+    const server = Date.parse(status?.serverTime);
+    if (!Number.isFinite(eligible) || !Number.isFinite(server)) return 0;
+    return Math.max(0, eligible - server - Math.max(0, performance.now() - status.receivedAt));
+  };
+  const formatCooldownMessage = milliseconds => {
+    // Round the last partial minute up, so a blocked button never shows zero.
+    const totalMinutes = Math.max(1, Math.ceil(milliseconds / 60000));
+    const days = Math.floor(totalMinutes / 1440);
+    const hours = Math.floor((totalMinutes % 1440) / 60);
+    const minutes = totalMinutes % 60;
+    return `Podrás solicitar tu ascenso en ${days} día${days === 1 ? '' : 's'}, ${hours} hora${hours === 1 ? '' : 's'} y ${minutes} minuto${minutes === 1 ? '' : 's'}.`;
+  };
+  const displayedCircle = fallback => {
+    const mounted = Number(accreditationSection?.querySelector('.metacrilatos-host')?.dataset.crxLevel);
+    return isMetacrilatos() && mounted >= 1 && mounted <= 5 ? mounted
+      : getNormalizedCircleLevel(fallback ?? window.CRONOX_USER?.circleLevel, 1);
   };
   const NAME_REGEX = /^[A-Za-zÁÉÍÓÚÜÑáéíóúüñ\s'-]+$/;
   const LETTERS_REGEX = /[A-Za-zÁÉÍÓÚÜÑáéíóúüñ]/;
@@ -644,6 +672,13 @@
       accreditationBook.hidden = !!isLoading || accreditationSection?.dataset.accreditationRenderer === 'metacrilatos-v1';
     }
     setGlobalLoaderVisible(!!isLoading);
+    // Resolve the exterior layout in this task, before the loader's removal
+    // can paint a frame at the renderer's unscaled base size.
+    if (!isLoading) {
+      window.CRONOX_ACCREDITATION_LAYOUT?.refresh();
+      window.CRONOX_METACRILATOS_FIT?.refresh();
+      schedulePromotionCountdown();
+    }
   };
 
   const waitForImageLoad = (img) =>
@@ -691,6 +726,11 @@
 
   const loadAccreditationData = async () => {
     const attempt = ++accreditationLoadSequence;
+    const promotionReference = document.querySelector('[data-promotion-size-reference]');
+    if (promotionReference) {
+      delete promotionReference.dataset.ready;
+      promotionReference.hidden = true;
+    }
     resetMetacrilatosMember();
     setAccreditationLoading(true);
     try {
@@ -698,10 +738,16 @@
       if (attempt !== accreditationLoadSequence || !design) return;
       if (design.renderer === 'metacrilatos-v1') {
         showMetacrilatosMember();
-        // The existing instance becomes visible immediately; history can load or
-        // retry independently without touching its orientation or motion timers.
-        setAccreditationLoading(false);
-        await Promise.all([loadAccreditationStats({ force: true }), loadCircleUpgradeStatus({ skipLoader: true })]);
+        // History's loading message and the promotion controls change the
+        // composition height used by the viewport fit. Settle their first
+        // presentation before revealing the card, without a timed delay.
+        // Later history retries still leave the existing instance interactive.
+        const signal = AbortSignal.timeout(15000);
+        await Promise.all([
+          loadAccreditationStats({ force: true, signal }),
+          loadCircleUpgradeStatus({ skipLoader: true, signal }),
+        ]);
+        if (attempt === accreditationLoadSequence) setAccreditationLoading(false);
         return;
       }
     } catch (error) {
@@ -728,10 +774,11 @@
 
     try {
       await Promise.all([
-        loadAccreditationStats(),
+        loadAccreditationStats({ force: true, signal: AbortSignal.timeout(15000) }),
         ensureAccreditationBook(),
         ensureAccreditationQr(),
-        loadCircleUpgradeStatus({ skipLoader: true }),
+        document.fonts?.ready,
+        loadCircleUpgradeStatus({ skipLoader: true, signal: AbortSignal.timeout(15000) }),
       ]);
     } finally {
       if (attempt === accreditationLoadSequence) setAccreditationLoading(false);
@@ -773,146 +820,141 @@
     }
   };
 
+  const syncPromotionContainer = () => {
+    const container = document.querySelector('[data-accreditation-promotions]');
+    if (!container) return;
+    const visible = [...container.querySelectorAll('.accreditation-promotion-flow')].some(flow => !flow.hidden);
+    container.hidden = !visible;
+    accreditationSection?.classList.toggle('has-accreditation-promotion', visible);
+    const retry = container.querySelector('[data-promotion-retry]');
+    if (retry) retry.hidden = !visible || !(
+      (displayedCircle() === 2 && circlePromotionStatus?.error) ||
+      (displayedCircle() === 3 && circleUpgradeStatus?.error));
+  };
+
+  const renderPromotionFlow = ({ root, button, statusElement, cooldownElement, visible, status, loading, submitting, pending }) => {
+    if (root) root.hidden = !visible;
+    const remaining = promotionRemaining(status);
+    const allowed = status?.canRequest === true && remaining <= 0 && !loading && !submitting && !pending && !status?.error;
+    if (button) {
+      button.hidden = !visible;
+      button.disabled = !visible || !allowed;
+      button.classList.remove('hidden');
+      if (button.disabled && document.activeElement === button) button.blur();
+    }
+    let message = '';
+    if (pending) message = 'Solicitud pendiente';
+    else if (submitting) message = 'Enviando solicitud…';
+    else if (status?.error) message = 'No se pudo comprobar la disponibilidad del ascenso.';
+    else if (status?.blockedReason === 'promotion_date_unknown') message = 'La fecha de tu ascenso está pendiente de revisión.';
+    else if (loading || (!allowed && remaining <= 0 && status?.eligibleAt)) message = 'Comprobando disponibilidad…';
+    else if (!allowed && remaining <= 0) message = 'Solicitud no disponible por el momento.';
+    if (statusElement) {
+      statusElement.hidden = !visible || !message;
+      statusElement.textContent = message;
+      statusElement.classList.remove('hidden');
+    }
+    if (cooldownElement) {
+      const show = visible && remaining > 0 && !pending && !submitting && !status?.error;
+      cooldownElement.hidden = !show;
+      cooldownElement.textContent = show ? formatCooldownMessage(remaining) : '';
+      cooldownElement.classList.remove('hidden');
+    }
+    syncPromotionContainer();
+  };
+
   const updatePromotionUi = ({ circleLevel, promotionRequestStatus } = {}) => {
-    const normalizedLevel = getNormalizedCircleLevel(circleLevel ?? window.CRONOX_USER?.circleLevel, 1);
-    const status = promotionRequestStatus || window.CRONOX_PROMOTION_STATUS || 'none';
-    window.CRONOX_PROMOTION_STATUS = status;
-    const isLoading = status === 'loading';
-
-    const circleRequestBtn = getCircleRequestBtn();
-    const circleRequestStatus = getCircleRequestStatusEl();
-
-    if (circleRequestBtn) {
-      const showBtn = !isLoading && normalizedLevel === 2 && status !== 'pending' && normalizedLevel < 3;
-      circleRequestBtn.hidden = !showBtn;
-      circleRequestBtn.disabled = !showBtn;
-    }
-
-    if (circleRequestStatus) {
-      const showStatus = !isLoading && status === 'pending' && normalizedLevel === 2;
-      if (showStatus) {
-        circleRequestStatus.textContent = 'Solicitud de ascenso enviada';
-      }
-      circleRequestStatus.hidden = !showStatus;
-    }
+    const requestState = promotionRequestStatus || window.CRONOX_PROMOTION_STATUS || 'none';
+    window.CRONOX_PROMOTION_STATUS = requestState;
+    renderPromotionFlow({
+      root: document.querySelector('[data-circle-request-cta]'), button: getCircleRequestBtn(),
+      statusElement: getCircleRequestStatusEl(), cooldownElement: document.querySelector('[data-circle-request-cooldown]'),
+      visible: displayedCircle(circleLevel) === 2, status: circlePromotionStatus,
+      loading: circlePromotionLoading, submitting: circlePromotionSubmitting,
+      pending: circlePromotionStatus?.hasPending || requestState === 'pending',
+    });
   };
 
   const renderCircleUpgradeUi = (status = circleUpgradeStatus) => {
-    const circleLevelRaw =
-      status?.circleLevel ?? window.CRONOX_ACCREDITATION_STATS?.circleLevel ?? window.CRONOX_USER?.circleLevel ?? 1;
-    const circleLevel = getNormalizedCircleLevel(circleLevelRaw, 1);
-    const circleUpgradeCta = getCircleUpgradeCta();
-    const circleUpgradeBtn = getCircleUpgradeBtn();
-    const circleUpgradeStatusEl = getCircleUpgradeStatusEl();
-    const circleUpgradeCooldown = getCircleUpgradeCooldownEl();
-
-    const latestStatus = (status?.latestRequest?.status || status?.status || '').toString().toUpperCase();
-    const hasPending =
-      Boolean(status?.hasPending) || latestStatus === 'PENDING' || latestStatus === 'REQUESTED' || latestStatus === 'SENT';
-    const hasApprovedRequest = Boolean(status?.hasApproved || latestStatus === 'APPROVED');
-    const cooldownDays = Number(status?.cooldownDaysRemaining ?? status?.cooldownDays ?? 0);
-    const isCircleThree = circleLevel === 3;
-    const isLoadingStatus = circleUpgradeStatusLoading || status === 'loading';
-
-    let computedStatus = 'NONE';
-    if (hasApprovedRequest || circleLevel >= 4) {
-      computedStatus = 'APPROVED';
-    } else if (hasPending) {
-      computedStatus = 'PENDING';
-    } else if (latestStatus === 'DENIED' || latestStatus === 'REJECTED') {
-      computedStatus = 'DENIED';
-    } else if (status?.error) {
-      computedStatus = 'ERROR';
+    const level = displayedCircle(status?.circleLevel ?? window.CRONOX_ACCREDITATION_STATS?.circleLevel);
+    const latest = String(status?.latestRequest?.status || status?.status || '').toUpperCase();
+    const approved = status?.hasApproved || latest === 'APPROVED';
+    const visible = level === 3 && !approved;
+    // The former III CTA contributed to the approved card's fit. Capture its
+    // original layout once per presentation; countdown updates must never
+    // rescale the artwork, QR or identity as the real exterior action changes.
+    const reference = document.querySelector('[data-promotion-size-reference]');
+    if (reference && !reference.dataset.ready && !circleUpgradeStatusLoading && status) {
+      reference.dataset.ready = 'true';
+      reference.hidden = !visible;
+      const days = Number(status.cooldownDaysRemaining ?? status.cooldownDays ?? 0);
+      const pending = status.hasPending || ['PENDING', 'REQUESTED', 'SENT'].includes(latest);
+      const denied = ['DENIED', 'REJECTED'].includes(latest);
+      reference.querySelector('button').hidden = !visible || pending || !status.canRequest || (denied && days > 0);
+      reference.querySelector('[data-size-reference-pending]').hidden = !visible || !pending;
+      const cooldown = reference.querySelector('[data-size-reference-cooldown]');
+      cooldown.hidden = !visible || !denied || days <= 0;
+      cooldown.textContent = `Ya has enviado una solicitud recientemente. Podrás volver a solicitar el ascenso en ${days} día${days === 1 ? '' : 's'}.`;
     }
-
-    const canRequest =
-      status?.canRequest ??
-      (isCircleThree &&
-        computedStatus !== 'PENDING' &&
-        computedStatus !== 'APPROVED' &&
-        cooldownDays <= 0);
-
-    const shouldShowFlow = isCircleThree && computedStatus !== 'APPROVED' && circleLevel < 4;
-    const canShowCtaContent = shouldShowFlow || isLoadingStatus;
-    const canShowButton =
-      shouldShowFlow &&
-      !isLoadingStatus &&
-      (computedStatus === 'NONE' || computedStatus === 'ERROR' || (computedStatus === 'DENIED' && cooldownDays <= 0)) &&
-      !!canRequest;
-    const shouldShowStatus = shouldShowFlow && computedStatus === 'PENDING';
-    const shouldShowCooldown = shouldShowFlow && computedStatus === 'DENIED' && cooldownDays > 0;
-
-    debugAccreditationLog('Circle 4 UI state', {
-      circleRaw: circleLevelRaw,
-      circleNormalized: circleLevel,
-      latestStatus,
-      computedStatus,
-      hasPending,
-      hasApprovedRequest,
-      cooldownDays,
-      isLoadingStatus,
-      canRequest,
-      shouldShowFlow,
-      canShowButton,
-      shouldShowStatus,
-      shouldShowCooldown,
+    renderPromotionFlow({
+      root: getCircleUpgradeCta(), button: getCircleUpgradeBtn(), statusElement: getCircleUpgradeStatusEl(),
+      cooldownElement: getCircleUpgradeCooldownEl(), visible, status,
+      loading: circleUpgradeStatusLoading, submitting: circleUpgradeSubmitting,
+      pending: status?.hasPending || ['PENDING', 'REQUESTED', 'SENT'].includes(latest),
     });
+    if (!visible) { hideCircleUpgradeModal(); hideCircleUpgradeSuccessModal(); }
+  };
 
-    if (circleUpgradeCta) {
-      const hideCta = !canShowCtaContent || !shouldShowFlow;
-      circleUpgradeCta.classList.toggle('hidden', hideCta);
-      if (hideCta) {
-        circleUpgradeCta.setAttribute('hidden', '');
-      } else {
-        circleUpgradeCta.removeAttribute('hidden');
+  const promotionViewActive = () => accreditationSection?.classList.contains('is-active') && !document.hidden;
+  const schedulePromotionCountdown = () => {
+    window.clearTimeout(promotionTimer);
+    promotionTimer = 0;
+    if (!promotionViewActive() || accreditationSection.classList.contains('is-loading')) return;
+    const status = displayedCircle() === 2 ? circlePromotionStatus : displayedCircle() === 3 ? circleUpgradeStatus : null;
+    if (!status || status.hasPending || status.hasApproved || status.error || !status.eligibleAt) return;
+    if (status.blockedReason && status.blockedReason !== 'cooldown') return;
+    if (displayedCircle() === 3 && Number(status.circleLevel) !== 3) return;
+    const remaining = promotionRemaining(status);
+    if (remaining <= 0) {
+      if (!status.canRequest && !status.expiryChecked && !promotionRefreshPromise) {
+        status.expiryChecked = true;
+        void refreshPromotionEligibility();
       }
+      return;
     }
+    promotionTimer = window.setTimeout(() => {
+      updatePromotionUi();
+      renderCircleUpgradeUi();
+      schedulePromotionCountdown();
+    }, Math.max(250, Math.min(60000, remaining % 60000 || 60000)));
+  };
 
-    if (circleUpgradeBtn) {
-      if (canShowButton) {
-        circleUpgradeBtn.classList.remove('hidden');
-        circleUpgradeBtn.removeAttribute('hidden');
-        circleUpgradeBtn.disabled = false;
-      } else {
-        circleUpgradeBtn.classList.add('hidden');
-        circleUpgradeBtn.setAttribute('hidden', '');
-        circleUpgradeBtn.disabled = true;
-      }
-    }
-
-    if (circleUpgradeStatusEl) {
-      circleUpgradeStatusEl.classList.toggle('hidden', !shouldShowStatus);
-      if (shouldShowStatus) {
-        circleUpgradeStatusEl.removeAttribute('hidden');
-        circleUpgradeStatusEl.textContent = 'La solicitud de ascenso ha sido enviada.';
-      } else {
-        circleUpgradeStatusEl.setAttribute('hidden', '');
-      }
-    }
-
-    if (circleUpgradeCooldown) {
-      circleUpgradeCooldown.classList.toggle('hidden', !shouldShowCooldown);
-      if (shouldShowCooldown) {
-        circleUpgradeCooldown.removeAttribute('hidden');
-        circleUpgradeCooldown.textContent = formatCooldownMessage(cooldownDays);
-      } else {
-        circleUpgradeCooldown.setAttribute('hidden', '');
-      }
-    }
-
-    if (!shouldShowFlow || circleLevel >= 4 || computedStatus === 'APPROVED') {
-      hideCircleUpgradeModal();
-      hideCircleUpgradeSuccessModal();
-    }
+  const refreshPromotionEligibility = () => {
+    if (promotionRefreshPromise) return promotionRefreshPromise;
+    if (!promotionViewActive() || accreditationSection.classList.contains('is-loading')) return Promise.resolve();
+    const current = accreditationContext();
+    const signal = AbortSignal.timeout(15000);
+    const refresh = Promise.all([
+      loadAccreditationStats({ force: true, signal, preserveHistory: true }),
+      loadCircleUpgradeStatus({ skipLoader: true, signal }),
+    ]).finally(() => {
+      if (promotionRefreshPromise === refresh) promotionRefreshPromise = null;
+      if (!current()) return;
+      updatePromotionUi();
+      renderCircleUpgradeUi();
+      schedulePromotionCountdown();
+    });
+    promotionRefreshPromise = refresh;
+    return refresh;
   };
 
   const setCircleUpgradeState = (status) => {
-    circleUpgradeStatus = status || null;
+    circleUpgradeStatus = clockedPromotionStatus(status) || null;
     lastCircleUpgradeRequestId = status?.latestRequest?.id || null;
     renderCircleUpgradeUi(circleUpgradeStatus);
   };
 
-  const loadCircleUpgradeStatus = async ({ skipLoader = false } = {}) => {
+  const loadCircleUpgradeStatus = async ({ skipLoader = false, signal } = {}) => {
     const current = accreditationContext();
     if (!api.getCircleUpgradeStatus) {
       circleUpgradeStatusLoading = false;
@@ -923,7 +965,7 @@
       circleUpgradeStatusLoading = true;
       renderCircleUpgradeUi(circleUpgradeStatus);
       if (!skipLoader) setAccreditationLoading(true);
-      const status = await api.getCircleUpgradeStatus();
+      const status = await api.getCircleUpgradeStatus({ signal });
       if (!current()) return null;
       circleUpgradeStatusLoaded = true;
       setCircleUpgradeState(status);
@@ -942,7 +984,7 @@
         hasPending: false,
         hasApproved: false,
         cooldownDaysRemaining: 0,
-        canRequest: fallbackCircle === 3,
+        canRequest: false,
         latestRequest: { status: 'ERROR' },
         error: true,
       });
@@ -952,6 +994,7 @@
       if (current()) {
         circleUpgradeStatusLoading = false;
         renderCircleUpgradeUi(circleUpgradeStatus);
+        schedulePromotionCountdown();
         if (!skipLoader) setAccreditationLoading(false);
       }
     }
@@ -1002,11 +1045,9 @@
     const latestStatus = (circleUpgradeStatus?.latestRequest?.status || '').toString().toUpperCase();
     const hasPending = Boolean(circleUpgradeStatus?.hasPending || latestStatus === 'PENDING');
     const hasApprovedRequest = Boolean(circleUpgradeStatus?.hasApproved || latestStatus === 'APPROVED');
-    const cooldownDays = Number(circleUpgradeStatus?.cooldownDaysRemaining ?? circleUpgradeStatus?.cooldownDays ?? 0);
-    const canRequest =
-      circleUpgradeStatus?.canRequest ??
-      (circleLevel === 3 && !hasPending && !hasApprovedRequest && cooldownDays <= 0);
-    const eligible = circleLevel === 3 && canRequest && !hasApprovedRequest;
+    const eligible = circleLevel === 3 && circleUpgradeStatus?.canRequest === true
+      && promotionRemaining(circleUpgradeStatus) <= 0 && !circleUpgradeStatusLoading
+      && !hasPending && !hasApprovedRequest && !circleUpgradeSubmitting;
 
     if (!modal || isCircleUpgradeModalOpen || !eligible || (btn && (btn.hidden || btn.disabled))) return;
     modal.hidden = false;
@@ -1051,18 +1092,23 @@
     markCircleUpgradeModalSeen(requestId);
   };
 
-  const loadAccreditationStats = async ({ force = false } = {}) => {
+  const loadAccreditationStats = async ({ force = false, signal, preserveHistory = false } = {}) => {
     const context = accreditationContext();
     const attempt = ++accreditationStatsSequence;
     const current = () => context() && attempt === accreditationStatsSequence;
     const memberHistory = isMetacrilatos();
-    if (memberHistory) setMetacrilatosHistory('loading');
+    circlePromotionLoading = true;
+    updatePromotionUi();
+    if (memberHistory && !preserveHistory) setMetacrilatosHistory('loading');
     if (!api.getAccreditationStats) {
       const normalizedCircle = getNormalizedCircleLevel(window.CRONOX_USER?.circleLevel, window.CRONOX_USER?.circleLevel);
       fillAccreditationStats({ circleLevel: normalizedCircle });
       updatePromotionUi({ circleLevel: normalizedCircle });
       renderCircleUpgradeUi(circleUpgradeStatus || { circleLevel: normalizedCircle });
       if (memberHistory) setMetacrilatosHistory('error');
+      circlePromotionLoading = false;
+      circlePromotionStatus = { error: true, canRequest: false };
+      updatePromotionUi();
       return;
     }
 
@@ -1078,12 +1124,17 @@
         promotionRequestStatus: window.CRONOX_ACCREDITATION_STATS?.promotionRequestStatus,
       });
       renderCircleUpgradeUi(circleUpgradeStatus || { circleLevel: normalizedCircle });
+      // Re-entering accreditation must revalidate eligibility with server time.
+      circlePromotionLoading = false;
+      updatePromotionUi();
+      void refreshPromotionEligibility();
       return;
     }
 
     try {
-      const stats = await api.getAccreditationStats();
+      const stats = await api.getAccreditationStats({ signal });
       if (!current()) return;
+      circlePromotionStatus = clockedPromotionStatus(stats?.promotion) || { canRequest: false, error: true };
       if (memberHistory) {
         const counts = getAccreditationCounts(stats);
         if (!Object.values(counts).every(value => Number.isSafeInteger(value) && value >= 0)) {
@@ -1109,8 +1160,15 @@
       if (handleAuthRedirect(err)) return;
       console.warn('[PROFILE] No se pudieron cargar las estadísticas de acreditación', err);
       accreditationStatsLoaded = false;
-      if (memberHistory) setMetacrilatosHistory('error');
-      else showProfileMessage('No se pudieron cargar tus datos de acreditación.', 'error');
+      circlePromotionStatus = { error: true, canRequest: false };
+      if (memberHistory && !preserveHistory) setMetacrilatosHistory('error');
+      else if (!preserveHistory) showProfileMessage('No se pudieron cargar tus datos de acreditación.', 'error');
+    } finally {
+      if (current()) {
+        circlePromotionLoading = false;
+        updatePromotionUi();
+        schedulePromotionCountdown();
+      }
     }
   };
 
@@ -1579,7 +1637,8 @@
     if (form) {
       form.addEventListener('submit', async (ev) => {
         ev.preventDefault();
-        if (!api.requestCircleUpgrade) return;
+        if (!api.requestCircleUpgrade || circleUpgradeSubmitting || btn?.disabled
+          || circleUpgradeStatus?.canRequest !== true || promotionRemaining(circleUpgradeStatus) > 0) return;
         const socialNetwork = (socialField?.value || '').trim();
         const username = safeTrim(usernameField?.value || '');
 
@@ -1588,6 +1647,7 @@
           return;
         }
 
+        circleUpgradeSubmitting = true;
         if (submitBtn) submitBtn.disabled = true;
         setAccreditationLoading(true);
         try {
@@ -1618,8 +1678,10 @@
             'No se pudo enviar la solicitud de ascenso al Círculo 4.';
           showProfileMessage(msg, 'error');
         } finally {
+          circleUpgradeSubmitting = false;
           if (submitBtn) submitBtn.disabled = false;
           setAccreditationLoading(false);
+          renderCircleUpgradeUi();
         }
       });
     }
@@ -1633,48 +1695,33 @@
     hideCircleRequestModal();
 
     const btn = getCircleRequestBtn();
-    const circleRequestStatus = getCircleRequestStatusEl();
     if (btn) {
       btn.addEventListener('click', async () => {
-        if (!api.requestCirclePromotion) return;
-
-        window.CRONOX_PROMOTION_STATUS = 'pending';
-        btn.hidden = true;
-        btn.disabled = true;
-
-        if (circleRequestStatus) {
-          circleRequestStatus.hidden = false;
-          circleRequestStatus.textContent = 'Solicitud de ascenso enviada';
-        }
-
-        updatePromotionUi({ promotionRequestStatus: 'pending' });
-
+        if (!api.requestCirclePromotion || btn.disabled || btn.hidden || circlePromotionSubmitting
+          || circlePromotionStatus?.canRequest !== true || promotionRemaining(circlePromotionStatus) > 0) return;
+        circlePromotionSubmitting = true;
+        updatePromotionUi();
+        const current = accreditationContext();
         try {
           const response = await api.requestCirclePromotion();
+          if (!current()) return;
           const promotionStatus = response?.status || 'pending';
-
+          circlePromotionStatus = { ...circlePromotionStatus, canRequest: false, hasPending: true };
           window.CRONOX_PROMOTION_STATUS = promotionStatus;
-          updatePromotionUi({
-            circleLevel: 2,
-            promotionRequestStatus: promotionStatus,
-          });
-          // Only show after successful request
+          updatePromotionUi({ promotionRequestStatus: promotionStatus });
+          // Only show the confirmation after the server accepted the request.
           showCircleRequestModal();
+          try { localStorage.setItem('cronox_circle_request_updated', JSON.stringify({ userId: window.CRONOX_USER?.id, nonce: Math.random() })); } catch {}
         } catch (err) {
-          if (handleAuthRedirect(err)) return;
-          console.error('[PROFILE] Error al solicitar ascenso de círculo', err);
+          if (!current() || handleAuthRedirect(err)) return;
           const msg = err?.payload?.message || err?.message || 'No se pudo solicitar el ascenso.';
           showProfileMessage(msg, 'error');
-          window.CRONOX_PROMOTION_STATUS = 'none';
-          if (circleRequestStatus) {
-            circleRequestStatus.hidden = true;
-          }
-          updatePromotionUi({
-            circleLevel: window.CRONOX_USER?.circleLevel,
-            promotionRequestStatus: 'none',
-          });
-          btn.hidden = false;
-          btn.disabled = false;
+          // A second tab may already have submitted, or eligibility may have
+          // changed. Restore only the server-confirmed state after a failure.
+          await refreshPromotionEligibility();
+        } finally {
+          circlePromotionSubmitting = false;
+          if (current()) updatePromotionUi();
         }
       });
     }
@@ -1707,6 +1754,18 @@
     bindAddressForm();
     bindCircleUpgrade();
     bindCirclePromotion();
+    document.querySelector('[data-promotion-retry]')?.addEventListener('click', () => { void refreshPromotionEligibility(); });
+    const resumePromotions = () => {
+      if (promotionViewActive()) void refreshPromotionEligibility();
+      else window.clearTimeout(promotionTimer);
+    };
+    window.addEventListener('focus', resumePromotions);
+    window.addEventListener('pageshow', resumePromotions);
+    document.addEventListener('visibilitychange', resumePromotions);
+    window.addEventListener('storage', event => {
+      if (event.key !== 'cronox_circle_request_updated') return;
+      try { if (JSON.parse(event.newValue)?.userId === window.CRONOX_USER?.id) resumePromotions(); } catch {}
+    });
     metacrilatosRetry?.addEventListener('click', () => {
       if (isMetacrilatos() && !metacrilatosMember.hidden && metacrilatosHistory?.dataset.state === 'error') {
         loadAccreditationStats({ force: true });

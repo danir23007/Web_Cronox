@@ -231,6 +231,19 @@ describe('METACRILATOS personal composition viewport fit', () => {
     expect(f.frames.size).toBe(0);
   });
 
+  it('resolves the first visible fit synchronously and cancels the provisional frame', () => {
+    const f = setup();
+    f.section.classList.add('is-loading');
+    f.flush();
+    expect(f.win.document.body.classList.contains(layoutClass)).toBe(false);
+    f.section.classList.remove('is-loading');
+    f.win.CRONOX_METACRILATOS_FIT.refresh();
+    expect(f.number('--meta-fit-scale')).toBeCloseTo(818 / 600, 4);
+    expect(f.number('--meta-fit-height')).toBe(818);
+    expect(f.frames.size).toBe(0);
+    expect(f.win.CRONOX_METACRILATOS.mount).not.toHaveBeenCalled();
+  });
+
   it('cancels pending work on pagehide, ignores stale callbacks, and starts only one observer set on pageshow', () => {
     const f = setup();
     const staleFrame = f.allCallbacks[0];

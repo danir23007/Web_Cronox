@@ -26,6 +26,8 @@
     "test:cov": "jest --coverage",
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
     "test:manual-purchases:db": "node scripts/test-manual-purchases-db.cjs",
+    "test:circle-promotions:db": "node scripts/test-circle-promotions-db.cjs",
+    "circles:reconcile:local": "node scripts/reconcile-circles-local.cjs",
     "test:accreditations:db": "node scripts/test-accreditations-db.cjs",
     "test:qr-events:db": "node scripts/test-qr-events-db.cjs",
     "test:account-welcome:db": "node scripts/test-account-welcome-db.cjs",
