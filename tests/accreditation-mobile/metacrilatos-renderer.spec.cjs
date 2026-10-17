@@ -11,7 +11,7 @@ const longToken = `CRX:1:${crypto.createHash('sha256').update('existing persiste
 const baseData = {
   name: 'Daniel Rivas Cruz', createdAt: '2025-11-17T23:30:00.000Z',
   visibleId: '76ddc205-e68d-4f01-b2d1-dd6ac050f481',
-  registrationNumber: 23,
+  registrationNumber: 1, memberCode: 'CRX-000050',
 };
 let qrDataUrl;
 let longQrDataUrl;
@@ -25,7 +25,7 @@ test.beforeAll(async () => {
 
 async function harness(page) {
   await page.route('**/metacrilatos-renderer-test', route => route.fulfill({
-    contentType: 'text/html', body: `<!doctype html><meta charset="utf-8"><style>body{margin:0;background:#080809}</style><link rel="stylesheet" href="/assets/metacrilatos.css?v=2"><div id="root"></div><script src="/assets/metacrilatos.js"></script><script src="/assets/qr-reader.js"></script>`,
+    contentType: 'text/html', body: `<!doctype html><meta charset="utf-8"><style>body{margin:0;background:#080809}</style><link rel="stylesheet" href="/assets/metacrilatos.css?v=2"><div id="root"></div><script src="/assets/user-identity.js?v=1"></script><script src="/assets/metacrilatos.js"></script><script src="/assets/qr-reader.js"></script>`,
   }));
   await page.goto('/metacrilatos-renderer-test');
   await page.evaluate(() => {
@@ -104,13 +104,35 @@ test('all approved hashes, 68 edge panels, exact circle colors/contours, readabl
     await page.locator('.crx-stage').screenshot({ path: path.resolve(__dirname, `../../output/playwright/metacrilatos-${entry.circulo}-${testInfo.project.name}-back.png`) });
     await testInfo.attach(`circle-${entry.circulo}-reverse-${testInfo.project.name}`, { body: await page.locator('.crx-stage').screenshot(), contentType: 'image/png' });
     const fullId = await page.locator('[data-crx-id]').evaluate(element => ({ text: element.textContent, width: element.scrollWidth, available: element.clientWidth }));
-    expect(fullId.text).toBe(String(baseData.registrationNumber));
+    expect(fullId.text).toBe(baseData.memberCode);
     expect(fullId.width).toBeLessThanOrEqual(fullId.available + 1);
     await render(page, entry.circulo, { qrDataUrl: longQrDataUrl });
     await page.locator('[data-crx-flip]').click();
     const longQr = await page.locator('.crx-qr').screenshot();
     fs.writeFileSync(path.resolve(__dirname, `../../output/playwright/metacrilatos-${entry.circulo}-${testInfo.project.name}-long-qr.png`), longQr);
     expect(await decodeScreenshot(page, longQr)).toBe(longToken);
+  }
+});
+
+
+test('public memberCode is literal, never falls back to administrative identity, and leaves QR unchanged', async ({ page }) => {
+  await harness(page);
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  for (let circleLevel = 1; circleLevel <= 5; circleLevel++) {
+    for (const [memberCode, registrationNumber, label] of [
+      ['CRX-000050', 1, 'CRX-000050'],
+      ['CRX-000050', 999, 'CRX-000050'],
+      ['000007', 1, '000007'],
+      [null, 1, '\u2014'],
+      [undefined, 1, '\u2014'],
+      ['', 1, '\u2014'],
+    ]) {
+      await render(page, circleLevel, { memberCode, registrationNumber,
+        identityUid: baseData.visibleId, publicMemberToken: 'never-use-the-QR-token-as-the-label' });
+      await expect(page.locator('[data-crx-id]')).toHaveText(label);
+      await expect(page.locator('.crx-qr img')).toHaveAttribute('src', qrDataUrl);
+      expect(await page.locator('[data-crx-id]').evaluate(element => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
+    }
   }
 });
 

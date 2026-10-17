@@ -22,7 +22,7 @@ export const DESIGN_REGISTRY: Readonly<Record<string, DesignDefinition>> = Objec
       return { version: 1 };
     },
     async checkResources() {
-      for (const resource of ['assets/metacrilatos.js', 'assets/metacrilatos.css',
+      for (const resource of ['assets/user-identity.js', 'assets/metacrilatos.js', 'assets/metacrilatos.css',
         'assets/metacrilatos/wordmark.png', 'assets/metacrilatos/symbol.png', 'assets/metacrilatos/eye.png']) {
         try { if (!(await stat(join(__dirname, '../../../cronox-front', resource))).isFile()) throw new Error(); }
         catch { throw new BadRequestException('Faltan recursos de METACRILATOS. La acreditación anterior se conserva.'); }

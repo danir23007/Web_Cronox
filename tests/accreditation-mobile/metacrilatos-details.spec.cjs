@@ -35,7 +35,7 @@ async function setup(page, { heldStats = false, clock = false } = {}) {
     if (pathname === '/api/accreditations/active') return json(design);
     if (pathname === '/api/membership/me/accreditation') {
       state.credentialRequests++;
-      return json({ circleLevel: state.level, registrationNumber: 23, name: 'Daniel Rivas', createdAt: '2020-01-01T23:30:00Z',
+      return json({ circleLevel: state.level, registrationNumber: 1, memberCode: 'CRX-000050', name: 'Daniel Rivas', createdAt: '2020-01-01T23:30:00Z',
         visibleId: '11111111-2222-4333-8444-555555555555', qrDataUrl });
     }
     // Deliberately stale cached profile and statistics circle: the authorized

@@ -52,7 +52,7 @@ export class AdminAccreditationsController {
     const html = await readFile(join(__dirname, '../../../cronox-front/profile.html'), 'utf8');
     return html.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, '')
       .replace('<head>', '<head><base href="/"><style>body{visibility:hidden}</style>')
-      .replace('</body>', '<script src="/assets/metacrilatos.js?v=4"></script><script src="/assets/accreditation-designs.js?v=2"></script><script src="/assets/accreditation-preview.js?v=5"></script></body>');
+      .replace('</body>', '<script src="/assets/user-identity.js?v=1"></script><script src="/assets/metacrilatos.js?v=5"></script><script src="/assets/accreditation-designs.js?v=2"></script><script src="/assets/accreditation-preview.js?v=6"></script></body>');
   }
   @Post(':id/activate')
   activate(@Param('id') id: string, @Body() dto: ActivateAccreditationDto, @CurrentUser('id') actorId: number) {

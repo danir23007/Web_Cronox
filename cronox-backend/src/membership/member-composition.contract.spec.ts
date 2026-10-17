@@ -103,7 +103,7 @@ describe('Member composition: existing authenticated statistics route', () => {
     getMyStats.mockReset();
     getMyStats.mockResolvedValue({ pedidosRealizados: 0, articulosAdquiridos: 0, productosDiferentes: 0 });
     getMyAccreditation.mockReset();
-    getMyAccreditation.mockResolvedValue({ registrationNumber: 7, visibleId: 'immutable-identity', qrPayload: 'CRX:1:unchanged' });
+    getMyAccreditation.mockResolvedValue({ memberCode: 'CRX-000050', registrationNumber: 7, visibleId: 'immutable-identity', qrPayload: 'CRX:1:unchanged' });
   });
   afterAll(async () => { await app?.close(); });
 
@@ -119,15 +119,15 @@ describe('Member composition: existing authenticated statistics route', () => {
     expect(getMyStats).not.toHaveBeenCalled();
   });
 
-  it('returns only the authenticated member number, ignoring forged identity and number parameters', async () => {
-    await request(app.getHttpServer()).get('/api/membership/me/accreditation?userId=999&registrationNumber=999&identityUid=other')
+  it('returns only the authenticated public code, ignoring forged code, identity and number parameters', async () => {
+    await request(app.getHttpServer()).get('/api/membership/me/accreditation?userId=999&memberCode=CRX-999999&registrationNumber=999&identityUid=other')
       .set('Authorization', 'Test member-session').expect(200)
       .expect('Cache-Control', 'private, no-store')
-      .expect({ registrationNumber: 7, visibleId: 'immutable-identity', qrPayload: 'CRX:1:unchanged' });
+      .expect({ memberCode: 'CRX-000050', registrationNumber: 7, visibleId: 'immutable-identity', qrPayload: 'CRX:1:unchanged' });
     expect(getMyAccreditation).toHaveBeenCalledWith(7);
   });
 
-  it('does not expose the display number or QR without an accepted session', async () => {
+  it('does not expose the public code or QR without an accepted session', async () => {
     await request(app.getHttpServer()).get('/api/membership/me/accreditation?userId=7').expect(401);
     expect(getMyAccreditation).not.toHaveBeenCalled();
   });

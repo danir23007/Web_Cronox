@@ -85,6 +85,7 @@ async function main() {
     const service = new QrEventsService(db, circles), service2 = new QrEventsService(second, new CircleService(second, {}));
     const card = await membership.getMyAccreditation(person.id);
     assert.equal(card.name, 'Daniel Rivas'); assert.equal(card.visibleId, person.identityUid);
+    assert.equal(card.memberCode, person.memberCode);
     const adminUsers = new AdminUsersService(db);
     const numberInAdmin = async identityUid => (await adminUsers.listUsers({ page: 1, pageSize: 25, sort: 'id', order: 'asc' }))
       .data.find(user => user.identityUid === identityUid).registrationNumber;
@@ -92,6 +93,8 @@ async function main() {
       const personalCard = await membership.getMyAccreditation(user.id);
       assert.equal(personalCard.registrationNumber, await numberInAdmin(user.identityUid));
       assert.equal(personalCard.registrationNumber, user.id);
+      assert.equal(personalCard.memberCode, user.memberCode);
+      assert.match(personalCard.memberCode, /^CRX-0+\d+$/);
       assert.equal(personalCard.visibleId, user.identityUid);
     }
     assert.equal(card.createdAt.toISOString(), person.createdAt.toISOString());
@@ -103,7 +106,7 @@ async function main() {
     const lazy = await db.user.create({ data: { email: 'legacy-null@qr.test', publicMemberToken: null } });
     assert.equal(new Set(await Promise.all(Array.from({ length: 12 }, () => users.ensurePublicMemberToken(lazy.id)))).size, 1);
     await assert.rejects(db.user.update({ where: { id: person.id }, data: { publicMemberToken: randomUUID() } }));
-    checks.push('Four users expose the same current registrationNumber as the actual admin list; real identity triggers + concurrent provisioning preserve QR through reload/name/circle changes and immutable UUID');
+    checks.push('Four users expose their stored public memberCode literally with leading zeros, separately from the compatible administrative registrationNumber; real identity triggers + concurrent provisioning preserve QR through reload/name/circle changes and immutable UUID');
     const group = await service.create({ name: 'Encuentro local', description: 'Prueba aislada' }, admin.id);
     const group2 = await service.create({ name: 'Otro encuentro' }, superadmin.id);
     const race = await Promise.all(Array.from({ length: 12 }, (_, index) => (index % 2 ? service2 : service).scan(group.id, card.qrPayload, index % 2 ? superadmin.id : admin.id)));
@@ -178,6 +181,7 @@ async function main() {
     const own = await request.get('/api/membership/me/accreditation?userId=' + other.id).set(auth('USER')).expect(200);
     assert.equal(own.body.visibleId, person.identityUid); assert.equal(own.body.qrPayload, card.qrPayload);
     assert.equal(own.body.registrationNumber, await numberInAdmin(person.identityUid));
+    assert.equal(own.body.memberCode, person.memberCode);
     assert.notEqual(own.body.registrationNumber, other.id);
     assert.match(own.headers['cache-control'], /no-store/);
     let enterCard, releaseCard;
@@ -229,6 +233,7 @@ async function main() {
     assert.equal(reloadedCard.registrationNumber, await numberInAdmin(person.identityUid));
     assert.equal(reloadedCard.registrationNumber, afterRenumber.id);
     assert.notEqual(reloadedCard.registrationNumber, card.registrationNumber);
+    assert.equal(reloadedCard.memberCode, afterRenumber.memberCode);
     assert.equal(reloadedCard.visibleId, card.visibleId);
     assert.equal(reloadedCard.qrPayload, card.qrPayload);
     assert.equal(reloadedCard.qrDataUrl, card.qrDataUrl);
@@ -245,7 +250,7 @@ async function main() {
     const currentAdmin = await db.user.findUniqueOrThrow({ where: { identityUid: admin.identityUid } });
     await assert.rejects(service.scan(group.id, card.qrPayload, currentAdmin.id), error => error.getResponse().code === 'INVALID_QR');
     await assert.rejects(db.user.create({ data: { email: 'reuse@qr.test', publicMemberToken: backfilled.publicMemberToken } }));
-    checks.push('Actual controlled deletion + renumbering update displayed registrationNumber to the admin number on reload while preserving UUID and exact QR pixels/payload; deleting attendee keeps anonymous event count/time/circle, removes PII, rejects retired QR and token reuse');
+    checks.push('Existing controlled deletion + renumbering expose the current stored memberCode and compatible administrative number on reload while preserving UUID and exact QR pixels/payload; deleting attendee keeps anonymous event count/time/circle, removes PII, rejects retired QR and token reuse');
   } finally {
     if (app) await app.close(); if (numberingPool) await numberingPool.end(); if (db) await db.$disconnect(); if (second) await second.$disconnect(); if (sql) await sql.end();
     if (created) { assert.match(database, /^cronox_qr_test_[a-f0-9]{32}$/); await control.query(`DROP DATABASE "${database}" WITH (FORCE)`); }

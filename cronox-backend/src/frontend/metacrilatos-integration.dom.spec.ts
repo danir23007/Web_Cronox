@@ -6,7 +6,7 @@ const root = path.resolve(__dirname, '../../../cronox-front');
 const read = (file: string) => readFileSync(path.join(root, file), 'utf8');
 const tick = () => new Promise(resolve => setTimeout(resolve, 0));
 const design = { id: 'metacrilatos', name: 'METACRILATOS', renderer: 'metacrilatos-v1', config: { version: 1 } };
-const person = { circleLevel: 3, name: 'Daniel Rivas', createdAt: '2020-01-01T23:30:00Z', registrationNumber: 42, visibleId: 'stable-a', qrDataUrl: 'data:image/png;base64,AA==' };
+const person = { circleLevel: 3, name: 'Daniel Rivas', createdAt: '2020-01-01T23:30:00Z', registrationNumber: 1, memberCode: 'CRX-000050', visibleId: 'stable-a', qrDataUrl: 'data:image/png;base64,AA==' };
 
 describe('METACRILATOS integration and privacy boundaries', () => {
   function setup() {
@@ -47,11 +47,11 @@ describe('METACRILATOS integration and privacy boundaries', () => {
     } finally { dom.window.close(); }
   });
 
-  it('reloads the authorized display number without deriving it from cached profile state or changing the QR', async () => {
+  it('passes the authorized public code verbatim without deriving it from cached profile state or changing the QR', async () => {
     const { dom, win, mount, api, section } = setup();
     try {
       let personal = { ...person };
-      win.CRONOX_USER = { id: 999, registrationNumber: 999, identityUid: 'cached-identity' };
+      win.CRONOX_USER = { id: 999, registrationNumber: 999, memberCode: 'CRX-999999', identityUid: 'cached-identity' };
       win.fetch = jest.fn(async (url: string) => ({ ok: true, json: async () => url.endsWith('/active') ? design : personal }));
       await api.loadActive(section);
       expect(mount.mock.calls.at(-1)![1]).toEqual(person);
@@ -59,9 +59,14 @@ describe('METACRILATOS integration and privacy boundaries', () => {
       await api.loadActive(section);
       const updated = mount.mock.calls.at(-1)![1];
       expect(updated.registrationNumber).toBe(41);
+      expect(updated.memberCode).toBe('CRX-000050');
       expect(updated.visibleId).toBe(person.visibleId);
       expect(updated.qrDataUrl).toBe(person.qrDataUrl);
-      expect(win.fetch.mock.calls.filter(([url]) => url.endsWith('/me/accreditation'))).toHaveLength(2);
+      personal = { ...person, memberCode: '000007' };
+      await api.loadActive(section);
+      expect(mount.mock.calls.at(-1)![1].memberCode).toBe('000007');
+      expect(mount.mock.calls.at(-1)![1].qrDataUrl).toBe(person.qrDataUrl);
+      expect(win.fetch.mock.calls.filter(([url]) => url.endsWith('/me/accreditation'))).toHaveLength(3);
     } finally { dom.window.close(); }
   });
 

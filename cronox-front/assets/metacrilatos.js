@@ -48,9 +48,6 @@
   }
 
   const normalizeName = value => typeof value === 'string' ? value.trim().split(/\s+/u).slice(0, 2).join(' ') : '';
-  // Match the N.º column in Clients → Users. Identity UUIDs, member codes and
-  // QR tokens are separate values and must never substitute this display ID.
-  const formatRegistrationNumber = value => Number.isSafeInteger(value) && value > 0 ? String(value) : '—';
   function formatRegistrationDate(value) {
     if (typeof value !== 'string' || !value.trim()) return '';
     const day = /^(\d{4})-(\d{2})-(\d{2})(?:T|$)/.exec(value);
@@ -182,7 +179,9 @@
       name.textContent = normalizeName(data.name);
       name.title = name.textContent;
       root.querySelector('[data-crx-date]').textContent = formatRegistrationDate(data.createdAt);
-      visibleId.textContent = formatRegistrationNumber(data.registrationNumber);
+      // The public code is already issued: preserve it verbatim, including
+      // prefixes and leading zeroes. Administrative numbers are not this ID.
+      visibleId.textContent = window.CRONOX_USER_IDENTITY.format(data);
       visibleId.title = visibleId.textContent;
       emblem.setAttribute('aria-label', `Círculo ${roman[level - 1]}: ${level === 1 ? 'un círculo' : `${level} círculos concéntricos`}`);
       for (let i = 0; i < level; i++) {
@@ -502,5 +501,5 @@
     update(initialData);
     return api;
   }
-  window.CRONOX_METACRILATOS = Object.freeze({ mount, normalizeName, formatRegistrationNumber, formatRegistrationDate });
+  window.CRONOX_METACRILATOS = Object.freeze({ mount, normalizeName, formatRegistrationDate });
 })();

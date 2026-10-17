@@ -17,7 +17,9 @@ describe('shared public user identity presentation', () => {
   });
 
   it('loads the same formatter before the list, details and accreditation scripts', () => {
-    for (const [html, script] of [['admin.html', 'assets/admin.js'], ['admin-user.html', 'assets/admin-user.js'], ['profile.html', 'assets/profile.js']]) {
+    for (const [html, script] of [['admin.html', 'assets/admin.js'], ['admin-user.html', 'assets/admin-user.js'],
+      ['profile.html', 'assets/profile.js'], ['profile.html', 'assets/metacrilatos.js'],
+      ['metacrilatos-preview.html', 'assets/metacrilatos.js']]) {
       const page = read(html);
       expect(page.indexOf('assets/user-identity.js?v=1')).toBeGreaterThan(0);
       expect(page.indexOf('assets/user-identity.js?v=1')).toBeLessThan(page.indexOf(script));

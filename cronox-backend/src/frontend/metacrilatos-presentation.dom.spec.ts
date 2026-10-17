@@ -120,6 +120,7 @@ describe('shared personal and sample METACRILATOS presentation', () => {
       expect(sample.name).toBe('Andrea Ejemplo');
       expect(sample.visibleId).toBe('00000000-0000-4000-8000-000000000000');
       expect(sample.registrationNumber).toBe(23);
+      expect(sample.memberCode).toBe('CRX-000050');
       expect(sample.qrDataUrl).toBe(design.sampleQr);
       expect(member.dataset.circleLevel).toBe(String(circle));
       expect(member.querySelector('[data-meta-history]').dataset.state).toBe('ready');

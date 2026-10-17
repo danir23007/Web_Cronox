@@ -42,16 +42,17 @@ export class MembershipService {
     await this.circleService.maybePromoteRequestedCircle(userId);
     const token = await this.usersService.ensurePublicMemberToken(userId);
     const user = await this.prisma.user.findUnique({ where: { id: userId },
-      select: { id: true, identityUid: true, firstName: true, createdAt: true, circleLevel: true,
+      select: { id: true, memberCode: true, identityUid: true, firstName: true, createdAt: true, circleLevel: true,
         accountState: true, publicMemberToken: true } });
     if (!user) throw new NotFoundException('User not found');
     assertUsableAccreditation(user);
     const qrPayload = accreditationPayload(user.publicMemberToken ?? token);
     return { circleLevel: user.circleLevel, name: accreditationName(user.firstName),
-      // Same current User.id exposed as N.º / registrationNumber in Users.
-      // Keep the existing identity field and personal QR independent of this
-      // display number: controlled renumbering must not change either of them.
-      createdAt: user.createdAt, registrationNumber: user.id, visibleId: user.identityUid, qrPayload,
+      // The stored public member code is the label ID, without reconstruction.
+      // Keep the administrative number, internal identity and QR compatible.
+      // Missing legacy codes stay missing; reading a card never allocates one.
+      createdAt: user.createdAt, memberCode: user.memberCode,
+      registrationNumber: user.id, visibleId: user.identityUid, qrPayload,
       qrDataUrl: await renderAccreditationQr(qrPayload) };
   }
 

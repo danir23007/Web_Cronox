@@ -56,7 +56,7 @@ describe('MembershipService accreditation statistics', () => {
   });
 });
 
-describe('MembershipService accreditation display number', () => {
+describe('MembershipService accreditation public member code', () => {
   const token = 'p'.repeat(32);
   const identityUid = 'c6046947-df98-46d0-a20f-b0ad71d63716';
   let renderQr: jest.SpyInstance;
@@ -68,11 +68,11 @@ describe('MembershipService accreditation display number', () => {
       .mockImplementation(async payload => `data:image/png;base64,${Buffer.from(payload).toString('base64')}`);
   });
   afterEach(() => renderQr.mockRestore());
-  function setup(id: number) {
-    const user = { id, identityUid, firstName: 'Daniel Rivas', circleLevel: 5,
+  function setup(id: number, memberCode: string | null = 'CRX-000050') {
+    const user = { id, memberCode, identityUid, firstName: 'Daniel Rivas', circleLevel: 5,
       createdAt: new Date('2020-01-01'), accountState: 'ACTIVE', publicMemberToken: token };
     const prisma = { user: { findUnique: jest.fn().mockResolvedValue(user) } };
-    const users = { ensurePublicMemberToken: jest.fn().mockResolvedValue(token) };
+    const users = { ensurePublicMemberToken: jest.fn().mockResolvedValue(token), ensureMemberCode: jest.fn() };
     const circle = { ensureCircleByNetSpent: jest.fn(), maybePromoteRequestedCircle: jest.fn() };
     const service = new MembershipService(prisma as any, users as any, {} as any, circle as any);
     return { service, prisma, users, user };
@@ -81,15 +81,43 @@ describe('MembershipService accreditation display number', () => {
   it.each([1, 23, 1042])('exposes the current database User.id %i separately from identity and QR', async id => {
     const { service, prisma, users } = setup(id);
     const card = await service.getMyAccreditation(id);
+    expect(card.memberCode).toBe('CRX-000050');
     expect(card.registrationNumber).toBe(id);
     expect(card.visibleId).toBe(identityUid);
     expect(card.qrPayload).toBe(`CRX:1:${token}`);
     expect(renderQr).toHaveBeenCalledWith(`CRX:1:${token}`);
     expect(prisma.user.findUnique).toHaveBeenCalledWith({ where: { id }, select: {
-      id: true, identityUid: true, firstName: true, createdAt: true, circleLevel: true,
+      id: true, memberCode: true, identityUid: true, firstName: true, createdAt: true, circleLevel: true,
       accountState: true, publicMemberToken: true,
     } });
     expect(users.ensurePublicMemberToken).toHaveBeenCalledWith(id);
+    expect(users.ensureMemberCode).not.toHaveBeenCalled();
+  });
+
+  it.each(['CRX-000050', '000007'])('returns stored memberCode %s verbatim instead of administrative number 1', async memberCode => {
+    const { service, user, users } = setup(1, memberCode);
+    const before = { ...user };
+    const first = await service.getMyAccreditation(1);
+    const reloaded = await service.getMyAccreditation(1);
+    expect(first.memberCode).toBe(memberCode);
+    expect(first.registrationNumber).toBe(1);
+    expect(first.visibleId).toBe(identityUid);
+    expect(first.qrPayload).toBe(`CRX:1:${token}`);
+    expect(reloaded.qrPayload).toBe(first.qrPayload);
+    expect(reloaded.qrDataUrl).toBe(first.qrDataUrl);
+    expect(user).toEqual(before);
+    expect(users.ensureMemberCode).not.toHaveBeenCalled();
+  });
+
+  it.each([null, ''])('keeps a missing legacy memberCode (%s) without allocating a code or using another identity', async memberCode => {
+    const { service, users, user } = setup(1, memberCode);
+    const card = await service.getMyAccreditation(1);
+    expect(card.memberCode).toBe(memberCode);
+    expect(card.registrationNumber).toBe(1);
+    expect(card.visibleId).toBe(identityUid);
+    expect(card.qrPayload).toBe(`CRX:1:${token}`);
+    expect(user.memberCode).toBe(memberCode);
+    expect(users.ensureMemberCode).not.toHaveBeenCalled();
   });
 
   it('reloads the new current number after controlled renumbering with identical identity and QR', async () => {
@@ -98,6 +126,7 @@ describe('MembershipService accreditation display number', () => {
     user.id = 22; // The existing database numbering rules are simulated here.
     const reloaded = await service.getMyAccreditation(22);
     expect(reloaded.registrationNumber).toBe(22);
+    expect(reloaded.memberCode).toBe(user.memberCode);
     expect(reloaded.visibleId).toBe(first.visibleId);
     expect(reloaded.qrPayload).toBe(first.qrPayload);
     expect(reloaded.qrDataUrl).toBe(first.qrDataUrl);
