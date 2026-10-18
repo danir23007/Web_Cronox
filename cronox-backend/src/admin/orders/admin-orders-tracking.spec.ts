@@ -21,7 +21,9 @@ describe('Correos tracking assignment on the existing Order', () => {
     const order = fixture(overrides);
     const db = {
       $queryRaw: jest.fn().mockResolvedValue([{ id: 9 }]),
+      $executeRaw: jest.fn().mockResolvedValue(1),
       order: {
+        findFirst: jest.fn().mockResolvedValue(null),
         findUnique: jest.fn().mockResolvedValue(order),
         update: jest.fn().mockImplementation(({ data }) => ({ ...order, ...data })),
       },
@@ -40,8 +42,9 @@ describe('Correos tracking assignment on the existing Order', () => {
 
   it('audits a correction, invalidates old work and preserves payment/stock and manual fulfillment', async () => {
     const { service, db, email } = setup();
-    const detail = await service.updateOrderFulfillment(9, { trackingNumber: ' new12345678 ', trackingRevision: 2 }, 7);
+    const detail = await service.updateOrderFulfillment(9, { trackingNumber: ' new12345678 ', trackingRevision: 2, replaceTracking: true }, 7);
     expect(db.$queryRaw).toHaveBeenCalledTimes(1);
+    expect(db.$executeRaw).toHaveBeenCalledTimes(1);
     expect(db.orderTrackingAudit.create).toHaveBeenCalledWith({ data: {
       orderId: 9, actorId: 7, actorIdentityUid: '9714ed2b-2137-4e2f-a853-3a628477e2c5',
       previousNumber: 'OLD12345678', nextNumber: 'NEW12345678', revision: 3,
@@ -82,7 +85,7 @@ describe('Correos tracking assignment on the existing Order', () => {
 
   it('removes an assignment explicitly and stops its pending synchronizations', async () => {
     const { service, db } = setup();
-    await service.updateOrderFulfillment(9, { trackingNumber: null }, 7);
+    await service.updateOrderFulfillment(9, { trackingNumber: null, trackingRevision: 2, replaceTracking: true }, 7);
     expect(db.order.update.mock.calls[0][0].data).toEqual(expect.objectContaining({
       trackingNumber: null, trackingUrl: null, trackingRevision: 3, trackingNextSyncAt: null,
     }));
@@ -90,7 +93,7 @@ describe('Correos tracking assignment on the existing Order', () => {
 
   it('canonicalizes an empty Correos carrier without overwriting it after number validation', async () => {
     const { service, db } = setup();
-    await service.updateOrderFulfillment(9, { trackingNumber: 'new12345678', shippingCarrier: '', trackingRevision: 2 }, 7);
+    await service.updateOrderFulfillment(9, { trackingNumber: 'new12345678', shippingCarrier: '', trackingRevision: 2, replaceTracking: true }, 7);
     expect(db.order.update.mock.calls[0][0].data).toEqual(expect.objectContaining({
       trackingNumber: 'NEW12345678', shippingCarrier: 'Correos', trackingRevision: 3,
     }));

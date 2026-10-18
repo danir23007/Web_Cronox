@@ -1,4 +1,15 @@
-import { BadRequestException } from '@nestjs/common';
+import { BadRequestException, HttpException } from '@nestjs/common';
+
+export function trackingBatchError(error: unknown): string {
+  if (error instanceof HttpException) {
+    const response = error.getResponse();
+    if (typeof response === 'string') return response;
+    const data = response as { message?: string; code?: string };
+    return [data.code, data.message].filter(value => typeof value === 'string').join(' · ') || 'No se pudo completar el pedido';
+  }
+  // Do not return Prisma/transport exception messages, queries or connection data.
+  return 'No se pudo completar el pedido. Recarga y vuelve a validar';
+}
 
 // Trackpub also accepts domestic references: do not assume every ID is S10.
 export function normalizeCorreosTrackingNumber(input: string | null): string | null {

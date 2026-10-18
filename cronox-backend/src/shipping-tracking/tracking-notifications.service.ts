@@ -17,7 +17,7 @@ export class TrackingNotificationsService {
     // After a crash SMTP may have accepted a message: never automatically resend.
     await this.db.orderTrackingNotification.updateMany({ where: { status: 'SENDING', leaseUntil: { lte: new Date() } },
       data: { status: 'UNKNOWN', leaseToken: null, leaseUntil: null } });
-    const jobs = await this.db.orderTrackingNotification.findMany({ where: { status: { in: ['PENDING', 'RETRY'] }, nextAttemptAt: { lte: new Date() } },
+    const jobs = await this.db.orderTrackingNotification.findMany({ where: { category: 'SHIPPED', status: { in: ['PENDING', 'RETRY'] }, nextAttemptAt: { lte: new Date() } },
       orderBy: { createdAt: 'asc' }, take: 2 });
     for (const job of jobs) await this.deliver(job.id);
   }
@@ -29,14 +29,17 @@ export class TrackingNotificationsService {
       data: { status: 'SENDING', leaseToken: token, leaseUntil: new Date(Date.now() + 120000), attempts: { increment: 1 } } });
     if (!claimed.count) return;
     let sendingStarted = false;
+    let attempts = 1;
     const deliveryDeadline = Date.now() + 20000;
     try {
       await this.db.$transaction(async tx => {
         const job = await tx.orderTrackingNotification.findUniqueOrThrow({ where: { id } });
+        attempts = job.attempts;
         await tx.$queryRaw`SELECT id FROM "Order" WHERE id=${job.orderId} FOR UPDATE`;
         const order = await tx.order.findUniqueOrThrow({ where: { id: job.orderId } });
         if (job.status !== 'SENDING' || job.leaseToken !== token) return;
-        if (job.revision !== order.trackingRevision || !eligibleTrackingOrder(order)) {
+        if (job.category !== 'SHIPPED' || job.revision !== order.trackingRevision || !eligibleTrackingOrder(order) ||
+            !['SHIPPED', 'DELIVERED'].includes(order.status) || order.trackingNotificationReview) {
           await tx.orderTrackingNotification.update({ where: { id }, data: { status: 'CANCELLED', leaseToken: null, leaseUntil: null } }); return;
         }
         const event = await tx.orderTrackingEvent.findUniqueOrThrow({ where: { id: job.eventId } });
@@ -44,9 +47,9 @@ export class TrackingNotificationsService {
         // Keep the order row locked through SMTP so a number replacement cannot race.
         sendingStarted = true;
         const result = await this.email.send({ type: EmailType.ORDER_TRACKING, deliveryDeadline, to: order.customerEmail,
-          subject: `CRONOX · Seguimiento del pedido #${order.id}`,
+          subject: `CRONOX · Pedido #${order.id} enviado`,
           templateData: { orderId: String(order.id), trackingNumber: order.trackingNumber,
-            trackingUrl, shippingCarrier: 'Correos', statusLabel: event.label || event.code } });
+            trackingUrl, shippingCarrier: 'Correos', statusLabel: 'Enviado · admisión confirmada por Correos' } });
         if (result.queued) throw Object.assign(Error('DELIVERY_DEFERRED_REVIEW'), { deliveryUnknown: true });
         await tx.orderTrackingNotification.update({ where: { id }, data: { status: 'SENT', messageId: result.messageId, leaseToken: null, leaseUntil: null } });
       }, { timeout: 60000, maxWait: 10000 });
@@ -58,7 +61,7 @@ export class TrackingNotificationsService {
         sendingStarted && !waiting && !(error as { getStatus?: () => number }).getStatus;
       await this.db.orderTrackingNotification.updateMany({ where: { id, status: 'SENDING', leaseToken: token },
         data: { status: ambiguous ? 'UNKNOWN' : 'RETRY', leaseToken: null, leaseUntil: null,
-          nextAttemptAt: waiting ? error.retryAt : new Date(Date.now() + 300000) } });
+          nextAttemptAt: waiting ? error.retryAt : new Date(Date.now() + Math.min(86400000, 60000 * 2 ** Math.min(Math.max(attempts - 1, 0), 11))) } });
     }
   }
 }

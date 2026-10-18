@@ -7,8 +7,8 @@ describe('persistent carrier notification outbox (simulated SMTP)', () => {
   beforeEach(() => Object.assign(process.env, { EMAIL_ENABLED: 'true', CORREOS_EMAIL_ENABLED: 'true', BACKGROUND_JOBS_ENABLED: 'true' }));
   afterEach(() => { process.env = { ...original }; });
   function fixture() {
-    const job: any = { id: 'notice', orderId: 42, revision: 3, eventId: 'event', category: 'DELIVERED', status: 'PENDING', attempts: 0, nextAttemptAt: new Date(0) };
-    const order: any = { id: 42, trackingRevision: 3, trackingNumber: 'PQ123456789ES', shippingCarrier: 'Correos', status: 'PAID', source: 'ONLINE', shippingMethodCode: 'STANDARD', customerEmail: 'buyer@example.test' };
+    const job: any = { id: 'notice', orderId: 42, revision: 3, eventId: 'event', category: 'SHIPPED', status: 'PENDING', attempts: 0, nextAttemptAt: new Date(0) };
+    const order: any = { id: 42, trackingRevision: 3, trackingNumber: 'PQ123456789ES', shippingCarrier: 'Correos', status: 'SHIPPED', source: 'ONLINE', shippingMethodCode: 'STANDARD', customerEmail: 'buyer@example.test' };
     const update = jest.fn(async ({ data }) => { Object.assign(job, data); return job; });
     const updateMany = jest.fn(async ({ where, data }) => {
       if (where.id && where.id !== job.id || where.leaseToken && job.leaseToken !== where.leaseToken ||
@@ -58,6 +58,17 @@ describe('persistent carrier notification outbox (simulated SMTP)', () => {
   it('requires explicit mail opt-in even if normal email is enabled', async () => {
     const { service, email, db } = fixture(); process.env.CORREOS_EMAIL_ENABLED = 'false';
     await service.tick(); await service.deliver('notice'); expect(email.send).not.toHaveBeenCalled(); expect(db.$transaction).not.toHaveBeenCalled();
+  });
+  it('retries a proven transport rejection and marks SENT only after acceptance', async () => {
+    const { service, email, job } = fixture();
+    email.send.mockRejectedValueOnce(Object.assign(Error('rejected'), { getStatus: () => 500 }) as never);
+    await service.deliver('notice'); expect(job.status).toBe('RETRY'); expect(job.messageId).toBeUndefined();
+    job.nextAttemptAt = new Date(0);
+    await service.deliver('notice'); expect(job.status).toBe('SENT'); expect(email.send).toHaveBeenCalledTimes(2);
+  });
+  it.each(['ADMITTED', 'OUT_FOR_DELIVERY', 'DELIVERED', 'INCIDENT'])('cancels legacy %s notices before SMTP', async category => {
+    const { service, email, job } = fixture(); job.category = category;
+    await service.deliver('notice'); expect(job.status).toBe('CANCELLED'); expect(email.send).not.toHaveBeenCalled();
   });
   it('excludes in-person purchases and local collection without guessing from shipping price', () => {
     const { order } = fixture(); expect(eligibleTrackingOrder(order)).toBe(true);

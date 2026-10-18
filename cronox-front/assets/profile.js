@@ -483,6 +483,11 @@
       if (order.deliveredAt) {
         trackingBits.push(`Entregado el: ${escapeHtml(formatDate(order.deliveredAt))}`);
       }
+      if (order.trackingAdmissionLocalAt) trackingBits.push(`Admisión (hora local de Correos): ${escapeHtml(order.trackingAdmissionLocalAt)}`);
+      if (order.trackingDeliveryLocalAt) trackingBits.push(`Entrega (hora local de Correos): ${escapeHtml(order.trackingDeliveryLocalAt)}`);
+      if (order.trackingNumber && ['PAID', 'PROCESSING'].includes(order.status) && /^correos$/i.test(order.shippingCarrier || '')) {
+        trackingBits.unshift('Pendiente de entregar a Correos');
+      }
       if (!order.trackingNumber) {
         const method = String(order.shippingMethodCode || '').toUpperCase();
         const fallback = order.status === 'CANCELLED' ? 'Pedido cancelado'

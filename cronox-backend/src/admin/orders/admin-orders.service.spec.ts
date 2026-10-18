@@ -198,6 +198,7 @@ describe('AdminOrdersService Stripe safety', () => {
   it('does not allow an admin to cancel a captured Stripe order without a refund', async () => {
     const order = makeOrder();
     const prisma = {
+      $queryRaw: jest.fn().mockResolvedValue([{ id: 9 }]),
       order: { findUnique: jest.fn().mockResolvedValue(order) },
       $transaction: jest.fn(async (callback: (tx: any) => unknown) =>
         callback(prisma),

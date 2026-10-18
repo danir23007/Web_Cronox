@@ -9,6 +9,7 @@ export const CORREOS_EVENT_CODES: Readonly<
     {
       category:
         | 'ADMITTED'
+        | 'IN_TRANSIT'
         | 'OUT_FOR_DELIVERY'
         | 'DELIVERED'
         | 'RETURNED'
@@ -17,6 +18,12 @@ export const CORREOS_EVENT_CODES: Readonly<
     }
   >
 > = {
+  A050000V: { category: 'ADMITTED', description: 'El envío ha tenido admisión en origen' },
+  A050020V: { category: 'ADMITTED', description: 'El envío ha tenido admisión en el centro logístico de origen' },
+  C010000V: { category: 'IN_TRANSIT', description: 'El envío ha salido del centro logístico internacional de origen y se ha cursado a destino' },
+  E020000V: { category: 'IN_TRANSIT', description: 'Finalizada tramitación de importación, envío en curso hacía el destinatario' },
+  F010000V: { category: 'IN_TRANSIT', description: 'El envío ha salido de la centro logístico internacional de destino para su entrega' },
+  G010000V: { category: 'IN_TRANSIT', description: 'El envío ha entrado en la unidad responsable de su entrega' },
   A010000V: {
     category: 'ADMITTED',
     description: 'El envío ha tenido admisión en origen',

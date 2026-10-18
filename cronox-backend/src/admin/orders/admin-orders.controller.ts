@@ -28,9 +28,10 @@ import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { ShippingLabelsService } from '../../shipping-tracking/labels.service';
 import { ShippingLabelUploadInterceptor } from '../../shipping-tracking/labels-upload.interceptor';
 import { SuperAdminGuard } from '../../common/guards/super-admin.guard';
+import { TrackingBulkAssignDto } from './dto/tracking-bulk.dto';
 
 @Controller('admin/orders')
-@UseGuards(JwtAuthGuard, AdminGuard, RolesGuard, UserIdentityGuard)
+@UseGuards(JwtAuthGuard, AdminGuard, RolesGuard, UserIdentityGuard, SuperAdminGuard)
 @Roles(Role.SUPERADMIN)
 export class AdminOrdersController {
   constructor(
@@ -64,12 +65,18 @@ export class AdminOrdersController {
     return this.ordersService.getOrderById(id);
   }
 
+  @Post('tracking-bulk/assign')
+  assignTrackingBulk(@Body() dto: TrackingBulkAssignDto, @CurrentUser('id') actorId: number) {
+    return this.ordersService.assignTrackingBulk(dto.rows, dto.preview, actorId);
+  }
+
   @Patch(':id/status')
   updateOrderStatus(
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: UpdateOrderStatusDto,
+    @CurrentUser('id') actorId: number,
   ) {
-    return this.ordersService.updateOrderStatus(id, dto.status);
+    return this.ordersService.updateOrderStatus(id, dto.status, actorId);
   }
 
   @Patch(':id/fulfillment')
@@ -113,13 +120,13 @@ export class AdminOrdersController {
   }
 
   @Post(':id/mark-shipped')
-  markShipped(@Param('id', ParseIntPipe) id: number) {
-    return this.ordersService.updateOrderFulfillment(id, { status: OrderStatus.SHIPPED });
+  markShipped(@Param('id', ParseIntPipe) id: number, @CurrentUser('id') actorId: number) {
+    return this.ordersService.updateOrderFulfillment(id, { status: OrderStatus.SHIPPED }, actorId);
   }
 
   @Post(':id/mark-delivered')
-  markDelivered(@Param('id', ParseIntPipe) id: number) {
-    return this.ordersService.updateOrderFulfillment(id, { status: OrderStatus.DELIVERED });
+  markDelivered(@Param('id', ParseIntPipe) id: number, @CurrentUser('id') actorId: number) {
+    return this.ordersService.updateOrderFulfillment(id, { status: OrderStatus.DELIVERED }, actorId);
   }
 
   @Post(':id/refund')

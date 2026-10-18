@@ -929,6 +929,29 @@
         </div>
       </div>
       <div id="ordersMessage" class="message" role="status" aria-live="polite"></div>
+      <div class="table-actions" style="display:flex;gap:10px;flex-wrap:wrap;margin-top:12px">
+        <span id="ordersSelectedCount" role="status">0 seleccionados de esta página</span>
+        <button class="btn" type="button" id="ordersBulkSyncBtn" disabled>Sincronizar seguimiento seleccionados</button>
+        <button class="btn" type="button" id="ordersBulkAssignBtn">Asociar códigos por lote</button>
+        <button class="btn" type="button" id="ordersPrevBtn" disabled>Anterior</button>
+        <span id="ordersPageInfo">Página 1</span>
+        <button class="btn" type="button" id="ordersNextBtn" disabled>Siguiente</button>
+      </div>
+      <div id="ordersBulkResults" role="status" aria-live="polite"></div>
+      <section id="ordersBulkEditor" class="order-detail__section" hidden aria-label="Asociación por lote">
+        <p>Pega pares «ID de pedido CRONOX + código de Correos», una fila por pedido, separados por tabulador, coma o punto y coma. No uses el ID del usuario. Máximo 100 filas. Los seguimientos existentes se conservan.</p>
+        <label for="ordersBulkPaste">Pares de pedidos y códigos</label>
+        <textarea id="ordersBulkPaste" class="input" rows="4" placeholder="42;PQ123456789ES"></textarea>
+        <label for="ordersBulkFile">Importar CSV o TSV</label>
+        <input id="ordersBulkFile" type="file" accept=".csv,.tsv,.txt,text/csv,text/tab-separated-values">
+        <div class="table-actions">
+          <button class="btn" type="button" id="ordersBulkParseBtn">Cargar filas</button>
+          <button class="btn" type="button" id="ordersBulkAddRowBtn">Añadir fila</button>
+          <button class="btn" type="button" id="ordersBulkPreviewBtn">Validar y previsualizar</button>
+          <button class="btn" type="button" id="ordersBulkSaveBtn" disabled>Guardar filas válidas de la vista previa</button>
+        </div>
+        <div style="overflow-x:auto"><table><thead><tr><th>ID pedido CRONOX</th><th>Código Correos</th><th>Validación / resultado</th><th>Acción</th></tr></thead><tbody id="ordersBulkRows"></tbody></table></div>
+      </section>
       <div class="filter-bar" style="margin-top:10px;">
         <label for="ordersEmailSearch" class="input-icon" style="display:flex; align-items:center; gap:8px; width:min(420px, 100%);">
           <span aria-hidden="true">🔎</span>
@@ -939,10 +962,10 @@
         <table aria-describedby="title-orders">
           <thead>
             <tr>
-              <th>ID pedido</th><th>Fecha</th><th>Estado</th><th>Total</th><th>Usuario</th><th>Transportista</th><th>Seguimiento</th><th>Enviado</th><th>Entregado</th><th>Acciones</th>
+              <th><input type="checkbox" id="ordersSelectPage" aria-label="Seleccionar solo los pedidos de esta página"></th><th>ID pedido</th><th>Fecha</th><th>Estado</th><th>Total</th><th>Usuario</th><th>Transportista</th><th>Seguimiento</th><th>Enviado</th><th>Entregado</th><th>Acciones</th>
             </tr>
           </thead>
-          <tbody id="ordersAdminBody"><tr><td colspan="10" class="empty">Cargando pedidos…</td></tr></tbody>
+          <tbody id="ordersAdminBody"><tr><td colspan="11" class="empty">Cargando pedidos…</td></tr></tbody>
         </table>
       </div>
     </section>
@@ -1039,7 +1062,7 @@
         </section>
         <div class="modal-actions">
           <button class="btn primary" id="orderSaveBtn" type="button">Guardar tracking</button>
-          <button class="btn" id="orderMarkShippedBtn" type="button">Marcar enviado</button>
+          <button class="btn" id="orderMarkShippedBtn" type="button">Marcar enviado manualmente (sin verificar Correos)</button>
           <button class="btn" id="orderMarkDeliveredBtn" type="button">Marcar entregado</button>
           <button class="btn danger" id="orderRefundBtn" type="button">Reembolsar</button>
         </div>
@@ -2132,7 +2155,7 @@
   <script src="assets/responsive-images.js?v=5"></script>
   <script src="assets/admin-mail-document.js?v=2"></script>
   <script src="assets/admin-mails.js?v=4"></script>
-  <script src="assets/admin-orders.js?v=4"></script>
+  <script src="assets/admin-orders.js?v=5"></script>
   <script src="assets/gallery.js?v=18"></script>
   <script src="assets/admin-gallery.js?v=7"></script>
   <script src="assets/key-screen-renderer.js?v=2"></script>

@@ -16,7 +16,8 @@ import { EmailType } from '../../email/email.types';
 import { StripeService } from '../../payments/stripe.service';
 import { OrdersService } from '../../orders/orders.service';
 import { toCountryDisplayName } from '../../common/country';
-import { buildCorreosTrackingUrl, normalizeCorreosTrackingNumber } from '../../shipping-tracking/tracking-links';
+import { buildCorreosTrackingUrl, normalizeCorreosTrackingNumber, trackingBatchError } from '../../shipping-tracking/tracking-links';
+import { eligibleTrackingOrder } from '../../shipping-tracking/tracking.service';
 
 const DEFAULT_PAGE_SIZE = 20;
 const MAX_EXPORT_ROWS = 5000;
@@ -133,8 +134,47 @@ export class AdminOrdersService {
     return this.serializeOrderWithItems(order);
   }
 
-  async updateOrderStatus(id: number, status: OrderStatus) {
-    return this.updateOrderFulfillment(id, { status });
+  async updateOrderStatus(id: number, status: OrderStatus, actorId?: number) {
+    return this.updateOrderFulfillment(id, { status }, actorId);
+  }
+
+  async assignTrackingBulk(rows: unknown[], preview: boolean, actorId: number) {
+    if (!Array.isArray(rows) || !rows.length || rows.length > 100) throw new BadRequestException('Indica entre 1 y 100 filas');
+    const normalized = rows.map((input, index) => {
+      try {
+        if (!input || typeof input !== 'object' || Array.isArray(input)) throw Error('Fila inválida');
+        const row = input as Record<string, unknown>;
+        if (!Number.isSafeInteger(row.orderId) || Number(row.orderId) < 1) throw Error('ID de pedido CRONOX inválido; no uses el ID del usuario');
+        const orderId = Number(row.orderId);
+        if (typeof row.trackingNumber !== 'string') throw Error('Falta el código de Correos');
+        const trackingNumber = normalizeCorreosTrackingNumber(row.trackingNumber);
+        if (!trackingNumber) throw Error('Falta el código de Correos');
+        return { index, orderId, trackingNumber, revision: row.revision, replaceTracking: row.replaceTracking === true };
+      } catch (error) { return { index, error: (error as Error).message }; }
+    });
+    const results: Record<string, unknown>[] = [];
+    for (const row of normalized) {
+      if ('error' in row) { results.push({ ...row, status: 'error' }); continue; }
+      try {
+        if (normalized.filter(other => !('error' in other) && other.orderId === row.orderId).length > 1) throw new BadRequestException('ID de pedido repetido en el lote; corrige todas sus filas');
+        if (normalized.filter(other => !('error' in other) && other.trackingNumber === row.trackingNumber).length > 1) throw new BadRequestException('Código de Correos repetido en el lote; corrige todas sus filas');
+        const order = await this.prisma.order.findUnique({ where: { id: row.orderId } });
+        if (!order) throw new BadRequestException('Pedido CRONOX no encontrado');
+        if (!eligibleTrackingOrder({ ...order, trackingNumber: row.trackingNumber, shippingCarrier: 'Correos' })) throw new BadRequestException('Pedido no apto para envío: revisa estado, compra presencial o recogida');
+        const duplicate = await this.prisma.order.findFirst({ where: { id: { not: row.orderId }, shippingCarrier: { equals: 'Correos', mode: 'insensitive' }, trackingNumber: { equals: row.trackingNumber, mode: 'insensitive' } }, select: { id: true } });
+        if (duplicate) throw new ConflictException(`Código ya asociado al pedido CRONOX #${duplicate.id}`);
+        const changed = order.trackingNumber !== row.trackingNumber || order.shippingCarrier?.toLowerCase() !== 'correos';
+        if (changed && order.trackingNumber) throw new ConflictException('Conservado el seguimiento existente. Para sustituirlo usa Gestionar pedido');
+        if (!preview && row.revision !== order.trackingRevision) throw new ConflictException('El pedido cambió desde la vista previa. Valida otra vez');
+        if (!preview && changed) await this.updateOrderFulfillment(row.orderId, { trackingNumber: row.trackingNumber,
+          shippingCarrier: 'Correos', trackingRevision: order.trackingRevision }, actorId);
+        results.push({ index: row.index, orderId: row.orderId, trackingNumber: row.trackingNumber,
+          revision: order.trackingRevision, status: changed ? (preview ? 'valid' : 'updated') : 'unchanged' });
+      } catch (error) {
+        results.push({ index: row.index, orderId: row.orderId, status: 'error', error: (error as { code?: string }).code === 'P2002' ? 'Código asociado por otra operación; vuelve a validar' : trackingBatchError(error) });
+      }
+    }
+    return { preview, results };
   }
 
   async updateOrderFulfillment(id: number, dto: UpdateOrderFulfillmentDto, actorId?: number) {
@@ -157,7 +197,7 @@ export class AdminOrdersService {
 
     const { updated, previous } = await this.prisma.$transaction(async (tx) => {
       const trackingEdit = dto.trackingNumber !== undefined || dto.shippingCarrier !== undefined;
-      if (trackingEdit) {
+      if (trackingEdit || hadExplicitStatus) {
         // Serialize corrections with synchronizers and label uploads on this Order.
         await tx.$queryRaw`SELECT "id" FROM "Order" WHERE "id" = ${id} FOR UPDATE`;
       }
@@ -211,6 +251,19 @@ export class AdminOrdersService {
         const nextNumber = isCorreos ? normalizeCorreosTrackingNumber(rawNumber) : rawNumber?.trim() || null;
         const carrierChanged = (carrier.toLowerCase() || 'correos') !== ((existing.shippingCarrier ?? 'Correos').trim().toLowerCase() || 'correos');
         const numberChanged = nextNumber !== existing.trackingNumber;
+        if (nextNumber && (numberChanged || carrierChanged) && !eligibleTrackingOrder({ ...existing, trackingNumber: nextNumber, shippingCarrier: 'Correos' })) {
+          throw new BadRequestException('Este pedido no admite asociación de envíos: revisa estado, compra presencial o recogida');
+        }
+        if ((numberChanged || carrierChanged) && existing.trackingNumber &&
+            (dto.replaceTracking !== true || dto.trackingRevision !== existing.trackingRevision)) {
+          throw new ConflictException('Para sustituir o quitar un seguimiento confirma la sustitución y su revisión actual');
+        }
+        if (isCorreos && nextNumber) {
+          await tx.$executeRaw`SELECT pg_advisory_xact_lock(824033, hashtext(${nextNumber}))`;
+          const duplicate = await tx.order.findFirst({ where: { id: { not: id },
+            shippingCarrier: { equals: 'Correos', mode: 'insensitive' }, trackingNumber: { equals: nextNumber, mode: 'insensitive' } }, select: { id: true } });
+          if (duplicate) throw new ConflictException(`Ese seguimiento ya está asociado al pedido CRONOX #${duplicate.id}`);
+        }
         if (dto.trackingNumber !== undefined || nextNumber !== existing.trackingNumber) data.trackingNumber = nextNumber;
         if (isCorreos && nextNumber) data.shippingCarrier = 'Correos';
         if (numberChanged || carrierChanged) {
@@ -231,6 +284,10 @@ export class AdminOrdersService {
             trackingStateCode: null,
             trackingTerminalAt: null,
             trackingBaselineEstablished: false,
+            trackingAttachedAt: nextNumber ? new Date() : null,
+            trackingAdmissionLocalAt: null,
+            trackingDeliveryLocalAt: null,
+            trackingNotificationReview: null,
           });
           await tx.orderTrackingAudit.create({ data: {
             orderId: id,
@@ -261,6 +318,14 @@ export class AdminOrdersService {
       if (dto.internalNote !== undefined)
         data.internalNote = dto.internalNote ?? null;
 
+      if (hadExplicitStatus && targetStatus !== existing.status) {
+        const actor = actorId === undefined ? null : await tx.user.findUnique({ where: { id: actorId }, select: { identityUid: true } });
+        await tx.orderTrackingAudit.create({ data: { orderId: id, actorId: actorId ?? null,
+          actorIdentityUid: actor?.identityUid ?? null, previousNumber: existing.trackingNumber,
+          nextNumber: existing.trackingNumber, revision: existing.trackingRevision,
+          action: 'MANUAL_STATUS', previousStatus: existing.status, nextStatus: targetStatus } });
+      }
+
       if (
         hadExplicitStatus &&
         targetStatus === OrderStatus.SHIPPED &&
@@ -289,6 +354,10 @@ export class AdminOrdersService {
       await this.handlePromoUsageOnPaid(tx, existing, order);
 
       return { updated: order, previous: existing };
+    }).catch(error => {
+      if ((error as { code?: string }).code === 'P2002' && (dto.trackingNumber !== undefined || dto.shippingCarrier !== undefined))
+        throw new ConflictException('Ese código de Correos ya está asociado a otro pedido. Recarga y revisa la asociación');
+      throw error;
     });
 
     try {
@@ -531,6 +600,9 @@ export class AdminOrdersService {
       shippingCarrier: order.shippingCarrier,
       shippedAt: order.shippedAt?.toISOString() ?? null,
       deliveredAt: order.deliveredAt?.toISOString() ?? null,
+      trackingAdmissionLocalAt: order.trackingAdmissionLocalAt,
+      trackingDeliveryLocalAt: order.trackingDeliveryLocalAt,
+      trackingNotificationReview: order.trackingNotificationReview,
       internalNote: order.internalNote,
       total: this.formatMoney(order.total),
       subtotal: this.formatMoney(order.subtotal),
@@ -577,6 +649,9 @@ export class AdminOrdersService {
       status: order.status,
       paymentStatus: this.getPaymentStatus(order.status),
       fulfillmentStatus: this.getFulfillmentStatus(order),
+      trackingAdmissionLocalAt: order.trackingAdmissionLocalAt,
+      trackingDeliveryLocalAt: order.trackingDeliveryLocalAt,
+      trackingNotificationReview: order.trackingNotificationReview,
       trackingNumber: order.trackingNumber,
       trackingUrl: order.trackingUrl,
       trackingRevision: order.trackingRevision,

@@ -4,8 +4,9 @@ import { correosConfig, trackingInteger } from './correos.config';
 import { CorreosApiError, TrackpubClient } from './trackpub.client';
 import { TrackpubContract } from './trackpub.contract';
 import { TrackingRequestGate } from './tracking-request-gate';
-import { buildCorreosTrackingUrl } from './tracking-links';
+import { buildCorreosTrackingUrl, trackingBatchError } from './tracking-links';
 import { randomUUID } from 'node:crypto';
+import { fulfillmentEvidence, shippedNoticeDecision } from './fulfillment-policy';
 
 export function eligibleTrackingOrder(order: { trackingNumber: string | null; shippingCarrier: string | null; status: string; source: string; shippingMethodCode: string | null }): boolean {
   return Boolean(order.trackingNumber && /^correos$/i.test(order.shippingCarrier?.trim() || '') &&
@@ -21,6 +22,8 @@ export class TrackingService {
   async getOrderTracking(id: number) {
     const order = await this.db.order.findUnique({ where: { id }, include: {
       shippingLabel: true, trackingAudits: { orderBy: { createdAt: 'desc' }, take: 50 },
+      trackingNotifications: { orderBy: { createdAt: 'desc' }, take: 20,
+        select: { status: true, category: true, attempts: true, createdAt: true } },
     } });
     if (!order) throw new NotFoundException('Pedido no encontrado');
     const events = await this.db.orderTrackingEvent.findMany({ where: { orderId: id, revision: order.trackingRevision },
@@ -29,6 +32,9 @@ export class TrackingService {
       revision: order.trackingRevision, number: order.trackingNumber,
       publicUrl: /^correos$/i.test(order.shippingCarrier?.trim() || '') ? buildCorreosTrackingUrl(order.trackingNumber) : order.trackingUrl,
       state: order.trackingState, stateCode: order.trackingStateCode,
+      admissionLocalAt: order.trackingAdmissionLocalAt, deliveryLocalAt: order.trackingDeliveryLocalAt,
+      notificationReview: order.trackingNotificationReview,
+      notifications: order.trackingNotifications || [],
       events: events.map(event => ({ id: event.id, occurredAt: event.eventTime, occurredLocalAt: event.eventLocalDate,
         code: event.code, description: event.label, category: event.category })),
       lastSuccessAt: order.trackingLastSuccessAt,
@@ -71,32 +77,63 @@ export class TrackingService {
         await tx.$queryRaw`SELECT id FROM "Order" WHERE id=${id} FOR UPDATE`;
         const current = await tx.order.findUniqueOrThrow({ where: { id } });
         if (current.trackingRevision !== claim.trackingRevision || current.trackingNumber !== claim.trackingNumber || current.trackingLeaseToken !== claim.token) return;
-        const previousLatest = await tx.orderTrackingEvent.findFirst({ where: { orderId: id, revision: claim.trackingRevision, eventSortKey: { not: null } }, orderBy: { eventSortKey: 'desc' } });
+        if (!eligibleTrackingOrder(current)) {
+          await tx.order.update({ where: { id }, data: { trackingLeaseToken: null, trackingLeaseUntil: null } });
+          return;
+        }
         for (const event of events) {
-          const exists = await tx.orderTrackingEvent.findUnique({ where: { orderId_revision_fingerprint: { orderId: id, revision: claim.trackingRevision, fingerprint: event.fingerprint } } });
-          const saved = await tx.orderTrackingEvent.upsert({ where: { orderId_revision_fingerprint: { orderId: id, revision: claim.trackingRevision, fingerprint: event.fingerprint } },
+          await tx.orderTrackingEvent.upsert({ where: { orderId_revision_fingerprint: { orderId: id, revision: claim.trackingRevision, fingerprint: event.fingerprint } },
             create: { ...event, orderId: id, revision: claim.trackingRevision }, update: { label: event.label, category: event.category } });
-          const afterBaseline = previousLatest?.eventSortKey
-            ? Boolean(event.eventSortKey && event.eventSortKey >= previousLatest.eventSortKey)
-            : event.fingerprint === events.filter(item => item.eventSortKey).at(-1)?.fingerprint;
-          if (!exists && current.trackingBaselineEstablished && eligibleTrackingOrder(current) && event.category && event.eventSortKey && afterBaseline) {
-            await tx.orderTrackingNotification.createMany({ data: [{ orderId: id, revision: claim.trackingRevision, eventId: saved.id, category: event.category }], skipDuplicates: true });
+        }
+        const history = await tx.orderTrackingEvent.findMany({ where: { orderId: id, revision: claim.trackingRevision } });
+        const evidence = fulfillmentEvidence(history as typeof events);
+        const fulfillment: Record<string, unknown> = {};
+        const transition = ['PAID', 'PROCESSING'].includes(current.status) && evidence.physical;
+        if (transition || current.status === 'SHIPPED' && evidence.delivered) {
+          const status = evidence.delivered ? 'DELIVERED' : 'SHIPPED';
+          fulfillment.status = status;
+          await tx.orderTrackingAudit.create({ data: { orderId: id, revision: claim.trackingRevision,
+            previousNumber: current.trackingNumber, nextNumber: current.trackingNumber,
+            action: 'CORREOS_FULFILLMENT', previousStatus: current.status, nextStatus: status } });
+        }
+        // A missing admission timestamp is never replaced with our query time.
+        if (!current.shippedAt && evidence.admission?.eventTime) fulfillment.shippedAt = evidence.admission.eventTime;
+        if (!current.deliveredAt && evidence.delivery?.eventTime) fulfillment.deliveredAt = evidence.delivery.eventTime;
+        if (!current.trackingAdmissionLocalAt && evidence.admission?.eventLocalDate) fulfillment.trackingAdmissionLocalAt = evidence.admission.eventLocalDate;
+        if (!current.trackingDeliveryLocalAt && evidence.delivery?.eventLocalDate) fulfillment.trackingDeliveryLocalAt = evidence.delivery.eventLocalDate;
+        if (transition) {
+          const cutoff = await tx.correosTrackingGate.findUnique({ where: { key: 'SHIPPED_EMAIL_CUTOFF' } });
+          const review = evidence.delivered ? 'ALREADY_DELIVERED_AT_FIRST_SYNC' : shippedNoticeDecision(evidence.admission, cutoff?.notBefore || null, current);
+          fulfillment.trackingNotificationReview = review;
+          if (!review) {
+            const admitted = history.find(e => e.fingerprint === evidence.admission!.fingerprint)!;
+            await tx.orderTrackingNotification.createMany({ data: [{ orderId: id, revision: claim.trackingRevision,
+              eventId: admitted.id, category: 'SHIPPED' }], skipDuplicates: true });
           }
         }
         const latest = await tx.orderTrackingEvent.findFirst({ where: { orderId: id, revision: claim.trackingRevision, eventSortKey: { not: null } }, orderBy: [{ eventSortKey: 'desc' }, { createdAt: 'desc' }] });
-        const terminal = latest && ['DELIVERED', 'RETURNED'].includes(latest.category || '');
+        const rank: Record<string, number> = { ADMITTED: 1, IN_TRANSIT: 2, OUT_FOR_DELIVERY: 3, DELIVERED: 4 };
+        const phase = [...history].filter(e => rank[e.category || '']).sort((a, b) =>
+          rank[b.category!] - rank[a.category!] || (b.eventSortKey || '').localeCompare(a.eventSortKey || ''))[0];
+        const display = latest && ['INCIDENT', 'RETURNED'].includes(latest.category || '') ? latest : phase || latest;
+        const terminal = evidence.delivered || latest && latest.category === 'RETURNED';
         await tx.order.update({ where: { id }, data: {
+          ...fulfillment,
           trackingLastSuccessAt: new Date(), trackingLastErrorCode: null, trackingLastErrorAt: null, trackingFailures: 0,
           trackingLeaseToken: null, trackingLeaseUntil: null,
           trackingNextSyncAt: new Date(Date.now() + (terminal ? Math.max(config.intervalMs, 86400000) : config.intervalMs)),
           trackingBaselineEstablished: true,
-          ...(latest ? { trackingState: latest.label, trackingStateCode: latest.code, trackingTerminalAt: terminal ? current.trackingTerminalAt || new Date() : null } : {}),
+          trackingTerminalAt: terminal ? current.trackingTerminalAt || new Date() : current.trackingTerminalAt,
+          ...(display && current.status !== 'DELIVERED' && !evidence.delivered ? {
+            trackingState: evidence.physical || display.category === 'INCIDENT' || display.category === 'RETURNED'
+              ? display.label : 'Pendiente de entregar a Correos', trackingStateCode: display.code } : {}),
+          ...(evidence.delivered ? { trackingState: 'Entregado', trackingStateCode: evidence.delivery?.code || 'I010000V' } : {}),
         } });
       });
     } catch (error) {
       const safe = error instanceof CorreosApiError ? error : new CorreosApiError('SYNC_FAILED');
       const attempt = Math.min(claim.trackingFailures + 1, 12);
-      const backoff = Math.min(86400000, 60000 * 2 ** Math.min(attempt - 1, 10));
+      const backoff = Math.min(86400000, 60000 * 2 ** Math.min(attempt - 1, 11));
       await this.db.order.updateMany({ where: { id, trackingRevision: claim.trackingRevision, trackingNumber: claim.trackingNumber, trackingLeaseToken: claim.token }, data: {
         trackingLastErrorCode: safe.code, trackingLastErrorAt: new Date(), trackingFailures: attempt,
         trackingLeaseToken: null, trackingLeaseUntil: null,
@@ -119,5 +156,31 @@ export class TrackingService {
         { OR: [{ trackingTerminalAt: null }, { trackingTerminalAt: { gt: correctionWindow } }] } ],
     }, orderBy: { trackingNextSyncAt: { sort: 'asc', nulls: 'first' } }, take: correosConfig().concurrency });
     await Promise.allSettled(candidates.map(order => this.syncOrder(order.id, false)));
+  }
+
+  async syncBulk(orderIds: unknown[]) {
+    if (!Array.isArray(orderIds) || !orderIds.length || orderIds.length > 100) throw new BadRequestException('Selecciona entre 1 y 100 pedidos visibles');
+    const results: Record<string, unknown>[] = [];
+    const seen = new Set<number>();
+    // Sequential on purpose: the shared request gate enforces process-wide quotas.
+    for (const id of orderIds) {
+      try {
+        if (typeof id !== 'number' || !Number.isSafeInteger(id) || id < 1 || seen.has(id)) throw new BadRequestException('ID de pedido inválido o repetido');
+        seen.add(id);
+        const before = await this.db.order.findUnique({ where: { id } });
+        if (!before) throw new NotFoundException('Pedido no encontrado');
+        const countBefore = await this.db.orderTrackingEvent.count({ where: { orderId: id, revision: before.trackingRevision } });
+        await this.syncOrder(id);
+        const after = await this.db.order.findUniqueOrThrow({ where: { id } });
+        const countAfter = await this.db.orderTrackingEvent.count({ where: { orderId: id, revision: after.trackingRevision } });
+        const changed = before.status !== after.status || before.trackingStateCode !== after.trackingStateCode ||
+          before.trackingState !== after.trackingState || before.trackingAdmissionLocalAt !== after.trackingAdmissionLocalAt ||
+          before.trackingDeliveryLocalAt !== after.trackingDeliveryLocalAt || countAfter !== countBefore;
+        results.push({ orderId: id, status: changed ? 'updated' : 'unchanged', orderStatus: after.status, notificationReview: after.trackingNotificationReview });
+      } catch (error) {
+        results.push({ orderId: id, status: 'error', error: trackingBatchError(error) });
+      }
+    }
+    return { results };
   }
 }

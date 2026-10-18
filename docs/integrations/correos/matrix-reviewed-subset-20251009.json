@@ -128,6 +128,61 @@
       "des_visible03": "S",
       "des_resumenes": "Tiempo de recogida finalizado en PUDO",
       "des_es03": "El periodo de recogida del envío en el punto de conveniencia seleccionado ha finalizado y se procederá a su devolución a origen."
+    },
+    {
+      "cod_unico": "A050000V",
+      "des_fase": "2",
+      "fase": "2EN CAMINO / IN TRANSIT",
+      "des_visible03": "S",
+      "des_resumenes": "Admitido",
+      "des_es03": "El envío ha tenido admisión en origen",
+      "cod_evento2": "A-E-005"
+    },
+    {
+      "cod_unico": "A050020V",
+      "des_fase": "2",
+      "fase": "2EN CAMINO / IN TRANSIT",
+      "des_visible03": "S",
+      "des_resumenes": "Admitido en Centro Logístico",
+      "des_es03": "El envío  ha tenido admisión en el centro logístico de origen",
+      "cod_evento2": "A-E-005"
+    },
+    {
+      "cod_unico": "C010000V",
+      "des_fase": "2",
+      "fase": "2EN CAMINO / IN TRANSIT",
+      "des_visible03": "S",
+      "des_resumenes": "Salida de oficina de cambio",
+      "des_es03": "El envío ha salido del centro logístico internacional de origen  y se ha cursado a destino",
+      "cod_evento2": "C-E-001"
+    },
+    {
+      "cod_unico": "E020000V",
+      "des_fase": "2",
+      "fase": "2EN CAMINO / IN TRANSIT",
+      "des_visible03": "S",
+      "des_resumenes": "Finalizada tramitación aduanera",
+      "des_es03": "Finalizada tramitación de importación, envío en curso hacía el destinatario",
+      "cod_evento2": "F-E-002"
+    },
+    {
+      "cod_unico": "F010000V",
+      "des_fase": "2",
+      "fase": "2EN CAMINO / IN TRANSIT",
+      "des_visible03": "S",
+      "des_resumenes": "Salida de oficina de cambio de destino",
+      "des_es03": "El envío ha salido de la centro logístico internacional de destino para su entrega",
+      "cod_evento2": "F-E-001"
+    },
+    {
+      "cod_unico": "G010000V",
+      "des_fase": "3",
+      "fase": "3EN ENTREGA / IN DELIVERY",
+      "des_visible03": "S",
+      "des_resumenes": "Alta en la unidad de reparto",
+      "des_es03": "El envío ha entrado en la unidad responsable de su entrega",
+      "cod_evento2": "G-E-001"
     }
-  ]
+  ],
+  "reverifiedOn": "2026-10-18"
 }

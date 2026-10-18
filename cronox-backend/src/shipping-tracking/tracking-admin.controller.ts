@@ -1,4 +1,5 @@
-import { Controller, Get, Param, ParseIntPipe, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, ParseIntPipe, Post, UseGuards } from '@nestjs/common';
+import { TrackingBulkSyncDto } from '../admin/orders/dto/tracking-bulk.dto';
 import { Role } from '@prisma/client';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { AdminGuard } from '../common/guards/admin.guard';
@@ -13,6 +14,8 @@ import { TrackingService } from './tracking.service';
 @Roles(Role.SUPERADMIN)
 export class TrackingAdminController {
   constructor(private readonly tracking: TrackingService) {}
+  @Post('tracking-bulk/sync')
+  bulkSync(@Body() dto: TrackingBulkSyncDto) { return this.tracking.syncBulk(dto.orderIds); }
   @Get(':id/tracking')
   get(@Param('id', ParseIntPipe) id: number) { return this.tracking.getOrderTracking(id); }
   @Post(':id/tracking/sync')

@@ -119,6 +119,12 @@ export class EmailService {
           custom = null;
         }
       }
+      if (options.type === EmailType.ORDER_TRACKING && custom) {
+        const required = [data.orderId, data.trackingNumber, 'Correos'];
+        const link = Handlebars.escapeExpression(String(data.trackingUrl || ''));
+        if (!link || !custom.html.includes(`href="${link}"`) ||
+            required.some(value => !value || !custom!.html.includes(Handlebars.escapeExpression(String(value))))) custom = null;
+      }
       let html = custom?.html || (await this.renderTemplate(template, data));
       if (options.purpose === 'NEWSLETTER_ACCESS' && data.initialPassword &&
           !html.includes(Handlebars.escapeExpression(String(data.passwordMessage)))) {
@@ -132,7 +138,7 @@ export class EmailService {
       const info = (await this.transportFactory
         .sendMail(senderKey, {
           to: options.to,
-          subject: options.purpose === 'NEWSLETTER_ACCESS' ? options.subject : custom?.subject || options.subject,
+          subject: options.type === EmailType.ORDER_TRACKING || options.purpose === 'NEWSLETTER_ACCESS' ? options.subject : custom?.subject || options.subject,
           html,
           ...(custom ? { text: custom.text } : {}),
         }, options.purpose || options.type, ...(options.type === EmailType.ORDER_TRACKING ? [options.deliveryDeadline ?? Date.now() + 20000] : []))) as { messageId: string; accepted?: unknown[]; queued?: boolean };

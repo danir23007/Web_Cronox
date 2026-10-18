@@ -1552,6 +1552,10 @@ model Order {
   trackingStateCode     String?
   trackingTerminalAt    DateTime?
   trackingBaselineEstablished Boolean           @default(false)
+  trackingAttachedAt   DateTime?
+  trackingAdmissionLocalAt String?
+  trackingDeliveryLocalAt String?
+  trackingNotificationReview String?
   trackingEvents       OrderTrackingEvent[]
   trackingAudits       OrderTrackingAudit[]
   trackingNotifications OrderTrackingNotification[]
@@ -1640,6 +1644,9 @@ model OrderTrackingAudit {
   previousNumber String?
   nextNumber String?
   revision   Int
+  action     String?
+  previousStatus String?
+  nextStatus String?
   createdAt  DateTime @default(now()) @db.Timestamptz(3)
 
   @@index([orderId, createdAt])

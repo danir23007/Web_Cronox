@@ -3,7 +3,7 @@ import { createHash } from 'node:crypto';
 import { CorreosApiError } from './trackpub.client';
 import { CORREOS_EVENT_CODES } from './correos-event-codes';
 
-export type TrackingCategory = 'ADMITTED' | 'OUT_FOR_DELIVERY' | 'DELIVERED' | 'RETURNED' | 'INCIDENT';
+export type TrackingCategory = 'ADMITTED' | 'IN_TRANSIT' | 'OUT_FOR_DELIVERY' | 'DELIVERED' | 'RETURNED' | 'INCIDENT';
 export type TrackingEvent = {
   fingerprint: string; eventTime: Date | null; eventLocalDate: string | null;
   eventSortKey: string | null; code: string | null; label: string | null; category: TrackingCategory | null;

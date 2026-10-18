@@ -245,6 +245,8 @@ export class MeService {
         source: true,
         shippedAt: true,
         deliveredAt: true,
+        trackingAdmissionLocalAt: true,
+        trackingDeliveryLocalAt: true,
       },
     });
 
@@ -264,6 +266,8 @@ export class MeService {
       shippingRequired: order.source !== 'IN_PERSON_ADMIN' && !['LOCAL_PICKUP', 'PICKUP'].includes(order.shippingMethodCode || ''),
       shippedAt: order.shippedAt,
       deliveredAt: order.deliveredAt,
+      trackingAdmissionLocalAt: order.trackingAdmissionLocalAt,
+      trackingDeliveryLocalAt: order.trackingDeliveryLocalAt,
     }));
   }
 

@@ -27,7 +27,9 @@ describe('Correos tracking without an optional PDF label', () => {
     };
     const db: any = {
       $queryRaw: jest.fn(async () => [{ id: 9 }]),
+      $executeRaw: jest.fn(async () => 1),
       order: {
+        findFirst: jest.fn(async () => null),
         findUnique: jest.fn(async () => ({ ...order })),
         findUniqueOrThrow: jest.fn(async () => ({ ...order })),
         update: jest.fn(async ({ data }) => { Object.assign(order, data); return { ...order }; }),

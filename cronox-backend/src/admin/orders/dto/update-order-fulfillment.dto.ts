@@ -5,6 +5,7 @@ import {
   IsString,
   IsUrl,
   IsInt,
+  IsBoolean,
   Min,
   MaxLength,
   ValidateIf,
@@ -21,6 +22,9 @@ const trimOrUndefined = ({ value }: { value: unknown }) => {
 };
 
 export class UpdateOrderFulfillmentDto {
+  @IsOptional()
+  @IsBoolean()
+  replaceTracking?: boolean;
   @IsOptional()
   @IsEnum(OrderStatus)
   status?: OrderStatus;

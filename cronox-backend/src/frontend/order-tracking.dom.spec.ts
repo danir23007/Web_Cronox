@@ -28,6 +28,7 @@ const setupAdmin = (tracking: Record<string, unknown> = trackingFixture()) => {
   const dom = new JSDOM(read('admin.html'), { runScripts: 'outside-only', url: 'https://fixture.test/admin.html' });
   const win = dom.window as any;
   win.CRONOX_API = { API_BASE: '', getCsrfHeaders: async () => ({ 'x-csrf-token': 'fixture' }) };
+  win.confirm = jest.fn(() => true);
   win.CRONOX_SECURITY = { externalHttpUrl: (value: string) => /^https?:\/\//.test(value || '') ? value : '' };
   win.fetch = jest.fn(async (url: string, _options: unknown) => ({
     ok: true, status: 200,
