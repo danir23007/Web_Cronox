@@ -8,6 +8,20 @@ import install
 
 
 class BootstrapTests(unittest.TestCase):
+    @unittest.skipUnless(os.name == 'posix', 'Linux permission modes')
+    def test_private_umask_keeps_code_traversable_and_configuration_private(self):
+        with tempfile.TemporaryDirectory() as d:
+            lib, cfg, state = (Path(d, name) for name in ('lib', 'cfg', 'state'))
+            previous = os.umask(0o077)
+            try:
+                with patch.object(install, 'LIB', lib), patch.object(install, 'CFG', cfg), patch.object(install, 'STATE', state):
+                    install.make_installation_directories()
+                self.assertEqual(lib.stat().st_mode & 0o777, 0o755)
+                self.assertEqual(cfg.stat().st_mode & 0o777, 0o700)
+                self.assertEqual(state.stat().st_mode & 0o777, 0o700)
+            finally:
+                os.umask(previous)
+
     def test_main_sudoers_preserves_all_unrelated_bytes(self):
         prefix = b'# admin policy\r\nDefaults env_reset\r\nroot ALL=(ALL:ALL) ALL\r\n'
         grant = b'deploy ALL=(root) NOPASSWD: /usr/bin/pm2 restart cronox, /usr/bin/pm2 save\r\n'

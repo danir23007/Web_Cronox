@@ -217,6 +217,15 @@ def preflight():
     return app, sudo_files
 
 
+def make_installation_directories():
+    for path in (LIB, CFG, STATE):
+        mode = 0o755 if path == LIB else 0o700
+        path.mkdir(mode=mode)
+        # The installer deliberately uses umask 077. Explicitly restore traversal
+        # for public root-owned code, while configuration and evidence stay private.
+        path.chmod(mode)
+
+
 def install():
     import pwd
     app, sudo_files = preflight()
@@ -233,8 +242,7 @@ def install():
                 'LD_PRELOAD', 'LD_LIBRARY_PATH', 'PYTHONPATH', 'PYTHONHOME', 'NODE_OPTIONS'):
         environment.pop(key, None)
     environment.update(HOST='127.0.0.1', CRONOX_LOCAL_DEV='false', CRONOX_ROUTE_SMOKE_MODE='false')
-    for path in (LIB, CFG, STATE):
-        path.mkdir(mode=0o700 if path != LIB else 0o755)
+    make_installation_directories()
     (STATE / 'bootstrap').mkdir(mode=0o700)
     backup = STATE / 'bootstrap'
     (backup / 'identity-before.json').write_text(json.dumps(before))
