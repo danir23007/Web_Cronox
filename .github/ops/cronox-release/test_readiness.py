@@ -5,32 +5,26 @@ from controller import Refused
 
 
 class ReadinessTests(unittest.TestCase):
-    def test_temporary_server_is_never_queried_even_if_it_would_accept_connections(self):
+    def test_temporary_server_accepting_connections_does_not_pass_readiness(self):
         class Runtime:
             def __init__(self):
                 self.polls = 0
-                self.sql = 0
             def command(self, args, **kwargs):
-                if 'cat' in args:
-                    self.polls += 1
-                    return b'bash\n' if self.polls < 3 else b'postgres\n'
-                assert self.polls == 3
                 if 'psql' in args:
-                    self.sql += 1
-                    return b'1\n'
+                    assert 'BEGIN READ ONLY' in args[-1]
+                    assert "pg_read_file('postmaster.pid')" in args[-1]
+                    self.polls += 1
+                    return b'52\n' if self.polls < 3 else b'1\n'
                 return b'accepting connections\n'
         rt = Runtime()
         with patch('backup.time.sleep'):
             wait_for_final_postgres(rt, 'synthetic')
         self.assertEqual(rt.polls, 3)
-        self.assertEqual(rt.sql, 1)
 
     def test_final_server_must_also_pass_authenticated_query(self):
         class Runtime:
             attempts = 0
             def command(self, args, **kwargs):
-                if 'cat' in args:
-                    return b'postgres\n'
                 if 'psql' in args:
                     self.attempts += 1
                     if self.attempts == 1:
@@ -42,11 +36,10 @@ class ReadinessTests(unittest.TestCase):
             wait_for_final_postgres(rt, 'synthetic')
         self.assertEqual(rt.attempts, 2)
 
-    def test_unknown_pid_one_times_out_without_running_sql(self):
+    def test_missing_or_nonfinal_postmaster_pid_times_out(self):
         class Runtime:
             def command(self, args, **kwargs):
-                assert 'cat' in args
-                return b'unknown-wrapper\n'
+                return b'52\n' if 'psql' in args else b''
         with patch('backup.time.monotonic', side_effect=[0, 0, 121]), patch('backup.time.sleep'):
             with self.assertRaisesRegex(Refused, 'FINAL_POSTGRES_START_TIMEOUT'):
                 wait_for_final_postgres(Runtime(), 'synthetic')

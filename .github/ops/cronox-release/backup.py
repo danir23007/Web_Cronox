@@ -17,14 +17,15 @@ def wait_for_final_postgres(rt, container, timeout=120):
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
         try:
-            process = rt.command(['/usr/bin/docker', 'exec', container, 'cat', '/proc/1/comm'], timeout=5)
-            if process.strip() == b'postgres':
-                rt.command(['/usr/bin/docker', 'exec', container, 'pg_isready',
-                            '-h', '/var/run/postgresql', '-U', 'supabase_admin', '-d', 'postgres'], timeout=5)
-                ready = rt.command(['/usr/bin/docker', 'exec', container, 'psql', '-X', '-w', '-qAt',
-                    '-h', '/var/run/postgresql', '-U', 'supabase_admin', '-d', 'postgres',
-                    '-v', 'ON_ERROR_STOP=1', '-c', 'SELECT 1;'], timeout=5)
-                require(ready.strip() == b'1', 'RESTORE_SERVER_PROBE_FAILED')
+            rt.command(['/usr/bin/docker', 'exec', container, 'pg_isready',
+                        '-h', '/var/run/postgresql', '-U', 'supabase_admin', '-d', 'postgres'], timeout=5)
+            # Read the postmaster PID of the server serving this authenticated connection.
+            # Supabase wraps the executable, so /proc/1/comm is not necessarily "postgres".
+            ready = rt.command(['/usr/bin/docker', 'exec', container, 'psql', '-X', '-w', '-qAt',
+                '-h', '/var/run/postgresql', '-U', 'supabase_admin', '-d', 'postgres',
+                '-v', 'ON_ERROR_STOP=1', '-c',
+                "BEGIN READ ONLY; SELECT split_part(pg_read_file('postmaster.pid'), chr(10), 1); COMMIT;"], timeout=5)
+            if ready.strip() == b'1':
                 return
         except Refused:
             pass
