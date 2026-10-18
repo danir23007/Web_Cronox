@@ -144,6 +144,9 @@ class Runtime:
                 os.setuid(self.user.pw_uid)
         elif env:
             actual_env.update(env)
+        # PM2 IPC descriptors belong to the original child, never to a new CLI.
+        for key in ('NODE_CHANNEL_FD', 'NODE_CHANNEL_SERIALIZATION_MODE', 'NODE_UNIQUE_ID'):
+            actual_env.pop(key, None)
         with open(self.folder / 'private.log', 'ab') as log, contextlib.ExitStack() as stack:
             stdout = stack.enter_context(open(output, 'xb')) if output else subprocess.PIPE
             result = subprocess.run(args, input=input, stdout=stdout, stderr=log,

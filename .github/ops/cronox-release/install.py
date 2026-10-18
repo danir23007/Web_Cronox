@@ -250,7 +250,8 @@ def install():
     environment = dict(item.split('=', 1) for item in Path('/proc/%d/environ' % app['pid']).read_text().split('\0') if '=' in item)
     # Environment stays private; PM2_HOME and privileged interpreter controls are not inherited.
     for key in ('PM2_HOME', 'HOME', 'USER', 'LOGNAME', 'SUDO_USER', 'SUDO_UID', 'SUDO_GID',
-                'LD_PRELOAD', 'LD_LIBRARY_PATH', 'PYTHONPATH', 'PYTHONHOME', 'NODE_OPTIONS'):
+                'LD_PRELOAD', 'LD_LIBRARY_PATH', 'PYTHONPATH', 'PYTHONHOME', 'NODE_OPTIONS',
+                'NODE_CHANNEL_FD', 'NODE_CHANNEL_SERIALIZATION_MODE', 'NODE_UNIQUE_ID'):
         environment.pop(key, None)
     environment.update(HOST='127.0.0.1', CRONOX_LOCAL_DEV='false', CRONOX_ROUTE_SMOKE_MODE='false')
     make_installation_directories()
