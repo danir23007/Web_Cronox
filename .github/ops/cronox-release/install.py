@@ -12,6 +12,9 @@ import sys
 import time
 import configparser
 import signal
+import re
+import tempfile
+import traceback
 from urllib.parse import urlparse, unquote
 
 HERE = Path(__file__).resolve().parent
@@ -89,28 +92,81 @@ def root_owned(p):
         require(st.st_uid == 0 and not st.st_mode & 0o022 and not part.is_symlink())
 
 
-def old_sudo_files():
-    matches = []
-    for path in Path('/etc/sudoers.d').iterdir():
-        if path.is_file() and not path.name.startswith('.'):
-            text = path.read_text()
-            lines = [s.strip() for s in text.splitlines() if s.strip() and not s.lstrip().startswith('#')]
-            if not any('pm2' in s and 'deploy' in s for s in lines):
-                continue
-            # Fail closed on a mixed/custom policy. No editing arbitrary sudoers rules.
-            allowed = {
+def sudo_policy_files():
+    # Use the files actually parsed by sudo, including /etc/sudoers itself.
+    output = run(['/usr/sbin/visudo', '-c']).decode()
+    files = [Path(p) for p in re.findall(r'^(/.+): parsed OK$', output, re.M)]
+    require(files and Path('/etc/sudoers') in files)
+    for path in files:
+        root_owned(path)
+    return files
+
+
+def remove_known_pm2_rules(original, main_file=False):
+    lines = original.decode('utf8').splitlines(keepends=True)
+    allowed = {
                 'deploy ALL=(root) NOPASSWD: /usr/bin/pm2 restart cronox, /usr/bin/pm2 save',
                 'deploy ALL=(ALL) NOPASSWD: /usr/bin/pm2 restart cronox, /usr/bin/pm2 save',
                 'deploy ALL=(root) NOPASSWD: /usr/bin/pm2 restart cronox',
                 'deploy ALL=(root) NOPASSWD: /usr/bin/pm2 save',
                 'deploy ALL=(ALL) NOPASSWD: /usr/bin/pm2 restart cronox',
                 'deploy ALL=(ALL) NOPASSWD: /usr/bin/pm2 save',
-            }
-            require(all(s in allowed for s in lines))
-            root_owned(path)
-            matches.append(path)
-    require(matches)
-    return matches
+    }
+    remove = []
+    for index, line in enumerate(lines):
+        text = line.strip()
+        if not text or text.startswith('#'):
+            continue
+        if 'pm2' in text and 'deploy' in text:
+            require(text in allowed)
+            require(index == 0 or not lines[index - 1].rstrip().endswith('\\'))
+            remove.append(index)
+        elif not main_file and any('pm2' in s and 'deploy' in s and not s.lstrip().startswith('#') for s in lines):
+            # Keep the original conservative policy for dedicated included files.
+            raise RuntimeError('MIXED_SUDO_POLICY')
+    return ''.join(line for index, line in enumerate(lines) if index not in remove).encode('utf8'), len(remove)
+
+
+def old_sudo_files():
+    plans = []
+    policies = sudo_policy_files()
+    require(any(line.strip() in ('@includedir /etc/sudoers.d', '#includedir /etc/sudoers.d')
+                for path in policies for line in path.read_text().splitlines()))
+    for path in policies:
+        original = path.read_bytes()
+        remaining, count = remove_known_pm2_rules(original, main_file=path == Path('/etc/sudoers'))
+        if count:
+            plans.append({'path': path, 'before': original, 'after': remaining})
+    require(plans)
+    return plans
+
+
+def replace_sudo_policy(plan, apply=True):
+    path = plan['path']
+    root_owned(path)
+    require(path.read_bytes() == plan['before'])
+    stat = path.stat()
+    fd, name = tempfile.mkstemp(prefix='.cronox-sudoers-', dir=path.parent)
+    candidate = Path(name)
+    try:
+        with os.fdopen(fd, 'wb') as stream:
+            os.fchmod(stream.fileno(), stat.st_mode & 0o777)
+            os.fchown(stream.fileno(), stat.st_uid, stat.st_gid)
+            stream.write(plan['after'])
+            stream.flush()
+            os.fsync(stream.fileno())
+        run(['/usr/sbin/visudo', '-cf', str(candidate)])
+        require(path.read_bytes() == plan['before'])
+        if not apply:
+            return
+        os.replace(candidate, path)
+        directory = os.open(path.parent, os.O_RDONLY)
+        try:
+            os.fsync(directory)
+        finally:
+            os.close(directory)
+    finally:
+        candidate.unlink(missing_ok=True)
 
 
 def preflight():
@@ -154,6 +210,8 @@ def preflight():
             and unquote(db.username or '') == service['user']
             and unquote(db.path.lstrip('/')) == service['dbname'])
     sudo_files = old_sudo_files()
+    for plan in sudo_files:
+        replace_sudo_policy(plan, apply=False)
     run(['/usr/sbin/visudo', '-cf', str(HERE / 'sudoers')])
     require(run(['/usr/bin/ss', '-H', '-ltn', 'sport = :3000']).decode().split()[3] == '127.0.0.1:3000')
     return app, sudo_files
@@ -182,8 +240,10 @@ def install():
     (backup / 'identity-before.json').write_text(json.dumps(before))
     (backup / 'root-pm2.json').write_bytes(run(['/usr/bin/pm2', 'jlist']))
     shutil.copy2('/root/.pm2/dump.pm2', backup / 'root-pm2-dump.json')
-    for source in sudo_files:
-        shutil.copy2(source, backup / source.name)
+    for index, plan in enumerate(sudo_files):
+        (backup / ('sudo-policy-%02d.before' % index)).write_bytes(plan['before'])
+        (backup / ('sudo-policy-%02d.after' % index)).write_bytes(plan['after'])
+    (backup / 'sudo-policy-paths.json').write_text(json.dumps([str(p['path']) for p in sudo_files]))
     for file in FILES:
         shutil.copyfile(HERE / file, LIB / file)
         (LIB / file).chmod(0o644)
@@ -212,8 +272,8 @@ def install():
         require(not run(['/usr/bin/ss', '-H', '-ltn', 'sport = :3000']).strip())
         # Permanently stop root's daemon before granting the new restricted commands.
         run(['/usr/bin/systemctl', 'disable', '--now', 'pm2-root.service'])
-        for source in sudo_files:
-            source.unlink()
+        for plan in sudo_files:
+            replace_sudo_policy(plan)
         run(['/usr/sbin/visudo', '-c'])
 
         def demote():
@@ -284,8 +344,8 @@ def recover_transition():
 
 
 def old_pm2_grants_present():
-    return any('pm2' in p.read_text() and 'deploy' in p.read_text()
-               for p in Path('/etc/sudoers.d').iterdir() if p.is_file() and not p.name.startswith('.'))
+    return any('pm2' in line and 'deploy' in line and not line.lstrip().startswith('#')
+               for path in sudo_policy_files() for line in path.read_text().splitlines())
 
 
 def revoke():
@@ -318,6 +378,11 @@ if __name__ == '__main__':
             recover_transition()
         else:
             raise RuntimeError()
-    except BaseException:
+    except BaseException as error:
+        frames = [frame for frame in traceback.extract_tb(error.__traceback__)
+                  if frame.filename == __file__ and frame.name != 'require']
+        if frames:
+            frame = frames[-1]
+            print(json.dumps({'failedFunction': frame.name, 'line': frame.lineno}), file=sys.stderr)
         print('BOOTSTRAP_NOT_COMPLETED: inspect privately; do not rerun blindly', file=sys.stderr)
         sys.exit(1)
