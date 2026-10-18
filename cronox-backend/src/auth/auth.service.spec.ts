@@ -55,7 +55,7 @@ describe('AuthService password reset security', () => {
         create: jest.fn().mockResolvedValue({ id: 1 }),
       },
       user: {
-        findUnique: jest.fn().mockResolvedValue({ email: 'member@example.test' }),
+        findUnique: jest.fn().mockResolvedValue({ email: 'member@example.test', password: null }),
         update: jest.fn().mockResolvedValue({ id: 42 }),
         updateMany: jest.fn().mockResolvedValue({ count: 1 }),
       },
@@ -164,7 +164,7 @@ describe('AuthService password reset security', () => {
     emailService.isEnabled.mockReturnValue(true);
     emailService.sendInitialPasswordSetup.mockRejectedValue(Object.assign(new Error('unknown SMTP outcome'), { deliveryUnknown: true }));
     prisma.user.findUnique.mockResolvedValue({ id: 42, email: 'member@example.test', password: null });
-    await expect(service.sendInitialPasswordSetupIfNeeded(42)).resolves.toBe('uncertain');
+    await expect(service.sendInitialPasswordSetupIfNeeded(42, { scenario: 'NEW_ACCOUNT', orderId: 9 })).resolves.toBe('uncertain');
     expect(prisma.passwordResetToken.updateMany).not.toHaveBeenCalled();
     expect(prisma.user.updateMany).toHaveBeenLastCalledWith(expect.objectContaining({ data: expect.objectContaining({ passwordSetupEmailSentAt: expect.any(Date) }) }));
   });
@@ -230,7 +230,7 @@ describe('AuthService password reset security', () => {
 
   it('does not issue a queued reset link to a mailbox changed before token persistence', async () => {
     usersService.findByEmail.mockResolvedValue({ id: 42, email: 'old@example.test', accountState: UserAccountState.ACTIVE });
-    tx.user.findUnique.mockResolvedValue({ email: 'new@example.test' });
+    tx.user.findUnique.mockResolvedValue({ email: 'new@example.test', password: null });
     emailService.isEnabled.mockReturnValue(true);
     await service.requestPasswordReset('old@example.test');
     await new Promise<void>(resolve => setImmediate(resolve));
@@ -286,7 +286,7 @@ describe('AuthService password reset security', () => {
   });
 
   it('claims and sends one secure initial-password link for a passwordless account', async () => {
-    tx.user.findUnique.mockResolvedValue({ email: 'new@example.test' });
+    tx.user.findUnique.mockResolvedValue({ email: 'new@example.test', password: null });
     emailService.isEnabled.mockReturnValue(true);
     prisma.user.updateMany
       .mockResolvedValueOnce({ count: 1 })
@@ -298,8 +298,8 @@ describe('AuthService password reset security', () => {
       password: null,
     });
 
-    await service.sendInitialPasswordSetupIfNeeded(42);
-    await service.sendInitialPasswordSetupIfNeeded(42);
+    await service.sendInitialPasswordSetupIfNeeded(42, { scenario: 'NEW_ACCOUNT', orderId: 9 });
+    await service.sendInitialPasswordSetupIfNeeded(42, { scenario: 'NEW_ACCOUNT', orderId: 9 });
 
     expect(emailService.sendInitialPasswordSetup).toHaveBeenCalledTimes(1);
     const setupUrl = emailService.sendInitialPasswordSetup.mock.calls[0][1];
@@ -328,7 +328,7 @@ describe('AuthService password reset security', () => {
   });
 
   it('releases the setup-email claim without invalidating the account when delivery fails', async () => {
-    tx.user.findUnique.mockResolvedValue({ email: 'new@example.test' });
+    tx.user.findUnique.mockResolvedValue({ email: 'new@example.test', password: null });
     emailService.isEnabled.mockReturnValue(true);
     emailService.sendInitialPasswordSetup.mockRejectedValue(new Error('SMTP'));
     prisma.user.updateMany.mockResolvedValue({ count: 1 });
@@ -339,7 +339,7 @@ describe('AuthService password reset security', () => {
     });
 
     await expect(
-      service.sendInitialPasswordSetupIfNeeded(42),
+      service.sendInitialPasswordSetupIfNeeded(42, { scenario: 'NEW_ACCOUNT', orderId: 9 }),
     ).resolves.toBe('retry_required');
 
     expect(prisma.passwordResetToken.updateMany).toHaveBeenCalledWith(
@@ -370,7 +370,7 @@ describe('AuthService password reset security', () => {
     emailService.isEnabled.mockReturnValue(true);
     prisma.user.updateMany.mockResolvedValue({ count: 0 });
 
-    await service.sendInitialPasswordSetupIfNeeded(42);
+    await service.sendInitialPasswordSetupIfNeeded(42, { scenario: 'NEW_ACCOUNT', orderId: 9 });
 
     expect(prisma.user.findUnique).toHaveBeenCalled();
     expect(emailService.sendInitialPasswordSetup).not.toHaveBeenCalled();

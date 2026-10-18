@@ -11,12 +11,18 @@ describe('GuestOrderAccountService', () => {
     tx = {
       $executeRaw: jest.fn(),
       user: {
-        findUnique: jest.fn(),
+        findUnique: jest.fn().mockResolvedValue({ password: null }),
         findFirst: jest.fn(),
         create: jest.fn(),
       },
       address: { create: jest.fn() },
     };
+  });
+  it('records NOT_NEEDED for a pre-existing password, without writing credentials', async () => {
+    tx.user.findFirst.mockResolvedValue({ id: 41 }); tx.user.findUnique.mockResolvedValue({ password: 'existing-hash' });
+    await expect(service.resolveUserForCompletedOrder(tx, { userId: null, customerEmail: 'member@example.test', shippingAddr: null, billingAddr: null }))
+      .resolves.toMatchObject({ accountCreated: false, passwordSetupScenario: 'NOT_NEEDED' });
+    expect(tx.user.create).not.toHaveBeenCalled(); expect(tx.user.update).toBeUndefined();
   });
 
   it('preserves a long postal addressee without storing over-limit new account fields or touching existing accounts', async () => {
@@ -48,7 +54,7 @@ describe('GuestOrderAccountService', () => {
         },
         billingAddr: null,
       }),
-    ).resolves.toEqual({ userId: 41, accountCreated: false });
+    ).resolves.toEqual({ userId: 41, accountCreated: false, passwordSetupScenario: 'EXISTING_PASSWORDLESS' });
 
     expect(tx.user.findFirst).toHaveBeenCalledWith({
       where: {
@@ -69,7 +75,7 @@ describe('GuestOrderAccountService', () => {
         shippingAddr: null,
         billingAddr: null,
       }),
-    ).resolves.toEqual({ userId: 9, accountCreated: false });
+    ).resolves.toEqual({ userId: 9, accountCreated: false, passwordSetupScenario: 'EXISTING_PASSWORDLESS' });
 
     expect(tx.user.findFirst).not.toHaveBeenCalled();
     expect(tx.user.create).not.toHaveBeenCalled();
@@ -98,7 +104,7 @@ describe('GuestOrderAccountService', () => {
         },
         billingAddr: null,
       }),
-    ).resolves.toEqual({ userId: 72, accountCreated: true });
+    ).resolves.toEqual({ userId: 72, accountCreated: true, passwordSetupScenario: 'NEW_ACCOUNT' });
 
     expect(tx.user.create).toHaveBeenCalledWith({
       data: {
@@ -139,7 +145,7 @@ describe('GuestOrderAccountService', () => {
         shippingAddr: { firstName: 'Guest', country: 'France' },
         billingAddr: null,
       }),
-    ).resolves.toEqual({ userId: 73, accountCreated: true });
+    ).resolves.toEqual({ userId: 73, accountCreated: true, passwordSetupScenario: 'NEW_ACCOUNT' });
 
     expect(tx.address.create).not.toHaveBeenCalled();
   });

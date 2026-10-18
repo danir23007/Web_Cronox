@@ -1319,6 +1319,7 @@ export class OrdersService {
         if (created.status === OrderStatus.PAID) await tx.checkoutEffect.createMany({
           data: ['ANALYTICS', 'INITIAL_SETUP', 'ORDER_CONFIRMATION'].map(kind => ({
             checkoutSnapshotId: snapshot.id, orderId: created.id, userId: resolvedAccount.userId, kind,
+            accountScenario: kind === 'INITIAL_SETUP' ? ('passwordSetupScenario' in resolvedAccount ? resolvedAccount.passwordSetupScenario : null) : null,
           })), skipDuplicates: true,
         });
 

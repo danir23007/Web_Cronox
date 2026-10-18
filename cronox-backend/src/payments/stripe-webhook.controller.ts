@@ -281,7 +281,10 @@ export class StripeWebhookController {
     const order = await this.prisma.order.findUnique({ where: { id: effect.orderId }, ...orderForConfirmationEmailInclude });
     if (!order || ![OrderStatus.PAID, OrderStatus.PROCESSING, OrderStatus.SHIPPED, OrderStatus.DELIVERED].includes(order.status as any)) return 'not_needed';
     if (effect.kind === 'INITIAL_SETUP') {
-      return effect.userId == null ? 'not_needed' : this.authService.sendInitialPasswordSetupIfNeeded(effect.userId);
+      if (effect.userId == null || effect.userId !== order.userId ||
+          !['NEW_ACCOUNT', 'EXISTING_PASSWORDLESS'].includes(effect.accountScenario || '')) return 'not_needed';
+      return this.authService.sendInitialPasswordSetupIfNeeded(effect.userId,
+        { scenario: effect.accountScenario as 'NEW_ACCOUNT' | 'EXISTING_PASSWORDLESS', orderId: order.id });
     }
     if (effect.kind !== 'ORDER_CONFIRMATION') throw new Error('UNKNOWN_CHECKOUT_EFFECT');
     const snapshot = await this.prisma.checkoutSnapshot.findUniqueOrThrow({ where: { id: effect.checkoutSnapshotId } });

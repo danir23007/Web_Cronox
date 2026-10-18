@@ -35,7 +35,8 @@ describe('Correos tracking without an optional PDF label', () => {
         update: jest.fn(async ({ data }) => { Object.assign(order, data); return { ...order }; }),
       },
       orderTrackingAudit: { create: jest.fn(async () => ({})) },
-      orderTrackingNotification: { updateMany: jest.fn(async () => ({ count: 0 })) },
+      correosTrackingGate: { findUnique: jest.fn(async () => ({ notBefore: new Date(0) })) },
+      orderTrackingNotification: { findMany: jest.fn(async () => []), updateMany: jest.fn(async () => ({ count: 0 })) },
       orderTrackingEvent: {
         findFirst: jest.fn(async () => null),
         findMany: jest.fn(async () => []),

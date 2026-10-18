@@ -1,5 +1,7 @@
 # Correos: admisión, aviso de envío y lotes — 18/10/2026
 
+> Registro de la entrega anterior. La reorganización posterior de contraseña y avisos comunes se documenta en [Coordinación de correos y logística](mail-logistics-coordination-2026-10-18.md), con [autorización y cierre de implementación del 19/10](shipping-mail-release-2026-10-19.md); sustituye sus reglas de comunicación al publicarse, sin alterar las verificaciones históricas que se recogen aquí.
+
 ## Resultado y límite operativo
 
 Este cambio reutiliza Trackpub, el worker, la vinculación sobre `Order`, la cola `OrderTrackingNotification`, la plantilla `order-tracking.hbs` y el remitente transaccional ORDERS. No crea envíos ni etiquetas en Correos. El PDF sigue siendo opcional.

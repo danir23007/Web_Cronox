@@ -12,6 +12,8 @@ import { MailTransportFactory } from './mail-transport.factory';
 import { ManagedMailService } from './managed/managed-mail.service';
 import { RestockDeliveryError, restockDeliveryOutcome } from './restock-delivery.error';
 import { quotaWaiting } from './mail-account-quota';
+import { PasswordSetupContext } from '../common/password-setup-context';
+import { getFrontendUrl } from '../common/config/environment';
 import {
   EMAIL_TEMPLATE_FILE,
   EMAIL_TYPE_TO_SENDER,
@@ -85,7 +87,8 @@ export class EmailService {
     }
     const senderKey = ['NEWSLETTER_ACCESS', 'NEWSLETTER_WELCOME'].includes(purpose)
       ? EmailSenderKey.NOREPLY : EMAIL_TYPE_TO_SENDER[options.type];
-    const template = options.purpose === 'NEWSLETTER_ACCESS' ? EmailTemplate.NEWSLETTER_ACCESS : EMAIL_TYPE_TO_TEMPLATE[options.type];
+    const setup = ['PASSWORD_SETUP_NEW_ACCOUNT', 'PASSWORD_SETUP_EXISTING_ACCOUNT'].includes(purpose);
+    const template = setup ? EmailTemplate.PASSWORD_SETUP : options.purpose === 'NEWSLETTER_ACCESS' ? EmailTemplate.NEWSLETTER_ACCESS : EMAIL_TYPE_TO_TEMPLATE[options.type];
 
     try {
       const data: Record<string, unknown> = {
@@ -107,6 +110,14 @@ export class EmailService {
         );
       }
       // A published design must never remove the verification action.
+      if (setup && custom) {
+        const required = [data.title, data.message, data.orderId, 'Configurar contraseña'];
+        const action = Handlebars.escapeExpression(String(data.actionUrl || ''));
+        const recovery = Handlebars.escapeExpression(String(data.recoveryUrl || ''));
+        if (!action || !recovery || !custom.html.includes(`href="${action}"`) ||
+            !custom.html.includes(`href="${recovery}"`) || required.some(value => !value || !custom!.html.includes(Handlebars.escapeExpression(String(value)))) ||
+            (purpose === 'PASSWORD_SETUP_EXISTING_ACCOUNT' && /nueva\s+cuenta|cuenta.{0,30}(?:creada|creado)|(?:creamos|hemos creado).{0,30}cuenta/i.test(custom.html + '\n' + custom.text))) custom = null;
+      }
       if (options.purpose === 'NEWSLETTER_WELCOME' && custom && data.discountCode &&
           !custom.html.includes(Handlebars.escapeExpression(String(data.discountCode)))) custom = null;
       if (options.purpose === 'NEWSLETTER_ACCESS' && custom) {
@@ -119,10 +130,10 @@ export class EmailService {
           custom = null;
         }
       }
-      if (options.type === EmailType.ORDER_TRACKING && custom) {
-        const required = [data.orderId, data.trackingNumber, 'Correos'];
+      if ((options.type === EmailType.ORDER_TRACKING || options.deliveryDeadline !== undefined) && custom) {
+        const required = [data.orderId, data.statusLabel, ...(data.trackingNumber ? [data.trackingNumber, data.shippingCarrier] : [])];
         const link = Handlebars.escapeExpression(String(data.trackingUrl || ''));
-        if (!link || !custom.html.includes(`href="${link}"`) ||
+        if (data.trackingNumber && (!link || !custom.html.includes(`href="${link}"`)) ||
             required.some(value => !value || !custom!.html.includes(Handlebars.escapeExpression(String(value))))) custom = null;
       }
       let html = custom?.html || (await this.renderTemplate(template, data));
@@ -138,10 +149,10 @@ export class EmailService {
       const info = (await this.transportFactory
         .sendMail(senderKey, {
           to: options.to,
-          subject: options.type === EmailType.ORDER_TRACKING || options.purpose === 'NEWSLETTER_ACCESS' ? options.subject : custom?.subject || options.subject,
+          subject: setup || options.deliveryDeadline !== undefined || options.type === EmailType.ORDER_TRACKING || options.purpose === 'NEWSLETTER_ACCESS' ? options.subject : custom?.subject || options.subject,
           html,
           ...(custom ? { text: custom.text } : {}),
-        }, options.purpose || options.type, ...(options.type === EmailType.ORDER_TRACKING ? [options.deliveryDeadline ?? Date.now() + 20000] : []))) as { messageId: string; accepted?: unknown[]; queued?: boolean };
+        }, options.purpose || options.type, ...(options.deliveryDeadline !== undefined || options.type === EmailType.ORDER_TRACKING ? [options.deliveryDeadline ?? Date.now() + 20000] : []))) as { messageId: string; accepted?: unknown[]; queued?: boolean };
 
       if (info.queued) return { messageId: info.messageId, queued: true };
 
@@ -199,16 +210,20 @@ export class EmailService {
     });
   }
 
-  async sendInitialPasswordSetup(email: string, link: string) {
+  async sendInitialPasswordSetup(email: string, link: string, context: PasswordSetupContext) {
+    const created = context.scenario === 'NEW_ACCOUNT';
     return this.send({
-      purpose: 'INITIAL_PASSWORD_SETUP',
+      purpose: created ? 'PASSWORD_SETUP_NEW_ACCOUNT' : 'PASSWORD_SETUP_EXISTING_ACCOUNT',
       type: EmailType.PASSWORD_RESET,
       to: email,
-      subject: 'CRONOX · Tu cuenta ha sido creada',
+      subject: created ? 'CRONOX · Tu cuenta está lista: configura tu contraseña' : 'CRONOX · Configura tu contraseña y consulta tu pedido',
       templateData: {
-        title: 'Tu cuenta CRONOX ha sido creada',
-        message:
-          'Tu compra ya está asociada a tu nueva cuenta. Configura una contraseña para acceder a tus pedidos.',
+        title: created ? 'Tu cuenta está lista: configura tu contraseña' : 'Configura tu contraseña y consulta tu pedido',
+        message: created
+          ? 'Hemos creado una cuenta asociada al email utilizado en tu compra para que puedas consultar tus pedidos. Configura una contraseña para acceder.'
+          : 'Tu pedido está asociado a tu cuenta CRONOX. Puedes configurar una contraseña para acceder y consultar tu pedido.',
+        orderId: String(context.orderId),
+        recoveryUrl: `${getFrontendUrl()}/recuperar-contrasena`,
         actionUrl: link,
         actionLabel: 'Configurar contraseña',
       },

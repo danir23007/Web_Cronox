@@ -56,15 +56,27 @@ async function run() {
       // Reconstruct the immediate pre-change model, including after this test is
       // committed. The real SQL migration (not db push) must add these columns.
       const baseline = fs.readFileSync(path.join(backend, 'prisma/schema.prisma'), 'utf8')
-        .replace(/^  tracking(?:AttachedAt|AdmissionLocalAt|DeliveryLocalAt|NotificationReview)\s+.*\r?\n/gm, '')
-        .replace(/model OrderTrackingAudit \{[\s\S]*?\n\}/, block => block.replace(/^  (?:action|previousStatus|nextStatus)\s+.*\r?\n/gm, ''));
+        .replace(/^  tracking(?:AttachedAt|AdmissionLocalAt|DeliveryLocalAt|NotificationReview|FlowStartedAt|Category)\s+.*\r?\n/gm, '')
+        .replace(/model OrderTrackingAudit \{[\s\S]*?\n\}/, block => block.replace(/^  (?:action|previousStatus|nextStatus)\s+.*\r?\n/gm, ''))
+        .replace(/^  (?:accountScenario|noticeKey|origin|transitionFrom|transitionTo|suppressionReason)\s+.*\r?\n/gm, '')
+        .replace(/^  @@index\(\[eventId\]\)\r?\n/gm, '')
+        .replace(/model OrderTrackingNotification \{[\s\S]*?\n\}/, block => block.replace(/^(  eventId\s+String)[ \t]*$/gm, '$1 @unique'));
       const baselinePath = path.join(temporary, 'baseline.prisma');
       fs.writeFileSync(baselinePath, baseline);
       const pushed = spawnSync(process.execPath, [require.resolve('prisma/build/index.js'), 'db', 'push', '--skip-generate', '--schema', baselinePath],
         { cwd: backend, env, windowsHide: true, encoding: 'utf8', timeout: 60000 });
       assert.equal(pushed.status, 0, 'BASELINE_SCHEMA_INITIALIZATION_FAILED');
       await setup.query(fs.readFileSync(path.join(backend, 'prisma/migrations/20261018180000_correos_fulfillment/migration.sql'), 'utf8'));
+      await setup.query(`INSERT INTO "CheckoutEffect" (id,"checkoutSnapshotId","orderId",kind,"updatedAt") VALUES
+        ('legacy-setup-fixture','legacy-fixture',1,'INITIAL_SETUP',now()),
+        ('legacy-confirmation-fixture','legacy-fixture',1,'ORDER_CONFIRMATION',now())`);
+      await setup.query(fs.readFileSync(path.join(backend, 'prisma/migrations/20261018220000_mail_event_coordination/migration.sql'), 'utf8'));
+      const legacyEffects = (await setup.query(`SELECT kind,status,error FROM "CheckoutEffect" WHERE "checkoutSnapshotId"='legacy-fixture' ORDER BY kind`)).rows;
+      assert.deepEqual(legacyEffects, [{ kind: 'INITIAL_SETUP', status: 'REVIEW', error: 'PASSWORD_SETUP_CONTEXT_MISSING' }, { kind: 'ORDER_CONFIRMATION', status: 'PENDING', error: null }]);
+      await setup.query(`DELETE FROM "CheckoutEffect" WHERE "checkoutSnapshotId"='legacy-fixture'`);
+      report.checks.push('Migration holds legacy password effects without guessing/replaying them and leaves pending order confirmation unchanged');
       await setup.query(`UPDATE "CorreosTrackingGate" SET "notBefore"='2026-10-18T16:00:00Z' WHERE key='SHIPPED_EMAIL_CUTOFF'`);
+      await setup.query(`UPDATE "CorreosTrackingGate" SET "notBefore"='2026-10-18T16:00:00Z' WHERE key='LOGISTICS_EMAIL_CUTOFF'`);
       // Prisma db push creates the HEAD schema, not its historical security DDL.
       const priorMigration = fs.readFileSync(path.join(backend, 'prisma/migrations/20261016120000_correos_tracking/migration.sql'), 'utf8');
       await setup.query(priorMigration.slice(priorMigration.indexOf('DO $$'), priorMigration.indexOf('END $$;') + 'END $$;'.length));
@@ -145,7 +157,7 @@ async function run() {
     assert.equal(admittedOrder.status, 'SHIPPED'); assert.equal(admittedOrder.shippedAt, null);
     assert.equal(admittedOrder.trackingAdmissionLocalAt, '20/10/2026 09:00:00');
     await ready(); await otherService.syncOrder(order.id, true);
-    assert.equal(await prisma.orderTrackingNotification.count({ where: { orderId: order.id } }), 1);
+    assert.equal(await prisma.orderTrackingNotification.count({ where: { orderId: order.id } }), 2);
     assert.equal(await prisma.orderTrackingEvent.count({ where: { orderId: order.id } }), 4);
     const view = await service.getOrderTracking(order.id);
     assert.equal(view.events[0].code, 'H020000V');
@@ -222,7 +234,7 @@ async function run() {
     process.env.EMAIL_ENABLED = 'true'; process.env.CORREOS_EMAIL_ENABLED = 'true'; process.env.BACKGROUND_JOBS_ENABLED = 'true';
     try { await new TrackingNotificationsService(prisma, noEmail).tick(); }
     finally { process.env.EMAIL_ENABLED = 'false'; process.env.CORREOS_EMAIL_ENABLED = 'false'; process.env.BACKGROUND_JOBS_ENABLED = 'false'; }
-    assert.equal((await prisma.orderTrackingNotification.findUniqueOrThrow({ where: { eventId: 'crash-fixture-no-smtp' } })).status, 'UNKNOWN');
+    assert.equal((await prisma.orderTrackingNotification.findFirstOrThrow({ where: { eventId: 'crash-fixture-no-smtp' } })).status, 'UNKNOWN');
     assert.equal(smtpCalls, 0);
     report.checks.push('Restart recovery moves an expired SENDING outbox lease to UNKNOWN without attempting SMTP or duplicating its message');
     assert.equal((await prisma.productVariant.findUniqueOrThrow({ where: { id: product.variants[0].id } })).stockQty, 10);
@@ -266,15 +278,15 @@ async function run() {
     const sameSecondMilestone = event('H020000V', '20/10/2026', '09:00:00');
     emptyPayload = { code: initiallyEmpty.trackingNumber, events: [admitted, sameSecondMilestone] };
     await readyEmpty(); await emptyService.syncOrder(initiallyEmpty.id);
-    assert.equal(await prisma.orderTrackingNotification.count({ where: { orderId: initiallyEmpty.id, category: 'OUT_FOR_DELIVERY' } }), 0);
+    assert.equal(await prisma.orderTrackingNotification.count({ where: { orderId: initiallyEmpty.id, category: 'OUT_FOR_DELIVERY' } }), 1);
     await readyEmpty(); await emptyService.syncOrder(initiallyEmpty.id);
-    assert.equal(await prisma.orderTrackingNotification.count({ where: { orderId: initiallyEmpty.id } }), 1);
+    assert.equal(await prisma.orderTrackingNotification.count({ where: { orderId: initiallyEmpty.id } }), 2);
     report.checks.push('Later and repeated milestones at the same second never create another shipment notice');
 
     emptyPayload = { code: initiallyEmpty.trackingNumber, events: [admitted, sameSecondMilestone, event('H250000V', '15/10/2026', '09:00:00')] };
     await readyEmpty(); await emptyService.syncOrder(initiallyEmpty.id);
-    assert.equal(await prisma.orderTrackingNotification.count({ where: { orderId: initiallyEmpty.id } }), 1);
-    report.checks.push('Distinct delivery milestones remain in history without sending additional mail');
+    assert.equal(await prisma.orderTrackingNotification.count({ where: { orderId: initiallyEmpty.id } }), 2);
+    report.checks.push('An older distinct out-for-delivery scan remains in history without creating an additional notice');
 
     await prisma.order.updateMany({ where: { shippingCarrier: 'Correos' }, data: { trackingNextSyncAt: new Date(Date.now() + 60000) } });
     for (let index = 0; index < 4; index++) {
@@ -298,9 +310,9 @@ async function run() {
     const queryFixture = (target, events, database = prisma) => new TrackingService(database, { search: async () => ({ code: target.trackingNumber, events }) }, contract, requests);
     await queryFixture(historical, [event('A010000V', '14/10/2026', '09:00:00')]).syncOrder(historical.id);
     const historicalView = await prisma.order.findUniqueOrThrow({ where: { id: historical.id } });
-    assert.equal(historicalView.status, 'SHIPPED'); assert.equal(historicalView.trackingNotificationReview, 'HISTORICAL_ADMISSION');
-    assert.equal(await prisma.orderTrackingNotification.count({ where: { orderId: historical.id } }), 0);
-    report.checks.push('Historical first admission updates fulfillment but permanently retains its notice for review without enqueueing');
+    assert.equal(historicalView.status, 'SHIPPED'); assert.equal(historicalView.trackingNotificationReview, 'HISTORICAL_EVENT');
+    assert.equal(await prisma.orderTrackingNotification.count({ where: { orderId: historical.id, status: 'PENDING' } }), 0);
+    report.checks.push('Historical first admission updates fulfillment and records a SUPPRESSED notice for review, never a PENDING delivery');
 
     const advanced = await createFixture('ADVANCED0001');
     await queryFixture(advanced, [event('I010000V', '21/10/2026', '12:00:00'), admitted, inDelivery]).syncOrder(advanced.id);
@@ -310,15 +322,15 @@ async function run() {
     await prisma.order.update({ where: { id: advanced.id }, data: { trackingLastSuccessAt: null } });
     await queryFixture(advanced, [event('PRE_ADMISION', '22/10/2026', '12:00:00')]).syncOrder(advanced.id);
     advancedView = await prisma.order.findUniqueOrThrow({ where: { id: advanced.id } });
-    assert.equal(advancedView.status, 'DELIVERED'); assert.equal(advancedView.trackingState, 'Entregado');
-    assert.equal(await prisma.orderTrackingNotification.count({ where: { orderId: advanced.id } }), 0);
+    assert.equal(advancedView.status, 'DELIVERED'); assert.equal(advancedView.trackingCategory, 'DELIVERED');
+    assert.equal(await prisma.orderTrackingNotification.count({ where: { orderId: advanced.id } }), 2);
     report.checks.push('Advanced first delivery uses available admission/delivery history and never regresses on later contradictory preadmission or invents UTC dates');
 
     const transit = await createFixture('TRANSIT0001');
     await queryFixture(transit, [event('C010000V', '20/10/2026', '11:00:00')]).syncOrder(transit.id);
     const transitView = await prisma.order.findUniqueOrThrow({ where: { id: transit.id } });
     assert.equal(transitView.status, 'SHIPPED'); assert.equal(transitView.shippedAt, null);
-    assert.equal(transitView.trackingAdmissionLocalAt, null); assert.equal(transitView.trackingNotificationReview, 'ADMISSION_DATE_MISSING');
+    assert.equal(transitView.trackingAdmissionLocalAt, null); assert.equal(transitView.trackingNotificationReview, null);
     report.checks.push('First transit without admission still proves physical shipment but invents neither admission date nor a historical notice');
 
     const cancelledFlight = await createFixture('CANCELFLIGHT0001');
@@ -375,6 +387,180 @@ async function run() {
     assert.equal((await prisma.orderTrackingNotification.findUniqueOrThrow({ where: { id: notice.id } })).status, 'SENT');
     report.checks.push('Two real database clients delivering one shipment outbox record invoke the simulated sender exactly once');
     assert.equal(smtpCalls, 0); assert.equal(await prisma.stockMovement.count(), 0);
+
+    const bulkPaid = await createFixture(null), bulkProcessing = await createFixture('PRESERVEDBULK001', { status: 'PROCESSING' });
+    const bulkCancelled = await createFixture(null, { status: 'CANCELLED' });
+    const bulkPickup = await createFixture(null, { shippingMethodCode: 'PICKUP' });
+    const bulkInPerson = await createFixture(null, { source: 'IN_PERSON_ADMIN' });
+    const bulkDelivered = await createFixture(null, { status: 'DELIVERED' });
+    const rows = [bulkPaid, bulkProcessing, bulkCancelled, bulkPickup, bulkInPerson, bulkDelivered].map(o => ({ orderId: o.id }));
+    const beforeBulk = await prisma.orderTrackingNotification.count();
+    const preview = await adminA.markShippedBulk(rows, true, actor.id);
+    assert.deepEqual(preview.results.map(r => r.status), ['valid', 'valid', 'skipped', 'skipped', 'skipped', 'skipped']);
+    assert.equal(await prisma.orderTrackingNotification.count(), beforeBulk);
+    const manualBatch = await adminA.markShippedBulk(preview.results, false, actor.id);
+    assert.deepEqual(manualBatch.results.map(r => r.status), ['updated', 'updated', 'skipped', 'skipped', 'skipped', 'skipped']);
+    assert.equal((await prisma.order.findUniqueOrThrow({ where: { id: bulkProcessing.id } })).trackingNumber, 'PRESERVEDBULK001');
+    const replay = await adminA.markShippedBulk(preview.results, false, actor.id);
+    assert.deepEqual(replay.results.slice(0, 2).map(r => r.status), ['already_shipped', 'already_shipped']);
+    assert.equal(await prisma.orderTrackingNotification.count({ where: { orderId: { in: [bulkPaid.id, bulkProcessing.id] }, category: 'SHIPPED' } }), 2);
+    report.checks.push('Bulk manual shipment previews without writes, reports every excluded row, preserves tracking, and replays as already shipped with one notice per order');
+
+    const bulkRace = await createFixture(null);
+    const racePreview = await adminA.markShippedBulk([{ orderId: bulkRace.id }], true, actor.id);
+    await Promise.all([adminA.markShippedBulk(racePreview.results, false, actor.id), new AdminOrdersService(second, {}, noEmail, {}, {}).markShippedBulk(racePreview.results, false, actor.id)]);
+    assert.equal(await prisma.orderTrackingNotification.count({ where: { orderId: bulkRace.id, category: 'SHIPPED' } }), 1);
+    const bulkStale = await createFixture(null);
+    const stalePreview = await adminA.markShippedBulk([{ orderId: bulkStale.id }], true, actor.id);
+    await prisma.order.update({ where: { id: bulkStale.id }, data: { trackingRevision: { increment: 1 } } });
+    assert.equal((await adminA.markShippedBulk(stalePreview.results, false, actor.id)).results[0].status, 'error');
+    assert.equal((await adminA.markShippedBulk([{ orderId: bulkStale.id }], false, actor.id)).results[0].status, 'error');
+    assert.equal((await adminA.markShippedBulk([{orderId:bulkStale.id},{orderId:bulkStale.id},{orderId:'bad'},{orderId:2147483647}], true, actor.id)).results.filter(r=>r.status==='error').length, 4);
+    assert.equal((await prisma.order.findUniqueOrThrow({ where: { id: bulkStale.id } })).status, 'PAID');
+    report.checks.push('Concurrent manual batches serialize once; stale/unpreviewed, duplicate, missing and invalid rows fail individually without mutating their orders');
+
+    process.env.CORREOS_TRACKING_ENABLED = 'false'; process.env.CORREOS_EMAIL_ENABLED = 'false'; process.env.ORDER_LOGISTICS_EMAIL_ENABLED = 'false';
+    const manualJob = await prisma.orderTrackingNotification.findFirstOrThrow({ where: { orderId: bulkPaid.id, category: 'SHIPPED' } });
+    const carrierPending = await createFixture('DISABLEDCARRIER001', { trackingFlowStartedAt: new Date() });
+    // Carrier work already recorded before disabling integration must stay pending.
+    const carrierEvent = await prisma.orderTrackingEvent.create({ data: { orderId: carrierPending.id, revision: 0, fingerprint: 'disabled-fixture', origin: 'CORREOS', category: 'ADMITTED' } });
+    const heldCarrierJob = await prisma.orderTrackingNotification.create({ data: { orderId: carrierPending.id, revision: 0, eventId: carrierEvent.id, category: 'SHIPPED', origin: 'CORREOS' } });
+    const manualMailCalls = [];
+    const manualSender = new TrackingNotificationsService(prisma, { send: async options => { manualMailCalls.push(options); return { messageId: 'MANUAL_SIMULATED_ONLY' }; } });
+    await manualSender.deliver(manualJob.id); await manualSender.deliver(heldCarrierJob.id);
+    assert.equal(manualMailCalls.length, 1); assert.equal(manualMailCalls[0].type, 'ORDER_SHIPPED');
+    assert.equal((await prisma.orderTrackingNotification.findUniqueOrThrow({ where: { id: manualJob.id } })).status, 'SENT');
+    assert.equal((await prisma.orderTrackingNotification.findUniqueOrThrow({ where: { id: heldCarrierJob.id } })).status, 'PENDING');
+    assert.equal(await prisma.stockMovement.count(), 0);
+    process.env.CORREOS_TRACKING_ENABLED = 'true'; process.env.CORREOS_EMAIL_ENABLED = 'true'; delete process.env.ORDER_LOGISTICS_EMAIL_ENABLED;
+    report.checks.push('With both Correos flags and the carrier-mail override false, real outbox claims send manual ORDERS work only and leave carrier work untouched');
+
+    const fresh = await createFixture('MANUALFIRST001', { trackingFlowStartedAt: new Date() });
+    await adminA.updateOrderFulfillment(fresh.id, { status: 'SHIPPED' }, actor.id);
+    assert.equal(await prisma.orderTrackingNotification.count({ where: { orderId: fresh.id, category: 'SHIPPED' } }), 1);
+    await queryFixture(fresh, [admitted]).syncOrder(fresh.id);
+    assert.equal(await prisma.orderTrackingNotification.count({ where: { orderId: fresh.id, category: 'SHIPPED' } }), 1);
+    await adminA.updateOrderFulfillment(fresh.id, { status: 'DELIVERED' }, actor.id);
+    await prisma.order.update({ where: { id: fresh.id }, data: { trackingLastSuccessAt: null } });
+    await queryFixture(fresh, [admitted, event('I010000V', '21/10/2026', '10:00:00')]).syncOrder(fresh.id);
+    assert.equal(await prisma.orderTrackingNotification.count({ where: { orderId: fresh.id, category: 'DELIVERED' } }), 1);
+    const manualNotice = await prisma.orderTrackingNotification.findFirstOrThrow({ where: { orderId: fresh.id, category: 'SHIPPED' } });
+    assert.equal(manualNotice.origin, 'MANUAL'); assert.equal(manualNotice.transitionFrom, 'PAID');
+    report.checks.push('Manual shipment/delivery followed by carrier evidence each produce one logical notice, with persisted origin and transition');
+
+    for (const deliveryStatus of ['PENDING', 'SENT', 'UNKNOWN']) {
+      const unlinked = await createFixture(null);
+      await adminA.updateOrderFulfillment(unlinked.id, { status: 'SHIPPED' }, actor.id);
+      const original = await prisma.orderTrackingNotification.findFirstOrThrow({ where: { orderId: unlinked.id, category: 'SHIPPED' } });
+      await prisma.orderTrackingNotification.update({ where: { id: original.id }, data: { status: deliveryStatus } });
+      await adminA.updateOrderFulfillment(unlinked.id, { trackingNumber: `FIRSTLINK${deliveryStatus}001`, trackingRevision: 0 }, actor.id);
+      const current = await prisma.order.findUniqueOrThrow({ where: { id: unlinked.id } });
+      const logical = await prisma.orderTrackingNotification.findUniqueOrThrow({ where: { noticeKey: `ORDER:${unlinked.id}:SHIPPED` } });
+      assert.equal(logical.status, deliveryStatus);
+      assert.equal(logical.revision, deliveryStatus === 'PENDING' ? current.trackingRevision : 0);
+      const originalEvent = await prisma.orderTrackingEvent.findUniqueOrThrow({ where: { id: logical.eventId } });
+      assert.equal(originalEvent.revision, logical.revision);
+      await queryFixture(current, [admitted]).syncOrder(unlinked.id);
+      assert.equal(await prisma.orderTrackingNotification.count({ where: { orderId: unlinked.id, status: 'PENDING' } }), deliveryStatus === 'PENDING' ? 1 : 0);
+    }
+    report.checks.push('First tracking association preserves a pending manual notice with a new revision-specific event and archived prior audit; SENT/UNKNOWN notices never reopen');
+
+    const carrierFirst = await createFixture('CARRIERFIRST001', { trackingFlowStartedAt: new Date() });
+    await queryFixture(carrierFirst, [admitted]).syncOrder(carrierFirst.id);
+    await adminA.updateOrderFulfillment(carrierFirst.id, { status: 'SHIPPED' }, actor.id);
+    assert.equal(await prisma.orderTrackingNotification.count({ where: { orderId: carrierFirst.id, category: 'SHIPPED' } }), 1);
+    await prisma.order.update({ where: { id: carrierFirst.id }, data: { trackingLastSuccessAt: null } });
+    await queryFixture(carrierFirst, [event('I010000V', '21/10/2026', '10:00:00')]).syncOrder(carrierFirst.id);
+    await adminA.updateOrderFulfillment(carrierFirst.id, { status: 'DELIVERED' }, actor.id);
+    assert.equal(await prisma.orderTrackingNotification.count({ where: { orderId: carrierFirst.id, category: 'DELIVERED' } }), 1);
+    report.checks.push('Carrier shipment/delivery followed by manual fallback cannot duplicate either notice');
+
+    for (const [code, date, category] of [['O07A010R', '22/10/2026', 'INCIDENT'], ['O07A010R', '23/10/2026', 'INCIDENT'], ['I020000V', '24/10/2026', 'RETURNED']]) {
+      await prisma.order.update({ where: { id: carrierFirst.id }, data: { trackingLastSuccessAt: null } });
+      await queryFixture(carrierFirst, [event(code, date, '12:00:00')]).syncOrder(carrierFirst.id);
+      const projected = await prisma.order.findUniqueOrThrow({ where: { id: carrierFirst.id } });
+      assert.equal(projected.status, 'DELIVERED'); assert.equal(projected.trackingCategory, category);
+    }
+    assert.equal(await prisma.orderTrackingNotification.count({ where: { orderId: carrierFirst.id, category: 'INCIDENT', status: 'PENDING' } }), 1);
+    assert.equal(await prisma.orderTrackingNotification.count({ where: { orderId: carrierFirst.id, category: 'RETURNED', status: 'PENDING' } }), 1);
+    assert.equal(await prisma.stockMovement.count(), 0);
+    report.checks.push('Genuine incidence/return after delivery updates carrier state, preserves commercial delivery and stock, and coalesces repeated scans of the same incident');
+
+    const simultaneous = await createFixture('RACEMANUAL001', { trackingFlowStartedAt: new Date() });
+    await Promise.all([adminA.updateOrderFulfillment(simultaneous.id, { status: 'SHIPPED' }, actor.id), queryFixture(simultaneous, [admitted], second).syncOrder(simultaneous.id)]);
+    assert.equal(await prisma.orderTrackingNotification.count({ where: { orderId: simultaneous.id, category: 'SHIPPED' } }), 1);
+    const beforeReview = await prisma.orderTrackingNotification.count();
+    const dry = await service.reviewExisting();
+    assert.equal(dry.readOnly, true); assert.equal(dry.carrierQueried, false);
+    assert.equal(await prisma.orderTrackingNotification.count(), beforeReview);
+    report.checks.push('Concurrent manual/carrier transitions serialize to one notice; historical review only reads persisted events and creates no communication');
+
+    const { OrdersService } = require('../src/orders/orders.service');
+    const { GuestOrderAccountService } = require('../src/orders/guest-order-account.service');
+    const { AuthService } = require('../src/auth/auth.service');
+    const { StripeWebhookController } = require('../src/payments/stripe-webhook.controller');
+    const historyStub = { incrementOrderProgress: async () => {}, registerReturn: async () => {}, syncFromOrders: async () => {} };
+    const checkoutOrders = new OrdersService(prisma, {}, {}, {}, historyStub, new GuestOrderAccountService());
+    const checkoutOther = new OrdersService(second, {}, {}, {}, historyStub, new GuestOrderAccountService());
+    const setupDeliveries = [];
+    const recoveryDelivered = deferred();
+    const accountMail = { isEnabled: () => true, sendInitialPasswordSetup: async (to, link, context) => { setupDeliveries.push({ to, link, context }); return { messageId: 'SIMULATED_SETUP' }; }, sendPasswordReset: async () => { recoveryDelivered.resolve(); return { messageId: 'SIMULATED_RECOVERY' }; } };
+    const auth = new AuthService({ findByEmail: email => prisma.user.findUnique({ where: { email } }) }, {}, prisma, accountMail, {}, {});
+    const hook = new StripeWebhookController({}, checkoutOrders, {}, prisma, {}, auth);
+    const paid = async (email, reference) => {
+      const cart = await prisma.cart.create({ data: { anonymousId: randomUUID(), itemsCount: 1, subtotal: 1000,
+        items: { create: { variantId: product.variants[0].id, qty: 1, priceAtAdd: 1000 } } } });
+      const snapshot = await prisma.checkoutSnapshot.create({ data: { customerEmail: email, cartId: cart.id,
+        anonymousId: cart.anonymousId, cartUpdatedAt: cart.updatedAt, requestFingerprint: randomUUID(),
+        stripePaymentIntentId: reference, subtotalCents: 1000, taxRate: '0.21', taxAmountCents: 174,
+        totalCents: 1000, expiresAt: new Date(Date.now() + 3600000),
+        items: { create: { productId: product.id, variantId: product.variants[0].id, title: 'Fixture purchase', quantity: 1, unitPriceCents: 1000, lineTotalCents: 1000 } } } });
+      await prisma.checkoutStockReservation.create({ data: { checkoutSnapshotId: snapshot.id, variantId: product.variants[0].id,
+        quantity: 1 } });
+      await prisma.productVariant.update({ where: { id: product.variants[0].id }, data: { stockQty: { decrement: 1 } } });
+      await prisma.stockMovement.create({ data: { variantId: product.variants[0].id, delta: -1,
+        reason: 'checkout_reservation', checkoutSnapshotId: snapshot.id } });
+      const input = { checkoutSnapshotId: snapshot.id, paymentIntentId: reference, amountCents: 1000, currency: 'EUR', occurredAt: new Date() };
+      const results = await Promise.all([checkoutOrders.createOrderFromVerifiedStripePayment(input), checkoutOther.createOrderFromVerifiedStripePayment(input)]);
+      assert.equal(new Set(results.map(r => r.orderId)).size, 1);
+      const effects = await prisma.checkoutEffect.findMany({ where: { checkoutSnapshotId: snapshot.id, kind: 'INITIAL_SETUP' } });
+      assert.equal(effects.length, 1); return effects[0];
+    };
+    const newAccount = await paid('new-setup@tracking.example.test', 'pi_setup_new_fixture');
+    assert.equal(newAccount.accountScenario, 'NEW_ACCOUNT');
+    await Promise.all([hook.deliverEffect(newAccount), hook.deliverEffect(newAccount)]);
+    await hook.deliverEffect(newAccount);
+    assert.equal(setupDeliveries.length, 1); assert.equal(setupDeliveries[0].context.scenario, 'NEW_ACCOUNT');
+    assert.equal(setupDeliveries[0].context.orderId, newAccount.orderId);
+    const priorUser = await prisma.user.create({ data: { email: 'existing-setup@tracking.example.test', password: null } });
+    const existingAccount = await paid(priorUser.email, 'pi_setup_existing_fixture');
+    assert.equal(existingAccount.accountScenario, 'EXISTING_PASSWORDLESS');
+    await hook.deliverEffect(existingAccount);
+    assert.equal(setupDeliveries.length, 2); assert.equal(setupDeliveries[1].context.scenario, 'EXISTING_PASSWORDLESS');
+    assert.equal((await prisma.user.findUniqueOrThrow({ where: { id: priorUser.id } })).password, null);
+    const passwordUser = await prisma.user.create({ data: { email: 'configured-setup@tracking.example.test', password: 'EXISTING_HASH_UNCHANGED' } });
+    const configured = await paid(passwordUser.email, 'pi_setup_configured_fixture');
+    assert.equal(configured.accountScenario, 'NOT_NEEDED'); await hook.deliverEffect(configured);
+    assert.equal(setupDeliveries.length, 2);
+    assert.equal((await prisma.user.findUniqueOrThrow({ where: { id: passwordUser.id } })).password, 'EXISTING_HASH_UNCHANGED');
+    await hook.deliverEffect({ ...existingAccount, accountScenario: null });
+    assert.equal(setupDeliveries.length, 2);
+    report.checks.push('Real concurrent paid-checkout transactions persist NEW_ACCOUNT/EXISTING_PASSWORDLESS/NOT_NEEDED exactly once; recovery uses that context, never overwrites a password, and suppresses contextless legacy effects');
+    const link = setupDeliveries[1].link, raw = new URLSearchParams(new URL(link).hash.slice(1)).get('token');
+    const { createHash } = require('node:crypto');
+    const stored = await prisma.passwordResetToken.findUniqueOrThrow({ where: { token: createHash('sha256').update(raw).digest('hex') } });
+    assert.ok(stored.expiresAt.getTime() > Date.now() + 3500000); assert.equal(stored.usedAt, null);
+    await auth.resetPassword(raw, 'LocalFixturePassword9');
+    await assert.rejects(auth.resetPassword(raw, 'AnotherFixturePassword9'));
+    report.checks.push('Real persisted setup link stores only its hash, expires in an hour, and can be consumed once');
+    const expiredRaw = new URLSearchParams(new URL(setupDeliveries[0].link).hash.slice(1)).get('token');
+    await prisma.passwordResetToken.updateMany({ where: { userId: newAccount.userId }, data: { expiresAt: new Date(Date.now() - 1000) } });
+    await assert.rejects(auth.resetPassword(expiredRaw, 'ExpiredFixturePassword9'), error => error.getResponse?.().code === 'PASSWORD_RESET_EXPIRED');
+    assert.equal((await prisma.user.findUniqueOrThrow({ where: { id: newAccount.userId } })).password, null);
+    await auth.requestPasswordReset('new-setup@tracking.example.test');
+    await recoveryDelivered.promise;
+    assert.equal(await prisma.passwordResetToken.count({ where: { userId: newAccount.userId, usedAt: null, expiresAt: { gt: new Date() } } }), 1);
+    report.checks.push('An expired setup link cannot set a password, and explicit password recovery creates a new valid link for the passwordless account');
     report.passed = true;
   } finally {
     await Promise.all([prisma?.$disconnect(), second?.$disconnect(), numberingA?.onModuleDestroy(), numberingB?.onModuleDestroy()]);
@@ -396,6 +582,8 @@ async function run() {
 }
 run().then(() => console.log(JSON.stringify({ passed: report.passed, checks: report.checks.length, cleanedUp: report.cleanedUp, reportPath })))
   .catch(error => {
+    report.failure = { name: error.name, code: error.code, frames: String(error.stack || '').split('\n').filter(line => /^\s+at /.test(line)).slice(0, 6) };
+    fs.writeFileSync(reportPath, JSON.stringify(report, null, 2));
     // Never print connection strings, raw provider responses or credentials.
     console.error('CORREOS_LOCAL_DB_TEST_FAILED:' + (error.code || (error instanceof assert.AssertionError ? error.message : 'REVIEW_PRIVATE_LOCAL_REPORT')));
     process.exitCode = 1;

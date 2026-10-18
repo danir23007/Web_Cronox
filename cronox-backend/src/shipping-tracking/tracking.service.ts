@@ -6,12 +6,12 @@ import { TrackpubContract } from './trackpub.contract';
 import { TrackingRequestGate } from './tracking-request-gate';
 import { buildCorreosTrackingUrl, trackingBatchError } from './tracking-links';
 import { randomUUID } from 'node:crypto';
-import { fulfillmentEvidence, shippedNoticeDecision } from './fulfillment-policy';
+import { fulfillmentEvidence, carrierProjection, carrierNoticeCandidates } from './fulfillment-policy';
+import { eligibleFulfillmentOrder, recordLogisticsNotice, logisticsNoticeKey, logisticsMailEnabled } from './fulfillment-events';
 
 export function eligibleTrackingOrder(order: { trackingNumber: string | null; shippingCarrier: string | null; status: string; source: string; shippingMethodCode: string | null }): boolean {
   return Boolean(order.trackingNumber && /^correos$/i.test(order.shippingCarrier?.trim() || '') &&
-    ['PAID', 'PROCESSING', 'SHIPPED', 'DELIVERED'].includes(order.status) && order.source !== 'IN_PERSON_ADMIN' &&
-    !['LOCAL_PICKUP', 'PICKUP'].includes(order.shippingMethodCode || ''));
+    eligibleFulfillmentOrder(order));
 }
 
 @Injectable()
@@ -23,7 +23,7 @@ export class TrackingService {
     const order = await this.db.order.findUnique({ where: { id }, include: {
       shippingLabel: true, trackingAudits: { orderBy: { createdAt: 'desc' }, take: 50 },
       trackingNotifications: { orderBy: { createdAt: 'desc' }, take: 20,
-        select: { status: true, category: true, attempts: true, createdAt: true } },
+        select: { status: true, category: true, origin: true, revision: true, transitionFrom: true, transitionTo: true, suppressionReason: true, attempts: true, createdAt: true } },
     } });
     if (!order) throw new NotFoundException('Pedido no encontrado');
     const events = await this.db.orderTrackingEvent.findMany({ where: { orderId: id, revision: order.trackingRevision },
@@ -32,9 +32,12 @@ export class TrackingService {
       revision: order.trackingRevision, number: order.trackingNumber,
       publicUrl: /^correos$/i.test(order.shippingCarrier?.trim() || '') ? buildCorreosTrackingUrl(order.trackingNumber) : order.trackingUrl,
       state: order.trackingState, stateCode: order.trackingStateCode,
+      category: order.trackingCategory,
       admissionLocalAt: order.trackingAdmissionLocalAt, deliveryLocalAt: order.trackingDeliveryLocalAt,
       notificationReview: order.trackingNotificationReview,
       notifications: order.trackingNotifications || [],
+      notificationsEnabled: logisticsMailEnabled(),
+      manualNotificationsEnabled: logisticsMailEnabled('MANUAL'),
       events: events.map(event => ({ id: event.id, occurredAt: event.eventTime, occurredLocalAt: event.eventLocalDate,
         code: event.code, description: event.label, category: event.category })),
       lastSuccessAt: order.trackingLastSuccessAt,
@@ -81,11 +84,12 @@ export class TrackingService {
           await tx.order.update({ where: { id }, data: { trackingLeaseToken: null, trackingLeaseUntil: null } });
           return;
         }
+        const previous = await tx.orderTrackingEvent.findMany({ where: { orderId: id, revision: claim.trackingRevision, origin: 'CORREOS' } });
         for (const event of events) {
           await tx.orderTrackingEvent.upsert({ where: { orderId_revision_fingerprint: { orderId: id, revision: claim.trackingRevision, fingerprint: event.fingerprint } },
             create: { ...event, orderId: id, revision: claim.trackingRevision }, update: { label: event.label, category: event.category } });
         }
-        const history = await tx.orderTrackingEvent.findMany({ where: { orderId: id, revision: claim.trackingRevision } });
+        const history = await tx.orderTrackingEvent.findMany({ where: { orderId: id, revision: claim.trackingRevision, origin: 'CORREOS' } });
         const evidence = fulfillmentEvidence(history as typeof events);
         const fulfillment: Record<string, unknown> = {};
         const transition = ['PAID', 'PROCESSING'].includes(current.status) && evidence.physical;
@@ -101,33 +105,25 @@ export class TrackingService {
         if (!current.deliveredAt && evidence.delivery?.eventTime) fulfillment.deliveredAt = evidence.delivery.eventTime;
         if (!current.trackingAdmissionLocalAt && evidence.admission?.eventLocalDate) fulfillment.trackingAdmissionLocalAt = evidence.admission.eventLocalDate;
         if (!current.trackingDeliveryLocalAt && evidence.delivery?.eventLocalDate) fulfillment.trackingDeliveryLocalAt = evidence.delivery.eventLocalDate;
-        if (transition) {
-          const cutoff = await tx.correosTrackingGate.findUnique({ where: { key: 'SHIPPED_EMAIL_CUTOFF' } });
-          const review = evidence.delivered ? 'ALREADY_DELIVERED_AT_FIRST_SYNC' : shippedNoticeDecision(evidence.admission, cutoff?.notBefore || null, current);
-          fulfillment.trackingNotificationReview = review;
-          if (!review) {
-            const admitted = history.find(e => e.fingerprint === evidence.admission!.fingerprint)!;
-            await tx.orderTrackingNotification.createMany({ data: [{ orderId: id, revision: claim.trackingRevision,
-              eventId: admitted.id, category: 'SHIPPED' }], skipDuplicates: true });
-          }
+        const cutoff = await tx.correosTrackingGate.findUnique({ where: { key: 'LOGISTICS_EMAIL_CUTOFF' } });
+        for (const candidate of carrierNoticeCandidates(current, history as (typeof events[number] & { id: string })[], previous as (typeof events[number] & { id: string })[], cutoff?.notBefore || null)) {
+          const result = await recordLogisticsNotice(tx, current, candidate.category, candidate.event,
+            { origin: 'CORREOS', previousStatus: current.status, nextStatus: String(fulfillment.status || current.status), suppressionReason: candidate.suppressionReason });
+          if (result.count && candidate.suppressionReason) fulfillment.trackingNotificationReview = candidate.suppressionReason;
         }
-        const latest = await tx.orderTrackingEvent.findFirst({ where: { orderId: id, revision: claim.trackingRevision, eventSortKey: { not: null } }, orderBy: [{ eventSortKey: 'desc' }, { createdAt: 'desc' }] });
-        const rank: Record<string, number> = { ADMITTED: 1, IN_TRANSIT: 2, OUT_FOR_DELIVERY: 3, DELIVERED: 4 };
-        const phase = [...history].filter(e => rank[e.category || '']).sort((a, b) =>
-          rank[b.category!] - rank[a.category!] || (b.eventSortKey || '').localeCompare(a.eventSortKey || ''))[0];
-        const display = latest && ['INCIDENT', 'RETURNED'].includes(latest.category || '') ? latest : phase || latest;
-        const terminal = evidence.delivered || latest && latest.category === 'RETURNED';
+        const display = carrierProjection(history as typeof events);
+        const terminal = display && ['DELIVERED', 'RETURNED'].includes(display.category || '');
         await tx.order.update({ where: { id }, data: {
           ...fulfillment,
           trackingLastSuccessAt: new Date(), trackingLastErrorCode: null, trackingLastErrorAt: null, trackingFailures: 0,
           trackingLeaseToken: null, trackingLeaseUntil: null,
           trackingNextSyncAt: new Date(Date.now() + (terminal ? Math.max(config.intervalMs, 86400000) : config.intervalMs)),
           trackingBaselineEstablished: true,
-          trackingTerminalAt: terminal ? current.trackingTerminalAt || new Date() : current.trackingTerminalAt,
-          ...(display && current.status !== 'DELIVERED' && !evidence.delivered ? {
+          trackingTerminalAt: terminal ? current.trackingTerminalAt || new Date() : null,
+          ...(display && !(current.status === 'DELIVERED' && ['ADMITTED', 'IN_TRANSIT'].includes(display.category || '')) ? {
             trackingState: evidence.physical || display.category === 'INCIDENT' || display.category === 'RETURNED'
-              ? display.label : 'Pendiente de entregar a Correos', trackingStateCode: display.code } : {}),
-          ...(evidence.delivered ? { trackingState: 'Entregado', trackingStateCode: evidence.delivery?.code || 'I010000V' } : {}),
+              ? display.label : 'Pendiente de entregar a Correos', trackingStateCode: display.code, trackingCategory: display.category } : {}),
+          ...(!display && !evidence.physical && ['PAID', 'PROCESSING'].includes(current.status) ? { trackingState: 'Pendiente de entregar a Correos', trackingCategory: 'AWAITING_HANDOVER' } : {}),
         } });
       });
     } catch (error) {
@@ -182,5 +178,34 @@ export class TrackingService {
       }
     }
     return { results };
+  }
+
+  async reviewExisting(page = 1) {
+    if (!Number.isSafeInteger(page) || page < 1 || page > 100000) throw new BadRequestException('Página inválida');
+    const cutoff = await this.db.correosTrackingGate.findUnique({ where: { key: 'LOGISTICS_EMAIL_CUTOFF' } });
+    const orders = await this.db.order.findMany({ where: { trackingNumber: { not: null } },
+      orderBy: { id: 'asc' }, skip: (page - 1) * 50, take: 51,
+      include: { trackingEvents: true, trackingNotifications: { select: { category: true, status: true, revision: true, noticeKey: true, suppressionReason: true } } } });
+    return { readOnly: true, carrierQueried: false, page, hasMore: orders.length > 50, cutoff: cutoff?.notBefore || null,
+      trackingEnabled: correosConfig().enabled,
+      logisticsEmailEnabled: logisticsMailEnabled(),
+      manualEmailEnabled: logisticsMailEnabled('MANUAL'),
+      items: orders.slice(0, 50).map(order => {
+        const history = order.trackingEvents.filter(event => event.revision === order.trackingRevision && event.origin === 'CORREOS');
+        const last = carrierProjection(history as any[]);
+        return { orderId: order.id, orderStatus: order.status, trackingNumber: order.trackingNumber,
+          revision: order.trackingRevision, eligible: eligibleTrackingOrder(order), state: order.trackingState,
+          lastReliableMilestone: last ? { code: last.code, category: last.category, localAt: last.eventLocalDate, occurredAt: last.eventTime } : null,
+          potential: eligibleTrackingOrder(order) ? carrierNoticeCandidates(order, history as any[], [], cutoff?.notBefore || null)
+            .map(candidate => {
+              const key = logisticsNoticeKey(order.id, order.trackingRevision, candidate.category, candidate.event.fingerprint, candidate.event.code);
+              const existing = order.trackingNotifications.find(notice => notice.noticeKey === key);
+              return { category: candidate.category, decision: existing ? 'ALREADY_RECORDED' : candidate.suppressionReason ? 'REVIEW' : 'POTENTIAL',
+                reason: existing ? `Ya registrado: ${existing.status}` : candidate.suppressionReason };
+            }) : [],
+          communications: order.trackingNotifications,
+          review: history.length ? order.trackingNotificationReview : 'NO_STORED_CARRIER_HISTORY',
+        };
+      }) };
   }
 }

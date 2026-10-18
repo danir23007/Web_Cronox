@@ -1,0 +1,8 @@
+<!doctype html><html lang="es"><body style="margin:0;background:#000;color:#eee;font-family:Arial,sans-serif">
+<table role="presentation" width="100%"><tr><td align="center" style="padding:28px 14px"><table role="presentation" width="100%" style="max-width:640px;background:#111"><tr><td style="padding:28px">
+<p style="letter-spacing:4px">CRONOX</p><h1 style="font-size:26px">{{title}}</h1>
+<p>Pedido CRONOX <strong>#{{orderId}}</strong></p><p>{{statusLabel}}</p><p>{{message}}</p>
+{{#if shippingCarrier}}<p>Transportista: {{shippingCarrier}}</p>{{/if}}
+{{#if trackingNumber}}<p>Seguimiento: <strong>{{trackingNumber}}</strong></p>{{/if}}
+{{#if trackingUrl}}<p><a href="{{trackingUrl}}" style="display:inline-block;padding:14px 20px;background:#fff;color:#000;text-decoration:none">Ver seguimiento en Correos</a></p>{{/if}}
+</td></tr></table></td></tr></table></body></html>

@@ -6,6 +6,8 @@ export enum EmailSenderKey {
 }
 
 export enum EmailTemplate {
+  ORDER_LOGISTICS = 'ORDER_LOGISTICS',
+  PASSWORD_SETUP = 'PASSWORD_SETUP',
   ORDER_TRACKING = 'ORDER_TRACKING',
   EMAIL_CHANGE = 'EMAIL_CHANGE',
   NEWSLETTER_ACCESS = 'NEWSLETTER_ACCESS',
@@ -20,6 +22,9 @@ export enum EmailTemplate {
 }
 
 export enum EmailType {
+  ORDER_OUT_FOR_DELIVERY = 'ORDER_OUT_FOR_DELIVERY',
+  ORDER_INCIDENT = 'ORDER_INCIDENT',
+  ORDER_RETURNED = 'ORDER_RETURNED',
   ORDER_TRACKING = 'ORDER_TRACKING',
   RESTOCK = 'RESTOCK',
   TEST = 'TEST',
@@ -36,7 +41,7 @@ export enum EmailType {
 export interface EmailSendOptions {
   // Internal absolute deadline; tracking SMTP must finish before releasing Order lock.
   deliveryDeadline?: number;
-  purpose?: 'INITIAL_PASSWORD_SETUP' | 'FIRST_ORDER_DISCOUNT' | 'NEWSLETTER_WELCOME' | 'NEWSLETTER_ACCESS' | 'LAUNCH';
+  purpose?: 'PASSWORD_SETUP_NEW_ACCOUNT' | 'PASSWORD_SETUP_EXISTING_ACCOUNT' | 'INITIAL_PASSWORD_SETUP' | 'FIRST_ORDER_DISCOUNT' | 'NEWSLETTER_WELCOME' | 'NEWSLETTER_ACCESS' | 'LAUNCH';
   type: EmailType;
   to: string;
   subject: string;
@@ -99,6 +104,9 @@ export interface EmailConfig {
 }
 
 export const EMAIL_TYPE_TO_SENDER: Record<EmailType, EmailSenderKey> = {
+  [EmailType.ORDER_OUT_FOR_DELIVERY]: EmailSenderKey.ORDERS,
+  [EmailType.ORDER_INCIDENT]: EmailSenderKey.ORDERS,
+  [EmailType.ORDER_RETURNED]: EmailSenderKey.ORDERS,
   [EmailType.ORDER_TRACKING]: EmailSenderKey.ORDERS,
   [EmailType.RESTOCK]: EmailSenderKey.NOREPLY,
   [EmailType.TEST]: EmailSenderKey.NOREPLY,
@@ -113,6 +121,9 @@ export const EMAIL_TYPE_TO_SENDER: Record<EmailType, EmailSenderKey> = {
 };
 
 export const EMAIL_TYPE_TO_TEMPLATE: Record<EmailType, EmailTemplate> = {
+  [EmailType.ORDER_OUT_FOR_DELIVERY]: EmailTemplate.ORDER_LOGISTICS,
+  [EmailType.ORDER_INCIDENT]: EmailTemplate.ORDER_LOGISTICS,
+  [EmailType.ORDER_RETURNED]: EmailTemplate.ORDER_LOGISTICS,
   [EmailType.ORDER_TRACKING]: EmailTemplate.ORDER_TRACKING,
   [EmailType.RESTOCK]: EmailTemplate.RESTOCK,
   [EmailType.TEST]: EmailTemplate.TEST,
@@ -128,6 +139,8 @@ export const EMAIL_TYPE_TO_TEMPLATE: Record<EmailType, EmailTemplate> = {
 };
 
 export const EMAIL_TEMPLATE_FILE: Record<EmailTemplate, string> = {
+  [EmailTemplate.ORDER_LOGISTICS]: 'order-logistics.hbs',
+  [EmailTemplate.PASSWORD_SETUP]: 'password-setup.hbs',
   [EmailTemplate.ORDER_TRACKING]: 'order-tracking.hbs',
   [EmailTemplate.EMAIL_CHANGE]: 'email-change.hbs',
   [EmailTemplate.NEWSLETTER_ACCESS]: 'newsletter-access.hbs',

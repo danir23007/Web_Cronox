@@ -35,9 +35,10 @@
 
                 <div style="padding-top:14px;font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.8;color:#d7d7d7;">
                   Tu pedido <span style="color:#ffffff;font-weight:700;">#{{orderId}}</span> ya figura como entregado correctamente.
-                  {{#if statusLabel}}
-                  Estado actual: <span style="color:#ffffff;font-weight:700;">{{statusLabel}}</span>.
-                  {{/if}}
+                  {{#if statusLabel}}<br>Estado actual: <span style="color:#ffffff;font-weight:700;">{{statusLabel}}</span>.{{/if}}
+                  {{#if shippingCarrier}}<br>Transportista: {{shippingCarrier}}.{{/if}}
+                  {{#if trackingNumber}}<br>Seguimiento: <strong>{{trackingNumber}}</strong>.{{/if}}
+                  {{#if trackingUrl}}<br><a href="{{trackingUrl}}" style="display:inline-block;margin-top:16px;padding:14px 22px;background:#fff;color:#000;text-decoration:none;">Ver seguimiento en Correos</a>{{/if}}
                 </div>
 
                 <div style="padding-top:18px;font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.8;color:#b5b5b5;">

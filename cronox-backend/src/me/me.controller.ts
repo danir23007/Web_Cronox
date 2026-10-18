@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Put, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Put, UseGuards, Param, ParseIntPipe } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { UpdateMeDto } from './dto/update-me.dto';
@@ -31,5 +31,9 @@ export class MeController {
   @Get('orders')
   getOrders(@CurrentUser('id') userId: number) {
     return this.meService.getOrders(userId);
+  }
+  @Get('orders/:id/tracking')
+  getOrderTracking(@CurrentUser('id') userId: number, @Param('id', ParseIntPipe) id: number) {
+    return this.meService.getOrderTracking(userId, id);
   }
 }

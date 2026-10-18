@@ -932,7 +932,10 @@
       <div class="table-actions" style="display:flex;gap:10px;flex-wrap:wrap;margin-top:12px">
         <span id="ordersSelectedCount" role="status">0 seleccionados de esta página</span>
         <button class="btn" type="button" id="ordersBulkSyncBtn" disabled>Sincronizar seguimiento seleccionados</button>
+        <button class="btn" type="button" id="ordersBulkShipPreviewBtn" disabled>Previsualizar marcado como Enviados</button>
+        <button class="btn" type="button" id="ordersBulkShipApplyBtn" disabled>Marcar como Enviados</button>
         <button class="btn" type="button" id="ordersBulkAssignBtn">Asociar códigos por lote</button>
+        <button class="btn" type="button" id="ordersTrackingReviewBtn">Revisar históricos (sin envío)</button>
         <button class="btn" type="button" id="ordersPrevBtn" disabled>Anterior</button>
         <span id="ordersPageInfo">Página 1</span>
         <button class="btn" type="button" id="ordersNextBtn" disabled>Siguiente</button>
@@ -956,6 +959,13 @@
         <label for="ordersEmailSearch" class="input-icon" style="display:flex; align-items:center; gap:8px; width:min(420px, 100%);">
           <span aria-hidden="true">🔎</span>
           <input id="ordersEmailSearch" class="input" type="search" placeholder="Buscar por email" autocomplete="off">
+        </label>
+        <label for="ordersLogisticsFilter">Estado del envío
+          <select id="ordersLogisticsFilter" class="input"><option value="">Todos</option>
+            <option value="AWAITING_HANDOVER">Pendiente de entregar a Correos</option><option value="SHIPPED">Enviado / admitido</option>
+            <option value="IN_TRANSIT">En tránsito</option><option value="OUT_FOR_DELIVERY">En reparto</option>
+            <option value="DELIVERED">Entregado</option><option value="INCIDENT">Incidencia</option><option value="RETURNED">Devuelto al remitente</option>
+          </select>
         </label>
       </div>
       <div style="overflow-x:auto; margin-top:10px;">
@@ -2155,7 +2165,7 @@
   <script src="assets/responsive-images.js?v=5"></script>
   <script src="assets/admin-mail-document.js?v=2"></script>
   <script src="assets/admin-mails.js?v=4"></script>
-  <script src="assets/admin-orders.js?v=5"></script>
+  <script src="assets/admin-orders.js?v=7"></script>
   <script src="assets/gallery.js?v=18"></script>
   <script src="assets/admin-gallery.js?v=7"></script>
   <script src="assets/key-screen-renderer.js?v=2"></script>

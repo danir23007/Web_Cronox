@@ -17,3 +17,13 @@ export class TrackingBulkSyncDto {
   @ArrayMaxSize(100)
   orderIds!: unknown[];
 }
+
+export class FulfillmentBulkShipDto {
+  @IsArray()
+  @ArrayMinSize(1)
+  @ArrayMaxSize(100)
+  rows!: unknown[];
+
+  @IsBoolean()
+  preview!: boolean;
+}

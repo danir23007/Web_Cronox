@@ -28,7 +28,7 @@ import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { ShippingLabelsService } from '../../shipping-tracking/labels.service';
 import { ShippingLabelUploadInterceptor } from '../../shipping-tracking/labels-upload.interceptor';
 import { SuperAdminGuard } from '../../common/guards/super-admin.guard';
-import { TrackingBulkAssignDto } from './dto/tracking-bulk.dto';
+import { FulfillmentBulkShipDto, TrackingBulkAssignDto } from './dto/tracking-bulk.dto';
 
 @Controller('admin/orders')
 @UseGuards(JwtAuthGuard, AdminGuard, RolesGuard, UserIdentityGuard, SuperAdminGuard)
@@ -68,6 +68,11 @@ export class AdminOrdersController {
   @Post('tracking-bulk/assign')
   assignTrackingBulk(@Body() dto: TrackingBulkAssignDto, @CurrentUser('id') actorId: number) {
     return this.ordersService.assignTrackingBulk(dto.rows, dto.preview, actorId);
+  }
+
+  @Post('fulfillment-bulk/mark-shipped')
+  markShippedBulk(@Body() dto: FulfillmentBulkShipDto, @CurrentUser('id') actorId: number) {
+    return this.ordersService.markShippedBulk(dto.rows, dto.preview, actorId);
   }
 
   @Patch(':id/status')

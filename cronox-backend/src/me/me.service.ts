@@ -247,6 +247,8 @@ export class MeService {
         deliveredAt: true,
         trackingAdmissionLocalAt: true,
         trackingDeliveryLocalAt: true,
+        trackingState: true,
+        trackingCategory: true,
       },
     });
 
@@ -268,7 +270,21 @@ export class MeService {
       deliveredAt: order.deliveredAt,
       trackingAdmissionLocalAt: order.trackingAdmissionLocalAt,
       trackingDeliveryLocalAt: order.trackingDeliveryLocalAt,
+      trackingState: order.trackingState,
+      trackingCategory: order.trackingCategory,
     }));
+  }
+
+  async getOrderTracking(userId: number, orderId: number) {
+    const order = await this.prisma.order.findFirst({ where: { id: orderId, userId },
+      select: { id: true, trackingRevision: true, trackingState: true, trackingCategory: true } });
+    if (!order) throw new NotFoundException('Pedido no encontrado');
+    const events = await this.prisma.orderTrackingEvent.findMany({ where: { orderId, revision: order.trackingRevision },
+      select: { label: true, eventTime: true, eventLocalDate: true, origin: true },
+      orderBy: [{ eventSortKey: { sort: 'desc', nulls: 'last' } }, { createdAt: 'desc' }], take: 100 });
+    return { orderId: order.id, state: order.trackingState, category: order.trackingCategory,
+      events: events.map(event => ({ description: event.label, occurredAt: event.eventTime,
+        occurredLocalAt: event.eventLocalDate, source: event.origin === 'MANUAL' ? 'Confirmación manual' : 'Correos' })) };
   }
 
   private toProfile(user: User): MeProfile {

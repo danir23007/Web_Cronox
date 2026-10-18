@@ -206,6 +206,7 @@ function shipped(): MailBlock[] {
         { color: '#b5b5b5' },
       ),
       button('Ver pedido', '{{orderUrl}}', { condition: 'orderUrl' }),
+      button('Ver seguimiento en Correos', '{{trackingUrl}}', { condition: 'trackingUrl' }),
       button('Visitar la tienda', '{{storeUrl}}', {
         background: '#0b0b0b',
         color: '#eeeeee',
@@ -249,6 +250,8 @@ function delivered(): MailBlock[] {
         color: '#d7d7d7',
       }),
       dynamic('statusDetails', { status: 'Estado actual' }, { ...dark }),
+      dynamic('trackingDetails', { carrier: 'Transportista', tracking: 'Número de seguimiento', status: 'Estado' }, { ...dark }),
+      button('Ver seguimiento en Correos', '{{trackingUrl}}', { condition: 'trackingUrl' }),
       text('Esperamos que todo haya llegado en perfectas condiciones.', {
         color: '#b5b5b5',
       }),
@@ -322,6 +325,21 @@ export function structuredDocumentForPurpose(
 ): VisualDocument | null {
   let blocks: MailBlock[];
   switch (purpose) {
+    case 'PASSWORD_SETUP_NEW_ACCOUNT':
+    case 'PASSWORD_SETUP_EXISTING_ACCOUNT':
+      blocks = [section([heading('{{title}}'), text('{{message}}'),
+        text('Pedido CRONOX #{{orderId}}', { condition: 'orderId' }),
+        button('Configurar contraseña', '{{actionUrl}}'),
+        text('El enlace es de un solo uso y caduca en una hora.'),
+        button('Solicitar otro enlace de recuperación', '{{recoveryUrl}}')])];
+      break;
+    case 'ORDER_OUT_FOR_DELIVERY':
+    case 'ORDER_INCIDENT':
+    case 'ORDER_RETURNED':
+      blocks = [section([heading('{{title}}'), text('Pedido CRONOX #{{orderId}}'), text('{{message}}'),
+        dynamic('trackingDetails', { carrier: 'Transportista', tracking: 'Seguimiento', status: 'Estado' }, { ...dark }),
+        button('Ver seguimiento en Correos', '{{trackingUrl}}', { condition: 'trackingUrl' })])];
+      break;
     case 'ORDER_TRACKING':
       blocks = [section([
         heading('Seguimiento del pedido #{{orderId}}'),
@@ -391,4 +409,30 @@ export function adaptFirstPartyDocument(
   if (value?.blocks?.length === 1 && value.blocks[0]?.type === 'html')
     return structuredDocumentForPurpose(purpose, document) || document;
   return document;
+}
+
+/** Clone legacy designs; never mutate their drafts, versions or publications. */
+export function passwordSetupDesign(document: unknown, purpose: string): unknown {
+  const copy = JSON.parse(JSON.stringify(document)) as Record<string, any>;
+  if (!Array.isArray(copy?.blocks) || copy.blocks.some((b: any) => b.type === 'html'))
+    return structuredDocumentForPurpose(purpose, document);
+  const walk = (value: any) => {
+    if (!value || typeof value !== 'object') return;
+    if (value.type === 'button' && value.url === '{{actionUrl}}') value.text = 'Configurar contraseña';
+    if (typeof value.text === 'string' && /(?:nueva\s+cuenta|cuenta.{0,35}(?:cread[ao]|nueva)|(?:hemos creado|creamos).{0,30}cuenta)/i.test(value.text))
+      value.text = value.type === 'heading' ? '{{title}}' : '{{message}}';
+    for (const item of Object.values(value)) {
+      if (Array.isArray(item)) item.forEach(walk); else if (item && typeof item === 'object') walk(item);
+    }
+  };
+  walk(copy);
+  const serialized = JSON.stringify(copy);
+  const missing: MailBlock[] = [];
+  if (!serialized.includes('{{title}}')) missing.push(heading('{{title}}'));
+  if (!serialized.includes('{{message}}')) missing.push(text('{{message}}'));
+  if (!serialized.includes('{{orderId}}')) missing.push(text('Pedido CRONOX #{{orderId}}', { condition: 'orderId' }));
+  if (!serialized.includes('{{actionUrl}}')) missing.push(button('Configurar contraseña', '{{actionUrl}}'));
+  if (!serialized.includes('{{recoveryUrl}}')) missing.push(button('Solicitar otro enlace de recuperación', '{{recoveryUrl}}'));
+  if (missing.length) copy.blocks.push(section(missing));
+  return copy;
 }

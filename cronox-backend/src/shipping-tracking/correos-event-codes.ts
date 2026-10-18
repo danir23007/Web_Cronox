@@ -18,6 +18,8 @@ export const CORREOS_EVENT_CODES: Readonly<
     }
   >
 > = {
+  I01H230V: { category: 'RETURNED', description: 'Envío devuelto al remitente en oficina' },
+  O200000R: { category: 'INCIDENT', description: 'Envío con posible demora en la entrega por problemas climatológicos' },
   A050000V: { category: 'ADMITTED', description: 'El envío ha tenido admisión en origen' },
   A050020V: { category: 'ADMITTED', description: 'El envío ha tenido admisión en el centro logístico de origen' },
   C010000V: { category: 'IN_TRANSIT', description: 'El envío ha salido del centro logístico internacional de origen y se ha cursado a destino' },

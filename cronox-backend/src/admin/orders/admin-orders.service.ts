@@ -12,12 +12,12 @@ import { AdminOrdersQueryDto } from './dto/admin-order-query.dto';
 import { HistorialService } from '../../historial/historial.service';
 import { UpdateOrderFulfillmentDto } from './dto/update-order-fulfillment.dto';
 import { EmailService } from '../../email/email.service';
-import { EmailType } from '../../email/email.types';
 import { StripeService } from '../../payments/stripe.service';
 import { OrdersService } from '../../orders/orders.service';
 import { toCountryDisplayName } from '../../common/country';
 import { buildCorreosTrackingUrl, normalizeCorreosTrackingNumber, trackingBatchError } from '../../shipping-tracking/tracking-links';
 import { eligibleTrackingOrder } from '../../shipping-tracking/tracking.service';
+import { eligibleFulfillmentOrder, recordManualFulfillment } from '../../shipping-tracking/fulfillment-events';
 
 const DEFAULT_PAGE_SIZE = 20;
 const MAX_EXPORT_ROWS = 5000;
@@ -177,7 +177,49 @@ export class AdminOrdersService {
     return { preview, results };
   }
 
-  async updateOrderFulfillment(id: number, dto: UpdateOrderFulfillmentDto, actorId?: number) {
+  async markShippedBulk(rows: unknown[], preview: boolean, actorId: number) {
+    if (!Array.isArray(rows) || !rows.length || rows.length > 100 || typeof preview !== 'boolean')
+      throw new BadRequestException('Introduce entre 1 y 100 pedidos y especifica vista previa');
+    const results: Record<string, unknown>[] = [];
+    const ids = rows.map(row => (row as { orderId?: unknown } | null)?.orderId);
+    for (const [index, raw] of rows.entries()) {
+      const row = raw as { orderId?: unknown; expectedStatus?: unknown; revision?: unknown } | null;
+      const id = row?.orderId;
+      try {
+        if (typeof id !== 'number' || !Number.isSafeInteger(id) || id < 1) throw new BadRequestException('ID de pedido CRONOX inválido');
+        if (ids.filter(other => other === id).length > 1) throw new BadRequestException('ID de pedido repetido; corrige el lote');
+        const order = await this.prisma.order.findUnique({ where: { id } });
+        if (!order) throw new NotFoundException('Pedido CRONOX no encontrado');
+        if (!eligibleFulfillmentOrder(order)) {
+          results.push({ index, orderId: id, status: 'skipped', error: 'No elegible: revisa pago, disputa, cancelación, compra presencial o recogida' }); continue;
+        }
+        if (order.status === 'SHIPPED') {
+          results.push({ index, orderId: id, status: 'already_shipped' }); continue;
+        }
+        if (!['PAID', 'PROCESSING'].includes(order.status)) {
+          results.push({ index, orderId: id, status: 'skipped', error: 'Ya entregado; no se retrocede a Enviado' }); continue;
+        }
+        if (!preview) {
+          if (!['PAID', 'PROCESSING'].includes(String(row?.expectedStatus)) || !Number.isSafeInteger(row?.revision))
+            throw new BadRequestException('Valida la vista previa antes de marcar como Enviado');
+          await this.updateOrderFulfillment(id, { status: OrderStatus.SHIPPED }, actorId,
+            { status: row!.expectedStatus as OrderStatus, revision: row!.revision as number });
+        }
+        results.push({ index, orderId: id, status: preview ? 'valid' : 'updated', expectedStatus: order.status, revision: order.trackingRevision });
+      } catch (error) {
+        // A simultaneous manual/carrier transition may have already fulfilled it.
+        const current = typeof id === 'number' && Number.isSafeInteger(id) && id > 0 && error instanceof ConflictException
+          ? await this.prisma.order.findUnique({ where: { id } }) : null;
+        results.push({ index, orderId: typeof id === 'number' ? id : null,
+          status: current?.status === 'SHIPPED' ? 'already_shipped' : 'error',
+          ...(current?.status === 'SHIPPED' ? {} : { error: trackingBatchError(error) }) });
+      }
+    }
+    return { preview, results };
+  }
+
+  async updateOrderFulfillment(id: number, dto: UpdateOrderFulfillmentDto, actorId?: number,
+    expected?: { status: OrderStatus; revision: number }) {
     const include = {
       user: { select: { email: true, memberCode: true } },
       checkoutSnapshot: {
@@ -205,6 +247,8 @@ export class AdminOrdersService {
       if (!existing) {
         throw new NotFoundException('Order not found');
       }
+      if (expected && (existing.status !== expected.status || existing.trackingRevision !== expected.revision))
+        throw new ConflictException('El pedido cambió desde la vista previa; vuelve a validar');
 
       if (
         !hadExplicitStatus &&
@@ -288,6 +332,8 @@ export class AdminOrdersService {
             trackingAdmissionLocalAt: null,
             trackingDeliveryLocalAt: null,
             trackingNotificationReview: null,
+            trackingFlowStartedAt: nextNumber ? new Date() : null,
+            trackingCategory: null,
           });
           await tx.orderTrackingAudit.create({ data: {
             orderId: id,
@@ -297,10 +343,37 @@ export class AdminOrdersService {
             nextNumber,
             revision,
           } });
+          const unsentManual = !existing.trackingNumber && nextNumber
+            ? await tx.orderTrackingNotification.findMany({ where: {
+              orderId: id, revision: existing.trackingRevision, origin: 'MANUAL',
+              status: { in: ['PENDING', 'RETRY'] },
+              noticeKey: { in: [`ORDER:${id}:SHIPPED`, `ORDER:${id}:DELIVERED`] },
+            } }) : [];
           await tx.orderTrackingNotification.updateMany({
             where: { orderId: id, revision: { lt: revision }, status: { in: ['PENDING', 'SENDING', 'RETRY'] } },
             data: { status: 'CANCELLED', leaseToken: null, leaseUntil: null },
           });
+          // A first tracking association may follow manual shipment. Move only
+          // provably unsent manual work, keeping its old event/job as audit.
+          // Replacements and ambiguous/SENT deliveries never reopen a notice.
+          if (unsentManual.length) {
+            for (const notice of unsentManual) {
+              const originalEvent = await tx.orderTrackingEvent.findUniqueOrThrow({ where: { id: notice.eventId } });
+              const event = await tx.orderTrackingEvent.create({ data: {
+                orderId: id, revision, origin: 'MANUAL', fingerprint: originalEvent.fingerprint,
+                code: originalEvent.code, category: originalEvent.category, label: originalEvent.label,
+                eventTime: originalEvent.eventTime,
+              } });
+              await tx.orderTrackingNotification.update({ where: { id: notice.id }, data: {
+                noticeKey: `ARCHIVED:${notice.id}`, suppressionReason: 'FIRST_TRACKING_ASSOCIATION',
+              } });
+              await tx.orderTrackingNotification.create({ data: {
+                orderId: id, revision, origin: 'MANUAL', eventId: event.id, category: notice.category,
+                noticeKey: notice.noticeKey, transitionFrom: notice.transitionFrom, transitionTo: notice.transitionTo,
+                nextAttemptAt: notice.nextAttemptAt, attempts: notice.attempts,
+              } });
+            }
+          }
         }
         if (isCorreos) data.trackingUrl = buildCorreosTrackingUrl(nextNumber);
       }
@@ -319,6 +392,15 @@ export class AdminOrdersService {
         data.internalNote = dto.internalNote ?? null;
 
       if (hadExplicitStatus && targetStatus !== existing.status) {
+        if (['SHIPPED', 'DELIVERED'].includes(targetStatus) && !eligibleFulfillmentOrder(existing))
+          throw new BadRequestException('Este pedido no admite cambios logísticos: revisa estado, compra presencial o recogida');
+        if (['SHIPPED', 'DELIVERED'].includes(targetStatus)) {
+          data.trackingFlowStartedAt = existing.trackingFlowStartedAt || new Date();
+          if (!existing.trackingStateCode || data.trackingState === null) Object.assign(data, {
+            trackingCategory: targetStatus,
+            trackingState: targetStatus === 'SHIPPED' ? 'Enviado (confirmación manual)' : 'Entregado (confirmación manual)',
+          });
+        }
         const actor = actorId === undefined ? null : await tx.user.findUnique({ where: { id: actorId }, select: { identityUid: true } });
         await tx.orderTrackingAudit.create({ data: { orderId: id, actorId: actorId ?? null,
           actorIdentityUid: actor?.identityUid ?? null, previousNumber: existing.trackingNumber,
@@ -352,6 +434,7 @@ export class AdminOrdersService {
 
       await this.syncHistorialForStatusChange(existing, order, tx);
       await this.handlePromoUsageOnPaid(tx, existing, order);
+      if (hadExplicitStatus) await recordManualFulfillment(tx, order, existing.status);
 
       return { updated: order, previous: existing };
     }).catch(error => {
@@ -359,16 +442,6 @@ export class AdminOrdersService {
         throw new ConflictException('Ese código de Correos ya está asociado a otro pedido. Recarga y revisa la asociación');
       throw error;
     });
-
-    try {
-      await this.sendStatusEmails(previous, updated, hadExplicitStatus);
-    } catch (error) {
-      const reason =
-        error instanceof Error ? error.message : 'Error desconocido';
-      this.logger.error(
-        `No se pudo enviar el email transaccional del pedido #${updated.id}. El pedido se actualizó correctamente. reason=${reason}`,
-      );
-    }
 
     return this.serializeOrderWithItems(updated);
   }
@@ -514,6 +587,14 @@ export class AdminOrdersService {
 
   private buildWhere(query: AdminOrdersQueryDto): Prisma.OrderWhereInput {
     const where: Prisma.OrderWhereInput = {};
+    if (query.trackingCategory === 'AWAITING_HANDOVER') {
+      where.trackingNumber = { not: null }; where.status = { in: ['PAID', 'PROCESSING'] };
+      where.source = 'ONLINE';
+      where.AND = [{ status: { in: ['PAID', 'PROCESSING'] } }, { OR: [{ trackingCategory: null }, { trackingCategory: 'AWAITING_HANDOVER' }] },
+        { OR: [{ shippingMethodCode: null }, { shippingMethodCode: { notIn: ['PICKUP', 'LOCAL_PICKUP'] } }] }];
+    } else if (query.trackingCategory) {
+      where.trackingCategory = query.trackingCategory === 'SHIPPED' ? { in: ['SHIPPED', 'ADMITTED'] } : query.trackingCategory;
+    }
 
     if (query.status?.length) {
       where.status = { in: query.status };
@@ -597,6 +678,8 @@ export class AdminOrdersService {
       trackingNumber: order.trackingNumber,
       trackingUrl: order.trackingUrl,
       trackingRevision: order.trackingRevision,
+      trackingState: order.trackingState,
+      trackingCategory: order.trackingCategory,
       shippingCarrier: order.shippingCarrier,
       shippedAt: order.shippedAt?.toISOString() ?? null,
       deliveredAt: order.deliveredAt?.toISOString() ?? null,
@@ -649,6 +732,8 @@ export class AdminOrdersService {
       status: order.status,
       paymentStatus: this.getPaymentStatus(order.status),
       fulfillmentStatus: this.getFulfillmentStatus(order),
+      trackingState: order.trackingState,
+      trackingCategory: order.trackingCategory,
       trackingAdmissionLocalAt: order.trackingAdmissionLocalAt,
       trackingDeliveryLocalAt: order.trackingDeliveryLocalAt,
       trackingNotificationReview: order.trackingNotificationReview,
@@ -898,48 +983,6 @@ export class AdminOrdersService {
       throw new BadRequestException(
         `Transición no permitida: ${from} -> ${to}`,
       );
-    }
-  }
-
-  private async sendStatusEmails(
-    previous: OrderWithItems,
-    updated: OrderWithItems,
-    statusWasExplicitlyUpdated: boolean,
-  ) {
-    if (!statusWasExplicitlyUpdated || previous.status === updated.status) {
-      return;
-    }
-
-    const to = updated.user?.email;
-    if (!to) {
-      return;
-    }
-
-    if (updated.status === OrderStatus.SHIPPED) {
-      await this.emailService.send({
-        type: EmailType.ORDER_SHIPPED,
-        to,
-        subject: `CRONOX · Pedido #${updated.id} enviado`,
-        templateData: {
-          orderId: String(updated.id),
-          statusLabel: this.getOrderStatusLabel(updated.status),
-          trackingNumber: updated.trackingNumber,
-          trackingUrl: updated.trackingUrl,
-          shippingCarrier: updated.shippingCarrier,
-        },
-      });
-    }
-
-    if (updated.status === OrderStatus.DELIVERED) {
-      await this.emailService.send({
-        type: EmailType.ORDER_DELIVERED,
-        to,
-        subject: `CRONOX · Pedido #${updated.id} entregado`,
-        templateData: {
-          orderId: String(updated.id),
-          statusLabel: this.getOrderStatusLabel(updated.status),
-        },
-      });
     }
   }
 

@@ -49,6 +49,8 @@ describe('TrackpubContract against the official object response contract', () =>
     ['H250000V', 'OUT_FOR_DELIVERY'],
     ['I010000V', 'DELIVERED'],
     ['I020000V', 'RETURNED'],
+    ['I01H230V', 'RETURNED'],
+    ['O200000R', 'INCIDENT'],
     ['O07A010R', 'INCIDENT'],
     ['O07A030R', 'INCIDENT'],
   ])('classifies reviewed uniqueCode %s as %s', (uniqueCode, category) => {
@@ -83,7 +85,7 @@ describe('TrackpubContract against the official object response contract', () =>
     });
   });
 
-  it.each(['UNREVIEWED', 'I01H230V', 'I01E410V', 'X400000R', 'i010000v'])(
+  it.each(['UNREVIEWED', 'I01E410V', 'X400000R', 'i010000v'])(
     'preserves unreviewed code %s despite delivery phase/text',
     (uniqueCode) => {
       const [parsed] = contract.parse({

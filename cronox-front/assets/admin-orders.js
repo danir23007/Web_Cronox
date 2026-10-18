@@ -6,6 +6,7 @@
   const message = $('#ordersMessage');
   const refreshButton = $('#ordersRefreshBtn');
   const emailSearch = $('#ordersEmailSearch');
+  const logisticsFilter = $('#ordersLogisticsFilter');
   const modal = $('#orderDetailModal');
   const closeButton = $('#orderDetailClose');
   const title = $('#orderDetailTitle');
@@ -66,14 +67,21 @@
   const selectedOrders = new Set();
   let visibleOrders = [];
   let bulkPreview = null;
+  let bulkShipPreview = null;
   const selectPage = $('#ordersSelectPage');
   const bulkSyncButton = $('#ordersBulkSyncBtn');
   const bulkRows = $('#ordersBulkRows');
   const bulkSave = $('#ordersBulkSaveBtn');
   const bulkEditor = $('#ordersBulkEditor');
   const selectionChanged = () => {
+    if (bulkShipPreview && (bulkShipPreview.ids.length !== selectedOrders.size || bulkShipPreview.ids.some(id => !selectedOrders.has(id)))) bulkShipPreview = null;
     setText($('#ordersSelectedCount'), selectedOrders.size + ' seleccionados de esta página');
     if (bulkSyncButton) bulkSyncButton.disabled = bulkBusy || !selectedOrders.size;
+    if ($('#ordersBulkShipPreviewBtn')) $('#ordersBulkShipPreviewBtn').disabled = bulkBusy || !selectedOrders.size;
+    if ($('#ordersBulkShipApplyBtn')) {
+      $('#ordersBulkShipApplyBtn').disabled = bulkBusy || !bulkShipPreview?.validCount;
+      $('#ordersBulkShipApplyBtn').textContent = bulkShipPreview?.validCount ? 'Marcar ' + bulkShipPreview.validCount + ' como Enviados' : 'Marcar como Enviados';
+    }
     if (selectPage) {
       selectPage.checked = visibleOrders.length > 0 && selectedOrders.size === visibleOrders.length;
       selectPage.indeterminate = selectedOrders.size > 0 && selectedOrders.size < visibleOrders.length;
@@ -254,7 +262,9 @@
       (data?.notificationReview ? ' · Aviso retenido para revisión: ' + data.notificationReview : '') +
       (data?.admissionLocalAt ? ' · Admisión (hora local de Correos): ' + data.admissionLocalAt : '') +
       (data?.deliveryLocalAt ? ' · Entrega (hora local de Correos): ' + data.deliveryLocalAt : '') +
-      ((data?.notifications || []).length ? ' · Aviso de envío: ' + data.notifications.map(job => job.status + ' (' + job.attempts + ' intentos)').join(', ') : ''));
+      ((data?.notifications || []).length ? ' · Comunicaciones: ' + data.notifications.map(job =>
+        ({ SHIPPED: 'Enviado', OUT_FOR_DELIVERY: 'En reparto', DELIVERED: 'Entregado', INCIDENT: 'Incidencia', RETURNED: 'Devuelto' }[job.category] || job.category) +
+        ': ' + job.status + ' · ' + (job.origin === 'MANUAL' ? 'Manual' : 'Correos') + ' · revisión ' + job.revision + ' (' + job.attempts + ' intentos)').join(', ') : ''));
     setText(trackingSuccess, data?.lastSuccessAt ? formatDate(data.lastSuccessAt) : 'Sin sincronización correcta');
     setText(trackingError, data?.lastError ? text(data.lastError.code) + ' · ' + formatDate(data.lastError.at) : 'Ninguno');
     setText(trackingNext, data?.nextSyncAt ? formatDate(data.nextSyncAt) : '—');
@@ -262,7 +272,7 @@
     if (trackingContract) trackingContract.hidden = !number || data?.contractReady !== false;
     if (trackingApi) {
       trackingApi.hidden = data?.apiEnabled !== false && data?.apiReady !== false && data?.apiEligible !== false && data?.eligible !== false;
-      trackingApi.textContent = data?.apiEnabled === false ? 'Las consultas a Correos están desactivadas. El enlace público y la etiqueta siguen disponibles.'
+      trackingApi.textContent = data?.apiEnabled === false ? 'Las consultas a Correos están desactivadas. El enlace público y la etiqueta siguen disponibles.' + (data.manualNotificationsEnabled ? ' Los avisos del marcado manual siguen habilitados.' : '')
         : data?.apiReady === false ? 'Falta completar la configuración privada de Correos en el servidor. El enlace público y la etiqueta siguen disponibles.'
         : 'Este pedido no admite consultas automáticas de transporte. El enlace público y la etiqueta siguen disponibles.';
     }
@@ -400,6 +410,7 @@
       createCell(row, formatDate(order?.createdAt));
       const statusCell = document.createElement('td');
       statusCell.appendChild(createStatusChip(order?.status));
+      if (order?.trackingState) { const state = document.createElement('div'); state.textContent = 'Envío: ' + order.trackingState; statusCell.appendChild(state); }
       if (order?.trackingNotificationReview) statusCell.append(' · Aviso retenido para revisión');
       if (order?.excludedFromStatistics) statusCell.append(' · Excluida de estadísticas');
       row.appendChild(statusCell);
@@ -429,7 +440,8 @@
     setMessage(message, '');
     try {
       const email = getEmailFilter();
-      const query = '?page=' + ordersPage + (email ? '&email=' + encodeURIComponent(email) : '');
+      const query = '?page=' + ordersPage + (email ? '&email=' + encodeURIComponent(email) : '') +
+        (logisticsFilter?.value ? '&trackingCategory=' + encodeURIComponent(logisticsFilter.value) : '');
       const data = await request('/api/admin/orders' + query);
       if (sequence !== listRequest) return;
       ordersPageCount = data?.meta?.pageCount || 1;
@@ -594,13 +606,13 @@
   const invalidateBulkPreview = () => { bulkPreview = null; if (bulkSave) bulkSave.disabled = true; };
   const setBulkBusy = (value) => {
     bulkBusy = value;
-    document.querySelectorAll('#section-orders button, #section-orders input, #section-orders textarea').forEach(el => { el.disabled = value; });
+    document.querySelectorAll('#section-orders button, #section-orders input, #section-orders textarea, #section-orders select').forEach(el => { el.disabled = value; });
     selectionChanged();
     if (bulkSave) bulkSave.disabled = value || !bulkPreview?.length;
     if ($('#ordersPrevBtn')) $('#ordersPrevBtn').disabled = value || ordersPage <= 1;
     if ($('#ordersNextBtn')) $('#ordersNextBtn').disabled = value || ordersPage >= ordersPageCount;
   };
-  const resultLabel = result => ({ updated: 'Actualizado', unchanged: 'Sin cambios', valid: 'Válido para guardar', error: 'Error' }[result.status] || result.status) +
+  const resultLabel = result => ({ updated: 'Actualizado', unchanged: 'Sin cambios', valid: 'Válido para guardar', already_shipped: 'Ya enviado', skipped: 'Omitido', error: 'Error' }[result.status] || result.status) +
     (result.error ? ': ' + result.error : '') + (result.orderStatus ? ' · ' + statusLabel(result.orderStatus) : '') +
     (result.notificationReview ? ' · Aviso retenido: ' + result.notificationReview : '');
   const addBulkRow = (id = '', code = '') => {
@@ -632,6 +644,39 @@
     if (selectPage.checked) visibleOrders.forEach(order => selectedOrders.add(order.id));
     body.querySelectorAll('[data-select-order]').forEach(input => { input.checked = selectedOrders.has(Number(input.dataset.selectOrder)); });
     selectionChanged();
+  });
+  const renderBulkShipResults = results => {
+    const container = $('#ordersBulkResults'); container?.replaceChildren();
+    results.forEach(result => { const line = document.createElement('p');
+      line.textContent = 'Pedido #' + (result.orderId || 'inválido') + ': ' + resultLabel(result);
+      container?.appendChild(line);
+    });
+  };
+  $('#ordersBulkShipPreviewBtn')?.addEventListener('click', () => {
+    const ids = [...selectedOrders]; if (!ids.length) return;
+    runBulk(async () => {
+      bulkShipPreview = null;
+      const response = await request('/api/admin/orders/fulfillment-bulk/mark-shipped', { method: 'POST', body: JSON.stringify({ rows: ids.map(orderId => ({ orderId })), preview: true }) });
+      renderBulkShipResults(response.results);
+      const rows = response.results.map(({ orderId, expectedStatus, revision }) => ({ orderId, expectedStatus, revision }));
+      const validCount = response.results.filter(result => result.status === 'valid').length;
+      bulkShipPreview = { ids, rows, validCount };
+      setMessage(message, validCount + ' pedidos válidos. Revisa los resultados y pulsa Marcar como Enviados para confirmar el cambio y crear sus avisos. La vista previa no modifica pedidos ni envía correos.');
+    });
+  });
+  $('#ordersBulkShipApplyBtn')?.addEventListener('click', () => {
+    if (!bulkShipPreview?.validCount) return;
+    const rows = bulkShipPreview.rows.map(row => ({ ...row }));
+    runBulk(async () => {
+      bulkShipPreview = null;
+      const response = await request('/api/admin/orders/fulfillment-bulk/mark-shipped', { method: 'POST', body: JSON.stringify({ rows, preview: false }) });
+      renderBulkShipResults(response.results);
+      await load();
+      const updated = response.results.filter(result => result.status === 'updated').length;
+      const already = response.results.filter(result => result.status === 'already_shipped').length;
+      const unresolved = response.results.length - updated - already;
+      setMessage(message, updated + ' actualizados, ' + already + ' ya enviados, ' + unresolved + ' omitidos o con error. Consulta cada resultado.', unresolved ? 'error' : 'success');
+    });
   });
   bulkSyncButton?.addEventListener('click', () => {
     const ids = [...selectedOrders]; if (!ids.length) return;
@@ -694,6 +739,25 @@
   $('#ordersPrevBtn')?.addEventListener('click', () => { if (ordersPage > 1 && !bulkBusy) { ordersPage--; load(); } });
   $('#ordersNextBtn')?.addEventListener('click', () => { if (ordersPage < ordersPageCount && !bulkBusy) { ordersPage++; load(); } });
   emailSearch?.addEventListener('input', () => { ordersPage = 1; });
+  logisticsFilter?.addEventListener('change', () => { ordersPage = 1; load(); });
+  $('#ordersTrackingReviewBtn')?.addEventListener('click', () => runBulk(async () => {
+    const container = $('#ordersBulkResults'); container?.replaceChildren();
+    let page = 1, hasMore = true;
+    while (hasMore) {
+      const review = await request('/api/admin/orders/tracking-bulk/review?page=' + page);
+      if (!review.readOnly || review.carrierQueried) throw Error('Respuesta de revisión no válida');
+      review.items.forEach(item => { const line = document.createElement('p');
+        line.textContent = 'Pedido #' + item.orderId + ' · ' + statusLabel(item.orderStatus) + ' · ' + (item.state || 'Sin hito fiable') +
+          ' · ' + (item.eligible ? 'Elegible' : 'Excluido') + ' · Avisos potenciales: ' +
+          (item.potential.map(notice => notice.category + ': ' + (notice.reason || 'pendiente de revisión antes de activar')).join(', ') || 'ninguno') +
+          ' · Avisos registrados: ' + (item.communications.map(notice => notice.category + '/' + notice.status).join(', ') || 'ninguno');
+        container?.appendChild(line);
+      });
+      hasMore = review.hasMore; page++;
+      if (page > 200) { setMessage(message, 'Revisión limitada a 10.000 pedidos. Usa la consulta paginada para continuar.'); return; }
+    }
+    setMessage(message, 'Revisión completada con el historial guardado: sin consultar Correos ni generar avisos.');
+  }));
   window.fetchOrders = load;
   window.CRONOX_ADMIN_ORDERS = { open: openOrder };
 })();

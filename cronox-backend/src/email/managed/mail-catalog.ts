@@ -8,9 +8,15 @@ import {
 
 // Distinct purposes preserve the existing sender/transport types.
 export const MAIL_PURPOSES = [
-  { key: 'ORDER_TRACKING', name: 'Actualización de seguimiento de Correos',
+  { key: 'ORDER_TRACKING', name: 'Seguimiento genérico (legado; no genera avisos)',
     type: EmailType.ORDER_TRACKING, subject: 'CRONOX · Seguimiento del pedido #{{orderId}}',
     required: ['orderId', 'trackingNumber', 'trackingUrl', 'statusLabel'] },
+  { key: 'ORDER_OUT_FOR_DELIVERY', name: 'Pedido en reparto', type: EmailType.ORDER_OUT_FOR_DELIVERY,
+    subject: 'CRONOX · Pedido #{{orderId}} en reparto', required: ['orderId', 'trackingNumber', 'trackingUrl', 'statusLabel'] },
+  { key: 'ORDER_INCIDENT', name: 'Incidencia en el envío', type: EmailType.ORDER_INCIDENT,
+    subject: 'CRONOX · Incidencia en el envío del pedido #{{orderId}}', required: ['orderId', 'trackingNumber', 'trackingUrl', 'statusLabel'] },
+  { key: 'ORDER_RETURNED', name: 'Devolución al remitente', type: EmailType.ORDER_RETURNED,
+    subject: 'CRONOX · Pedido #{{orderId}} devuelto al remitente', required: ['orderId', 'trackingNumber', 'trackingUrl', 'statusLabel'] },
   { key: 'RESTOCK', name: 'Aviso de reposición de talla', type: EmailType.RESTOCK,
     subject: 'Tu talla ha vuelto: {{product}} · {{size}}', required: ['product', 'size', 'actionUrl'] },
   {
@@ -57,8 +63,16 @@ export const MAIL_PURPOSES = [
     required: ['actionUrl'],
   },
   {
+    key: 'PASSWORD_SETUP_NEW_ACCOUNT', name: 'Contraseña tras compra: cuenta nueva', type: EmailType.PASSWORD_RESET,
+    subject: 'CRONOX · Tu cuenta está lista: configura tu contraseña', required: ['actionUrl', 'recoveryUrl', 'message', 'orderId'],
+  },
+  {
+    key: 'PASSWORD_SETUP_EXISTING_ACCOUNT', name: 'Contraseña tras compra: cuenta existente', type: EmailType.PASSWORD_RESET,
+    subject: 'CRONOX · Configura tu contraseña y consulta tu pedido', required: ['actionUrl', 'recoveryUrl', 'message', 'orderId'],
+  },
+  {
     key: 'INITIAL_PASSWORD_SETUP',
-    name: 'Configuración inicial de cuenta',
+    name: 'Configuración inicial (legado; diseño conservado)',
     type: EmailType.PASSWORD_RESET,
     subject: 'CRONOX · Tu cuenta ha sido creada',
     required: ['actionUrl'],
@@ -66,7 +80,7 @@ export const MAIL_PURPOSES = [
 ].map((p) => ({
   ...p,
   senderKey: ['NEWSLETTER_ACCESS', 'NEWSLETTER_WELCOME'].includes(p.key) ? EmailSenderKey.NOREPLY : EMAIL_TYPE_TO_SENDER[p.type],
-  template: p.key === 'NEWSLETTER_ACCESS' ? EmailTemplate.NEWSLETTER_ACCESS : EMAIL_TYPE_TO_TEMPLATE[p.type],
+  template: p.key.startsWith('PASSWORD_SETUP_') ? EmailTemplate.PASSWORD_SETUP : p.key === 'NEWSLETTER_ACCESS' ? EmailTemplate.NEWSLETTER_ACCESS : EMAIL_TYPE_TO_TEMPLATE[p.type],
 }));
 
 export const SAMPLE_DATA: Record<string, unknown> = {
@@ -85,6 +99,7 @@ export const SAMPLE_DATA: Record<string, unknown> = {
   orderUrl: 'https://example.com/pedido',
   storeUrl: 'https://example.com',
   actionUrl: 'https://example.com/confirmar',
+  recoveryUrl: 'https://example.com/recuperar-contrasena',
   actionLabel: 'Continuar',
   supportCaseId: 'SOP-PRUEBA',
   statusLabel: 'En camino',
@@ -135,6 +150,7 @@ export const VARIABLE_DESCRIPTIONS: Record<string, string> = {
   orderUrl: 'Enlace al pedido',
   storeUrl: 'Enlace a la tienda',
   actionUrl: 'Enlace de la acción principal',
+  recoveryUrl: 'Enlace para solicitar una nueva recuperación',
   actionLabel: 'Texto del botón principal',
   supportCaseId: 'Número del ticket de soporte',
   statusLabel: 'Estado del pedido',
@@ -167,6 +183,7 @@ export const VARIABLE_DESCRIPTIONS: Record<string, string> = {
 
 export function variablesFor(purpose?: string | null) {
   const base = ['subject', 'title', 'message'];
+  if (purpose?.startsWith('PASSWORD_SETUP_')) return [...base, 'orderId', 'actionUrl', 'actionLabel', 'recoveryUrl'];
   // Content-only campaign versions have no transactional purpose. Preserve
   // their event/customer vocabulary without exposing password or token fields.
   if (!purpose) return [...base, 'actionUrl', 'actionLabel', 'storeUrl', 'product',
@@ -187,6 +204,9 @@ export function variablesFor(purpose?: string | null) {
   ];
   switch (MAIL_PURPOSES.find((x) => x.key === purpose)?.type) {
     case EmailType.ORDER_TRACKING:
+    case EmailType.ORDER_OUT_FOR_DELIVERY:
+    case EmailType.ORDER_INCIDENT:
+    case EmailType.ORDER_RETURNED:
       return [...base, ...order, 'trackingNumber', 'trackingUrl', 'shippingCarrier', 'statusLabel'];
     case EmailType.RESTOCK:
       return [...base, 'product', 'size', 'imageUrl', 'actionUrl'];
@@ -214,10 +234,11 @@ export function variablesFor(purpose?: string | null) {
         ...order,
         'shippingCarrier',
         'trackingNumber',
+        'trackingUrl',
         'statusLabel',
       ];
     case EmailType.ORDER_DELIVERED:
-      return [...base, 'orderId', 'statusLabel'];
+      return [...base, ...order, 'shippingCarrier', 'trackingNumber', 'trackingUrl', 'statusLabel'];
     case EmailType.SUPPORT_TICKET_RECEIVED:
       return [...base, 'supportCaseId', 'customerEmail'];
     case EmailType.TEST:

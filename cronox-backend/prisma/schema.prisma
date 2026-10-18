@@ -1516,6 +1516,7 @@ model CheckoutEffect {
   orderId            Int
   userId             Int?
   kind               String
+  accountScenario    String?
   status             String   @default("PENDING")
   result             String?
   error              String?
@@ -1556,6 +1557,8 @@ model Order {
   trackingAdmissionLocalAt String?
   trackingDeliveryLocalAt String?
   trackingNotificationReview String?
+  trackingFlowStartedAt DateTime?
+  trackingCategory     String?
   trackingEvents       OrderTrackingEvent[]
   trackingAudits       OrderTrackingAudit[]
   trackingNotifications OrderTrackingNotification[]
@@ -1627,6 +1630,7 @@ model OrderTrackingEvent {
   code        String?
   label       String?
   category    String?
+  origin      String   @default("CORREOS")
   createdAt   DateTime @default(now()) @db.Timestamptz(3)
 
   @@unique([orderId, revision, fingerprint])
@@ -1657,7 +1661,12 @@ model OrderTrackingNotification {
   orderId       Int
   order         Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
   revision      Int
-  eventId       String   @unique
+  eventId       String
+  noticeKey     String?  @unique
+  origin        String   @default("CORREOS")
+  transitionFrom String?
+  transitionTo   String?
+  suppressionReason String?
   category      String
   status        String   @default("PENDING")
   attempts      Int      @default(0)
@@ -1670,6 +1679,7 @@ model OrderTrackingNotification {
 
   @@index([status, nextAttemptAt])
   @@index([orderId, revision])
+  @@index([eventId])
 }
 
 // Files live outside every publicly served tree; only authenticated Admin downloads.

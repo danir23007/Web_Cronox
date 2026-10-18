@@ -51,7 +51,7 @@ export class MailTransportFactory implements OnModuleInit, OnModuleDestroy {
         return tx.emailDelivery.create({ data });
       });
     } catch (error) {
-      if (!quotaWaiting(error) || !['ORDER_CONFIRMATION','ORDER_SHIPPED','ORDER_DELIVERED'].includes(purpose || '')) throw error;
+      if (!quotaWaiting(error) || deadline !== undefined || !['ORDER_CONFIRMATION','ORDER_SHIPPED','ORDER_DELIVERED'].includes(purpose || '')) throw error;
       // Existing newsletter/restock jobs wait in their own durable queues. Orders
       // need this outbox so a committed payment/status change never loses mail.
       const payload = encrypt(JSON.stringify({ raw: raw.toString('base64'), envelope: prepared.envelope }), data.id + ':queued-email');

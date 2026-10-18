@@ -466,6 +466,7 @@
       const orderStatus = escapeHtml(statusLabel(order.status)) + (order.excludedFromStatistics ? '<br><strong>Excluida de estadísticas</strong>' : '');
       const total = escapeHtml(order.total ?? '');
       const currency = escapeHtml(order.currency || '');
+      if (order.trackingState) trackingBits.push(`Estado del envío: ${escapeHtml(order.trackingState)}`);
       if (order.shippingCarrier) {
         trackingBits.push(`Transportista: ${escapeHtml(order.shippingCarrier)}`);
       }
@@ -508,6 +509,28 @@
         <td data-label="Seguimiento">${trackingBits.join('<br>')}</td>
         <td data-label="Total">${total} ${currency}</td>
       `;
+      if (order.trackingNumber) {
+        const details = document.createElement('details');
+        const summary = document.createElement('summary'); summary.textContent = 'Historial de seguimiento';
+        const history = document.createElement('div'); history.setAttribute('aria-live', 'polite');
+        details.append(summary, history);
+        let loaded = false, loading = false;
+        details.addEventListener('toggle', async () => {
+          if (!details.open || loaded || loading) return;
+          loading = true; history.textContent = 'Cargando historial…';
+          try {
+            const response = await fetch((api.API_BASE || '') + '/api/me/orders/' + encodeURIComponent(order.id) + '/tracking', { credentials: 'include' });
+            if (!response.ok) throw Error('No se pudo cargar el historial.');
+            const data = await response.json(); history.replaceChildren();
+            (data.events || []).forEach(event => { const line = document.createElement('p');
+              line.textContent = [event.occurredLocalAt || (event.occurredAt ? formatDate(event.occurredAt) : ''), event.description, event.source].filter(Boolean).join(' · '); history.appendChild(line); });
+            if (!data.events?.length) history.textContent = 'Todavía no hay eventos confirmados.';
+            loaded = true;
+          } catch { history.textContent = 'No se pudo cargar el historial. Cierra y vuelve a abrir para reintentar.'; }
+          finally { loading = false; }
+        });
+        tr.querySelector('[data-label="Seguimiento"]')?.appendChild(details);
+      }
       ordersBody.appendChild(tr);
     });
   };

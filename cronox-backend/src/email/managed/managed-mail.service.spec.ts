@@ -133,6 +133,7 @@ describe('managed email safety and import', () => {
         ),
       },
       managedEmailTemplate: {
+        findUnique: jest.fn(({ where }: { where: { importKey: string } }) => templateRows.get(where.importKey) || null),
         count: jest.fn(
           ({ where }: { where: { importKey: { in: string[] } } }) =>
             where.importKey.in.filter((key) => templateRows.has(key)).length,

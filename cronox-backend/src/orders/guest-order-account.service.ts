@@ -4,6 +4,8 @@ import { normalizeCountry } from '../common/country';
 import { normalizeEmail } from '../common/email';
 import { ensureAccountWelcome } from '../users/account-welcome';
 import { ACCOUNT_FIRST_NAME_MAX, ACCOUNT_LAST_NAME_MAX } from '../common/account-name-policy';
+import { PasswordSetupScenario } from '../common/password-setup-context';
+import { lockAccountCredentials } from '../auth/account-credentials';
 
 type CompletedCheckoutIdentity = {
   userId: number | null;
@@ -15,6 +17,7 @@ type CompletedCheckoutIdentity = {
 export type ResolvedCompletedOrderUser = {
   userId: number;
   accountCreated: boolean;
+  passwordSetupScenario: PasswordSetupScenario;
 };
 
 /**
@@ -29,7 +32,10 @@ export class GuestOrderAccountService {
     checkout: CompletedCheckoutIdentity,
   ): Promise<ResolvedCompletedOrderUser> {
     if (checkout.userId != null) {
-      return { userId: checkout.userId, accountCreated: false };
+      await lockAccountCredentials(tx, checkout.userId);
+      const user = await tx.user.findUnique({ where: { id: checkout.userId }, select: { password: true } });
+      return { userId: checkout.userId, accountCreated: false,
+        passwordSetupScenario: user?.password === null ? 'EXISTING_PASSWORDLESS' : 'NOT_NEEDED' };
     }
 
     const email = normalizeEmail(checkout.customerEmail);
@@ -43,7 +49,10 @@ export class GuestOrderAccountService {
       select: { id: true },
     });
     if (existing) {
-      return { userId: existing.id, accountCreated: false };
+      await lockAccountCredentials(tx, existing.id);
+      const user = await tx.user.findUnique({ where: { id: existing.id }, select: { password: true } });
+      return { userId: existing.id, accountCreated: false,
+        passwordSetupScenario: user?.password === null ? 'EXISTING_PASSWORDLESS' : 'NOT_NEEDED' };
     }
 
     const shipping = this.asRecord(checkout.shippingAddr);
@@ -87,7 +96,7 @@ export class GuestOrderAccountService {
       });
     }
 
-    return { userId: user.id, accountCreated: true };
+    return { userId: user.id, accountCreated: true, passwordSetupScenario: 'NEW_ACCOUNT' };
   }
 
   private toSavedAddress(input: Record<string, unknown> | null): {

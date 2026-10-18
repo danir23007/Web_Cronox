@@ -36,6 +36,7 @@ it.each(['El enlace ha caducado. Solicita uno nuevo.', 'Este enlace ya se ha uti
   await view.submit();
   expect(view.form.querySelector('button')!.disabled).toBe(false);
   expect(view.dom.window.document.getElementById('resetMessage')!.textContent).toBe(message);
+  expect(view.dom.window.document.querySelector('#requestNewPasswordLink')?.getAttribute('href')).toBe('/recuperar-contrasena');
   expect(view.form.querySelector<HTMLInputElement>('input')!.value).toBe('LocalOnlyPassword');
   expect(view.dom.window.location.hash).toContain('token=');
   view.dom.window.close();

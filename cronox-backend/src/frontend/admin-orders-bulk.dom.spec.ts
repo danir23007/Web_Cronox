@@ -16,12 +16,46 @@ function setup() {
         status: row.orderId === 42 ? (body.preview ? 'valid' : 'updated') : 'error', error: row.orderId === 42 ? undefined : '<img id=unsafe> ID inválido' })) };
     }
     if (url.endsWith('/tracking-bulk/sync')) payload = { results: JSON.parse(options.body).orderIds.map((orderId: number) => ({ orderId, status: 'unchanged' })) };
+    if (url.endsWith('/fulfillment-bulk/mark-shipped')) {
+      const body = JSON.parse(options.body);
+      payload = { results: body.rows.map((row: any) => ({ ...row, revision: 0, expectedStatus: 'PAID',
+        status: row.orderId === 42 ? (body.preview ? 'valid' : 'updated') : 'skipped',
+        error: row.orderId === 43 ? 'No elegible: recogida local' : undefined })) };
+    }
     return { ok: true, status: 200, text: async () => JSON.stringify(payload) };
   });
   win.eval(read('assets/user-identity.js')); win.eval(read('assets/admin-orders.js'));
   return { dom, win, doc: win.document };
 }
 describe('order bulk selection, preview and double click protection', () => {
+  it('previews manual shipment, writes once on explicit confirmation, and keeps partial results visible', async () => {
+    const {dom,win,doc}=setup();
+    try {
+      await win.fetchOrders(); doc.querySelector('#ordersSelectPage').click();
+      expect(doc.querySelector('#ordersBulkShipApplyBtn').disabled).toBe(true);
+      doc.querySelector('#ordersBulkShipPreviewBtn').click(); await flush(); await flush();
+      expect(win.fetch.mock.calls.filter(([url,options]:any[])=>url.endsWith('/fulfillment-bulk/mark-shipped')&&!JSON.parse(options.body).preview)).toHaveLength(0);
+      expect(doc.querySelector('#ordersBulkResults').textContent).toContain('Pedido #43: Omitido');
+      expect(doc.querySelector('#ordersBulkShipApplyBtn').textContent).toContain('Marcar 1');
+      doc.querySelector('#ordersBulkShipApplyBtn').click(); doc.querySelector('#ordersBulkShipApplyBtn').click();
+      await flush(); await flush();
+      const writes=win.fetch.mock.calls.filter(([url,options]:any[])=>url.endsWith('/fulfillment-bulk/mark-shipped')&&!JSON.parse(options.body).preview);
+      expect(writes).toHaveLength(1); expect(JSON.parse(writes[0][1].body).rows.map((r:any)=>r.orderId)).toEqual([42,43]);
+      expect(doc.querySelector('#ordersBulkResults').textContent).toContain('Pedido #42: Actualizado');
+      expect(doc.querySelector('#ordersBulkResults').textContent).toContain('Pedido #43: Omitido');
+      expect(doc.querySelector('#ordersMessage').textContent).toContain('1 omitidos o con error');
+      expect(doc.querySelector('#ordersBulkShipApplyBtn').disabled).toBe(true);
+    } finally {dom.window.close();}
+  });
+  it('invalidates manual shipment preview when the selected page or selection changes', async () => {
+    const {dom,win,doc}=setup();
+    try {
+      await win.fetchOrders(); doc.querySelector('#ordersSelectPage').click();
+      doc.querySelector('#ordersBulkShipPreviewBtn').click(); await flush(); await flush();
+      doc.querySelector('[data-select-order]').click();
+      expect(doc.querySelector('#ordersBulkShipApplyBtn').disabled).toBe(true);
+    } finally {dom.window.close();}
+  });
   it('selects only visible order IDs and clears selection on pagination', async () => {
     const { dom, win, doc } = setup();
     try {

@@ -24,6 +24,7 @@ import { renderMail } from './mail-renderer';
 import {
   adaptFirstPartyDocument,
   structuredDocumentForPurpose,
+  passwordSetupDesign,
 } from './mail-template-documents';
 import {
   FolderDeleteDto,
@@ -168,7 +169,9 @@ export class ManagedMailService {
             },
           });
           for (const { purpose: p, document } of sources) {
-            const rendered = renderMail(document, p.subject, '', p.key);
+            const legacy = p.key.startsWith('PASSWORD_SETUP_') ? await tx.managedEmailTemplate.findUnique({ where: { importKey: `${key}:${circle}:INITIAL_PASSWORD_SETUP` } }) : null;
+            const compatibleDocument = legacy ? json(passwordSetupDesign(legacy.document, p.key)) : document;
+            const rendered = renderMail(compatibleDocument, p.subject, '', p.key);
             await tx.managedEmailTemplate.upsert({
               where: { importKey: `${key}:${circle}:${p.key}` },
               update: {},
@@ -179,7 +182,7 @@ export class ManagedMailService {
                 name: p.name,
                 purpose: p.key,
                 subject: p.subject,
-                document,
+                document: compatibleDocument,
                 html: rendered.html,
                 text: rendered.text,
                 createdBy: actorId,
@@ -962,6 +965,15 @@ export class ManagedMailService {
       where: { senderKey_purpose: { senderKey: key, purpose } },
       include: { version: true },
     });
+    if (!publication && purpose.startsWith('PASSWORD_SETUP_')) {
+      const legacy = await this.db.emailPublication.findUnique({ where: { senderKey_purpose: { senderKey: key, purpose: 'INITIAL_PASSWORD_SETUP' } }, include: { version: true } });
+      if (!legacy) return null;
+      const original = legacy.version.snapshot as unknown as ManagedEmailTemplate;
+      if (original.senderKey !== String(key) || original.purpose !== 'INITIAL_PASSWORD_SETUP') throw Error('Publicación incompatible');
+      return this.render(key, { ...original, purpose, subject: String(data.subject || ''),
+        textOverride: null,
+        document: json(passwordSetupDesign(original.document, purpose)) }, data, true);
+    }
     if (!publication) return null;
     const snapshot = publication.version
       .snapshot as unknown as ManagedEmailTemplate;

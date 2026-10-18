@@ -38,6 +38,7 @@ import { serializableTransaction } from '../prisma/serializable-transaction';
 import { UserNumberingGate } from '../users/user-numbering-gate.module';
 import { ensureAccountWelcome } from '../users/account-welcome';
 import { lockAccountCredentials, revokeAccountLinks } from './account-credentials';
+import { PasswordSetupContext } from '../common/password-setup-context';
 
 const PASSWORD_SETUP_CLAIM_STALE_MS = 10 * 60 * 1000;
 export type PasswordSetupDelivery = 'accepted' | 'not_needed' | 'busy' | 'retry_required' | 'uncertain';
@@ -422,13 +423,16 @@ export class AuthService {
     await this.createAndSendPasswordLink(user, 'reset');
   }
 
-  async sendInitialPasswordSetupIfNeeded(userId: number): Promise<PasswordSetupDelivery> {
+  async sendInitialPasswordSetupIfNeeded(userId: number, context?: PasswordSetupContext): Promise<PasswordSetupDelivery> {
+    if (!context || !['NEW_ACCOUNT', 'EXISTING_PASSWORDLESS'].includes(context.scenario) ||
+        !Number.isSafeInteger(context.orderId) || context.orderId < 1) return 'not_needed';
     if (!this.emailService.isEnabled()) return 'retry_required';
 
     const claimed = await this.prisma.user.updateMany({
       where: {
         id: userId,
         password: null,
+        accountState: UserAccountState.ACTIVE,
         passwordSetupEmailSentAt: null,
         OR: [
           { passwordSetupClaimedAt: null },
@@ -455,7 +459,7 @@ export class AuthService {
       return 'not_needed';
     }
 
-    const sent = await this.createAndSendPasswordLink(user, 'initial-setup');
+    const sent = await this.createAndSendPasswordLink(user, 'initial-setup', context);
     if (sent === 'accepted' || sent === 'uncertain') {
       await this.prisma.user.updateMany({
         where: { id: userId, password: null, passwordSetupEmailSentAt: null },
@@ -474,6 +478,7 @@ export class AuthService {
   private async createAndSendPasswordLink(
     user: Pick<User, 'id' | 'email' | 'sessionVersion'>,
     purpose: 'reset' | 'initial-setup',
+    setupContext?: PasswordSetupContext,
   ): Promise<'accepted' | 'retry_required' | 'uncertain'> {
     const token = randomBytes(32).toString('base64url');
     const tokenHash = this.hashResetToken(token);
@@ -482,10 +487,11 @@ export class AuthService {
 
     const persisted = await serializableTransaction(this.prisma, async (tx) => {
       await lockAccountCredentials(tx, user.id);
-      const current = await tx.user.findUnique({ where: { id: user.id }, select: { email: true, sessionVersion: true } });
+      const current = await tx.user.findUnique({ where: { id: user.id }, select: { email: true, sessionVersion: true, password: true } });
       // A reset request can be queued before an email change and persisted after
       // it. Serialize the check with profile changes, without sending inside a retry.
       if (!current || normalizeEmail(current.email) !== normalizeEmail(user.email) || current.sessionVersion !== user.sessionVersion) return false;
+      if (purpose === 'initial-setup' && current.password !== null) return false;
       await tx.passwordResetToken.updateMany({
         where: { userId: user.id, usedAt: null },
         data: { usedAt: now },
@@ -504,7 +510,7 @@ export class AuthService {
     const resetUrl = `${getFrontendUrl()}/restablecer-contrasena#token=${encodeURIComponent(token)}`;
     try {
       if (purpose === 'initial-setup') {
-        await this.emailService.sendInitialPasswordSetup(user.email, resetUrl);
+        await this.emailService.sendInitialPasswordSetup(user.email, resetUrl, setupContext!);
       } else {
         await this.emailService.sendPasswordReset(user.email, resetUrl);
       }

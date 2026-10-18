@@ -27,6 +27,14 @@ describe('StripeWebhookController lifecycle safety', () => {
       authService,
     );
   });
+  it.each(['NEW_ACCOUNT', 'EXISTING_PASSWORDLESS', 'NOT_NEEDED', null])('recovers initial setup from persisted scenario %s only', async accountScenario => {
+    const prisma = { order: { findUnique: jest.fn().mockResolvedValue({ id: 18, userId: 42, status: 'PAID' }) } };
+    const hook = new StripeWebhookController({} as any, ordersService, {} as any, prisma as any, {} as any, authService);
+    await (hook as any).deliverEffect({ kind: 'INITIAL_SETUP', orderId: 18, userId: 42, accountScenario });
+    if (['NEW_ACCOUNT', 'EXISTING_PASSWORDLESS'].includes(accountScenario || ''))
+      expect(authService.sendInitialPasswordSetupIfNeeded).toHaveBeenCalledWith(42, { scenario: accountScenario, orderId: 18 });
+    else expect(authService.sendInitialPasswordSetupIfNeeded).not.toHaveBeenCalled();
+  });
 
   it('does not turn a partial charge refund into a full order refund', async () => {
     const response = await (controller as any).handleChargeRefunded({

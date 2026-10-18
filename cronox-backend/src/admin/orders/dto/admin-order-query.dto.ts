@@ -46,6 +46,9 @@ const normalizeStatuses = (value: unknown): OrderStatus[] | undefined => {
 
 export class AdminOrdersQueryDto {
   @IsOptional()
+  @IsIn(['AWAITING_HANDOVER', 'SHIPPED', 'ADMITTED', 'IN_TRANSIT', 'OUT_FOR_DELIVERY', 'DELIVERED', 'INCIDENT', 'RETURNED'])
+  trackingCategory?: string;
+  @IsOptional()
   @Type(() => Number)
   @IsInt()
   @Min(1)
