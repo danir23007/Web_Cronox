@@ -1,0 +1,21 @@
+[Unit]
+Description=CRONOX application PM2 (unprivileged)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=forking
+User=deploy
+Group=deploy
+Environment=PM2_HOME=/var/lib/cronox-pm2
+Environment=PATH=/usr/bin:/bin
+PIDFile=/var/lib/cronox-pm2/pm2.pid
+ExecStartPre=+/usr/bin/python3 -I /usr/local/lib/cronox-release/boot_guard.py
+ExecStart=/usr/bin/pm2 resurrect
+ExecStop=/usr/bin/pm2 kill
+Restart=on-failure
+NoNewPrivileges=true
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

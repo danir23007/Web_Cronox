@@ -1,0 +1,4 @@
+# No shell, PM2, Docker, systemctl or file-write privileges are granted directly.
+# The Python parser independently enforces exact arity and a 40-char hex SHA.
+Defaults!/usr/local/sbin/cronox-release env_reset, !setenv
+deploy ALL=(root) NOPASSWD: /usr/local/sbin/cronox-release request *, /usr/local/sbin/cronox-release status *, /usr/local/sbin/cronox-release recover *

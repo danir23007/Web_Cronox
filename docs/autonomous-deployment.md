@@ -1,0 +1,117 @@
+# Publicaciones autónomas de CRONOX
+
+Estado a 18/10/2026: **instalación aprobada por el titular, pendiente de ejecución administrativa**. Autorizados ventana, traslado PM2 root→deploy, controlador, permisos delimitados, workflow, Pages y commits/pushes de configuración. No se autoriza publicar cambios funcionales. Pages ya está en workflow (API verificada); portada y ready responden 200 en ambos dominios. No se ha detenido aún la web ni cambiado sudo/PM2. El VPS conserva `488a5185122826188986fd6cedd3e1046cfe42ba`; node_modules/.package-lock.json ajeno se conserva.
+
+## Actualización de instalación autorizada
+
+Este apartado actualiza los pendientes del inventario y propuesta originales conservados abajo. La aprobación ya se recibió y el cambio de Pages ya se aplicó. Los commits de configuración ejecutan CI en push; no se solicita workflow_dispatch publish=true ni se actualiza el checkout/compilado del VPS durante esta instalación.
+
+El instalador exige la revisión funcional 488a518. Antes del mantenimiento captura HEAD, hashes de todos los archivos del dist y el historial de migraciones mediante transacción de sólo lectura; exige igualdad antes de parar y antes de reabrir. Ejecuta primero el autoensayo de respaldo/restauración con datos sintéticos en Docker sin red. Requiere root y aún no se ha ejecutado; si falla, no comienza la ventana. Guarda identity-before.json y transition-result.json bajo /var/lib/cronox-release/bootstrap. Los errores de comandos quedan en bootstrap-private.log privado, sin imprimir configuración. La instalación se inicia mediante unidad transitoria cronox-bootstrap-20261018, Type=oneshot, RemainAfterExit=yes y UMask=0077, para independizarla de la conexión de consola.
+
+Recuperación de la transición: administrador ejecuta `/usr/bin/python3 -I /root/cronox-release-bootstrap/install.py --recover-transition` sólo después de revisar el fallo. Exige mantenimiento propio, código/compilado/historial iguales, PM2 root inactivo, concesiones antiguas retiradas y dump de deploy preparado. Arranca la misma versión como deploy, valida salud/loopback y reabre. Si el fallo precedió a ese dump o hay divergencias, exige revisión administrativa; no restaura datos ni devuelve la aplicación a root. `--revoke` retira la delegación, no revierte el runtime.
+
+Verificación adicional: 20 pruebas Python/Linux satisfactorias en un directorio temporal aislado del VPS, con adaptadores de producción simulados. Incluyen fallo de restauración antes de mantenimiento y rechazo de recuperación ante cambio de código. Siete comprobaciones focales de los guards existentes y el control de contenido de publicación también pasan. No equivalen a una restauración Docker real ni a una publicación productiva. No se ha ejecutado una nueva batería general local.
+
+Limitación del worker: 488a518 no emite la telemetría privada nueva. Su código de supervisión se versiona para una publicación futura, sin instalarlo en el dist actual. Tras la transición se podrá leer el log como deploy; acreditar avance de lastScanCompletedAt sigue requiriendo una sesión SUPERADMIN legítima. No se fabrican tokens, no se fuerza ningún ciclo y no se trata el log de arranque como prueba de escaneo completado. El controlador exige la señal en la versión entrante antes de declarar éxito de una futura publicación.
+
+## Inventario y restricciones comprobadas
+
+| Capa | Evidencia y efecto |
+|---|---|
+| Codex | Workspace con acceso local y red; política de herramientas `never` para escalaciones. Eso no concede privilegios root en el VPS. Se respeta además la aprobación expresa requerida por el propietario para cambios privilegiados/disponibilidad. No hubo rechazo de herramientas interpretado como fallo SSH. |
+| SSH | La clave privada existente permite autenticar como `deploy`; se conserva StrictHostKeyChecking=yes. No se han mostrado ni copiado claves al repositorio. El procedimiento anterior no disponía de acceso SSH root. |
+| sudo real | `sudo -n -l`: únicamente `/usr/bin/pm2 restart cronox` y `/usr/bin/pm2 save` como root. No permite mantenimiento, parada, respaldo privado ni Docker. |
+| Runtime | pm2-root.service activo y habilitado; backend de root, código propiedad de deploy. Permitir a deploy reiniciar código que controla como root es una frontera de privilegios inadecuada. No se amplía ese modelo. |
+| Red | Backend escucha en 127.0.0.1:3000; Nginx usa ese upstream. No se abre 3000 ni se añaden reglas de firewall. |
+| GitHub | Workflow existente verifica en push y publica por workflow_dispatch. Concurrencia cronox-production, sin cancelar ejecución activa. Los cuatro secretos CRONOX_VPS_* existen (solo se consultaron sus nombres). |
+| Publicación paralela | Pages está en modo legacy, main, raíz. Puede publicar al hacer push aunque deploy.yml no publique. Se ha preparado pasar a workflow; no se ha aplicado. |
+| Protección de rama | Consulta a protección de main devuelve 404; no se acredita una protección de rama obligatoria. El SHA y la revisión de su contenido deben formar parte de la autorización. |
+
+Se reutilizan la cuenta deploy, su clave SSH, los secretos existentes, el repositorio, Nginx, PM2, la imagen Supabase ya disponible y **el mismo workflow**. El nuevo controlador sustituye las operaciones manuales del operador; no es otro canal de publicación de frontend/backend.
+
+## Configuración propuesta para aprobación
+
+Único punto de entrada de administrador: `.github/ops/cronox-release/install.py`, empaquetado con sus componentes y manifest de hashes. Modos `--plan` (lectura), `--apply` (instalación/transición) y `--revoke` (retirar delegación). El paquete debe quedar bajo `/root`, propiedad root, sin escritura de grupo/otros; el instalador verifica archivos, padres, hashes y permisos antes de actuar. No se ejecutará una copia modificable por deploy como root.
+
+`--apply` hace primero una restauración de **datos sintéticos** en dos contenedores de la imagen fijada, sin red, sin puertos y sin montajes del host. No usa la base de producción. Si falla, no comienza la transición del servicio. Esta comprobación Docker requiere root y está pendiente de la aprobación inicial; no se presenta como ejecutada.
+
+Después instala:
+
+- `/usr/local/lib/cronox-release`: código root, directorio 755 y archivos 644; deploy no puede modificarlos. El intérprete Python usa `-I` y rutas absolutas, sin imports desde el repositorio ni PYTHONPATH del solicitante.
+- `/usr/local/sbin/cronox-release`: wrapper root 755, sin shell arbitraria. Acepta únicamente `request SHA`, `status SHA` y `recover SHA` desde sudo; SHA debe ser exactamente 40 caracteres hexadecimales y la aridad exacta. Los verbos internos de systemd no están delegados.
+- `/etc/cronox-release`: 700; runtime.json, pg_service.conf y pgpass 600. Copia privada de configuración vigente ya preparada en `/root/cronox-release-20261017`, sin rotar credenciales. Comprueba que el servicio de respaldo y DATABASE_URL apuntan al mismo host/puerto/usuario/base. Una rotación futura necesita actualizar coordinadamente estos archivos privados.
+- `/var/lib/cronox-release`: 700, diarios y respaldos privados de cada SHA. `status` solo devuelve fase, tiempos y resultado saneados; no devuelve logs completos, cookies, configuración ni datos.
+- `/var/lib/cronox-pm2`: 700, deploy. PM2 pasa a `pm2-deploy.service`, con User=deploy y NoNewPrivileges=true. `pm2-root.service` se deshabilita; no se vuelven a ejecutar archivos modificables por deploy como root.
+- `/etc/sudoers.d/cronox-release`: 440 con tres comandos delimitados. Se retiran las dos concesiones antiguas de PM2 solamente si sus archivos contienen exactamente las reglas reconocidas; una política mixta/desconocida bloquea el instalador, no se reescribe a ciegas. No concede sudo general, Docker, systemctl, shell ni escritura de archivos root.
+- `cronox-release@SHA.service`: proceso de publicación independiente de SSH, exclusión global mediante flock, sin reinicio automático. ExecStopPost vuelve al estado de mantenimiento/parada en caso de terminación después de comenzar la ventana. Un guard de arranque impide resucitar escritores tras un reboot durante una publicación incompleta.
+
+La transición de PM2 requiere **una ventana breve aprobada**, sin migraciones ni recompilación funcional. Conserva configuración y copia de PM2 root para diagnóstico, arranca el mismo dist como deploy, comprueba health/ready/loopback y reabre. Si falla, mantiene mantenimiento; no vuelve a ejecutar automáticamente la aplicación como root. Permisos de ficheros de aplicación que impidan ejecutar como deploy deben revisarse, no resolverse con chmod/chown indiscriminados.
+
+Para retirar la delegación: ejecutar el mismo instalador root con `--revoke`, sin publicación activa. Elimina únicamente la nueva regla sudo validada. Conserva la aplicación sin privilegios, los backups y la evidencia; no restaura la antigua vía de ejecución root. Esto revierte la concesión de permisos sin interrumpir el sitio ni perder datos. Eliminar los componentes restantes es una tarea administrativa separada si se abandona PM2/deploy.
+
+GitHub Pages: `.github/scripts/configure-pages-dispatch.cjs --plan` confirmó legacy main /. Tras aprobación, `--apply` cambia únicamente build_type a workflow y verifica por GET. No borra el sitio ni cambia dominio/HTTPS. No se añade workflow Pages: deja de publicar automáticamente cada push. Revertir a legacy reactivaría precisamente ese canal paralelo y requiere decisión expresa. [API oficial de Pages](https://docs.github.com/en/rest/pages/pages#update-information-about-a-github-pages-site).
+
+## Instalación inicial (pendiente de aprobación)
+
+Paquete revisado: `output/playwright/autonomous-release/cronox-release-bootstrap-20261018-v2.tar.gz` (12 entradas, incluidos instalador y manifest, sin credenciales). SHA-256: `cbf8fb4caabfbd0b759dee7bcb44d988150bfd24bbca9d6f957690ca84f28ba2`. Sustituye al inicial e incorpora comprobación de identidad y recuperación de transición. Una regeneración/cambio de componentes requiere revisar el nuevo hash. El paquete está excluido de Git; los componentes fuente sí forman parte del cambio.
+
+1. Aprobar explícitamente el paquete y la transición PM2/no-root, la breve ventana y el cambio de Pages. No publicar todavía cambios funcionales por el hecho de aprobar esta instalación.
+2. Codex puede transferir el paquete revisado por el SSH existente a un archivo temporal de deploy. El administrador lo copia a un directorio privado root, contrasta el SHA-256 del paquete y lo extrae allí. Se facilita un solo entrypoint revisable; no se solicitan contraseñas en chat.
+3. Administrador: `/usr/bin/python3 -I /root/cronox-release-bootstrap/install.py --plan`. Si pasa, ejecutar el mismo script con `--apply`. No repetir ciegamente si falla; conservar el estado y evidencia. Las precondiciones aún no comprobables sin root (sudoers exacto, permisos root, restauración Docker sintética) se validan antes de la transición.
+4. Codex verifica por SSH el wrapper, su estado, límites sudo y salud pública. La revocación inicial sigue disponible con `--revoke`.
+5. Aprobar aparte la publicación del commit que incorpore workflow/controlador/telemetría. El controlador exige que el SHA entrante incluya la señal privada de recuperación; no intenta publicar una versión anterior que carezca de ella. En adelante todas las publicaciones usan el mismo procedimiento.
+
+El instalador nunca cambia automáticamente la clave SSH ni la política de host keys. La credencial existente queda limitada al nivel deploy y al wrapper sudo; no equivale a acceso root. Si se revoca esa clave, retirar su autorización en el servidor y actualizar CRONOX_VPS_SSH_KEY y la configuración privada de Codex, sin pegar valores en informes.
+
+## Cómo solicitar una publicación
+
+> «Autorizo publicar el commit `<SHA completo>` de CRONOX mediante el procedimiento autónomo, incluida su ventana de mantenimiento, respaldo verificado, migraciones revisadas y reactivación de los servicios habituales. No autorizo reparaciones históricas ni transacciones o comunicaciones de prueba.»
+
+La autorización cubre el recorrido previsto completo, sin confirmación por comando. No cubre alterar el controlador root, cambiar permisos fuera de lo instalado, rotar credenciales, resolver arbitrariamente migraciones, reparar datos ni cobrar/reembolsar/enviar pruebas reales. Si el cambio requiere alguno de esos actos, se prepara una decisión concreta adicional.
+
+Codex revisa diff y alcance, preserva trabajo ajeno, comprueba CI y que el SHA autorizado siga siendo main. Invoca `Deploy CRONOX` por workflow_dispatch con `publish=true` sobre ese commit/ref. Push solo verifica. Actions pide una vez `sudo -n /usr/local/sbin/cronox-release request SHA` y consulta `status SHA`; no hace un despliegue alternativo por SSH. Antes de futuros pushes también se comprueba que Pages ya no esté en legacy.
+
+## Fases y comportamiento al fallar
+
+| Fase | Operación | Fallo/interrupción |
+|---|---|---|
+| Preflight | SHA actual de main, fast-forward, cambios locales sin solapamiento, guards existentes, historial/checksums aplicados (acepta equivalencia LF/CRLF histórica), runtime no-root habilitado, salud/loopback, imagen fijada disponible, >=8 GiB libres y DB <512 MiB | Sin mantenimiento ni cambio funcional. Detiene antes de tocar código/runtime. No omite checksum, no modifica migraciones aplicadas. |
+| Mantenimiento | Flag propio y comprobación 503 en ambos dominios | Mantiene flag y detiene escritores; no reutiliza mantenimiento ajeno. |
+| Parada | PM2 cronox detenido y dump detenido guardado, sin listener, sin otros procesos PM2 ni clientes DB activos/prepared transactions | Mantiene cerrado. No termina sesiones de Supabase ni servicios desconocidos a la fuerza. |
+| Respaldo | pg_dump custom + roles sin contraseñas + aplicación (incluye dependencias/configuración; excluye .git/output), archivos root privados | No avanza si falla cualquier copia. |
+| Verificación real | Restauración completa en contenedor sin red/puertos/montajes host, mismos objetos, filas/digests, secuencias, permisos normalizados, RLS, políticas y extensiones | No basta listar el dump. Cualquier diferencia bloquea antes de instalar. Conserva logs privados. Solo tolera el tratamiento explícito de roles ya existentes y suplemento GraphQL probado en la ventana anterior. |
+| Instalación | Merge fast-forward exacto, npm ci y compilado frontend/backend como deploy; guards existentes antes de migrar | Mantenimiento y parada. No git reset, clean, stash ni descarte de trabajo ajeno. |
+| Migraciones | Prisma migrate deploy como deploy, orden del historial, todas terminadas y conjunto de nombres esperado | Mantiene cerrado. No migrate resolve, db push, seed, reparación histórica ni rollback automático. |
+| Arranque pausado | Seis controles de jobs/correo/worker false; health/ready, loopback, tienda/cesta/checkout/envío, admin no autenticado 401 y telemetría explícitamente desactivada | Detiene y conserva mantenimiento. |
+| Activación | Restituye cinco controles previamente revisados y worker financiero true; dos muestras privadas frescas, mismo PID, avance del escaneo sin error | Puede ejecutar trabajo legítimo pendiente, nunca crea operaciones de prueba. Si no hay avance, detiene y mantiene cerrado. REVIEW no se reencola. |
+| Guardado/reapertura | Guarda PM2 y retira solo flag propio, luego HTTP público de ambos dominios | Si falla después de retirar flag, lo repone y para escritores. No declara éxito parcial. |
+
+La política de comunicaciones se conserva en runtime.json. Activar jobs puede enviar comunicaciones operativas legítimas; no se usa email=false para drenar colas reales. El fichero de telemetría es privado 600, no contiene identificadores de eventos/clientes ni payloads, se publica atómicamente y se valida por PID/frescura. No requiere credenciales SUPERADMIN ni desprotege el endpoint existente.
+
+## Pérdida de conexión y recuperación
+
+- Una desconexión de SSH o cancelación/timeout de Actions no mata la unidad de systemd. Consultar **el mismo SHA**, no volver a ejecutar npm, migraciones o restauraciones. `request` es idempotente por SHA: no vuelve a ejecutar un directorio ya registrado. `status` identifica un diario running sin unidad activa como interrupted, no como éxito.
+- Publicaciones simultáneas se serializan en GitHub y mediante flock en el VPS. Una publicación no resuelta bloquea nuevas solicitudes. Los comandos request/status no aceptan rutas ni comandos arbitrarios.
+- Antes de instalar código/migrar: `sudo -n /usr/local/sbin/cronox-release recover SHA` solicita recuperación separada en systemd. Solo permite fases maintenance/stop/backup, exige mismo HEAD e historial de migraciones que antes; reinicia esa misma versión, no restaura código viejo. Conserva el backup fallido para diagnóstico. No cuenta como publicación exitosa.
+- Desde install/migrate en adelante: **no hay vuelta automática al código anterior**. Se conserva mantenimiento, respaldo, esquema actual, SHA y fase. Codex prepara una corrección hacia delante y la revisión concreta que falte. El controlador deliberadamente no ofrece ejecución SQL arbitraria, restauración de producción, migrate resolve ni un botón de ignorar el fallo. Resolver una migración ambigua o rearmar una publicación tras cambios de esquema requiere actuación administrativa revisada; es una limitación explícita, no una autonomía absoluta.
+- En reboot durante mantenimiento, el guard impide arrancar automáticamente los escritores. Reactivar un daemon detenido por ese guard requiere revisar la fase y el estado; no saltar el guard. Un contenedor de verificación dejado por SIGKILL puede permanecer aislado; retirarlo por su nombre exacto después de revisar evidencia, sin `docker prune`.
+- Los respaldos lógicos y de aplicación no son un backup completo del proveedor: no incluyen objetos externos de Storage, configuración de plataforma, claves raíz de Vault ni servicios externos. No prometen recuperar un desastre total del VPS/Supabase. Mantener PITR/copias externas según la política del titular. La verificación aquí permite afrontar las migraciones de aplicación previstas. [Límites de restauración Supabase](https://supabase.com/docs/guides/platform/migrating-within-supabase/backup-restore).
+
+## Registros y señales
+
+- GitHub Actions: SHA, resultado verify-release, estados saneados y resultado deploy. Si agota espera, resultado **desconocido**, no restaurado.
+- `sudo -n /usr/local/sbin/cronox-release status SHA`: fase, resultado, timestamps, safeStateConfirmed si falló; sin logs privados.
+- Root: `/var/lib/cronox-release/SHA/status.json`, private.log, before.json, migrations-before/after.json, backup-verified.json, backup-sha256.json, source/restore-verification.json, worker.json y artefactos privados. Acceso exclusivamente administrativo a contenidos sensibles.
+- PM2 de deploy en `/var/lib/cronox-pm2`, bajo pm2-deploy.service. `recovery-status.json` es una señal operativa, no un archivo para publicar. Alertar si no avanza durante 120 s o aparece error de escaneo; investigar REVIEW/FAILED en el panel autorizado sin reencolar automáticamente.
+- Control de retención: este primer controlador no borra automáticamente backups. El umbral de espacio bloquea publicaciones antes de quedarse sin disco; la política de retención/copia externa queda pendiente del titular.
+
+## Verificación realizada y pendiente
+
+- 17 pruebas Python/Linux: recorrido completo simulado; fallos en cada fase; cancelación durante migración; fallo del propio estado seguro; validación estricta de SHA/argumentos; rechazo de verbos internos por sudo; solicitud duplicada tras respuesta perdida; rechazo de rollback tras cambio de código/esquema; archivo de estado duradero tras matar un proceso real; exclusión real entre procesos; telemetría obsoleta/inicialización; adaptación GraphQL y roles. Incluyen ejecución del driver Bash con SSH simulado que acepta la solicitud y pierde la respuesta: consulta estado sin volver a solicitar, tanto para éxito como para mantenimiento por fallo.
+- La suite final pasó en Linux como deploy en un directorio temporal aislado (17/17, incluido flock). Una versión previa pasó también en Windows con la prueba de flock omitida por plataforma. Los adaptadores de producción están simulados; no se ejecutó una publicación de prueba ni se cortó una conexión de producción durante una publicación real.
+- Bash syntax checks en Linux para ambos scripts del flujo y wrapper de build; 13 comprobaciones de guards/preflight satisfactorias, actualizadas al nuevo orden de fases; backend typecheck, compilación y diez tests focales de recuperación/telemetría satisfactorios.
+- Comprobaciones SSH/GitHub reales fueron de lectura. El único trabajo remoto de preparación fue crear/eliminar el directorio temporal de tests de deploy; no cambió configuración ni disponibilidad.
+- **Pendiente antes de declarar operativo:** aprobación e instalación inicial root; visudo/plan real sobre archivos root; autoensayo Docker con datos sintéticos; transición PM2 y sus comprobaciones; cambio autorizado de Pages; publicación autorizada del commit de automatización. No se han ejecutado una restauración nueva en Docker ni un reboot real; no se presentan los mocks como validación real de esos pasos.
+- Alcance probado del restore: basado en PostgreSQL 17 y la imagen fijada previamente utilizada. Si cambian versiones/extensiones/volumen o aparecen otros escritores programados/externos, revisar el procedimiento y no omitir los controles. La parada de PM2 y una instantánea de actividad no garantizan por sí solas que un cliente externo idle nunca vuelva a escribir: la autorización debe confirmar que no hay escritores de aplicación fuera del inventario previsto.
+
+El diseño de proceso independiente y acciones de parada sigue la semántica documentada de [systemd.service](https://www.freedesktop.org/software/systemd/man/latest/systemd.service.html); no depende de mantener viva la terminal del operador.

@@ -15,6 +15,8 @@ test('release fails closed until the reviewed maintenance migration is complete'
 test('deployment checks maintenance before automatic migrations and restart',()=>{
   const script=fs.readFileSync(path.join(__dirname,'../../.github/scripts/deploy-vps-release.sh'),'utf8');
   const guard=script.indexOf('node scripts/check-account-state-release.cjs');
-  assert.ok(guard>=0&&guard<script.indexOf('npx prisma migrate deploy'));
-  assert.ok(guard<script.indexOf('pm2 restart'));
+  assert.ok(guard>=0&&guard<script.indexOf('npm run build:compiled'));
+  assert.doesNotMatch(script,/migrate deploy|pm2 restart/);
+  const controller=fs.readFileSync(path.join(__dirname,'../../.github/ops/cronox-release/controller.py'),'utf8');
+  assert.match(controller,/'backup', 'install', 'migrate',\s*'start_paused'/);
 });

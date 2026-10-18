@@ -4,6 +4,7 @@ import { randomUUID } from 'node:crypto';
 import Stripe from 'stripe';
 import { PrismaService } from '../prisma/prisma.service';
 import { stripeWebhookLease } from './stripe-webhook-fence';
+import { writeRecoveryOperationalStatus } from './recovery-operational-status';
 
 const LEASE_MS = 60_000;
 const RETRY_MS = 15_000;
@@ -38,6 +39,7 @@ export class StripeWebhookRecoveryService implements OnModuleInit, OnModuleDestr
       : process.env.CRONOX_ROUTE_SMOKE_MODE === 'true' ? 'ROUTE_SMOKE'
       : process.env.STRIPE_WEBHOOK_WORKER_ENABLED === 'false' ? 'EXPLICITLY_DISABLED' : null;
     if (this.disabledReason) {
+      this.publishOperationalStatus();
       this.logger.log(`Stripe recovery worker disabled: ${this.disabledReason}`);
       return;
     }
@@ -45,6 +47,7 @@ export class StripeWebhookRecoveryService implements OnModuleInit, OnModuleDestr
     this.logger.log('Stripe recovery worker started; poll=5000ms lease=60000ms');
     this.timer = setInterval(() => void this.tick().catch(error => this.logger.error('Stripe recovery worker failed', error)), 5_000);
     this.timer.unref();
+    this.publishOperationalStatus();
     void this.tick().catch(error => this.logger.error('Stripe recovery startup failed', error));
   }
 
@@ -52,6 +55,7 @@ export class StripeWebhookRecoveryService implements OnModuleInit, OnModuleDestr
     if (this.timer) clearInterval(this.timer);
     this.timer = undefined;
     this.disabledReason = 'STOPPED';
+    this.publishOperationalStatus();
   }
 
   async accept(event: Stripe.Event, metadata: { paymentIntentId?: string; lifecycleStatus?: string; amountCents?: number; refundCumulativeCents?: number }) {
@@ -140,7 +144,7 @@ export class StripeWebhookRecoveryService implements OnModuleInit, OnModuleDestr
       this.lastScanErrorAt = new Date();
       this.lastScanError = 'RECOVERY_SCAN_FAILED';
       throw error;
-    } finally { this.running = false; }
+    } finally { this.running = false; this.publishOperationalStatus(); }
   }
 
   async processEffects() {
@@ -207,6 +211,15 @@ export class StripeWebhookRecoveryService implements OnModuleInit, OnModuleDestr
       await tx.auditLog.create({ data: { actorId, actionType: 'CHECKOUT_RECOVERY_REFUND_RESOLVED', targetType: 'event', targetId: id, metadata: { verifiedRefundEventId: refund.id } } });
       return { resolved: true };
     });
+  }
+
+  private publishOperationalStatus() {
+    try {
+      writeRecoveryOperationalStatus({ enabled: Boolean(this.timer), disabledReason: this.disabledReason,
+        lastScanCompletedAt: this.lastScanCompletedAt, lastScanError: this.lastScanError });
+    } catch {
+      this.logger.error('RECOVERY_STATUS_WRITE_FAILED');
+    }
   }
 
   private errorCode(error: unknown) { return (error instanceof Error ? error.message : String(error)).slice(0, 500); }

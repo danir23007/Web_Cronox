@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
-# Same production build/migration/restart sequence, without a destructive reset.
+# Build only; installed controller owns maintenance, backup, migrations and PM2.
+test "$(id -un)" = deploy
+test "${CRONOX_COORDINATED_BUILD:-}" = 1
+test -f /var/lib/cronox/maintenance.flag
 cd /var/www/cronox/Web_Cronox
 npm ci
 npm run admin:build
@@ -9,15 +12,6 @@ npm ci
 node scripts/check-user-numbering-release.cjs --deployment-check
 node scripts/check-account-state-release.cjs --deployment-check
 npx prisma generate
-npx prisma migrate deploy
 npm run build:compiled
 node ../.github/scripts/check-checkout-release-safety.cjs
-if [ -f /var/lib/cronox/maintenance.flag ]; then
-  # The coordinated root operator starts compatible code with jobs/mail paused.
-  # Never restart old or new writers automatically during schema maintenance.
-  echo 'MAINTENANCE_RELEASE_INSTALLED_BACKEND_STOPPED'
-else
-  sudo /usr/bin/pm2 restart cronox
-  sudo /usr/bin/pm2 save
-  node ../.github/scripts/wait-for-backend.cjs
-fi
+echo 'COORDINATED_BUILD_COMPLETE_WRITERS_STOPPED'

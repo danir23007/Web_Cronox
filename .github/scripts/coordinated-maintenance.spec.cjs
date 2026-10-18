@@ -2,10 +2,13 @@ const {test}=require('node:test'),assert=require('node:assert/strict'),fs=requir
 const root=path.resolve(__dirname,'../..');
 test('maintenance installs artifacts without restarting writers or performing an unavailable HTTP smoke',()=>{
  const stage=fs.readFileSync(path.join(__dirname,'deploy-vps-release.sh'),'utf8');
- assert.match(stage,/if \[ -f \/var\/lib\/cronox\/maintenance\.flag \]; then[\s\S]*?MAINTENANCE_RELEASE_INSTALLED_BACKEND_STOPPED[\s\S]*?else[\s\S]*?pm2 restart cronox/);
+ assert.match(stage,/test -f \/var\/lib\/cronox\/maintenance\.flag/);
+ assert.doesNotMatch(stage,/pm2 restart|migrate deploy|sudo/);
  const driver=fs.readFileSync(path.join(__dirname,'deploy-production.sh'),'utf8');
- assert.ok(driver.indexOf('MAINTENANCE_ACTIVE_ROOT_START_REQUIRED')<driver.indexOf('cronox-export-smoke.json'));
- assert.match(driver,/MAINTENANCE_ACTIVE_ROOT_START_REQUIRED'[\s\S]*?exit 0/);
+ assert.match(driver,/cronox-release request \$GITHUB_SHA/);
+ assert.match(driver,/cronox-release status \$GITHUB_SHA/);
+ assert.doesNotMatch(driver,/sudo \/usr\/bin\/pm2|git reset|git merge/);
+ assert.match(driver,/StrictHostKeyChecking=yes/);
 });
 test('push verifies only and publishing requires an explicit dispatch',()=>{
  const workflow=fs.readFileSync(path.join(root,'.github/workflows/deploy.yml'),'utf8');

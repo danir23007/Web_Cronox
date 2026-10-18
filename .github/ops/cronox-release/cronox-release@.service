@@ -1,0 +1,22 @@
+[Unit]
+Description=CRONOX coordinated release %i
+After=network-online.target docker.service pm2-deploy.service
+Wants=network-online.target
+Requires=docker.service
+
+[Service]
+Type=exec
+ExecStart=/usr/bin/python3 -I /usr/local/lib/cronox-release/controller.py worker %i
+ExecStopPost=/usr/bin/python3 -I /usr/local/lib/cronox-release/controller.py fail-safe %i
+User=root
+Group=root
+UMask=0077
+Restart=no
+TimeoutStopSec=90
+RuntimeMaxSec=3600
+KillMode=control-group
+StandardOutput=journal
+StandardError=journal
+
+# Deliberately not enabled at boot: interrupted releases require status/recovery,
+# never replay migrations or reopen the store automatically.

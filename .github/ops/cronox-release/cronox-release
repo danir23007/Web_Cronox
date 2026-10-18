@@ -1,0 +1,3 @@
+#!/bin/sh
+# Fixed interpreter + isolated Python; no caller environment/PYTHONPATH imports.
+exec /usr/bin/python3 -I /usr/local/lib/cronox-release/controller.py "$@"

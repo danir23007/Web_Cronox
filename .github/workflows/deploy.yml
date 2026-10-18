@@ -59,7 +59,11 @@ jobs:
       - name: Verify isolated preflight dependencies and fail-closed deployment ordering
         run: node --test .github/scripts/run-release-preflight.spec.cjs .github/scripts/wait-for-backend.spec.cjs .github/scripts/check-checkout-release-safety.spec.cjs .github/scripts/coordinated-maintenance.spec.cjs cronox-backend/scripts/check-user-numbering-release.spec.cjs cronox-backend/scripts/check-account-state-release.spec.cjs
 
-      - name: Generate the Prisma client
+      - name: Verify release controller and interruption handling
+        # Deployment-controller tests never connect to production or invoke Docker.
+        run: python3 -m unittest discover -s .github/ops/cronox-release -p 'test_*.py' -v
+
+      - name: Generate Prisma client for application tests
         run: npm run prisma:generate --prefix cronox-backend
 
       - name: Check all frontend and backend TypeScript
@@ -94,7 +98,7 @@ jobs:
     if: github.event_name == 'workflow_dispatch' && inputs.publish
     needs: verify-release
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v5
       - name: Verify SSH identity and deploy the current main commit
