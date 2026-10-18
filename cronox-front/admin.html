@@ -34,7 +34,7 @@
   <link rel="stylesheet" href="assets/admin-newsletter.css?v=5">
   <link rel="stylesheet" href="assets/admin-footer.css?v=2">
   <link rel="stylesheet" href="assets/admin-accreditations.css?v=2">
-  <link rel="stylesheet" href="assets/admin-qr-events.css?v=1">
+  <link rel="stylesheet" href="assets/admin-qr-events.css?v=2">
   <style>
     .users-sort-toolbar { display: flex; gap: 12px; flex-wrap: wrap; margin: 16px 0; }
     .users-sort-toolbar .form-group { flex: 1; min-width: 150px; max-width: 320px; }
@@ -1084,13 +1084,23 @@
         <button id="qrEventsBack" class="btn" type="button">← Todos los grupos</button>
         <div class="qr-events-heading"><h3 id="qrEventsGroupName" tabindex="-1"></h3><strong id="qrEventsTotal"></strong></div>
         <p id="qrEventsGroupDescription"></p>
+        <div class="qr-events-export">
+          <button id="qrEventsExport" class="btn" type="button" disabled>Descargar IDs en Excel</button>
+          <p id="qrEventsExportMessage" role="status" aria-live="polite"></p>
+        </div>
         <div class="qr-events-controls">
           <button id="qrEventsCameraOpen" class="btn primary" type="button" disabled>Abrir cámara</button>
           <button id="qrEventsCameraStop" class="btn" type="button" disabled>Detener escaneo</button>
           <label id="qrEventsCameraLabel" hidden>Cámara<select id="qrEventsCameraChoice" class="input"></select></label>
         </div>
         <p id="qrEventsCameraMessage" role="status" aria-live="polite">Cámara cerrada.</p>
-        <div id="qrEventsScanner" class="qr-events-scanner" hidden><video id="qrEventsVideo" playsinline muted aria-label="Vista de la cámara para leer acreditaciones"></video></div>
+        <div id="qrEventsScanner" class="qr-events-scanner" hidden>
+          <video id="qrEventsVideo" playsinline muted aria-label="Vista de la cámara para leer acreditaciones"></video>
+          <div id="qrEventsScanResult" class="qr-events-scan-result" role="status" aria-live="assertive" aria-atomic="true" hidden>
+            <svg viewBox="0 0 100 100" aria-hidden="true" focusable="false"><path class="qr-events-check" d="M18 52 40 74 82 26"/><path class="qr-events-cross" d="M25 25 75 75 M75 25 25 75"/></svg>
+            <strong id="qrEventsScanResultText"></strong>
+          </div>
+        </div>
         <p id="qrEventsScanMessage" role="status" aria-live="polite"></p>
         <button id="qrEventsScanRetry" class="btn" type="button" hidden>Reintentar registro</button>
         <form id="qrEventsParticipantFilters" class="qr-events-filters filters-panel">
@@ -1100,7 +1110,7 @@
         </form>
         <p id="qrEventsParticipantMessage" role="status" aria-live="polite"></p>
         <div class="qr-events-table-wrap"><table aria-label="Participantes del grupo">
-          <thead><tr><th scope="col">ID del usuario</th><th scope="col">Identificador QR</th><th scope="col">Nombre</th><th scope="col">Círculo al registrarse</th><th scope="col">Primer registro · Madrid</th><th scope="col">Registrado por</th></tr></thead>
+          <thead><tr><th scope="col">ID del usuario</th><th scope="col">Nombre</th><th scope="col">Círculo al registrarse</th><th scope="col">Primer registro · Madrid</th><th scope="col">Registrado por</th><th scope="col">Identificador QR</th></tr></thead>
           <tbody id="qrEventsParticipants"></tbody>
         </table></div>
         <div class="qr-events-pages"><button id="qrEventsParticipantPrev" class="btn" type="button" disabled>Anterior</button><span id="qrEventsParticipantPage"></span><button id="qrEventsParticipantNext" class="btn" type="button" disabled>Siguiente</button></div>
@@ -2115,7 +2125,7 @@
   <script src="assets/admin-push.js?v=1"></script>
   <script src="assets/admin-inbox.js?v=14"></script>
   <script src="assets/admin.js?v=23"></script>
-  <script src="assets/admin-qr-events.js?v=1"></script>
+  <script src="assets/admin-qr-events.js?v=2"></script>
   <script src="assets/admin-inventory.js?v=2"></script>
   <script src="assets/admin-waitlist.js?v=2"></script>
   <script src="assets/admin-favorites.js?v=1"></script>

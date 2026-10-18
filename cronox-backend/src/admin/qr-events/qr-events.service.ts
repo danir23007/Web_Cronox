@@ -1,10 +1,12 @@
 import {
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
 import { Prisma, Role, UserAccountState } from '@prisma/client';
+import ExcelJS from 'exceljs';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CircleService } from '../../membership/circle.service';
 import {
@@ -49,6 +51,8 @@ const describeGroup = (group: Group) => ({
 });
 const describeParticipant = (row: Participant) => ({
   id: row.id,
+  // Resolve the current authentic administrative number through the immutable
+  // identity relation, including historical participations. UUIDs remain technical.
   userId: row.user?.id ?? null,
   publicUserId: row.user?.identityUid ?? null,
   qrIdentifier: row.user?.publicMemberToken ?? null,
@@ -140,6 +144,9 @@ export class QrEventsService {
               OR: [
                 { firstName: { contains: q, mode: 'insensitive' } },
                 { publicMemberToken: { contains: q } },
+                ...(/^\d+$/.test(q) && Number(q) <= 2147483647
+                  ? [{ id: Number(q) }]
+                  : []),
                 ...(/^[\da-f]{8}-[\da-f]{4}-[\da-f]{4}-[\da-f]{4}-[\da-f]{12}$/i.test(
                   q,
                 )
@@ -176,6 +183,72 @@ export class QrEventsService {
       },
       { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead },
     );
+  }
+
+  async exportIds(groupId: string) {
+    // One snapshot for the full group, independent of the visible table's search
+    // and pagination. Never infer numbers from UUIDs or participation positions.
+    const { groupName, ids } = await this.prisma.$transaction(
+      async (tx) => {
+        const group = await tx.qrEventGroup.findUnique({
+          where: { id: groupId },
+          include: { _count: { select: { participants: true } } },
+        });
+        if (!group || group.archived) throw unavailable();
+        if (!group._count.participants) {
+          throw new BadRequestException({
+            code: 'EMPTY_GROUP',
+            message: 'No hay participantes en este grupo.',
+          });
+        }
+        if (group._count.participants > 1048575) {
+          throw new BadRequestException({
+            code: 'EXCEL_ROW_LIMIT',
+            message: 'El grupo supera el límite de filas de una hoja de Excel.',
+          });
+        }
+        const participants = await tx.qrEventParticipant.findMany({
+          where: { groupId },
+          select: { user: { select: { id: true } } },
+        });
+        if (participants.some((row) => !row.user)) {
+          // Deleted accounts deliberately leave anonymous event history. Do not
+          // invent an ID or silently produce an incomplete export for that group.
+          throw new ConflictException({
+            code: 'UNRESOLVED_PARTICIPANT_ID',
+            message:
+              'Hay participantes sin una cuenta vinculada (por ejemplo, cuentas eliminadas). No se puede generar un Excel completo de IDs reales.',
+          });
+        }
+        const ids = [...new Set(participants.map((row) => row.user!.id))].sort(
+          (a, b) => a - b,
+        );
+        return { groupName: group.name, ids };
+      },
+      { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead },
+    );
+
+    // Reuse the installed ExcelJS dependency. The general export builder adds
+    // title/date/filter rows, which are intentionally absent from this workbook.
+    const workbook = new ExcelJS.Workbook();
+    const sheet = workbook.addWorksheet('IDs');
+    sheet.getColumn(1).width = 18;
+    sheet.getColumn(1).numFmt = '0';
+    sheet.addRow(['ID de usuario']);
+    sheet.getRow(1).font = { bold: true };
+    for (const id of ids) sheet.addRow([id]);
+    const slug = groupName
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .slice(0, 80)
+      .replace(/-+$/g, '');
+    return {
+      buffer: Buffer.from(await workbook.xlsx.writeBuffer()),
+      filename: `eventos-qr-${slug || 'grupo'}-ids.xlsx`,
+    };
   }
 
   async scan(groupId: string, qrContent: string, actorId: number) {

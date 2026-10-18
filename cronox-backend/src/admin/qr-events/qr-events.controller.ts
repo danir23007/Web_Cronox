@@ -7,9 +7,12 @@ import {
   ParseUUIDPipe,
   Post,
   Query,
+  Res,
   UseGuards,
 } from '@nestjs/common';
 import { Role } from '@prisma/client';
+import type { Response } from 'express';
+import { EXCEL_MIME } from '../exports/excel-workbook.service';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { AdminGuard } from '../../common/guards/admin.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
@@ -49,6 +52,22 @@ export class QrEventsController {
     @Query() query: QrEventQueryDto,
   ) {
     return this.service.participants(id, query);
+  }
+  @Get(':id/ids.xlsx')
+  async exportIds(
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Res() response: Response,
+  ) {
+    const result = await this.service.exportIds(id);
+    response.set({
+      'Content-Type': EXCEL_MIME,
+      'Content-Disposition': `attachment; filename="${result.filename}"`,
+      'Cache-Control': 'private, no-store, max-age=0',
+      Pragma: 'no-cache',
+      Expires: '0',
+      'X-Content-Type-Options': 'nosniff',
+    });
+    return response.send(result.buffer);
   }
   @Post(':id/scan')
   @Header('Cache-Control', 'private, no-store')

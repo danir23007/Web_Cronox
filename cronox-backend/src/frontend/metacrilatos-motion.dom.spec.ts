@@ -5,6 +5,9 @@ import { JSDOM } from 'jsdom';
 const renderer = readFileSync(path.resolve(__dirname, '../../../cronox-front/assets/metacrilatos.js'), 'utf8');
 const identityFormatter = readFileSync(path.resolve(__dirname, '../../../cronox-front/assets/user-identity.js'), 'utf8');
 const person = { circleLevel: 1, name: 'Daniel Rivas', createdAt: '2020-01-01T00:00:00Z', registrationNumber: 1, memberCode: 'CRX-000050', visibleId: 'stable-identity' };
+// The existing 650ms turn finishes on the first 16ms frame at/after 650ms,
+// following the initial zero-elapsed frame. The visible-face hold starts there.
+const completedTurnMs = 672;
 
 // This browser clock drives actual event listeners and rendered transforms. It
 // deliberately does not expose or depend on the renderer's private state.
@@ -257,25 +260,26 @@ describe('METACRILATOS shared motion lifecycle', () => {
     } finally { f.close(); }
   });
 
-  it('turns smoothly, pauses on the requested face, and resumes exactly seven seconds after activation', async () => {
+  it('turns smoothly and holds the requested face for five full seconds after placement', async () => {
     const f = await fixture();
     try {
       f.clock.advance(1000);
       const original = f.orientation();
       f.flip();
       expect(f.orientation()).toEqual(original);
-      expect(f.clock.timers).toBe(1);
+      expect(f.clock.timers).toBe(0);
       f.clock.advance(320);
       const middle = f.orientation();
       expect(middle).not.toEqual(original);
       expect(Math.abs(middle.y % 180)).toBeGreaterThan(1);
-      f.clock.advance(680);
+      f.clock.advance(completedTurnMs - 320);
       const facing = f.orientation();
       expect(facing.x).toBeCloseTo(0);
       expect(Math.abs(facing.y % 360)).toBeCloseTo(180);
       expect(f.clock.frames).toBe(0);
       expect(f.host.querySelector('[data-crx-flip]').textContent).toBe('Ver anverso');
-      f.clock.advance(5999);
+      expect(f.clock.timers).toBe(1);
+      f.clock.advance(4999);
       expect(f.orientation()).toEqual(facing);
       expect(f.clock.timers).toBe(1);
       expect(f.clock.frames).toBe(0);
@@ -295,12 +299,13 @@ describe('METACRILATOS shared motion lifecycle', () => {
       f.flip();
       f.clock.advance(4000);
       f.host.querySelector('[data-crx-flip]').dispatchEvent(new f.win.MouseEvent('click', { bubbles: true, detail: 0 }));
-      expect(f.clock.timers).toBe(1);
-      f.clock.advance(1000);
+      expect(f.clock.timers).toBe(0);
+      f.clock.advance(completedTurnMs);
       const front = f.orientation();
       expect(front.x).toBeCloseTo(0);
       expect(front.y % 360).toBeCloseTo(0);
-      f.clock.advance(5999);
+      expect(f.clock.timers).toBe(1);
+      f.clock.advance(4999);
       expect(f.orientation()).toEqual(front);
       expect(f.clock.frames).toBe(0);
       f.clock.advance(1);
@@ -309,8 +314,9 @@ describe('METACRILATOS shared motion lifecycle', () => {
     } finally { f.close(); }
   });
 
-  it.each(['mouse', 'touch'])('holds a %s gesture beyond seven seconds, cancels an old timeout, and restarts waiting only on release', async pointerType => {
+  it('holds a mouse gesture beyond five seconds, cancels an old timeout, and waits five seconds only after release', async () => {
     const f = await fixture();
+    const pointerType = 'mouse';
     try {
       f.flip();
       f.clock.advance(500);
@@ -328,7 +334,7 @@ describe('METACRILATOS shared motion lifecycle', () => {
       expect(f.clock.frames).toBe(0);
       f.pointer('pointerup', { pointerType, clientX: 140, clientY: 120 });
       expect(f.clock.timers).toBe(1);
-      f.clock.advance(6999);
+      f.clock.advance(4999);
       expect(f.orientation()).toEqual(dragged);
       expect(f.clock.frames).toBe(0);
       f.clock.advance(1);
@@ -341,21 +347,171 @@ describe('METACRILATOS shared motion lifecycle', () => {
     } finally { f.close(); }
   });
 
-  it.each(['pointercancel', 'lostpointercapture'])('releases a gesture after %s without blocking or duplicating the restart timer', async eventType => {
+  it.each(['touch', 'pen'])('resumes a %s gesture immediately from its exact final orientation without a timer', async pointerType => {
+    const f = await fixture();
+    try {
+      f.flip();
+      f.clock.advance(completedTurnMs + 1000);
+      expect(f.clock.timers).toBe(1);
+      const before = f.orientation();
+      f.pointer('pointerdown', { pointerType });
+      expect(f.clock.timers).toBe(0);
+      expect(f.clock.frames).toBe(0);
+      f.pointer('pointermove', { pointerType, clientX: 140, clientY: 120 });
+      const dragged = f.orientation();
+      expect(dragged.y - before.y).toBeCloseTo(26);
+      expect(dragged.x - before.x).toBeCloseTo(-6);
+      f.clock.advance(15000);
+      expect(f.orientation()).toEqual(dragged);
+      expect(f.clock.frames).toBe(0);
+      f.pointer('pointerup', { pointerType, clientX: 140, clientY: 120 });
+      expect(f.orientation()).toEqual(dragged);
+      expect(f.clock.timers).toBe(0);
+      expect(f.clock.frames).toBe(1);
+      f.clock.advance(16);
+      expect(f.orientation()).toEqual(dragged);
+      f.clock.advance(32);
+      expect(f.orientation().y - dragged.y).toBeCloseTo(.672, 3);
+      expect(f.orientation().x).toBe(dragged.x);
+      f.clock.advance(6000);
+      expect(f.orientation().y).toBeGreaterThan(dragged.y);
+      expect(f.clock.timers).toBe(0);
+      expect(f.clock.frames).toBe(1);
+    } finally { f.close(); }
+  });
+
+  it.each(['turning', 'holding'])('a simple touch cancels a button that is %s without creating a release pause or repositioning', async phase => {
+    const f = await fixture();
+    try {
+      f.flip();
+      f.clock.advance(phase === 'turning' ? 200 : completedTurnMs + 1000);
+      const touched = f.orientation();
+      f.pointer('pointerdown', { pointerType: 'touch' });
+      expect(f.orientation()).toEqual(touched);
+      expect(f.clock.timers).toBe(0);
+      f.clock.advance(6000);
+      expect(f.orientation()).toEqual(touched);
+      f.pointer('pointerup', { pointerType: 'touch' });
+      expect(f.orientation()).toEqual(touched);
+      expect(f.clock.timers).toBe(0);
+      expect(f.clock.frames).toBe(1);
+      f.clock.advance(32);
+      expect(f.orientation().y - touched.y).toBeCloseTo(.336, 3);
+      expect(f.orientation().x).toBe(touched.x);
+    } finally { f.close(); }
+  });
+
+  it.each(['pointercancel', 'lostpointercapture'])('releases a touch gesture after %s immediately without blocking or creating a restart timer', async eventType => {
     const f = await fixture();
     try {
       f.pointer('pointerdown', { pointerType: 'touch' });
       f.pointer('pointermove', { pointerType: 'touch', clientX: 150 });
-      f.pointer(eventType, { pointerType: 'touch' });
+      // Capture-loss events need not carry pointerType. Use the original down.
+      f.pointer(eventType, { pointerType: undefined });
       const after = f.orientation();
-      expect(f.clock.timers).toBe(1);
+      expect(f.clock.timers).toBe(0);
+      expect(f.clock.frames).toBe(1);
       f.pointer('pointerup', { pointerType: 'touch' });
-      expect(f.clock.timers).toBe(1);
-      f.clock.advance(7032);
-      expect(f.orientation().y).toBeGreaterThan(after.y);
+      expect(f.clock.timers).toBe(0);
+      expect(f.clock.frames).toBe(1);
+      f.clock.advance(32);
+      expect(f.orientation().y - after.y).toBeCloseTo(.336, 3);
+      expect(f.orientation().x).toBe(after.x);
       f.pointer('pointerdown', { pointerId: 2 });
       f.pointer('pointermove', { pointerId: 2, clientX: 110 });
       expect(f.orientation().y - after.y).toBeGreaterThan(6);
+    } finally { f.close(); }
+  });
+
+  it.each(['pointercancel', 'lostpointercapture'])('retains the five-second mouse release wait after %s without duplicating its timer', async eventType => {
+    const f = await fixture();
+    try {
+      f.pointer('pointerdown');
+      f.pointer('pointermove', { clientX: 150 });
+      const cancelled = f.orientation();
+      f.pointer(eventType, { pointerType: undefined });
+      expect(f.orientation()).toEqual(cancelled);
+      expect(f.clock.timers).toBe(1);
+      expect(f.clock.frames).toBe(0);
+      f.pointer('pointerup');
+      expect(f.clock.timers).toBe(1);
+      f.clock.advance(4999);
+      expect(f.orientation()).toEqual(cancelled);
+      f.clock.advance(33);
+      expect(f.orientation().y - cancelled.y).toBeCloseTo(.336, 3);
+      expect(f.orientation().x).toBe(cancelled.x);
+    } finally { f.close(); }
+  });
+
+  it.each([390, 1440])('uses the actual pointer type on a hybrid device at width %i rather than screen size or touch capability', async width => {
+    const f = await fixture();
+    try {
+      Object.defineProperty(f.win, 'innerWidth', { value: width });
+      Object.defineProperty(f.win.navigator, 'maxTouchPoints', { value: 5 });
+      f.pointer('pointerdown', { pointerType: 'mouse', pointerId: 1 });
+      f.pointer('pointerup', { pointerType: 'mouse', pointerId: 1 });
+      expect(f.clock.timers).toBe(1);
+      expect(f.clock.frames).toBe(0);
+      f.clock.advance(2500);
+      f.pointer('pointerdown', { pointerType: 'touch', pointerId: 2 });
+      f.pointer('pointermove', { pointerType: 'touch', pointerId: 2, clientX: 150 });
+      const touched = f.orientation();
+      f.pointer('pointerup', { pointerType: 'touch', pointerId: 2 });
+      expect(f.clock.timers).toBe(0);
+      expect(f.clock.frames).toBe(1);
+      f.clock.advance(32);
+      expect(f.orientation().y - touched.y).toBeCloseTo(.336, 3);
+      f.pointer('pointerdown', { pointerType: 'mouse', pointerId: 3 });
+      const mouse = f.orientation();
+      f.pointer('pointerup', { pointerType: 'mouse', pointerId: 3 });
+      expect(f.clock.timers).toBe(1);
+      f.clock.advance(4999);
+      expect(f.orientation()).toEqual(mouse);
+      f.clock.advance(33);
+      expect(f.orientation().y - mouse.y).toBeCloseTo(.336, 3);
+      expect(f.clock.timers).toBe(0);
+    } finally { f.close(); }
+  });
+
+  it('resumes a touch gesture on blur when pointer capture is unavailable and no release event supplies a pointer type', async () => {
+    const f = await fixture();
+    try {
+      f.host.querySelector('.crx-stage').setPointerCapture = () => { throw new Error('No capture'); };
+      f.pointer('pointerdown', { pointerType: 'touch' });
+      f.pointer('pointermove', { pointerType: 'touch', clientX: 150, clientY: 120 });
+      const held = f.orientation();
+      f.win.dispatchEvent(new f.win.Event('blur'));
+      expect(f.orientation()).toEqual(held);
+      expect(f.clock.timers).toBe(0);
+      expect(f.clock.frames).toBe(1);
+      f.clock.advance(32);
+      expect(f.orientation().y - held.y).toBeCloseTo(.336, 3);
+      expect(f.orientation().x).toBe(held.x);
+      f.pointer('pointerup', { pointerType: 'touch' }, f.win);
+      expect(f.clock.timers).toBe(0);
+      expect(f.clock.frames).toBe(1);
+    } finally { f.close(); }
+  });
+
+  it('uses the same complete five-second face hold for a touch-originated button click', async () => {
+    const f = await fixture();
+    try {
+      Object.defineProperty(f.win, 'innerWidth', { value: 390 });
+      Object.defineProperty(f.win.navigator, 'maxTouchPoints', { value: 5 });
+      const button = f.host.querySelector('[data-crx-flip]');
+      f.pointer('pointerdown', { pointerType: 'touch' }, button);
+      f.pointer('pointerup', { pointerType: 'touch' }, button);
+      f.flip();
+      expect(f.clock.timers).toBe(0);
+      f.clock.advance(completedTurnMs);
+      const facing = f.orientation();
+      expect(Math.abs(facing.y % 360)).toBeCloseTo(180);
+      expect(f.clock.timers).toBe(1);
+      f.clock.advance(4999);
+      expect(f.orientation()).toEqual(facing);
+      expect(f.clock.frames).toBe(0);
+      f.clock.advance(33);
+      expect(f.orientation().y - facing.y).toBeCloseTo(.336, 3);
     } finally { f.close(); }
   });
 
@@ -389,7 +545,7 @@ describe('METACRILATOS shared motion lifecycle', () => {
       for (let i = 0; i < 12; i++) {
         f.flip();
         expect(f.clock.frames).toBeLessThanOrEqual(1);
-        expect(f.clock.timers).toBe(1);
+        expect(f.clock.timers).toBe(0);
         f.clock.advance(75);
       }
       f.pointer('pointerdown');
@@ -402,9 +558,9 @@ describe('METACRILATOS shared motion lifecycle', () => {
       f.pointer('pointerup');
       f.clock.advance(5000);
       f.flip();
-      f.clock.advance(1000);
+      f.clock.advance(completedTurnMs);
       const lastFace = f.orientation();
-      f.clock.advance(5999);
+      f.clock.advance(4999);
       expect(f.orientation()).toEqual(lastFace);
       f.clock.advance(1);
       expect(f.clock.frames).toBe(1);
@@ -422,13 +578,13 @@ describe('METACRILATOS shared motion lifecycle', () => {
       expect(f.orientation()).toEqual(held);
       f.pointer('pointerup', {}, f.win);
       expect(f.clock.timers).toBe(1);
-      f.clock.advance(7032);
+      f.clock.advance(5032);
       expect(f.orientation().y).toBeGreaterThan(held.y);
       f.pointer('pointerdown');
       f.win.dispatchEvent(new f.win.Event('blur'));
       const blurred = f.orientation();
       expect(f.clock.timers).toBe(1);
-      f.clock.advance(6999);
+      f.clock.advance(4999);
       expect(f.orientation()).toEqual(blurred);
       f.clock.advance(33);
       expect(f.orientation().y).toBeGreaterThan(blurred.y);
@@ -448,14 +604,15 @@ describe('METACRILATOS shared motion lifecycle', () => {
       const initial = f.orientation(secondSlab);
       expect(f.clock.frames).toBe(2);
       f.flip();
-      f.clock.advance(1000);
+      f.clock.advance(completedTurnMs);
       expect(f.orientation(secondSlab).y).toBeGreaterThan(initial.y);
       const firstPaused = f.orientation();
       secondHost.querySelector('[data-crx-flip]').click();
-      expect(f.clock.timers).toBe(2);
-      f.clock.advance(1000);
+      expect(f.clock.timers).toBe(1);
+      f.clock.advance(completedTurnMs);
       const secondPaused = f.orientation(secondSlab);
-      f.clock.advance(4999);
+      expect(f.clock.timers).toBe(2);
+      f.clock.advance(5000 - completedTurnMs - 1);
       expect(f.orientation()).toEqual(firstPaused);
       expect(f.orientation(secondSlab)).toEqual(secondPaused);
       f.clock.advance(33);
@@ -476,14 +633,14 @@ describe('METACRILATOS shared motion lifecycle', () => {
     const f = await fixture();
     try {
       f.flip();
-      f.clock.advance(2000);
+      f.clock.advance(completedTurnMs + 1000);
       const facing = f.orientation();
       f.hidden(true);
       f.clock.advance(3000);
       expect(f.orientation()).toEqual(facing);
       expect(f.clock.frames).toBe(0);
       f.hidden(false);
-      f.clock.advance(1999);
+      f.clock.advance(999);
       expect(f.orientation()).toEqual(facing);
       expect(f.clock.frames).toBe(0);
       f.clock.advance(1);
@@ -519,7 +676,7 @@ describe('METACRILATOS shared motion lifecycle', () => {
     } finally { f.close(); }
   });
 
-  it('treats page hiding during a held gesture as cancellation and retains the new seven-second deadline', async () => {
+  it('treats page hiding during a touch gesture as cancellation and resumes immediately on return without a deadline', async () => {
     const f = await fixture();
     try {
       f.pointer('pointerdown', { pointerType: 'touch' });
@@ -532,45 +689,40 @@ describe('METACRILATOS shared motion lifecycle', () => {
       expect(f.clock.timers).toBe(0);
       f.clock.advance(3000);
       f.hidden(false);
-      expect(f.clock.timers).toBe(1);
-      f.clock.advance(3999);
-      expect(f.orientation()).toEqual(held);
-      expect(f.clock.frames).toBe(0);
-      f.clock.advance(1);
+      expect(f.clock.timers).toBe(0);
       expect(f.clock.frames).toBe(1);
-      f.clock.advance(32);
+      f.clock.advance(16);
+      expect(f.orientation()).toEqual(held);
+      f.clock.advance(16);
       expect(f.orientation().y - held.y).toBeCloseTo(.336, 3);
     } finally { f.close(); }
   });
 
-  it.each([false, true])('defers a button turn during a held gesture and lets subsequent dragging cancel it (drag again: %s)', async dragAgain => {
+  it.each(['mouse', 'touch', 'pen'])('keeps a held %s gesture in control when the face button is activated', async pointerType => {
     const f = await fixture();
     try {
-      f.pointer('pointerdown');
+      f.pointer('pointerdown', { pointerType });
       const held = f.orientation();
       f.flip();
       f.clock.advance(12000);
       expect(f.orientation()).toEqual(held);
       expect(f.clock.frames).toBe(0);
       expect(f.clock.timers).toBe(0);
-      if (dragAgain) f.pointer('pointermove', { clientX: 160, clientY: 110 });
+      f.pointer('pointermove', { pointerType, clientX: 160, clientY: 110 });
       const released = f.orientation();
-      f.pointer('pointerup');
-      expect(f.clock.timers).toBe(1);
-      f.clock.advance(1000);
-      const resting = f.orientation();
-      if (dragAgain) expect(resting).toEqual(released);
-      else {
-        expect(resting.x).toBeCloseTo(0);
-        expect(Math.abs(resting.y % 360)).toBeCloseTo(180);
-      }
-      f.clock.advance(5999);
-      expect(f.orientation()).toEqual(resting);
-      expect(f.clock.frames).toBe(0);
-      f.clock.advance(1);
+      f.pointer('pointerup', { pointerType });
+      expect(f.orientation()).toEqual(released);
+      if (pointerType === 'mouse') {
+        expect(f.clock.timers).toBe(1);
+        f.clock.advance(4999);
+        expect(f.orientation()).toEqual(released);
+        expect(f.clock.frames).toBe(0);
+        f.clock.advance(1);
+      } else expect(f.clock.timers).toBe(0);
       expect(f.clock.frames).toBe(1);
       f.clock.advance(32);
-      expect(f.orientation().y - resting.y).toBeCloseTo(.336, 3);
+      expect(f.orientation().y - released.y).toBeCloseTo(.336, 3);
+      expect(f.orientation().x).toBe(released.x);
     } finally { f.close(); }
   });
 
@@ -578,7 +730,7 @@ describe('METACRILATOS shared motion lifecycle', () => {
     const f = await fixture();
     try {
       f.flip();
-      f.clock.advance(2000);
+      f.clock.advance(completedTurnMs + 1000);
       const facing = f.orientation();
       f.win.dispatchEvent(new f.win.Event('pagehide'));
       f.clock.advance(3000);
@@ -587,7 +739,7 @@ describe('METACRILATOS shared motion lifecycle', () => {
       expect(f.clock.frames).toBe(0);
       f.win.dispatchEvent(new f.win.Event('pageshow'));
       expect(f.clock.timers).toBe(1);
-      f.clock.advance(1999);
+      f.clock.advance(999);
       expect(f.orientation()).toEqual(facing);
       expect(f.clock.frames).toBe(0);
       f.clock.advance(1);
@@ -597,7 +749,7 @@ describe('METACRILATOS shared motion lifecycle', () => {
     } finally { f.close(); }
   });
 
-  it('suspends an unfinished face transition at its rendered angle without extending the interaction deadline', async () => {
+  it('suspends an unfinished face transition at its rendered angle and starts the five-second hold only on completion', async () => {
     const f = await fixture();
     try {
       f.flip();
@@ -610,10 +762,11 @@ describe('METACRILATOS shared motion lifecycle', () => {
       f.hidden(false);
       f.clock.advance(16);
       expect(f.orientation()).toEqual(intermediate);
-      f.clock.advance(984);
+      f.clock.advance(480);
       const facing = f.orientation();
       expect(Math.abs(facing.y % 360)).toBeCloseTo(180);
-      f.clock.advance(3799);
+      expect(f.clock.timers).toBe(1);
+      f.clock.advance(4999);
       expect(f.orientation()).toEqual(facing);
       expect(f.clock.frames).toBe(0);
       f.clock.advance(1);
@@ -665,11 +818,32 @@ describe('METACRILATOS shared motion lifecycle', () => {
       expect(f.clock.frames).toBe(0);
       f.clock.advance(2000);
       f.reduced(false);
-      f.clock.advance(4799);
+      f.clock.advance(2999);
       expect(f.orientation()).toEqual(back);
       expect(f.clock.frames).toBe(0);
       f.clock.advance(1);
       expect(f.clock.frames).toBe(1);
+    } finally { f.close(); }
+  });
+
+  it.each(['touch', 'pen'])('keeps reduced motion respected after an immediate %s release without introducing an idle timer', async pointerType => {
+    const f = await fixture({ reduced: true });
+    try {
+      f.flip();
+      expect(f.clock.timers).toBe(1);
+      f.pointer('pointerdown', { pointerType });
+      f.pointer('pointermove', { pointerType, clientX: 160, clientY: 110 });
+      f.pointer('pointerup', { pointerType });
+      const dragged = f.orientation();
+      expect(f.clock.timers).toBe(0);
+      expect(f.clock.frames).toBe(0);
+      f.clock.advance(10000);
+      expect(f.orientation()).toEqual(dragged);
+      f.reduced(false);
+      f.clock.advance(32);
+      expect(f.orientation().y - dragged.y).toBeCloseTo(.336, 3);
+      expect(f.orientation().x).toBe(dragged.x);
+      expect(f.clock.timers).toBe(0);
     } finally { f.close(); }
   });
 
@@ -699,7 +873,7 @@ describe('METACRILATOS shared motion lifecycle', () => {
       for (let i = 0; i < 8; i++) observer.callback([]);
       expect(f.clock.frames).toBe(1);
       expect(f.clock.timers).toBe(1);
-      f.clock.advance(3999);
+      f.clock.advance(1999);
       expect(f.orientation()).toEqual(held);
       expect(f.clock.frames).toBe(0);
       expect(f.clock.timers).toBe(1);

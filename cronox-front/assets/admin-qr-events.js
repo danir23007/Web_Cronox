@@ -11,33 +11,44 @@
   let groupPage = 1, participantPage = 1, creating = false, scanPending = null, retryRead = null;
   let cameraVersion = 0, cameraState = 'closed', stream = null, frameTimer, permissionTimer;
   let detector = null, reader = null, fallbackPromise;
-  const cooldown = new Map();
+  let resultTimer, resultVersion = 0, resultActive = false, exportPending = null;
+  const heldCodes = new Map();
+  const REMOVAL_MS = 800;
+  const XLSX_TYPE = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
   const video = $('Video');
   const canvas = document.createElement('canvas');
   const current = (id, version) => groupId === id && generation === version && !root.hidden;
   const message = (id, value, state = 'info') => { $(id).textContent = value; $(id).dataset.state = state; };
   const node = (tag, value, className) => { const el = document.createElement(tag); el.textContent = value ?? ''; if (className) el.className = className; return el; };
 
-  async function request(path = '', method = 'GET', body, signal) {
+  async function request(path = '', method = 'GET', body, signal, format = 'json') {
     const controller = new AbortController();
     const abort = () => controller.abort();
     signal?.addEventListener('abort', abort, { once: true });
     if (signal?.aborted) abort();
     const timeout = setTimeout(abort, 15000);
     try {
-      const headers = { Accept: 'application/json' };
+      const headers = { Accept: format === 'xlsx' ? XLSX_TYPE : 'application/json' };
       if (body !== undefined) Object.assign(headers, { 'Content-Type': 'application/json' }, await window.CRONOX_API.getCsrfHeaders());
+      if (controller.signal.aborted) throw new DOMException('Solicitud cancelada', 'AbortError');
       const response = await fetch(`${base()}/api/admin/qr-events${path}`, {
         method, headers, credentials: 'include', cache: 'no-store', signal: controller.signal,
         body: body === undefined ? undefined : JSON.stringify(body),
       });
-      const data = await response.json().catch(() => ({}));
       if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
         const error = new Error('No se pudo completar la operación.');
         error.status = response.status; error.code = data.code;
         throw error;
       }
-      return data;
+      if (format === 'xlsx') {
+        if (!(response.headers.get('content-type') || '').startsWith(XLSX_TYPE)) throw new Error('Archivo no confirmado');
+        const filename = /filename="([a-zA-Z0-9._-]+\.xlsx)"/.exec(response.headers.get('content-disposition') || '')?.[1];
+        const blob = await response.blob();
+        if (!blob.size) throw new Error('Archivo vacío');
+        return { blob, filename: filename || 'eventos-qr-ids.xlsx' };
+      }
+      return await response.json();
     } finally { clearTimeout(timeout); signal?.removeEventListener('abort', abort); }
   }
 
@@ -46,7 +57,8 @@
     if (error.status === 403) return 'Permiso insuficiente para gestionar Eventos QR.';
     if (error.code === 'GROUP_UNAVAILABLE' || error.status === 404) return 'Grupo no disponible. Vuelve al listado y actualízalo.';
     if (error.code === 'CREDENTIAL_UNUSABLE') return 'Credencial no utilizable. Revisa el estado de la cuenta y su círculo.';
-    if (error.code === 'INVALID_QR' || error.status === 400) return scanning ? 'QR no válido o desconocido. Utiliza una acreditación CRONOX.' : 'Datos no válidos. Revisa el nombre y la descripción.';
+    if (error.code === 'INVALID_QR') return 'QR no válido o desconocido. Utiliza una acreditación CRONOX.';
+    if (!scanning && error.status === 400) return 'Datos no válidos. Revisa el nombre y la descripción.';
     if (error.status === 429) return 'Demasiadas solicitudes. Espera unos segundos y vuelve a intentarlo.';
     return scanning
       ? 'No se pudo confirmar el registro por un fallo de red o servidor. Puede haberse guardado: reintenta el mismo QR para comprobarlo sin duplicarlo.'
@@ -94,14 +106,59 @@
     $('GroupDescription').textContent = group.description || '';
     $('Total').textContent = `${number(group.total)} participantes`;
     $('CameraOpen').disabled = cameraState !== 'closed';
+    updateExport();
+  }
+
+  function updateExport() {
+    $('Export').disabled = !group || !group.total || !!exportPending;
+    if (group && !group.total && !exportPending) message('ExportMessage', 'No hay participantes para descargar.');
+    else if ($('ExportMessage').textContent === 'No hay participantes para descargar.') message('ExportMessage', '');
+  }
+
+  function cancelExport() {
+    exportPending?.controller.abort(); exportPending = null;
+    $('Export').textContent = 'Descargar IDs en Excel'; $('Export').removeAttribute('aria-busy');
+    $('Export').disabled = true; message('ExportMessage', '');
+  }
+
+  async function downloadIds() {
+    if (!group?.total || exportPending || root.hidden) return;
+    const pending = { id: groupId, scope: generation, controller: new AbortController() };
+    exportPending = pending; updateExport();
+    $('Export').textContent = 'Preparando Excel…'; $('Export').setAttribute('aria-busy', 'true');
+    message('ExportMessage', 'Preparando todos los IDs del grupo…');
+    try {
+      const result = await request(`/${encodeURIComponent(pending.id)}/ids.xlsx`, 'GET', undefined, pending.controller.signal, 'xlsx');
+      if (exportPending !== pending || !current(pending.id, pending.scope)) return;
+      const url = URL.createObjectURL(result.blob), anchor = document.createElement('a');
+      anchor.href = url; anchor.download = result.filename;
+      document.body.append(anchor); anchor.click(); anchor.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      message('ExportMessage', 'Excel descargado con todos los IDs del grupo.', 'success');
+    } catch (error) {
+      if (exportPending !== pending || !current(pending.id, pending.scope)) return;
+      if (error.code === 'EMPTY_GROUP') { group.total = 0; $('Total').textContent = '0 participantes'; }
+      message('ExportMessage', error.code === 'UNRESOLVED_PARTICIPANT_ID'
+        ? 'Hay registros sin un usuario asociado. No se ha generado un Excel incompleto: revisa esos registros.'
+        : error.code === 'EMPTY_GROUP' ? 'No hay participantes para descargar.'
+        : [401, 403, 404].includes(error.status) ? failure(error)
+        : 'No se pudo descargar el Excel. Vuelve a pulsar Descargar IDs en Excel para reintentarlo.', 'error');
+    } finally {
+      if (exportPending === pending) {
+        exportPending = null; $('Export').textContent = 'Descargar IDs en Excel';
+        $('Export').removeAttribute('aria-busy'); updateExport();
+      }
+    }
   }
 
   function renderParticipant(item) {
     const row = document.createElement('tr'); row.dataset.participantId = String(item.id);
     const date = new Date(item.registeredAt);
-    const registeredBy = item.registeredBy ? (item.registeredBy.name || item.registeredBy.publicUserId) : 'Cuenta eliminada';
-    row.append(node('td', item.publicUserId, 'qr-events-id'), node('td', item.qrIdentifier, 'qr-events-id'), node('td', item.name || ''),
-      node('td', romans[item.circleAtRegistration] || 'No disponible'), node('td', Number.isFinite(date.getTime()) ? dateFormat.format(date) : ''), node('td', registeredBy));
+    const registeredBy = item.registeredBy ? (item.registeredBy.name || String(item.registeredBy.id ?? 'ID no disponible')) : 'Cuenta eliminada';
+    const userId = Number.isSafeInteger(item.userId) ? String(item.userId) : 'ID no disponible';
+    row.append(node('td', userId, 'qr-events-id'), node('td', item.deleted ? 'Cuenta eliminada' : item.name || ''),
+      node('td', romans[item.circleAtRegistration] || 'No disponible'), node('td', Number.isFinite(date.getTime()) ? dateFormat.format(date) : ''),
+      node('td', registeredBy), node('td', item.qrIdentifier || 'No disponible', 'qr-events-qr'));
     return row;
   }
 
@@ -119,15 +176,16 @@
     } catch (error) {
       if (!current(id, read.scope) || read.version !== readVersion) return;
       $('Participants').replaceChildren(); $('ParticipantPage').textContent = ''; message('ParticipantMessage', failure(error), 'error');
-      if ([401, 403, 404].includes(error.status)) { group = null; stopCamera(); $('CameraOpen').disabled = true; }
+      if ([401, 403, 404].includes(error.status)) { group = null; stopCamera(); $('CameraOpen').disabled = true; updateExport(); }
     } finally { if (read.version === readVersion) $('Participants').setAttribute('aria-busy', 'false'); }
   }
 
   function resetView(id) {
-    generation++; readVersion++; readAbort?.abort(); stopCamera();
-    groupId = id; group = null; participantPage = 1; scanPending = null; retryRead = null; cooldown.clear();
+    generation++; readVersion++; readAbort?.abort(); stopCamera(); cancelExport();
+    groupId = id; group = null; participantPage = 1;
     $('ScanRetry').hidden = true; message('ScanMessage', ''); $('ParticipantSearch').value = '';
     $('Participants').replaceChildren(); $('GroupName').textContent = 'Cargando grupo…';
+    root.querySelector('.qr-events-table-wrap').scrollLeft = 0;
     $('GroupDescription').textContent = ''; $('Total').textContent = ''; $('CameraOpen').disabled = true;
     $('Overview').hidden = !!id; $('Detail').hidden = !id;
   }
@@ -145,26 +203,62 @@
     return id ? loadParticipants() : loadGroups();
   }
 
+  function clearResult() {
+    resultVersion++; clearTimeout(resultTimer); resultActive = false;
+    $('ScanResult').hidden = true; $('ScanResultText').textContent = '';
+    delete $('ScanResult').dataset.result;
+  }
+
+  function showResult(kind) {
+    clearResult();
+    const text = { registered: 'aprobado', already_registered: 'ya registrado', invalid: 'no válido' }[kind];
+    // Start the hold only now: after the server has confirmed, not when reading.
+    resultActive = true; $('ScanResult').dataset.result = kind;
+    $('ScanResultText').textContent = text; $('ScanResult').hidden = false;
+    const version = resultVersion, camera = cameraVersion, id = groupId, scope = generation;
+    resultTimer = setTimeout(() => {
+      if (version !== resultVersion || camera !== cameraVersion || !current(id, scope)) return;
+      clearResult();
+    }, kind === 'registered' ? 1000 : 2000);
+  }
+
+  function observeCodes(values) {
+    const now = performance.now();
+    // Keep observing while requests/results block registration. A held QR is
+    // rearmed by its absence across frames, never by an elapsed success timer.
+    for (const [value, lastSeen] of heldCodes) {
+      if (values.includes(value)) heldCodes.set(value, now);
+      else if (now - lastSeen >= REMOVAL_MS) heldCodes.delete(value);
+    }
+    if (scanPending || resultActive || retryRead) return;
+    const next = values.find(value => !heldCodes.has(value));
+    if (next !== undefined) void submitRead(next);
+  }
+
   async function submitRead(raw, retry = false) {
-    if (!group || root.hidden || scanPending) return;
-    const qrContent = String(raw || ''), id = groupId, scope = generation;
-    const key = id + '\u0000' + qrContent;
-    const now = Date.now();
-    for (const [oldKey, until] of cooldown) if (until <= now) cooldown.delete(oldKey);
-    if (!retry && cooldown.has(key)) return;
-    cooldown.set(key, now + 2500);
-    if (!qrContent || qrContent.length > 512) { message('ScanMessage', 'QR no válido o desconocido. Utiliza una acreditación CRONOX.', 'error'); return; }
-    // Both the destination and UI generation are immutable for this request.
-    const pending = { id, scope, qrContent }; scanPending = pending;
+    if (!group || root.hidden || scanPending || resultActive || cameraState !== 'open') return;
+    const qrContent = String(raw), id = groupId, scope = generation, camera = cameraVersion;
+    if (!retry && (retryRead || heldCodes.has(qrContent))) return;
+    heldCodes.set(qrContent, performance.now());
+    if (!qrContent || qrContent.length > 512) {
+      message('ScanMessage', 'QR no válido o desconocido. Utiliza una acreditación CRONOX.', 'error'); showResult('invalid'); return;
+    }
+    // Scope includes the camera session: stopping also invalidates late writes.
+    const pending = { id, scope, camera, qrContent, controller: new AbortController() }; scanPending = pending;
+    const active = () => current(id, scope) && camera === cameraVersion && scanPending === pending;
     retryRead = null; $('ScanRetry').hidden = true; message('ScanMessage', 'Comprobando y guardando acreditación…');
     try {
-      const result = await request(`/${encodeURIComponent(id)}/scan`, 'POST', { qrContent });
-      if (!current(id, scope)) return;
-      if (String(result.groupId) !== id || !['registered', 'already_registered'].includes(result.status)) throw new Error('Respuesta no confirmada');
+      const result = await request(`/${encodeURIComponent(id)}/scan`, 'POST', { qrContent }, pending.controller.signal);
+      if (!active()) return;
+      if (String(result.groupId) !== id || !['registered', 'already_registered'].includes(result.status)
+          || !result.participant?.id || !Number.isSafeInteger(result.participant.userId)
+          || !Number.isSafeInteger(result.total) || result.total < 1) throw new Error('Respuesta no confirmada');
       const duplicate = result.status === 'already_registered';
+      showResult(result.status);
+      message('CameraMessage', 'Cámara abierta. Enfoca el QR completo de la acreditación.');
       message('ScanMessage', (duplicate ? 'Ya registrado en este grupo' : 'Registrado') + (result.participant.name ? ': ' + result.participant.name : '.') + (cameraState === 'open' ? ' Puedes escanear la siguiente acreditación.' : ''), duplicate ? 'warning' : 'success');
       group.total = result.total; $('Total').textContent = `${number(result.total)} participantes`;
-      cooldown.set(key, Date.now() + 2500);
+      updateExport();
       // Invalidate any older list response before showing the confirmed row/count.
       readVersion++; readAbort?.abort();
       if (participantPage === 1 && !$('ParticipantSearch').value.trim()) {
@@ -174,12 +268,17 @@
       }
       void loadParticipants();
     } catch (error) {
-      if (!current(id, scope)) return;
+      if (!active()) return;
       message('ScanMessage', failure(error, true), 'error');
-      if (!error.status || error.status >= 500) {
-        retryRead = pending; $('ScanRetry').hidden = false; stopCamera('Escaneo detenido hasta comprobar el último registro.');
+      if ([400, 422].includes(error.status) && ['INVALID_QR', 'CREDENTIAL_UNUSABLE'].includes(error.code)) {
+        showResult('invalid');
       } else if ([401, 403, 404].includes(error.status)) {
-        stopCamera(); group = null; $('CameraOpen').disabled = true;
+        stopCamera(); group = null; $('CameraOpen').disabled = true; updateExport();
+      } else {
+        // Unknown, permission-independent and transport failures are technical,
+        // never red invalid-credential results or unconfirmed approvals.
+        retryRead = pending; $('ScanRetry').hidden = false;
+        message('CameraMessage', 'Cámara abierta. Lecturas en pausa: reintenta el último registro para continuar.');
       }
     } finally { if (scanPending === pending) scanPending = null; }
   }
@@ -188,6 +287,8 @@
 
   function stopCamera(text = 'Cámara cerrada.') {
     cameraVersion++; clearTimeout(frameTimer); clearTimeout(permissionTimer);
+    clearResult(); heldCodes.clear(); scanPending?.controller.abort();
+    retryRead = null; $('ScanRetry').hidden = true;
     stopTracks(stream); stream = null; video.srcObject = null;
     canvas.width = 0; canvas.height = 0;
     try { video.pause(); } catch (_) { /* Media element may already be detached. */ }
@@ -220,11 +321,11 @@
 
   async function decodeFrame(version, id, scope) {
     if (version !== cameraVersion || !current(id, scope) || cameraState !== 'open') return;
-    if (video.readyState >= 2 && !scanPending) {
+    if (video.readyState >= 2) {
       try {
-        let value;
+        let values;
         if (detector) {
-          try { value = (await detector.detect(video)).find(code => code.rawValue)?.rawValue; }
+          try { values = (await detector.detect(video)).map(code => code.rawValue).filter(value => typeof value === 'string'); }
           catch (_) {
             const library = await loadFallback();
             if (version !== cameraVersion || !current(id, scope)) return;
@@ -237,10 +338,11 @@
           canvas.width = Math.round(video.videoWidth * scale); canvas.height = Math.round(video.videoHeight * scale);
           if (canvas.width && canvas.height) {
             canvas.getContext('2d', { willReadFrequently: true }).drawImage(video, 0, 0, canvas.width, canvas.height);
-            value = await reader.decodeFromCanvas(canvas);
+            const value = await reader.decodeFromCanvas(canvas);
+            values = typeof value === 'string' ? [value] : [];
           }
         }
-        if (value && version === cameraVersion && current(id, scope)) void submitRead(value);
+        if (values && version === cameraVersion && current(id, scope)) observeCodes(values);
       } catch (error) {
         if (version === cameraVersion) stopCamera('No se pudo leer la cámara. Detén y vuelve a abrir el lector.');
       }
@@ -302,8 +404,8 @@
   }
 
   function leave() {
-    generation++; readVersion++; readAbort?.abort(); stopCamera();
-    group = null; groupId = ''; scanPending = null; retryRead = null; cooldown.clear();
+    generation++; readVersion++; readAbort?.abort(); stopCamera(); cancelExport();
+    group = null; groupId = '';
     $('Participants').replaceChildren(); $('List').replaceChildren();
     $('GroupName').textContent = ''; $('GroupDescription').textContent = ''; $('Total').textContent = '';
     message('ScanMessage', '');
@@ -331,6 +433,7 @@
   $('Back').onclick = () => navigate('');
   $('ParticipantFilters').addEventListener('submit', event => { event.preventDefault(); participantPage = 1; void loadParticipants(); });
   $('ParticipantsRefresh').onclick = () => void loadParticipants();
+  $('Export').onclick = () => void downloadIds();
   $('ParticipantPrev').onclick = () => { participantPage--; void loadParticipants(); }; $('ParticipantNext').onclick = () => { participantPage++; void loadParticipants(); };
   $('CameraOpen').onclick = () => void openCamera(); $('CameraStop').onclick = () => stopCamera();
   $('CameraChoice').onchange = () => void openCamera($('CameraChoice').value);

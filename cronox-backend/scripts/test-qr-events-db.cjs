@@ -3,6 +3,7 @@
 const assert = require('node:assert/strict'), fs = require('node:fs'), path = require('node:path');
 const { randomUUID } = require('node:crypto'), { spawnSync } = require('node:child_process');
 const { Client, Pool } = require('pg');
+const ExcelJS = require('exceljs');
 const { loadLocalEnvironment, ensureLocalPostgres } = require('./start-local.cjs');
 const backend = path.resolve(__dirname, '..');
 const database = 'cronox_qr_test_' + randomUUID().replace(/-/g, '');
@@ -114,6 +115,8 @@ async function main() {
     assert.equal(race.filter(r => r.status === 'already_registered').length, 11);
     assert.equal(await db.qrEventParticipant.count({ where: { groupId: group.id } }), 1);
     const first = race.find(r => r.status === 'registered');
+    assert.equal(first.participant.userId, person.id);
+    assert.equal(first.participant.publicUserId, person.identityUid);
     const retry = await service2.scan(group.id, card.qrPayload, superadmin.id);
     assert.equal(retry.status, 'already_registered'); assert.deepEqual(retry.participant, first.participant);
     assert.equal((await service2.scan(group2.id, card.qrPayload, superadmin.id)).status, 'registered');
@@ -126,8 +129,49 @@ async function main() {
     await db.user.update({ where: { id: person.id }, data: { accountState: 'ACTIVE', circleLevel: 0 } });
     await assert.rejects(service.scan(group.id, card.qrPayload, admin.id), error => error.getResponse().code === 'CREDENTIAL_UNUSABLE');
     await db.user.update({ where: { id: person.id }, data: { circleLevel: 3 } });
+    const historical = (await service.participants(group.id, {})).items[0];
+    assert.equal(historical.userId, person.id);
+    assert.equal(historical.circleAtRegistration, 5);
+    assert.equal(historical.registeredAt.toISOString(), first.participant.registeredAt.toISOString());
+    assert.deepEqual(historical.registeredBy, first.participant.registeredBy);
     await assert.rejects(db.qrEventGroup.delete({ where: { id: group.id } }));
     checks.push('12 simultaneous scans on two independent PostgreSQL clients produce exactly one row; retry preserves first time/actor/circle; separate group succeeds; unavailable/inactive/invalid reject');
+
+    // Existing and new registrations across three table pages. All fixtures live
+    // only in this disposable database; no real accounts or providers are used.
+    const exportGroup = await service.create({ name: 'Prúeba / IDs' }, admin.id);
+    const emptyGroup = await service.create({ name: 'Sin participantes' }, admin.id);
+    await db.user.createMany({ data: Array.from({ length: 122 }, (_, index) => ({ email: `export-${index}@export.qr.test` })) });
+    const exportUsers = [admin, superadmin, person, ...await db.user.findMany({ where: { email: { endsWith: '@export.qr.test' } } })];
+    await db.qrEventParticipant.createMany({ data: exportUsers.map(user => ({
+      groupId: exportGroup.id, userIdentityUid: user.identityUid,
+      registeredByIdentityUid: admin.identityUid, circleAtRegistration: 2,
+    })) });
+    const expectedIds = exportUsers.map(user => user.id).sort((a, b) => a - b);
+    assert.equal(expectedIds.length, 125);
+    assert.deepEqual(expectedIds.slice(0, 2), [2, 3]); assert.ok(expectedIds.includes(10));
+    assert.equal((await service.participants(exportGroup.id, { page: 3, limit: 50 })).items.length, 25);
+    const numericSearch = await service.participants(exportGroup.id, { q: '10' });
+    assert.ok(numericSearch.items.some(item => item.userId === 10));
+    const recordsBeforeExport = await db.qrEventParticipant.findMany({ orderBy: { id: 'asc' } });
+    const verifyWorkbook = async buffer => {
+      assert.equal(buffer.subarray(0, 2).toString(), 'PK');
+      const workbook = new ExcelJS.Workbook(); await workbook.xlsx.load(buffer);
+      assert.equal(workbook.worksheets.length, 1);
+      const sheet = workbook.worksheets[0];
+      assert.equal(sheet.columnCount, 1); assert.equal(sheet.rowCount, expectedIds.length + 1);
+      assert.equal(sheet.getCell('A1').value, 'ID de usuario');
+      const ids = [];
+      sheet.eachRow((row, index) => { if (index > 1) { const cell = row.getCell(1); assert.equal(cell.type, ExcelJS.ValueType.Number); ids.push(cell.value); } });
+      assert.deepEqual(ids, expectedIds); assert.equal(new Set(ids).size, ids.length);
+      assert.ok(!ids.includes(other.id));
+    };
+    const exportResult = await service.exportIds(exportGroup.id);
+    assert.equal(exportResult.filename, 'eventos-qr-prueba-ids-ids.xlsx');
+    await verifyWorkbook(exportResult.buffer);
+    await assert.rejects(service.exportIds(emptyGroup.id), error => error.getResponse().code === 'EMPTY_GROUP');
+    assert.deepEqual(await db.qrEventParticipant.findMany({ orderBy: { id: 'asc' } }), recordsBeforeExport);
+    checks.push('Real PostgreSQL: historical and new rows resolve User.id, preserve first circle/date/actor; XLSX parses as one column/sheet containing all 125 group IDs across 3 pages, numeric/unique/sorted (2,3,10), without other-group users or record writes');
 
     const { Test } = require('@nestjs/testing');
     const { ValidationPipe } = require('@nestjs/common');
@@ -158,11 +202,25 @@ async function main() {
     for (const user of [admin, superadmin, person, friend]) tokens[user.role] = (await sessions.create(await db.user.findUniqueOrThrow({ where: { id: user.id } }))).accessToken;
     const auth = role => ({ Authorization: 'Bearer ' + tokens[role] });
     const csrf = { Origin: env.FRONTEND_URL, Cookie: 'cronox_csrf_token=qr-test', 'X-CSRF-Token': 'qr-test' };
-    for (const route of ['', '/' + group.id, '/' + group.id + '/participants']) {
+    for (const route of ['', '/' + group.id, '/' + group.id + '/participants', '/' + group.id + '/ids.xlsx']) {
       await request.get('/api/admin/qr-events' + route).expect(401);
       for (const role of ['USER', 'FRIEND']) await request.get('/api/admin/qr-events' + route).set(auth(role)).expect(403);
       for (const role of ['ADMIN', 'SUPERADMIN']) await request.get('/api/admin/qr-events' + route).set(auth(role)).expect(200);
     }
+    const binary = (response, done) => {
+      const chunks = []; response.on('data', chunk => chunks.push(chunk));
+      response.on('end', () => done(null, Buffer.concat(chunks))); response.on('error', done);
+    };
+    const downloaded = await request.get(`/api/admin/qr-events/${exportGroup.id}/ids.xlsx?page=2&limit=1&q=not-a-participant`)
+      .set(auth('ADMIN')).buffer(true).parse(binary).expect(200);
+    assert.match(downloaded.headers['content-type'], /application\/vnd.openxmlformats-officedocument.spreadsheetml.sheet/);
+    assert.equal(downloaded.headers['content-disposition'], 'attachment; filename="eventos-qr-prueba-ids-ids.xlsx"');
+    assert.match(downloaded.headers['cache-control'], /private, no-store/);
+    assert.equal(downloaded.headers['x-content-type-options'], 'nosniff');
+    await verifyWorkbook(downloaded.body);
+    assert.equal((await request.get(`/api/admin/qr-events/${emptyGroup.id}/ids.xlsx`).set(auth('ADMIN')).expect(400)).body.code, 'EMPTY_GROUP');
+    await request.get('/api/admin/qr-events/not-a-uuid/ids.xlsx').set(auth('ADMIN')).expect(400);
+    checks.push('Real authenticated XLSX HTTP endpoint: anonymous 401, USER/FRIEND 403, ADMIN/SUPERADMIN allowed; binary contents inspected despite search/page/limit query, private/no-store + safe filename, empty/invalid groups rejected');
     for (const role of ['USER', 'FRIEND']) {
       await request.post('/api/admin/qr-events').set({ ...auth(role), ...csrf }).send({ name: 'Forbidden' }).expect(403);
       await request.post(`/api/admin/qr-events/${group.id}/scan`).set({ ...auth(role), ...csrf }).send({ qrContent: card.qrPayload }).expect(403);
@@ -240,17 +298,22 @@ async function main() {
     const recordsAfter = (await ownership(sql)).records;
     assert.deepEqual(recordsAfter, ownershipBefore.records.filter(record => !record.includes(older.identityUid)));
     assert.equal((await service.participants(group.id, {})).items[0].publicUserId, person.identityUid);
+    assert.equal((await service.participants(group.id, {})).items[0].userId, afterRenumber.id);
+    const renumberedExport = new ExcelJS.Workbook();
+    await renumberedExport.xlsx.load((await service.exportIds(group.id)).buffer);
+    assert.equal(renumberedExport.worksheets[0].getCell('A2').value, afterRenumber.id);
     await sql.query('BEGIN'); await sql.query('SELECT pg_advisory_xact_lock(824031,1)');
     await sql.query("SELECT set_config('cronox.user_delete','on',true)");
     await sql.query('DELETE FROM "User" WHERE "identityUid"=$1', [person.identityUid]); await sql.query('COMMIT');
     const retired = (await service.participants(group.id, {})).items[0];
-    assert.equal(retired.deleted, true); assert.equal(retired.name, ''); assert.equal(retired.publicUserId, null); assert.equal(retired.qrIdentifier, null);
+    assert.equal(retired.deleted, true); assert.equal(retired.userId, null); assert.equal(retired.name, ''); assert.equal(retired.publicUserId, null); assert.equal(retired.qrIdentifier, null);
     assert.equal(retired.registeredAt.toISOString(), first.participant.registeredAt.toISOString());
     assert.equal((await service.get(group.id)).total, 1);
     const currentAdmin = await db.user.findUniqueOrThrow({ where: { identityUid: admin.identityUid } });
+    await assert.rejects(service.exportIds(group.id), error => error.getResponse().code === 'UNRESOLVED_PARTICIPANT_ID');
     await assert.rejects(service.scan(group.id, card.qrPayload, currentAdmin.id), error => error.getResponse().code === 'INVALID_QR');
     await assert.rejects(db.user.create({ data: { email: 'reuse@qr.test', publicMemberToken: backfilled.publicMemberToken } }));
-    checks.push('Existing controlled deletion + renumbering expose the current stored memberCode and compatible administrative number on reload while preserving UUID and exact QR pixels/payload; deleting attendee keeps anonymous event count/time/circle, removes PII, rejects retired QR and token reuse');
+    checks.push('Existing controlled deletion + renumbering expose current User.id in participation and XLSX, preserving UUID and exact QR pixels/payload; deleting attendee keeps anonymous event count/time/circle, removes PII, rejects incomplete XLSX rather than inventing IDs, retired QR and token reuse');
   } finally {
     if (app) await app.close(); if (numberingPool) await numberingPool.end(); if (db) await db.$disconnect(); if (second) await second.$disconnect(); if (sql) await sql.end();
     if (created) { assert.match(database, /^cronox_qr_test_[a-f0-9]{32}$/); await control.query(`DROP DATABASE "${database}" WITH (FORCE)`); }

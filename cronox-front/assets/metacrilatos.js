@@ -165,11 +165,13 @@
       const cleanups = [];
       let active = true;
       let x = -7, y = -19, dragging = false, previousX = 0, previousY = 0, pointerId = null;
+      let directManipulation = false;
       // One frame loop owns all rotation; one deadline owns idle resumption.
       // Hiding the scene suspends work without losing its orientation/deadline.
       let automatic = true, frame = 0, lastTime = null, turn = null;
       let layoutFrame = 0;
       let resumeTimer = 0, resumeAt = null, sceneReady = false, pageActive = true;
+      let resumeGeneration = 0;
       let intersecting = typeof IntersectionObserver !== 'function';
       const on = (target, type, listener, options) => {
         target.addEventListener(type, listener, options);
@@ -311,6 +313,7 @@
         lastTime = null;
       }
       function cancelResumeTimer() {
+        resumeGeneration += 1;
         window.clearTimeout(resumeTimer);
         resumeTimer = 0;
       }
@@ -333,7 +336,9 @@
             turn = null;
             automatic = true;
           } else if (!resumeTimer) {
+            const generation = resumeGeneration;
             resumeTimer = window.setTimeout(() => {
+              if (!active || generation !== resumeGeneration) return;
               resumeTimer = 0;
               syncMotion();
             }, remaining);
@@ -348,16 +353,18 @@
         if (!isVisible()) { syncMotion(); return; }
         const elapsed = lastTime === null ? 0 : Math.max(0, Math.min(time-lastTime, 50));
         lastTime = time;
+        let completedTurn = false;
         if (turn) {
           turn.elapsed += elapsed;
           const progress = Math.min(1, turn.elapsed/650);
           const ease = 1-Math.pow(1-progress, 3);
           x = turn.startX * (1-ease);
           y = turn.startY + (turn.targetY-turn.startY)*ease;
-          if (progress === 1) turn = null;
+          if (progress === 1) { turn = null; completedTurn = true; }
         } else if (automatic) y += elapsed * .021;
         render();
-        syncMotion();
+        if (completedTurn) resumeAfterIdle();
+        else syncMotion();
       }
       function stopForInteraction() {
         cancelFrame();
@@ -368,14 +375,24 @@
       }
       function resumeAfterIdle() {
         cancelResumeTimer();
-        resumeAt = performance.now() + 7000;
+        resumeAt = performance.now() + 5000;
+        syncMotion();
+      }
+      function resumeImmediately() {
+        cancelResumeTimer();
+        resumeAt = null;
+        turn = null;
+        automatic = true;
         syncMotion();
       }
       function turnTo(targetY) {
-        if (reduced.matches) { x = 0; y = targetY; render(); return; }
+        if (reduced.matches) { x = 0; y = targetY; render(); resumeAfterIdle(); return; }
         turn = { startX: x, startY: y, targetY, elapsed: 0 };
+        syncMotion();
       }
       on(flip, 'click', () => {
+        // An active captured gesture owns the orientation, including on hybrids.
+        if (dragging) return;
         stopForInteraction();
         const onFront = Math.cos(y * Math.PI / 180) >= 0;
         const target = onFront ? 180 : 0;
@@ -383,12 +400,12 @@
         if (delta > 180) delta -= 360;
         turnTo(y+delta);
         status.textContent = onFront ? 'Vista del reverso.' : 'Vista del anverso.';
-        resumeAfterIdle();
       });
       on(stage, 'pointerdown', event => {
         if (event.button !== 0 || dragging) return;
         stopForInteraction();
         dragging = true;
+        directManipulation = event.pointerType === 'touch' || event.pointerType === 'pen';
         pointerId = event.pointerId;
         previousX = event.clientX;
         previousY = event.clientY;
@@ -408,12 +425,17 @@
         if (!dragging || (event?.pointerId !== undefined && event.pointerId !== pointerId)) return;
         dragging = false;
         const releasedId = pointerId;
+        const resumeDirectly = directManipulation;
+        directManipulation = false;
         pointerId = null;
         // Clear gesture state before releasing capture: lostpointercapture may
         // fire synchronously and must not create a second idle deadline.
         try { if (stage.hasPointerCapture(releasedId)) stage.releasePointerCapture(releasedId); } catch { /* Already released. */ }
         status.textContent = Math.cos(y * Math.PI / 180) >= 0 ? 'Vista del anverso.' : 'Vista del reverso.';
-        if (active) resumeAfterIdle();
+        if (active) {
+          if (resumeDirectly) resumeImmediately();
+          else resumeAfterIdle();
+        }
       }
       on(stage, 'pointerup', release);
       on(stage, 'pointercancel', release);
@@ -429,8 +451,9 @@
       on(window, 'pageshow', () => { pageActive = true; syncMotion(); });
       on(reduced, 'change', () => {
         cancelFrame();
-        if (reduced.matches && turn) { x = 0; y = turn.targetY; turn = null; render(); }
-        syncMotion();
+        if (reduced.matches && turn) {
+          x = 0; y = turn.targetY; turn = null; render(); resumeAfterIdle();
+        } else syncMotion();
       });
       // Scaling changes the observed host height. Batch these layout writes
       // after ResizeObserver delivery, without introducing another motion loop.

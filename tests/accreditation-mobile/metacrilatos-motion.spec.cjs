@@ -103,7 +103,7 @@ async function reduceMotion(page) {
 }
 
 for (const target of ['profile', 'preview']) {
-  test(`${target}: all five circles start automatically, retain one centered control and resume seven seconds after activation`, async ({ page }) => {
+  test(`${target}: all five circles start automatically, retain one centered control and resume five seconds after face placement`, async ({ page }) => {
     test.setTimeout(90000); // WebKit renders every simulated animation frame for all five cards.
     const state = await setup(page, target);
     for (let level = 1; level <= 5; level++) {
@@ -127,7 +127,7 @@ for (const target of ['profile', 'preview']) {
       expect(resting.x).toBeCloseTo(0, 8);
       expect(Math.abs(Math.cos(resting.y * Math.PI / 180))).toBeCloseTo(1, 8);
       await expect(button).toHaveText(requestedFront ? 'Ver reverso' : 'Ver anverso');
-      await page.clock.runFor(6200); // 6.9 s from activation, not from turn completion.
+      await page.clock.runFor(4850); // 4.9 s after the 650 ms face transition completes.
       expect(await angles(page)).toEqual(resting);
       await page.clock.runFor(180);
       const resumed = await angles(page);
@@ -147,9 +147,49 @@ for (const target of ['profile', 'preview']) {
     expect(state.errors).toEqual([]);
     expect(state.writes).toEqual([]);
   });
+
+  test(`${target}: touch and pen on a desktop-width hybrid cancel the button pause and release without an orientation jump`, async ({ page }) => {
+    test.setTimeout(60000);
+    await page.setViewportSize({ width: 1440, height: 1000 }); // Input type, not the responsive breakpoint, controls release.
+    const state = await setup(page, target);
+    const stage = page.locator('.crx-stage');
+    const button = page.locator('[data-crx-flip]');
+    let pointerId = 30;
+    for (const pointerType of ['touch', 'pen']) {
+      for (const releaseType of ['pointerup', 'pointercancel']) {
+        await button.click();
+        await page.clock.runFor(700);
+        await stage.scrollIntoViewIfNeeded();
+        const box = await stage.boundingBox();
+        const point = { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+        const event = { pointerType, pointerId: pointerId++, isPrimary: true,
+          button: 0, buttons: 1, clientX: point.x, clientY: point.y };
+        const beforeGesture = await angles(page);
+        // Synthetic pointer events cover the shared state machine, in addition
+        // to the browser-generated Chromium touch gesture checked below.
+        await stage.dispatchEvent('pointerdown', event);
+        expect(await angles(page)).toEqual(beforeGesture);
+        await page.clock.runFor(5500); // The obsolete button deadline expires while held.
+        expect(await angles(page)).toEqual(beforeGesture);
+        await stage.dispatchEvent('pointermove', { ...event,
+          clientX: point.x + 40, clientY: point.y + 10 });
+        const moved = await angles(page);
+        expect(moved.y - beforeGesture.y).toBeCloseTo(26, 6);
+        expect(moved.x - beforeGesture.x).toBeCloseTo(-3, 6);
+        await button.evaluate(element => element.click());
+        await page.clock.runFor(700);
+        expect(await angles(page)).toEqual(moved);
+        await stage.dispatchEvent(releaseType, { ...event, buttons: 0 });
+        expect(await angles(page)).toEqual(moved);
+        await expectSpinning(page);
+      }
+    }
+    expect(state.errors).toEqual([]);
+    expect(state.writes).toEqual([]);
+  });
 }
 
-test('mouse hold, hover, rapid activations, release and capture loss coordinate a single inactivity deadline', async ({ page }) => {
+test('mouse hold, hover, rapid activations, release and capture loss coordinate a single five-second deadline', async ({ page }) => {
   const state = await setup(page, 'profile');
   const stage = page.locator('.crx-stage');
   await stage.scrollIntoViewIfNeeded();
@@ -175,10 +215,13 @@ test('mouse hold, hover, rapid activations, release and capture loss coordinate 
   expect(dragged.x - turning.x).toBeCloseTo(-6, 3);
   await page.clock.runFor(8500);
   expect(await angles(page)).toEqual(dragged);
+  await button.evaluate(element => element.click()); // An active gesture owns the orientation.
+  await page.clock.runFor(700);
+  expect(await angles(page)).toEqual(dragged);
   await page.mouse.up();
   await page.clock.runFor(4000);
   await page.mouse.move(center.x - 10, center.y - 10);
-  await page.clock.runFor(2900);
+  await page.clock.runFor(900);
   expect(await angles(page)).toEqual(dragged); // Hover did not postpone release deadline.
   await page.clock.runFor(180);
   expect((await angles(page)).y).toBeGreaterThan(dragged.y);
@@ -189,12 +232,12 @@ test('mouse hold, hover, rapid activations, release and capture loss coordinate 
   }
   await page.clock.runFor(600);
   const settled = await angles(page);
-  await page.clock.runFor(6200);
+  await page.clock.runFor(4850);
   expect(await angles(page)).toEqual(settled);
   await button.click(); // New activation resets the preceding deadline.
   await page.clock.runFor(700);
   const reset = await angles(page);
-  await page.clock.runFor(6200);
+  await page.clock.runFor(4850);
   expect(await angles(page)).toEqual(reset);
   await page.clock.runFor(180);
   expect((await angles(page)).y).toBeGreaterThan(reset.y);
@@ -210,7 +253,7 @@ test('mouse hold, hover, rapid activations, release and capture loss coordinate 
     if (element.hasPointerCapture(1)) element.releasePointerCapture(1);
   });
   await page.mouse.move(center.x + 2, center.y); // Browser delivers lostpointercapture.
-  await page.clock.runFor(6900);
+  await page.clock.runFor(4900);
   expect(await angles(page)).toEqual(held);
   await page.clock.runFor(180);
   expect((await angles(page)).y).toBeGreaterThan(held.y);
@@ -218,7 +261,7 @@ test('mouse hold, hover, rapid activations, release and capture loss coordinate 
   expect(state.errors).toEqual([]);
 });
 
-test('desktop browser with its real clock automatically resumes after the seven-second pause', async ({ page }, testInfo) => {
+test('desktop browser with its real clock automatically resumes five seconds after face placement', async ({ page }, testInfo) => {
   test.skip(testInfo.project.name !== 'chromium-desktop', 'One real-clock smoke check complements deterministic cross-browser timing tests.');
   const state = await setup(page, 'preview', false);
   const before = await angles(page);
@@ -227,7 +270,7 @@ test('desktop browser with its real clock automatically resumes after the seven-
   await button.click();
   await page.waitForTimeout(800);
   const resting = await angles(page);
-  await page.waitForTimeout(5400);
+  await page.waitForTimeout(4700);
   expect(await angles(page)).toEqual(resting);
   await expect.poll(async () => (await angles(page)).y, { timeout: 2000 }).toBeGreaterThan(resting.y + 1);
   await reduceMotion(page);
@@ -238,7 +281,7 @@ test('desktop browser with its real clock automatically resumes after the seven-
   expect(state.errors).toEqual([]);
 });
 
-test('browser-generated touch drag and cancellation resume only after release; reopening starts a fresh turn', async ({ page, context, browserName }) => {
+test('browser-generated touch drag and cancellation resume immediately from the released orientation; only the button pauses for five seconds', async ({ page, context, browserName }) => {
   test.skip(browserName !== 'chromium', 'Touch drag/cancel uses the Chromium input protocol; no physical device is involved.');
   const state = await setup(page, 'profile');
   const stage = page.locator('.crx-stage');
@@ -255,10 +298,12 @@ test('browser-generated touch drag and cancellation resume only after release; r
   const moved = await angles(page);
   expect(moved.y).toBeGreaterThan(held.y);
   await session.send('Input.dispatchTouchEvent', { type: 'touchCancel', touchPoints: [] });
-  await page.clock.runFor(6900);
-  expect(await angles(page)).toEqual(moved);
-  await page.clock.runFor(180);
-  expect((await angles(page)).y).toBeGreaterThan(moved.y);
+  expect(await angles(page)).toEqual(moved); // Release/cancel never snaps or restores a face.
+  await page.clock.runFor(160);
+  const afterCancel = await angles(page);
+  expect(afterCancel.y - moved.y).toBeGreaterThan(2.5);
+  expect(afterCancel.y - moved.y).toBeLessThan(4);
+  expect(afterCancel.x).toBe(moved.x);
   const button = page.locator('[data-crx-flip]');
   await button.scrollIntoViewIfNeeded();
   const buttonBox = await button.boundingBox();
@@ -269,7 +314,7 @@ test('browser-generated touch drag and cancellation resume only after release; r
   await page.clock.runFor(700);
   await expect(button).toHaveText(expectedLabel);
   const afterTap = await angles(page);
-  await page.clock.runFor(6200);
+  await page.clock.runFor(4850);
   expect(await angles(page)).toEqual(afterTap);
   await page.clock.runFor(180);
   expect((await angles(page)).y).toBeGreaterThan(afterTap.y);

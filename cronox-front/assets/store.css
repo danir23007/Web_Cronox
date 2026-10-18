@@ -777,9 +777,11 @@ button.product-cta--disabled:disabled { opacity:.5; cursor:not-allowed; filter:n
 .black-menu__discover:focus-visible{outline:2px solid #fff;outline-offset:4px;}
 /* White variant of the exact favicon: filter preserves every alpha pixel. */
 .black-menu__brand{display:block;flex:none;align-self:center;width:clamp(64px,20vw,80px);height:auto;aspect-ratio:1;object-fit:contain;margin:0 auto 28px;filter:brightness(0) invert(1);pointer-events:none;}
-.filters-close{position:absolute;top:max(12px,env(safe-area-inset-top));right:max(12px,env(safe-area-inset-right));z-index:1;display:grid;place-items:center;width:44px;height:44px;padding:0;background:none;border:none;color:#fff;font-size:20px;line-height:1;cursor:pointer;transition:opacity .2s ease;}
+.filters-close{position:absolute;top:max(12px,env(safe-area-inset-top));right:max(12px,env(safe-area-inset-right));z-index:1;display:grid;place-items:center;width:44px;height:44px;padding:0;background:none;border:none;appearance:none;-webkit-appearance:none;-webkit-tap-highlight-color:transparent;color:#fff;font-size:20px;line-height:1;cursor:pointer;transition:opacity .2s ease;}
 .filters-close:hover{opacity:.85;}
-.filters-close:focus-visible{outline:2px solid #fff;outline-offset:2px;}
+.filters-close:focus,.filters-close:focus-visible{outline:0;box-shadow:none;}
+/* Keep keyboard focus visible on the glyph, without framing the touch target. */
+.filters-close:focus-visible{text-shadow:0 0 7px rgba(255,255,255,.9);}
 .black-menu__list{display:flex;flex-direction:column;gap:18px;padding:0;margin:0;}
 .black-menu__link{min-width:0;max-width:100%;overflow-wrap:anywhere;white-space:normal;color:#fff;text-decoration:none;font:700 18px/1.2 system-ui;text-transform:uppercase;letter-spacing:.05em;transition:color .2s ease,transform .2s ease;}
 .black-menu__link:hover{color:#cfcfcf;transform:translateX(4px);}
@@ -2151,9 +2153,10 @@ button.product-cta--disabled:disabled { opacity:.5; cursor:not-allowed; filter:n
    =========================== */
 
 .site-footer {
+  --footer-side-padding: clamp(18px, 4.7vw, 90px);
   background-color: #000;
   color: #ffffff;
-  padding: 20px clamp(18px, 4.7vw, 90px) 12px;
+  padding: 20px var(--footer-side-padding) 12px;
   font-size: 11px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -2171,6 +2174,7 @@ button.product-cta--disabled:disabled { opacity:.5; cursor:not-allowed; filter:n
 }
 
 .footer-inner {
+  --footer-brand-offset: 8px;
   display: grid;
   grid-template-columns: minmax(132px, 160px) minmax(0, 1fr);
   align-items: stretch;
@@ -2201,6 +2205,7 @@ button.product-cta--disabled:disabled { opacity:.5; cursor:not-allowed; filter:n
 /* ===== Columna 1: Marca ===== */
 
 .footer-brand-block {
+  --footer-logo-width: 144px;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -2220,9 +2225,88 @@ button.product-cta--disabled:disabled { opacity:.5; cursor:not-allowed; filter:n
 
 .footer-brand-name {
   font-size: 13px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: calc(var(--footer-logo-width) * 0.451470588);
+}
+
+.footer-brand-name a {
+  position: relative;
+  left: var(--footer-brand-offset);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  gap: 20px;
+}
+
+/* 680 x 307 wordmark: frame x76..603 / y86..226 around the visible ink,
+   preserving its rendered width and a safety margin around every point. */
+.footer-primary-mark {
+  position: relative;
+  display: block;
+  flex: none;
+  width: calc(var(--footer-logo-width) * 0.775);
+  height: calc(var(--footer-logo-width) * 0.205882353);
+  overflow: hidden;
+}
+
+.footer-primary-mark .footer-logo {
+  position: absolute;
+  left: calc(var(--footer-logo-width) * -0.111764706);
+  top: calc(var(--footer-logo-width) * -0.126470588);
+  width: var(--footer-logo-width);
+  max-width: none;
+  height: auto;
+}
+
+.footer-secondary-logo {
+  flex: none;
+  width: auto;
+  height: calc(var(--footer-logo-width) * 0.205882353);
+  object-fit: contain;
+}
+
+.footer-cx-logo {
+  flex: none;
+  width: auto;
+  height: calc(var(--footer-logo-width) * 0.194444444);
+  margin-left: 8px;
+  object-fit: contain;
+}
+
+/* Keep the existing desktop marks at their original size within the
+   existing brand column, including just above the stacked footer breakpoint. */
+@media (min-width: 1101px) and (max-width: 1600px) {
+  .footer-brand-name a {
+    gap: clamp(3px, calc(3.55vw - 36.5px), 20px);
+  }
+
+  .footer-cx-logo {
+    height: clamp(21px, calc(4.05vw - 23.6px), 25px);
+    margin-left: 0.5px;
+  }
+}
+
+@media (min-width: 1350px) and (max-width: 1600px) {
+  .footer-cx-logo {
+    height: clamp(25px, calc(0.8vw + 14.2px), 26px);
+    margin-left: 1px;
+  }
+}
+
+@media (min-width: 1601px) and (max-width: 1920px) {
+  .footer-cx-logo {
+    height: clamp(26px, calc(1.44vw + 2.94px), 28px);
+    margin-left: clamp(1px, calc(5vw - 79px), 8px);
+  }
 }
 
 .footer-social {
+  position: relative;
+  left: var(--footer-brand-offset);
   display: flex;
   justify-content: center;
   gap: 8px;
@@ -2242,6 +2326,7 @@ button.product-cta--disabled:disabled { opacity:.5; cursor:not-allowed; filter:n
 }
 
 .footer-copy {
+  align-self: flex-start;
   font-size: 10px;
   opacity: 0.7;
   margin-top: 20px;
@@ -2386,6 +2471,65 @@ button.product-cta--disabled:disabled { opacity:.5; cursor:not-allowed; filter:n
 
 /* ===== Responsive ===== */
 
+@media (min-width: 1101px) {
+  .footer-inner {
+    --footer-brand-width: 160px;
+    --footer-brand-offset: clamp(20px, calc(8.7vw - 100px), 48px);
+    --footer-newsletter-width: clamp(240px, 20vw, 360px);
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr) auto minmax(0, 1fr);
+    gap: 0;
+  }
+
+  /* Flatten the wrappers so all centres refer to the full footer width.
+     The middle row aligns the link headings; the outer rows balance their
+     height against the brand and newsletter without removing normal flow. */
+  .footer-middle-sections,
+  .footer-links-block {
+    display: contents;
+  }
+
+  .footer-bottom {
+    grid-area: 1 / 1 / -1 / -1;
+    justify-self: start;
+    width: var(--footer-brand-width);
+  }
+
+  .footer-copy {
+    position: relative;
+    left: calc(18px - var(--footer-side-padding));
+  }
+
+  .footer-acc-item {
+    grid-area: 2 / 1;
+    align-self: stretch;
+    justify-self: start;
+    position: relative;
+    left: 50%;
+    transform: translateX(-50%);
+    width: max-content;
+    max-width: 200px;
+  }
+
+  /* Support = midpoint(brand centre, footer centre).
+     Legal = midpoint(footer centre, newsletter centre). */
+  .footer-acc-item:first-child {
+    left: calc(25% + var(--footer-brand-width) / 4 + var(--footer-brand-offset) / 2);
+    max-width: clamp(128px, calc(30vw - 200px), 200px);
+  }
+
+  .footer-acc-item:last-child {
+    left: calc(75% - var(--footer-newsletter-width) / 4);
+    max-width: min(220px, calc(50% - var(--footer-newsletter-width) * 1.5 - 24px));
+  }
+
+  .footer-newsletter-block {
+    grid-area: 1 / 1 / -1 / -1;
+    align-self: center;
+    width: var(--footer-newsletter-width);
+  }
+}
+
 @media (max-width: 1100px) {
   .footer-inner {
     display: flex;
@@ -2417,6 +2561,13 @@ button.product-cta--disabled:disabled { opacity:.5; cursor:not-allowed; filter:n
     width: 100%;
     margin: 0;
     justify-self: auto;
+  }
+}
+
+@media (min-width: 481px) and (max-width: 1100px) {
+  .footer-copy {
+    position: relative;
+    left: calc(98px - 50vw);
   }
 }
 
@@ -2454,6 +2605,7 @@ button.product-cta--disabled:disabled { opacity:.5; cursor:not-allowed; filter:n
   }
 
   .footer-brand-block {
+    --footer-logo-width: clamp(112px, 34vw, 132px);
     align-items: center;
     text-align: center;
     gap: 6px;
@@ -2468,8 +2620,9 @@ button.product-cta--disabled:disabled { opacity:.5; cursor:not-allowed; filter:n
 
   .footer-brand-name a {
     display: inline-flex;
-    width: min(100%, 132px);
+    width: max-content;
     justify-content: center;
+    gap: clamp(12px, 4vw, 20px);
   }
 
   .footer-logo {
@@ -2489,6 +2642,8 @@ button.product-cta--disabled:disabled { opacity:.5; cursor:not-allowed; filter:n
   }
 
   .footer-copy {
+    position: relative;
+    left: -6px;
     margin-top: 6px;
     font-size: 9.5px;
   }
