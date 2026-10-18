@@ -1,6 +1,6 @@
 # Publicaciones autónomas de CRONOX
 
-Estado a 18/10/2026: **controlador instalado y acceso operativo; transición a deploy terminada**. Se completó la instalación autorizada sin publicar cambios funcionales ni aplicar migraciones. La aplicación conserva `488a5185122826188986fd6cedd3e1046cfe42ba`. Sigue pendiente acreditar un ciclo normal del worker de esta instancia.
+Estado a 18/10/2026: **controlador instalado y acceso operativo; transición a deploy terminada y ciclos normales del worker acreditados**. Se completó la instalación autorizada sin publicar cambios funcionales ni aplicar migraciones. La aplicación conserva `488a5185122826188986fd6cedd3e1046cfe42ba`.
 
 ## Resultado comprobado en el VPS
 
@@ -11,7 +11,9 @@ Estado a 18/10/2026: **controlador instalado y acceso operativo; transición a d
 - Sudo concede exclusivamente request/status/recover. Se verificaron el rechazo de SHA inválido, la denegación del verbo interno worker y el rechazo de status para una publicación inexistente sin crearla. No se solicitó una publicación válida como prueba.
 - Pages está en modo workflow, comprobado mediante API. Se conserva el workflow existente: push verifica código; sólo workflow_dispatch publica. No se añadió otro canal de despliegue.
 
-Worker actual: habilitado, un registro de arranque y ningún fallo de escaneo/arranque o renovación de lease en sus nuevos logs. **Esto no acredita un ciclo completado.** La versión 488a518 no genera la nueva telemetría privada y no hay sesión SUPERADMIN disponible. Hace falta leer lastScanCompletedAt de esta instancia mediante una sesión legítima. Los ciclos observados antes del reinicio no sirven para este cierre. No se fabricaron tokens ni se reencoló el evento histórico REVIEW.
+Worker actual: **ciclos normales acreditados mediante sesión SUPERADMIN legítima del operador**, quien aportó la salida del comprobador privado el 18/10/2026. Ambas lecturas de GET /api/admin/payments/recovery muestran enabled=true, disabledReason=null y startedAt=2026-10-18T00:48:51.309Z. lastScanCompletedAt avanzó de 2026-10-18T01:17:46.589Z a 2026-10-18T01:17:56.729Z; lastScanErrorAt y lastScanError son null en ambas. El comprobador indicó advancing=true y CICLOS_RECUPERACION_VERIFICADOS. No se presenta la autenticación realizada por el operador como una consulta independiente de Codex.
+
+Contraste independiente posterior por SSH: PM2 deploy activo, aplicación online PID 275405, iniciada a las 00:48:49.543Z, mantenimiento inactivo y HEAD funcional 488a518 intacto. El inicio del worker corresponde al arranque de esa instancia después de la transición, no a la instancia anterior al reinicio de red. El comprobador original exigía maintenance.flag y fallaba antes del login; se creó check-recovery-session-online.cjs eliminando únicamente esa precondición y corrigiendo el mensaje, conservando entrada oculta, autenticación y consultas. No se activó mantenimiento, no se reinició el servicio ni se forzaron reprocesamientos. El REVIEW histórico no fue modificado. Esta evidencia acredita escaneos normales, no un pago o recuperación sintéticos.
 
 ## Configuración instalada y límites de acceso
 
@@ -89,7 +91,7 @@ La política de comunicaciones se conserva en runtime.json. Activar jobs puede e
 - También pasaron comprobaciones focales de Bash/guards, compilación y tests de recuperación/telemetría. No se repitió la batería general para cerrar documentación.
 - En el VPS se verificaron restauración sintética previa, transición PM2, identidad funcional, permisos, rechazos del controlador, salud externa y Pages. No se hizo un despliegue funcional de prueba, un reboot real ni una restauración sobre producción.
 - Configuración publicada en 0153f4c7248f71e928e94a1c63012ffebcaa4088 y correcciones af175a7, aba178f, 22b97a2 y 97d3bffba983d599c0063ec3c8883cdf1ac0d22a. CI final 39084301376: success, sin despliegue funcional. El cierre modifica sólo docs, excluidos del push CI por paths-ignore existente; no usa una excepción nueva ni skip-ci.
-- Pendiente: acreditar un ciclo del worker actual mediante SUPERADMIN. La nueva telemetría está versionada pero no instalada en 488a518; una futura publicación expresamente autorizada deberá incluirla. El controlador exige dos muestras frescas de avance antes de declarar éxito.
+- Cerrado el pendiente de acreditar ciclos del worker actual mediante SUPERADMIN. La nueva telemetría está versionada pero no instalada en 488a518; una futura publicación expresamente autorizada deberá incluirla. El controlador exige dos muestras frescas de avance antes de declarar éxito. Se mantiene la supervisión ordinaria de ciclos y errores.
 - El primer recorrido completo de publicación productiva queda para una autorización funcional. La autonomía cubre el procedimiento previsto, no reparaciones arbitrarias después de una migración fallida.
 - Pendiente del titular: política de retención y copia externa. No se borran backups automáticamente. El restore está preparado para PostgreSQL 17 e imagen fijada; cambios de versión, extensiones o volumen requieren revisión. PM2 detenido y una instantánea de actividad no garantizan que un cliente externo idle no vuelva a escribir: comprobar que no existan escritores de aplicación fuera del inventario.
 
