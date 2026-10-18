@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { MailboxPushService } from './mailbox-push.service';
 
@@ -56,12 +56,18 @@ export class AdminEventPushService {
       device[column].getTime() !== delivery.enabledSince.getTime()
     )
       return false;
-    const session = await this.push.sessions.validate({
-      sub: device.userId,
-      sid: device.sessionId,
-      sv: device.sessionVersion,
-      type: 'access',
-    });
+    let session;
+    try {
+      session = await this.push.sessions.validate({
+        sub: device.userId,
+        sid: device.sessionId,
+        sv: device.sessionVersion,
+        type: 'access',
+      });
+    } catch (error) {
+      if (error instanceof UnauthorizedException) return false;
+      throw error;
+    }
     if (
       !['ADMIN', 'SUPERADMIN'].includes(session.user.role) ||
       (delivery.event.kind === 'paidOrders' &&
@@ -138,11 +144,43 @@ export class AdminEventPushService {
       let device = await this.db.mailboxPushDevice.findUniqueOrThrow({
         where: { id },
       });
-      let permitted = false;
+      let permitted;
       try {
         permitted = await this.permitted(device, delivery);
-      } catch {}
+      } catch {
+        await this.db.mailboxPushDelivery.updateMany({
+          where: { eventId: delivery.eventId, deviceId: id, status: 'PENDING' },
+          data: {
+            readyAt: new Date(Date.now() + 30000),
+            errorCode: 'PUSH_VALIDATION_UNAVAILABLE',
+          },
+        });
+        return;
+      }
       if (!permitted) {
+        await this.db.mailboxPushDelivery.update({
+          where: key,
+          data: { status: 'SKIPPED' },
+        });
+        return;
+      }
+      // Re-read preferences immediately before transport (including remote edits).
+      try {
+        device = await this.db.mailboxPushDevice.findUniqueOrThrow({
+          where: { id },
+        });
+        permitted = await this.permitted(device, delivery);
+      } catch {
+        await this.db.mailboxPushDelivery.updateMany({
+          where: { eventId: delivery.eventId, deviceId: id, status: 'PENDING' },
+          data: {
+            readyAt: new Date(Date.now() + 30000),
+            errorCode: 'PUSH_VALIDATION_UNAVAILABLE',
+          },
+        });
+        return;
+      }
+      if (device.leaseUntil?.getTime() !== lease.getTime() || !permitted) {
         await this.db.mailboxPushDelivery.update({
           where: key,
           data: { status: 'SKIPPED' },
@@ -157,32 +195,24 @@ export class AdminEventPushService {
           attempts: { increment: 1 },
         },
       });
-      // Re-read preferences immediately before transport (including remote edits).
-      device = await this.db.mailboxPushDevice.findUniqueOrThrow({
-        where: { id },
-      });
-      if (
-        device.leaseUntil?.getTime() !== lease.getTime() ||
-        !(await this.permitted(device, delivery))
-      ) {
-        await this.db.mailboxPushDelivery.update({
-          where: key,
-          data: { status: 'SKIPPED' },
-        });
-        return;
-      }
       try {
         await this.push.sendPayload(
           device,
           eventPayload(delivery.event),
           async () => {
-            const fresh = await this.db.mailboxPushDevice.findUniqueOrThrow({
-              where: { id },
-            });
-            if (
-              fresh.leaseUntil?.getTime() !== lease.getTime() ||
-              !(await this.permitted(fresh, delivery))
-            )
+            let fresh, permitted;
+            try {
+              fresh = await this.db.mailboxPushDevice.findUniqueOrThrow({
+                where: { id },
+              });
+              permitted = await this.permitted(fresh, delivery);
+            } catch {
+              // This callback runs before any request to the push provider.
+              throw Object.assign(Error('PUSH_VALIDATION_UNAVAILABLE'), {
+                code: 'PUSH_VALIDATION_UNAVAILABLE',
+              });
+            }
+            if (fresh.leaseUntil?.getTime() !== lease.getTime() || !permitted)
               throw Object.assign(Error('PUSH_PREFERENCES_DISABLED'), {
                 code: 'PUSH_PREFERENCES_DISABLED',
               });
@@ -199,6 +229,7 @@ export class AdminEventPushService {
         });
       } catch (e: any) {
         const code = Number(e.statusCode),
+          validationUnavailable = e.code === 'PUSH_VALIDATION_UNAVAILABLE',
           retry =
             [429, 500, 502, 503, 504].includes(code) && delivery.attempts < 4;
         await this.db.mailboxPushDelivery.updateMany({
@@ -209,24 +240,30 @@ export class AdminEventPushService {
             startedAt: now,
           },
           data: {
-            status:
-              e.code === 'PUSH_PREFERENCES_DISABLED'
+            status: validationUnavailable
+              ? 'PENDING'
+              : e.code === 'PUSH_PREFERENCES_DISABLED'
                 ? 'SKIPPED'
                 : retry
                   ? 'PENDING'
                   : code
                     ? 'FAILED'
                     : 'UNKNOWN',
-            errorCode:
-              e.code === 'PUSH_PREFERENCES_DISABLED'
+            errorCode: validationUnavailable
+              ? 'PUSH_VALIDATION_UNAVAILABLE'
+              : e.code === 'PUSH_PREFERENCES_DISABLED'
                 ? 'PUSH_PREFERENCES_DISABLED'
                 : retry
                   ? 'PUSH_TEMPORARY_REJECTION'
                   : code
                     ? 'PUSH_REJECTED'
                     : 'PUSH_OUTCOME_UNKNOWN',
+            ...(validationUnavailable ? { attempts: { decrement: 1 } } : {}),
             readyAt: new Date(
-              Date.now() + Math.min(3600000, 30000 * 2 ** delivery.attempts),
+              Date.now() +
+                (validationUnavailable
+                  ? 30000
+                  : Math.min(3600000, 30000 * 2 ** delivery.attempts)),
             ),
           },
         });

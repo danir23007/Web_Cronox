@@ -7,7 +7,7 @@ import sys
 import tarfile
 
 HERE = Path(__file__).resolve().parent
-FILES = ('install.py', 'controller.py', 'backup.py', 'boot_guard.py', 'selftest.py',
+FILES = ('install.py', 'controller.py', 'backup.py', 'boot_guard.py', 'selftest.py', 'mailbox_storage.py',
          'build.sh', 'preflight.cjs', 'cronox-release', 'cronox-release@.service',
          'pm2-deploy.service', 'sudoers')
 

@@ -184,6 +184,7 @@ class Runtime:
     def preflight(self):
         import shutil
         require(not FLAG.exists(), 'MAINTENANCE_ALREADY_ACTIVE')
+        self.mailbox_storage_check()
         require(shutil.disk_usage(BASE).free >= 8 * 1024**3, 'INSUFFICIENT_DISK')
         # The current full-row restore verifier is deliberately bounded, not an unbounded
         # in-memory service for arbitrarily large future databases.
@@ -217,6 +218,11 @@ class Runtime:
         require(all(self.saved_env.get(key) in ('true', 'false') for key in FLAGS[:-1]),
                 'EXPLICIT_COMMUNICATION_POLICY_REQUIRED')
         self.command(['/usr/bin/node', str(INSTALL / 'preflight.cjs'), self.sha], user=True, timeout=240)
+
+    def mailbox_storage_check(self):
+        secure_path(INSTALL / 'mailbox_storage.py')
+        self.command(['/usr/bin/python3', '-I', str(INSTALL / 'mailbox_storage.py'), '--check'],
+                     env={'MAILBOX_PRIVATE_DIR': self.saved_env.get('MAILBOX_PRIVATE_DIR', '')}, timeout=60)
 
     @staticmethod
     def image():
@@ -274,6 +280,7 @@ class Runtime:
 
     def check_paused(self):
         self.loopback()
+        self.mailbox_storage_check()
         for path in ('/tienda', '/cesta', '/checkout', '/api/shipping-methods?itemsTotal=6990&country=ES'):
             self.http('http://127.0.0.1:3000' + path, 200)
         self.http('http://127.0.0.1:3000/api/admin/payments/recovery', 401)

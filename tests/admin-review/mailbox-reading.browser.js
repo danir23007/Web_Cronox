@@ -28,7 +28,7 @@ async (page) => {
     if(url.pathname.endsWith('/status'))return route.fulfill({json:{seen:false}});
     const isFirst=id===messageIds[0], state=mode;
     if(isFirst && slow) await new Promise(resolve=>setTimeout(resolve,700));
-    if(state==='failed'||state==='gone')return route.fulfill({status:state==='gone'?404:503,json:{message:state==='gone'?'MAILBOX_MESSAGE_UNAVAILABLE':'MAILBOX_CONTENT_DOWNLOAD_FAILED'}}).catch(()=>{});
+    if(['failed','gone','storage'].includes(state))return route.fulfill({status:state==='gone'?404:503,json:{message:state==='gone'?'MAILBOX_MESSAGE_UNAVAILABLE':state==='storage'?'MAILBOX_PRIVATE_STORAGE_PERMISSION_DENIED':'MAILBOX_CONTENT_DOWNLOAD_FAILED'}}).catch(()=>{});
     return route.fulfill({json:{id,mailboxId:boxId,subject:isFirst?'First delayed':'Second selected',seen:false,envelope:{from:[{address:'from@example.test'}],replyTo:[{address:'one@example.test'},{address:'two@example.test'}]},replyChoices:['one@example.test','two@example.test'],files:[],body:{text:isFirst?'First body':'Second body',html:''}}}).catch(()=>{});
   });
   for(const width of [1440,390]) {
@@ -53,7 +53,7 @@ async (page) => {
     assert((await page.locator('[data-feedback]').innerText()).includes('única dirección'),'Reply choice is required');
     assert(await page.locator('[data-retry-read]').count()===1,'Read mutation retry is separate from body');
     await page.locator('.mail-reader iframe').scrollIntoViewIfNeeded();
-    await page.screenshot({path:`test-results/admin-review/mailbox-reader-${width}.png`,fullPage:true});
+    await page.screenshot({path:`output/playwright/mail-local/mailbox-reader-${width}.png`,fullPage:true});
     assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),'Reader has no horizontal overflow');
 
     await page.locator('[data-reply-choice]').selectOption('two@example.test');
@@ -98,11 +98,21 @@ async (page) => {
     mode='body';
     await page.locator('[data-retry-body]').click();
     await page.locator('.mail-reader iframe').waitFor();
+    assert(await page.locator('.mail-reader iframe').getAttribute('sandbox') === 'allow-popups allow-popups-to-escape-sandbox','Email HTML stays sandboxed without scripts or same-origin');
+    await page.locator('.mail-reader [data-back]').click(); mode='storage';
+    await page.locator('[data-message]').first().click();
+    await page.locator('[data-retry-body]').waitFor();
+    assert((await page.locator('.mail-reader').innerText()).includes('almacenamiento privado'),'Storage permission diagnostic is visible');
+    assert(await page.locator('.mail-reader [aria-busy="true"]').count() === 0,'Storage failure does not stay loading');
+    mode='body';
+    await page.locator('[data-retry-body]').click();
+    await page.locator('.mail-reader iframe').waitFor();
+    assert((await page.frameLocator('.mail-reader iframe').locator('body').innerText()).includes('First body'),'Retry recovers content after storage access is repaired');
     await page.locator('.mail-reader [data-back]').click(); mode='gone';
     await page.locator('[data-message]').first().click();
     await page.locator('.mail-reader .mail-error').filter({hasText:'ya no está disponible'}).waitFor();
     assert(await page.locator('[data-retry-body]').count()===0,'Missing provider message is distinct from download failure');
-    results.push({width,translations:true,contentStates:true,rapidSwitches:true,actions:true});
+    results.push({width,translations:true,contentStates:true,rapidSwitches:true,actions:true,storagePermissionRecovery:true,htmlSandbox:true});
   }
   await context.unroute('**/api/admin/mailbox/messages*');
   await context.unroute('**/api/admin/mailbox/messages/**');

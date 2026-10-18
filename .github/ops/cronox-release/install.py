@@ -18,7 +18,7 @@ import traceback
 from urllib.parse import urlparse, unquote
 
 HERE = Path(__file__).resolve().parent
-FILES = ('controller.py', 'backup.py', 'boot_guard.py', 'selftest.py', 'build.sh', 'preflight.cjs', 'cronox-release',
+FILES = ('controller.py', 'backup.py', 'boot_guard.py', 'selftest.py', 'mailbox_storage.py', 'build.sh', 'preflight.cjs', 'cronox-release',
          'cronox-release@.service', 'pm2-deploy.service', 'sudoers')
 LIB = Path('/usr/local/lib/cronox-release')
 CFG = Path('/etc/cronox-release')
@@ -169,6 +169,14 @@ def replace_sudo_policy(plan, apply=True):
         candidate.unlink(missing_ok=True)
 
 
+def mailbox_storage_check(folder, configured):
+    root_owned(folder / 'mailbox_storage.py')
+    result = subprocess.run(['/usr/bin/python3', '-I', str(folder / 'mailbox_storage.py'), '--check'],
+                            env=dict(ENV, MAILBOX_PRIVATE_DIR=configured or ''),
+                            capture_output=True, timeout=60)
+    require(result.returncode == 0)
+
+
 def preflight():
     require(os.getuid() == 0 and not FLAG.exists())
     root_owned(HERE)
@@ -201,6 +209,9 @@ def preflight():
     require(app['pm2_env']['pm_exec_path'] == str(REPO / 'cronox-backend/dist/main.js'))
     require(not app['pm2_env'].get('watch') and not app['pm2_env'].get('cron_restart'))
     effective = dict(item.split('=', 1) for item in Path('/proc/%d/environ' % app['pid']).read_text().split('\0') if '=' in item)
+    # Readiness of HTTP alone does not establish that the target runtime can read
+    # encrypted mailbox bodies. Refuse before maintenance; never silently chown.
+    mailbox_storage_check(HERE, effective.get('MAILBOX_PRIVATE_DIR'))
     db = urlparse(effective.get('DATABASE_URL', ''))
     profile = configparser.ConfigParser(interpolation=None)
     profile.read(OLD / 'pg_service.conf')
@@ -299,6 +310,7 @@ def install():
         Path('/run/cronox-release-bootstrap-permit').chmod(0o600)
         run(['/usr/bin/systemctl', 'enable', '--now', 'pm2-deploy.service'])
         health()
+        mailbox_storage_check(LIB, environment.get('MAILBOX_PRIVATE_DIR'))
         assert_unchanged(before, identity())
         shutil.copyfile(LIB / 'sudoers', '/etc/sudoers.d/cronox-release')
         Path('/etc/sudoers.d/cronox-release').chmod(0o440)
@@ -339,6 +351,7 @@ def recover_transition():
         run(['/usr/bin/systemctl', 'reset-failed', 'pm2-deploy.service'])
         run(['/usr/bin/systemctl', 'enable', '--now', 'pm2-deploy.service'])
         health()
+        mailbox_storage_check(LIB, json.loads((CFG / 'runtime.json').read_text()).get('MAILBOX_PRIVATE_DIR'))
         assert_unchanged(before, identity())
         shutil.copyfile(LIB / 'sudoers', '/etc/sudoers.d/cronox-release')
         Path('/etc/sudoers.d/cronox-release').chmod(0o440)

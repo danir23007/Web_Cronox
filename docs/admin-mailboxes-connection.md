@@ -1,5 +1,7 @@
 # Preparación y conexión de los buzones
 
+Actualización del 18/10/2026: se reparó el acceso de deploy al almacenamiento privado que había quedado como root:root 700. Tras reanudar la misma versión, los cuatro buzones abren contenido en el visor aislado y continúan sincronizando sin errores. El dispositivo Apple sigue inactivo y sin sesión vigente; la recuperación de lectura no acredita recepción push. Véase el [estado de la reparación y sus pruebas](mailbox-recovery-2026-10-18.md); las instrucciones históricas de activación que siguen no deben repetirse para resolver esta incidencia.
+
 Estado de producción del 03/10/2026: los cuatro buzones pasaron IMAP/SMTP desde el VPS y quedaron activos para sincronización, envío manual y avisos nuevos. El operador confirmó la recepción de las cuatro pruebas SMTP. Se corrigió y publicó el transporte push para Node 22; la identificación inequívoca del aviso automático en el iPhone sigue pendiente. Véanse [la evidencia y la prueba controlada](admin-publication-2026-10-03.md).
 
 Las instrucciones de preparación y primera fase que siguen describen una instalación nueva y su revisión histórica. No hay que repetirlas sobre producción ya activada: el preparador conserva claves, pero vuelve a dejar las flags de sincronización y envío en false. Los registros existentes y sus permisos se conservan.

@@ -3,6 +3,41 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 describe('Mailbox system folder labels', () => {
+  it('explains inaccessible private storage and allows a successful body retry without losing isolation', async () => {
+    const dom = new JSDOM('<div id="mailboxWorkspace"></div>', {url:'http://localhost/admin.html',runScripts:'outside-only',pretendToBeVisual:true});
+    const win = dom.window as any;
+    let denied = true;
+    win.setInterval = () => 1;
+    win.clearInterval = () => {};
+    win.CRONOX_API = {API_BASE:'', getCsrfHeaders:async()=>({})};
+    const box = {id:'box',name:'Fixture',address:'support@example.test',active:true,canSend:false,folders:[{id:'inbox',path:'INBOX',specialUse:'\\Inbox'}]};
+    win.fetch = jest.fn(async(url:string) => {
+      const error = !url.endsWith('/overview') && !url.includes('/messages?') && denied;
+      return {ok:!error,status:error?503:200,json:async()=>
+        url.endsWith('/overview') ? {boxes:[box]} : url.includes('/messages?') ?
+        {messages:[{id:'a',mailboxId:'box',subject:'Fixture',seen:true}],pagination:{pages:1,total:1}} :
+        error ? {message:'MAILBOX_PRIVATE_STORAGE_PERMISSION_DENIED'} :
+        {id:'a',mailboxId:'box',subject:'Fixture',seen:true,envelope:{},files:[],body:{text:'Café recuperado',html:''}}
+      };
+    });
+    try {
+      win.document.documentElement.dataset.adminAuthState='authorized';
+      win.eval(readFileSync(join(__dirname,'../../../cronox-front/assets/admin-inbox.js'),'utf8'));
+      await win.CRONOX_INBOX.load();
+      win.document.querySelector('[data-message="a"]').click();
+      await new Promise(resolve=>setTimeout(resolve,0));
+      expect(win.document.querySelector('.mail-reader').textContent).toContain('almacenamiento privado');
+      expect(win.document.querySelector('.mail-reader [aria-busy="true"]')).toBeNull();
+      denied=false;
+      win.document.querySelector('[data-retry-body]').click();
+      await new Promise(resolve=>setTimeout(resolve,0));
+      const frame=win.document.querySelector('.mail-reader iframe');
+      expect(frame.srcdoc).toContain('Café recuperado');
+      expect(frame.getAttribute('sandbox')).not.toContain('allow-scripts');
+      expect(frame.getAttribute('sandbox')).not.toContain('allow-same-origin');
+      expect(win.document.querySelector('[data-retry-body]')).toBeNull();
+    } finally {dom.window.close();}
+  });
   it('keeps an available body when a later status check finds the provider message gone', async () => {
     const dom = new JSDOM('<div id="mailboxWorkspace"></div>', {url:'http://localhost/admin.html',runScripts:'outside-only',pretendToBeVisual:true});
     const win=dom.window as any;

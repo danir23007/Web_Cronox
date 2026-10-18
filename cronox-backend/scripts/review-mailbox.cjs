@@ -1266,6 +1266,7 @@ async function main() {
     assert.equal(await db.financeArchive.count(), 0);
     assert.equal(await db.dailyVisitor.count(), 0);
     await require('./review-admin-push.cjs')({app,db,backend,request,boxId,users,sessions,push,security,webpush,pass});
+    await require('./review-mailbox-four-boxes.cjs')({db,users,reader,sync,stores,pass});
     tokens.writer = await sessions.create(users.writer);
     await db.mailboxSend.updateMany({
       where: { status: 'PENDING' },

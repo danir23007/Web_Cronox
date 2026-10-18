@@ -4,6 +4,7 @@ import {
   ServiceUnavailableException,
   NotFoundException,
   ConflictException,
+  UnauthorizedException,
 } from '@nestjs/common';
 import { createHash } from 'node:crypto';
 import { Agent } from 'node:https';
@@ -335,8 +336,13 @@ export class MailboxPushService {
           sv: device.sessionVersion,
           type: 'access',
         });
-      } catch {
-        await persist({ active: false });
+      } catch (error) {
+        // Only a confirmed invalid/revoked session disables a registration.
+        // A transient database failure must not permanently unsubscribe it.
+        if (error instanceof UnauthorizedException)
+          await persist({ active: false });
+        else
+          await persist({ nextPushAt: new Date(Date.now() + 300000) });
         return;
       }
       const actor = { id: session.userId, role: session.user.role },

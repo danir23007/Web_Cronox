@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, HttpException, Injectable } from '@nestjs/common';
 import { MailParser, simpleParser } from 'mailparser';
 import { Readable, Transform } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
@@ -256,7 +256,16 @@ export class MailboxReaderService {
         });
         return this.body(actor, id, interactive, false);
       }
-      if (error instanceof BadRequestException) throw error;
+      await this.access.audit(
+        actor.id ? actor : null,
+        current.mailboxId,
+        'body-cache-read',
+        id,
+        error instanceof HttpException
+          ? safeError(error)
+          : 'MAILBOX_CACHED_CONTENT_UNAVAILABLE',
+      );
+      if (error instanceof HttpException) throw error;
       throw new BadRequestException('MAILBOX_CACHED_CONTENT_UNAVAILABLE');
     }
     await this.access.box(actor, current.mailboxId);

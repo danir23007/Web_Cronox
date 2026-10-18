@@ -1,5 +1,7 @@
 # Publicaciones autónomas de CRONOX
 
+Incidencia posterior del 18/10/2026: la transición conservó el almacenamiento privado del correo como root:root 700, inaccesible para deploy. Se repararon los permisos y se reanudó la misma versión tras acreditar la huella original del entorno. La web volvió a responder 200 y los cuatro buzones mostraron contenido dentro del visor aislado en una sesión SUPERADMIN legítima. Los ciclos del worker de la instancia iniciada a las 04:00 UTC también avanzaron sin error. Los chequeos iniciales del bootstrap no cubrían el almacenamiento; se han preparado guardias adicionales. Véase el [estado actual de correo y notificaciones](mailbox-recovery-2026-10-18.md), incluidos los pendientes de publicación y recepción física en el iPhone. Los datos de PID y ciclos que siguen corresponden al cierre histórico del bootstrap.
+
 Estado a 18/10/2026: **controlador instalado y acceso operativo; transición a deploy terminada y ciclos normales del worker acreditados**. Se completó la instalación autorizada sin publicar cambios funcionales ni aplicar migraciones. La aplicación conserva `488a5185122826188986fd6cedd3e1046cfe42ba`.
 
 ## Resultado comprobado en el VPS

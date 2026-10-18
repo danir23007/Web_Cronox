@@ -61,6 +61,8 @@
       "No se puede descifrar el contenido. Revisa la clave actual y las anteriores.",
     MAILBOX_PRIVATE_STORAGE_NOT_CONFIGURED:
       "Pendiente de configuración: falta el almacenamiento privado.",
+    MAILBOX_PRIVATE_STORAGE_PERMISSION_DENIED:
+      "El servidor no puede acceder al almacenamiento privado del correo. Debe corregirse su acceso; después podrás reintentar sin perder el mensaje original.",
     MAILBOX_CREDENTIAL_MISSING:
       "Falta una credencial privada. Configúrala en el servidor o desde Configuración.",
     MAILBOX_WORKER_DISABLED:

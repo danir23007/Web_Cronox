@@ -24,6 +24,18 @@ import { Readable, Transform } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import { keyring } from './mailbox-security';
 
+// Only classify errors raised by private storage operations. Provider errors
+// must not be mistaken for filesystem permissions, or expose a private path.
+export function mailboxStorageError(error: Error) {
+  return ['EACCES', 'EPERM'].includes(
+    (error as NodeJS.ErrnoException).code || '',
+  )
+    ? new ServiceUnavailableException(
+        'MAILBOX_PRIVATE_STORAGE_PERMISSION_DENIED',
+      )
+    : error;
+}
+
 export function mailboxPrivateRoot() {
   const configured = process.env.MAILBOX_PRIVATE_DIR;
   if (!configured || !isAbsolute(configured))
@@ -47,14 +59,17 @@ export function mailboxPrivateRoot() {
 @Injectable()
 export class MailboxFilesService {
   root() {
-    return mailboxPrivateRoot();
+    try {
+      return mailboxPrivateRoot();
+    } catch (error) {
+      throw mailboxStorageError(error);
+    }
   }
   async write(source: Readable, maximum: number) {
     const root = this.root(),
       key = randomUUID(),
       { id, key: secret } = keyring(),
       iv = randomBytes(12);
-    await mkdir(root, { recursive: true, mode: 0o700 });
     const cipher = createCipheriv('aes-256-gcm', secret, iv);
     cipher.setAAD(Buffer.from(key));
     let size = 0;
@@ -72,6 +87,7 @@ export class MailboxFilesService {
       },
     });
     try {
+      await mkdir(root, { recursive: true, mode: 0o700 });
       await pipeline(
         source,
         bound,
@@ -89,28 +105,32 @@ export class MailboxFilesService {
       );
       return { key, size };
     } catch (e) {
-      await this.remove(key);
-      throw e;
+      await this.remove(key).catch(() => {});
+      throw mailboxStorageError(e);
     }
   }
   async read(key: string) {
     if (!/^[\da-f-]{36}$/.test(key))
       throw new ServiceUnavailableException('MAILBOX_FILE_UNAVAILABLE');
-    const root = this.root(),
-      meta = JSON.parse(await readFile(join(root, key + '.meta'), 'utf8')),
-      secret = Buffer.from(keyring().keys[meta.id] || '', 'base64');
-    if (secret.length !== 32)
-      throw new ServiceUnavailableException('MAILBOX_KEY_UNAVAILABLE');
-    const cipher = createDecipheriv(
-      'aes-256-gcm',
-      secret,
-      Buffer.from(meta.iv, 'base64'),
-    );
-    cipher.setAAD(Buffer.from(key));
-    cipher.setAuthTag(Buffer.from(meta.tag, 'base64'));
-    const source = createReadStream(join(root, key));
-    source.on('error', (error) => cipher.destroy(error));
-    return source.pipe(cipher);
+    try {
+      const root = this.root(),
+        meta = JSON.parse(await readFile(join(root, key + '.meta'), 'utf8')),
+        secret = Buffer.from(keyring().keys[meta.id] || '', 'base64');
+      if (secret.length !== 32)
+        throw new ServiceUnavailableException('MAILBOX_KEY_UNAVAILABLE');
+      const cipher = createDecipheriv(
+        'aes-256-gcm',
+        secret,
+        Buffer.from(meta.iv, 'base64'),
+      );
+      cipher.setAAD(Buffer.from(key));
+      cipher.setAuthTag(Buffer.from(meta.tag, 'base64'));
+      const source = createReadStream(join(root, key));
+      source.on('error', (error) => cipher.destroy(mailboxStorageError(error)));
+      return source.pipe(cipher);
+    } catch (error) {
+      throw mailboxStorageError(error);
+    }
   }
   async remove(key: string) {
     if (!/^[\da-f-]{36}$/.test(key)) return;
