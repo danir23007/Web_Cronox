@@ -8,6 +8,30 @@ import time
 from controller import Refused, require, atomic_json, REPO
 
 
+def wait_for_final_postgres(rt, container, timeout=120):
+    """Do not accept the temporary postmaster started by docker-entrypoint initdb.
+
+    The pinned image execs the final postgres as PID 1 after stopping that server.
+    Only readiness probes are retried; no DDL, restore or migration is replayed.
+    """
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        try:
+            process = rt.command(['/usr/bin/docker', 'exec', container, 'cat', '/proc/1/comm'], timeout=5)
+            if process.strip() == b'postgres':
+                rt.command(['/usr/bin/docker', 'exec', container, 'pg_isready',
+                            '-h', '/var/run/postgresql', '-U', 'supabase_admin', '-d', 'postgres'], timeout=5)
+                ready = rt.command(['/usr/bin/docker', 'exec', container, 'psql', '-X', '-w', '-qAt',
+                    '-h', '/var/run/postgresql', '-U', 'supabase_admin', '-d', 'postgres',
+                    '-v', 'ON_ERROR_STOP=1', '-c', 'SELECT 1;'], timeout=5)
+                require(ready.strip() == b'1', 'RESTORE_SERVER_PROBE_FAILED')
+                return
+        except Refused:
+            pass
+        time.sleep(1)
+    raise Refused('FINAL_POSTGRES_START_TIMEOUT')
+
+
 def compatible_roles(sql):
     pattern = r'^CREATE ROLE ((?:"(?:[^"]|"")+"|[a-zA-Z_][a-zA-Z_0-9]*));$'
     def wrap(m):
@@ -119,14 +143,7 @@ def backup_and_verify(rt):
                     '--env-file', str(secret_file), rt.image(),
                     'postgres', '-c', 'config_file=/etc/postgresql/postgresql.conf'], timeout=120)
         created = True
-        for attempt in range(45):
-            try:
-                rt.command(['/usr/bin/docker', 'exec', container, 'pg_isready', '-U', 'postgres'], timeout=5)
-                break
-            except Refused:
-                if attempt == 44:
-                    raise
-                time.sleep(1)
+        wait_for_final_postgres(rt, container)
         target('CREATE ROLE cronox_restore_operator LOGIN SUPERUSER;\nCREATE DATABASE cronox_restore_verify TEMPLATE template0 OWNER postgres;', 'postgres')
         target('BEGIN; SET LOCAL ROLE cronox_restore_operator;\n' + compatible_roles(roles.decode()) + '\nCOMMIT;')
         target('BEGIN; SET LOCAL ROLE cronox_restore_operator;\n' + compatible + '\nCOMMIT;')

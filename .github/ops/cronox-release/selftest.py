@@ -9,10 +9,13 @@ import subprocess
 import sys
 import tempfile
 import time
+import json
+import traceback
+import re
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from controller import Runtime, REPO, Refused
-from backup import backup_and_verify
+from backup import backup_and_verify, wait_for_final_postgres
 
 
 class Fixture:
@@ -45,6 +48,8 @@ class Fixture:
                 p = subprocess.run(args, input=input, stdout=subprocess.PIPE, stderr=log, timeout=timeout,
                                    env={'PATH': '/usr/bin:/bin', 'HOME': '/root'})
             if p.returncode:
+                log.write(p.stdout or b'')
+                log.write(('\nCOMMAND_EXIT_CODE=%d\n' % p.returncode).encode())
                 raise Refused('ISOLATED_FIXTURE_COMMAND_FAILED')
             return p.stdout or b''
 
@@ -65,14 +70,7 @@ class Fixture:
                       '--restart', 'no', '--memory', '1g', '--cpus', '1', '--env-file', str(credential),
                       self.image(), 'postgres', '-c', 'config_file=/etc/postgresql/postgresql.conf'])
         try:
-            for attempt in range(45):
-                try:
-                    self.command(['/usr/bin/docker', 'exec', self.source, 'pg_isready', '-U', 'postgres'])
-                    break
-                except Refused:
-                    if attempt == 44:
-                        raise
-                    time.sleep(1)
+            wait_for_final_postgres(self, self.source)
             self.target('CREATE DATABASE fixture TEMPLATE template0 OWNER postgres;', 'postgres')
             self.target('''
 CREATE SCHEMA graphql;
@@ -103,6 +101,11 @@ if __name__ == '__main__':
     try:
         Fixture(folder).run()
         print('ISOLATED_BACKUP_RESTORE_VERIFIED')
-    except BaseException:
+    except BaseException as error:
+        code = str(error)
+        print(json.dumps({'errorType': type(error).__name__,
+            'code': code if re.fullmatch(r'[A-Z_]{3,80}', code) else 'PRIVATE_DETAILS_OMITTED',
+            'location': [{'file': Path(f.filename).name, 'function': f.name, 'line': f.lineno}
+                         for f in traceback.extract_tb(error.__traceback__)]}))
         print('ISOLATED_SELFTEST_FAILED: no production changes; private diagnostics in ' + folder)
         sys.exit(1)
