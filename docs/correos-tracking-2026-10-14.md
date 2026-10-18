@@ -1,5 +1,7 @@
 # Seguimiento de Correos en CRONOX
 
+**Actualización 18/10/2026:** el [flujo de admisión, aviso único y gestión por lotes](correos-fulfillment-2026-10-18.md) está publicado y sustituye el comportamiento de estados/avisos descrito en este informe histórico. Ambos flags de Correos continúan desactivados: todavía no hay etiqueta real para validar Trackpub. El nuevo documento recoge el corte persistente, las pruebas y el despliegue comprobado.
+
 Integración de seguimiento mediante Trackpub: los envíos, etiquetas y recogidas siguen gestionándose manualmente en Correos. No se crea un segundo pedido ni se reutiliza el número CRONOX como identificador del transportista. Subir el PDF es opcional: guardar el número, mostrar su enlace y consultar Trackpub funcionan sin etiqueta.
 
 ## Funcionamiento

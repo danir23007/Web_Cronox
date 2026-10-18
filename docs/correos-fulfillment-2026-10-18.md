@@ -53,3 +53,18 @@ El titular confirmó que todavía no dispone de una etiqueta real. No se necesit
 La publicación usa únicamente `Deploy CRONOX`, con CI del SHA exacto, mantenimiento, parada de escritores, respaldo y restauración/comparación aislada, migración y reapertura mediante el controlador ya instalado. No se sustituye ese procedimiento por npm/migraciones/PM2 manuales. Las comprobaciones productivas posteriores se añaden al cierre de este documento.
 
 Fuentes: [integración API de Correos](https://www.correos.es/es/es/empresas/ecommerce/refuerza-la-logistica-de-tu-ecommerce/integracion-api), [Trackpub oficial](https://anypoint.mulesoft.com/exchange/portals/sociedad-estatal-correos/c9ca99ed-6681-402c-811e-5ebc907e6b46/trackpub/), [contrato y límites conservados](integrations/correos/contract-notes-2026-10-14.md). El procedimiento de impresión/colocación de la etiqueta en oficina depende del contrato de Correos: este cambio no acredita que la oficina ofrezca ese servicio concreto.
+
+## Cierre productivo verificado
+
+Publicado `036d1c2f9d06773ddf5858462d59b209a76b3094` mediante [Deploy CRONOX 39157580783](https://github.com/danir23007/Web_Cronox/actions/runs/39157580783), verify-release/deploy **success**. El [CI del push exacto](https://github.com/danir23007/Web_Cronox/actions/runs/39157157050) también pasó. Controlador: `success/public_check`, finalizado el 18/10/2026 a las 19:19:17 UTC (21:19 en Madrid). Respaldo realmente restaurado y comparado: **295 objetos originales/restaurados, cero diferencias**, sin clases de error registradas. No se realizó restauración sobre producción.
+
+Comprobación independiente por SSH y transacción de solo lectura después de reabrir:
+
+- HEAD funcional exacto `036d1c2f9d06773ddf5858462d59b209a76b3094`, PM2 deploy online, PID 961536 en esa comprobación.
+- Migración nueva terminada **una vez**; ambos índices únicos presentes. Corte persistente exacto **2026-10-18T19:19:03.464Z**. No se reinició ni sustituyó el corte después.
+- Runtime efectivo: `CORREOS_TRACKING_ENABLED=false`, `CORREOS_EMAIL_ENABLED=false`; correo general y trabajos habituales `true`. Se cotejó PM2 y el archivo de configuración sin mostrar secretos.
+- Cero pedidos con seguimiento, cero eventos, outbox vacío. No se inventaron asociaciones ni hubo comunicaciones de prueba. Sigue pendiente el primer código real, como confirmó el titular.
+- Portada, health y ready de cronox.es y www.cronox.es terminan en HTTP 200. Los JS públicos de administración de pedidos y perfil coinciden **byte a byte con los blobs del commit publicado** y con el checkout remoto; la copia de trabajo Windows usa CRLF y no se usa su hash bruto como referencia de publicación.
+- GET privado de seguimiento sin sesión devuelve 401; ambos POST de lotes sin sesión/CSRF devuelven 403 antes de procesar filas. Los roles y la navegación completa de lotes se verificaron en pruebas HTTP/DOM locales y Chromium ficticio; no se afirma una sesión SUPERADMIN real en producción.
+
+El código está publicado y la asociación es utilizable. La automatización y el envío de avisos **siguen desactivados por la verificación externa pendiente**. Próximo paso: crear la etiqueta en el portal de Correos, asociarla al ID CRONOX correcto, ejecutar la consulta controlada con el comprobador existente, contrastar respuesta/cuota, y solo entonces habilitar seguimiento y avisos de forma revisada. El contrato debe confirmar además el procedimiento concreto de impresión/colocación de etiqueta en oficina.
