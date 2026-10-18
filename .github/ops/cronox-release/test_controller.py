@@ -47,6 +47,71 @@ class FakeRuntime:
         return step
 
 
+class PublicCheckTests(unittest.TestCase):
+    def test_www_home_accepts_direct_200_or_exact_canonical_308(self):
+        for response in (b'200\n', b'308\nhttps://cronox.es/'):
+            with self.subTest(response=response):
+                runtime = object.__new__(Runtime)
+                with patch.object(runtime, 'command', return_value=response) as command, \
+                     patch.object(runtime, 'http') as http:
+                    runtime.public_check()
+                args = command.call_args.args[0]
+                self.assertEqual(args[-1], 'https://www.cronox.es/')
+                self.assertNotIn('--location', args)
+                self.assertNotIn('-L', args)
+                self.assertIn('%{http_code}\n%{redirect_url}', args)
+                calls = [call.args for call in http.call_args_list]
+                self.assertIn(('https://cronox.es/', 200), calls)
+                for host in ('cronox.es', 'www.cronox.es'):
+                    for route in ('/api/health', '/api/ready'):
+                        self.assertEqual(calls.count(('https://' + host + route, 200)), 1)
+                self.assertEqual(calls.count(('https://cronox.es/', 200)),
+                                 2 if response.startswith(b'308') else 1)
+
+    def test_www_home_rejects_other_status_targets_credentials_queries_and_fragments(self):
+        rejected = [b'200', b'200\nhttps://cronox.es/', b'503\n', b'308\n']
+        rejected += [str(code).encode() + b'\nhttps://cronox.es/' for code in (301, 302, 303, 307)]
+        rejected += [b'308\n' + target for target in (
+            b'https://outside.invalid/', b'http://cronox.es/', b'https://www.cronox.es/',
+            b'https://cronox.es/other', b'https://cronox.es/?query=1', b'https://cronox.es/#fragment',
+            b'https://user@cronox.es/', b'https://cronox.es:443/', b'/relative',
+            b'https://cronox.es/\nhttps://outside.invalid/')]
+        for response in rejected:
+            with self.subTest(response=response):
+                runtime = object.__new__(Runtime)
+                with patch.object(runtime, 'command', return_value=response), patch.object(runtime, 'http'):
+                    with self.assertRaisesRegex(Refused, 'PUBLIC_CANONICAL_REDIRECT_INVALID'):
+                        runtime.public_check()
+
+    def test_canonical_destination_still_requires_200_after_valid_redirect(self):
+        runtime = object.__new__(Runtime)
+        canonical_calls = 0
+        def check(url, expected):
+            nonlocal canonical_calls
+            if url == 'https://cronox.es/':
+                canonical_calls += 1
+                if canonical_calls == 2: raise Refused('HTTP_CHECK_FAILED')
+        with patch.object(runtime, 'command', return_value=b'308\nhttps://cronox.es/'), \
+             patch.object(runtime, 'http', side_effect=check):
+            with self.assertRaisesRegex(Refused, 'HTTP_CHECK_FAILED'):
+                runtime.public_check()
+
+    def test_normal_http_and_maintenance_checks_remain_strict_without_redirect_following(self):
+        cases = [('http://127.0.0.1:3000/api/health', 200, b'308'),
+                 ('https://cronox.es/', 200, b'308'),
+                 ('https://cronox.es/', 503, b'200')]
+        cases += [('https://' + host + route, 200, b'308')
+                  for host in ('cronox.es', 'www.cronox.es') for route in ('/api/health', '/api/ready')]
+        for url, expected, response in cases:
+            with self.subTest(url=url, expected=expected):
+                runtime = object.__new__(Runtime)
+                with patch.object(runtime, 'command', return_value=response) as command:
+                    with self.assertRaisesRegex(Refused, 'HTTP_CHECK_FAILED'):
+                        runtime.http(url, expected)
+                    self.assertNotIn('--location', command.call_args.args[0])
+                    self.assertNotIn('-L', command.call_args.args[0])
+
+
 class ReleaseTests(unittest.TestCase):
     def simulate_ssh_driver(self, terminal):
         with tempfile.TemporaryDirectory() as d:

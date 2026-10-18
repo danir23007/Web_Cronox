@@ -332,7 +332,21 @@ class Runtime:
     def public_check(self):
         for host in ('cronox.es', 'www.cronox.es'):
             for route in ('/', '/api/health', '/api/ready'):
-                self.http('https://' + host + route, 200)
+                url = 'https://' + host + route
+                if host != 'www.cronox.es' or route != '/':
+                    self.http(url, 200)
+                    continue
+                # The public www homepage has a canonical redirect. Never
+                # follow arbitrary redirects or relax health/maintenance checks.
+                response = self.command(['/usr/bin/curl', '--silent', '--show-error', '--max-time', '10',
+                                         '--output', '/dev/null', '--write-out',
+                                         '%{http_code}\n%{redirect_url}', url]).decode()
+                code, separator, target = response.partition('\n')
+                require(separator == '\n' and ((code == '200' and not target)
+                        or (code == '308' and target == 'https://cronox.es/')),
+                        'PUBLIC_CANONICAL_REDIRECT_INVALID')
+                if code == '308':
+                    self.http('https://cronox.es/', 200)
 
     def hold(self):
         if not FLAG.exists():
