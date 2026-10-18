@@ -234,8 +234,13 @@ describe('CRONOX responsive design system', () => {
   });
 
   it('keeps the complete footer within a shrinkable, fluid layout', () => {
+    // The same fluid padding is shared with the copyright's horizontal offset.
+    // Check both its bounds and its use, rather than requiring an inline value.
     expect(storeStyles).toMatch(
-      /\.site-footer\s*\{[^}]*padding:\s*20px clamp\(18px, 4\.7vw, 90px\) 12px;/,
+      /\.site-footer\s*\{[^}]*--footer-side-padding:\s*clamp\(18px, 4\.7vw, 90px\);/,
+    );
+    expect(storeStyles).toMatch(
+      /\.site-footer\s*\{[^}]*padding:\s*20px var\(--footer-side-padding\) 12px;/,
     );
     expect(storeStyles).toMatch(
       /\.footer-inner\s*\{[^}]*display:\s*grid;[^}]*grid-template-columns:\s*minmax\(132px, 160px\) minmax\(0, 1fr\);[^}]*align-items:\s*stretch;[^}]*gap:\s*clamp\(32px, 4vw, 72px\);[^}]*width:\s*100%;[^}]*min-width:\s*0;/,
