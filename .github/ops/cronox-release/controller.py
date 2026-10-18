@@ -376,6 +376,117 @@ class Runtime:
         raise Refused('BACKEND_NOT_READY')
 
 
+def backup_diagnostics(folder):
+    import json
+    import os
+    from pathlib import Path
+    import re
+    import stat
+
+    try:
+        folder = Path(folder)
+        info = folder.lstat()
+        if not stat.S_ISDIR(info.st_mode) or info.st_uid != os.geteuid() or info.st_mode & 0o077:
+            return {'available': False}
+        names = ('database.dump', 'roles.sql', 'application.tar.gz', 'restore.sql',
+                 'graphql-function.sql', 'roles.restore.sql', 'verification.sql',
+                 'source-verification.json', 'restore-verification.json',
+                 'graphql-sequence.sql', 'backup-verified.json', 'backup-sha256.json')
+
+        def entry(name):
+            path = folder / name
+            try:
+                value = path.lstat()
+            except FileNotFoundError:
+                return None
+            if not stat.S_ISREG(value.st_mode) or value.st_uid != os.geteuid() \
+                    or value.st_nlink != 1 or value.st_mode & 0o077:
+                raise ValueError('UNTRUSTED_DIAGNOSTIC_FILE')
+            return value
+
+        def read(name, limit, tail=False):
+            before = entry(name)
+            if before is None:
+                return None
+            handle = os.open(folder / name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+            try:
+                current = os.fstat(handle)
+                if (current.st_dev, current.st_ino) != (before.st_dev, before.st_ino):
+                    raise ValueError('DIAGNOSTIC_FILE_CHANGED')
+                if before.st_size > limit:
+                    if not tail:
+                        raise ValueError('DIAGNOSTIC_FILE_TOO_LARGE')
+                    os.lseek(handle, -limit, os.SEEK_END)
+                return os.read(handle, limit).decode('utf8', errors='replace')
+            finally:
+                os.close(handle)
+
+        artifacts = []
+        for name in names:
+            value = entry(name)
+            artifacts.append({'name': name, 'present': value is not None,
+                              'bytes': value.st_size if value else None})
+        text = read('private.log', 65536, tail=True) or ''
+        patterns = {
+            'TAR_PERMISSION_DENIED': r'tar:.*(?:Permission denied|Cannot open)',
+            'TAR_SOURCE_CHANGED': r'tar:.*(?:file changed as we read|File removed before we read)',
+            'TAR_FAILED': r'tar:.*(?:failure status|Error is not recoverable)',
+            'PG_DUMP_FAILED': r'pg_dump(?:all)?: error:',
+            'PG_RESTORE_FAILED': r'pg_restore: error:',
+            'SQL_PERMISSION_DENIED': r'(?:ERROR|FATAL):.*(?:permission denied|must be owner|must be superuser)',
+            'SQL_SYNTAX_ERROR': r'ERROR:.*(?:syntax error|invalid command)',
+            'SQL_MISSING_FUNCTION': r'ERROR:.*function .* does not exist',
+            'SQL_MISSING_ROLE': r'(?:ERROR|FATAL):.*role .* does not exist',
+            'SQL_EXTENSION_ERROR': r'ERROR:.*extension',
+            'SQL_AUTH_FAILED': r'FATAL:.*(?:authentication failed|no pg_hba.conf entry)',
+            'POSTGRES_SHUTTING_DOWN': r'FATAL:.*database system is shutting down',
+            'NO_SPACE_LEFT': r'No space left on device',
+        }
+        result = {'available': True, 'artifacts': artifacts,
+                  'errorClasses': [code for code, pattern in patterns.items()
+                                   if re.search(pattern, text, re.I)],
+                  'postgresErrorPresent': bool(re.search(r'\b(?:ERROR|FATAL|PANIC):', text)),
+                  'logTailLimited': entry('private.log') is not None
+                      and entry('private.log').st_size > 65536}
+        a, b = read('source-verification.json', 4 * 1024**2), read('restore-verification.json', 4 * 1024**2)
+        if a is not None and b is not None:
+            def mapping(raw):
+                rows = json.loads(raw)
+                if not isinstance(rows, list) or len(rows) > 5000:
+                    raise ValueError('INVALID_COMPARISON')
+                output = {}
+                for row in rows:
+                    policy = row.get('definition', {})
+                    key = (row.get('kind'), row.get('schema'), row.get('name'),
+                           policy.get('schemaname'), policy.get('tablename'), policy.get('policyname'))
+                    if key in output:
+                        raise ValueError('DUPLICATE_COMPARISON')
+                    output[key] = row
+                return output
+            source, restored = mapping(a), mapping(b)
+            kinds, fields, count = {}, {}, 0
+            allowed_kinds = {'table', 'sequence', 'permissions', 'policy', 'extension'}
+            allowed_fields = {'rows', 'digest', 'value', 'called', 'owner', 'rls', 'forceRls',
+                              'acl', 'definition', 'version', 'kind', 'schema', 'name'}
+            for key in source.keys() | restored.keys():
+                left, right = source.get(key, {}), restored.get(key, {})
+                if left == right:
+                    continue
+                count += 1
+                kind = key[0] if key[0] in allowed_kinds else 'other'
+                kinds[kind] = kinds.get(kind, 0) + 1
+                for field in left.keys() | right.keys():
+                    if left.get(field) != right.get(field):
+                        label = field if field in allowed_fields else 'other'
+                        fields[label] = fields.get(label, 0) + 1
+            result['comparison'] = {'sourceObjects': len(source), 'restoredObjects': len(restored),
+                                    'differenceCount': count, 'differencesByKind': kinds,
+                                    'differencesByField': fields}
+        return result
+    except Exception:
+        return {'available': False}
+
+
 def main(args):
     require(os.getuid() == 0, 'ROOT_WRAPPER_REQUIRED')
     for path in (INSTALL, CONFIG, BASE, FLAG.parent):
@@ -392,6 +503,7 @@ def main(args):
                                 stdout=subprocess.PIPE, stderr=subprocess.DEVNULL).stdout.strip() in (b'active', b'activating', b'deactivating')
         if state['status'] in ('queued', 'running', 'recovery_queued', 'recovering') and not active:
             state.update(status='interrupted', recovery='inspect-before-retry')
+        state['backupDiagnostics'] = backup_diagnostics(folder)
         print(json.dumps(state))
         return
     with lock(BASE / 'controller.lock', wait=action in ('worker', 'fail-safe')):
@@ -458,6 +570,8 @@ if __name__ == '__main__':
     os.umask(0o077)
     # -I omits cwd and user PYTHONPATH. Only add the root-owned installation directory.
     sys.path.insert(0, str(Path(__file__).resolve().parent))
+    # Helpers import controller.Refused; share this CLI module rather than loading it twice.
+    sys.modules['controller'] = sys.modules[__name__]
     try:
         main(sys.argv[1:])
     except BaseException:
