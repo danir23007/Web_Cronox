@@ -10,9 +10,9 @@ import controller
 import resume_mail_release as resume
 
 class ForwardTests(unittest.TestCase):
- @unittest.skipUnless(os.name == 'posix' and Path('/usr/bin/npm').is_file() and shutil.which('node'), 'Linux npm fixture')
+ @unittest.skipUnless(os.name == 'posix' and shutil.which('npm') and shutil.which('node'), 'Linux npm fixture')
  def test_real_npm_production_include_without_network_or_lock_changes(self):
-  result=subprocess.run(['node',str(Path(__file__).with_name('test_build_dependencies.cjs'))],capture_output=True,text=True,timeout=60)
+  result=subprocess.run(['node',str(Path(__file__).with_name('test_build_dependencies.cjs'))],capture_output=True,text=True,timeout=60,env=dict(os.environ,CRONOX_TEST_NPM_BIN=shutil.which('npm')))
   self.assertEqual(result.returncode,0,'Isolated npm fixture failed; inspect private test output')
   self.assertEqual(json.loads(result.stdout),{'productionDefaultOmittedBuildTool':True,'explicitIncludeInstalledBuildTool':True,'lockUnchanged':True,'networkUsed':False})
 
@@ -29,7 +29,8 @@ class ForwardTests(unittest.TestCase):
    rt=object.__new__(controller.Runtime);rt.folder=Path(d)
    env={'NODE_CHANNEL_FD':'3','NODE_CHANNEL_SERIALIZATION_MODE':'json','NODE_UNIQUE_ID':'fixture','NODE_ENV':'production','EMAIL_ENABLED':'false','BUSINESS_SETTING':'preserve'}
    script="process.stdout.write(JSON.stringify({ipcPresent:['NODE_CHANNEL_FD','NODE_CHANNEL_SERIALIZATION_MODE','NODE_UNIQUE_ID'].some(k=>Object.hasOwn(process.env,k)),business:process.env.BUSINESS_SETTING,nodeEnv:process.env.NODE_ENV,email:process.env.EMAIL_ENABLED}))"
-   result=rt.command(['node','-e',script],env=env)
+   node=shutil.which('node'); self.assertIsNotNone(node,'Required Node toolchain unavailable')
+   result=rt.command([node,'-e',script],env=env)
    self.assertEqual(json.loads(result),{'ipcPresent':False,'business':'preserve','nodeEnv':'production','email':'false'})
    self.assertEqual(env['NODE_CHANNEL_FD'],'3')
 
