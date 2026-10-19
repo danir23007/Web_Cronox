@@ -41,4 +41,20 @@ Preflight productivo: SHA `5684a7d13201a2aa82c4683060d4d05450e8048c`, 99 migraci
 - Documento local idéntico a `welcomeDocument()`, revisión 25 y cero publicaciones activas del diseño. Checksums de las cuatro migraciones locales verificados sin cambios.
 - Revisión de archivos de entrega sin valores privados de entorno, MIME, volcados ni artefactos temporales. Evidencia operativa privada en `output/playwright/mail-release-20261019/`, fuera de Git.
 
-Los resultados finales de CI, despliegue, migraciones e importación se añadirán tras verificar la entrega. No se han autorizado correos, usuarios, pedidos, promociones ni reencolados para esta publicación.
+## Resultado productivo verificado
+
+Código publicado en `main`: **`3be5b9b39a412bdf9879d17630399e92a26c7168`**.
+
+- [CI del push](https://github.com/danir23007/Web_Cronox/actions/runs/39223972521): success. El job deploy se omite por diseño en pushes.
+- [Única ejecución de publicación](https://github.com/danir23007/Web_Cronox/actions/runs/39224616081): verify-release y deploy correctos. El controlador pasó a `success`, `public_check` completo, a las **10:48:42 Madrid** (08:48:42 UTC). HEAD productivo coincide exactamente con el SHA anterior.
+- Respaldo privado de base/roles/aplicación y restauración aislada verificada: **295 objetos de origen y restaurados, cero diferencias**. Evidencias protegidas en `/var/lib/cronox-release/3be5b9b39a412bdf9879d17630399e92a26c7168/`; no se publican volcados ni registros privados.
+- Las cuatro migraciones de esta fase terminaron a las **10:48:27–28 Madrid**. Historial completo: **103 migraciones, ninguna pendiente/fallida**; checksums comparados con los archivos desplegados. RLS activo en `ManagedEmailTemplate` y `AccountWelcomeBenefit`, sin grants para PUBLIC/anon/authenticated.
+- Portada, health y ready responden 200 en ambos dominios (www mantiene la redirección canónica de portada). El administrador exige sesión: redirección a login sin autenticar y 401 en su API. JS/CSS servidos coinciden con la entrega; los ocho recursos de imagen mantienen respuesta 200 y hash correcto.
+
+El importador explícito se ejecutó una vez tras el éxito del controlador y creó **`cmvf0j8780001l296e24fam0c`**, revisión **1**, en la carpeta original **`cmttuzl6c0019f8ck1tuqhoqe`**. El documento es idéntico al generador aprobado y, por comparación previa, al borrador local de revisión 25; HTML de previsualización de 8.369 bytes. **Cero versiones publicadas del nuevo diseño; no se activó ni se enlazó automáticamente a los envíos de clientes.** Las 105 plantillas anteriores mantienen exactamente sus registros (comparación excluyendo únicamente la nueva columna nullable), las 20 carpetas mantienen sus identidades y contenido, y las publicaciones permanecen sin cambios. Total posterior: 106 plantillas, contando archivadas. La bienvenida anterior se conserva como tarjeta independiente.
+
+Revisión en el panel productivo con la sesión administrativa legítima: las cinco carpetas numéricas de NOREPLY, tarjeta azul Única y estado Borrador; selector con verde `#187048`, azul `#235db5`, morado `#7841b5` en modo claro; papelera abre confirmación con nombre/buzón/carpeta/dependencias y Cancelar conserva la tarjeta. Editor, previsualización aislada, enlaces y texto plano disponibles, y cierre/reapertura correctos. Se localizó **Opciones avanzadas → Enviar prueba**, sin pulsarlo. La comprobación del borrado lógico y sus bloqueos destructivos procede de las pruebas aisladas, no de eliminar plantillas productivas. Las capturas del panel no se presentan como recepción visual de Gmail.
+
+Configuración de entorno y flags de PM2 comparados antes/después: intactos, con trabajadores productivos en su estado previo y Correos tracking/email todavía `false`. No se trasladaron las pausas locales. No se enviaron pruebas, crearon usuarios/pedidos/promociones ni reencolaron bienvenidas como parte de esta publicación.
+
+El repositorio local quedó limpio tras el commit funcional. El cierre se añade mediante un commit exclusivamente documental; no requiere otra publicación de la aplicación. Se conservan fuera de Git los artefactos privados de revisión y los cambios previos de dependencias/`src/main.ts.cronox-before-stripe` del VPS. El marco blanco confirmado en Gmail para iPhone sigue pendiente, sin nuevas alteraciones del diseño.
