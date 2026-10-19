@@ -35,4 +35,16 @@ Administrador real con Playwright, login y CSRF legítimos, base aislada en `127
 
 Cada resultado se consultó con otro cliente PostgreSQL. Ninguna prueba usa SMTP ni activa plantillas; no se escriben pedidos/promociones ni datos productivos. La base desechable y el administrador aislado se eliminan al terminar. Evidencia privada fuera de Git: `output/playwright/mail-color-fix/` y `test-results/mail-classification/`.
 
-La publicación sigue la autorización previa y Deploy CRONOX. El resultado se añadirá tras verificarlo.
+## Publicación y comprobación productiva
+
+Corrección subida a `main` y desplegada como **`b183d238c11d29fa1d06f3782d008eebb2fc602a`** mediante la autorización previa y el procedimiento habitual:
+
+- [CI del push](https://github.com/danir23007/Web_Cronox/actions/runs/39246870850): success.
+- [Publicación única](https://github.com/danir23007/Web_Cronox/actions/runs/39247493627): verify-release y deploy correctos. Controlador en `success`, public_check completo a las **13:58:08 Madrid** (11:58:08 UTC).
+- Respaldo de base/roles/aplicación y restauración aislada verificados: **297 objetos comparados y cero diferencias**. El diagnóstico recoge `POSTGRES_SHUTTING_DOWN` durante el cierre del entorno aislado; no bloqueó la comprobación ni la publicación. No se ejecutó restauración sobre la base productiva.
+- HEAD remoto comprobado igual al SHA esperado. Portada, health y ready 200 en ambos dominios. `admin-mails.js?v=8` y `admin-mails.css?v=4` servidos con el contenido de esta entrega.
+- Comparación antes/después del registro completo de las **106 plantillas**, incluyendo `visualClassification`: idénticos. Las **20 carpetas** mantienen sus identidades y datos; versiones/publicaciones permanecen intactas. Las **103 migraciones** y sus checksums están sin cambios, sin nuevas migraciones. Configuración de entorno y flags operativos conservados; Correos sigue desactivado.
+- Consulta productiva de `draftTargets`: la bienvenida antigua desde Círculo 3 ofrece exactamente sus cinco identidades originales. «Bienvenida · Diseño aprobado» ofrece únicamente su identidad independiente y continúa como borrador sin publicación activa.
+- Panel productivo con sesión legítima: selección temporal de verde desde Círculo 3, ventana con los cinco destinos correctos y aviso «Se guardará solo la clasificación visual»; se seleccionaron 1/3/5 y se canceló. Cero PATCH de plantillas. Se volvió a comparar la base después: los 106 registros siguen íntegros. El guardado con escritura se verificó previamente contra PostgreSQL aislado, no modificando clasificaciones productivas para probar.
+
+Sin correos, activación de plantillas, reencolados ni cambios en el diseño de bienvenida. Base y sesión de prueba eliminadas; servidor local habitual actualizado y con SMTP/trabajadores desactivados. El cierre se sube mediante un commit documental, sin otro despliegue de aplicación. Los artefactos privados quedan fuera de Git y se conservan los cambios previos de dependencias y el archivo de respaldo ajeno existentes en el VPS.
