@@ -1,7 +1,7 @@
 import { UserNumberingGate } from '../users/user-numbering-gate.module';
 import { ConflictException, ForbiddenException, Injectable, Logger, Optional, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
 import { EmailDelivery } from '@prisma/client';
-import MailComposer from 'nodemailer/lib/mail-composer';
+import { compileMailMessage, rawMessageId } from './mail-message';
 import { createTransport, Transporter, SendMailOptions } from 'nodemailer';
 import SMTPTransport from 'nodemailer/lib/smtp-transport';
 import { loadEmailConfig } from './email.config';
@@ -38,10 +38,8 @@ export class MailTransportFactory implements OnModuleInit, OnModuleDestroy {
         Buffer.byteLength(attachment.content, attachment.encoding as BufferEncoding || 'utf8');
     }
     if (totalAttachments > maxAttachmentBytes()) throw Error('EMAIL_ATTACHMENT_LIMIT');
-    const compiled = new MailComposer({ ...options, from: this.getFrom(senderKey), disableFileAccess: true, disableUrlAccess: true }).compile();
-    const raw = await new Promise<Buffer>((resolve, reject) => compiled.build((error, content) => error ? reject(error) : resolve(content)));
-    if (raw.length > maxMessageBytes()) throw Error('EMAIL_MESSAGE_LIMIT');
-    const prepared = { raw, envelope: compiled.getEnvelope() };
+    const prepared = await compileMailMessage(this.getFrom(senderKey), options);
+    const { raw } = prepared;
     const data = { id: quotaAttemptId(), senderKey, recipient, subject: String(options.subject || ''), purpose, quotaUnits: units };
     let attempt;
     try {
@@ -79,7 +77,10 @@ export class MailTransportFactory implements OnModuleInit, OnModuleDestroy {
         } else transport = this.getTransport(senderKey);
       }
       catch (error) { throw Object.assign(error as Error, { code: 'EMAIL_CONFIG' }); }
-      info = await transport.sendMail({ ...options, from });
+      // For precompiled MIME, Nodemailer's outer wrapper otherwise reports a
+      // different generated ID from the one actually contained in the message.
+      const messageId = rawMessageId(options.raw);
+      info = await transport.sendMail({ ...options, from, ...(messageId ? { messageId } : {}) });
       if (!info.accepted?.length) throw Object.assign(new Error('SMTP_RECIPIENT_NOT_ACCEPTED'), { code: 'EENVELOPE' });
     } catch (error) {
       const code = String((error as { code?: string }).code || 'SMTP_OUTCOME_UNKNOWN');

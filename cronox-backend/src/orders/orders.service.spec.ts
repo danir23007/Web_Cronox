@@ -103,6 +103,7 @@ describe('OrdersService checkout reservations', () => {
 
   const makeSnapshot = (overrides: Record<string, unknown> = {}) => ({
     id: 'snap_new',
+    customerEmail: 'fixture@welcome.invalid',
     anonymousId: null,
     userId: 1,
     cartId: 10,
@@ -141,6 +142,8 @@ describe('OrdersService checkout reservations', () => {
 
   beforeEach(() => {
     prisma = {
+      $executeRaw: jest.fn(),
+      accountWelcomeBenefit: { findFirst: jest.fn().mockResolvedValue(null), findUnique: jest.fn().mockResolvedValue(null) },
       product: { findMany: jest.fn().mockResolvedValue([{ id: 7, name: 'Camiseta', imageUrl: null, privateCost: { unitCostCents: 1000 } }]) },
       checkoutItemFinancial: { findMany: jest.fn().mockResolvedValue([]) },
       checkoutEffect: { createMany: jest.fn().mockResolvedValue({ count: 3 }) },

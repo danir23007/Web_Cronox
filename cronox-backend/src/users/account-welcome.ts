@@ -7,6 +7,7 @@ export async function ensureAccountWelcome(
   tx: Prisma.TransactionClient,
   userId: number,
   newlyCreated = false,
+  originCheckoutId?: string,
 ) {
   const account = await tx.user.findUniqueOrThrow({ where: { id: userId } });
   const email = normalizeEmail(account.email);
@@ -122,9 +123,13 @@ export async function ensureAccountWelcome(
     !subscription?.welcomeSentAt &&
     !subscription?.welcomeClaimedAt
   ) {
-    await tx.newsletterMailJob.create({
+    const job = await tx.newsletterMailJob.create({
       data: { email, userId, kind: 'WELCOME' },
     });
+    if (!consumed) await tx.accountWelcomeBenefit.create({ data: {
+      userId, email, promoCodeId: promo.id, welcomeJobId: job.id,
+      originCheckoutId,
+    } });
   }
   return updated;
 }

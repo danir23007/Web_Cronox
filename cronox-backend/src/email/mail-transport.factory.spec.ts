@@ -1,6 +1,7 @@
 import { MailTransportFactory } from './mail-transport.factory';
 import { EmailSenderKey } from './email.types';
 import * as security from '../mailbox/mailbox-security';
+import { simpleParser } from 'mailparser';
 
 describe('durable email delivery history', () => {
   const originalUser = process.env.SMTP_INFO_USER;
@@ -31,6 +32,24 @@ describe('durable email delivery history', () => {
     const { db, factory, sendMail } = setup(); db.emailDelivery.create.mockRejectedValue(new Error('db'));
     await expect(factory.sendMail(EmailSenderKey.INFO, { to: 'test@example.test' })).rejects.toThrow();
     expect(sendMail).not.toHaveBeenCalled();
+  });
+  it('keeps independent MIME IDs, no reply headers, and reports the actual precompiled Message-ID', async () => {
+    const { factory, sendMail, db } = setup();
+    const ids: string[] = [];
+    sendMail.mockImplementation(async options => {
+      const message = await simpleParser(options.raw, { skipHtmlToText: true, skipTextToHtml: true });
+      expect(message.messageId).toBe(options.messageId);
+      expect(message.headers.has('in-reply-to')).toBe(false);
+      expect(message.headers.has('references')).toBe(false);
+      expect(message.html).toBe('<p>Independent welcome</p>');
+      ids.push(message.messageId!);
+      return { messageId: message.messageId, accepted: ['test@example.test'] };
+    });
+    for (let i = 0; i < 2; i++) await factory.sendMail(EmailSenderKey.INFO, {
+      to: 'test@example.test', subject: 'Independent test', html: '<p>Independent welcome</p>', text: 'Independent welcome',
+    }, 'ADMIN_TEST');
+    expect(new Set(ids).size).toBe(2);
+    expect(db.emailDelivery.update.mock.calls.map(call => call[0].data.providerMessageId)).toEqual(ids);
   });
   it.each([['EAUTH', 'FAILED'], ['ETIMEDOUT', 'UNKNOWN']])('records %s without exposing raw server errors', async (code, status) => {
     const { db, factory, sendMail } = setup(); sendMail.mockRejectedValue(Object.assign(new Error('secret SMTP data'), { code }));

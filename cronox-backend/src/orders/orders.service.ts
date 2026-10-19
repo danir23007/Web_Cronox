@@ -1,3 +1,4 @@
+import { lockWelcomeBenefit, recordWelcomePurchase } from '../users/welcome-benefit';
 // [ORDERS] Lógica de negocio para checkout y pedidos
 import {
   BadRequestException,
@@ -671,6 +672,20 @@ export class OrdersService {
           );
         }
 
+        if (preview.appliedPromo?.promoId) {
+          await lockWelcomeBenefit(tx, resolvedOwner.customerEmail);
+          const promo = await tx.promoCode.findUniqueOrThrow({ where: { id: preview.appliedPromo.promoId } });
+          const valid = await this.validatePromoAvailability(promo, { userId: resolvedOwner.userId ?? undefined, customerEmail: resolvedOwner.customerEmail, client: tx });
+          if (!valid.valid) throw new BadRequestException(valid.message);
+          if (promo.firstOrderOnly) {
+            const reservation = await tx.checkoutSnapshot.findFirst({ where: { promoCodeId: promo.id, status: { in: ACTIVE_CHECKOUT_SNAPSHOT_STATUSES } }, include: { items: true } });
+            if (reservation) {
+              if (reservation.cartId === preview.cart.id) return this.reuseActiveCheckoutSnapshot(reservation, requestFingerprint, new Date());
+              throw new ConflictException('WELCOME_CODE_RESERVED_BY_PENDING_CHECKOUT');
+            }
+          }
+        }
+
         const costProducts = await tx.product.findMany({
           where: { id: { in: preview.computation.lineItems.map(item => item.productId) } },
           select: { id: true, name: true, imageUrl: true, privateCost: true },
@@ -1197,6 +1212,7 @@ export class OrdersService {
           };
         }
 
+        await lockWelcomeBenefit(tx, snapshot.customerEmail);
         const lifecycleStatus = await this.resolvePersistedPaymentLifecycle(
           tx,
           input.paymentIntentId,
@@ -1274,6 +1290,7 @@ export class OrdersService {
         }) });
 
 
+        await recordWelcomePurchase(tx, created, snapshot.id);
         if (lifecycleStatus === OrderStatus.PAID) {
           await this.consumeStockReservationsForCheckoutSnapshot(
             tx,
@@ -2768,12 +2785,28 @@ export class OrdersService {
       const owner = user ?? (userId ? await client.user.findUnique({ where: { id: userId }, select: { firstOrderDiscountUsed: true } }) : null);
       const legacy = promo.code ? await client.discountCode.findUnique({ where: { code: promo.code }, select: { used: true, usedAt: true } }) : null;
       if (owner?.firstOrderDiscountUsed || legacy?.used || legacy?.usedAt) return { valid: false, message: PROMO_ALREADY_REDEEMED_MESSAGE };
+      const benefit = await client.accountWelcomeBenefit.findUnique({ where: { promoCodeId: promo.id }, include: { welcomeJob: true } });
+      if (benefit) {
+        if (benefit.userId !== userId || benefit.email !== email || !benefit.sentAt || !benefit.smtpMessageId ||
+            benefit.welcomeJob.kind !== 'WELCOME' || benefit.welcomeJob.userId !== benefit.userId || benefit.welcomeJob.email !== email ||
+            benefit.welcomeJob.status !== 'SENT' || benefit.welcomeJob.sentAt?.getTime() !== benefit.sentAt.getTime()) {
+          return { valid: false, message: 'El código estará disponible cuando se registre el envío de tu bienvenida.' };
+        }
+        if (options.excludeOrderId === benefit.originOrderId || (benefit.firstOnlineOrderId && benefit.firstOnlineOrderId !== options.excludeOrderId)) {
+          return { valid: false, message: 'El descuento de bienvenida es solo para el primer pedido online posterior a su envío.' };
+        }
+      }
       {
         const previous = await client.order.findFirst({ where: {
           OR: [{ customerEmail: { equals: email, mode: 'insensitive' } }, ...(userId ? [{ userId }] : [])],
           status: { notIn: [OrderStatus.PENDING, OrderStatus.CANCELLED] },
           source: 'ONLINE',
-          ...(options.excludeOrderId ? { id: { not: options.excludeOrderId } } : {}),
+          ...(benefit ? {
+            AND: [
+              { id: { notIn: [benefit.originOrderId, options.excludeOrderId].filter((id): id is number => id != null) } },
+              { OR: [{ paidAt: { gte: benefit.sentAt! } }, { paidAt: null }] },
+            ],
+          } : options.excludeOrderId ? { id: { not: options.excludeOrderId } } : {}),
         }, select: { id: true } });
         if (previous) return { valid: false, message: 'El descuento de bienvenida es solo para el primer pedido online.' };
       }
@@ -3249,6 +3282,11 @@ export class OrdersService {
       return;
     }
 
+    if (promo.firstOrderOnly) {
+      await lockWelcomeBenefit(tx, order.customerEmail);
+      const benefit = await tx.accountWelcomeBenefit.findUnique({ where: { promoCodeId: promo.id } });
+      if (benefit && (!benefit.sentAt || !order.paidAt || order.paidAt < benefit.sentAt || order.id === benefit.originOrderId)) throw new BadRequestException('WELCOME_PAYMENT_BEFORE_SEND');
+    }
     const validation = await this.validatePromoAvailability(promo, {
       userId: order.userId ?? undefined,
       client: tx,

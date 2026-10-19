@@ -15,6 +15,7 @@ import {
   MaxLength,
   Min,
   ValidateNested,
+  ValidateIf,
 } from 'class-validator';
 
 export class MailListDto {
@@ -29,6 +30,9 @@ export class MailListDto {
   @Type(() => Number) @IsInt() @Min(1) @Max(100) limit = 30;
 }
 export class MailSaveDto {
+  @ValidateIf((_object, value) => value !== undefined)
+  @IsIn(['FOR_ALL', 'UNIQUE', 'DIFFERENT'])
+  visualClassification?: string;
   @IsOptional() @IsString() @MaxLength(1000000) textOverride?: string;
   @IsString() @MaxLength(120) name!: string;
   @IsString() @MaxLength(100) folderId!: string;
@@ -42,6 +46,9 @@ export class MailSaveDto {
     | 'selected' = 'none';
   @IsOptional() @IsString() @MaxLength(100) signatureId?: string;
   @IsOptional() @IsInt() @Min(1) revision?: number;
+}
+export class MailPreviewDto extends MailSaveDto {
+  @IsOptional() @IsIn(['available']) previewDiscountCode?: 'available';
 }
 export class CampaignFamilyDto {
   @IsString() @MaxLength(120) name!: string;
@@ -72,6 +79,7 @@ export class MailActionDto {
     'archive',
     'restore',
     'publish',
+    'unpublish',
     'restoreVersion',
   ])
   action!: string;

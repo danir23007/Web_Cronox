@@ -8,6 +8,17 @@
     "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
   })[c]);
   const api = (path, method, body) => window.CRONOX_API.admin.mailRequest(path || "", method || "GET", body);
+  const classifications = [
+    { value: "FOR_ALL", tag: "Para todo", name: "Plantillas para todo", description: "El mismo contenido para todos los círculos." },
+    { value: "UNIQUE", tag: "Única", name: "Plantillas únicas", description: "Contenido específico de un círculo o situación." },
+    { value: "DIFFERENT", tag: "Diferente", name: "Plantillas diferentes", description: "Existe en todos los círculos, con contenido distinto." },
+  ];
+  const classificationFor = value => classifications.find(item => item.value === value);
+  function classificationSelector(current) {
+    return '<fieldset class="mail-classification"><legend>Clasificación visual</legend><p>Solo organiza las tarjetas; no cambia el contenido, los destinatarios ni las automatizaciones.</p><div class="mail-classification-options">' +
+      classifications.map(item => '<label class="mail-classification-option" data-classification="' + item.value + '"><input type="radio" name="mailVisualClassification" data-field="visualClassification" value="' + item.value + '" ' + (current.visualClassification === item.value ? "checked" : "") + '><span class="mail-color-swatch" aria-hidden="true"></span><span><strong>' + item.name + '</strong><small>' + item.description + '</small></span></label>').join("") +
+      '</div>' + (!current.visualClassification && current.id ? '<p>Esta plantilla conserva su apariencia original hasta que elijas una clasificación.</p>' : '') + '</fieldset>';
+  }
   const state = {
     key: "", account: null, folders: [], signatures: [], catalog: [],
     folderId: "", current: null, dirty: false, history: [], future: [],
@@ -49,6 +60,7 @@
     signatureMode: state.current.signatureMode || "none",
     signatureId: state.current.signatureId || undefined,
     revision: state.current.revision || undefined,
+    ...(state.current.visualClassification ? { visualClassification: state.current.visualClassification } : {}),
     ...(state.current.familyId ? {textOverride:state.current.textOverride ?? state.current.text} : {}),
   });
   function checkpoint() {
@@ -245,18 +257,21 @@
       sort: "updatedAt", archived: "false",
     });
     const data = await api(pathFor("/templates?" + params.toString()));
+    const lastPage = Math.max(1, Math.ceil(data.total / 30));
+    if (state.page > lastPage) { state.page = lastPage; return renderTemplates(); }
     root.innerHTML = breadcrumb("circles", "Círculos", folderName()) +
       '<header class="mail-view-heading"><div><span class="mail-eyebrow">' +
       esc(state.account.email || state.key) + "</span><h3>" + esc(folderName()) +
       "</h3><p>" + data.total + ' plantillas en este círculo</p></div>' +
       button("new", "+ Nueva plantilla", "", "btn mail-primary") + '</header><div class="mail-template-grid">' +
-      (data.items.map((t) => '<article class="mail-template-card"><div class="mail-template-top">' +
+      (data.items.map((t) => '<article class="mail-template-card"' + (classificationFor(t.visualClassification) ? ' data-classification="' + t.visualClassification + '"' : '') + '><div class="mail-template-top">' +
         '<span class="mail-template-state ' + (t.published ? "is-published" : "") + '">' +
-        (t.published ? "Publicada" : "Borrador") + "</span><time>" +
+        (t.published ? "● Publicada" : "○ Borrador") + "</span><time>" +
         new Date(t.updatedAt).toLocaleDateString("es-ES") + "</time></div><h3>" +
-        esc(t.name) + "</h3><p>" + esc(t.subject) + "</p>" +
+        esc(t.name) + "</h3>" + (classificationFor(t.visualClassification) ? '<span class="mail-classification-tag">' + classificationFor(t.visualClassification).tag + '</span>' : '') + '<p>' + esc(t.subject) + '</p><p class="mail-template-purpose">' + esc(state.catalog.find(item => item.key === t.purpose)?.name || t.purpose || "Sin automatización") + '</p><div class="mail-template-actions">' +
         button("edit", "Editar plantilla", 'data-id="' + esc(t.id) + '"', "btn mail-secondary") +
-        "</article>").join("") || '<div class="mail-empty"><h3>Este círculo está vacío</h3><p>Crea una plantilla para empezar.</p></div>') +
+        button("delete-template", '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M3 6h18M9 6V3h6v3M5 6l1 15h12l1-15M10 10v7M14 10v7"/></svg>', 'data-id="' + esc(t.id) + '" title="Eliminar plantilla" aria-label="Eliminar plantilla"', "mail-trash") +
+        "</div></article>").join("") || '<div class="mail-empty"><h3>Este círculo está vacío</h3><p>Crea una plantilla para empezar.</p></div>') +
       '</div><div class="mail-pagination">' +
       button("previous", "← Anterior", state.page <= 1 ? "disabled" : "", "mail-link") +
       "<span>Página " + state.page + "</span>" +
@@ -449,18 +464,53 @@
           (current.id
             ? button("duplicate-template", "Duplicar plantilla", "", "btn mail-secondary") +
               button(current.archivedAt ? "restore-template" : "archive-template",
-                current.archivedAt ? "Restaurar plantilla" : "Archivar plantilla", "", "btn mail-secondary") +
+                current.archivedAt ? "Restaurar plantilla" : "Eliminar plantilla", "", "btn mail-secondary") +
+              button("unpublish", "Despublicar plantilla", "", "btn mail-secondary") +
               button("versions", "Versiones publicadas", "", "btn mail-secondary")
             : "")
         : "") +
       '</div><div id="mailAdvancedOutput"></div></details></div>';
     if (!state.signatureEditor) {
+      root.querySelector(".mail-compose-fields").insertAdjacentHTML("afterend", classificationSelector(current));
       const signature = root.querySelector("#mailSignature");
       signature.value = current.signatureMode === "selected"
         ? current.signatureId : current.signatureMode || "none";
     }
     hydrateRich();
     renderInspector();
+    if (current.document.format === "html-email") htmlEmailEditor();
+  }
+  let htmlPreviewGeneration = 0;
+  function previewFrameSource(html) {
+    const policy = '<meta http-equiv="Content-Security-Policy" content="default-src \'none\'; img-src https:; style-src \'unsafe-inline\'; base-uri \'none\'; form-action \'none\'">';
+    return html.replace("<head>", "<head>" + policy);
+  }
+  function htmlEmailEditor() {
+    const builder = root.querySelector(".mail-builder");
+    builder.classList.add("is-html-email");
+    builder.innerHTML = '<main class="mail-html-workbench"><div class="mail-preview-bar"><div class="mail-device-switch">' +
+      button("desktop", "Escritorio", 'aria-pressed="' + !state.mobile + '"', "mail-device") +
+      button("mobile", "Móvil", 'aria-pressed="' + state.mobile + '"', "mail-device") +
+      '</div>' + button("html-refresh", "Actualizar vista previa", "", "btn mail-secondary") + '</div>' +
+      '<p class="mail-html-preview-note">Vista previa aislada con datos ficticios. No se envía ningún correo. Las pruebas de envío no incluyen descuentos de muestra.</p>' +
+      '<p class="mail-html-preview-status" role="status">Preparando vista previa…</p><iframe class="mail-html-email-preview ' + (state.mobile ? 'is-mobile' : '') + '" sandbox="" referrerpolicy="no-referrer" title="Vista previa aislada del diseño HTML"></iframe>' +
+      '<details class="mail-html-source"><summary>Editar HTML del diseño</summary><p>Se conservan las variables y se aplica el sanitizador al guardar y renderizar.</p><label>Cuerpo HTML<textarea data-mail-html spellcheck="false">' + esc(state.current.document.blocks[0].html) + '</textarea></label></details></main>';
+    hydrateHtmlEmailPreview();
+  }
+  async function hydrateHtmlEmailPreview() {
+    const generation = ++htmlPreviewGeneration;
+    const frame = root.querySelector(".mail-html-email-preview");
+    if (!frame) return;
+    const status = root.querySelector(".mail-html-preview-status");
+    try {
+      const result = await api(pathFor("/preview"), "POST", Object.assign(payload(), {
+      }));
+      if (generation !== htmlPreviewGeneration || !frame.isConnected) return;
+      frame.srcdoc = previewFrameSource(result.html);
+      status.textContent = "Vista previa actualizada. La recepción en clientes de correo requiere una prueba autorizada aparte.";
+    } catch (error) {
+      if (generation === htmlPreviewGeneration && status.isConnected) status.textContent = error.message || "No se pudo generar la vista previa. Puedes reintentar con Actualizar vista previa.";
+    }
   }
   function hydrateRich() {
     root.querySelectorAll("[data-edit-rich]").forEach((element) => {
@@ -586,6 +636,10 @@
     return names.slice(0, -1).join(", ") + " y " + names[names.length - 1];
   }
   async function save(targets) {
+    if (!state.signatureEditor && !state.current.id && !classificationFor(state.current.visualClassification)) {
+      root.querySelector('[name="mailVisualClassification"]')?.focus();
+      return message("Elige una clasificación visual para la nueva plantilla.", "warning");
+    }
     let result;
     if (state.signatureEditor) {
       result = await api(pathFor("/signatures" + (state.current.id ? "/" + state.current.id : "")),
@@ -619,11 +673,67 @@
       ? "Borrador guardado en " + joinedCircleNames(targets.map((target) => target.folderName)) + "."
       : "Borrador guardado.", "success");
   }
+  let deletionContext = null;
+  async function openDeletion(id, opener, errorText) {
+    const details = await api(pathFor("/templates/" + encodeURIComponent(id) + "/deletion"));
+    closeDeletion(false);
+    deletionContext = { details, opener };
+    root.insertAdjacentHTML("beforeend", '<dialog class="mail-delete-dialog" aria-labelledby="mailDeleteTitle" aria-describedby="mailDeleteDescription"><div class="mail-delete-content"><h3 id="mailDeleteTitle">Eliminar plantilla</h3><p id="mailDeleteDescription">Se retirará únicamente esta plantilla. Las versiones, los mensajes enviados y la auditoría se conservan.</p><dl><dt>Plantilla</dt><dd>' + esc(details.name) + '</dd><dt>Buzón</dt><dd>' + esc(state.account.email || state.key) + '</dd><dt>Círculo o carpeta</dt><dd>' + esc(details.folderName) + '</dd><dt>Publicación</dt><dd>' + (details.published ? 'Publicada · ' + esc(details.publications.join(", ")) : 'Borrador · sin publicación activa') + '</dd><dt>Campañas pendientes o en curso</dt><dd>' + details.pendingCampaigns + '</dd><dt>Versiones conservadas</dt><dd>' + details.versionCount + '</dd></dl>' +
+      (details.familyName ? '<p>Familia: ' + esc(details.familyName) + ' · Círculo ' + esc(details.campaignCircle) + '. Al eliminarla, esta versión dejará de estar disponible para nuevas campañas; las otras versiones se conservan.</p>' : '') +
+      details.blockers.map(text => '<p class="mail-delete-blocker">' + esc(text) + '</p>').join("") +
+      '<p class="mail-delete-error" role="alert">' + esc(errorText || '') + '</p><div class="mail-delete-links">' +
+      (details.published ? button("delete-open-editor", "Abrir editor para despublicar", "", "mail-link") : '') +
+      (details.pendingCampaigns ? '<a class="mail-link" data-mail-action="delete-campaigns" href="#section-inbox">Gestionar campañas en Correo</a>' : '') + '</div><div class="mail-save-actions">' +
+      button("delete-cancel", "Cancelar", "", "btn mail-secondary") + button("delete-confirm", "Eliminar plantilla", details.canDelete ? "" : "disabled", "btn mail-delete-confirm") + '</div></div></dialog>');
+    const dialog = root.querySelector(".mail-delete-dialog");
+    dialog.addEventListener("cancel", event => { event.preventDefault(); if (!state.busy) closeDeletion(); });
+    if (dialog.showModal) dialog.showModal(); else dialog.setAttribute("open", "");
+    dialog.querySelector('[data-mail-action="delete-cancel"]').focus();
+  }
+  function closeDeletion(restoreFocus = true) {
+    const opener = deletionContext?.opener;
+    root.querySelector(".mail-delete-dialog")?.remove();
+    deletionContext = null;
+    if (restoreFocus && opener?.isConnected) opener.focus();
+  }
+  async function confirmDeletion() {
+    if (!deletionContext?.details.canDelete) return;
+    const { details, opener } = deletionContext;
+    const dialog = root.querySelector(".mail-delete-dialog");
+    dialog.querySelectorAll("button").forEach(item => { item.disabled = true; });
+    dialog.setAttribute("aria-busy", "true");
+    try {
+      await api(pathFor("/templates/" + encodeURIComponent(details.id) + "/actions"), "POST", {
+        action: "archive", revision: details.revision, confirmed: true,
+      });
+    } catch (error) {
+      const errorText = (error.message || "No se pudo eliminar la plantilla.") + " Revisa los datos y vuelve a intentarlo.";
+      try { await openDeletion(details.id, opener, errorText); }
+      catch (_) {
+        dialog.removeAttribute("aria-busy");
+        dialog.querySelectorAll("button").forEach(item => { item.disabled = false; });
+        dialog.querySelector(".mail-delete-error").textContent = errorText;
+      }
+      return;
+    }
+    closeDeletion(false);
+    // The archive has committed; report a refresh failure separately from deletion.
+    try {
+      state.folders = await api(pathFor("/folders"));
+      await renderTemplates();
+      root.querySelector('[data-mail-action="new"]')?.focus();
+      message("Plantilla eliminada. Su historial se conserva.", "success");
+    } catch (_) {
+      root.innerHTML = button("templates", "Actualizar listado", "", "btn mail-secondary");
+      message("La plantilla se eliminó, pero no se pudo actualizar el listado. Pulsa Actualizar listado.", "warning");
+    }
+  }
   async function compiledPreview(showText) {
     const result = state.signatureEditor
       ? await api(pathFor("/signatures/preview"), "POST",
         { name: state.current.name, document: state.current.document })
-      : await api(pathFor("/preview"), "POST", payload());
+      : await api(pathFor("/preview"), "POST", Object.assign(payload(), {
+        }));
     state.preview = result;
     const output = root.querySelector("#mailAdvancedOutput");
     if (showText) output.innerHTML = '<pre class="mail-source">' + esc(result.text) + "</pre>";
@@ -707,6 +817,35 @@
       ).join("") + "</div>";
   }
   async function handleAction(name, element) {
+    if (name === "html-refresh") return hydrateHtmlEmailPreview();
+    if (name === "delete-template" || name === "archive-template") {
+      if (state.dirty) return message("Guarda el borrador antes de eliminarlo.", "warning");
+      return openDeletion(element.dataset.id || state.current.id, element);
+    }
+    if (name === "delete-cancel") return closeDeletion();
+    if (name === "delete-campaigns") return closeDeletion(false);
+    if (name === "delete-confirm") return confirmDeletion();
+    if (name === "delete-open-editor") {
+      const id = deletionContext.details.id;
+      const template = await api(pathFor("/templates/" + encodeURIComponent(id)));
+      closeDeletion(false);
+      state.current = template; state.dirty = false; state.signatureEditor = false;
+      state.history = []; state.future = []; state.selected = [];
+      editor();
+      const advanced = root.querySelector(".mail-advanced");
+      advanced.open = true;
+      advanced.querySelector('[data-mail-action="unpublish"]').focus();
+      return;
+    }
+    if (name === "unpublish") {
+      if (state.dirty) return message("Guarda el borrador antes de despublicarlo.", "warning");
+      if (!window.confirm("¿Despublicar únicamente esta plantilla? Los próximos correos automáticos usarán el diseño de respaldo configurado. Se conservan el borrador y las versiones históricas.")) return;
+      state.current = await api(pathFor("/templates/" + state.current.id + "/actions"), "POST", {
+        action: "unpublish", revision: state.current.revision, confirmed: true,
+      });
+      editor();
+      return message("Plantilla despublicada. Puedes eliminarla desde Opciones avanzadas.", "success");
+    }
     const path = (element.dataset.path || "").split("/").filter(Boolean).map(Number);
     if (name === "accounts") return load();
     if (name === 'deliveries' || name === 'delivery-next' || name === 'delivery-previous') {
@@ -890,17 +1029,15 @@
       editor();
       return message("Plantilla duplicada como borrador.", "success");
     }
-    if (name === "archive-template" || name === "restore-template") {
+    if (name === "restore-template") {
       if (state.dirty) return message("Guarda el borrador antes de cambiar su estado.");
-      if (name === "archive-template" &&
-        !window.confirm("¿Archivar la plantilla? Si está publicada, se desactivará.")) return;
       state.current = await api(pathFor("/templates/" + state.current.id + "/actions"), "POST", {
-        action: name === "archive-template" ? "archive" : "restore",
+        action: "restore",
         revision: state.current.revision,
       });
       state.dirty = false;
       editor();
-      return message(name === "archive-template" ? "Plantilla archivada." : "Plantilla restaurada.", "success");
+      return message("Plantilla restaurada.", "success");
     }
     if (name === "versions") {
       const versions = await api(pathFor("/templates/" + state.current.id + "/versions"));
@@ -937,6 +1074,7 @@
   root.addEventListener("click", async (event) => {
     const element = event.target.closest("[data-mail-action]");
     if (!element || element.disabled || state.busy) return;
+    event.stopPropagation();
     state.busy = true;
     try { await handleAction(element.dataset.mailAction, element); }
     catch (error) { message(error.message || "No se pudo completar la operación.", "error"); }
@@ -948,6 +1086,11 @@
   root.addEventListener("input", (event) => {
     if (!state.current) return;
     const element = event.target;
+    if (element.matches('[data-mail-html]')) {
+      if (!state.dirty) checkpoint();
+      state.current.document.blocks[0].html = element.value;
+      message("Cambios sin guardar. Actualiza la vista previa para revisar el HTML.");
+    }
     if (element.dataset.field) {
       if (!state.dirty) checkpoint();
       state.current[element.dataset.field] = element.value;

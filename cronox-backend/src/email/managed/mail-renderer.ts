@@ -1,6 +1,8 @@
+import { requireWelcomeCode } from './welcome-code';
 import { BadRequestException } from '@nestjs/common';
 import Handlebars from 'handlebars';
 import sanitizeHtml from 'sanitize-html';
+import { parseDocument } from 'htmlparser2';
 import { MAIL_PURPOSES, variablesFor } from './mail-catalog';
 
 export type MailBlock = {
@@ -34,7 +36,37 @@ export type MailBlock = {
   labels?: Record<string, string>;
   columns?: MailBlock[][];
 };
-export type MailDocument = { blocks: MailBlock[] };
+// Explicit imported-email format. It uses the same sanitizer and expression
+// validation as visual blocks; it is not a trusted/unsanitized source marker.
+export type MailDocument = {
+  blocks: MailBlock[];
+  format?: 'html-email';
+  schemaVersion?: number;
+  page?: { width: number; background: string; colorScheme?: 'light-only'; canvas?: 'body' };
+};
+export const MAIL_RESPONSIVE_CSS = '@media(max-width:480px){.welcome-backdrop{background-size:560px 100%!important}.mail-column{display:block!important;width:100%!important}.welcome-title{font-size:40px!important;line-height:43px!important;letter-spacing:-0.5px!important}.welcome-copy{font-size:17px!important;line-height:23px!important}.welcome-footer{font-size:9px!important;letter-spacing:0.3px!important}.welcome-instagram{width:9px!important;height:9px!important}.welcome-code{font-size:18px!important;letter-spacing:1px!important}}';
+// A closed document preference, never arbitrary imported head markup/CSS.
+// Ask supporting email clients to preserve the approved light design in dark UI.
+const LIGHT_ONLY_HEAD = '<meta name="color-scheme" content="light only"><meta name="supported-color-schemes" content="light only">';
+// Gmail's meta opt-out preserves the palette. The surrounding canvas always
+// uses the document background, including when the client prefers dark mode.
+const LIGHT_ONLY_CSS = ':root{color-scheme:light dark;}';
+// Keep the light canvas painted and remove client body spacing. These resets
+// belong to the explicit imported light document, not every managed email.
+const lightPageCss = (background: string) => LIGHT_ONLY_CSS +
+  `html,body,.mail-html-page{margin:0!important;padding:0!important;width:100%!important;background-color:${background}!important;}`;
+const lightPageAttributes = (background: string) =>
+  ` class="mail-html-page" bgcolor="${background}" leftmargin="0" topmargin="0" marginwidth="0" marginheight="0"`;
+const lightPageStyle = (background: string, foreground: string) =>
+  `margin:0!important;padding:0!important;width:100%;background-color:${background};color:${foreground};`;
+// Optional body-painted canvas: restore the original welcome's background
+// propagation (transparent html -> body background), independently of Gmail's
+// palette opt-out. No custom dark palette is used, so no :root scheme override.
+// Kept separate from lightPage* to leave other imported/visual documents alone.
+const bodyCanvasStyle = (background: string) =>
+  `margin:0;background:${background};color:#080808;`;
+const bodyCanvasAttributes = (background: string) =>
+  ` class="mail-html-page mail-body-canvas" bgcolor="${background}"`;
 const escape = (s: unknown) =>
   Handlebars.escapeExpression(
     typeof s === 'string' || typeof s === 'number' ? String(s) : '',
@@ -85,7 +117,7 @@ export function cleanMailHtml(html: string, placeholders = false) {
       table: ['cellpadding', 'cellspacing', 'border', 'width', 'role'],
       td: ['colspan', 'rowspan', 'background', 'bgcolor'],
     },
-    allowedClasses: { '*': ['mail-column'] },
+    allowedClasses: { '*': ['mail-column', 'welcome-title', 'welcome-copy', 'welcome-footer', 'welcome-instagram', 'welcome-code', 'welcome-backdrop'] },
     allowedSchemes: ['https', 'http', 'mailto', 'tel'],
     allowProtocolRelative: false,
     allowedStyles: {
@@ -104,19 +136,21 @@ export function cleanMailHtml(html: string, placeholders = false) {
         'text-align': [/^(left|center|right)$/],
         'text-decoration': [/^(none|underline|line-through)$/],
         'text-transform': [/^(uppercase|lowercase|none)$/],
-        padding: [/^[\d.]+(px|%)(\s+[\d.]+(px|%)){0,3}$/],
-        margin: [/^[\d.]+(px|%)(\s+([\d.]+(px|%)|auto)){0,3}$/],
+        padding: [/^(0|[\d.]+(px|%))(\s+(0|[\d.]+(px|%))){0,3}$/],
+        margin: [/^(0|[\d.]+(px|%))(\s+(0|[\d.]+(px|%)|auto)){0,3}$/],
         'padding-top': [/^\d+px$/],
         'padding-bottom': [/^\d+px$/],
-        'letter-spacing': [/^[\d.]+px$/],
+        'letter-spacing': [/^-?[\d.]+px$/],
         width: [/^[\d.]+(px|%)$/],
         'max-width': [/^[\d.]+(px|%)$/],
-        height: [/^[\d.]+(px|%)$/],
+        height: [/^(auto|[\d.]+(px|%))$/],
         display: [/^(block|inline-block|none)$/],
         'border-collapse': [/^(collapse|separate)$/],
-        border: [/^\d+px solid #[\da-f]{3,8}$/i],
+        border: [/^\d+px solid #[\da-f]{3,8}$/i, /^0$/],
         'border-radius': [/^\d+px$/],
         'white-space': [/^nowrap$/],
+        'overflow-wrap': [/^anywhere$/],
+        'word-break': [/^break-(word|all)$/],
       },
     },
     transformTags: {
@@ -144,7 +178,17 @@ export function cleanMailHtml(html: string, placeholders = false) {
 // Keep the same responsive email shell when editing the effective HTML in Correo.
 // Only the existing body sanitizer accepts user markup; head CSS is fixed code.
 export function effectiveMailHtml(html: string, placeholders = false) {
-  return `<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>@media(max-width:480px){.mail-column{display:block!important;width:100%!important}}</style></head><body style="margin:0;background:#111111;color:#eeeeee;">${cleanMailHtml(html, placeholders)}</body></html>`;
+  const parsed = parseDocument(html);
+  const root = parsed.children.find(node => node.type === 'tag' && node.name === 'html');
+  const head = root && 'children' in root ? root.children.find(node => node.type === 'tag' && node.name === 'head') : undefined;
+  const lightOnly = !!(head && 'children' in head && head.children.some(node =>
+    node.type === 'tag' && node.name === 'meta' && node.attribs.name === 'color-scheme' && node.attribs.content === 'light only'));
+  const body = root && 'children' in root ? root.children.find(node => node.type === 'tag' && node.name === 'body') : undefined;
+  const bodyCanvas = lightOnly && !!(body && 'attribs' in body &&
+    /(?:^|\s)mail-body-canvas(?:\s|$)/.test(body.attribs.class || ''));
+  // Read only a validated color from our shell; never copy source CSS/attrs.
+  const background = color(body && 'attribs' in body ? body.attribs.bgcolor : undefined, '#111111');
+  return `<!doctype html><html lang="es"${lightOnly && !bodyCanvas ? ` style="margin:0;padding:0;background-color:${background};"` : ''}><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">${lightOnly ? LIGHT_ONLY_HEAD : ''}<style>${lightOnly && !bodyCanvas ? lightPageCss(background) : ''}${MAIL_RESPONSIVE_CSS}</style></head><body${bodyCanvas ? bodyCanvasAttributes(background) : lightOnly ? lightPageAttributes(background) : ''} style="${bodyCanvas ? bodyCanvasStyle(background) : lightOnly ? lightPageStyle(background, '#080808') : 'margin:0;background:#111111;color:#eeeeee;'}">${cleanMailHtml(html, placeholders)}</body></html>`;
 }
 
 function validateExpressions(source: string, purpose?: string | null) {
@@ -178,6 +222,7 @@ export function renderMail(
   signature?: unknown,
   publishing = false,
 ) {
+  if (purpose === 'NEWSLETTER_WELCOME' && data !== undefined) requireWelcomeCode(data.discountCode);
   if (purpose === 'NEWSLETTER_ACCESS' && /\{\{\s*(?:initialPassword|passwordMessage)\s*\}\}/.test(subject + preheader)) {
     throw new BadRequestException('La contraseña solo puede aparecer en el cuerpo del correo.');
   }
@@ -333,7 +378,22 @@ export function renderMail(
       })
       .join('');
   };
-  let body = renderBlocks(document);
+  const doc = document as MailDocument;
+  const imported = doc.format === 'html-email';
+  if (doc.format !== undefined && !imported)
+    throw new BadRequestException('Formato de documento no válido.');
+  if (doc.page?.colorScheme !== undefined && (!imported || doc.page.colorScheme !== 'light-only'))
+    throw new BadRequestException('Esquema de color del correo no válido.');
+  if (doc.page?.canvas !== undefined && (!imported || doc.page.canvas !== 'body' || doc.page.colorScheme !== 'light-only'))
+    throw new BadRequestException('Fondo exterior del correo no válido.');
+  if (imported && (doc.schemaVersion !== 3 || doc.blocks?.length !== 1 ||
+      doc.blocks[0]?.type !== 'html' || typeof doc.blocks[0]?.html !== 'string' ||
+      !doc.page || !Number.isInteger(doc.page.width) || doc.page.width < 320 || doc.page.width > 640 ||
+      !/^#[\da-f]{6}$/i.test(doc.page.background)))
+    throw new BadRequestException('Documento HTML de correo no válido.');
+  if (imported && signature)
+    throw new BadRequestException('Este diseño ya incluye su pie. Selecciona «Sin firma».');
+  let body = imported ? cleanMailHtml(doc.blocks[0].html!, true) : renderBlocks(document);
   if (
     signature &&
     !(document as MailDocument).blocks.some((b) => b.type === 'signature')
@@ -363,15 +423,30 @@ export function renderMail(
       : s;
   body = cleanMailHtml(compile(body), !data);
   const header = compile(escape(preheader));
-  const html = `<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>@media(max-width:480px){.mail-column{display:block!important;width:100%!important}}</style></head><body style="margin:0;background:#111111;color:#eeeeee;"><div style="display:none;max-height:0;overflow:hidden;">${header}</div><table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td align="center"><table role="presentation" width="100%" style="width:100%;max-width:640px;border-collapse:collapse;">${body}</table></td></tr></table></body></html>`;
-  const text = sanitizeHtml(
-    body
+  const pageBackground = imported ? doc.page!.background : '#111111';
+  const content = imported
+    ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="${pageBackground}" style="width:100%;margin:0;border:0;border-collapse:collapse;background-color:${pageBackground};"><tr><td align="center" bgcolor="${pageBackground}" style="padding:0;border:0;"><table role="presentation" align="center" width="${doc.page!.width}" cellpadding="0" cellspacing="0" border="0" bgcolor="${pageBackground}" style="width:100%;max-width:${doc.page!.width}px;border:0;border-collapse:collapse;background-color:${pageBackground};"><tr><td bgcolor="${pageBackground}" style="padding:0;border:0;">${body}</td></tr></table></td></tr></table>`
+    : `<table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td align="center"><table role="presentation" width="100%" style="width:100%;max-width:640px;border-collapse:collapse;">${body}</table></td></tr></table>`;
+  const lightOnly = imported && doc.page!.colorScheme === 'light-only';
+  const bodyCanvas = lightOnly && doc.page!.canvas === 'body';
+  const html = `<!doctype html><html lang="es"${lightOnly && !bodyCanvas ? ` style="margin:0;padding:0;background-color:${pageBackground};"` : ''}><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">${lightOnly ? LIGHT_ONLY_HEAD : ''}<style>${lightOnly && !bodyCanvas ? lightPageCss(pageBackground) : ''}${MAIL_RESPONSIVE_CSS}</style></head><body${bodyCanvas ? bodyCanvasAttributes(pageBackground) : lightOnly ? lightPageAttributes(pageBackground) : ''} style="${bodyCanvas ? bodyCanvasStyle(pageBackground) : lightOnly ? lightPageStyle(pageBackground, '#080808') : `margin:0;background:${pageBackground};color:${imported ? '#080808' : '#eeeeee'};`}">${imported && !header ? '' : `<div style="display:none;max-height:0;overflow:hidden;">${header}</div>`}${content}</body></html>`;
+  if (purpose === 'NEWSLETTER_WELCOME' && Buffer.byteLength(html, 'utf8') >= 80 * 1024)
+    throw new BadRequestException('WELCOME_HTML_SIZE_LIMIT: el HTML final debe ser inferior a 80 KB.');
+  let text = sanitizeHtml(
+    (imported ? body.replace(/<img\b[^>]*alt="([^"]*)"[^>]*>/gi, '$1') : body)
       .replace(/<a\b[^>]*href="([^"]*)"[^>]*>([\s\S]*?)<\/a>/gi, '$2 ($1)')
       .replace(/<\/(td|p|div|h[1-4]|tr)>|<br\s*\/?\s*>/gi, '\n'),
     { allowedTags: [], allowedAttributes: {} },
   )
     .replace(/\n\s*\n/g, '\n\n')
     .trim();
+  if (imported) {
+    const parsed = parseDocument(text);
+    const plain = (nodes: typeof parsed.children): string => nodes.map(node =>
+      node.type === 'text' ? node.data : 'children' in node ? plain(node.children) : '',
+    ).join('');
+    text = plain(parsed.children);
+  }
   return {
     html,
     text,

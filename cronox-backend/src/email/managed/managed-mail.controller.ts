@@ -38,6 +38,7 @@ import {
   MailListDto,
   MailMultiSaveDto,
   MailSaveDto,
+  MailPreviewDto,
   SignatureDto,
   TestMailDto,
   CampaignFamilyDto,
@@ -174,6 +175,12 @@ export class ManagedMailController {
   ) {
     return this.service.draftTargets(key, id);
   }
+  @Get(':key/templates/:id/deletion') deletion(
+    @Param('key', new ParseEnumPipe(EmailSenderKey)) key: EmailSenderKey,
+    @Param('id') id: string,
+  ) {
+    return this.service.deletion(key, id);
+  }
   @Post(':key/templates') create(
     @Param('key', new ParseEnumPipe(EmailSenderKey)) key: EmailSenderKey,
     @Body() dto: MailSaveDto,
@@ -213,7 +220,7 @@ export class ManagedMailController {
   }
   @Post(':key/preview') preview(
     @Param('key', new ParseEnumPipe(EmailSenderKey)) key: EmailSenderKey,
-    @Body() dto: MailSaveDto,
+    @Body() dto: MailPreviewDto,
   ) {
     return this.service.preview(key, dto);
   }

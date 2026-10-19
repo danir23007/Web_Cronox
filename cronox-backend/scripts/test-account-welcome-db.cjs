@@ -120,8 +120,7 @@ const checks = [];
     }
     const deliveries = [],
       email = {
-        sendNewsletterWelcome: async (to, code) =>
-          deliveries.push({ to, code }),
+        sendNewsletterWelcome: async (to, code) => { deliveries.push({ to, code }); return { messageId: 'SIMULATED-ACCEPTANCE' }; },
         isEnabled: () => false,
       };
     const users = new UsersService(db),
@@ -374,10 +373,15 @@ const checks = [];
     assert.equal(await db.newsletterMailJob.count({ where: { email: 'historical@welcome.test' } }), 0);
     assert.equal((await db.user.findUniqueOrThrow({ where: { id: existing.id } })).firstOrderDiscountCode, 'KEEP01');
     checks.push('Historical link repair in the disposable database schedules no retrospective welcome and preserves repaired codes');
+    const firstJob = await db.newsletterMailJob.findFirstOrThrow({ where: { userId: first.id, kind: 'WELCOME' } });
+    const firstAcceptedAt = new Date();
+    await db.newsletterMailJob.update({ where: { id: firstJob.id }, data: { status: 'SENT', sentAt: firstAcceptedAt } });
+    await db.accountWelcomeBenefit.update({ where: { userId: first.id }, data: { sentAt: firstAcceptedAt, smtpMessageId: 'SIMULATED-PRIOR-ACCEPTANCE' } });
     const order = await db.order.create({
       data: {
         userId: first.id,
         customerEmail: first.email,
+        paidAt: new Date(),
         source: 'IN_PERSON_ADMIN',
         status: 'PAID',
         subtotal: 50,

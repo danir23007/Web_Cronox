@@ -22,7 +22,7 @@ it('preserves newsletter jobs at quota exhaustion without burning retries or cla
   const readyAt = new Date(Date.now()+86400000);
   const db: any = {
     newsletterMailJob: { findFirst: jest.fn().mockResolvedValue({id:'job',email:'buyer@example.test',kind:'WELCOME',attempts:12}), updateMany:jest.fn().mockResolvedValue({count:1}) },
-    newsletterSubscription: { findUnique:jest.fn().mockResolvedValue({subscribedAt:new Date(),welcomeSentAt:null}) },
+    newsletterSubscription: { findUnique:jest.fn().mockResolvedValue({subscribedAt:new Date(),welcomeSentAt:null,welcomePromoCode:{code:"CUSTOMER42",ownerEmail:"buyer@example.test",firstOrderOnly:true,type:"PERCENT",value:10,isActive:true,usageCount:0}}) },
   };
   const email: any = {sendNewsletterWelcome:jest.fn().mockRejectedValue(new EmailQuotaWaitError(readyAt))};
   await new NewsletterDeliveryService(db,email).dispatch('job','claim');

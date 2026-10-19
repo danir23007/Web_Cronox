@@ -15,9 +15,12 @@ describe('static UI media optimization', () => {
       ' M cronox-front/assets/product-photo.jpg',
       '?? docs/unreviewed-banner.svg',
       '?? cronox-front/assets/metacrilatos/unapproved.png',
+      '?? cronox-front/assets/mail/welcome/logo-cronox.png',
+      '?? cronox-front/assets/mail/welcome/unapproved.png',
     ].join('\n'))).toEqual([
       'cronox-front/assets/product-photo.jpg', 'docs/unreviewed-banner.svg',
       'cronox-front/assets/metacrilatos/unapproved.png',
+      'cronox-front/assets/mail/welcome/unapproved.png',
     ]);
   });
   it('passes the explicit media allowlist and runtime verification', () => {

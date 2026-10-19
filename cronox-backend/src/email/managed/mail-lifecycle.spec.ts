@@ -34,6 +34,15 @@ const template = {
   archivedAt: null,
 };
 describe('email permissions, publication and controlled tests', () => {
+  it('accepts exactly three optional visual classifications, rejects null/arbitrary colors', async () => {
+    const base = { name: 'n', subject: 's', folderId: 'f', document: { blocks: [] } };
+    for (const visualClassification of ['FOR_ALL', 'UNIQUE', 'DIFFERENT', undefined]) {
+      expect(await validate(plainToInstance(MailSaveDto, { ...base, visualClassification }))).toHaveLength(0);
+    }
+    for (const visualClassification of ['GREEN', '#00ff00', '', null]) {
+      expect((await validate(plainToInstance(MailSaveDto, { ...base, visualClassification }))).length).toBeGreaterThan(0);
+    }
+  });
   it('requires authentication and super-admin roles on the entire controller', () => {
     const reflector = new Reflector();
     expect(reflector.get(GUARDS_METADATA, ManagedMailController)).toEqual([
@@ -149,7 +158,7 @@ describe('email permissions, publication and controlled tests', () => {
     });
     const published = await service.published(EmailSenderKey.NOREPLY, 'NEWSLETTER_WELCOME', {
       subject: 'Asunto',
-      message: 'Hola',
+      message: 'Hola', discountCode: 'PERSONAL42',
     });
     expect(published?.text).toContain('Original Hola');
     expect(published?.text).not.toContain('Borrador diferente');
@@ -159,7 +168,7 @@ describe('email permissions, publication and controlled tests', () => {
       (
         await service.published(EmailSenderKey.NOREPLY, 'NEWSLETTER_WELCOME', {
           subject: 'Asunto',
-          message: 'Hola',
+          message: 'Hola', discountCode: 'PERSONAL42',
         })
       )?.text,
     ).toContain('Firma actualizada');
@@ -215,7 +224,7 @@ describe('email permissions, publication and controlled tests', () => {
       $transaction: jest.fn(),
       $executeRaw: jest.fn(),
       managedEmailTemplate: {
-        findFirst: jest.fn().mockResolvedValue(template),
+        findFirst: jest.fn().mockResolvedValue({ ...template, purpose: 'NEWSLETTER_ACCESS' }),
       },
       auditLog: { count: jest.fn().mockResolvedValue(0), create: jest.fn() },
     };

@@ -477,6 +477,7 @@ model CampaignTemplateFamily {
 }
 
 model ManagedEmailTemplate {
+  visualClassification String?
   familyId String?
   campaignCircle Int?
   textOverride String? @db.Text
@@ -973,6 +974,7 @@ model NewsletterSettings {
 }
 
 model User {
+  welcomeBenefit AccountWelcomeBenefit?
   qrEventGroups QrEventGroup[] @relation("QrEventCreator")
   qrEventParticipants QrEventParticipant[] @relation("QrEventMember")
   qrEventRegistrations QrEventParticipant[] @relation("QrEventRecorder")
@@ -1383,6 +1385,7 @@ model CartItem {
 // A checkout snapshot is created before a Stripe PaymentIntent is created.
 // Order creation must use these frozen values rather than a mutable cart.
 model CheckoutSnapshot {
+  welcomeOriginBenefit AccountWelcomeBenefit?
   bankNetworkHash            String?
   bankAddressHash            String?
   bankRequestedAt            DateTime?                  @db.Timestamptz(3)
@@ -1532,6 +1535,8 @@ model CheckoutEffect {
 }
 
 model Order {
+  welcomeOriginBenefit AccountWelcomeBenefit? @relation("WelcomeOriginOrder")
+  welcomeFirstOnlineBenefit AccountWelcomeBenefit? @relation("WelcomeFirstOnlineOrder")
   paidAt               DateTime?
   id                   Int                     @id @default(autoincrement())
   status               OrderStatus             @default(PENDING)
@@ -1854,6 +1859,7 @@ model NewsletterSubscription {
 /// Durable newsletter delivery and single-use access-link record. Public clients
 /// never query this table directly; raw access tokens exist only in worker memory.
 model NewsletterMailJob {
+  welcomeBenefit AccountWelcomeBenefit?
   id             String    @id @default(cuid())
   email          String
   kind           String
@@ -1877,7 +1883,30 @@ model NewsletterMailJob {
   @@index([userId, createdAt])
 }
 
+// Explicit prospective context; historical accounts/codes are never backfilled.
+model AccountWelcomeBenefit {
+  id                 String @id @default(cuid())
+  userId             Int @unique
+  user               User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  email              String @unique
+  promoCodeId        Int @unique
+  promoCode          PromoCode @relation(fields: [promoCodeId], references: [id], onDelete: Restrict)
+  welcomeJobId       String @unique
+  welcomeJob         NewsletterMailJob @relation(fields: [welcomeJobId], references: [id], onDelete: Restrict)
+  originCheckoutId   String? @unique
+  originCheckout     CheckoutSnapshot? @relation(fields: [originCheckoutId], references: [id], onDelete: Restrict)
+  originOrderId      Int? @unique
+  originOrder        Order? @relation("WelcomeOriginOrder", fields: [originOrderId], references: [id], onDelete: Restrict)
+  firstOnlineOrderId Int? @unique
+  firstOnlineOrder   Order? @relation("WelcomeFirstOnlineOrder", fields: [firstOnlineOrderId], references: [id], onDelete: Restrict)
+  // Transport acceptance recorded atomically with the job, never inbox delivery/read.
+  sentAt             DateTime? @db.Timestamptz(3)
+  smtpMessageId      String?
+  createdAt          DateTime @default(now()) @db.Timestamptz(3)
+}
+
 model PromoCode {
+  welcomeBenefit AccountWelcomeBenefit?
   firstOrderOnly       Boolean                @default(false)
   newsletterSubscription NewsletterSubscription?
   ownerUserId          Int?

@@ -402,9 +402,13 @@ export function adaptFirstPartyDocument(
   document: unknown,
 ) {
   const value = document as {
+    format?: string;
     sourceKind?: string;
     blocks?: Array<{ type?: string }>;
   };
+  // A documented HTML-email document is intentional, unlike the legacy import
+  // shape below. renderMail validates its structure and always sanitizes it.
+  if (value?.format === 'html-email') return document;
   if (value?.sourceKind === 'cronox-first-party') return document;
   if (value?.blocks?.length === 1 && value.blocks[0]?.type === 'html')
     return structuredDocumentForPurpose(purpose, document) || document;

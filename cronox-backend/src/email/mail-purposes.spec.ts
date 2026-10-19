@@ -34,12 +34,17 @@ describe('CRONOX mail purposes', () => {
     expect(sendMail.mock.calls[0][1].subject).not.toContain('bavolima');
   });
   it('keeps the current published welcome design and configured sender for an account welcome', async () => {
-    const custom = { subject: 'Bienvenida publicada', html: '<p>Diseño actual: ABC234</p>', text: 'Diseño actual: ABC234' };
+    const custom = { subject: 'Bienvenida publicada', html: '<p>Diseño actual: ABC234 10% Un solo uso</p>', text: 'Diseño actual: ABC234 10% Un solo uso' };
     const { service, sendMail, published } = setup(custom);
     await service.sendNewsletterWelcome('local@example.test', 'ABC234');
     expect(sendMail.mock.calls[0][0]).toBe(EmailSenderKey.NOREPLY);
     expect(sendMail.mock.calls[0][1]).toMatchObject(custom);
     expect(published.mock.calls[0][1]).toBe('NEWSLETTER_WELCOME');
+  });
+  it.each([undefined, 'CRX-EJEMPLO', 'BIENVENIDA10', 'CÓDIGO DE EJEMPLO'])('never sends example codes or discount promises without a valid customer code (%s)', async code => {
+    const { service, sendMail, published } = setup();
+    await expect(service.sendNewsletterWelcome('local@example.test', code)).rejects.toThrow(/personal/);
+    expect(sendMail).not.toHaveBeenCalled(); expect(published).not.toHaveBeenCalled();
   });
   it('keeps custom designs and supplements an old publication with the mandatory password instructions', async () => {
     const { service, sendMail } = setup({ html: '<body><p>Custom design</p><a href="https://example.test/access">Entrar en CRONOX</a></body>', text: 'Custom design', subject: 'Custom' });

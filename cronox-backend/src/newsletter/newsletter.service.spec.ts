@@ -6,6 +6,7 @@ describe('Newsletter durable single opt-in', () => {
   beforeEach(() => {
     row = null; promo = null; legacy = null; user = null; jobs = [];
     db = {
+      accountWelcomeBenefit: { create: jest.fn() },
       $executeRaw: jest.fn(),
       $queryRaw: jest.fn(async () => user ? [user] : []),
       newsletterSubscription: {

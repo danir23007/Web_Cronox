@@ -1,3 +1,5 @@
+import { mailCircleNumber, resolveMailCircle } from './mail-circle-folders';
+import { requireWelcomeCode } from './welcome-code';
 import {
   BadRequestException,
   ConflictException,
@@ -21,6 +23,7 @@ import {
   variablesFor,
 } from './mail-catalog';
 import { renderMail } from './mail-renderer';
+import { mailPreviewData, welcomeDocument, WELCOME_SUBJECT } from './welcome-design';
 import {
   adaptFirstPartyDocument,
   structuredDocumentForPurpose,
@@ -32,10 +35,15 @@ import {
   MailListDto,
   MailMultiSaveDto,
   MailSaveDto,
+  MailPreviewDto,
   SignatureDto,
 } from './mail.dto';
 
 type Tx = Prisma.TransactionClient;
+// Internal operator capability, deliberately absent from the HTTP test DTO.
+// It permits an explicitly authorized sample email without weakening real
+// welcome eligibility or enabling local background delivery.
+export type ControlledWelcomeDraftTest = { requestKey: string; revision: number; subjectId?: string };
 const json = (data: unknown) =>
   JSON.parse(JSON.stringify(data)) as Prisma.InputJsonValue;
 const failConflict = () => {
@@ -92,7 +100,7 @@ export class ManagedMailService {
   }
   async accounts() {
     const profiles = await this.db.emailSenderProfile.findMany({
-      include: { _count: { select: { folders: true, templates: true } } },
+      include: { _count: { select: { folders: true, templates: { where: { archivedAt: null } } } } },
     });
     return this.metadata().map((a) => ({
       ...a,
@@ -117,6 +125,7 @@ export class ManagedMailService {
         // Reconcile newly introduced first-party purposes without overwriting
         // any existing imported template or administrator edit.
         const purposes = MAIL_PURPOSES.filter((p) => p.senderKey === key);
+        for (let circle = 1; circle <= 5; circle++) await resolveMailCircle(tx, key, circle, true);
         if (profile.initializedAt) {
           const expectedKeys = purposes.flatMap((purpose) =>
             Array.from(
@@ -157,17 +166,7 @@ export class ManagedMailService {
           }),
         );
         for (let circle = 1; circle <= 5; circle++) {
-          const folder = await tx.emailTemplateFolder.upsert({
-            where: {
-              senderKey_name: { senderKey: key, name: `Círculo ${circle}` },
-            },
-            update: {},
-            create: {
-              senderKey: key,
-              name: `Círculo ${circle}`,
-              position: circle - 1,
-            },
-          });
+          const folder = await resolveMailCircle(tx, key, circle, true);
           for (const { purpose: p, document } of sources) {
             const legacy = p.key.startsWith('PASSWORD_SETUP_') ? await tx.managedEmailTemplate.findUnique({ where: { importKey: `${key}:${circle}:INITIAL_PASSWORD_SETUP` } }) : null;
             const compatibleDocument = legacy ? json(passwordSetupDesign(legacy.document, p.key)) : document;
@@ -204,7 +203,35 @@ export class ManagedMailService {
     return this.db.emailTemplateFolder.findMany({
       where: { senderKey: key },
       orderBy: [{ position: 'asc' }, { name: 'asc' }],
-      include: { _count: { select: { templates: true } } },
+      include: { _count: { select: { templates: { where: { archivedAt: null } } } } },
+    });
+  }
+  /** Explicit operator import only. Never called by initialization or delivery.
+   * A distinct identity preserves the existing welcome, including publications.
+   * Subsequent imports preserve every field, even if edited or archived. */
+  async importApprovedWelcomeDraft() {
+    const key = EmailSenderKey.NOREPLY;
+    const importKey = 'NOREPLY:1:NEWSLETTER_WELCOME:approved-20261019';
+    return this.db.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`mail-import:${importKey}`}))`;
+      const existing = await tx.managedEmailTemplate.findUnique({ where: { importKey } });
+      if (existing) return { created: false, template: existing };
+      const folder = await resolveMailCircle(tx, key, 1);
+      const name = 'Bienvenida · Diseño aprobado';
+      // Do not create an indistinguishable second card over an earlier manual
+      // import. An operator must reconcile that identity without overwriting it.
+      if (await tx.managedEmailTemplate.findFirst({ where: { senderKey: key, folderId: folder.id, name } }))
+        throw new ConflictException('Ya existe un diseño aprobado en este círculo; se conserva sin cambios.');
+      const document = json(welcomeDocument());
+      const rendered = renderMail(document, WELCOME_SUBJECT, '', 'NEWSLETTER_WELCOME');
+      const template = await tx.managedEmailTemplate.create({ data: {
+        importKey, senderKey: key, folderId: folder.id, name,
+        purpose: 'NEWSLETTER_WELCOME', subject: WELCOME_SUBJECT,
+        visualClassification: 'UNIQUE', signatureMode: 'none', document,
+        html: rendered.html, text: rendered.text,
+      } });
+      await this.audit(tx, undefined, 'EMAIL_APPROVED_WELCOME_DRAFT_IMPORT', template.id);
+      return { created: true, template };
     });
   }
   private async folder(tx: Tx, key: string, id: string) {
@@ -223,8 +250,18 @@ export class ManagedMailService {
   ) {
     if (!name.trim())
       throw new BadRequestException('Escribe un nombre de carpeta.');
+    const normalizedName = name.normalize('NFD').replace(/\p{M}/gu, '').trim();
+    if (!mailCircleNumber(name) && /^(?:circulo|\d+$|VI$|VII$|VIII$|IX$|X$)/i.test(normalizedName))
+      throw new BadRequestException('Plantillas Mail utiliza únicamente los cinco círculos canónicos, del 1 al 5.');
     return this.db.$transaction(async (tx) => {
-      if (id) await this.folder(tx, key, id);
+      const current = id ? await this.folder(tx, key, id) : null;
+      const requestedCircle = mailCircleNumber(name);
+      if (current && mailCircleNumber(current.name) && requestedCircle !== mailCircleNumber(current.name)) throw new BadRequestException('Las cinco carpetas canónicas de círculos conservan su identidad y nombre.');
+      if (requestedCircle) {
+        const canonical = await resolveMailCircle(tx, key, requestedCircle);
+        if (id && canonical.id !== id) throw new BadRequestException('Utiliza la carpeta canónica existente; no se puede renombrar otra carpeta como círculo.');
+        return canonical;
+      }
       const result = id
         ? await tx.emailTemplateFolder.update({
             where: { id },
@@ -270,7 +307,8 @@ export class ManagedMailService {
     actorId?: number,
   ) {
     return this.db.$transaction(async (tx) => {
-      await this.folder(tx, key, id);
+      const targetFolder = await this.folder(tx, key, id);
+      if (mailCircleNumber(targetFolder.name)) throw new BadRequestException('Las carpetas canónicas de círculos no se pueden eliminar.');
       const count = await tx.managedEmailTemplate.count({
         where: { folderId: id },
       });
@@ -284,6 +322,15 @@ export class ManagedMailService {
             'Selecciona otra carpeta de destino para conservar las plantillas.',
           );
         await this.folder(tx, key, dto.destinationId);
+        if (dto.mode === 'archive') {
+          await tx.$queryRaw`SELECT id FROM "ManagedEmailTemplate" WHERE "folderId"=${id} AND "senderKey"=${key} ORDER BY id FOR UPDATE`;
+          const templates = await tx.managedEmailTemplate.findMany({ where: { folderId: id, senderKey: key, archivedAt: null }, select: { id: true } });
+          for (const template of templates) {
+            const dependencies = await this.deletion(key, template.id, tx);
+            if (!dependencies.canDelete) throw new ConflictException(dependencies.blockers.join(' '));
+            await this.audit(tx, actorId, 'EMAIL_ARCHIVE', template.id);
+          }
+        }
         await tx.managedEmailTemplate.updateMany({
           where: { folderId: id, senderKey: key },
           data: {
@@ -293,18 +340,6 @@ export class ManagedMailService {
             updatedBy: actorId,
           },
         });
-        if (dto.mode === 'archive')
-          await tx.emailPublication.deleteMany({
-            where: {
-              senderKey: key,
-              version: {
-                template: {
-                  folderId: dto.destinationId,
-                  archivedAt: { not: null },
-                },
-              },
-            },
-          });
       }
       await tx.emailTemplateFolder.delete({ where: { id } });
       await this.audit(tx, actorId, 'EMAIL_FOLDER_DELETE', id);
@@ -338,6 +373,7 @@ export class ManagedMailService {
           id: true,
           name: true,
           subject: true,
+          visualClassification: true,
           folderId: true,
           purpose: true,
           revision: true,
@@ -446,7 +482,7 @@ export class ManagedMailService {
           'El círculo ya tiene una versión. Edita su contenido sin sustituir su identidad.',
         );
       const linked = await tx.managedEmailTemplate.updateMany({
-        where: { id: t.id, revision: dto.revision, familyId: null },
+        where: { id: t.id, revision: dto.revision, familyId: null, archivedAt: null },
         data: {
           familyId: id,
           campaignCircle: circle,
@@ -486,6 +522,8 @@ export class ManagedMailService {
     });
     if (!source)
       throw new NotFoundException('Plantilla no encontrada en esta cuenta.');
+    if (source.archivedAt)
+      throw new ConflictException('La plantilla está eliminada. Restaura el borrador antes de utilizarlo.');
     const supported = MAIL_PURPOSES.some(
       (purpose) => purpose.key === source.purpose && purpose.senderKey === key,
     );
@@ -593,12 +631,46 @@ export class ManagedMailService {
     }
     return result;
   }
+  private validateClassification(value: unknown) {
+    if (value !== undefined && !['FOR_ALL', 'UNIQUE', 'DIFFERENT'].includes(value as string))
+      throw new BadRequestException('Selecciona una de las tres clasificaciones visuales.');
+  }
+  async deletion(key: EmailSenderKey, id: string, tx: Tx = this.db) {
+    const template = await this.template(key, id, tx);
+    const [folder, publications, pendingCampaigns, versionCount, family] = await Promise.all([
+      tx.emailTemplateFolder.findFirstOrThrow({ where: { id: template.folderId, senderKey: key }, select: { name: true } }),
+      tx.emailPublication.findMany({ where: { senderKey: key, version: { templateId: id } }, select: { purpose: true } }),
+      tx.mailboxCampaign.count({ where: {
+        status: { in: ['SCHEDULED', 'PROCESSING'] }, cancelledAt: null,
+        OR: [
+          { snapshot: { path: ['versions'], array_contains: [{ templateId: id }] } },
+          { snapshot: { path: ['templateId'], equals: id } },
+          { versions: { some: { content: { path: ['templateId'], equals: id } } } },
+          { deliveries: { some: { content: { path: ['templateId'], equals: id } } } },
+        ],
+      } }),
+      tx.emailTemplateVersion.count({ where: { templateId: id } }),
+      template.familyId ? tx.campaignTemplateFamily.findUnique({ where: { id: template.familyId }, select: { name: true } }) : null,
+    ]);
+    const blockers: string[] = [];
+    if (template.archivedAt) blockers.push('Esta plantilla ya está eliminada. Actualiza el listado.');
+    if (publications.length) blockers.push('La plantilla está publicada. Abre el editor y utiliza «Despublicar plantilla» en Opciones avanzadas; después vuelve a eliminarla. La despublicación retira este diseño de los próximos correos automáticos, que usarán el diseño de respaldo configurado.');
+    if (pendingCampaigns) blockers.push(`Hay ${pendingCampaigns} campaña(s) programada(s) o en curso que utilizan esta plantilla. Revisa Correo → Campañas y espera a que finalicen o resuélvelas explícitamente antes de eliminarla. No se cancelará ninguna campaña desde aquí.`);
+    return {
+      id, revision: template.revision, name: template.name, senderKey: key,
+      folderName: folder.name, published: publications.length > 0,
+      publications: publications.map(p => p.purpose), pendingCampaigns,
+      versionCount, familyName: family?.name || null, campaignCircle: template.campaignCircle,
+      canDelete: blockers.length === 0, blockers,
+    };
+  }
   async save(
     key: EmailSenderKey,
     dto: MailSaveDto,
     actorId?: number,
     id?: string,
   ) {
+    this.validateClassification(dto.visualClassification);
     if (!dto.name.trim() || !dto.subject.trim())
       throw new BadRequestException('Nombre y asunto son obligatorios.');
     if (
@@ -617,6 +689,7 @@ export class ManagedMailService {
           );
       }
       const input = {
+        ...(dto.visualClassification !== undefined ? { visualClassification: dto.visualClassification } : {}),
         name: dto.name.trim(),
         folderId: dto.folderId,
         subject: dto.subject,
@@ -633,7 +706,19 @@ export class ManagedMailService {
             ? { textOverride: existing.textOverride }
             : {}),
       };
-      const rendered = await this.render(key, input, undefined, false, tx);
+      // Visual/name/folder edits must preserve the stored draft byte for byte,
+      // including imported HTML and signatures that have changed since saving.
+      const contentChanged = !existing ||
+        input.subject !== existing.subject ||
+        input.preheader !== existing.preheader ||
+        input.purpose !== existing.purpose ||
+        input.signatureMode !== existing.signatureMode ||
+        input.signatureId !== existing.signatureId ||
+        (input.textOverride ?? null) !== (existing.textOverride ?? null) ||
+        JSON.stringify(input.document) !== JSON.stringify(existing.document);
+      const rendered = contentChanged
+        ? await this.render(key, input, undefined, false, tx)
+        : { html: existing.html, text: existing.text };
       if (id) {
         const result = await tx.managedEmailTemplate.updateMany({
           where: { id, senderKey: key, revision: dto.revision },
@@ -658,6 +743,8 @@ export class ManagedMailService {
         id = created.id;
       }
       await this.audit(tx, actorId, 'EMAIL_DRAFT_SAVE', id);
+      if (dto.visualClassification !== undefined && dto.visualClassification !== existing?.visualClassification)
+        await this.audit(tx, actorId, 'EMAIL_CLASSIFICATION_CHANGE', id);
       return this.template(key, id, tx);
     });
   }
@@ -667,6 +754,7 @@ export class ManagedMailService {
     dto: MailMultiSaveDto,
     actorId?: number,
   ) {
+    this.validateClassification(dto.visualClassification);
     if (!dto.name.trim() || !dto.subject.trim())
       throw new BadRequestException('Nombre y asunto son obligatorios.');
     const targetIds = dto.targets.map((target) => target.id);
@@ -771,7 +859,8 @@ export class ManagedMailService {
           data: {
             ...draft,
             ...(target.id === id
-              ? { name: dto.name.trim(), folderId: dto.folderId }
+              ? { name: dto.name.trim(), folderId: dto.folderId,
+                  ...(dto.visualClassification !== undefined ? { visualClassification: dto.visualClassification } : {}) }
               : {}),
             html: rendered.html,
             text: rendered.text,
@@ -785,6 +874,8 @@ export class ManagedMailService {
           target.id === id ? 'EMAIL_DRAFT_SAVE' : 'EMAIL_DRAFT_SYNC',
           target.id,
         );
+        if (target.id === id && dto.visualClassification !== undefined && dto.visualClassification !== source.visualClassification)
+          await this.audit(tx, actorId, 'EMAIL_CLASSIFICATION_CHANGE', id);
       }
       return {
         template: await this.template(key, id, tx),
@@ -818,6 +909,7 @@ export class ManagedMailService {
           const created = await tx.managedEmailTemplate.create({
             data: {
               senderKey: key,
+              visualClassification: t.visualClassification,
               subject: t.subject,
               preheader: t.preheader,
               purpose: t.purpose,
@@ -852,14 +944,22 @@ export class ManagedMailService {
             data: { name: dto.name.trim() },
           });
           break;
-        case 'archive':
+        case 'archive': {
+          if (!dto.confirmed)
+            throw new BadRequestException('Confirma la eliminación de esta plantilla.');
+          const dependencies = await this.deletion(key, id, tx);
+          if (!dependencies.canDelete)
+            throw new ConflictException(dependencies.blockers.join(' '));
           await tx.managedEmailTemplate.update({
             where: { id },
             data: { archivedAt: new Date() },
           });
-          await tx.emailPublication.deleteMany({
-            where: { senderKey: key, version: { templateId: id } },
-          });
+          break;
+        }
+        case 'unpublish':
+          if (!dto.confirmed)
+            throw new BadRequestException('Confirma la despublicación antes de continuar.');
+          await tx.emailPublication.deleteMany({ where: { senderKey: key, version: { templateId: id } } });
           break;
         case 'restore':
           await tx.managedEmailTemplate.update({
@@ -879,7 +979,7 @@ export class ManagedMailService {
             throw new BadRequestException(
               'Confirma la activación de una plantilla válida de esta cuenta.',
             );
-          await this.render(key, t, SAMPLE_DATA, true, tx);
+          await this.render(key, t, mailPreviewData(t.purpose), true, tx);
           const v = await tx.emailTemplateVersion.create({
             data: { templateId: id, snapshot: json(t), createdBy: actorId },
           });
@@ -941,7 +1041,7 @@ export class ManagedMailService {
       },
     });
   }
-  async preview(key: EmailSenderKey, dto: MailSaveDto) {
+  async preview(key: EmailSenderKey, dto: MailPreviewDto) {
     await this.folder(this.db, key, dto.folderId);
     return this.render(
       key,
@@ -951,7 +1051,7 @@ export class ManagedMailService {
         purpose: dto.purpose || null,
         signatureId: dto.signatureId || null,
       },
-      SAMPLE_DATA,
+      mailPreviewData(dto.purpose),
     );
   }
   async published(
@@ -1038,10 +1138,26 @@ export class ManagedMailService {
     to: string,
     confirmed: boolean,
     actorId?: number,
+    controlled?: ControlledWelcomeDraftTest,
   ) {
-    if (process.env.CRONOX_LOCAL_DEV === 'true') {
+    if (controlled) {
+      const localUrl = new URL(process.env.DATABASE_URL || 'invalid:');
+      if (process.env.CRONOX_LOCAL_DEV !== 'true' || !['127.0.0.1', 'localhost', '[::1]'].includes(localUrl.hostname) ||
+          process.env.BACKGROUND_JOBS_ENABLED !== 'false' || process.env.MAILBOX_WORKER_ENABLED !== 'false' ||
+          process.env.NEWSLETTER_EMAIL_WORKER_ENABLED !== 'false' || process.env.WAITLIST_EMAIL_WORKER_ENABLED !== 'false' ||
+          key !== EmailSenderKey.NOREPLY || !confirmed || !actorId ||
+          !Number.isSafeInteger(controlled.revision) || controlled.revision < 1 ||
+          !/^welcome-draft-test:[a-zA-Z0-9-]{8,70}$/.test(controlled.requestKey) ||
+          (controlled.subjectId !== undefined && !/^[a-zA-Z0-9-]{6,50}$/.test(controlled.subjectId)) ||
+          !/^[^\s@,;<>]+@[^\s@,;<>]+\.[^\s@,;<>]+$/.test(to)) {
+        throw new BadRequestException('CONTROLLED_WELCOME_TEST_REQUIRES_ISOLATED_LOCAL_PROCESS');
+      }
+      const actor = await this.db.user.findUnique({ where: { id: actorId }, select: { role: true } });
+      if (actor?.role !== 'SUPERADMIN') throw new BadRequestException('CONTROLLED_WELCOME_TEST_REQUIRES_SUPERADMIN');
+    }
+    if (process.env.CRONOX_LOCAL_DEV === 'true' && !controlled) {
       const template = await this.template(key, id);
-      const rendered = await this.render(key, template, SAMPLE_DATA);
+      const rendered = await this.render(key, template, mailPreviewData(template.purpose));
       return {
         localOnly: true,
         html: rendered.html,
@@ -1059,10 +1175,31 @@ export class ManagedMailService {
         'Confirma el destinatario y configura el envío de esta cuenta.',
       );
     const t = await this.template(key, id);
-    const rendered = await this.render(key, t, SAMPLE_DATA);
+    let data = mailPreviewData(t.purpose);
+    if (controlled) {
+      const folder = await this.folder(this.db, key, t.folderId);
+      if (t.purpose !== 'NEWSLETTER_WELCOME' || t.importKey !== 'NOREPLY:1:NEWSLETTER_WELCOME' ||
+          t.archivedAt || t.revision !== controlled.revision || folder.name !== 'Círculo 1' ||
+          (t.document as { format?: string }).format !== 'html-email') {
+        throw new BadRequestException('CONTROLLED_WELCOME_DRAFT_CHANGED');
+      }
+    } else if (t.purpose === 'NEWSLETTER_WELCOME') {
+      const user = await this.db.user.findFirst({ where: { email: { equals: to.trim(), mode: 'insensitive' } } });
+      const promo = user?.firstOrderDiscountCode ? await this.db.promoCode.findUnique({ where: { code: user.firstOrderDiscountCode } }) : null;
+      if (!user || !promo || user.firstOrderDiscountUsed || !promo.isActive || promo.usageCount || !promo.firstOrderOnly || promo.type !== 'PERCENT' || promo.value !== 10 || promo.ownerEmail?.toLowerCase() !== user.email.toLowerCase() || (promo.ownerUserId != null && promo.ownerUserId !== user.id)) throw new BadRequestException('WELCOME_PERSONAL_CODE_UNAVAILABLE: el destinatario no tiene un código personal de bienvenida disponible.');
+      data = { ...data, discountCode: requireWelcomeCode(promo.code, true) };
+    }
+    const rendered = await this.render(key, t, data, Boolean(controlled));
     // Atomic per-admin limit also covers requests from different IPs.
     await this.db.$transaction(async (tx) => {
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`mail-test:${actorId}`}))`;
+      if (controlled) {
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${controlled.requestKey}))`;
+        if (await tx.auditLog.findUnique({ where: { requestKey: controlled.requestKey } }))
+          throw new ConflictException('CONTROLLED_WELCOME_TEST_ALREADY_ATTEMPTED: revisa el resultado; no se repite el envío.');
+        const current = await tx.$queryRaw<{ id: string }[]>`SELECT id FROM "ManagedEmailTemplate" WHERE id=${id} AND revision=${controlled.revision} AND "archivedAt" IS NULL FOR SHARE`;
+        if (current.length !== 1) throw new ConflictException('CONTROLLED_WELCOME_DRAFT_CHANGED');
+      }
       const recent = await tx.auditLog.count({
         where: {
           actorId,
@@ -1074,19 +1211,27 @@ export class ManagedMailService {
         throw new BadRequestException(
           'Espera un minuto antes de enviar más pruebas.',
         );
-      await this.audit(tx, actorId, 'EMAIL_TEST_ATTEMPT', id);
+      if (controlled) await tx.auditLog.create({ data: {
+        requestKey: controlled.requestKey, actorId, action: 'EMAIL_TEST_ATTEMPT', actionType: 'EMAIL_TEST_ATTEMPT',
+        targetType: 'EMAIL_TEMPLATE', targetId: id,
+        metadata: { sampleData: true, revision: controlled.revision, recipient: to },
+      } });
+      else await this.audit(tx, actorId, 'EMAIL_TEST_ATTEMPT', id);
     });
     try {
       const info = (await this.transport.sendMail(
         key,
         {
           to,
-          subject: `[PRUEBA] ${rendered.subject}`,
+          subject: `[PRUEBA${controlled?.subjectId ? ' ' + controlled.subjectId : ''}] ${rendered.subject}`,
           html: rendered.html,
           text: rendered.text,
         },
         'ADMIN_TEST',
-      )) as { messageId: string; accepted?: unknown[] };
+        ...(controlled ? [Date.now() + 60000] : []),
+      )) as { messageId: string; accepted?: unknown[]; queued?: boolean };
+      if (controlled && (!info.messageId || info.queued || info.accepted?.length !== 1 || String(info.accepted[0]).toLowerCase() !== to.toLowerCase()))
+        throw new Error('CONTROLLED_WELCOME_SMTP_ACCEPTANCE_UNVERIFIED');
       if (info.accepted && !info.accepted.length)
         throw new Error('No aceptado');
       // The attempt is already durable. An audit failure after SMTP acceptance

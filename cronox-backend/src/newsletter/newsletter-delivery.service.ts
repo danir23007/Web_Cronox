@@ -1,3 +1,6 @@
+import { lockWelcomeBenefit } from '../users/welcome-benefit';
+import { requireWelcomeCode } from '../email/managed/welcome-code';
+import { EmailSendResult } from '../email/email.types';
 import { UserNumberingGate } from '../users/user-numbering-gate.module';
 import { lockAccountCredentials } from '../auth/account-credentials';
 import { Injectable, Optional, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
@@ -89,7 +92,18 @@ export class NewsletterDeliveryService implements OnModuleInit, OnModuleDestroy 
           return;
         }
         const promo = user.firstOrderDiscountCode ? await this.prisma.promoCode.findUnique({ where: { code: user.firstOrderDiscountCode } }) : null;
-        welcomeCode = !user.firstOrderDiscountUsed && promo?.isActive && promo.usageCount === 0 ? promo.code : undefined;
+        welcomeCode = !user.firstOrderDiscountUsed && promo?.firstOrderOnly && promo.type === 'PERCENT' && promo.value === 10 && promo.isActive && promo.usageCount === 0 && promo.ownerEmail?.trim().toLowerCase() === job.email && (promo.ownerUserId == null || promo.ownerUserId === user.id) ? promo.code : undefined;
+        if (promo) {
+          const [legacy, redeemed, context] = await Promise.all([
+            this.prisma.discountCode.findUnique({ where: { code: promo.code } }),
+            this.prisma.promoCodeRedemption.findFirst({ where: { promoCodeId: promo.id }, select: { id: true } }),
+            this.prisma.accountWelcomeBenefit.findUnique({ where: { welcomeJobId: job.id } }),
+          ]);
+          if (legacy?.used || legacy?.usedAt || redeemed ||
+              (legacy && legacy.userId !== user.id) ||
+              (context && (context.promoCodeId !== promo.id || context.userId !== user.id || context.email !== job.email)) ||
+              (promo.expiresAt && promo.expiresAt < new Date()) || (promo.startsAt && promo.startsAt > new Date())) welcomeCode = undefined;
+        }
       } else {
         const subscription = await this.prisma.newsletterSubscription.findUnique({
           where: { email: job.email }, include: { welcomePromoCode: true },
@@ -103,7 +117,7 @@ export class NewsletterDeliveryService implements OnModuleInit, OnModuleDestroy 
           return;
         }
         const promo = subscription.welcomePromoCode;
-        welcomeCode = promo?.isActive && promo.usageCount === 0 ? promo.code : undefined;
+        welcomeCode = promo?.firstOrderOnly && promo.type === 'PERCENT' && promo.value === 10 && promo.isActive && promo.usageCount === 0 && promo.ownerEmail?.trim().toLowerCase() === job.email ? promo.code : undefined;
       }
     } else if (job.kind === 'ACCESS') {
       const matches = await this.prisma.user.findMany({
@@ -143,8 +157,22 @@ export class NewsletterDeliveryService implements OnModuleInit, OnModuleDestroy 
       await this.prisma.newsletterMailJob.updateMany({ where, data: { status: 'FAILED', errorCode: 'INVALID_KIND' } });
       return;
     }
+    if (job.kind === 'WELCOME') {
+      try { requireWelcomeCode(welcomeCode, true); }
+      catch {
+        await this.prisma.newsletterMailJob.updateMany({ where, data: {
+          status: 'FAILED', errorCode: 'WELCOME_PERSONAL_CODE_UNAVAILABLE', claimToken: null, claimedAt: null,
+        } });
+        this.logger.warn('WELCOME_PERSONAL_CODE_UNAVAILABLE: revisión de cuenta/código requerida; no se ha enviado correo.');
+        return;
+      }
+    }
+    let accepted: EmailSendResult | undefined;
     try {
-      if (job.kind === 'WELCOME') await this.email.sendNewsletterWelcome(job.email, welcomeCode);
+      if (job.kind === 'WELCOME') {
+        accepted = await this.email.sendNewsletterWelcome(job.email, welcomeCode);
+        if (!accepted?.messageId || accepted.queued) throw Object.assign(new Error('WELCOME_ACCEPTANCE_UNVERIFIED'), { deliveryUnknown: true });
+      }
       else await this.email.sendNewsletterAccess(job.email, actionUrl!, Boolean(rawToken));
     } catch (error) {
       const uncertain = Boolean((error as { deliveryUnknown?: boolean }).deliveryUnknown);
@@ -163,14 +191,19 @@ export class NewsletterDeliveryService implements OnModuleInit, OnModuleDestroy 
     }
     // A failure after SMTP acceptance must remain ambiguous, never retried.
     await this.prisma.$transaction(async tx => {
+      if (job.kind === 'WELCOME') await lockWelcomeBenefit(tx, job.email);
+      const sentAt = new Date();
       const updated = await tx.newsletterMailJob.updateMany({ where, data: {
-        status: 'SENT', sentAt: new Date(), claimToken: null, claimedAt: null, errorCode: null,
+        status: 'SENT', sentAt, claimToken: null, claimedAt: null, errorCode: null,
       } });
       if (updated.count !== 1) throw new Error('NEWSLETTER_JOB_CLAIM_LOST');
-      if (job.kind === 'WELCOME') await tx.newsletterSubscription.updateMany({
+      if (job.kind === 'WELCOME') {
+        await tx.accountWelcomeBenefit.updateMany({ where: { welcomeJobId: job.id, sentAt: null }, data: { sentAt, smtpMessageId: accepted!.messageId } });
+        await tx.newsletterSubscription.updateMany({
         where: { email: job.email, welcomeSentAt: null },
-        data: { welcomeSentAt: new Date(), welcomeClaimedAt: null },
-      });
+        data: { welcomeSentAt: sentAt, welcomeClaimedAt: null },
+        });
+      }
     });
   }
 }

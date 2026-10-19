@@ -1,3 +1,4 @@
+import { requireWelcomeCode } from './managed/welcome-code';
 import {
   Injectable,
   InternalServerErrorException,
@@ -5,6 +6,8 @@ import {
   Optional,
 } from '@nestjs/common';
 import Handlebars from 'handlebars';
+import { renderMail } from './managed/mail-renderer';
+import { EXAMPLE_WELCOME_CODE, welcomeData, welcomeDocument, WELCOME_SUBJECT } from './managed/welcome-design';
 import { readFile } from 'fs/promises';
 import { join } from 'path';
 import { loadEmailConfig } from './email.config';
@@ -82,6 +85,7 @@ export class EmailService {
 
   async send(options: EmailSendOptions): Promise<EmailSendResult> {
     const purpose = options.purpose || options.type;
+    if (purpose === 'NEWSLETTER_WELCOME') requireWelcomeCode(options.templateData?.discountCode, true);
     if (['LAUNCH', 'PRE_REGISTRATION_CONFIRMATION', 'NEWSLETTER_CONFIRMATION', 'FIRST_ORDER_DISCOUNT', 'GENERIC', 'TEST'].includes(purpose)) {
       throw new InternalServerErrorException('Finalidad de correo retirada.');
     }
@@ -136,7 +140,12 @@ export class EmailService {
         if (data.trackingNumber && (!link || !custom.html.includes(`href="${link}"`)) ||
             required.some(value => !value || !custom!.html.includes(Handlebars.escapeExpression(String(value))))) custom = null;
       }
-      let html = custom?.html || (await this.renderTemplate(template, data));
+      if (purpose === 'NEWSLETTER_WELCOME' && custom &&
+          (EXAMPLE_WELCOME_CODE.test(custom.html + custom.text) || !/10\s*%/.test(custom.html) || !/un solo uso/i.test(custom.html + custom.text))) custom = null;
+      const welcomeFallback = !custom && purpose === 'NEWSLETTER_WELCOME'
+        ? renderMail(welcomeDocument(false), options.subject, '', purpose, data, undefined, true)
+        : null;
+      let html = custom?.html || welcomeFallback?.html || (await this.renderTemplate(template, data));
       if (options.purpose === 'NEWSLETTER_ACCESS' && data.initialPassword &&
           !html.includes(Handlebars.escapeExpression(String(data.passwordMessage)))) {
         const block = `<p style="max-width:640px;margin:16px auto;padding:16px;background:#f7f7f5;color:#111;font-family:Arial,sans-serif;line-height:1.5;">${Handlebars.escapeExpression(String(data.passwordMessage))}</p>`;
@@ -151,7 +160,7 @@ export class EmailService {
           to: options.to,
           subject: setup || options.deliveryDeadline !== undefined || options.type === EmailType.ORDER_TRACKING || options.purpose === 'NEWSLETTER_ACCESS' ? options.subject : custom?.subject || options.subject,
           html,
-          ...(custom ? { text: custom.text } : {}),
+          ...(custom || welcomeFallback ? { text: (custom || welcomeFallback)!.text } : {}),
         }, options.purpose || options.type, ...(options.deliveryDeadline !== undefined || options.type === EmailType.ORDER_TRACKING ? [options.deliveryDeadline ?? Date.now() + 20000] : []))) as { messageId: string; accepted?: unknown[]; queued?: boolean };
 
       if (info.queued) return { messageId: info.messageId, queued: true };
@@ -233,14 +242,8 @@ export class EmailService {
   async sendNewsletterWelcome(email: string, code?: string) {
     return this.send({
       purpose: 'NEWSLETTER_WELCOME', type: EmailType.GENERIC, to: email,
-      subject: 'CRONOX · Te damos la bienvenida',
-      templateData: {
-        title: 'Bienvenido a CRONOX',
-        message: code
-          ? `Tu cuenta CRONOX está lista. Tu código de bienvenida es ${code}: 10% de descuento en tu primer pedido online, de un solo uso y asociado a este correo. Utiliza esta misma dirección al comprar. ¡Gracias por unirte!`
-          : 'Tu cuenta CRONOX está lista. ¡Gracias por unirte a CRONOX!',
-        discountCode: code || '',
-      },
+      subject: WELCOME_SUBJECT,
+      templateData: welcomeData(requireWelcomeCode(code, true)),
     });
   }
 

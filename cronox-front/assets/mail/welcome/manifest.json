@@ -1,0 +1,88 @@
+{
+  "assets": {
+    "fondo-cortinas.png": {
+      "url": "https://frqlgocxnyppzdgxxjuq.supabase.co/storage/v1/object/public/gallery/NOREPLY/images/2026/10/1792382565637-0777ed19-f708-4fdd-ada1-4c13fe8eef44.png",
+      "storageKey": "NOREPLY/images/2026/10/1792382565637-0777ed19-f708-4fdd-ada1-4c13fe8eef44.png",
+      "mimeType": "image/png",
+      "fileSize": 2354684,
+      "width": 1024,
+      "height": 1536,
+      "sha256": "520201b7c19e47e61a9cca4b9be5ea9c68fcc6b02438b54fbe8da0edb4534093"
+    },
+    "logo-cronox.png": {
+      "url": "https://frqlgocxnyppzdgxxjuq.supabase.co/storage/v1/object/public/gallery/NOREPLY/images/2026/10/1792382566598-f15b4780-2677-441c-bacd-6bd34cb8ab79.png",
+      "storageKey": "NOREPLY/images/2026/10/1792382566598-f15b4780-2677-441c-bacd-6bd34cb8ab79.png",
+      "mimeType": "image/png",
+      "fileSize": 25911,
+      "width": 522,
+      "height": 132,
+      "sha256": "df6a167d9cafba9fc8d8cb1391e70b64b2f6fa8e1bdcb3c6f50908c3e1c0eddf"
+    },
+    "la-cara-b.png": {
+      "url": "https://frqlgocxnyppzdgxxjuq.supabase.co/storage/v1/object/public/gallery/NOREPLY/images/2026/10/1792382567118-949a8ece-2471-4b31-ab2d-4eb393096967.png",
+      "storageKey": "NOREPLY/images/2026/10/1792382567118-949a8ece-2471-4b31-ab2d-4eb393096967.png",
+      "mimeType": "image/png",
+      "fileSize": 14893,
+      "width": 805,
+      "height": 119,
+      "sha256": "111230ceba3ddc34b4780d9e7de3f6eb3a1cf10c0ff7516e4a988a1028190e7f"
+    },
+    "logo-cx.png": {
+      "url": "https://frqlgocxnyppzdgxxjuq.supabase.co/storage/v1/object/public/gallery/NOREPLY/images/2026/10/1792382567817-4f7d5639-1129-4dde-8aed-0d7593d1aac0.png",
+      "storageKey": "NOREPLY/images/2026/10/1792382567817-4f7d5639-1129-4dde-8aed-0d7593d1aac0.png",
+      "mimeType": "image/png",
+      "fileSize": 18379,
+      "width": 320,
+      "height": 234,
+      "sha256": "bea6664f3836660d8c17e973c99ce2ef574bd2753890bf4c055dee9356115173"
+    },
+    "instagram.png": {
+      "url": "https://frqlgocxnyppzdgxxjuq.supabase.co/storage/v1/object/public/gallery/NOREPLY/images/2026/10/1792382568480-1b98ca1b-b596-4f55-8b72-d8e53688d610.png",
+      "storageKey": "NOREPLY/images/2026/10/1792382568480-1b98ca1b-b596-4f55-8b72-d8e53688d610.png",
+      "mimeType": "image/png",
+      "fileSize": 1416,
+      "width": 96,
+      "height": 96,
+      "sha256": "864c5b2391b1da3eb550174577ff09890787adf29860e730586ab83037d2b975"
+    },
+    "logo-ojo.png": {
+      "url": "https://frqlgocxnyppzdgxxjuq.supabase.co/storage/v1/object/public/gallery/NOREPLY/images/2026/10/1792382568949-85e98e5f-192e-4c1d-a755-5578f96c164d.png",
+      "storageKey": "NOREPLY/images/2026/10/1792382568949-85e98e5f-192e-4c1d-a755-5578f96c164d.png",
+      "mimeType": "image/png",
+      "fileSize": 25668,
+      "width": 1602,
+      "height": 472,
+      "sha256": "855495263bd9d0c63208195a4a172fa8f2e201e77a4ca53deb7dbbdc18ff1856"
+    },
+    "instagram-blanco.png": {
+      "url": "https://frqlgocxnyppzdgxxjuq.supabase.co/storage/v1/object/public/gallery/NOREPLY/images/2026/10/1792388573977-cd6b7ad1-e38e-4790-a17c-317b8974c300.png",
+      "storageKey": "NOREPLY/images/2026/10/1792388573977-cd6b7ad1-e38e-4790-a17c-317b8974c300.png",
+      "mimeType": "image/png",
+      "fileSize": 1811,
+      "width": 96,
+      "height": 96,
+      "sha256": "2220109340c1b61eb7fad0949f579695c65183182fc96ea272d27521ab567c01",
+      "source": "instagram.svg",
+      "sourceSha256": "83951cd0281601e57ebcfa0675969599ed4e1a9ca1325dc80f547a7bb37a3d12",
+      "change": "Original vector geometry; stroke/fill white"
+    }
+  },
+  "derivatives": {
+    "fondo-cortinas-email.jpg": {
+      "url": "https://frqlgocxnyppzdgxxjuq.supabase.co/storage/v1/object/public/gallery/NOREPLY/images/2026/10/1792393087148-7a0fd69e-637e-4d1e-b694-61192b272fa5.jpg",
+      "storageKey": "NOREPLY/images/2026/10/1792393087148-7a0fd69e-637e-4d1e-b694-61192b272fa5.jpg",
+      "mimeType": "image/jpeg",
+      "fileSize": 261330,
+      "height": 1536,
+      "width": 1024,
+      "sha256": "d5608558869a155dcce77af74e401554c47ba22e41facc3d049437fc3b5ac73f",
+      "source": "fondo-cortinas.png",
+      "sourceSha256": "520201b7c19e47e61a9cca4b9be5ea9c68fcc6b02438b54fbe8da0edb4534093",
+      "encoding": {
+        "quality": 92,
+        "chromaSubsampling": "4:4:4",
+        "progressive": false
+      }
+    }
+  }
+}

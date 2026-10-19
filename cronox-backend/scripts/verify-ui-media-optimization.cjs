@@ -33,6 +33,18 @@ const approvedImageChanges = new Set([
   'cronox-front/assets/metacrilatos/eye.png',
   'cronox-front/assets/metacrilatos/symbol.png',
   'cronox-front/assets/metacrilatos/wordmark.png',
+  // Original PNGs explicitly approved for the welcome email. Byte identity and
+  // dimensions are checked against their manifest below; no regeneration.
+  'cronox-front/assets/mail/welcome/fondo-cortinas.png',
+  // Requested same-resolution JPEG derivative; approved PNG stays byte exact.
+  'cronox-front/assets/mail/welcome/fondo-cortinas-email.jpg',
+  'cronox-front/assets/mail/welcome/instagram.png',
+  // Requested white version, rendered from the original Instagram SVG paths.
+  'cronox-front/assets/mail/welcome/instagram-blanco.png',
+  'cronox-front/assets/mail/welcome/la-cara-b.png',
+  'cronox-front/assets/mail/welcome/logo-cronox.png',
+  'cronox-front/assets/mail/welcome/logo-cx.png',
+  'cronox-front/assets/mail/welcome/logo-ojo.png',
   'docs/original-assets/ui-media/cronox-front/assets/CRONOX-GIF.gif',
   'docs/original-assets/ui-media/cronox-front/assets/logo_banner.png',
 ]);
@@ -48,6 +60,37 @@ function unapprovedImageChanges(porcelain) {
 }
 
 async function main() {
+  const welcome = JSON.parse(read('cronox-front/assets/mail/welcome/manifest.json'));
+  assert.deepEqual(Object.keys(welcome.assets).sort(), ['fondo-cortinas.png', 'instagram-blanco.png', 'instagram.png', 'la-cara-b.png', 'logo-cronox.png', 'logo-cx.png', 'logo-ojo.png']);
+  for (const [name, asset] of Object.entries(welcome.assets)) {
+    const relative = `cronox-front/assets/mail/welcome/${name}`;
+    assert.equal(digest(relative), asset.sha256, 'Approved welcome originals must remain byte-identical');
+    assert.equal(fs.statSync(path.join(repositoryRoot, relative)).size, asset.fileSize);
+    const info = await sharp(path.join(repositoryRoot, relative)).metadata();
+    assert.equal(info.width, asset.width); assert.equal(info.height, asset.height);
+  }
+  assert.deepEqual(Object.keys(welcome.derivatives || {}), ['fondo-cortinas-email.jpg']);
+  const derivative = welcome.derivatives['fondo-cortinas-email.jpg'];
+  assert.equal(derivative.sourceSha256, welcome.assets['fondo-cortinas.png'].sha256);
+  assert.equal(derivative.source, 'fondo-cortinas.png');
+  const derivativePath = path.join(frontendRoot, 'assets/mail/welcome/fondo-cortinas-email.jpg');
+  assert.equal(digest('cronox-front/assets/mail/welcome/fondo-cortinas-email.jpg'), derivative.sha256);
+  assert.equal(fs.statSync(derivativePath).size, derivative.fileSize);
+  assert.ok(derivative.fileSize < welcome.assets[derivative.source].fileSize * 0.15);
+  const derivativeInfo = await sharp(derivativePath).metadata();
+  assert.equal(derivativeInfo.width, 1024); assert.equal(derivativeInfo.height, 1536);
+  const originalPixels = await sharp(path.join(frontendRoot, 'assets/mail/welcome/fondo-cortinas.png')).removeAlpha().raw().toBuffer();
+  const optimizedPixels = await sharp(derivativePath).removeAlpha().raw().toBuffer();
+  assert.equal(originalPixels.length, optimizedPixels.length);
+  let channelError = 0;
+  for (let i = 0; i < originalPixels.length; i++) channelError += Math.abs(originalPixels[i] - optimizedPixels[i]);
+  assert.ok(channelError / originalPixels.length < 2, 'Compression must preserve the original artwork closely');
+  const whiteMark = await sharp(path.join(frontendRoot, 'assets/mail/welcome/instagram-blanco.png')).ensureAlpha().raw().toBuffer();
+  let opaquePixels = 0;
+  for (let i = 0; i < whiteMark.length; i += 4) if (whiteMark[i + 3]) {
+    assert.equal(whiteMark[i], 255); assert.equal(whiteMark[i + 1], 255); assert.equal(whiteMark[i + 2], 255); opaquePixels++;
+  }
+  assert.ok(opaquePixels > 0 && opaquePixels < whiteMark.length / 4, 'White mark must retain transparency');
   assert.deepEqual(
     manifest.assets.map((asset) => asset.purpose),
     ['storefront-preloader', 'homepage-topbar-logo'],

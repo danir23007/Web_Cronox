@@ -8,6 +8,7 @@ import { PasswordSetupScenario } from '../common/password-setup-context';
 import { lockAccountCredentials } from '../auth/account-credentials';
 
 type CompletedCheckoutIdentity = {
+  id?: string;
   userId: number | null;
   customerEmail: string;
   shippingAddr: unknown;
@@ -85,7 +86,7 @@ export class GuestOrderAccountService {
     });
 
     const address = this.toSavedAddress(shipping ?? billing);
-    await ensureAccountWelcome(tx, user.id, true);
+    await ensureAccountWelcome(tx, user.id, true, checkout.id);
     if (address) {
       await tx.address.create({
         data: {

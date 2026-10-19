@@ -120,6 +120,8 @@ describe('managed email safety and import', () => {
         }),
       },
       emailTemplateFolder: {
+        findUnique: jest.fn(({ where }: any) => folderRows.get(`${where.senderKey_name.senderKey}:${where.senderKey_name.name}`) || null),
+        create: jest.fn(({ data }: any) => { const row = { id: `f${folderRows.size + 1}`, ...data }; folderRows.set(`${data.senderKey}:${data.name}`, row); return row; }),
         upsert: jest.fn(
           ({
             where,

@@ -524,6 +524,10 @@ export class MailboxCampaignService {
         }) : d;
         const fresh: any = input.selection ? { ...stored, ...await this.selection(actor, stored.mailboxId, input), revision: stored.revision,
           campaignName: input.campaignName === undefined ? stored.campaignName : input.campaignName.trim() || null } : stored;
+        // Share locks coordinate snapshot creation with revision-claimed template
+        // archival. RepeatableRead rejects a stale row if archival won the race.
+        if (fresh.familyId)
+          await tx.$queryRaw`SELECT id FROM "ManagedEmailTemplate" WHERE "familyId"=${fresh.familyId} ORDER BY id FOR SHARE`;
         const plan = await this.plan(fresh, tx);
         if (plan.blocked.length)
           throw new BadRequestException({
