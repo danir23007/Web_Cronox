@@ -64,9 +64,13 @@ export class MailDraftTargetDto {
   @IsInt() @Min(1) revision!: number;
 }
 export class MailMultiSaveDto extends MailSaveDto {
+  @IsOptional() @IsIn(['classification', 'content']) saveMode?: 'classification' | 'content';
+  @ValidateIf((_object, value) => value !== undefined)
+  @IsBoolean() explicitSelection?: boolean;
   @IsArray()
   @ArrayMinSize(1)
-  @ArrayMaxSize(50)
+  @ArrayMaxSize(5)
+  @ArrayUnique((target: MailDraftTargetDto) => target.id)
   @ValidateNested({ each: true })
   @Type(() => MailDraftTargetDto)
   targets!: MailDraftTargetDto[];

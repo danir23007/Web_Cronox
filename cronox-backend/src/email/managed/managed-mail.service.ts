@@ -1,4 +1,5 @@
 import { mailCircleNumber, resolveMailCircle } from './mail-circle-folders';
+import { CANONICAL_MAIL_CIRCLES, draftScope, draftContentMatches } from './mail-draft-scope';
 import { requireWelcomeCode } from './welcome-code';
 import {
   BadRequestException,
@@ -508,67 +509,32 @@ export class ManagedMailService {
       document: adaptFirstPartyDocument(result.purpose, result.document),
     };
   }
-  async draftTargets(key: EmailSenderKey, id: string) {
-    const source = await this.db.managedEmailTemplate.findFirst({
-      where: { id, senderKey: key },
-      select: {
-        id: true,
-        purpose: true,
-        folderId: true,
-        revision: true,
-        archivedAt: true,
-        folder: { select: { name: true, position: true } },
-      },
-    });
-    if (!source)
-      throw new NotFoundException('Plantilla no encontrada en esta cuenta.');
+  async draftTargets(key: EmailSenderKey, id: string, tx: Tx = this.db) {
+    const source = await this.template(key, id, tx);
     if (source.archivedAt)
       throw new ConflictException('La plantilla está eliminada. Restaura el borrador antes de utilizarlo.');
-    const supported = MAIL_PURPOSES.some(
-      (purpose) => purpose.key === source.purpose && purpose.senderKey === key,
-    );
-    if (!supported)
-      return {
-        purpose: source.purpose,
-        targets: [
-          {
-            id: source.id,
-            folderId: source.folderId,
-            folderName: source.folder.name,
-            revision: source.revision,
-            current: true,
-          },
-        ],
-      };
-    const matches = await this.db.managedEmailTemplate.findMany({
+    const scope = draftScope(source);
+    const matches = await tx.managedEmailTemplate.findMany({
       where: {
-        senderKey: key,
-        purpose: source.purpose,
-        archivedAt: null,
-        OR: [{ id: source.id }, { folderId: { not: source.folderId } }],
+        senderKey: key, purpose: source.purpose, archivedAt: null,
+        OR: [{ id: source.id }, { AND: [scope.where, {
+          folderId: { not: source.folderId },
+          folder: { name: { in: CANONICAL_MAIL_CIRCLES } },
+        }] }],
       },
       select: {
-        id: true,
-        folderId: true,
-        revision: true,
+        id: true, name: true, folderId: true, revision: true, visualClassification: true,
         folder: { select: { name: true, position: true } },
       },
-      orderBy: [
-        { folder: { position: 'asc' } },
-        { folder: { name: 'asc' } },
-        { createdAt: 'asc' },
-      ],
+      orderBy: [{ folder: { position: 'asc' } }, { name: 'asc' }, { id: 'asc' }],
     });
-    if (!matches.some((match) => match.id === source.id))
-      matches.unshift(source);
     return {
-      purpose: source.purpose,
-      targets: matches.map((target) => ({
-        id: target.id,
-        folderId: target.folderId,
-        folderName: target.folder.name,
-        revision: target.revision,
-        current: target.id === source.id,
+      purpose: source.purpose, relation: scope.kind,
+      requiresExplicitSelection: scope.kind === 'explicit' && matches.length > 1,
+      targets: matches.map(target => ({
+        id: target.id, name: target.name, folderId: target.folderId,
+        folderName: target.folder.name, revision: target.revision,
+        visualClassification: target.visualClassification, current: target.id === id,
       })),
     };
   }
@@ -722,7 +688,11 @@ export class ManagedMailService {
       if (id) {
         const result = await tx.managedEmailTemplate.updateMany({
           where: { id, senderKey: key, revision: dto.revision },
-          data: {
+          data: dto.visualClassification !== undefined && existing && draftContentMatches(existing, dto) ? {
+            visualClassification: dto.visualClassification,
+            updatedBy: actorId,
+            revision: { increment: 1 },
+          } : {
             ...input,
             html: rendered.html,
             text: rendered.text,
@@ -749,144 +719,82 @@ export class ManagedMailService {
     });
   }
   async saveDrafts(
-    key: EmailSenderKey,
-    id: string,
-    dto: MailMultiSaveDto,
-    actorId?: number,
+    key: EmailSenderKey, id: string, dto: MailMultiSaveDto, actorId?: number,
   ) {
     this.validateClassification(dto.visualClassification);
     if (!dto.name.trim() || !dto.subject.trim())
       throw new BadRequestException('Nombre y asunto son obligatorios.');
-    const targetIds = dto.targets.map((target) => target.id);
-    if (new Set(targetIds).size !== targetIds.length || !targetIds.includes(id))
+    const targetIds = dto.targets.map(target => target.id);
+    if (!targetIds.length || targetIds.length > 5 || new Set(targetIds).size !== targetIds.length || !targetIds.includes(id))
       throw new BadRequestException('Selección de círculos no válida.');
-    return this.db.$transaction(async (tx) => {
+    return this.db.$transaction(async tx => {
+      // Same row locks as archival/publication, in a deterministic order. All
+      // validation and writes share this transaction; any failed CAS rolls back.
+      await tx.$queryRaw`SELECT id FROM "ManagedEmailTemplate" WHERE id IN (${Prisma.join([...targetIds].sort())}) ORDER BY id FOR UPDATE`;
       const source = await this.template(key, id, tx);
-      if (source.familyId)
-        throw new BadRequestException(
-          'Edita cada versión de la familia por separado.',
-        );
-      if (
-        !source.purpose ||
-        !MAIL_PURPOSES.some(
-          (purpose) =>
-            purpose.key === source.purpose && purpose.senderKey === key,
-        ) ||
-        dto.purpose !== source.purpose
-      )
-        throw new BadRequestException(
-          'El propósito del borrador no coincide con la plantilla origen.',
-        );
       if (source.revision !== dto.revision) failConflict();
+      if (source.archivedAt) throw new ConflictException('La plantilla está eliminada.');
+      const classificationOnly = dto.visualClassification !== undefined && draftContentMatches(source, dto);
+      // A later content save must not repaint siblings with the source's
+      // unchanged color merely because an older client includes that field.
+      const applyClassification = dto.visualClassification !== undefined &&
+        (classificationOnly || dto.visualClassification !== source.visualClassification);
+      if (dto.saveMode === 'classification' && !classificationOnly)
+        throw new BadRequestException('El borrador también contiene cambios de contenido. Revisa el modo de guardado.');
+      if (!classificationOnly && source.familyId)
+        throw new BadRequestException('Edita el contenido de cada versión de campaña por separado.');
       if (source.folderId !== dto.folderId)
-        throw new BadRequestException(
-          'Guarda primero el cambio de círculo antes de sincronizar.',
-        );
-      const sourceFolder = await this.folder(tx, key, dto.folderId);
-      const targets = await tx.managedEmailTemplate.findMany({
-        where: { id: { in: targetIds } },
-        select: {
-          id: true,
-          familyId: true,
-          senderKey: true,
-          purpose: true,
-          folderId: true,
-          revision: true,
-          archivedAt: true,
-          folder: { select: { name: true } },
-        },
-      });
-      if (targets.length !== targetIds.length)
-        throw new BadRequestException(
-          'Alguna plantilla seleccionada no existe.',
-        );
-      const requested = new Map(
-        dto.targets.map((target) => [target.id, target.revision]),
-      );
+        throw new BadRequestException('Guarda primero el cambio de círculo antes de guardar en varios.');
+      if ((dto.purpose || null) !== source.purpose)
+        throw new BadRequestException('El propósito del borrador no coincide con la plantilla origen.');
+      const available = await this.draftTargets(key, id, tx);
+      if (targetIds.length > 1 && available.requiresExplicitSelection && dto.explicitSelection !== true)
+        throw new BadRequestException('Selecciona explícitamente las copias: no hay una relación guardada entre estos diseños.');
+      const allowed = new Set(available.targets.map(target => target.id));
+      if (targetIds.some(target => !allowed.has(target)))
+        throw new BadRequestException('Alguna plantilla no pertenece a las copias seleccionables de este diseño y buz?n.');
+      const targets = await tx.managedEmailTemplate.findMany({ where: { id: { in: targetIds } }, include: { folder: true } });
+      if (targets.length !== targetIds.length) throw new BadRequestException('Alguna plantilla seleccionada no existe.');
+      const revisions = new Map(dto.targets.map(target => [target.id, target.revision]));
       for (const target of targets) {
-        if (target.familyId)
-          throw new BadRequestException(
-            'Edita cada versión de campaña por separado.',
-          );
-        if (target.senderKey !== String(key))
-          throw new BadRequestException(
-            'No se pueden guardar borradores en otra cuenta remitente.',
-          );
-        if (target.purpose !== source.purpose)
-          throw new BadRequestException(
-            'Todas las plantillas deben tener exactamente el mismo propósito.',
-          );
-        if (target.archivedAt)
-          throw new BadRequestException(
-            'No se puede actualizar una plantilla archivada.',
-          );
-        if (requested.get(target.id) !== target.revision) failConflict();
+        if (target.senderKey !== String(key) || target.purpose !== source.purpose || target.archivedAt)
+          throw new BadRequestException('Plantilla incompatible o eliminada en la selección.');
+        if (!CANONICAL_MAIL_CIRCLES.includes(target.folder.name))
+          throw new BadRequestException('Selecciona únicamente los cinco círculos canónicos.');
+        if (revisions.get(target.id) !== target.revision) failConflict();
       }
-      const selectedFolders = targets.map((target) =>
-        target.id === id ? dto.folderId : target.folderId,
-      );
-      if (new Set(selectedFolders).size !== selectedFolders.length)
-        throw new BadRequestException(
-          'Sólo se puede seleccionar una plantilla por círculo.',
-        );
+      if (new Set(targets.map(target => target.folderId)).size !== targets.length)
+        throw new BadRequestException('Selecciona una sola copia por círculo.');
       const draft = {
-        subject: dto.subject,
-        preheader: dto.preheader,
-        document: json(dto.document),
+        subject: dto.subject, preheader: dto.preheader, document: json(dto.document),
         signatureMode: dto.signatureMode,
-        signatureId:
-          dto.signatureMode === 'selected' ? dto.signatureId || null : null,
-        updatedBy: actorId,
+        signatureId: dto.signatureMode === 'selected' ? dto.signatureId || null : null,
       };
-      const rendered = await this.render(
-        key,
-        {
-          ...draft,
-          purpose: source.purpose,
-        },
-        undefined,
-        false,
-        tx,
-      );
+      // No rendering, normalization or copy of another circle's content for a
+      // classification-only operation (including legacy/imported documents).
+      const rendered = classificationOnly ? null : await this.render(key, { ...draft, purpose: source.purpose }, undefined, false, tx);
       for (const target of targets) {
-        const result = await tx.managedEmailTemplate.updateMany({
-          where: {
-            id: target.id,
-            senderKey: key,
-            purpose: source.purpose,
-            revision: target.revision,
-          },
+        const changed = await tx.managedEmailTemplate.updateMany({
+          where: { id: target.id, senderKey: key, revision: target.revision, archivedAt: null },
           data: {
-            ...draft,
-            ...(target.id === id
-              ? { name: dto.name.trim(), folderId: dto.folderId,
-                  ...(dto.visualClassification !== undefined ? { visualClassification: dto.visualClassification } : {}) }
-              : {}),
-            html: rendered.html,
-            text: rendered.text,
-            revision: { increment: 1 },
+            ...(classificationOnly ? {} : { ...draft, html: rendered!.html, text: rendered!.text,
+              ...(target.id === id ? { name: dto.name.trim() } : {}) }),
+            ...(applyClassification ? { visualClassification: dto.visualClassification } : {}),
+            updatedBy: actorId, revision: { increment: 1 },
           },
         });
-        if (result.count !== 1) failConflict();
-        await this.audit(
-          tx,
-          actorId,
-          target.id === id ? 'EMAIL_DRAFT_SAVE' : 'EMAIL_DRAFT_SYNC',
-          target.id,
-        );
-        if (target.id === id && dto.visualClassification !== undefined && dto.visualClassification !== source.visualClassification)
-          await this.audit(tx, actorId, 'EMAIL_CLASSIFICATION_CHANGE', id);
+        if (changed.count !== 1) failConflict();
+        await this.audit(tx, actorId, classificationOnly ? 'EMAIL_CLASSIFICATION_SAVE' : target.id === id ? 'EMAIL_DRAFT_SAVE' : 'EMAIL_DRAFT_SYNC', target.id);
+        if (applyClassification && dto.visualClassification !== target.visualClassification)
+          await this.audit(tx, actorId, 'EMAIL_CLASSIFICATION_CHANGE', target.id);
       }
       return {
-        template: await this.template(key, id, tx),
-        updated: targets.map((target) => ({
-          id: target.id,
-          folderId: target.id === id ? dto.folderId : target.folderId,
-          folderName: target.id === id ? sourceFolder.name : target.folder.name,
-          revision: target.revision + 1,
-        })),
+        template: await this.template(key, id, tx), mode: classificationOnly ? 'classification' : 'content',
+        updated: targets.map(target => ({ id: target.id, folderId: target.folderId,
+          folderName: target.folder.name, revision: target.revision + 1,
+          visualClassification: applyClassification ? dto.visualClassification : target.visualClassification })),
       };
-    });
+    }, { timeout: 20000 });
   }
   async action(
     key: EmailSenderKey,

@@ -23,7 +23,7 @@
     key: "", account: null, folders: [], signatures: [], catalog: [],
     folderId: "", current: null, dirty: false, history: [], future: [],
     selected: [], mobile: false, dragging: null, preview: null, page: 1,
-    busy: false, signatureEditor: false,
+    busy: false, signatureEditor: false, saved: null,
   };
   const pathFor = (suffix) => "/" + encodeURIComponent(state.key) + suffix;
   const button = (action, label, attrs, className) =>
@@ -61,8 +61,17 @@
     signatureId: state.current.signatureId || undefined,
     revision: state.current.revision || undefined,
     ...(state.current.visualClassification ? { visualClassification: state.current.visualClassification } : {}),
-    ...(state.current.familyId ? {textOverride:state.current.textOverride ?? state.current.text} : {}),
+    ...(state.current.textOverride != null ? { textOverride: state.current.textOverride } : {}),
   });
+  function classificationOnly() {
+    if (!state.current?.id || state.saved?.id !== state.current.id || !classificationFor(state.current.visualClassification)) return false;
+    const content = template => ({ name: template.name, folderId: template.folderId,
+      subject: template.subject, preheader: template.preheader || '', purpose: template.purpose || null,
+      document: template.document, signatureMode: template.signatureMode || 'none',
+      signatureId: template.signatureMode === 'selected' ? template.signatureId || null : null,
+      textOverride: template.textOverride ?? null });
+    return JSON.stringify(content(state.current)) === JSON.stringify(content(state.saved));
+  }
   function checkpoint() {
     state.history.push(D.clone(state.current));
     if (state.history.length > 80) state.history.shift();
@@ -409,6 +418,8 @@
     ).join("");
   }
   function editor() {
+    if (!state.dirty || state.saved?.id !== state.current?.id) state.saved = D.clone(state.current);
+
     const current = state.current;
     const purposeOptions = state.catalog.filter((item) => item.senderKey === state.key).map((item) =>
       '<option value="' + esc(item.key) + '" ' + (item.key === current.purpose ? "selected" : "") +
@@ -614,22 +625,27 @@
       if (field && block[key] != null) field.value = String(block[key]);
     });
   }
-  function openDraftTargets(targets) {
+  function openDraftTargets(available) {
+    const targets = available.targets;
     root.insertAdjacentHTML("beforeend",
-      '<div class="mail-modal mail-save-modal" role="dialog" aria-modal="true" aria-labelledby="mailSaveTitle">' +
+      '<div class="mail-modal mail-save-modal" role="dialog" aria-modal="true" aria-labelledby="mailSaveTitle" data-explicit-selection="' + Boolean(available.requiresExplicitSelection) + '">' +
       '<div class="mail-modal-card mail-save-modal-card"><div class="mail-modal-head"><div>' +
       '<h3 id="mailSaveTitle">¿Dónde quieres guardar estos cambios?</h3>' +
-      '<p>Esta plantilla también existe en otros círculos.</p></div>' +
+      '<p>' + (available.requiresExplicitSelection
+        ? 'No hay una relación guardada entre estos diseños. Selecciona explícitamente la copia correspondiente de cada círculo; no se vincularán para cambios futuros.'
+        : 'Esta plantilla también existe en otros círculos.') + '</p>' +
+      '<p>' + (classificationOnly() ? 'Se guardará solo la clasificación visual. El contenido de cada círculo se conserva.' : 'Se guardarán los cambios de contenido en las copias seleccionadas, incluida la clasificación indicada.') + '</p></div>' +
       button("close-modal", "×", 'aria-label="Cancelar"', "mail-icon-btn") +
-      '</div><div class="mail-save-targets">' + targets.map((target) =>
+      '</div><div class="mail-save-targets">' + targets.map(target =>
         '<label><input type="checkbox" data-draft-target="' + esc(target.id) +
-        '" data-revision="' + esc(target.revision) + '" data-folder-name="' +
-        esc(target.folderName) + '" ' + (target.current ? "checked disabled" : "") +
-        '><span><strong>' + esc(target.folderName) + "</strong></span></label>",
-      ).join("") + '</div><div class="mail-save-actions">' +
+        '" data-folder-id="' + esc(target.folderId) + '" data-revision="' + esc(target.revision) + '" data-folder-name="' +
+        esc(target.folderName) + '" ' + (target.current ? 'checked disabled' : '') +
+        '><span><strong>' + esc(target.folderName) + '</strong><small>' + esc(target.name || state.current.name) +
+        ' · ' + esc(target.id) + '</small></span></label>',
+      ).join('') + '</div><p class="mail-save-error" role="alert"></p><div class="mail-save-actions">' +
       button("close-modal", "Cancelar", "", "btn mail-secondary") +
       button("save-selected", "Guardar en seleccionados", "", "btn mail-primary") +
-      "</div></div></div>");
+      '</div></div></div>');
   }
   function joinedCircleNames(names) {
     if (names.length < 2) return names[0] || "";
@@ -646,32 +662,50 @@
         state.current.id ? "PATCH" : "POST",
         { name: state.current.name, document: state.current.document, revision: state.current.revision });
     } else {
-      if (state.current.id && !state.current.familyId && !targets) {
+      if (state.current.id && (!state.current.familyId || classificationOnly()) && !targets) {
         const available = await api(pathFor("/templates/" + state.current.id + "/draft-targets"));
         if (available.purpose === state.current.purpose &&
           state.current.folderId === state.folderId && available.targets.length > 1) {
-          openDraftTargets(available.targets);
+          openDraftTargets(available);
           return;
         }
       }
-      if (state.current.id && targets && targets.length > 1) {
-        const saved = await api(pathFor("/templates/" + state.current.id + "/drafts"),
-          "PATCH", Object.assign(payload(), { targets: targets.map((target) => ({
-            id: target.id, revision: target.revision,
-          })) }));
-        result = saved.template;
+      if (state.current.id && ((targets && targets.length) || classificationOnly())) {
+        const selected = targets || [{ id: state.current.id, revision: state.current.revision, folderName: folderName() }];
+        const modal = root.querySelector('.mail-save-modal');
+        const controls = modal ? [...modal.querySelectorAll('button,input')] : [];
+        const disabled = controls.map(control => control.disabled);
+        controls.forEach(control => { control.disabled = true; });
+        try {
+          const body = Object.assign(payload(), { saveMode: classificationOnly() ? 'classification' : 'content',
+            explicitSelection: modal?.dataset.explicitSelection === 'true',
+            targets: selected.map(target => ({ id: target.id, revision: target.revision })) });
+          if (body.saveMode === 'content' && state.current.visualClassification === state.saved?.visualClassification)
+            delete body.visualClassification;
+          const saved = await api(pathFor('/templates/' + state.current.id + '/drafts'), 'PATCH', body);
+          if (!saved.template || saved.updated?.length !== selected.length ||
+              selected.some(target => !saved.updated.some(row => row.id === target.id && row.revision > target.revision &&
+                (body.visualClassification === undefined || row.visualClassification === body.visualClassification))))
+            throw new Error('El servidor no ha confirmado el guardado de todas las copias. Conservamos la edición y selección para revisarlas.');
+          result = saved.template;
+          targets = saved.updated;
+          state.lastSaveMode = saved.mode;
+        } finally {
+          controls.forEach((control, index) => { control.disabled = disabled[index]; });
+        }
       } else {
-        result = await api(pathFor("/templates" + (state.current.id ? "/" + state.current.id : "")),
-          state.current.id ? "PATCH" : "POST", payload());
+        result = await api(pathFor('/templates' + (state.current.id ? '/' + state.current.id : '')),
+          state.current.id ? 'PATCH' : 'POST', payload());
+        state.lastSaveMode = 'content';
       }
     }
     state.current = result; state.dirty = false; state.history = []; state.future = [];
     const modal = root.querySelector(".mail-save-modal");
     if (modal) modal.remove();
     editor();
-    message(targets && targets.length > 1
-      ? "Borrador guardado en " + joinedCircleNames(targets.map((target) => target.folderName)) + "."
-      : "Borrador guardado.", "success");
+    message(targets?.length
+      ? (state.lastSaveMode === 'classification' ? 'Clasificación visual aplicada en ' : 'Borrador guardado en ') + joinedCircleNames(targets.map(target => target.folderName)) + '.'
+      : 'Borrador guardado.', 'success');
   }
   let deletionContext = null;
   async function openDeletion(id, opener, errorText) {
@@ -1077,7 +1111,12 @@
     event.stopPropagation();
     state.busy = true;
     try { await handleAction(element.dataset.mailAction, element); }
-    catch (error) { message(error.message || "No se pudo completar la operación.", "error"); }
+    catch (error) {
+      const text = error.message || 'No se pudo completar la operación.';
+      const saveError = root.querySelector('.mail-save-error');
+      if (saveError) saveError.textContent = text + ' Se conservan la edición y los círculos seleccionados.';
+      message(text, 'error');
+    }
     finally { state.busy = false; }
   });
   root.addEventListener("mousedown", (event) => {
@@ -1131,6 +1170,11 @@
   });
   root.addEventListener("change", (event) => {
     const element = event.target;
+    if (element.matches('[data-draft-target]') && element.checked) {
+      root.querySelectorAll('[data-draft-target]').forEach(other => {
+        if (other !== element && other.dataset.folderId === element.dataset.folderId && !other.disabled) other.checked = false;
+      });
+    }
     if (element.id === "mailSignature") {
       checkpoint();
       state.current.signatureMode = ["none", "default"].includes(element.value)

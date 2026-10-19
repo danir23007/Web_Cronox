@@ -36,6 +36,11 @@ async function workspace(options: { blocked?: boolean; fail?: boolean; total?: n
       }
       if (body.action === 'duplicate') { const copy = { ...row, id: 'copy', revision: 1 }; rows.push(copy); return copy; }
     }
+    if (path.endsWith('/drafts') && method === 'PATCH') {
+      writes++; const selected = rows.filter(item => body.targets.some((t: any) => t.id === item.id));
+      selected.forEach(item => Object.assign(item, body.saveMode === 'classification' ? { visualClassification: body.visualClassification } : body, { revision: item.revision + 1 }));
+      return { template: { ...row }, mode: body.saveMode, updated: selected.map(item => ({ id: item.id, revision: item.revision, folderName: 'C?rculo 1', visualClassification: item.visualClassification })) };
+    }
     if (method === 'PATCH') { writes++; Object.assign(row, body, { revision: row.revision + 1 }); return { ...row }; }
     if (method === 'POST') { writes++; const created = { ...body, id: 'created', revision: 1 }; rows.push(created); return created; }
     return { ...row };

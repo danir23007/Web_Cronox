@@ -32,6 +32,7 @@
     "test:qr-events:db": "node scripts/test-qr-events-db.cjs",
     "test:account-welcome:db": "node scripts/test-account-welcome-db.cjs",
     "test:mail-template-cards:db": "node scripts/test-mail-template-cards-db.cjs",
+    "test:mail-classification:db": "node scripts/test-mail-classification-db.cjs",
     "test:welcome-business:db": "node scripts/test-welcome-business-db.cjs",
     "test:welcome-design:db": "node scripts/test-welcome-design-db.cjs",
     "test:welcome-draft-import:db": "node scripts/test-welcome-draft-import-db.cjs",

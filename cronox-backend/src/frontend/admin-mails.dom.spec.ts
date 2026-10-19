@@ -344,7 +344,7 @@ describe('PLANTILLAS MAILS visual workspace', () => {
       if (path.endsWith('/templates/t1/drafts') && method === 'PATCH') {
         multiBody = body;
         return Promise.resolve({
-          template: { ...template, revision: 2 },
+          template: { ...template, subject: 'Confirmación editada', revision: 2 },
           updated: [
             { id: 't1', folderName: 'Círculo 1', revision: 2 },
             { id: 't2', folderName: 'Círculo 2', revision: 4 },
@@ -378,6 +378,9 @@ describe('PLANTILLAS MAILS visual workspace', () => {
     await click('[data-mail-action=account]');
     await click('[data-mail-action=circle]');
     await click('[data-mail-action=edit]');
+    const editedSubject = dom.window.document.querySelector('[data-field=subject]') as HTMLInputElement;
+    editedSubject.value = 'Confirmación editada';
+    editedSubject.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
     await click('[data-mail-action=save]');
 
     const modal = dom.window.document.querySelector('.mail-save-modal')!;
@@ -410,7 +413,7 @@ describe('PLANTILLAS MAILS visual workspace', () => {
       { id: 't2', revision: 3 },
     ]);
     expect(submitted).toMatchObject({
-      subject: 'Confirmación',
+      subject: 'Confirmación editada',
       preheader: 'Gracias por tu compra',
     });
     expect(submitted.document.blocks[0]).toEqual(

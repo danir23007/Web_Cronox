@@ -16,7 +16,7 @@ En Plantillas Mail → buzón → círculo, cada tarjeta tiene una papelera visi
 
 Seleccionar la opción y guardar el borrador. La duplicación conserva la clasificación inicial; después se puede cambiar independientemente. Las plantillas anteriores mantienen `NULL`, sin inferencias ni asignaciones automáticas. Este estado heredado no es una cuarta opción. La interfaz exige elegir una de las tres opciones al crear.
 
-El servidor valida los valores y PostgreSQL añade una restricción equivalente. Los cambios de asunto, firma, carpeta o contenido conservan la clasificación omitida. El guardado explícito de contenido en varios círculos cambia la clasificación únicamente de la plantilla origen. Cambiar solo metadatos conserva incluso los bytes de HTML/texto importados: no vuelve a compilar el contenido. El renderizador y la selección de publicaciones no utilizan la clasificación; no se añaden correos ni disparadores.
+El servidor valida los valores y PostgreSQL añade una restricción equivalente. Los cambios de asunto, firma, carpeta o contenido conservan la clasificación omitida. La [corrección posterior del guardado múltiple](mail-classification-multi-circle-2026-10-19.md) aplica la clasificación a todas las copias seleccionadas; cuando solo cambia el color, conserva íntegramente el contenido distinto de cada círculo. Un guardado posterior solo de contenido tampoco sobrescribe sus colores. El renderizador y la selección de publicaciones no utilizan la clasificación; no se añaden correos ni disparadores.
 
 ## Eliminación y dependencias
 

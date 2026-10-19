@@ -40,7 +40,7 @@ async function main() {
       const pushed = spawnSync(process.execPath, [require.resolve('prisma/build/index.js'), 'db', 'push', '--skip-generate', '--schema', baselinePath], { cwd: backend, env, windowsHide: true, encoding: 'utf8', timeout: 60000 });
       assert.equal(pushed.status, 0, 'BASELINE_INITIALIZATION_FAILED');
       await setup.query(`INSERT INTO "EmailSenderProfile" (key,"updatedAt") VALUES ('ORDERS',now()),('INFO',now());
-        INSERT INTO "EmailTemplateFolder" (id,"senderKey",name,"updatedAt") VALUES ('f1','ORDERS','Círculo I',now()),('f2','ORDERS','Círculo II',now()),('fi','INFO','Círculo I',now());
+        INSERT INTO "EmailTemplateFolder" (id,"senderKey",name,"updatedAt") VALUES ('f1','ORDERS','Círculo 1',now()),('f2','ORDERS','Círculo 2',now()),('fi','INFO','Círculo 1',now());
         INSERT INTO "ManagedEmailTemplate" (id,"senderKey","folderId",name,subject,document,html,text,"updatedAt") VALUES ('legacy','ORDERS','f1','Original','Original','{"blocks":[]}','original','original',now());
         REVOKE ALL ON "ManagedEmailTemplate" FROM PUBLIC`);
       const before = (await setup.query('SELECT row_to_json(t) AS data FROM "ManagedEmailTemplate" t WHERE id=\'legacy\'')).rows[0].data;
@@ -90,10 +90,10 @@ async function main() {
     for (const value of ['RED', '', null]) await assert.rejects(service.save('ORDERS', { ...input, visualClassification: value }), /clasificaciones/);
     report.checks.push('Unrelated edits and duplication preserve assigned/null values; invalid values rejected by service and database');
     a = await service.template('ORDERS', a.id);
-    const synced = await service.saveDrafts('ORDERS', a.id, { ...dto(a, { visualClassification: 'FOR_ALL' }), targets: [{ id: a.id, revision: a.revision }, { id: b.id, revision: b.revision }] });
+    const synced = await service.saveDrafts('ORDERS', a.id, { ...dto(a, { visualClassification: 'FOR_ALL' }), explicitSelection: true, targets: [{ id: a.id, revision: a.revision }, { id: b.id, revision: b.revision }] });
     a = synced.template;
-    assert.equal(a.visualClassification, 'FOR_ALL'); assert.equal((await service.template('ORDERS', b.id)).visualClassification, 'DIFFERENT');
-    report.checks.push('Explicit multi-circle content save changes classification on source only');
+    assert.equal(a.visualClassification, 'FOR_ALL'); assert.equal((await service.template('ORDERS', b.id)).visualClassification, 'FOR_ALL');
+    report.checks.push('Explicit multi-circle classification save updates every selected copy without copying content');
     const version = await db.emailTemplateVersion.create({ data: { templateId: a.id, snapshot: a } });
     await db.emailPublication.create({ data: { senderKey: 'ORDERS', purpose: 'ORDER_CONFIRMATION', versionId: version.id } });
     const publicationBefore = await db.emailPublication.findMany();

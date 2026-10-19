@@ -477,22 +477,25 @@ html[data-admin-theme] #section-mails .mail-delete-confirm,
 .mail-modal-head { display: flex; justify-content: space-between; align-items: start; }
 .mail-modal-head h3 { margin: 0 0 18px; }
 .mail-save-modal-card { width: min(500px,100%); }
-.mail-save-modal-card .mail-modal-head p { margin: -8px 0 20px; color: #8f8f98; }
+.mail-save-modal-card .mail-modal-head p { margin: 8px 0 12px; line-height: 1.6; color: var(--admin-c-495468, #8f8f98); }
+.mail-save-targets small { display: block; margin-top: 5px; font-size: 11px; overflow-wrap: anywhere; color: var(--admin-c-495468, #b8c6da); }
+.mail-save-error { color: var(--admin-c-a32c2c, #ffb7b0); line-height: 1.6; }
+.mail-save-error:empty { display: none; }
 .mail-save-targets { display: grid; gap: 8px; }
 .mail-save-targets label {
   display: flex;
   align-items: center;
   gap: 12px;
   padding: 13px 14px;
-  border: 1px solid #2c2c32;
+  border: 1px solid var(--admin-border, #2c2c32);
   border-radius: 10px;
-  background: #111114;
-  color: #e3e3e6;
+  background: var(--admin-surface, #111114);
+  color: var(--admin-text, #e3e3e6);
   cursor: pointer;
 }
-.mail-save-targets input { width: 17px !important; height: 17px; margin: 0; accent-color: #fff; }
+.mail-save-targets input { width: 17px !important; height: 17px; margin: 0; accent-color: var(--admin-text, #fff); }
 .mail-save-targets input:disabled { opacity: 1; }
-.mail-save-targets label:has(input:checked) { border-color: #606069; background: #18181c; }
+.mail-save-targets label:has(input:checked) { border-color: var(--admin-c-495468, #606069); background: var(--admin-page, #18181c); }
 .mail-save-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; }
 .mail-upload-zone { display: grid; gap: 5px; padding: 28px; border: 1px dashed #484850; border-radius: 12px; text-align: center; cursor: pointer; }
 .mail-upload-zone span { color: #86868e; font-size: 12px; }
