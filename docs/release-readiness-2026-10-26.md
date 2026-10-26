@@ -1,8 +1,72 @@
 # Cierre local de verificaciones · 26/10/2026
 
-Estado: **CI Linux definitivo aprobado** para `bfc794cd6574dcd887d8b0f5e2c846d8100b5573`, incluida la corrección de una dependencia descubierta en los avisos del primer CI. Rama exclusiva `verify/release-20261026-linux`. Commit y push de esa rama autorizados posteriormente por el titular. No se ha hecho merge, despliegue, cobro ni envío real. WebKit automatizado no acredita Safari en un iPhone físico.
+Estado actualizado: **dependencias revisadas, tarjeta Stripe sandbox con webhooks originales y CI Linux aprobados**. Código definitivo comprobado: **`d92b7f0633d6b29a8a5d3f4f03fc6c89cd2a3f43`**, rama `verify/release-20261026-linux`. No se ha integrado en `main`, desplegado, cobrado dinero real ni enviado correo. **La aceptación en iPhone físico sigue pendiente.**
 
-## Ejecución Linux sin publicación
+## Cierre de los pendientes concretos
+
+### Dependencias y commit comprobado
+
+La [matriz de dependencias](release-dependencies-2026-10-26.md) documenta **los 18 avisos únicos**, condiciones de explotación, consumidores del proyecto y conclusión individual. Se aplicaron exclusivamente actualizaciones compatibles de Vite, Multer, Nodemailer y su parser, sanitize-html, fast-uri, ip-address y SMTP de pruebas. Quedan **0 avisos frontend y 3 entradas backend de un único aviso** de `deepmerge-ts` en el CLI de Prisma. Su condición —objetos cíclicos no fiables en configuración local— no existe en el recorrido publicado de clientes; se acepta como mantenimiento no bloqueante, con el alcance de la migración mayor Prisma documentado. No se oculta ni se marca resuelto.
+
+[CI Linux 40413530898](https://github.com/danir23007/Web_Cronox/actions/runs/40413530898), **26/10/2026 22:35–22:39 UTC** (23:35–23:39 Europe/Madrid), sobre [`d92b7f0633d6b29a8a5d3f4f03fc6c89cd2a3f43`](https://github.com/danir23007/Web_Cronox/commit/d92b7f0633d6b29a8a5d3f4f03fc6c89cd2a3f43):
+
+| Comprobación | Resultado definitivo |
+|---|---|
+| Aplicación Jest | **3.036 pruebas, 279 suites correctas** |
+| Controlador Linux | **143 correctas**, ninguna omitida |
+| Preflight/mantenimiento/gates | **16 correctas** |
+| Exportaciones | **59 pruebas, 6 suites**, smoke de artefactos y rutas correctos |
+| Prisma, tipos frontend/backend y ambos builds | Correctos |
+| Guardias de secretos/sandbox y recursos aprobados | Correctos |
+| Publicación | `publish=false`, **deploy omitido sin pasos** |
+
+`bfc794cd` conserva su CI anterior; `e757e086` solo documentó aquel resultado. El nuevo CI es necesario porque ahora sí cambiaron los lockfiles. El cierre posterior a `d92b7f06` modifica únicamente documentación y no necesita atribuirse otra ejecución. Se ha vuelto a comprobar Pages `build_type=workflow`, push limitado a la rama de verificación y `main` intacto en `8867cd12df8f5f444e4a4376cbb478322311e9d2`.
+
+La comparación del estado inicial conserva todos los archivos de aplicación, tipografía, newsletter, sesiones, footer y proxy. Solo cambian cuatro manifiestos/lockfiles, la nueva regresión de parsing de correo y esta documentación. La migración ensayada conserva SHA-256 `8ab1ad256ad0139ab7770b30355e1c2d40ecc3e15306a35d7a6e05d757c792bb`. No se repitieron la auditoría productiva ni el ensayo de migración.
+
+### Stripe sandbox: pruebas reales del proveedor
+
+Sandbox separado existente: **Entorno de prueba de CRONOX**, cuenta `acct_1SPoZCFk1nGlnJwa`. Se verificó `livemode=false` en API, PaymentIntents y eventos. PostgreSQL vacío local exclusivo de esta revisión, producto/envíos/direcciones ficticios; no se importaron datos. Trabajadores y transportes de correo desactivados. El bootstrap aislado reutiliza módulos compilados, validación, autenticación, CSRF, limitador PostgreSQL, firma de webhooks y lógica real de pedidos. No se desactivó ninguna protección del proyecto para usar la base histórica.
+
+El acceso de revisión sirve su propia configuración pública `pk_test` mediante el mecanismo `runtime-config.js` existente, sin cambiar el archivo publicado. En la primera carga se detectó la configuración pública de producción; se sustituyó en el instrumental **antes de introducir tarjeta o confirmar un pago de navegador**. Ninguna clave secreta LIVE se cargó y todos los pagos comprobados fueron de sandbox.
+
+Stripe CLI **1.55.2** recibe eventos originales y los reenvía al listener loopback `43129`; la aplicación verifica su firma. Se cruzaron las respuestas **200** del CLI con `StripeWebhookEvent=PROCESSED`, el estado `PAID`, los cargos del proveedor y las reservas consumidas. **No se usó una firma generada localmente para acreditar estas entregas.**
+
+| Caso | Evidencia y resultado |
+|---|---|
+| Rechazo y reintento vía HTTP real + API sandbox | `pi_3UUwY5Fk1nGlnJwa0pbUntj0`: rechazo real, evento de fallo procesado y ningún pedido; reintento con la misma intención termina en un pedido pagado y un cargo válido. Dos solicitudes simultáneas de preparación y confirmación repetida no duplican intención, pedido, cobro ni consumo. |
+| Checkout de navegador con 3DS | Desde producto/cesta hasta Payment Element con tarjeta de prueba `4000…3220`, reto real del sandbox y retorno “Pedido confirmado”. `pi_3UUwbzFk1nGlnJwa19F5JqMY`, 3DS **2.1.0**, `authentication_flow=challenge`, **`result=authenticated`**; evento `evt_3UUwbzFk1nGlnJwa1Z8Vu8jG` recibido originalmente. |
+| Rechazo y reintento desde Payment Element | Tarjeta de prueba `4000…0002`: la UI muestra “Tu tarjeta ha sido rechazada”, conserva contacto/dirección y no crea pedido. Cambiar a `4242…4242` confirma **la misma** intención `pi_3UUwgMFk1nGlnJwa1kMqdvYQ`; una sola instantánea de checkout, pedido, cargo y reserva consumida. |
+| Consistencia final | **3 pedidos de prueba pagados, 3 cargos de prueba válidos y 3 reservas consumidas**; stock ficticio inicial 10 → 7. Los intentos rechazados no añaden otro consumo. No son cobros reales. |
+
+Evidencia local: [resultados API](../output/release-acceptance-20261026/payments-card.json), [rechazo de navegador](../output/release-acceptance-20261026/payments-verify-decline.json), [3DS y reintento](../output/release-acceptance-20261026/payments-verify-browser.json), [recepciones originales](../output/release-acceptance-20261026/original-webhooks.ndjson), [consistencia y acceso](../output/release-acceptance-20261026/final-check.json). Capturas: [reto 3DS](../output/playwright/release-acceptance-20261026/3ds-challenge.png), [confirmación](../output/playwright/release-acceptance-20261026/paid-confirmation.png), [rechazo](../output/playwright/release-acceptance-20261026/card-decline.png), [reintento confirmado](../output/playwright/release-acceptance-20261026/retry-confirmation.png). Las capturas corresponden a Chromium de escritorio; no acreditan un iPhone.
+
+Métodos **no probados en este cierre**: Apple Pay, Google Pay, PayPal, Bizum, Klarna, Revolut Pay, Amazon Pay, transferencia y otros métodos regionales. Mostrar un botón o aparecer como disponible en la configuración no acredita una transacción. Apple Pay requiere dispositivo/cartera y registrar/verificar el dominio temporal en el sandbox; Stripe.js comunica que ese dominio no está registrado. Google Pay requiere una cartera/cuenta de prueba apropiada. No se ha utilizado una cuenta personal para validar carteras. PayPal y métodos regionales mostraron avisos de activación en Stripe.js; no se extrapolan al estado productivo ni se han cambiado las opciones del Dashboard. Las pruebas históricas de otros métodos conservan su fecha y alcance.
+
+Los avisos de imágenes `data:` bloqueadas pertenecen al iframe ACS de prueba de Stripe y no impidieron el reto; no se relajó la CSP de CRONOX. Se conservan los logs iniciales del instrumental (arranques del túnel y configuración pública corregida) separados del resultado final.
+
+### Revisión desde iPhone sin publicar
+
+**URL:** [https://westminster-dec-ampland-overview.trycloudflare.com/](https://westminster-dec-ampland-overview.trycloudflare.com/).
+
+Acceso protegido: copiar exclusivamente el valor `SANDBOX_ACCESS_CODE` de `cronox-backend/.env.release-acceptance-20261026` en “Código de acceso”. El archivo privado está ignorado por Git; el código no se incorpora a este informe ni a la URL. Después, pulsar “Abrir la web”. Se necesita mantener este ordenador encendido y los procesos de revisión activos; la URL desaparece al detener el túnel y no es un dominio estable de staging. La sesión de la puerta dura 12 horas y es independiente de la sesión de cliente.
+
+Se comprobó el 401 sin acceso, rechazo de origen ajeno y 403 aun con acceso para administración, webhooks públicos y rutas privadas. El túnel solo expone rutas de cliente permitidas. El webhook entra por Stripe CLI en loopback, no por esa URL. No hay acceso a la base histórica ni modificación de producción.
+
+El smoke del acceso protegido verificó popup → registro → abandono sin cuenta/suscripción/bienvenida; footer → registro compartido sin volver a pedir email → una cuenta y suscripción vinculadas, con una bienvenida en cola detenida; recarga de cuenta y logout explícito. Son comprobaciones de disponibilidad del entorno en Chromium, **no sustituyen la prueba física**.
+
+Lista breve para el titular, en Safari normal y con direcciones distintas terminadas en `@example.test`:
+
+1. Newsletter del footer o popup: introducir email, cerrar el registro; volver e introducirlo de nuevo. No debe anunciar suscripción completada antes de crear cuenta. Completar nombre y contraseña; no debe pedir otra vez el email. Probar también una contraseña inválida.
+2. En Mi cuenta, recargar y cerrar/reabrir completamente Safari. Debe conservar sesión; después de “Cerrar sesión”, repetir y comprobar que ya no entra identificado. Para un email con cuenta, usar login, nunca crear otra contraseña desde la newsletter.
+3. Añadir el producto ficticio M, cambiar cantidad y revisar favoritos/cesta. Abrir checkout como invitado sin hacer obligatoria la cuenta. Usar solo tarjetas de prueba si se desea repetir pago.
+4. Girar el teléfono y revisar teclado, footer/desplegables, letras/números, logos/Instagram, precio y copyright de pedidos vacíos y páginas largas. Sin recortes, solapamientos ni desplazamiento horizontal.
+5. Comunicar modelo de iPhone, versión de iOS y resultado de esos pasos. **Pendiente de respuesta/prueba física; no marcado como aprobado.** La recuperación por email está fuera de esta URL: no se habilitan envíos para esa comprobación.
+
+
+## Historial: cierre Linux anterior a esta revisión
+
+Este apartado conserva la evidencia de `bfc794cd`. Para el estado definitivo de dependencias y código, prevalece el cierre de `d92b7f06` descrito arriba.
 
 Se revisaron el diff y los workflows efectivos de la rama predeterminada, coincidentes con los locales. `Deploy CRONOX` solo responde a pushes de `main`; la rama de verificación se ejecuta mediante `workflow_dispatch` con **`publish=false` explícito**. El job `deploy` exige `inputs.publish=true`. El otro workflow actual, de SSH, es exclusivamente manual y no se invoca. La API de Pages confirmó `build_type=workflow`, sin publicación legacy por push. No se cambió ninguna configuración remota.
 
@@ -33,9 +97,7 @@ El CI inicial pasó, pero `npm ci` informó de dependencias vulnerables. La revi
 
 Se fijó `body-parser` a **2.4.0** y su requisito `qs` a **6.16.1** mediante los overrides existentes y el lockfile; solo cambiaron tres paquetes instalados (incluido `content-type` 2.1.0). Se conserva la aceptación de cuerpos comprimidos, la validación y los límites. La regresión HTTP usa un proceso hijo y comprueba petición válida, bytes tardíos y rechazo 413 de un cuerpo descomprimido excesivo; después verifica la salud del mismo servidor. **11 pruebas focales correctas**, incluidas las 8 existentes de validación. La suite Linux definitiva repitió todas las comprobaciones con este cambio y las superó.
 
-Los avisos restantes de `npm audit` no son gates del workflow: 1 alto en frontend (Vite de desarrollo) y 11 en backend (6 moderados, 5 altos, con avisos propagados entre dependencias). No se ejecutó `npm audit fix --force` ni se cambió Prisma de versión mayor. Se mantienen visibles como mantenimiento de dependencias; este CI no constituye una auditoría de seguridad completa ni acredita su ausencia. El fallo remoto confirmado de `body-parser` sí se corrigió y tiene regresión.
-
-Alcance identificado sin una nueva auditoría completa: los cinco avisos altos del backend corresponden a `multer`/`@nestjs/platform-express` y `deepmerge-ts`/`@prisma/config`/`prisma`. El [aviso de Multer](https://github.com/expressjs/multer/security/advisories/GHSA-q7qp-rjg7-q26m) exige un `fileFilter` asíncrono; los filtros del proyecto revisados son síncronos. La dependencia afectada de Prisma se utiliza al cargar configuración del CLI, no como parser de solicitudes de cliente. Vite y `fast-uri` corresponden a herramientas de desarrollo/build. Los restantes avisos moderados afectan a `ip-address`, `nodemailer`, `mailparser`, `smtp-server` y `sanitize-html`; **su exposición no se declara descartada mediante los tests funcionales**. Requieren una revisión de dependencias específica antes de presentar la publicación como cerrada también en seguridad; no se incluyen actualizaciones mayores improvisadas en este cierre de CI.
+El cierre anterior dejó 18 avisos únicos pendientes de revisión. Esa revisión ya se ha completado en la [matriz de dependencias](release-dependencies-2026-10-26.md): parches compatibles aplicados y único aviso retenido de Prisma justificado individualmente. Los recuentos actuales y el CI nuevo figuran al principio de este informe.
 
 La comparación de hashes conserva intactos 164 de los 166 archivos pendientes incorporados al primer commit; los otros dos son `package.json` (corrección HTTP) y este informe. No hay cambios inesperados. El SQL de `20261026180000_storefront_concurrency` mantiene SHA-256 `8ab1ad256ad0139ab7770b30355e1c2d40ecc3e15306a35d7a6e05d757c792bb`. El diff de código no tiene errores de espacios; se conserva literalmente el archivo de licencia original OFL, incluido su espacio final en la línea 21. No se modificaron workflows ni configuración remota.
 
@@ -67,13 +129,13 @@ Las pruebas cubren formato, nombre, correo, contraseña, campos extra, concurren
 
 Durante la revisión WebKit también se detectó un enfoque tardío del modal que podía interrumpir el rellenado rápido. Ahora el enfoque inicial respeta el campo ya elegido y un modal cerrado. Hay prueba de regresión y versión de caché de `app.js` actualizada a 104.
 
-## Verificaciones del estado final
+## Verificaciones acumuladas de la versión
 
 Resultados y logs: [output/release-readiness-20261026](../output/release-readiness-20261026/). Datos de registro, pedidos y pago exclusivamente ficticios. Bases temporales independientes; correo en memoria y trabajadores desactivados.
 
 | Comprobación | Resultado |
 |---|---|
-| Jest completo, estado final de la aplicación | **3.024 pruebas, 278 suites** correctas en Linux; cierre Windows previo: 3.021 / 277 |
+| Jest completo, estado final de la aplicación | **3.036 pruebas, 279 suites** correctas en el Linux definitivo; cierre Windows previo: 3.021 / 277 |
 | Tipos frontend y backend; builds frontend y Nest | Correctos |
 | Pruebas Node de preflight, mantenimiento y gates | **16 correctas** |
 | Exportaciones: tests, artefactos y rutas compiladas protegidas | **59 pruebas / 6 suites**; ambos smoke correctos |
@@ -115,19 +177,30 @@ Orden: conservar todo el historial existente, aplicar esta migración mediante `
 
 El procedimiento existente mantiene mantenimiento y escritores detenidos si falla. `recover SHA` solo permite volver a arrancar la misma versión en fases anteriores a instalación/migración (`maintenance`, `stop`, `backup`), con HEAD e historial intactos. Desde `install`/`migrate`, exige una corrección hacia delante revisada. No ejecutar `migrate reset`, `db push`, `migrate resolve`, down-migrations ni restauraciones improvisadas. Si la conexión se pierde, consultar el estado del mismo SHA; no repetir la publicación por intuición.
 
-## Limitaciones y condición de publicación
+## Conclusión de publicación
 
-- **Cerrado el pendiente de CI Linux:** el SHA indicado arriba supera todas las comprobaciones y las 143 pruebas del controlador, sin omisiones. El resultado parcial anterior en Windows (130 casos descubiertos, 74 correctos, 46 omitidos, 10 fallos/cargas imposibles por POSIX) queda como evidencia histórica, no como resultado definitivo. El workflow conserva su bloqueo de deploy ante cualquier fallo.
-- No se ha identificado la causa histórica del 400. La falta de logs adecuados no bloquea la corrección demostrada de identificación/validación, pero debe conservarse como incertidumbre.
-- No hay prueba en iPhone físico. WebKit Windows verifica comportamiento disponible, no barras del navegador, almacenamiento real de iOS o carteras del dispositivo.
-- El checkout usa proveedor simulado; no acredita una nueva autorización real en Stripe sandbox, 3DS, Apple Pay o PayPal. La configuración y tipografía de Stripe se conservaron. No se efectuaron cobros.
-- Las mediciones de concurrencia corresponden al equipo/base aislados, no a capacidad o latencia del VPS.
+### Impedimentos reales
 
-**No queda ningún check Linux fallido ni un defecto reproducido sin corregir.** La versión queda preparada en la rama de verificación. Permanecen pendientes, por separado, la aceptación en iPhone físico y el recorrido real de Stripe sandbox/3DS/carteras; no se consideran superados por emulación. Además, los avisos restantes de dependencias requieren revisión específica para cerrar la aceptación de seguridad: el CI verde no equivale a esa revisión. No se afirma una autorización incondicional para desplegar. La integración en `main` y la publicación no están autorizadas en esta tarea.
+**No se ha confirmado un impedimento técnico para publicar el SHA d92b7f06.** Los avisos alcanzables de correo se han corregido, el CI definitivo está verde y tarjeta/3DS/rechazo/reintento funcionan contra el sandbox real con webhooks originales. No queda un fallo reproducido de aplicación sin corregir en el alcance de esta revisión. Es obligatorio conservar el orden de migración descrito arriba: el backend nuevo necesita las dos tablas nuevas antes de arrancar.
+
+### Pendientes que requieren intervención del titular
+
+- **iPhone físico:** realizar la lista anterior y comunicar el resultado. Recomiendo completar esa aceptación breve antes de autorizar publicación; está preparada la URL y no falta implementación para hacerla. No es un fallo confirmado ni se marca superada por Chromium/WebKit.
+- **Carteras y métodos alternativos:** no se acredita una prueba nueva. Apple Pay requiere dominio de sandbox registrado y dispositivo/cartera; Google Pay requiere cuenta/cartera; los restantes requieren completar su autorización de prueba y resolver los avisos de activación cuando corresponda. Si la aceptación del lanzamiento exige específicamente esos métodos, siguen siendo una condición de aceptación pendiente. No bloquean por sí mismos esta corrección, que no modifica su integración/configuración.
+- La integración en main y el despliegue requieren una autorización posterior: no se han realizado aquí.
+
+### Limitaciones conocidas no bloqueantes
+
+- Un aviso alto de deepmerge-ts en Prisma CLI, propagado a tres paquetes: no recibe objetos cíclicos de clientes, solo configuración local revisada. Migrar Prisma se planifica aparte; no se aplica un override mayor sin ensayarlo. Véase la matriz completa.
+- Sigue sin evidencia suficiente la causa histórica del 400 de la fotografía. No invalida las correcciones demostradas de proxy/429 y mensajes de validación; no se afirma haber explicado aquel incidente.
+- La revisión física usa un túnel temporal, producto ficticio y base vacía; no acredita capacidad del VPS ni almacenamiento de Safari a largo plazo. El correo real permanece fuera de las pruebas. Los checks previos conservan su alcance y fecha.
+- Avisos del ACS de prueba de Stripe sobre imágenes data: y limitaciones de métodos no impidieron los pagos de tarjeta comprobados; no se rebajó CSP ni protección alguna para conseguirlos.
+
+**Recomendación:** versión técnicamente preparada para publicar, con dependencias revisadas y pago de tarjeta validado. Completar primero la aceptación breve en el iPhone y, si forma parte del requisito de lanzamiento, la de las carteras concretas. No hace falta repetir auditorías completas ni migrar Prisma de forma precipitada. El siguiente paso será autorizar integración y publicación del SHA correspondiente, con CI del commit resultante.
 
 ## Pasos de publicación futura
 
-1. Revisar y autorizar la integración de `verify/release-20261026-linux`, cuyo código ya tiene CI verde en el SHA indicado. El commit posterior de cierre contiene exclusivamente este informe. No incluir perfiles de navegador ni archivos temporales de `output`. No se ha realizado merge ni push a `main` en esta tarea.
+1. Revisar y autorizar la integración de `verify/release-20261026-linux`, cuyo código tiene CI verde en `d92b7f0633d6b29a8a5d3f4f03fc6c89cd2a3f43`. El cierre posterior contiene exclusivamente documentación. No incluir perfiles de navegador ni archivos temporales de `output`. No se ha realizado merge ni push a `main` en esta tarea.
 2. Tras esa autorización, seguir [el procedimiento autónomo existente](autonomous-deployment.md): comprobar estado de Pages, integrar y verificar el SHA concreto en `main`. Si la integración genera un SHA nuevo, exigir su CI verde; no atribuirle automáticamente el resultado de otro commit. El push por sí solo no publica. Exigir tipos, suite completa, builds, controller Linux, guards, recursos y smoke de exportaciones verdes.
 3. Con autorización de publicación del SHA exacto, invocar **Deploy CRONOX → workflow_dispatch → publish=true**. No ejecutar un despliegue alternativo por SSH.
 4. El controlador hace preflight, mantenimiento, parada, respaldo con restauración comprobada, instalación, migración, arranque pausado, health/ready y gates, activación normal y reapertura. Mantener este orden y las restricciones instaladas. No cambiar la confianza del proxy ni las cuotas durante el despliegue.
