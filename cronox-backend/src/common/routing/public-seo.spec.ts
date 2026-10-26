@@ -1,4 +1,5 @@
 import express from 'express';
+import cookieParser from 'cookie-parser';
 import request from 'supertest';
 import { join } from 'path';
 import { JSDOM } from 'jsdom';
@@ -61,6 +62,7 @@ const catalog: SeoCatalog = {
 function app(source = catalog, gated = false, shipping?: Parameters<typeof createSeoPages>[2]) {
   const app = express();
   app.set('trust proxy', 1);
+  app.use(cookieParser());
   app.use((_req, res, next) => {
     res.setHeader('Content-Security-Policy', createContentSecurityPolicy(root));
     next();
@@ -191,7 +193,7 @@ describe('public SEO server HTML (no database connection)', () => {
         ?.getAttribute('content'),
     ).toContain('noindex');
   });
-  it('consolidates public hosts and HTTPS without moving checkout/API sessions', async () => {
+  it('consolidates new storefront visits without moving historical cookie sessions or API/admin traffic', async () => {
     const result = await request(app())
       .get('/producto/camiseta-prueba?size=S')
       .set('Host', 'www.cronox.es')
@@ -212,10 +214,19 @@ describe('public SEO server HTML (no database connection)', () => {
     expect(
       (await request(app()).get('/').set('Host', 'cronox.es')).status,
     ).toBe(200);
-    expect(
-      (await request(app()).get('/checkout').set('Host', 'www.cronox.es'))
-        .status,
-    ).toBe(200);
+    for (const route of ['/checkout', '/checkout/exito', '/cuenta', '/cesta', '/favoritos', '/profile.html']) {
+      const redirected = await request(app()).get(route).set('Host', 'www.cronox.es');
+      expect(redirected.status).toBe(308);
+      expect(redirected.headers.location).toBe(`https://cronox.es${route}`);
+      expect(redirected.headers['cache-control']).toBe('no-store');
+    }
+    for (const cookie of ['jwt=legacy', 'refresh_token=legacy', 'cartId=legacy']) {
+      for (const route of ['/', '/checkout', '/cuenta']) {
+        expect((await request(app()).get(route).set('Host', 'www.cronox.es').set('Cookie', cookie)).status).toBe(200);
+      }
+    }
+    expect((await request(app()).get('/api/me').set('Host', 'www.cronox.es')).headers.location).toBeUndefined();
+    expect((await request(app()).get('/admin').set('Host', 'www.cronox.es')).headers.location).toBeUndefined();
     expect(
       (await request(app()).post('/api/payments').set('Host', 'www.cronox.es'))
         .status,

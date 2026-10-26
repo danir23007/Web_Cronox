@@ -65,6 +65,7 @@
   };
   const render = data => {
     ref = data.paymentIntentId;
+    window.dispatchEvent(new CustomEvent('cronox:bank-transfer-reference', { detail: { paymentIntentId: ref } }));
     pending = data.orderStatus === 'PENDING';
     rememberReference(pending ? ref : null);
     section.hidden = false;

@@ -70,14 +70,8 @@ describe('informational footer destinations use the shared CRONOX topbar', () =>
     (route) => {
       const html = readFrontend(route);
       const shellVersion = '4';
-      expect(html).toContain('<body class="page-info">');
-      expect(html).toMatch(
-        new RegExp(
-          `<body class="page-info">\\s*<script src="assets/info-shell\\.js\\?v=${shellVersion}"></script>`,
-        ),
-      );
       expect(html).toMatch(/href="assets\/store\.css\?v=\d+"/);
-      expect(html).toContain('href="assets/info-page.css?v=3"');
+      expect(html).toContain('href="assets/info-page.css?v=4"');
       expect(
         html.match(
           new RegExp(`assets/info-shell\\.js\\?v=${shellVersion}`, 'g'),
@@ -91,6 +85,10 @@ describe('informational footer destinations use the shared CRONOX topbar', () =>
         runScripts: 'outside-only',
         url: `http://localhost:3000/${route}`,
       });
+      expect(dom.window.document.body.classList.contains('page-info')).toBe(true);
+      expect(
+        dom.window.document.body.firstElementChild?.getAttribute('src'),
+      ).toBe(`assets/info-shell.js?v=${shellVersion}`);
       dom.window.eval(infoShellScript);
       const document = dom.window.document;
       const topbar = document.getElementById('topbar');

@@ -18,6 +18,9 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
     info: unknown,
     context: ExecutionContext,
   ): TUser {
+    // Both authenticated and rejected identity responses are private and must
+    // be revalidated after a browser return, login or explicit logout.
+    context.switchToHttp().getResponse().setHeader('Cache-Control', 'no-store');
     const request = context.switchToHttp().getRequest<Request>();
     const path = request?.path || request?.url || '';
     const cookies = request.cookies as Record<string, unknown> | undefined;

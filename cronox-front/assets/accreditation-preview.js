@@ -68,7 +68,10 @@
     await window.CRONOX_ACCREDITATION_DESIGNS.apply(section, design);
     section.querySelector('.accreditation-name').textContent = 'Andrea Ejemplo';
     section.querySelector('.accreditation-id').textContent = 'ID: MUESTRA';
-    section.querySelector('.accreditation-circle').textContent = 'Círculo I';
+    const numeral = document.createElement('span');
+    numeral.dataset.circleNumeral = '';
+    numeral.textContent = 'I';
+    section.querySelector('.accreditation-circle').replaceChildren('Círculo ', numeral);
     const values = { circle: 'I', createdAt: '16/10/2026', orders: '3', items: '5', products: '4' };
     section.querySelectorAll('[data-acc-stat]').forEach(el => { el.textContent = values[el.dataset.accStat] || '—'; });
     const privileges = section.querySelector('[data-acc-privileges-list]');

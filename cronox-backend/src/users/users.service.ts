@@ -48,23 +48,38 @@ export class UsersService {
     validateAccountName(data.lastName, 'lastName');
     return this.prisma.$transaction(async (tx) => {
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${'newsletter:' + normalizeEmail(data.email)}))`;
-      // Opt-in may have created a passwordless account after register's initial read.
+      // Serialize with opt-in and competing registrations. Never claim an
+      // existing account, even if it has no password yet.
       const existing = await tx.user.findFirst({ where: { email: { equals: normalizeEmail(data.email), mode: 'insensitive' } } });
       if (existing) {
         throw new ConflictException('El email ya esta registrado');
       }
+      const subscription = await tx.newsletterSubscription.findUnique({ where: { email: normalizeEmail(data.email) } });
+      if (subscription?.userId) throw new ConflictException('La suscripción requiere revisión antes de crear la cuenta.');
       const { memberCode, ...userData } = data;
       const ensuredCode = memberCode ?? (await getNextSequentialMemberCode(tx));
 
       const user = await tx.user.create({
         data: {
           ...userData,
+          newsletterSubscribed: Boolean(subscription?.subscribedAt) || Boolean(userData.newsletterSubscribed),
           accountState: UserAccountState.ACTIVE,
           registrationClaimable: false,
           email: normalizeEmail(userData.email),
           memberCode: ensuredCode,
         },
       });
+      if (data.newsletterSubscribed) {
+        // Account, consent, personal code and welcome outbox share this commit.
+        // Preserve historical consent/verification/delivery metadata on retries.
+        await tx.newsletterSubscription.upsert({
+          where: { email: user.email },
+          create: { email: user.email, userId: user.id, subscribedAt: new Date() },
+          update: { userId: user.id, subscribedAt: subscription?.subscribedAt ?? new Date() },
+        });
+      } else if (subscription) {
+        await tx.newsletterSubscription.update({ where: { id: subscription.id }, data: { userId: user.id } });
+      }
       return ensureAccountWelcome(tx, user.id, true);
     });
   }

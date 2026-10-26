@@ -147,7 +147,8 @@ test('desktop fitting grows proportionally, reserves its space and resizes witho
   expect(await pose(page)).toEqual(held);
   await page.mouse.up();
   await page.setViewportSize({ width: 2560, height: 1440 });
-  await page.clock.runFor(6900);
+  // Mouse release has used a five-second pause since the existing renderer.
+  await page.clock.runFor(4900);
   expect(await pose(page)).toEqual(held);
   await page.clock.runFor(180);
   expect((await pose(page)).y).toBeGreaterThan(held.y);

@@ -3,6 +3,7 @@ import {
   Controller,
   Delete,
   Get,
+  Headers,
   Param,
   ParseIntPipe,
   Patch,
@@ -65,9 +66,10 @@ export class CartController {
     @Req() req: Request,
     @Res({ passthrough: true }) res: Response,
     @Body() dto: AddItemDto,
+    @Headers('Idempotency-Key') operationKey?: string,
   ): Promise<CartWithItems> {
     const context = this.resolveContext(req, { ensureAnonymousId: true });
-    const cart = await this.cartService.addItem(context, dto);
+    const cart = await this.cartService.addItem(context, dto, operationKey);
     this.persistAnonymousCookie(req, res, context, { refreshExisting: true });
     if (context.userId) {
       const item = cart.items.find((entry) => entry.variantId === dto.variantId);
@@ -86,12 +88,13 @@ export class CartController {
     @Res({ passthrough: true }) res: Response,
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: UpdateItemDto,
+    @Headers('Idempotency-Key') operationKey?: string,
   ): Promise<CartWithItems> {
     const context = this.resolveContext(req, { ensureAnonymousId: true });
     const before = context.userId
       ? (await this.cartService.getActiveCartForRequest(req, context))?.items.find((entry) => entry.id === id)
       : undefined;
-    const cart = await this.cartService.updateItem(context, id, dto);
+    const cart = await this.cartService.updateItem(context, id, dto, operationKey);
     this.persistAnonymousCookie(req, res, context, { refreshExisting: true });
     if (context.userId && before && before.qty !== dto.qty) {
       await this.analytics?.recordServerEvent(req, context.userId, CustomerActivityEventType.CART_QUANTITY_CHANGED, {

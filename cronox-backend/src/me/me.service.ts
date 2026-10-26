@@ -18,6 +18,7 @@ import { UpsertAddressDto } from './dto/upsert-address.dto';
 import { serializableTransaction } from '../prisma/serializable-transaction';
 import { validateAccountName } from '../common/account-name-policy';
 import { ADDRESS_LIMIT } from '../addresses/addresses.service';
+import { addressTransaction } from '../addresses/address-transaction';
 import { buildCorreosTrackingUrl } from '../shipping-tracking/tracking-links';
 
 export type MeProfile = SafeUser & {
@@ -195,11 +196,11 @@ export class MeService {
       isDefault: true,
     };
 
-    const updated = await serializableTransaction(this.prisma, async (tx) => {
+    const updated = await addressTransaction(this.prisma, userId, async (tx) => {
       const existingDefault = await tx.address.findFirst({ where: { userId, isDefault: true } });
       if (!existingDefault) {
         if (await tx.address.count({ where: { userId } }) >= ADDRESS_LIMIT) {
-          throw new BadRequestException('Address limit reached');
+          throw new BadRequestException('Puedes guardar como m?ximo diez direcciones.');
         }
         return tx.address.create({ data });
       }

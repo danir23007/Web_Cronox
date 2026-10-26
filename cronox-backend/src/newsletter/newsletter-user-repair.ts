@@ -25,12 +25,12 @@ export async function auditNewsletterUsers(db: PrismaClient) {
   };
 }
 
-/** No email jobs, credentials, activation, deletion, merging or consent invention. */
+/** Link existing accounts only; unregistered subscribers are valid, not orphans. */
 export async function repairNewsletterUsers(db: PrismaClient, apply = false) {
   const before = await auditNewsletterUsers(db);
   if (!apply) return { mode: 'dry-run', before };
   if (!before.migrated || before.ambiguous.length || before.duplicateUsers.length || before.duplicateSubscriptions.length || before.codeCollisions.length) throw new Error('Migration or manual collision review required before repair');
-  const ids = [...before.confirmedWithoutAccount, ...before.needsLink];
+  const ids = before.needsLink;
   for (const id of ids) {
     for (let attempt = 0; ; attempt++) {
       try {
@@ -41,7 +41,8 @@ export async function repairNewsletterUsers(db: PrismaClient, apply = false) {
           await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${'newsletter:' + email}))`;
           const subscription = await tx.newsletterSubscription.findUnique({ where: { id } });
           if (!subscription?.subscribedAt) return;
-          const { user } = await linkNewsletterUser(tx, email, true, false);
+          const { user } = await linkNewsletterUser(tx, email, true);
+          if (!user) return;
           if (subscription.userId && subscription.userId !== user.id) throw new Error('Historical account link conflict: manual review required');
           await tx.newsletterSubscription.update({ where: { id }, data: { userId: user.id } });
         });

@@ -7,11 +7,14 @@ import {
   Post,
   Query,
   Res,
+  UseGuards,
 } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import type { Response } from 'express';
 import { NewsletterSubscribeDto } from './dto/newsletter-subscribe.dto';
 import { NewsletterService } from './newsletter.service';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { CurrentUser } from '../common/decorators/current-user.decorator';
 
 @Controller('newsletter')
 export class NewsletterController {
@@ -28,6 +31,22 @@ export class NewsletterController {
   @Throttle({ default: { limit: 5, ttl: 15 * 60_000 } })
   async subscribe(@Body() dto: NewsletterSubscribeDto) {
     return this.newsletterService.subscribe(dto.email);
+  }
+
+  @Post('start-registration')
+  @HttpCode(200)
+  @Header('Cache-Control', 'no-store')
+  @Throttle({ default: { limit: 5, ttl: 15 * 60_000 } })
+  startRegistration(@Body() dto: NewsletterSubscribeDto) {
+    return this.newsletterService.startRegistration(dto.email);
+  }
+
+  @Post('complete-registration')
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(200)
+  @Throttle({ default: { limit: 5, ttl: 15 * 60_000 } })
+  completeRegistration(@CurrentUser('id') userId: number, @Body() dto: NewsletterSubscribeDto) {
+    return this.newsletterService.completeRegistration(userId, dto.email);
   }
 
   @Post('request-access')

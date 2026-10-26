@@ -1,10 +1,9 @@
-import { Injectable, Logger, ServiceUnavailableException } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import { ForbiddenException, Injectable, Logger, ServiceUnavailableException } from '@nestjs/common';
+import { Prisma, User } from '@prisma/client';
 import { EmailService } from '../email/email.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { NewsletterSettingsService } from './newsletter-settings.service';
 import { normalizeEmail } from '../common/email';
-import { linkNewsletterUser } from './newsletter-user';
 
 export type SubscriptionResult = { status: 'accepted'; httpStatus: number; confirmation?: 'welcome' | 'existing_account' | 'subscribed' };
 export type ExistingSubscriptionClaimResult = { status: 'claimed'; code?: string } | { status: 'not_subscribed' };
@@ -45,7 +44,41 @@ export class NewsletterService {
     }
   }
 
-  /** Single opt-in: persist consent and email work atomically before accepting. */
+  /** Footer/popup first step is read-only, including for historical subscribers. */
+  async startRegistration(email: string) {
+    const normalized = normalizeEmail(email);
+    const user = await this.prisma.user.findFirst({
+      where: { email: { equals: normalized, mode: 'insensitive' } }, select: { id: true },
+    });
+    return { status: user ? 'authentication_required' : 'registration_required' };
+  }
+
+  /** Existing accounts opt in only after authentication of the same address. */
+  async completeRegistration(userId: number, email: string) {
+    const normalized = normalizeEmail(email);
+    await this.prisma.$transaction(async tx => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${'newsletter:' + normalized}))`;
+      const user = await tx.user.findUnique({ where: { id: userId } });
+      if (!user || normalizeEmail(user.email) !== normalized || user.accountState !== 'ACTIVE' || !['USER', 'FRIEND'].includes(user.role)) {
+        throw new ForbiddenException('Inicia sesión con el correo que quieres suscribir.');
+      }
+      const subscription = await tx.newsletterSubscription.findUnique({ where: { email: normalized } });
+      if (subscription?.userId && subscription.userId !== user.id) {
+        throw new ServiceUnavailableException({ code: 'NEWSLETTER_ACCOUNT_LINK_CONFLICT' });
+      }
+      await tx.newsletterSubscription.upsert({
+        where: { email: normalized },
+        create: { email: normalized, userId, subscribedAt: new Date() },
+        update: { userId, subscribedAt: subscription?.subscribedAt ?? new Date() },
+      });
+      await tx.user.update({ where: { id: userId }, data: { newsletterSubscribed: true } });
+      // The account lifecycle already owns welcome delivery and its personal
+      // code. Signing in to subscribe must not create another of either.
+    });
+    return { status: 'subscribed' };
+  }
+
+  /** Checkout opt-in retains its existing independent purchase flow. */
   async subscribe(email: string): Promise<SubscriptionResult> {
     const normalized = normalizeEmail(email);
     const confirmation = await this.scheduleSubscription(normalized);
@@ -77,36 +110,31 @@ export class NewsletterService {
       return await this.prisma.$transaction(async tx => {
         await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${'newsletter:' + email}))`;
         const now = new Date();
-        const previous = await tx.newsletterSubscription.findUnique({ where: { email } });
         const subscription = await tx.newsletterSubscription.upsert({
           where: { email }, create: { email, subscribedAt: now },
-          update: {}, include: { welcomePromoCode: true },
+          update: {},
         });
         if (!subscription.subscribedAt) {
           await tx.newsletterSubscription.update({ where: { id: subscription.id }, data: {
             subscribedAt: now, verificationTokenHash: null, verificationExpiresAt: null,
           } });
         }
-        const welcomeJob = await tx.newsletterMailJob.findFirst({ where: { email, kind: 'WELCOME' }, select: { id: true } });
-        const { user, created } = await linkNewsletterUser(tx, email, true, !previous?.subscribedAt);
-        if (subscription.userId && subscription.userId !== user.id) throw new Error('Newsletter account link conflict: manual review required');
+        const matches = await tx.$queryRaw<Pick<User, 'id' | 'email' | 'role' | 'accountState' | 'newsletterSubscribed'>[]>`SELECT id, email, role, "accountState", "newsletterSubscribed" FROM "User" WHERE lower(btrim(email)) = ${email} LIMIT 2`;
+        if (matches.length > 1) throw new ServiceUnavailableException({ code: 'NEWSLETTER_ACCOUNT_AMBIGUOUS' });
+        const user = matches[0];
+        if (subscription.userId && subscription.userId !== user?.id) throw new ServiceUnavailableException({ code: 'NEWSLETTER_ACCOUNT_LINK_CONFLICT' });
+        // Checkout can record consent without making registration a purchase requirement.
+        if (!user) return 'subscribed';
+        if (!user.newsletterSubscribed) await tx.user.update({ where: { id: user.id }, data: { newsletterSubscribed: true } });
         await tx.newsletterSubscription.update({ where: { id: subscription.id }, data: { userId: user.id } });
-        // Welcome delivery is independent of enablement. Becoming ACTIVE must
-        // not enqueue a second access message alongside a new/pending welcome.
-        if (created && !previous?.subscribedAt) return 'welcome';
-        if (welcomeJob && !subscription.welcomeSentAt) return 'subscribed';
+        const welcomeJob = await tx.newsletterMailJob.findFirst({ where: { email, kind: 'WELCOME' }, select: { id: true } });
+        // Preserve existing access delivery and its cooldown, but never add it
+        // beside a pending account welcome. This response grants no session.
         const eligible = user?.accountState === 'ACTIVE' && ['USER', 'FRIEND'].includes(user.role);
-        if (eligible) {
+        if (eligible && (!welcomeJob || subscription.welcomeSentAt)) {
           await this.scheduleAccess(tx, email, now);
-          if (previous?.subscribedAt || welcomeJob) return created ? 'subscribed' : 'existing_account';
         }
-        // Historical subscribers keep their existing consent and discounts.
-        if (previous?.subscribedAt) {
-          await this.scheduleAccess(tx, email, now);
-          return 'subscribed';
-        }
-        if (subscription.welcomeClaimedAt) throw new ServiceUnavailableException({ code: 'NEWSLETTER_UNAVAILABLE' });
-        return eligible ? 'existing_account' : created ? 'welcome' : 'subscribed';
+        return 'existing_account';
       });
     } catch (error) {
       if (retries && error instanceof Prisma.PrismaClientKnownRequestError && ['P2002', 'P2034'].includes(error.code)) {

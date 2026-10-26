@@ -72,6 +72,39 @@
 
   const rawRef = resolveProviderRef();
 
+  const offerNewsletterAccountAccess = () => {
+    const section = document.getElementById('checkout-success-account');
+    const button = document.getElementById('checkout-success-account-button');
+    if (!section || !button) return;
+    let hint;
+    try { hint = JSON.parse(window.sessionStorage.getItem('cronoxNewsletterAfterPurchase') || 'null'); } catch { return; }
+    if (!hint || hint.providerRef !== rawRef || typeof hint.email !== 'string' ||
+        !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(hint.email) ||
+        !Number.isFinite(hint.createdAt) || Date.now() - hint.createdAt < 0 || Date.now() - hint.createdAt > 24 * 60 * 60_000) return;
+    // Paid guest orders already resolve an account. Only the usual login or a
+    // mailbox verification link may grant access or establish its password.
+    section.hidden = false;
+    button.onclick = async () => {
+      button.disabled = true;
+      try {
+        await window.CRONOX_AUTH_READY;
+        if (window.CRONOX_USER) {
+          window.location.assign('/cuenta');
+          return;
+        }
+        const opened = await window.CRONOX_openAuthModal?.('login', {
+          newsletterEmail: hint.email, accountExists: true, returnFocus: button,
+        });
+        if (opened) {
+          try { window.sessionStorage.removeItem('cronoxNewsletterAfterPurchase'); } catch {}
+        } else {
+          const feedback = document.getElementById('checkout-success-account-feedback');
+          if (feedback) feedback.textContent = 'No hemos podido abrir el formulario. Vuelve a intentarlo; tu pedido y tu suscripción están guardados.';
+        }
+      } finally { button.disabled = false; }
+    };
+  };
+
   const syncCartUiWithBackend = async () => {
     const api = window.CRONOX_API || null;
     const cartController = window.CRONOX_CART || null;
@@ -161,6 +194,7 @@
         title: 'Pedido confirmado',
         message: 'Tu pedido ha sido guardado correctamente. Guarda el número de pedido para cualquier consulta.',
       });
+      offerNewsletterAccountAccess();
     }
 
     if (referenceEl && displayRef) {

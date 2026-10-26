@@ -83,7 +83,7 @@ export class AuthService {
     const email = normalizeEmail(dto.email);
     const existing = await this.usersService.findByEmail(email);
 
-    if (existing) return this.requireRegistrationVerification(existing);
+    if (existing) return this.requireRegistrationVerification(existing, dto.registrationSource);
 
     const hashedPassword = await this.hashPassword(dto.password);
     const fullName = [dto.firstName, dto.lastName]
@@ -98,18 +98,17 @@ export class AuthService {
           name: fullName || undefined,
           firstName: dto.firstName,
           lastName: dto.lastName,
+          ...(dto.registrationSource === 'newsletter' ? { newsletterSubscribed: true } : {}),
         });
     } catch (error) {
-      // Opt-in may create the account after the first lookup. Never claim it.
+      // Another registration/checkout may create it after the first lookup.
+      // Knowing the newsletter email never authorizes claiming that account.
       if (!(error instanceof ConflictException)) throw error;
       const current = await this.usersService.findByEmail(email);
       if (!current) throw error;
-      return this.requireRegistrationVerification(current);
+      return this.requireRegistrationVerification(current, dto.registrationSource);
     }
     const authUser = this.omitPassword(user);
-
-    // Inherit existing newsletter consent; this does not verify account identity.
-    await this.newsletterService.subscribeIfNeeded(user.email);
 
     const tokens = await this.generateTokens(authUser);
 
@@ -120,7 +119,10 @@ export class AuthService {
     };
   }
 
-  private async requireRegistrationVerification(user: User) {
+  private async requireRegistrationVerification(user: User, source?: RegisterDto['registrationSource']) {
+    if (source === 'newsletter') {
+      throw new ConflictException('Este correo ya tiene una cuenta. Inicia sesión o recupera tu contraseña.');
+    }
     if (user.password !== null || user.accountState !== UserAccountState.ACTIVE || !['USER', 'FRIEND'].includes(user.role)) {
       throw new ConflictException('El email ya esta registrado');
     }

@@ -28,6 +28,9 @@ const approvedImageChanges = new Set([
   'cronox-front/assets/maps/spain-provinces.svg',
   // Official PayPal artwork requested for the checkout payment selector.
   'cronox-front/assets/paypal-logo-white.png',
+  // Customer typography update: official Cormorant Garamond caption outlined
+  // for image-context rendering; the administrator's original remains intact.
+  'cronox-front/assets/customer-product-image-unavailable.svg',
   // Byte-exact extractions from the five approved METACRILATOS references;
   // extract-assets.cjs --check verifies their content during release checks.
   'cronox-front/assets/metacrilatos/eye.png',

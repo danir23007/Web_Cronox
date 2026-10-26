@@ -1,5 +1,4 @@
 import './common/config/load-environment';
-import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import cookieParser from 'cookie-parser';
@@ -11,6 +10,8 @@ import { AppModule } from './app.module';
 import { createContentSecurityPolicy, documentSecurityHeaders } from './common/config/content-security-policy';
 import { localReviewSafety } from './common/config/local-review-safety';
 import { localLoginDiagnostics } from './common/config/local-login-diagnostics';
+import { createAppValidationPipe } from './common/customer-validation';
+import { customerRequestDiagnostics, customerBodyParserError } from './common/customer-request-diagnostics';
 import {
   getCorsOrigins,
   getTrustedProxyHops,
@@ -56,6 +57,7 @@ async function bootstrap() {
   expressApp.disable('x-powered-by');
   app.use(localReviewSafety);
   app.use(localLoginDiagnostics);
+  app.use(customerRequestDiagnostics);
 
   if (trustedProxyHops > 0) {
     expressApp.set('trust proxy', trustedProxyHops);
@@ -99,6 +101,7 @@ async function bootstrap() {
   app.use('/api/live-stats/presence', express.json({ limit: '1kb' }));
   app.use(express.json({ limit: '100kb' }));
   app.use(express.urlencoded({ extended: true, limit: '100kb' }));
+  app.use(customerBodyParserError);
   app.use(cookieParser());
   if (process.env.CRONOX_ROUTE_SMOKE_MODE !== 'true') {
     app.use(userNumberingMiddleware(app.get(UserNumberingGate).pool));
@@ -156,14 +159,7 @@ async function bootstrap() {
     return res.redirect(307, '/admin.html');
   });
 
-  app.useGlobalPipes(
-    new ValidationPipe({
-      whitelist: true,
-      forbidNonWhitelisted: true,
-      transform: true,
-      disableErrorMessages: isProduction,
-    }),
-  );
+  app.useGlobalPipes(createAppValidationPipe(isProduction));
 
   app.enableCors({
     origin: (origin, callback) => {
@@ -173,7 +169,7 @@ async function bootstrap() {
       );
     },
     credentials: true,
-    exposedHeaders: ['X-Session-Idle-Expires', 'Content-Disposition'],
+    exposedHeaders: ['X-Session-Idle-Expires', 'Content-Disposition', 'Retry-After', 'X-Request-ID'],
     methods: ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: [
       'Authorization',

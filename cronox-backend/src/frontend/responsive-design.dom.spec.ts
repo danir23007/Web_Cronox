@@ -234,8 +234,7 @@ describe('CRONOX responsive design system', () => {
   });
 
   it('keeps the complete footer within a shrinkable, fluid layout', () => {
-    // The same fluid padding is shared with the copyright's horizontal offset.
-    // Check both its bounds and its use, rather than requiring an inline value.
+    // Keep fluid padding and bounded columns across the responsive breakpoints.
     expect(storeStyles).toMatch(
       /\.site-footer\s*\{[^}]*--footer-side-padding:\s*clamp\(18px, 4\.7vw, 90px\);/,
     );
@@ -252,7 +251,7 @@ describe('CRONOX responsive design system', () => {
       /\.footer-accordion\s*\{[^}]*display:\s*grid;[^}]*grid-template-columns:\s*repeat\(3, minmax\(0, 1fr\)\);[^}]*gap:\s*clamp\(24px, 4vw, 80px\);[^}]*margin:\s*0;[^}]*width:\s*auto;[^}]*min-width:\s*0;/,
     );
     expect(storeStyles).toMatch(
-      /\.footer-newsletter-block\s*\{[^}]*width:\s*100%;[^}]*min-width:\s*0;[^}]*margin-left:\s*0;[^}]*max-width:\s*360px;[^}]*justify-self:\s*end;/,
+      /\.footer-newsletter-block\s*\{[^}]*width:\s*100%;[^}]*min-width:\s*0;[^}]*margin-left:\s*0;[^}]*max-width:\s*440px;[^}]*justify-self:\s*end;/,
     );
     expect(storeStyles).toMatch(
       /\.footer-logo\s*\{[^}]*width:\s*min\(100%, 144px\);[^}]*height:\s*auto;[^}]*object-fit:\s*contain;/,
@@ -351,15 +350,15 @@ describe('CRONOX responsive design system', () => {
   it('loads each modified stylesheet through its exact incremented cache version', () => {
     expect(readFrontend('assets/version.js')).toContain("VERSION = '99'");
     expect(readFrontend('index.html')).toContain('assets/gallery.css?v=20');
-    expect(readFrontend('index.html')).toContain('assets/quick-add.css?v=11');
+    expect(readFrontend('index.html')).toContain('assets/quick-add.css?v=12');
     expect(readFrontend('index.html')).toContain(
       'assets/product-detail.css?v=2',
     );
-    expect(readFrontend('gallery.html')).toContain('assets/info-page.css?v=3');
+    expect(readFrontend('gallery.html')).toContain('assets/info-page.css?v=4');
     expect(readFrontend('cart.html')).toMatch(/assets\/cart\.css\?v=\d+/);
-    expect(readFrontend('checkout.html')).toContain('assets/checkout.css?v=30');
+    expect(readFrontend('checkout.html')).toContain('assets/checkout.css?v=31');
     expect(readFrontend('checkout-success.html')).toContain(
-      'assets/checkout-success.css?v=1',
+      'assets/checkout-success.css?v=3',
     );
     expect(readFrontend('producto.html')).toContain(
       'assets/product-page.css?v=11',

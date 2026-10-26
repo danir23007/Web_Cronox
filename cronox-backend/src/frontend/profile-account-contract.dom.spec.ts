@@ -10,7 +10,7 @@ const tick = () => new Promise(resolve => setTimeout(resolve, 0));
 const windows: JSDOM[] = [];
 afterEach(() => windows.splice(0).forEach(dom => dom.window.close()));
 
-async function setup(firstName = 'Persona') {
+async function setup(firstName = 'Persona', failSession = false) {
   const dom = new JSDOM(read('profile.html'), { url: 'http://localhost/perfil', runScripts: 'outside-only', virtualConsole: new VirtualConsole() });
   windows.push(dom);
   const win = dom.window as any;
@@ -29,6 +29,7 @@ async function setup(firstName = 'Persona') {
   win.CRONOX_API = { updateMe, requestCirclePromotion: async () => ({status: 'pending'}),
     getAccreditationStats: async () => ({circleLevel: 2, promotion: {canRequest: true, hasPending: false, fromCircle: 2, toCircle: 3, eligibleAt: '2020-01-01', serverTime: new Date().toISOString()}}),
     getCircleUpgradeStatus: async () => ({circleLevel: 2, canRequest: false}) };
+  if (failSession) win.CRONOX_API.getMe = jest.fn().mockRejectedValue(new Error('temporary outage'));
   win.eval(read('assets/profile.js'));
   await tick();
   const submit = async (name: string) => {
@@ -45,6 +46,16 @@ it.each(['María José', 'Ángel', 'Jean-Luc', "O'Neil", 'Nombre9'])('matches th
   await submit(name);
   expect(updateMe.mock.calls.length).toBe(errors.length ? 0 : 1);
   if (errors.length) expect(win.document.getElementById('profileMessage').textContent).toContain('letras y espacios');
+});
+
+it('reloads the profile and removes only its stale load error after session recovery', async () => {
+  const { win } = await setup('Persona', true);
+  expect(win.document.getElementById('profileMessage').hidden).toBe(false);
+  win.CRONOX_API.getMe.mockResolvedValue(win.CRONOX_USER);
+  win.dispatchEvent(new win.CustomEvent('cronox:authResolved', { detail: { state: 'authenticated' } }));
+  await tick();
+  expect(win.document.getElementById('firstName').value).toBe('Persona');
+  expect(win.document.getElementById('profileMessage').hidden).toBe(true);
 });
 
 it('omits an unchanged legacy name and retains identity, authoritative role and promotion modal persistence after saving', async () => {

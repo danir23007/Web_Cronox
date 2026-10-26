@@ -19,6 +19,20 @@ export class FavoritesService {
 
   constructor(private readonly prisma: PrismaService) {}
 
+  private mutate<T>(
+    userId: number,
+    productId: number,
+    operation: (tx: Prisma.TransactionClient) => Promise<T>,
+  ): Promise<T> {
+    return this.prisma.$transaction(
+      async (tx) => {
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${'favorite:' + userId + ':' + productId}, 0))`;
+        return operation(tx);
+      },
+      { maxWait: 10_000, timeout: 10_000 },
+    );
+  }
+
   async list(userId: number) {
     const favorites = await this.prisma.favorite.findMany({
       where: { userId, product: { isActive: true } },
@@ -62,55 +76,59 @@ export class FavoritesService {
 
   async add(userId: number, dto: AddFavoriteDto) {
     const product = await this.findProduct(dto);
-    const existing = await this.prisma.favorite.findUnique({
-      where: { userId_productId: { userId, productId: product.id } },
-      select: { id: true },
-    });
+    return this.mutate(userId, product.id, async (tx) => {
+      const existing = await tx.favorite.findUnique({
+        where: { userId_productId: { userId, productId: product.id } },
+        select: { id: true },
+      });
 
-    await this.prisma.favorite.upsert({
-      where: { userId_productId: { userId, productId: product.id } },
-      update: {},
-      create: { userId, productId: product.id },
-    });
+      await tx.favorite.upsert({
+        where: { userId_productId: { userId, productId: product.id } },
+        update: {},
+        create: { userId, productId: product.id },
+      });
 
-    return {
-      productId: product.id,
-      product: this.toProductResponse(product),
-      isFavorite: true,
-      created: !existing,
-    };
+      return {
+        productId: product.id,
+        product: this.toProductResponse(product),
+        isFavorite: true,
+        created: !existing,
+      };
+    });
   }
 
   async toggle(userId: number, dto: AddFavoriteDto) {
     const product = await this.findProduct(dto);
-    const existing = await this.prisma.favorite.findUnique({
-      where: { userId_productId: { userId, productId: product.id } },
-    });
-
-    if (existing) {
-      await this.prisma.favorite.delete({
+    return this.mutate(userId, product.id, async (tx) => {
+      const existing = await tx.favorite.findUnique({
         where: { userId_productId: { userId, productId: product.id } },
+      });
+
+      if (existing) {
+        await tx.favorite.delete({
+          where: { userId_productId: { userId, productId: product.id } },
+        });
+        return {
+          productId: product.id,
+          product: this.toProductResponse(product),
+          isFavorite: false,
+        };
+      }
+
+      await tx.favorite.create({
+        data: { userId, productId: product.id },
       });
       return {
         productId: product.id,
         product: this.toProductResponse(product),
-        isFavorite: false,
+        isFavorite: true,
       };
-    }
-
-    await this.prisma.favorite.create({
-      data: { userId, productId: product.id },
     });
-    return {
-      productId: product.id,
-      product: this.toProductResponse(product),
-      isFavorite: true,
-    };
   }
 
   async remove(userId: number, productIdOrSlug: string) {
     if (!productIdOrSlug) {
-      throw new BadRequestException('Product identifier is required');
+      throw new BadRequestException('Falta el identificador del producto.');
     }
 
     let productId = Number(productIdOrSlug);
@@ -128,10 +146,12 @@ export class FavoritesService {
       productId = product.id;
     }
 
-    const removed = await this.prisma.favorite.deleteMany({
-      where: { userId, productId },
+    return this.mutate(userId, productId, async (tx) => {
+      const removed = await tx.favorite.deleteMany({
+        where: { userId, productId },
+      });
+      return removed.count > 0 ? productId : null;
     });
-    return removed.count > 0 ? productId : null;
   }
 
   private async findProduct(dto: AddFavoriteDto): Promise<FavoriteProduct> {

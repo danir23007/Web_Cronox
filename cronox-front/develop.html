@@ -1,6 +1,8 @@
 <!doctype html>
 <html lang="es">
 <head>
+  <link rel="preload" href="/assets/fonts/cormorant-garamond/cormorant-garamond-normal-latin-v21.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="/assets/customer-typography.css?v=4">
   <link rel="stylesheet" href="/assets/password-visibility.css?v=1">
   <script src="/assets/password-visibility.js?v=1" defer></script>
   <meta charset="utf-8">
@@ -14,8 +16,8 @@
     .topbar svg { width: 24px; height: 24px; }
   </style>
   <link rel="stylesheet" href="assets/cookie-consent.css?v=2">
-  <link rel="stylesheet" href="assets/store.css?v=124">
-  <link rel="stylesheet" href="assets/info-page.css?v=3">
+  <link rel="stylesheet" href="assets/store.css?v=127">
+  <link rel="stylesheet" href="assets/info-page.css?v=4">
   <script src="assets/cookie-consent.js?v=9" defer></script>
   <script src="assets/customer-analytics.js?v=2" defer></script>
   <script src="assets/page-content.js?v=1" defer></script>
@@ -25,7 +27,7 @@
       min-height: 100vh;
       background: #000;
       color: #fff;
-      font-family: "Times New Roman", serif;
+      --customer-original-font: "Times New Roman", serif; font-family: var(--customer-font-prefix,) var(--customer-original-font);
       text-align: center;
     }
     .container { width: 100%; max-width: 800px; margin: 0 auto; }
@@ -36,15 +38,15 @@
   <link rel="icon" type="image/png" href="/favicon.png?v=4">
   <meta name="theme-color" content="#000000">
 </head>
-<body class="page-info">
+<body data-cronox-surface="customer" class="page-info">
   <script src="assets/info-shell.js?v=4"></script>
   <main class="container" data-footer-content data-footer-page-slug="develop">
     <h1>DESARROLLA</h1>
     <p>Si quieres desarrollar una colaboración, proyecto o propuesta con CRONOX, escríbenos a <a href="mailto:support@cronox.es">support@cronox.es</a>.</p>
   </main>
-  <script src="assets/api.js?v=24"></script>
+  <script src="assets/api.js?v=26"></script>
   <script src="/assets/product-delivery.js?v=5" defer></script>
-  <script src="assets/app.js?v=97" defer></script>
+  <script src="assets/app.js?v=104" defer></script>
   <script src="assets/cart-badge.js?v=45" defer></script>
 </body>
 </html>

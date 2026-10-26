@@ -26,3 +26,102 @@ body.page-info > .topbar {
   width: 100%;
   background: #000;
 }
+
+/* Only editable footer destinations opt in. Keep the document/root font size
+   unchanged so headings, FAQ questions, controls and shared shells retain their
+   own sizes. The same rules apply after page-content.js replaces the content. */
+[data-cronox-surface="customer"] [data-footer-content][data-footer-page-slug] {
+  --footer-content-body-size: 19px;
+  --footer-content-body-leading: 1.75;
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
+
+[data-cronox-surface="customer"] [data-footer-content]:is(
+  [data-footer-page-slug="privacy-policy"],
+  [data-footer-page-slug="terms-of-service"],
+  [data-footer-page-slug="legal-notice"]
+) {
+  --footer-content-body-size: 18px;
+  --footer-content-body-leading: 1.85;
+  max-width: 820px;
+}
+
+[data-cronox-surface="customer"] [data-footer-content][data-footer-page-slug="faqs"] {
+  --footer-content-body-size: clamp(18px, 2.35vw, 20px);
+}
+
+[data-cronox-surface="customer"] [data-footer-content][data-footer-page-slug] :where(
+  p:not(.shipping-title):not(.shipping-region-title), li, dt, dd, blockquote, figcaption, .notice
+) {
+  font-size: var(--footer-content-body-size);
+  line-height: var(--footer-content-body-leading);
+}
+
+[data-cronox-surface="customer"] [data-footer-content][data-footer-page-slug] :is(
+  p:not(.shipping-title):not(.shipping-region-title), ul, ol, dl, blockquote
+) {
+  margin-block: 0 1em;
+}
+
+[data-cronox-surface="customer"] [data-footer-content][data-footer-page-slug] li {
+  margin-block: 0 0.6em;
+}
+
+/* This existing region label is a heading rendered as a paragraph, like the
+   shipping-title above it; keep its original 16px/1.7 size and paragraph gaps. */
+[data-cronox-surface="customer"] [data-footer-content][data-footer-page-slug="shipping-policy"] .shipping-region-title {
+  font-size: 16px;
+  line-height: 1.7;
+  margin-block: 16px;
+}
+
+[data-cronox-surface="customer"] [data-footer-content][data-footer-page-slug] :is(
+  p, ul, ol, dl, blockquote
+):last-child {
+  margin-block-end: 0;
+}
+
+[data-cronox-surface="customer"] [data-footer-content][data-footer-page-slug="faqs"] .faq-answer {
+  max-width: 820px;
+}
+
+/* Cookies retain a wider, locally scrollable table, with a shorter text measure.
+   Avoid the old second set of mobile side gutters inside the page's padding. */
+[data-cronox-surface="customer"] [data-footer-content][data-footer-page-slug="cookie-policy"] {
+  width: 100%;
+  max-width: 1000px;
+}
+
+[data-cronox-surface="customer"] [data-footer-page-slug="cookie-policy"] :is(p, ul, ol, .notice) {
+  max-width: 820px;
+}
+
+[data-cronox-surface="customer"] [data-footer-content][data-footer-page-slug="cookie-policy"] .summary {
+  font-size: 21px;
+}
+
+[data-cronox-surface="customer"] [data-footer-content][data-footer-page-slug] td {
+  font-size: 17px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+
+[data-cronox-surface="customer"] [data-footer-content][data-footer-page-slug] .table-wrap {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+/* Body content inside cells follows the cell's size; inline links/emphasis
+   inherit, without shrinking or compounding the increase in nested lists. */
+[data-cronox-surface="customer"] [data-footer-content][data-footer-page-slug] :is(td, li, blockquote, .notice) :is(p, li) {
+  font-size: inherit;
+}
+
+/* The preferences panel is also reachable from the cookie policy. Enlarge its
+   explanations only on footer content pages, preserving headings and switches. */
+body[data-cronox-surface="customer"]:has([data-footer-content][data-footer-page-slug])
+  .cronox-consent-panel :is(.cronox-consent-panel__intro, .cronox-consent__category p) {
+  font-size: 16px;
+  line-height: 1.6;
+}

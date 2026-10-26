@@ -33,6 +33,22 @@ describe('browser sliding-session transport', () => {
   );
   const bundle = readFileSync(path.join(frontendRoot, 'assets/api.js'), 'utf8');
 
+  it.each([429, 503])('honors Retry-After without retrying mutations or changing HTTP %s', async status => {
+    const dom = createDom('<!doctype html><body></body>', { runScripts: 'outside-only', url: 'https://cronox.test/index.html' });
+    const ended = jest.fn();
+    dom.window.addEventListener('cronox:session-ended', ended);
+    const fetch = jest.fn(async (input: any) => new Response('{}', String(input).includes('/favorites')
+      ? { status, headers: { 'Retry-After': '60' } } : { status: 200 }));
+    Object.assign(dom.window, { fetch, Response, Request, Headers, URL, BroadcastChannel: undefined });
+    dom.window.eval(bundle);
+    expect((await dom.window.fetch('/api/favorites', { method: 'POST' })).status).toBe(status);
+    expect((await dom.window.fetch('/api/favorites', { method: 'POST' })).status).toBe(status);
+    expect(fetch.mock.calls.filter(c => String(c[0]).endsWith('/favorites'))).toHaveLength(1);
+    expect((await dom.window.fetch('/api/products')).status).toBe(200);
+    expect(ended).not.toHaveBeenCalled();
+    expect(dom.window.document.body.hidden).toBe(false);
+  });
+
   it.each(['USER', 'FRIEND', 'ADMIN', 'SUPERADMIN'])(
     'renews visible visits only for %s client policy',
     async (role) => {
@@ -168,6 +184,56 @@ describe('browser sliding-session transport', () => {
       expect(ended).not.toHaveBeenCalled();
     },
   );
+
+  it('does not cache identity or treat a missing API route as anonymous', async () => {
+    const dom = createDom('<body></body>', { runScripts: 'outside-only', url: 'https://cronox.test/' });
+    const raw = jest.fn(async () => new Response('{}', { status: 404 }));
+    Object.assign(dom.window, { fetch: raw, Response, Request, Headers, URL, BroadcastChannel: undefined });
+    dom.window.console.error = jest.fn();
+    dom.window.eval(bundle);
+    await expect((dom.window as any).CRONOX_API.getMe()).rejects.toMatchObject({ status: 404 });
+    expect(raw).toHaveBeenCalledWith('https://cronox.test/api/me', expect.objectContaining({ credentials: 'include', cache: 'no-store' }));
+  });
+
+  it.each([true, false])('bounds REFRESH_RETRY recovery when cookies update: %s', async updated => {
+    const dom = createDom('<body></body>', { runScripts: 'outside-only', url: 'https://cronox.test/' });
+    let refreshes = 0;
+    const ended = jest.fn();
+    dom.window.addEventListener('cronox:session-ended', ended);
+    Object.assign(dom.window, { Response, Request, Headers, URL, BroadcastChannel: undefined,
+      fetch: async (input: RequestInfo | URL) => {
+        const route = new URL(String(input), dom.window.location.href).pathname;
+        if (route.endsWith('/csrf')) return new Response('{"csrfToken":"fixture"}');
+        if (route.endsWith('/refresh')) { refreshes++; return new Response('{"code":"REFRESH_RETRY"}', { status: 409 }); }
+        return new Response('{}', { status: updated && refreshes ? 200 : 401 });
+      },
+    });
+    dom.window.eval(bundle);
+    if (updated) expect((await dom.window.fetch('/api/orders')).ok).toBe(true);
+    else await expect(dom.window.fetch('/api/orders')).rejects.toThrow('renovar');
+    expect(refreshes).toBe(updated ? 1 : 2);
+    expect(ended).not.toHaveBeenCalled();
+  });
+
+  it('verifies cookies instead of trusting another tab\'s refresh timestamp', async () => {
+    const dom = createDom('<body></body>', { runScripts: 'outside-only', url: 'https://cronox.test/' });
+    let channel: any;
+    let refreshed = false;
+    let refreshes = 0;
+    Object.assign(dom.window, { Response, Request, Headers, URL,
+      BroadcastChannel: class { onmessage: any; constructor() { channel = this; } postMessage() {} },
+      fetch: async (input: RequestInfo | URL) => {
+        const route = new URL(String(input), dom.window.location.href).pathname;
+        if (route.endsWith('/csrf')) return new Response('{"csrfToken":"fixture"}');
+        if (route.endsWith('/refresh')) { refreshes++; refreshed = true; return new Response('{}'); }
+        return new Response('{}', { status: refreshed ? 200 : 401 });
+      },
+    });
+    dom.window.eval(bundle);
+    channel.onmessage({ data: { kind: 'refresh', tab: 'other', at: Date.now() + 60_000 } });
+    expect((await dom.window.fetch('/api/orders')).ok).toBe(true);
+    expect(refreshes).toBe(1);
+  });
 
   it('ships the exact idle message, genuine-event gate and multi-tab channels', () => {
     expect(source).toContain('Tu sesión se ha cerrado por inactividad.');

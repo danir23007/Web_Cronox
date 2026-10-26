@@ -295,7 +295,7 @@
     const helper = window.CRONOX_SECURITY?.externalHttpUrl;
     return typeof helper === 'function' ? helper(value) : '';
   };
-  const safeProductImage = (value, fallback = 'assets/product-image-unavailable.svg') => {
+  const safeProductImage = (value, fallback = window.CRONOX_PRODUCT_PLACEHOLDER || 'assets/product-image-unavailable.svg') => {
     const helper = window.CRONOX_SECURITY?.productImageUrl;
     return typeof helper === 'function' ? helper(value, fallback) : fallback;
   };
@@ -411,7 +411,10 @@
     }
 
     if (accreditationCircle) {
-      accreditationCircle.textContent = `Círculo ${toRomanNumeral(normalized)}`;
+      const numeral = document.createElement('span');
+      numeral.dataset.circleNumeral = '';
+      numeral.textContent = toRomanNumeral(normalized);
+      accreditationCircle.replaceChildren('Círculo ', numeral);
     }
 
     renderCircleSymbol(normalized);
@@ -549,9 +552,8 @@
 
   const fillAccreditation = (user) => {
     const fullName = buildDisplayName(user) || 'Miembro CRONOX';
-    const normalizedCircle = applyCircleLevel(user?.circleLevel);
+    applyCircleLevel(user?.circleLevel);
     if (accreditationName) accreditationName.textContent = formatAccreditationName(fullName);
-    if (accreditationCircle) accreditationCircle.textContent = `Círculo ${toRomanNumeral(normalizedCircle)}`;
     if (accreditationCode) accreditationCode.textContent = `ID: ${window.CRONOX_USER_IDENTITY.format(user)}`;
   };
 
@@ -1346,11 +1348,19 @@
     }
   };
 
+  let profileRecoveryNeeded = false;
+  const profileLoadError = 'No se pudo cargar tu perfil. Inténtalo de nuevo más tarde.';
   const loadProfile = async () => {
     if (!api.getMe) return;
     try {
       const user = await api.getMe();
       if (!user) throw new Error('Usuario no autenticado');
+      if (profileRecoveryNeeded && messageEl?.textContent === profileLoadError) {
+        messageEl.hidden = true;
+        messageEl.textContent = '';
+        messageEl.classList.remove('is-error', 'is-visible');
+      }
+      profileRecoveryNeeded = false;
       const normalizedUserCircle = getNormalizedCircleLevel(user?.circleLevel, user?.circleLevel);
       const normalizedUser = { ...user, circleLevel: normalizedUserCircle };
       window.CRONOX_USER = normalizedUser;
@@ -1361,10 +1371,14 @@
       await Promise.all([loadAddress(), loadOrders()]);
     } catch (err) {
       if (handleAuthRedirect(err)) return;
+      profileRecoveryNeeded = true;
       console.warn('[PROFILE] No se pudo cargar el perfil', err);
-      showProfileMessage('No se pudo cargar tu perfil. Inténtalo de nuevo más tarde.', 'error');
+      showProfileMessage(profileLoadError, 'error');
     }
   };
+  window.addEventListener('cronox:authResolved', event => {
+    if (profileRecoveryNeeded && event.detail?.state === 'authenticated') void loadProfile();
+  });
 
   let hasPassword = false;
   const refreshPasswordState = (user) => {

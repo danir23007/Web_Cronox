@@ -449,6 +449,8 @@
   });
   document.addEventListener("visibilitychange", refreshIfStale);
   window.addEventListener("focus", refreshIfStale);
+  document.fonts?.ready.then(fitComposition);
+  document.fonts?.addEventListener("loadingdone", fitComposition);
   if (window.ResizeObserver)
     new ResizeObserver(fitComposition).observe(el.content);
   window.CRONOX_KEY_SCREEN_EXPIRATION = Object.freeze({

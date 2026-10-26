@@ -131,7 +131,7 @@ const runCompiled = async () => {
   const baseUrl = `http://127.0.0.1:${port}`;
   const child = spawn(
     process.execPath,
-    [join(backendRoot, 'dist', 'main.js')],
+    [join(backendRoot, 'scripts', 'compiled-export-smoke.cjs')],
     {
       cwd: backendRoot,
       env: withTestEnvironment(process.env, {

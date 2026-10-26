@@ -2,6 +2,17 @@
 .metacrilatos-member { display: none; }
 [data-metacrilatos-fit] { display: contents; }
 
+/* Customer captions remain readable without changing the administrative
+   preview controls or the card's fixed design plane. */
+body[data-cronox-surface="customer"] .metacrilatos-member .metacrilatos-member__eyebrow,
+body[data-cronox-surface="customer"] .metacrilatos-member .metacrilatos-member__section-title,
+body[data-cronox-surface="customer"] .metacrilatos-member .metacrilatos-member__history dt { font-size:14px; }
+body[data-cronox-surface="customer"] .metacrilatos-member .metacrilatos-member__privileges li,
+body[data-cronox-surface="customer"] .metacrilatos-member .metacrilatos-member__status,
+body[data-cronox-surface="customer"] .metacrilatos-member .metacrilatos-member__retry { font-size:16px; }
+body[data-cronox-surface="customer"] .metacrilatos-member .metacrilatos-member__circles li { font-size:16px; }
+body[data-cronox-surface="customer"] .metacrilatos-presentation .profile-back-link { font-size:16px; }
+
 .metacrilatos-presentation[data-profile-section="accreditation"][data-accreditation-renderer="metacrilatos-v1"].is-active {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
@@ -31,7 +42,7 @@
   max-width: 354px;
   justify-self: center;
   color: #eee;
-  font-family: Arial, Helvetica, sans-serif;
+  --customer-original-font: Arial, Helvetica, sans-serif; font-family:var(--customer-font-prefix,) var(--customer-original-font);
   --member-accent: #4b4d51;
   --member-accent-edge: #696b70;
 }
@@ -62,7 +73,7 @@
 .metacrilatos-presentation[data-accreditation-renderer="metacrilatos-v1"] .metacrilatos-member__title {
   margin: 0;
   color: #f3f0ec;
-  font-family: Georgia, "Times New Roman", serif;
+  --customer-original-font: Georgia, "Times New Roman", serif; font-family:var(--customer-font-prefix,) var(--customer-original-font);
   font-size: 36px;
   line-height: 1.15;
   font-weight: 400;
@@ -89,7 +100,7 @@
   border-radius: 50%;
   background: #000;
   color: #d8dadd;
-  font: 11px/1 Georgia, "Times New Roman", serif;
+  --customer-original-font: Georgia, "Times New Roman", serif; font:11px/1 var(--customer-original-font);
 }
 
 .metacrilatos-presentation[data-accreditation-renderer="metacrilatos-v1"] .metacrilatos-member__circles li[data-meta-circle-marker="3"] {
@@ -125,7 +136,7 @@
 .metacrilatos-presentation[data-accreditation-renderer="metacrilatos-v1"] .metacrilatos-member__section-title {
   margin: 0 0 16px;
   color: #bbb;
-  font: 400 10px/1.5 Arial, Helvetica, sans-serif;
+  --customer-original-font: Arial, Helvetica, sans-serif; font:400 10px/1.5 var(--customer-font-prefix,) var(--customer-original-font);
   letter-spacing: 0.19em;
 }
 
@@ -182,7 +193,7 @@
   order: -1;
   margin: 0;
   color: #efefef;
-  font: 400 24px/1.1 Georgia, "Times New Roman", serif;
+  --customer-original-font: Georgia, "Times New Roman", serif; font:400 24px/1.1 var(--customer-font-prefix,) var(--customer-original-font);
   font-variant-numeric: tabular-nums;
   overflow-wrap: anywhere;
 }
@@ -200,7 +211,7 @@
   border: 0;
   background: transparent;
   color: #ddd;
-  font: 12px/1.5 Arial, Helvetica, sans-serif;
+  --customer-original-font: Arial, Helvetica, sans-serif; font:12px/1.5 var(--customer-font-prefix,) var(--customer-original-font);
   text-decoration: underline;
   text-underline-offset: 3px;
   cursor: pointer;
@@ -341,7 +352,7 @@
   justify-content: center;
   min-height: 44px;
   padding: 10px 12px;
-  font: 10.5px/1.5 Arial, Helvetica, sans-serif;
+  --customer-original-font: Arial, Helvetica, sans-serif; font:10.5px/1.5 var(--customer-font-prefix,) var(--customer-original-font);
 }
 .metacrilatos-presentation[data-accreditation-renderer="metacrilatos-v1"] .profile-back-link:focus-visible {
   outline: 2px solid #fff;
@@ -361,7 +372,7 @@ body.metacrilatos-preview {
   flex: none;
   padding: 12px 16px;
   text-align: center;
-  font: 12px/1.5 Arial, Helvetica, sans-serif;
+  --customer-original-font: Arial, Helvetica, sans-serif; font:12px/1.5 var(--customer-font-prefix,) var(--customer-original-font);
   color: #bbb;
 }
 .metacrilatos-preview__controls p { margin: 0 0 8px; }

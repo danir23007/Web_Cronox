@@ -111,9 +111,11 @@
 .newsletter-modal-title { margin: 4px 0; font-size: clamp(22px,3vw,30px); letter-spacing: .12em; }
 .newsletter-modal-subtitle { margin: 0 0 12px; color: #d0d0d0; line-height: 1.5; }
 .newsletter-modal-form { display: grid; gap: 10px; }
+.newsletter-consent-copy { margin: 0; font-size: 12px; line-height: 1.45; color: #d0d0d0; }
+.newsletter-consent-copy a { color: inherit; text-decoration: underline; }
 .newsletter-modal-input { width: 100%; padding: 12px 14px; border: 1px solid rgba(255,255,255,.14); border-radius: 10px; background: rgba(255,255,255,.08); color: #fff; font-size: 14px; }
 .newsletter-modal-input:focus-visible { outline: none; border-color: rgba(255,255,255,.4); box-shadow: 0 0 0 2px rgba(255,255,255,.2); }
-.newsletter-modal-button { width: 100%; height: 46px; border: 1px solid rgba(255,255,255,.22); border-radius: 10px; background: linear-gradient(120deg,#fff 0%,#d2d2d2 100%); color: #000; font-weight: 800; letter-spacing: .18em; text-transform: uppercase; cursor: pointer; }
+.newsletter-modal-button { width: 100%; height: 46px; border: 1px solid rgba(255,255,255,.22); border-radius: 10px; background: linear-gradient(120deg,#fff 0%,#d2d2d2 100%); color: #000; font-weight: var(--customer-heavy, 800); letter-spacing: .18em; text-transform: uppercase; cursor: pointer; }
 .newsletter-modal-button:disabled { opacity: .7; cursor: not-allowed; }
 .newsletter-login-prompt { margin: 2px 0 0; text-align: center; color: #cfcfcf; font-size: 12px; line-height: 1.4; }
 .newsletter-login-link { padding: 0; border: 0; background: none; color: inherit; font: inherit; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }

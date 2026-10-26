@@ -5,6 +5,11 @@
    ========================================================== */
 
 (function () {
+  // Informational pages render their cart before the image/catalogue helpers
+  // load. Choose the customer caption immediately, independently of account role.
+  if (document.body?.dataset.cronoxSurface === 'customer' && !window.CRONOX_PRODUCT_PLACEHOLDER) {
+    window.CRONOX_PRODUCT_PLACEHOLDER = '/assets/customer-product-image-unavailable.svg';
+  }
   const $ = (s, el = document) => el.querySelector(s);
   const $$ = (s, el = document) => Array.from(el.querySelectorAll(s));
   const clamp = (n, min, max) => Math.max(min, Math.min(max, n));
@@ -864,6 +869,9 @@
   });
 
   // ===== Favoritos globales =====
+  const storeChannel = typeof BroadcastChannel === 'function' ? new BroadcastChannel('cronox.store') : null;
+  const withStoreLock = (name, operation) => name && navigator.locks?.request
+    ? navigator.locks.request(`cronox.store:${name}`, operation) : operation();
   const FavoritesManager = {
     ready: false,
     ids: new Set(),
@@ -875,6 +883,8 @@
     sessionObserved: false,
     serverFavorites: null,
     pendingProducts: new Set(),
+    queuedProducts: new Map(),
+    peerRefresh: false,
     initDone: false,
     normalizeId(value) {
       const str = value == null ? '' : String(value).trim();
@@ -894,6 +904,7 @@
       this.serverFavorites = null;
       this.ids = new Set();
       this.pendingProducts.clear();
+      this.queuedProducts.clear();
       window.CRONOX_FAVORITE_IDS = this.ids;
       this.updateDomState();
       this.updateTopbarCount();
@@ -975,20 +986,15 @@
       if (!this.initDone) this.init();
       const epoch = this.sessionEpoch;
       await this.loadFromServer();
-      if (epoch !== this.sessionEpoch || this.pendingProducts.has(normId)) return;
+      if (epoch !== this.sessionEpoch) return;
+      if (this.pendingProducts.has(normId)) {
+        this.queuedProducts.set(normId, !(this.queuedProducts.get(normId) ?? this.isFavorite(normId)));
+        return;
+      }
       if (!this.ready) return;
 
-      try {
-        const sessionRes = await fetch(apiEndpoint('/api/me'), { credentials: 'include' });
-        if (sessionRes.status === 401) {
-          window.dispatchEvent(new CustomEvent('cronox:authRequired', { detail: { reason: 'favorites' } }));
-          return;
-        }
-        if (!sessionRes.ok) {
-          throw new Error('No se pudo verificar la sesión');
-        }
-      } catch (err) {
-        console.error('[CRONOX] No se pudo verificar la sesión', err);
+      if (this.anonymous) {
+        window.dispatchEvent(new CustomEvent('cronox:authRequired', { detail: { reason: 'favorites' } }));
         return;
       }
       if (epoch !== this.sessionEpoch || this.pendingProducts.has(normId)) return;
@@ -1009,28 +1015,33 @@
       this.updateDomState();
       this.updateTopbarCount();
 
+      let saved = false;
       try {
-        let res;
-        if (willBeFav) {
-          res = await fetch(apiEndpoint('/api/favorites'), {
+        const res = await withStoreLock(`favorite:${normId}`, async () => {
+          if (willBeFav) return fetch(apiEndpoint('/api/favorites'), {
             method: 'POST',
             credentials: 'include',
             headers: { 'Content-Type': 'application/json', ...(await getCsrfHeaders()) },
             body: JSON.stringify({ productId: normId }),
           });
-        } else {
-          res = await fetch(apiEndpoint('/api/favorites/' + encodeURIComponent(normId)), {
+          return fetch(apiEndpoint('/api/favorites/' + encodeURIComponent(normId)), {
             method: 'DELETE',
             credentials: 'include',
             headers: await getCsrfHeaders(),
           });
-        }
+        });
 
         if (!res.ok) {
-          throw new Error('Error al sincronizar favorito');
+          if (res.status === 401) window.dispatchEvent(new CustomEvent('cronox:authRequired', { detail: { reason: 'favorites' } }));
+          const seconds = Number(res.headers.get('Retry-After'));
+          throw new Error(res.status === 429 && seconds > 0
+            ? `Espera ${seconds} segundos antes de volver a guardar el favorito.`
+            : 'No se pudo actualizar tu favorito. Inténtalo de nuevo.');
         }
         if (epoch !== this.sessionEpoch) return;
+        saved = true;
         this.emitChange();
+        storeChannel?.postMessage({ kind: 'favorites' });
       } catch (err) {
         if (epoch !== this.sessionEpoch) return;
         console.error('[CRONOX] Error actualizando favorito', err);
@@ -1045,12 +1056,21 @@
         this.updateTopbarCount();
         this.emitChange();
         if (typeof showToast === 'function') {
-          showToast('No se pudo actualizar tu favorito. Inténtalo de nuevo.');
+          showToast(err.message);
         } else if (typeof window.showToast === 'function') {
-          window.showToast('No se pudo actualizar tu favorito. Inténtalo de nuevo.');
+          window.showToast(err.message);
         }
       } finally {
-        if (epoch === this.sessionEpoch) this.pendingProducts.delete(normId);
+        if (epoch === this.sessionEpoch) {
+          this.pendingProducts.delete(normId);
+          const queued = this.queuedProducts.get(normId);
+          this.queuedProducts.delete(normId);
+          if (saved && queued != null && queued !== this.isFavorite(normId)) void this.toggleFromButton(btn);
+          else if (this.peerRefresh && !this.pendingProducts.size) {
+            this.peerRefresh = false;
+            void this.loadFromServer({ force: true });
+          }
+        }
       }
     },
     updateDomState() {
@@ -1075,7 +1095,7 @@
     updateTopbarCount() {
       const topbarFav = document.querySelector('.topbar__fav');
       const badge = topbarFav?.querySelector('.favorites-count, .fav-count');
-      const count = this.ready ? this.ids.size : 0;
+      const count = this.ids.size;
       let target = badge || null;
       if (!target && topbarFav && count > 0) {
         target = document.createElement('span');
@@ -1175,7 +1195,7 @@
           .replace(/"/g, '&quot;')
           .replace(/'/g, '&#39;');
   };
-  const safeProductImage = (value, fallback = 'assets/product-image-unavailable.svg') => {
+  const safeProductImage = (value, fallback = window.CRONOX_PRODUCT_PLACEHOLDER || 'assets/product-image-unavailable.svg') => {
     const helper = window.CRONOX_SECURITY?.productImageUrl;
     return typeof helper === 'function' ? helper(value, fallback) : fallback;
   };
@@ -1282,7 +1302,7 @@
     let recoverConfirmedMutation = false;
     if (mutation) cartRead = null;
     cartState.pending += 1;
-    const task = cartQueue.then(async () => {
+    const task = cartQueue.then(() => withStoreLock(mutation || !cartState.data ? 'cart' : null, async () => {
       if (owner !== cartOwner) return cartState.data;
       const version = cartVersion;
       cartState.status = 'loading';
@@ -1304,6 +1324,7 @@
           cartIdentity = identity;
         }
         const cart = await operation();
+        if (mutation) storeChannel?.postMessage({ kind: 'cart' });
         if (owner === cartOwner && version === cartVersion) {
           try { publishCart(cart); }
           catch (error) {
@@ -1322,14 +1343,14 @@
       } catch (error) {
         if (owner === cartOwner && version === cartVersion) {
           cartState.status = 'error';
-          cartState.error = mutation
+          cartState.error = [409, 429].includes(error?.status) ? error.message : mutation
             ? 'No se pudo actualizar la cesta. Comprueba los artículos y vuelve a intentarlo.'
             : 'No se pudo cargar la cesta. Vuelve a intentarlo.';
           notifyCartState();
         }
         throw error;
       }
-    }).finally(() => {
+    })).finally(() => {
       cartState.pending -= 1;
       notifyCartState();
     });
@@ -1358,22 +1379,56 @@
 
   const addCartItem = async ({ variantId, qty }) => {
     if (!API?.addCartItem) throw new Error('API de carrito no disponible');
-    return requestCart(() => API.addCartItem({ variantId, qty }), true);
+    return requestCart(async () => {
+      const retryKey = `cronox.cart-intent:${cartState.data?.id}:${variantId}:${qty}`;
+      let operationKey;
+      try { operationKey = sessionStorage.getItem(retryKey); } catch {}
+      operationKey ||= crypto.randomUUID();
+      try {
+        // Keep this intent through a lost response/reload. A confirmed success
+        // clears it, so a later intentional add gets a distinct operation key.
+        try { sessionStorage.setItem(retryKey, operationKey); } catch {}
+        const cart = await API.addCartItem({ variantId, qty, operationKey });
+        try { sessionStorage.removeItem(retryKey); } catch {}
+        return cart;
+      } catch (error) {
+        if (error?.status >= 400 && error.status < 500 && error.status !== 429) {
+          try { sessionStorage.removeItem(retryKey); } catch {}
+        }
+        throw error;
+      }
+    }, true);
   };
 
   const updateCartItem = async (itemId, qty) => {
     if (!API?.updateCartItem) throw new Error('API de carrito no disponible');
-    return requestCart(() => API.updateCartItem(itemId, qty), true);
+    return requestCart(() => API.updateCartItem(itemId, qty, cartState.data?.items?.find(item => item.id === itemId)?.qty), true);
   };
 
   const removeCartItem = async (itemId) => {
     if (!API?.removeCartItem) throw new Error('API de carrito no disponible');
-    return requestCart(() => API.removeCartItem(itemId), true);
+    return requestCart(async () => {
+      const variantId = cartState.data?.items?.find(item => item.id === itemId)?.variantId;
+      const cart = await API.removeCartItem(itemId);
+      if (variantId != null) forgetCartIntents(cart.id, variantId);
+      return cart;
+    }, true);
+  };
+
+  const forgetCartIntents = (cartId, variantId) => {
+    const prefix = `cronox.cart-intent:${cartId}:` + (variantId == null ? '' : `${variantId}:`);
+    try {
+      for (const key of Object.keys(sessionStorage)) if (key.startsWith(prefix)) sessionStorage.removeItem(key);
+    } catch { /* storage is optional */ }
   };
 
   const clearCartItems = async () => {
     if (!API?.clearCart) throw new Error('API de carrito no disponible');
-    return requestCart(() => API.clearCart(), true);
+    return requestCart(async () => {
+      const cart = await API.clearCart();
+      forgetCartIntents(cart.id);
+      return cart;
+    }, true);
   };
 
   async function addToCartLine(item) {
@@ -1542,12 +1597,12 @@
     });
     cartCatalogLoad = (async () => {
       if (typeof window.CRONOX_openQuickAdd !== 'function') {
-        for (const href of ['/assets/quick-add.css?v=11']) {
+        for (const href of ['/assets/quick-add.css?v=12']) {
           if (!Array.from(document.querySelectorAll('link[rel="stylesheet"]')).some(link => new URL(link.href).pathname === new URL(href, location.href).pathname)) {
             const style = document.createElement('link'); style.rel = 'stylesheet'; style.href = href; document.head.append(style);
           }
         }
-        if (!window.CRONOX_IMAGES) await loadScript('/assets/responsive-images.js?v=5');
+        if (!window.CRONOX_IMAGES) await loadScript('/assets/responsive-images.js?v=6');
         await loadScript('/assets/products.js?v=74');
       }
       await window.CRONOX_FULL_CATALOG.load();
@@ -1650,7 +1705,7 @@
   const getCartItemImage = (item) => {
     const canonical = window.CRONOX_IMAGES?.resolveProduct(item, 'cart');
     if (canonical?.src) return canonical.src;
-    const fallbackImage = 'assets/product-image-unavailable.svg';
+    const fallbackImage = window.CRONOX_PRODUCT_PLACEHOLDER || 'assets/product-image-unavailable.svg';
     const normalizeImage = (img) => {
       if (!img) return '';
       if (typeof img === 'string') return img;
@@ -2206,6 +2261,24 @@
     if (event.persisted) fetchCart().catch(() => undefined);
   });
   window.addEventListener('focus', revalidateCart);
+  storeChannel?.addEventListener('message', (event) => {
+    // Messages contain no private state; re-read the authenticated server.
+    if (event.data?.kind === 'cart') {
+      cartVersion += 1;
+      cartSyncedAt = 0;
+      cartRead = null;
+      fetchCart().catch(() => undefined);
+    } else if (event.data?.kind === 'favorites') {
+      FavoritesManager.revision += 1;
+      FavoritesManager.peerRefresh = true;
+      Promise.resolve(FavoritesManager.loadPromise).finally(() => {
+        if (!FavoritesManager.pendingProducts.size) {
+          FavoritesManager.peerRefresh = false;
+          void FavoritesManager.loadFromServer({ force: true });
+        }
+      });
+    }
+  });
   document.addEventListener('visibilitychange', revalidateCart);
   window.addEventListener('cronox:session-ended', () => {
     invalidateCart(undefined);
@@ -2267,8 +2340,44 @@ window.CRONOX_AUTH_STATE = window.CRONOX_USER ? 'authenticated' : 'unknown';
   let currentView = 'login';
   let loginErrorMessage = '';
   let registerErrorMessage = '';
+  let newsletterRegistration = null;
+  let registerSubmitting = false;
+  let loginSubmitting = false;
+  let authContextNotice;
+  const NEWSLETTER_RECOVERY_KEY = 'cronoxNewsletterRecovery';
+
+  const applyRegistrationContext = () => {
+    const newsletter = Boolean(newsletterRegistration);
+    for (const input of [registerEmail, registerLastName]) {
+      if (!input) continue;
+      input.hidden = newsletter;
+      input.disabled = newsletter;
+    }
+    if (newsletter && registerEmail) registerEmail.value = newsletterRegistration.email;
+    document.querySelectorAll('[data-auth-switch="register"]').forEach(button => {
+      button.hidden = Boolean(newsletterRegistration?.accountExists);
+    });
+    if (authContextNotice) {
+      authContextNotice.hidden = !newsletter;
+      authContextNotice.textContent = !newsletter ? '' : newsletterRegistration.signup
+        ? (newsletterRegistration.accountExists
+          ? 'Este correo ya tiene una cuenta. Inicia sesión o recupera tu contraseña para completar la suscripción a la newsletter.'
+          : 'Completa tu cuenta para suscribirte a la newsletter. Al finalizar aceptas recibir sus comunicaciones; las condiciones de la cuenta se indican debajo.')
+        : 'Tu suscripción está guardada. Inicia sesión o recupera tu contraseña para acceder a tu cuenta.';
+    }
+    const loginButton = loginForm?.querySelector('button[type="submit"]');
+    if (loginButton) loginButton.textContent = newsletterRegistration?.signup ? 'ACCEDER Y SUSCRIBIRME' : 'ACCEDER';
+    const registerButton = registerForm?.querySelector('button[type="submit"]');
+    if (registerButton) registerButton.textContent = newsletterRegistration?.signup ? 'CREAR CUENTA Y SUSCRIBIRME' : 'CREAR CUENTA';
+    const separateNewsletter = registerForm?.querySelector('[data-auth-separate-newsletter]');
+    if (separateNewsletter) separateNewsletter.hidden = Boolean(newsletterRegistration?.signup);
+  };
 
   let authStateRevision = 0;
+  let authRead = null;
+  let authRetryTimer = 0;
+  let authRetryDelay = 1500;
+  let authRecoveryNeeded = false;
   const publishAuthState = (user, { initial = false } = {}) => {
     authStateRevision++;
     window.CRONOX_USER = user || null;
@@ -2315,7 +2424,8 @@ window.CRONOX_AUTH_STATE = window.CRONOX_USER ? 'authenticated' : 'unknown';
   };
 
   const selectAuthView = (view) => {
-    currentView = view === 'register' ? 'register' : 'login';
+    currentView = view === 'register' && !newsletterRegistration?.accountExists ? 'register' : 'login';
+    applyRegistrationContext();
     document.querySelectorAll('.cronox-auth__view').forEach((v) => {
       v.classList.toggle('is-active', v.dataset.authView === currentView);
     });
@@ -2376,13 +2486,37 @@ window.CRONOX_AUTH_STATE = window.CRONOX_USER ? 'authenticated' : 'unknown';
     hideUserMenu();
   };
 
-  const openAuthModal = async (initialView = 'login') => {
+  const openAuthModal = async (initialView = 'login', options = {}) => {
+    if (registerSubmitting || loginSubmitting) return false;
     if (!authOverlay) {
       const ready = await prepareAuthExperience();
       if (!ready) return false;
     }
 
-    const activeElement = document.activeElement;
+    // Recovery may leave the page. This tab-local intent has no server effect
+    // and still requires an explicit authenticated submission on return.
+    if (!options.newsletterEmail && initialView === 'login') {
+      try {
+        const pending = JSON.parse(sessionStorage.getItem(NEWSLETTER_RECOVERY_KEY) || 'null');
+        sessionStorage.removeItem(NEWSLETTER_RECOVERY_KEY);
+        if (pending && /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(pending.email) &&
+            Date.now() - pending.createdAt >= 0 && Date.now() - pending.createdAt < 30 * 60_000) {
+          options = { ...options, newsletterEmail: pending.email, accountExists: true, newsletterSignup: true };
+        }
+      } catch {}
+    }
+    newsletterRegistration = options.newsletterEmail ? {
+      email: String(options.newsletterEmail).trim().toLowerCase(),
+      accountExists: options.accountExists === true,
+      signup: options.newsletterSignup === true,
+    } : null;
+    if (newsletterRegistration && loginEmail) loginEmail.value = newsletterRegistration.email;
+    if (newsletterRegistration) {
+      registerFirstName.value = '';
+      registerLastName.value = '';
+      registerPassword.value = '';
+    }
+    const activeElement = options.returnFocus || document.activeElement;
     if (
       activeElement instanceof HTMLElement &&
       activeElement !== document.body &&
@@ -2396,8 +2530,15 @@ window.CRONOX_AUTH_STATE = window.CRONOX_USER ? 'authenticated' : 'unknown';
     authOverlay.classList.remove('auth-hidden');
     authOverlay.setAttribute('aria-hidden', 'false');
     lockBody();
-    const focusInput = initialView === 'register' ? registerEmail : loginEmail;
-    if (focusInput) setTimeout(() => focusInput.focus({ preventScroll: true }), 60);
+    const focusInput = currentView === 'register' ? (newsletterRegistration ? registerFirstName : registerEmail) : loginEmail;
+    if (focusInput) setTimeout(() => {
+      // A fast tap/autofill may already have selected another field. Do not
+      // steal focus while it is being completed, or after the modal is closed.
+      if (authOverlay.classList.contains('is-open') &&
+          !authOverlay.contains(document.activeElement)) {
+        focusInput.focus({ preventScroll: true });
+      }
+    }, 60);
     return true;
   };
 
@@ -2411,6 +2552,8 @@ window.CRONOX_AUTH_STATE = window.CRONOX_USER ? 'authenticated' : 'unknown';
     unlockBody();
     loginErrorMessage = '';
     registerErrorMessage = '';
+    newsletterRegistration = null;
+    applyRegistrationContext();
     setAuthMessage('');
     if (returnFocus?.isConnected && typeof returnFocus.focus === 'function') {
       window.requestAnimationFrame(() => returnFocus.focus({ preventScroll: true }));
@@ -2419,19 +2562,26 @@ window.CRONOX_AUTH_STATE = window.CRONOX_USER ? 'authenticated' : 'unknown';
 
   const updateProfileIconUI = () => {
     if (!profileBtn) return;
+    profileBtn.setAttribute('aria-busy', String(Boolean(authRead)));
     if (window.CRONOX_USER) {
       profileBtn.setAttribute('data-auth-state', 'logged');
       profileBtn.title = window.CRONOX_USER.email || 'Mi cuenta';
     } else {
       hideUserMenu();
-      profileBtn.setAttribute('data-auth-state', 'guest');
-      profileBtn.title = 'Iniciar sesión';
+      const unresolved = window.CRONOX_AUTH_STATE === 'unknown';
+      profileBtn.setAttribute('data-auth-state', unresolved ? 'unknown' : 'guest');
+      profileBtn.title = unresolved ? 'Comprobar mi sesión' : 'Iniciar sesión';
     }
     syncTopbarActiveIcon();
   };
 
   const parseAuthError = (err) => {
     if (!err) return 'Ha ocurrido un error. Inténtalo de nuevo.';
+    if (err?.status >= 500) return 'No hemos podido guardar los cambios. Conservamos tus datos; vuelve a intentarlo en unos minutos.';
+    if (err?.status === 429) return 'Has realizado varios intentos. Espera un minuto antes de volver a intentarlo.';
+    if (err?.name === 'TypeError' || /failed to fetch|networkerror|network request|load failed/i.test(err?.message || '')) {
+      return 'No hemos podido comprobar la solicitud. Revisa tu conexión y vuelve a intentarlo; conservamos los datos del formulario.';
+    }
     if (typeof err === 'string') return err;
     if (err?.message) {
       if (String(err.message).toUpperCase().includes('INSUFFICIENT_STOCK')) {
@@ -2446,8 +2596,21 @@ window.CRONOX_AUTH_STATE = window.CRONOX_USER ? 'authenticated' : 'unknown';
     setAuthMessage('Revisa tu correo o contacta con soporte para recuperar tu acceso.', 'info');
   };
 
+  const persistNewsletterSubscription = async (email) => {
+    const response = await fetch(apiEndpoint('/api/newsletter/complete-registration'), {
+      method: 'POST', credentials: 'include',
+      headers: { 'Content-Type': 'application/json', ...(await getCsrfHeaders()) },
+      body: JSON.stringify({ email }),
+    });
+    const result = await response.json().catch(() => null);
+    if (!response.ok || result?.status !== 'subscribed') {
+      throw new Error('Has iniciado sesión, pero no hemos podido guardar la suscripción. Vuelve a intentarlo.');
+    }
+  };
+
   const handleLoginSubmit = async (event) => {
     event.preventDefault();
+    if (loginSubmitting) return;
     if (!window.CRONOX_API?.login) {
       setAuthMessage('Servicio de login no disponible.', 'error');
       return;
@@ -2462,68 +2625,122 @@ window.CRONOX_AUTH_STATE = window.CRONOX_USER ? 'authenticated' : 'unknown';
       return;
     }
 
+    const context = newsletterRegistration;
+    if (context?.signup && email.toLowerCase() !== context.email) {
+      setAuthMessage('Inicia sesión con el correo que has introducido para la newsletter.', 'error');
+      return;
+    }
+    loginSubmitting = true;
+    const submitButton = loginForm.querySelector('button[type="submit"]');
+    if (submitButton) submitButton.disabled = true;
     try {
       loginErrorMessage = '';
       setAuthMessage('Iniciando sesión...');
       const user = await window.CRONOX_API.login({ email, password });
       publishAuthState(user);
+      if (context?.signup && newsletterRegistration === context) {
+        await persistNewsletterSubscription(context.email);
+        publishAuthState({ ...user, newsletterSubscribed: true });
+      }
       await refreshUserDependentUI();
       if (['ADMIN', 'SUPERADMIN'].includes(user?.role)) {
         window.location.href = 'admin.html';
         return;
       }
-      closeAuthModal();
+      if (newsletterRegistration === context) {
+        closeAuthModal();
+        if (context?.signup) showNewsletterCompleted();
+      }
     } catch (err) {
       console.error('[AUTH] login error', err);
       loginErrorMessage = parseAuthError(err) || 'No se ha podido iniciar sesión.';
       setAuthMessage(loginErrorMessage, 'error');
+    } finally {
+      loginSubmitting = false;
+      if (submitButton) submitButton.disabled = false;
     }
   };
 
   const handleRegisterSubmit = async (event) => {
     event.preventDefault();
+    if (registerSubmitting) return;
     if (!window.CRONOX_API?.register) {
       setAuthMessage('Servicio de registro no disponible.', 'error');
       return;
     }
 
     const firstName = registerFirstName?.value.trim();
-    const lastName = registerLastName?.value.trim();
-    const email = registerEmail?.value.trim();
+    const fromNewsletter = Boolean(newsletterRegistration);
+    const registrationContext = newsletterRegistration;
+    const lastName = fromNewsletter ? undefined : registerLastName?.value.trim();
+    const email = newsletterRegistration?.email || registerEmail?.value.trim();
     const password = registerPassword?.value;
 
-    if (!firstName || !lastName || !email || !password) {
+    if (!firstName || (!fromNewsletter && !lastName) || !email || !password) {
       registerErrorMessage = 'Rellena todos los campos.';
       setAuthMessage(registerErrorMessage, 'error');
       return;
     }
 
-    if (firstName.length > 25 || lastName.length > 30) {
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
+      setAuthMessage('Introduce un correo electrónico válido.', 'error');
+      registerEmail?.focus();
+      return;
+    }
+    if (!/^[A-Za-zÁÉÍÓÚáéíóúÑñÜü\s]+$/.test(firstName) || (lastName && !/^[A-Za-zÁÉÍÓÚáéíóúÑñÜü\s]+$/.test(lastName))) {
+      setAuthMessage('El nombre y el apellido solo pueden contener letras y espacios.', 'error');
+      return;
+    }
+    if (Array.from(firstName).length > 25 || Array.from(lastName || '').length > 30) {
       registerErrorMessage = 'El nombre admite como máximo 25 caracteres y el apellido 30.';
       setAuthMessage(registerErrorMessage, 'error');
       return;
     }
 
+    // Keep required fields/acceptances in the shared registration form active.
+    if (!registerForm.checkValidity()) {
+      registerForm.reportValidity();
+      return;
+    }
+    const submitButton = registerForm.querySelector('button[type="submit"]');
+    registerSubmitting = true;
+    if (submitButton) submitButton.disabled = true;
+    registerForm.setAttribute('aria-busy', 'true');
     try {
       registerErrorMessage = '';
       setAuthMessage('Creando cuenta...');
       if (Array.from(password).length < 7 || new TextEncoder().encode(password).length > 72) {
         throw new Error('La contrase\u00f1a debe tener al menos 7 caracteres y no superar 72 bytes UTF-8.');
       }
-      const user = await window.CRONOX_API.register({ firstName, lastName, email, password });
+      const user = await window.CRONOX_API.register({ firstName, ...(fromNewsletter ? { registrationSource: 'newsletter' } : { lastName }), email, password });
       if (user?.verificationRequired === true) {
         registerErrorMessage = '';
         setAuthMessage(user.message || 'Comprueba tu correo para verificar la cuenta y establecer tu contraseña.');
         return;
       }
       if (!user) throw new Error('No se ha podido crear la cuenta.');
+      if (registrationContext?.signup && user.newsletterSubscribed !== true) {
+        throw new Error('No hemos podido confirmar la suscripción. Inicia sesión con este correo para completarla.');
+      }
       publishAuthState(user);
       await refreshUserDependentUI();
-      closeAuthModal();
+      if (newsletterRegistration === registrationContext) {
+        closeAuthModal();
+        if (registrationContext?.signup) showNewsletterCompleted();
+      }
     } catch (err) {
       console.error('[AUTH] register error', err);
       registerErrorMessage = parseAuthError(err) || 'No se ha podido crear la cuenta.';
       setAuthMessage(registerErrorMessage, 'error');
+      if (fromNewsletter && err?.status === 409 && newsletterRegistration) {
+        newsletterRegistration.accountExists = true;
+        loginErrorMessage = registerErrorMessage;
+        selectAuthView('login');
+      }
+    } finally {
+      registerSubmitting = false;
+      if (submitButton) submitButton.disabled = false;
+      registerForm.removeAttribute('aria-busy');
     }
   };
 
@@ -2572,6 +2789,9 @@ window.CRONOX_AUTH_STATE = window.CRONOX_USER ? 'authenticated' : 'unknown';
   };
 
   const resetClientSessionState = () => {
+    clearTimeout(authRetryTimer);
+    authRecoveryNeeded = false;
+    document.getElementById('authRecoveryStatus')?.remove();
     authStateRevision++;
     window.CRONOX_AUTH_STATE = 'anonymous';
     window.CRONOX_USER = null;
@@ -2635,8 +2855,15 @@ window.CRONOX_AUTH_STATE = window.CRONOX_USER ? 'authenticated' : 'unknown';
 
     profileBtn = document.getElementById('profileBtn');
     if (profileBtn) {
-      profileBtn.addEventListener('click', (ev) => {
+      profileBtn.addEventListener('click', async (ev) => {
         ev.preventDefault();
+        if (window.CRONOX_AUTH_STATE === 'unknown') {
+          await initAuthState();
+          if (window.CRONOX_AUTH_STATE === 'unknown') {
+            showAuthRecoveryMessage();
+            return;
+          }
+        }
         if (window.CRONOX_USER) toggleUserMenu();
         else openAuthModal('login');
       });
@@ -2651,6 +2878,9 @@ window.CRONOX_AUTH_STATE = window.CRONOX_USER ? 'authenticated' : 'unknown';
     document.querySelectorAll('[data-auth-forgot]').forEach((btn) => {
       btn.addEventListener('click', (ev) => {
         ev.preventDefault();
+        if (newsletterRegistration?.signup) {
+          try { sessionStorage.setItem(NEWSLETTER_RECOVERY_KEY, JSON.stringify({ email: newsletterRegistration.email, createdAt: Date.now() })); } catch {}
+        }
         window.location.href = '/recuperar-contrasena';
       });
     });
@@ -2696,6 +2926,14 @@ window.CRONOX_AUTH_STATE = window.CRONOX_USER ? 'authenticated' : 'unknown';
     registerLastName = document.getElementById('authRegisterLastName');
     registerEmail = document.getElementById('authRegisterEmail');
     registerPassword = document.getElementById('authRegisterPassword');
+    authContextNotice = document.getElementById('authContextNotice');
+    if (!authContextNotice && authTitle) {
+      authContextNotice = document.createElement('p');
+      authContextNotice.id = 'authContextNotice';
+      authContextNotice.className = 'cronox-auth__message';
+      authContextNotice.hidden = true;
+      authTitle.after(authContextNotice);
+    }
     userMenu = document.getElementById('authUserMenu');
   };
 
@@ -2747,22 +2985,71 @@ window.CRONOX_AUTH_STATE = window.CRONOX_USER ? 'authenticated' : 'unknown';
     return Boolean(authOverlay);
   };
 
-  const initAuthState = async () => {
+  const showAuthRecoveryMessage = () => {
+    let status = document.getElementById('authRecoveryStatus');
+    if (!status) {
+      status = document.createElement('p');
+      status.id = 'authRecoveryStatus';
+      status.setAttribute('role', 'status');
+      status.style.cssText = 'position:fixed;top:80px;right:20px;left:20px;z-index:9999;background:#fff;color:#111;padding:16px;text-align:center';
+      document.body.append(status);
+    }
+    status.textContent = 'No hemos podido comprobar tu sesión. Reintentaremos al recuperar la conexión. Puedes volver a pulsar Mi cuenta.';
+  };
+
+  const initAuthState = ({ initial = false } = {}) => {
+    if (authRead) return authRead;
     if (!window.CRONOX_API?.getMe) return;
+    clearTimeout(authRetryTimer);
     const attempt = authStateRevision;
-    try {
+    authRead = (async () => { try {
       const user = await window.CRONOX_API.getMe();
       if (attempt !== authStateRevision) return window.CRONOX_USER;
+      authRecoveryNeeded = false;
+      authRetryDelay = 1500;
+      document.getElementById('authRecoveryStatus')?.remove();
+      // A visibility check is not a new login. Avoid resetting a filled
+      // checkout/cart on every tab switch when identity is unchanged.
+      if (!initial && window.CRONOX_AUTH_STATE !== 'unknown' && (window.CRONOX_USER?.id ?? null) === (user?.id ?? null)) {
+        window.CRONOX_USER = user || null;
+        return user;
+      }
       // Initial reads already use the same session cookies. Only an actual
       // login/logout needs to reload the cart and checkout a second time.
-      return publishAuthState(user, { initial: true });
+      return publishAuthState(user, { initial });
     } catch (err) {
       // A transport/session recovery error is not proof of anonymity. Keep
       // the state unknown so authenticated visitors never see a popup flash.
-      if (attempt === authStateRevision) window.CRONOX_AUTH_STATE = 'unknown';
+      if (attempt !== authStateRevision) return window.CRONOX_USER;
+      if (!window.CRONOX_USER) window.CRONOX_AUTH_STATE = 'unknown';
+      authRecoveryNeeded = true;
+      authRetryTimer = setTimeout(recoverVisibleAuth, authRetryDelay);
+      authRetryDelay = Math.min(authRetryDelay * 2, 30_000);
       console.warn('[AUTH] No se pudo obtener el usuario actual', err);
-    }
+      return window.CRONOX_USER || undefined;
+    } finally {
+      authRead = null;
+      updateProfileIconUI();
+    } })();
+    window.CRONOX_AUTH_READY = authRead;
+    updateProfileIconUI();
+    return authRead;
   };
+  const recoverVisibleAuth = () => {
+    if (document.visibilityState === 'hidden' || navigator.onLine === false || !authRecoveryNeeded) return;
+    void initAuthState();
+  };
+  window.addEventListener('online', recoverVisibleAuth);
+  window.addEventListener('cronox:session-check', async () => {
+    // A lookup started before another tab's login may still return anonymous.
+    // Discard it, then resolve the new shared cookies through the server.
+    authStateRevision++;
+    await authRead;
+    void initAuthState();
+  });
+  window.addEventListener('focus', recoverVisibleAuth);
+  document.addEventListener('visibilitychange', recoverVisibleAuth);
+  window.addEventListener('cronox:session-ended', resetClientSessionState);
 
   // Exponer funciones globales por compatibilidad
   window.CRONOX_refreshAuthState = initAuthState;
@@ -2798,6 +3085,8 @@ window.CRONOX_AUTH_STATE = window.CRONOX_USER ? 'authenticated' : 'unknown';
     shownInMemory: false,
     previousFocus: null,
     storefrontReady: false,
+    continuation: null,
+    continuing: false,
   };
 
   const newsletterVisit = window.CRONOX_NEWSLETTER_VISIT?.create();
@@ -2828,30 +3117,41 @@ window.CRONOX_AUTH_STATE = window.CRONOX_USER ? 'authenticated' : 'unknown';
     }
   };
 
-  const showNewsletterResult = (confirmation = 'welcome') => {
+  const showNewsletterResult = (status, email) => {
     newsletterState.completed = true;
+    newsletterState.continuation = { email, accountExists: status === 'authentication_required' };
     newsletterState.modal.querySelector('.newsletter-modal-content')?.classList.add('newsletter-modal-content--result');
-    const welcome = confirmation === 'welcome';
-    newsletterState.title.textContent = welcome ? 'Bienvenido a Cronox' : '';
-    newsletterState.title.hidden = !welcome;
-    newsletterState.modal.setAttribute('aria-labelledby', welcome ? 'newsletterTitle' : 'newsletterResultCopy');
+    newsletterState.title.textContent = 'Completa tu suscripción';
+    newsletterState.title.hidden = false;
+    newsletterState.modal.setAttribute('aria-labelledby', 'newsletterTitle');
     newsletterState.subtitle.hidden = true;
     newsletterState.form.hidden = true;
     newsletterState.resultCopy.id = 'newsletterResultCopy';
-    newsletterState.resultCopy.textContent = confirmation === 'existing_account'
-      ? 'Este correo ya estaba asociado a una cuenta. Te hemos enviado un correo, revisa tu bandeja de entrada.'
-      : welcome ? 'Has activado tu cuenta. Consulta tu correo para conocer las novedades de Cronox y poder disfrutar del código de 10% en tu próxima compra.'
-      : 'Ya estás suscrito a las novedades de Cronox. Consulta tu correo para continuar con el registro o el acceso.';
+    newsletterState.resultCopy.textContent = status === 'authentication_required'
+      ? 'Este correo ya tiene una cuenta. Inicia sesión o recupera tu contraseña para suscribirte.'
+      : 'Completa tu cuenta para suscribirte a la newsletter.';
+    newsletterState.doneBtn.textContent = status === 'authentication_required' ? 'Iniciar sesión' : 'Completar mi cuenta';
     newsletterState.result.hidden = false;
-    const focusTarget = welcome ? newsletterState.title : newsletterState.resultCopy;
+    const focusTarget = newsletterState.title;
     focusTarget.tabIndex = -1;
-    focusTarget.focus({ preventScroll: true });
+    if (newsletterState.overlay.classList.contains('newsletter-modal-overlay--visible')) focusTarget.focus({ preventScroll: true });
     newsletterState.renderer?.reflow?.();
+  };
+
+  const showNewsletterCompleted = () => {
+    showNewsletterResult('completed', '');
+    newsletterState.continuation = null;
+    newsletterState.title.textContent = 'Suscripción completada';
+    newsletterState.resultCopy.textContent = 'Tu cuenta y tu suscripción a la newsletter están listas.';
+    newsletterState.doneBtn.textContent = 'Cerrar';
+    openNewsletterModal({ manual: true });
+    requestAnimationFrame(() => newsletterState.doneBtn.focus({ preventScroll: true }));
   };
 
   const resetNewsletterResult = () => {
     if (!newsletterState.completed) return;
     newsletterState.completed = false;
+    newsletterState.continuation = null;
     newsletterState.modal.querySelector('.newsletter-modal-content')?.classList.remove('newsletter-modal-content--result');
     newsletterState.title.textContent = newsletterState.originalTitle;
     newsletterState.title.hidden = false;
@@ -2862,6 +3162,28 @@ window.CRONOX_AUTH_STATE = window.CRONOX_USER ? 'authenticated' : 'unknown';
     newsletterState.result.hidden = true;
     newsletterState.form.hidden = false;
     setNewsletterFeedback('');
+  };
+
+  const continueNewsletterRegistration = async () => {
+    if (newsletterState.continuing || !newsletterState.continuation || !newsletterState.overlay?.classList.contains('newsletter-modal-overlay--visible')) return;
+    newsletterState.continuing = true;
+    newsletterState.doneBtn.disabled = true;
+    try {
+      const ready = await prepareAuthExperience();
+      // Closing during either request must not reopen another modal later.
+      if (!newsletterState.overlay.classList.contains('newsletter-modal-overlay--visible')) return;
+      if (!ready || registerSubmitting) {
+        newsletterState.resultCopy.textContent = 'No hemos podido abrir el formulario. La suscripción aún no se ha completado; vuelve a intentarlo con el botón de abajo.';
+        return;
+      }
+      const { email, accountExists } = newsletterState.continuation;
+      const returnFocus = newsletterState.previousFocus;
+      closeNewsletterModal({ dismiss: false, restoreFocus: false });
+      await openAuthModal(accountExists ? 'login' : 'register', { newsletterEmail: email, newsletterSignup: true, accountExists, returnFocus });
+    } finally {
+      newsletterState.continuing = false;
+      newsletterState.doneBtn.disabled = false;
+    }
   };
 
   const setNewsletterLoading = (isLoading) => {
@@ -2977,7 +3299,27 @@ window.CRONOX_AUTH_STATE = window.CRONOX_USER ? 'authenticated' : 'unknown';
     setNewsletterFeedback('Enviando...');
 
     try {
-      const res = await fetch(apiEndpoint('/api/newsletter/subscribe'), {
+      if (window.CRONOX_AUTH_STATE === 'unknown') {
+        setNewsletterFeedback('No hemos podido comprobar tu sesión. Vuelve a intentarlo.', 'error');
+        return;
+      }
+      const currentUser = window.CRONOX_USER;
+      if (currentUser && window.CRONOX_AUTH_STATE === 'authenticated') {
+        if (email.toLowerCase() !== String(currentUser.email || '').trim().toLowerCase()) {
+          setNewsletterFeedback('Utiliza el correo de tu cuenta actual para suscribirte a la newsletter.', 'error');
+          return;
+        }
+        // The server checks the authenticated identity and persists consent;
+        // this path neither registers an account nor changes its credentials.
+        await persistNewsletterSubscription(currentUser.email);
+        const stillOpen = newsletterState.overlay?.classList.contains('newsletter-modal-overlay--visible');
+        if (window.CRONOX_USER?.id === currentUser.id) {
+          publishAuthState({ ...window.CRONOX_USER, newsletterSubscribed: true });
+          if (stillOpen) showNewsletterCompleted();
+        }
+        return;
+      }
+      const res = await fetch(apiEndpoint('/api/newsletter/start-registration'), {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json', ...(await getCsrfHeaders()) },
@@ -2985,13 +3327,14 @@ window.CRONOX_AUTH_STATE = window.CRONOX_USER ? 'authenticated' : 'unknown';
       });
 
       const result = await res.json().catch(() => null);
-      if (res.status === 202 && result?.status === 'accepted') {
-        // A voluntary successful subscription also suppresses automatic prompts
-        // for the remainder of this session, without a persistent cooldown.
+      if (res.status === 200 && ['registration_required', 'authentication_required'].includes(result?.status)) {
+        // Starting a voluntary signup suppresses further automatic prompts;
+        // it does not yet create consent, an account or a welcome message.
         markNewsletterShown();
         clearNewsletterTimers();
-        showNewsletterResult(result.confirmation);
+        showNewsletterResult(result.status, email);
         persistNewsletterDismiss();
+        await continueNewsletterRegistration();
         return;
       }
 
@@ -3025,12 +3368,24 @@ window.CRONOX_AUTH_STATE = window.CRONOX_USER ? 'authenticated' : 'unknown';
       ev.preventDefault();
       closeNewsletterModal();
     });
-    newsletterState.doneBtn?.addEventListener('click', () => closeNewsletterModal());
-    document.querySelector('.footer-newsletter-form')?.addEventListener('submit', (event) => {
+    newsletterState.doneBtn?.addEventListener('click', () => {
+      if (newsletterState.continuation) void continueNewsletterRegistration();
+      else closeNewsletterModal();
+    });
+    document.querySelector('.footer-newsletter-form')?.addEventListener('submit', async (event) => {
       event.preventDefault();
-      const email = event.currentTarget.querySelector('input[type="email"]')?.value.trim() || '';
+      const form = event.currentTarget;
+      const email = form.querySelector('input[type="email"]')?.value.trim() || '';
+      const returnFocus = event.submitter || form.querySelector('input[type="email"]');
+      if (window.CRONOX_AUTH_STATE === 'unknown') {
+        await initAuthState();
+        if (window.CRONOX_AUTH_STATE === 'unknown') {
+          showAuthRecoveryMessage();
+          return;
+        }
+      }
       if (!openNewsletterModal({ manual: true })) return;
-      newsletterState.previousFocus = event.submitter || event.currentTarget.querySelector('input[type="email"]');
+      newsletterState.previousFocus = returnFocus;
       if (newsletterState.submitBtn?.disabled) return;
       resetNewsletterResult();
       newsletterState.emailInput.value = email;
@@ -3144,15 +3499,30 @@ window.CRONOX_AUTH_STATE = window.CRONOX_USER ? 'authenticated' : 'unknown';
       setIcon(item, '+');
     };
 
+    const openPanelHeight = (panel) => {
+      // Measure the natural children, including the OPEN padding. scrollHeight
+      // on a collapsed border-box omits part of that padding and can leave the
+      // last line outside the reserved space after text wraps or fonts load.
+      const style = getComputedStyle(panel);
+      const px = (value) => parseFloat(value) || 0;
+      const children = Array.from(panel.children).filter(child => getComputedStyle(child).display !== 'none');
+      const content = children.reduce((height, child) => {
+        const childStyle = getComputedStyle(child);
+        return height + child.getBoundingClientRect().height + px(childStyle.marginTop) + px(childStyle.marginBottom);
+      }, 0);
+      return Math.ceil(content + Math.max(0, children.length - 1) * px(style.rowGap)
+        + px(style.paddingTop) + px(style.paddingBottom) + px(style.borderTopWidth) + px(style.borderBottomWidth));
+    };
+
     const openItem = (item) => {
       const trigger = item.querySelector('.footer-acc-trigger');
       const panel = item.querySelector('.footer-acc-panel');
       if (trigger) trigger.setAttribute('aria-expanded', 'true');
+      item.classList.add('is-open');
       if (panel) {
-        panel.style.maxHeight = `${panel.scrollHeight}px`;
+        panel.style.maxHeight = `${openPanelHeight(panel)}px`;
         panel.setAttribute('aria-hidden', 'false');
       }
-      item.classList.add('is-open');
       setIcon(item, '–');
     };
 
@@ -3166,7 +3536,7 @@ window.CRONOX_AUTH_STATE = window.CRONOX_USER ? 'authenticated' : 'unknown';
         if (!item.classList.contains('is-open')) return;
         const panel = item.querySelector('.footer-acc-panel');
         if (panel) {
-          panel.style.maxHeight = `${panel.scrollHeight}px`;
+          panel.style.maxHeight = `${openPanelHeight(panel)}px`;
         }
       });
     };
@@ -3216,6 +3586,8 @@ window.CRONOX_AUTH_STATE = window.CRONOX_USER ? 'authenticated' : 'unknown';
 
     mobileQuery.addEventListener('change', handleMatchChange);
     window.addEventListener('resize', recalcOpenPanels);
+    document.fonts?.ready.then(recalcOpenPanels);
+    document.fonts?.addEventListener('loadingdone', recalcOpenPanels);
   };
 
   document.addEventListener('DOMContentLoaded', () => {
@@ -3225,7 +3597,7 @@ window.CRONOX_AUTH_STATE = window.CRONOX_USER ? 'authenticated' : 'unknown';
 
   document.addEventListener('DOMContentLoaded', async () => {
     // Session resolution must not wait for the optional login modal download.
-    window.CRONOX_AUTH_READY = initAuthState();
+    window.CRONOX_AUTH_READY = initAuthState({ initial: true });
     const ready = await prepareAuthExperience();
     if (!ready) return;
     await window.CRONOX_AUTH_READY;

@@ -5,8 +5,9 @@ import { JSDOM } from 'jsdom';
 
 const read = (file: string) => readFileSync(path.resolve(__dirname, '../../../cronox-front', file), 'utf8');
 const tick = () => new Promise(resolve => setTimeout(resolve, 0));
-function setup() {
+function setup(customerSurface = true) {
   const dom = new JSDOM(read('faqs.html'), { runScripts: 'outside-only', url: 'http://localhost:3000/faqs' });
+  if (!customerSurface) dom.window.document.body.removeAttribute('data-cronox-surface');
   const app = dom.window as any;
   app.matchMedia = () => ({ matches: false, addEventListener() {}, removeEventListener() {} });
   app.scrollTo = () => {};
@@ -24,6 +25,25 @@ const catalog = [{ id: '1', slug: 'available', name: 'Available', variants: [{ s
   { id: '2', slug: 'sold-out', name: 'Sold out', variants: [{ stock: 0 }] }];
 
 describe('cart recommendation dependencies', () => {
+  it.each([true, false])('uses the correct missing-image caption before lazy helpers load (customer surface: %s)', async customerSurface => {
+    const { app, dom, document } = setup(customerSurface);
+    await tick();
+    app.CRONOX_API.getCart = async () => ({
+      items: [{ id: 1, qty: 1, priceCents: 2000, product: { name: 'Product without image' } }],
+      itemsCount: 1, subtotalCents: 2000,
+    });
+    await app.CRONOX_CART.fetchCart();
+    const expected = customerSurface
+      ? '/assets/customer-product-image-unavailable.svg'
+      : 'assets/product-image-unavailable.svg';
+    expect(document.querySelector('.cart-line img')?.getAttribute('src')).toBe(expected);
+    expect(app.CRONOX_IMAGES).toBeUndefined();
+    await app.CRONOX_CART.openCartDrawer();
+    expect(document.querySelector('.cart-line img')?.getAttribute('src')).toBe(expected);
+    expect(app.CRONOX_IMAGES).toBeUndefined();
+    dom.window.close();
+  });
+
   it('loads the existing catalogue and quick-add once, then redraws after catalogue readiness', async () => {
     const { app, dom, document } = setup();
     await tick();

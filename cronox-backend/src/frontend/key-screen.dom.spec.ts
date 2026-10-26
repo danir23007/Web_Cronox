@@ -57,7 +57,7 @@ describe('Pantalla Clave frontend integration', () => {
       adminHtml.indexOf('admin-key-screen.js'),
     );
     expect(adminHtml).toContain('assets/key-screen-composition.css?v=2');
-    expect(gateHtml).toContain('assets/key-screen-composition.css?v=3');
+    expect(gateHtml).toContain('assets/key-screen-composition.css?v=4');
     expect(
       document.querySelector('#keyPreview.key-composition'),
     ).not.toBeNull();

@@ -16,6 +16,7 @@ describe('GuestOrderAccountService', () => {
         create: jest.fn(),
       },
       address: { create: jest.fn() },
+      newsletterSubscription: { findUnique: jest.fn().mockResolvedValue(null), update: jest.fn() },
     };
   });
   it('records NOT_NEEDED for a pre-existing password, without writing credentials', async () => {
@@ -111,6 +112,7 @@ describe('GuestOrderAccountService', () => {
         email: 'new.customer@example.com',
         accountState: 'ACTIVE',
         password: null,
+        newsletterSubscribed: false,
         role: Role.USER,
         name: 'Daniel Rivas Cruz',
         firstName: 'Daniel',

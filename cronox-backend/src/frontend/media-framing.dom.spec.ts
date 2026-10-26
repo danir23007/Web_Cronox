@@ -606,6 +606,7 @@ const makePublicDom = (
   viewport = { width: 1440, height: 900 },
   cached?: unknown,
   holdInitialLoad = false,
+  prepare?: (dom: JSDOM) => void,
 ) => {
   const dom = new JSDOM(
     '<!doctype html><html><body><section class="hero-video-section"><img class="hero-video" data-media-placement="home.hero.video" alt=""></section></body></html>',
@@ -646,6 +647,7 @@ const makePublicDom = (
       JSON.stringify(cached),
     );
   }
+  prepare?.(dom);
   dom.window.eval(geometryScript);
   dom.window.eval(publicScript);
   return {
@@ -658,6 +660,90 @@ const makePublicDom = (
 };
 
 describe('public hero framing', () => {
+  it.each([
+    ['customer', 'SUPERADMIN', 800, '700'],
+    ['customer', undefined, 900, '700'],
+    ['customer', undefined, 300, '300'],
+    ['customer', undefined, 600, '600'],
+    ['admin', 'SUPERADMIN', 900, '900'],
+  ])('renders enabled hero weight by %s surface rather than role %s (saved %i)', async (surface, role, weight, expected) => {
+    const heroText = {
+      enabled: true, content: 'CRONOX enabled hero',
+      desktop: { ...heroViewport(42), fontWeight: weight },
+      tablet: { ...heroViewport(36), fontWeight: weight },
+      mobile: { ...heroViewport(28), fontWeight: weight },
+    };
+    const payload = { version: 5, placements: { 'home.hero.video': {
+      desktop: baseline, tablet: baseline, mobile: baseline,
+      source: '/assets/portada-demo.mp4', mediaType: 'video', heroText,
+    } } };
+    const fetchMock = jest.fn().mockResolvedValue(jsonResponse(payload));
+    const { dom } = makePublicDom(fetchMock);
+    const win = dom.window as any;
+    win.CRONOX_USER = role ? { role } : null;
+    win.document.body.dataset.cronoxSurface = surface;
+    try {
+      await flushAsync();
+      await flushAsync();
+      const text = win.document.querySelector('.hero-overlay-text');
+      expect(text.textContent).toBe(heroText.content);
+      expect(win.getComputedStyle(text).fontWeight).toBe(expected);
+      expect(heroText.desktop.fontWeight).toBe(weight);
+      expect(JSON.parse(win.localStorage.getItem('cronox.mediaFraming.web.v5')).placements['home.hero.video'].heroText.desktop.fontWeight).toBe(weight);
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    } finally { win.close(); }
+  });
+
+  it('remeasures enabled text after fonts settle without replacing the hero or fetching again', async () => {
+    let fontsReady!: () => void;
+    let fonts!: EventTarget;
+    const ready = new Promise<void>((resolve) => { fontsReady = resolve; });
+    const payload = { version: 5, placements: { 'home.hero.video': {
+      desktop: baseline, tablet: baseline, mobile: baseline,
+      source: '/assets/hero.jpg', mediaType: 'image',
+      heroText: {
+        enabled: true, content: 'Texto largo del hero con fuente descargada',
+        desktop: heroViewport(42, 100, 100),
+        tablet: heroViewport(36, 100, 100),
+        mobile: heroViewport(28, 100, 100),
+      },
+    } } };
+    const fetchMock = jest.fn().mockResolvedValue(jsonResponse(payload));
+    const { dom } = makePublicDom(fetchMock, { width: 390, height: 844 }, undefined, false, (fixture) => {
+      fonts = new fixture.window.EventTarget();
+      Object.defineProperty(fonts, 'ready', { value: ready });
+      Object.defineProperty(fixture.window.document, 'fonts', { value: fonts });
+      fixture.window.document.body.dataset.cronoxSurface = 'customer';
+    });
+    const win = dom.window as any;
+    try {
+      await flushAsync();
+      await flushAsync();
+      const hero = win.document.querySelector('[data-media-placement="home.hero.video"]');
+      const text = win.document.querySelector('.hero-overlay-text');
+      let bounds = { width: 120, height: 40 };
+      text.getBoundingClientRect = () => bounds;
+      win.CRONOX_MEDIA_FRAMING.applyAll();
+      expect(text.style.left).toBe('270px');
+      expect(text.style.top).toBe('804px');
+
+      bounds = { width: 220, height: 90 };
+      fontsReady();
+      await flushAsync();
+      expect(text.style.left).toBe('170px');
+      expect(text.style.top).toBe('754px');
+
+      bounds = { width: 260, height: 120 };
+      fonts.dispatchEvent(new win.Event('loadingdone'));
+      expect(text.style.left).toBe('130px');
+      expect(text.style.top).toBe('724px');
+      expect(win.document.querySelector('.hero-overlay-text')).toBe(text);
+      expect(win.document.querySelector('[data-media-placement="home.hero.video"]')).toBe(hero);
+      expect(hero.getAttribute('src')).toBe('https://store.example.test/assets/hero.jpg');
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    } finally { win.close(); }
+  });
+
   it('renders no hero text by default and uses textContent for enabled plain text', async () => {
     const fetchMock = jest.fn().mockResolvedValue(
       jsonResponse({
@@ -905,9 +991,9 @@ describe('public hero framing', () => {
   });
 
   it('loads framing assets only on the homepage and leaves Products/Gallery untouched', () => {
-    expect(indexHtml).toContain('media-framing-geometry.js?v=6');
-    expect(indexHtml).toContain('media-framing.js?v=8');
-    expect(indexHtml).toContain('responsive-images.js?v=5');
+    expect(indexHtml).toContain('media-framing-geometry.js?v=7');
+    expect(indexHtml).toContain('media-framing.js?v=9');
+    expect(indexHtml).toContain('responsive-images.js?v=6');
     expect(indexHtml).toContain('data-media-placement="home.hero.video"');
     expect(indexHtml).toContain('<img class="hero-video"');
     expect(indexHtml).not.toContain('<video class="hero-video"');

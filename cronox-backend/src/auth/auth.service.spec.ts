@@ -106,6 +106,24 @@ describe('AuthService password reset security', () => {
     Object.assign(process.env, originalEnvironment);
   });
 
+  it.each([null, 'existing-hash'])('newsletter completion never replaces existing credentials=%s or sends a reset automatically', async password => {
+    usersService.findByEmail.mockResolvedValue({ id: 42, email: 'member@example.test', password, role: Role.USER, accountState: UserAccountState.ACTIVE });
+    await expect(service.register({ email: 'member@example.test', firstName: 'Otro', password: 'NewPassword1', registrationSource: 'newsletter' })).rejects.toThrow('ya tiene una cuenta');
+    expect(usersService.createUser).not.toHaveBeenCalled();
+    expect(sessions.create).not.toHaveBeenCalled();
+    expect(emailService.sendPasswordReset).not.toHaveBeenCalled();
+    expect(emailService.sendInitialPasswordSetup).not.toHaveBeenCalled();
+  });
+
+  it('passes newsletter consent into the account transaction without requiring a previous subscription', async () => {
+    usersService.findByEmail.mockResolvedValue(null);
+    usersService.createUser.mockRejectedValue(new Error('atomic persistence failed'));
+    await expect(service.register({ email: 'new@example.test', firstName: 'Persona', password: 'NewPassword1', registrationSource: 'newsletter' })).rejects.toThrow('atomic persistence failed');
+    expect(usersService.createUser).toHaveBeenCalledWith(expect.objectContaining({ email: 'new@example.test', newsletterSubscribed: true }));
+    expect(newsletterService.subscribeIfNeeded).not.toHaveBeenCalled();
+    expect(sessions.create).not.toHaveBeenCalled();
+  });
+
   it('records a successful login as coarse client information only', async () => {
     prisma.userLoginEvent = {
       create: jest.fn().mockResolvedValue({ id: 'login-1' }),

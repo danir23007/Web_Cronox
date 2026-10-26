@@ -376,6 +376,22 @@ describe('server-authoritative sliding auth sessions', () => {
     });
   });
 
+  it('coalesces nearby customer visits and retains the refresh returned just before a visit', async () => {
+    const original = await service.create(user);
+    const claims = { sub: 7, sv: 3, sid: [...records.keys()][0] };
+    jest.advanceTimersByTime(20_000);
+    const refreshed = await service.rotate(original.refreshToken);
+    const visited = (await service.visit(claims))!;
+    await expect(service.verify(refreshed.refreshToken, 'refresh')).resolves.toBeTruthy();
+    jest.advanceTimersByTime(2000);
+    const secondVisit = (await service.visit(claims))!;
+    expect(secondVisit.refreshToken).toBe(visited.refreshToken);
+    await expect(service.rotate(refreshed.refreshToken)).resolves.toMatchObject({ refreshToken: visited.refreshToken });
+    jest.advanceTimersByTime(REFRESH_RACE_MS);
+    await expect(service.rotate(refreshed.refreshToken)).rejects.toMatchObject({ response: { code: 'REFRESH_RETRY' } });
+    expect([...records.values()][0].revokedAt).toBeNull();
+  });
+
   it('stores only a refresh-token hash and deletes no user or cart data', async () => {
     const tokens = await service.create(user);
     const row = [...records.values()][0];

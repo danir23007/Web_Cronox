@@ -1,6 +1,8 @@
 <!doctype html>
 <html lang="es">
 <head>
+  <link rel="preload" href="/assets/fonts/cormorant-garamond/cormorant-garamond-normal-latin-v21.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="/assets/customer-typography.css?v=4">
   <link rel="stylesheet" href="/assets/password-visibility.css?v=1">
   <script src="/assets/password-visibility.js?v=1" defer></script>
   <meta charset="utf-8">
@@ -17,8 +19,8 @@
     .topbar__logo-img { display: block; width: 140px; height: auto; }
     .topbar svg { width: 24px; height: 24px; }
   </style>
-  <link id="cronox-main-style" rel="stylesheet" href="assets/store.css?v=124">
-  <link rel="stylesheet" href="assets/quick-add.css?v=11">
+  <link id="cronox-main-style" rel="stylesheet" href="assets/store.css?v=127">
+  <link rel="stylesheet" href="assets/quick-add.css?v=12">
   <style>
     .profile-account-stack { min-width: 0; }
     #passwordForm { margin-top: 16px; }
@@ -28,7 +30,7 @@
     .profile-card { background: transparent; border: none; border-radius: 12px; padding: 20px; box-shadow: none; }
     .profile-card h2 { font-size: 1.25rem; margin: 0 0 12px; }
     .profile-card p.section-desc { margin: 0 0 16px; color: #9ea0a6; }
-    .profile-card .email-support-link { color: #fff; font-weight: 800; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+    .profile-card .email-support-link { color: #fff; font-weight: var(--customer-heavy, 800); text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
     .profile-card .email-support-link:focus-visible { outline: 2px solid #fff; outline-offset: 4px; border-radius: 2px; }
     .profile-form { display: grid; gap: 12px; }
     .profile-form .form-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(200px, 100%), 1fr)); gap: 12px; }
@@ -61,13 +63,14 @@
     #profileMessage.is-error { border-color: #ff5f5f; color: #ffd9d9; }
     #profileMessage.is-success { border-color: #4ade80; color: #e6ffed; }
   </style>
-  <link rel="stylesheet" href="assets/metacrilatos-profile.css?v=5">
+  <link rel="stylesheet" href="assets/metacrilatos-profile.css?v=6">
   <link rel="icon" type="image/png" href="/favicon.png?v=4">
   <link rel="shortcut icon" type="image/png" href="/favicon.png?v=4">
   <link rel="apple-touch-icon" href="/favicon.png?v=4">
   <meta name="theme-color" content="#000000">
+  <link rel="stylesheet" href="/assets/customer-layout.css?v=1">
 </head>
-<body class="page-profile">
+<body data-cronox-surface="customer" class="customer-page page-profile">
 
   <div id="overlay" class="overlay" hidden></div>
 
@@ -213,7 +216,7 @@
                       <div class="accreditation-symbol-wrap">
                         <div class="accreditation-symbol" data-accreditation-rings></div>
                       </div>
-                      <p class="accreditation-circle">Círculo I</p>
+                      <p class="accreditation-circle">Círculo <span data-circle-numeral>I</span></p>
                     </div>
                     <div class="accreditation-meta">
                       <p class="accreditation-name">—</p>
@@ -278,14 +281,14 @@
         <aside class="metacrilatos-member" data-metacrilatos-member hidden></aside>
         <div class="accreditation-upgrade" data-accreditation-promotions hidden>
           <div class="accreditation-promotion-flow" data-circle-request-cta hidden>
-            <button type="button" class="accreditation-circle-btn" data-circle-request-btn disabled aria-describedby="circlePromotionFeedback">Solicitar ascenso al círculo III</button>
+            <button type="button" class="accreditation-circle-btn" data-circle-request-btn disabled aria-describedby="circlePromotionFeedback">Solicitar ascenso al círculo <span data-circle-numeral>III</span></button>
             <div class="accreditation-promotion-feedback" id="circlePromotionFeedback">
               <p class="accreditation-circle-status" data-circle-request-status role="status" hidden></p>
               <p class="accreditation-circle-status accreditation-circle-status--muted" data-circle-request-cooldown hidden></p>
             </div>
           </div>
           <div class="accreditation-promotion-flow" data-circle4-cta hidden>
-            <button type="button" class="accreditation-circle-btn" data-circle4-request-btn disabled aria-describedby="circleUpgradeFeedback">Solicitar ascenso al círculo IV</button>
+            <button type="button" class="accreditation-circle-btn" data-circle4-request-btn disabled aria-describedby="circleUpgradeFeedback">Solicitar ascenso al círculo <span data-circle-numeral>IV</span></button>
             <div class="accreditation-promotion-feedback" id="circleUpgradeFeedback">
               <p class="accreditation-circle-status" data-circle4-status role="status" hidden></p>
               <p class="accreditation-circle-status accreditation-circle-status--muted" data-circle4-cooldown hidden></p>
@@ -506,21 +509,21 @@
 
   <script src="assets/country.js?v=1"></script>
   <script src="assets/size-systems.js?v=1"></script>
-  <script src="assets/api.js?v=24"></script>
-  <script src="assets/responsive-images.js?v=5"></script>
+  <script src="assets/api.js?v=26"></script>
+  <script src="assets/responsive-images.js?v=6"></script>
   <script src="/assets/product-delivery.js?v=5" defer></script>
-  <script src="assets/app.js?v=97" defer></script>
-  <script src="assets/media-framing-geometry.js?v=6" defer></script>
+  <script src="assets/app.js?v=104" defer></script>
+  <script src="assets/media-framing-geometry.js?v=7" defer></script>
   <script src="assets/product-card-framing.js?v=1" defer></script>
   <script src="assets/products.js?v=74" defer></script>
   <script src="assets/favorites-toggle.js?v=3" defer></script>
   <script src="assets/user-identity.js?v=1" defer></script>
   <script src="assets/accreditation-layout.js?v=2" defer></script>
-  <script src="assets/metacrilatos.js?v=7" defer></script>
+  <script src="assets/metacrilatos.js?v=8" defer></script>
   <script src="assets/accreditation-designs.js?v=2" defer></script>
   <script src="assets/metacrilatos-presentation.js?v=3" defer></script>
-  <script src="assets/profile.js?v=33" defer></script>
-  <script src="assets/metacrilatos-profile.js?v=4" defer></script>
+  <script src="assets/profile.js?v=35" defer></script>
+  <script src="assets/metacrilatos-profile.js?v=34" defer></script>
 
   <style>
     /* Profile overrides */

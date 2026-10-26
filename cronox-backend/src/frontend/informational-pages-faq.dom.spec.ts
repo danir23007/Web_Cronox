@@ -23,7 +23,7 @@ describe('Informational pages and FAQ', () => {
     const document = new JSDOM(html).window.document;
     expect(document.body.classList.contains('page-info')).toBe(true);
     expect(
-      document.querySelector('link[href="assets/info-page.css?v=3"]'),
+      document.querySelector('link[href="assets/info-page.css?v=4"]'),
     ).not.toBeNull();
     const inlineStyles = Array.from(document.querySelectorAll('style'))
       .map((style) => style.textContent)

@@ -1,7 +1,7 @@
 import { NewsletterService } from './newsletter.service';
 jest.mock('../users/member-code.util', () => ({ getNextSequentialMemberCode: jest.fn().mockResolvedValue('CRX-000123') }));
 
-describe('Newsletter durable single opt-in', () => {
+describe('Newsletter registration and independent checkout opt-in', () => {
   let row: any, promo: any, legacy: any, user: any, jobs: any[], db: any, mail: any, service: NewsletterService;
   beforeEach(() => {
     row = null; promo = null; legacy = null; user = null; jobs = [];
@@ -18,7 +18,7 @@ describe('Newsletter durable single opt-in', () => {
         findFirst: jest.fn(async ({ where }: any) => jobs.find(job => (where.OR ? where.OR.some((match: any) => match.userId ? job.userId === match.userId : job.email === match.email) : job.email === where.email) && job.kind === where.kind && (!where.createdAt || job.createdAt >= where.createdAt.gte)) || null),
         create: jest.fn(async ({ data }: any) => { const job = { id: `job-${jobs.length}`, createdAt: new Date(), ...data }; jobs.push(job); return job; }),
       },
-      user: { findMany: jest.fn(async () => user ? [user] : []), findUnique: jest.fn(async () => user), findUniqueOrThrow: jest.fn(async () => user), update: jest.fn(async ({ data }: any) => Object.assign(user, data)), create: jest.fn(async ({ data }: any) => user = { id: 1, role: 'USER', ...data }) },
+      user: { findFirst: jest.fn(async () => user), findMany: jest.fn(async () => user ? [user] : []), findUnique: jest.fn(async () => user), findUniqueOrThrow: jest.fn(async () => user), update: jest.fn(async ({ data }: any) => Object.assign(user, data)), create: jest.fn(async ({ data }: any) => user = { id: 1, role: 'USER', ...data }) },
       order: { findFirst: jest.fn().mockResolvedValue(null) },
       discountCode: { findFirst: jest.fn(async () => legacy), findUnique: jest.fn(async () => legacy), create: jest.fn(async ({ data }: any) => legacy = { ...data }) },
       promoCodeRedemption: { findFirst: jest.fn().mockResolvedValue(null) },
@@ -31,59 +31,88 @@ describe('Newsletter durable single opt-in', () => {
     service = new NewsletterService(db, mail);
   });
 
-  it('persists consent, one welcome benefit and one durable job before returning 202', async () => {
-    expect(await service.subscribe('NEW@example.test')).toEqual({ status: 'accepted', httpStatus: 202, confirmation: 'welcome' });
+  it.each(['new', 'subscribed', 'existing'])('starting %s registration makes no writes or delivery', async kind => {
+    if (kind === 'subscribed') row = { email: 'new@example.test', subscribedAt: new Date() };
+    if (kind === 'existing') user = { id: 7, email: 'new@example.test', newsletterSubscribed: false };
+    expect(await service.startRegistration(' NEW@example.test ')).toEqual({ status: kind === 'existing' ? 'authentication_required' : 'registration_required' });
+    expect(db.$transaction).not.toHaveBeenCalled();
+    expect(db.newsletterSubscription.upsert).not.toHaveBeenCalled();
+    expect(db.user.update).not.toHaveBeenCalled();
+    expect(jobs).toHaveLength(0);
+  });
+
+  it('completes consent for the authenticated address without another code or message', async () => {
+    user = { id: 7, email: 'known@example.test', role: 'USER', accountState: 'ACTIVE', newsletterSubscribed: false, password: 'unchanged' };
+    expect(await service.completeRegistration(7, ' KNOWN@example.test ')).toEqual({ status: 'subscribed' });
+    await service.completeRegistration(7, user.email);
+    expect(row).toMatchObject({ userId: 7, email: user.email });
+    expect(user).toMatchObject({ newsletterSubscribed: true, password: 'unchanged' });
+    expect(jobs).toHaveLength(0);
+    expect(db.promoCode.create).not.toHaveBeenCalled();
+  });
+
+  it.each(['different-address', 'blocked', 'link-conflict'])('rejects %s before persisting consent', async reason => {
+    user = { id: 7, email: 'known@example.test', role: 'USER', accountState: reason === 'blocked' ? 'DISABLED' : 'ACTIVE' };
+    if (reason === 'link-conflict') row = { email: user.email, userId: 8 };
+    await expect(service.completeRegistration(7, reason === 'different-address' ? 'other@example.test' : user.email)).rejects.toThrow();
+    expect(db.newsletterSubscription.upsert).not.toHaveBeenCalled();
+    expect(db.user.update).not.toHaveBeenCalled();
+  });
+
+  it('persists consent without creating an incomplete account, code, session or welcome', async () => {
+    expect(await service.subscribe(' NEW@example.test ')).toEqual({ status: 'accepted', httpStatus: 202, confirmation: 'subscribed' });
     expect(row.email).toBe('new@example.test');
     expect(row.subscribedAt).toBeInstanceOf(Date);
     expect(row.verifiedAt).toBeNull();
-    expect(promo.code).toMatch(/^[A-Z0-9]{6}$/);
-    expect(promo).toMatchObject({ type: 'PERCENT', value: 10, firstOrderOnly: true, ownerEmail: 'new@example.test', usageLimit: 1 });
-    expect(jobs).toMatchObject([{ email: 'new@example.test', kind: 'WELCOME' }]);
+    expect(db.user.create).not.toHaveBeenCalled();
+    expect(db.promoCode.create).not.toHaveBeenCalled();
+    expect(jobs).toHaveLength(0);
     expect(mail.sendNewsletterWelcome).not.toHaveBeenCalled();
-    expect(db.user.create).toHaveBeenCalledTimes(1);
-    expect(user).toMatchObject({ password: null, accountState: 'ACTIVE', memberCode: 'CRX-000123', newsletterSubscribed: true });
-    expect(row.userId).toBe(user.id);
   });
 
-  it('keeps the public response identical and never duplicates a pending welcome', async () => {
-    const first = await service.subscribe('new@example.test');
-    const repeated = await service.subscribe('NEW@example.test');
-    expect(first.confirmation).toBe('welcome');
-    expect(repeated.confirmation).toBe('subscribed');
+  it('repeated subscription without an account remains one subscription and no account', async () => {
+    await service.subscribe('new@example.test');
+    const first = row;
+    expect((await service.subscribe('NEW@example.test')).confirmation).toBe('subscribed');
+    expect(row).toBe(first);
+    expect(db.user.create).not.toHaveBeenCalled();
+    expect(jobs).toHaveLength(0);
+  });
+
+  it('preserves an existing account and limits replacement access to one job per cooldown', async () => {
+    user = { id: 7, email: 'known@example.test', role: 'USER', accountState: 'ACTIVE', newsletterSubscribed: false, password: 'unchanged', name: 'Original' };
+    expect((await service.subscribe(user.email)).confirmation).toBe('existing_account');
+    await service.subscribe(user.email);
+    expect(user).toMatchObject({ password: 'unchanged', name: 'Original', newsletterSubscribed: true });
+    expect(row.userId).toBe(7);
+    expect(jobs.map(job => job.kind)).toEqual(['ACCESS']);
+    expect(db.promoCode.create).not.toHaveBeenCalled();
+    expect(db.user.create).not.toHaveBeenCalled();
+  });
+
+  it('does not add access delivery beside an existing pending welcome', async () => {
+    user = { id: 7, email: 'known@example.test', role: 'USER', accountState: 'ACTIVE' };
+    jobs.push({ email: user.email, kind: 'WELCOME' });
+    expect((await service.subscribe(user.email)).confirmation).toBe('existing_account');
     expect(jobs).toHaveLength(1);
-    expect(db.promoCode.create).toHaveBeenCalledTimes(1);
   });
 
-  it('queues one access message for an existing subscriber, with or without an account', async () => {
-    row = { id: 'sub', email: 'known@example.test', subscribedAt: new Date(), welcomeSentAt: new Date() };
-    const first = await service.subscribe('known@example.test');
-    user = { id: 1, email: row.email, newsletterSubscribed: true, role: 'USER', accountState: 'ACTIVE' };
-    const second = await service.subscribe('KNOWN@example.test');
-    expect(first.confirmation).toBe('subscribed');
-    expect(second.confirmation).toBe('existing_account');
-    expect(jobs).toMatchObject([{ email: row.email, kind: 'ACCESS' }]);
-    expect(db.newsletterMailJob.create).toHaveBeenCalledTimes(1);
-  });
-
-  it('does not report accepted when durable scheduling fails', async () => {
-    db.newsletterMailJob.create.mockRejectedValueOnce(new Error('database unavailable'));
+  it('does not report accepted when persistence fails', async () => {
+    db.newsletterSubscription.upsert.mockRejectedValueOnce(new Error('database unavailable'));
     await expect(service.subscribe('new@example.test')).rejects.toThrow('database unavailable');
     expect(mail.sendNewsletterWelcome).not.toHaveBeenCalled();
   });
 
-  it('uses account records before a first subscription and preserves its one welcome benefit', async () => {
-    user = { id: 7, email: 'known@example.test', role: 'USER', accountState: 'ACTIVE', newsletterSubscribed: false };
+  it.each(['ADMIN', 'SUPERADMIN'])('does not send passwordless access or create a new account for %s', async role => {
+    user = { id: 7, email: 'known@example.test', role, accountState: 'ACTIVE' };
     expect((await service.subscribe(user.email)).confirmation).toBe('existing_account');
-    expect(jobs.map(job => job.kind)).toEqual(['ACCESS']);
-    await service.subscribe(user.email);
-    expect(jobs).toHaveLength(1);
-    expect(db.promoCode.create).toHaveBeenCalledTimes(1);
+    expect(jobs).toHaveLength(0);
   });
 
-  it.each(['ADMIN', 'SUPERADMIN'])('does not advertise passwordless access for %s', async role => {
-    user = { id: 7, email: 'known@example.test', role, accountState: 'ACTIVE' };
-    row = { id: 'sub', email: user.email, subscribedAt: new Date(), welcomeSentAt: new Date() };
-    expect((await service.subscribe(user.email)).confirmation).toBe('subscribed');
+  it('rejects ambiguous account matches without selecting a user', async () => {
+    db.$queryRaw.mockResolvedValue([{ id: 1 }, { id: 2 }]);
+    await expect(service.subscribe('same@example.test')).rejects.toThrow();
+    expect(db.user.update).not.toHaveBeenCalled();
   });
 
   it('only offers replacement access for existing consent and respects the cooldown', async () => {
@@ -97,7 +126,7 @@ describe('Newsletter durable single opt-in', () => {
 
   it('inherits consent on account creation without another welcome or code', async () => {
     await service.subscribe('new@example.test');
-    user = { ...user, newsletterSubscribed: false };
+    user = { id: 1, email: 'new@example.test', newsletterSubscribed: false };
     expect(await service.subscribeIfNeeded('new@example.test')).toEqual({ status: 'claimed' });
     expect(user.newsletterSubscribed).toBe(true);
     expect(db.user.update).toHaveBeenLastCalledWith(expect.objectContaining({ data: { newsletterSubscribed: true } }));
@@ -113,9 +142,9 @@ describe('Newsletter durable single opt-in', () => {
     user = { id: 1, email: 'new@example.test', newsletterSubscribed: false };
     legacy = { code: 'CRX10-ABC234', used: false, userId: 1, type: 'FIRST_ORDER', percent: 10 };
     await service.subscribe('new@example.test');
-    expect(promo.code).toBe('CRX10-ABC234');
-    expect(user.firstOrderDiscountCode).toBe('CRX10-ABC234');
+    expect(legacy.code).toBe('CRX10-ABC234');
+    expect(db.user.update).toHaveBeenCalledWith({ where: { id: 1 }, data: { newsletterSubscribed: true } });
     expect(jobs).toHaveLength(0);
-    expect(db.promoCode.create).toHaveBeenCalledTimes(1);
+    expect(db.promoCode.create).not.toHaveBeenCalled();
   });
 });

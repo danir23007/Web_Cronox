@@ -1,15 +1,31 @@
 const { test, expect } = require('@playwright/test');
 
-test.beforeEach(async ({ page }) => {
+test.beforeEach(async ({ page, browserName }) => {
   page.cartErrors = [];
   page.cartConsole = [];
-  page.on('pageerror', error => page.cartErrors.push(error.message));
+  page.cartNavigationCancellations = [];
+  let replacingDocument = false;
+  page.on('request', request => {
+    if (request.isNavigationRequest() && request.frame() === page.mainFrame()) replacingDocument = true;
+  });
+  page.on('framenavigated', frame => { if (frame === page.mainFrame()) replacingDocument = false; });
+  page.on('pageerror', error => {
+    // WebKit mislabels cancelled same-origin loads during document replacement
+    // as page errors: microsoft/playwright#43120. Keep evidence separately;
+    // ordinary errors and access-control failures on a stable page still fail.
+    if (browserName === 'webkit' && replacingDocument &&
+        error.stack?.startsWith('Fetch API cannot load http://127.0.0.1:4173/api/') &&
+        error.message.endsWith(' due to access control checks.')) {
+      page.cartNavigationCancellations.push(error.message);
+    } else page.cartErrors.push(error.message);
+  });
   page.on('console', message => {
     if (['error', 'warning'].includes(message.type())) page.cartConsole.push(message.text());
   });
 });
 test.afterEach(async ({ page }, testInfo) => {
   await testInfo.attach('console', { body: JSON.stringify(page.cartConsole || [], null, 2), contentType: 'application/json' });
+  await testInfo.attach('webkit-navigation-cancellations', { body: JSON.stringify(page.cartNavigationCancellations || []), contentType: 'application/json' });
   expect(page.cartErrors || []).toEqual([]);
 });
 

@@ -1,0 +1,83 @@
+/* Only documents with a page footer opt in. Header space remains owned by
+   each page; border-box includes existing body padding in the viewport height.
+   Content grows naturally, including asynchronous account/cart results. */
+body[data-cronox-surface="customer"].customer-page {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  min-height: 100vh;
+  min-height: 100dvh;
+  box-sizing: border-box;
+}
+
+body.customer-page > main {
+  flex: 1 0 auto;
+  min-width: 0;
+}
+
+body.customer-page > footer {
+  flex: none;
+}
+
+/* Reduced footers have no commercial columns. Use the same small inset even
+   when their content used to inherit the cart/product's centred container. */
+body.customer-page > .footer {
+  padding: 12px max(16px, env(safe-area-inset-right))
+    max(12px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
+  text-align: left;
+}
+
+body.customer-page > .footer > :is(p, .container) {
+  width: auto;
+  max-width: none;
+  margin: 0;
+}
+
+/* The commercial footer keeps its existing responsive columns and logos.
+   Copyright is its final row, outside the centred brand group. */
+body.customer-page > .site-footer {
+  padding-inline: 0;
+  padding-bottom: max(12px, env(safe-area-inset-bottom));
+}
+
+body.customer-page > .site-footer > .footer-inner {
+  padding-left: max(var(--footer-side-padding), env(safe-area-inset-left));
+  padding-right: max(var(--footer-side-padding), env(safe-area-inset-right));
+}
+
+body.customer-page .footer-brand-block {
+  grid-template-rows: 1fr;
+}
+
+body.customer-page > .site-footer > .footer-copy {
+  margin: 12px 0 0;
+  padding-left: max(16px, env(safe-area-inset-left));
+  padding-right: max(16px, env(safe-area-inset-right));
+  text-align: left;
+}
+
+/* Cookies is the informational document with an existing reduced footer.
+   Keep its reading measure, but move the old body bottom gutter into content
+   flow so it cannot leave an empty strip beneath the copyright. */
+body.customer-page.page-info {
+  padding-inline: 0;
+  padding-bottom: 0;
+}
+
+body.customer-page.page-info > main[data-footer-content] {
+  width: calc(100% - 2 * clamp(20px, 4vw, 48px));
+}
+
+/* Checkout already has its own viewport grid (and a column layout on mobile).
+   Retain that shell, including Stripe; only protect the footer's safe insets. */
+body[data-cronox-surface="customer"] .checkout-footer {
+  padding-left: max(16px, env(safe-area-inset-left));
+  padding-right: max(16px, env(safe-area-inset-right));
+  padding-bottom: max(12px, env(safe-area-inset-bottom));
+}
+
+@media (max-width: 900px) {
+  body[data-cronox-surface="customer"] .checkout-footer {
+    margin-top: auto;
+  }
+}

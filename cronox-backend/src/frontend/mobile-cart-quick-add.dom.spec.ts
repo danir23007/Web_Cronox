@@ -31,8 +31,10 @@ describe('mobile cart and Quick Add layers', () => {
     expect(Array.from(brand.children, (node) => node.className)).toEqual([
       'footer-brand-name',
       'footer-social',
-      'footer-copy',
     ]);
+    const footer = document.querySelector('.site-footer')!;
+    expect(footer.lastElementChild?.className).toBe('footer-copy');
+    expect(footer.querySelectorAll('.footer-copy')).toHaveLength(1);
     expect(storeCss).toMatch(
       /@media \(max-width: 480px\)[\s\S]*?\.footer-brand-name\s*\{[^}]*display: flex;[^}]*width: 100%;[^}]*justify-content: center;/,
     );
@@ -294,7 +296,7 @@ describe('mobile cart and Quick Add layers', () => {
         document.querySelectorAll('#cart-items-container .cart-line'),
       ).toHaveLength(3),
     );
-    expect(addCartItem).toHaveBeenCalledWith({ variantId: 303, qty: 1 });
+    expect(addCartItem).toHaveBeenCalledWith({ variantId: 303, qty: 1, operationKey: expect.any(String) });
     expect(addCartItem).toHaveBeenCalledTimes(1);
     if (failRender) await waitFor(() => expect(app.CRONOX_API.getCart.mock.calls.length).toBeGreaterThanOrEqual(3));
     expect(
@@ -322,7 +324,7 @@ describe('mobile cart and Quick Add layers', () => {
         '[data-cart-line="1"] [data-action="inc"]',
       ) as HTMLButtonElement
     ).click();
-    await waitFor(() => expect(updateCartItem).toHaveBeenCalledWith(1, 2));
+    await waitFor(() => expect(updateCartItem).toHaveBeenCalledWith(1, 2, 1));
     await waitFor(() =>
       expect(
         document.querySelector('#cart-checkout-btn')?.textContent,

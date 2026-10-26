@@ -4,6 +4,8 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <base href="/">
+  <link rel="preload" href="/assets/fonts/cormorant-garamond/cormorant-garamond-normal-latin-v21.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="/assets/customer-typography.css?v=4">
   <link rel="stylesheet" href="assets/cookie-consent.css?v=2" />
   <script src="assets/cookie-consent.js?v=9" defer></script>
   <script src="assets/customer-analytics.js?v=2" defer></script>
@@ -16,14 +18,15 @@
     .topbar__logo-img { display: block; width: 140px; height: auto; }
     .topbar svg { width: 24px; height: 24px; }
   </style>
-  <link id="cronox-main-style" rel="stylesheet" href="assets/store.css?v=118">
-  <link rel="stylesheet" href="assets/checkout-success.css?v=1" />
+  <link id="cronox-main-style" rel="stylesheet" href="assets/store.css?v=127">
+  <link rel="stylesheet" href="assets/checkout-success.css?v=3" />
+  <link rel="stylesheet" href="assets/password-visibility.css?v=1" />
   <link rel="icon" type="image/png" href="/favicon.png?v=4">
   <link rel="shortcut icon" type="image/png" href="/favicon.png?v=4">
   <link rel="apple-touch-icon" href="/favicon.png?v=4">
   <meta name="theme-color" content="#000000">
 </head>
-<body class="page-checkout-success">
+<body data-cronox-surface="customer" class="page-checkout-success">
   <main class="checkout-success" aria-live="polite">
     <div class="checkout-success__ascii" aria-hidden="true">
       <pre>
@@ -61,10 +64,17 @@
       <p id="checkout-success-message">Estamos confirmando tu compra con nuestro sistema. Esto puede tardar unos segundos.</p>
       <p id="checkout-success-reference" class="checkout-success__reference" hidden></p>
       <a id="checkout-success-cta" href="/" class="checkout-success__cta">Volver a la tienda</a>
+      <div id="checkout-success-account" hidden>
+        <p>Tu suscripción a la newsletter está guardada. Puedes acceder a tu cuenta o solicitar un enlace por correo para establecer tu contraseña.</p>
+        <button id="checkout-success-account-button" type="button" class="checkout-success__cta">Acceder o completar mi cuenta</button>
+        <p id="checkout-success-account-feedback" role="status"></p>
+      </div>
     </section>
   </main>
 
-  <script src="assets/api.js?v=24"></script>
-  <script src="assets/checkout-success.js?v=5"></script>
+  <script src="assets/api.js?v=26"></script>
+  <script src="assets/password-visibility.js?v=1" defer></script>
+  <script src="assets/app.js?v=104" defer></script>
+  <script src="assets/checkout-success.js?v=6"></script>
 </body>
 </html>

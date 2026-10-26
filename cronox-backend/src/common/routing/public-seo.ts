@@ -5,6 +5,7 @@ import { createHash } from 'crypto';
 import type { PrismaService } from '../../prisma/prisma.service';
 import { Prisma } from '@prisma/client';
 import { renderCartShipping } from './cart-shipping';
+import { CART_COOKIE_NAME } from '../cookies/cart-cookie';
 import { sizeOrder, variantSizeLabel } from '../../products/product-size-system';
 import type { ImageVariants } from '../../images/image-presets';
 import {
@@ -279,14 +280,22 @@ export const seoRequestSignals: RequestHandler = (req, res, next) => {
   const legacy = legacyRedirectTarget(path, req.originalUrl);
   const effective = legacy?.split('?')[0] || path;
   if (isUtility(effective)) res.setHeader('X-Robots-Tag', 'noindex, follow');
-  // Do not move API requests, admin sessions or checkout across cookie origins.
+  // New customer visits (including account/checkout) must enter one origin
+  // before creating host-only cookies. API/admin traffic is never redirected.
   const canonicalSurface =
-    !isUtility(effective) &&
     (Boolean(cleanPageForPath(effective)) ||
-      ['/robots.txt', '/sitemap.xml'].includes(path));
+      ['/newsletter-access.html', '/email-change.html', '/robots.txt', '/sitemap.xml'].includes(path));
   // HTTP->HTTPS already belongs to the production edge (verified 301). Do not
   // infer TLS from req.protocol here: an untrusted TLS-terminating proxy would loop.
   if (canonicalSurface && req.hostname === 'www.cronox.es') {
+    // Preserve historical www sessions/carts on their own origin across all
+    // storefront links. Cookie presence is only a routing hint, never identity:
+    // the API still validates the session. Do not broaden cookie Domain or
+    // silently discard a guest checkout to consolidate an old browser.
+    const legacyBrowser = req.cookies?.jwt || req.cookies?.refresh_token || req.cookies?.[CART_COOKIE_NAME];
+    res.setHeader('Cache-Control', 'no-store');
+    res.vary('Cookie');
+    if (legacyBrowser && !['/robots.txt', '/sitemap.xml'].includes(path)) return next();
     return res.redirect(
       308,
       `${PUBLIC_SITE_URL.slice(0, -1)}${req.originalUrl}`,

@@ -5,7 +5,7 @@
   // This renderer never fetches identity, creates credentials, or changes a design.
   const scriptUrl = document.currentScript?.src || new URL('/assets/metacrilatos.js', location.href).href;
   const assetUrl = name => new URL(`metacrilatos/${name}`, scriptUrl).href;
-  const cssUrl = new URL('metacrilatos.css?v=2', scriptUrl).href;
+  const cssUrl = new URL('metacrilatos.css?v=3', scriptUrl).href;
   const instances = new WeakMap();
   const roman = ['I', 'II', 'III', 'IV', 'V'];
   const inks = [
@@ -516,7 +516,24 @@
       // A global stylesheet request can be shared by another mounted card.
       // Detaching this card still settles its own ready promise immediately.
       const cancelled = new Promise(resolve => { cleanups.push(resolve); });
-      ready = Promise.race([Promise.all([ensureStyles(), document.fonts?.ready, ...imagesReady]), cancelled]).then(() => {
+      // CSS is inserted lazily. Reading fonts.ready before it loads can resolve
+      // before its font faces are used, leaving the fitted identity in fallback
+      // metrics. Load the actual face after the stylesheet has applied.
+      const typographyReady = ensureStyles().then(async () => {
+        if (!active || destroyed || currentRevision !== revision || !document.fonts) return;
+        if (document.fonts.load) {
+          // A failed webfont must use the declared serif fallback, not make
+          // the credential unavailable. CSS/artwork failures still reject.
+          await Promise.allSettled([name, visibleId].map(element => {
+            const style = getComputedStyle(element);
+            return Promise.resolve().then(() => document.fonts.load(
+              `${style.fontWeight} ${style.fontSize} ${style.fontFamily}`, element.textContent || 'CRONOX',
+            ));
+          }));
+        }
+        await document.fonts.ready;
+      });
+      ready = Promise.race([Promise.all([typographyReady, ...imagesReady]), cancelled]).then(() => {
         if (active && !destroyed && currentRevision === revision) { sceneReady = true; buildRim(); render(); syncMotion(); }
       });
       buildRim();

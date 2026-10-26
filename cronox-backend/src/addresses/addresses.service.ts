@@ -11,7 +11,7 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateAddressDto } from './dto/create-address.dto';
 import { UpdateAddressDto } from './dto/update-address.dto';
-import { serializableTransaction } from '../prisma/serializable-transaction';
+import { addressTransaction } from './address-transaction';
 
 export const ADDRESS_LIMIT = 10;
 
@@ -63,9 +63,9 @@ export class AddressesService {
       isDefault: dto.isDefault ?? false,
     };
 
-    const created = await serializableTransaction(this.prisma, async (tx) => {
+    const created = await addressTransaction(this.prisma, userId, async (tx) => {
       const count = await tx.address.count({ where: { userId } });
-      if (count >= ADDRESS_LIMIT) throw new BadRequestException('Address limit reached');
+      if (count >= ADDRESS_LIMIT) throw new BadRequestException('Puedes guardar como máximo diez direcciones.');
       if (dto.isDefault === true) {
         await tx.address.updateMany({
           where: { userId },
@@ -101,7 +101,7 @@ export class AddressesService {
     }
     if (dto.isDefault !== undefined) data.isDefault = dto.isDefault;
 
-    const updated = await serializableTransaction(this.prisma, async (tx) => {
+    const updated = await addressTransaction(this.prisma, userId, async (tx) => {
       await this.getOwned(userId, id, tx);
       if (dto.isDefault === true) {
         await tx.address.updateMany({
@@ -116,14 +116,14 @@ export class AddressesService {
   }
 
   async remove(userId: number, id: number): Promise<void> {
-    await serializableTransaction(this.prisma, async tx => {
+    await addressTransaction(this.prisma, userId, async tx => {
       await this.getOwned(userId, id, tx);
       await tx.address.delete({ where: { id } });
     });
   }
 
   async setDefault(userId: number, id: number): Promise<SafeAddress> {
-    const updated = await serializableTransaction(this.prisma, async tx => {
+    const updated = await addressTransaction(this.prisma, userId, async tx => {
       await this.getOwned(userId, id, tx);
       await tx.address.updateMany({
         where: { userId },

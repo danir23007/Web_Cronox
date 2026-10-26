@@ -8,6 +8,21 @@ describe('responsive storefront image delivery', () => {
   const read = (file: string) =>
     readFileSync(path.join(frontendRoot, file), 'utf8');
 
+  it.each([false, true])('selects the customer caption by surface, even for an administrator account: %s', customer => {
+    const dom = new JSDOM(`<body${customer ? ' data-cronox-surface="customer"' : ''}><img></body>`, {
+      url: 'https://cronox.test/', runScripts: 'outside-only',
+    });
+    const win = dom.window as any;
+    win.CRONOX_USER = { role: 'SUPERADMIN' };
+    win.CRONOX_SECURITY = { productImageUrl: (value: string) => value };
+    try {
+      win.eval(read('assets/responsive-images.js'));
+      win.CRONOX_IMAGES.applyProduct(win.document.querySelector('img'), {}, 'card');
+      expect(win.document.querySelector('img').getAttribute('src')).toBe(customer
+        ? '/assets/customer-product-image-unavailable.svg' : 'assets/product-image-unavailable.svg');
+    } finally { win.close(); }
+  });
+
   it('centralizes context roles, responsive sizes and original fallback', () => {
     const source = read('assets/responsive-images.js');
     expect(source).toContain('card: { roles: ["card"]');

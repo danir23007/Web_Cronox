@@ -35,7 +35,7 @@ describe('focused storefront refinement acceptance matrix', () => {
 
   it('1. lets a guest create and add to an opaque server cart', () => {
     expect(cartController).toContain('@UseGuards(OptionalJwtAuthGuard)');
-    expect(cartController).toContain('this.cartService.addItem(context, dto)');
+    expect(cartController).toContain('this.cartService.addItem(context, dto, operationKey)');
     expect(apiSource).toContain('withGuestCartRecovery');
     expect(apiSource).toContain('await api.logout()');
   });
@@ -88,7 +88,7 @@ describe('focused storefront refinement acceptance matrix', () => {
 
   it('11. reads guest and existing account carts in one merge transaction', () => {
     expect(cartService).toContain('const [anonCart, userCart] = await Promise.all([');
-    expect(cartService).toContain('return serializableTransaction(this.prisma, async (tx) =>');
+    expect(cartService).toContain('return this.cartTransaction([{ userId }, { anonymousId }], async (tx) =>');
   });
 
   it('12. merges duplicate variants into one existing line', () => {
@@ -278,7 +278,7 @@ describe('focused storefront refinement acceptance matrix', () => {
       '#address-summary.is-address > .address-summary__name',
     );
     expect(addressName).toContain('color: #fff');
-    expect(addressName).toContain('font-size: 13px');
+    expect(addressName).toContain('font-size: 14px');
     expect(addressName).toContain('font-weight: 700');
     expect(
       cssRule(
@@ -425,7 +425,7 @@ describe('focused storefront refinement acceptance matrix', () => {
     expect(cssRule(checkoutStyles, '.checkout-item__price')).toContain(
       'font-size: 14px',
     );
-    expect(cssRule(checkoutStyles, '.summary-row')).toContain('font-size: 13px');
+    expect(cssRule(checkoutStyles, '.summary-row')).toContain('font-size: 14px');
     expect(cssRule(checkoutStyles, '.summary-total')).toContain('font-size: 17px');
     expect(cssRule(checkoutStyles, '.summary-total strong')).toContain(
       'font-size: 23px',
@@ -451,7 +451,7 @@ describe('focused storefront refinement acceptance matrix', () => {
       'recommendationsSection.hidden = recommendationsList.children.length === 0',
     );
     expect(expressTitle).toContain('color: rgba(245, 245, 242, 0.56)');
-    expect(expressTitle).toContain('font-size: 11px');
+    expect(expressTitle).toContain('font-size: 14px');
     expect(expressTitle).toContain('font-weight: 400');
     expect(expressTitle).toContain('text-transform: none');
   });
@@ -513,7 +513,7 @@ describe('focused storefront refinement acceptance matrix', () => {
     expect(sizeRule).toContain('min-width: 22px');
     expect(sizeRule).toContain('height: 20px');
     expect(sizeRule).toContain('padding: 1px 4px');
-    expect(sizeRule).toContain('font-size: 9px');
+    expect(sizeRule).toContain('font-size: 14px');
     expect(sizesRule).toContain('gap: 3px');
     expect(sizesRule).toContain('margin-top: 4px');
     expect(unavailableRule).toContain('opacity: 0.38');
@@ -521,7 +521,7 @@ describe('focused storefront refinement acceptance matrix', () => {
     expect(strikeRule).toContain('transform: rotate(-28deg)');
     expect(strikeRule).toContain('height: 1px');
     expect(actionRule).toContain('padding: 6px 9px');
-    expect(actionRule).toContain('font-size: 9px');
+    expect(actionRule).toContain('font-size: 14px');
   });
 
   it('58. centers the promo controls without moving either existing divider', () => {

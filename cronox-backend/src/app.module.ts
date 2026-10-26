@@ -12,7 +12,9 @@ import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { ReadinessService } from './readiness.service';
 import { DatabaseAvailabilityFilter } from './common/filters/database-availability.filter';
-import { ExpiringThrottlerStorage } from './common/guards/expiring-throttler.storage';
+import { CustomerBadRequestFilter } from './common/customer-request-diagnostics';
+import { SharedThrottlerStorage } from './common/guards/shared-throttler.storage';
+import { PrismaService } from './prisma/prisma.service';
 import { AuthModule } from './auth/auth.module';
 import { CartModule } from './cart/cart.module';
 import { EmailModule } from './email/email.module';
@@ -56,9 +58,11 @@ import {
       validate: validateEnvironment,
     }),
     ThrottlerModule.forRootAsync({
-      useFactory: () => ({
+      imports: [PrismaModule],
+      inject: [PrismaService],
+      useFactory: (prisma: PrismaService) => ({
         throttlers: [{ ttl: getRateLimitTtlMs(), limit: getRateLimitMax() }],
-        storage: new ExpiringThrottlerStorage(),
+        storage: new SharedThrottlerStorage(prisma),
       }),
     }),
     ServeStaticModule.forRoot(
@@ -75,7 +79,23 @@ import {
         renderPath: '/',
         // solo cadenas simples; /api y compañía se reservan para la API
         exclude: ['/api', '/docs', '/webhooks'],
-        serveStaticOptions: { index: 'index.html' },
+        serveStaticOptions: {
+          index: 'index.html',
+          setHeaders: (res, filePath) => {
+            // Versioned, self-hosted font binaries are immutable. HTML/CSS keep
+            // their existing cache policy so a typography update can roll out.
+            if (/[/\\]assets[/\\]fonts[/\\]cormorant-garamond[/\\]cormorant-garamond-(normal|italic)-latin(-ext)?-v\d+\.woff2$/.test(filePath)) {
+              res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+              res.setHeader('Access-Control-Allow-Origin', '*');
+              res.removeHeader('Access-Control-Allow-Credentials');
+            } else if (/[/\\]assets[/\\]customer-fonts\.css$/.test(filePath)) {
+              // Stripe Elements loads this public, font-only stylesheet in
+              // its own iframe. API CORS and credential policies stay scoped.
+              res.setHeader('Access-Control-Allow-Origin', '*');
+              res.removeHeader('Access-Control-Allow-Credentials');
+            }
+          },
+        },
       },
     ),
     PrismaModule,
@@ -113,6 +133,7 @@ import {
     { provide: APP_INTERCEPTOR, useClass: UserNumberingCompletion },
     ReadinessService,
     { provide: APP_FILTER, useClass: DatabaseAvailabilityFilter },
+    { provide: APP_FILTER, useClass: CustomerBadRequestFilter },
     { provide: APP_GUARD, useClass: AppThrottlerGuard },
     { provide: APP_GUARD, useClass: CsrfProtectionGuard },
   ],

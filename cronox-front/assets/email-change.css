@@ -2,7 +2,7 @@
   margin: 0;
   background: #000;
   color: #fff;
-  font-family: Arial, sans-serif;
+  --customer-original-font: Arial, sans-serif; font-family: var(--customer-font-prefix,) var(--customer-original-font);
   line-height: 1.6;
 }
 .email-change-page main {

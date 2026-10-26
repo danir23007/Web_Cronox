@@ -1,0 +1,87 @@
+/* Customer surfaces opt in explicitly; admin controls never define these tokens. */
+@import url('./customer-fonts.css?v=2');
+
+/* Local serif fallback matched to the downloaded font's advances and hhea
+   metrics (924/-287/1000). No extra download; avoids a two-line fallback title
+   becoming one line once the font arrives on narrow password/account screens. */
+@font-face {
+  font-family: 'Cormorant Garamond Fallback';
+  src: local('Times New Roman');
+  font-style: normal;
+  font-weight: 300 500;
+  size-adjust: 96%;
+  ascent-override: 96.25%;
+  descent-override: 29.8958%;
+  line-gap-override: 0%;
+  unicode-range: U+0041-005A, U+0061-007A, U+00C0-00D6, U+00D8-00F6, U+00F8-02BA, U+02BD-02C1, U+02C7-02CC, U+02CE-02D1, U+02E0-02E4, U+02EC, U+02EE, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2C60-2C7F, U+A722-A788, U+A78B-A7CD, U+A7D0-A7D1, U+A7D3, U+A7D5-A7DC, U+A7F2-A7FF; /* generated letters */
+}
+@font-face {
+  font-family: 'Cormorant Garamond Fallback';
+  src: local('Times New Roman Bold');
+  font-style: normal;
+  font-weight: 600 700;
+  size-adjust: 92%;
+  ascent-override: 100.4348%;
+  descent-override: 31.1957%;
+  line-gap-override: 0%;
+  unicode-range: U+0041-005A, U+0061-007A, U+00C0-00D6, U+00D8-00F6, U+00F8-02BA, U+02BD-02C1, U+02C7-02CC, U+02CE-02D1, U+02E0-02E4, U+02EC, U+02EE, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2C60-2C7F, U+A722-A788, U+A78B-A7CD, U+A7D0-A7D1, U+A7D3, U+A7D5-A7DC, U+A7F2-A7FF; /* generated letters */
+}
+[data-cronox-surface="customer"] {
+  --customer-font: 'Cormorant Garamond', 'Cormorant Garamond Fallback';
+  /* Optional prefix, including its separator. The empty var() fallback in
+     shared CSS leaves precisely the original stack on administrative pages. */
+  --customer-font-prefix: var(--customer-font),;
+  /* Original font contexts are preserved beside the migrated declarations.
+     The unstyled public documents originally used the browser's serif default.
+     Do not add a full-coverage font before this context-specific fallback. */
+  --customer-heavy: 700;
+}
+:where([data-cronox-surface="customer"]) {
+  --customer-original-font: 'Times New Roman', serif;
+  font-family: var(--customer-font-prefix,) var(--customer-original-font);
+}
+
+/* Native controls do not inherit a document's font by default. Icons are SVGs
+   or images; brand artwork (including the ASCII wordmark) keeps its own font. */
+:where([data-cronox-surface="customer"]) :where(button, input, select, textarea, option, optgroup) {
+  --customer-original-font: Arial, sans-serif;
+  font-family: var(--customer-font-prefix,) var(--customer-original-font);
+}
+[data-cronox-surface="customer"] :where(input, textarea)::placeholder {
+  font-family: inherit;
+}
+:where([data-cronox-surface="customer"]) :where(code, kbd, samp) {
+  --customer-original-font: monospace;
+  font-family: var(--customer-font-prefix,) var(--customer-original-font);
+}
+
+/* Roman numerals are semantic numbers even though I/V are alphabetic code
+   points. Only the numeral's existing/semantic node opts out, never the word
+   surrounding it. No text rewriting or per-character DOM wrappers are used. */
+[data-cronox-surface="customer"] :is([data-circle-numeral], [data-meta-circle], [data-acc-stat="circle"]) {
+  font-family: var(--customer-numeral-font, var(--customer-original-font));
+}
+[data-cronox-surface="customer"] .accreditation-page-right-content { --customer-numeral-font: 'Cinzel', Georgia, serif; }
+
+/* Keep compact operational text readable in the finer serif without changing
+   component geometry or the dimensions of the membership artwork. */
+[data-cronox-surface="customer"] .product-card { grid-template-rows: max-content minmax(88px, auto); align-self: stretch; }
+[data-cronox-surface="customer"] .product-card__info { height: auto; min-height: 88px; overflow: visible; }
+[data-cronox-surface="customer"] .product-name { font-size: 14px; line-height: 1.3; overflow-wrap: anywhere; }
+/* Keep the price attached to its title. Extra row height belongs below the
+   content, not between a short title and its price; long titles still grow. */
+[data-cronox-surface="customer"] .product-card__info > :is(.product-price, .product-card__price-row) { margin-top: 0; }
+[data-cronox-surface="customer"] :is(.topbar__cart .cart-count, .topbar__fav .favorites-count, .topbar__fav .fav-count) { font-size: 12px; }
+[data-cronox-surface="customer"] :is(.cronox-auth__label, .cronox-auth__link, .cronox-auth__message, .auth-user-menu__label, .qa-label, .qa-muted-link) { font-size: 14px; }
+[data-cronox-surface="customer"] :is(.cronox-auth__input, .qa-select) { font-size: 16px; }
+[data-cronox-surface="customer"] :is(.product-price, .product-last-units, .cart-line__meta, .cart-upsell__price, .cart-low-stock, .footer-title, .footer-link, .footer-newsletter-text, .footer-button, .footer-acc-title) { font-size: 14px; }
+[data-cronox-surface="customer"] :is(.footer-copy, .footer-newsletter-legal) { font-size: 12px; }
+[data-cronox-surface="customer"] .footer-input { font-size: 16px; }
+[data-cronox-surface="customer"] :is(.cronox-consent__eyebrow, .cronox-consent__button, .checkout-success__eyebrow) { font-size: 13px; }
+[data-cronox-surface="customer"] .cronox-consent p:not(.cronox-consent__eyebrow) { font-size: 14px; }
+[data-cronox-surface="customer"] :is(.checkout-kicker, .checkout-section-title, .checkout-field label, .checkout-accordion__value, .checkout-secure-copy) { font-size: 14px; }
+
+@media (max-width: 600px) {
+  /* A 16px input also avoids automatic zoom in iOS. */
+  body[data-cronox-surface="customer"] :is(input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]), select, textarea) { font-size: 16px; }
+}

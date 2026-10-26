@@ -13,6 +13,30 @@ export function installSessionTransport(
     window.location.href,
   ).origin;
   const endpoint = (path: string) => new URL(path, origin).href;
+  const cooldowns = new Map<string, { until: number; status: number }>();
+  async function transportFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
+    const url = new URL(typeof input === "string" ? input : input instanceof URL ? input.href : input.url, location.href);
+    if (url.origin !== origin || !url.pathname.startsWith('/api/')) return rawFetch(input, init);
+    const method = init?.method || (typeof Request !== 'undefined' && input instanceof Request ? input.method : 'GET');
+    const key = `${method.toUpperCase()}:${url.pathname}`;
+    const current = cooldowns.get(key);
+    if (current && current.until > Date.now()) {
+      const seconds = Math.ceil((current.until - Date.now()) / 1000);
+      return new Response(JSON.stringify({ code: current.status === 429 ? 'RATE_LIMITED' : 'TEMPORARILY_UNAVAILABLE',
+        message: `Espera ${seconds} segundos antes de volver a intentarlo.` }), {
+        status: current.status, headers: { 'Content-Type': 'application/json', 'Retry-After': String(seconds) },
+      });
+    }
+    cooldowns.delete(key);
+    const response = await rawFetch(input, init);
+    const retry = response.headers.get('Retry-After');
+    const delay = retry ? (/^\d+(?:\.\d+)?$/.test(retry) ? Number(retry) * 1000 : Date.parse(retry) - Date.now()) : 0;
+    if ([429, 503].includes(response.status) && Number.isFinite(delay) && delay > 0) {
+      for (const [scope, value] of cooldowns) if (value.until <= Date.now()) cooldowns.delete(scope);
+      cooldowns.set(key, { until: Date.now() + delay, status: response.status });
+    }
+    return response;
+  }
   const THROTTLE = 3 * 60_000;
   const KEY = "cronox.session.event";
   const LOCK = "cronox.session.refresh-lock";
@@ -29,13 +53,12 @@ export function installSessionTransport(
   let activityPromise: Promise<void> | null = null;
   let idleTimer: ReturnType<typeof setTimeout> | undefined;
   let activityTimer: ReturnType<typeof setTimeout> | undefined;
-  let refreshedAt = 0;
   const channel =
     typeof BroadcastChannel === "function"
       ? new BroadcastChannel("cronox.session")
       : null;
   type SessionEvent = {
-    kind: "activity" | "refresh" | "logout";
+    kind: "activity" | "refresh" | "logout" | "login";
     at: number;
     deadline?: number;
     idle?: boolean;
@@ -63,6 +86,7 @@ export function installSessionTransport(
 
   function terminate(idle: boolean, broadcast = true, navigate = true) {
     if (ended) return;
+    cooldowns.clear();
     ended = true;
     authenticated = false;
     client = false;
@@ -166,11 +190,11 @@ export function installSessionTransport(
     }
   }
 
-  async function doRefresh(started: number): Promise<boolean> {
+  async function doRefresh(retryRace = true): Promise<boolean> {
     // A tab waiting for the lock first tries the new shared access cookie.
-    if (refreshedAt >= started) return true;
+    // A BroadcastChannel timestamp cannot prove that Set-Cookie has arrived.
     const probe = observe(
-      await rawFetch(endpoint("/api/me"), {
+      await transportFetch(endpoint("/api/me"), {
         credentials: "include",
         cache: "no-store",
       }),
@@ -181,7 +205,7 @@ export function installSessionTransport(
       throw new Error("No se pudo comprobar la sesión. Inténtalo de nuevo.");
     }
     const response = observe(
-      await rawFetch(endpoint("/api/auth/refresh"), {
+      await transportFetch(endpoint("/api/auth/refresh"), {
         method: "POST",
         credentials: "include",
         headers: await csrfHeaders(),
@@ -190,9 +214,14 @@ export function installSessionTransport(
       true,
     );
     if (response.ok) {
-      refreshedAt = Date.now();
       announce("refresh");
       return true;
+    }
+    if (response.status === 409 && retryRace && await errorCode(response) === "REFRESH_RETRY") {
+      // Another response may still be installing its cookies. Re-read those
+      // cookies once under the same lock; never accept/replay a stale token.
+      await new Promise(resolve => setTimeout(resolve, 150));
+      return doRefresh(false);
     }
     if (response.status === 401) {
       const code = await errorCode(response);
@@ -244,7 +273,7 @@ export function installSessionTransport(
 
   function refresh() {
     if (!refreshPromise)
-      refreshPromise = withCookieLock(() => doRefresh(Date.now())).finally(
+      refreshPromise = withCookieLock(() => doRefresh()).finally(
         () => {
           refreshPromise = null;
         },
@@ -267,7 +296,7 @@ export function installSessionTransport(
       return;
     const send = async () => {
       if (ended || document.visibilityState !== "visible") return;
-      const response = await rawFetch(endpoint("/api/auth/visit"), {
+      const response = await transportFetch(endpoint("/api/auth/visit"), {
         method: "POST",
         credentials: "include",
         cache: "no-store",
@@ -306,7 +335,7 @@ export function installSessionTransport(
       url.origin === origin &&
       url.pathname.startsWith("/api/") &&
       init?.credentials !== "omit";
-    if (!eligible) return rawFetch(input, init);
+    if (!eligible) return transportFetch(input, init);
     // Clone before the first attempt, preserving uploads and request bodies.
     const retryInput =
       typeof Request !== "undefined" && input instanceof Request
@@ -322,12 +351,12 @@ export function installSessionTransport(
     if (url.pathname === "/api/auth/logout") {
       await visitPromise;
       await refreshPromise;
-      const sendLogout = () => rawFetch(input, init);
+      const sendLogout = () => transportFetch(input, init);
       const result = await withCookieLock(sendLogout);
       if (result.ok) terminate(false, true, false);
       return result;
     }
-    let response = observe(await rawFetch(input, init), authResponse);
+    let response = observe(await transportFetch(input, init), authResponse);
     if (response.status === 401 && !noRetry.test(url.pathname)) {
       const code = await errorCode(response);
       if (code === "AUTH_REQUIRED") {
@@ -339,7 +368,7 @@ export function installSessionTransport(
         return response;
       }
       if (!ended && (await refresh()))
-        response = observe(await rawFetch(retryInput, init), authResponse);
+        response = observe(await transportFetch(retryInput, init), authResponse);
       if (response.status === 401 && deadline)
         terminate((await errorCode(response)) === "SESSION_IDLE");
     }
@@ -351,7 +380,8 @@ export function installSessionTransport(
     ) {
       ended = false;
       visitDue = true;
-      announce("activity");
+      cooldowns.clear();
+      announce("login");
     }
     if (response.ok && authResponse && !ended) {
       try {
@@ -430,7 +460,9 @@ export function installSessionTransport(
     if (document.visibilityState !== "visible" || ended) return;
     visitDue = true;
     // A successful authenticated response is required before renewal.
-    if (client && authenticated)
+    const recover = (window as Window & { CRONOX_refreshAuthState?: () => Promise<unknown> }).CRONOX_refreshAuthState;
+    if (recover) void recover();
+    else if (client && authenticated)
       void sessionFetch(endpoint("/api/me"), {
         credentials: "include",
         cache: "no-store",
@@ -450,11 +482,18 @@ export function installSessionTransport(
 
   function receive(event: SessionEvent) {
     if (!event || event.tab === tab) return;
+    if (event.kind === "login") {
+      cooldowns.clear();
+      // A cross-tab message is only a hint. Recover through the server before
+      // changing UI identity, including tabs that observed an earlier logout.
+      ended = false;
+      window.dispatchEvent(new CustomEvent("cronox:session-check"));
+      return;
+    }
     if (event.kind === "logout") {
       terminate(Boolean(event.idle), false, Boolean(deadline));
       return;
     }
-    if (event.kind === "refresh") refreshedAt = Math.max(refreshedAt, event.at);
     if (event.kind === "activity") lastReport = Math.max(lastReport, event.at);
     if (event.deadline && event.deadline > deadline)
       acceptDeadline(event.deadline);

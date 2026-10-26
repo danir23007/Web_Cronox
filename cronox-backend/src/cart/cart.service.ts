@@ -1,7 +1,7 @@
-import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { Prisma, PrismaClient } from '@prisma/client';
 import type { Request } from 'express';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { AddItemDto } from './dto/add-item.dto';
 import { UpdateItemDto } from './dto/update-item.dto';
 import { serializableTransaction } from '../prisma/serializable-transaction';
@@ -72,6 +72,33 @@ export class CartService {
 
   private readonly cartInclude = cartInclude;
 
+  private cartTransaction<T>(contexts: CartContext[], operation: (tx: Prisma.TransactionClient) => Promise<T>): Promise<T> {
+    // ReadCommitted sees changes made while waiting. A Serializable snapshot
+    // taken before the lock would keep aborting a burst of legitimate writes.
+    const keys = contexts.map(c => c.userId != null ? `cart:user:${c.userId}` : `cart:guest:${c.anonymousId}`).sort();
+    contexts.forEach(c => this.buildUniqueWhere(c));
+    return this.prisma.$transaction(async tx => {
+      for (const key of new Set(keys)) await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${key}, 0))`;
+      // Also coordinate with fulfillment, which locks the existing cart row.
+      await tx.$queryRaw(Prisma.sql`SELECT id FROM "Cart" WHERE ${Prisma.join(contexts.map(c => c.userId != null
+        ? Prisma.sql`"userId" = ${c.userId}` : Prisma.sql`"anonymousId" = ${c.anonymousId}`), ' OR ')} ORDER BY id FOR UPDATE`);
+      return operation(tx);
+    }, { isolationLevel: 'ReadCommitted', maxWait: 10_000, timeout: 10_000 });
+  }
+
+  private async replayOperation(tx: Prisma.TransactionClient, cartId: number, key: string | undefined, body: unknown): Promise<boolean> {
+    if (!key) return false;
+    if (!/^[\w:.-]{8,128}$/.test(key)) throw new BadRequestException('La clave de la operación de cesta no es válida.');
+    const fingerprint = createHash('sha256').update(JSON.stringify(body)).digest('hex');
+    const previous = await tx.$queryRaw<{ fingerprint: string }[]>`SELECT fingerprint FROM "CartOperation" WHERE "cartId" = ${cartId} AND key = ${key}`;
+    if (previous.length) {
+      if (previous[0].fingerprint !== fingerprint) throw new ConflictException({ code: 'CART_OPERATION_CONFLICT', message: 'Esta operación ya se utilizó para otro cambio de cesta.' });
+      return true;
+    }
+    await tx.$executeRaw`INSERT INTO "CartOperation" ("cartId", key, fingerprint) VALUES (${cartId}, ${key}, ${fingerprint})`;
+    return false;
+  }
+
   private getClient(tx?: Prisma.TransactionClient): ModelClient {
     return (tx ?? this.prisma) as unknown as ModelClient;
   }
@@ -138,14 +165,15 @@ export class CartService {
 
   async getOrCreateCart(context: CartContext): Promise<CartWithItems> {
     const where = this.buildUniqueWhere(context);
-    return serializableTransaction(this.prisma, tx => this.findOrCreate(where, tx), true);
+    return this.cartTransaction([context], tx => this.findOrCreate(where, tx));
   }
 
-  async addItem(context: CartContext, dto: AddItemDto): Promise<CartWithItems> {
-    return serializableTransaction(this.prisma, async (tx) => {
+  async addItem(context: CartContext, dto: AddItemDto, operationKey?: string): Promise<CartWithItems> {
+    return this.cartTransaction([context], async (tx) => {
       const client = this.getClient(tx);
       const where = this.buildUniqueWhere(context);
       const cart = await this.findOrCreate(where, tx);
+      if (await this.replayOperation(tx, cart.id, operationKey, ['add', dto.variantId, dto.qty])) return cart;
 
       const variant = await this.getVariantOrThrow(client, dto.variantId);
       const price = this.getVariantPriceOrThrow(variant);
@@ -183,21 +211,27 @@ export class CartService {
 
       await this.recalcTotals(client, cart.id);
       return this.getCartByIdOrThrow(client, cart.id);
-    }, true);
+    });
   }
 
   async updateItem(
     context: CartContext,
     itemId: number,
     dto: UpdateItemDto,
+    operationKey?: string,
   ): Promise<CartWithItems> {
-    return serializableTransaction(this.prisma, async (tx) => {
+    return this.cartTransaction([context], async (tx) => {
       const client = this.getClient(tx);
       const cart = await this.getCartForContext(context, client);
+      if (await this.replayOperation(tx, cart.id, operationKey, ['update', itemId, dto.qty, dto.expectedQty])) return cart;
 
       const item = await client.cartItem.findUnique({ where: { id: itemId } });
       if (!item || item.cartId !== cart.id) {
         throw new NotFoundException(ITEM_NOT_FOUND_ERROR);
+      }
+
+      if (dto.expectedQty != null && item.qty !== dto.expectedQty) {
+        throw new ConflictException({ code: 'CART_CHANGED', message: 'La cantidad ha cambiado en otra pestaña. Revisa la cesta antes de volver a modificarla.' });
       }
 
       const variant = await this.getVariantOrThrow(client, item.variantId);
@@ -215,12 +249,13 @@ export class CartService {
   }
 
   async removeItem(context: CartContext, itemId: number): Promise<CartWithItems> {
-    return serializableTransaction(this.prisma, async (tx) => {
+    return this.cartTransaction([context], async (tx) => {
       const client = this.getClient(tx);
       const cart = await this.getCartForContext(context, client);
 
       const item = await client.cartItem.findUnique({ where: { id: itemId } });
-      if (!item || item.cartId !== cart.id) {
+      if (!item) return cart;
+      if (item.cartId !== cart.id) {
         throw new NotFoundException(ITEM_NOT_FOUND_ERROR);
       }
 
@@ -231,7 +266,7 @@ export class CartService {
   }
 
   async clearCart(context: CartContext): Promise<CartWithItems> {
-    return serializableTransaction(this.prisma, async (tx) => {
+    return this.cartTransaction([context], async (tx) => {
       const client = this.getClient(tx);
       const where = this.buildUniqueWhere(context);
       const cart = await this.findOrCreate(where, tx);
@@ -239,7 +274,7 @@ export class CartService {
       await client.cartItem.deleteMany({ where: { cartId: cart.id } });
       await this.recalcTotals(client, cart.id);
       return this.getCartByIdOrThrow(client, cart.id);
-    }, true);
+    });
   }
 
   async mergeOnLogin(userId: number, anonymousId?: string): Promise<MergeOnLoginResult> {
@@ -247,7 +282,7 @@ export class CartService {
       return { merged: false, incidents: [] };
     }
 
-    return serializableTransaction(this.prisma, async (tx) => {
+    return this.cartTransaction([{ userId }, { anonymousId }], async (tx) => {
       const client = this.getClient(tx);
 
       const [anonCart, userCart] = await Promise.all([
@@ -347,6 +382,9 @@ export class CartService {
         where: { anonymousId, userId: null, cartId: anonCart.id },
         data: { anonymousId: null, userId, cartId: userCart.id },
       });
+      await tx.$executeRaw`INSERT INTO "CartOperation" ("cartId", key, fingerprint, "createdAt")
+        SELECT ${userCart.id}, key, fingerprint, "createdAt" FROM "CartOperation" WHERE "cartId" = ${anonCart.id}
+        ON CONFLICT ("cartId", key) DO NOTHING`;
       await client.cart.delete({ where: { id: anonCart.id } });
       await this.recalcTotals(client, userCart.id);
 

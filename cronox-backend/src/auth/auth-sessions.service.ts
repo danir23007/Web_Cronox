@@ -321,7 +321,10 @@ export class AuthSessionsService {
       return null;
     const now = new Date();
     const issued = Math.floor(now.getTime() / 1000);
-    if (issued <= session.refreshIssuedAt)
+    // Nearby tabs/visits must return the same descendant. Rotating on every
+    // second allowed a slower response to overwrite the browser with a token
+    // which was no longer even the accepted predecessor.
+    if (issued * 1000 < session.refreshIssuedAt * 1000 + REFRESH_RACE_MS)
       return this.tokens(session, session.user.role);
     const next = {
       ...session,
@@ -345,10 +348,7 @@ export class AuthSessionsService {
         refreshIssuedAt: issued,
         lastActivityAt: now,
         refreshHash: this.hash(this.refreshToken(next, session.user.role)),
-        previousRefreshHash:
-          session.previousValidUntil && session.previousValidUntil > now
-            ? session.previousRefreshHash
-            : session.refreshHash,
+        previousRefreshHash: session.refreshHash,
         previousValidUntil: new Date(now.getTime() + REFRESH_RACE_MS),
       },
     });

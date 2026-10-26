@@ -40,8 +40,8 @@ class BrowserClock {
   }
 }
 
-async function fixture(options: { level?: number; hidden?: boolean; containerHidden?: boolean; intersecting?: boolean; reduced?: boolean } = {}) {
-  const dom = new JSDOM('<!doctype html><link rel="stylesheet" href="/assets/metacrilatos.css?v=2"><div id="root"></div>', {
+async function fixture(options: { level?: number; hidden?: boolean; containerHidden?: boolean; intersecting?: boolean; reduced?: boolean; prepare?: (win: any) => void; mounted?: (win: any, instance: any) => void } = {}) {
+  const dom = new JSDOM('<!doctype html><link rel="stylesheet" href="/assets/metacrilatos.css?v=3"><div id="root"></div>', {
     url: 'http://localhost/profile.html', runScripts: 'outside-only', pretendToBeVisual: true,
   });
   const win = dom.window as any;
@@ -99,10 +99,12 @@ async function fixture(options: { level?: number; hidden?: boolean; containerHid
     Object.defineProperty(event, 'pointerId', { value: id });
     this.dispatchEvent(event);
   };
+  options.prepare?.(win);
   win.eval(identityFormatter);
   win.eval(renderer);
   const host = win.document.getElementById('root');
   let instance = win.CRONOX_METACRILATOS.mount(host, { ...person, circleLevel: options.level ?? 1 });
+  options.mounted?.(win, instance);
   await instance.ready;
   await Promise.resolve();
   const slab = () => host.querySelector('.crx-slab');
@@ -130,6 +132,52 @@ async function fixture(options: { level?: number; hidden?: boolean; containerHid
 }
 
 describe('METACRILATOS shared motion lifecycle', () => {
+  it('loads the actual identity fonts after lazy CSS and waits before declaring the card ready', async () => {
+    let release!: () => void;
+    const fontReady = new Promise<void>(resolve => { release = resolve; });
+    const load = jest.fn(() => fontReady);
+    let complete = false;
+    const pending = fixture({
+      reduced: true,
+      prepare(win) {
+        win.document.querySelector('link').remove();
+        Object.defineProperty(win.document, 'fonts', { value: { ready: Promise.resolve(), load } });
+      },
+      mounted(win, instance) {
+        void instance.ready.then(() => { complete = true; });
+        expect(load).not.toHaveBeenCalled();
+        win.document.querySelector('link').dispatchEvent(new win.Event('load'));
+      },
+    });
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(load).toHaveBeenCalledTimes(2);
+    expect(load.mock.calls.map(call => (call as unknown[])[1])).toEqual([person.name, person.memberCode]);
+    expect(complete).toBe(false);
+    release();
+    const f = await pending;
+    try { expect(complete).toBe(true); } finally { f.close(); }
+  });
+  it('keeps the identity and card usable with fallback typography when the webfont fails', async () => {
+    const load = jest.fn(() => Promise.reject(new Error('WOFF2 request failed')));
+    const f = await fixture({
+      prepare(win) {
+        Object.defineProperty(win.document, 'fonts', { value: { ready: Promise.resolve(), load } });
+      },
+    });
+    try {
+      expect(load).toHaveBeenCalledTimes(2);
+      expect(f.host.querySelector('[data-crx-name]').textContent).toBe(person.name);
+      expect(f.host.querySelector('[data-crx-id]').textContent).toBe(person.memberCode);
+      const start = f.orientation();
+      f.clock.advance(1016);
+      expect(f.orientation().y).toBeGreaterThan(start.y);
+      expect(f.clock.frames).toBe(1);
+      f.flip();
+      f.clock.advance(completedTurnMs);
+      expect(f.host.querySelector('.crx-back').getAttribute('aria-hidden')).toBe('false');
+    } finally { f.close(); }
+  });
   it('prints the stored public code verbatim, preserving QR and avoiding administrative/identity/token fallbacks', async () => {
     const f = await fixture({ reduced: true });
     const qrDataUrl = 'data:image/png;base64,AA==';

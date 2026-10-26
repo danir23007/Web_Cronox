@@ -829,6 +829,12 @@ import { loadCategoryPages } from './category-pagination';
         error.status = response.status;
         error.endpoint = url;
         error.payload = data ?? null;
+        const retry = response.headers.get('Retry-After');
+        const delay = retry ? (/^\d+(?:\.\d+)?$/.test(retry) ? Number(retry) * 1000 : Date.parse(retry) - Date.now()) : 0;
+        if ([429, 503].includes(response.status) && Number.isFinite(delay) && delay > 0) {
+          error.retryAfterMs = delay;
+        }
+        if (response.status === 429) error.message = `Has realizado demasiadas solicitudes. Espera ${Math.max(1, Math.ceil((delay || 1000) / 1000))} segundos antes de volver a intentarlo.`;
         throw error;
       }
 
@@ -840,10 +846,9 @@ import { loadCategoryPages } from './category-pagination';
         if (err.status == null) err.status = 0;
         if (!err.endpoint) err.endpoint = url;
         if (err.payload === undefined) {
-          err.payload =
-            options.body && typeof options.body === 'object'
-              ? options.body
-              : null;
+          // Request bodies can contain credentials. Never attach them to an
+          // exception that a caller may log after a transport failure.
+          err.payload = null;
         }
         if (!err.message) {
           err.message = 'Error de red o de conexión';
@@ -981,20 +986,20 @@ import { loadCategoryPages } from './category-pagination';
 
   const readMe = async () => {
     try {
-      const data = await request<UnknownRecord>('/api/me');
+      const data = await request<UnknownRecord>('/api/me', { cache: 'no-store' });
       return data || null;
     } catch (error) {
       const err = error as CronoxApiError;
       if (
         err &&
-        (err.status === 401 || err.statusCode === 401 || err.status === 404)
+        (err.status === 401 || err.statusCode === 401)
       ) {
         return null;
       }
       const message =
         (err && err.message) || 'Error obteniendo el usuario autenticado';
       console.error('[CRONOX_API.getMe]', message, err);
-      throw new Error(message);
+      throw error;
     }
   };
 
@@ -1788,24 +1793,29 @@ import { loadCategoryPages } from './category-pagination';
   api.addCartItem = async ({
     variantId,
     qty,
+    operationKey = crypto.randomUUID(),
   }: {
     variantId: number | string;
     qty: number;
+    operationKey?: string;
   }) => {
     const data = await withGuestCartRecovery(() =>
       request('/api/cart/items', {
         method: 'POST',
         body: { variantId, qty },
+        headers: { 'Idempotency-Key': operationKey },
       }),
     );
     return mapCartResponse(data);
   };
 
-  api.updateCartItem = async (itemId: number | string, qty: number) => {
+  api.updateCartItem = async (itemId: number | string, qty: number, expectedQty?: number) => {
+    const operationKey = crypto.randomUUID();
     const data = await withGuestCartRecovery(() =>
       request(`/api/cart/items/${itemId}`, {
         method: 'PATCH',
-        body: { qty },
+        body: { qty, ...(expectedQty == null ? {} : { expectedQty }) },
+        headers: { 'Idempotency-Key': operationKey },
       }),
     );
     return mapCartResponse(data);

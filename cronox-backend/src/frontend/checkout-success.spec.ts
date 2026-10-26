@@ -1,6 +1,35 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import vm from 'node:vm';
+import { JSDOM } from 'jsdom';
+
+describe('newsletter account continuation after purchase', () => {
+  it.each(['paid', 'pending', 'refunded', 'wrong-ref', 'expired', 'missing'])(
+    'offers optional verified account access only for a processed matching purchase: %s', async scenario => {
+      const root = path.resolve(__dirname, '../../../cronox-front');
+      const dom = new JSDOM(readFileSync(path.join(root, 'checkout-success.html'), 'utf8'), { runScripts: 'outside-only', url: 'https://example.test/checkout/exito?ref=pi_fixture' });
+      const w = dom.window as any;
+      try {
+        const hint = { email: 'guest@example.test', providerRef: scenario === 'wrong-ref' ? 'pi_other' : 'pi_fixture', createdAt: Date.now() - (scenario === 'expired' ? 25 * 60 * 60_000 : 0) };
+        if (scenario !== 'missing') w.sessionStorage.setItem('cronoxNewsletterAfterPurchase', JSON.stringify(hint));
+        w.CRONOX_API = { getCart: jest.fn().mockResolvedValue({ items: [] }) };
+        w.CRONOX_AUTH_READY = Promise.resolve(null);
+        w.CRONOX_openAuthModal = jest.fn().mockResolvedValue(true);
+        w.fetch = jest.fn().mockResolvedValue({ ok: true, json: async () => ({ found: true, isProcessed: scenario !== 'pending', orderStatus: scenario === 'pending' ? 'PENDING' : scenario === 'refunded' ? 'REFUNDED' : 'PAID' }) });
+        w.eval(readFileSync(path.join(root, 'assets/checkout-success.js'), 'utf8'));
+        await new Promise(resolve => setImmediate(resolve));
+        expect(w.CRONOX_openAuthModal).not.toHaveBeenCalled();
+        expect(w.document.getElementById('checkout-success-account').hidden).toBe(scenario !== 'paid');
+        if (scenario === 'paid') {
+          w.document.getElementById('checkout-success-account-button').click();
+          await new Promise(resolve => setImmediate(resolve));
+          expect(w.CRONOX_openAuthModal).toHaveBeenCalledWith('login', expect.objectContaining({ newsletterEmail: hint.email, accountExists: true }));
+          expect(w.sessionStorage.getItem('cronoxNewsletterAfterPurchase')).toBeNull();
+        }
+      } finally { dom.window.close(); }
+    },
+  );
+});
 
 describe('checkout success cart synchronization', () => {
   it.each([false, true])('checks the backend on cancelled redirects, even when already processed=%s', async processed => {

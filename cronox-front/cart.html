@@ -1,6 +1,8 @@
 <!doctype html>
 <html lang="es">
 <head>
+  <link rel="preload" href="/assets/fonts/cormorant-garamond/cormorant-garamond-normal-latin-v21.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="/assets/customer-typography.css?v=4">
   <link rel="stylesheet" href="/assets/password-visibility.css?v=1">
   <script src="/assets/password-visibility.js?v=1" defer></script>
   <meta charset="utf-8" />
@@ -18,16 +20,17 @@
     .topbar__logo-img { display: block; width: 140px; height: auto; }
     .topbar svg { width: 24px; height: 24px; }
   </style>
-  <link id="cronox-main-style" rel="stylesheet" href="assets/store.css?v=118">
+  <link id="cronox-main-style" rel="stylesheet" href="assets/store.css?v=127">
   <!-- CSS del carrito (nuevo) -->
-  <link rel="stylesheet" href="assets/cart.css?v=7" />
-  <link rel="stylesheet" href="assets/quick-add.css?v=11" />
+  <link rel="stylesheet" href="assets/cart.css?v=8" />
+  <link rel="stylesheet" href="assets/quick-add.css?v=12" />
   <link rel="icon" type="image/png" href="/favicon.png?v=4">
   <link rel="shortcut icon" type="image/png" href="/favicon.png?v=4">
   <link rel="apple-touch-icon" href="/favicon.png?v=4">
   <meta name="theme-color" content="#000000">
+  <link rel="stylesheet" href="/assets/customer-layout.css?v=1">
 </head>
-<body class="page-cart">
+<body data-cronox-surface="customer" class="customer-page page-cart">
 
   <div id="overlay" class="overlay" hidden></div>
 
@@ -186,14 +189,14 @@
 
   <!-- JS (reutiliza tus scripts) -->
   <script src="assets/size-systems.js?v=1"></script>
-  <script src="assets/api.js?v=24"></script>
-  <script src="assets/responsive-images.js?v=5"></script>
+  <script src="assets/api.js?v=26"></script>
+  <script src="assets/responsive-images.js?v=6"></script>
   <script src="/assets/product-delivery.js?v=5" defer></script>
-  <script src="assets/app.js?v=97" defer></script>
-  <script src="assets/media-framing-geometry.js?v=6" defer></script>
+  <script src="assets/app.js?v=104" defer></script>
+  <script src="assets/media-framing-geometry.js?v=7" defer></script>
   <script src="assets/product-card-framing.js?v=1" defer></script>
   <script src="assets/products.js?v=74" defer></script>
   <script src="assets/cart-badge.js?v=45" defer></script>
-  <script src="assets/cart.js?v=10" defer></script>
+  <script src="assets/cart.js?v=11" defer></script>
 </body>
 </html>

@@ -177,13 +177,41 @@ const checks = [];
       (await check(first.email, true)).firstOrderDiscountCode,
       first.firstOrderDiscountCode,
     );
-    await newsletter.subscribe('newsletter@welcome.test');
+    await Promise.all(Array.from({ length: 4 }, () => newsletter.startRegistration('newsletter@welcome.test')));
+    assert.equal(await db.user.count({ where: { email: 'newsletter@welcome.test' } }), 0);
+    assert.equal(await db.newsletterMailJob.count({ where: { email: 'newsletter@welcome.test' } }), 0);
+    assert.equal(await db.newsletterSubscription.count({ where: { email: 'newsletter@welcome.test' } }), 0);
+    const newsletterDto = { email: 'newsletter@welcome.test', registrationSource: 'newsletter', firstName: 'Local', password: 'ValidPassword1!' };
+    const attempts = await Promise.allSettled(Array.from({ length: 4 }, () => auth.register(newsletterDto)));
+    assert.equal(attempts.filter(result => result.status === 'fulfilled').length, 1);
     const opted = await check('newsletter@welcome.test', true);
-    await register(opted.email);
-    assert.equal(
-      (await check(opted.email, true)).firstOrderDiscountCode,
-      opted.firstOrderDiscountCode,
-    );
+    assert.ok(opted.password);
+    assert.equal(opted.lastName, null);
+    assert.equal((await db.newsletterSubscription.findUniqueOrThrow({ where: { email: opted.email } })).userId, opted.id);
+    await assert.rejects(auth.register({ ...newsletterDto, firstName: 'Otro', password: 'DifferentPassword!' }));
+    const unchanged = await db.user.findUniqueOrThrow({ where: { id: opted.id } });
+    assert.equal(unchanged.firstName, opted.firstName);
+    assert.equal(unchanged.password, opted.password);
+    assert.equal(await db.newsletterSubscription.count({ where: { email: opted.email } }), 1);
+    checks.push('Starting signup creates nothing; concurrent newsletter registration commits exactly one account/subscription/code/welcome and never overwrites credentials');
+    await newsletter.subscribe('historical-signup@welcome.test');
+    const historical = await db.newsletterSubscription.findUniqueOrThrow({ where: { email: 'historical-signup@welcome.test' } });
+    await newsletter.startRegistration(historical.email);
+    assert.deepEqual(await db.newsletterSubscription.findUniqueOrThrow({ where: { email: historical.email } }), historical);
+    await auth.register({ ...newsletterDto, email: historical.email });
+    const linked = await db.newsletterSubscription.findUniqueOrThrow({ where: { email: historical.email } });
+    assert.equal(linked.id, historical.id);
+    assert.deepEqual(linked.subscribedAt, historical.subscribedAt);
+    await check(historical.email, true);
+    const loginAccount = (await register('existing-login@welcome.test')).user;
+    await newsletter.startRegistration(loginAccount.email);
+    assert.equal(await db.newsletterSubscription.count({ where: { email: loginAccount.email } }), 0);
+    await assert.rejects(newsletter.completeRegistration(loginAccount.id, opted.email));
+    await Promise.all(Array.from({ length: 4 }, () => newsletter.completeRegistration(loginAccount.id, loginAccount.email)));
+    await check(loginAccount.email, true);
+    assert.equal(await db.newsletterSubscription.count({ where: { email: loginAccount.email } }), 1);
+    assert.equal(await db.newsletterMailJob.count({ where: { email: loginAccount.email, kind: 'ACCESS' } }), 0);
+    checks.push('Historical subscription identity and consent date retained; existing accounts require matching authenticated identity and concurrent completion deduplicates');
     await Promise.all([
       register('concurrent@welcome.test'),
       newsletter.subscribe('concurrent@welcome.test'),
@@ -211,6 +239,7 @@ const checks = [];
       new UsersService(brokenQueue).createUser({
         email: 'rollback@welcome.test',
         password: 'local-test-hash',
+        newsletterSubscribed: true,
       }),
       (error) => error.code === 'P2003',
     );
@@ -219,6 +248,7 @@ const checks = [];
       0,
     );
     assert.equal(await db.promoCode.count(), countBefore);
+    assert.equal(await db.newsletterSubscription.count({ where: { email: 'rollback@welcome.test' } }), 0);
     assert.equal(
       await db.newsletterMailJob.count({
         where: { email: 'rollback@welcome.test' },
@@ -226,10 +256,10 @@ const checks = [];
       0,
     );
     checks.push(
-      'A real outbox FK failure rolls back account, code and welcome together',
+      'A real outbox FK failure rolls back account, subscription, code and welcome together',
     );
     checks.push(
-      'Registration and newsletter in either order reuse one persisted personal code and one welcome; account creation never adds consent',
+      'Ordinary registration and checkout opt-in remain independent and reuse one personal code and welcome',
     );
     const screen = await db.keyScreen.create({
       data: {
@@ -370,6 +400,7 @@ const checks = [];
     const { repairNewsletterUsers } = require('../src/newsletter/newsletter-user-repair');
     await db.newsletterSubscription.create({ data: { email: 'historical@welcome.test', subscribedAt: new Date() } });
     await repairNewsletterUsers(db, true);
+    assert.equal(await db.user.count({ where: { email: 'historical@welcome.test' } }), 0);
     assert.equal(await db.newsletterMailJob.count({ where: { email: 'historical@welcome.test' } }), 0);
     assert.equal((await db.user.findUniqueOrThrow({ where: { id: existing.id } })).firstOrderDiscountCode, 'KEEP01');
     checks.push('Historical link repair in the disposable database schedules no retrospective welcome and preserves repaired codes');

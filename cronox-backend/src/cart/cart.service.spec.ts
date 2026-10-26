@@ -38,6 +38,8 @@ describe('CartService checkout cart selection', () => {
       items: [{ id: 201, cartId: 20, variantId: 1, qty: 3, priceAtAdd: 1200 }],
     };
     const tx = {
+      $executeRaw: jest.fn().mockResolvedValue(0),
+      $queryRaw: jest.fn().mockResolvedValue([]),
       cart: {
         findUnique: jest.fn(async ({ where }: any) =>
           where.anonymousId ? anonymousCart : userCart,
@@ -112,6 +114,8 @@ describe('CartService checkout cart selection', () => {
     const anonymousCart = { id: 10, items: [] };
     let adopted = false;
     const tx = {
+      $executeRaw: jest.fn().mockResolvedValue(0),
+      $queryRaw: jest.fn().mockResolvedValue([]),
       cart: {
         findUnique: jest.fn(async ({ where }: any) => {
           if (where.anonymousId) return adopted ? null : anonymousCart;
@@ -158,6 +162,8 @@ describe('CartService checkout cart selection', () => {
 
   it('rejects an add that bypasses the frontend when real variant stock is insufficient', async () => {
     const tx = {
+      $executeRaw: jest.fn().mockResolvedValue(0),
+      $queryRaw: jest.fn().mockResolvedValue([]),
       cart: {
         findUnique: jest.fn().mockResolvedValue({ id: 10, items: [] }),
       },

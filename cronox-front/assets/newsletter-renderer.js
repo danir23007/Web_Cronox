@@ -169,6 +169,7 @@
           <form${id('newsletterForm')} class="newsletter-modal-form" novalidate>
             <input${id('newsletterEmail')} class="newsletter-modal-input" type="email" name="email" placeholder="Email" autocomplete="email" required${preview ? ' tabindex="-1"' : ''}>
             <button type="submit" class="newsletter-modal-button"${preview ? ' tabindex="-1"' : ''}>UNIRSE</button>
+            <p class="newsletter-consent-copy">Completa tu cuenta para suscribirte a la newsletter. Al finalizar aceptas recibir sus comunicaciones. <a href="/privacidad" target="_blank" rel="noopener">Política de privacidad</a>.</p>
             <p class="newsletter-login-prompt">O si ya tienes cuenta, <button type="button" class="newsletter-login-link"${preview ? ' tabindex="-1"' : ''}>inicia sesión</button></p>
             <p${id('newsletterFeedback')} class="newsletter-modal-feedback" role="status" aria-live="polite"></p>
           </form>

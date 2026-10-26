@@ -3,15 +3,17 @@
 const assert = require('node:assert/strict'),
   fs = require('node:fs'),
   path = require('node:path');
-const { spawnSync } = require('node:child_process'),
+const { spawnSync, fork } = require('node:child_process'),
   { Client } = require('pg'),
   { randomUUID, randomBytes, createHash } = require('node:crypto');
 const backend = path.resolve(__dirname, '..'),
   root = path.resolve(backend, '..'),
   sessionReview = process.argv.includes('--sessions'),
+  sessionWorker = sessionReview && process.argv.includes('--session-worker'),
   bookReview = process.argv.includes('--book'),
   port = bookReview ? 43127 : sessionReview ? 43126 : 43125;
-const name = 'cronox_password_test_' + randomUUID().replace(/-/g, '');
+const name = sessionWorker ? process.env.CRONOX_REVIEW_SESSION_DATABASE : 'cronox_password_test_' + randomUUID().replace(/-/g, '');
+assert.match(name, /^cronox_password_test_[a-f0-9]{32}$/);
 (async () => {
   const env = require('./start-local.cjs').loadLocalEnvironment(),
     source = new URL(env.DATABASE_URL);
@@ -28,8 +30,10 @@ const name = 'cronox_password_test_' + randomUUID().replace(/-/g, '');
           .host,
       ),
     );
-    await control.query(`CREATE DATABASE "${name}" TEMPLATE template0`);
-    created = true;
+    if (!sessionWorker) {
+      await control.query(`CREATE DATABASE "${name}" TEMPLATE template0`);
+      created = true;
+    }
     const target = new URL(source);
     target.pathname = '/' + name;
     target.search = '';
@@ -43,7 +47,7 @@ const name = 'cronox_password_test_' + randomUUID().replace(/-/g, '');
       USER_NUMBERING_DATABASE_URL: target.href,
       FRONTEND_URL: `http://127.0.0.1:${port}`,
       API_PUBLIC_URL: `http://127.0.0.1:${port}`,
-      CORS_ORIGINS: `http://127.0.0.1:${port}`,
+      CORS_ORIGINS: `http://127.0.0.1:${port}` + (sessionReview ? ',https://cronox.es,https://www.cronox.es' : ''),
       EMAIL_ENABLED: 'false',
       BACKGROUND_JOBS_ENABLED: 'false',
       NEWSLETTER_EMAIL_WORKER_ENABLED: 'false',
@@ -52,7 +56,7 @@ const name = 'cronox_password_test_' + randomUUID().replace(/-/g, '');
       RATE_LIMIT_TTL_MS: '1000',
       RATE_LIMIT_MAX: '100',
     };
-    const push = spawnSync(
+    const push = sessionWorker ? { status: 0 } : spawnSync(
       process.execPath,
       [
         require.resolve('prisma/build/index.js'),
@@ -78,6 +82,7 @@ const name = 'cronox_password_test_' + randomUUID().replace(/-/g, '');
       (await db.$queryRawUnsafe('SELECT current_database() AS name'))[0].name,
       name,
     );
+    if (!sessionWorker) {
     await db.userNumberingState.create({
       data: { id: 1, nextId: 1, ready: true },
     });
@@ -108,6 +113,24 @@ const name = 'cronox_password_test_' + randomUUID().replace(/-/g, '');
       );
     } finally {
       await setup.end();
+    }
+    }
+    if (sessionReview && !sessionWorker) {
+      // The parent owns the disposable DB. Each restart boots an entirely new
+      // Node/Nest process with the same test keys and persistent session rows.
+      const initial = randomBytes(12).toString('base64url');
+      let restart = true;
+      while (restart) {
+        restart = false;
+        const child = fork(__filename, ['--sessions', '--session-worker'], {
+          cwd: backend, windowsHide: true, stdio: ['ignore', 'inherit', 'inherit', 'ipc'],
+          env: { ...process.env, CRONOX_REVIEW_SESSION_DATABASE: name, CRONOX_REVIEW_SESSION_PASSWORD: initial },
+        });
+        child.on('message', message => { if (message?.restart) restart = true; });
+        const code = await new Promise((resolve, reject) => { child.once('exit', resolve); child.once('error', reject); });
+        assert.equal(code, 0, 'Disposable session worker failed');
+      }
+      return;
     }
     const mails = new Map(),
       fixtures = new Map(),
@@ -157,13 +180,17 @@ const name = 'cronox_password_test_' + randomUUID().replace(/-/g, '');
     const auth = app.get(AuthService),
       newsletter = app.get(NewsletterService),
       keyScreen = app.get(KeyScreenService);
-    const initial = randomBytes(12).toString('base64url');
+    const initial = sessionWorker ? process.env.CRONOX_REVIEW_SESSION_PASSWORD : randomBytes(12).toString('base64url');
+    if (!sessionWorker || !await db.user.findUnique({ where: { email: 'normal@password.test' } })) {
     await auth.register({
       email: 'normal@password.test',
       password: initial,
       firstName: 'Local',
       lastName: 'Normal',
     });
+    // Historical passwordless newsletter account, explicitly seeded as a fixture.
+    // New subscriptions deliberately no longer create this kind of account.
+    await db.user.create({ data: { email: 'newsletter@password.test', password: null, accountState: 'ACTIVE', registrationClaimable: true } });
     await newsletter.subscribe('newsletter@password.test');
     const screen = await db.keyScreen.create({
       data: {
@@ -212,6 +239,7 @@ const name = 'cronox_password_test_' + randomUUID().replace(/-/g, '');
           billingAddr: null,
         }),
     );
+    }
     if (bookReview) await db.user.update({
       where: { email: 'normal@password.test' },
       data: { firstName: 'W'.repeat(120), lastName: 'W'.repeat(120), circleLevel: 3 },
@@ -393,6 +421,15 @@ const name = 'cronox_password_test_' + randomUUID().replace(/-/g, '');
       });
     });
     // Mirror the canonical routes used by generated email links, without logging URLs.
+    if (sessionReview) {
+      app.use(require('../dist/common/routing/public-seo').seoRequestSignals);
+      const { CLEAN_PUBLIC_PAGES } = require('../dist/common/routing/public-pages');
+      app.use((req, res, next) => {
+        const file = CLEAN_PUBLIC_PAGES.get(req.path);
+        if (!file || !['GET', 'HEAD'].includes(req.method)) return next();
+        res.sendFile(path.join(root, 'cronox-front', file));
+      });
+    }
     app.use('/reset-password', (req, res) =>
       res.redirect(
         308,
@@ -408,6 +445,20 @@ const name = 'cronox_password_test_' + randomUUID().replace(/-/g, '');
     );
     app.use(require('express').static(path.join(root, 'cronox-front/public')));
     app.use(require('express').static(path.join(root, 'cronox-front')));
+    let stopReview;
+    const stopped = new Promise(resolve => { stopReview = resolve; });
+    app.use('/__review/stop', (req, res) => {
+      if (req.method !== 'POST') return res.sendStatus(405);
+      res.json({ stopping: true });
+      stopReview();
+    });
+    if (sessionWorker) app.use('/__review/restart', (req, res) => {
+      if (req.method !== 'POST') return res.sendStatus(405);
+      res.json({ restarting: true });
+      process.send({ restart: true });
+      stopReview();
+    });
+    if (sessionReview) app.use('/__review/process', (_req, res) => res.json({ pid: process.pid }));
     await app.listen(port, '127.0.0.1');
     console.log(
       JSON.stringify({
@@ -417,22 +468,30 @@ const name = 'cronox_password_test_' + randomUUID().replace(/-/g, '');
         disposable: true,
       }),
     );
-    await new Promise((resolve) => {
+    const timeout = setTimeout(stopReview, 60 * 60_000);
+    await Promise.race([stopped, new Promise((resolve) => {
       process.stdin.on('data', (chunk) => {
         if (String(chunk).includes('stop')) {
           process.stdin.pause();
           resolve();
         }
       });
-    });
+    })]);
+    clearTimeout(timeout);
   } finally {
-    if (app) await app.close();
+    if (app) {
+      // Browser APIRequest keep-alive connections must not keep a deliberately
+      // stopped test process alive while the supervisor waits to replace it.
+      const drain = setInterval(() => app.getHttpServer().closeAllConnections?.(), 50);
+      try { await app.close(); } finally { clearInterval(drain); }
+    }
     if (db) await db.$disconnect();
     if (created) {
       assert.match(name, /^cronox_password_test_[a-f0-9]{32}$/);
       await control.query(`DROP DATABASE "${name}" WITH (FORCE)`);
     }
     await control.end();
+    if (sessionWorker && process.connected) process.disconnect();
   }
   console.log(JSON.stringify({ cleanedUp: true }));
 })().catch((error) => {

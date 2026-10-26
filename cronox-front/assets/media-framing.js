@@ -342,6 +342,10 @@
     }
   });
   window.addEventListener("resize", applyAll, { passive: true });
+  // A downloaded face changes the text bounds even when the hero frame
+  // keeps its size. Reposition only the text, retaining the current media.
+  pageDocument.fonts?.ready.then(ensureHeroText);
+  pageDocument.fonts?.addEventListener("loadingdone", ensureHeroText);
 
   load();
   window.CRONOX_MEDIA_FRAMING = {

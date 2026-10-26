@@ -11,9 +11,10 @@ import { RolesGuard } from '../common/guards/roles.guard';
 import { SupabaseStorageService } from '../common/storage/supabase-storage.service';
 import { WebsiteMediaUploadSizeExceptionFilter } from '../media-framing/media-upload-size-exception.filter';
 import { ImagesModule } from '../images/images.module';
+import { AccessAuthModule } from '../auth/access-auth.module';
 
 @Module({
-  imports: [PrismaModule, EmailModule, ImagesModule],
+  imports: [PrismaModule, EmailModule, ImagesModule, AccessAuthModule],
   controllers: [NewsletterController, AdminNewsletterController],
   providers: [
     NewsletterService,

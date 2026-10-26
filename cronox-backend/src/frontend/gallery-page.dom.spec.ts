@@ -125,6 +125,11 @@ describe('CRONOX gallery page', () => {
       runScripts: 'outside-only',
       url: 'http://localhost:3000/gallery.html',
     });
+    expect(dom.window.document.body.classList.contains('page-info')).toBe(true);
+    expect(dom.window.document.body.classList.contains('page-gallery')).toBe(true);
+    expect(
+      dom.window.document.body.firstElementChild?.getAttribute('src'),
+    ).toBe('assets/info-shell.js?v=4');
     dom.window.requestAnimationFrame = (callback: FrameRequestCallback) => {
       callback(0);
       return 1;
@@ -151,9 +156,6 @@ describe('CRONOX gallery page', () => {
     expect(galleryHtml).toContain('href="assets/gallery.css?v=20"');
     expect(galleryHtml).toContain('src="assets/gallery.js?v=18"');
     expect(document.title).toBe('Galer\u00eda | CRONOX');
-    expect(galleryHtml).toMatch(
-      /<body class="page-info page-gallery">\s*<script src="assets\/info-shell\.js\?v=4"><\/script>/,
-    );
     expect(document.querySelectorAll('#topbar')).toHaveLength(1);
     expect(topbar?.classList.contains('topbar--page')).toBe(true);
     expect(topbar?.classList.contains('topbar--transparent')).toBe(false);

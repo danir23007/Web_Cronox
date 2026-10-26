@@ -20,7 +20,7 @@
           .replace(/"/g, '&quot;')
           .replace(/'/g, '&#39;');
   };
-  const safeProductImage = (value, fallback = 'assets/product-image-unavailable.svg') => {
+  const safeProductImage = (value, fallback = window.CRONOX_PRODUCT_PLACEHOLDER || 'assets/product-image-unavailable.svg') => {
     const helper = window.CRONOX_SECURITY?.productImageUrl;
     return typeof helper === 'function' ? helper(value, fallback) : fallback;
   };
@@ -114,7 +114,6 @@
       colorDanger: '#ff8c8c',
       borderRadius: '0px',
       spacingUnit: '4px',
-      fontSizeBase: '14px',
     },
     rules: {
       '.Input': {
@@ -128,8 +127,6 @@
       },
       '.Label': {
         color: '#d0d0cc',
-        fontSize: '12px',
-        fontWeight: '600',
       },
       '.AccordionItem': {
         border: '1px solid #303030',
@@ -234,6 +231,8 @@
   let activeProfile = null;
   let savedDefaultAddress = null;
   let newsletterSubmittedFor = '';
+  let newsletterSubscriptionPending = null;
+  let newsletterPurchaseReference = null;
 
   const isValidEmail = (value) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanText(value));
   const getCheckoutEmail = () =>
@@ -686,8 +685,12 @@
       }
     } catch (error) {
       console.warn('[CRONOX] No se pudo resolver la sesión', error);
+      throw error;
     }
 
+    if (window.CRONOX_AUTH_STATE === 'unknown') {
+      throw new Error('No se pudo comprobar tu sesión. Reintentaremos al recuperar la conexión.');
+    }
     state.isAuthenticated = false;
     renderCustomerContact(null);
     return false;
@@ -1682,10 +1685,27 @@
     if (currentPaymentIntentId) {
       successUrl.searchParams.set('ref', currentPaymentIntentId);
     }
+    rememberNewsletterCompletion();
     return successUrl.toString();
   };
 
+  // A tab-local presentation hint, never a credential or proof of ownership.
+  // Bind it to this payment so an unrelated success page cannot offer it.
+  const rememberNewsletterCompletion = () => {
+    try {
+      const providerRef = newsletterPurchaseReference || currentPaymentIntentId;
+      if (state.isAuthenticated || !newsletterConsent?.checked || newsletterSubmittedFor !== getCheckoutEmail() || !providerRef) {
+        sessionStorage.removeItem('cronoxNewsletterAfterPurchase');
+        return;
+      }
+      sessionStorage.setItem('cronoxNewsletterAfterPurchase', JSON.stringify({
+        email: newsletterSubmittedFor, providerRef, createdAt: Date.now(),
+      }));
+    } catch { /* Storage availability must never block payment. */ }
+  };
+
   const subscribeNewsletterIfRequested = async () => {
+    if (newsletterSubscriptionPending) return newsletterSubscriptionPending;
     const email = getCheckoutEmail();
     if (
       state.isAuthenticated ||
@@ -1695,24 +1715,30 @@
     ) {
       return;
     }
-    try {
-      const response = await fetch(`${API_BASE}/api/newsletter/subscribe`, {
-        method: 'POST',
-        credentials: 'include',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(await getCsrfHeaders()),
-        },
-        body: JSON.stringify({ email }),
-      });
-      const result = await response.json().catch(() => null);
-      if (response.status === 202 && result?.status === 'accepted') newsletterSubmittedFor = email;
-    } catch (error) {
-      console.warn('[CRONOX checkout newsletter]', {
-        event: 'checkout_newsletter_subscription_failed',
-        type: error instanceof Error ? error.name : 'unexpected',
-      });
-    }
+    newsletterSubscriptionPending = (async () => {
+      try {
+        const response = await fetch(`${API_BASE}/api/newsletter/subscribe`, {
+          method: 'POST',
+          credentials: 'include',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(await getCsrfHeaders()),
+          },
+          body: JSON.stringify({ email }),
+        });
+        const result = await response.json().catch(() => null);
+        if (response.status === 202 && result?.status === 'accepted') {
+          newsletterSubmittedFor = email;
+          rememberNewsletterCompletion();
+        }
+      } catch (error) {
+        console.warn('[CRONOX checkout newsletter]', {
+          event: 'checkout_newsletter_subscription_failed',
+          type: error instanceof Error ? error.name : 'unexpected',
+        });
+      }
+    })();
+    try { await newsletterSubscriptionPending; } finally { newsletterSubscriptionPending = null; }
   };
 
   const expressRates = () => state.shippingMethods.map(method => ({
@@ -2108,7 +2134,11 @@
     paymentMethodComplete = false;
 
     mountedAmountCents = state.totals.totalCents;
-    elements = stripe.elements({ mode: 'payment', currency: 'eur', amount: mountedAmountCents, appearance });
+    // Keep Stripe's default typography inside its payment form. The surrounding
+    // checkout retains the customer font; colors/layout stay in Appearance.
+    elements = stripe.elements({
+      mode: 'payment', currency: 'eur', amount: mountedAmountCents, appearance,
+    });
     mountExpressCheckoutElement();
     const nextPaymentElement = elements.create('payment', paymentElementOptions);
     paymentElement = nextPaymentElement;
@@ -3075,6 +3105,13 @@
     }
   });
 
+  window.addEventListener('cronox:bank-transfer-reference', (event) => {
+    const ref = event.detail?.paymentIntentId;
+    if (typeof ref !== 'string' || !/^pi_[A-Za-z0-9_]+$/.test(ref)) return;
+    newsletterPurchaseReference = ref;
+    void subscribeNewsletterIfRequested().then(rememberNewsletterCompletion);
+  });
+
   window.addEventListener('cronox:bank-transfer-lock', (event) => {
     if (event.detail?.locked && (paymentInFlight || expressCheckoutRevision !== null)) {
       event.preventDefault();
@@ -3083,9 +3120,12 @@
     bankTransferPending = Boolean(event.detail?.locked);
     if (bankTransferPending) {
       currentClientSecret = null;
+      // Record explicit consent without opening account UI or delaying payment.
+      void subscribeNewsletterIfRequested();
       setExpressCheckoutVisibility();
       setPayButtonState(false);
     } else {
+      newsletterPurchaseReference = null;
       void queueCheckoutUpdate();
     }
   });

@@ -154,7 +154,9 @@ test('five circles retain their real privileges and geometry in the desktop/mobi
       expect(layout.member.left).toBeGreaterThan(layout.stage.right);
       expect(Math.abs(layout.member.top - layout.slab.top)).toBeLessThan(80);
       expect(layout.store.left + layout.store.width / 2).toBeCloseTo(layout.contentWidth / 2, 0);
-      expect(layout.history.bottom).toBeLessThanOrEqual(layout.button.bottom);
+      // Readable customer text can make the information column taller than
+      // the card. The shared return row must clear both complete columns.
+      expect(layout.store.top).toBeGreaterThan(Math.max(layout.history.bottom, layout.button.bottom));
     } else {
       expect(layout.member.top).toBeGreaterThan(layout.button.bottom + 20);
       expect(layout.store.top).toBeGreaterThan(layout.history.bottom + 20);
@@ -218,7 +220,9 @@ test('loading, failure, missing counts and retry preserve the mounted card, its 
   await page.locator('.crx-stage').scrollIntoViewIfNeeded();
   await page.clock.runFor(64);
   await page.locator('.crx-stage').dispatchEvent('pointerup', { pointerId: 77, button: 0 });
-  await page.clock.runFor(6900);
+  // Mouse release keeps the existing five-second hold (the same contract as
+  // metacrilatos-motion.spec.cjs); history retries must not extend it.
+  await page.clock.runFor(4900);
   expect(await page.evaluate(() => window.detailsTestSlab.style.transform === window.detailsTestOrientation)).toBe(true);
   await page.clock.runFor(180);
   expect(await page.evaluate(() => window.detailsTestSlab.style.transform !== window.detailsTestOrientation)).toBe(true);

@@ -35,7 +35,7 @@ export class OptionalJwtAuthGuard extends AuthGuard('jwt') {
     // Optional means no credentials are required. Credentials that are
     // present but invalid must not silently downgrade an account request to a
     // guest cart, because that recreates the split-cart failure.
-    if (hasAccessToken) {
+    if (hasAccessToken || cookies?.refresh_token) {
       throw new UnauthorizedException('Usuario no autenticado');
     }
 

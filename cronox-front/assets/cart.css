@@ -151,7 +151,7 @@ body { padding-top: calc(var(--topbar-h) + env(safe-area-inset-top)); }
 .shipping-option__price{ font-weight:700; }
 
 .btn-primary{
-  background:#fff; color:#000; font-weight:800; border:0; border-radius:0;
+  background:#fff; color:#000; font-weight:var(--customer-heavy, 800); border:0; border-radius:0;
   padding:12px 16px; cursor:pointer; width:100%;
   margin-top:10px;
 }

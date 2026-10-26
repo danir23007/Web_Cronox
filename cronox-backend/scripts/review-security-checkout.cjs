@@ -44,7 +44,15 @@ module.exports = async ({ db }) => {
   await assert.rejects(() => orders.getOrderById({ id: users[1 - winner].id, role: 'USER' }, fulfilled[0].orderId), /ACCESS_DENIED/);
   // Refund/cancellation are provider simulation at the service boundary; no Stripe API called.
   const event = { id: 'evt_isolated_refund', type: 'charge.refunded', paymentIntentId: payment.paymentIntentId, occurredAt: new Date(), lifecycleStatus: 'REFUNDED', amountCents: 3000, refundCumulativeCents: 3000 };
-  await orders.claimStripeWebhookEvent(event);
+  const { StripeWebhookRecoveryService } = require('../dist/payments/stripe-webhook-recovery.service');
+  const recovery = new StripeWebhookRecoveryService(db);
+  recovery.register(async () => {
+    await orders.applyStripePaymentLifecycle(payment.paymentIntentId, 'REFUNDED');
+    return { received: true };
+  }, async () => 'not_needed');
+  await Promise.all(Array.from({ length: 5 }, () => recovery.accept({ id: event.id, type: event.type, created: Math.floor(Date.now() / 1000), data: { object: {} } }, {
+    paymentIntentId: payment.paymentIntentId, lifecycleStatus: event.lifecycleStatus, amountCents: 3000, refundCumulativeCents: 3000,
+  })));
   await Promise.all([orders.applyStripePaymentLifecycle(payment.paymentIntentId, 'REFUNDED'), orders.applyStripePaymentLifecycle(payment.paymentIntentId, 'REFUNDED')]);
   assert.equal((await db.productVariant.findUnique({ where: { id: variantId } })).stockQty, 1);
   assert.equal((await db.order.findFirst()).status, 'REFUNDED');

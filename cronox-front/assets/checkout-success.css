@@ -12,7 +12,7 @@ body.page-checkout-success {
   min-height: 100dvh;
   background: var(--checkout-success-bg);
   color: var(--checkout-success-text);
-  font-family: "Inter", "Segoe UI", Roboto, Arial, sans-serif;
+  --customer-original-font: "Inter", "Segoe UI", Roboto, Arial, sans-serif; font-family: var(--customer-font-prefix,) var(--customer-original-font);
 }
 
 .checkout-success {
@@ -131,6 +131,9 @@ body.page-checkout-success {
   transform: translateY(-1px);
   box-shadow: 0 10px 22px rgba(255, 255, 255, 0.2);
 }
+
+#checkout-success-account { margin-top: 28px; }
+#checkout-success-account .checkout-success__cta { margin-top: 14px; cursor: pointer; border: 0; font: inherit; }
 
 @media (max-width: 640px) {
   .checkout-success__ascii pre {

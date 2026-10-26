@@ -14,6 +14,10 @@
     galleryLarge: { roles: ["large"], sizes: "100vw", loading: "eager" },
     hero: { roles: ["mobile", "tablet", "desktop"], sizes: "100vw", loading: "eager" },
   });
+  // Surface, never account role: the administration keeps its original asset.
+  if (globalScope.document?.body?.dataset.cronoxSurface === "customer" && !globalScope.CRONOX_PRODUCT_PLACEHOLDER) {
+    globalScope.CRONOX_PRODUCT_PLACEHOLDER = "/assets/customer-product-image-unavailable.svg";
+  }
   const DEFAULT_PLACEHOLDER = globalScope.CRONOX_PRODUCT_PLACEHOLDER || "assets/product-image-unavailable.svg";
 
   const validUrl = (value) => {
@@ -29,7 +33,7 @@
     const url = validUrl(variant?.url);
     return url ? { url, width: Number(variant.width) || 0, height: Number(variant.height) || 0 } : null;
   };
-  const isPlaceholder = (url) => /\/(?:logo_banner|logo_browser)\.png(?:$|[?#])|\/product-image-unavailable\.svg(?:$|[?#])/i.test(url || "");
+  const isPlaceholder = (url) => /\/(?:logo_banner|logo_browser)\.png(?:$|[?#])|\/(?:customer-)?product-image-unavailable\.svg(?:$|[?#])/i.test(url || "");
   const asRecord = (value) => {
     if (typeof value === "string") return originalUrl(value) ? { url: originalUrl(value) } : null;
     if (!value || typeof value !== "object") return null;

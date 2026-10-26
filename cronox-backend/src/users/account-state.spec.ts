@@ -45,7 +45,7 @@ describe('account enablement contract', () => {
   });
   it('normal creation persists ACTIVE explicitly and ignores a forged internal state field', async () => {
     let row:any;
-    const tx:any={ $executeRaw:jest.fn(),user:{findFirst:jest.fn(async()=>null),findUnique:jest.fn(async()=>row),create:jest.fn(async({data})=>row={id:1,...data})} };
+    const tx:any={ $executeRaw:jest.fn(),newsletterSubscription:{findUnique:jest.fn(async()=>null)},user:{findFirst:jest.fn(async()=>null),findUnique:jest.fn(async()=>row),create:jest.fn(async({data})=>row={id:1,...data})} };
     const service=new UsersService({$transaction:fn=>fn(tx)} as any);
     const created=await service.createUser({email:'fixture@example.test',password:'hash',accountState:'INACTIVE'} as any);
     expect(created.accountState).toBe('ACTIVE');

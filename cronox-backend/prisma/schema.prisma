@@ -1353,6 +1353,26 @@ model Cart {
   updatedAt   DateTime   @updatedAt
   user        User?      @relation(fields: [userId], references: [id], onDelete: Cascade)
   items       CartItem[]
+  operations  CartOperation[]
+}
+
+// Replay fence for a cart intention, committed atomically with its mutation.
+model CartOperation {
+  cartId Int
+  key String @db.VarChar(128)
+  fingerprint String @db.VarChar(64)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  cart Cart @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  @@id([cartId, key])
+}
+
+// Shared bounded windows; keys are HMACs and contain no customer identifiers.
+model RequestRateWindow {
+  key String @id @db.VarChar(64)
+  hits Int
+  resetsAt DateTime @db.Timestamptz(3)
+  blockedUntil DateTime? @db.Timestamptz(3)
+  @@index([resetsAt])
 }
 
 // Short-lived operational presence. Daily analytics has separate consent.

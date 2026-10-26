@@ -21,6 +21,7 @@ describe('AddressesService country normalization', () => {
 
   const createService = () => {
     const prisma: any = {
+      $executeRaw: jest.fn().mockResolvedValue(0),
       address: {
         count: jest.fn().mockResolvedValue(0),
         create: jest.fn().mockImplementation(({ data }) => ({

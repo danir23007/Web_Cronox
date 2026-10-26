@@ -70,6 +70,44 @@ const setup = (page = 'checkout.html', initialUser: any = null) => {
 };
 
 describe('checkout and cart startup performance', () => {
+  it('does not initialize guest checkout while session recovery is unresolved', async () => {
+    const { dom, w } = setup();
+    w.console.error = jest.fn(); w.console.warn = jest.fn();
+    try {
+      w.CRONOX_AUTH_STATE = 'unknown';
+      w.CRONOX_AUTH_READY = Promise.resolve(undefined);
+      w.eval(read('assets/checkout.js')); await flush();
+      expect(w.CRONOX_API.getCheckoutSummary).not.toHaveBeenCalled();
+      expect(w.document.querySelector('#pay-button').disabled).toBe(true);
+    } finally { dom.window.close(); }
+  });
+  it('records explicit newsletter consent during bank transfer without opening registration or duplicating in-flight requests', async () => {
+    const { dom, w } = setup();
+    try {
+      const accepted = pending();
+      w.fetch = jest.fn(() => accepted.promise);
+      w.CRONOX_API.getCsrfHeaders = jest.fn().mockResolvedValue({ 'x-csrf-token': 'fixture' });
+      w.CRONOX_openAuthModal = jest.fn();
+      w.eval(read('assets/checkout.js')); await flush();
+      w.document.getElementById('checkout-guest-email').value = 'guest@example.test';
+      const consent = w.document.getElementById('checkout-newsletter-consent');
+      const lock = () => w.dispatchEvent(new w.CustomEvent('cronox:bank-transfer-lock', { detail: { locked: true }, cancelable: true }));
+      lock(); await flush();
+      expect(w.fetch).not.toHaveBeenCalled();
+      consent.checked = true;
+      lock(); lock(); await flush();
+      expect(w.fetch).toHaveBeenCalledTimes(1);
+      expect(JSON.parse(w.fetch.mock.calls[0][1].body)).toEqual({ email: 'guest@example.test' });
+      expect(w.fetch.mock.calls[0][1].headers['x-csrf-token']).toBe('fixture');
+      accepted.resolve({ status: 202, json: async () => ({ status: 'accepted' }) }); await flush();
+      w.dispatchEvent(new w.CustomEvent('cronox:bank-transfer-reference', { detail: { paymentIntentId: 'pi_bank_fixture' } })); await flush();
+      expect(JSON.parse(w.sessionStorage.getItem('cronoxNewsletterAfterPurchase'))).toMatchObject({ email: 'guest@example.test', providerRef: 'pi_bank_fixture' });
+      lock(); await flush();
+      expect(w.fetch).toHaveBeenCalledTimes(1);
+      expect(w.CRONOX_openAuthModal).not.toHaveBeenCalled();
+    } finally { dom.window.close(); }
+  });
+
   it('shares the initial session, skips the initial auth reload, and does not wait for the modal, Stripe or recommendations', async () => {
     const { dom, w } = setup();
     try {
@@ -285,6 +323,8 @@ describe('checkout and cart startup performance', () => {
       expect(stripe.elements).toHaveBeenCalledWith(expect.objectContaining({
         mode: 'payment', currency: 'eur', amount: 3790,
       }));
+      // Stripe owns its form typography; customer fonts stay outside the iframe.
+      expect(JSON.stringify(stripe.elements.mock.calls)).not.toMatch(/"fonts"|fontFamily|fontSize|fontWeight/);
       expect(paymentElement.mount).toHaveBeenCalledTimes(1);
       expect(w.document.querySelector('#payment-element').dataset.stripeMounted).toBe('true');
       expect(w.document.querySelector('#pay-button').textContent).toBe('Completa tus datos');

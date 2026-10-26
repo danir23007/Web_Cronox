@@ -7,6 +7,13 @@ import { PrismaService } from '../prisma/prisma.service';
 import { validateAccountName } from './account-name-policy';
 
 describe('new account name limits with unchanged historical values', () => {
+  it('only permits omitting the last name in the explicit newsletter context, never the first name', async () => {
+    const data = { email: 'local@name.test', password: 'LocalPassword', firstName: 'Persona' };
+    expect((await validate(plainToInstance(RegisterDto, data))).map(f => f.property)).toContain('lastName');
+    expect(await validate(plainToInstance(RegisterDto, { ...data, registrationSource: 'newsletter' }))).toHaveLength(0);
+    expect((await validate(plainToInstance(RegisterDto, { ...data, firstName: undefined, registrationSource: 'newsletter' }))).map(f => f.property)).toContain('firstName');
+    expect((await validate(plainToInstance(RegisterDto, { ...data, registrationSource: 'other' }))).map(f => f.property)).toContain('registrationSource');
+  });
   it.each([
     ['firstName', 25],
     ['lastName', 30],

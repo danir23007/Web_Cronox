@@ -30,7 +30,10 @@ async page => {
   await page.locator('#authRegisterPassword').fill('Local-' + crypto.randomUUID());
   const registration = page.waitForResponse(r => r.url().endsWith('/api/auth/register'));
   await page.locator('#authRegisterForm button[type=submit]').click();
-  check((await registration).ok(), 'Real registration failed');
+  const registrationResponse = await registration;
+  check(registrationResponse.ok(), 'Real registration failed');
+  const setCookies = (await registrationResponse.headersArray()).filter(h => h.name.toLowerCase() === 'set-cookie').map(h=>h.value);
+  check(['jwt','refresh_token'].every(name=>setCookies.some(value=>value.startsWith(name+'=') && /; SameSite=Lax/i.test(value) && /; HttpOnly/i.test(value))), 'Server cookie flags missing');
   await user();
   const registeredId = await page.evaluate(() => window.CRONOX_USER.id);
   await page.reload(); await user();
@@ -38,11 +41,11 @@ async page => {
   const cookies = await page.context().cookies();
   for (const name of ['jwt', 'refresh_token']) {
     const cookie = cookies.find(c => c.name === name);
-    check(cookie?.httpOnly && cookie.sameSite === 'Lax' && cookie.path === '/' && cookie.expires > Date.now() / 1000, 'Persistent technical cookie missing');
+    check(cookie?.httpOnly && cookie.path === '/' && cookie.expires > Date.now() / 1000, 'Persistent technical cookie missing');
   }
   check(Math.abs((await state()).deadline - (Date.now() + 500 * 86400_000)) < 5000, 'Server deadline is not 500 days');
   const browserCookieDays = Math.round((cookies.find(c => c.name === 'refresh_token').expires * 1000 - Date.now()) / 86400_000);
-  results.push({ registration: true, reload: true, consentRejected: true, serverDays: 500, browserCookieDays });
+  results.push({ registration: true, reload: true, consentRejected: true, serverDays: 500, browserCookieDays, serverSameSite: "Lax", browserReportedSameSite: cookies.find(c=>c.name === "refresh_token").sameSite });
   await helper('session-age', { days: 400 });
   const before = await state();
   check((await page.request.get(origin + '/api/me')).ok(), 'Aged access session rejected');

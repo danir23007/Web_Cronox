@@ -69,6 +69,7 @@ declare global {
     statusCode?: number;
     endpoint?: string;
     payload?: unknown;
+    retryAfterMs?: number;
   }
 
   interface CronoxApiErrorClassification {

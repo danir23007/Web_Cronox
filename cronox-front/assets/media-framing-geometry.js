@@ -289,7 +289,13 @@
   const applyHeroText = (element, viewportElement, value, device = "desktop", options = {}) => {
     if (!element?.style || !viewportElement) return null;
     const selected = heroTextViewport(value, device);
-    Object.assign(element.style, heroTextStyle(value, device, options.visualScale));
+    const textStyle = heroTextStyle(value, device, options.visualScale);
+    // Saved weights still describe the original design. Only its customer
+    // rendering is limited to the available Cormorant Garamond weight range.
+    if (element.closest?.('[data-cronox-surface="customer"]')) {
+      textStyle.fontWeight = String(clamp(textStyle.fontWeight, 300, 700, 700));
+    }
+    Object.assign(element.style, textStyle);
     const viewportRect = viewportElement.getBoundingClientRect?.() || {};
     const textRect = element.getBoundingClientRect?.() || {};
     const position = calculateHeroTextPosition({

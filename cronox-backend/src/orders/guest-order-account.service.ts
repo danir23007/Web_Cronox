@@ -72,10 +72,13 @@ export class GuestOrderAccountService {
     // User.email is unique. If another paid checkout creates the same account
     // concurrently, Prisma raises P2002 and OrdersService retries the complete
     // order transaction, which then resolves this row as existing.
+    const subscription = await tx.newsletterSubscription.findUnique({ where: { email } });
+    if (subscription?.userId) throw new BadRequestException('NEWSLETTER_ACCOUNT_LINK_CONFLICT');
     const user = await tx.user.create({
       data: {
         email,
         password: null,
+        newsletterSubscribed: Boolean(subscription?.subscribedAt),
         role: Role.USER,
         accountState: UserAccountState.ACTIVE,
         name: fullName || null,
@@ -84,6 +87,7 @@ export class GuestOrderAccountService {
       },
       select: { id: true },
     });
+    if (subscription) await tx.newsletterSubscription.update({ where: { id: subscription.id }, data: { userId: user.id } });
 
     const address = this.toSavedAddress(shipping ?? billing);
     await ensureAccountWelcome(tx, user.id, true, checkout.id);
