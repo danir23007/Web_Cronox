@@ -1,15 +1,16 @@
 # Cierre local de verificaciones · 26/10/2026
 
-Estado: primera ejecución Linux aprobada para `467816bb0a13e2682982b2edd161f192cb85e768`; repetición final pendiente tras corregir un fallo de dependencia descubierto en sus avisos. Rama exclusiva `verify/release-20261026-linux`. Commit y push de esa rama autorizados posteriormente por el titular. No se ha hecho merge, despliegue, cobro ni envío real. WebKit automatizado no acredita Safari en un iPhone físico.
+Estado: **CI Linux definitivo aprobado** para `bfc794cd6574dcd887d8b0f5e2c846d8100b5573`, incluida la corrección de una dependencia descubierta en los avisos del primer CI. Rama exclusiva `verify/release-20261026-linux`. Commit y push de esa rama autorizados posteriormente por el titular. No se ha hecho merge, despliegue, cobro ni envío real. WebKit automatizado no acredita Safari en un iPhone físico.
 
 ## Ejecución Linux sin publicación
 
 Se revisaron el diff y los workflows efectivos de la rama predeterminada, coincidentes con los locales. `Deploy CRONOX` solo responde a pushes de `main`; la rama de verificación se ejecuta mediante `workflow_dispatch` con **`publish=false` explícito**. El job `deploy` exige `inputs.publish=true`. El otro workflow actual, de SSH, es exclusivamente manual y no se invoca. La API de Pages confirmó `build_type=workflow`, sin publicación legacy por push. No se cambió ninguna configuración remota.
 
-La rama parte de `8867cd12df8f5f444e4a4376cbb478322311e9d2`, que se conserva en `main`. Se incluyen los 166 archivos de fuentes, pruebas, recursos tipográficos e informe y la migración ensayada; se excluyen credenciales, perfiles y resultados temporales de `output`.
+La rama parte de `8867cd12df8f5f444e4a4376cbb478322311e9d2`, que se conserva en `main`. El primer commit incluye los 166 archivos pendientes de fuentes, pruebas, recursos tipográficos, informe y migración ensayada; se excluyen credenciales, perfiles y resultados temporales de `output`. El segundo añade la corrección y regresión HTTP descritas abajo.
 
-- **Commit comprobado:** [`467816bb0a13e2682982b2edd161f192cb85e768`](https://github.com/danir23007/Web_Cronox/commit/467816bb0a13e2682982b2edd161f192cb85e768).
-- **CI:** [Actions 40408456804](https://github.com/danir23007/Web_Cronox/actions/runs/40408456804), `workflow_dispatch`, `publish=false`, 26/10/2026 21:56–21:58 UTC (22:56–22:58 Europe/Madrid).
+- **Commit definitivo comprobado:** [`bfc794cd6574dcd887d8b0f5e2c846d8100b5573`](https://github.com/danir23007/Web_Cronox/commit/bfc794cd6574dcd887d8b0f5e2c846d8100b5573).
+- **CI definitivo:** [Actions 40409808621](https://github.com/danir23007/Web_Cronox/actions/runs/40409808621), `workflow_dispatch`, `publish=false`, 26/10/2026 22:06–22:09 UTC (23:06–23:09 Europe/Madrid).
+- Primera ejecución: [Actions 40408456804](https://github.com/danir23007/Web_Cronox/actions/runs/40408456804), SHA `467816bb0a13e2682982b2edd161f192cb85e768`, también correcta; la segunda sustituye ese resultado para el código final.
 - **Entorno:** Ubuntu 24.04.5, Node 22.23.3; dependencias instaladas con ambos lockfiles mediante `npm ci`.
 - **Resultado:** `verify-release=success`; **`deploy=skipped`, sin pasos ejecutados**.
 
@@ -18,23 +19,25 @@ La rama parte de `8867cd12df8f5f444e4a4376cbb478322311e9d2`, que se conserva en 
 | Preflight, mantenimiento y gates Node | **16 correctas, 0 omitidas** |
 | Controlador Python, instalación, recuperación e interrupciones | **143 correctas, ninguna omitida** |
 | Generación Prisma y tipos frontend/backend | Correctos |
-| Suite completa de aplicación | **3.021 pruebas / 277 suites correctas** |
+| Suite completa de aplicación | **3.024 pruebas / 278 suites correctas** |
 | Builds frontend y backend | Correctos |
 | Guardia de credenciales y contenido exclusivo de sandbox | Correcta |
 | Referencias aprobadas y generador de acreditaciones | Correctos |
 | Exportaciones | **59 pruebas / 6 suites correctas**, smoke de artefactos y rutas compiladas correctos |
 
-El controlador carga en Linux los módulos que no podían importarse en Windows: por eso su total es 143 y no los 130 casos descubiertos allí. No se desactivaron pruebas ni se rebajaron validaciones. No se repitieron auditorías de producción, pruebas de carga ni ensayos de migración ya completados.
+El controlador carga en Linux los módulos que no podían importarse en Windows: por eso su total es 143 y no los 130 casos descubiertos allí. No se desactivaron pruebas ni se rebajaron validaciones. No se repitieron auditorías de producción, pruebas de carga ni ensayos de migración ya completados. El commit posterior de cierre modifica exclusivamente este informe; no se atribuye una ejecución nueva de CI a ese cambio documental. El código y los recursos permanecen exactamente como en el SHA definitivo comprobado.
 
 ### Corrección surgida de los avisos de instalación
 
 El CI inicial pasó, pero `npm ci` informó de dependencias vulnerables. La revisión acotada confirmó que `body-parser@2.3.0`, utilizado por `express.json` antes de autenticación, estaba afectado por [GHSA-27r3-jxmh-p828](https://github.com/expressjs/body-parser/security/advisories/GHSA-27r3-jxmh-p828), publicado el 22/10. Se reprodujo en un proceso hijo aislado: un frame gzip válido, terminador y bytes tardíos provocaban `Z_DATA_ERROR` no capturado y salida 1. No se probó contra producción.
 
-Se fijó `body-parser` a **2.4.0** y su requisito `qs` a **6.16.1** mediante los overrides existentes y el lockfile; solo cambiaron tres paquetes instalados (incluido `content-type` 2.1.0). Se conserva la aceptación de cuerpos comprimidos, la validación y los límites. La regresión HTTP usa un proceso hijo y comprueba petición válida, bytes tardíos y rechazo 413 de un cuerpo descomprimido excesivo; después verifica la salud del mismo servidor. **11 pruebas focales correctas**, incluidas las 8 existentes de validación. La suite Linux debe repetirse sobre este cambio antes del cierre.
+Se fijó `body-parser` a **2.4.0** y su requisito `qs` a **6.16.1** mediante los overrides existentes y el lockfile; solo cambiaron tres paquetes instalados (incluido `content-type` 2.1.0). Se conserva la aceptación de cuerpos comprimidos, la validación y los límites. La regresión HTTP usa un proceso hijo y comprueba petición válida, bytes tardíos y rechazo 413 de un cuerpo descomprimido excesivo; después verifica la salud del mismo servidor. **11 pruebas focales correctas**, incluidas las 8 existentes de validación. La suite Linux definitiva repitió todas las comprobaciones con este cambio y las superó.
 
 Los avisos restantes de `npm audit` no son gates del workflow: 1 alto en frontend (Vite de desarrollo) y 11 en backend (6 moderados, 5 altos, con avisos propagados entre dependencias). No se ejecutó `npm audit fix --force` ni se cambió Prisma de versión mayor. Se mantienen visibles como mantenimiento de dependencias; este CI no constituye una auditoría de seguridad completa ni acredita su ausencia. El fallo remoto confirmado de `body-parser` sí se corrigió y tiene regresión.
 
-La comparación de hashes conserva todos los archivos pendientes incorporados al commit; el SQL de `20261026180000_storefront_concurrency` mantiene SHA-256 `8ab1ad256ad0139ab7770b30355e1c2d40ecc3e15306a35d7a6e05d757c792bb`. El diff de código no tiene errores de espacios; se conserva literalmente el archivo de licencia original OFL, incluido su espacio final en la línea 21. No se modificaron workflows ni configuración remota.
+Alcance identificado sin una nueva auditoría completa: los cinco avisos altos del backend corresponden a `multer`/`@nestjs/platform-express` y `deepmerge-ts`/`@prisma/config`/`prisma`. El [aviso de Multer](https://github.com/expressjs/multer/security/advisories/GHSA-q7qp-rjg7-q26m) exige un `fileFilter` asíncrono; los filtros del proyecto revisados son síncronos. La dependencia afectada de Prisma se utiliza al cargar configuración del CLI, no como parser de solicitudes de cliente. Vite y `fast-uri` corresponden a herramientas de desarrollo/build. Los restantes avisos moderados afectan a `ip-address`, `nodemailer`, `mailparser`, `smtp-server` y `sanitize-html`; **su exposición no se declara descartada mediante los tests funcionales**. Requieren una revisión de dependencias específica antes de presentar la publicación como cerrada también en seguridad; no se incluyen actualizaciones mayores improvisadas en este cierre de CI.
+
+La comparación de hashes conserva intactos 164 de los 166 archivos pendientes incorporados al primer commit; los otros dos son `package.json` (corrección HTTP) y este informe. No hay cambios inesperados. El SQL de `20261026180000_storefront_concurrency` mantiene SHA-256 `8ab1ad256ad0139ab7770b30355e1c2d40ecc3e15306a35d7a6e05d757c792bb`. El diff de código no tiene errores de espacios; se conserva literalmente el archivo de licencia original OFL, incluido su espacio final en la línea 21. No se modificaron workflows ni configuración remota.
 
 ## Producción y proxy: evidencia de solo lectura
 
@@ -70,7 +73,7 @@ Resultados y logs: [output/release-readiness-20261026](../output/release-readine
 
 | Comprobación | Resultado |
 |---|---|
-| Jest completo, estado final de la aplicación | **3.021 pruebas, 277 suites** correctas |
+| Jest completo, estado final de la aplicación | **3.024 pruebas, 278 suites** correctas en Linux; cierre Windows previo: 3.021 / 277 |
 | Tipos frontend y backend; builds frontend y Nest | Correctos |
 | Pruebas Node de preflight, mantenimiento y gates | **16 correctas** |
 | Exportaciones: tests, artefactos y rutas compiladas protegidas | **59 pruebas / 6 suites**; ambos smoke correctos |
@@ -120,7 +123,7 @@ El procedimiento existente mantiene mantenimiento y escritores detenidos si fall
 - El checkout usa proveedor simulado; no acredita una nueva autorización real en Stripe sandbox, 3DS, Apple Pay o PayPal. La configuración y tipografía de Stripe se conservaron. No se efectuaron cobros.
 - Las mediciones de concurrencia corresponden al equipo/base aislados, no a capacidad o latencia del VPS.
 
-No queda un fallo de aplicación reproducido sin corregir; falta el CI del ajuste de `body-parser` antes de declarar preparada la revisión definitiva. Permanecen pendientes, por separado, la aceptación en iPhone físico y el recorrido real de Stripe sandbox/3DS/carteras. No puede declararse compatibilidad física ni pago externo verificados; si son condiciones de aceptación de la publicación, deben completarse antes de autorizarla. Los avisos de dependencias restantes se detallan arriba y no se confunden con pruebas aprobadas. La integración en `main` y la publicación no están autorizadas en esta tarea.
+**No queda ningún check Linux fallido ni un defecto reproducido sin corregir.** La versión queda preparada en la rama de verificación. Permanecen pendientes, por separado, la aceptación en iPhone físico y el recorrido real de Stripe sandbox/3DS/carteras; no se consideran superados por emulación. Además, los avisos restantes de dependencias requieren revisión específica para cerrar la aceptación de seguridad: el CI verde no equivale a esa revisión. No se afirma una autorización incondicional para desplegar. La integración en `main` y la publicación no están autorizadas en esta tarea.
 
 ## Pasos de publicación futura
 
