@@ -1,12 +1,40 @@
 # Cierre local de verificaciones · 26/10/2026
 
-Estado: correcciones y comprobaciones locales terminadas; cierre del CI Linux en curso en la rama exclusiva `verify/release-20261026-linux`, autorizado posteriormente por el titular. No se ha hecho merge, despliegue, cobro ni envío real. WebKit automatizado no acredita Safari en un iPhone físico.
+Estado: primera ejecución Linux aprobada para `467816bb0a13e2682982b2edd161f192cb85e768`; repetición final pendiente tras corregir un fallo de dependencia descubierto en sus avisos. Rama exclusiva `verify/release-20261026-linux`. Commit y push de esa rama autorizados posteriormente por el titular. No se ha hecho merge, despliegue, cobro ni envío real. WebKit automatizado no acredita Safari en un iPhone físico.
 
 ## Ejecución Linux sin publicación
 
 Se revisaron el diff y los workflows efectivos de la rama predeterminada, coincidentes con los locales. `Deploy CRONOX` solo responde a pushes de `main`; la rama de verificación se ejecuta mediante `workflow_dispatch` con **`publish=false` explícito**. El job `deploy` exige `inputs.publish=true`. El otro workflow actual, de SSH, es exclusivamente manual y no se invoca. La API de Pages confirmó `build_type=workflow`, sin publicación legacy por push. No se cambió ninguna configuración remota.
 
-La rama parte de `8867cd12df8f5f444e4a4376cbb478322311e9d2`. Se incluyen fuentes, pruebas, recursos tipográficos y la migración ensayada; se excluyen credenciales, perfiles y resultados temporales de `output`. Resultado Linux y SHA exacto: pendientes de completar esta ejecución.
+La rama parte de `8867cd12df8f5f444e4a4376cbb478322311e9d2`, que se conserva en `main`. Se incluyen los 166 archivos de fuentes, pruebas, recursos tipográficos e informe y la migración ensayada; se excluyen credenciales, perfiles y resultados temporales de `output`.
+
+- **Commit comprobado:** [`467816bb0a13e2682982b2edd161f192cb85e768`](https://github.com/danir23007/Web_Cronox/commit/467816bb0a13e2682982b2edd161f192cb85e768).
+- **CI:** [Actions 40408456804](https://github.com/danir23007/Web_Cronox/actions/runs/40408456804), `workflow_dispatch`, `publish=false`, 26/10/2026 21:56–21:58 UTC (22:56–22:58 Europe/Madrid).
+- **Entorno:** Ubuntu 24.04.5, Node 22.23.3; dependencias instaladas con ambos lockfiles mediante `npm ci`.
+- **Resultado:** `verify-release=success`; **`deploy=skipped`, sin pasos ejecutados**.
+
+| Comprobación Linux | Resultado |
+|---|---|
+| Preflight, mantenimiento y gates Node | **16 correctas, 0 omitidas** |
+| Controlador Python, instalación, recuperación e interrupciones | **143 correctas, ninguna omitida** |
+| Generación Prisma y tipos frontend/backend | Correctos |
+| Suite completa de aplicación | **3.021 pruebas / 277 suites correctas** |
+| Builds frontend y backend | Correctos |
+| Guardia de credenciales y contenido exclusivo de sandbox | Correcta |
+| Referencias aprobadas y generador de acreditaciones | Correctos |
+| Exportaciones | **59 pruebas / 6 suites correctas**, smoke de artefactos y rutas compiladas correctos |
+
+El controlador carga en Linux los módulos que no podían importarse en Windows: por eso su total es 143 y no los 130 casos descubiertos allí. No se desactivaron pruebas ni se rebajaron validaciones. No se repitieron auditorías de producción, pruebas de carga ni ensayos de migración ya completados.
+
+### Corrección surgida de los avisos de instalación
+
+El CI inicial pasó, pero `npm ci` informó de dependencias vulnerables. La revisión acotada confirmó que `body-parser@2.3.0`, utilizado por `express.json` antes de autenticación, estaba afectado por [GHSA-27r3-jxmh-p828](https://github.com/expressjs/body-parser/security/advisories/GHSA-27r3-jxmh-p828), publicado el 22/10. Se reprodujo en un proceso hijo aislado: un frame gzip válido, terminador y bytes tardíos provocaban `Z_DATA_ERROR` no capturado y salida 1. No se probó contra producción.
+
+Se fijó `body-parser` a **2.4.0** y su requisito `qs` a **6.16.1** mediante los overrides existentes y el lockfile; solo cambiaron tres paquetes instalados (incluido `content-type` 2.1.0). Se conserva la aceptación de cuerpos comprimidos, la validación y los límites. La regresión HTTP usa un proceso hijo y comprueba petición válida, bytes tardíos y rechazo 413 de un cuerpo descomprimido excesivo; después verifica la salud del mismo servidor. **11 pruebas focales correctas**, incluidas las 8 existentes de validación. La suite Linux debe repetirse sobre este cambio antes del cierre.
+
+Los avisos restantes de `npm audit` no son gates del workflow: 1 alto en frontend (Vite de desarrollo) y 11 en backend (6 moderados, 5 altos, con avisos propagados entre dependencias). No se ejecutó `npm audit fix --force` ni se cambió Prisma de versión mayor. Se mantienen visibles como mantenimiento de dependencias; este CI no constituye una auditoría de seguridad completa ni acredita su ausencia. El fallo remoto confirmado de `body-parser` sí se corrigió y tiene regresión.
+
+La comparación de hashes conserva todos los archivos pendientes incorporados al commit; el SQL de `20261026180000_storefront_concurrency` mantiene SHA-256 `8ab1ad256ad0139ab7770b30355e1c2d40ecc3e15306a35d7a6e05d757c792bb`. El diff de código no tiene errores de espacios; se conserva literalmente el archivo de licencia original OFL, incluido su espacio final en la línea 21. No se modificaron workflows ni configuración remota.
 
 ## Producción y proxy: evidencia de solo lectura
 
@@ -86,18 +114,18 @@ El procedimiento existente mantiene mantenimiento y escritores detenidos si fall
 
 ## Limitaciones y condición de publicación
 
-- **Obligatorio antes de publicar:** CI Linux del SHA definitivo. En este Windows, el controlador descubre 130 pruebas: 74 pasan, 46 se omiten y 10 fallan/no pueden cargarse por dependencias POSIX (`pwd`), permisos Unix y entorno de subprocesos Linux. No se relajaron esas pruebas ni se presenta el controlador como verificado íntegramente en Windows. El workflow ya las ejecuta en Ubuntu y bloquea deploy si fallan.
+- **Cerrado el pendiente de CI Linux:** el SHA indicado arriba supera todas las comprobaciones y las 143 pruebas del controlador, sin omisiones. El resultado parcial anterior en Windows (130 casos descubiertos, 74 correctos, 46 omitidos, 10 fallos/cargas imposibles por POSIX) queda como evidencia histórica, no como resultado definitivo. El workflow conserva su bloqueo de deploy ante cualquier fallo.
 - No se ha identificado la causa histórica del 400. La falta de logs adecuados no bloquea la corrección demostrada de identificación/validación, pero debe conservarse como incertidumbre.
 - No hay prueba en iPhone físico. WebKit Windows verifica comportamiento disponible, no barras del navegador, almacenamiento real de iOS o carteras del dispositivo.
 - El checkout usa proveedor simulado; no acredita una nueva autorización real en Stripe sandbox, 3DS, Apple Pay o PayPal. La configuración y tipografía de Stripe se conservaron. No se efectuaron cobros.
 - Las mediciones de concurrencia corresponden al equipo/base aislados, no a capacidad o latencia del VPS.
 
-No queda un fallo de aplicación reproducido sin corregir en estos recorridos. La preparación local queda lista para revisión; no debe saltarse el CI Linux para publicarla.
+No queda un fallo de aplicación reproducido sin corregir; falta el CI del ajuste de `body-parser` antes de declarar preparada la revisión definitiva. Permanecen pendientes, por separado, la aceptación en iPhone físico y el recorrido real de Stripe sandbox/3DS/carteras. No puede declararse compatibilidad física ni pago externo verificados; si son condiciones de aceptación de la publicación, deben completarse antes de autorizarla. Los avisos de dependencias restantes se detallan arriba y no se confunden con pruebas aprobadas. La integración en `main` y la publicación no están autorizadas en esta tarea.
 
 ## Pasos de publicación futura
 
-1. Revisar el commit de la rama de verificación con fuentes, pruebas, fuentes tipográficas originales y la única migración nueva. No incluir perfiles de navegador ni archivos temporales de `output`. La preparación del commit y su push a una rama aislada se autorizaron en la tarea posterior de CI Linux.
-2. Seguir [el procedimiento autónomo existente](autonomous-deployment.md): comprobar estado de Pages, push para CI y verificar que el SHA concreto sigue siendo `main`. El push por sí solo no publica. Exigir tipos, suite completa, builds, controller Linux, guards, recursos y smoke de exportaciones verdes.
+1. Revisar y autorizar la integración de `verify/release-20261026-linux`, cuyo código ya tiene CI verde en el SHA indicado. El commit posterior de cierre contiene exclusivamente este informe. No incluir perfiles de navegador ni archivos temporales de `output`. No se ha realizado merge ni push a `main` en esta tarea.
+2. Tras esa autorización, seguir [el procedimiento autónomo existente](autonomous-deployment.md): comprobar estado de Pages, integrar y verificar el SHA concreto en `main`. Si la integración genera un SHA nuevo, exigir su CI verde; no atribuirle automáticamente el resultado de otro commit. El push por sí solo no publica. Exigir tipos, suite completa, builds, controller Linux, guards, recursos y smoke de exportaciones verdes.
 3. Con autorización de publicación del SHA exacto, invocar **Deploy CRONOX → workflow_dispatch → publish=true**. No ejecutar un despliegue alternativo por SSH.
 4. El controlador hace preflight, mantenimiento, parada, respaldo con restauración comprobada, instalación, migración, arranque pausado, health/ready y gates, activación normal y reapertura. Mantener este orden y las restricciones instaladas. No cambiar la confianza del proxy ni las cuotas durante el despliegue.
 5. Consultar `sudo -n /usr/local/sbin/cronox-release status <SHA>` hasta resultado terminal. Ante fallo, seguir la fase y las reglas anteriores; conservar respaldo y diagnóstico. No reencolar bienvenidas ni ejecutar reparaciones históricas.
