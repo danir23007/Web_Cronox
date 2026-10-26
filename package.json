@@ -12,7 +12,7 @@
     "@playwright/test": "^1.63.0",
     "@types/node": "^25.2.1",
     "typescript": "^5.9.3",
-    "vite": "^7.3.1"
+    "vite": "^7.3.7"
   },
   "dependencies": {
     "zxing-wasm": "3.1.5"
