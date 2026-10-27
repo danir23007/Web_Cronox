@@ -222,6 +222,10 @@ describe('informational footer destinations use the shared CRONOX topbar', () =>
     await waitFor(() => {
       expect(document.querySelectorAll('#authOverlay')).toHaveLength(1);
     });
+    // A real pointer user closes the modal before using the background topbar.
+    // Otherwise two deliberately opened focus traps compete in this fixture.
+    (document.getElementById('authCloseBtn') as HTMLButtonElement).click();
+    expect(document.getElementById('authOverlay')?.classList.contains('is-open')).toBe(false);
 
     (document.getElementById('cart-icon-btn') as HTMLAnchorElement).click();
     await waitFor(() => {

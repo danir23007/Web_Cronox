@@ -59,6 +59,7 @@ describe('customer list purchase metrics', () => {
     tx.promoCodeRedemption = { findMany: jest.fn().mockResolvedValue([]) };
     tx.discountCode = tx.promoCode = { findFirst: jest.fn().mockResolvedValue(null) };
     tx.$transaction = jest.fn(callback => callback(tx));
+    tx.$queryRaw = jest.fn().mockResolvedValue([{id:1,ordinal:1n}]);
     // The same order delegate serves operational history and ownership lookup.
     for (const excluded of [true, false, true]) {
       orders[1].excludedFromStatistics = excluded;

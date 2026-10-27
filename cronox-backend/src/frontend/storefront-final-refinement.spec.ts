@@ -141,7 +141,7 @@ describe('focused storefront refinement acceptance matrix', () => {
   });
 
   it('22. retains the backend insufficient-stock enforcement', () => {
-    expect(cartService).toContain('this.assertStock(newQty, variant.stockQty ?? 0)');
+    expect(cartService).toMatch(/this\.assertStock\(newQty,\s*await this\.stockAvailableToCart\(/);
     expect(cartService).toContain('throw new BadRequestException(INSUFFICIENT_STOCK_ERROR)');
   });
 

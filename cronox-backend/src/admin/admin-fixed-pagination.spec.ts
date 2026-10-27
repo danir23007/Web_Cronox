@@ -65,6 +65,7 @@ describe('fixed Admin backend pagination defaults', () => {
         count: jest.fn().mockResolvedValue(101),
       },
       order: { findMany: jest.fn().mockResolvedValue([]) },
+      $queryRaw: jest.fn().mockResolvedValue(Array.from({length:101},(_,i)=>({id:101-i,ordinal:BigInt(101-i)}))),
       $transaction: jest.fn((work) => work(usersPrisma)),
     };
     const users = await new AdminUsersService(usersPrisma as never).listUsers({});

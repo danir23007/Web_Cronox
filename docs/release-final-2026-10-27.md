@@ -53,6 +53,8 @@ Recuperación: ante desconexión se consulta el diario del **mismo SHA**, sin re
 - PostgreSQL desechable: checkout con migraciones SQL reales y nuevos permisos de presencia; eliminación de usuarios y de QR con relaciones/restricciones reales y pruebas de concurrencia. Los resultados quedan en `output/release-final-20261027/`; no hay pruebas destructivas sobre datos productivos.
 - CI del proyecto mantiene por obligación su batería completa Linux, exportaciones, compilaciones y controles de secretos; se usará su resultado sobre el SHA candidato exacto antes del dispatch.
 
+El primer CI (`40552347803`) detuvo la publicación con cinco tests fallidos y 3072 aprobados. Se actualizaron dos mocks para la consulta real de ordinales globales, el contrato de disponibilidad que ahora incluye la reserva de la propia cesta y la comprobación de versión del checkout. El fixture de navegación ahora cierra el acceso antes de pulsar la barra de fondo, igual que exige un diálogo modal real; ya no abre artificialmente dos trampas de foco a la vez. Las 109 comprobaciones focales de estas suites, incluido el servicio real de carrito, pasan. No se desactivó ninguna aserción de stock, permisos o foco ni se cambió la funcionalidad para saltar CI. El nuevo SHA debe superar otra vez el workflow requerido.
+
 ### Pago real en modo test desde el formulario
 
 Chromium con Payment Element real, datos ficticios y PostgreSQL habitual local. La configuración estática de producción contiene su clave pública live: **no se modifica**. Solo ese contexto de navegador local recibe la clave pública test del perfil privado, mientras el backend ya utiliza claves test y rechaza pagos live. No se simula Stripe.js ni se interceptan las API de checkout/pago/webhook.

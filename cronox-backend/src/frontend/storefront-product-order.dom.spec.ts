@@ -129,6 +129,8 @@ describe('public storefront product ordering', () => {
         readFrontend('index.html').match(/assets\/products\.js\?v=\d+/)?.[0],
       );
     }
-    expect(readFrontend('checkout.html')).toContain('assets/checkout.js?v=35');
+    const checkoutVersion=readFrontend('checkout.html').match(/assets\/checkout\.js\?v=(\d+)/);
+    expect(checkoutVersion).not.toBeNull();
+    expect(Number(checkoutVersion![1])).toBeGreaterThan(35);
   });
 });
