@@ -2478,27 +2478,34 @@ button.product-cta--disabled:disabled { opacity:.5; cursor:not-allowed; filter:n
 
   .footer-social {
     width: 36px;
-    margin-left: 22px;
+    margin-left: var(--footer-social-offset);
     gap: 12px;
   }
 
   .footer-inner {
     --footer-brand-width: 176px;
     --footer-newsletter-width: clamp(360px, 28vw, 440px);
+    --footer-social-offset: 22px;
+    --footer-frame-gap: clamp(24px, 3vw, 56px);
+    --footer-column-gap: clamp(16px, 2vw, 40px);
     grid-template-columns: var(--footer-brand-width) minmax(0, 1fr) var(--footer-newsletter-width);
-    gap: clamp(24px, 3vw, 56px);
+    gap: var(--footer-frame-gap);
     align-items: center;
   }
 
-  /* Bounded columns keep brand, links and newsletter in normal flow. Grouping
-     the links preserves a shared heading baseline regardless of list length. */
+  /* Keep both end blocks anchored to their original tracks. The links use the
+     whole interval from the social block's right edge to the newsletter. */
   .footer-middle-sections {
     display: contents;
   }
 
   .footer-links-block {
     grid-area: 1 / 2;
-    gap: clamp(16px, 2vw, 40px);
+    display: flex;
+    width: calc(100% + 2 * var(--footer-frame-gap) - var(--footer-social-offset));
+    margin-left: calc(var(--footer-social-offset) - var(--footer-frame-gap));
+    gap: 0;
+    justify-content: space-evenly;
     align-items: start;
   }
 
@@ -2511,9 +2518,11 @@ button.product-cta--disabled:disabled { opacity:.5; cursor:not-allowed; filter:n
 
   .footer-acc-item {
     align-self: start;
-    justify-self: stretch;
-    width: auto;
-    max-width: none;
+    flex: none;
+    width: var(--footer-content-width, max-content);
+    /* Preserve the previous wrapping limit. footer-config measures occupied
+       text after wrapping so unused line space does not enter the four gaps. */
+    max-width: calc((100% - 2 * var(--footer-frame-gap) + var(--footer-social-offset) - 2 * var(--footer-column-gap)) / 3);
   }
 
   .footer-newsletter-block {

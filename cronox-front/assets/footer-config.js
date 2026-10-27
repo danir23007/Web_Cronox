@@ -68,6 +68,44 @@
     }
   };
 
+  // CSS distributes the four spaces; these measurements only tighten each
+  // column to its longest rendered line, retaining its existing line breaks.
+  // Intrinsic CSS widths alone include unused space after wrapped text.
+  const links = document.querySelector('.footer-links-block');
+  if (links && window.ResizeObserver && window.requestAnimationFrame && window.matchMedia && document.fonts) {
+    const desktop = window.matchMedia('(min-width: 1101px)');
+    const items = [...links.querySelectorAll('.footer-acc-item')];
+    let frame = 0;
+    const measure = () => {
+      frame = 0;
+      items.forEach(item => item.style.removeProperty('--footer-content-width'));
+      if (!desktop.matches) return;
+      const widths = items.map(item => {
+        const rects = [...item.querySelectorAll('.footer-title, .footer-link')].flatMap(element => {
+          const range = document.createRange();
+          range.selectNodeContents(element);
+          return [...range.getClientRects()];
+        });
+        return Math.ceil(Math.max(0, ...rects.map(rect => rect.width)) * 64) / 64;
+      });
+      items.forEach((item, index) => {
+        if (widths[index]) item.style.setProperty('--footer-content-width', `${widths[index]}px`);
+      });
+    };
+    const schedule = () => { if (!frame) frame = requestAnimationFrame(measure); };
+    let previousSize = '';
+    new ResizeObserver(entries => {
+      const { width, height } = entries[0].contentRect;
+      const size = `${width}:${height}`;
+      if (size !== previousSize) { previousSize = size; schedule(); }
+    }).observe(links);
+    new MutationObserver(schedule).observe(links, { subtree: true, childList: true, characterData: true });
+    desktop.addEventListener('change', schedule);
+    document.fonts.ready.then(schedule);
+    document.fonts.addEventListener('loadingdone', schedule);
+    schedule();
+  }
+
   window.CRONOX_FOOTER = { DEFAULTS, apply, load };
   void load();
 })();
