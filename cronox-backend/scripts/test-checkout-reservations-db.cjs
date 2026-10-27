@@ -8,7 +8,8 @@ const { spawnSync } = require('node:child_process');
 const { Client } = require('pg');
 const { loadLocalEnvironment, ensureLocalPostgres } = require('./start-local.cjs');
 const backend = path.resolve(__dirname, '..');
-const reportPath = path.resolve(backend, '../output/stock-reservations/database-results.json');
+const singleConnection = process.argv.includes('--single-connection');
+const reportPath = path.resolve(backend, singleConnection ? '../output/checkout-incident-20261027/single-connection-results.json' : '../output/stock-reservations/database-results.json');
 const report = { isolatedDatabase: true, provider: 'STATEFUL_STRIPE_DOUBLE', realCharges: false, checks: [], passed: false };
 async function run() {
   const env = loadLocalEnvironment(); ensureLocalPostgres(env);
@@ -23,9 +24,11 @@ async function run() {
     assert.ok(['127.0.0.1', '::1'].includes((await control.query('SELECT host(inet_server_addr()) AS host')).rows[0].host));
     await control.query(`CREATE DATABASE "${name}" TEMPLATE template0`); created = true;
     const target = new URL(source); target.pathname = '/' + name;
+    const runtime = new URL(target);
+    if (singleConnection) { runtime.searchParams.set('connection_limit', '1'); runtime.searchParams.set('pool_timeout', '1'); report.connectionLimit = 1; }
     const setup = new Client({ connectionString: target.href }); await setup.connect();
     await setup.query('CREATE EXTENSION IF NOT EXISTS pg_trgm');
-    const isolated = { ...env, DATABASE_URL: target.href, DIRECT_URL: target.href, USER_NUMBERING_DATABASE_URL: target.href,
+    const isolated = { ...env, DATABASE_URL: runtime.href, DIRECT_URL: target.href, USER_NUMBERING_DATABASE_URL: target.href,
       EMAIL_ENABLED: 'false', BACKGROUND_JOBS_ENABLED: 'false', STRIPE_WEBHOOK_WORKER_ENABLED: 'false',
       STRIPE_SECRET_KEY: 'sk_test_local_fixture', STRIPE_WEBHOOK_SECRET: 'whsec_local_fixture', JWT_ACCESS_SECRET: 'local-reservation-fixture-secret-at-least-32-chars' };
     const push = spawnSync(process.execPath, [require.resolve('prisma/build/index.js'), 'db', 'push', '--skip-generate'], { cwd: backend, env: isolated, encoding: 'utf8', windowsHide: true, timeout: 60000 });
@@ -123,7 +126,9 @@ async function run() {
         const body = { checkoutSnapshotId: f.reservation.checkoutSnapshotId, tabId: f.tabId, shippingMethod: 'STANDARD', guestEmail: owner.customerEmail,
           shippingAddress: { firstName: 'Fixture', lastName: 'Customer', line1: `Fictitious street ${id}`, city: 'Madrid', postalCode: '28001', country: 'España' } };
         f.dto = body;
-        f.payment = await factory.createPaymentIntentForOwner(owner, body, await f.readCart());
+        f.payment = kind === 'guest'
+          ? await factory.createPaymentIntentForOwner(owner, body, await f.readCart())
+          : await factory.createPaymentIntentForUser(owner.userId, body, await f.readCart());
         f.reservation = await f.enter('heartbeat'); f.dto.checkoutSnapshotId = f.reservation.checkoutSnapshotId;
         return f.payment;
       };
@@ -135,6 +140,50 @@ async function run() {
       const event = { id: eventId, object: 'event', type, livemode: false, created: Math.floor(Date.now() / 1000), data: { object: { ...intents.get(f.payment.paymentIntentId) } } };
       const raw = JSON.stringify(event), signature = signatureApi.generateTestHeaderString({ payload: raw, secret: isolated.STRIPE_WEBHOOK_SECRET });
       return webhook.processEvent({ body: Buffer.from(raw) }, signature, '/webhooks/stripe');
+    }
+    if (singleConnection) {
+      for (const kind of ['guest', 'registered']) {
+        const f = await fixture(kind); await f.enter(); const initial = f.reservation.checkoutSnapshotId;
+        try { await f.prepare(); } catch (error) {
+          report.failure = { code: error.code, beforeStripe: intents.size === 0,
+            snapshot: await db.checkoutSnapshot.findUnique({ where: { id: initial }, select: { status: true, reservationPhase: true, stripePaymentIntentId: true } }) };
+          throw error;
+        }
+        assert.notEqual(f.payment.metadata.checkoutSnapshotId, initial);
+        assert.equal((await db.checkoutSnapshot.findUniqueOrThrow({ where: { id: initial } })).status, 'REPLACED');
+        assert.equal(await f.stock(), 0); const preparedId = f.payment.paymentIntentId;
+        await f.prepare(); assert.equal(f.payment.paymentIntentId, preparedId);
+        await db.promoCode.create({ data: { code: `POOL${kind.toUpperCase()}`, type: 'PERCENT', value: 5, isActive: true } });
+        const dto = { ...f.dto, shippingMethod: 'EXPRESS', promoCode: `POOL${kind.toUpperCase()}`, shippingAddress: { ...f.dto.shippingAddress, line1: 'Changed fictitious street' } };
+        const prepare = async () => kind === 'guest' ? factory.createPaymentIntentForOwner(f.owner, dto, await f.readCart()) : factory.createPaymentIntentForUser(f.owner.userId, dto, await f.readCart());
+        f.payment = await prepare();
+        assert.notEqual(f.payment.paymentIntentId, preparedId); assert.equal(intents.get(preparedId).status, 'canceled');
+        assert.equal(f.payment.totals.totalCents, 1445); assert.equal(await f.stock(), 0);
+        f.reservation = await f.enter('heartbeat'); dto.checkoutSnapshotId = f.reservation.checkoutSnapshotId;
+        const canceled = f.payment.paymentIntentId;
+        await stripe.cancelCheckoutPaymentIntent(canceled, dto.checkoutSnapshotId);
+        f.payment = await prepare();
+        assert.notEqual(f.payment.paymentIntentId, canceled); assert.equal(await f.stock(), 0);
+        f.reservation = await f.enter('heartbeat'); await f.start();
+        const started = await f.row(); advance(1000); await f.enter('heartbeat');
+        assert.equal((await f.row()).expiresAt.getTime(), started.expiresAt.getTime());
+        assert.equal(started.expiresAt.getTime() - started.paymentStartedAt.getTime(), 360000);
+        advance(360000); await cleanup.reconcile(started.id); assert.equal(await f.stock(), 1);
+        check(`${kind}: single connection prepares own last-unit reservation, reuses intent, replaces shipping/address/promo, recovers canceled intent and preserves/expires the immutable 360s window`);
+      }
+      const stalled = await fixture(); await stalled.enter();
+      const stalledCart = await stalled.readCart();
+      await orders.claimCheckoutSnapshotReplacementForOwner(stalled.owner, stalledCart.id, stalled.reservation.checkoutSnapshotId);
+      const concurrent = await Promise.allSettled([stalled.prepare(), stalled.prepare()]);
+      assert.ok(concurrent.some(result => result.status === 'fulfilled'));
+      for (const result of concurrent) if (result.status === 'rejected') assert.match(result.reason.message, /CHECKOUT_(REPLACEMENT_IN_PROGRESS|RESERVATION_EXPIRED|PAYMENT_INTENT_IN_PROGRESS)/);
+      await stalled.enter('heartbeat'); await stalled.prepare();
+      assert.equal((await stalled.row()).status, 'PAYMENT_BOUND'); assert.equal(await stalled.stock(), 0);
+      const active = await db.checkoutSnapshot.count({ where: { cartId: stalledCart.id, status: { in: ['RESERVED', 'PAYMENT_INTENT_CREATING', 'PAYMENT_BOUND', 'REPLACEMENT_PENDING'] } } });
+      assert.equal(active, 1);
+      await stalled.enter('leave'); assert.equal(await stalled.stock(), 1);
+      check('Existing unbound REPLACEMENT_PENDING recovers with concurrent retries, one active intent/reservation and safe departure cleanup');
+      report.passed = true; return;
     }
     for (const kind of ['guest', 'registered']) {
       const f = await fixture(kind);

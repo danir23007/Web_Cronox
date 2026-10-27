@@ -39,6 +39,7 @@
   const taxNoteEl = document.getElementById('summary-tax-note');
   const payButton = document.getElementById('pay-button');
   const errorDiv = document.getElementById('payment-error');
+  const preparationRetryButton = document.getElementById('payment-prepare-retry');
   const helpText = document.getElementById('checkout-help');
   const promoInput = document.getElementById('promo-code-input');
   const applyPromoBtn = document.getElementById('apply-promo-button');
@@ -724,6 +725,18 @@
     setPayButtonState(locked);
   };
   let bankTransferPending = false;
+  let preparationRetryAllowed = false;
+  let preparationRetryInFlight = false;
+  const renderPreparationRetry = () => {
+    if (!preparationRetryButton) return;
+    preparationRetryButton.hidden = !preparationRetryAllowed && !preparationRetryInFlight;
+    preparationRetryButton.disabled = preparationRetryInFlight || !checkoutReservation?.ready() || bankTransferPending || paymentInFlight || expressCheckoutRevision !== null;
+    preparationRetryButton.textContent = preparationRetryInFlight ? 'Comprobando el pago…' : 'Volver a preparar el pago';
+  };
+  const setPreparationRetry = allowed => {
+    preparationRetryAllowed = Boolean(allowed);
+    renderPreparationRetry();
+  };
   let pendingPaymentElementLoadResolver = null;
   let pendingPaymentElementLoadPromise = null;
   let hasClearedPromoOnLoad = false;
@@ -836,7 +849,8 @@
       paymentElementMounted,
     });
     const methodReady = paymentChannel === 'paypal' ? isFormPayPalAvailable() : paymentMethodComplete;
-    payButton.disabled = !checkoutReservation?.ready() || bankTransferPending || paymentInFlight || expressCheckoutRevision !== null || (buttonState?.disabled ?? true) || !methodReady || mountedAmountCents !== state.totals.totalCents;
+    payButton.disabled = !checkoutReservation?.ready() || preparationRetryInFlight || bankTransferPending || paymentInFlight || expressCheckoutRevision !== null || (buttonState?.disabled ?? true) || !methodReady || mountedAmountCents !== state.totals.totalCents;
+    renderPreparationRetry();
     if (forcedLabel && isCheckoutContactAndShippingReady()) {
       payButton.textContent = forcedLabel;
       return;
@@ -2287,6 +2301,7 @@
         code: typeof event?.error?.code === 'string' ? event.error.code : undefined,
       });
       errorDiv.textContent = 'No hemos podido preparar el pago. Inténtalo de nuevo.';
+      setPreparationRetry(true);
       setPayButtonState(false);
     };
     const observesLoad =
@@ -2483,6 +2498,7 @@
 
   const preparePaymentIntent = async (revision = checkoutRevision, expressCheckout = false) => {
     if (revision !== checkoutRevision) return false;
+    setPreparationRetry(false);
     setLoadingState(true);
     errorDiv.textContent = '';
 
@@ -2605,6 +2621,13 @@
         renderPromoUI();
       }
       errorDiv.textContent = getPaymentPreparationMessage(details);
+      // Recovery reuses the server's idempotent preparation path. Explicitly
+      // unresolved provider states remain locked for reconciliation instead.
+      setPreparationRetry(details.isRetryable && ![
+        'CHECKOUT_PAYMENT_CONFIRMATION_PENDING', 'CHECKOUT_PAYMENT_INTENT_RECOVERY_BLOCKED',
+        'CHECKOUT_PAYMENT_INTENT_IN_PROGRESS', 'STRIPE_PAYMENT_INTENT_NOT_CANCELLABLE',
+        'STRIPE_PAYMENT_INTENT_NOT_REUSABLE',
+      ].includes(details.code));
       if (details.code === 'CHECKOUT_PAYMENT_CONFIRMATION_PENDING') {
         void waitForPreviousPaymentConfirmation(revision);
       }
@@ -2615,6 +2638,7 @@
   };
 
   const invalidateCheckoutPayment = () => {
+    setPreparationRetry(false);
     window.dispatchEvent(new CustomEvent('cronox:checkout-payment-unready'));
     checkoutRevision = checkoutCoordinator?.invalidate() ?? checkoutRevision + 1;
     currentClientSecret = null;
@@ -3005,6 +3029,28 @@
         setPayButtonState(false);
       }
     }));
+
+    preparationRetryButton?.addEventListener('click', async () => {
+      if (!preparationRetryAllowed || preparationRetryInFlight || !checkoutReservation?.ready() || bankTransferPending || paymentInFlight || expressCheckoutRevision !== null) return;
+      preparationRetryInFlight = true;
+      const revision = invalidateCheckoutPayment();
+      setPayButtonState(true);
+      try {
+        // Refresh the existing ownership/phase first. Never restart a hold,
+        // renew a protected deadline, call payment-start or confirm Stripe here.
+        await checkoutReservation.heartbeat();
+        if (revision !== checkoutRevision || !checkoutReservation.ready()) return;
+        await queueCheckoutUpdate({ revision });
+      } catch {
+        if (revision === checkoutRevision) {
+          errorDiv.textContent = 'No pudimos comprobar el estado del pago. Inténtalo de nuevo en unos instantes.';
+          setPreparationRetry(true);
+        }
+      } finally {
+        preparationRetryInFlight = false;
+        setPayButtonState(false);
+      }
+    });
 
     payButton?.addEventListener('click', async () => {
       if (!checkoutReservation?.ready() || bankTransferPending || paymentInFlight || expressCheckoutRevision !== null) return;

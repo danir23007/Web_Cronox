@@ -4,6 +4,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import type { Prisma } from '@prisma/client';
 import { ShippingMethodCode } from '../common/enums/shipping-method-code.enum';
 import {
   normalizeCountry,
@@ -44,10 +45,10 @@ export class ShippingMethodsService {
    * IMPORTANTE: no borres estas filas y las recrees cambiando el orden,
    * crea siempre primero el estándar (id 1) y luego el express (id 2).
    */
-  private async loadMethodsFromDb(): Promise<
+  private async loadMethodsFromDb(client: Pick<Prisma.TransactionClient, 'shippingMethod'> = this.prisma): Promise<
     Map<ShippingMethodCode, ShippingRow>
   > {
-    const rows = await this.prisma.shippingMethod.findMany({
+    const rows = await client.shippingMethod.findMany({
       where: { isActive: true },
       orderBy: { id: 'asc' },
     });
@@ -83,9 +84,10 @@ export class ShippingMethodsService {
     itemsTotalCents: number,
     discountCents = 0,
     country: string = SPAIN_COUNTRY_NAME,
+    client: Pick<Prisma.TransactionClient, 'shippingMethod'> = this.prisma,
   ): Promise<ShippingMethodOption> {
     this.assertSupportedCountry(country);
-    const methods = await this.loadMethodsFromDb();
+    const methods = await this.loadMethodsFromDb(client);
     const row = methods.get(code);
 
     if (!row) {

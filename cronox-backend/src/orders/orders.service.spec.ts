@@ -33,6 +33,7 @@ import { HistorialService } from '../historial/historial.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { OrdersService } from './orders.service';
 import { GuestOrderAccountService } from './guest-order-account.service';
+import { ShippingMethodsService } from '../shipping-methods/shipping-methods.service';
 
 describe('OrdersService checkout reservations', () => {
   let service: OrdersService;
@@ -246,6 +247,40 @@ describe('OrdersService checkout reservations', () => {
     await expect(service.getCheckoutSummary(cart as any, {})).rejects.toThrow('MIXED_CART_CURRENCIES');
     expect(shippingMethods.listAvailableMethods).not.toHaveBeenCalled();
     expect(prisma.checkoutSnapshot.create).not.toHaveBeenCalled();
+  });
+
+  it('keeps owner, own-stock, shipping and promo reads on the transaction during replacement', async () => {
+    const outside = jest.fn(() => { throw new Error('Query escaped the only transaction connection'); });
+    const root = {
+      user: { findUnique: outside }, cart: { findFirst: outside },
+      checkoutSnapshot: { findFirst: outside }, checkoutStockReservation: { findMany: outside },
+      shippingMethod: { findMany: outside }, promoCode: { findFirst: outside }, $transaction: outside,
+    };
+    const reservedCart = { id: 10, userId: 1, anonymousId: null, updatedAt,
+      items: [{ variantId: 8, qty: 2, priceAtAdd: 5000, variant: { id: 8, productId: 7,
+        isActive: true, stockQty: 0, price: 5000, size: 'M',
+        product: { id: 7, name: 'Fictitious item', isActive: true, currency: 'EUR', price: 5000 } } }],
+    };
+    const tx = {
+      user: { findUnique: jest.fn().mockResolvedValue({ email: 'fixture@example.test' }) },
+      cart: { findFirst: jest.fn().mockResolvedValue(reservedCart) },
+      checkoutSnapshot: { findFirst: jest.fn().mockResolvedValue(makeSnapshot()) },
+      checkoutStockReservation: { findMany: jest.fn().mockResolvedValue([{ variantId: 8, quantity: 2 }]) },
+      shippingMethod: { findMany: jest.fn().mockResolvedValue([{ id: 2, name: 'Express', price: 495, isActive: true }]) },
+      promoCode: { findFirst: jest.fn().mockResolvedValue({ id: 3, code: 'POOL', type: 'PERCENT', value: 5, isActive: true,
+        startsAt: null, expiresAt: null, minCartValue: null, firstOrderOnly: false, singleUsePerUser: false, usageLimit: null, usageCount: 0 }) },
+    };
+    const isolatedService = new OrdersService(root as any, cartService, {
+      getDefaultVat: () => 0.21,
+    } as any, new ShippingMethodsService(root as any), historialService, guestOrderAccountService);
+    await expect(isolatedService.createCheckoutSnapshotForOwner({ userId: 1 },
+      { shippingMethod: 'EXPRESS' as any, promoCode: 'POOL' }, { transaction: tx as any })).resolves.toMatchObject({ checkoutSnapshotId: 'snap_new' });
+    expect(outside).not.toHaveBeenCalled();
+    expect(tx.user.findUnique).toHaveBeenCalled();
+    expect(tx.cart.findFirst).toHaveBeenCalled();
+    expect(tx.checkoutStockReservation.findMany).toHaveBeenCalled();
+    expect(tx.shippingMethod.findMany).toHaveBeenCalledTimes(2);
+    expect(tx.promoCode.findFirst).toHaveBeenCalled();
   });
 
   it('reuses an active snapshot for an identical checkout request', async () => {

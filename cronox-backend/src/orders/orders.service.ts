@@ -397,7 +397,7 @@ export class OrdersService {
   async getCheckoutPreview(
     userId: number,
     params: { shippingMethod: ShippingMethodCode; promoCode?: string },
-    options: { cart?: CartSnapshot | null } = {},
+    options: { cart?: CartSnapshot | null; transaction?: Prisma.TransactionClient } = {},
   ): Promise<CheckoutPreview> {
     return this.getCheckoutPreviewForOwner(
       { userId, customerEmail: '' },
@@ -409,14 +409,16 @@ export class OrdersService {
   async getCheckoutPreviewForOwner(
     owner: CheckoutOwner,
     params: { shippingMethod: ShippingMethodCode; promoCode?: string },
-    options: { cart?: CartSnapshot | null } = {},
+    options: { cart?: CartSnapshot | null; transaction?: Prisma.TransactionClient } = {},
   ): Promise<CheckoutPreview> {
     // [STRIPE]
     const cart =
       options.cart ??
-      (await this.cartService.getOrCreateCart(this.toCartContext(owner)));
+      (options.transaction
+        ? await options.transaction.cart.findFirst({ where: this.toCartContext(owner), include: cartInclude, orderBy: { createdAt: 'desc' } })
+        : await this.cartService.getOrCreateCart(this.toCartContext(owner)));
 
-    if (!this.cartBelongsToOwner(cart, owner)) {
+    if (!cart || !this.cartBelongsToOwner(cart, owner)) {
       throw new ForbiddenException('CART_ACCESS_DENIED');
     }
 
@@ -427,14 +429,13 @@ export class OrdersService {
       });
     }
 
-    this.assertCartEligibleForCheckout(cart, await this.reservedStockForCart(cart));
+    this.assertCartEligibleForCheckout(cart, await this.reservedStockForCart(cart, options.transaction));
 
     const itemsTotalCents = this.computeItemsTotalCents(cart);
     const normalizedPromo = this.normalizePromoCode(params.promoCode);
-    const shippingMethod = await this.shippingMethods.getMethod(
-      params.shippingMethod,
-      itemsTotalCents,
-    );
+    const shippingMethod = options.transaction
+      ? await this.shippingMethods.getMethod(params.shippingMethod, itemsTotalCents, 0, undefined, options.transaction)
+      : await this.shippingMethods.getMethod(params.shippingMethod, itemsTotalCents);
     const baseTotals = this.calculateCartTotals(cart, shippingMethod);
     const appliedPromo = normalizedPromo
       ? await this.computePromoApplication(
@@ -442,15 +443,13 @@ export class OrdersService {
           shippingMethod,
           normalizedPromo,
           baseTotals,
-          { userId: owner.userId, customerEmail: owner.customerEmail },
+          { userId: owner.userId, customerEmail: owner.customerEmail, client: options.transaction },
         )
       : null;
     const discountCents = appliedPromo?.valid ? appliedPromo.discountCents : 0;
-    const adjustedShippingMethod = await this.shippingMethods.getMethod(
-      params.shippingMethod,
-      itemsTotalCents,
-      discountCents,
-    );
+    const adjustedShippingMethod = options.transaction
+      ? await this.shippingMethods.getMethod(params.shippingMethod, itemsTotalCents, discountCents, undefined, options.transaction)
+      : await this.shippingMethods.getMethod(params.shippingMethod, itemsTotalCents, discountCents);
     const totals = this.calculateCartTotals(
       cart,
       adjustedShippingMethod,
@@ -587,7 +586,9 @@ export class OrdersService {
       ),
       billingAddress: this.normalizeApplicationAddress(params.billingAddress),
     };
-    const resolvedOwner = await this.resolveCheckoutOwner(owner);
+    // Atomic replacement already holds its connection and stock/cart locks.
+    // Every nested read must use that transaction, including quotes/promos.
+    const resolvedOwner = await this.resolveCheckoutOwner(owner, options.transaction);
     if (options.presenceOnly && resolvedOwner.userId == null) resolvedOwner.customerEmail = '';
     this.assertCheckoutOwner(resolvedOwner, options.presenceOnly);
     // Payment uses its immutable snapshot, including after another tab edits
@@ -603,7 +604,7 @@ export class OrdersService {
             shippingMethod: params.shippingMethod,
             promoCode: params.promoCode,
           },
-          { cart: options.cart },
+          { cart: options.cart, ...(options.transaction ? { transaction: options.transaction } : {}) },
         )
       : await this.getCheckoutPreviewForOwner(
           resolvedOwner,
@@ -611,7 +612,7 @@ export class OrdersService {
             shippingMethod: params.shippingMethod,
             promoCode: params.promoCode,
           },
-          { cart: options.cart },
+          { cart: options.cart, ...(options.transaction ? { transaction: options.transaction } : {}) },
         );
     const requestedPromoCode = this.normalizePromoCode(params.promoCode);
     if (requestedPromoCode && !preview.appliedPromo?.valid) {
@@ -2511,9 +2512,10 @@ export class OrdersService {
 
   private async resolveCheckoutOwner(
     owner: CheckoutOwner,
+    client: Pick<Prisma.TransactionClient, 'user'> = this.prisma,
   ): Promise<ResolvedCheckoutOwner> {
     if (owner.userId != null && !owner.customerEmail) {
-      const user = await this.prisma.user.findUnique({
+      const user = await client.user.findUnique({
         where: { id: owner.userId },
         select: { email: true },
       });
@@ -3145,14 +3147,14 @@ export class OrdersService {
     );
   }
 
-  private async reservedStockForCart(cart: CartSnapshot | null): Promise<Map<number, number>> {
+  private async reservedStockForCart(cart: CartSnapshot | null, client: Pick<Prisma.TransactionClient, 'checkoutStockReservation'> = this.prisma): Promise<Map<number, number>> {
     const reserved = new Map<number, number>();
     if (!cart?.id || !cart.items.some(item => item.variant && item.qty > item.variant.stockQty)) return reserved;
     if (cart.userId == null && !cart.anonymousId) return reserved;
     // Available inventory already excludes reservations. Only this cart's
     // still-reserved units may be credited during preview/retry; another
     // shopper's stock and consumed/released reservations never qualify.
-    const rows = await this.prisma.checkoutStockReservation.findMany({
+    const rows = await client.checkoutStockReservation.findMany({
       where: {
         status: 'RESERVED',
         checkoutSnapshot: {
