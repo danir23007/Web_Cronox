@@ -1,6 +1,16 @@
 # Cierre local de verificaciones · 26/10/2026
 
-Estado actualizado: **dependencias revisadas, tarjeta Stripe sandbox con webhooks originales y CI Linux aprobados**. Código definitivo comprobado: **`d92b7f0633d6b29a8a5d3f4f03fc6c89cd2a3f43`**, rama `verify/release-20261026-linux`. No se ha integrado en `main`, desplegado, cobrado dinero real ni enviado correo. **La aceptación en iPhone físico sigue pendiente.**
+Estado de preparación: **dependencias revisadas, tarjeta Stripe sandbox con webhooks originales y CI Linux aprobados**. Código comprobado: **`d92b7f0633d6b29a8a5d3f4f03fc6c89cd2a3f43`**, rama `verify/release-20261026-linux`; **`f7c12a6a57fcb2346e688d1a1400c102dac96999`** añade únicamente documentación. Las pruebas no cobraron dinero real ni enviaron correo.
+
+## Autorización de publicación · 27/10/2026
+
+El titular autoriza integrar esta versión en `main`, hacer push, aplicar las migraciones y publicar mediante **Deploy CRONOX / workflow_dispatch / publish=true**, con CI Linux satisfactorio para el SHA final. La integración y la publicación se ejecutan por separado; no se permite force push ni un despliegue alternativo por SSH.
+
+**iPhone físico: no realizado y omitido expresamente por decisión del titular.** El entorno de revisión no cargaba correctamente sus recursos. Esta aceptación deja de ser requisito de publicación; no se prepara otro sandbox ni se sustituye por emulación. Se mantienen las limitaciones de carteras y métodos de pago no acreditados descritas abajo.
+
+Antes de integrar se ha contrastado Git local/remoto: `main` sigue en `8867cd12df8f5f444e4a4376cbb478322311e9d2`, la rama de verificación coincide con `f7c12a6a57fcb2346e688d1a1400c102dac96999` y no hay cambios posteriores de aplicación. Pages conserva `build_type=workflow`; el workflow efectivo coincide con el revisado: push a `main` solo verifica, publicación exclusivamente manual. Se conserva la migración ensayada y su checksum. Los archivos privados y `output/` quedan fuera de los commits.
+
+La evidencia de integración, CI del SHA final, controlador y verificaciones públicas se registrará en el cierre de publicación. Los resultados históricos siguientes conservan su fecha y alcance.
 
 ## Cierre de los pendientes concretos
 
@@ -45,7 +55,9 @@ Métodos **no probados en este cierre**: Apple Pay, Google Pay, PayPal, Bizum, K
 
 Los avisos de imágenes `data:` bloqueadas pertenecen al iframe ACS de prueba de Stripe y no impidieron el reto; no se relajó la CSP de CRONOX. Se conservan los logs iniciales del instrumental (arranques del túnel y configuración pública corregida) separados del resultado final.
 
-### Revisión desde iPhone sin publicar
+### Historial del entorno de revisión de iPhone (prueba no realizada)
+
+El acceso y la lista que siguen documentan lo preparado el 26/10. El titular omite la prueba física el 27/10; esta URL temporal no se vuelve a preparar ni se exige para publicar.
 
 **URL:** [https://westminster-dec-ampland-overview.trycloudflare.com/](https://westminster-dec-ampland-overview.trycloudflare.com/).
 
@@ -61,7 +73,7 @@ Lista breve para el titular, en Safari normal y con direcciones distintas termin
 2. En Mi cuenta, recargar y cerrar/reabrir completamente Safari. Debe conservar sesión; después de “Cerrar sesión”, repetir y comprobar que ya no entra identificado. Para un email con cuenta, usar login, nunca crear otra contraseña desde la newsletter.
 3. Añadir el producto ficticio M, cambiar cantidad y revisar favoritos/cesta. Abrir checkout como invitado sin hacer obligatoria la cuenta. Usar solo tarjetas de prueba si se desea repetir pago.
 4. Girar el teléfono y revisar teclado, footer/desplegables, letras/números, logos/Instagram, precio y copyright de pedidos vacíos y páginas largas. Sin recortes, solapamientos ni desplazamiento horizontal.
-5. Comunicar modelo de iPhone, versión de iOS y resultado de esos pasos. **Pendiente de respuesta/prueba física; no marcado como aprobado.** La recuperación por email está fuera de esta URL: no se habilitan envíos para esa comprobación.
+5. Comunicar modelo de iPhone, versión de iOS y resultado de esos pasos. **No realizado; omitido por el titular el 27/10, sin resultado aprobado.** La recuperación por email está fuera de esta URL: no se habilitan envíos para esa comprobación.
 
 
 ## Historial: cierre Linux anterior a esta revisión
@@ -185,9 +197,9 @@ El procedimiento existente mantiene mantenimiento y escritores detenidos si fall
 
 ### Pendientes que requieren intervención del titular
 
-- **iPhone físico:** realizar la lista anterior y comunicar el resultado. Recomiendo completar esa aceptación breve antes de autorizar publicación; está preparada la URL y no falta implementación para hacerla. No es un fallo confirmado ni se marca superada por Chromium/WebKit.
+- **iPhone físico:** no realizado; el titular ha decidido omitirlo y continuar el 27/10. No bloquea esta publicación autorizada ni se acredita mediante Chromium/WebKit.
 - **Carteras y métodos alternativos:** no se acredita una prueba nueva. Apple Pay requiere dominio de sandbox registrado y dispositivo/cartera; Google Pay requiere cuenta/cartera; los restantes requieren completar su autorización de prueba y resolver los avisos de activación cuando corresponda. Si la aceptación del lanzamiento exige específicamente esos métodos, siguen siendo una condición de aceptación pendiente. No bloquean por sí mismos esta corrección, que no modifica su integración/configuración.
-- La integración en main y el despliegue requieren una autorización posterior: no se han realizado aquí.
+- La integración en `main` y la publicación están autorizadas el 27/10; requieren CI del SHA final y el procedimiento oficial, sin omitir sus controles.
 
 ### Limitaciones conocidas no bloqueantes
 
@@ -196,7 +208,7 @@ El procedimiento existente mantiene mantenimiento y escritores detenidos si fall
 - La revisión física usa un túnel temporal, producto ficticio y base vacía; no acredita capacidad del VPS ni almacenamiento de Safari a largo plazo. El correo real permanece fuera de las pruebas. Los checks previos conservan su alcance y fecha.
 - Avisos del ACS de prueba de Stripe sobre imágenes data: y limitaciones de métodos no impidieron los pagos de tarjeta comprobados; no se rebajó CSP ni protección alguna para conseguirlos.
 
-**Recomendación:** versión técnicamente preparada para publicar, con dependencias revisadas y pago de tarjeta validado. Completar primero la aceptación breve en el iPhone y, si forma parte del requisito de lanzamiento, la de las carteras concretas. No hace falta repetir auditorías completas ni migrar Prisma de forma precipitada. El siguiente paso será autorizar integración y publicación del SHA correspondiente, con CI del commit resultante.
+**Recomendación vigente:** continuar la publicación autorizada, con dependencias revisadas, pago de tarjeta validado y omisión expresa del iPhone físico. Mantener documentados los métodos de pago no acreditados. Exigir CI del SHA final y todos los controles del despliegue; no hace falta repetir auditorías completas ni migrar Prisma de forma precipitada.
 
 ## Pasos de publicación futura
 
@@ -213,7 +225,7 @@ Después de publicar:
 - Revisar login/logout, carrito y favoritos con una cuenta de revisión autorizada, sin compra ni alta ficticia en producción. Observar los contadores/429 y los nuevos identificadores de diagnóstico sin registrar datos sensibles.
 - Para una prueba completa con escritura, usar el entorno aislado/sandbox; una prueba de correo o pago en producción requiere autorización propia.
 
-Comprobación breve en iPhone físico, sobre revisión/sandbox autorizado:
+Lista archivada de comprobación en iPhone físico (no realizada; ya no es requisito de esta publicación):
 
 1. Safari normal, cerrar pestañas previas; probar footer y popup con direcciones de prueba distintas. Abandonar primero y confirmar que no hay alta; después completar y comprobar una sola cuenta/suscripción.
 2. Probar nombre/contraseña inválidos, pérdida de conexión, reintento y cuenta existente mediante login. Confirmar que no pide de nuevo el correo y no reemplaza credenciales.
