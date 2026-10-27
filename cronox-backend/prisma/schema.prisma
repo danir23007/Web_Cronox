@@ -54,6 +54,8 @@ model QrEventParticipant {
 
 // Private external sales ledger. No Order, customer, Stripe or shipping lifecycle.
 model SalePoint {
+  provinceId String? @db.VarChar(2)
+  deletedAt DateTime? @db.Timestamptz(3)
   id String @id @default(uuid())
   name String @db.VarChar(160)
   type String
@@ -71,6 +73,8 @@ model SalePoint {
 }
 
 model PointSale {
+  orderId Int? @unique
+  order Order? @relation(fields: [orderId], references: [id], onDelete: Restrict)
   id String @id @default(uuid())
   pointId String
   point SalePoint @relation(fields: [pointId], references: [id], onDelete: Restrict)
@@ -1038,6 +1042,8 @@ model User {
 
   // ✅ FIX: relación correcta y naming consistente
   historial Historial?
+
+  @@index([createdAt, id])
 }
 
 // Aggregate history is independent of short-lived customer activity/session logs.
@@ -1405,6 +1411,11 @@ model CartItem {
 // A checkout snapshot is created before a Stripe PaymentIntent is created.
 // Order creation must use these frozen values rather than a mutable cart.
 model CheckoutSnapshot {
+  // Presence and payment protection share the existing stock reservations.
+  reservationPhase           String                     @default("PRESENCE")
+  paymentStartedAt           DateTime?                   @db.Timestamptz(3)
+  stripeCreateRequest        Json?
+  reservationRetryAt         DateTime?                   @db.Timestamptz(3)
   welcomeOriginBenefit AccountWelcomeBenefit?
   bankNetworkHash            String?
   bankAddressHash            String?
@@ -1464,6 +1475,17 @@ model CheckoutSnapshot {
   @@index([expiresAt])
   @@index([stripeAccountId, stripePaymentIntentId])
   @@index([userId, cartId, cartUpdatedAt, requestFingerprint])
+}
+
+// A page incarnation has its own random ID; reloads/duplicated tabs never share
+// it. Tombstones prevent delayed heartbeats from resurrecting a departed page.
+model CheckoutPresence {
+  cartId      Int
+  tabId       String
+  expiresAt   DateTime @db.Timestamptz(3)
+  departedAt  DateTime? @db.Timestamptz(3)
+  @@id([cartId, tabId])
+  @@index([expiresAt])
 }
 
 model CheckoutSnapshotItem {
@@ -1555,6 +1577,7 @@ model CheckoutEffect {
 }
 
 model Order {
+  pointSale PointSale?
   welcomeOriginBenefit AccountWelcomeBenefit? @relation("WelcomeOriginOrder")
   welcomeFirstOnlineBenefit AccountWelcomeBenefit? @relation("WelcomeFirstOnlineOrder")
   paidAt               DateTime?
@@ -1820,8 +1843,8 @@ model UserIdentityReservation {
   reservedAt        DateTime @default(now()) @db.Timestamptz(6)
 }
 
-// Private numbering coordinator and immutable account/QR identity. Numeric IDs
-// are positions; UUIDs are never reassigned, including after account deletion.
+// Permanent allocation cursor. Neither numeric IDs nor UUIDs are reassigned.
+// The list ordinal is computed separately over surviving creation dates.
 model UserNumberingState {
   id Int @id
   nextId Int
@@ -1832,6 +1855,15 @@ model UserNumberingState {
 model UserIdentityRegistry {
   identityUid String @id @db.Uuid
   publicMemberToken String? @unique
+}
+
+/// Durable idempotency receipt, independent of the deleted account/audit retention.
+model AdminUserDeletion {
+  userId Int @id
+  identityUid String @unique @db.Uuid
+  memberCode String?
+  performedById Int
+  deletedAt DateTime @default(now()) @db.Timestamptz(3)
 }
 
 /// Private attribution of historical non-FK references whose account was deleted.

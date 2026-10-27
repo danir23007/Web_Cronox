@@ -1,4 +1,4 @@
-import { Controller, Get, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, Header, Query, UseGuards } from '@nestjs/common';
 import { Type } from 'class-transformer';
 import { IsIn, IsInt, IsOptional, Matches, Max, Min } from 'class-validator';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
@@ -29,7 +29,7 @@ export class MapQuery {
 @UseGuards(JwtAuthGuard, AdminGuard)
 export class AdminMapController {
   constructor(private readonly map: AdminMapService) {}
-  @Get() get(@Query() query: MapQuery) {
+  @Get() @Header('Cache-Control','private, no-store') get(@Query() query: MapQuery) {
     return this.map.getReport(query);
   }
 }

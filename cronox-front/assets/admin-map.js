@@ -8,31 +8,31 @@
   const territories = () => state.division === 'provinces' ? data.provinces : data.regions;
   const territoryLabel = () => state.division === 'provinces' ? 'provincia' : 'comunidad';
   const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-  const number = v => v === null ? 'No disponible' : new Intl.NumberFormat('es-ES').format(v);
-  const money = v => v === null ? 'No disponible' : new Intl.NumberFormat('es-ES', { style:'currency', currency:'EUR' }).format(v / 100);
+  const number = v => v == null ? 'No disponible' : new Intl.NumberFormat('es-ES').format(v);
+  const money = v => v == null ? 'No disponible' : new Intl.NumberFormat('es-ES', { style:'currency', currency:'EUR' }).format(v / 100);
   const today = () => new Intl.DateTimeFormat('en-CA', { timeZone:'Europe/Madrid', year:'numeric', month:'2-digit', day:'2-digit' }).format(new Date());
-  const metricNames = { orders:'Pedidos', units:'Unidades vendidas netas', revenueCents:'Facturación' };
-  let state = { from:today().slice(0,7) + '-01', to:today(), metric:'orders', division:'communities', preset:'month', region:'', page:1 };
+  const metricNames = { orders:'Ventas/pedidos', units:'Unidades netas', revenueCents:'Facturación', profitCents:'Beneficio neto' };
+  let state = { from:today().slice(0,7) + '-01', to:today(), metric:'orders', division:'provinces', preset:'month', region:'', page:1 };
   let data, abort, version = 0, svgPromise, svgReady = false, sort = 'name', direction = 1;
   const nameOrder = new Intl.Collator('es');
   let salesState = 'loading', exploredRegion = '';
   const regionNames = new Map();
   let zoom = 1;
   const $ = selector => root.querySelector(selector);
-  const valueLabel = v => state.metric === 'revenueCents' ? money(v) : number(v);
+  const valueLabel = v => ['revenueCents','profitCents'].includes(state.metric) ? money(v) : number(v);
   const percent = r => {
     const denominator = data?.identified[state.metric];
-    return denominator === null || r[state.metric] === null ? 'No disponible' : denominator === 0 ? '0 %' : new Intl.NumberFormat('es-ES', { style:'percent', maximumFractionDigits:1 }).format(r[state.metric] / denominator);
+    return denominator == null || r[state.metric] == null ? 'No disponible' : denominator === 0 ? (r[state.metric]===0?'0 %':'No disponible · total neto cero') : new Intl.NumberFormat('es-ES', { style:'percent', maximumFractionDigits:1 }).format(r[state.metric] / denominator);
   };
-  root.innerHTML = `<header><span class="map-eyebrow">DISTRIBUCIÓN DE VENTAS</span><h1 id="title-map">Mapa</h1><p>El destino de los pedidos pagados, por comunidades autónomas o provincias.</p></header>
+  root.innerHTML = `<header><span class="map-eyebrow">DISTRIBUCIÓN DE VENTAS</span><h1 id="title-map">Mapa</h1><p>Ventas web por destino del pedido y ventas físicas por ubicación del punto de venta.</p></header>
     <form class="map-filters"><label>Período<select name="preset"><option value="today">Hoy</option><option value="month" selected>Este mes</option><option value="year">Este año</option><option value="all">Todo el histórico</option><option value="custom">Intervalo personalizado</option></select></label>
     <label>Desde<input name="from" type="date" min="2000-01-01" max="2100-12-31" required></label><label>Hasta<input name="to" type="date" min="2000-01-01" max="2100-12-31" required></label>
-    <label>División territorial<select name="division"><option value="communities">Comunidades autónomas</option><option value="provinces">Provincias</option></select></label><label>Métrica<select name="metric"><option value="orders">Pedidos</option><option value="units">Unidades vendidas</option><option value="revenueCents">Facturación</option></select></label><button type="submit">Aplicar fechas</button></form>
+    <label>División territorial<select name="division"><option value="communities">Comunidades autónomas</option><option value="provinces">Provincias</option></select></label><label>Métrica<select name="metric"><option value="orders">Ventas/pedidos</option><option value="units">Unidades netas</option><option value="revenueCents">Facturación</option><option value="profitCents">Beneficio neto</option></select></label><button type="submit">Aplicar fechas</button></form>
     <div class="map-status" role="status" aria-live="polite"></div><button type="button" data-retry hidden>Reintentar</button>
-    <div class="map-panel map-cartography"><h2>España por comunidades autónomas</h2><div class="map-layout"><div><div class="map-cartography-status" role="status">Cargando cartografía…</div><button type="button" data-map-retry hidden>Reintentar cartografía</button><div class="map-zoom" aria-label="Ampliación del mapa"><button type="button" data-zoom="1" aria-label="Ampliar mapa">+</button><button type="button" data-zoom="-1" aria-label="Reducir mapa" disabled>−</button><button type="button" data-zoom="0">Restablecer mapa</button></div><div class="map-viewport" tabindex="0" aria-label="Mapa desplazable al ampliar"><div class="map-graphic"></div></div><div class="map-legend" aria-label="Escala de valores"></div></div><aside><h2>Explora una comunidad</h2><p class="map-note">Pasa el cursor, enfoca con el teclado o toca una región. Pulsa para ver sus provincias y pedidos.</p><div class="map-tooltip" role="status" aria-live="polite">Selecciona una comunidad.</div></aside></div>
+    <div class="map-panel map-cartography"><h2>España por comunidades autónomas</h2><div class="map-layout"><div><div class="map-cartography-status" role="status">Cargando cartografía…</div><button type="button" data-map-retry hidden>Reintentar cartografía</button><div class="map-zoom" aria-label="Ampliación del mapa"><button type="button" data-zoom="1" aria-label="Ampliar mapa">+</button><button type="button" data-zoom="-1" aria-label="Reducir mapa" disabled>−</button><button type="button" data-zoom="0">Restablecer mapa</button></div><div class="map-viewport" tabindex="0" aria-label="Mapa desplazable al ampliar"><div class="map-graphic"></div></div><div class="map-legend" aria-label="Escala de valores"></div></div><aside><h2>Explora una comunidad</h2><p class="map-note">Pasa el cursor, enfoca con el teclado o toca una región. Pulsa para ver sus provincias y operaciones.</p><div class="map-tooltip" role="status" aria-live="polite">Selecciona una comunidad.</div></aside></div>
     <p class="map-note map-projection-note"></p><p class="map-note">Cartografía: IGN (comunidades) · INE (provincias) / <a href="https://www.geoboundaries.org/" target="_blank" rel="noopener">geoBoundaries</a> · <a href="assets/maps/README.md" target="_blank" rel="noopener">Licencias y procedencia</a>.</p></div>
     <div class="map-results" hidden><div class="map-cards"></div><div class="map-panel map-detail" hidden></div>
-    <div class="map-panel map-table-panel"><h2>Comunidades y ciudades autónomas</h2><div class="map-scroll"><table class="map-regions-table"><caption>España identificada · tabla equivalente al mapa</caption><thead><tr>${[['name','Comunidad'],['orders','Pedidos'],['units','Unidades netas'],['revenueCents','Facturación']].map(([key,label]) => `<th scope="col" data-column="${key}"><button type="button" data-sort="${key}"><span data-sort-label>${label}</span><span class="map-sort-indicator" aria-hidden="true">↕</span></button></th>`).join('')}<th scope="col">Porcentaje</th></tr></thead><tbody></tbody></table></div></div>
+    <div class="map-panel map-table-panel"><h2>Comunidades y ciudades autónomas</h2><div class="map-scroll"><table class="map-regions-table"><caption>España identificada · tabla equivalente al mapa</caption><thead><tr>${[['name','Comunidad'],['orders','Ventas/pedidos'],['units','Unidades netas'],['revenueCents','Facturación'],['profitCents','Beneficio neto']].map(([key,label]) => `<th scope="col" data-column="${key}"><button type="button" data-sort="${key}"><span data-sort-label>${label}</span><span class="map-sort-indicator" aria-hidden="true">↕</span></button></th>`).join('')}<th scope="col">Porcentaje</th></tr></thead><tbody></tbody></table></div></div>
     <div class="map-panel map-exceptions"><h2>Otros destinos y provincias sin identificar</h2><p class="map-note">Los destinos desconocidos y extranjeros están excluidos del denominador. Las comunidades identificadas sin provincia conservan sus ventas en España identificada y se desglosan aquí en modo Provincias.</p><div class="map-exceptions-list"></div></div>
     <div class="map-panel map-table-panel"><h2>Criterios y conciliación</h2><p class="map-basis map-note"></p><p class="map-reconciliation map-note"></p><p class="map-exclusions map-note"></p><ul class="map-warnings map-note"></ul></div></div>`;
 
@@ -44,7 +44,8 @@
   }
   function color(value, max) {
     if (value === null) return 'url(#map-unknown)';
-    if (value <= 0) return '#44444d';
+    if (value < 0) { const t=max?Math.min(1,Math.abs(value)/max):1; return `rgb(${Math.round(70-30*t)},${Math.round(120-40*t)},${Math.round(170+40*t)})`; }
+    if (value === 0) return '#44444d';
     const t = max ? value / max : 1;
     return `rgb(${Math.round(104 + 135 * t)},${Math.round(27 + 34 * t)},${Math.round(49 + 32 * t)})`;
   }
@@ -98,7 +99,7 @@
     const provinces = state.division === 'provinces';
     $('.map-cartography > h2').textContent = provinces ? 'España por provincias' : 'España por comunidades autónomas';
     $('.map-layout aside h2').textContent = 'Explora una ' + territoryLabel();
-    $('.map-layout aside .map-note').textContent = 'Pasa el cursor, enfoca con el teclado o toca un territorio. Pulsa para ver sus pedidos. También puedes seleccionarlo en la tabla.';
+    $('.map-layout aside .map-note').textContent = 'Pasa el cursor, enfoca con el teclado o toca un territorio. Pulsa para ver sus operaciones. También puedes seleccionarlo en la tabla.';
     $('.map-regions-table').closest('.map-table-panel').querySelector('h2').textContent = provinces ? 'Provincias y ciudades autónomas' : 'Comunidades y ciudades autónomas';
     $('[data-sort="name"] [data-sort-label]').textContent = provinces ? 'Provincia · Comunidad' : 'Comunidad';
     $('.map-projection-note').textContent = 'Porcentajes sobre el total de España con ubicación identificada en la métrica activa. Canarias, Ceuta y Melilla se muestran en recuadros; Ceuta y Melilla están ampliadas.' + (provinces ? ' Las islas de cada provincia comparten color, datos y selección.' : ' En Melilla, la ciudad ocupa la parte superior y los islotes de la fuente se muestran debajo, a otra escala.');
@@ -121,7 +122,7 @@
       if (name) $('.map-tooltip').innerHTML = `<strong>${esc(name)}</strong><p>${salesState === 'loading' ? 'Cargando ventas…' : 'Ventas no disponibles. Reintenta la consulta para ver los pedidos, unidades e importes.'}</p>`;
       return;
     }
-    $('.map-tooltip').innerHTML = `<strong>${esc(r.name)}</strong>${r.regionName ? `<p>${esc(r.regionName)}</p>` : ''}<dl><dt>Pedidos</dt><dd>${number(r.orders)}</dd><dt>Unidades netas</dt><dd>${number(r.units)}</dd><dt>Facturación</dt><dd>${money(r.revenueCents)}</dd><dt>${esc(metricNames[state.metric])}</dt><dd>${percent(r)}</dd></dl>`;
+    $('.map-tooltip').innerHTML = `<strong>${esc(r.name)}</strong>${r.regionName ? `<p>${esc(r.regionName)}</p>` : ''}<dl><dt>Ventas/pedidos</dt><dd>${number(r.orders)}</dd><dt>Unidades netas</dt><dd>${number(r.units)}</dd><dt>Facturación</dt><dd>${money(r.revenueCents)}</dd><dt>Beneficio neto</dt><dd>${money(r.profitCents)}</dd><dt>${esc(metricNames[state.metric])}</dt><dd>${percent(r)}</dd></dl>`;
   }
   function select(id) {
     state.region = id; state.page = 1; showTooltip(id); saveHash(); request();
@@ -140,19 +141,19 @@
       const next = active ? -direction : th.dataset.column === 'name' ? 1 : -1;
       button.setAttribute('aria-label', button.querySelector('[data-sort-label]').textContent + ': ordenar ' + (th.dataset.column === 'name' ? next === 1 ? 'de A a Z' : 'de Z a A' : next === 1 ? 'de menor a mayor' : 'de mayor a menor'));
     });
-    $('.map-regions-table tbody').innerHTML = rows.map(r => `<tr><td><button type="button" data-select="${r.id}" aria-pressed="${state.region === r.id}">${esc(r.name)}</button>${r.regionName ? `<small class="map-region-name">${esc(r.regionName)}</small>` : ''}</td><td>${number(r.orders)}</td><td>${number(r.units)}</td><td>${money(r.revenueCents)}</td><td>${percent(r)}</td></tr>`).join('');
+    $('.map-regions-table tbody').innerHTML = rows.map(r => `<tr><td><button type="button" data-select="${r.id}" aria-pressed="${state.region === r.id}">${esc(r.name)}</button>${r.regionName ? `<small class="map-region-name">${esc(r.regionName)}</small>` : ''}</td><td>${number(r.orders)}</td><td>${number(r.units)}</td><td>${money(r.revenueCents)}</td><td>${money(r.profitCents)}</td><td>${percent(r)}</td></tr>`).join('');
   }
   function renderDetail() {
     const r = [...territories(),...data.groups,...(data.communityOnly || [])].find(r => r.id === state.region), panel = $('.map-detail');
     panel.hidden = !r;
     if (!r) { panel.replaceChildren(); return; }
-    panel.innerHTML = `<h2>${esc(r.name)}</h2>${r.regionName ? `<p>${esc(r.regionName)}</p>` : ''}${r.unassignedProvince?.orders ? `<p>Provincia sin identificar: ${number(r.unassignedProvince.orders)} pedidos · ${number(r.unassignedProvince.units)} unidades · ${money(r.unassignedProvince.revenueCents)}</p>` : ''}${r.provinces ? `<div class="map-scroll"><table><caption>Desglose por provincias</caption><thead><tr><th scope="col">Provincia</th><th scope="col">Pedidos</th><th scope="col">Unidades netas</th><th scope="col">Facturación</th></tr></thead><tbody>${r.provinces.map(p => `<tr><td>${esc(p.name)}</td><td>${number(p.orders)}</td><td>${number(p.units)}</td><td>${money(p.revenueCents)}</td></tr>`).join('')}</tbody></table></div>` : ''}
-      <div class="map-scroll"><table><caption>Pedidos de este destino · ordenados por número</caption><thead><tr><th scope="col">Pedido</th><th scope="col">Fecha de pago</th><th scope="col">Provincia</th><th scope="col">Unidades netas</th><th scope="col">Facturación</th></tr></thead><tbody>${data.orders.map(o => `<tr><td>${o.available ? `<button type="button" data-order="${o.id}" aria-label="Abrir detalle del pedido ${o.id}">#${o.id} ↗</button>` : `#${o.id} (archivado)`}</td><td>${esc(new Date(o.paidAt).toLocaleString('es-ES',{timeZone:'Europe/Madrid', dateStyle:'short', timeStyle:'short'}))}</td><td>${esc(o.province || 'Sin identificar')}</td><td>${number(o.units)}</td><td>${money(o.revenueCents)}</td></tr>`).join('') || '<tr><td colspan="5">No hay pedidos pagados en este destino y período.</td></tr>'}</tbody></table></div>
-      <div class="map-pagination"><button type="button" data-page="-1" ${state.page <= 1 ? 'disabled' : ''}>Anterior</button><span>Página ${data.pagination.page} de ${data.pagination.pages} · ${number(data.pagination.total)} pedidos</span><button type="button" data-page="1" ${state.page >= data.pagination.pages ? 'disabled' : ''}>Siguiente</button></div>`;
+    panel.innerHTML = `<h2>${esc(r.name)}</h2>${r.regionName ? `<p>${esc(r.regionName)}</p>` : ''}${r.unassignedProvince?.orders ? `<p>Provincia sin identificar: ${number(r.unassignedProvince.orders)} ventas/pedidos · ${number(r.unassignedProvince.units)} unidades · ${money(r.unassignedProvince.revenueCents)}</p>` : ''}${r.provinces ? `<div class="map-scroll"><table><caption>Desglose por provincias</caption><thead><tr><th scope="col">Provincia</th><th scope="col">Ventas/pedidos</th><th scope="col">Unidades netas</th><th scope="col">Facturación</th><th scope="col">Beneficio neto</th></tr></thead><tbody>${r.provinces.map(p => `<tr><td>${esc(p.name)}</td><td>${number(p.orders)}</td><td>${number(p.units)}</td><td>${money(p.revenueCents)}</td><td>${money(p.profitCents)}</td></tr>`).join('')}</tbody></table></div>` : ''}
+      <div class="map-scroll"><table><caption>Pedidos web y movimientos físicos de este territorio</caption><thead><tr><th scope="col">Operación</th><th scope="col">Fecha de venta / movimiento</th><th scope="col">Provincia</th><th scope="col">Unidades netas</th><th scope="col">Facturación</th><th scope="col">Beneficio neto</th></tr></thead><tbody>${data.orders.map(o => `<tr><td>${o.pointId ? `<button type="button" data-point="${esc(o.pointId)}">${esc(o.pointName)} ↗</button>` : o.available ? `<button type="button" data-order="${o.id}" aria-label="Abrir detalle del pedido ${o.id}">#${o.id} ↗</button>` : `#${o.id} (archivado)`}</td><td>${esc(new Date(o.paidAt).toLocaleString('es-ES',{timeZone:'Europe/Madrid', dateStyle:'short', timeStyle:'short'}))}</td><td>${esc(o.province || 'Sin identificar')}</td><td>${number(o.units)}</td><td>${money(o.revenueCents)}</td><td>${money(o.profitCents)}</td></tr>`).join('') || '<tr><td colspan="6">No hay operaciones en este territorio y período.</td></tr>'}</tbody></table></div>
+      <div class="map-pagination"><button type="button" data-page="-1" ${state.page <= 1 ? 'disabled' : ''}>Anterior</button><span>Página ${data.pagination.page} de ${data.pagination.pages} · ${number(data.pagination.total)} registros</span><button type="button" data-page="1" ${state.page >= data.pagination.pages ? 'disabled' : ''}>Siguiente</button></div>`;
   }
   function paintMap() {
     const values = territories().map(r => r[state.metric]);
-    const max = Math.max(0, ...values.filter(v => v !== null));
+    const max = Math.max(0, ...values.filter(v => v !== null).map(Math.abs));
     const unknown = values.some(v => v === null);
     root.querySelectorAll('.map-graphic [data-region]').forEach(node => {
       if (graphicDivision !== state.division) return;
@@ -160,26 +161,27 @@
       if (!r) return;
       node.style.fill = color(r[state.metric],max);
       node.setAttribute('aria-pressed', String(r.id === state.region));
-      node.setAttribute('aria-label', `${r.name}${r.regionName ? ` · ${r.regionName}` : ''}: ${number(r.orders)} pedidos, ${number(r.units)} unidades netas, ${money(r.revenueCents)}, ${percent(r)} de ${metricNames[state.metric]}. Ver pedidos.`);
+      node.setAttribute('aria-label', `${r.name}${r.regionName ? ` · ${r.regionName}` : ''}: ${number(r.orders)} ventas/pedidos, ${number(r.units)} unidades netas, ${money(r.revenueCents)}, ${percent(r)} de ${metricNames[state.metric]}. Ver operaciones.`);
     });
-    const positive = values.filter(v => v > 0), min = Math.min(...positive);
-    $('.map-legend').innerHTML = `<span><i style="background:#44444d"></i>0</span>` + (max ? (min === max ? [max] : [...new Set([min,Math.round((min + max) / 2),max])]).map(v => `<span><i style="background:${color(v,max)}"></i>${esc(valueLabel(v))}</span>`).join('') : '') + (unknown ? '<span><i style="background:repeating-linear-gradient(45deg,#35353d 0 3px,#babac5 3px 5px)"></i>No disponible</span>' : '') + `<span>${esc(metricNames[state.metric])}</span>`;
+    const signed = values.filter(v => v !== null && v !== 0), min = Math.min(0, ...signed), upper = Math.max(0,...signed);
+    $('.map-legend').innerHTML = `<span><i style="background:#44444d"></i>0</span>` + (max ? [...new Set([min,0,upper])].map(v => `<span><i style="background:${color(v,max)}"></i>${esc(valueLabel(v))}</span>`).join('') : '') + (unknown ? '<span><i style="background:repeating-linear-gradient(45deg,#35353d 0 3px,#babac5 3px 5px)"></i>No disponible</span>' : '') + `<span>${esc(metricNames[state.metric])}</span>`;
     if (exploredRegion || state.region) showTooltip(exploredRegion || state.region);
     else $('.map-tooltip').textContent = 'Selecciona una ' + territoryLabel() + '.';
   }
   function render() {
     paintMap();
     const values = territories().map(r => r[state.metric]);
-    const max = Math.max(0, ...values.filter(v => v !== null));
+    const active=territories().filter(r=>r.orders!==0||r.units!==0||r.revenueCents!==0||(r.profitCents??0)!==0);
+    const max = active.length ? Math.max(...active.map(r=>r[state.metric]).filter(v=>v!==null)) : 0;
     const unknown = values.some(v => v === null);
-    const leaders = max > 0 ? territories().filter(r => r[state.metric] === max) : [];
+    const leaders = active.length ? active.filter(r => r[state.metric] === max) : [];
     const top = unknown ? 'No disponible: importes incompletos' : leaders.length > 3 ? `Empate entre ${leaders.length} ${state.division === 'provinces' ? 'provincias' : 'comunidades'}` : leaders.length ? leaders.map(r => r.name).join(' · ') + (leaders.length > 1 ? ' (empate)' : '') : 'Sin ventas en esta métrica';
-    $('.map-cards').innerHTML = [['Pedidos · España identificada',number(data.identified.orders)],['Unidades netas · España identificada',number(data.identified.units)],['Facturación · España identificada',money(data.identified.revenueCents)],[`${state.division === 'provinces' ? 'Provincia' : 'Comunidad'} con mayor ${metricNames[state.metric].toLowerCase()}`,esc(top)]].map(([label,v]) => `<div class="map-card"><span>${label}</span><strong>${v}</strong></div>`).join('');
+    $('.map-cards').innerHTML = [['Ventas/pedidos · España identificada',number(data.identified.orders)],['Unidades netas · España identificada',number(data.identified.units)],['Facturación · España identificada',money(data.identified.revenueCents)],['Beneficio neto · España identificada',money(data.identified.profitCents)],[`${state.division === 'provinces' ? 'Provincia' : 'Comunidad'} con mayor ${metricNames[state.metric].toLowerCase()}`,esc(top)]].map(([label,v]) => `<div class="map-card"><span>${label}</span><strong>${v}</strong></div>`).join('');
     renderTable(); renderDetail();
-    $('.map-exceptions-list').innerHTML = [...data.groups,...(state.division === 'provinces' ? (data.communityOnly || []).filter(r => r.orders > 0) : [])].map(r => `<button type="button" data-select="${r.id}"><strong>${esc(r.name)}</strong><span>${number(r.orders)} pedidos · ${number(r.units)} unidades netas</span><span>${money(r.revenueCents)}</span><span>Ver pedidos →</span></button>`).join('');
+    $('.map-exceptions-list').innerHTML = [...data.groups,...(state.division === 'provinces' ? (data.communityOnly || []).filter(r => r.orders !== 0 || r.units !== 0 || r.revenueCents !== 0 || (r.profitCents??0)!==0) : [])].map(r => `<button type="button" data-select="${r.id}"><strong>${esc(r.name)}</strong><span>${number(r.orders)} ventas/pedidos · ${number(r.units)} unidades netas</span><span>Facturación: ${money(r.revenueCents)} · Beneficio neto: ${money(r.profitCents)}</span><span>Ver operaciones →</span></button>`).join('');
     $('.map-basis').textContent = data.basis;
-    $('.map-reconciliation').textContent = `Total de todos los destinos: ${number(data.total.orders)} pedidos · ${number(data.total.units)} unidades netas · ${money(data.total.revenueCents)}. Unidades brutas: ${number(data.reconciliation.grossUnits)}; devueltas con evidencia: ${number(data.reconciliation.returnedUnits)}. Finanzas del mismo período (incluye ajustes de otros pedidos y ventas antiguas sin fecha de cobro): ${money(data.reconciliation.financePeriod.revenueCents)}; diferencia de alcance: ${money(data.reconciliation.revenueDifferenceCents)}. Fechas en Europe/Madrid.`;
-    $('.map-exclusions').textContent = `Excluidos del conjunto: ${number(data.exclusions.refunded)} pedidos totalmente reembolsados y ${number(data.exclusions.undated)} sin fecha de cobro acreditada. Los pedidos antiguos sin fecha no se atribuyen a su fecha de creación.`;
+    $('.map-reconciliation').textContent = `Total de todos los destinos: ${number(data.total.orders)} ventas/pedidos · ${number(data.total.units)} unidades netas · ${money(data.total.revenueCents)} de facturación · ${money(data.total.profitCents)} de beneficio neto. Unidades brutas: ${number(data.reconciliation.grossUnits)}; devueltas con evidencia: ${number(data.reconciliation.returnedUnits)}. Finanzas del mismo período y orígenes: ${money(data.reconciliation.financePeriod.revenueCents)}; diferencia de facturación: ${money(data.reconciliation.revenueDifferenceCents)}. Fechas en Europe/Madrid.`;
+    $('.map-exclusions').textContent = `El número de ventas/pedidos registra operaciones, no prendas; las devoluciones conservan su movimiento original. Los importes y unidades reflejan anulaciones, devoluciones y exclusiones según las mismas reglas que Finanzas.`;
     $('.map-warnings').innerHTML = data.warnings.map(w => `<li>${esc(w)}</li>`).join('');
   }
   async function request() {
@@ -238,13 +240,14 @@
     if (target.dataset.sort && data) { direction = sort === target.dataset.sort ? -direction : target.dataset.sort === 'name' ? 1 : -1; sort = target.dataset.sort; renderTable(); }
     if (target.dataset.page) { state.page += Number(target.dataset.page); saveHash(); request(); }
     if (target.dataset.order) window.CRONOX_ADMIN_ORDERS?.open(Number(target.dataset.order));
+    if(target.dataset.point) window.CRONOX_ADMIN_NAV?.navigate('#section-sale-points?'+new URLSearchParams({point:target.dataset.point,from:state.from,to:state.to}));
   });
   window.CRONOX_MAP = { load() {
     const params = new URLSearchParams(location.hash.split('?')[1] || '');
     for (const key of ['from','to']) if (/^\d{4}-\d{2}-\d{2}$/.test(params.get(key) || '')) state[key] = params.get(key);
     if (metricNames[params.get('metric')]) state.metric = params.get('metric');
     if (['today','month','year','all','custom'].includes(params.get('preset'))) state.preset = params.get('preset');
-    const division = params.get('division') === 'provinces' ? 'provinces' : 'communities';
+    const division = params.get('division') === 'communities' ? 'communities' : 'provinces';
     if (state.division !== division) exploredRegion = '';
     state.division = division;
     const id = params.get('region') || '';
@@ -252,5 +255,9 @@
     state.page = Math.max(1, Math.min(1000000, Math.floor(Number(params.get('page')) || 1)));
     syncInputs(); request();
   }};
-  syncInputs();
+  const refreshChanged=()=>{if(!root.closest('section')?.hidden)request();};
+  window.addEventListener('cronox:sale-points-changed',refreshChanged);
+  window.addEventListener('storage',e=>{if(e.key==='cronox:statistics-revision')refreshChanged();});
+  document.addEventListener('visibilitychange',()=>{if(!document.hidden)refreshChanged();});
+  syncInputs(); syncDivision();
 })();

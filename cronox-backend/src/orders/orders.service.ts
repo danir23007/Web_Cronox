@@ -45,9 +45,10 @@ import { normalizeEmail } from '../common/email';
 import { admitBankReservation } from './bank-transfer-policy';
 import { variantSizeLabel } from '../products/product-size-system';
 import { assertStripeWebhookFence } from '../payments/stripe-webhook-fence';
+import { CHECKOUT_PRESENCE_MS, CHECKOUT_DEPARTURE_GRACE_MS, CHECKOUT_PAYMENT_WINDOW_MS } from './checkout-reservation-policy';
 
 const DEFAULT_CURRENCY = 'EUR';
-const CHECKOUT_SNAPSHOT_TTL_MS = 30 * 60 * 1000;
+const CHECKOUT_SNAPSHOT_TTL_MS = CHECKOUT_PRESENCE_MS;
 const CONFIRMATION_EMAIL_CLAIM_STALE_MS = 10 * 60 * 1000;
 const ACTIVE_CHECKOUT_SNAPSHOT_STATUSES = [
   'RESERVED',
@@ -110,6 +111,8 @@ type CheckoutSnapshotResponse = {
   stripeAccountId: string | null;
   status: string;
   expiresAt: Date;
+  reservationPhase: string;
+  paymentStartedAt: Date | null;
   reused: boolean;
   expired: boolean;
   replacementRequired: boolean;
@@ -553,7 +556,7 @@ export class OrdersService {
       shippingAddress?: Record<string, unknown>;
       billingAddress?: Record<string, unknown>;
     },
-    options: { cart?: CartSnapshot | null } = {},
+    options: { cart?: CartSnapshot | null; tabId?: string } = {},
   ): Promise<CheckoutSnapshotResponse> {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
@@ -575,7 +578,7 @@ export class OrdersService {
       shippingAddress?: Record<string, unknown>;
       billingAddress?: Record<string, unknown>;
     },
-    options: { cart?: CartSnapshot | null } = {},
+    options: { cart?: CartSnapshot | null; presenceOnly?: boolean; tabId?: string; enterTabId?: string; transaction?: Prisma.TransactionClient } = {},
   ): Promise<CheckoutSnapshotResponse> {
     params = {
       ...params,
@@ -585,7 +588,14 @@ export class OrdersService {
       billingAddress: this.normalizeApplicationAddress(params.billingAddress),
     };
     const resolvedOwner = await this.resolveCheckoutOwner(owner);
-    this.assertCheckoutOwner(resolvedOwner);
+    if (options.presenceOnly && resolvedOwner.userId == null) resolvedOwner.customerEmail = '';
+    this.assertCheckoutOwner(resolvedOwner, options.presenceOnly);
+    // Payment uses its immutable snapshot, including after another tab edits
+    // or empties the cart. Preparation/retries must never replace that attempt.
+    if (options.cart) {
+      const protectedSnapshot = await this.findActiveCheckoutSnapshot(resolvedOwner, options.cart.id, options.transaction);
+      if (protectedSnapshot?.paymentStartedAt) return this.buildCheckoutSnapshotResponse(protectedSnapshot, new Date(), true);
+    }
     const preview = resolvedOwner.userId != null
       ? await this.getCheckoutPreview(
           resolvedOwner.userId,
@@ -629,9 +639,11 @@ export class OrdersService {
     const existing = await this.findActiveCheckoutSnapshot(
       resolvedOwner,
       preview.cart.id,
+      options.transaction,
     );
 
     if (existing) {
+      if (options.presenceOnly) return this.buildCheckoutSnapshotResponse(existing, new Date(), true);
       return this.reuseActiveCheckoutSnapshot(
         existing,
         requestFingerprint,
@@ -640,8 +652,17 @@ export class OrdersService {
     }
 
     try {
-      const snapshot: CheckoutSnapshotResponse | CheckoutSnapshotWithItems =
-        await this.prisma.$transaction(async (tx) => {
+      const create = async (tx: Prisma.TransactionClient): Promise<CheckoutSnapshotResponse | CheckoutSnapshotWithItems> => {
+        if (options.enterTabId) {
+          // Serialize first admission with a departure that arrives before the
+          // initial HTTP response. A departed page can never create an orphan hold.
+          await tx.$executeRaw`SELECT pg_advisory_xact_lock(192733, ${preview.cart.id}::integer)`;
+          const key = { cartId_tabId: { cartId: preview.cart.id, tabId: options.enterTabId } };
+          const lease = await tx.checkoutPresence.findUnique({ where: key });
+          if (lease?.departedAt) throw new ConflictException('CHECKOUT_PRESENCE_REQUIRED');
+          const expiresAt = new Date(Date.now() + CHECKOUT_PRESENCE_MS);
+          await tx.checkoutPresence.upsert({ where: key, create: { cartId: preview.cart.id, tabId: options.enterTabId, expiresAt }, update: { expiresAt } });
+        }
         const currentCart = await tx.cart.findUnique({
           where: { id: preview.cart.id },
           select: { userId: true, anonymousId: true, updatedAt: true },
@@ -686,6 +707,13 @@ export class OrdersService {
           }
         }
 
+        let presenceExpiry = new Date(Date.now() + CHECKOUT_SNAPSHOT_TTL_MS);
+        if (options.tabId) {
+          const lease = await tx.checkoutPresence.findUnique({ where: { cartId_tabId: { cartId: preview.cart.id, tabId: options.tabId } } });
+          if (!lease || lease.departedAt || lease.expiresAt <= new Date()) throw new ConflictException('CHECKOUT_PRESENCE_REQUIRED');
+          const latest = await tx.checkoutPresence.aggregate({ where: { cartId: preview.cart.id }, _max: { expiresAt: true } });
+          presenceExpiry = latest._max.expiresAt ?? lease.expiresAt;
+        }
         const costProducts = await tx.product.findMany({
           where: { id: { in: preview.computation.lineItems.map(item => item.productId) } },
           select: { id: true, name: true, imageUrl: true, privateCost: true },
@@ -717,7 +745,7 @@ export class OrdersService {
             totalCents: preview.totals.totalCents,
             shippingAddr: this.toInputJsonValue(params.shippingAddress),
             billingAddr: this.toInputJsonValue(params.billingAddress),
-            expiresAt: new Date(Date.now() + CHECKOUT_SNAPSHOT_TTL_MS),
+            expiresAt: presenceExpiry,
             items: {
               create: preview.computation.lineItems.map((item) => ({
                 productId: item.productId,
@@ -743,13 +771,15 @@ export class OrdersService {
           preview.computation.lineItems,
         );
         return created;
-        });
+      };
+      const snapshot = options.transaction ? await create(options.transaction) : await this.prisma.$transaction(create);
 
       if ('checkoutSnapshotId' in snapshot) {
         return snapshot;
       }
       return this.buildCheckoutSnapshotResponse(snapshot, new Date(), false);
     } catch (error) {
+      if (options.transaction) throw error;
       if (!this.isUniqueConstraintError(error)) {
         throw error;
       }
@@ -768,6 +798,7 @@ export class OrdersService {
   }
   async claimCheckoutPaymentIntentCreation(
     checkoutSnapshotId: string,
+    request?: Prisma.InputJsonValue,
   ): Promise<boolean> {
     const staleBefore = new Date(
       Date.now() - PAYMENT_INTENT_CREATION_CLAIM_STALE_MS,
@@ -776,18 +807,24 @@ export class OrdersService {
       where: {
         id: checkoutSnapshotId,
         stripePaymentIntentId: null,
+        reservationPhase: 'PRESENCE',
         expiresAt: { gt: new Date() },
         OR: [
           { status: 'RESERVED' },
           {
             status: 'PAYMENT_INTENT_CREATING',
-            updatedAt: { lt: staleBefore },
+            paymentRecoveryClaimedAt: { lt: staleBefore },
           },
         ],
       },
-      data: { status: 'PAYMENT_INTENT_CREATING' },
+      data: { status: 'PAYMENT_INTENT_CREATING', paymentRecoveryClaimedAt: new Date(), ...(request ? { stripeCreateRequest: request } : {}) },
     });
     return result.count === 1;
+  }
+
+  async getCheckoutCreationRequest(id: string) {
+    const row = await this.prisma.checkoutSnapshot.findUnique({ where: { id }, select: { stripeCreateRequest: true } });
+    return row?.stripeCreateRequest;
   }
 
   async bindStripePaymentIntent(
@@ -801,6 +838,7 @@ export class OrdersService {
         stripePaymentIntentId: null,
         status: 'PAYMENT_INTENT_CREATING',
         expiresAt: { gt: new Date() },
+        reservationPhase: 'PRESENCE',
       },
       data: {
         stripePaymentIntentId: paymentIntentId,
@@ -874,7 +912,9 @@ export class OrdersService {
         userId,
         cartId,
         orderId: null,
-        status: { in: ['RESERVED', 'PAYMENT_BOUND'] },
+        paymentStartedAt: null,
+        reservationPhase: 'PRESENCE',
+        status: { in: ['RESERVED', 'PAYMENT_BOUND', 'REPLACEMENT_PENDING'] },
       },
       data: { status: 'REPLACEMENT_PENDING' },
     });
@@ -892,7 +932,9 @@ export class OrdersService {
         ...this.snapshotOwnerWhere(owner),
         cartId,
         orderId: null,
-        status: { in: ['RESERVED', 'PAYMENT_BOUND'] },
+        paymentStartedAt: null,
+        reservationPhase: 'PRESENCE',
+        status: { in: ['RESERVED', 'PAYMENT_BOUND', 'REPLACEMENT_PENDING'] },
       },
       data: { status: 'REPLACEMENT_PENDING' },
     });
@@ -913,6 +955,8 @@ export class OrdersService {
         const claimed = await tx.checkoutSnapshot.updateMany({
           where: {
             id: input.checkoutSnapshotId,
+            paymentStartedAt: null,
+            reservationPhase: 'PRESENCE',
             userId: input.userId,
             anonymousId: input.anonymousId,
             cartId: input.cartId,
@@ -963,6 +1007,7 @@ export class OrdersService {
   async finalizeUnavailableCheckoutPaymentRecovery(
     input: CheckoutPaymentRecoveryInput,
     token: string,
+    replacement?: { owner: CheckoutOwner; tabId: string; params: { shippingMethod: ShippingMethodCode; promoCode?: string; shippingAddress?: Record<string, unknown> } },
   ): Promise<{ released: boolean; reason?: string }> {
     try {
       return await this.prisma.$transaction(async (tx) => {
@@ -998,6 +1043,12 @@ export class OrdersService {
         if (!snapshot) {
           throw new CheckoutPaymentRecoveryBlockedError('SNAPSHOT_NOT_FOUND');
         }
+        if (replacement) {
+          await tx.$queryRaw`SELECT id FROM "Cart" WHERE id = ${snapshot.cartId} FOR UPDATE`;
+          const cart = await tx.cart.findUniqueOrThrow({ where: { id: snapshot.cartId }, include: cartInclude });
+          const ids = [...new Set([...snapshot.items.map(i => i.variantId), ...cart.items.map(i => i.variantId)])].sort((a, b) => a - b);
+          if (ids.length) await tx.$queryRaw(Prisma.sql`SELECT id FROM "ProductVariant" WHERE id IN (${Prisma.join(ids)}) ORDER BY id FOR UPDATE`);
+        }
         await this.releaseStockReservationsForCheckoutSnapshot(tx, snapshot);
         await tx.checkoutSnapshot.update({
           where: { id: snapshot.id },
@@ -1007,6 +1058,10 @@ export class OrdersService {
             paymentRecoveryClaimedAt: null,
           },
         });
+        if (replacement) {
+          const cart = await tx.cart.findUniqueOrThrow({ where: { id: snapshot.cartId }, include: cartInclude });
+          await this.createCheckoutSnapshotForOwner(replacement.owner, replacement.params, { cart, tabId: replacement.tabId, transaction: tx });
+        }
         return { released: true };
       });
     } catch (error) {
@@ -1026,7 +1081,163 @@ export class OrdersService {
     return snapshot;
   }
 
-  async reserveBankTransfer(checkoutSnapshotId: string, paymentIntentId: string, network = 'internal') {
+  async getActiveReservation(owner: CheckoutOwner, cartId: number) {
+    return this.findActiveCheckoutSnapshot(owner, cartId);
+  }
+
+  async replaceCheckoutReservation(owner: CheckoutOwner, id: string, tabId?: string, params?: {
+    shippingMethod: ShippingMethodCode; promoCode?: string; shippingAddress?: Record<string, unknown>; billingAddress?: Record<string, unknown>;
+  }) {
+    // Provider cancellation is verified by the caller BEFORE this transaction.
+    // Release + acquire commit together: editing an address/quantity never puts
+    // already-held units briefly on sale to another customer.
+    return this.prisma.$transaction(async tx => {
+      const locked = await tx.checkoutSnapshot.updateMany({ where: { id, ...this.snapshotOwnerWhere(owner),
+        status: 'REPLACEMENT_PENDING', reservationPhase: 'PRESENCE', paymentStartedAt: null, expiresAt: { gt: new Date() },
+      }, data: { updatedAt: new Date() } });
+      if (!locked.count) throw new ConflictException('CHECKOUT_REPLACEMENT_IN_PROGRESS');
+      const snapshot = await tx.checkoutSnapshot.findUniqueOrThrow({ where: { id }, include: { items: true } });
+      await tx.$queryRaw`SELECT id FROM "Cart" WHERE id = ${snapshot.cartId} FOR UPDATE`;
+      const cart = await tx.cart.findUniqueOrThrow({ where: { id: snapshot.cartId }, include: cartInclude });
+      if (!this.cartBelongsToOwner(cart, owner)) throw new ForbiddenException('CART_ACCESS_DENIED');
+      const ids = [...new Set([...snapshot.items.map(i => i.variantId), ...cart.items.map(i => i.variantId)])].sort((a, b) => a - b);
+      if (ids.length) await tx.$queryRaw(Prisma.sql`SELECT id FROM "ProductVariant" WHERE id IN (${Prisma.join(ids)}) ORDER BY id FOR UPDATE`);
+      await this.releaseStockReservationsForCheckoutSnapshot(tx, snapshot);
+      await tx.checkoutSnapshot.update({ where: { id }, data: { status: 'REPLACED' } });
+      const refreshed = await tx.cart.findUniqueOrThrow({ where: { id: snapshot.cartId }, include: cartInclude });
+      if (!refreshed.items.length) return null;
+      return this.createCheckoutSnapshotForOwner(owner, params ?? { shippingMethod: (snapshot.shippingMethodCode || 'STANDARD') as ShippingMethodCode },
+        { cart: refreshed, tabId, presenceOnly: !params, transaction: tx });
+    }, { timeout: 15000 });
+  }
+
+  async reloadCheckoutCart(owner: CheckoutOwner, cartId: number) {
+    const cart = await this.prisma.cart.findUnique({ where: { id: cartId }, include: cartInclude });
+    if (!cart || !this.cartBelongsToOwner(cart, owner)) throw new ForbiddenException('CART_ACCESS_DENIED');
+    return cart;
+  }
+
+  async requiresExplicitReservationRestart(owner: CheckoutOwner, cartId: number) {
+    const latest = await this.prisma.checkoutSnapshot.findFirst({ where: { ...this.snapshotOwnerWhere(owner), cartId },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], select: { status: true, paymentStartedAt: true } });
+    return Boolean(latest?.paymentStartedAt && ['EXPIRED', 'PAYMENT_CANCELLED', 'PAYMENT_CREATION_FAILED'].includes(latest.status));
+  }
+
+  async reservationResponse(snapshot: CheckoutSnapshotWithItems, client: Prisma.TransactionClient = this.prisma) {
+    const visuals = snapshot.paymentStartedAt ? await client.checkoutItemFinancial.findMany({
+      where: { itemId: { in: snapshot.items.map(item => item.id) } }, select: { itemId: true, imageUrl: true },
+    }) : [];
+    return { ...this.buildCheckoutSnapshotResponse(snapshot, new Date(), true),
+      serverNow: new Date(),
+      // Only the authorized owner receives these immutable payment details.
+      checkout: snapshot.paymentStartedAt ? {
+        shippingAddress: snapshot.shippingAddr, customerEmail: snapshot.customerEmail,
+        promoCode: snapshot.promoCodeCode,
+        items: snapshot.items.map(item => ({ variantId: item.variantId, qty: item.quantity,
+          priceAtAdd: item.unitPriceCents, variant: { id: item.variantId, size: '',
+            product: { id: item.productId, name: item.title, price: item.unitPriceCents,
+              imageUrl: visuals.find(visual => visual.itemId === item.id)?.imageUrl ?? null } } })),
+      } : null,
+    };
+  }
+
+  async updateCheckoutPresence(owner: CheckoutOwner, cartId: number, tabId: string, action: 'enter' | 'heartbeat' | 'leave' | 'depart') {
+    return this.prisma.$transaction(async tx => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(192733, ${cartId}::integer)`;
+      const ref = await tx.checkoutSnapshot.findFirst({ where: {
+        ...this.snapshotOwnerWhere(owner), cartId,
+        status: { in: ACTIVE_CHECKOUT_SNAPSHOT_STATUSES },
+        OR: [{ orderId: null }, { status: 'BANK_TRANSFER_PENDING' }],
+      }, select: { id: true } });
+      if (!ref) {
+        if (action === 'leave' || action === 'depart') {
+          const now = new Date();
+          await tx.checkoutPresence.upsert({ where: { cartId_tabId: { cartId, tabId } },
+            create: { cartId, tabId, expiresAt: now, departedAt: now }, update: { expiresAt: now, departedAt: now } });
+          return { checkoutSnapshotId: '', paymentStartedAt: null, expired: true, status: 'NOT_RESERVED' };
+        }
+        throw new ConflictException('CHECKOUT_RESERVATION_EXPIRED');
+      }
+      await tx.checkoutSnapshot.update({ where: { id: ref.id }, data: { updatedAt: new Date() } });
+      const snapshot = await tx.checkoutSnapshot.findUniqueOrThrow({ where: { id: ref.id }, include: { items: true } });
+      if (!ACTIVE_CHECKOUT_SNAPSHOT_STATUSES.includes(snapshot.status) || snapshot.reservationPhase === 'RECONCILING') throw new ConflictException('CHECKOUT_RESERVATION_RECONCILING');
+      // Departures and heartbeats cannot touch a protected deadline.
+      if (snapshot.paymentStartedAt) return this.reservationResponse(snapshot, tx);
+      const now = new Date();
+      const key = { cartId_tabId: { cartId, tabId } };
+      const lease = await tx.checkoutPresence.findUnique({ where: key });
+      if (action === 'leave' || action === 'depart') {
+        if (!lease) await tx.checkoutPresence.create({ data: { cartId, tabId, expiresAt: now, departedAt: now } });
+        if (lease && !lease.departedAt) await tx.checkoutPresence.update({ where: key, data: {
+          departedAt: now,
+          expiresAt: action === 'leave' ? now : new Date(Math.min(lease.expiresAt.getTime(), now.getTime() + CHECKOUT_DEPARTURE_GRACE_MS)),
+        } });
+      } else {
+        if (snapshot.expiresAt <= now || lease?.departedAt || (action === 'heartbeat' && (!lease || lease.expiresAt <= now))) throw new ConflictException('CHECKOUT_RESERVATION_EXPIRED');
+        const expiresAt = new Date(now.getTime() + CHECKOUT_PRESENCE_MS);
+        await tx.checkoutPresence.upsert({ where: key, create: { cartId, tabId, expiresAt }, update: { expiresAt } });
+      }
+      const latest = await tx.checkoutPresence.aggregate({ where: { cartId, expiresAt: { gt: now } }, _max: { expiresAt: true } });
+      const updated = await tx.checkoutSnapshot.update({ where: { id: snapshot.id }, data: { expiresAt: latest._max.expiresAt ?? now }, include: { items: true } });
+      return this.reservationResponse(updated, tx);
+    });
+  }
+
+  async assertCheckoutPreparationPresence(owner: CheckoutOwner, cartId: number, snapshotId: string, tabId: string) {
+    const snapshot = await this.prisma.checkoutSnapshot.findFirst({ where: {
+      id: snapshotId, cartId, ...this.snapshotOwnerWhere(owner), status: { in: ACTIVE_CHECKOUT_SNAPSHOT_STATUSES },
+    } });
+    if (!snapshot || snapshot.reservationPhase === 'RECONCILING' || snapshot.expiresAt <= new Date()) throw new ConflictException('CHECKOUT_RESERVATION_EXPIRED');
+    if (snapshot.paymentStartedAt) return;
+    const lease = await this.prisma.checkoutPresence.findUnique({ where: { cartId_tabId: { cartId, tabId } } });
+    if (!lease || lease.departedAt || lease.expiresAt <= new Date()) throw new ConflictException('CHECKOUT_PRESENCE_REQUIRED');
+  }
+
+  async startCheckoutPayment(owner: CheckoutOwner, cartId: number, snapshotId: string, paymentIntentId: string, tabId: string) {
+    return this.prisma.$transaction(async tx => {
+      const locked = await tx.checkoutSnapshot.updateMany({ where: { id: snapshotId, cartId, ...this.snapshotOwnerWhere(owner) }, data: { updatedAt: new Date() } });
+      if (!locked.count) throw new ForbiddenException('CHECKOUT_ACCESS_DENIED');
+      const snapshot = await tx.checkoutSnapshot.findUniqueOrThrow({ where: { id: snapshotId }, include: { items: true } });
+      const now = new Date();
+      if (snapshot.stripePaymentIntentId !== paymentIntentId || snapshot.reservationPhase === 'RECONCILING' || !['PAYMENT_BOUND', 'BANK_TRANSFER_PENDING'].includes(snapshot.status) || snapshot.expiresAt <= now) throw new ConflictException('CHECKOUT_RESERVATION_EXPIRED');
+      if (snapshot.paymentStartedAt) return this.reservationResponse(snapshot, tx);
+      const lease = await tx.checkoutPresence.findUnique({ where: { cartId_tabId: { cartId, tabId } } });
+      if (!lease || lease.departedAt || lease.expiresAt <= now) throw new ConflictException('CHECKOUT_PRESENCE_REQUIRED');
+      // Lock the cart against concurrent mutations before freezing its revision.
+      await tx.$queryRaw`SELECT id FROM "Cart" WHERE id = ${cartId} FOR UPDATE`;
+      const cart = await tx.cart.findUnique({ where: { id: cartId } });
+      if (!cart || !this.cartBelongsToOwner(cart, owner) || cart.updatedAt.getTime() !== snapshot.cartUpdatedAt.getTime()) throw new ConflictException('CART_CHANGED_DURING_CHECKOUT');
+      this.assertCheckoutOwner({ ...owner, customerEmail: snapshot.customerEmail });
+      const address = snapshot.shippingAddr as Record<string, unknown> | null;
+      if (!address?.firstName || !address.lastName || !address.line1 || !address.city || !address.country || !/^[0-9]{5}$/.test(String(address.postalCode || ''))) throw new BadRequestException('CHECKOUT_SHIPPING_ADDRESS_REQUIRED');
+      const protectedSnapshot = await tx.checkoutSnapshot.update({ where: { id: snapshot.id }, data: {
+        reservationPhase: 'PROTECTED', paymentStartedAt: now, expiresAt: new Date(now.getTime() + CHECKOUT_PAYMENT_WINDOW_MS),
+      }, include: { items: true } });
+      return this.reservationResponse(protectedSnapshot, tx);
+    });
+  }
+
+  async claimCheckoutExpiry(id: string) {
+    return this.prisma.$transaction(async tx => {
+      const claimed = await tx.checkoutSnapshot.updateMany({ where: {
+        id, expiresAt: { lte: new Date() }, status: { in: EXPIRABLE_CHECKOUT_SNAPSHOT_STATUSES },
+        OR: [{ orderId: null }, { status: 'BANK_TRANSFER_PENDING' }],
+      }, data: { reservationPhase: 'RECONCILING' } });
+      return claimed.count ? tx.checkoutSnapshot.findUnique({ where: { id }, include: { items: true } }) : null;
+    });
+  }
+
+  async bindReconciledCheckoutIntent(snapshotId: string, paymentIntentId: string, stripeAccountId: string) {
+    const bound = await this.prisma.checkoutSnapshot.updateMany({ where: {
+      id: snapshotId, reservationPhase: 'RECONCILING', stripePaymentIntentId: null, status: 'PAYMENT_INTENT_CREATING',
+    }, data: { stripePaymentIntentId: paymentIntentId, stripeAccountId, status: 'PAYMENT_BOUND' } });
+    if (!bound.count) {
+      const current = await this.prisma.checkoutSnapshot.findUnique({ where: { id: snapshotId } });
+      if (current?.stripePaymentIntentId !== paymentIntentId) throw new ConflictException('CHECKOUT_RECONCILIATION_CONFLICT');
+    }
+  }
+
+  async reserveBankTransfer(checkoutSnapshotId: string, paymentIntentId: string, network = 'internal', tabId?: string) {
     return this.prisma.$transaction(async tx => {
       await tx.checkoutSnapshot.update({ where: { id: checkoutSnapshotId }, data: { updatedAt: new Date() } });
       const snapshot = await tx.checkoutSnapshot.findUnique({ where: { id: checkoutSnapshotId }, include: { items: true } });
@@ -1034,6 +1245,15 @@ export class OrdersService {
       if (snapshot.status === 'BANK_TRANSFER_PENDING') return snapshot;
       if (snapshot.status !== 'PAYMENT_BOUND' || snapshot.orderId || snapshot.expiresAt <= new Date()) throw new ConflictException('CHECKOUT_NOT_AVAILABLE_FOR_BANK_TRANSFER');
       const admission = await admitBankReservation(tx, snapshot, network);
+      const now = new Date();
+      if (snapshot.reservationPhase === 'RECONCILING') throw new ConflictException('CHECKOUT_RESERVATION_RECONCILING');
+      if (!snapshot.paymentStartedAt) {
+        const lease = tabId ? await tx.checkoutPresence.findUnique({ where: { cartId_tabId: { cartId: snapshot.cartId, tabId } } }) : null;
+        if (!lease || lease.departedAt || lease.expiresAt <= now) throw new ConflictException('CHECKOUT_PRESENCE_REQUIRED');
+        await tx.$queryRaw`SELECT id FROM "Cart" WHERE id = ${snapshot.cartId} FOR UPDATE`;
+        const cart = await tx.cart.findUnique({ where: { id: snapshot.cartId } });
+        if (!cart || cart.updatedAt.getTime() !== snapshot.cartUpdatedAt.getTime()) throw new ConflictException('CART_CHANGED_DURING_CHECKOUT');
+      }
       // Pending orders retain RESERVED inventory. No history, promo redemption,
       // paidAt, account creation or confirmation email occurs here.
       const order = await tx.order.create({ data: {
@@ -1057,7 +1277,11 @@ export class OrdersService {
       return tx.checkoutSnapshot.update({ where: { id: snapshot.id }, data: {
         status: 'BANK_TRANSFER_PENDING', orderId: order.id,
         ...admission,
-        expiresAt: new Date(Date.now() + 72 * 60 * 60 * 1000),
+        // Bank confirmation is preceded by the same 360-second transition.
+        // Never renew it when retrieving/retrying bank instructions.
+        reservationPhase: 'PROTECTED',
+        paymentStartedAt: snapshot.paymentStartedAt ?? now,
+        expiresAt: snapshot.paymentStartedAt ? snapshot.expiresAt : new Date(now.getTime() + CHECKOUT_PAYMENT_WINDOW_MS),
       }, include: { items: true } });
     });
   }
@@ -1128,12 +1352,21 @@ export class OrdersService {
       where: {
         OR: [{ orderId: null }, { status: 'BANK_TRANSFER_PENDING' }],
         expiresAt: { lte: new Date() },
+        AND: [{ OR: [{ reservationRetryAt: null }, { reservationRetryAt: { lte: new Date() } }] }],
         status: { in: EXPIRABLE_CHECKOUT_SNAPSHOT_STATUSES },
       },
       orderBy: { expiresAt: 'asc' },
       take: Math.max(1, Math.min(limit, 100)),
       select: { id: true, stripePaymentIntentId: true },
     });
+  }
+
+  async deferCheckoutReconciliation(id: string) {
+    await this.prisma.checkoutSnapshot.updateMany({ where: { id, reservationPhase: 'RECONCILING' }, data: { reservationRetryAt: new Date(Date.now() + 5_000) } });
+  }
+
+  async pruneCheckoutPresence() {
+    await this.prisma.checkoutPresence.deleteMany({ where: { expiresAt: { lt: new Date(Date.now() - 86400000) } } });
   }
 
   /**
@@ -1191,9 +1424,9 @@ export class OrdersService {
         ) {
           throw new ConflictException('CHECKOUT_SNAPSHOT_ALREADY_RELEASED');
         }
-        if (input.occurredAt > snapshot.expiresAt && snapshot.status !== 'BANK_TRANSFER_PENDING') {
-          throw new BadRequestException('STRIPE_PAYMENT_AFTER_CHECKOUT_EXPIRY');
-        }
+        // A deadline stops new attempts, not verified fulfillment. Units stay
+        // reserved until provider cancellation is confirmed; success winning
+        // that race (including delayed processing) consumes them exactly once.
 
         const existing = await tx.order.findUnique({
           where: { providerRef: input.paymentIntentId },
@@ -2056,8 +2289,9 @@ export class OrdersService {
   private async findActiveCheckoutSnapshot(
     owner: CheckoutOwner,
     cartId: number,
+    client: Pick<Prisma.TransactionClient, 'checkoutSnapshot'> = this.prisma,
   ): Promise<CheckoutSnapshotWithItems | null> {
-    return this.prisma.checkoutSnapshot.findFirst({
+    return client.checkoutSnapshot.findFirst({
       where: {
         ...this.snapshotOwnerWhere(owner),
         cartId,
@@ -2173,6 +2407,8 @@ export class OrdersService {
     requestFingerprint: string,
     now: Date,
   ): CheckoutSnapshotResponse {
+    if (snapshot.reservationPhase === 'RECONCILING') throw new ConflictException('CHECKOUT_RESERVATION_RECONCILING');
+    if (snapshot.paymentStartedAt) return this.buildCheckoutSnapshotResponse(snapshot, now, true);
     const replacementRequired =
       snapshot.status === 'REPLACEMENT_PENDING' ||
       snapshot.expiresAt <= now ||
@@ -2234,6 +2470,8 @@ export class OrdersService {
       stripeAccountId: snapshot.stripeAccountId,
       status: snapshot.status,
       expiresAt: snapshot.expiresAt,
+      reservationPhase: snapshot.reservationPhase,
+      paymentStartedAt: snapshot.paymentStartedAt,
       reused,
       expired: snapshot.expiresAt <= now,
       replacementRequired,
@@ -2257,6 +2495,7 @@ export class OrdersService {
           : `anonymous:${owner.anonymousId}`,
       cartId: preview.cart.id,
       cartUpdatedAt: preview.cart.updatedAt.toISOString(),
+      customerEmail: owner.customerEmail || '',
       shippingMethod: preview.shippingMethod.code,
       promoCode:
         preview.appliedPromo?.valid && preview.appliedPromo.code
@@ -2289,14 +2528,14 @@ export class OrdersService {
     } as ResolvedCheckoutOwner;
   }
 
-  private assertCheckoutOwner(owner: CheckoutOwner): void {
+  private assertCheckoutOwner(owner: CheckoutOwner, presenceOnly = false): void {
     const hasUser = Number.isSafeInteger(owner.userId) && Number(owner.userId) > 0;
     const hasAnonymous =
       typeof owner.anonymousId === 'string' && owner.anonymousId.length >= 16;
     const hasEmail =
       typeof owner.customerEmail === 'string' &&
       /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(owner.customerEmail.trim());
-    if (hasUser === hasAnonymous || !hasEmail) {
+    if (hasUser === hasAnonymous || (!presenceOnly && !hasEmail)) {
       throw new ForbiddenException('INVALID_CHECKOUT_OWNER');
     }
   }
@@ -2369,7 +2608,7 @@ export class OrdersService {
       );
     }
 
-    for (const [variantId, quantity] of quantities) {
+    for (const [variantId, quantity] of [...quantities].sort(([a], [b]) => a - b)) {
       if (!Number.isInteger(quantity) || quantity <= 0) {
         throw new BadRequestException('INVALID_CART_ITEM_QUANTITY');
       }
@@ -2379,12 +2618,13 @@ export class OrdersService {
           id: variantId,
           isActive: true,
           product: { is: { isActive: true } },
-          ...(this.allowNegativeStock ? {} : { stockQty: { gte: quantity } }),
+          stockQty: { gte: quantity },
         },
         data: { stockQty: { decrement: quantity } },
       });
       if (updated.count !== 1) {
-        throw new ConflictException('INSUFFICIENT_STOCK_AT_CHECKOUT');
+        const item = lineItems.find(line => line.variantId === variantId);
+        throw new ConflictException({ code: 'INSUFFICIENT_STOCK_AT_CHECKOUT', message: 'No queda stock suficiente para reservar todos los artículos.', items: [{ variantId, productId: item?.productId, title: item?.title, requested: quantity }] });
       }
 
       await tx.checkoutStockReservation.create({
@@ -2935,6 +3175,14 @@ export class OrdersService {
 
     const currencies = new Set(cart.items.map(item => (item.variant?.product?.currency ?? DEFAULT_CURRENCY).trim().toUpperCase()));
     if (currencies.size > 1) throw new BadRequestException('MIXED_CART_CURRENCIES');
+
+    const unavailable = cart.items.filter(item => item.variant && item.qty > item.variant.stockQty + (reserved.get(item.variantId) ?? 0));
+    if (unavailable.length) throw new ConflictException({ code: 'INSUFFICIENT_STOCK_AT_CHECKOUT',
+      message: 'No queda stock suficiente para reservar todos los artículos.',
+      items: unavailable.map(item => ({ productId: item.variant.productId, variantId: item.variantId,
+        title: `${item.variant.product.name} (${variantSizeLabel(item.variant.size)})`, requested: item.qty,
+        available: item.variant.stockQty + (reserved.get(item.variantId) ?? 0) })),
+    });
 
     for (const item of cart.items) {
       const variant = item.variant;

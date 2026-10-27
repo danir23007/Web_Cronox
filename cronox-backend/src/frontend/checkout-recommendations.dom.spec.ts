@@ -180,6 +180,7 @@ describe('checkout recommendation production DOM path', () => {
     };
 
     browserWindow.eval(checkoutLifecycle);
+    require('../../test/checkout-presence-fixture.cjs').install(browserWindow);
     browserWindow.eval(checkoutScript);
 
     await waitFor(() => {

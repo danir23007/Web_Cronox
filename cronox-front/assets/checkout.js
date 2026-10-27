@@ -98,6 +98,90 @@
       }
     : {};
   const userEditedShippingFields = new Set();
+  let checkoutReservation = null;
+  const reservationStatus = document.getElementById('checkout-reservation-status');
+  const reservationRetry = document.getElementById('checkout-reservation-retry');
+  const reservationRequest = async (path, body, keepalive = false) => {
+    const response = await fetch(`${API_BASE}/api/checkout/${path}`, {
+      method: 'POST', credentials: 'include', keepalive,
+      headers: { 'Content-Type': 'application/json', ...(await getCsrfHeaders()) }, body: JSON.stringify(body),
+    });
+    const payload = await response.json().catch(() => null);
+    if (!response.ok) {
+      const error = new Error(typeof payload?.message === 'string' ? payload.message : 'No se pudo confirmar la reserva.');
+      error.code = payload?.code || payload?.message; error.items = payload?.items; throw error;
+    }
+    return payload;
+  };
+  const restoreProtectedCheckout = () => {
+    const saved = checkoutReservation?.current();
+    if (!saved?.paymentStartedAt || !saved.checkout) return;
+    const address = saved.checkout.shippingAddress || {};
+    userEditedShippingFields.clear();
+    hydrateShippingFormFromProfile({ firstName: address.firstName, lastName: address.lastName }, address);
+    Object.values(shippingFields).forEach(input => { if (input) { input.readOnly = true; userEditedShippingFields.add(input.name); } });
+    if (guestEmailInput) { guestEmailInput.value = saved.checkout.customerEmail || ''; guestEmailInput.readOnly = true; }
+    if (shippingForm) shippingForm.inert = true;
+    if (shippingOptionsEl) shippingOptionsEl.inert = true;
+    for (const control of [promoInput, applyPromoBtn, removePromoBtn, differentAddressButton, editAddressButton]) if (control) control.disabled = true;
+    if (saved.checkout.promoCode) setPromoState({ code: saved.checkout.promoCode, discountCents: saved.totals.discountCents });
+  };
+  const protectCheckoutPayment = async () => {
+    if (!checkoutReservation) throw new Error('No se pudo confirmar la reserva.');
+    await checkoutReservation.protect(currentPaymentIntentId);
+  };
+  const initializeReservation = async () => {
+    if (!window.CRONOX_CHECKOUT_PRESENCE) throw new Error('No se pudo cargar la reserva.');
+    checkoutReservation = window.CRONOX_CHECKOUT_PRESENCE.create({ request: reservationRequest,
+      onChange: (reservation, error, reason, previous) => {
+        const ready = checkoutReservation?.ready();
+        const expired = reservation && new Date(reservation.expiresAt).getTime() <= Date.now();
+        if (reservationStatus) {
+          const affected = Array.isArray(error?.items) ? error.items.map(item => item.title || `Variante ${item.variantId}`).join(', ') : '';
+          reservationStatus.textContent = error || !ready
+            ? affected ? `Sin stock suficiente: ${affected}. Corrige la cesta y vuelve a comprobar.`
+              : reservation?.paymentStartedAt || String(error?.code).includes('RECONCILING') ? 'Estamos comprobando el estado del pago anterior. No vuelvas a pagar hasta confirmar su resultado.'
+                : expired || String(error?.code).includes('EXPIRED') ? 'La reserva ha caducado. Comprueba de nuevo el stock antes de pagar.'
+                : 'No hemos podido confirmar la disponibilidad. Comprueba el estado antes de pagar.'
+            : reservation.paymentStartedAt ? `Pago iniciado. Reserva protegida hasta las ${new Date(reservation.expiresAt).toLocaleTimeString('es-ES')}. Si el pago sigue procesándose, comprobaremos su estado antes de liberar los artículos.`
+              : 'Artículos reservados mientras permanezcas en el checkout.';
+        }
+        if (reservationRetry) reservationRetry.hidden = !!ready;
+        if (reservation?.paymentStartedAt) restoreProtectedCheckout();
+        setPayButtonState(false);
+        if (reason === 'heartbeat' && previous && previous.checkoutSnapshotId !== reservation?.checkoutSnapshotId) void queueCheckoutUpdate();
+      },
+    });
+    window.CRONOX_CHECKOUT_RESERVATION = checkoutReservation;
+    reservationRetry?.addEventListener('click', async () => {
+      reservationRetry.disabled = true;
+      try {
+        await checkoutReservation.enter(true);
+        if (!checkoutReservation.current()?.paymentStartedAt) {
+          Object.values(shippingFields).forEach(input => { if (input) input.readOnly = false; });
+          if (guestEmailInput) guestEmailInput.readOnly = false;
+          if (shippingForm) shippingForm.inert = false;
+          if (shippingOptionsEl) shippingOptionsEl.inert = false;
+          for (const control of [promoInput, applyPromoBtn, removePromoBtn, differentAddressButton, editAddressButton]) if (control) control.disabled = false;
+        }
+        await queueCheckoutUpdate();
+      } catch { /* The reservation status explains the failure. */ }
+      finally { reservationRetry.disabled = false; }
+    });
+    window.addEventListener('pagehide', event => { void checkoutReservation.leave(event.persisted); });
+    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') void checkoutReservation.heartbeat(); });
+    window.addEventListener('pageshow', event => { if (event.persisted) void checkoutReservation.restore().catch(() => {}); });
+    // A navigation in a new tab does not abandon this checkout. Visibility,
+    // keyboard and orientation events deliberately do not release inventory.
+    document.addEventListener('click', event => {
+      const link = event.target?.closest?.('a[href]');
+      if (!link || event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || link.target === '_blank' || link.hasAttribute('download')) return;
+      const destination = new URL(link.href, location.href);
+      if (destination.origin === location.origin && destination.pathname === location.pathname) return;
+      void checkoutReservation.leave(true);
+    });
+    try { await checkoutReservation.enter(); } catch { /* Render the cart for correction, but keep payment disabled. */ }
+  };
 
   const formatter = new Intl.NumberFormat('es-ES', {
     style: 'currency',
@@ -752,7 +836,7 @@
       paymentElementMounted,
     });
     const methodReady = paymentChannel === 'paypal' ? isFormPayPalAvailable() : paymentMethodComplete;
-    payButton.disabled = bankTransferPending || paymentInFlight || expressCheckoutRevision !== null || (buttonState?.disabled ?? true) || !methodReady || mountedAmountCents !== state.totals.totalCents;
+    payButton.disabled = !checkoutReservation?.ready() || bankTransferPending || paymentInFlight || expressCheckoutRevision !== null || (buttonState?.disabled ?? true) || !methodReady || mountedAmountCents !== state.totals.totalCents;
     if (forcedLabel && isCheckoutContactAndShippingReady()) {
       payButton.textContent = forcedLabel;
       return;
@@ -1588,13 +1672,21 @@
     setLoadingState(true);
     errorDiv.textContent = '';
     try {
-      const data = await API.getCheckoutSummary({
+      const frozen = checkoutReservation?.current();
+      const data = frozen?.paymentStartedAt && frozen.checkout ? {
+        cart: { items: frozen.checkout.items.map(item => ({ ...item, product: item.variant?.product,
+          size: item.variant?.size, priceCents: item.priceAtAdd })) }, shippingMethods: [frozen.shippingMethod], selectedShippingMethod: frozen.shippingMethod,
+        totals: frozen.totals, summary: frozen.summary,
+        appliedPromo: frozen.checkout.promoCode ? { valid: true, code: frozen.checkout.promoCode, discountCents: frozen.totals.discountCents } : null,
+      } : await API.getCheckoutSummary({
         shippingMethod: shippingMethodCode,
         promoCode: state.promo?.code,
         guestEmail: state.isAuthenticated ? undefined : getCheckoutEmail(),
       });
 
       if (revision !== checkoutRevision) return false;
+
+      restoreProtectedCheckout();
 
       state.cart = data.cart;
       if (
@@ -1981,6 +2073,7 @@
       return;
     }
     const result = await confirmExpressPayment({
+      beforeConfirm: protectCheckoutPayment,
       stripe,
       elements,
       clientSecret,
@@ -2427,6 +2520,7 @@
       const requestedPromoCode = state.promo?.code || undefined;
       const requestedShippingAddress = buildShippingAddressPayload();
 
+      if (!checkoutReservation?.ready()) return false;
       const response = await fetch(`${API_BASE}/api/payments/create-payment-intent`, {
         method: 'POST',
         credentials: 'include',
@@ -2435,6 +2529,7 @@
           ...(await getCsrfHeaders()),
         },
         body: JSON.stringify({
+          ...checkoutReservation.identity(),
           shippingMethod: requestedShippingMethod,
           promoCode: requestedPromoCode,
           guestEmail: state.isAuthenticated ? undefined : getCheckoutEmail(),
@@ -2454,6 +2549,9 @@
       }
 
       const data = payload;
+      if (data.metadata?.checkoutSnapshotId) checkoutReservation.adopt({ ...checkoutReservation.current(), checkoutSnapshotId: data.metadata.checkoutSnapshotId,
+        serverNow: data.serverNow,
+        expiresAt: data.reservation?.expiresAt, reservationPhase: data.reservation?.phase, paymentStartedAt: data.reservation?.paymentStartedAt });
       const nextClientSecret = typeof data.clientSecret === 'string' ? data.clientSecret : null;
       const nextPaymentIntentId = typeof data.paymentIntentId === 'string' ? data.paymentIntentId : null;
 
@@ -2479,7 +2577,7 @@
       errorDiv.textContent = '';
       window.dispatchEvent(new CustomEvent('cronox:checkout-payment-ready', { detail: {
         paymentIntentId: nextPaymentIntentId,
-        payload: { shippingMethod: requestedShippingMethod, promoCode: requestedPromoCode,
+        payload: { ...checkoutReservation.identity(), shippingMethod: requestedShippingMethod, promoCode: requestedPromoCode,
           guestEmail: state.isAuthenticated ? undefined : getCheckoutEmail(), shippingAddress: requestedShippingAddress },
       } }));
       return true;
@@ -2909,7 +3007,7 @@
     }));
 
     payButton?.addEventListener('click', async () => {
-      if (bankTransferPending || paymentInFlight || expressCheckoutRevision !== null) return;
+      if (!checkoutReservation?.ready() || bankTransferPending || paymentInFlight || expressCheckoutRevision !== null) return;
       if (!isCheckoutContactAndShippingReady()) {
         errorDiv.textContent = state.isAuthenticated
           ? 'Completa la direccion de envio.'
@@ -2947,6 +3045,7 @@
           const address = buildShippingAddressPayload();
           const returnUrl = buildPaymentReturnUrl();
           // This official direct PayPal flow must not submit the unselected card form.
+          await protectCheckoutPayment();
           const result = await stripe.confirmPayPalPayment(secret, {
             payment_method: { billing_details: {
               name: [address.firstName, address.lastName].filter(Boolean).join(' '),
@@ -2990,6 +3089,7 @@
       }
 
       const result = await confirmMountedPayment({
+        beforeConfirm: protectCheckoutPayment,
         stripe,
         elements,
         clientSecret,
@@ -3068,6 +3168,9 @@
     if (ev.initial) return;
     const user = ev?.detail;
     state.isAuthenticated = Boolean(user);
+    // Login may merge the anonymous cart into an existing account cart. Join
+    // that server-owned reservation before preparing any new payment UI.
+    try { await checkoutReservation?.restore(); } catch { setPayButtonState(false); }
     if (state.isAuthenticated) {
       if (user) window.CRONOX_USER = user;
       renderCustomerContact(user);
@@ -3090,6 +3193,8 @@
   });
 
   window.addEventListener('cart:updated', (event) => {
+    if (checkoutReservation?.current()?.paymentStartedAt) return;
+    void checkoutReservation?.heartbeat();
     const cart = event?.detail;
     recommendationLoadRevision += 1;
     if (!cart || !Array.isArray(cart.items)) {
@@ -3138,6 +3243,7 @@
       renderPromoUI();
       bindEvents();
       await resolveAuthStatus();
+      await initializeReservation();
       if (!state.isAuthenticated) {
         await renderGuestCheckout();
         void loadRecommendations();

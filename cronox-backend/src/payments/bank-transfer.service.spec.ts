@@ -79,14 +79,14 @@ describe('bank transfer safety', () => {
     await expect(service.get(owner, 'pi_test')).rejects.toThrow('Not found');
     expect(stripe.retrieveBankTransfer).not.toHaveBeenCalled();
   });
-  it.each([false,true])('admission denial releases preparation only after confirmed Stripe cancellation (provider fails: %s)', async providerFails => {
+  it.each([false,true])('admission denial retains ordinary presence without starting or canceling payment (provider fails: %s)', async providerFails => {
     orders.getOwnedBankTransferSnapshot.mockResolvedValue({id:'snap',status:'PAYMENT_BOUND',totalCents:3790,currency:'EUR',customerEmail:owner.customerEmail});
     orders.reserveBankTransfer.mockRejectedValue(new ConflictException('BANK_TRANSFER_RESERVATION_LIMIT'));
     if(providerFails)stripe.cancelCheckoutPaymentIntent.mockRejectedValue(new Error('Provider unavailable'));
-    await expect(service.begin(owner,{} as any,null)).rejects.toThrow(providerFails?'Provider unavailable':'BANK_TRANSFER_RESERVATION_LIMIT');
+    await expect(service.begin(owner,{} as any,null)).rejects.toThrow('BANK_TRANSFER_RESERVATION_LIMIT');
     expect(stripe.confirmBankTransfer).not.toHaveBeenCalled();
-    if(providerFails)expect(orders.releaseCheckoutSnapshot).not.toHaveBeenCalled();
-    else expect(orders.releaseCheckoutSnapshot).toHaveBeenCalledWith('snap','PAYMENT_CANCELLED','pi_test');
+    expect(stripe.cancelCheckoutPaymentIntent).not.toHaveBeenCalled();
+    expect(orders.releaseCheckoutSnapshot).not.toHaveBeenCalled();
   });
   it('does not release stock after an unconfirmed cancellation', async () => {
     stripe.cancelCheckoutPaymentIntent.mockRejectedValue(

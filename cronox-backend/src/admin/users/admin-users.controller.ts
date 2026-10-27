@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   ParseIntPipe,
@@ -24,6 +25,7 @@ import { Role } from '@prisma/client';
 import { SuperAdminGuard } from '../../common/guards/super-admin.guard';
 import { UpdateAdminUserDto } from './dto/update-admin-user.dto';
 import { UserIdentityGuard } from '../../users/user-identity.guard';
+import { DeleteAdminUserDto } from './dto/delete-admin-user.dto';
 
 @Controller('admin/users')
 @UseGuards(JwtAuthGuard, AdminGuard, RolesGuard, UserIdentityGuard)
@@ -83,6 +85,17 @@ export class AdminUsersController {
   @Roles(Role.SUPERADMIN)
   getUserAuditLogs(@Param('id', ParseIntPipe) id: number) {
     return this.usersService.getUserAuditLogs(id);
+  }
+
+  @Delete(':id')
+  @Roles(Role.SUPERADMIN)
+  @UseGuards(SuperAdminGuard)
+  deleteUser(@Param('id', ParseIntPipe) id: number, @Body() dto: DeleteAdminUserDto,
+    @CurrentUser('id') adminId: number, @Req() request: Request) {
+    const requestId = request.headers['x-request-id'];
+    return this.usersService.deleteUser(id, String(request.headers['x-cronox-user-identity'] || ''), dto, adminId, {
+      ip: request.ip, userAgent: request.get('user-agent'), requestId: Array.isArray(requestId) ? requestId[0] : requestId,
+    });
   }
 
   @Get(':id/requests')

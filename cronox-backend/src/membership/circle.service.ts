@@ -21,9 +21,11 @@ export class CircleService {
     await serializableTransaction(this.prisma, tx => reconcileCircle2(tx, userId));
   }
 
-  async maybePromoteRequestedCircle(userId: number): Promise<void> {
-    await serializableTransaction(this.prisma, async tx => {
-      await tx.$queryRaw`SELECT id FROM "User" WHERE id=${userId} FOR UPDATE`;
+  async maybePromoteRequestedCircle(userId: number, transaction?: Prisma.TransactionClient): Promise<void> {
+    const promote = async (tx: Prisma.TransactionClient) => {
+      // Only non-key account fields change. This serializes promotion without
+      // blocking FK key-share locks for an administrator recording another user.
+      await tx.$queryRaw`SELECT id FROM "User" WHERE id=${userId} FOR NO KEY UPDATE`;
       const request = await tx.circlePromotionRequest.findFirst({
         where: { userId, status: 'pending', promoteAt: { lte: new Date() } },
       });
@@ -42,7 +44,9 @@ export class CircleService {
         if (changed.count !== 1) throw new ConflictException('PROMOTION_REVIEW_LINK_CHANGED');
       }
       await tx.circlePromotionRequest.update({ where: { userId }, data: { status: 'completed' } });
-    });
+    };
+    if (transaction) await promote(transaction);
+    else await serializableTransaction(this.prisma, promote);
   }
 
   private async promotionStatus(userId: number, tx: Prisma.TransactionClient) {

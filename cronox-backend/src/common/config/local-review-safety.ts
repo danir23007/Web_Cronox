@@ -1,10 +1,15 @@
 import type { Request, Response, NextFunction } from 'express';
+import { localCheckoutTestEnabled } from '../../payments/local-checkout-test';
 
 // Imported order lifecycles and external-operation entry points remain blocked.
 // New manual records and analytic flags can be reviewed against the isolated
 // local database; the local loader disables emails/jobs and verifies loopback.
 export function localReviewSafety(req: Request, res: Response, next: NextFunction) {
   if (process.env.CRONOX_LOCAL_DEV !== 'true' || ['GET', 'HEAD', 'OPTIONS'].includes(req.method)) return next();
+  // Explicit local Stripe test activation does not unlock historical order
+  // actions, refunds, mail, logistics, or arbitrary payment mutations.
+  if (req.method === 'POST' && localCheckoutTestEnabled() &&
+      /^\/api\/(?:checkout\/(?:reservation|payment-start|payment-intent)|payments\/(?:create-payment-intent|webhook|bank-transfer(?:\/(?:cancel|resume))?)|webhooks\/stripe)\/?$/.test(req.path)) return next();
   if (/^\/api\/admin\/orders\/\d+\/statistics-exclusion$/.test(req.path)) return next();
   if (req.method === 'POST' && /^\/api\/admin\/users\/\d+\/in-person-purchases$/.test(req.path)) return next();
   // Manual edits have no external effects and use the original stock policy.

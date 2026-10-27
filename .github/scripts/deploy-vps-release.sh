@@ -9,7 +9,7 @@ npm ci
 npm run admin:build
 cd cronox-backend
 npm ci
-node scripts/check-user-numbering-release.cjs --deployment-check
+node scripts/check-user-numbering-release.cjs --deployment-check --before-migrate
 node scripts/check-account-state-release.cjs --deployment-check
 npx prisma generate
 npm run build:compiled

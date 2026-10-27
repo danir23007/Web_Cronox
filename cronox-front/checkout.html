@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
   <link rel="preload" href="/assets/fonts/cormorant-garamond/cormorant-garamond-normal-latin-v21.woff2" as="font" type="font/woff2" crossorigin>
-  <link rel="stylesheet" href="/assets/customer-typography.css?v=4">
+  <link rel="stylesheet" href="/assets/customer-typography.css?v=5">
   <link rel="stylesheet" href="/assets/password-visibility.css?v=1">
   <script src="/assets/password-visibility.js?v=1" defer></script>
   <meta charset="utf-8" />
@@ -55,7 +55,7 @@
     .checkout-brand img { display: block; width: 140px; height: auto; }
     .checkout-brandbar svg { width: 24px; height: 24px; }
   </style>
-  <link id="cronox-main-style" rel="stylesheet" href="assets/store.css?v=127">
+  <link id="cronox-main-style" rel="stylesheet" href="assets/store.css?v=128">
   <link rel="stylesheet" href="assets/checkout.css?v=31" />
   <noscript><style>#preloader{display:none!important}.checkout-shell{visibility:visible!important}body.page-checkout{overflow:auto!important}</style></noscript>
   <link rel="icon" type="image/png" href="/favicon.png?v=4">
@@ -255,7 +255,7 @@
           </fieldset>
           <details id="bank-transfer-option" class="checkout-bank-transfer" hidden>
             <summary>Transferencia bancaria</summary>
-            <p>Recibirás un IBAN y una referencia de Stripe. Reservaremos tus productos durante 72 horas. El pedido se confirmará cuando llegue el importe completo.</p>
+            <p>La reserva dura seis minutos desde que inicias el pago. Una transferencia puede tardar más: no envíes dinero después del vencimiento. El pedido solo se confirma al recibir el importe completo; los fondos que lleguen tras cancelar el intento pueden quedar en tu saldo de Stripe y requieren revisión.</p>
             <button id="bank-transfer-start" class="checkout-pay-button" type="button" disabled>Obtener instrucciones de transferencia</button>
             <div id="bank-transfer-instructions" aria-live="polite" hidden></div>
             <button id="bank-transfer-refresh" class="checkout-text-button" type="button" hidden>Actualizar estado</button>
@@ -263,6 +263,8 @@
             <p id="bank-transfer-error" class="checkout-error" role="alert"></p>
           </details>
           <button id="pay-button" class="checkout-pay-button" type="button" disabled>Completa tus datos</button>
+          <p id="checkout-reservation-status" class="checkout-help" role="status">Comprobando disponibilidad…</p>
+          <button id="checkout-reservation-retry" class="checkout-text-button" type="button" hidden>Comprobar stock y reservar de nuevo</button>
           <div id="payment-error" class="checkout-error" role="alert" aria-live="assertive"></div>
           <p id="checkout-help" class="checkout-help">Stripe procesa tus datos de pago de forma cifrada.</p>
           <nav class="checkout-legal" aria-label="Información legal del checkout">
@@ -353,9 +355,10 @@
   <script src="assets/api.js?v=26"></script>
   <script src="assets/responsive-images.js?v=6"></script>
   <script src="/assets/product-delivery.js?v=5" defer></script>
-  <script src="assets/app.js?v=104"></script>
-  <script src="assets/checkout-lifecycle.js?v=9"></script>
-  <script src="assets/checkout.js?v=35"></script>
+  <script src="assets/app.js?v=105"></script>
+  <script src="assets/checkout-lifecycle.js?v=10"></script>
+  <script src="assets/checkout-presence.js?v=1"></script>
+  <script src="assets/checkout.js?v=36"></script>
   <script src="assets/checkout-bank-transfer.js?v=2"></script>
 </body>
 </html>

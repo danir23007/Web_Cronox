@@ -5,6 +5,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import type { FinanceQuery } from './admin-finance.controller';
 import { calculateFinance, FinanceEvent, FinanceOrder, madridDate, madridMidnight, nextDate, sortProducts, validateRange } from './financial-calculations';
 import { calculatePoints } from '../points/point-calculations';
+import { pointLedger, pointOrderIds } from '../points/point-report';
 import { archiveUtcDate } from './historical-cost';
 
 @Injectable()
@@ -28,6 +29,7 @@ export class AdminFinanceService {
         if (Object.values(target).some(v => typeof v === 'number' && !Number.isSafeInteger(v))) throw new Error('El total supera la precisión admitida.');
       };
       let cursor = 0;
+      const linkedOrders=await pointOrderIds(tx);
       let salesCount = 0;
       while (query.source !== 'points' && !query.pointId) {
         const batch = await tx.financeArchive.findMany({
@@ -47,7 +49,7 @@ export class AdminFinanceService {
             return { ...value, createdAt: archiveUtcDate(value.createdAt) };
           });
           return order;
-        }).filter(countsInStatistics).filter(order => !query.source || query.source === 'all' || (query.source === 'manual' ? order.source === 'IN_PERSON_ADMIN' : order.source === 'ONLINE'));
+        }).filter(order=>!linkedOrders.has(order.id)).filter(countsInStatistics).filter(order => !query.source || query.source === 'all' || (query.source === 'manual' ? order.source === 'IN_PERSON_ADMIN' : order.source === 'ONLINE'));
         salesCount += orders.filter(order => {
           const success = eventRows.find(event => event.paymentIntentId === order.providerRef && (event.snapshot as unknown as FinanceEvent).type === 'payment_intent.succeeded');
           const date = madridDate(order.source === 'IN_PERSON_ADMIN' ? order.purchasedAt ?? order.createdAt : order.paidAt ?? success?.occurredAt ?? order.purchasedAt ?? order.createdAt);
@@ -64,8 +66,7 @@ export class AdminFinanceService {
         partial.warnings.forEach(warning => warnings.add(warning));
         result.recentOrders = [...result.recentOrders, ...partial.recentOrders].sort((a, b) => b.paidAt.getTime() - a.paidAt.getTime() || b.id - a.id).slice(0, 5);
       }
-      const entries = query.currency === 'EUR' && (!query.source || ['all', 'points'].includes(query.source)) ? await tx.pointEntry.findMany({ where: { pointId: query.pointId,
-        occurredAt: { gte: madridMidnight(query.from), lt: madridMidnight(nextDate(query.to)) } }, select: { kind: true, occurredAt: true, lines: true, expenseCents: true, after: true } }) : [];
+      const entries = query.currency === 'EUR' && (!query.source || ['all', 'points'].includes(query.source)) ? await pointLedger(tx,query.from,query.to,query.pointId) : [];
       const external = calculatePoints(entries, query.from, query.to, query.aggregation);
       merge(result.totals, external.totals); external.buckets.forEach((bucket, i) => merge(result.buckets[i], bucket));
       for (const product of external.products) {

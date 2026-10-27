@@ -4,24 +4,24 @@ import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import {
   calculateFinance,
-  cents,
   FinanceEvent,
   FinanceOrder,
-  madridDate,
-  madridMidnight,
-  nextDate,
   validateRange,
 } from '../finance/financial-calculations';
 import type { MapQuery } from './admin-map.controller';
 import { archiveUtcDate } from '../finance/historical-cost';
 import { classifyShipping, PROVINCES, REGIONS } from './spain-geography';
+import { pointLedger, pointOrderIds } from '../points/point-report';
+import { pointLocation } from '../points/point-geography';
+import { calculatePoints } from '../points/point-calculations';
 
 export type MapAmounts = {
   orders: number;
   units: number;
   revenueCents: number | null;
+  profitCents: number | null;
 };
-const empty = (): MapAmounts => ({ orders: 0, units: 0, revenueCents: 0 });
+const empty = (): MapAmounts => ({ orders: 0, units: 0, revenueCents: 0, profitCents:0 });
 export function addAmounts(target: MapAmounts, amount: MapAmounts) {
   target.orders += amount.orders;
   target.units += amount.units;
@@ -29,70 +29,23 @@ export function addAmounts(target: MapAmounts, amount: MapAmounts) {
     target.revenueCents === null || amount.revenueCents === null
       ? null
       : target.revenueCents + amount.revenueCents;
+  target.profitCents=target.profitCents===null||amount.profitCents===null?null:target.profitCents+amount.profitCents;
   if (
-    [target.orders, target.units, target.revenueCents].some(
+    [target.orders, target.units, target.revenueCents,target.profitCents].some(
       (v) => v !== null && !Number.isSafeInteger(v),
     )
   )
     throw new Error('El total supera la precisión admitida.');
 }
 
-export function mapOrderAmounts(
-  order: FinanceOrder,
-  events: FinanceEvent[],
-  from: string,
-  to: string,
-) {
+export function mapOrderAmounts(order: FinanceOrder, events: FinanceEvent[], from: string, to: string) {
   if (!countsInStatistics(order)) return { excluded: 'outside' as const };
-  const end = madridMidnight(nextDate(to));
-  const ledger = events.filter(
-    (e) => e.paymentIntentId === order.providerRef && e.occurredAt < end,
-  );
-  const success = ledger
-    .filter((e) => e.type === 'payment_intent.succeeded')
-    .sort((a, b) => +a.occurredAt - +b.occurredAt)[0];
-  const paidAt =
-    order.paidAt ??
-    success?.occurredAt ??
-    (order.source === 'IN_PERSON_ADMIN' ? order.purchasedAt : null);
-  if (!paidAt) return { excluded: 'undated' as const };
-  if (madridDate(paidAt) < from || madridDate(paidAt) > to)
-    return { excluded: 'outside' as const };
-  const refunds = ledger.filter((e) => e.type === 'charge.refunded');
-  const total = cents(order.total);
-  const fullyRefunded =
-    (order.voidedAt && order.voidedAt < end) ||
-    refunds.some(
-      (e) =>
-        (e.refundCumulativeCents ??
-          (e.lifecycleStatus === 'REFUNDED' ? total : -1)) === total,
-    ) ||
-    (order.status === 'REFUNDED' &&
-      !events.some((e) => e.type === 'charge.refunded'));
-  if (fullyRefunded) return { excluded: 'refunded' as const };
-  const result = calculateFinance(
-    [{ ...order, paidAt }],
-    events,
-    from,
-    to,
-    'months',
-    false,
-  );
-  return {
-    paidAt,
-    amount: {
-      orders: 1,
-      units: result.totals.unitsSold - result.totals.unitsReturned,
-      revenueCents: result.totals.revenueCents,
-    },
-    grossUnits: result.totals.unitsSold,
-    returnedUnits: result.totals.unitsReturned,
-    warnings: result.warnings.filter(
-      (w) =>
-        !w.includes('costes históricos') &&
-        !w.includes('beneficio en otras monedas'),
-    ),
-  };
+  const calculated=calculateFinance([order],events,from,to,'months',false),financial=calculated.totals;
+  const success=events.filter(e=>e.paymentIntentId===order.providerRef&&e.type==='payment_intent.succeeded').sort((a,b)=>+a.occurredAt-+b.occurredAt||a.id.localeCompare(b.id))[0];
+  const paidAt=order.source==='IN_PERSON_ADMIN'?order.purchasedAt??order.createdAt:order.paidAt??success?.occurredAt??order.purchasedAt??order.createdAt;
+  const amount={orders:calculated.recentOrders.some(o=>o.id===order.id)?1:0,units:financial.unitsSold-financial.unitsReturned,revenueCents:financial.revenueCents,profitCents:financial.profitCents};
+  if(Object.values(amount).every(v=>v===0))return {excluded:'outside' as const};
+  return {paidAt,amount,grossUnits:financial.unitsSold,returnedUnits:financial.unitsReturned,warnings:calculated.warnings};
 }
 
 @Injectable()
@@ -101,7 +54,7 @@ export class AdminMapService {
 
   async getReport(query: MapQuery) {
     validateRange(query.from, query.to);
-    const division = query.division ?? 'communities';
+    const division = query.division ?? 'provinces';
     if (
       query.region &&
       /^\d+$/.test(query.region) &&
@@ -142,23 +95,29 @@ export class AdminMapService {
           total = empty();
         const financePeriod = {
           revenueCents: 0 as number | null,
+          profitCents:0 as number|null,
           unitsSold: 0,
           unitsReturned: 0,
         };
         const warnings = new Set<string>();
         const exclusions = { undated: 0, refunded: 0 };
         const orders: {
-          id: number;
+          id: number | string;
           paidAt: Date;
           province: string | null;
           units: number;
           revenueCents: number | null;
           available: boolean;
+          profitCents:number|null;
+          pointId?: string;
+          pointName?:string;
+          source?:'order'|'point';
         }[] = [];
         let cursor = 0,
           detailCount = 0,
           grossUnits = 0,
           returnedUnits = 0;
+        const linkedOrders=await pointOrderIds(tx);
         while (true) {
           const batch = await tx.financeArchive.findMany({
             where: {
@@ -215,7 +174,7 @@ export class AdminMapService {
           }
           for (const row of batch) {
             const order = { ...(row.snapshot as unknown as FinanceOrder) };
-            if (!countsInStatistics(order)) continue;
+            if (!countsInStatistics(order) || linkedOrders.has(row.orderId)) continue;
             for (const key of [
               'paidAt',
               'purchasedAt',
@@ -225,30 +184,12 @@ export class AdminMapService {
               if (order[key]) order[key] = archiveUtcDate(order[key]);
             order.stockMovements = movements.get(row.orderId) ?? [];
             const ledger = events.get(row.providerRef ?? '') ?? [];
-            const financial = calculateFinance(
-              [order],
-              ledger,
-              query.from,
-              query.to,
-              'months',
-              false,
-            ).totals;
-            financePeriod.revenueCents =
-              financePeriod.revenueCents === null ||
-              financial.revenueCents === null
-                ? null
-                : financePeriod.revenueCents + financial.revenueCents;
-            financePeriod.unitsSold += financial.unitsSold;
-            financePeriod.unitsReturned += financial.unitsReturned;
-            const value = mapOrderAmounts(order, ledger, query.from, query.to);
-            if (value.excluded) {
-              if (
-                value.excluded !== 'outside' &&
-                row.paidDate >= new Date(query.from)
-              )
-                exclusions[value.excluded]++;
-              continue;
-            }
+            const value=mapOrderAmounts(order,ledger,query.from,query.to);
+            if('excluded' in value)continue;
+            financePeriod.revenueCents=financePeriod.revenueCents===null||value.amount.revenueCents===null?null:financePeriod.revenueCents+value.amount.revenueCents;
+            financePeriod.profitCents=financePeriod.profitCents===null||value.amount.profitCents===null?null:financePeriod.profitCents+value.amount.profitCents;
+            financePeriod.unitsSold+=value.grossUnits;
+            financePeriod.unitsReturned+=value.returnedUnits;
             value.warnings.forEach((w) => {
               if (warnings.size < 20) warnings.add(w);
             });
@@ -295,9 +236,29 @@ export class AdminMapService {
                   units: value.amount.units,
                   revenueCents: value.amount.revenueCents,
                   available: shipping.has(row.orderId),
+                  profitCents:value.amount.profitCents,source:'order',
                 });
               detailCount++;
             }
+          }
+        }
+        const entries=await pointLedger(tx,query.from,query.to);
+        const external=calculatePoints(entries,query.from,query.to,'months',false);
+        financePeriod.revenueCents=financePeriod.revenueCents===null?null:financePeriod.revenueCents+external.totals.revenueCents!;
+        financePeriod.profitCents=financePeriod.profitCents===null?null:financePeriod.profitCents+external.totals.profitCents!;
+        financePeriod.unitsSold+=external.totals.unitsSold;financePeriod.unitsReturned+=external.totals.unitsReturned;
+        for(const entry of entries){
+          const stats=calculatePoints([entry],query.from,query.to,'months',false),t=stats.totals;
+          const amount={orders:t.salesCount,units:t.unitsSold-t.unitsReturned,revenueCents:t.revenueCents,profitCents:t.profitCents};
+          if(Object.values(amount).every(v=>v===0))continue;
+          const location=pointLocation(entry.point);
+          addAmounts(total,amount);grossUnits+=t.unitsSold;returnedUnits+=t.unitsReturned;
+          if(location.group==='identified'){
+            addAmounts(identified,amount);const region=regions.find(r=>r.id===location.regionId)!;addAmounts(region,amount);addAmounts(region.provinces.find(p=>p.id===location.provinceId)!,amount);
+          }else addAmounts(groups.find(g=>g.id==='unknownSpain')!,amount);
+          if(query.region===(division==='provinces'?(location.provinceId??location.group):(location.regionId??location.group))){
+            if(detailCount>=(query.page-1)*pageSize&&orders.length<pageSize)orders.push({id:entry.id,source:'point',pointId:entry.pointId,pointName:entry.point.name,paidAt:entry.occurredAt,province:PROVINCES.find(p=>p.id===location.provinceId)?.name??null,units:amount.units,revenueCents:amount.revenueCents,profitCents:amount.profitCents,available:true});
+            detailCount++;
           }
         }
         if (
@@ -355,7 +316,7 @@ export class AdminMapService {
           range: { from: query.from, to: query.to, timeZone: 'Europe/Madrid' },
           currency: 'EUR',
           basis:
-            'Productos después de descuentos, IVA incluido y envío excluido; solo EUR. Unidades netas = vendidas − devoluciones con reposición registrada. Un reembolso monetario no implica unidades devueltas. Pedidos seleccionados por fecha de cobro; reembolsos y devoluciones registrados hasta el final del intervalo. Se excluyen los totalmente reembolsados. Misma fórmula que Finanzas para este conjunto de pedidos; Finanzas también incluye devoluciones del período de ventas cobradas en fechas anteriores. Los importes sin reparto fiable se muestran como no disponibles.',
+            'Ventas web y físicas en EUR, después de descuentos, IVA incluido y envío excluido. Mismo criterio temporal que Finanzas: cobros por su fecha; ajustes, devoluciones y gastos por la fecha del movimiento, incluso de ventas anteriores. Unidades netas = vendidas menos devoluciones documentadas; un reembolso monetario no implica unidades devueltas. Beneficio neto = facturación menos costes históricos; en puntos también resta comisiones y gastos fijos, una sola vez. El número cuenta ventas/pedidos registrados, no prendas. Los pedidos vinculados a una venta física se incluyen una sola vez desde su libro de movimientos. Domicilio del pedido para web; provincia guardada en el punto para ventas físicas. Corregir esa provincia reasigna todo su historial sin alterar importes. Los puntos eliminados con historial siguen incluidos. Datos sin ubicación o coste fiable no se inventan.',
         };
       },
       {

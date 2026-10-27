@@ -474,10 +474,11 @@ describe('OrdersService checkout reservations', () => {
     expect(prisma.checkoutSnapshot.updateMany).toHaveBeenCalledWith({
       where: {
         id: 'snap_bound',
+        paymentStartedAt: null, reservationPhase: 'PRESENCE',
         userId: 1,
         cartId: 10,
         orderId: null,
-        status: { in: ['RESERVED', 'PAYMENT_BOUND'] },
+        status: { in: ['RESERVED', 'PAYMENT_BOUND', 'REPLACEMENT_PENDING'] },
       },
       data: { status: 'REPLACEMENT_PENDING' },
     });
@@ -793,7 +794,7 @@ describe('OrdersService checkout reservations', () => {
             { status: 'RESERVED' },
             {
               status: 'PAYMENT_INTENT_CREATING',
-              updatedAt: { lt: expect.any(Date) },
+              paymentRecoveryClaimedAt: { lt: expect.any(Date) },
             },
           ],
         }),
@@ -1343,21 +1344,11 @@ describe('OrdersService checkout reservations', () => {
     ).not.toHaveBeenCalled();
   });
 
-  it('rejects a signed payment that occurred after snapshot expiry but accepts a late delivery from before expiry', async () => {
+  it('accepts verified success after the deadline while inventory has not been released', async () => {
     const expiresAt = new Date('2026-08-08T10:30:00.000Z');
     prisma.checkoutSnapshot.findUnique.mockResolvedValue(
       makeSnapshot({ stripePaymentIntentId: 'pi_expiry', expiresAt }),
     );
-
-    await expect(
-      service.createOrderFromVerifiedStripePayment({
-        checkoutSnapshotId: 'snap_new',
-        paymentIntentId: 'pi_expiry',
-        amountCents: 10495,
-        currency: 'EUR',
-        occurredAt: new Date(expiresAt.getTime() + 1),
-      }),
-    ).rejects.toThrow('STRIPE_PAYMENT_AFTER_CHECKOUT_EXPIRY');
 
     const existingOrder = {
       id: 89,
@@ -1375,7 +1366,7 @@ describe('OrdersService checkout reservations', () => {
         paymentIntentId: 'pi_expiry',
         amountCents: 10495,
         currency: 'EUR',
-        occurredAt: new Date(expiresAt.getTime() - 1),
+        occurredAt: new Date(expiresAt.getTime() + 1),
       }),
     ).resolves.toMatchObject({ orderId: 89, status: 'PAID' });
   });

@@ -62,12 +62,15 @@
     picker,
     observer,
     activeForm;
+  let territories=[], listPage=1, deletingPoint=false, deleteNotice='';
+  const notifyChanged=()=>{window.dispatchEvent(new Event('cronox:sale-points-changed'));try{localStorage.setItem('cronox:statistics-revision',Date.now()+':'+crypto.randomUUID());}catch{}};
+  const provinceName=p=>territories.find(t=>t.id===p.provinceId)?.name||'Sin ubicación identificada';
   let historyProductId = '', historyFilterEvents;
   const historyParams = () => ({ from, to, search, ...(historyProductId ? { productId:historyProductId } : {}) });
   let from = localNow().slice(0, 8) + "01",
     to = localNow().slice(0, 10),
     search = "";
-  const api = async (path = "", body, key) => {
+  const api = async (path = "", body, key, method = body ? "POST" : "GET") => {
     const response = await fetch(
       (window.CRONOX_API?.API_BASE || "") + "/api/admin/sale-points" + path,
       {
@@ -83,7 +86,7 @@
               }
             : {}),
         },
-        ...(body ? { method: "POST", body: JSON.stringify(body) } : {}),
+        method, ...(body ? { body: JSON.stringify(body) } : {}),
       },
     );
     const data = await response.json();
@@ -93,6 +96,7 @@
           ? data.message.join(" · ")
           : data.message || "No se pudo completar la operación.",
       );
+      if(response.status>=500)error.message="No se pudo completar la operación en el servidor. Comprueba el estado y reintenta.";
       error.status = response.status;
       throw error;
     }
@@ -145,7 +149,7 @@
         submittedBody = JSON.stringify(payload);
         let result;
         try {
-          result = await api(submit.path, payload, key);
+          result = await api(submit.path, payload, key); notifyChanged();
         } catch (e) {
           if (e.status >= 400 && e.status < 500) {
             submittedBody = null;
@@ -218,6 +222,7 @@
           )
           .join("")}</select></label>` +
         input("city", "Ciudad", point?.city) +
+        `<label>Provincia<select class="select" name="provinceId"><option value="">Sin ubicación identificada</option>${territories.map(t=>`<option value="${esc(t.id)}" ${t.id===point?.provinceId?'selected':''}>${esc(t.name)}</option>`).join('')}</select></label><p>La provincia identifica el lugar de la venta física. Corregirla reasigna todo el historial del punto en el mapa, sin alterar importes, pedidos ni stock.</p>` +
         input("venue", "Lugar", point?.venue) +
         input("startsOn", "Inicio (opcional)", point?.startsOn, "date") +
         input("endsOn", "Fin (opcional)", point?.endsOn, "date") +
@@ -230,7 +235,7 @@
         ) +
         input("notes", "Notas", point?.notes) +
         (point
-          ? `<label><input name="archived" type="checkbox" ${point.archived ? "checked" : ""}>Archivado (conserva todo el historial)</label><p class="pos-archive-explanation">Archivar bloquea nuevas ventas y gastos. Conserva las ventas, los gastos, el historial y sus estadísticas. Puedes reactivar el punto cuando lo necesites.</p>`
+          ? point.deletedAt ? `<p class="pos-archive-explanation">Punto retirado del listado operativo. Puedes corregir su localización histórica, pero no reactivarlo.</p>` : `<label><input name="archived" type="checkbox" ${point.archived ? "checked" : ""}>Archivado (conserva todo el historial)</label><p class="pos-archive-explanation">Archivar bloquea nuevas ventas y gastos. Conserva las ventas, los gastos, el historial y sus estadísticas. Puedes reactivar el punto cuando lo necesites.</p>`
           : input(
               "participation",
               "Participación (€)",
@@ -253,12 +258,13 @@
             name: f.get("name"),
             type: f.get("type"),
             city: f.get("city"),
+            provinceId:f.get("provinceId"),
             venue: f.get("venue"),
             startsOn: f.get("startsOn") || undefined,
             endsOn: f.get("endsOn") || undefined,
             commissionBp: numeric(f.get("commission")),
             notes: f.get("notes"),
-            archived: !!f.get("archived"),
+            archived: point?.deletedAt ? true : !!f.get("archived"),
             ...(point
               ? { revision: point.revision }
               : {
@@ -304,6 +310,7 @@
           )
           .join("")}</select></label>` +
         input("note", "Notas", sale?.state.note) +
+        (!sale ? input("orderId","Pedido presencial ya registrado (opcional)","","number",'min="1" step="1"')+'<p>Vincula solo un pedido presencial manual confirmado en EUR, con las mismas prendas e importes. Elige «Ya estaba descontado». Se contará una sola vez desde este punto; sus ajustes se registran en este libro.</p>' : "") +
         `<label>Stock de esta operación<select class="select" name="stockHandling"><option value="DEDUCT_NOW">${sale ? 'Ajustar stock al guardar (solo diferencias)' : 'Descontar stock al guardar'}</option><option value="ALREADY_ADJUSTED">${sale ? 'El stock ya estaba ajustado' : 'Ya estaba descontado'}</option></select></label><p>${sale ? 'Elige si este ajuste debe modificar el stock por la diferencia de cantidades o si ya lo ajustaste anteriormente.' : 'Si eliges «Ya estaba descontado», se registra la venta y su beneficio sin volver a restar unidades del stock.'}</p>` +
         (sale
           ? input("reason", "Motivo de la corrección", "", "text", "required")
@@ -318,6 +325,7 @@
             occurredAt: f.get("occurredAt"),
             paymentMethod: f.get("paymentMethod"),
             stockHandling: f.get("stockHandling"),
+            ...(!sale&&f.get("orderId")?{orderId:Number(f.get("orderId"))}:{}),
             note: f.get("note"),
             ...(sale
               ? { revision: sale.revision, reason: f.get("reason") }
@@ -495,12 +503,39 @@
       },
     );
   }
+
+  async function openDeletion(point,button){
+    if(!point?.canDelete||deletingPoint)return;
+    button.disabled=true;const scope=revision;
+    try{
+      const plan=await api('/'+point.id+'/deletion-preview');if(scope!==revision)return;
+      const dialog=document.createElement('dialog');dialog.className='pos-delete-dialog';dialog.setAttribute('aria-label','Eliminar punto de venta');
+      const archive=plan.mode==='archive';
+      dialog.innerHTML=`<h2>Eliminar punto de venta</h2><p><strong>${esc(plan.point.name)}</strong></p><p>${esc(provinceName(plan.point))} · ${esc(plan.point.city)} · ${esc(plan.point.venue)}</p><p>${plan.operationsCount} operaciones asociadas · ${plan.salesCount} ventas</p><p>${archive?'Se retirará del listado operativo y bloqueará nuevas operaciones. Se conservarán las ventas, pedidos, pagos, costes, gastos, movimientos de stock y su información territorial. El historial seguirá contando en las estadísticas. No se devolverán prendas al inventario.':'Se eliminará definitivamente este punto vacío y sus datos de configuración sin valor económico. No tiene ventas, gastos ni movimientos de stock. Se conservará la auditoría administrativa.'}</p><p>Esta acción no se puede deshacer.</p><p data-removal-error role="alert"></p><div class="pos-actions"><button class="btn" type="button" data-removal-cancel>Cancelar</button><button class="btn pos-delete" type="button" data-removal-confirm>Eliminar punto de venta</button></div>`;
+      root.append(dialog);const cancel=dialog.querySelector('[data-removal-cancel]'),confirm=dialog.querySelector('[data-removal-confirm]');
+      const close=()=>{dialog.close();dialog.remove();};cancel.onclick=()=>{if(!deletingPoint)close();};dialog.addEventListener('cancel',e=>{if(deletingPoint)e.preventDefault();});
+      confirm.onclick=async()=>{
+        if(deletingPoint)return;deletingPoint=true;confirm.disabled=cancel.disabled=true;dialog.querySelector('[data-removal-error]').textContent='';
+        try{const result=await api('/'+point.id,{confirmed:true,mode:plan.mode,revision:plan.point.revision},crypto.randomUUID(),'DELETE');
+          if(result.deleted!==true||result.id!==point.id)throw new Error('El servidor no ha confirmado la eliminación.');
+          close();notifyChanged();if(scope!==revision)return;
+          points=points.filter(p=>p.id!==point.id);listPage=Math.max(1,Math.min(listPage,Math.ceil(points.length/25)||1));
+          deleteNotice=result.mode==='archive'?'Punto eliminado del listado. Su historial y estadísticas se conservan.':'Punto vacío eliminado definitivamente.';await load();
+        }catch(e){if(dialog.isConnected)dialog.querySelector('[data-removal-error]').textContent=e.message||'No se pudo confirmar la eliminación; la tarjeta se conserva.';}
+        finally{deletingPoint=false;confirm.disabled=cancel.disabled=false;}
+      };
+      dialog.showModal();cancel.focus();
+    }catch(e){if(scope===revision){let error=root.querySelector('[data-removal-read-error]');if(!error){error=document.createElement('p');error.dataset.removalReadError='';error.setAttribute('role','alert');button.closest('article').append(error);}error.textContent=e.message;}}
+    finally{button.disabled=false;}
+  }
+
   function listView() {
     root.innerHTML = `<div class="finance-heading"><div><h1>Puntos de venta</h1><p>Tiendas, eventos y ediciones independientes · Importes en EUR</p></div>${action("create", "Crear punto de venta")}</div><div data-editor></div><label>Buscar punto o ciudad<input class="input" data-point-search type="search" value="${esc(search)}"></label><div class="pos-list">${
       points
+        .slice((listPage-1)*25,listPage*25)
         .map((p) => {
           const t = p.totals;
-          return `<article class="finance-card"><h2><button class="btn" data-open="${p.id}">${esc(p.name)}</button></h2><p>${esc(p.city)} · ${esc(p.venue)} ${p.archived ? "· Archivado" : ""}</p><dl class="pos-metrics">${[
+          return `<article class="finance-card" data-point-card="${p.id}"><div class="pos-card-header"><h2><button class="btn" data-open="${p.id}">${esc(p.name)}</button></h2>${p.canDelete?`<button type="button" class="btn pos-delete" data-delete="${p.id}" aria-label="Eliminar punto: ${esc(p.name)}">Eliminar</button>`:""}</div><p>${esc(provinceName(p))} · ${esc(p.city)} · ${esc(p.venue)} ${p.archived ? "· Archivado" : ""}</p><dl class="pos-metrics">${[
             ["Unidades netas", t.unitsSold - t.unitsReturned],
             ["Facturación", money(t.revenueCents)],
             ["Comisiones", money(t.commissionCents)],
@@ -512,7 +547,11 @@
             .join("")}</dl></article>`;
         })
         .join("") || "<p>No hay puntos de venta.</p>"
-    }</div>`;
+    }</div><p data-delete-notice role="status">${esc(deleteNotice)}</p><div class="pos-actions"><button type="button" class="btn" data-list-prev ${listPage<=1?"disabled":""}>Anterior</button><span>Página ${listPage} de ${Math.max(1,Math.ceil(points.length/25))} · ${points.length} puntos</span><button type="button" class="btn" data-list-next ${listPage>=Math.ceil(points.length/25)?"disabled":""}>Siguiente</button></div>`;
+    deleteNotice="";
+    root.querySelector("[data-list-prev]").onclick=()=>{listPage--;listView();};
+    root.querySelector("[data-list-next]").onclick=()=>{listPage++;listView();};
+    root.querySelectorAll("[data-delete]").forEach(b=>b.onclick=()=>openDeletion(points.find(p=>p.id===b.dataset.delete),b));
     root.querySelector("[data-action=create]").onclick = () => editPoint();
     root
       .querySelectorAll("[data-open]")
@@ -524,7 +563,7 @@
     field.oninput = () => {
       clearTimeout(timer);
       timer = setTimeout(async () => {
-        search = field.value;
+        search = field.value; listPage=1;
         await load();
         root.querySelector("[data-point-search]")?.focus();
       }, 350);
@@ -533,8 +572,8 @@
   function detailView() {
     const { point, report, sales, entries } = detail,
       t = report.totals;
-    const blocked = point.archived ? 'disabled aria-describedby="pos-archived-help"' : '';
-    const archivedStatus = point.archived ? `<div class="pos-archive-status" role="status"><strong>Punto archivado</strong><p id="pos-archived-help">No puedes registrar nuevas ventas ni gastos mientras esté archivado. Las operaciones anteriores, el historial y sus estadísticas se conservan.</p>${action("reactivate", "Reactivar")}<p data-reactivate-error role="alert"></p></div>` : '';
+    const blocked = point.archived || point.deletedAt ? 'disabled aria-describedby="pos-archived-help"' : '';
+    const archivedStatus = point.archived ? `<div class="pos-archive-status" role="status"><strong>Punto archivado</strong><p id="pos-archived-help">No puedes registrar nuevas ventas ni gastos mientras esté archivado. Las operaciones anteriores, el historial y sus estadísticas se conservan.</p>${point.deletedAt?"<p>Eliminado del listado operativo. El historial y las estadísticas se conservan; no puede reactivarse.</p>":action("reactivate", "Reactivar")}<p data-reactivate-error role="alert"></p></div>` : '';
     root.innerHTML = `<div class="finance-heading"><div><h1>${esc(point.name)}</h1><p>${esc(point.city)} · ${esc(point.venue)} ${point.archived ? "· Archivado" : ""}</p></div><div class="pos-actions">${action("list", "Todos los puntos")}${action("edit", "Editar punto")}${action("sale", "Registrar venta", blocked)}${action("expense", "Registrar gasto", blocked)}</div></div>${archivedStatus}<div data-editor></div><div class="finance-controls"><div class="pos-range"></div><div class="pos-history-filter"><label for="pos-history-input">Filtrar historial por producto</label><input id="pos-history-input" class="input" data-history-search type="search" role="combobox" aria-autocomplete="list" aria-controls="pos-history-options" aria-expanded="false" autocomplete="off" value="${esc(search)}"><div id="pos-history-options" class="pos-history-options" role="listbox" aria-label="Productos del historial" hidden></div></div>${action("filter", "Aplicar filtro")}</div><p>Los indicadores incluyen todas las prendas del periodo. La búsqueda filtra el historial.</p><article class="finance-card"><dl class="pos-metrics">${[
       ["Facturación", money(t.revenueCents)],
       ["Beneficio neto", money(t.profitCents)],
@@ -707,7 +746,7 @@
       const key = crypto.randomUUID();
       const payload = { name:point.name, type:point.type, city:point.city, venue:point.venue,
         startsOn:point.startsOn || undefined, endsOn:point.endsOn || undefined, notes:point.notes,
-        commissionBp:point.commissionBp, archived:false, revision:point.revision };
+        commissionBp:point.commissionBp, provinceId:point.provinceId||"", archived:false, revision:point.revision };
       reactivate.onclick = async () => {
         if (reactivate.disabled) return;
         if (activeForm?.isConnected && !window.CRONOX_ADMIN_SHELL?.canLeave('reactivate')) return;
@@ -798,6 +837,7 @@
       } else {
         historyProductId = '';
       }
+      if(!territories.length){const choices=await api("/territories");territories=Array.isArray(choices)?choices.filter(t=>/^\d{2}$/.test(t.id)):[];}
       const result = await api(
         id
           ? `/${encodeURIComponent(id)}?${new URLSearchParams(historyParams())}`
@@ -808,6 +848,7 @@
       variants = options;
       detail = id ? result : null;
       points = id ? [] : result;
+      if(!id)listPage=Math.max(1,Math.min(listPage,Math.ceil(points.length/25)||1));
       detail ? detailView() : listView();
     } catch (e) {
       if (current !== revision) return;

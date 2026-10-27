@@ -8,6 +8,7 @@ const settle = async () => { for (let i = 0; i < 20; i++) await new Promise(reso
 function setup() {
   const dom = new JSDOM(read('checkout.html'), { runScripts: 'outside-only', url: 'https://fixture.test/checkout' });
   const w = dom.window as any;
+  require('../../test/checkout-presence-fixture.cjs').install(w);
   const method = { code: 'STANDARD', label: 'Envío estándar', priceCents: 490, amountCents: 490 };
   const cart = { items: [{ id: 1, qty: 1, priceCents: 5000, product: { name: 'Fixture' } }], subtotalCents: 5000, itemsCount: 1 };
   let promo: any = null;

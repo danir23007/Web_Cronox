@@ -133,6 +133,30 @@ export class QrEventsService {
     return describeGroup(group);
   }
 
+  async delete(id: string, confirmed: boolean, actorId: number) {
+    if (confirmed !== true) throw new BadRequestException('Confirma expresamente la eliminación del evento.');
+    return this.prisma.$transaction(async tx => {
+      // Same row as scan's FOR SHARE. Wait for earlier registrations and fence
+      // new scans before deleting any participant. Missing UUIDs are idempotent.
+      const groups = await tx.$queryRaw<Array<{ name: string }>>`
+        SELECT name FROM "QrEventGroup" WHERE id=${id}::uuid FOR UPDATE`;
+      const actors = await tx.$queryRaw<Array<{ role: Role; accountState: UserAccountState }>>`
+        SELECT role,"accountState" FROM "User" WHERE id=${actorId} FOR SHARE`;
+      if (actors[0]?.role !== Role.SUPERADMIN || actors[0]?.accountState !== UserAccountState.ACTIVE) {
+        throw new ForbiddenException('Solo un SUPERADMIN activo puede eliminar eventos QR.');
+      }
+      if (!groups[0]) return { id, deleted: true, alreadyDeleted: true, participantsDeleted: 0 };
+      const removed = await tx.qrEventParticipant.deleteMany({ where: { groupId: id } });
+      await tx.qrEventGroup.delete({ where: { id } });
+      await tx.auditLog.create({ data: {
+        actorId, action: 'qr_event.delete', actionType: 'qr_event.delete',
+        targetType: 'qr_event_group', targetId: id, requestKey: `qr-event-delete:${id}`,
+        metadata: { name: groups[0].name, participantsDeleted: removed.count },
+      } });
+      return { id, deleted: true, alreadyDeleted: false, participantsDeleted: removed.count };
+    }, { isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted, timeout: 15000 });
+  }
+
   async participants(groupId: string, query: QrEventQueryDto) {
     const { page = 1, limit = 50 } = query;
     const q = query.q?.trim();
@@ -253,20 +277,26 @@ export class QrEventsService {
 
   async scan(groupId: string, qrContent: string, actorId: number) {
     const token = parseAccreditationPayload(qrContent);
-    const initial = await this.prisma.user.findUnique({
-      where: { publicMemberToken: token },
-      select: { id: true },
-    });
-    if (!initial) throw invalidQr();
-    // Same authoritative circle rules as the profile; no circle or user ID is
-    // accepted from a camera/client. Invalid circles remain invalid.
-    await this.circles.maybePromoteRequestedCircle(initial.id);
     return this.prisma.$transaction(
       async (tx) => {
         const groups = await tx.$queryRaw<
           Array<{ archived: boolean }>
         >`SELECT "archived" FROM "QrEventGroup" WHERE "id"=${groupId}::uuid FOR SHARE`;
         if (!groups[0] || groups[0].archived) throw unavailable();
+        const actor = await tx.user.findUnique({
+          where: { id: actorId },
+          select: { identityUid: true, role: true, accountState: true },
+        });
+        if (!actor || actor.accountState !== UserAccountState.ACTIVE ||
+            (actor.role !== Role.ADMIN && actor.role !== Role.SUPERADMIN)) {
+          throw new ForbiddenException('Permiso insuficiente');
+        }
+        const initial = await tx.user.findUnique({ where: { publicMemberToken: token }, select: { id: true } });
+        if (!initial) throw invalidQr();
+        // Reuse this transaction/connection, including the existing promotion
+        // rules. A deleted event never reaches a circle/user mutation, and
+        // concurrent scanners cannot exhaust the pool with nested transactions.
+        await this.circles.maybePromoteRequestedCircle(initial.id, tx);
         const users = await tx.$queryRaw<
           Array<{
             identityUid: string;
@@ -277,17 +307,6 @@ export class QrEventsService {
         SELECT "identityUid", "accountState", "circleLevel" FROM "User" WHERE "publicMemberToken"=${token} FOR SHARE`;
         if (!users[0]) throw invalidQr();
         assertUsableAccreditation(users[0]);
-        const actor = await tx.user.findUnique({
-          where: { id: actorId },
-          select: { identityUid: true, role: true, accountState: true },
-        });
-        if (
-          !actor ||
-          actor.accountState !== UserAccountState.ACTIVE ||
-          (actor.role !== Role.ADMIN && actor.role !== Role.SUPERADMIN)
-        ) {
-          throw new ForbiddenException('Permiso insuficiente');
-        }
         // PostgreSQL INSERT ON CONFLICT DO NOTHING waits for concurrent inserts.
         // The following READ COMMITTED statement sees the winner, preserving its
         // timestamp, circle and administrator even after a lost-response retry.

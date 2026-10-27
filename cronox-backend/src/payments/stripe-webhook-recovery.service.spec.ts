@@ -48,7 +48,7 @@ describe('Stripe recovery operational boundaries', () => {
   });
 
   it('lists incident metadata without returning signed payloads or customer details', async () => {
-    const prisma = { stripeWebhookEvent: { findMany: jest.fn().mockResolvedValue([]) }, checkoutEffect: { findMany: jest.fn().mockResolvedValue([]) } };
+    const prisma = { checkoutSnapshot: { findMany: jest.fn().mockResolvedValue([]), count: jest.fn().mockResolvedValue(0) }, stripeWebhookEvent: { findMany: jest.fn().mockResolvedValue([]) }, checkoutEffect: { findMany: jest.fn().mockResolvedValue([]) } };
     const service = new StripeWebhookRecoveryService(prisma as any);
     await service.incidents();
     expect(prisma.stripeWebhookEvent.findMany.mock.calls[0][0].select).not.toHaveProperty('payload');
@@ -68,6 +68,7 @@ describe('Stripe recovery operational boundaries', () => {
     process.env.STRIPE_WEBHOOK_WORKER_ENABLED = 'true';
     jest.useFakeTimers();
     const prisma = {
+      checkoutSnapshot: { findMany: jest.fn().mockResolvedValue([]), count: jest.fn().mockResolvedValue(0) },
       stripeWebhookEvent: { findMany: jest.fn().mockResolvedValue([]) },
       checkoutEffect: { updateMany: jest.fn().mockResolvedValue({ count: 0 }), findMany: jest.fn().mockResolvedValue([]) },
     };

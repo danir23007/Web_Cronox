@@ -17,6 +17,7 @@ import {
 } from 'class-validator';
 
 export class PointDto {
+  @IsOptional() @IsIn(['', ...Array.from({length:52},(_,i)=>String(i+1).padStart(2,'0'))]) provinceId?: string;
   @IsString() @MaxLength(160) name: string;
   @IsIn(['STORE', 'EVENT', 'OTHER']) type: string;
   @IsOptional() @IsString() @MaxLength(160) city = '';
@@ -38,6 +39,7 @@ export class SaleLineDto {
   @IsInt() @Min(0) @Max(10000) commissionBp: number;
 }
 export class SaleDto {
+  @IsOptional() @IsInt() @Min(1) orderId?: number;
   @Equals(undefined, { message: "Statistics exclusion is only available for customer manual purchases" })
   excludedFromStatistics?: never;
   @IsOptional() @IsIn(['DEDUCT_NOW', 'ALREADY_ADJUSTED'])
@@ -55,6 +57,11 @@ export class SaleDto {
   paymentMethod = '';
   @IsOptional() @IsInt() @Min(1) revision?: number;
   @IsOptional() @IsString() @MaxLength(1000) reason?: string;
+}
+export class DeletePointDto {
+  @Equals(true) confirmed!: true;
+  @IsIn(['archive','delete']) mode!: 'archive' | 'delete';
+  @IsInt() @Min(1) revision!: number;
 }
 export class SaleDateDto {
   @IsString() occurredAt: string;

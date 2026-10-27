@@ -294,7 +294,7 @@ describe('AdminUsersService protected user updates', () => {
       promoCodeRedemption: { findMany: jest.fn().mockResolvedValue([]) },
       discountCode: { findFirst: jest.fn().mockResolvedValue(null) },
       promoCode: { findFirst: jest.fn().mockResolvedValue(null) },
-      $queryRaw: jest.fn().mockResolvedValue([{ id: accountUser.id, registrationNumber: 1n }]),
+      $queryRaw: jest.fn().mockResolvedValue([{ id: accountUser.id, ordinal: 1n }]),
       $transaction: jest.fn((operations) => typeof operations === 'function'
         ? operations(readPrisma) : Promise.all(operations)),
     };
@@ -305,7 +305,7 @@ describe('AdminUsersService protected user updates', () => {
 
     expect(list.data[0].phone).toBe('+12025550184');
     expect(list.data[0].id).toBe(accountUser.id);
-    expect(list.data[0].registrationNumber).toBe(accountUser.id);
+    expect(list.data[0].registrationNumber).toBe(1);
     expect(readPrisma.$transaction).toHaveBeenCalledWith(expect.any(Function), {
       isolationLevel: 'RepeatableRead',
       timeout: 60000,

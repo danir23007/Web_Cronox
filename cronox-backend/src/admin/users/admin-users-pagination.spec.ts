@@ -8,6 +8,7 @@ describe('admin user pagination before purchase metrics', () => {
   let metrics: jest.SpyInstance;
   beforeEach(() => {
     tx = {
+      $queryRaw: jest.fn().mockResolvedValue(users.map((user, index) => ({ id: user.id, ordinal: BigInt(index + 1) }))),
       user: {
         findMany: jest.fn(({ orderBy, skip = 0, take = users.length }) => Promise.resolve(
           [...users].sort((a, b) => orderBy.id === 'asc' ? a.id - b.id : b.id - a.id).slice(skip, skip + take),
@@ -33,6 +34,7 @@ describe('admin user pagination before purchase metrics', () => {
     expect(result.data.map(user => user.id)).toEqual(ids);
     expect(result.meta).toEqual({ page: 2, pageSize: 2, total: 5, totalPages: 3, sort: 'id', order });
     expect(result.data.map(user => user.revenueCents)).toEqual(ids.map(id => id * 100));
+    expect(result.data.map(user => user.registrationNumber)).toEqual(ids.map(id => users.findIndex(user => user.id === id) + 1));
     expect(metrics).toHaveBeenCalledWith(tx, ids);
     expect(tx.$transaction).toHaveBeenCalledWith(expect.any(Function), { isolationLevel: 'RepeatableRead', timeout: 60000 });
   });

@@ -15,6 +15,18 @@
 
     [hidden] { display: none !important; }
 
+    .cronox-admin .btn.user-delete-action { color: #fff; background: #a51c32; border: 1px solid #d64960; }
+    .cronox-admin .btn.user-delete-action:hover { background: #bd243d; }
+    .cronox-admin .btn.user-delete-action:disabled { opacity: 0.55; cursor: wait; }
+    .user-delete-dialog { width: min(480px, calc(100% - 40px)); color: var(--admin-text, #f5f5f7); background: var(--admin-surface, #11111a); border: 1px solid #d64960; border-radius: 8px; padding: 24px; }
+    .user-delete-dialog::backdrop { background: rgba(0,0,0,.75); }
+    .user-delete-dialog h2 { margin-top: 0; }
+    .user-delete-dialog dl { overflow-wrap: anywhere; }
+    .user-delete-dialog dt { color: var(--admin-muted, #b4b4c4); margin-top: 12px; }
+    .user-delete-dialog dd { margin: 4px 0 0; }
+    .user-delete-dialog .dialog-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 10px; margin-top: 24px; }
+    .user-delete-error { color: var(--admin-c-a32c2c, #ffb7c2); }
+
     .admin-auth-check {
       min-height: 100vh;
       display: grid;
@@ -488,12 +500,28 @@
       <div class="topbar-right">
         <span class="badge" id="apiBaseBadge">API: —</span>
         <button class="btn" type="button" id="editUser" hidden>Editar usuario</button>
+        <button class="btn user-delete-action" type="button" id="deleteUser" hidden>Eliminar usuario</button>
         <button class="btn" type="button" id="refreshAll">Recargar</button>
         <a class="btn" id="backToUsers" href="admin.html">Volver</a>
       </div>
     </header>
 
     <div id="statusArea" class="status-area" aria-live="polite"></div>
+
+    <dialog class="user-delete-dialog" id="deleteUserDialog" aria-labelledby="deleteUserTitle" aria-describedby="deleteUserWarning">
+      <h2 id="deleteUserTitle">Eliminar usuario</h2>
+      <p id="deleteUserWarning">¿Seguro que quieres eliminar esta cuenta? Esta acción no se puede deshacer.</p>
+      <dl>
+        <dt>Nombre</dt><dd id="deleteUserName">—</dd>
+        <dt>Email</dt><dd id="deleteUserEmail">—</dd>
+        <dt>ID de usuario CRX</dt><dd id="deleteUserCrx">—</dd>
+      </dl>
+      <p id="deleteUserError" class="user-delete-error" role="alert" hidden></p>
+      <div class="dialog-actions">
+        <button class="btn" id="cancelDeleteUser" type="button" autofocus>Cancelar</button>
+        <button class="btn user-delete-action" id="confirmDeleteUser" type="button">Eliminar definitivamente</button>
+      </div>
+    </dialog>
 
     <main class="layout">
       <aside class="card summary-card">
@@ -730,7 +758,7 @@
   </div>
 
   <script src="assets/country.js?v=1"></script>
-  <script src="assets/api.js?v=26"></script>
+  <script src="assets/api.js?v=27"></script>
   <script src="assets/admin-auth-routing.js?v=1"></script>
   <script src="assets/ui-status.js"></script>
   <script src="assets/admin-navigation.js?v=2"></script>
@@ -739,6 +767,6 @@
   <script src="assets/admin-live-stats.js?v=2"></script>
   <script src="assets/user-identity.js?v=1"></script>
   <script src="assets/account-state.js?v=1"></script>
-  <script src="assets/admin-user.js?v=11"></script>
+  <script src="assets/admin-user.js?v=12"></script>
 </body>
 </html>

@@ -15,10 +15,11 @@ import { AccessAuthModule } from '../auth/access-auth.module';
 import { AuthModule } from '../auth/auth.module';
 import { LiveStatsModule } from '../live-stats/live-stats.module';
 import { StripeWebhookRecoveryService } from './stripe-webhook-recovery.service';
+import { CheckoutPresenceController } from './checkout-presence.controller';
 
 @Module({
   imports: [OrdersModule, CartModule, EmailModule, AnalyticsModule, AccessAuthModule, AuthModule, LiveStatsModule],
-  controllers: [PaymentsController, PaymentsApiController, StripeWebhookController, BankTransferController],
+  controllers: [PaymentsController, PaymentsApiController, StripeWebhookController, BankTransferController, CheckoutPresenceController],
   providers: [
     StripeService,
     BankTransferService,

@@ -65,6 +65,7 @@ describe('CartService checkout cart selection', () => {
         })),
       },
       checkoutSnapshot: {
+        findFirst: jest.fn().mockResolvedValue(null),
         updateMany: jest.fn().mockResolvedValue({ count: 0 }),
       },
     };
@@ -131,6 +132,7 @@ describe('CartService checkout cart selection', () => {
         findMany: jest.fn().mockResolvedValue([]),
       },
       checkoutSnapshot: {
+        findFirst: jest.fn().mockResolvedValue(null),
         updateMany: jest.fn().mockResolvedValue({ count: 1 }),
       },
     };
@@ -162,6 +164,7 @@ describe('CartService checkout cart selection', () => {
 
   it('rejects an add that bypasses the frontend when real variant stock is insufficient', async () => {
     const tx = {
+      checkoutSnapshot: { findFirst: jest.fn().mockResolvedValue(null) },
       $executeRaw: jest.fn().mockResolvedValue(0),
       $queryRaw: jest.fn().mockResolvedValue([]),
       cart: {

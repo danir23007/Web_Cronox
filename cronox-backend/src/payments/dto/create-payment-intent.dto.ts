@@ -8,12 +8,22 @@ import {
   IsObject,
   IsOptional,
   IsString,
+  IsUUID,
   MaxLength,
   Min,
 } from 'class-validator';
 import { ShippingMethodCode } from '../../common/enums/shipping-method-code.enum';
 
 export class CreatePaymentIntentDto {
+  // Required at the HTTP boundary; optional TS shape keeps internal legacy
+  // fixtures source-compatible. Public clients must own a checkout presence.
+  @IsString()
+  @MaxLength(64)
+  checkoutSnapshotId?: string;
+
+  @IsUUID()
+  tabId?: string;
+
   @IsOptional()
   @IsBoolean()
   expressCheckout?: boolean;

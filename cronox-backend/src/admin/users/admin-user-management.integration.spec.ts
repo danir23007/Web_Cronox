@@ -34,10 +34,12 @@ describe('Super Admin user management (HTTP integration)', () => {
     listUsers: jest.Mock;
     getEditOptions: jest.Mock;
     updateAdminUser: jest.Mock;
+    deleteUser: jest.Mock;
   };
 
   beforeEach(async () => {
     usersService = {
+      deleteUser: jest.fn((id, identityUid) => ({ deleted: true, id, identityUid })),
       listUsers: jest.fn().mockResolvedValue({ items: [], total: 0 }),
       getEditOptions: jest.fn().mockReturnValue({
         roles: Object.values(Role),
@@ -94,6 +96,24 @@ describe('Super Admin user management (HTTP integration)', () => {
     circleLevel: 3,
     expectedUpdatedAt: '2026-09-15T08:00:00.000Z',
   };
+
+  const deletion = { confirmed: true, expectedUpdatedAt: '2026-09-15T08:00:00.000Z' };
+  it('allows only the Super Admin deletion route with explicit confirmation and stable identity', async () => {
+    await request(app.getHttpServer()).delete('/api/admin/users/7').set('x-test-role', Role.SUPERADMIN)
+      .set('x-cronox-user-identity', 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa').send(deletion).expect(200);
+    expect(usersService.deleteUser).toHaveBeenCalledWith(7, 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', deletion, 99, expect.any(Object));
+  });
+  it.each([Role.ADMIN, Role.USER, Role.FRIEND, 'SUPER_ADMIN'])('denies deletion over HTTP for %s', async role => {
+    await request(app.getHttpServer()).delete('/api/admin/users/7').set('x-test-role', role).send(deletion).expect(403);
+    expect(usersService.deleteUser).not.toHaveBeenCalled();
+  });
+  it('rejects unauthenticated and unconfirmed deletion before the service', async () => {
+    await request(app.getHttpServer()).delete('/api/admin/users/7').send(deletion).expect(401);
+    for (const body of [{}, { ...deletion, confirmed: false }, { ...deletion, expectedUpdatedAt: 'invalid' }]) {
+      await request(app.getHttpServer()).delete('/api/admin/users/7').set('x-test-role', Role.SUPERADMIN).send(body).expect(400);
+    }
+    expect(usersService.deleteUser).not.toHaveBeenCalled();
+  });
 
   it('allows SUPERADMIN to update protected fields', async () => {
     const response = await request(app.getHttpServer())

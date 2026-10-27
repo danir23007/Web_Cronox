@@ -1,6 +1,6 @@
 jest.mock('node:fs', () => ({ writeFileSync: jest.fn(), renameSync: jest.fn(), unlinkSync: jest.fn() }));
 import { writeFileSync, renameSync } from 'node:fs';
-import { writeRecoveryOperationalStatus } from './recovery-operational-status';
+import { writeRecoveryOperationalStatus, writeCheckoutReservationOperationalStatus } from './recovery-operational-status';
 
 describe('private deployment recovery telemetry', () => {
   const original = process.env.CRONOX_RECOVERY_STATUS_FILE;
@@ -28,5 +28,12 @@ describe('private deployment recovery telemetry', () => {
     expect(JSON.parse(bytes)).toEqual({ ...state, lastScanCompletedAt: state.lastScanCompletedAt.toISOString(), pid: process.pid, writtenAt: expect.any(Number) });
     expect(bytes).not.toContain('private');
     expect(renameSync).toHaveBeenCalledWith(path, process.env.CRONOX_RECOVERY_STATUS_FILE);
+  });
+  it('publishes separate private reservation telemetry without identifiers or provider data',()=>{
+    const reservation={...state,running:false,pollIntervalMs:1000,retryDelayMs:5000,payload:'not-public',snapshotId:'not-public'};
+    delete process.env.CRONOX_RECOVERY_STATUS_FILE;writeCheckoutReservationOperationalStatus(reservation);expect(writeFileSync).not.toHaveBeenCalled();
+    process.env.CRONOX_RECOVERY_STATUS_FILE='/tmp/wrong';expect(()=>writeCheckoutReservationOperationalStatus(reservation)).toThrow('INVALID_RECOVERY_STATUS_PATH');
+    process.env.CRONOX_RECOVERY_STATUS_FILE='/var/lib/cronox-pm2/recovery-status.json';writeCheckoutReservationOperationalStatus(reservation);
+    const [path,bytes,options]=(writeFileSync as jest.Mock).mock.calls[0];expect(options).toEqual({mode:0o600,flag:'wx'});expect(JSON.parse(bytes)).toMatchObject({pid:process.pid,enabled:true,running:false,pollIntervalMs:1000,retryDelayMs:5000});expect(bytes).not.toContain('not-public');expect(renameSync).toHaveBeenCalledWith(path,'/var/lib/cronox-pm2/reservation-status.json');
   });
 });

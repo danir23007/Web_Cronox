@@ -9,6 +9,7 @@ import { madridDate } from '../finance/financial-calculations';
 import { EditManualPurchaseDto } from './dto/edit-manual-purchase.dto';
 
 const include = {
+  pointSale:{select:{id:true}},
   items: { include: { financialSnapshot: true, variant: { include: { product: true } } }, orderBy: { id: 'asc' as const } },
   stockMovements: { select: { reason: true } }, checkoutSnapshot: { select: { id: true } },
 } satisfies Prisma.OrderInclude;
@@ -31,6 +32,7 @@ const version = (order: EditableOrder, archive: { revision: number } | null) => 
 });
 
 function limitation(order: EditableOrder, archive: { revision: number } | null): string | null {
+  if(order.pointSale)return 'Esta compra está vinculada a un punto de venta. Registra sus ajustes y devoluciones desde ese punto para conservar un único libro económico.';
   if (order.source !== 'IN_PERSON_ADMIN') return 'Solo se pueden editar compras presenciales registradas por el administrador.';
   if (order.status !== 'PAID' || order.voidedAt) return 'No se pueden editar compras anuladas, devueltas o que no estén pagadas.';
   if (order.providerRef || (order.provider && order.provider !== 'manual') || order.paymentMethod === 'STRIPE' || order.checkoutSnapshot)

@@ -329,6 +329,29 @@ export class StripeService {
     }
   }
 
+  async reconcileExpiredCheckoutPayment(expected: { paymentIntentId: string; checkoutSnapshotId: string; amount: number; currency: string; stripeAccountId: string | null }) {
+    const account = await this.getCurrentStripeAccountId();
+    if (expected.stripeAccountId && account !== expected.stripeAccountId) throw new ConflictException('CHECKOUT_STRIPE_ACCOUNT_MISMATCH');
+    const retrieve = async () => {
+      const intent = await this.stripe.paymentIntents.retrieve(expected.paymentIntentId);
+      this.assertCheckoutPaymentIntentBinding(intent, expected);
+      if (intent.livemode === this.testMode) throw new ConflictException('STRIPE_PAYMENT_MODE_MISMATCH');
+      return intent;
+    };
+    let intent = await retrieve();
+    if (!['succeeded', 'canceled', 'processing'].includes(intent.status)) {
+      try {
+        intent = await this.stripe.paymentIntents.cancel(intent.id, {}, { idempotencyKey: `checkout-expire:${expected.checkoutSnapshotId}` });
+        this.assertCheckoutPaymentIntentBinding(intent, expected);
+      } catch {
+        // Confirmation can win between retrieve and cancel. Only a fresh,
+        // authenticated terminal state permits fulfillment or release.
+        intent = await retrieve();
+      }
+    }
+    return intent;
+  }
+
   async assertCheckoutPaymentIsNotConfirming(
     paymentIntentId: string,
     checkoutSnapshotId: string,

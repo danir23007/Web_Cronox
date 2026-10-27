@@ -29,43 +29,8 @@ async function prepare(client, connection, directory, bin) {
   await client.query('COMMIT');return manifest;
  } catch(e){await client.query('ROLLBACK');throw e;}
 }
-async function apply(client, manifest, directory, expected, deletionUid) {
- if(expected!==manifest.total)throw Error('Explicit expected user count does not match the reviewed plan');
- if(digest(fs.readFileSync(path.join(directory,manifest.backup)))!==manifest.backupSha256)throw Error('Backup hash mismatch');
- if(!manifest.restoreVerified)throw Error('Restore this dump to an isolated database and verify it before --apply');
- await client.query('BEGIN');
- try {
-  await client.query('SELECT pg_advisory_xact_lock(824031,1)');
-  const tables=(await client.query(`SELECT string_agg(format('%I.%I',n.nspname,c.relname),',' ORDER BY c.relname) AS names FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='public' AND c.relkind='r'`)).rows[0].names;
-  await client.query('LOCK TABLE '+tables+' IN ACCESS EXCLUSIVE MODE');
-  const actual=await readPlan(client);
-  if(JSON.stringify(actual)!==JSON.stringify(manifest.plan))throw Error('Plan changed; prepare and verify a fresh backup');
-  const before=await ownership(client);
-  if(JSON.stringify(before.inventory)!==JSON.stringify(manifest.references))throw Error('Reference schema changed; prepare and verify a fresh backup');
-  if(manifest.ownership && before.sha256!==manifest.ownership.sha256)throw Error('Account references changed since backup; prepare and restore a fresh backup');
-  let run;
-  if(deletionUid) {
-   if(!actual.some(x=>x.identityUid===deletionUid))throw Error('Deletion UUID is absent from the reviewed plan');
-   const target=(await client.query('SELECT role,"accountState" FROM "User" WHERE "identityUid"=$1',[deletionUid])).rows[0];
-   if(target.accountState==='ACTIVE'&&['ADMIN','SUPERADMIN'].includes(target.role)) {
-    const counts=(await client.query(`SELECT count(*) FILTER(WHERE role IN ('ADMIN','SUPERADMIN'))::integer admins,count(*) FILTER(WHERE role='SUPERADMIN')::integer supers FROM "User" WHERE "accountState"='ACTIVE'`)).rows[0];
-    if(counts.admins<=1||(target.role==='SUPERADMIN'&&counts.supers<=1))throw Error('Deletion would remove the last active administrative access');
-   }
-   await client.query(`SELECT set_config('cronox.user_delete','on',true)`);
-   const deleted=await client.query('DELETE FROM "User" WHERE "identityUid"=$1 RETURNING "identityUid"',[deletionUid]);
-   if(deleted.rowCount!==1)throw Error('Deletion changed unexpectedly');
-   run='controlled deletion';
-  } else run=(await client.query('SELECT cronox_compact_users($1,$2::jsonb,$3) AS run',[expected,JSON.stringify(actual),'reviewed initial numbering'])).rows[0].run;
-  const after=await readPlan(client);
-  if(after.length!==expected-(deletionUid?1:0)||after.some(x=>x.oldId!==x.newId))throw Error('Nonconsecutive result');
-  const invalid=(await client.query(`SELECT count(*)::integer AS n FROM "User" WHERE "memberCode"<>cronox_user_number_code(id)`)).rows[0].n;
-  if(invalid)throw Error('Member code mismatch');
-  const cascaded=new Set(deletionUid?before.records.map(record=>JSON.parse(record)).filter(([table,key,column,uid])=>uid===deletionUid && before.inventory.foreignKeys.some(f=>f.table===table&&f.column===column&&f.delete_action==='c')).map(([table,key])=>JSON.stringify([table,key])):[]);
-  const retained=before.records.filter(record=>{const [table,key,column,uid]=JSON.parse(record);return uid!==deletionUid&&!cascaded.has(JSON.stringify([table,key]));});
-  const current=await ownership(client);
-  if(JSON.stringify(retained)!==JSON.stringify(current.records))throw Error('Ownership verification failed; operation rolled back');
-  await client.query('COMMIT');return {total:after.length,changed:!!run,run};
- }catch(e){await client.query('ROLLBACK');throw e;}
+async function apply() {
+ throw Error('User IDs are permanent. The legacy compaction/deletion operator is disabled. Use confirmed deletion in the administrator; only list ordinals are recalculated.');
 }
 async function main() {
  const args=process.argv.slice(2),value=key=>args.find(x=>x.startsWith(key+'='))?.slice(key.length+1);

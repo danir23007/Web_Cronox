@@ -68,6 +68,9 @@ async function main() {
         'utf8',
       ),
     );
+    for (const name of ['20261027230000_point_territory_and_safe_removal','20261027231000_point_place_normalization']) {
+      await sql.query(fs.readFileSync(path.join(backend,'prisma/migrations',name,'migration.sql'),'utf8'));
+    }
     await sql.query(
       fs.readFileSync(
         path.join(
@@ -712,6 +715,7 @@ async function main() {
     checks.push(
       'Real HTTP JWT/Admin guards: anonymous 401, customer 403, administrator 200 for points, private options, detail and finance',
     );
+    await require('./test-map-sale-points-fixtures.cjs')({db,points,finance,admin,customer,app,token,userToken,checks});
     fs.mkdirSync(path.join(root, 'test-results/sale-points'), {
       recursive: true,
     });

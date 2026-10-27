@@ -39,6 +39,10 @@ export class PaymentIntentFactory {
     dto: CreatePaymentIntentDto,
     cart?: CartWithItems | null,
   ) {
+    if (dto.checkoutSnapshotId) {
+      if (!cart || !dto.tabId) throw new ConflictException('CHECKOUT_PRESENCE_REQUIRED');
+      await this.ordersService.assertCheckoutPreparationPresence(owner, cart.id, dto.checkoutSnapshotId, dto.tabId);
+    }
     const normalizedShippingAddress = this.normalizeShippingAddress(
       dto.shippingAddress,
     );
@@ -65,12 +69,12 @@ export class PaymentIntentFactory {
         ? this.ordersService.createCheckoutSnapshot(
             legacyUserId,
             checkoutParams,
-            { cart },
+            { cart, tabId: dto.tabId },
           )
         : this.ordersService.createCheckoutSnapshotForOwner(
             owner,
             checkoutParams,
-            { cart },
+            { cart, tabId: dto.tabId },
           );
     const claimReplacement = (snapshot: {
       cartId: number;
@@ -88,6 +92,7 @@ export class PaymentIntentFactory {
             snapshot.checkoutSnapshotId,
           );
     let snapshot = await createSnapshot();
+    if (snapshot.expired || snapshot.reservationPhase === 'RECONCILING') throw new ConflictException('CHECKOUT_RESERVATION_EXPIRED');
     if (snapshot.status === 'BANK_TRANSFER_PENDING') {
       throw new ConflictException({ code: 'CHECKOUT_BANK_TRANSFER_PENDING', paymentIntentId: snapshot.paymentIntentId });
     }
@@ -96,6 +101,7 @@ export class PaymentIntentFactory {
     // replacement lifecycle. The ownership claim remains under the active-cart
     // unique index while Stripe cancellation is verified.
     if (snapshot.replacementRequired) {
+      let replacementReady = false;
       const replacementClaimed = await claimReplacement(snapshot);
       if (!replacementClaimed) {
         let unavailablePaymentIntentReleased = false;
@@ -112,6 +118,7 @@ export class PaymentIntentFactory {
                 snapshot,
                 cart,
                 error,
+                dto.tabId ? { owner, tabId: dto.tabId, params: checkoutParams } : undefined,
               );
             if (!unavailablePaymentIntentReleased) throw error;
           }
@@ -142,19 +149,19 @@ export class PaymentIntentFactory {
                 snapshot,
                 cart,
                 error,
+                dto.tabId ? { owner, tabId: dto.tabId, params: checkoutParams } : undefined,
               );
             if (!unavailablePaymentIntentReleased) throw error;
           }
         }
         if (!unavailablePaymentIntentReleased) {
-          await this.ordersService.releaseCheckoutSnapshot(
-            snapshot.checkoutSnapshotId,
-            snapshot.expired ? 'EXPIRED' : 'REPLACED',
-            snapshot.paymentIntentId ?? undefined,
-          );
+          const replaced = await this.ordersService.replaceCheckoutReservation(owner, snapshot.checkoutSnapshotId, dto.tabId, checkoutParams);
+          if (!replaced) throw new ConflictException('EMPTY_CART');
+          snapshot = replaced; replacementReady = true;
         }
       }
-      snapshot = await createSnapshot();
+      if (cart) cart = await this.ordersService.reloadCheckoutCart(owner, snapshot.cartId);
+      if (!replacementReady) snapshot = await createSnapshot();
       if (snapshot.replacementRequired) {
         throw new ConflictException('CHECKOUT_REPLACEMENT_IN_PROGRESS');
       }
@@ -182,9 +189,11 @@ export class PaymentIntentFactory {
           snapshot,
           cart,
           error,
+          dto.tabId ? { owner, tabId: dto.tabId, params: checkoutParams } : undefined,
         );
         if (!released) throw error;
 
+        if (cart) cart = await this.ordersService.reloadCheckoutCart(owner, snapshot.cartId);
         snapshot = await createSnapshot();
         if (snapshot.replacementRequired || snapshot.paymentIntentId) {
           throw new ConflictException('CHECKOUT_REPLACEMENT_IN_PROGRESS');
@@ -192,8 +201,18 @@ export class PaymentIntentFactory {
       }
     }
 
+    const creationRequest = (await this.ordersService.getCheckoutCreationRequest(snapshot.checkoutSnapshotId)) as {
+      checkoutSnapshotId: string; amount: number; currency: string; shippingAddress?: Record<string, string>; requestedAt?: string;
+    } || {
+      requestedAt: new Date().toISOString(),
+      checkoutSnapshotId: snapshot.checkoutSnapshotId,
+      amount: snapshot.amountCents,
+      currency: snapshot.currency,
+      ...(normalizedShippingAddress && !dto.expressCheckout ? { shippingAddress: normalizedShippingAddress } : {}),
+    };
     const claimed = await this.ordersService.claimCheckoutPaymentIntentCreation(
       snapshot.checkoutSnapshotId,
+      creationRequest,
     );
     if (!claimed) {
       const concurrent = await createSnapshot();
@@ -226,14 +245,7 @@ export class PaymentIntentFactory {
       | { id: string; clientSecret: string; stripeAccountId: string }
       | undefined;
     try {
-      paymentIntent = await this.stripeService.createPaymentIntentForCheckout({
-        checkoutSnapshotId: snapshot.checkoutSnapshotId,
-        amount: snapshot.amountCents,
-        currency: snapshot.currency,
-        ...(normalizedShippingAddress && !dto.expressCheckout
-          ? { shippingAddress: normalizedShippingAddress }
-          : {}),
-      });
+      paymentIntent = await this.stripeService.createPaymentIntentForCheckout(creationRequest);
       await this.ordersService.bindStripePaymentIntent(
         snapshot.checkoutSnapshotId,
         paymentIntent.id,
@@ -241,9 +253,8 @@ export class PaymentIntentFactory {
       );
     } catch (error) {
       if (!paymentIntent) {
-        await this.ordersService.resetCheckoutPaymentIntentCreation(
-          snapshot.checkoutSnapshotId,
-        );
+        // A network failure may follow successful creation at Stripe. Retain
+        // the durable request/claim; retry or cleanup uses the SAME key/body.
       } else {
         try {
           await this.stripeService.cancelCheckoutPaymentIntent(
@@ -278,8 +289,11 @@ export class PaymentIntentFactory {
     },
     cart: CartWithItems | null | undefined,
     error: unknown,
+    replacement?: Parameters<OrdersService['finalizeUnavailableCheckoutPaymentRecovery']>[2],
   ): Promise<boolean> {
     if (!snapshot.paymentIntentId) return false;
+    const current = await this.ordersService.getActiveReservation(owner, snapshot.cartId);
+    if (current?.paymentStartedAt) throw new ConflictException('CHECKOUT_RESERVATION_EXPIRED');
 
     let stripeAccountId: string;
     let allowStripeAccountBackfill = false;
@@ -363,6 +377,7 @@ export class PaymentIntentFactory {
       await this.ordersService.finalizeUnavailableCheckoutPaymentRecovery(
         recoveryInput,
         claim.token,
+        ...(replacement ? [replacement] as const : []),
       );
     if (!finalized.released) {
       this.blockRecovery(
@@ -413,16 +428,21 @@ export class PaymentIntentFactory {
       lineItems: unknown;
       shippingMethod: unknown;
       totals: unknown;
+      expiresAt?: Date;
+      reservationPhase?: string;
+      paymentStartedAt?: Date | null;
     },
     paymentIntent: { id: string; clientSecret: string },
   ) {
     return {
+      serverNow: new Date(),
       clientSecret: paymentIntent.clientSecret,
       paymentIntentId: paymentIntent.id,
       summary: snapshot.summary,
       lineItems: snapshot.lineItems,
       shippingMethod: snapshot.shippingMethod,
       totals: snapshot.totals,
+      reservation: { expiresAt: snapshot.expiresAt, phase: snapshot.reservationPhase, paymentStartedAt: snapshot.paymentStartedAt },
       metadata: { checkoutSnapshotId: snapshot.checkoutSnapshotId },
     };
   }

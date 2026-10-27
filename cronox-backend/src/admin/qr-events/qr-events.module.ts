@@ -3,12 +3,13 @@ import { PrismaModule } from '../../prisma/prisma.module';
 import { MembershipModule } from '../../membership/membership.module';
 import { AdminGuard } from '../../common/guards/admin.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
+import { SuperAdminGuard } from '../../common/guards/super-admin.guard';
 import { QrEventsController } from './qr-events.controller';
 import { QrEventsService } from './qr-events.service';
 
 @Module({
   imports: [PrismaModule, MembershipModule],
   controllers: [QrEventsController],
-  providers: [QrEventsService, AdminGuard, RolesGuard],
+  providers: [QrEventsService, AdminGuard, RolesGuard, SuperAdminGuard],
 })
 export class QrEventsModule {}

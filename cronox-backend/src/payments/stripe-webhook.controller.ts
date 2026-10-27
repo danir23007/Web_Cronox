@@ -37,6 +37,7 @@ import { LivePaymentObservation } from '../live-stats/live-payment-observation';
 import { StripeWebhookRecoveryService, EffectOutcome } from './stripe-webhook-recovery.service';
 import { SuperAdminGuard } from '../common/guards/super-admin.guard';
 import type { CheckoutEffect } from '@prisma/client';
+import { CheckoutReservationCleanupService } from './checkout-reservation-cleanup.service';
 
 @ApiTags('Payments / Stripe')
 @Controller()
@@ -52,13 +53,16 @@ export class StripeWebhookController {
     private readonly authService: AuthService,
     @Optional() private readonly livePayment?: LivePaymentObservation,
     @Optional() private readonly recovery?: StripeWebhookRecoveryService,
+    @Optional() private readonly reservationCleanup?: CheckoutReservationCleanupService,
   ) {
     this.recovery?.register(event => this.dispatchEvent(event), effect => this.deliverEffect(effect));
   }
 
   @Get('admin/payments/recovery')
   @UseGuards(JwtAuthGuard, SuperAdminGuard)
-  async recoveryIncidents() { return this.requireRecovery().incidents(); }
+  async recoveryIncidents() {
+    return { ...await this.requireRecovery().incidents(), reservationWorker: this.reservationCleanup?.operationalStatus() ?? { enabled: false } };
+  }
 
   @Post('admin/payments/recovery/:kind/:id/retry')
   @UseGuards(JwtAuthGuard, SuperAdminGuard)

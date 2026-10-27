@@ -191,7 +191,7 @@ export class CartService {
       const currentQty = existingItem?.qty ?? 0;
       const newQty = currentQty + dto.qty;
 
-      this.assertStock(newQty, variant.stockQty ?? 0);
+        this.assertStock(newQty, await this.stockAvailableToCart(client, cart.id, variant.id, variant.stockQty ?? 0));
 
       if (existingItem) {
         await client.cartItem.update({
@@ -235,7 +235,7 @@ export class CartService {
       }
 
       const variant = await this.getVariantOrThrow(client, item.variantId);
-      this.assertStock(dto.qty, variant.stockQty ?? 0);
+      this.assertStock(dto.qty, await this.stockAvailableToCart(client, cart.id, variant.id, variant.stockQty ?? 0));
       const price = this.getVariantPriceOrThrow(variant);
 
       await client.cartItem.update({
@@ -246,6 +246,16 @@ export class CartService {
       await this.recalcTotals(client, cart.id);
       return this.getCartByIdOrThrow(client, cart.id);
     });
+  }
+
+  private async stockAvailableToCart(client: ModelClient, cartId: number, variantId: number, available: number) {
+    const snapshot = await client.checkoutSnapshot.findFirst({ where: { cartId,
+      stockReservations: { some: { variantId, status: 'RESERVED' } } },
+      select: { stockReservations: { where: { variantId, status: 'RESERVED' }, select: { quantity: true } } },
+    });
+    // This only validates a wish-list quantity; it never moves inventory or
+    // modifies the immutable items of a payment already started.
+    return available + (snapshot?.stockReservations.reduce((sum, row) => sum + row.quantity, 0) ?? 0);
   }
 
   async removeItem(context: CartContext, itemId: number): Promise<CartWithItems> {
@@ -315,6 +325,13 @@ export class CartService {
         return { merged: true, incidents };
       }
 
+      const activeWhere = { status: { in: ['RESERVED', 'PAYMENT_INTENT_CREATING', 'PAYMENT_BOUND', 'REPLACEMENT_PENDING', 'MISSING_RECOVERY_PENDING', 'DISPUTED', 'BANK_TRANSFER_PENDING'] } };
+      const [guestCheckout, accountCheckout] = await Promise.all([
+        client.checkoutSnapshot.findFirst({ where: { cartId: anonCart.id, ...activeWhere }, select: { id: true } }),
+        client.checkoutSnapshot.findFirst({ where: { cartId: userCart.id, ...activeWhere }, select: { id: true } }),
+      ]);
+      if (guestCheckout && accountCheckout) throw new ConflictException({ code: 'CHECKOUT_MERGE_CONFLICT', message: 'Hay dos compras en curso. Finaliza o abandona una antes de combinar las cestas.' });
+
       const existingItemsMap = new Map<number, number>(
         userCart.items.map((item) => [item.variantId, item.qty]),
       );
@@ -324,7 +341,8 @@ export class CartService {
         const requestedTotalQty = currentQty + item.qty;
 
         const variant = await this.getVariantOrThrow(client, item.variantId);
-        const availableStock = Math.max(0, variant.stockQty ?? 0);
+        const guestAvailable = await this.stockAvailableToCart(client, anonCart.id, variant.id, Math.max(0, variant.stockQty ?? 0));
+        const availableStock = await this.stockAvailableToCart(client, userCart.id, variant.id, guestAvailable);
         const mergedQty = Math.min(requestedTotalQty, availableStock);
 
         if (mergedQty <= 0) {
@@ -382,6 +400,10 @@ export class CartService {
         where: { anonymousId, userId: null, cartId: anonCart.id },
         data: { anonymousId: null, userId, cartId: userCart.id },
       });
+      await tx.$executeRaw`INSERT INTO "CheckoutPresence" ("cartId", "tabId", "expiresAt", "departedAt")
+        SELECT ${userCart.id}, "tabId", "expiresAt", "departedAt" FROM "CheckoutPresence" WHERE "cartId" = ${anonCart.id}
+        ON CONFLICT ("cartId", "tabId") DO NOTHING`;
+      await tx.$executeRaw`DELETE FROM "CheckoutPresence" WHERE "cartId" = ${anonCart.id}`;
       await tx.$executeRaw`INSERT INTO "CartOperation" ("cartId", key, fingerprint, "createdAt")
         SELECT ${userCart.id}, key, fingerprint, "createdAt" FROM "CartOperation" WHERE "cartId" = ${anonCart.id}
         ON CONFLICT ("cartId", key) DO NOTHING`;

@@ -12,6 +12,7 @@
   let cameraVersion = 0, cameraState = 'closed', stream = null, frameTimer, permissionTimer;
   let detector = null, reader = null, fallbackPromise;
   let resultTimer, resultVersion = 0, resultActive = false, exportPending = null;
+  let canDelete = false, deleteTarget = null, deleting = false, listData = null, listNotice = '';
   const heldCodes = new Map();
   const REMOVAL_MS = 800;
   const XLSX_TYPE = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
@@ -55,7 +56,7 @@
   function failure(error, scanning = false) {
     if (error.status === 401) return 'La sesión ha caducado. Inicia sesión de nuevo.';
     if (error.status === 403) return 'Permiso insuficiente para gestionar Eventos QR.';
-    if (error.code === 'GROUP_UNAVAILABLE' || error.status === 404) return 'Grupo no disponible. Vuelve al listado y actualízalo.';
+    if (error.code === 'GROUP_UNAVAILABLE' || error.status === 404) return 'Grupo no disponible: puede haber sido eliminado. Vuelve a Todos los grupos y actualiza el listado.';
     if (error.code === 'CREDENTIAL_UNUSABLE') return 'Credencial no utilizable. Revisa el estado de la cuenta y su círculo.';
     if (error.code === 'INVALID_QR') return 'QR no válido o desconocido. Utiliza una acreditación CRONOX.';
     if (!scanning && error.status === 400) return 'Datos no válidos. Revisa el nombre y la descripción.';
@@ -84,20 +85,67 @@
       const query = new URLSearchParams({ page: String(groupPage), limit: '25', q: $('Search').value.trim() });
       const data = await request('?' + query, 'GET', undefined, read.signal);
       if (generation !== read.scope || read.version !== readVersion || groupId) return;
-      if (groupPage > 1 && !data.items.length) { groupPage = 1; return loadGroups(); }
+      if (groupPage > 1 && !data.items.length) { groupPage = Math.max(1, Math.min(groupPage - 1, Number(data.pages) || 1)); return loadGroups(); }
+      canDelete = data.canDelete === true; listData = data;
       $('List').replaceChildren();
       for (const item of data.items) {
-        const article = node('article', '', 'qr-events-group');
-        article.append(node('h3', item.name), node('p', item.description || ''), node('strong', `${number(item.total)} participantes`));
+        const article = node('article', '', 'qr-events-group'); article.dataset.groupId = String(item.id);
+        const heading = node('div', '', 'qr-events-group-heading'); heading.append(node('h3', item.name));
+        if (canDelete) {
+          const remove = node('button', 'Eliminar', 'btn qr-events-delete'); remove.type = 'button';
+          remove.setAttribute('aria-label', 'Eliminar evento: ' + item.name); remove.onclick = () => openDeletion(item);
+          heading.append(remove);
+        }
+        article.append(heading, node('p', item.description || ''), node('strong', `${number(item.total)} participantes`));
         const open = node('button', 'Abrir grupo', 'btn'); open.type = 'button';
         open.setAttribute('aria-label', 'Abrir grupo: ' + item.name); open.onclick = () => navigate(String(item.id));
         article.append(open); $('List').append(article);
       }
-      renderPages('', data); message('Message', data.items.length ? '' : 'No hay grupos con esta búsqueda.');
+      renderPages('', data); message('Message', listNotice || (data.items.length ? '' : 'No hay grupos con esta búsqueda.'), listNotice ? 'success' : 'info');
+      listNotice = '';
     } catch (error) {
       if (generation !== read.scope || read.version !== readVersion) return;
-      $('List').replaceChildren(); $('Page').textContent = ''; message('Message', failure(error), 'error');
+      message('Message', (listNotice ? listNotice + ' ' : '') + failure(error), 'error');
     } finally { if (read.version === readVersion) $('List').setAttribute('aria-busy', 'false'); }
+  }
+
+  function openDeletion(item) {
+    if (!canDelete || deleting || groupId || root.hidden) return;
+    deleteTarget = { id: String(item.id), scope: generation };
+    $('DeleteDescription').textContent = `¿Quieres eliminar el evento “${item.name}”? Se eliminarán el grupo y sus registros de participación. Las cuentas de los usuarios y sus acreditaciones no se eliminarán. Esta acción no se puede deshacer`;
+    $('DeleteCount').textContent = `${number(item.total)} participantes`;
+    $('DeleteError').hidden = true; $('DeleteError').textContent = '';
+    $('DeleteDialog').showModal(); $('DeleteCancel').focus();
+  }
+
+  async function confirmDeletion() {
+    if (deleting || !deleteTarget || !canDelete || !$('DeleteDialog').open) return;
+    const target = deleteTarget; deleting = true;
+    $('DeleteConfirm').disabled = true; $('DeleteCancel').disabled = true;
+    $('DeleteConfirm').textContent = 'Eliminando…'; $('DeleteError').hidden = true;
+    try {
+      const result = await request('/' + encodeURIComponent(target.id), 'DELETE', { confirmed: true });
+      if (result.deleted !== true || String(result.id) !== target.id) throw new Error('Eliminación no confirmada');
+      $('DeleteDialog').close();
+      if (target.scope !== generation || groupId || root.hidden) return;
+      const card = [...$('List').children].find(card => card.dataset.groupId === target.id);
+      card?.remove();
+      if (listData && card) {
+        const total = Math.max(0, listData.total - 1), pages = Math.max(1, Math.ceil(total / (listData.limit || 25)));
+        groupPage = Math.min(groupPage, pages); renderPages('', { ...listData, total, pages, page: groupPage });
+      }
+      listNotice = result.alreadyDeleted ? 'El evento ya estaba eliminado. Listado actualizado.' : 'Evento eliminado correctamente.';
+      await loadGroups();
+    } catch (error) {
+      if (target.scope !== generation || root.hidden) return;
+      $('DeleteError').hidden = false;
+      $('DeleteError').textContent = error.status === 403 ? 'Solo un SUPERADMIN puede eliminar eventos QR.'
+        : error.status === 401 ? failure(error)
+        : 'No se pudo confirmar la eliminación. La tarjeta se conserva; actualiza el listado para comprobar el estado o reintenta la confirmación.';
+    } finally {
+      deleting = false; if (!$('DeleteDialog').open) deleteTarget = null;
+      $('DeleteConfirm').disabled = false; $('DeleteCancel').disabled = false; $('DeleteConfirm').textContent = 'Eliminar definitivamente';
+    }
   }
 
   function updateGroup(value) {
@@ -182,6 +230,8 @@
 
   function resetView(id) {
     generation++; readVersion++; readAbort?.abort(); stopCamera(); cancelExport();
+    if ($('DeleteDialog').open) $('DeleteDialog').close();
+    if (!deleting) deleteTarget = null;
     groupId = id; group = null; participantPage = 1;
     $('ScanRetry').hidden = true; message('ScanMessage', ''); $('ParticipantSearch').value = '';
     $('Participants').replaceChildren(); $('GroupName').textContent = 'Cargando grupo…';
@@ -406,6 +456,9 @@
   function leave() {
     generation++; readVersion++; readAbort?.abort(); stopCamera(); cancelExport();
     group = null; groupId = '';
+    if ($('DeleteDialog').open) $('DeleteDialog').close();
+    if (!deleting) deleteTarget = null;
+    canDelete = false; listData = null; listNotice = '';
     $('Participants').replaceChildren(); $('List').replaceChildren();
     $('GroupName').textContent = ''; $('GroupDescription').textContent = ''; $('Total').textContent = '';
     message('ScanMessage', '');
@@ -429,6 +482,9 @@
   });
   $('Filters').addEventListener('submit', event => { event.preventDefault(); groupPage = 1; void loadGroups(); });
   $('Refresh').onclick = () => void loadGroups();
+  $('DeleteConfirm').onclick = () => void confirmDeletion();
+  $('DeleteCancel').onclick = () => { if (!deleting) { $('DeleteDialog').close(); deleteTarget = null; } };
+  $('DeleteDialog').addEventListener('cancel', event => { if (deleting) event.preventDefault(); else deleteTarget = null; });
   $('Prev').onclick = () => { groupPage--; void loadGroups(); }; $('Next').onclick = () => { groupPage++; void loadGroups(); };
   $('Back').onclick = () => navigate('');
   $('ParticipantFilters').addEventListener('submit', event => { event.preventDefault(); participantPage = 1; void loadParticipants(); });

@@ -73,6 +73,20 @@ function setup(id = 'a') {
 }
 
 describe('Eventos QR camera, session and request lifecycles', () => {
+  it('stops scanning an event deleted elsewhere, explains the state and retains the return-to-list action', async () => {
+    const t = setup();
+    try {
+      await t.w.CRONOX_QR_EVENTS.load();
+      t.w.fetch.mockResolvedValueOnce({ ok: false, status: 404, json: async () => ({ code: 'GROUP_UNAVAILABLE' }) });
+      await t.scan('CRX1.deleted-group-token');
+      expect(t.el('ScanMessage').textContent).toContain('eliminado');
+      expect(t.el('CameraOpen').disabled).toBe(true);
+      expect(t.el('ScanRetry').hidden).toBe(true);
+      expect(t.el('Back').hidden).toBe(false);
+      expect(t.tracks[0].stop).toHaveBeenCalled();
+      await t.tick(5000); expect(t.posts()).toHaveLength(1);
+    } finally { t.close(); }
+  });
   it('shows a confirmed result only after persistence and suppresses repeated frames without leaking raw QR', async () => {
     const t = setup(), pending = deferred();
     try {

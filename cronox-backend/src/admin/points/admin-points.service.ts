@@ -1,10 +1,11 @@
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import { Prisma, Role } from '@prisma/client';
 import { createHash, randomUUID } from 'crypto';
 import { PrismaService } from '../../prisma/prisma.service';
 import { configuredManualCost } from '../finance/historical-cost';
@@ -12,8 +13,11 @@ import {
   madridMidnight,
   nextDate,
   validateRange,
+  allocate, cents,
 } from '../finance/financial-calculations';
-import { ExpenseDto, PointDto, ReturnDto, SaleDto, SaleDateDto } from './point.dto';
+import { DeletePointDto, ExpenseDto, PointDto, ReturnDto, SaleDto, SaleDateDto } from './point.dto';
+import { normalizedPointProvince } from './point-geography';
+import { pointEntryIncluded } from './point-report';
 import {
   calculatePoints,
   commission,
@@ -59,10 +63,11 @@ export class AdminPointsService {
       { timeout: 30000 },
     );
   }
-  private async point(tx: Tx, id: string, allowArchived = false) {
+  private async point(tx: Tx, id: string, allowArchived = false, allowDeleted = false) {
     await tx.$queryRaw`SELECT id FROM "SalePoint" WHERE id = ${id} FOR UPDATE`;
     const point = await tx.salePoint.findUnique({ where: { id } });
     if (!point) throw new NotFoundException('Punto no encontrado.');
+    if (point.deletedAt && !allowDeleted) throw new ConflictException('Punto eliminado: conserva su historial pero no admite nuevas operaciones.');
     if (point.archived && !allowArchived)
       throw new ConflictException(
         'Punto archivado. Reactívalo para registrar ventas o gastos.',
@@ -104,14 +109,14 @@ export class AdminPointsService {
   }
   async list(search = '') {
     const points = await this.prisma.salePoint.findMany({
-      where: search
+      where: { deletedAt:null, ...(search
         ? {
             OR: [
               { name: { contains: search, mode: 'insensitive' } },
               { city: { contains: search, mode: 'insensitive' } },
             ],
           }
-        : {},
+        : {}) },
       orderBy: [{ archived: 'asc' }, { createdAt: 'desc' }],
     });
     const entries = await this.prisma.pointEntry.findMany({
@@ -123,17 +128,53 @@ export class AdminPointsService {
         lines: true,
         expenseCents: true,
         after: true,
+        sale:{select:{order:{select:{source:true,excludedFromStatistics:true}}}},
       },
     });
     return points.map((point) => ({
       ...point,
+      operationsCount: entries.filter(e=>e.pointId===point.id && (e.expenseCents!==0 || !['POINT_CREATE','POINT_EDIT'].includes(e.kind) || (e.lines as unknown[]).length>0)).length,
       totals: calculatePoints(
-        entries.filter((e) => e.pointId === point.id),
+        entries.filter((e) => e.pointId === point.id && pointEntryIncluded(e)),
         '2000-01-01',
         '2100-12-31',
         'months',
       ).totals,
     }));
+  }
+  private async removalPlan(tx: Tx, id: string) {
+    const point=await tx.salePoint.findUnique({where:{id}});
+    if(!point) return null;
+    const [sales,entries]=await Promise.all([
+      tx.pointSale.count({where:{pointId:id}}),tx.pointEntry.findMany({where:{pointId:id},select:{id:true,kind:true,expenseCents:true,lines:true}}),
+    ]);
+    const operationsCount=entries.filter(e=>!['POINT_CREATE','POINT_EDIT'].includes(e.kind)||e.expenseCents!==0||!Array.isArray(e.lines)||e.lines.length>0).length;
+    const stock=entries.length?await tx.stockMovement.count({where:{note:{in:entries.map(e=>'PointEntry:'+e.id)}}}):0;
+    return {point,operationsCount,salesCount:sales,mode:(sales||operationsCount||stock?'archive':'delete') as 'archive'|'delete'};
+  }
+  async previewDeletion(id: string) {
+    return this.prisma.$transaction(async tx=>{
+      const plan=await this.removalPlan(tx,id);if(!plan)throw new NotFoundException('Punto no encontrado o eliminado.');return plan;
+    },{isolationLevel:'RepeatableRead'});
+  }
+  async delete(id: string, dto: DeletePointDto, actorId: number) {
+    if(dto.confirmed!==true)throw new BadRequestException('Confirma expresamente la eliminación del punto.');
+    return this.prisma.$transaction(async tx=>{
+      await tx.$queryRaw`SELECT id FROM "SalePoint" WHERE id=${id} FOR UPDATE`;
+      const actors=await tx.$queryRaw<Array<{role:Role;accountState:string}>>`SELECT role,"accountState" FROM "User" WHERE id=${actorId} FOR SHARE`;
+      if(actors[0]?.role!==Role.SUPERADMIN||actors[0]?.accountState!=='ACTIVE')throw new ForbiddenException('Solo un SUPERADMIN activo puede eliminar puntos de venta.');
+      const plan=await this.removalPlan(tx,id);
+      if(!plan||plan.point.deletedAt)return {id,deleted:true,alreadyDeleted:true,mode:plan?'archive':'delete'};
+      if(plan.point.revision!==dto.revision||plan.mode!==dto.mode)throw new ConflictException('El punto o su historial han cambiado. Cancela y vuelve a abrir la confirmación para revisar qué se conservará.');
+      if(plan.mode==='archive')await tx.salePoint.update({where:{id},data:{deletedAt:new Date(),archived:true,revision:{increment:1}}});
+      else {
+        await tx.$executeRaw`SELECT set_config('cronox.empty_point_delete',${id},true)`;
+        await tx.pointEntry.deleteMany({where:{pointId:id}});
+        await tx.salePoint.delete({where:{id}});
+      }
+      await this.audit(tx,actorId,id,'POINT_DELETE',{name:plan.point.name,city:plan.point.city,venue:plan.point.venue,provinceId:plan.point.provinceId,mode:plan.mode,operationsCount:plan.operationsCount,salesCount:plan.salesCount});
+      return {id,deleted:true,alreadyDeleted:false,mode:plan.mode};
+    },{timeout:30000});
   }
   async savePoint(actor: number, key: string, dto: PointDto, id?: string) {
     if (!dto.name.trim())
@@ -142,13 +183,15 @@ export class AdminPointsService {
     if (dto.endsOn) validateRange(dto.endsOn, dto.endsOn);
     if (dto.startsOn && dto.endsOn) validateRange(dto.startsOn, dto.endsOn);
     return this.operation(actor, key, { id, dto }, async (tx, hash) => {
-      const before = id ? await this.point(tx, id, true) : null;
+      const before = id ? await this.point(tx, id, true, true) : null;
+      if (before?.deletedAt && !dto.archived) throw new ConflictException('Un punto eliminado no se puede reactivar. Puedes corregir su localización conservando el historial.');
       if (before && before.revision !== dto.revision)
         throw new ConflictException(
           'El punto ha cambiado. Recarga antes de editar.',
         );
       const data = {
         name: dto.name.trim(),
+        provinceId: dto.provinceId === undefined ? (before ? before.provinceId : normalizedPointProvince(dto.city)) : dto.provinceId || null,
         type: dto.type,
         city: dto.city,
         venue: dto.venue,
@@ -189,7 +232,7 @@ export class AdminPointsService {
       return entry;
     });
   }
-  private async snapshot(tx: Tx, dto: SaleDto, old: PointLine[] = []) {
+  private async snapshot(tx: Tx, dto: SaleDto, old: PointLine[] = [], historic?: Map<number,number>) {
     if (
       new Set(dto.lines.filter((l) => l.id).map((l) => l.id)).size !==
       dto.lines.filter((l) => l.id).length
@@ -217,7 +260,7 @@ export class AdminPointsService {
         throw new BadRequestException('Los puntos de venta trabajan en EUR.');
       const cost = previous
         ? previous.unitCostCents
-        : configuredManualCost(variant.product.privateCost);
+        : historic ? (historic.get(input.variantId) ?? null) : configuredManualCost(variant.product.privateCost);
       if (cost === null)
         throw new BadRequestException(
           `Falta el coste de ${variant.product.name} (#${variant.productId}). Configúralo antes de registrar la venta.`,
@@ -334,7 +377,29 @@ export class AdminPointsService {
             );
         }
         const before = previous?.state as unknown as PointState | undefined;
-        const lines = await this.snapshot(tx, dto, before?.lines);
+        if (previous && dto.orderId !== undefined && dto.orderId !== previous.orderId) throw new ConflictException('No se puede cambiar el pedido vinculado de una venta.');
+        let historic: Map<number,number> | undefined;
+        if (!previous && dto.orderId) {
+          if (stockHandling !== 'ALREADY_ADJUSTED') throw new BadRequestException('Un pedido vinculado requiere «Ya estaba descontado» para no descontar stock dos veces.');
+          await tx.$executeRaw`SELECT pg_advisory_xact_lock(73421, ${dto.orderId}::int)`;
+          await tx.$queryRaw`SELECT id FROM "Order" WHERE id=${dto.orderId} FOR UPDATE`;
+          const order=await tx.order.findUnique({where:{id:dto.orderId},include:{items:{include:{financialSnapshot:true},orderBy:{id:'asc'}},checkoutSnapshot:{select:{id:true}},stockMovements:{select:{reason:true}}}});
+          if (!order || order.source!=='IN_PERSON_ADMIN' || order.providerRef || (order.provider && order.provider!=='manual') || order.paymentMethod==='STRIPE' || order.checkoutSnapshot || order.disputeLostCents || order.stockMovements.some(m=>['refund','manual_sale_void'].includes(m.reason??'')) || order.currency!=='EUR' || order.status!=='PAID' || order.voidedAt) throw new BadRequestException('El pedido debe ser una compra presencial confirmada en EUR, sin pago integrado, devolución previa ni anulación.');
+          if (await tx.pointSale.findUnique({where:{orderId:dto.orderId}})) throw new ConflictException('Este pedido ya está vinculado a un punto de venta.');
+          const discounts=allocate(order.discountCents,order.items.map(item=>cents(item.lineTotal)));
+          historic=new Map();
+          if (order.items.length!==dto.lines.length || new Set(order.items.map(i=>i.variantId)).size!==order.items.length) throw new BadRequestException('Las prendas deben coincidir exactamente con el pedido.');
+          order.items.forEach((item,i)=>{
+            const line=dto.lines.find(l=>l.variantId===item.variantId);
+            if(!line || line.quantity!==item.quantity || line.unitPriceCents*line.quantity!==cents(item.lineTotal)-discounts[i] || item.financialSnapshot?.unitCostCents==null) throw new BadRequestException('Importes, cantidades y costes históricos deben coincidir con el pedido vinculado.');
+            historic!.set(line.variantId,item.financialSnapshot.unitCostCents);
+          });
+          // Advance the order version under the shared manual-edit lock. A
+          // concurrent serializable editor with an older snapshot must retry.
+          // No financial, payment or inventory field changes here.
+          await tx.order.update({where:{id:order.id},data:{updatedAt:new Date()}});
+        }
+        const lines = await this.snapshot(tx, dto, before?.lines, historic);
         if (
           !previous &&
           (!lines.some((l) => l.quantity > 0) || lines.some((l) => !l.quantity))
@@ -352,7 +417,7 @@ export class AdminPointsService {
               data: { state: json(state), revision: { increment: 1 } },
             })
           : await tx.pointSale.create({
-              data: { pointId, soldAt: occurredAt, state: json(state) },
+              data: { pointId, orderId:dto.orderId, soldAt: occurredAt, state: json(state) },
             });
         const deltas = [
           ...(before?.lines ?? []).map((l) => lineDelta(l, -1)),
@@ -581,6 +646,7 @@ export class AdminPointsService {
             },
           },
           orderBy: [{ occurredAt: 'desc' }, { createdAt: 'desc' }],
+          include:{sale:{select:{order:{select:{source:true,excludedFromStatistics:true}}}}},
         });
         const sales = await tx.pointSale.findMany({
           where: {
@@ -607,7 +673,7 @@ export class AdminPointsService {
           : normalize(line.name).includes(normalize(search.trim())) || String(line.productId) === search.trim());
         return {
           point,
-          report: calculatePoints(entries, from, to),
+          report: calculatePoints(entries.filter(pointEntryIncluded), from, to),
           sales: sales.filter(
             (s) => (!search && productId === undefined) || matches((s.state as unknown as PointState).lines),
           ),

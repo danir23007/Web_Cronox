@@ -29,6 +29,9 @@ describe('PaymentIntentFactory', () => {
 
   it('retains the reservation and retries the same snapshot after Stripe rejects a payment method', async () => {
     const ordersService = {
+      getCheckoutCreationRequest: jest.fn().mockResolvedValue(null),
+      getActiveReservation: jest.fn().mockResolvedValue(null),
+      reloadCheckoutCart: jest.fn().mockResolvedValue(null),
       createCheckoutSnapshot: jest.fn().mockResolvedValue(baseSnapshot),
       claimCheckoutPaymentIntentCreation: jest.fn().mockResolvedValue(true),
       resetCheckoutPaymentIntentCreation: jest.fn().mockResolvedValue(undefined),
@@ -44,15 +47,19 @@ describe('PaymentIntentFactory', () => {
     const factory = new PaymentIntentFactory(ordersService as any, stripeService as any);
     const dto = { shippingMethod: 'STANDARD', shippingAddress: completeAddress } as any;
     await expect(factory.createPaymentIntentForUser(1, dto)).rejects.toBe(rejection);
-    expect(ordersService.resetCheckoutPaymentIntentCreation).toHaveBeenCalledWith('snap_1');
+    expect(ordersService.resetCheckoutPaymentIntentCreation).not.toHaveBeenCalled();
     expect(ordersService.bindStripePaymentIntent).not.toHaveBeenCalled();
     expect(ordersService.releaseCheckoutSnapshot).not.toHaveBeenCalled();
+    ordersService.getCheckoutCreationRequest.mockResolvedValue(stripeService.createPaymentIntentForCheckout.mock.calls[0][0]);
     await expect(factory.createPaymentIntentForUser(1, dto)).resolves.toMatchObject({ paymentIntentId: 'pi_retry' });
     expect(stripeService.createPaymentIntentForCheckout.mock.calls[0]).toEqual(stripeService.createPaymentIntentForCheckout.mock.calls[1]);
   });
 
   it('reuses the server-bound PaymentIntent instead of honoring a client ID', async () => {
     const ordersService = {
+      getCheckoutCreationRequest: jest.fn().mockResolvedValue(null),
+      getActiveReservation: jest.fn().mockResolvedValue(null),
+      reloadCheckoutCart: jest.fn().mockResolvedValue(null),
       createCheckoutSnapshot: jest.fn().mockResolvedValue({
         ...baseSnapshot,
         paymentIntentId: 'pi_server_bound',
@@ -107,6 +114,9 @@ describe('PaymentIntentFactory', () => {
     'creates a new %s checkout from backend-owned totals',
     async (shippingMethod) => {
       const ordersService = {
+      getCheckoutCreationRequest: jest.fn().mockResolvedValue(null),
+      getActiveReservation: jest.fn().mockResolvedValue(null),
+      reloadCheckoutCart: jest.fn().mockResolvedValue(null),
         createCheckoutSnapshot: jest.fn().mockResolvedValue(baseSnapshot),
         claimCheckoutPaymentIntentCreation: jest.fn().mockResolvedValue(true),
         bindStripePaymentIntent: jest.fn().mockResolvedValue(undefined),
@@ -130,7 +140,7 @@ describe('PaymentIntentFactory', () => {
 
       expect(
         ordersService.claimCheckoutPaymentIntentCreation,
-      ).toHaveBeenCalledWith('snap_1');
+      ).toHaveBeenCalledWith('snap_1', expect.objectContaining({ checkoutSnapshotId: 'snap_1', amount: 10495 }));
       expect(stripeService.createPaymentIntentForCheckout).toHaveBeenCalledWith(
         expect.objectContaining({
           checkoutSnapshotId: 'snap_1',
@@ -149,6 +159,9 @@ describe('PaymentIntentFactory', () => {
 
   it('canonicalizes checkout addresses and passes España to the Stripe boundary adapter', async () => {
     const ordersService = {
+      getCheckoutCreationRequest: jest.fn().mockResolvedValue(null),
+      getActiveReservation: jest.fn().mockResolvedValue(null),
+      reloadCheckoutCart: jest.fn().mockResolvedValue(null),
       createCheckoutSnapshot: jest.fn().mockResolvedValue(baseSnapshot),
       claimCheckoutPaymentIntentCreation: jest.fn().mockResolvedValue(true),
       bindStripePaymentIntent: jest.fn().mockResolvedValue(undefined),
@@ -192,6 +205,9 @@ describe('PaymentIntentFactory', () => {
 
   it.each([false, true])('validates and saves a guest address with wallet shipping collection = %s', async (expressCheckout) => {
     const ordersService = {
+      getCheckoutCreationRequest: jest.fn().mockResolvedValue(null),
+      getActiveReservation: jest.fn().mockResolvedValue(null),
+      reloadCheckoutCart: jest.fn().mockResolvedValue(null),
       createCheckoutSnapshotForOwner: jest.fn().mockResolvedValue(baseSnapshot),
       claimCheckoutPaymentIntentCreation: jest.fn().mockResolvedValue(true),
       bindStripePaymentIntent: jest.fn().mockResolvedValue(undefined),
@@ -236,7 +252,10 @@ describe('PaymentIntentFactory', () => {
   });
 
   it('rejects an unsupported checkout country before snapshot persistence', async () => {
-    const ordersService = { createCheckoutSnapshot: jest.fn() };
+    const ordersService = {
+      getCheckoutCreationRequest: jest.fn().mockResolvedValue(null),
+      getActiveReservation: jest.fn().mockResolvedValue(null),
+      reloadCheckoutCart: jest.fn().mockResolvedValue(null), createCheckoutSnapshot: jest.fn() };
     const factory = new PaymentIntentFactory(ordersService as any, {} as any);
 
     await expect(
@@ -253,7 +272,10 @@ describe('PaymentIntentFactory', () => {
     { ...completeAddress, line1: '' },
     { ...completeAddress, postalCode: '28' },
   ])('rejects an incomplete recipient before reserving stock or creating an intent', async (shippingAddress) => {
-    const ordersService = { createCheckoutSnapshot: jest.fn() };
+    const ordersService = {
+      getCheckoutCreationRequest: jest.fn().mockResolvedValue(null),
+      getActiveReservation: jest.fn().mockResolvedValue(null),
+      reloadCheckoutCart: jest.fn().mockResolvedValue(null), createCheckoutSnapshot: jest.fn() };
     const stripeService = { createPaymentIntentForCheckout: jest.fn() };
     const factory = new PaymentIntentFactory(ordersService as any, stripeService as any);
     await expect(factory.createPaymentIntentForUser(1, {
@@ -265,6 +287,9 @@ describe('PaymentIntentFactory', () => {
 
   it('recovers a stale creation-in-progress snapshot with Stripe idempotency', async () => {
     const ordersService = {
+      getCheckoutCreationRequest: jest.fn().mockResolvedValue(null),
+      getActiveReservation: jest.fn().mockResolvedValue(null),
+      reloadCheckoutCart: jest.fn().mockResolvedValue(null),
       createCheckoutSnapshot: jest.fn().mockResolvedValue({
         ...baseSnapshot,
         status: 'PAYMENT_INTENT_CREATING',
@@ -291,7 +316,7 @@ describe('PaymentIntentFactory', () => {
 
     expect(
       ordersService.claimCheckoutPaymentIntentCreation,
-    ).toHaveBeenCalledWith('snap_1');
+    ).toHaveBeenCalledWith('snap_1', expect.objectContaining({ checkoutSnapshotId: 'snap_1', amount: 10495 }));
     expect(stripeService.createPaymentIntentForCheckout).toHaveBeenCalledWith(expect.objectContaining({
       checkoutSnapshotId: 'snap_1',
       amount: 10495,
@@ -324,11 +349,15 @@ describe('PaymentIntentFactory', () => {
         amountCents,
       };
       const ordersService = {
+      getCheckoutCreationRequest: jest.fn().mockResolvedValue(null),
+      getActiveReservation: jest.fn().mockResolvedValue(null),
+      reloadCheckoutCart: jest.fn().mockResolvedValue(null),
         createCheckoutSnapshot: jest
           .fn()
           .mockResolvedValueOnce(replacement)
           .mockResolvedValueOnce(nextSnapshot),
         claimCheckoutSnapshotReplacement: jest.fn().mockResolvedValue(true),
+        replaceCheckoutReservation: jest.fn().mockResolvedValue(nextSnapshot),
         releaseCheckoutSnapshot: jest.fn().mockResolvedValue(undefined),
         claimCheckoutPaymentIntentCreation: jest.fn().mockResolvedValue(true),
         bindStripePaymentIntent: jest.fn().mockResolvedValue(undefined),
@@ -363,11 +392,11 @@ describe('PaymentIntentFactory', () => {
         `pi_${previousSuffix}`,
         `snap_${previousSuffix}`,
       );
-      expect(ordersService.releaseCheckoutSnapshot).toHaveBeenCalledWith(
-        `snap_${previousSuffix}`,
-        'REPLACED',
-        `pi_${previousSuffix}`,
+      expect(ordersService.replaceCheckoutReservation).toHaveBeenCalledWith(
+        { userId: 1 }, `snap_${previousSuffix}`, undefined,
+        expect.objectContaining({ shippingMethod }),
       );
+      expect(ordersService.releaseCheckoutSnapshot).not.toHaveBeenCalled();
       expect(result).toMatchObject({
         paymentIntentId: `pi_${nextSuffix}`,
         clientSecret: `secret_${nextSuffix}`,
@@ -382,6 +411,9 @@ describe('PaymentIntentFactory', () => {
     'fails closed when the previous PaymentIntent is %s',
     async (status) => {
       const ordersService = {
+      getCheckoutCreationRequest: jest.fn().mockResolvedValue(null),
+      getActiveReservation: jest.fn().mockResolvedValue(null),
+      reloadCheckoutCart: jest.fn().mockResolvedValue(null),
         createCheckoutSnapshot: jest.fn().mockResolvedValue({
           ...baseSnapshot,
           paymentIntentId: 'pi_bound',
@@ -415,6 +447,9 @@ describe('PaymentIntentFactory', () => {
 
   it('does not cancel anything when another request or foreign owner holds the replacement claim', async () => {
     const ordersService = {
+      getCheckoutCreationRequest: jest.fn().mockResolvedValue(null),
+      getActiveReservation: jest.fn().mockResolvedValue(null),
+      reloadCheckoutCart: jest.fn().mockResolvedValue(null),
       createCheckoutSnapshot: jest.fn().mockResolvedValue({
         ...baseSnapshot,
         paymentIntentId: 'pi_server_owned',
@@ -448,6 +483,9 @@ describe('PaymentIntentFactory', () => {
 
   it('reports confirmation pending instead of a temporary replacement conflict', async () => {
     const ordersService = {
+      getCheckoutCreationRequest: jest.fn().mockResolvedValue(null),
+      getActiveReservation: jest.fn().mockResolvedValue(null),
+      reloadCheckoutCart: jest.fn().mockResolvedValue(null),
       createCheckoutSnapshot: jest.fn().mockResolvedValue({
         ...baseSnapshot,
         paymentIntentId: 'pi_succeeded',
@@ -486,6 +524,9 @@ describe('PaymentIntentFactory', () => {
       replacementRequired: true,
     };
     const ordersService = {
+      getCheckoutCreationRequest: jest.fn().mockResolvedValue(null),
+      getActiveReservation: jest.fn().mockResolvedValue(null),
+      reloadCheckoutCart: jest.fn().mockResolvedValue(null),
       createCheckoutSnapshot: jest
         .fn()
         .mockResolvedValueOnce(staleSnapshot)
@@ -557,6 +598,9 @@ describe('PaymentIntentFactory', () => {
       reused: true,
     };
     const ordersService = {
+      getCheckoutCreationRequest: jest.fn().mockResolvedValue(null),
+      getActiveReservation: jest.fn().mockResolvedValue(null),
+      reloadCheckoutCart: jest.fn().mockResolvedValue(null),
       createCheckoutSnapshot: jest
         .fn()
         .mockResolvedValueOnce(cancelledSnapshot)
@@ -608,6 +652,9 @@ describe('PaymentIntentFactory', () => {
       reused: true,
     };
     const ordersService = {
+      getCheckoutCreationRequest: jest.fn().mockResolvedValue(null),
+      getActiveReservation: jest.fn().mockResolvedValue(null),
+      reloadCheckoutCart: jest.fn().mockResolvedValue(null),
       createCheckoutSnapshot: jest
         .fn()
         .mockResolvedValueOnce(legacySnapshot)
@@ -680,6 +727,9 @@ describe('PaymentIntentFactory', () => {
       resolveStripeCreation = resolve;
     });
     const ordersService = {
+      getCheckoutCreationRequest: jest.fn().mockResolvedValue(null),
+      getActiveReservation: jest.fn().mockResolvedValue(null),
+      reloadCheckoutCart: jest.fn().mockResolvedValue(null),
       createCheckoutSnapshot: jest.fn().mockResolvedValue(baseSnapshot),
       claimCheckoutPaymentIntentCreation: jest
         .fn()

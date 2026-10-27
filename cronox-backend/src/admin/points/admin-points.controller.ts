@@ -1,7 +1,9 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
+  Header,
   Headers,
   Param,
   ParseIntPipe,
@@ -12,21 +14,31 @@ import {
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { AdminGuard } from '../../common/guards/admin.guard';
+import { RolesGuard } from '../../common/guards/roles.guard';
+import { SuperAdminGuard } from '../../common/guards/super-admin.guard';
+import { Roles } from '../../common/roles.decorator';
+import { Role } from '@prisma/client';
+import { PROVINCES } from '../map/spain-geography';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { AdminPointsService } from './admin-points.service';
-import { ExpenseDto, PointDto, ReturnDto, SaleDto, SaleDateDto } from './point.dto';
+import { DeletePointDto, ExpenseDto, PointDto, ReturnDto, SaleDto, SaleDateDto } from './point.dto';
 
 @Controller('admin/sale-points')
-@UseGuards(JwtAuthGuard, AdminGuard)
+@UseGuards(JwtAuthGuard, AdminGuard, RolesGuard)
 export class AdminPointsController {
   constructor(private readonly service: AdminPointsService) {}
   @Get('options') options() {
     return this.service.options();
   }
-  @Get() list(@Query('search') search = '') {
-    return this.service.list(search.slice(0, 160));
+  @Get('territories') territories(){return PROVINCES.map(p=>({id:p.id,name:p.name,regionId:p.regionId}));}
+  @Get() @Header('Cache-Control','private, no-store') async list(@Query('search') search = '', @CurrentUser('role') role:Role) {
+    return (await this.service.list(search.slice(0,160))).map(p=>({...p,canDelete:role===Role.SUPERADMIN}));
   }
-  @Get(':id') detail(
+  @Get(':id/deletion-preview') @Header('Cache-Control','private, no-store') @Roles(Role.SUPERADMIN) @UseGuards(SuperAdminGuard)
+  previewDeletion(@Param('id',ParseUUIDPipe) id:string){return this.service.previewDeletion(id);}
+  @Delete(':id') @Roles(Role.SUPERADMIN) @UseGuards(SuperAdminGuard)
+  delete(@Param('id',ParseUUIDPipe) id:string,@Body() dto:DeletePointDto,@CurrentUser('id') actor:number){return this.service.delete(id,dto,actor);}
+  @Get(':id') @Header('Cache-Control','private, no-store') detail(
     @Param('id', ParseUUIDPipe) id: string,
     @Query('from') from: string,
     @Query('to') to: string,

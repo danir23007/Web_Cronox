@@ -100,7 +100,7 @@ function main(args = process.argv.slice(2)) {
     if (install.status !== 0) throw Error('ISOLATED_PREFLIGHT_INSTALL_FAILED');
     console.log(`PREFLIGHT_DEPENDENCIES_READY pg=${dependencies.pg} dotenv=${dependencies.dotenv}`);
     for (const script of ['check-user-numbering-release.cjs', 'check-account-state-release.cjs']) {
-      const result = spawnSync(process.execPath, [path.join(isolated, script), '--deployment-check'], {
+      const result = spawnSync(process.execPath, [path.join(isolated, script), '--deployment-check', ...(script==='check-user-numbering-release.cjs'?['--before-migrate']:[])], {
         ...options, env: { ...options.env, CRONOX_ENV_FILE: environmentFile, CRONOX_ACCOUNT_STATE_MIGRATION_FILE: accountMigrationFile },
       });
       if (result.status !== 0) return result.status ?? 1;

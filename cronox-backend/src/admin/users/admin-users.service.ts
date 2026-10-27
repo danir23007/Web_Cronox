@@ -24,6 +24,8 @@ import { isAdminPanelRole, isSuperAdminRole } from '../../common/roles.utils';
 import { UpdateAdminUserDto } from './dto/update-admin-user.dto';
 import { ADMIN_PAGE_SIZES } from '../admin-pagination.constants';
 import { retainedAuditLogDateFilter } from '../audit-logs/audit-log-retention';
+import { deleteAdminUser } from './admin-user-deletion';
+import { DeleteAdminUserDto } from './dto/delete-admin-user.dto';
 
 const DEFAULT_PAGE_SIZE = ADMIN_PAGE_SIZES.USERS;
 const MAX_PAGE_SIZE = ADMIN_PAGE_SIZES.USERS;
@@ -69,6 +71,10 @@ export class AdminUsersService {
     };
   }
 
+  deleteUser(id: number, identityUid: string, dto: DeleteAdminUserDto, adminId: number, request: AdminUserUpdateRequestMetadata = {}) {
+    return deleteAdminUser(this.prisma, id, identityUid, dto, adminId, request);
+  }
+
   selectBulkIds(query: AdminUserQueryDto, tx: Prisma.TransactionClient) {
     return tx.user.findMany({ where: this.buildWhere(query), select: { id: true, identityUid: true }, orderBy: { id: 'asc' }, take: 101 });
   }
@@ -97,7 +103,13 @@ export class AdminUsersService {
       }
       const metrics = await loadUserPurchaseMetrics(tx, users.map(user => user.id));
       const pageUsers = sort === 'id' ? users : sortUsersByMetrics(users, metrics, sort, order).slice(skip, skip + pageSize);
-      return { data: pageUsers.map(user => ({ ...this.mapUser(user), registrationNumber: user.id, ...metrics.get(user.id)! })), total };
+      // Rank the entire surviving cohort before applying search/filter/page.
+      // This ordinal is presentation only; IDs and CRX codes never change.
+      const ordinals = pageUsers.length ? await tx.$queryRaw<{ id: number; ordinal: bigint }[]>(Prisma.sql`
+        SELECT id, ordinal FROM (SELECT id, row_number() OVER (ORDER BY "createdAt",id) AS ordinal FROM "User") ranked
+        WHERE id IN (${Prisma.join(pageUsers.map(user => user.id))})`) : [];
+      const numbers = new Map(ordinals.map(row => [row.id, Number(row.ordinal)]));
+      return { data: pageUsers.map(user => ({ ...this.mapUser(user), registrationNumber: numbers.get(user.id), ...metrics.get(user.id)! })), total };
     }, { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead, timeout: 60000 });
     return { data, meta: { page, pageSize, total, totalPages: Math.ceil(total / pageSize) || 1, sort, order } };
   }

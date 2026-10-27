@@ -59,6 +59,7 @@
     paymentElementMounted,
     confirmParams,
     shouldConfirm = () => true,
+    beforeConfirm,
     onFailure = () => undefined,
   }) => {
     if (!stripe || !elements || !clientSecret || !paymentElementMounted) {
@@ -76,6 +77,7 @@
         await onFailure(error);
         return { attempted: true, error };
       }
+      if (beforeConfirm) await beforeConfirm();
       const result = await stripe.confirmPayment({ elements, clientSecret, confirmParams });
       const error = result?.error ?? null;
       if (error) await onFailure(error);
@@ -94,6 +96,7 @@
     expressCheckoutMounted,
     confirmParams,
     shouldConfirm = () => true,
+    beforeConfirm,
     onFailure = () => undefined,
   }) => {
     if (!stripe || !elements || (!clientSecret && !prepareAfterSubmit) || !expressCheckoutMounted) {
@@ -113,6 +116,7 @@
         await onFailure(error);
         return { attempted: true, error };
       }
+      if (beforeConfirm) await beforeConfirm();
       const result = await stripe.confirmPayment({ elements, clientSecret, confirmParams });
       const error = result?.error ?? null;
       if (error) await onFailure(error);
@@ -157,7 +161,7 @@
       addressLine2: clean(address.line2 || profileAddress.line2),
       city: clean(address.city || profileAddress.city || profile.city),
       state: clean(address.state || profileAddress.state || profile.state),
-      zip: clean(address.zip || profileAddress.zip || profile.zip),
+      zip: clean(address.zip || address.postalCode || profileAddress.zip || profileAddress.postalCode || profile.zip),
       phone: clean(profile.phone || address.phone || profileAddress.phone),
     };
   };

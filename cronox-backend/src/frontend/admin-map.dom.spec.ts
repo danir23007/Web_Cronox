@@ -57,7 +57,7 @@ const report = (from = '2026-10-01', to = '2026-10-07', orders = 1) => ({
 function setup() {
   const dom = new JSDOM('<div id="adminMap"></div>', {
     runScripts: 'outside-only',
-    url: 'https://cronox.test/admin.html#section-map?from=2026-10-01&to=2026-10-07',
+    url: 'https://cronox.test/admin.html#section-map?from=2026-10-01&to=2026-10-07&division=communities',
   });
   const w = dom.window as any;
   const requests: { url: string; resolve: (v: unknown) => void }[] = [];
@@ -74,9 +74,35 @@ function setup() {
   return { dom, w, requests, $: (s: string) => w.document.querySelector(s) };
 }
 describe('Map frontend synchronization and accessible states', () => {
+  it('offers net profit, shows negative amounts consistently and refreshes after a point change',async()=>{
+    const {dom,w,requests,$}=setup();try{
+      w.location.hash='#section-map?metric=profitCents&division=provinces';w.CRONOX_MAP.load();await flush();
+      expect($('[name="metric"]').value).toBe('profitCents');
+      const data=report() as any;data.provinces.forEach((r:any)=>Object.assign(r,{orders:0,units:0,revenueCents:0,profitCents:0}));
+      Object.assign(data.provinces[0],{profitCents:-500,orders:1});Object.assign(data.provinces[1],{profitCents:1000,orders:1});
+      data.identified.profitCents=500;data.total.profitCents=500;
+      requests[0].resolve({ok:true,json:async()=>data});await flush();await flush();
+      const negative=$('.map-graphic [data-region="01"]'),positive=$('.map-graphic [data-region="02"]');
+      expect(negative.style.fill).not.toBe(positive.style.fill);expect($('.map-legend').textContent).toContain('-5,00');
+      expect($('.map-cards').textContent).toContain('Beneficio neto');expect($('.map-cards').textContent).toContain('5,00');
+      expect($('.map-regions-table tbody').textContent).toContain('-5,00');expect($('.map-regions-table tbody').textContent).toContain('-100');
+      negative.dispatchEvent(new w.Event('pointerenter'));expect($('.map-tooltip').textContent).toContain('-5,00');
+      w.dispatchEvent(new w.CustomEvent('cronox:sale-points-changed'));await flush();expect(requests.length).toBe(2);
+    }finally{dom.window.close();}
+  });
+  it('starts with provinces without a selection, ignoring an old stored preference', async () => {
+    const {dom,w,requests,$}=setup();
+    w.localStorage.setItem('cronox:map:division','communities');w.location.hash='#section-map';
+    w.CRONOX_MAP.load();await flush();
+    expect($('[name="division"]').value).toBe('provinces');
+    expect(requests[0].url).toContain('division=provinces');
+    expect($('.map-cartography > h2').textContent).toContain('provincias');
+    expect(w.document.querySelectorAll('.map-graphic [data-region]')).toHaveLength(52);
+    dom.window.close();
+  });
   it.each(['communities', 'provinces'])('sorts all %s numerically with Spanish ties, zeros and unavailable amounts', async (division) => {
     const { dom, w, requests, $ } = setup();
-    w.location.hash += '&division=' + division;
+    w.location.hash = '#section-map?from=2026-10-01&to=2026-10-07&division=' + division;
     w.CRONOX_MAP.load();
     const data = report();
     const rows = division === 'provinces' ? data.provinces : data.regions;
@@ -221,7 +247,7 @@ describe('Map frontend synchronization and accessible states', () => {
   it('ignores an older response even when transport ignores abort; reuses the SVG', async () => {
     const { dom, w, requests, $ } = setup();
     w.CRONOX_MAP.load();
-    w.location.hash = '#section-map?from=2026-10-02&to=2026-10-03';
+    w.location.hash = '#section-map?from=2026-10-02&to=2026-10-03&division=communities';
     w.CRONOX_MAP.load();
     requests[1].resolve({
       ok: true,
@@ -253,7 +279,7 @@ describe('Map frontend synchronization and accessible states', () => {
     expect($('.map-legend').textContent).toContain('1');
     expect(
       $('.map-graphic [data-region="18"]').getAttribute('aria-label'),
-    ).toContain('Ceuta: 1 pedidos');
+    ).toContain('Ceuta: 1 ventas/pedidos');
     expect($('.map-graphic [data-region]').style.fill).not.toBe('#44444d');
     $('.map-graphic [data-region="19"]').focus();
     expect($('.map-tooltip').textContent).toContain('Melilla');

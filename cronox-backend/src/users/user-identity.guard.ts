@@ -14,6 +14,10 @@ export class UserIdentityGuard implements CanActivate {
     const identityUid = req.headers['x-cronox-user-identity'];
     if (typeof identityUid !== 'string' || !/^[0-9a-f-]{36}$/i.test(identityUid)) this.stale();
     const user = await this.db.user.findUnique({ where:{ id:Number(id) },select:{ identityUid:true } });
+    if (!user && req.method === 'DELETE' && /^\/api\/admin\/users\/\d+\/?$/.test(path)) {
+      const receipts = await this.db.$queryRaw<{ identityUid: string }[]>`SELECT "identityUid" FROM "AdminUserDeletion" WHERE "userId"=${Number(id)}`;
+      if (receipts[0]?.identityUid === identityUid) return true;
+    }
     if (!user || user.identityUid !== identityUid) this.stale();
     return true;
   }

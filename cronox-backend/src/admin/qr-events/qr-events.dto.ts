@@ -1,5 +1,6 @@
 import { Transform, Type } from 'class-transformer';
 import {
+  Equals,
   IsInt,
   IsOptional,
   IsString,
@@ -31,4 +32,8 @@ export class CreateQrEventDto {
 }
 export class ScanQrEventDto {
   @IsString() @Length(1, 512) qrContent!: string;
+}
+export class DeleteQrEventDto {
+  @Equals(true, { message: 'Confirma expresamente la eliminación del evento.' })
+  confirmed!: true;
 }

@@ -69,6 +69,7 @@ const query = (patch: Partial<MapQuery> = {}) =>
   Object.assign(new MapQuery(), {
     from: '2026-03-01',
     to: '2026-03-31',
+    division: 'communities',
     ...patch,
   });
 const amounts = (o = order(), events: FinanceEvent[] = []) =>
@@ -160,11 +161,11 @@ describe('Map finance criteria', () => {
         amount: { orders: 1, units: 2, revenueCents: 2000 },
       }),
   );
-  it.each(['PENDING', 'FAILED', 'CANCELLED', 'PAID'])(
-    'does not invent a confirmation date for %s',
+  it.each(['PENDING', 'FAILED', 'CANCELLED'])(
+    'excludes an unconfirmed %s order using the Finance criteria',
     (status) =>
       expect(amounts(order({ status, paidAt: null }))).toEqual({
-        excluded: 'undated',
+        excluded: 'outside',
       }),
   );
   it('counts once across duplicate successful events and payment retries', () => {
@@ -216,16 +217,14 @@ describe('Map finance criteria', () => {
       amounts(order({ shippingCost: 500, total: '25.00' }), [event('a')]),
     ).toMatchObject({ amount: { revenueCents: null, units: 2 } });
   });
-  it('excludes full refunds, unknown dated full refunds and voided sales', () => {
-    expect(amounts(order(), [event('a', 2000)])).toEqual({
-      excluded: 'refunded',
-    });
-    expect(amounts(order({ status: 'REFUNDED' }))).toEqual({
-      excluded: 'refunded',
-    });
-    expect(
-      amounts(order({ voidedAt: new Date('2026-03-30T12:00:00Z') })),
-    ).toEqual({ excluded: 'refunded' });
+  it('uses Finance for full refunds, undated refunds and voids instead of dropping their period movements', () => {
+    for(const [o,events] of [[order(),[event('a',2000)]],[order({status:'REFUNDED'}),[]],[order({voidedAt:new Date('2026-03-30T12:00:00Z')}),[]]] as const){
+      const totals=calculateFinance([o],[...events],'2026-03-01','2026-03-31','months',false).totals;
+      expect(amounts(o,[...events])).toMatchObject({amount:{orders:1,revenueCents:totals.revenueCents,profitCents:totals.profitCents,units:totals.unitsSold-totals.unitsReturned}});
+    }
+  });
+  it('exposes the existing Finance fallback warning for a legacy confirmed order without paidAt',()=>{
+    const value=amounts(order({paidAt:null}));expect(value).toMatchObject({amount:{orders:1,revenueCents:2000}});expect(value.warnings?.join(' ')).toContain('fecha de creación');
   });
   it('does not apply future refunds to a historical period', () => {
     expect(
@@ -279,6 +278,7 @@ describe('Map aggregation, validation and permissions', () => {
       snapshot: order({ id: index + 1, providerRef: `pi_${index + 1}` }),
     }));
     const tx = {
+      pointSale:{findMany:jest.fn().mockResolvedValue([])},
       pointEntry: { findMany: jest.fn().mockResolvedValue([]) }, salePoint: { findMany: jest.fn().mockResolvedValue([]) },
       financeArchive: {
         findMany: jest.fn(async ({ where, select }: any) =>
@@ -369,6 +369,7 @@ describe('Map aggregation, validation and permissions', () => {
       orders: 405,
       units: 810,
       revenueCents: 810000,
+      profitCents:567000,
     });
     expect(result.identified.orders).toBe(402);
     expect(result.groups.find((g) => g.id === 'foreign')?.orders).toBe(3);
@@ -389,6 +390,7 @@ describe('Map aggregation, validation and permissions', () => {
     );
     expect(result.reconciliation.financePeriod).toEqual({
       revenueCents: finance.totals.revenueCents,
+      profitCents:finance.totals.profitCents,
       unitsSold: finance.totals.unitsSold,
       unitsReturned: finance.totals.unitsReturned,
     });
@@ -426,7 +428,7 @@ describe('Map aggregation, validation and permissions', () => {
         new AdminMapService({} as never).getReport(query(bad)),
       ).rejects.toThrow();
   });
-  it('explains the Finance difference from an earlier paid cohort and preserves deleted destinations', async () => {
+  it('reconciles period refunds from earlier sales and preserves deleted destinations', async () => {
     const { rows, tx, db } = fixture();
     rows[0].paidDate = new Date('2026-02-01');
     rows[0].snapshot.paidAt = new Date('2026-02-01T12:00:00Z');
@@ -445,7 +447,7 @@ describe('Map aggregation, validation and permissions', () => {
     expect(report.identified.orders).toBe(0);
     expect(report.groups.find((g) => g.id === 'unresolved')?.orders).toBe(404);
     expect(report.orders.every((o) => !o.available)).toBe(true);
-    expect(report.reconciliation.revenueDifferenceCents).toBe(500);
+    expect(report.reconciliation.revenueDifferenceCents).toBe(0);
     const finance = await new AdminFinanceService(db as never).getReport(
       Object.assign(new FinanceQuery(), query()),
     );

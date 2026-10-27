@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Header,
   Param,
@@ -17,9 +18,11 @@ import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { AdminGuard } from '../../common/guards/admin.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/roles.decorator';
+import { SuperAdminGuard } from '../../common/guards/super-admin.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import {
   CreateQrEventDto,
+  DeleteQrEventDto,
   QrEventQueryDto,
   ScanQrEventDto,
 } from './qr-events.dto';
@@ -32,13 +35,21 @@ export class QrEventsController {
   constructor(private readonly service: QrEventsService) {}
   @Get()
   @Header('Cache-Control', 'private, no-store')
-  list(@Query() query: QrEventQueryDto) {
-    return this.service.list(query);
+  async list(@Query() query: QrEventQueryDto, @CurrentUser('role') role: Role) {
+    return { ...await this.service.list(query), canDelete: role === Role.SUPERADMIN };
   }
   @Post()
   @Header('Cache-Control', 'private, no-store')
   create(@Body() body: CreateQrEventDto, @CurrentUser('id') actorId: number) {
     return this.service.create(body, actorId);
+  }
+  @Delete(':id')
+  @Roles(Role.SUPERADMIN)
+  @UseGuards(SuperAdminGuard)
+  @Header('Cache-Control', 'private, no-store')
+  delete(@Param('id', new ParseUUIDPipe()) id: string,
+    @Body() body: DeleteQrEventDto, @CurrentUser('id') actorId: number) {
+    return this.service.delete(id, body.confirmed, actorId);
   }
   @Get(':id')
   @Header('Cache-Control', 'private, no-store')

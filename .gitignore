@@ -27,6 +27,13 @@ playwright-report/
 
 # Generated local browser verification artifacts.
 /output/playwright/
+/output/checkout-local-activation/*.private*
+/output/checkout-local-activation/*.dump
+/output/user-deletion-local-activation/*.private*
+/output/user-deletion-local-activation/*.dump
+/output/map-sale-points/*.dump
+/output/map-sale-points/*.private*
+/output/release-final-20261027/
 /output/metacrilatos/
 # Private recoverable backups and reviewed account maps must never enter Git.
 output/private-user-numbering/

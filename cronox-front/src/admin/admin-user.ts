@@ -21,6 +21,13 @@ import { MAX_MANUAL_CENTS, parseManualPrice, manualPriceText } from './manual-pu
   const analyticsStatus = document.getElementById('analyticsStatus');
   const refreshAllBtn = document.getElementById('refreshAll');
   const editUserBtn = document.getElementById('editUser') as HTMLButtonElement | null;
+  const deleteUserBtn = document.getElementById('deleteUser') as HTMLButtonElement | null;
+  const deleteUserDialog = document.getElementById('deleteUserDialog') as HTMLDialogElement | null;
+  const cancelDeleteUserBtn = document.getElementById('cancelDeleteUser') as HTMLButtonElement | null;
+  const confirmDeleteUserBtn = document.getElementById('confirmDeleteUser') as HTMLButtonElement | null;
+  const deleteUserError = document.getElementById('deleteUserError');
+  let deletingUser = false;
+  let deletionVersion: string | null = null;
   const userEditForm = document.getElementById('userEditForm') as HTMLFormElement | null;
   const editUserName = document.getElementById('editUserName') as HTMLInputElement | null;
   const editUserPhone = document.getElementById('editUserPhone') as HTMLInputElement | null;
@@ -261,6 +268,44 @@ import { MAX_MANUAL_CENTS, parseManualPrice, manualPriceText } from './manual-pu
   if (backToUsersBtn) {
     backToUsersBtn.href = usersReturnLink;
   }
+
+  const updateDeletionPermission = () => {
+    if (deleteUserBtn) deleteUserBtn.hidden = !canEditProtectedUserFields || !currentUserDetail || String(userId) === authenticatedAdminId;
+  };
+  const openUserDeletion = () => {
+    if (!canEditProtectedUserFields || !currentUserDetail || !deleteUserDialog || String(userId) === authenticatedAdminId || deletingUser) return;
+    deletionVersion = String(currentUserDetail.updatedAt || '');
+    const name = currentUserDetail.name || [currentUserDetail.firstName, currentUserDetail.lastName].filter(Boolean).join(' ') || 'Sin nombre';
+    document.getElementById('deleteUserName')!.textContent = String(name);
+    document.getElementById('deleteUserEmail')!.textContent = String(currentUserDetail.email || '—');
+    document.getElementById('deleteUserCrx')!.textContent = window.CRONOX_USER_IDENTITY.format(currentUserDetail);
+    if (deleteUserError) { deleteUserError.hidden = true; deleteUserError.textContent = ''; }
+    deleteUserDialog.showModal();
+    cancelDeleteUserBtn?.focus();
+  };
+  const confirmUserDeletion = async () => {
+    if (deletingUser || !deleteUserDialog?.open || !canEditProtectedUserFields || !userId || !deletionVersion || !window.CRONOX_API?.admin?.deleteAdminUser || String(userId) === authenticatedAdminId) return;
+    deletingUser = true;
+    if (confirmDeleteUserBtn) { confirmDeleteUserBtn.disabled = true; confirmDeleteUserBtn.textContent = 'Eliminando…'; }
+    if (cancelDeleteUserBtn) cancelDeleteUserBtn.disabled = true;
+    if (deleteUserError) deleteUserError.hidden = true;
+    try {
+      const result = await window.CRONOX_API.admin.deleteAdminUser(userId, { confirmed: true, expectedUpdatedAt: deletionVersion }) as { deleted?: boolean };
+      if (result?.deleted !== true) throw new Error('El servidor no ha confirmado la eliminación. Recarga para comprobar el estado de la cuenta.');
+      try { sessionStorage.setItem('cronox:admin-user-deleted', '1'); } catch { /* Navigation still completes if storage is unavailable. */ }
+      window.location.assign(usersReturnLink);
+    } catch (error) {
+      if (deleteUserError) { deleteUserError.hidden = false; deleteUserError.textContent = (error as Error)?.message || 'No se pudo eliminar la cuenta. No la mostramos como eliminada; comprueba su estado antes de reintentar.'; }
+    } finally {
+      deletingUser = false;
+      if (confirmDeleteUserBtn) { confirmDeleteUserBtn.disabled = false; confirmDeleteUserBtn.textContent = 'Eliminar definitivamente'; }
+      if (cancelDeleteUserBtn) cancelDeleteUserBtn.disabled = false;
+    }
+  };
+  deleteUserBtn?.addEventListener('click', openUserDeletion);
+  cancelDeleteUserBtn?.addEventListener('click', () => { if (!deletingUser) deleteUserDialog?.close(); });
+  deleteUserDialog?.addEventListener('cancel', event => { if (deletingUser) event.preventDefault(); });
+  confirmDeleteUserBtn?.addEventListener('click', () => void confirmUserDeletion());
 
   const formatDate = (value: unknown) => {
     if (!value) return '—';
@@ -960,6 +1005,7 @@ import { MAX_MANUAL_CENTS, parseManualPrice, manualPriceText } from './manual-pu
         return;
       }
       currentUserDetail = user;
+      updateDeletionPermission();
       updateOrderKpis({
         ordersCount: (stats.ordersCount as number) ?? (stats.orders as number) ?? (stats.ordersTotal as number),
         totalSpent: (stats.totalSpent as number) ?? (stats.totalPaid as number) ?? (stats.spentTotal as number),

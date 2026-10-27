@@ -33,14 +33,23 @@ async function setup() {
     confirmPayPalPayment: jest.fn().mockResolvedValue({ error: { type: 'invalid_request_error', message: 'Autorización cancelada' } }) };
   w.Stripe = () => stripe;
   w.fetch = jest.fn(async (url: string, options?: any) => {
+    if (url.includes('/checkout/reservation') || url.includes('/checkout/payment-start')) return { ok: true, json: async () => ({
+      checkoutSnapshotId: 'snap_test', expiresAt: new Date(Date.now() + 360000).toISOString(),
+      reservationPhase: url.includes('payment-start') ? 'PROTECTED' : 'PRESENCE',
+      paymentStartedAt: url.includes('payment-start') ? new Date().toISOString() : null,
+    }) };
     const rate = options?.body ? JSON.parse(options.body).shippingMethod : new URL(url, 'https://example.test').searchParams.get('shippingMethod');
     const quoted = summary(rate || 'STANDARD');
     return { ok: true, json: async () => url.includes('express-quote') ? quoted : {
+      metadata: { checkoutSnapshotId: 'snap_test' }, reservation: { phase: 'PRESENCE', expiresAt: new Date(Date.now() + 90000).toISOString(), paymentStartedAt: null },
       clientSecret: 'pi_test_secret', paymentIntentId: 'pi_test', shippingMethod: { code: rate }, totals: quoted.totals,
     } };
   });
-  w.eval(read('assets/country.js')); w.eval(read('assets/checkout-lifecycle.js')); w.eval(read('assets/checkout.js'));
+  w.eval(read('assets/country.js')); w.eval(read('assets/checkout-lifecycle.js')); w.eval(read('assets/checkout-presence.js')); w.eval(read('assets/checkout.js'));
   await flush();
+  // Individual wallet assertions count preparation/confirmation requests;
+  // initial presence is exercised separately by reservation tests.
+  w.fetch.mockClear();
   return { dom, w, stripe, elements, handlers, payment, express, finishUpdate: () => updateDone?.() };
 }
 const address = { country: 'ES', postal_code: '28001', city: 'Madrid', state: 'Madrid', line1: 'Calle ficticia 1', line2: '' };

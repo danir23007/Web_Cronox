@@ -58,15 +58,13 @@ export class BankTransferService {
         email: snapshot.customerEmail,
       });
       try {
-        await this.orders.reserveBankTransfer(snapshot.id, paymentIntentId, network);
+        await this.orders.reserveBankTransfer(snapshot.id, paymentIntentId, network, dto.tabId);
       } catch (error) {
         const response = error instanceof ConflictException ? error.getResponse() : null;
         const code = typeof response === 'string' ? response : response && typeof response === 'object' && 'message' in response ? response.message : null;
         if (code === 'BANK_TRANSFER_RESERVATION_LIMIT' || code === 'BANK_TRANSFER_STOCK_RESERVATION_LIMIT') {
-          // A denied bank request must not keep its preparatory 30-minute stock
-          // hold. Release only after Stripe confirms cancellation.
-          await this.stripe.cancelCheckoutPaymentIntent(paymentIntentId, snapshot.id);
-          await this.orders.releaseCheckoutSnapshot(snapshot.id, 'PAYMENT_CANCELLED', paymentIntentId);
+          // Admission failed before payment started: retain ordinary checkout
+          // presence so another payment method can be selected without renewal.
         }
         throw error;
       }

@@ -150,6 +150,7 @@ declare global {
     getUserDetail?: (id: number | string) => Promise<unknown>;
     getUserEditOptions?: () => Promise<unknown>;
     updateAdminUser?: (id: number | string, payload: Record<string, unknown>) => Promise<unknown>;
+    deleteAdminUser?: (id: number | string, payload: Record<string, unknown>) => Promise<unknown>;
     getUserAuditLogs?: (id: number | string) => Promise<unknown>;
     getUserAnalyticsSummary?: (id: number | string) => Promise<unknown>;
     getUserAnalyticsProducts?: (id: number | string) => Promise<unknown>;

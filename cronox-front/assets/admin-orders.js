@@ -196,7 +196,7 @@
         : response.status === 404 ? 'No se encontró el pedido solicitado.'
         : typeof data?.message === 'string' && data.message !== 'Internal server error' ? data.message
         : 'No se pudo completar la operación. Revisa los datos e inténtalo de nuevo.';
-      throw new Error(message);
+      throw Object.assign(new Error(message), { status: response.status });
     }
     return data;
   }
@@ -434,6 +434,7 @@
   };
 
   async function load() {
+    void loadCheckoutRecovery();
     const sequence = ++listRequest;
     selectedOrders.clear(); visibleOrders = []; selectionChanged();
     renderLoading();
@@ -455,6 +456,47 @@
       renderEmpty('No se pudo cargar.');
     }
   }
+  let recoveryRequest = 0;
+  async function loadCheckoutRecovery() {
+    const panel = $('#checkoutRecoveryPanel');
+    if (!panel) return;
+    const sequence = ++recoveryRequest;
+    try {
+      const data = await request('/api/admin/payments/recovery');
+      if (sequence !== recoveryRequest) return;
+      if (!Array.isArray(data?.reservations) || !Number.isInteger(data?.reservationCount) || typeof data?.reservationWorker?.enabled !== 'boolean') {
+        throw new Error('Incomplete recovery response');
+      }
+      panel.hidden = false;
+      setText(panel.querySelector('summary'), 'Reservas de checkout pendientes de conciliación (' + data.reservationCount + ')');
+      const worker = data.reservationWorker;
+      const healthy = worker?.enabled && !worker.lastScanError;
+      setText($('#checkoutRecoveryStatus'), (healthy ? 'Conciliación automática activa.' : 'Atención: conciliación detenida o con errores; revisar el servidor.') +
+        ' Reservas vencidas con stock retenido: ' + data.reservationCount + '. Mostrando hasta 100, las más antiguas primero.');
+      const rows = $('#checkoutRecoveryRows');
+      rows.replaceChildren();
+      for (const reservation of data.reservations || []) {
+        const row = document.createElement('tr');
+        const reference = createCell(row, reservation.id + ' / ' + (reservation.stripePaymentIntentId || 'Intento aún no vinculado'));
+        reference.style.overflowWrap = 'anywhere';
+        createCell(row, reservation.status === 'PAYMENT_INTENT_CREATING' && !reservation.stripePaymentIntentId
+          ? 'Creación incierta: requiere comprobar el intento original; no crear otro ni liberar stock.'
+          : 'Pendiente de verificar con Stripe. Si persiste, revisar cuenta, conexión y estado del intento.');
+        createCell(row, (reservation.stockReservations || []).reduce((sum, item) => sum + item.quantity, 0));
+        createCell(row, formatDate(reservation.expiresAt));
+        createCell(row, formatDate(reservation.reservationRetryAt));
+        rows.appendChild(row);
+      }
+    } catch (error) {
+      if (sequence !== recoveryRequest) return;
+      if (error?.status === 401 || error?.status === 403) { panel.hidden = true; return; }
+      panel.hidden = false;
+      setText(panel.querySelector('summary'), 'Reservas de checkout: comprobación no disponible');
+      $('#checkoutRecoveryRows').replaceChildren();
+      setText($('#checkoutRecoveryStatus'), 'No disponible: no se pudo comprobar la conciliación. Actualiza para reintentar.');
+    }
+  }
+  $('#checkoutRecoveryRefresh')?.addEventListener('click', loadCheckoutRecovery);
   async function openOrder(id) {
     const sequence = ++detailRequest;
     fill(null);

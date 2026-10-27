@@ -148,6 +148,12 @@ describe('linked automatic promotion review', () => {
     expect(tx.circlePromotionRequest.update).toHaveBeenCalledWith({ where: { userId: 7 }, data: { status: 'completed' } });
     expect(tx.user.updateMany).toHaveBeenCalledWith({ where: { id: 7, circleLevel: 2 }, data: { circleLevel: 3 } });
   });
+  it('can join the caller transaction without opening a nested connection', async () => {
+    const { tx, service } = promotionFixture();
+    await service.maybePromoteRequestedCircle(7, tx);
+    expect(tx.$transaction).not.toHaveBeenCalled();
+    expect(tx.circlePromotionRequest.update).toHaveBeenCalledWith({ where: { userId: 7 }, data: { status: 'completed' } });
+  });
   it('fails atomically if the linked review has changed instead of updating another cycle', async () => {
     const { tx, service } = promotionFixture();
     tx.circleUpgradeRequest.updateMany.mockResolvedValue({ count: 0 });

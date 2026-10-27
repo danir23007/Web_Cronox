@@ -18,3 +18,21 @@ describe('local historical review safety', () => {
     expect(res.status).toHaveBeenCalledWith(403); expect(next).not.toHaveBeenCalled();
   });
 });
+
+describe('checkout test activation preserves historical-operation restrictions', () => {
+  const original = { ...process.env };
+  afterEach(() => { process.env = { ...original }; });
+  it('opens only the explicit test checkout routes, with live keys still rejected', () => {
+    Object.assign(process.env, { CRONOX_LOCAL_DEV: 'true', CRONOX_LOCAL_CHECKOUT_TEST: 'true', NODE_ENV: 'development', DATABASE_URL: 'postgresql://local@127.0.0.1/db', STRIPE_SECRET_KEY: 'sk_test_fixture' });
+    for (const path of ['/api/checkout/reservation','/api/checkout/payment-start','/api/checkout/payment-intent','/api/webhooks/stripe']) {
+      const next = jest.fn(); localReviewSafety({ method:'POST', path } as any, {} as any, next); expect(next).toHaveBeenCalled();
+    }
+    for (const path of ['/api/admin/orders/1/refund','/api/admin/orders/1/mark-shipped','/api/newsletter/subscribe']) {
+      const next=jest.fn(), res={status:jest.fn().mockReturnThis(),json:jest.fn()};
+      localReviewSafety({method:'POST',path} as any,res as any,next);expect(res.status).toHaveBeenCalledWith(403);expect(next).not.toHaveBeenCalled();
+    }
+    process.env.STRIPE_SECRET_KEY='sk_live_fixture';
+    const next=jest.fn(), res={status:jest.fn().mockReturnThis(),json:jest.fn()};
+    localReviewSafety({method:'POST',path:'/api/checkout/payment-intent'} as any,res as any,next);expect(res.status).toHaveBeenCalledWith(403);expect(next).not.toHaveBeenCalled();
+  });
+});

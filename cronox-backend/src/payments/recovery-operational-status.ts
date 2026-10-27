@@ -26,3 +26,19 @@ export function writeRecoveryOperationalStatus(status: RecoveryOperationalStatus
     try { unlinkSync(temporary); } catch { /* rename already removed it */ }
   }
 }
+
+// Independent, private evidence for the reservation worker. Reuses the existing
+// explicitly configured runtime directory; no HTTP route or customer payloads.
+export function writeCheckoutReservationOperationalStatus(status: {
+  enabled: boolean; running: boolean; pollIntervalMs: number; retryDelayMs: number;
+  lastScanCompletedAt: Date | null; lastScanError: string | null;
+}): void {
+  if (!process.env.CRONOX_RECOVERY_STATUS_FILE) return;
+  if (process.env.CRONOX_RECOVERY_STATUS_FILE !== '/var/lib/cronox-pm2/recovery-status.json') throw new Error('INVALID_RECOVERY_STATUS_PATH');
+  const file='/var/lib/cronox-pm2/reservation-status.json',temporary=file+'.'+process.pid+'.'+randomUUID();
+  try {
+    writeFileSync(temporary,JSON.stringify({pid:process.pid,writtenAt:Date.now(),enabled:status.enabled,running:status.running,
+      pollIntervalMs:status.pollIntervalMs,retryDelayMs:status.retryDelayMs,lastScanCompletedAt:status.lastScanCompletedAt,lastScanError:status.lastScanError}),{mode:0o600,flag:'wx'});
+    renameSync(temporary,file);
+  }finally{try{unlinkSync(temporary);}catch{}}
+}

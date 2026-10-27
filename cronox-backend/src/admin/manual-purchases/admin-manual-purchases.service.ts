@@ -267,8 +267,10 @@ export class AdminManualPurchasesService {
   async void(orderId: number, adminId: number, reason: string) {
     const trimmedReason = reason.trim();
     return this.prisma.$transaction(async (tx) => {
-      const order = await tx.order.findUnique({ where: { id: orderId }, include: { items: true } });
+      await tx.$queryRaw`SELECT id FROM "Order" WHERE id=${orderId} FOR UPDATE`;
+      const order = await tx.order.findUnique({ where: { id: orderId }, include: { items: true, pointSale:{select:{id:true}} } });
       if (!order) throw new NotFoundException('Pedido no encontrado');
+      if(order.pointSale)throw new ConflictException('Esta compra está vinculada a un punto de venta. Anula o devuelve la operación desde ese punto.');
       if (order.source !== OrderSource.IN_PERSON_ADMIN) throw new BadRequestException('NOT_MANUAL_PURCHASE');
       if (order.status === OrderStatus.CANCELLED) return { changed: false, order };
       if (order.status !== OrderStatus.PAID) throw new ConflictException('MANUAL_PURCHASE_NOT_CORRECTABLE');

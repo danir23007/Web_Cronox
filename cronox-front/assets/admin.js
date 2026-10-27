@@ -1954,8 +1954,11 @@
     usersState.role = params?.get('role') ?? usersState.role;
     usersState.circle = params?.get('circle') ?? usersState.circle;
     usersState.accountState = ['ACTIVE', 'INACTIVE'].includes(params?.get('accountState')) ? params.get('accountState') : '';
-    // Every new entry starts with latest registrations, ignoring legacy sort/state.
-    usersState.sort = 'id'; usersState.order = 'desc'; usersState.page = 1;
+    const [sort, order] = String(params?.get('sort') || 'id:desc').split(':');
+    usersState.sort = ['id', 'revenue', 'orders', 'distinctProducts'].includes(sort) ? sort : 'id';
+    usersState.order = order === 'asc' ? 'asc' : 'desc';
+    const page = Number(params?.get('page') || 1);
+    usersState.page = Number.isSafeInteger(page) && page > 0 ? page : 1;
     const clean = new URL(window.location.href);
     clean.searchParams.delete('accountState');
     clean.hash = buildUsersHash(usersState);
@@ -2639,6 +2642,12 @@
       }
       updateUsersHashState();
       updateUsersPagination();
+      try {
+        if (sessionStorage.getItem('cronox:admin-user-deleted') === '1') {
+          sessionStorage.removeItem('cronox:admin-user-deleted');
+          showToast('Usuario eliminado definitivamente. Listado actualizado.', 'success');
+        }
+      } catch { /* The updated list remains usable without session storage. */ }
       window.CRONOX_BULK?.page('users', normalized.items || [], normalized.meta.total);
     } catch (error) {
       console.error('[ADMIN] Error cargando usuarios', error);

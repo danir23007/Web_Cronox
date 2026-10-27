@@ -99,8 +99,9 @@ export function calculatePoints(
   from: string,
   to: string,
   aggregation: 'days' | 'months' = 'days',
+  collectBuckets = true,
 ) {
-  const base = calculateFinance([], [], from, to, aggregation);
+  const base = calculateFinance([], [], from, to, aggregation, collectBuckets);
   const extra = () => ({
     commissionCents: 0,
     fixedExpenseCents: 0,
@@ -141,13 +142,14 @@ export function calculatePoints(
     const bucket = buckets.find(
       (b) => b.date === (aggregation === 'months' ? day.slice(0, 7) : day),
     )!;
-    for (const target of [totals, bucket]) {
+    for (const target of [totals, ...(bucket ? [bucket] : [])]) {
       target.fixedExpenseCents += entry.expenseCents;
       target.profitCents! -= entry.expenseCents;
       if (entry.kind === 'SALE') target.salesCount++;
       const transfer = entry.after as { dateTransfer?: boolean; salesCountDelta?: number } | null;
       if (entry.kind === 'CORRECTION' && transfer?.dateTransfer === true && [1, -1].includes(transfer.salesCountDelta!))
         target.salesCount += transfer.salesCountDelta!;
+      if(Object.values(target).some(v=>typeof v==='number'&&!Number.isSafeInteger(v)))throw new Error('Importe fuera de precisión.');
     }
     for (const d of entry.lines as PointDelta[]) {
       if (!products.has(d.productId))
@@ -169,7 +171,7 @@ export function calculatePoints(
         });
       for (const target of [
         totals,
-        bucket,
+        ...(bucket ? [bucket] : []),
         products.get(d.productId)!,
         variants.get(d.variantId)!,
       ])

@@ -47,6 +47,7 @@ const setup = (page = 'checkout.html', initialUser: any = null) => {
     url: 'https://example.test/' + page,
   });
   const w = dom.window as any;
+  require('../../test/checkout-presence-fixture.cjs').install(w);
   w.CRONOX_USER = initialUser;
   w.matchMedia = () => ({
     matches: false,

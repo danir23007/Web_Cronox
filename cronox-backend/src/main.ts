@@ -39,6 +39,11 @@ import {
 } from './common/routing/public-seo';
 
 async function bootstrap() {
+  // The controller migrates after building. Never start a production writer on
+  // the accepted legacy input state: allocation must already be permanent.
+  if (isProductionEnvironment() && process.env.CRONOX_ROUTE_SMOKE_MODE !== 'true') {
+    await require('../scripts/check-user-numbering-release.cjs').main(['--deployment-check']);
+  }
   const app = await NestFactory.create(AppModule, { bodyParser: false });
   const isProduction = isProductionEnvironment();
   const trustedProxyHops = getTrustedProxyHops();

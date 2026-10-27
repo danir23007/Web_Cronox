@@ -27,3 +27,8 @@ test('never inherits Correos credentials or enables carrier jobs from a parent d
   assert.equal(result.CORREOS_TRACKING_ENABLED, ''); assert.equal(result.CORREOS_EMAIL_ENABLED, '');
   assert.equal(result.CORREOS_IDENTITY_CLIENT_SECRET, ''); assert.equal(result.CORREOS_DEVELOPERS_CLIENT_SECRET, '');
 });
+
+test('checkout test activation cannot be inherited from the parent shell', () => {
+  const result = buildLocalEnvironment(local, { CRONOX_LOCAL_CHECKOUT_TEST: 'true', CHECKOUT_RESERVATION_WORKER_ENABLED: 'true', LOCAL_CHECKOUT_STRIPE_TEST: 'true', STRIPE_WEBHOOK_WORKER_ENABLED: 'true' });
+  for (const key of ['CRONOX_LOCAL_CHECKOUT_TEST', 'CHECKOUT_RESERVATION_WORKER_ENABLED', 'LOCAL_CHECKOUT_STRIPE_TEST', 'STRIPE_WEBHOOK_WORKER_ENABLED']) assert.equal(result[key], '');
+});

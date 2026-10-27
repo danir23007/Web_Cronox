@@ -37,7 +37,7 @@ export async function admitBankReservation(tx: Prisma.TransactionClient, snapsho
     const variant = await tx.productVariant.findUniqueOrThrow({where:{id:item.variantId}});
     const all = await tx.checkoutStockReservation.aggregate({where:{variantId:item.variantId,status:'RESERVED'},_sum:{quantity:true}});
     const bank = await tx.checkoutStockReservation.aggregate({where:{variantId:item.variantId,status:'RESERVED',checkoutSnapshot:pending},_sum:{quantity:true}});
-    // At most half the unsold inventory may be held for 72h, minimum one unit.
+    // At most half the unsold inventory may be held by bank attempts, minimum one unit.
     // The two-unit order cap also bounds changing IP/email/address identities.
     const limit = Math.max(1, Math.floor((variant.stockQty + (all._sum.quantity || 0))/2));
     if (item.quantity > 2 || (bank._sum.quantity || 0) + item.quantity > limit) throw new ConflictException('BANK_TRANSFER_STOCK_RESERVATION_LIMIT');

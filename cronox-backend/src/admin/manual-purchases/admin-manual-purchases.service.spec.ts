@@ -4,6 +4,7 @@ import { AdminManualPurchasesService } from './admin-manual-purchases.service';
 
 describe('AdminManualPurchasesService', () => {
   const tx: any = {
+    $queryRaw: jest.fn().mockResolvedValue([]),
     user: { findUnique: jest.fn() },
     productVariant: { findMany: jest.fn(), updateMany: jest.fn(), update: jest.fn() },
     order: { create: jest.fn(), findUnique: jest.fn(), updateMany: jest.fn() },

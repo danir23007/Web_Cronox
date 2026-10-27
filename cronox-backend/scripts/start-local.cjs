@@ -12,6 +12,20 @@ function loadLocalEnvironment() {
   const deployment = fs.existsSync(path.join(backend, '.env'))
     ? dotenv.parse(fs.readFileSync(path.join(backend, '.env'))) : {};
   const env = buildLocalEnvironment(local, process.env, Object.keys(deployment));
+  if (local.LOCAL_CHECKOUT_STRIPE_TEST === 'true') {
+    const sandbox = dotenv.parse(fs.readFileSync(path.join(backend, '.env.stripe-sandbox')));
+    if (!sandbox.STRIPE_SECRET_KEY?.startsWith('sk_test_') ||
+        !sandbox.STRIPE_PUBLISHABLE_KEY?.startsWith('pk_test_') ||
+        !sandbox.STRIPE_WEBHOOK_SECRET?.startsWith('whsec_') ||
+        /fixture|dummy|disabled|placeholder/.test(sandbox.STRIPE_SECRET_KEY)) {
+      throw new Error('La activación local del checkout requiere credenciales Stripe test y webhook en .env.stripe-sandbox.');
+    }
+    for (const key of ['STRIPE_SECRET_KEY', 'STRIPE_PUBLISHABLE_KEY', 'STRIPE_WEBHOOK_SECRET']) env[key] = sandbox[key];
+    env.STRIPE_API_KEY = sandbox.STRIPE_SECRET_KEY;
+    env.CRONOX_LOCAL_CHECKOUT_TEST = 'true';
+    env.CHECKOUT_RESERVATION_WORKER_ENABLED = 'true';
+    env.STRIPE_WEBHOOK_WORKER_ENABLED = 'true';
+  }
   // Explicit mailbox-only opt-in: resolve current references at every startup,
   // without persisting a second copy of the operator's SMTP passwords.
   if (local.MAILBOX_LOCAL_SMTP_REFERENCES === 'true') {
@@ -44,7 +58,7 @@ function buildLocalEnvironment(local, inherited, deploymentKeys = []) {
   for (const key of new Set([...Object.keys(env), ...deploymentKeys])) {
     // Explicit empty values also prevent Prisma's automatic .env expansion from
     // repopulating deployment credentials that are absent in the local file.
-    if (deploymentKeys.includes(key) || /^(?:CORREOS_|ORDER_LOGISTICS_EMAIL_ENABLED$|MAILBOX_|SMTP_|EMAIL_|SUPABASE_|STRIPE_|JWT_|DATABASE_URL$|DIRECT_URL$|DOTENV_|CRONOX_ROUTE_SMOKE_MODE$)/.test(key)) env[key] = '';
+    if (deploymentKeys.includes(key) || /^(?:CORREOS_|ORDER_LOGISTICS_EMAIL_ENABLED$|MAILBOX_|SMTP_|EMAIL_|SUPABASE_|STRIPE_|JWT_|DATABASE_URL$|DIRECT_URL$|DOTENV_|CRONOX_ROUTE_SMOKE_MODE$|CRONOX_LOCAL_CHECKOUT_TEST$|CHECKOUT_RESERVATION_WORKER_ENABLED$|LOCAL_CHECKOUT_STRIPE_TEST$)/.test(key)) env[key] = '';
   }
   return { ...env, ...local, USER_NUMBERING_DATABASE_URL: local.DATABASE_URL, DOTENV_CONFIG_PATH: configPath, CRONOX_ENV_FILE: configPath, CRONOX_LOCAL_DEV: 'true', HOST: '127.0.0.1' };
 }
@@ -70,7 +84,7 @@ if (require.main === module) {
       : watch ? [require.resolve('@nestjs/cli/bin/nest.js'), 'start', '--watch']
       : [path.join(backend, 'dist/main.js')];
     const url = new URL(env.DATABASE_URL);
-    console.log(`[local] ${env.FRONTEND_URL} -> PostgreSQL ${url.hostname}:${url.port}${url.pathname}; correo y trabajos desactivados.`);
+    console.log(`[local] ${env.FRONTEND_URL} -> PostgreSQL ${url.hostname}:${url.port}${url.pathname}; correo y trabajos generales desactivados; checkout test ${env.CRONOX_LOCAL_CHECKOUT_TEST === 'true' ? 'activo (reservas y recuperación)' : 'inactivo'}.`);
     const child = spawn(process.execPath, args, { cwd: backend, env, stdio: 'inherit', windowsHide: true });
     child.on('exit', code => { process.exitCode = code ?? 1; });
     child.on('error', () => { console.error('No se pudo iniciar el proceso local.'); process.exitCode = 1; });

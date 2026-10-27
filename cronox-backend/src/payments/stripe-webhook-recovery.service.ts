@@ -5,6 +5,7 @@ import Stripe from 'stripe';
 import { PrismaService } from '../prisma/prisma.service';
 import { stripeWebhookLease } from './stripe-webhook-fence';
 import { writeRecoveryOperationalStatus } from './recovery-operational-status';
+import { localCheckoutTestEnabled } from './local-checkout-test';
 
 const LEASE_MS = 60_000;
 const RETRY_MS = 15_000;
@@ -35,7 +36,7 @@ export class StripeWebhookRecoveryService implements OnModuleInit, OnModuleDestr
   onModuleInit() {
     // This is recovery of accepted financial obligations, independent of
     // optional marketing jobs. Smoke/tests may explicitly disable the worker.
-    this.disabledReason = process.env.CRONOX_LOCAL_DEV === 'true' ? 'LOCAL_REVIEW'
+    this.disabledReason = process.env.CRONOX_LOCAL_DEV === 'true' && !localCheckoutTestEnabled() ? 'LOCAL_REVIEW'
       : process.env.CRONOX_ROUTE_SMOKE_MODE === 'true' ? 'ROUTE_SMOKE'
       : process.env.STRIPE_WEBHOOK_WORKER_ENABLED === 'false' ? 'EXPLICITLY_DISABLED' : null;
     if (this.disabledReason) {
@@ -171,11 +172,19 @@ export class StripeWebhookRecoveryService implements OnModuleInit, OnModuleDestr
   }
 
   async incidents() {
-    const [events, effects] = await Promise.all([
+    const reservationWhere: Prisma.CheckoutSnapshotWhereInput = {
+      expiresAt: { lte: new Date() }, stockReservations: { some: { status: 'RESERVED' } },
+    };
+    const [events, effects, reservations, reservationCount] = await Promise.all([
       this.prisma.stripeWebhookEvent.findMany({ where: { status: { in: ['REVIEW', 'FAILED', 'PROCESSING', 'PENDING'] } }, orderBy: { createdAt: 'asc' }, take: 100, select: { id: true, type: true, paymentIntentId: true, status: true, error: true, attempts: true, createdAt: true, nextAttemptAt: true, leaseUntil: true } }),
       this.prisma.checkoutEffect.findMany({ where: { status: { not: 'COMPLETED' } }, orderBy: { createdAt: 'asc' }, take: 100, select: { id: true, orderId: true, kind: true, status: true, error: true, result: true, attempts: true, createdAt: true, nextAttemptAt: true } }),
+      this.prisma.checkoutSnapshot.findMany({ where: reservationWhere, orderBy: [{ expiresAt: 'asc' }, { id: 'asc' }], take: 100,
+        select: { id: true, stripePaymentIntentId: true, stripeAccountId: true, status: true, reservationPhase: true,
+          paymentStartedAt: true, expiresAt: true, reservationRetryAt: true, updatedAt: true,
+          stockReservations: { where: { status: 'RESERVED' }, select: { variantId: true, quantity: true } } } }),
+      this.prisma.checkoutSnapshot.count({ where: reservationWhere }),
     ]);
-    return { events, effects, worker: {
+    return { events, effects, reservations, reservationCount, worker: {
       enabled: Boolean(this.timer), disabledReason: this.disabledReason,
       running: this.running, startedAt: this.startedAt,
       pollIntervalMs: 5000, leaseMs: LEASE_MS, retryDelayMs: RETRY_MS,

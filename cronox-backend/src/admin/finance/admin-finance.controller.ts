@@ -1,4 +1,4 @@
-import { Controller, Get, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, Header, Query, UseGuards } from '@nestjs/common';
 import { Type } from 'class-transformer';
 import { IsIn, IsInt, IsOptional, IsString, IsUUID, Matches, Max, MaxLength, Min } from 'class-validator';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
@@ -22,5 +22,5 @@ export class FinanceQuery {
 @UseGuards(JwtAuthGuard, AdminGuard)
 export class AdminFinanceController {
   constructor(private readonly finance: AdminFinanceService) {}
-  @Get() get(@Query() query: FinanceQuery) { return this.finance.getReport(query); }
+  @Get() @Header('Cache-Control','private, no-store') get(@Query() query: FinanceQuery) { return this.finance.getReport(query); }
 }
