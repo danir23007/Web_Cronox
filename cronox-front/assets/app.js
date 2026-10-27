@@ -48,6 +48,7 @@
     },
   };
   const STAR_ICON = '<span class="icon-star"></span>';
+  const TRASH_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M3 6h18M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2M5 6l1 14h12l1-14M10 10v6M14 10v6"></path></svg>';
   window.CRONOX_STAR_ICON = STAR_ICON;
   const getCsrfHeaders = async () => {
     const provider = window.CRONOX_API?.getCsrfHeaders;
@@ -1854,7 +1855,7 @@
               />
               <button class="cart-qty__btn" data-action="inc" aria-label="Aumentar cantidad" data-id="${display.id}" ${isPending ? 'disabled' : ''}>+</button>
             </div>
-            <button class="cart-line__remove" data-remove="${display.id}" aria-label="Eliminar artículo" ${isPending ? 'disabled' : ''}>🗑</button>
+            <button class="cart-line__remove" data-remove="${display.id}" aria-label="Eliminar artículo" ${isPending ? 'disabled' : ''}>${TRASH_ICON}</button>
           </div>
         </div>
       `;
@@ -3478,7 +3479,7 @@ window.CRONOX_AUTH_STATE = window.CRONOX_USER ? 'authenticated' : 'unknown';
     const items = Array.from(accordion.querySelectorAll('.footer-acc-item'));
     if (!items.length) return;
 
-    const mobileQuery = window.matchMedia('(max-width: 480px)');
+    const mobileQuery = window.matchMedia('(max-width: 480px), (max-width: 900px) and (orientation: landscape) and (hover: none) and (pointer: coarse)');
 
     const setIcon = (item, symbol) => {
       const icon = item.querySelector('.footer-acc-icon');

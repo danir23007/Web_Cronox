@@ -1356,6 +1356,15 @@ body.checkout-modal-open {
 }
 
 @media (max-width: 900px) {
+  /* The mobile header leaves with the document, including its menu control. */
+  .checkout-brandbar .checkout-menu {
+    position: static;
+    inset: auto;
+    margin-right: auto;
+    z-index: auto;
+    flex: none;
+  }
+
   .payment-element {
     /* Stripe owns its content height, including expanded methods and errors. */
     min-height: 0;

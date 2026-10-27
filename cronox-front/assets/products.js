@@ -587,7 +587,8 @@
     const settled = new Set();
     images.forEach(image => {
       const finish = () => {
-        if (opening !== qaOpening || qaCurrentProduct !== product) return;
+        // Availability can replace the snapshot while these images are loading.
+        if (opening !== qaOpening || !sameQuickProduct(product)) return;
         if (image.naturalWidth > 0) image.classList.remove('qa-image-loading');
         settled.add(image);
         if (settled.size === images.length) media.setAttribute('aria-busy', 'false');

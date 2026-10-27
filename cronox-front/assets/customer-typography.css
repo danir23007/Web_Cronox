@@ -85,3 +85,9 @@
   /* A 16px input also avoids automatic zoom in iOS. */
   body[data-cronox-surface="customer"] :is(input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]), select, textarea) { font-size: 16px; }
 }
+
+@media (max-width: 600px), (max-width: 900px) and (orientation: landscape) and (hover: none) and (pointer: coarse) {
+  [data-cronox-surface="customer"] .product-card .product-last-units:not(.product-last-units--out) {
+    font-size: 11px;
+  }
+}

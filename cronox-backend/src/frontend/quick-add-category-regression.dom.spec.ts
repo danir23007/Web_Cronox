@@ -29,6 +29,27 @@ const complete = (app: any, image: HTMLImageElement) => {
 };
 
 describe('Quick Add opening isolation', () => {
+  it('reveals loaded images after an availability refresh replaces the product snapshot', async () => {
+    const { dom, app, document } = create();
+    try {
+      const selected = { ...product(1), slug: 'product-1' };
+      app.CRONOX_API.getProductBySlug = jest.fn(async () => ({ ...selected }));
+      app.eval(read('assets/responsive-images.js'));
+      app.eval(read('assets/products.js'));
+      app.CRONOX_openQuickAdd(selected);
+      const images = Array.from(document.querySelectorAll<HTMLImageElement>('.qa-media img'));
+      await new Promise(resolve => setTimeout(resolve, 0));
+      expect(app.CRONOX_API.getProductBySlug).toHaveBeenCalledWith('product-1', { cache: 'no-store' });
+      expect(document.querySelector<HTMLButtonElement>('#qaAdd')!.disabled).toBe(false);
+      complete(app, images[0]);
+      expect(images[0].classList.contains('qa-image-loading')).toBe(false);
+      expect(document.querySelector('.qa-media')!.getAttribute('aria-busy')).toBe('true');
+      complete(app, images[1]);
+      expect(images[1].classList.contains('qa-image-loading')).toBe(false);
+      expect(document.querySelector('.qa-media')!.getAttribute('aria-busy')).toBe('false');
+    } finally { dom.window.close(); }
+  });
+
   it('removes old pixels/attributes immediately and ignores late image loads after switch and close', () => {
     const { dom, app, document } = create();
     app.eval(read('assets/responsive-images.js'));

@@ -129,6 +129,22 @@
 .qa-footer { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:10px 16px; }
 .qa-footer > .qa-muted-link { flex:1 1 110px; min-width:0; overflow-wrap:anywhere; }
 .qa-footer > .qa-delivery--corner { flex:1 1 140px; min-width:0; margin:0; margin-left:auto; text-align:right; justify-content:flex-end; }
+
+@media (max-width:640px), (max-width:900px) and (orientation:landscape) and (hover:none) and (pointer:coarse){
+  .qa-footer{
+    display:grid;
+    grid-template-columns:minmax(0,1fr);
+    gap:8px;
+  }
+  .qa-footer > .qa-delivery--corner{
+    width:100%;
+    margin-left:0;
+    justify-content:flex-start;
+    text-align:left;
+    font-size:13px;
+    line-height:1.4;
+  }
+}
 .qa-delivery[hidden] { display:none; }
 .qa-size-btn.is-unavailable { cursor:pointer; }
 .qa-size-btn.is-unavailable:focus-visible { outline:2px solid #fff; outline-offset:2px; }

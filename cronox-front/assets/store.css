@@ -1260,6 +1260,12 @@ button.product-cta--disabled:disabled { opacity:.5; cursor:not-allowed; filter:n
 .cart-qty__input[type=number] { -moz-appearance: textfield; }
 
 .cart-line__remove {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 10px;
   background: transparent;
   border: none;
   color: rgba(255, 255, 255, 0.6);
@@ -1268,7 +1274,10 @@ button.product-cta--disabled:disabled { opacity:.5; cursor:not-allowed; filter:n
   transition: color 0.2s ease, transform 0.2s ease;
 }
 
-.cart-line__remove:hover { color: #ffb9b9; transform: translateY(-1px); }
+.cart-line__remove svg { width: 18px; height: 18px; }
+.cart-line__remove:not(:disabled):hover { color: #ffb9b9; transform: translateY(-1px); }
+.cart-line__remove:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }
+.cart-line__remove:disabled { opacity: .4; cursor: wait; }
 
 .cart-line__error {
   grid-column: 1 / -1;
@@ -2555,7 +2564,7 @@ button.product-cta--disabled:disabled { opacity:.5; cursor:not-allowed; filter:n
   }
 }
 
-@media (max-width: 480px) {
+@media (max-width: 480px), (max-width: 900px) and (orientation: landscape) and (hover: none) and (pointer: coarse) {
   .site-footer,
   .footer-inner,
   .footer-middle-sections,
@@ -2568,6 +2577,7 @@ button.product-cta--disabled:disabled { opacity:.5; cursor:not-allowed; filter:n
   }
 
   .site-footer {
+    --footer-side-padding: 18px;
     padding: 16px 18px 18px;
     margin-top: 26px;
     letter-spacing: 0.06em;
@@ -2589,24 +2599,42 @@ button.product-cta--disabled:disabled { opacity:.5; cursor:not-allowed; filter:n
   }
 
   .footer-brand-block {
-    --footer-logo-width: clamp(112px, 34vw, 132px);
+    --footer-logo-width: clamp(120px, 36vw, 152px);
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto auto;
     align-items: center;
     text-align: center;
-    gap: 8px 12px;
-    width: 176px;
+    gap: 8px;
+    width: 100%;
   }
 
   .footer-brand-name {
+    grid-area: 1 / 1;
     display: flex;
     width: 100%;
     justify-content: center;
   }
 
   .footer-brand-name a {
-    display: inline-flex;
-    width: max-content;
-    justify-content: center;
-    gap: 6px;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+    align-items: center;
+    width: 100%;
+    gap: 8px;
+  }
+
+  .footer-primary-mark {
+    justify-self: start;
+  }
+
+  .footer-secondary-logo {
+    justify-self: center;
+    height: clamp(24px, 7vw, 30px);
+  }
+
+  .footer-cx-logo {
+    justify-self: end;
+    height: clamp(30px, 8.4vw, 36px);
   }
 
   .footer-logo {
@@ -2615,6 +2643,9 @@ button.product-cta--disabled:disabled { opacity:.5; cursor:not-allowed; filter:n
   }
 
   .footer-social {
+    grid-area: 2 / 1;
+    justify-self: center;
+    flex-direction: row;
     margin-left: 0;
     justify-content: center;
     gap: 10px;
