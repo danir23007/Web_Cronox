@@ -73,6 +73,24 @@ function setup(id = 'a') {
 }
 
 describe('Eventos QR camera, session and request lifecycles', () => {
+  it.each(['local', 'other-tab', 'return'])('refreshes removed participants, counts and Excel availability on %s invalidation', async signal => {
+    const t = setup();
+    try {
+      let removed = false;
+      t.w.fetch.mockImplementation(async () => ok({ group: { ...group('a'), total: removed ? 0 : 1 }, items: removed ? [] : [participant], total: removed ? 0 : 1, page: 1, limit: 25, pages: 1 }));
+      await t.w.CRONOX_QR_EVENTS.load(); await flush();
+      expect(t.el('Participants').textContent).toContain(participant.name);
+      expect(t.el('Export').disabled).toBe(false);
+      removed = true;
+      if (signal === 'local') t.w.dispatchEvent(new t.w.Event('cronox:qr-participations-changed'));
+      else if (signal === 'other-tab') t.w.dispatchEvent(new t.w.StorageEvent('storage', { key: 'cronox:qr-participations-revision', newValue: 'opaque-revision' }));
+      else { Object.defineProperty(t.w.document, 'hidden', { value: false, configurable: true }); t.w.document.dispatchEvent(new t.w.Event('visibilitychange')); }
+      await flush();
+      expect(t.el('Participants').children).toHaveLength(0);
+      expect(t.el('Total').textContent).toContain('0 participantes');
+      expect(t.el('Export').disabled).toBe(true);
+    } finally { t.close(); }
+  });
   it('stops scanning an event deleted elsewhere, explains the state and retains the return-to-list action', async () => {
     const t = setup();
     try {

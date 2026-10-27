@@ -24,7 +24,7 @@ import { isAdminPanelRole, isSuperAdminRole } from '../../common/roles.utils';
 import { UpdateAdminUserDto } from './dto/update-admin-user.dto';
 import { ADMIN_PAGE_SIZES } from '../admin-pagination.constants';
 import { retainedAuditLogDateFilter } from '../audit-logs/audit-log-retention';
-import { deleteAdminUser } from './admin-user-deletion';
+import { deleteAdminUser, previewAdminUserDeletion } from './admin-user-deletion';
 import { DeleteAdminUserDto } from './dto/delete-admin-user.dto';
 
 const DEFAULT_PAGE_SIZE = ADMIN_PAGE_SIZES.USERS;
@@ -73,6 +73,9 @@ export class AdminUsersService {
 
   deleteUser(id: number, identityUid: string, dto: DeleteAdminUserDto, adminId: number, request: AdminUserUpdateRequestMetadata = {}) {
     return deleteAdminUser(this.prisma, id, identityUid, dto, adminId, request);
+  }
+  deletionPreview(id: number, identityUid: string, adminId: number) {
+    return previewAdminUserDeletion(this.prisma, id, identityUid, adminId);
   }
 
   selectBulkIds(query: AdminUserQueryDto, tx: Prisma.TransactionClient) {

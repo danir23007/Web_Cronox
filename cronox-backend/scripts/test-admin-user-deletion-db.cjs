@@ -135,7 +135,8 @@ async function run() {
     const qrOwner = await create(); const group = await db.qrEventGroup.create({ data: { name: 'Fixture QR', createdByIdentityUid: actor.identityUid } });
     await db.qrEventParticipant.create({ data: { groupId: group.id, userIdentityUid: qrOwner.identityUid, circleAtRegistration: 1 } });
     await assert.rejects(remove(qrOwner), /QR/);
-    check('Paid order, stock trace and QR-event ownership block real deletion; history remains byte-for-byte intact');
+    check('Paid orders and stock trace block deletion; QR participation alone requires the new explicit confirmation');
+    await require('./test-user-qr-deletion-fixtures.cjs')({db,second,sql,service,competing,actor,admin,create,sessions,membership,check,product});
     {
       const { CartService } = require('../src/cart/cart.service');
       const { OrdersService } = require('../src/orders/orders.service');

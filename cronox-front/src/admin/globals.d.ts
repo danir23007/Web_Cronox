@@ -151,6 +151,7 @@ declare global {
     getUserEditOptions?: () => Promise<unknown>;
     updateAdminUser?: (id: number | string, payload: Record<string, unknown>) => Promise<unknown>;
     deleteAdminUser?: (id: number | string, payload: Record<string, unknown>) => Promise<unknown>;
+    getUserDeletionPreview?: (id: number | string) => Promise<unknown>;
     getUserAuditLogs?: (id: number | string) => Promise<unknown>;
     getUserAnalyticsSummary?: (id: number | string) => Promise<unknown>;
     getUserAnalyticsProducts?: (id: number | string) => Promise<unknown>;

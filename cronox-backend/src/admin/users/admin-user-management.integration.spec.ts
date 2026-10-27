@@ -35,10 +35,12 @@ describe('Super Admin user management (HTTP integration)', () => {
     getEditOptions: jest.Mock;
     updateAdminUser: jest.Mock;
     deleteUser: jest.Mock;
+    deletionPreview: jest.Mock;
   };
 
   beforeEach(async () => {
     usersService = {
+      deletionPreview: jest.fn().mockResolvedValue({ qr: { count: 1, events: [{ name: 'Evento ficticio' }] }, blockers: [] }),
       deleteUser: jest.fn((id, identityUid) => ({ deleted: true, id, identityUid })),
       listUsers: jest.fn().mockResolvedValue({ items: [], total: 0 }),
       getEditOptions: jest.fn().mockReturnValue({
@@ -98,6 +100,29 @@ describe('Super Admin user management (HTTP integration)', () => {
   };
 
   const deletion = { confirmed: true, expectedUpdatedAt: '2026-09-15T08:00:00.000Z' };
+  it('serves an uncached deletion preview only to SUPERADMIN without deleting data', async () => {
+    const response = await request(app.getHttpServer()).get('/api/admin/users/7/deletion-preview')
+      .set('x-test-role', Role.SUPERADMIN).set('x-cronox-user-identity', 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa').expect(200);
+    expect(response.headers['cache-control']).toBe('private, no-store');
+    expect(response.body.qr.count).toBe(1);
+    expect(usersService.deletionPreview).toHaveBeenCalledWith(7, 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', 99);
+    expect(usersService.deleteUser).not.toHaveBeenCalled();
+    for (const role of [Role.ADMIN, Role.USER, Role.FRIEND]) {
+      await request(app.getHttpServer()).get('/api/admin/users/7/deletion-preview').set('x-test-role', role).expect(403);
+    }
+    await request(app.getHttpServer()).get('/api/admin/users/7/deletion-preview').expect(401);
+    expect(usersService.deletionPreview).toHaveBeenCalledTimes(1);
+  });
+  it('validates explicit QR consent and its snapshot token before deleting', async () => {
+    for (const changes of [{ deleteQrParticipations: false }, { qrParticipationToken: 'invalid' }, { deleteQrParticipations: 'true' }]) {
+      await request(app.getHttpServer()).delete('/api/admin/users/7').set('x-test-role', Role.SUPERADMIN).send({ ...deletion, ...changes }).expect(400);
+    }
+    expect(usersService.deleteUser).not.toHaveBeenCalled();
+    const body = { ...deletion, deleteQrParticipations: true, qrParticipationToken: 'a'.repeat(64) };
+    await request(app.getHttpServer()).delete('/api/admin/users/7').set('x-test-role', Role.SUPERADMIN)
+      .set('x-cronox-user-identity', 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa').send(body).expect(200);
+    expect(usersService.deleteUser).toHaveBeenCalledWith(7, 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', body, 99, expect.any(Object));
+  });
   it('allows only the Super Admin deletion route with explicit confirmation and stable identity', async () => {
     await request(app.getHttpServer()).delete('/api/admin/users/7').set('x-test-role', Role.SUPERADMIN)
       .set('x-cronox-user-identity', 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa').send(deletion).expect(200);

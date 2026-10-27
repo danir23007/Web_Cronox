@@ -496,7 +496,17 @@
   $('ScanRetry').onclick = () => { if (retryRead && current(retryRead.id, retryRead.scope)) void submitRead(retryRead.qrContent, true); };
   window.addEventListener('pagehide', leave);
   window.addEventListener('cronox:session-ended', leave);
-  document.addEventListener('visibilitychange', () => { if (document.hidden) stopCamera('Cámara detenida al dejar de ver la página. Pulsa Abrir cámara para continuar.'); });
+  const refreshParticipants = () => {
+    if (root.hidden) return;
+    cancelExport();
+    if (groupId) void loadParticipants(); else void loadGroups();
+  };
+  window.addEventListener('cronox:qr-participations-changed', refreshParticipants);
+  window.addEventListener('storage', event => { if (event.key === 'cronox:qr-participations-revision') refreshParticipants(); });
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) stopCamera('Cámara detenida al dejar de ver la página. Pulsa Abrir cámara para continuar.');
+    else refreshParticipants();
+  });
   new MutationObserver(() => { if (root.hidden) leave(); }).observe(root, { attributes: true, attributeFilter: ['hidden'] });
   window.CRONOX_QR_EVENTS = Object.freeze({ load, leave });
   // Auth may finish before this deferred module is evaluated on a direct route.

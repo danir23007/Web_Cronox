@@ -28,6 +28,14 @@ import { MAX_MANUAL_CENTS, parseManualPrice, manualPriceText } from './manual-pu
   const deleteUserError = document.getElementById('deleteUserError');
   let deletingUser = false;
   let deletionVersion: string | null = null;
+  type DeletionPreview = {
+    user: Record<string, unknown>;
+    qr: { token: string; count: number; eventCount: number; events: { id: string; name: string; count: number }[] };
+    blockers: { description: string; count: number }[];
+  };
+  let deletionPreview: DeletionPreview | null = null;
+  let deletionRead = 0;
+  let deletionNeedsReview = false;
   const userEditForm = document.getElementById('userEditForm') as HTMLFormElement | null;
   const editUserName = document.getElementById('editUserName') as HTMLInputElement | null;
   const editUserPhone = document.getElementById('editUserPhone') as HTMLInputElement | null;
@@ -272,40 +280,96 @@ import { MAX_MANUAL_CENTS, parseManualPrice, manualPriceText } from './manual-pu
   const updateDeletionPermission = () => {
     if (deleteUserBtn) deleteUserBtn.hidden = !canEditProtectedUserFields || !currentUserDetail || String(userId) === authenticatedAdminId;
   };
-  const openUserDeletion = () => {
+  const deletionLabel = () => deletionPreview?.qr.count ? 'Sí, eliminar usuario y participaciones' : 'Eliminar definitivamente';
+  const renderDeletionPreview = (plan: DeletionPreview) => {
+    if (!plan?.user || !/^[a-f0-9]{64}$/.test(plan.qr?.token || '') || !Array.isArray(plan.qr.events) || !Array.isArray(plan.blockers))
+      throw new Error('No se ha podido comprobar el alcance de la eliminación. Cancela y vuelve a intentarlo.');
+    deletionPreview = plan;
+    deletionVersion = String(plan.user.updatedAt || '');
+    const name = plan.user.name || [plan.user.firstName, plan.user.lastName].filter(Boolean).join(' ') || 'Sin nombre';
+    document.getElementById('deleteUserName')!.textContent = String(name);
+    document.getElementById('deleteUserEmail')!.textContent = String(plan.user.email || '—');
+    document.getElementById('deleteUserCrx')!.textContent = window.CRONOX_USER_IDENTITY.format(plan.user);
+    document.getElementById('deleteUserWarning')!.textContent = plan.qr.count
+      ? `Este usuario está inscrito en ${plan.qr.eventCount} ${plan.qr.eventCount === 1 ? 'evento QR' : 'eventos QR'} (${plan.qr.count} ${plan.qr.count === 1 ? 'participación' : 'participaciones'}). Si eliminas su cuenta, también se eliminarán sus inscripciones y registros de participación en esos eventos. Los eventos y las participaciones de otras personas se conservarán. ¿Deseas continuar? Esta acción no se puede deshacer.`
+      : '¿Seguro que quieres eliminar esta cuenta? Esta acción no se puede deshacer.';
+    const list = document.getElementById('deleteUserEvents');
+    if (list) {
+      list.replaceChildren(); list.hidden = !plan.qr.count;
+      for (const event of plan.qr.events) { const item = document.createElement('li'); item.textContent = event.name; list.append(item); }
+    }
+    if (confirmDeleteUserBtn) { confirmDeleteUserBtn.disabled = Boolean(plan.blockers.length); confirmDeleteUserBtn.textContent = deletionLabel(); }
+    if (plan.blockers.length && deleteUserError) { deleteUserError.hidden = false; deleteUserError.textContent = `No se puede eliminar esta cuenta: conserva ${[...new Set(plan.blockers.map(b=>b.description))].join(', ')}.`; }
+  };
+  const openUserDeletion = async () => {
     if (!canEditProtectedUserFields || !currentUserDetail || !deleteUserDialog || String(userId) === authenticatedAdminId || deletingUser) return;
-    deletionVersion = String(currentUserDetail.updatedAt || '');
+    if (deleteUserDialog.open) return;
+    const read = ++deletionRead;
+    deletionVersion = null; deletionPreview = null; deletionNeedsReview = false;
+    const review = document.getElementById('reviewDeleteUserChanges') as HTMLInputElement | null;
+    if (review) review.checked = false;
+    const reviewLabel = document.getElementById('deleteUserReview'); if (reviewLabel) reviewLabel.hidden = true;
     const name = currentUserDetail.name || [currentUserDetail.firstName, currentUserDetail.lastName].filter(Boolean).join(' ') || 'Sin nombre';
     document.getElementById('deleteUserName')!.textContent = String(name);
     document.getElementById('deleteUserEmail')!.textContent = String(currentUserDetail.email || '—');
     document.getElementById('deleteUserCrx')!.textContent = window.CRONOX_USER_IDENTITY.format(currentUserDetail);
     if (deleteUserError) { deleteUserError.hidden = true; deleteUserError.textContent = ''; }
+    document.getElementById('deleteUserWarning')!.textContent = 'Comprobando las participaciones QR y las protecciones de esta cuenta…';
+    document.getElementById('deleteUserEvents')?.replaceChildren();
+    if (confirmDeleteUserBtn) { confirmDeleteUserBtn.disabled = true; confirmDeleteUserBtn.textContent = 'Comprobando…'; }
     deleteUserDialog.showModal();
     cancelDeleteUserBtn?.focus();
+    try {
+      if (!window.CRONOX_API?.admin?.getUserDeletionPreview || !userId) throw new Error('No se pudo comprobar la eliminación. Recarga la página.');
+      const plan = await window.CRONOX_API.admin.getUserDeletionPreview(userId) as DeletionPreview;
+      if (read === deletionRead && deleteUserDialog.open) renderDeletionPreview(plan);
+    } catch (error) {
+      if (read === deletionRead && deleteUserDialog.open && deleteUserError) { deleteUserError.hidden = false; deleteUserError.textContent = (error as Error).message; }
+    }
   };
   const confirmUserDeletion = async () => {
-    if (deletingUser || !deleteUserDialog?.open || !canEditProtectedUserFields || !userId || !deletionVersion || !window.CRONOX_API?.admin?.deleteAdminUser || String(userId) === authenticatedAdminId) return;
+    if (deletingUser || deletionNeedsReview || !deleteUserDialog?.open || !canEditProtectedUserFields || !userId || !deletionVersion || !deletionPreview || deletionPreview.blockers.length || !window.CRONOX_API?.admin?.deleteAdminUser || String(userId) === authenticatedAdminId) return;
     deletingUser = true;
     if (confirmDeleteUserBtn) { confirmDeleteUserBtn.disabled = true; confirmDeleteUserBtn.textContent = 'Eliminando…'; }
     if (cancelDeleteUserBtn) cancelDeleteUserBtn.disabled = true;
     if (deleteUserError) deleteUserError.hidden = true;
     try {
-      const result = await window.CRONOX_API.admin.deleteAdminUser(userId, { confirmed: true, expectedUpdatedAt: deletionVersion }) as { deleted?: boolean };
+      const result = await window.CRONOX_API.admin.deleteAdminUser(userId, { confirmed: true, expectedUpdatedAt: deletionVersion,
+        qrParticipationToken: deletionPreview.qr.token, ...(deletionPreview.qr.count ? { deleteQrParticipations: true } : {}) }) as { deleted?: boolean };
       if (result?.deleted !== true) throw new Error('El servidor no ha confirmado la eliminación. Recarga para comprobar el estado de la cuenta.');
       try { sessionStorage.setItem('cronox:admin-user-deleted', '1'); } catch { /* Navigation still completes if storage is unavailable. */ }
+      window.dispatchEvent(new Event('cronox:qr-participations-changed'));
+      try { localStorage.setItem('cronox:qr-participations-revision', Date.now() + ':' + crypto.randomUUID()); } catch { /* Refresh on next navigation still works. */ }
       window.location.assign(usersReturnLink);
     } catch (error) {
-      if (deleteUserError) { deleteUserError.hidden = false; deleteUserError.textContent = (error as Error)?.message || 'No se pudo eliminar la cuenta. No la mostramos como eliminada; comprueba su estado antes de reintentar.'; }
+      const payload = (error as {payload?: {code?: string; preview?: DeletionPreview}}).payload;
+      if (payload?.code === 'USER_DELETE_QR_CONFIRMATION_CHANGED') {
+        deletionPreview = null; deletionVersion = null;
+        try {
+          const plan = payload.preview || await window.CRONOX_API.admin.getUserDeletionPreview?.(userId) as DeletionPreview;
+          renderDeletionPreview(plan);
+        } catch { /* No valid preview means confirmation remains disabled. */ }
+        deletionNeedsReview = true;
+        const review = document.getElementById('reviewDeleteUserChanges') as HTMLInputElement | null;
+        if (review) review.checked = false;
+        const reviewLabel = document.getElementById('deleteUserReview'); if (reviewLabel) reviewLabel.hidden = false;
+      }
+      if (deleteUserError) { deleteUserError.hidden = false; deleteUserError.textContent = ((error as Error)?.message || 'No se pudo eliminar la cuenta. No la mostramos como eliminada; comprueba su estado antes de reintentar.') +
+        (deletionPreview?.blockers.length ? ` La cuenta conserva ${[...new Set(deletionPreview.blockers.map(b=>b.description))].join(', ')}.` : ''); }
     } finally {
       deletingUser = false;
-      if (confirmDeleteUserBtn) { confirmDeleteUserBtn.disabled = false; confirmDeleteUserBtn.textContent = 'Eliminar definitivamente'; }
+      if (confirmDeleteUserBtn) { confirmDeleteUserBtn.disabled = deletionNeedsReview || !deletionPreview || Boolean(deletionPreview.blockers.length); confirmDeleteUserBtn.textContent = deletionLabel(); }
       if (cancelDeleteUserBtn) cancelDeleteUserBtn.disabled = false;
     }
   };
-  deleteUserBtn?.addEventListener('click', openUserDeletion);
-  cancelDeleteUserBtn?.addEventListener('click', () => { if (!deletingUser) deleteUserDialog?.close(); });
-  deleteUserDialog?.addEventListener('cancel', event => { if (deletingUser) event.preventDefault(); });
+  deleteUserBtn?.addEventListener('click', () => void openUserDeletion());
+  cancelDeleteUserBtn?.addEventListener('click', () => { if (!deletingUser) { deletionRead++; deleteUserDialog?.close(); } });
+  deleteUserDialog?.addEventListener('cancel', event => { if (deletingUser) event.preventDefault(); else deletionRead++; });
   confirmDeleteUserBtn?.addEventListener('click', () => void confirmUserDeletion());
+  document.getElementById('reviewDeleteUserChanges')?.addEventListener('change', event => {
+    deletionNeedsReview = !(event.target as HTMLInputElement).checked;
+    if (confirmDeleteUserBtn) confirmDeleteUserBtn.disabled = deletingUser || deletionNeedsReview || !deletionPreview || Boolean(deletionPreview.blockers.length);
+  });
 
   const formatDate = (value: unknown) => {
     if (!value) return '—';

@@ -23,6 +23,9 @@ async page => {
       if (!url.pathname.startsWith('/api/')) return route.continue();
       let data = {};
       if (url.pathname === '/api/me') data = actor;
+      else if (url.pathname === `/api/admin/users/${target}/deletion-preview`) data = {
+        user: users.find(user => user.id === target), qr: { token: 'a'.repeat(64), count: 0, eventCount: 0, events: [] }, blockers: []
+      };
       else if (url.pathname === '/api/auth/csrf') data = { csrfToken: 'isolated-fixture' };
       else if (url.pathname === `/api/admin/users/${target}`) {
         if (request.method() === 'DELETE') {

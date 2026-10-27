@@ -3,7 +3,8 @@ import {
   ForbiddenException,
   NotFoundException,
 } from '@nestjs/common';
-import { Prisma, Role, UserAccountState } from '@prisma/client';
+import { Prisma, Role, UserAccountState, User } from '@prisma/client';
+import { createHash } from 'node:crypto';
 import { PrismaService } from '../../prisma/prisma.service';
 import { serializableTransaction } from '../../prisma/serializable-transaction';
 import type { DeleteAdminUserDto } from './dto/delete-admin-user.dto';
@@ -15,7 +16,7 @@ const relationNames: Record<string, string> = {
   PromoCodeRedemption: 'usos de promociones',
   StockMovement: 'movimientos de stock',
   QrEventGroup: 'eventos QR creados',
-  QrEventParticipant: 'inscripciones o registros de eventos QR',
+  QrEventParticipant: 'autoría administrativa de registros QR ajenos',
   CircleUpgradeRequest: 'solicitudes de cambio de círculo',
   CirclePromotionRequest: 'solicitudes de promoción',
   AuditLog: 'acciones de auditoría realizadas',
@@ -28,6 +29,116 @@ const relationNames: Record<string, string> = {
   AccountWelcomeBenefit: 'beneficios asociados a compras',
   CheckoutEffect: 'obligaciones de un pago',
 };
+
+async function inspectDeletion(tx: Prisma.TransactionClient, user: User) {
+  const participants = await tx.qrEventParticipant.findMany({
+    where: { userIdentityUid: user.identityUid },
+    include: { group: { select: { id: true, name: true } } },
+    orderBy: { id: 'asc' },
+  });
+  const token = createHash('sha256')
+    .update(
+      JSON.stringify({
+        identityUid: user.identityUid,
+        rows: participants.map((p) => [p.id, p.groupId, p.group.name]),
+      }),
+    )
+    .digest('hex');
+  const events = new Map<string, { id: string; name: string; count: number }>();
+  for (const p of participants) {
+    const event = events.get(p.groupId) ?? {
+      id: p.groupId,
+      name: p.group.name,
+      count: 0,
+    };
+    event.count++;
+    events.set(p.groupId, event);
+  }
+  const blockers = await tx.$queryRaw<{ relation: string; total: bigint }[]>`
+    SELECT * FROM cronox_user_delete_blockers(${user.id}::integer)`;
+  const ownSelfRecorded = participants.filter(
+    (p) => p.registeredByIdentityUid === user.identityUid,
+  ).length;
+  const reasons = blockers.flatMap((row) => {
+    // Only the participant relation is authorized for removal. Recording other
+    // people's scans or creating groups remains protected administrative history.
+    if (row.relation === 'QrEventParticipant.userIdentityUid') return [];
+    const count =
+      Number(row.total) -
+      (row.relation === 'QrEventParticipant.registeredByIdentityUid'
+        ? ownSelfRecorded
+        : 0);
+    return count > 0
+      ? [
+          {
+            relation: row.relation,
+            count,
+            description:
+              relationNames[row.relation.split('.')[0]] ||
+              `registros de ${row.relation}`,
+          },
+        ]
+      : [];
+  });
+  return {
+    participants,
+    preview: {
+      user: {
+        id: user.id,
+        identityUid: user.identityUid,
+        memberCode: user.memberCode,
+        name: user.name,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        email: user.email,
+        updatedAt: user.updatedAt.toISOString(),
+      },
+      qr: {
+        token,
+        count: participants.length,
+        eventCount: events.size,
+        events: [...events.values()].sort(
+          (a, b) =>
+            a.name.localeCompare(b.name, 'es') || a.id.localeCompare(b.id),
+        ),
+      },
+      blockers: reasons,
+    },
+  };
+}
+
+export async function previewAdminUserDeletion(
+  prisma: PrismaService,
+  id: number,
+  identityUid: string,
+  performedById: number,
+) {
+  if (id === performedById)
+    throw new ForbiddenException(
+      'No puedes eliminar tu propia cuenta desde esta acción.',
+    );
+  return prisma.$transaction(
+    async (tx) => {
+      const actor = await tx.user.findUnique({
+        where: { id: performedById },
+        select: { role: true, accountState: true },
+      });
+      if (
+        actor?.role !== Role.SUPERADMIN ||
+        actor.accountState !== UserAccountState.ACTIVE
+      )
+        throw new ForbiddenException(
+          'Solo un Super Admin activo puede eliminar usuarios.',
+        );
+      const user = await tx.user.findUnique({ where: { id } });
+      if (!user) throw new NotFoundException('Usuario no encontrado.');
+      if (user.identityUid !== identityUid)
+        throw new ConflictException('La identidad de la cuenta no coincide.');
+      return (await inspectDeletion(tx, user)).preview;
+    },
+    { isolationLevel: 'RepeatableRead' },
+  );
+}
 
 export async function deleteAdminUser(
   prisma: PrismaService,
@@ -78,6 +189,21 @@ export async function deleteAdminUser(
         throw new ConflictException(
           'La identidad de la cuenta ha cambiado. Recarga el listado.',
         );
+      const { participants, preview } = await inspectDeletion(tx, user);
+      if (
+        (dto.qrParticipationToken !== undefined &&
+          dto.qrParticipationToken !== preview.qr.token) ||
+        (preview.qr.count > 0 &&
+          (dto.deleteQrParticipations !== true ||
+            dto.qrParticipationToken !== preview.qr.token))
+      ) {
+        throw new ConflictException({
+          code: 'USER_DELETE_QR_CONFIRMATION_CHANGED',
+          message:
+            'Las participaciones QR requieren una confirmación actualizada. Revisa los eventos y confirma de nuevo; no se ha eliminado nada.',
+          preview,
+        });
+      }
       if (
         user.updatedAt.toISOString() !==
         new Date(dto.expectedUpdatedAt).toISOString()
@@ -100,23 +226,26 @@ export async function deleteAdminUser(
           'Debe permanecer al menos un Super Admin activo.',
         );
       }
-      const blockers = await tx.$queryRaw<
-        { relation: string; total: bigint }[]
-      >`SELECT * FROM cronox_user_delete_blockers(${id}::integer)`;
-      if (blockers.length) {
-        const reasons = blockers.map((row) => ({
-          relation: row.relation,
-          count: Number(row.total),
-          description:
-            relationNames[row.relation.split('.')[0]] ||
-            `registros de ${row.relation}`,
-        }));
+      if (preview.blockers.length) {
+        const reasons = preview.blockers;
         throw new ConflictException({
           code: 'USER_DELETE_BLOCKED',
           message: `No se puede eliminar esta cuenta: conserva ${[...new Set(reasons.map((row) => row.description))].join(', ')}.`,
           reasons,
         });
       }
+      const removed = await tx.qrEventParticipant.deleteMany({
+        where: {
+          userIdentityUid: user.identityUid,
+          id: { in: participants.map((p) => p.id) },
+        },
+      });
+      if (removed.count !== participants.length)
+        throw new ConflictException({
+          code: 'USER_DELETE_QR_CONFIRMATION_CHANGED',
+          message:
+            'Las participaciones han cambiado. Revisa la advertencia y confirma de nuevo; no se ha eliminado nada.',
+        });
       const email = user.email.trim().toLowerCase();
       // Same lock as newsletter/welcome issuance. Invalidate access-link tokens,
       // keep sent mail evidence, and stop pending deliveries for this account.
@@ -217,6 +346,9 @@ export async function deleteAdminUser(
             role: user.role,
             request: { ...request },
             permanentIdentityRetired: true,
+            qrParticipationsDeleted: removed.count,
+            qrEvents: preview.qr.events,
+            qrParticipationIds: participants.map((p) => p.id),
           },
         },
       });
@@ -224,7 +356,13 @@ export async function deleteAdminUser(
       // Cascades only the allowlisted disposable data. Auth sessions, reset and
       // email-change tokens, favourites, waitlist and accreditation owner vanish.
       await tx.user.delete({ where: { id } });
-      return { deleted: true, id, identityUid, alreadyDeleted: false };
+      return {
+        deleted: true,
+        id,
+        identityUid,
+        alreadyDeleted: false,
+        qrParticipationsDeleted: removed.count,
+      };
     });
   } catch (error) {
     if (

@@ -1466,6 +1466,9 @@ import { loadCategoryPages } from './category-pagination';
   adminApi.deleteAdminUser = async (id: number | string, payload: UnknownRecord) => {
     return request(`/api/admin/users/${encodeURIComponent(id)}`, { method: 'DELETE', body: payload });
   };
+  adminApi.getUserDeletionPreview = async (id: number | string) => {
+    return request(`/api/admin/users/${encodeURIComponent(id)}/deletion-preview`);
+  };
 
   adminApi.getUserAuditLogs = async (id: number | string) => {
     return request(`/api/admin/users/${encodeURIComponent(id)}/audit-logs`);
