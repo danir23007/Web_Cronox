@@ -1,6 +1,6 @@
 # Revisión y publicación conjunta · 27/10/2026
 
-Estado: preparación final de la publicación autorizada por el titular. El resultado del despliegue se añadirá al cierre. No se autoriza cobrar, borrar cuentas/eventos/puntos reales ni modificar ventas para probar.
+**Publicación completada y web abierta.** Versión funcional instalada: **`09525386c1148393d687b8a533e2c85319a274fc`**. El controlador terminó `success/public_check` el 27/10/2026 a las **17:55:18 UTC / 18:55:18 Europe/Madrid**. No se hicieron cobros, borrados ni modificaciones de ventas de prueba en producción.
 
 ## Alcance revisado y dependencias
 
@@ -71,4 +71,45 @@ Esto completa la prueba pendiente de tarjeta desde formulario. No acredita 3DS f
 
 ## Publicación y comprobaciones finales
 
-Pendiente de completar con SHA, enlaces de CI/dispatch, recibo de respaldo restaurado, migraciones aplicadas, disponibilidad/cachés/permisos y dos lecturas frescas de los trabajadores. No se declara publicada la versión mientras esos controles no hayan terminado.
+- Commits: `76a365e2` (footer/móvil), `3be9d543` (integración administrativa/checkout) y `09525386` (fixtures de integración). Avance normal de main, sin force push ni descarte de trabajo. El commit móvil previo `d6a04e61` está incluido.
+- **[CI del SHA publicado · 40553377300](https://github.com/danir23007/Web_Cronox/actions/runs/40553377300): correcto.** 3077 pruebas / 284 suites, más 59 pruebas / 6 suites de exportaciones; tipos, Prisma, builds, recursos y guardias de secretos aprobados. El primer CI fallido quedó documentado y no desplegó.
+- **[Deploy CRONOX · 40554055301](https://github.com/danir23007/Web_Cronox/actions/runs/40554055301): correcto.** Un único dispatch `publish=true`, con el mismo SHA contrastado contra main. Su CI obligatorio volvió a pasar; deploy terminó success. No hubo recuperación ni canal alternativo por SSH.
+- Controlador: preflight → mantenimiento observado 503 en ambos dominios → escritores detenidos → respaldo/restauración/comparación → instalación/builds → cinco migraciones → arranque pausado → activación/verificación → reapertura/public_check. No se modificó el controlador privilegiado.
+- Respaldo productivo: `database.dump` **2084086 bytes**, `application.tar.gz` **270725393 bytes**, roles y recibos de hashes privados. **301 objetos restaurados y comparados, cero diferencias**. `backup-verified.json`, `backup-sha256.json` y las dos verificaciones permanecen en el diario privado del controlador para este SHA. No se descargan ni publican los datos del respaldo.
+
+### Migraciones registradas en producción
+
+| Migración | SHA-256 aplicado |
+| --- | --- |
+| `20261027190000_checkout_presence_and_payment_window` | `02e5785fc9e37bf0d2071d68700c83b7536579a9f874475689e6cb0684f2d643` |
+| `20261027210000_safe_user_deletion_permanent_ids` | `787f0e20c5790be8b6c8d336338de6f9134d2f55d1f6629aac821febb5eb3199` |
+| `20261027230000_point_territory_and_safe_removal` | `afc07b819a07cdff9dbd21c070d8e36ab2daa9b336a9e285dd2b52898648b6d5` |
+| `20261027231000_point_place_normalization` | `236fccd6097c4dc0689f0c549391dec0a70199f020f6016331a7b2e616ff2648` |
+| `20261027233000_checkout_presence_private` | `e4aa9cac6cdf32c55ecd09b7df44eef74ce9b7371b928ce7d8d2d90f523b4fbe` |
+
+Hay **109 migraciones terminadas**, sin fallidas ni revertidas. Las 104 filas históricas permanecen idénticas, incluidos sus checksums; las cinco nuevas se contrastaron contra el contenido Git admitiendo únicamente la representación LF/CRLF documentada. El control estricto de numeración devuelve `USER_NUMBERING_RELEASE_READY`; el trigger de compactación está ausente.
+
+### Contraste independiente
+
+| Capa | Resultado |
+| --- | --- |
+| Identidad y arranque | HEAD productivo exacto; PM2 cronox online, PID **208552**, estable entre las lecturas posteriores. Mantenimiento retirado. |
+| Disponibilidad | Health y ready 200 en apex/www; portada apex 200 y redirección www 308 exacta al dominio canónico. 25 peticiones de disponibilidad/páginas/permisos aprobadas. |
+| Recursos y caché | 16 activos revisados: JS/CSS coinciden con fuente publicada normalizando solo LF/CRLF; PNG de acreditación coincide por bytes. HTML no-store y versiones de recursos nuevas. Sin secretos ni contenido de sandbox en artefactos. |
+| Datos conservados | Mismas 100 identidades (ID, UUID, CRX, QR público y fecha de creación). Huellas completas idénticas de 29 pedidos, 55 líneas, 33 movimientos de puntos, 22 ventas físicas, 49 variantes, 2 eventos y 40 participaciones. En PointSale se compara la proyección histórica, excluyendo únicamente la nueva columna nullable. |
+| Finanzas reales, solo lectura | Servicios compilados ejecutados con transacciones PostgreSQL **READ ONLY**: provincias iniciales 52, comunidades 19, totales del mapa iguales a Finanzas y agrupación territorial equivalente; los tres puntos productivos concilian detalle/Finanzas para el mismo período. No se imprimen datos de clientes ni se alteran operaciones. |
+| Permisos | Endpoints administrativos sin sesión devuelven 401. Metadatos de los controladores compilados confirman JWT/Admin/SUPERADMIN para los tres borrados. 40 controles de SELECT/INSERT/UPDATE/DELETE denegados a anon/authenticated sobre las cinco tablas privadas revisadas, con RLS activo. Cero recibos de borrado de usuarios productivos. |
+| Trabajador webhook | Habilitado, mismo PID, sin error. Escaneo avanza de **17:57:01.876Z a 17:58:41.638Z**. |
+| Trabajador reservas | Habilitado, mismo PID, sin error. Escaneo avanza de **17:57:02.207Z a 17:58:45.217Z**; poll 1000 ms/reintento 5000 ms. Archivo privado 0600 y fresco. Cero reservas con unidades retenidas en las lecturas. No se creó una reserva productiva para probar. |
+| Política y logs | Comunicaciones y trabajos conservan exactamente sus controles anteriores. No se activó modo local/test en producción. Error log PM2 permanece en 63178 bytes, sin entradas nuevas. Archivo histórico privado de main.ts conserva su huella; no hay modificaciones de fuente ajenas al SHA. Se conservan las dependencias generadas por la automatización. |
+| Footer en navegador | Chromium 1366/390 px, fuentes y logos decodificados, sin scroll horizontal. Altura escritorio **207,984375 px antes y después**. Logos separados en escritorio; fila móvil con márgenes de 20 px y ojo centrado en el viewport de contenido. Instagram conserva destino; TikTok/YouTube son spans sin href/rol/tabindex ni cursor interactivo. Desplegable SOPORTE abre y muestra contenido sin desbordamiento. Cero imágenes rotas del footer. |
+
+La primera captura informativa se intentó en Privacidad, que conserva su plantilla sin este footer; se corrigió la selección de página de prueba y se verificó el footer compartido en la portada. No fue una regresión ni se añadió un footer nuevo a páginas que no lo utilizaban. Las capturas finales del elemento están en `output/playwright/release-final-footer-only-1366.png` y `release-final-footer-only-390.png`; no se usa la carga diferida de galería como evidencia de una comprobación terminada de esa galería.
+
+No hay una sesión administrativa productiva legítima disponible en esta revisión: no se fabricaron sesiones ni se suplantó una cuenta para obtener capturas. La navegación autenticada dentro del administrador conserva la evidencia local/aislada y de CI; en producción se contrastaron servicios reales en solo lectura, permisos compilados y rechazo HTTP anónimo. No se presenta esto como un borrado ni una navegación autenticada probados en producción.
+
+**Pendientes explícitos:** zoom móvil no reproducido, contraste físico Xiaomi de todos los efectos de color/bordes, wallets/3DS y otros retornos bancarios en dispositivo físico, suspensión/red móvil y cámara física. El pago test desde formulario sí está completado como se describe arriba. El antiguo hCaptcha 429 no se reprodujo en ese intento; no se ha desactivado ni se promete que desaparezca universalmente.
+
+Evidencias privadas/locales: `output/release-final-20261027/` (CI/dispatch/controlador, respaldo local, consultas antes/después, migraciones, privilegios, conciliación económica, workers, HTTP/recursos y navegador). Los archivos privados, respaldos, claves y estados de navegador están excluidos de Git. Ninguno de los 168 archivos pendientes capturados al inicio desapareció; las seis diferencias sobre esa captura son ampliaciones revisadas de controles, privacidad/pruebas y documentación.
+
+Este cierre es documental. La versión funcional publicada sigue siendo **09525386**, sin necesidad de otra publicación por guardar este resultado.

@@ -1,6 +1,6 @@
 # Reservas de checkout — implementación local, 27/10/2026
 
-**Actualización de revisión final:** la tarjeta se ha completado desde Payment Element real en modo test, con pedido local 9, webhook original y consumo único de stock. El hCaptcha 429 previo no bloqueó este intento; wallets/3DS físicos siguen pendientes. Se añade la migración de privacidad de presencia y el control de arranque compatible con migraciones. El estado vigente de publicación está en [revisión final conjunta](release-final-2026-10-27.md); los apartados siguientes conservan la evidencia cronológica anterior.
+**Actualización de publicación:** operativo en producción en `09525386`, con migraciones verificadas y ambos trabajadores avanzando sin error. La tarjeta se completó desde Payment Element real en modo test, con pedido local 9, webhook original y consumo único de stock. El hCaptcha 429 previo no bloqueó ese intento; wallets/3DS físicos siguen pendientes. El estado vigente está en [publicación conjunta](release-final-2026-10-27.md); los apartados siguientes conservan la evidencia cronológica anterior.
 
 La cesta no reserva. Entrar en checkout adquiere stock por variante y cantidad; la presencia mantiene esa reserva. Después de validar y justo antes de confirmar el pago, el servidor fija una única ventana de **360 segundos**. Se reutilizan `CheckoutSnapshot` y `CheckoutStockReservation`; no se añade otra contabilidad de inventario.
 

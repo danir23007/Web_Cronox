@@ -1,5 +1,7 @@
 # Mapa, territorio y eliminación de puntos de venta
 
+**Actualización:** publicado en producción en `09525386`. Migraciones y conciliación de los tres puntos reales verificadas en solo lectura, sin eliminar puntos ni alterar ventas. Estado vigente en [publicación conjunta](release-final-2026-10-27.md). Se conserva a continuación el registro local previo.
+
 Estado local: implementado el 27/10/2026. Sin commit, push ni despliegue. No se han eliminado puntos reales ni efectuado pagos. Se conserva el trabajo pendiente de checkout, usuarios, eventos QR, footer y compatibilidad móvil.
 
 ## Comportamiento

@@ -1,5 +1,7 @@
 # Eliminación de usuarios e identidades permanentes — 27/10/2026
 
+**Actualización:** publicado en producción en `09525386`, con migración verificada y sin eliminar cuentas reales. Estado vigente y límites de validación en [publicación conjunta](release-final-2026-10-27.md). Los apartados siguientes conservan el historial de implementación y activación local.
+
 Implementación local. No se han eliminado usuarios reales ni aplicado migraciones en la base habitual. Sin commit, push ni despliegue.
 
 ## Comportamiento

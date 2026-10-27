@@ -1,5 +1,7 @@
 # Eliminación de eventos QR — 27/10/2026
 
+**Actualización:** publicado en producción en `09525386`, sin migración específica ni borrado de eventos reales. Permisos compilados y conservación de eventos/participaciones verificados. Véase [publicación conjunta](release-final-2026-10-27.md); lo que sigue es el historial de la implementación local.
+
 Implementado en local. Solo SUPERADMIN puede eliminar eventos. No se han eliminado eventos reales, modificado producción, realizado commit/push ni desplegado cambios.
 
 ## Interfaz

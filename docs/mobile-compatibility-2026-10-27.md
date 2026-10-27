@@ -1,5 +1,7 @@
 # Compatibilidad móvil de CRONOX — 27/10/2026
 
+**Actualización:** las correcciones visuales terminadas están publicadas en `09525386`; el zoom espontáneo continúa **sin reproducir ni resolver** y las validaciones físicas siguen pendientes. Véase [publicación conjunta](release-final-2026-10-27.md). Los apartados siguientes son el registro de la investigación local anterior.
+
 Estado: correcciones previas conservadas en local; fotografía del Xiaomi revisada; **apertura aparentemente ampliada todavía sin reproducir ni resolver**. Sin commit, push ni despliegue. Esta continuación añade diagnóstico, comprobaciones concretas y documentación, sin modificar código público. El diff de los archivos ya versionados coincide byte a byte con `output/playwright/mobile-followup/start.patch`, tomado al comenzar esta continuación.
 
 Se partió de `main`, `d6a04e61`, con el footer ya en curso. La investigación previa se hizo en `../mobile-compat-review` y se integró conservando aquel trabajo. Los diffs de `store.css` y de la prueba móvil del footer siguen siendo los de esa tarea; en sus HTML se actualizaron versiones de recursos compartidos. El panel de administración no se ha modificado.
