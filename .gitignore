@@ -27,6 +27,26 @@ playwright-report/
 
 # Generated local browser verification artifacts.
 /output/playwright/
+
+# Reviewed local verification reports and runtime artifacts. Reusable source
+# and fixtures are versioned under tests/, scripts/ and cronox-backend/scripts/.
+/output/**/*.log
+/output/**/*.pid
+/output/**/*.patch
+/output/**/*.png
+/output/**/*.json
+/output/**/*.txt
+/output/**/*.private*
+/output/**/*.dump
+/output/stock-reservations/generated-client/
+
+# One-off incident probes: fixed diagnostic sessions/IDs and local fixtures.
+# The reusable recovery regression lives in tests/stock-reservations/.
+/output/checkout-incident-20261027/*.cjs
+/output/checkout-incident-20261027/*.cli.js
+# Temporary copy of checkout-browser.cli.js with only a different local port.
+/output/incident-checkout-browser.cli.js
+
 /output/checkout-local-activation/*.private*
 /output/checkout-local-activation/*.dump
 /output/user-deletion-local-activation/*.private*
