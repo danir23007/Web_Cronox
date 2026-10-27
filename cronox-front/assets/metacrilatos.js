@@ -5,14 +5,9 @@
   // This renderer never fetches identity, creates credentials, or changes a design.
   const scriptUrl = document.currentScript?.src || new URL('/assets/metacrilatos.js', location.href).href;
   const assetUrl = name => new URL(`metacrilatos/${name}`, scriptUrl).href;
-  const cssUrl = new URL('metacrilatos.css?v=3', scriptUrl).href;
+  const cssUrl = new URL('metacrilatos.css?v=4', scriptUrl).href;
   const instances = new WeakMap();
   const roman = ['I', 'II', 'III', 'IV', 'V'];
-  const inks = [
-    ['#111315', '#d8dadd'], ['#111315', '#d8dadd'], ['#25282b', '#d3d6d7'],
-    ['#25282b', '#3f4548'], ['#191419', '#d4b69b'],
-  ];
-  let nextInstance = 0;
   let styleReady;
 
   function ensureStyles() {
@@ -61,20 +56,9 @@
     }).format(parsed);
   }
 
-  function markup(id) {
+  function markup() {
     // No customer-controlled string is interpolated into this static template.
-    return `<svg xmlns="http://www.w3.org/2000/svg" width="0" height="0" class="crx-definitions" aria-hidden="true" focusable="false">
-      <defs>
-        <filter id="${id}-label" x="0" y="0" width="100%" height="100%" color-interpolation-filters="sRGB">
-          <feFlood data-crx-label-ink></feFlood><feComposite in2="SourceAlpha" operator="in"></feComposite>
-        </filter>
-        <filter id="${id}-circle" x="0" y="0" width="100%" height="100%" color-interpolation-filters="sRGB">
-          <feColorMatrix in="SourceGraphic" type="matrix" values="0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  -0.2126 -0.7152 -0.0722 0 1" result="logo-alpha"></feColorMatrix>
-          <feFlood data-crx-circle-ink></feFlood><feComposite in2="logo-alpha" operator="in"></feComposite>
-        </filter>
-      </defs>
-    </svg>
-    <section class="crx-display" aria-label="Acreditación CRONOX encapsulada en metacrilato con reflejos interactivos">
+    return `<section class="crx-display" aria-label="Acreditación CRONOX encapsulada en metacrilato con reflejos interactivos">
       <div class="crx-stage" role="group" aria-label="Acreditación 3D. Arrastra para girarla o utiliza el botón inferior.">
         <div class="crx-scale"><div class="crx-slab">
           <div class="crx-rim" aria-hidden="true"></div>
@@ -105,7 +89,6 @@
   function mount(root, initialData) {
     if (!(root instanceof Element)) throw new TypeError('Falta el contenedor de la acreditación.');
     instances.get(root)?.destroy();
-    const id = `crx-metacrilatos-${++nextInstance}`;
     let destroyed = false;
     let revision = 0;
     let disposeScene = () => {};
@@ -121,7 +104,7 @@
         root.replaceChildren();
         root.classList.remove('crx-metacrilatos');
         delete root.dataset.crxLevel;
-        ['--crx-label-filter', '--crx-circle-filter', '--crx-scale'].forEach(key => root.style.removeProperty(key));
+        root.style.removeProperty('--crx-scale');
         if (instances.get(root) === api) instances.delete(root);
       },
       get ready() { return ready; },
@@ -145,11 +128,7 @@
         return ready;
       }
       root.dataset.crxLevel = String(level);
-      root.innerHTML = markup(id);
-      root.style.setProperty('--crx-label-filter', `url("#${id}-label")`);
-      root.style.setProperty('--crx-circle-filter', `url("#${id}-circle")`);
-      root.querySelector('[data-crx-label-ink]').setAttribute('flood-color', inks[level - 1][0]);
-      root.querySelector('[data-crx-circle-ink]').setAttribute('flood-color', inks[level - 1][1]);
+      root.innerHTML = markup();
       const slab = root.querySelector('.crx-slab');
       const stage = root.querySelector('.crx-stage');
       const rim = root.querySelector('.crx-rim');
@@ -194,7 +173,9 @@
         ring.setAttribute('aria-hidden', 'true');
         emblem.insertBefore(ring, emblem.firstChild);
       }
-      root.querySelectorAll('[data-crx-asset]').forEach(image => { image.src = assetUrl(image.dataset.crxAsset); });
+      root.querySelectorAll('[data-crx-asset]').forEach(image => {
+        image.src = assetUrl(image.dataset.crxAsset.replace('.png', `-${level}.png`));
+      });
       // Restrict the authorized graphic to a local PNG data URI. No scanned URL
       // or arbitrary external image is ever opened by the renderer.
       if (typeof data.qrDataUrl === 'string' && /^data:image\/png;base64,[A-Za-z0-9+/=]+$/.test(data.qrDataUrl)) {

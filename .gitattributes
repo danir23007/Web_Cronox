@@ -1,4 +1,7 @@
 # Preserve the exact bytes/checksum of this migration already applied in production.
+# Approved artwork references are hash-verified byte for byte by the generator.
+metacrilatos-codex/disenos/*.html -text
+cronox-front/assets/metacrilatos.css text eol=lf
 # Operational scripts must retain Unix line endings across Windows checkouts.
 .github/ops/cronox-release/* text eol=lf
 .github/scripts/deploy-production.sh text eol=lf

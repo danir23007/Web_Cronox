@@ -36,7 +36,7 @@ describe('mobile cart and Quick Add layers', () => {
     expect(footer.lastElementChild?.className).toBe('footer-copy');
     expect(footer.querySelectorAll('.footer-copy')).toHaveLength(1);
     expect(storeCss).toMatch(
-      /@media \(max-width: 480px\)[\s\S]*?\.footer-brand-name\s*\{[^}]*display: flex;[^}]*width: 100%;[^}]*justify-content: center;/,
+      /@media \(max-width: 1100px\)[\s\S]*?\.footer-brand-name\s*\{[^}]*display: flex;[^}]*width: 100%;[^}]*justify-content: center;/,
     );
     expect(storeCss).toMatch(
       /\.footer-logo\s*\{[^}]*width: min\(100%, 144px\);[^}]*height: auto;[^}]*object-fit: contain;/,

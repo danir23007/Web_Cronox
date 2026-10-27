@@ -27,11 +27,11 @@
     .crx-metacrilatos[data-crx-level="1"] .crx-label-code{--customer-original-font: 'Courier New',monospace; font-family:var(--customer-font-prefix,) var(--customer-original-font);font-size:12px;font-weight:600;letter-spacing:1.1px;white-space:nowrap}
     .crx-metacrilatos[data-crx-level="1"] .crx-label-grade{display:flex;align-items:center;justify-content:center;border-left:1px solid #78858b60;--customer-original-font: Georgia,serif; font-family:var(--customer-original-font);font-size:26px;color:#25282b}
     .crx-metacrilatos[data-crx-level="1"] .crx-front .crx-label{grid-template-columns:minmax(0,1fr) 40px}
-    .crx-metacrilatos[data-crx-level="1"] .crx-label-symbol img{display:block;width:30px;height:30px;max-width:none;object-fit:contain;pointer-events:none;filter:var(--crx-label-filter)}
+    .crx-metacrilatos[data-crx-level="1"] .crx-label-symbol img{display:block;width:30px;height:30px;max-width:none;object-fit:contain;pointer-events:none}
     .crx-metacrilatos[data-crx-level="1"] .crx-card{position:absolute;top:67px;bottom:20px;left:19px;right:19px;border:1px solid #4b4d51;border-radius:8px;background:radial-gradient(ellipse at 50% 42%,#242426 0,#0e0f10 42%,#030304 79%);color:#e3e5e7;overflow:hidden;box-shadow:0 0 0 .5px #4b4d51,0 1px 0 #d5dce052,0 4px 12px #0009}
     .crx-metacrilatos[data-crx-level="1"] .crx-card::before{content:'';position:absolute;inset:6px;border:1px solid #b7bec32e;border-radius:4px;pointer-events:none}
     .crx-metacrilatos[data-crx-level="1"] .crx-long-logo{position:absolute;left:18px;top:18px;width:94px;height:26px;overflow:hidden;transform:scale(1.12);transform-origin:top left}
-    .crx-metacrilatos[data-crx-level="1"] .crx-long-logo img{position:absolute;left:-16.6px;top:-15.6px;width:127px;height:auto;max-width:none;pointer-events:none;filter:var(--crx-circle-filter)}
+    .crx-metacrilatos[data-crx-level="1"] .crx-long-logo img{position:absolute;left:-16.6px;top:-15.6px;width:127px;height:auto;max-width:none;pointer-events:none}
     .crx-metacrilatos[data-crx-level="1"] .crx-emblem{position:absolute;left:50%;top:60px;width:170px;height:170px;transform:translateX(-50%);display:grid;place-items:center}
     .crx-metacrilatos[data-crx-level="1"] .crx-ring{position:absolute;border:1.15px solid #b2b4b8;border-radius:50%;pointer-events:none}
     .crx-metacrilatos[data-crx-level="1"] .crx-roman{position:relative;--customer-original-font: Georgia,'Times New Roman',serif; font-family:var(--customer-original-font);font-size:77px;line-height:1;font-weight:400;text-shadow:0 1px 0 #f0f2f2,0 3px 1px #000000;color:#d8dadd;transform:translateY(-1px)}
@@ -40,7 +40,7 @@
     .crx-metacrilatos[data-crx-level="1"] .crx-date{--customer-original-font: 'Courier New',monospace; font-family:var(--customer-font-prefix,) var(--customer-original-font);font-size:11px;letter-spacing:2px;margin-top:10px;color:#b4b7bb}
     .crx-metacrilatos[data-crx-level="1"] .crx-card-back{background:radial-gradient(ellipse at 50% 30%,#181a1d,#030304 80%)}
     .crx-metacrilatos[data-crx-level="1"] .crx-reverse-mark{position:absolute;top:25px;left:0;right:0;text-align:center;--customer-original-font: Georgia,'Times New Roman',serif; font-family:var(--customer-font-prefix,) var(--customer-original-font);font-size:37px;line-height:1.15;font-weight:700;letter-spacing:-2px;color:#d8dadd}
-    .crx-metacrilatos[data-crx-level="1"] .crx-eye-logo{position:absolute;top:81px;left:50%;transform:translateX(-50%);width:101px;height:30px;overflow:hidden;mix-blend-mode:screen;filter:grayscale(1) brightness(.84)}
+    .crx-metacrilatos[data-crx-level="1"] .crx-eye-logo{position:absolute;top:81px;left:50%;transform:translateX(-50%);width:101px;height:30px;overflow:hidden}
     .crx-metacrilatos[data-crx-level="1"] .crx-eye-logo img{position:absolute;left:-5.6px;top:-12px;width:111px;height:auto;max-width:none;pointer-events:none}
     .crx-metacrilatos[data-crx-level="1"] .crx-qr{position:absolute;left:31px;right:31px;top:125px;aspect-ratio:1;background:#dbdbdb;display:block;overflow:hidden;border-radius:2px;z-index:4;opacity:1}
     .crx-metacrilatos[data-crx-level="1"] .crx-qr img{display:block;width:100%;height:100%;image-rendering:pixelated;pointer-events:none;filter:grayscale(1)}
@@ -82,11 +82,11 @@
     .crx-metacrilatos[data-crx-level="2"] .crx-label-code{--customer-original-font: 'Courier New',monospace; font-family:var(--customer-font-prefix,) var(--customer-original-font);font-size:12px;font-weight:600;letter-spacing:1.1px;white-space:nowrap}
     .crx-metacrilatos[data-crx-level="2"] .crx-label-grade{display:flex;align-items:center;justify-content:center;border-left:1px solid #78858b60;--customer-original-font: Georgia,serif; font-family:var(--customer-original-font);font-size:26px;color:#25282b}
     .crx-metacrilatos[data-crx-level="2"] .crx-front .crx-label{grid-template-columns:minmax(0,1fr) 40px}
-    .crx-metacrilatos[data-crx-level="2"] .crx-label-symbol img{display:block;width:30px;height:30px;max-width:none;object-fit:contain;pointer-events:none;filter:var(--crx-label-filter)}
+    .crx-metacrilatos[data-crx-level="2"] .crx-label-symbol img{display:block;width:30px;height:30px;max-width:none;object-fit:contain;pointer-events:none}
     .crx-metacrilatos[data-crx-level="2"] .crx-card{position:absolute;top:67px;bottom:20px;left:19px;right:19px;border:1px solid #4b4d51;border-radius:8px;background:radial-gradient(ellipse at 50% 42%,#242426 0,#0e0f10 42%,#030304 79%);color:#e3e5e7;overflow:hidden;box-shadow:0 0 0 .5px #4b4d51,0 1px 0 #d5dce052,0 4px 12px #0009}
     .crx-metacrilatos[data-crx-level="2"] .crx-card::before{content:'';position:absolute;inset:6px;border:1px solid #b7bec32e;border-radius:4px;pointer-events:none}
     .crx-metacrilatos[data-crx-level="2"] .crx-long-logo{position:absolute;left:18px;top:18px;width:94px;height:26px;overflow:hidden;transform:scale(1.12);transform-origin:top left}
-    .crx-metacrilatos[data-crx-level="2"] .crx-long-logo img{position:absolute;left:-16.6px;top:-15.6px;width:127px;height:auto;max-width:none;pointer-events:none;filter:var(--crx-circle-filter)}
+    .crx-metacrilatos[data-crx-level="2"] .crx-long-logo img{position:absolute;left:-16.6px;top:-15.6px;width:127px;height:auto;max-width:none;pointer-events:none}
     .crx-metacrilatos[data-crx-level="2"] .crx-emblem{position:absolute;left:50%;top:60px;width:170px;height:170px;transform:translateX(-50%);display:grid;place-items:center}
     .crx-metacrilatos[data-crx-level="2"] .crx-ring{position:absolute;border:1.15px solid #b2b4b8;border-radius:50%;pointer-events:none}
     .crx-metacrilatos[data-crx-level="2"] .crx-roman{position:relative;--customer-original-font: Georgia,'Times New Roman',serif; font-family:var(--customer-original-font);font-size:77px;line-height:1;font-weight:400;text-shadow:0 1px 0 #f0f2f2,0 3px 1px #000000;color:#d8dadd;transform:translateY(-1px)}
@@ -95,7 +95,7 @@
     .crx-metacrilatos[data-crx-level="2"] .crx-date{--customer-original-font: 'Courier New',monospace; font-family:var(--customer-font-prefix,) var(--customer-original-font);font-size:11px;letter-spacing:2px;margin-top:10px;color:#b4b7bb}
     .crx-metacrilatos[data-crx-level="2"] .crx-card-back{background:radial-gradient(ellipse at 50% 30%,#181a1d,#030304 80%)}
     .crx-metacrilatos[data-crx-level="2"] .crx-reverse-mark{position:absolute;top:25px;left:0;right:0;text-align:center;--customer-original-font: Georgia,'Times New Roman',serif; font-family:var(--customer-font-prefix,) var(--customer-original-font);font-size:37px;line-height:1.15;font-weight:700;letter-spacing:-2px;color:#d8dadd}
-    .crx-metacrilatos[data-crx-level="2"] .crx-eye-logo{position:absolute;top:81px;left:50%;transform:translateX(-50%);width:101px;height:30px;overflow:hidden;mix-blend-mode:screen;filter:grayscale(1) brightness(.84)}
+    .crx-metacrilatos[data-crx-level="2"] .crx-eye-logo{position:absolute;top:81px;left:50%;transform:translateX(-50%);width:101px;height:30px;overflow:hidden}
     .crx-metacrilatos[data-crx-level="2"] .crx-eye-logo img{position:absolute;left:-5.6px;top:-12px;width:111px;height:auto;max-width:none;pointer-events:none}
     .crx-metacrilatos[data-crx-level="2"] .crx-qr{position:absolute;left:31px;right:31px;top:125px;aspect-ratio:1;background:#dbdbdb;display:block;overflow:hidden;border-radius:2px;z-index:4;opacity:1}
     .crx-metacrilatos[data-crx-level="2"] .crx-qr img{display:block;width:100%;height:100%;image-rendering:pixelated;pointer-events:none;filter:grayscale(1)}
@@ -137,11 +137,11 @@
     .crx-metacrilatos[data-crx-level="3"] .crx-label-code{--customer-original-font: 'Courier New',monospace; font-family:var(--customer-font-prefix,) var(--customer-original-font);font-size:12px;font-weight:600;letter-spacing:1.1px;white-space:nowrap}
     .crx-metacrilatos[data-crx-level="3"] .crx-label-grade{display:flex;align-items:center;justify-content:center;border-left:1px solid #78858b60;--customer-original-font: Georgia,serif; font-family:var(--customer-original-font);font-size:26px;color:#3f4548}
     .crx-metacrilatos[data-crx-level="3"] .crx-front .crx-label{grid-template-columns:minmax(0,1fr) 40px}
-    .crx-metacrilatos[data-crx-level="3"] .crx-label-symbol img{display:block;width:30px;height:30px;max-width:none;object-fit:contain;pointer-events:none;filter:var(--crx-label-filter)}
+    .crx-metacrilatos[data-crx-level="3"] .crx-label-symbol img{display:block;width:30px;height:30px;max-width:none;object-fit:contain;pointer-events:none}
     .crx-metacrilatos[data-crx-level="3"] .crx-card{position:absolute;top:67px;bottom:20px;left:19px;right:19px;border:1px solid #878f94;border-radius:8px;background:radial-gradient(ellipse at 50% 42%,#666a6c 0,#383c3f 42%,#1c1f22 79%);color:#e1e4e5;overflow:hidden;box-shadow:0 0 0 .5px #878f94,0 1px 0 #d5dce052,0 4px 12px #0009}
     .crx-metacrilatos[data-crx-level="3"] .crx-card::before{content:'';position:absolute;inset:6px;border:1px solid #b7bec347;border-radius:4px;pointer-events:none}
     .crx-metacrilatos[data-crx-level="3"] .crx-long-logo{position:absolute;left:18px;top:18px;width:94px;height:26px;overflow:hidden;transform:scale(1.12);transform-origin:top left}
-    .crx-metacrilatos[data-crx-level="3"] .crx-long-logo img{position:absolute;left:-16.6px;top:-15.6px;width:127px;height:auto;max-width:none;pointer-events:none;filter:var(--crx-circle-filter)}
+    .crx-metacrilatos[data-crx-level="3"] .crx-long-logo img{position:absolute;left:-16.6px;top:-15.6px;width:127px;height:auto;max-width:none;pointer-events:none}
     .crx-metacrilatos[data-crx-level="3"] .crx-emblem{position:absolute;left:50%;top:60px;width:170px;height:170px;transform:translateX(-50%);display:grid;place-items:center}
     .crx-metacrilatos[data-crx-level="3"] .crx-ring{position:absolute;border:1.15px solid #b7bdc0;border-radius:50%;pointer-events:none}
     .crx-metacrilatos[data-crx-level="3"] .crx-roman{position:relative;--customer-original-font: Georgia,'Times New Roman',serif; font-family:var(--customer-original-font);font-size:77px;line-height:1;font-weight:400;text-shadow:0 1px 0 #f0f2f2,0 3px 1px #111518;color:#d3d6d7;transform:translateY(-1px)}
@@ -150,7 +150,7 @@
     .crx-metacrilatos[data-crx-level="3"] .crx-date{--customer-original-font: 'Courier New',monospace; font-family:var(--customer-font-prefix,) var(--customer-original-font);font-size:11px;letter-spacing:2px;margin-top:10px;color:#b4b9bc}
     .crx-metacrilatos[data-crx-level="3"] .crx-card-back{background:radial-gradient(ellipse at 50% 30%,#41464a,#1c1f22 80%)}
     .crx-metacrilatos[data-crx-level="3"] .crx-reverse-mark{position:absolute;top:25px;left:0;right:0;text-align:center;--customer-original-font: Georgia,'Times New Roman',serif; font-family:var(--customer-font-prefix,) var(--customer-original-font);font-size:37px;line-height:1.15;font-weight:700;letter-spacing:-2px;color:#d5d9db}
-    .crx-metacrilatos[data-crx-level="3"] .crx-eye-logo{position:absolute;top:81px;left:50%;transform:translateX(-50%);width:101px;height:30px;overflow:hidden;mix-blend-mode:screen;filter:grayscale(1) brightness(.84)}
+    .crx-metacrilatos[data-crx-level="3"] .crx-eye-logo{position:absolute;top:81px;left:50%;transform:translateX(-50%);width:101px;height:30px;overflow:hidden}
     .crx-metacrilatos[data-crx-level="3"] .crx-eye-logo img{position:absolute;left:-5.6px;top:-12px;width:111px;height:auto;max-width:none;pointer-events:none}
     .crx-metacrilatos[data-crx-level="3"] .crx-qr{position:absolute;left:31px;right:31px;top:125px;aspect-ratio:1;background:#dbdbdb;display:block;overflow:hidden;border-radius:2px;z-index:4;opacity:1}
     .crx-metacrilatos[data-crx-level="3"] .crx-qr img{display:block;width:100%;height:100%;image-rendering:pixelated;pointer-events:none;filter:grayscale(1)}
@@ -192,11 +192,11 @@
     .crx-metacrilatos[data-crx-level="4"] .crx-label-code{--customer-original-font: 'Courier New',monospace; font-family:var(--customer-font-prefix,) var(--customer-original-font);font-size:12px;font-weight:600;letter-spacing:1.1px;white-space:nowrap}
     .crx-metacrilatos[data-crx-level="4"] .crx-label-grade{display:flex;align-items:center;justify-content:center;border-left:1px solid #78858b60;--customer-original-font: Georgia,serif; font-family:var(--customer-original-font);font-size:26px;color:#3f4548}
     .crx-metacrilatos[data-crx-level="4"] .crx-front .crx-label{grid-template-columns:minmax(0,1fr) 40px}
-    .crx-metacrilatos[data-crx-level="4"] .crx-label-symbol img{display:block;width:30px;height:30px;max-width:none;object-fit:contain;pointer-events:none;filter:var(--crx-label-filter)}
+    .crx-metacrilatos[data-crx-level="4"] .crx-label-symbol img{display:block;width:30px;height:30px;max-width:none;object-fit:contain;pointer-events:none}
     .crx-metacrilatos[data-crx-level="4"] .crx-card{position:absolute;top:67px;bottom:20px;left:19px;right:19px;border:1px solid #ffffff;border-radius:8px;background:radial-gradient(ellipse at 50% 42%,#ffffff 0,#f1f2f0 42%,#dce0e0 79%);color:#343b3e;overflow:hidden;box-shadow:inset 0 0 0 6px #ffffff,0 1px 0 #ffffff52,0 4px 12px #0009}
     .crx-metacrilatos[data-crx-level="4"] .crx-card::before{content:'';position:absolute;inset:6px;border:1px solid #78858b47;border-radius:4px;pointer-events:none}
     .crx-metacrilatos[data-crx-level="4"] .crx-long-logo{position:absolute;left:18px;top:18px;width:94px;height:26px;overflow:hidden;transform:scale(1.12);transform-origin:top left}
-    .crx-metacrilatos[data-crx-level="4"] .crx-long-logo img{position:absolute;left:-16.6px;top:-15.6px;width:127px;height:auto;max-width:none;pointer-events:none;filter:var(--crx-circle-filter)}
+    .crx-metacrilatos[data-crx-level="4"] .crx-long-logo img{position:absolute;left:-16.6px;top:-15.6px;width:127px;height:auto;max-width:none;pointer-events:none}
     .crx-metacrilatos[data-crx-level="4"] .crx-emblem{position:absolute;left:50%;top:60px;width:170px;height:170px;transform:translateX(-50%);display:grid;place-items:center}
     .crx-metacrilatos[data-crx-level="4"] .crx-ring{position:absolute;border:1.15px solid #737d81;border-radius:50%;pointer-events:none}
     .crx-metacrilatos[data-crx-level="4"] .crx-roman{position:relative;--customer-original-font: Georgia,'Times New Roman',serif; font-family:var(--customer-original-font);font-size:77px;line-height:1;font-weight:400;text-shadow:0 1px 0 #ffffff,0 3px 1px #a6b0b5;color:#3f4548;transform:translateY(-1px)}
@@ -205,7 +205,7 @@
     .crx-metacrilatos[data-crx-level="4"] .crx-date{--customer-original-font: 'Courier New',monospace; font-family:var(--customer-font-prefix,) var(--customer-original-font);font-size:11px;letter-spacing:2px;margin-top:10px;color:#586166}
     .crx-metacrilatos[data-crx-level="4"] .crx-card-back{background:radial-gradient(ellipse at 50% 30%,#ffffff,#e0e4e4 80%)}
     .crx-metacrilatos[data-crx-level="4"] .crx-reverse-mark{position:absolute;top:25px;left:0;right:0;text-align:center;--customer-original-font: Georgia,'Times New Roman',serif; font-family:var(--customer-font-prefix,) var(--customer-original-font);font-size:37px;line-height:1.15;font-weight:700;letter-spacing:-2px;color:#424a4e}
-    .crx-metacrilatos[data-crx-level="4"] .crx-eye-logo{position:absolute;top:81px;left:50%;transform:translateX(-50%);width:101px;height:30px;overflow:hidden;mix-blend-mode:multiply;filter:invert(1) grayscale(1) opacity(.78)}
+    .crx-metacrilatos[data-crx-level="4"] .crx-eye-logo{position:absolute;top:81px;left:50%;transform:translateX(-50%);width:101px;height:30px;overflow:hidden}
     .crx-metacrilatos[data-crx-level="4"] .crx-eye-logo img{position:absolute;left:-5.6px;top:-12px;width:111px;height:auto;max-width:none;pointer-events:none}
     .crx-metacrilatos[data-crx-level="4"] .crx-qr{position:absolute;left:31px;right:31px;top:125px;aspect-ratio:1;background:#ffffff;display:block;overflow:hidden;border-radius:2px;z-index:4;opacity:1}
     .crx-metacrilatos[data-crx-level="4"] .crx-qr img{display:block;width:100%;height:100%;image-rendering:pixelated;pointer-events:none;filter:grayscale(1) contrast(1.15) brightness(1.1)}
@@ -247,11 +247,11 @@
     .crx-metacrilatos[data-crx-level="5"] .crx-label-code{--customer-original-font: 'Courier New',monospace; font-family:var(--customer-font-prefix,) var(--customer-original-font);font-size:12px;font-weight:600;letter-spacing:1.1px;white-space:nowrap}
     .crx-metacrilatos[data-crx-level="5"] .crx-label-grade{display:flex;align-items:center;justify-content:center;border-left:1px solid #7c6f7260;--customer-original-font: Georgia,serif; font-family:var(--customer-original-font);font-size:26px;color:#67152b}
     .crx-metacrilatos[data-crx-level="5"] .crx-front .crx-label{grid-template-columns:minmax(0,1fr) 40px}
-    .crx-metacrilatos[data-crx-level="5"] .crx-label-symbol img{display:block;width:30px;height:30px;max-width:none;object-fit:contain;pointer-events:none;filter:var(--crx-label-filter)}
+    .crx-metacrilatos[data-crx-level="5"] .crx-label-symbol img{display:block;width:30px;height:30px;max-width:none;object-fit:contain;pointer-events:none}
     .crx-metacrilatos[data-crx-level="5"] .crx-card{position:absolute;top:67px;bottom:20px;left:19px;right:19px;border:1px solid #a14c5b;border-radius:8px;background:radial-gradient(ellipse at 50% 42%,#52202b 0,#251016 42%,#120d10 79%);color:#eaded3;overflow:hidden;box-shadow:0 1px 0 #eddac552,0 4px 12px #0009}
     .crx-metacrilatos[data-crx-level="5"] .crx-card::before{content:'';position:absolute;inset:6px;border:1px solid #b6787047;border-radius:4px;pointer-events:none}
     .crx-metacrilatos[data-crx-level="5"] .crx-long-logo{position:absolute;left:18px;top:18px;width:94px;height:26px;overflow:hidden;transform:scale(1.12);transform-origin:top left}
-    .crx-metacrilatos[data-crx-level="5"] .crx-long-logo img{position:absolute;left:-16.6px;top:-15.6px;width:127px;height:auto;max-width:none;pointer-events:none;filter:var(--crx-circle-filter)}
+    .crx-metacrilatos[data-crx-level="5"] .crx-long-logo img{position:absolute;left:-16.6px;top:-15.6px;width:127px;height:auto;max-width:none;pointer-events:none}
     .crx-metacrilatos[data-crx-level="5"] .crx-emblem{position:absolute;left:50%;top:60px;width:170px;height:170px;transform:translateX(-50%);display:grid;place-items:center}
     .crx-metacrilatos[data-crx-level="5"] .crx-ring{position:absolute;border:1.15px solid #c49180;border-radius:50%;pointer-events:none}
     .crx-metacrilatos[data-crx-level="5"] .crx-roman{position:relative;--customer-original-font: Georgia,'Times New Roman',serif; font-family:var(--customer-original-font);font-size:77px;line-height:1;font-weight:400;text-shadow:0 1px 0 #e8c6a2,0 3px 1px #17060c;color:#d4b69b;transform:translateY(-1px)}
@@ -260,7 +260,7 @@
     .crx-metacrilatos[data-crx-level="5"] .crx-date{--customer-original-font: 'Courier New',monospace; font-family:var(--customer-font-prefix,) var(--customer-original-font);font-size:11px;letter-spacing:2px;margin-top:10px;color:#d3b8ac}
     .crx-metacrilatos[data-crx-level="5"] .crx-card-back{background:radial-gradient(ellipse at 50% 30%,#2e1820,#120e11 80%)}
     .crx-metacrilatos[data-crx-level="5"] .crx-reverse-mark{position:absolute;top:25px;left:0;right:0;text-align:center;--customer-original-font: Georgia,'Times New Roman',serif; font-family:var(--customer-font-prefix,) var(--customer-original-font);font-size:37px;line-height:1.15;font-weight:700;letter-spacing:-2px;color:#e6d6c7}
-    .crx-metacrilatos[data-crx-level="5"] .crx-eye-logo{position:absolute;top:81px;left:50%;transform:translateX(-50%);width:101px;height:30px;overflow:hidden;mix-blend-mode:screen;filter:sepia(.3) saturate(.6) brightness(.93)}
+    .crx-metacrilatos[data-crx-level="5"] .crx-eye-logo{position:absolute;top:81px;left:50%;transform:translateX(-50%);width:101px;height:30px;overflow:hidden}
     .crx-metacrilatos[data-crx-level="5"] .crx-eye-logo img{position:absolute;left:-5.6px;top:-12px;width:111px;height:auto;max-width:none;pointer-events:none}
     .crx-metacrilatos[data-crx-level="5"] .crx-qr{position:absolute;left:31px;right:31px;top:125px;aspect-ratio:1;background:#e9d8c4;display:block;overflow:hidden;border-radius:2px;z-index:4;opacity:1}
     .crx-metacrilatos[data-crx-level="5"] .crx-qr img{display:block;width:100%;height:100%;image-rendering:pixelated;pointer-events:none}
@@ -277,6 +277,11 @@
 /* Host integration: preserve the approved slab geometry; shrink the entire 3D
    scene proportionally only when its real container is narrower. */
 .crx-metacrilatos{width:100%;position:relative;min-width:0;--customer-original-font: Arial,Helvetica,sans-serif; font-family:var(--customer-font-prefix,) var(--customer-original-font);font-size:16px;font-weight:400;line-height:normal;box-sizing:border-box}
+/* The artwork deliberately mixes dark cards and pale labels. Declare those
+   actual surfaces so automatic darkening does not invert just their grounds.
+   Forced-colors/contrast preferences remain enabled. */
+.crx-metacrilatos{color-scheme:only dark}
+.crx-metacrilatos .crx-label,.crx-metacrilatos[data-crx-level="4"] .crx-card{color-scheme:only light}
 .metacrilatos-host{width:100%;min-width:0}
 [data-accreditation-renderer='metacrilatos-v1']>.profile-card>.accreditation-stage{display:none!important}
 .crx-metacrilatos .crx-scale{position:relative;transform-style:preserve-3d;transform:scale(var(--crx-scale,1));transform-origin:center}
@@ -284,7 +289,6 @@
 /* Some WebKit environments paint a hidden backface. Reuse the face
    state already maintained by the renderer; the rim and 3D transforms stay intact. */
 .crx-metacrilatos .crx-face[aria-hidden="true"]{visibility:hidden}
-.crx-metacrilatos .crx-definitions{position:absolute;overflow:hidden;pointer-events:none}
 .crx-metacrilatos .crx-name{min-height:1.15em;line-height:normal}
 .crx-metacrilatos .crx-label-code{display:block;min-width:0;max-width:100%}
 .crx-metacrilatos .crx-qr:empty::before{content:'QR no disponible';display:grid;place-items:center;height:100%;--customer-original-font: Arial,sans-serif; font:12px var(--customer-font-prefix,) var(--customer-original-font);text-align:center;color:#49212c;padding:12px}

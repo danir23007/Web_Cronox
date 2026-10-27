@@ -41,7 +41,7 @@ class BrowserClock {
 }
 
 async function fixture(options: { level?: number; hidden?: boolean; containerHidden?: boolean; intersecting?: boolean; reduced?: boolean; prepare?: (win: any) => void; mounted?: (win: any, instance: any) => void } = {}) {
-  const dom = new JSDOM('<!doctype html><link rel="stylesheet" href="/assets/metacrilatos.css?v=3"><div id="root"></div>', {
+  const dom = new JSDOM('<!doctype html><link rel="stylesheet" href="/assets/metacrilatos.css?v=4"><div id="root"></div>', {
     url: 'http://localhost/profile.html', runScripts: 'outside-only', pretendToBeVisual: true,
   });
   const win = dom.window as any;

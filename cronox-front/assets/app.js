@@ -2425,6 +2425,7 @@ window.CRONOX_AUTH_STATE = window.CRONOX_USER ? 'authenticated' : 'unknown';
   };
 
   const selectAuthView = (view) => {
+    const focusedView = document.activeElement?.closest('.cronox-auth__view');
     currentView = view === 'register' && !newsletterRegistration?.accountExists ? 'register' : 'login';
     applyRegistrationContext();
     document.querySelectorAll('.cronox-auth__view').forEach((v) => {
@@ -2433,6 +2434,11 @@ window.CRONOX_AUTH_STATE = window.CRONOX_USER ? 'authenticated' : 'unknown';
     if (authTitle) authTitle.textContent = currentView === 'login' ? 'Iniciar sesión' : 'Crear cuenta';
     const storedMessage = currentView === 'login' ? loginErrorMessage : registerErrorMessage;
     setAuthMessage(storedMessage, storedMessage ? 'error' : 'info');
+    // A switch hides the link that had focus. Anchor keyboard navigation in
+    // the still-visible dialog instead of leaving it on a hidden form.
+    if (focusedView && focusedView.dataset.authView !== currentView) {
+      document.getElementById('authCloseBtn')?.focus({ preventScroll: true });
+    }
   };
 
   const positionUserMenu = () => {
@@ -2871,6 +2877,38 @@ window.CRONOX_AUTH_STATE = window.CRONOX_USER ? 'authenticated' : 'unknown';
     }
 
     authDialog?.addEventListener('click', (ev) => ev.stopPropagation());
+    const consentAboveAuth = () => Boolean(document.querySelector('.cronox-consent:not([hidden]), .cronox-consent-panel:not([hidden])'));
+    document.addEventListener('keydown', (event) => {
+      if (!authOverlay?.classList.contains('is-open') || consentAboveAuth()) return;
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        closeAuthModal();
+        return;
+      }
+      if (event.key !== 'Tab') return;
+      const controls = [...authDialog.querySelectorAll('a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])')]
+        .filter(element => element.getClientRects().length && getComputedStyle(element).visibility !== 'hidden');
+      const first = controls[0], last = controls[controls.length - 1];
+      if (!first) return;
+      if (!authDialog.contains(document.activeElement) || (event.shiftKey && document.activeElement === first)) {
+        event.preventDefault();
+        (event.shiftKey ? last : first).focus({ preventScroll: true });
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus({ preventScroll: true });
+      }
+    });
+    window.addEventListener('cronox:consentchange', () => {
+      // Consent is dismissed after its change event. Restore focus only when
+      // the control the user just used has become hidden; never steal typing.
+      requestAnimationFrame(() => {
+        const active = document.activeElement;
+        if (authOverlay?.classList.contains('is-open') && !consentAboveAuth() &&
+            (active === document.body || !active?.getClientRects().length)) {
+          document.getElementById('authCloseBtn')?.focus({ preventScroll: true });
+        }
+      });
+    });
     document.querySelectorAll('[data-auth-switch]').forEach((btn) => {
       btn.addEventListener('click', () => selectAuthView(btn.dataset.authSwitch));
     });

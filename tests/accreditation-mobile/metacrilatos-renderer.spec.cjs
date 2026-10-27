@@ -23,9 +23,9 @@ test.beforeAll(async () => {
   longQrDataUrl = await QRCode.toDataURL(longToken, options);
 });
 
-async function harness(page) {
+async function harness(page, { stylesheet = true } = {}) {
   await page.route('**/metacrilatos-renderer-test', route => route.fulfill({
-    contentType: 'text/html', body: `<!doctype html><meta charset="utf-8"><style>body{margin:0;background:#080809}</style><link rel="stylesheet" href="/assets/metacrilatos.css?v=2"><div id="root"></div><script src="/assets/user-identity.js?v=1"></script><script src="/assets/metacrilatos.js"></script><script src="/assets/qr-reader.js"></script>`,
+    contentType: 'text/html', body: `<!doctype html><meta charset="utf-8"><style>body{margin:0;background:#080809}</style>${stylesheet ? '<link rel="stylesheet" href="/assets/metacrilatos.css?v=4">' : ''}<div id="root"></div><script src="/assets/user-identity.js?v=1"></script><script src="/assets/metacrilatos.js"></script><script src="/assets/qr-reader.js"></script>`,
   }));
   await page.goto('/metacrilatos-renderer-test');
   await page.evaluate(() => {
@@ -75,9 +75,7 @@ test('all approved hashes, 68 edge panels, exact circle colors/contours, readabl
         card: getComputedStyle(card).boxShadow,
         inner: getComputedStyle(card, '::before').borderTopWidth,
         roman: getComputedStyle(document.querySelector('.crx-roman')).color,
-        logo: document.querySelector('[data-crx-circle-ink]').getAttribute('flood-color'),
         label: getComputedStyle(label).color,
-        symbol: document.querySelector('[data-crx-label-ink]').getAttribute('flood-color'),
         width: document.querySelector('.crx-slab').offsetWidth,
         height: document.querySelector('.crx-slab').offsetHeight,
         hiddenDemo: document.body.textContent.includes('CONCEPTO') || document.body.textContent.includes('CRX-000001'),
@@ -159,8 +157,8 @@ test('name/date validation, update isolation, multiple instances, unknown circle
     const second = document.createElement('div'); second.id = 'second'; document.body.append(second);
     window.secondRenderer = window.CRONOX_METACRILATOS.mount(second, data); await window.secondRenderer.ready;
   }, { ...baseData, circleLevel: 5, qrDataUrl });
-  const ids = await page.locator('filter').evaluateAll(elements => elements.map(element => element.id));
-  expect(new Set(ids).size).toBe(4);
+  await expect(page.locator('#root .crx-long-logo img')).toHaveAttribute('src', /wordmark-2\.png$/);
+  await expect(page.locator('#second .crx-long-logo img')).toHaveAttribute('src', /wordmark-5\.png$/);
   await expect(page.locator('#root [data-crx-auto]')).toHaveCount(0);
   await page.evaluate(() => window.renderer.destroy());
   expect(await page.locator('#root').textContent()).toBe('');
@@ -204,7 +202,7 @@ test('front/back geometry and surface styles agree with each approved reference'
 test('failed assets reject ready and can recover; destroying pending images settles and disconnects', async ({ page }) => {
   await harness(page);
   let attempts = 0;
-  await page.route('**/metacrilatos/eye.png', route => ++attempts === 1 ? route.abort('failed') : route.continue());
+  await page.route('**/metacrilatos/eye-*.png', route => ++attempts === 1 ? route.abort('failed') : route.continue());
   const failure = await page.evaluate(async data => {
     window.renderer = window.CRONOX_METACRILATOS.mount(document.getElementById('root'), data);
     try { await window.renderer.ready; return null; } catch (error) { return error.message; }
@@ -212,10 +210,10 @@ test('failed assets reject ready and can recover; destroying pending images sett
   expect(failure).toContain('imagen');
   await render(page, 1);
   expect(await page.locator('[data-crx-asset="eye.png"]').evaluate(image => image.naturalWidth)).toBeGreaterThan(0);
-  await page.unroute('**/metacrilatos/eye.png');
+  await page.unroute('**/metacrilatos/eye-*.png');
   await harness(page);
   let pending;
-  await page.route('**/metacrilatos/eye.png', route => { pending = route; });
+  await page.route('**/metacrilatos/eye-*.png', route => { pending = route; });
   await page.evaluate(data => { window.renderer = window.CRONOX_METACRILATOS.mount(document.getElementById('root'), data); window.pendingReady = window.renderer.ready; }, { ...baseData, circleLevel: 2, qrDataUrl });
   await expect.poll(() => !!pending).toBe(true);
   await page.evaluate(async () => { window.renderer.destroy(); await window.pendingReady; });
@@ -225,8 +223,9 @@ test('failed assets reject ready and can recover; destroying pending images sett
 });
 
 test('stylesheet loading failure resets for retry and missing resource is bounded', async ({ page }) => {
-  await harness(page);
-  await page.locator('link[rel="stylesheet"]').evaluate(element => element.remove());
+  // Never preload the resource being failed: Blink may reuse a parsed sheet
+  // after its link is removed, bypassing a later network interception.
+  await harness(page, { stylesheet: false });
   let attempts = 0;
   await page.route(/\/metacrilatos\.css(?:\?.*)?$/, route => ++attempts === 1 ? route.abort('failed') : route.continue());
   const failure = await page.evaluate(async data => {
@@ -239,7 +238,7 @@ test('stylesheet loading failure resets for retry and missing resource is bounde
   await harness(page);
   await page.clock.install();
   let pending;
-  await page.route('**/metacrilatos/eye.png', route => { pending = route; });
+  await page.route('**/metacrilatos/eye-*.png', route => { pending = route; });
   await page.evaluate(data => { window.renderer = window.CRONOX_METACRILATOS.mount(document.getElementById('root'), data); window.pendingFailure = window.renderer.ready.then(() => '', error => error.message); }, { ...baseData, circleLevel: 4, qrDataUrl });
   await expect.poll(() => !!pending).toBe(true);
   await page.clock.fastForward(15001);

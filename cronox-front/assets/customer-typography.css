@@ -81,8 +81,10 @@
 [data-cronox-surface="customer"] .cronox-consent p:not(.cronox-consent__eyebrow) { font-size: 14px; }
 [data-cronox-surface="customer"] :is(.checkout-kicker, .checkout-section-title, .checkout-field label, .checkout-accordion__value, .checkout-secure-copy) { font-size: 14px; }
 
-@media (max-width: 600px) {
-  /* A 16px input also avoids automatic zoom in iOS. */
+@media (max-width: 600px), (hover: none) and (pointer: coarse) {
+  /* Keep editable controls at least 16px after phone rotation too. A narrow
+     viewport alone misses landscape phones and their focus-zoom threshold.
+     This does not restrict pinch zoom or the user's text-size preferences. */
   body[data-cronox-surface="customer"] :is(input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]), select, textarea) { font-size: 16px; }
 }
 

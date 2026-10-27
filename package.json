@@ -6,7 +6,8 @@
     "admin:map": "node cronox-backend/scripts/build-admin-map.cjs",
     "admin:build": "npm run admin:map && npm run admin:qr-scanner && vite build -c vite.admin.config.ts",
     "admin:watch": "vite build -c vite.admin.config.ts --watch",
-    "admin:qr-scanner": "vite build -c vite.qr-scanner.config.ts"
+    "admin:qr-scanner": "vite build -c vite.qr-scanner.config.ts",
+    "test:mobile-compat:browser": "playwright test --config playwright.mobile-compat.config.cjs"
   },
   "devDependencies": {
     "@playwright/test": "^1.63.0",
