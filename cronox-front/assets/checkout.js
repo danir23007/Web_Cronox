@@ -145,7 +145,8 @@
                 : expired || String(error?.code).includes('EXPIRED') ? 'La reserva ha caducado. Comprueba de nuevo el stock antes de pagar.'
                 : 'No hemos podido confirmar la disponibilidad. Comprueba el estado antes de pagar.'
             : reservation.paymentStartedAt ? `Pago iniciado. Reserva protegida hasta las ${new Date(reservation.expiresAt).toLocaleTimeString('es-ES')}. Si el pago sigue procesándose, comprobaremos su estado antes de liberar los artículos.`
-              : 'Artículos reservados mientras permanezcas en el checkout.';
+              : '';
+          reservationStatus.hidden = !reservationStatus.textContent;
         }
         if (reservationRetry) reservationRetry.hidden = !!ready;
         if (reservation?.paymentStartedAt) restoreProtectedCheckout();
