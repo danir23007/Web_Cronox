@@ -1,5 +1,7 @@
 # Cierre local de verificaciones · 26/10/2026
 
+**Publicación completada el 27/10/2026:** SHA `7952ed37f84e41951b02b35a04a5b9e894772079`, CI Linux y Deploy CRONOX correctos, 104 migraciones terminadas y web reabierta. Véase el [cierre de publicación y sus límites de verificación](release-publication-2026-10-27.md). Los apartados siguientes conservan la preparación y su historial.
+
 Estado de preparación: **dependencias revisadas, tarjeta Stripe sandbox con webhooks originales y CI Linux aprobados**. Código comprobado: **`d92b7f0633d6b29a8a5d3f4f03fc6c89cd2a3f43`**, rama `verify/release-20261026-linux`; **`f7c12a6a57fcb2346e688d1a1400c102dac96999`** añade únicamente documentación. Las pruebas no cobraron dinero real ni enviaron correo.
 
 ## Autorización de publicación · 27/10/2026
