@@ -20,6 +20,13 @@ async function main() {
   }
   const data = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
   if (Object.keys(data).some(name => !models.includes(name))) throw new Error('Unapproved table in export.');
+  // Older approved exports predate the permanent product URL migration. Never
+  // restore its old slug after migrations, or change any historical order data.
+  for (const product of data.Product || []) {
+    if (product.slug !== 'shielded-coal') continue;
+    if (product.id !== 4 || product.name !== 'ARMORED COAL') throw new Error('ARMORED COAL import identity mismatch.');
+    product.slug = 'armored-coal';
+  }
   // Only assets referenced by public placement/newsletter settings are needed.
   const mediaIds = new Set([
     ...(data.WebsiteMediaPlacement || []).map(row => row.assetId),

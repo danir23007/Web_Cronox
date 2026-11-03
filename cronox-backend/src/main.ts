@@ -31,6 +31,7 @@ import { AuthService } from './auth/auth.service';
 import { ShippingMethodsService } from './shipping-methods/shipping-methods.service';
 import { createPublicHtmlGateMiddleware } from './common/routing/public-html-gate.middleware';
 import { legacyRedirectTarget } from './common/routing/public-pages';
+import { productSlugRedirect } from './common/routing/product-slug-redirect';
 import {
   createSeoCatalog,
   createSeoDiscovery,
@@ -132,6 +133,7 @@ async function bootstrap() {
   const authService = app.get(AuthService);
 
   const seoCatalog = createSeoCatalog(app.get(PrismaService));
+  app.use(productSlugRedirect);
   app.use(seoRequestSignals);
   app.use(
     createSeoDiscovery(seoCatalog, () => keyScreen.shouldGatePublicHtml()),

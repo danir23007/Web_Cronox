@@ -4,6 +4,7 @@ const express = require('../../cronox-backend/node_modules/express');
 const path = require('node:path');
 const { createSeoPages, createSeoDiscovery, seoRequestSignals } = require('../../cronox-backend/dist/common/routing/public-seo');
 const { legacyRedirectTarget } = require('../../cronox-backend/dist/common/routing/public-pages');
+const { productSlugRedirect } = require('../../cronox-backend/dist/common/routing/product-slug-redirect');
 const { createContentSecurityPolicy } = require('../../cronox-backend/dist/common/config/content-security-policy');
 const { createPublicHtmlGateMiddleware } = require('../../cronox-backend/dist/common/routing/public-html-gate.middleware');
 const productionSeo = process.argv.includes('--production-seo');
@@ -39,6 +40,7 @@ app.use((req, res, next) => {
   res.send = body => send(typeof body === 'string' ? body.replace('<html lang="es">', `<html lang="es" data-cronox-api-base="http://127.0.0.1:${port}">`) : body);
   next();
 });
+app.use(productSlugRedirect);
 app.use(seoRequestSignals);
 app.use(createSeoDiscovery(catalog, async () => gated));
 app.use(createPublicHtmlGateMiddleware({ frontendRoot: root, keyScreen: { shouldGatePublicHtml: async () => gated }, authService: { hasValidAdminSession: async () => false } }));

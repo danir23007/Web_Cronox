@@ -7,6 +7,7 @@ import type { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { sizeOrder, variantSizeLabel } from '../products/product-size-system';
 import { AddFavoriteDto } from './dto/add-favorite.dto';
+import { currentProductSlug } from '../products/product-slugs';
 
 type FavoriteProduct = Prisma.ProductGetPayload<{
   include: { images: true; variants: true };
@@ -135,7 +136,7 @@ export class FavoritesService {
 
     if (!Number.isFinite(productId)) {
       const product = await this.prisma.product.findUnique({
-        where: { slug: productIdOrSlug },
+        where: { slug: currentProductSlug(productIdOrSlug) },
         select: { id: true },
       });
 
@@ -162,7 +163,7 @@ export class FavoritesService {
     const where: Prisma.ProductWhereUniqueInput | null = dto.productId
       ? { id: dto.productId }
       : dto.slug
-        ? { slug: dto.slug }
+        ? { slug: currentProductSlug(dto.slug) }
         : null;
 
     if (!where) {
