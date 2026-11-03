@@ -100,7 +100,9 @@ export class SupabaseStorageService {
         headers: {
           Authorization: `Bearer ${this.serviceRoleKey}`,
           'Content-Type': mimeType,
-          ...(immutable ? { 'Cache-Control': '31536000' } : {}),
+          // Raw REST uploads need an HTTP directive, unlike the SDK option
+          // cacheControl (seconds). A bare number is not a browser cache TTL.
+          ...(immutable ? { 'Cache-Control': 'max-age=31536000' } : {}),
           'x-upsert': 'false',
         },
         body: buffer as unknown as BodyInit,

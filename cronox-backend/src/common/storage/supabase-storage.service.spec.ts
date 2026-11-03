@@ -163,11 +163,22 @@ describe('SupabaseStorageService', () => {
         /\/storage\/v1\/object\/product-images\/products\/originals\/.+\.png$/,
       ),
       expect.objectContaining({
-        headers: expect.objectContaining({ 'Content-Type': 'image/png' }),
+        headers: expect.objectContaining({ 'Content-Type': 'image/png', 'Cache-Control': 'max-age=31536000', 'x-upsert': 'false' }),
       }),
     );
     expect(result.urls).toHaveLength(1);
     expect(result.urls[0]).toMatch(/\.png$/);
+  });
+
+  it('keeps identical uploads at the same URL and gives replacements a new URL', async () => {
+    global.fetch = jest.fn().mockResolvedValue({ ok: true, status: 200 }) as typeof fetch;
+    const service = new SupabaseStorageService();
+    const file = (buffer: Buffer) => ({ mimetype: 'image/png', buffer, size: buffer.length, originalname: 'photo.png' }) as Express.Multer.File;
+    const first = await service.uploadProductImages([file(PNG_SIGNATURE)]);
+    const repeated = await service.uploadProductImages([file(PNG_SIGNATURE)]);
+    const replaced = await service.uploadProductImages([file(Buffer.concat([PNG_SIGNATURE, Buffer.from('different image')]))]);
+    expect(repeated.urls).toEqual(first.urls);
+    expect(replaced.urls[0]).not.toBe(first.urls[0]);
   });
 
   it('stores gallery uploads in the non-destructive fotos-antiguas prefix', async () => {

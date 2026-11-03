@@ -2,7 +2,7 @@
   "use strict";
 
   const CONTEXTS = Object.freeze({
-    card: { roles: ["card"], sizes: "(max-width: 640px) 50vw, 33vw", loading: "lazy" },
+    card: { roles: ["small", "card"], sizes: "auto, (max-width: 640px) 50vw, 33vw", loading: "lazy" },
     quick: { roles: ["quick"], sizes: "(max-width: 640px) 100vw, 720px", loading: "lazy" },
     pdp: { roles: ["card", "quick", "pdp"], sizes: "(max-width: 900px) 100vw, 62vw", loading: "eager" },
     pdpZoom: { roles: ["pdp"], sizes: "(max-width: 900px) 100vw, 62vw", loading: "eager" },
@@ -10,7 +10,7 @@
     cart: { roles: ["small"], sizes: "600px", loading: "lazy" },
     checkout: { roles: ["small"], sizes: "600px", loading: "lazy" },
     recommendation: { roles: ["small"], sizes: "600px", loading: "lazy" },
-    galleryGrid: { roles: ["grid"], sizes: "(max-width: 700px) 100vw, 50vw", loading: "lazy" },
+    galleryGrid: { roles: ["preview", "grid"], sizes: "(max-width: 700px) 100vw, 50vw", loading: "lazy" },
     galleryLarge: { roles: ["large"], sizes: "100vw", loading: "eager" },
     hero: { roles: ["mobile", "tablet", "desktop"], sizes: "100vw", loading: "eager" },
   });
@@ -135,9 +135,13 @@
   };
   const applyResolved = (element, resolved, options) => {
     if (!element) return resolved;
+    // Set loading and sizes before src/srcset: connected elements must not
+    // start an eager request before their delivery policy is established.
+    element.loading = options?.loading || resolved.loading;
+    const sizes = options?.sizes || resolved.sizes;
     if (resolved.srcset) {
-      if (element.getAttribute("sizes") !== resolved.sizes) {
-        element.sizes = resolved.sizes;
+      if (element.getAttribute("sizes") !== sizes) {
+        element.sizes = sizes;
       }
       if (element.getAttribute("srcset") !== resolved.srcset) {
         element.srcset = resolved.srcset;
@@ -153,7 +157,6 @@
       element.width = resolved.width;
       element.height = resolved.height;
     }
-    element.loading = options?.loading || resolved.loading;
     element.decoding = "async";
     if (options?.fetchPriority) element.setAttribute("fetchpriority", options.fetchPriority);
     return resolved;

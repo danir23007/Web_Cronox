@@ -25,6 +25,9 @@ async function fixture(page, { mode = 'CAROUSEL', empty = false, delay = 800 } =
       await new Promise(resolve => setTimeout(resolve, delay));
       return route.fulfill({ json: { mode, slots, carouselItems: empty ? [] : carouselItems } });
     }
+    if (url.pathname === '/api/products') return route.fulfill({ json: { items: [], meta: { total: 0, pageCount: 1 } } });
+    if (url.pathname === '/api/categories') return route.fulfill({ json: { items: ['camisetas', 'sudaderas', 'pantalones', 'chaquetas', 'accesorios'].map((slug, i) => ({ id: i + 1, slug, name: slug, group: 'GARMENT', isActive: true, showInStoreFilters: true })), meta: { page: 1, limit: 100, total: 5, pageCount: 1 } } });
+    if (url.pathname === '/api/favorites') return route.fulfill({ json: [] });
     if (url.pathname.startsWith('/api/')) return route.fulfill({ json: url.pathname === '/api/cart' ? { items: [], itemsCount: 0, subtotalCents: 0 } : {} });
     return route.continue();
   });
@@ -79,10 +82,11 @@ for (const width of [390, 1366]) {
       await expect(section).toBeVisible();
       await expect(root.getByRole('status')).toContainText('Cargando');
       expect(await root.locator('.gallery__tile').count()).toBe(0);
+      await section.scrollIntoViewIfNeeded();
       await expect(root).toHaveAttribute('data-gallery-mode', mode, { timeout: 10000 });
       await expect(section.locator('.gallery-homepage__heading')).toBeVisible({ visible: mode === 'MOSAIC' });
       await page.locator('#btnMenu').click();
-      await expect(page.locator('#filtersPanel .black-menu__link')).toHaveCount(5);
+      await expect(page.locator('#filtersPanel .black-menu__link')).toHaveCount(6);
       await expect(page.locator('#filtersPanel a[href="/galeria"]')).toHaveCount(0);
       await expect(page.locator('#filtersPanel a[href*="categorySlug="]')).toHaveCount(5);
       expect(state.errors).toEqual([]);

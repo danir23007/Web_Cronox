@@ -69,16 +69,20 @@ async function toggle(page, id) {
 test('shares pending requests, reuses current state and keeps mutation counts correct', async ({ page }) => {
   const state = await setup(page, { meDelay: 20, favoritesDelay: 180 });
   await page.goto('/');
+  await page.evaluate(() => window.CRONOX_FAVORITES.loadFromServer());
+  const initialReads = state.requests.filter(r => r === 'GET /api/favorites').length;
   const result = await page.evaluate(async () => {
     const manager = window.CRONOX_FAVORITES;
-    const a = manager.loadFromServer(), b = manager.loadFromServer();
+    // Explicitly start a pending refresh: a fast homepage may already have
+    // completed its initial read by window.load, when resolved Promises differ.
+    const a = manager.loadFromServer({ force: true }), b = manager.loadFromServer();
     await Promise.all([a, b]);
     return { shared: a === b, count: manager.ids.size };
   });
   expect(result).toEqual({ shared: true, count: 3 });
-  expect(state.requests.filter(r => r === 'GET /api/favorites')).toHaveLength(1);
+  expect(state.requests.filter(r => r === 'GET /api/favorites')).toHaveLength(initialReads + 1);
   await page.evaluate(() => window.initFavoritesFromBackend());
-  expect(state.requests.filter(r => r === 'GET /api/favorites')).toHaveLength(1);
+  expect(state.requests.filter(r => r === 'GET /api/favorites')).toHaveLength(initialReads + 1);
   await toggle(page, 14);
   await expect(badge(page)).toHaveText('4');
   await toggle(page, 14);

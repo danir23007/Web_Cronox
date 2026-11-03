@@ -55,6 +55,7 @@ const hasAllRoles = (
           productPdp: 'pdp',
           smallProduct: 'small',
           galleryGrid: 'grid',
+          galleryPreview: 'preview',
           galleryLarge: 'large',
           heroDesktop: 'desktop',
           heroTablet: 'tablet',

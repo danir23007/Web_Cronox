@@ -295,6 +295,25 @@
     }
   };
 
+  const responsiveGalleryItems = new WeakMap();
+  const galleryImageSizes = (image, item) => {
+    const box = image.getBoundingClientRect();
+    const variant = item?.variants?.grid || item?.variants?.preview;
+    if (!box.width || !box.height || !variant?.width || !variant?.height) return null;
+    // The rect includes the administrator's per-device zoom. Cover can crop
+    // a landscape source, so its painted width may exceed the tile's width.
+    const fittedWidth = box.height * variant.width / variant.height;
+    const width = window.getComputedStyle(image).objectFit === "contain"
+      ? Math.min(box.width, fittedWidth) : Math.max(box.width, fittedWidth);
+    return `${Math.ceil(width * 1.025)}px`;
+  };
+  window.addEventListener("resize", () => {
+    galleryRoots.forEach(root => root.querySelectorAll("img").forEach(image => {
+      const item = responsiveGalleryItems.get(image);
+      const sizes = item && galleryImageSizes(image, item);
+      if (sizes && image.srcset) image.sizes = sizes;
+    }));
+  });
   const applyGalleryImage = (
     image,
     item,
@@ -303,6 +322,11 @@
     onFinalError,
   ) => {
     const original = getImageUrl(item?.imageSrc);
+    if (context === "galleryGrid") {
+      responsiveGalleryItems.set(image, item);
+      const sizes = galleryImageSizes(image, item);
+      if (sizes) options = { ...options, sizes };
+    }
     if (window.CRONOX_IMAGES) {
       window.CRONOX_IMAGES.apply(
         image,
@@ -565,7 +589,9 @@
       tile.addEventListener("click", () => onOpen?.(item, tile));
 
       const image = pageDocument.createElement("img");
-      applyGalleryImage(image, item, "galleryGrid");
+      // Measure the mosaic's real cell after insertion, before assigning any
+      // source. Detached cells cannot account for cover cropping or admin zoom.
+      responsiveGalleryItems.set(image, item);
       image.alt = alt;
       image.decoding = "async";
       image.loading = "lazy";
@@ -968,6 +994,10 @@
     );
     root.replaceChildren(fragment);
     setGalleryState(root, "ready");
+    root.querySelectorAll("img").forEach(image => {
+      const item = responsiveGalleryItems.get(image);
+      if (item) applyGalleryImage(image, item, "galleryGrid");
+    });
   };
 
   const normalizeApiSlots = (slots) => {
@@ -1064,8 +1094,33 @@
     });
   };
 
+  // A horizontal slide observer alone treats slides as visible even while
+  // their carousel is below the page viewport. Gate the homepage section too.
+  const nearHomepageGalleries = new WeakSet();
+  const homepageGalleryObserver = window.IntersectionObserver
+    ? new window.IntersectionObserver(entries => {
+        entries.forEach(entry => {
+          if (!entry.isIntersecting) return;
+          nearHomepageGalleries.add(entry.target);
+          homepageGalleryObserver.unobserve(entry.target);
+          loadVisibleGalleries();
+        });
+      }, { rootMargin: "200px 0px" })
+    : null;
   const loadVisibleGalleries = () => {
     if (!syncHomepageGalleryVisibility()) return;
+    if (pageDocument.getElementById("productsGrid") &&
+        galleryRoots.every(root => root.hasAttribute("data-gallery-homepage")) &&
+        !window.CRONOX_CATALOG_SETTLED) return;
+    const ready = galleryRoots.some(root => {
+      const section = root.closest("[data-gallery-homepage-section]") || root;
+      if (section.hidden) return false;
+      if (!root.hasAttribute("data-gallery-homepage") || !homepageGalleryObserver) return true;
+      if (nearHomepageGalleries.has(section)) return true;
+      homepageGalleryObserver.observe(section);
+      return false;
+    });
+    if (!ready) return;
     if (galleryRoots.some((root) => root.dataset.galleryState === "error")) {
       showGalleryLoading();
     }
@@ -1150,6 +1205,7 @@
 
   galleryRoots.forEach((root) => { root.dataset.galleryInitialized = "true"; });
   window.addEventListener("cronox:productsLoaded", loadVisibleGalleries);
+  window.addEventListener("cronox:catalogSettled", loadVisibleGalleries);
   window.addEventListener("popstate", loadVisibleGalleries);
   loadVisibleGalleries();
 })();

@@ -25,12 +25,12 @@ describe('responsive storefront image delivery', () => {
 
   it('centralizes context roles, responsive sizes and original fallback', () => {
     const source = read('assets/responsive-images.js');
-    expect(source).toContain('card: { roles: ["card"]');
+    expect(source).toContain('card: { roles: ["small", "card"]');
     expect(source).toContain('quick: { roles: ["quick"]');
     expect(source).toContain('pdp: { roles: ["card", "quick", "pdp"]');
     expect(source).toContain('pdpZoom: { roles: ["pdp"]');
     expect(source).toContain('small: { roles: ["small"]');
-    expect(source).toContain('galleryGrid: { roles: ["grid"]');
+    expect(source).toContain('galleryGrid: { roles: ["preview", "grid"]');
     expect(source).toContain('galleryLarge: { roles: ["large"]');
     expect(source).toContain('roles: ["mobile", "tablet", "desktop"]');
     expect(source).toContain('preferred?.url || fallback');

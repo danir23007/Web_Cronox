@@ -4,6 +4,7 @@ export const IMAGE_PRESETS = Object.freeze({
   productPdp: { role: 'pdp', dimension: 3400, quality: 96 },
   smallProduct: { role: 'small', dimension: 600, quality: 93 },
   galleryGrid: { role: 'grid', dimension: 2000, quality: 95 },
+  galleryPreview: { role: 'preview', dimension: 960, quality: 92 },
   galleryLarge: { role: 'large', dimension: 3000, quality: 96 },
   heroDesktop: { role: 'desktop', dimension: 3000, quality: 96 },
   heroTablet: { role: 'tablet', dimension: 2200, quality: 95 },
@@ -20,6 +21,7 @@ export const PRODUCT_IMAGE_PRESETS: ImagePresetName[] = [
   'smallProduct',
 ];
 export const GALLERY_IMAGE_PRESETS: ImagePresetName[] = [
+  'galleryPreview',
   'galleryGrid',
   'galleryLarge',
 ];
