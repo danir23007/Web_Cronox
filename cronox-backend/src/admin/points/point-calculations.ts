@@ -5,7 +5,10 @@ import {
   validateRange,
 } from '../finance/financial-calculations';
 
+import { FrozenLotCost, frozenCost } from '../../inventory-lots/lot-costs';
 export type PointLine = {
+  lotId?: string;
+  lotCosts?: FrozenLotCost[];
   id: string;
   variantId: number;
   productId: number;
@@ -19,12 +22,13 @@ export type PointLine = {
   returned: number;
 };
 export type PointDelta = {
+  lotCosts?: FrozenLotCost[];
   productId: number;
   variantId: number;
   name: string;
   size: string;
   revenueCents: number;
-  costCents: number;
+  costCents: number | null;
   commissionCents: number;
   unitsSold: number;
   unitsReturned: number;
@@ -39,12 +43,13 @@ export const commission = (revenue: number, bp: number) =>
   Number((BigInt(revenue) * BigInt(bp) + 5000n) / 10000n);
 export function lineDelta(line: PointLine, sign = 1): PointDelta {
   return {
+    ...(line.lotCosts ? { lotCosts: line.lotCosts } : {}),
     productId: line.productId,
     variantId: line.variantId,
     name: line.name,
     size: line.size,
     revenueCents: sign * line.unitPriceCents * line.quantity,
-    costCents: sign * line.unitCostCents * line.quantity,
+    costCents: line.quantity === 0 ? 0 : line.lotCosts ? (line.lotCosts.length && frozenCost(line.lotCosts) !== null ? sign * frozenCost(line.lotCosts)! : null) : sign * line.unitCostCents * line.quantity,
     commissionCents: sign * line.commissionCents,
     unitsSold: sign * line.quantity,
     unitsReturned: 0,
@@ -124,9 +129,9 @@ export function calculatePoints(
   >();
   const apply = (target: typeof totals, d: PointDelta) => {
     target.revenueCents! += d.revenueCents;
-    target.costCents! += d.costCents;
+    target.costCents = target.costCents === null || d.costCents === null ? null : target.costCents + d.costCents;
     target.commissionCents += d.commissionCents;
-    target.profitCents! += d.revenueCents - d.costCents - d.commissionCents;
+    target.profitCents = target.profitCents === null || d.costCents === null ? null : target.profitCents + d.revenueCents - d.costCents - d.commissionCents;
     target.unitsSold += d.unitsSold;
     target.unitsReturned += d.unitsReturned;
     if (
@@ -144,7 +149,7 @@ export function calculatePoints(
     )!;
     for (const target of [totals, ...(bucket ? [bucket] : [])]) {
       target.fixedExpenseCents += entry.expenseCents;
-      target.profitCents! -= entry.expenseCents;
+      if (target.profitCents !== null) target.profitCents -= entry.expenseCents;
       if (entry.kind === 'SALE') target.salesCount++;
       const transfer = entry.after as { dateTransfer?: boolean; salesCountDelta?: number } | null;
       if (entry.kind === 'CORRECTION' && transfer?.dateTransfer === true && [1, -1].includes(transfer.salesCountDelta!))

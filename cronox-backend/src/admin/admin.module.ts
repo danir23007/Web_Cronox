@@ -1,4 +1,7 @@
+import { ProductEditionsService } from './lots/product-editions.service';
 import { Module } from '@nestjs/common';
+import { AdminLotsController } from './lots/admin-lots.controller';
+import { AdminLotsService } from './lots/admin-lots.service';
 import { AdminPointsController } from './points/admin-points.controller';
 import { AdminPointsService } from './points/admin-points.service';
 import { AdminFavoritesController } from './favorites/admin-favorites.controller';
@@ -60,6 +63,7 @@ import { ShippingTrackingModule } from '../shipping-tracking/shipping-tracking.m
     ShippingTrackingModule,
   ],
   controllers: [
+    AdminLotsController,
     AdminPointsController,
     AdminFavoritesController,
     AdminMapController,
@@ -82,6 +86,8 @@ import { ShippingTrackingModule } from '../shipping-tracking/shipping-tracking.m
     AdminManualPurchaseCorrectionsController,
   ],
   providers: [
+    AdminLotsService,
+    ProductEditionsService,
     AdminPointsService,
     AdminFavoritesService,
     AdminMapService,

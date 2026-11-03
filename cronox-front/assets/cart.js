@@ -200,6 +200,7 @@
             ${display.size ? `<span>Talla: ${display.size}</span>` : ''}
             ${hasLastUnits ? '<span class="cart-low-stock">Últimas unidades</span>' : ''}
           </p>
+          ${item.editionChanged ? `<p role="status">Ha cambiado la tirada. Precio actual: ${escapeHtml(money(item.currentPriceCents))}. <a href="/producto/${encodeURIComponent(item.product?.slug || '')}">Revisar ficha</a></p><button type="button" class="ci-edition-review" data-id="${display.id}" data-qty="${qty}">Aceptar tirada y precio actuales</button>` : ''}
           <div class="ci-controls">
             <label>Cant.
               <input type="number" class="ci-qty" min="1" value="${display.qty}" data-id="${display.id}" aria-label="Cantidad">
@@ -292,6 +293,8 @@
   });
 
   listEl?.addEventListener('click', (event) => {
+    const review = event.target.closest('.ci-edition-review');
+    if (review) { void handleQtyChange({dataset:review.dataset,value:review.dataset.qty}); return; }
     const removeBtn = event.target.closest('.ci-remove');
     if (removeBtn) {
       event.preventDefault();

@@ -1,4 +1,7 @@
 import { createHash } from 'node:crypto';
+import { allocateLots, returnLots, takeCosts } from '../../inventory-lots/lot-ledger';
+import { FrozenLotCost } from '../../inventory-lots/lot-costs';
+import { freezeOrderLots } from '../../inventory-lots/lot-financial';
 import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
 import { ManualStockHandling, OrderPaymentMethod, Prisma } from '@prisma/client';
 import { Decimal } from '@prisma/client/runtime/library';
@@ -127,6 +130,15 @@ export class ManualPurchaseEditor {
             if (!delta) continue;
             const result = await tx.productVariant.updateMany({ where: { id, ...(delta < 0 ? { stockQty: { gte: -delta } } : {}) }, data: { stockQty: { increment: delta } } });
             if (result.count !== 1) throw new ConflictException('No hay stock suficiente para la nueva cantidad. No se ha guardado ningún cambio.');
+            if (delta < 0) await allocateLots(tx, id, -delta, 'order:' + orderId, 'SOLD');
+            else {
+              const returned = order.items.filter(old => old.variantId === id).flatMap(old => {
+                const next = dto.items.find(i => i.itemId === old.id && i.variantId === id);
+                const kept = Math.min(old.quantity, next?.quantity ?? 0);
+                return old.financialSnapshot?.lotCosts && Array.isArray(old.financialSnapshot.lotCosts) && old.financialSnapshot.lotCosts.length && old.quantity > kept ? takeCosts(old.financialSnapshot.lotCosts as unknown as FrozenLotCost[], old.quantity-kept, kept) : [];
+              });
+              await returnLots(tx, id, delta, 'order:' + orderId, false, returned.length ? takeCosts(returned, delta) : undefined);
+            }
             stockChanges.push({ variantId: id, delta });
           }
         }
@@ -145,6 +157,7 @@ export class ManualPurchaseEditor {
           }
         }
         await tx.orderItem.deleteMany({ where: { orderId, id: { in: order.items.filter(item => !itemIds.includes(item.id)).map(item => item.id) } } });
+        await freezeOrderLots(tx, orderId, order.manualStockHandling !== ManualStockHandling.DEDUCT_NOW, order.items);
         const subtotal = money(totalCents);
         const saved = await tx.order.update({ where: { id: orderId }, data: { subtotal, total: subtotal,
           taxAmount: subtotal.minus(subtotal.div(order.taxRate.add(1)).toDecimalPlaces(2)).toDecimalPlaces(2),
@@ -160,12 +173,13 @@ export class ManualPurchaseEditor {
             const previousLine = jsonObject(previousLines.find(line => jsonObject(line)?.id === item.id));
             const sameVariant = previousLine?.variantId === item.variantId;
             const financial = item.financialSnapshot ? { unitCostCents: item.financialSnapshot.unitCostCents,
+              lotCosts: item.financialSnapshot.lotCosts,
               productName: item.financialSnapshot.productName, imageUrl: item.financialSnapshot.imageUrl } : null;
             return { ...(sameVariant ? previousLine : {}), id: item.id, productId: item.productId,
               variantId: item.variantId, title: item.title, quantity: item.quantity, lineTotal: item.lineTotal.toString(),
               // Preserve the archived cost and its evidence, including unknown
               // costs, rather than refresh them from a possibly changed source row.
-              financialSnapshot: sameVariant && previousLine?.financialSnapshot !== undefined ? previousLine.financialSnapshot : financial };
+              financialSnapshot: item.financialSnapshot?.lotCosts != null ? financial : sameVariant && previousLine?.financialSnapshot !== undefined ? previousLine.financialSnapshot : financial };
           }) };
         const paidDate = new Date(madridDate(saved.purchasedAt!));
         await tx.financeArchive.update({ where: { orderId }, data: { snapshot, revision: { increment: 1 }, paidDate, lastDate: paidDate, uncertain: false } });

@@ -18,7 +18,7 @@ describe('historical product API resolution', () => {
   it('resolves the old slug to the same active product ID and returns the new slug', async () => {
     const product = { id: 4, slug: 'armored-coal', name: 'ARMORED COAL', price: 6500, variants: [], images: [] };
     const findUnique = jest.fn().mockResolvedValue(product);
-    const service = new ProductService({ product: { findUnique } } as never);
+    const service = new ProductService({ $transaction: jest.fn(callback => callback({product:{findUnique}})), product: { findUnique } } as never);
     expect(await service.getBySlug('shielded-coal')).toMatchObject(product);
     expect(findUnique).toHaveBeenLastCalledWith(expect.objectContaining({ where: { id: 4, slug: 'armored-coal', isActive: true } }));
     await service.getBySlug('armored-coal');

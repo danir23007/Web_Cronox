@@ -490,6 +490,7 @@ import { loadCategoryPages } from './category-pagination';
 
     return {
       __fromBackend: true,
+      activeLotId: product.activeLotId ?? null,
       id: String(product.slug ?? product.id ?? ''),
       backendId: product.id,
       slug: product.slug,
@@ -566,6 +567,8 @@ import { loadCategoryPages } from './category-pagination';
     return {
       id: item.id,
       variantId: item.variantId,
+      editionChanged: !!product.activeLotId && (item.lotAtAdd !== product.activeLotId || Number(item.priceAtAdd) !== Number(variant.price ?? product.price)),
+      currentPriceCents: Number(variant.price ?? product.price ?? 0),
       // Keep the authoritative selected variant's availability for cart warnings.
       variant: {
         id: variant.id,

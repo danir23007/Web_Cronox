@@ -1746,6 +1746,9 @@
 
   const toggleModal = (modalEl, open) => {
     if (!modalEl) return;
+    if (!open && modalEl === productModal && window.CRONOX_EDITIONS?.needsDecision()) {
+      void window.CRONOX_EDITIONS.leave(() => toggleModal(modalEl,false)); return;
+    }
     if (open) {
       modalEl.classList.add('show');
       modalEl.setAttribute('aria-hidden', 'false');
@@ -3338,28 +3341,9 @@
   window.addEventListener('cronox:admin-edit-product', event => {
     if (canAccess('products') && currentSectionId === 'section-favorites' && Number.isInteger(event.detail?.id) && event.detail.id > 0) void openProductModal(event.detail.id);
   });
-  const openProductModal = async (productId = null) => {
-    const request = ++productOpenVersion;
-    const section = currentSectionId;
-    const current = () => request === productOpenVersion && section === currentSectionId;
-    resetProductForm();
-    editingProductId = productId;
-    if (!productModal) return;
-    if (creationCategoryField) creationCategoryField.hidden = false;
-    if (!productId) void loadCreationCategories();
-
-    if (productId) {
-      if (productModalTitle) productModalTitle.textContent = 'Editar producto';
-      if (productSubmitBtn) productSubmitBtn.textContent = 'Guardar cambios';
-      try {
-        const pendingCategories = loadAssignableCategories();
-        pendingCategories.catch(() => {}); // loadCreationCategories presents the retry on failure.
-        const product = await window.CRONOX_API?.admin?.getAdminProduct(productId);
-        if (!current()) return;
-        if (product) {
+  const fillEditionProduct = async product => {
           creationCategories.selected = new Set(assignedCategoryIds(product));
-          await loadCreationCategories(pendingCategories);
-          if (!current()) return;
+          await loadCreationCategories();
           const priceInput = document.getElementById('productPrice');
           const nameInput = document.getElementById('productName');
           const descInput = document.getElementById('productDescription');
@@ -3402,6 +3386,29 @@
             if (size) variantEditorStocks.set(size, variant.stockQty ?? variant.stock ?? 0);
           });
           renderVariantStockFields();
+  };
+
+  const openProductModal = async (productId = null) => {
+    const request = ++productOpenVersion;
+    const section = currentSectionId;
+    const current = () => request === productOpenVersion && section === currentSectionId;
+    resetProductForm();
+    editingProductId = productId;
+
+    if (!productModal) return;
+    if (creationCategoryField) creationCategoryField.hidden = false;
+    if (!productId) { void loadCreationCategories(); window.CRONOX_EDITIONS?.reset(); }
+
+    if (productId) {
+      if (productModalTitle) productModalTitle.textContent = 'Editar producto';
+      if (productSubmitBtn) productSubmitBtn.textContent = 'Guardar cambios';
+      try {
+        const pendingCategories = loadAssignableCategories();
+        pendingCategories.catch(() => {}); // loadCreationCategories presents the retry on failure.
+        const product = window.CRONOX_EDITIONS ? await window.CRONOX_EDITIONS.load(productId) : await window.CRONOX_API?.admin?.getAdminProduct(productId);
+        if (!current()) return;
+        if (product) {
+          await fillEditionProduct(product);
         }
       } catch (error) {
         if (!current()) return;
@@ -3416,6 +3423,13 @@
       categoryIds: [...creationCategories.selected].sort((a, b) => a - b),
     }));
     toggleModal(productModal, true);
+    window.CRONOX_EDITIONS?.capture();
+  };
+
+  window.CRONOX_PRODUCT_EDITOR = {
+    fill: fillEditionProduct,
+    save: () => submitProduct(),
+    fingerprint: () => JSON.stringify({ fields:[...new FormData(productForm)], stock:collectVariantPayload(), gallery:window.CRONOX_PRODUCT_GALLERY?.serialize?.() || [], categories:[...creationCategories.selected], framing:productCardFramingState }),
   };
 
   const uploadProductImages = async (files) => {
@@ -3484,6 +3498,7 @@
     const [costWhole, costFraction = ''] = costText.split('.');
     const unitCostCents = costText ? Number(costWhole) * 100 + Number(costFraction.padEnd(2, '0')) : null;
     productSubmitInFlight = true;
+    window.CRONOX_EDITIONS?.setSaving(true);
     if (productSubmitBtn) {
       productSubmitBtn.disabled = true;
       productSubmitBtn.textContent = editingProductId ? 'Guardando…' : 'Creando…';
@@ -3517,6 +3532,7 @@
     const files = productImagesInput?.files ? Array.from(productImagesInput.files) : [];
 
     try {
+      if (editingProductId && window.CRONOX_EDITIONS?.selected() && typeof window.CRONOX_PRODUCT_GALLERY?.serialize !== 'function') throw new Error('No se pudo cargar la galería. Recarga el editor antes de guardar para conservar sus imágenes.');
       const imageValidationMessage = validateProductImages(files);
       if (imageValidationMessage) {
         throw new Error(imageValidationMessage);
@@ -3545,6 +3561,7 @@
       }
 
       if (editingProductId) {
+        if (window.CRONOX_EDITIONS?.selected()) { await window.CRONOX_EDITIONS.save(payload); await fetchProducts(); return true; }
         await window.CRONOX_API?.admin?.updateAdminProduct(editingProductId, payload);
         setScopedMessage(productsMessage, 'Producto actualizado correctamente.', 'success');
       } else {
@@ -3565,6 +3582,7 @@
       setScopedMessage(productsMessage, message, 'error');
       if (formMessage) { formMessage.textContent = Array.isArray(message) ? message.join(' ') : message; formMessage.hidden = false; }
     } finally {
+      window.CRONOX_EDITIONS?.setSaving(false);
       if (productModal?.classList.contains('show')) {
         productSubmitInFlight = false;
         if (productSubmitBtn) {

@@ -1,3 +1,12 @@
+// These unit fixtures model legacy products. Real lot-managed transaction,
+// stock guards and cost snapshots are exercised by test-inventory-lots-db.cjs.
+jest.mock('../inventory-lots/lot-ledger', () => ({
+  allocateLots: jest.fn().mockResolvedValue(false), returnLots: jest.fn().mockResolvedValue(false),
+  consumeLots: jest.fn().mockResolvedValue(undefined), reconcileLotCounts: jest.fn().mockResolvedValue(undefined),
+}));
+jest.mock('../inventory-lots/lot-financial', () => ({
+  freezeCheckoutLots: jest.fn().mockResolvedValue(undefined), freezeOrderLots: jest.fn().mockResolvedValue(undefined),
+}));
 // Focused checkout safety tests.
 jest.mock('@prisma/client', () => ({
   PrismaClient: class PrismaClient {},
@@ -162,6 +171,7 @@ describe('OrdersService checkout reservations', () => {
         findMany: jest.fn(),
         updateMany: jest.fn(),
       },
+      $queryRaw: jest.fn().mockResolvedValue([]),
       productVariant: { updateMany: jest.fn(), update: jest.fn() },
       stockMovement: { create: jest.fn(), updateMany: jest.fn() },
       cart: {

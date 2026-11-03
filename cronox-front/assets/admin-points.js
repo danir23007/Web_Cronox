@@ -14,6 +14,11 @@
           "'": "&#39;",
         })[c],
     );
+  const lotUnitCost = line => {
+    if (!line.lotCosts) return line.unitCostCents;
+    if (!line.quantity || !line.lotCosts.length || line.lotCosts.some(p => p.quality !== 'CONFIRMED' || (p.legacyUnitCostCents == null && [p.productionCents,p.freightCents,p.otherCents].some(v => v == null)))) return null;
+    return line.lotCosts.reduce((sum,p) => sum + p.quantity * (p.legacyUnitCostCents ?? (p.productionCents+p.freightCents+p.otherCents)),0) / line.quantity;
+  };
   const money = (value) =>
     value == null
       ? "No disponible"
@@ -341,6 +346,7 @@
       return [...linesHost.children].map((row) => ({
         ...(row.dataset.id ? { id: row.dataset.id } : {}),
         variantId: Number(row.querySelector("[data-variant]").value),
+        lotId: row.querySelector("[data-lot]")?.value || undefined,
         quantity: Number(row.querySelector("[data-qty]").value),
         unitPriceCents: numeric(row.querySelector("[data-price]").value),
         commissionBp: numeric(row.querySelector("[data-commission]").value),
@@ -356,8 +362,8 @@
         const rows = lines.map((line, i) => {
           const old = sale?.state.lines.find((l) => l.id === line.id),
             variant = variants.find((v) => v.id === line.variantId);
-          const unitCost = old ? old.unitCostCents : variant?.unitCostCents;
-          if (unitCost == null)
+          const unitCost = old ? lotUnitCost(old) : variant?.unitCostCents;
+          if (unitCost == null && !variant?.lotManaged && !old?.lotCosts)
             throw new Error(
               "Selecciona prendas con coste configurado. Un coste cero explícito sí es válido.",
             );
@@ -372,14 +378,14 @@
                   )
                 : 0);
           revenue += paid;
-          cost += unitCost * line.quantity;
+          cost = cost === null || unitCost === null ? null : cost + unitCost * line.quantity;
           commissions += fee;
           return [
             i + 1,
             money(paid),
-            money(unitCost * line.quantity),
+            unitCost == null ? 'Según lotes / pendiente' : money(unitCost * line.quantity),
             money(fee),
-            money(paid - unitCost * line.quantity - fee),
+            money(unitCost == null ? null : paid - unitCost * line.quantity - fee),
           ];
         });
         host.innerHTML =
@@ -387,7 +393,7 @@
             ["Línea", "Pagado", "Coste", "Comisión", "Beneficio"],
             rows,
           ) +
-          `<p>Total pagado: <strong>${money(revenue)}</strong> · Comisión: ${money(commissions)} · Para CRONOX: ${money(revenue - commissions)} · Coste: ${money(cost)} · Beneficio antes de gastos fijos: <strong>${money(revenue - cost - commissions)}</strong></p>${sale ? "<p>Se registrará la diferencia respecto a la venta anterior. Las líneas ya devueltas conservan su saldo; el historial incluye los costes de prendas que no se repusieron.</p>" : ""}`;
+          `<p>Total pagado: <strong>${money(revenue)}</strong> · Comisión: ${money(commissions)} · Para CRONOX: ${money(revenue - commissions)} · Coste: ${money(cost)} · Beneficio antes de gastos fijos: <strong>${money(cost === null ? null : revenue - cost - commissions)}</strong></p>${sale ? "<p>Se registrará la diferencia respecto a la venta anterior. Las líneas ya devueltas conservan su saldo; el historial incluye los costes de prendas que no se repusieron.</p>" : ""}`;
       } catch (e) {
         host.textContent = e.message;
       }
@@ -411,6 +417,9 @@
           row.remove();
           preview();
         });
+      const lotLabel=document.createElement('label');lotLabel.textContent='Tirada vendida';const lotSelect=document.createElement('select');lotSelect.className='select';lotSelect.dataset.lot='';lotSelect.disabled=!!line;lotLabel.append(lotSelect);row.querySelector('[data-variant]').closest('label').after(lotLabel);
+      const fillLots=()=>{const v=variants.find(v=>v.id===Number(row.querySelector('[data-variant]').value));const lots=v?.lots || [];lotSelect.innerHTML='<option value="">Tirada activa</option>'+lots.map(l=>`<option value="${esc(l.id)}">Lote ${l.number} ? stock ${l.stock}${l.active?' ? activo':''}</option>`).join('');lotSelect.value=line?.lotId || lots.find(l=>l.active)?.id || '';};
+      row.querySelector('[data-variant]').addEventListener('change',fillLots);fillLots();
       linesHost.append(row);
       preview();
     }
@@ -436,7 +445,7 @@
           .filter((l) => l.quantity > 0)
           .map(
             (l) =>
-              `<fieldset class="pos-line" data-return="${l.id}"><legend>${esc(l.name)} · ${esc(l.size)}</legend><p>Precio pagado: ${money(l.unitPriceCents)} · Coste unitario: ${money(l.unitCostCents)} · Comisión pendiente: ${money(l.commissionCents)}</p><label>Cantidad a devolver<input class="input" data-qty type="number" value="0" min="0" max="${l.quantity}" step="1" required></label><label><input data-restock type="checkbox">Reponer stock</label><label>Comisión recuperada (€)<input class="input" data-recovery type="number" min="0" max="${l.commissionCents / 100}" step="0.01" value="0" required></label></fieldset>`,
+              `<fieldset class="pos-line" data-return="${l.id}"><legend>${esc(l.name)} · ${esc(l.size)}</legend><p>Precio pagado: ${money(l.unitPriceCents)} · Coste unitario: ${money(lotUnitCost(l))} · Comisión pendiente: ${money(l.commissionCents)}</p><label>Cantidad a devolver<input class="input" data-qty type="number" value="0" min="0" max="${l.quantity}" step="1" required></label><label><input data-restock type="checkbox">Reponer stock</label><label>Comisión recuperada (€)<input class="input" data-recovery type="number" min="0" max="${l.commissionCents / 100}" step="0.01" value="0" required></label></fieldset>`,
           )
           .join(""),
       {
@@ -604,7 +613,7 @@
             esc(l.name) + " " + esc(l.size),
             l.quantity,
             money(l.unitPriceCents),
-            money(l.unitCostCents),
+            money(lotUnitCost(l)),
             money(l.commissionCents),
           ]),
         )}<p>${esc(s.state.note)} · ${esc(s.state.paymentMethod)} · Revisión ${s.revision}</p></details>`,
@@ -652,7 +661,7 @@
                         esc(l.name) + " " + esc(l.size),
                         l.quantity,
                         money(l.unitPriceCents),
-                        money(l.unitCostCents),
+                        money(lotUnitCost(l)),
                         money(l.commissionCents),
                       ]),
                     )

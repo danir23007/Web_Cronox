@@ -1,5 +1,7 @@
 import { lockWelcomeBenefit, recordWelcomePurchase } from '../users/welcome-benefit';
 // [ORDERS] Lógica de negocio para checkout y pedidos
+import { allocateLots, consumeLots, returnLots } from '../inventory-lots/lot-ledger';
+import { freezeCheckoutLots } from '../inventory-lots/lot-financial';
 import {
   BadRequestException,
   ConflictException,
@@ -142,6 +144,7 @@ class CheckoutPaymentRecoveryBlockedError extends Error {
 }
 
 type CheckoutLineItem = {
+  lotId?: string | null;
   productId: number;
   variantId: number;
   title: string;
@@ -771,6 +774,7 @@ export class OrdersService {
           created.id,
           preview.computation.lineItems,
         );
+        await freezeCheckoutLots(tx, created.id);
         return created;
       };
       const snapshot = options.transaction ? await create(options.transaction) : await this.prisma.$transaction(create);
@@ -1273,7 +1277,7 @@ export class OrdersService {
       await tx.orderItemFinancial.createMany({ data: order.items.map(item => {
         const source = snapshot.items.find(line => line.variantId === item.variantId);
         const cost = financial.find(line => line.itemId === source?.id);
-        return { itemId: item.id, unitCostCents: cost?.unitCostCents ?? null, productName: cost?.productName ?? item.title, imageUrl: cost?.imageUrl ?? null };
+        return { itemId: item.id, unitCostCents: cost?.unitCostCents ?? null, lotCosts: cost?.lotCosts ?? Prisma.DbNull, productName: cost?.productName ?? item.title, imageUrl: cost?.imageUrl ?? null };
       }) });
       return tx.checkoutSnapshot.update({ where: { id: snapshot.id }, data: {
         status: 'BANK_TRANSFER_PENDING', orderId: order.id,
@@ -1520,6 +1524,7 @@ export class OrdersService {
           const source = snapshot.items.find(line => line.variantId === item.variantId);
           const financial = financialSnapshots.find(line => line.itemId === source?.id);
           return { itemId: item.id, unitCostCents: financial?.unitCostCents ?? null,
+            lotCosts: financial?.lotCosts ?? Prisma.DbNull,
             productName: financial?.productName ?? item.title, imageUrl: financial?.imageUrl ?? null };
         }) });
 
@@ -2602,6 +2607,9 @@ export class OrdersService {
     checkoutSnapshotId: string,
     lineItems: CheckoutLineItem[],
   ): Promise<void> {
+    for (const productId of [...new Set(lineItems.map(item => item.productId))].sort((a,b)=>a-b)) {
+      await tx.$queryRaw`SELECT id FROM "Product" WHERE id=${productId} FOR UPDATE`;
+    }
     const quantities = new Map<number, number>();
     for (const item of lineItems) {
       quantities.set(
@@ -2615,6 +2623,9 @@ export class OrdersService {
         throw new BadRequestException('INVALID_CART_ITEM_QUANTITY');
       }
 
+      const line = lineItems.find(item => item.variantId === variantId);
+      const locked = await tx.$queryRaw<Array<{ activeLotId:string|null; price:number }>>`SELECT p."activeLotId",COALESCE(v.price,p.price) AS price FROM "ProductVariant" v JOIN "Product" p ON p.id=v."productId" WHERE v.id=${variantId} FOR UPDATE OF v`;
+      if (locked[0]?.activeLotId && (locked[0].activeLotId !== line?.lotId || locked[0].price !== Number(line?.unitPrice.mul(100)))) throw new ConflictException({code:'PRODUCT_EDITION_CHANGED',message:'La tirada ha cambiado. Revisa la cesta antes de pagar.'});
       const updated = await tx.productVariant.updateMany({
         where: {
           id: variantId,
@@ -2629,6 +2640,7 @@ export class OrdersService {
         throw new ConflictException({ code: 'INSUFFICIENT_STOCK_AT_CHECKOUT', message: 'No queda stock suficiente para reservar todos los artículos.', items: [{ variantId, productId: item?.productId, title: item?.title, requested: quantity }] });
       }
 
+      await allocateLots(tx, variantId, quantity, 'checkout:' + checkoutSnapshotId, 'RESERVED');
       await tx.checkoutStockReservation.create({
         data: {
           checkoutSnapshotId,
@@ -2705,6 +2717,7 @@ export class OrdersService {
     if (movements.count !== reservations.length) {
       throw new ConflictException('CHECKOUT_STOCK_RESERVATION_MISSING');
     }
+    await consumeLots(tx, snapshot.id, orderId);
     return true;
   }
 
@@ -2728,6 +2741,7 @@ export class OrdersService {
         where: { id: reservation.variantId },
         data: { stockQty: { increment: reservation.quantity } },
       });
+      await returnLots(tx, reservation.variantId, reservation.quantity, 'checkout:' + snapshot.id, true);
       await tx.stockMovement.create({
         data: {
           variantId: reservation.variantId,
@@ -2776,6 +2790,7 @@ export class OrdersService {
         where: { id: reservation.variantId },
         data: { stockQty: { increment: reservation.quantity } },
       });
+      await returnLots(tx, reservation.variantId, reservation.quantity, 'order:' + orderId);
       await tx.stockMovement.create({
         data: {
           variantId: reservation.variantId,
@@ -3175,6 +3190,9 @@ export class OrdersService {
   private assertCartEligibleForCheckout(cart: CartSnapshot | null, reserved = new Map<number, number>()): void {
     if (!cart?.items?.length) return;
 
+    const changedEditions = cart.items.filter(item => item.variant?.product?.activeLotId && (item.lotAtAdd !== item.variant.product.activeLotId || item.priceAtAdd !== (item.variant.price ?? item.variant.product.price)) && !reserved.has(item.variantId));
+    if (changedEditions.length) throw new ConflictException({ code:'PRODUCT_EDITION_CHANGED', message:'Ha cambiado la tirada o el precio de un producto. Revisa la cesta y confirma la ficha actual antes de pagar.' });
+
     const currencies = new Set(cart.items.map(item => (item.variant?.product?.currency ?? DEFAULT_CURRENCY).trim().toUpperCase()));
     if (currencies.size > 1) throw new BadRequestException('MIXED_CART_CURRENCIES');
 
@@ -3321,6 +3339,7 @@ export class OrdersService {
     const title = `${item.variant.product.name}${sizeLabel}`;
 
     return {
+      lotId: item.variant.product.activeLotId,
       productId: item.variant.productId,
       variantId: item.variantId,
       title,

@@ -1,3 +1,4 @@
+import { reconcileLotCounts } from '../../inventory-lots/lot-ledger';
 import {
   BadRequestException,
   ConflictException,
@@ -186,6 +187,7 @@ export class AdminInventoryService {
 
         const delta = update.stock - before.stockQty;
         if (delta === 0) continue;
+        await reconcileLotCounts(tx, productId, adminId, reason);
         const movement = await tx.stockMovement.create({
           data: {
             variantId: update.variantId,

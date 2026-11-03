@@ -42,6 +42,7 @@ export class ProductController {
   }
 
   @Get('suggestions')
+  @Header('Cache-Control', 'no-store')
   @ApiOperation({
     summary: 'Sugerencias ligeras para el buscador de productos',
   })

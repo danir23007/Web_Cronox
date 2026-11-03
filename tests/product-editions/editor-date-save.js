@@ -1,0 +1,13 @@
+await page.goto(f.origin+'/admin-login.html');await page.locator('#adminLoginEmail').fill(f.users.admin.email);await page.locator('#adminLoginPassword').fill(f.password);await page.locator('#adminLoginSubmit').click();await page.waitForURL('**/admin.html**');
+await openEditor();await page.waitForFunction(()=>document.querySelector('[name=editionReceivedAt]').value==='2026-10-01');check(await page.locator('[name=editionFreight]').count()===0,'Transport input still present');
+const original=await state(),originalStock=original.lots[0].slices.reduce((n,s)=>n+s.received,0);
+await page.locator('[name=editionReceivedAt]').fill('2026-10-25');await page.locator('#productSubmitBtn').click();await page.getByText('Cambios guardados en el lote 1.',{exact:true}).waitFor();
+check(await page.locator('[name=editionReceivedAt]').inputValue()==='2026-10-25','Date cleared after save');
+let saved=await state();check(saved.lots[0].receivedAt.startsWith('2026-10-25'),'Date missing in database');check(saved.lots[0].slices.reduce((n,s)=>n+s.received,0)===originalStock,'Date-only edit created a receipt');
+await page.locator('#productCancelBtn').click();await openEditor();await page.waitForFunction(()=>document.querySelector('[name=editionReceivedAt]').value==='2026-10-25');
+await page.locator('[name=editionReceivedAt]').fill('2026-03-29');await page.locator('#productSubmitBtn').click();await page.getByText('Cambios guardados en el lote 1.',{exact:true}).waitFor();
+await page.reload();await page.locator('[data-edit-product="'+f.productId+'"]').click();await page.waitForFunction(()=>document.querySelector('[name=editionReceivedAt]').value==='2026-03-29');
+saved=await state();check(saved.lots[0].slices.reduce((n,s)=>n+s.received,0)===originalStock,'Date correction changed quantities');check(saved.lots[0].freightTotalCents===75,'Historical freight was rewritten');
+const historical=saved.orders[0].items[0].financialSnapshot.lotCosts[0];check(historical.productionCents===2500&&historical.freightCents===75&&historical.otherCents===25,'Historical sale cost changed');
+await page.screenshot({path:'output/playwright/editions-editor-save/date-after-fix.png'});
+return {passed:true,date:'2026-03-29',dateOnlyStockUnchanged:true,historicalFreightCents:75,historicalCostCents:2600};

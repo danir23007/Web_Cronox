@@ -1,3 +1,4 @@
+import { reconcileLotCounts } from '../inventory-lots/lot-ledger';
 import {
   BadRequestException,
   ConflictException,
@@ -1136,10 +1137,10 @@ export class ProductService {
     }
 
     if (normalizedSearch) {
-      const matchedProducts = await this.prisma.product.findMany({
+      const matchedProducts = await this.prisma.$transaction(tx => tx.product.findMany({
         where,
         include: this.getProductInclude(),
-      });
+      }), { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead });
       matchedProducts.sort((left, right) => {
         const scoreDifference =
           scoreProductSearch(right, normalizedSearch) -
@@ -1172,7 +1173,7 @@ export class ProductService {
         include: this.getProductInclude(),
       }),
       this.prisma.product.count({ where }),
-    ]);
+    ], { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead });
 
     return {
       meta: {
@@ -1192,7 +1193,7 @@ export class ProductService {
     if (!normalizedSearch) return { items: [] };
 
     const limit = Math.min(Math.max(query.limit ?? 8, 1), 8);
-    const candidates = await this.prisma.product.findMany({
+    const candidates = await this.prisma.$transaction(tx => tx.product.findMany({
       where: this.buildPublicSearchWhere(normalizedSearch, query.categorySlug),
       take: Math.max(40, limit * 10),
       orderBy: [{ displayOrder: 'asc' }, { id: 'asc' }],
@@ -1221,7 +1222,7 @@ export class ProductService {
           },
         },
       },
-    });
+    }), { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead });
 
     const searchTerms = expandSearchTokens(normalizedSearch).flat();
     return {
@@ -1260,13 +1261,13 @@ export class ProductService {
   }
 
   async getBySlug(slug: string) {
-    const product = await this.prisma.product.findUnique({
+    const product = await this.prisma.$transaction(tx => tx.product.findUnique({
       where: {
         slug: currentProductSlug(slug), isActive: true,
         ...(slug === ARMORED_COAL.oldSlug ? { id: ARMORED_COAL.id } : {}),
       },
       include: this.getProductInclude(),
-    });
+    }), { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead });
 
     return product ? this.toPublicProduct(product) : null;
   }
@@ -1930,6 +1931,7 @@ export class ProductService {
           tx,
         );
 
+        await reconcileLotCounts(tx, id, adminId);
         return updated;
       });
 
@@ -2142,6 +2144,8 @@ export class ProductService {
         );
       }
 
+      const editionReferences = await tx.$queryRaw<Array<{ n:bigint }>>`SELECT count(*) AS n FROM "InventoryLot" WHERE profile->'images' @> ${JSON.stringify([{url:image.url}])}::jsonb`;
+      if (Number(editionReferences[0]?.n ?? 0)>0) throw new ConflictException('La imagen pertenece a una tirada guardada y debe conservarse.');
       const [products, productImages, galleries, websiteMedia, emailAssets] =
         await Promise.all([
           tx.product.count({ where: { imageUrl: image.url } }),
@@ -2271,6 +2275,7 @@ export class ProductService {
           });
         }
 
+        await reconcileLotCounts(tx, productId);
         return tx.product.findUnique({
           where: { id: productId },
           include: this.getProductInclude({ includeInactiveVariants: true }),
@@ -2311,7 +2316,8 @@ export class ProductService {
     }
 
     try {
-      const updated = await this.prisma.productVariant.update({
+      const updated = await this.prisma.$transaction(async tx => {
+        const result = await tx.productVariant.update({
         where: { id: variantId },
         data: {
           ...(dto.size !== undefined ? { size: dto.size } : {}),
@@ -2323,6 +2329,9 @@ export class ProductService {
           ...(dto.isActive !== undefined ? { isActive: dto.isActive } : {}),
         },
         include: { product: { select: { price: true } } },
+        });
+        await reconcileLotCounts(tx, productId);
+        return result;
       });
 
       return this.buildVariantResponse(updated);
@@ -2383,6 +2392,7 @@ export class ProductService {
       if (changed.count !== 1) {
         throw new ConflictException('STOCK_ADJUSTMENT_OUT_OF_RANGE');
       }
+      await reconcileLotCounts(tx, productId, performedById, dto.reason ?? 'Ajuste manual');
 
       const updated = await tx.productVariant.findUnique({
         where: { id: variantId },
