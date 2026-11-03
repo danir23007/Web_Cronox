@@ -25,6 +25,11 @@ async function main() {
           // subscriptions, favorites or carts. The anonymous refresh is local.
           await page.setRequestInterception(true);
           page.on('request', request => {
+            // GET /api/cart creates an anonymous row on its first read.
+            // Keep this boundary in memory as well as blocking writes.
+            if (new URL(request.url()).pathname === '/api/cart') {
+              return request.respond({ status: 200, contentType: 'application/json', body: JSON.stringify({ items: [], itemsCount: 0, subtotal: 0 }) });
+            }
             if (!['GET', 'HEAD', 'OPTIONS'].includes(request.method())) {
               return request.respond({ status: 401, contentType: 'application/json', body: '{}' });
             }
