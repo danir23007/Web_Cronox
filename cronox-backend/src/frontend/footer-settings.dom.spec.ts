@@ -74,6 +74,7 @@ describe('Footer settings public and Admin UI', () => {
       '/devoluciones',
       '/desarrolla',
       '/eventos',
+      '/galeria',
       '/privacidad',
       '/cookies',
       '/terminos',

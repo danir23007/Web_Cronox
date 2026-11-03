@@ -24,7 +24,7 @@ describe('storefront initial rendering and shared reads', () => {
         dom.window.document.querySelector<HTMLLinkElement>(
           '#cronox-main-style',
         )!;
-      expect(new URL(link.href).pathname).toBe('/assets/store.css');
+      expect(new URL(link.href).pathname).toBe(file === 'index.html' ? '/assets/store.min.css' : '/assets/store.css');
       expect(link.rel).toBe('stylesheet');
       dom.window.close();
     },

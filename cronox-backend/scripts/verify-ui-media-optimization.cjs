@@ -24,6 +24,9 @@ const approvedImageChanges = new Set([
   // Responsive derivatives requested by the performance review; original retained.
   'cronox-front/assets/CRONOX-preloader-320.webp',
   'cronox-front/assets/CRONOX-preloader-640.webp',
+  'cronox-front/assets/CRONOX-preloader-v2-208.webp',
+  'cronox-front/assets/CRONOX-preloader-v2-400.webp',
+  'cronox-front/assets/CRONOX-preloader-v2-640.webp',
   'cronox-front/assets/logo-topbar.webp',
   'cronox-front/assets/maps/spain-provinces.svg',
   // Official PayPal artwork requested for the checkout payment selector.
@@ -137,8 +140,9 @@ async function main() {
     },
   );
 
-  for (const width of [320, 640]) {
-    const derivative = path.join(frontendRoot, `assets/CRONOX-preloader-${width}.webp`);
+  for (const name of ['320', '640', 'v2-208', 'v2-400', 'v2-640']) {
+    const width = Number(name.split('-').at(-1));
+    const derivative = path.join(frontendRoot, `assets/CRONOX-preloader-${name}.webp`);
     const responsive = await sharp(derivative, { animated: true }).metadata();
     assert.equal(responsive.format, animation.format);
     assert.equal(responsive.width, width);
@@ -165,11 +169,11 @@ async function main() {
   const profileHtml = read('cronox-front/profile.html');
   const keyScreen = read('cronox-front/key-screen.html');
   const newsletter = read('cronox-front/assets/newsletter-renderer.js');
-  for (const html of [index, checkout]) {
+  for (const [html, optimized] of [[index, true], [checkout, false]]) {
     const preloader = html.match(/<img\b[^>]*class="preloader__logo"[^>]*>/)?.[0];
     assert.ok(preloader, 'The visible animated preloader must remain present');
-    assert.match(preloader, /src="assets\/CRONOX-preloader-640\.webp"/);
-    assert.match(preloader, /srcset="assets\/CRONOX-preloader-320\.webp 320w, assets\/CRONOX-preloader-640\.webp 640w"/);
+    assert.match(preloader, optimized ? /src="assets\/CRONOX-preloader-v2-400\.webp"/ : /src="assets\/CRONOX-preloader-640\.webp"/);
+    assert.match(preloader, optimized ? /srcset="assets\/CRONOX-preloader-v2-208\.webp 208w, assets\/CRONOX-preloader-v2-400\.webp 400w, assets\/CRONOX-preloader-v2-640\.webp 640w"/ : /srcset="assets\/CRONOX-preloader-320\.webp 320w, assets\/CRONOX-preloader-640\.webp 640w"/);
     assert.match(preloader, /sizes="196px"/);
   }
   assert.match(index, /class="topbar__logo"[\s\S]*?src="assets\/logo-topbar\.webp"/);
