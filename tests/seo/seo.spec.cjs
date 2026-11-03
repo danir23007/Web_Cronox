@@ -19,7 +19,7 @@ for (const width of [1366, 390]) {
     await page.getByRole('button', { name: 'Abrir menú', exact: true }).click();
     await expect(page.locator('.black-menu__discover')).toHaveCount(1);
     await expect(page.locator('.black-menu__discover')).toHaveAttribute('href', '/sobre-cronox');
-    await expect(page.locator('[data-store-category][value="camisetas"]')).toBeVisible();
+    await expect(page.locator('.black-menu__link[href="/tienda?categorySlug=camisetas#store"]')).toBeVisible();
     await expect(page.locator('[data-store-category][value="interna-prueba"]')).toHaveCount(0);
     await page.goto('/sobre-cronox');
     await expect(page.locator('main section p')).toHaveCount(13);
@@ -67,7 +67,7 @@ test('initial HTML remains useful without JavaScript', async ({ browser }) => {
 
 test('direct product survives omission from the first catalogue page', async ({ page }) => {
   await page.addInitScript(() => { window.__CRONOX_API_BASE__ = location.origin; });
-  await page.route('**/api/products', route => route.fulfill({ json: { items: [], meta: { total: 0 } } }));
+  await page.route('**/api/products?**', route => route.fulfill({ json: { items: [], meta: { total: 0 } } }));
   await page.goto('/producto/seo-test-shirt?size=S');
   await expect(page.locator('.size-btn.is-active')).toHaveAttribute('data-size', 'S');
   await expect(page.locator('#pName')).toHaveText('Camiseta de prueba SEO');
@@ -75,7 +75,7 @@ test('direct product survives omission from the first catalogue page', async ({ 
 });
 
 test('the API data that updates the page also updates its single ProductGroup', async ({ page }) => {
-  await page.route('**/api/products', async route => {
+  await page.route('**/api/products?**', async route => {
     const response = await route.fetch();
     const body = await response.json();
     body.items[0].description = 'Descripción actualizada desde la API local.';

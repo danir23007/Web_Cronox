@@ -20,6 +20,7 @@ import {
 } from './public-seo';
 import { legacyRedirectTarget, robotsText } from './public-pages';
 import { createContentSecurityPolicy } from '../config/content-security-policy';
+import { productSlugRedirect } from './product-slug-redirect';
 
 const root = join(__dirname, '../../../../cronox-front');
 
@@ -67,6 +68,7 @@ function app(source = catalog, gated = false, shipping?: Parameters<typeof creat
     res.setHeader('Content-Security-Policy', createContentSecurityPolicy(root));
     next();
   });
+  app.use(productSlugRedirect);
   app.use(seoRequestSignals);
   app.use(createSeoDiscovery(source, async () => gated));
   app.use((req, res, next) => {
@@ -79,6 +81,46 @@ function app(source = catalog, gated = false, shipping?: Parameters<typeof creat
 }
 const doc = (html: string) => new JSDOM(html).window.document;
 describe('public SEO server HTML (no database connection)', () => {
+  it('serves the renamed product directly after a single 301, with current links and metadata', async () => {
+    const renamed = { ...product, id: 4, slug: 'armored-coal', name: 'ARMORED COAL' };
+    const source: SeoCatalog = {
+      product: async key => ('slug' in key ? key.slug === renamed.slug : key.id === 4) ? renamed : null,
+      links: async () => [renamed],
+    };
+    const server = app(source);
+    const old = await request(server).get('/producto/shielded-coal?size=S');
+    expect(old.status).toBe(301);
+    expect(old.headers.location).toBe('/producto/armored-coal?size=S');
+    for (const method of ['get', 'head'] as const) {
+      const current = await request(server)[method](old.headers.location);
+      expect(current.status).toBe(200);
+      expect(current.headers.location).toBeUndefined();
+      expect(current.headers.link).toBe('<https://cronox.es/producto/armored-coal>; rel="canonical"');
+      if (method === 'get') {
+        const document = doc(current.text);
+        expect(document.querySelector('#pName')?.textContent).toBe('ARMORED COAL');
+        expect(document.querySelector('meta[property="og:url"]')?.getAttribute('content')).toBe('https://cronox.es/producto/armored-coal');
+        expect(document.querySelector('#cronox-seo')?.textContent).toContain('/producto/armored-coal');
+        expect(current.text).not.toContain('shielded-coal');
+      }
+    }
+    for (const path of ['/', '/tienda', '/sitemap.xml']) {
+      const response = await request(server).get(path);
+      expect(response.text).toContain('/producto/armored-coal');
+      expect(response.text).not.toContain('/producto/shielded-coal');
+    }
+  });
+  it.each(['/devoluciones', '/envios', '/galeria', '/sobre-cronox'])('keeps %s publicly indexable with self canonical and discovery', async path => {
+    const response = await request(app()).get(path);
+    const document = doc(response.text);
+    expect(response.status).toBe(200);
+    expect(response.headers['x-robots-tag']).toBeUndefined();
+    expect(document.querySelector('meta[name=robots]')?.getAttribute('content')).toContain('index, follow');
+    expect(document.querySelector('link[rel=canonical]')?.getAttribute('href')).toBe(`https://cronox.es${path}`);
+    expect(document.querySelector('meta[name=description]')?.getAttribute('content')).toBeTruthy();
+    expect(document.querySelector('h1')?.textContent?.trim()).toBeTruthy();
+    expect((await request(app()).get('/sitemap.xml')).text).toContain(`<loc>https://cronox.es${path}</loc>`);
+  });
   it('retains the cart shell and client retry when the initial shipping read fails, without caching failure or inventing prices', async () => {
     const warning = jest.spyOn(console, 'warn').mockImplementation(() => {});
     try {

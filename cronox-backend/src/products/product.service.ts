@@ -37,6 +37,7 @@ import {
   variantSizeSkuToken,
 } from './product-size-system';
 import { ADMIN_PAGE_SIZES } from '../admin/admin-pagination.constants';
+import { ARMORED_COAL, currentProductSlug } from './product-slugs';
 
 @Injectable()
 export class ProductService {
@@ -1260,7 +1261,10 @@ export class ProductService {
 
   async getBySlug(slug: string) {
     const product = await this.prisma.product.findUnique({
-      where: { slug, isActive: true },
+      where: {
+        slug: currentProductSlug(slug), isActive: true,
+        ...(slug === ARMORED_COAL.oldSlug ? { id: ARMORED_COAL.id } : {}),
+      },
       include: this.getProductInclude(),
     });
 
