@@ -16,8 +16,10 @@ http.createServer((req, res) => {
   if (pathname.startsWith('/producto/') || pathname === '/producto') file = '/producto.html';
   if (pathname === '/cart') file = '/cart.html';
   if (pathname.includes('/assets/')) file = pathname.slice(pathname.indexOf('/assets/'));
-  const target = path.resolve(root, '.' + file);
+  let target = path.resolve(root, '.' + file);
   if (!target.startsWith(root + path.sep)) { res.writeHead(403); res.end(); return; }
+  // Match Nest's second static root (favicon lives in public/).
+  if (!fs.existsSync(target)) target = path.resolve(root, 'public', '.' + file);
   fs.readFile(target, (error, data) => {
     if (error) { res.writeHead(404); res.end(); return; }
     const cacheControl = process.env.CRONOX_TEST_CACHE_ASSETS === '1' && pathname.startsWith('/assets/')

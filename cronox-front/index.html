@@ -57,7 +57,7 @@
     .topbar__logo-img { display: block; width: 140px; height: auto; }
     .topbar svg { width: 24px; height: 24px; }
   </style>
-  <link id="cronox-main-style" rel="stylesheet" href="assets/store.css?v=129">
+  <link id="cronox-main-style" rel="stylesheet" href="assets/store.min.css?v=3b33541cb31b">
   <link rel="stylesheet" href="assets/gallery.css?v=20">
   <link rel="stylesheet" href="assets/product-detail.css?v=2">
   <link rel="stylesheet" href="assets/quick-add.css?v=12">
@@ -77,8 +77,8 @@
   <div id="preloader" class="preloader" aria-hidden="true" aria-live="polite">
     <div class="preloader-inner">
       <img sizes="196px"
-           srcset="assets/CRONOX-preloader-320.webp 320w, assets/CRONOX-preloader-640.webp 640w"
-           src="assets/CRONOX-preloader-640.webp"
+           srcset="assets/CRONOX-preloader-v2-208.webp 208w, assets/CRONOX-preloader-v2-400.webp 400w, assets/CRONOX-preloader-v2-640.webp 640w"
+           src="assets/CRONOX-preloader-v2-400.webp"
            alt="CRONOX" class="preloader__logo" decoding="async">
     </div>
   </div>
@@ -208,6 +208,7 @@
     <!-- Logo centrado -->
     <a href="/" class="topbar__logo" aria-label="Cronox — Tienda">
       <img src="assets/logo-topbar.webp"
+           width="680" height="307"
            alt="Cronox" class="topbar__logo-img" decoding="async">
     </a>
 
@@ -468,20 +469,20 @@
   <!-- ===== BADGE FAVORITOS ===== -->
   <script src="assets/size-systems.js?v=1"></script>
   <script src="assets/api.js?v=26"></script>
-  <script src="assets/responsive-images.js?v=6"></script>
+  <script src="assets/responsive-images.js?v=7"></script>
   <!-- ===== MAIN SCRIPTS ===== -->
   <script src="assets/media-framing-geometry.js?v=7" defer></script>
   <script src="assets/newsletter-renderer.js?v=9" defer></script>
   <script src="assets/newsletter-visit.js?v=2" defer></script>
   <script src="/assets/product-delivery.js?v=5" defer></script>
-  <script src="assets/app.js?v=105" defer></script>
+  <script src="assets/app.min.js?v=4289a07a6c60" defer></script>
   <script src="assets/product-card-framing.js?v=1" defer></script>
-  <script src="assets/products.js?v=74" defer></script>
+  <script src="assets/products.min.js?v=3fab520a7684" defer></script>
   <script src="assets/favorites-toggle.js?v=3" defer></script>
   <script src="assets/cart-badge.js?v=45" defer></script>
   <script src="assets/product-gallery.js?v=2" defer></script>
   <script src="assets/media-framing.js?v=9" defer></script>
-  <script src="assets/gallery.js?v=18" defer></script>
+  <script src="assets/gallery.min.js?v=7c39bdc4ae73" defer></script>
 
   <footer class="site-footer">
     <div class="footer-inner">
@@ -490,7 +491,7 @@
           <div class="footer-brand-name">
             <a href="/" aria-label="CRONOX — Tienda">
               <span class="footer-primary-mark">
-                <img src="assets/logo_banner.png"
+                <img src="assets/logo-topbar.webp" width="680" height="307"
                      alt="CRONOX" class="footer-logo" decoding="async">
               </span>
               <img src="/assets/logo-secondary-footer.webp" width="1619" height="491"
@@ -502,13 +503,13 @@
 
           <div class="footer-social">
             <a href="https://www.instagram.com/cronox.es/" target="_blank" rel="noopener noreferrer" data-footer-social="instagramUrl">
-              <img src="assets/icons/instagram.svg" class="social-icon" alt="Instagram">
+              <img src="assets/icons/instagram.svg" width="64" height="64" class="social-icon" alt="Instagram">
             </a>
             <span>
-              <img src="assets/icons/tiktok.svg" class="social-icon" alt="TikTok">
+              <img src="assets/icons/tiktok.svg" width="64" height="64" class="social-icon" alt="TikTok">
             </span>
             <span>
-              <img src="assets/icons/youtube.svg" class="social-icon" alt="YouTube">
+              <img src="assets/icons/youtube.svg" width="64" height="64" class="social-icon" alt="YouTube">
             </span>
           </div>
         </div>

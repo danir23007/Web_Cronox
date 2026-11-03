@@ -421,6 +421,8 @@ test('failure is explicit, preserves known rows, and supports retry; initial fai
 test('all entry points share rows, quantities, shipping, subtotal and badge', async ({ page }) => {
   await fixture(page, 0);
   await page.goto('/producto/test-tee-1');
+  await page.locator('.size-btn[data-size="M"]').click();
+  await expect(page.locator('.size-btn[data-size="M"]')).toHaveAttribute('aria-checked', 'true');
   await expect(page.locator('#pAdd')).toBeEnabled();
   await page.locator('#pAdd').click();
   await expect(page.locator('.cart-count').first()).toHaveText('1');

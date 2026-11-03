@@ -8,6 +8,16 @@ import {
 describe('ImageProcessorService', () => {
   const service = new ImageProcessorService();
 
+  it('adds a small gallery preview without reducing the grid or enlarged image', async () => {
+    const source = await sharp({ create: { width: 2250, height: 3000, channels: 3, background: '#345678' } }).jpeg().toBuffer();
+    const results = await service.createVariants(source, ['galleryPreview', 'galleryGrid', 'galleryLarge']);
+    expect(results.map(({ role, width, height }) => ({ role, width, height }))).toEqual([
+      { role: 'preview', width: 720, height: 960 },
+      { role: 'grid', width: 1500, height: 2000 },
+      { role: 'large', width: 2250, height: 3000 },
+    ]);
+  });
+
   it.each([
     [
       'png',

@@ -10,15 +10,15 @@ const original = path.join(assetDirectory, 'CRONOX-preloader.webp');
 async function main() {
   const before = await sharp(original, { animated: true }).metadata();
   // The logo is 160 CSS px, inside scale(1.2), with a scale(1.02) exit.
-  // 640×360 preserves 16:9 and covers >3× its maximum 195.84px visible width.
-  // Maximum WebP quality preserves the metallic detail at the rendered size.
+  // 208/400/640 cover 1x/2x/3x at that size. Keep the master and older
+  // derivatives intact (other pages and historic releases still use them).
   const originalBytes = (await fs.stat(original)).size;
   const results = [];
-  for (const width of [320, 640]) {
-    const derivative = path.join(assetDirectory, `CRONOX-preloader-${width}.webp`);
+  for (const width of [208, 400, 640]) {
+    const derivative = path.join(assetDirectory, `CRONOX-preloader-v2-${width}.webp`);
     await sharp(original, { animated: true })
       .resize({ width, withoutEnlargement: true })
-      .webp({ quality: 100, alphaQuality: 100, effort: 6, loop: before.loop, delay: before.delay })
+      .webp({ quality: 85, alphaQuality: 100, effort: 6, loop: before.loop, delay: before.delay })
       .toFile(derivative);
     const after = await sharp(derivative, { animated: true }).metadata();
     if (after.pages !== before.pages || after.loop !== before.loop || after.hasAlpha !== before.hasAlpha || JSON.stringify(after.delay) !== JSON.stringify(before.delay)) {

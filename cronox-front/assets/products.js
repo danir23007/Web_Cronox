@@ -1227,6 +1227,10 @@
     }
     if (!error || !PRODUCTS.length) setProducts(products);
     applyAll();
+    // Homepage sections below the catalogue can now measure their real
+    // position, including the empty/error state, instead of its loading shell.
+    window.CRONOX_CATALOG_SETTLED = true;
+    window.dispatchEvent(new CustomEvent('cronox:catalogSettled'));
     if (!error) notifyCatalogReady(source, requestedAt);
   }
 

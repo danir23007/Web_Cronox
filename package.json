@@ -4,7 +4,8 @@
     "test:cart:browser": "playwright test --config playwright.cart.config.cjs",
     "admin:typecheck": "tsc --noEmit -p tsconfig.admin.json",
     "admin:map": "node cronox-backend/scripts/build-admin-map.cjs",
-    "admin:build": "npm run admin:map && npm run admin:qr-scanner && vite build -c vite.admin.config.ts",
+    "admin:build": "npm run admin:map && npm run admin:qr-scanner && vite build -c vite.admin.config.ts && npm run storefront:build",
+    "storefront:build": "node cronox-backend/scripts/build-storefront.cjs",
     "admin:watch": "vite build -c vite.admin.config.ts --watch",
     "admin:qr-scanner": "vite build -c vite.qr-scanner.config.ts",
     "test:mobile-compat:browser": "playwright test --config playwright.mobile-compat.config.cjs"
@@ -12,6 +13,7 @@
   "devDependencies": {
     "@playwright/test": "^1.63.0",
     "@types/node": "^25.2.1",
+    "esbuild": "0.27.2",
     "typescript": "^5.9.3",
     "vite": "^7.3.7"
   },
