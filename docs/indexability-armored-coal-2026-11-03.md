@@ -1,5 +1,7 @@
 # ARMORED COAL y revisión de indexabilidad — 03/11/2026
 
+**Actualización posterior:** migración y código publicados; alias 301 y destino 200 verificados. Véase [el cierre de publicación](publication-url-performance-2026-11-03.md). El diagnóstico y los pendientes siguientes conservan la evidencia anterior al despliegue.
+
 Trabajo realizado en el checkout y PostgreSQL local. **Sin push, despliegue ni
 escrituras en producción.** La consulta pública fue anónima y de solo lectura.
 

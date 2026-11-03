@@ -1,5 +1,7 @@
 # Portada: rendimiento y verificación local — 3 de noviembre de 2026
 
+**Actualización posterior:** publicado y verificado en producción. Las mediciones públicas, Storage completado, alcance acotado y cierre están en [el informe de publicación](publication-url-performance-2026-11-03.md). Los resultados y pendientes que siguen describen el estado al terminar la fase local, no el estado final de producción.
+
 Trabajo local, sin push, despliegue, cambios de datos en producción, compras ni pagos reales. Se conservaron los cambios anteriores de ARMORED COAL y SEO. No se modificó el diseño, los textos de marca, la tipografía ni las reglas de consentimiento/newsletter.
 
 ## Qué se comprobó
