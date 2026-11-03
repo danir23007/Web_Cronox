@@ -45,6 +45,7 @@ const expectedRoutes = [
   '/devoluciones',
   '/desarrolla',
   '/eventos',
+  '/galeria',
   '/privacidad',
   '/cookies',
   '/terminos',
@@ -52,7 +53,7 @@ const expectedRoutes = [
 ];
 
 describe('informational footer destinations use the shared CRONOX topbar', () => {
-  it('enumerates all nine real footer routes without placeholders', () => {
+  it('enumerates all ten real footer routes without placeholders', () => {
     const dom = new JSDOM(indexHtml);
     const links = Array.from(
       dom.window.document.querySelectorAll(

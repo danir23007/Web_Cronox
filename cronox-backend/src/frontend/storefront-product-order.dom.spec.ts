@@ -1,5 +1,7 @@
 /* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access */
 import { readFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { transformSync } from 'esbuild';
 import path from 'node:path';
 import { JSDOM } from 'jsdom';
 
@@ -116,7 +118,7 @@ describe('public storefront product ordering', () => {
     expect(checkoutScript).toMatch(/API\.getProducts\(\{\s*limit: 12,?\s*\}\)/);
   });
 
-  it('cache-busts products.js consistently on every page that loads it', () => {
+  it('cache-busts each product bundle and keeps the homepage build equivalent to its readable source', () => {
     for (const page of [
       'index.html',
       'favorites.html',
@@ -124,10 +126,15 @@ describe('public storefront product ordering', () => {
       'producto.html',
     ]) {
       const html = readFrontend(page);
-      expect(html).toMatch(/assets\/products\.js\?v=\d+/);
-      expect(html.match(/assets\/products\.js\?v=\d+/)?.[0]).toBe(
-        readFrontend('index.html').match(/assets\/products\.js\?v=\d+/)?.[0],
-      );
+      const resource = html.match(/assets\/products(?:\.min)?\.js\?v=([a-z0-9]+)/);
+      expect(resource).not.toBeNull();
+      if (page === 'index.html') {
+        const generated = readFrontend('assets/products.min.js').replace(/\r\n/g, '\n');
+        expect(generated).toBe(transformSync(productsScript, { loader: 'js', minify: true, target: 'es2020', legalComments: 'inline' }).code);
+        expect(resource![1]).toBe(createHash('sha256').update(generated).digest('hex').slice(0, 12));
+      } else {
+        expect(resource![0]).toBe(readFrontend('producto.html').match(/assets\/products\.js\?v=\d+/)?.[0]);
+      }
     }
     const checkoutVersion=readFrontend('checkout.html').match(/assets\/checkout\.js\?v=(\d+)/);
     expect(checkoutVersion).not.toBeNull();

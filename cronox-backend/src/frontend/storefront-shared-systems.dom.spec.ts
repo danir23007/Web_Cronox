@@ -29,8 +29,8 @@ describe('shared storefront systems', () => {
   ])('%s loads the complete shared Quick Add surface', (page) => {
     const html = read(page);
     expect(html).toContain('assets/quick-add.css?v=12');
-    expect(html).toMatch(/assets\/products\.js\?v=\d+/);
-    expect(html).toMatch(/assets\/app\.js\?v=\d+/);
+    expect(html).toMatch(/assets\/products(?:\.min)?\.js\?v=[a-z0-9]+/);
+    expect(html).toMatch(/assets\/app(?:\.min)?\.js\?v=[a-z0-9]+/);
   });
 
   it('places each cart price below its product name and before size and quantity', () => {

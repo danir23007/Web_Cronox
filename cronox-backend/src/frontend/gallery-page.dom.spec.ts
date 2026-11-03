@@ -245,7 +245,7 @@ describe('CRONOX gallery page', () => {
         dom.window.Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
     expect(homepageHtml).toContain('href="assets/gallery.css?v=20"');
-    expect(homepageHtml).toContain('src="assets/gallery.js?v=18"');
+    expect(homepageHtml).toMatch(/src="assets\/gallery\.min\.js\?v=[a-f0-9]{12}"/);
     expect(document.querySelectorAll('#galleryLightbox')).toHaveLength(1);
     expect(document.querySelectorAll<HTMLElement>('[id]').length).toBe(
       new Set(
@@ -286,6 +286,16 @@ describe('CRONOX gallery page', () => {
       'http://localhost:3000/index.html',
       fetchMock,
     );
+    // The homepage now waits until catalog layout has settled. JSDOM has no
+    // IntersectionObserver, so this event exercises the supported fallback.
+    await new Promise<void>((resolve) => {
+      if (dom.window.document.readyState === 'loading') {
+        dom.window.document.addEventListener('DOMContentLoaded', () => resolve(), { once: true });
+      } else resolve();
+    });
+    expect(fetchMock).not.toHaveBeenCalled();
+    (dom.window as any).CRONOX_CATALOG_SETTLED = true;
+    dom.window.dispatchEvent(new dom.window.Event('cronox:catalogSettled'));
     const gallery = (dom.window as any).CRONOX_GALLERY;
     await gallery.load();
     await gallery.load();
@@ -428,6 +438,9 @@ describe('CRONOX gallery page', () => {
       'http://localhost:3000/index.html',
       fetchMock,
     );
+    expect(fetchMock).not.toHaveBeenCalled();
+    (dom.window as any).CRONOX_CATALOG_SETTLED = true;
+    dom.window.dispatchEvent(new dom.window.Event('cronox:catalogSettled'));
     await Promise.resolve();
     await Promise.resolve();
     await new Promise((resolve) => setTimeout(resolve, 0));

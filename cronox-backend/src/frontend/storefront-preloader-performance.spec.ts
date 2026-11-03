@@ -133,7 +133,7 @@ describe('storefront preloader performance', () => {
     expect(dom.window.document.querySelector('video.hero-video')).toBeNull();
     expect(
       dom.window.document.querySelector('#preloader img')?.getAttribute('src'),
-    ).toBe('assets/CRONOX-preloader-640.webp');
+    ).toBe('assets/CRONOX-preloader-v2-400.webp');
     dom.window.close();
   });
 });
