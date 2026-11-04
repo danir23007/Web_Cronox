@@ -3,7 +3,6 @@ import {
   Controller,
   Delete,
   Get,
-  Header,
   Param,
   ParseIntPipe,
   Patch,
@@ -86,14 +85,6 @@ export class AdminUsersController {
   @Roles(Role.SUPERADMIN)
   getUserAuditLogs(@Param('id', ParseIntPipe) id: number) {
     return this.usersService.getUserAuditLogs(id);
-  }
-
-  @Get(':id/deletion-preview')
-  @Header('Cache-Control', 'private, no-store')
-  @Roles(Role.SUPERADMIN)
-  @UseGuards(SuperAdminGuard)
-  deletionPreview(@Param('id', ParseIntPipe) id: number, @CurrentUser('id') adminId: number, @Req() request: Request) {
-    return this.usersService.deletionPreview(id, String(request.headers['x-cronox-user-identity'] || ''), adminId);
   }
 
   @Delete(':id')

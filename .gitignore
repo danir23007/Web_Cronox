@@ -68,3 +68,5 @@ output/private-user-numbering/
 /cronox-backend/scripts/test-checkout-stripe-sandbox.cjs
 /cronox-backend/scripts/verify-express-paypal-sandbox.cjs
 /cronox-backend/scripts/verify-physical-wallets.cjs
+
+/output/performance-20261103/
