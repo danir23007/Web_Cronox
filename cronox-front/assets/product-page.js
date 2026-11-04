@@ -731,6 +731,11 @@
     String(product.backendId ?? product.slug ?? product.id) === String(currentProduct.backendId ?? currentProduct.slug ?? currentProduct.id);
   function updateAvailability(product, requestedAt = performance.now()) {
     if (!sameProduct(product) || requestedAt < availabilityStamp) return;
+    if (product.activeLotId && product.activeLotId !== currentProduct.activeLotId) {
+      render(product);
+      showToast('La ficha se ha actualizado. Revisa la tirada y la talla antes de añadirla.');
+      return;
+    }
     availabilityStamp = requestedAt;
     availabilityRequest++;
     currentProduct = product;

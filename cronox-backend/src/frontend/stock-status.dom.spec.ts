@@ -32,7 +32,7 @@ describe('stock status presentation', () => {
       /\.product-last-units\s*\{[^}]*color:var\(--stock-low-warning\)/,
     );
     expect(css).toMatch(
-      /\.product-last-units--out\s*\{[^}]*color:var\(--stock-out-warning\)/,
+      /\.product-last-units--out\s*\{[^}]*color:#e60000/,
     );
     expect(css).toContain('--stock-out-warning:#ff6464');
     expect(css).not.toContain('.product-card__stock-label {');

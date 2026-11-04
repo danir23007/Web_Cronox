@@ -100,6 +100,7 @@
     : {};
   const userEditedShippingFields = new Set();
   let checkoutReservation = null;
+  let editionReviewRequired = false;
   const reservationStatus = document.getElementById('checkout-reservation-status');
   const reservationRetry = document.getElementById('checkout-reservation-retry');
   const reservationRequest = async (path, body, keepalive = false) => {
@@ -139,7 +140,9 @@
         const expired = reservation && new Date(reservation.expiresAt).getTime() <= Date.now();
         if (reservationStatus) {
           const affected = Array.isArray(error?.items) ? error.items.map(item => item.title || `Variante ${item.variantId}`).join(', ') : '';
-          reservationStatus.textContent = error || !ready
+          reservationStatus.textContent = editionReviewRequired || error?.code === 'PRODUCT_EDITION_CHANGED'
+            ? 'Ha cambiado la tirada o el precio. Revisa la cesta y acepta la ficha actual antes de pagar.'
+            : error || !ready
             ? affected ? `Sin stock suficiente: ${affected}. Corrige la cesta y vuelve a comprobar.`
               : reservation?.paymentStartedAt || String(error?.code).includes('RECONCILING') ? 'Estamos comprobando el estado del pago anterior. No vuelvas a pagar hasta confirmar su resultado.'
                 : expired || String(error?.code).includes('EXPIRED') ? 'La reserva ha caducado. Comprueba de nuevo el stock antes de pagar.'
@@ -147,7 +150,7 @@
             : reservation.paymentStartedAt ? `Pago iniciado. Reserva protegida hasta las ${new Date(reservation.expiresAt).toLocaleTimeString('es-ES')}. Si el pago sigue procesándose, comprobaremos su estado antes de liberar los artículos.`
               : 'Artículos reservados mientras permanezcas en el checkout.';
         }
-        if (reservationRetry) reservationRetry.hidden = !!ready;
+        if (reservationRetry) reservationRetry.hidden = editionReviewRequired || !!ready;
         if (reservation?.paymentStartedAt) restoreProtectedCheckout();
         setPayButtonState(false);
         if (reason === 'heartbeat' && previous && previous.checkoutSnapshotId !== reservation?.checkoutSnapshotId) void queueCheckoutUpdate();
@@ -1046,7 +1049,15 @@
       onAction: retry,
     };
 
-    if (details.kind === 'auth') {
+    if (details.code === 'PRODUCT_EDITION_CHANGED') {
+      editionReviewRequired = true;
+      options.title = 'Revisa la tirada de tu producto';
+      options.description = 'Ha cambiado la tirada o el precio. Revisa la cesta y acepta la ficha actual antes de pagar.';
+      options.actionLabel = 'Revisar cesta';
+      options.onAction = () => { window.location.href = '/cesta'; };
+      if (reservationStatus) { reservationStatus.textContent = options.description; reservationStatus.hidden = false; }
+      if (reservationRetry) reservationRetry.hidden = true;
+    } else if (details.kind === 'auth') {
       options.title = 'Tu sesión ya no es válida';
       options.description = 'Vuelve a iniciar sesión y reintenta el checkout.';
       options.actionLabel = 'Recargar';
@@ -1700,6 +1711,7 @@
 
       if (revision !== checkoutRevision) return false;
 
+      editionReviewRequired = false;
       restoreProtectedCheckout();
 
       state.cart = data.cart;
@@ -2384,6 +2396,9 @@
   };
 
   const getPaymentPreparationMessage = (details) => {
+    if (details.code === 'PRODUCT_EDITION_CHANGED') {
+      return 'Ha cambiado la tirada o el precio. Revisa la cesta y acepta la ficha actual antes de pagar.';
+    }
     if (details.code === 'PROMO_ALREADY_REDEEMED') {
       return 'Ya has utilizado este código de descuento.';
     }

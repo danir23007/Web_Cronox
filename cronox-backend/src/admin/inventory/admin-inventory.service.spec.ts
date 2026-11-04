@@ -1,3 +1,12 @@
+// These unit fixtures model legacy products. Real lot-managed transaction,
+// stock guards and cost snapshots are exercised by test-inventory-lots-db.cjs.
+jest.mock('../../inventory-lots/lot-ledger', () => ({
+  allocateLots: jest.fn().mockResolvedValue(false), returnLots: jest.fn().mockResolvedValue(false),
+  consumeLots: jest.fn().mockResolvedValue(undefined), reconcileLotCounts: jest.fn().mockResolvedValue(undefined),
+}));
+jest.mock('../../inventory-lots/lot-financial', () => ({
+  freezeCheckoutLots: jest.fn().mockResolvedValue(undefined), freezeOrderLots: jest.fn().mockResolvedValue(undefined),
+}));
 /* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-return */
 import { BadRequestException, ConflictException } from '@nestjs/common';
 import { plainToInstance } from 'class-transformer';

@@ -1,0 +1,11 @@
+const a=await session('raceA'),b=await session('raceB');await addFromProduct(a);await addFromProduct(b);
+const responses=[];for(const p of [a,b])p.on('response',async r=>{if(r.url().includes('/api/checkout/reservation')&&r.request().method()==='POST')responses.push({status:r.status(),body:await r.json().catch(()=>null)});});
+await Promise.all([a.goto(f.origin+'/checkout'),b.goto(f.origin+'/checkout')]);
+for(let i=0;i<40&&responses.length<2;i++)await new Promise(resolve=>setTimeout(resolve,100));
+const held=await state(),racing=held.snapshots.filter(s=>[f.users.raceA.id,f.users.raceB.id].includes(s.userId)&&s.stockReservations.some(r=>r.status==='RESERVED'));
+check(racing.length===1,'More than one last-unit reservation');check(responses.some(r=>r.status===409)&&responses.some(r=>r.status===201||r.status===200),'Race HTTP statuses unexpected');
+check(held.product.variants.find(v=>v.size==='M').stockQty===0,'Last-unit public stock mismatch');check(held.lots.find(l=>l.number===1).slices.reduce((n,s)=>n+s.available,0)===1,'Inactive edition was consumed');
+const winner=racing[0].userId===f.users.raceA.id?a:b,loser=winner===a?b:a;
+await loser.screenshot({path:'output/playwright/editions-integrated/last-unit-loser.png',fullPage:true});await checkout(winner);await pay(winner);
+const after=await state(),orders=after.orders.filter(o=>[f.users.raceA.id,f.users.raceB.id].includes(o.userId));check(orders.length===1,'Duplicate last-unit orders');check(orders[0].items[0].financialSnapshot.lotCosts.every(p=>p.lotId===after.product.activeLotId),'Wrong web edition assigned');
+return {passed:true,requests:responses.map(r=>r.status),winnerUser:orders[0].userId,orderId:orders[0].id,oneOrderOnly:true,inactiveStockPreserved:true};

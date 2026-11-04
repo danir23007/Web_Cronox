@@ -245,7 +245,7 @@ export class AdminMapService {
         const entries=await pointLedger(tx,query.from,query.to);
         const external=calculatePoints(entries,query.from,query.to,'months',false);
         financePeriod.revenueCents=financePeriod.revenueCents===null?null:financePeriod.revenueCents+external.totals.revenueCents!;
-        financePeriod.profitCents=financePeriod.profitCents===null?null:financePeriod.profitCents+external.totals.profitCents!;
+        financePeriod.profitCents=financePeriod.profitCents===null||external.totals.profitCents===null?null:financePeriod.profitCents+external.totals.profitCents;
         financePeriod.unitsSold+=external.totals.unitsSold;financePeriod.unitsReturned+=external.totals.unitsReturned;
         for(const entry of entries){
           const stats=calculatePoints([entry],query.from,query.to,'months',false),t=stats.totals;

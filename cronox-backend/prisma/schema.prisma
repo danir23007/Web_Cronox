@@ -87,6 +87,7 @@ model PointSale {
 
 // Append-only finance deltas, frozen before/after snapshots and stock evidence.
 model PointEntry {
+  costRevisions InventoryPointCostRevision[]
   id String @id @default(uuid())
   pointId String
   point SalePoint @relation(fields: [pointId], references: [id], onDelete: Restrict)
@@ -606,6 +607,9 @@ model MailAccountQuota {
 }
 
 model Product {
+  activeLotId        String?
+  inventoryLots      InventoryLot[]
+  lotManaged         Boolean                    @default(false)
   privateCost        ProductCost?
   id                 Int                        @id @default(autoincrement())
   slug               String                     @unique
@@ -695,6 +699,7 @@ model ProductCategory {
 }
 
 model ProductVariant {
+  lotSlices                 InventoryLotSlice[]
   restockRequests           RestockRequest[]
   id                        Int                        @id @default(autoincrement())
   productId                 Int
@@ -1394,6 +1399,7 @@ model LivePresence {
 }
 
 model CartItem {
+  lotAtAdd String?
   id         Int            @id @default(autoincrement())
   cartId     Int
   variantId  Int
@@ -1777,6 +1783,7 @@ model ProductCost {
 }
 
 model CheckoutItemFinancial {
+  lotCosts      Json?
   itemId        Int                  @id
   unitCostCents Int?
   productName   String
@@ -1785,6 +1792,7 @@ model CheckoutItemFinancial {
 }
 
 model OrderItemFinancial {
+  lotCosts      Json?
   itemId        Int       @id
   unitCostCents Int?
   productName   String
@@ -2314,4 +2322,86 @@ model EmailChangeRequest {
   windowAt DateTime
   starts Int @default(1)
   createdAt DateTime @default(now())
+}
+
+// Lot balances are protected by deferred database constraints in the migration.
+model InventoryLot {
+  number Int?
+  profile Json?
+  profilePending Boolean @default(false)
+  id String @id
+  productId Int
+  product Product @relation(fields: [productId], references: [id], onDelete: Restrict)
+  name String @db.VarChar(160)
+  receivedAt DateTime?
+  notes String @default("") @db.VarChar(2000)
+  referencePriceCents Int?
+  freightTotalCents Int?
+  otherTotalCents Int?
+  costQuality String
+  allocationRule String @default("PER_UNIT")
+  openingBalance Boolean @default(false)
+  archived Boolean @default(false)
+  revision Int @default(1)
+  requestKey String @unique
+  requestHash String
+  createdAt DateTime @default(now())
+  slices InventoryLotSlice[]
+  history InventoryLotAudit[]
+  @@index([productId])
+}
+model InventoryLotSlice {
+  id String @id
+  lotId String
+  lot InventoryLot @relation(fields: [lotId], references: [id], onDelete: Restrict)
+  variantId Int
+  variant ProductVariant @relation(fields: [variantId], references: [id], onDelete: Restrict)
+  received Int
+  available Int
+  productionCents Int?
+  freightCents Int?
+  otherCents Int?
+  allocations InventoryLotAllocation[]
+  @@index([variantId, lotId], map: "InventoryLotSlice_variantId_idx")
+}
+model InventoryLotAllocation {
+  id String @id
+  sliceId String
+  slice InventoryLotSlice @relation(fields: [sliceId], references: [id], onDelete: Restrict)
+  sourceKey String
+  quantity Int
+  returned Int @default(0)
+  retired Int @default(0)
+  state String
+  productionCents Int?
+  freightCents Int?
+  otherCents Int?
+  costQuality String
+  createdAt DateTime @default(now())
+  @@index([sourceKey], map: "InventoryLotAllocation_source_idx")
+  @@index([sliceId], map: "InventoryLotAllocation_slice_idx")
+}
+model InventoryLotAudit {
+  id String @id
+  lotId String
+  lot InventoryLot @relation(fields: [lotId], references: [id], onDelete: Restrict)
+  actorId Int?
+  reason String
+  before Json?
+  after Json
+  createdAt DateTime @default(now())
+  @@index([lotId, createdAt], map: "InventoryLotAudit_lot_idx")
+}
+model InventoryPointCostRevision {
+  id String @id
+  entryId String
+  entry PointEntry @relation(fields: [entryId], references: [id], onDelete: Restrict)
+  lineIndex Int
+  revision Int
+  actorId Int
+  reason String
+  before Json
+  after Json
+  createdAt DateTime @default(now())
+  @@unique([entryId, lineIndex, revision])
 }

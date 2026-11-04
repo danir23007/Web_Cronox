@@ -264,6 +264,12 @@
     String(product.backendId ?? product.slug ?? product.id) === String(qaCurrentProduct.backendId ?? qaCurrentProduct.slug ?? qaCurrentProduct.id);
   function updateQuickAddAvailability(product, requestedAt = performance.now()) {
     if (!sameQuickProduct(product) || requestedAt < qaAvailabilityStamp) return;
+    if (product.activeLotId && product.activeLotId !== qaCurrentProduct.activeLotId) {
+      const returnFocus = qaReturnFocus;
+      openQuickAdd(product);
+      qaReturnFocus = returnFocus;
+      return;
+    }
     qaAvailabilityStamp = requestedAt;
     qaAvailabilityRequest++;
     qaAvailabilityPending = false;

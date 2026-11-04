@@ -18,7 +18,7 @@ describe('ProductService search', () => {
         categories: [{ category: { name: 'Camisetas', slug: 'camisetas' } }],
       },
     ]);
-    const service = new ProductService({ product: { findMany } } as any);
+    const service = new ProductService({ $transaction: jest.fn(callback => callback({product:{findMany}})), product: { findMany } } as any);
 
     await expect(
       service.getSearchSuggestions({ search: 'negro', limit: 8 }),
@@ -60,7 +60,7 @@ describe('ProductService search', () => {
       { ...base, id: 2, slug: 'washed-black-tee', name: 'Washed Black Tee' },
       { ...base, id: 1, slug: 'black-tee', name: 'Black Tee' },
     ]);
-    const service = new ProductService({ product: { findMany } } as any);
+    const service = new ProductService({ $transaction: jest.fn(callback => callback({product:{findMany}})), product: { findMany } } as any);
 
     const response = await service.getAllProducts({ search: 'black tee' });
 
@@ -112,7 +112,7 @@ describe('ProductService search', () => {
         displayOrder: 2,
       },
     ]);
-    const service = new ProductService({ product: { findMany } } as any);
+    const service = new ProductService({ $transaction: jest.fn(callback => callback({product:{findMany}})), product: { findMany } } as any);
 
     const response = await service.getAllProducts({ search: 'black tee' });
 

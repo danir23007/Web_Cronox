@@ -1,0 +1,10 @@
+await page.goto(f.origin+'/admin.html#section-sale-points');await page.getByRole('button',{name:'Crear punto de venta',exact:true}).click();
+await page.getByLabel('Nombre / edición').fill('INTEGRACIÓN LOTES '+Date.now());await page.locator('.pos-editor select[name=type]').selectOption('EVENT');await page.getByLabel('Ciudad',{exact:true}).fill('Madrid');await page.getByLabel('Comisión predeterminada (%)').fill('0');await page.getByRole('button',{name:'Guardar',exact:true}).click();
+await page.getByRole('button',{name:'Registrar venta',exact:true}).click();
+const before=await state(),variant=before.product.variants.find(v=>v.size==='M');
+await page.getByLabel('Producto y talla').selectOption(String(variant.id));await page.getByLabel('Tirada vendida').selectOption(before.product.activeLotId);await page.getByLabel('Cantidad',{exact:true}).fill('1');await page.getByLabel('Precio pagado por unidad (€)').fill('110');await page.getByRole('button',{name:'Guardar',exact:true}).click();
+await page.locator('.pos-editor').waitFor({state:'detached'});const saved=await state();
+check(saved.points.length===1,'Physical sale not persisted');check(saved.points[0].state.lines[0].lotCosts[0].lotId===before.product.activeLotId,'Physical lot mismatch');
+check(saved.product.variants.find(v=>v.size==='M').stockQty===before.product.variants.find(v=>v.size==='M').stockQty-1,'Physical stock deduction mismatch');
+await page.screenshot({path:'output/playwright/editions-integrated/physical-sale.png',fullPage:true});
+return {passed:true,saleId:saved.points[0].id,lot:saved.points[0].state.lines[0].lotId,stock:saved.product.variants.find(v=>v.size==='M').stockQty};

@@ -32,6 +32,7 @@ export class PointDto {
   @IsOptional() @IsString() expenseDate?: string;
 }
 export class SaleLineDto {
+  @IsOptional() @IsString() @MaxLength(100) lotId?: string;
   @IsOptional() @IsUUID() id?: string;
   @IsInt() @Min(1) variantId: number;
   @IsInt() @Min(0) @Max(1000) quantity: number;

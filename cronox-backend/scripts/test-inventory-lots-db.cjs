@@ -1,0 +1,191 @@
+'use strict';
+// Read-only dump of a verified loopback source; every write targets a fresh,
+// uniquely named local database. No production environment is accepted.
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
+const { randomUUID } = require('node:crypto');
+const { spawnSync } = require('node:child_process');
+const { Client } = require('pg');
+const { loadLocalEnvironment } = require('./start-local.cjs');
+const backend = path.resolve(__dirname, '..');
+const name = 'cronox_lots_test_' + randomUUID().replaceAll('-', '');
+const out = path.resolve(backend, '../output/playwright/inventory-lots');
+const report = { database: name, checks: [] };
+async function main() {
+  const env = loadLocalEnvironment(), source = new URL(env.DATABASE_URL);
+  assert.ok(['127.0.0.1', 'localhost', '[::1]'].includes(source.hostname));
+  source.search = '';
+  const control = new Client({ connectionString: source.href });
+  let created = false, db;
+  fs.mkdirSync(out, { recursive: true });
+  const bin = 'C:/Program Files/PostgreSQL/17/bin';
+  const run = (tool, args, url) => {
+    const result = spawnSync(path.join(bin, tool + '.exe'), args, { env: { ...process.env, PGHOST: url.hostname, PGPORT: url.port || '5432', PGUSER: decodeURIComponent(url.username), PGPASSWORD: decodeURIComponent(url.password), PGDATABASE: decodeURIComponent(url.pathname.slice(1)) }, windowsHide: true, encoding: 'utf8', timeout: 120000 });
+    assert.equal(result.status, 0, tool + ' failed: ' + String(result.stderr).replace(/postgres(?:ql)?:\/\/\S+/g, '[redacted]'));
+  };
+  try {
+    await control.connect();
+    const identity = (await control.query('SELECT host(inet_server_addr()) AS host,current_database() AS db')).rows[0];
+    assert.ok(['127.0.0.1', '::1'].includes(identity.host));
+    const dump = path.join(out, 'local-copy.dump');
+    const baseline = path.join(out, 'pre-lots-baseline.dump');
+    if (fs.existsSync(baseline)) fs.copyFileSync(baseline, dump);
+    else run('pg_dump', ['--format=custom', '--no-owner', '--no-acl', '--file', dump], source);
+    await control.query(`CREATE DATABASE "${name}" TEMPLATE template0`); created = true;
+    const target = new URL(source); target.pathname = '/' + name;
+    run('pg_restore', ['--no-owner', '--no-acl', '--exit-on-error', '--dbname', name, dump], target);
+    const sql = new Client({ connectionString: target.href }); await sql.connect();
+    try {
+      const before = (await sql.query('SELECT count(*)::int AS products FROM "Product"')).rows[0];
+      const historyHashSql = `SELECT
+        (SELECT md5(COALESCE(jsonb_agg(to_jsonb(o) ORDER BY o.id)::text,'[]')) FROM "Order" o) AS orders,
+        (SELECT md5(COALESCE(jsonb_agg(to_jsonb(i) ORDER BY i.id)::text,'[]')) FROM "OrderItem" i) AS items,
+        (SELECT md5(COALESCE(jsonb_agg(to_jsonb(f) ORDER BY f."itemId")::text,'[]')) FROM (SELECT "itemId","unitCostCents","productName","imageUrl" FROM "OrderItemFinancial") f) AS costs,
+        (SELECT md5(COALESCE(jsonb_agg(to_jsonb(a) ORDER BY a."orderId")::text,'[]')) FROM "FinanceArchive" a) AS archive`;
+      const historicalBefore = (await sql.query(historyHashSql)).rows[0];
+      const alreadyMigrated = (await sql.query(`SELECT to_regclass('"InventoryLot"') IS NOT NULL AS present`)).rows[0].present;
+      const initialLots = alreadyMigrated ? (await sql.query('SELECT count(*)::int AS n FROM "InventoryLot"')).rows[0].n : 0;
+      if (!alreadyMigrated) await sql.query(fs.readFileSync(path.join(backend, 'prisma/migrations/20261103120000_inventory_lots/migration.sql'), 'utf8'));
+      const hasGuard = (await sql.query("SELECT to_regprocedure('cronox_check_lot_slice(text)') IS NOT NULL AS present")).rows[0].present;
+      if (!hasGuard) await sql.query(fs.readFileSync(path.join(backend,'prisma/migrations/20261103121000_inventory_lot_balance_guards/migration.sql'),'utf8'));
+      // Exercise the pre-conversion ledger with the current generated client.
+      // Edition behavior itself is covered by test-product-editions-db.cjs.
+      await sql.query('ALTER TABLE "Product" ADD COLUMN IF NOT EXISTS "activeLotId" TEXT; ALTER TABLE "InventoryLot" ADD COLUMN IF NOT EXISTS number INTEGER; ALTER TABLE "InventoryLot" ADD COLUMN IF NOT EXISTS profile JSONB; ALTER TABLE "InventoryLot" ADD COLUMN IF NOT EXISTS "profilePending" BOOLEAN NOT NULL DEFAULT false; ALTER TABLE "CartItem" ADD COLUMN IF NOT EXISTS "lotAtAdd" TEXT;');
+      assert.deepEqual((await sql.query('SELECT count(*)::int AS products FROM "Product"')).rows[0], before);
+      assert.deepEqual((await sql.query(historyHashSql)).rows[0], historicalBefore);
+      assert.equal((await sql.query('SELECT count(*)::int AS n FROM "InventoryLot"')).rows[0].n, initialLots);
+      report.checks.push(alreadyMigrated ? 'Isolated copy of already-migrated local schema preserves existing products and lots' : 'Migration applied to isolated local copy without changing products or inventing historical receipts');
+    } finally { await sql.end(); }
+    Object.assign(process.env, env, { DATABASE_URL: target.href, DIRECT_URL: target.href, USER_NUMBERING_DATABASE_URL: target.href, BACKGROUND_JOBS_ENABLED: 'false', EMAIL_ENABLED: 'false' });
+    require('ts-node').register({ project: path.join(backend, 'tsconfig.json'), transpileOnly: true });
+    const { PrismaClient } = require('@prisma/client'); db = new PrismaClient(); await db.$connect();
+    const { AdminLotsService } = require('../src/admin/lots/admin-lots.service');
+    const { allocateLots, returnLots, consumeLots, sourceCosts } = require('../src/inventory-lots/lot-ledger');
+    const lots = new AdminLotsService(db);
+    const admin = await db.user.create({ data: { email: name + '@test.invalid', role: 'SUPERADMIN' } });
+    const product = await db.product.create({ data: { slug: name, name: 'Lot test', price: 9000, variants: { create: [{ size: 'M', sku: name + '-M', stockQty: 0 }, { size: 'L', sku: name + '-L', stockQty: 0 }] } }, include: { variants: true } });
+    const m = product.variants.find(v => v.size === 'M').id, l = product.variants.find(v => v.size === 'L').id;
+    const preview = await lots.preview(product.id);
+    assert.ok(preview.warnings.length); await lots.activate(product.id, preview, admin.id);
+    const receipt = { name: 'First', receivedAt: '2026-11-01', notes: '', referencePriceCents: 9000, freightTotalCents: 3, otherTotalCents: 0, costQuality: 'CONFIRMED', lines: [{ variantId: m, quantity: 2, productionCents: 3000 }, { variantId: l, quantity: 1, productionCents: 4000 }] };
+    const first = await lots.create(product.id, randomUUID(), receipt, admin.id);
+    const second = await lots.create(product.id, randomUUID(), { ...receipt, name: 'Second', receivedAt: '2026-11-02', freightTotalCents: 4, lines: [{ variantId: m, quantity: 2, productionCents: 5000 }] }, admin.id);
+    assert.equal((await db.product.findUnique({ where: { id: product.id } })).price, 9000);
+    const reserve = key => db.$transaction(async tx => {
+      const changed = await tx.productVariant.updateMany({ where: { id: m, stockQty: { gte: 3 } }, data: { stockQty: { decrement: 3 } } });
+      if (!changed.count) throw Error('INSUFFICIENT_STOCK');
+      await allocateLots(tx, m, 3, key, 'RESERVED');
+    });
+    const concurrency = await Promise.allSettled([reserve('checkout:test-one'), reserve('checkout:test-two')]);
+    assert.equal(concurrency.filter(r => r.status === 'fulfilled').length, 1);
+    const key = concurrency[0].status === 'fulfilled' ? 'checkout:test-one' : 'checkout:test-two';
+    const costs = await db.$transaction(tx => sourceCosts(tx, key, m));
+    assert.equal(costs.filter(c => c.lotId === first.id).reduce((n,c) => n+c.quantity,0), 2);
+    assert.equal(costs.filter(c => c.lotId === second.id).reduce((n,c) => n+c.quantity,0), 1);
+    report.checks.push('Concurrent reservations: one succeeds, one fails; FIFO splits 2+1 across lots, independent L stock remains');
+    await db.$transaction(async tx => { await tx.productVariant.update({ where: { id: m }, data: { stockQty: { increment: 3 } } }); await returnLots(tx, m, 3, key, true); });
+    assert.equal((await db.productVariant.findUnique({ where: { id: m } })).stockQty, 4);
+    await reserve('checkout:paid');
+    await db.$transaction(tx => consumeLots(tx, 'paid', 999999));
+    await db.$transaction(async tx => { await tx.productVariant.update({ where: { id: m }, data: { stockQty: { increment: 3 } } }); await returnLots(tx, m, 3, 'order:999999'); });
+    await assert.rejects(db.productVariant.update({ where: { id: m }, data: { stockQty: 99 } }), /LOT_STOCK_MISMATCH/);
+    report.checks.push('Release and return restore original lots; database rejects independent stock changes');
+    await db.product.update({ where: { id: product.id }, data: { price: 11000 } });
+    assert.equal(costs.reduce((n,c) => n+c.quantity*(c.productionCents+c.freightCents+c.otherCents),0), 11004);
+    report.checks.push('90→110 public price update leaves frozen 11004-cent mixed-lot cost intact');
+    const { AdminManualPurchasesService } = require('../src/admin/manual-purchases/admin-manual-purchases.service');
+    const { HistorialService } = require('../src/historial/historial.service');
+    const { TaxConfigService } = require('../src/common/tax/tax-config.service');
+    const { AdminPointsService } = require('../src/admin/points/admin-points.service');
+    const manual = new AdminManualPurchasesService(db, new HistorialService(db), new TaxConfigService());
+    const buyer = await db.user.create({ data: { email: name + '-buyer@test.invalid' } });
+    const dto = { items: [{ variantId: m, quantity: 3, unitPriceCents: 9000 }], paymentMethod: 'CASH', stockHandling: 'DEDUCT_NOW', purchasedAt: '2026-11-03T09:00:00Z' };
+    const operation = randomUUID();
+    const purchase = await manual.create(buyer.id, admin.id, operation, dto);
+    const historical = await db.financeArchive.findUniqueOrThrow({ where: { orderId: purchase.order.id } });
+    assert.equal(historical.snapshot.items[0].financialSnapshot.lotCosts.reduce((n,c) => n+c.quantity*(c.productionCents+c.freightCents+c.otherCents),0), 11004);
+    assert.equal((await manual.create(buyer.id, admin.id, operation, dto)).created, false);
+    assert.equal((await db.productVariant.findUnique({ where: { id: m } })).stockQty, 1);
+    const reportLots = await lots.report(product.id, '2026-11-01', '2026-11-30');
+    assert.equal(reportLots.rows.reduce((n,r) => n+r.revenueCents,0), 27000);
+    assert.equal(reportLots.rows.reduce((n,r) => n+r.costCents,0), 11004);
+    const already = await manual.create(buyer.id, admin.id, randomUUID(), { ...dto, items: [{ variantId: m, quantity: 1, unitPriceCents: 11000 }], stockHandling: 'ALREADY_ADJUSTED' });
+    assert.equal((await db.productVariant.findUnique({ where: { id: m } })).stockQty, 1);
+    const unresolved = await db.financeArchive.findUniqueOrThrow({ where: { orderId: already.order.id } });
+    const reconcile = { orderId: already.order.id, itemId: already.order.items[0].id, revision: unresolved.revision, reason: 'Justificante histórico de prueba', parts: [{ lotId: first.id, quantity: 1, productionCents: 3000, freightCents: 1, otherCents: 0, quality: 'CONFIRMED' }] };
+    await lots.reconcileHistorical(product.id, reconcile, admin.id);
+    await assert.rejects(lots.reconcileHistorical(product.id, reconcile, admin.id), /ha cambiado/);
+    assert.equal((await db.productVariant.findUnique({ where: { id: m } })).stockQty, 1);
+    await manual.void(purchase.order.id, admin.id, 'Prueba aislada');
+    await manual.void(purchase.order.id, admin.id, 'Reintento aislado');
+    assert.equal((await db.productVariant.findUnique({ where: { id: m } })).stockQty, 4);
+    report.checks.push('Actual manual purchase service freezes mixed-lot finance archive, report reconciles; duplicate creation/void and Already adjusted never double-decrement');
+    const points = new AdminPointsService(db);
+    const point = await db.salePoint.create({ data: { name: name, type: 'STORE', city: '', venue: '', notes: '', commissionBp: 0 } });
+    const sale = await points.sale(point.id, admin.id, randomUUID(), { occurredAt: '2026-11-03T10:00:00Z', stockHandling: 'DEDUCT_NOW', note: '', paymentMethod: 'CASH', lines: [{ variantId: m, quantity: 3, unitPriceCents: 11000, commissionBp: 0 }] });
+    const state = (await db.pointSale.findUnique({ where: { id: sale.saleId } }));
+    assert.equal(state.state.lines[0].lotCosts.reduce((n,c) => n+c.quantity*(c.productionCents+c.freightCents+c.otherCents),0), 11004);
+    await points.refund(point.id, sale.saleId, admin.id, randomUUID(), { occurredAt: '2026-11-03T11:00:00Z', revision: state.revision, reason: 'Prueba aislada', lines: [{ id: state.state.lines[0].id, quantity: 3, restock: true, recoveredCommissionCents: 0 }] });
+    assert.equal((await db.productVariant.findUnique({ where: { id: m } })).stockQty, 4);
+    report.checks.push('Actual point sale/refund restores FIFO source lots and keeps original cost');
+    const { ManualPurchaseEditor } = require('../src/admin/manual-purchases/manual-purchase-editor');
+    const editor = new ManualPurchaseEditor(db, new HistorialService(db));
+    const split = await manual.create(buyer.id, admin.id, randomUUID(), { ...dto, items: [{ variantId: m, quantity: 1, unitPriceCents: 9000 }, { variantId: m, quantity: 2, unitPriceCents: 11000 }] });
+    const editable = await editor.read(buyer.id, split.order.id);
+    await editor.edit(buyer.id, split.order.id, admin.id, randomUUID(), { expectedVersion: editable.expectedVersion, items: [editable.order.items[1]], paymentMethod: 'CASH', purchasedAt: dto.purchasedAt, excludedFromStatistics: false, note: 'Conservar segunda línea y sus costes' });
+    const retainedLine = await db.orderItemFinancial.findUniqueOrThrow({ where: { itemId: editable.order.items[1].itemId } });
+    assert.equal(retainedLine.lotCosts.reduce((n,c) => n+c.quantity*(c.productionCents+c.freightCents+c.otherCents),0), 8003);
+    await manual.void(split.order.id, admin.id, 'Cerrar prueba aislada');
+    assert.equal((await db.productVariant.findUnique({ where: { id: m } })).stockQty, 4);
+    const partialSale = await points.sale(point.id, admin.id, randomUUID(), { occurredAt: '2026-11-03T12:00:00Z', stockHandling: 'DEDUCT_NOW', note: '', paymentMethod: 'CASH', lines: [{ variantId: m, quantity: 1, unitPriceCents: 9000, commissionBp: 0 }, { variantId: m, quantity: 2, unitPriceCents: 11000, commissionBp: 0 }] });
+    let partialState = await db.pointSale.findUnique({ where: { id: partialSale.saleId } });
+    const secondLine = partialState.state.lines[1];
+    await points.refund(point.id, partialSale.saleId, admin.id, randomUUID(), { occurredAt: '2026-11-03T13:00:00Z', revision: partialState.revision, reason: 'Devolución de segunda línea', lines: [{ id: secondLine.id, quantity: 1, restock: false, recoveredCommissionCents: 0 }] });
+    partialState = await db.pointSale.findUnique({ where: { id: partialSale.saleId } });
+    await points.refund(point.id, partialSale.saleId, admin.id, randomUUID(), { occurredAt: '2026-11-03T14:00:00Z', revision: partialState.revision, reason: 'Reponer solo la unidad restante del segundo lote', lines: [{ id: secondLine.id, quantity: 1, restock: true, recoveredCommissionCents: 0 }] });
+    const secondBalance = await db.inventoryLotSlice.aggregate({ where: { lotId: second.id, variantId: m }, _sum: { available: true } });
+    assert.equal(secondBalance._sum.available, 2);
+    partialState = await db.pointSale.findUnique({ where: { id: partialSale.saleId } });
+    await points.refund(point.id, partialSale.saleId, admin.id, randomUUID(), { occurredAt: '2026-11-03T15:00:00Z', revision: partialState.revision, reason: 'Reponer primera línea', lines: [{ id: partialState.state.lines[0].id, quantity: 1, restock: true, recoveredCommissionCents: 0 }] });
+    assert.equal((await db.productVariant.findUnique({ where: { id: m } })).stockQty, 3);
+    report.checks.push('Editing separate prices preserves retained line lot costs; partial point returns with/without restock restore the selected original lot only');
+    const { OrdersService } = require('../src/orders/orders.service');
+    const { freezeCheckoutLots } = require('../src/inventory-lots/lot-financial');
+    const orders = Object.create(OrdersService.prototype);
+    const snapshot = await db.checkoutSnapshot.create({ data: { userId: buyer.id, customerEmail: 'test@test.invalid', cartId: 0, cartUpdatedAt: new Date(), requestFingerprint: randomUUID(), subtotalCents: 27000, taxRate: '0.21', taxAmountCents: 4686, totalCents: 27000, expiresAt: new Date(Date.now()-1000), items: { create: { productId: product.id, variantId: m, title: 'Lot test M', unitPriceCents: 9000, quantity: 3, lineTotalCents: 27000, financialSnapshot: { create: { productName: 'Lot test', unitCostCents: null } } } } }, include: { items: true } });
+    await db.$transaction(async tx => { await orders.reserveStockForCheckoutSnapshot(tx, snapshot.id, snapshot.items); await freezeCheckoutLots(tx, snapshot.id); });
+    const frozen = await db.checkoutItemFinancial.findUniqueOrThrow({ where: { itemId: snapshot.items[0].id } });
+    assert.equal(frozen.lotCosts.reduce((n,c) => n+c.quantity*(c.productionCents+c.freightCents+c.otherCents),0), 13005);
+    await db.$transaction(tx => orders.releaseStockReservationsForCheckoutSnapshot(tx, snapshot));
+    await db.$transaction(tx => orders.releaseStockReservationsForCheckoutSnapshot(tx, snapshot));
+    assert.equal((await db.productVariant.findUnique({ where: { id: m } })).stockQty, 3);
+    report.checks.push('Real checkout reservation/release methods freeze FIFO costs and release an expired reservation once across retries; historic reconciliation changes neither stock nor paid price');
+    const unknownPoint = await points.sale(point.id, admin.id, randomUUID(), { occurredAt: '2026-11-03T16:00:00Z', stockHandling: 'ALREADY_ADJUSTED', note: '', paymentMethod: 'CASH', lines: [{ variantId: m, quantity: 1, unitPriceCents: 9000, commissionBp: 0 }] });
+    const originalPointEntry = await db.pointEntry.findUniqueOrThrow({ where: { id: unknownPoint.id } });
+    assert.equal(originalPointEntry.lines[0].costCents, null);
+    await lots.reconcilePoint(product.id, { entryId: unknownPoint.id, lineIndex: 0, revision: 0, reason: 'Coste histórico verificado de prueba', parts: [{ lotId: first.id, quantity: 1, productionCents: 3000, freightCents: 1, otherCents: 0, quality: 'CONFIRMED' }] }, admin.id);
+    assert.deepEqual((await db.pointEntry.findUniqueOrThrow({ where: { id: unknownPoint.id } })).lines, originalPointEntry.lines);
+    const detail = await points.detail(point.id, '2026-11-01', '2026-11-30');
+    assert.equal(detail.entries.find(e => e.id === unknownPoint.id).lines[0].costCents, 3001);
+    assert.equal((await db.productVariant.findUnique({ where: { id: m } })).stockQty, 3);
+    const { reconcileLotCounts } = require('../src/inventory-lots/lot-ledger');
+    await db.$transaction(async tx => { await tx.productVariant.update({ where: { id: m }, data: { stockQty: { decrement: 1 } } }); await reconcileLotCounts(tx, product.id, admin.id, 'Salida previa de prueba'); });
+    const withdrawal = await db.inventoryLotAllocation.findFirstOrThrow({ where: { state: 'ADJUSTED', slice: { lotId: first.id, variantId: m } } });
+    const detached = await manual.create(buyer.id, admin.id, randomUUID(), { ...dto, items: [{ variantId: m, quantity: 1, unitPriceCents: 9000 }], stockHandling: 'ALREADY_ADJUSTED' });
+    const detachedArchive = await db.financeArchive.findUniqueOrThrow({ where: { orderId: detached.order.id } });
+    await lots.reconcileHistorical(product.id, { orderId: detached.order.id, itemId: detached.order.items[0].id, revision: detachedArchive.revision, reason: 'Vinculación explícita de salida ya descontada', parts: [{ lotId: first.id, adjustmentSourceKey: withdrawal.sourceKey, quantity: 1, productionCents: 3000, freightCents: 1, otherCents: 0, quality: 'CONFIRMED' }] }, admin.id);
+    assert.equal((await db.productVariant.findUnique({ where: { id: m } })).stockQty, 2);
+    const linked = await points.sale(point.id, admin.id, randomUUID(), { orderId: detached.order.id, occurredAt: '2026-11-03T17:00:00Z', stockHandling: 'ALREADY_ADJUSTED', note: '', paymentMethod: 'CASH', lines: [{ variantId: m, quantity: 1, unitPriceCents: 9000, commissionBp: 0 }] });
+    const linkedState = await db.pointSale.findUniqueOrThrow({ where: { id: linked.saleId } });
+    await points.refund(point.id, linked.saleId, admin.id, randomUUID(), { occurredAt: '2026-11-03T18:00:00Z', revision: linkedState.revision, reason: 'Reposición de salida identificada', lines: [{ id: linkedState.state.lines[0].id, quantity: 1, restock: true, recoveredCommissionCents: 0 }] });
+    assert.equal((await db.productVariant.findUnique({ where: { id: m } })).stockQty, 3);
+    report.checks.push('Explicit point cost revision preserves append-only source ledger; Already adjusted can claim a documented lot withdrawal without double-decrement and restore it through the linked point return');
+  } finally {
+    if (db) await db.$disconnect();
+    if (created) { assert.match(name, /^cronox_lots_test_[a-f0-9]{32}$/); await control.query(`DROP DATABASE "${name}" WITH (FORCE)`); report.cleanedUp = true; }
+    await control.end(); fs.writeFileSync(path.join(out, 'results.json'), JSON.stringify(report, null, 2));
+  }
+  console.log(JSON.stringify(report));
+}
+main().catch(e => { console.error(String(e.message).replace(/postgres(?:ql)?:\/\/\S+/g, '[redacted]')); process.exitCode = 1; });

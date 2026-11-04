@@ -35,7 +35,7 @@ export class FavoritesService {
   }
 
   async list(userId: number) {
-    const favorites = await this.prisma.favorite.findMany({
+    const favorites = await this.prisma.$transaction(tx => tx.favorite.findMany({
       where: { userId, product: { isActive: true } },
       include: {
         product: {
@@ -46,7 +46,7 @@ export class FavoritesService {
         },
       },
       orderBy: { createdAt: 'desc' },
-    });
+    }), { isolationLevel: 'RepeatableRead' });
 
     return favorites.map((favorite) => ({
       id: favorite.id,
@@ -57,7 +57,7 @@ export class FavoritesService {
   }
 
   async listProducts(userId: number) {
-    const favorites = await this.prisma.favorite.findMany({
+    const favorites = await this.prisma.$transaction(tx => tx.favorite.findMany({
       where: { userId, product: { isActive: true } },
       include: {
         product: {
@@ -68,7 +68,7 @@ export class FavoritesService {
         },
       },
       orderBy: { createdAt: 'desc' },
-    });
+    }), { isolationLevel: 'RepeatableRead' });
 
     return favorites.map((favorite) =>
       this.toProductResponse(favorite.product),

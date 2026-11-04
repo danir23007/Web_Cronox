@@ -1,6 +1,8 @@
 import { countsInStatistics } from '../../common/statistics-eligibility';
 import { BadRequestException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
+import { frozenCost, FrozenLotCost } from '../../inventory-lots/lot-costs';
+import { takeCosts } from '../../inventory-lots/lot-ledger';
 
 export const FINANCE_ZONE = 'Europe/Madrid';
 const dateFormatter = new Intl.DateTimeFormat('en-CA', { timeZone: FINANCE_ZONE, year: 'numeric', month: '2-digit', day: '2-digit' });
@@ -47,8 +49,10 @@ export function allocate(amount: number, weights: number[]): number[] {
 }
 
 export type FinanceLine = {
+  physicalProductId?: number;
+  allocatedDiscountCents?: number;
   id: number; productId: number; variantId: number | null; title: string; quantity: number; lineTotal: Prisma.Decimal | string;
-  financialSnapshot?: { unitCostCents: number | null; productName: string; imageUrl: string | null } | null;
+  financialSnapshot?: { unitCostCents: number | null; productName: string; imageUrl: string | null; lotCosts?: FrozenLotCost[] | null } | null;
 };
 export type FinanceOrder = {
   excludedFromStatistics?: boolean;
@@ -113,12 +117,21 @@ export function calculateFinance(orders: FinanceOrder[], events: FinanceEvent[],
     const lines = [...order.items].sort((a, b) => a.id - b.id);
     const gross = lines.map(line => cents(line.lineTotal));
     const discounts = allocate(order.discountCents, gross);
-    const net = gross.map((amount, i) => amount - discounts[i]);
+    const net = gross.map((amount, i) => amount - (lines[i].allocatedDiscountCents ?? discounts[i]));
     const total = cents(order.total);
     const merchandise = net.reduce((sum, amount) => sum + amount, 0);
     const validAmounts = merchandise >= 0 && net.every(amount => amount >= 0) && merchandise + order.shippingCost === total;
     // Product costs are entered in EUR. Never silently treat euros as another currency.
-    const historicalCost = (line: FinanceLine, quantity: number) => order.currency !== 'EUR' || line.financialSnapshot?.unitCostCents == null ? null : line.financialSnapshot.unitCostCents * quantity;
+    const historicalCost = (line: FinanceLine, quantity: number, offset = 0) => {
+      if (order.currency !== 'EUR') return null;
+      const parts = line.financialSnapshot?.lotCosts;
+      if (parts != null) {
+        if (parts.reduce((s, p) => s + p.quantity, 0) !== line.quantity) return null;
+        const cost = frozenCost(takeCosts(parts, Math.abs(quantity), offset));
+        return cost === null ? null : Math.sign(quantity) * cost;
+      }
+      return line.financialSnapshot?.unitCostCents == null ? null : line.financialSnapshot.unitCostCents * quantity;
+    };
     if (order.currency !== 'EUR') warnings.add('Los costes se registran en EUR. El beneficio en otras monedas no está disponible sin un cambio histórico fiable.');
     lines.forEach((line, i) => post(line, paidAt, validAmounts ? net[i] : null, historicalCost(line, line.quantity), line.quantity));
 
@@ -155,7 +168,7 @@ export function calculateFinance(orders: FinanceOrder[], events: FinanceEvent[],
       const full = cumulative === total;
       // Full refunds have a known final allocation. Partial refunds only have a
       // reliable product allocation for one product with no delivery charge.
-      const singleProduct = new Set(lines.map(line => line.productId)).size === 1 && order.shippingCost === 0;
+      const singleProduct = new Set(lines.map(line => line.physicalProductId ?? line.productId)).size === 1 && order.shippingCost === 0;
       if (full && previousRefund === 0 && !refundUnknown) {
         lines.forEach((line, i) => post(line, refund.date, validAmounts ? -net[i] : null, 0));
       } else if (singleProduct && !refundUnknown) {
@@ -175,7 +188,7 @@ export function calculateFinance(orders: FinanceOrder[], events: FinanceEvent[],
         const units = Math.min(quantity, remaining.get(line.id)!);
         if (!units) continue;
         quantity -= units; remaining.set(line.id, remaining.get(line.id)! - units);
-        post(line, movement.createdAt, 0, historicalCost(line, -units), 0, units);
+        post(line, movement.createdAt, 0, historicalCost(line, -units, line.quantity - remaining.get(line.id)! - units), 0, units);
       }
     }
     if (order.disputeLostCents > 0) {

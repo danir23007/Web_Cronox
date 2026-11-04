@@ -196,7 +196,7 @@ export class CartService {
       if (existingItem) {
         await client.cartItem.update({
           where: { id: existingItem.id },
-          data: { qty: newQty, priceAtAdd: price },
+          data: { qty: newQty, lotAtAdd: variant.product.activeLotId, priceAtAdd: price },
         });
       } else {
         await client.cartItem.create({
@@ -204,7 +204,7 @@ export class CartService {
             cartId: cart.id,
             variantId: dto.variantId,
             qty: dto.qty,
-            priceAtAdd: price,
+            lotAtAdd: variant.product.activeLotId, priceAtAdd: price,
           },
         });
       }
@@ -240,7 +240,7 @@ export class CartService {
 
       await client.cartItem.update({
         where: { id: itemId },
-        data: { qty: dto.qty, priceAtAdd: price },
+        data: { qty: dto.qty, lotAtAdd: variant.product.activeLotId, priceAtAdd: price },
       });
 
       await this.recalcTotals(client, cart.id);
@@ -380,7 +380,7 @@ export class CartService {
               cartId: userCart.id,
               variantId: item.variantId,
               qty: mergedQty,
-              priceAtAdd: item.priceAtAdd,
+              priceAtAdd: item.priceAtAdd, lotAtAdd:item.lotAtAdd,
             },
             select: { id: true, variantId: true, qty: true },
           });
@@ -548,7 +548,7 @@ export class CartService {
       where: { id: variantId },
       include: {
         product: {
-          select: { id: true, isActive: true, price: true },
+          select: { id: true, isActive: true, price: true, activeLotId: true },
         },
       },
     });

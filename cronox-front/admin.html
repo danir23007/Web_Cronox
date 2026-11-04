@@ -22,6 +22,7 @@
   <link rel="stylesheet" href="assets/gallery.css?v=20">
   <link rel="stylesheet" href="assets/admin-gallery.css?v=6">
   <link rel="stylesheet" href="assets/admin-media.css?v=4">
+  <link rel="stylesheet" href="assets/admin-lots.css?v=3">
   <link rel="stylesheet" href="assets/admin-inventory.css?v=2">
   <link rel="stylesheet" href="assets/waitlist.css?v=1">
   <link rel="stylesheet" href="assets/admin-mails.css?v=4">
@@ -1733,7 +1734,7 @@
 
   <div class="modal" id="productModal" role="dialog" aria-modal="true" aria-hidden="true" aria-labelledby="productModalTitle">
     <div class="modal-box">
-      <h3 id="productModalTitle" style="margin-top:0;">Crear producto</h3>
+      <div class="edition-header"><h3 id="productModalTitle" style="margin-top:0;">Crear producto</h3><div id="productEditionTabs" role="tablist" aria-label="Tiradas"></div><div id="productEditionAction"></div></div><p id="productEditionMessage" role="status" hidden></p>
       <form id="productForm">
         <p id="productFormMessage" role="alert" hidden></p>
         <div class="form-grid">
@@ -1762,9 +1763,9 @@
             <input id="productPrice" name="price" class="input" type="number" min="0" step="0.01" required>
           </div>
           <div class="form-group">
-            <label for="productCost">Coste del producto (€)</label>
+            <label for="productCost">Coste de producción por unidad (€)</label>
             <input id="productCost" name="unitCost" class="input" type="number" min="0" max="21474836.47" step="0.01" aria-describedby="productCostHelp">
-            <small id="productCostHelp">Privado. Coste por unidad para todas las variantes. Vacío = desconocido; 0 = coste cero.</small>
+            <small id="productCostHelp">Privado. Coste por unidad de esta tirada, incluido el transporte de aprovisionamiento. Las ventas anteriores conservan sus costes. Vacío = desconocido; 0 = coste cero.</small>
           </div>
           <div class="form-group">
             <label for="productLastUnits">Últimas unidades</label>
@@ -1774,7 +1775,7 @@
           <div class="form-group" style="align-items:flex-start; justify-content:flex-end;">
             <label style="display:flex; gap:8px; align-items:center; margin-top:26px;">
               <input type="checkbox" id="productIsActive" name="isActive" checked>
-              Activo
+              Producto visible en la tienda
             </label>
           </div>
         </div>
@@ -1839,17 +1840,25 @@
             <option value="APPAREL">Apparel</option>
             <option value="US_RING">US Ring</option>
           </select>
-          <small>El cambio se bloqueará si las variantes existentes tienen stock o historial comercial.</small>
+          <small>La configuración de tallas pertenece a esta tirada. Las variantes con historial se conservan.</small>
         </div>
         <div class="form-group">
           <label>Stock por talla</label>
-          <div id="productVariantStockFields" class="form-grid"></div>
+          <p>Existencias disponibles de esta tirada. Aumentarlas registra las unidades recibidas; no modifica otras tiradas.</p>
+          <div id="editionReceiptFields" class="form-grid">
+            <label>Fecha de recepción de la tirada<input class="input" name="editionReceivedAt" type="date"></label>
+            <label>Fecha de la nueva entrada<input class="input" name="editionReceiptDate" type="date"><small>Solo al añadir unidades. Vacía: usa la fecha de la tirada.</small></label>
+            <label>Otros gastos de las unidades nuevas (€)<input class="input" name="editionOther" type="number" min="0" step="0.01"></label>
+          </div><div id="productVariantStockFields" class="form-grid"></div>
+          <small>Otros gastos: solo importes adicionales que todavía no estén incluidos en el coste por unidad. Vacío o 0 significa sin gastos adicionales. El envío del pedido al cliente se registra por separado. Las bajas se registran como ajustes de inventario.</small>
         </div>
+        <details id="editionReceiptsHistory"><summary>Recepciones y gastos guardados</summary><div id="editionReceiptsContent"></div></details>
         <div class="modal-actions">
           <button type="button" class="btn" id="productCancelBtn">Cancelar</button>
           <button type="submit" class="btn primary" id="productSubmitBtn">Crear producto</button>
         </div>
       </form>
+      <details id="editionHistory" hidden><summary>Histórico, informes y conciliación</summary><section id="productLots" aria-label="Histórico de lotes" hidden></section></details>
     </div>
   </div>
 
@@ -2169,7 +2178,7 @@
   <script src="assets/admin-navigation.js?v=2"></script>
   <script src="assets/admin-shell.js?v=11"></script>
   <script src="assets/admin-finance.js?v=3"></script>
-  <script src="assets/admin-points.js?v=7"></script>
+  <script src="assets/admin-points.js?v=9"></script>
   <script src="assets/admin-map.js?v=5"></script>
   <link rel="stylesheet" href="assets/admin-visitors.css?v=1">
   <script src="assets/admin-visitors.js?v=3"></script>
@@ -2179,7 +2188,9 @@
   <script src="assets/admin-section-headers.js?v=1"></script>
   <script src="assets/admin-push.js?v=1"></script>
   <script src="assets/admin-inbox.js?v=14"></script>
-  <script src="assets/admin.js?v=24"></script>
+  <script src="assets/admin-lots.js?v=2"></script>
+  <script src="assets/admin-editions.js?v=2"></script>
+  <script src="assets/admin.js?v=27"></script>
   <script src="assets/admin-qr-events.js?v=3"></script>
   <script src="assets/admin-inventory.js?v=2"></script>
   <script src="assets/admin-waitlist.js?v=2"></script>

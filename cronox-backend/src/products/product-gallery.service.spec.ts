@@ -78,6 +78,7 @@ describe('ProductService gallery manager', () => {
   const fixture = () => {
     const finalProduct = { ...existing, images, variants: [], categories: [] };
     const tx: any = {
+      $queryRaw: jest.fn().mockResolvedValue([{ n:0 }]),
       product: {
         findUnique: jest
           .fn()
@@ -175,6 +176,7 @@ describe('ProductService gallery manager', () => {
       deletionState: null,
     };
     const tx: any = {
+      $queryRaw: jest.fn().mockResolvedValue([{ n:0 }]),
       product: {
         findUnique: jest.fn().mockResolvedValue(existing),
         updateMany: jest.fn().mockResolvedValue({ count: 1 }),

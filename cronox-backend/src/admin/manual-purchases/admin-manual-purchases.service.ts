@@ -1,4 +1,6 @@
 import { createHash } from 'node:crypto';
+import { allocateLots, returnLots } from '../../inventory-lots/lot-ledger';
+import { freezeOrderLots } from '../../inventory-lots/lot-financial';
 import {
   BadRequestException,
   ConflictException,
@@ -153,7 +155,7 @@ export class AdminManualPurchasesService {
           const variants = await tx.productVariant.findMany({
             where: { id: { in: [...quantities.keys()] }, isActive: true, product: { isActive: true } },
             orderBy: { id: 'asc' },
-            include: { product: { select: { id: true, name: true, price: true, currency: true, imageUrl: true, privateCost: true } } },
+            include: { product: { select: { id: true, name: true, price: true, currency: true, imageUrl: true, privateCost: true, lotManaged: true } } },
           });
           if (variants.length !== quantities.size) throw new BadRequestException('VARIANT_NOT_AVAILABLE');
           const currencies = new Set(variants.map((variant) => variant.product.currency));
@@ -233,7 +235,9 @@ export class AdminManualPurchasesService {
                 userId,
               })),
             });
+            for (const variant of variants) await allocateLots(tx, variant.id, quantities.get(variant.id)!, 'order:' + order.id, 'SOLD');
           }
+          await freezeOrderLots(tx, order.id, dto.stockHandling !== ManualStockHandling.DEDUCT_NOW);
           await this.historialService.syncFromOrders(userId, tx);
           await tx.auditLog.create({
             data: {
@@ -246,8 +250,8 @@ export class AdminManualPurchasesService {
                 userId, excludedFromStatistics: dto.excludedFromStatistics ?? false, paymentMethod: dto.paymentMethod, stockHandling: dto.stockHandling, purchasedAt: order.purchasedAt,
                 items: lines.map((line) => ({
                   variantId: line.variant.id, quantity: line.quantity, unitPriceCents: line.unitPriceCents,
-                  unitCostCents: configuredManualCost(line.variant.product.privateCost),
-                  costSource: 'ProductCost', costRecordedAt: line.variant.product.privateCost?.updatedAt ?? null,
+                  unitCostCents: line.variant.product.lotManaged ? null : configuredManualCost(line.variant.product.privateCost),
+                  costSource: line.variant.product.lotManaged ? 'LOT_FINANCIAL_SNAPSHOT' : 'ProductCost', costRecordedAt: line.variant.product.lotManaged ? null : line.variant.product.privateCost?.updatedAt ?? null,
                 })),
               },
             },
@@ -283,6 +287,7 @@ export class AdminManualPurchasesService {
         for (const item of order.items) {
           if (!item.variantId) throw new ConflictException('MANUAL_PURCHASE_VARIANT_MISSING');
           await tx.productVariant.update({ where: { id: item.variantId }, data: { stockQty: { increment: item.quantity } } });
+          await returnLots(tx, item.variantId, item.quantity, 'order:' + orderId);
         }
         await tx.stockMovement.createMany({
           data: order.items.map((item) => ({ variantId: item.variantId!, delta: item.quantity, reason: 'manual_sale_void', orderId, userId: order.userId })),

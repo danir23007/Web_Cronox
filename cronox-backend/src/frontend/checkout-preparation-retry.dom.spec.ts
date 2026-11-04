@@ -12,7 +12,7 @@ const totals = { subtotalCents: 3495, shippingCents: 295, discountCents: 0, tota
 const success = { ok: true, json: async () => ({ clientSecret: 'pi_retry_secret_fixture', paymentIntentId: 'pi_retry', shippingMethod: shipping, totals }) };
 const failed = (code = 'DEPENDENCY_UNAVAILABLE') => ({ ok: false, status: 503, json: async () => ({ code, message: code }) });
 
-async function setup(signedIn = true, code = 'DEPENDENCY_UNAVAILABLE') {
+async function setup(signedIn = true, code = 'DEPENDENCY_UNAVAILABLE', summaryCode = '') {
   const dom = new JSDOM(read('checkout.html'), { runScripts: 'outside-only', url: 'https://fixture.test/checkout' });
   const w = dom.window as any;
   require('../../test/checkout-presence-fixture.cjs').install(w);
@@ -25,7 +25,9 @@ async function setup(signedIn = true, code = 'DEPENDENCY_UNAVAILABLE') {
   w.CRONOX_API = {
     getMe: jest.fn().mockResolvedValue(w.CRONOX_USER), getDefaultAddress: jest.fn().mockResolvedValue(null),
     getCart: jest.fn().mockResolvedValue(cart), getProducts: jest.fn().mockResolvedValue([]),
-    getCheckoutSummary: jest.fn().mockResolvedValue({ cart, totals, shippingMethods: [shipping], selectedShippingMethod: shipping }),
+    getCheckoutSummary: summaryCode
+      ? jest.fn().mockRejectedValue({ status: 409, payload: { code: summaryCode } })
+      : jest.fn().mockResolvedValue({ cart, totals, shippingMethods: [shipping], selectedShippingMethod: shipping }),
     getCsrfHeaders: jest.fn().mockResolvedValue({ 'X-CSRF-Token': 'fixture' }),
     classifyApiError: jest.fn().mockReturnValue({ kind: 'server', isRetryable: true }),
   };
@@ -49,6 +51,27 @@ async function setup(signedIn = true, code = 'DEPENDENCY_UNAVAILABLE') {
   }
   return { dom, w, submit, confirm, pay: w.document.getElementById('pay-button'), error: w.document.getElementById('payment-error'), retry: () => w.document.getElementById('payment-prepare-retry') };
 }
+
+it('explains a changed product edition during payment preparation', async () => {
+  const t = await setup(true, 'PRODUCT_EDITION_CHANGED');
+  try {
+    expect(t.error.textContent).toContain('Ha cambiado la tirada o el precio');
+    expect(t.error.textContent).toContain('Revisa la cesta');
+    expect(t.confirm).not.toHaveBeenCalled();
+  } finally { t.dom.window.close(); }
+});
+
+it('offers cart review when a changed edition prevents the initial summary', async () => {
+  const t = await setup(true, 'DEPENDENCY_UNAVAILABLE', 'PRODUCT_EDITION_CHANGED');
+  try {
+    expect(t.w.document.body.textContent).toContain('Ha cambiado la tirada o el precio');
+    expect(t.w.document.body.textContent).toContain('Revisar cesta');
+    expect(t.w.document.getElementById('checkout-reservation-status').textContent).toContain('Ha cambiado la tirada o el precio');
+    expect(t.w.document.getElementById('checkout-reservation-retry').hidden).toBe(true);
+    expect(t.pay.disabled).toBe(true);
+    expect(t.confirm).not.toHaveBeenCalled();
+  } finally { t.dom.window.close(); }
+});
 
 describe('explicit recovery after checkout preparation fails', () => {
   it.each([false, true])('revalidates the same reservation and retries once without confirming or restarting (authenticated: %s)', async signedIn => {

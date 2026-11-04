@@ -1,3 +1,6 @@
+import { applyPointCostRevisions } from './point-cost-revisions';
+import { allocateLots, returnLots, managedVariant, sourceCosts, takeCosts, removeCostParts } from '../../inventory-lots/lot-ledger';
+import { frozenCost, FrozenLotCost } from '../../inventory-lots/lot-costs';
 import {
   BadRequestException,
   ConflictException,
@@ -93,8 +96,8 @@ export class AdminPointsService {
   }
   async options() {
     const variants = await this.prisma.productVariant.findMany({
-      where: { isActive: true, product: { isActive: true } },
-      include: { product: { include: { privateCost: true } } },
+      where: { product: { isActive: true } },
+      include: { product: { include: { privateCost: true, inventoryLots: { include: { slices:true } } } } },
       orderBy: [{ productId: 'asc' }, { size: 'asc' }],
     });
     return variants.map((v) => ({
@@ -103,7 +106,9 @@ export class AdminPointsService {
       name: v.product.name,
       size: v.size,
       stock: v.stockQty,
-      unitCostCents: configuredManualCost(v.product.privateCost),
+      unitCostCents: v.product.lotManaged ? null : configuredManualCost(v.product.privateCost),
+      lotManaged: v.product.lotManaged,
+      lots: v.product.inventoryLots?.filter(l => (l.profile as any)?.variants?.some((x:any)=>x.id===v.id && x.isActive!==false)).map(l=>({id:l.id,number:l.number,active:l.id===v.product.activeLotId,stock:l.slices.filter(s=>s.variantId===v.id).reduce((n,s)=>n+s.available,0)})),
       currency: v.product.currency,
     }));
   }
@@ -119,9 +124,10 @@ export class AdminPointsService {
         : {}) },
       orderBy: [{ archived: 'asc' }, { createdAt: 'desc' }],
     });
-    const entries = await this.prisma.pointEntry.findMany({
+    const entries = await applyPointCostRevisions(this.prisma, await this.prisma.pointEntry.findMany({
       where: { pointId: { in: points.map((p) => p.id) } },
       select: {
+        id: true,
         pointId: true,
         kind: true,
         occurredAt: true,
@@ -130,7 +136,7 @@ export class AdminPointsService {
         after: true,
         sale:{select:{order:{select:{source:true,excludedFromStatistics:true}}}},
       },
-    });
+    }));
     return points.map((point) => ({
       ...point,
       operationsCount: entries.filter(e=>e.pointId===point.id && (e.expenseCents!==0 || !['POINT_CREATE','POINT_EDIT'].includes(e.kind) || (e.lines as unknown[]).length>0)).length,
@@ -251,17 +257,21 @@ export class AdminPointsService {
       });
       if (
         !variant ||
-        (!previous && (!variant.isActive || !variant.product.isActive))
+        (!previous && ((!variant.isActive && !input.lotId) || !variant.product.isActive))
       )
         throw new BadRequestException(
           `Variante #${input.variantId} no disponible.`,
         );
       if (variant.product.currency !== 'EUR')
         throw new BadRequestException('Los puntos de venta trabajan en EUR.');
+      const selectedLot = input.lotId ? await tx.inventoryLot.findFirst({where:{id:input.lotId,productId:variant.productId}}) : null;
+      if (input.lotId && (!selectedLot || !(selectedLot.profile as any)?.variants?.some((v:any)=>v.id===variant.id))) throw new BadRequestException('La tirada no contiene esa talla.');
+      if (previous?.lotId && input.lotId && previous.lotId!==input.lotId) throw new BadRequestException('Conserva la tirada de la venta original.');
       const cost = previous
         ? previous.unitCostCents
         : historic ? (historic.get(input.variantId) ?? null) : configuredManualCost(variant.product.privateCost);
-      if (cost === null)
+      const lotManaged = variant.product.lotManaged;
+      if (cost === null && !lotManaged)
         throw new BadRequestException(
           `Falta el coste de ${variant.product.name} (#${variant.productId}). Configúralo antes de registrar la venta.`,
         );
@@ -285,11 +295,13 @@ export class AdminPointsService {
         id: previous?.id ?? randomUUID(),
         variantId: variant.id,
         productId: variant.productId,
-        name: previous?.name ?? variant.product.name,
+        lotId: previous?.lotId ?? input.lotId ?? variant.product.activeLotId ?? undefined,
+        name: previous?.name ?? (selectedLot?.profile as any)?.name ?? variant.product.name,
         size: variant.size,
         quantity: input.quantity,
         unitPriceCents: input.unitPriceCents,
-        unitCostCents: cost,
+        unitCostCents: cost ?? 0,
+        ...(lotManaged ? { lotCosts: previous?.lotCosts ?? [] } : {}),
         commissionBp: input.commissionBp,
         commissionCents: fee,
         returned: previous?.returned ?? 0,
@@ -311,20 +323,34 @@ export class AdminPointsService {
     changes: Map<number, number>,
     actor: number,
     entryId: string,
+    knownSource?: string,
+    specificReturns?: Map<number, FrozenLotCost[]>,
+    selectedLots?: Map<number,string>,
   ) {
     for (const [variantId, delta] of [...changes].sort(([a], [b]) => a - b)) {
       if (!delta) continue;
       const changed = await tx.productVariant.updateMany({
         where: {
           id: variantId,
-          ...(delta < 0 ? { stockQty: { gte: -delta } } : {}),
+          ...(delta < 0 && !selectedLots?.has(variantId) ? { stockQty: { gte: -delta } } : {}),
         },
-        data: { stockQty: { increment: delta } },
+        data: { stockQty: { increment: delta < 0 && selectedLots?.has(variantId) ? 0 : delta } },
       });
       if (!changed.count)
         throw new ConflictException(
           `Stock insuficiente en variante #${variantId}.`,
         );
+      let source = knownSource;
+      if (!source) {
+        const entry = await tx.pointEntry.findUniqueOrThrow({ where: { id: entryId } });
+        const sale = await tx.pointSale.findUniqueOrThrow({ where: { id: entry.saleId! } });
+        source = sale.orderId ? 'order:' + sale.orderId : 'point:' + entry.saleId;
+      }
+      if (delta < 0) await allocateLots(tx, variantId, -delta, source, 'SOLD', selectedLots?.get(variantId));
+      else {
+        const parts = specificReturns?.get(variantId);
+        await returnLots(tx, variantId, delta, source, false, parts ? takeCosts(parts, delta) : undefined);
+      }
       await tx.stockMovement.create({
         data: {
           variantId,
@@ -391,8 +417,8 @@ export class AdminPointsService {
           if (order.items.length!==dto.lines.length || new Set(order.items.map(i=>i.variantId)).size!==order.items.length) throw new BadRequestException('Las prendas deben coincidir exactamente con el pedido.');
           order.items.forEach((item,i)=>{
             const line=dto.lines.find(l=>l.variantId===item.variantId);
-            if(!line || line.quantity!==item.quantity || line.unitPriceCents*line.quantity!==cents(item.lineTotal)-discounts[i] || item.financialSnapshot?.unitCostCents==null) throw new BadRequestException('Importes, cantidades y costes históricos deben coincidir con el pedido vinculado.');
-            historic!.set(line.variantId,item.financialSnapshot.unitCostCents);
+            if(!line || line.quantity!==item.quantity || line.unitPriceCents*line.quantity!==cents(item.lineTotal)-discounts[i] || (item.financialSnapshot?.unitCostCents==null && item.financialSnapshot?.lotCosts == null)) throw new BadRequestException('Importes, cantidades y costes históricos deben coincidir con el pedido vinculado.');
+            historic!.set(line.variantId,item.financialSnapshot?.unitCostCents ?? 0);
           });
           // Advance the order version under the shared manual-edit lock. A
           // concurrent serializable editor with an older snapshot must retry.
@@ -423,8 +449,55 @@ export class AdminPointsService {
           ...(before?.lines ?? []).map((l) => lineDelta(l, -1)),
           ...lines.map((l) => lineDelta(l)),
         ];
+        const entryId = randomUUID();
+        const changes = new Map<number, number>();
+        for (const d of deltas)
+          changes.set(
+            d.variantId,
+            (changes.get(d.variantId) ?? 0) - d.unitsSold,
+          );
+        const returnedParts = new Map<number, FrozenLotCost[]>();
+        for (const old of before?.lines ?? []) {
+          const kept = Math.min(old.quantity, lines.find(l => l.id === old.id)?.quantity ?? 0);
+          if (old.lotCosts?.length && old.quantity > kept) returnedParts.set(old.variantId, [...(returnedParts.get(old.variantId) ?? []), ...takeCosts(old.lotCosts, old.quantity-kept, kept)]);
+        }
+        const selectedLots = new Map<number,string>();
+        for (const line of lines) if(line.lotId){if(selectedLots.has(line.variantId) && selectedLots.get(line.variantId)!==line.lotId)throw new BadRequestException('Registra por separado las tiradas distintas de una misma talla.');selectedLots.set(line.variantId,line.lotId);}
+        if (stockHandling === 'DEDUCT_NOW') await this.stock(tx, changes, actor, entryId, sale.orderId ? 'order:' + sale.orderId : 'point:' + sale.id, returnedParts, selectedLots);
+        const pools = new Map<number, FrozenLotCost[]>(), retained = new Map<string, FrozenLotCost[]>();
+        for (const line of lines) {
+          if (!await managedVariant(tx, line.variantId)) continue;
+          if (!pools.has(line.variantId)) {
+            const pool = await sourceCosts(tx, 'point:' + sale.id, line.variantId); pools.set(line.variantId, pool);
+            let missing = lines.filter(l => l.variantId === line.variantId).reduce((s,l) => s+l.quantity,0) - pool.reduce((s,p) => s+p.quantity,0);
+            if (stockHandling === 'DEDUCT_NOW') for (const old of before?.lines.filter(l => l.variantId === line.variantId) ?? []) {
+              const quantity = Math.min(missing, old.quantity); if (quantity <= 0) break;
+              pool.unshift({ lotId: 'unreconciled', sliceId: 'point-historical:' + old.id, quantity, productionCents: null, freightCents: null, otherCents: null, legacyUnitCostCents: old.unitCostCents, quality: 'CONFIRMED' }); missing -= quantity;
+            }
+            if (stockHandling === 'DEDUCT_NOW') for (const current of lines.filter(l => l.variantId === line.variantId)) {
+              const old = before?.lines.find(l => l.id === current.id);
+              const oldParts = old?.lotCosts?.length ? old.lotCosts : pool.filter(p => p.sliceId === 'point-historical:' + old?.id);
+              const kept = old && oldParts.length ? takeCosts(oldParts, Math.min(current.quantity,old.quantity)) : [];
+              removeCostParts(pool, kept); retained.set(current.id, kept);
+            }
+          }
+          const pool = pools.get(line.variantId)!, kept = retained.get(line.id) ?? [];
+          const extra = stockHandling === 'DEDUCT_NOW' ? takeCosts(pool, line.quantity-kept.reduce((s,p) => s+p.quantity,0)) : [];
+          removeCostParts(pool, extra);
+          line.lotCosts = [...kept, ...extra];
+          if (stockHandling === 'ALREADY_ADJUSTED' && line.lotId && !line.lotCosts.length) {
+            line.lotCosts = [{ lotId:line.lotId, sliceId:'historical:'+line.id, quantity:line.quantity, productionCents:null, freightCents:null, otherCents:null, quality:'UNKNOWN' }];
+          }
+          if (sale.orderId) {
+            const linked = await tx.orderItem.findFirst({ where: { orderId: sale.orderId, variantId: line.variantId }, include: { financialSnapshot: true } });
+            if (Array.isArray(linked?.financialSnapshot?.lotCosts)) line.lotCosts = linked!.financialSnapshot!.lotCosts as unknown as NonNullable<PointLine['lotCosts']>;
+          }
+        }
+        const frozenDeltas = [...(before?.lines ?? []).map(l => lineDelta(l, -1)), ...lines.map(l => lineDelta(l))];
+        await tx.pointSale.update({ where: { id: sale.id }, data: { state: json(state) } });
         const entry = await tx.pointEntry.create({
           data: {
+            id: entryId,
             pointId,
             saleId: sale.id,
             requestKey: key,
@@ -435,16 +508,9 @@ export class AdminPointsService {
             description: dto.reason?.trim() || dto.note || 'Venta',
             before: before ? json(before) : Prisma.JsonNull,
             after: json(state),
-            lines: json(deltas),
+            lines: json(frozenDeltas),
           },
         });
-        const changes = new Map<number, number>();
-        for (const d of deltas)
-          changes.set(
-            d.variantId,
-            (changes.get(d.variantId) ?? 0) - d.unitsSold,
-          );
-        if (stockHandling === 'DEDUCT_NOW') await this.stock(tx, changes, actor, entry.id);
         await this.audit(tx, actor, pointId, entry.kind, {
           entryId: entry.id,
           saleId: sale.id,
@@ -468,7 +534,7 @@ export class AdminPointsService {
       if (!sale || sale.pointId !== pointId) throw new NotFoundException('Venta no encontrada.');
       if (sale.revision !== dto.revision || !dto.reason?.trim())
         throw new ConflictException('Indica el motivo y utiliza la revisión actual de la venta.');
-      const entries = await tx.pointEntry.findMany({ where: { saleId }, orderBy: { occurredAt: 'asc' } });
+      const entries = await applyPointCostRevisions(tx, await tx.pointEntry.findMany({ where: { saleId }, orderBy: { occurredAt: 'asc' } }));
       const original = entries.find(entry => entry.kind === 'SALE');
       if (!original) throw new ConflictException('No se encuentra el registro original de la venta.');
       const movement = entries.find(entry => entry.kind !== 'SALE' && !(entry.after as { dateTransfer?: boolean } | null)?.dateTransfer && Array.isArray(entry.lines) && entry.lines.length > 0);
@@ -489,7 +555,7 @@ export class AdminPointsService {
         kind: 'CORRECTION', occurredAt: sale.soldAt, description: `Traslado de la fecha anterior: ${dto.reason.trim()}`,
         before, after: { ...after, dateTransfer: true, salesCountDelta: -1 },
         lines: json(lines.map(line => ({ ...line, revenueCents: -line.revenueCents,
-          costCents: -line.costCents, commissionCents: -line.commissionCents,
+          costCents: line.costCents === null ? null : -line.costCents, commissionCents: -line.commissionCents,
           unitsSold: -line.unitsSold, unitsReturned: -line.unitsReturned }))),
       } });
       await this.audit(tx, actor, pointId, 'SALE_DATE_CHANGE', { saleId, entryId: entry.id, before, after });
@@ -533,6 +599,7 @@ export class AdminPointsService {
           after: PointState = structuredClone(before);
         const deltas: PointDelta[] = [],
           changes = new Map<number, number>();
+        const specificReturns = new Map<number, FrozenLotCost[]>();
         for (const input of dto.lines) {
           const line = after.lines.find((l) => l.id === input.id);
           if (
@@ -543,15 +610,20 @@ export class AdminPointsService {
             throw new BadRequestException(
               'Cantidad o comisión recuperada superior al saldo de la línea.',
             );
+          const returnedParts = line.lotCosts?.length ? takeCosts(line.lotCosts, input.quantity) : undefined;
+          if (input.restock && returnedParts) specificReturns.set(line.variantId, [...(specificReturns.get(line.variantId) ?? []), ...returnedParts]);
+          if (!input.restock) await returnLots(tx, line.variantId, input.quantity, sale.orderId ? 'order:' + sale.orderId : 'point:' + saleId, false, returnedParts, false);
           deltas.push({
             ...lineDelta(line),
+            ...(line.lotCosts?.length ? { lotCosts: takeCosts(line.lotCosts, input.quantity) } : {}),
             revenueCents: -input.quantity * line.unitPriceCents,
-            costCents: input.restock ? -input.quantity * line.unitCostCents : 0,
+            costCents: input.restock ? (line.lotCosts ? (line.lotCosts.length && frozenCost(takeCosts(line.lotCosts, input.quantity)) !== null ? -frozenCost(takeCosts(line.lotCosts, input.quantity))! : null) : -input.quantity * line.unitCostCents) : 0,
             commissionCents: -input.recoveredCommissionCents,
             unitsSold: 0,
             unitsReturned: input.quantity,
           });
           line.quantity -= input.quantity;
+          if (line.lotCosts?.length) line.lotCosts = takeCosts(line.lotCosts, line.quantity, input.quantity);
           line.returned += input.quantity;
           line.commissionCents -= input.recoveredCommissionCents;
           if (input.restock)
@@ -579,7 +651,7 @@ export class AdminPointsService {
             lines: json(deltas),
           },
         });
-        await this.stock(tx, changes, actor, entry.id);
+        await this.stock(tx, changes, actor, entry.id, undefined, specificReturns);
         await this.audit(tx, actor, pointId, entry.kind, { entryId: entry.id });
         return entry;
       },
@@ -637,7 +709,7 @@ export class AdminPointsService {
       async (tx) => {
         const point = await tx.salePoint.findUnique({ where: { id } });
         if (!point) throw new NotFoundException('Punto no encontrado.');
-        const entries = await tx.pointEntry.findMany({
+        const entries = await applyPointCostRevisions(tx, await tx.pointEntry.findMany({
           where: {
             pointId: id,
             occurredAt: {
@@ -647,7 +719,7 @@ export class AdminPointsService {
           },
           orderBy: [{ occurredAt: 'desc' }, { createdAt: 'desc' }],
           include:{sale:{select:{order:{select:{source:true,excludedFromStatistics:true}}}}},
-        });
+        }));
         const sales = await tx.pointSale.findMany({
           where: {
             pointId: id,
