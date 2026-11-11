@@ -1,5 +1,7 @@
 # Puntos de venta: costes congelados y resultados parciales
 
+La recuperación posterior de las siete unidades con una copia de los datos reales y el criterio de tirada estable está documentada en [sale-point-cost-recovery-2026-11-11.md](sale-point-cost-recovery-2026-11-11.md). Ese resultado sustituye las limitaciones de conciliación histórica descritas abajo.
+
 Corrección preparada y verificada por separado en `fix/sale-point-costs-20261111`, basada en `origin/main` / `77b268a8aa036d889a7330530f263b870220132c`. Conserva la publicación de Agotado/Avisarme. No añade migraciones. Tras revisar el resultado local, el usuario autorizó su commit y publicación en cronox.es el 11/11/2026. La publicación no aplica automáticamente las propuestas de conciliación histórica.
 
 ## Diagnóstico reproducido

@@ -718,6 +718,7 @@ async function main() {
       'Real HTTP JWT/Admin guards: anonymous 401, customer 403, administrator 200 for points, private options, detail and finance',
     );
     await require('./test-map-sale-points-fixtures.cjs')({db,points,finance,admin,customer,app,token,userToken,checks});
+    await require('./test-point-cost-evidence-fixtures.cjs')({db,points,admin,checks});
     fs.mkdirSync(path.join(root, 'test-results/sale-points'), {
       recursive: true,
     });
