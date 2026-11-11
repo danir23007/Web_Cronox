@@ -161,7 +161,7 @@ describe('Quick Add size messages and shared delivery', () => {
     document.querySelector<HTMLButtonElement>('#productWaitlist button')!.click();
     await new Promise(resolve => setTimeout(resolve, 0));
     expect(document.querySelectorAll('[data-restock-size][aria-pressed=true]')).toHaveLength(0);
-    expect(requests).toHaveLength(2); // Read-only state checks for both exhausted sizes.
+    expect(requests).toHaveLength(5); // Read-only checks include every size's saved alerts, even after a restock.
     // A restocked chosen size must not silently switch the request to another size.
     const latest = product(2);
     latest.variants[0].stockQty = 1;
@@ -170,6 +170,6 @@ describe('Quick Add size messages and shared delivery', () => {
     await new Promise(resolve => setTimeout(resolve, 0));
     expect(document.querySelector<HTMLAnchorElement>('[data-restock-buy]')!.href).toContain('size=XS');
     expect(document.querySelector('[data-restock-status]')!.textContent).toContain('ya está disponible');
-    expect(requests).toHaveLength(2); // Only the initial GETs, never a POST for a different size.
+    expect(requests).toHaveLength(5); // Only the initial GETs, never a POST for a different size.
   });
 });

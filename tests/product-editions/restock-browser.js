@@ -20,7 +20,7 @@ await page.getByRole('button',{name:'Avisarme de la talla M',exact:true}).click(
 await page.locator('#authLoginEmail').fill(f.users.buyer.email);await page.locator('#authLoginPassword').fill(f.password);await page.locator('#authLoginForm button[type=submit]').click();
 await page.getByText('Te avisaremos cuando vuelva la talla M',{exact:true}).waitFor();
 let saved=await read();check(saved.requests.length===1&&saved.requests[0].userId===f.users.buyer.id&&saved.requests[0].variant.size==='M','Guest auth continuation did not save real subscription');
-await page.getByRole('button',{name:'Avisarme de la talla M',exact:true}).click();await page.getByText('Ya tienes un aviso para esta talla',{exact:true}).waitFor();
+await page.getByRole('button',{name:'Avisarme de la talla M',exact:true}).click();await page.getByText('Ya tienes un aviso para la talla M. Puedes cancelar este aviso.',{exact:true}).waitFor();
 await page.getByRole('button',{name:'Avisarme de la talla L',exact:true}).dblclick();await page.getByText('Te avisaremos cuando vuelva la talla L',{exact:true}).waitFor();
 check((await read()).requests.length===2,'Duplicate click created multiple requests');
 await page.keyboard.press('Escape');await page.waitForFunction(slug=>document.querySelector('.product-card[data-slug="'+slug+'"] .product-restock button')===document.activeElement,f.slug);
@@ -30,7 +30,7 @@ const ring=page.locator('.product-card[data-slug="'+f.extraProducts.ring.slug+'"
 check(await page.locator('[data-restock-size]').allTextContents().then(x=>x.join(',')==='US 8,US 9'),'Ring sizes/order incorrect');
 await page.request.post(f.origin+'/__review/restock',{data:{op:'fault',enabled:true}});
 await page.getByRole('button',{name:'Avisarme de la talla US 8',exact:true}).click();await page.getByRole('button',{name:'Reintentar',exact:true}).waitFor();
-check(await page.locator('[data-restock-size=US_8]').getAttribute('aria-pressed')==='true','Error lost size selection');check((await read()).requests.length===2,'Failed insert created subscription');
+check(await page.locator('[data-restock-size=US_8]').getAttribute('aria-pressed')==='false','Failed request was marked active');check((await read()).requests.length===2,'Failed insert created subscription');
 await page.request.post(f.origin+'/__review/restock',{data:{op:'fault',enabled:false}});await page.getByRole('button',{name:'Reintentar',exact:true}).click();await page.getByText('Te avisaremos cuando vuelva la talla US 8',{exact:true}).waitFor();
 await page.keyboard.press('Escape');
 // Public page uses the same immediate registration action with the chosen size.

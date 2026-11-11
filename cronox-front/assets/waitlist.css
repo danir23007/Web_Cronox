@@ -14,9 +14,13 @@
 .restock-dialog button,.restock-dialog a{font:inherit;min-height:44px;color:#000;background:transparent;border:1px solid #000;border-radius:0;padding:10px 14px;cursor:pointer;}
 .restock-dialog .restock-close{position:absolute;right:8px;top:8px;border:0;font-size:24px;}
 .restock-sizes{display:flex;flex-wrap:wrap;gap:10px;}
+.restock-sizes button{transition:background-color .16s ease,color .16s ease;}
+@media(hover:hover) and (pointer:fine){.restock-sizes button:not(:disabled):hover{background:#000;color:#fff;}}
+@media(prefers-reduced-motion:reduce){.restock-sizes button{transition:none;}}
 .restock-sizes button[aria-pressed=true]{background:#000;color:#fff;}
 .restock-sizes button:disabled{cursor:wait;}
 .restock-dialog [data-restock-status]{min-height:3em;}
+.restock-dialog [data-restock-subscriptions]:not([hidden]) ~ [data-restock-status]:empty{display:none;}
 .restock-dialog :focus-visible{outline:2px solid #000;outline-offset:3px;}
 .restock-dialog .restock-help{color:#444;}
 .restock-panel button{width:100%;}

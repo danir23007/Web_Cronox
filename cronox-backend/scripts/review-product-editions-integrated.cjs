@@ -3,10 +3,13 @@
 // only external Stripe, email and object storage are replaced at their boundary.
 const fs=require('node:fs'),path=require('node:path'),assert=require('node:assert/strict');
 const {spawnSync}=require('node:child_process'),{randomUUID,randomBytes}=require('node:crypto'),{Client}=require('pg');
-const restockReview=process.argv.includes('--restock');
+const restockSelection=process.argv.includes('--restock-selection');
+const favoritePrices=process.argv.includes('--favorite-prices');
+const restockReview=process.argv.includes('--restock')||restockSelection;
 const pointCostsReview=process.argv.includes('--point-costs');
-const backend=path.resolve(__dirname,'..'),root=path.resolve(backend,'..'),out=path.join(root,'output/playwright',pointCostsReview?'point-costs':restockReview?'restock-flow':process.argv.includes('--editor-save')?'editions-editor-save':'editions-integrated');
-const port=pointCostsReview?43132:43131,origin='http://127.0.0.1:'+port,name='cronox_editions_ui_'+randomUUID().replaceAll('-','');
+const realCostsFile=process.argv.find(a=>a.startsWith('--real-point-costs='))?.slice('--real-point-costs='.length);
+const backend=path.resolve(__dirname,'..'),root=path.resolve(backend,'..'),out=path.join(root,'output/playwright',favoritePrices?'favorite-prices':pointCostsReview?'point-costs':restockSelection?'restock-selection':restockReview?'restock-flow':process.argv.includes('--editor-save')?'editions-editor-save':'editions-integrated');
+const port=favoritePrices?43134:realCostsFile?43133:pointCostsReview?43132:43131,origin='http://127.0.0.1:'+port,name='cronox_editions_ui_'+randomUUID().replaceAll('-','');
 async function main(){
   const env=require('./start-local.cjs').loadLocalEnvironment(),source=new URL(env.DATABASE_URL);source.search='';
   assert.ok(['127.0.0.1','localhost','[::1]'].includes(source.hostname));
@@ -16,7 +19,7 @@ async function main(){
     await control.connect();assert.ok(['127.0.0.1','::1'].includes((await control.query('SELECT host(inet_server_addr()) AS host')).rows[0].host));
     const dump=path.join(out,'source-local.dump'),bin='C:/Program Files/PostgreSQL/17/bin';
     const run=(tool,args,url)=>{const r=spawnSync(path.join(bin,tool+'.exe'),args,{windowsHide:true,encoding:'utf8',env:{...process.env,PGHOST:url.hostname,PGPORT:url.port||'5432',PGUSER:decodeURIComponent(url.username),PGPASSWORD:decodeURIComponent(url.password),PGDATABASE:decodeURIComponent(url.pathname.slice(1))}});assert.equal(r.status,0,tool+' failed');};
-    run('pg_dump',['--format=custom','--no-owner','--no-acl','--file',dump],source);
+    run('pg_dump',['--format=custom','--no-owner','--no-acl',...(realCostsFile?['--schema-only']:[]),'--file',dump],source);
     await control.query(`CREATE DATABASE "${name}" TEMPLATE template0`);created=true;
     const target=new URL(source);target.pathname='/'+name;run('pg_restore',['--no-owner','--no-acl','--exit-on-error','--dbname',name,dump],target);
     Object.assign(process.env,env,{DATABASE_URL:target.href,DIRECT_URL:target.href,USER_NUMBERING_DATABASE_URL:target.href,FRONTEND_URL:origin,API_PUBLIC_URL:origin,CORS_ORIGINS:origin,PORT:String(port),EMAIL_ENABLED:'false',BACKGROUND_JOBS_ENABLED:'false',CRONOX_ROUTE_SMOKE_MODE:'true',CRONOX_LOCAL_CHECKOUT_TEST:'false',CHECKOUT_RESERVATION_WORKER_ENABLED:'false',STRIPE_WEBHOOK_WORKER_ENABLED:'false',MAILBOX_SEND_ENABLED:'false',MAILBOX_WORKER_ENABLED:'false',NEWSLETTER_EMAIL_WORKER_ENABLED:'false',STRIPE_SECRET_KEY:'sk_test_integrated_fixture_not_real',STRIPE_PUBLISHABLE_KEY:'pk_test_integrated_fixture_not_real',STRIPE_WEBHOOK_SECRET:'whsec_integrated_fixture_not_real',JWT_ACCESS_SECRET:'integrated-only-access-secret-73f4290d',JWT_REFRESH_SECRET:'integrated-only-refresh-secret-19342ad8',RATE_LIMIT_MAX:'10000',RATE_LIMIT_TTL_MS:'1000'});
@@ -24,15 +27,17 @@ async function main(){
     require('ts-node').register({project:path.join(backend,'tsconfig.json'),transpileOnly:true});require('reflect-metadata');
     const {PrismaService}=require('../src/prisma/prisma.service');db=new PrismaService();await db.$connect();
     assert.equal((await db.$queryRaw`SELECT current_database() AS name`)[0].name,name);
+    if(realCostsFile)await db.$executeRawUnsafe('INSERT INTO "UserNumberingState" (id,"nextId",revision,ready) VALUES (1,1,0,true)');
     const password='EdicionesPrueba1!',hash=await require('bcrypt').hash(password,10),users={};
     for(const [key,role] of [['admin','SUPERADMIN'],['buyer','USER'],['stale','USER'],['reserved','USER'],['raceA','USER'],['raceB','USER'],['limited','ADMIN']])users[key]=await db.user.create({data:{email:key.toLowerCase()+'-'+name+'@example.test',password:hash,firstName:'Prueba',lastName:'Lotes',role}});
+    if(realCostsFile)await require('./import-point-costs-review.cjs')({db,file:realCostsFile,actorId:users.admin.id,database:name});
     const assetDir=path.join(out,'assets');fs.mkdirSync(assetDir,{recursive:true});
     const sharp=require('sharp');
     for(const [file,color] of [['first.png','#34495e'],['second.png','#b03a2e']]){
-      const image=restockReview?sharp(path.join(root,'cronox-front/assets/products',file==='first.png'?'camiseta_washed_gris.png':'camiseta_washed_negra.png')):sharp({create:{width:320,height:400,channels:3,background:color}});
+      const image=restockSelection&&fs.existsSync(path.join(out,'ashen-shell.png'))?sharp(path.join(out,'ashen-shell.png')):restockReview?sharp(path.join(root,'cronox-front/assets/products',file==='first.png'?'camiseta_washed_gris.png':'camiseta_washed_negra.png')):sharp({create:{width:320,height:400,channels:3,background:color}});
       await image.resize(320,400,{fit:'contain',background:'#fff'}).png().toFile(path.join(assetDir,file));
     }
-    const product=await db.product.create({data:{name:'PRUEBA LOTES INTEGRADA',slug:'prueba-lotes-integrada-'+Date.now(),price:9000,displayOrder:-999,description:'Composición primera tirada: algodón de prueba.',collection:'prueba-local',imageUrl:origin+'/__review/assets/first.png',images:{create:{url:origin+'/__review/assets/first.png',alt:'Imagen de prueba de la primera tirada',isActive:true,isPrimary:true}},privateCost:{create:{unitCostCents:2500}},variants:{create:[{size:'M',sku:name+'-M',stockQty:0},{size:'L',sku:name+'-L',stockQty:0}]}}});
+    const product=await db.product.create({data:{name:restockSelection?'ASHEN SHELL':'PRUEBA LOTES INTEGRADA',slug:'prueba-lotes-integrada-'+Date.now(),price:restockSelection?11000:9000,displayOrder:-999,description:'Composición primera tirada: algodón de prueba.',collection:'prueba-local',imageUrl:origin+'/__review/assets/first.png',images:{create:{url:origin+'/__review/assets/first.png',alt:'Imagen de prueba de la primera tirada',isActive:true,isPrimary:true}},privateCost:{create:{unitCostCents:2500}},variants:{create:(restockSelection?['XS','S','M','L','XL','XXL']:['M','L']).map(size=>({size,sku:name+'-'+size,stockQty:0}))}}});
     if(process.argv.includes('--editor-save')) {
       // Known historical transport belongs to this synthetic closed sale. It
       // must never be added again by the revised editor's inclusive unit cost.
@@ -58,7 +63,7 @@ async function main(){
       await db.$executeRawUnsafe('CREATE TABLE "RestockReviewFault" (enabled BOOLEAN NOT NULL DEFAULT false)');
       await db.$executeRawUnsafe('INSERT INTO "RestockReviewFault" VALUES (false)');
       await db.$executeRawUnsafe(`CREATE FUNCTION cronox_restock_review_fault() RETURNS TRIGGER LANGUAGE plpgsql AS $$ BEGIN IF EXISTS(SELECT 1 FROM "RestockReviewFault" WHERE enabled) THEN RAISE EXCEPTION 'CONTROLLED_RESTOCK_FAILURE'; END IF; RETURN NEW; END $$`);
-      await db.$executeRawUnsafe('CREATE TRIGGER restock_review_fault BEFORE INSERT ON "RestockRequest" FOR EACH ROW EXECUTE FUNCTION cronox_restock_review_fault()');
+      await db.$executeRawUnsafe('CREATE TRIGGER restock_review_fault BEFORE INSERT OR UPDATE ON "RestockRequest" FOR EACH ROW EXECUTE FUNCTION cronox_restock_review_fault()');
     }
     const {Test}=require('@nestjs/testing'),{AppModule}=require('../src/app.module'),{EmailService}=require('../src/email/email.service');
     const emails=[];const mail=new Proxy({isEnabled:()=>true},{get:(target,key)=>key==='then'?undefined:key in target?target[key]:async(...args)=>{emails.push({method:String(key),to:args[0]?.to??args[0]});return true;}});
@@ -88,10 +93,20 @@ async function main(){
     const state=async()=>({product:await db.product.findUnique({where:{id:product.id},include:{variants:true,images:true,categories:true}}),lots:await db.inventoryLot.findMany({where:{productId:product.id},orderBy:{number:'asc'},include:{slices:{include:{allocations:true}},history:{orderBy:{createdAt:'desc'}}}}),orders:await db.order.findMany({where:{items:{some:{productId:product.id}}},include:{items:{include:{financialSnapshot:true}}},orderBy:{id:'asc'}}),snapshots:await db.checkoutSnapshot.findMany({where:{items:{some:{productId:product.id}}},include:{items:{include:{financialSnapshot:true}},stockReservations:true},orderBy:{createdAt:'asc'}}),points:await db.pointSale.findMany({where:{point:{name:{startsWith:'INTEGRACIÓN LOTES'}}}}),emails:emails.map(e=>({method:e.method}))});
     let stop;const stopped=new Promise(resolve=>stop=resolve);
     const pointCosts=pointCostsReview ? await require('./review-point-costs-fixtures.cjs')({db,app,users,root,out,origin}) : undefined;
+    const favoritePriceFixture=favoritePrices?await require('./review-favorite-prices-fixtures.cjs')({db,app,users,root,out,origin}):undefined;
+    if(restockSelection){
+      const waitlist=app.get(require('../src/waitlist/waitlist.service').WaitlistService);
+      for(const v of await db.productVariant.findMany({where:{productId:product.id,size:{in:['XS','M']}}}))await waitlist.join(users.buyer.id,v.id);
+    }
     if(restockReview){
       app.use('/__review/restock',async(req,res)=>{try{
         const editions=app.get(require('../src/admin/lots/product-editions.service').ProductEditionsService),waitlist=app.get(require('../src/waitlist/waitlist.service').WaitlistService);
         const dto=req.body||{};
+        if(restockSelection&&dto.op==='reset-selection'){
+          const all=await db.productVariant.findMany({where:{productId:product.id}});
+          for(const v of all)await waitlist.cancel(users.buyer.id,v.id);
+          for(const v of all.filter(v=>['XS','M'].includes(v.size)))await waitlist.join(users.buyer.id,v.id);
+        }
         if(dto.op==='fault')await db.$executeRaw`UPDATE "RestockReviewFault" SET enabled=${Boolean(dto.enabled)}`;
         if(dto.op==='receive'){
           const state=await editions.list(product.id),lot=state.lots.find(l=>l.id===state.product.activeLotId);
@@ -132,7 +147,7 @@ async function main(){
     app.use((req,res,next)=>{if(req.method!=='GET')return next();const file=cleanPageForPath(req.path)||(req.path.endsWith('.html')?path.basename(req.path):null);if(file&&fs.existsSync(path.join(root,'cronox-front',file))){let html=fs.readFileSync(path.join(root,'cronox-front',file),'utf8').replace('<html ',`<html data-cronox-api-base="${origin}" `);return res.type('html').set('Cache-Control','no-store').send(html);}next();});
     app.use(express.static(path.join(root,'cronox-front/public')));app.use(express.static(path.join(root,'cronox-front')));
     await app.listen(port,'127.0.0.1');
-    const fixture={origin,database:name,productId:product.id,slug:product.slug,extraProducts,pointCosts,users:Object.fromEntries(Object.entries(users).map(([key,user])=>[key,{id:user.id,email:user.email}])),password,image2:path.join(assetDir,'second.png')};
+    const fixture={origin,database:name,productId:product.id,slug:product.slug,extraProducts,pointCosts,favoritePriceFixture,users:Object.fromEntries(Object.entries(users).map(([key,user])=>[key,{id:user.id,email:user.email}])),password,image2:path.join(assetDir,'second.png')};
     fs.writeFileSync(path.join(out,'fixture.json'),JSON.stringify(fixture,null,2));console.log(JSON.stringify({ready:true,origin,database:name,productId:product.id,externalPayments:'simulated',email:'in-memory',storage:'local-files'}));
     await stopped;
   }finally{if(app)await app.close();if(db)await db.$disconnect();if(created){assert.match(name,/^cronox_editions_ui_[a-f0-9]{32}$/);await control.query(`DROP DATABASE "${name}" WITH (FORCE)`);fs.writeFileSync(path.join(out,'cleanup.json'),JSON.stringify({database:name,removed:true,sourceUnchanged:true}));}await control.end();}

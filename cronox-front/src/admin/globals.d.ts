@@ -175,6 +175,7 @@ declare global {
   interface CronoxApi {
     API_BASE: string;
     formatPrice: (value: number) => string;
+    normalizeProductResponse: (product: Record<string, unknown>) => Record<string, unknown> | null;
     getFallbackProducts: () => unknown[];
     getCsrfHeaders: () => Promise<Record<string, string>>;
     classifyApiError: (error?: unknown) => CronoxApiErrorClassification;

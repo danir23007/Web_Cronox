@@ -224,17 +224,18 @@ describe('initial Quick Add size and current availability', () => {
     app.history.replaceState(null, '', '/producto/chosen?waitlist=11&size=S#productWaitlist');
     app.CRONOX_USER = { id: 1 }; app.CRONOX_AUTH_READY = Promise.resolve();
     let resolveRead: (result: unknown) => void = () => {};
-    app.fetch = () => new Promise(resolve => { resolveRead = resolve; });
+    const readStates = new Promise(resolve => { resolveRead = resolve; });
+    app.fetch = () => readStates;
     app.eval(read('waitlist.js'));
     const anchor = document.createElement('div'); document.body.appendChild(anchor);
     app.CRONOX_WAITLIST.mount(data(), anchor);
     void app.CRONOX_WAITLIST.open(data(), { size: 'S' });
     const select = document.querySelector('[data-restock-size=S]') as HTMLButtonElement;
-    expect(select.getAttribute('aria-pressed')).toBe('true');
+    expect(select.getAttribute('aria-pressed')).toBe('false');
     await tick(); resolveRead({ ok: true, json: async () => ({ subscription: null }) }); await tick();
     await new Promise(resolve => app.requestAnimationFrame(resolve));
     expect(select.disabled).toBe(false); expect(document.activeElement).toBe(select);
-    expect(select.getAttribute('aria-pressed')).toBe('true');
+    expect(select.getAttribute('aria-pressed')).toBe('false');
     dom.window.close();
   });
   it('an alert entry that is no longer exhausted offers buying without substituting another size', async () => {
@@ -242,7 +243,8 @@ describe('initial Quick Add size and current availability', () => {
     app.history.replaceState(null, '', '/producto/chosen?waitlist=10&size=M#productWaitlist');
     app.eval(read('waitlist.js'));
     app.CRONOX_USER = { id: 1 }; app.CRONOX_AUTH_READY = Promise.resolve();
-    const post = jest.fn(); app.fetch = post;
+    const post = jest.fn(); app.fetch = (_url: string, options: {method?:string}) => options?.method === 'GET'
+      ? Promise.resolve({ok:true,json:async()=>({subscription:null})}) : post();
     const anchor = document.createElement('div'); document.body.appendChild(anchor);
     app.CRONOX_WAITLIST.mount(data(), anchor);
     await app.CRONOX_WAITLIST.open(data(), { size: 'M', submit: true }); await tick();

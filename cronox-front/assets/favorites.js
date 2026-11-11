@@ -1,16 +1,7 @@
 (function () {
   const LOGIN_PAGE_URL = '/';
 
-  function formatPriceFromCents(priceInCents) {
-    const euros = Number(priceInCents || 0) / 100;
-    return euros.toFixed(2).replace('.', ',') + ' €';
-  }
-
   const apiEndpoint = (path) => (window.CRONOX_API?.API_BASE || '') + path;
-  const safeProductImage = (value, fallback = window.CRONOX_PRODUCT_PLACEHOLDER || 'assets/product-image-unavailable.svg') => {
-    const helper = window.CRONOX_SECURITY?.productImageUrl;
-    return typeof helper === 'function' ? helper(value, fallback) : fallback;
-  };
   let favoriteIdsSet = new Set();
 
   const syncFavoritesDom = () => {
@@ -18,8 +9,6 @@
       window.CRONOX_syncFavoritesDom();
     }
   };
-
-  window.formatPriceFromCents = window.formatPriceFromCents || formatPriceFromCents;
 
   const refs = {
     loading: document.getElementById('favorites-loading'),
@@ -95,6 +84,7 @@
     const res = await fetch(apiEndpoint('/api/favorites/products'), {
       method: 'GET',
       credentials: 'include',
+      cache: 'no-store',
     });
 
     if (!res.ok) {
@@ -107,52 +97,10 @@
   }
 
   function normalizeFavorite(item) {
+    // FavoritesManager and /favorites/products contain wire Product records:
+    // price is integer cents, exactly like /products. Use the same mapper.
     const product = item?.product || item || {};
-    const images = Array.isArray(product.images)
-      ? product.images
-          .map((img) => (typeof img === 'string' ? img : img?.url || img?.imageUrl))
-          .map((image) => safeProductImage(image, ''))
-          .filter(Boolean)
-      : [];
-
-    const priceRaw = product.priceCents ?? product.price ?? product.price_in_cents;
-    let priceInCents = Number(priceRaw || 0);
-    if (priceInCents > 0 && priceInCents < 100) {
-      priceInCents = Math.round(priceInCents * 100);
-    }
-
-    return {
-      id: product.id ?? item?.productId ?? item?.id ?? '',
-      slug: product.slug,
-      name: product.name || 'Producto',
-      priceInCents,
-      image: safeProductImage(product.imageUrl || product.image || images[0], ''),
-      images: images.length
-        ? images
-        : (product.image ? [safeProductImage(product.image, '')].filter(Boolean) : []),
-      backendId: product.backendId ?? product.id ?? item?.productId,
-      variants: product.variants,
-      lastUnitsThreshold: product.lastUnitsThreshold ?? null,
-      imageRecords: product.imageRecords || product.galleryImages || (Array.isArray(product.images) ? product.images : []),
-    };
-  }
-
-  function findCatalogProduct(fav) {
-    const catalog = Array.isArray(window.CRONOX_PRODUCTS) ? window.CRONOX_PRODUCTS : [];
-    if (!catalog.length) return null;
-
-    const id = (fav?.backendId ?? fav?.id ?? fav?.productId ?? '').toString();
-    const slug = fav?.slug;
-
-    const bySlug = slug ? catalog.find((p) => p.slug === slug) : null;
-    if (bySlug) return bySlug;
-
-    if (id) {
-      const byId = catalog.find((p) => p.id === id || (p.backendId != null && String(p.backendId) === id));
-      if (byId) return byId;
-    }
-
-    return null;
+    return window.CRONOX_API.normalizeProductResponse(product);
   }
 
   const updateFavoriteIdsSet = (list) => {
@@ -178,7 +126,7 @@
   const normalizeFavoritesList = (list) =>
     (Array.isArray(list) ? list : [])
       .map(normalizeFavorite)
-      .filter((fav) => fav.id);
+      .filter((fav) => fav?.id);
 
   const signatureFromIds = (idsLike) => {
     const ids = idsLike instanceof Set ? Array.from(idsLike) : Array.from(idsLike || []);
@@ -219,18 +167,7 @@
 
     const frag = document.createDocumentFragment();
     favorites.forEach((fav) => {
-      const catalogProduct = findCatalogProduct(fav);
-      const cardData = catalogProduct ? { ...catalogProduct, variants: fav.variants, lastUnitsThreshold: fav.lastUnitsThreshold } : {
-        ...fav,
-        id: String(fav.id || fav.backendId || ''),
-        backendId: fav.backendId,
-        price: Number(fav.priceInCents || 0) / 100,
-        priceLabel: formatPriceFromCents(fav.priceInCents),
-        images: Array.isArray(fav.images) && fav.images.length ? fav.images : (fav.image ? [fav.image] : []),
-        imageRecords: fav.imageRecords || [],
-        galleryImages: fav.imageRecords || [],
-      };
-      const card = cardBuilder(cardData);
+      const card = cardBuilder(fav);
       frag.appendChild(card);
     });
     refs.grid.appendChild(frag);
@@ -267,12 +204,6 @@
       const epoch = window.CRONOX_FAVORITES?.sessionEpoch;
       const favorites = await fetchFavoriteProducts(force);
       const revision = window.CRONOX_FAVORITES?.revision;
-
-      if (window.CRONOX_catalogReady instanceof Promise) {
-        try {
-          await window.CRONOX_catalogReady;
-        } catch {}
-      }
 
       if (flowId !== favoriteFlowId || epoch !== window.CRONOX_FAVORITES?.sessionEpoch || revision !== window.CRONOX_FAVORITES?.revision) return;
       const normalized = normalizeFavoritesList(favorites);
@@ -317,6 +248,8 @@
   document.addEventListener('DOMContentLoaded', loadFavoritesFlow);
   window.addEventListener('cronox:favsChanged', handleFavsChanged);
   window.addEventListener('pageshow', event => { if (event.persisted) void loadFavoritesFlow({ force: true }); });
+  window.addEventListener('focus', () => { if (favoritesLoaded) void loadFavoritesFlow({ force: true }); });
+  document.addEventListener('visibilitychange', () => { if (favoritesLoaded && document.visibilityState === 'visible') void loadFavoritesFlow({ force: true }); });
   const handleSessionChange = event => {
     if (event.initial && event.detail) return;
     favoriteFlowId += 1;

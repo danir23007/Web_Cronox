@@ -960,6 +960,9 @@ import { loadCategoryPages } from './category-pagination';
   const api = {
     API_BASE,
     formatPrice,
+    // Wire Product.price is integer cents. The shared view model exposes
+    // priceCents (cents), price (euros), and priceLabel; convert only here.
+    normalizeProductResponse: mapProduct,
     getFallbackProducts,
     getCsrfHeaders,
     classifyApiError,
@@ -1636,7 +1639,7 @@ import { loadCategoryPages } from './category-pagination';
 
   api.getFavorites = async () => {
     // [FAVORITES_BACKEND_ONLY] [FAVORITES_FIX]
-    const data = await request('/api/favorites');
+    const data = await request('/api/favorites', { cache: 'no-store' });
     return Array.isArray(data)
       ? data.map((item) => ({
           id: item.id ?? item.productId,

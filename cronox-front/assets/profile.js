@@ -35,7 +35,7 @@
   const getCircleUpgradeStatusEl = () => document.querySelector('[data-circle4-status]');
   const getCircleUpgradeCooldownEl = () => document.querySelector('[data-circle4-cooldown]');
 
-  let favoritesLoaded = false;
+  let favoritesRequestPending = false;
   let accreditationQrLoaded = false;
   let accreditationLoadSequence = 0;
   let accreditationStatsSequence = 0;
@@ -344,12 +344,6 @@
     return result || '—';
   };
 
-  const normalizeCentsValue = (value) => {
-    let cents = Number(value ?? 0);
-    if (cents > 0 && cents < 100) cents = Math.round(cents * 100);
-    return cents;
-  };
-
   const buildDisplayName = (user) => {
     if (!user) return '';
     const name = [user.firstName, user.lastName].filter(Boolean).join(' ').trim();
@@ -420,29 +414,6 @@
     renderCircleSymbol(normalized);
 
     return normalized;
-  };
-
-  const formatPriceFromCents = (valueInCents) => {
-    const cents = normalizeCentsValue(valueInCents);
-    if (typeof window.formatPriceFromCents === 'function') {
-      return window.formatPriceFromCents(cents);
-    }
-
-    const amount = (Number(cents) || 0) / 100;
-    if (typeof api.formatPrice === 'function') {
-      return api.formatPrice(amount);
-    }
-
-    try {
-      return amount.toLocaleString('es-ES', {
-        style: 'currency',
-        currency: 'EUR',
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 2,
-      });
-    } catch (error) {
-      return `${amount.toFixed(2)} €`;
-    }
   };
 
   const renderOrders = (orders) => {
@@ -1239,40 +1210,9 @@
     }
   };
 
-  const normalizeFavoriteProduct = (favorite) => {
-    const product = favorite?.product || favorite || {};
-    const images = Array.isArray(product.images)
-      ? product.images
-          .map((img) => (typeof img === 'string' ? img : img?.url || img?.imageUrl || img?.image))
-          .map((image) => safeProductImage(image, ''))
-          .filter(Boolean)
-      : [];
-
-    const priceInCents = normalizeCentsValue(
-      product.price ?? product.priceCents ?? product.price_in_cents ?? product.priceInCents ?? 0
-    );
-    const priceLabel = formatPriceFromCents(priceInCents);
-    const imageList = images.length
-      ? images
-      : product.image
-        ? [safeProductImage(product.image, '')].filter(Boolean)
-        : [];
-
-    return {
-      id: product.id ?? favorite?.id ?? favorite?.productId,
-      backendId: product.backendId ?? product.id ?? favorite?.productId,
-      variants: product.variants,
-      lastUnitsThreshold: product.lastUnitsThreshold ?? null,
-      slug: product.slug,
-      name: product.name || 'Producto',
-      priceInCents,
-      priceLabel,
-      price: priceInCents / 100,
-      image: safeProductImage(product.imageUrl || product.image || images[0], ''),
-      images: imageList,
-      imageRecords: product.imageRecords || product.galleryImages || (Array.isArray(product.images) ? product.images : []),
-    };
-  };
+  // api.getFavorites already returns the catalogue view model: priceCents in
+  // cents, price in euros, priceLabel ready to render. Do not infer units again.
+  const normalizeFavoriteProduct = favorite => favorite?.product || favorite || {};
 
   const updateFavoritesState = ({ loading = false, empty = false } = {}) => {
     if (favoritesLoading) favoritesLoading.hidden = !loading;
@@ -1313,8 +1253,8 @@
   };
 
   const loadFavorites = async () => {
-    if (!api.getFavorites || favoritesLoaded) return;
-    favoritesLoaded = true;
+    if (!api.getFavorites || favoritesRequestPending) return;
+    favoritesRequestPending = true;
     updateFavoritesState({ loading: true, empty: false });
 
     try {
@@ -1332,8 +1272,9 @@
     } catch (err) {
       if (handleAuthRedirect(err)) return;
       console.warn('[PROFILE] No se pudieron cargar los favoritos', err);
-      favoritesLoaded = false;
       updateFavoritesState({ loading: false, empty: true });
+    } finally {
+      favoritesRequestPending = false;
     }
   };
 
@@ -1841,6 +1782,12 @@
     window.addEventListener('focus', resumePromotions);
     window.addEventListener('pageshow', resumePromotions);
     document.addEventListener('visibilitychange', resumePromotions);
+    const resumeFavorites = () => {
+      if (document.visibilityState !== 'hidden' && document.querySelector('[data-profile-section="favorites"].is-active')) void loadFavorites();
+    };
+    window.addEventListener('focus', resumeFavorites);
+    window.addEventListener('pageshow', event => { if (event.persisted) resumeFavorites(); });
+    document.addEventListener('visibilitychange', resumeFavorites);
     window.addEventListener('storage', event => {
       if (event.key !== 'cronox_circle_request_updated') return;
       try { if (JSON.parse(event.newValue)?.userId === window.CRONOX_USER?.id) resumePromotions(); } catch {}
