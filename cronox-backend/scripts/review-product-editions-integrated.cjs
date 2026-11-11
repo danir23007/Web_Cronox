@@ -4,8 +4,9 @@
 const fs=require('node:fs'),path=require('node:path'),assert=require('node:assert/strict');
 const {spawnSync}=require('node:child_process'),{randomUUID,randomBytes}=require('node:crypto'),{Client}=require('pg');
 const restockReview=process.argv.includes('--restock');
-const backend=path.resolve(__dirname,'..'),root=path.resolve(backend,'..'),out=path.join(root,'output/playwright',restockReview?'restock-flow':process.argv.includes('--editor-save')?'editions-editor-save':'editions-integrated');
-const port=43131,origin='http://127.0.0.1:'+port,name='cronox_editions_ui_'+randomUUID().replaceAll('-','');
+const pointCostsReview=process.argv.includes('--point-costs');
+const backend=path.resolve(__dirname,'..'),root=path.resolve(backend,'..'),out=path.join(root,'output/playwright',pointCostsReview?'point-costs':restockReview?'restock-flow':process.argv.includes('--editor-save')?'editions-editor-save':'editions-integrated');
+const port=pointCostsReview?43132:43131,origin='http://127.0.0.1:'+port,name='cronox_editions_ui_'+randomUUID().replaceAll('-','');
 async function main(){
   const env=require('./start-local.cjs').loadLocalEnvironment(),source=new URL(env.DATABASE_URL);source.search='';
   assert.ok(['127.0.0.1','localhost','[::1]'].includes(source.hostname));
@@ -86,6 +87,7 @@ async function main(){
     const realFetch=global.fetch;global.fetch=(url,options)=>{const parsed=new URL(typeof url==='string'?url:url.url??url.href);if(!['127.0.0.1','localhost','[::1]'].includes(parsed.hostname))throw Error('External network blocked in integrated review: '+parsed.hostname);return realFetch(url,options);};
     const state=async()=>({product:await db.product.findUnique({where:{id:product.id},include:{variants:true,images:true,categories:true}}),lots:await db.inventoryLot.findMany({where:{productId:product.id},orderBy:{number:'asc'},include:{slices:{include:{allocations:true}},history:{orderBy:{createdAt:'desc'}}}}),orders:await db.order.findMany({where:{items:{some:{productId:product.id}}},include:{items:{include:{financialSnapshot:true}}},orderBy:{id:'asc'}}),snapshots:await db.checkoutSnapshot.findMany({where:{items:{some:{productId:product.id}}},include:{items:{include:{financialSnapshot:true}},stockReservations:true},orderBy:{createdAt:'asc'}}),points:await db.pointSale.findMany({where:{point:{name:{startsWith:'INTEGRACIÓN LOTES'}}}}),emails:emails.map(e=>({method:e.method}))});
     let stop;const stopped=new Promise(resolve=>stop=resolve);
+    const pointCosts=pointCostsReview ? await require('./review-point-costs-fixtures.cjs')({db,app,users,root,out,origin}) : undefined;
     if(restockReview){
       app.use('/__review/restock',async(req,res)=>{try{
         const editions=app.get(require('../src/admin/lots/product-editions.service').ProductEditionsService),waitlist=app.get(require('../src/waitlist/waitlist.service').WaitlistService);
@@ -130,7 +132,7 @@ async function main(){
     app.use((req,res,next)=>{if(req.method!=='GET')return next();const file=cleanPageForPath(req.path)||(req.path.endsWith('.html')?path.basename(req.path):null);if(file&&fs.existsSync(path.join(root,'cronox-front',file))){let html=fs.readFileSync(path.join(root,'cronox-front',file),'utf8').replace('<html ',`<html data-cronox-api-base="${origin}" `);return res.type('html').set('Cache-Control','no-store').send(html);}next();});
     app.use(express.static(path.join(root,'cronox-front/public')));app.use(express.static(path.join(root,'cronox-front')));
     await app.listen(port,'127.0.0.1');
-    const fixture={origin,database:name,productId:product.id,slug:product.slug,extraProducts,users:Object.fromEntries(Object.entries(users).map(([key,user])=>[key,{id:user.id,email:user.email}])),password,image2:path.join(assetDir,'second.png')};
+    const fixture={origin,database:name,productId:product.id,slug:product.slug,extraProducts,pointCosts,users:Object.fromEntries(Object.entries(users).map(([key,user])=>[key,{id:user.id,email:user.email}])),password,image2:path.join(assetDir,'second.png')};
     fs.writeFileSync(path.join(out,'fixture.json'),JSON.stringify(fixture,null,2));console.log(JSON.stringify({ready:true,origin,database:name,productId:product.id,externalPayments:'simulated',email:'in-memory',storage:'local-files'}));
     await stopped;
   }finally{if(app)await app.close();if(db)await db.$disconnect();if(created){assert.match(name,/^cronox_editions_ui_[a-f0-9]{32}$/);await control.query(`DROP DATABASE "${name}" WITH (FORCE)`);fs.writeFileSync(path.join(out,'cleanup.json'),JSON.stringify({database:name,removed:true,sourceUnchanged:true}));}await control.end();}

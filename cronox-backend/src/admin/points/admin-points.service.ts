@@ -1,4 +1,5 @@
 import { applyPointCostRevisions } from './point-cost-revisions';
+import { adjustedPointParts, pointLotOption, pricePointParts } from './point-lot-costs';
 import { allocateLots, returnLots, managedVariant, sourceCosts, takeCosts, removeCostParts } from '../../inventory-lots/lot-ledger';
 import { frozenCost, FrozenLotCost } from '../../inventory-lots/lot-costs';
 import {
@@ -108,7 +109,7 @@ export class AdminPointsService {
       stock: v.stockQty,
       unitCostCents: v.product.lotManaged ? null : configuredManualCost(v.product.privateCost),
       lotManaged: v.product.lotManaged,
-      lots: v.product.inventoryLots?.filter(l => (l.profile as any)?.variants?.some((x:any)=>x.id===v.id && x.isActive!==false)).map(l=>({id:l.id,number:l.number,active:l.id===v.product.activeLotId,stock:l.slices.filter(s=>s.variantId===v.id).reduce((n,s)=>n+s.available,0)})),
+      lots: v.product.inventoryLots?.filter(l => l.number !== null && l.number > 0 && (l.profile as any)?.variants?.some((x:any)=>x.id===v.id)).sort((a,b)=>a.number!-b.number!).map(l=>({id:l.id,number:l.number,active:l.id===v.product.activeLotId,stock:l.slices.filter(s=>s.variantId===v.id).reduce((n,s)=>n+s.available,0),...pointLotOption(l.id===v.product.activeLotId ? {...l,profile:{...(l.profile as object),unitCostCents:v.product.privateCost?.unitCostCents ?? null}} : l,v.id)})),
       currency: v.product.currency,
     }));
   }
@@ -129,6 +130,7 @@ export class AdminPointsService {
       select: {
         id: true,
         pointId: true,
+        saleId: true,
         kind: true,
         occurredAt: true,
         lines: true,
@@ -264,17 +266,16 @@ export class AdminPointsService {
         );
       if (variant.product.currency !== 'EUR')
         throw new BadRequestException('Los puntos de venta trabajan en EUR.');
-      const selectedLot = input.lotId ? await tx.inventoryLot.findFirst({where:{id:input.lotId,productId:variant.productId}}) : null;
-      if (input.lotId && (!selectedLot || !(selectedLot.profile as any)?.variants?.some((v:any)=>v.id===variant.id))) throw new BadRequestException('La tirada no contiene esa talla.');
+      if(previous && !previous.lotId && input.lotId)throw new BadRequestException('Esta venta histórica no tiene tirada identificada. Concilia su procedencia antes de asignarla.');
+      if(previous && !previous.lotId && variant.product.lotManaged && input.quantity>previous.quantity)throw new BadRequestException('Añade una nueva línea con una tirada identificada para aumentar las unidades de esta venta histórica.');
+      const lotId = previous ? previous.lotId : input.lotId ?? variant.product.activeLotId ?? undefined;
+      const selectedLot = lotId ? await tx.inventoryLot.findFirst({where:{id:lotId,productId:variant.productId}}) : null;
+      if (lotId && (!selectedLot || !(selectedLot.profile as any)?.variants?.some((v:any)=>v.id===variant.id))) throw new BadRequestException('La tirada elegida no pertenece al producto o no contiene esa talla.');
       if (previous?.lotId && input.lotId && previous.lotId!==input.lotId) throw new BadRequestException('Conserva la tirada de la venta original.');
       const cost = previous
         ? previous.unitCostCents
         : historic ? (historic.get(input.variantId) ?? null) : configuredManualCost(variant.product.privateCost);
       const lotManaged = variant.product.lotManaged;
-      if (cost === null && !lotManaged)
-        throw new BadRequestException(
-          `Falta el coste de ${variant.product.name} (#${variant.productId}). Configúralo antes de registrar la venta.`,
-        );
       // A correction reprices the remaining units only. Commission retained (or
       // recovered above the proportional amount) on earlier returns is preserved.
       const returnedCommission = previous
@@ -295,12 +296,13 @@ export class AdminPointsService {
         id: previous?.id ?? randomUUID(),
         variantId: variant.id,
         productId: variant.productId,
-        lotId: previous?.lotId ?? input.lotId ?? variant.product.activeLotId ?? undefined,
+        lotId,
         name: previous?.name ?? (selectedLot?.profile as any)?.name ?? variant.product.name,
         size: variant.size,
         quantity: input.quantity,
         unitPriceCents: input.unitPriceCents,
-        unitCostCents: cost ?? 0,
+        unitCostCents: cost,
+        costSource: previous?.costSource ?? (cost === null ? 'PENDING' : 'PRODUCT_DEFAULT'),
         ...(lotManaged ? { lotCosts: previous?.lotCosts ?? [] } : {}),
         commissionBp: input.commissionBp,
         commissionCents: fee,
@@ -312,7 +314,7 @@ export class AdminPointsService {
         'Conserva las líneas con devoluciones en la corrección.',
       );
     if (
-      result.some((l) => l.unitCostCents * l.quantity > 1000000000) ||
+      result.some((l) => l.unitCostCents !== null && l.unitCostCents * l.quantity > 1000000000) ||
       result.reduce((s, l) => s + l.quantity * l.unitPriceCents, 0) > 1000000000
     )
       throw new BadRequestException('La venta supera el importe máximo.');
@@ -346,7 +348,10 @@ export class AdminPointsService {
         const sale = await tx.pointSale.findUniqueOrThrow({ where: { id: entry.saleId! } });
         source = sale.orderId ? 'order:' + sale.orderId : 'point:' + entry.saleId;
       }
-      if (delta < 0) await allocateLots(tx, variantId, -delta, source, 'SOLD', selectedLots?.get(variantId));
+      if (delta < 0) {
+        try { await allocateLots(tx, variantId, -delta, source, 'SOLD', selectedLots?.get(variantId)); }
+        catch(error) { if (error instanceof Error && error.message === 'LOT_INSUFFICIENT_STOCK') throw new ConflictException(`Stock insuficiente en la tirada elegida para la variante #${variantId}. Revisa la cantidad o selecciona otra tirada.`); throw error; }
+      }
       else {
         const parts = specificReturns?.get(variantId);
         await returnLots(tx, variantId, delta, source, false, parts ? takeCosts(parts, delta) : undefined);
@@ -464,34 +469,48 @@ export class AdminPointsService {
         const selectedLots = new Map<number,string>();
         for (const line of lines) if(line.lotId){if(selectedLots.has(line.variantId) && selectedLots.get(line.variantId)!==line.lotId)throw new BadRequestException('Registra por separado las tiradas distintas de una misma talla.');selectedLots.set(line.variantId,line.lotId);}
         if (stockHandling === 'DEDUCT_NOW') await this.stock(tx, changes, actor, entryId, sale.orderId ? 'order:' + sale.orderId : 'point:' + sale.id, returnedParts, selectedLots);
-        const pools = new Map<number, FrozenLotCost[]>(), retained = new Map<string, FrozenLotCost[]>();
+        const pools = new Map<number, FrozenLotCost[]>();
         for (const line of lines) {
           if (!await managedVariant(tx, line.variantId)) continue;
-          if (!pools.has(line.variantId)) {
-            const pool = await sourceCosts(tx, 'point:' + sale.id, line.variantId); pools.set(line.variantId, pool);
-            let missing = lines.filter(l => l.variantId === line.variantId).reduce((s,l) => s+l.quantity,0) - pool.reduce((s,p) => s+p.quantity,0);
-            if (stockHandling === 'DEDUCT_NOW') for (const old of before?.lines.filter(l => l.variantId === line.variantId) ?? []) {
-              const quantity = Math.min(missing, old.quantity); if (quantity <= 0) break;
-              pool.unshift({ lotId: 'unreconciled', sliceId: 'point-historical:' + old.id, quantity, productionCents: null, freightCents: null, otherCents: null, legacyUnitCostCents: old.unitCostCents, quality: 'CONFIRMED' }); missing -= quantity;
-            }
-            if (stockHandling === 'DEDUCT_NOW') for (const current of lines.filter(l => l.variantId === line.variantId)) {
-              const old = before?.lines.find(l => l.id === current.id);
-              const oldParts = old?.lotCosts?.length ? old.lotCosts : pool.filter(p => p.sliceId === 'point-historical:' + old?.id);
-              const kept = old && oldParts.length ? takeCosts(oldParts, Math.min(current.quantity,old.quantity)) : [];
-              removeCostParts(pool, kept); retained.set(current.id, kept);
-            }
-          }
-          const pool = pools.get(line.variantId)!, kept = retained.get(line.id) ?? [];
-          const extra = stockHandling === 'DEDUCT_NOW' ? takeCosts(pool, line.quantity-kept.reduce((s,p) => s+p.quantity,0)) : [];
-          removeCostParts(pool, extra);
-          line.lotCosts = [...kept, ...extra];
-          if (stockHandling === 'ALREADY_ADJUSTED' && line.lotId && !line.lotCosts.length) {
-            line.lotCosts = [{ lotId:line.lotId, sliceId:'historical:'+line.id, quantity:line.quantity, productionCents:null, freightCents:null, otherCents:null, quality:'UNKNOWN' }];
-          }
           if (sale.orderId) {
             const linked = await tx.orderItem.findFirst({ where: { orderId: sale.orderId, variantId: line.variantId }, include: { financialSnapshot: true } });
-            if (Array.isArray(linked?.financialSnapshot?.lotCosts)) line.lotCosts = linked!.financialSnapshot!.lotCosts as unknown as NonNullable<PointLine['lotCosts']>;
+            if (Array.isArray(linked?.financialSnapshot?.lotCosts)) line.lotCosts = takeCosts(linked!.financialSnapshot!.lotCosts as unknown as FrozenLotCost[],line.quantity);
+            else { delete line.lotCosts; line.unitCostCents=linked?.financialSnapshot?.unitCostCents ?? null; line.costSource='LINKED_ORDER'; }
+            continue;
           }
+          const old = before?.lines.find(l => l.id === line.id);
+          const retainedQuantity = Math.min(old?.quantity ?? 0,line.quantity);
+          const kept: FrozenLotCost[] = old && retainedQuantity ? old.lotCosts?.length
+            ? takeCosts(old.lotCosts,retainedQuantity)
+            : [{lotId:old.lotId ?? 'unreconciled',sliceId:'point-historical:'+old.id,quantity:retainedQuantity,productionCents:null,freightCents:null,otherCents:null,legacyUnitCostCents:old.lotCosts ? null : old.unitCostCents,quality:!old.lotCosts && old.unitCostCents !== null ? 'CONFIRMED':'UNKNOWN',costSource:'FROZEN_PREVIOUS_SALE'}] : [];
+          const extraQuantity = line.quantity-retainedQuantity;
+          const lot = line.lotId ? await tx.inventoryLot.findUnique({where:{id:line.lotId},include:{slices:true,product:{include:{privateCost:true}}}}) : null;
+          const pricedLot = lot && lot.product.activeLotId===lot.id ? {...lot,profile:{...(lot.profile as object),unitCostCents:lot.product.privateCost?.unitCostCents ?? null}} : lot;
+          let extra: FrozenLotCost[] = [];
+          if(stockHandling === 'DEDUCT_NOW') {
+            if(!pools.has(line.variantId)) {
+              const pool=await sourceCosts(tx,'point:'+sale.id,line.variantId);
+              // Remove every retained physical unit once, before assigning any
+              // new line; historical snapshots have no stock allocation to remove.
+              for(const current of lines.filter(l=>l.variantId===line.variantId)) {
+                const prior=before?.lines.find(l=>l.id===current.id);
+                if(!prior?.lotCosts?.length)continue;
+                for(const part of takeCosts(prior.lotCosts,Math.min(current.quantity,prior.quantity))) {
+                  const present=pool.filter(p=>p.sliceId===part.sliceId).reduce((n,p)=>n+p.quantity,0);
+                  if(present)removeCostParts(pool,[{...part,quantity:Math.min(present,part.quantity)}]);
+                }
+              }
+              pools.set(line.variantId,pool);
+            }
+            const pool=pools.get(line.variantId)!;
+            extra=takeCosts(pool,extraQuantity);removeCostParts(pool,extra);
+            if(pricedLot)extra=pricePointParts(extra,pricedLot);
+          } else if(pricedLot) extra=adjustedPointParts(pricedLot,line.variantId,extraQuantity,line.id);
+          else if(extraQuantity) extra=[{lotId:'unreconciled',sliceId:'historical:'+line.id,quantity:extraQuantity,productionCents:null,freightCents:null,otherCents:null,quality:'UNKNOWN',costSource:'PENDING'}];
+          line.lotCosts=[...kept,...extra];
+          const totalCost=frozenCost(line.lotCosts);
+          if(totalCost!==null && totalCost>1000000000)throw new BadRequestException('La venta supera el coste máximo admitido.');
+          line.unitCostCents=null;line.costSource='FROZEN_EDITION_PARTS';
         }
         const frozenDeltas = [...(before?.lines ?? []).map(l => lineDelta(l, -1)), ...lines.map(l => lineDelta(l))];
         await tx.pointSale.update({ where: { id: sale.id }, data: { state: json(state) } });
@@ -617,7 +636,7 @@ export class AdminPointsService {
             ...lineDelta(line),
             ...(line.lotCosts?.length ? { lotCosts: takeCosts(line.lotCosts, input.quantity) } : {}),
             revenueCents: -input.quantity * line.unitPriceCents,
-            costCents: input.restock ? (line.lotCosts ? (line.lotCosts.length && frozenCost(takeCosts(line.lotCosts, input.quantity)) !== null ? -frozenCost(takeCosts(line.lotCosts, input.quantity))! : null) : -input.quantity * line.unitCostCents) : 0,
+            costCents: input.restock ? (line.lotCosts ? (line.lotCosts.length && frozenCost(takeCosts(line.lotCosts, input.quantity)) !== null ? -frozenCost(takeCosts(line.lotCosts, input.quantity))! : null) : line.unitCostCents === null ? null : -input.quantity * line.unitCostCents) : 0,
             commissionCents: -input.recoveredCommissionCents,
             unitsSold: 0,
             unitsReturned: input.quantity,

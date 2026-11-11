@@ -26,6 +26,11 @@
           style: "currency",
           currency: "EUR",
         }).format(value / 100);
+  const costMoney = (row, field) => window.CRONOX_FINANCE?.costMoney?.(row, field, money) ?? money(row[field]);
+  const metricValue = value => {
+    const text=String(value),parts=text.match(/^(.*?) \((\d+ unidad(?:es)? con coste pendiente)\)$/);
+    return parts ? `${esc(parts[1].replace(' · parcial',''))}<br><small class="finance-notice">${text.includes(' · parcial')?'parcial · ':''}${esc(parts[2])}</small>` : esc(value);
+  };
   const localDateTime = (value) =>
     new Intl.DateTimeFormat("sv-SE", {
       timeZone: "Europe/Madrid",
@@ -362,11 +367,20 @@
         const rows = lines.map((line, i) => {
           const old = sale?.state.lines.find((l) => l.id === line.id),
             variant = variants.find((v) => v.id === line.variantId);
-          const unitCost = old ? lotUnitCost(old) : variant?.unitCostCents;
-          if (unitCost == null && !variant?.lotManaged && !old?.lotCosts)
-            throw new Error(
-              "Selecciona prendas con coste configurado. Un coste cero explícito sí es válido.",
-            );
+          const selectedLot=variant?.lots?.find(l=>l.id===line.lotId);
+          let unitCost = old ? lotUnitCost(old) : variant?.unitCostCents ?? null;
+          if(!old && selectedLot){
+            if(form.querySelector('[name=stockHandling]')?.value==='ALREADY_ADJUSTED')unitCost=selectedLot.adjustedUnitCostCents;
+            else {
+              let missing=line.quantity,total=0;
+              for(const part of selectedLot.availableCosts ?? []){
+                const count=Math.min(missing,part.quantity);if(!count)continue;
+                if(part.quality!=='CONFIRMED' || [part.productionCents,part.freightCents,part.otherCents].some(v=>v==null)){total=null;break;}
+                total+=count*(part.productionCents+part.freightCents+part.otherCents);missing-=count;
+              }
+              unitCost=missing || total===null ? null : line.quantity ? total/line.quantity : 0;
+            }
+          }
           const paid = line.unitPriceCents * line.quantity,
             fee =
               roundCommission(paid, line.commissionBp) +
@@ -418,7 +432,7 @@
           preview();
         });
       const lotLabel=document.createElement('label');lotLabel.textContent='Tirada vendida';const lotSelect=document.createElement('select');lotSelect.className='select';lotSelect.dataset.lot='';lotSelect.disabled=!!line;lotLabel.append(lotSelect);row.querySelector('[data-variant]').closest('label').after(lotLabel);
-      const fillLots=()=>{const v=variants.find(v=>v.id===Number(row.querySelector('[data-variant]').value));const lots=v?.lots || [];lotSelect.innerHTML='<option value="">Tirada activa</option>'+lots.map(l=>`<option value="${esc(l.id)}">Lote ${l.number} ? stock ${l.stock}${l.active?' ? activo':''}</option>`).join('');lotSelect.value=line?.lotId || lots.find(l=>l.active)?.id || '';};
+      const fillLots=()=>{const v=variants.find(v=>v.id===Number(row.querySelector('[data-variant]').value));const lots=[...(v?.lots || [])].sort((a,b)=>a.number-b.number);lotSelect.innerHTML=lots.length ? lots.map(l=>`<option value="${esc(l.id)}">${l.number} tirada</option>`).join('') : '<option value="">Sin tiradas disponibles</option>';if(line && !line.lotId){const option=document.createElement('option');option.value='';option.textContent='Tirada pendiente de identificar';lotSelect.prepend(option);}lotSelect.value=line ? line.lotId || '' : lots.find(l=>l.active)?.id || '';if(line?.lotId && !lots.some(l=>l.id===line.lotId)){const option=document.createElement('option');option.value=line.lotId;option.textContent='Tirada guardada';lotSelect.append(option);lotSelect.value=line.lotId;}lotSelect.required=Boolean(v?.lotManaged);};
       row.querySelector('[data-variant]').addEventListener('change',fillLots);fillLots();
       linesHost.append(row);
       preview();
@@ -548,9 +562,9 @@
             ["Unidades netas", t.unitsSold - t.unitsReturned],
             ["Facturación", money(t.revenueCents)],
             ["Comisiones", money(t.commissionCents)],
-            ["Costes de prendas", money(t.costCents)],
+            ["Costes de prendas", costMoney(t, 'costCents')],
             ["Gastos fijos", money(t.fixedExpenseCents)],
-            ["Beneficio neto", money(t.profitCents)],
+            ["Beneficio neto", costMoney(t, 'profitCents')],
           ]
             .map(([k, v]) => `<div><dt>${k}</dt><dd>${v}</dd></div>`)
             .join("")}</dl></article>`;
@@ -585,16 +599,16 @@
     const archivedStatus = point.archived ? `<div class="pos-archive-status" role="status"><strong>Punto archivado</strong><p id="pos-archived-help">No puedes registrar nuevas ventas ni gastos mientras esté archivado. Las operaciones anteriores, el historial y sus estadísticas se conservan.</p>${point.deletedAt?"<p>Eliminado del listado operativo. El historial y las estadísticas se conservan; no puede reactivarse.</p>":action("reactivate", "Reactivar")}<p data-reactivate-error role="alert"></p></div>` : '';
     root.innerHTML = `<div class="finance-heading"><div><h1>${esc(point.name)}</h1><p>${esc(point.city)} · ${esc(point.venue)} ${point.archived ? "· Archivado" : ""}</p></div><div class="pos-actions">${action("list", "Todos los puntos")}${action("edit", "Editar punto")}${action("sale", "Registrar venta", blocked)}${action("expense", "Registrar gasto", blocked)}</div></div>${archivedStatus}<div data-editor></div><div class="finance-controls"><div class="pos-range"></div><div class="pos-history-filter"><label for="pos-history-input">Filtrar historial por producto</label><input id="pos-history-input" class="input" data-history-search type="search" role="combobox" aria-autocomplete="list" aria-controls="pos-history-options" aria-expanded="false" autocomplete="off" value="${esc(search)}"><div id="pos-history-options" class="pos-history-options" role="listbox" aria-label="Productos del historial" hidden></div></div>${action("filter", "Aplicar filtro")}</div><p>Los indicadores incluyen todas las prendas del periodo. La búsqueda filtra el historial.</p><article class="finance-card"><dl class="pos-metrics">${[
       ["Facturación", money(t.revenueCents)],
-      ["Beneficio neto", money(t.profitCents)],
+      ["Beneficio neto", costMoney(t, 'profitCents')],
       ["Unidades netas", report.netUnits],
       ["Ventas", t.salesCount],
       ["Ticket medio neto", money(report.averageTicketCents)],
-      ["Costes de prendas", money(t.costCents)],
+      ["Costes de prendas", costMoney(t, 'costCents')],
       ["Comisiones", money(t.commissionCents)],
       ["Para CRONOX antes de costes", money(report.cronoxCents)],
       ["Gastos fijos", money(t.fixedExpenseCents)],
     ]
-      .map(([k, v]) => `<div><dt>${k}</dt><dd>${v}</dd></div>`)
+      .map(([k, v]) => `<div><dt>${k}</dt><dd>${metricValue(v)}</dd></div>`)
       .join(
         "",
       )}</dl><div class="finance-chart"></div></article><article class="finance-card"><h2>Productos ganadores y tallas</h2><p>Beneficio después de coste y comisión; los gastos fijos se muestran por separado.</p><label>Ordenar por<select class="select" data-ranking><option value="revenueCents">Facturación</option><option value="netUnits">Unidades netas</option><option value="profitCents">Beneficio</option></select></label><div data-products></div></article><article class="finance-card"><h2>Ventas</h2>${table(
@@ -713,9 +727,9 @@
               esc(p.name),
               p.unitsSold - p.unitsReturned,
               money(p.revenueCents),
-              money(p.costCents),
+              costMoney(p, 'costCents'),
               money(p.commissionCents),
-              money(p.profitCents),
+              costMoney(p, 'profitCents'),
             ]),
         ) +
         "<h3>Desglose por talla</h3>" +
@@ -734,9 +748,9 @@
               esc(p.name) + " · " + esc(p.size),
               p.unitsSold - p.unitsReturned,
               money(p.revenueCents),
-              money(p.costCents),
+              costMoney(p, 'costCents'),
               money(p.commissionCents),
-              money(p.profitCents),
+              costMoney(p, 'profitCents'),
             ]),
         );
     };

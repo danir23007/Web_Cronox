@@ -166,6 +166,16 @@ async function main() {
     report.checks.push('Real cart rejects changed edition until explicit review; checkout revalidates after locking, freezes original costs, expires once; physical inactive-edition sale/refund and Already adjusted preserve public stock');
     report.checks.push('ASHEN SHELL 90/110: complete independent profiles, zero-stock idempotent copy, atomic activation, unchanged URL, selected-source duplication, concurrent activations, hidden product preserved');
     report.checks.push('Reservations retain original edition; returns to inactive edition do not increase public stock; new sales cannot consume inactive stock; exact frozen costs and simultaneous stock protection');
+    const explicit=await db.product.create({data:{name:'Explicit edition only',slug:'explicit-'+name,price:1000,variants:{create:{size:'M',sku:'explicit-'+name,stockQty:5}}}});
+    const explicitState=await editions.list(explicit.id),explicitOpening=explicitState.lots.find(l=>l.id===explicitState.product.activeLotId);
+    const emptyCopy=await editions.duplicate(explicit.id,explicitOpening.id,explicitOpening.revision,randomUUID(),admin.id);
+    const explicitVariant=(await db.productVariant.findFirstOrThrow({where:{productId:explicit.id}})).id;
+    await assert.rejects(db.$transaction(async tx=>{
+      await tx.product.update({where:{id:explicit.id},data:{activeLotId:null}});
+      await allocateLots(tx,explicitVariant,1,'explicit-selection-test','SOLD',emptyCopy.id);
+    }),/LOT_INSUFFICIENT_STOCK/);
+    assert.equal((await db.inventoryLotSlice.aggregate({where:{lotId:explicitOpening.id,variantId:explicitVariant},_sum:{available:true}}))._sum.available,5);
+    report.checks.push('An explicit empty edition never silently consumes another edition, even without an active-edition projection');
   } finally {
     if (db) await db.$disconnect();
     if (created) { assert.match(name, /^cronox_editions_test_[a-f0-9]{32}$/); await control.query(`DROP DATABASE "${name}" WITH (FORCE)`); report.cleanedUp = true; }

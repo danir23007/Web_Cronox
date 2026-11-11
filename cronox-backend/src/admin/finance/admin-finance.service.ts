@@ -5,6 +5,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import type { FinanceQuery } from './admin-finance.controller';
 import { calculateFinance, FinanceEvent, FinanceOrder, madridDate, madridMidnight, nextDate, sortProducts, validateRange } from './financial-calculations';
 import { calculatePoints } from '../points/point-calculations';
+import { mergePartialAmounts } from '../points/point-partial-cost';
 import { pointLedger, pointOrderIds } from '../points/point-report';
 import { archiveUtcDate } from './historical-cost';
 
@@ -22,6 +23,7 @@ export class AdminFinanceService {
       const products = new Map<number, typeof result.products[number]>();
       const warnings = new Set<string>();
       const merge = (target: typeof result.totals, value: typeof result.totals) => {
+        mergePartialAmounts(target,value);
         for (const field of ['revenueCents', 'costCents', 'profitCents'] as const) {
           target[field] = target[field] === null || value[field] === null ? null : target[field]! + value[field]!;
         }
@@ -68,9 +70,11 @@ export class AdminFinanceService {
       }
       const entries = query.currency === 'EUR' && (!query.source || ['all', 'points'].includes(query.source)) ? await pointLedger(tx,query.from,query.to,query.pointId) : [];
       const external = calculatePoints(entries, query.from, query.to, query.aggregation);
-      merge(result.totals, external.totals); external.buckets.forEach((bucket, i) => merge(result.buckets[i], bucket));
-      for (const product of external.products) {
-        if (products.has(product.productId)) merge(products.get(product.productId)!, product); else products.set(product.productId, product);
+      if(entries.length){
+        merge(result.totals, external.totals); external.buckets.forEach((bucket, i) => merge(result.buckets[i], bucket));
+        for (const product of external.products) {
+          if (products.has(product.productId)) merge(products.get(product.productId)!, product); else products.set(product.productId, product);
+        }
       }
       salesCount += external.totals.salesCount;
       result.products = [...products.values()]; result.warnings = [...warnings];

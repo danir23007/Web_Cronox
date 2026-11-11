@@ -58,6 +58,7 @@ async function main() {
     );
     assert.equal(push.status, 0, push.stderr);
     // Exercise the actual incremental migration, not just Prisma's table creation.
+    await sql.query('ALTER TABLE "InventoryPointCostRevision" DROP CONSTRAINT "InventoryPointCostRevision_entryId_fkey"');
     await sql.query('DROP TABLE "PointEntry", "PointSale", "SalePoint"');
     const migration = fs
       .readdirSync(path.join(backend, 'prisma/migrations'))
@@ -68,6 +69,7 @@ async function main() {
         'utf8',
       ),
     );
+    await sql.query('ALTER TABLE "InventoryPointCostRevision" ADD CONSTRAINT "InventoryPointCostRevision_entryId_fkey" FOREIGN KEY ("entryId") REFERENCES "PointEntry"(id) ON DELETE RESTRICT ON UPDATE CASCADE');
     for (const name of ['20261027230000_point_territory_and_safe_removal','20261027231000_point_place_normalization']) {
       await sql.query(fs.readFileSync(path.join(backend,'prisma/migrations',name,'migration.sql'),'utf8'));
     }
@@ -205,7 +207,7 @@ async function main() {
       const d = await detail(id),
         r = await finance.getReport({ ...query, pointId: id });
       assert.equal(d.report.totals.profitCents, profit);
-      assert.deepEqual(r.totals, {
+      assert.deepEqual(Object.fromEntries(['revenueCents','costCents','profitCents','unitsSold','unitsReturned'].map(field=>[field,r.totals[field]])), {
         revenueCents: 50000,
         costCents: 15000,
         profitCents: profit,
@@ -426,10 +428,10 @@ async function main() {
       where: { productId: p.id },
       data: { unitCostCents: null },
     });
-    await assert.rejects(
-      points.sale(id, admin.id, randomUUID(), saleBody(0, 1)),
-      /Falta el coste/,
-    );
+    const pending = await points.sale(id, admin.id, randomUUID(), {...saleBody(0,1),occurredAt:'2026-11-01T12:00',stockHandling:'ALREADY_ADJUSTED'});
+    assert.equal(pending.after.lines[0].unitCostCents,null);
+    const pendingReport=await points.detail(id,'2026-11-01','2026-11-01');
+    assert.equal(pendingReport.report.totals.pendingCostUnits,1);
     await db.productCost.update({
       where: { productId: p.id },
       data: { unitCostCents: 0 },
@@ -437,7 +439,7 @@ async function main() {
     const zero = await points.sale(id, admin.id, randomUUID(), saleBody(0, 1));
     assert.equal(zero.after.lines[0].unitCostCents, 0);
     checks.push(
-      'Insufficient stock rolls back all records; competing points cannot oversell; explicit zero accepted and missing cost identifies product',
+      'Insufficient stock rolls back all records; competing points cannot oversell; explicit zero accepted and missing cost remains explicitly pending',
     );
     const exp = await points.expense(id, admin.id, randomUUID(), {
       occurredAt: '2026-10-05T12:00',

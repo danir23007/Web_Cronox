@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { ConflictException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
-import { FrozenLotCost } from './lot-costs';
+import { FrozenLotCost, frozenCost } from './lot-costs';
 
 type Tx = Prisma.TransactionClient;
 type Slice = { id: string; lotId: string; available: number; productionCents: number | null; freightCents: number | null; otherCents: number | null; costQuality: string };
@@ -15,7 +15,7 @@ export async function managedVariant(tx: Tx, variantId: number): Promise<boolean
 export async function allocateLots(tx: Tx, variantId: number, quantity: number, sourceKey: string, state: 'RESERVED' | 'SOLD' | 'ADJUSTED', requestedLot?: string) {
   if (!await managedVariant(tx, variantId)) return false;
   if (!Number.isSafeInteger(quantity) || quantity <= 0) throw new ConflictException('LOT_INVALID_QUANTITY');
-  const slices = await tx.$queryRaw<Slice[]>`SELECT s.*, l."costQuality" FROM "InventoryLotSlice" s JOIN "InventoryLot" l ON l.id=s."lotId" WHERE s."variantId"=${variantId} AND s.available>0 AND (s."lotId"=COALESCE(${requestedLot ?? null},(SELECT p."activeLotId" FROM "Product" p JOIN "ProductVariant" v ON v."productId"=p.id WHERE v.id=${variantId})) OR (SELECT p."activeLotId" FROM "Product" p JOIN "ProductVariant" v ON v."productId"=p.id WHERE v.id=${variantId}) IS NULL) ORDER BY l."receivedAt" ASC NULLS FIRST,l."createdAt",l.id,s.id FOR UPDATE OF s`;
+  const slices = await tx.$queryRaw<Slice[]>`SELECT s.*, l."costQuality" FROM "InventoryLotSlice" s JOIN "InventoryLot" l ON l.id=s."lotId" WHERE s."variantId"=${variantId} AND s.available>0 AND (s."lotId"=COALESCE(${requestedLot ?? null},(SELECT p."activeLotId" FROM "Product" p JOIN "ProductVariant" v ON v."productId"=p.id WHERE v.id=${variantId})) OR (${requestedLot ?? null}::text IS NULL AND (SELECT p."activeLotId" FROM "Product" p JOIN "ProductVariant" v ON v."productId"=p.id WHERE v.id=${variantId}) IS NULL)) ORDER BY l."receivedAt" ASC NULLS FIRST,l."createdAt",l.id,s.id FOR UPDATE OF s`;
   let remaining = quantity;
   for (const s of slices) {
     if (!remaining) break;
@@ -40,9 +40,11 @@ export async function returnLots(tx: Tx, variantId: number, quantity: number, so
       if (known) {
         if (restock) {
           const sliceId=randomUUID();
-          await tx.inventoryLotSlice.create({data:{id:sliceId,lotId:part.lotId,variantId,received:part.quantity,available:part.quantity}});
-          await tx.inventoryLotAllocation.create({data:{id:randomUUID(),sliceId,sourceKey,quantity:part.quantity,returned:part.quantity,state:'SOLD',costQuality:'UNKNOWN'}});
-          await tx.inventoryLotAudit.create({data:{id:randomUUID(),lotId:part.lotId,reason:'Devolución de venta ya descontada: tirada identificada, coste pendiente',after:{sourceKey,variantId,quantity:part.quantity}}});
+          const confirmed=frozenCost([part])!==null;
+          const costs=confirmed ? {productionCents:part.legacyUnitCostCents ?? part.productionCents,freightCents:part.legacyUnitCostCents!==undefined?0:part.freightCents,otherCents:part.legacyUnitCostCents!==undefined?0:part.otherCents} : {};
+          await tx.inventoryLotSlice.create({data:{id:sliceId,lotId:part.lotId,variantId,received:part.quantity,available:part.quantity,...costs}});
+          await tx.inventoryLotAllocation.create({data:{id:randomUUID(),sliceId,sourceKey,quantity:part.quantity,returned:part.quantity,state:'SOLD',costQuality:confirmed?'CONFIRMED':'UNKNOWN',...costs}});
+          await tx.inventoryLotAudit.create({data:{id:randomUUID(),lotId:part.lotId,reason:confirmed?'Devolución de venta ya descontada: coste histórico conservado':'Devolución de venta ya descontada: tirada identificada, coste pendiente',after:{sourceKey,variantId,quantity:part.quantity,costSource:part.costSource ?? null,...costs}}});
         }
       } else await returnLots(tx, variantId, part.quantity, sourceKey + ':legacy-return:' + randomUUID(), false, undefined, restock);
     }

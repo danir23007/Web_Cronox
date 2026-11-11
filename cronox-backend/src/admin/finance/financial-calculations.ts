@@ -67,7 +67,7 @@ export type FinanceEvent = {
   id: string; type: string; paymentIntentId: string | null; occurredAt: Date; lifecycleStatus: string | null;
   refundCumulativeCents: number | null; amountCents: number | null;
 };
-type Amounts = { revenueCents: number | null; costCents: number | null; profitCents: number | null; unitsSold: number; unitsReturned: number };
+type Amounts = { revenueCents: number | null; costCents: number | null; profitCents: number | null; unitsSold: number; unitsReturned: number; knownCostCents?:number;knownProfitCents?:number;pendingCostUnits?:number;knownCostUnits?:number };
 type Product = Amounts & { productId: number; name: string; imageUrl: string | null };
 const empty = (): Amounts => ({ revenueCents: 0, costCents: 0, profitCents: 0, unitsSold: 0, unitsReturned: 0 });
 function add(target: Amounts, revenue: number | null, cost: number | null, sold: number, returned: number) {

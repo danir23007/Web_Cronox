@@ -14,15 +14,20 @@ import { classifyShipping, PROVINCES, REGIONS } from './spain-geography';
 import { pointLedger, pointOrderIds } from '../points/point-report';
 import { pointLocation } from '../points/point-geography';
 import { calculatePoints } from '../points/point-calculations';
+import { mergePartialAmounts } from '../points/point-partial-cost';
 
 export type MapAmounts = {
   orders: number;
   units: number;
   revenueCents: number | null;
   profitCents: number | null;
+  knownProfitCents?:number;
+  knownCostUnits?:number;
+  pendingCostUnits?:number;
 };
 const empty = (): MapAmounts => ({ orders: 0, units: 0, revenueCents: 0, profitCents:0 });
 export function addAmounts(target: MapAmounts, amount: MapAmounts) {
+  mergePartialAmounts(target,amount);
   target.orders += amount.orders;
   target.units += amount.units;
   target.revenueCents =
@@ -244,22 +249,34 @@ export class AdminMapService {
         }
         const entries=await pointLedger(tx,query.from,query.to);
         const external=calculatePoints(entries,query.from,query.to,'months',false);
+        if(entries.length)mergePartialAmounts(financePeriod,external.totals);
         financePeriod.revenueCents=financePeriod.revenueCents===null?null:financePeriod.revenueCents+external.totals.revenueCents!;
         financePeriod.profitCents=financePeriod.profitCents===null||external.totals.profitCents===null?null:financePeriod.profitCents+external.totals.profitCents;
         financePeriod.unitsSold+=external.totals.unitsSold;financePeriod.unitsReturned+=external.totals.unitsReturned;
+        const pointTargets=new Map<MapAmounts,typeof entries>();
+        const collectPoint=(target:MapAmounts,entry:typeof entries[number])=>{
+          if(!pointTargets.has(target))pointTargets.set(target,[]);
+          pointTargets.get(target)!.push(entry);
+        };
         for(const entry of entries){
           const stats=calculatePoints([entry],query.from,query.to,'months',false),t=stats.totals;
-          const amount={orders:t.salesCount,units:t.unitsSold-t.unitsReturned,revenueCents:t.revenueCents,profitCents:t.profitCents};
+          const amount={orders:t.salesCount,units:t.unitsSold-t.unitsReturned,revenueCents:t.revenueCents,profitCents:t.profitCents,knownProfitCents:t.knownProfitCents,knownCostUnits:t.knownCostUnits,pendingCostUnits:t.pendingCostUnits};
           if(Object.values(amount).every(v=>v===0))continue;
           const location=pointLocation(entry.point);
-          addAmounts(total,amount);grossUnits+=t.unitsSold;returnedUnits+=t.unitsReturned;
+          collectPoint(total,entry);grossUnits+=t.unitsSold;returnedUnits+=t.unitsReturned;
           if(location.group==='identified'){
-            addAmounts(identified,amount);const region=regions.find(r=>r.id===location.regionId)!;addAmounts(region,amount);addAmounts(region.provinces.find(p=>p.id===location.provinceId)!,amount);
-          }else addAmounts(groups.find(g=>g.id==='unknownSpain')!,amount);
+            collectPoint(identified,entry);const region=regions.find(r=>r.id===location.regionId)!;collectPoint(region,entry);collectPoint(region.provinces.find(p=>p.id===location.provinceId)!,entry);
+          }else collectPoint(groups.find(g=>g.id==='unknownSpain')!,entry);
           if(query.region===(division==='provinces'?(location.provinceId??location.group):(location.regionId??location.group))){
-            if(detailCount>=(query.page-1)*pageSize&&orders.length<pageSize)orders.push({id:entry.id,source:'point',pointId:entry.pointId,pointName:entry.point.name,paidAt:entry.occurredAt,province:PROVINCES.find(p=>p.id===location.provinceId)?.name??null,units:amount.units,revenueCents:amount.revenueCents,profitCents:amount.profitCents,available:true});
+            if(detailCount>=(query.page-1)*pageSize&&orders.length<pageSize)orders.push({id:entry.id,source:'point',pointId:entry.pointId,pointName:entry.point.name,paidAt:entry.occurredAt,province:PROVINCES.find(p=>p.id===location.provinceId)?.name??null,...amount,available:true});
             detailCount++;
           }
+        }
+        // Resolve compensating movements together. Summing nullable per-entry
+        // profits would leave a fully cancelled unknown sale permanently unknown.
+        for(const [target,ledger] of pointTargets){
+          const t=calculatePoints(ledger,query.from,query.to,'months',false).totals;
+          addAmounts(target,{orders:t.salesCount,units:t.unitsSold-t.unitsReturned,revenueCents:t.revenueCents,profitCents:t.profitCents,knownProfitCents:t.knownProfitCents,knownCostUnits:t.knownCostUnits,pendingCostUnits:t.pendingCostUnits});
         }
         if (
           query.region &&

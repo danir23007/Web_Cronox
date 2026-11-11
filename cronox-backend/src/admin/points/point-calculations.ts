@@ -6,6 +6,7 @@ import {
 } from '../finance/financial-calculations';
 
 import { FrozenLotCost, frozenCost } from '../../inventory-lots/lot-costs';
+import { pointPartialCost } from './point-partial-cost';
 export type PointLine = {
   lotId?: string;
   lotCosts?: FrozenLotCost[];
@@ -16,12 +17,14 @@ export type PointLine = {
   size: string;
   quantity: number;
   unitPriceCents: number;
-  unitCostCents: number;
+  unitCostCents: number | null;
+  costSource?: string;
   commissionBp: number;
   commissionCents: number;
   returned: number;
 };
 export type PointDelta = {
+  lineId?: string;
   lotCosts?: FrozenLotCost[];
   productId: number;
   variantId: number;
@@ -43,13 +46,14 @@ export const commission = (revenue: number, bp: number) =>
   Number((BigInt(revenue) * BigInt(bp) + 5000n) / 10000n);
 export function lineDelta(line: PointLine, sign = 1): PointDelta {
   return {
+    lineId: line.id,
     ...(line.lotCosts ? { lotCosts: line.lotCosts } : {}),
     productId: line.productId,
     variantId: line.variantId,
     name: line.name,
     size: line.size,
     revenueCents: sign * line.unitPriceCents * line.quantity,
-    costCents: line.quantity === 0 ? 0 : line.lotCosts ? (line.lotCosts.length && frozenCost(line.lotCosts) !== null ? sign * frozenCost(line.lotCosts)! : null) : sign * line.unitCostCents * line.quantity,
+    costCents: line.quantity === 0 ? 0 : line.lotCosts ? (line.lotCosts.length && frozenCost(line.lotCosts) !== null ? sign * frozenCost(line.lotCosts)! : null) : line.unitCostCents === null ? null : sign * line.unitCostCents * line.quantity,
     commissionCents: sign * line.commissionCents,
     unitsSold: sign * line.quantity,
     unitsReturned: 0,
@@ -93,6 +97,7 @@ export function pointDate(value: string): Date {
   return date;
 }
 export type LedgerEntry = {
+  saleId?: string | null;
   kind: string;
   occurredAt: Date;
   lines: unknown;
@@ -108,6 +113,10 @@ export function calculatePoints(
 ) {
   const base = calculateFinance([], [], from, to, aggregation, collectBuckets);
   const extra = () => ({
+    knownCostCents: 0,
+    knownProfitCents: 0,
+    knownCostUnits: 0,
+    pendingCostUnits: 0,
     commissionCents: 0,
     fixedExpenseCents: 0,
     salesCount: 0,
@@ -127,11 +136,19 @@ export function calculatePoints(
       size: string;
     }
   >();
+  const pending = new WeakMap<object, Map<string,number>>();
   const apply = (target: typeof totals, d: PointDelta) => {
     target.revenueCents! += d.revenueCents;
-    target.costCents = target.costCents === null || d.costCents === null ? null : target.costCents + d.costCents;
+    const part=pointPartialCost(d);
+    target.knownCostUnits+=d.costCents !== null ? (d.unitsReturned>0 && d.costCents===0 ? 0:d.unitsSold-d.unitsReturned) : (d.lotCosts ?? []).filter(p=>frozenCost([p]) !== null).reduce((n,p)=>n+(d.unitsReturned>0 || d.unitsSold<0 ? -1:1)*p.quantity,0);
+    target.knownCostCents+=part.knownCostCents;target.knownProfitCents+=part.knownProfitCents;
+    if(!pending.has(target))pending.set(target,new Map());
+    const outstanding=pending.get(target)!;
+    part.pending.forEach(p=>outstanding.set(p.key,(outstanding.get(p.key) ?? 0)+p.units));
+    target.pendingCostUnits=[...outstanding.values()].reduce((n,q)=>n+Math.abs(q),0);
+    target.costCents=target.pendingCostUnits ? null : target.knownCostCents;
     target.commissionCents += d.commissionCents;
-    target.profitCents = target.profitCents === null || d.costCents === null ? null : target.profitCents + d.revenueCents - d.costCents - d.commissionCents;
+    target.profitCents=target.pendingCostUnits ? null : target.knownProfitCents;
     target.unitsSold += d.unitsSold;
     target.unitsReturned += d.unitsReturned;
     if (
@@ -149,6 +166,7 @@ export function calculatePoints(
     )!;
     for (const target of [totals, ...(bucket ? [bucket] : [])]) {
       target.fixedExpenseCents += entry.expenseCents;
+      target.knownProfitCents -= entry.expenseCents;
       if (target.profitCents !== null) target.profitCents -= entry.expenseCents;
       if (entry.kind === 'SALE') target.salesCount++;
       const transfer = entry.after as { dateTransfer?: boolean; salesCountDelta?: number } | null;
@@ -180,7 +198,7 @@ export function calculatePoints(
         products.get(d.productId)!,
         variants.get(d.variantId)!,
       ])
-        apply(target, d);
+        apply(target, entry.saleId ? {...d,lineId:entry.saleId+':'+d.variantId} : d);
     }
   }
   return {

@@ -26,7 +26,7 @@ export function receiptSlices(lines: LotReceiptLine[], freight: number | null, o
   return result;
 }
 
-export type FrozenLotCost = { lotId: string; sliceId: string; quantity: number; productionCents: number | null; freightCents: number | null; otherCents: number | null; quality: string; legacyUnitCostCents?: number | null };
+export type FrozenLotCost = { lotId: string; sliceId: string; quantity: number; productionCents: number | null; freightCents: number | null; otherCents: number | null; quality: string; legacyUnitCostCents?: number | null; costSource?: string; evidenceIds?: string[] };
 export function frozenCost(parts: FrozenLotCost[]): number | null {
   if (parts.some(p => p.quality !== 'CONFIRMED' || (p.legacyUnitCostCents === undefined ? p.productionCents === null || p.freightCents === null || p.otherCents === null : p.legacyUnitCostCents === null))) return null;
   const total = parts.reduce((s, p) => s + p.quantity * (p.legacyUnitCostCents ?? (p.productionCents! + p.freightCents! + p.otherCents!)), 0);
