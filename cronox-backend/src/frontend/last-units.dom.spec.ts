@@ -32,9 +32,10 @@ describe('product last units', () => {
     const card = dom.window.document.querySelector('a')!;
     const price = card.querySelector<HTMLElement>('.product-price')!;
     const stock = (dom.window as unknown as { CRONOX_STOCK: { decorateCard: (card: Element, price: Element, product: unknown) => void } }).CRONOX_STOCK;
-    for (const [qty, threshold, visible] of [[5, 5, true], [6, 5, false], [1, 5, true], [1, 0, false], [0, 5, true], [5, 5, true], [5, null, false]]) {
+    for (const [qty, threshold, visible] of [[5, 5, true], [6, 5, false], [1, 5, true], [1, 0, false], [0, 5, false], [5, 5, true], [5, null, false]]) {
       stock.decorateCard(card, price, { lastUnitsThreshold: threshold, variants: [{ stockQty: qty }] });
       expect(card.querySelectorAll('.product-last-units')).toHaveLength(visible ? 1 : 0);
+      expect(card.querySelectorAll('.product-restock__label')).toHaveLength(qty === 0 ? 1 : 0);
       expect(card.querySelectorAll('.product-card__price-row')).toHaveLength(1);
       expect(price.parentElement?.children).toHaveLength(1);
       expect(card.getAttribute('href')).toBe('/producto/qa');

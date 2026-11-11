@@ -1,166 +1,163 @@
-(function () {
+﻿(function () {
   'use strict';
-
-  let refresh = () => {};
-  const activeMessage = 'Ya tienes un aviso activado para esta talla. Recibirás un mail avisándote cuando volvamos a tener esta talla de este producto.';
   const label = size => window.CRONOX_SIZES?.label?.(size) || String(size).replace('US_', 'US ');
-  // Reservations have already been deducted from stockQty, as on the PDP and checkout.
-  const soldOutVariants = product => (product?.variants || Object.values(product?.variantMap || {}))
-    .filter(v => Number.isSafeInteger(Number(v.id)) && v.isActive !== false &&
-      (v.stockQty ?? v.stock) != null && Number.isFinite(Number(v.stockQty ?? v.stock)) &&
-      Number(v.stockQty ?? v.stock) <= 0);
-
+  const key = size => window.CRONOX_SIZES?.key?.(size) || String(size).toUpperCase().replace(/\s+/g, '_');
+  const variants = p => (p?.variants || Object.values(p?.variantMap || {})).filter(v => v.isActive !== false && Number.isSafeInteger(Number(v.id)));
+  const unavailable = v => window.CRONOX_STOCK?.productStockStatus([v], null) === 'out_of_stock';
+  const storageKey = 'cronox.restock.intent';
+  let dialog, product, selectedSize = '', busy = false, generation = 0, returnFocus, pending, pendingFocus;
   const request = async (id, method = 'GET') => {
     const headers = { Accept: 'application/json' };
-    if (method !== 'GET') Object.assign(headers, await window.CRONOX_API?.getCsrfHeaders?.());
-    const response = await fetch(`${window.CRONOX_API?.API_BASE || ''}/api/waitlist/${id}`, {
-      method, headers, credentials: 'include', cache: 'no-store',
-    });
+    if (method !== 'GET') Object.assign(headers, await window.CRONOX_API.getCsrfHeaders());
+    const response = await fetch(`${window.CRONOX_API.API_BASE || ''}/api/waitlist/${id}`, { method, headers, credentials: 'include', cache: 'no-store' });
     const data = await response.json().catch(() => ({}));
     if (!response.ok) {
-      const error = new Error(typeof data.message === 'string' ? data.message : 'No hemos podido gestionar el aviso. Vuelve a intentarlo.');
-      error.status = response.status;
-      throw error;
+      const error = new Error(response.status >= 500 ? 'No se pudo guardar el aviso. La talla se conserva; vuelve a intentarlo.' : typeof data.message === 'string' ? data.message : 'No se pudo guardar el aviso. Vuelve a intentarlo.');
+      error.status = response.status; throw error;
     }
     return data;
   };
-
-  window.CRONOX_WAITLIST = { mount(product, anchor) {
-    document.getElementById('productWaitlist')?.remove();
-    refresh = () => {};
-    let variants = soldOutVariants(product);
-    if (!anchor || !variants.length) return;
-
-    const params = new URLSearchParams(location.search);
-    const chooseSize = location.hash === '#productWaitlist' || params.has('waitlist') || params.has('size');
-    const initial = variants.find(v => String(v.id) === params.get('waitlist')) ||
-      variants.find(v => String(v.sizeCode || v.size).toUpperCase().replace(/\s+/g, '_') === params.get('size')?.toUpperCase()) || (chooseSize ? null : variants[0]);
-    const root = document.createElement('details');
-    root.id = 'productWaitlist'; root.className = 'restock-panel'; root.open = true;
-    // Only static markup; product-controlled values are assigned as text below.
-    root.innerHTML = '<summary>Avísame cuando vuelva</summary><label for="restockSize">Elige la talla para tu aviso</label><select id="restockSize"></select><p class="restock-choice"></p><p class="restock-status" role="status" aria-live="polite"></p><button class="btn" type="button"></button><p class="restock-help">Disponibilidad sujeta a existencias. Este aviso no reserva la prenda.</p>';
-    anchor.insertAdjacentElement('afterend', root);
-    const select = root.querySelector('select');
-    const status = root.querySelector('.restock-status');
-    const choice = root.querySelector('.restock-choice');
-    const button = root.querySelector('button');
-    if (chooseSize) select.add(new Option('Selecciona tu talla', ''));
-    variants.forEach(v => select.add(new Option(label(v.size), String(v.id))));
-    select.value = initial ? String(initial.id) : '';
-    let subscription = null, generation = 0, busy = false, readFailed = false;
-    let entryFocusPending = chooseSize;
-    const focusEntry = () => {
-      if (!entryFocusPending || busy || !root.isConnected) return;
-      entryFocusPending = false;
-      root.scrollIntoView({ block: 'center' });
-      select.focus({ preventScroll: true });
-    };
-    const selected = () => variants.find(v => String(v.id) === select.value);
-    const remember = () => {
-      const url = new URL(location.href);
-      if (select.value) url.searchParams.set('waitlist', select.value);
-      else url.searchParams.delete('waitlist');
-      history.replaceState(history.state, '', url);
-    };
-    const render = () => {
-      const variant = selected();
-      if (!root.isConnected) return;
-      if (!variant) {
-        choice.textContent = 'Selecciona la talla agotada para consultar y confirmar tu aviso.';
-        button.textContent = 'Elige una talla';
-        button.disabled = true;
-        select.disabled = false;
-        root.setAttribute('aria-busy', 'false');
-        requestAnimationFrame(focusEntry);
-        return;
-      }
-      choice.textContent = `${product.name} · Talla ${label(variant.size)}`;
-      button.textContent = busy ? 'Un momento…' : readFailed ? 'Volver a comprobar' : subscription ? 'Cancelar aviso' : window.CRONOX_USER ? 'Avísame cuando vuelva' : 'Iniciar sesión o registrarme';
-      button.disabled = busy || subscription?.status === 'PROCESSING';
-      select.disabled = busy;
-      root.setAttribute('aria-busy', String(busy));
-      if (!busy) requestAnimationFrame(focusEntry);
-    };
-    const showState = () => {
-      if (subscription) {
-        status.textContent = subscription.status === 'PROCESSING' ? 'Tu aviso ya se está enviando.' :
-          subscription.status === 'UNCERTAIN' ? 'Tu aviso tiene una entrega sin confirmar. No lo reenviaremos automáticamente.' :
-          subscription.status === 'FAILED' ? 'No pudimos enviar tu aviso. Puedes cancelarlo.' : activeMessage;
-      } else status.textContent = window.CRONOX_USER ?
-        'Confirma tu aviso. Te avisaremos cuando esta talla vuelva a estar disponible.' :
-        'Inicia sesión o crea tu cuenta. Al volver tendrás que confirmar el aviso.';
-    };
-    // Recheck before POST: the page's product snapshot may have become stale.
-    // The server still validates availability atomically.
-    const updateAvailability = latest => {
-      const next = soldOutVariants(latest);
-      if (!next.length) { root.remove(); refresh = () => {}; return false; }
-      const previousId = select.value;
-      variants = next;
-      select.replaceChildren(...next.map(v => new Option(label(v.size), String(v.id))));
-      if (chooseSize) select.prepend(new Option('Selecciona tu talla', ''));
-      const stillEligible = next.some(v => String(v.id) === previousId);
-      select.value = stillEligible ? previousId : chooseSize ? '' : String(next[0].id);
-      if (!stillEligible) { subscription = null; remember(); }
-      return stillEligible;
-    };
-    refresh = async () => {
-      if (!selected()) { generation++; subscription = null; busy = false; status.textContent = ''; render(); return; }
-      const current = ++generation;
-      subscription = null; readFailed = false; busy = true; status.textContent = 'Comprobando tu aviso…'; render();
-      try {
-        await window.CRONOX_AUTH_READY;
-        const result = window.CRONOX_USER ? await request(select.value) : { subscription: null };
-        if (current !== generation || !root.isConnected) return;
-        subscription = result.subscription; showState();
-      } catch (error) {
-        if (current !== generation) return;
-        readFailed = true;
-        status.textContent = error.status === 401 ? 'Inicia sesión de nuevo para gestionar tu aviso.' : error.message;
-      } finally { if (current === generation) { busy = false; render(); } }
-    };
-    select.addEventListener('change', () => { remember(); void refresh(); });
-    button.addEventListener('click', async () => {
-      if (busy || !selected()) return;
-      remember();
-      if (!window.CRONOX_USER) {
-        try { await window.CRONOX_openAuthModal?.('login'); }
-        catch { status.textContent = 'No se pudo abrir el acceso a tu cuenta. Vuelve a intentarlo.'; }
-        return;
-      }
-      if (readFailed) { void refresh(); return; }
-      const current = ++generation;
-      const cancelling = Boolean(subscription);
-      const variantId = select.value;
-      busy = true; status.textContent = cancelling ? 'Cancelando aviso…' : 'Comprobando disponibilidad…'; render();
-      try {
-        if (!cancelling) {
-          if (!window.CRONOX_API?.getProductBySlug) throw new Error('No pudimos comprobar la disponibilidad. Vuelve a intentarlo.');
-          const requestedAt = performance.now();
-          const latest = await window.CRONOX_API.getProductBySlug(product.slug, { cache: 'no-store' });
-          if (current !== generation || !root.isConnected) return;
-          if (!latest) throw new Error('No pudimos comprobar la disponibilidad. Vuelve a intentarlo.');
-          window.dispatchEvent(new CustomEvent('cronox:productAvailability', { detail: { product: latest, requestedAt } }));
-          if (!updateAvailability(latest)) {
-            status.textContent = 'Esta talla ya está disponible. Actualiza la página para comprarla.';
-            return;
-          }
-          status.textContent = 'Activando aviso…';
-        }
-        const result = await request(variantId, cancelling ? 'DELETE' : 'POST');
-        if (current !== generation || !root.isConnected) return;
-        subscription = result.subscription;
-        if (cancelling) status.textContent = 'Aviso cancelado.';
-        else showState();
-      } catch (error) {
-        if (current !== generation) return;
-        status.textContent = error.message;
-        // The server may have committed even if the response was lost.
-        readFailed = true;
-      } finally { if (current === generation) { busy = false; render(); } }
+  const status = text => { dialog.querySelector('[data-restock-status]').textContent = text; };
+  const chosen = () => variants(product).find(v => key(v.sizeCode || v.size) === selectedSize);
+  function remember(value) {
+    pending = value;
+    try { if (value) sessionStorage.setItem(storageKey, JSON.stringify(value)); else sessionStorage.removeItem(storageKey); } catch {}
+  }
+  function controls() {
+    dialog.setAttribute('aria-busy', String(busy));
+    dialog.querySelectorAll('[data-restock-size]').forEach(button => {
+      button.disabled = busy;
+      button.setAttribute('aria-pressed', String(button.dataset.restockSize === selectedSize));
     });
-    void refresh();
-  } };
-  window.addEventListener('cronox:userChanged', () => void refresh());
-  window.addEventListener('pageshow', event => { if (event.persisted) void refresh(); });
+    dialog.querySelector('[data-restock-retry]').disabled = busy;
+    dialog.querySelector('[data-restock-cancel]').disabled = busy;
+  }
+  function ensure() {
+    if (dialog) return;
+    dialog = document.createElement('dialog'); dialog.className = 'restock-dialog';
+    dialog.setAttribute('aria-labelledby', 'restockTitle'); dialog.setAttribute('aria-describedby', 'restockPrompt');
+    dialog.innerHTML = '<button type="button" class="restock-close" aria-label="Cerrar avisos de reposición">×</button><h2 id="restockTitle"></h2><p id="restockPrompt">Selecciona tu talla para recibir un aviso cuando vuelva</p><div class="restock-sizes" role="group" aria-label="Talla del aviso"></div><p data-restock-status role="status" aria-live="polite"></p><button type="button" data-restock-retry hidden>Reintentar</button><a data-restock-buy hidden>Continuar con la compra</a><p class="restock-help">Este aviso no reserva la prenda.</p>';
+    document.body.append(dialog);
+    const cancel=document.createElement('button');cancel.type='button';cancel.dataset.restockCancel='';cancel.textContent='Cancelar aviso';cancel.hidden=true;
+    dialog.querySelector('[data-restock-retry]').after(cancel);
+    cancel.onclick=async()=>{
+      if(busy || !chosen())return;
+      const current=++generation;busy=true;controls();status('Cancelando aviso…');
+      try{await request(chosen().id,'DELETE');if(current!==generation)return;cancel.hidden=true;status('Aviso cancelado.');}
+      catch(error){if(current===generation)status(error.message || 'No se pudo cancelar. Vuelve a intentarlo.');}
+      finally{if(current===generation){busy=false;controls();}}
+    };
+    dialog.querySelector('.restock-close').onclick = () => dialog.close();
+    dialog.addEventListener('keydown', event => {
+      if(event.key !== 'Tab')return;
+      const focusable=[...dialog.querySelectorAll('button:not([disabled]),a[href],input:not([disabled]),[tabindex="0"]')].filter(el=>!el.hidden && el.getClientRects().length);
+      const first=focusable[0],last=focusable[focusable.length-1];
+      if(event.shiftKey && document.activeElement===first){event.preventDefault();last?.focus();}
+      else if(!event.shiftKey && document.activeElement===last){event.preventDefault();first?.focus();}
+    });
+    dialog.addEventListener('click', event => { if (event.target === dialog) { const r = dialog.getBoundingClientRect(); if (event.clientX < r.left || event.clientX > r.right || event.clientY < r.top || event.clientY > r.bottom) dialog.close(); } });
+    dialog.addEventListener('close', () => {
+      generation++; busy = false; window.CRONOX_unlockScroll?.('restock');
+      const fallback=document.querySelector(`.product-card[data-slug="${CSS.escape(product.slug)}"] .product-restock button`) || document.querySelector('#productWaitlist button');
+      const target=returnFocus?.isConnected && returnFocus.getClientRects().length ? returnFocus : fallback;
+      target?.focus({ preventScroll: true });
+    });
+    dialog.querySelector('[data-restock-retry]').onclick = () => void subscribe();
+  }
+  function drawSizes() {
+    const sizes = window.CRONOX_SIZES?.sort?.(variants(product).map(v => key(v.sizeCode || v.size))) || variants(product).map(v => key(v.size));
+    const host = dialog.querySelector('.restock-sizes'); host.replaceChildren();
+    [...new Set(sizes)].forEach(size => {
+      const button = document.createElement('button'); button.type = 'button'; button.dataset.restockSize = size;
+      button.textContent = label(size); button.setAttribute('aria-label', `Avisarme de la talla ${label(size)}`);
+      button.onclick = () => { if (busy) return; selectedSize = size; controls(); void subscribe(); };
+      host.append(button);
+    });
+    controls();
+  }
+  function showAvailable() {
+    status('Esta talla ya está disponible. Puedes continuar con la compra.');
+    const link = dialog.querySelector('[data-restock-buy]'); link.hidden = false;
+    link.href = `/producto/${encodeURIComponent(product.slug)}?size=${encodeURIComponent(selectedSize)}`;
+    dialog.querySelector('[data-restock-retry]').hidden = true; remember(null);
+  }
+  async function subscribe() {
+    if (busy || !chosen() || !dialog.open) return;
+    const current = ++generation;
+    busy = true; controls(); status('Guardando aviso…');
+    dialog.querySelector('[data-restock-retry]').hidden = true; dialog.querySelector('[data-restock-buy]').hidden = true;
+    dialog.querySelector('[data-restock-cancel]').hidden = true;
+    try {
+      await window.CRONOX_AUTH_READY;
+      if (current !== generation) return;
+      if (!window.CRONOX_USER) {
+        pendingFocus = returnFocus;
+        remember({ slug: product.slug, size: selectedSize, at: Date.now() });
+        dialog.close(); await window.CRONOX_openAuthModal('login'); return;
+      }
+      const requestedAt = performance.now();
+      const latest = await window.CRONOX_API.getProductBySlug(product.slug, { cache: 'no-store' });
+      if (current !== generation) return;
+      product = latest;
+      dialog.querySelector('#restockTitle').textContent = latest.name;
+      const variant = chosen();
+      if (!variant) { drawSizes(); throw new Error('Esta talla ya no pertenece a la ficha actual. Selecciona una talla válida.'); }
+      if (!unavailable(variant)) { showAvailable(); return; }
+      const result = await request(variant.id, 'POST');
+      if (current !== generation) return;
+      status(result.existing ? 'Ya tienes un aviso para esta talla' : `Te avisaremos cuando vuelva la talla ${label(selectedSize)}`);
+      dialog.querySelector('[data-restock-cancel]').hidden = result.subscription?.status === 'PROCESSING';
+      remember(null);
+      window.dispatchEvent(new CustomEvent('cronox:productAvailability', { detail: { product: latest, requestedAt } }));
+    } catch (error) {
+      if (current !== generation) return;
+      if (error.status === 409) showAvailable();
+      else {
+        status(error.status === 401 ? 'Inicia sesión de nuevo para guardar el aviso.' : error.message || 'No se pudo guardar el aviso. Vuelve a intentarlo.');
+        if (error.status === 401) window.CRONOX_USER = null;
+        dialog.querySelector('[data-restock-retry]').hidden = false;
+      }
+    } finally { if (current === generation) { busy = false; controls(); } }
+  }
+  async function open(next, options = {}) {
+    ensure(); if (dialog.open && busy) return;
+    const current = ++generation;
+    product = next; selectedSize = options.size ? key(options.size) : ''; busy = false;
+    returnFocus = options.returnFocus || document.activeElement;
+    dialog.querySelector('#restockTitle').textContent = product.name;
+    dialog.querySelector('[data-restock-retry]').hidden = true; dialog.querySelector('[data-restock-buy]').hidden = true;
+    dialog.querySelector('[data-restock-cancel]').hidden = true;
+    status(''); drawSizes(); if (!dialog.open) dialog.showModal(); window.CRONOX_lockScroll?.('restock');
+    (dialog.querySelector(`[data-restock-size="${CSS.escape(selectedSize)}"]`) || dialog.querySelector('[data-restock-size]'))?.focus();
+    if (options.submit && chosen()) { void subscribe(); return; }
+    // Read-only on opening: neither visiting nor opening creates a request.
+    try {
+      await window.CRONOX_AUTH_READY; if (current !== generation || !window.CRONOX_USER) return;
+      const states = await Promise.all(variants(product).filter(unavailable).map(async v => ({ size: key(v.sizeCode || v.size), state: await request(v.id) })));
+      if (current !== generation) return;
+      const subscribed = states.filter(row => row.state.subscription).map(row => label(row.size));
+      if (subscribed.length) status(`Ya tienes avisos para: ${subscribed.join(', ')}. Puedes seleccionar otra talla.`);
+    } catch { /* Selection revalidates with the server; a failed read never claims success. */ }
+  }
+  async function resume() {
+    if (!window.CRONOX_USER || !pending) return;
+    const intent = pending; remember(null);
+    try { await open(await window.CRONOX_API.getProductBySlug(intent.slug, { cache: 'no-store' }), { size: intent.size, submit: true, returnFocus: pendingFocus }); pendingFocus=null; }
+    catch { remember(intent); }
+  }
+  window.CRONOX_WAITLIST = {
+    open,
+    mount(next, anchor, selected = () => '') {
+      document.getElementById('productWaitlist')?.remove();
+      if (!anchor || !variants(next).some(unavailable)) return;
+      const root = document.createElement('div'); root.id = 'productWaitlist'; root.className = 'restock-panel';
+      const button = document.createElement('button'); button.type = 'button'; button.textContent = 'Avisarme';
+      button.onclick = () => { const size = selected(); const v = variants(next).find(v => key(v.sizeCode || v.size) === key(size)); void open(next, { size: v && unavailable(v) ? size : '', submit: Boolean(v && unavailable(v)) }); };
+      root.append(button); anchor.insertAdjacentElement('afterend', root);
+    },
+  };
+  window.addEventListener('cronox:restockOpen', event => void open(event.detail.product, event.detail));
+  window.addEventListener('cronox:userChanged', () => void resume());
+  try { const value = JSON.parse(sessionStorage.getItem(storageKey) || 'null'); if (value && typeof value.slug === 'string' && typeof value.size === 'string' && Date.now() - value.at < 1800000) pending = value; } catch {}
+  Promise.resolve(window.CRONOX_AUTH_READY).then(() => resume());
 })();

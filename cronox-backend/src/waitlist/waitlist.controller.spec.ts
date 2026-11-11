@@ -18,6 +18,7 @@ import { WaitlistService } from './waitlist.service';
 describe('Waitlist HTTP authorization/validation', () => {
   let app: INestApplication;
   const service = {
+    recipients: jest.fn().mockResolvedValue({ rows: [{ user: { email: 'private@example.test' } }] }),
     report: jest.fn().mockResolvedValue({ rows: [] }),
     state: jest.fn().mockResolvedValue({ subscription: null }),
     join: jest.fn().mockResolvedValue({}),
@@ -67,6 +68,16 @@ describe('Waitlist HTTP authorization/validation', () => {
   it('requires authentication for customer and admin endpoints', async () => {
     await request(app.getHttpServer()).get('/api/waitlist/1').expect(401);
     await request(app.getHttpServer()).get('/api/admin/waitlist').expect(401);
+    await request(app.getHttpServer()).get('/api/admin/waitlist/1/requests').expect(401);
+  });
+  it.each(['USER', 'FRIEND'])('keeps recipient addresses private from %s', async role => {
+    await request(app.getHttpServer()).get('/api/admin/waitlist/1/requests').set('x-test-role', role).expect(403);
+  });
+  it.each(['ADMIN', 'SUPERADMIN'])('allows paginated recipient inspection by %s', async role => {
+    const response=await request(app.getHttpServer()).get('/api/admin/waitlist/1/requests?page=2').set('x-test-role', role).expect(200);
+    expect(response.body.rows[0].user.email).toBe('private@example.test');
+    expect(service.recipients).toHaveBeenCalledWith(1,2);
+    await request(app.getHttpServer()).get('/api/admin/waitlist/1/requests?page=0').set('x-test-role', role).expect(400);
   });
   it.each(['USER', 'FRIEND'])(
     'forbids %s from admin reporting',

@@ -440,12 +440,9 @@
 
     qaNotify.addEventListener('click', () => {
       if (qaNotify.disabled || quickSizeStatus() !== 'out_of_stock') return;
-      const variant = findVariantForSize(qaCurrentProduct, qaSelectedSize);
-      const url = new URL(qaLink.href, location.origin);
-      url.searchParams.set('waitlist', String(variant.id));
-      url.searchParams.set('size', qaSelectedSize);
-      url.hash = 'productWaitlist';
-      window.location.assign(url.href);
+      const product = qaCurrentProduct, size = qaSelectedSize, returnFocus = qaReturnFocus;
+      closeQuickAdd();
+      window.CRONOX_WAITLIST?.open(product, { size, submit: true, returnFocus });
     });
   }
 
@@ -700,8 +697,7 @@
         ? `/producto?id=${encodeURIComponent(key)}`
         : "#";
 
-    const a = document.createElement("a");
-    a.href = detailHref;
+    const a = document.createElement("article");
     a.className = "product-card";
     if (options.variant) {
       a.classList.add(`product-card--${options.variant}`);
@@ -740,7 +736,13 @@
       im.referrerPolicy = "no-referrer";
       return im;
     });
-    imgEls.forEach(im => gallery.appendChild(im));
+    const photoLink = document.createElement('a');
+    photoLink.href = detailHref;
+    photoLink.className = 'product-photo-link';
+    photoLink.dataset.productLink = 'true';
+    photoLink.setAttribute('aria-label', p.name || 'Ver producto');
+    imgEls.forEach(im => photoLink.appendChild(im));
+    gallery.appendChild(photoLink);
     window.CRONOX_PRODUCT_CARD_FRAMING?.bind(imgEls[0], gallery, p);
 
     const dots = document.createElement("div");
@@ -953,7 +955,11 @@
 
     const info = document.createElement("div");
     info.className = "product-card__info";
-    info.appendChild(name);
+    const nameLink = document.createElement('a');
+    nameLink.href = detailHref;
+    nameLink.dataset.productLink = 'true';
+    nameLink.appendChild(name);
+    info.appendChild(nameLink);
     info.appendChild(price);
 
     a.appendChild(media);
@@ -1034,10 +1040,10 @@
   // ---- Guardar scroll antes de salir a PDP ----
   if (productsGrid) {
     productsGrid.addEventListener("click", (e) => {
-      const link = e.target.closest("a.product-card[href]");
+      const link = e.target.closest('.product-card a[data-product-link]');
       if (!link) return;
       try { sessionStorage.setItem(SCROLL_POS_KEY, String(window.scrollY || 0)); } catch {}
-      const pid = link.getAttribute("data-id") || link.dataset.id;
+      const pid = link.closest('.product-card')?.dataset.id;
       if (pid) { try { sessionStorage.setItem(RETURN_KEY, pid); } catch {} }
     }, { capture: true });
   }

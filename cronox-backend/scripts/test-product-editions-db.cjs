@@ -82,6 +82,7 @@ async function main() {
     dated=openingState.lots[0];assert.equal(dated.receivedAt,'2026-03-29');
     assert.equal(dated.slices.reduce((n,s)=>n+s.received,0),1);
     const receiptKey=randomUUID(),receiptDto={revision:dated.revision,expectedStocks:[{size:'M',available:0}],variants:[{size:'M',stockQty:1}],receiptReceivedAt:'2026-10-25',otherTotalCents:200};
+    const restock=await db.restockRequest.create({data:{userId:admin.id,variantId:emptyVariant}});
     openingState=await editions.save(empty.id,dated.id,receiptDto,admin.id,receiptKey);
     const committed=openingState.lots[0];
     const replayed=(await editions.save(empty.id,dated.id,receiptDto,admin.id,receiptKey)).lots[0];
@@ -95,6 +96,11 @@ async function main() {
     await assert.rejects(editions.save(empty.id,dated.id,{revision:replayed.revision,otherTotalCents:1},admin.id,randomUUID()));
     await assert.rejects(editions.save(empty.id,dated.id,{revision:replayed.revision,freightTotalCents:1},admin.id,randomUUID()));
     assert.deepEqual((await editions.list(empty.id)).lots[0],replayed);
+    const queued=await db.restockRequest.findUniqueOrThrow({where:{id:restock.id}});assert.equal(queued.status,'QUEUED');
+    await editions.save(empty.id,dated.id,{revision:replayed.revision,receivedAt:replayed.receivedAt},admin.id,randomUUID());
+    const unchanged=await db.restockRequest.findUniqueOrThrow({where:{id:restock.id}});
+    assert.equal(unchanged.readyAt.toISOString(),queued.readyAt.toISOString());
+    report.checks.push('Saving an unchanged active profile preserves the restock uninterrupted-availability deadline');
     report.checks.push('Calendar date correction without stock, separate receipt dates, zero included freight, additional costs, idempotent committed replay and rejected conflicting retries');
     const product=await db.product.create({data:{name:'ASHEN SHELL',slug:name,price:9000,description:'Composicion original',variants:{create:[{size:'M',sku:name+'M',stockQty:2},{size:'L',sku:name+'L',stockQty:0}]},images:{create:[{url:'https://example.invalid/first.webp',alt:'Primera foto',isPrimary:true}]}}});
     let state=await editions.list(product.id); const first=state.lots[0], m=first.profile.variants.find(v=>v.size==='M').id;

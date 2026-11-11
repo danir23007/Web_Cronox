@@ -74,6 +74,10 @@ export class WaitlistController {
 @Roles(Role.ADMIN, Role.SUPERADMIN)
 export class AdminWaitlistController {
   constructor(private readonly service: WaitlistService) {}
+  @Get(':variantId/requests') recipients(
+    @Param('variantId', ParseIntPipe) id: number,
+    @Query() query: WaitlistQuery,
+  ) { return this.service.recipients(id, query.page); }
   @Get() report(@Query() query: WaitlistQuery) {
     return this.service.report(query);
   }

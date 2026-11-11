@@ -124,6 +124,10 @@ export class WaitlistService implements OnModuleInit, OnModuleDestroy {
         throw new BadRequestException(
           'Necesitas una cuenta activa con un correo válido.',
         );
+      if (purchasable(variant))
+        throw new ConflictException(
+          'Esta talla ya está disponible. Puedes comprarla.',
+        );
       const existing = await tx.restockRequest.findFirst({
         where: { userId, variantId, status: { in: ACTIVE_RESTOCK } },
       });
@@ -132,10 +136,6 @@ export class WaitlistService implements OnModuleInit, OnModuleDestroy {
           subscription: { id: existing.id, status: existing.status },
           existing: true,
         };
-      if (purchasable(variant))
-        throw new ConflictException(
-          'Esta talla ya está disponible. Puedes comprarla.',
-        );
       const row = await tx.restockRequest.create({
         data: { userId, variantId },
       });
@@ -320,6 +320,16 @@ export class WaitlistService implements OnModuleInit, OnModuleDestroy {
       errorCode: null,
       readyAt: null,
     });
+  }
+
+  async recipients(variantId: number, page: number) {
+    const where = { variantId };
+    const [rows, total] = await this.prisma.$transaction([
+      this.prisma.restockRequest.findMany({ where, orderBy: [{ requestedAt: 'desc' }, { id: 'desc' }], skip: (page - 1) * 25, take: 25,
+        select: { id: true, status: true, requestedAt: true, acceptedAt: true, attempts: true, errorCode: true, user: { select: { email: true } } } }),
+      this.prisma.restockRequest.count({ where }),
+    ]);
+    return { rows, total, page, pageSize: 25 };
   }
 
   async report(query: {

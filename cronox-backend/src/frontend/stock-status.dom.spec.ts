@@ -21,9 +21,9 @@ describe('stock status presentation', () => {
   });
   it('centers the vertical information block and keeps distinct, safely wrapping warnings', () => {
     const css = read('assets/store.css');
-    expect(css).toMatch(
-      /\.product-card--out-of-stock \.product-price\s*\{[^}]*text-decoration:line-through;[^}]*opacity:\.55/,
-    );
+    expect(css).not.toMatch(/\.product-card--out-of-stock \.product-(?:price|name)\s*\{[^}]*text-decoration:line-through/);
+    expect(css).toContain('.product-card--out-of-stock .product-images::after');
+    expect(css).toContain('pointer-events:none');
     expect(css).toMatch(
       /\.product-card__price-row\s*\{[^}]*display:flex;[^}]*flex-direction:column;[^}]*align-items:center;[^}]*text-align:center;[^}]*gap:4px/,
     );
@@ -31,9 +31,7 @@ describe('stock status presentation', () => {
     expect(css).toMatch(
       /\.product-last-units\s*\{[^}]*color:var\(--stock-low-warning\)/,
     );
-    expect(css).toMatch(
-      /\.product-last-units--out\s*\{[^}]*color:#e60000/,
-    );
+    expect(css).toContain('.product-restock button');
     expect(css).toContain('--stock-out-warning:#ff6464');
     expect(css).not.toContain('.product-card__stock-label {');
   });
@@ -71,7 +69,8 @@ describe('stock status presentation', () => {
       });
       expect(
         media.querySelector('.product-last-units')?.textContent ?? '',
-      ).toBe(stock === 0 ? 'AGOTADO' : stock < 15 ? 'ÚLTIMAS UNIDADES' : '');
+      ).toBe(stock > 0 && stock < 15 ? 'ÚLTIMAS UNIDADES' : '');
+      expect(media.querySelector('.product-restock button')?.textContent ?? '').toBe(stock === 0 ? 'Avisarme' : '');
       expect(card.querySelector('.product-card__stock-label')).toBeNull();
       expect(card.textContent).not.toContain('SIN STOCK');
       expect(price.parentElement?.children.length).toBe(1);

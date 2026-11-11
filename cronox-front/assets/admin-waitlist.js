@@ -37,6 +37,24 @@
           text('p', `En espera: ${row.waiting} · En cola: ${row.queued} · En proceso: ${row.processing} · Aceptados por SMTP: ${row.accepted} · Fallidos: ${row.failed} · Inciertos: ${row.uncertain} · Cancelados: ${row.cancelled}`),
           text('p', `Última solicitud: ${new Date(row.latestRequest).toLocaleString('es-ES')}`));
         article.append(image, content); $('waitlistList').append(article);
+        const details=document.createElement('details'),summary=text('summary','Ver destinatarios y estados'),people=document.createElement('div');
+        details.append(summary,people);content.append(details);
+        let recipientPage=1,recipientBusy=false;
+        const loadPeople=async()=>{
+          if(recipientBusy)return;recipientBusy=true;people.setAttribute('aria-busy','true');
+          try{
+            const response=await fetch(`${window.CRONOX_API?.API_BASE || ''}/api/admin/waitlist/${row.id}/requests?page=${recipientPage}`,{credentials:'include',cache:'no-store'});
+            if(!response.ok)throw new Error('No se pudieron cargar los destinatarios. Cierra y vuelve a abrir para reintentar.');
+            const result=await response.json();people.replaceChildren();
+            result.rows.forEach(person=>people.append(text('p',`${person.user.email} · ${statusLabels[person.status] || person.status} · ${new Date(person.requestedAt).toLocaleString('es-ES')}`)));
+            for(const [title,delta,disabled] of [['Anterior',-1,recipientPage<=1],['Siguiente',1,recipientPage*result.pageSize>=result.total]]){
+              const button=text('button',title);button.type='button';button.className='btn';button.disabled=disabled;
+              button.onclick=()=>{recipientPage+=delta;void loadPeople();};people.append(button);
+            }
+          }catch(error){people.replaceChildren(text('p',error.message));}
+          finally{recipientBusy=false;people.setAttribute('aria-busy','false');}
+        };
+        details.addEventListener('toggle',()=>{if(details.open)void loadPeople();});
       }
       $('waitlistMessage').textContent = `${data.rows.length ? 'Ordenado por demanda de mayor a menor.' : 'No hay solicitudes con estos filtros.'} Envíos: ${data.workerEnabled && data.senderReady && data.storeOpen ? 'habilitados' : 'pausados'}. Los aceptados por SMTP no garantizan entrega en la bandeja de entrada.`;
       const pages = Math.max(1, Math.ceil(data.total / data.pageSize));

@@ -14,6 +14,9 @@ const setup = (url = 'http://localhost:3000/') => {
   const dom = new JSDOM('', { url, runScripts: 'outside-only', pretendToBeVisual: true });
   openDoms.add(dom);
   const app = dom.window as any;
+  app.CSS = { escape: (value: string) => value };
+  app.HTMLDialogElement.prototype.showModal = function () { this.open = true; };
+  app.HTMLDialogElement.prototype.close = function () { this.open = false; this.dispatchEvent(new app.Event('close')); };
   app.Date.now = () => Date.parse('2026-10-09T12:00:00Z');
   app.scrollTo = () => {};
   app.matchMedia = () => ({ matches: false, addEventListener() {} });
@@ -154,24 +157,19 @@ describe('Quick Add size messages and shared delivery', () => {
     app.CRONOX_AUTH_READY = Promise.resolve();
     app.eval(read('assets/waitlist.js'));
     app.CRONOX_WAITLIST.mount(product(2), document.getElementById('anchor'));
-    const select = document.querySelector<HTMLSelectElement>('#restockSize')!;
-    expect(select.value).toBe('');
-    expect(document.querySelector<HTMLButtonElement>('#productWaitlist button')!.disabled).toBe(true);
     expect(requests).toHaveLength(0);
-    select.value = '1';
-    select.dispatchEvent(new app.Event('change'));
+    document.querySelector<HTMLButtonElement>('#productWaitlist button')!.click();
     await new Promise(resolve => setTimeout(resolve, 0));
-    expect(requests).toEqual([expect.stringContaining('/api/waitlist/1')]);
-    expect(document.querySelector('#productWaitlist .restock-status')!.textContent).toContain('Confirma tu aviso');
+    expect(document.querySelectorAll('[data-restock-size][aria-pressed=true]')).toHaveLength(0);
+    expect(requests).toHaveLength(2); // Read-only state checks for both exhausted sizes.
     // A restocked chosen size must not silently switch the request to another size.
     const latest = product(2);
     latest.variants[0].stockQty = 1;
     app.CRONOX_API.getProductBySlug = async () => latest;
-    document.querySelector<HTMLButtonElement>('#productWaitlist button')!.click();
+    document.querySelector<HTMLButtonElement>('[data-restock-size=XS]')!.click();
     await new Promise(resolve => setTimeout(resolve, 0));
-    expect(select.value).toBe('');
-    expect(document.querySelector<HTMLButtonElement>('#productWaitlist button')!.disabled).toBe(true);
-    expect(new URL(app.location.href).searchParams.has('waitlist')).toBe(false);
-    expect(requests).toHaveLength(1); // Only the initial GET, never an automatic POST.
+    expect(document.querySelector<HTMLAnchorElement>('[data-restock-buy]')!.href).toContain('size=XS');
+    expect(document.querySelector('[data-restock-status]')!.textContent).toContain('ya está disponible');
+    expect(requests).toHaveLength(2); // Only the initial GETs, never a POST for a different size.
   });
 });

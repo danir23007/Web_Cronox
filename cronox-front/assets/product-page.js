@@ -575,7 +575,7 @@
         const unavailable = window.CRONOX_STOCK?.classifyStock(window.CRONOX_STOCK.availableStock(product.variants)) === 'out_of_stock' || !isVariantAvailable(variant);
         const displaySize = window.CRONOX_SIZES?.label?.(size) || size;
         const label = unavailable ? `${displaySize}, no disponible` : displaySize;
-        return `<button type="button" class="size-btn${unavailable ? ' is-unavailable' : ''}" data-size="${escapeHtml(size)}" role="radio" aria-label="${escapeHtml(label)}" aria-checked="false" aria-disabled="${unavailable ? 'true' : 'false'}" ${unavailable ? 'disabled' : ''}>${escapeHtml(displaySize)}</button>`;
+        return `<button type="button" class="size-btn${unavailable ? ' is-unavailable' : ''}" data-size="${escapeHtml(size)}" role="radio" aria-label="${escapeHtml(label)}" aria-checked="false">${escapeHtml(displaySize)}</button>`;
       })
       .join("");
 
@@ -607,12 +607,12 @@
     };
 
     const requestedSize = new URLSearchParams(location.search).get('size')?.toUpperCase();
-    const firstButton = buttons.find(btn => btn.dataset.size === previousSize) || buttons.find(btn => String(btn.dataset.size).toUpperCase() === requestedSize) || buttons.find((btn) => !btn.disabled);
+    const firstButton = buttons.find(btn => btn.dataset.size === previousSize) || buttons.find(btn => String(btn.dataset.size).toUpperCase() === requestedSize) || buttons.find(btn => isVariantAvailable(findVariantForSize(product, btn.dataset.size)));
     if (firstButton) activate(firstButton);
     else selectedSize = "";
 
     if (pAdd) {
-      pAdd.disabled = !firstButton || firstButton.disabled;
+      pAdd.disabled = !isVariantAvailable(findVariantForSize(product, selectedSize));
       pAdd.setAttribute("aria-disabled", pAdd.disabled ? "true" : "false");
     }
 
@@ -713,7 +713,8 @@
       }
     }
 
-    window.CRONOX_WAITLIST?.mount(product, pAdd?.closest('.pdp__actions') || pSizeGroup);
+    window.CRONOX_WAITLIST?.mount(product, pAdd?.closest('.pdp__actions') || pSizeGroup, () => selectedSize);
+    if (pAdd) pAdd.hidden = window.CRONOX_STOCK?.productStockStatus(product.variants, null) === 'out_of_stock';
     if (pPrice && pAdd) window.CRONOX_STOCK?.decoratePurchase(pPrice, pAdd, product);
     // A directly linked size owns the displayed price and purchase availability.
     setupSizeButtons(product);
@@ -740,6 +741,8 @@
     availabilityRequest++;
     currentProduct = product;
     const previous = selectedSize;
+    window.CRONOX_WAITLIST?.mount(product, pAdd?.closest('.pdp__actions') || pSizeGroup, () => selectedSize);
+    if (pAdd) pAdd.hidden = window.CRONOX_STOCK?.productStockStatus(product.variants, null) === 'out_of_stock';
     window.CRONOX_DELIVERY?.setProduct(pDelivery, product);
     if (pPrice && pAdd) window.CRONOX_STOCK?.decoratePurchase(pPrice, pAdd, product);
     setupSizeButtons(product, previous);

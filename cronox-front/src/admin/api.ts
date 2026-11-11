@@ -1160,10 +1160,10 @@ import { loadCategoryPages } from './category-pagination';
       card.querySelectorAll('.product-last-units').forEach(badge => badge.remove());
       const media = card.querySelector('.product-media, .cart-upsell__media');
       const status = productStockStatus(product.variants, product.lastUnitsThreshold);
-      if (!media || (status !== 'low' && status !== 'out_of_stock')) return;
+      if (!media || status !== 'low') return;
       const badge = document.createElement('span');
-      badge.className = `product-last-units${status === 'out_of_stock' ? ' product-last-units--out' : ''}`;
-      badge.appendChild(document.createTextNode(status === 'out_of_stock' ? 'AGOTADO' : 'ÚLTIMAS UNIDADES'));
+      badge.className = 'product-last-units';
+      badge.appendChild(document.createTextNode('ÚLTIMAS UNIDADES'));
       media.appendChild(badge);
     },
     classifyVariantStock,
@@ -1183,7 +1183,7 @@ import { loadCategoryPages } from './category-pagination';
         row.appendChild(price);
       }
       row.querySelector('.stock-status')?.remove();
-      price.classList.toggle('price--out-of-stock', status === 'out_of_stock');
+      price.classList.remove('price--out-of-stock');
       if (status === 'low' || status === 'out_of_stock') {
         const label = document.createElement('span');
         label.className = `stock-status stock-status--${status === 'low' ? 'low' : 'out'}`;
@@ -1206,6 +1206,26 @@ import { loadCategoryPages } from './category-pagination';
     ) {
       stockApi.decorateLastUnits(card, product);
       const status = productStockStatus(product.variants, product.lastUnitsThreshold);
+      card.querySelector('.product-restock')?.remove();
+      if (status === 'out_of_stock') {
+        const media = card.querySelector('.product-media');
+        if (media) {
+          const block = document.createElement('div');
+          block.className = 'product-restock';
+          const label = document.createElement('span');
+          label.className = 'product-restock__label';
+          label.textContent = 'Agotado';
+          const notify = document.createElement('button');
+          notify.type = 'button';
+          notify.textContent = 'Avisarme';
+          notify.setAttribute('aria-label', `Avisarme cuando vuelva ${product.name || 'este producto'}`);
+          notify.addEventListener('click', event => {
+            event.preventDefault(); event.stopPropagation();
+            window.dispatchEvent(new CustomEvent('cronox:restockOpen', { detail: { product } }));
+          });
+          block.append(label, notify); media.append(block);
+        }
+      }
       card.classList.remove(
         'product-card--out-of-stock',
         'product-card--low-stock',

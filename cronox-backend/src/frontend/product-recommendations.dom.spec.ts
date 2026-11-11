@@ -19,7 +19,7 @@ type ProductTestWindow = {
   CRONOX_catalogReady: Promise<unknown>;
   CRONOX_createProductCard: (
     product: Record<string, unknown>,
-  ) => HTMLAnchorElement;
+  ) => HTMLElement;
   eval: (source: string) => void;
 };
 
@@ -87,10 +87,13 @@ describe('PDP recommended-product cards', () => {
     const quickAdd = card.querySelector<HTMLButtonElement>('.fav-add');
     const favorite = card.querySelector<HTMLButtonElement>('.favorite-toggle');
 
-    expect(card.href).toBe('http://localhost:3000/producto/recommended-tee');
+    const links = card.querySelectorAll<HTMLAnchorElement>('a[data-product-link]');
+    expect(links).toHaveLength(2);
+    links.forEach(link => expect(link.href).toBe('http://localhost:3000/producto/recommended-tee'));
+    expect(card.querySelectorAll('a button')).toHaveLength(0);
     expect(media.nextElementSibling).toBe(info);
-    expect(info.firstElementChild).toBe(name);
-    expect(name.nextElementSibling).toBe(price);
+    expect(info.firstElementChild).toBe(name.parentElement);
+    expect(name.parentElement!.nextElementSibling).toBe(price);
     expect(name.textContent).toBe('RECOMMENDED TEE');
     expect(price.textContent).toBe('34,95 €');
     expect(images).toHaveLength(2);

@@ -41,7 +41,7 @@ describe('PDP and quick-add stock presentation', () => {
     stock.decorateCard(card, price, {
       variants: [{ id: 1, stockQty: 0, isActive: true }],
     });
-    expect(card.textContent).toContain('AGOTADO');
+    expect(card.querySelector('.product-restock__label')?.textContent).toBe('Agotado');
   });
 
   it.each(['pdp', 'quick-add'])(
@@ -116,9 +116,7 @@ describe('PDP and quick-add stock presentation', () => {
               ? 'stock-status stock-status--low'
               : '',
         );
-        expect(price.classList.contains('price--out-of-stock')).toBe(
-          stock === 0,
-        );
+        expect(price.classList.contains('price--out-of-stock')).toBe(false);
         expect(button.disabled).toBe(stock === 0);
         expect(button.getAttribute('aria-disabled')).toBe(String(stock === 0));
         if (stock === 0) {

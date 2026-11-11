@@ -78,7 +78,10 @@ export class ProductEditionsService {
       for (const key of ['url','storageKey','mimeType','fileSize','width','height','variants','alt','sortOrder','isPrimary','isActive','galleryPositionX','galleryPositionY','galleryZoom','galleryFit']) if (image[key] != null) data[key]=image[key];
       await tx.productImage.create({ data: data as Prisma.ProductImageUncheckedCreateInput });
     }
-    await tx.productVariant.updateMany({ where: { productId }, data: { isActive: false } });
+    // Keep unchanged purchasable sizes active: toggling every row off/on would
+    // reset the waitlist's uninterrupted-availability debounce on every save.
+    const activeIds = (profile.variants ?? []).filter((v: Profile) => v.isActive !== false).map((v: Profile) => v.id);
+    await tx.productVariant.updateMany({ where: { productId, isActive: true, id: { notIn: activeIds } }, data: { isActive: false } });
     for (const variant of profile.variants ?? []) await tx.productVariant.update({ where: { id: variant.id }, data: { isActive: variant.isActive !== false, price: variant.price ?? null } });
     await tx.productCost.upsert({ where: { productId }, create: { productId, unitCostCents: profile.unitCostCents ?? null }, update: { unitCostCents: profile.unitCostCents ?? null } });
     for (const v of await tx.productVariant.findMany({ where: { productId }, select: { id: true } })) await projectLotStock(tx,v.id);

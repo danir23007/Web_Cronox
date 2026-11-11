@@ -7,6 +7,19 @@
 .restock-status { min-height: 3em; line-height: 1.5; }
 .restock-help { font-size: .85rem; color: #aaa; line-height: 1.5; }
 .restock-panel :focus-visible { outline: 2px solid #fff; outline-offset: 4px; }
+.restock-dialog{box-sizing:border-box;width:calc(100% - 32px);max-width:420px;max-height:calc(100dvh - 32px);overflow:auto;padding:32px 24px;background:#fff;color:#000;border:1px solid #000;font:inherit;}
+.restock-dialog::backdrop{background:rgba(0,0,0,.65);}
+.restock-dialog h2{font:inherit;font-weight:700;padding-right:28px;overflow-wrap:anywhere;margin:0 0 20px;}
+.restock-dialog p{line-height:1.5;overflow-wrap:anywhere;}
+.restock-dialog button,.restock-dialog a{font:inherit;min-height:44px;color:#000;background:transparent;border:1px solid #000;border-radius:0;padding:10px 14px;cursor:pointer;}
+.restock-dialog .restock-close{position:absolute;right:8px;top:8px;border:0;font-size:24px;}
+.restock-sizes{display:flex;flex-wrap:wrap;gap:10px;}
+.restock-sizes button[aria-pressed=true]{background:#000;color:#fff;}
+.restock-sizes button:disabled{cursor:wait;}
+.restock-dialog [data-restock-status]{min-height:3em;}
+.restock-dialog :focus-visible{outline:2px solid #000;outline-offset:3px;}
+.restock-dialog .restock-help{color:#444;}
+.restock-panel button{width:100%;}
 .waitlist-filters { display: flex; flex-wrap: wrap; gap: 12px; margin-block: 16px; }
 .waitlist-filters label { flex: 1 1 180px; }
 .waitlist-filters input, .waitlist-filters select { width: 100%; }

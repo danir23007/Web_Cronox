@@ -12,6 +12,9 @@ const setup = (pdp = false, initial = data()) => {
   const dom = new JSDOM(pdp ? '<p id="pPrice"></p><div id="pSizeGroup"></div><button id="pAdd"></button><p data-delivery-notice data-product-delivery hidden><strong data-delivery-date></strong></p>' : '',
     { runScripts: 'outside-only', pretendToBeVisual: true, url: 'http://localhost:3000/producto/chosen' });
   const app = dom.window as any;
+  app.CSS = { escape: (value: string) => value };
+  app.HTMLDialogElement.prototype.showModal = function () { this.open = true; };
+  app.HTMLDialogElement.prototype.close = function () { this.open = false; this.dispatchEvent(new app.Event('close')); };
   app.scrollTo = () => {};
   app.HTMLElement.prototype.scrollIntoView = () => {};
   app.matchMedia = () => ({ matches: false, addEventListener() {} });
@@ -30,6 +33,13 @@ const setup = (pdp = false, initial = data()) => {
 };
 const tick = () => new Promise(resolve => setTimeout(resolve, 0));
 describe('initial Quick Add size and current availability', () => {
+  it('leaves a fully exhausted PDP unselected until the customer chooses a size', async () => {
+    const { dom, document }=setup(true,data(0));await tick();
+    expect(document.querySelectorAll('#pSizeGroup [aria-checked=true]')).toHaveLength(0);
+    const size=document.querySelector<HTMLButtonElement>('#pSizeGroup [data-size=M]')!;
+    expect(size.disabled).toBe(false);size.click();expect(size.getAttribute('aria-checked')).toBe('true');
+    expect(document.querySelector<HTMLButtonElement>('#pAdd')!.disabled).toBe(true);dom.window.close();
+  });
   it('requires a fresh read on each opening and genuinely retries after an availability failure', async () => {
     const { dom, app, document } = setup();
     let resolve: (product: unknown) => void = () => {};
@@ -209,7 +219,7 @@ describe('initial Quick Add size and current availability', () => {
     expect(document.querySelector<HTMLElement>('[data-product-delivery]')!.hidden).toBe(true);
     dom.window.close();
   });
-  it('alert entry retains the explicit exhausted size and focuses it after the authenticated read', async () => {
+  it('the shared alert selector retains and focuses the explicit exhausted size without subscribing on opening', async () => {
     const { dom, app, document } = setup();
     app.history.replaceState(null, '', '/producto/chosen?waitlist=11&size=S#productWaitlist');
     app.CRONOX_USER = { id: 1 }; app.CRONOX_AUTH_READY = Promise.resolve();
@@ -218,22 +228,27 @@ describe('initial Quick Add size and current availability', () => {
     app.eval(read('waitlist.js'));
     const anchor = document.createElement('div'); document.body.appendChild(anchor);
     app.CRONOX_WAITLIST.mount(data(), anchor);
-    const select = document.getElementById('restockSize') as HTMLSelectElement;
-    expect(select.value).toBe('11'); expect(select.disabled).toBe(true);
+    void app.CRONOX_WAITLIST.open(data(), { size: 'S' });
+    const select = document.querySelector('[data-restock-size=S]') as HTMLButtonElement;
+    expect(select.getAttribute('aria-pressed')).toBe('true');
     await tick(); resolveRead({ ok: true, json: async () => ({ subscription: null }) }); await tick();
     await new Promise(resolve => app.requestAnimationFrame(resolve));
     expect(select.disabled).toBe(false); expect(document.activeElement).toBe(select);
-    expect(select.value).toBe('11');
+    expect(select.getAttribute('aria-pressed')).toBe('true');
     dom.window.close();
   });
-  it('an alert entry that is no longer exhausted never substitutes a different size', () => {
+  it('an alert entry that is no longer exhausted offers buying without substituting another size', async () => {
     const { dom, app, document } = setup();
     app.history.replaceState(null, '', '/producto/chosen?waitlist=10&size=M#productWaitlist');
     app.eval(read('waitlist.js'));
+    app.CRONOX_USER = { id: 1 }; app.CRONOX_AUTH_READY = Promise.resolve();
+    const post = jest.fn(); app.fetch = post;
     const anchor = document.createElement('div'); document.body.appendChild(anchor);
     app.CRONOX_WAITLIST.mount(data(), anchor);
-    expect((document.getElementById('restockSize') as HTMLSelectElement).value).toBe('');
-    expect(document.querySelector<HTMLButtonElement>('#productWaitlist button')!.disabled).toBe(true);
+    await app.CRONOX_WAITLIST.open(data(), { size: 'M', submit: true }); await tick();
+    expect(document.querySelector<HTMLAnchorElement>('[data-restock-buy]')!.hidden).toBe(false);
+    expect(document.querySelector<HTMLAnchorElement>('[data-restock-buy]')!.href).toContain('size=M');
+    expect(post).not.toHaveBeenCalled();
     dom.window.close();
   });
 });
