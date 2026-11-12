@@ -16,7 +16,19 @@ export async function reconcilePointCosts(db: Pick<PrismaClient,'$transaction'>,
       if(!options.actorId || !await tx.user.findFirst({where:{id:options.actorId,role:'SUPERADMIN'}}))throw Error('SUPERADMIN_REQUIRED');
       await tx.$queryRaw`SELECT id FROM "SalePoint" WHERE (${options.pointId ?? null}::text IS NULL OR id=${options.pointId ?? null}) ORDER BY id FOR UPDATE`;
     }
-    const entries=await tx.pointEntry.findMany({where:{pointId:options.pointId,kind:'SALE'},include:{sale:{include:{entries:true}}},orderBy:{id:'asc'}});
+    return pointCostPlan(tx,options);
+  },{isolationLevel:Prisma.TransactionIsolationLevel.Serializable,timeout:60000});
+}
+
+/** Read projection shares the reconciliation evidence policy, without exposing
+ * its write mode. Applying revisions still requires the authorised wrapper. */
+export function planPointCosts(tx:Prisma.TransactionClient, options:{entryIds:string[];projection:true}) {
+  return pointCostPlan(tx,options);
+}
+
+async function pointCostPlan(tx:Prisma.TransactionClient, options:{pointId?:string;entryIds?:string[];apply?:boolean;actorId?:number;projection?:boolean}={}) {
+    const resolved:Array<{entryId:string;lineIndex:number;after:PointDelta}>=[];
+    const entries=await tx.pointEntry.findMany({where:{pointId:options.pointId,id:options.entryIds ? {in:options.entryIds}:undefined,kind:'SALE'},include:{sale:{include:{entries:true}}},orderBy:{id:'asc'}});
     const rows:Array<{entryId:string;saleId:string|null;date:string;lineIndex:number;productId:number;product:string;size:string;units:number;lotIds:string[];editionNumbers:(number|null)[];status:string;reason:string;previousCostCents:number|null;costCents:number|null;profitImpactCents:number|null;recoveredProfitCents:number|null;sources:string[];evidenceIds:string[]}> = [];
     for(const entry of entries)for(const [index,original] of (entry.lines as unknown as PointDelta[]).entries()){
       const revision=await tx.inventoryPointCostRevision.findFirst({where:{entryId:entry.id,lineIndex:index},orderBy:{revision:'desc'}});
@@ -26,7 +38,7 @@ export async function reconcilePointCosts(db: Pick<PrismaClient,'$transaction'>,
       row.status='PENDING';row.reason='Falta evidencia histórica de la tirada y su coste';
       const later=entry.sale?.entries.some(e=>e.kind!=='SALE' && !(e.after as {dateTransfer?:boolean}|null)?.dateTransfer && Array.isArray(e.lines) && e.lines.length);
       // A date transfer copies the old financial line too; it must be reconciled together.
-      if(later || entry.sale?.entries.some(e=>(e.after as {dateTransfer?:boolean}|null)?.dateTransfer)){row.reason='Conciliar conjuntamente la venta y sus correcciones, cambios de fecha o devoluciones';continue;}
+      if((later || entry.sale?.entries.some(e=>(e.after as {dateTransfer?:boolean}|null)?.dateTransfer)) && !(options.projection && entry.sale?.entries.filter(e=>e.kind!=='SALE').every(e=>Array.isArray(e.lines) && (e.lines as unknown as PointDelta[]).every(l=>l.costCents!==null)))){row.reason='Conciliar conjuntamente la venta y sus correcciones, cambios de fecha o devoluciones';continue;}
       const snapshot=entry.after as unknown as PointState;
       const savedLine=snapshot?.lines?.find(l=>l.id===current.lineId) ?? snapshot?.lines?.[index];
       if(!savedLine || savedLine.variantId!==current.variantId){row.reason='Falta la línea original que identifica las unidades';continue;}
@@ -79,8 +91,9 @@ export async function reconcilePointCosts(db: Pick<PrismaClient,'$transaction'>,
       row.recoveredProfitCents=current.revenueCents-current.commissionCents-cost;
       row.profitImpactCents=row.recoveredProfitCents-pointPartialCost(current).knownProfitCents;
       row.reason='Coste de las unidades originales acreditado por '+row.sources.join(', ');
+      const after:PointDelta={...current,lineId:current.lineId ?? savedLine.id,lotCosts:proposed,costCents:cost};
+      resolved.push({entryId:entry.id,lineIndex:index,after});
       if(!options.apply)continue;
-      const after:PointDelta={...current,lotCosts:proposed,costCents:cost};
       await tx.inventoryPointCostRevision.create({data:{id:randomUUID(),entryId:entry.id,lineIndex:index,revision:(revision?.revision ?? 0)+1,actorId:options.actorId!,reason:'Conciliación verificable de coste; evidencia: '+row.evidenceIds.join(', '),before:current as unknown as Prisma.InputJsonValue,after:after as unknown as Prisma.InputJsonValue}});
       if(entry.sale){
         const saved=await tx.pointSale.findUniqueOrThrow({where:{id:entry.sale.id}});
@@ -95,6 +108,5 @@ export async function reconcilePointCosts(db: Pick<PrismaClient,'$transaction'>,
       for(const lotId of new Set(proposed.map(p=>p.lotId)))await tx.inventoryLotAudit.create({data:{id:randomUUID(),lotId,actorId:options.actorId,reason:'Conciliar coste de venta física sin cambiar stock',after:{entryId:entry.id,lineIndex:index,evidenceIds:row.evidenceIds,costCents:cost,stockChanged:false}}});
       row.status='APPLIED';
     }
-    return {apply:!!options.apply,rows,summary:Object.fromEntries(['PRESERVED','PROPOSED','PENDING','APPLIED'].map(status=>[status,rows.filter(r=>r.status===status).reduce((n,r)=>n+r.units,0)]))};
-  },{isolationLevel:Prisma.TransactionIsolationLevel.Serializable,timeout:60000});
+    return {apply:!!options.apply,rows,resolved,summary:Object.fromEntries(['PRESERVED','PROPOSED','PENDING','APPLIED'].map(status=>[status,rows.filter(r=>r.status===status).reduce((n,r)=>n+r.units,0)]))};
 }

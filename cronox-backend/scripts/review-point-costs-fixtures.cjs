@@ -49,7 +49,10 @@ module.exports=async({db,app,users,root,out})=>{
   }
   await previous.sale(reproduction.pointId,users.admin.id,randomUUID(),{occurredAt:date,stockHandling:mode,note:'Reproducción sintética',paymentMethod:'CASH',lines:[{variantId:product.variants[size],lotId:product.lot1,quantity:1,unitPriceCents:price,commissionBp:5000}]});
  }
- const baseline=await points.detail(reproduction.pointId,range.from,range.to);
+ const projectedBaseline=await points.detail(reproduction.pointId,range.from,range.to);
+ assert.equal(projectedBaseline.report.totals.knownCostCents,11200);assert.equal(projectedBaseline.report.totals.knownProfitCents,5300);assert.equal(projectedBaseline.report.totals.pendingCostUnits,2);
+ fs.writeFileSync(path.join(out,'projected-baseline.json'),JSON.stringify(projectedBaseline.report,null,2));
+ const baseline={...projectedBaseline,report:require('../src/admin/points/point-calculations').calculatePoints(await db.pointEntry.findMany({where:{pointId:reproduction.pointId}}),range.from,range.to)};
  assert.equal(baseline.report.totals.revenueCents,41000);assert.equal(baseline.report.totals.commissionCents,20500);assert.equal(baseline.report.netUnits,9);
  assert.equal(baseline.report.totals.knownCostCents,2750);assert.equal(baseline.report.totals.knownProfitCents,1250);assert.equal(baseline.report.totals.pendingCostUnits,7);
  // Dated audit evidence allows safe recovery of one old sale; absence of such

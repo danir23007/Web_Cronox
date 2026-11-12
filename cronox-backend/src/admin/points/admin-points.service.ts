@@ -1,4 +1,4 @@
-import { applyPointCostRevisions } from './point-cost-revisions';
+import { applyPointCostRevisions, pointSaleCostState } from './point-cost-revisions';
 import { adjustedPointParts, pointLotOption, pricePointParts } from './point-lot-costs';
 import { allocateLots, returnLots, managedVariant, sourceCosts, takeCosts, removeCostParts } from '../../inventory-lots/lot-ledger';
 import { frozenCost, FrozenLotCost } from '../../inventory-lots/lot-costs';
@@ -407,7 +407,7 @@ export class AdminPointsService {
               'La corrección no puede preceder al último movimiento.',
             );
         }
-        const before = previous?.state as unknown as PointState | undefined;
+        const before = previous ? await pointSaleCostState(tx,previous.id,previous.state as unknown as PointState) : undefined;
         if (previous && dto.orderId !== undefined && dto.orderId !== previous.orderId) throw new ConflictException('No se puede cambiar el pedido vinculado de una venta.');
         let historic: Map<number,number> | undefined;
         if (!previous && dto.orderId) {
@@ -614,7 +614,7 @@ export class AdminPointsService {
           throw new BadRequestException(
             'La devolución no puede preceder al último movimiento.',
           );
-        const before = sale.state as unknown as PointState,
+        const before = await pointSaleCostState(tx,sale.id,sale.state as unknown as PointState),
           after: PointState = structuredClone(before);
         const deltas: PointDelta[] = [],
           changes = new Map<number, number>();
@@ -765,9 +765,9 @@ export class AdminPointsService {
         return {
           point,
           report: calculatePoints(entries.filter(pointEntryIncluded), from, to),
-          sales: sales.filter(
+          sales: await Promise.all(sales.filter(
             (s) => (!search && productId === undefined) || matches((s.state as unknown as PointState).lines),
-          ),
+          ).map(async s=>({...s,state:await pointSaleCostState(tx,s.id,s.state as unknown as PointState)}))),
           entries: entries.filter(
             (e) => (!search && productId === undefined) || matches(e.lines as unknown as { productId: number; name: string }[]) || sales.some(s => s.id === e.saleId && matches((s.state as unknown as PointState).lines)),
           ),

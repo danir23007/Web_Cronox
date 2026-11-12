@@ -5,11 +5,14 @@ const fs=require('node:fs'),path=require('node:path'),assert=require('node:asser
 const {spawnSync}=require('node:child_process'),{randomUUID,randomBytes}=require('node:crypto'),{Client}=require('pg');
 const restockSelection=process.argv.includes('--restock-selection');
 const favoritePrices=process.argv.includes('--favorite-prices');
+const pointReportReview=process.argv.includes('--point-report');
+const allPointReports=process.argv.includes('--all-point-reports');
+const pointSalesReview=process.argv.includes('--point-sales-review');
 const restockReview=process.argv.includes('--restock')||restockSelection;
-const pointCostsReview=process.argv.includes('--point-costs');
+const pointCostsReview=process.argv.includes('--point-costs')||pointSalesReview;
 const realCostsFile=process.argv.find(a=>a.startsWith('--real-point-costs='))?.slice('--real-point-costs='.length);
-const backend=path.resolve(__dirname,'..'),root=path.resolve(backend,'..'),out=path.join(root,'output/playwright',favoritePrices?'favorite-prices':pointCostsReview?'point-costs':restockSelection?'restock-selection':restockReview?'restock-flow':process.argv.includes('--editor-save')?'editions-editor-save':'editions-integrated');
-const port=favoritePrices?43134:realCostsFile?43133:pointCostsReview?43132:43131,origin='http://127.0.0.1:'+port,name='cronox_editions_ui_'+randomUUID().replaceAll('-','');
+const backend=path.resolve(__dirname,'..'),root=path.resolve(backend,'..'),out=path.join(root,'output/playwright',allPointReports?'all-point-costs-release-20261112':pointSalesReview?'point-sales-review-20261112':pointReportReview?'point-cost-report-20261112':favoritePrices?'favorite-prices':pointCostsReview?'point-costs':restockSelection?'restock-selection':restockReview?'restock-flow':process.argv.includes('--editor-save')?'editions-editor-save':'editions-integrated');
+const port=allPointReports?43137:pointSalesReview?43136:pointReportReview?43135:favoritePrices?43134:realCostsFile?43133:pointCostsReview?43132:43131,origin='http://127.0.0.1:'+port,name='cronox_editions_ui_'+randomUUID().replaceAll('-','');
 async function main(){
   const env=require('./start-local.cjs').loadLocalEnvironment(),source=new URL(env.DATABASE_URL);source.search='';
   assert.ok(['127.0.0.1','localhost','[::1]'].includes(source.hostname));

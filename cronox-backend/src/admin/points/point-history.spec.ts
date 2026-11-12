@@ -1,5 +1,5 @@
 // Legacy unit fixtures have no explicit lot cost revisions; PostgreSQL integration covers those.
-jest.mock('./point-cost-revisions', () => ({ applyPointCostRevisions: jest.fn(async (_db, entries) => entries) }));
+jest.mock('./point-cost-revisions', () => ({ applyPointCostRevisions: jest.fn(async (_db, entries) => entries), pointSaleCostState: jest.fn(async (_db, _id, state) => state) }));
 import { AdminPointsService } from './admin-points.service';
 describe('Point product history filtering',()=>{
   it('uses exact selected IDs, normalizes text, excludes unrelated expenses and leaves totals intact',async()=>{

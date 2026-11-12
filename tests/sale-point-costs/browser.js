@@ -6,12 +6,13 @@ await page.context().clearCookies();await page.goto(f.origin+'/admin-login.html'
 await page.locator('#adminLoginEmail').fill(f.users.admin.email);await page.locator('#adminLoginPassword').fill(f.password);await page.locator('#adminLoginSubmit').click();await page.waitForURL('**/admin.html**');
 const url=id=>f.origin+'/admin.html#section-sale-points?'+new URLSearchParams({point:id,...c.range});
 await page.goto(url(c.reproductionPointId));await page.getByRole('heading',{name:'PRUEBA COSTES · Reproducción 410 €',exact:true}).waitFor();
-check(await page.locator('.pos-metrics').textContent().then(t=>t.includes('410,00')&&t.includes('205,00')&&t.includes('12,50')&&t.includes('parcial')&&t.includes('7 unidades con coste pendiente')),'410/205/9 partial control not rendered');
+check(await page.locator('.pos-metrics').textContent().then(t=>t.includes('410,00')&&t.includes('205,00')&&t.includes('53,00')&&t.includes('parcial')&&t.includes('2 unidades con coste pendiente')),'410/205/9 historical read projection not rendered');
 await page.screenshot({path:'output/playwright/point-costs/reproduction-1440.png',fullPage:true});
 const read=async()=>await(await page.request.get(f.origin+'/__review/point-costs')).json();
 const api=async(path,body)=>page.evaluate(async({path,body})=>{
  const r=await fetch('/api/admin/'+path,{method:body?'POST':'GET',credentials:'include',headers:{'Content-Type':'application/json',...(body?await window.CRONOX_API.getCsrfHeaders():{}),'Idempotency-Key':crypto.randomUUID()},...(body?{body:JSON.stringify(body)}:{})});const data=await r.json();return {status:r.status,data};
 },{path,body});
+const initialMap=(await api('map?'+new URLSearchParams({...c.range,division:'provinces',region:'28'}))).data;
 const open=async()=>{await page.goto(url(c.pointId));await page.locator('[data-action=sale]').click();await page.locator('.pos-editor form').waitFor();await page.locator('[name=occurredAt]').fill(c.date);};
 // Multiple lines, exact edition labels and independent defaults.
 await open();let row=page.locator('[data-lines] > fieldset').first();await row.locator('[data-variant]').selectOption(String(c.two.variants.M));
@@ -79,7 +80,7 @@ const historicReturn=await api('sale-points/'+c.recoveryPointId+'/sales/'+adjust
 const returnedStock=(await read()).lots.find(l=>l.id===c.two.lot1).slices.filter(s=>s.variantId===c.two.variants.L);check(returnedStock.reduce((n,s)=>n+s.available,0)===21&&returnedStock.every(s=>s.available===0||s.productionCents===1375&&s.freightCents===0&&s.otherCents===0),'Restocked historical unit lost frozen cost');
 const map=(await api('map?'+new URLSearchParams({...c.range,division:'provinces',region:'28'}))).data;
 const allFinance=(await api('finance?'+new URLSearchParams({...c.range,source:'all',currency:'EUR'}))).data;
-check(map.total.pendingCostUnits===8,'Map retained uncertainty after cancellation');
+check(map.total.pendingCostUnits===initialMap.total.pendingCostUnits+1,'Map retained uncertainty after cancellation');
 for(const field of ['revenueCents','profitCents','knownProfitCents','pendingCostUnits'])check(map.total[field]===allFinance.totals[field],'Map and Finance disagree: '+field);
 for(const width of [390,1440]){await page.setViewportSize({width,height:950});await page.goto(url(c.pointId));await page.locator('.pos-metrics').waitFor();check(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),'Page overflow at '+width);await page.screenshot({path:'output/playwright/point-costs/results-'+width+'.png',fullPage:true});await page.locator('.finance-chart:visible').scrollIntoViewIfNeeded();await page.waitForFunction(()=>{const host=document.querySelector('#section-sale-points .finance-chart'),svg=host?.querySelector('svg');return svg && Number(svg.getAttribute('viewBox').split(' ')[2])===host.clientWidth;});await page.locator('.finance-chart:visible').focus();await page.keyboard.press('Home');await page.locator('.finance-tooltip:visible').waitFor({state:'visible'});}
 return {passed:true,captures,referenceProfit:625,mixedBeforeAdjustments:{knownCostCents:8525,knownProfitCents:3475,pendingCostUnits:1},finalTotals:(await read()).report.report.totals,labels:['1 tirada','2 tirada'],manualChoicePreserved:true,historicalSnapshotsUnchanged:true,commissionRounding:2733,returnAndExpenseReversal:true,financeMatches:true,mapMatchesFinance:true,mapPendingUnits:map.total.pendingCostUnits,widths:[390,1440]};
