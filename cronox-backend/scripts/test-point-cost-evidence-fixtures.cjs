@@ -49,7 +49,7 @@ module.exports=async({db,points,admin,checks})=>{
  const filtered=await finance.getReport({...query,pointId:point.id});
  for(const field of ['costCents','profitCents','knownCostCents','knownProfitCents','pendingCostUnits'])assert.equal(filtered.totals[field],read.report.totals[field],'Filtered general mismatch: '+field);
  const map=await new(require('../src/admin/map/admin-map.service').AdminMapService)(db).getReport({from:query.from,to:query.to,page:1}),allFinance=await finance.getReport({...query,source:'all'});
- for(const field of ['revenueCents','profitCents','knownProfitCents','pendingCostUnits'])assert.equal(map.total[field],allFinance.totals[field],'Map/Finance mismatch: '+field);
+ for(const field of ['revenueCents','costCents','knownCostCents','profitCents','knownProfitCents','pendingCostUnits'])assert.equal(map.total[field],allFinance.totals[field],'Map/Finance mismatch: '+field);
  checks.push('Read-time historical costs agree across every point, point-list cards, general report, point filter, Finance and Map; explicit zero and genuine pending units preserved without reconciliation');
  const applied=await reconcilePointCosts(db,{pointId:point.id,apply:true,actorId:admin.id});assert.equal(applied.summary.APPLIED,4);
  const count=await db.inventoryPointCostRevision.count();const replay=await reconcilePointCosts(db,{pointId:point.id,apply:true,actorId:admin.id});assert.equal(replay.summary.APPLIED,0);assert.equal(await db.inventoryPointCostRevision.count(),count);

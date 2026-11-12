@@ -16,7 +16,7 @@ import {
   madridMidnight,
 } from '../finance/financial-calculations';
 import { AdminMapController, MapQuery } from './admin-map.controller';
-import { AdminMapService, mapOrderAmounts } from './admin-map.service';
+import { addAmounts, AdminMapService, mapOrderAmounts } from './admin-map.service';
 import { classifyShipping, PROVINCES, REGIONS } from './spain-geography';
 
 const order = (patch: Partial<FinanceOrder> = {}): FinanceOrder => ({
@@ -76,6 +76,13 @@ const amounts = (o = order(), events: FinanceEvent[] = []) =>
   mapOrderAmounts(o, events, '2026-03-01', '2026-03-31');
 
 describe('Map geography', () => {
+  it('retains web and recovered point costs when combining partial metadata',()=>{
+    const target={orders:1,units:2,revenueCents:2000,profitCents:1400,costCents:600};
+    addAmounts(target,{orders:1,units:1,revenueCents:4000,profitCents:625,costCents:1375,knownCostCents:1375,knownProfitCents:625,pendingCostUnits:0,knownCostUnits:1});
+    expect(target).toMatchObject({costCents:1975,knownCostCents:1975,profitCents:2025,knownProfitCents:2025,pendingCostUnits:0});
+    addAmounts(target,{orders:1,units:1,revenueCents:4000,profitCents:null,costCents:null,knownCostCents:0,knownProfitCents:0,pendingCostUnits:1,knownCostUnits:0});
+    expect(target).toMatchObject({costCents:null,knownCostCents:1975,profitCents:null,knownProfitCents:2025,pendingCostUnits:1});
+  });
   it('keeps a reliable community without inventing a province and rejects conflicting community evidence', () => {
     expect(
       classifyShipping({ country: 'ES', state: 'Andalucía' }),
@@ -370,6 +377,7 @@ describe('Map aggregation, validation and permissions', () => {
       units: 810,
       revenueCents: 810000,
       profitCents:567000,
+      costCents:243000,
     });
     expect(result.identified.orders).toBe(402);
     expect(result.groups.find((g) => g.id === 'foreign')?.orders).toBe(3);

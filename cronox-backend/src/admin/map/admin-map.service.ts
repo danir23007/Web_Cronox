@@ -21,11 +21,13 @@ export type MapAmounts = {
   units: number;
   revenueCents: number | null;
   profitCents: number | null;
+  costCents?: number | null;
+  knownCostCents?:number;
   knownProfitCents?:number;
   knownCostUnits?:number;
   pendingCostUnits?:number;
 };
-const empty = (): MapAmounts => ({ orders: 0, units: 0, revenueCents: 0, profitCents:0 });
+const empty = (): MapAmounts => ({ orders: 0, units: 0, revenueCents: 0, profitCents:0, costCents:0 });
 export function addAmounts(target: MapAmounts, amount: MapAmounts) {
   mergePartialAmounts(target,amount);
   target.orders += amount.orders;
@@ -35,8 +37,9 @@ export function addAmounts(target: MapAmounts, amount: MapAmounts) {
       ? null
       : target.revenueCents + amount.revenueCents;
   target.profitCents=target.profitCents===null||amount.profitCents===null?null:target.profitCents+amount.profitCents;
+  target.costCents=target.costCents===null||amount.costCents===null?null:(target.costCents ?? 0)+(amount.costCents ?? 0);
   if (
-    [target.orders, target.units, target.revenueCents,target.profitCents].some(
+    [target.orders, target.units, target.revenueCents,target.profitCents,target.costCents].some(
       (v) => v !== null && !Number.isSafeInteger(v),
     )
   )
@@ -48,7 +51,7 @@ export function mapOrderAmounts(order: FinanceOrder, events: FinanceEvent[], fro
   const calculated=calculateFinance([order],events,from,to,'months',false),financial=calculated.totals;
   const success=events.filter(e=>e.paymentIntentId===order.providerRef&&e.type==='payment_intent.succeeded').sort((a,b)=>+a.occurredAt-+b.occurredAt||a.id.localeCompare(b.id))[0];
   const paidAt=order.source==='IN_PERSON_ADMIN'?order.purchasedAt??order.createdAt:order.paidAt??success?.occurredAt??order.purchasedAt??order.createdAt;
-  const amount={orders:calculated.recentOrders.some(o=>o.id===order.id)?1:0,units:financial.unitsSold-financial.unitsReturned,revenueCents:financial.revenueCents,profitCents:financial.profitCents};
+  const amount={orders:calculated.recentOrders.some(o=>o.id===order.id)?1:0,units:financial.unitsSold-financial.unitsReturned,revenueCents:financial.revenueCents,profitCents:financial.profitCents,costCents:financial.costCents};
   if(Object.values(amount).every(v=>v===0))return {excluded:'outside' as const};
   return {paidAt,amount,grossUnits:financial.unitsSold,returnedUnits:financial.unitsReturned,warnings:calculated.warnings};
 }
@@ -114,6 +117,7 @@ export class AdminMapService {
           revenueCents: number | null;
           available: boolean;
           profitCents:number|null;
+          costCents?:number|null;
           pointId?: string;
           pointName?:string;
           source?:'order'|'point';
@@ -241,7 +245,7 @@ export class AdminMapService {
                   units: value.amount.units,
                   revenueCents: value.amount.revenueCents,
                   available: shipping.has(row.orderId),
-                  profitCents:value.amount.profitCents,source:'order',
+                  profitCents:value.amount.profitCents,costCents:value.amount.costCents,source:'order',
                 });
               detailCount++;
             }
@@ -260,7 +264,7 @@ export class AdminMapService {
         };
         for(const entry of entries){
           const stats=calculatePoints([entry],query.from,query.to,'months',false),t=stats.totals;
-          const amount={orders:t.salesCount,units:t.unitsSold-t.unitsReturned,revenueCents:t.revenueCents,profitCents:t.profitCents,knownProfitCents:t.knownProfitCents,knownCostUnits:t.knownCostUnits,pendingCostUnits:t.pendingCostUnits};
+          const amount={orders:t.salesCount,units:t.unitsSold-t.unitsReturned,revenueCents:t.revenueCents,profitCents:t.profitCents,costCents:t.costCents,knownCostCents:t.knownCostCents,knownProfitCents:t.knownProfitCents,knownCostUnits:t.knownCostUnits,pendingCostUnits:t.pendingCostUnits};
           if(Object.values(amount).every(v=>v===0))continue;
           const location=pointLocation(entry.point);
           collectPoint(total,entry);grossUnits+=t.unitsSold;returnedUnits+=t.unitsReturned;
@@ -276,7 +280,7 @@ export class AdminMapService {
         // profits would leave a fully cancelled unknown sale permanently unknown.
         for(const [target,ledger] of pointTargets){
           const t=calculatePoints(ledger,query.from,query.to,'months',false).totals;
-          addAmounts(target,{orders:t.salesCount,units:t.unitsSold-t.unitsReturned,revenueCents:t.revenueCents,profitCents:t.profitCents,knownProfitCents:t.knownProfitCents,knownCostUnits:t.knownCostUnits,pendingCostUnits:t.pendingCostUnits});
+          addAmounts(target,{orders:t.salesCount,units:t.unitsSold-t.unitsReturned,revenueCents:t.revenueCents,profitCents:t.profitCents,costCents:t.costCents,knownCostCents:t.knownCostCents,knownProfitCents:t.knownProfitCents,knownCostUnits:t.knownCostUnits,pendingCostUnits:t.pendingCostUnits});
         }
         if (
           query.region &&

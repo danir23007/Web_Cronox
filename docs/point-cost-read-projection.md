@@ -14,6 +14,8 @@ cost. The currently active edition never replaces the sale's original edition.
 
 The point-list cards, individual reports, product/size breakdowns, chart buckets,
 Finance with or without a point filter, and Map use this shared projection. The
+Map aggregation also carries total and known cost alongside profit, including
+the previously accumulated web costs when partial point metadata is merged. The
 sale detail, correction and return flows reuse the original resolved units.
 Legacy deltas without a line identifier are matched to their original snapshot.
 Financial corrections that cannot be resolved together remain pending.
