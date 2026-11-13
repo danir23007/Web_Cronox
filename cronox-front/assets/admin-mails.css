@@ -142,7 +142,23 @@ html[data-admin-theme] #section-mails .mail-template-card > p { color: var(--adm
 .mail-template-actions { display: flex; justify-content: space-between; gap: 16px; align-items: center; margin-top: auto; padding-top: 12px; border-top: 1px solid var(--admin-border, #36363d); }
 .mail-template-top { gap: 12px; align-items: center; flex-wrap: wrap; }
 html[data-admin-theme] #section-mails .mail-template-top { color: var(--admin-c-495468); }
-html[data-admin-theme] #section-mails .mail-template-state { color: var(--admin-text); border-color: var(--admin-border); background: var(--admin-surface); }
+.mail-template-state.is-published { --mail-state-color: #8de0b5; --mail-state-tint: #19382a; }
+.mail-template-state.is-draft { --mail-state-color: #ffb7b0; --mail-state-tint: #46282b; }
+html[data-admin-theme="light"] .mail-template-state.is-published { --mail-state-color: #187048; --mail-state-tint: #eff9f3; }
+html[data-admin-theme="light"] .mail-template-state.is-draft { --mail-state-color: #a32c2c; --mail-state-tint: #fff0ef; }
+#section-mails .mail-template-state { color: var(--mail-state-color); border-color: currentColor; background: var(--mail-state-tint); }
+.mail-template-guide { margin-top: 18px; padding: 18px 22px; border: 1px solid var(--admin-border, #36363d); border-radius: 12px; background: var(--admin-surface, #151518); }
+.mail-template-guide h4 { margin: 0 0 10px; font-size: 14px; }
+.mail-template-guide p { margin: 0; color: var(--admin-c-495468, #b8c6da); font-size: 12px; line-height: 1.6; }
+.mail-template-guide section + section { margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--admin-border, #36363d); }
+.mail-guide-classifications { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; margin-top: 12px; }
+.mail-template-guide .mail-classification-tag,
+.mail-template-guide .mail-template-state { display: inline-block; margin: 0 0 6px; }
+.mail-guide-states { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+@media (max-width: 780px) {
+  .mail-template-guide { padding: 16px; }
+  .mail-guide-classifications, .mail-guide-states { grid-template-columns: 1fr; }
+}
 .mail-trash { flex: 0 0 44px; min-width: 44px; height: 44px; display: inline-grid; place-items: center; border: 1px solid var(--admin-border, #5d4545); border-radius: 9px; color: var(--admin-c-a32c2c, #ffb7b0); background: var(--admin-surface, #151518); cursor: pointer; }
 .mail-trash:hover { background: var(--admin-c-fff0ef, #46282b); border-color: currentColor; }
 .mail-classification { margin: 20px 16px; padding: 16px; border: 1px solid var(--admin-border, #36363d); border-radius: 12px; }

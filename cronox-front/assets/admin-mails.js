@@ -14,6 +14,17 @@
     { value: "DIFFERENT", tag: "Diferente", name: "Plantillas diferentes", description: "Existe en todos los círculos, con contenido distinto." },
   ];
   const classificationFor = value => classifications.find(item => item.value === value);
+  function templateGuide() {
+    return '<aside class="mail-template-guide" aria-label="Guía de plantillas">' +
+      '<section aria-labelledby="mailColorsTitle"><h4 id="mailColorsTitle">Colores de las plantillas</h4>' +
+      '<p>La clasificación visual organiza las tarjetas; no cambia el contenido, los destinatarios ni las automatizaciones.</p>' +
+      '<div class="mail-guide-classifications">' + classifications.map(item =>
+        '<div data-classification="' + item.value + '"><span class="mail-classification-tag">' + item.tag + '</span><p>' + item.description + '</p></div>'
+      ).join('') + '</div></section>' +
+      '<section aria-labelledby="mailPublicationTitle"><h4 id="mailPublicationTitle">Estado de publicación</h4>' +
+      '<div class="mail-guide-states"><div><span class="mail-template-state is-draft">○ Borrador</span><p>Puedes editar la plantilla, previsualizarla y enviarte una prueba. Los envíos automáticos siguen usando la última versión publicada o, si todavía no hay ninguna, la plantilla de reserva.</p></div>' +
+      '<div><span class="mail-template-state is-published">● Publicado</span><p>Los próximos correos automáticos de ese tipo usan la versión publicada. Si haces cambios después, debes volver a pulsar «Publicar» para aplicarlos.</p></div></div></section></aside>';
+  }
   function classificationSelector(current) {
     return '<fieldset class="mail-classification"><legend>Clasificación visual</legend><p>Solo organiza las tarjetas; no cambia el contenido, los destinatarios ni las automatizaciones.</p><div class="mail-classification-options">' +
       classifications.map(item => '<label class="mail-classification-option" data-classification="' + item.value + '"><input type="radio" name="mailVisualClassification" data-field="visualClassification" value="' + item.value + '" ' + (current.visualClassification === item.value ? "checked" : "") + '><span class="mail-color-swatch" aria-hidden="true"></span><span><strong>' + item.name + '</strong><small>' + item.description + '</small></span></label>').join("") +
@@ -101,7 +112,7 @@
         '<span class="mail-status ' + (a.configured ? "is-ready" : "") + '"><i></i>' +
           (a.localOnly ? "Envío externo desactivado · vista previa local" : a.configured ? "SMTP configurado" : "SMTP pendiente") + "</span>",
         "account", a.key,
-      )).join("") + "</div>";
+      )).join("") + "</div>" + templateGuide();
     message("Selecciona una cuenta de correo.");
   }
   async function openAccount(key) {
@@ -274,8 +285,8 @@
       "</h3><p>" + data.total + ' plantillas en este círculo</p></div>' +
       button("new", "+ Nueva plantilla", "", "btn mail-primary") + '</header><div class="mail-template-grid">' +
       (data.items.map((t) => '<article class="mail-template-card"' + (classificationFor(t.visualClassification) ? ' data-classification="' + t.visualClassification + '"' : '') + '><div class="mail-template-top">' +
-        '<span class="mail-template-state ' + (t.published ? "is-published" : "") + '">' +
-        (t.published ? "● Publicada" : "○ Borrador") + "</span><time>" +
+        '<span class="mail-template-state ' + (t.published ? "is-published" : "is-draft") + '">' +
+        (t.published ? "● Publicado" : "○ Borrador") + "</span><time>" +
         new Date(t.updatedAt).toLocaleDateString("es-ES") + "</time></div><h3>" +
         esc(t.name) + "</h3>" + (classificationFor(t.visualClassification) ? '<span class="mail-classification-tag">' + classificationFor(t.visualClassification).tag + '</span>' : '') + '<p>' + esc(t.subject) + '</p><p class="mail-template-purpose">' + esc(state.catalog.find(item => item.key === t.purpose)?.name || t.purpose || "Sin automatización") + '</p><div class="mail-template-actions">' +
         button("edit", "Editar plantilla", 'data-id="' + esc(t.id) + '"', "btn mail-secondary") +
