@@ -1,5 +1,5 @@
 import { mailCircleNumber, resolveMailCircle } from './mail-circle-folders';
-import { CANONICAL_MAIL_CIRCLES, draftScope, draftContentMatches } from './mail-draft-scope';
+import { CANONICAL_MAIL_CIRCLES, draftScope, draftContentMatches as rawDraftContentMatches } from './mail-draft-scope';
 import { requireWelcomeCode } from './welcome-code';
 import {
   BadRequestException,
@@ -24,9 +24,9 @@ import {
   variablesFor,
 } from './mail-catalog';
 import { renderMail } from './mail-renderer';
+import { editableDraft, editorCopy, markEditableDocument, NEWSLETTER_ACCESS_COPY } from './mail-editor-content';
 import { mailPreviewData, welcomeDocument, WELCOME_SUBJECT } from './welcome-design';
 import {
-  adaptFirstPartyDocument,
   structuredDocumentForPurpose,
   passwordSetupDesign,
 } from './mail-template-documents';
@@ -47,6 +47,8 @@ type Tx = Prisma.TransactionClient;
 export type ControlledWelcomeDraftTest = { requestKey: string; revision: number; subjectId?: string };
 const json = (data: unknown) =>
   JSON.parse(JSON.stringify(data)) as Prisma.InputJsonValue;
+const draftContentMatches: typeof rawDraftContentMatches = (left, right) =>
+  rawDraftContentMatches(editableDraft(left as any), editableDraft(right as any));
 const failConflict = () => {
   throw new ConflictException(
     'El contenido cambió en otra sesión. Recarga antes de guardar.',
@@ -504,10 +506,10 @@ export class ManagedMailService {
     });
     if (!result || (result.purpose && !MAIL_PURPOSES.some(p => p.key === result.purpose && p.senderKey === key)))
       throw new NotFoundException('Plantilla no encontrada en esta cuenta.');
-    return {
-      ...result,
-      document: adaptFirstPartyDocument(result.purpose, result.document),
-    };
+    return result;
+  }
+  async editorTemplate(key: string, id: string) {
+    return editableDraft(await this.template(key, id));
   }
   async draftTargets(key: EmailSenderKey, id: string, tx: Tx = this.db) {
     const source = await this.template(key, id, tx);
@@ -951,16 +953,33 @@ export class ManagedMailService {
   }
   async preview(key: EmailSenderKey, dto: MailPreviewDto) {
     await this.folder(this.db, key, dto.folderId);
-    return this.render(
-      key,
-      {
-        ...dto,
-        document: json(dto.document),
-        purpose: dto.purpose || null,
-        signatureId: dto.signatureId || null,
-      },
-      mailPreviewData(dto.purpose),
-    );
+    const draft = editableDraft({ ...dto, purpose: dto.purpose || null, signatureId: dto.signatureId || null });
+    const data = mailPreviewData(dto.purpose);
+    if (dto.purpose === 'NEWSLETTER_ACCESS' && dto.scenario === 'registration') {
+      data.accountEligible = false; data.message = NEWSLETTER_ACCESS_COPY.registration;
+      data.initialPassword = ''; data.passwordMessage = '';
+    } else if (dto.purpose === 'NEWSLETTER_ACCESS' && dto.scenario === 'without-password') {
+      data.initialPassword = ''; data.passwordMessage = '';
+    }
+    if (dto.view === 'edit') {
+      const marked = markEditableDocument(draft.document);
+      const tokenData = (value: any, prefix = ''): any => Array.isArray(value) ? [tokenData(value[0])] :
+        value && typeof value === 'object' ? Object.fromEntries(Object.entries(value).map(([key, child]) => [key, tokenData(child, prefix ? `${prefix}.${key}` : key)])) :
+          typeof value === 'boolean' || value === '' ? value : `{{${prefix}}}`;
+      return { ...await this.render(key, { ...draft, document: marked.document }, tokenData(data)),
+        bindings: marked.bindings, warnings: [], preheader: draft.preheader || '' };
+    }
+    const source = await this.render(key, draft);
+    const missing = new Set<string>();
+    for (const match of (source.html + source.subject + (draft.textOverride || '')).matchAll(/\{\{\s*(?:#(?:if|each)\s+)?([\w.]+)\s*\}\}/g)) {
+      const name = match[1];
+      if (name === 'else') continue;
+      const value = name.split('.').reduce<any>((value, key) => value?.[key], data);
+      if (value === undefined || value === null) missing.add(name);
+    }
+    const result = await this.render(key, draft, data);
+    return { ...result, bindings: [], preheader: Handlebars.compile(draft.preheader || '')(data),
+      warnings: [...missing].map(name => `Falta un dato ficticio para {{${name}}}.`) };
   }
   async published(
     key: EmailSenderKey,
@@ -1165,6 +1184,7 @@ export class ManagedMailService {
   catalog() {
     return MAIL_PURPOSES.map((p) => ({
       ...p,
+      editorCopy: editorCopy(p.key),
       variables: variablesFor(p.key).map((key) => ({
         key,
         description: VARIABLE_DESCRIPTIONS[key] || key,

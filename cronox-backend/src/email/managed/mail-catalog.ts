@@ -26,7 +26,7 @@ export const MAIL_PURPOSES = [
   },
   { key: 'NEWSLETTER_ACCESS', name: 'Acceso solicitado desde newsletter',
     type: EmailType.GENERIC, subject: 'CRONOX · Accede a tu cuenta',
-    required: ['message', 'actionUrl'] },
+    required: ['actionUrl'] },
   {
     key: 'ORDER_CONFIRMATION',
     name: 'Confirmación de pedido',
@@ -64,11 +64,11 @@ export const MAIL_PURPOSES = [
   },
   {
     key: 'PASSWORD_SETUP_NEW_ACCOUNT', name: 'Contraseña tras compra: cuenta nueva', type: EmailType.PASSWORD_RESET,
-    subject: 'CRONOX · Tu cuenta está lista: configura tu contraseña', required: ['actionUrl', 'recoveryUrl', 'message', 'orderId'],
+    subject: 'CRONOX · Tu cuenta está lista: configura tu contraseña', required: ['actionUrl', 'recoveryUrl', 'orderId'],
   },
   {
     key: 'PASSWORD_SETUP_EXISTING_ACCOUNT', name: 'Contraseña tras compra: cuenta existente', type: EmailType.PASSWORD_RESET,
-    subject: 'CRONOX · Configura tu contraseña y consulta tu pedido', required: ['actionUrl', 'recoveryUrl', 'message', 'orderId'],
+    subject: 'CRONOX · Configura tu contraseña y consulta tu pedido', required: ['actionUrl', 'recoveryUrl', 'orderId'],
   },
   {
     key: 'INITIAL_PASSWORD_SETUP',
@@ -135,6 +135,7 @@ export const SAMPLE_DATA: Record<string, unknown> = {
   ],
 };
 export const VARIABLE_DESCRIPTIONS: Record<string, string> = {
+  accountEligible: 'Acceso solicitado por una cuenta existente (condición)',
   product: 'Nombre del producto', size: 'Talla solicitada', discountCode: 'Código de bienvenida',
   subject: 'Asunto del correo',
   title: 'Título del mensaje',
@@ -189,7 +190,7 @@ export function variablesFor(purpose?: string | null) {
   if (!purpose) return [...base, 'actionUrl', 'actionLabel', 'storeUrl', 'product',
     'productName', 'productSlug', 'size', 'imageUrl', 'productImage',
     'customerFullName', 'customerEmail', 'email'];
-  if (purpose === 'NEWSLETTER_ACCESS') return [...base, 'actionUrl', 'actionLabel', 'initialPassword', 'passwordMessage'];
+  if (purpose === 'NEWSLETTER_ACCESS') return [...base, 'actionUrl', 'actionLabel', 'initialPassword', 'passwordMessage', 'accountEligible'];
   const order = [
     'orderId',
     'orderUrl',

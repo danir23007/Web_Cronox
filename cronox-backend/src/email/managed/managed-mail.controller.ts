@@ -28,7 +28,8 @@ import { EmailSenderKey } from '../email.types';
 import { ManagedMailService } from './managed-mail.service';
 import { MailExceptionFilter } from './mail-exception.filter';
 import { renderMail } from './mail-renderer';
-import { SAMPLE_DATA } from './mail-catalog';
+import { mailPreviewData } from './welcome-design';
+import { markEditableDocument } from './mail-editor-content';
 import {
   AssetDto,
   FolderDeleteDto,
@@ -79,8 +80,10 @@ export class ManagedMailController {
     @Param('key', new ParseEnumPipe(EmailSenderKey)) key: EmailSenderKey,
     @Body() dto: SignatureDto,
   ) {
+    const marked = dto.view === 'edit' ? markEditableDocument(dto.document) : null;
     return {
-      ...renderMail(dto.document, dto.name, '', null, SAMPLE_DATA),
+      ...renderMail(marked?.document || dto.document, dto.name, '', null, dto.view === 'edit' ? undefined : mailPreviewData()),
+      bindings: marked?.bindings || [], warnings: [], preheader: '',
       senderKey: key,
     };
   }
@@ -167,7 +170,7 @@ export class ManagedMailController {
     @Param('key', new ParseEnumPipe(EmailSenderKey)) key: EmailSenderKey,
     @Param('id') id: string,
   ) {
-    return this.service.template(key, id);
+    return this.service.editorTemplate(key, id);
   }
   @Get(':key/templates/:id/draft-targets') draftTargets(
     @Param('key', new ParseEnumPipe(EmailSenderKey)) key: EmailSenderKey,

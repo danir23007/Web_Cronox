@@ -1,4 +1,5 @@
 import { requireWelcomeCode } from './managed/welcome-code';
+import { PASSWORD_SETUP_COPY, NEWSLETTER_ACCESS_COPY } from './managed/mail-editor-content';
 import {
   Injectable,
   InternalServerErrorException,
@@ -115,7 +116,9 @@ export class EmailService {
       }
       // A published design must never remove the verification action.
       if (setup && custom) {
-        const required = [data.title, data.message, data.orderId, 'Configurar contraseña'];
+        // Fixed prose is editable. Security depends on the real links and order,
+        // not an exact match with the original title/message.
+        const required = [data.orderId];
         const action = Handlebars.escapeExpression(String(data.actionUrl || ''));
         const recovery = Handlebars.escapeExpression(String(data.recoveryUrl || ''));
         if (!action || !recovery || !custom.html.includes(`href="${action}"`) ||
@@ -147,18 +150,18 @@ export class EmailService {
         : null;
       let html = custom?.html || welcomeFallback?.html || (await this.renderTemplate(template, data));
       if (options.purpose === 'NEWSLETTER_ACCESS' && data.initialPassword &&
-          !html.includes(Handlebars.escapeExpression(String(data.passwordMessage)))) {
+          !html.includes(Handlebars.escapeExpression(String(data.initialPassword)))) {
         const block = `<p style="max-width:640px;margin:16px auto;padding:16px;background:#f7f7f5;color:#111;font-family:Arial,sans-serif;line-height:1.5;">${Handlebars.escapeExpression(String(data.passwordMessage))}</p>`;
         html = html.includes('</body>') ? html.replace('</body>', `${block}</body>`) : html + block;
       }
-      if (custom && options.purpose === 'NEWSLETTER_ACCESS' && data.initialPassword && !custom.text.includes(String(data.passwordMessage))) {
+      if (custom && options.purpose === 'NEWSLETTER_ACCESS' && data.initialPassword && !custom.text.includes(String(data.initialPassword))) {
         custom.text += `\n${data.passwordMessage}`;
       }
 
       const info = (await this.transportFactory
         .sendMail(senderKey, {
           to: options.to,
-          subject: setup || options.deliveryDeadline !== undefined || options.type === EmailType.ORDER_TRACKING || options.purpose === 'NEWSLETTER_ACCESS' ? options.subject : custom?.subject || options.subject,
+          subject: custom?.subject || options.subject,
           html,
           ...(custom || welcomeFallback ? { text: (custom || welcomeFallback)!.text } : {}),
         }, options.purpose || options.type, ...(options.deliveryDeadline !== undefined || options.type === EmailType.ORDER_TRACKING ? [options.deliveryDeadline ?? Date.now() + 20000] : []))) as { messageId: string; accepted?: unknown[]; queued?: boolean };
@@ -227,10 +230,7 @@ export class EmailService {
       to: email,
       subject: created ? 'CRONOX · Tu cuenta está lista: configura tu contraseña' : 'CRONOX · Configura tu contraseña y consulta tu pedido',
       templateData: {
-        title: created ? 'Tu cuenta está lista: configura tu contraseña' : 'Configura tu contraseña y consulta tu pedido',
-        message: created
-          ? 'Hemos creado una cuenta asociada al email utilizado en tu compra para que puedas consultar tus pedidos. Configura una contraseña para acceder.'
-          : 'Tu pedido está asociado a tu cuenta CRONOX. Puedes configurar una contraseña para acceder y consultar tu pedido.',
+        ...PASSWORD_SETUP_COPY[created ? 'PASSWORD_SETUP_NEW_ACCOUNT' : 'PASSWORD_SETUP_EXISTING_ACCOUNT'],
         orderId: String(context.orderId),
         recoveryUrl: `${getFrontendUrl()}/recuperar-contrasena`,
         actionUrl: link,
@@ -252,12 +252,13 @@ export class EmailService {
       purpose: 'NEWSLETTER_ACCESS', type: EmailType.GENERIC, to: email,
       subject: 'CRONOX · Accede a tu cuenta',
       templateData: {
-        title: 'Tu acceso a CRONOX',
+        title: NEWSLETTER_ACCESS_COPY.title,
+        accountEligible,
         initialPassword: initialPassword || '',
         passwordMessage: initialPassword ? `Tu contrase\u00f1a es: "${initialPassword}". Introd\u00facela sin las comillas.` : '',
         message: accountEligible
-          ? 'Solicitaste un enlace de acceso. Pulsa el botón para entrar; caduca en 20 minutos y solo funciona una vez. Si no lo solicitaste, ignora este correo.'
-          : 'Para acceder a CRONOX, continúa con el registro o inicia sesión con tu contraseña. Esta solicitud no ha creado ninguna cuenta.',
+          ? NEWSLETTER_ACCESS_COPY.eligible
+          : NEWSLETTER_ACCESS_COPY.registration,
         actionUrl: link,
         actionLabel: 'Entrar en CRONOX',
       },

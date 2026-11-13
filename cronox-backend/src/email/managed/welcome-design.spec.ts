@@ -141,7 +141,8 @@ describe('approved welcome imported HTML email', () => {
   it('keeps message mandatory, rejects unsigned format variants and prevents a duplicate footer signature', () => {
     const doc = welcomeDocument();
     const withoutMessage = { ...doc, blocks: [{ ...doc.blocks[0], html: doc.blocks[0].html!.replace('{{message}}', '') }] };
-    expect(() => renderMail(withoutMessage, WELCOME_SUBJECT, '', 'NEWSLETTER_WELCOME', welcomeData('VISTA-PREVIA-NO-VALIDO'), undefined, true)).toThrow(/message/);
+    // Fixed prose may now be written literally and customized in the editor.
+    expect(() => renderMail(withoutMessage, WELCOME_SUBJECT, '', 'NEWSLETTER_WELCOME', welcomeData('VISTA-PREVIA-NO-VALIDO'), undefined, true)).not.toThrow();
     expect(() => renderMail({ ...doc, schemaVersion: 0 }, WELCOME_SUBJECT)).toThrow(/no válido/);
     expect(() => renderMail({ ...doc, blocks: [...doc.blocks, { type: 'spacer' }] }, WELCOME_SUBJECT)).toThrow(/no válido/);
     expect(() => renderMail(doc, WELCOME_SUBJECT, '', 'NEWSLETTER_WELCOME', welcomeData('VISTA-PREVIA-NO-VALIDO'), { blocks: [] })).toThrow(/Sin firma/);

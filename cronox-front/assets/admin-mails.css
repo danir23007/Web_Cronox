@@ -113,6 +113,20 @@
 .mail-template-top { display: flex; justify-content: space-between; color: #777780; font-size: 11px; }
 .mail-template-state { padding: 4px 8px; border: 1px solid #36363d; border-radius: 999px; }
 .mail-template-state.is-published { font-weight: 700; }
+.mail-document-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding: 16px; border-bottom: 1px solid var(--admin-border, #36363d); }
+.mail-editor-tabs { display: inline-flex; gap: 4px; margin-right: auto; }
+#section-mails .mail-editor-tabs [aria-selected="true"] { background: var(--admin-c-edf2fa, #304363); color: var(--admin-text, #e4ebf5); box-shadow: inset 0 -2px var(--admin-c-245ab0, #9ec2ff); }
+.mail-document-workbench { min-width: 0; background: var(--admin-page, #111722); }
+.mail-document-note, .mail-preview-envelope, .mail-preview-scenario { display: block; margin: 16px; font-size: 13px; line-height: 1.6; color: var(--admin-c-495468, #b8c6da); }
+.mail-html-preview-status[data-kind="warning"] { padding: 12px; border: 1px solid currentColor; color: var(--admin-c-9b3229, #ffb7b0); }
+.mail-preview-envelope { padding: 14px; border: 1px solid var(--admin-border, #465269); border-radius: 8px; background: var(--admin-surface, #1b2230); }
+.mail-preview-envelope strong { color: var(--admin-text, #e4ebf5); }
+.mail-preview-envelope p { margin: 6px 0 0; }
+.mail-document-stage { width: 100%; max-width: 700px; margin: auto; }
+.mail-document-stage.is-mobile { max-width: 399px; }
+#section-mails [hidden] { display: none !important; }
+.mail-document-stage .mail-html-email-preview { min-height: 600px; height: 1040px; max-width: 640px; }
+@media (max-width: 780px) { .mail-document-toolbar { gap: 8px; padding: 12px; } .mail-editor-tabs { width: 100%; } }
 .mail-builder.is-html-email { display: block; }
 .mail-html-workbench { min-width: 0; padding-bottom: 20px; }
 .mail-html-preview-note,.mail-html-preview-status,.mail-html-sample { display: block; margin: 16px; font-size: 12px; line-height: 1.6; color: var(--admin-c-495468, #b8c6da); }

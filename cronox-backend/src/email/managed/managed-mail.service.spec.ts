@@ -62,6 +62,17 @@ describe('managed email safety and import', () => {
     jest.spyOn(config, 'loadEmailConfig').mockReturnValue(emailConfig),
   );
   afterEach(() => jest.restoreAllMocks());
+  it('sends customized published password copy with the real links and published subject', async () => {
+    const custom = { html: '<h1>Tu pedido te espera</h1><p>Consulta el pedido 1042 con tu cuenta.</p><a href="https://example.test/real-action">Acceder</a><a href="http://localhost:43119/recuperar-contrasena">Recuperar</a>',
+      text: 'Consulta el pedido 1042 con tu cuenta.', subject: 'Asunto publicado personalizado' };
+    const managed = { published: jest.fn().mockImplementation(async (_key, _purpose, data) => ({ ...custom,
+      html: custom.html.replace('http://localhost:43119/recuperar-contrasena', data.recoveryUrl) })) };
+    const sender = transport(); sender.sendMail.mockResolvedValue({ messageId: 'test', accepted: ['lucia@example.test'] });
+    const email = new EmailService(sender as any, managed as any);
+    await email.sendInitialPasswordSetup('lucia@example.test', 'https://example.test/real-action', { scenario: 'EXISTING_PASSWORDLESS', orderId: 1042 });
+    expect(sender.sendMail.mock.calls[0][1]).toMatchObject({ html: expect.stringContaining('Tu pedido te espera'), subject: custom.subject });
+    expect(managed.published.mock.calls[0][2]).toMatchObject({ orderId: '1042', actionUrl: 'https://example.test/real-action' });
+  });
   it('describes every offered variable in Spanish instead of exposing only its technical key', () => {
     const service = new ManagedMailService(
       {} as PrismaService,
@@ -239,7 +250,7 @@ describe('managed email safety and import', () => {
       } as MailSaveDto),
     ).rejects.toThrow('Propósito incompatible');
   });
-  it('adapts a persisted first-party HTML draft on read without mutating storage', async () => {
+  it('preserves a persisted custom HTML draft on read without substituting a generic design', async () => {
     const update = jest.fn();
     const db = {
       managedEmailTemplate: {
@@ -263,15 +274,10 @@ describe('managed email safety and import', () => {
 
     const result = await service.template('ORDERS', 'confirmation');
 
-    expect(result.document).toEqual(
-      expect.objectContaining({
-        schemaVersion: 2,
-        sourceKind: 'cronox-first-party',
-      }),
-    );
+    expect(result.document).toEqual({ blocks: [{ type: 'html', html: '{{#each items}}{{name}}{{/each}}' }] });
     const editableBlocks = (result.document as { blocks: unknown[] }).blocks;
-    expect(JSON.stringify(editableBlocks)).toContain('orderItems');
-    expect(JSON.stringify(editableBlocks)).not.toContain('"type":"html"');
+    expect(JSON.stringify(editableBlocks)).toContain('{{#each items}}');
+    expect(JSON.stringify(editableBlocks)).toContain('"type":"html"');
     expect(update).not.toHaveBeenCalled();
   });
   it('blocks incomplete and foreign folder reorders and non-empty deletion', async () => {

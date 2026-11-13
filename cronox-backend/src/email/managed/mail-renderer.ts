@@ -4,6 +4,7 @@ import Handlebars from 'handlebars';
 import sanitizeHtml from 'sanitize-html';
 import { parseDocument } from 'htmlparser2';
 import { MAIL_PURPOSES, variablesFor } from './mail-catalog';
+import { editorCopy } from './mail-editor-content';
 
 export type MailBlock = {
   type: string;
@@ -406,7 +407,8 @@ export function renderMail(
       ?.required || []) {
       if (
         !source.includes(`{{${variable}}}`) &&
-        !source.includes(`{{#each ${variable}}}`)
+        !source.includes(`{{#each ${variable}}}`) &&
+        editorCopy(purpose)[variable] === undefined
       )
         throw new BadRequestException(
           `Falta la variable obligatoria ${variable}.`,

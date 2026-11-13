@@ -49,6 +49,8 @@ export class MailSaveDto {
 }
 export class MailPreviewDto extends MailSaveDto {
   @IsOptional() @IsIn(['available']) previewDiscountCode?: 'available';
+  @IsOptional() @IsIn(['edit', 'preview']) view?: 'edit' | 'preview';
+  @IsOptional() @IsIn(['eligible', 'registration', 'without-password']) scenario?: 'eligible' | 'registration' | 'without-password';
 }
 export class CampaignFamilyDto {
   @IsString() @MaxLength(120) name!: string;
@@ -108,6 +110,7 @@ export class FolderDeleteDto {
   @IsOptional() @IsString() @MaxLength(100) destinationId?: string;
 }
 export class SignatureDto {
+  @IsOptional() @IsIn(['edit', 'preview']) view?: 'edit' | 'preview';
   @IsString() @MaxLength(120) name!: string;
   @IsObject() document!: Record<string, unknown>;
   @IsOptional() @IsInt() @Min(1) revision?: number;

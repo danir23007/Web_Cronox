@@ -56,11 +56,33 @@ async function workspace(options: { blocked?: boolean; fail?: boolean; total?: n
 }
 
 describe('manual template classification and safe card deletion', () => {
+  it.each([false, true])('keeps unsaved edits and original variables across Edit/Preview without writes (HTML %s)', async htmlEmail => {
+    const t = await workspace({ htmlEmail });
+    await t.click('[data-mail-action="edit"][data-id="t0"]');
+    const before = JSON.stringify(t.rows);
+    const subject = t.win.document.querySelector('[data-field="subject"]');
+    subject.value = 'Asunto propio {{title}}'; subject.dispatchEvent(new t.win.Event('input', { bubbles: true }));
+    if (htmlEmail) {
+      const html = t.win.document.querySelector('[data-mail-html]');
+      html.value = '<p>Contenido propio {{message}}</p>'; html.dispatchEvent(new t.win.Event('input', { bubbles: true }));
+    }
+    await t.click('[data-mail-action="view-preview"]');
+    const previewCall = t.api.mock.calls.filter(call => call[0].endsWith('/preview')).at(-1)!;
+    expect(previewCall[2]).toMatchObject({ subject: 'Asunto propio {{title}}', view: 'preview' });
+    expect(t.win.document.querySelector('[role="tab"][aria-selected="true"]').textContent).toBe('Preview');
+    await t.click('[data-mail-action="view-edit"]');
+    expect(t.win.document.querySelector('[data-field="subject"]').value).toBe('Asunto propio {{title}}');
+    if (htmlEmail) expect(t.win.document.querySelector('[data-mail-html]').value).toBe('<p>Contenido propio {{message}}</p>');
+    expect(JSON.stringify(t.rows)).toBe(before);
+    expect(t.writes()).toBe(0);
+    t.dom.window.close();
+  });
   it('opens explicit HTML emails as a sandboxed preview/source editor and preserves their document on save/reopen', async () => {
     const t = await workspace({ htmlEmail: true });
     await t.click('[data-mail-action="edit"][data-id="t0"]'); await tick();
     const frame = t.win.document.querySelector('.mail-html-email-preview');
-    expect(frame.getAttribute('sandbox')).toBe('');
+    expect(frame.getAttribute('sandbox')).toBe('allow-same-origin');
+    expect(frame.getAttribute('sandbox')).not.toContain('allow-scripts');
     expect(frame.srcdoc).toContain('Content-Security-Policy');
     expect(frame.srcdoc).toContain('Vista segura');
     expect(t.win.document.querySelector('[data-mail-action="add"]')).toBeNull();

@@ -35,6 +35,7 @@
     folderId: "", current: null, dirty: false, history: [], future: [],
     selected: [], mobile: false, dragging: null, preview: null, page: 1,
     busy: false, signatureEditor: false, saved: null,
+    editorView: 'edit', blockEditor: false, previewScenario: 'eligible',
   };
   const pathFor = (suffix) => "/" + encodeURIComponent(state.key) + suffix;
   const button = (action, label, attrs, className) =>
@@ -500,38 +501,131 @@
     }
     hydrateRich();
     renderInspector();
-    if (current.document.format === "html-email") htmlEmailEditor();
+    documentWorkbench();
   }
   let htmlPreviewGeneration = 0;
+  let livePreviewTimer;
+  function scheduleDocumentPreview() {
+    clearTimeout(livePreviewTimer);
+    livePreviewTimer = setTimeout(() => { if (state.current) hydrateDocumentView(); }, 250);
+  }
   function previewFrameSource(html) {
     const policy = '<meta http-equiv="Content-Security-Policy" content="default-src \'none\'; img-src https:; style-src \'unsafe-inline\'; base-uri \'none\'; form-action \'none\'">';
-    return html.replace("<head>", "<head>" + policy);
+    // Links retain their appearance but cannot navigate even inside the iframe.
+    return html.replace("<head>", "<head>" + policy).replace(/(<a\b[^>]*?)\s+href=("[^"]*"|'[^']*')/gi, '$1');
   }
-  function htmlEmailEditor() {
-    const builder = root.querySelector(".mail-builder");
-    builder.classList.add("is-html-email");
-    builder.innerHTML = '<main class="mail-html-workbench"><div class="mail-preview-bar"><div class="mail-device-switch">' +
-      button("desktop", "Escritorio", 'aria-pressed="' + !state.mobile + '"', "mail-device") +
-      button("mobile", "Móvil", 'aria-pressed="' + state.mobile + '"', "mail-device") +
-      '</div>' + button("html-refresh", "Actualizar vista previa", "", "btn mail-secondary") + '</div>' +
-      '<p class="mail-html-preview-note">Vista previa aislada con datos ficticios. No se envía ningún correo. Las pruebas de envío no incluyen descuentos de muestra.</p>' +
-      '<p class="mail-html-preview-status" role="status">Preparando vista previa…</p><iframe class="mail-html-email-preview ' + (state.mobile ? 'is-mobile' : '') + '" sandbox="" referrerpolicy="no-referrer" title="Vista previa aislada del diseño HTML"></iframe>' +
-      '<details class="mail-html-source"><summary>Editar HTML del diseño</summary><p>Se conservan las variables y se aplica el sanitizador al guardar y renderizar.</p><label>Cuerpo HTML<textarea data-mail-html spellcheck="false">' + esc(state.current.document.blocks[0].html) + '</textarea></label></details></main>';
-    hydrateHtmlEmailPreview();
+  function documentWorkbench() {
+    const builder = root.querySelector('.mail-builder');
+    const imported = state.current.document.format === 'html-email';
+    const preview = state.editorView === 'preview';
+    if (imported) builder.remove();
+    else builder.hidden = preview || !state.blockEditor;
+    const htmlBlocks = [];
+    function walk(blocks, prefix) {
+      blocks.forEach((block, index) => {
+        const path = prefix.concat(index);
+        if (typeof block.html === 'string') htmlBlocks.push({ block, path });
+        (block.columns || []).forEach((column, col) => walk(column, path.concat(col)));
+      });
+    }
+    walk(state.current.document.blocks, []);
+    const panel = document.createElement('section');
+    panel.className = 'mail-document-workbench';
+    panel.innerHTML = '<div class="mail-document-toolbar"><div class="mail-editor-tabs" role="tablist" aria-label="Vista del correo">' +
+      button('view-edit', 'Editar', 'id="mailEditTab" role="tab" aria-controls="mailDocumentPanel" aria-selected="' + !preview + '"', 'mail-device') +
+      button('view-preview', 'Preview', 'id="mailPreviewTab" role="tab" aria-controls="mailDocumentPanel" aria-selected="' + preview + '"', 'mail-device') +
+      '</div><div class="mail-device-switch">' + button('desktop', 'Escritorio', 'aria-pressed="' + !state.mobile + '"', 'mail-device') +
+      button('mobile', 'Móvil', 'aria-pressed="' + state.mobile + '"', 'mail-device') + '</div>' +
+      (!preview && !imported ? button('block-editor', state.blockEditor ? 'Ver correo completo' : 'Diseño por bloques', '', 'btn mail-secondary') : '') +
+      button('html-refresh', 'Actualizar', '', 'btn mail-secondary') + '</div>' +
+      '<div id="mailDocumentPanel" role="tabpanel" aria-labelledby="' + (preview ? 'mailPreviewTab' : 'mailEditTab') + '">' +
+      (preview ? '<p class="mail-document-note">Datos ficticios. Los enlaces están desactivados. No se guarda, publica ni envía ningún correo.</p>' :
+        '<p class="mail-document-note">Haz clic en el texto del correo para editarlo. Los valores variables conservan sus marcadores. Los bloques condicionales mantienen sus variantes. La firma se gestiona desde Firmas.</p>') +
+      (state.current.purpose === 'NEWSLETTER_ACCESS' ? '<label class="mail-preview-scenario">Caso de ejemplo<select data-preview-scenario><option value="eligible">Acceso con contraseña inicial</option><option value="without-password">Acceso sin contraseña inicial</option><option value="registration">Continuar registro</option></select></label>' : '') +
+      '<p class="mail-html-preview-status" role="status">Preparando correo…</p><div class="mail-preview-envelope" ' + (!preview ? 'hidden' : '') + '><strong data-preview-subject></strong><p data-preview-preheader></p></div>' +
+      '<div class="mail-document-stage ' + (state.mobile ? 'is-mobile' : '') + '" ' + (!preview && state.blockEditor && !imported ? 'hidden' : '') + '><iframe class="mail-html-email-preview" sandbox="allow-same-origin" referrerpolicy="no-referrer" title="' + (preview ? 'Preview del correo con datos ficticios' : 'Editar el correo completo') + '"></iframe></div>' +
+      (!preview && htmlBlocks.length ? '<details class="mail-html-source"><summary>Editar HTML, imágenes y diseño</summary><p>Se conserva el HTML de cada bloque y sus variables. Puedes cambiar aquí imágenes, fondos, enlaces y estilos.</p>' + htmlBlocks.map(item => '<label>HTML del bloque ' + esc(item.path.join('/')) + '<textarea data-mail-html data-html-path="' + item.path.join('/') + '" spellcheck="false">' + esc(item.block.html) + '</textarea></label>').join('') + '</details>' : '') +
+      '</div>';
+    root.querySelector('.mail-classification, .mail-compose-fields').insertAdjacentElement('afterend', panel);
+    const scenario = panel.querySelector('[data-preview-scenario]');
+    if (scenario) scenario.value = state.previewScenario;
+    hydrateDocumentView();
   }
-  async function hydrateHtmlEmailPreview() {
+  async function hydrateDocumentView() {
     const generation = ++htmlPreviewGeneration;
-    const frame = root.querySelector(".mail-html-email-preview");
-    if (!frame) return;
-    const status = root.querySelector(".mail-html-preview-status");
+    const panel = root.querySelector('.mail-document-workbench');
+    if (!panel) return;
+    const frame = panel.querySelector('iframe');
+    const status = panel.querySelector('.mail-html-preview-status');
+    const preview = state.editorView === 'preview';
+    const current = state.current;
     try {
-      const result = await api(pathFor("/preview"), "POST", Object.assign(payload(), {
-      }));
-      if (generation !== htmlPreviewGeneration || !frame.isConnected) return;
+      const request = Object.assign(payload(), { view: preview ? 'preview' : 'edit', scenario: state.previewScenario });
+      const result = state.signatureEditor
+        ? await api(pathFor('/signatures/preview'), 'POST', { name: state.current.name, document: state.current.document, view: request.view })
+        : await api(pathFor('/preview'), 'POST', request);
+      if (generation !== htmlPreviewGeneration || !panel.isConnected) return;
+      panel.querySelector('[data-preview-subject]').textContent = result.subject || '';
+      panel.querySelector('[data-preview-preheader]').textContent = result.preheader || '';
+      const readyMessage = (result.warnings || []).length ? result.warnings.join(' ') : preview ? 'Preview actualizada con datos ficticios.' : 'Correo completo. Las ediciones se conservan como cambios pendientes.';
+      status.dataset.kind = (result.warnings || []).length ? 'warning' : '';
+      frame.onload = () => {
+        if (!frame.isConnected || state.current !== current || generation !== htmlPreviewGeneration) return;
+        const doc = frame.contentDocument;
+        if (!doc) return;
+        frame.style.pointerEvents = '';
+        status.textContent = readyMessage;
+        const sizeFrame = () => { if (frame.isConnected) frame.style.height = Math.max(600, doc.body.scrollHeight + 24) + 'px'; };
+        sizeFrame();
+        if (preview) return;
+        doc.addEventListener('click', event => { if (event.target.closest('a')) event.preventDefault(); });
+        const edits = new Map();
+        const sources = new Map();
+        const bindings = result.bindings || [];
+        const nodes = [];
+        const walker = doc.createTreeWalker(doc.body, 4);
+        while (walker.nextNode()) if (/CRONOXEDITSTART\d+X/.test(walker.currentNode.nodeValue)) nodes.push(walker.currentNode);
+        nodes.forEach(node => {
+          const value = node.nodeValue;
+          const fragment = doc.createDocumentFragment();
+          const pattern = /CRONOXEDITSTART(\d+)X([\s\S]*?)CRONOXEDITEND\1X/g;
+          let last = 0, match;
+          while ((match = pattern.exec(value))) {
+            fragment.append(doc.createTextNode(value.slice(last, match.index)));
+            const binding = bindings.find(item => item.id === Number(match[1]));
+            const span = doc.createElement('span');
+            span.textContent = match[2]; span.contentEditable = 'true'; span.setAttribute('role', 'textbox');
+            span.setAttribute('aria-label', 'Editar texto del correo'); span.style.whiteSpace = 'pre-wrap';
+            span.style.outlineOffset = '3px';
+            if (binding) {
+              const key = binding.path.join('/') + ':' + binding.field;
+              const block = D.blockAt(state.current.document, binding.path);
+              if (!sources.has(key)) sources.set(key, block[binding.field]);
+              span.addEventListener('input', () => {
+                if (!state.dirty) checkpoint();
+                {
+                  const text = span.innerText;
+                  edits.set(binding.id, binding.field === 'html' ? esc(text).replace(/\n/g, '<br>') : text);
+                  let source = sources.get(key);
+                  bindings.filter(item => item.path.join('/') + ':' + item.field === key && edits.has(item.id)).sort((a, b) => b.start - a.start).forEach(item => {
+                    source = source.slice(0, item.start) + edits.get(item.id) + source.slice(item.end);
+                  });
+                  block[binding.field] = source;
+                  const input = binding.field === 'html' && panel.querySelector('[data-html-path="' + binding.path.join('/') + '"]');
+                  if (input) input.value = source;
+                }
+                message('Cambios sin guardar');
+              });
+            }
+            fragment.append(span); last = pattern.lastIndex;
+          }
+          fragment.append(doc.createTextNode(value.slice(last))); node.replaceWith(fragment);
+        });
+        sizeFrame();
+      };
       frame.srcdoc = previewFrameSource(result.html);
-      status.textContent = "Vista previa actualizada. La recepción en clientes de correo requiere una prueba autorizada aparte.";
     } catch (error) {
-      if (generation === htmlPreviewGeneration && status.isConnected) status.textContent = error.message || "No se pudo generar la vista previa. Puedes reintentar con Actualizar vista previa.";
+      if (generation === htmlPreviewGeneration && status.isConnected) { status.textContent = error.message || 'No se pudo preparar el correo. Pulsa Actualizar para reintentar.'; status.dataset.kind = 'warning'; }
     }
   }
   function hydrateRich() {
@@ -862,7 +956,7 @@
       ).join("") + "</div>";
   }
   async function handleAction(name, element) {
-    if (name === "html-refresh") return hydrateHtmlEmailPreview();
+    if (name === "html-refresh") return hydrateDocumentView();
     if (name === "delete-template" || name === "archive-template") {
       if (state.dirty) return message("Guarda el borrador antes de eliminarlo.", "warning");
       return openDeletion(element.dataset.id || state.current.id, element);
@@ -920,6 +1014,7 @@
       return renderTemplates();
     }
     if (name === "new") {
+      state.editorView = 'edit'; state.blockEditor = false;
       state.signatureEditor = false;
       state.current = {
         name: "Nueva plantilla", subject: "", preheader: "", folderId: state.folderId,
@@ -930,11 +1025,17 @@
     }
     if (name === "edit") {
       state.signatureEditor = false;
-      state.current = await api(pathFor("/templates/" + element.dataset.id));
+      state.current = D.clone(await api(pathFor("/templates/" + element.dataset.id)));
+      state.editorView = 'edit'; state.blockEditor = false;
       state.dirty = false; state.history = []; state.future = []; state.selected = [];
       return editor();
     }
     if (name === "select") return selectPath(path);
+    if (name === 'view-edit' || name === 'view-preview') {
+      state.editorView = name === 'view-preview' ? 'preview' : 'edit';
+      return editor();
+    }
+    if (name === 'block-editor') { state.blockEditor = !state.blockEditor; return editor(); }
     if (name === "clear-selection") return selectPath([]);
     if (name === "desktop" || name === "mobile") {
       state.mobile = name === "mobile";
@@ -1104,12 +1205,14 @@
     }
     if (name === "signatures") return signatureList();
     if (name === "signature-new") {
+      state.editorView = 'edit'; state.blockEditor = false;
       state.signatureEditor = true;
       state.current = { name: "Nueva firma", subject: "Firma", document: { blocks: [] } };
       state.history = []; state.future = []; state.selected = []; state.dirty = true;
       return editor();
     }
     if (name === "signature-edit") {
+      state.editorView = 'edit'; state.blockEditor = false;
       state.signatureEditor = true;
       state.current = D.clone(state.signatures.find((signature) => signature.id === element.dataset.id));
       state.history = []; state.future = []; state.selected = []; state.dirty = false;
@@ -1138,13 +1241,23 @@
     const element = event.target;
     if (element.matches('[data-mail-html]')) {
       if (!state.dirty) checkpoint();
-      state.current.document.blocks[0].html = element.value;
+      const block = D.blockAt(state.current.document, (element.dataset.htmlPath || '0').split('/').map(Number));
+      block.html = element.value;
+      const frame = root.querySelector('.mail-document-stage iframe');
+      if (frame) frame.style.pointerEvents = 'none';
+      const status = root.querySelector('.mail-html-preview-status');
+      if (status) status.textContent = 'HTML modificado. Pulsa Actualizar para continuar editando el correo completo.';
       message("Cambios sin guardar. Actualiza la vista previa para revisar el HTML.");
     }
     if (element.dataset.field) {
       if (!state.dirty) checkpoint();
       state.current[element.dataset.field] = element.value;
       message("Cambios sin guardar");
+      if (state.editorView === 'preview') scheduleDocumentPreview();
+    }
+    if (element.matches('[data-preview-scenario]')) {
+      state.previewScenario = element.value;
+      hydrateDocumentView();
     }
     if (element.dataset.prop) {
       if (!state.dirty) checkpoint();
@@ -1191,6 +1304,7 @@
       state.current.signatureMode = ["none", "default"].includes(element.value)
         ? element.value : "selected";
       state.current.signatureId = state.current.signatureMode === "selected" ? element.value : null;
+      scheduleDocumentPreview();
     }
     if (element.id === "mailUpload" && element.files && element.files[0]) {
       uploadImage(element.files[0], element.dataset.background === "true")
