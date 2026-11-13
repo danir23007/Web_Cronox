@@ -198,7 +198,7 @@
   // ======================================================
   // Quick-Add DOM (panel negro, sin color)
   // ======================================================
-  let qaOverlay, qaPanel, qaClose, qaImg1, qaImg2, qaName, qaPrice, /* qaColor, */ qaSizeGroup, qaQty, qaAdd, qaLink, qaNotify, qaDelivery;
+  let qaOverlay, qaPanel, qaClose, qaImg1, qaImg2, qaName, qaPrice, /* qaColor, */ qaSizeGroup, qaAdd, qaLink, qaNotify, qaDelivery;
   let qaReturnFocus = null;
   let qaSuspendedCart = null;
   let qaCurrentProduct = null;
@@ -239,7 +239,7 @@
     const exhaustedSizes = window.CRONOX_STOCK?.soldOutSizeCount(qaCurrentProduct.variants) || 0;
     const variant = findVariantForSize(qaCurrentProduct, qaSelectedSize);
     qaPrice.textContent = variant?.priceLabel || (variant?.price != null ? euros(variant.price) : qaCurrentProduct.priceLabel || euros(qaCurrentProduct.price));
-    window.CRONOX_STOCK?.decoratePurchase(qaPrice, qaAdd, qaCurrentProduct);
+    window.CRONOX_STOCK?.decoratePurchase(qaPrice, qaAdd, { ...qaCurrentProduct, ...(variant || {}) });
     qaAdd.hidden = productStatus === 'out_of_stock';
     qaAdd.disabled = qaBusy || status !== 'in_stock';
     qaAdd.textContent = qaBusy ? 'Añadiendo…' : 'Añadir al carrito';
@@ -248,9 +248,6 @@
     qaNotify.disabled = qaBusy || status !== 'out_of_stock';
     qaNotify.hidden = productStatus === 'in_stock' && exhaustedSizes === 0;
     qaNotify.setAttribute('aria-disabled', String(qaNotify.disabled));
-    qaQty.disabled = qaBusy;
-    const availableQty = variant?.stockQty ?? variant?.stock;
-    qaQty.max = String(Number.isSafeInteger(availableQty) && availableQty > 0 ? Math.min(999, availableQty) : 999);
     if (!qaSelectedSize && !qaAvailabilityPending && !qaAvailabilityFailed) {
       qaOverlay.querySelector('#qaCartStatus').textContent = 'Selecciona una talla para añadir el artículo.';
     }
@@ -305,6 +302,10 @@
   });
   window.addEventListener('cronox:productAvailability', event => updateQuickAddAvailability(event.detail?.product, event.detail?.requestedAt));
   window.addEventListener('focus', () => void refreshQuickAddAvailability());
+  window.addEventListener('cronox:priceBoundary', () => {
+    void window.CRONOX_reloadCatalog?.();
+    void refreshQuickAddAvailability();
+  });
   window.addEventListener('pageshow', event => { if (event.persisted) void refreshQuickAddAvailability(); });
 
   function ensureQuickAddDOM() {
@@ -332,11 +333,6 @@
             <div id="qaSizes" class="qa-sizes" role="radiogroup" aria-label="Selecciona una talla"></div>
           </div>
 
-          <div class="qa-row">
-            <label class="qa-label" for="qaQty">Cantidad</label>
-            <input id="qaQty" class="qa-qty" type="number" min="1" max="999" step="1" value="1" inputmode="numeric" required>
-          </div>
-
           <div class="qa-row qa-actions">
             <button id="qaAdd" class="qa-btn">Añadir al carrito</button>
             <button id="qaNotify" type="button" class="qa-btn qa-notify" disabled>AVÍSAME</button>
@@ -357,7 +353,6 @@
     qaName  = qaOverlay.querySelector("#qaName");
     qaPrice = qaOverlay.querySelector("#qaPrice");
     qaSizeGroup = qaOverlay.querySelector("#qaSizes");
-    qaQty = qaOverlay.querySelector('#qaQty');
     qaAdd   = qaOverlay.querySelector("#qaAdd");
     qaLink  = qaOverlay.querySelector("#qaLink");
     qaNotify = qaOverlay.querySelector('#qaNotify');
@@ -393,8 +388,6 @@
     // Añadir al carrito
     qaAdd.addEventListener("click", () => {
       if (!qaCurrentProduct || qaBusy || qaAdd.disabled || quickSizeStatus() !== 'in_stock') return;
-      if (!qaQty.reportValidity()) return;
-      const qty = Number(qaQty.value);
       const size = window.CRONOX_SIZES?.label?.(qaSelectedSize) || String(qaSelectedSize).toUpperCase();
       const color = qaCurrentProduct.color || (qaCurrentProduct.colors?.[0]) || "Único";
       const variant = findVariantForSize(qaCurrentProduct, size);
@@ -431,7 +424,7 @@
           image: (qaCurrentProduct.images?.[0]) || qaCurrentProduct.image,
           size,
           color,
-          qty,
+          qty: 1,
           variantId: variant.id,
         }
       });
@@ -554,7 +547,6 @@
     ensureQuickAddDOM();
     const opening = ++qaOpening;
     qaBusy = false;
-    qaQty.value = '1';
     qaAvailabilityStamp = performance.now();
     qaAvailabilityRequest++;
     qaAvailabilityPending = false;
@@ -614,6 +606,7 @@
 
     qaName.textContent  = product.name || "";
     qaPrice.textContent = product.priceLabel || euros(product.price);
+    window.CRONOX_STOCK?.decoratePrice?.(qaPrice, product);
 
     qaLink.textContent = 'Ver detalles del producto';
     setupQuickAddSizes(product, '', true);

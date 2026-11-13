@@ -40,7 +40,7 @@ describe('ProductService search', () => {
     const query = findMany.mock.calls[0][0];
     expect(query.where.isActive).toBe(true);
     expect(query.take).toBeLessThanOrEqual(80);
-    expect(query.select.variants).toBeUndefined();
+    expect(query.select.variants).toEqual({ select: { price: true, isActive: true } });
   });
 
   it('ranks all full-search matches and does not expose internal search metadata', async () => {

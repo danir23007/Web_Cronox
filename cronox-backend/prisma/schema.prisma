@@ -2326,6 +2326,12 @@ model EmailChangeRequest {
 
 // Lot balances are protected by deferred database constraints in the migration.
 model InventoryLot {
+  webOfferPriceCents Int?
+  webOfferPreviousCents Int?
+  webOfferStartsAt DateTime? @db.Timestamptz(3)
+  webOfferEndsAt DateTime? @db.Timestamptz(3)
+  webOfferDisabledAt DateTime? @db.Timestamptz(3)
+  webOfferConfirmedAt DateTime? @db.Timestamptz(3)
   number Int?
   profile Json?
   profilePending Boolean @default(false)

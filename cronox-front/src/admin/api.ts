@@ -367,7 +367,21 @@ import { loadCategoryPages } from './category-pagination';
     );
   };
 
+  let priceRefreshTimer: ReturnType<typeof setTimeout> | undefined;
+  let priceRefreshAt = Infinity;
+  const schedulePriceRefresh = (delay: unknown) => {
+    if (typeof delay !== 'number' || delay <= 0) return;
+    const due = Date.now() + delay;
+    if (due >= priceRefreshAt) return;
+    clearTimeout(priceRefreshTimer);
+    priceRefreshAt = due;
+    priceRefreshTimer = setTimeout(() => {
+      priceRefreshAt = Infinity;
+      window.dispatchEvent(new CustomEvent('cronox:priceBoundary'));
+    }, Math.min(delay + 100, 2147483647));
+  };
   const mapVariant = (variant: UnknownRecord = {}, fallbackPriceCents = 0) => {
+    schedulePriceRefresh(variant.priceRefreshAfterMs);
     const effectivePriceCents = Number(
       variant.effectivePrice ?? fallbackPriceCents ?? 0,
     );
@@ -386,6 +400,7 @@ import { loadCategoryPages } from './category-pagination';
       stock: stockQty,
       isActive: Boolean(variant.isActive ?? true),
       priceCents: effectivePriceCents,
+      previousPriceCents: variant.previousPrice ?? null,
       price: centsToUnits(effectivePriceCents),
       priceLabel: formatCents(effectivePriceCents),
       isAvailable: Boolean((variant.isActive ?? true) && stockQty !== null && stockQty > 0),
@@ -393,6 +408,7 @@ import { loadCategoryPages } from './category-pagination';
   };
 
   const mapProduct = (product?: UnknownRecord | null) => {
+    if (product) schedulePriceRefresh(product.priceRefreshAfterMs);
     if (!product) return null;
 
     const productImages = [
@@ -496,6 +512,7 @@ import { loadCategoryPages } from './category-pagination';
       slug: product.slug,
       name: product.name,
       priceCents: product.price,
+      previousPriceCents: product.previousPrice ?? null,
       price: centsToUnits(product.price as number),
       priceLabel: formatCents(product.price as number),
       currency: product.currency || 'EUR',
@@ -567,8 +584,8 @@ import { loadCategoryPages } from './category-pagination';
     return {
       id: item.id,
       variantId: item.variantId,
-      editionChanged: !!product.activeLotId && (item.lotAtAdd !== product.activeLotId || Number(item.priceAtAdd) !== Number(variant.price ?? product.price)),
-      currentPriceCents: Number(variant.price ?? product.price ?? 0),
+      editionChanged: !!product.activeLotId && (item.lotAtAdd !== product.activeLotId || Number(item.priceAtAdd) !== Number(variant.effectivePrice ?? variant.price ?? product.price)),
+      currentPriceCents: Number(variant.effectivePrice ?? variant.price ?? product.price ?? 0),
       // Keep the authoritative selected variant's availability for cart warnings.
       variant: {
         id: variant.id,
@@ -1172,11 +1189,26 @@ import { loadCategoryPages } from './category-pagination';
     classifyVariantStock,
     availableStock,
     classifyStock,
+    decoratePrice(price: HTMLElement, product: UnknownRecord) {
+      const previous = Number(product.previousPriceCents);
+      const current = Number(product.priceCents);
+      price.classList.toggle('web-offer-price', previous > current && current > 0);
+      if (!(previous > current && current > 0)) return;
+      const old = document.createElement('del');
+      old.className = 'web-offer-price__previous';
+      old.setAttribute('aria-label', 'Precio anterior');
+      old.textContent = formatCents(previous);
+      const sale = document.createElement('strong');
+      sale.setAttribute('aria-label', 'Precio de oferta');
+      sale.textContent = formatCents(current);
+      price.replaceChildren(old, document.createTextNode(' '), sale);
+    },
     decoratePurchase(
       price: HTMLElement,
       button: HTMLButtonElement,
       product: UnknownRecord,
     ) {
+      stockApi.decoratePrice(price, product);
       const status = productStockStatus(product.variants, product.lastUnitsThreshold);
       let row = price.parentElement;
       if (!row?.classList.contains('stock-price-row')) {
@@ -1207,6 +1239,7 @@ import { loadCategoryPages } from './category-pagination';
       price: HTMLElement,
       product: UnknownRecord,
     ) {
+      stockApi.decoratePrice(price, product);
       stockApi.decorateLastUnits(card, product);
       const status = productStockStatus(product.variants, product.lastUnitsThreshold);
       card.querySelector('.product-restock')?.remove();

@@ -1,4 +1,5 @@
 import { reconcileLotCounts } from '../inventory-lots/lot-ledger';
+import { resolveWebPrice, webOfferLots } from './web-offer';
 import {
   BadRequestException,
   ConflictException,
@@ -174,7 +175,10 @@ export class ProductService {
           Number(Boolean(right.isPrimary)) - Number(Boolean(left.isPrimary)),
       );
     }
-    return this.addEffectiveVariantPrices(publicProduct);
+    const priced = this.addEffectiveVariantPrices(publicProduct);
+    const { inventoryLots, ...visible } = priced as typeof priced & { inventoryLots?: unknown };
+    const price = resolveWebPrice(product);
+    return { ...visible, ...price, price: price.effectivePrice };
   }
 
   private async ensureUniqueSlug(
@@ -381,6 +385,7 @@ export class ProductService {
     }
 
     return {
+      inventoryLots: webOfferLots,
       images: {
         where: options?.includeArchivedImages ? undefined : { isActive: true },
         orderBy: this.imageOrderBy,
@@ -551,7 +556,7 @@ export class ProductService {
           sizeLabel: variantSizeLabel(
             (variant as { size?: string }).size || '',
           ),
-          effectivePrice: variant.price ?? product.price,
+          ...resolveWebPrice(product, variant),
         }))
         .sort(
           (left, right) =>
@@ -1206,7 +1211,11 @@ export class ProductService {
         searchKeywords: true,
         displayOrder: true,
         price: true,
+        activeLotId: true,
+        isActive: true,
+        inventoryLots: webOfferLots,
         currency: true,
+        variants: { select: { price: true, isActive: true } },
         imageUrl: true,
         images: {
           where: { isActive: true },
@@ -1250,7 +1259,7 @@ export class ProductService {
             id: product.id,
             slug: product.slug,
             name: product.name,
-            price: product.price,
+            price: resolveWebPrice(product).effectivePrice,
             currency: product.currency,
             imageUrl: product.images[0]?.url ?? product.imageUrl,
             image: product.images[0] ?? null,

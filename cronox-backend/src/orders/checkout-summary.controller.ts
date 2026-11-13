@@ -2,6 +2,7 @@ import {
   Body,
   Controller,
   Get,
+  Header,
   Post,
   Query,
   Req,
@@ -34,6 +35,7 @@ export class CheckoutSummaryController {
   ) {}
 
   @Get('express-quote')
+  @Header('Cache-Control', 'private, no-store')
   async getExpressQuote(
     @Req() req: Request,
     @Query('country') country: string,
@@ -57,6 +59,7 @@ export class CheckoutSummaryController {
   }
 
   @Get('summary')
+  @Header('Cache-Control', 'private, no-store')
   @ApiOperation({
     summary:
       'Obtiene el resumen del checkout con carrito, métodos de envío y totales',

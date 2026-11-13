@@ -408,12 +408,19 @@ html.category-page #hero{display:none!important;}
 }
 
 /* ===== Content ===== */
+.web-offer-price{display:flex;align-items:baseline;justify-content:inherit;flex-wrap:wrap;gap:4px 10px;}
+.web-offer-price__previous{color:#aaa;font-weight:400;}
+.web-offer-price strong{color:#fff;font-weight:700;}
 #store,#contact{scroll-margin-top:calc(var(--topbar-h) + env(safe-area-inset-top) + 12px)}
 .store{padding:calc(40px + var(--topbar-h)) 16px 40px;background:#000;color:#fff;z-index:1;position:relative;}
 html.category-page .store{padding-top:calc(var(--topbar-h) + 24px);}
+html:not(.category-page) .page-home #hero + .store{padding-top:calc(20px + var(--topbar-h)*0.5);}
+@media (min-width:481px){
+  html:not(.category-page) .page-home #hero + .store > .store-heading{margin-top:0.415em;}
+}
 
 @media (max-width:480px){
-  html:not(.category-page) .hero-video-section{ margin-bottom:8px; }
+  html:not(.category-page) .hero-video-section{ margin-bottom:4px; }
   .store{
     padding:calc(22px + var(--topbar-h)*0.25) 14px 30px;
     margin-top:0;
@@ -422,6 +429,7 @@ html.category-page .store{padding-top:calc(var(--topbar-h) + 24px);}
     padding-top:calc(var(--topbar-h) + 18px);
   }
   .store > .store-heading{ margin:0 0 20px; }
+  html:not(.category-page) .page-home #hero + .store{padding-top:calc(11px + var(--topbar-h)*0.125);}
   html.category-page .store{padding-top:calc(var(--topbar-h) + 18px);}
 }
 
@@ -778,7 +786,8 @@ button.product-cta--disabled:disabled { opacity:.5; cursor:not-allowed; filter:n
 .black-menu__discover{display:block;flex:none;margin-top:auto;padding:24px 0 8px;border-top:1px solid #444;color:#fff;--customer-original-font: system-ui; font:var(--customer-heavy, 800) 16px/1.5 var(--customer-font-prefix,) var(--customer-original-font);letter-spacing:.05em;text-decoration:underline;text-underline-offset:6px;min-height:44px;}
 .black-menu:has(.black-menu__discover){row-gap:32px;}
 .black-menu:has(.black-menu__discover) .black-menu__brand{margin-bottom:0;}
-.black-menu__header{flex:none;}
+.black-menu__header{display:block;flex:none;}
+.black-menu__header:focus-visible{outline:2px solid #fff;outline-offset:4px;}
 .black-menu .black-menu__list{flex:1;min-width:0;min-height:0;width:100%;padding:6px;overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;}
 .black-menu__header,.black-menu__discover{min-width:0;max-width:100%;overflow-wrap:anywhere;}
 .black-menu__list > *{flex-shrink:0;min-width:0;max-width:100%;}

@@ -8,6 +8,7 @@ import { assertSizesMatchSystem, PRODUCT_SIZE_SYSTEMS } from '../../products/pro
 import { receiptSlices } from '../../inventory-lots/lot-costs';
 import { projectLotStock } from '../../inventory-lots/lot-ledger';
 import { receiptDate, receiptDay } from './receipt-date';
+import { validateWebOffer, webOfferStatus, WebOffer } from '../../products/web-offer';
 type Tx = Prisma.TransactionClient;
 // JSON stores the complete editable commercial configuration, never identity,
 // global visibility, sold quantities or mutable stock counters.
@@ -37,7 +38,7 @@ export class ProductEditionsService {
     const live = await this.capture(tx, productId);
     return { product: { id: product.id, slug: product.slug, isActive: product.isActive, activeLotId: product.activeLotId }, lots: lots.map(lot => {
       const profile = (lot.id === product.activeLotId ? live : lot.profile ?? {}) as Profile;
-      return { ...lot, receivedAt: receiptDay(lot.receivedAt), profile: { ...profile, id: product.id, slug: product.slug, isActive: product.isActive, updatedAt: lot.id === product.activeLotId ? product.updatedAt.toISOString() : undefined, privateCost: { unitCostCents: profile.unitCostCents ?? null },
+      return { ...lot, webOfferStatus: webOfferStatus(lot), receivedAt: receiptDay(lot.receivedAt), profile: { ...profile, id: product.id, slug: product.slug, isActive: product.isActive, updatedAt: lot.id === product.activeLotId ? product.updatedAt.toISOString() : undefined, privateCost: { unitCostCents: profile.unitCostCents ?? null },
         categories: (profile.categoryIds ?? []).map((categoryId: number) => ({ categoryId })),
         variants: (profile.variants ?? []).map((v: Profile) => ({ ...v, stockQty: lot.slices.filter(s => s.variantId === v.id).reduce((n,s) => n+s.available,0) })) } };
     }) };
@@ -91,6 +92,7 @@ export class ProductEditionsService {
       const product = await this.lock(tx,productId);
       const lot = await tx.inventoryLot.findFirst({ where: { id: lotId, productId } });
       if (!lot || lot.revision !== revision || !lot.profile) throw new ConflictException('La tirada cambió. Recarga antes de activar.');
+      if (['ACTIVE', 'SCHEDULED'].includes(webOfferStatus(lot))) validateWebOffer(lot, lot.profile as any);
       if (product.activeLotId !== lotId) {
         if (product.activeLotId) await tx.inventoryLot.update({ where: { id: product.activeLotId }, data: { profile: await this.capture(tx,productId) } });
         await this.project(tx,productId,lotId,lot.profile as Profile);
@@ -143,6 +145,25 @@ export class ProductEditionsService {
         if (!Number.isSafeInteger(target) || target < available || target>100000) throw new BadRequestException('Las entradas no pueden retirar stock. Usa el ajuste de inventario para bajas justificadas.');
         if (target>available) received.push({ variantId: variant.id, quantity: target-available, productionCents: profile.unitCostCents ?? null });
       }
+      let offer: WebOffer = lot;
+      if (dto.webOffer) {
+        const input = dto.webOffer;
+        if (input.enabled && (![input.startsAt, input.endsAt].every(value => value && /(?:Z|[+-]\d{2}:\d{2})$/.test(value)))) throw new BadRequestException('Las fechas de Oferta web deben incluir su zona horaria UTC.');
+        offer = input.enabled ? {
+          webOfferPriceCents: input.priceCents, webOfferPreviousCents: input.previousCents,
+          webOfferStartsAt: input.startsAt ? new Date(input.startsAt) : null,
+          webOfferEndsAt: input.endsAt ? new Date(input.endsAt) : null,
+          webOfferDisabledAt: null,
+          webOfferConfirmedAt: input.previousConfirmed === true ? new Date() : null,
+        } : { ...lot, webOfferDisabledAt: new Date() };
+        if (input.enabled && (input.priceCents == null || input.previousCents == null)) throw new BadRequestException('Completa los importes de Oferta web.');
+        if (input.enabled) validateWebOffer(offer, profile as any);
+        const offerData = Object.fromEntries(Object.entries(offer).filter(([key]) => key.startsWith('webOffer')));
+        await tx.inventoryLot.update({ where: { id: lotId }, data: offerData });
+        await this.audit(tx, lotId, actor, input.enabled ? 'Configurar Oferta web y confirmar referencia de 30 días' : 'Desactivar Oferta web', {
+          price: lot.webOfferPriceCents, previous: lot.webOfferPreviousCents, startsAt: lot.webOfferStartsAt, endsAt: lot.webOfferEndsAt,
+        }, offerData);
+      } else if (['ACTIVE', 'SCHEDULED'].includes(webOfferStatus(offer))) validateWebOffer(offer, profile as any);
       const other = dto.otherTotalCents === undefined ? 0 : dto.otherTotalCents;
       if (!received.length && ((other ?? 0) > 0 || dto.receiptReceivedAt !== undefined)) throw new BadRequestException('Para registrar una fecha de entrada o gastos adicionales, añade unidades. La fecha de la tirada se puede corregir sin cambiar el stock.');
       const receipt = received.length ? { id: key ?? randomUUID(), receivedAt: receiptDay(movementDate), lines: received, freightTotalCents: 0, otherTotalCents: other, unitCostIncludesFreight: true } : null;

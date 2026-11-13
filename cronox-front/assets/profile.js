@@ -1786,6 +1786,7 @@
       if (document.visibilityState !== 'hidden' && document.querySelector('[data-profile-section="favorites"].is-active')) void loadFavorites();
     };
     window.addEventListener('focus', resumeFavorites);
+    window.addEventListener('cronox:priceBoundary', resumeFavorites);
     window.addEventListener('pageshow', event => { if (event.persisted) resumeFavorites(); });
     document.addEventListener('visibilitychange', resumeFavorites);
     window.addEventListener('storage', event => {

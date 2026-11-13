@@ -82,7 +82,7 @@ describe('mobile storefront refinement', () => {
       /\.hero-video\{[^}]*width:100%;[^}]*height:100%;[^}]*object-fit:cover;/,
     );
     expect(storeStyles).toContain(
-      'html:not(.category-page) .hero-video-section{ margin-bottom:8px; }',
+      'html:not(.category-page) .hero-video-section{ margin-bottom:4px; }',
     );
     expect(storeStyles).toContain(
       'html.category-page .store{padding-top:calc(var(--topbar-h) + 18px);}',

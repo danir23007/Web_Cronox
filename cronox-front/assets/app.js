@@ -275,7 +275,7 @@
     filtersPanel.setAttribute('role', 'dialog'); filtersPanel.setAttribute('aria-modal', 'true');
     filtersPanel.innerHTML = `
       <button class="filters-close" type="button" aria-label="Cerrar menú">✕</button>
-      <div class="black-menu__header"><img class="black-menu__brand" src="/favicon.png?v=4" width="372" height="372" alt="CRONOX" draggable="false"></div>
+      <a class="black-menu__header" aria-label="CRONOX — Inicio"><img class="black-menu__brand" src="/favicon.png?v=4" width="372" height="372" alt="" draggable="false"></a>
       <nav class="black-menu__list" aria-label="Categorías y colecciones">
         <a class="black-menu__link" href="/tienda#store">Todos</a>
         <a class="black-menu__link" href="/tienda?categorySlug=novedades#store">Novedades</a>
@@ -284,6 +284,9 @@
         <a class="black-menu__link" href="/tienda?categorySlug=pantalones#store">Pantalones</a>
         <a class="black-menu__link" href="/tienda?categorySlug=complementos#store">Complementos</a>
       </nav>`;
+    const homeLink = filtersPanel.querySelector('.black-menu__header');
+    homeLink.setAttribute('href', document.querySelector('.topbar__logo')?.getAttribute('href') || '/');
+    homeLink.addEventListener('click', () => closeFilters());
     document.body.append(filtersPanel);
   }
   const filtersCloseBtn = filtersPanel ? $('.filters-close', filtersPanel) : null;

@@ -249,6 +249,7 @@
   window.addEventListener('cronox:favsChanged', handleFavsChanged);
   window.addEventListener('pageshow', event => { if (event.persisted) void loadFavoritesFlow({ force: true }); });
   window.addEventListener('focus', () => { if (favoritesLoaded) void loadFavoritesFlow({ force: true }); });
+  window.addEventListener('cronox:priceBoundary', () => { if (favoritesLoaded) void loadFavoritesFlow({ force: true }); });
   document.addEventListener('visibilitychange', () => { if (favoritesLoaded && document.visibilityState === 'visible') void loadFavoritesFlow({ force: true }); });
   const handleSessionChange = event => {
     if (event.initial && event.detail) return;

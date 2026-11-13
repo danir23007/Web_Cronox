@@ -13,18 +13,18 @@
       if (window.CRONOX_ASSET) {
         const link = document.getElementById('cronox-admin-style');
         if (link) {
-          link.href = window.CRONOX_ASSET('assets/store.css?v=131');
+          link.href = window.CRONOX_ASSET('assets/store.css?v=132');
         }
       }
     })();
   </script>
-  <link id="cronox-admin-style" rel="stylesheet" href="assets/store.css?v=131">
+  <link id="cronox-admin-style" rel="stylesheet" href="assets/store.css?v=132">
   <link rel="stylesheet" href="assets/gallery.css?v=20">
   <link rel="stylesheet" href="assets/admin-gallery.css?v=6">
   <link rel="stylesheet" href="assets/admin-media.css?v=4">
   <link rel="stylesheet" href="assets/admin-lots.css?v=3">
   <link rel="stylesheet" href="assets/admin-inventory.css?v=2">
-  <link rel="stylesheet" href="assets/waitlist.css?v=3">
+  <link rel="stylesheet" href="assets/waitlist.css?v=4">
   <link rel="stylesheet" href="assets/admin-mails.css?v=4">
   <link rel="stylesheet" href="assets/admin-inbox.css?v=6">
   <link rel="manifest" href="/mailbox.webmanifest">
@@ -1852,6 +1852,22 @@
           </div><div id="productVariantStockFields" class="form-grid"></div>
           <small>Otros gastos: solo importes adicionales que todavía no estén incluidos en el coste por unidad. Vacío o 0 significa sin gastos adicionales. El envío del pedido al cliente se registra por separado. Las bajas se registran como ajustes de inventario.</small>
         </div>
+        <fieldset id="editionWebOffer" class="form-group" hidden>
+          <legend>Oferta web</legend>
+          <p id="webOfferStatus" role="status"></p>
+          <label><input name="webOfferEnabled" type="checkbox"> Configurar oferta para todas las tallas activas de esta tirada</label>
+          <div class="form-grid">
+            <label>Precio de oferta (€)<input class="input" name="webOfferPrice" type="number" min="0.01" step="0.01"></label>
+            <label>Precio anterior (€)<input class="input" name="webOfferPrevious" type="number" min="0.01" step="0.01" aria-describedby="webOfferReferenceHelp"></label>
+            <label>Inicio (Europe/Madrid)<input class="input" name="webOfferStart" type="datetime-local" step="60"></label>
+            <label>Fin (Europe/Madrid)<input class="input" name="webOfferEnd" type="datetime-local" step="60"></label>
+          </div>
+          <p id="webOfferReferenceHelp">El precio anterior debe ser el menor precio aplicado a este artículo durante los 30 días previos al inicio de la rebaja. No hay un registro completo de precios aplicados en la web. Introduce el importe contrastado con tus datos. Si las tallas tienen precios habituales distintos, esta versión impide publicar una referencia común.</p>
+          <label><input name="webOfferConfirmed" type="checkbox"> Confirmo con mis registros que el precio anterior es el menor aplicado en los 30 días previos al inicio para todas las tallas activas.</label>
+          <p id="webOfferSizes" role="status"></p>
+          <button type="button" class="btn" id="webOfferDisable">Desactivar oferta y guardar</button>
+          <small>Se aplica automáticamente al comprar mientras esta sea la tirada activa y el producto sea visible. Guarda la ficha para confirmar la programación.</small>
+        </fieldset>
         <details id="editionReceiptsHistory"><summary>Recepciones y gastos guardados</summary><div id="editionReceiptsContent"></div></details>
         <div class="modal-actions">
           <button type="button" class="btn" id="productCancelBtn">Cancelar</button>
@@ -2164,7 +2180,7 @@
   <div class="toast-container" id="toastContainer" aria-live="polite" aria-atomic="true"></div>
 
   <script src="assets/size-systems.js?v=1"></script>
-  <script src="assets/api.js?v=30"></script>
+  <script src="assets/api.js?v=31"></script>
   <script src="assets/admin-auth-routing.js?v=1"></script>
   <script src="assets/ui-status.js"></script>
   <script src="assets/media-framing-geometry.js?v=6"></script>
@@ -2189,7 +2205,7 @@
   <script src="assets/admin-push.js?v=1"></script>
   <script src="assets/admin-inbox.js?v=14"></script>
   <script src="assets/admin-lots.js?v=2"></script>
-  <script src="assets/admin-editions.js?v=2"></script>
+  <script src="assets/admin-editions.js?v=3"></script>
   <script src="assets/admin.js?v=27"></script>
   <script src="assets/admin-qr-events.js?v=3"></script>
   <script src="assets/admin-inventory.js?v=2"></script>

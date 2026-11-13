@@ -3,6 +3,7 @@ import {
   Controller,
   Delete,
   Get,
+  Header,
   Headers,
   Param,
   ParseIntPipe,
@@ -43,6 +44,7 @@ export class CartController {
   ) {}
 
   @Get()
+  @Header('Cache-Control', 'private, no-store')
   async getCart(
     @Req() req: Request,
     @Res({ passthrough: true }) res: Response,
@@ -53,12 +55,12 @@ export class CartController {
 
     if (cart) {
       this.persistAnonymousCookie(req, res, context);
-      return cart;
+      return this.cartService.withCurrentPrices(cart);
     }
 
     const created = await this.cartService.getOrCreateCart(context);
     this.persistAnonymousCookie(req, res, context);
-    return created;
+    return this.cartService.withCurrentPrices(created);
   }
 
   @Post('items')
@@ -79,7 +81,7 @@ export class CartController {
         quantity: dto.qty,
       }).catch(() => undefined);
     }
-    return cart;
+    return this.cartService.withCurrentPrices(cart);
   }
 
   @Patch('items/:id')
@@ -104,7 +106,7 @@ export class CartController {
         quantity: dto.qty,
       }).catch(() => undefined);
     }
-    return cart;
+    return this.cartService.withCurrentPrices(cart);
   }
 
   @Delete('items/:id')
@@ -126,7 +128,7 @@ export class CartController {
         quantity: before.qty,
       }).catch(() => undefined);
     }
-    return cart;
+    return this.cartService.withCurrentPrices(cart);
   }
 
   @Delete()
@@ -149,7 +151,7 @@ export class CartController {
         }).catch(() => undefined);
       }
     }
-    return cart;
+    return this.cartService.withCurrentPrices(cart);
   }
 
   private resolveContext(

@@ -47,8 +47,39 @@
   }
   const esc = value => String(value ?? '').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const amount = value => value == null ? 'Pendiente' : new Intl.NumberFormat('es-ES',{style:'currency',currency:'EUR'}).format(value/100);
+  const madridDate = value => value ? new Intl.DateTimeFormat('sv-SE', { timeZone:'Europe/Madrid', year:'numeric', month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit', hourCycle:'h23' }).format(new Date(value)).replace(' ', 'T') : '';
+  function utcDate(value) {
+    if (!value) throw new Error('Completa el inicio y fin de Oferta web (Europe/Madrid).');
+    const local = Date.parse(value + 'Z');
+    const candidates = [1, 2].map(offset => new Date(local - offset * 3600000)).filter(date => madridDate(date) === value);
+    if (candidates.length !== 1) throw new Error('La hora indicada no existe o se repite por el cambio de hora en Europe/Madrid. Elige otra hora inequívoca.');
+    return candidates[0].toISOString();
+  }
+  function offerFields() {
+    const lot = selected(), block = document.getElementById('editionWebOffer');
+    block.hidden = !lot;
+    if (!lot) return;
+    form.elements.webOfferEnabled.checked = lot.webOfferPriceCents != null && !lot.webOfferDisabledAt;
+    form.elements.webOfferPrice.value = lot.webOfferPriceCents == null ? '' : (lot.webOfferPriceCents / 100).toFixed(2);
+    form.elements.webOfferPrevious.value = lot.webOfferPreviousCents == null ? '' : (lot.webOfferPreviousCents / 100).toFixed(2);
+    form.elements.webOfferStart.value = madridDate(lot.webOfferStartsAt);
+    form.elements.webOfferEnd.value = madridDate(lot.webOfferEndsAt);
+    form.elements.webOfferConfirmed.checked = !!lot.webOfferConfirmedAt;
+    document.getElementById('webOfferDisable').disabled = !lot.webOfferPriceCents || !!lot.webOfferDisabledAt;
+    const names = { SCHEDULED:'Programada', ACTIVE:'Activa', ENDED:'Finalizada', DISABLED:'Desactivada' };
+    document.getElementById('webOfferStatus').textContent = (lot.webOfferPriceCents == null ? 'Sin oferta configurada' : names[lot.webOfferStatus]) + (lot.id !== data.product.activeLotId ? ' · Tirada inactiva, no se publica en la tienda.' : '');
+    const variants = (lot.profile.variants || []).filter(v => v.isActive !== false);
+    const distinct = new Set(variants.map(v => v.price ?? lot.profile.price));
+    document.getElementById('webOfferSizes').textContent = distinct.size > 1 ? 'Revisa los precios por talla. No se puede publicar una referencia común: ' + variants.map(v => v.size + ' ' + amount(v.price ?? lot.profile.price)).join(' · ') : '';
+  }
+  document.getElementById('webOfferDisable').addEventListener('click', () => {
+    form.elements.webOfferEnabled.checked = false;
+    void editor().save();
+  });
+  for (const name of ['webOfferPrevious', 'webOfferStart']) form.elements[name].addEventListener('input', () => { form.elements.webOfferConfirmed.checked = false; });
   function fillReceiptFields() {
     const lot=selected(); if(!lot)return;
+    offerFields();
     form.elements.editionReceivedAt.value=lot.receivedAt?.slice(0,10) || '';
     for(const name of ['editionReceiptDate','editionOther']) if(form.elements[name])form.elements[name].value='';
     const host=document.getElementById('editionReceiptsContent');if(!host)return;
@@ -79,12 +110,15 @@
     selected, capture, needsDecision,
     setSaving(value) { saving=value;form.inert=value;if(value)tell('');draw(); },
     async leave(fn) {if(busy || saving)return;await operate(async()=>{if(await decide()){baseline=null;fn();}});},
-    reset() {loading++;data=null;selectedId=null;baseline=null;tell('');document.getElementById('editionHistory').hidden=true;draw();},
+    reset() {loading++;data=null;selectedId=null;baseline=null;tell('');document.getElementById('editionHistory').hidden=true;document.getElementById('editionWebOffer').hidden=true;draw();},
     async load(productId) {const token=++loading;data={product:{id:productId},lots:[]};const result=await request();if(token!==loading)return null;data=result;selectedId=data.product.activeLotId;pendingSave=null;baseline=null;document.getElementById('editionHistory').hidden=false;draw();if(!selected())throw new Error('No se pudo cargar el lote activo.');fillReceiptFields();return selected().profile;},
     async save(payload) {
       const values=new FormData(form);
       const version=loading, lotId=selectedId;
       const body={...payload,revision:selected().revision,expectedStocks:payload.variants.map(v=>({size:v.size,available:selected().profile.variants.find(p=>p.size===v.size)?.stockQty ?? 0})),receivedAt:values.get('editionReceivedAt')||null,receiptReceivedAt:values.get('editionReceiptDate')||undefined,otherTotalCents:money('editionOther') ?? 0};
+      const enabled = form.elements.webOfferEnabled.checked;
+      if (enabled) body.webOffer = { enabled, priceCents:money('webOfferPrice'), previousCents:money('webOfferPrevious'), startsAt:utcDate(values.get('webOfferStart')), endsAt:utcDate(values.get('webOfferEnd')), previousConfirmed:form.elements.webOfferConfirmed.checked };
+      else if (selected().webOfferPriceCents != null && !selected().webOfferDisabledAt) body.webOffer = { enabled:false };
       if(body.isActive===data.product.isActive)delete body.isActive;
       else body.expectedVisibility=data.product.isActive;
       const serialized=JSON.stringify(body);

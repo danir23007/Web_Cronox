@@ -5,6 +5,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { AddItemDto } from './dto/add-item.dto';
 import { UpdateItemDto } from './dto/update-item.dto';
 import { serializableTransaction } from '../prisma/serializable-transaction';
+import { resolveWebPrice, webOfferLots, PricedProduct } from '../products/web-offer';
 
 export const cartInclude = {
   items: {
@@ -16,6 +17,7 @@ export const cartInclude = {
         include: {
           product: {
             include: {
+              inventoryLots: webOfferLots,
               images: {
                 where: { isActive: true },
                 orderBy: [
@@ -69,6 +71,12 @@ export class CartService {
   private readonly logger = new Logger(CartService.name);
 
   constructor(private readonly prisma: PrismaClient) {}
+
+  withCurrentPrices(cart: CartWithItems): CartWithItems {
+    return { ...cart, items: cart.items.map(item => ({ ...item, variant: {
+      ...item.variant, ...resolveWebPrice(item.variant.product, item.variant),
+    } })) };
+  }
 
   private readonly cartInclude = cartInclude;
 
@@ -548,7 +556,7 @@ export class CartService {
       where: { id: variantId },
       include: {
         product: {
-          select: { id: true, isActive: true, price: true, activeLotId: true },
+          select: { id: true, isActive: true, price: true, activeLotId: true, inventoryLots: webOfferLots },
         },
       },
     });
@@ -565,9 +573,9 @@ export class CartService {
 
   private getVariantPriceOrThrow(variant: {
     price: number | null;
-    product: { price: number };
+    product: PricedProduct;
   }): number {
-    const price = variant.price ?? variant.product.price;
+    const price = resolveWebPrice(variant.product, variant).effectivePrice;
     if (!Number.isInteger(price) || price < 0) {
       throw new BadRequestException(VARIANT_PRICE_NOT_SET_ERROR);
     }

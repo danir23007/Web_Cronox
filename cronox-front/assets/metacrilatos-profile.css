@@ -12,6 +12,8 @@ body[data-cronox-surface="customer"] .metacrilatos-member .metacrilatos-member__
 body[data-cronox-surface="customer"] .metacrilatos-member .metacrilatos-member__retry { font-size:16px; }
 body[data-cronox-surface="customer"] .metacrilatos-member .metacrilatos-member__circles li { font-size:16px; }
 body[data-cronox-surface="customer"] .metacrilatos-presentation .profile-back-link { font-size:16px; }
+body.page-profile[data-cronox-surface="customer"] .metacrilatos-presentation .profile-back-link { font-size:13px; }
+body.page-profile .metacrilatos-presentation > .profile-back-wrapper { padding-top:24px; }
 
 .metacrilatos-presentation[data-profile-section="accreditation"][data-accreditation-renderer="metacrilatos-v1"].is-active {
   display: grid;

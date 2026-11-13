@@ -210,6 +210,7 @@ declare global {
       safeReturnTo: (candidate?: string | null) => string;
     };
     CRONOX_STOCK?: {
+      decoratePrice: (price: HTMLElement, product: Record<string, unknown>) => void;
       hasLastUnits: (variants: unknown, threshold: unknown) => boolean;
       productStockStatus: (variants: unknown, threshold: unknown) => string;
       soldOutSizeCount: (variants: unknown) => number;

@@ -30,6 +30,7 @@ type TestCart = {
 };
 
 class InMemoryCartService {
+  withCurrentPrices(cart: TestCart) { return cart; }
   private nextCartId = 1;
   private nextItemId = 1;
   private readonly carts = new Map<string, TestCart>();

@@ -8,9 +8,10 @@ import { PrismaService } from '../prisma/prisma.service';
 import { sizeOrder, variantSizeLabel } from '../products/product-size-system';
 import { AddFavoriteDto } from './dto/add-favorite.dto';
 import { currentProductSlug } from '../products/product-slugs';
+import { resolveWebPrice, webOfferLots } from '../products/web-offer';
 
 type FavoriteProduct = Prisma.ProductGetPayload<{
-  include: { images: true; variants: true };
+  include: { images: true; variants: true; inventoryLots: typeof webOfferLots };
 }>;
 
 @Injectable()
@@ -42,6 +43,7 @@ export class FavoritesService {
           include: {
             images: { where: { isActive: true }, orderBy: this.imageOrderBy },
             variants: true,
+            inventoryLots: webOfferLots,
           },
         },
       },
@@ -64,6 +66,7 @@ export class FavoritesService {
           include: {
             images: { where: { isActive: true }, orderBy: this.imageOrderBy },
             variants: true,
+            inventoryLots: webOfferLots,
           },
         },
       },
@@ -175,6 +178,7 @@ export class FavoritesService {
       include: {
         images: { where: { isActive: true }, orderBy: this.imageOrderBy },
         variants: true,
+        inventoryLots: webOfferLots,
       },
     });
 
@@ -195,8 +199,10 @@ export class FavoritesService {
       backendId: product.id,
       slug: product.slug,
       name: product.name,
-      price: product.price,
-      priceInCents: product.price,
+      price: resolveWebPrice(product).effectivePrice,
+      priceInCents: resolveWebPrice(product).effectivePrice,
+      previousPrice: resolveWebPrice(product).previousPrice,
+      activeLotId: product.activeLotId,
       currency: product.currency,
       sizeSystem: product.sizeSystem,
       lastUnitsThreshold: product.lastUnitsThreshold ?? null,
@@ -207,6 +213,7 @@ export class FavoritesService {
           sizeLabel: variantSizeLabel(size),
           sku,
           price,
+          ...resolveWebPrice(product, { price, isActive }),
           stockQty,
           isActive,
         }))

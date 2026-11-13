@@ -1,4 +1,5 @@
 import { lockWelcomeBenefit, recordWelcomePurchase } from '../users/welcome-benefit';
+import { resolveWebPrice, WebOffer } from '../products/web-offer';
 // [ORDERS] Lógica de negocio para checkout y pedidos
 import { allocateLots, consumeLots, returnLots } from '../inventory-lots/lot-ledger';
 import { freezeCheckoutLots } from '../inventory-lots/lot-financial';
@@ -2624,7 +2625,15 @@ export class OrdersService {
       }
 
       const line = lineItems.find(item => item.variantId === variantId);
-      const locked = await tx.$queryRaw<Array<{ activeLotId:string|null; price:number }>>`SELECT p."activeLotId",COALESCE(v.price,p.price) AS price FROM "ProductVariant" v JOIN "Product" p ON p.id=v."productId" WHERE v.id=${variantId} FOR UPDATE OF v`;
+      const locked = await tx.$queryRaw<Array<{ activeLotId: string | null; price: number; offer?: WebOffer }>>`
+        SELECT p."activeLotId", COALESCE(v.price,p.price) AS price,
+          jsonb_build_object('id',l.id,'archived',l.archived,'webOfferPriceCents',l."webOfferPriceCents",'webOfferPreviousCents',l."webOfferPreviousCents",
+            'webOfferStartsAt',l."webOfferStartsAt",'webOfferEndsAt',l."webOfferEndsAt",
+            'webOfferDisabledAt',l."webOfferDisabledAt",'webOfferConfirmedAt',l."webOfferConfirmedAt") AS offer
+        FROM "ProductVariant" v JOIN "Product" p ON p.id=v."productId"
+        LEFT JOIN "InventoryLot" l ON l.id=p."activeLotId"
+        WHERE v.id=${variantId} FOR UPDATE OF v`;
+      if (locked[0]) locked[0].price = resolveWebPrice({ price: locked[0].price, activeLotId: locked[0].activeLotId, inventoryLots: locked[0].offer ? [locked[0].offer] : [] }).effectivePrice;
       if (locked[0]?.activeLotId && (locked[0].activeLotId !== line?.lotId || locked[0].price !== Number(line?.unitPrice.mul(100)))) throw new ConflictException({code:'PRODUCT_EDITION_CHANGED',message:'La tirada ha cambiado. Revisa la cesta antes de pagar.'});
       const updated = await tx.productVariant.updateMany({
         where: {
@@ -3190,7 +3199,7 @@ export class OrdersService {
   private assertCartEligibleForCheckout(cart: CartSnapshot | null, reserved = new Map<number, number>()): void {
     if (!cart?.items?.length) return;
 
-    const changedEditions = cart.items.filter(item => item.variant?.product?.activeLotId && (item.lotAtAdd !== item.variant.product.activeLotId || item.priceAtAdd !== (item.variant.price ?? item.variant.product.price)) && !reserved.has(item.variantId));
+    const changedEditions = cart.items.filter(item => item.variant?.product?.activeLotId && (item.lotAtAdd !== item.variant.product.activeLotId || item.priceAtAdd !== resolveWebPrice(item.variant.product, item.variant).effectivePrice) && !reserved.has(item.variantId));
     if (changedEditions.length) throw new ConflictException({ code:'PRODUCT_EDITION_CHANGED', message:'Ha cambiado la tirada o el precio de un producto. Revisa la cesta y confirma la ficha actual antes de pagar.' });
 
     const currencies = new Set(cart.items.map(item => (item.variant?.product?.currency ?? DEFAULT_CURRENCY).trim().toUpperCase()));
@@ -3232,7 +3241,7 @@ export class OrdersService {
       throw new BadRequestException('INVALID_CART_ITEM_VARIANT');
     }
 
-    const price = variant.price ?? product.price;
+    const price = resolveWebPrice(product, variant).effectivePrice;
     if (!Number.isInteger(price) || price < 0) {
       throw new BadRequestException('VARIANT_PRICE_NOT_SET');
     }

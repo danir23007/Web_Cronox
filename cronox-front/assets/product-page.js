@@ -600,6 +600,7 @@
       });
       const variant = findVariantForSize(product, selectedSize);
       if (pPrice) pPrice.textContent = variant?.priceLabel || money(variant?.price ?? product.price);
+      if (pPrice) window.CRONOX_STOCK?.decoratePrice?.(pPrice, { ...product, ...(variant || {}) });
       if (pAdd) {
         pAdd.disabled = !isVariantAvailable(variant);
         pAdd.setAttribute('aria-disabled', pAdd.disabled ? 'true' : 'false');
@@ -766,6 +767,7 @@
   });
   window.addEventListener('cronox:productAvailability', event => updateAvailability(event.detail?.product, event.detail?.requestedAt));
   window.addEventListener('focus', () => void refreshAvailability());
+  window.addEventListener('cronox:priceBoundary', () => void refreshAvailability());
   window.addEventListener('pageshow', event => { if (event.persisted) void refreshAvailability(); });
 
   function setupBackLinks(currentId) {
