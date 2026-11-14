@@ -5,7 +5,7 @@ import { orderCanvas, orderRingsUrl } from './order-confirmation-design';
 
 const { orderRingSvg } = require('../../../scripts/order-mail-rings.cjs');
 const radii = [268, 220, 172, 124, 76];
-const colors = ['#000000', '#000000', '#7C7C7C', '#FFFFFF', '#FFFFFF'];
+const colors = ['#000000', '#000000', '#7C7C7C', '#FFFFFF', '#B1001A'];
 const cases = [1, 2, 3, 4, 5].flatMap(circle => ['light', 'dark'].map(theme => ({ circle, theme })));
 describe('five visible order rings with a single active colour', () => {
   it.each(cases)('keeps the approved geometry and outside-to-inside identity ($circle/$theme)', ({ circle, theme }) => {
@@ -40,15 +40,26 @@ describe('five visible order rings with a single active colour', () => {
   });
   it('updates only the resource URL and keeps the approved canvas position and scale', () => {
     for (let circle = 1; circle <= 5; circle++) {
-      expect(orderRingsUrl(circle)).toContain(`rings-${circle}-light.png?v=${circle === 5 ? 3 : 2}`);
+      expect(orderRingsUrl(circle)).toContain(`rings-${circle}-light.png?v=${circle === 5 ? 4 : circle === 4 ? 3 : 2}`);
       expect(orderCanvas('<p>Contenido original</p>', circle)).toContain('background-size:640px 1400px;background-position:70% center;');
     }
   });
-  it.each(['light', 'dark'])('keeps the centre of circle V pure opaque white in the final PNG (%s)', async theme => {
+  it.each(['light', 'dark'])('keeps the centre of circle IV pure opaque white in the final PNG (%s)', async theme => {
+    const file = join(__dirname, '../../../../cronox-front/assets/mail/order-confirmation', `rings-4-${theme}.png`);
+    const { data, info } = await sharp(file).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+    const offset = (576 * info.width + 450) * info.channels;
+    expect([...data.subarray(offset, offset + 4)]).toEqual([255, 255, 255, 255]);
+    expect(orderRingSvg(4, theme)).toMatch(/data-ring="4"[^>]*stroke="#FFFFFF"[^>]*stroke-width="2" opacity="1"/);
+  });
+  it.each(['light', 'dark'])('uses the historical brand red exclusively on the inner active V (%s)', async theme => {
+    const svg = orderRingSvg(5, theme);
+    expect(svg).toMatch(/data-ring="5"[^>]*r="76"[^>]*stroke="#B1001A"/);
+    expect(svg.match(/#B1001A/g)).toHaveLength(1);
     const file = join(__dirname, '../../../../cronox-front/assets/mail/order-confirmation', `rings-5-${theme}.png`);
     const { data, info } = await sharp(file).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
     const offset = (624 * info.width + 450) * info.channels;
-    expect([...data.subarray(offset, offset + 4)]).toEqual([255, 255, 255, 255]);
-    expect(orderRingSvg(5, theme)).toMatch(/data-ring="5"[^>]*stroke="#FFFFFF"[^>]*stroke-width="2" opacity="1"/);
+    // Transparent antialiasing rounds premultiplied 8-bit channels.
+    expect(Math.abs(data[offset] - 177)).toBeLessThanOrEqual(2);
+    expect(data[offset + 1]).toBe(0); expect(Math.abs(data[offset + 2] - 26)).toBeLessThanOrEqual(1);
   });
 });

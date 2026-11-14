@@ -3,6 +3,7 @@ import { Prisma } from '@prisma/client';
 import { Decimal } from '@prisma/client/runtime/library';
 import { OrderConfirmationEmailTemplateData } from './email.types';
 import { toCountryDisplayName } from '../common/country';
+import { containedOrderImage } from './managed/order-product-image';
 
 export const orderForConfirmationEmailInclude = {
   include: {
@@ -22,6 +23,7 @@ export const orderForConfirmationEmailInclude = {
     },
     items: {
       include: {
+        variant: { select: { size: true } },
         product: {
           select: {
             name: true,
@@ -31,6 +33,8 @@ export const orderForConfirmationEmailInclude = {
               where: { isActive: true },
               select: {
                 url: true,
+                width: true,
+                height: true,
                 isPrimary: true,
                 sortOrder: true,
               },
@@ -108,6 +112,8 @@ export class OrderConfirmationEmailMapper {
           variantName,
           quantity: Math.max(1, item.quantity),
           imageUrl,
+          ...containedOrderImage(item.product?.images?.find(image => image.url === imageUrl)?.width,
+            item.product?.images?.find(image => image.url === imageUrl)?.height),
           unitPriceFormatted: this.formatCurrencyFromDecimal(item.unitPrice),
           lineTotalFormatted: this.formatCurrencyFromDecimal(item.lineTotal),
         };
@@ -267,6 +273,7 @@ export class OrderConfirmationEmailMapper {
   private resolveVariantName(
     item: OrderForConfirmationEmail['items'][number],
   ): string | null {
+    if (item.variant?.size) return item.variant.size;
     const sizeInTitle = item.title.match(/\(([^)]+)\)\s*$/)?.[1]?.trim();
     if (sizeInTitle) {
       return sizeInTitle;

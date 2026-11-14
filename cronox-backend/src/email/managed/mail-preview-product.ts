@@ -1,6 +1,7 @@
 import { randomInt } from 'node:crypto';
 import { PrismaService } from '../../prisma/prisma.service';
 import { resolveWebPrice, webOfferLots } from '../../products/web-offer';
+import { containedOrderImage } from './order-product-image';
 
 export function usesPreviewProduct(document: unknown, purpose?: string | null) {
   return purpose === 'RESTOCK' || /"type":"(?:orderItems|orderTotals)"|\{\{\s*(?:#each\s+items|product(?:Name|Image|Slug)?|imageUrl|items\b|unitPriceFormatted|lineTotalFormatted)\b/.test(JSON.stringify(document));
@@ -31,6 +32,7 @@ export async function previewCatalogProduct(db: Pick<PrismaService, 'product'>, 
   const money = (cents: number) => new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR' }).format(cents / 100);
   const image = imageFor(product)!;
   const item = { name: product.name, variantName: variant.size, quantity, imageUrl: image,
+    ...containedOrderImage(product.images.find(entry => entry.url === image)?.width, product.images.find(entry => entry.url === image)?.height),
     unitPriceFormatted: money(price), lineTotalFormatted: money(subtotal) };
   return {
     selection: { productId: product.id, variantId: variant.id },

@@ -85,6 +85,7 @@ export const MAIL_PURPOSES = [
 
 export const SAMPLE_DATA: Record<string, unknown> = {
   product: 'Camiseta de ejemplo', size: 'M', imageUrl: 'https://example.com/camiseta.png',
+  imageWidth: 70, imageHeight: 70,
   subject: 'Correo de ejemplo CRONOX',
   title: 'Hola, Alex',
   message:
@@ -129,6 +130,7 @@ export const SAMPLE_DATA: Record<string, unknown> = {
       variantName: 'M',
       quantity: 2,
       imageUrl: 'https://example.com/camiseta.png',
+      imageWidth: 70, imageHeight: 70,
       unitPriceFormatted: '34,95 €',
       lineTotalFormatted: '69,90 €',
     },
@@ -178,6 +180,8 @@ export const VARIABLE_DESCRIPTIONS: Record<string, string> = {
   variantName: 'Artículo: variante (dentro del bucle)',
   quantity: 'Artículo: cantidad (dentro del bucle)',
   imageUrl: 'Artículo: imagen (dentro del bucle)',
+  imageWidth: 'Artículo: ancho proporcional de la foto (dentro del bucle)',
+  imageHeight: 'Artículo: alto proporcional de la foto (dentro del bucle)',
   unitPriceFormatted: 'Artículo: precio unitario (dentro del bucle)',
   lineTotalFormatted: 'Artículo: importe total (dentro del bucle)',
 };
@@ -215,6 +219,8 @@ export function variablesFor(purpose?: string | null) {
       return [
         ...base,
         ...order,
+        'imageWidth',
+        'imageHeight',
         'customerEmail',
         'customerFullName',
         'customerPhone',

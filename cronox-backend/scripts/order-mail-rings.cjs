@@ -1,7 +1,7 @@
 // The email consumes raster PNGs, not this SVG. Keep the approved canvas,
 // centre and set of radii; circle identity runs from outside to inside.
 const ORDER_RING_GEOMETRY = Object.freeze({ width: 640, height: 1400, cx: 450, cy: 700, radii: Object.freeze([268, 220, 172, 124, 76]) });
-const ORDER_RING_COLORS = Object.freeze(['#000000', '#000000', '#7C7C7C', '#FFFFFF', '#FFFFFF']);
+const ORDER_RING_COLORS = Object.freeze(['#000000', '#000000', '#7C7C7C', '#FFFFFF', '#B1001A']);
 
 function orderRingSvg(selected, theme) {
   if (!Number.isInteger(selected) || selected < 1 || selected > 5 || !['light', 'dark'].includes(theme)) throw Error('INVALID_ORDER_RING_VARIANT');
@@ -11,11 +11,11 @@ function orderRingSvg(selected, theme) {
   const circles = radii.map((radius, index) => {
     const active = index + 1 === selected;
     const stroke = active ? ORDER_RING_COLORS[index] : neutral;
-    const strokeWidth = active ? ((dark && index < 2) || (!dark && index === 3) || index === 4 ? 2 : 1.4) : 1.15;
-    const opacity = !active ? (dark ? .15 : .17) : dark ? [1, 1, .6, .22, 1][index] : [.3, .3, .55, 1, 1][index];
+    const strokeWidth = active ? ((dark && index < 2) || index === 3 ? 2 : 1.4) : 1.15;
+    const opacity = !active ? (dark ? .15 : .17) : dark ? [1, 1, .6, 1, .6][index] : [.3, .3, .55, 1, .4][index];
     // Preserve pure black in dark mode. The neutral halo lights only its
     // immediate surroundings. White needs the inverse treatment on light.
-    const halo = active && ((dark && index < 2) || (!dark && (index === 3 || index === 4)))
+    const halo = active && ((dark && index < 2) || (!dark && index === 3))
       ? `<circle cx="${cx}" cy="${cy}" r="${radius}" fill="none" stroke="${dark ? '#B8B8B8' : '#505050'}" stroke-width="6" opacity=".025"/><circle cx="${cx}" cy="${cy}" r="${radius}" fill="none" stroke="${dark ? '#B8B8B8' : '#505050'}" stroke-width="3.6" opacity="${dark ? .16 : .14}"/>` : '';
     return `${halo}<circle data-ring="${index + 1}" cx="${cx}" cy="${cy}" r="${radius}" fill="none" stroke="${stroke}" stroke-width="${strokeWidth}" opacity="${opacity}"/>`;
   }).join('');

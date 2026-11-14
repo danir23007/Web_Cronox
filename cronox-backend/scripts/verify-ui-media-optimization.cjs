@@ -52,7 +52,7 @@ const approvedImageChanges = new Set([
   'cronox-front/assets/mail/welcome/logo-cx.png',
   'cronox-front/assets/mail/welcome/logo-ojo.png',
   // Approved order-confirmation PNGs. Dedicated raster tests verify the
-  // official logo and five visible rings, including the opaque white V.
+  // official logo and five visible rings, including opaque white IV and red V.
   'cronox-front/assets/mail/order-confirmation/logo-light.png',
   'cronox-front/assets/mail/order-confirmation/logo-dark.png',
   ...[1, 2, 3, 4, 5].flatMap(circle => ['light', 'dark'].map(theme =>

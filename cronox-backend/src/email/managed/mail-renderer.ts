@@ -5,6 +5,7 @@ import sanitizeHtml from 'sanitize-html';
 import { parseDocument } from 'htmlparser2';
 import { MAIL_PURPOSES, variablesFor } from './mail-catalog';
 import { editorCopy } from './mail-editor-content';
+import { orderProductImageHtml } from './order-product-image';
 import { prepareOrderConfirmationDocument, ORDER_CONFIRMATION_CSS, orderLogoHtml, ORDER_LOGO_LIGHT, mutedTaxColor, orderCanvas, orderCircle } from './order-confirmation-design';
 
 export type MailBlock = {
@@ -124,7 +125,7 @@ export function cleanMailHtml(html: string, placeholders = false) {
       table: ['cellpadding', 'cellspacing', 'border', 'width', 'role'],
       td: ['colspan', 'rowspan', 'background', 'bgcolor'],
     },
-    allowedClasses: { '*': ['mail-column', 'welcome-title', 'welcome-copy', 'welcome-footer', 'welcome-instagram', 'welcome-code', 'welcome-backdrop', 'order-logo-light', 'order-logo-dark', 'order-tax-row', 'order-surface', 'order-confirmation', 'order-header-cell', 'order-summary-lead', 'order-summary-values', 'order-cta-cell', 'order-actions', 'order-action-or'] },
+    allowedClasses: { '*': ['mail-column', 'welcome-title', 'welcome-copy', 'welcome-footer', 'welcome-instagram', 'welcome-code', 'welcome-backdrop', 'order-logo-light', 'order-logo-dark', 'order-tax-row', 'order-surface', 'order-confirmation', 'order-header-cell', 'order-summary-lead', 'order-summary-values', 'order-cta-cell', 'order-actions', 'order-action-or', 'order-product-frame'] },
     allowedSchemes: ['https', 'http', 'mailto', 'tel'],
     allowProtocolRelative: false,
     allowedStyles: {
@@ -345,7 +346,7 @@ export function renderMail(
             break;
           }
           case 'orderItems':
-            content = `{{#each items}}<table role="presentation" width="100%"><tr><td width="84" valign="top" style="padding:10px 14px 10px 0;">{{#if imageUrl}}<img src="{{imageUrl}}" alt="{{name}}" width="70" height="70" style="display:block;width:70px;height:70px;border:1px solid #ddddda;border-radius:8px;" />{{/if}}</td><td valign="middle" style="padding:10px 8px;"><strong>{{name}}{{#if quantity}} × {{quantity}}{{/if}}</strong>{{#if variantName}}<br><span style="font-size:12px;color:#929292;">{{variantName}}</span>{{/if}}</td><td valign="middle" align="right" style="padding:10px 0;white-space:nowrap;"><strong>{{lineTotalFormatted}}</strong></td></tr></table>{{else}}<p>${label('empty', 'No hay artículos.')}</p>{{/each}}`;
+            content = `{{#each items}}<table role="presentation" width="100%"><tr><td width="84" valign="top" style="padding:10px 14px 10px 0;">{{#if imageUrl}}${purpose === 'ORDER_CONFIRMATION' ? orderProductImageHtml() : '<img src="{{imageUrl}}" alt="{{name}}" width="70" height="70" style="display:block;width:70px;height:70px;border:1px solid #ddddda;border-radius:8px;" />'}{{/if}}</td><td valign="middle" style="padding:10px 8px;"><strong>{{name}}{{#if quantity}} × {{quantity}}{{/if}}</strong>{{#if variantName}}<br><span style="font-size:12px;color:#929292;">{{variantName}}</span>{{/if}}</td><td valign="middle" align="right" style="padding:10px 0;white-space:nowrap;"><strong>{{lineTotalFormatted}}</strong></td></tr></table>{{else}}<p>${label('empty', 'No hay artículos.')}</p>{{/each}}`;
             break;
           case 'orderTotals':
             content = `<table role="presentation" width="100%"><tr><td>${label('subtotal', 'Total parcial')}</td><td align="right"><strong>{{subtotalFormatted}}</strong></td></tr>{{#if savingsFormatted}}<tr><td>${label('discount', 'Descuento')}</td><td align="right"><strong>{{discountFormatted}}</strong></td></tr>{{/if}}<tr><td>${label('shipping', 'Envío')}</td><td align="right"><strong>{{shippingFormatted}}</strong></td></tr><tr${purpose === 'ORDER_CONFIRMATION' ? ' class="order-tax-row"' : ''}><td style="${purpose === 'ORDER_CONFIRMATION' ? `color:${mutedTaxColor(fallbackBackground)};font-weight:400;white-space:nowrap;` : ''}">${label('taxes', 'Impuestos')}</td><td align="right" style="${purpose === 'ORDER_CONFIRMATION' ? `color:${mutedTaxColor(fallbackBackground)};font-weight:400;` : ''}"><strong style="${purpose === 'ORDER_CONFIRMATION' ? 'font-weight:400;' : ''}">{{taxesFormatted}}</strong></td></tr><tr><td style="padding-top:12px;border-top:1px solid #ddddda;">${label('total', 'Total')}</td><td align="right" style="padding-top:12px;border-top:1px solid #ddddda;font-size:18px;"><strong>{{totalFormatted}}</strong></td></tr>{{#if savingsFormatted}}<tr><td></td><td align="right" style="font-size:12px;">${label('savings', 'Ahorraste')} {{savingsFormatted}}</td></tr>{{/if}}</table>`;

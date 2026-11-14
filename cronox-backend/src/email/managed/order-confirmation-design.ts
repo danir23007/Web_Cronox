@@ -1,12 +1,13 @@
 import { parseDocument } from 'htmlparser2';
 import type { MailBlock } from './mail-renderer';
+import { orderProductImageHtml } from './order-product-image';
 
 export const ORDER_LOGO_LIGHT = 'https://cronox.es/assets/mail/order-confirmation/logo-light.png';
 export const ORDER_LOGO_DARK = 'https://cronox.es/assets/mail/order-confirmation/logo-dark.png';
 export const ORDER_TAX_LABEL = 'Impuestos (ya incluidos)';
 export const orderCircle = (value: unknown) => typeof value === 'number' && Number.isInteger(value) && value >= 1 && value <= 5 ? value : 1;
 export const orderPublicationKey = (circle: number) => `ORDER_CONFIRMATION:CIRCLE_${orderCircle(circle)}`;
-export const orderRingsUrl = (circle: number, theme = 'light') => `https://cronox.es/assets/mail/order-confirmation/rings-${orderCircle(circle)}-${theme === 'dark' ? 'dark' : 'light'}.png?v=${orderCircle(circle) === 5 ? 3 : 2}`;
+export const orderRingsUrl = (circle: number, theme = 'light') => `https://cronox.es/assets/mail/order-confirmation/rings-${orderCircle(circle)}-${theme === 'dark' ? 'dark' : 'light'}.png?v=${orderCircle(circle) === 5 ? 4 : orderCircle(circle) === 4 ? 3 : 2}`;
 export const ORDER_CONFIRMATION_CSS = `
 .order-logo-dark{display:none!important;max-height:0!important;overflow:hidden!important;mso-hide:all;}
 .order-header-cell{padding:0;}.order-actions{border-collapse:collapse!important;width:auto!important;max-width:100%!important;}.order-actions td{padding:0;vertical-align:middle!important;}.order-actions a{box-sizing:border-box;white-space:nowrap;min-height:44px;}
@@ -66,6 +67,19 @@ export function prepareOrderConfirmationHtml(source: string) {
     : open.replace(/^(<\w+)/, `$1 class="${name}"`);
   const visit = (node: any) => {
     if (node.type === 'tag') {
+      if (node.name === 'table' && node.attribs?.class?.split(/\s+/).includes('order-product-frame')) {
+        const original = source.slice(node.startIndex, node.endIndex + 1);
+        if (original.includes('{{imageUrl}}')) {
+          const current = orderProductImageHtml();
+          if (original !== current) replace(node, current);
+          return;
+        }
+      }
+      if (node.name === 'img' && node.attribs?.src === '{{imageUrl}}') {
+        let parent = node.parent, framed = false;
+        while (parent) { if (parent.attribs?.class?.split(/\s+/).includes('order-product-frame')) framed = true; parent = parent.parent; }
+        if (!framed) { replace(node, orderProductImageHtml()); return; }
+      }
       if (node.name === 'a' && ['{{orderUrl}}', '{{storeUrl}}'].includes(node.attribs?.href) && node.children?.every((n: any) => n.type === 'text')) {
         const original = source.slice(node.startIndex, node.endIndex + 1);
         const trimmed = original.replace(/>([\s\S]*?)<\/a>$/, (_all, text) => `>${text.trim()}</a>`);

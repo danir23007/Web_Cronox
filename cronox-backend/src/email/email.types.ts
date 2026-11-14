@@ -79,6 +79,8 @@ export type OrderConfirmationEmailTemplateData = {
     variantName?: string | null;
     quantity: number;
     imageUrl?: string | null;
+    imageWidth?: number;
+    imageHeight?: number;
     unitPriceFormatted?: string | null;
     lineTotalFormatted: string;
   }>;
