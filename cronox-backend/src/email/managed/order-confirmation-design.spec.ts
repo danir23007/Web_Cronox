@@ -13,7 +13,7 @@ import { ManagedMailService } from './managed-mail.service';
 import { mutedTaxColor, prepareOrderConfirmationDocument, prepareOrderConfirmationHtml, ORDER_LOGO_LIGHT, ORDER_LOGO_DARK, ORDER_TAX_LABEL } from './order-confirmation-design';
 
 const legacy = readFileSync(join(__dirname, '../templates/order-confirmation.hbs'), 'utf8');
-const sample = mailPreviewData('ORDER_CONFIRMATION');
+const sample = { ...mailPreviewData('ORDER_CONFIRMATION'), circleLevel: 1 };
 describe('confirmation presentation without changing financial or publication data', () => {
   it('exports email PNGs with the official aspect ratio and an opaque light fallback canvas', async () => {
     const folder = join(__dirname, '../../../../cronox-front/assets/mail/order-confirmation');

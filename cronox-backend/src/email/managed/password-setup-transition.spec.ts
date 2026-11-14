@@ -7,7 +7,7 @@ const original = { blocks: [{ type: 'section', background: '#174f42', columns: [
   { type: 'text', text: 'Tu compra ya está asociada a tu nueva cuenta.' },
   { type: 'button', text: 'Activar cuenta', url: '{{actionUrl}}' },
 ]] }] };
-const data = { title: 'Configura tu contraseña y consulta tu pedido', message: 'Tu pedido está asociado a tu cuenta CRONOX.',
+const data = { circleLevel: 1, title: 'Configura tu contraseña y consulta tu pedido', message: 'Tu pedido está asociado a tu cuenta CRONOX.',
   orderId: '42', actionUrl: 'https://example.test/reset#token=fixture', recoveryUrl: 'https://example.test/recuperar-contrasena',
   actionLabel: 'Configurar contraseña', subject: 'CRONOX · Configura tu contraseña y consulta tu pedido' };
 describe('compatible password purpose design transition', () => {
@@ -23,8 +23,8 @@ describe('compatible password purpose design transition', () => {
     expect(JSON.stringify(original)).toBe(before);
   });
   it('can read an existing published design through the new purpose without writing or republishing it', async () => {
-    const snapshot: any = { senderKey: 'NOREPLY', purpose: 'INITIAL_PASSWORD_SETUP', document: original, subject: 'Tu cuenta ha sido creada', textOverride: 'Hemos creado tu nueva cuenta' };
-    const db = { emailPublication: { findUnique: jest.fn(async ({ where }: any) => where.senderKey_purpose.purpose === 'INITIAL_PASSWORD_SETUP' ? { version: { snapshot } } : null) } };
+    const snapshot: any = { folderId: 'legacy-circle-one', senderKey: 'NOREPLY', purpose: 'INITIAL_PASSWORD_SETUP', document: original, subject: 'Tu cuenta ha sido creada', textOverride: 'Hemos creado tu nueva cuenta' };
+    const db = { emailTemplateFolder: { findFirst: jest.fn().mockResolvedValue({name:'Círculo 1'}) }, emailPublication: { findUnique: jest.fn(async ({ where }: any) => where.senderKey_purpose.purpose === 'INITIAL_PASSWORD_SETUP' ? { version: { snapshot } } : null) } };
     const service = new ManagedMailService(db as any, {} as any);
     const render = jest.spyOn(service, 'render').mockResolvedValue({ html: 'fixture', text: 'fixture', subject: data.subject } as any);
     await service.published(EmailSenderKey.NOREPLY, 'PASSWORD_SETUP_EXISTING_ACCOUNT', data);

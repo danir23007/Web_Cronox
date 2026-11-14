@@ -69,7 +69,8 @@ export class EmailService {
     try {
       html = await this.renderTemplate(EmailTemplate.RESTOCK, data);
       try {
-        const custom = await this.managed?.published(EmailSenderKey.NOREPLY, 'RESTOCK', data);
+        const circleLevel = await this.managed?.recipientCircle?.(to);
+        const custom = await this.managed?.published(EmailSenderKey.NOREPLY, 'RESTOCK', { ...data, circleLevel });
         const link = Handlebars.escapeExpression(data.actionUrl);
         if (custom && (custom.html.includes(`href="${link}"`) || custom.html.includes(`href='${link}'`))) { html = custom.html; publication = custom; }
       } catch { /* Preserve the working first-party template. */ }
@@ -104,6 +105,7 @@ export class EmailService {
       };
       let custom: { html: string; text: string; subject: string } | null = null;
       try {
+        data.circleLevel = await this.managed?.recipientCircle?.(options.to, data.circleLevel) ?? data.circleLevel;
         custom =
           (await this.managed?.published(
             senderKey,

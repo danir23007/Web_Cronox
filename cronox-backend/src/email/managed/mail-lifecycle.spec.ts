@@ -108,6 +108,7 @@ describe('email permissions, publication and controlled tests', () => {
       signatureText = 'Firma inicial';
     const db = {
       $transaction: jest.fn(),
+      emailTemplateFolder: { findFirst: jest.fn().mockResolvedValue({ id: 'f', name: 'Círculo 1' }) },
       managedEmailTemplate: {
         findFirst: jest
           .fn()
@@ -122,7 +123,7 @@ describe('email permissions, publication and controlled tests', () => {
       },
       emailPublication: {
         upsert: jest.fn(),
-        findUnique: jest.fn(() => ({ version: { snapshot } })),
+        findUnique: jest.fn(() => snapshot ? ({ version: { snapshot } }) : null),
       },
       emailSenderProfile: {
         findUnique: jest.fn().mockResolvedValue({ defaultSignatureId: 's1' }),
@@ -148,15 +149,16 @@ describe('email permissions, publication and controlled tests', () => {
       1,
     );
     expect(db.emailPublication.upsert).toHaveBeenCalledWith({
-      where: { senderKey_purpose: { senderKey: 'NOREPLY', purpose: 'NEWSLETTER_WELCOME' } },
+      where: { senderKey_purpose: { senderKey: 'NOREPLY', purpose: 'NEWSLETTER_WELCOME:CIRCLE_1' } },
       update: { versionId: 'v1' },
-      create: { senderKey: 'NOREPLY', purpose: 'NEWSLETTER_WELCOME', versionId: 'v1' },
+      create: { senderKey: 'NOREPLY', purpose: 'NEWSLETTER_WELCOME:CIRCLE_1', versionId: 'v1' },
     });
     db.managedEmailTemplate.findFirst.mockResolvedValue({
       ...template,
       document: { blocks: [{ type: 'text', text: 'Borrador diferente' }] },
     });
     const published = await service.published(EmailSenderKey.NOREPLY, 'NEWSLETTER_WELCOME', {
+      circleLevel: 1,
       subject: 'Asunto',
       message: 'Hola', discountCode: 'PERSONAL42',
     });
@@ -167,6 +169,7 @@ describe('email permissions, publication and controlled tests', () => {
     expect(
       (
         await service.published(EmailSenderKey.NOREPLY, 'NEWSLETTER_WELCOME', {
+          circleLevel: 1,
           subject: 'Asunto',
           message: 'Hola', discountCode: 'PERSONAL42',
         })

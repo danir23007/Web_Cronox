@@ -1,5 +1,6 @@
 import { mailCircleNumber, resolveMailCircle } from './mail-circle-folders';
-import { orderCircle, orderPublicationKey, prepareOrderConfirmationDocument } from './order-confirmation-design';
+import { mailPublicationKey, recipientMailCircle, snapshotMailCircle } from './mail-publication-scope';
+import { orderCircle, prepareOrderConfirmationDocument } from './order-confirmation-design';
 import { previewCatalogProduct, usesPreviewProduct } from './mail-preview-product';
 import { CANONICAL_MAIL_CIRCLES, draftScope, draftContentMatches as rawDraftContentMatches } from './mail-draft-scope';
 import { requireWelcomeCode } from './welcome-code';
@@ -921,11 +922,21 @@ export class ManagedMailService {
           });
           break;
         }
-        case 'unpublish':
+        case 'unpublish': {
           if (!dto.confirmed)
             throw new BadRequestException('Confirma la despublicación antes de continuar.');
-          await tx.emailPublication.deleteMany({ where: { senderKey: key, version: { templateId: id } } });
+          const folder = await this.folder(tx, key, t.folderId), circle = mailCircleNumber(folder.name);
+          if (!circle) throw new BadRequestException('La publicación debe pertenecer a un círculo del I al V.');
+          // The draft may have changed its purpose since publication. Use its
+          // actual version references, while keeping other circles untouched.
+          const publications = await tx.emailPublication.findMany({ where: { senderKey: key, version: { templateId: id } }, include: { version: true } });
+          for (const publication of publications) {
+            const scoped = publication.purpose.match(/:CIRCLE_([1-5])$/);
+            const bound = scoped ? Number(scoped[1]) : await snapshotMailCircle(tx, key, publication.version.snapshot);
+            if (bound === circle) await tx.emailPublication.deleteMany({ where: { senderKey: key, purpose: publication.purpose, versionId: publication.versionId } });
+          }
           break;
+        }
         case 'restore':
           await tx.managedEmailTemplate.update({
             where: { id },
@@ -945,9 +956,17 @@ export class ManagedMailService {
               'Confirma la activación de una plantilla válida de esta cuenta.',
             );
           await this.render(key, t, mailPreviewData(t.purpose), true, tx);
-          const circle = t.purpose === 'ORDER_CONFIRMATION' ? await this.confirmationCircle(key, t.folderId, tx) : null;
-          const publicationPurpose = circle ? orderPublicationKey(circle) : t.purpose;
-          const snapshot = circle ? { ...t, document: { ...prepareOrderConfirmationDocument(t.document) as object, orderCircle: circle } } : t;
+          const folder = await this.folder(tx, key, t.folderId), circle = mailCircleNumber(folder.name);
+          if (!circle) throw new BadRequestException('Para publicar, utiliza un círculo del I al V.');
+          const publicationPurpose = mailPublicationKey(t.purpose, circle);
+          const snapshot = { ...t, publicationCircle: circle,
+            ...(t.purpose === 'ORDER_CONFIRMATION' ? { document: { ...prepareOrderConfirmationDocument(t.document) as object, orderCircle: circle } } : {}),
+          };
+          // Retire only a legacy global pointer proven to belong to this same
+          // circle. Other circles and every immutable version remain intact.
+          const legacy = await tx.emailPublication.findUnique({ where: { senderKey_purpose: { senderKey: key, purpose: t.purpose } }, include: { version: true } });
+          if (legacy && await snapshotMailCircle(tx, key, legacy.version.snapshot) === circle)
+            await tx.emailPublication.deleteMany({ where: { senderKey: key, purpose: t.purpose, versionId: legacy.versionId } });
           const v = await tx.emailTemplateVersion.create({
             data: { templateId: id, snapshot: json(snapshot), createdBy: actorId },
           });
@@ -1050,36 +1069,38 @@ export class ManagedMailService {
   ) {
     if (!MAIL_PURPOSES.some((p) => p.key === purpose && p.senderKey === key))
       return null;
-    let publication = await this.db.emailPublication.findUnique({
-      where: { senderKey_purpose: { senderKey: key, purpose: purpose === 'ORDER_CONFIRMATION' ? orderPublicationKey(orderCircle(data.circleLevel)) : purpose } },
-      include: { version: true },
-    });
-    if (purpose === 'ORDER_CONFIRMATION') {
-      if (!publication) publication = await this.db.emailPublication.findUnique({ where: { senderKey_purpose: { senderKey: key, purpose } }, include: { version: true } });
+    const circle = recipientMailCircle(data.circleLevel);
+    if (!circle) return null; // Guests retain the first-party fallback; never assume I.
+    const resolve = async (target: string) => {
+      const scoped = await this.db.emailPublication.findUnique({ where: { senderKey_purpose: { senderKey: key, purpose: mailPublicationKey(target, circle) } }, include: { version: true } });
+      const publication = scoped || await this.db.emailPublication.findUnique({ where: { senderKey_purpose: { senderKey: key, purpose: target } }, include: { version: true } });
       if (!publication) return null;
       const snapshot = publication.version.snapshot as any;
-      const circle = snapshot.document?.orderCircle ?? await this.confirmationCircle(key, snapshot.folderId);
-      // A legacy global publication is eligible only for its own circle. New
-      // immutable snapshots bind the circle even if the draft is moved later.
-      if (circle !== orderCircle(data.circleLevel)) return null;
-      if (snapshot.senderKey !== String(key) || snapshot.purpose !== purpose) throw new Error('Publicación incompatible');
+      if (snapshot.senderKey !== String(key) || snapshot.purpose !== target) throw Error('Publicación incompatible');
+      // A scoped key itself is evidence for pre-existing order publications
+      // without explicit metadata; legacy global keys need snapshot evidence.
+      const bound = await snapshotMailCircle(this.db, key, snapshot);
+      if (bound !== circle && !(scoped && bound == null && !snapshot.folderId && snapshot.publicationCircle == null && snapshot.campaignCircle == null && snapshot.document?.orderCircle == null)) return null;
+      return snapshot;
+    };
+    const snapshot = await resolve(purpose);
+    if (snapshot && purpose === 'ORDER_CONFIRMATION')
       return this.render(key, { ...snapshot, folderId: undefined, document: { ...snapshot.document, orderCircle: circle } }, data, true);
-    }
-    if (!publication && purpose.startsWith('PASSWORD_SETUP_')) {
-      const legacy = await this.db.emailPublication.findUnique({ where: { senderKey_purpose: { senderKey: key, purpose: 'INITIAL_PASSWORD_SETUP' } }, include: { version: true } });
-      if (!legacy) return null;
-      const original = legacy.version.snapshot as unknown as ManagedEmailTemplate;
-      if (original.senderKey !== String(key) || original.purpose !== 'INITIAL_PASSWORD_SETUP') throw Error('Publicación incompatible');
+    if (snapshot) return this.render(key, snapshot, data, true);
+    if (purpose.startsWith('PASSWORD_SETUP_')) {
+      const original = await resolve('INITIAL_PASSWORD_SETUP');
+      if (!original) return null;
       return this.render(key, { ...original, purpose, subject: String(data.subject || ''),
         textOverride: null,
         document: json(passwordSetupDesign(original.document, purpose)) }, data, true);
     }
-    if (!publication) return null;
-    const snapshot = publication.version
-      .snapshot as unknown as ManagedEmailTemplate;
-    if (snapshot.senderKey !== String(key) || snapshot.purpose !== purpose)
-      throw new Error('Publicación incompatible');
-    return this.render(key, snapshot, data, true);
+    return null;
+  }
+  async recipientCircle(email: string, supplied?: unknown): Promise<number | null> {
+    const explicit = recipientMailCircle(supplied);
+    if (explicit) return explicit;
+    const user = await this.db.user.findFirst({ where: { email: { equals: email.trim(), mode: 'insensitive' } }, select: { circleLevel: true } });
+    return recipientMailCircle(user?.circleLevel);
   }
   async signatures(key: EmailSenderKey) {
     return this.db.emailSignature.findMany({

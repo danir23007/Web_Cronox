@@ -82,7 +82,7 @@ export class OrderConfirmationEmailMapper {
     const savingsCents = discountCents;
 
     return {
-      circleLevel: Math.max(1, Math.min(5, order.user?.circleLevel || 1)),
+      circleLevel: order.user?.circleLevel ?? undefined,
       orderId: String(order.id),
       customerEmail: order.customerEmail || order.user?.email || '',
       customerFullName,

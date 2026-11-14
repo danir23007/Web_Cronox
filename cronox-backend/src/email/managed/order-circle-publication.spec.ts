@@ -14,7 +14,7 @@ describe('order confirmation publications belong to their own circle', () => {
       managedEmailTemplate: { findFirst: jest.fn().mockResolvedValue(t), updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
       emailTemplateFolder: { findFirst: jest.fn().mockResolvedValue({ id: t.folderId, name: `Círculo ${circle}` }) },
       emailTemplateVersion: { create: jest.fn().mockResolvedValue({ id: 'version' }) },
-      emailPublication: { upsert: jest.fn() }, auditLog: { create: jest.fn() } };
+      emailPublication: { upsert: jest.fn(), findUnique: jest.fn().mockResolvedValue(null) }, auditLog: { create: jest.fn() } };
     const transport = { sendMail: jest.fn() }, service = new ManagedMailService(db, transport as any);
     await service.action(EmailSenderKey.ORDERS, t.id, { action: 'publish', confirmed: true, revision: 1 });
     expect(db.emailPublication.upsert.mock.calls[0][0]).toMatchObject({ where: { senderKey_purpose: { senderKey: 'ORDERS', purpose: orderPublicationKey(circle) } } });
