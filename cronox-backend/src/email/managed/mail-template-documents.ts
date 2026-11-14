@@ -1,4 +1,5 @@
 import type { MailBlock, MailDocument } from './mail-renderer';
+import { prepareOrderConfirmationDocument } from './order-confirmation-design';
 
 type VisualDocument = MailDocument & {
   schemaVersion: 2;
@@ -389,12 +390,13 @@ export function structuredDocumentForPurpose(
     default:
       return null;
   }
-  return {
+  const document: VisualDocument = {
     schemaVersion: 2,
     sourceKind: 'cronox-first-party',
     ...(legacySource ? { legacySource } : {}),
     blocks,
   };
+  return purpose === 'ORDER_CONFIRMATION' ? prepareOrderConfirmationDocument(document) : document;
 }
 
 export function adaptFirstPartyDocument(

@@ -76,6 +76,10 @@ describe('design-scoped multi-circle saving', () => {
     await service.saveDrafts(EmailSenderKey.ORDERS, 't3', input({ subject: 'Solo contenido', visualClassification: 'FOR_ALL' }));
     expect([1, 3, 5].map(n => rows.get(n)!.visualClassification)).toEqual(['UNIQUE', 'FOR_ALL', 'DIFFERENT']);
     expect([1, 3, 5].map(n => rows.get(n)!.subject)).toEqual(['Solo contenido', 'Solo contenido', 'Solo contenido']);
+    for (const n of [1, 3, 5]) {
+      expect((rows.get(n)!.document as any).orderCircle).toBe(n);
+      expect(rows.get(n)!.html).toContain(`class="order-circle-canvas order-circle-${n}"`);
+    }
   });
   it.each(['stale', 'foreign', 'duplicate', 'content-mode-mismatch', 'archived', 'same-circle'])('rejects %s before any writes', async problem => {
     const { service, rows, db, input } = fixture();

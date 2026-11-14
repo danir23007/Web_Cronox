@@ -1,5 +1,6 @@
 import { requireWelcomeCode } from './managed/welcome-code';
 import { PASSWORD_SETUP_COPY, NEWSLETTER_ACCESS_COPY } from './managed/mail-editor-content';
+import { ORDER_CONFIRMATION_CSS, prepareOrderConfirmationHtml, orderCanvas, orderCircle } from './managed/order-confirmation-design';
 import {
   Injectable,
   InternalServerErrorException,
@@ -270,7 +271,8 @@ export class EmailService {
     data: Record<string, unknown>,
   ): Promise<string> {
     const compiledTemplate = await this.loadTemplate(template);
-    return compiledTemplate(data);
+    const html = compiledTemplate(data);
+    return template === EmailTemplate.ORDER_CONFIRMATION ? html.replace(/(<body\b[^>]*>)([\s\S]*?)(<\/body>)/i, (_all, open, body, close) => open + orderCanvas(body, orderCircle(data.circleLevel)) + close) : html;
   }
 
   private async loadTemplate(
@@ -290,7 +292,10 @@ export class EmailService {
     for (const templatePath of templatePaths) {
       try {
         const content = await readFile(templatePath, 'utf8');
-        const compiled = Handlebars.compile(content);
+        const source = template === EmailTemplate.ORDER_CONFIRMATION
+          ? prepareOrderConfirmationHtml(content).replace('<!-- ORDER_CONFIRMATION_HEAD -->', `<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light dark"><meta name="supported-color-schemes" content="light dark"><style>${ORDER_CONFIRMATION_CSS}</style></head>`)
+          : content;
+        const compiled = Handlebars.compile(source);
         this.templateCache.set(template, compiled);
         return compiled;
       } catch {

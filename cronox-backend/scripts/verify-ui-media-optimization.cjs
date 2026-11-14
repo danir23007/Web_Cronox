@@ -51,6 +51,12 @@ const approvedImageChanges = new Set([
   'cronox-front/assets/mail/welcome/logo-cronox.png',
   'cronox-front/assets/mail/welcome/logo-cx.png',
   'cronox-front/assets/mail/welcome/logo-ojo.png',
+  // Approved order-confirmation PNGs. Dedicated raster tests verify the
+  // official logo and five visible rings, including the opaque white V.
+  'cronox-front/assets/mail/order-confirmation/logo-light.png',
+  'cronox-front/assets/mail/order-confirmation/logo-dark.png',
+  ...[1, 2, 3, 4, 5].flatMap(circle => ['light', 'dark'].map(theme =>
+    `cronox-front/assets/mail/order-confirmation/rings-${circle}-${theme}.png`)),
   'docs/original-assets/ui-media/cronox-front/assets/CRONOX-GIF.gif',
   'docs/original-assets/ui-media/cronox-front/assets/logo_banner.png',
 ]);

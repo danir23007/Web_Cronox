@@ -1,4 +1,6 @@
 import { mailCircleNumber, resolveMailCircle } from './mail-circle-folders';
+import { orderCircle, orderPublicationKey, prepareOrderConfirmationDocument } from './order-confirmation-design';
+import { previewCatalogProduct, usesPreviewProduct } from './mail-preview-product';
 import { CANONICAL_MAIL_CIRCLES, draftScope, draftContentMatches as rawDraftContentMatches } from './mail-draft-scope';
 import { requireWelcomeCode } from './welcome-code';
 import {
@@ -47,8 +49,14 @@ type Tx = Prisma.TransactionClient;
 export type ControlledWelcomeDraftTest = { requestKey: string; revision: number; subjectId?: string };
 const json = (data: unknown) =>
   JSON.parse(JSON.stringify(data)) as Prisma.InputJsonValue;
-const draftContentMatches: typeof rawDraftContentMatches = (left, right) =>
-  rawDraftContentMatches(editableDraft(left as any), editableDraft(right as any));
+const draftContentMatches: typeof rawDraftContentMatches = (left, right) => {
+  const normalize = (draft: any) => {
+    const value = editableDraft(draft);
+    if (value.purpose === 'ORDER_CONFIRMATION') delete value.document.orderCircle;
+    return value;
+  };
+  return rawDraftContentMatches(normalize(left), normalize(right));
+};
 const failConflict = () => {
   throw new ConflictException(
     'El contenido cambió en otra sesión. Recarga antes de guardar.',
@@ -509,7 +517,16 @@ export class ManagedMailService {
     return result;
   }
   async editorTemplate(key: string, id: string) {
-    return editableDraft(await this.template(key, id));
+    const template = editableDraft(await this.template(key, id));
+    if (template.purpose === 'ORDER_CONFIRMATION') template.document = { ...(template.document as object), orderCircle: await this.confirmationCircle(key, template.folderId) } as Prisma.JsonValue;
+    return template;
+  }
+  private async confirmationCircle(key: string, folderId?: string, tx: Tx = this.db) {
+    if (!folderId) return 1;
+    const folder = await this.folder(tx, key, folderId);
+    const circle = mailCircleNumber(folder.name);
+    if (!circle) throw new BadRequestException('La confirmación de pedido debe pertenecer a un círculo del I al V.');
+    return circle;
   }
   async draftTargets(key: EmailSenderKey, id: string, tx: Tx = this.db) {
     const source = await this.template(key, id, tx);
@@ -565,7 +582,7 @@ export class ManagedMailService {
     t: Pick<
       ManagedEmailTemplate,
       'subject' | 'preheader' | 'purpose' | 'signatureMode' | 'signatureId'
-    > & { document: unknown; textOverride?: string | null },
+    > & { document: unknown; textOverride?: string | null; folderId?: string },
     data?: Record<string, unknown>,
     publishing = false,
     tx: Tx = this.db,
@@ -576,8 +593,12 @@ export class ManagedMailService {
       t.signatureId,
       tx,
     );
+    const document = t.purpose === 'ORDER_CONFIRMATION' ? {
+      ...prepareOrderConfirmationDocument(t.document) as object,
+      orderCircle: t.folderId ? await this.confirmationCircle(key, t.folderId, tx) : orderCircle((t.document as any)?.orderCircle ?? data?.circleLevel),
+    } : t.document;
     const result = renderMail(
-      t.document,
+      document,
       t.subject,
       t.preheader,
       t.purpose,
@@ -663,7 +684,7 @@ export class ManagedMailService {
         subject: dto.subject,
         preheader: dto.preheader,
         purpose: dto.purpose || null,
-        document: json(dto.document),
+        document: json(dto.purpose === 'ORDER_CONFIRMATION' ? { ...prepareOrderConfirmationDocument(dto.document), orderCircle: await this.confirmationCircle(key, dto.folderId, tx) } : dto.document),
         signatureMode: dto.signatureMode,
         signatureId:
           dto.signatureMode === 'selected' ? dto.signatureId || null : null,
@@ -774,12 +795,13 @@ export class ManagedMailService {
       };
       // No rendering, normalization or copy of another circle's content for a
       // classification-only operation (including legacy/imported documents).
-      const rendered = classificationOnly ? null : await this.render(key, { ...draft, purpose: source.purpose }, undefined, false, tx);
       for (const target of targets) {
+        const targetDraft = classificationOnly ? draft : { ...draft, document: source.purpose === 'ORDER_CONFIRMATION' ? json({ ...prepareOrderConfirmationDocument(dto.document), orderCircle: mailCircleNumber(target.folder.name) }) : draft.document };
+        const rendered = classificationOnly ? null : await this.render(key, { ...targetDraft, purpose: source.purpose }, undefined, false, tx);
         const changed = await tx.managedEmailTemplate.updateMany({
           where: { id: target.id, senderKey: key, revision: target.revision, archivedAt: null },
           data: {
-            ...(classificationOnly ? {} : { ...draft, html: rendered!.html, text: rendered!.text,
+            ...(classificationOnly ? {} : { ...targetDraft, html: rendered!.html, text: rendered!.text,
               ...(target.id === id ? { name: dto.name.trim() } : {}) }),
             ...(applyClassification ? { visualClassification: dto.visualClassification } : {}),
             updatedBy: actorId, revision: { increment: 1 },
@@ -890,15 +912,18 @@ export class ManagedMailService {
               'Confirma la activación de una plantilla válida de esta cuenta.',
             );
           await this.render(key, t, mailPreviewData(t.purpose), true, tx);
+          const circle = t.purpose === 'ORDER_CONFIRMATION' ? await this.confirmationCircle(key, t.folderId, tx) : null;
+          const publicationPurpose = circle ? orderPublicationKey(circle) : t.purpose;
+          const snapshot = circle ? { ...t, document: { ...prepareOrderConfirmationDocument(t.document) as object, orderCircle: circle } } : t;
           const v = await tx.emailTemplateVersion.create({
-            data: { templateId: id, snapshot: json(t), createdBy: actorId },
+            data: { templateId: id, snapshot: json(snapshot), createdBy: actorId },
           });
           await tx.emailPublication.upsert({
             where: {
-              senderKey_purpose: { senderKey: key, purpose: t.purpose },
+              senderKey_purpose: { senderKey: key, purpose: publicationPurpose },
             },
             update: { versionId: v.id },
-            create: { senderKey: key, purpose: t.purpose, versionId: v.id },
+            create: { senderKey: key, purpose: publicationPurpose, versionId: v.id },
           });
           break;
         }
@@ -955,6 +980,9 @@ export class ManagedMailService {
     await this.folder(this.db, key, dto.folderId);
     const draft = editableDraft({ ...dto, purpose: dto.purpose || null, signatureId: dto.signatureId || null });
     const data = mailPreviewData(dto.purpose);
+    const product = dto.view !== 'edit' && usesPreviewProduct(draft.document, dto.purpose)
+      ? await previewCatalogProduct(this.db, dto.previewProductId, dto.previewVariantId) : null;
+    if (product) Object.assign(data, product.data);
     if (dto.purpose === 'NEWSLETTER_ACCESS' && dto.scenario === 'registration') {
       data.accountEligible = false; data.message = NEWSLETTER_ACCESS_COPY.registration;
       data.initialPassword = ''; data.passwordMessage = '';
@@ -979,7 +1007,8 @@ export class ManagedMailService {
     }
     const result = await this.render(key, draft, data);
     return { ...result, bindings: [], preheader: Handlebars.compile(draft.preheader || '')(data),
-      warnings: [...missing].map(name => `Falta un dato ficticio para {{${name}}}.`) };
+      previewProduct: product?.selection,
+      warnings: [...missing].map(name => `Falta un dato ficticio para {{${name}}}.`).concat(product?.warnings || []) };
   }
   async published(
     key: EmailSenderKey,
@@ -988,10 +1017,21 @@ export class ManagedMailService {
   ) {
     if (!MAIL_PURPOSES.some((p) => p.key === purpose && p.senderKey === key))
       return null;
-    const publication = await this.db.emailPublication.findUnique({
-      where: { senderKey_purpose: { senderKey: key, purpose } },
+    let publication = await this.db.emailPublication.findUnique({
+      where: { senderKey_purpose: { senderKey: key, purpose: purpose === 'ORDER_CONFIRMATION' ? orderPublicationKey(orderCircle(data.circleLevel)) : purpose } },
       include: { version: true },
     });
+    if (purpose === 'ORDER_CONFIRMATION') {
+      if (!publication) publication = await this.db.emailPublication.findUnique({ where: { senderKey_purpose: { senderKey: key, purpose } }, include: { version: true } });
+      if (!publication) return null;
+      const snapshot = publication.version.snapshot as any;
+      const circle = snapshot.document?.orderCircle ?? await this.confirmationCircle(key, snapshot.folderId);
+      // A legacy global publication is eligible only for its own circle. New
+      // immutable snapshots bind the circle even if the draft is moved later.
+      if (circle !== orderCircle(data.circleLevel)) return null;
+      if (snapshot.senderKey !== String(key) || snapshot.purpose !== purpose) throw new Error('Publicación incompatible');
+      return this.render(key, { ...snapshot, folderId: undefined, document: { ...snapshot.document, orderCircle: circle } }, data, true);
+    }
     if (!publication && purpose.startsWith('PASSWORD_SETUP_')) {
       const legacy = await this.db.emailPublication.findUnique({ where: { senderKey_purpose: { senderKey: key, purpose: 'INITIAL_PASSWORD_SETUP' } }, include: { version: true } });
       if (!legacy) return null;

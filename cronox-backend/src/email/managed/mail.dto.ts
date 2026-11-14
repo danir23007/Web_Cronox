@@ -48,6 +48,8 @@ export class MailSaveDto {
   @IsOptional() @IsInt() @Min(1) revision?: number;
 }
 export class MailPreviewDto extends MailSaveDto {
+  @IsOptional() @IsInt() @Min(1) previewProductId?: number;
+  @IsOptional() @IsInt() @Min(1) previewVariantId?: number;
   @IsOptional() @IsIn(['available']) previewDiscountCode?: 'available';
   @IsOptional() @IsIn(['edit', 'preview']) view?: 'edit' | 'preview';
   @IsOptional() @IsIn(['eligible', 'registration', 'without-password']) scenario?: 'eligible' | 'registration' | 'without-password';

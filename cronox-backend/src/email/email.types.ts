@@ -49,6 +49,7 @@ export interface EmailSendOptions {
 }
 
 export type OrderConfirmationEmailTemplateData = {
+  circleLevel?: number;
   orderId: string;
   customerEmail: string;
   customerFullName?: string | null;

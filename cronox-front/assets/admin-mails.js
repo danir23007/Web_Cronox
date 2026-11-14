@@ -433,6 +433,7 @@
     if (!state.dirty || state.saved?.id !== state.current?.id) state.saved = D.clone(state.current);
 
     const current = state.current;
+    if (state.previewProductOwner !== current) { state.previewProductOwner = current; state.previewProduct = null; }
     const purposeOptions = state.catalog.filter((item) => item.senderKey === state.key).map((item) =>
       '<option value="' + esc(item.key) + '" ' + (item.key === current.purpose ? "selected" : "") +
       ">" + esc(item.name) + "</option>",
@@ -510,7 +511,12 @@
     livePreviewTimer = setTimeout(() => { if (state.current) hydrateDocumentView(); }, 250);
   }
   function previewFrameSource(html) {
-    const policy = '<meta http-equiv="Content-Security-Policy" content="default-src \'none\'; img-src https:; style-src \'unsafe-inline\'; base-uri \'none\'; form-action \'none\'">';
+    const local = ['localhost', '127.0.0.1', '[::1]'].includes(location.hostname);
+    // New email assets remain local until the approved deployment. The draft
+    // and the sending renderer always retain their public HTTPS destinations.
+    if (local) html = html.replaceAll('https://cronox.es/assets/mail/order-confirmation/', location.origin + '/assets/mail/order-confirmation/');
+    if (state.editorView === 'edit') html = html.replace('</head>', '<style>.order-confirmation td,.order-confirmation strong{overflow-wrap:anywhere;word-break:break-word;}.order-confirmation strong{white-space:normal;}</style></head>');
+    const policy = '<meta http-equiv="Content-Security-Policy" content="default-src \'none\'; img-src https:' + (local ? ' ' + location.origin : '') + '; style-src \'unsafe-inline\'; base-uri \'none\'; form-action \'none\'">';
     // Links retain their appearance but cannot navigate even inside the iframe.
     return html.replace("<head>", "<head>" + policy).replace(/(<a\b[^>]*?)\s+href=("[^"]*"|'[^']*')/gi, '$1');
   }
@@ -561,10 +567,12 @@
     const current = state.current;
     try {
       const request = Object.assign(payload(), { view: preview ? 'preview' : 'edit', scenario: state.previewScenario });
+      if (preview && state.previewProduct) Object.assign(request, { previewProductId: state.previewProduct.productId, previewVariantId: state.previewProduct.variantId });
       const result = state.signatureEditor
         ? await api(pathFor('/signatures/preview'), 'POST', { name: state.current.name, document: state.current.document, view: request.view })
         : await api(pathFor('/preview'), 'POST', request);
       if (generation !== htmlPreviewGeneration || !panel.isConnected) return;
+      if (result.previewProduct) state.previewProduct = result.previewProduct;
       panel.querySelector('[data-preview-subject]').textContent = result.subject || '';
       panel.querySelector('[data-preview-preheader]').textContent = result.preheader || '';
       const readyMessage = (result.warnings || []).length ? result.warnings.join(' ') : preview ? 'Preview actualizada con datos ficticios.' : 'Correo completo. Las ediciones se conservan como cambios pendientes.';
@@ -1014,6 +1022,7 @@
       return renderTemplates();
     }
     if (name === "new") {
+      state.previewProduct = null;
       state.editorView = 'edit'; state.blockEditor = false;
       state.signatureEditor = false;
       state.current = {
@@ -1024,6 +1033,7 @@
       return editor();
     }
     if (name === "edit") {
+      state.previewProduct = null;
       state.signatureEditor = false;
       state.current = D.clone(await api(pathFor("/templates/" + element.dataset.id)));
       state.editorView = 'edit'; state.blockEditor = false;

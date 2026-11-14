@@ -11,7 +11,9 @@ import { EMAIL_TEMPLATE_FILE, EmailSenderKey } from '../email.types';
 
 describe('complete editable mail and isolated purpose previews', () => {
   const service = () => {
-    const db = { emailTemplateFolder: { findFirst: jest.fn().mockResolvedValue({ id: 'folder' }) } };
+    const db = { emailTemplateFolder: { findFirst: jest.fn().mockResolvedValue({ id: 'folder', name: 'Círculo 1' }) },
+      product: { findMany: jest.fn().mockResolvedValue([{ id: 1, name: 'Producto del catálogo', slug: 'producto', price: 3495, currency: 'EUR', isActive: true,
+        images: [{ url: 'https://example.test/producto.png' }], variants: [{ id: 2, size: 'M', isActive: true, price: null, stockQty: 10 }], inventoryLots: [] }]) } };
     const transport = { sendMail: jest.fn() };
     return { db, transport, mail: new ManagedMailService(db as any, transport as any) };
   };

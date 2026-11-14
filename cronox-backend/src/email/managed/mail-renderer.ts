@@ -5,8 +5,13 @@ import sanitizeHtml from 'sanitize-html';
 import { parseDocument } from 'htmlparser2';
 import { MAIL_PURPOSES, variablesFor } from './mail-catalog';
 import { editorCopy } from './mail-editor-content';
+import { prepareOrderConfirmationDocument, ORDER_CONFIRMATION_CSS, orderLogoHtml, ORDER_LOGO_LIGHT, mutedTaxColor, orderCanvas, orderCircle } from './order-confirmation-design';
 
 export type MailBlock = {
+  adaptiveOrderLogo?: boolean;
+  orderHeader?: boolean;
+  orderActions?: boolean;
+  orderSurface?: boolean;
   type: string;
   text?: string;
   html?: string;
@@ -40,6 +45,7 @@ export type MailBlock = {
 // Explicit imported-email format. It uses the same sanitizer and expression
 // validation as visual blocks; it is not a trusted/unsanitized source marker.
 export type MailDocument = {
+  orderCircle?: number;
   blocks: MailBlock[];
   format?: 'html-email';
   schemaVersion?: number;
@@ -118,7 +124,7 @@ export function cleanMailHtml(html: string, placeholders = false) {
       table: ['cellpadding', 'cellspacing', 'border', 'width', 'role'],
       td: ['colspan', 'rowspan', 'background', 'bgcolor'],
     },
-    allowedClasses: { '*': ['mail-column', 'welcome-title', 'welcome-copy', 'welcome-footer', 'welcome-instagram', 'welcome-code', 'welcome-backdrop'] },
+    allowedClasses: { '*': ['mail-column', 'welcome-title', 'welcome-copy', 'welcome-footer', 'welcome-instagram', 'welcome-code', 'welcome-backdrop', 'order-logo-light', 'order-logo-dark', 'order-tax-row', 'order-surface', 'order-confirmation', 'order-header-cell', 'order-summary-lead', 'order-summary-values', 'order-cta-cell', 'order-actions', 'order-action-or'] },
     allowedSchemes: ['https', 'http', 'mailto', 'tel'],
     allowProtocolRelative: false,
     allowedStyles: {
@@ -146,6 +152,9 @@ export function cleanMailHtml(html: string, placeholders = false) {
         'max-width': [/^[\d.]+(px|%)$/],
         height: [/^(auto|[\d.]+(px|%))$/],
         display: [/^(block|inline-block|none)$/],
+        'max-height': [/^(0|\d+px)$/],
+        overflow: [/^(hidden|visible)$/],
+        'mso-hide': [/^all$/],
         'border-collapse': [/^(collapse|separate)$/],
         border: [/^\d+px solid #[\da-f]{3,8}$/i, /^0$/],
         'border-radius': [/^\d+px$/],
@@ -223,6 +232,7 @@ export function renderMail(
   signature?: unknown,
   publishing = false,
 ) {
+  if (purpose === 'ORDER_CONFIRMATION') document = prepareOrderConfirmationDocument(document);
   if (purpose === 'NEWSLETTER_WELCOME' && data !== undefined) requireWelcomeCode(data.discountCode);
   if (purpose === 'NEWSLETTER_ACCESS' && /\{\{\s*(?:initialPassword|passwordMessage)\s*\}\}/.test(subject + preheader)) {
     throw new BadRequestException('La contraseña solo puede aparecer en el cuerpo del correo.');
@@ -264,7 +274,7 @@ export function renderMail(
               'Etiquetas del bloque dinámico no válidas.',
             );
         }
-        const fallbackBackground = color(b.background, '#111111');
+        const fallbackBackground = color(b.background, purpose === 'ORDER_CONFIRMATION' && b.type === 'html' ? '#f7f7f5' : '#111111');
         const safeBackgroundImage =
           typeof b.backgroundImage === 'string' &&
           /^https:\/\/[^\s"'<>]+$/i.test(b.backgroundImage)
@@ -305,7 +315,7 @@ export function renderMail(
             : b.align === 'right'
               ? '0px 0px 0px auto'
               : '0px';
-        const img = `<img src="${escape(b.src)}" alt="${escape(b.alt)}" width="${dimension(b.width, 560)}" style="display:block;width:100%;max-width:${dimension(b.width, 560)}px;margin:${imageMargin};" />`;
+        const img = b.adaptiveOrderLogo && b.src === ORDER_LOGO_LIGHT ? orderLogoHtml() : `<img src="${escape(b.src)}" alt="${escape(b.alt)}" width="${dimension(b.width, 560)}" style="display:block;width:100%;max-width:${dimension(b.width, 560)}px;margin:${imageMargin};" />`;
         switch (b.type) {
           case 'heading':
             content = `<h2 style="margin:0;">${escape(b.text)}</h2>`;
@@ -338,7 +348,7 @@ export function renderMail(
             content = `{{#each items}}<table role="presentation" width="100%"><tr><td width="84" valign="top" style="padding:10px 14px 10px 0;">{{#if imageUrl}}<img src="{{imageUrl}}" alt="{{name}}" width="70" height="70" style="display:block;width:70px;height:70px;border:1px solid #ddddda;border-radius:8px;" />{{/if}}</td><td valign="middle" style="padding:10px 8px;"><strong>{{name}}{{#if quantity}} × {{quantity}}{{/if}}</strong>{{#if variantName}}<br><span style="font-size:12px;color:#929292;">{{variantName}}</span>{{/if}}</td><td valign="middle" align="right" style="padding:10px 0;white-space:nowrap;"><strong>{{lineTotalFormatted}}</strong></td></tr></table>{{else}}<p>${label('empty', 'No hay artículos.')}</p>{{/each}}`;
             break;
           case 'orderTotals':
-            content = `<table role="presentation" width="100%"><tr><td>${label('subtotal', 'Total parcial')}</td><td align="right"><strong>{{subtotalFormatted}}</strong></td></tr>{{#if savingsFormatted}}<tr><td>${label('discount', 'Descuento')}</td><td align="right"><strong>{{discountFormatted}}</strong></td></tr>{{/if}}<tr><td>${label('shipping', 'Envío')}</td><td align="right"><strong>{{shippingFormatted}}</strong></td></tr><tr><td>${label('taxes', 'Impuestos')}</td><td align="right"><strong>{{taxesFormatted}}</strong></td></tr><tr><td style="padding-top:12px;border-top:1px solid #ddddda;">${label('total', 'Total')}</td><td align="right" style="padding-top:12px;border-top:1px solid #ddddda;font-size:18px;"><strong>{{totalFormatted}}</strong></td></tr>{{#if savingsFormatted}}<tr><td></td><td align="right" style="font-size:12px;">${label('savings', 'Ahorraste')} {{savingsFormatted}}</td></tr>{{/if}}</table>`;
+            content = `<table role="presentation" width="100%"><tr><td>${label('subtotal', 'Total parcial')}</td><td align="right"><strong>{{subtotalFormatted}}</strong></td></tr>{{#if savingsFormatted}}<tr><td>${label('discount', 'Descuento')}</td><td align="right"><strong>{{discountFormatted}}</strong></td></tr>{{/if}}<tr><td>${label('shipping', 'Envío')}</td><td align="right"><strong>{{shippingFormatted}}</strong></td></tr><tr${purpose === 'ORDER_CONFIRMATION' ? ' class="order-tax-row"' : ''}><td style="${purpose === 'ORDER_CONFIRMATION' ? `color:${mutedTaxColor(fallbackBackground)};font-weight:400;white-space:nowrap;` : ''}">${label('taxes', 'Impuestos')}</td><td align="right" style="${purpose === 'ORDER_CONFIRMATION' ? `color:${mutedTaxColor(fallbackBackground)};font-weight:400;` : ''}"><strong style="${purpose === 'ORDER_CONFIRMATION' ? 'font-weight:400;' : ''}">{{taxesFormatted}}</strong></td></tr><tr><td style="padding-top:12px;border-top:1px solid #ddddda;">${label('total', 'Total')}</td><td align="right" style="padding-top:12px;border-top:1px solid #ddddda;font-size:18px;"><strong>{{totalFormatted}}</strong></td></tr>{{#if savingsFormatted}}<tr><td></td><td align="right" style="font-size:12px;">${label('savings', 'Ahorraste')} {{savingsFormatted}}</td></tr>{{/if}}</table>`;
             break;
           case 'customerDetails':
             content = `<table role="presentation" width="100%"><tr><td class="mail-column" width="50%" valign="top"><strong>${label('contact', 'Contacto')}</strong>{{#if customerFullName}}<br>{{customerFullName}}{{/if}}{{#if customerEmail}}<br>{{customerEmail}}{{/if}}{{#if customerPhone}}<br>{{customerPhone}}{{/if}}</td><td class="mail-column" width="50%" valign="top"><strong>${label('shippingAddress', 'Dirección de envío')}</strong>{{#if shippingAddress.fullName}}<br>{{shippingAddress.fullName}}{{/if}}{{#if shippingAddress.line1}}<br>{{shippingAddress.line1}}{{/if}}{{#if shippingAddress.line2}}<br>{{shippingAddress.line2}}{{/if}}{{#if shippingAddress.postalCode}}<br>{{shippingAddress.postalCode}}{{/if}}{{#if shippingAddress.city}}, {{shippingAddress.city}}{{/if}}{{#if shippingAddress.state}}<br>{{shippingAddress.state}}{{/if}}{{#if shippingAddress.country}}<br>{{shippingAddress.country}}{{/if}}</td></tr><tr><td colspan="2" style="padding-top:18px;"><strong>${label('shippingMethod', 'Método de envío')}</strong><br>{{shippingMethod}}</td></tr></table>`;
@@ -365,7 +375,14 @@ export function renderMail(
               throw new BadRequestException(
                 'Una sección admite de una a tres columnas.',
               );
-            content = `<table role="presentation" width="100%"><tr>${b.columns.map((c) => `<td class="mail-column" valign="top" width="${Math.floor(100 / b.columns!.length)}%"><table role="presentation" width="100%">${renderBlocks({ blocks: c }, depth + 1)}</table></td>`).join('')}</tr></table>`;
+            if (b.orderActions && purpose === 'ORDER_CONFIRMATION' && b.columns.length === 2 && b.columns.every(c => c.length === 1 && c[0].type === 'button')) {
+              const button = (c: MailBlock[], index: number) => {
+                const action = c[0];
+                const html = `<a href="${escape(action.url)}" style="display:inline-block;white-space:nowrap;padding:15px 16px;background:${color(action.buttonBackground, index ? '#ffffff' : '#060606')};color:${color(action.buttonColor, index ? '#111111' : '#ffffff')};font-size:13px;font-weight:700;line-height:16px;font-family:Arial,Helvetica,sans-serif;text-decoration:none;border-radius:2px;">${escape(action.text)}</a>`;
+                return action.condition ? `{{#if ${action.condition}}}${html}{{/if}}` : html;
+              };
+              content = `<table class="order-actions" role="presentation" cellpadding="0" cellspacing="0"><tr><td>${button(b.columns[0], 0)}</td><td class="order-action-or" style="padding:0 14px;">o</td><td>${button(b.columns[1], 1)}</td></tr></table>`;
+            } else content = `<table role="presentation" width="100%"><tr>${b.columns.map((c) => `<td class="${b.orderHeader ? 'order-header-cell' : 'mail-column'}" valign="top" width="${Math.floor(100 / b.columns!.length)}%"><table role="presentation" width="100%">${renderBlocks({ blocks: c }, depth + 1)}</table></td>`).join('')}</tr></table>`;
             break;
           case 'signature':
             content = signature
@@ -375,7 +392,7 @@ export function renderMail(
           default:
             throw new BadRequestException('Tipo de bloque no permitido.');
         }
-        return `<tr><td${safeBackgroundImage ? ` background="${escape(safeBackgroundImage)}"` : ''} bgcolor="${fallbackBackground}" style="${style}">${content}</td></tr>`;
+        return `<tr><td${b.orderSurface ? ' class="order-surface"' : ''}${safeBackgroundImage ? ` background="${escape(safeBackgroundImage)}"` : ''} bgcolor="${fallbackBackground}" style="${style}">${content}</td></tr>`;
       })
       .join('');
   };
@@ -426,12 +443,13 @@ export function renderMail(
   body = cleanMailHtml(compile(body), !data);
   const header = compile(escape(preheader));
   const pageBackground = imported ? doc.page!.background : '#111111';
-  const content = imported
+  let content = imported
     ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="${pageBackground}" style="width:100%;margin:0;border:0;border-collapse:collapse;background-color:${pageBackground};"><tr><td align="center" bgcolor="${pageBackground}" style="padding:0;border:0;"><table role="presentation" align="center" width="${doc.page!.width}" cellpadding="0" cellspacing="0" border="0" bgcolor="${pageBackground}" style="width:100%;max-width:${doc.page!.width}px;border:0;border-collapse:collapse;background-color:${pageBackground};"><tr><td bgcolor="${pageBackground}" style="padding:0;border:0;">${body}</td></tr></table></td></tr></table>`
-    : `<table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td align="center"><table role="presentation" width="100%" style="width:100%;max-width:640px;border-collapse:collapse;">${body}</table></td></tr></table>`;
+    : `<table${purpose === 'ORDER_CONFIRMATION' ? ' class="order-confirmation"' : ''} role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td align="center"><table role="presentation" width="100%" style="width:100%;max-width:640px;border-collapse:collapse;">${body}</table></td></tr></table>`;
   const lightOnly = imported && doc.page!.colorScheme === 'light-only';
+  if (purpose === 'ORDER_CONFIRMATION') content = orderCanvas(content, orderCircle(doc.orderCircle));
   const bodyCanvas = lightOnly && doc.page!.canvas === 'body';
-  const html = `<!doctype html><html lang="es"${lightOnly && !bodyCanvas ? ` style="margin:0;padding:0;background-color:${pageBackground};"` : ''}><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">${lightOnly ? LIGHT_ONLY_HEAD : ''}<style>${lightOnly && !bodyCanvas ? lightPageCss(pageBackground) : ''}${MAIL_RESPONSIVE_CSS}</style></head><body${bodyCanvas ? bodyCanvasAttributes(pageBackground) : lightOnly ? lightPageAttributes(pageBackground) : ''} style="${bodyCanvas ? bodyCanvasStyle(pageBackground) : lightOnly ? lightPageStyle(pageBackground, '#080808') : `margin:0;background:${pageBackground};color:${imported ? '#080808' : '#eeeeee'};`}">${imported && !header ? '' : `<div style="display:none;max-height:0;overflow:hidden;">${header}</div>`}${content}</body></html>`;
+  const html = `<!doctype html><html lang="es"${lightOnly && !bodyCanvas ? ` style="margin:0;padding:0;background-color:${pageBackground};"` : ''}><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">${lightOnly ? LIGHT_ONLY_HEAD : purpose === 'ORDER_CONFIRMATION' ? '<meta name="color-scheme" content="light dark"><meta name="supported-color-schemes" content="light dark">' : ''}<style>${lightOnly && !bodyCanvas ? lightPageCss(pageBackground) : ''}${MAIL_RESPONSIVE_CSS}${purpose === 'ORDER_CONFIRMATION' ? ORDER_CONFIRMATION_CSS : ''}</style></head><body${bodyCanvas ? bodyCanvasAttributes(pageBackground) : lightOnly ? lightPageAttributes(pageBackground) : ''} style="${bodyCanvas ? bodyCanvasStyle(pageBackground) : lightOnly ? lightPageStyle(pageBackground, '#080808') : `margin:0;background:${pageBackground};color:${imported ? '#080808' : '#eeeeee'};`}">${imported && !header ? '' : `<div style="display:none;max-height:0;overflow:hidden;">${header}</div>`}${content}</body></html>`;
   if (purpose === 'NEWSLETTER_WELCOME' && Buffer.byteLength(html, 'utf8') >= 80 * 1024)
     throw new BadRequestException('WELCOME_HTML_SIZE_LIMIT: el HTML final debe ser inferior a 80 KB.');
   let text = sanitizeHtml(

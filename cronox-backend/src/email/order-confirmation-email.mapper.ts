@@ -12,6 +12,7 @@ export const orderForConfirmationEmailInclude = {
         firstName: true,
         lastName: true,
         name: true,
+        circleLevel: true,
       },
     },
     shippingMethod: {
@@ -75,6 +76,7 @@ export class OrderConfirmationEmailMapper {
     const savingsCents = discountCents;
 
     return {
+      circleLevel: Math.max(1, Math.min(5, order.user?.circleLevel || 1)),
       orderId: String(order.id),
       customerEmail: order.customerEmail || order.user?.email || '',
       customerFullName,
