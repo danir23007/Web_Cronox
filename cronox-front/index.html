@@ -54,6 +54,7 @@
   <style>
     html, body { background: #000; color: #fff; }
     body { margin: 0; }
+    .topbar__heading { display: flex; justify-content: center; margin: 0; }
     .topbar__logo-img { display: block; width: 140px; height: auto; }
     .topbar svg { width: 24px; height: 24px; }
   </style>
@@ -207,11 +208,13 @@
     </div>
 
     <!-- Logo centrado -->
-    <a href="/" class="topbar__logo" aria-label="Cronox — Tienda">
-      <img src="assets/logo-topbar.webp"
-           width="680" height="307"
-           alt="Cronox" class="topbar__logo-img" decoding="async">
-    </a>
+    <h1 class="topbar__heading">
+      <a href="/" class="topbar__logo">
+        <img src="assets/logo-topbar.webp"
+             width="680" height="307"
+             alt="CRONOX" class="topbar__logo-img" decoding="async">
+      </a>
+    </h1>
 
     <nav class="topbar__right" aria-label="Navegación principal">
       <!-- Perfil -->
