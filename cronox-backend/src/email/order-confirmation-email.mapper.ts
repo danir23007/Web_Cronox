@@ -4,6 +4,7 @@ import { Decimal } from '@prisma/client/runtime/library';
 import { OrderConfirmationEmailTemplateData } from './email.types';
 import { toCountryDisplayName } from '../common/country';
 import { containedOrderImage } from './managed/order-product-image';
+import { orderProductThumbnail } from './managed/order-product-thumbnail';
 
 export const orderForConfirmationEmailInclude = {
   include: {
@@ -32,6 +33,7 @@ export const orderForConfirmationEmailInclude = {
             images: {
               where: { isActive: true },
               select: {
+                id: true,
                 url: true,
                 width: true,
                 height: true,
@@ -106,14 +108,15 @@ export class OrderConfirmationEmailMapper {
           item.product,
           `${storefrontUrl.replace(/\/$/, '')}/assets/logo_banner.png`,
         );
+        const image = item.product?.images?.find(image => image.url === imageUrl);
 
         return {
           name: item.product?.name ?? item.title,
           variantName,
           quantity: Math.max(1, item.quantity),
           imageUrl,
-          ...containedOrderImage(item.product?.images?.find(image => image.url === imageUrl)?.width,
-            item.product?.images?.find(image => image.url === imageUrl)?.height),
+          ...containedOrderImage(image?.width, image?.height),
+          ...(orderProductThumbnail(image) || {}),
           unitPriceFormatted: this.formatCurrencyFromDecimal(item.unitPrice),
           lineTotalFormatted: this.formatCurrencyFromDecimal(item.lineTotal),
         };

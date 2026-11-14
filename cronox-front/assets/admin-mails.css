@@ -77,6 +77,12 @@
 }
 .mail-nav-card:hover { transform: translateY(-2px); border-color: #4a4a52; }
 .mail-account-card { min-height: 176px; grid-template-rows: 1fr auto; gap: 16px; }
+.mail-account-heading { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 10px 12px; margin-bottom: 8px; }
+.mail-account-heading h3 { flex: 1 1 110px; margin: 0; }
+.mail-account-counts { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; margin-left: auto; }
+.mail-account-counts .mail-template-state { display: inline-block; font-size: 12px; line-height: 1.3; white-space: nowrap; }
+.mail-circle-nav-card { position: relative; }
+.mail-circle-nav-card .mail-account-counts { position: absolute; top: 22px; right: 22px; }
 .mail-nav-card h3 { margin: 0 0 8px; font-size: 18px; overflow-wrap: anywhere; }
 .mail-nav-card p { margin: 0 0 14px; color: #8f8f98; }
 .mail-nav-card .btn { justify-self: stretch; display: flex; justify-content: space-between; }
@@ -205,6 +211,9 @@ html[data-admin-theme] #section-mails .mail-delete-confirm,
 .mail-delete-confirm:disabled { opacity: .45; cursor: not-allowed; }
 @media (max-width: 780px) { .mail-classification-options { grid-template-columns: 1fr; } }
 @media (max-width: 520px) {
+  .mail-account-heading h3 { flex-basis: 100%; }
+  .mail-account-counts { flex-direction: row; flex-wrap: wrap; justify-content: flex-start; margin-left: 0; }
+  .mail-circle-nav-card .mail-account-counts { position: static; }
   .mail-delete-content { padding: 18px; }
   .mail-delete-content dl { grid-template-columns: 1fr; gap: 4px; }
   .mail-delete-content dd { margin-bottom: 10px; }

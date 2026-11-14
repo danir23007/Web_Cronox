@@ -15,7 +15,9 @@ function orderRingSvg(selected, theme) {
     const opacity = !active ? (dark ? .15 : .17) : dark ? [1, 1, .6, 1, .6][index] : [.3, .3, .55, 1, .4][index];
     // Preserve pure black in dark mode. The neutral halo lights only its
     // immediate surroundings. White needs the inverse treatment on light.
-    const halo = active && ((dark && index < 2) || (!dark && index === 3))
+    const halo = active && index === 2
+      ? `<circle cx="${cx}" cy="${cy}" r="${radius}" fill="none" stroke="#FFFFFF" stroke-width="5" opacity="${dark ? .045 : .01}"/><circle cx="${cx}" cy="${cy}" r="${radius}" fill="none" stroke="#FFFFFF" stroke-width="3" opacity="${dark ? .2 : .035}"/>`
+      : active && ((dark && index < 2) || (!dark && index === 3))
       ? `<circle cx="${cx}" cy="${cy}" r="${radius}" fill="none" stroke="${dark ? '#B8B8B8' : '#505050'}" stroke-width="6" opacity=".025"/><circle cx="${cx}" cy="${cy}" r="${radius}" fill="none" stroke="${dark ? '#B8B8B8' : '#505050'}" stroke-width="3.6" opacity="${dark ? .16 : .14}"/>` : '';
     return `${halo}<circle data-ring="${index + 1}" cx="${cx}" cy="${cy}" r="${radius}" fill="none" stroke="${stroke}" stroke-width="${strokeWidth}" opacity="${opacity}"/>`;
   }).join('');

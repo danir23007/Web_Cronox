@@ -91,11 +91,16 @@
     state.dirty = true;
     message("Cambios sin guardar");
   }
-  function navCard(title, detail, status, action, key, icon) {
+  function stateCounters(counts) {
+    return '<div class="mail-account-counts" aria-label="Estado de las plantillas">' +
+      '<span class="mail-template-state is-draft">' + esc(counts.drafts || 0) + (counts.drafts === 1 ? ' borrador' : ' borradores') + '</span>' +
+      '<span class="mail-template-state is-published">' + esc(counts.published || 0) + (counts.published === 1 ? ' publicada' : ' publicadas') + '</span></div>';
+  }
+  function navCard(title, detail, status, action, key, icon, counters) {
     const hasIcon = icon != null && icon !== "";
-    return '<article class="mail-nav-card ' + (!hasIcon ? "mail-account-card" : "") + '">' +
+    return '<article class="mail-nav-card ' + (!hasIcon ? "mail-account-card" : "mail-circle-nav-card") + '">' +
       (hasIcon ? '<div class="mail-card-icon" aria-hidden="true">' + esc(icon) + "</div>" : "") +
-      '<div><h3>' + esc(title) + '</h3><p>' + esc(detail) +
+      '<div>' + (counters ? '<div class="mail-account-heading"><h3>' + esc(title) + '</h3>' + counters + '</div>' : '<h3>' + esc(title) + '</h3>') + '<p>' + esc(detail) +
       '</p>' + status + '</div>' + button(action, 'Abrir <span aria-hidden="true">→</span>',
       'data-' + (action === "account" ? "key" : "id") + '="' + esc(key) + '"', "btn mail-primary") + "</article>";
   }
@@ -112,7 +117,8 @@
         a.counts.folders + " círculos · " + a.counts.templates + " plantillas",
         '<span class="mail-status ' + (a.configured ? "is-ready" : "") + '"><i></i>' +
           (a.localOnly ? "Envío externo desactivado · vista previa local" : a.configured ? "SMTP configurado" : "SMTP pendiente") + "</span>",
-        "account", a.key,
+        "account", a.key, null,
+        stateCounters(a.counts),
       )).join("") + "</div>" + templateGuide();
     message("Selecciona una cuenta de correo.");
   }
@@ -126,13 +132,14 @@
       api(pathFor("/folders")), api(pathFor("/signatures")), api("/catalog"),
     ]);
     state.folders = values[0]; state.signatures = values[1]; state.catalog = values[2];
-    renderCircles();
+    await renderCircles(false);
   }
   function breadcrumb(action, label, current) {
     return '<div class="mail-breadcrumb">' + button(action, "← " + esc(label), "", "mail-link") +
       "<span>/</span><strong>" + esc(current) + "</strong></div>";
   }
-  function renderCircles() {
+  async function renderCircles(refresh = true) {
+    if (refresh) state.folders = await api(pathFor('/folders'));
     state.current = null; state.dirty = false;
     root.innerHTML = breadcrumb("accounts", "Cuentas", state.account.email || state.key) +
       '<header class="mail-view-heading"><div><span class="mail-eyebrow">' +
@@ -141,7 +148,7 @@
       (state.key === "INFO" ? button("families", "Familias de campa\u00f1as", "", "btn mail-secondary") : "") + button("signatures", "Firmas", "", "btn mail-secondary") + '</header><div class="mail-circles">' +
       state.folders.map((f, index) => navCard(
         f.name, f._count.templates + (f._count.templates === 1 ? " plantilla" : " plantillas"),
-        "", "circle", f.id, String(index + 1).padStart(2, "0"),
+        "", "circle", f.id, String(index + 1).padStart(2, "0"), stateCounters(f.counts || { drafts: f._count.templates, published: 0 }),
       )).join("") + "</div>";
     message("Selecciona un círculo.");
   }
@@ -514,7 +521,8 @@
     const local = ['localhost', '127.0.0.1', '[::1]'].includes(location.hostname);
     // New email assets remain local until the approved deployment. The draft
     // and the sending renderer always retain their public HTTPS destinations.
-    if (local) html = html.replaceAll('https://cronox.es/assets/mail/order-confirmation/', location.origin + '/assets/mail/order-confirmation/');
+    if (local) html = html.replaceAll('https://cronox.es/assets/mail/order-confirmation/', location.origin + '/assets/mail/order-confirmation/')
+      .replaceAll('https://cronox.es/api/email/order-product-image/', location.origin + '/api/email/order-product-image/');
     if (state.editorView === 'edit') html = html.replace('</head>', '<style>.order-confirmation td,.order-confirmation strong{overflow-wrap:anywhere;word-break:break-word;}.order-confirmation strong{white-space:normal;}</style></head>');
     const policy = '<meta http-equiv="Content-Security-Policy" content="default-src \'none\'; img-src https:' + (local ? ' ' + location.origin : '') + '; style-src \'unsafe-inline\'; base-uri \'none\'; form-action \'none\'">';
     // Links retain their appearance but cannot navigate even inside the iframe.
@@ -1014,7 +1022,7 @@
     }
     if (name === "account") return openAccount(element.dataset.key);
     if (name === "families") { await renderFamilies(); return; }
-    if (name === "circles") { if (canLeave()) renderCircles(); return; }
+    if (name === "circles") { if (canLeave()) await renderCircles(); return; }
     if (name === "circle") return openCircle(element.dataset.id);
     if (name === "templates") { if (canLeave()) return renderTemplates(); return; }
     if (name === "previous" || name === "next") {

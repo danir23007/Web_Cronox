@@ -110,18 +110,37 @@ export class ManagedMailService {
     }));
   }
   async accounts() {
-    const profiles = await this.db.emailSenderProfile.findMany({
-      include: { _count: { select: { folders: true, templates: { where: { archivedAt: null } } } } },
+    const accounts = this.metadata();
+    // Count template rows, not versions/publications. This is the list's
+    // published predicate, including an active version with a later draft.
+    const publishedQuery = this.db.managedEmailTemplate.groupBy({
+      by: ['senderKey'],
+      where: { archivedAt: null, OR: accounts.map(a => ({ senderKey: a.key,
+        versions: { some: { publications: { some: { senderKey: a.key } } } },
+      })) },
+      _count: { _all: true },
     });
-    return this.metadata().map((a) => ({
+    const [profiles, published] = await this.db.$transaction([
+      this.db.emailSenderProfile.findMany({
+        include: { _count: { select: { folders: true, templates: { where: { archivedAt: null } } } } },
+      }),
+      publishedQuery,
+    ], { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead });
+    return accounts.map((a) => {
+      const profile = profiles.find(p => p.key === a.key);
+      const total = profile?._count.templates || 0;
+      const publishedCount = published.find(p => p.senderKey === a.key)?._count._all || 0;
+      return {
       ...a,
-      defaultSignatureId:
-        profiles.find((p) => p.key === a.key)?.defaultSignatureId || null,
-      counts: profiles.find((p) => p.key === a.key)?._count || {
-        folders: 0,
-        templates: 0,
+      defaultSignatureId: profile?.defaultSignatureId || null,
+      counts: {
+        folders: profile?._count.folders || 0,
+        templates: total,
+        drafts: total - publishedCount,
+        published: publishedCount,
       },
-    }));
+    };
+    });
   }
   async initialize(key: EmailSenderKey, actorId?: number) {
     // One transaction and an account-scoped lock: imports never overwrite edits.
@@ -211,10 +230,24 @@ export class ManagedMailService {
     );
   }
   async folders(key: EmailSenderKey) {
-    return this.db.emailTemplateFolder.findMany({
-      where: { senderKey: key },
-      orderBy: [{ position: 'asc' }, { name: 'asc' }],
-      include: { _count: { select: { templates: { where: { archivedAt: null } } } } },
+    const publishedQuery = this.db.managedEmailTemplate.groupBy({
+      by: ['folderId'],
+      where: { senderKey: key, archivedAt: null,
+        versions: { some: { publications: { some: { senderKey: key } } } },
+      },
+      _count: { _all: true },
+    });
+    const [folders, published] = await this.db.$transaction([
+      this.db.emailTemplateFolder.findMany({
+        where: { senderKey: key },
+        orderBy: [{ position: 'asc' }, { name: 'asc' }],
+        include: { _count: { select: { templates: { where: { archivedAt: null } } } } },
+      }),
+      publishedQuery,
+    ], { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead });
+    return folders.map(folder => {
+      const count = published.find(row => row.folderId === folder.id)?._count._all || 0;
+      return { ...folder, counts: { templates: folder._count.templates, published: count, drafts: folder._count.templates - count } };
     });
   }
   /** Explicit operator import only. Never called by initialization or delivery.
@@ -981,7 +1014,7 @@ export class ManagedMailService {
     const draft = editableDraft({ ...dto, purpose: dto.purpose || null, signatureId: dto.signatureId || null });
     const data = mailPreviewData(dto.purpose);
     const product = dto.view !== 'edit' && usesPreviewProduct(draft.document, dto.purpose)
-      ? await previewCatalogProduct(this.db, dto.previewProductId, dto.previewVariantId) : null;
+      ? await previewCatalogProduct(this.db, dto.previewProductId, dto.previewVariantId, dto.purpose) : null;
     if (product) Object.assign(data, product.data);
     if (dto.purpose === 'NEWSLETTER_ACCESS' && dto.scenario === 'registration') {
       data.accountEligible = false; data.message = NEWSLETTER_ACCESS_COPY.registration;

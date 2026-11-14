@@ -2,6 +2,7 @@ import { randomInt } from 'node:crypto';
 import { PrismaService } from '../../prisma/prisma.service';
 import { resolveWebPrice, webOfferLots } from '../../products/web-offer';
 import { containedOrderImage } from './order-product-image';
+import { orderProductThumbnail } from './order-product-thumbnail';
 
 export function usesPreviewProduct(document: unknown, purpose?: string | null) {
   return purpose === 'RESTOCK' || /"type":"(?:orderItems|orderTotals)"|\{\{\s*(?:#each\s+items|product(?:Name|Image|Slug)?|imageUrl|items\b|unitPriceFormatted|lineTotalFormatted)\b/.test(JSON.stringify(document));
@@ -9,7 +10,7 @@ export function usesPreviewProduct(document: unknown, purpose?: string | null) {
 
 /** Called only by the authenticated preview endpoint. IDs are held by the
  * editor session, never persisted in a draft or consulted by automatic sends. */
-export async function previewCatalogProduct(db: Pick<PrismaService, 'product'>, productId?: number, variantId?: number) {
+export async function previewCatalogProduct(db: Pick<PrismaService, 'product'>, productId?: number, variantId?: number, purpose?: string | null) {
   const products = await db.product.findMany({
     where: { isActive: true, currency: 'EUR', variants: { some: { isActive: true, stockQty: { gt: 0 } } } },
     include: {
@@ -33,6 +34,7 @@ export async function previewCatalogProduct(db: Pick<PrismaService, 'product'>, 
   const image = imageFor(product)!;
   const item = { name: product.name, variantName: variant.size, quantity, imageUrl: image,
     ...containedOrderImage(product.images.find(entry => entry.url === image)?.width, product.images.find(entry => entry.url === image)?.height),
+    ...(purpose === 'ORDER_CONFIRMATION' ? orderProductThumbnail(product.images.find(entry => entry.url === image)!) || {} : {}),
     unitPriceFormatted: money(price), lineTotalFormatted: money(subtotal) };
   return {
     selection: { productId: product.id, variantId: variant.id },

@@ -8,6 +8,14 @@ const radii = [268, 220, 172, 124, 76];
 const colors = ['#000000', '#000000', '#7C7C7C', '#FFFFFF', '#B1001A'];
 const cases = [1, 2, 3, 4, 5].flatMap(circle => ['light', 'dark'].map(theme => ({ circle, theme })));
 describe('five visible order rings with a single active colour', () => {
+  it('adds a light halo only behind the active III while retaining its original grey stroke', () => {
+    for (const theme of ['light', 'dark']) {
+      const svg = orderRingSvg(3, theme);
+      expect(svg).toContain(`r="172" fill="none" stroke="#FFFFFF" stroke-width="3" opacity="${theme === 'dark' ? .2 : .035}"`);
+      expect(svg).toMatch(/data-ring="3"[^>]*stroke="#7C7C7C"[^>]*stroke-width="1.4"/);
+      expect(svg.indexOf('stroke="#FFFFFF"')).toBeLessThan(svg.indexOf('data-ring="3"'));
+    }
+  });
   it.each(cases)('keeps the approved geometry and outside-to-inside identity ($circle/$theme)', ({ circle, theme }) => {
     const rings: any[] = [];
     const visit = (node: any) => { if (node.attribs?.['data-ring']) rings.push(node.attribs); node.children?.forEach(visit); };
@@ -40,7 +48,7 @@ describe('five visible order rings with a single active colour', () => {
   });
   it('updates only the resource URL and keeps the approved canvas position and scale', () => {
     for (let circle = 1; circle <= 5; circle++) {
-      expect(orderRingsUrl(circle)).toContain(`rings-${circle}-light.png?v=${circle === 5 ? 4 : circle === 4 ? 3 : 2}`);
+      expect(orderRingsUrl(circle)).toContain(`rings-${circle}-light.png?v=${circle === 5 ? 4 : [3, 4].includes(circle) ? 3 : 2}`);
       expect(orderCanvas('<p>Contenido original</p>', circle)).toContain('background-size:640px 1400px;background-position:70% center;');
     }
   });
