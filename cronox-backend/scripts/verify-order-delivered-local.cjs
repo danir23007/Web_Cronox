@@ -15,9 +15,11 @@ async function main(){
   const rows=await tx.managedEmailTemplate.findMany({where:{purpose:'ORDER_DELIVERED',archivedAt:null},include:{folder:true},orderBy:{folder:{name:'asc'}}});
   assert.equal(rows.length,5);
   const service=new ManagedMailService(tx,{sendMail:()=>{throw Error('NO_SEND_ALLOWED');}});
+  // URL fixtures are rendered only, never downloaded by this verification.
+  const photoRoot='https://abcdefghijklmnopqrst.supabase.co/storage/v1/object/public/product-images/';
   const items=mapDeliveredOrderItems([
-    {title:'Prenda vertical',quantity:2,variant:{size:'M'},product:{images:[{url:'https://example.test/vertical.png',width:600,height:1200}]}},
-    {title:'Prenda horizontal',quantity:1,variant:{size:'L'},product:{images:[{url:'https://example.test/horizontal.png',width:1200,height:600}]}},
+    {title:'Prenda vertical',quantity:2,variant:{size:'M'},product:{images:[{id:11,url:photoRoot+'vertical.png',width:600,height:1200}]}},
+    {title:'Prenda horizontal',quantity:1,variant:{size:'L'},product:{images:[{id:12,url:photoRoot+'horizontal.png',width:1200,height:600}]}},
     {title:'Prenda sin imagen',quantity:3,product:{images:[]}},
   ]);
   const cases=[];
@@ -31,15 +33,19 @@ async function main(){
     assert(block,'Delivery items missing in '+row.folder.name);
     assert.equal(block.querySelectorAll('img').length,2);
     assert(block.textContent.includes('Cantidad: 3'));
-    assert(rendered.html.includes('width="35" height="70"'));
-    assert(rendered.html.includes('width="70" height="35"'));
+    for(const img of block.querySelectorAll('img')){
+      assert(img.getAttribute('src').includes('/delivered.png?v=1'));
+      assert.equal(img.getAttribute('width'),'70');assert.equal(img.getAttribute('height'),'70');
+      const frame=img.closest('.order-product-frame');
+      assert.equal(frame.getAttribute('width'),'70');assert.equal(frame.getAttribute('height'),'70');
+    }
     assert(!rendered.html.includes('object-fit'));
     assert.equal(JSON.stringify(design),before);
     fs.writeFileSync(path.join(out,`${row.folder.name.replaceAll(' ','-')}-${index}.html`),rendered.html);
    }
    cases.push({circle:row.folder.name,templateId:row.id,versionsChecked:versions.length,published:publications.length>0});
   }
-  return {cases,readOnlyTransaction:true,realEmailsSent:0,snapshotsUnchanged:true};
+  return {cases,framing:'delivered',frameSize:[70,70],readOnlyTransaction:true,realEmailsSent:0,snapshotsUnchanged:true};
  },{timeout:30000});
  fs.writeFileSync(path.join(out,'report.json'),JSON.stringify(report,null,2));console.log(JSON.stringify(report));
 }

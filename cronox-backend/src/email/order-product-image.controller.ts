@@ -1,7 +1,7 @@
 import { Controller, Get, NotFoundException, Param, ParseIntPipe, Res } from '@nestjs/common';
 import type { Response } from 'express';
 import { PrismaService } from '../prisma/prisma.service';
-import { createOrderProductThumbnail, trustedOrderImageUrl } from './managed/order-product-thumbnail';
+import { createOrderProductThumbnail, trustedOrderImageUrl, OrderThumbnailFraming } from './managed/order-product-thumbnail';
 
 @Controller('email/order-product-image')
 export class OrderProductImageController {
@@ -10,9 +10,19 @@ export class OrderProductImageController {
 
   @Get(':id.png')
   async image(@Param('id', ParseIntPipe) id: number, @Res() response: Response) {
+    return this.serve(id, response, 'confirmation');
+  }
+
+  @Get(':id/delivered.png')
+  async deliveredImage(@Param('id', ParseIntPipe) id: number, @Res() response: Response) {
+    return this.serve(id, response, 'delivered');
+  }
+
+  private async serve(id: number, response: Response, framing: OrderThumbnailFraming) {
     const image = await this.db.productImage.findFirst({ where: { id, isActive: true, archivedAt: null } });
     if (!image || !trustedOrderImageUrl(image.url)) throw new NotFoundException();
-    let buffer = this.cache.get(image.url);
+    const cacheKey = `${framing}:${image.url}`;
+    let buffer = this.cache.get(cacheKey);
     if (!buffer) {
       // Only the configured public catalogue bucket, no redirects, credentials
       // or arbitrary client-supplied URL. Limit both encoded and decoded sizes.
@@ -20,9 +30,9 @@ export class OrderProductImageController {
       if (!original.ok || Number(original.headers.get('content-length')) > 20_000_000) throw new NotFoundException();
       const chunks: Uint8Array[] = []; let length = 0;
       for await (const chunk of original.body!) { length += chunk.length; if (length > 20_000_000) throw new NotFoundException(); chunks.push(chunk); }
-      buffer = (await createOrderProductThumbnail(Buffer.concat(chunks))).buffer;
+      buffer = (await createOrderProductThumbnail(Buffer.concat(chunks), framing)).buffer;
       if (this.cache.size >= 100) this.cache.delete(this.cache.keys().next().value!);
-      this.cache.set(image.url, buffer);
+      this.cache.set(cacheKey, buffer);
     }
     response.set({ 'Content-Type': 'image/png', 'Cache-Control': 'public, max-age=86400', 'X-Content-Type-Options': 'nosniff' }).send(buffer);
   }

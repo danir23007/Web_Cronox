@@ -38,6 +38,7 @@ export async function previewCatalogProduct(db: Pick<PrismaService, 'product'>, 
   const item = { name: product.name, variantName: variant.size, quantity, imageUrl: image,
     ...containedOrderImage(product.images.find(entry => entry.url === image)?.width, product.images.find(entry => entry.url === image)?.height),
     ...(purpose === 'ORDER_CONFIRMATION' ? orderProductThumbnail(product.images.find(entry => entry.url === image)!) || {} : {}),
+    ...(purpose === 'ORDER_DELIVERED' ? orderProductThumbnail(product.images.find(entry => entry.url === image), 'delivered') || {} : {}),
     unitPriceFormatted: money(price), lineTotalFormatted: money(subtotal) };
   return {
     selection: { productId: product.id, variantId: variant.id },

@@ -1,5 +1,6 @@
 import { Prisma } from '@prisma/client';
 import { containedOrderImage } from './managed/order-product-image';
+import { orderProductThumbnail } from './managed/order-product-thumbnail';
 
 // Sizes share their product's photos in the current catalogue. The image saved
 // on the purchased line is more specific than today's product primary image.
@@ -11,7 +12,7 @@ export const deliveredOrderItemSelection = {
     financialSnapshot: { select: { imageUrl: true } },
     product: { select: { name: true, imageUrl: true, images: {
       where: { isActive: true, archivedAt: null },
-      select: { url: true, width: true, height: true },
+      select: { id: true, url: true, width: true, height: true },
       orderBy: [{ isPrimary: 'desc' }, { sortOrder: 'asc' }, { id: 'asc' }],
     } } },
   },
@@ -35,6 +36,7 @@ export function mapDeliveredOrderItems(items: DeliveredItem[]) {
       variantName: item.variant?.size || item.title?.match(/\(([^)]+)\)\s*$/)?.[1]?.trim() || null,
       quantity: item.quantity,
       ...(url ? { imageUrl: url, ...containedOrderImage(photo?.width, photo?.height) } : {}),
+      ...(orderProductThumbnail(photo, 'delivered') || {}),
     };
   });
 }

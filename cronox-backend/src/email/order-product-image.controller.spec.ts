@@ -25,4 +25,18 @@ describe('public order-only image resource', () => {
     }
     expect(fetch).not.toHaveBeenCalled();
   });
+  it('serves a separate delivered PNG and cache without changing confirmation resources',async()=>{
+    const url='https://catalogue.example.test/storage/v1/object/public/product-images/tee.png';
+    const source=await sharp(Buffer.from('<svg width="300" height="600"><rect width="100%" height="100%" fill="white"/><rect x="90" y="140" width="120" height="320" fill="black"/></svg>')).png().toBuffer();
+    const fetch=jest.fn().mockImplementation(async()=>new Response(new Uint8Array(source)));global.fetch=fetch;
+    const controller=new OrderProductImageController({productImage:{findFirst:async()=>({url})}} as any);
+    const response:any={set:jest.fn().mockReturnThis(),send:jest.fn()};
+    await controller.image(12,response);await controller.deliveredImage(12,response);
+    await controller.image(12,response);await controller.deliveredImage(12,response);
+    expect(fetch).toHaveBeenCalledTimes(2);
+    const buffers=response.send.mock.calls.map(call=>call[0]);
+    expect(buffers[0].equals(buffers[2])).toBe(true);expect(buffers[1].equals(buffers[3])).toBe(true);
+    expect(buffers[0].equals(buffers[1])).toBe(false);
+    for(const buffer of buffers){const meta=await sharp(buffer).metadata();expect([meta.width,meta.height]).toEqual([140,140]);}
+  });
 });

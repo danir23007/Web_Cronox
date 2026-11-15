@@ -2,7 +2,8 @@ import sharp from 'sharp';
 
 /** Only remove near-white/transparent empty margins. Never crop a non-white
  * pixel, never enlarge by more than 18%, and keep the full original otherwise. */
-export async function createOrderProductThumbnail(source: Buffer) {
+export type OrderThumbnailFraming = 'confirmation' | 'delivered';
+export async function createOrderProductThumbnail(source: Buffer, framing: OrderThumbnailFraming = 'confirmation') {
   const image = await sharp(source, { limitInputPixels: 40_000_000 }).rotate()
     .resize({ width: 1000, height: 1000, fit: 'inside', withoutEnlargement: true })
     .toColourspace('srgb').ensureAlpha().raw().toBuffer({ resolveWithObject: true });
@@ -27,6 +28,19 @@ export async function createOrderProductThumbnail(source: Buffer) {
   let crop = { left: 0, top: 0, width, height };
   if (emptyBorder / border >= .995 && right >= left && bottom >= top) {
     const safety = Math.max(2, Math.ceil(Math.max(width, height) * .02));
+    if (framing === 'delivered') {
+      // Increase the garment by up to 15% compared with the full original in
+      // the same 70px frame. One scale for both axes preserves the original
+      // photo aspect; a safety margin includes every non-background pixel.
+      const scale = Math.max(1, Math.min(1.15,
+        width / (right - left + 1 + 2 * safety),
+        height / (bottom - top + 1 + 2 * safety)));
+      const cropWidth = Math.min(width, Math.ceil(width / scale));
+      const cropHeight = Math.min(height, Math.ceil(height / scale));
+      const x = Math.max(0, Math.min(width - cropWidth, Math.floor((left + right + 1 - cropWidth) / 2)));
+      const y = Math.max(0, Math.min(height - cropHeight, Math.floor((top + bottom + 1 - cropHeight) / 2)));
+      crop = { left: x, top: y, width: cropWidth, height: cropHeight };
+    } else {
     const axis = (start: number, end: number, size: number) => {
       const a = Math.max(0, start - safety), b = Math.min(size, end + safety + 1);
       const length = Math.max(b - a, Math.ceil(size / 1.18));
@@ -35,6 +49,7 @@ export async function createOrderProductThumbnail(source: Buffer) {
     };
     const [x, w] = axis(left, right, width), [y, h] = axis(top, bottom, height);
     crop = { left: x, top: y, width: w, height: h };
+    }
   }
   const buffer = await sharp(data, { raw: { width, height, channels } }).extract(crop).flatten({ background: '#ffffff' })
     .resize(140, 140, { fit: 'contain', background: '#ffffff' }).png().toBuffer();
@@ -54,7 +69,7 @@ export function trustedOrderImageUrl(source: string) {
 }
 
 /** Stable public image URL; no customer data or credentials go into the HTML. */
-export function orderProductThumbnail(image?: { id?: number; url: string; width?: number | null; height?: number | null }) {
+export function orderProductThumbnail(image?: { id?: number; url: string; width?: number | null; height?: number | null }, framing: OrderThumbnailFraming = 'confirmation') {
   if (!image?.id || !trustedOrderImageUrl(image.url)) return null;
-  return { imageUrl: `https://cronox.es/api/email/order-product-image/${image.id}.png?v=1`, imageWidth: 70, imageHeight: 70 };
+  return { imageUrl: `https://cronox.es/api/email/order-product-image/${image.id}${framing === 'delivered' ? '/delivered' : ''}.png?v=1`, imageWidth: 70, imageHeight: 70 };
 }
