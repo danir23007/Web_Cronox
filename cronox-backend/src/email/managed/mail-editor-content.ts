@@ -2,6 +2,7 @@ import Handlebars from 'handlebars';
 import { parseDocument } from 'htmlparser2';
 import { logisticsMail } from '../../shipping-tracking/logistics-mail';
 import { prepareOrderConfirmationDocument } from './order-confirmation-design';
+import { PASSWORD_RESET_COPY } from './password-reset-design';
 
 // Copy from the transactional data producers. Only these fields are fixed for
 // a purpose; customer/event content in other purposes stays a real variable.
@@ -27,7 +28,7 @@ export function editorCopy(purpose?: string | null): Record<string, string> {
   const milestone = Object.values(logisticsMail).find(value => value.type === purpose);
   if (milestone) return { title: milestone.label, message: milestone.message };
   switch (purpose) {
-    case 'PASSWORD_RESET': return { title: 'Restablecimiento de contraseña', message: 'Use the secure link below to reset your password. It expires in one hour.', actionLabel: 'Reset password' };
+    case 'PASSWORD_RESET': return { title: PASSWORD_RESET_COPY.title, message: PASSWORD_RESET_COPY.message, actionLabel: PASSWORD_RESET_COPY.actionLabel };
     case 'NEWSLETTER_WELCOME': return { title: 'Bienvenido a CRONOX', message: 'Aquí empieza tu recorrido dentro de los círculos de CRONOX.' };
     case 'ORDER_CONFIRMATION': return { message: 'Tu pedido se ha confirmado correctamente. Te avisaremos cuando esté en camino.' };
     case 'NEWSLETTER_ACCESS': return { title: NEWSLETTER_ACCESS_COPY.title, actionLabel: NEWSLETTER_ACCESS_COPY.actionLabel,

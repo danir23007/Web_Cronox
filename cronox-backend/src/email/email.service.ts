@@ -1,6 +1,7 @@
 import { requireWelcomeCode } from './managed/welcome-code';
 import { PASSWORD_SETUP_COPY, NEWSLETTER_ACCESS_COPY } from './managed/mail-editor-content';
 import { withMailLogoHtmlHeader } from './managed/mail-logo-header';
+import { PASSWORD_RESET_COPY, PASSWORD_RESET_TEXT, passwordResetDocument } from './managed/password-reset-design';
 import { ORDER_CONFIRMATION_CSS, prepareOrderConfirmationHtml, orderCanvas, orderCircle } from './managed/order-confirmation-design';
 import {
   Injectable,
@@ -152,7 +153,12 @@ export class EmailService {
       const welcomeFallback = !custom && purpose === 'NEWSLETTER_WELCOME'
         ? renderMail(welcomeDocument(false), options.subject, '', purpose, data, undefined, true)
         : null;
-      let html = custom?.html || welcomeFallback?.html || (await this.renderTemplate(template, data));
+      const resetFallback = !custom && purpose === 'PASSWORD_RESET'
+        ? { ...renderMail(passwordResetDocument(), options.subject, PASSWORD_RESET_COPY.preheader, purpose, data),
+          text: Handlebars.compile(PASSWORD_RESET_TEXT, { noEscape: true })(data) }
+        : null;
+      const fallback = welcomeFallback || resetFallback;
+      let html = custom?.html || fallback?.html || (await this.renderTemplate(template, data));
       if (!custom && senderKey === EmailSenderKey.NOREPLY) html = withMailLogoHtmlHeader(html);
       if (options.purpose === 'NEWSLETTER_ACCESS' && data.initialPassword &&
           !html.includes(Handlebars.escapeExpression(String(data.initialPassword)))) {
@@ -168,7 +174,7 @@ export class EmailService {
           to: options.to,
           subject: custom?.subject || options.subject,
           html,
-          ...(custom || welcomeFallback ? { text: (custom || welcomeFallback)!.text } : {}),
+          ...(custom || fallback ? { text: (custom || fallback)!.text } : {}),
         }, options.purpose || options.type, ...(options.deliveryDeadline !== undefined || options.type === EmailType.ORDER_TRACKING ? [options.deliveryDeadline ?? Date.now() + 20000] : []))) as { messageId: string; accepted?: unknown[]; queued?: boolean };
 
       if (info.queued) return { messageId: info.messageId, queued: true };
@@ -212,17 +218,16 @@ export class EmailService {
   }
 
   async sendPasswordReset(email: string, link: string) {
-    const subject = 'CRONOX · Restablece tu contraseña';
+    const subject = PASSWORD_RESET_COPY.subject;
     return this.send({
       type: EmailType.PASSWORD_RESET,
       to: email,
       subject,
       templateData: {
-        title: 'Restablecimiento de contraseña',
-        message:
-          'Use the secure link below to reset your password. It expires in one hour.',
+        title: PASSWORD_RESET_COPY.title,
+        message: PASSWORD_RESET_COPY.message,
         actionUrl: link,
-        actionLabel: 'Reset password',
+        actionLabel: PASSWORD_RESET_COPY.actionLabel,
       },
     });
   }

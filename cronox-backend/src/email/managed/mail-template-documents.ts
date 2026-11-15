@@ -1,6 +1,7 @@
 import type { MailBlock, MailDocument } from './mail-renderer';
 import { prepareOrderConfirmationDocument } from './order-confirmation-design';
 import { NOREPLY_HEADER_PURPOSES, withMailLogoHeader } from './mail-logo-header';
+import { passwordResetDocument } from './password-reset-design';
 
 type VisualDocument = MailDocument & {
   schemaVersion: 2;
@@ -325,6 +326,7 @@ export function structuredDocumentForPurpose(
   purpose: string | null | undefined,
   legacySource?: unknown,
 ): VisualDocument | null {
+  if (purpose === 'PASSWORD_RESET') return { ...passwordResetDocument(), ...(legacySource ? { legacySource } : {}) };
   let blocks: MailBlock[];
   switch (purpose) {
     case 'PASSWORD_SETUP_NEW_ACCOUNT':
@@ -376,7 +378,6 @@ export function structuredDocumentForPurpose(
     case 'NEWSLETTER_ACCESS':
       blocks = [...generic(), text('{{passwordMessage}}')];
       break;
-    case 'PASSWORD_RESET':
     case 'INITIAL_PASSWORD_SETUP':
     case 'NEWSLETTER_CONFIRMATION':
     case 'FIRST_ORDER_DISCOUNT':
