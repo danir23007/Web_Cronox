@@ -25,6 +25,7 @@ export function mailPreviewData(purpose?: string | null) {
     discountCode: 'VISTA-PREVIA-NO-VALIDO', initialPassword: 'Ejemplo-No-Valido-1042', accountEligible: true,
     product: 'Camiseta CRONOX', productName: 'Camiseta CRONOX', productSlug: 'camiseta-ejemplo',
     size: 'M', imageUrl: image, productImage: image,
+    restockPhoto1: '', restockPhoto2: '',
     name: 'Camiseta CRONOX', variantName: 'M', quantity: 2, unitPriceFormatted: '34,95 €', lineTotalFormatted: '69,90 €',
     orderUrl: 'https://example.test/pedidos/CRX-1042', storeUrl: 'https://example.test/tienda',
     actionUrl: 'https://example.test/vista-previa/accion', recoveryUrl: 'https://example.test/vista-previa/recuperacion',

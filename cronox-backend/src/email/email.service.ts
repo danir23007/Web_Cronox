@@ -65,7 +65,8 @@ export class EmailService {
   }
 
   // Dedicated opt-in availability notice, independent from launch publications.
-  async sendRestock(to: string, data: { product: string; size: string; actionUrl: string; imageUrl?: string }) {
+  async sendRestock(to: string, data: { product: string; size: string; actionUrl: string; imageUrl?: string; restockPhoto1?: string; restockPhoto2?: string }) {
+    data = { ...data, restockPhoto1: data.restockPhoto1 ?? data.imageUrl ?? '', restockPhoto2: data.restockPhoto2 ?? '' };
     let html: string;
     let publication: { html: string; text: string; subject: string } | null = null;
     try {

@@ -2,6 +2,7 @@ import type { MailBlock, MailDocument } from './mail-renderer';
 import { prepareOrderConfirmationDocument } from './order-confirmation-design';
 import { NOREPLY_HEADER_PURPOSES, withMailLogoHeader } from './mail-logo-header';
 import { passwordResetDocument } from './password-reset-design';
+import { prepareRestockDocument } from './restock-photos';
 
 type VisualDocument = MailDocument & {
   schemaVersion: 2;
@@ -355,7 +356,7 @@ export function structuredDocumentForPurpose(
       break;
     case 'RESTOCK':
       blocks = [section([
-        heading('Ya está disponible'), text('{{product}} · Talla {{size}}'),
+        heading('Tu producto con alerta ya está disponible de nuevo'), text('{{product}} · Talla {{size}}'),
         text('La talla que nos pediste vuelve a estar disponible. Sujeto a existencias; este aviso no reserva la prenda.'),
         button('VER PRODUCTO', '{{actionUrl}}'), text('CRONOX'),
       ])];
@@ -398,6 +399,7 @@ export function structuredDocumentForPurpose(
     ...(legacySource ? { legacySource } : {}),
     blocks,
   };
+  if (purpose === 'RESTOCK') return withMailLogoHeader(prepareRestockDocument(document));
   return purpose === 'ORDER_CONFIRMATION' ? prepareOrderConfirmationDocument(document)
     : NOREPLY_HEADER_PURPOSES.has(purpose || '') || purpose?.startsWith('ORDER_') ? withMailLogoHeader(document) : document;
 }

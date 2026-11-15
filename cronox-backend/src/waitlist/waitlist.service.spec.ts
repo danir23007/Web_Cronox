@@ -3,6 +3,22 @@ import { RestockDeliveryError } from '../email/restock-delivery.error';
 import { EmailQuotaWaitError } from '../email/mail-account-quota';
 
 describe('Waitlist dispatch safeguards', () => {
+  it('loads the current gallery for an already queued request, using its own variant product', async () => {
+    const h = fixture();
+    (h.row.variant.product as any).images = [
+      { url: 'https://images.example.test/back.png', sortOrder: 1 },
+      { url: 'https://images.example.test/front.png', isPrimary: true },
+    ];
+    await h.service.dispatch('r', 'claim');
+    expect(h.mail.sendRestock).toHaveBeenCalledWith('buyer@example.test', expect.objectContaining({
+      product: 'Ring', size: 'US 8', restockPhoto1: 'https://images.example.test/front.png', restockPhoto2: 'https://images.example.test/back.png',
+    }));
+    expect(h.prisma.restockRequest.findFirst).toHaveBeenCalledWith(expect.objectContaining({
+      include: expect.objectContaining({ variant: expect.objectContaining({ include: expect.objectContaining({
+        product: expect.objectContaining({ include: expect.objectContaining({ images: expect.not.objectContaining({ take: 1 }) }) }),
+      }) }) }),
+    }));
+  });
   it('waits for quota without exhausting SMTP retries', async () => {
     const h = fixture(); h.row.attempts = 10;
     const retryAt = new Date(Date.now()+86400000);

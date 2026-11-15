@@ -8,6 +8,7 @@
     logo: "Logo", social: "Enlace social", signature: "Firma",
     video: "Vídeo enlazado", html: "HTML de compatibilidad",
     orderItems: "Artículos del pedido",
+    restockPhotos: "Fotos del producto repuesto",
     orderTotals: "Resumen del pedido",
     customerDetails: "Datos del cliente",
     trackingDetails: "Seguimiento",

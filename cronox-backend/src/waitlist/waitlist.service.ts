@@ -16,6 +16,7 @@ import { EmailService } from '../email/email.service';
 import { RestockDeliveryError } from '../email/restock-delivery.error';
 import { quotaWaiting } from '../email/mail-account-quota';
 import { getFrontendUrl } from '../common/config/environment';
+import { restockPhotoData } from '../email/managed/restock-photos';
 
 export const ACTIVE_RESTOCK = [
   'WAITING',
@@ -32,8 +33,8 @@ const variantInclude = {
         orderBy: [
           { isPrimary: 'desc' as const },
           { sortOrder: 'asc' as const },
+          { id: 'asc' as const },
         ],
-        take: 1,
       },
     },
   },
@@ -285,6 +286,7 @@ export class WaitlistService implements OnModuleInit, OnModuleDestroy {
         size: sizeLabel(row.variant.size),
         actionUrl: link.href,
         imageUrl,
+        ...restockPhotoData(product),
       });
     } catch (error) {
       if (quotaWaiting(error)) {

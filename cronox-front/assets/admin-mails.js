@@ -601,7 +601,7 @@
     const current = state.current;
     try {
       const request = Object.assign(payload(), { view: preview ? 'preview' : 'edit', scenario: state.previewScenario });
-      if (preview && state.previewProduct) Object.assign(request, { previewProductId: state.previewProduct.productId, previewVariantId: state.previewProduct.variantId });
+      if (state.previewProduct) Object.assign(request, { previewProductId: state.previewProduct.productId, previewVariantId: state.previewProduct.variantId });
       const result = state.signatureEditor
         ? await api(pathFor('/signatures/preview'), 'POST', { name: state.current.name, document: state.current.document, view: request.view })
         : await api(pathFor('/preview'), 'POST', request);

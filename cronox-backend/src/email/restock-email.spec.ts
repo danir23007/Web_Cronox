@@ -23,7 +23,7 @@ describe('Restock email (fake transport only)', () => {
     );
     expect(message.html).toContain('&lt;img');
     expect(message.html).not.toContain('<img src=x');
-    expect(message.html).toContain('Ya está disponible');
+    expect(message.html).toContain('Tu producto con alerta ya está disponible de nuevo');
     expect(message.html).toContain('VER PRODUCTO');
     expect(message.html).toContain('Este aviso no reserva la prenda.');
     expect(message.html).toContain('https://img.example.test/small.webp');

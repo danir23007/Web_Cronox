@@ -5,6 +5,15 @@ const product = (id: number) => ({ id, name: `Producto ${id}`, slug: `producto-$
   activeLotId: 'offer', inventoryLots: [{ id: 'offer', webOfferPriceCents: 3000, webOfferPreviousCents: 4000,
     webOfferStartsAt: new Date(Date.now() - 10000), webOfferEndsAt: new Date(Date.now() + 100000), webOfferConfirmedAt: new Date() }] });
 describe('preview-only catalogue selection', () => {
+  it('prefers a real two-photo product for restock and preserves it across refreshes', async () => {
+    const two = product(2);
+    two.images.push({ url: 'https://example.test/back.png' });
+    const db: any = { product: { findMany: jest.fn().mockResolvedValue([product(1), two]) } };
+    const initial = await previewCatalogProduct(db, undefined, undefined, 'RESTOCK');
+    expect(initial.selection).toEqual({ productId: 2, variantId: 20 });
+    expect(initial.data).toMatchObject({ restockPhoto1: 'https://example.test/2.png', restockPhoto2: 'https://example.test/back.png' });
+    expect((await previewCatalogProduct(db, 2, 20, 'RESTOCK')).selection).toEqual(initial.selection);
+  });
   it('keeps an existing selection and uses its own image, variant and effective sale price with coherent totals', async () => {
     const db: any = { product: { findMany: jest.fn().mockResolvedValue([product(1), product(2)]) } };
     for (let i = 0; i < 3; i++) {

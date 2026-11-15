@@ -6,6 +6,7 @@ import { parseDocument } from 'htmlparser2';
 import { MAIL_PURPOSES, variablesFor } from './mail-catalog';
 import { editorCopy } from './mail-editor-content';
 import { orderProductImageHtml } from './order-product-image';
+import { prepareRestockDocument, RESTOCK_PHOTOS_HTML } from './restock-photos';
 import { prepareOrderConfirmationDocument, ORDER_CONFIRMATION_CSS, orderLogoHtml, ORDER_LOGO_LIGHT, mutedTaxColor, orderCanvas, orderCircle } from './order-confirmation-design';
 
 export type MailBlock = {
@@ -125,7 +126,7 @@ export function cleanMailHtml(html: string, placeholders = false) {
       table: ['cellpadding', 'cellspacing', 'border', 'width', 'role'],
       td: ['colspan', 'rowspan', 'background', 'bgcolor'],
     },
-    allowedClasses: { '*': ['mail-column', 'welcome-title', 'welcome-copy', 'welcome-footer', 'welcome-instagram', 'welcome-code', 'welcome-backdrop', 'order-logo-light', 'order-logo-dark', 'order-tax-row', 'order-surface', 'order-confirmation', 'order-header-cell', 'order-summary-lead', 'order-summary-values', 'order-cta-cell', 'order-actions', 'order-action-or', 'order-product-frame'] },
+    allowedClasses: { '*': ['restock-photos', 'mail-column', 'welcome-title', 'welcome-copy', 'welcome-footer', 'welcome-instagram', 'welcome-code', 'welcome-backdrop', 'order-logo-light', 'order-logo-dark', 'order-tax-row', 'order-surface', 'order-confirmation', 'order-header-cell', 'order-summary-lead', 'order-summary-values', 'order-cta-cell', 'order-actions', 'order-action-or', 'order-product-frame'] },
     allowedSchemes: ['https', 'http', 'mailto', 'tel'],
     allowProtocolRelative: false,
     allowedStyles: {
@@ -157,6 +158,7 @@ export function cleanMailHtml(html: string, placeholders = false) {
         overflow: [/^(hidden|visible)$/],
         'mso-hide': [/^all$/],
         'border-collapse': [/^(collapse|separate)$/],
+        'table-layout': [/^fixed$/],
         border: [/^\d+px solid #[\da-f]{3,8}$/i, /^0$/],
         'border-radius': [/^\d+px$/],
         'white-space': [/^nowrap$/],
@@ -176,7 +178,9 @@ export function cleanMailHtml(html: string, placeholders = false) {
           if (
             ['src', 'background'].includes(name) &&
             !variable &&
-            !/^https:\/\//i.test(value)
+            !/^https:\/\//i.test(value) &&
+            !(process.env.CRONOX_LOCAL_DEV === 'true' && process.env.NODE_ENV !== 'production' &&
+              /^http:\/\/localhost:3000\/api\/email\/restock-product-image\/\d+\.png\?v=[12]$/.test(value))
           )
             delete attribs[name];
         }
@@ -234,6 +238,7 @@ export function renderMail(
   publishing = false,
 ) {
   if (purpose === 'ORDER_CONFIRMATION') document = prepareOrderConfirmationDocument(document);
+  if (purpose === 'RESTOCK') document = prepareRestockDocument(document);
   if (purpose === 'NEWSLETTER_WELCOME' && data !== undefined) requireWelcomeCode(data.discountCode);
   if (purpose === 'NEWSLETTER_ACCESS' && /\{\{\s*(?:initialPassword|passwordMessage)\s*\}\}/.test(subject + preheader)) {
     throw new BadRequestException('La contraseña solo puede aparecer en el cuerpo del correo.');
@@ -318,6 +323,10 @@ export function renderMail(
               : '0px';
         const img = b.adaptiveOrderLogo && b.src === ORDER_LOGO_LIGHT ? orderLogoHtml() : `<img src="${escape(b.src)}" alt="${escape(b.alt)}" width="${dimension(b.width, 560)}" style="display:block;width:100%;max-width:${dimension(b.width, 560)}px;margin:${imageMargin};" />`;
         switch (b.type) {
+          case 'restockPhotos':
+            if (purpose !== 'RESTOCK') throw new BadRequestException('Las fotos de reposición requieren su finalidad.');
+            content = RESTOCK_PHOTOS_HTML;
+            break;
           case 'heading':
             content = `<h2 style="margin:0;">${escape(b.text)}</h2>`;
             break;
@@ -398,7 +407,9 @@ export function renderMail(
           default:
             throw new BadRequestException('Tipo de bloque no permitido.');
         }
-        return `<tr><td${b.orderSurface ? ' class="order-surface"' : ''}${safeBackgroundImage ? ` background="${escape(safeBackgroundImage)}"` : ''} bgcolor="${fallbackBackground}" style="${style}">${content}</td></tr>`;
+        const row = `<tr><td${b.orderSurface ? ' class="order-surface"' : ''}${safeBackgroundImage ? ` background="${escape(safeBackgroundImage)}"` : ''} bgcolor="${fallbackBackground}" style="${style}">${content}</td></tr>`;
+        return purpose === 'RESTOCK' && (b.type === 'restockPhotos' || b.type === 'html') && b.condition === 'restockPhoto1'
+          ? `{{#if restockPhoto1}}${row}{{/if}}` : row;
       })
       .join('');
   };

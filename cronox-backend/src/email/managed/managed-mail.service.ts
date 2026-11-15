@@ -1034,7 +1034,7 @@ export class ManagedMailService {
     await this.folder(this.db, key, dto.folderId);
     const draft = editableDraft({ ...dto, purpose: dto.purpose || null, signatureId: dto.signatureId || null });
     const data = mailPreviewData(dto.purpose);
-    const product = dto.view !== 'edit' && usesPreviewProduct(draft.document, dto.purpose)
+    const product = (dto.view !== 'edit' || dto.purpose === 'RESTOCK') && usesPreviewProduct(draft.document, dto.purpose)
       ? await previewCatalogProduct(this.db, dto.previewProductId, dto.previewVariantId, dto.purpose) : null;
     if (product) Object.assign(data, product.data);
     if (dto.purpose === 'NEWSLETTER_ACCESS' && dto.scenario === 'registration') {
@@ -1048,8 +1048,12 @@ export class ManagedMailService {
       const tokenData = (value: any, prefix = ''): any => Array.isArray(value) ? [tokenData(value[0])] :
         value && typeof value === 'object' ? Object.fromEntries(Object.entries(value).map(([key, child]) => [key, tokenData(child, prefix ? `${prefix}.${key}` : key)])) :
           typeof value === 'boolean' || value === '' ? value : `{{${prefix}}}`;
-      return { ...await this.render(key, { ...draft, document: marked.document }, tokenData(data)),
-        bindings: marked.bindings, warnings: [], preheader: draft.preheader || '' };
+      const editData = tokenData(data);
+      if (dto.purpose === 'RESTOCK') Object.assign(editData, {
+        restockPhoto1: data.restockPhoto1, restockPhoto2: data.restockPhoto2,
+      });
+      return { ...await this.render(key, { ...draft, document: marked.document }, editData),
+        bindings: marked.bindings, warnings: product?.warnings || [], previewProduct: product?.selection, preheader: draft.preheader || '' };
     }
     const source = await this.render(key, draft);
     const missing = new Set<string>();

@@ -180,6 +180,8 @@ export const VARIABLE_DESCRIPTIONS: Record<string, string> = {
   variantName: 'Artículo: variante (dentro del bucle)',
   quantity: 'Artículo: cantidad (dentro del bucle)',
   imageUrl: 'Artículo: imagen (dentro del bucle)',
+  restockPhoto1: 'Reposición: primera foto de la galería del producto',
+  restockPhoto2: 'Reposición: segunda foto de la galería del producto, si existe',
   imageWidth: 'Artículo: ancho proporcional de la foto (dentro del bucle)',
   imageHeight: 'Artículo: alto proporcional de la foto (dentro del bucle)',
   unitPriceFormatted: 'Artículo: precio unitario (dentro del bucle)',
@@ -214,7 +216,7 @@ export function variablesFor(purpose?: string | null) {
     case EmailType.ORDER_RETURNED:
       return [...base, ...order, 'trackingNumber', 'trackingUrl', 'shippingCarrier', 'statusLabel'];
     case EmailType.RESTOCK:
-      return [...base, 'product', 'size', 'imageUrl', 'actionUrl'];
+      return [...base, 'product', 'size', 'imageUrl', 'actionUrl', 'restockPhoto1', 'restockPhoto2'];
     case EmailType.ORDER_CONFIRMATION:
       return [
         ...base,

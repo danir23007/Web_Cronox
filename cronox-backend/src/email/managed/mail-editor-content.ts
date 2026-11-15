@@ -3,6 +3,7 @@ import { parseDocument } from 'htmlparser2';
 import { logisticsMail } from '../../shipping-tracking/logistics-mail';
 import { prepareOrderConfirmationDocument } from './order-confirmation-design';
 import { PASSWORD_RESET_COPY } from './password-reset-design';
+import { prepareRestockDocument } from './restock-photos';
 
 // Copy from the transactional data producers. Only these fields are fixed for
 // a purpose; customer/event content in other purposes stays a real variable.
@@ -43,6 +44,7 @@ export function editorCopy(purpose?: string | null): Record<string, string> {
 export function editableDraft<T extends { purpose?: string | null; document: unknown; subject?: string; preheader?: string; textOverride?: string | null }>(draft: T): T {
   const copy = JSON.parse(JSON.stringify(draft)) as T;
   if (copy.purpose === 'ORDER_CONFIRMATION') copy.document = prepareOrderConfirmationDocument(copy.document);
+  if (copy.purpose === 'RESTOCK') copy.document = prepareRestockDocument(copy.document);
   const vocabulary = editorCopy(copy.purpose);
   const expand = (value: string, html = false) => value.replace(/\{\{\s*(\w+)\s*\}\}/g, (token, key) =>
     vocabulary[key] === undefined ? token : html ? Handlebars.escapeExpression(vocabulary[key]) : vocabulary[key]);

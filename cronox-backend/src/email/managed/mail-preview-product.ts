@@ -3,6 +3,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { resolveWebPrice, webOfferLots } from '../../products/web-offer';
 import { containedOrderImage } from './order-product-image';
 import { orderProductThumbnail } from './order-product-thumbnail';
+import { restockPhotoData, restockPhotos } from './restock-photos';
 
 export function usesPreviewProduct(document: unknown, purpose?: string | null) {
   return purpose === 'RESTOCK' || /"type":"(?:orderItems|orderTotals)"|\{\{\s*(?:#each\s+items|product(?:Name|Image|Slug)?|imageUrl|items\b|unitPriceFormatted|lineTotalFormatted)\b/.test(JSON.stringify(document));
@@ -25,7 +26,9 @@ export async function previewCatalogProduct(db: Pick<PrismaService, 'product'>, 
   });
   const valid = products.filter(p => p.variants.length && imageFor(p));
   if (!valid.length) return { data: {}, selection: undefined, warnings: ['No hay un producto activo con imagen y talla disponible en el catálogo local para Preview.'] };
-  const product = valid.find(p => p.id === productId) || valid[randomInt(valid.length)];
+  const candidates = purpose === 'RESTOCK' && valid.some(p => restockPhotos(p).length > 1)
+    ? valid.filter(p => restockPhotos(p).length > 1) : valid;
+  const product = valid.find(p => p.id === productId) || candidates[randomInt(candidates.length)];
   const variant = product.variants.find(v => v.id === variantId) || product.variants[randomInt(product.variants.length)];
   const price = resolveWebPrice(product, variant).effectivePrice;
   const quantity = Math.min(2, variant.stockQty), subtotal = price * quantity, discount = Math.round(subtotal * .1), shipping = 490;
@@ -40,7 +43,7 @@ export async function previewCatalogProduct(db: Pick<PrismaService, 'product'>, 
     selection: { productId: product.id, variantId: variant.id },
     warnings: productId && (productId !== product.id || (variantId && variantId !== variant.id))
       ? ['El producto o la talla anterior ya no está disponible. Preview ha elegido otro producto válido.'] : [],
-    data: { ...item, product: product.name, productName: product.name, productSlug: product.slug,
+    data: { ...item, ...(purpose === 'RESTOCK' ? restockPhotoData(product) : {}), product: product.name, productName: product.name, productSlug: product.slug,
       size: variant.size, productImage: image, items: [item], subtotalFormatted: money(subtotal),
       discountFormatted: `-${money(discount)}`, savingsFormatted: money(discount), shippingFormatted: money(shipping),
       taxesFormatted: money(tax), totalFormatted: money(total) },
