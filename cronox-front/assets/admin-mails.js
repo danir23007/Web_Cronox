@@ -528,6 +528,31 @@
     // Links retain their appearance but cannot navigate even inside the iframe.
     return html.replace("<head>", "<head>" + policy).replace(/(<a\b[^>]*?)\s+href=("[^"]*"|'[^']*')/gi, '$1');
   }
+  function purposeInformation() {
+    if (state.signatureEditor) return '';
+    const purpose = state.current.purpose;
+    if (!purpose) return '<p>Selecciona una finalidad para ver cuándo se utiliza esta plantilla.</p>' +
+      (state.current.id ? '<p class="mail-purpose-footnote">Esta tarjeta no tiene una finalidad de envío asociada.</p>' : '');
+    const usage = (state.catalog.find(item => item.key === purpose) || {}).usage || {
+      description: 'Plantilla personalizada o heredada cuyo flujo de envío no se ha podido verificar.',
+      delivery: 'Uso automático o manual no verificado.',
+      trigger: 'No hay un disparador verificable en el catálogo para esta finalidad. Revisa su integración antes de utilizarla con clientes.',
+    };
+    return '<dl>' + [['Para qué sirve', usage.description], ['Tipo de envío', usage.delivery], ['Cuándo se envía', usage.trigger]]
+      .map(([label, text]) => '<div><dt>' + esc(label) + '</dt><dd>' + esc(text) + '</dd></div>').join('') +
+      '</dl><p class="mail-purpose-footnote">Publicar elige el diseño de cada círculo. Las automatizaciones dependen de su configuración; guardar un borrador no cambia la versión publicada.</p>';
+  }
+  function previewScenarioSelector() {
+    return state.current.purpose === 'NEWSLETTER_ACCESS' ? '<label class="mail-preview-scenario">Caso de ejemplo<select data-preview-scenario><option value="eligible">Acceso con contraseña inicial</option><option value="without-password">Acceso sin contraseña inicial</option><option value="registration">Continuar registro</option></select></label>' : '';
+  }
+  function refreshPurposeInformation() {
+    const info = root.querySelector('[data-mail-purpose-help]');
+    if (info) info.innerHTML = purposeInformation();
+    const slot = root.querySelector('[data-mail-scenario-slot]');
+    if (slot) slot.innerHTML = previewScenarioSelector();
+    const scenario = root.querySelector('[data-preview-scenario]');
+    if (scenario) scenario.value = state.previewScenario;
+  }
   function documentWorkbench() {
     const builder = root.querySelector('.mail-builder');
     const imported = state.current.document.format === 'html-email';
@@ -552,10 +577,11 @@
       button('mobile', 'Móvil', 'aria-pressed="' + state.mobile + '"', 'mail-device') + '</div>' +
       (!preview && !imported ? button('block-editor', state.blockEditor ? 'Ver correo completo' : 'Diseño por bloques', '', 'btn mail-secondary') : '') +
       button('html-refresh', 'Actualizar', '', 'btn mail-secondary') + '</div>' +
+      (!state.signatureEditor ? '<aside class="mail-purpose-info" aria-label="Uso de la plantilla" data-mail-purpose-help>' + purposeInformation() + '</aside>' : '') +
       '<div id="mailDocumentPanel" role="tabpanel" aria-labelledby="' + (preview ? 'mailPreviewTab' : 'mailEditTab') + '">' +
       (preview ? '<p class="mail-document-note">Datos ficticios. Los enlaces están desactivados. No se guarda, publica ni envía ningún correo.</p>' :
         '<p class="mail-document-note">Haz clic en el texto del correo para editarlo. Los valores variables conservan sus marcadores. Los bloques condicionales mantienen sus variantes. La firma se gestiona desde Firmas.</p>') +
-      (state.current.purpose === 'NEWSLETTER_ACCESS' ? '<label class="mail-preview-scenario">Caso de ejemplo<select data-preview-scenario><option value="eligible">Acceso con contraseña inicial</option><option value="without-password">Acceso sin contraseña inicial</option><option value="registration">Continuar registro</option></select></label>' : '') +
+      '<div data-mail-scenario-slot>' + previewScenarioSelector() + '</div>' +
       '<p class="mail-html-preview-status" role="status">Preparando correo…</p><div class="mail-preview-envelope" ' + (!preview ? 'hidden' : '') + '><strong data-preview-subject></strong><p data-preview-preheader></p></div>' +
       '<div class="mail-document-stage ' + (state.mobile ? 'is-mobile' : '') + '" ' + (!preview && state.blockEditor && !imported ? 'hidden' : '') + '><iframe class="mail-html-email-preview" sandbox="allow-same-origin" referrerpolicy="no-referrer" title="' + (preview ? 'Preview del correo con datos ficticios' : 'Editar el correo completo') + '"></iframe></div>' +
       (!preview && htmlBlocks.length ? '<details class="mail-html-source"><summary>Editar HTML, imágenes y diseño</summary><p>Se conserva el HTML de cada bloque y sus variables. Puedes cambiar aquí imágenes, fondos, enlaces y estilos.</p>' + htmlBlocks.map(item => '<label>HTML del bloque ' + esc(item.path.join('/')) + '<textarea data-mail-html data-html-path="' + item.path.join('/') + '" spellcheck="false">' + esc(item.block.html) + '</textarea></label>').join('') + '</details>' : '') +
@@ -1271,7 +1297,8 @@
       if (!state.dirty) checkpoint();
       state.current[element.dataset.field] = element.value;
       message("Cambios sin guardar");
-      if (state.editorView === 'preview') scheduleDocumentPreview();
+      if (element.dataset.field === 'purpose') { refreshPurposeInformation(); scheduleDocumentPreview(); }
+      else if (state.editorView === 'preview') scheduleDocumentPreview();
     }
     if (element.matches('[data-preview-scenario]')) {
       state.previewScenario = element.value;
