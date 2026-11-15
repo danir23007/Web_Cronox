@@ -53,10 +53,12 @@ describe('delivered-only 15% garment framing',()=>{
      const item=mapDeliveredOrderItems([{title:product.name,quantity:2,variant:{size:'M'},product,financialSnapshot:{imageUrl:photo.url}}] as any)[0];
      expect(item).toMatchObject({imageUrl:'https://cronox.es/api/email/order-product-image/12/delivered.png?v=1',imageWidth:70,imageHeight:70});
      const preview=await previewCatalogProduct({product:{findMany:async()=>[product]}} as any,2,20,'ORDER_DELIVERED');
-     expect(preview.data.items![0]).toMatchObject(orderProductThumbnail(photo,'delivered')!);
+     if (!('items' in preview.data)) throw Error('Missing catalogue preview items');
+     expect(preview.data.items[0]).toMatchObject(orderProductThumbnail(photo,'delivered')!);
      for(const purpose of ['ORDER_SHIPPED','RESTOCK']){
        const other=await previewCatalogProduct({product:{findMany:async()=>[product]}} as any,2,20,purpose);
-       expect(other.data.items![0].imageUrl).toBe(photo.url);
+       if (!('items' in other.data)) throw Error('Missing catalogue preview items');
+       expect(other.data.items[0].imageUrl).toBe(photo.url);
      }
      expect(orderProductThumbnail(photo)!.imageUrl).toBe('https://cronox.es/api/email/order-product-image/12.png?v=1');
      const snapshot={senderKey:'ORDERS',purpose:'ORDER_DELIVERED',publicationCircle:circle,subject:'Entregado',preheader:'',signatureMode:'none',document:{blocks:[{type:'html',html:readFileSync(join(__dirname,'../templates/order-delivered.hbs'),'utf8')}]}};
