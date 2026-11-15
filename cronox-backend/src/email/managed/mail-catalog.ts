@@ -241,6 +241,8 @@ export function variablesFor(purpose?: string | null) {
       return [
         ...base,
         ...order,
+        'imageWidth',
+        'imageHeight',
         'shippingCarrier',
         'trackingNumber',
         'trackingUrl',
