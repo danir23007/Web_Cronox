@@ -1,5 +1,6 @@
 import { mailCircleNumber, resolveMailCircle } from './mail-circle-folders';
 import { mailPublicationKey, recipientMailCircle, snapshotMailCircle } from './mail-publication-scope';
+import { withMailLogoHeader } from './mail-logo-header';
 import { MAIL_PURPOSE_HELP } from './mail-purpose-help';
 import { orderCircle, prepareOrderConfirmationDocument } from './order-confirmation-design';
 import { previewCatalogProduct, usesPreviewProduct } from './mail-preview-product';
@@ -1279,6 +1280,7 @@ export class ManagedMailService {
   catalog() {
     return MAIL_PURPOSES.map((p) => ({
       ...p,
+      ...(p.senderKey === EmailSenderKey.NOREPLY ? { initialDocument: withMailLogoHeader({ blocks: [] }) } : {}),
       usage: MAIL_PURPOSE_HELP[p.key],
       editorCopy: editorCopy(p.key),
       variables: variablesFor(p.key).map((key) => ({

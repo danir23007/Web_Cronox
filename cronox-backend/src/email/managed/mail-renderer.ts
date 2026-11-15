@@ -383,7 +383,12 @@ export function renderMail(
                 return action.condition ? `{{#if ${action.condition}}}${html}{{/if}}` : html;
               };
               content = `<table class="order-actions" role="presentation" cellpadding="0" cellspacing="0"><tr><td>${button(b.columns[0], 0)}</td><td class="order-action-or" style="padding:0 14px;">o</td><td>${button(b.columns[1], 1)}</td></tr></table>`;
-            } else content = `<table role="presentation" width="100%"><tr>${b.columns.map((c) => `<td class="${b.orderHeader ? 'order-header-cell' : 'mail-column'}" valign="top" width="${Math.floor(100 / b.columns!.length)}%"><table role="presentation" width="100%">${renderBlocks({ blocks: c }, depth + 1)}</table></td>`).join('')}</tr></table>`;
+            } else content = `<table role="presentation" width="100%"><tr>${b.columns.map((c, index) => {
+              const width = b.orderHeader && purpose !== 'ORDER_CONFIRMATION'
+                ? index === 0 ? ' width="160"' : ''
+                : ` width="${Math.floor(100 / b.columns!.length)}%"`;
+              return `<td class="${b.orderHeader ? 'order-header-cell' : 'mail-column'}" valign="top"${width}><table role="presentation" width="100%">${renderBlocks({ blocks: c }, depth + 1)}</table></td>`;
+            }).join('')}</tr></table>`;
             break;
           case 'signature':
             content = signature

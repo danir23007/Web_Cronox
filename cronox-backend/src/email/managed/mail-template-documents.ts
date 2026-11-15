@@ -1,5 +1,6 @@
 import type { MailBlock, MailDocument } from './mail-renderer';
 import { prepareOrderConfirmationDocument } from './order-confirmation-design';
+import { NOREPLY_HEADER_PURPOSES, withMailLogoHeader } from './mail-logo-header';
 
 type VisualDocument = MailDocument & {
   schemaVersion: 2;
@@ -396,7 +397,8 @@ export function structuredDocumentForPurpose(
     ...(legacySource ? { legacySource } : {}),
     blocks,
   };
-  return purpose === 'ORDER_CONFIRMATION' ? prepareOrderConfirmationDocument(document) : document;
+  return purpose === 'ORDER_CONFIRMATION' ? prepareOrderConfirmationDocument(document)
+    : NOREPLY_HEADER_PURPOSES.has(purpose || '') || purpose?.startsWith('ORDER_') ? withMailLogoHeader(document) : document;
 }
 
 export function adaptFirstPartyDocument(

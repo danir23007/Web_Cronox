@@ -1061,7 +1061,7 @@
       state.signatureEditor = false;
       state.current = {
         name: "Nueva plantilla", subject: "", preheader: "", folderId: state.folderId,
-        document: { blocks: [] }, signatureMode: "none",
+        document: state.key === 'NOREPLY' ? D.clone(state.catalog.find(item => item.senderKey === 'NOREPLY')?.initialDocument || { blocks: [] }) : { blocks: [] }, signatureMode: "none",
       };
       state.dirty = true; state.history = []; state.future = []; state.selected = [];
       return editor();

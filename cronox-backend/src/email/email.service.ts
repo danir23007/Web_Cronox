@@ -1,5 +1,6 @@
 import { requireWelcomeCode } from './managed/welcome-code';
 import { PASSWORD_SETUP_COPY, NEWSLETTER_ACCESS_COPY } from './managed/mail-editor-content';
+import { withMailLogoHtmlHeader } from './managed/mail-logo-header';
 import { ORDER_CONFIRMATION_CSS, prepareOrderConfirmationHtml, orderCanvas, orderCircle } from './managed/order-confirmation-design';
 import {
   Injectable,
@@ -152,6 +153,7 @@ export class EmailService {
         ? renderMail(welcomeDocument(false), options.subject, '', purpose, data, undefined, true)
         : null;
       let html = custom?.html || welcomeFallback?.html || (await this.renderTemplate(template, data));
+      if (!custom && senderKey === EmailSenderKey.NOREPLY) html = withMailLogoHtmlHeader(html);
       if (options.purpose === 'NEWSLETTER_ACCESS' && data.initialPassword &&
           !html.includes(Handlebars.escapeExpression(String(data.initialPassword)))) {
         const block = `<p style="max-width:640px;margin:16px auto;padding:16px;background:#f7f7f5;color:#111;font-family:Arial,sans-serif;line-height:1.5;">${Handlebars.escapeExpression(String(data.passwordMessage))}</p>`;
@@ -274,7 +276,8 @@ export class EmailService {
   ): Promise<string> {
     const compiledTemplate = await this.loadTemplate(template);
     const html = compiledTemplate(data);
-    return template === EmailTemplate.ORDER_CONFIRMATION ? html.replace(/(<body\b[^>]*>)([\s\S]*?)(<\/body>)/i, (_all, open, body, close) => open + orderCanvas(body, orderCircle(data.circleLevel)) + close) : html;
+    return template === EmailTemplate.ORDER_CONFIRMATION ? html.replace(/(<body\b[^>]*>)([\s\S]*?)(<\/body>)/i, (_all, open, body, close) => open + orderCanvas(body, orderCircle(data.circleLevel)) + close)
+      : [EmailTemplate.PASSWORD_SETUP, EmailTemplate.NEWSLETTER_ACCESS, EmailTemplate.RESTOCK, EmailTemplate.EMAIL_CHANGE, EmailTemplate.TEST, EmailTemplate.ORDER_SHIPPED, EmailTemplate.ORDER_DELIVERED, EmailTemplate.ORDER_LOGISTICS, EmailTemplate.ORDER_TRACKING].includes(template) ? withMailLogoHtmlHeader(html) : html;
   }
 
   private async loadTemplate(
