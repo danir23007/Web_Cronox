@@ -7,6 +7,7 @@ import { MAIL_PURPOSES, variablesFor } from './mail-catalog';
 import { editorCopy } from './mail-editor-content';
 import { orderProductImageHtml } from './order-product-image';
 import { prepareOrderShippedDocument } from './order-shipped-design';
+import { prepareOrderDeliveredDocument } from './order-delivered-design';
 import { prepareRestockDocument, RESTOCK_PHOTOS_HTML } from './restock-photos';
 import { prepareOrderConfirmationDocument, ORDER_CONFIRMATION_CSS, orderLogoHtml, ORDER_LOGO_LIGHT, mutedTaxColor, orderCanvas, orderCircle } from './order-confirmation-design';
 
@@ -127,7 +128,7 @@ export function cleanMailHtml(html: string, placeholders = false) {
       table: ['cellpadding', 'cellspacing', 'border', 'width', 'role'],
       td: ['colspan', 'rowspan', 'background', 'bgcolor'],
     },
-    allowedClasses: { '*': ['restock-photos', 'mail-column', 'welcome-title', 'welcome-copy', 'welcome-footer', 'welcome-instagram', 'welcome-code', 'welcome-backdrop', 'order-logo-light', 'order-logo-dark', 'order-tax-row', 'order-surface', 'order-confirmation', 'order-header-cell', 'order-summary-lead', 'order-summary-values', 'order-cta-cell', 'order-actions', 'order-action-or', 'order-product-frame', 'order-shipped-actions'] },
+    allowedClasses: { '*': ['restock-photos', 'mail-column', 'welcome-title', 'welcome-copy', 'welcome-footer', 'welcome-instagram', 'welcome-code', 'welcome-backdrop', 'order-logo-light', 'order-logo-dark', 'order-tax-row', 'order-surface', 'order-confirmation', 'order-header-cell', 'order-summary-lead', 'order-summary-values', 'order-cta-cell', 'order-actions', 'order-action-or', 'order-product-frame', 'order-shipped-actions', 'order-delivered-items'] },
     allowedSchemes: ['https', 'http', 'mailto', 'tel'],
     allowProtocolRelative: false,
     allowedStyles: {
@@ -244,6 +245,7 @@ export function renderMail(
 ) {
   if (purpose === 'ORDER_CONFIRMATION') document = prepareOrderConfirmationDocument(document);
   if (purpose === 'ORDER_SHIPPED') document = prepareOrderShippedDocument(document);
+  if (purpose === 'ORDER_DELIVERED') document = prepareOrderDeliveredDocument(document);
   if (purpose === 'RESTOCK') document = prepareRestockDocument(document);
   if (purpose === 'NEWSLETTER_WELCOME' && data !== undefined) requireWelcomeCode(data.discountCode);
   if (purpose === 'NEWSLETTER_ACCESS' && /\{\{\s*(?:initialPassword|passwordMessage)\s*\}\}/.test(subject + preheader)) {

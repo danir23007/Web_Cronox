@@ -1,6 +1,9 @@
 import { TrackingNotificationsService } from './tracking-notifications.service';
 import { TrackingWorkerService } from './tracking-worker.service';
 import { eligibleTrackingOrder } from './tracking.service';
+import { mapDeliveredOrderItems } from '../email/order-delivered-email.mapper';
+import { renderMail } from '../email/managed/mail-renderer';
+import { structuredDocumentForPurpose } from '../email/managed/mail-template-documents';
 
 describe('persistent carrier notification outbox (simulated SMTP)', () => {
   const original = { ...process.env };
@@ -17,6 +20,7 @@ describe('persistent carrier notification outbox (simulated SMTP)', () => {
       Object.assign(job, data, data.attempts ? { attempts: job.attempts + 1 } : {}); return { count: 1 };
     });
     const tx = { $queryRaw: jest.fn(async () => [{ id: 42 }]), order: { findUniqueOrThrow: jest.fn(async () => order) },
+      orderItem: { findMany: jest.fn(async () => []) },
       orderTrackingNotification: { findUniqueOrThrow: jest.fn(async () => ({ ...job })), update },
       orderTrackingEvent: { findUniqueOrThrow: jest.fn(async () => ({ orderId: 42, revision: 3, label: 'Admitido', code: 'A010000V' })) } };
     const db = { $transaction: jest.fn(async callback => callback(tx)), orderTrackingNotification: { updateMany,
@@ -32,6 +36,22 @@ describe('persistent carrier notification outbox (simulated SMTP)', () => {
     expect(email.send.mock.calls[0]).toEqual([expect.objectContaining({ type: 'ORDER_SHIPPED', to: 'buyer@example.test',
       templateData: expect.objectContaining({ orderId: '42', trackingNumber: 'PQ123456789ES', trackingUrl: expect.stringContaining('tracking-number=PQ123456789ES') }) })]);
     expect(job.status).toBe('SENT'); expect(job.messageId).toBe('smtp-fixture');
+  });
+  it.each(['MANUAL','CORREOS'])('loads purchased lines and renders delivery HTML through the %s outbox',async origin=>{
+    const {service,tx,email,job,order}=fixture();
+    Object.assign(job,{origin,category:'DELIVERED'});order.status='DELIVERED';
+    const lines:any=[{id:11,title:'Prenda comprada',quantity:2,variant:{size:'M'},product:{images:[{url:'https://example.test/item.png',width:600,height:1200}]}},{id:12,title:'Sin imagen',quantity:1,product:{images:[]}}];
+    tx.orderItem.findMany.mockResolvedValue(lines);
+    await service.deliver('notice');
+    const options=(email.send.mock.calls[0] as any)[0];
+    expect(tx.orderItem.findMany).toHaveBeenCalledWith(expect.objectContaining({where:{orderId:42},orderBy:{id:'asc'}}));
+    expect(options.type).toBe('ORDER_DELIVERED');
+    expect(options.templateData.items).toEqual(mapDeliveredOrderItems(lines));
+    const html=renderMail(structuredDocumentForPurpose('ORDER_DELIVERED'),options.subject,'','ORDER_DELIVERED',options.templateData).html;
+    expect(html).toContain('Artículos de tu pedido');expect(html).toContain('Prenda comprada');expect(html).toContain('Cantidad: 2');
+    expect(html).toContain('width="35" height="70"');expect(html).not.toContain('src=""');
+    expect(job.status).toBe('SENT');
+    await service.deliver('notice');expect(email.send).toHaveBeenCalledTimes(1);
   });
   it('cancels an old revision before SMTP starts', async () => {
     const { service, email, job, order } = fixture(); order.trackingRevision++;

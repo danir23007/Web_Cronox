@@ -1,4 +1,5 @@
 import { prepareOrderShippedHtml } from './managed/order-shipped-design';
+import { prepareOrderDeliveredHtml } from './managed/order-delivered-design';
 import { requireWelcomeCode } from './managed/welcome-code';
 import { PASSWORD_SETUP_COPY, NEWSLETTER_ACCESS_COPY } from './managed/mail-editor-content';
 import { withMailLogoHtmlHeader } from './managed/mail-logo-header';
@@ -306,7 +307,8 @@ export class EmailService {
         const content = await readFile(templatePath, 'utf8');
         const source = template === EmailTemplate.ORDER_CONFIRMATION
           ? prepareOrderConfirmationHtml(content).replace('<!-- ORDER_CONFIRMATION_HEAD -->', `<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light dark"><meta name="supported-color-schemes" content="light dark"><style>${ORDER_CONFIRMATION_CSS}</style></head>`)
-          : template === EmailTemplate.ORDER_SHIPPED ? prepareOrderShippedHtml(content) : content;
+          : template === EmailTemplate.ORDER_SHIPPED ? prepareOrderShippedHtml(content)
+          : template === EmailTemplate.ORDER_DELIVERED ? prepareOrderDeliveredHtml(content) : content;
         const compiled = Handlebars.compile(source);
         this.templateCache.set(template, compiled);
         return compiled;

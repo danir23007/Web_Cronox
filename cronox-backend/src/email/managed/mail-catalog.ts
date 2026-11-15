@@ -249,7 +249,7 @@ export function variablesFor(purpose?: string | null) {
         'statusLabel',
       ];
     case EmailType.ORDER_DELIVERED:
-      return [...base, ...order, 'shippingCarrier', 'trackingNumber', 'trackingUrl', 'statusLabel'];
+      return [...base, ...order, 'imageWidth', 'imageHeight', 'shippingCarrier', 'trackingNumber', 'trackingUrl', 'statusLabel'];
     case EmailType.SUPPORT_TICKET_RECEIVED:
       return [...base, 'supportCaseId', 'customerEmail'];
     case EmailType.TEST:

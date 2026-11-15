@@ -75,6 +75,17 @@ describe('Correos tracking assignment on the existing Order', () => {
     expect(db.order.update.mock.calls[0][0].data).not.toHaveProperty('trackingRevision');
   });
 
+  it('queues the delivery notice from the administrator without sending inside the status transaction', async () => {
+    const {service,db,email}=setup({status:OrderStatus.SHIPPED,source:'ONLINE',shippingMethodCode:'STANDARD'});
+    const createMany=jest.fn().mockResolvedValue({count:1});
+    Object.assign(db,{orderTrackingEvent:{upsert:jest.fn().mockResolvedValue({id:'manual-delivery',fingerprint:'delivery'})}});
+    Object.assign(db.orderTrackingNotification,{createMany});
+    const result=await service.updateOrderFulfillment(9,{status:OrderStatus.DELIVERED},7);
+    expect(result.status).toBe('DELIVERED');
+    expect(createMany).toHaveBeenCalledWith({data:[expect.objectContaining({orderId:9,origin:'MANUAL',category:'DELIVERED',status:'PENDING',noticeKey:'ORDER:9:DELIVERED'})],skipDuplicates:true});
+    expect(email.send).not.toHaveBeenCalled();
+  });
+
   it('rejects a stale admin edit before creating audit or updating the order', async () => {
     const { service, db } = setup();
     await expect(service.updateOrderFulfillment(9, { trackingNumber: 'NEW12345678', trackingRevision: 1 }, 7))

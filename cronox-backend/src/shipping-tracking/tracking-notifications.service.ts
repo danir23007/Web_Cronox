@@ -6,6 +6,7 @@ import { quotaWaiting } from '../email/mail-account-quota';
 import { buildCorreosTrackingUrl } from './tracking-links';
 import { eligibleFulfillmentOrder, logisticsMailEnabled, logisticsMilestones, LogisticsMilestone } from './fulfillment-events';
 import { logisticsMail } from './logistics-mail';
+import { deliveredOrderItemSelection, mapDeliveredOrderItems } from '../email/order-delivered-email.mapper';
 
 @Injectable()
 export class TrackingNotificationsService {
@@ -55,11 +56,15 @@ export class TrackingNotificationsService {
         const template = logisticsMail[job.category as LogisticsMilestone];
         const correos = /^correos$/i.test(order.shippingCarrier?.trim() || '');
         const trackingUrl = correos ? buildCorreosTrackingUrl(order.trackingNumber) : null;
+        const items = job.category === 'DELIVERED' ? mapDeliveredOrderItems(await tx.orderItem.findMany({
+          where: { orderId: order.id }, orderBy: { id: 'asc' }, ...deliveredOrderItemSelection,
+        })) : undefined;
         // Keep the order row locked through SMTP so a number replacement cannot race.
         sendingStarted = true;
         const result = await this.email.send({ type: template.type, deliveryDeadline, to: order.customerEmail,
           subject: `CRONOX · ${template.label} #${order.id}`,
           templateData: { orderId: String(order.id), trackingNumber: order.trackingNumber,
+            ...(items ? { items } : {}),
             trackingUrl, shippingCarrier: order.shippingCarrier || undefined,
             title: template.label, message: template.message, statusLabel: template.label,
             orderUrl: undefined, storeUrl: undefined } });

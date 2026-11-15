@@ -3,6 +3,7 @@ import { parseDocument } from 'htmlparser2';
 import { logisticsMail } from '../../shipping-tracking/logistics-mail';
 import { prepareOrderConfirmationDocument } from './order-confirmation-design';
 import { prepareOrderShippedDocument } from './order-shipped-design';
+import { prepareOrderDeliveredDocument } from './order-delivered-design';
 import { PASSWORD_RESET_COPY } from './password-reset-design';
 import { prepareRestockDocument } from './restock-photos';
 
@@ -46,6 +47,7 @@ export function editableDraft<T extends { purpose?: string | null; document: unk
   const copy = JSON.parse(JSON.stringify(draft)) as T;
   if (copy.purpose === 'ORDER_CONFIRMATION') copy.document = prepareOrderConfirmationDocument(copy.document);
   if (copy.purpose === 'ORDER_SHIPPED') copy.document = prepareOrderShippedDocument(copy.document);
+  if (copy.purpose === 'ORDER_DELIVERED') copy.document = prepareOrderDeliveredDocument(copy.document);
   if (copy.purpose === 'RESTOCK') copy.document = prepareRestockDocument(copy.document);
   const vocabulary = editorCopy(copy.purpose);
   const expand = (value: string, html = false) => value.replace(/\{\{\s*(\w+)\s*\}\}/g, (token, key) =>

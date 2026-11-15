@@ -1,12 +1,21 @@
 import { carrierNoticeCandidates, carrierProjection, logisticsNoticeDecision } from './fulfillment-policy';
 import { TrackpubContract } from './trackpub.contract';
-import { logisticsNoticeKey } from './fulfillment-events';
+import { logisticsNoticeKey, recordLogisticsNotice } from './fulfillment-events';
 import { TrackingWorkerService } from './tracking-worker.service';
 const contract = new TrackpubContract();
 const cutoff = new Date('2026-10-18T19:00:00Z');
 const event = (code: string, day = '18/10/2026', time = '20:00:00') => contract.parse({ events: [{ uniqueCode: code, eventDate: day, eventHours: time }] })[0];
 const fresh = { status: 'PAID', trackingBaselineEstablished: false, trackingFlowStartedAt: new Date('2026-10-18T19:01:00Z') };
 describe('coordinated manual/carrier notices and chronological projection', () => {
+  it('queues a new Correos delivery event for the same delivered-mail consumer used by manual delivery',async()=>{
+    const order={...fresh,id:42,trackingRevision:3,status:'SHIPPED',trackingBaselineEstablished:true};
+    const history=[{...event('I010000V','20/10/2026'),id:'carrier-delivery'}];
+    const candidate=carrierNoticeCandidates(order,history,[],cutoff).find(c=>c.category==='DELIVERED')!;
+    expect(candidate.suppressionReason).toBeNull();
+    const tx:any={orderTrackingNotification:{createMany:jest.fn().mockResolvedValue({count:1})}};
+    await recordLogisticsNotice(tx,order,candidate.category,candidate.event,{origin:'CORREOS',previousStatus:'SHIPPED',nextStatus:'DELIVERED',suppressionReason:candidate.suppressionReason});
+    expect(tx.orderTrackingNotification.createMany).toHaveBeenCalledWith({data:[expect.objectContaining({orderId:42,origin:'CORREOS',category:'DELIVERED',status:'PENDING',noticeKey:'ORDER:42:DELIVERED'})],skipDuplicates:true});
+  });
   it('allows the first same-day physical admission of a newly incorporated shipment, without a false UTC timestamp', () => {
     const admission = event('A010000V');
     expect(carrierNoticeCandidates(fresh, [admission], [], cutoff)).toMatchObject([{ category: 'SHIPPED', suppressionReason: null }]);
