@@ -176,6 +176,7 @@ export const VARIABLE_DESCRIPTIONS: Record<string, string> = {
   'shippingAddress.postalCode': 'Envío: código postal',
   'shippingAddress.country': 'Envío: país',
   items: 'Lista de artículos (usar con el bloque each)',
+  returnReason: 'Motivo concreto comunicado por Correos en el evento de devolución (opcional)',
   name: 'Artículo: nombre (dentro del bucle)',
   variantName: 'Artículo: variante (dentro del bucle)',
   quantity: 'Artículo: cantidad (dentro del bucle)',
