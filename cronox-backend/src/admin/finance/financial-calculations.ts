@@ -87,6 +87,7 @@ export function calculateFinance(orders: FinanceOrder[], events: FinanceEvent[],
   const totals = empty();
   const products = new Map<number, Product>();
   const warnings = new Set<string>();
+  let operationId: number;
   const recentOrders: { id: number; paidAt: Date; totalCents: number; status: string; refundedCents: number | null }[] = [];
   const byPayment = new Map<string, FinanceEvent[]>();
   for (const event of events) {
@@ -101,10 +102,17 @@ export function calculateFinance(orders: FinanceOrder[], events: FinanceEvent[],
     add(products.get(line.productId)!, revenue, cost, sold, returned);
     if (collectBuckets) add(buckets.get(key(day))!, revenue, cost, sold, returned);
     add(totals, revenue, cost, sold, returned);
-    if (cost === null) warnings.add(`Faltan costes históricos: línea #${line.id}, producto #${line.productId}. El beneficio afectado no está disponible.`);
+    if (cost === null) {
+      const parts = line.financialSnapshot?.lotCosts;
+      const missing = parts != null && parts.reduce((n,p) => n+p.quantity,0) !== line.quantity
+        ? 'las cantidades de las asignaciones no coinciden con la línea'
+        : parts?.length ? `falta coste confirmado de las unidades originales en tirada(s) ${[...new Set(parts.map(p => p.lotId))].join(', ')} (componentes o evidencia histórica insuficientes)` : 'falta la instantánea de coste histórico de las unidades originales';
+      warnings.add(`Pedido #${operationId}: Faltan costes históricos: línea #${line.id}, producto #${line.productId}, variante #${line.variantId ?? 'desconocida'}. ${missing}. El beneficio afectado no está disponible.`);
+    }
     if (revenue === null) warnings.add('Hay reembolsos sin importe o reparto fiable entre productos y envío. La facturación y el beneficio afectados no están disponibles.');
   };
   for (const order of orders) {
+    operationId = order.id;
     if (!countsInStatistics(order)) continue;
     const manual = order.source === 'IN_PERSON_ADMIN';
     const ledger = [...(byPayment.get(order.providerRef ?? '') ?? [])].sort((a, b) => a.occurredAt.getTime() - b.occurredAt.getTime() || (a.refundCumulativeCents ?? 0) - (b.refundCumulativeCents ?? 0) || a.id.localeCompare(b.id));

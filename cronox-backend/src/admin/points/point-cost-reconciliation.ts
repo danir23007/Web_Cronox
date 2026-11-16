@@ -1,10 +1,10 @@
 import { Prisma, PrismaClient } from '@prisma/client';
 import { randomUUID } from 'node:crypto';
 import { FrozenLotCost, frozenCost } from '../../inventory-lots/lot-costs';
-import { adjustedPointParts, pricePointParts } from './point-lot-costs';
+import { resolveHistoricalLotParts } from '../../inventory-lots/historical-lot-cost';
 import { pointPartialCost } from './point-partial-cost';
 import { PointDelta, PointState } from './point-calculations';
-import { historicalEdition, historicalEditionCost } from './point-historical-evidence';
+import { historicalEdition } from './point-historical-evidence';
 
 /** Recover from saved receipts, allocations and edition history, never from
  * the active edition of a different sale.
@@ -54,37 +54,10 @@ async function pointCostPlan(tx:Prisma.TransactionClient, options:{pointId?:stri
           parts=[{lotId:lot.id,sliceId:'historical:'+savedLine.id,quantity:row.units,productionCents:null,freightCents:null,otherCents:null,quality:'UNKNOWN'}];
         }
       }
-      const proposed:FrozenLotCost[]=[];
-      for(const part of parts){
-        const lot=lots.find(l=>l.id===part.lotId);
-        row.lotIds.push(part.lotId);row.editionNumbers.push(lot?.number ?? null);
-        if(frozenCost([part])!==null){proposed.push(part);continue;}
-        // Complete components already captured in the sale remain the best evidence.
-        const receipt=pricePointParts([part],{id:part.lotId,profile:null})[0];
-        if(frozenCost([receipt])!==null){proposed.push({...receipt,costSource:'SAVED_RECEIPT_COMPONENTS'});row.evidenceIds.push(part.sliceId);continue;}
-        if([part.productionCents,part.freightCents,part.otherCents].some(v=>v!==null)){row.reason='Recepción parcialmente valorada: faltan componentes del coste';proposed.push(part);continue;}
-        const allocation=allocations.find(a=>a.sliceId===part.sliceId);
-        const slice=lot?.slices.find(s=>s.id===part.sliceId && s.variantId===current.variantId);
-        const evidence=allocation ?? slice;
-        if(evidence) {
-          const received=pricePointParts([{...part,productionCents:evidence.productionCents,freightCents:evidence.freightCents,otherCents:evidence.otherCents,quality:allocation?.costQuality ?? lot!.costQuality}],{id:part.lotId,profile:null})[0];
-          if(frozenCost([received])!==null){proposed.push({...received,costSource:'LINKED_RECEIPT',evidenceIds:[evidence.id]});row.evidenceIds.push(evidence.id);continue;}
-          if([received.productionCents,received.freightCents,received.otherCents].some(v=>v!==null) || received.quality==='ESTIMATED'){row.reason='Recepción vinculada incompleta o estimada';proposed.push(part);continue;}
-        }
-        const historical=lot && historicalEditionCost(lot,entry.occurredAt,savedLine.unitCostCents ?? null);
-        // A historical marker has no linked receipt: require uniform evidence.
-        const receiptCosts=lot?.slices.filter(s=>s.variantId===current.variantId && s.received>0)
-          .map(s=>[s.productionCents,s.freightCents,s.otherCents]).filter(v=>v.some(n=>n!==null)) ?? [];
-        if(!slice && receiptCosts.length){
-          const uniform=adjustedPointParts({...lot!,profile:null},current.variantId,part.quantity,savedLine.id);
-          if(frozenCost(uniform)!==null){proposed.push(...uniform);row.evidenceIds.push(...uniform.flatMap(p=>p.evidenceIds ?? []));continue;}
-          row.reason='Falta la recepción exacta de la salida histórica';proposed.push(part);continue;
-        }
-        if(historical){
-          const priced=pricePointParts([part],{id:part.lotId,profile:{unitCostCents:historical.cost}})[0];
-          proposed.push({...priced,costSource:historical.source,evidenceIds:historical.evidenceIds});row.evidenceIds.push(...historical.evidenceIds);
-        } else {row.reason='Falta un coste de la tirada verificable: vacío o historial contradictorio';proposed.push(part);}
-      }
+      const resolution=resolveHistoricalLotParts(parts,lots,current.variantId,entry.occurredAt,savedLine.unitCostCents ?? null,savedLine.id,allocations);
+      const proposed=resolution.parts;
+      row.reason=resolution.reason;row.evidenceIds.push(...resolution.evidenceIds);
+      for(const part of parts){row.lotIds.push(part.lotId);row.editionNumbers.push(lots.find(l=>l.id===part.lotId)?.number ?? null);}
       if(proposed.reduce((n,p)=>n+p.quantity,0)!==row.units){row.reason='La cantidad de las asignaciones no coincide con la venta original';continue;}
       const cost=frozenCost(proposed);if(cost===null)continue;
       row.status='PROPOSED';row.costCents=cost;row.sources=[...new Set(proposed.map(p=>p.costSource ?? 'RECEIPT'))];row.evidenceIds=[...new Set(row.evidenceIds)];

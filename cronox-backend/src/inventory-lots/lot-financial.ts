@@ -1,3 +1,4 @@
+import { historicalLotParts } from './historical-lot-cost';
 import { Prisma } from '@prisma/client';
 import { managedVariant, sourceCosts, takeCosts, removeCostParts } from './lot-ledger';
 import { FrozenLotCost } from './lot-costs';
@@ -7,13 +8,14 @@ export async function freezeCheckoutLots(tx: Prisma.TransactionClient, checkoutI
   const offsets = new Map<number, number>();
   for (const item of items) {
     if (!await managedVariant(tx, item.variantId)) continue;
-    const parts = takeCosts(await sourceCosts(tx, 'checkout:' + checkoutId, item.variantId), item.quantity, offsets.get(item.variantId) ?? 0);
+    const allocated = takeCosts(await sourceCosts(tx, 'checkout:' + checkoutId, item.variantId), item.quantity, offsets.get(item.variantId) ?? 0);
+    const parts = await historicalLotParts(tx, allocated, item.variantId, new Date(), null, String(item.id));
     offsets.set(item.variantId, (offsets.get(item.variantId) ?? 0) + item.quantity);
     await tx.checkoutItemFinancial.update({ where: { itemId: item.id }, data: { unitCostCents: null, lotCosts: parts as unknown as Prisma.InputJsonValue } });
   }
 }
 
-export async function freezeOrderLots(tx: Prisma.TransactionClient, orderId: number, alreadyAdjusted = false, previous: Array<{ id: number; variantId: number | null; quantity: number; financialSnapshot: { unitCostCents: number | null; lotCosts: Prisma.JsonValue | null } | null }> = []) {
+export async function freezeOrderLots(tx: Prisma.TransactionClient, orderId: number, alreadyAdjusted = false, previous: Array<{ id: number; variantId: number | null; quantity: number; financialSnapshot: { unitCostCents: number | null; lotCosts: Prisma.JsonValue | null } | null }> = [], at = new Date()) {
   const items = await tx.orderItem.findMany({ where: { orderId }, orderBy: { id: 'asc' } });
   const offsets = new Map<number, number>();
   const costs = new Map<number, FrozenLotCost[]>();
@@ -50,7 +52,7 @@ export async function freezeOrderLots(tx: Prisma.TransactionClient, orderId: num
     const kept = retained.get(item.id) ?? [], pool = costs.get(item.variantId)!;
     const extra = takeCosts(pool, item.quantity - kept.reduce((s,p) => s+p.quantity,0));
     removeCostParts(pool, extra);
-    const parts: FrozenLotCost[] = [...kept, ...extra];
+    const parts = await historicalLotParts(tx, [...kept, ...extra], item.variantId, at, null, String(item.id));
     await tx.orderItemFinancial.update({ where: { itemId: item.id }, data: { unitCostCents: null, lotCosts: parts as unknown as Prisma.InputJsonValue } });
   }
 }

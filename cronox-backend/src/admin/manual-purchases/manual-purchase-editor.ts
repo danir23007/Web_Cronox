@@ -157,7 +157,7 @@ export class ManualPurchaseEditor {
           }
         }
         await tx.orderItem.deleteMany({ where: { orderId, id: { in: order.items.filter(item => !itemIds.includes(item.id)).map(item => item.id) } } });
-        await freezeOrderLots(tx, orderId, order.manualStockHandling !== ManualStockHandling.DEDUCT_NOW, order.items);
+        await freezeOrderLots(tx, orderId, order.manualStockHandling !== ManualStockHandling.DEDUCT_NOW, order.items, order.purchasedAt ?? order.createdAt);
         const subtotal = money(totalCents);
         const saved = await tx.order.update({ where: { id: orderId }, data: { subtotal, total: subtotal,
           taxAmount: subtotal.minus(subtotal.div(order.taxRate.add(1)).toDecimalPlaces(2)).toDecimalPlaces(2),

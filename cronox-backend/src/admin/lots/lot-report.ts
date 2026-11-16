@@ -1,3 +1,4 @@
+import { applyOrderHistoricalCosts } from '../finance/order-historical-cost';
 import { Prisma } from '@prisma/client';
 import { allocate, calculateFinance, cents, FinanceEvent, FinanceOrder, validateRange } from '../finance/financial-calculations';
 import { archiveUtcDate } from '../finance/historical-cost';
@@ -30,6 +31,7 @@ export async function lotReport(tx: Prisma.TransactionClient, productId: number,
       if (!order.items.some(i => i.productId === productId)) continue;
       for (const field of ['paidAt','purchasedAt','createdAt','voidedAt'] as const) if (order[field]) order[field] = archiveUtcDate(order[field]!);
       order.stockMovements = (await tx.financeStockArchive.findMany({ where: { orderId: archive.orderId } })).map(s => { const value = s.snapshot as unknown as FinanceOrder['stockMovements'][number]; return { ...value, createdAt: archiveUtcDate(value.createdAt) }; });
+      order.items = (await applyOrderHistoricalCosts(tx, order)).items;
       const original = [...order.items].sort((a,b) => a.id-b.id);
       const discounts = allocate(order.discountCents, original.map(i => cents(i.lineTotal)));
       let id = 0;

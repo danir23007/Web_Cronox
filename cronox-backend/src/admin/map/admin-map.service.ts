@@ -1,3 +1,4 @@
+import { applyOrderHistoricalCosts } from '../finance/order-historical-cost';
 import { countsInStatistics } from '../../common/statistics-eligibility';
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
@@ -193,7 +194,7 @@ export class AdminMapService {
               if (order[key]) order[key] = archiveUtcDate(order[key]);
             order.stockMovements = movements.get(row.orderId) ?? [];
             const ledger = events.get(row.providerRef ?? '') ?? [];
-            const value=mapOrderAmounts(order,ledger,query.from,query.to);
+            const value=mapOrderAmounts(await applyOrderHistoricalCosts(tx,order),ledger,query.from,query.to);
             if('excluded' in value)continue;
             financePeriod.revenueCents=financePeriod.revenueCents===null||value.amount.revenueCents===null?null:financePeriod.revenueCents+value.amount.revenueCents;
             financePeriod.profitCents=financePeriod.profitCents===null||value.amount.profitCents===null?null:financePeriod.profitCents+value.amount.profitCents;

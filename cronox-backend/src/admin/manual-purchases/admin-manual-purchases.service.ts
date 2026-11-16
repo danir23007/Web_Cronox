@@ -237,7 +237,7 @@ export class AdminManualPurchasesService {
             });
             for (const variant of variants) await allocateLots(tx, variant.id, quantities.get(variant.id)!, 'order:' + order.id, 'SOLD');
           }
-          await freezeOrderLots(tx, order.id, dto.stockHandling !== ManualStockHandling.DEDUCT_NOW);
+          await freezeOrderLots(tx, order.id, dto.stockHandling !== ManualStockHandling.DEDUCT_NOW, [], purchasedAt);
           await this.historialService.syncFromOrders(userId, tx);
           await tx.auditLog.create({
             data: {

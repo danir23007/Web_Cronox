@@ -1,3 +1,4 @@
+import { applyOrderHistoricalCosts } from './order-historical-cost';
 import { countsInStatistics } from '../../common/statistics-eligibility';
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
@@ -58,7 +59,8 @@ export class AdminFinanceService {
           return date >= query.from && date <= query.to;
         }).length;
         const events = eventRows.map(row => ({ ...(row.snapshot as unknown as FinanceEvent), occurredAt: row.occurredAt }));
-        const partial = calculateFinance(orders, events, query.from, query.to, query.aggregation);
+        const valuedOrders = await Promise.all(orders.map(order => applyOrderHistoricalCosts(tx, order)));
+        const partial = calculateFinance(valuedOrders, events, query.from, query.to, query.aggregation);
         merge(result.totals, partial.totals);
         partial.buckets.forEach((bucket, i) => merge(result.buckets[i], bucket));
         for (const product of partial.products) {
