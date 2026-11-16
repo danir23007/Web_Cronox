@@ -2,11 +2,13 @@ import { Injectable } from '@nestjs/common';
 import { createHash } from 'node:crypto';
 import { CorreosApiError } from './trackpub.client';
 import { CORREOS_EVENT_CODES } from './correos-event-codes';
+import { readableReturnReason } from './return-reason';
 
 export type TrackingCategory = 'ADMITTED' | 'IN_TRANSIT' | 'OUT_FOR_DELIVERY' | 'DELIVERED' | 'RETURNED' | 'INCIDENT';
 export type TrackingEvent = {
   fingerprint: string; eventTime: Date | null; eventLocalDate: string | null;
   eventSortKey: string | null; code: string | null; label: string | null; category: TrackingCategory | null;
+  returnReason?: string | null;
 };
 const text = (value: unknown, max = 600): string | null => typeof value === 'string' && value.trim() ? value.trim().slice(0, max) : null;
 
@@ -51,7 +53,8 @@ export class TrackpubContract {
       if (!identity.some(Boolean) && !label) throw new CorreosApiError('INVALID_TRACKPUB_EVENT');
       return { fingerprint: createHash('sha256').update(JSON.stringify(identity.some(Boolean) ? identity : [label])).digest('hex'),
         eventTime: null, eventLocalDate: local?.local || [text(event.eventDate), text(event.eventHours)].filter(Boolean).join(' ') || null,
-        eventSortKey: local?.sort || null, code, label, category: mapped?.category as TrackingCategory || null };
+        eventSortKey: local?.sort || null, code, label, category: mapped?.category as TrackingCategory || null,
+        ...(mapped?.category === 'RETURNED' ? { returnReason: readableReturnReason(event.razonDes, event.razonCode) } : {}) };
     });
     return [...new Map(events.map(event => [event.fingerprint, event])).values()]
       .sort((a, b) => (a.eventSortKey || '').localeCompare(b.eventSortKey || '') || a.fingerprint.localeCompare(b.fingerprint));

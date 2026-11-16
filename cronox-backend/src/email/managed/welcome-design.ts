@@ -39,6 +39,7 @@ export function mailPreviewData(purpose?: string | null) {
     data.passwordMessage = `Tu contraseña es: "${data.initialPassword}". Introdúcela sin las comillas.`;
   }
   if (purpose === 'SUPPORT_TICKET_RECEIVED') data.message = 'Hola, necesito ayuda para consultar mi pedido CRX-1042. Gracias, Lucía.';
+  if (purpose === 'ORDER_RETURNED') data.returnReason = '';
   return data;
 }
 

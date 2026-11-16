@@ -1,5 +1,7 @@
 import { prepareOrderShippedHtml } from './managed/order-shipped-design';
 import { prepareOrderDeliveredHtml } from './managed/order-delivered-design';
+import { prepareOrderReturnedHtml, RETURNED_SUBJECT, hasReturnedTrackingLink } from './managed/order-returned-design';
+import { readableReturnReason } from '../shipping-tracking/return-reason';
 import { requireWelcomeCode } from './managed/welcome-code';
 import { PASSWORD_SETUP_COPY, NEWSLETTER_ACCESS_COPY } from './managed/mail-editor-content';
 import { withMailLogoHtmlHeader } from './managed/mail-logo-header';
@@ -93,6 +95,10 @@ export class EmailService {
 
   async send(options: EmailSendOptions): Promise<EmailSendResult> {
     const purpose = options.purpose || options.type;
+    if (purpose === 'ORDER_RETURNED') options = { ...options,
+      subject: Handlebars.compile(RETURNED_SUBJECT)(options.templateData || {}),
+      templateData: { ...options.templateData, returnReason: readableReturnReason(options.templateData?.returnReason) },
+    };
     if (purpose === 'NEWSLETTER_WELCOME') requireWelcomeCode(options.templateData?.discountCode, true);
     if (['LAUNCH', 'PRE_REGISTRATION_CONFIRMATION', 'NEWSLETTER_CONFIRMATION', 'FIRST_ORDER_DISCOUNT', 'GENERIC', 'TEST'].includes(purpose)) {
       throw new InternalServerErrorException('Finalidad de correo retirada.');
@@ -146,9 +152,14 @@ export class EmailService {
         }
       }
       if ((options.type === EmailType.ORDER_TRACKING || options.deliveryDeadline !== undefined) && custom) {
-        const required = [data.orderId, data.statusLabel, ...(data.trackingNumber ? [data.trackingNumber, data.shippingCarrier] : [])];
+        const required = purpose === 'ORDER_RETURNED'
+          ? [data.orderId, ...(data.trackingNumber ? [data.trackingNumber] : [])]
+          : [data.orderId, data.statusLabel, ...(data.trackingNumber ? [data.trackingNumber, data.shippingCarrier] : [])];
         const link = Handlebars.escapeExpression(String(data.trackingUrl || ''));
-        if (data.trackingNumber && (!link || !custom.html.includes(`href="${link}"`)) ||
+        const trackingLinkPresent = purpose === 'ORDER_RETURNED'
+          ? hasReturnedTrackingLink(custom.html, String(data.trackingUrl || ''))
+          : custom.html.includes(`href="${link}"`);
+        if (data.trackingNumber && (!link || !trackingLinkPresent) ||
             required.some(value => !value || !custom!.html.includes(Handlebars.escapeExpression(String(value))))) custom = null;
       }
       if (purpose === 'NEWSLETTER_WELCOME' && custom &&
@@ -285,7 +296,7 @@ export class EmailService {
     const compiledTemplate = await this.loadTemplate(template);
     const html = compiledTemplate(data);
     return template === EmailTemplate.ORDER_CONFIRMATION ? html.replace(/(<body\b[^>]*>)([\s\S]*?)(<\/body>)/i, (_all, open, body, close) => open + orderCanvas(body, orderCircle(data.circleLevel)) + close)
-      : [EmailTemplate.PASSWORD_SETUP, EmailTemplate.NEWSLETTER_ACCESS, EmailTemplate.RESTOCK, EmailTemplate.EMAIL_CHANGE, EmailTemplate.TEST, EmailTemplate.ORDER_SHIPPED, EmailTemplate.ORDER_DELIVERED, EmailTemplate.ORDER_LOGISTICS, EmailTemplate.ORDER_TRACKING].includes(template) ? withMailLogoHtmlHeader(html) : html;
+      : [EmailTemplate.PASSWORD_SETUP, EmailTemplate.NEWSLETTER_ACCESS, EmailTemplate.RESTOCK, EmailTemplate.EMAIL_CHANGE, EmailTemplate.TEST, EmailTemplate.ORDER_SHIPPED, EmailTemplate.ORDER_DELIVERED, EmailTemplate.ORDER_LOGISTICS, EmailTemplate.ORDER_RETURNED, EmailTemplate.ORDER_TRACKING].includes(template) ? withMailLogoHtmlHeader(html) : html;
   }
 
   private async loadTemplate(
@@ -308,7 +319,8 @@ export class EmailService {
         const source = template === EmailTemplate.ORDER_CONFIRMATION
           ? prepareOrderConfirmationHtml(content).replace('<!-- ORDER_CONFIRMATION_HEAD -->', `<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light dark"><meta name="supported-color-schemes" content="light dark"><style>${ORDER_CONFIRMATION_CSS}</style></head>`)
           : template === EmailTemplate.ORDER_SHIPPED ? prepareOrderShippedHtml(content)
-          : template === EmailTemplate.ORDER_DELIVERED ? prepareOrderDeliveredHtml(content) : content;
+          : template === EmailTemplate.ORDER_DELIVERED ? prepareOrderDeliveredHtml(content)
+          : template === EmailTemplate.ORDER_RETURNED ? prepareOrderReturnedHtml(content) : content;
         const compiled = Handlebars.compile(source);
         this.templateCache.set(template, compiled);
         return compiled;

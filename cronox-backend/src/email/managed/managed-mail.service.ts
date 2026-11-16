@@ -642,7 +642,7 @@ export class ManagedMailService {
       signature,
       publishing,
     );
-    if (t.textOverride != null) {
+    if (t.textOverride != null && t.purpose !== 'ORDER_RETURNED') {
       // Validate the same variable vocabulary and syntax as the HTML editor.
       renderMail(
         { blocks: [{ type: 'text', text: t.textOverride }] },

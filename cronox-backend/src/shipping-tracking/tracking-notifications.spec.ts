@@ -4,6 +4,7 @@ import { eligibleTrackingOrder } from './tracking.service';
 import { mapDeliveredOrderItems } from '../email/order-delivered-email.mapper';
 import { renderMail } from '../email/managed/mail-renderer';
 import { structuredDocumentForPurpose } from '../email/managed/mail-template-documents';
+import { TrackpubContract } from './trackpub.contract';
 
 describe('persistent carrier notification outbox (simulated SMTP)', () => {
   const original = { ...process.env };
@@ -36,6 +37,20 @@ describe('persistent carrier notification outbox (simulated SMTP)', () => {
     expect(email.send.mock.calls[0]).toEqual([expect.objectContaining({ type: 'ORDER_SHIPPED', to: 'buyer@example.test',
       templateData: expect.objectContaining({ orderId: '42', trackingNumber: 'PQ123456789ES', trackingUrl: expect.stringContaining('tracking-number=PQ123456789ES') }) })]);
     expect(job.status).toBe('SENT'); expect(job.messageId).toBe('smtp-fixture');
+  });
+  it.each(['Dirección incorrecta',null,'Devuelto al remitente','SR123ABC',''])('takes return reason %s only from the exact triggering event',async reason=>{
+    const {service,tx,email,job}=fixture();job.category='RETURNED';
+    const parsed=new TrackpubContract().parse({events:[
+      {uniqueCode:'O07A010R',eventDate:'14/10/2026',eventHours:'12:00:00',razonDes:'Motivo de un evento anterior'},
+      {uniqueCode:'I020000V',eventDate:'15/10/2026',eventHours:'12:00:00',eventDes:'Devuelto al remitente',razonDes:reason},
+    ]}).find(e=>e.category==='RETURNED')!;
+    tx.orderTrackingEvent.findUniqueOrThrow.mockResolvedValue({...parsed,orderId:42,revision:3,origin:'CORREOS'} as any);
+    await service.deliver('notice');
+    const message=(email.send.mock.calls[0] as any)[0];
+    expect(message.type).toBe('ORDER_RETURNED');expect(message.subject).toBe('CRONOX · Correos ha devuelto tu paquete del pedido #42');
+    expect(message.templateData.returnReason).toBe(reason==='Dirección incorrecta'?reason:null);
+    expect(tx.orderTrackingEvent.findUniqueOrThrow).toHaveBeenCalledWith({where:{id:'event'}});
+    expect(job.status).toBe('SENT');await service.deliver('notice');expect(email.send).toHaveBeenCalledTimes(1);
   });
   it.each(['MANUAL','CORREOS'])('loads purchased lines and renders delivery HTML through the %s outbox',async origin=>{
     const {service,tx,email,job,order}=fixture();

@@ -16,7 +16,7 @@ export const MAIL_PURPOSES = [
   { key: 'ORDER_INCIDENT', name: 'Incidencia en el envío', type: EmailType.ORDER_INCIDENT,
     subject: 'CRONOX · Incidencia en el envío del pedido #{{orderId}}', required: ['orderId', 'trackingNumber', 'trackingUrl', 'statusLabel'] },
   { key: 'ORDER_RETURNED', name: 'Devolución al remitente', type: EmailType.ORDER_RETURNED,
-    subject: 'CRONOX · Pedido #{{orderId}} devuelto al remitente', required: ['orderId', 'trackingNumber', 'trackingUrl', 'statusLabel'] },
+    subject: 'CRONOX · Correos ha devuelto tu paquete del pedido #{{orderId}}', required: ['orderId', 'trackingNumber', 'trackingUrl'] },
   { key: 'RESTOCK', name: 'Aviso de reposición de talla', type: EmailType.RESTOCK,
     subject: 'Tu talla ha vuelto: {{product}} · {{size}}', required: ['product', 'size', 'actionUrl'] },
   {
@@ -214,7 +214,7 @@ export function variablesFor(purpose?: string | null) {
     case EmailType.ORDER_OUT_FOR_DELIVERY:
     case EmailType.ORDER_INCIDENT:
     case EmailType.ORDER_RETURNED:
-      return [...base, ...order, 'trackingNumber', 'trackingUrl', 'shippingCarrier', 'statusLabel'];
+      return [...base, ...order, 'trackingNumber', 'trackingUrl', 'shippingCarrier', 'statusLabel', ...(purpose === 'ORDER_RETURNED' ? ['returnReason'] : [])];
     case EmailType.RESTOCK:
       return [...base, 'product', 'size', 'imageUrl', 'actionUrl', 'restockPhoto1', 'restockPhoto2'];
     case EmailType.ORDER_CONFIRMATION:

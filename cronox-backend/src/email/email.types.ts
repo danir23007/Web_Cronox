@@ -6,6 +6,7 @@ export enum EmailSenderKey {
 }
 
 export enum EmailTemplate {
+  ORDER_RETURNED = 'ORDER_RETURNED',
   ORDER_LOGISTICS = 'ORDER_LOGISTICS',
   PASSWORD_SETUP = 'PASSWORD_SETUP',
   ORDER_TRACKING = 'ORDER_TRACKING',
@@ -126,7 +127,7 @@ export const EMAIL_TYPE_TO_SENDER: Record<EmailType, EmailSenderKey> = {
 export const EMAIL_TYPE_TO_TEMPLATE: Record<EmailType, EmailTemplate> = {
   [EmailType.ORDER_OUT_FOR_DELIVERY]: EmailTemplate.ORDER_LOGISTICS,
   [EmailType.ORDER_INCIDENT]: EmailTemplate.ORDER_LOGISTICS,
-  [EmailType.ORDER_RETURNED]: EmailTemplate.ORDER_LOGISTICS,
+  [EmailType.ORDER_RETURNED]: EmailTemplate.ORDER_RETURNED,
   [EmailType.ORDER_TRACKING]: EmailTemplate.ORDER_TRACKING,
   [EmailType.RESTOCK]: EmailTemplate.RESTOCK,
   [EmailType.TEST]: EmailTemplate.TEST,
@@ -142,6 +143,7 @@ export const EMAIL_TYPE_TO_TEMPLATE: Record<EmailType, EmailTemplate> = {
 };
 
 export const EMAIL_TEMPLATE_FILE: Record<EmailTemplate, string> = {
+  [EmailTemplate.ORDER_RETURNED]: 'order-returned.hbs',
   [EmailTemplate.ORDER_LOGISTICS]: 'order-logistics.hbs',
   [EmailTemplate.PASSWORD_SETUP]: 'password-setup.hbs',
   [EmailTemplate.ORDER_TRACKING]: 'order-tracking.hbs',

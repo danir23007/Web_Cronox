@@ -7,6 +7,8 @@ import { buildCorreosTrackingUrl } from './tracking-links';
 import { eligibleFulfillmentOrder, logisticsMailEnabled, logisticsMilestones, LogisticsMilestone } from './fulfillment-events';
 import { logisticsMail } from './logistics-mail';
 import { deliveredOrderItemSelection, mapDeliveredOrderItems } from '../email/order-delivered-email.mapper';
+import { readableReturnReason } from './return-reason';
+import { RETURNED_SUBJECT } from '../email/managed/order-returned-design';
 
 @Injectable()
 export class TrackingNotificationsService {
@@ -62,9 +64,10 @@ export class TrackingNotificationsService {
         // Keep the order row locked through SMTP so a number replacement cannot race.
         sendingStarted = true;
         const result = await this.email.send({ type: template.type, deliveryDeadline, to: order.customerEmail,
-          subject: `CRONOX · ${template.label} #${order.id}`,
+          subject: job.category === 'RETURNED' ? RETURNED_SUBJECT.replace('{{orderId}}', String(order.id)) : `CRONOX · ${template.label} #${order.id}`,
           templateData: { orderId: String(order.id), trackingNumber: order.trackingNumber,
             ...(items ? { items } : {}),
+            ...(job.category === 'RETURNED' ? { returnReason: event.category === 'RETURNED' && event.origin === 'CORREOS' ? readableReturnReason(event.returnReason) : null } : {}),
             trackingUrl, shippingCarrier: order.shippingCarrier || undefined,
             title: template.label, message: template.message, statusLabel: template.label,
             orderUrl: undefined, storeUrl: undefined } });

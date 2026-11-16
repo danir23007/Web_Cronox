@@ -87,7 +87,7 @@ export class TrackingService {
         const previous = await tx.orderTrackingEvent.findMany({ where: { orderId: id, revision: claim.trackingRevision, origin: 'CORREOS' } });
         for (const event of events) {
           await tx.orderTrackingEvent.upsert({ where: { orderId_revision_fingerprint: { orderId: id, revision: claim.trackingRevision, fingerprint: event.fingerprint } },
-            create: { ...event, orderId: id, revision: claim.trackingRevision }, update: { label: event.label, category: event.category } });
+            create: { ...event, orderId: id, revision: claim.trackingRevision }, update: { label: event.label, category: event.category, returnReason: event.returnReason ?? null } });
         }
         const history = await tx.orderTrackingEvent.findMany({ where: { orderId: id, revision: claim.trackingRevision, origin: 'CORREOS' } });
         const evidence = fulfillmentEvidence(history as typeof events);

@@ -4,6 +4,7 @@ import { logisticsMail } from '../../shipping-tracking/logistics-mail';
 import { prepareOrderConfirmationDocument } from './order-confirmation-design';
 import { prepareOrderShippedDocument } from './order-shipped-design';
 import { prepareOrderDeliveredDocument } from './order-delivered-design';
+import { prepareOrderReturnedDocument, RETURNED_SUBJECT, RETURNED_TITLE } from './order-returned-design';
 import { PASSWORD_RESET_COPY } from './password-reset-design';
 import { prepareRestockDocument } from './restock-photos';
 
@@ -27,6 +28,7 @@ export const NEWSLETTER_ACCESS_COPY = {
   registration: 'Para acceder a CRONOX, continúa con el registro o inicia sesión con tu contraseña. Esta solicitud no ha creado ninguna cuenta.',
 };
 export function editorCopy(purpose?: string | null): Record<string, string> {
+  if (purpose === 'ORDER_RETURNED') return { title: RETURNED_TITLE, message: 'Correos nos ha informado de que el paquete ha sido devuelto al remitente.' };
   if (purpose && purpose in PASSWORD_SETUP_COPY) return PASSWORD_SETUP_COPY[purpose as keyof typeof PASSWORD_SETUP_COPY];
   const milestone = Object.values(logisticsMail).find(value => value.type === purpose);
   if (milestone) return { title: milestone.label, message: milestone.message };
@@ -48,6 +50,11 @@ export function editableDraft<T extends { purpose?: string | null; document: unk
   if (copy.purpose === 'ORDER_CONFIRMATION') copy.document = prepareOrderConfirmationDocument(copy.document);
   if (copy.purpose === 'ORDER_SHIPPED') copy.document = prepareOrderShippedDocument(copy.document);
   if (copy.purpose === 'ORDER_DELIVERED') copy.document = prepareOrderDeliveredDocument(copy.document);
+  if (copy.purpose === 'ORDER_RETURNED') {
+    copy.document = prepareOrderReturnedDocument(copy.document);
+    copy.subject = RETURNED_SUBJECT;
+    copy.textOverride = null;
+  }
   if (copy.purpose === 'RESTOCK') copy.document = prepareRestockDocument(copy.document);
   const vocabulary = editorCopy(copy.purpose);
   const expand = (value: string, html = false) => value.replace(/\{\{\s*(\w+)\s*\}\}/g, (token, key) =>
