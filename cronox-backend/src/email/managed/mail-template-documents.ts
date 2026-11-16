@@ -3,6 +3,7 @@ import { prepareOrderConfirmationDocument } from './order-confirmation-design';
 import { NOREPLY_HEADER_PURPOSES, withMailLogoHeader } from './mail-logo-header';
 import { passwordResetDocument } from './password-reset-design';
 import { prepareRestockDocument } from './restock-photos';
+import { circlePromotionDocument } from './circle-promotion-design';
 
 type VisualDocument = MailDocument & {
   schemaVersion: 2;
@@ -328,6 +329,7 @@ export function structuredDocumentForPurpose(
   legacySource?: unknown,
 ): VisualDocument | null {
   if (purpose === 'PASSWORD_RESET') return { ...passwordResetDocument(), ...(legacySource ? { legacySource } : {}) };
+  if (purpose === 'CIRCLE_PROMOTION') return circlePromotionDocument(2);
   let blocks: MailBlock[];
   switch (purpose) {
     case 'PASSWORD_SETUP_NEW_ACCOUNT':

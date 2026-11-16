@@ -145,6 +145,8 @@ describe('managed email safety and import', () => {
           },
         ),
       },
+      emailTemplateVersion: { create: jest.fn(({ data }) => ({ ...data, id: `v:${data.templateId}` })) },
+      emailPublication: { findUnique: jest.fn().mockResolvedValue(null), create: jest.fn() },
       managedEmailTemplate: {
         findUnique: jest.fn(({ where }: { where: { importKey: string } }) => templateRows.get(where.importKey) || null),
         count: jest.fn(
@@ -182,12 +184,14 @@ describe('managed email safety and import', () => {
     }
     expect(profiles.size).toBe(4);
     expect(folderRows.size).toBe(20);
-    expect(templateRows.size).toBe(MAIL_PURPOSES.length * 5);
+    expect(templateRows.size).toBe(MAIL_PURPOSES.length * 5 - 1);
+    expect(db.emailPublication.create.mock.calls.map(([args]) => args.data.purpose))
+      .toEqual([2, 3, 4, 5].map(circle => `CIRCLE_PROMOTION:CIRCLE_${circle}`));
     for (const p of MAIL_PURPOSES) {
       const copies = [...templateRows.values()].filter(
         (t) => t.purpose === p.key,
       );
-      expect(copies).toHaveLength(5);
+      expect(copies).toHaveLength(p.circles?.length ?? 5);
       expect(
         copies.every((t) => t.senderKey === p.senderKey && t.name === p.name),
       ).toBe(true);

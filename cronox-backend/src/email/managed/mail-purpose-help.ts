@@ -7,6 +7,11 @@ export interface MailPurposeHelp {
 }
 
 export const MAIL_PURPOSE_HELP: Record<string, MailPurposeHelp> = {
+  CIRCLE_PROMOTION: {
+    description: 'Confirma la nueva membresía, muestra las ventajas desbloqueadas y enlaza a la acreditación de la cuenta.',
+    delivery: 'Automático desde No-reply.',
+    trigger: 'Al confirmarse una subida al Círculo II, III, IV o V en una cuenta activa. Se genera un aviso para el círculo alcanzado.',
+  },
   ORDER_CONFIRMATION: {
     description: 'Confirma al comprador que su pedido online está pagado y resume los artículos, importes y datos del cliente.',
     delivery: 'Automático tras confirmar el pago.',

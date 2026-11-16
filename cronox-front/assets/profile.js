@@ -834,6 +834,10 @@
 
   const handleAuthRedirect = (err) => {
     if (err?.status === 401 || err?.status === 403) {
+      if (window.location.hash === '#accreditation') {
+        profileRecoveryNeeded = true;
+        return true;
+      }
       try { localStorage.setItem('cronox_open_auth_on_load', 'login'); } catch (_) {}
       window.location.href = '/';
       return true;
@@ -1309,6 +1313,10 @@
       refreshPasswordState(normalizedUser);
       fillAccreditation(normalizedUser);
       renderAccreditationPrivileges(normalizedUserCircle);
+      if (window.location.hash === '#accreditation') {
+        const tab = document.querySelector('[data-profile-tab="accreditation"]:not(.is-active)');
+        tab?.click();
+      }
       await Promise.all([loadAddress(), loadOrders()]);
     } catch (err) {
       if (handleAuthRedirect(err)) return;

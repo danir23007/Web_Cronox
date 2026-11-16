@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { MailDocument } from './mail-renderer';
 import { SAMPLE_DATA } from './mail-catalog';
+import { circlePromotionData } from './circle-promotion-design';
 import { editorCopy, NEWSLETTER_ACCESS_COPY } from './mail-editor-content';
 
 export const WELCOME_SUBJECT = 'CRONOX · Te damos la bienvenida';
@@ -13,7 +14,7 @@ export function welcomeData(code?: string) {
   return { title: 'Bienvenido a CRONOX', message: WELCOME_MESSAGE, discountCode: requireWelcomeCode(code) };
 }
 
-export function mailPreviewData(purpose?: string | null) {
+export function mailPreviewData(purpose?: string | null, circle = 2): Record<string, unknown> {
   const image = 'https://cronox.es/assets/mail/welcome/fondo-cortinas-email.jpg';
   const data: Record<string, unknown> = {
     ...SAMPLE_DATA,
@@ -40,6 +41,10 @@ export function mailPreviewData(purpose?: string | null) {
   }
   if (purpose === 'SUPPORT_TICKET_RECEIVED') data.message = 'Hola, necesito ayuda para consultar mi pedido CRX-1042. Gracias, Lucía.';
   if (purpose === 'ORDER_RETURNED') data.returnReason = '';
+  if (purpose === 'CIRCLE_PROMOTION') {
+    const destination = circle >= 2 && circle <= 5 ? circle : 2;
+    Object.assign(data, circlePromotionData(destination - 1, destination, 'https://example.test'));
+  }
   return data;
 }
 

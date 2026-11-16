@@ -20,9 +20,9 @@ describe('METACRILATOS member composition data and instance lifecycle', () => {
     for (const win of windows.splice(0)) win.close();
   });
 
-  async function setup(circleLevel = 5, getStats = jest.fn().mockResolvedValue(stats)) {
+  async function setup(circleLevel = 5, getStats = jest.fn().mockResolvedValue(stats), fromEmail = false) {
     const dom = new JSDOM(read('profile.html'), {
-      url: 'http://localhost/profile.html', runScripts: 'outside-only', virtualConsole: new VirtualConsole(),
+      url: fromEmail ? 'http://localhost/cuenta?login=1#accreditation' : 'http://localhost/profile.html', runScripts: 'outside-only', virtualConsole: new VirtualConsole(),
     });
     const win = dom.window as any;
     windows.push(win);
@@ -43,6 +43,9 @@ describe('METACRILATOS member composition data and instance lifecycle', () => {
     const getMyOrders = jest.fn().mockResolvedValue([{ id: 'partial-page-should-not-be-used' }]);
     win.CRONOX_USER = { id: 7, identityUid: 'stable-member', circleLevel: 1, memberCode: 'old-visible-id' };
     win.CRONOX_API = { getAccreditationStats: getStats, getMyOrders };
+    if (fromEmail) win.CRONOX_API.getMe = jest.fn()
+      .mockRejectedValueOnce(Object.assign(new Error('Sign-in required'), { status: 401 }))
+      .mockResolvedValue({ id: 7, identityUid: 'stable-member', circleLevel });
     win.CRONOX_USER_IDENTITY = { format: () => 'old-visible-id' };
     win.CRONOX_METACRILATOS = { mount };
     win.fetch = jest.fn(async (url: string) => ({ ok: true, json: async () => url.endsWith('/active') ? design : personal }));
@@ -61,6 +64,17 @@ describe('METACRILATOS member composition data and instance lifecycle', () => {
     const numbers = () => [...panel.querySelectorAll('[data-meta-stat]')].map((node: any) => node.textContent);
     return { win, personal, mount, destroys, getStats, getMyOrders, section, panel, history, retry, open, numbers };
   }
+
+  it('opens the private accreditation after authentication from the promotion email', async () => {
+    const { win, section, mount } = await setup(4, undefined, true);
+    expect(mount).not.toHaveBeenCalled();
+    expect(win.location.hash).toBe('#accreditation');
+    win.dispatchEvent(new win.CustomEvent('cronox:authResolved', { detail: { state: 'authenticated' } }));
+    await tick();
+    await tick();
+    expect(section.classList.contains('is-active')).toBe(true);
+    expect(mount).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ circleLevel: 4 }));
+  });
 
   it.each([1, 2, 3, 4, 5])('uses circle %i from the mounted personal card despite stale browser or statistics circle', async circle => {
     const context = await setup(circle, jest.fn().mockResolvedValue({ ...stats, circleLevel: circle === 5 ? 1 : 5 }));

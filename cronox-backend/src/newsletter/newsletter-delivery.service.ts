@@ -79,12 +79,28 @@ export class NewsletterDeliveryService implements OnModuleInit, OnModuleDestroy 
     let rawToken: string | undefined;
     let actionUrl: string | undefined;
     let welcomeCode: string | undefined;
-    if (job.kind === 'WELCOME') {
+    const isPromotion = job.kind === 'CIRCLE_PROMOTION';
+    const previousCircle = job.previousCircle ?? 0;
+    const promotedCircle = job.promotedCircle ?? 0;
+    if (isPromotion || job.kind === 'WELCOME') {
       // Consume the dispatch lease once, even if dispatch is called concurrently.
       const dispatchClaim = randomUUID();
       const claimed = await this.prisma.newsletterMailJob.updateMany({ where, data: { claimToken: dispatchClaim } });
       if (claimed.count !== 1) return;
       where.claimToken = dispatchClaim;
+    }
+    if (isPromotion) {
+      const user = job.userId ? await this.prisma.user.findUnique({
+        where: { id: job.userId }, select: { email: true, accountState: true, circleLevel: true },
+      }) : null;
+      if (!user || user.accountState !== 'ACTIVE' || user.email.trim().toLowerCase() !== job.email ||
+          previousCircle < 1 || previousCircle >= promotedCircle || promotedCircle > 5 || user.circleLevel < promotedCircle) {
+        await this.prisma.newsletterMailJob.updateMany({ where, data: {
+          status: 'FAILED', errorCode: 'PROMOTION_RECIPIENT_UNAVAILABLE', claimToken: null, claimedAt: null,
+        } });
+        return;
+      }
+    } else if (job.kind === 'WELCOME') {
       if (job.userId) {
         const user = await this.prisma.user.findUnique({ where: { id: job.userId } });
         if (!user || user.email.toLowerCase() !== job.email) {
@@ -169,7 +185,10 @@ export class NewsletterDeliveryService implements OnModuleInit, OnModuleDestroy 
     }
     let accepted: EmailSendResult | undefined;
     try {
-      if (job.kind === 'WELCOME') {
+      if (isPromotion) {
+        accepted = await this.email.sendCirclePromotion(job.email, previousCircle, promotedCircle);
+        if (!accepted?.messageId || accepted.queued) throw Object.assign(new Error('PROMOTION_ACCEPTANCE_UNVERIFIED'), { deliveryUnknown: true });
+      } else if (job.kind === 'WELCOME') {
         accepted = await this.email.sendNewsletterWelcome(job.email, welcomeCode);
         if (!accepted?.messageId || accepted.queued) throw Object.assign(new Error('WELCOME_ACCEPTANCE_UNVERIFIED'), { deliveryUnknown: true });
       }

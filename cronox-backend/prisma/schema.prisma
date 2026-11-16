@@ -1924,6 +1924,8 @@ model NewsletterMailJob {
   id             String    @id @default(cuid())
   email          String
   kind           String
+  previousCircle Int?
+  promotedCircle Int?
   status         String    @default("QUEUED")
   readyAt        DateTime  @default(now()) @db.Timestamptz(3)
   claimedAt      DateTime? @db.Timestamptz(3)

@@ -1,4 +1,5 @@
 import { mailCircleNumber, resolveMailCircle } from './mail-circle-folders';
+import { CIRCLE_PROMOTION_PREHEADER, circlePromotionDocument } from './circle-promotion-design';
 import { mailPublicationKey, recipientMailCircle, snapshotMailCircle } from './mail-publication-scope';
 import { withMailLogoHeader } from './mail-logo-header';
 import { MAIL_PURPOSE_HELP } from './mail-purpose-help';
@@ -161,10 +162,7 @@ export class ManagedMailService {
         for (let circle = 1; circle <= 5; circle++) await resolveMailCircle(tx, key, circle, true);
         if (profile.initializedAt) {
           const expectedKeys = purposes.flatMap((purpose) =>
-            Array.from(
-              { length: 5 },
-              (_, index) => `${key}:${index + 1}:${purpose.key}`,
-            ),
+            (purpose.circles || [1, 2, 3, 4, 5]).map(circle => `${key}:${circle}:${purpose.key}`),
           );
           const existingCount = await tx.managedEmailTemplate.count({
             where: { importKey: { in: expectedKeys } },
@@ -201,19 +199,26 @@ export class ManagedMailService {
         for (let circle = 1; circle <= 5; circle++) {
           const folder = await resolveMailCircle(tx, key, circle, true);
           for (const { purpose: p, document } of sources) {
+            if (p.circles && !p.circles.includes(circle)) continue;
             const legacy = p.key.startsWith('PASSWORD_SETUP_') ? await tx.managedEmailTemplate.findUnique({ where: { importKey: `${key}:${circle}:INITIAL_PASSWORD_SETUP` } }) : null;
-            const compatibleDocument = legacy ? json(passwordSetupDesign(legacy.document, p.key)) : document;
-            const rendered = renderMail(compatibleDocument, p.subject, '', p.key);
-            await tx.managedEmailTemplate.upsert({
-              where: { importKey: `${key}:${circle}:${p.key}` },
+            const importKey = `${key}:${circle}:${p.key}`;
+            const isPromotion = p.key === 'CIRCLE_PROMOTION';
+            if (isPromotion && await tx.managedEmailTemplate.findUnique({ where: { importKey } })) continue;
+            const compatibleDocument = isPromotion ? json(circlePromotionDocument(circle))
+              : legacy ? json(passwordSetupDesign(legacy.document, p.key)) : document;
+            const preheader = p.key === 'CIRCLE_PROMOTION' ? CIRCLE_PROMOTION_PREHEADER : '';
+            const rendered = renderMail(compatibleDocument, p.subject, preheader, p.key);
+            const template = await tx.managedEmailTemplate.upsert({
+              where: { importKey },
               update: {},
               create: {
-                importKey: `${key}:${circle}:${p.key}`,
+                importKey,
                 senderKey: key,
                 folderId: folder.id,
                 name: p.name,
                 purpose: p.key,
                 subject: p.subject,
+                preheader,
                 document: compatibleDocument,
                 html: rendered.html,
                 text: rendered.text,
@@ -221,6 +226,18 @@ export class ManagedMailService {
                 updatedBy: actorId,
               },
             });
+            if (isPromotion) {
+              const purpose = mailPublicationKey(p.key, circle);
+              const where = { senderKey_purpose: { senderKey: key, purpose } };
+              if (!await tx.emailPublication.findUnique({ where })) {
+                const version = await tx.emailTemplateVersion.create({ data: {
+                  templateId: template.id,
+                  snapshot: json({ ...template, publicationCircle: circle }),
+                  createdBy: actorId,
+                } });
+                await tx.emailPublication.create({ data: { senderKey: key, purpose, versionId: version.id } });
+              }
+            }
           }
         }
         await this.audit(tx, actorId, 'EMAIL_INITIALIZE', key);
@@ -957,9 +974,11 @@ export class ManagedMailService {
             throw new BadRequestException(
               'Confirma la activación de una plantilla válida de esta cuenta.',
             );
-          await this.render(key, t, mailPreviewData(t.purpose), true, tx);
           const folder = await this.folder(tx, key, t.folderId), circle = mailCircleNumber(folder.name);
           if (!circle) throw new BadRequestException('Para publicar, utiliza un círculo del I al V.');
+          if (t.purpose === 'CIRCLE_PROMOTION' && circle < 2)
+            throw new BadRequestException('Los avisos de ascenso empiezan en el Círculo II.');
+          await this.render(key, t, mailPreviewData(t.purpose, circle), true, tx);
           const publicationPurpose = mailPublicationKey(t.purpose, circle);
           const snapshot = { ...t, publicationCircle: circle,
             ...(t.purpose === 'ORDER_CONFIRMATION' ? { document: { ...prepareOrderConfirmationDocument(t.document) as object, orderCircle: circle } } : {}),
@@ -1031,9 +1050,9 @@ export class ManagedMailService {
     });
   }
   async preview(key: EmailSenderKey, dto: MailPreviewDto) {
-    await this.folder(this.db, key, dto.folderId);
+    const folder = await this.folder(this.db, key, dto.folderId);
     const draft = editableDraft({ ...dto, purpose: dto.purpose || null, signatureId: dto.signatureId || null });
-    const data = mailPreviewData(dto.purpose);
+    const data = mailPreviewData(dto.purpose, mailCircleNumber(folder.name) ?? 2);
     const product = (dto.view !== 'edit' || dto.purpose === 'RESTOCK') && usesPreviewProduct(draft.document, dto.purpose)
       ? await previewCatalogProduct(this.db, dto.previewProductId, dto.previewVariantId, dto.purpose) : null;
     if (product) Object.assign(data, product.data);
@@ -1184,7 +1203,9 @@ export class ManagedMailService {
     }
     if (process.env.CRONOX_LOCAL_DEV === 'true' && !controlled) {
       const template = await this.template(key, id);
-      const rendered = await this.render(key, template, mailPreviewData(template.purpose));
+      const sampleCircle = template.purpose === 'CIRCLE_PROMOTION'
+        ? mailCircleNumber((await this.folder(this.db, key, template.folderId)).name) ?? 2 : undefined;
+      const rendered = await this.render(key, template, mailPreviewData(template.purpose, sampleCircle));
       return {
         localOnly: true,
         html: rendered.html,
@@ -1202,7 +1223,9 @@ export class ManagedMailService {
         'Confirma el destinatario y configura el envío de esta cuenta.',
       );
     const t = await this.template(key, id);
-    let data = mailPreviewData(t.purpose);
+    const sampleCircle = t.purpose === 'CIRCLE_PROMOTION'
+      ? mailCircleNumber((await this.folder(this.db, key, t.folderId)).name) ?? 2 : undefined;
+    let data = mailPreviewData(t.purpose, sampleCircle);
     if (controlled) {
       const folder = await this.folder(this.db, key, t.folderId);
       if (t.purpose !== 'NEWSLETTER_WELCOME' || t.importKey !== 'NOREPLY:1:NEWSLETTER_WELCOME' ||

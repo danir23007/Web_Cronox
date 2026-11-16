@@ -6,8 +6,13 @@ import {
   EmailTemplate,
 } from '../email.types';
 
+import { CIRCLE_PROMOTION_SUBJECT, circleBenefitFields } from './circle-promotion-design';
+
 // Distinct purposes preserve the existing sender/transport types.
 export const MAIL_PURPOSES = [
+  { key: 'CIRCLE_PROMOTION', name: 'Ascenso de círculo', type: EmailType.CIRCLE_PROMOTION,
+    subject: CIRCLE_PROMOTION_SUBJECT, required: ['circleRoman', 'accreditationColor', 'actionUrl'],
+    circles: [2, 3, 4, 5] },
   { key: 'ORDER_TRACKING', name: 'Seguimiento genérico (legado; no genera avisos)',
     type: EmailType.ORDER_TRACKING, subject: 'CRONOX · Seguimiento del pedido #{{orderId}}',
     required: ['orderId', 'trackingNumber', 'trackingUrl', 'statusLabel'] },
@@ -84,6 +89,7 @@ export const MAIL_PURPOSES = [
 }));
 
 export const SAMPLE_DATA: Record<string, unknown> = {
+  circleRoman: 'II', accreditationColor: 'negra',
   product: 'Camiseta de ejemplo', size: 'M', imageUrl: 'https://example.com/camiseta.png',
   imageWidth: 70, imageHeight: 70,
   subject: 'Correo de ejemplo CRONOX',
@@ -137,6 +143,11 @@ export const SAMPLE_DATA: Record<string, unknown> = {
   ],
 };
 export const VARIABLE_DESCRIPTIONS: Record<string, string> = {
+  circleRoman: 'Círculo alcanzado por el cliente, en números romanos.',
+  accreditationColor: 'Color de la nueva acreditación.',
+  ...Object.fromEntries(circleBenefitFields.map((field, index) => [
+    field, `Ventaja nueva n.º ${index + 1}, si corresponde al ascenso.`,
+  ])),
   accountEligible: 'Acceso solicitado por una cuenta existente (condición)',
   product: 'Nombre del producto', size: 'Talla solicitada', discountCode: 'Código de bienvenida',
   subject: 'Asunto del correo',
@@ -197,6 +208,7 @@ export function variablesFor(purpose?: string | null) {
   if (!purpose) return [...base, 'actionUrl', 'actionLabel', 'storeUrl', 'product',
     'productName', 'productSlug', 'size', 'imageUrl', 'productImage',
     'customerFullName', 'customerEmail', 'email'];
+  if (purpose === 'CIRCLE_PROMOTION') return [...base, 'circleRoman', 'accreditationColor', 'actionUrl', 'actionLabel', ...circleBenefitFields];
   if (purpose === 'NEWSLETTER_ACCESS') return [...base, 'actionUrl', 'actionLabel', 'initialPassword', 'passwordMessage', 'accountEligible'];
   const order = [
     'orderId',

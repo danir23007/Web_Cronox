@@ -6,6 +6,7 @@ export enum EmailSenderKey {
 }
 
 export enum EmailTemplate {
+  CIRCLE_PROMOTION = 'CIRCLE_PROMOTION',
   ORDER_RETURNED = 'ORDER_RETURNED',
   ORDER_LOGISTICS = 'ORDER_LOGISTICS',
   PASSWORD_SETUP = 'PASSWORD_SETUP',
@@ -23,6 +24,7 @@ export enum EmailTemplate {
 }
 
 export enum EmailType {
+  CIRCLE_PROMOTION = 'CIRCLE_PROMOTION',
   ORDER_OUT_FOR_DELIVERY = 'ORDER_OUT_FOR_DELIVERY',
   ORDER_INCIDENT = 'ORDER_INCIDENT',
   ORDER_RETURNED = 'ORDER_RETURNED',
@@ -112,6 +114,7 @@ export const EMAIL_TYPE_TO_SENDER: Record<EmailType, EmailSenderKey> = {
   [EmailType.ORDER_INCIDENT]: EmailSenderKey.ORDERS,
   [EmailType.ORDER_RETURNED]: EmailSenderKey.ORDERS,
   [EmailType.ORDER_TRACKING]: EmailSenderKey.ORDERS,
+  [EmailType.CIRCLE_PROMOTION]: EmailSenderKey.NOREPLY,
   [EmailType.RESTOCK]: EmailSenderKey.NOREPLY,
   [EmailType.TEST]: EmailSenderKey.NOREPLY,
   [EmailType.ORDER_CONFIRMATION]: EmailSenderKey.ORDERS,
@@ -129,6 +132,7 @@ export const EMAIL_TYPE_TO_TEMPLATE: Record<EmailType, EmailTemplate> = {
   [EmailType.ORDER_INCIDENT]: EmailTemplate.ORDER_LOGISTICS,
   [EmailType.ORDER_RETURNED]: EmailTemplate.ORDER_RETURNED,
   [EmailType.ORDER_TRACKING]: EmailTemplate.ORDER_TRACKING,
+  [EmailType.CIRCLE_PROMOTION]: EmailTemplate.CIRCLE_PROMOTION,
   [EmailType.RESTOCK]: EmailTemplate.RESTOCK,
   [EmailType.TEST]: EmailTemplate.TEST,
   [EmailType.ORDER_CONFIRMATION]: EmailTemplate.ORDER_CONFIRMATION,
@@ -143,6 +147,7 @@ export const EMAIL_TYPE_TO_TEMPLATE: Record<EmailType, EmailTemplate> = {
 };
 
 export const EMAIL_TEMPLATE_FILE: Record<EmailTemplate, string> = {
+  [EmailTemplate.CIRCLE_PROMOTION]: 'circle-promotion.hbs',
   [EmailTemplate.ORDER_RETURNED]: 'order-returned.hbs',
   [EmailTemplate.ORDER_LOGISTICS]: 'order-logistics.hbs',
   [EmailTemplate.PASSWORD_SETUP]: 'password-setup.hbs',

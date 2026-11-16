@@ -23,6 +23,7 @@ import { MailTransportFactory } from './mail-transport.factory';
 import { ManagedMailService } from './managed/managed-mail.service';
 import { RestockDeliveryError, restockDeliveryOutcome } from './restock-delivery.error';
 import { quotaWaiting } from './mail-account-quota';
+import { CIRCLE_PROMOTION_PREHEADER, CIRCLE_PROMOTION_SUBJECT, circlePromotionData, circlePromotionDocument } from './managed/circle-promotion-design';
 import { PasswordSetupContext } from '../common/password-setup-context';
 import { getFrontendUrl } from '../common/config/environment';
 import {
@@ -171,9 +172,17 @@ export class EmailService {
         ? { ...renderMail(passwordResetDocument(), options.subject, PASSWORD_RESET_COPY.preheader, purpose, data),
           text: Handlebars.compile(PASSWORD_RESET_TEXT, { noEscape: true })(data) }
         : null;
-      const fallback = welcomeFallback || resetFallback;
+      if (purpose === 'CIRCLE_PROMOTION' && custom) {
+        const link = Handlebars.escapeExpression(String(data.actionUrl));
+        if (!custom.html.includes(`href="${link}"`)) custom = null;
+      }
+      const promotionFallback = !custom && purpose === 'CIRCLE_PROMOTION'
+        ? renderMail(circlePromotionDocument(Number(data.circleLevel)), CIRCLE_PROMOTION_SUBJECT,
+          CIRCLE_PROMOTION_PREHEADER, purpose, data, undefined, true)
+        : null;
+      const fallback = welcomeFallback || resetFallback || promotionFallback;
       let html = custom?.html || fallback?.html || (await this.renderTemplate(template, data));
-      if (!custom && senderKey === EmailSenderKey.NOREPLY) html = withMailLogoHtmlHeader(html);
+      if (!custom && !promotionFallback && senderKey === EmailSenderKey.NOREPLY) html = withMailLogoHtmlHeader(html);
       if (options.purpose === 'NEWSLETTER_ACCESS' && data.initialPassword &&
           !html.includes(Handlebars.escapeExpression(String(data.initialPassword)))) {
         const block = `<p style="max-width:640px;margin:16px auto;padding:16px;background:#f7f7f5;color:#111;font-family:Arial,sans-serif;line-height:1.5;">${Handlebars.escapeExpression(String(data.passwordMessage))}</p>`;
@@ -186,7 +195,7 @@ export class EmailService {
       const info = (await this.transportFactory
         .sendMail(senderKey, {
           to: options.to,
-          subject: custom?.subject || options.subject,
+          subject: custom?.subject || promotionFallback?.subject || options.subject,
           html,
           ...(custom || fallback ? { text: (custom || fallback)!.text } : {}),
         }, options.purpose || options.type, ...(options.deliveryDeadline !== undefined || options.type === EmailType.ORDER_TRACKING ? [options.deliveryDeadline ?? Date.now() + 20000] : []))) as { messageId: string; accepted?: unknown[]; queued?: boolean };
@@ -260,6 +269,13 @@ export class EmailService {
         actionUrl: link,
         actionLabel: 'Configurar contraseña',
       },
+    });
+  }
+
+  async sendCirclePromotion(to: string, previous: number, destination: number) {
+    return this.send({
+      to, type: EmailType.CIRCLE_PROMOTION, subject: CIRCLE_PROMOTION_SUBJECT,
+      templateData: circlePromotionData(previous, destination, getFrontendUrl()),
     });
   }
 
